@@ -1,12 +1,16 @@
 //! Spec v19 §1.2 acceptance #1 — basic_window demo.
 //!
 //! Phase C Task 4 deliverable: a minimal winit + `SharedSkiaContext` +
-//! `NativeBackend` + `JianPointerMapper` integration that paints chrome
-//! (rect / text / box outline) on every frame and translates pointer
-//! events through the Phase B Task 3 mapper. The macOS / Linux / Windows
-//! runtime is exercised by maintainers manually (`notes/step-1a-{macos,
-//! linux, windows}-manual-smoke.md`); CI only verifies that
-//! `cargo build --examples --workspace` compiles on every desktop OS.
+//! `NativeBackend` integration that paints chrome (rect / text / box
+//! outline) on every frame and translates pointer events through Jian's
+//! `PointerTranslator` directly into `jian_core::gesture::PointerEvent`
+//! (re-exported from `openpencil_shell_core`). Per user 2026-05-05
+//! directive there is no OP-specific event translation layer — widget
+//! dispatch in Step 1c+ consumes Jian event types directly. The
+//! macOS / Linux / Windows runtime is exercised by maintainers manually
+//! (`notes/step-1a-{macos, linux, windows}-manual-smoke.md`); CI only
+//! verifies that `cargo build --examples --workspace` compiles on every
+//! desktop OS.
 //!
 //! Run with:
 //! ```text
@@ -27,9 +31,7 @@
 use jian_core::scene::Color as JianColor;
 use jian_host_desktop::pointer::PointerTranslator;
 use openpencil_shell_core::{Color, Point2D, Rect, TextLayout};
-use openpencil_shell_native::{
-    JianPointerMapper, NativeBackend, SharedSkiaContext, SharedSkiaError,
-};
+use openpencil_shell_native::{NativeBackend, SharedSkiaContext, SharedSkiaError};
 use winit::application::ApplicationHandler;
 use winit::event::WindowEvent;
 use winit::event_loop::{ActiveEventLoop, EventLoop};
@@ -77,12 +79,11 @@ struct BasicWindowApp {
     window: Option<Window>,
     ctx: Option<SharedSkiaContext>,
     backend: Option<NativeBackend>,
-    /// Phase B Task 3 wiring: winit `WindowEvent` → Jian `PointerEvent`
-    /// → `JianPointerMapper` → `ShellEvent`. We only translate pointer
-    /// events here; window/resize/close events go straight to the
-    /// match arms below.
+    /// Pointer wiring: winit `WindowEvent` → Jian `PointerEvent` (the
+    /// canonical event type also re-exported from
+    /// `openpencil_shell_core`). Widget hit-test + dispatch lands in
+    /// Step 1c+; the demo only proves the pipeline compiles.
     pointer_translator: PointerTranslator,
-    pointer_mapper: JianPointerMapper,
     /// Fatal teardown / surface error captured for post-loop diagnosis.
     error: Option<SharedSkiaError>,
 }
@@ -94,7 +95,6 @@ impl BasicWindowApp {
             ctx: None,
             backend: None,
             pointer_translator: PointerTranslator::new(),
-            pointer_mapper: JianPointerMapper::new(),
             error: None,
         }
     }
@@ -147,10 +147,11 @@ impl ApplicationHandler for BasicWindowApp {
         _window_id: WindowId,
         event: WindowEvent,
     ) {
-        // Phase B Task 3 wiring: route pointer-flavoured winit events
-        // through Jian's PointerTranslator + our JianPointerMapper.
-        // Non-pointer events (Resized / RedrawRequested / CloseRequested)
-        // bypass the Jian path per spec §5.1.1.
+        // Route pointer-flavoured winit events through Jian's
+        // PointerTranslator. Non-pointer events (Resized /
+        // RedrawRequested / CloseRequested / keys) bypass the Jian
+        // path entirely — they're handled by winit directly in the
+        // match arms below.
         match &event {
             WindowEvent::ModifiersChanged(m) => {
                 self.pointer_translator.update_modifiers(m.state());
@@ -160,11 +161,11 @@ impl ApplicationHandler for BasicWindowApp {
             | WindowEvent::MouseInput { .. }
             | WindowEvent::Touch(_) => {
                 if let Some(jian_event) = self.pointer_translator.translate(&event) {
-                    let shell_events = self.pointer_mapper.from_jian_pointer(&jian_event);
                     // The demo doesn't act on pointer events — it just
                     // proves the pipeline compiles + runs without
-                    // panicking. Real widget dispatch lands in Step 1c+.
-                    let _ = shell_events;
+                    // panicking. Real widget dispatch (hit-test +
+                    // gesture arena) lands in Step 1c+.
+                    let _ = jian_event;
                 }
             }
             _ => {}
