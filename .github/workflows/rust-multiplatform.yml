@@ -6,7 +6,7 @@ name: Rust multi-platform build
 
 on:
   push:
-    branches: [main, v0.8.0]
+    branches: [main]
     paths:
       - 'Cargo.toml'
       - 'Cargo.lock'
