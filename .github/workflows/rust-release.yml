@@ -42,6 +42,11 @@ jobs:
             runner: windows-latest
             target: x86_64-pc-windows-msvc
             archive: zip
+          # Windows ARM64 — cargo cross-compile from x86_64 windows runner.
+          - label: windows-aarch64
+            runner: windows-latest
+            target: aarch64-pc-windows-msvc
+            archive: zip
     steps:
       - uses: actions/checkout@v4
         with:
