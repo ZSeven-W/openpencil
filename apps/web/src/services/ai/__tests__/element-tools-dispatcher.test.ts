@@ -1,10 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { ELEMENT_TOOL_NAMES } from '@zseven-w/pen-mcp';
-import {
-  dispatchElementToolCall,
-  dispatchElementToolCalls,
-  looksLikeJsonl,
-} from '../element-tools-dispatcher';
+import { dispatchElementToolCall, dispatchElementToolCalls } from '../element-tools-dispatcher';
 import { SUPPORTED_EMBEDDED_ELEMENT_TOOLS } from '../element-tool-shims';
 import { useHistoryStore } from '@/stores/history-store';
 import { useDocumentStore } from '@/stores/document-store';
@@ -697,64 +693,3 @@ describe('dispatchElementToolCall — M2 shim + M3 HTTP fallback', () => {
 
 // afterEach is imported implicitly via vitest globals; re-import for clarity
 import { afterEach } from 'vitest';
-
-describe('looksLikeJsonl', () => {
-  // Each weak/mid-tier model puts the JSONL in a slightly different
-  // wrapper. The detector has to recognize ALL of them so the
-  // dispatcher can re-route to applyBatchDesignAsJsonl instead of
-  // failing the whole subtask via the DSL parser.
-
-  it('matches pure JSONL (one node per line, starts with {)', () => {
-    const jsonl =
-      '{"_parent":null,"id":"r","type":"frame","children":[]}\n' +
-      '{"_parent":"r","id":"t","type":"text","content":"hi"}';
-    expect(looksLikeJsonl(jsonl)).toBe(true);
-  });
-
-  it('matches JSON-array-of-nodes (M2.7 food-app shape)', () => {
-    // Real failure from the M2.7 food-app run: model emitted the full
-    // subtask design wrapped in a single JSON array literal. The
-    // previous gate only checked `startsWith('{')` so this fell
-    // through to the DSL parser, every line of `[`/`{`/`}` failed,
-    // and the subtask returned empty → orchestrator retry → minimal-
-    // skills fallback → still empty → user got a single-frame
-    // placeholder with one section instead of the full design.
-    const jsonArray = `[
-  {
-    "id": "filterChips-root",
-    "type": "frame",
-    "name": "Filter Chips Section",
-    "role": "section",
-    "_parent": null,
-    "children": []
-  }
-]`;
-    expect(looksLikeJsonl(jsonArray)).toBe(true);
-  });
-
-  it('matches array shape with leading whitespace (newlines / indent)', () => {
-    const padded = '\n\n  [{"_parent":null,"id":"x","type":"frame"}]';
-    expect(looksLikeJsonl(padded)).toBe(true);
-  });
-
-  it('rejects DSL-style assignment lines (foo=I("parent",{...}))', () => {
-    // Real DSL: dispatch should NOT re-route to JSONL apply.
-    const dsl = 'root=I(null,{"type":"frame"})\nlabel=I(root,{"type":"text"})';
-    expect(looksLikeJsonl(dsl)).toBe(false);
-  });
-
-  it('rejects empty / non-bracketed strings', () => {
-    expect(looksLikeJsonl('')).toBe(false);
-    expect(looksLikeJsonl('   ')).toBe(false);
-    expect(looksLikeJsonl('hello world')).toBe(false);
-  });
-
-  it('rejects bracketed-but-non-JSONL content (e.g. JSON array of strings)', () => {
-    // A `[ ... ]` literal that doesn't carry JSONL shape keys (no
-    // `_parent`, no PenNode `type`) should NOT match — otherwise
-    // we'd reroute legit non-design array operations into the
-    // JSONL apply path.
-    expect(looksLikeJsonl('["foo", "bar"]')).toBe(false);
-    expect(looksLikeJsonl('[{"foo": "bar"}]')).toBe(false);
-  });
-});

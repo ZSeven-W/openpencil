@@ -461,11 +461,11 @@ bun run cargo:deny        # cargo-deny (native + wasm32 bans; CI uses cargo-deny
 
 **Crate list (`crates/`):**
 
-| Crate                                                       | Category                       | wasm32                                        |
-| ----------------------------------------------------------- | ------------------------------ | --------------------------------------------- |
-| openpencil-app                                              | Stage F entry placeholder      | —                                             |
-| openpencil-shell-{core,web,native}                          | UI shell（spec §1.2 三 crate） | core/web ✅ / native ❌ (compile_error guard) |
-| pen-types / pen-core / pen-engine / pen-codegen / pen-figma | bucket A logic                 | ✅                                            |
+| Crate | Category | wasm32 |
+|-------|----------|--------|
+| openpencil-app | Stage F entry placeholder | — |
+| openpencil-shell-{core,web,native} | UI shell（spec §1.2 三 crate） | core/web ✅ / native ❌ (compile_error guard) |
+| pen-types / pen-core / pen-engine / pen-codegen / pen-figma | bucket A logic | ✅ |
 
 **Submodule:** `vendor/agent` → `github.com/ZSeven-W/agent-rs` (cross-product Rust agent runtime).
 
@@ -502,7 +502,6 @@ Contributions are welcome! See [CLAUDE.md](./CLAUDE.md) for architecture details
 - [x] Native agent runtime (`agent-native` — Zig NAPI)
 - [x] Git integration — clone, branch, push/pull, folder-mode three-way merge
 - [x] Canvas raster export (PNG / JPEG / WEBP / PDF)
-- [x] Rust shell — Step 1a (G1 shared Skia context) on `v0.8.0`: `SharedSkiaContext` + `NativeBackend` (Jian-`DrawOp`-backed) + shell-core re-exports `jian_core::gesture::*` (events stay consistent with Jian — no OP-side translation layer per v19.4) + `basic_window` demo, with the multi-platform CI matrix green (macOS aarch64 + x86_64, Linux x86_64 + aarch64 cross, Windows x86_64 + aarch64 cross, iOS aarch64 + sim, Android aarch64 + x86_64, wasm32). Spec `v19.5` FROZEN; `vendor/jian` pinned at `c4a794dc`. OP visual model (single-page + infinite canvas canonical / multi-page also supported / no routing / Figma import auto-converts) and OP chrome (toolbars / panels — Rust-only) deferred to Step 1c+.
 - [ ] Collaborative editing
 - [ ] Plugin system
 

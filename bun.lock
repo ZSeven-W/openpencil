@@ -79,7 +79,7 @@
     },
     "apps/cli": {
       "name": "@zseven-w/openpencil",
-      "version": "0.8.0",
+      "version": "0.7.1",
       "bin": {
         "op": "dist/openpencil-cli.cjs",
       },
@@ -90,11 +90,11 @@
     },
     "apps/desktop": {
       "name": "@zseven-w/desktop",
-      "version": "0.8.0",
+      "version": "0.7.1",
     },
     "apps/web": {
       "name": "@zseven-w/web",
-      "version": "0.8.0",
+      "version": "0.7.1",
       "dependencies": {
         "@zseven-w/agent-native": "workspace:*",
         "@zseven-w/pen-acp": "workspace:*",
@@ -106,17 +106,16 @@
         "@zseven-w/pen-react": "workspace:*",
         "@zseven-w/pen-renderer": "workspace:*",
         "@zseven-w/pen-types": "workspace:*",
-        "undici": "^7.22.0",
         "zod": "^3.24",
       },
     },
     "packages/agent-native/napi": {
       "name": "@zseven-w/agent-native",
-      "version": "0.4.0",
+      "version": "0.2.0",
     },
     "packages/pen-acp": {
       "name": "@zseven-w/pen-acp",
-      "version": "0.8.0",
+      "version": "0.7.1",
       "dependencies": {
         "@agentclientprotocol/sdk": "^0.18.2",
         "ws": "^8.18.0",
@@ -128,7 +127,7 @@
     },
     "packages/pen-ai-skills": {
       "name": "@zseven-w/pen-ai-skills",
-      "version": "0.8.0",
+      "version": "0.7.1",
       "dependencies": {
         "@zseven-w/pen-types": "workspace:*",
         "gray-matter": "^4.0.3",
@@ -137,7 +136,7 @@
     },
     "packages/pen-core": {
       "name": "@zseven-w/pen-core",
-      "version": "0.8.0",
+      "version": "0.7.1",
       "dependencies": {
         "@zseven-w/pen-types": "workspace:*",
         "nanoid": "^5.1.6",
@@ -149,7 +148,7 @@
     },
     "packages/pen-engine": {
       "name": "@zseven-w/pen-engine",
-      "version": "0.8.0",
+      "version": "0.7.1",
       "dependencies": {
         "@zseven-w/pen-core": "workspace:*",
         "@zseven-w/pen-figma": "workspace:*",
@@ -170,7 +169,7 @@
     },
     "packages/pen-figma": {
       "name": "@zseven-w/pen-figma",
-      "version": "0.8.0",
+      "version": "0.7.1",
       "dependencies": {
         "@zseven-w/pen-types": "workspace:*",
         "fzstd": "^0.1.1",
@@ -184,7 +183,7 @@
     },
     "packages/pen-mcp": {
       "name": "@zseven-w/pen-mcp",
-      "version": "0.8.0",
+      "version": "0.7.1",
       "dependencies": {
         "@iconify-json/feather": "^1.2.1",
         "@iconify-json/lucide": "^1.2.93",
@@ -201,7 +200,7 @@
     },
     "packages/pen-react": {
       "name": "@zseven-w/pen-react",
-      "version": "0.8.0",
+      "version": "0.7.1",
       "dependencies": {
         "@zseven-w/pen-core": "workspace:*",
         "@zseven-w/pen-engine": "workspace:*",
@@ -230,7 +229,7 @@
     },
     "packages/pen-renderer": {
       "name": "@zseven-w/pen-renderer",
-      "version": "0.8.0",
+      "version": "0.7.1",
       "dependencies": {
         "@zseven-w/pen-core": "workspace:*",
         "@zseven-w/pen-types": "workspace:*",
@@ -247,7 +246,7 @@
     },
     "packages/pen-sdk": {
       "name": "@zseven-w/pen-sdk",
-      "version": "0.8.0",
+      "version": "0.7.1",
       "dependencies": {
         "@zseven-w/pen-core": "workspace:*",
         "@zseven-w/pen-engine": "workspace:*",
@@ -262,7 +261,7 @@
     },
     "packages/pen-types": {
       "name": "@zseven-w/pen-types",
-      "version": "0.8.0",
+      "version": "0.7.1",
       "devDependencies": {
         "typescript": "^5.7.2",
       },

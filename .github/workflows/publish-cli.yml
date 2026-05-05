@@ -1,0 +1,115 @@
+name: Publish npm
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  publish:
+    name: Publish to npm
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: https://registry.npmjs.org
+
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: 0.15.2
+
+      - name: Install dependencies
+        env:
+          OPENPENCIL_SKIP_AGENT_NATIVE: '1'
+        run: bun install --frozen-lockfile
+
+      - name: Get version
+        id: version
+        run: echo "version=$(jq -r .version package.json)" >> "$GITHUB_OUTPUT"
+
+      - name: Replace workspace:* with version
+        run: |
+          VERSION=${{ steps.version.outputs.version }}
+          for f in packages/*/package.json apps/cli/package.json; do
+            if [ -f "$f" ]; then
+              jq --arg v "$VERSION" '
+                if .dependencies then
+                  .dependencies |= with_entries(
+                    if .value == "workspace:*" then .value = $v else . end
+                  )
+                else . end |
+                if .devDependencies then
+                  .devDependencies |= with_entries(
+                    if .value == "workspace:*" then .value = $v else . end
+                  )
+                else . end
+              ' "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+              echo "Updated $f"
+            fi
+          done
+
+      - name: Checkout openpencil-skill
+        uses: actions/checkout@v4
+        with:
+          repository: zseven-w/openpencil-skill
+          path: external/openpencil-skill
+
+      - name: Compile CLI
+        env:
+          SKILL_ROOT: ${{ github.workspace }}/external/openpencil-skill
+        run: bun run cli:compile
+
+      - name: Verify CLI build
+        run: node apps/cli/dist/openpencil-cli.cjs --version
+
+      # Publish in topological order. For each package:
+      #   1. Resolve the real name from its package.json (no hand-written
+      #      name — avoids drift between workflow and package manifest).
+      #   2. Query the registry for that exact name@version. If it already
+      #      exists, skip (idempotent re-runs of the same tag are safe).
+      #   3. Otherwise, publish. Real errors (auth, network, notarize, etc.)
+      #      still fail the step because we only skip on a verified hit.
+      - name: Publish all packages (skip versions already on registry)
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          PACKAGES=(
+            packages/pen-types
+            packages/pen-core
+            packages/pen-figma
+            packages/pen-renderer
+            packages/pen-engine
+            packages/pen-react
+            packages/pen-mcp
+            packages/pen-sdk
+            packages/pen-ai-skills
+            apps/cli
+          )
+          for dir in "${PACKAGES[@]}"; do
+            name=$(jq -r .name "$dir/package.json")
+            echo "::group::$name@$VERSION  ($dir)"
+            if npm view "$name@$VERSION" version >/dev/null 2>&1; then
+              echo "✓ already on registry — skipping"
+            else
+              ( cd "$dir" && npm publish --access public )
+              echo "✓ published"
+            fi
+            echo "::endgroup::"
+          done

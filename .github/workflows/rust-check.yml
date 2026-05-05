@@ -32,45 +32,36 @@ jobs:
           submodules: recursive
       - uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: '1.85'
+          toolchain: "1.85"
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
-      # Linux GL prerequisites for winit's x11+wayland feature link.
-      # libxkbcommon-x11-dev / libwayland-dev are winit's link-time deps on
-      # Linux; the wayland-csd-adwaita feature pulls in xkbcommon + wayland-client.
-      - name: Install Linux GL prereqs
+      # Linux GL prerequisites for the P0 probe ignored test step. xvfb gives
+      # winit a virtual display; mesa software-rasterizes GL when no GPU is
+      # available; libxkbcommon-x11-dev / libwayland-dev are winit's link-time
+      # dependencies on Linux. (No-op on macOS / Windows runners.)
+      - name: Install Linux GL prereqs (P0 probe gate)
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y \
+            xvfb \
+            libgl1-mesa-dri libglu1-mesa libegl1 libgles2 \
             libxkbcommon-dev libxkbcommon-x11-dev \
-            libwayland-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev \
-            libegl1-mesa-dev libgles2-mesa-dev libgbm-dev mesa-utils \
-            libfreetype-dev libfontconfig1-dev
+            libwayland-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev
       - run: cargo fmt --all -- --check
       - run: cargo build --workspace
-      # Step 1a §9.2: Linux GPU smoke must hard-fail on EGL/GL setup failure
-      # in CI (real Mesa software-rendered EGL pbuffer is available). Local
-      # dev runners (no GPU + no env var) skip with INCONCLUSIVE marker.
-      - name: Run tests (Linux with strict GPU gate)
-        if: runner.os == 'Linux'
-        env:
-          STEP1A_REQUIRE_GPU: '1'
-        run: cargo test --workspace
-      - name: Run tests (macOS / Windows)
-        if: runner.os != 'Linux'
-        run: cargo test --workspace
+      - run: cargo test --workspace
       - run: cargo clippy --workspace --all-targets -- -D warnings
-      # Step 1a Phase C Task 4: spec v19 §11 + §12.3 boundary invariants.
-      # Linux runner has the full mobile target stdlib (`rustup target add`
-      # in subsequent steps would handle ios/android cargo metadata too,
-      # but the script uses `cargo tree --target` which only needs the
-      # cfg-gate evaluation, not the actual target sysroot).
-      - name: Verify Jian boundary invariants
+      # P0 probe gate (Step 1a) — runs only the `#[ignore = "P0_PROBE_GATE"]`
+      # tests. Linux: route through `xvfb-run` for a virtual display.
+      # Windows: the test body early-returns with a "deferred" message
+      # (spec §8.2 WINDOWS_GPU_DEFERRED_NO_RUNNER); macOS: runs natively.
+      - name: P0 probe gate (Linux)
         if: runner.os == 'Linux'
-        run: |
-          rustup target add aarch64-linux-android aarch64-apple-ios wasm32-unknown-unknown
-          bash tools/check-jian-boundaries.sh
+        run: xvfb-run -a cargo test -p openpencil-shell-native --test p0_probe -- --ignored
+      - name: P0 probe gate (macOS / Windows)
+        if: runner.os != 'Linux'
+        run: cargo test -p openpencil-shell-native --test p0_probe -- --ignored
 
   deny:
     name: cargo-deny (native)
@@ -80,6 +71,6 @@ jobs:
         with:
           submodules: recursive
       - uses: dtolnay/rust-toolchain@stable
-      - uses: EmbarkStudios/cargo-deny-action@v2 # auto-updates within v2.x; runner cargo at this stage carries cargo-deny 0.18+ which handles modern transitive manifests (Phase 1 Task 1.8 finding)
+      - uses: EmbarkStudios/cargo-deny-action@v2  # auto-updates within v2.x; runner cargo at this stage carries cargo-deny 0.18+ which handles modern transitive manifests (Phase 1 Task 1.8 finding)
         with:
           command: check

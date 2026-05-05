@@ -14,7 +14,6 @@
     "@zseven-w/pen-react": "workspace:*",
     "@zseven-w/pen-renderer": "workspace:*",
     "@zseven-w/pen-types": "workspace:*",
-    "undici": "^7.22.0",
     "zod": "^3.24"
   }
 }
