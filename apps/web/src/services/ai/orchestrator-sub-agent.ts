@@ -570,6 +570,22 @@ async function executeSubAgent(
                 .filter((r) => r.status !== 'applied')
                 .map((r) => `[${r.toolName}] ${r.message}`)
                 .join('; ') || 'element-tool dispatch produced no nodes';
+        // Run the same tree-aware post-pass the streaming path runs
+        // below at line ~630. Without this, dispatcher-path inserts
+        // (Strategy A `<op_tool>` chains AND Strategy B JSONL-in-
+        // batch_design fallback) skip role resolution, layout
+        // normalization, redundant-fill stripping, AND nav-surface fill
+        // injection. The visible regression: sub-agents that emit a
+        // `bottom-tab-bar` / `top-app-bar` / etc. without an explicit
+        // fill ship floating-on-cream nav rows, and banner sections
+        // miss the height/clipContent fix-ups that depend on
+        // role-resolved children. `subtask.parentFrameId` is the
+        // section root the dispatcher inserted into; the post-pass
+        // walks up to the actual page root for the inject pass.
+        if (inserted.length > 0) {
+          const postPassRootId = subtask.parentFrameId ?? plan.rootFrame.id;
+          applyPostStreamingTreeHeuristics(postPassRootId);
+        }
         return {
           subtaskId: subtask.id,
           nodes: inserted.length > 0 ? inserted : renderer.getInsertedNodes(),
