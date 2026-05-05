@@ -1,6 +1,8 @@
 import type { PenNode, FrameNode, SizingBehavior } from '@/types/pen';
 import type { PathNode } from '@/types/pen';
 import type { PenFill, PenStroke, PenEffect, SolidFill } from '@/types/styles';
+import { resolveColorRef, getDefaultTheme } from '@zseven-w/pen-core';
+import { useDocumentStore } from '@/stores/document-store';
 import {
   toSizeNumber,
   toGapNumber,
@@ -10,6 +12,25 @@ import {
   hasCjkText,
 } from './generation-utils';
 import { resolveIconPathBySemanticName } from './icon-resolver';
+
+/**
+ * Resolve a color string that may be a `$color-*` variable ref into the
+ * concrete hex it points at on the active theme. Returns the original
+ * string when it isn't a ref or when resolution fails. Reads the live
+ * doc store directly because the role resolver runs without an
+ * explicit variables param threaded through every helper.
+ */
+function resolveColorMaybeRef(color: string | undefined): string | undefined {
+  if (color === undefined) return undefined;
+  if (!color.startsWith('$')) return color;
+  const doc = useDocumentStore.getState().document;
+  const variables = doc.variables;
+  if (!variables || Object.keys(variables).length === 0) return color;
+  const themes = doc.themes;
+  const activeTheme = themes ? getDefaultTheme(themes) : undefined;
+  const resolved = resolveColorRef(color, variables, activeTheme);
+  return typeof resolved === 'string' ? resolved : color;
+}
 
 // ---------------------------------------------------------------------------
 // Context passed to each role rule function
@@ -738,11 +759,24 @@ function fixButtonForegroundContrast(parent: FrameNode): void {
   // white on an invisible button.
   if (!hasVisibleFill(parent)) return;
 
-  const bgColor = getFirstSolidColor(parent);
+  const bgColorRaw = getFirstSolidColor(parent);
+  if (!bgColorRaw) return;
+  // The model emits accent-colored buttons as `$color-accent`, not
+  // hex. Without resolving the ref the luminance check sees a literal
+  // `$color-...` string, parseInt returns NaN, `NaN < 0.5` is false,
+  // and the dark-fg branch wins — so on an orange accent button the
+  // contrast pass paints text dark-on-orange. Use the resolved hex
+  // (or the literal when not a ref) for luminance.
+  const bgColor = resolveColorMaybeRef(bgColorRaw);
   if (!bgColor) return;
 
   const lum = hexLuminance(bgColor);
-  const fgColor = lum < 0.5 ? '#FFFFFF' : '#0F172A';
+  // Treat unparseable luminance (NaN — e.g. when the variable was not
+  // seeded and resolution returned the original ref) as a dark bg so
+  // the contrast pass at least paints visible white text instead of
+  // dark-on-unknown. Better default than the previous silent NaN<0.5
+  // branch which always picked the dark fg.
+  const fgColor = !Number.isFinite(lum) || lum < 0.5 ? '#FFFFFF' : '#0F172A';
   const fgFill: PenFill[] = [{ type: 'solid', color: fgColor }];
 
   if (!('children' in parent) || !Array.isArray(parent.children)) return;
@@ -750,12 +784,31 @@ function fixButtonForegroundContrast(parent: FrameNode): void {
   for (const child of parent.children) {
     const rec = child as unknown as Record<string, unknown>;
 
-    if (child.type === 'text' || child.type === 'icon_font') {
+    if (child.type === 'text') {
       // `hasVisibleFill` treats transparent-hex placeholder fills as
       // unfilled, so the normalizer's #00000000 leftover does not
       // block contrast from supplying a visible color.
       if (!hasVisibleFill(child)) {
         rec.fill = fgFill;
+      }
+    } else if (child.type === 'icon_font') {
+      // Icons get the contrast fg even when they already have a fill.
+      // The model defaults `icon_font.fill` to a dark text-color (the
+      // prompt lists `fill` as a property, models reflexively stamp
+      // a dark hex) — but inside an accent-colored button that paints
+      // a dark icon next to a contrast-corrected white text label,
+      // which is the visible regression. ONLY override when the
+      // existing icon fill has poor contrast against the bg; an
+      // intentional brand-color icon on a white button (e.g. a red
+      // notification dot) survives untouched.
+      if (!hasVisibleFill(child)) {
+        rec.fill = fgFill;
+      } else {
+        const existing = getFirstSolidColor(child);
+        const existingHex = existing ? resolveColorMaybeRef(existing) : undefined;
+        if (existingHex && needsContrastOverride(existingHex, bgColor)) {
+          rec.fill = fgFill;
+        }
       }
     } else if (child.type === 'path') {
       const hasStroke = 'stroke' in child && child.stroke != null;
@@ -773,6 +826,22 @@ function fixButtonForegroundContrast(parent: FrameNode): void {
       }
     }
   }
+}
+
+/**
+ * Return true when a foreground color has poor contrast against a
+ * background color and should be replaced by the contrast pass. The
+ * threshold (luminance delta < 0.4) catches dark-on-dark and
+ * light-on-light pairs while keeping intentional accent icons
+ * (e.g. red badge dot on white card, brand-blue icon on white button)
+ * untouched. Both inputs must already be hex; ref resolution happens
+ * at the caller.
+ */
+function needsContrastOverride(fgHex: string, bgHex: string): boolean {
+  const fgLum = hexLuminance(fgHex);
+  const bgLum = hexLuminance(bgHex);
+  if (!Number.isFinite(fgLum) || !Number.isFinite(bgLum)) return false;
+  return Math.abs(fgLum - bgLum) < 0.4;
 }
 
 const SECTION_ROLES = new Set(['section', 'hero', 'cta-section', 'stats-section', 'footer']);
