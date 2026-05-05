@@ -243,4 +243,69 @@ describe('injectMissingNavSurfaceFill', () => {
     expect(changed).toBe(false);
     expect((sectionWithoutFill as PenNode & { fill?: unknown }).fill).toBeUndefined();
   });
+
+  it('injects an upward shadow on bottom-tab-bar so it lifts off cream pages', () => {
+    // Regression: warm-light themes resolve `$color-surface` to white
+    // and `$color-bg-deep` to cream (#FFF8F0). The luminance delta is
+    // ~0.03 — the nav looks transparent against the page even with a
+    // valid surface fill. The inject pass also stamps a soft upward
+    // shadow on bottom-positioned nav so the separation survives the
+    // low fill-contrast case.
+    const nav = frame({
+      id: 'bottom-nav',
+      role: 'bottom-tab-bar',
+      children: [],
+    });
+    const root = frame({
+      id: 'root',
+      fill: solidFill('#FFF8F0'),
+      children: [nav],
+    });
+    injectMissingNavSurfaceFill(root);
+    const effects = (nav as PenNode & { effects?: Array<{ type?: string; offsetY?: number }> })
+      .effects;
+    expect(Array.isArray(effects)).toBe(true);
+    expect(effects?.[0]?.type).toBe('shadow');
+    // Bottom nav → negative offsetY → shadow points up.
+    expect(effects?.[0]?.offsetY).toBeLessThan(0);
+  });
+
+  it('injects a downward shadow on top nav (top-app-bar / top-nav-bar / navbar)', () => {
+    // Top-positioned nav can't use an upward shadow (it would cling
+    // to the screen edge). The inject pass picks `offsetY > 0` for
+    // every non-bottom role.
+    const topRoles = ['top-app-bar', 'top-nav-bar', 'navbar'];
+    for (const role of topRoles) {
+      const nav = frame({ id: `nav-${role}`, role, children: [] });
+      const root = frame({
+        id: 'root',
+        fill: solidFill('#FFF8F0'),
+        children: [nav],
+      });
+      injectMissingNavSurfaceFill(root);
+      const effects = (nav as PenNode & { effects?: Array<{ type?: string; offsetY?: number }> })
+        .effects;
+      expect(effects?.[0]?.type).toBe('shadow');
+      expect(effects?.[0]?.offsetY).toBeGreaterThan(0);
+    }
+  });
+
+  it('preserves existing effects (sub-agent intentional shadow / glow)', () => {
+    const intentionalShadow = [
+      { type: 'shadow', offsetX: 0, offsetY: 8, blur: 24, spread: 0, color: '#00000033' },
+    ];
+    const nav = frame({
+      id: 'nav-with-effects',
+      role: 'bottom-tab-bar',
+      effects: intentionalShadow as never,
+      children: [],
+    });
+    const root = frame({
+      id: 'root',
+      fill: solidFill('#FFF8F0'),
+      children: [nav],
+    });
+    injectMissingNavSurfaceFill(root);
+    expect((nav as PenNode & { effects?: unknown }).effects).toEqual(intentionalShadow);
+  });
 });
