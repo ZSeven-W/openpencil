@@ -72,7 +72,8 @@ jobs:
             libxkbcommon-dev libxkbcommon-x11-dev \
             libwayland-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev \
             libegl1-mesa-dev libgles2-mesa-dev libgbm-dev mesa-utils \
-            libfreetype-dev libfontconfig1-dev
+            libfreetype-dev libfontconfig1-dev \
+            xvfb
       - name: Install cross
         if: matrix.cross == true
         run: cargo install cross --locked --version 0.2.5
@@ -82,11 +83,21 @@ jobs:
       - name: Build (cross)
         if: matrix.cross == true
         run: cross build --workspace --target ${{ matrix.target }} --release
-      - name: Test (host, Linux strict-GPU)
+      - name: Test (host, Linux strict-GPU under Xvfb)
         if: matrix.cross == false && runner.os == 'Linux'
         env:
           STEP1A_REQUIRE_GPU: '1'
-        run: cargo test --workspace --target ${{ matrix.target }}
+          # Force Mesa software-rendered llvmpipe so EGL pbuffer surfaces work
+          # on hosted runners without a real GPU. See spec §9.2 + plan v7
+          # P0 platform gotcha #3 (Linux GPU smoke window-based deferred;
+          # EGL pbuffer non-ignored).
+          LIBGL_ALWAYS_SOFTWARE: '1'
+          GALLIUM_DRIVER: llvmpipe
+          MESA_GL_VERSION_OVERRIDE: '4.5'
+        # xvfb-run gives the Mesa EGL provider a real X11 display connection;
+        # EGL_DEFAULT_DISPLAY then resolves to an initialised display rather
+        # than the headless DRI fallback that fails `eglInitialize`.
+        run: xvfb-run -a cargo test --workspace --target ${{ matrix.target }}
       - name: Test (host, macOS / Windows)
         if: matrix.cross == false && runner.os != 'Linux'
         run: cargo test --workspace --target ${{ matrix.target }}
