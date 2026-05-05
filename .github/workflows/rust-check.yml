@@ -59,9 +59,29 @@ jobs:
       # tests. Linux: route through `xvfb-run` for a virtual display.
       # Windows: the test body early-returns with a "deferred" message
       # (spec §8.2 WINDOWS_GPU_DEFERRED_NO_RUNNER); macOS: runs natively.
+      #
+      # Xvfb arguments:
+      #   -screen 0 1280x1024x24 — 24-bit color so GLX visuals can match.
+      #   +extension GLX        — explicitly enable GLX (without this, a
+      #                           winit X11 window hits `GLXBadWindow` when
+      #                           the X server reports an empty FBConfig list).
+      #   +render               — RENDER extension (winit/skia path queries it).
+      #   -noreset              — keep the X server alive across the cargo
+      #                           subprocess fork (probe spawns
+      #                           `cargo run --example p0_probe` per test).
+      # Env:
+      #   LIBGL_ALWAYS_SOFTWARE=1 + GALLIUM_DRIVER=llvmpipe forces mesa to
+      #   software-render (xvfb has no GPU); without it create_context
+      #   negotiates an unusable hardware visual.
       - name: P0 probe gate (Linux)
         if: runner.os == 'Linux'
-        run: xvfb-run -a cargo test -p openpencil-shell-native --test p0_probe -- --ignored
+        env:
+          LIBGL_ALWAYS_SOFTWARE: '1'
+          GALLIUM_DRIVER: llvmpipe
+          MESA_GL_VERSION_OVERRIDE: '4.5'
+        run: |
+          xvfb-run -a -s "-screen 0 1280x1024x24 +extension GLX +render -noreset" \
+            cargo test -p openpencil-shell-native --test p0_probe -- --ignored
       - name: P0 probe gate (macOS / Windows)
         if: runner.os != 'Linux'
         run: cargo test -p openpencil-shell-native --test p0_probe -- --ignored
