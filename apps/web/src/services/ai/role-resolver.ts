@@ -2,16 +2,6 @@ import type { PenNode, FrameNode, SizingBehavior } from '@/types/pen';
 import type { PathNode } from '@/types/pen';
 import type { PenFill, PenStroke, PenEffect, SolidFill } from '@/types/styles';
 import {
-  resolveColorRef,
-  getDefaultTheme,
-  getSemanticPaletteHex,
-  SEMANTIC_PALETTE_THEME_LIGHT,
-  SEMANTIC_PALETTE_THEME_DARK,
-  getActivePageChildren,
-} from '@zseven-w/pen-core';
-import { useDocumentStore } from '@/stores/document-store';
-import { useCanvasStore } from '@/stores/canvas-store';
-import {
   toSizeNumber,
   toGapNumber,
   parsePaddingValues,
@@ -20,80 +10,6 @@ import {
   hasCjkText,
 } from './generation-utils';
 import { resolveIconPathBySemanticName } from './icon-resolver';
-
-/**
- * Resolve a color string that may be a `$color-*` variable ref into the
- * concrete hex it points at on the active theme. Returns the original
- * string when it isn't a ref, or `undefined` when input is undefined.
- *
- * Resolution cascade (each step's miss falls through to the next):
- *   1. Doc-seeded variables (the user's chosen palette, if any).
- *   2. The built-in `getSemanticPaletteHex` map in whichever Light /
- *      Dark mode the active page root's fill advertises — every
- *      semantic token has a known light + dark hex baked in. Covers
- *      the case where a sub-agent emits `$color-accent` BEFORE
- *      `seedDocVariablesFromStyleGuide` runs.
- *   3. Return the original ref string. The caller (typically a
- *      luminance check) treats this as "unresolvable" and bails.
- *
- * Mode detection for step 2 uses `detectThemeFromNode` on the active
- * page's primary frame, the same signal `resolveTreeRoles` reads at
- * its entry point. Two earlier iterations got this wrong:
- *   - `themeHint` parameter — never threaded through, dark-mode docs
- *     were always served the light palette.
- *   - `doc.themes[SEMANTIC_PALETTE_THEME_AXIS]` — that axis is NOT
- *     written in the production orchestrator path
- *     (`seedDocVariablesFromStyleGuide` writes only `doc.variables`),
- *     so dark-mode generations still fell back to the light palette.
- * Reading the page root's fill matches whatever the user / model
- * actually painted as the page background, regardless of whether the
- * themes axis was ever populated.
- */
-function resolveColorMaybeRef(color: string | undefined): string | undefined {
-  if (color === undefined) return undefined;
-  if (!color.startsWith('$')) return color;
-  const doc = useDocumentStore.getState().document;
-
-  // Step 1: doc-seeded variables.
-  const variables = doc.variables;
-  if (variables && Object.keys(variables).length > 0) {
-    const themes = doc.themes;
-    const activeTheme = themes ? getDefaultTheme(themes) : undefined;
-    const resolved = resolveColorRef(color, variables, activeTheme);
-    if (typeof resolved === 'string' && !resolved.startsWith('$')) return resolved;
-  }
-
-  // Step 2: built-in semantic palette in the doc's current mode.
-  // Mode is detected from the active page's primary frame fill —
-  // the same signal `resolveTreeRoles` uses for its theme param.
-  const tokenName = color.slice(1); // strip leading '$'
-  const mode =
-    detectActivePageMode() === 'dark' ? SEMANTIC_PALETTE_THEME_DARK : SEMANTIC_PALETTE_THEME_LIGHT;
-  const paletteHex = getSemanticPaletteHex(mode);
-  if (typeof paletteHex[tokenName] === 'string') return paletteHex[tokenName];
-
-  // Step 3: unresolvable; let the caller decide.
-  return color;
-}
-
-/**
- * Detect light vs dark mode from the active page's primary frame. Used
- * by `resolveColorMaybeRef`'s step-2 cascade to pick the right
- * semantic palette when doc.variables hasn't been seeded yet.
- *
- * Returns 'light' when no page root is found or the root has no fill —
- * Light is the safer default since most generations are light theme,
- * and the caller will fall through to the light palette which carries
- * conventional defaults (white surface, slate text).
- */
-function detectActivePageMode(): 'light' | 'dark' {
-  const doc = useDocumentStore.getState().document;
-  const activePageId = useCanvasStore.getState().activePageId;
-  const children = getActivePageChildren(doc, activePageId);
-  const root = children.find((c) => c.type === 'frame');
-  if (!root) return 'light';
-  return detectThemeFromNode(root);
-}
 
 // ---------------------------------------------------------------------------
 // Context passed to each role rule function
@@ -815,20 +731,6 @@ export function getFirstSolidColor(node: PenNode): string | undefined {
 // Post-pass helpers
 // ---------------------------------------------------------------------------
 
-/**
- * Luminance-delta fallback for icon-only buttons. Returns true when
- * the foreground hex is "too close" to the background hex and should
- * be replaced. Threshold 0.5 catches dark-on-dark (e.g. slate-900
- * icon on slate-800 button) while leaving intentional accent icons
- * on light bg (red dot on white card, delta ≈ 0.7) alone.
- */
-function needsLuminanceContrastOverride(fgHex: string, bgHex: string): boolean {
-  const fgLum = hexLuminance(fgHex);
-  const bgLum = hexLuminance(bgHex);
-  if (!Number.isFinite(fgLum) || !Number.isFinite(bgLum)) return false;
-  return Math.abs(fgLum - bgLum) < 0.5;
-}
-
 function fixButtonForegroundContrast(parent: FrameNode): void {
   if (parent.role !== 'button' && parent.role !== 'icon-button') return;
   // A transparent button has no background color to compute contrast
@@ -836,111 +738,24 @@ function fixButtonForegroundContrast(parent: FrameNode): void {
   // white on an invisible button.
   if (!hasVisibleFill(parent)) return;
 
-  const bgColorRaw = getFirstSolidColor(parent);
-  if (!bgColorRaw) return;
-  // The model emits accent-colored buttons as `$color-accent`, not
-  // hex. Without resolving the ref the luminance check sees a literal
-  // `$color-...` string, parseInt returns NaN, and `NaN < 0.5` is
-  // false — so the original code always picked the dark fg branch on
-  // unresolved refs (visible bug: dark text on orange accent).
-  // Resolve the ref via the doc's variables before deciding contrast.
-  const bgColor = resolveColorMaybeRef(bgColorRaw);
+  const bgColor = getFirstSolidColor(parent);
   if (!bgColor) return;
 
   const lum = hexLuminance(bgColor);
-  // When luminance is unparseable (the ref still didn't resolve to a
-  // hex — e.g. doc variables haven't been seeded yet, or the ref
-  // points at a missing token), we cannot pick a contrast color
-  // safely. Painting white risks invisible-on-light bg; painting
-  // dark risks invisible-on-dark bg. Either guess can ship a
-  // visually broken button. The least-bad option is to skip the
-  // contrast pass entirely on this button — text/icon retain
-  // whatever fill they already had, which is at least *something*
-  // visible (the model's default text color, usually a dark hex). A
-  // later post-pass run AFTER variables get seeded will re-resolve
-  // and apply contrast cleanly.
-  if (!Number.isFinite(lum)) return;
-
   const fgColor = lum < 0.5 ? '#FFFFFF' : '#0F172A';
   const fgFill: PenFill[] = [{ type: 'solid', color: fgColor }];
 
   if (!('children' in parent) || !Array.isArray(parent.children)) return;
 
-  // PASS 1: find a "reference" foreground color from a sibling text.
-  // Inside a button, text + icon should always paint the SAME color —
-  // they're a unit, not two independent surfaces. The model often
-  // gives the text a correct fill (white on accent, dark on light)
-  // but stamps `icon_font.fill` with a hardcoded dark hex from a
-  // generic default ("icons are dark"), producing white-text-next-to-
-  // dark-icon regressions like the food-app "Order now" CTA.
-  //
-  // Pass 1 reads the resolved hex from any text child's fill; if found
-  // it overrides the contrast-derived fg. This is more accurate than a
-  // luminance-delta heuristic because it captures the model's intent
-  // (whatever color it picked for the label is what it meant for the
-  // foreground) and matches user expectation that the two glyphs read
-  // as a single token.
-  let referenceFgHex: string | null = null;
-  for (const child of parent.children) {
-    if (child.type !== 'text') continue;
-    if (!hasVisibleFill(child)) continue;
-    const tc = getFirstSolidColor(child);
-    if (!tc) continue;
-    const resolved = resolveColorMaybeRef(tc);
-    if (resolved && !resolved.startsWith('$')) {
-      referenceFgHex = resolved;
-      break;
-    }
-  }
-  const finalFgFill: PenFill[] = referenceFgHex
-    ? [{ type: 'solid', color: referenceFgHex }]
-    : fgFill;
-
-  // PASS 2: apply foreground.
   for (const child of parent.children) {
     const rec = child as unknown as Record<string, unknown>;
 
-    if (child.type === 'text') {
+    if (child.type === 'text' || child.type === 'icon_font') {
       // `hasVisibleFill` treats transparent-hex placeholder fills as
       // unfilled, so the normalizer's #00000000 leftover does not
       // block contrast from supplying a visible color.
       if (!hasVisibleFill(child)) {
         rec.fill = fgFill;
-      }
-    } else if (child.type === 'icon_font') {
-      // Icons should match the sibling text's color. If the icon
-      // already has a fill, override it ONLY when its resolved hex
-      // differs from the reference fg — that catches the dark-icon-
-      // next-to-white-text bug while leaving intentional accent
-      // icons (e.g. a red notification dot whose color matches no
-      // sibling text) untouched.
-      if (!hasVisibleFill(child)) {
-        rec.fill = finalFgFill;
-        continue;
-      }
-      if (referenceFgHex) {
-        const existing = getFirstSolidColor(child);
-        const existingHex = existing ? resolveColorMaybeRef(existing) : undefined;
-        if (
-          existingHex &&
-          !existingHex.startsWith('$') &&
-          existingHex.toLowerCase() !== referenceFgHex.toLowerCase()
-        ) {
-          rec.fill = finalFgFill;
-        }
-      } else {
-        // Icon-only button (no text sibling to copy from). Fall back
-        // to a luminance-based override: when the icon's existing
-        // fill is too close to the bg, swap to the contrast-derived
-        // fg. Threshold 0.5 catches the dark-on-dark case (slate-900
-        // icon on slate-800 button, delta ≈ 0.09) without disturbing
-        // intentional accent icons on light surfaces (red dot on
-        // white card, delta ≈ 0.7).
-        const existing = getFirstSolidColor(child);
-        const existingHex = existing ? resolveColorMaybeRef(existing) : undefined;
-        if (existingHex && needsLuminanceContrastOverride(existingHex, bgColor)) {
-          rec.fill = fgFill;
-        }
       }
     } else if (child.type === 'path') {
       const hasStroke = 'stroke' in child && child.stroke != null;
@@ -952,9 +767,9 @@ function fixButtonForegroundContrast(parent: FrameNode): void {
       if (hasVisibleFill(child)) {
         // fill-style icon — already styled, skip
       } else if (hasStroke && !hasStrokeFill) {
-        (child.stroke as unknown as Record<string, unknown>).fill = finalFgFill;
+        (child.stroke as unknown as Record<string, unknown>).fill = fgFill;
       } else if (!hasStroke && !hasVisibleFill(child)) {
-        rec.fill = finalFgFill;
+        rec.fill = fgFill;
       }
     }
   }

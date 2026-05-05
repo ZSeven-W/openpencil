@@ -106,10 +106,8 @@ pub mod egl_pbuffer {
                 )
             };
 
-            // SAFETY: khronos-egl 6.x marks `get_display` unsafe (it dereferences
-            // a raw display pointer). DEFAULT_DISPLAY is a well-known sentinel
-            // (NULL on most Linux platforms) handled correctly by libEGL.
-            let display = unsafe { egl.get_display(egl::DEFAULT_DISPLAY) }
+            let display = egl
+                .get_display(egl::DEFAULT_DISPLAY)
                 .ok_or_else(|| ProviderError::from_msg("no default EGL display"))?;
             egl.initialize(display)
                 .map_err(|e| ProviderError::from_msg(format!("EGL init: {e}")))?;

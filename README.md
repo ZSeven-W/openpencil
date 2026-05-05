@@ -461,11 +461,11 @@ bun run cargo:deny        # cargo-deny (native + wasm32 bans; CI uses cargo-deny
 
 **Crate list (`crates/`):**
 
-| Crate                                                       | Category                       | wasm32                                        |
-| ----------------------------------------------------------- | ------------------------------ | --------------------------------------------- |
-| openpencil-app                                              | Stage F entry placeholder      | —                                             |
-| openpencil-shell-{core,web,native}                          | UI shell（spec §1.2 三 crate） | core/web ✅ / native ❌ (compile_error guard) |
-| pen-types / pen-core / pen-engine / pen-codegen / pen-figma | bucket A logic                 | ✅                                            |
+| Crate | Category | wasm32 |
+|-------|----------|--------|
+| openpencil-app | Stage F entry placeholder | — |
+| openpencil-shell-{core,web,native} | UI shell（spec §1.2 三 crate） | core/web ✅ / native ❌ (compile_error guard) |
+| pen-types / pen-core / pen-engine / pen-codegen / pen-figma | bucket A logic | ✅ |
 
 **Submodule:** `vendor/agent` → `github.com/ZSeven-W/agent-rs` (cross-product Rust agent runtime).
 
@@ -502,7 +502,6 @@ Contributions are welcome! See [CLAUDE.md](./CLAUDE.md) for architecture details
 - [x] Native agent runtime (`agent-native` — Zig NAPI)
 - [x] Git integration — clone, branch, push/pull, folder-mode three-way merge
 - [x] Canvas raster export (PNG / JPEG / WEBP / PDF)
-- [x] Rust shell — Step 1a (G1 shared Skia context) on `v0.8.0`: `SharedSkiaContext` + `NativeBackend` (Jian-`DrawOp`-backed) + `JianPointerMapper` (Jian `PointerEvent` → `ShellEvent`) + `basic_window` demo, with the multi-platform CI matrix green (macOS / Linux / Windows desktop, iOS / Android cargo check, wasm32). Spec `v19.3` FROZEN; `vendor/jian` pinned at `c4a794dc`.
 - [ ] Collaborative editing
 - [ ] Plugin system
 

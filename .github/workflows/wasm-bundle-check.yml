@@ -21,7 +21,7 @@ jobs:
           submodules: recursive
       - uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: '1.85'
+          toolchain: "1.85"
           targets: wasm32-unknown-unknown
       - uses: Swatinem/rust-cache@v2
         with:
@@ -44,7 +44,7 @@ jobs:
         with:
           targets: wasm32-unknown-unknown
       - name: Reverse — blacklisted crates not in wasm bundle
-        uses: EmbarkStudios/cargo-deny-action@v2 # cargo-deny 0.18+ via the action (Phase 1 Task 1.8 finding)
+        uses: EmbarkStudios/cargo-deny-action@v2  # cargo-deny 0.18+ via the action (Phase 1 Task 1.8 finding)
         with:
           command: check bans
           arguments: --target wasm32-unknown-unknown
