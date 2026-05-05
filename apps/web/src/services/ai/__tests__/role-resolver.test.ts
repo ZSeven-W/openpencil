@@ -2218,6 +2218,73 @@ describe('resolveTreePostPass — icon_font contrast override', () => {
     expect(txt.fill?.[0]?.color).toBe('#FFFFFF');
   });
 
+  it('uses dark-mode semantic palette when doc.themes advertises Mode=Dark', async () => {
+    // Regression: the cascade's step-2 fallback was hard-coded to
+    // SEMANTIC_PALETTE_THEME_LIGHT via an unused `themeHint` param,
+    // so dark-mode docs got the LIGHT palette accent (#2563EB) for
+    // an unseeded `\$color-accent` ref instead of the DARK one
+    // (#60A5FA). With identical light-bg luminance assumptions in
+    // both branches the contrast fg landed on the wrong color band
+    // for genuinely dark-bg generations.
+    //
+    // Fix reads `doc.themes['Mode']` directly so step-2 honors
+    // whichever mode the doc advertises. Test exercises that path
+    // by setting `Mode = ['Dark', 'Light']` on a fresh doc.
+    const { useDocumentStore } = await import('@/stores/document-store');
+    const prevDoc = useDocumentStore.getState().document;
+    try {
+      useDocumentStore.setState({
+        document: {
+          ...prevDoc,
+          themes: { Mode: ['Dark', 'Light'] },
+          variables: {}, // unseeded, force step-2 cascade
+        },
+      } as never);
+
+      const button: PenNode = {
+        id: 'btn',
+        type: 'frame',
+        x: 0,
+        y: 0,
+        width: 120,
+        height: 44,
+        role: 'button',
+        // Dark-mode \$color-accent → #60A5FA (light blue, lum ≈ 0.6).
+        // Step-2 picks dark palette → contrast pass picks dark fg.
+        fill: [{ type: 'solid', color: '$color-accent' }],
+        children: [
+          {
+            id: 'txt',
+            type: 'text',
+            x: 0,
+            y: 0,
+            width: 80,
+            height: 20,
+            content: 'Sign In',
+          } as PenNode,
+        ],
+      } as PenNode;
+      const root: PenNode = {
+        id: 'root',
+        type: 'frame',
+        x: 0,
+        y: 0,
+        width: 375,
+        height: 812,
+        children: [button],
+      } as PenNode;
+      dispatchPostPass(root);
+      const txt = ((root as { children: PenNode[] }).children[0] as { children: PenNode[] })
+        .children[0] as PenNode & { fill?: Array<{ color?: string }> };
+      // #60A5FA luminance ≈ 0.61 → fg = #0F172A (dark).
+      // If step-2 had stayed locked on Light, accent=#2563EB lum ≈ 0.27
+      // → fg = #FFFFFF, this expect would fail.
+      expect(txt.fill?.[0]?.color).toBe('#0F172A');
+    } finally {
+      useDocumentStore.setState({ document: prevDoc } as never);
+    }
+  });
+
   it('skips contrast on unknown ref tokens (preserves existing text fill)', () => {
     // Step-2 fallback only handles tokens in the built-in semantic
     // palette. A made-up ref like `\$color-mystery` cascades all the

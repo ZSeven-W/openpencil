@@ -5,6 +5,7 @@ import {
   resolveColorRef,
   getDefaultTheme,
   getSemanticPaletteHex,
+  SEMANTIC_PALETTE_THEME_AXIS,
   SEMANTIC_PALETTE_THEME_LIGHT,
   SEMANTIC_PALETTE_THEME_DARK,
 } from '@zseven-w/pen-core';
@@ -22,35 +23,30 @@ import { resolveIconPathBySemanticName } from './icon-resolver';
 /**
  * Resolve a color string that may be a `$color-*` variable ref into the
  * concrete hex it points at on the active theme. Returns the original
- * string when it isn't a ref or when resolution fails. Reads the live
- * doc store directly because the role resolver runs without an
- * explicit variables param threaded through every helper.
- */
-/**
- * Resolve a color string that may be a `$color-*` variable ref into the
- * concrete hex it points at on the active theme. Returns the original
  * string when it isn't a ref, or `undefined` when input is undefined.
  *
  * Resolution cascade (each step's miss falls through to the next):
  *   1. Doc-seeded variables (the user's chosen palette, if any).
- *   2. The built-in `getSemanticPaletteHex` map for the detected
- *      `Light` / `Dark` mode. This fallback covers the case where a
- *      sub-agent emits `$color-accent` BEFORE
- *      `seedDocVariablesFromStyleGuide` runs (or when seeding fails)
- *      — every semantic token has a known light + dark hex baked in.
+ *   2. The built-in `getSemanticPaletteHex` map in whichever Light /
+ *      Dark mode `doc.themes['Mode']` advertises — every semantic
+ *      token has a known light + dark hex baked in. Covers the case
+ *      where a sub-agent emits `$color-accent` BEFORE
+ *      `seedDocVariablesFromStyleGuide` runs.
  *   3. Return the original ref string. The caller (typically a
  *      luminance check) treats this as "unresolvable" and bails.
  *
- * Without step 2 the contrast pass would either skip the button
- * entirely (text/icon stays at the model's default — usually a dark
- * hex that's invisible on a dark accent bg) or pick the wrong fg via
- * a NaN-luminance default. The cascade keeps a best-effort hex
- * available even when the doc state is mid-flight.
+ * Mode detection for step 2: read `doc.themes[SEMANTIC_PALETTE_THEME_AXIS]`
+ * (the standard "Mode" axis written by `seedDocVariablesFromStyleGuide`)
+ * and pick the first value as active mode. Light is the default when
+ * the axis is missing or its first value isn't 'Dark'. An earlier
+ * iteration plumbed a `themeHint` parameter through the call sites,
+ * but no caller actually supplied one, so dark-mode generations were
+ * always served the light palette via step 2 — Codex flagged this as
+ * "dark-mode semantic fallback is never used by the contrast pass".
+ * Reading directly from the doc state keeps the function self-contained
+ * and makes step 2 honor whichever mode the doc currently advertises.
  */
-function resolveColorMaybeRef(
-  color: string | undefined,
-  themeHint?: 'light' | 'dark',
-): string | undefined {
+function resolveColorMaybeRef(color: string | undefined): string | undefined {
   if (color === undefined) return undefined;
   if (!color.startsWith('$')) return color;
   const doc = useDocumentStore.getState().document;
@@ -64,9 +60,11 @@ function resolveColorMaybeRef(
     if (typeof resolved === 'string' && !resolved.startsWith('$')) return resolved;
   }
 
-  // Step 2: built-in semantic palette for the requested or default mode.
+  // Step 2: built-in semantic palette in the doc's current mode.
   const tokenName = color.slice(1); // strip leading '$'
-  const mode = themeHint === 'dark' ? SEMANTIC_PALETTE_THEME_DARK : SEMANTIC_PALETTE_THEME_LIGHT;
+  const modeAxis = doc.themes?.[SEMANTIC_PALETTE_THEME_AXIS];
+  const isDarkMode = Array.isArray(modeAxis) && modeAxis[0] === SEMANTIC_PALETTE_THEME_DARK;
+  const mode = isDarkMode ? SEMANTIC_PALETTE_THEME_DARK : SEMANTIC_PALETTE_THEME_LIGHT;
   const paletteHex = getSemanticPaletteHex(mode);
   if (typeof paletteHex[tokenName] === 'string') return paletteHex[tokenName];
 
