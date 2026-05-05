@@ -1,0 +1,22 @@
+# Force LF on all text files when checking out (so cross-OS rustfmt
+# `newline_style = "Unix"` stays green on Windows runners). Without this
+# Windows checkout normalizes to CRLF, breaking `cargo fmt --all -- --check`.
+* text=auto eol=lf
+
+# Rust sources must remain LF — explicit override.
+*.rs text eol=lf
+*.toml text eol=lf
+
+# Binary files Git should not touch.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.icns binary
+*.pdf binary
+*.zip binary
+*.gz binary
+*.tar binary
+*.bin binary
