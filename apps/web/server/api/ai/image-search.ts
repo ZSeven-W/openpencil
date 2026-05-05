@@ -1,5 +1,14 @@
 import { defineEventHandler, readBody, setResponseHeaders } from 'h3';
 import type { ImageSearchResult, ImageSearchResponse } from '../../../src/types/image-service';
+import { configureProxyDispatcher } from '../../utils/proxy-dispatcher';
+
+// Route external fetches through HTTPS_PROXY / HTTP_PROXY when set. Node's
+// native fetch ignores those env vars by default, so on machines that
+// require a local proxy (clash / mihomo / corporate gateway) every
+// Openverse + Wikimedia call would silently ECONNREFUSED and the endpoint
+// would return empty results — surfacing as blank image placeholders in
+// the canvas.
+configureProxyDispatcher();
 
 // ---------------------------------------------------------------------------
 // Types
