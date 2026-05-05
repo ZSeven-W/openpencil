@@ -28,46 +28,59 @@ openpencil-shell-core = { path = "../openpencil-shell-core", version = "0.1.0" }
 #     OP runs its own GPU event loop and does not call jian_host_desktop::run (softbuffer
 #     raster present is not needed).
 #
-# winit features note: on Linux you MUST explicitly enable `x11` and/or `wayland`,
-# otherwise `platform_impl/mod.rs` triggers `compile_error!`. macOS / Windows backends
-# are auto-enabled via cfg(target_os) and need no feature flag. Step 1a runs CI on all
-# three desktop OSes, so enabling both x11 + wayland Linux backends is sufficient.
+# Desktop GL stack — target-gated to macOS / Linux / Windows. iOS / Android
+# pull EaglProvider / AndroidEglProvider stubs (Step 1f) which don't need
+# glutin / winit / desktop skia-safe gl bindings; spec §11 invariant 1 says
+# shell-native must compile on mobile cargo check (verified by CI mobile-check
+# job in rust-multiplatform.yml). winit features note: on Linux you MUST
+# explicitly enable `x11` and/or `wayland`, otherwise `platform_impl/mod.rs`
+# triggers `compile_error!`. macOS / Windows backends are auto-enabled via
+# cfg(target_os) and need no feature flag.
+# Cross-platform abstraction deps — pulled for ALL non-wasm targets including
+# iOS / Android. The `GlContextProvider` trait (spec §3.1) references
+# `glow::Context` in its method signatures and Step 1f Eagl / AndroidEgl
+# stubs reference `raw_window_handle` for `on_resume`; both must be importable
+# on mobile per spec §11 invariant 2. `glow` and `raw-window-handle` are
+# pure-Rust thin bindings — no native build steps on iOS / Android.
+# `jian-core` is wasm32-clean per P0.5 and platform-neutral on mobile.
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+jian-core = { path = "../../vendor/jian/crates/jian-core", version = "0.0.1" }
+glow = "0.17.0"
+raw-window-handle = "0.6.2"
+
+# Desktop GL stack — target-gated to macOS / Linux / Windows. iOS / Android
+# pull only the cross-platform `glow` + `raw-window-handle` above for the
+# `GlContextProvider` trait surface; the actual `GlutinProvider` desktop
+# implementation, `SharedSkiaContext`, `NativeBackend`, and
+# `CanvasViewportStub` are cfg-gated out of the mobile build (see
+# src/lib.rs module-level `#[cfg(...)]`). spec §11 invariant 1 says
+# shell-native must compile on mobile cargo check (verified by CI
+# mobile-check job in rust-multiplatform.yml). winit features note: on
+# Linux you MUST explicitly enable `x11` and/or `wayland`, otherwise
+# `platform_impl/mod.rs` triggers `compile_error!`. macOS / Windows
+# backends are auto-enabled via cfg(target_os) and need no feature flag.
+[target.'cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))'.dependencies]
 skia-safe = { version = "0.97.0", features = ["gl"] }
 glutin = "0.32.3"
 glutin-winit = "0.5.0"
-glow = "0.17.0"
 winit = { version = "0.30.13", default-features = false, features = [
   "x11",
   "wayland",
   "wayland-csd-adwaita",
   "rwh_06",
 ] }
-raw-window-handle = "0.6.2"
 scopeguard = "1.2"
-
-# Jian path deps — both path + version per spec §12.2.
-# - jian-core: exposes DrawOp / Paint / TextRun / geometry / scene::Color. `shell-core`
-#   also pulls jian-core; shell-native uses it directly so the NativeBackend translation
-#   path can construct `jian_core::render::DrawOp::*` without bouncing through the
-#   shell-core re-export each frame.
-# - jian-skia: provides SkiaBackend (RenderBackend impl) + skia textlayout (the textlayout
-#   feature pulls ICU + harfbuzz, ~15MB; P0.5 already bumped skia-safe 0.78→0.97 and
-#   added a public draw_on_canvas).
-jian-core = { path = "../../vendor/jian/crates/jian-core", version = "0.0.1" }
 jian-skia = { path = "../../vendor/jian/crates/jian-skia", version = "0.0.1", features = [
   "textlayout",
 ] }
-
-# jian-host-desktop: target-gated desktop only (Linux/macOS/Windows); not pulled into
-# android/ios metadata (verified by Task 1 Step 26 boundary check).
-# - default-features = false: Jian's default features include `run = ["dep:softbuffer"]`
-#   for raster present; OP runs its own GPU event loop and doesn't need softbuffer.
-# - features = ["textlayout"]: aligns the text path with jian-skia.
-[target.'cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))'.dependencies]
 jian-host-desktop = { path = "../../vendor/jian/crates/jian-host-desktop", version = "0.0.1", default-features = false, features = [
   "textlayout",
 ] }
+
+# jian-skia + jian-host-desktop are now in the desktop-only `[target...]`
+# block above (merged to avoid duplicate table headers). Per spec §11 +
+# §12.3 boundary invariants 2 & 3 they're not pulled into iOS / Android
+# cargo check (verified by check-jian-boundaries.sh).
 
 # tracing for span instrumentation across SharedSkiaContext / NativeBackend
 # (spec §3.3 / §5.2.1; Task 2 Step 15 dictates per-method spans).
