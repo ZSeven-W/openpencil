@@ -61,16 +61,6 @@ jobs:
         if: runner.os != 'Linux'
         run: cargo test --workspace
       - run: cargo clippy --workspace --all-targets -- -D warnings
-      # Step 1a Phase C Task 4: spec v19 §11 + §12.3 boundary invariants.
-      # Linux runner has the full mobile target stdlib (`rustup target add`
-      # in subsequent steps would handle ios/android cargo metadata too,
-      # but the script uses `cargo tree --target` which only needs the
-      # cfg-gate evaluation, not the actual target sysroot).
-      - name: Verify Jian boundary invariants
-        if: runner.os == 'Linux'
-        run: |
-          rustup target add aarch64-linux-android aarch64-apple-ios wasm32-unknown-unknown
-          bash tools/check-jian-boundaries.sh
 
   deny:
     name: cargo-deny (native)

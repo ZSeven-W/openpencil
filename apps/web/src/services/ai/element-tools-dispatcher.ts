@@ -448,30 +448,19 @@ async function applyElementTool(
 /**
  * Detect whether `operations` looks like flat JSONL nodes rather than the
  * `foo=I("parent",{...})` assignment-based DSL. Weak / mid-tier models
- * (GPT-5.5 standard tier, MiniMax M2.7 basic tier observed) emit their
- * full design as JSONL but stuff it inside
- * `<op_tool>{name:"batch_design",arguments:{operations}}` because the
- * ELEMENT_TOOL_OUTPUT_FORMAT prompt teaches `<op_tool>`-only output
- * but doesn't show DSL syntax. The DSL parser then rejects every line.
- * Detect this case at dispatch time and route through the JSONL apply
- * path instead of failing.
+ * (GPT-5.5 standard tier observed) emit their full design as raw JSONL
+ * but stuff it inside `<op_tool>{name:"batch_design",arguments:{operations}}`
+ * because the ELEMENT_TOOL_OUTPUT_FORMAT prompt teaches `<op_tool>`-only
+ * output but doesn't show DSL syntax. The DSL parser then rejects every
+ * line. Detect this case at dispatch time and route through the JSONL
+ * apply path instead of failing.
  *
- * Two shapes count:
- *   - Pure JSONL: starts with `{`, one node per line.
- *   - JSON array: starts with `[`, all nodes wrapped in a single
- *     array literal. M2.7 reflexively does this because its training
- *     data includes a lot of "here's a JSON array of things" patterns;
- *     the food-app run shipped a 1300-byte single-line `[{…}, {…}]`
- *     that DSL parsed to "[" + "{" + "}" + "]" each on its own line,
- *     all rejected, the whole subtask returned empty.
- *
- * Either shape carries the same JSONL-style keys (`_parent` /
- * `type:"frame|text|…"`) — that's the actual signature, the
- * leading-character check just disambiguates from real DSL.
+ * Signature: starts with `{` AND contains JSONL-shape keys (`_parent`
+ * or a `type:"frame|text|…"` field) within the first chunk.
  */
-export function looksLikeJsonl(operations: string): boolean {
+function looksLikeJsonl(operations: string): boolean {
   const trimmed = operations.trim();
-  if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) return false;
+  if (!trimmed.startsWith('{')) return false;
   return /"_parent"\s*:|"type"\s*:\s*"(frame|text|rectangle|ellipse|icon_font|image|path|line|polygon|group)"/.test(
     trimmed.slice(0, 800),
   );

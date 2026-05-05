@@ -18,7 +18,13 @@ js-sys = "0.3"
 
 [dependencies.web-sys]
 version = "0.3"
-features = ["console", "Document", "Element", "HtmlCanvasElement", "Window"]
+features = [
+    "console",
+    "Document",
+    "Element",
+    "HtmlCanvasElement",
+    "Window",
+]
 
 [features]
 default = ["web"]

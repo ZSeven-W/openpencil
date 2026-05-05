@@ -281,17 +281,8 @@ mod platform {
     pub fn run() {}
 }
 
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "linux"))]
 #[test]
-fn gpu_chrome_stub_composition() {
-    platform::run();
-}
-
-// Linux GPU chrome+stub composition deferred: same root cause as
-// LINUX_GPU_SKIA_LOADER_TBD in gpu_smoke.rs.
-#[cfg(target_os = "linux")]
-#[test]
-#[ignore = "LINUX_GPU_SKIA_LOADER_TBD: skia-safe Interface::new_native cannot resolve GL syms from EGL pbuffer + llvmpipe (see gpu_smoke.rs)"]
 fn gpu_chrome_stub_composition() {
     platform::run();
 }

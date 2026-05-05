@@ -10,8 +10,9 @@
 //! exist as compile-time placeholders so the public API surface is frozen
 //! before Step 1f real implementations land.
 
-#[cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]
 use std::error::Error;
+use std::ffi::CString;
+use std::num::NonZeroU32;
 use std::sync::Arc;
 
 /// Errors raised by GL context providers.
@@ -24,11 +25,6 @@ pub enum ProviderError {
 }
 
 impl ProviderError {
-    /// Wrap any `Error` impl into a `ProviderError::Failure`. Used by the
-    /// desktop `GlutinProvider` to convert glutin / glutin-winit errors;
-    /// `cfg(any(...))`-gated to silence `dead_code` on iOS / Android where
-    /// no in-tree caller exists yet (Step 1f mobile providers will use it).
-    #[cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]
     pub(crate) fn from_error<E: Error>(err: E) -> Self {
         Self::Failure(err.to_string())
     }
@@ -102,9 +98,7 @@ pub trait GlContextProvider {
 }
 
 // ────────────────────────────────────────────────────────────────────────────
-// Desktop: GlutinProvider (cfg-gated to macOS / Linux / Windows; the
-// glutin / winit / skia-safe dep stack is desktop-only per spec §11
-// invariant 1).
+// Desktop: GlutinProvider
 // ────────────────────────────────────────────────────────────────────────────
 
 /// Desktop GL provider built on top of `glutin 0.32` + `glutin-winit 0.5`.
@@ -112,7 +106,6 @@ pub trait GlContextProvider {
 /// All non-`Send` glutin handles live in [`Option`]s so `release` can
 /// drop them in a defined order (surface → context → display) without
 /// requiring `&mut self` to consume `self`.
-#[cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]
 pub struct GlutinProvider {
     /// Currently-current context. `None` after `release`.
     context: Option<glutin::context::PossiblyCurrentContext>,
@@ -124,7 +117,6 @@ pub struct GlutinProvider {
     glow: Arc<glow::Context>,
 }
 
-#[cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]
 impl GlutinProvider {
     /// Construct from an existing winit window. Builds a glutin display
     /// directly from the window's display handle (bypassing the sealed
@@ -142,7 +134,6 @@ impl GlutinProvider {
         use glutin::prelude::*;
         use glutin_winit::GlWindow;
         use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
-        use std::ffi::CString;
 
         let raw_window_handle = window
             .window_handle()
@@ -244,7 +235,13 @@ fn pick_display_api(
     glutin::display::DisplayApiPreference::Egl
 }
 
-#[cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]
+#[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
+fn pick_display_api(
+    _raw: raw_window_handle::RawWindowHandle,
+) -> glutin::display::DisplayApiPreference {
+    glutin::display::DisplayApiPreference::Egl
+}
+
 impl GlContextProvider for GlutinProvider {
     #[tracing::instrument(skip(self))]
     fn make_current(&mut self) -> ProviderResult<()> {
@@ -288,7 +285,6 @@ impl GlContextProvider for GlutinProvider {
     #[tracing::instrument(skip(self))]
     fn resize(&mut self, width: u32, height: u32) -> ProviderResult<()> {
         use glutin::prelude::*;
-        use std::num::NonZeroU32;
         let ctx = self
             .context
             .as_ref()
