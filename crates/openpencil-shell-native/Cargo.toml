@@ -31,18 +31,3 @@ openpencil-shell-core = { path = "../openpencil-shell-core", version = "0.1.0" }
 # 重新审视（可能加 `serde` / `rwh_06` 等）。
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 winit = { version = "0.30", default-features = false, features = ["x11", "wayland", "wayland-csd-adwaita", "rwh_06"] }
-
-# TRANSIENT (Step 1a P0 CI gate only — reverted after notes commit, before Task 1 starts).
-# These deps power `examples/p0_probe.rs` + `tests/p0_probe.rs` (gated `#[ignore = "P0_PROBE_GATE"]`).
-# Pinned to versions resolved in /tmp/skia-glow-probe per spec §7. Task 1 will
-# re-introduce them as permanent prod deps in this same target block.
-[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
-skia-safe = { version = "0.97.0", features = ["gl"] }
-glutin = "0.32.3"
-glutin-winit = "0.5.0"
-glow = "0.17.0"
-raw-window-handle = "0.6.2"
-scopeguard = "1.2.0"
-# Re-enable winit defaults for the dev probe (prod dep is no-default — Stage F
-# will choose the final feature set). Defaults pull in x11+wayland on Linux.
-winit = { version = "0.30" }
