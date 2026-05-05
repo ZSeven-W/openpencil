@@ -35,10 +35,33 @@ jobs:
           toolchain: "1.85"
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
+      # Linux GL prerequisites for the P0 probe ignored test step. xvfb gives
+      # winit a virtual display; mesa software-rasterizes GL when no GPU is
+      # available; libxkbcommon-x11-dev / libwayland-dev are winit's link-time
+      # dependencies on Linux. (No-op on macOS / Windows runners.)
+      - name: Install Linux GL prereqs (P0 probe gate)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            xvfb \
+            libgl1-mesa-dri libglu1-mesa libegl1 libgles2 \
+            libxkbcommon-dev libxkbcommon-x11-dev \
+            libwayland-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev
       - run: cargo fmt --all -- --check
       - run: cargo build --workspace
       - run: cargo test --workspace
       - run: cargo clippy --workspace --all-targets -- -D warnings
+      # P0 probe gate (Step 1a) — runs only the `#[ignore = "P0_PROBE_GATE"]`
+      # tests. Linux: route through `xvfb-run` for a virtual display.
+      # Windows: the test body early-returns with a "deferred" message
+      # (spec §8.2 WINDOWS_GPU_DEFERRED_NO_RUNNER); macOS: runs natively.
+      - name: P0 probe gate (Linux)
+        if: runner.os == 'Linux'
+        run: xvfb-run -a cargo test -p openpencil-shell-native --test p0_probe -- --ignored
+      - name: P0 probe gate (macOS / Windows)
+        if: runner.os != 'Linux'
+        run: cargo test -p openpencil-shell-native --test p0_probe -- --ignored
 
   deny:
     name: cargo-deny (native)
