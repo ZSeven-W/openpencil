@@ -25,8 +25,18 @@ import type { PenNode } from '@zseven-w/pen-types';
  *
  * Pattern detection (conservative — false positives are worse than
  * misses):
- *   - The frame has `layout: 'vertical'` (or undefined, which
- *     `inferLayout` would also resolve to vertical).
+ *   - The frame has `layout: 'vertical'` EXPLICITLY. We do NOT
+ *     accept `undefined` here even though `inferLayout` would
+ *     usually resolve it to vertical: a layout-less frame may also
+ *     be the model's implicit way of saying "lay these out
+ *     horizontally" (a row of icons with no x/y), and we don't
+ *     want to flip those to absolute. Pre-`normalizeTreeLayout`
+ *     timing makes this critical — by the time normalize fills
+ *     in the inferred layout, this pass has already run, so we
+ *     can't rely on a normalized field. If `layout` isn't there,
+ *     we let normalize run first; the rare hero that omits the
+ *     explicit `layout: 'vertical'` keyword is an acceptable
+ *     miss.
  *   - The frame has a NUMERIC fixed height `H`.
  *   - At least 2 of the children are visually-large background-
  *     candidate types (`image`, `rectangle`, or `frame`) AND have
@@ -51,7 +61,7 @@ export function convertStackedOverlayToAbsolute(rootFrame: PenNode): boolean {
         height?: unknown;
         children?: PenNode[];
       };
-      if ((c.layout === 'vertical' || c.layout === undefined) && typeof c.height === 'number') {
+      if (c.layout === 'vertical' && typeof c.height === 'number') {
         const containerH = c.height;
         const children = Array.isArray(c.children) ? c.children : [];
         let bgLike = 0;
