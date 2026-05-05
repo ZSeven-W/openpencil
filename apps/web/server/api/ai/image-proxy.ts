@@ -75,16 +75,82 @@ export default defineEventHandler(async (event) => {
   }
 
   try {
-    const upstream = await fetch(parsed.toString(), {
-      signal: AbortSignal.timeout(15000),
-      // Some image hosts (openverse thumbs) gate on Accept; an empty
-      // Accept makes them happiest.
-      headers: { Accept: 'image/*,*/*;q=0.5' },
-    });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
+    let upstream: Response;
+    try {
+      upstream = await fetch(parsed.toString(), {
+        signal: controller.signal,
+        // Some image hosts (openverse thumbs) gate on Accept; an empty
+        // Accept makes them happiest.
+        headers: { Accept: 'image/*,*/*;q=0.5' },
+      });
+    } finally {
+      clearTimeout(timeoutId);
+    }
     if (!upstream.ok) {
       setResponseStatus(event, upstream.status);
       return { error: `Upstream returned ${upstream.status}` };
     }
+
+    // Cap upstream body size. The earlier version did
+    // `await upstream.arrayBuffer()` which buffers the entire body
+    // in memory with no limit — a malicious or accidentally large
+    // upstream (Wikimedia Commons originals can be 100MB+) would
+    // happily exhaust the dev server's heap. Cap at 16 MiB (well
+    // above any reasonable thumbnail; high-res 4K JPEGs land around
+    // 5–8 MiB) and abort the read if we exceed it.
+    const declared = upstream.headers.get('content-length');
+    if (declared) {
+      const declaredBytes = Number.parseInt(declared, 10);
+      if (Number.isFinite(declaredBytes) && declaredBytes > MAX_BYTES) {
+        controller.abort();
+        setResponseStatus(event, 413);
+        return {
+          error: `Upstream Content-Length ${declaredBytes} exceeds ${MAX_BYTES} cap`,
+        };
+      }
+    }
+    if (!upstream.body) {
+      setResponseStatus(event, 502);
+      return { error: 'Upstream returned no body' };
+    }
+
+    // Stream the body and accumulate with a hard cap. Any chunk
+    // that pushes total bytes past MAX_BYTES aborts the upstream
+    // fetch and returns 413 — no further bytes are buffered.
+    const reader = upstream.body.getReader();
+    const chunks: Uint8Array[] = [];
+    let total = 0;
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        if (value) {
+          total += value.byteLength;
+          if (total > MAX_BYTES) {
+            controller.abort();
+            try {
+              await reader.cancel();
+            } catch {
+              /* ignore cancel errors */
+            }
+            setResponseStatus(event, 413);
+            return {
+              error: `Upstream body exceeds ${MAX_BYTES}-byte cap (got ${total}+ so far)`,
+            };
+          }
+          chunks.push(value);
+        }
+      }
+    } finally {
+      try {
+        reader.releaseLock();
+      } catch {
+        /* lock already released */
+      }
+    }
+
     const contentType = upstream.headers.get('content-type') ?? 'image/jpeg';
     const cacheControl = upstream.headers.get('cache-control') ?? 'public, max-age=86400';
 
@@ -95,8 +161,7 @@ export default defineEventHandler(async (event) => {
     // sets crossOrigin='anonymous'). Same-origin avoids the issue.
     setResponseHeader(event, 'Access-Control-Allow-Origin', '*');
 
-    const buffer = Buffer.from(await upstream.arrayBuffer());
-    return buffer;
+    return Buffer.concat(chunks.map((c) => Buffer.from(c.buffer, c.byteOffset, c.byteLength)));
   } catch (err) {
     setResponseStatus(event, 502);
     return {
@@ -105,3 +170,12 @@ export default defineEventHandler(async (event) => {
     };
   }
 });
+
+/**
+ * Maximum bytes accepted from any single upstream image. 16 MiB is
+ * well above what a thumbnail or even a high-res 4K JPEG needs (~5–
+ * 8 MiB). Tuning past this risks a single proxied fetch eating
+ * meaningful chunks of the dev server's heap; tuning below it would
+ * reject legitimate Wikimedia Commons photos.
+ */
+const MAX_BYTES = 16 * 1024 * 1024;
