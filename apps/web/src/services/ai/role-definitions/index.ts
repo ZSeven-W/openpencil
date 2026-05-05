@@ -173,6 +173,32 @@ registerRole('button', (node, ctx) => {
       cornerRadius: 10,
     };
   }
+  // Bottom-tab style. The model emits `role: 'button'` on every cell
+  // of a `bottom-tab-bar` (icon stacked over label, no horizontal
+  // text). The default text-button `[12, 24]` padding is wildly
+  // wrong here: 12 vertical × 2 = 24, plus a 20px icon, 3px gap,
+  // and ~13px label, totals 60 — way past the 46–56px height the
+  // model usually gives a bottom nav, so layout overflows and the
+  // icon / label crash into each other or get clipped (Image #44
+  // bottom nav).
+  // Detect by parent role (bottom-tab-bar / tab-bar / tab-row are
+  // the cell-stacking nav families) AND a vertical layout the
+  // model already declared. Use tight padding sized for the typical
+  // 56px tab height: 6px vertical, 4px horizontal.
+  const TAB_PARENT_ROLES = new Set(['bottom-tab-bar', 'tab-bar', 'tab-row']);
+  const nodeLayout = (node as unknown as Record<string, unknown>).layout;
+  if (ctx.parentRole && TAB_PARENT_ROLES.has(ctx.parentRole) && nodeLayout === 'vertical') {
+    return {
+      gap: 4,
+      padding: [6, 4] as [number, number],
+      alignItems: 'center' as const,
+      justifyContent: 'center' as const,
+      // No fill default — tabs inherit transparency from the nav
+      // surface (which already has its own fill via the inject
+      // pass). Default text-button cornerRadius would be wrong on
+      // tabs (no visible button shape).
+    };
+  }
   // Avatar / icon-button shape detector. The model frequently emits
   // `role: "button"` on a 44×44 (or similar small square) frame whose
   // single child is a one-character text or an icon — visually an

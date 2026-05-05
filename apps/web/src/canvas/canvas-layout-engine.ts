@@ -16,5 +16,6 @@ export {
   unwrapFakePhoneMockups,
   stripRedundantSectionFills,
   injectMissingNavSurfaceFill,
+  expandOverflowingFixedHeightCards,
   normalizeStrokeFillSchema,
 } from '@zseven-w/pen-core';
