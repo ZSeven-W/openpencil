@@ -219,6 +219,12 @@ function stripIllegalColorsFromStrokeFill(node: PenNode): void {
   if (!stroke || typeof stroke !== 'object') return;
   const fillArr = stroke.fill;
   if (!Array.isArray(fillArr)) return;
+  // Repair missing-`#` hex prefixes before the legal-entry filter,
+  // matching the same repair the fill normalizer does on shape
+  // fills. Without this, stroke colors like `'F0DCC8'` survive
+  // isLegalFillEntry (it only rejects CSS keywords, not malformed
+  // hex) and produce a transparent / gray-fallback stroke at render.
+  for (const f of fillArr) repairHexPrefixOnFillEntry(f);
   (stroke as { fill?: PenFill[] }).fill = fillArr.filter((f) => isLegalFillEntry(f)) as PenFill[];
 }
 
@@ -254,6 +260,16 @@ function normalizeNodeFill(node: PenNode): void {
   const raw = rec.fill;
   if (!raw) return;
   if (!Array.isArray(raw)) return;
+  // Repair fill entries with hex colors missing the leading `#` (e.g.
+  // `color: 'FFF8F0'` instead of `'#FFF8F0'`). Models like
+  // MiniMax M2.7 frequently drop the prefix; the renderer's hex
+  // parser then fails and the node falls back to the default gray
+  // fill — which is what made the food-app M2.7 run ship with a
+  // washed-out gray page bg even though the model "set" the cream
+  // color. Repair in place; doesn't touch other entry shapes.
+  for (const entry of raw) {
+    repairHexPrefixOnFillEntry(entry);
+  }
   // Separate legal entries from CSS-keyword illegal entries.
   const cleaned = raw.filter((f) => isLegalFillEntry(f));
   if (cleaned.length > 0) {
@@ -294,4 +310,44 @@ function isLegalFillEntry(entry: unknown): boolean {
     if (c === 'none' || c === 'transparent') return false;
   }
   return true;
+}
+
+/**
+ * 3, 4, 6, or 8 hex digits — the four shapes the renderer's hex
+ * parser accepts (#RGB / #RGBA / #RRGGBB / #RRGGBBAA). Anything
+ * else (named colors, malformed strings, partials) we leave alone
+ * so we don't mask other classes of bugs.
+ */
+const RAW_HEX_RE = /^[0-9A-Fa-f]{3}([0-9A-Fa-f]([0-9A-Fa-f]{2}([0-9A-Fa-f]{2})?)?)?$/;
+
+/**
+ * Repair a single fill entry's color when it's a hex string missing
+ * the leading `#`. Mutates the entry in place. Solid entries only —
+ * gradient stops are repaired separately at the stop level (they're
+ * still PenFill SolidFill-shaped objects, just nested).
+ */
+function repairHexPrefixOnFillEntry(entry: unknown): void {
+  if (!entry || typeof entry !== 'object') return;
+  const e = entry as { type?: unknown; color?: unknown; stops?: unknown };
+  if (e.type === 'solid' && typeof e.color === 'string') {
+    const c = e.color.trim();
+    if (!c.startsWith('#') && !c.startsWith('$') && RAW_HEX_RE.test(c)) {
+      e.color = `#${c}`;
+    }
+  } else if (
+    (e.type === 'linear_gradient' || e.type === 'radial_gradient') &&
+    Array.isArray(e.stops)
+  ) {
+    for (const stop of e.stops) {
+      if (stop && typeof stop === 'object') {
+        const s = stop as { color?: unknown };
+        if (typeof s.color === 'string') {
+          const c = s.color.trim();
+          if (!c.startsWith('#') && !c.startsWith('$') && RAW_HEX_RE.test(c)) {
+            s.color = `#${c}`;
+          }
+        }
+      }
+    }
+  }
 }
