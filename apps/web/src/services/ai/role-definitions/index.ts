@@ -149,7 +149,7 @@ registerRole('nav-link', (_node, _ctx) => ({
 // Interactive roles
 // ---------------------------------------------------------------------------
 
-registerRole('button', (_node, ctx) => {
+registerRole('button', (node, ctx) => {
   if (ctx.parentRole === 'navbar') {
     return {
       padding: [8, 16] as [number, number],
@@ -171,6 +171,33 @@ registerRole('button', (_node, ctx) => {
       alignItems: 'center' as const,
       justifyContent: 'center' as const,
       cornerRadius: 10,
+    };
+  }
+  // Avatar / icon-button shape detector. The model frequently emits
+  // `role: "button"` on a 44×44 (or similar small square) frame whose
+  // single child is a one-character text or an icon — visually an
+  // avatar or icon-action, NOT a text-button. The default `[12, 24]`
+  // padding then collides with the 44px width: 24×2 = 48 horizontal
+  // padding on a 44px frame leaves negative space, the layout engine
+  // clamps, and the avatar's "A" or icon ends up visibly off-center.
+  // When the node has explicit numeric width AND height both ≤ 60 AND
+  // the default `[12,24]` padding would not fit horizontally, skip the
+  // text-button defaults and emit the icon-button shape (no padding,
+  // centering still applies).
+  const nodeRecord = node as unknown as Record<string, unknown>;
+  const w = nodeRecord.width;
+  const h = nodeRecord.height;
+  if (typeof w === 'number' && typeof h === 'number' && w <= 60 && h <= 60 && w < 24 * 2) {
+    return {
+      layout: 'horizontal' as const,
+      gap: 8,
+      alignItems: 'center' as const,
+      justifyContent: 'center' as const,
+      // No `padding` default — the small explicit size is the
+      // signal that the caller wants tight icon-button packing.
+      // No `cornerRadius` default — for square avatars the model
+      // typically supplies cornerRadius=width/2 itself; the
+      // 8px text-button default would silently override that.
     };
   }
   return {
