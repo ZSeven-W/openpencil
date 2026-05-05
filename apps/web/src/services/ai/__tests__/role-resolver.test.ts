@@ -2164,17 +2164,20 @@ describe('resolveTreePostPass — icon_font contrast override', () => {
     expect(ico.fill?.[0]?.color).toBe('#DC2626');
   });
 
-  it('skips contrast pass when bg ref does not resolve (no white-on-unknown)', () => {
-    // Regression: my fix from `ddf6580f` originally treated a NaN
-    // luminance (unresolvable ref) as "dark bg" and painted white
-    // text. If the doc's `$color-accent` later resolves to a LIGHT
-    // hex (e.g. the user's chosen palette has accent=#FFE4B5), the
-    // white text becomes invisible on the light bg. Codex flagged
-    // this on stop-time review — the safer default is to skip the
-    // contrast pass entirely when we can't resolve the ref, leaving
-    // text/icon with whatever fill they already had. A later
-    // post-pass invocation (after variables are seeded) re-runs and
-    // applies contrast cleanly with a real hex luminance.
+  it('resolves \\$color-accent ref via semantic palette when doc.variables is unseeded', () => {
+    // Regression chain:
+    //   ddf6580f — treated NaN luminance as "dark bg" → white text
+    //              on whatever the user's palette later resolved to,
+    //              risking white-on-light invisibility.
+    //   1c08ac3f — flipped to "skip pass on NaN" → text without fill
+    //              stayed with no fill, defaulting to black, risking
+    //              black-on-dark invisibility on accent buttons.
+    //   THIS COMMIT — `resolveColorMaybeRef` now cascades through the
+    //              built-in semantic palette as a step-2 fallback, so
+    //              `\$color-accent` always resolves to a known hex
+    //              (`#2563EB` light, `#60A5FA` dark) even with no
+    //              doc.variables. The contrast pass then runs with a
+    //              real luminance and picks the right fg.
     const button: PenNode = {
       id: 'btn',
       type: 'frame',
@@ -2183,7 +2186,7 @@ describe('resolveTreePostPass — icon_font contrast override', () => {
       width: 120,
       height: 44,
       role: 'button',
-      // Unseeded ref — the doc has no variables yet.
+      // Unseeded ref — the doc has no variables.
       fill: [{ type: 'solid', color: '$color-accent' }],
       children: [
         {
@@ -2194,7 +2197,51 @@ describe('resolveTreePostPass — icon_font contrast override', () => {
           width: 80,
           height: 20,
           content: 'Sign In',
-          // Model's default — dark text on UNKNOWN bg. Survive untouched.
+          // No fill emitted — the contrast pass has to supply one.
+        } as PenNode,
+      ],
+    } as PenNode;
+    const root: PenNode = {
+      id: 'root',
+      type: 'frame',
+      x: 0,
+      y: 0,
+      width: 375,
+      height: 812,
+      children: [button],
+    } as PenNode;
+    dispatchPostPass(root);
+    const txt = ((root as { children: PenNode[] }).children[0] as { children: PenNode[] })
+      .children[0] as PenNode & { fill?: Array<{ color?: string }> };
+    // \$color-accent (light mode default) is #2563EB blue, lum ≈ 0.27
+    // → contrast pass picks white fg.
+    expect(txt.fill?.[0]?.color).toBe('#FFFFFF');
+  });
+
+  it('skips contrast on unknown ref tokens (preserves existing text fill)', () => {
+    // Step-2 fallback only handles tokens in the built-in semantic
+    // palette. A made-up ref like `\$color-mystery` cascades all the
+    // way through and returns the original string. The luminance
+    // check then bails (NaN) and we leave the existing text fill
+    // alone rather than guess and risk invisibility.
+    const button: PenNode = {
+      id: 'btn',
+      type: 'frame',
+      x: 0,
+      y: 0,
+      width: 120,
+      height: 44,
+      role: 'button',
+      fill: [{ type: 'solid', color: '$color-mystery-token' }],
+      children: [
+        {
+          id: 'txt',
+          type: 'text',
+          x: 0,
+          y: 0,
+          width: 80,
+          height: 20,
+          content: 'Sign In',
           fill: [{ type: 'solid', color: '#0F172A' }],
         } as PenNode,
       ],
@@ -2211,8 +2258,6 @@ describe('resolveTreePostPass — icon_font contrast override', () => {
     dispatchPostPass(root);
     const txt = ((root as { children: PenNode[] }).children[0] as { children: PenNode[] })
       .children[0] as PenNode & { fill?: Array<{ color?: string }> };
-    // Original fill survives — contrast pass bailed because we
-    // can't safely choose a color against an unresolved bg.
     expect(txt.fill?.[0]?.color).toBe('#0F172A');
   });
 
