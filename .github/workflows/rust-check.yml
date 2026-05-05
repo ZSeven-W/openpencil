@@ -32,7 +32,7 @@ jobs:
           submodules: recursive
       - uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: "1.85"
+          toolchain: '1.85'
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
       # Linux GL prerequisites for winit's x11+wayland feature link.
@@ -44,10 +44,22 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y \
             libxkbcommon-dev libxkbcommon-x11-dev \
-            libwayland-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev
+            libwayland-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev \
+            libegl1-mesa-dev libgles2-mesa-dev libgbm-dev mesa-utils \
+            libfreetype-dev libfontconfig1-dev
       - run: cargo fmt --all -- --check
       - run: cargo build --workspace
-      - run: cargo test --workspace
+      # Step 1a §9.2: Linux GPU smoke must hard-fail on EGL/GL setup failure
+      # in CI (real Mesa software-rendered EGL pbuffer is available). Local
+      # dev runners (no GPU + no env var) skip with INCONCLUSIVE marker.
+      - name: Run tests (Linux with strict GPU gate)
+        if: runner.os == 'Linux'
+        env:
+          STEP1A_REQUIRE_GPU: '1'
+        run: cargo test --workspace
+      - name: Run tests (macOS / Windows)
+        if: runner.os != 'Linux'
+        run: cargo test --workspace
       - run: cargo clippy --workspace --all-targets -- -D warnings
 
   deny:
@@ -58,6 +70,6 @@ jobs:
         with:
           submodules: recursive
       - uses: dtolnay/rust-toolchain@stable
-      - uses: EmbarkStudios/cargo-deny-action@v2  # auto-updates within v2.x; runner cargo at this stage carries cargo-deny 0.18+ which handles modern transitive manifests (Phase 1 Task 1.8 finding)
+      - uses: EmbarkStudios/cargo-deny-action@v2 # auto-updates within v2.x; runner cargo at this stage carries cargo-deny 0.18+ which handles modern transitive manifests (Phase 1 Task 1.8 finding)
         with:
           command: check
