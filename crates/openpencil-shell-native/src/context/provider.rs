@@ -1,0 +1,356 @@
+//! GL context provider abstraction (spec v19 §3.1).
+//!
+//! Trait abstraction over the GL stack so `SharedSkiaContext` is reusable
+//! across desktop (glutin) and mobile (EAGL / Android EGL — Step 1f). The
+//! trait deliberately does **not** carry a `Send` bound: glutin's
+//! `PossiblyCurrentContext` is `!Send` (thread-current binding), and the
+//! shell event loop runs on the main thread.
+//!
+//! Step 1a ships only [`GlutinProvider`] (desktop). iOS / Android stubs
+//! exist as compile-time placeholders so the public API surface is frozen
+//! before Step 1f real implementations land.
+
+use std::error::Error;
+use std::ffi::CString;
+use std::num::NonZeroU32;
+use std::sync::Arc;
+
+/// Errors raised by GL context providers.
+#[derive(Debug, thiserror::Error)]
+pub enum ProviderError {
+    /// Underlying glutin / EGL / EAGL error wrapped as a string for
+    /// cross-platform uniformity (each backend uses different error types).
+    #[error("GL context provider failed: {0}")]
+    Failure(String),
+}
+
+impl ProviderError {
+    pub(crate) fn from_error<E: Error>(err: E) -> Self {
+        Self::Failure(err.to_string())
+    }
+
+    pub(crate) fn from_msg(msg: impl Into<String>) -> Self {
+        Self::Failure(msg.into())
+    }
+}
+
+/// Result alias used by all provider methods.
+pub type ProviderResult<T> = Result<T, ProviderError>;
+
+/// Cross-platform abstraction over a current GL context + presentation
+/// surface. Implementations must be safe to call `make_current` /
+/// `swap_buffers` repeatedly on the same thread.
+///
+/// **No `Send` bound** — `PossiblyCurrentContext` and EAGL contexts are
+/// thread-bound; `SharedSkiaContext` is intended to live on the main
+/// thread alongside winit's `EventLoop` (or the iOS/Android UI thread).
+pub trait GlContextProvider {
+    /// Make this provider's GL context current on the calling thread.
+    fn make_current(&mut self) -> ProviderResult<()>;
+
+    /// Swap the back buffer to the screen.
+    fn swap_buffers(&mut self) -> ProviderResult<()>;
+
+    /// A shared `glow::Context` for direct GL state mutation by the
+    /// chrome / canvas viewport stub. The `Arc` lets callers cheaply
+    /// hand the handle off to long-lived components without reloading
+    /// function pointers.
+    fn glow(&self) -> Arc<glow::Context>;
+
+    /// Resize the underlying surface (window / pbuffer). Called from
+    /// `SharedSkiaContext::resize` before the Skia surface is rebuilt.
+    fn resize(&mut self, width: u32, height: u32) -> ProviderResult<()>;
+
+    /// The default framebuffer object id of the presentation surface.
+    /// `0` = the GL window default FBO; non-zero = an FBO that Skia
+    /// must wrap when constructing its `BackendRenderTarget`.
+    fn default_framebuffer_id(&self) -> u32 {
+        0
+    }
+
+    /// Surface size in physical pixels.
+    fn size(&self) -> (u32, u32);
+
+    /// Cleanup hook invoked by `SharedSkiaContext::teardown` before the
+    /// provider is dropped. Intentionally explicit: glutin's `Drop` only
+    /// unbinds the thread-current context and lets the driver free
+    /// asynchronously, so an explicit release path makes the
+    /// 100-iteration RSS sanity test deterministic.
+    fn release(&mut self) -> ProviderResult<()>;
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Desktop: GlutinProvider
+// ────────────────────────────────────────────────────────────────────────────
+
+/// Desktop GL provider built on top of `glutin 0.32` + `glutin-winit 0.5`.
+///
+/// All non-`Send` glutin handles live in [`Option`]s so `release` can
+/// drop them in a defined order (surface → context → display) without
+/// requiring `&mut self` to consume `self`.
+pub struct GlutinProvider {
+    /// Currently-current context. `None` after `release`.
+    context: Option<glutin::context::PossiblyCurrentContext>,
+    /// The window surface attached to the GL context.
+    surface: Option<glutin::surface::Surface<glutin::surface::WindowSurface>>,
+    /// glow handle — shared via `Arc` so the same loaded function table
+    /// reaches both Skia (via `gl::Interface::new_load_with`) and the
+    /// chrome stub.
+    glow: Arc<glow::Context>,
+    /// Cached size; refreshed on every `resize` call.
+    size: (u32, u32),
+}
+
+impl GlutinProvider {
+    /// Construct from an existing winit window. Builds a glutin display
+    /// directly from the window's display handle (bypassing the sealed
+    /// `glutin_winit::GlutinEventLoop` trait), picks a GL config, creates
+    /// a context + window surface, and loads glow function pointers.
+    ///
+    /// This routine performs the minimal handshake required by Skia's
+    /// GL backend: a current context with a default framebuffer that
+    /// matches the window's pixel format and stencil bits.
+    #[tracing::instrument(skip_all)]
+    pub fn from_window(window: &winit::window::Window) -> ProviderResult<Self> {
+        use glutin::config::ConfigTemplateBuilder;
+        use glutin::context::ContextAttributesBuilder;
+        use glutin::display::{Display, GetGlDisplay};
+        use glutin::prelude::*;
+        use glutin_winit::GlWindow;
+        use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
+
+        let raw_window_handle = window
+            .window_handle()
+            .map_err(ProviderError::from_error)?
+            .as_raw();
+        let raw_display_handle = window
+            .display_handle()
+            .map_err(ProviderError::from_error)?
+            .as_raw();
+
+        // Per-platform display preference (glutin-winit applies the same
+        // matrix internally, but we go direct to avoid the sealed trait).
+        let preference = pick_display_api(raw_window_handle);
+
+        let gl_display = unsafe {
+            Display::new(raw_display_handle, preference).map_err(ProviderError::from_error)?
+        };
+
+        let template = ConfigTemplateBuilder::new()
+            .with_alpha_size(8)
+            .with_stencil_size(8)
+            .compatible_with_native_window(raw_window_handle)
+            .build();
+
+        let gl_config = unsafe {
+            gl_display
+                .find_configs(template)
+                .map_err(ProviderError::from_error)?
+                .reduce(|best, cfg| {
+                    if cfg.num_samples() > best.num_samples() {
+                        cfg
+                    } else {
+                        best
+                    }
+                })
+                .ok_or_else(|| ProviderError::from_msg("no GL config matched the window"))?
+        };
+
+        let context_attributes = ContextAttributesBuilder::new().build(Some(raw_window_handle));
+
+        let not_current = unsafe {
+            gl_config
+                .display()
+                .create_context(&gl_config, &context_attributes)
+                .map_err(ProviderError::from_error)?
+        };
+
+        let surface_attrs = window
+            .build_surface_attributes(<_>::default())
+            .map_err(ProviderError::from_error)?;
+        let surface = unsafe {
+            gl_config
+                .display()
+                .create_window_surface(&gl_config, &surface_attrs)
+                .map_err(ProviderError::from_error)?
+        };
+
+        let context = not_current
+            .make_current(&surface)
+            .map_err(ProviderError::from_error)?;
+
+        // Load glow function pointers from the now-current context.
+        let display_for_loader = gl_config.display();
+        let glow_ctx = unsafe {
+            glow::Context::from_loader_function(|sym| {
+                let cstr = CString::new(sym).expect("GL symbol UTF-8");
+                display_for_loader.get_proc_address(cstr.as_c_str())
+            })
+        };
+
+        let inner = window.inner_size();
+        Ok(Self {
+            context: Some(context),
+            surface: Some(surface),
+            glow: Arc::new(glow_ctx),
+            size: (inner.width.max(1), inner.height.max(1)),
+        })
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn pick_display_api(
+    _raw: raw_window_handle::RawWindowHandle,
+) -> glutin::display::DisplayApiPreference {
+    glutin::display::DisplayApiPreference::Cgl
+}
+
+#[cfg(target_os = "windows")]
+fn pick_display_api(
+    raw: raw_window_handle::RawWindowHandle,
+) -> glutin::display::DisplayApiPreference {
+    glutin::display::DisplayApiPreference::WglThenEgl(Some(raw))
+}
+
+#[cfg(target_os = "linux")]
+fn pick_display_api(
+    _raw: raw_window_handle::RawWindowHandle,
+) -> glutin::display::DisplayApiPreference {
+    // Prefer EGL on Linux: works under both X11 (via Mesa EGL) and Wayland,
+    // and lines up with the EGL-pbuffer headless path used by GPU smoke tests.
+    glutin::display::DisplayApiPreference::Egl
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
+fn pick_display_api(
+    _raw: raw_window_handle::RawWindowHandle,
+) -> glutin::display::DisplayApiPreference {
+    glutin::display::DisplayApiPreference::Egl
+}
+
+impl GlContextProvider for GlutinProvider {
+    #[tracing::instrument(skip(self))]
+    fn make_current(&mut self) -> ProviderResult<()> {
+        use glutin::prelude::*;
+        let ctx = self
+            .context
+            .as_ref()
+            .ok_or_else(|| ProviderError::from_msg("provider already released"))?;
+        let surface = self
+            .surface
+            .as_ref()
+            .ok_or_else(|| ProviderError::from_msg("provider already released"))?;
+        ctx.make_current(surface).map_err(ProviderError::from_error)
+    }
+
+    #[tracing::instrument(skip(self))]
+    fn swap_buffers(&mut self) -> ProviderResult<()> {
+        use glutin::prelude::*;
+        let ctx = self
+            .context
+            .as_ref()
+            .ok_or_else(|| ProviderError::from_msg("provider already released"))?;
+        let surface = self
+            .surface
+            .as_ref()
+            .ok_or_else(|| ProviderError::from_msg("provider already released"))?;
+        surface.swap_buffers(ctx).map_err(ProviderError::from_error)
+    }
+
+    fn glow(&self) -> Arc<glow::Context> {
+        self.glow.clone()
+    }
+
+    #[tracing::instrument(skip(self))]
+    fn resize(&mut self, width: u32, height: u32) -> ProviderResult<()> {
+        use glutin::prelude::*;
+        let ctx = self
+            .context
+            .as_ref()
+            .ok_or_else(|| ProviderError::from_msg("provider already released"))?;
+        let surface = self
+            .surface
+            .as_ref()
+            .ok_or_else(|| ProviderError::from_msg("provider already released"))?;
+        let w = NonZeroU32::new(width.max(1)).expect("width clamped to >= 1");
+        let h = NonZeroU32::new(height.max(1)).expect("height clamped to >= 1");
+        surface.resize(ctx, w, h);
+        self.size = (width, height);
+        Ok(())
+    }
+
+    fn size(&self) -> (u32, u32) {
+        self.size
+    }
+
+    #[tracing::instrument(skip(self))]
+    fn release(&mut self) -> ProviderResult<()> {
+        // glutin 0.32 release semantics (spec §3.5): drop in surface →
+        // context order; the driver finishes resource cleanup
+        // asynchronously. The explicit `Option::take` chain makes
+        // `release` idempotent.
+        if let Some(s) = self.surface.take() {
+            drop(s);
+        }
+        if let Some(c) = self.context.take() {
+            drop(c);
+        }
+        Ok(())
+    }
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Mobile: stubs (Step 1f real implementations)
+// ────────────────────────────────────────────────────────────────────────────
+
+/// iOS GL provider — placeholder. Step 1f wires CAEAGLLayer or Metal-translated.
+#[cfg(target_os = "ios")]
+pub struct EaglProvider;
+
+#[cfg(target_os = "ios")]
+impl GlContextProvider for EaglProvider {
+    fn make_current(&mut self) -> ProviderResult<()> {
+        unimplemented!("Step 1f")
+    }
+    fn swap_buffers(&mut self) -> ProviderResult<()> {
+        unimplemented!("Step 1f")
+    }
+    fn glow(&self) -> Arc<glow::Context> {
+        unimplemented!("Step 1f")
+    }
+    fn resize(&mut self, _width: u32, _height: u32) -> ProviderResult<()> {
+        unimplemented!("Step 1f")
+    }
+    fn size(&self) -> (u32, u32) {
+        unimplemented!("Step 1f")
+    }
+    fn release(&mut self) -> ProviderResult<()> {
+        unimplemented!("Step 1f")
+    }
+}
+
+/// Android GL provider — placeholder. Step 1f wires ANativeWindow + EGL.
+#[cfg(target_os = "android")]
+pub struct AndroidEglProvider;
+
+#[cfg(target_os = "android")]
+impl GlContextProvider for AndroidEglProvider {
+    fn make_current(&mut self) -> ProviderResult<()> {
+        unimplemented!("Step 1f")
+    }
+    fn swap_buffers(&mut self) -> ProviderResult<()> {
+        unimplemented!("Step 1f")
+    }
+    fn glow(&self) -> Arc<glow::Context> {
+        unimplemented!("Step 1f")
+    }
+    fn resize(&mut self, _width: u32, _height: u32) -> ProviderResult<()> {
+        unimplemented!("Step 1f")
+    }
+    fn size(&self) -> (u32, u32) {
+        unimplemented!("Step 1f")
+    }
+    fn release(&mut self) -> ProviderResult<()> {
+        unimplemented!("Step 1f")
+    }
+}
