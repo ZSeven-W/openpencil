@@ -414,3 +414,91 @@ describe('normalizeStrokeFillSchema — recursion', () => {
     expect(rec.strokeWidth).toBeUndefined();
   });
 });
+
+describe('normalizeStrokeFillSchema — hex prefix repair', () => {
+  // M2.7 food-app run shipped the page root with
+  //   fill: [{ type: 'solid', color: 'FFF8F0' }]
+  // (note: no leading `#`). The renderer's hex parser failed → the
+  // root frame fell back to its default gray fill, the cream warm-
+  // food page bg disappeared, and the whole design read as a
+  // generic gray app instead of the warm-light theme. The
+  // normalizer now repairs the missing prefix in place.
+
+  it('adds # prefix to a 6-digit hex without one', () => {
+    const node = frame({ fill: [{ type: 'solid' as const, color: 'FFF8F0' }] });
+    normalizeStrokeFillSchema(node);
+    const rec = node as unknown as { fill?: Array<{ color?: string }> };
+    expect(rec.fill?.[0]?.color).toBe('#FFF8F0');
+  });
+
+  it('repairs 3, 4, and 8-digit raw hex shapes', () => {
+    const cases: Array<[string, string]> = [
+      ['F00', '#F00'],
+      ['F00A', '#F00A'],
+      ['00FF7733', '#00FF7733'],
+    ];
+    for (const [raw, expected] of cases) {
+      const node = frame({ fill: [{ type: 'solid' as const, color: raw }] });
+      normalizeStrokeFillSchema(node);
+      const rec = node as unknown as { fill?: Array<{ color?: string }> };
+      expect(rec.fill?.[0]?.color).toBe(expected);
+    }
+  });
+
+  it('leaves valid # hex unchanged', () => {
+    const node = frame({ fill: [{ type: 'solid' as const, color: '#1F2937' }] });
+    normalizeStrokeFillSchema(node);
+    const rec = node as unknown as { fill?: Array<{ color?: string }> };
+    expect(rec.fill?.[0]?.color).toBe('#1F2937');
+  });
+
+  it('leaves $color-* variable refs unchanged', () => {
+    const node = frame({ fill: [{ type: 'solid' as const, color: '$color-accent' }] });
+    normalizeStrokeFillSchema(node);
+    const rec = node as unknown as { fill?: Array<{ color?: string }> };
+    expect(rec.fill?.[0]?.color).toBe('$color-accent');
+  });
+
+  it('leaves non-hex strings alone (unrecognized formats not in scope)', () => {
+    // 5 chars, 7 chars, alphabet-other-than-hex — none match the
+    // 3/4/6/8 hex shape, so the repair is a no-op. This avoids
+    // accidentally `#`-prefixing model output we don't understand.
+    const cases = ['12345', '1234567', 'rebeccapurple', 'fake-hex'];
+    for (const raw of cases) {
+      const node = frame({ fill: [{ type: 'solid' as const, color: raw }] });
+      normalizeStrokeFillSchema(node);
+      const rec = node as unknown as { fill?: Array<{ color?: string }> };
+      expect(rec.fill?.[0]?.color).toBe(raw);
+    }
+  });
+
+  it('repairs prefix on stroke.fill colors', () => {
+    const node = path({
+      stroke: { thickness: 2, fill: [{ type: 'solid' as const, color: 'F0DCC8' }] },
+    });
+    normalizeStrokeFillSchema(node);
+    const rec = node as unknown as { stroke?: { fill?: Array<{ color?: string }> } };
+    expect(rec.stroke?.fill?.[0]?.color).toBe('#F0DCC8');
+  });
+
+  it('repairs prefix on gradient stop colors', () => {
+    const node = frame({
+      fill: [
+        {
+          type: 'linear_gradient' as const,
+          stops: [
+            { offset: 0, color: 'F97316' },
+            { offset: 1, color: '#EA580C' }, // already-prefixed survives
+          ],
+          angle: 90,
+        },
+      ],
+    });
+    normalizeStrokeFillSchema(node);
+    const rec = node as unknown as {
+      fill?: Array<{ stops?: Array<{ color?: string }> }>;
+    };
+    expect(rec.fill?.[0]?.stops?.[0]?.color).toBe('#F97316');
+    expect(rec.fill?.[0]?.stops?.[1]?.color).toBe('#EA580C');
+  });
+});
