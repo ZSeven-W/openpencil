@@ -26,8 +26,12 @@ describe('mapOpenverseResult', () => {
 
     expect(result.id).toBe('abc-123');
     expect(result.url).toBe(raw.url);
-    expect(result.thumbUrl).toBe(raw.thumbnail);
-    expect(result.thumbUrl).toContain('openverse.org');
+    // thumbUrl is wrapped through the local image-proxy so the
+    // browser canvas fetch can reach openverse via the dev server
+    // (which honors HTTPS_PROXY). Both the proxy path and the
+    // encoded original URL must be present.
+    expect(result.thumbUrl).toMatch(/^\/api\/ai\/image-proxy\?url=/);
+    expect(decodeURIComponent(result.thumbUrl.split('url=')[1])).toBe(raw.thumbnail);
     expect(result.width).toBe(1920);
     expect(result.height).toBe(1080);
     expect(result.source).toBe('openverse');
@@ -100,7 +104,11 @@ describe('mapWikimediaPages', () => {
     const r = results[0];
     expect(r.id).toBe('12345');
     expect(r.url).toContain('wikimedia.org');
-    expect(r.thumbUrl).toContain('800px');
+    // thumbUrl is wrapped through the local image-proxy; assert
+    // that the proxy wrapper exists and the encoded URL still
+    // carries the upstream's thumbnail size hint.
+    expect(r.thumbUrl).toMatch(/^\/api\/ai\/image-proxy\?url=/);
+    expect(decodeURIComponent(r.thumbUrl.split('url=')[1])).toContain('800px');
     expect(r.width).toBe(1600);
     expect(r.height).toBe(1200);
     expect(r.source).toBe('wikimedia');

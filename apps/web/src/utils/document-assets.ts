@@ -2,6 +2,15 @@ const EXTERNAL_ASSET_RE = /^(?:data:|https?:|blob:)/i;
 const FILE_URL_RE = /^file:\/\//i;
 const HTTP_PROTOCOL_RE = /^https?:$/i;
 const LOCAL_IMAGE_EXT_RE = /\.(?:png|jpe?g|gif|webp|bmp|svg|avif)$/i;
+// Same-origin server routes the dev server / Nitro serves directly.
+// These are NOT file-system asset paths — they're runtime endpoints
+// (`/api/ai/image-proxy?url=...`, `/api/local-asset?path=...`, etc).
+// Without this carve-out the asset resolver treats them as local
+// file paths and double-wraps them through `/api/local-asset`,
+// producing a broken `/api/local-asset?path=%2Fapi%2Fai%2Fimage-proxy%3F...`
+// URL that only the local-asset handler can dispatch on, which then
+// 404s because `/api/ai/image-proxy?...` isn't a real file path.
+const SAME_ORIGIN_ROUTE_RE = /^\/(?:api|_)\//;
 
 export interface RuntimeAssetSource {
   sourcePath: string | null;
@@ -12,7 +21,10 @@ export interface RuntimeAssetSource {
 
 export function isLocalAssetPath(assetPath: string | null | undefined): boolean {
   if (!assetPath) return false;
-  return !EXTERNAL_ASSET_RE.test(assetPath.trim());
+  const trimmed = assetPath.trim();
+  if (EXTERNAL_ASSET_RE.test(trimmed)) return false;
+  if (SAME_ORIGIN_ROUTE_RE.test(trimmed)) return false;
+  return true;
 }
 
 export function resolveRuntimeAssetSource(

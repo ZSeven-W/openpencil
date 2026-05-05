@@ -1,4 +1,4 @@
-import type { PenNode, PenFill, SolidFill } from '@zseven-w/pen-types';
+import type { PenNode, PenFill, PenEffect, ShadowEffect, SolidFill } from '@zseven-w/pen-types';
 
 /**
  * Inject a default surface fill on top-level navigation frames that lack
@@ -30,22 +30,101 @@ const NAV_ROLES = new Set([
   'tab-row',
 ]);
 
+// Roles that sit at the BOTTOM of the screen — their shadow points
+// up so the nav lifts off the content above. Anything else (top nav
+// bar, generic navbar) gets a downward shadow lifting it off the
+// content below.
+const BOTTOM_NAV_ROLES = new Set(['bottom-tab-bar']);
+
 export function injectMissingNavSurfaceFill(rootFrame: PenNode): boolean {
   if (!('children' in rootFrame) || !Array.isArray(rootFrame.children)) return false;
 
   let changed = false;
-  for (const child of rootFrame.children) {
-    if (child.type !== 'frame') continue;
-    const role = (child as PenNode & { role?: string }).role;
-    if (!role || !NAV_ROLES.has(role)) continue;
-    const existing = (child as PenNode & { fill?: PenFill[] | string }).fill;
-    if (hasAnyFill(existing)) continue;
-    (child as PenNode & { fill?: PenFill[] }).fill = [
-      { type: 'solid', color: '$color-surface' } as SolidFill,
-    ];
-    changed = true;
+  for (const directChild of rootFrame.children) {
+    if (directChild.type !== 'frame') continue;
+    // Two shapes the model emits:
+    //   1. The nav frame is itself the direct child:
+    //        root > frame{role:'bottom-tab-bar'} > [icon-buttons]
+    //   2. The nav frame is wrapped in a single-child section:
+    //        root > frame{role:'section', id:'bottom-tabs-root'} > frame{role:'bottom-tab-bar'} > ...
+    // Earlier versions only handled shape (1). Shape (2) showed up
+    // on the food-app run where GPT-5.5 wrapped its bottom nav in
+    // a `bottom-tabs-root` section — the inject pass walked the
+    // direct child (a section, no nav role), bailed, and the
+    // nested nav stayed transparent. Allow one hop through a
+    // wrapper section to reach the nav child.
+    const role = (directChild as PenNode & { role?: string }).role;
+    if (role && NAV_ROLES.has(role)) {
+      if (applyNavSurfaceFill(directChild, role)) changed = true;
+      continue;
+    }
+    // Wrapper case: section-like role wrapping a single nav child.
+    // Only walk one hop to keep scope tight (we don't want to
+    // recurse into cards etc. that legitimately contain nested
+    // nav-shaped frames).
+    if (
+      role === 'section' &&
+      Array.isArray((directChild as PenNode & { children?: PenNode[] }).children) &&
+      ((directChild as PenNode & { children?: PenNode[] }).children?.length ?? 0) === 1
+    ) {
+      const inner = (directChild as PenNode & { children?: PenNode[] }).children![0];
+      if (inner.type !== 'frame') continue;
+      const innerRole = (inner as PenNode & { role?: string }).role;
+      if (innerRole && NAV_ROLES.has(innerRole)) {
+        if (applyNavSurfaceFill(inner, innerRole)) changed = true;
+      }
+    }
   }
   return changed;
+}
+
+/**
+ * Stamp the `$color-surface` fill and a position-appropriate shadow
+ * on a nav frame that has no fill yet. Returns true if anything
+ * was written. Bails entirely (returns false, no shadow either)
+ * when the sub-agent emitted any valid fill — the explicit fill is
+ * a clear signal of intent, and a sub-agent that picked a specific
+ * surface color likely also has an opinion about whether the nav
+ * should carry a shadow. We don't want to silently stamp visual
+ * lift on a nav the model deliberately left flat.
+ */
+function applyNavSurfaceFill(navFrame: PenNode, role: string): boolean {
+  const existing = (navFrame as PenNode & { fill?: PenFill[] | string }).fill;
+  if (hasAnyFill(existing)) return false;
+
+  (navFrame as PenNode & { fill?: PenFill[] }).fill = [
+    { type: 'solid', color: '$color-surface' } as SolidFill,
+  ];
+
+  // Why also inject a shadow: in warm-light themes (`$color-bg-deep`
+  // = #FFF8F0 cream, `$color-surface` = #FFFFFF white), the
+  // luminance delta between page bg and the surface fill we just
+  // applied is ~0.03 — visually indistinguishable. The user reads
+  // the nav as having "no background" even though it does. Adding
+  // a soft shadow lifts the nav off the page bg independently of
+  // the fill contrast. Only add the shadow when no `effects` were
+  // already set; if the sub-agent emitted its own effects
+  // (intentional drop shadow, brand glow, etc.) we leave them alone.
+  const existingEffects = (navFrame as PenNode & { effects?: PenEffect[] }).effects;
+  const hasEffects = Array.isArray(existingEffects) && existingEffects.length > 0;
+  if (!hasEffects) {
+    // Bottom nav: shadow above (offsetY < 0) — lifts off content
+    // above. Top nav / generic navbar: shadow below (offsetY > 0)
+    // — lifts off content below. A downward shadow on a bottom
+    // nav would hide off-screen, and an upward shadow on a top
+    // nav would cling to the screen edge.
+    const isBottomNav = BOTTOM_NAV_ROLES.has(role);
+    const shadow: ShadowEffect = {
+      type: 'shadow',
+      offsetX: 0,
+      offsetY: isBottomNav ? -4 : 4,
+      blur: 12,
+      spread: 0,
+      color: '#0000000F',
+    };
+    (navFrame as PenNode & { effects?: PenEffect[] }).effects = [shadow];
+  }
+  return true;
 }
 
 /**
