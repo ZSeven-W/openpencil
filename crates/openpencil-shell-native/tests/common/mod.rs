@@ -203,6 +203,13 @@ pub mod egl_pbuffer {
             self.glow.clone()
         }
 
+        /// EGL pbuffer default FBO = 0 (matches `GlutinProvider`).
+        /// Phase A Gate round 2 CONCERN 1 fix — explicit override
+        /// required, no trait default body.
+        fn default_framebuffer_id(&self) -> u32 {
+            0
+        }
+
         fn resize(&mut self, _w: u32, _h: u32) -> ProviderResult<()> {
             // Pbuffer can't be resized once created — tests build the
             // surface at the size they need.
