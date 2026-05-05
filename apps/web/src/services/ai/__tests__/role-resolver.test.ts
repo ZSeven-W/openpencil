@@ -2065,3 +2065,141 @@ describe('resolveTreeRoles — theme-aware role defaults', () => {
     expect(fill?.[0]?.color).toBe('#111111');
   });
 });
+
+describe('resolveTreePostPass — icon_font contrast override', () => {
+  // Regression: GPT-5.5 food-app generation shipped accent buttons
+  // ("Burger" tab, "Order now" CTA, filter icon-button) where the
+  // text label rendered white-on-orange (correct) but the icon_font
+  // sibling rendered dark-on-orange (wrong). Two compounding bugs:
+  //   1. `getFirstSolidColor` returned the raw `$color-accent` ref;
+  //      `hexLuminance` parsed NaN; the dark-fg branch always won.
+  //   2. The icon_font branch skipped any node with an existing
+  //      visible fill, even when that fill was a dark text-color
+  //      default with poor contrast against the bg.
+  // Tests below lock in the fix from `ddf6580f`.
+
+  const dispatchPostPass = (root: PenNode) => resolveTreePostPass(root, 375);
+
+  it('overrides dark icon_font fill on dark button (low contrast → white)', () => {
+    const button: PenNode = {
+      id: 'btn',
+      type: 'frame',
+      name: 'Button',
+      x: 0,
+      y: 0,
+      width: 120,
+      height: 44,
+      role: 'button',
+      fill: [{ type: 'solid', color: '#1E293B' }],
+      children: [
+        {
+          id: 'ico',
+          type: 'icon_font',
+          name: 'Icon',
+          x: 0,
+          y: 0,
+          width: 24,
+          height: 24,
+          // Dark icon — model's reflexive default. Contrast vs dark
+          // bg is < 0.4, so the override fires.
+          fill: [{ type: 'solid', color: '#0F172A' }],
+        } as PenNode,
+      ],
+    } as PenNode;
+    const root: PenNode = {
+      id: 'root',
+      type: 'frame',
+      x: 0,
+      y: 0,
+      width: 375,
+      height: 812,
+      children: [button],
+    } as PenNode;
+    dispatchPostPass(root);
+    const ico = ((root as { children: PenNode[] }).children[0] as { children: PenNode[] })
+      .children[0] as PenNode & {
+      fill?: Array<{ color?: string }>;
+    };
+    expect(ico.fill?.[0]?.color).toBe('#FFFFFF');
+  });
+
+  it('preserves a strong-contrast icon (red dot on white button)', () => {
+    const button: PenNode = {
+      id: 'btn',
+      type: 'frame',
+      x: 0,
+      y: 0,
+      width: 44,
+      height: 44,
+      role: 'icon-button',
+      fill: [{ type: 'solid', color: '#FFFFFF' }],
+      children: [
+        {
+          id: 'ico',
+          type: 'icon_font',
+          x: 0,
+          y: 0,
+          width: 16,
+          height: 16,
+          // Brand-red intentional accent — luminance delta vs white
+          // is ≈ 0.7, well above 0.4 threshold. Survives.
+          fill: [{ type: 'solid', color: '#DC2626' }],
+        } as PenNode,
+      ],
+    } as PenNode;
+    const root: PenNode = {
+      id: 'root',
+      type: 'frame',
+      x: 0,
+      y: 0,
+      width: 375,
+      height: 812,
+      children: [button],
+    } as PenNode;
+    dispatchPostPass(root);
+    const ico = ((root as { children: PenNode[] }).children[0] as { children: PenNode[] })
+      .children[0] as PenNode & {
+      fill?: Array<{ color?: string }>;
+    };
+    expect(ico.fill?.[0]?.color).toBe('#DC2626');
+  });
+
+  it('still fills unfilled icon_font (no regression on the original branch)', () => {
+    const button: PenNode = {
+      id: 'btn',
+      type: 'frame',
+      x: 0,
+      y: 0,
+      width: 120,
+      height: 44,
+      role: 'button',
+      fill: [{ type: 'solid', color: '#1E293B' }],
+      children: [
+        {
+          id: 'ico',
+          type: 'icon_font',
+          x: 0,
+          y: 0,
+          width: 24,
+          height: 24,
+          // No fill — the original "fill if missing" branch fires.
+        } as PenNode,
+      ],
+    } as PenNode;
+    const root: PenNode = {
+      id: 'root',
+      type: 'frame',
+      x: 0,
+      y: 0,
+      width: 375,
+      height: 812,
+      children: [button],
+    } as PenNode;
+    dispatchPostPass(root);
+    const ico = ((root as { children: PenNode[] }).children[0] as { children: PenNode[] })
+      .children[0] as PenNode & {
+      fill?: Array<{ color?: string }>;
+    };
+    expect(ico.fill?.[0]?.color).toBe('#FFFFFF');
+  });
+});
