@@ -355,7 +355,7 @@ export default defineEventHandler(async (event) => {
   const clientSecret = body?.openverseClientSecret;
 
   // Try Openverse first
-  const openverseResults = await fetchFromOpenverse(
+  let openverseResults = await fetchFromOpenverse(
     query,
     count,
     aspectRatio,
@@ -363,15 +363,55 @@ export default defineEventHandler(async (event) => {
     clientSecret,
   );
 
-  if (openverseResults !== null) {
+  // Openverse `[]` (zero results) is its own failure mode, distinct from
+  // null (429 / network). LLMs often emit 3-keyword queries that match
+  // real photos but return zero on Openverse's strict AND-search —
+  // "burger combo fries" gets 0 matches even though "burger fries"
+  // returns 240. Retry with the first two keywords before giving up.
+  // This trades a tiny amount of relevance (the 3rd keyword) for a much
+  // better hit rate on AI-emitted queries; if even the 2-keyword form
+  // returns nothing, fall through to the Wikimedia fallback.
+  if (openverseResults !== null && openverseResults.length === 0) {
+    const words = query.split(/\s+/).filter((w) => w.length > 0);
+    if (words.length > 2) {
+      const truncated = words.slice(0, 2).join(' ');
+      const retryResults = await fetchFromOpenverse(
+        truncated,
+        count,
+        aspectRatio,
+        clientId,
+        clientSecret,
+      );
+      if (retryResults !== null && retryResults.length > 0) {
+        openverseResults = retryResults;
+      }
+    }
+  }
+
+  if (openverseResults !== null && openverseResults.length > 0) {
     return {
       results: openverseResults,
       source: 'openverse',
     } satisfies ImageSearchResponse;
   }
 
-  // Openverse returned 429 or failed — fall back to Wikimedia
+  // Openverse 429-failed OR returned no usable results even after the
+  // 2-keyword retry — fall back to Wikimedia, which has different
+  // coverage and a less strict matching algorithm.
   const wikimediaResults = await fetchFromWikimedia(query, count);
+  if (wikimediaResults.length === 0) {
+    const words = query.split(/\s+/).filter((w) => w.length > 0);
+    if (words.length > 2) {
+      const truncated = words.slice(0, 2).join(' ');
+      const retryResults = await fetchFromWikimedia(truncated, count);
+      if (retryResults.length > 0) {
+        return {
+          results: retryResults,
+          source: 'wikimedia',
+        } satisfies ImageSearchResponse;
+      }
+    }
+  }
   return {
     results: wikimediaResults,
     source: 'wikimedia',
