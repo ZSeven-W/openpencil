@@ -22,8 +22,15 @@ openpencil-shell-core = { path = "../openpencil-shell-core", version = "0.1.0" }
 # 原因：Rust 1.80 toolchain (rust-toolchain.toml) 对 home/hashbrown 等 crate 当前
 # 版本的 edition2024 / MSRV 1.81+ 需求不兼容，加完整依赖会导致下载阶段失败。
 # 详见提交说明 + Phase 1 Gate codex review。
+#
+# winit features 说明：on Linux 必须显式开 `x11` 和/或 `wayland`，否则
+# `platform_impl/mod.rs` 触发 `compile_error!("The platform you're compiling for is
+# not supported by winit")`. macOS / Windows 各自的 backend 通过 cfg(target_os)
+# 默认启用，不需要 feature flag。Step 1a 只在三大桌面 OS 跑 CI，所以同时打开
+# x11 + wayland 两个 Linux backend 就够。Stage F 真正接 RenderBackend 时会
+# 重新审视（可能加 `serde` / `rwh_06` 等）。
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-winit = { version = "0.30", default-features = false }
+winit = { version = "0.30", default-features = false, features = ["x11", "wayland", "wayland-csd-adwaita", "rwh_06"] }
 
 # TRANSIENT (Step 1a P0 CI gate only — reverted after notes commit, before Task 1 starts).
 # These deps power `examples/p0_probe.rs` + `tests/p0_probe.rs` (gated `#[ignore = "P0_PROBE_GATE"]`).
