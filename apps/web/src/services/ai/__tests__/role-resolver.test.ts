@@ -2218,26 +2218,49 @@ describe('resolveTreePostPass — icon_font contrast override', () => {
     expect(txt.fill?.[0]?.color).toBe('#FFFFFF');
   });
 
-  it('uses dark-mode semantic palette when doc.themes advertises Mode=Dark', async () => {
-    // Regression: the cascade's step-2 fallback was hard-coded to
-    // SEMANTIC_PALETTE_THEME_LIGHT via an unused `themeHint` param,
-    // so dark-mode docs got the LIGHT palette accent (#2563EB) for
-    // an unseeded `\$color-accent` ref instead of the DARK one
-    // (#60A5FA). With identical light-bg luminance assumptions in
-    // both branches the contrast fg landed on the wrong color band
-    // for genuinely dark-bg generations.
+  it('uses dark-mode semantic palette when the page root has a dark fill', async () => {
+    // Regression chain on dark-mode fallback:
+    //   - 965e143e gated step-2 mode on a `themeHint` param that no
+    //     caller supplied → dark-mode docs always got light palette.
+    //   - b3180534 read `doc.themes['Mode']` instead, but Codex flagged
+    //     that signal as non-production:
+    //     `seedDocVariablesFromStyleGuide` writes ONLY `doc.variables`,
+    //     never `doc.themes`, so the axis would never exist on a real
+    //     orchestrator-emitted doc and the dark-palette fallback would
+    //     still never fire.
+    //   - This commit reads the active page root's fill via
+    //     `detectThemeFromNode`, the same signal `resolveTreeRoles`
+    //     uses at its entry point. That fill is what the model /
+    //     user actually painted, so it's the production-truthful
+    //     mode signal.
     //
-    // Fix reads `doc.themes['Mode']` directly so step-2 honors
-    // whichever mode the doc advertises. Test exercises that path
-    // by setting `Mode = ['Dark', 'Light']` on a fresh doc.
+    // Test seeds a dark page-root fill on the live doc store and
+    // asserts that an unseeded `\$color-accent` button gets the
+    // dark-palette accent (#60A5FA, lum ≈ 0.6) and therefore the
+    // dark fg color (#0F172A) on the text child.
     const { useDocumentStore } = await import('@/stores/document-store');
     const prevDoc = useDocumentStore.getState().document;
     try {
       useDocumentStore.setState({
         document: {
           ...prevDoc,
-          themes: { Mode: ['Dark', 'Light'] },
+          // Page root with a dark fill — detectThemeFromNode reads
+          // luminance and returns 'dark'.
+          children: [
+            {
+              id: 'page-root',
+              type: 'frame',
+              x: 0,
+              y: 0,
+              width: 375,
+              height: 812,
+              fill: [{ type: 'solid', color: '#0A0A0A' }],
+              children: [],
+            } as PenNode,
+          ],
+          pages: [],
           variables: {}, // unseeded, force step-2 cascade
+          themes: undefined,
         },
       } as never);
 
