@@ -431,10 +431,12 @@ describe('normalizeStrokeFillSchema — hex prefix repair', () => {
     expect(rec.fill?.[0]?.color).toBe('#FFF8F0');
   });
 
-  it('repairs 3, 4, and 8-digit raw hex shapes', () => {
+  it('repairs 3 and 8-digit raw hex shapes (the lengths parseColor accepts)', () => {
+    // pen-renderer's `parseColor` only matches lengths 3, 6, and 8.
+    // We only repair the shapes the renderer can actually render —
+    // see the RAW_HEX_RE comment for why 4-digit RGBA is excluded.
     const cases: Array<[string, string]> = [
       ['F00', '#F00'],
-      ['F00A', '#F00A'],
       ['00FF7733', '#00FF7733'],
     ];
     for (const [raw, expected] of cases) {
@@ -443,6 +445,17 @@ describe('normalizeStrokeFillSchema — hex prefix repair', () => {
       const rec = node as unknown as { fill?: Array<{ color?: string }> };
       expect(rec.fill?.[0]?.color).toBe(expected);
     }
+  });
+
+  it("does NOT repair 4-digit RGBA hex (renderer doesn't parse length 4)", () => {
+    // Adding `#` to `F00A` would make the result look valid
+    // downstream while still rendering as the fallback gray
+    // (`parseColor` has no length-4 branch). Leave it alone so the
+    // schema error stays visible to upstream callers and tooling.
+    const node = frame({ fill: [{ type: 'solid' as const, color: 'F00A' }] });
+    normalizeStrokeFillSchema(node);
+    const rec = node as unknown as { fill?: Array<{ color?: string }> };
+    expect(rec.fill?.[0]?.color).toBe('F00A');
   });
 
   it('leaves valid # hex unchanged', () => {
