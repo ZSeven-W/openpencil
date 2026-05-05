@@ -22,8 +22,11 @@ jobs:
             runner: macos-latest
             target: aarch64-apple-darwin
             archive: tar.gz
+          # macos-13 (Intel) deprecated; cross-compile x86_64-apple-darwin
+          # from Apple Silicon (cargo supports cross-compile to host's other
+          # arch out of the box, no `cross` needed).
           - label: macos-x86_64
-            runner: macos-13
+            runner: macos-latest
             target: x86_64-apple-darwin
             archive: tar.gz
           - label: linux-x86_64

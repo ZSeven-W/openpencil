@@ -36,10 +36,14 @@ jobs:
             runner: macos-latest
             target: aarch64-apple-darwin
             cross: false
+            # macos-13 (Intel runners) deprecated; build x86_64-apple-darwin via
+            # cross-compile from Apple Silicon. cargo build/check run; no test
+            # since binary arch ≠ host arch.
           - label: macos-x86_64
-            runner: macos-13
+            runner: macos-latest
             target: x86_64-apple-darwin
             cross: false
+            check_only: true
           - label: linux-x86_64
             runner: ubuntu-latest
             target: x86_64-unknown-linux-gnu
@@ -78,8 +82,11 @@ jobs:
         if: matrix.cross == true
         run: cargo install cross --locked --version 0.2.5
       - name: Build (host)
-        if: matrix.cross == false
+        if: matrix.cross == false && matrix.check_only != true
         run: cargo build --workspace --target ${{ matrix.target }} --release
+      - name: Check (cross-arch host, e.g. macos-x86_64 from Apple Silicon)
+        if: matrix.check_only == true
+        run: cargo check --workspace --target ${{ matrix.target }}
       - name: Build (cross)
         if: matrix.cross == true
         run: cross build --workspace --target ${{ matrix.target }} --release
@@ -99,10 +106,10 @@ jobs:
         # than the headless DRI fallback that fails `eglInitialize`.
         run: xvfb-run -a cargo test --workspace --target ${{ matrix.target }}
       - name: Test (host, macOS / Windows)
-        if: matrix.cross == false && runner.os != 'Linux'
+        if: matrix.cross == false && matrix.check_only != true && runner.os != 'Linux'
         run: cargo test --workspace --target ${{ matrix.target }}
       - name: Upload openpencil-app binary
-        if: matrix.cross == false
+        if: matrix.cross == false && matrix.check_only != true
         uses: actions/upload-artifact@v4
         with:
           name: openpencil-app-${{ matrix.label }}
