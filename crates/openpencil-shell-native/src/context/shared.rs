@@ -33,16 +33,19 @@ pub enum SharedSkiaError {
 /// Result alias for fallible context operations.
 pub type SharedSkiaResult<T> = Result<T, SharedSkiaError>;
 
-/// Configuration for surface creation. `dpi` is logical→physical scale
-/// (passed to `NativeBackend::dpi_scale`); `(width, height)` is the
-/// initial physical-pixel size of the framebuffer.
+/// Internal surface dimensions + GL config queried from the provider's
+/// current GL state at construction time. Not a public input — Phase A
+/// Gate round 2 BLOCK 1 fix moved configuration ownership to the
+/// provider per spec v19.1 §3.3 (`SharedSkiaContext::new(provider)`
+/// single-arg). The struct stays public so `resize` can mutate
+/// `width`/`height` and `Default` keeps `inert_for_lifecycle_test`
+/// trivially constructable.
 #[derive(Debug, Clone, Copy)]
 pub struct SurfaceConfig {
     pub width: u32,
     pub height: u32,
     pub sample_count: usize,
     pub stencil_bits: usize,
-    pub dpi: f32,
 }
 
 impl Default for SurfaceConfig {
@@ -52,7 +55,6 @@ impl Default for SurfaceConfig {
             height: 600,
             sample_count: 0,
             stencil_bits: 8,
-            dpi: 1.0,
         }
     }
 }
@@ -67,23 +69,10 @@ pub struct SharedSkiaContext {
     provider: Option<Box<dyn GlContextProvider>>,
     direct_context: Option<skia_safe::gpu::DirectContext>,
     surface: Option<skia_safe::Surface>,
-    /// glow handle. **Spec mini-patch pending** (Codex Phase A Gate
-    /// round 1 CONCERN 2): spec v19 lines 120-125 + 191 declare a
-    /// non-Optional `Arc<glow::Context>`, but real lifecycle requires
-    /// it to be droppable:
-    ///
-    ///   - `teardown` must release the handle so the loaded function
-    ///     table can be GC'd (deterministic cleanup for the
-    ///     100-iteration RSS test);
-    ///   - `inert_for_lifecycle_test()` produces a context with no
-    ///     GL backing whatsoever — exposing a phantom `Arc` would
-    ///     just hide UB behind a `unimplemented!()` loader closure;
-    ///   - Step 1f Android `on_pause` will need to drop the glow
-    ///     handle alongside the surface (the EGL context behind it
-    ///     becomes invalid the moment the activity backgrounds).
-    ///
-    /// Report back to controller to push v19 → v19.1 making
-    /// `glow_handle` optional in §3.2 / §3.3.
+    /// glow handle. v19.1 mini-patch landed (spec frozen at
+    /// openpencil-docs commit 526791f, §3.2): `Option<Arc<...>>` so
+    /// `teardown`, `inert_for_lifecycle_test`, and mobile `on_pause`
+    /// can drop the loader function table alongside the surface.
     glow_handle: Option<Arc<glow::Context>>,
     config: SurfaceConfig,
 }
@@ -92,11 +81,18 @@ impl SharedSkiaContext {
     /// Generic constructor accepting any `GlContextProvider`. Used by
     /// headless tests (EGL pbuffer provider) and mobile providers in
     /// Step 1f.
+    ///
+    /// Phase A Gate round 2 BLOCK 1 fix — single-arg signature aligned
+    /// to spec v19.1 §3.3: `SharedSkiaContext::new(provider) -> Result<Self>`.
+    /// The provider owns surface configuration; this constructor
+    /// queries the actual GL state (`GL_VIEWPORT`, `GL_SAMPLES`,
+    /// `GL_STENCIL_BITS`) after `make_current()` returns. Both
+    /// glutin window surfaces and EGL pbuffers initialise the GL
+    /// viewport to the surface dimensions, so the readback is the
+    /// authoritative source for initial size — no caller-side config
+    /// needed.
     #[tracing::instrument(skip_all)]
-    pub fn new<P: GlContextProvider + 'static>(
-        mut provider: P,
-        config: SurfaceConfig,
-    ) -> SharedSkiaResult<Self> {
+    pub fn new<P: GlContextProvider + 'static>(mut provider: P) -> SharedSkiaResult<Self> {
         provider.make_current()?;
 
         let glow_handle = provider.glow();
@@ -106,6 +102,7 @@ impl SharedSkiaContext {
         let mut direct_context = skia_safe::gpu::direct_contexts::make_gl(interface, None)
             .ok_or(SharedSkiaError::DirectContext)?;
 
+        let config = query_surface_config(&glow_handle);
         let fboid = provider.default_framebuffer_id();
         let surface = build_gl_surface(&mut direct_context, &config, fboid)?;
 
@@ -119,19 +116,13 @@ impl SharedSkiaContext {
     }
 
     /// Desktop convenience constructor — wraps `GlutinProvider` and
-    /// derives the initial surface size from the window.
+    /// delegates to [`Self::new`]. The provider is built from the
+    /// winit window, so the GL viewport queried inside `new` already
+    /// matches the window's framebuffer dimensions.
     #[tracing::instrument(skip_all)]
     pub fn new_desktop(window: &winit::window::Window) -> SharedSkiaResult<Self> {
         let provider = GlutinProvider::from_window(window)?;
-        let inner = window.inner_size();
-        let scale = window.scale_factor() as f32;
-        let config = SurfaceConfig {
-            width: inner.width.max(1),
-            height: inner.height.max(1),
-            dpi: if scale > 0.0 { scale } else { 1.0 },
-            ..SurfaceConfig::default()
-        };
-        Self::new(provider, config)
+        Self::new(provider)
     }
 
     /// Begin a frame. Pure marker hook for now — chrome / canvas viewport
@@ -235,8 +226,13 @@ impl SharedSkiaContext {
 
     /// Optional accessor for the current glow handle. Mainly used by
     /// tests + headless GPU smoke (`with_frame` is the preferred path).
-    pub fn glow(&self) -> Option<Arc<glow::Context>> {
-        self.glow_handle.clone()
+    ///
+    /// Phase A Gate round 2 BLOCK 2(a) fix — borrow rather than clone
+    /// `Arc`, per spec v19.1 §3.3 (`Option<&Arc<glow::Context>>`).
+    /// Hot-path callers that need an owned `Arc` clone explicitly via
+    /// `.clone()` after `Some` matching.
+    pub fn glow(&self) -> Option<&Arc<glow::Context>> {
+        self.glow_handle.as_ref()
     }
 
     // ── Lifecycle hooks ────────────────────────────────────────────────
@@ -244,13 +240,24 @@ impl SharedSkiaContext {
     /// Background entry. On Android / iOS the surface must be dropped
     /// before this returns; the system reclaims the underlying native
     /// window. Desktop is a no-op. Idempotent.
+    ///
+    /// Phase A Gate round 2 BLOCK 2(b) fix — also drop `glow_handle`
+    /// on mobile targets, per spec v19.1 §3.4. The EGL/EAGL context
+    /// behind the loader function table becomes invalid the moment
+    /// the activity backgrounds, so retaining the `Arc` would leave a
+    /// dangling pointer set inside `glow::Context`. `on_resume` re-
+    /// fetches a fresh handle from the provider after window reattach.
     #[tracing::instrument(skip(self))]
     pub fn on_pause(&mut self) -> SharedSkiaResult<()> {
         tracing::trace!("on_pause");
-        if cfg!(any(target_os = "android", target_os = "ios")) {
+        #[cfg(any(target_os = "android", target_os = "ios"))]
+        {
             if let Some(s) = self.surface.take() {
                 drop(s);
             }
+            // Drop the glow handle alongside the surface — the
+            // backing GL context is being torn down by the system.
+            self.glow_handle.take();
         }
         Ok(())
     }
@@ -315,6 +322,33 @@ impl Drop for SharedSkiaContext {
         if let Err(err) = self.teardown() {
             tracing::error!(?err, "SharedSkiaContext drop fallback teardown failed");
         }
+    }
+}
+
+/// Query GL state for the current viewport + sample/stencil bits.
+///
+/// Phase A Gate round 2 BLOCK 1 fix: `SharedSkiaContext::new` is now
+/// single-arg per spec v19.1 §3.3, so initial surface dimensions must
+/// come from the GL state established by `provider.make_current()`.
+///
+/// `glGetIntegerv(GL_VIEWPORT)` returns `[x, y, width, height]`, set by
+/// the surface attach (glutin window surface or EGL pbuffer). `GL_SAMPLES`
+/// and `GL_STENCIL_BITS` reflect the chosen GL config, matching what
+/// Skia's `BackendRenderTarget` needs to wrap the FBO.
+fn query_surface_config(glow: &Arc<glow::Context>) -> SurfaceConfig {
+    use glow::HasContext;
+    let mut viewport = [0i32; 4];
+    let (samples, stencil_bits) = unsafe {
+        glow.get_parameter_i32_slice(glow::VIEWPORT, &mut viewport);
+        let s = glow.get_parameter_i32(glow::SAMPLES);
+        let st = glow.get_parameter_i32(glow::STENCIL_BITS);
+        (s, st)
+    };
+    SurfaceConfig {
+        width: viewport[2].max(1) as u32,
+        height: viewport[3].max(1) as u32,
+        sample_count: samples.max(0) as usize,
+        stencil_bits: stencil_bits.max(0) as usize,
     }
 }
 
