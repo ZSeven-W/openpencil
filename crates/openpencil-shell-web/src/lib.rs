@@ -5,15 +5,16 @@
 //! openpencil-shell-web --no-default-features --features web` to pass on
 //! every PR.
 //!
-//! Step 1a Task 1 状态：仅 link-check shell-core re-export；CanvasKit
-//! WebBackend 在 Step 1b 加。
+//! Step 1a Task 1 status: only link-checks the shell-core re-export; the
+//! CanvasKit WebBackend lands in Step 1b.
 
 use wasm_bindgen::prelude::*;
 
 /// Skeleton placeholder until Step 1b lands `WebCanvasKitBackend`.
 ///
-/// 用 OP `Color::TRANSPARENT` 命名常量证明 shell-core re-export 在 wasm32
-/// 链通了；这是最小 link-check（shell-core 必须 wasm32-clean per spec §1.2）。
+/// Uses the OP `Color::TRANSPARENT` named constant to prove the shell-core
+/// re-export links on wasm32 — this is the minimal link-check (shell-core
+/// must stay wasm32-clean per spec §1.2).
 #[wasm_bindgen]
 pub fn placeholder() -> String {
     let _t = openpencil_shell_core::Color::TRANSPARENT;

@@ -1,18 +1,18 @@
 //! Task 1 Step 20-21: prove the Jian re-export wrapper compiles & is usable.
 //!
-//! Two anchor invariants for spec v19 §2 / §5.2：
-//! 1. `DrawOp::Rect` constructible **through OP re-export path**
-//!    (`openpencil_shell_core::jian::DrawOp` —— shell-native 内部翻译用)。
-//! 2. `TextLayout::single_run` 产生**恰好一个** `TextRun`（spec §5.2，
-//!    确认 `..Default::default()` 替代成显式字段后语义等价）。
+//! Two anchor invariants for spec v19 §2 / §5.2:
+//! 1. `DrawOp::Rect` constructible **through the OP re-export path**
+//!    (`openpencil_shell_core::jian::DrawOp` — used by shell-native's internal translation).
+//! 2. `TextLayout::single_run` produces **exactly one** `TextRun` (spec §5.2,
+//!    confirming the explicit-field replacement for `..Default::default()` is semantically equivalent).
 
 use openpencil_shell_core::jian::{DrawOp, JianRect, Paint};
 use openpencil_shell_core::render_backend::{Color, Point2D, TextLayout};
 
 #[test]
 fn drawop_rect_constructible_via_re_export() {
-    // 通过 OP re-export 路径构造 Jian DrawOp::Rect —— 证明 shell-core 的
-    // jian 模块把 jian_core::render::{DrawOp, Paint} 暴露出来了。
+    // Construct a Jian DrawOp::Rect via the OP re-export path — proves shell-core's
+    // jian module exposes jian_core::render::{DrawOp, Paint}.
     let rect = JianRect::new(
         jian_core::geometry::Point::new(0.0, 0.0),
         jian_core::geometry::Size::new(100.0, 50.0),
@@ -31,9 +31,9 @@ fn drawop_rect_constructible_via_re_export() {
 
 #[test]
 fn text_layout_single_run_creates_one_run() {
-    // 显式字段构造（TextRun 没 Default impl）—— 证明 spec §5.2 的
-    // single_run 路径产生恰好一个 run，content/font_family/font_size
-    // 都按调用方传入设置。
+    // Explicit-field construction (TextRun has no Default impl) — proves the
+    // spec §5.2 single_run path produces exactly one run with content /
+    // font_family / font_size set from the caller's arguments.
     let layout = TextLayout::single_run(
         "Hello",
         "system-ui",
@@ -57,7 +57,7 @@ fn text_layout_single_run_creates_one_run() {
 
 #[test]
 fn text_layout_translated_offsets_origin() {
-    // translated() 把 offset 加到每 run origin 上；原 layout 不变。
+    // translated() adds offset to each run's origin; the original layout is unchanged.
     let layout = TextLayout::single_run(
         "World",
         "system-ui",
@@ -70,14 +70,14 @@ fn text_layout_translated_offsets_origin() {
     assert_eq!(shifted.runs()[0].origin.x, 105.0);
     assert_eq!(shifted.runs()[0].origin.y, 210.0);
 
-    // 原 layout 不动
+    // Original layout untouched.
     assert_eq!(layout.runs()[0].origin.x, 5.0);
     assert_eq!(layout.runs()[0].origin.y, 10.0);
 }
 
 #[test]
 fn op_color_constants_distinct() {
-    // spec §5.2 命名常量 6 全 —— RED/GREEN/BLUE/BLACK/WHITE/TRANSPARENT。
+    // spec §5.2 names all six constants — RED/GREEN/BLUE/BLACK/WHITE/TRANSPARENT.
     assert_eq!(Color::RED.r, 1.0);
     assert_eq!(Color::GREEN.g, 1.0);
     assert_eq!(Color::BLUE.b, 1.0);
