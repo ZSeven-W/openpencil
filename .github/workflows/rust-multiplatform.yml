@@ -1,0 +1,164 @@
+name: Rust multi-platform build
+
+# Builds the OpenPencil Rust workspace across all supported targets.
+# Runs on every push/PR to verify the matrix stays green; release artifacts
+# are produced by `rust-release.yml` on tag pushes.
+
+on:
+  push:
+    branches: [main, v0.8.0]
+    paths:
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'crates/**'
+      - 'vendor/jian/**'
+      - 'rust-toolchain.toml'
+      - 'deny.toml'
+      - '.github/workflows/rust-multiplatform.yml'
+  pull_request:
+    paths:
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'crates/**'
+      - 'vendor/jian/**'
+      - '.github/workflows/rust-multiplatform.yml'
+  workflow_dispatch:
+
+jobs:
+  desktop:
+    name: ${{ matrix.label }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: macos-aarch64
+            runner: macos-latest
+            target: aarch64-apple-darwin
+            cross: false
+          - label: macos-x86_64
+            runner: macos-13
+            target: x86_64-apple-darwin
+            cross: false
+          - label: linux-x86_64
+            runner: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            cross: false
+          - label: linux-aarch64
+            runner: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+            cross: true
+          - label: windows-x86_64
+            runner: windows-latest
+            target: x86_64-pc-windows-msvc
+            cross: false
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: '1.85'
+          targets: ${{ matrix.target }}
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+      - name: Install Linux GL/EGL prereqs
+        if: runner.os == 'Linux' && matrix.cross == false
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libxkbcommon-dev libxkbcommon-x11-dev \
+            libwayland-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev \
+            libegl1-mesa-dev libgles2-mesa-dev libgbm-dev mesa-utils \
+            libfreetype-dev libfontconfig1-dev
+      - name: Install cross
+        if: matrix.cross == true
+        run: cargo install cross --locked --version 0.2.5
+      - name: Build (host)
+        if: matrix.cross == false
+        run: cargo build --workspace --target ${{ matrix.target }} --release
+      - name: Build (cross)
+        if: matrix.cross == true
+        run: cross build --workspace --target ${{ matrix.target }} --release
+      - name: Test (host, Linux strict-GPU)
+        if: matrix.cross == false && runner.os == 'Linux'
+        env:
+          STEP1A_REQUIRE_GPU: '1'
+        run: cargo test --workspace --target ${{ matrix.target }}
+      - name: Test (host, macOS / Windows)
+        if: matrix.cross == false && runner.os != 'Linux'
+        run: cargo test --workspace --target ${{ matrix.target }}
+      - name: Upload openpencil-app binary
+        if: matrix.cross == false
+        uses: actions/upload-artifact@v4
+        with:
+          name: openpencil-app-${{ matrix.label }}
+          path: |
+            target/${{ matrix.target }}/release/openpencil-app
+            target/${{ matrix.target }}/release/openpencil-app.exe
+          if-no-files-found: ignore
+          retention-days: 14
+
+  wasm-web:
+    name: wasm32-unknown-unknown / openpencil-shell-web
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: '1.85'
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: wasm32
+      - run: cargo build -p openpencil-shell-web --target wasm32-unknown-unknown --release
+      - name: Upload wasm bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: openpencil-shell-web-wasm
+          path: target/wasm32-unknown-unknown/release/openpencil_shell_web.wasm
+          if-no-files-found: warn
+          retention-days: 14
+
+  mobile-check:
+    name: ${{ matrix.label }} (cargo check only)
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # iOS targets need Xcode SDK — macOS runner only.
+          - label: ios-aarch64
+            runner: macos-latest
+            target: aarch64-apple-ios
+          - label: ios-aarch64-sim
+            runner: macos-latest
+            target: aarch64-apple-ios-sim
+          # Android targets via NDK — Linux runner.
+          - label: android-aarch64
+            runner: ubuntu-latest
+            target: aarch64-linux-android
+          - label: android-x86_64
+            runner: ubuntu-latest
+            target: x86_64-linux-android
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: '1.85'
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: mobile-${{ matrix.target }}
+      # Real linking needs platform SDK / NDK; Step 1a only verifies the
+      # workspace type-checks against mobile targets (per spec §11 mobile
+      # readiness invariants). The shell-native `unimplemented!` stubs for
+      # iOS/Android providers are exercised by this check.
+      - run: cargo check -p openpencil-shell-core --target ${{ matrix.target }}
+      - run: cargo check -p openpencil-shell-native --target ${{ matrix.target }}
