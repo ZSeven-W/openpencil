@@ -6,4 +6,4 @@
 	url = https://github.com/ZSeven-W/agent-rs.git
 [submodule "vendor/jian"]
 	path = vendor/jian
-	url = git@github.com:Kayshen-X/jian.git
+	url = git@github.com:ZSeven-W/jian.git
