@@ -689,6 +689,24 @@ export function applyPostStreamingTreeHeuristics(rootNodeId: string): void {
   const freshRoot = useDocumentStore.getState().getNodeById(rootNodeId);
   if (!freshRoot || freshRoot.type !== 'frame') return;
 
+  // Detect layered hero / overlay containers BEFORE the normalize pass.
+  // `convertStackedOverlayToAbsolute` switches `layout: 'vertical'` to
+  // `layout: 'none'` for `image + rectangle + content`-style stacks
+  // whose children all match the parent's fixed height (the M2.7 hero
+  // shape that piled content into the next section). Crucially, this
+  // must run BEFORE `normalizeTreeLayout` because that pass strips
+  // `x` / `y` from non-overlay children of any vertical / horizontal
+  // container as a "stale-coordinate cleanup". If a sub-agent
+  // intentionally emitted offsets on the content child (e.g.
+  // `content: { x: 16, y: 80 }` to inset it above the bg image),
+  // running normalize first would delete those offsets, then the
+  // convert pass would flip layout to 'none' on a hero whose
+  // children no longer have positions to honor — content lands at
+  // (0,0) overlapping the image. Convert first → normalize sees
+  // `layout: 'none'` → leaves the x/y alone. Function is a no-op
+  // when no layered pattern matches.
+  convertStackedOverlayToAbsolute(freshRoot);
+
   // Normalize layout as a final safety net: fills in `layout` for frames the
   // role resolver did not touch (unknown roles, plain containers) and strips
   // stale x/y from children of any auto-layout frame. MUST run AFTER role
@@ -734,13 +752,6 @@ export function applyPostStreamingTreeHeuristics(rootNodeId: string): void {
   // preserves both the rounded-image clip behavior and the
   // overflowing button.
   expandOverflowingFixedHeightCards(pageRoot);
-  // Detect "layered hero" patterns the model emitted with vertical
-  // layout — image + overlay + content stacked sequentially when the
-  // intent was clearly to layer them. Fixes the M2.7 food-app run
-  // where the hero's overflowing content piled into the next
-  // section. See packages/pen-core/src/layout/convert-stacked-
-  // overlay-to-absolute.ts for the conservative pattern detector.
-  convertStackedOverlayToAbsolute(pageRoot);
 
   // Publish point. unwrap, resolveTreeRoles, and normalizeTreeLayout all
   // mutate store-owned nodes in place; resolveTreePostPass mostly goes
