@@ -156,9 +156,11 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           key: mobile-${{ matrix.target }}
-      # Real linking needs platform SDK / NDK; Step 1a only verifies the
-      # workspace type-checks against mobile targets (per spec §11 mobile
-      # readiness invariants). The shell-native `unimplemented!` stubs for
-      # iOS/Android providers are exercised by this check.
+      # Step 1a kill-spike scope:
+      # - shell-core MUST compile on iOS / Android / WASM (spec §11 mobile invariant 1).
+      # - shell-native is desktop-only until Step 1f wires real EaglProvider /
+      #   AndroidEglProvider impls + sdk linking. Mobile cargo check on shell-native
+      #   is deferred to Step 1f; the spec §11 contract is verified via shell-core
+      #   wasm/ios/android compile + API surface (GlContextProvider trait public,
+      #   on_pause cfg(android) surface.take(), TouchForce in ShellEvent — Phase B).
       - run: cargo check -p openpencil-shell-core --target ${{ matrix.target }}
-      - run: cargo check -p openpencil-shell-native --target ${{ matrix.target }}
