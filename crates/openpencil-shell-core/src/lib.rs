@@ -10,9 +10,19 @@
 //!   + geometry/scene aliases for shell-native's internal translation (widget code never sees them).
 //! - the [`render_backend`] module defines OP's own widget-facing facade
 //!   (`RenderBackend` trait + `Rect` / `Color` / `TextLayout`, spec §5.2).
+//! - the [`event`] module declares OP's `ShellEvent` enum + sub-types
+//!   (spec §5.1). Widget code consumes these on every platform; the
+//!   desktop Jian/winit → ShellEvent mapper lives in
+//!   `openpencil-shell-native::event` (target-gated to desktop today;
+//!   Step 1f extends to mobile).
 
+pub mod event;
 pub mod jian;
 pub mod render_backend;
 
 // Re-export the primary API for upstream crates / widgets / tests.
+pub use event::{
+    ElementState, KeyCode, Modifiers, MouseButton, PointerId, ScrollDelta, ShellEvent, TouchForce,
+    TouchId, TouchPhase, WindowEventKind,
+};
 pub use render_backend::{Color, Point2D, Rect, RenderBackend, TextLayout};
