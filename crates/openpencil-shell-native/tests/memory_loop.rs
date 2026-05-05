@@ -33,22 +33,17 @@ use common::{raster_memory_cycle, setup_headless_context};
 #[cfg(target_os = "linux")]
 fn linux_gpu_memory_cycle(iterations: usize) -> Result<(), String> {
     use openpencil_shell_core::{Color, Point2D, Rect};
-    use openpencil_shell_native::{NativeBackend, SharedSkiaContext, SurfaceConfig};
+    use openpencil_shell_native::{NativeBackend, SharedSkiaContext};
 
     use common::egl_pbuffer::EglPbufferProvider;
 
     for _ in 0..iterations {
         let provider = EglPbufferProvider::new((400, 300))
             .map_err(|e| format!("EglPbufferProvider::new: {e}"))?;
-        let config = SurfaceConfig {
-            width: 400,
-            height: 300,
-            sample_count: 0,
-            stencil_bits: 8,
-            dpi: 1.0,
-        };
-        let mut ctx = SharedSkiaContext::new(provider, config)
-            .map_err(|e| format!("SharedSkiaContext::new: {e}"))?;
+        // Phase A Gate round 2 BLOCK 1 fix — single-arg `new(provider)`.
+        // Initial size queried from GL viewport (set by pbuffer attach).
+        let mut ctx =
+            SharedSkiaContext::new(provider).map_err(|e| format!("SharedSkiaContext::new: {e}"))?;
         let mut backend = NativeBackend::with_dpi(1.0);
         ctx.begin_frame();
         ctx.with_frame(|canvas, _glow| {

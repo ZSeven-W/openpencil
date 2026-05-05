@@ -111,8 +111,10 @@ mod platform {
     }
 
     fn readback_red(ctx: &SharedSkiaContext) -> bool {
+        // Phase A Gate round 2 BLOCK 2(a) fix — `glow()` now returns
+        // `Option<&Arc<...>>`; borrow inline rather than cloning.
         let glow = match ctx.glow() {
-            Some(g) => g,
+            Some(g) => g.as_ref(),
             None => return false,
         };
         let mut buf = [0u8; 4];
@@ -191,7 +193,6 @@ mod platform {
     use super::*;
     use crate::common::egl_pbuffer::EglPbufferProvider;
     use glow::HasContext;
-    use openpencil_shell_native::SurfaceConfig;
 
     pub fn run() {
         // BLOCK 2 (Codex Phase A Gate round 1): the previous behaviour
@@ -223,14 +224,9 @@ mod platform {
                 return;
             }
         };
-        let config = SurfaceConfig {
-            width: 800,
-            height: 600,
-            sample_count: 0,
-            stencil_bits: 8,
-            dpi: 1.0,
-        };
-        let mut ctx = match SharedSkiaContext::new(provider, config) {
+        // Phase A Gate round 2 BLOCK 1 fix — single-arg `new(provider)`.
+        // Initial 800×600 size comes from the EGL pbuffer attach.
+        let mut ctx = match SharedSkiaContext::new(provider) {
             Ok(c) => c,
             Err(err) => {
                 let msg = format!("SharedSkiaContext::new failed: {err}");
@@ -249,7 +245,11 @@ mod platform {
 
         // FBO readback (spec §7.2 #3, EGL pbuffer simplification —
         // default FBO == fboid 0).
-        let glow = ctx.glow().expect("glow handle live before teardown");
+        // Phase A Gate round 2 BLOCK 2(a) fix — `glow()` borrows.
+        let glow = ctx
+            .glow()
+            .expect("glow handle live before teardown")
+            .clone();
         let mut buf = [0u8; 4];
         unsafe {
             glow.bind_framebuffer(glow::READ_FRAMEBUFFER, None);

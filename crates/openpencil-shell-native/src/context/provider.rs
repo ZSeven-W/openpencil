@@ -70,28 +70,24 @@ pub trait GlContextProvider {
     /// Resize the underlying surface (window / pbuffer). Called from
     /// `SharedSkiaContext::resize` before the Skia surface is rebuilt.
     ///
-    /// **Spec mini-patch pending** (Codex Phase A Gate round 1
-    /// CONCERN 1): spec v19 §3.1 names only four trait methods —
-    /// `make_current` / `swap_buffers` / `glow` / `release`. The
-    /// implementation needs `resize` because mobile surface-recreate
-    /// (Step 1f Android `on_resume`) and desktop window resize both
-    /// require the GL surface to be rebuilt before Skia rewraps the
-    /// FBO. Spec patch trail: report back to controller for v19 →
-    /// v19.1 mini-rev. Don't drop without coordinating.
+    /// v19.1 mini-patch landed (spec frozen at openpencil-docs
+    /// commit 526791f, §3.1): mobile surface-recreate (Step 1f Android
+    /// `on_resume`) and desktop window resize both require the GL
+    /// surface to be rebuilt before Skia rewraps the FBO.
     fn resize(&mut self, width: u32, height: u32) -> ProviderResult<()>;
 
     /// The default framebuffer object id of the presentation surface.
     /// `0` = the GL window default FBO; non-zero = an FBO that Skia
     /// must wrap when constructing its `BackendRenderTarget`.
     ///
-    /// **Spec mini-patch pending** (Codex Phase A Gate round 1
-    /// CONCERN 1): also a non-spec method. The iOS EAGL provider
-    /// (Step 1f) won't expose FBO 0 for the layer-backed render
-    /// target — it has to thread the actual FBO id through to Skia's
-    /// `wrap_backend_render_target`. Default `0` keeps desktop happy.
-    fn default_framebuffer_id(&self) -> u32 {
-        0
-    }
+    /// v19.1 mini-patch landed (spec frozen at openpencil-docs
+    /// commit 526791f, §3.1). **Required method, no default body**
+    /// (Phase A Gate round 2 CONCERN 1 fix): Step 1f mobile
+    /// implementations must explicitly specify — iOS EAGL needs the
+    /// non-zero CAEAGLLayer-backed FBO; an inherited default would
+    /// silently route Skia's `wrap_backend_render_target` to FBO 0
+    /// and produce a black screen at runtime.
+    fn default_framebuffer_id(&self) -> u32;
 
     /// Cleanup hook invoked by `SharedSkiaContext::teardown` before the
     /// provider is dropped. Intentionally explicit: glutin's `Drop` only
@@ -279,6 +275,13 @@ impl GlContextProvider for GlutinProvider {
         self.glow.clone()
     }
 
+    /// Desktop GL: window default framebuffer = FBO 0.
+    /// Phase A Gate round 2 CONCERN 1 fix — explicit override (trait
+    /// no longer provides a default body).
+    fn default_framebuffer_id(&self) -> u32 {
+        0
+    }
+
     #[tracing::instrument(skip(self))]
     fn resize(&mut self, width: u32, height: u32) -> ProviderResult<()> {
         use glutin::prelude::*;
@@ -334,6 +337,12 @@ impl GlContextProvider for EaglProvider {
     fn resize(&mut self, _width: u32, _height: u32) -> ProviderResult<()> {
         unimplemented!("Step 1f")
     }
+    /// CAEAGLLayer-backed FBO is non-zero; Step 1f must thread the
+    /// real FBO id (Phase A Gate round 2 CONCERN 1 fix — explicit
+    /// override required, no trait default body).
+    fn default_framebuffer_id(&self) -> u32 {
+        unimplemented!("Step 1f")
+    }
     fn release(&mut self) -> ProviderResult<()> {
         unimplemented!("Step 1f")
     }
@@ -356,6 +365,12 @@ impl GlContextProvider for AndroidEglProvider {
     }
     fn resize(&mut self, _width: u32, _height: u32) -> ProviderResult<()> {
         unimplemented!("Step 1f")
+    }
+    /// EGL window default FBO = 0 (per spec §3.1 line 136).
+    /// Phase A Gate round 2 CONCERN 1 fix — explicit override required,
+    /// no trait default body.
+    fn default_framebuffer_id(&self) -> u32 {
+        0
     }
     fn release(&mut self) -> ProviderResult<()> {
         unimplemented!("Step 1f")
