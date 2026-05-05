@@ -123,6 +123,39 @@ describe('convertStackedOverlayToAbsolute', () => {
     expect((card as PenNode & { layout?: string }).layout).toBe('vertical');
   });
 
+  it("doesn't flip layout-less horizontal rows (Codex regression on pre-normalize timing)", () => {
+    // Codex flag: when the convert pass runs BEFORE normalizeTreeLayout
+    // (which is required to preserve child x/y offsets — see the
+    // "preserves child offsets" test below), a layout-less frame
+    // hasn't been classified yet. Earlier I accepted
+    // `layout === undefined` thinking inferLayout would say vertical,
+    // but inferLayout reads the children's shape and a row of side-
+    // by-side images / rectangles often resolves to horizontal.
+    // Treating layout-less containers as vertical-by-default would
+    // mis-flip those rows to absolute and the side-by-side images
+    // would collapse to overlapping at (0,0).
+    //
+    // Fix: only accept explicit `layout: 'vertical'`. Layout-less
+    // frames are left for normalize to classify; if a hero
+    // genuinely omits the keyword, that's an acceptable miss.
+    const layoutlessRow = frame({
+      id: 'maybe-row',
+      width: 'fill_container',
+      height: 200,
+      // NO layout field — model emitted a row of two equal-height
+      // images side by side and let inference figure it out.
+      children: [
+        image({ id: 'left', width: 'fill_container', height: 200 }),
+        image({ id: 'right', width: 'fill_container', height: 200 }),
+      ],
+    });
+    const root = frame({ id: 'root', children: [layoutlessRow] });
+    const changed = convertStackedOverlayToAbsolute(root);
+    expect(changed).toBe(false);
+    // Layout untouched — we leave classification to normalizeTreeLayout.
+    expect((layoutlessRow as PenNode & { layout?: string }).layout).toBeUndefined();
+  });
+
   it('respects an explicit layout=horizontal (not the bug shape)', () => {
     // A horizontal-layout container with side-by-side image+overlay
     // is NOT the layered-hero pattern — the model likely meant a
