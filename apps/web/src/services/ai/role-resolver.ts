@@ -763,20 +763,28 @@ function fixButtonForegroundContrast(parent: FrameNode): void {
   if (!bgColorRaw) return;
   // The model emits accent-colored buttons as `$color-accent`, not
   // hex. Without resolving the ref the luminance check sees a literal
-  // `$color-...` string, parseInt returns NaN, `NaN < 0.5` is false,
-  // and the dark-fg branch wins — so on an orange accent button the
-  // contrast pass paints text dark-on-orange. Use the resolved hex
-  // (or the literal when not a ref) for luminance.
+  // `$color-...` string, parseInt returns NaN, and `NaN < 0.5` is
+  // false — so the original code always picked the dark fg branch on
+  // unresolved refs (visible bug: dark text on orange accent).
+  // Resolve the ref via the doc's variables before deciding contrast.
   const bgColor = resolveColorMaybeRef(bgColorRaw);
   if (!bgColor) return;
 
   const lum = hexLuminance(bgColor);
-  // Treat unparseable luminance (NaN — e.g. when the variable was not
-  // seeded and resolution returned the original ref) as a dark bg so
-  // the contrast pass at least paints visible white text instead of
-  // dark-on-unknown. Better default than the previous silent NaN<0.5
-  // branch which always picked the dark fg.
-  const fgColor = !Number.isFinite(lum) || lum < 0.5 ? '#FFFFFF' : '#0F172A';
+  // When luminance is unparseable (the ref still didn't resolve to a
+  // hex — e.g. doc variables haven't been seeded yet, or the ref
+  // points at a missing token), we cannot pick a contrast color
+  // safely. Painting white risks invisible-on-light bg; painting
+  // dark risks invisible-on-dark bg. Either guess can ship a
+  // visually broken button. The least-bad option is to skip the
+  // contrast pass entirely on this button — text/icon retain
+  // whatever fill they already had, which is at least *something*
+  // visible (the model's default text color, usually a dark hex). A
+  // later post-pass run AFTER variables get seeded will re-resolve
+  // and apply contrast cleanly.
+  if (!Number.isFinite(lum)) return;
+
+  const fgColor = lum < 0.5 ? '#FFFFFF' : '#0F172A';
   const fgFill: PenFill[] = [{ type: 'solid', color: fgColor }];
 
   if (!('children' in parent) || !Array.isArray(parent.children)) return;

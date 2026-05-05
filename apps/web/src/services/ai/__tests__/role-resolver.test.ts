@@ -2164,6 +2164,58 @@ describe('resolveTreePostPass — icon_font contrast override', () => {
     expect(ico.fill?.[0]?.color).toBe('#DC2626');
   });
 
+  it('skips contrast pass when bg ref does not resolve (no white-on-unknown)', () => {
+    // Regression: my fix from `ddf6580f` originally treated a NaN
+    // luminance (unresolvable ref) as "dark bg" and painted white
+    // text. If the doc's `$color-accent` later resolves to a LIGHT
+    // hex (e.g. the user's chosen palette has accent=#FFE4B5), the
+    // white text becomes invisible on the light bg. Codex flagged
+    // this on stop-time review — the safer default is to skip the
+    // contrast pass entirely when we can't resolve the ref, leaving
+    // text/icon with whatever fill they already had. A later
+    // post-pass invocation (after variables are seeded) re-runs and
+    // applies contrast cleanly with a real hex luminance.
+    const button: PenNode = {
+      id: 'btn',
+      type: 'frame',
+      x: 0,
+      y: 0,
+      width: 120,
+      height: 44,
+      role: 'button',
+      // Unseeded ref — the doc has no variables yet.
+      fill: [{ type: 'solid', color: '$color-accent' }],
+      children: [
+        {
+          id: 'txt',
+          type: 'text',
+          x: 0,
+          y: 0,
+          width: 80,
+          height: 20,
+          content: 'Sign In',
+          // Model's default — dark text on UNKNOWN bg. Survive untouched.
+          fill: [{ type: 'solid', color: '#0F172A' }],
+        } as PenNode,
+      ],
+    } as PenNode;
+    const root: PenNode = {
+      id: 'root',
+      type: 'frame',
+      x: 0,
+      y: 0,
+      width: 375,
+      height: 812,
+      children: [button],
+    } as PenNode;
+    dispatchPostPass(root);
+    const txt = ((root as { children: PenNode[] }).children[0] as { children: PenNode[] })
+      .children[0] as PenNode & { fill?: Array<{ color?: string }> };
+    // Original fill survives — contrast pass bailed because we
+    // can't safely choose a color against an unresolved bg.
+    expect(txt.fill?.[0]?.color).toBe('#0F172A');
+  });
+
   it('still fills unfilled icon_font (no regression on the original branch)', () => {
     const button: PenNode = {
       id: 'btn',
