@@ -4,11 +4,7 @@ resolver = "2"
 # Phase 1 batch 2 的 workspace masking 反馈：列出未存在的 crate 会让 `cargo build -p X`
 # 在 resolve 阶段就挂掉）。glob 自动包含 crates/ 下所有 manifest，自然支持增量创建。
 members = ["crates/*"]
-exclude = [
-    "vendor/agent",
-    "vendor/jian",
-    "node_modules",
-]
+exclude = ["vendor/agent", "vendor/jian", "node_modules"]
 
 [workspace.package]
 version = "0.1.0"
