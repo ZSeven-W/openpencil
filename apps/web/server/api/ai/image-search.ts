@@ -206,11 +206,25 @@ export function simplifySearchQuery(prompt: string): string {
 // Mapping helpers (exported for testing)
 // ---------------------------------------------------------------------------
 
+/**
+ * Wrap an external image URL with the local image-proxy endpoint so
+ * the browser-side canvas fetch goes through the dev server (where
+ * `EnvHttpProxyAgent` routes outbound HTTPS through the system
+ * proxy). Without this wrap the browser tries to reach openverse /
+ * wikimedia directly and ECONNREFUSEDs on machines behind a local
+ * proxy (clash / mihomo / corporate gateway), so the canvas paints
+ * the placeholder visual even though the search-pipeline already
+ * found a valid image URL via its server-side fetch.
+ */
+function viaImageProxy(externalUrl: string): string {
+  return `/api/ai/image-proxy?url=${encodeURIComponent(externalUrl)}`;
+}
+
 export function mapOpenverseResult(r: OpenverseImageResult): ImageSearchResult {
   return {
     id: r.id,
     url: r.url,
-    thumbUrl: r.thumbnail,
+    thumbUrl: viaImageProxy(r.thumbnail),
     width: r.width,
     height: r.height,
     source: 'openverse',
@@ -227,7 +241,7 @@ export function mapWikimediaPages(pages: Record<string, WikimediaPage>): ImageSe
     results.push({
       id: String(page.pageid),
       url: info.url,
-      thumbUrl: info.thumburl ?? info.url,
+      thumbUrl: viaImageProxy(info.thumburl ?? info.url),
       width: info.width,
       height: info.height,
       source: 'wikimedia',
