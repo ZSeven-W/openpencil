@@ -1,4 +1,4 @@
-import type { PenNode, PenFill, SolidFill } from '@zseven-w/pen-types';
+import type { PenNode, PenFill, PenEffect, ShadowEffect, SolidFill } from '@zseven-w/pen-types';
 
 /**
  * Inject a default surface fill on top-level navigation frames that lack
@@ -30,6 +30,12 @@ const NAV_ROLES = new Set([
   'tab-row',
 ]);
 
+// Roles that sit at the BOTTOM of the screen — their shadow points
+// up so the nav lifts off the content above. Anything else (top nav
+// bar, generic navbar) gets a downward shadow lifting it off the
+// content below.
+const BOTTOM_NAV_ROLES = new Set(['bottom-tab-bar']);
+
 export function injectMissingNavSurfaceFill(rootFrame: PenNode): boolean {
   if (!('children' in rootFrame) || !Array.isArray(rootFrame.children)) return false;
 
@@ -43,6 +49,37 @@ export function injectMissingNavSurfaceFill(rootFrame: PenNode): boolean {
     (child as PenNode & { fill?: PenFill[] }).fill = [
       { type: 'solid', color: '$color-surface' } as SolidFill,
     ];
+
+    // Why also inject a shadow: in warm-light themes (`$color-bg-deep`
+    // = #FFF8F0 cream, `$color-surface` = #FFFFFF white), the
+    // luminance delta between page bg and the surface fill we just
+    // applied is ~0.03 — visually indistinguishable. The user reads
+    // the nav as having "no background" even though it does. Adding
+    // a soft upward shadow lifts the nav off the page bg
+    // independently of the fill contrast. We only add the shadow
+    // when no `effects` were already set; if the sub-agent emitted
+    // its own effects (intentional drop shadow, brand glow, etc.)
+    // we leave them alone.
+    const existingEffects = (child as PenNode & { effects?: PenEffect[] }).effects;
+    const hasEffects = Array.isArray(existingEffects) && existingEffects.length > 0;
+    if (!hasEffects) {
+      // Bottom nav: shadow above (offsetY < 0) — lifts off content
+      // above. Top nav / generic navbar: shadow below (offsetY > 0)
+      // — lifts off content below. A downward shadow on a bottom
+      // nav would hide off-screen and not provide any separation,
+      // and an upward shadow on a top nav would cling to the screen
+      // edge and look broken.
+      const isBottomNav = BOTTOM_NAV_ROLES.has(role);
+      const shadow: ShadowEffect = {
+        type: 'shadow',
+        offsetX: 0,
+        offsetY: isBottomNav ? -4 : 4,
+        blur: 12,
+        spread: 0,
+        color: '#0000000F',
+      };
+      (child as PenNode & { effects?: PenEffect[] }).effects = [shadow];
+    }
     changed = true;
   }
   return changed;
