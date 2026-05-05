@@ -40,8 +40,13 @@ raw-window-handle = "0.6.2"
 scopeguard = "1.2"
 
 # Jian path deps —— 双写 path + version per spec §12.2。
-# jian-skia: 提供 SkiaBackend (RenderBackend impl) + skia textlayout (textlayout feature
-# 需要 ICU + harfbuzz, ~15MB；P0.5 已升 skia-safe 0.78→0.97 + 新增 pub draw_on_canvas).
+# - jian-core: 暴露 DrawOp / Paint / TextRun / geometry / scene::Color。`shell-core`
+#   也引 jian-core；shell-native 直接用是为了在 NativeBackend 翻译路径里直接构造
+#   `jian_core::render::DrawOp::*`（避免每帧经 shell-core re-export bounce）。
+# - jian-skia: 提供 SkiaBackend (RenderBackend impl) + skia textlayout (textlayout
+#   feature 需要 ICU + harfbuzz, ~15MB；P0.5 已升 skia-safe 0.78→0.97 + 新增 pub
+#   draw_on_canvas).
+jian-core = { path = "../../vendor/jian/crates/jian-core", version = "0.0.1" }
 jian-skia = { path = "../../vendor/jian/crates/jian-skia", version = "0.0.1", features = ["textlayout"] }
 
 # jian-host-desktop: target-gate desktop only (Linux/macOS/Windows)；不进 android/ios
@@ -51,3 +56,31 @@ jian-skia = { path = "../../vendor/jian/crates/jian-skia", version = "0.0.1", fe
 # - features = ["textlayout"]：与 jian-skia 对齐文本路径。
 [target.'cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))'.dependencies]
 jian-host-desktop = { path = "../../vendor/jian/crates/jian-host-desktop", version = "0.0.1", default-features = false, features = ["textlayout"] }
+
+# tracing for span instrumentation across SharedSkiaContext / NativeBackend
+# (spec §3.3 / §5.2.1; Task 2 Step 15 dictates per-method spans).
+[dependencies.tracing]
+workspace = true
+
+# thiserror for ProviderError / SharedSkiaError enums (context module).
+[dependencies.thiserror]
+workspace = true
+
+# Task 2 dev-dependencies (spec §9 + plan v7 Steps 16a-16f):
+# - sysinfo: 100-loop RSS sanity (memory_loop.rs)
+# - tracing-test: capture span emission (tracing_spans.rs)
+# - khronos-egl: Linux EGL pbuffer GPU smoke (gpu_smoke.rs / gpu_chrome_stub_composition.rs)
+[dev-dependencies]
+sysinfo = "0.30"
+# `no-env-filter` is required for integration tests — the default filter
+# only captures logs from the test crate itself, but our `#[tracing::instrument]`
+# spans live inside `openpencil_shell_native::*`. (Per upstream README §136.)
+tracing-test = { version = "0.2", features = ["no-env-filter"] }
+
+# EGL pbuffer dev-dep is Linux-only — macOS/Windows GPU smoke takes other
+# paths (invisible winit window / manual). Gating with `target.'cfg(...)'`
+# keeps `cargo check` on non-Linux quiet about the un-fetchable pkg-config
+# requirement. khronos-egl 6.x covers Mesa softpipe pbuffer creation.
+[target.'cfg(target_os = "linux")'.dev-dependencies]
+khronos-egl = { version = "6", features = ["dynamic"] }
+libloading = "0.8"
