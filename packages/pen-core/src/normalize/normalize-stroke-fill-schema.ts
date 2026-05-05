@@ -313,12 +313,23 @@ function isLegalFillEntry(entry: unknown): boolean {
 }
 
 /**
- * 3, 4, 6, or 8 hex digits — the four shapes the renderer's hex
- * parser accepts (#RGB / #RGBA / #RRGGBB / #RRGGBBAA). Anything
- * else (named colors, malformed strings, partials) we leave alone
- * so we don't mask other classes of bugs.
+ * 3, 6, or 8 hex digits — the three shapes `pen-renderer/paint-utils
+ * .ts::parseColor` actually parses (#RGB / #RRGGBB / #RRGGBBAA).
+ * 4-digit `#RGBA` shorthand is intentionally NOT in this set:
+ * parseColor only matches lengths 3/6/8 and falls back to the
+ * default gray for length 4. Repairing a raw 4-digit string by
+ * prepending `#` would silently swap one broken render path
+ * (raw-string → fallback gray) for another (length-4 → fallback
+ * gray) while making the result LOOK valid downstream — masking
+ * the real problem. Leave 4-digit strings alone so they continue
+ * to surface as obvious schema errors that callers can fix at
+ * the source.
+ *
+ * Anything else (5/7-digit partials, named colors like
+ * `'rebeccapurple'`, malformed strings) is also outside scope —
+ * the normalizer doesn't know how to interpret them.
  */
-const RAW_HEX_RE = /^[0-9A-Fa-f]{3}([0-9A-Fa-f]([0-9A-Fa-f]{2}([0-9A-Fa-f]{2})?)?)?$/;
+const RAW_HEX_RE = /^[0-9A-Fa-f]{3}([0-9A-Fa-f]{3}([0-9A-Fa-f]{2})?)?$/;
 
 /**
  * Repair a single fill entry's color when it's a hex string missing
