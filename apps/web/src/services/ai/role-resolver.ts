@@ -5,11 +5,12 @@ import {
   resolveColorRef,
   getDefaultTheme,
   getSemanticPaletteHex,
-  SEMANTIC_PALETTE_THEME_AXIS,
   SEMANTIC_PALETTE_THEME_LIGHT,
   SEMANTIC_PALETTE_THEME_DARK,
+  getActivePageChildren,
 } from '@zseven-w/pen-core';
 import { useDocumentStore } from '@/stores/document-store';
+import { useCanvasStore } from '@/stores/canvas-store';
 import {
   toSizeNumber,
   toGapNumber,
@@ -28,23 +29,25 @@ import { resolveIconPathBySemanticName } from './icon-resolver';
  * Resolution cascade (each step's miss falls through to the next):
  *   1. Doc-seeded variables (the user's chosen palette, if any).
  *   2. The built-in `getSemanticPaletteHex` map in whichever Light /
- *      Dark mode `doc.themes['Mode']` advertises — every semantic
- *      token has a known light + dark hex baked in. Covers the case
- *      where a sub-agent emits `$color-accent` BEFORE
+ *      Dark mode the active page root's fill advertises — every
+ *      semantic token has a known light + dark hex baked in. Covers
+ *      the case where a sub-agent emits `$color-accent` BEFORE
  *      `seedDocVariablesFromStyleGuide` runs.
  *   3. Return the original ref string. The caller (typically a
  *      luminance check) treats this as "unresolvable" and bails.
  *
- * Mode detection for step 2: read `doc.themes[SEMANTIC_PALETTE_THEME_AXIS]`
- * (the standard "Mode" axis written by `seedDocVariablesFromStyleGuide`)
- * and pick the first value as active mode. Light is the default when
- * the axis is missing or its first value isn't 'Dark'. An earlier
- * iteration plumbed a `themeHint` parameter through the call sites,
- * but no caller actually supplied one, so dark-mode generations were
- * always served the light palette via step 2 — Codex flagged this as
- * "dark-mode semantic fallback is never used by the contrast pass".
- * Reading directly from the doc state keeps the function self-contained
- * and makes step 2 honor whichever mode the doc currently advertises.
+ * Mode detection for step 2 uses `detectThemeFromNode` on the active
+ * page's primary frame, the same signal `resolveTreeRoles` reads at
+ * its entry point. Two earlier iterations got this wrong:
+ *   - `themeHint` parameter — never threaded through, dark-mode docs
+ *     were always served the light palette.
+ *   - `doc.themes[SEMANTIC_PALETTE_THEME_AXIS]` — that axis is NOT
+ *     written in the production orchestrator path
+ *     (`seedDocVariablesFromStyleGuide` writes only `doc.variables`),
+ *     so dark-mode generations still fell back to the light palette.
+ * Reading the page root's fill matches whatever the user / model
+ * actually painted as the page background, regardless of whether the
+ * themes axis was ever populated.
  */
 function resolveColorMaybeRef(color: string | undefined): string | undefined {
   if (color === undefined) return undefined;
@@ -61,15 +64,35 @@ function resolveColorMaybeRef(color: string | undefined): string | undefined {
   }
 
   // Step 2: built-in semantic palette in the doc's current mode.
+  // Mode is detected from the active page's primary frame fill —
+  // the same signal `resolveTreeRoles` uses for its theme param.
   const tokenName = color.slice(1); // strip leading '$'
-  const modeAxis = doc.themes?.[SEMANTIC_PALETTE_THEME_AXIS];
-  const isDarkMode = Array.isArray(modeAxis) && modeAxis[0] === SEMANTIC_PALETTE_THEME_DARK;
-  const mode = isDarkMode ? SEMANTIC_PALETTE_THEME_DARK : SEMANTIC_PALETTE_THEME_LIGHT;
+  const mode =
+    detectActivePageMode() === 'dark' ? SEMANTIC_PALETTE_THEME_DARK : SEMANTIC_PALETTE_THEME_LIGHT;
   const paletteHex = getSemanticPaletteHex(mode);
   if (typeof paletteHex[tokenName] === 'string') return paletteHex[tokenName];
 
   // Step 3: unresolvable; let the caller decide.
   return color;
+}
+
+/**
+ * Detect light vs dark mode from the active page's primary frame. Used
+ * by `resolveColorMaybeRef`'s step-2 cascade to pick the right
+ * semantic palette when doc.variables hasn't been seeded yet.
+ *
+ * Returns 'light' when no page root is found or the root has no fill —
+ * Light is the safer default since most generations are light theme,
+ * and the caller will fall through to the light palette which carries
+ * conventional defaults (white surface, slate text).
+ */
+function detectActivePageMode(): 'light' | 'dark' {
+  const doc = useDocumentStore.getState().document;
+  const activePageId = useCanvasStore.getState().activePageId;
+  const children = getActivePageChildren(doc, activePageId);
+  const root = children.find((c) => c.type === 'frame');
+  if (!root) return 'light';
+  return detectThemeFromNode(root);
 }
 
 // ---------------------------------------------------------------------------
