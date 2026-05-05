@@ -44,7 +44,6 @@ mod platform {
     use super::*;
     use crate::common::egl_pbuffer::EglPbufferProvider;
     use glow::HasContext;
-    use openpencil_shell_native::SurfaceConfig;
 
     pub fn run() {
         // BLOCK 2 (Codex Phase A Gate round 1): see `gpu_smoke.rs` for
@@ -69,14 +68,9 @@ mod platform {
                 return;
             }
         };
-        let config = SurfaceConfig {
-            width: 800,
-            height: 600,
-            sample_count: 0,
-            stencil_bits: 8,
-            dpi: 1.0,
-        };
-        let mut ctx = match SharedSkiaContext::new(provider, config) {
+        // Phase A Gate round 2 BLOCK 1 fix — single-arg `new(provider)`;
+        // size queried from EGL pbuffer GL viewport.
+        let mut ctx = match SharedSkiaContext::new(provider) {
             Ok(c) => c,
             Err(err) => {
                 let msg = format!("SharedSkiaContext::new failed: {err}");
@@ -95,7 +89,9 @@ mod platform {
 
         // Chrome pixel must be red even though the stub poked
         // STENCIL_TEST + BlendFunc(ONE, ZERO).
-        let glow = ctx.glow().expect("glow handle");
+        // Phase A Gate round 2 BLOCK 2(a) fix — `glow()` borrows;
+        // clone the `Arc` so the handle outlives the later `teardown`.
+        let glow = ctx.glow().expect("glow handle").clone();
         let mut chrome_px = [0u8; 4];
         let mut stub_px = [0u8; 4];
         unsafe {
@@ -197,7 +193,9 @@ mod platform {
                 Ok(mut ctx) => {
                     let mut backend = NativeBackend::with_dpi(window.scale_factor() as f32);
                     paint_chrome_and_stub(&mut ctx, &mut backend);
-                    let glow = ctx.glow().expect("glow handle");
+                    // Phase A Gate round 2 BLOCK 2(a) fix — `glow()` borrows;
+                    // clone the `Arc` so the handle outlives `teardown`.
+                    let glow = ctx.glow().expect("glow handle").clone();
                     let mut chrome_px = [0u8; 4];
                     let mut stub_px = [0u8; 4];
                     unsafe {
