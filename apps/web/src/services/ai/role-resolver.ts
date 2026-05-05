@@ -1,7 +1,13 @@
 import type { PenNode, FrameNode, SizingBehavior } from '@/types/pen';
 import type { PathNode } from '@/types/pen';
 import type { PenFill, PenStroke, PenEffect, SolidFill } from '@/types/styles';
-import { resolveColorRef, getDefaultTheme } from '@zseven-w/pen-core';
+import {
+  resolveColorRef,
+  getDefaultTheme,
+  getSemanticPaletteHex,
+  SEMANTIC_PALETTE_THEME_LIGHT,
+  SEMANTIC_PALETTE_THEME_DARK,
+} from '@zseven-w/pen-core';
 import { useDocumentStore } from '@/stores/document-store';
 import {
   toSizeNumber,
@@ -20,16 +26,52 @@ import { resolveIconPathBySemanticName } from './icon-resolver';
  * doc store directly because the role resolver runs without an
  * explicit variables param threaded through every helper.
  */
-function resolveColorMaybeRef(color: string | undefined): string | undefined {
+/**
+ * Resolve a color string that may be a `$color-*` variable ref into the
+ * concrete hex it points at on the active theme. Returns the original
+ * string when it isn't a ref, or `undefined` when input is undefined.
+ *
+ * Resolution cascade (each step's miss falls through to the next):
+ *   1. Doc-seeded variables (the user's chosen palette, if any).
+ *   2. The built-in `getSemanticPaletteHex` map for the detected
+ *      `Light` / `Dark` mode. This fallback covers the case where a
+ *      sub-agent emits `$color-accent` BEFORE
+ *      `seedDocVariablesFromStyleGuide` runs (or when seeding fails)
+ *      — every semantic token has a known light + dark hex baked in.
+ *   3. Return the original ref string. The caller (typically a
+ *      luminance check) treats this as "unresolvable" and bails.
+ *
+ * Without step 2 the contrast pass would either skip the button
+ * entirely (text/icon stays at the model's default — usually a dark
+ * hex that's invisible on a dark accent bg) or pick the wrong fg via
+ * a NaN-luminance default. The cascade keeps a best-effort hex
+ * available even when the doc state is mid-flight.
+ */
+function resolveColorMaybeRef(
+  color: string | undefined,
+  themeHint?: 'light' | 'dark',
+): string | undefined {
   if (color === undefined) return undefined;
   if (!color.startsWith('$')) return color;
   const doc = useDocumentStore.getState().document;
+
+  // Step 1: doc-seeded variables.
   const variables = doc.variables;
-  if (!variables || Object.keys(variables).length === 0) return color;
-  const themes = doc.themes;
-  const activeTheme = themes ? getDefaultTheme(themes) : undefined;
-  const resolved = resolveColorRef(color, variables, activeTheme);
-  return typeof resolved === 'string' ? resolved : color;
+  if (variables && Object.keys(variables).length > 0) {
+    const themes = doc.themes;
+    const activeTheme = themes ? getDefaultTheme(themes) : undefined;
+    const resolved = resolveColorRef(color, variables, activeTheme);
+    if (typeof resolved === 'string' && !resolved.startsWith('$')) return resolved;
+  }
+
+  // Step 2: built-in semantic palette for the requested or default mode.
+  const tokenName = color.slice(1); // strip leading '$'
+  const mode = themeHint === 'dark' ? SEMANTIC_PALETTE_THEME_DARK : SEMANTIC_PALETTE_THEME_LIGHT;
+  const paletteHex = getSemanticPaletteHex(mode);
+  if (typeof paletteHex[tokenName] === 'string') return paletteHex[tokenName];
+
+  // Step 3: unresolvable; let the caller decide.
+  return color;
 }
 
 // ---------------------------------------------------------------------------
