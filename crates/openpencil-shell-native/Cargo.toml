@@ -13,23 +13,25 @@ path = "src/lib.rs"
 [dependencies]
 openpencil-shell-core = { path = "../openpencil-shell-core", version = "0.1.0" }
 
-# Native-only deps cfg-gated 在 wasm32 之外。这一步关键（解 codex round 2 B1 BLOCK）：
-# 如果不 cfg-gate，cargo 会先 fetch + run skia-safe 的 build.rs（在 wasm32 上构建失败），
-# Step 5 grep `must NOT be compiled for wasm32` 永远命中不到——会被 skia 错误盖过。
+# Native-only deps cfg-gated outside wasm32. This is critical (resolves codex round 2 B1 BLOCK):
+# without cfg-gate, cargo would fetch + run skia-safe's build.rs (which fails on wasm32),
+# and the Step 5 grep `must NOT be compiled for wasm32` would never match — masked by
+# the skia build error.
 #
-# v19 pivot (Task 1): 加 P0-pinned GL stack + jian-skia + jian-host-desktop。
-#   - P0 dep-stack pin 来自 P0 probe（plan v7 §Task P0；skia-safe 0.97 + glow 0.17 +
+# v19 pivot (Task 1): add P0-pinned GL stack + jian-skia + jian-host-desktop.
+#   - P0 dep-stack pin comes from the P0 probe (plan v7 §Task P0; skia-safe 0.97 + glow 0.17 +
 #     glutin 0.32.3 + glutin-winit 0.5.0 + winit 0.30.13 + raw-window-handle 0.6.2 +
-#     scopeguard 1.2 全在 macOS/Windows/Linux GO）。
-#   - jian-skia (textlayout feature) 提供 SkiaBackend impl + skia textlayout（替代 parley）。
-#   - jian-host-desktop (target-gate desktop only, 不含 `run` feature) 复用 PointerTranslator /
-#     scene::collect_draws_with_state / DesktopHost config helpers；OP 自管 GPU event loop，
-#     不调 jian_host_desktop::run（softbuffer raster present 不需要）。
+#     scopeguard 1.2 all GO on macOS/Windows/Linux).
+#   - jian-skia (textlayout feature) provides SkiaBackend impl + skia textlayout (replaces parley).
+#   - jian-host-desktop (target-gated desktop only, without the `run` feature) reuses
+#     PointerTranslator / scene::collect_draws_with_state / DesktopHost config helpers;
+#     OP runs its own GPU event loop and does not call jian_host_desktop::run (softbuffer
+#     raster present is not needed).
 #
-# winit features 说明：on Linux 必须显式开 `x11` 和/或 `wayland`，否则
-# `platform_impl/mod.rs` 触发 `compile_error!`. macOS / Windows 各自的 backend 通过
-# cfg(target_os) 默认启用，不需要 feature flag。Step 1a 三大桌面 OS CI 都跑，
-# 所以同时打开 x11 + wayland 两个 Linux backend 就够。
+# winit features note: on Linux you MUST explicitly enable `x11` and/or `wayland`,
+# otherwise `platform_impl/mod.rs` triggers `compile_error!`. macOS / Windows backends
+# are auto-enabled via cfg(target_os) and need no feature flag. Step 1a runs CI on all
+# three desktop OSes, so enabling both x11 + wayland Linux backends is sufficient.
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 skia-safe = { version = "0.97.0", features = ["gl"] }
 glutin = "0.32.3"
@@ -39,21 +41,22 @@ winit = { version = "0.30.13", default-features = false, features = ["x11", "way
 raw-window-handle = "0.6.2"
 scopeguard = "1.2"
 
-# Jian path deps —— 双写 path + version per spec §12.2。
-# - jian-core: 暴露 DrawOp / Paint / TextRun / geometry / scene::Color。`shell-core`
-#   也引 jian-core；shell-native 直接用是为了在 NativeBackend 翻译路径里直接构造
-#   `jian_core::render::DrawOp::*`（避免每帧经 shell-core re-export bounce）。
-# - jian-skia: 提供 SkiaBackend (RenderBackend impl) + skia textlayout (textlayout
-#   feature 需要 ICU + harfbuzz, ~15MB；P0.5 已升 skia-safe 0.78→0.97 + 新增 pub
-#   draw_on_canvas).
+# Jian path deps — both path + version per spec §12.2.
+# - jian-core: exposes DrawOp / Paint / TextRun / geometry / scene::Color. `shell-core`
+#   also pulls jian-core; shell-native uses it directly so the NativeBackend translation
+#   path can construct `jian_core::render::DrawOp::*` without bouncing through the
+#   shell-core re-export each frame.
+# - jian-skia: provides SkiaBackend (RenderBackend impl) + skia textlayout (the textlayout
+#   feature pulls ICU + harfbuzz, ~15MB; P0.5 already bumped skia-safe 0.78→0.97 and
+#   added a public draw_on_canvas).
 jian-core = { path = "../../vendor/jian/crates/jian-core", version = "0.0.1" }
 jian-skia = { path = "../../vendor/jian/crates/jian-skia", version = "0.0.1", features = ["textlayout"] }
 
-# jian-host-desktop: target-gate desktop only (Linux/macOS/Windows)；不进 android/ios
-# metadata（Task 1 Step 26 boundary check 验证）。
-# - default-features = false：Jian 默认 features 含 `run = ["dep:softbuffer"]` 拉
-#   raster present；OP 自管 GPU event loop 不需要 softbuffer。
-# - features = ["textlayout"]：与 jian-skia 对齐文本路径。
+# jian-host-desktop: target-gated desktop only (Linux/macOS/Windows); not pulled into
+# android/ios metadata (verified by Task 1 Step 26 boundary check).
+# - default-features = false: Jian's default features include `run = ["dep:softbuffer"]`
+#   for raster present; OP runs its own GPU event loop and doesn't need softbuffer.
+# - features = ["textlayout"]: aligns the text path with jian-skia.
 [target.'cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))'.dependencies]
 jian-host-desktop = { path = "../../vendor/jian/crates/jian-host-desktop", version = "0.0.1", default-features = false, features = ["textlayout"] }
 
