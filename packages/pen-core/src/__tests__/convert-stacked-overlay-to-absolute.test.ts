@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import type { PenNode } from '@zseven-w/pen-types';
 import { convertStackedOverlayToAbsolute } from '../layout/convert-stacked-overlay-to-absolute';
+import { normalizeTreeLayout } from '../layout/normalize-tree';
 
 const frame = (props: Partial<PenNode> & { children?: PenNode[] }): PenNode =>
   ({
@@ -140,6 +141,53 @@ describe('convertStackedOverlayToAbsolute', () => {
     const changed = convertStackedOverlayToAbsolute(root);
     expect(changed).toBe(false);
     expect((row as PenNode & { layout?: string }).layout).toBe('horizontal');
+  });
+
+  it('preserves child offsets when run BEFORE normalizeTreeLayout', () => {
+    // Codex regression test: normalizeTreeLayout strips `x` / `y`
+    // from non-overlay children of any vertical / horizontal layout
+    // container. If the convert pass runs AFTER normalize, an
+    // intentional content offset like `y: 80` is gone before we
+    // flip layout to 'none' — the child renders at (0,0) overlapping
+    // the bg image instead of where the model placed it. Run
+    // ORDER: convert → normalize. After convert, the container's
+    // layout is 'none' so normalize leaves the children's x/y
+    // untouched.
+    const hero = frame({
+      id: 'hero',
+      width: 'fill_container',
+      height: 200,
+      layout: 'vertical',
+      children: [
+        image({ id: 'bg', width: 'fill_container', height: 200 }),
+        rect({ id: 'overlay', width: 'fill_container', height: 200 }),
+        frame({
+          id: 'content',
+          width: 'fill_container',
+          height: 'fit_content',
+          // Model deliberately offset the content frame so the title
+          // sits below the overlay's gradient stop — these offsets
+          // must survive through the post-pass chain.
+          x: 16,
+          y: 80,
+          children: [text({ id: 'title', content: 'Hungry?' })],
+        } as Partial<PenNode>),
+      ],
+    });
+    const root = frame({ id: 'root', children: [hero] });
+
+    // Same order as design-canvas-ops::applyPostStreamingTreeHeuristics:
+    // convert FIRST, then normalize.
+    convertStackedOverlayToAbsolute(root);
+    normalizeTreeLayout(root);
+
+    expect((hero as PenNode & { layout?: string }).layout).toBe('none');
+    const content = (hero as PenNode & { children: PenNode[] }).children[2] as PenNode & {
+      x?: number;
+      y?: number;
+    };
+    expect(content.x).toBe(16);
+    expect(content.y).toBe(80);
   });
 
   it('walks nested heroes (nested-section regressions)', () => {
