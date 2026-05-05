@@ -35,49 +35,20 @@ jobs:
           toolchain: "1.85"
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
-      # Linux GL prerequisites for the P0 probe ignored test step. xvfb gives
-      # winit a virtual display; mesa software-rasterizes GL when no GPU is
-      # available; libxkbcommon-x11-dev / libwayland-dev are winit's link-time
-      # dependencies on Linux; libfreetype-dev / libfontconfig1-dev are
-      # skia-bindings' link-time dependencies on Linux (skia-safe v0.97 links
-      # against the system freetype + fontconfig). (No-op on macOS / Windows.)
-      - name: Install Linux GL prereqs (P0 probe gate)
+      # Linux GL prerequisites for winit's x11+wayland feature link.
+      # libxkbcommon-x11-dev / libwayland-dev are winit's link-time deps on
+      # Linux; the wayland-csd-adwaita feature pulls in xkbcommon + wayland-client.
+      - name: Install Linux GL prereqs
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            xvfb \
-            libgl1-mesa-dri libglu1-mesa libegl1 libgles2 \
             libxkbcommon-dev libxkbcommon-x11-dev \
-            libwayland-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev \
-            libfreetype-dev libfontconfig1-dev
+            libwayland-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev
       - run: cargo fmt --all -- --check
       - run: cargo build --workspace
       - run: cargo test --workspace
       - run: cargo clippy --workspace --all-targets -- -D warnings
-      # P0 probe gate (Step 1a) — runs only the `#[ignore = "P0_PROBE_GATE"]`
-      # tests. macOS: runs the full window+GL path natively. Linux/Windows:
-      # the test body early-returns with a documented deferral marker
-      # because the GH-hosted runners cannot supply a usable GL window:
-      #   Windows  → WINDOWS_GPU_DEFERRED_NO_RUNNER (spec §8.2): no GL driver.
-      #   Linux    → LINUX_GPU_DEFERRED_NO_RUNNER  (Xvfb's GLX visuals lack
-      #              GLX_WINDOW_BIT, so `glXCreateWindow` returns
-      #              `GLXBadWindow`. Same constraint hits bevy / rust-skia /
-      #              iced CI; they all skip window-bound GL tests on hosted
-      #              Linux runners). The link-time half of the dep-stack
-      #              probe (skia-safe + glutin + glow + winit + EGL link)
-      #              is already verified by `cargo build / test / clippy
-      #              --workspace --all-targets` above. Manual smoke on a
-      #              real Linux desktop with a GLX-capable X server runs
-      #              the full path (env var unset → no early-return).
-      - name: P0 probe gate (Linux)
-        if: runner.os == 'Linux'
-        env:
-          OPENPENCIL_LINUX_GPU_DEFERRED_NO_RUNNER: '1'
-        run: cargo test -p openpencil-shell-native --test p0_probe -- --ignored
-      - name: P0 probe gate (macOS / Windows)
-        if: runner.os != 'Linux'
-        run: cargo test -p openpencil-shell-native --test p0_probe -- --ignored
 
   deny:
     name: cargo-deny (native)
