@@ -17,7 +17,7 @@ import { getMcpHooks } from '../hooks';
 import type { PenDocument, PenNode } from '@zseven-w/pen-types';
 
 // ---------------------------------------------------------------------------
-// Node data validation
+// Node 数据验证
 // ---------------------------------------------------------------------------
 
 const VALID_NODE_TYPES = new Set([
@@ -54,7 +54,7 @@ function validateNodeData(data: Record<string, unknown>): void {
   }
 }
 
-/** Recursively validate node data including children. */
+/** Recursively 验证包括子节点在内的节点数据。 */
 function validateNodeTree(data: Record<string, unknown>): void {
   validateNodeData(data);
   if (Array.isArray(data.children)) {
@@ -65,7 +65,7 @@ function validateNodeTree(data: Record<string, unknown>): void {
 }
 
 // ---------------------------------------------------------------------------
-// Shared post-processing (extracted from batch-design.ts)
+// Shared 后处理（摘自 batch-design.ts）
 // ---------------------------------------------------------------------------
 
 export function postProcessNode(doc: PenDocument, canvasWidth: number, pageId?: string): void {
@@ -98,7 +98,7 @@ function countNodes(nodes: PenNode[]): number {
   return count;
 }
 
-/** A root frame is "empty" if it has no children. */
+/** 如果根框架没有子框架，则它是“空的”。 */
 function isEmptyFrame(node: PenNode): boolean {
   return (
     node.type === 'frame' && (!('children' in node) || !node.children || node.children.length === 0)
@@ -134,8 +134,7 @@ export async function handleInsertNode(params: InsertNodeParams): Promise<{
   const node = { ...data, id: generateId() } as PenNode;
   const parent = params.parent;
 
-  // Auto-replace: when inserting a frame at root level and an empty
-  // root frame exists, replace it instead of creating a sibling.
+  // Auto-replace：当在根级别插入框架并且存在空根框架时，替换它而不是创建同级框架。
   if (parent === null && data.type === 'frame') {
     const children = getDocChildren(doc, pageId);
     const emptyIdx = children.findIndex((n) => isEmptyFrame(n));
@@ -194,7 +193,7 @@ export async function handleUpdateNode(
   const pageId = params.pageId;
 
   const data = sanitizeObject(params.data);
-  // Validate type if being changed
+  // Validate 类型（如果更改）
   if (data.type && !VALID_NODE_TYPES.has(data.type as string)) {
     throw new Error(
       `Invalid node type: "${data.type}". Valid types: ${[...VALID_NODE_TYPES].join(', ')}`,

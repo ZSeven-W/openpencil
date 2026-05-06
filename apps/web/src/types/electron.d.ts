@@ -1,13 +1,13 @@
 // apps/web/src/types/electron.d.ts
 //
-// Type definition for window.electronAPI, exposed by apps/desktop/preload.ts.
-// Kept in sync with preload.ts by hand — when new IPC channels land in the
-// desktop bridge, update both files.
+// window.electronAPI 的 Type 定义，由 apps/desktop/preload.ts 公开。
+// Kept 与 preload.ts 手动同步 — 当新的 IPC 通道登陆时
+// 桌面桥，更新这两个文件。
 //
-// This file is a module (it imports from services/git-types) so `export {}`
-// below marks it as such. The `declare global` block makes the Window
-// augmentation (and the ambient Updater* / ElectronAPI types that existing
-// code references globally) visible project-wide.
+// This 文件是一个模块（它从 services/git-types 导入），所以 `export {}`
+// 下面将其标记为这样。 The `declare global` 块使 Window
+// 增强（以及现有的环境 Updater* / ElectronAPI 类型
+// 全局代码引用）在项目范围内可见。
 
 import type { GitAPI } from '@/services/git-types';
 
@@ -43,7 +43,7 @@ declare global {
     readFile: (filePath: string) => Promise<{ filePath: string; content: string } | null>;
     getPendingFile: () => Promise<string | null>;
     syncRecentFiles: (files: Array<{ fileName: string; filePath: string }>) => void;
-    /** Resolve the absolute filesystem path of a File from drag-and-drop. */
+    /** Resolve 拖放时 File 的绝对文件系统路径。 */
     getPathForFile: (file: File) => string | null;
     confirmClose: () => void;
     confirmUnsavedChanges: (payload: {
@@ -66,7 +66,7 @@ declare global {
       setAutoCheck: (enabled: boolean) => Promise<boolean>;
       onStateChange: (callback: (state: UpdaterState) => void) => () => void;
     };
-    /** Phase 3+: git IPC surface. See apps/web/src/services/git-types.ts. */
+    /** Phase 3+：git IPC 表面。 See apps/web/src/services/git-types.ts。 */
     git: GitAPI;
   }
 

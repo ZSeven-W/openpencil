@@ -1,4 +1,4 @@
-// @vitest-environment jsdom
+// @vitest-环境 jsdom
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { DesignEngineContext } from '../context';
@@ -7,7 +7,7 @@ import { LayerPanel } from '../components/layer-panel';
 function createMockEngine() {
   const listeners = new Map<string, Set<(...args: any[]) => void>>();
 
-  // Stable references required so useSyncExternalStore doesn't infinite-loop
+  // 需要 Stable 引用，因此 useSyncExternalStore 不会无限循环
   const doc = {
     id: 'doc',
     pages: [

@@ -1,8 +1,9 @@
 /**
- * Variable resolution utilities.
+ * Variable
  *
- * Resolves `$variableName` references against a VariableDefinition map,
- * optionally matching themed values to an active theme context.
+ * 解析实用程序。 Resolves `$variableNam
+ * e` 针对 Variab
+ leDefinition 地图的引用，可选择将主题值与活动主题上下文匹配。
  */
 
 import type { PenNode } from '@zseven-w/pen-types';
@@ -16,12 +17,12 @@ type Theme = Record<string, string>;
 // Helpers
 // ---------------------------------------------------------------------------
 
-/** Check whether a value is a `$variable` reference string. */
+/** Check 值是否是 `$variable` 引用字符串。 */
 export function isVariableRef(value: unknown): value is string {
   return typeof value === 'string' && value.startsWith('$');
 }
 
-/** Build the default theme map (first value per axis) from PenDocument.themes. */
+/** Build 来自 PenDocument.themes 的默认主题图（每个轴的第一个值）。 */
 export function getDefaultTheme(themes: Record<string, string[]> | undefined): Theme {
   const result: Theme = {};
   if (!themes) return result;
@@ -32,10 +33,10 @@ export function getDefaultTheme(themes: Record<string, string[]> | undefined): T
 }
 
 // ---------------------------------------------------------------------------
-// Core resolution
+// Core 分辨率
 // ---------------------------------------------------------------------------
 
-/** Pick the concrete value from a `ThemedValue[]` for the given theme. */
+/** Pick 给定主题的 `ThemedValue[]` 的具体值。 */
 function resolveThemedValue(
   values: ThemedValue[],
   activeTheme?: Theme,
@@ -51,8 +52,8 @@ function resolveThemedValue(
 }
 
 /**
- * Resolve a single `$variableName` reference to its concrete value.
- * Returns `undefined` if the variable does not exist or has an incompatible type.
+ * Resolve 单个
+ * `$variableName` 对其具体值的引用。 Returns `undefined` 如果变量不存在或具有不兼容的类型。
  */
 export function resolveVariableRef(
   ref: string,
@@ -67,18 +68,18 @@ export function resolveVariableRef(
   const val = def.value;
   if (Array.isArray(val)) {
     const resolved = resolveThemedValue(val, activeTheme);
-    // Circular guard: if resolved value is also a $ref, stop
+    // Circular 防护：如果解析值也是 $ref，则停止
     if (typeof resolved === 'string' && resolved.startsWith('$')) return undefined;
     return resolved;
   }
-  // Circular guard
+  // Circular 守卫
   if (typeof val === 'string' && val.startsWith('$')) return undefined;
   return val;
 }
 
 /**
- * Resolve a color string that may be a `$variable` reference.
- * Returns the original string if it's not a ref, or the resolved color.
+ * Resolve
+ * 颜色字符串，可能是 `$variable` 引用。 Returns 原始字符串（如果不是引用）或解析的颜色。
  */
 export function resolveColorRef(
   color: string | undefined,
@@ -92,8 +93,8 @@ export function resolveColorRef(
 }
 
 /**
- * Resolve a numeric value that may be a `$variable` reference.
- * Returns the original number if it's not a ref.
+ * Resolve 可能是
+ * `$variable` 引用的数值。 Returns 如果不是参考号，则为原始号码。
  */
 export function resolveNumericRef(
   value: unknown,
@@ -113,7 +114,7 @@ export function resolveNumericRef(
 }
 
 // ---------------------------------------------------------------------------
-// Fill / stroke / effect resolution
+// Fill / 描边 / 效果分辨率
 // ---------------------------------------------------------------------------
 
 function resolveFillsForCanvas(
@@ -148,13 +149,13 @@ function resolveStrokeForCanvas(
   let changed = false;
   const out: Record<string, unknown> = { ...stroke };
 
-  // Resolve thickness
+  // Resolve 厚度
   if (typeof stroke.thickness === 'string' && isVariableRef(stroke.thickness)) {
     out.thickness = resolveNumericRef(stroke.thickness, vars, theme) ?? 1;
     changed = true;
   }
 
-  // Resolve stroke fill colors
+  // Resolve 描边填充颜色
   if (stroke.fill) {
     const resolved = resolveFillsForCanvas(stroke.fill, vars, theme);
     if (resolved !== stroke.fill) {
@@ -194,14 +195,14 @@ function resolveEffectsForCanvas(
 }
 
 // ---------------------------------------------------------------------------
-// Full node resolution for canvas rendering
+// Full 画布渲染的节点分辨率
 // ---------------------------------------------------------------------------
 
 /**
- * Resolve all `$variable` references in a PenNode, returning a new node
- * with concrete values suitable for Fabric.js rendering.
+ * Resolve
+ * PenNode 中的所有 `$variable` 引用，返回一个具有适合 Fabric.js
  *
- * Returns the same object reference when no variables are present.
+ * 渲染的具体值的新节点。当不存在变量时，Returns 相同的对象引用。
  */
 export function resolveNodeForCanvas(node: PenNode, variables: Vars, activeTheme?: Theme): PenNode {
   if (!variables || Object.keys(variables).length === 0) return node;
@@ -263,7 +264,7 @@ export function resolveNodeForCanvas(node: PenNode, variables: Vars, activeTheme
     }
   }
 
-  // Text content
+  // Text 内容
   if (node.type === 'text' && typeof node.content === 'string' && isVariableRef(node.content)) {
     const resolved = resolveVariableRef(node.content, variables, activeTheme);
     if (typeof resolved === 'string') {
@@ -272,13 +273,13 @@ export function resolveNodeForCanvas(node: PenNode, variables: Vars, activeTheme
     }
   }
 
-  // Recurse into children
+  // Recurse 进入儿童
   if ('children' in node && node.children) {
     const children = node.children;
     const resolvedChildren = children.map((child) =>
       resolveNodeForCanvas(child, variables, activeTheme),
     );
-    // Only allocate new array if any child actually changed
+    // Only 如果任何子项实际发生更改，则分配新数组
     if (resolvedChildren.some((rc, i) => rc !== children[i])) {
       out.children = resolvedChildren;
       changed = true;

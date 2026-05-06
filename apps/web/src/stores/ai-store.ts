@@ -36,7 +36,7 @@ function writeUIPrefs(partial: AIUIPrefs): void {
     const current = readUIPrefs();
     appStorage.setItem(UI_PREFS_KEY, JSON.stringify({ ...current, ...partial }));
   } catch {
-    /* ignore */
+    /* 忽略 */
   }
 }
 
@@ -56,7 +56,7 @@ function writeStoredModelPreference(model: string): void {
   try {
     appStorage.setItem(MODEL_PREFERENCE_STORAGE_KEY, model);
   } catch {
-    // Ignore storage failures (private mode, quota, etc.)
+    // Ignore 存储故障（私有模式、配额等）
   }
 }
 
@@ -77,12 +77,12 @@ function writeStoredConcurrency(n: number): void {
   try {
     appStorage.setItem(CONCURRENCY_STORAGE_KEY, String(n));
   } catch {
-    // Ignore storage failures
+    // Ignore 存储故障
   }
 }
 
-// Keep SSR/CSR first render deterministic to avoid hydration mismatch.
-// Real preference is loaded on mount via hydrateModelPreference().
+// Keep SSR/CSR 首先渲染确定性以避免水合不匹配。 Real 首选项通过 hydrateModelPreference()
+// 加载到挂载上。
 const initialPreferredModel = DEFAULT_MODEL;
 
 export interface AIModelInfo {
@@ -112,7 +112,7 @@ interface AIState {
   setPanelSize: (width: number, height: number) => void;
   chatTitle: string;
   generationProgress: { current: number; total: number } | null;
-  /** Step tags from orchestrator during Agent tool execution (bypasses message content) */
+  /** Agent 工具执行期间来自 Orchestrator 的 Step 标签（绕过消息内容） */
   agentOrchestrationSteps: string | null;
   setAgentOrchestrationSteps: (steps: string | null) => void;
   concurrency: number;
@@ -208,7 +208,7 @@ export const useAIStore = create<AIState>((set, get) => ({
   addMessage: (msg) =>
     set((s) => ({
       messages: [...s.messages, msg],
-      // Clear stale orchestration steps when a new user message starts a new turn
+      // 当新用户消息开始新一轮时，Clear 陈旧的编排步骤
       agentOrchestrationSteps: msg.role === 'user' ? null : s.agentOrchestrationSteps,
     })),
 

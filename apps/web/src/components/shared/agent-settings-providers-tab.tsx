@@ -14,7 +14,7 @@ import OpenCodeLogo from '@/components/icons/opencode-logo';
 import CopilotLogo from '@/components/icons/copilot-logo';
 import GeminiLogo from '@/components/icons/gemini-logo';
 
-/** Provider display metadata -- labels/descriptions are i18n keys resolved at render time */
+/** Provider 显示元数据 -- labels/descriptions 是在渲染时解析的 i18n 键 */
 const PROVIDER_META: Record<
   AIProviderType,
   {

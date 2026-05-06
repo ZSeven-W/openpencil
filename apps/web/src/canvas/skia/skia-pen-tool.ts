@@ -51,7 +51,7 @@ export class SkiaPenTool {
 
   onMouseDown(scene: { x: number; y: number }, zoom: number): boolean {
     if (!this.penActive) {
-      // First click — start a new path
+      // First click — 开始一条新路径
       this.penActive = true;
       this.penPoints = [
         {
@@ -68,7 +68,7 @@ export class SkiaPenTool {
       return true;
     }
 
-    // Check if clicking near the first point to close the path
+    // Check 如果在第一个点附近单击以关闭路径
     if (this.penPoints.length >= 3) {
       const first = this.penPoints[0];
       const threshold = PEN_CLOSE_HIT_THRESHOLD / zoom;
@@ -78,7 +78,7 @@ export class SkiaPenTool {
       }
     }
 
-    // Add a new anchor point
+    // Add 一个新的锚点
     this.penPoints.push({
       x: scene.x,
       y: scene.y,
@@ -122,7 +122,7 @@ export class SkiaPenTool {
 
   onDblClick(): boolean {
     if (!this.penActive) return false;
-    // Remove the extra point added by the second click of the double-click
+    // Remove 双击第二次添加的额外点
     if (this.penPoints.length > 1) this.penPoints.pop();
     this.finalizePen(false);
     return true;

@@ -13,15 +13,15 @@ export interface ImageLoadStatus {
 }
 
 /**
- * Async image loader for CanvasKit. Loads images via browser's native Image
- * element (supports all browser-supported formats), rasterizes to Canvas 2D,
- * then converts to CanvasKit Image for GPU rendering.
+ * Async Canvas
+ * Kit 的图像加载器。 Loads 图像通过浏览器的本机 Image 元素（支持所有浏览器支持的格式），光栅化为 Canvas 2d，然后转换为
+ * CanvasKit Image 以进行 GPU 渲染。
  */
 export class SkiaImageLoader {
   private ck: CanvasKit;
   private cache = new Map<string, SkImage | null>();
   private loading = new Set<string>();
-  /** In-flight load promises (separate from `loading` URL set, used for flushPending) */
+  /** In-航班负载承诺（与 `loading` URL 集分开，用于 flushPending） */
   private pendingPromises = new Set<Promise<unknown>>();
   private status = new Map<string, ImageLoadStatus>();
   private onLoaded: (() => void) | null = null;
@@ -34,7 +34,7 @@ export class SkiaImageLoader {
     this.ck = ck;
   }
 
-  /** Set callback to trigger re-render when an image finishes loading. */
+  /** Set 回调，用于在图像加载完成时触发重新渲染。 */
   setOnLoaded(cb: () => void) {
     this.onLoaded = cb;
   }
@@ -43,7 +43,7 @@ export class SkiaImageLoader {
     this.sourceResolver = resolver;
   }
 
-  /** Get a cached image, or null if not loaded / failed. Returns undefined if not yet requested. */
+  /** Get 缓存的图像，如果未加载/失败则为 null。如果尚未请求，则 Returns 未定义。 */
   get(src: string): SkImage | null | undefined {
     const resolved = this.sourceResolver(src);
     return this.cache.get(resolved.cacheKey);
@@ -54,7 +54,7 @@ export class SkiaImageLoader {
     return this.status.get(resolved.cacheKey);
   }
 
-  /** Start loading an image if not already cached or in progress. */
+  /** Start 加载图像（如果尚未缓存或正在进行中）。 */
   request(src: string) {
     const resolved = this.sourceResolver(src);
     if (this.cache.has(resolved.cacheKey) || this.loading.has(resolved.cacheKey)) return;
@@ -73,14 +73,15 @@ export class SkiaImageLoader {
     pending.finally(() => this.pendingPromises.delete(pending));
   }
 
-  /** Number of in-flight image load promises. */
+  /** Number 飞行中图像加载承诺。 */
   pendingCount(): number {
     return this.pendingPromises.size;
   }
 
   /**
-   * Wait for every currently pending image load to settle.
-   * Used by SkiaEngine.waitForSettled to coordinate readback timing.
+   * Wait 对于每个当前待
+   * 处理的图像加载进行解决。 Used 通过 SkiaEngine.waitForSettled
+   来协调读回时序。
    */
   async flushPending(): Promise<void> {
     const snapshot = Array.from(this.pendingPromises);
@@ -99,7 +100,7 @@ export class SkiaImageLoader {
 
   private async loadAsync(source: ResolvedImageSource) {
     try {
-      // Use browser Image element — supports all browser-supported formats
+      // Use 浏览器 Image 元素 — 支持所有浏览器支持的格式
       const htmlImg = await this.loadHtmlImage(source.loadUrl!);
       const skImg = this.htmlImageToSkia(htmlImg);
       this.cache.set(source.cacheKey, skImg);

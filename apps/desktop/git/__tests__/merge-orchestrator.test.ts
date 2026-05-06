@@ -16,7 +16,7 @@ async function commitDocument(
   message: string,
   parents?: string[],
 ): Promise<string> {
-  // Write to disk first (commitFile reads from disk, not from the input).
+  // 首先将 Write 写入磁盘（commitFile 从磁盘读取，而不是从输入读取）。
   const fsp = await import('node:fs/promises');
   const path = `${handle.dir}/login.op`;
   await fsp.writeFile(path, JSON.stringify(doc), 'utf-8');

@@ -1,17 +1,17 @@
 // apps/desktop/git/__tests__/test-helpers.ts
 //
-// Shared test utilities for the desktop git layer tests. Each test creates
-// a fresh temp dir, runs its operation, and cleans up via the returned
-// disposer. This keeps tests isolated and parallel-safe.
+// Shared 用于桌面 git 层测试的测试实用程序。 Each 测试创建
+// 一个新的临时目录，运行其操作，并通过返回的进行清理
+// 处理器。 This 保持测试隔离和并行安全。
 
 import { mkdtemp, rm, writeFile, mkdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 /**
- * Create a fresh temp directory under the OS temp path. Returns the path
- * and a disposer that recursively removes it. Always pair the call with
- * `try { ... } finally { await dispose(); }`.
+ * Create OS
+ * 临时路径下的新临时目录。 Returns 路径和递归删除它的处理程序。 Always 将呼叫与 `try { ... } finally {
+ * await dispose(); }` 配对。
  */
 export async function mkTempDir(prefix = 'op-git-test-'): Promise<{
   dir: string;
@@ -27,8 +27,8 @@ export async function mkTempDir(prefix = 'op-git-test-'): Promise<{
 }
 
 /**
- * Write a stub `.op` file (a tiny PenDocument JSON) into a directory.
- * Returns the absolute file path.
+ * Write 将
+ * `.op` 存根文件（一个很小的 PenDocument JSON）放入目录中。 Returns 绝对文件路径。
  */
 export async function writeOpFile(
   dir: string,
@@ -41,8 +41,8 @@ export async function writeOpFile(
 }
 
 /**
- * Create a nested directory structure under a temp root.
- * Useful for setting up "file inside parent git repo" scenarios.
+ * Create 临时根目录
+ * 下的嵌套目录结构。 Useful 用于设置“父 git 存储库内的文件”场景。
  */
 export async function mkSubdir(root: string, ...segments: string[]): Promise<string> {
   const dir = join(root, ...segments);

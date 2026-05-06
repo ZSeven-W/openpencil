@@ -65,7 +65,7 @@ function persistPrefs(prefs: CanvasPreferences) {
   try {
     appStorage.setItem(PREFS_KEY, JSON.stringify(prefs));
   } catch {
-    /* ignore */
+    /* 忽略 */
   }
 }
 
@@ -222,17 +222,17 @@ export const useCanvasStore = create<CanvasStoreState>((set, get) => ({
       if (data.rightPanelTab === 'design' || data.rightPanelTab === 'code')
         set({ rightPanelTab: data.rightPanelTab });
     } catch {
-      /* ignore */
+      /* 忽略 */
     }
   },
 }));
 
 /**
- * Bridge: mirror pen-engine state into canvas-store so that legacy readers
- * (components not yet migrated to pen-react hooks) continue to work.
+ * Bridge：将笔引擎状
+ * 态镜像到画布存储中，以便遗留阅读器（尚未迁移到笔反应挂钩的组件）继续工作。 Call 在创建 DesignEngine 之后执行一次。一旦
  *
- * Call this once after DesignEngine is created.
- * Remove this bridge once ALL readers have migrated to pen-react hooks.
+ * ALL 读者迁移到 pen-react hooks，Remove 就会建立这个桥梁。
+ *
  */
 export function initCanvasStoreBridge(engine: DesignEngine): () => void {
   const unsubs: Array<() => void> = [];

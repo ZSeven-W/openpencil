@@ -9,48 +9,47 @@ import { PORT_FILE_DIR_NAME, PORT_FILE_NAME } from './constants';
 
 const cache = new Map<string, { doc: PenDocument; mtime: number }>();
 
-/** Special path indicating the MCP should operate on the live Electron canvas. */
+/** Special 路径指示 MCP 应在实时 Electron 画布上运行。 */
 export const LIVE_CANVAS_PATH = 'live://canvas';
 
-/** Resolve filePath for MCP tools — defaults to live canvas when omitted. */
+/** Resolve filePath 用于 MCP 工具 — 省略时默认为实时画布。 */
 export function resolveDocPath(filePath?: string): string {
   if (!filePath || filePath === LIVE_CANVAS_PATH) return LIVE_CANVAS_PATH;
   return resolve(filePath);
 }
 
 // ---------------------------------------------------------------------------
-// Sync URL cache — avoids repeated port file reads + health checks
+// Sync URL 缓存 — 避免重复的端口文件读取+运行状况检查
 // ---------------------------------------------------------------------------
 
 let _cachedSyncUrl: string | null = null;
 let _cachedSyncUrlTime = 0;
-const SYNC_URL_TTL = 30_000; // 30 seconds
+const SYNC_URL_TTL = 30_000; // 30 秒
 
-/** Pre-set the sync URL (e.g. from CLI connection discovery). */
+/** Pre-设置同步 URL（例如，来自 CLI 连接发现）。 */
 export function setSyncUrl(url: string): void {
   _cachedSyncUrl = url;
   _cachedSyncUrlTime = Date.now();
 }
 
-/** Clear the cached sync URL (e.g. after connection failure). */
+/** Clear 缓存的同步 URL （例如，连接失败后）。 */
 export function clearSyncUrl(): void {
   _cachedSyncUrl = null;
   _cachedSyncUrlTime = 0;
 }
 
 const PORT_FILE_PATH = join(homedir(), PORT_FILE_DIR_NAME, PORT_FILE_NAME);
-// IPv6 [::1] comes first because Vite 6+ resolves `localhost` to ::1 only on
-// macOS — it's the most likely successful host. IPv4 + named localhost are
-// kept as fallbacks for systems where the dev server binds to IPv4 only.
+// IPv6 [::1] 排在第一位，因为 Vite 6+ 仅在 macOS 上将 `localhost` 解析为 ::1 — 它是最有可能成功的主机。
+// IPv4 + 命名的 localhost 保留作为开发服务器仅绑定到 IPv4 的系统的后备。
 const SYNC_BASE_URLS = ['http://[::1]', 'http://127.0.0.1', 'http://localhost'];
 
 /**
- * Try every base URL in parallel and return the first one whose
- * `/api/mcp/server` probe succeeds. Retries up to 5 times with a small delay
- * between attempts so we tolerate the dev server still booting.
+ * Try 每个基地 URL
+ * 并行并返回第一个 `/api/mcp/server` 探测成功的基地。 Retries 最多 5
+ * 次，尝试之间有很小的延迟，因此我们可以容忍开发服务器仍在启动。 Exported 用于单元测试；内部调用者应该通过 getSyncUrl /
  *
- * Exported for unit tests; internal callers should go through getSyncUrl /
- * getLiveSyncState which add caching and richer state reporting.
+ * getLiveSyncState 添加缓存和更丰富的状态报告。
+ *
  */
 export async function getReachableSyncUrl(port: number): Promise<string | null> {
   for (let attempt = 0; attempt < 5; attempt++) {

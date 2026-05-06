@@ -1,8 +1,9 @@
 import type { DesignEngine } from '../../core/design-engine.js';
 
 /**
- * Handles arc editing interactions on ellipse nodes.
- * Extracted from apps/web/src/canvas/skia/skia-interaction-arc.ts.
+ * Handles
+ * 椭圆节点上的弧编辑交互。 Extracted 来自 apps/web/src/canvas/skia
+ /skia-interaction-arc.ts。
  */
 export class EngineArcHandler {
   isDraggingArc = false;

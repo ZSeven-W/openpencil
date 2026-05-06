@@ -4,11 +4,11 @@ import { handleLogsTail } from '../tools/debug-logs-tail';
 import { handleScreenshot, type DebugScreenshotParams } from '../tools/debug-screenshot';
 
 /**
- * DEBUG MCP tools — only exposed when the server is started with the
- * `--debug` flag or `OPENPENCIL_DEBUG_TOOLS=1` environment variable.
+ * DEBUG MCP 工具
+ * — 仅在使用 `--debug` 标志或 `OPENPENCIL_DEBUG_TOOLS=1` 环境变量启动服务器时公开。
  *
- * These tools are for pen-ai-skills development and diagnostics. They MUST
- * NOT be exposed to production MCP clients.
+ * These 工具用于笔人工智能技能开发和诊断。 They MUST NOT 暴露给生产 MCP 客户端。
+ *
  */
 export const DEBUG_TOOL_DEFINITIONS = [
   {
@@ -119,9 +119,9 @@ export const DEBUG_TOOL_NAMES: ReadonlySet<string> = new Set(
 );
 
 /**
- * Future-safe signature (Promise<string | ToolContent[]>) so Phase 2 can add
- * `debug_screenshot` with an image content block result without touching this
- * file's type signature again.
+ * Future 安全签名
+ * (Promise<string | ToolContent[]>)，因此 Phase 2 可以添加 `debug_screenshot`
+ * 和图像内容块结果，而无需再次触及此文件的类型签名。
  */
 export async function handleDebugToolCall(
   name: string,

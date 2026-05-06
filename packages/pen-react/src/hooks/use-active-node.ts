@@ -5,11 +5,11 @@ import { useSelection } from './use-selection.js';
 import { useDocument } from './use-document.js';
 
 /**
- * Returns the first selected node's full data, or null.
- * Derived from useSelection + useDocument — re-renders on either change.
+ * Returns
+ * 第一个选定节点的完整数据，或者为 null。 Derived 来自 useSelection +
  *
- * `doc` is included in the deps so the memo recomputes when node properties
- * change even if the selection array stays the same.
+ * useDocument — 在任一更改上重新渲染。 `doc` 包含在 deps 中，因此即使选择数组保持不变，当节点属性发生更改时，备忘录
+ * 也会重新计算。
  */
 export function useActiveNode(): PenNode | null {
   const engine = useDesignEngine();

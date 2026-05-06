@@ -158,13 +158,13 @@ export default function Toolbar() {
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
       if (!file) return;
-      // Reset input so the same file can be re-selected
+      // 重置 input 的值，这样同一个文件也能被再次选中
       e.target.value = '';
 
       const isSvg = file.type === 'image/svg+xml';
 
       if (isSvg) {
-        // SVG → parse into editable path/shape nodes
+        // SVG：解析成可编辑的 path / shape 节点
         const reader = new FileReader();
         reader.onload = () => {
           const svgText = reader.result as string;
@@ -188,7 +188,7 @@ export default function Toolbar() {
         };
         reader.readAsText(file);
       } else {
-        // Raster image → ImageNode
+        // 位图图片：插入为 `ImageNode`
         const reader = new FileReader();
         reader.onload = () => {
           const dataUrl = reader.result as string;
@@ -233,7 +233,7 @@ export default function Toolbar() {
 
       <Separator className="my-1 w-8" />
 
-      {/* Undo / Redo */}
+      {/* 撤销 / 重做 */}
       <Tooltip>
         <TooltipTrigger asChild>
           <Button variant="ghost" size="icon-sm" onClick={handleUndo} disabled={!canUndo}>

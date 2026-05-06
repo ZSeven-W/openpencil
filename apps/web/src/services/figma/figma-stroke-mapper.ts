@@ -3,7 +3,7 @@ import type { PenStroke } from '@/types/styles';
 import { mapFigmaFills } from './figma-fill-mapper';
 
 /**
- * Convert Figma strokePaints + strokeWeight to PenStroke.
+ * Convert Figma strokePaints + strokeWeight 至 PenStroke。
  */
 export function mapFigmaStroke(node: FigmaNodeChange): PenStroke | undefined {
   if (!node.strokePaints || node.strokePaints.length === 0) return undefined;

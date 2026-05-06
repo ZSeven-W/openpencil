@@ -1,13 +1,13 @@
 // apps/web/src/services/git-types.ts
 //
-// Renderer-side type mirror of the desktop git IPC surface. Kept in sync
-// with apps/desktop/preload.ts's GitAPI interface by hand — when a new IPC
-// channel lands in Phase 2+ or later phases, update both files.
+// Renderer-桌面 git IPC 表面的侧型镜像。 Kept 同步
+// 手动使用 apps/desktop/preload.ts 的 GitAPI 界面 — 当一个新的 IPC
+// 频道进入 Phase 2+ 或更高版本，请更新这两个文件。
 //
-// The GitErrorCode union mirrors apps/desktop/git/error.ts verbatim.
+// The GitErrorCode 联合镜像 apps/desktop/git/error.ts 逐字。
 
 export type GitErrorCode =
-  // Emitted by Phase 1b-2c:
+  // Emitted 由 Phase 1b-2c：
   | 'init-failed'
   | 'open-failed'
   | 'not-a-repo'
@@ -106,10 +106,10 @@ export interface GitStatusInfo {
   unresolvedFiles: string[];
   conflicts: GitConflictBag | null;
   /**
-   * I2: true when the panel was reopened mid-merge — MERGE_HEAD is present
-   * on disk but session.inflightMerge is null (new session). The renderer
-   * uses this to show an abort-only UI instead of the normal conflict view.
-   * False (or absent) in all normal merge flows.
+   * I2：在合并过程中重新打
+   * 开面板时为 true — MERGE_HEAD 存在于磁盘上，但 session.inflightMerge 为 null（新会话）。
+   * The 渲染器使用它来显示仅中止的 UI 而不是正常的冲突视图。 False （或不存在）在所有正常的合并流中。
+   *
    */
   reopenedMidMerge?: boolean;
 }
@@ -139,13 +139,13 @@ export interface GitPublicSshKeyInfo {
 }
 
 /**
- * Renderer-visible remote metadata for the single 'origin' remote.
+ * Renderer-单个“
  *
- * Phase 6a's contract: there is exactly one remote — `origin`. The renderer
- * never inspects multi-remote setups; if a user has more than one remote in
- * `.git/config`, only `origin` is reported. `url` is the configured URL or
- * null when origin is absent. `host` is parsed from the URL (HTTPS, ssh://,
- * and SCP-style git@host:path) or null for unparseable URLs / null URLs.
+ * 原始”远程的可见远程元数据。 Phase 6a 的合约：只有一个遥控器 — `origin`。 The
+ * 渲染器从不检查多远程设置
+ * ；如果用户在 `.git/config` 中有多个遥控器，则仅报告 `origin`。 `url` 是配置的 URL 或在 origin
+ * 不存在时为 null。 `host` 是从 URL（HTTPS、ssh:// 和 SCP 样式 git@host:path）解析的，对于无法解析的
+ * URLs / null URLs，则为 null。
  */
 export interface GitRemoteInfo {
   name: 'origin';
@@ -235,15 +235,15 @@ export interface GitAPI {
   applyMerge: (repoId: string) => Promise<{ hash: string; noop: boolean }>;
   abortMerge: (repoId: string) => Promise<void>;
 
-  // Phase 4a: author identity probe (system git config). Returns null if
-  // git is unavailable or either user.name/user.email key is unset.
+  // Phase 4a：作者身份探测（系统 git 配置）。如果 git 不可用或未设置 user.name/user.email 键，则
+  // Returns null。
   getSystemAuthor: () => Promise<{ name: string; email: string } | null>;
 
-  // Phase 6a: remote metadata + config. remoteGet reads only .git/config
-  // (no network). remoteSet owns exactly one remote ('origin') — pass a
-  // non-empty url to set/update it, or `null` to remove it. Both calls
-  // return the fresh GitRemoteInfo so the renderer can update state from
-  // a single round-trip.
+  // Phase 6a：远程元数据+配置。 remoteGet 只读 .git/config
+  // （没有网络）。 remoteSet 恰好拥有一个远程（'origin'） - 传递一个
+  // 非空 url 到 set/update 或 `null` 删除它。 Both 通话
+// return the fresh GitRemoteInfo so the renderer can update state from
+  // 单程往返。
   remoteGet: (repoId: string) => Promise<GitRemoteInfo>;
   remoteSet: (repoId: string, url: string | null) => Promise<GitRemoteInfo>;
 }

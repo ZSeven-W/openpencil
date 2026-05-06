@@ -3,8 +3,9 @@ import { useDesignEngine } from './use-design-engine.js';
 import { useEngineSubscribe } from '../utils/use-engine-subscribe.js';
 
 /**
- * Returns the current PenDocument (immutable ref).
- * Re-renders only when the document mutates (new ref via structural sharing).
+ * Returns 当前
+ * PenDocument （不可变引用）。 Re-仅在文档发生变化时渲染（通过结构共享生成新引用）
+ 。
  */
 export function useDocument(): PenDocument {
   const engine = useDesignEngine();

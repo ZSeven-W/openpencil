@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 
-// Mock canvas-text-measure to avoid CanvasKit WASM dependency in tests
+// Mock canvas-text-measure 以避免测试中 CanvasKit WASM 依赖
 vi.mock('@/canvas/canvas-text-measure', () => ({
   estimateLineWidth: () => 0,
   estimateTextHeight: () => 0,
@@ -55,10 +55,8 @@ describe('hexLuminance', () => {
 });
 
 describe('hasFill', () => {
-  // hasFill answers "has the AI declared any fill entry?" — it's used by
-  // post-pass heuristics that must NOT overwrite an explicitly-chosen
-  // fill, even if that fill is transparent. Use `hasVisibleFill` when
-  // you need "will this draw a visible color?".
+  // hasFill 回答“AI 是否声明了任何填充条目？” — 它由后通道启发法使用，必须 NOT 覆盖显式选择的填充，即使该填充是透明的。
+  // Use `hasVisibleFill` 当您需要“这会绘制可见颜色吗？”时。
 
   it('returns false for node without fill', () => {
     const node = { id: 'n1', type: 'frame', x: 0, y: 0, width: 100, height: 100 } as PenNode;
@@ -91,10 +89,8 @@ describe('hasFill', () => {
     expect(hasFill(node)).toBe(true);
   });
 
-  // hasFill must report transparent fills as "has fill" so the overwrite-
-  // protection callers (fixOrphanContainerContrast, fixSectionAlternation)
-  // leave them alone. A frame whose AI author explicitly set
-  // fill=#00000000 is making a deliberate no-background choice.
+  // hasFill 必须将透明填充报告为“已填充”，以便覆盖保护调用者（fixOrphanContainerContrast、fixSecti
+  // onAlternation）不理会它们。 AI 作者明确设置 fill=#00000000 的框架正在做出故意的无背景选择。
   it('returns true for explicit-transparent hex (#00000000) — overwrite protection', () => {
     const node = {
       id: 'n',
@@ -122,9 +118,8 @@ describe('hasFill', () => {
   });
 
   it('returns true for opacity-0 fill — still a deliberate author choice', () => {
-    // opacity: 0 is a legitimate "I want a transparent background"
-    // declaration. hasFill exists to stop post-pass heuristics from
-    // overwriting such choices, so it must keep reporting true.
+    // opacity: 0 是一个合法的“我想要透明背景”声明。 hasFill
+    // 的存在是为了阻止后通过启发法覆盖此类选择，因此它必须保持报告真实。
     const node = {
       id: 'n',
       type: 'frame',
@@ -139,10 +134,8 @@ describe('hasFill', () => {
 });
 
 describe('hasVisibleFill', () => {
-  // hasVisibleFill answers "will this draw a visible color on screen?".
-  // Used by the button foreground contrast pass to decide whether a
-  // child node needs a color supplied. Transparent fills must report
-  // as false so contrast can paint in a visible foreground color.
+  // hasVisibleFill 回答“这会在屏幕上绘制可见的颜色吗？”。 Used 通过按钮前景对比度传递来决定子节点是否需要提供颜色。
+  // Transparent 填充必须报告为 false，以便对比度可以绘制可见的前景色。
 
   it('returns false for node without fill', () => {
     const node = { id: 'n', type: 'frame', x: 0, y: 0, width: 100, height: 100 } as PenNode;
@@ -240,11 +233,9 @@ describe('hasVisibleFill', () => {
     expect(hasVisibleFill(node)).toBe(true);
   });
 
-  // --- opacity field handling ---------------------------------------
-  // PenFill variants all carry an optional `opacity` field. A solid fill
-  // with opacity=0 renders as fully transparent regardless of its color
-  // hex, and downstream contrast logic must treat it as "no visible
-  // fill" so the foreground color can still be supplied.
+  // --- 不透明字段处理 --------------------------------------- PenFill
+  // 变体都带有可选的 `opacity` 字段。不透明度=0 的实心填充呈现为完全透明，无论其颜色十六进制如何，下游对比度逻辑必须将其视为“
+  // 不可见填充”，以便仍然可以提供前景色。
   it('returns false for a solid fill with opacity: 0', () => {
     const node = {
       id: 'n',
@@ -322,10 +313,8 @@ describe('hasVisibleFill', () => {
 });
 
 describe('resolveTreePostPass — transparent fill overwrite protection', () => {
-  // Regression: the post-pass heuristics that DON'T want to overwrite an
-  // explicit fill choice must respect a transparent fill the same way
-  // they respect any other color. Only the button contrast pass needs
-  // to treat transparent as "no visible fill".
+  // Regression：DON 不想覆盖显式填充选择的后通道试探必须尊重透明填充，就像尊重任何其他颜色一样。 Only
+  // 按钮对比度通道需要将透明视为“无可见填充”。
 
   it('fixOrphanContainerContrast does NOT overwrite a card with opacity: 0 fill', () => {
     const card: PenNode = {
@@ -367,9 +356,8 @@ describe('resolveTreePostPass — transparent fill overwrite protection', () => 
   });
 
   it('fixOrphanContainerContrast does NOT overwrite a card with explicit transparent fill', () => {
-    // An author wrote a card with cornerRadius + children but chose a
-    // transparent background intentionally. The orphan-contrast pass
-    // must not suddenly paint it white and add shadows.
+    // An 作者用 cornerRadius + 孩子写了一张卡片，但故意选择了透明背景。 The
+    // 孤儿对比通道不得突然将其涂成白色并添加阴影。
     const card: PenNode = {
       id: 'card',
       type: 'frame',
@@ -404,9 +392,9 @@ describe('resolveTreePostPass — transparent fill overwrite protection', () => 
       children: [card],
     } as PenNode;
     resolveTreePostPass(root, 1200);
-    // Fill is exactly what the author set — not #FFFFFF.
+    // Fill 正是作者设置的——而不是#FFFFFF。
     expect((card as any).fill).toEqual([{ type: 'solid', color: '#00000000' }]);
-    // No shadow added.
+    // 添加了 No 阴影。
     expect((card as any).effects).toBeUndefined();
   });
 
@@ -474,18 +462,15 @@ describe('resolveTreePostPass — transparent fill overwrite protection', () => 
       children,
     } as PenNode;
     resolveTreePostPass(root, 1200);
-    // The transparent hero stays transparent — alternation does not
-    // overwrite an explicit fill of any color.
+    // The 透明英雄保持透明 - 交替不会覆盖任何颜色的显式填充。
     expect((children[0] as any).fill).toEqual([{ type: 'solid', color: '#00000000' }]);
   });
 });
 
 describe('resolveTreePostPass — button foreground contrast with transparent-hex path icon', () => {
-  // The real failure the normalizeStrokeFillSchema fix had to address:
-  // an AI-generated stroke-style line icon inside a button, where the
-  // AI wrote `fill: [{color: "none"}]` and the normalizer substituted
-  // `#00000000` to preserve hollow intent. The button contrast pass
-  // must still see "no visible fill" and supply a visible stroke color.
+  // The 真正的失败，normalizeStrokeFillSchema 修复必须解决：按钮内 AI 生成的笔划样式线条图标，其中
+  // AI 写入 `fill: [{color: "none"}]`，规范化器替换 `#00000000` 以保留空洞意图。 The
+  // 按钮对比通道仍必须看到“无可见填充”并提供可见的描边颜色。
   it('paints stroke on a path icon whose fill is 8-digit transparent hex', () => {
     const button: PenNode = {
       id: 'btn',
@@ -1029,10 +1014,9 @@ describe('resolveTreePostPass — section background alternation', () => {
     expect((children[1] as any).fill).toBeUndefined();
   });
 
-  // Regression guard for 2026-04-15: when design.md forces a dark rootFrame,
-  // the hardcoded #FFFFFF/#F8FAFC alternation painted visible white strips
-  // over the dark page background. On dark pages sections must stay
-  // transparent — internal card contrast already groups them visually.
+  // 2026 年 4 月 15 日的 Regression 防护：当 design.md 强制使用深色 rootFrame 时，硬编码的
+  // #FFFFFF/#F8FAFC 交替在深色页面背景上绘制可见的白色条带。 On 深色页面部分必须保持透明 -
+  // 内部卡片对比度已经在视觉上将它们分组。
   it('does NOT alternate on a dark-themed parent (luminance < 0.5)', () => {
     const children = [
       {
@@ -1321,7 +1305,7 @@ describe('resolveTreePostPass — input sibling consistency', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Name-based role inference
+// 基于 Name 的角色推理
 // ---------------------------------------------------------------------------
 
 describe('resolveNodeRole — name-based role inference', () => {
@@ -1339,7 +1323,7 @@ describe('resolveNodeRole — name-based role inference', () => {
     } as PenNode;
     resolveNodeRole(node, ctx);
     expect(node.role).toBe('button');
-    // Button role should NOT inject a hardcoded fill color — fill comes from AI/design system
+    // Button 角色应该 NOT 注入硬编码的填充颜色 - 填充来自 AI/design 系统
     expect((node as any).fill).toBeUndefined();
   });
 
@@ -1487,7 +1471,7 @@ describe('resolveNodeRole — name-based role inference', () => {
       role: 'input',
     } as PenNode;
     resolveNodeRole(node, ctx);
-    expect(node.role).toBe('input'); // keeps explicit role, not inferred search-bar
+    expect(node.role).toBe('input'); // 保持明确的角色，而不是推断的搜索栏
   });
 
   it('does not infer role for generic names', () => {
@@ -1505,12 +1489,11 @@ describe('resolveNodeRole — name-based role inference', () => {
   });
 
   // ---------------------------------------------------------------------
-  // Regression coverage for the 2026-04-06 part-word / modifier fixes
-  // (commits 5e2e6f9, d45f1a5, f842853). These cases locked down the
-  // final behavior of ROLE_PART_WORDS / first-word-after-match scan.
-  // ---------------------------------------------------------------------
-
-  // --- "Card X" where X is a structural piece: must NOT become role=card ---
+  // Regression 2026-04-06 部分词/修饰符修复的覆盖范围
+  // （提交 5e2e6f9、d45f1a5、f842853）。 These 案件被锁定
+  // ROLE_PART_WORDS /匹配后第一个单词扫描的最终行为。
+// ---------------------------------------------------------------------
+  // --- "Card x" 其中 x 是结构片段：必须 NOT 成为 role=card ---
   it.each([
     ['Card Header'],
     ['Card Body'],
@@ -1530,12 +1513,12 @@ describe('resolveNodeRole — name-based role inference', () => {
     const node = { id: 'n', type: 'frame', name, x: 0, y: 0, width: 300, height: 60 } as PenNode;
     resolveNodeRole(node, ctx);
     expect(node.role).not.toBe('card');
-    // Must not inherit card default fill/shadow
+    // Must 不继承卡默认 fill/shadow
     expect((node as { fill?: unknown }).fill).toBeUndefined();
     expect((node as { effects?: unknown }).effects).toBeUndefined();
   });
 
-  // --- Punctuation between role word and part word still counts as part ---
+  // --- 角色词和部分词之间的 Punctuation 仍算作部分 ---
   it.each([['Card - Header'], ['Card: Body'], ['Card / Footer']])(
     'does not infer card role when punctuation separates it from part word: "%s"',
     (name) => {
@@ -1545,13 +1528,10 @@ describe('resolveNodeRole — name-based role inference', () => {
     },
   );
 
-  // --- Numeric index between role word and part word must NOT leak role ---
-  // Regression: sub-agents name nodes "Card 1 Content", "Card 2 Header",
-  // "Button 3 Label". The naive \w+ word scan grabbed the numeric "1" as
-  // the first token, missed the trailing part word, and wrongly inferred
-  // role=card on the content wrapper — which then got the white card
-  // default fill and hid all the text inside (the "Upcoming card title
-  // invisible" bug from the 2026-04-06 health-tracker dump).
+  // --- Numeric 角色词和部分词之间的索引必须 NOT 泄漏角色 --- Regression：子代理名称节点“Card 1
+  // Content”、“Card 2 Header”、“Button 3 Label”。 The 天真的 \w+
+  // 单词扫描抓取了数字“1”作为第一个标记，错过了尾随部分单词，并错误地推断出内容包装器上的 role=card -
+  // 然后得到了白卡默认填充并隐藏了其中的所有文本（来自 2026-04-06 健康跟踪器转储的“Upcoming 卡标题不可见”错误）。
   it.each([
     ['Card 1 Content'],
     ['Card 2 Header'],
@@ -1565,8 +1545,7 @@ describe('resolveNodeRole — name-based role inference', () => {
     (name) => {
       const node = { id: 'n', type: 'frame', name, x: 0, y: 0, width: 300, height: 60 } as PenNode;
       resolveNodeRole(node, ctx);
-      // The node should not inherit the card white fill + shadow. Role is
-      // either undefined or something other than card/button.
+      // The 节点不应继承卡片白色填充+阴影。 Role 未定义或不是 card/button。
       expect(node.role).not.toBe('card');
       expect(node.role).not.toBe('button');
       expect((node as { fill?: unknown }).fill).toBeUndefined();
@@ -1574,7 +1553,7 @@ describe('resolveNodeRole — name-based role inference', () => {
     },
   );
 
-  // --- Modifier BEFORE the role word: must STILL infer the role ---
+  // --- Modifier BEFORE 角色词：必须由 STILL 推断角色 ---
   it.each([
     ['Icon Button', 'button'],
     ['Primary Button', 'button'],
@@ -1591,7 +1570,7 @@ describe('resolveNodeRole — name-based role inference', () => {
     expect(node.role).toBe(expected);
   });
 
-  // --- Prepositional variants: "X with Y" means a variant of X, keep role ---
+  // --- Prepositional 变体：“x with y”表示 x 的变体，保留 --- 角色
   it.each([
     ['Card with Icon', 'card'],
     ['Card with Image', 'card'],
@@ -1606,8 +1585,8 @@ describe('resolveNodeRole — name-based role inference', () => {
     expect(node.role).toBe(expected);
   });
 
-  // --- "X Icon" / "X Label": role pattern skipped by part word, the icon
-  //     pattern (later in NAME_PATTERN_MAP) then takes over ---
+  // --- "x Icon" / "x Label"：角色模式被部分单词跳过，图标模式（稍后在 NAME_PATTERN_MAP 中）然后接管
+  // ---
   it('falls through to icon role for "Card Icon" (icon is a part word after card)', () => {
     const node = {
       id: 'n',
@@ -1638,18 +1617,16 @@ describe('resolveNodeRole — name-based role inference', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Size-sanity guard for card-family roles
+// Size-卡片系列角色的理智守卫
 // ---------------------------------------------------------------------------
 
 describe('resolveNodeRole — absurd-size guard for card-family roles', () => {
   const ctx: RoleContext = { canvasWidth: 375 };
 
   it('refuses stat-card inference on a 6×6 status dot (name "Status Dot")', () => {
-    // Regression: name-based inference saw `/\bstat/` in "Status Dot"
-    // and tagged it stat-card. That role injects padding:[24,24] +
-    // cornerRadius + shadow, inflating a 6-pixel dot into an
-    // oversized card. Guard strips the role entirely when the node
-    // is too small to plausibly be a card container.
+    // Regression：基于名称的推理在“Status Dot”中看到了 `/\bstat/` 并将其标记为统计卡。 That
+    // 角色注入 padding:[24,24] + cornerRadius + 阴影，将 6
+    // 像素点膨胀到超大卡片中。当节点太小而无法成为卡容器时，Guard 会完全剥夺该角色。
     const node = {
       id: 'dot',
       type: 'frame',
@@ -1668,8 +1645,8 @@ describe('resolveNodeRole — absurd-size guard for card-family roles', () => {
   });
 
   it('refuses card inference on a tiny swatch (width=20)', () => {
-    // A 20×20 color swatch named "Card Swatch" also shouldn't become
-    // a card — 20px is below the CARD_LIKE_MIN_DIMENSION threshold.
+    // 名为“Card Swatch”的 20×20 色样也不应该成为卡片 — 20px 低于
+    // CARD_LIKE_MIN_DIMENSION 阈值。
     const node = {
       id: 'swatch',
       type: 'frame',
@@ -1684,8 +1661,7 @@ describe('resolveNodeRole — absurd-size guard for card-family roles', () => {
   });
 
   it('refuses LLM-emitted card role on a 16×16 node (not just name-inferred)', () => {
-    // The LLM can also emit `role: "card"` directly on a tiny node.
-    // Guard applies either way.
+    // The LLM 还可以直接在小节点上发出 `role: "card"`。 Guard 无论哪种方式都适用。
     const node = {
       id: 'pill',
       type: 'frame',
@@ -1700,9 +1676,7 @@ describe('resolveNodeRole — absurd-size guard for card-family roles', () => {
   });
 
   it('applies card defaults normally on a normal-sized card (200×120)', () => {
-    // Counter-test: a real card-sized frame must still get the
-    // card defaults applied. The guard should only strip the role
-    // on tiny elements.
+    // Counter-test：真正的卡片大小的框架仍然必须应用卡片默认值。 The 防护应该只在微小元素上发挥作用。
     const node = {
       id: 'real-card',
       type: 'frame',
@@ -1719,10 +1693,8 @@ describe('resolveNodeRole — absurd-size guard for card-family roles', () => {
   });
 
   it('leaves the role alone when width/height are fill_container (unknown pixel size)', () => {
-    // When dimensions are sizing keywords we can't tell if the final
-    // render will be small, so the guard refuses to decide and the
-    // role is applied normally. This prevents the guard from
-    // accidentally stripping card roles on responsive layouts.
+    // When 尺寸是调整大小的关键字，我们无法判断最终渲染是否会很小，因此守卫拒绝决定并且角色正常应用。 This
+    // 可防止警卫意外剥离响应式布局上的卡片角色。
     const node = {
       id: 'responsive-card',
       type: 'frame',
@@ -1737,17 +1709,15 @@ describe('resolveNodeRole — absurd-size guard for card-family roles', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Page-chrome-in-card guard
+// Page-镀铬卡防护装置
 // ---------------------------------------------------------------------------
 
 describe('resolveNodeRole — page-chrome roles must not infer inside a card-family parent', () => {
   it('does NOT infer navbar from "Header" when parent is a card', () => {
-    // Regression: heart-rate card had a child named "Header" (its
-    // title row with the heart icon and "Heart Rate" label). The
-    // name `header` lexically matches NAME_EXACT_MAP → 'navbar',
-    // which then injected navbarFill (#FFFFFF on light) + bottom
-    // border, turning the inner section into a glaring white bar
-    // that didn't belong inside the dark heart-rate card.
+    // Regression：心率卡有一个名为“Header”的子项（其标题行带有心形图标和“Heart Rate”标签）。
+    // The 名称 `header` 在词法上匹配 NAME_EXACT_MAP → 'navbar'，然后注入
+    // navbarFill（#FFFFFF on light）+ 底部边框，将内部部分变成不属于黑暗心率卡内部的耀眼的白色
+    // 条。
     const node = {
       id: 'card-header',
       type: 'frame',
@@ -1777,9 +1747,8 @@ describe('resolveNodeRole — page-chrome roles must not infer inside a card-fam
   });
 
   it('STILL infers navbar from "Header" at the page top level (no card parent)', () => {
-    // Counter-test: at the page top level (no parent role, or
-    // parent is a layout container like section), "Header" still
-    // legitimately means a page navbar. Don't over-strip.
+    // Counter-test：在页面顶层（没有父角色，或者父级是类似部分的布局容器），“Header”仍然合法地表
+    // 示页面导航栏。 Don 不要过度剥离。
     const node = {
       id: 'page-header',
       type: 'frame',
@@ -1807,11 +1776,11 @@ describe('resolveNodeRole — page-chrome roles must not infer inside a card-fam
   });
 
   it('does NOT strip an EXPLICIT navbar role even when parent is a card (LLM was deliberate)', () => {
-    // Guard only applies to NAME-INFERRED page-chrome roles. If the
-    // LLM explicitly emitted `role: navbar` on a node inside a card,
-    // we trust the author intent and apply navbar defaults. (Edge
-    // case: a card containing a mini search/nav header. Probably
-    // wrong but not our place to override.)
+    // Guard 仅适用于 NAME-INFERRED page-chrome 角色。 If 的
+    // LLM 在卡内的节点上显式发出 `role: navbar`，
+    // 我们相信作者的意图并应用导航栏默认值。 (Edge
+// case: a card containing a mini search/nav header. Probably
+    // 错误，但不是我们要覆盖的地方。）
     const node = {
       id: 'explicit-nav',
       type: 'frame',
@@ -1827,14 +1796,13 @@ describe('resolveNodeRole — page-chrome roles must not infer inside a card-fam
 });
 
 // ---------------------------------------------------------------------------
-// Theme detection (resolveTreeRoles)
+// Theme 检测 (resolveTreeRoles)
 // ---------------------------------------------------------------------------
 
 describe('resolveTreeRoles — theme-aware role defaults', () => {
   it('paints navbar default with WHITE on a light page (theme inferred light)', () => {
-    // Baseline: page bg is white, the navbar role default should pick the
-    // light-theme fill (#FFFFFF). Locks in the original behavior so the
-    // theme switch is purely additive.
+    // Baseline：页面背景为白色，导航栏角色默认应选择浅色主题填充（#FFFFFF）。 Locks
+    // 在原始行为中，因此主题切换纯粹是附加的。
     const navbar = {
       id: 'nav',
       type: 'frame',
@@ -1858,11 +1826,11 @@ describe('resolveTreeRoles — theme-aware role defaults', () => {
   });
 
   it('paints navbar default with DARK fill on a dark page (theme inferred dark)', () => {
-    // The bug: a navbar with no LLM-set fill on a #111111 dark page used
-    // to inherit the hardcoded #FFFFFF default, leaving a glaring white
-    // bar across the top of the dark design. The theme detector reads
-    // the root fill, classifies the page as dark, and the navbar role
-    // function picks navbarFill('dark') = #111111.
+    // The bug：在使用的 #111111 深色页面上没有 LLM-set 填充的导航栏
+    // 继承硬编码的 #FFFFFF 默认值，留下耀眼的白色
+    // 酒吧横贯顶部的深色设计。 The 主题检测器读取
+    // 根填充，将页面分类为深色，以及导航栏角色
+// function picks navbarFill('dark') = #111111.
     const navbar = {
       id: 'nav',
       type: 'frame',
@@ -1953,10 +1921,8 @@ describe('resolveTreeRoles — theme-aware role defaults', () => {
   });
 
   it('does NOT overwrite an LLM-supplied fill (only fills missing defaults)', () => {
-    // The applyDefaults rule must still hold: if the LLM emits any fill,
-    // the resolver leaves it alone — even if theme-aware defaults would
-    // pick something else. This guards against the resolver becoming a
-    // destructive layer.
+    // The applyDefaults 规则必须仍然成立：如果 LLM 发出任何填充，解析器将不理会它 -
+    // 即使主题感知默认值会选择其他内容。 This 防止解析器成为破坏性层。
     const navbar = {
       id: 'nav',
       type: 'frame',
@@ -1993,7 +1959,7 @@ describe('resolveTreeRoles — theme-aware role defaults', () => {
       type: 'frame',
       width: 375,
       height: 800,
-      // No fill on root → defaults to light theme
+      // No 填充根 → 默认为浅色主题
       children: [navbar],
     } as unknown as PenNode;
 
@@ -2004,29 +1970,28 @@ describe('resolveTreeRoles — theme-aware role defaults', () => {
   });
 
   it('honors EXPLICIT theme override even when called on a sub-tree without its own fill', () => {
-    // Locks in the fix Codex caught: `sanitizeNodesForInsert` and
-    // `sanitizeNodesForUpsert` call `resolveTreeRoles` on an arbitrary
-    // sub-tree (a card or navbar that has no fill of its own — the LLM
-    // omitted it expecting the dark page bg to show through). Without
-    // an explicit theme parameter, theme detection would read the
-    // sub-tree root's missing fill, fall back to 'light', and stamp
-    // #FFFFFF on top of the dark page.
-    //
-    // The fix is to look up the actual page root from the document
-    // store at the call site and pass its detected theme through this
-    // last positional argument. This test simulates that path.
+    // Locks 在修复 Codex 中捕获：`sanitizeNodesForInsert` 和
+    // `sanitizeNodesForUpsert` 任意调用 `resolveTreeRoles`
+    // 子树（没有自己填充的卡片或导航栏 - LLM
+    // 省略它期望黑暗页面背景显示出来）。 Without
+    // 明确的主题参数，主题检测将读取
+    // 子树根缺少填充，回落到“光”，然后盖章
+    // #FFFFFF 在黑暗页面的顶部。
+//
+    // The 修复是从文档中查找实际的页面根目录
+    // 存储在调用站点并通过此传递检测到的主题
+    // 最后一个位置参数。 This 测试模拟该路径。
     const navbar = {
       id: 'nav-subtree',
       type: 'frame',
       role: 'navbar',
       width: 375,
       height: 56,
-      // No fill on this navbar — the LLM expected the page bg to show.
+      // No 填充此导航栏 — LLM 期望显示页面 bg。
     } as unknown as PenNode;
 
-    // Call resolveTreeRoles on the navbar DIRECTLY (no parent passed),
-    // but supply an explicit dark theme — this is what the sanitize
-    // path does after looking up the live page root.
+    // Call resolveTreeRoles 在导航栏上 DIRECTLY （没有父级传递），但提供一个明确的深色主题 -
+    // 这是清理路径在查找实时页面根目录后所做的事情。
     resolveTreeRoles(navbar, 375, undefined, undefined, undefined, false, 'dark');
 
     const fill = (navbar as unknown as { fill?: Array<{ color?: string }> }).fill;
@@ -2034,11 +1999,9 @@ describe('resolveTreeRoles — theme-aware role defaults', () => {
   });
 
   it('explicit theme override beats auto-detection from a non-page sub-tree root', () => {
-    // Stronger version of the previous test: the sub-tree root HAS a
-    // fill (e.g. a card with #1A1A1A) which auto-detection would
-    // classify as 'dark' anyway. This test makes sure the explicit
-    // 'light' override still wins, proving the explicit parameter is
-    // not silently ignored.
+    // 上一个测试的 Stronger 版本：子树根 HAS 填充（例如带有 #1a1a1a
+    // 的卡片），自动检测无论如何都会将其分类为“黑暗”。 This 测试确保显式“轻”覆盖仍然获胜，证明显式参数不会被默默
+    // 忽略。
     const card = {
       id: 'card-subtree',
       type: 'frame',
@@ -2057,7 +2020,7 @@ describe('resolveTreeRoles — theme-aware role defaults', () => {
       ],
     } as unknown as PenNode;
 
-    // Force theme = 'dark' even though the card itself looks light
+    // Force theme = 'dark' 即使卡片本身看起来很亮
     resolveTreeRoles(card, 375, undefined, undefined, undefined, false, 'dark');
 
     const innerNavbar = (card as unknown as { children: PenNode[] }).children[0];

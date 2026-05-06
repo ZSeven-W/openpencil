@@ -1,13 +1,13 @@
 // apps/web/src/services/git-client.ts
 //
-// Thin IPC wrapper around window.electronAPI.git.*. Every method forwards
-// the call to the preload bridge and rehydrates any thrown GitError from
-// the Electron-serialized marker format. Callers (the store) can then use
-// `instanceof GitError` reliably.
+// 这是对 `window.electronAPI.git.*` 的一层轻量封装。
+// 每个方法都只是把调用转发给 preload bridge，
+// 并把 Electron 侧序列化后的 `GitError` 恢复成真正的错误实例，
+// 这样上层调用方仍然可以可靠地使用 `instanceof GitError`。
 //
-// This module is stateless. The withCleanWorkingTree gate lives in the
-// store (not the client) so that a tripped gate can queue a PendingAction
-// for retry after the user saves.
+// 这个模块本身不保存状态。
+// `withCleanWorkingTree` 这类“是否允许继续操作”的门控逻辑放在 store 层，
+// 这样被拦下来的 `PendingAction` 才能在用户保存后继续重试。
 
 import { GitError, rehydrateGitError } from './git-error';
 import type {
@@ -25,10 +25,11 @@ import type {
 } from './git-types';
 
 /**
- * Lazy accessor for window.electronAPI.git. Throws if we're not running
- * inside Electron — the caller should gate on isElectron() first. The
- * defensive throw here surfaces misuse loudly (e.g. the top-bar button
- * rendered in a browser accidentally).
+ * 惰性获取 `window.electronAPI.git`。
+ * 如果当前不在 Electron 环境中就直接抛错，
+ * 调用方应该先用 `isElectron()` 做环境判断。
+ * 这里故意抛得比较早，是为了尽快暴露误用场景，
+ * 例如某个只该在桌面端出现的按钮被错误地渲染到了浏览器里。
  */
 function getApi(): GitAPI {
   if (typeof window === 'undefined' || !window.electronAPI?.git) {
@@ -42,10 +43,10 @@ function getApi(): GitAPI {
 }
 
 /**
- * Run an IPC call and rehydrate any thrown GitError. Non-GitError failures
- * (network timeouts, Electron internal errors, malformed payloads) are
- * re-thrown as-is so the store can distinguish "the backend returned a
- * known failure mode" from "something truly unexpected happened".
+ * 执行一次 IPC 调用，并把抛出的 `GitError` 恢复出来。
+ * 非 `GitError` 类型的异常（例如网络超时、Electron 内部错误、
+ * 或格式错误的返回值）会原样向上抛出，
+ * 方便 store 区分“后端返回了已知故障”与“真的出现了意外错误”。
  */
 async function invoke<T>(fn: () => Promise<T>): Promise<T> {
   try {
@@ -58,21 +59,21 @@ async function invoke<T>(fn: () => Promise<T>): Promise<T> {
 }
 
 /**
- * Public: check whether window.electronAPI.git is wired. Used by the
- * top-bar button to decide whether to render at all, and by the store's
- * boot helper to short-circuit no-op in browser mode.
+ * 对外暴露：检查 `window.electronAPI.git` 是否可用。
+ * 顶栏按钮会用它决定是否渲染，
+ * store 的启动逻辑也会用它在浏览器模式下尽早短路成 no-op。
  */
 export function isGitApiAvailable(): boolean {
   return typeof window !== 'undefined' && !!window.electronAPI?.git;
 }
 
 // ---------------------------------------------------------------------------
-// Public surface — one method per IPC channel. Each is a two-line wrapper:
-// get the api handle, forward the call through invoke().
+// 对外接口：每个 IPC 通道对应一个方法。
+// 每个方法都很薄：先拿 api，再通过 `invoke()` 转发。
 // ---------------------------------------------------------------------------
 
 export const gitClient = {
-  // ---- Detect / open / init / clone ---------------------------------------
+  // ---- 检测 / 打开 / 初始化 / 克隆 ---------------------------------------
   detect: (filePath: string) => invoke(() => getApi().detect(filePath)),
   init: (filePath: string) => invoke(() => getApi().init(filePath)),
   open: (repoPath: string, currentFilePath?: string) =>
@@ -84,14 +85,14 @@ export const gitClient = {
   listCandidates: (repoId: string) => invoke(() => getApi().listCandidates(repoId)),
   close: (repoId: string) => invoke(() => getApi().close(repoId)),
 
-  // ---- Status / log / diff -----------------------------------------------
+  // ---- 状态 / 日志 / 差异 -----------------------------------------------
   status: (repoId: string) => invoke(() => getApi().status(repoId)),
   log: (repoId: string, opts: { ref: 'main' | 'autosaves' | string; limit: number }) =>
     invoke(() => getApi().log(repoId, opts)),
   diff: (repoId: string, fromCommit: string, toCommit: string) =>
     invoke(() => getApi().diff(repoId, fromCommit, toCommit)),
 
-  // ---- Commit / restore / promote ----------------------------------------
+  // ---- 提交 / 恢复 / 提升 ----------------------------------------
   commit: (
     repoId: string,
     opts: {
@@ -109,7 +110,7 @@ export const gitClient = {
     author: { name: string; email: string },
   ) => invoke(() => getApi().promote(repoId, autosaveHash, message, author)),
 
-  // ---- Branches ----------------------------------------------------------
+  // ---- 分支 ----------------------------------------------------------
   branchList: (repoId: string) => invoke(() => getApi().branchList(repoId)),
   branchCreate: (repoId: string, opts: { name: string; fromCommit?: string }) =>
     invoke(() => getApi().branchCreate(repoId, opts)),
@@ -119,30 +120,30 @@ export const gitClient = {
   branchMerge: (repoId: string, fromBranch: string) =>
     invoke(() => getApi().branchMerge(repoId, fromBranch)),
 
-  // ---- Merge orchestration -----------------------------------------------
+  // ---- 合并编排 -----------------------------------------------
   resolveConflict: (repoId: string, conflictId: string, choice: GitConflictResolution) =>
     invoke(() => getApi().resolveConflict(repoId, conflictId, choice)),
   applyMerge: (repoId: string) => invoke(() => getApi().applyMerge(repoId)),
   abortMerge: (repoId: string) => invoke(() => getApi().abortMerge(repoId)),
 
-  // ---- Phase 4a: author identity probe -----------------------------------
+  // ---- Phase 4a：探测作者身份 -----------------------------------
   getSystemAuthor: () => invoke(() => getApi().getSystemAuthor()),
 
-  // ---- Remote ------------------------------------------------------------
+  // ---- 远程仓库 ------------------------------------------------------------
   fetch: (repoId: string, auth?: GitAuthCreds) => invoke(() => getApi().fetch(repoId, auth)),
   pull: (repoId: string, auth?: GitAuthCreds) => invoke(() => getApi().pull(repoId, auth)),
   push: (repoId: string, auth?: GitAuthCreds) => invoke(() => getApi().push(repoId, auth)),
 
-  // ---- Phase 6a: remote metadata + config (no network) -------------------
+  // ---- Phase 6a：远程元数据 + 配置（无网络） -------------------
   remoteGet: (repoId: string) => invoke(() => getApi().remoteGet(repoId)),
   remoteSet: (repoId: string, url: string | null) => invoke(() => getApi().remoteSet(repoId, url)),
 
-  // ---- Auth --------------------------------------------------------------
+  // ---- 认证 --------------------------------------------------------------
   authStore: (host: string, creds: GitAuthCreds) => invoke(() => getApi().authStore(host, creds)),
   authGet: (host: string) => invoke(() => getApi().authGet(host)),
   authClear: (host: string) => invoke(() => getApi().authClear(host)),
 
-  // ---- SSH keys ----------------------------------------------------------
+  // ---- SSH 密钥 ----------------------------------------------------------
   sshListKeys: () => invoke(() => getApi().sshListKeys()),
   sshGenerateKey: (opts: { host: string; comment: string }) =>
     invoke(() => getApi().sshGenerateKey(opts)),
@@ -151,8 +152,7 @@ export const gitClient = {
   sshDeleteKey: (keyId: string) => invoke(() => getApi().sshDeleteKey(keyId)),
 };
 
-// Re-export the types most consumers need, so importing sites don't also
-// need to pull from git-types.
+// 重新导出大多数消费者会用到的类型，避免导入点再去单独引用 `git-types`。
 export type {
   GitRepoOpenInfo,
   GitStatusInfo,

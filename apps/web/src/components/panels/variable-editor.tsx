@@ -14,7 +14,7 @@ export interface VariableEditorProps {
   ensureThemes: () => void;
 }
 
-/** Footer bar with the "Add variable" button and type-selection dropdown. */
+/** Footer 栏，带有“Add 变量”按钮和类型选择下拉列表。 */
 export default function VariableEditor({
   variables,
   themes,

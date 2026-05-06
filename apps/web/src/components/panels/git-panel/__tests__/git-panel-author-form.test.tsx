@@ -1,4 +1,4 @@
-// @vitest-environment jsdom
+// @vitest-环境 jsdom
 // apps/web/src/components/panels/git-panel/__tests__/git-panel-author-form.test.tsx
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, fireEvent, cleanup } from '@testing-library/react';
@@ -42,7 +42,7 @@ describe('GitPanelAuthorForm', () => {
     const submitButton = screen.getByText('git.author.submit');
     fireEvent.click(submitButton);
 
-    // Allow async handler to settle.
+    // Allow 异步处理程序要解决。
     await Promise.resolve();
     await Promise.resolve();
 
@@ -54,17 +54,17 @@ describe('GitPanelAuthorForm', () => {
   it('rejects empty name or invalid email and does not call setAuthorIdentity', async () => {
     render(<GitPanelAuthorForm />);
 
-    // Submit with empty fields.
+    // Submit 带有空字段。
     fireEvent.click(screen.getByText('git.author.submit'));
     await Promise.resolve();
     expect(setAuthorIdentityMock).not.toHaveBeenCalled();
     expect(hideAuthorPromptMock).not.toHaveBeenCalled();
 
-    // Validation errors visible.
+    // Validation 错误可见。
     expect(screen.getByText('git.author.validationName')).toBeTruthy();
     expect(screen.getByText('git.author.validationEmail')).toBeTruthy();
 
-    // Fill name only, leave email invalid.
+    // Fill 仅姓名，电子邮件无效。
     fireEvent.change(screen.getByLabelText('git.author.nameLabel'), { target: { value: 'Bob' } });
     fireEvent.change(screen.getByLabelText('git.author.emailLabel'), {
       target: { value: 'no-at-sign' },

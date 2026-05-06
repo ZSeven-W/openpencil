@@ -20,7 +20,7 @@ export default function ComponentBrowserCard({ component, kit }: ComponentBrowse
     const kitNode = findReusableNode(kit.document, component.id);
     if (!kitNode) return;
 
-    // Copy referenced variables from the kit document
+    // Copy 引用了套件文档中的变量
     if (kit.document.variables) {
       const refs = collectVariableRefs(kitNode);
       const { setVariable } = useDocumentStore.getState();
@@ -33,13 +33,13 @@ export default function ComponentBrowserCard({ component, kit }: ComponentBrowse
       }
     }
 
-    // Deep clone with new IDs, remove reusable flag so it's standalone
+    // Deep 克隆新的 IDs，删除可重用标志，使其成为独立的
     const cloned = cloneNodeWithNewIds(deepCloneNode(kitNode));
     if ('reusable' in cloned) {
       delete (cloned as unknown as Record<string, unknown>).reusable;
     }
 
-    // Place at viewport center
+    // Place 位于视口中心
     const { width: canvasW, height: canvasH } = getCanvasSize();
     const centerX = (-viewport.panX + canvasW / 2) / viewport.zoom;
     const centerY = (-viewport.panY + canvasH / 2) / viewport.zoom;

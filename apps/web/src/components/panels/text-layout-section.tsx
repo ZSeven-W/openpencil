@@ -127,11 +127,11 @@ export default function TextLayoutSection({ node, onUpdate }: TextLayoutSectionP
     onUpdate(updates as Partial<PenNode>);
   };
 
-  // Always show dimensions — read-only when not directly editable
+  // Always 显示尺寸 — 不可直接编辑时为只读
   const canEditWidth = resizing !== 'auto' && !fillWidth && numericWidth !== undefined;
   const canEditHeight =
     resizing === 'fixed-width-height' && !fillHeight && numericHeight !== undefined;
-  // Display value: prefer numeric, fallback to extracted size from fill_container(N)
+  // Display 值：更喜欢数字，后备从 fill_container(N) 提取的大小
   const displayW = numericWidth ?? fallbackW;
   const displayH = numericHeight ?? fallbackH;
 
@@ -139,7 +139,7 @@ export default function TextLayoutSection({ node, onUpdate }: TextLayoutSectionP
     <div className="space-y-1.5">
       <SectionHeader title={t('textLayout.title')} />
 
-      {/* Dimensions — always visible, read-only when auto/fill */}
+      {/* Dimensions — 始终可见，当 auto/fill 时只读 */}
       <div>
         <span className="text-[10px] text-muted-foreground mb-1 block">
           {t('textLayout.dimensions')}
@@ -186,7 +186,7 @@ export default function TextLayoutSection({ node, onUpdate }: TextLayoutSectionP
         </div>
       )}
 
-      {/* Resizing mode */}
+      {/* Resizing 模式 */}
       <div>
         <span className="text-[10px] text-muted-foreground mb-1 block">
           {t('textLayout.resizing')}

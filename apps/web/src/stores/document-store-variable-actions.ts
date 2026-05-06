@@ -42,7 +42,7 @@ export function createVariableActions(
       useHistoryStore.getState().pushState(state.document);
       const { [name]: _removed, ...rest } = vars;
       const activeTheme = getDefaultTheme(state.document.themes);
-      // Replace variable refs across all pages
+      // Replace 所有页面的变量引用
       const doc = state.document;
       if (doc.pages && doc.pages.length > 0) {
         const newPages = doc.pages.map((p) => ({
@@ -80,7 +80,7 @@ export function createVariableActions(
       const { [oldName]: _removed, ...rest } = vars;
       const newVars = { ...rest, [newName]: def };
       const activeTheme = getDefaultTheme(state.document.themes);
-      // Rename variable refs across all pages
+      // Rename 所有页面的变量引用
       const doc = state.document;
       if (doc.pages && doc.pages.length > 0) {
         const newPages = doc.pages.map((p) => ({

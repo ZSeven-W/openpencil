@@ -9,21 +9,21 @@ interface RTreeItem {
   maxY: number;
   nodeId: string;
   renderNode: RenderNode;
-  /** Position in the render array — higher = rendered later = visually on top */
+  /** 渲染数组中的 Position — 较高 = 稍后渲染 = 视觉上位于顶部 */
   zIndex: number;
 }
 
 /**
- * Spatial index for fast hit testing using R-tree.
- * Nodes are indexed with their render order so hit results
- * are sorted topmost-first (children before parents).
+ * Spatial 使用 r
+ * 树进行快速命中测试的索引。 Nodes 按其渲染顺序进行索引，因此命中结果按最上面的顺序排序（子
+ * 项在父项之前）。
  */
 export class SpatialIndex {
   private tree = new RBush<RTreeItem>();
   private items = new Map<string, RTreeItem>();
 
   /**
-   * Rebuild the entire index from a list of render nodes.
+   * Rebuild 渲染节点列表中的整个索引。
    */
   rebuild(nodes: RenderNode[]) {
     this.tree.clear();
@@ -52,8 +52,8 @@ export class SpatialIndex {
   }
 
   /**
-   * Find all nodes that contain the given scene point.
-   * Returns nodes sorted by z-order: topmost (highest zIndex) first.
+   * Find 包含给定场景点
+   * 的所有节点。 Returns 节点按 z 顺序排序：最上面（最高的 zIndex）首先。
    */
   hitTest(sceneX: number, sceneY: number): RenderNode[] {
     const candidates = this.tree.search({
@@ -63,13 +63,13 @@ export class SpatialIndex {
       maxY: sceneY,
     });
 
-    // Sort by zIndex descending — children (rendered later) come first
+    // Sort by zIndex 降序 — 子项（稍后渲染）先行
     candidates.sort((a, b) => b.zIndex - a.zIndex);
     return candidates.map((c) => c.renderNode).filter((rn) => isPointHittableRenderNode(rn));
   }
 
   /**
-   * Find all nodes that intersect with a rectangle (for marquee selection).
+   * Find 与矩形相交的所有节点（用于选取框选择）。
    */
   searchRect(left: number, top: number, right: number, bottom: number): RenderNode[] {
     const candidates = this.tree.search({
@@ -82,7 +82,7 @@ export class SpatialIndex {
   }
 
   /**
-   * Get the render node for a specific node ID.
+   * Get 特定节点 ID 的渲染节点。
    */
   get(nodeId: string): RenderNode | undefined {
     return this.items.get(nodeId)?.renderNode;

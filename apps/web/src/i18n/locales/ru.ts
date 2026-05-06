@@ -61,7 +61,7 @@ const ru: TranslationKeys = {
   'topbar.connected': 'подключено',
   'topbar.agentStatus': '{{agents}} агент{{agentSuffix}} · {{mcp}} MCP',
 
-  // ── Панель Git ──
+  // ── панель Git ──
   'git.openPanel': 'Открыть панель Git',
   'git.closePanel': 'Закрыть панель Git',
   'git.title': 'Git · {{fileName}}',
@@ -85,7 +85,7 @@ const ru: TranslationKeys = {
   'git.conflict.banner.continue': 'Продолжить',
   'git.conflict.banner.finalizeError': 'Не удалось применить: {{message}}',
   'git.conflict.banner.pollError': 'Опрос статуса приостановлен из-за ошибки: {{message}}',
-  // placeholder — future localization
+  // placeholder — 未来的本地化
   'git.conflict.banner.reopenMessage':
     'Панель была открыта повторно в процессе слияния — пожалуйста, прервите и повторите pull.',
 
@@ -121,7 +121,7 @@ const ru: TranslationKeys = {
   'git.error.retry': 'Повторить',
   'git.error.title': 'Что-то пошло не так',
 
-  // ── Пустое состояние Git ──
+  // ── пустое состояние Git ──
   'git.empty.heading': 'История версий ещё не создана',
   'git.empty.optional': 'Git необязателен — можно пропустить',
   'git.empty.requireSavedFile': 'Сначала сохраните файл .op, чтобы включить историю',
@@ -132,7 +132,7 @@ const ru: TranslationKeys = {
   'git.empty.cloneCard': 'Клонировать',
   'git.empty.cloneCardDescription': 'Из удалённого',
 
-  // ── Форма автора Git ──
+  // ── форма автора Git ──
   'git.author.heading': 'Автор коммита',
   'git.author.subheading': 'Для первого коммита нужно имя и email',
   'git.author.nameLabel': 'Имя',
@@ -144,7 +144,7 @@ const ru: TranslationKeys = {
   'git.author.validationName': 'Имя обязательно',
   'git.author.validationEmail': 'Требуется действительный email',
 
-  // ── Выбор файла Git (Phase 4b) ──
+  // ── выбор файла Git (Phase 4b) ──
   'git.picker.heading': '{{count}} файлов .op в этом репозитории:',
   'git.picker.milestoneCount': '{{count}} вех',
   'git.picker.noHistory': 'Нет истории',
@@ -157,12 +157,12 @@ const ru: TranslationKeys = {
   'git.picker.empty.body': 'Панель Git требует хотя бы один файл .op.',
   'git.picker.empty.close': 'Закрыть панель',
 
-  // ── Баннер автопривязки (Phase 4b) ──
+  // ── баннер автопривязки (Phase 4b) ──
   'git.autoBind.confirmHeading': 'Найден {{fileName}} — открыть?',
   'git.autoBind.openButton': 'Открыть',
   'git.autoBind.dismissButton': 'Пропустить',
 
-  // ── Относительное время (Phase 4b) ──
+  // ── относительное время (Phase 4b) ──
   'git.relativeTime.justNow': 'только что',
   'git.relativeTime.minutesAgo': '{{count}}м назад',
   'git.relativeTime.hoursAgo': '{{count}}ч назад',
@@ -216,7 +216,7 @@ const ru: TranslationKeys = {
   'git.autosave.messagePrefix': 'auto',
   'git.autosave.messageDiffSuffix': '',
 
-  // ── Git Выбор ветки (Phase 5) ──
+  // ── Git выбор ветки (Phase 5) ──
   'git.branch.listHeading': 'Ветки',
   'git.branch.createAction': 'Новая ветка',
   'git.branch.createPlaceholder': 'feature/login-redesign',
@@ -287,7 +287,7 @@ const ru: TranslationKeys = {
   'git.push.rejectedPull': 'Выполнить pull',
   'git.remote.dismissError': 'Закрыть',
 
-  // ── Git Настройки удалённого (Phase 6c) ──
+  // ── Git настройки удалённого (Phase 6c) ──
   'git.remote.settingsLabel': 'Настройки удалённого',
   'git.remote.settingsHeading': 'Удалённый',
   'git.remote.back': 'Назад',
@@ -345,7 +345,7 @@ const ru: TranslationKeys = {
   'git.ssh.genericGuidance':
     'Скопируйте публичный ключ и добавьте его в настройки SSH-ключей вашего Git-провайдера.',
 
-  // ── Git Форма аутентификации (Phase 6b) ──
+  // ── Git форма аутентификации (Phase 6b) ──
   'git.auth.formLabel': 'Учётные данные Git',
   'git.auth.heading': 'Аутентификация на {{host}}',
   'git.auth.headingUnknown': 'Аутентификация с этим удалённым',

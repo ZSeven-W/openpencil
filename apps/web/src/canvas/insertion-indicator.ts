@@ -1,7 +1,7 @@
 // ---------------------------------------------------------------------------
-// Shared insertion indicator + container highlight state
-// Used by layout-reorder.ts and drag-into-layout.ts, rendered by
-// use-layout-indicator.ts.
+// Shared 插入指示器 + 容器突出显示状态
+// Used 由 layout-reorder.ts 和 drag-into-layout.ts 渲染，由
+// use-layout-indicator.ts。
 // ---------------------------------------------------------------------------
 
 export interface InsertionIndicator {

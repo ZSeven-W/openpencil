@@ -1,4 +1,4 @@
-// @vitest-environment jsdom
+// @vitest-环境 jsdom
 // apps/web/src/components/panels/git-panel/__tests__/git-panel-conflict-json-editor.test.tsx
 
 import { describe, it, expect, afterEach, vi } from 'vitest';
@@ -10,7 +10,7 @@ vi.mock('react-i18next', () => ({
   }),
 }));
 
-// Stub Button to render a plain button
+// Stub Button 渲染普通按钮
 vi.mock('@/components/ui/button', () => ({
   Button: ({
     children,
@@ -131,10 +131,10 @@ describe('GitPanelConflictJsonEditor — field mode', () => {
         onCancel={vi.fn()}
       />,
     );
-    // Initially invalid
+    // Initially 无效
     expect((screen.getByTestId('conflict-json-apply') as HTMLButtonElement).disabled).toBe(true);
 
-    // User types valid JSON
+    // User 类型有效 JSON
     fireEvent.change(screen.getByTestId('conflict-json-textarea'), {
       target: { value: '"fixed"' },
     });

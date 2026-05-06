@@ -3,7 +3,7 @@
 import pkg from '../package.json';
 import { setPretty, output, outputError } from './output';
 
-// --- Arg parsing ---
+// --- Arg 解析 ---
 
 interface ParsedArgs {
   command: string;

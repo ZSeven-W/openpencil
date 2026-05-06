@@ -1,4 +1,4 @@
-// @vitest-environment jsdom
+// @vitest-环境 jsdom
 // apps/web/src/components/panels/git-panel/__tests__/git-panel-history-list.test.tsx
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, fireEvent, cleanup } from '@testing-library/react';
@@ -17,7 +17,7 @@ const mocks = vi.hoisted(() => ({
     name: string;
     email: string;
   } | null,
-  // Phase 7b: computeDiff is used by GitPanelHistoryDiff inside expanded rows.
+  // Phase 7b：computeDiff 由 GitPanelHistoryDiff 在扩展行内使用。
   computeDiff: vi.fn(async () => ({
     summary: { framesChanged: 0, nodesAdded: 0, nodesRemoved: 0, nodesModified: 0 },
     patches: [],

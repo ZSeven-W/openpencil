@@ -21,7 +21,7 @@ export type {
 export type { PenNode, SizingBehavior };
 export type { TreeNode };
 
-// Icon lookup is injectable — set via setIconLookup() from the host app
+// Icon 查找是可注入的 — 通过主机应用程序中的 setIconLookup() 设置
 export interface IconLookupResult {
   d: string;
   iconId?: string;
@@ -30,7 +30,7 @@ export interface IconLookupResult {
 
 let _lookupIconByName: ((name: string) => IconLookupResult | null) | null = null;
 
-/** Set the icon lookup function (provided by host app's icon-resolver). */
+/** Set 图标查找功能（由主机应用程序的图标解析器提供）。 */
 export function setIconLookup(fn: (name: string) => IconLookupResult | null): void {
   _lookupIconByName = fn;
 }
@@ -41,7 +41,7 @@ export function lookupIconByName(name: string): IconLookupResult | null {
 
 export interface ConversionContext {
   componentMap: Map<string, string>;
-  /** SYMBOL TreeNodes keyed by figma GUID — includes internal canvases for instance inlining */
+  /** SYMBOL TreeNodes 由 Figma GUID 键入 — 包括内部画布，例如内联 */
   symbolTree: Map<string, TreeNode>;
   warnings: string[];
   generateId: () => string;
@@ -49,7 +49,7 @@ export interface ConversionContext {
   layoutMode: FigmaImportLayoutMode;
 }
 
-// --- Size resolution ---
+// --- Size 分辨率 ---
 
 export function resolveWidth(
   figma: FigmaNodeChange,
@@ -69,23 +69,20 @@ export function resolveHeight(
   return mapHeightSizing(figma, parentStackMode);
 }
 
-// --- Common property extraction ---
+// --- Common 属性提取 ---
 
 export function extractPosition(figma: FigmaNodeChange): { x: number; y: number } {
   if (!figma.transform) return { x: 0, y: 0 };
 
   const m = figma.transform;
 
-  // Detect rotation or flip: any non-identity 2×2 sub-matrix means
-  // m02/m12 is NOT the top-left corner of the bounding box.
+  // Detect 旋转或翻转：任何非恒等 2×2 子矩阵意味着 m02/m12 是 NOT 边界框的左上角。
   const hasRotation = Math.abs(m.m01) > 0.001 || Math.abs(m.m10) > 0.001;
   const hasFlip = m.m00 < -0.001 || m.m11 < -0.001;
 
   if ((hasRotation || hasFlip) && figma.size) {
-    // Figma's m02/m12 gives where local origin (0,0) maps in parent space.
-    // For rotated/flipped nodes this differs from the pre-transform top-left
-    // that OpenPencil needs.  Compute the object center (invariant under
-    // rotation/flip) and derive the pre-transform top-left from it.
+    // Figma 的 m02/m12 给出局部原点 (0,0) 在父空间中的映射位置。 For rotated/flipped 节点，这与
+    // OpenPencil 所需的预变换左上角不同。 Compute 对象中心（在 rotation/flip 下不变）并从中导出左上角的预变换。
     const w = figma.size.x;
     const h = figma.size.y;
     const cx = (m.m00 * w) / 2 + (m.m01 * h) / 2 + m.m02;
@@ -110,7 +107,7 @@ export function normalizeAngle(deg: number): number {
 
 export function extractRotation(transform?: FigmaMatrix): number | undefined {
   if (!transform) return undefined;
-  // Use abs(m00) to ignore horizontal flip (which is handled separately as flipX)
+  // Use abs(m00) 忽略水平翻转（作为 flipX 单独处理）
   const angle = Math.atan2(transform.m10, Math.abs(transform.m00)) * (180 / Math.PI);
   const rounded = Math.round(angle);
   return rounded !== 0 ? rounded : undefined;
@@ -119,11 +116,10 @@ export function extractRotation(transform?: FigmaMatrix): number | undefined {
 export function extractFlip(transform?: FigmaMatrix): { flipX?: boolean; flipY?: boolean } {
   if (!transform) return {};
   const result: { flipX?: boolean; flipY?: boolean } = {};
-  // Determinant sign of the 2x2 rotation/scale sub-matrix detects reflection
-  // m00*m11 - m01*m10 < 0 means a single-axis flip
+  // Determinant 2x2 rotation/scale 子矩阵的符号检测到反射 m00*m11 - m01*m10 < 0 表示单轴翻转
   const det = transform.m00 * transform.m11 - transform.m01 * transform.m10;
   if (det < -0.001) {
-    // Check which axis is flipped by looking at the scale signs
+    // Check 通过查看刻度符号来翻转哪个轴
     if (transform.m00 < 0) result.flipX = true;
     else result.flipY = true;
   }
@@ -177,7 +173,7 @@ export function commonProps(
   };
 }
 
-// --- Image helpers ---
+// --- Image 助手 ---
 
 export function figmaFillColor(figma: FigmaNodeChange): string | undefined {
   const paint = figma.fillPaints?.find((f) => f.visible !== false && f.type === 'SOLID');

@@ -29,5 +29,5 @@ export {
   historyToPromptString,
 } from './memory/generation-history';
 
-// Diagnostics (pure detectors for design quality issues)
+// Diagnostics（设计质量问题的纯检测器）
 export * from './diagnostics';

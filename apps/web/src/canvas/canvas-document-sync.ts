@@ -3,11 +3,11 @@ import { useCanvasStore } from '@/stores/canvas-store';
 import { getActivePageChildren } from '@/stores/document-tree-utils';
 
 /**
- * Subscribe to the active page's children array reference.
- * Calls `onSync` only when the children reference changes (not on
- * unrelated store mutations like fileName or isDirty).
+ * Subscribe
+ * 到活动页面的子数组引用。 Calls `onSync` 仅当子级引用更改时（不适用于不相关的存储突变，如
+ * fileName 或 isDirty）。 Returns 取消订阅功能。
  *
- * Returns an unsubscribe function.
+ *
  */
 export function subscribeToActivePageChildren(onSync: () => void): () => void {
   let prevChildren = getActivePageChildren(

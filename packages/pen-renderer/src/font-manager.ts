@@ -1,16 +1,16 @@
 import type { TypefaceFontProvider, CanvasKit } from 'canvaskit-wasm';
 
 export interface FontManagerOptions {
-  /** Base URL for bundled font files. Default: '/fonts/' */
+  /** Base URL 用于捆绑字体文件。 Default: '/字体/' */
   fontBasePath?: string;
-  /** Custom Google Fonts CSS endpoint. Default: 'https://fonts.googleapis.com/css2' */
+  /** Custom Google Fonts CSS 端点。 Default: 'https://fonts.googleapis.com/css2' */
   googleFontsCssUrl?: string;
 }
 
-/** Permission state for the native font access (Local Font Access API) */
+/** 本机字体访问的 Permission 状态 (Local Font Access API) */
 export type NativeFontPermission = 'prompt' | 'granted' | 'denied' | 'unavailable';
 
-/** Native font entry from the Local Font Access API with blob accessor */
+/** 来自 Local Font Access API 的 Native 字体条目（带有 blob 访问器） */
 interface NativeFontEntry {
   family: string;
   fullName: string;
@@ -20,8 +20,8 @@ interface NativeFontEntry {
 }
 
 /**
- * Bundled font files (relative paths, prepended with fontBasePath at load time).
- * Key = lowercase family name, values = relative file names.
+ * Bundled
+ * 字体文件（相对路径，在加载时以 fontBasePath 开头）。 Key = 小写家族名称，值 = 相对文件名。
  */
 const BUNDLED_FONTS: Record<string, string[]> = {
   inter: [
@@ -66,7 +66,7 @@ const BUNDLED_FONTS: Record<string, string[]> = {
   ],
 };
 
-/** List of all bundled font family names (for UI font picker) */
+/** 所有捆绑字体系列名称的 List（用于 UI 字体选择器） */
 export const BUNDLED_FONT_FAMILIES = [
   'Inter',
   'Noto Sans SC',
@@ -83,38 +83,39 @@ export const BUNDLED_FONT_FAMILIES = [
 ];
 
 /**
- * Manages font loading for CanvasKit's Paragraph API (vector text rendering).
+ * Manages 的
  *
- * Fonts are loaded from a configurable base path first, falling back to
- * Google Fonts CDN. Once loaded, text is rendered as true vector glyphs.
+ * CanvasKit 的 Paragraph API 字体加载（矢量文本渲染）。首先从可配置的基本路径加载 Fonts，然后回退到 Google
+ * Fonts CDN。
+ Once 加载后，文本呈现为真正的矢量字形。
  */
 export class SkiaFontManager {
   private provider: TypefaceFontProvider;
   private fontBasePath: string;
   private googleFontsCssUrl: string;
-  /** Registered family names (lowercase) -> true once loaded */
+  /** Registered 姓氏（小写）-> 加载后为 true */
   private loadedFamilies = new Set<string>();
-  /** Font families that failed to load */
+  /** 无法加载的 Font 系列 */
   private failedFamilies = new Set<string>();
-  /** System fonts that render via bitmap */
+  /** System 通过位图渲染的字体 */
   private systemFontFamilies = new Set<string>();
-  /** In-flight font fetch promises to avoid duplicate requests */
+  /** In-flight 字体获取承诺避免重复请求 */
   private pendingFetches = new Map<string, Promise<boolean>>();
-  /** Cached set of native (OS-installed) font families from Local Font Access API (lowercase) */
+  /** Cached 来自 Local Font Access API （小写）的原生（OS 安装）字体系列集 */
   private nativeFontSet: Set<string> | null = null;
-  /** Full native font entries with blob accessors, keyed by lowercase family name */
+  /** Full 带有 blob 访问器的本机字体条目，由小写家族名称键控 */
   private nativeFontMap = new Map<string, NativeFontEntry[]>();
-  /** Current permission state for native font access (Local Font Access API) */
+  /** Current 本机字体访问的权限状态 (Local Font Access API) */
   nativeFontPermission: NativeFontPermission = 'prompt';
 
   constructor(ck: CanvasKit, options?: FontManagerOptions) {
     this.provider = ck.TypefaceFontProvider.Make();
     this.fontBasePath = options?.fontBasePath ?? '/fonts/';
-    // Ensure trailing slash
+    // Ensure 尾部斜杠
     if (!this.fontBasePath.endsWith('/')) this.fontBasePath += '/';
     this.googleFontsCssUrl = options?.googleFontsCssUrl ?? 'https://fonts.googleapis.com/css2';
 
-    // Check initial permission state (non-blocking)
+    // Check 初始权限状态（非阻塞）
     this._checkPermissionState();
   }
 
@@ -122,38 +123,40 @@ export class SkiaFontManager {
     return this.provider;
   }
 
-  /** Number of in-flight font load promises. */
+  /** Number 的飞行中字体加载承诺。 */
   pendingCount(): number {
     return this.pendingFetches.size;
   }
 
   /**
-   * Wait for every currently pending font fetch to settle.
-   * Used by SkiaEngine.waitForSettled to coordinate readback timing.
+   * Wait 用于每个当前待
+   * 处理的字体获取以进行解决。 Used 通过 SkiaEngine.waitForSettled
+   来协调读回时序。
    */
   async flushPending(): Promise<void> {
     const snapshot = Array.from(this.pendingFetches.values());
     await Promise.all(snapshot.map((p) => p.catch(() => false)));
   }
 
-  /** Check if a font family is ready for use */
+  /** Check 如果字体系列可供使用 */
   isFontReady(family: string): boolean {
     return this.loadedFamilies.has(family.toLowerCase());
   }
 
-  /** Check if a font family is bundled (available offline) */
+  /** Check 如果捆绑了字体系列（可离线使用） */
   isBundled(family: string): boolean {
     return family.toLowerCase() in BUNDLED_FONTS;
   }
 
-  /** Check if a font is a system font that should use bitmap rendering */
+  /** Check 如果字体是应使用位图渲染的系统字体 */
   isSystemFont(family: string): boolean {
     return this.systemFontFamilies.has(family.toLowerCase()) || isSystemFont(family);
   }
 
   /**
-   * Build a font fallback chain for the Paragraph API.
-   * Only includes fonts actually registered in the TypefaceFontProvider.
+   * Build Paragr
+   * aph API 的字体后备链。 Only 包括实际在 TypefaceFontProvider
+   中注册的字体。
    */
   getFallbackChain(primaryFamily: string): string[] {
     const chain: string[] = [];
@@ -176,7 +179,7 @@ export class SkiaFontManager {
   }
 
   /**
-   * Check if there's at least one loaded fallback font for the given primary family.
+   * Check 如果给定的主要系列至少有一种加载的后备字体。
    */
   hasAnyFallback(primaryFamily: string): boolean {
     const key = primaryFamily.toLowerCase();
@@ -184,7 +187,7 @@ export class SkiaFontManager {
     return this.loadedFamilies.has('inter') || this.loadedFamilies.has('noto sans sc');
   }
 
-  /** Register a font from raw ArrayBuffer data */
+  /** Register 来自原始 ArrayBuffer 数据的字体 */
   registerFont(data: ArrayBuffer, familyName: string): boolean {
     try {
       this.provider.registerFont(data, familyName);
@@ -197,8 +200,9 @@ export class SkiaFontManager {
   }
 
   /**
-   * Ensure a font family is loaded. Tries bundled fonts first, then native
-   * fonts (Local Font Access API + canvas heuristic), then Google Fonts CDN.
+   * Ensure 加载字体系
+   * 列。首先是 Tries 捆绑字体，然后是本机字体（Local Font Access API + canvas 启发式），然后是
+   Google Fonts CDN。
    */
   async ensureFont(family: string, weights: number[] = [400, 500, 600, 700]): Promise<boolean> {
     const key = family.toLowerCase();
@@ -225,7 +229,7 @@ export class SkiaFontManager {
   }
 
   /**
-   * Load multiple font families concurrently.
+   * Load 同时使用多个字体系列。
    */
   async ensureFonts(families: string[]): Promise<Set<string>> {
     const unique = [...new Set(families.map((f) => f.trim()).filter(Boolean))];
@@ -238,11 +242,11 @@ export class SkiaFontManager {
   }
 
   /**
-   * Request native font access from the user via the Local Font Access API.
-   * Must be called from a user gesture context (click handler) for the
-   * browser to show the permission prompt.
+   * 用户通过 Local
+   * Font Access API 访问 Request 本机字体。 Must 从用户手势上下文（单击处理程序）中调用，以便浏览器显示权限提示。
+   * Returns 如果授予访问权限并且枚举字体，则为 true。
    *
-   * Returns true if access was granted and fonts were enumerated.
+   *
    */
   async requestNativeFontAccess(): Promise<boolean> {
     if (typeof window === 'undefined') {

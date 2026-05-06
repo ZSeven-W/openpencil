@@ -1,7 +1,7 @@
 /**
- * Minimal type declarations for @opencode-ai/sdk.
- * The package's export map points to non-existent paths (dist/ vs dist/src/).
- * A postinstall script patches this, but we keep declarations as fallback.
+ * @opencode-ai
+ * /sdk 的 Minimal 类型声明。 The 包的导出映射指向不存在的路径（dist/ 与
+ * dist/src/）。安装后脚本对此进行了修补，但我们保留声明作为后备。
  */
 
 interface OpencodeClient {

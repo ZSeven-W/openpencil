@@ -9,11 +9,11 @@ export interface LoadCanvasKitOptions {
 }
 
 /**
- * Load CanvasKit WASM singleton. Returns the same instance on subsequent calls.
+ * Load CanvasKit WASM 单例。 Returns 后续调用中的同一实例。
  *
- * @param locateFileOrOptions - Base path string (e.g. '/canvaskit/'), a resolver
+ * @param locateFileOrOptions - Base 路径字符串（例如“/canvaskit/”），解析器
  *   function `(file: string) => string`, or a `LoadCanvasKitOptions` object.
- *   Defaults to '/canvaskit/'.
+ * Defaults 到“/canvaskit/”。
  */
 export async function loadCanvasKit(
   locateFileOrOptions?: string | ((file: string) => string) | LoadCanvasKitOptions,

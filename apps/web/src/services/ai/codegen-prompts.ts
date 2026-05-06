@@ -9,8 +9,8 @@ function loadSkill(name: string): string {
 }
 
 /**
- * Strip fields that don't influence code generation. Keeps request bodies small
- * enough that proxies don't reject them with 403/413, and reduces input tokens.
+ * Strip 不影响代码生
+ * 成的字段。 Keeps 请求主体足够小，代理不会使用 403/413 拒绝它们，并减少输入令牌。
  */
 function stripNoise(input: unknown): unknown {
   if (Array.isArray(input)) return input.map(stripNoise);
@@ -18,12 +18,10 @@ function stripNoise(input: unknown): unknown {
   const obj = input as Record<string, unknown>;
   const out: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(obj)) {
-    // Drop fields the generator doesn't need:
-    //  - id (model picks its own names)
-    //  - parentId / pageId (tree structure is implicit in nesting)
-    //  - x/y on auto-layout children (layout engine positions them)
-    //  - effects we typically can't translate (skip noisy nested props)
-    //  - rotation/opacity/visible when default
+    // Drop 生成器不需要的字段： - id （模型选择自己的名称） -
+    // parentId / pageId （嵌套中隐含树结构） -
+    // 自动布局子项上的 x/y （布局引擎定位它们） - 我们通常无法翻译的效果（跳过嘈杂的嵌套道具） - 默认时为
+    // rotation/opacity/visible
     if (k === 'id' || k === 'parentId' || k === 'pageId' || k === '_meta') continue;
     if (k === 'rotation' && v === 0) continue;
     if (k === 'opacity' && v === 1) continue;
@@ -33,13 +31,13 @@ function stripNoise(input: unknown): unknown {
   return out;
 }
 
-/** Compact JSON for AI prompts (no indentation, drops noise fields). */
+/** Compact JSON 用于 AI 提示（无缩进，消除噪音场）。 */
 function compactNodes(nodes: PenNode[]): string {
   return JSON.stringify(stripNoise(nodes));
 }
 
 /**
- * Build system prompt for Step 1: planning.
+ * Build 系统提示 Step 1：规划。
  */
 export function buildPlanningPrompt(
   nodes: PenNode[],

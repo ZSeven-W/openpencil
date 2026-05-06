@@ -1,7 +1,7 @@
 import type { FigmaColor } from './figma-types';
 
 /**
- * Convert Figma {r, g, b, a} (0-1 floats) to #RRGGBB or #RRGGBBAA hex string.
+ * Convert Figma {r, g, b, a}（0-1 浮点数）到 #RRGGBB 或 #RRGGBBAA 十六进制字符串。
  */
 export function figmaColorToHex(color: FigmaColor): string {
   const r = Math.round(color.r * 255);

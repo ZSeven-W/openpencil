@@ -5,8 +5,9 @@ import { parseAndPrepareImportedDocument } from '@/utils/import-pen-document';
 import type { PenDocument } from '@/types/pen';
 
 /**
- * Parse a dropped File into a PenDocument.
- * Returns null if the file is not a valid .op/.pen/.json document.
+ * Parse a 将
+ * File 放入 PenDocument。如果文件不是有效的
+ .op/.pen/.json 文档，则 Returns null。
  */
 async function parseDroppedFile(
   file: File,
@@ -28,13 +29,13 @@ async function parseDroppedFile(
 }
 
 /**
- * Hook that enables drag-and-drop file opening on the editor.
- * Returns `isDragging` state for rendering a drop zone overlay.
+ * Hook 允许在编辑器上
+ * 拖放文件打开。 Returns `isDragging` 渲染放置区域叠加层的状态。
  */
 export function useFileDrop() {
   const [isDragging, setIsDragging] = useState(false);
 
-  // Track nested drag enter/leave so overlay doesn't flicker
+  // Track 嵌套拖动 enter/leave 所以叠加不会闪烁
   const handleDragEnter = useCallback((e: DragEvent) => {
     e.preventDefault();
     if (e.dataTransfer?.types.includes('Files')) {
@@ -50,7 +51,7 @@ export function useFileDrop() {
   }, []);
 
   const handleDragLeave = useCallback((e: DragEvent) => {
-    // Only close overlay when leaving the window (relatedTarget is null)
+    // Only 离开窗口时关闭覆盖（relatedTarget 为空）
     if (!e.relatedTarget) {
       setIsDragging(false);
     }
@@ -63,7 +64,7 @@ export function useFileDrop() {
     const file = e.dataTransfer?.files?.[0];
     if (!file) return;
 
-    // .fig files → open Figma import dialog with the file pre-loaded
+    // .fig 文件 → 打开 Figma 导入对话框并预加载文件
     const ext = file.name.split('.').pop()?.toLowerCase();
     if (ext === 'fig') {
       const store = useCanvasStore.getState();
@@ -75,14 +76,13 @@ export function useFileDrop() {
     const result = await parseDroppedFile(file);
     if (!result) return;
 
-    // In Electron, resolve the absolute filesystem path so the recent files
-    // entry is clickable later. In a plain browser this returns null.
+    // In Electron，解析绝对文件系统路径，以便稍后可以单击最近的文件条目。 In 一个普通浏览器，返回 null。
     const filePath =
       (typeof window !== 'undefined' && window.electronAPI?.getPathForFile?.(file)) || null;
 
     useDocumentStore.getState().loadDocument(result.doc, result.fileName, null, filePath);
 
-    // Let the canvas sync, then zoom to fit
+    // Let 画布同步，然后缩放以适合
     const { zoomToFitContent } = await import('@/canvas/skia-engine-ref');
     requestAnimationFrame(() => zoomToFitContent());
   }, []);

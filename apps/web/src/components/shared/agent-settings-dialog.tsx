@@ -12,7 +12,7 @@ import { SystemTab } from './agent-settings-system-tab';
 
 type SettingsTab = 'agents' | 'mcp' | 'images' | 'system';
 
-/* ---------- Sidebar nav item ---------- */
+/* ---------- Sidebar 导航项 ---------- */
 function NavItem({
   icon: IconComp,
   label,
@@ -102,14 +102,14 @@ export default function AgentSettingsDialog() {
 
         {/* Content */}
         <div className="flex-1 flex flex-col min-w-0">
-          {/* Close button */}
+          {/* Close 按钮 */}
           <div className="flex justify-end px-4 pt-3">
             <Button variant="ghost" size="icon-sm" onClick={() => setDialogOpen(false)}>
               <X size={14} />
             </Button>
           </div>
 
-          {/* Page content */}
+          {/* Page 内容 */}
           <div className="flex-1 overflow-y-auto px-5 pb-5">
             {activeTab === 'agents' && <ProvidersTab />}
             {activeTab === 'mcp' && <McpTab />}

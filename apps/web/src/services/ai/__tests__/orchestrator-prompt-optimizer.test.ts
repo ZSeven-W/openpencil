@@ -60,8 +60,7 @@ describe('buildPlanningStyleGuideContext', () => {
       designMd,
     );
 
-    // No explicit background role → don't hint a palette color; provide a
-    // neutral dark default and warn the model.
+    // No 显式背景角色 → 不暗示调色板颜色；提供中性深色默认值并警告模型。
     const bgLine = ctx.availableStyleGuides
       .split('\n')
       .find((line) => line.startsWith('- Set rootFrame.fill'));
@@ -93,7 +92,7 @@ describe('buildPlanningStyleGuideContext', () => {
     expect(ctx.availableStyleGuides).toContain('SURFACE COLORS');
     expect(ctx.availableStyleGuides).toContain('#12182A');
     expect(ctx.availableStyleGuides).toContain('#1A1F2E');
-    // Page bg still resolves to the explicit Primary app background.
+    // Page bg 仍解析为显式 Primary 应用程序背景。
     const bgLine = ctx.availableStyleGuides
       .split('\n')
       .find((line) => line.startsWith('- Set rootFrame.fill'));

@@ -34,8 +34,8 @@ export async function handleOpenDocument(params: OpenDocumentParams): Promise<Op
   let doc: PenDocument;
 
   if (!params.filePath || params.filePath === LIVE_CANVAS_PATH) {
-    // Live canvas mode: connect to the running Electron/dev server.
-    // openDocument() now returns a more precise diagnostic when sync is unavailable.
+    // Live 画布模式：连接到正在运行的 Electron/dev 服务器。当同步不可用时，openDocument()
+    // 现在会返回更精确的诊断。
     filePath = LIVE_CANVAS_PATH;
     doc = await openDocument(LIVE_CANVAS_PATH);
   } else {
@@ -44,7 +44,7 @@ export async function handleOpenDocument(params: OpenDocumentParams): Promise<Op
     if (exists) {
       doc = await openDocument(filePath);
     } else {
-      // Create new file at specified path
+      // Create 在指定路径创建新文件
       doc = createEmptyDocument();
       await saveDocument(filePath, doc);
     }
@@ -59,8 +59,7 @@ export async function handleOpenDocument(params: OpenDocumentParams): Promise<Op
     ? doc.pages.reduce((sum, p) => sum + p.children.length, 0)
     : doc.children.length;
 
-  // Only include full design prompt when document is empty or has only empty frames.
-  // For non-empty documents, include a brief note to reduce context window waste.
+  // Only 当文档为空或只有空框架时包括完整的设计提示。 For 非空文档，包含简短注释以减少上下文窗口浪费。
   const children = getDocChildren(doc);
   const isEmpty =
     totalChildren === 0 ||
@@ -93,7 +92,7 @@ export async function handleOpenDocument(params: OpenDocumentParams): Promise<Op
 }
 
 // ---------------------------------------------------------------------------
-// Document context builder (merged from document-context.ts)
+// Document 上下文构建器（从 document-context.ts 合并）
 // ---------------------------------------------------------------------------
 
 function buildDocumentContext(doc: PenDocument): string {

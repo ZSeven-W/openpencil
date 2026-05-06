@@ -1,15 +1,15 @@
 // apps/web/src/components/panels/git-panel/git-panel-history-diff.tsx
 //
-// Phase 7b: inline diff block shown under an expanded history row. Replaces
-// the "Diff view coming in Phase 6" placeholder. Loads the diff summary
-// and patch list on expand, then renders:
-//   - loading state while the IPC is in flight
-//   - error state if computeDiff() throws
-//   - initial-commit state when commit.parentHashes[0] is absent
-//   - diff summary (framesChanged, nodesAdded, nodesRemoved, nodesModified)
-//   - compact patch list (op + nodeId)
+// Phase 7b：内联差异块显示在扩展历史记录行下。 Replaces
+// “Diff 视图来自 Phase 6”占位符。 Loads 差异总结
+// 并展开补丁列表，然后渲染：
+//   - IPC 飞行时的加载状态
+//   - 如果 computeDiff() 抛出错误状态
+//   - 当 commit.parentHashes[0] 不存在时的初始提交状态
+//   - 差异摘要（framesChanged、nodesAdded、nodesRemoved、nodesModified）
+//   - 紧凑补丁列表（op + nodeId）
 //
-// This is intentionally an inline block, not a full-screen route.
+// This 故意是一个内联块，而不是全屏路由。
 
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -100,7 +100,7 @@ export function GitPanelHistoryDiff({ commit }: GitPanelHistoryDiffProps) {
     );
   }
 
-  // status === 'ready'
+  // 状态 === '准备好'
   const s = diff.summary!;
   const patches = diff.patches ?? [];
 
@@ -109,7 +109,7 @@ export function GitPanelHistoryDiff({ commit }: GitPanelHistoryDiffProps) {
 
   return (
     <div className="flex flex-col gap-1.5">
-      {/* Summary row */}
+      {/* Summary 行 */}
       {hasSummary ? (
         <div className="flex flex-wrap gap-x-3 gap-y-0.5">
           {s.framesChanged > 0 && (
@@ -139,7 +139,7 @@ export function GitPanelHistoryDiff({ commit }: GitPanelHistoryDiffProps) {
         </div>
       )}
 
-      {/* Compact patch list */}
+      {/* Compact 补丁列表 */}
       {patches.length > 0 && (
         <ul className="flex flex-col gap-0.5 max-h-24 overflow-y-auto">
           {patches.map((p, i) => (

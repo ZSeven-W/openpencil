@@ -27,13 +27,13 @@ interface IconPickerDialogProps {
   open: boolean;
   onClose: () => void;
   onSelect: (svgText: string, iconName: string) => void;
-  /** Pre-fill the search query when opened */
+  /** Pre-打开时填写搜索查询 */
   initialQuery?: string;
-  /** Restrict results to this Iconify collection prefix */
+  /** Restrict 结果指向此 Iconify 集合前缀 */
   collectionFilter?: string;
-  /** Highlight this icon ID as the current selection */
+  /** Highlight 这个图标 ID 作为当前选择 */
   currentIconId?: string;
-  /** Position of the popover (anchored near trigger element) */
+  /** 弹出窗口的 Position（锚定在触发元素附近） */
   position?: IconPickerPosition;
 }
 
@@ -51,7 +51,7 @@ export default function IconPickerDialog({
   const [allIcons, setAllIcons] = useState<string[]>([]);
   const [totalCount, setTotalCount] = useState<number | null>(null);
   const [collectionLoading, setCollectionLoading] = useState(false);
-  // Global search (no collection context)
+  // Global 搜索（无集合上下文）
   const [searchIcons, setSearchIcons] = useState<string[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
   const [searched, setSearched] = useState(false);
@@ -61,11 +61,11 @@ export default function IconPickerDialog({
   const inputRef = useRef<HTMLInputElement>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // The active collection: explicit filter > current icon's collection > default Feather
+  // The 活动集合：显式过滤器 > 当前图标的集合 > 默认 Feather
   const activeCollection =
     collectionFilter ?? (currentIconId ? currentIconId.split(':')[0] : undefined) ?? 'feather';
 
-  // Load all icons for the active collection
+  // Load 活动集合的所有图标
   useEffect(() => {
     if (!activeCollection) return;
 

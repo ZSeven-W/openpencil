@@ -1,15 +1,15 @@
 // apps/desktop/git/merge-session.ts
 //
-// In-flight merge state for a single repo. Stored on RepoSession.inflightMerge
-// during the conflict resolution loop. The conflict id codec lives here too
-// because it's the only string format both the engine and the tests share.
+// In-单个存储库的飞行合并状态。 Stored 上 RepoSession.inflightMerge
+// 在冲突解决循环期间。 The 冲突 ID 编解码器也存在于此
+// 因为它是引擎和测试共享的唯一字符串格式。
 
 import type { MergeResult, NodeConflict, DocFieldConflict } from '@zseven-w/pen-core';
 import type { PenNode } from '@zseven-w/pen-types';
 
 /**
- * The user's choice for resolving a single conflict. Mirrors the spec's
- * ConflictResolution union.
+ * The 用户解决单个冲突
+ * 的选择。 Mirrors 规范的 ConflictResolution 联合。
  */
 export type ConflictResolution =
   | { kind: 'ours' }
@@ -18,9 +18,9 @@ export type ConflictResolution =
   | { kind: 'manual-field'; value: unknown }; // for doc-field conflicts
 
 /**
- * Wire-format conflict bag returned across IPC. The renderer wraps this in
- * Maps for resolution tracking. Each conflict has a stable id that the
- * renderer passes back via resolveConflict().
+ * Wire-通过 IPC
+ * 返回格式冲突包。 The 渲染器将其包装在 Maps 中以进行分辨率跟踪。 Each 冲突有一个稳定的 id，渲染器通过
+ * resolveConflict() 传回。
  */
 export interface ConflictBag {
   nodeConflicts: Array<NodeConflict & { id: string }>;
@@ -28,9 +28,9 @@ export interface ConflictBag {
 }
 
 export interface InflightMerge {
-  /** The current HEAD commit at the time branchMerge was invoked. */
+  /** The 调用 branchMerge 时的当前 HEAD 提交。 */
   oursCommit: string;
-  /** The branch tip we're merging in. */
+  /** 我们正在合并的 The 分支提示。 */
   theirsCommit: string;
   /** Common ancestor commit. */
   baseCommit: string;
@@ -52,8 +52,8 @@ export interface InflightMerge {
 // Conflict id codec
 //
 // Encoding rules (matches spec line 836-841 verbatim):
-//   Node conflict: `node:${pageId ?? '_'}:${nodeId}`
-//   Doc-field conflict: `field:${field}:${path}`
+// Node conflict: `node:${pageId ?? '_'}:${nodeId}`
+// Doc-field conflict: `field:${field}:${path}`
 //
 // Stable, deterministic, both engine and renderer agree.
 // ---------------------------------------------------------------------------

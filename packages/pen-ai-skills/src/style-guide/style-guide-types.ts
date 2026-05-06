@@ -5,12 +5,12 @@ export interface StyleGuideMeta {
 }
 
 export interface ParsedStyleGuide extends StyleGuideMeta {
-  /** Full markdown content of the style guide (injected into prompts) */
+  /** Full 风格指南的 Markdown 内容（注入提示中） */
   content: string;
 }
 
 export const STYLE_GUIDE_TAGS = [
-  // visual
+  // 视觉的
   'brutalist',
   'classical',
   'clean',
@@ -25,7 +25,7 @@ export const STYLE_GUIDE_TAGS = [
   'swiss',
   'bauhaus',
   'zen',
-  // tone
+  // 语气
   'calm',
   'dark-mode',
   'high-contrast',
@@ -35,7 +35,7 @@ export const STYLE_GUIDE_TAGS = [
   'pastel',
   'vibrant',
   'warm-tones',
-  // industry
+  // 工业
   'corporate',
   'creative',
   'data-focused',
@@ -47,7 +47,7 @@ export const STYLE_GUIDE_TAGS = [
   'tech',
   'terminal',
   'wellness',
-  // typography
+  // 版式
   'bold-typography',
   'condensed',
   'display',
@@ -56,14 +56,14 @@ export const STYLE_GUIDE_TAGS = [
   'monospace',
   'serif',
   'uppercase',
-  // layout
+  // 布局
   'bento-grid',
   'floating-nav',
   'flush-layout',
   'horizontal-nav',
   'icon-sidebar',
   'sidebar',
-  // mood
+  // 心情
   'austere',
   'confident',
   'cozy',
@@ -74,7 +74,7 @@ export const STYLE_GUIDE_TAGS = [
   'refined',
   'sophisticated',
   'urban',
-  // accent
+  // 口音
   'blue-accent',
   'cyan-accent',
   'gold-accent',
@@ -82,7 +82,7 @@ export const STYLE_GUIDE_TAGS = [
   'orange-accent',
   'red-accent',
   'sage-green',
-  // technique
+  // 技术
   'flat',
   'gradient',
   'mesh-gradient',

@@ -1,8 +1,8 @@
 // apps/web/src/components/panels/git-panel/git-panel-conflict-item.tsx
 //
-// Thin dispatcher component that renders either a GitPanelNodeConflictCard or
-// a GitPanelFieldConflictCard based on the conflict kind. The conflict list
-// renders these uniformly without needing to switch on kind itself.
+// Thin 调度程序组件，呈现 GitPanelNodeConflictCard 或
+// 基于冲突类型的 GitPanelFieldConflictCard。 The 冲突列表
+// 统一渲染这些，而不需要打开种类本身。
 
 import { useGitStore } from '@/stores/git-store';
 import { GitPanelNodeConflictCard } from './git-panel-node-conflict-card';

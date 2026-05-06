@@ -1,7 +1,7 @@
-// MCP HTTP server default port
+// MCP HTTP 服务器默认端口
 export const MCP_DEFAULT_PORT = 3100;
 
-// Port file directory for MCP sync discovery
+// Port 用于 MCP 同步发现的文件目录
 export const PORT_FILE_DIR_NAME = '.openpencil';
 export const PORT_FILE_NAME = '.port';
 

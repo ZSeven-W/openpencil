@@ -54,7 +54,7 @@ describe('HistoryManager', () => {
 
   it('should respect maxStates', () => {
     for (let i = 0; i < 10; i++) {
-      // Force past debounce by resetting internal timer
+      // Force 通过重置内部计时器消除反跳
       (hm as any).lastPushTime = 0;
       hm.push(makeDoc(`v${i}`));
     }

@@ -4,7 +4,7 @@ import type { StyledTextSegment } from '@/types/styles';
 import { figmaColorToHex } from './figma-color-utils';
 
 /**
- * Map Figma .fig internal text properties to PenNode TextNode partial.
+ * Map Figma .fig 内部文本属性为 PenNode TextNode 部分。
  */
 export function mapFigmaTextProps(
   node: FigmaNodeChange,
@@ -80,7 +80,7 @@ function buildContent(node: FigmaNodeChange): string | StyledTextSegment[] {
     return text;
   }
 
-  // Build segments from character style IDs
+  // Build 字符样式中的 IDs 段
   const segments: StyledTextSegment[] = [];
   let currentStyleId = styleIds[0] ?? 0;
   let segStart = 0;
@@ -99,7 +99,7 @@ function buildContent(node: FigmaNodeChange): string | StyledTextSegment[] {
     }
   }
 
-  // If all segments have no style overrides, return plain string
+  // If 所有段都没有样式覆盖，返回纯字符串
   if (segments.every((s) => !s.fontFamily && !s.fontSize && !s.fontWeight && !s.fill)) {
     return text;
   }
@@ -110,7 +110,7 @@ function buildContent(node: FigmaNodeChange): string | StyledTextSegment[] {
 function buildSegment(text: string, styleId: number, table: FigmaNodeChange[]): StyledTextSegment {
   if (styleId === 0) return { text };
 
-  // styleOverrideTable is 0-indexed but style IDs start from 1 in some cases
+  // styleOverrideTable 是 0 索引，但样式 IDs 在某些情况下从 1 开始
   const override = table[styleId] ?? table[styleId - 1];
   if (!override) return { text };
 
@@ -125,7 +125,7 @@ function buildSegment(text: string, styleId: number, table: FigmaNodeChange[]): 
   if (override.textDecoration === 'UNDERLINE') segment.underline = true;
   if (override.textDecoration === 'STRIKETHROUGH') segment.strikethrough = true;
 
-  // Text fill color
+  // Text 填充颜色
   if (override.fillPaints?.[0]?.color) {
     segment.fill = figmaColorToHex(override.fillPaints[0].color);
   }
@@ -151,19 +151,19 @@ function parseFontWeight(style?: string): number | undefined {
 function mapLineHeight(node: FigmaNodeChange): number | undefined {
   if (!node.lineHeight) return undefined;
   const fontSize = node.fontSize ?? 14;
-  // PenNode lineHeight is a MULTIPLIER (e.g. 1.5), not absolute pixels.
-  // drawText computes final px as: lineHeight * fontSize.
+  // PenNode lineHeight 是 MULTIPLIER （例如 1.5），不是绝对像素。 drawText 将最终 px
+  // 计算为：lineHeight * fontSize。
   if (node.lineHeight.units === 'PIXELS' && node.lineHeight.value) {
-    // Convert absolute pixels to multiplier (e.g. 24px / 16px = 1.5)
+    // Convert 绝对像素乘数（例如 24px / 16px = 1.5）
     const mul = node.lineHeight.value / fontSize;
     return Math.round(mul * 1000) / 1000;
   }
   if (node.lineHeight.units === 'PERCENT' && node.lineHeight.value) {
-    // Convert percentage to multiplier (e.g. 150% = 1.5)
+    // Convert 乘数百分比（例如 150% = 1.5）
     return Math.round((node.lineHeight.value / 100) * 1000) / 1000;
   }
   if (node.lineHeight.units === 'RAW' && node.lineHeight.value) {
-    // RAW is already a multiplier
+    // RAW 已经是一个乘数
     return Math.round(node.lineHeight.value * 1000) / 1000;
   }
   return undefined;
@@ -174,7 +174,7 @@ function mapLetterSpacing(node: FigmaNodeChange): number | undefined {
   if (node.letterSpacing.units === 'PIXELS' && node.letterSpacing.value) {
     return node.letterSpacing.value;
   }
-  // Percentage letter spacing: relative to font size
+  // Percentage 字母间距：相对于字体大小
   if (node.letterSpacing.units === 'PERCENT' && node.letterSpacing.value) {
     const fontSize = node.fontSize ?? 14;
     return Math.round(((fontSize * node.letterSpacing.value) / 100) * 100) / 100;

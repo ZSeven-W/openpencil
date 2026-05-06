@@ -12,9 +12,9 @@ export interface NumberInputProps {
   suffix?: string;
   className?: string;
   readOnly?: boolean;
-  /** Called when scrub-drag begins (for external history batching). */
+  /** Called 当擦洗拖动开始时（用于外部历史批处理）。 */
   onDragStart?: () => void;
-  /** Called when scrub-drag ends (for external history batching). */
+  /** Called 当擦洗拖动结束时（用于外部历史批处理）。 */
   onDragEnd?: () => void;
 }
 

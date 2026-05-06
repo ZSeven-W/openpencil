@@ -1,4 +1,4 @@
-// @vitest-environment jsdom
+// @vitest-环境 jsdom
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, cleanup } from '@testing-library/react';
 import { DesignEngineContext } from '../context';
@@ -41,7 +41,7 @@ describe('CoreToolbar', () => {
       </DesignEngineContext.Provider>,
     );
 
-    // Should have select, text, frame, hand tool buttons
+    // Should 有选择、文本、框架、手动工具按钮
     expect(screen.getByLabelText(/select/i)).toBeTruthy();
     expect(screen.getByLabelText(/text/i)).toBeTruthy();
   });

@@ -1,13 +1,13 @@
 // apps/web/src/components/panels/git-panel/git-panel-conflict-list.tsx
 //
-// Conflict workspace mounted below the banner in GitPanelConflict. Renders all
-// node conflicts and doc-field conflicts interleaved in document tree order,
-// with bulk-action buttons to choose all-ours or all-theirs across unresolved
-// items.
+// Conflict 工作区安装在 GitPanelConflict 中的横幅下方。全部 Renders
+// 节点冲突和文档字段冲突按文档树顺序交错，
+// 使用批量操作按钮可以在未解决的问题上选择我们的所有或他们的所有
+// 项目。
 //
-// Bulk actions stay renderer-side by looping resolveConflict() over unresolved
-// items — no new IPC call is required. The banner already owns the primary
-// apply/continue button; the list owns only the bulk action shortcuts.
+// Bulk 操作通过在未解决的问题上循环 resolveConflict() 来保持渲染器端
+// items — 不需要新的 IPC 调用。 The 横幅已经拥有主
+// apply/continue 按钮；该列表仅拥有批量操作快捷方式。
 
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
@@ -28,17 +28,14 @@ export function GitPanelConflictList() {
   const resolveConflict = useGitStore((s) => s.resolveConflict);
   const document = useDocumentStore((s) => s.document);
 
-  // Only render in conflict state.
+  // Only 在冲突状态下渲染。
   if (state.kind !== 'conflict') return null;
 
   const { nodeConflicts, docFieldConflicts } = state.conflicts;
 
-  // Build a flat list ordered by document tree position. orderConflicts walks
-  // the current document depth-first so ours/theirs previews appear in the same
-  // sequence as the layer panel. Orphan conflicts (node deleted in theirs) are
-  // appended at the end; doc-field conflicts follow, sorted alphabetically by path.
-  // useMemo is intentionally omitted — the conflict list is small and the tree
-  // walk is O(n) over a modest set, so memoisation adds complexity without benefit.
+  // Build 按文档树位置排序的平面列表。 orderConflicts 以深度优先方式遍历当前文档，因此 ours/theirs
+  // 预览的显示顺序与图层面板相同。 Orphan 冲突（节点已删除）添加在末尾；文档字段冲突如下，按路径字母顺序排序。 useMemo
+  // 被故意省略——冲突列表很小，树遍历是 O(n) 在一个适度的集合上，所以记忆增加了复杂性，但没有任何好处。
   const ordered = orderConflicts(document, nodeConflicts, docFieldConflicts);
 
   const items: ConflictItemData[] = ordered.map((c) => {
@@ -72,7 +69,7 @@ export function GitPanelConflictList() {
   const unresolvedItems = items.filter((i) => i.resolution == null);
   const allResolved = totalCount > 0 && resolvedCount === totalCount;
 
-  // Bulk-action handlers: iterate unresolved items and dispatch resolveConflict.
+  // Bulk-action 处理程序：迭代未解决的项目并分派 resolveConflict。
   function handleSelectAllOurs() {
     for (const item of unresolvedItems) {
       void resolveConflict(item.id, { kind: 'ours' });
@@ -89,7 +86,7 @@ export function GitPanelConflictList() {
 
   return (
     <div className="flex flex-col gap-0" data-testid="conflict-list">
-      {/* Section header with bulk actions */}
+      {/* 具有批量操作的 Section 标头 */}
       <div className="flex items-center justify-between gap-2 px-4 py-2">
         <div className="flex items-center gap-2">
           <span className="text-xs font-medium text-foreground">
@@ -109,7 +106,7 @@ export function GitPanelConflictList() {
           )}
         </div>
 
-        {/* Bulk actions — only shown when there are unresolved items */}
+        {/* Bulk 操作 — 仅在存在未解决的项目时显示 */}
         {unresolvedItems.length > 0 && (
           <div className="flex items-center gap-1" data-testid="bulk-actions">
             <Button
@@ -138,7 +135,7 @@ export function GitPanelConflictList() {
 
       <Separator />
 
-      {/* Conflict item list — plain div with max-height; no shadcn ScrollArea needed */}
+      {/* Conflict 项目列表 — 具有最大高度的普通 div；不需要 shadcn ScrollArea */}
       <div className="max-h-[400px] overflow-y-auto">
         <div className="flex flex-col gap-3 p-4" data-testid="conflict-items">
           {items.map((item) => (

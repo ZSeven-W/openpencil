@@ -20,9 +20,8 @@ import { mkTempDir } from './test-helpers';
 
 const execFileAsync = promisify(execFile);
 
-// Synchronous availability probe at module load. We can't use the async
-// isSystemGitAvailable() because vitest's it.skipIf() reads its predicate at
-// test-collection time, before any beforeEach hook has run.
+// Synchronous 模块加载时的可用性探测。 We 不能使用异步 isSystemGitAvailable()，因为 vitest 是
+// it.skipIf() 在测试收集时、在任何 beforeEach 挂钩运行之前读取其谓词。
 let systemGitAvailable: boolean;
 try {
   execFileSync('git', ['--version'], { stdio: 'ignore', timeout: 5000 });
@@ -47,7 +46,7 @@ describe('git-sys real (gated on system git)', () => {
     const sourceDir = join(temp.dir, 'source');
     const cloneDir = join(temp.dir, 'clone');
 
-    // Set up: bare remote, source repo with one commit, push source → remote.
+    // Set up：裸远程，一次提交的源代码库，推送源 → 远程。
     await execFileAsync('git', ['init', '--bare', remoteDir]);
     await fsp.mkdir(sourceDir, { recursive: true });
     await execFileAsync('git', ['init', '-b', 'main', sourceDir]);
@@ -61,10 +60,10 @@ describe('git-sys real (gated on system git)', () => {
     await execFileAsync('git', ['remote', 'add', 'origin', remoteDir], { cwd: sourceDir });
     await execFileAsync('git', ['push', 'origin', 'main'], { cwd: sourceDir });
 
-    // Now clone via sysClone.
+    // Now 通过 sysClone 克隆。
     await sysClone({ url: remoteDir, dest: cloneDir });
 
-    // Verify the clone has the README.
+    // Verify 克隆具有 README。
     const content = await fsp.readFile(join(cloneDir, 'README.md'), 'utf-8');
     expect(content).toBe('# test\n');
   });
@@ -75,7 +74,7 @@ describe('git-sys real (gated on system git)', () => {
     const bDir = join(temp.dir, 'b');
 
     await execFileAsync('git', ['init', '--bare', remoteDir]);
-    // a: clone, commit, push
+    // a：克隆、提交、推送
     await execFileAsync('git', ['clone', remoteDir, aDir]);
     await execFileAsync('git', ['-C', aDir, 'checkout', '-b', 'main']);
     await fsp.writeFile(join(aDir, 'one.txt'), '1');
@@ -87,10 +86,10 @@ describe('git-sys real (gated on system git)', () => {
     );
     await execFileAsync('git', ['-C', aDir, 'push', '-u', 'origin', 'main']);
 
-    // b: clone the same remote (now has main with one.txt)
+    // b：克隆相同的远程（现在有 main 和 one.txt）
     await execFileAsync('git', ['clone', remoteDir, bDir]);
 
-    // a commits another file and pushes
+    // a 提交另一个文件并推送
     await fsp.writeFile(join(aDir, 'two.txt'), '2');
     await execFileAsync('git', ['-C', aDir, 'add', '.']);
     await execFileAsync(
@@ -100,11 +99,11 @@ describe('git-sys real (gated on system git)', () => {
     );
     await execFileAsync('git', ['-C', aDir, 'push']);
 
-    // b's ahead/behind before fetch should be 0/0 (b doesn't know about the new commit yet).
+    // b 在获取之前的 ahead/behind 应该是 0/0 （b 还不知道新的提交）。
     const before = await sysAheadBehind({ cwd: bDir, branch: 'main' });
     expect(before).toEqual({ ahead: 0, behind: 0 });
 
-    // Fetch updates b's remote-tracking ref.
+    // Fetch 更新 b 的远程跟踪引用。
     await sysFetch({ cwd: bDir });
     const after = await sysAheadBehind({ cwd: bDir, branch: 'main' });
     expect(after).toEqual({ ahead: 0, behind: 1 });
@@ -127,7 +126,7 @@ describe('git-sys real (gated on system git)', () => {
 
     await sysPush({ cwd: cloneDir, branch: 'main' });
 
-    // Verify the bare remote has main pointing at the clone's commit.
+    // Verify 裸遥控器的主要指向克隆的提交。
     const { stdout: remoteHead } = await execFileAsync('git', [
       '-C',
       remoteDir,
@@ -144,7 +143,7 @@ describe('git-sys real (gated on system git)', () => {
     const bDir = join(temp.dir, 'b');
 
     await execFileAsync('git', ['init', '--bare', remoteDir]);
-    // a: seed remote with one commit
+    // a：一次提交的种子远程种子
     await execFileAsync('git', ['clone', remoteDir, aDir]);
     await execFileAsync('git', ['-C', aDir, 'checkout', '-b', 'main']);
     await fsp.writeFile(join(aDir, 'one.txt'), '1');
@@ -156,7 +155,7 @@ describe('git-sys real (gated on system git)', () => {
     );
     await execFileAsync('git', ['-C', aDir, 'push', '-u', 'origin', 'main']);
 
-    // b: clone, then a pushes a 2nd commit
+    // b：克隆，然后 a 推送第二次提交
     await execFileAsync('git', ['clone', remoteDir, bDir]);
     await fsp.writeFile(join(aDir, 'two.txt'), '2');
     await execFileAsync('git', ['-C', aDir, 'add', '.']);
@@ -167,7 +166,7 @@ describe('git-sys real (gated on system git)', () => {
     );
     await execFileAsync('git', ['-C', aDir, 'push']);
 
-    // b makes a divergent commit and tries to push → rejected.
+    // b 进行了不同的提交并尝试推送 → 被拒绝。
     await fsp.writeFile(join(bDir, 'b.txt'), 'b');
     await execFileAsync('git', ['-C', bDir, 'add', '.']);
     await execFileAsync(
@@ -183,7 +182,7 @@ describe('git-sys real (gated on system git)', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Phase 7a: worktree-merge real-git spike tests
+// Phase 7a：worktree-merge real-git 峰值测试
 // ---------------------------------------------------------------------------
 
 describe('worktree-merge real-git spike (gated on system git)', () => {
@@ -198,8 +197,8 @@ describe('worktree-merge real-git spike (gated on system git)', () => {
   });
 
   /**
-   * Helper: create a repo with two divergent branches, each modifying the
-   * tracked .op file (and optionally a README.md side file).
+   * Helper：创建一个具
+   * 有两个不同分支的存储库，每个分支修改跟踪的 .op 文件（以及可选的 README.md 辅助文件）。
    */
   async function setupDivergentRepo(opts: {
     withReadme?: boolean;
@@ -216,7 +215,7 @@ describe('worktree-merge real-git spike (gated on system git)', () => {
 
     await g('init', '-b', 'main');
     // sysMergeNoCommit reads identity during git's internal bookkeeping;
-    // make tests self-sufficient for machines without global git config.
+    // 使测试对于没有全局 git 配置的机器来说是自给自足的。
     await g('config', 'user.name', 'Test');
     await g('config', 'user.email', 'test@test.com');
     await fsp.writeFile(
@@ -229,7 +228,7 @@ describe('worktree-merge real-git spike (gated on system git)', () => {
     await g('add', '.');
     await gc('commit', '-m', 'base');
 
-    // Branch off: feature changes
+    // Branch 关闭：功能更改
     await g('checkout', '-b', 'feature');
     await fsp.writeFile(
       join(repoDir, 'design.op'),
@@ -241,7 +240,7 @@ describe('worktree-merge real-git spike (gated on system git)', () => {
     await g('add', '.');
     await gc('commit', '-m', 'theirs');
 
-    // Return to main: ours changes
+    // Return 到 main：我们的更改
     await g('checkout', 'main');
     await fsp.writeFile(
       join(repoDir, 'design.op'),
@@ -318,16 +317,16 @@ describe('worktree-merge real-git spike (gated on system git)', () => {
 
       await sysRestoreOurs({ cwd: repoDir, filepath: 'design.op' });
 
-      // File on disk is now readable JSON.
+      // 磁盘上的 File 现在可以读取 JSON。
       const content = await fsp.readFile(join(repoDir, 'design.op'), 'utf-8');
       expect(() => JSON.parse(content)).not.toThrow();
       expect(JSON.parse(content).children[0].id).toBe('ours');
 
-      // MERGE_HEAD is still set.
+      // MERGE_HEAD 仍然设置。
       const mergeHead = await readMergeHead(gitdir);
       expect(mergeHead).not.toBeNull();
 
-      // File is still listed as unresolved in the index.
+      // File 在索引中仍列为未解决。
       const unresolved = await sysListUnresolved({ cwd: repoDir });
       expect(unresolved).toContain('design.op');
     },
@@ -339,7 +338,7 @@ describe('worktree-merge real-git spike (gated on system git)', () => {
       const { repoDir } = await setupDivergentRepo({});
       await sysMergeNoCommit({ cwd: repoDir, ref: 'feature' });
 
-      // Write the final content and stage it.
+      // Write 最终内容并上演。
       await fsp.writeFile(
         join(repoDir, 'design.op'),
         JSON.stringify({ version: '1.0.0', children: [{ id: 'resolved' }] }),
@@ -358,7 +357,7 @@ describe('worktree-merge real-git spike (gated on system git)', () => {
       const headBefore = await sysReadHead({ cwd: repoDir });
       await sysMergeNoCommit({ cwd: repoDir, ref: 'feature' });
 
-      // Resolve the conflict.
+      // Resolve 冲突。
       await fsp.writeFile(
         join(repoDir, 'design.op'),
         JSON.stringify({ version: '1.0.0', children: [{ id: 'resolved' }] }),
@@ -374,11 +373,11 @@ describe('worktree-merge real-git spike (gated on system git)', () => {
       expect(mergeCommit).toMatch(/^[a-f0-9]{40}$/);
       expect(mergeCommit).not.toBe(headBefore);
 
-      // MERGE_HEAD is gone.
+      // MERGE_HEAD 消失了。
       const mergeHead = await readMergeHead(gitdir);
       expect(mergeHead).toBeNull();
 
-      // Verify 2-parent commit via git cat-file.
+      // Verify 2-parent 通过 git cat 文件提交。
       const catResult = await execFileAsync('git', ['cat-file', '-p', 'HEAD'], { cwd: repoDir });
       const parentLines = catResult.stdout.split('\n').filter((line) => line.startsWith('parent '));
       expect(parentLines).toHaveLength(2);
@@ -394,15 +393,15 @@ describe('worktree-merge real-git spike (gated on system git)', () => {
 
       await sysAbortMerge({ cwd: repoDir });
 
-      // MERGE_HEAD is gone.
+      // MERGE_HEAD 消失了。
       const mergeHead = await readMergeHead(gitdir);
       expect(mergeHead).toBeNull();
 
-      // HEAD is unchanged.
+      // HEAD 不变。
       const headAfter = await sysReadHead({ cwd: repoDir });
       expect(headAfter).toBe(headBefore);
 
-      // design.op is the ours version (clean JSON, no conflict markers).
+      // design.op 是我们的版本（干净的 JSON，没有冲突标记）。
       const content = await fsp.readFile(join(repoDir, 'design.op'), 'utf-8');
       expect(() => JSON.parse(content)).not.toThrow();
       expect(JSON.parse(content).children[0].id).toBe('ours');
@@ -413,33 +412,33 @@ describe('worktree-merge real-git spike (gated on system git)', () => {
     'sysAbortMerge is idempotent when no merge is in progress',
     async () => {
       const { repoDir } = await setupDivergentRepo({});
-      // No merge started — abort should not throw.
+      // No 合并开始 - 中止不应抛出。
       await expect(sysAbortMerge({ cwd: repoDir })).resolves.toBeUndefined();
     },
   );
 
   // ---------------------------------------------------------------------------
-  // Phase 7a spike scenario 3: rename conflict
-  // Documents what git actually does when the tracked .op file is RENAMED
-  // on the feature branch while also being modified on both branches.
-  //
-  // Setup:
-  //   base:    design.op  (base content)
-  //   main:    design.op  (modified — id: 'ours')
-  //   feature: design-v2.op (renamed + modified — id: 'theirs')
-  //
-  // Expected git behavior after `git merge --no-commit --no-ff feature`:
-  //   - exitCode 1 (conflict)
-  //   - `git ls-files -u` lists BOTH "design.op" (deleted-by-them, stages 1+2)
-  //     AND "design-v2.op" (added-by-them, stage 3 only)
-  //   - stage 3 blob for "design.op" is absent (file was renamed away on theirs)
-  //   - stage 1/2 blobs for "design-v2.op" are absent (file is new on theirs)
-  //
-  // Engine implication (verified in the engine test below):
-  //   Since stage 3 blob for the tracked "design.op" is missing, the engine
-  //   falls through to { result: 'conflict-non-op' }. This is CORRECT because
-  //   we cannot perform a semantic merge when theirs renamed the tracked file.
-  // ---------------------------------------------------------------------------
+  // Phase 7a 峰值场景 3：重命名冲突
+  // Documents 当跟踪的 .op 文件是 RENAMED 时 git 实际执行的操作
+  // 在功能分支上，同时也在两个分支上进行修改。
+//
+  // Setup：
+  // 基础：design.op（基础内容）
+  // 主要：design.op（已修改 — id：'我们的'）
+  // 功能：design-v2.op（重命名 + 修改 — id：“他们的”）
+//
+  // `git merge --no-commit --no-ff feature` 之后 Expected git 行为：
+  //   - exitCode 1（冲突）
+  //   - `git ls-files -u` 列出 BOTH“design.op”（被他们删除，阶段 1+2）
+  // AND "design-v2.op" （由他们添加，仅限第 3 阶段）
+  //   - “design.op”的第 3 阶段 blob 不存在（文件已在其上重命名）
+  //   - “design-v2.op”的 stage 1/2 blob 不存在（文件是新的）
+//
+  // Engine 含义（在下面的引擎测试中验证）：
+  // Since 跟踪的“design.op”的第 3 阶段 blob 丢失，引擎
+  // 落入 { result: 'conflict-non-op' }。 This 是 CORRECT 因为
+  // 当他们重命名跟踪文件时，我们无法执行语义合并。
+// ---------------------------------------------------------------------------
   it.skipIf(!systemGitAvailable)(
     'spike scenario 3: rename conflict — sysListUnresolved reports both old and new name',
     async () => {
@@ -460,10 +459,10 @@ describe('worktree-merge real-git spike (gated on system git)', () => {
       await g('add', '.');
       await gc('commit', '-m', 'base');
 
-      // feature branch: rename design.op → design-v2.op and modify content.
+      // 功能分支：重命名 design.op→design-v2.op 并修改内容。
       await g('checkout', '-b', 'feature');
       await fsp.rename(join(repoDir, 'design.op'), join(repoDir, 'design-v2.op'));
-      // Overwrite the new name with different content so there's a real content diff.
+      // Overwrite 具有不同内容的新名称，因此存在真正的内容差异。
       await fsp.writeFile(
         join(repoDir, 'design-v2.op'),
         JSON.stringify({ version: '1.0.0', children: [{ id: 'theirs' }] }),
@@ -471,7 +470,7 @@ describe('worktree-merge real-git spike (gated on system git)', () => {
       await g('add', '-A');
       await gc('commit', '-m', 'rename to design-v2.op');
 
-      // main branch: modify design.op in place (divergent from the feature rename).
+      // 主分支：就地修改 design.op（与功能重命名不同）。
       await g('checkout', 'main');
       await fsp.writeFile(
         join(repoDir, 'design.op'),
@@ -480,20 +479,18 @@ describe('worktree-merge real-git spike (gated on system git)', () => {
       await g('add', '.');
       await gc('commit', '-m', 'ours');
 
-      // Attempt merge — expect conflict.
+      // Attempt 合并 — 预计会发生冲突。
       const mergeResult = await sysMergeNoCommit({ cwd: repoDir, ref: 'feature' });
       expect(mergeResult.kind).toBe('conflict');
 
-      // SPIKE FINDING: git reports the rename as a conflict by listing the old
-      // path ("design.op") and possibly the new path ("design-v2.op") as unresolved.
-      // The exact set depends on git version and rename detection thresholds.
+      // SPIKE FINDING：git 通过将旧路径（“design.op”）和可能的新路径（“design-v2.op”）列为未解决来将重命名
+      // 报告为冲突。 The 确切的设置取决于 git 版本和重命名检测阈值。
       const unresolved = await sysListUnresolved({ cwd: repoDir });
 
-      // The original tracked file must appear in the unresolved list because
-      // git detects a rename conflict involving it.
+      // The 原始跟踪文件必须出现在未解析列表中，因为 git 检测到涉及它的重命名冲突。
       expect(unresolved).toContain('design.op');
 
-      // Stage 3 blob for the ORIGINAL path must be absent (theirs renamed it away).
+      // Stage 3 blob 的 ORIGINAL 路径必须不存在（他们已将其重命名）。
       const stage3Original = await sysShowStageBlob({
         cwd: repoDir,
         stage: 3,
@@ -501,7 +498,7 @@ describe('worktree-merge real-git spike (gated on system git)', () => {
       });
       expect(stage3Original).toBeNull();
 
-      // Stage 2 blob for the ORIGINAL path (ours) must be present.
+      // Stage 2 blob 的 ORIGINAL 路径（我们的）必须存在。
       const stage2Original = await sysShowStageBlob({
         cwd: repoDir,
         stage: 2,
@@ -510,37 +507,36 @@ describe('worktree-merge real-git spike (gated on system git)', () => {
       expect(stage2Original).not.toBeNull();
       expect(JSON.parse(stage2Original!).children[0].id).toBe('ours');
 
-      // CONCLUSION: the engine checks for all three stages of trackedRel.
-      // When stage 3 is null, it returns { result: 'conflict-non-op' }.
-      // This is correct: the user must resolve the rename in a terminal.
+      // CONCLUSION：引擎检查 trackedRel 的所有三个阶段。 When 第 3 阶段为 null，它返回 {
+      // result: 'conflict-non-op' }。 This 是正确的：用户必须在终端中解析重命名。
     },
   );
 
   // ---------------------------------------------------------------------------
-  // Phase 7a spike scenario 4: dirty working tree behavior
-  //
-  // The plan says the renderer-side `withCleanWorkingTree` gate should block
-  // merge attempts when the tracked file has uncommitted changes. This test
-  // documents what git *actually does* when that gate is bypassed — establishing
-  // the engine-layer contract: "the engine trusts callers to gate dirty trees;
-  // if they don't, here is what git does."
-  //
-  // Spike setup:
-  //   - Both branches have a divergent commit on design.op (true 3-way merge
-  //     scenario, not a fast-forward), so git must merge the working tree.
-  //   - The working tree has an ADDITIONAL uncommitted change on top of the
-  //     committed ours version.
-  //
-  // Spike finding:
-  //   git merge --no-commit --no-ff with dirty tracked files that the merge
-  //   would touch exits with a non-zero code and a "local changes would be
-  //   overwritten" message. sysMergeNoCommit sees exit code != 0 and != 1,
-  //   so it throws a GitError('engine-crash'). The dirty content is NOT
-  //   silently lost or overwritten.
-  //
-  // This confirms that the renderer gate is the right place for the check:
-  // the engine will throw (not silently corrupt) if called with a dirty tree.
-  // ---------------------------------------------------------------------------
+  // Phase 7a 峰值场景 4：肮脏的工作树行为
+//
+  // The 计划表示渲染器端 `withCleanWorkingTree` 门应该阻塞
+  // 当跟踪的文件有未提交的更改时尝试合并。 This 测试
+  // 记录了当该门被绕过时 git *实际上做了什么 - 建立
+// the engine-layer contract: "the engine trusts callers to gate dirty trees;
+// if they don't, here is what git does."
+//
+  // Spike 设置：
+  //   - Both 分支在 design.op 上有不同的提交（真正的 3 路合并
+  // 场景，而不是快进），所以 git 必须合并工作树。
+  //   - The 工作树在其顶部有一个 ADDITIONAL 未提交的更改
+  // 提交了我们的版本。
+//
+  // Spike 发现：
+  // git merge --no-commit --no-ff 与合并的脏跟踪文件
+  // 会用非零代码触摸退出，并且“本地更改将是
+  // 已覆盖”消息。 sysMergeNoCommit 看到退出代码 != 0 和 != 1，
+  // 所以它会抛出 GitError('engine-crash')。 The 脏内容是 NOT
+  // 悄然丢失或被覆盖。
+//
+  // This 确认渲染器门是检查的正确位置：
+  // 如果使用脏树调用，引擎将抛出异常（不是默默地损坏）。
+// ---------------------------------------------------------------------------
   it.skipIf(!systemGitAvailable)(
     'spike scenario 4: sysMergeNoCommit throws engine-crash when dirty tracked file would be overwritten',
     async () => {
@@ -553,7 +549,7 @@ describe('worktree-merge real-git spike (gated on system git)', () => {
           cwd: repoDir,
         });
 
-      // Base commit on main.
+      // Base 在 main 上提交。
       await g('init', '-b', 'main');
       await fsp.writeFile(
         join(repoDir, 'design.op'),
@@ -562,7 +558,7 @@ describe('worktree-merge real-git spike (gated on system git)', () => {
       await g('add', '.');
       await gc('commit', '-m', 'base');
 
-      // feature branch: modify design.op and commit.
+      // 功能分支：修改 design.op 并提交。
       await g('checkout', '-b', 'feature');
       await fsp.writeFile(
         join(repoDir, 'design.op'),
@@ -571,7 +567,7 @@ describe('worktree-merge real-git spike (gated on system git)', () => {
       await g('add', '.');
       await gc('commit', '-m', 'theirs');
 
-      // main: ALSO make a divergent commit (creates a true 3-way merge).
+      // main: ALSO 进行发散提交（创建真正的三向合并）。
       await g('checkout', 'main');
       await fsp.writeFile(
         join(repoDir, 'design.op'),
@@ -580,35 +576,32 @@ describe('worktree-merge real-git spike (gated on system git)', () => {
       await g('add', '.');
       await gc('commit', '-m', 'ours');
 
-      // Now dirty the tracked file AFTER committing (uncommitted working-tree change).
+      // Now 弄脏了跟踪文件 AFTER 提交（未提交的工作树更改）。
       await fsp.writeFile(
         join(repoDir, 'design.op'),
         JSON.stringify({ version: '1.0.0', children: [{ id: 'dirty-uncommitted' }] }),
       );
-      // Do NOT stage or commit — file is now dirty.
-
-      // SPIKE: attempt the merge. Git detects the dirty tracked file would be
-      // overwritten by the merge and exits with a non-zero code OTHER than 1
-      // (typically exit code 1 but with a "would be overwritten" message, or
-      // exit code 128 on some git versions). Either way, sysMergeNoCommit
-      // either throws or returns { kind: 'conflict' } (if git wrote markers).
-      //
-      // The critical contract: the dirty content is NEVER silently discarded.
+      // Do NOT 阶段或提交 — 文件现在已脏。
+      // SPIKE：尝试合并。 Git 检测到脏跟踪文件将是
+      // 被合并覆盖并以非零代码 OTHER 大于 1 退出
+      // （通常退出代码 1，但带有“将被覆盖”消息，或者
+      // 在某些 git 版本上退出代码 128）。 Either 方式，sysMergeNoCommit
+      // 抛出或返回 { kind: 'conflict' } （如果 git 写入了标记）。
+//
+      // The 关键合约：脏内容被 NEVER 默默丢弃。
       let threwOrConflict = false;
       try {
         const mergeResult = await sysMergeNoCommit({ cwd: repoDir, ref: 'feature' });
-        // If sysMergeNoCommit did not throw, git returned exit code 0 or 1.
-        // Exit code 1 means it entered a conflict state — verify the dirty
-        // content is preserved in conflict markers or the file is unresolved.
+        // If sysMergeNoCommit 没有抛出，git 返回退出代码 0 或 1。 Exit 代码 1 表示它进入了冲突状态 -
+        // 验证脏内容是否保留在冲突标记中或文件未解析。
         if (mergeResult.kind === 'conflict') {
           threwOrConflict = true;
           const unresolved = await sysListUnresolved({ cwd: repoDir });
-          // design.op must be listed — dirty working tree + merge conflict.
+          // design.op 必须列出 — 肮脏的工作树 + 合并冲突。
           expect(unresolved).toContain('design.op');
-          // The working tree file should contain conflict markers (not clean JSON).
+          // The 工作树文件应包含冲突标记（不是干净的 JSON）。
           const raw = await fsp.readFile(join(repoDir, 'design.op'), 'utf-8');
-          // Either it has conflict markers OR it's valid JSON (git preserved ours).
-          // In both cases the content must not be silently replaced with theirs.
+          // Either 它有冲突标记 OR 它是有效的 JSON （git 保留了我们的）。 In 这两种情况的内容都不能默默地替换为他们的内容。
           const hasConflictMarkers = raw.includes('<<<<<<<') || raw.includes('>>>>>>>');
           const isReadableJson = (() => {
             try {
@@ -620,20 +613,17 @@ describe('worktree-merge real-git spike (gated on system git)', () => {
           })();
           expect(hasConflictMarkers || isReadableJson).toBe(true);
         }
-        // If kind === 'clean', the dirty content was identical to what the merge
-        // would produce — the merge happened to be a no-op for this file.
+        // If kind === 'clean'，脏内容与合并产生的内容相同 - 合并恰好是该文件的无操作。
       } catch (err) {
-        // sysMergeNoCommit threw a GitError — git refused the merge entirely.
-        // This is the most common outcome when dirty files would be overwritten.
+        // sysMergeNoCommit 抛出了 GitError —— git 完全拒绝了合并。 This 是覆盖脏文件时最常见的结果。
         threwOrConflict = true;
-        // The error should be an engine-crash (non-0/non-1 exit code from git).
+        // The 错误应该是引擎崩溃（来自 git 的 non-0/non-1 退出代码）。
         const e = err as { name?: string; code?: string };
         expect(e.name).toBe('GitError');
         expect(e.code).toBe('engine-crash');
       }
 
-      // CONTRACT: either git threw (refused) or entered conflict state.
-      // It must NOT silently overwrite the dirty content with theirs.
+      // CONTRACT：git 抛出（拒绝）或进入冲突状态。 It 必须默默地用他们的内容覆盖 NOT 的脏内容。
       expect(threwOrConflict).toBe(true);
     },
   );
@@ -647,32 +637,32 @@ describe('worktree-merge real-git spike (gated on system git)', () => {
       });
       await sysMergeNoCommit({ cwd: repoDir, ref: 'feature' });
 
-      // Confirm both conflict.
+      // Confirm 两者冲突。
       const unresolved = await sysListUnresolved({ cwd: repoDir });
       expect(unresolved).toContain('design.op');
       expect(unresolved).toContain('README.md');
 
-      // Resolve .op by writing final merged content and staging.
+      // Resolve .op 通过编写最终合并的内容和暂存。
       await fsp.writeFile(
         join(repoDir, 'design.op'),
         JSON.stringify({ version: '1.0.0', children: [{ id: 'merged' }] }),
       );
       await sysStageFile({ cwd: repoDir, filepath: 'design.op' });
 
-      // .op is resolved; README still unresolved.
+      // .op 已解决； README 仍未解决。
       const afterOp = await sysListUnresolved({ cwd: repoDir });
       expect(afterOp).not.toContain('design.op');
       expect(afterOp).toContain('README.md');
 
-      // Resolve README (take ours).
+      // Resolve README（拿我们的）。
       await sysRestoreOurs({ cwd: repoDir, filepath: 'README.md' });
       await sysStageFile({ cwd: repoDir, filepath: 'README.md' });
 
-      // All resolved.
+      // All 已解决。
       const afterAll = await sysListUnresolved({ cwd: repoDir });
       expect(afterAll).toHaveLength(0);
 
-      // Finalize.
+      // Finalize。
       const mergeCommit = await sysFinalizeMerge({
         cwd: repoDir,
         message: 'Merge feature: mixed conflict',

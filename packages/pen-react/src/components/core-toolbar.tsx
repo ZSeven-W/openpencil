@@ -5,18 +5,19 @@ import { ShapeToolDropdown } from './shape-tool-dropdown.js';
 import { useHistory } from '../hooks/use-history.js';
 
 export interface CoreToolbarProps {
-  /** Extra buttons to render after the core tools (app-specific: variables, design.md, etc.). */
+  /** Extra 按钮在核心工具之后呈现（特定于应用程序：变量、design.md 等）。 */
   trailing?: ReactNode;
-  /** Extra items for the shape tool dropdown (icon picker, image import). */
+  /** Extra 形状工具下拉菜单项（图标选择器、图像导入）。 */
   shapeTrailing?: ReactNode;
   className?: string;
 }
 
 /**
- * Core editor toolbar with standard design tool buttons.
+ * Core 编辑器工具栏，
  *
- * Includes: Select, Shape dropdown, Text, Frame, Hand, Undo, Redo.
- * App-specific buttons are injected via the `trailing` slot.
+ * 带有标准设计工具按钮。 Includes：Select、Shape
+ * 下拉菜单、Text、Fr
+ ame、Hand、Undo、Redo。 App 特定按钮通过 `trailing` 插槽注入。
  */
 export function CoreToolbar({ trailing, shapeTrailing, className }: CoreToolbarProps) {
   const { canUndo, canRedo, undo, redo } = useHistory();

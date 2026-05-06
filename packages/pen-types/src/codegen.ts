@@ -1,6 +1,6 @@
 import type { PenNode } from './pen.js';
 
-// === Canonical framework type ===
+// === Canonical 框架类型 ===
 
 export type Framework =
   | 'react'
@@ -23,7 +23,7 @@ export const FRAMEWORKS: Framework[] = [
   'react-native',
 ];
 
-// === Step 1 output: AI planner returns this (no node data, minimal tokens) ===
+// === Step 1 输出：AI 规划器返回此（无节点数据，最小标记）===
 
 export interface PlannedChunk {
   id: string;
@@ -41,7 +41,7 @@ export interface CodePlanFromAI {
   rootLayout: { direction: string; gap: number; responsive: boolean };
 }
 
-// === Runtime: hydrated with node data + execution order ===
+// === Runtime：与节点数据水合+执行顺序===
 
 export interface ExecutableChunk extends PlannedChunk {
   nodes: PenNode[];
@@ -55,7 +55,7 @@ export interface CodeExecutionPlan {
   rootLayout: { direction: string; gap: number; responsive: boolean };
 }
 
-// === Chunk contract: structured metadata output from each chunk ===
+// === Chunk 合约：每个块的结构化元数据输出 ===
 
 export interface ChunkContract {
   chunkId: string;
@@ -83,7 +83,7 @@ export interface ImportDef {
   specifiers: string[];
 }
 
-// === Chunk generation output ===
+// === Chunk 生成输出 ===
 
 export interface ChunkResult {
   chunkId: string;
@@ -91,7 +91,7 @@ export interface ChunkResult {
   contract: ChunkContract;
 }
 
-// === Progress events ===
+// === Progress 事件 ===
 
 export type ChunkStatus = 'pending' | 'running' | 'done' | 'degraded' | 'failed' | 'skipped';
 
@@ -114,27 +114,28 @@ export type CodeGenProgress =
   | { step: 'complete'; finalCode: string; degraded: boolean }
   | { step: 'error'; message: string; chunkId?: string };
 
-// === Contract validation ===
+// === Contract 验证 ===
 
 export interface ContractValidationResult {
   valid: boolean;
   issues: string[];
 }
 
-// === Wire DTO types (MCP/CLI responses) ===
+// === Wire DTO 类型（MCP/CLI 响应）===
 
 /**
- * Depth-limited node snapshot for wire transfer.
- * When depth is exhausted, `children` is the string `"..."` instead of NodeSnapshot[].
+ * Depth-用于电汇的有
+ * 限节点快照。 When 深度已耗尽，`children` 是字符串 `"..."` 而不是
+ NodeSnapshot[]。
  */
 export type NodeSnapshot = Omit<PenNode, 'children'> & {
   children?: NodeSnapshot[] | '...';
 };
 
 /**
- * Hydrated chunk payload returned by codegen_plan and codegen_submit_chunk.
- * Uses NodeSnapshot (depth-limited) instead of PenNode[].
- * depContracts entries may be null when a dependency chunk failed/was skipped.
+ * Hydrated
+ * codegen_plan 和 codegen_submit_chunk 返回的块有效负载。 Uses NodeSnapshot（深度有限）而不是
+ * PenNode[]。当跳过依赖块 failed/was 时，depContracts 条目可能为空。
  */
 export interface ExecutableChunkPayload extends Omit<ExecutableChunk, 'nodes' | 'depContracts'> {
   nodes: NodeSnapshot[];
@@ -142,6 +143,6 @@ export interface ExecutableChunkPayload extends Omit<ExecutableChunk, 'nodes' | 
 }
 
 /**
- * A dependency contract that may be absent if the upstream chunk failed or was skipped.
+ * 如果上游块失败或被跳过，则可能不存在依赖契约。
  */
 export type ResolvedDepContract = ChunkContract | null;

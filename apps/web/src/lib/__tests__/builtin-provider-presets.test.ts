@@ -185,9 +185,8 @@ describe('builtin provider presets', () => {
   });
 
   it('preserves alternative-format baseURL on canonicalize (e.g. Bailian Coding Plan + Anthropic)', () => {
-    // Repro for the regression where switching a default-OpenAI preset to
-    // its Anthropic alt URL would silently get reset to the OpenAI URL on
-    // save, and the request then went to .../v1/messages → 404.
+    // Repro 用于回归，其中将 default-OpenAI 预设切换为其 Anthropic alt URL 将在保存时静默重置为
+    // OpenAI URL，然后请求转到 .../v1/messages → 404。
     const altFormat = canonicalizeBuiltinProviderConfig({
       id: 'bp-bailian-coding-anthropic',
       displayName: 'Bailian Coding Plan',
@@ -205,7 +204,7 @@ describe('builtin provider presets', () => {
   });
 
   it('round-trips the default OpenAI URL on canonicalize for the same preset', () => {
-    // Sanity: we did not break the default-format path while fixing the alt-format one.
+    // Sanity：我们在修复替代格式路径时没有破坏默认格式路径。
     const defaultFormat = canonicalizeBuiltinProviderConfig({
       id: 'bp-bailian-coding-openai',
       displayName: 'Bailian Coding Plan',
@@ -223,9 +222,8 @@ describe('builtin provider presets', () => {
   });
 
   it('infers a unique preset from its alternative-format URL (so reload restores it correctly)', () => {
-    // Previously the URL→preset reverse lookup only knew about default-format
-    // URLs; an alt-format URL would fall through to 'custom' and lose the
-    // preset selection on the next reload.
+    // Previously URL→预设反向查找只知道 default-format URLs； alt 格式的 URL
+    // 将转为“自定义”，并在下次重新加载时丢失预设选择。
     expect(
       inferBuiltinProviderPreset({
         type: 'anthropic',
@@ -235,8 +233,8 @@ describe('builtin provider presets', () => {
   });
 
   it('preserves an explicit preset when two presets share the same alt URL', () => {
-    // zhipu and glm-coding both point at https://open.bigmodel.cn/api/anthropic
-    // for their Anthropic alt format. The user's dropdown choice must win.
+    // zhipu 和 glm-coding 都指向 https://open.bigmodel.cn/api/anthropic
+// for their Anthropic alt format. The user's dropdown choice must win.
     const glmCoding = canonicalizeBuiltinProviderConfig({
       id: 'bp-glm-coding-anthropic',
       displayName: 'GLM Coding Plan',

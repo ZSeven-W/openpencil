@@ -11,32 +11,32 @@ export type ComponentCategory =
   | 'other';
 
 export interface KitComponent {
-  /** Node ID of the reusable FrameNode in the kit document */
+  /** 套件文档中可重复使用的 FrameNode 的 Node ID */
   id: string;
-  /** Display name */
+  /** Display 名称 */
   name: string;
-  /** Category for organization in the browser */
+  /** Category 用于在浏览器中进行组织 */
   category: ComponentCategory;
-  /** Tags for search */
+  /** Tags 用于搜索 */
   tags: string[];
-  /** Component dimensions for preview sizing */
+  /** Component 预览尺寸 */
   width: number;
   height: number;
 }
 
 export interface UIKit {
-  /** Unique identifier */
+  /** Unique 标识符 */
   id: string;
-  /** Display name */
+  /** Display 名称 */
   name: string;
-  /** Optional description */
+  /** Optional 描述 */
   description?: string;
-  /** Version string */
+  /** Version 字符串 */
   version: string;
-  /** Whether this is a built-in kit that ships with the app */
+  /** Whether 这是应用程序附带的内置套件 */
   builtIn: boolean;
-  /** Backing PenDocument containing the reusable nodes */
+  /** Backing PenDocument 包含可重用节点 */
   document: PenDocument;
-  /** Extracted component metadata for browsing */
+  /** Extracted 用于浏览的组件元数据 */
   components: KitComponent[];
 }

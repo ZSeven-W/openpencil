@@ -79,17 +79,17 @@ const tr: TranslationKeys = {
   'git.conflict.nonOp.unresolvedHeading_other': '{{count}} dosya ilgilenmeyi bekliyor',
   'git.conflict.nonOp.continue': 'Birleştirmeye devam et',
   'git.conflict.nonOp.abort': 'Birleştirmeyi iptal et',
-  // ── Git çakışma — banner (Phase 7b) ──
+  // ── Git çakışma — 横幅 (Phase 7b) ──
   'git.conflict.banner.progress': '{{resolved}} / {{total}} çözüldü',
   'git.conflict.banner.apply': 'Birleştirmeyi uygula',
   'git.conflict.banner.continue': 'Devam et',
   'git.conflict.banner.finalizeError': 'Uygulanamadı: {{message}}',
   'git.conflict.banner.pollError': 'Bir hata nedeniyle durum kontrolü duraklatıldı: {{message}}',
-  // placeholder — future localization
+  // placeholder — 未来的本地化
   'git.conflict.banner.reopenMessage':
     'Panel birleştirme sırasında yeniden açıldı — lütfen iptal edip tekrar pull yapın.',
 
-  // ── Git çakışma — liste (Phase 7c) ──
+  // ── Git çakışma — 列表 (Phase 7c) ──
   'git.conflict.list.heading': 'Tüm çakışmalar',
   'git.conflict.list.progress': '{{resolved}} / {{total}} çözüldü',
   'git.conflict.list.allResolved': 'Hepsi çözüldü',
@@ -101,7 +101,7 @@ const tr: TranslationKeys = {
   'git.conflict.item.fieldConflict': 'Alan çakışması',
   'git.conflict.item.resolved': 'Çözüldü',
 
-  // ── Git çakışma — kart (Phase 7c) ──
+  // ── Git çakışma — 卡丁车 (Phase 7c) ──
   'git.conflict.card.ours': 'Benimki',
   'git.conflict.card.theirs': 'Onlarınki',
   'git.conflict.card.base': 'Temel',
@@ -162,7 +162,7 @@ const tr: TranslationKeys = {
   'git.autoBind.openButton': 'Aç',
   'git.autoBind.dismissButton': 'Atla',
 
-  // ── Göreli Zaman (Phase 4b) ──
+  // ── 格瑞利 Zaman (Phase 4b) ──
   'git.relativeTime.justNow': 'şimdi',
   'git.relativeTime.minutesAgo': '{{count}}d önce',
   'git.relativeTime.hoursAgo': '{{count}}s önce',
@@ -344,7 +344,7 @@ const tr: TranslationKeys = {
   'git.ssh.genericGuidance':
     'Genel anahtarı kopyalayın ve Git sağlayıcınızın SSH anahtar ayarlarına ekleyin.',
 
-  // ── Git Kimlik doğrulama formu (Phase 6b) ──
+  // ── Git Kimlik doğrulama 公式 (Phase 6b) ──
   'git.auth.formLabel': 'Git kimlik bilgileri',
   'git.auth.heading': '{{host}} ile kimlik doğrula',
   'git.auth.headingUnknown': 'Bu remote ile kimlik doğrula',

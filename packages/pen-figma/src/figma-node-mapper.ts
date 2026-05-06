@@ -17,13 +17,13 @@ import {
 } from './figma-node-converters';
 
 /**
- * Resolve style references (fill, stroke, text, effect) to inline properties.
- * Figma stores styles as separate nodes (styleType='FILL'|'TEXT'|'EFFECT') and
- * references them via styleIdFor* on consuming nodes.  Nodes with a style ref
- * but no inline properties need the style's values copied in.
+ * Resolve
+ * 样式引用（填充、描边、文本、效果）到内联属性。 Figma 将样式存储为单独的节点 (styleType='FILL'|'TEXT'|'EFFECT'
+ * ) 并通过消费节点上的 styleIdFor* 引用它们。 Nodes 具有样式引用，但没有内联属性需要复制样式的值。
+ *
  */
 function resolveStyleReferences(nodeChanges: FigmaNodeChange[]): void {
-  // Build style map from nodes with styleType
+  // Build 带有 styleType 的节点的样式映射
   const styleMap = new Map<string, FigmaNodeChange>();
   for (const nc of nodeChanges) {
     if ((nc as any).styleType && nc.guid) {

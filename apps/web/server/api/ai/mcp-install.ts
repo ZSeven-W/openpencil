@@ -6,7 +6,7 @@ import { existsSync, readdirSync, statSync } from 'node:fs';
 import { execSync, execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
-// ESM-compatible __dirname polyfill
+// ESM 兼容 __dirname polyfill
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
@@ -23,7 +23,7 @@ interface InstallResult {
   success: boolean;
   error?: string;
   configPath?: string;
-  /** True when node was not found and HTTP URL fallback was used */
+  /** True 当未找到节点并且使用 HTTP URL 回退时 */
   fallbackHttp?: boolean;
 }
 
@@ -31,19 +31,19 @@ const MCP_SERVER_NAME = 'openpencil';
 const CODEX_CONFIG_PATH = join(homedir(), '.codex', 'config.toml');
 
 /**
- * Resolve the absolute path to the compiled MCP server.
- * In dev: <project>/dist/mcp-server.cjs
- * In production (Electron): <resources>/mcp-server.cjs
+ * Resolve 已编译的
+ * MCP 服务器的绝对路径。 In 开发：<项目>/dist/mcp-server.cjs In 生产
+ * (Electron)：<资源>/mcp-server.cjs
  */
 function resolveMcpServerPath(): string {
-  // Electron production: extraResources places it in resourcesPath
+  // Electron 制作：extraResources 将其放入 resourcesPath
   const electronResources = process.env.ELECTRON_RESOURCES_PATH;
   if (electronResources) {
     const electronPath = join(electronResources, 'mcp-server.cjs');
     if (existsSync(electronPath)) return electronPath;
   }
-  // Monorepo root: cwd may be apps/web (dev) or project root (Electron)
-  // Walk up from cwd to find monorepo root (has package.json with workspaces)
+  // Monorepo root：cwd 可能是 apps/web (dev) 或项目根 (Electron) Walk 从 cwd
+  // 向上查找 monorepo 根（具有 package.json 和工作区）
   let root = process.cwd();
   for (let i = 0; i < 5; i++) {
     const candidate = join(root, 'out', 'mcp-server.cjs');
@@ -52,19 +52,19 @@ function resolveMcpServerPath(): string {
     if (parent === root) break;
     root = parent;
   }
-  // Fallback: try relative to this file (Nitro bundles server code)
+  // Fallback：尝试相对于此文件（Nitro 捆绑服务器代码）
   const fromFile = resolve(__dirname, '..', '..', '..', 'out', 'mcp-server.cjs');
   if (existsSync(fromFile)) return fromFile;
-  // Return expected monorepo root path
+  // Return 预期 monorepo 根路径
   return join(root, 'out', 'mcp-server.cjs');
 }
 
 /**
- * Detect if `node` is available on the system.
- * Checks PATH first, then common install locations (the Nitro/Electron
- * process may run with a stripped PATH that doesn't include the user's
- * node installation).
- * Caches the result for the lifetime of the process.
+ * Detect（如果
+ * `node` 在系统上可用）。首先是 Checks PATH，然后是常见安装位置（Nit
+ * ro/Electron 进程可能会使用不包含用户节点安装的剥离 PATH 运行）。 Caches 进程生命周期的结果。
+ *
+ *
  */
 let _nodeAvailable: boolean | null = null;
 let _nodeCommand: string | null = null;
@@ -81,15 +81,14 @@ function nodeCandidates(): string[] {
 
   const candidates = ['node', '/usr/local/bin/node', '/usr/bin/node', '/opt/homebrew/bin/node'];
 
-  // NVM: resolve the active node version via the symlink or by reading
-  // .nvm/alias/default, then constructing the versioned bin path.
-  // The old path (`.nvm/versions/node`) is a directory, not a binary —
-  // existsSync would return true but executing it gives "Permission denied".
+  // NVM：通过符号链接或读取 .nvm/alias/default 解析活动节点版本，然后构建版本化的 bin 路径。 The 旧路径
+  // (`.nvm/versions/node`) 是一个目录，而不是二进制文件 — existsSync 将返回
+  // true，但执行它会给出“Permission 被拒绝”。
   const nvmDir = join(homedir(), '.nvm');
   const nvmCurrent = join(nvmDir, 'current', 'bin', 'node');
   candidates.push(nvmCurrent);
 
-  // Fallback: if NVM_DIR/current doesn't exist, find the highest installed version
+  // Fallback：如果 NVM_DIR/current 不存在，则查找安装的最高版本
   if (!existsSync(nvmCurrent)) {
     const versionsDir = join(nvmDir, 'versions', 'node');
     if (existsSync(versionsDir)) {
@@ -101,7 +100,7 @@ function nodeCandidates(): string[] {
           candidates.push(join(versionsDir, versions[versions.length - 1], 'bin', 'node'));
         }
       } catch {
-        /* ignore */
+        /* 忽略 */
       }
     }
   }
@@ -112,7 +111,7 @@ function nodeCandidates(): string[] {
 function isNodeAvailable(): boolean {
   if (_nodeAvailable !== null) return _nodeAvailable;
 
-  // Try PATH first
+  // 首先是 Try PATH
   try {
     const whichCmd = process.platform === 'win32' ? 'where node 2>nul' : 'which node 2>/dev/null';
     const resolved = execSync(whichCmd, { encoding: 'utf-8', timeout: 5000 })
@@ -123,13 +122,11 @@ function isNodeAvailable(): boolean {
     _nodeAvailable = true;
     return true;
   } catch {
-    /* not on PATH */
+    /* 不在 PATH 上 */
   }
 
-  // Check common absolute paths (macOS/Linux + Windows).
-  // Must verify the path is a file, not a directory — existsSync returns
-  // true for directories, which caused the NVM versions dir to be treated
-  // as a node binary.
+  // Check 常见绝对路径 (macOS/Linux + Windows)。 Must
+  // 验证路径是文件，而不是目录 — existsSync 对于目录返回 true，这导致 NVM 版本目录被视为节点二进制文件。
   for (const p of nodeCandidates().slice(1)) {
     try {
       if (existsSync(p) && statSync(p).isFile()) {
@@ -138,7 +135,7 @@ function isNodeAvailable(): boolean {
         return true;
       }
     } catch {
-      /* ignore stat errors */
+      /* 忽略统计错误 */
     }
   }
 
@@ -169,7 +166,7 @@ function buildMcpServerEntry(
   }
 }
 
-/** Build an HTTP URL-based MCP server entry (no local node required). */
+/** Build 一个基于 HTTP URL 的 MCP 服务器条目（不需要本地节点）。 */
 function buildMcpHttpUrlEntry(httpPort = MCP_DEFAULT_PORT): { type: 'http'; url: string } {
   return { type: 'http', url: `http://127.0.0.1:${httpPort}/mcp` };
 }
@@ -300,7 +297,7 @@ async function installCodexMcp(
   try {
     uninstallCodexMcp();
   } catch {
-    // Ignore missing-entry cleanup failures; install below is the real operation.
+    // Ignore 缺失条目清理失败；下面安装才是真正的操作。
   }
 
   if (useHttp) {
@@ -308,7 +305,7 @@ async function installCodexMcp(
       const { startMcpHttpServer } = await import('../../utils/mcp-server-manager');
       startMcpHttpServer(port);
     } catch {
-      // Non-fatal: server may already be running or will be started manually
+      // Non-fatal：服务器可能已经在运行或将手动启动
     }
 
     runCodex(['mcp', 'add', MCP_SERVER_NAME, '--url', `http://127.0.0.1:${port}/mcp`]);

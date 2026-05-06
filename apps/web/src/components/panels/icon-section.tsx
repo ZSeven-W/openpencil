@@ -25,21 +25,22 @@ interface IconSectionProps {
 }
 
 /**
- * Convert any parsed SVG node type into an SVG path `d` string.
- * SVGs can contain <circle>, <ellipse>, <rect>, <line>, <path>, etc.
- * We convert them all to path commands so they can be merged into one compound path.
+ * Convert
+ * 将任何已解析的 SVG 节点类型转换为 SVG 路径 `d` 字符串。 SVGs 可以包含
+ * <circle>、<ellipse>、<rect>、<line>、<path> 等。We
+ 将它们全部转换为路径命令，以便将它们合并为一个复合路径。
  */
 function nodeToPathD(node: PenNode): string | null {
   if (node.type === 'path') {
     return typeof (node as PathNode).d === 'string' ? (node as PathNode).d : null;
   }
   if (node.type === 'ellipse') {
-    // Center + radii from the node's bounding box position
+    // Center + 节点边界框位置的半径
     const rx = typeof node.width === 'number' ? node.width / 2 : 12;
     const ry = typeof node.height === 'number' ? node.height / 2 : 12;
     const cx = (node.x ?? 0) + rx;
     const cy = (node.y ?? 0) + ry;
-    // Two half-arc commands form a closed ellipse/circle
+    // Two 半弧命令形成闭合的 ellipse/circle
     return `M ${cx - rx} ${cy} a ${rx} ${ry} 0 1 0 ${rx * 2} 0 a ${rx} ${ry} 0 1 0 ${-rx * 2} 0 Z`;
   }
   if (node.type === 'rectangle') {

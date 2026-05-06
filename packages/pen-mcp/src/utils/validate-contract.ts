@@ -4,13 +4,13 @@ export function validateContract(result: ChunkResult): ContractValidationResult 
   const issues: string[] = [];
   const { contract, code } = result;
 
-  // 1. componentName must be a valid PascalCase identifier (if provided)
+  // 1. componentName 必须是有效的 PascalCase 标识符（如果提供）
   if (contract.componentName && !/^[A-Z][a-zA-Z0-9]*$/.test(contract.componentName)) {
     issues.push(`componentName "${contract.componentName}" is not a valid PascalCase identifier`);
   }
 
-  // 2. componentName should appear in code (skip for SFC frameworks where name is implicit)
-  // Svelte/Vue SFC may have <script>, <template>, or just <style> with HTML
+  // 2. componentName 应出现在代码中（跳过名称隐式的 SFC 框架） Svelte/Vue SFC 可能有 <script>、<template> 或只有
+  // <style> 以及 HTML
   const isSFC = code.includes('<script') || code.includes('<template') || code.includes('<style');
   if (contract.componentName && !isSFC && !code.includes(contract.componentName)) {
     issues.push(`componentName "${contract.componentName}" not found in generated code`);

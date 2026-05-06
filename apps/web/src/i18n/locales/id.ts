@@ -79,29 +79,29 @@ const id: TranslationKeys = {
   'git.conflict.nonOp.unresolvedHeading_other': '{{count}} file perlu perhatian',
   'git.conflict.nonOp.continue': 'Lanjutkan penggabungan',
   'git.conflict.nonOp.abort': 'Batalkan penggabungan',
-  // ── Konflik Git — banner (Phase 7b) ──
+  // ── Konflik Git — 横幅 (Phase 7b) ──
   'git.conflict.banner.progress': '{{resolved}} / {{total}} diselesaikan',
   'git.conflict.banner.apply': 'Terapkan penggabungan',
   'git.conflict.banner.continue': 'Lanjutkan',
   'git.conflict.banner.finalizeError': 'Tidak dapat diterapkan: {{message}}',
   'git.conflict.banner.pollError': 'Polling status dijeda karena kesalahan: {{message}}',
-  // placeholder — future localization
+  // placeholder — 未来的本地化
   'git.conflict.banner.reopenMessage':
     'Panel dibuka kembali saat penggabungan — silakan batalkan dan pull ulang.',
 
-  // ── Konflik Git — daftar (Phase 7c) ──
+  // ── Konflik Git — 达夫塔 (Phase 7c) ──
   'git.conflict.list.heading': 'Semua konflik',
   'git.conflict.list.progress': '{{resolved}} / {{total}} diselesaikan',
   'git.conflict.list.allResolved': 'Semua selesai',
   'git.conflict.list.allOurs': 'Semua milik saya',
   'git.conflict.list.allTheirs': 'Semua milik mereka',
 
-  // ── Konflik Git — item (Phase 7c) ──
+  // ── Konflik Git — 项目 (Phase 7c) ──
   'git.conflict.item.nodeConflict': 'Konflik node',
   'git.conflict.item.fieldConflict': 'Konflik field',
   'git.conflict.item.resolved': 'Diselesaikan',
 
-  // ── Konflik Git — kartu (Phase 7c) ──
+  // ── Konflik Git — 卡图 (Phase 7c) ──
   'git.conflict.card.ours': 'Milik saya',
   'git.conflict.card.theirs': 'Milik mereka',
   'git.conflict.card.base': 'Dasar',
@@ -110,7 +110,7 @@ const id: TranslationKeys = {
   'git.conflict.card.oursThumbnailAlt': 'Versi saya',
   'git.conflict.card.theirsThumbnailAlt': 'Versi mereka',
 
-  // ── Konflik Git — editor JSON (Phase 7c) ──
+  // ── Konflik Git — 编辑 JSON (Phase 7c) ──
   'git.conflict.editor.editManually': 'Edit secara manual',
   'git.conflict.editor.cancel': 'Batal',
   'git.conflict.editor.apply': 'Terapkan',
@@ -157,12 +157,12 @@ const id: TranslationKeys = {
   'git.picker.empty.body': 'Panel Git memerlukan setidaknya satu file .op untuk bekerja.',
   'git.picker.empty.close': 'Tutup panel',
 
-  // ── Banner auto-bind (Phase 4b) ──
+  // ── Banner 自动绑定 (Phase 4b) ──
   'git.autoBind.confirmHeading': '{{fileName}} ditemukan — buka?',
   'git.autoBind.openButton': 'Buka',
   'git.autoBind.dismissButton': 'Lewati',
 
-  // ── Waktu relatif (Phase 4b) ──
+  // ── Waktu 相关 (Phase 4b) ──
   'git.relativeTime.justNow': 'baru saja',
   'git.relativeTime.minutesAgo': '{{count}}m yang lalu',
   'git.relativeTime.hoursAgo': '{{count}}j yang lalu',
@@ -285,7 +285,7 @@ const id: TranslationKeys = {
   'git.push.rejectedPull': 'Pull sekarang',
   'git.remote.dismissError': 'Tutup',
 
-  // ── Git Pengaturan remote (Phase 6c) ──
+  // ── Git Pengaturan 远程 (Phase 6c) ──
   'git.remote.settingsLabel': 'Pengaturan remote',
   'git.remote.settingsHeading': 'Remote',
   'git.remote.back': 'Kembali',

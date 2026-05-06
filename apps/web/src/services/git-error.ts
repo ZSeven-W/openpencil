@@ -1,14 +1,14 @@
 // apps/web/src/services/git-error.ts
 //
-// Renderer-side GitError class. Mirrors apps/desktop/git/error.ts in shape
-// so the store + panel can `instanceof GitError` and pattern-match on .code
-// uniformly.
+// Renderer 端 GitError 类。 Mirrors apps/desktop/git/error.ts 形状
+// 所以商店+面板可以在.code 上进行 `instanceof GitError` 和模式匹配
+// 均匀地。
 //
-// Electron IPC drops custom Error subclasses across the bridge. Phase 2a's
-// ipc-handlers.ts works around this by serializing GitError into a plain
-// Error whose message starts with the GIT_ERROR_MARKER followed by JSON.
-// This file provides the inverse operation — rehydrateGitError parses the
-// marker-encoded message back into a GitError instance.
+// Electron IPC 通过桥删除自定义 Error 子类。 Phase 2a 的
+// ipc-handlers.ts 通过将 GitError 序列化为普通格式来解决此问题
+// Error，其消息以 GIT_ERROR_MARKER 开头，后跟 JSON。
+// This 文件提供逆操作 — rehydrateGitError 解析
+// 标记编码消息返回到 GitError 实例。
 
 import type { GitErrorCode } from './git-types';
 
@@ -33,9 +33,9 @@ export class GitError extends Error {
 }
 
 /**
- * Defensive type guard. `instanceof GitError` works in same-realm code, but
+ * Defensive 型防护罩。 `instanceof GitError` 在同一领域代码中工作，但是
  * if the GitError was reconstructed from an IPC payload it may be a plain
- * object rather than a class instance. This guard handles both.
+ * 对象而不是类实例。 This 守卫处理两者。
  */
 export function isGitError(err: unknown): err is GitError {
   if (err instanceof GitError) return true;
@@ -45,10 +45,10 @@ export function isGitError(err: unknown): err is GitError {
 }
 
 /**
- * Parse an IPC-delivered Error whose message starts with GIT_ERROR_MARKER
- * back into a GitError instance. Returns null for any input that doesn't
- * match the marker format — the caller should fall back to re-throwing the
- * original error.
+ * Parse 是 IPC
+ * 传递的 Error，其消息以 GIT_ERROR_MARKER 开头返回到 GitError 实例。 Returns null
+ * 对于任何与标记格式不匹配的输入 - 调用者应该重新抛出原始错误。
+ *
  */
 export function rehydrateGitError(err: unknown): GitError | null {
   if (!(err instanceof Error)) return null;

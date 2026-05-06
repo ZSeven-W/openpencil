@@ -106,7 +106,7 @@ describe('parseOrchestratorResponse', () => {
       colorPalette: [{ name: 'Midnight Canvas', hex: '#111111', role: 'Primary app background' }],
     };
 
-    // Invalid JSON (missing rootFrame) with stale catalog styleGuideName + fill
+    // Invalid JSON（缺少 rootFrame），带有过时目录 styleGuideName + 填充
     const raw = JSON.stringify({
       styleGuideName: 'health-minimal-mobile-dark',
       rootFrame: { fill: [{ type: 'solid', color: '#0A0F1C' }] },
@@ -167,8 +167,8 @@ describe('parseOrchestratorResponse', () => {
   });
 
   it('does not use a surface/card color as the page background', () => {
-    // design.md has a "Card surface" role but no explicit page background.
-    // Painting the whole page with #1A1F2E would flatten the card distinction.
+    // design.md 具有“Card 表面”角色，但没有明确的页面背景。 Painting 整个页面带有 #1a1f2e
+    // 会使卡片的区别变平。
     const designMd: DesignMdSpec = {
       raw: '# Test',
       visualTheme: 'moody dark fitness dashboard',
@@ -195,7 +195,7 @@ describe('parseOrchestratorResponse', () => {
 
     const parsed = parseOrchestratorResponse(raw, 'design a mobile screen', designMd);
 
-    // Should fall back to neutral dark (#111111), NOT the card surface color.
+    // Should 恢复为中性深色 (#111111)，NOT 卡表面颜色。
     expect((parsed?.plan.rootFrame.fill as Array<{ color?: string }> | undefined)?.[0]?.color).toBe(
       '#111111',
     );
@@ -211,9 +211,8 @@ describe('parseOrchestratorResponse', () => {
       ],
     };
 
-    // Model returned a brand color as page background — this is exactly the
-    // regression we guard against. Finalize must overwrite it with the neutral
-    // default derived from visualTheme ("dark" → #111111).
+    // Model 返回品牌颜色作为页面背景 - 这正是我们要防止的回归。 Finalize 必须使用从 visualTheme
+    // 派生的中性默认值覆盖它（“dark” → #111111）。
     const raw = JSON.stringify({
       rootFrame: {
         id: 'page',

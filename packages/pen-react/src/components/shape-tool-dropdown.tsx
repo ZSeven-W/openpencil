@@ -15,14 +15,14 @@ const SHAPE_TOOLS: Array<{ tool: ToolType; icon: typeof Square; label: string }>
 const DRAWING_TOOLS = new Set<ToolType>(['rectangle', 'ellipse', 'line', 'polygon', 'path']);
 
 export interface ShapeToolDropdownProps {
-  /** Extra items to show at the bottom (e.g. icon picker, image import). */
+  /** Extra 在底部显示的项目（例如图标选择器、图像导入）。 */
   trailing?: ReactNode;
 }
 
 /**
- * Shape tool dropdown with submenu for shape types.
- * Shows the last-used shape tool as the main button.
- * The `trailing` slot allows apps to inject additional items (icon picker, image import).
+ * Shape 工具下拉菜单
+ * ，带有形状类型的子菜单。 Shows 最后使用的形状工具作为主按钮。 The `trailing`
+ * 插槽允许应用程序注入其他项目（图标选择器、图像导入）。
  */
 export function ShapeToolDropdown({ trailing }: ShapeToolDropdownProps) {
   const [activeTool, setActiveTool] = useActiveTool();

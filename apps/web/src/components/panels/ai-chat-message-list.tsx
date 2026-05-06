@@ -15,8 +15,8 @@ interface AIChatMessageListProps {
 }
 
 /**
- * Scrollable message list with auto-scroll, quick actions (when empty),
- * tool call blocks, and the fixed checklist overlay.
+ * Scrollable
+ * 消息列表，具有自动滚动、快速操作（空时）、工具调用块和固定清单覆盖。
  */
 export function AIChatMessageList({
   messages,
@@ -72,7 +72,7 @@ export function AIChatMessageList({
                 attachments={msg.attachments}
               />
             ))}
-            {/* Tool call blocks (built-in provider / agent pipeline) */}
+            {/* Tool 调用块（内置提供者/代理管道） */}
             {toolCallBlocks.length > 0 && (
               <div className="mt-1">
                 {toolCallBlocks.map((block) => (

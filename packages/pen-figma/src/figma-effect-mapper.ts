@@ -3,7 +3,7 @@ import type { PenEffect } from '@zseven-w/pen-types';
 import { figmaColorToHex } from './figma-color-utils';
 
 /**
- * Convert Figma effects[] (internal format) to PenEffect[].
+ * Convert Figma 效果[]（内部格式）到 PenEffect[]。
  */
 export function mapFigmaEffects(effects: FigmaEffect[] | undefined): PenEffect[] | undefined {
   if (!effects || effects.length === 0) return undefined;

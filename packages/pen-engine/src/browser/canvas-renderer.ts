@@ -21,8 +21,9 @@ import {
 import type { DesignEngineOptions } from '@zseven-w/pen-types';
 
 /**
- * Manages CanvasKit rendering for a DesignEngine instance.
- * Created by attachCanvas(), not directly.
+ * Manages
+ * CanvasKit 呈现 DesignEngine 实例。 Created by
+ attachCanvas()，不是直接的。
  */
 export class CanvasRenderer {
   private ck: CanvasKit;
@@ -165,12 +166,12 @@ export class CanvasRenderer {
   }
 
   async renderToImageData(width: number, height: number): Promise<Uint8Array> {
-    // Render to an offscreen surface and extract pixels
+    // Render 到屏幕外表面并提取像素
     const surface = this.ck.MakeSurface(width, height);
     if (!surface) throw new Error('Failed to create offscreen surface');
     const canvas = surface.getCanvas();
     canvas.clear(this.ck.WHITE);
-    // Render at 1:1 scale
+    // Render 比例为 1:1
     for (const rn of this.renderNodes) {
       this.nodeRenderer.drawNode(canvas, rn);
     }

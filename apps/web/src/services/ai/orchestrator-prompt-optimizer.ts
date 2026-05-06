@@ -21,7 +21,7 @@ export interface PreparedDesignPrompt {
   subAgentPrompt: string;
   wasCompressed: boolean;
   originalLength: number;
-  /** Selectively loaded design principles for sub-agent context */
+  /** Selectively 加载子代理上下文的设计原则 */
   designPrinciples: string;
 }
 
@@ -53,8 +53,7 @@ export function getSubAgentTimeouts(promptLength: number, model?: string): Strea
   }
   const timeouts = applyProfileToTimeouts(base, profile);
 
-  // Basic models are much more likely to stall after emitting a small amount
-  // of reasoning or while the server only sends keepalive pings. Fail faster.
+  // Basic 模型在发出少量推理后或服务器仅发送 keepalive ping 时更有可能停止。 Fail 更快。
   if (profile.tier === 'basic') {
     timeouts.pingResetsTimeout = false;
     timeouts.noTextTimeoutMs = Math.min(timeouts.noTextTimeoutMs, 45_000);
@@ -103,9 +102,9 @@ export function getBuiltinPlanningTimeouts(model?: string): StreamTimeoutProfile
 }
 
 /**
- * Prepare a user prompt for the orchestrator and sub-agents.
- * Simply normalizes whitespace and truncates if too long.
- * No lossy "intelligent" extraction — the user's original intent is preserved.
+ * Prepare
+ * 协调器和子代理的用户提示。 Simply 标准化空白，如果太长则截断。 No
+ * 有损“智能”提取——保留用户的原始意图。
  */
 export function prepareDesignPrompt(prompt: string): PreparedDesignPrompt {
   const normalized = normalizePromptText(prompt);
@@ -132,20 +131,17 @@ export function buildFallbackPlanFromPrompt(
 ): OrchestratorPlan {
   const preset = detectDesignType(prompt);
 
-  // If the user has a design.md, seed the fallback plan from it so basic-tier
-  // models that fall through to this path still honor the user's custom theme.
+  // If 用户有一个 design.md，从中播种后备计划，因此落入此路径的基本层模型仍然遵循用户的自定义主题。
   const designMdBg = designMd ? inferDesignMdBackground(designMd) : null;
 
-  // Try to select a style guide based on prompt keywords (only when no design.md)
+  // Try 根据提示关键字选择样式指南（仅当没有 design.md 时）
   const platform = preset.width <= 500 ? 'mobile' : 'webapp';
   const tags = inferTagsFromPrompt(prompt);
   const guide = designMd ? null : selectStyleGuide(styleGuideRegistry, { tags, platform });
 
-  // Extract background color from selected guide, or use default.
-  // When design.md is present but has no palette entry tagged as background,
-  // fall back to a neutral color derived from visualTheme rather than the
-  // catalog — picking any palette color here risks painting the page with a
-  // brand/CTA/accent color.
+  // Extract 所选指南的背景颜色，或使用默认值。 When design.md
+  // 存在，但没有标记为背景的调色板条目，回退到源自 visualTheme 而不是目录的中性颜色 - 在此处选择任何调色板颜色都有可能使用
+  // brand/CTA/accent 颜色绘制页面。
   let bgColor = designMd ? guessNeutralBackgroundFromTheme(designMd.visualTheme) : '#FFFFFF';
   if (designMdBg) {
     bgColor = designMdBg;
@@ -156,14 +152,12 @@ export function buildFallbackPlanFromPrompt(
     if (bgMatch) bgColor = bgMatch[1];
   }
 
-  // Use preset's default sections — don't parse bullet points from prompt
-  // (bullet parsing caused duplicate elements like triple status bars)
+  // Use 预设的默认部分 - 不解析提示中的项目符号点（项目符号解析导致重复元素，例如三重状态栏）
   const labels = preset.defaultSections;
 
   const sectionCount = Math.max(1, labels.length);
 
-  // Mobile: split height evenly (no weighted allocation — sub-agent decides actual proportions)
-  // Desktop: use standard weighted allocation
+  // Mobile：均匀分割高度（无加权分配——子代理决定实际比例） Desktop：使用标准加权分配
   let heights: number[];
   if (preset.type === 'mobile-screen') {
     const perSection = Math.floor(preset.height / sectionCount);
@@ -192,9 +186,8 @@ export function buildFallbackPlanFromPrompt(
     })),
   };
 
-  // Attach selected style guide for downstream injection.
-  // When design.md is present, we intentionally skip catalog content so it
-  // doesn't override the user's custom design system downstream.
+  // Attach 选择下游注入的风格指南。 When design.md
+  // 存在，我们有意跳过目录内容，因此它不会覆盖下游用户的自定义设计系统。
   if (designMd) {
     plan.styleGuideName = DESIGN_MD_STYLE_GUIDE_NAME;
   } else if (guide) {
@@ -205,7 +198,7 @@ export function buildFallbackPlanFromPrompt(
   return plan;
 }
 
-/** Assign distinct element hints to each mobile section to prevent duplicate content. */
+/** Assign 不同的元素提示每个移动部分以防止重复内容。 */
 function getMobileSectionElements(type: string, label: string): string | undefined {
   if (type !== 'mobile-screen') return undefined;
   switch (label) {
@@ -244,10 +237,9 @@ export function buildPlanningStyleGuideContext(
   if (designMd) {
     const policy = buildDesignMdStylePolicy(designMd);
     const bgHint = inferDesignMdBackground(designMd);
-    // When design.md has no palette entry explicitly marked as background/
-    // surface/canvas, do NOT ask the model to "pick" from the palette — it will
-    // happily pick a brand/CTA color and paint the whole page that color. Give
-    // it a neutral default instead, biased by visualTheme keywords.
+    // When design.md 没有明确标记为背景/ surface/canvas 的调色板条目，NOT
+    // 是否要求模型从调色板中“选择”——它会很乐意选择 brand/CTA 颜色并将整个页面绘制为该颜色。 Give 它是一个中性默认值，受
+    // visualTheme 关键字的影响。
     const neutralDefault = guessNeutralBackgroundFromTheme(designMd.visualTheme);
     const lines = [
       `The user has a custom design system (design.md). DO NOT pick a style guide from a catalog.`,
@@ -303,15 +295,15 @@ export function buildPlanningStyleGuideContext(
 }
 
 /**
- * Pick the color in design.md most likely to be the root/app background.
- * Returns null when no palette entry has a role that clearly marks it as a
- * background — guessing at the first palette color is dangerous because it is
- * often a brand/accent color, which would turn the entire page that color.
+ * Pick design.
+ * md 中的颜色最有可能是 root/app 背景。 Returns null 当没有调色板条目具有明确将其标记为背景的角色时 -
+ * 猜测第一个调色板颜色是危险的，因为它通常是 brand/accent 颜色，这会将整个页面变成该颜色。
+ *
  */
 /**
- * Pick a safe neutral page background when design.md lacks an explicit
- * background role. Biases toward dark when the visual theme hints at dark mode,
- * otherwise defaults to a light page color.
+ * 当 design.md
+ * 缺乏明确的背景角色时，Pick 是安全的中性页面背景。当视觉主题暗示深色模式时，Biases 趋向深色，否则默认为浅色页面颜色。
+ *
  */
 export function guessNeutralBackgroundFromTheme(theme?: string): string {
   if (!theme) return '#FFFFFF';
@@ -326,11 +318,8 @@ export function inferDesignMdBackground(spec: DesignMdSpec): string | null {
   if (!palette?.length) return null;
   const scoreRole = (role: string): number => {
     const r = role.toLowerCase();
-    // A surface/card role is NOT a page background — e.g. dark-mode palettes
-    // often use #0A0F1C for the page and #1A1F2E for cards, and painting the
-    // whole page with the card color produces a flat result that hides the
-    // card boundaries. Only accept roles that explicitly describe a page/app
-    // background or the root canvas.
+    // surface/card 角色是 NOT 页面背景 — 例如暗模式调色板通常使用 #0a0f1c 表示页面，使用 #1a1f2e
+    // 表示卡片，并且使用卡片颜色绘制整个页面会产生隐藏卡片边界的平面结果。 Only 接受明确描述 page/app 背景或根画布的角色。
     if (/primary.*background|app background|main background|page background|canvas/.test(r)) {
       return 3;
     }

@@ -20,7 +20,7 @@ export async function handleAddPage(
   let doc = await openDocument(filePath);
   doc = structuredClone(doc);
 
-  // Ensure pages array exists; migrate doc.children to first page if needed
+  // Ensure 页面数组存在；如果需要，将 doc.children 迁移到首页
   if (!doc.pages || doc.pages.length === 0) {
     doc.pages = [
       {

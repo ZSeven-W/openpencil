@@ -86,7 +86,7 @@ describe('repo-session', () => {
     });
     expect(unregisterSession(s.repoId)).toBe(true);
     expect(getSession(s.repoId)).toBeUndefined();
-    expect(unregisterSession(s.repoId)).toBe(false); // already gone
+    expect(unregisterSession(s.repoId)).toBe(false); // 已经走了
   });
 
   it('setInflightMerge and clearInflightMerge mutate the session', () => {
@@ -98,8 +98,7 @@ describe('repo-session', () => {
     });
     expect(getSession(s.repoId)?.inflightMerge).toBeNull();
 
-    // Minimal InflightMerge stub (types cast bypasses full shape — the test
-    // just exercises the registry mutators, not the merge logic).
+    // Minimal InflightMerge 存根（类型转换绕过完整形状 - 测试仅练习注册表变异器，而不是合并逻辑）。
     const merge = {
       oursCommit: 'a'.repeat(40),
       theirsCommit: 'b'.repeat(40),

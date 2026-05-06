@@ -1,6 +1,6 @@
 import { consumeSSEAsText } from '@/services/ai/ai-service';
 
-/** Intent classification prompt — lightweight LLM call to determine message routing */
+/** Intent 分类提示——轻量级 LLM 调用来确定消息路由 */
 const CLASSIFY_PROMPT = `You are a UI design tool assistant. Classify the user's message intent.
 Reply with EXACTLY one of these tags, nothing else:
 - DESIGN_NEW — user wants to create or generate a NEW design, screen, page, or component from scratch
@@ -9,14 +9,13 @@ Reply with EXACTLY one of these tags, nothing else:
 
 export type DesignIntent = 'new' | 'modify' | 'chat';
 
-/** Classify user intent via a lightweight LLM call instead of hardcoded keyword matching */
+/** Classify 通过轻量级 LLM 调用而不是硬编码关键字匹配来表达用户意图 */
 export async function classifyIntent(
   text: string,
   model: string,
   provider?: string,
 ): Promise<{ intent: DesignIntent }> {
-  // Builtin providers can't use /api/ai/generate (it doesn't resolve builtin
-  // API keys). Use keyword-based classification instead.
+  // Builtin 提供程序无法使用 /api/ai/generate （它不解析内置 API 密钥）。 Use 改为基于关键字的分类。
   if (model.startsWith('builtin:') || provider === 'builtin') {
     return classifyByKeywords(text);
   }
@@ -50,7 +49,7 @@ export async function classifyIntent(
     if (upper.includes('CHAT')) return { intent: 'chat' };
     return { intent: 'new' };
   } catch {
-    // Fallback: in a design tool, default to new design mode
+    // Fallback：在设计工具中，默认为新设计模式
     return { intent: 'new' };
   }
 }

@@ -28,7 +28,7 @@ function isNodeReusable(node: PenNode, parentReusable: boolean): boolean {
   return 'reusable' in node && node.reusable === true;
 }
 
-/** Get effective children for a node, resolving RefNode instances. */
+/** Get 节点的有效子节点，解析 RefNode 实例。 */
 function getEffectiveChildren(node: PenNode, allChildren: PenNode[]): PenNode[] | null {
   if (node.type === 'ref') {
     const component = findNodeInTree(allChildren, node.ref);
@@ -212,7 +212,7 @@ function LayerPanelInner() {
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
-  // Auto-expand ancestors when selection changes (e.g. child selected on canvas)
+  // Auto-当选择更改时展开祖先（例如在画布上选择的子项）
   useEffect(() => {
     if (selectedIds.length === 0) return;
     const ancestorIds = new Set<string>();
@@ -239,7 +239,7 @@ function LayerPanelInner() {
       return next;
     });
 
-    // Scroll the selected item into view after DOM updates
+    // Scroll 更新后所选项目进入视图
     requestAnimationFrame(() => {
       const container = scrollContainerRef.current;
       if (!container) return;
@@ -294,7 +294,7 @@ function LayerPanelInner() {
       const { dragId } = dragRef.current;
       if (!dragId || dragId === id) return;
 
-      // Prevent dropping into own descendants
+      // Prevent 落入自己的后代
       if (isDescendantOf(id, dragId)) return;
 
       const rect = e.currentTarget.getBoundingClientRect();
@@ -332,7 +332,7 @@ function LayerPanelInner() {
           move.index,
           move.preserveAbsolutePosition ? { preserveAbsolutePosition: true } : undefined,
         );
-        // Auto-expand the target so the dropped item is visible
+        // Auto-展开目标，使放置的项目可见
         setCollapsedIds((prev) => {
           const next = new Set(prev);
           next.delete(overId);
@@ -439,7 +439,7 @@ function LayerPanelInner() {
       className="bg-card border-r border-border flex flex-col shrink-0 relative"
       style={{ width: panelWidth }}
     >
-      {/* Resize handle */}
+      {/* Resize 手柄 */}
       <div
         className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-primary/30 active:bg-primary/50 z-10"
         onMouseDown={handleResizeMouseDown}

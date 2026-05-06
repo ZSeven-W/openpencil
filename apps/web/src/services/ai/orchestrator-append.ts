@@ -9,12 +9,12 @@ export interface AppendPlanResult {
 }
 
 /**
- * Mutates/returns the plan according to an AppendContext:
- * - Repoints `rootFrame.id` to `targetParentId` so sub-agent sections are
- *   inserted as children of the existing page content root.
- * - Drops any planner-emitted status-bar subtasks (existing page already has one).
- * - Carries `existingSectionLabels` through to each remaining subtask so the
- *   sub-agent prompt can instruct the model not to regenerate them.
+ * Mutates/retu
+ * rns 根据 AppendContext 进行计划： - Repoints `rootFrame.id` 到
+ * `targetParentId` 因此子代理部分将作为现有页面内容根的子项插入。 - Drops
+ * 任何规划器发出的状态栏子任务（现有页面已经有一个）。 - Carries
+ * `existingSectionLabels` 贯穿每个剩余的子任务，以便子代理提示可以指示模型不要重新生成它们。
+ *
  */
 export function applyAppendContextToPlan(
   plan: OrchestratorPlan,

@@ -46,8 +46,8 @@ export function clearRecentFiles(): void {
 }
 
 /**
- * Format a timestamp as a relative time string.
- * Returns an i18n key + interpolation params.
+ * Format 作为相对时
+ * 间字符串的时间戳。 Returns 一个 i18n 键 + 插值参数。
  */
 export function relativeTime(timestamp: number): { key: string; params?: Record<string, number> } {
   const diff = Date.now() - timestamp;

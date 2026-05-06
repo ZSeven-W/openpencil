@@ -3,15 +3,15 @@ import { clamp, toSizeNumber, extractPrimaryColor } from './generation-utils';
 import { ICON_PATH_MAP } from './icon-dictionary';
 
 // ---------------------------------------------------------------------------
-// Emoji detection + fallback icon heuristics
+// Emoji 检测 + 后备图标启发式
 // ---------------------------------------------------------------------------
 
 const EMOJI_REGEX = /[\p{Extended_Pictographic}\p{Emoji_Presentation}\uFE0F]/gu;
 
 /**
- * When a text node contains emoji characters, strip them.
- * If the entire content is emoji (no text remains), convert the node
- * to a fallback circle path icon in-place.
+ * When 文本节点包含表
+ * 情符号字符，将其剥离。 If 整个内容是表情符号（没有文本保留），将节点就地转换为后备圆形路径图标。
+ *
  */
 export function applyNoEmojiIconHeuristic(node: PenNode): void {
   if (node.type !== 'text') return;

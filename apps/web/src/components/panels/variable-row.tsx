@@ -4,7 +4,7 @@ import { cn } from '@/lib/utils';
 import NumberInput from '@/components/shared/number-input';
 import type { VariableDefinition, ThemedValue } from '@/types/variables';
 
-/** Convert any CSS color string to #rrggbb for <input type="color">. */
+/** Convert 任何 CSS 颜色字符串为 #rrggbb <input type="color">。 */
 function toHex7(color: string): string {
   if (color.startsWith('#') && color.length >= 7) return color.slice(0, 7);
   const m = color.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/);

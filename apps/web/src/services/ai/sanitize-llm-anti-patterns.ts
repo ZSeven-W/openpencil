@@ -1,80 +1,80 @@
 /**
- * Structural rewriters for known LLM-generation anti-patterns.
+ * Structural
  *
- * Weaker models (and occasionally strong ones) reproduce a few broken
- * composition patterns no matter how carefully the prompt describes the
- * right approach. Prompt-level education is unreliable — LLMs copy the
- * most common pattern from their training data, not the rule from the
- * instruction header. This module catches the recurring anti-patterns
- * at sanitize time and rewrites the subtree into a structurally correct
- * form BEFORE `resolveTreeRoles` / `normalizeTreeLayout` run.
+ * 重写已知的 LLM 生成反模式。 Weaker 模型（有时是强模型）会重现一些破碎的构图模式，无论提示如何仔细地描述正确
+ * 的方法。 Prompt
+ * 级别的教育是不可靠的 - LLMs 从训练数据中复制最常见的模式，而不是指令头中的规则。 This
+ * 模块在清理时捕获重复出现的反模式，并将子树重写为结构正确的形式 BEFORE `resolveTreeRoles` /
+ * `normalizeTreeLayout` 运行。 Design 原理： - Pure 树突变。 No 在传递的节点之外产生副作用。 -
+ * Conservative 检测。 Each 重写器在触发之前需要多个信号，因此它不会触及未损坏的设计。 - Structural
+ * 替换，而不是属性编辑。 The 损坏的模式一步即可替换为正确的等效模式 - 没有可能使树处于部分重写状态的零碎修复。 - Runs
  *
- * Design principles:
- *   - Pure tree mutation. No side effects outside the passed node.
- *   - Conservative detection. Each rewriter requires multiple signals
- *     before firing so it doesn't touch designs that weren't broken.
- *   - Structural replacement, not property edits. The broken pattern
- *     is swapped for a correct equivalent in one step — no piecemeal
- *     fixes that could leave the tree in a partially-rewritten state.
- *   - Runs BEFORE role resolution so the rewritten subtree can still
- *     benefit from downstream passes (theme-aware defaults, layout
- *     normalization, post-pass badge overlay detection).
+ * BEFORE 角色解析，因此重写的子树仍然可以从下游传递中受益（主题感知默认值、布局规范化、传递后徽章覆盖检测）。 Current
+ * 重写器：rewriteStackedEllipsesToRingFrames 一个 `layout: 'none'`
+ * 父级，包含 ≥2
+ * 个同心椭圆（透明填充，仅描边）加上任
+ * 意数量的文本/ icon_font 子级。 The LLM 意图是同心环组合 (Apple Activity
+ * Rings)，但当布局=none 并且椭圆上没有 x/y 时，它们都在 (0,0) 处渲染并重叠在左上角。 Rewritten
+ * 进入嵌套框架 + cornerRadius 树，其中每个框架通过 Flex 在其父框架内居中。
+ * rewriteAlternatingBarLabelSiblings 一个水平父母，有交替的 `frame(no-text
+ * children)` + `text` 兄弟姐妹（总共 ≥6 个孩子，≥3 对）。 The LLM
+ * 意图是一个条形图，每个条形下方都有标签，但在 `space_between`
  *
- * Current rewriters:
+ * 下将它们作为平面兄弟发出会产生分散在条形之间的标签，而不是分组在列中。 Rewritten 将每个条形与其后面的文本配对到
  *
- *   rewriteStackedEllipsesToRingFrames
- *     A `layout: 'none'` parent containing ≥2 concentric ellipses
- *     (transparent fill, stroke-only) plus any number of text/
- *     icon_font children. The LLM intent is a concentric ring
- *     composition (Apple Activity Rings), but with layout=none and
- *     no x/y on the ellipses, they all render at (0,0) and overlap
- *     top-left. Rewritten into a nested frame+cornerRadius tree where
- *     each frame is centered inside its parent via flex.
+ * `layout=vertical` 列框架中。 rewriteOpenStrokePathsWithDuplicateF
+ * ill Weak 模型通常在 `fill` 和 `stroke`
+ * 中发出具有相同纯色的折线
+ * 图/迷你图路径，但忘记用 `Z`
+ * 关闭 SVG 路径。
+ * SVG fill 隐式关闭开放路径，将简单的趋势线变成
+ * wedge/area 斑点。 When 路径显然是一条开放的描边线，填充复制了描边颜色，删除填充并仅保留描边。
+ * normalizeRingTrackProgressGeometry Weak
  *
- *   rewriteAlternatingBarLabelSiblings
- *     A horizontal parent with alternating `frame(no-text children)`
- *     + `text` siblings (≥6 children total, ≥3 pairs). The LLM intent
- *     is a bar chart with labels below each bar, but emitting them as
- *     flat siblings under `space_between` produces labels scattered
- *     between bars instead of grouped in columns. Rewritten to pair
- *     each bar with the text that follows it into a `layout=vertical`
- *     column frame.
+ * 模型有时会从椭圆轨道加上同级路径弧构建进度环，但该路径使用不同的 bbox（例如，在 x=5,y=5 处的
+ * 80×80 轨道上的 90×90 路径）。 That 不匹配使环在路径 normalization/scaling
+ * 之后看起来被拉伸或偏离中心。 When 我们检测到这种模式，将进度路径重写到轨道的本地 bbox 上并保留
+ * dash/cap 样式。 rewritePseudoRingFrames Some
+ * 较弱的模型会生成一个人造环作为宽药丸框架，其中包含方形“Progress
+ * Ring”子项和较小的“
+ * Inner Circle”子项。 The
+ * 外框变成一个拉伸的胶囊而不是圆形。 When 检测到此模式，将外框重写到方形进度 bbox
  *
- *   rewriteOpenStrokePathsWithDuplicateFill
- *     Weak models often emit line-chart / sparkline paths with the same
- *     solid color in both `fill` and `stroke`, but forget to close the
- *     SVG path with `Z`. SVG fill closes open paths implicitly, which
- *     turns a simple trend line into a wedge/area blob. When the path is
- *     clearly an open stroked line and the fill duplicates the stroke
- *     color, drop the fill and keep the stroke only.
+ * 上，删除虚假的白色胶囊填充，并将内部内容居中，以便结果至少是一个稳定的圆环。 stripRingFrameFills Ring
+ * 框架是笔画几何体。 Downstream role/post 通过，某些型号可以通过添加白色或中性填充物将它们变成填充圆盘。
+ * For 名为 ring/circle/progress 的方形、圆形、描边节点，删除内部填充，同时保留描边和子项。
  *
- *   normalizeRingTrackProgressGeometry
- *     Weak models sometimes build a progress ring from an ellipse track plus
- *     a sibling path arc, but the path uses a different bbox (e.g. 90×90 path
- *     over an 80×80 track at x=5,y=5). That mismatch makes the ring look
- *     stretched or off-center after path normalization/scaling. When we detect
- *     this pattern, rewrite the progress path onto the track's local bbox and
- *     preserve dash/cap styling.
  *
- *   rewritePseudoRingFrames
- *     Some weaker models generate a faux ring as a wide pill frame containing
- *     a square "Progress Ring" child and a smaller "Inner Circle" child. The
- *     outer frame becomes a stretched capsule instead of a circle. When this
- *     pattern is detected, rewrite the outer frame onto the square progress
- *     bbox, drop the bogus white capsule fill, and center the inner content so
- *     the result is at least a stable circular ring.
  *
- *   stripRingFrameFills
- *     Ring frames are stroke geometry. Downstream role/post passes and some
- *     models can turn them into filled discs by adding white or neutral fills.
- *     For square, rounded, stroked nodes named ring/circle/progress, remove
- *     the interior fill while keeping the stroke and children.
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
  */
 
 import type { PenNode } from '@/types/pen';
 
 // ---------------------------------------------------------------------------
-// Shared helpers
+// Shared 帮助者
 // ---------------------------------------------------------------------------
 
 function getChildren(node: PenNode): PenNode[] | undefined {
@@ -90,7 +90,7 @@ function getNum(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
 
-/** Counter used to mint deterministic ids for newly-created wrapper frames. */
+/** Counter 用于为新创建的包装框架创建确定性 ID。 */
 let _rewriteCounter = 0;
 function mintId(prefix: string): string {
   _rewriteCounter += 1;

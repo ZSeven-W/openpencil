@@ -1,31 +1,31 @@
 /**
- * Fixed mobile status bar node, replicated from Pencil demo (pencil-demo.pen).
+ * Fixed 移动状态栏节点，复制自 Pencil 演示 (pencil-demo.pen)。
  *
- * The visual style originates from iOS (4-bar signal, fan WiFi, pill battery)
- * but is used as a **universal mobile mockup status bar** for all platforms.
+ * The 视觉风格源自 iOS（4 条信号、风扇 WiFi、药丸电池）
+ * 但用作所有平台的**通用移动模型状态栏**。
  * This is intentional — real-world design tools (Figma, Sketch) do the same;
- * the iOS chrome is the de facto standard for mobile UI mockups regardless of
- * target platform.
+ * iOS chrome 是移动 UI 模型的事实上的标准，无论
+ * 目标平台。
  *
- * Structure:
- *   Status bar (frame, w=fill_container, h=62, padding=[21,24,19,24])
- *   ├── Time (frame, fill_container, h=22) → "9:41" text
- *   └── Levels (frame, fill_container, h=22, gap=7)
- *       ├── Cellular Connection (path — 4-bar signal)
- *       ├── Wifi (path — fan icon)
- *       └── Battery (frame, layout=none)
- *           ├── Border (rectangle, r=4.3, opacity=0.35, stroke)
- *           ├── Cap (path, opacity=0.4)
- *           └── Capacity (rectangle, r=2.5, solid fill)
+ * Structure：
+ * Status 条（框架，w=fill_container，h=62，填充=[21,24,19,24]）
+ * ├── Time（帧，fill_container，h=22）→“9:41”文本
+ * └── Levels（帧，fill_container，h=22，间隙=7）
+ * ├── Cellular Connection（路径 — 4 条信号）
+ * ├── Wifi（路径 — 风扇图标）
+ * └── Battery（框架，布局=无）
+ * ├── Border（矩形，r=4.3，不透明度=0.35，描边）
+ * ├── Cap（路径，不透明度=0.4）
+ * └── Capacity（矩形，r=2.5，实心填充）
  *
- * Two variants: dark (#000) for light backgrounds, white (#fff) for dark backgrounds.
+ * Two 变体：深色 (#000) 表示浅色背景，白色 (#fff) 表示深色背景。
  */
 
 import type { PenNode } from '@/types/pen';
 import type { PenFill } from '@/types/styles';
 import { nanoid } from 'nanoid';
 
-// -- Path geometry (identical for both variants) ------------------------------
+// -- Path 几何形状（两种变体相同） ------------------------------
 
 const CELLULAR_D =
   'M19.2 1.14623c0-0.63304-0.47756-1.14623-1.06667-1.14623l-1.06666 0c-0.5891 0-1.06667 0.51318-1.06667 1.14623l0 9.93396c0 0.63304 0.47756 1.14623 1.06667 1.14622l1.06666 0c0.5891 0 1.06667-0.51318 1.06667-1.14622l0-9.93396z m-7.43411 1.29905l1.06666 0c0.5891 0 1.06667 0.5255 1.06667 1.17374l0 7.43366c0 0.64824-0.47756 1.17374-1.06667 1.17373l-1.06666 0c-0.5891 0-1.06667-0.5255-1.06667-1.17373l0-7.43366c0-0.64824 0.47756-1.17374 1.06667-1.17374z m-4.33178 2.64905l-1.06666 0c-0.5891 0-1.06667 0.53219-1.06667 1.18868l0 4.75472c0 0.65649 0.47756 1.18868 1.06667 1.18867l1.06666 0.00001c0.5891 0 1.06667-0.53219 1.06667-1.18868l0-4.75472c0-0.65649-0.47756-1.18868-1.06667-1.18868z m-5.30078 2.44529l-1.06666 0c-0.5891 0-1.06667 0.52459-1.06667 1.1717l0 2.3434c0 0.64711 0.47756 1.1717 1.06667 1.1717l1.06666 0c0.5891 0 1.06667-0.52459 1.06667-1.1717l0-2.3434c0-0.64711-0.47756-1.1717-1.06667-1.1717z';
@@ -47,9 +47,9 @@ function solidFill(color: string): PenFill[] {
 type StatusBarVariant = 'dark' | 'light';
 
 /**
- * Creates a mobile status bar node tree with fresh IDs.
+ * Creates 一个带有新鲜 IDs 的移动状态栏节点树。
  *
- * @param variant - 'dark' (black icons, for light backgrounds) or 'light' (white icons, for dark backgrounds)
+ * @param variant - “深色”（黑色图标，用于浅色背景）或“浅色”（白色图标，用于深色背景）
  */
 export function createMobileStatusBar(variant: StatusBarVariant = 'dark'): PenNode {
   const fg = variant === 'dark' ? '#000000ff' : '#ffffffff';
@@ -66,7 +66,7 @@ export function createMobileStatusBar(variant: StatusBarVariant = 'dark'): PenNo
     justifyContent: 'center',
     alignItems: 'center',
     children: [
-      // Time section (left)
+      // Time 部分（左）
       {
         id: nanoid(),
         type: 'frame',
@@ -92,7 +92,7 @@ export function createMobileStatusBar(variant: StatusBarVariant = 'dark'): PenNo
           } as PenNode,
         ],
       } as PenNode,
-      // Levels section (right — signal, wifi, battery)
+      // Levels 部分（右 — 信号、wifi、电池）
       {
         id: nanoid(),
         type: 'frame',
@@ -126,7 +126,7 @@ export function createMobileStatusBar(variant: StatusBarVariant = 'dark'): PenNo
             fill: fgFill,
             fillRule: 'evenodd',
           } as PenNode,
-          // Battery frame
+          // Battery 帧
           {
             id: nanoid(),
             type: 'frame',
@@ -182,21 +182,19 @@ export function createMobileStatusBar(variant: StatusBarVariant = 'dark'): PenNo
 }
 
 /**
- * Determines the best status bar variant based on a background color.
- * Returns 'light' (white icons) for dark backgrounds, 'dark' (black icons) for light ones.
+ * Determines
+ * 基于背景颜色的最佳状态栏变体。 Returns 'light'（白色图标）用于深色背景，'dark'（黑色图标）用于浅色背景。
  */
 export function inferStatusBarVariant(bgColor?: string | unknown): StatusBarVariant {
-  // Defensive: callers occasionally pass non-string values (e.g. a fill
-  // object or a `$variable` ref-shaped object) when the upstream PenNode
-  // hasn't been variable-resolved yet. Bail to the safe default instead
-  // of throwing `bgColor.replace is not a function`.
+  // Defensive：当上游 PenNode 尚未进行变量解析时，调用者偶尔会传递非字符串值（例如填充对象或 `$variable`
+  // 引用形状对象）。 Bail 为安全默认值，而不是抛出 `bgColor.replace is not a function`。
   if (typeof bgColor !== 'string' || !bgColor) return 'dark';
   const hex = bgColor.replace(/^#/, '').slice(0, 6);
   if (hex.length !== 6) return 'dark';
   const r = parseInt(hex.slice(0, 2), 16);
   const g = parseInt(hex.slice(2, 4), 16);
   const b = parseInt(hex.slice(4, 6), 16);
-  // Relative luminance (simplified)
+  // Relative 亮度（简化）
   const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
   return luminance < 0.5 ? 'light' : 'dark';
 }

@@ -1,21 +1,21 @@
 // apps/web/src/components/panels/git-panel/use-git-panel-log-loader.ts
 //
-// Phase 7b: shared hook that loads the commit log for the current branch
-// whenever state.kind matches one of the active-repo kinds. Replaces the
-// hardcoded `ref: 'main'` that GitPanelReady and GitPanelConflict used to
-// pass — the log should always follow state.repo.currentBranch.
+// Phase 7b：加载当前分支的提交日志的共享钩子
+// 每当 state.kind 与 active-repo 类型之一匹配时。 Replaces 的
+// GitPanelReady 和 GitPanelConflict 用来硬编码的 `ref: 'main'`
+// pass — 日志应始终遵循 state.repo.currentBranch。
 //
-// Callers just invoke the hook; it fires loadLog on mount and whenever
-// state.kind or state.repo.currentBranch changes.
+// Callers 只是调用钩子；它会在安装时触发 loadLog
+// state.kind 或 state.repo.currentBranch 更改。
 
 import { useEffect } from 'react';
 import { useGitStore } from '@/stores/git-store';
 
 /**
- * Fires `loadLog({ ref: state.repo.currentBranch, limit: 50 })` whenever
- * the panel is in one of the given `kinds`. Re-fires when state.kind or
- * currentBranch changes so branch switches and conflict → ready transitions
- * always show the right log.
+ * Fires `loadL
+ * og({ ref: state.repo.currentBranch, limit: 50 })` 每当面板位于给定的 `kinds`
+ * 之一时。 Re-当 state.kind 或 currentBranch 更改时触发，因此分支切换和冲突 → 就绪转换始终显示正确的日志。
+ *
  */
 export function useGitPanelLogLoader(kinds: ReadonlyArray<string>): void {
   const stateKind = useGitStore((s) => s.state.kind);

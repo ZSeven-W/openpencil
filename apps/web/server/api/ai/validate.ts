@@ -19,12 +19,12 @@ interface ValidateBody {
 }
 
 /**
- * Vision-based validation endpoint.
- * Accepts a base64 PNG screenshot and a text prompt, sends multimodal
- * content blocks for analysis via Agent SDK.
+ * 基于 Vision
+ * 的验证端点。 Accepts Base64 PNG
+ * 屏幕截图和文本提示，通过 Agent SDK 发送多模式内容块进行分析。 Saves 屏幕截图到临时文件，要求 Claude Code
  *
- * Saves screenshot to temp file, asks Claude Code to read it via its
- * built-in Read tool.
+ * 通过其内置的 Read 工具读取它。
+ *
  */
 export default defineEventHandler(async (event) => {
   const body = await readBody<ValidateBody>(event);
@@ -71,8 +71,7 @@ async function withTempImageFile<T>(
 ): Promise<T> {
   let tempDir: string;
   if (insideProject) {
-    // Save inside the project directory so Claude Code Agent SDK (plan mode)
-    // can read the file — it restricts reads to the project directory.
+    // Save 在项目目录中，因此 Claude Code Agent SDK （计划模式）可以读取该文件 - 它限制对项目目录的读取。
     const { mkdirSync, chmodSync } = await import('node:fs');
     const baseDir = join(process.cwd(), '.openpencil-tmp');
     mkdirSync(baseDir, { recursive: true });
@@ -91,10 +90,10 @@ async function withTempImageFile<T>(
 }
 
 /**
- * Agent SDK: save screenshot to a temp PNG file inside the project directory,
- * then ask Claude Code to read it (Claude Code's Read tool supports images
- * natively). Must use insideProject=true because plan mode restricts reads
- * to the project directory.
+ * Agent SDK：将屏
+ * 幕截图保存到项目目录内的临时 PNG 文件中，然后要求 Claude Code 读取它（Claude Code 的 Read 工具本身支持图像）。
+ * Must 使用 insideProject=true 因为计划模式限制对项目目录的读取。
+ *
  */
 async function validateViaAgentSDK(
   body: ValidateBody,

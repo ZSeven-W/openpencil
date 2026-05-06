@@ -5,7 +5,7 @@ import { useDesignEngine } from '../hooks/use-design-engine.js';
 import { useActivePage } from '../hooks/use-active-page.js';
 
 export interface PageTabsProps {
-  /** Optional callback when page is switched (e.g. to zoom-to-fit). */
+  /** Optional 页面切换时的回调（例如缩放至适合）。 */
   onPageSwitch?: (pageId: string) => void;
 }
 

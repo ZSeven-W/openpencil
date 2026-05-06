@@ -8,8 +8,9 @@ export interface PageManagerOptions {
 }
 
 /**
- * Manages multi-page state.
- * Extracted from apps/web/src/stores/document-store-pages.ts.
+ * Manages
+ * 多页面状态。 Extracted 来自
+ apps/web/src/stores/document-store-pages.ts。
  */
 export class PageManager {
   private activePageId: string | null = null;
@@ -21,7 +22,7 @@ export class PageManager {
     this.getDocument = options.getDocument;
     this.setDocument = options.setDocument;
     this.onPageChangeCb = options.onPageChange;
-    // Initialize active page to the first page
+    // Initialize 活动页面到首页
     const doc = this.getDocument();
     this.activePageId = doc.pages?.[0]?.id ?? null;
   }

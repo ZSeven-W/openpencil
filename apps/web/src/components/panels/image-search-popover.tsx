@@ -82,7 +82,7 @@ export default function ImageSearchPopover({
   const handleOpenChange = useCallback((next: boolean) => {
     setOpen(next);
     if (next) {
-      // Reset search state when re-opening
+      // Reset 重新打开时的搜索状态
       setHasSearched(false);
       setResults([]);
       setSource(null);
@@ -94,7 +94,7 @@ export default function ImageSearchPopover({
       <PopoverTrigger asChild>{children}</PopoverTrigger>
 
       <PopoverContent className="w-80 p-3" side="left" align="start" sideOffset={8}>
-        {/* Search bar */}
+        {/* Search 酒吧 */}
         <div className="flex gap-1.5 mb-3">
           <input
             ref={inputRef}
@@ -119,7 +119,7 @@ export default function ImageSearchPopover({
           </button>
         </div>
 
-        {/* Results / empty state */}
+        {/* Results / 空状态 */}
         {loading ? (
           <div className="flex flex-col items-center justify-center py-8 gap-2">
             <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
@@ -153,7 +153,7 @@ export default function ImageSearchPopover({
           </div>
         )}
 
-        {/* Footer: license + source */}
+        {/* Footer：许可证+源 */}
         {results.length > 0 && source && (
           <div className="mt-2 pt-2 border-t border-border">
             <p className="text-[10px] text-muted-foreground leading-snug">

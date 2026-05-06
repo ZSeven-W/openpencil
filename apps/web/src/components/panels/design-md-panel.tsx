@@ -15,7 +15,7 @@ const DEFAULT_WIDTH = 560;
 const DEFAULT_HEIGHT = 520;
 
 // ---------------------------------------------------------------------------
-// Panel component
+// Panel 组件
 // ---------------------------------------------------------------------------
 
 export default function DesignMdPanel() {
@@ -50,7 +50,7 @@ export default function DesignMdPanel() {
     startPanelY: number;
   } | null>(null);
 
-  // Drag + resize handlers
+  // Drag + 调整大小处理程序
   useEffect(() => {
     const onMove = (e: PointerEvent) => {
       const d = dragRef.current;
@@ -114,7 +114,7 @@ export default function DesignMdPanel() {
     [panelWidth, panelHeight],
   );
 
-  // Check if designMd has any meaningful content beyond just raw text
+  // Check 如果 designMd 除了原始文本之外还有任何有意义的内容
   const hasContent =
     designMd &&
     (designMd.visualTheme ||
@@ -130,7 +130,7 @@ export default function DesignMdPanel() {
       className="fixed z-50 bg-card border border-border rounded-xl shadow-2xl flex flex-col overflow-hidden"
       style={{ width: panelWidth, height: panelHeight, left: panelX, top: panelY }}
     >
-      {/* Header — draggable */}
+      {/* Header — 可拖动 */}
       <div
         className="flex items-center justify-between px-3 py-2 border-b border-border bg-muted/40 shrink-0 cursor-grab active:cursor-grabbing select-none"
         onPointerDown={startDrag}
@@ -166,10 +166,10 @@ export default function DesignMdPanel() {
         )}
       </div>
 
-      {/* Generating overlay */}
+      {/* Generating 覆盖 */}
       {isGenerating && <DesignMdGeneratingOverlay onStop={handleAutoGenerate} />}
 
-      {/* Resize handles */}
+      {/* Resize 手柄 */}
       <div
         className="absolute right-0 top-0 w-1.5 h-full cursor-ew-resize"
         onPointerDown={(e) => startResize('right', e)}

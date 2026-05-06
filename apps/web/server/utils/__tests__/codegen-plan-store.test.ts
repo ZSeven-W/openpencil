@@ -162,7 +162,7 @@ describe('codegen-plan-store', () => {
     expect(assembled.chunks).toHaveLength(2);
     expect(assembled.degraded).toBe(false);
 
-    // Terminal operation — plan should be cleared
+    // Terminal 操作 — 计划应被清除
     expect(getPlan(planId)).toBeUndefined();
   });
 

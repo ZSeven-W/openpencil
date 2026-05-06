@@ -1,4 +1,4 @@
-/** Port file discovery and app health check. */
+/** Port 文件发现和应用程序运行状况检查。 */
 
 import { readFile, unlink } from 'node:fs/promises';
 import { join } from 'node:path';

@@ -49,14 +49,14 @@ describe('flattenToRenderNodes — dimension consistency', () => {
   });
 
   it('absH uses getNodeHeight for text without height, not sizeToNumber 100 fallback', () => {
-    // Simulates text after fixTextHeights deleted height
+    // Simulates 删除 fixTextHeights 后的文本高度
     const root = frame({
       id: 'root',
       width: 400,
       height: 600,
       layout: 'vertical' as any,
       children: [
-        // Text with no height property (deleted by fixTextHeights)
+        // 没有 height 属性的 Text （被 fixTextHeights 删除）
         {
           id: 't1',
           type: 'text',
@@ -70,8 +70,7 @@ describe('flattenToRenderNodes — dimension consistency', () => {
     const nodes = flattenToRenderNodes([root]);
     const t1 = nodes.find((rn) => rn.node.id === 't1')!;
 
-    // absH should reflect estimated text height (~18-24px for single line at 16px),
-    // NOT the 100px sizeToNumber fallback
+    // absH 应反映估计的文本高度（16 像素处的单行约为 18-24 像素），NOT 为 100 像素 sizeToNumber 后备
     expect(t1.absH).toBeLessThan(50);
     expect(t1.absH).toBeGreaterThan(10);
   });
@@ -85,7 +84,7 @@ describe('flattenToRenderNodes — dimension consistency', () => {
       children: [
         frame({
           id: 'inner',
-          // No explicit width — getNodeWidth should compute from children
+          // No 显式宽度 — getNodeWidth 应从子级计算
           height: 100,
           children: [
             { id: 'r1', type: 'rectangle', x: 0, y: 0, width: 200, height: 50 } as PenNode,
@@ -97,8 +96,8 @@ describe('flattenToRenderNodes — dimension consistency', () => {
     const nodes = flattenToRenderNodes([root]);
     const inner = nodes.find((rn) => rn.node.id === 'inner')!;
 
-    // inner absW should come from getNodeWidth (fitContentWidth → 200),
-    // not the sizeToNumber fallback of 100
+    // 内部 absW 应该来自 getNodeWidth (fitContentWidth → 200)，而不是
+    // sizeToNumber 后备 100
     expect(inner.absW).toBeGreaterThanOrEqual(200);
   });
 

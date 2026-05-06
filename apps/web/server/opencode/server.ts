@@ -7,7 +7,7 @@ export type ServerOptions = {
   signal?: AbortSignal;
   timeout?: number;
   config?: Config;
-  /** Absolute path to the opencode binary (avoids PATH lookup issues in Electron). */
+  /** Absolute opencode 二进制文件的路径（避免 Electron 中的 PATH 查找问题）。 */
   binaryPath?: string;
 };
 

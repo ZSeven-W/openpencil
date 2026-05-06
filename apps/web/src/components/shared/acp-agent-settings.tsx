@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { useAgentSettingsStore } from '@/stores/agent-settings-store';
 import type { AcpAgentConfig } from '@/types/agent-settings';
 
-/* ---------- Shared field wrapper ---------- */
+/* ---------- Shared 字段包装 ---------- */
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="space-y-1">
@@ -23,14 +23,14 @@ const inputClass =
 
 /* ---------- Helpers ---------- */
 
-/** Check whether we are running inside the Electron shell */
+/** Check 我们是否在 Electron shell 内运行 */
 function isElectron(): boolean {
   return (
     typeof window !== 'undefined' && !!(window as unknown as Record<string, unknown>).electronAPI
   );
 }
 
-/** Parse KEY=VALUE lines into a record */
+/** Parse KEY=VALUE 行写入记录 */
 function parseEnvText(text: string): Record<string, string> {
   const env: Record<string, string> = {};
   for (const line of text.split('\n')) {
@@ -44,7 +44,7 @@ function parseEnvText(text: string): Record<string, string> {
   return env;
 }
 
-/** Serialize a record to KEY=VALUE lines */
+/** Serialize 一条记录到 KEY=VALUE 行 */
 function envToText(env?: Record<string, string>): string {
   if (!env) return '';
   return Object.entries(env)

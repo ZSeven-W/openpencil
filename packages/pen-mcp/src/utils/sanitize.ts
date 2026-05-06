@@ -1,11 +1,10 @@
 /**
- * Recursively strip dangerous prototype-pollution keys from parsed JSON objects.
- * Call on any user-supplied or file-parsed JSON before using it in the application.
+ * Recursively
+ * 从解析的 JSON 对象中去除危险的原型污染键。在应用程序中使用任何用户提供的或文件解析的 JSON 之前，先对其执行 Call。
  */
 
-// '__proto__' and 'prototype' enable classic prototype pollution.
-// 'constructor' is stripped because obj.constructor.prototype can also be
-// used to reach and mutate Object.prototype in certain exploit chains.
+// '__proto__' 和 'prototype' 会造成经典的原型污染。 'constructor' 被删除，因为
+// obj.constructor.prototype 也可用于在某些漏洞利用链中访问和变异 Object.prototype。
 const DANGEROUS_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
 
 export function sanitizeObject<T>(obj: T, seen = new WeakSet<object>()): T {

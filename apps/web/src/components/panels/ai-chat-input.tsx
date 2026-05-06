@@ -15,8 +15,8 @@ interface AIChatInputProps {
 }
 
 /**
- * Chat input area: textarea, attachment preview strip, model selector,
- * concurrency button, attachment button, and send/stop button.
+ * Chat 输入区域：文本
+ * 区域、附件预览条、模型选择器、并发按钮、附件按钮和 send/stop 按钮。
  */
 export function AIChatInput({ input, setInput, onSend }: AIChatInputProps) {
   const { t } = useTranslation();
@@ -76,7 +76,7 @@ export function AIChatInput({ input, setInput, onSend }: AIChatInputProps) {
       const files = e.target.files;
       if (!files) return;
       processImageFiles(Array.from(files));
-      // Reset so the same file can be re-selected
+      // Reset 所以可以重新选择相同的文件
       e.target.value = '';
     },
     [processImageFiles],
@@ -111,7 +111,7 @@ export function AIChatInput({ input, setInput, onSend }: AIChatInputProps) {
         onChange={handleFileSelect}
       />
 
-      {/* Attachment preview strip */}
+      {/* Attachment 预览条 */}
       {pendingAttachments.length > 0 && (
         <div className="flex items-center gap-1.5 px-3 pt-2 pb-1 overflow-x-auto">
           {pendingAttachments.map((att) => (

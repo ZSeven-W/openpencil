@@ -30,17 +30,17 @@ type SetState = {
   ): void;
 };
 
-/** Shortcut: get the active page's children from the current state. */
+/** Shortcut：从当前状态获取活动页面的子级。 */
 function _children(s: { document: PenDocument }): PenNode[] {
   return getActivePageChildren(s.document, useCanvasStore.getState().activePageId);
 }
 
-/** Shortcut: return a new document with active page's children replaced. */
+/** Shortcut：返回一个新文档，其中活动页面的子级已替换。 */
 function _setChildren(doc: PenDocument, children: PenNode[]): PenDocument {
   return setActivePageChildren(doc, useCanvasStore.getState().activePageId, children);
 }
 
-/** Push current document to history, then apply mutation and mark dirty. */
+/** Push 将当前文档添加到历史记录，然后应用突变并标记为脏。 */
 function mutateWithHistory(
   get: () => { document: PenDocument },
   set: SetState,
@@ -83,9 +83,8 @@ export function createNodeActions(
       mutateWithHistory(get, set, (doc) =>
         _setChildren(
           doc,
-          // Default to index 0 (prepend) so new items appear at the top of
-          // the layer panel = frontmost on canvas. Callers can pass an
-          // explicit index to override.
+          // Default 到索引 0（前置），以便新项目出现在图层面板的顶部 = 画布上的最前面。 Callers
+          // 可以传递显式索引来覆盖。
           insertNodeInTree(_children({ document: doc }), parentId, node, index ?? 0),
         ),
       );
@@ -194,7 +193,7 @@ export function createNodeActions(
       const node = findNodeInTree(children, id);
       if (!node) return null;
 
-      // Duplicating a reusable component creates an instance (RefNode)
+      // Duplicating 可重用组件创建实例 (RefNode)
       if ('reusable' in node && node.reusable === true) {
         const bounds = getNodeBounds(node, allNodes);
         const parent = findParentInTree(children, id);
@@ -222,7 +221,7 @@ export function createNodeActions(
         return refNode.id;
       }
 
-      // Regular duplication for non-reusable nodes
+      // Regular 不可重用节点的复制
       const clone = cloneNodeWithNewIds(node);
       clone.name = (clone.name ?? clone.type) + ' copy';
 
@@ -248,7 +247,7 @@ export function createNodeActions(
       const nodes = nodeIds.map((id) => findNodeInTree(children, id)).filter(Boolean) as PenNode[];
       if (nodes.length < 2) return null;
 
-      // Compute bounding box
+      // Compute 边界框
       let minX = Infinity,
         minY = Infinity,
         maxX = -Infinity,
@@ -264,7 +263,7 @@ export function createNodeActions(
         maxY = Math.max(maxY, ny + nh);
       }
 
-      // Make children relative to group
+      // Make 相对于组的儿童
       const groupChildren = nodes.map((n) => ({
         ...n,
         x: (n.x ?? 0) - minX,
@@ -283,7 +282,7 @@ export function createNodeActions(
         children: groupChildren,
       };
 
-      // Find insertion position (position of first selected node)
+      // Find 插入位置（第一个选定节点的位置）
       const firstParent = findParentInTree(children, nodeIds[0]);
       const parentId = firstParent ? firstParent.id : null;
       const siblings = firstParent
@@ -293,7 +292,7 @@ export function createNodeActions(
         : children;
       const firstIdx = siblings.findIndex((n) => nodeIds.includes(n.id));
 
-      // Remove all selected nodes, then insert group at first node's position
+      // Remove 所有选定的节点，然后在第一个节点的位置插入组
       let newChildren = children;
       for (const id of nodeIds) {
         newChildren = removeNodeFromTree(newChildren, id);
@@ -316,7 +315,7 @@ export function createNodeActions(
       const siblings = parent ? ('children' in parent ? (parent.children ?? []) : []) : children;
       const groupIdx = siblings.findIndex((n) => n.id === groupId);
 
-      // Adjust children coordinates to parent space
+      // Adjust 子坐标到父空间
       const groupX = group.x ?? 0;
       const groupY = group.y ?? 0;
       const adjustedChildren = group.children.map((child) => ({
@@ -325,7 +324,7 @@ export function createNodeActions(
         y: (child.y ?? 0) + groupY,
       })) as PenNode[];
 
-      // Remove group, then insert children at group's position (in reverse to maintain order)
+      // Remove 组，然后在组的位置插入子项（相反以保持顺序）
       let newChildren = removeNodeFromTree(children, groupId);
       for (let i = adjustedChildren.length - 1; i >= 0; i--) {
         newChildren = insertNodeInTree(newChildren, parentId, adjustedChildren[i], groupIdx);

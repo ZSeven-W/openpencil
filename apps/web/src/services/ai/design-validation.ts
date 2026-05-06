@@ -1,9 +1,9 @@
 /**
- * Post-generation screenshot validation.
+ * Post-生成截图验证。
  *
- * After all design sections are generated, captures a screenshot of the root
- * frame and sends it alongside a simplified node tree to the vision API.
- * The LLM correlates visual issues with actual node IDs and returns fixes.
+ * After 生成所有设计部分，捕获根框架的屏幕截图并将其与简化的节点树一起发
+ * 送到视觉 API。
+ * The LLM 将视觉问题与实际节点 IDs 相关联并返回修复。
  */
 
 import { DEFAULT_FRAME_ID, useDocumentStore } from '@/stores/document-store';
@@ -28,7 +28,7 @@ import {
 } from './design-validation-fixes';
 
 // ---------------------------------------------------------------------------
-// System prompt for the vision validator (resolved from pen-ai-skills)
+// System 视觉验证器提示（从 pen-ai-skills 解决）
 // ---------------------------------------------------------------------------
 
 function getValidationSystemPrompt(): string {
@@ -37,7 +37,7 @@ function getValidationSystemPrompt(): string {
 }
 
 // ---------------------------------------------------------------------------
-// Node tree dump — simplified for LLM context
+// Node 树转储 — 针对 LLM 上下文进行简化
 // ---------------------------------------------------------------------------
 
 function buildNodeTreeDump(rootId: string): string {

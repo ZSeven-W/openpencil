@@ -22,7 +22,7 @@ export interface BatchGetParams {
   readDepth?: number;
   searchDepth?: number;
   pageId?: string;
-  /** When true, resolve $variable refs to concrete values. Default false. */
+  /** When true，将 $variable 引用解析为具体值。 Default 假。 */
   resolveRefs?: boolean;
 }
 
@@ -39,7 +39,7 @@ export async function handleBatchGet(
     ? { resolveRefs: true, doc }
     : undefined;
 
-  // If no patterns or nodeIds, return top-level children
+  // If 无模式或 nodeIds，返回顶级子级
   if (!params.patterns?.length && !params.nodeIds?.length) {
     const rootNodes = params.parentId
       ? (() => {
@@ -55,7 +55,7 @@ export async function handleBatchGet(
   const results: PenNode[] = [];
   const seen = new Set<string>();
 
-  // Search by patterns
+  // Search 按模式
   if (params.patterns?.length) {
     const searchRoot = params.parentId
       ? (() => {
@@ -75,7 +75,7 @@ export async function handleBatchGet(
     }
   }
 
-  // Read by IDs
+  // Read 作者：IDs
   if (params.nodeIds?.length) {
     for (const id of params.nodeIds) {
       if (seen.has(id)) continue;

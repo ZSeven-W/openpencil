@@ -12,7 +12,7 @@ export const SELECTION_BLUE = '#0d99ff';
 export const COMPONENT_COLOR = '#a855f7';
 export const INSTANCE_COLOR = '#9281f7';
 
-// Hover / overlay / indicator
+// Hover / 覆盖 / 指示器
 export const HOVER_BLUE = '#3b82f6';
 export const HOVER_LINE_WIDTH = 1.5;
 export const HOVER_DASH = [4, 4];
@@ -21,12 +21,12 @@ export const INDICATOR_LINE_WIDTH = 2;
 export const INDICATOR_DASH = [6, 4];
 export const INDICATOR_ENDPOINT_RADIUS = 3;
 
-// Frame labels
+// Frame 标签
 export const FRAME_LABEL_FONT_SIZE = 12;
 export const FRAME_LABEL_OFFSET_Y = 6;
 export const FRAME_LABEL_COLOR = '#999999';
 
-// Pen tool
+// Pen 工具
 export const PEN_ANCHOR_FILL = '#ffffff';
 export const PEN_ANCHOR_RADIUS = 4;
 export const PEN_ANCHOR_FIRST_RADIUS = 5;
@@ -36,14 +36,14 @@ export const PEN_RUBBER_BAND_STROKE = 'rgba(13, 153, 255, 0.5)';
 export const PEN_RUBBER_BAND_DASH = [4, 4];
 export const PEN_CLOSE_HIT_THRESHOLD = 8;
 
-// Dimension label
+// Dimension 标签
 export const DIMENSION_LABEL_OFFSET_Y = 8;
 
-// Default node colors
+// Default 节点颜色
 export const DEFAULT_FRAME_FILL = '#ffffff';
 export const DEFAULT_TEXT_FILL = '#000000';
 
-// Smart guides
+// Smart 指南
 export const GUIDE_COLOR = '#FF6B35';
 export const GUIDE_LINE_WIDTH = 1;
 export const GUIDE_DASH = [3, 3];

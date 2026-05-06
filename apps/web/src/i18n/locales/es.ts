@@ -61,7 +61,7 @@ const es: TranslationKeys = {
   'topbar.connected': 'conectado',
   'topbar.agentStatus': '{{agents}} agente{{agentSuffix}} · {{mcp}} MCP',
 
-  // ── Panel de Git ──
+  // ── Panel 的 Git ──
   'git.openPanel': 'Abrir panel de Git',
   'git.closePanel': 'Cerrar panel de Git',
   'git.title': 'Git · {{fileName}}',
@@ -79,24 +79,24 @@ const es: TranslationKeys = {
   'git.conflict.nonOp.unresolvedHeading_other': '{{count}} archivos necesitan atención',
   'git.conflict.nonOp.continue': 'Continuar fusión',
   'git.conflict.nonOp.abort': 'Cancelar fusión',
-  // ── Conflicto Git — banner (Phase 7b) ──
+  // ── Conflicto Git — 横幅 (Phase 7b) ──
   'git.conflict.banner.progress': 'Resuelto {{resolved}} / {{total}}',
   'git.conflict.banner.apply': 'Aplicar fusión',
   'git.conflict.banner.continue': 'Continuar',
   'git.conflict.banner.finalizeError': 'No se pudo aplicar: {{message}}',
   'git.conflict.banner.pollError': 'Sondeo de estado pausado por un error: {{message}}',
-  // placeholder — future localization
+  // placeholder — 未来的本地化
   'git.conflict.banner.reopenMessage':
     'Panel reabierto durante la fusión — por favor, cancela y vuelve a hacer pull.',
 
-  // ── Conflicto Git — lista (Phase 7c) ──
+  // ── Conflicto Git — 列表 (Phase 7c) ──
   'git.conflict.list.heading': 'Todos los conflictos',
   'git.conflict.list.progress': '{{resolved}} / {{total}} resueltos',
   'git.conflict.list.allResolved': 'Todo resuelto',
   'git.conflict.list.allOurs': 'Todo el mío',
   'git.conflict.list.allTheirs': 'Todo el suyo',
 
-  // ── Conflicto Git — ítem (Phase 7c) ──
+  // ── Conflicto Git — 项目 (Phase 7c) ──
   'git.conflict.item.nodeConflict': 'Conflicto de nodo',
   'git.conflict.item.fieldConflict': 'Conflicto de campo',
   'git.conflict.item.resolved': 'Resuelto',
@@ -110,7 +110,7 @@ const es: TranslationKeys = {
   'git.conflict.card.oursThumbnailAlt': 'Mi versión',
   'git.conflict.card.theirsThumbnailAlt': 'Su versión',
 
-  // ── Conflicto Git — editor JSON (Phase 7c) ──
+  // ── Conflicto Git — 编辑 JSON (Phase 7c) ──
   'git.conflict.editor.editManually': 'Editar manualmente',
   'git.conflict.editor.cancel': 'Cancelar',
   'git.conflict.editor.apply': 'Aplicar',
@@ -121,7 +121,7 @@ const es: TranslationKeys = {
   'git.error.retry': 'Reintentar',
   'git.error.title': 'Algo salió mal',
 
-  // ── Estado vacío de Git ──
+  // ── Estado 没有 Git ──
   'git.empty.heading': 'Aún no hay historial de versiones',
   'git.empty.optional': 'Git es opcional — puedes omitirlo',
   'git.empty.requireSavedFile': 'Guarda el archivo .op para habilitar el historial',
@@ -132,7 +132,7 @@ const es: TranslationKeys = {
   'git.empty.cloneCard': 'Clonar',
   'git.empty.cloneCardDescription': 'Desde un remoto',
 
-  // ── Formulario de autor de Git ──
+  // ── Formulario 作者 Git ──
   'git.author.heading': 'Autor del commit',
   'git.author.subheading': 'Guardar el primer commit requiere nombre y correo',
   'git.author.nameLabel': 'Nombre',
@@ -151,7 +151,7 @@ const es: TranslationKeys = {
   'git.picker.lastCommit': '{{message}} · {{time}}',
   'git.picker.bindButton': 'Rastrear este archivo',
   'git.picker.bindAndOpenButton': 'Rastrear y abrir',
-  // Phase 7b: back/cancel navigation
+  // Phase 7b：back/cancel 导航
   'git.picker.back': 'Atrás',
   'git.picker.backClose': 'Cancelar',
   'git.picker.empty.heading': 'No hay archivos .op en este repositorio',
@@ -163,7 +163,7 @@ const es: TranslationKeys = {
   'git.autoBind.openButton': 'Abrir',
   'git.autoBind.dismissButton': 'Omitir',
 
-  // ── Tiempo relativo (Phase 4b) ──
+  // ── Tiempo 相对 (Phase 4b) ──
   'git.relativeTime.justNow': 'ahora',
   'git.relativeTime.minutesAgo': 'hace {{count}}m',
   'git.relativeTime.hoursAgo': 'hace {{count}}h',
@@ -198,7 +198,7 @@ const es: TranslationKeys = {
   'git.history.restoreButton': 'Restaurar',
   'git.history.copyHashButton': 'Copiar hash',
   'git.history.copiedToast': 'Copiado',
-  // Phase 7b: inline diff block
+  // Phase 7b：内联差异块
   'git.history.diff.loading': 'Cargando diff…',
   'git.history.diff.initialCommit': 'Commit inicial — sin padre para comparar',
   'git.history.diff.noChanges': 'No se detectaron cambios',
@@ -217,7 +217,7 @@ const es: TranslationKeys = {
   'git.autosave.messagePrefix': 'auto',
   'git.autosave.messageDiffSuffix': '',
 
-  // ── Git Selector de ramas (Phase 5) ──
+  // ── Git Selector 拉玛斯 (Phase 5) ──
   'git.branch.listHeading': 'Ramas',
   'git.branch.createAction': 'Nueva rama',
   'git.branch.createPlaceholder': 'feature/login-redesign',
@@ -288,7 +288,7 @@ const es: TranslationKeys = {
   'git.push.rejectedPull': 'Pull ahora',
   'git.remote.dismissError': 'Cerrar',
 
-  // ── Git Ajustes del remoto (Phase 6c) ──
+  // ── Git Ajustes 德尔雷莫托 (Phase 6c) ──
   'git.remote.settingsLabel': 'Ajustes del remoto',
   'git.remote.settingsHeading': 'Remoto',
   'git.remote.back': 'Atrás',
@@ -346,7 +346,7 @@ const es: TranslationKeys = {
   'git.ssh.genericGuidance':
     'Copia la clave pública y añádela a los ajustes de claves SSH de tu proveedor de Git.',
 
-  // ── Git Formulario de autenticación (Phase 6b) ──
+  // ── Git Formulario 验证 (Phase 6b) ──
   'git.auth.formLabel': 'Credenciales de Git',
   'git.auth.heading': 'Autenticar con {{host}}',
   'git.auth.headingUnknown': 'Autenticar con este remoto',

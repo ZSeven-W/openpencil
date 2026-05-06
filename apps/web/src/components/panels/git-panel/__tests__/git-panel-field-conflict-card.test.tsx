@@ -1,4 +1,4 @@
-// @vitest-environment jsdom
+// @vitest-环境 jsdom
 // apps/web/src/components/panels/git-panel/__tests__/git-panel-field-conflict-card.test.tsx
 
 import { describe, it, expect, afterEach, vi } from 'vitest';
@@ -27,8 +27,7 @@ vi.mock('@/components/ui/button', () => ({
   ),
 }));
 
-// Note: shadcn Badge is not in this project; the card uses an inline InlineBadge.
-// No mock needed.
+// Note: shadcn Badge 不在本项目中；该卡使用内联 InlineBadge。需要 No 模拟。
 
 vi.mock('@/components/panels/git-panel/git-panel-conflict-json-editor', () => ({
   GitPanelConflictJsonEditor: ({
@@ -143,7 +142,7 @@ describe('GitPanelFieldConflictCard', () => {
   it('shows base, ours, and theirs values', () => {
     const conflict = makeFieldConflict('docField:name');
     render(<GitPanelFieldConflictCard conflict={conflict} onResolve={() => {}} />);
-    // prettyJson renders strings with JSON quotes
+    // prettyJson 使用 JSON 引号呈现字符串
     expect(screen.getByTestId('field-base-value-docField:name').textContent).toContain('old-name');
     expect(screen.getByTestId('field-ours-value-docField:name').textContent).toContain('my-name');
     expect(screen.getByTestId('field-theirs-value-docField:name').textContent).toContain(

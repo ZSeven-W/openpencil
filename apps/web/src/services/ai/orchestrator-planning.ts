@@ -98,9 +98,8 @@ function repairPlanObject(
   const rootSource = isRecord(obj.rootFrame) ? obj.rootFrame : obj;
   const fallbackHeights = buildFallbackHeights(fallback, rawSubtasks.length);
 
-  // Shape the rootFrame first — finalizePlan will re-stamp rootFrame.fill
-  // below when design.md is present, so we don't need to special-case the fill
-  // here. For non-design.md flows, honor the model's fill when coercible.
+  // Shape 首先是 rootFrame — 当 design.md 存在时，finalizePlan 将在下面重新标记
+  // rootFrame.fill，因此我们不需要在此处对填充进行特殊处理。 For non-design.md 流动，强制时尊重模型的填充。
   const rootFrame: OrchestratorPlan['rootFrame'] = {
     id: asString(rootSource.id) ?? fallback.rootFrame.id,
     name: asString(rootSource.name) ?? fallback.rootFrame.name,
@@ -121,9 +120,8 @@ function repairPlanObject(
 
   const repaired: OrchestratorPlan = {
     rootFrame,
-    // When design.md is present, force the design-md style guide name so a
-    // stale catalog name left over from invalid planner JSON can't leak into
-    // downstream sub-agent prompts.
+    // When design.md 存在，强制使用 design-md 样式指南名称，以便无效规划器 JSON
+    // 留下的陈旧目录名称不会泄漏到下游子代理提示中。
     styleGuideName: designMd
       ? DESIGN_MD_STYLE_GUIDE_NAME
       : (asString(obj.styleGuideName) ?? asString(obj.style_guide) ?? fallback.styleGuideName),
@@ -142,13 +140,10 @@ function finalizePlan(
   rawObj?: Record<string, unknown>,
   designMd?: DesignMdSpec,
 ): OrchestratorPlan {
-  // design.md always wins: strip any catalog styleGuideName/styleGuide the
-  // model might have emitted, force the root background to the design.md
-  // primary palette color (or a neutral default biased by visualTheme when no
-  // palette entry is tagged as background — DO NOT trust the model's own
-  // rootFrame.fill here because it often lifts a brand/CTA color from the
-  // palette), and leave plan.styleGuide unset so downstream consumers fall
-  // back to the buildDesignMdStylePolicy path.
+  // design.md 总是获胜：剥离模型可能发出的任何目录 styleGuideName/styleGuide，强制根背景为
+  // design.md 主调色板颜色（或者当没有调色板条目标记为背景时，由 visualTheme 偏向的中性默认值 — DO NOT
+  // 信任模型自己的 rootFrame.fill ，因为它经常从调色板中提升 brand/CTA 颜色），以及保留 plan.styleGuide
+  // 未设置，以便下游消费者退回到 buildDesignMdStylePolicy 路径。
   if (designMd) {
     plan.styleGuideName = DESIGN_MD_STYLE_GUIDE_NAME;
     plan.styleGuide = undefined;

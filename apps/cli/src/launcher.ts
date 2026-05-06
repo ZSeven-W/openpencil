@@ -1,4 +1,4 @@
-/** Start/stop OpenPencil app from the CLI. */
+/** Start/stop OpenPencil 应用程序来自 CLI。 */
 
 import { spawn, fork, execSync } from 'node:child_process';
 import { createServer } from 'node:net';
@@ -38,7 +38,7 @@ async function waitForPortFile(timeoutMs = 15_000): Promise<{ port: number; pid:
   throw new Error('Timeout waiting for OpenPencil to start');
 }
 
-/** Find the installed desktop app binary. */
+/** Find 安装的桌面应用程序二进制文件。 */
 function findDesktopBinary(): string | null {
   const candidates: string[] = [];
 
@@ -51,26 +51,26 @@ function findDesktopBinary(): string | null {
     const localAppData = process.env.LOCALAPPDATA ?? join(homedir(), 'AppData', 'Local');
     const programFiles = process.env.PROGRAMFILES ?? 'C:\\Program Files';
     const programFilesX86 = process.env['PROGRAMFILES(X86)'] ?? 'C:\\Program Files (x86)';
-    // NSIS per-user install (default)
+    // NSIS 每用户安装（默认）
     candidates.push(join(localAppData, 'Programs', 'openpencil', 'OpenPencil.exe'));
-    // NSIS per-machine install
+    // NSIS 每台机器安装
     candidates.push(join(programFiles, 'OpenPencil', 'OpenPencil.exe'));
     candidates.push(join(programFilesX86, 'OpenPencil', 'OpenPencil.exe'));
-    // Portable — same directory as CLI
+    // Portable — 与 CLI 相同的目录
     candidates.push(join(__dirname, '..', 'OpenPencil.exe'));
   } else {
-    // Linux — AppImage, deb, snap, flatpak, manual
+    // Linux — AppImage、deb、snap、flatpak、手册
     candidates.push('/usr/bin/openpencil');
     candidates.push('/usr/local/bin/openpencil');
     candidates.push(join(homedir(), '.local', 'bin', 'openpencil'));
-    // AppImage in common download locations
+    // AppImage 位于常见下载位置
     const appImageDirs = [
       join(homedir(), 'Applications'),
       join(homedir(), 'Downloads'),
       join(homedir(), '.local', 'share', 'applications'),
     ];
     for (const dir of appImageDirs) {
-      // Match OpenPencil*.AppImage (version may vary)
+      // Match OpenPencil*.AppImage（版本可能有所不同）
       try {
         if (existsSync(dir)) {
           const files = require('node:fs').readdirSync(dir) as string[];
@@ -80,7 +80,7 @@ function findDesktopBinary(): string | null {
           if (appImage) candidates.push(join(dir, appImage));
         }
       } catch {
-        /* skip */
+        /* 跳过 */
       }
     }
     // Snap
@@ -98,14 +98,14 @@ function findDesktopBinary(): string | null {
   return null;
 }
 
-/** Find the Nitro server entry relative to CLI's location. */
+/** Find 相对于 CLI 位置的 Nitro 服务器条目。 */
 function findServerEntry(): string | null {
-  // When compiled, __dirname points to dist/
-  // Server is at ../../out/web/server/index.mjs or relative to monorepo root
+  // When 已编译，__dirname 指向 dist/ Server 位于
+  // ../../out/web/server/index.mjs 或相对于 monorepo 根
   const candidates = [
     join(__dirname, '..', '..', '..', 'out', 'web', 'server', 'index.mjs'),
     join(__dirname, '..', '..', 'out', 'web', 'server', 'index.mjs'),
-    join(__dirname, '..', 'server', 'index.mjs'), // when bundled in Electron resources
+    join(__dirname, '..', 'server', 'index.mjs'), // 当捆绑在 Electron 资源中时
   ];
   for (const path of candidates) {
     if (existsSync(path)) return path;
@@ -161,7 +161,7 @@ export async function startWeb(): Promise<{ port: number; pid: number }> {
   });
   child.unref();
 
-  // Write port file (the Nitro plugin also writes it, but write early for faster discovery)
+  // Write 端口文件（Nitro 插件也会写入它，但尽早写入以便更快发现）
   await mkdir(PORT_FILE_DIR, { recursive: true });
   await writeFile(
     PORT_FILE_PATH,
@@ -178,7 +178,7 @@ export async function stopApp(): Promise<boolean> {
 
   try {
     if (IS_WIN) {
-      // Windows: SIGTERM is not supported, use taskkill for graceful shutdown
+      // Windows：不支持 SIGTERM，使用 taskkill 正常关闭
       execSync(`taskkill /PID ${info.pid}`, { stdio: 'ignore' });
     } else {
       process.kill(info.pid, 'SIGTERM');

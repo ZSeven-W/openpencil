@@ -6,8 +6,8 @@ import type { RightPanelTab } from '@/stores/canvas-store';
 import PropertyPanel from './property-panel';
 import CodePanel from './code-panel';
 
-const MIN_WIDTH = 256; // 16rem (w-64)
-const MAX_WIDTH = 640; // 40rem
+const MIN_WIDTH = 256; // 16 雷姆 (w-64)
+const MAX_WIDTH = 640; // 40 雷姆
 const DEFAULT_WIDTH = 256;
 
 export default function RightPanel() {
@@ -60,13 +60,13 @@ export default function RightPanel() {
       className="bg-card border-l border-border flex flex-col shrink-0 relative"
       style={{ width }}
     >
-      {/* Resize handle */}
+      {/* Resize 手柄 */}
       <div
         className="absolute left-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-primary/30 active:bg-primary/50 z-10"
         onMouseDown={handleMouseDown}
       />
 
-      {/* Tab bar */}
+      {/* Tab 酒吧 */}
       <div className="h-8 flex items-center px-2 border-b border-border shrink-0 gap-1">
         {tabs.map((tab) => (
           <button

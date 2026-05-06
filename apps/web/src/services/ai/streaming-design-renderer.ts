@@ -26,7 +26,7 @@ export class StreamingDesignRenderer {
   private appliedIds = new Set<string>();
   private indicatedIds = new Set<string>();
   private insertedNodes: PenNode[] = [];
-  /** Nodes waiting for their parent to be inserted first. */
+  /** Nodes 等待先插入其父级。 */
   private pendingNodes: Array<{ node: any; parentId: string | null }> = [];
   private rootNodeId: string | null = null;
   private readonly animated: boolean;
@@ -39,13 +39,12 @@ export class StreamingDesignRenderer {
   feedText(rawResponse: string): number {
     const { results, newOffset } = extractStreamingNodes(rawResponse, this.streamOffset);
     if (results.length === 0) {
-      // Even with no new nodes, retry pending ones — earlier nodes
-      // in this batch might have made their parents available.
+      // Even 没有新节点，请重试挂起的节点 - 该批次中较早的节点可能已使其父节点可用。
       return this.flushPending();
     }
     this.streamOffset = newOffset;
 
-    // Add new nodes to pending queue
+    // Add 将新节点加入待处理队列
     for (const { node, parentId } of results) {
       if (this.options.idPrefix) {
         ensureIdPrefix(node, this.options.idPrefix);
@@ -57,12 +56,11 @@ export class StreamingDesignRenderer {
       this.pendingNodes.push({ node, parentId: resolvedParent });
     }
 
-    // Flush: insert nodes whose parent is already applied (or root).
-    // Retry loop handles dependency chains within the same batch.
+    // Flush：插入已应用父级（或根）的节点。 Retry 循环处理同一批次内的依赖链。
     return this.flushPending();
   }
 
-  /** Try to insert pending nodes whose parents are available. */
+  /** Try 插入父节点可用的挂起节点。 */
   private flushPending(): number {
     if (this.pendingNodes.length === 0) return 0;
 
@@ -74,7 +72,7 @@ export class StreamingDesignRenderer {
       progress = false;
       for (let i = this.pendingNodes.length - 1; i >= 0; i--) {
         const { node, parentId } = this.pendingNodes[i];
-        // Can insert if: root node (no parent), or parent already on canvas
+        // Can 插入如果：根节点（无父节点），或父节点已在画布上
         if (parentId === null || parentId === undefined || this.appliedIds.has(parentId)) {
           this.insertNode(node, parentId);
           this.pendingNodes.splice(i, 1);
@@ -91,7 +89,7 @@ export class StreamingDesignRenderer {
     return totalInserted;
   }
 
-  /** Insert a single node into the canvas with indicators and animation. */
+  /** Insert 将单个节点放入画布中，并带有指示器和动画。 */
   private insertNode(node: any, parentId: string | null): void {
     if (this.options.agentColor && this.options.agentName) {
       this.collectIdsRecursive(node);
@@ -108,9 +106,8 @@ export class StreamingDesignRenderer {
       const target = this.options.parentFrameId ?? null;
       insertStreamingNode(node, target);
 
-      // insertStreamingNode may remap root frame ID (e.g. replaces the
-      // default empty frame with DEFAULT_FRAME_ID). Register the badge
-      // under the actual ID the canvas uses, not the original node.id.
+      // insertStreamingNode 可以重新映射根帧 ID （例如，用 DEFAULT_FRAME_ID
+      // 替换默认的空帧）。 Register 画布使用的实际 ID 下的徽章，而不是原始的 node.id。
       const effectiveId =
         getGenerationRootFrameId() !== node.id ? getGenerationRootFrameId() : node.id;
 
@@ -120,25 +117,24 @@ export class StreamingDesignRenderer {
 
       if (!this.rootNodeId) this.rootNodeId = effectiveId;
 
-      // Track the effective (possibly remapped) ID so finish() can clean up
-      // the frame badge. node.id may differ from effectiveId after remapping.
+      // Track 有效（可能重新映射）ID，因此 finish() 可以清理帧标记。重新映射后，node.id 可能与
+      // effectiveId 不同。
       this.appliedIds.add(effectiveId);
     }
 
-    // Always track the original node.id — needed for pending queue parent
-    // dependency resolution (children reference parent by original id).
+    // Always 跟踪原始 node.id — 待处理队列父依赖关系解析所需（子级通过原始 id 引用父级）。
     this.appliedIds.add(node.id);
     this.insertedNodes.push(node as PenNode);
   }
 
-  /** Force-insert any remaining pending nodes whose parents never arrived.
-   *  Called at stream end (done event) to avoid losing orphaned nodes. */
+  /** Force - 插入其父节点从未到达的任何剩余待处理节点。 Called 在流结束（完成事件）以避免丢失孤立节点。
+   *  */
   forceFlushPending(): number {
     if (this.pendingNodes.length === 0) return 0;
     if (this.animated) startNewAnimationBatch();
     let inserted = 0;
     for (const { node, parentId } of this.pendingNodes) {
-      // Try the declared parent, fall back to root frame
+      // Try 声明的父级，回退到根框架
       const target = parentId ?? this.rootNodeId ?? this.options.parentFrameId ?? null;
       this.insertNode(node, target);
       inserted++;

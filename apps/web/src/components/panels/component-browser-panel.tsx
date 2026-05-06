@@ -101,7 +101,7 @@ export default function ComponentBrowserPanel() {
     await exportKit(doc, [], doc.name ?? 'My Kit');
   }, []);
 
-  /* --- Delete imported kit --- */
+  /* --- Delete 进口套件 --- */
   const handleDeleteKit = useCallback(
     (kitId: string) => {
       removeKit(kitId);
@@ -110,10 +110,10 @@ export default function ComponentBrowserPanel() {
     [removeKit],
   );
 
-  /* --- Imported kits for delete list --- */
+  /* --- Imported 删除列表套件 --- */
   const importedKits = useMemo(() => kits.filter((k) => !k.builtIn), [kits]);
 
-  /* --- Visible categories (only show tabs that have components) --- */
+  /* --- Visible 类别（仅显示具有组件的选项卡） --- */
   const visibleCategories = useMemo(() => {
     const categorySet = new Set<ComponentCategory>();
     const targetKits = activeKitId ? kits.filter((k) => k.id === activeKitId) : kits;
@@ -164,9 +164,9 @@ export default function ComponentBrowserPanel() {
         </div>
       </div>
 
-      {/* Kit filter + Category tabs */}
+      {/* Kit 过滤器 + Category 选项卡 */}
       <div className="relative shrink-0">
-        {/* Kit selector row */}
+        {/* Kit 选择器行 */}
         <div className="flex items-center gap-1.5 px-3 py-1.5 border-b border-border">
           <span className="text-xs text-muted-foreground shrink-0">
             {t('componentBrowser.kit')}

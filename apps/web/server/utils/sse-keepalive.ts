@@ -6,7 +6,7 @@ export function startSSEKeepAlive(
     try {
       send();
     } catch {
-      /* stream already closed */
+      /* 流已经关闭 */
     }
   };
 

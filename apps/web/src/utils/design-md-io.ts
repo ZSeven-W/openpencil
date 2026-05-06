@@ -2,7 +2,7 @@ import type { DesignMdSpec } from '@/types/design-md';
 import { parseDesignMd, generateDesignMd } from './design-md-parser';
 import { supportsFileSystemAccess } from './file-operations';
 
-/** Import a .md design file via file picker. */
+/** Import 通过文件选择器生成 .md 设计文件。 */
 export async function importDesignMd(): Promise<DesignMdSpec | null> {
   if (supportsFileSystemAccess()) {
     try {
@@ -26,7 +26,7 @@ export async function importDesignMd(): Promise<DesignMdSpec | null> {
     }
   }
 
-  // Fallback: <input type="file">
+  // Fallback：<输入类型=“文件”>
   return new Promise((resolve) => {
     const input = document.createElement('input');
     input.type = 'file';
@@ -49,7 +49,7 @@ export async function importDesignMd(): Promise<DesignMdSpec | null> {
   });
 }
 
-/** Export a DesignMdSpec as a .md file. */
+/** Export 和 DesignMdSpec 作为 .md 文件。 */
 export async function exportDesignMd(spec: DesignMdSpec, fileName?: string): Promise<void> {
   const markdown = generateDesignMd(spec);
   const name = fileName ?? `${(spec.projectName ?? 'design').replace(/[^a-zA-Z0-9_-]/g, '_')}.md`;

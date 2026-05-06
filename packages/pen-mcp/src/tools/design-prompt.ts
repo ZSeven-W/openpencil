@@ -3,7 +3,7 @@ import { buildDesignMdStylePolicy } from '../utils/design-md-style-policy';
 import type { DesignMdSpec } from '@zseven-w/pen-types';
 
 // ---------------------------------------------------------------------------
-// Skill name mapping — maps legacy section keys to skill registry names
+// Skill 名称映射 — 将旧部分键映射到技能注册表名称
 // ---------------------------------------------------------------------------
 
 const SECTION_NAME_MAP: Record<string, string> = {
@@ -20,14 +20,14 @@ const SECTION_NAME_MAP: Record<string, string> = {
   examples: 'examples',
 };
 
-/** Look up a skill by legacy section key or skill name. */
+/** Look 通过旧版部分键或技能名称升级技能。 */
 function getSkillContent(key: string): string {
   const skillName = SECTION_NAME_MAP[key] ?? key;
   return getSkillByName(skillName)?.content ?? '';
 }
 
 // ---------------------------------------------------------------------------
-// Named prompt sections — can be retrieved individually via section parameter
+// Named 提示部分 — 可以通过部分参数单独检索
 // ---------------------------------------------------------------------------
 
 const INTRO = `You are working with OpenPencil, a vector design tool.
@@ -221,7 +221,7 @@ LAYERED WORKFLOW:
 This approach produces higher-fidelity designs than generating everything at once.`;
 
 // ---------------------------------------------------------------------------
-// Section registry
+// Section 注册表
 // ---------------------------------------------------------------------------
 
 type PromptSection =
@@ -252,7 +252,7 @@ type PromptSection =
   | 'codegen-compose'
   | 'codegen-react-native';
 
-// Dynamic section map — skills from registry, local sections for planning/variables/design-md
+// Dynamic 部分图 — 来自注册表的技能，planning/variables/design-md 的本地部分
 const SECTION_MAP: Record<PromptSection, () => string> = {
   all: () => buildFullPrompt(),
   schema: () => getSkillContent('schema'),
@@ -282,15 +282,15 @@ const SECTION_MAP: Record<PromptSection, () => string> = {
   'codegen-react-native': () => getSkillContent('codegen-react-native'),
 };
 
-// Design.md content injected via setDesignMdForPrompt()
+// Design.md 通过 setDesignMdForPrompt() 注入的内容
 let _designMdContent: string | null = null;
 
-/** Set the design.md content to be returned by the 'design-md' section. */
+/** Set 'design-md' 部分返回的 design.md 内容。 */
 export function setDesignMdForPrompt(spec: DesignMdSpec | undefined): void {
   _designMdContent = spec ? buildDesignMdStylePolicy(spec) : null;
 }
 
-/** Get the design.md style policy, or null if not loaded. */
+/** Get design.md 样式策略，如果未加载则为 null。 */
 export function getDesignMdForPrompt(): string | null {
   return _designMdContent;
 }
@@ -300,15 +300,15 @@ export function getDesignMdForPrompt(): string | null {
 // ---------------------------------------------------------------------------
 
 /**
- * Build the design knowledge prompt for AI-assisted design generation.
+ * Build AI
  *
- * When `section` is provided, returns only that focused subset of design
- * knowledge. This allows external LLMs to load context incrementally
- * instead of consuming the full prompt at once.
+ * 辅助设计生成的设计知识提示。提供了 When `section`，仅返回设计知识的重点子集。 This 允许外部 LLMs
+ * 增量加载上下文，而不是一
+ * 次消耗完整的提示。
  */
 export function buildDesignPrompt(section?: string): string {
   if (section) {
-    // When design-md is loaded, 'style' section returns it instead of default
+    // When design-md 已加载，“style”部分返回它而不是默认值
     if (section === 'style' && _designMdContent) {
       return `DESIGN SYSTEM (from design.md):\n${_designMdContent}`;
     }

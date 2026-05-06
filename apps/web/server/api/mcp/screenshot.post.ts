@@ -11,7 +11,7 @@ export default defineEventHandler(async (event) => {
   const body = (await readBody(event)) as ScreenshotRequestBody;
   const timeoutMs = Math.min(body.timeoutMs ?? 15000, 60000);
 
-  // 1. Resolve target renderer — fail fast if none
+  // 1. Resolve 目标渲染器 — 如果没有则快速失败
   const targetClientId = getLastActiveClientId();
   if (!targetClientId || !isClientConnected(targetClientId)) {
     throw createError({
@@ -21,7 +21,7 @@ export default defineEventHandler(async (event) => {
     });
   }
 
-  // 2. Allocate request id and try to send
+  // 2. Allocate 请求 id 并尝试发送
   const requestId = allocateRequestId();
   const sent = sendToClient(targetClientId, {
     type: 'screenshot:request',
@@ -32,7 +32,7 @@ export default defineEventHandler(async (event) => {
     timeoutMs,
   });
 
-  // 3. Only register pending + start timeout AFTER successful send (Q3 decision)
+  // 3. Only 注册挂起+启动超时 AFTER 成功发送（Q3 判定）
   if (!sent) {
     throw createError({
       statusCode: 503,
@@ -41,6 +41,6 @@ export default defineEventHandler(async (event) => {
     });
   }
 
-  // 4. Await renderer response (or timeout)
+  // 4. Await 渲染器响应（或超时）
   return await registerPending(requestId, timeoutMs);
 });

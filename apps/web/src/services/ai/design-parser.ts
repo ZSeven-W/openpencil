@@ -1,7 +1,7 @@
 import type { PenNode } from '@/types/pen';
 
 // ---------------------------------------------------------------------------
-// Streaming JSONL parser result
+// Streaming JSONL 解析器结果
 // ---------------------------------------------------------------------------
 
 export interface StreamingNodeResult {
@@ -10,39 +10,40 @@ export interface StreamingNodeResult {
 }
 
 // ---------------------------------------------------------------------------
-// JSON extraction from AI response text
+// 从 AI 响应文本中提取 JSON
 // ---------------------------------------------------------------------------
 
 /**
- * Extract PenNode JSON from AI response text.
- * Handles ```json blocks, JSONL format, raw arrays, and fallback parsing.
+ * Extract
+ * PenNode JSON 来自 AI 响应文本。 Handles ```json
+ 块、JSONL 格式、原始数组和后备解析。
  */
 /**
- * Strip non-standard XML-like tags that third-party models may inject
- * (e.g. `<minimax:tool_call>`, `<tool_call>`, `<|im_start|>`).
- * Preserves content between tags so any embedded JSON can still be parsed.
+ * Strip 第三方模型可
+ * 能注入的非标准 XML 类标签（例如 `<minimax:tool_call>`、`<tool_call>`、`<|im_start|
+ * >`）。 Preserves 标签之间的内容，因此任何嵌入的 JSON 仍然可以被解析。
  */
 function stripNonStandardTags(text: string): string {
   return text
-    .replace(/<\/?[\w:.]+:[\w]+[^>]*>/g, '') // namespaced tags: <minimax:tool_call>
-    .replace(/<\/?tool_call[^>]*>/g, '') // <tool_call>, </tool_call>
-    .replace(/<\|[\w_]+\|>/g, '') // chat template markers: <|im_start|>
-    .replace(/\[TOOL_CALL\]/gi, ''); // bracket-style tool call markers
+    .replace(/<\/?[\w:.]+:[\w]+[^>]*>/g, '') // 命名空间标签：<minimax:tool_call>
+    .replace(/<\/?tool_call[^>]*>/g, '') // <tool_call>，</tool_call>
+    .replace(/<\|[\w_]+\|>/g, '') // 聊天模板标记：<|im_start|>
+    .replace(/\[TOOL_CALL\]/gi, ''); // 括号式工具调用标记
 }
 
 /**
- * Strip fake tool call blocks that basic-tier models (MiniMax, etc.) may emit.
+ * Strip 基本层模型（MiniMax 等）可能发出的虚假工具调用块。
  * These look like `{tool => "Write", args => { ... }}` and are not valid JSON.
- * Must run BEFORE JSON extraction so brace-scanning doesn't pick them up.
+ * Must 运行 BEFORE JSON 提取，因此大括号扫描不会拾取它们。
  */
 function stripToolCallBlocks(text: string): string {
   // Remove `{tool => "...", args => { ... }}` blocks (arrow-syntax pseudo-calls)
-  // These use `=>` instead of `:` for key-value pairs
+// These use `=>` instead of `:` for key-value pairs
   return text.replace(/\{tool\s*=>\s*"[^"]*"\s*,\s*args\s*=>[\s\S]*$/gi, '');
 }
 
 export function extractJsonFromResponse(text: string): PenNode[] | null {
-  // Clean non-standard model artifacts before parsing
+  // Clean 解析前的非标准模型工件
   const cleaned = stripToolCallBlocks(stripNonStandardTags(text));
 
   const parsedBlocks = extractAllJsonBlocks(cleaned)
@@ -53,23 +54,22 @@ export function extractJsonFromResponse(text: string): PenNode[] | null {
     return selectBestNodeSet(parsedBlocks);
   }
 
-  // Try JSONL format (flat nodes with _parent field)
+  // Try JSONL 格式（带有 _parent 字段的平面节点）
   const jsonlTree = parseJsonlToTree(cleaned);
   if (jsonlTree) return jsonlTree;
 
-  // Fallback: try to find a single JSON array if no blocks found
+  // Fallback：如果没有找到块，尝试查找单个 JSON 数组
   const arrayMatch = cleaned.match(/\[\s*\{[\s\S]*\}\s*\]/);
   if (arrayMatch) {
     const nodes = tryParseNodes(arrayMatch[0]);
     return nodes;
   }
 
-  // Fallback: try parsing a single root node with nested children
-  // (weaker models may output one root object instead of an array)
+  // Fallback：尝试解析具有嵌套子节点的单个根节点（较弱的模型可能会输出一个根对象而不是数组）
   const singleRoot = tryParseSingleRootNode(cleaned);
   if (singleRoot) return singleRoot;
 
-  // Fallback: try parsing raw text after removing <step> tags.
+  // Fallback：删除 <step> 标签后尝试解析原始文本。
   const stripped = cleaned.replace(/<step[\s\S]*?<\/step>/g, '').trim();
   const directNodes = tryParseNodes(stripped);
   if (directNodes) {
@@ -80,21 +80,22 @@ export function extractJsonFromResponse(text: string): PenNode[] | null {
 }
 
 // ---------------------------------------------------------------------------
-// Streaming JSONL parser — extracts completed JSON objects from within
-// a ```json block as they stream in, enabling element-by-element rendering.
+// Streaming JSONL 解析器 — 从内部提取完整的 JSON 对象
+// 当它们流入时，会出现一个 ```json 块，从而实现逐元素渲染。
 // ---------------------------------------------------------------------------
 
 /**
- * Extract completed JSON objects from streaming text (within a ```json block).
- * Uses brace-counting to detect complete objects before the block closes.
- * Each object is expected to have a `_parent` field for tree insertion.
+ * Extract
+ * 从流文本中完成了 JSON 对象（在用于树插入的“`json block). Uses brace-counting to detect
+ * complete objects before the block closes. Each object is expected to
+ have a `_parent”字段内）。
  */
 export function extractStreamingNodes(
   text: string,
   processedOffset: number,
 ): { results: StreamingNodeResult[]; newOffset: number } {
-  // Primary mode: parse inside a ```json fenced block.
-  // Fallback mode: parse raw JSONL/object text when the model omits fences.
+  // Primary 模式：在 ```json 围栏块内解析。 Fallback
+  // 模式：当模型省略栅栏时解析原始 JSONL/object 文本。
   const jsonBlockStart = text.indexOf('```json');
 
   let contentStart = -1;
@@ -117,11 +118,11 @@ export function extractStreamingNodes(
   let i = startPos;
 
   while (i < searchEnd) {
-    // Skip to next '{' character
+    // Skip 到下一个“{”字符
     while (i < searchEnd && text[i] !== '{') i++;
     if (i >= searchEnd) break;
 
-    // Brace-counting to find matching '}'
+    // Brace-计数以查找匹配的“}”
     const objStart = i;
     let depth = 0;
     let inString = false;
@@ -153,7 +154,7 @@ export function extractStreamingNodes(
       else if (ch === '}') {
         depth--;
         if (depth === 0) {
-          // Complete object found
+          // 找到 Complete 对象
           const objStr = text.slice(objStart, j + 1);
           try {
             const obj = JSON.parse(objStr) as Record<string, unknown>;
@@ -163,7 +164,7 @@ export function extractStreamingNodes(
               results.push({ node: obj as unknown as PenNode, parentId });
             }
           } catch {
-            /* malformed JSON, skip */
+            /* 格式错误 JSON，跳过 */
           }
           i = j + 1;
           break;
@@ -172,26 +173,26 @@ export function extractStreamingNodes(
       j++;
     }
 
-    if (depth > 0) break; // Incomplete object, wait for more data
+    if (depth > 0) break; // Incomplete 对象，等待更多数据
   }
 
   return { results, newOffset: i };
 }
 
 // ---------------------------------------------------------------------------
-// Internal helpers
+// Internal 帮助者
 // ---------------------------------------------------------------------------
 
 /**
- * Helper to find all complete JSON blocks in text (```json or ``` blocks).
+ * Helper 查找文本中所有完整的 JSON 块（```json or ``` 块）。
  */
 function extractAllJsonBlocks(text: string): string[] {
   const blocks: string[] = [];
-  // Matches ```json or ``` blocks
+  // Matches ```json or ``` 块
   const regex = /```(?:json)?\s*\n?([\s\S]*?)\n?\s*```/g;
   let match;
   while ((match = regex.exec(text)) !== null) {
-    // Basic heuristic: check if it looks like JSON array/object before adding
+    // Basic 启发式：在添加之前检查它是否看起来像 JSON array/object
     const content = match[1].trim();
     if (content.startsWith('[') || content.startsWith('{')) {
       blocks.push(content);
@@ -201,8 +202,9 @@ function extractAllJsonBlocks(text: string): string[] {
 }
 
 /**
- * Parse JSONL-format response (flat nodes with _parent field) into a tree.
- * Used by extractAndApplyDesign for batch apply of JSONL content.
+ * Parse JSONL
+ * 格式响应（带有 _parent 字段的平面节点）到树中。 Used by extractAndApplyDesign 用于批量应用 JSONL
+ 内容。
  */
 function parseJsonlToTree(text: string): PenNode[] | null {
   const { results } = extractStreamingNodes(text, 0);
@@ -227,7 +229,7 @@ function parseJsonlToTree(text: string): PenNode[] | null {
         }
         (parent as PenNode & { children: PenNode[] }).children.push(node);
       } else {
-        roots.push(node); // Parent not found, treat as root
+        roots.push(node); // Parent 未找到，视为 root
       }
     }
   }
@@ -236,9 +238,9 @@ function parseJsonlToTree(text: string): PenNode[] | null {
 }
 
 /**
- * Try to parse a single root PenNode with nested children from raw text.
- * Handles the case where weaker models output a single JSON object
- * instead of an array or JSONL format.
+ * Try 从原始文本中解析
+ * 带有嵌套子项的单个根 PenNode。 Handles 较弱的模型输出单个 JSON 对象而不是数组或 JSONL 格式的情况。
+ *
  */
 function tryParseSingleRootNode(text: string): PenNode[] | null {
   const first = text.indexOf('{');
@@ -250,7 +252,7 @@ function tryParseSingleRootNode(text: string): PenNode[] | null {
       return [obj as unknown as PenNode];
     }
   } catch {
-    /* ignore parse errors */
+    /* 忽略解析错误 */
   }
   return null;
 }
@@ -283,7 +285,7 @@ function selectBestNodeSet(candidates: PenNode[][]): PenNode[] {
 
   for (const candidate of candidates) {
     const score = scoreNodeSet(candidate);
-    // Favor later blocks on ties to keep the most recent complete output.
+    // Favor 稍后会阻止连接以保留最新的完整输出。
     if (score >= bestScore) {
       best = candidate;
       bestScore = score;

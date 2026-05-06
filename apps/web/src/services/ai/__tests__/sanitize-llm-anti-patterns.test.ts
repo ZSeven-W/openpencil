@@ -10,7 +10,7 @@ import {
 } from '../sanitize-llm-anti-patterns';
 
 // ---------------------------------------------------------------------------
-// Fixture helpers
+// Fixture 帮助者
 // ---------------------------------------------------------------------------
 
 const strokeEllipse = (id: string, w: number, h: number, color: string, thickness = 10): PenNode =>
@@ -48,12 +48,9 @@ const bar = (id: string, height: number, color: string): PenNode =>
 
 describe('rewriteStackedEllipsesToRingFrames', () => {
   it('rewrites 3 concentric ellipses + center text into nested ring frames (activity-ring regression)', () => {
-    // The exact bug from the fitness app debug session:
-    // layout='none' parent with 3 transparent-fill stroke-only ellipses
-    // (120/84/52) and a center percentage text. With layout='none' all
-    // 4 children render at (0,0) overlapping top-left. Rewriter must
-    // produce a nested frame tree where each ring is a frame centered
-    // inside its parent.
+    // The 健身应用程序调试会话中的确切错误：layout='none' 父级，带有 3
+    // 个透明填充仅描边的省略号 (120/84/52) 和中心百分比文本。 With layout='none' 所有 4 个子项都在
+    // (0,0) 重叠的左上角渲染。 Rewriter 必须生成一个嵌套框架树，其中每个环都是以其父级为中心的框架。
     const rings: PenNode = {
       id: 'rings-visual',
       type: 'frame',
@@ -70,8 +67,7 @@ describe('rewriteStackedEllipsesToRingFrames', () => {
 
     rewriteStackedEllipsesToRingFrames(rings);
 
-    // The original node should now be a centering frame holding the
-    // outermost ring.
+    // The 原始节点现在应该是一个固定最外环的居中框架。
     const root = rings as PenNode & {
       layout?: string;
       alignItems?: string;
@@ -88,7 +84,7 @@ describe('rewriteStackedEllipsesToRingFrames', () => {
     expect(root.height).toBe(120);
     expect(root.children).toHaveLength(1);
 
-    // Outer ring: 120×120 frame with cornerRadius=60, stroke from outer ellipse
+    // Outer 环：120×120 框架，cornerRadius=60，从外椭圆开始的行程
     const outer = root.children[0] as PenNode & {
       width?: number;
       height?: number;
@@ -109,11 +105,11 @@ describe('rewriteStackedEllipsesToRingFrames', () => {
     expect(outer.layout).toBe('horizontal');
     expect(outer.alignItems).toBe('center');
     expect(outer.justifyContent).toBe('center');
-    // Empty fill so the inner content shows through.
+    // Empty 填充，以便内部内容显示出来。
     expect(Array.isArray(outer.fill) && outer.fill.length === 0).toBe(true);
     expect(outer.children).toHaveLength(1);
 
-    // Middle ring: 84×84 frame with cornerRadius=42
+    // Middle 环：84×84 帧，cornerRadius=42
     const middle = outer.children[0] as PenNode & {
       width?: number;
       cornerRadius?: number;
@@ -126,7 +122,7 @@ describe('rewriteStackedEllipsesToRingFrames', () => {
     expect(middle.stroke?.fill?.[0]?.color).toBe('#FF8A65');
     expect(middle.children).toHaveLength(1);
 
-    // Inner ring: 52×52 frame with cornerRadius=26
+    // Inner 环：52×52 帧，cornerRadius=26
     const inner = middle.children[0] as PenNode & {
       width?: number;
       cornerRadius?: number;
@@ -138,7 +134,7 @@ describe('rewriteStackedEllipsesToRingFrames', () => {
     expect(inner.cornerRadius).toBe(26);
     expect(inner.stroke?.fill?.[0]?.color).toBe('#4FC3F7');
 
-    // The text label is the innermost child of the innermost ring.
+    // The 文本标签是最内环的最内子级。
     expect(inner.children).toHaveLength(1);
     const label = inner.children[0] as PenNode & { content?: string };
     expect(label.id).toBe('label');
@@ -146,8 +142,7 @@ describe('rewriteStackedEllipsesToRingFrames', () => {
   });
 
   it('rewrites 2-ring stack without any center text (empty progress ring)', () => {
-    // Distinct sizes (60 vs 48) required by the rewriter — equal-size
-    // pairs are rejected as ambiguous (likely a dot grid).
+    // Distinct 重写器所需的大小（60 与 48）——大小相等的对会因为不明确（可能是点网格）而被拒绝。
     const rings: PenNode = {
       id: 'simple-ring',
       type: 'frame',
@@ -164,14 +159,14 @@ describe('rewriteStackedEllipsesToRingFrames', () => {
     const root = rings as PenNode & { layout?: string; children: PenNode[] };
     expect(root.layout).toBe('horizontal');
     expect(root.children).toHaveLength(1);
-    // The innermost ring has no label children.
+    // The 最里面的环没有标签孩子。
     const outer = root.children[0] as PenNode & { children: PenNode[] };
     const inner = outer.children[0] as PenNode & { children: PenNode[] };
     expect(inner.children).toHaveLength(0);
   });
 
   it('does NOT rewrite when parent layout is not "none"', () => {
-    // A layout=horizontal parent is behaving; don't touch it.
+    // 布局=水平父级正在运行；别碰它。
     const parent: PenNode = {
       id: 'horiz-parent',
       type: 'frame',
@@ -187,8 +182,7 @@ describe('rewriteStackedEllipsesToRingFrames', () => {
   });
 
   it('does NOT rewrite when ellipses have the same size (not concentric)', () => {
-    // Two 40×40 ellipses at (0,0) under layout=none is probably a dot
-    // row with bad positioning — ambiguous intent, don't touch.
+    // Two 在 layout=none 下的(0,0) 处的 40×40 椭圆可能是定位不良的点行——意图不明确，请勿触摸。
     const parent: PenNode = {
       id: 'dots',
       type: 'frame',
@@ -311,9 +305,9 @@ describe('rewriteStackedEllipsesToRingFrames', () => {
 
 describe('rewriteAlternatingBarLabelSiblings', () => {
   it('groups 5-bar/5-label alternation into 5 vertical columns (bar chart regression)', () => {
-    // The exact bug from the fitness app: 10 flat children arranged as
-    // [bar, label, bar, label, …]. With justifyContent=space_between
-    // the labels land between bars instead of under them.
+    // The 健身应用程序中的确切错误：10 个扁平儿童排列为
+// [bar, label, bar, label, …]. With justifyContent=space_between
+    // 标签位于条形之间而不是条形下方。
     const chart: PenNode = {
       id: 'weekly-chart',
       type: 'frame',
@@ -343,8 +337,8 @@ describe('rewriteAlternatingBarLabelSiblings', () => {
       justifyContent?: string;
       children: PenNode[];
     };
-    // Parent keeps layout=horizontal and justifyContent=space_between
-    // so the columns distribute across the full width.
+    // Parent 保持 layout=horizo​​ntal 和 justifyContent=space_between，以便
+    // 列分布在整个宽度上。
     expect(root.layout).toBe('horizontal');
     expect(root.justifyContent).toBe('space_between');
     expect(root.children).toHaveLength(5);
@@ -358,11 +352,11 @@ describe('rewriteAlternatingBarLabelSiblings', () => {
       expect(c.layout).toBe('vertical');
       expect(c.alignItems).toBe('center');
       expect(c.children).toHaveLength(2);
-      expect(c.children[0].type).toBe('frame'); // bar
-      expect(c.children[1].type).toBe('text'); // label
+      expect(c.children[0].type).toBe('frame'); // 酒吧
+      expect(c.children[1].type).toBe('text'); // 标签
     }
 
-    // Verify the first column is Mon (preserves order).
+    // Verify 第一列是 Mon （保留顺序）。
     const firstCol = root.children[0] as PenNode & { children: PenNode[] };
     const firstBar = firstCol.children[0] as PenNode & { id: string };
     const firstLabel = firstCol.children[1] as PenNode & { content?: string };
@@ -371,8 +365,7 @@ describe('rewriteAlternatingBarLabelSiblings', () => {
   });
 
   it('does NOT rewrite a horizontal row of 2 bars (too few pairs)', () => {
-    // Minimum 3 pairs (6 children) required — 2 bars + 2 labels is
-    // likely a stat widget, not a chart.
+    // Minimum 需要 3 对（6 个子项）——2 个条形图 + 2 个标签可能是统计小部件，而不是图表。
     const row: PenNode = {
       id: 'two-bar-row',
       type: 'frame',
@@ -399,7 +392,7 @@ describe('rewriteAlternatingBarLabelSiblings', () => {
       children: [
         bar('a', 40, '#000'),
         text('a-label', 'A'),
-        text('extra', 'rogue'), // breaks alternation
+        text('extra', 'rogue'), // 中断交替
         bar('b', 60, '#000'),
         text('b-label', 'B'),
         bar('c', 80, '#000'),
@@ -411,9 +404,8 @@ describe('rewriteAlternatingBarLabelSiblings', () => {
   });
 
   it('does NOT rewrite when the frames contain text (they are cards, not bars)', () => {
-    // If a "bar" frame already has a text descendant, it's not a
-    // plain bar — could be a card with a title and a value next to a
-    // label. Refuse to touch.
+    // If “栏”框架已经有一个文本后代，它不是一个普通的栏 - 可能是一张带有标题和标签旁边的值的卡片。 Refuse
+    // 触摸。
     const withTitles: PenNode = {
       id: 'labeled-cards',
       type: 'frame',
@@ -679,7 +671,7 @@ describe('stripRingFrameFills', () => {
 });
 
 // ---------------------------------------------------------------------------
-// rewriteLlmAntiPatterns (orchestrator)
+// rewriteLlmAntiPatterns（编曲家）
 // ---------------------------------------------------------------------------
 
 describe('rewriteLlmAntiPatterns', () => {
@@ -689,7 +681,7 @@ describe('rewriteLlmAntiPatterns', () => {
       type: 'frame',
       layout: 'vertical',
       children: [
-        // Broken ring composition
+        // Broken 环组成
         {
           id: 'rings',
           type: 'frame',
@@ -701,7 +693,7 @@ describe('rewriteLlmAntiPatterns', () => {
             strokeEllipse('r2', 60, 60, '#FF8A65'),
           ],
         } as unknown as PenNode,
-        // Broken bar chart
+        // Broken 条形图
         {
           id: 'chart',
           type: 'frame',
@@ -721,11 +713,11 @@ describe('rewriteLlmAntiPatterns', () => {
     rewriteLlmAntiPatterns(page);
 
     const children = (page as unknown as { children: PenNode[] }).children;
-    // Ring rewritten
+    // Ring 重写
     const rings = children[0] as PenNode & { layout?: string; children: PenNode[] };
     expect(rings.layout).toBe('horizontal');
     expect(rings.children).toHaveLength(1);
-    // Chart rewritten
+    // Chart 重写
     const chart = children[1] as PenNode & { children: PenNode[] };
     expect(chart.children).toHaveLength(3);
     expect((chart.children[0] as PenNode & { layout?: string }).layout).toBe('vertical');

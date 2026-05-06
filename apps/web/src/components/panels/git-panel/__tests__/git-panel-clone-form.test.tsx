@@ -1,4 +1,4 @@
-// @vitest-environment jsdom
+// @vitest-环境 jsdom
 // apps/web/src/components/panels/git-panel/__tests__/git-panel-clone-form.test.tsx
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/react';
@@ -8,19 +8,16 @@ import { CLONE_INLINE_ERROR_CODES } from '@/stores/git-store-types';
 const cloneRepoMock = vi.fn(async () => {});
 const cancelCloneWizardMock = vi.fn(() => {});
 
-// The wizard error/busy are mutable so individual tests can flip them
-// before render. The store mock below reads the live values on every
-// selector call so a test can mutate these in a `cloneRepo` side effect
-// (e.g. to simulate the store transitioning back to `wizard-clone` with
-// an error after a failed clone).
+// The 向导 error/busy 是可变的，因此各个测试可以在渲染之前翻转它们。下面的 The
+// 存储模拟读取每个选择器调用的实时值，因此测试可以在 `cloneRepo` 副作用中改变这些值（例如，模拟存储在克隆失败后转换回
+// `wizard-clone` 并出现错误）。
 let mockedWizardError: { code: string; message: string } | null = null;
 let mockedBusy = false;
 
 vi.mock('@/stores/git-store', () => {
-  // The selector receives a partial GitStore-like shape. We construct it to
-  // match exactly what GitPanelCloneForm reads: cloneRepo, cancelCloneWizard,
-  // and `state` (so the wizardError + busy selectors can read state.error /
-  // state.busy).
+  // The 选择器接收部分类似 GitStore 的形状。 We 将其构造为与 GitPanelCloneForm
+  // 读取的内容完全匹配：cloneRepo、cancelCloneWizard 和 `state`（因此 wizardError + busy
+  // 选择器可以读取 state.error / state.busy）。
   const useGitStore = (
     selector: (s: {
       cloneRepo: typeof cloneRepoMock;
@@ -37,9 +34,8 @@ vi.mock('@/stores/git-store', () => {
 });
 
 vi.mock('react-i18next', () => ({
-  // We honour the defaultValue fallback for tests that don't care about the
-  // specific localized string, and honour real key lookups into the bundled
-  // `en` locale for tests that DO care (the parametrized locale test below).
+  // We 尊重不关心特定本地化字符串的测试的 defaultValue 回退，并尊重捆绑 `en` 区域设置中的真实键查找，以进行 DO
+  // 关心的测试（下面的参数化区域设置测试）。
   useTranslation: () => ({
     t: (k: string, opts?: { defaultValue?: string }) => {
       const localized = (en as Record<string, string | undefined>)[k];
@@ -52,7 +48,7 @@ vi.mock('react-i18next', () => ({
 
 import { GitPanelCloneForm } from '@/components/panels/git-panel/git-panel-clone-form';
 
-// Shortcut to the localized strings we assert on repeatedly.
+// Shortcut 到我们重复断言的本地化字符串。
 const L = en as Record<string, string>;
 
 describe('GitPanelCloneForm', () => {
@@ -84,8 +80,7 @@ describe('GitPanelCloneForm', () => {
     fireEvent.click(screen.getByText(L['git.wizard.clone.destPickButton']));
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await waitFor(() => expect((window as any).electronAPI.openDirectory).toHaveBeenCalledTimes(1));
-    // The setState happens after the async openDirectory resolves; waitFor
-    // polls until the controlled input reflects the picked path.
+    // The setState 在异步 openDirectory 解析后发生； waitFor 进行轮询，直到受控输入反映所选路径。
     await waitFor(() => {
       const destInput = screen.getByLabelText(L['git.wizard.clone.destLabel']) as HTMLInputElement;
       expect(destInput.value).toBe('/picked/dest');
@@ -148,10 +143,10 @@ describe('GitPanelCloneForm', () => {
       target: { value: '/tmp/clone' },
     });
 
-    // Token fields are gone in SSH mode.
+    // Token 字段在 SSH 模式下消失。
     expect(screen.queryByLabelText(L['git.wizard.clone.tokenLabel'])).toBeNull();
     expect(screen.queryByLabelText(L['git.wizard.clone.usernameLabel'])).toBeNull();
-    // SSH hint is shown.
+    // 显示 SSH 提示。
     expect(screen.getByText(L['git.wizard.clone.sshHint'])).toBeTruthy();
 
     fireEvent.click(screen.getByText(L['git.wizard.clone.submit']));
@@ -174,16 +169,16 @@ describe('GitPanelCloneForm', () => {
     expect(cloneRepoMock).not.toHaveBeenCalled();
   });
 
-  // ----- Issue 3: parametrized locale coverage for every inline error code -
-  //
-  // CLONE_INLINE_ERROR_CODES enumerates all recoverable codes the store
-  // surfaces inline. The i18n layer has a localized string per code under
-  // `git.wizard.clone.error.<code>` in all 15 locales. If any locale key is
-  // mistyped (e.g. `auth_token_invalid` instead of `auth-token-invalid`) the
-  // t() defaultValue fallback hides the miss. This test proves the rendered
-  // banner text for every code matches the bundled `en` locale string, NOT
-  // the raw GitError message — so any locale-key typo shows up as a
-  // loud test failure.
+  // ----- Issue 3：每个内联错误代码的参数化区域覆盖范围 -
+//
+  // CLONE_INLINE_ERROR_CODES 枚举商店中所有可恢复的代码
+  // 表面内联。 The i18n 层下的每个代码都有一个本地化字符串
+  // `git.wizard.clone.error.<code>` 在所有 15 个区域设置中。 If 任何区域设置键是
+  // 输入错误（例如 `auth_token_invalid` 而不是 `auth-token-invalid`）
+  // t() defaultValue 后备隐藏了失误。 This 测试证明渲染效果
+  // 每个代码的横幅文本与捆绑的 `en` 区域设置字符串 NOT 匹配
+  // 原始 GitError 消息 — 因此任何语言环境键拼写错误都会显示为
+  // 大声的测试失败。
   describe('inline error banner for every recoverable code', () => {
     it.each(CLONE_INLINE_ERROR_CODES)('renders the localized banner for "%s"', (code) => {
       mockedWizardError = { code, message: `raw-error-for-${code}` };

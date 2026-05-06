@@ -16,7 +16,7 @@ import {
 import { parseColor } from './skia-paint-utils';
 
 // ---------------------------------------------------------------------------
-// Canvas 2D text rasterization (CanvasKit null typeface can't render text)
+// Canvas 2d 文本光栅化（CanvasKit null 字体无法渲染文本）
 // ---------------------------------------------------------------------------
 
 const OVERLAY_FONT = '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
@@ -33,7 +33,7 @@ function evictTextCache() {
   }
 }
 
-/** Measure text width using Canvas 2D. */
+/** Measure 文本宽度使用 Canvas 2d。 */
 function measureText(text: string, fontSize: number, fontWeight = '500'): number {
   const c = document.createElement('canvas');
   const ctx = c.getContext('2d')!;

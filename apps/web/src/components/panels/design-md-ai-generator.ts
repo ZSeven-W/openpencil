@@ -8,7 +8,7 @@ import { parseDesignMd } from '@/utils/design-md-parser';
 import type { PenNode } from '@/types/pen';
 
 // ---------------------------------------------------------------------------
-// AI auto-generate prompt
+// AI 自动生成提示
 // ---------------------------------------------------------------------------
 
 const DESIGN_MD_SYSTEM_PROMPT = `You are a Design Systems Lead. Analyze the provided PenNode design tree and generate a comprehensive design.md in the Google Stitch format.
@@ -48,53 +48,53 @@ RULES:
 - Do NOT use <tool_call> tags or any tool invocations. Just output the markdown text directly.`;
 
 // ---------------------------------------------------------------------------
-// Clean AI response artifacts
+// Clean AI 响应工件
 // ---------------------------------------------------------------------------
 
 function cleanAIResult(raw: string): string {
   let text = raw.trim();
 
-  // Remove <tool_call>...</tool_call> blocks (XML-style tool calls)
+  // Remove <tool_call>...</tool_call> 块（XML 样式工具调用）
   text = text.replace(/<tool_call>[\s\S]*?<\/tool_call>/g, '');
 
-  // Remove preamble before the first markdown heading
+  // Remove 第一个 Markdown 标题之前的序言
   const headingIdx = text.search(/^#\s+/m);
   if (headingIdx > 0) {
     text = text.substring(headingIdx);
   }
 
-  // Strip wrapping code fences
+  // Strip 包装代码围栏
   if (text.startsWith('```')) {
     text = text.replace(/^```(?:markdown|md)?\n?/, '').replace(/\n?```$/, '');
   }
 
-  // Remove JSON tool-call artifacts (e.g. {"name":"Write","arguments":...})
+  // Remove JSON 工具调用工件（例如 {"name":"Write","arguments":...}）
   text = text.replace(/\{"name"\s*:\s*"(?:Write|Read|Edit|Bash)"[^}]*\}\s*/g, '');
 
-  // Remove lines that are tool call fragments or AI narration
+  // Remove 行是工具调用片段或 AI 旁白
   text = text
     .split('\n')
     .filter((line) => {
       const trimmed = line.trim();
       if (trimmed.startsWith('{"name"') || trimmed.startsWith('{"tool_use_id"')) return false;
       if (/^\{"file_path"\s*:/.test(trimmed)) return false;
-      // Drop leftover tool_call tags
+      // Drop 剩余 tool_call 标签
       if (trimmed === '<tool_call>' || trimmed === '</tool_call>') return false;
       return true;
     })
     .join('\n');
 
-  // Strip code fence blocks containing JSON tool calls
+  // Strip 包含 JSON 工具调用的代码围栏块
   text = text.replace(/```json\s*\{[^`]*?"(?:file_path|name|arguments)"[^`]*?```/gs, '');
 
-  // Collapse excessive blank lines
+  // Collapse 空行过多
   text = text.replace(/\n{4,}/g, '\n\n\n');
 
   return text.trim();
 }
 
 // ---------------------------------------------------------------------------
-// Build a compact summary of a design node tree
+// Build 设计节点树的紧凑摘要
 // ---------------------------------------------------------------------------
 
 function summarizeNode(n: PenNode, depth = 0): string {

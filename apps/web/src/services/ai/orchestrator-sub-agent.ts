@@ -1,11 +1,11 @@
 /**
- * Sub-agent execution for the orchestrator.
+ * 子代理执行器。
  *
- * Each sub-agent is responsible for generating one spatial section of the
- * design (e.g. "Hero", "Features", "Footer"). This module handles:
- * - Sequential execution
- * - Streaming JSONL parsing and real-time canvas insertion
- * - ID namespace isolation via prefixes
+ * 每个子代理只负责页面中的一个空间区块，例如 Hero、Features、Footer。
+ * 这个模块负责：
+ * - 顺序或并发调度子代理
+ * - 解析流式 JSONL，并实时把节点插入画布
+ * - 用前缀隔离不同子任务的节点 ID 命名空间
  */
 
 import type { VariableDefinition } from '@/types/variables';
@@ -38,7 +38,7 @@ import { buildDesignMdStylePolicy } from './ai-prompts';
 export { ensureIdPrefix, ensurePrefixStr } from './streaming-design-renderer';
 
 // ---------------------------------------------------------------------------
-// Stream timeout configuration (shared with orchestrator.ts)
+// 流式超时配置（与 orchestrator.ts 共用）
 // ---------------------------------------------------------------------------
 
 export interface StreamTimeoutConfig {
@@ -53,7 +53,7 @@ export interface StreamTimeoutConfig {
 }
 
 // ---------------------------------------------------------------------------
-// Sub-agent execution (sequential or concurrent)
+// 子代理执行（顺序或并发）
 // ---------------------------------------------------------------------------
 
 export async function executeSubAgents(
@@ -71,7 +71,7 @@ export async function executeSubAgents(
 ): Promise<SubAgentResult[]> {
   const timeoutOptions = getSubAgentTimeouts(preparedPrompt.originalLength, request.model);
 
-  // Sequential path — each subtask runs one at a time
+  // 顺序路径：子任务逐个执行
   if (concurrency <= 1) {
     const results: SubAgentResult[] = [];
     for (let i = 0; i < plan.subtasks.length; i++) {
@@ -90,10 +90,9 @@ export async function executeSubAgents(
         abortSignal,
       );
 
-      // Retry once on failure (e.g. socket closed by provider). Skip retry
-      // when the provider refused the request shape or content (HTTP 400/451)
-      // — retrying the same prompt will hit the same determinstic refusal and
-      // just wastes another round-trip (StepFun's 451 scan can take minutes).
+      // 如果失败就重试一次，例如 provider 中途关掉 socket。
+      // 但遇到 400 / 451 这类确定性拒绝时不要重试，
+      // 因为同样的 prompt 再发一次通常只会得到同样的结果。
       const isNonRetryable =
         !!result.error &&
         /HTTP 4(0[01]|29|51)|content blocked|authentication failed|censorship/i.test(result.error);
@@ -114,11 +113,11 @@ export async function executeSubAgents(
         );
       }
 
-      // Minimal-skills fallback: re-run just this failing subtask with a
-      // ~3KB kernel prompt (schema + jsonl-format only). Don't re-run any
-      // earlier successful subtasks. Skip when the provider gave a
-      // deterministic refusal (401/451/content-blocked) — a smaller prompt
-      // won't get past the same policy check.
+      // 最小技能兜底：
+      // 只重跑当前失败的这一个子任务，并把 system prompt 压到约 3KB，
+      // 只保留 schema + jsonl-format 这样的核心约束。
+      // 已经成功的子任务不重跑。
+      // 对于 401 / 451 / content-blocked 这类确定性拒绝，缩 prompt 也没用，直接跳过。
       if (result.error && result.nodes.length === 0 && !abortSignal?.aborted && !isNonRetryable) {
         console.warn(
           `[orchestrator] subtask ${i} still empty after retry, falling back to minimal skills: ${result.error}`,
@@ -152,13 +151,13 @@ export async function executeSubAgents(
     return results;
   }
 
-  // Concurrent path — screen-grouped parallelism.
-  // Subtasks sharing the same screen run sequentially (preserves section order).
-  // Different screen groups run in parallel, limited by `concurrency`.
+  // 并发路径：按 screen 分组后并行执行。
+  // 同一 screen 内的子任务仍按顺序执行，保证区块顺序稳定；
+  // 不同 screen 之间再受 `concurrency` 限制做并发。
   const total = plan.subtasks.length;
   const results: (SubAgentResult | null)[] = Array.from({ length: total }, () => null);
 
-  // Group subtasks by screen (same logic as orchestrator.ts)
+  // 按 screen 给子任务分组（逻辑与 orchestrator.ts 保持一致）
   const screenGroups: number[][] = [];
   const screenMap = new Map<string, number>();
   for (let i = 0; i < total; i++) {
@@ -171,7 +170,7 @@ export async function executeSubAgents(
     }
   }
 
-  // Semaphore to limit total concurrent API calls
+  // 用一个简单信号量限制并发 API 调用数
   let activeSlots = 0;
   const waitQueue: (() => void)[] = [];
 
@@ -191,7 +190,7 @@ export async function executeSubAgents(
     }
   }
 
-  // Each screen group runs its subtasks sequentially
+  // 每个 screen group 内部依然串行执行
   const workers = screenGroups.map(async (indices) => {
     for (const idx of indices) {
       if (abortSignal?.aborted) return;
@@ -211,9 +210,9 @@ export async function executeSubAgents(
           abortSignal,
         );
 
-        // Minimal-skills fallback — retry just this subtask with a ~3KB
-        // kernel prompt if the full-skills attempt produced no nodes.
-        // See the sequential path for rationale.
+        // 最小技能兜底：
+        // full-skills 没产出任何节点时，就只用一个 ~3KB 的内核 prompt 重跑当前子任务。
+        // 具体原因和顺序路径一致。
         if (result.error && result.nodes.length === 0 && !abortSignal?.aborted) {
           const nonRetryable =
             /HTTP 4(0[01]|29|51)|content blocked|authentication failed|censorship/i.test(
@@ -260,10 +259,10 @@ export async function executeSubAgents(
 
   await Promise.all(workers);
 
-  // Collect non-null results
+  // 收集非空结果
   const collected = results.filter((r): r is SubAgentResult => r !== null);
 
-  // If ALL failed with zero nodes, throw
+  // 如果全部失败且一个节点都没生成出来，就整体抛错
   const totalNodes = collected.reduce((sum, r) => sum + r.nodes.length, 0);
   if (totalNodes === 0 && collected.length > 0) {
     const errors = collected.filter((r) => r.error).map((r) => r.error!);
@@ -275,7 +274,7 @@ export async function executeSubAgents(
 }
 
 // ---------------------------------------------------------------------------
-// Single sub-agent execution
+// 单个子代理的执行过程
 // ---------------------------------------------------------------------------
 
 async function executeSubAgent(
@@ -301,8 +300,8 @@ async function executeSubAgent(
   progressEntry.status = 'streaming';
   emitProgress(plan, progress, callbacks);
 
-  // Context hint is set once at orchestrator level (combining all subtask labels)
-  // to avoid race conditions during concurrent execution
+  // 上下文提示由 orchestrator 层统一设置，
+  // 这样并发执行时不会出现多个子代理互相覆盖的问题。
 
   const userPrompt = buildSubAgentUserPrompt(
     subtask,
@@ -320,9 +319,9 @@ async function executeSubAgent(
   const modelProfile = resolveModelProfile(request.model);
   const isMobileScreen = plan.rootFrame.width <= 480;
 
-  // Build design.md payload for the skill template. If the structured summary
-  // is empty (a bare-minimum design.md with only free-form text), fall back to
-  // the raw markdown source so the sub-agent still sees the user's spec.
+  // 为技能模板准备 design.md 内容。
+  // 如果结构化摘要为空（例如只有一段自由文本），
+  // 就退回原始 markdown，让子代理至少能看到用户规范。
   let designMdContent = '';
   if (designMd) {
     const structured = buildDesignMdStylePolicy(designMd).trim();
@@ -335,9 +334,9 @@ async function executeSubAgent(
       hasVariables: !!variables && Object.keys(variables).length > 0,
       hasDesignMd: hasDesignMdContent,
       isBasicTier: modelProfile.tier === 'basic',
-      // style-defaults.md only loads when no style direction exists at all:
-      // - no pre-built style guide selected
-      // - no usable design.md content (empty raw + empty structured summary)
+      // `style-defaults.md` 只有在完全没有风格来源时才启用：
+      // - 没选预置 style guide
+      // - design.md 也没有可用内容
       noStyleGuideMatch: !plan.selectedStyleGuideContent && !hasDesignMdContent,
     },
     dynamicContent: hasDesignMdContent ? { designMdContent } : undefined,
@@ -345,16 +344,14 @@ async function executeSubAgent(
       modelProfile.tier === 'basic' ? 5200 : modelProfile.tier === 'standard' ? 6500 : undefined,
   });
 
-  // Debug-flag bisection for the cross-provider empty-response bug.
-  // See `sub-agent-debug-flags.ts` for the toggles. All branches here
-  // are no-ops when the corresponding flag is false (the default).
+  // 调试开关：用来排查跨 provider 的“空响应”问题。
+  // 开关定义见 `sub-agent-debug-flags.ts`，默认都是 no-op。
   let resolvedSkills = genCtx.skills;
-  // `minimalSkills` is the last-ditch fallback: after a full-skill attempt
-  // and a reduced-complexity retry both returned empty, re-run this ONE
-  // subtask with just the schema + JSONL-format kernel. A 19KB system
-  // prompt times out StepFun's safety scanner and occasionally yields
-  // pure-reasoning streams on weaker models; the ~3KB kernel gives the
-  // model a much better chance of actually emitting nodes.
+  // `minimalSkills` 是最后一层保底：
+  // 如果 full-skills 和 reduced-complexity 都没有节点产出，
+  // 就只重跑当前这一个子任务，并把 system prompt 压缩成 schema + JSONL 内核。
+  // 这么做是因为超长 prompt 在一些 provider 上会卡安全扫描，
+  // 或者让弱模型只输出 reasoning、不落实际节点。
   if (minimalSkills) {
     resolvedSkills = resolvedSkills.filter(
       (s) => s.meta.name === 'schema' || s.meta.name === 'jsonl-format',
@@ -422,8 +419,8 @@ async function executeSubAgent(
           emitProgress(plan, progress, callbacks, rawResponse);
         }
       } else if (chunk.type === 'thinking') {
-        // Do not expose provider reasoning text in the checklist UI. It is
-        // verbose, repetitive, and often duplicates the visible step labels.
+        // 不把 provider 的 reasoning 文本直接显示到 checklist UI。
+        // 它通常很长、重复，而且和步骤标签表达的是同一件事。
         continue;
       } else if (chunk.type === 'error') {
         progressEntry.status = 'error';
@@ -437,7 +434,7 @@ async function executeSubAgent(
       }
     }
 
-    // Fallback batch extraction
+    // 兜底：如果流式过程没能成功落节点，再做一次整段批量提取
     if (renderer.getAppliedIds().size === 0 && rawResponse.trim()) {
       const count = renderer.flushRemaining(rawResponse);
       if (count > 0) {
@@ -452,12 +449,12 @@ async function executeSubAgent(
       progressEntry.status = 'error';
       emitProgress(plan, progress, callbacks);
 
-      // Build a diagnostic error with a preview of what the model returned
+      // 构造带预览的诊断错误，方便快速看清模型到底返回了什么
       let errorMsg = 'The model response could not be parsed as design nodes.';
       if (rawResponse.trim().length === 0) {
         errorMsg += ' The model returned an empty response.';
       } else {
-        // Show a short snippet so the user can diagnose the issue
+        // 带上一小段预览，便于快速判断是哪类问题
         const preview = rawResponse.trim().slice(0, 150);
         const hasJson = rawResponse.includes('{') && rawResponse.includes('"type"');
         if (!hasJson) {
@@ -480,17 +477,16 @@ async function executeSubAgent(
       };
     }
 
-    // Apply tree-aware heuristics now that the full subtree is in the store.
-    // During streaming, nodes were inserted individually without children, so
-    // tree-aware heuristics (button width, frame height, clipContent) couldn't run.
+    // 现在整棵子树都已经在 store 里，可以补跑树感知启发式。
+    // 流式阶段节点是一个个插入的，依赖完整子树的规则当时还跑不了。
     const rootId = renderer.getRootId();
     if (rootId) {
       applyPostStreamingTreeHeuristics(rootId);
     }
 
     progressEntry.status = 'done';
-    // Delay indicator removal so the glow effect is visible even when the
-    // subtask finishes quickly (e.g. model outputs everything in one chunk).
+    // 稍微延迟移除指示器，
+    // 避免“模型一口气吐完整段”时 glow 效果一闪而过。
     renderer.finish(1500);
     emitProgress(plan, progress, callbacks);
     return { subtaskId: subtask.id, nodes: renderer.getInsertedNodes(), rawResponse };
@@ -520,7 +516,7 @@ function buildSubAgentUserPrompt(
   const { region } = subtask;
   const modelTier = resolveModelProfile(modelId).tier;
 
-  // Show all sections with their element boundaries so the model knows exact scope
+  // 把所有 section 和元素边界都列出来，让模型知道自己的精确职责范围
   const sectionList = plan.subtasks
     .map((st) => {
       const marker = st.id === subtask.id ? ' ← YOU' : '';
@@ -529,7 +525,7 @@ function buildSubAgentUserPrompt(
     })
     .join('\n');
 
-  // Build explicit boundary instruction when elements are specified
+  // 如果子任务显式给了 elements，就额外追加一段边界约束说明
   const myElements = subtask.elements
     ? `\nYOUR ELEMENTS: ${subtask.elements}\nDo NOT generate elements listed in other sections — they handle their own content.`
     : '';
@@ -539,8 +535,8 @@ function buildSubAgentUserPrompt(
     ? `The page root frame already has background color ${rootBgColor} — your section inherits it.`
     : `The page root frame already carries the background color — your section inherits it.`;
 
-  // When the user has a design.md, any numeric padding/spacing hint below must
-  // defer to design.md. Otherwise use the legacy desktop default.
+  // 一旦用户提供 design.md，下面所有 padding / spacing 默认值都必须让位给它；
+  // 没有 design.md 时才退回旧的桌面端默认值。
   const paddingHint = designMd
     ? `Use padding/spacing that matches the design.md "LAYOUT PRINCIPLES" and "COMPONENT STYLES" blocks below — those numbers OVERRIDE any generic defaults in these layout constraints.`
     : `Use padding=[0,80] for horizontal page margins.`;
@@ -558,19 +554,16 @@ CRITICAL LAYOUT CONSTRAINTS:
 - SECTION BACKGROUND: do NOT set \`fill\` on your section root frame. ${rootBgHint} Hardcoding a "safe dark" fill (e.g. #000 / #0A0A0A / #111) will cover the intended background and break theme switching. Only set \`fill\` on cards, buttons, chips, badges, and other visually distinct components — never on the section container itself.
 - IDs prefix="${subtask.idPrefix}-". No <step> tags. Output \`\`\`json immediately.`;
 
-  // Phone mockup guidance is only relevant when this subtask is actually
-  // rendering a phone mockup. Injecting it everywhere causes weaker models
-  // (e.g. MiniMax M2) to wrap unrelated sections — bottom-nav, footers — in
-  // a fake "Phone Mockup" frame and stuff the rest of the design inside.
+  // 手机样机提示只在当前子任务真的需要画手机样机时才有意义。
+  // 如果到处都注入，一些较弱模型会把无关区块也包进假的 Phone Mockup。
   if (needsPhoneMockupInstruction(subtask.label, compactPrompt, fullPrompt, plan.rootFrame.width)) {
     prompt += `\n\nPHONE MOCKUP RULE:
 - Phone mockup = ONE frame node, cornerRadius 32. If a placeholder label is needed, allow exactly ONE centered text child inside the phone; otherwise no children.
 - Never place placeholder text below the phone as a sibling. NEVER use ellipse for the phone bezel.`;
   }
 
-  // Prevent sub-agents from generating a duplicate status bar on mobile,
-  // and explicitly tell them NOT to wrap their section in a phone mockup —
-  // the design is already a mobile screen.
+  // 在移动端明确禁止重复生成状态栏，
+  // 也禁止再套一层手机样机，因为整个页面本身已经是手机屏。
   if (plan.rootFrame.width <= 480) {
     prompt += `\n\nMOBILE STATUS BAR: A status bar (time, signal, wifi, battery) has ALREADY been pre-inserted as the first child of the root page frame. Do NOT generate any status bar, system chrome, or OS-level indicators. Start your content directly.`;
     prompt += `\n\nNO PHONE MOCKUP WRAPPER: The whole design IS a mobile screen. Do NOT wrap your section in a phone-shaped frame (cornerRadius 32 dark bezel, fixed 260-300px width, name "Phone Mockup"). Your section's root frame must use width="fill_container" and contain only the content that belongs to this section — never the entire app's children.`;
@@ -610,10 +603,10 @@ CRITICAL LAYOUT CONSTRAINTS:
 - Only use stacked layout for mobile/narrow viewport sections.`;
   }
 
-  // Style guide injection precedence:
-  // 1. designMd (user's own design system) — highest, OVERRIDES everything else
-  // 2. Selected pre-built style guide content — middle
-  // 3. AI-generated styleGuide from planning (existing fallback) — lowest
+  // 风格注入优先级：
+  // 1. design.md（用户自己的设计系统）最高
+  // 2. 选中的预置 style guide 次之
+  // 3. 规划阶段 AI 推断出的 style guide 最后兜底
   if (designMd) {
     const policy = buildDesignMdStylePolicy(designMd);
     if (policy) {
@@ -706,10 +699,9 @@ function needsHeroPhoneTwoColumnInstruction(
 }
 
 /**
- * Pull the first solid fill color off the plan's root frame, if any.
- * Used in the sub-agent prompt so the model sees the actual background
- * color it is inheriting and has no excuse to hedge with a hardcoded
- * "safe dark" fill on its own section root.
+ * 取出计划根框架上的第一个实色填充颜色（如果存在）。
+ * 这样子代理 prompt 就能看到自己继承的真实背景色，
+ * 不至于在 section 根上再硬塞一个“安全深色背景”。
  */
 function extractRootFrameFillColor(plan: OrchestratorPlan): string | null {
   const fill = plan.rootFrame?.fill;
@@ -720,14 +712,13 @@ function extractRootFrameFillColor(plan: OrchestratorPlan): string | null {
 }
 
 /**
- * Decide whether this sub-agent should see the phone mockup style guide.
+ * 判断当前子代理是否应该看到“手机样机”相关提示。
  *
- * Mobile generation (root width <= 480) NEVER needs it: the design itself
- * is already a phone screen, so the prompt would only confuse the model
- * into wrapping its section in a fake bezel.
+ * 移动端（根宽度 <= 480）永远不需要，
+ * 因为整个设计本身已经是一块手机屏，再给这个提示只会误导模型去套假边框。
  *
- * Desktop generation needs it only when this specific sub-task is the one
- * rendering a phone mockup (hero showcase, app preview, etc.).
+ * 桌面端只有在当前子任务确实负责渲染手机样机时才需要，
+ * 比如 Hero 里的 App 预览或设备展示位。
  */
 function needsPhoneMockupInstruction(
   subtaskLabel: string,
@@ -742,7 +733,7 @@ function needsPhoneMockupInstruction(
   );
 }
 
-/** Test-only entry point so unit tests don't have to stand up real model calls. */
+/** 仅供测试使用的入口，避免单测里真的去发模型请求。 */
 export function buildSubAgentUserPromptForTest(args: {
   subtask: SubTask;
   plan: OrchestratorPlan;

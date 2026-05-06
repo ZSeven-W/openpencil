@@ -169,7 +169,7 @@ export function setupIPC(deps: IpcDeps): void {
     },
   );
 
-  // Theme sync for Windows/Linux title bar overlay
+  // Theme 同步 Windows/Linux 标题栏覆盖
   ipcMain.handle(
     'theme:set',
     (_event, theme: 'dark' | 'light', colors?: { bg: string; fg: string }) => {
@@ -187,7 +187,7 @@ export function setupIPC(deps: IpcDeps): void {
     },
   );
 
-  // Renderer preferences
+  // Renderer 偏好设置
   ipcMain.handle('prefs:getAll', () => ({ ...prefsCache }));
 
   ipcMain.handle('prefs:set', (_event, key: string, value: string) => {
@@ -200,12 +200,12 @@ export function setupIPC(deps: IpcDeps): void {
     schedulePrefsWrite();
   });
 
-  // Recent files sync from renderer → main (for native menu)
+  // Recent 文件从渲染器同步→主（用于本机菜单）
   ipcMain.on(
     'recent-files:sync',
     (_event, files: Array<{ fileName: string; filePath: string }>) => {
       (global as any).__recentFiles = files;
-      // Rebuild menu so "Open Recent" reflects current state
+      // Rebuild 菜单，因此“Open Recent”反映当前状态
       import('./app-menu').then(({ buildAppMenu }) => buildAppMenu());
     },
   );

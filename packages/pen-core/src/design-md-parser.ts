@@ -3,7 +3,7 @@ import type { PenDocument } from '@zseven-w/pen-types';
 import type { VariableDefinition } from '@zseven-w/pen-types';
 
 // ---------------------------------------------------------------------------
-// Section header patterns (fuzzy matching)
+// Section 标头模式（模糊匹配）
 // ---------------------------------------------------------------------------
 
 const SECTION_PATTERNS: Record<string, RegExp> = {
@@ -22,14 +22,14 @@ interface ParsedSection {
 }
 
 // ---------------------------------------------------------------------------
-// Parse markdown into sections
+// Parse 降价为多个部分
 // ---------------------------------------------------------------------------
 
 function splitSections(markdown: string): { projectName?: string; sections: ParsedSection[] } {
   const lines = markdown.split('\n');
   let projectName: string | undefined;
 
-  // Extract project name from H1
+  // Extract 项目名称来自 H1
   const h1Match = markdown.match(/^#\s+(?:Design\s+System:\s*)?(.+)$/m);
   if (h1Match) projectName = h1Match[1].trim();
 
@@ -41,7 +41,7 @@ function splitSections(markdown: string): { projectName?: string; sections: Pars
   for (const line of lines) {
     const h2Match = line.match(/^##\s+(?:\d+\.\s*)?(.+)$/);
     if (h2Match) {
-      // Flush previous section
+      // Flush 上一节
       if (currentKey) {
         sections.push({
           key: currentKey,
@@ -57,7 +57,7 @@ function splitSections(markdown: string): { projectName?: string; sections: Pars
     }
   }
 
-  // Flush last section
+  // Flush 最后一节
   if (currentKey) {
     sections.push({
       key: currentKey,
@@ -73,7 +73,7 @@ function matchSectionKey(title: string): string {
   for (const [key, pattern] of Object.entries(SECTION_PATTERNS)) {
     if (pattern.test(title)) return key;
   }
-  // Fallback: try to match common section names loosely
+  // Fallback：尝试松散地匹配公共部分名称
   const lower = title.toLowerCase();
   if (lower.includes('theme') || lower.includes('vibe') || lower.includes('aesthetic'))
     return 'visualTheme';
@@ -91,7 +91,7 @@ function matchSectionKey(title: string): string {
 }
 
 // ---------------------------------------------------------------------------
-// Color extraction
+// Color 提取
 // ---------------------------------------------------------------------------
 
 const HEX_COLOR_RE = /#([0-9A-Fa-f]{6})\b/;
@@ -101,7 +101,7 @@ function parseColors(content: string): DesignMdColor[] {
   const lines = content.split('\n');
 
   for (const line of lines) {
-    // Skip JSON/code artifacts
+    // Skip JSON/code 工件
     if (line.trimStart().startsWith('{') || line.trimStart().startsWith('`')) continue;
 
     const hexMatch = line.match(HEX_COLOR_RE);

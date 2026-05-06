@@ -1,17 +1,17 @@
 // apps/web/src/components/panels/git-panel/git-panel.tsx
 //
-// Git panel body — renders inside a <PopoverContent> anchored to the
-// top-bar GitButton. Phase 4a.1 removed the floating/draggable/minimized
-// chrome in favor of a dropdown form. The popover itself owns visibility
-// (open/close via the Popover's open + onOpenChange props wired in
-// git-button.tsx), so GitPanel no longer checks panelOpen or
-// panelMinimized — by the time this component renders, the popover is
-// already open.
+// Git 面板主体 — 在锚定到的 <PopoverContent> 内呈现
+// 顶栏 GitButton。 Phase 4a.1 删除了 floating/draggable/minimized
+// chrome 支持下拉表单。 The 弹出窗口本身拥有可见性
+// （open/close 通过 Popover 的 open + onOpenChange 道具连接
+// git-button.tsx)，因此 GitPanel 不再检查 panelOpen 或
+// panelMinimized — 当该组件渲染时，弹出窗口是
+// 已经开放了。
 //
-// The body switches on `state.kind` and delegates to the sibling
-// components (empty-state, error card, etc.). Author identity is loaded
-// once on first mount. Repo detection is triggered when the tracked
-// file path changes while the panel is visible.
+// The 主体开启 `state.kind` 并委托给同级
+// 组件（空状态、错误卡等）。 Author 身份已加载
+// 第一次安装时。 Repo 被跟踪时触发检测
+// 当面板可见时文件路径会发生变化。
 
 import { useEffect } from 'react';
 import { Loader2 } from 'lucide-react';
@@ -27,9 +27,9 @@ import { GitPanelTrackedPicker } from './git-panel-tracked-picker';
 import { Button } from '@/components/ui/button';
 
 /**
- * Body of the Git popover. Assumes the Popover ancestor is already open
- * (Radix unmounts PopoverContent when closed, so this component only
- * renders when visible).
+ * Git 弹出窗口的
+ * Body。 Assumes Popover 祖先已经打开（Radix 在关闭时卸载
+ * PopoverContent，因此该组件仅在可见时呈现）。
  */
 export function GitPanel() {
   const { t } = useTranslation();
@@ -40,19 +40,17 @@ export function GitPanel() {
   const acknowledgeAutoBind = useGitStore((s) => s.acknowledgeAutoBind);
   const acknowledgeAutoBindAndOpen = useGitStore((s) => s.acknowledgeAutoBindAndOpen);
 
-  // Reactive document store reads — re-renders when the user saves or
-  // opens a different file while the dropdown is open.
+  // Reactive 文档存储读取 — 当用户在下拉列表打开时保存或打开不同的文件时重新呈现。
   const docFilePath = useDocumentStore((s) => s.filePath);
 
-  // Load author identity once on first mount. loadAuthorIdentity itself
-  // is idempotent and short-circuits on SSR via a typeof window guard.
+  // Load 首次安装时显示作者身份。 loadAuthorIdentity 本身是幂等的，并且通过某种类型的窗口防护对 SSR
+  // 进行短路。
   useEffect(() => {
     void loadAuthorIdentity();
   }, [loadAuthorIdentity]);
 
-  // Trigger repo detection whenever the current file path changes while
-  // the panel is open in no-file state. Covers the "user opened the
-  // dropdown before saving, then saved" flow.
+  // 当面板在无文件状态下打开时，每当当前文件路径发生更改时，Trigger 都会进行存储库检测。 Covers
+  // “用户在保存之前打开下拉列表，然后保存”流程。
   useEffect(() => {
     if (state.kind !== 'no-file') return;
     if (docFilePath) {

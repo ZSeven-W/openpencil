@@ -12,7 +12,7 @@ import { vitePluginSkills } from '../../packages/pen-ai-skills/vite-plugin-skill
 
 const isElectronBuild = process.env.BUILD_TARGET === 'electron';
 
-// Copy CanvasKit WASM files to public directory for runtime loading
+// Copy CanvasKit WASM 文件到公共目录以供运行时加载
 function copyCanvasKitWasm() {
   const wasmDir = resolve('public/canvaskit');
   if (!existsSync(wasmDir)) mkdirSync(wasmDir, { recursive: true });
@@ -66,7 +66,7 @@ const config = defineConfig({
       output: { dir: '../../out/web' },
       ...(isElectronBuild ? { preset: 'node-server' } : {}),
     }),
-    // this is the plugin that enables path aliases
+    // 这是启用路径别名的插件
     viteTsConfigPaths({
       projects: ['./tsconfig.json'],
     }),

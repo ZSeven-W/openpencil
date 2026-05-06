@@ -24,7 +24,7 @@ export async function handleFindEmptySpace(
   const doc = await openDocument(filePath);
   const padding = params.padding ?? 50;
 
-  // Compute bounding box of reference content
+  // Compute 参考内容的边界框
   const docChildren = getDocChildren(doc, params.pageId);
   let nodes: PenNode[];
   if (params.nodeId) {

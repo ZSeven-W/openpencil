@@ -1,4 +1,4 @@
-// @vitest-environment jsdom
+// @vitest-环境 jsdom
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { DesignEngineContext } from '../context';
@@ -6,7 +6,7 @@ import { PropertyPanel } from '../components/property-panel';
 
 function createMockEngine(selectedNode: any = null, selection: string[] = []) {
   const listeners = new Map<string, Set<(...args: any[]) => void>>();
-  // Stable references required so useSyncExternalStore doesn't infinite-loop
+  // 需要 Stable 引用，因此 useSyncExternalStore 不会无限循环
   const doc = { id: 'doc', pages: [], children: [] };
 
   return {
@@ -61,7 +61,7 @@ describe('PropertyPanel', () => {
       </DesignEngineContext.Provider>,
     );
 
-    // SizeSection should render position labels
+    // SizeSection 应该渲染位置标签
     expect(screen.getByText('Position')).toBeTruthy();
   });
 
@@ -85,7 +85,7 @@ describe('PropertyPanel', () => {
       </DesignEngineContext.Provider>,
     );
 
-    // TextSection should render font-related controls
+    // TextSection 应该呈现与字体相关的控件
     expect(screen.getByText('Typography')).toBeTruthy();
   });
 });

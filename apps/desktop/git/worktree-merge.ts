@@ -1,29 +1,29 @@
 // apps/desktop/git/worktree-merge.ts
 //
-// System-git helpers for folder-mode merge operations. These are the only
-// functions in the git layer that shell out to the system git binary for
-// merge state management — everything else uses isomorphic-git.
+// System-git 文件夹模式合并操作的助手。 These 是唯一的
+// git 层中的函数，将 shell 输出到系统 git 二进制文件
+// 合并状态管理——其他一切都使用 isomorphic-git。
 //
-// DESIGN NOTE (Phase 7a spike):
-//   We use system git's merge machinery because isomorphic-git has no
-//   equivalent of --no-commit --no-ff merges and cannot write the three-stage
-//   index entries needed for conflict detection. The exact command sequence
-//   was chosen after verifying each shape against a live repo:
+// DESIGN NOTE（Phase 7a 尖峰）：
+// We 使用系统 git 的合并机制，因为 isomorphic-git 没有
+// 相当于--no-commit --no-ff 合并，不能写三阶段
+// 冲突检测所需的索引条目。 The 确切的命令序列
+// 在根据实时存储库验证每个形状后选择：
 //
-//   1. `git merge --no-commit --no-ff <ref>`  — enters merge state; exits 1
-//      on conflicts, exits 0 on clean merge (but still --no-commit so we
-//      can write the tracked file before committing).
-//   2. `git ls-files -u`  — lists all unresolved paths (all conflict types,
-//      not just "both modified"), along with stage numbers 1/2/3.
-//   3. `git show :1:<path>`, `:2:<path>`, `:3:<path>`  — reads base/ours/
-//      theirs blobs from the index without touching the working tree.
-//   4. `git checkout --ours -- <file>`  — writes the ours version to disk so
-//      the tracked .op file is readable JSON; file stays "unresolved" in the
-//      index so MERGE_HEAD and other unresolved files survive.
-//   5. `git add <file>`  — marks a file resolved in the index.
-//   6. `git commit -m <message>`  — when MERGE_HEAD is present, git
-//      automatically creates a 2-parent merge commit.
-//   7. `git merge --abort`  — atomically restores the working tree and index.
+//   1. `git merge --no-commit --no-ff <ref>` — 进入合并状态；出口 1
+// 发生冲突时，在干净合并时退出 0（但仍然是 --no-commit，所以我们
+// 可以在提交之前写入跟踪文件）。
+//   2. `git ls-files -u` — 列出所有未解析的路径（所有冲突类型，
+// 不仅仅是“都修改了”），以及阶段编号 1/2/3。
+//   3. `git show :1:<path>`、`:2:<path>`、`:3:<path>` — 读取 base/ours/
+// 他们的 blob 从索引中取出，而不触及工作树。
+//   4. `git checkout --ours -- <file>` — 将我们的版本写入磁盘
+// 被跟踪的.op 文件是可读的 JSON；文件保持“未解决”状态
+// 索引，因此 MERGE_HEAD 和其他未解析的文件仍然存在。
+//   5. `git add <file>` — 标记在索引中解析的文件。
+//   6. `git commit -m <message>` — 当 MERGE_HEAD 存在时，git
+// 自动创建 2-parent 合并提交。
+//   7. `git merge --abort` — 自动恢复工作树和索引。
 
 import { execFile } from 'node:child_process';
 import { promises as fsp } from 'node:fs';
@@ -48,10 +48,10 @@ interface RunResult {
 }
 
 /**
- * Run `git <args>`. Unlike the private runGit in git-sys.ts, this version
- * tolerates non-zero exits and returns the exit code so callers can
- * distinguish "conflict" from "error" — `git merge` exits 1 on conflicts
- * but that is not an error from the caller's perspective.
+ * Run `git
+ * <args>`。 Unlike git-sys.ts 中的私有 runGit，此版本容忍非零退出并返回退出代码，以便调用者可以区分“冲突”和“
+ * 错误” - `git merge` 在冲突时退出 1，但从调用者的角度来看这不是错误。
+ *
  */
 async function runGitTolerant(args: string[], opts: RunOpts): Promise<RunResult> {
   const env = { ...process.env, ...opts.env };
@@ -65,8 +65,7 @@ async function runGitTolerant(args: string[], opts: RunOpts): Promise<RunResult>
     return { stdout, stderr, exitCode: 0 };
   } catch (err) {
     const e = err as NodeJS.ErrnoException & { stderr?: string; stdout?: string; code?: number };
-    // exitCode is the numeric exit code from the child process; undefined if it
-    // was killed by a signal (which we map to -1).
+    // exitCode 是子进程的数字退出代码；如果它被信号杀死（我们将其映射为-1），则未定义。
     const exitCode = typeof e.code === 'number' ? e.code : -1;
     return {
       stdout: e.stdout ?? '',
@@ -77,23 +76,23 @@ async function runGitTolerant(args: string[], opts: RunOpts): Promise<RunResult>
 }
 
 // ---------------------------------------------------------------------------
-// Public helpers
+// Public 帮助者
 // ---------------------------------------------------------------------------
 
 /**
- * Attempt to merge `ref` into the current branch without auto-committing.
- * Uses `--no-ff` to always produce a merge commit even for fast-forwards.
+ * Attempt 将
+ * `ref` 合并到当前分支而不自动提交。 Uses `--no-ff` 始终生成合并提交，即使对于快进也是如此。 Returns: - {
  *
- * Returns:
- *   - { kind: 'clean' }     — merge succeeded with no conflicts; index is staged
- *                             but not committed (MERGE_HEAD is set).
- *   - { kind: 'conflict' }  — one or more conflicts; MERGE_HEAD is set, unresolved
- *                             files remain in the index at conflict stages.
- *   - throws GitError       — on engine-level failures (not available, unknown ref, etc.)
+ * kind: 'clean' } — 合并成功，没有冲突；索引已暂存但未提交（已设置 MERGE_HEAD）。 - { kind:
+ * 'conflict' }
+ * — 一个或多个冲突；设置
+ * MERGE_HEAD 后，未解析的文件在冲突阶段保留在索引中。 - 抛出 GitError — 引擎级故障（不可用、未知引用等） NOTE：某些 git
+ * 版本在合并簿记期间读取用户身份，即使使用 --no-commit。
+ * Callers 必须确保存储库配置了 user.name/user.email（或通过 opts.env 注入它们）——没有全局 git
  *
- * NOTE: some git versions read user identity during merge bookkeeping even with
- * --no-commit. Callers must ensure the repo has user.name/user.email configured
- * (or inject them via opts.env) — machines without a global git config will fail.
+ * 配置的机器将会失败。
+ *
+ *
  */
 export async function sysMergeNoCommit(opts: {
   cwd: string;
@@ -107,7 +106,7 @@ export async function sysMergeNoCommit(opts: {
 
   if (result.exitCode === 0) return { kind: 'clean' };
 
-  // Exit code 1 from `git merge` means conflicts. Any other code is an error.
+  // `git merge` 中的 Exit 代码 1 表示冲突。 Any 其他代码是错误的。
   if (result.exitCode === 1) return { kind: 'conflict' };
 
   throw new GitError(

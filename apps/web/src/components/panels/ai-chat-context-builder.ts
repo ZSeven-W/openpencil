@@ -2,8 +2,8 @@ import { useCanvasStore } from '@/stores/canvas-store';
 import { useDocumentStore } from '@/stores/document-store';
 
 /**
- * Build a context string from the current canvas state — selected nodes,
- * document node summary, and variable definitions.
+ * Build 当前画布状态
+ * 的上下文字符串 - 选定的节点、文档节点摘要和变量定义。
  */
 export function buildContextString(): string {
   const selectedIds = useCanvasStore.getState().selection.selectedIds;

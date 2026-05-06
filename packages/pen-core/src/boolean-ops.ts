@@ -4,7 +4,7 @@ import type { PenNode, PathNode } from '@zseven-w/pen-types';
 export type BooleanOpType = 'union' | 'subtract' | 'intersect';
 
 // ---------------------------------------------------------------------------
-// Paper.js scope — headless (no canvas needed)
+// Paper.js 范围 — 无头（不需要画布）
 // ---------------------------------------------------------------------------
 
 interface PaperBoundsLike {
@@ -47,9 +47,8 @@ let scope: PaperScope | null = null;
 function getPaperModule(): PaperModule | null {
   if (paperModule !== undefined) return paperModule;
   try {
-    // Indirect require via globalThis to load paper.js at runtime without
-    // triggering esbuild's direct-eval warning. The assignment to globalThis
-    // happens once; subsequent calls read from the cached paperModule.
+    // Indirect 需要通过 globalThis 在运行时加载 paper.js，而不会触发 esbuild 的直接评估警告。 The
+    // 到 globalThis 的分配发生一次；后续调用从缓存的 paperModule 中读取。
     const _r =
       ((globalThis as any)['require'] as NodeRequire | undefined) ??
       (typeof require !== 'undefined' ? require : undefined);
@@ -75,7 +74,7 @@ function getScope(): PaperScope {
 }
 
 // ---------------------------------------------------------------------------
-// Shape → SVG path string conversion
+// Shape → SVG 路径字符串转换
 // ---------------------------------------------------------------------------
 
 function sizeVal(v: number | string | undefined, fallback: number): number {

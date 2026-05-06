@@ -15,7 +15,7 @@ import type {
 import { randomUUID } from 'node:crypto';
 import { validateContract } from '@zseven-w/pen-mcp';
 
-// --- Internal state ---
+// --- Internal 状态 ---
 
 export interface PlanState {
   plan: CodePlanFromAI;
@@ -28,7 +28,7 @@ export interface PlanState {
 
 const plans = new Map<string, PlanState>();
 
-const TTL_MS = 30 * 60 * 1000; // 30 minutes
+const TTL_MS = 30 * 60 * 1000; // 30 分钟
 
 function cleanExpired(): void {
   const now = Date.now();

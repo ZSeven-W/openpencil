@@ -24,7 +24,7 @@ export function useToolShortcuts() {
 
       const isMod = e.metaKey || e.ctrlKey;
 
-      // Tool shortcuts (single key, no modifier)
+      // Tool 快捷键（单键，无修饰符）
       if (!isMod && !e.shiftKey && !e.altKey) {
         const tool = TOOL_KEYS[e.key.toLowerCase()];
         if (tool) {
@@ -34,7 +34,7 @@ export function useToolShortcuts() {
         }
       }
 
-      // Escape: 1) clear selection, 2) exit frame, 3) switch to select tool
+      // Escape：1）清除选择，2）退出框架，3）切换到选择工具
       if (e.key === 'Escape') {
         e.preventDefault();
         const { selectedIds, enteredFrameId } = useCanvasStore.getState().selection;

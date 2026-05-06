@@ -1,4 +1,4 @@
-// pen-engine browser adapter — public API
+// pen-engine 浏览器适配器 — public API
 
 export {
   attachCanvas,

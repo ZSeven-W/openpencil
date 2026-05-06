@@ -112,7 +112,7 @@ describe('layout-engine', () => {
       );
       expect(result[0].x).toBe(0);
       expect(result[0].y).toBe(0);
-      expect(result[1].x).toBe(60); // 50 + 10 gap
+      expect(result[1].x).toBe(60); // 50+10 差距
     });
 
     it('positions children vertically', () => {
@@ -129,7 +129,7 @@ describe('layout-engine', () => {
       );
       expect(result[0].x).toBe(0);
       expect(result[0].y).toBe(0);
-      expect(result[1].y).toBe(40); // 30 + 10 gap
+      expect(result[1].y).toBe(40); // 30+10 差距
     });
 
     it('applies padding', () => {
@@ -164,16 +164,16 @@ describe('layout-engine', () => {
     });
 
     it('maps alignItems="baseline" to end-alignment (engine has no baseline metric)', () => {
-      // LLMs routinely emit alignItems: 'baseline' from web CSS reflex
-      // for "big number + small unit" patterns like "72 BPM". The
-      // layout engine doesn't compute text baselines; the closest
-      // visually correct fallback is end-alignment (both children
-      // bottom-pinned). Locks in that `baseline` no longer falls
-      // through to the `start` default.
-      //
-      // `baseline` is not part of the TS `alignItems` union, so we
-      // cast through unknown — the normalizer accepts any string and
-      // that's exactly the behavior we want to exercise here.
+      // LLMs 经常从网络 CSS 反射中发出 alignItems: 'baseline'
+// for "big number + small unit" patterns like "72 BPM". The
+      // 布局引擎不计算文本基线；最接近的
+      // 视觉上正确的后备是末端对齐（两个孩子
+      // 底部固定）。 Locks 因为 `baseline` 不再掉落
+      // 直到 `start` 默认值。
+//
+      // `baseline` 不是 TS `alignItems` 联盟的一部分，所以我们
+      // 通过未知进行强制转换 - 规范化器接受任何字符串并且
+      // 这正是我们想要在这里练习的行为。
       const parent = frame({
         width: 300,
         height: 100,
@@ -185,14 +185,13 @@ describe('layout-engine', () => {
         parent,
         (parent as PenNode & { children: PenNode[] }).children,
       );
-      expect(result[0].y).toBe(20); // 100 - 80 (big pinned to bottom)
-      expect(result[1].y).toBe(80); // 100 - 20 (unit pinned to bottom)
+      expect(result[0].y).toBe(20); // 100 - 80（大固定在底部）
+      expect(result[1].y).toBe(80); // 100 - 20（装置固定在底部）
     });
 
     it('maps alignItems="flex-end" and "bottom" to end (CSS/alias passthrough)', () => {
-      // `flex-end` is a CSS alias that the normalizer accepts but the
-      // TS union doesn't — cast through unknown same as the baseline
-      // test above.
+      // `flex-end` 是标准化器接受的 CSS 别名，但 TS 联合不接受 -
+      // 通过未知进行强制转换，与上面的基线测试相同。
       const parent = frame({
         width: 300,
         height: 100,

@@ -1,8 +1,8 @@
 // ---------------------------------------------------------------------------
-// Agent indicator state — tracks which nodes have active agent overlays.
+// Agent 指示器状态 — 跟踪哪些节点具有活动代理覆盖。
 //
-// Uses globalThis to guarantee a single shared instance across all module
-// chunks — eliminates Vite module-splitting isolation issues.
+// Uses globalThis 确保所有模块有一个共享实例
+// 块 — 消除 Vite 模块分割隔离问题。
 // ---------------------------------------------------------------------------
 
 export interface AgentIndicatorEntry {
@@ -11,7 +11,7 @@ export interface AgentIndicatorEntry {
   name: string;
 }
 
-/** Tracks which root frame an agent is responsible for (for badge placement). */
+/** Tracks 代理负责哪个根框架（用于徽章放置）。 */
 export interface AgentFrameEntry {
   frameId: string;
   color: string;
@@ -58,7 +58,7 @@ export function addAgentIndicator(nodeId: string, color: string, name: string): 
   getIndicatorMap().set(nodeId, { nodeId, color, name });
 }
 
-/** Register a frame as being owned by an agent (for badge next to frame name). */
+/** Register 一个由代理拥有的框架（对于框架名称旁边的徽章）。 */
 export function addAgentFrame(frameId: string, color: string, name: string): void {
   getAgentFrameMap().set(frameId, { frameId, color, name });
 }
@@ -80,8 +80,8 @@ export function isPreviewNode(nodeId: string): boolean {
   return getPreviewSet().has(nodeId);
 }
 
-/** Remove all node indicators whose nodeId starts with the given prefix.
- *  Agent frame badges are NOT removed — they persist independently. */
+/** Remove 以给定前缀开头的所有节点指示器。 Agent 框架徽章已被删除 - 它们独立存在。
+ *  */
 export function removeAgentIndicatorsByPrefix(prefix: string): void {
   const map = getIndicatorMap();
   const set = getPreviewSet();

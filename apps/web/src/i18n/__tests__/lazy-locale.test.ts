@@ -10,7 +10,7 @@ describe('i18n lazy locale loading', () => {
     const i18nModule = await import('../index');
     const i18n = i18nModule.default;
 
-    // Before loading, zh should not have resources
+    // Before 正在加载，zh 应该没有资源
     expect(i18n.hasResourceBundle('zh', 'translation')).toBe(false);
 
     await i18nModule.loadLocale('zh');
@@ -21,6 +21,6 @@ describe('i18n lazy locale loading', () => {
   it('should no-op for en (already loaded statically)', async () => {
     const { loadLocale, default: i18n } = await import('../index');
     expect(i18n.hasResourceBundle('en', 'translation')).toBe(true);
-    await loadLocale('en'); // should not throw
+    await loadLocale('en'); // 不应该扔
   });
 });

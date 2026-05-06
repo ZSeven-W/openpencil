@@ -1,10 +1,10 @@
 /**
- * Image conversion utilities.
- * Image nodes in Figma are represented as RECTANGLE nodes with IMAGE fills.
- * The collectImageBlobs helper (in common.ts) handles blob detection.
- * Actual image node conversion is handled by convertRectangle in shape-converter.ts.
+ * Image 转换实用程序
+ * 。 Figma 中的 Image 节点表示为带有
+ * IMAGE 填充的 RECTANGLE 节点。 The collectImageBlobs 帮助程序（在 common.ts 中）处理 blob
+ * 检测。 Actual 图像节点转换由 shape-converter.ts 中的 convertRectangle 处理。 This
  *
- * This module is reserved for future image-specific conversion logic.
+ * 模块保留用于将来的图像特定转换逻辑。
  */
 
 export { collectImageBlobs } from './common.js';

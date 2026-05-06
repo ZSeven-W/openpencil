@@ -1,8 +1,9 @@
 /**
- * Model capability profiles — adapt AI configs per model tier.
+ * Model 功能配置文件
  *
- * Each profile matches a model ID pattern and overrides thinking mode,
- * effort, timeouts, and prompt complexity as needed. First match wins.
+ * — 根据模型层调整 AI 配置。 Each 配置文件与模型 ID 模式匹配，并根据需要覆盖思维模式、工作量、超时和提示复
+ * 杂性。 First
+ 比赛获胜。
  */
 
 import type { ThinkingMode, ThinkingEffort } from './ai-runtime-config';
@@ -20,14 +21,14 @@ export interface ModelProfile {
 }
 
 const MODEL_PROFILES: ModelProfile[] = [
-  // Full tier — defaults unchanged
+  // Full 层 — 默认值不变
   { match: 'claude-opus', tier: 'full', label: 'Claude Opus' },
   { match: 'claude-sonnet', tier: 'full', label: 'Claude Sonnet' },
   { match: 'claude-3-5', tier: 'full', label: 'Claude 3.5' },
   { match: 'claude-3.5', tier: 'full', label: 'Claude 3.5' },
   { match: 'claude-4', tier: 'full', label: 'Claude 4' },
 
-  // Standard tier — disable thinking (unsupported or unhelpful)
+  // Standard tier — 禁止思考（不受支持或无帮助）
   { match: 'gpt-4o', tier: 'standard', thinkingMode: 'disabled', label: 'GPT-4o' },
   { match: 'o1', tier: 'standard', thinkingMode: 'disabled', label: 'o1' },
   { match: 'o3', tier: 'standard', thinkingMode: 'disabled', label: 'o3' },
@@ -45,22 +46,19 @@ const MODEL_PROFILES: ModelProfile[] = [
   { match: 'gemini-pro', tier: 'standard', thinkingMode: 'disabled', label: 'Gemini Pro' },
   { match: /^gemini-2/, tier: 'standard', thinkingMode: 'disabled', label: 'Gemini 2' },
   // DeepSeek v4 series — v4-pro and v4-flash default to thinking enabled;
-  // the API toggles it via `{"thinking":{"type":"disabled"}}`. Mark
-  // these as disabled so the app keeps its fast/non-thinking default —
-  // server reasoning paths that wire DeepSeek's toggle will honor it.
-  // The Zig openai-compat path doesn't emit the toggle yet, so calls
-  // through that path still see provider-default thinking until the
-  // parameter is wired there.
+  // API 通过 `{"thinking":{"type":"disabled"}}` 切换它。 Mark
+  // 这些已禁用，因此应用程序保留其 fast/non-thinking 默认值 —
+  // 连接 DeepSeek 切换的服务器推理路径将遵循它。
+  // The Zig openai-compat 路径尚未发出切换，因此调用
+  // 通过这条路径仍然看到提供商默认的思维，直到
+  // 参数连接在那里。
   {
     match: 'deepseek-v4-pro',
     tier: 'full',
     thinkingMode: 'disabled',
-    // Until the Zig openai-compat path actually sends
-    // `thinking:{type:disabled}`, v4-pro keeps reasoning enabled on
-    // every request and reasoning tokens explode on long planning
-    // prompts. Double the timeout windows so orchestrator planning
-    // doesn't fall back on the first big request. Drop this back to 1
-    // once the toggle is wired.
+    // Until Zig openai-compat 路径实际上发送
+    // `thinking:{type:disabled}`，v4-pro 在每个请求上保持启用推理，并且推理令牌在长期计划提示上
+    // 爆炸。 Double 超时窗口，以便协调器规划不会依赖于第一个大请求。 Drop 连接开关后，此值恢复为 1。
     timeoutMultiplier: 2,
     label: 'DeepSeek V4 Pro',
   },
@@ -70,10 +68,9 @@ const MODEL_PROFILES: ModelProfile[] = [
     thinkingMode: 'disabled',
     label: 'DeepSeek V4 Flash',
   },
-  // Legacy aliases — exact match only so future deepseek-* variants
-  // (e.g. a hypothetical deepseek-r2 with native reasoning) don't
-  // inherit a forced disabled thinkingMode. These two sunset 2026-07-24
-  // and DeepSeek auto-routes them to v4-flash today.
+  // Legacy 别名 - 仅精确匹配，以便未来的 deepseek-* 变体（例如具有本机推理的假设的
+  // deepseek-r2）不会继承强制禁用的 thinkingMode。 These 两个日落 2026-07-24 和
+  // DeepSeek 今天自动将它们路由到 v4-flash。
   {
     match: /^deepseek-(chat|reasoner)$/,
     tier: 'standard',
@@ -81,7 +78,7 @@ const MODEL_PROFILES: ModelProfile[] = [
     label: 'DeepSeek (legacy)',
   },
 
-  // Basic tier — disable thinking, use simplified prompt
+  // Basic tier — 禁用思考，使用简化提示
   { match: 'claude-haiku', tier: 'basic', thinkingMode: 'disabled', label: 'Claude Haiku' },
   { match: 'gpt-4o-mini', tier: 'basic', thinkingMode: 'disabled', label: 'GPT-4o Mini' },
   { match: 'gpt-4.1-mini', tier: 'basic', thinkingMode: 'disabled', label: 'GPT-4.1 Mini' },
@@ -102,7 +99,7 @@ const DEFAULT_PROFILE: ModelProfile = {
 };
 
 /**
- * Resolve a model profile by ID. Strips `providerID/` prefix, first match wins.
+ * Resolve ID 的模型配置文件。 Strips `providerID/` 前缀，第一场比赛获胜。
  */
 export function resolveModelProfile(modelId?: string): ModelProfile {
   if (!modelId)
@@ -113,7 +110,7 @@ export function resolveModelProfile(modelId?: string): ModelProfile {
       label: 'Default (no model)',
     };
 
-  // Strip provider prefix (e.g. "opencode/gpt-4o" → "gpt-4o")
+  // Strip 提供商前缀（例如“opencode/gpt-4o”→“gpt-4o”）
   const normalized = modelId.includes('/') ? modelId.slice(modelId.indexOf('/') + 1) : modelId;
   const lower = normalized.toLowerCase();
 
@@ -133,14 +130,14 @@ export function resolveModelProfile(modelId?: string): ModelProfile {
 }
 
 /**
- * Check if a profile requires the simplified sub-agent prompt.
+ * Check 如果配置文件需要简化的子代理提示符。
  */
 export function needsSimplifiedPrompt(profile: ModelProfile): boolean {
   return profile.simplifiedPrompt === true;
 }
 
 /**
- * Apply profile overrides to a timeout config object (mutates a copy).
+ * Apply 配置文件覆盖超时配置对象（改变副本）。
  */
 export function applyProfileToTimeouts<
   T extends {

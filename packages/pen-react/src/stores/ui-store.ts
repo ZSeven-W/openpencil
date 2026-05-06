@@ -1,9 +1,9 @@
 import { create } from 'zustand';
 
 /**
- * Pure UI state that pen-react owns: panel visibility, drag interactions,
- * and other ephemeral UI concerns. This is NOT engine state — tool, selection,
- * viewport, and document state live in pen-engine.
+ * Pure UI 声明
+ * pen-react 拥有：面板可见性、拖动交互和其他短暂的 UI 问题。 This 是 NOT 引擎状态 —
+ * 笔引擎中的工具、选择、视口和文档状态。
  */
 
 export interface UIStoreState {
@@ -11,12 +11,12 @@ export interface UIStoreState {
   rightPanelTab: 'design' | 'code';
   codePanelOpen: boolean;
 
-  // Layer panel drag state
+  // Layer 面板拖动状态
   layerDragId: string | null;
   layerDragOverId: string | null;
   layerDropPosition: 'above' | 'below' | 'inside' | null;
 
-  // Layer panel collapsed nodes
+  // Layer 面板折叠节点
   collapsedLayerIds: Set<string>;
 
   // Actions

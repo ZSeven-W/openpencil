@@ -13,9 +13,9 @@ interface PopoverContentProps extends React.ComponentPropsWithoutRef<
   typeof PopoverPrimitive.Content
 > {
   /**
-   * Render a small arrow pointing at the anchor. Defaults to `true` — pass
-   * `false` for popovers where the arrow would collide with the layout
-   * (e.g. when the content is nearly flush with its trigger or overflowing).
+   * Render 一个指向锚
+   * 点的小箭头。 Defaults 到 `true` — 为弹出窗口传递 `false`，其中箭头会与布局碰撞（例如，当内容几乎与其触发器齐平或
+   * 溢出时）。
    */
   arrow?: boolean;
 }

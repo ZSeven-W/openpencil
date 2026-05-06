@@ -10,7 +10,7 @@ import {
 } from '@/stores/document-tree-utils';
 import type { PenNode } from '@zseven-w/pen-types';
 
-// Container types (extend ContainerProps in pen-types) — only these can hold children.
+// Container 类型（在钢笔类型中扩展 ContainerProps）——只有这些可以容纳孩子。
 function canHoldChildren(node: PenNode): boolean {
   return node.type === 'frame' || node.type === 'group' || node.type === 'rectangle';
 }
@@ -25,7 +25,7 @@ export function useClipboardShortcuts() {
 
       const isMod = e.metaKey || e.ctrlKey;
 
-      // Copy: Cmd/Ctrl+C
+      // Copy: Cmd/Ctrl+c
       if (isMod && e.key === 'c' && !e.shiftKey) {
         const { selectedIds } = useCanvasStore.getState().selection;
         if (selectedIds.length > 0) {
@@ -38,7 +38,7 @@ export function useClipboardShortcuts() {
         return;
       }
 
-      // Cut: Cmd/Ctrl+X
+      // Cut: Cmd/Ctrl+x
       if (isMod && e.key === 'x' && !e.shiftKey) {
         const { selectedIds } = useCanvasStore.getState().selection;
         if (selectedIds.length > 0) {
@@ -55,17 +55,15 @@ export function useClipboardShortcuts() {
         return;
       }
 
-      // Paste: Cmd/Ctrl+V
+      // Paste: Cmd/Ctrl+v
       if (isMod && e.key === 'v' && !e.shiftKey) {
         const canvasState = useCanvasStore.getState();
         const { clipboard } = canvasState;
         if (clipboard.length > 0) {
           e.preventDefault();
 
-          // Anchor paste to the active selection:
-          //  - If the selected node is a container, paste inside it (as last child).
-          //  - Otherwise paste as a sibling, right after the selected node.
-          //  - Falls back to root when nothing is selected.
+          // Anchor 粘贴到活动选择： - If 所选节点是一个容器，粘贴到其中（
+          // 作为最后一个子节点）。 - Otherwise 粘贴为同级节点，位于所选节点之后。 - Falls 当未选择任何内容时返回根目录。
           const anchorId = canvasState.selection.selectedIds[0];
           const docState = useDocumentStore.getState();
           const children = getActivePageChildren(docState.document, canvasState.activePageId);
@@ -75,11 +73,11 @@ export function useClipboardShortcuts() {
           if (anchorId) {
             const anchor = findNodeInTree(children, anchorId);
             if (anchor && canHoldChildren(anchor)) {
-              // Paste inside the selected container
+              // Paste 在所选容器内
               parentId = anchor.id;
-              insertIndex = undefined; // append to end
+              insertIndex = undefined; // 追加到末尾
             } else {
-              // Paste as sibling of the selected node
+              // Paste 作为所选节点的兄弟节点
               const parent = findParentInTree(children, anchorId);
               parentId = parent ? parent.id : null;
               const siblings = parent && 'children' in parent ? (parent.children ?? []) : children;
@@ -90,7 +88,7 @@ export function useClipboardShortcuts() {
 
           const newIds: string[] = [];
           for (const original of clipboard) {
-            // Pasting a reusable component creates an instance (RefNode)
+            // Pasting 可重用组件创建实例 (RefNode)
             if ('reusable' in original && original.reusable) {
               const component = useDocumentStore.getState().getNodeById(original.id);
               if (component && 'reusable' in component && component.reusable) {
@@ -101,7 +99,7 @@ export function useClipboardShortcuts() {
                 }
               }
             }
-            // Regular paste for non-reusable nodes
+            // Regular 粘贴不可重复使用的节点
             const [cloned] = cloneNodesWithNewIds([original], { offset: 10 });
             useDocumentStore.getState().addNode(parentId, cloned, insertIndex);
             newIds.push(cloned.id);
@@ -109,16 +107,15 @@ export function useClipboardShortcuts() {
           }
           useCanvasStore.getState().setSelection(newIds, newIds[0] ?? null);
         } else {
-          // Internal clipboard empty — try reading Figma data from system clipboard.
-          // The native `paste` event may not fire when a non-editable element (canvas)
-          // has focus, so we also read via the Clipboard API as a fallback.
+          // Internal 剪贴板为空 — 尝试从系统剪贴板读取 Figma 数据。当不可编辑元素（画布）具有焦点时，The 本机 `paste`
+          // 事件可能不会触发，因此我们还通过 Clipboard API 读取作为后备。
           e.preventDefault();
           tryPasteFigmaFromClipboard();
         }
         return;
       }
 
-      // Duplicate: Cmd/Ctrl+D
+      // Duplicate: Cmd/Ctrl+d
       if (isMod && e.key === 'd') {
         const { selectedIds } = useCanvasStore.getState().selection;
         if (selectedIds.length > 0) {

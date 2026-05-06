@@ -17,14 +17,14 @@ export default function SaveDialog({ open, onClose }: SaveDialogProps) {
 
   useEffect(() => {
     if (!open) return;
-    // Pre-fill with existing name (without extension)
+    // Pre-用现有名称填充（不带扩展名）
     const fn = useDocumentStore.getState().fileName;
     if (fn) {
       setName(fn.replace(/\.op$|\.pen$|\.json$/, ''));
     } else {
       setName(t('common.untitled'));
     }
-    // Focus + select on open
+    // Focus + 打开时选择
     requestAnimationFrame(() => inputRef.current?.select());
   }, [open]);
 
@@ -42,13 +42,11 @@ export default function SaveDialog({ open, onClose }: SaveDialogProps) {
   const handleSave = async () => {
     const trimmed = name.trim();
     if (!trimmed) return;
-    // Force-sync all Fabric object positions to the store before serializing
+    // Force-在序列化之前将所有 Fabric 对象位置同步到存储
     syncCanvasPositionsToStore();
-    // Pass the typed name as an explicit suggestion. The store action handles
-    // dialog/picker, write, fileName/filePath mutation, isDirty=false, and the
-    // 'saved' emission — but ONLY on confirmed success. We do not pre-mutate
-    // store state; if save fails or the user cancels, store stays untouched
-    // and the dialog stays open so the user can retry or change the name.
+    // Pass 作为明确建议的键入名称。 The 存储操作处理 dialog/picker、写入、fileName/filePath
+    // 突变、isDirty=false 和“已保存”发射 - 但 ONLY 已确认成功。 We
+    // 不预先改变存储状态；如果保存失败或用户取消，存储将保持不变并且对话框保持打开状态，以便用户可以重试或更改名称。
     const savedName = await useDocumentStore.getState().saveAs(trimmed);
     if (savedName) {
       onClose();

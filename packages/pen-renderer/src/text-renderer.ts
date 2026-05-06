@@ -6,42 +6,42 @@ import { parseColor, resolveFillColor, wrapLine } from './paint-utils.js';
 import { SkiaFontManager, type FontManagerOptions } from './font-manager.js';
 
 /**
- * Text rendering sub-system for SkiaNodeRenderer.
- * Handles both vector (Paragraph API) and bitmap (Canvas 2D) text rendering
- * with caching for performance.
+ * Text SkiaNod
+ * eRenderer 的渲染子系统。 Handles 矢量 (Paragraph API)
+ * 和位图 (Canvas 2d) 文本渲染均带有缓存以提高性能。
  */
 export class SkiaTextRenderer {
   private ck: CanvasKit;
 
-  // Text rasterization cache (Canvas 2D -> CanvasKit Image)
-  // FIFO eviction via Map insertion order; bytes tracked separately against TEXT_CACHE_BYTE_LIMIT.
+  // Text 光栅化缓存 (Canvas 2d -> CanvasKit Image) FIFO 通过 Map
+  // 插入顺序逐出；针对 TEXT_CACHE_BYTE_LIMIT 单独跟踪的字节。
   private textCache = new Map<string, SkImage | null>();
   private textCacheBytes = 0;
-  // 256 MB — each bitmap entry is ~cw*ch*4 bytes (RGBA pixels)
+  // 256 MB — 每个位图条目约为 cw*ch*4 字节（RGBA 像素）
   private static TEXT_CACHE_BYTE_LIMIT = 256 * 1024 * 1024;
 
-  // Paragraph cache for vector text (keyed by content+style)
-  // FIFO eviction via Map insertion order; bytes estimated from content length against PARA_CACHE_BYTE_LIMIT.
+  // Paragraph 矢量文本缓存（以内容+样式为键） FIFO 通过 Map 插入顺序逐出；根据
+  // PARA_CACHE_BYTE_LIMIT 的内容长度估计的字节数。
   private paraCache = new Map<string, Paragraph | null>();
   private paraCacheBytes = 0;
-  // 64 MB — each entry is estimated as content.length*64+4096 bytes (WASM heap approximation)
+  // 64 MB — 每个条目估计为 content.length*64+4096 字节（WASM 堆近似值）
   private static PARA_CACHE_BYTE_LIMIT = 64 * 1024 * 1024;
 
-  // Pre-rasterized paragraph image cache (SkImage, same key as paraCache, zoom-independent)
-  // Allows drawImageRect instead of drawParagraph on every frame — avoids per-frame glyph rasterization.
+  // Pre-光栅化段落图像缓存（SkImage，与 paraCache 相同的键，与缩放无关） Allows drawImageRect 而不是每帧上的
+  // drawParagraph — 避免每帧字形光栅化。
   private paraImageCache = new Map<string, SkImage | null>();
   private paraImageCacheBytes = 0;
-  // 128 MB — each entry is sw*sh*4 bytes (RGBA pixels at up to 2x DPR scale)
+  // 128 MB — 每个条目都是 sw*sh*4 字节（RGBA 像素，最大 2 倍 DPR 比例）
   private static PARA_IMAGE_CACHE_BYTE_LIMIT = 128 * 1024 * 1024;
 
   private static estimateParaBytes(content: string): number {
     return content.length * 64 + 4096;
   }
 
-  // Current viewport zoom (set by engine before each render frame)
+  // Current 视口缩放（在每个渲染帧之前由引擎设置）
   zoom = 1;
 
-  // Device pixel ratio override
+  // Device 像素比率覆盖
   devicePixelRatio: number | undefined;
 
   private get _dpr(): number {
@@ -50,7 +50,7 @@ export class SkiaTextRenderer {
     );
   }
 
-  // Font manager for vector text rendering
+  // Font 矢量文本渲染管理器
   fontManager: SkiaFontManager;
 
   constructor(ck: CanvasKit, fontOptions?: FontManagerOptions) {
@@ -79,7 +79,7 @@ export class SkiaTextRenderer {
     this.paraImageCacheBytes = 0;
   }
 
-  // Evict oldest entries (Map head = first inserted) until there is room for `incoming` bytes.
+  // Evict 最旧的条目（Map head = 第一个插入），直到有空间容纳 `incoming` 字节。
   private evictParaCache(incoming: number) {
     while (
       this.paraCacheBytes + incoming > SkiaTextRenderer.PARA_CACHE_BYTE_LIMIT &&
@@ -127,7 +127,7 @@ export class SkiaTextRenderer {
   }
 
   /**
-   * Main text drawing entry — tries vector, falls back to bitmap.
+   * Main 文本绘图条目 — 尝试矢量，返回位图。
    */
   drawText(
     canvas: Canvas,
@@ -139,23 +139,24 @@ export class SkiaTextRenderer {
     opacity: number,
     effects?: PenEffect[],
   ) {
-    // Draw text shadow as blurred copy of the text glyphs (not a rectangle)
+    // Draw 文本阴影作为文本字形的模糊副本（不是矩形）
     const shadow = effects?.find((e): e is ShadowEffect => e.type === 'shadow');
     if (shadow) {
       this.drawTextShadow(canvas, node, x, y, w, h, opacity, shadow);
     }
 
-    // Try vector text first (true Skia Paragraph API)
+    // 首先是 Try 矢量文本（true Skia Paragraph API）
     const vectorOk = this.drawTextVector(canvas, node, x, y, w, h, opacity);
     if (vectorOk) return;
 
-    // Fallback to bitmap text rendering
+    // Fallback 到位图文本渲染
     this.drawTextBitmap(canvas, node, x, y, w, h, opacity);
   }
 
   /**
-   * Render text as true vector glyphs using CanvasKit's Paragraph API.
-   * Returns true if rendered, false if font not available (caller should fallback).
+   * Render 文本作为使
+   * 用 CanvasKit 的 Paragraph API 的真实矢量字形。 Returns 如果呈现则为 true，如果字体不可用则为
+   false（调用者应回退）。
    */
   drawTextVector(
     canvas: Canvas,

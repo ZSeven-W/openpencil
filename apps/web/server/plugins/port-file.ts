@@ -1,10 +1,10 @@
 /**
- * Nitro plugin — writes ~/.openpencil/.port on server startup so the MCP
- * server can discover the running instance (dev server or Electron).
+ * Nitro 插件 —
+ * 在服务器启动时写入 ~/.openpencil/.port，以便 MCP 服务器可以发现正在运行的实例（开发服务器或 Electron）。
  *
- * In Electron production mode the main process also writes this file,
- * but this plugin ensures the dev server (`bun --bun run dev`) is
- * discoverable too.
+ * In Electron 生产模式主进程也会写入此文件，但此插件确保开发服务器（`bun --bun run dev`）也可发现。
+ *
+ *
  */
 
 import { writeFile, mkdir, unlink, readFile } from 'node:fs/promises';
@@ -34,7 +34,7 @@ async function writePortFile(port: number): Promise<void> {
       'utf-8',
     );
   } catch {
-    // Non-critical — MCP sync will fall back to file I/O
+    // Non-关键 — MCP 同步将回退到文件 I/O
   }
 }
 
@@ -45,7 +45,7 @@ async function cleanupPortFile(): Promise<void> {
     if (current.token !== PORT_FILE_TOKEN) return;
     await unlink(PORT_FILE_PATH);
   } catch {
-    // Ignore if already removed
+    // Ignore（如果已删除）
   }
 }
 

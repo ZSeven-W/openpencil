@@ -1,9 +1,7 @@
-// pen-engine headless core — public API
-
-// Engine
+// pen-engine 无头核心 — public API Engine
 export { DesignEngine } from './core/design-engine.js';
 
-// Managers (for advanced composition)
+// Managers（用于高级合成）
 export { TypedEventEmitter } from './core/event-emitter.js';
 export { HistoryManager, type HistoryManagerOptions } from './core/history-manager.js';
 export { DocumentManager, type DocumentManagerOptions } from './core/document-manager.js';
@@ -17,7 +15,7 @@ export { EngineSpatialIndex } from './core/spatial-index.js';
 export { createNodeForTool, isDrawingTool } from './core/node-creator.js';
 export { parseSvgToNodes } from './core/svg-parser.js';
 
-// Re-export key types from pen-types for convenience
+// Re-从笔型中导出按键类型以方便使用
 export type {
   DesignEngineOptions,
   DesignEngineEvents,

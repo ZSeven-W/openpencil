@@ -1,12 +1,12 @@
-// @vitest-environment jsdom
+// @vitest-环境 jsdom
 // apps/web/src/components/panels/git-panel/__tests__/git-panel-remote-settings.test.tsx
 //
-// Phase 6c: remote settings subview. Coverage matches the plan's
-// verification list:
-//   - load / edit / save / clear remote URL
-//   - fetch button
-//   - clear auth button visibility + action
-//   - SSH iso gating text
+// Phase 6c：远程设置子视图。 Coverage 符合计划
+// 验证清单：
+//   - 加载/编辑/保存/清除远程 URL
+//   - 获取按钮
+//   - 清除身份验证按钮可见性+操作
+//   - SSH iso 门控文本
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/react';
 import type { GitAuthCreds, GitRemoteInfo } from '@/services/git-types';

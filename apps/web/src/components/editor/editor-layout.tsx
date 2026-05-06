@@ -79,11 +79,10 @@ export default function EditorLayout() {
     };
   }, [showUnsavedDialog]);
 
-  // Phase 4c: mount the Git autosave subscriber once for the editor's
-  // lifetime. initAutosaveSubscriber is idempotent (checks for existing
-  // handle), so React StrictMode's double-invocation is safe. The cleanup
-  // disposes the subscriber so dev-time HMR and unmounts don't leak
-  // handlers.
+  // Phase 4c：在编辑器生命周期内只挂载一次 Git 自动保存订阅器。
+  // `initAutosaveSubscriber()` 是幂等的，会先检查现有句柄，
+  // 所以 React StrictMode 的双调用不会出问题。
+  // 清理阶段会释放订阅器，避免开发期 HMR 或组件卸载时泄漏监听器。
   useEffect(() => {
     useGitStore.getState().initAutosaveSubscriber();
     return () => {
@@ -95,49 +94,49 @@ export default function EditorLayout() {
     const handler = (e: KeyboardEvent) => {
       const isMod = e.metaKey || e.ctrlKey;
 
-      // Cmd+J: toggle AI panel minimize
+      // Cmd+J：切换 AI 面板最小化
       if (isMod && e.key === 'j') {
         e.preventDefault();
         toggleMinimize();
         return;
       }
 
-      // Cmd+Shift+C: switch right panel to code tab
+      // Cmd+Shift+C：将右侧面板切换到代码选项卡
       if (isMod && e.shiftKey && e.key.toLowerCase() === 'c') {
         e.preventDefault();
         useCanvasStore.getState().setRightPanelTab('code');
         return;
       }
 
-      // Cmd+Shift+V: toggle variables panel
+      // Cmd+Shift+V：切换变量面板
       if (isMod && e.shiftKey && e.key.toLowerCase() === 'v') {
         e.preventDefault();
         useCanvasStore.getState().toggleVariablesPanel();
         return;
       }
 
-      // Cmd+Shift+D: toggle design system panel
+      // Cmd+Shift+D：切换设计系统面板
       if (isMod && e.shiftKey && e.key.toLowerCase() === 'd') {
         e.preventDefault();
         useCanvasStore.getState().toggleDesignMdPanel();
         return;
       }
 
-      // Cmd+Shift+K: toggle UIKit browser
+      // Cmd+Shift+K：切换 UIKit 浏览器
       if (isMod && e.shiftKey && e.key.toLowerCase() === 'k') {
         e.preventDefault();
         useUIKitStore.getState().toggleBrowser();
         return;
       }
 
-      // Cmd+Shift+F: open Figma import
+      // Cmd+Shift+F：打开 Figma 导入
       if (isMod && e.shiftKey && e.key.toLowerCase() === 'f') {
         e.preventDefault();
         useCanvasStore.getState().setFigmaImportDialogOpen(true);
         return;
       }
 
-      // Cmd+,: open agent settings
+      // Cmd+,：打开代理设置
       if (isMod && e.key === ',') {
         e.preventDefault();
         useAgentSettingsStore.getState().setDialogOpen(true);
@@ -148,21 +147,21 @@ export default function EditorLayout() {
     return () => window.removeEventListener('keydown', handler);
   }, [toggleMinimize]);
 
-  // Cmd/Ctrl+Shift+P: open the global export dialog.
+  // Cmd/Ctrl+Shift+P：打开全局导出对话框。
   //
-  // We previously used Cmd+Shift+E, but that combo is silently swallowed
-  // by some macOS Chinese IMEs / system tools before the keystroke ever
-  // reaches the renderer (no JS handler fires, no logs appear). P (for
-  // "Print/PDF/Picture") is unused everywhere else in the app and is not
-  // intercepted by common IMEs.
+  // 之前我们用的是 Cmd+Shift+E，但这个组合在部分 macOS 中文输入法
+  // 或系统工具里会被静默吞掉，按键事件甚至到不了渲染层，
+  // 因而不会触发 JS 处理器，也看不到任何日志。
   //
-  // Registered as a *capture-phase document listener* so it fires earliest
-  // in the event chain, before any bubble-phase listener can interfere.
-  // Uses `e.code === 'KeyP'` for keyboard-layout independence (an IME state
-  // can change `e.key` but not `e.code`). The action is
-  // `setExportDialogOpen(true)` (idempotent) rather than a toggle, so even
-  // if multiple paths fire the dialog still ends up open instead of
-  // cancelling itself out.
+  // 这里改成 P（Print / PDF / Picture），因为它在应用内没有别的占用，
+  // 也不容易被常见输入法拦截。
+  //
+  // 这个监听器注册在捕获阶段，这样它会尽可能早地触发，
+  // 先于其他冒泡阶段监听器介入。
+  // 同时用 `e.code === 'KeyP'` 保证与键盘布局无关：
+  // 输入法可能改变 `e.key`，但不会改变 `e.code`。
+  // 动作使用 `setExportDialogOpen(true)` 这种幂等写法，
+  // 这样即使有多条路径同时触发，最终结果仍然是“打开”，而不是彼此抵消。
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       const isMod = e.metaKey || e.ctrlKey;
@@ -176,25 +175,25 @@ export default function EditorLayout() {
     return () => document.removeEventListener('keydown', handler, { capture: true });
   }, []);
 
-  // Handle Electron native menu actions
+  // 处理 Electron 原生菜单动作
   useElectronMenu();
 
-  // Handle Figma clipboard paste
+  // 处理 Figma 剪贴板粘贴
   useFigmaPaste();
 
-  // MCP ↔ canvas real-time sync
+  // MCP ↔ 画布实时同步
   useMcpSync();
 
-  // Drag-and-drop file open
+  // 处理拖放打开文件
   const isDragging = useFileDrop();
 
-  // Hydrate persisted settings (init appStorage first for Electron IPC cache)
+  // 恢复持久化设置（先初始化 appStorage，供 Electron IPC 缓存使用）
   useEffect(() => {
     initAppStorage().then(() => {
       useAgentSettingsStore.getState().hydrate();
       useUIKitStore.getState().hydrate();
       useCanvasStore.getState().hydrate();
-      // Sync recent files to Electron native menu on startup
+      // 启动时把最近文件同步到 Electron 原生菜单
       const recent = getRecentFiles();
       if (recent.length > 0 && window.electronAPI?.syncRecentFiles) {
         const forMenu = recent
@@ -220,16 +219,16 @@ export default function EditorLayout() {
               <Toolbar />
               <BooleanToolbar />
 
-              {/* Floating variables panel — anchored to the right of the toolbar */}
+              {/* 浮动变量面板，锚定在工具栏右侧 */}
               {variablesPanelOpen && <VariablesPanel />}
 
-              {/* Floating design system panel */}
+              {/* 浮动设计系统面板 */}
               {designMdPanelOpen && <DesignMdPanel />}
 
-              {/* Floating UIKit browser panel */}
+              {/* 浮动 UIKit 浏览器面板 */}
               {browserOpen && <ComponentBrowserPanel />}
 
-              {/* Bottom bar: minimized AI (left) + zoom controls (right) */}
+              {/* 底部栏：最小化 AI（左）+ 缩放控件（右） */}
               <div className="absolute bottom-2 left-2 right-2 z-10 flex items-center justify-between pointer-events-none">
                 <div className="pointer-events-auto">
                   <AIChatMinimizedBar />
@@ -239,7 +238,7 @@ export default function EditorLayout() {
                 </div>
               </div>
 
-              {/* Expanded AI panel (floating, draggable) */}
+              {/* 展开的 AI 面板（浮动、可拖动） */}
               <AIChatPanel />
             </div>
             {hasSelection && <RightPanel />}
@@ -255,7 +254,7 @@ export default function EditorLayout() {
           onResult={unsavedDialog.onResult}
         />
 
-        {/* Drop zone overlay */}
+        {/* 拖放区域遮罩 */}
         {isDragging && (
           <div className="fixed inset-0 z-50 border-2 border-dashed border-primary bg-primary/5 pointer-events-none" />
         )}

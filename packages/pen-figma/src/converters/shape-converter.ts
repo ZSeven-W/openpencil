@@ -42,13 +42,13 @@ export function convertEllipse(
   const figma = treeNode.figma;
   const id = ctx.generateId();
 
-  // Convert Figma arcData (radians) to PenNode arc properties (degrees)
+  // Convert Figma arcData（弧度）到 PenNode 弧属性（度）
   const arc = figma.arcData;
   const arcProps = arc ? mapFigmaArcData(arc) : {};
   const props = commonProps(figma, id);
 
-  // For arc ellipses, absorb flipX/flipY into the arc angles instead of
-  // relying on canvas-level flip (SVG path flip doesn't work well in Fabric.js).
+  // For 弧形椭圆，将 flipX/flipY 吸收到弧角中，而不是依赖画布级翻转（SVG 路径翻转在 Fabric.js
+  // 中效果不佳）。
   if (
     arcProps.sweepAngle !== undefined ||
     arcProps.startAngle !== undefined ||
@@ -80,7 +80,7 @@ export function convertEllipse(
   };
 }
 
-/** Convert Figma arcData (radians, endAngle) to PenNode arc props (degrees, sweepAngle). */
+/** Convert Figma arcData（弧度，endAngle）到 PenNode 弧形道具（度，sweepAngle）。 */
 function mapFigmaArcData(arc: {
   startingAngle?: number;
   endingAngle?: number;

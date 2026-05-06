@@ -1,10 +1,11 @@
 /**
- * Pen tool handler for path drawing.
- * Extracted from apps/web/src/canvas/skia/skia-pen-tool.ts.
+ * Pen 用于路径绘制的工
+ * 具处理程序。 Extracted 来自 apps/web/src/c
+ anvas/skia/skia-pen-tool.ts。
  */
 export class EnginePenToolHandler {
-  // Full implementation mirrors skia-pen-tool.ts
-  // but uses engine API instead of Zustand stores
+  // Full 实现镜像 skia-pen-tool.ts 但使用引擎 API 而不是
+  // Zustand 存储
   onMouseDown(_scene: { x: number; y: number }, _zoom: number): boolean {
     return false;
   }

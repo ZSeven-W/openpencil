@@ -1,17 +1,17 @@
 /**
- * Verify that every openai-compat preset's baseURL produces
- * the correct chat completions endpoint.
+ * 每个 openai-compat 预设的 baseURL 生成的 Verify
+ * 正确的聊天完成端点。
  *
- * The Zig agent-native module constructs: `${baseURL}/chat/completions`
- * So each preset's baseURL must be the API root WITHOUT a trailing /v1
+ * The Zig 代理本机模块构造：`${baseURL}/chat/completions`
+ * So 每个预设的 baseURL 必须是 API 根 WITHOUT 尾随 /v1
  * for providers that don't use one (e.g. Ark, Zhipu), or WITH /v1 for
- * providers that require it (e.g. OpenAI, DeepSeek).
+ * 需要它的提供商（例如 OpenAI、DeepSeek）。
  */
 import { describe, expect, it } from 'vitest';
 import { BUILTIN_PROVIDER_PRESETS } from '../../src/lib/builtin-provider-presets';
 import { requireOpenAICompatBaseURL } from '../api/ai/provider-url';
 
-/** Known correct chat completions endpoints per provider */
+/** Known 每个提供商的正确聊天完成端点 */
 const EXPECTED_ENDPOINTS: Record<string, string> = {
   openai: 'https://api.openai.com/v1/chat/completions',
   openrouter: 'https://openrouter.ai/api/v1/chat/completions',

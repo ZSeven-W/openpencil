@@ -250,10 +250,10 @@ function collectAssetRefs(options: {
     };
 
     // ---------------------------------------------------------------------
-    // Image nodes: keep `asset://asset-id` in the raw view so the original
-    // image-source field remains explicit, while the sanitized view continues
-    // to use the existing `./assets/...` relative path convention.
-    // ---------------------------------------------------------------------
+    // Image nodes: keep `asset://原始视图中的 asset-id` 是原始视图中的 asset-id`
+    // 图像源字段保持明确，而净化后的视图继续
+    // 使用现有的 `./assets/...` 相对路径约定。
+// ---------------------------------------------------------------------
     if (typeof sanitizedNodeWithImage.src === 'string') {
       const asset = assetByPath.get(sanitizedNodeWithImage.src);
       if (asset) {

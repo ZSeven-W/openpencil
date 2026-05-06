@@ -1,4 +1,4 @@
-// Re-export pure constants from @zseven-w/pen-core
+// Re-从@zseven-w/pen-core 导出纯常量
 export {
   MIN_ZOOM,
   MAX_ZOOM,
@@ -40,7 +40,7 @@ export {
 
 import { CANVAS_BACKGROUND_LIGHT, CANVAS_BACKGROUND_DARK } from '@zseven-w/pen-core';
 
-// Browser-only function — not in pen-core
+// Browser-only 功能 — 不在笔芯中
 export function getCanvasBackground(): string {
   if (typeof document === 'undefined') return CANVAS_BACKGROUND_DARK;
   return document.documentElement.classList.contains('light')

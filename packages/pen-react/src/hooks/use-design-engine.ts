@@ -3,8 +3,8 @@ import type { DesignEngine } from '@zseven-w/pen-engine';
 import { DesignEngineContext } from '../context.js';
 
 /**
- * Get the DesignEngine instance from the nearest <DesignProvider>.
- * Throws if used outside a provider.
+ * Get 来自最近的
+ * <DesignProvider> 的 DesignEngine 实例。 Throws 如果在提供商外部使用。
  */
 export function useDesignEngine(): DesignEngine {
   const engine = useContext(DesignEngineContext);

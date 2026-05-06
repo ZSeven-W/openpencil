@@ -10,7 +10,7 @@ interface FontPickerProps {
   className?: string;
 }
 
-/** Extract display name from a font value like "Arial, sans-serif" → "Arial" */
+/** Extract 显示来自字体值的名称，例如“Arial，sans-serif”→“Arial” */
 function displayName(value: string): string {
   return value.split(',')[0].trim().replace(/['"]/g, '');
 }
@@ -29,22 +29,22 @@ export default function FontPicker({ value, onChange, className }: FontPickerPro
     const opening = !open;
     setOpen(opening);
     if (opening && permissionState === 'prompt') {
-      requestAccess(); // user gesture context — browser shows permission prompt
+      requestAccess(); // 用户手势上下文 - 浏览器显示权限提示
     }
   }, [open, permissionState, requestAccess]);
 
-  // Filter fonts by search
+  // Filter 字体搜索
   const filtered = useMemo(() => {
     if (!search) return allFonts;
     const q = search.toLowerCase();
     return allFonts.filter((f) => f.family.toLowerCase().includes(q));
   }, [allFonts, search]);
 
-  // Group into bundled and system
+  // Group 进入捆绑和系统
   const bundled = useMemo(() => filtered.filter((f) => f.source === 'bundled'), [filtered]);
   const system = useMemo(() => filtered.filter((f) => f.source === 'system'), [filtered]);
 
-  // Flat list for keyboard navigation
+  // Flat 键盘导航列表
   const flatList = useMemo(() => {
     const items: FontInfo[] = [];
     items.push(...bundled);
@@ -62,7 +62,7 @@ export default function FontPicker({ value, onChange, className }: FontPickerPro
     [onChange],
   );
 
-  // Close on click outside
+  // Close 点击外部
   useEffect(() => {
     if (!open) return;
     const handler = (e: MouseEvent) => {
@@ -76,14 +76,14 @@ export default function FontPicker({ value, onChange, className }: FontPickerPro
     return () => document.removeEventListener('mousedown', handler);
   }, [open]);
 
-  // Focus search input when opened
+  // Focus 打开时搜索输入
   useEffect(() => {
     if (open) {
       requestAnimationFrame(() => inputRef.current?.focus());
     }
   }, [open]);
 
-  // Scroll highlighted item into view
+  // Scroll 突出显示的项目进入视图
   useEffect(() => {
     if (highlightIndex < 0 || !listRef.current) return;
     const items = listRef.current.querySelectorAll('[data-font-item]');
@@ -123,7 +123,7 @@ export default function FontPicker({ value, onChange, className }: FontPickerPro
     }
   };
 
-  // Reset highlight when search changes
+  // Reset 搜索更改时突出显示
   useEffect(() => {
     setHighlightIndex(search ? 0 : -1);
   }, [search]);
@@ -132,7 +132,7 @@ export default function FontPicker({ value, onChange, className }: FontPickerPro
 
   return (
     <div ref={containerRef} className={cn('relative', className)} onKeyDown={handleKeyDown}>
-      {/* Trigger button */}
+      {/* Trigger 按钮 */}
       <button
         type="button"
         onClick={handleToggle}
@@ -178,7 +178,7 @@ export default function FontPicker({ value, onChange, className }: FontPickerPro
             />
           </div>
 
-          {/* Font list */}
+          {/* Font 列表 */}
           <div ref={listRef} className="overflow-y-auto flex-1 py-1">
             {loading && (
               <div className="flex items-center justify-center py-3 gap-1.5 text-[11px] text-muted-foreground">
@@ -187,7 +187,7 @@ export default function FontPicker({ value, onChange, className }: FontPickerPro
               </div>
             )}
 
-            {/* Permission denied info — user must change browser settings */}
+            {/* Permission 拒绝信息 — 用户必须更改浏览器设置 */}
             {permissionState === 'denied' && (
               <div className="px-2 py-1.5 border-b border-border">
                 <p className="text-[9px] text-muted-foreground leading-tight">
@@ -196,7 +196,7 @@ export default function FontPicker({ value, onChange, className }: FontPickerPro
               </div>
             )}
 
-            {/* Bundled fonts group */}
+            {/* Bundled 字体组 */}
             {bundled.length > 0 && (
               <>
                 <div className="px-2 py-0.5 text-[9px] font-medium text-muted-foreground uppercase tracking-wider">
@@ -214,7 +214,7 @@ export default function FontPicker({ value, onChange, className }: FontPickerPro
               </>
             )}
 
-            {/* System fonts group */}
+            {/* System 字体组 */}
             {system.length > 0 && (
               <>
                 <div className="px-2 py-0.5 mt-1 text-[9px] font-medium text-muted-foreground uppercase tracking-wider">

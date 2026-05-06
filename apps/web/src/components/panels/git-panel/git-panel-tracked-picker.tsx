@@ -1,18 +1,18 @@
 // apps/web/src/components/panels/git-panel/git-panel-tracked-picker.tsx
 //
-// Phase 4b: tracked-file picker. Shown when openRepo or cloneRepo
-// returns a folder-mode repo with multiple .op files. The user picks
-// which file the Git panel should track. Two action buttons:
-//   - 跟踪此文件 (track only): bindTrackedFile, panel transitions to ready
-//   - 跟踪并打开 (track and open): bindTrackedFile + load the file into
-//     the editor via the loadOpFileFromPath helper
+// Phase 4b：跟踪文件选择器。当 openRepo 或 cloneRepo 时为 Shown
+// 返回包含多个 .op 文件的文件夹模式存储库。 The 用户精选
+// Git 面板应跟踪哪个文件。 Two 操作按钮：
+//   - 跟踪此文件（仅跟踪）：bindTrackedFile，面板转换为就绪状态
+//   - 跟踪并打开（跟踪并打开）：bindTrackedFile + 将文件加载到
+// 编辑器通过 loadOpFileFromPath 助手
 //
-// The zero-candidates edge case renders a small empty card prompting
-// the user to close the panel (and the underlying repo session).
+// The 零候选边缘情况渲染一个小空卡提示
+// 用户关闭面板（以及底层存储库会话）。
 //
-// The exactly-one-candidate path is handled in the store's openRepo /
-// cloneRepo actions (auto-bind), so this component never has to show
-// a single-row picker.
+// The 恰好一个候选路径在商店的 openRepo / 中处理
+// cloneRepo 操作（自动绑定），因此该组件永远不必显示
+// 单行选择器。
 
 import { Check, FileText } from 'lucide-react';
 import { useState } from 'react';
@@ -28,24 +28,22 @@ export function GitPanelTrackedPicker() {
   const bindTrackedFile = useGitStore((s) => s.bindTrackedFile);
   const closePanel = useGitStore((s) => s.closePanel);
   const closeRepo = useGitStore((s) => s.closeRepo);
-  // Phase 7b: exitTrackedFilePicker drives the back/cancel navigation rule
-  // (back → ready when rebinding, cancel → no-file when first open).
+  // Phase 7b：exitTrackedFilePicker 驱动 back/cancel 导航规则（重新绑定时返回 →
+  // 就绪，首次打开时取消 → 无文件）。
   const exitTrackedFilePicker = useGitStore((s) => s.exitTrackedFilePicker);
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
 
-  // Defensive guard — git-panel.tsx's body switch only mounts us in the
-  // needs-tracked-file branch, but if a state transition races us we
-  // render null instead of crashing.
+  // Defensive 防护 — git-panel.tsx 的主体开关仅将我们安装在需求跟踪文件分支中，但如果状态转换与我们竞争，我们将
+  // 渲染 null 而不是崩溃。
   if (state.kind !== 'needs-tracked-file') return null;
 
   const candidates = state.repo.candidateFiles;
-  // Phase 7b: determine back/cancel label based on whether a tracked file
-  // is already bound. isRebind=true → entered from ready → back label.
-  // isRebind=false → first post-open/clone screen → cancel label.
+  // Phase 7b：根据跟踪文件是否已绑定来确定 back/cancel 标签。 isRebind=true → 从就绪 → 后标签输入。
+  // isRebind=false → 第一个 post-open/clone 屏幕 → 取消标签。
   const isRebind = state.repo.trackedFilePath !== null;
   const backLabel = isRebind ? t('git.picker.back') : t('git.picker.backClose');
 
-  // Edge case: zero candidates
+  // Edge 案例：零个候选者
   if (candidates.length === 0) {
     return (
       <div className="flex flex-col items-center gap-3 p-6 text-center">
@@ -68,18 +66,16 @@ export function GitPanelTrackedPicker() {
     );
   }
 
-  // Sort by lastCommitAt desc, with null last. Tiebreak on relativePath
-  // ascending for ANY equal primary key (two nulls OR two equal non-null
-  // timestamps) so the sort is total and stable.
+  // Sort by lastCommitAt desc，最后为 null。 Tiebreak 在 relativePath 上升序，对于
+  // ANY 相等的主键（两个空 OR 两个相等的非空时间戳），因此排序是完整且稳定的。
   const sorted = [...candidates].sort((a, b) => {
-    // Primary key: lastCommitAt desc, nulls last
+    // Primary 键：lastCommitAt desc，最后为空
     if (a.lastCommitAt !== b.lastCommitAt) {
       if (a.lastCommitAt === null) return 1;
       if (b.lastCommitAt === null) return -1;
       return b.lastCommitAt - a.lastCommitAt;
     }
-    // Equal primary key (both null OR both the same non-null timestamp):
-    // fall back to relativePath asc as the tiebreak.
+    // Equal 主键（均为 null OR 均为相同的非空时间戳）：回退到 relativePath asc 作为决胜局。
     return a.relativePath.localeCompare(b.relativePath);
   });
 
@@ -111,8 +107,8 @@ export function GitPanelTrackedPicker() {
         ))}
       </div>
       <div className="flex items-center justify-between gap-2 pt-1">
-        {/* Phase 7b: back/cancel affordance — navigates back to ready when
-            rebinding, or closes the transient session when first opened. */}
+        {/* Phase 7b：back/cancel 可供性 — 重新绑定时导航回就绪状态，或在首次打开时关闭临时会话。
+             */}
         <Button
           type="button"
           variant="ghost"

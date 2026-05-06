@@ -1,16 +1,16 @@
 /**
- * Normalize a Pencil.dev .pen document into OpenPencil's internal format.
+ * Normalize 将
  *
- * Handles format normalization ONLY — does NOT resolve $variable references:
- * - fill type: "color" → "solid"
- * - fill shorthand string "#hex" → [{ type: "solid", color }]
- * - gradient type: "gradient" → "linear_gradient" / "radial_gradient"
- * - gradient stops { color, position } → { offset, color }
- * - sizing "fit_content(N)" / "fill_container(N)" → fallback number
- * - padding array normalization
+ * Pencil.dev .pen 文档转换为 OpenPencil 的内部格式。 Handles 格式规范化 ONLY — NOT 是否解析
+ * $variable
+ * 引用： - 填充类型："color" → "solid" - 填充简写字符串 "#hex" → [{ type: "solid", color }]
+ * - 渐变类型："gradient" →
+ * "linear_gradient" / "radial_gradient" - 渐变停止 {
+ * color,position } → { offset, color } - 大小调整"fit_content(N)" /
+ * "fill_container(N)" → 后备编号 - 填充数组标准化 Variable 分辨率由
  *
- * Variable resolution is handled separately by `resolve-variables.ts` at
- * canvas render time, preserving $variable bindings in the document.
+ * `resolve-variables.ts` 在画布渲染时单独处理，保留文档中的 $variable 绑定。
+ *
  */
 
 import type { PenDocument, PenNode } from '@zseven-w/pen-types';
@@ -25,7 +25,7 @@ export function normalizePenDocument(doc: PenDocument): PenDocument {
     ...doc,
     children: doc.children.map((n) => normalizeNode(n)),
   };
-  // Normalize all pages' children too
+  // Normalize 也是所有页面的子页面
   if (normalized.pages && normalized.pages.length > 0) {
     normalized.pages = normalized.pages.map((p) => ({
       ...p,
@@ -36,47 +36,42 @@ export function normalizePenDocument(doc: PenDocument): PenDocument {
 }
 
 // ---------------------------------------------------------------------------
-// Node normalizer (recursive)
+// Node 标准化器（递归）
 // ---------------------------------------------------------------------------
 
 function normalizeNode(node: PenNode): PenNode {
   const out: Record<string, unknown> = { ...node };
 
-  // fill
+  // 填充
   if ('fill' in out && out.fill !== undefined) {
     out.fill = normalizeFills(out.fill);
   }
 
-  // stroke
+  // 中风
   if ('stroke' in out && out.stroke != null) {
     out.stroke = normalizeStroke(out.stroke as Record<string, unknown>);
   }
 
-  // effects — pass through (no format changes needed)
-
-  // sizing
+  // 效果 - 传递（无需更改格式）大小
   if ('width' in out) out.width = normalizeSizing(out.width);
   if ('height' in out) out.height = normalizeSizing(out.height);
 
-  // gap — pass through ($variable strings preserved)
-
-  // padding — normalize array format only (not variable resolution)
+  // gap — 传递（保留$变量字符串） padding — 仅规范化数组格式（不规范变量分辨率）
   if ('padding' in out) out.padding = normalizePadding(out.padding);
 
-  // opacity — pass through ($variable strings preserved)
-
-  // text nodes: normalize `text` field to `content` (MCP/CLI use `text`, renderer expects `content`)
+  // 不透明度 — 传递（保留 $variable 字符串）文本节点：将 `text` 字段规范化为
+  // `content`（MCP/CLI 使用 `text`，渲染器需要 `content`）
   if (out.type === 'text' && !('content' in out) && typeof out.text === 'string') {
     out.content = out.text as string;
     delete out.text;
   }
 
-  // icon_font: default to lucide family
+  // icon_font：默认为 lucide 系列
   if (out.type === 'icon_font' && !out.iconFontFamily) {
     out.iconFontFamily = 'lucide';
   }
 
-  // children
+  // 儿童
   if ('children' in out && Array.isArray(out.children)) {
     out.children = (out.children as PenNode[]).map((c) => normalizeNode(c));
   }
@@ -85,23 +80,23 @@ function normalizeNode(node: PenNode): PenNode {
 }
 
 // ---------------------------------------------------------------------------
-// Fill normalization
+// Fill 标准化
 // ---------------------------------------------------------------------------
 
 function normalizeFills(raw: unknown): PenFill[] {
   if (!raw) return [];
 
-  // String shorthand: "#hex" or "$variable" → solid fill
+  // String 简写：“#hex”或“$variable”→实心填充
   if (typeof raw === 'string') {
     return [{ type: 'solid', color: raw }];
   }
 
-  // Array of fills
+  // Array 的填充
   if (Array.isArray(raw)) {
     return raw.map((f) => normalizeSingleFill(f)).filter(Boolean) as PenFill[];
   }
 
-  // Single fill object
+  // Single 填充对象
   if (typeof raw === 'object') {
     const f = normalizeSingleFill(raw as Record<string, unknown>);
     return f ? [f] : [];
@@ -111,14 +106,14 @@ function normalizeFills(raw: unknown): PenFill[] {
 }
 
 function normalizeSingleFill(raw: Record<string, unknown> | string): PenFill | null {
-  // String shorthand inside array: "#hex" or "$variable" → solid fill
+  // String 数组内简写：“#hex”或“$variable”→实心填充
   if (typeof raw === 'string') {
     return raw ? { type: 'solid', color: raw } : null;
   }
   if (!raw || typeof raw !== 'object') return null;
   const t = raw.type as string | undefined;
 
-  // Pencil "color" → OpenPencil "solid"
+  // Pencil“颜色”→OpenPencil“纯色”
   if (t === 'color' || t === 'solid') {
     return {
       type: 'solid',
@@ -126,7 +121,7 @@ function normalizeSingleFill(raw: Record<string, unknown> | string): PenFill | n
     };
   }
 
-  // Pencil "gradient" → split by gradientType
+  // Pencil“梯度”→被 gradientType 分割
   if (t === 'gradient') {
     const gt = (raw.gradientType as string) ?? 'linear';
     const stops = normalizeGradientStops(raw.colors as unknown[]);
@@ -141,7 +136,7 @@ function normalizeSingleFill(raw: Record<string, unknown> | string): PenFill | n
         stops,
       };
     }
-    // linear or angular
+    // 线性或角度
     return {
       type: 'linear_gradient',
       angle: typeof raw.rotation === 'number' ? raw.rotation : 0,
@@ -149,7 +144,7 @@ function normalizeSingleFill(raw: Record<string, unknown> | string): PenFill | n
     };
   }
 
-  // Already our format
+  // Already 我们的格式
   if (t === 'linear_gradient' || t === 'radial_gradient') {
     const stops =
       'stops' in raw
@@ -160,10 +155,10 @@ function normalizeSingleFill(raw: Record<string, unknown> | string): PenFill | n
     return { ...(raw as unknown as PenFill), stops } as PenFill;
   }
 
-  // Image fill — pass through
+  // Image fill — 通过
   if (t === 'image') return raw as unknown as PenFill;
 
-  // Fallback: if there's a color field, treat as solid
+  // Fallback：如果有色域，则视为实心
   if ('color' in raw) {
     return {
       type: 'solid',
@@ -177,7 +172,7 @@ function normalizeSingleFill(raw: Record<string, unknown> | string): PenFill | n
 function normalizeGradientStops(raw: unknown[] | undefined): GradientStop[] {
   if (!Array.isArray(raw) || raw.length === 0) return [];
 
-  // First pass: parse offsets, collecting which ones are explicitly set
+  // First pass：解析偏移量，收集显式设置的偏移量
   const parsed = raw.map((s: unknown) => {
     const stop = s as Record<string, unknown>;
     const rawOffset =
@@ -186,7 +181,7 @@ function normalizeGradientStops(raw: unknown[] | undefined): GradientStop[] {
         : typeof stop.position === 'number' && Number.isFinite(stop.position)
           ? stop.position
           : null;
-    // Normalize percentage-format offsets (AI sometimes outputs 0-100 instead of 0-1)
+    // Normalize 百分比格式偏移量（AI 有时输出 0-100 而不是 0-1）
     const offset = rawOffset !== null && rawOffset > 1 ? rawOffset / 100 : rawOffset;
     return {
       offset,
@@ -194,7 +189,7 @@ function normalizeGradientStops(raw: unknown[] | undefined): GradientStop[] {
     };
   });
 
-  // Second pass: auto-distribute any stops that are missing an offset
+  // Second pass：自动分配任何缺少偏移量的停靠点
   const n = parsed.length;
   return parsed.map((s, i) => ({
     color: s.color,
@@ -203,25 +198,25 @@ function normalizeGradientStops(raw: unknown[] | undefined): GradientStop[] {
 }
 
 // ---------------------------------------------------------------------------
-// Stroke normalization
+// Stroke 标准化
 // ---------------------------------------------------------------------------
 
 function normalizeStroke(raw: Record<string, unknown>): PenStroke | undefined {
   if (!raw) return undefined;
   const out = { ...raw };
 
-  // Normalize fill inside stroke
+  // Normalize 填充内部描边
   if ('fill' in out) {
     out.fill = normalizeFills(out.fill);
   }
 
-  // Pencil may use "color" directly on stroke
+  // Pencil 可以直接在笔画上使用“颜色”
   if ('color' in out && typeof out.color === 'string') {
     out.fill = [{ type: 'solid', color: out.color as string }];
     delete out.color;
   }
 
-  // Thickness: leave $variable strings as-is, normalise plain number strings
+  // Thickness：按原样保留 $variable 字符串，规范化纯数字字符串
   if (typeof out.thickness === 'string') {
     const str = out.thickness as string;
     if (!str.startsWith('$')) {
@@ -234,14 +229,14 @@ function normalizeStroke(raw: Record<string, unknown>): PenStroke | undefined {
 }
 
 // ---------------------------------------------------------------------------
-// Sizing normalization
+// Sizing 标准化
 // ---------------------------------------------------------------------------
 
 function normalizeSizing(value: unknown): number | string {
   if (typeof value === 'number') return value;
   if (typeof value !== 'string') return 0;
 
-  // $variable — pass through
+  // $variable——传递
   if (value.startsWith('$')) return value;
 
   // fill_container must always resolve dynamically from parent dimensions
@@ -254,7 +249,7 @@ function normalizeSizing(value: unknown): number | string {
     return 'fit_content';
   }
 
-  // Try as a plain number string
+  // Try 作为纯数字字符串
   const num = parseFloat(value);
   return isNaN(num) ? 0 : num;
 }
@@ -264,7 +259,7 @@ function normalizePadding(
 ): number | [number, number] | [number, number, number, number] | string | undefined {
   if (typeof value === 'number') return value;
   if (typeof value === 'string') {
-    // $variable — pass through
+    // $variable——传递
     if (value.startsWith('$')) return value;
     const num = parseFloat(value);
     return isNaN(num) ? 0 : num;

@@ -88,8 +88,8 @@ function hasImageVisual(node: PenNode | undefined): boolean {
 }
 
 /**
- * Encapsulates all canvas mouse/keyboard interaction state and handlers.
- * Extracted from SkiaCanvas to keep the component focused on lifecycle and rendering.
+ * Encapsulates
+ * 所有画布 mouse/keyboard 交互状态和处理程序。 SkiaCanvas 中的 Extracted 让组件专注于生命周期和渲染。
  */
 export class SkiaInteractionManager {
   private engineRef: { current: SkiaEngine | null };
@@ -97,13 +97,13 @@ export class SkiaInteractionManager {
   private onEditText: (state: TextEditState | null) => void;
   private onPathAnchorContextMenu: (state: PathAnchorContextMenuState | null) => void;
 
-  // Shared state
+  // Shared 状态
   private isPanning = false;
   private spacePressed = false;
   private lastX = 0;
   private lastY = 0;
 
-  // Select tool state
+  // Select 工具状态
   private isDragging = false;
   private dragMoved = false;
   private isMarquee = false;
@@ -115,7 +115,7 @@ export class SkiaInteractionManager {
   private dragPrevDy = 0;
   private dragAllIds: Set<string> | null = null;
 
-  // Resize handle state
+  // Resize 句柄状态
   private isResizing = false;
   private resizeHandle: HandleDir | null = null;
   private resizeNodeId: string | null = null;
@@ -130,7 +130,7 @@ export class SkiaInteractionManager {
   private resizeLatestScale: { scaleX: number; scaleY: number } | null = null;
   private resizeMoved = false;
 
-  // Rotation state
+  // Rotation 状态
   private isRotating = false;
   private rotateNodeId: string | null = null;
   private rotateOrigAngle = 0;
@@ -141,7 +141,7 @@ export class SkiaInteractionManager {
   private rotateLatestAngle: number | null = null;
   private rotateMoved = false;
 
-  // Arc handle state
+  // Arc 句柄状态
   private isDraggingArc = false;
   private arcHandleType: ArcHandleType | null = null;
   private arcNodeId: string | null = null;
@@ -149,7 +149,7 @@ export class SkiaInteractionManager {
   private arcLatestPatch: Partial<EllipseNode> | null = null;
   private arcMoved = false;
 
-  // Path control state
+  // Path 控制状态
   private isDraggingPathControl = false;
   private pathControlType: PathControlType | null = null;
   private pathControlAnchorIndex: number | null = null;
@@ -165,13 +165,13 @@ export class SkiaInteractionManager {
   > | null = null;
   private pathControlMoved = false;
 
-  // Drawing tool state
+  // Drawing 工具状态
   private isDrawing = false;
   private drawTool: ToolType = 'select';
   private drawStartX = 0;
   private drawStartY = 0;
 
-  // Pen tool
+  // Pen 工具
   private penTool: SkiaPenTool;
 
   constructor(
@@ -207,8 +207,8 @@ export class SkiaInteractionManager {
   }
 
   // ---------------------------------------------------------------------------
-  // Mouse down
-  // ---------------------------------------------------------------------------
+  // Mouse 下来
+// ---------------------------------------------------------------------------
 
   private onMouseDown = (e: MouseEvent) => {
     const engine = this.getEngine();
@@ -216,7 +216,7 @@ export class SkiaInteractionManager {
 
     if (e.button === 2) return;
 
-    // Pan: space+click, hand tool, or middle mouse
+    // Pan：空格+单击、手形工具或鼠标中键
     if (this.spacePressed || this.getTool() === 'hand' || e.button === 1) {
       this.isPanning = true;
       this.lastX = e.clientX;
@@ -229,7 +229,7 @@ export class SkiaInteractionManager {
     const scene = this.getScene(e);
     if (!scene) return;
 
-    // Text tool: click to create immediately
+    // Text 工具：点击立即创建
     if (tool === 'text') {
       const node = createNodeForTool('text', scene.x, scene.y, 0, 0);
       if (node) {
@@ -240,13 +240,13 @@ export class SkiaInteractionManager {
       return;
     }
 
-    // Pen tool
+    // Pen 工具
     if (tool === 'path') {
       this.penTool.onMouseDown(scene, engine.zoom || 1);
       return;
     }
 
-    // Drawing tools: start rubber-band
+    // Drawing 工具：启动橡皮筋
     if (isDrawingTool(tool)) {
       this.isDrawing = true;
       this.drawTool = tool;
@@ -263,7 +263,7 @@ export class SkiaInteractionManager {
       return;
     }
 
-    // Select tool
+    // Select 工具
     if (tool === 'select') {
       this.handleSelectMouseDown(e, scene, engine);
     }
@@ -305,7 +305,7 @@ export class SkiaInteractionManager {
       return;
     }
 
-    // Check arc handles first
+    // Check 弧线首先处理
     const arcHit = hitTestArcHandle(engine, scene.x, scene.y);
     if (arcHit) {
       this.isDraggingArc = true;
@@ -319,7 +319,7 @@ export class SkiaInteractionManager {
       return;
     }
 
-    // Check resize handle
+    // Check 调整手柄大小
     const handleHit = hitTestHandle(engine, scene.x, scene.y);
     if (handleHit) {
       this.isResizing = true;
@@ -345,7 +345,7 @@ export class SkiaInteractionManager {
       return;
     }
 
-    // Check rotation zone
+    // Check 旋转区域
     const rotHit = hitTestRotation(engine, scene.x, scene.y);
     if (rotHit) {
       this.isRotating = true;
@@ -377,7 +377,7 @@ export class SkiaInteractionManager {
         (selId) => selId !== nodeId && docStore.isDescendantOf(nodeId, selId),
       );
       if (isChildOfSelected) {
-        // Don't change selection
+        // Don 不更改选择
       } else if (!currentSelection.includes(nodeId)) {
         const clickedNode = docStore.getNodeById(nodeId);
         const parent = docStore.getParentOf(nodeId);
@@ -404,7 +404,7 @@ export class SkiaInteractionManager {
         }
       }
 
-      // Start drag
+      // Start 拖动
       const selectedIds = useCanvasStore.getState().selection.selectedIds;
       this.isDragging = true;
       this.dragMoved = false;
@@ -416,7 +416,7 @@ export class SkiaInteractionManager {
         return { id, x: n?.x ?? 0, y: n?.y ?? 0 };
       });
     } else {
-      // Empty space → start marquee or clear selection
+      // Empty space → 开始选取框或清除选择
       if (!e.shiftKey) {
         useCanvasStore.getState().clearSelection();
       }
@@ -428,8 +428,8 @@ export class SkiaInteractionManager {
   }
 
   // ---------------------------------------------------------------------------
-  // Mouse move
-  // ---------------------------------------------------------------------------
+  // Mouse 移动
+// ---------------------------------------------------------------------------
 
   private onMouseMove = (e: MouseEvent) => {
     const engine = this.getEngine();
@@ -489,7 +489,7 @@ export class SkiaInteractionManager {
       return;
     }
 
-    // Hover + handle cursor (select tool only)
+    // Hover + 手柄光标（仅选择工具）
     if (this.getTool() === 'select' && !this.spacePressed) {
       this.handleHoverCursor(scene, engine);
     }
@@ -978,8 +978,8 @@ export class SkiaInteractionManager {
   }
 
   // ---------------------------------------------------------------------------
-  // Mouse up
-  // ---------------------------------------------------------------------------
+  // Mouse 上
+// ---------------------------------------------------------------------------
 
   private onMouseUp = () => {
     const engine = this.getEngine();
@@ -1109,7 +1109,7 @@ export class SkiaInteractionManager {
     }
     this.isDrawing = false;
 
-    // Select tool: end drag / marquee
+    // Select 工具：结束拖动/选取框
     if (this.isDragging && this.dragMoved && this.dragOrigPositions.length > 0 && engine) {
       this.handleDragEnd(engine);
     } else if (engine) {
@@ -1139,7 +1139,7 @@ export class SkiaInteractionManager {
         ? { x: draggedRN.absX, y: draggedRN.absY, w: draggedRN.absW, h: draggedRN.absH }
         : { x: orig.x + dx, y: orig.y + dy, w: 100, h: 100 };
 
-      // Check if dragged completely outside parent → reparent
+      // Check 如果完全拖到父级之外 → 重新父级
       if (parent) {
         const parentRN = engine.renderNodes.find((rn) => rn.node.id === parent.id);
         if (parentRN) {
@@ -1203,8 +1203,8 @@ export class SkiaInteractionManager {
   }
 
   // ---------------------------------------------------------------------------
-  // Double click — text editing
-  // ---------------------------------------------------------------------------
+  // Double click — 文本编辑
+// ---------------------------------------------------------------------------
 
   private onDblClick = (e: MouseEvent) => {
     const engine = this.getEngine();
@@ -1223,7 +1223,7 @@ export class SkiaInteractionManager {
     const topHit = hits[0];
     const currentSelection = useCanvasStore.getState().selection.selectedIds;
 
-    // Double-click on a selected group/frame → enter it and select the child
+    // Double-单击选定的 group/frame → 输入它并选择子项
     if (currentSelection.length === 1) {
       const selectedNode = useDocumentStore.getState().getNodeById(currentSelection[0]);
       if (
@@ -1271,8 +1271,8 @@ export class SkiaInteractionManager {
   };
 
   // ---------------------------------------------------------------------------
-  // Keyboard: space for panning
-  // ---------------------------------------------------------------------------
+  // Keyboard：平移空间
+// ---------------------------------------------------------------------------
 
   private onKeyDown = (e: KeyboardEvent) => {
     if (this.penTool.onKeyDown(e.key)) {
@@ -1294,8 +1294,8 @@ export class SkiaInteractionManager {
   };
 
   // ---------------------------------------------------------------------------
-  // Attach / detach event listeners
-  // ---------------------------------------------------------------------------
+  // Attach / 分离事件监听器
+// ---------------------------------------------------------------------------
 
   attach(): () => void {
     const canvasEl = this.canvasEl;
@@ -1324,7 +1324,7 @@ export class SkiaInteractionManager {
       });
     };
 
-    // Tool change → cursor + cancel pen if switching away
+    // Tool 更改 → 光标 + 如果切换离开则取消笔
     const unsubTool = useCanvasStore.subscribe((state) => {
       if (!this.spacePressed && !this.isResizing)
         canvasEl.style.cursor = toolToCursor(state.activeTool);

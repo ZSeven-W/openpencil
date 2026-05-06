@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { SkiaFontManager } from '../font-manager';
 
-// Minimal mock CanvasKit shim — only the bits SkiaFontManager constructor touches.
+// Minimal 模拟 CanvasKit shim — 仅 SkiaFontManager 构造函数涉及的位。
 function makeMockCk(): unknown {
   return {
     TypefaceFontProvider: {
@@ -27,9 +27,8 @@ describe('SkiaFontManager.pendingCount / flushPending', () => {
 
   it('tracks in-flight promises injected via the pendingFetches map', async () => {
     const fm = new SkiaFontManager(makeMockCk() as never);
-    // Use private access via cast — testing internals to verify the new
-    // public methods read the map correctly without coupling tests to
-    // network/font-loading machinery.
+    // Use 通过强制转换进行私有访问 — 测试内部结构以验证新的公共方法是否正确读取地图，而无需将测试耦合到
+    // network/font-loading 机器。
     let releaseA: () => void = () => {};
     let releaseB: () => void = () => {};
     const pA = new Promise<boolean>((resolve) => {
@@ -77,12 +76,12 @@ describe('system font detection via Local Font Access API', () => {
   });
 
   it('marks unknown local font as systemFont when Google Fonts fails', async () => {
-    // Mock fetch to simulate Google Fonts returning 400
+    // Mock 获取模拟 Google Fonts 返回 400
     globalThis.fetch = vi
       .fn()
       .mockResolvedValue(new Response(null, { status: 400, statusText: 'Bad Request' }));
 
-    // Mock window.queryLocalFonts to include "HeyMeow Rnd"
+    // Mock window.queryLocalFonts 包含“HeyMeow Rnd”
     const origQuery = (globalThis as unknown as Record<string, unknown>).queryLocalFonts;
     (globalThis as unknown as Record<string, unknown>).queryLocalFonts = async () => [
       {
@@ -101,7 +100,7 @@ describe('system font detection via Local Font Access API', () => {
       },
     ];
 
-    // Mock window for the Local Font Access API check
+    // Mock 用于 Local Font Access API 检查的窗口
     const origWindow = globalThis.window;
     vi.stubGlobal('window', {
       queryLocalFonts: (
@@ -111,10 +110,10 @@ describe('system font detection via Local Font Access API', () => {
 
     const fm = new SkiaFontManager(makeMockCk() as never);
 
-    // "HeyMeow Rnd" is not bundled and not in NON_GOOGLE_FONT_PATTERNS
+    // “HeyMeow Rnd”未捆绑且不在 NON_GOOGLE_FONT_PATTERNS 中
     const result = await fm.ensureFont('HeyMeow Rnd');
 
-    // Should return false (not loaded into CanvasKit) but be classified as system font
+    // Should 返回 false（未加载到 CanvasKit）但被分类为系统字体
     expect(result).toBe(false);
     expect(fm.isSystemFont('HeyMeow Rnd')).toBe(true);
 
@@ -127,12 +126,12 @@ describe('system font detection via Local Font Access API', () => {
   });
 
   it('marks font as failed when not found locally either', async () => {
-    // Mock fetch to simulate Google Fonts returning 400
+    // Mock 获取模拟 Google Fonts 返回 400
     globalThis.fetch = vi
       .fn()
       .mockResolvedValue(new Response(null, { status: 400, statusText: 'Bad Request' }));
 
-    // Mock window.queryLocalFonts WITHOUT "SomeRandomFont"
+    // Mock 窗口.queryLocalFonts WITHOUT "SomeRandomFont"
     vi.stubGlobal('window', {
       queryLocalFonts: async () => [
         {
@@ -195,7 +194,7 @@ describe('requestLocalFontAccess', () => {
     expect(result).toBe(true);
     expect(fm.nativeFontPermission).toBe('granted');
 
-    // Check nativeFontMap has entries
+    // Check nativeFontMap 有条目
     const map = (fm as unknown as { nativeFontMap: Map<string, unknown[]> }).nativeFontMap;
     expect(map.has('segoe ui')).toBe(true);
     expect(map.get('segoe ui')?.length).toBe(2);
@@ -245,11 +244,11 @@ describe('local font blob loading into CanvasKit', () => {
   });
 
   it('loads local font data into CanvasKit when blob provides valid data', async () => {
-    // Create mock font data (enough bytes to look like a font file)
+    // Create 模拟字体数据（足够的字节看起来像字体文件）
     const fontBuffer = new ArrayBuffer(100);
     const mockBlob = new Blob([fontBuffer]);
 
-    // Mock fetch to fail (no bundled, no Google Fonts)
+    // Mock 获取失败（无捆绑，无 Google Fonts）
     globalThis.fetch = vi
       .fn()
       .mockResolvedValue(new Response(null, { status: 400, statusText: 'Bad Request' }));
@@ -268,16 +267,15 @@ describe('local font blob loading into CanvasKit', () => {
 
     const fm = new SkiaFontManager(makeMockCk() as never);
 
-    // Grant access first
+    // Grant 首先访问
     await fm.requestNativeFontAccess();
     expect(fm.nativeFontPermission).toBe('granted');
 
-    // Now try to ensure the font — should attempt blob loading
+    // Now 尝试确保字体 — 应该尝试加载 blob
     await fm.ensureFont('TestFont');
 
-    // Even if registerFont fails with mock data, the font should be recognized
-    // The mock CK registerFont is a no-op, so it won't actually register
-    // But the flow should exercise the blob loading path
+    // Even 如果 registerFont 因模拟数据失败，则应识别字体 The 模拟 CK registerFont
+    // 是无操作，因此它不会实际注册 But 流程应执行 Blob 加载路径
     expect(fm.nativeFontPermission).toBe('granted');
 
     vi.unstubAllGlobals();
@@ -295,7 +293,7 @@ describe('requestNativeFontAccess prompt-preservation', () => {
         throw new DOMException('Permission denied', 'NotAllowedError');
       },
     });
-    // Stub navigator.permissions for Node.js test environment
+    // Stub navigator.Node.js 测试环境的权限
     vi.stubGlobal('navigator', {
       permissions: {
         query: async () => ({ state: 'prompt' }),
@@ -317,7 +315,7 @@ describe('requestNativeFontAccess prompt-preservation', () => {
         throw new DOMException('Permission denied', 'NotAllowedError');
       },
     });
-    // Stub navigator.permissions for Node.js test environment
+    // Stub navigator.Node.js 测试环境的权限
     vi.stubGlobal('navigator', {
       permissions: {
         query: async () => ({ state: 'denied' }),

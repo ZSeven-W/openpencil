@@ -1,11 +1,11 @@
 // apps/desktop/git/ssh-keys.ts
 //
-// SSH key management. We generate ed25519 keypairs via node:crypto and
-// format the public key as OpenSSH using sshpk. Private keys are stored
-// as PEM PKCS#8 with file mode 0600. The metadata index lives at
-// <sshDir>/index.json and is rewritten atomically on every mutation.
+// SSH 密钥管理。 We 通过节点生成 ed25519 密钥对：crypto 和
+// 使用 sshpk 将公钥格式化为 OpenSSH。 Private 密钥已存储
+// 如 PEM PKCS#8，文件模式为 0600。The 元数据索引位于
+// <sshDir>/index.json 并在每次突变时自动重写。
 //
-// This module is factory-based so tests can inject a temp directory.
+// This 模块是基于工厂的，因此测试可以注入临时目录。
 
 import { promises as fsp } from 'node:fs';
 import { generateKeyPair, randomUUID } from 'node:crypto';
@@ -19,11 +19,11 @@ const generateKeyPairAsync = promisify(generateKeyPair);
 export interface SshKeyInfo {
   id: string;
   host: string;
-  publicKey: string; // OpenSSH single-line format
-  fingerprint: string; // SHA256 fingerprint with `SHA256:` prefix
+  publicKey: string; // OpenSSH 单行格式
+  fingerprint: string; // SHA256 指纹，前缀为 `SHA256:`
   comment: string;
-  /** Absolute path to the PEM private key file. Not exposed via IPC — used
-   * internally by git-sys when constructing GIT_SSH_COMMAND. */
+  /** Absolute PEM 私钥文件的路径。 Not 通过 IPC 公开 - 构建 GIT_SSH_COMMAND 时由 git-sys
+   * 在内部使用。 */
   privateKeyPath: string;
 }
 
@@ -32,13 +32,13 @@ export interface SshKeyManager {
   import(opts: { privateKeyPath: string; host: string }): Promise<SshKeyInfo>;
   list(): Promise<SshKeyInfo[]>;
   delete(keyId: string): Promise<void>;
-  /** Resolve a keyId to its private key path. Throws if missing. Used by
-   * git-sys when invoking SSH transport. Not part of the IPC surface. */
+  /** Resolve 和 keyId 到其私钥路径。 Throws 如果丢失。调用 SSH 传输时，git-sys 执行 Used。 Not
+   * IPC 表面的一部分。 */
   getPrivateKeyPath(keyId: string): Promise<string>;
 }
 
 export interface SshKeyManagerOpts {
-  /** Directory where private keys + index.json live. Created on first use. */
+  /** Directory 私钥 + index.json 所在。首次使用时为 Created。 */
   sshDir: string;
 }
 

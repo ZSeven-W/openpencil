@@ -11,7 +11,7 @@ import {
 import type { PenNode } from '@/types/pen';
 
 /**
- * Compute the bounding box of a set of PenNodes.
+ * Compute 一组 PenNodes 的边界框。
  */
 function computeBounds(nodes: PenNode[]): {
   minX: number;
@@ -50,7 +50,7 @@ function computeBounds(nodes: PenNode[]): {
 }
 
 /**
- * Get the viewport center in scene coordinates using the Skia canvas viewport.
+ * Get 使用 Skia 画布视口在场景坐标中的视口中心。
  */
 function getViewportCenter(): { cx: number; cy: number } {
   const { viewport } = useCanvasStore.getState();
@@ -61,8 +61,8 @@ function getViewportCenter(): { cx: number; cy: number } {
 }
 
 /**
- * Process Figma HTML clipboard data — extract, decode, and add to canvas.
- * Returns true if Figma nodes were pasted.
+ * Process
+ * Figma HTML 剪贴板数据 — 提取、解码并添加到画布。如果粘贴了 Figma 节点，则 Returns true。
  */
 function processFigmaHtml(html: string): boolean {
   const clipData = extractFigmaClipboardData(html);
@@ -71,7 +71,7 @@ function processFigmaHtml(html: string): boolean {
   const { nodes } = figmaClipboardToNodes(clipData.buffer, html);
   if (nodes.length === 0) return false;
 
-  // Center pasted nodes at viewport center
+  // Center 在视口中心粘贴节点
   const bounds = computeBounds(nodes);
   const { cx, cy } = getViewportCenter();
   const offsetX = cx - (bounds.minX + bounds.maxX) / 2;
@@ -82,7 +82,7 @@ function processFigmaHtml(html: string): boolean {
     node.y = (node.y ?? 0) + offsetY;
   }
 
-  // Batch all insertions into a single undo step
+  // Batch 所有插入到单个撤消步骤中
   const doc = useDocumentStore.getState().document;
   useHistoryStore.getState().startBatch(doc);
 
@@ -94,15 +94,15 @@ function processFigmaHtml(html: string): boolean {
 
   useHistoryStore.getState().endBatch(useDocumentStore.getState().document);
 
-  // Select the pasted nodes
+  // Select 粘贴的节点
   useCanvasStore.getState().setSelection(newIds, newIds[0] ?? null);
   return true;
 }
 
 /**
- * Try reading Figma data from the system clipboard via Clipboard API.
- * Used as a fallback when the `paste` event might not fire
- * (e.g. when a non-editable element like <canvas> has focus).
+ * Try 通过 Clipb
+ * oard API 从系统剪贴板读取 Figma 数据。 Used 作为 `paste` 事件可能不会触发时的后备（例如，当像
+ * <canvas> 这样的不可编辑元素具有焦点时）。
  */
 export async function tryPasteFigmaFromClipboard(): Promise<boolean> {
   try {
@@ -119,20 +119,20 @@ export async function tryPasteFigmaFromClipboard(): Promise<boolean> {
       }
     }
   } catch {
-    // Clipboard API may not be available or permission denied
+    // Clipboard API 可能不可用或权限被拒绝
   }
   return false;
 }
 
 /**
- * Listens for browser `paste` events to detect Figma clipboard data.
- * Also provides `tryPasteFigmaFromClipboard()` for use from the keydown
- * handler as a fallback when the paste event might not fire.
+ * Listens
+ * 用于浏览器 `paste` 事件来检测 Figma 剪贴板数据。 Also 提供
+ * `tryPasteFigmaFromClipboard()` 供 keydown 处理程序使用，作为粘贴事件可能未触发时的后备。
  */
 export function useFigmaPaste() {
   useEffect(() => {
     const handlePaste = (e: ClipboardEvent) => {
-      // Skip if user is typing in an input/textarea/contentEditable
+      // Skip 如果用户输入 input/textarea/contentEditable
       const target = e.target as HTMLElement;
       if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
         return;

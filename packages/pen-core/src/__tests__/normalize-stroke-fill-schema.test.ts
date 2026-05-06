@@ -2,10 +2,8 @@ import { describe, it, expect } from 'vitest';
 import type { PenNode } from '@zseven-w/pen-types';
 import { normalizeStrokeFillSchema } from '../normalize/normalize-stroke-fill-schema';
 
-// Test helpers accept untyped property bags because most assertions here
-// intentionally put malformed (schema-violating) data on the node — that
-// is exactly the input shape the normalizer is designed to repair. A
-// strongly-typed signature would reject the very cases we need to cover.
+// Test 帮助器接受无类型属性包，因为这里的大多数断言故意将格式错误（违反架构）的数据放在节点上 -
+// 这正是规范化器旨在修复的输入形状。强类型签名会拒绝我们需要涵盖的情况。
 type NodeProps = Record<string, unknown>;
 
 const path = (props: NodeProps = {}): PenNode =>
@@ -79,9 +77,9 @@ describe('normalizeStrokeFillSchema — stroke array unwrap', () => {
   });
 
   it('converts a fill-shaped stroke entry into a proper PenStroke', () => {
-    // Real M2.7 failure: stroke is an array and the inner object has
-    // {type, color} (fill shape) instead of {thickness, fill}. strokeWidth
-    // lives as a top-level node field.
+    // Real M2.7 失败：中风是一个数组，内部对象有
+// {type, color} (fill shape) instead of {thickness, fill}. strokeWidth
+    // 作为顶级节点字段。
     const node = path({
       stroke: [{ type: 'solid', color: '#C4F82A' }],
       strokeWidth: 2.5,
@@ -93,7 +91,7 @@ describe('normalizeStrokeFillSchema — stroke array unwrap', () => {
     };
     expect(rec.stroke?.thickness).toBe(2.5);
     expect(rec.stroke?.fill?.[0]?.color).toBe('#C4F82A');
-    // Stray strokeWidth field is cleaned up after migration
+    // Stray strokeWidth 字段在迁移后被清理
     expect(rec.strokeWidth).toBeUndefined();
   });
 
@@ -108,8 +106,8 @@ describe('normalizeStrokeFillSchema — stroke array unwrap', () => {
   });
 
   it('handles an object-shaped stroke with a fill-shaped inner value', () => {
-    // Some sub-agents emit { stroke: { type: "solid", color: "#fff" } }
-    // (object, not array) — still a fill shape. Same recovery rules apply.
+    // Some 子代理发出 { stroke: { type: "solid", color: "#fff" } }
+    // （对象，而不是数组）— 仍然是填充形状。 Same 恢复规则适用。
     const node = path({
       stroke: { type: 'solid', color: '#FFFFFF' },
       strokeWidth: 3,
@@ -206,12 +204,9 @@ describe('normalizeStrokeFillSchema — stroke array unwrap', () => {
 
 describe('normalizeStrokeFillSchema — illegal fill color replacement', () => {
   it('replaces a sole "none" fill with explicit transparent hex', () => {
-    // "none" and "transparent" are CSS keywords, not valid PenFill colors.
-    // But they express an explicit "no fill" intent (e.g. an activity ring
-    // that should be hollow). Deleting the fill field entirely would make
-    // the canvas renderer fall back to a default gray fill — the opposite
-    // of what the AI meant. Replace with the 8-digit transparent hex so
-    // the renderer sees an explicit transparent color and respects it.
+    // “none”和“transparent”是 CSS 关键字，不是有效的 PenFill 颜色。 But
+    // 它们表达了明确的“无填充”意图（例如，应该是空心的活动环）。 Deleting 填充字段完全会使画布渲染器回退到默认的灰色填充 - 与
+    // AI 的含义相反。 Replace 具有 8 位透明十六进制，因此渲染器会看到明确的透明颜色并尊重它。
     const node = path({
       fill: [{ type: 'solid', color: 'none' }],
     });
@@ -235,8 +230,7 @@ describe('normalizeStrokeFillSchema — illegal fill color replacement', () => {
   });
 
   it('drops a "none" entry but keeps other legitimate entries in the same array', () => {
-    // Mixed array: one illegal, one legal. Just drop the illegal one and
-    // keep the real color — no transparent fallback needed.
+    // Mixed 数组：1 个非法，1 个合法。 Just 丢弃非法颜色并保留真实颜色 - 无需透明后备。
     const node = path({
       fill: [
         { type: 'solid', color: 'none' },
@@ -259,8 +253,8 @@ describe('normalizeStrokeFillSchema — illegal fill color replacement', () => {
   });
 
   it('keeps 8-digit transparent hex (#00000000) alone', () => {
-    // The 8-digit hex IS a valid color string (alpha channel). Only the
-    // CSS keywords "none" and "transparent" are the unsupported forms.
+    // The 8 位十六进制 IS 有效颜色字符串（Alpha 通道）。 Only CSS
+    // 关键字“none”和“transparent”是不受支持的形式。
     const node = ellipse({
       fill: [{ type: 'solid', color: '#00000000' }],
     });
@@ -270,11 +264,9 @@ describe('normalizeStrokeFillSchema — illegal fill color replacement', () => {
   });
 
   it('DELETES text node fill when all entries are CSS keywords', () => {
-    // text.fill is the foreground color, not a shape background.
-    // "none"/"transparent" on a text node would hide the text entirely —
-    // almost certainly a mistake. Delete the field so downstream layers
-    // (role defaults, button contrast heuristic) can fill in a visible
-    // color. Replacing with #00000000 would freeze the text invisible.
+    // text.fill 是前景色，而不是形状背景。文本节点上的“无”/“透明”将完全隐藏文本 - 几乎肯定是一个错误。
+    // Delete 该字段，以便下游层（角色默认值、按钮对比度启发式）可以填充可见颜色。 Replacing 与 #00000000
+    // 会将文本冻结为不可见。
     const node = text({
       fill: [{ type: 'solid', color: 'none' }],
     });
@@ -293,7 +285,7 @@ describe('normalizeStrokeFillSchema — illegal fill color replacement', () => {
   });
 
   it('DELETES icon_font fill when all entries are CSS keywords', () => {
-    // Same reasoning: icon_font.fill is the foreground color.
+    // Same 推理：icon_font.fill 是前景色。
     const node = iconFont({
       fill: [{ type: 'solid', color: 'none' }],
     });
@@ -325,9 +317,8 @@ describe('normalizeStrokeFillSchema — illegal fill color replacement', () => {
   });
 
   it('keeps the transparent-hex replacement for shape fills (frame / ellipse / path)', () => {
-    // Sanity guard: the shape-vs-foreground split must not regress the
-    // shape branch. Frames, ellipses, and paths still get the explicit
-    // #00000000 when an AI writes "none".
+    // Sanity 防护：形状与前景的分割不得使形状分支回归。当 AI 写入“none”时，Frames、省略号和路径仍然得到显式的
+    // #00000000。
     for (const node of [
       frame({ fill: [{ type: 'solid', color: 'none' }] }),
       ellipse({ fill: [{ type: 'solid', color: 'none' }] }),
@@ -346,8 +337,7 @@ describe('normalizeStrokeFillSchema — illegal fill color replacement', () => {
     });
     normalizeStrokeFillSchema(node);
     const rec = node as unknown as { stroke?: { thickness?: number; fill?: unknown[] } };
-    // Whole stroke becomes either unset, or stroke.fill is empty — either
-    // way the renderer will not try to use "none".
+    // Whole 描边要么未设置，要么描边.fill 为空——无论哪种方式，渲染器都不会尝试使用“none”。
     if (rec.stroke && Array.isArray(rec.stroke.fill)) {
       expect(rec.stroke.fill.length).toBe(0);
     }
@@ -381,10 +371,10 @@ describe('normalizeStrokeFillSchema — recursion', () => {
       fill?: Array<{ color?: string }>;
       stroke?: { thickness?: number; fill?: Array<{ color?: string }> };
     };
-    // Stroke is now a proper object with the original thickness and color
+    // Stroke 现在是一个具有原始厚度和颜色的正确对象
     expect(rec.stroke?.thickness).toBe(12);
     expect(rec.stroke?.fill?.[0]?.color).toBe('#C4F82A');
-    // Transparent 8-digit hex fill is preserved (it's not a CSS keyword)
+    // Transparent 8 位十六进制填充被保留（它不是 CSS 关键字）
     expect(rec.fill?.[0]?.color).toBe('#00000000');
   });
 
@@ -405,10 +395,8 @@ describe('normalizeStrokeFillSchema — recursion', () => {
     };
     expect(rec.stroke?.thickness).toBe(2.5);
     expect(rec.stroke?.fill?.[0]?.color).toBe('#C4F82A');
-    // "none" fill was replaced with explicit transparent — NOT deleted.
-    // Deleting would let the canvas factory fall back to the default gray
-    // fill and the chart line's background would bleed through as a
-    // solid grey rectangle.
+    // “无”填充被替换为显式透明 — NOT 被删除。 Deleting 将使画布工厂回退到默认的灰色填充，并且图表线的背景将渗透为纯灰
+    // 色矩形。
     expect(rec.fill).toBeDefined();
     expect(rec.fill?.[0]?.color?.toLowerCase()).toBe('#00000000');
     expect(rec.strokeWidth).toBeUndefined();

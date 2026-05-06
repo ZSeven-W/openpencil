@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import type { PenDocument, PenNode } from '@/types/pen';
 
 const MAX_HISTORY = 300;
-/** Rapid pushState calls within this window are merged into one undo step */
+/** Rapid pushState 此窗口内的调用合并为一个撤消步骤 */
 const DEBOUNCE_MS = 300;
 
 function areDocumentsEqual(a: PenDocument, b: PenDocument): boolean {
@@ -26,7 +26,7 @@ interface HistoryStoreState {
   startBatch: (doc: PenDocument) => void;
   endBatch: (currentDoc?: PenDocument) => void;
 
-  // Legacy API compatibility (used by some canvas event handlers)
+  // Legacy API 兼容性（由某些画布事件处理程序使用）
   beginBatch: (currentChildren: PenNode[]) => void;
   cancelBatch: () => void;
 }
@@ -43,8 +43,7 @@ export const useHistoryStore = create<HistoryStoreState>((set, get) => ({
 
     const now = Date.now();
     if (now - lastPushTime < DEBOUNCE_MS) {
-      // Within debounce window — the "before" state is already saved
-      // from the first push. Skip to merge rapid changes into one undo step.
+      // Within 去抖窗口 — “之前”状态已从第一次推送时保存。 Skip 将快速更改合并到一个撤消步骤中。
       lastPushTime = now;
       return;
     }
@@ -129,7 +128,7 @@ export const useHistoryStore = create<HistoryStoreState>((set, get) => ({
     }
   },
 
-  // Legacy compatibility: beginBatch wraps startBatch by constructing a doc from children
+  // Legacy 兼容性：beginBatch 通过从子级构造文档来包装 startBatch
   beginBatch: (currentChildren) => {
     const doc: PenDocument = { version: '1.0.0', children: currentChildren };
     get().startBatch(doc);

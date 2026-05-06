@@ -1,13 +1,12 @@
-// @vitest-environment jsdom
+// @vitest-环境 jsdom
 import { describe, it, expect, vi, beforeAll, afterEach } from 'vitest';
 import { render, screen, cleanup, waitFor } from '@testing-library/react';
 import { DesignEngineContext } from '../context';
 import { DesignCanvas } from '../components/design-canvas';
 
-// Mock the browser entry that DesignCanvas imports from. Use the package
-// sub-path export (matches the source `import` statement), so the mock
-// resolves the same way under any checkout location — earlier the test
-// pinned an absolute /Users/... path which silently no-op'd in CI.
+// Mock DesignCanvas 从中导入的浏览器条目。 Use 包子路径导出（与源 `import`
+// 语句匹配），因此模拟在任何签出位置下都以相同的方式解析 - 之前的测试固定了绝对 /Users/... 路径，该路径在 CI
+// 中默默无操作。
 vi.mock('@zseven-w/pen-engine/browser', () => ({
   attachCanvas: vi.fn(() =>
     Promise.resolve({
@@ -20,7 +19,7 @@ vi.mock('@zseven-w/pen-engine/browser', () => ({
   attachInteraction: vi.fn(() => vi.fn()),
 }));
 
-// jsdom doesn't implement ResizeObserver — provide a stub
+// jsdom 没有实现 ResizeObserver — 提供一个存根
 beforeAll(() => {
   if (typeof window !== 'undefined' && !window.ResizeObserver) {
     window.ResizeObserver = class ResizeObserver {
@@ -87,10 +86,10 @@ describe('DesignCanvas', () => {
       </DesignEngineContext.Provider>,
     );
 
-    // Initially shows loader
+    // Initially 显示加载程序
     expect(screen.getByTestId('loader')).toBeTruthy();
 
-    // After attachCanvas resolves (mocked as instant), loading state clears
+    // After attachCanvas 解析（嘲笑为即时），加载状态清除
     await waitFor(() => {
       expect(screen.queryByTestId('loader')).toBeNull();
     });

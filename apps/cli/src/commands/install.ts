@@ -1,11 +1,12 @@
 /**
- * `op install` — install openpencil-skill for AI coding agents.
+ * `op install`
  *
- * The skill files are embedded at build time (via skill-bundle.json).
- * If the bundle is empty (e.g. dev build without the skill repo), falls back to git clone.
+ * — 为 AI 编码代理安装 openpencil-skill。 The 技能文件在构建时嵌入（通过
+ * skill-bundle
  *
- * Auto-detects installed agents (Claude Code, Codex, Cursor, Gemini CLI, OpenCode)
- * and installs the skill for each, or use `--target <name>` to install for one.
+ * .json）。 If 捆绑包是空的（例如，没有技能存储库的开发构建），回退到 git clone。 Auto -
+ * 检测已安装的代理（Claude Code、Codex、Cursor、Gemini CLI、OpenCode）并为每个代理安装技能，或使用 `--target <name>`
+ 为其中一个安装。
  */
 
 import { execSync } from 'node:child_process';

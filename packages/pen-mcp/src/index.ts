@@ -1,12 +1,10 @@
 // Core
 export { configureMcpHooks, getMcpHooks } from './hooks';
 export type { McpHooks } from './hooks';
-// server.ts is a standalone entry point (MCP server binary), not re-exported
-
-// Constants
+// server.ts 是一个独立的入口点（MCP 服务器二进制文件），而不是重新导出 Constants
 export { MCP_DEFAULT_PORT, PORT_FILE_DIR_NAME, PORT_FILE_NAME, ICONIFY_API_URL } from './constants';
 
-// Document manager
+// Document 经理
 export {
   openDocument,
   saveDocument,
@@ -78,6 +76,6 @@ export {
 export { validateContract } from './utils/validate-contract';
 export { readNodeWithDepth } from './utils/node-operations';
 
-// Log utilities (sensitive redaction + log tail reading)
+// Log 实用程序（敏感编辑+日志尾部读取）
 export { SENSITIVE_LOG_PATTERN, readDebugTail, readLogTail } from './utils/log-utils';
 export type { ReadLogTailOptions } from './utils/log-utils';

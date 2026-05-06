@@ -1,5 +1,5 @@
 /**
- * @zseven-w/pen-renderer — Standalone CanvasKit/Skia renderer for OpenPencil (.op) files
+ * @zseven-w/pen-renderer — OpenPencil (.op) 文件的 Standalone CanvasKit/Skia 渲染器
  *
  * @example
  * ```ts
@@ -7,9 +7,9 @@
  *
  * const ck = await loadCanvasKit('/canvaskit/')
  * const renderer = new PenRenderer(ck, { fontBasePath: '/fonts/' })
- * renderer.init(canvas)
- * renderer.setDocument(doc)
- * renderer.zoomToFit()
+ * 渲染器.init(canvas)
+ * 渲染器.setDocument(doc)
+ * 渲染器.zoomToFit()
  * ```
  */
 
@@ -21,7 +21,7 @@ export { PenRenderer } from './renderer.js';
 // ---- Types ----
 export type { RenderNode, ViewportState, PenRendererOptions, IconLookupFn } from './types.js';
 
-// ---- Low-level utilities (for apps/web editor re-use) ----
+// ---- Low 级实用程序（用于 apps/web 编辑器重用） ----
 export { SkiaNodeRenderer } from './node-renderer.js';
 export { SkiaTextRenderer } from './text-renderer.js';
 export { SkiaFontManager, BUNDLED_FONT_FAMILIES } from './font-manager.js';
@@ -59,6 +59,6 @@ export {
 } from './paint-utils.js';
 export { sanitizeSvgPath, hasInvalidNumbers, tryManualPathParse } from './path-utils.js';
 
-// ---- Thumbnail helper (Phase 7c) ----
+// ---- Thumbnail 帮助程序 (Phase 7c) ----
 export { renderNodeThumbnail } from './render-node-thumbnail.js';
 export type { ThumbnailContext } from './render-node-thumbnail.js';

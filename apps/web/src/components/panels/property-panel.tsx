@@ -25,7 +25,7 @@ import ExportSection from './export-section';
 import IconSection from './icon-section';
 import ImageSection from './image-section';
 
-/** Properties stored directly on the RefNode (instance-level), not as overrides. */
+/** Properties 直接存储在 RefNode（实例级）上，而不是作为覆盖。 */
 const INSTANCE_DIRECT_PROPS = new Set([
   'x',
   'y',
@@ -53,11 +53,11 @@ export default function PropertyPanel({ embedded }: { embedded?: boolean } = {})
   const makeReusable = useDocumentStore((s) => s.makeReusable);
   const detachComponent = useDocumentStore((s) => s.detachComponent);
 
-  // Subscribe to `children` so we re-render when nodes change
+  // Subscribe 到 `children` 所以当节点改变时我们重新渲染
   void children;
   const node = activeId ? getNodeById(activeId) : undefined;
 
-  // These hooks must run unconditionally (React rules of hooks)
+  // These 挂钩必须无条件运行（React 挂钩规则）
   const [isEditingName, setIsEditingName] = useState(false);
   const [editName, setEditName] = useState('');
   useEffect(() => {
@@ -71,8 +71,8 @@ export default function PropertyPanel({ embedded }: { embedded?: boolean } = {})
   const nodeIsReusable = 'reusable' in node && node.reusable === true;
   const nodeIsInstance = node.type === 'ref';
 
-  // For RefNodes, resolve the referenced component to get visual properties.
-  // The display node merges: component base → instance overrides → RefNode position/meta.
+  // For RefNodes，解析引用的组件以获取视觉属性。 The 显示节点合并：组件基础 → 实例覆盖 → RefNode
+  // position/meta。
   let displayNode = node;
   if (nodeIsInstance) {
     const refNode = node as RefNode;
@@ -80,7 +80,7 @@ export default function PropertyPanel({ embedded }: { embedded?: boolean } = {})
     if (component) {
       const topOverrides = refNode.descendants?.[refNode.ref] ?? {};
       const merged: Record<string, unknown> = { ...component, ...topOverrides };
-      // Apply RefNode's own explicitly defined properties
+      // Apply RefNode 自己显式定义的属性
       for (const [key, val] of Object.entries(node)) {
         if (key === 'type' || key === 'ref' || key === 'descendants' || key === 'children')
           continue;
@@ -88,7 +88,7 @@ export default function PropertyPanel({ embedded }: { embedded?: boolean } = {})
           merged[key] = val;
         }
       }
-      // Use component's type (frame/rect/etc.) not 'ref'
+      // Use 组件的类型 (frame/rect/etc.) 不是“ref”
       merged.type = component.type;
       if (!merged.name) merged.name = component.name;
       displayNode = merged as unknown as PenNode;
@@ -110,7 +110,7 @@ export default function PropertyPanel({ embedded }: { embedded?: boolean } = {})
         }
       }
 
-      // Store visual properties as overrides in descendants[ref]
+      // Store 视觉属性作为后代中的覆盖[参考]
       if (Object.keys(overrideProps).length > 0) {
         const currentDescendants = refNode.descendants ?? {};
         const existing = currentDescendants[refNode.ref] ?? {};

@@ -4,8 +4,8 @@ import { createNodeForTool } from '../../core/node-creator.js';
 import { MIN_DRAW_SIZE, MIN_LINE_LENGTH } from '../../core/constants.js';
 
 /**
- * Handles rubber-band drawing interactions for shape tools.
- * Engine-native: no DOM store references.
+ * Handles
+ * 形状工具的橡皮筋绘图交互。 Engine-native：没有 DOM 存储引用。
  */
 export class EngineDrawHandler {
   isDrawing = false;

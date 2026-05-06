@@ -1,11 +1,11 @@
 /**
- * Global canvas export — render whole pages or the entire document
- * to PNG / JPEG / WEBP / PDF.
+ * Global 画布导出
+ * — 将整个页面或整个文档渲染为 PNG / JPEG / WEBP / PDF。 Reuses 活动 SkiaEngine 的
  *
- * Reuses the active SkiaEngine's CanvasKit instance + node renderer so
- * the export visually matches what the user sees on screen. PDF output
- * is a minimal raster PDF (one JPEG page per design page) — no external
- * library required.
+ * CanvasKit 实例 + 节点渲染器，以便导出在视
+ * 觉上与用户在屏幕上看到的
+ * 内容相匹配。 PDF 输出是最小光栅 PDF（每个设计页一个 JPEG 页）——无需外部库。
+ *
  */
 
 import type { PenNode, PenDocument } from '@zseven-w/pen-types';
@@ -17,18 +17,18 @@ export type ImageExportFormat = 'png' | 'jpeg' | 'webp';
 export type GlobalExportFormat = ImageExportFormat | 'pdf';
 
 interface PageRender {
-  /** Page name (used in filenames). */
+  /** Page 名称（用于文件名）。 */
   name: string;
   /**
-   * Encoded image bytes (already copied out of the WASM heap).
-   * Typed with `<ArrayBuffer>` so it satisfies the `BlobPart` constraint
-   * in TS 5.7+, which rejects the wider `Uint8Array<ArrayBufferLike>`.
+   * Encoded
+   * 图像字节（已从 WASM 堆中复制出来）。 Typed 与 `<ArrayBuffer>` 因此它满足 TS
+   * 5.7+ 中的 `BlobPart` 约束，该约束拒绝更宽的 `Uint8Array<ArrayBufferLike>`。
    */
   bytes: Uint8Array<ArrayBuffer>;
-  /** Pixel dimensions of the encoded image. */
+  /** Pixel 编码图像的尺寸。 */
   width: number;
   height: number;
-  /** Logical dimensions in design units (used as PDF MediaBox). */
+  /** Logical 设计单位尺寸（用作 PDF MediaBox）。 */
   logicalWidth: number;
   logicalHeight: number;
 }
@@ -36,11 +36,11 @@ interface PageRender {
 interface RenderPageOptions {
   multiplier: number;
   format: ImageExportFormat;
-  /** When 'white', clears the surface with white instead of transparent. */
+  /** When '白色'，用白色而不是透明清除表面。 */
   background?: 'transparent' | 'white';
 }
 
-/** Decode a base64 data URL like `data:image/jpeg;base64,...` into raw bytes. */
+/** Decode 将 URL 的 Base64 数据像 `data:image/jpeg;base64,...` 一样转换为原始字节。 */
 function dataUrlToBytes(dataUrl: string): Uint8Array<ArrayBuffer> | null {
   const comma = dataUrl.indexOf(',');
   if (comma < 0) return null;
@@ -57,15 +57,15 @@ function dataUrlToBytes(dataUrl: string): Uint8Array<ArrayBuffer> | null {
 }
 
 /**
- * Render a single page to encoded image bytes.
- * Returns null if the SkiaEngine isn't available, the page is empty,
- * or surface allocation/encoding fails.
+ * Render 单页编码图像字节。
+ * Returns null 如果 SkiaEngine 不可用，则页面为空，
+ * 或表面 allocation/encoding 失败。
  *
- * Uses `MakeSWCanvasSurface` on a temporary `<canvas>` element rather than
- * `MakeSurface(w,h)` because the editor falls back to the SW path when WebGL
- * is unavailable, so it's the most reliable cross-build option. Encoding goes
- * through the browser's native `canvas.toDataURL` (which always supports
- * PNG/JPEG/WEBP) instead of `Image.encodeToBytes`, which has been observed to
+ * Uses `MakeSWCanvasSurface` 在临时 `<canvas>` 元素上而不是
+ * `MakeSurface(w,h)` 因为当 WebGL 时编辑器会回退到 SW 路径
+ * 不可用，因此它是最可靠的交叉构建选项。 Encoding 去
+ * 通过浏览器的本机 `canvas.toDataURL` （它始终支持
+ * PNG/JPEG/WEBP) 而不是 `Image.encodeToBytes`，据观察，
  * return null in some CanvasKit builds.
  */
 function renderPageToImage(
@@ -80,7 +80,7 @@ function renderPageToImage(
   }
   const ck = engine.ck;
 
-  // Mirror SkiaEngine.syncFromDocument so the export matches the on-screen render.
+  // Mirror SkiaEngine.syncFromDocument 因此导出与屏幕渲染相匹配。
   const allNodes: PenNode[] =
     doc.pages && doc.pages.length > 0 ? doc.pages.flatMap((p) => p.children) : doc.children;
   const resolved = resolveRefs(pageChildren, allNodes);
@@ -94,7 +94,7 @@ function renderPageToImage(
     return null;
   }
 
-  // Bounding box from root-level nodes (those without an inherited clipRect).
+  // 来自根级节点的 Bounding 框（那些没有继承的 clipRect 的节点）。
   let minX = Infinity,
     minY = Infinity,
     maxX = -Infinity,
@@ -116,9 +116,8 @@ function renderPageToImage(
   const outW = Math.max(1, Math.ceil(logicalW * opts.multiplier));
   const outH = Math.max(1, Math.ceil(logicalH * opts.multiplier));
 
-  // Create a temporary canvas + Skia software surface backed by it.
-  // After flush(), the rendered pixels live in the canvas's 2D context,
-  // accessible via toDataURL.
+  // Create 一个临时画布 + Skia 由它支持的软件表面。 After flush()，渲染的像素位于画布的 2d
+  // 上下文中，可通过 toDataURL 访问。
   const offCanvas = document.createElement('canvas');
   offCanvas.width = outW;
   offCanvas.height = outH;
@@ -146,7 +145,7 @@ function renderPageToImage(
     surface.delete();
   }
 
-  // Encode via the browser's native canvas encoder.
+  // Encode 通过浏览器的本机画布编码器。
   const mimeType =
     opts.format === 'jpeg' ? 'image/jpeg' : opts.format === 'webp' ? 'image/webp' : 'image/png';
   const quality = opts.format === 'png' ? undefined : 0.92;
@@ -174,7 +173,7 @@ function renderPageToImage(
   };
 }
 
-/** List the pages of a document — falls back to a single legacy page. */
+/** List 文档的页面 — 回退到单个旧页面。 */
 function listPages(doc: PenDocument): { id: string; name: string; children: PenNode[] }[] {
   if (doc.pages && doc.pages.length > 0) {
     return doc.pages.map((p) => ({ id: p.id, name: p.name || 'Page', children: p.children }));
@@ -183,8 +182,8 @@ function listPages(doc: PenDocument): { id: string; name: string; children: PenN
 }
 
 /**
- * Sanitize a string for use as a filename. Allows letters, digits, hyphen,
- * underscore, and CJK characters; collapses everything else to underscores.
+ * Sanitize
+ * 用作文件名的字符串。 Allows 字母、数字、连字符、下划线和 CJK 字符；将其他所有内容折叠为下划线。
  */
 export function sanitizeFilename(name: string, fallback = 'untitled'): string {
   const safe = (name || '').replace(/[^\p{L}\p{N}_-]+/gu, '_').replace(/^_+|_+$/g, '');
@@ -192,8 +191,8 @@ export function sanitizeFilename(name: string, fallback = 'untitled'): string {
 }
 
 /**
- * Export the active page as an image (PNG/JPEG/WEBP).
- * Returns null on failure.
+ * Export 将活动页面
+ * 作为图像 (PNG/JPEG/WEBP)。 Returns 失败时为 null。
  */
 export function exportActivePageImage(
   doc: PenDocument,
@@ -218,9 +217,9 @@ export function exportActivePageImage(
 }
 
 /**
- * Export the entire document as a multi-page raster PDF.
- * Each page renders to JPEG and is embedded as an /XObject /Image with
- * /DCTDecode filter — no external PDF library needed.
+ * Export 将整个文档
+ * 作为多页光栅 PDF。 Each 页面呈现为 JPEG 并嵌入为 /XObject /Image 和
+ * /DCTDecode 过滤器 — 无需外部 PDF 库。
  */
 export function exportDocumentPdf(doc: PenDocument, multiplier = 2): Blob | null {
   const pages = listPages(doc);
@@ -241,13 +240,13 @@ export function exportDocumentPdf(doc: PenDocument, multiplier = 2): Blob | null
 }
 
 /**
- * Build a minimal PDF embedding one JPEG image per page.
+ * Build 一个最小的
  *
- * Object layout:
- *   1: Catalog
- *   2: Pages root
- *   3, 4, 5: page 1 (Page, Image, Contents)
- *   6, 7, 8: page 2 ...
+ * PDF，每页嵌入一个 JPEG 图像。 Object 布局： 1：Catalog 2：Pages 根
+ * 3、4、5：第 1
+ * 页（Page、Image、C
+ * ontents）6、7、
+ * 8：第 2 页 ...
  */
 function buildRasterPdf(pages: PageRender[]): Blob {
   const enc = new TextEncoder();
@@ -290,7 +289,7 @@ function buildRasterPdf(pages: PageRender[]): Blob {
   );
   endObj();
 
-  // Per-page objects
+  // Per-页面对象
   for (let i = 0; i < pages.length; i++) {
     const p = pages[i];
     const W = p.logicalWidth;

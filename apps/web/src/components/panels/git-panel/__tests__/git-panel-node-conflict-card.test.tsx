@@ -1,4 +1,4 @@
-// @vitest-environment jsdom
+// @vitest-环境 jsdom
 // apps/web/src/components/panels/git-panel/__tests__/git-panel-node-conflict-card.test.tsx
 
 import { describe, it, expect, afterEach, vi } from 'vitest';
@@ -27,10 +27,9 @@ vi.mock('@/components/ui/button', () => ({
   ),
 }));
 
-// Note: shadcn Badge is not in this project; the card uses an inline InlineBadge.
-// No mock needed.
-
-// Stub the JSON editor so we can control its behaviour in tests
+// Note: shadcn Badge 不在本项目中；该卡使用内联 InlineBadge。需要 No 模拟。 Stub JSON
+// 编辑器，这样我们就可以在测试中
+// 控制它的行为
 vi.mock('@/components/panels/git-panel/git-panel-conflict-json-editor', () => ({
   GitPanelConflictJsonEditor: ({
     onSubmit,
@@ -55,7 +54,7 @@ vi.mock('@/components/panels/git-panel/git-panel-conflict-json-editor', () => ({
   ),
 }));
 
-// Stub pen-renderer to avoid WASM loading
+// Stub 笔渲染器以避免 WASM 加载
 vi.mock('@zseven-w/pen-renderer', () => ({
   renderNodeThumbnail: vi.fn(async () => null),
 }));

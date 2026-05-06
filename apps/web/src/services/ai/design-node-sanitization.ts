@@ -5,7 +5,7 @@ import { isOverlayNode } from '@/canvas/node-helpers';
 export { deepCloneNode } from '@/stores/document-tree-utils';
 
 // ---------------------------------------------------------------------------
-// Children helpers
+// Children 帮助者
 // ---------------------------------------------------------------------------
 
 export function setNodeChildren(node: PenNode, children: PenNode[]): void {
@@ -35,13 +35,13 @@ export function mergeNodeForProgressiveUpsert(existing: PenNode, incoming: PenNo
   const incomingById = new Map(incomingChildren.map((c) => [c.id, c] as const));
   const mergedChildren: PenNode[] = [];
 
-  // 1. Existing children first (preserves already-built order)
+  // 1. Existing 子级优先（保留已构建的顺序）
   for (const ex of existingChildren) {
     const inc = incomingById.get(ex.id);
     mergedChildren.push(inc ? mergeNodeForProgressiveUpsert(ex, inc) : ex);
   }
 
-  // 2. Append new incoming children (progressive sections added at end)
+  // 2. Append 新传入子项（在末尾添加渐进部分）
   for (const child of incomingChildren) {
     if (!existingById.has(child.id)) mergedChildren.push(child);
   }
@@ -51,7 +51,7 @@ export function mergeNodeForProgressiveUpsert(existing: PenNode, incoming: PenNo
 }
 
 // ---------------------------------------------------------------------------
-// Layout sanitization
+// Layout 消毒
 // ---------------------------------------------------------------------------
 
 export function hasActiveLayout(node: PenNode): boolean {
@@ -59,10 +59,10 @@ export function hasActiveLayout(node: PenNode): boolean {
   return node.layout === 'vertical' || node.layout === 'horizontal';
 }
 
-// isOverlayNode moved to @/canvas/node-helpers — re-exported above
+// isOverlayNode 移至 @/canvas/node-helpers — 在上面重新导出
 
 export function sanitizeLayoutChildPositions(node: PenNode, parentHasLayout: boolean): void {
-  // Overlay nodes (role: 'overlay') retain their x/y for absolute positioning
+  // Overlay 节点（角色：“overlay”）保留其 x/y 以进行绝对定位
   if (parentHasLayout && !isOverlayNode(node)) {
     if ('x' in node) delete (node as { x?: number }).x;
     if ('y' in node) delete (node as { y?: number }).y;
@@ -77,7 +77,7 @@ export function sanitizeLayoutChildPositions(node: PenNode, parentHasLayout: boo
 }
 
 // ---------------------------------------------------------------------------
-// Screen frame bounds sanitization
+// Screen 框架边界清理
 // ---------------------------------------------------------------------------
 
 export function isScreenFrame(node: PenNode): boolean {
@@ -136,7 +136,7 @@ export function sanitizeScreenFrameBounds(node: PenNode): void {
 }
 
 // ---------------------------------------------------------------------------
-// Node ID uniqueness
+// Node ID 唯一性
 // ---------------------------------------------------------------------------
 
 export function ensureUniqueNodeIds(
@@ -157,7 +157,7 @@ export function ensureUniqueNodeIds(
     node.id = finalId;
   }
 
-  // Track original→new mapping so progressive upsert can resolve IDs
+  // Track 原始→新映射，因此渐进式 upsert 可以解析 IDs
   if (remapping && originalId && finalId !== originalId) {
     remapping.set(originalId, finalId);
   }

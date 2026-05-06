@@ -1,13 +1,10 @@
 /**
- * Pre-validation: pure code checks that don't require LLM.
+ * 预校验：一组不依赖 LLM 的纯代码检查。
  *
- * This file is now a thin wrapper around `@zseven-w/pen-ai-skills` diagnostics.
- * All detect logic lives in `packages/pen-ai-skills/src/diagnostics/detectors.ts`
- * as pure functions so debug tools can reuse them without side effects.
- *
- * See also:
- *   - packages/pen-ai-skills/src/diagnostics/detectors.ts (pure detect)
- *   - docs/superpowers/specs/2026-04-06-mcp-debug-tools-design.md (Phase 1.A)
+ * 这个文件现在只是 `@zseven-w/pen-ai-skills` 诊断能力的一层薄包装。
+ * 真正的检测逻辑都以纯函数形式放在
+ * `packages/pen-ai-skills/src/diagnostics/detectors.ts` 里，
+ * 这样调试工具和业务代码都能复用它们，而不会引入副作用。
  */
 
 import { detectAllIssues, type Issue } from '@zseven-w/pen-ai-skills';
@@ -15,12 +12,14 @@ import { DEFAULT_FRAME_ID, useDocumentStore } from '@/stores/document-store';
 import type { PenNode } from '@/types/pen';
 
 /**
- * Run pre-validation detectors on the live document and apply suggested fixes.
- * Returns the number of fixes ACTUALLY applied (not the number detected).
+ * 对当前实时文档运行预校验检测器，并应用建议的自动修复。
  *
- * Detected issues that are skipped — `info` severity (detect-only) and
- * protected status-bar removals — are not counted, so callers can rely on
- * the return value as a faithful "did anything change" signal.
+ * 返回值表示“实际应用了多少个修复”，而不是检测到多少个问题。
+ * 被跳过的问题不会计数，比如：
+ * - `info` 级别的问题（只检测，不自动修）
+ * - 被保护节点上的删除动作（例如状态栏）
+ *
+ * 因此调用方可以把返回值当作“文档是否真的被改动过”的可靠信号。
  */
 export function runPreValidationFixes(): number {
   const store = useDocumentStore.getState();
@@ -35,15 +34,13 @@ function applyFixes(issues: Issue[]): number {
   const store = useDocumentStore.getState();
   let applied = 0;
   for (const issue of issues) {
-    // 'info' severity is detect-only — the detector emits the issue for
-    // debug visibility but is not confident enough that an auto-fix would
-    // be safe. Currently only sibling-inconsistency cross-role checks
-    // (loose pass on cornerRadius) use this; rewriting them could damage
-    // a structurally distinct sibling like a rounded chrome element.
+    // `info` 级别只做检测，不自动修复。
+    // 这类问题通常更偏“提示”而不是“确定性错误”，
+    // 贸然改写可能会误伤一些结构上本来就特殊的兄弟节点。
     if (issue.severity === 'info') continue;
 
     if (issue.property === '__remove') {
-      // Never remove pre-injected chrome (e.g. iPhone status bar)
+      // 不允许删除预注入的界面 chrome，例如 iPhone 状态栏。
       const target = store.getNodeById(issue.nodeId);
       if (target && 'role' in target && (target as { role?: string }).role === 'status-bar') {
         console.log(`[Pre-validation] ${issue.nodeId}: skipped removal (protected status-bar)`);

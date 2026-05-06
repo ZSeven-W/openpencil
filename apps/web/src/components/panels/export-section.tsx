@@ -48,9 +48,8 @@ export default function ExportSection({ nodeId, nodeName }: ExportSectionProps) 
       return;
     }
 
-    // 1. Resolve target subtree in the document tree.
-    //    Use post-resolveRefs tree so descendant IDs match what's in
-    //    engine.renderNodes (ref instances get remapped descendant IDs).
+    // 1. Resolve 文档树中的目标子树。 Use post-resolveRefs
+    // 树，因此后代 IDs 与 engine.renderNodes 中的内容匹配（ref 实例被重新映射后代 IDs）。
     const docState = useDocumentStore.getState();
     const activePageId = useCanvasStore.getState().activePageId;
     const pageChildren = getActivePageChildren(docState.document, activePageId);
@@ -71,7 +70,7 @@ export default function ExportSection({ nodeId, nodeName }: ExportSectionProps) 
     };
     collectIds(targetNode);
 
-    // 2. Find target render node to get absolute bounds.
+    // 2. Find 目标渲染节点获取绝对边界。
     const rootRn = engine.renderNodes.find((rn) => rn.node.id === nodeId);
     if (!rootRn) {
       console.error('[ExportSection] Target render node not found — node may be hidden');
@@ -83,10 +82,10 @@ export default function ExportSection({ nodeId, nodeName }: ExportSectionProps) 
       return;
     }
 
-    // 3. Filter to subtree, preserving render order from the flattener.
+    // 3. Filter 到子树，保留来自拼合器的渲染顺序。
     const subtreeRNs = engine.renderNodes.filter((rn) => subtreeIds.has(rn.node.id));
 
-    // 4. Create offscreen surface sized to bounds × scale multiplier.
+    // 4. Create 屏幕外表面大小为边界 × 比例乘数。
     const multiplier = Math.max(1, parseInt(scale, 10) || 1);
     const outW = Math.max(1, Math.ceil(width * multiplier));
     const outH = Math.max(1, Math.ceil(height * multiplier));
@@ -101,7 +100,7 @@ export default function ExportSection({ nodeId, nodeName }: ExportSectionProps) 
     setExporting(true);
     try {
       const canvas = surface.getCanvas();
-      // JPEG has no alpha — fill with white; PNG/WEBP preserve transparency.
+      // JPEG 没有 alpha — 用白色填充； PNG/WEBP 保持透明度。
       canvas.clear(format === 'jpeg' ? ck.WHITE : ck.TRANSPARENT);
 
       canvas.save();
@@ -131,7 +130,7 @@ export default function ExportSection({ nodeId, nodeName }: ExportSectionProps) 
         const mime =
           format === 'jpeg' ? 'image/jpeg' : format === 'webp' ? 'image/webp' : 'image/png';
         const ext = format === 'jpeg' ? 'jpg' : format;
-        // Preserve CJK and word chars in filename; replace other punctuation with _
+        // Preserve CJK 和文件名中的单词字符；将其他标点符号替换为 _
         const safeName = (nodeName || 'layer').replace(/[^\p{L}\p{N}_-]+/gu, '_') || 'layer';
         const filename = `${safeName}.${ext}`;
 

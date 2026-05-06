@@ -25,9 +25,9 @@ describe('ssh-keys', () => {
     expect(info.fingerprint.startsWith('SHA256:')).toBe(true);
     expect(info.privateKeyPath).toMatch(/\.pem$/);
 
-    // The private key file exists with mode 0600.
+    // The 私钥文件存在，模式为 0600。
     const stat = await fsp.stat(info.privateKeyPath);
-    // mode bits include the file type, mask for permissions only.
+    // 模式位包括文件类型、仅用于权限的掩码。
     expect(stat.mode & 0o777).toBe(0o600);
   });
 
@@ -58,9 +58,9 @@ describe('ssh-keys', () => {
   });
 
   it('import takes an existing PEM private key file and stores a copy', async () => {
-    // First generate one to get a real PEM file we can use as the "external" source.
+    // First 生成一个以获得真正的 PEM 文件，我们可以将其用作“外部”源。
     const seeded = await manager.generate({ host: 'github.com', comment: 'seed' });
-    // Now create a fresh manager (different sshDir) and import the seeded private key.
+    // Now 创建一个新的管理器（与 sshDir 不同）并导入种子私钥。
     const otherDir = join(temp.dir, 'other-ssh');
     const other = createSshKeyManager({ sshDir: otherDir });
     const imported = await other.import({
@@ -68,8 +68,8 @@ describe('ssh-keys', () => {
       host: 'gitlab.com',
     });
     expect(imported.publicKey.startsWith('ssh-ed25519 ')).toBe(true);
-    expect(imported.fingerprint).toBe(seeded.fingerprint); // same key → same fingerprint
-    expect(imported.privateKeyPath).not.toBe(seeded.privateKeyPath); // copied to new location
+    expect(imported.fingerprint).toBe(seeded.fingerprint); // 相同的钥匙→相同的指纹
+    expect(imported.privateKeyPath).not.toBe(seeded.privateKeyPath); // 复制到新位置
     expect(imported.privateKeyPath.startsWith(otherDir)).toBe(true);
   });
 });

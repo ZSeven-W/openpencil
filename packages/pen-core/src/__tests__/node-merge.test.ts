@@ -115,7 +115,7 @@ describe('mergeDocuments', () => {
     expect(result.nodeConflicts).toHaveLength(1);
     expect(result.nodeConflicts[0].reason).toBe('both-modified-same-field');
     expect(result.nodeConflicts[0].nodeId).toBe('r1');
-    // Merged document uses ours as placeholder
+    // Merged 文档使用我们的作为占位符
     expect((findNode(result.merged, 'r1') as { width: number }).width).toBe(20);
   });
 
@@ -232,7 +232,7 @@ describe('mergeDocuments', () => {
     const result = mergeDocuments({ base, ours, theirs });
     const reparentConflicts = result.nodeConflicts.filter((c) => c.reason === 'reparent-conflict');
     expect(reparentConflicts).toHaveLength(0);
-    // r1 ends up under f2
+    // r1 最终位于 f2 之下
     const f2 = findNode(result.merged, 'f2') as { children?: PenNode[] };
     expect(f2.children?.some((c) => c.id === 'r1')).toBe(true);
   });
@@ -415,7 +415,7 @@ describe('mergeDocuments', () => {
     ]);
     const result = mergeDocuments({ base, ours, theirs });
     expect(result.nodeConflicts.filter((c) => c.reason === 'reparent-conflict')).toHaveLength(0);
-    // r1 should now be on p2
+    // r1 现在应该在 p2 上
     const p1 = result.merged.pages!.find((p) => p.id === 'p1');
     const p2 = result.merged.pages!.find((p) => p.id === 'p2');
     expect(p1!.children).toHaveLength(0);

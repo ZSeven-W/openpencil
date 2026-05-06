@@ -20,8 +20,7 @@ import {
   type ConversionContext,
 } from './common.js';
 
-// Forward declaration — convertChildren is defined in index.ts and injected here
-// to avoid circular imports.
+// Forward 声明 — convertChildren 在 index.ts 中定义并注入此处以避免循环导入。
 let _convertChildren: (parent: TreeNode, ctx: ConversionContext) => PenNode[];
 
 export function setConvertChildren(fn: (parent: TreeNode, ctx: ConversionContext) => PenNode[]) {
@@ -37,10 +36,8 @@ export function convertFrame(
   const id = ctx.generateId();
   const children = _convertChildren(treeNode, ctx);
 
-  // In preserve mode, only apply auto-layout properties for frames that actually
-  // have stackMode set.  Frames without stackMode use absolute x,y positioning.
-  // For auto-layout frames, children order must be reversed because the tree
-  // builder sorts descending (for z-stacking) but layout needs ascending (flow order).
+  // In 保留模式，仅对实际设置了 stackMode 的帧应用自动布局属性。 没有 stackMode 的 Frames 使用绝对 x,y 定位。 For
+  // 自动布局框架，子级顺序必须颠倒，因为树构建器按降序排序（对于 z 堆叠），但布局需要升序（流顺序）。
   const hasAutoLayout = figma.stackMode && figma.stackMode !== 'NONE';
   const layout =
     ctx.layoutMode === 'preserve'
@@ -51,9 +48,8 @@ export function convertFrame(
           : {}
       : mapFigmaLayout(figma);
 
-  // Reverse children order for auto-layout frames in preserve mode:
-  // tree builder sorts descending by position (z-stacking), but auto-layout
-  // needs ascending order (first child = start of layout flow).
+  // Reverse 保留模式下自动布局框架的子级顺序：树构建器按位置降序排序（z 堆叠），但自动布局需要升序（第一个子级 =
+  // 布局流的开始）。
   const orderedChildren =
     hasAutoLayout && ctx.layoutMode === 'preserve' && children.length > 1
       ? [...children].reverse()
@@ -139,7 +135,7 @@ export function convertInstance(
   const figma = treeNode.figma;
   const componentGuid = figma.overriddenSymbolID ?? figma.symbolData?.symbolID;
 
-  // Check if this instance has visual overrides (fills, strokes, arcData, text) that must be inlined
+  // Check 如果此实例具有必须内联的视觉覆盖（填充、描边、arcData、文本）
   const hasVisualOverrides =
     figma.symbolData?.symbolOverrides?.some(
       (ov: any) =>
@@ -150,9 +146,8 @@ export function convertInstance(
         ov.fontSize !== undefined,
     ) ?? false;
 
-  // Try to inline the master SYMBOL's children with overrides applied.
-  // Always inline when the instance has no local children (meaning it needs
-  // the symbol's content to render), or when it has visual overrides.
+  // Try 内联主 SYMBOL 的子级并应用覆盖。当实例没有本地子级（意味着它需要渲染符号的内容）或具有视觉覆盖时，Always
+  // 内联。
   if (componentGuid && (treeNode.children.length === 0 || hasVisualOverrides)) {
     const symbolNode = ctx.symbolTree.get(guidToString(componentGuid));
     if (symbolNode && symbolNode.children.length > 0) {
@@ -163,9 +158,8 @@ export function convertInstance(
         figma.size,
         ctx.symbolTree,
       );
-      // Merge symbol's layout and visual properties into the instance.
-      // Instances inherit from their master but clipboard data may not
-      // include inherited properties on the instance node itself.
+      // Merge 符号的布局和视觉属性到实例中。 Instances 从其主节点继承，但剪贴板数据可能不包括实例节点本身的继承属性
+      // 。
       const mergedFigma = mergeSymbolProps(treeNode.figma, symbolNode.figma);
       return convertFrame({ figma: mergedFigma, children }, parentStackMode, ctx);
     }
@@ -188,15 +182,15 @@ export function convertInstance(
 }
 
 /**
- * Merge symbol's properties into an instance node.
- * Instances inherit layout and visual properties from their master component,
- * but clipboard data may not include these inherited values on the instance.
- * Instance's own properties take priority (they are explicit overrides).
+ * Merge 符号的属性到
+ * 实例节点中。 Instances 从其主组件继承布局和视觉属性，但剪贴板数据可能不包含实例上的这
+ * 些继承值。 Instance 自己的属性优先（它们是显式覆盖）。
+ *
  */
 function mergeSymbolProps(instance: FigmaNodeChange, symbol: FigmaNodeChange): FigmaNodeChange {
   const merged = { ...instance };
 
-  // Layout properties — needed for auto-layout detection and layout generation
+  // Layout 属性 — 自动布局检测和布局生成所需
   const layoutKeys: (keyof FigmaNodeChange)[] = [
     'stackMode',
     'stackSpacing',
@@ -214,7 +208,7 @@ function mergeSymbolProps(instance: FigmaNodeChange, symbol: FigmaNodeChange): F
     'frameMaskDisabled',
   ];
 
-  // Visual properties — fills/strokes for the frame itself
+  // Visual 属性 — fills/strokes 为框架本身
   const visualKeys: (keyof FigmaNodeChange)[] = [
     'fillPaints',
     'strokePaints',
@@ -242,8 +236,8 @@ function guidPathKey(guids: FigmaGUID[]): string {
 }
 
 /**
- * Apply INSTANCE overrides (fills, arcData) and derived data (sizes, transforms)
- * to SYMBOL children when inlining them into an instance.
+ * 当将 SYMBOL
+ * 子级内联到实例中时，Apply INSTANCE 会覆盖（填充、arcData）和派生数据（大小、转换）到 SYMBOL 子级。
  */
 function applyInstanceOverrides(
   symbolNode: TreeNode,
@@ -252,7 +246,7 @@ function applyInstanceOverrides(
   instanceSize: { x: number; y: number } | undefined,
   _symbolTree: Map<string, TreeNode>,
 ): TreeNode[] {
-  // If no derived data and no overrides, fall back to simple scaling
+  // If 没有派生数据，也没有覆盖，退回到简单缩放
   if ((!derived || derived.length === 0) && (!overrides || overrides.length === 0)) {
     if (instanceSize && symbolNode.figma.size) {
       const sx = instanceSize.x / symbolNode.figma.size.x;
@@ -262,7 +256,7 @@ function applyInstanceOverrides(
     return symbolNode.children;
   }
 
-  // Build override map keyed by guidPath string
+  // Build 覆盖由 guidPath 字符串键入的映射
   const overrideMap = new Map<string, FigmaSymbolOverride>();
   if (overrides) {
     for (const ov of overrides) {
@@ -272,7 +266,7 @@ function applyInstanceOverrides(
     }
   }
 
-  // Build derived map keyed by guidPath string
+  // Build 派生映射，由 guidPath 字符串键入
   const derivedMap = new Map<string, FigmaDerivedSymbolDataEntry>();
   const safeDerived = derived ?? [];
   for (const d of safeDerived) {
@@ -281,7 +275,7 @@ function applyInstanceOverrides(
     }
   }
 
-  // Flatten SYMBOL tree in pre-order DFS with children sorted by ascending GUID localID
+  // Flatten SYMBOL 树处于预序 DFS 中，子级按升序排序 GUID localID
   const flatSymbol: TreeNode[] = [];
   function flattenDFS(node: TreeNode) {
     flatSymbol.push(node);
@@ -294,20 +288,20 @@ function applyInstanceOverrides(
   }
   flattenDFS(symbolNode);
 
-  // Filter derived to length-1 guidPaths only (excludes nested instance entries)
+  // Filter 仅派生为 length-1 guidPaths（不包括嵌套实例条目）
   const len1Derived = safeDerived.filter((d) => d.guidPath?.guids?.length === 1);
 
-  // Extract base session/localID from the first derived entry
+  // Extract 来自第一个派生条目的 session/localID 基础
   const firstGuids = len1Derived[0]?.guidPath?.guids;
   const sessionID = firstGuids?.[0]?.sessionID;
   const firstLocalID = firstGuids?.[0]?.localID;
 
-  // Resolve overrides and derived data to actual symbol tree nodes.
+  // Resolve 覆盖并派生数据到实际符号树节点。
   const nodeOverride = new Map<string, FigmaSymbolOverride>();
   const nodeDerived = new Map<string, FigmaDerivedSymbolDataEntry>();
   const pkToNodeGuid = new Map<string, string>();
 
-  /** Resolve a pathKey's override/derived entries to a target node GUID. */
+  /** Resolve a pathKey 的 override/derived 条目到目标节点 GUID。 */
   function resolveToNode(pathKey: string, nodeGuid: string) {
     const d = derivedMap.get(pathKey);
     if (d) nodeDerived.set(nodeGuid, d);
@@ -315,14 +309,14 @@ function applyInstanceOverrides(
     if (ov) nodeOverride.set(nodeGuid, ov);
   }
 
-  // Build GUID→nodeGuid map for direct lookup
+  // Build GUID→nodeGuid 直接查找映射
   const guidToNodeMap = new Map<string, string>();
   for (const node of flatSymbol) {
     if (node.figma.guid)
       guidToNodeMap.set(guidToString(node.figma.guid), guidToString(node.figma.guid));
   }
 
-  // Strategy 0: Direct GUID matching
+  // Strategy 0: Direct GUID 匹配
   let directMatches = 0;
   for (const d of len1Derived) {
     const pk = d.guidPath?.guids?.[0];
@@ -339,7 +333,7 @@ function applyInstanceOverrides(
         pkToNodeGuid.set(pkStr, pkStr);
       }
     }
-    // Also resolve overrides that use actual GUIDs
+    // Also 解析使用实际 GUIDs 的覆盖
     for (const [pk] of overrideMap) {
       if (pk.includes('/')) continue;
       if (guidToNodeMap.has(pk)) {
@@ -348,7 +342,7 @@ function applyInstanceOverrides(
       }
     }
   } else if (len1Derived.length === flatSymbol.length) {
-    // Strategy 1: exact count match — index mapping (for virtual GUIDs)
+    // Strategy 1：精确计数匹配 — 索引映射（对于虚拟 GUIDs）
     for (let i = 0; i < flatSymbol.length; i++) {
       const node = flatSymbol[i];
       const d = len1Derived[i];
@@ -359,7 +353,7 @@ function applyInstanceOverrides(
       }
     }
   } else if (firstLocalID !== undefined && sessionID !== undefined) {
-    // Strategy 2: full DFS + expanded DFS.
+    // Strategy 2：完整的 DFS + 扩展的 DFS。
     const childSorted = [...symbolNode.children].sort(
       (a, b) => (a.figma.guid?.localID ?? 0) - (b.figma.guid?.localID ?? 0),
     );

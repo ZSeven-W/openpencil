@@ -20,33 +20,33 @@ export function matchTrigger(
 }
 
 /**
- * Match a single keyword against a (lowercased) user message.
+ * Match 针对（小写）
  *
- * For ASCII keywords this uses **word-boundary regex matching** so that
- * a keyword like `form` doesn't false-trigger on words that merely
- * CONTAIN it as a substring (`platform`, `information`, `perform`,
- * `format`, `transform`). The previous implementation used naive
- * `String.includes()` and any short keyword in the registry would
- * match every prompt that mentioned an unrelated word with the same
- * letters.
+ * 用户消息的单个关键字。 For ASCII 关键字，此关键字使用 **字边界正则表达式匹配**，因此像 `form`
+ * 这样的关键字不会错误触发
+ * 仅将 CONTAIN 作为子字符串的单词（`platform`、`information`、`perform`、`format`、`tra
+ * nsform`）。 The 以前的实现使用了朴素的 `String.includes()`
+ * ，并且注册表中的任何短关键字都会匹配提到具有相同字母的不相关单词的每个提示。 For 非 ASCII 关键字（CJK
+ * 等）字边界不适用 — Chinese 字符没有空格分隔符，因此 `\b` 永远不会匹配。对于包含非 ASCII
+ * 字符的任何关键字，We 会回退到原始子字符串方法。支持 Multi-word ASCII 关键字，如 `sign up` 和
  *
- * For non-ASCII keywords (CJK, etc.) word boundaries don't apply —
- * Chinese characters have no whitespace separators, so `\b` would
- * never match. We fall back to the original substring approach for
- * any keyword that contains a non-ASCII character.
+ * `react-native`：空格和连字符是正则表达式中的非单词字符，因此 `\bsign up\b` 和
+ * `\breact-nat
+ * ive\b` 都按预期运
+ * 行。
  *
- * Multi-word ASCII keywords like `sign up` and `react-native` are
- * supported: spaces and hyphens are non-word characters in regex, so
- * `\bsign up\b` and `\breact-native\b` both function as expected.
+ *
+ *
+ *
  */
 function matchKeyword(msg: string, kw: string): boolean {
-  // Non-ASCII path: keep the original substring behavior so CJK
-  // keywords like `表单` / `登录` still match.
-  // eslint-disable-next-line no-control-regex
+  // Non-ASCII 路径：保留原始子字符串行为，因此 CJK
+  // ` 表单 ` / ` 登录 ` 等关键字仍然匹配。
+// eslint-disable-next-line no-control-regex
   if (!/^[\x00-\x7f]+$/.test(kw)) {
     return msg.includes(kw);
   }
-  // Empty / whitespace-only keyword: never match.
+  // Empty / 仅空白关键字：从不匹配。
   if (kw.trim().length === 0) return false;
   const escaped = kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const re = new RegExp(`\\b${escaped}\\b`, 'i');

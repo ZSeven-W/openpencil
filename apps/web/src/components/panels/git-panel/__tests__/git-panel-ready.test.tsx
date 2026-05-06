@@ -1,4 +1,4 @@
-// @vitest-environment jsdom
+// @vitest-环境 jsdom
 // apps/web/src/components/panels/git-panel/__tests__/git-panel-ready.test.tsx
 import React from 'react';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';

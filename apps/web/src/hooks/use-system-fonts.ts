@@ -5,7 +5,7 @@ export interface FontInfo {
   source: 'bundled' | 'system';
 }
 
-/** Bundled font families (always available, vector rendering) */
+/** Bundled 字体系列（始终可用，矢量渲染） */
 const BUNDLED_FAMILIES = [
   'Inter',
   'Poppins',
@@ -20,7 +20,7 @@ const BUNDLED_FAMILIES = [
   'Source Sans 3',
 ];
 
-/** Common system fonts shown even when queryLocalFonts is not available */
+/** 即使 queryLocalFonts 不可用，也会显示 Common 系统字体 */
 const FALLBACK_SYSTEM_FONTS = [
   'Arial',
   'Helvetica',
@@ -35,10 +35,10 @@ const FALLBACK_SYSTEM_FONTS = [
   'Comic Sans MS',
 ];
 
-/** Permission state for the Local Font Access API */
+/** Permission 的 Local 状态 Font Access API */
 export type FontPermissionState = 'prompt' | 'granted' | 'denied' | 'unavailable';
 
-/** Cached system font families to avoid re-querying */
+/** Cached 系统字体系列以避免重新查询 */
 let cachedSystemFonts: string[] | null = null;
 let cachedPermissionState: FontPermissionState | null = null;
 let fetchPromise: Promise<{ fonts: string[]; permission: FontPermissionState }> | null = null;
@@ -52,7 +52,7 @@ async function querySystemFonts(): Promise<{ fonts: string[]; permission: FontPe
 
   fetchPromise = (async () => {
     try {
-      // queryLocalFonts() is available in Chromium 103+ and Electron
+      // queryLocalFonts() 可用于 Chromium 103+ 和 Electron
       if ('queryLocalFonts' in window) {
         const fonts = await (
           window as unknown as { queryLocalFonts: () => Promise<Array<{ family: string }>> }
@@ -61,7 +61,7 @@ async function querySystemFonts(): Promise<{ fonts: string[]; permission: FontPe
         for (const font of fonts) {
           families.add(font.family);
         }
-        // Remove bundled fonts from system list to avoid duplicates
+        // Remove 从系统列表中捆绑字体以避免重复
         const bundledSet = new Set(BUNDLED_FAMILIES.map((f) => f.toLowerCase()));
         const systemFonts = [...families]
           .filter((f) => !bundledSet.has(f.toLowerCase()))
@@ -71,20 +71,20 @@ async function querySystemFonts(): Promise<{ fonts: string[]; permission: FontPe
         return { fonts: systemFonts, permission: 'granted' as FontPermissionState };
       }
     } catch (e: unknown) {
-      // Check if it was a permission denial
+      // Check 如果是权限拒绝
       if (e instanceof DOMException && e.name === 'NotAllowedError') {
         cachedPermissionState = 'denied';
         cachedSystemFonts = FALLBACK_SYSTEM_FONTS;
         return { fonts: FALLBACK_SYSTEM_FONTS, permission: 'denied' };
       }
-      // Other error — API may be unavailable
+      // Other 错误 — API 可能不可用
       console.warn(
         '[useSystemFonts] queryLocalFonts failed:',
         e instanceof Error ? e.message : String(e),
       );
     }
 
-    // API not available or failed
+    // API 不可用或失败
     if (!cachedPermissionState) {
       cachedPermissionState =
         typeof window !== 'undefined' && 'queryLocalFonts' in window ? 'denied' : 'unavailable';
@@ -97,12 +97,12 @@ async function querySystemFonts(): Promise<{ fonts: string[]; permission: FontPe
 }
 
 /**
- * Request local font access permission from the user.
- * Must be called from a user gesture context (click handler).
- * Resets cached state and re-queries fonts.
+ * Request
+ * 用户的本地字体访问权限。 Must 从用户手势上下文（单击处理程序）中调用。 Resets
+ * 缓存状态并重新查询字体。
  */
 async function requestFontAccess(): Promise<{ fonts: string[]; permission: FontPermissionState }> {
-  // Reset cache to force re-query
+  // Reset 缓存强制重新查询
   cachedSystemFonts = null;
   cachedPermissionState = null;
   fetchPromise = null;
@@ -110,8 +110,8 @@ async function requestFontAccess(): Promise<{ fonts: string[]; permission: FontP
 }
 
 /**
- * Hook to enumerate system fonts via the Local Font Access API.
- * Falls back to a common font list if the API is unavailable.
+ * Hook 通过
+ * Local Font Access API 枚举系统字体。如果 API 不可用，则 Falls 返回通用字体列表。
  */
 export function useSystemFonts() {
   const [systemFonts, setSystemFonts] = useState<string[]>(cachedSystemFonts ?? []);
@@ -120,9 +120,8 @@ export function useSystemFonts() {
     cachedPermissionState ?? 'prompt',
   );
 
-  // Only read from module-level cache on mount — do NOT call queryLocalFonts()
-  // here because it requires a user gesture context. Fonts are populated via
-  // requestAccess() when the user opens the font picker dropdown.
+  // Only 在挂载时从模块级缓存读取 — NOT 在此调用 queryLocalFonts()
+  // 因为它需要用户手势上下文。当用户打开字体选择器下拉列表时，Fonts 通过 requestAccess() 填充。
   useEffect(() => {
     if (cachedSystemFonts && cachedPermissionState) {
       setSystemFonts(cachedSystemFonts);

@@ -1,6 +1,6 @@
 // packages/pen-core/src/merge/index.ts
 //
-// Public surface for the merge module.
+// Public 合并模块的表面。
 
 export type { NodePatch } from './node-diff.js';
 export { diffDocuments } from './node-diff.js';

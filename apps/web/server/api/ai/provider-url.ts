@@ -43,7 +43,7 @@ export function requireOpenAICompatBaseURL(baseURL?: string): string {
 }
 
 /**
- * Normalize a team-member's baseURL. Throws if an openai-compat member has no baseURL.
+ * Normalize 团队成员的 baseURL。 Throws 如果 openai-compat 成员没有 baseURL。
  */
 export function normalizeMemberBaseURL(
   memberId: string,

@@ -1,12 +1,12 @@
 // apps/web/src/components/panels/git-panel/git-panel-remote-controls.tsx
 //
-// Phase 6b: pull / push controls for the git panel header. Owns only
-// remote-action local state — everything repo-level comes from the store.
-// We keep this as a separate subtree (not inlined into git-panel-header)
-// so the header stays a thin compositor: branch picker + remote controls
-// + overflow menu.
+// Phase 6b：git 面板标题的拉/推控件。仅限 Owns
+// 远程操作本地状态——回购级别的所有内容都来自商店。
+// We 将其保留为单独的子树（未内联到 git-panel-header 中）
+// 所以标题保持一个薄合成器：分支选择器+远程控制
+// + 溢出菜单。
 //
-// Local state machine:
+// Local 状态机：
 //   { step: 'idle' }
 //   { step: 'pulling', auth?: creds }
 //   { step: 'pull-auth', host, mode, error? }       ← shared auth form
@@ -15,9 +15,9 @@
 //   { step: 'push-rejected' }                        ← one-click retry-to-pull strip
 //   { step: 'error', message }                       ← compact inline error
 //
-// The store is the only authority for IPC + dirty-tree gating. This
-// component never bypasses it — it calls `pull()` / `push()` and catches
-// the returned GitError, branching on err.code to pick the next step.
+// The 存储是 IPC + 脏树门控的唯一权限。 This
+// 组件永远不会绕过它——它调用 `pull()` / `push()` 并捕获
+// 返回的 GitError，在 err.code 上分支以选择下一步。
 
 import { ArrowDown, ArrowUp } from 'lucide-react';
 import { useEffect, useState } from 'react';
@@ -62,23 +62,20 @@ export function GitPanelRemoteControls() {
 
   const [step, setStep] = useState<RemoteControlsStep>({ step: 'idle' });
 
-  // Reset local state whenever the repo/remote changes so a stale pull-auth
-  // panel can't leak between repositories. `remote` may be absent in test
-  // fixtures that predate Phase 6a; treat undefined like null.
+  // 每当 repo/remote 发生更改时，Reset 本地状态都会发生变化，因此过时的 pull-auth 面板不会在存储库之间泄漏。
+  // `remote` 在 Phase 6a 之前的测试装置中可能不存在；将未定义视为 null。
   const remoteUrl = state.kind === 'ready' ? (state.repo.remote?.url ?? null) : null;
   useEffect(() => {
     setStep({ step: 'idle' });
   }, [remoteUrl]);
 
-  // Only render while the repo is in a clean `ready` state. During a
-  // `conflict` the user must finish the in-flight merge before they can
-  // pull/push again — the conflict banner owns the recovery UI and both
-  // IPCs would fail deterministically against a half-merged tree.
+  // Only 在仓库处于干净的 `ready` 状态时渲染。 During 和 `conflict`
+  // 用户必须先完成正在进行的合并，然后才能再次执行 pull/push — 冲突横幅拥有恢复 UI，并且对于半合并树，两个 IPCs
+  // 将确定性失败。
   if (state.kind !== 'ready') return null;
   const repo = state.repo;
-  // Defensive: `remote` is `GitRemoteInfo | null` per the contract, but
-  // tests that stub repo without the field still land here — treat a
-  // missing property the same as an explicit null.
+  // Defensive：根据合同，`remote` 是 `GitRemoteInfo |
+  // null`，但测试没有该字段的存根存储库仍然落在此处 - 将丢失的属性与显式空值相同。
   const hasRemote = repo.remote != null && repo.remote.url != null;
   const host = repo.remote?.host ?? null;
   const ahead = repo.ahead;
@@ -94,10 +91,8 @@ export function GitPanelRemoteControls() {
     } catch (err) {
       const classification = classifyRemoteAuthError(err, 'pull');
       if (classification.kind === 'auth') {
-        // Surface the shared auth form. Seed the mode from any previously
-        // stored credential so the user lands on the right tab without a
-        // click. When there is no stored credential, fall back to the
-        // URL scheme so SSH remotes open on the SSH tab (not token).
+        // Surface 共享身份验证表单。 Seed 来自任何先前存储的凭据的模式，以便用户无需单击即可登陆右侧选项卡。 When
+        // 没有存储的凭据，请回退到 URL 方案，以便 SSH 远程在 SSH 选项卡（不是令牌）上打开。
         const mode = await preseedAuthMode(host, remoteUrl, getAuth);
         setStep({
           step: 'pull-auth',

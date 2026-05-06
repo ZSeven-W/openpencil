@@ -52,15 +52,15 @@ let serverPort = 0;
 let pendingFilePath: string | null = null;
 
 const isDev = !app.isPackaged;
-// Settings stored in platform-standard app data dir (Electron-managed):
-// macOS: ~/Library/Application Support/OpenPencil/
-// Windows: %APPDATA%\OpenPencil\
-// Linux: ~/.config/OpenPencil/
+// Settings 存储在平台标准应用程序数据目录中（Electron 托管）： macOS: ~/Library/Application
+// Support/OpenPencil/ Windows:
+// %APPDATA%\OpenPencil\ Linux:
+// ~/.config/OpenPencil/
 const SETTINGS_PATH = join(app.getPath('userData'), 'settings.json');
 const PREFS_PATH = join(app.getPath('userData'), 'preferences.json');
 
 // ---------------------------------------------------------------------------
-// Renderer preferences (replaces localStorage which is origin-scoped)
+// Renderer 首选项（替换原始范围内的 localStorage）
 // ---------------------------------------------------------------------------
 
 let prefsCache: Record<string, string> = {};
@@ -421,7 +421,7 @@ function createWindow(): void {
   }
 
   const url = isDev
-    ? `http://localhost:${VITE_DEV_PORT}/editor`
+    ? `http://本地主机：${VITE_DEV_PORT}/editor`
     : `http://${NITRO_HOST}:${serverPort}/editor`;
 
   // Inject traffic-light padding CSS then show window (no flash)

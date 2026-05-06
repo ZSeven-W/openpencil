@@ -11,11 +11,13 @@ interface ImageGenerateBody {
 }
 
 /**
- * POST /api/ai/image-generate
+ * POST /api/ai
  *
- * Multi-provider image generation endpoint.
- * Supports OpenAI (dall-e-3/dall-e-2), Gemini (imagen), and Replicate.
- * Returns { url: string } — either a remote URL or a base64 data URL.
+ * /image-generate Multi-provi
+ * der 图像生成端点。
+ * Supports OpenAI (dall-e-3/dall-e-2)、Gemin
+ i (imagen) 和 Replicate。 Returns { url: string } — 远程 URL 或 Base64 数据
+ URL。
  */
 export default defineEventHandler(async (event) => {
   setResponseHeaders(event, { 'Content-Type': 'application/json' });

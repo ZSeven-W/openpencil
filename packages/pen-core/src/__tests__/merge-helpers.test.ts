@@ -114,7 +114,7 @@ describe('merge-helpers', () => {
       const original = frame('f', [rect('child')]);
       const stripped = stripChildren(original);
       expect((stripped as { children?: unknown }).children).toBeUndefined();
-      // Original is untouched
+      // Original 未受影响
       expect((original as { children?: unknown }).children).toBeDefined();
     });
   });

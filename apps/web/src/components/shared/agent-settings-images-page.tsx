@@ -96,7 +96,7 @@ function TestStatusBadge({ status }: { status: TestStatus }) {
   return <span className="text-[10px] text-destructive shrink-0">Invalid</span>;
 }
 
-/* ---------- Image Search section ---------- */
+/* ---------- Image Search 部分 ---------- */
 
 function ImageSearchSection() {
   const openverseOAuth = useAgentSettingsStore((s) => s.openverseOAuth);
@@ -192,7 +192,7 @@ function ImageSearchSection() {
   );
 }
 
-/* ---------- Provider labels ---------- */
+/* ---------- Provider 标签 ---------- */
 
 const PROVIDER_LABELS: Record<ImageGenProvider, string> = {
   openai: 'OpenAI',
@@ -201,7 +201,7 @@ const PROVIDER_LABELS: Record<ImageGenProvider, string> = {
   custom: 'Custom',
 };
 
-/* ---------- Single profile editor ---------- */
+/* ---------- Single 配置文件编辑器 ---------- */
 
 function ProfileEditor({
   profile,
@@ -304,7 +304,7 @@ function ProfileEditor({
   );
 }
 
-/* ---------- Image Generation section ---------- */
+/* ---------- Image Generation 部分 ---------- */
 
 function ImageGenerationSection() {
   const profiles = useAgentSettingsStore((s) => s.imageGenProfiles);

@@ -1,7 +1,7 @@
 // Parser
 export { parseFigFile } from './fig-parser.js';
 
-// Document conversion
+// Document 转换
 export {
   figmaToPenDocument,
   figmaAllPagesToPenDocument,
@@ -16,10 +16,10 @@ export {
   figmaClipboardToNodes,
 } from './figma-clipboard.js';
 
-// Image resolution
+// Image 分辨率
 export { resolveImageBlobs } from './figma-image-resolver.js';
 
-// Icon lookup injection
+// Icon 查找注入
 export { setIconLookup } from './figma-node-converters.js';
 
 // Types

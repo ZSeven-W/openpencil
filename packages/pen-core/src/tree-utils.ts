@@ -26,10 +26,10 @@ export function createEmptyDocument(): PenDocument {
 }
 
 // ---------------------------------------------------------------------------
-// Page helpers — centralize page-aware children access
+// Page helpers — 集中页面感知的子级访问
 // ---------------------------------------------------------------------------
 
-/** Get the active page object. */
+/** Get 活动页面对象。 */
 export function getActivePage(doc: PenDocument, activePageId: string | null): PenPage | undefined {
   if (!doc.pages || doc.pages.length === 0) return undefined;
   if (!activePageId) return doc.pages[0];
@@ -43,7 +43,7 @@ export function getActivePageChildren(doc: PenDocument, activePageId: string | n
   return doc.children;
 }
 
-/** Return a new document with the active page's children replaced. */
+/** Return 一个新文档，其中活动页面的子文档已被替换。 */
 export function setActivePageChildren(
   doc: PenDocument,
   activePageId: string | null,
@@ -68,7 +68,7 @@ export function getAllChildren(doc: PenDocument): PenNode[] {
   return doc.children;
 }
 
-/** Migrate a legacy document (no pages) to page-based format. */
+/** Migrate 遗留文档（无页面）以基于页面的格式。 */
 export function migrateToPages(doc: PenDocument): PenDocument {
   if (doc.pages && doc.pages.length > 0) return doc;
   return {
@@ -84,7 +84,7 @@ export function migrateToPages(doc: PenDocument): PenDocument {
   };
 }
 
-/** Recursively ensure all nodes in the tree have an `id`. */
+/** Recursively 确保树中的所有节点都有 `id`。 */
 function ensureNodeIdsInTree(nodes: PenNode[]): void {
   for (const node of nodes) {
     if (!node.id) {
@@ -96,7 +96,7 @@ function ensureNodeIdsInTree(nodes: PenNode[]): void {
   }
 }
 
-/** Ensure all nodes in a document have IDs (mutates in place). */
+/** Ensure 文档中的所有节点都有 IDs （就地变异）。 */
 export function ensureDocumentNodeIds(doc: PenDocument): PenDocument {
   if (doc.pages) {
     for (const page of doc.pages) {
@@ -263,8 +263,9 @@ export function getNodeBounds(
 }
 
 /**
- * Find a clear X position to the right of `sourceX + sourceW` that doesn't
- * overlap any sibling (excluding `excludeId`) on the same vertical band.
+ * Find a clear
+ * x position to the right of `sourceX + sourceW` that doesn't overlap any
+ sibling (excluding `excludeId`) on the same vertical band.
  */
 export function findClearX(
   sourceX: number,
@@ -308,7 +309,7 @@ export function findClearX(
   return proposedX;
 }
 
-/** Recursively scale all children's relative positions and sizes. */
+/** Recursively 缩放所有子项的相对位置和大小。 */
 export function scaleChildrenInPlace(
   children: PenNode[],
   scaleX: number,
@@ -332,10 +333,10 @@ export function scaleChildrenInPlace(
 }
 
 // ---------------------------------------------------------------------------
-// Clone utilities
+// Clone 实用程序
 // ---------------------------------------------------------------------------
 
-/** Deep-clone a node tree preserving all IDs. */
+/** Deep - 克隆保留所有 IDs 的节点树。 */
 export function deepCloneNode<T extends PenNode>(node: T): T {
   return structuredClone(node);
 }
@@ -349,7 +350,7 @@ export function cloneNodeWithNewIds(node: PenNode, idGenerator: () => string = n
   return cloned;
 }
 
-/** Clone multiple nodes with new IDs. Optionally strip `reusable` flag and apply position offset. */
+/** Clone 多个节点与新的 IDs。 Optionally 剥离 `reusable` 标志并应用位置偏移。 */
 export function cloneNodesWithNewIds(
   nodes: PenNode[],
   options: { offset?: number; stripReusable?: boolean; idGenerator?: () => string } = {},
@@ -368,7 +369,7 @@ export function cloneNodesWithNewIds(
   });
 }
 
-/** Recursively rotate all children's relative positions and angles. */
+/** Recursively 旋转所有子项的相对位置和角度。 */
 export function rotateChildrenInPlace(children: PenNode[], angleDeltaDeg: number): PenNode[] {
   const rad = (angleDeltaDeg * Math.PI) / 180;
   const cos = Math.cos(rad);
@@ -388,8 +389,8 @@ export function rotateChildrenInPlace(children: PenNode[], angleDeltaDeg: number
 }
 
 /**
- * Recursively render a node tree summary for AI prompts.
- * Shows node IDs, types, names, dimensions, roles, and child counts with indentation.
+ * Recursively
+ * 呈现 AI 提示的节点树摘要。 Shows 节点 IDs、类型、名称、维度、角色和带缩进的子计数。
  */
 export function nodeTreeToSummary(nodes: PenNode[], depth: number = 0): string {
   if (nodes.length === 0) return '';

@@ -22,7 +22,7 @@ export type { VariableDefinition, VariableValue, ThemedValue } from './variables
 // Canvas
 export type { ToolType, ViewportState, SelectionState, CanvasInteraction } from './canvas.js';
 
-// Document model
+// Document 型号
 export type {
   PenPage,
   PenDocument,
@@ -51,7 +51,7 @@ export type {
 // UIKit
 export type { ComponentCategory, KitComponent, UIKit } from './uikit.js';
 
-// Theme presets
+// Theme 预设
 export type { ThemePreset, ThemePresetFile } from './theme-preset.js';
 
 // Design.md

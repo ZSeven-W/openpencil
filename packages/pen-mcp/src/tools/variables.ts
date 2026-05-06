@@ -49,15 +49,16 @@ export interface SetThemesParams {
 }
 
 /**
- * Create, update, or replace theme axes and their variants.
+ * Create，更新或替换
  *
- * Data model: `doc.themes` is `Record<string, string[]>` where
- *   key = theme axis name (e.g. "Color Scheme")
- *   value = variant names (e.g. ["Light", "Dark"])
+ * 主题轴及其变体。 Data 模型：`doc.themes` 是 `Record<string,
+ * string[]>`，其
+ * 中 key = 主题轴名称（例如“Color Scheme”） value = 变体名称（例如
  *
- * With `replace: false` (default), provided axes are merged into existing
- * themes — existing axes not mentioned are preserved.
- * With `replace: true`, existing themes are fully replaced.
+ * [“Light”、“Dark”]）With `replace:
+ * false`（默认），前提是轴合并到现有主题中 - 保留未提及的现有轴。 With
+ * `replace:
+ true`，现有主题已完全替换。
  */
 export async function handleSetThemes(
   params: SetThemesParams,

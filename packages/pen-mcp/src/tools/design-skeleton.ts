@@ -71,7 +71,7 @@ export async function handleDesignSkeleton(
   const pageId = params.pageId;
   const canvasWidth = params.canvasWidth ?? params.rootFrame.width ?? 1200;
 
-  // Build root frame node
+  // Build 根框架节点
   const rootId = generateId();
   const rootNode: PenNode = {
     id: rootId,
@@ -88,7 +88,7 @@ export async function handleDesignSkeleton(
     (rootNode as PenNode & ContainerProps).padding = params.rootFrame.padding;
   }
 
-  // Build section frames as children
+  // Build 部分框架作为子项
   const sectionResults: SectionResult[] = [];
   const rootChildren: PenNode[] = [];
 
@@ -116,7 +116,7 @@ export async function handleDesignSkeleton(
 
     rootChildren.push(sectionNode);
 
-    // Compute content width for this section
+    // Compute 此部分的内容宽度
     const contentWidth = computeContentWidth(sectionNode, canvasWidth);
     const { guidelines, suggestedRoles } = generateSectionGuidelines(
       section,
@@ -136,7 +136,7 @@ export async function handleDesignSkeleton(
 
   (rootNode as PenNode & ContainerProps).children = rootChildren;
 
-  // Auto-replace empty root frame if exists
+  // Auto-如果存在则替换空根框架
   const children = getDocChildren(doc, pageId);
   const emptyIdx = children.findIndex((n) => isEmptyFrame(n));
   if (emptyIdx !== -1) {

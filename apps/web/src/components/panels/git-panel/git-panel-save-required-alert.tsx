@@ -1,8 +1,8 @@
 // apps/web/src/components/panels/git-panel/git-panel-save-required-alert.tsx
 //
-// Inline alert shown above the commit input when a mutating action
-// tripped the withCleanWorkingTree gate. Body quotes the pending action's
-// label (e.g. "commit milestone", "restore", "pull"). Two buttons:
+// 变异操作时，提交输入上方会显示 Inline 警报
+// 绊倒了 withCleanWorkingTree 门。 Body 引用待处理操作的
+// 标签（例如“提交里程碑”、“恢复”、“拉取”）。 Two 按钮：
 //   [保存] → retrySaveRequired (saves the document then re-runs the queued action)
 //   [取消] → cancelSaveRequired (clears the flag without retrying)
 
@@ -17,7 +17,7 @@ export function GitPanelSaveRequiredAlert() {
   const retrySaveRequired = useGitStore((s) => s.retrySaveRequired);
   const cancelSaveRequired = useGitStore((s) => s.cancelSaveRequired);
 
-  // Only render when we're in ready/conflict with a pending action.
+  // 当我们处于 ready/conflict 且有待处理操作时，Only 会渲染。
   if (state.kind !== 'ready' && state.kind !== 'conflict') return null;
   if (!state.saveRequiredFor) return null;
 

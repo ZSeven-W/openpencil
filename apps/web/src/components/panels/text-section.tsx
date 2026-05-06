@@ -108,7 +108,7 @@ export default function TextSection({ node, onUpdate }: TextSectionProps) {
     <div className="space-y-1.5">
       <SectionHeader title={t('text.typography')} />
 
-      {/* Font family */}
+      {/* Font 家族 */}
       <FontPicker
         value={fontFamily}
         onChange={(v) => onUpdate({ fontFamily: v } as Partial<PenNode>)}
@@ -140,7 +140,7 @@ export default function TextSection({ node, onUpdate }: TextSectionProps) {
         />
       </div>
 
-      {/* Line height + Letter spacing */}
+      {/* Line 高度 + Letter 间距 */}
       <div className="flex items-center justify-between text-[9px] text-muted-foreground px-0.5">
         <span>{t('text.lineHeight')}</span>
         <span>{t('text.letterSpacing')}</span>
@@ -161,7 +161,7 @@ export default function TextSection({ node, onUpdate }: TextSectionProps) {
         />
       </div>
 
-      {/* Horizontal alignment */}
+      {/* Horizontal 对齐 */}
       <div className="space-y-0.5">
         <span className="text-[10px] text-muted-foreground">{t('text.horizontal')}</span>
         <div className="flex items-center gap-0.5">
@@ -181,7 +181,7 @@ export default function TextSection({ node, onUpdate }: TextSectionProps) {
         </div>
       </div>
 
-      {/* Vertical alignment */}
+      {/* Vertical 对齐 */}
       <div className="space-y-0.5">
         <span className="text-[10px] text-muted-foreground">{t('text.vertical')}</span>
         <div className="flex items-center gap-0.5">

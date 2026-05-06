@@ -30,14 +30,14 @@ interface PendingEntry {
 
 const pendingRequests = new Map<string, PendingEntry>();
 
-/** Allocate a new request id. */
+/** Allocate 新的请求 ID。 */
 export function allocateRequestId(): string {
   return randomUUID();
 }
 
 /**
- * Register a pending screenshot request and return a promise that resolves
- * when the renderer posts its response or rejects on timeout.
+ * Register
+ * 一个待处理的屏幕截图请求，并返回一个承诺，该承诺在渲染器发布其响应或超时时拒绝时解决。
  */
 export function registerPending(requestId: string, timeoutMs: number): Promise<ScreenshotResponse> {
   return new Promise<ScreenshotResponse>((resolve, reject) => {

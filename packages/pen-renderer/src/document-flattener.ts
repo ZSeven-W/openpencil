@@ -15,7 +15,7 @@ import { wrapLine } from './paint-utils.js';
 import type { RenderNode } from './types.js';
 
 // ---------------------------------------------------------------------------
-// Pre-measure text widths using Canvas 2D (browser fonts)
+// Pre-使用 Canvas 2d（浏览器字体）测量文本宽度
 // ---------------------------------------------------------------------------
 
 let _measureCtx: CanvasRenderingContext2D | null = null;
@@ -28,15 +28,15 @@ function getMeasureCtx(): CanvasRenderingContext2D {
 }
 
 /**
- * Walk the node tree and fix text HEIGHTS using actual Canvas 2D wrapping.
+ * Walk 节点树并使用实
  *
- * Only targets fixed-width text with auto height — these are the cases where
- * estimateTextHeight may underestimate because its width estimation differs
- * from Canvas 2D's actual text measurement, leading to incorrect wrap counts.
+ * 际的 Canvas 2d 换行修复文本 HEIGHTS。 Only 的目标是具有自动高度的固定宽度文本 - 在这些情况下
+ * estimateText
+ * Height 可能会低估，因为其宽度估计与 Canvas 2d 的实际文本测量不同，从而导致换行计数不正确。 IMPORTANT：This
  *
- * IMPORTANT: This function never touches WIDTH or container-relative sizing
- * strings (fill_container / fit_content). Changing widths breaks layout
- * resolution in computeLayoutPositions.
+ * 函数永远不会触及 WIDTH 或容器相对大小字符串 (fill_container / fit_content)。 Changing 宽度破坏了
+ * computeLayoutPositions 中的布局分辨率。
+ *
  */
 export function premeasureTextHeights(nodes: PenNode[]): PenNode[] {
   return nodes.map((node) => {

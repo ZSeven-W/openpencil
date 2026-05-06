@@ -1,11 +1,11 @@
 /**
- * Build an SVG path `d` string for an ellipse arc (pie slice, donut segment, or ring).
+ * Build SVG 路径 `d` 椭圆弧（饼图、圆环段或环）的字符串。
  *
- * @param w         - Bounding box width
- * @param h         - Bounding box height
- * @param startDeg  - Start angle in degrees (0 = right / 3 o'clock, clockwise)
- * @param sweepDeg  - Sweep angle in degrees (extent of the arc)
- * @param inner     - Inner radius ratio 0..1 (0 = pie, >0 = donut)
+ * @param w         - Bounding 框宽度
+ * @param h         - Bounding 盒子高度
+ * @param startDeg  - Start 角度（0 = 右/3 点钟，顺时针）
+ * @param sweepDeg  - Sweep 角度（弧的长度）
+ * @param inner     - Inner 半径比 0..1（0 = 饼图，>0 = 甜甜圈）
  */
 export function buildEllipseArcPath(
   w: number,
@@ -23,7 +23,7 @@ export function buildEllipseArcPath(
   const cx = rx;
   const cy = ry;
 
-  // Outer arc endpoints
+  // Outer 圆弧端点
   const ox1 = cx + rx * Math.cos(startRad);
   const oy1 = cy + ry * Math.sin(startRad);
   const ox2 = cx + rx * Math.cos(endRad);
@@ -31,7 +31,7 @@ export function buildEllipseArcPath(
 
   const large = sweepRad > Math.PI ? 1 : 0;
 
-  // Near-full circle (>=~359.9°): split into two semicircular arcs
+  // Near-整圆（>=~359.9°）：分成两个半圆弧
   if (sweepRad > Math.PI * 2 - 0.02) {
     const midRad = startRad + Math.PI;
     const omx = cx + rx * Math.cos(midRad);

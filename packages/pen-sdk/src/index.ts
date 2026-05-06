@@ -1,23 +1,23 @@
 /**
  * @zseven-w/pen-sdk — OpenPencil SDK
  *
- * High-level API for working with OpenPencil (.op) design files.
- * Combines types, document operations, code generation, and Figma import.
+ * High 级 API 用于处理 OpenPencil (.op) 设计文件。
+ * Combines 类型、文档操作、代码生成和 Figma 导入。
  *
  * @example
  * ```ts
  * import {
  *   type PenDocument,
- *   createEmptyDocument,
- *   normalizePenDocument,
- *   parseFigFile,
+ * createEmptyDocument,
+ * normalizePenDocument,
+ * parseFigFile,
  * } from '@zseven-w/pen-sdk'
  * ```
  */
 
 // ── Types ──────────────────────────────────────────────────────────────
 export type {
-  // Document model
+  // Document 型号
   PenDocument,
   PenNode,
   PenNodeType,
@@ -61,16 +61,16 @@ export type {
   UIKit,
   KitComponent,
   ComponentCategory,
-  // Theme presets
+  // Theme 预设
   ThemePreset,
   ThemePresetFile,
 } from '@zseven-w/pen-types';
 
-// ── Core: Document operations ──────────────────────────────────────────
+// ── Core：Document 操作──────────────────────────────────────────
 export {
-  // ID generation
+  // ID 一代
   generateId,
-  // Document creation & tree operations
+  // Document 创建和树操作
   createEmptyDocument,
   DEFAULT_FRAME_ID,
   DEFAULT_PAGE_ID,
@@ -82,7 +82,7 @@ export {
   insertNodeInTree,
   isDescendantOf,
   getNodeBounds,
-  // Page operations
+  // Page 操作
   getActivePage,
   getActivePageChildren,
   setActivePageChildren,
@@ -106,23 +106,23 @@ export {
   getNodeWidth,
   getNodeHeight,
   inferLayout,
-  // Text measurement
+  // Text 测量
   parseSizing,
   defaultLineHeight,
   estimateTextWidth,
   estimateTextHeight,
   resolveTextContent,
   hasCjkText,
-  // Arc path
+  // Arc 路径
   buildEllipseArcPath,
   isArcEllipse,
-  // Boolean operations
+  // Boolean 操作
   type BooleanOpType,
   canBooleanOp,
   executeBooleanOp,
 } from '@zseven-w/pen-core';
 
-// ── Codegen types (from pen-types) ──────────────────────────────────────
+// ── Codegen 类型（来自笔类型） ──────────────────────────────────────
 export type {
   Framework,
   PlannedChunk,
@@ -143,7 +143,7 @@ export type {
 } from '@zseven-w/pen-types';
 export { FRAMEWORKS } from '@zseven-w/pen-types';
 
-// ── Figma: .fig file import ────────────────────────────────────────────
+// ── Figma: .fig 文件导入 ────────────────────────────────────────────
 export {
   parseFigFile,
   figmaToPenDocument,
@@ -159,7 +159,7 @@ export {
   type FigmaImportLayoutMode,
 } from '@zseven-w/pen-figma';
 
-// ── Engine: Headless design engine ────────────────────────────────────
+// ── Engine：Headless 设计引擎────────────────────────────────────
 export {
   DesignEngine,
   TypedEventEmitter,
@@ -179,15 +179,15 @@ export {
   type CodeResult,
 } from '@zseven-w/pen-engine';
 
-// ── React: React hooks and components ─────────────────────────────────
+// ── React: React 钩子和组件 ──────────────────────────────────
 export * from '@zseven-w/pen-react';
 
-// ── Renderer: CanvasKit/Skia rendering engine ────────────────────────
+// ── Renderer：CanvasKit/Skia 渲染引擎────────────────────────
 export {
   // Primary API
   loadCanvasKit,
   PenRenderer,
-  // Low-level
+  // Low 级别
   SkiaNodeRenderer,
   SkiaFontManager,
   SkiaImageLoader,

@@ -1,8 +1,7 @@
-// @vitest-environment jsdom
+// @vitest-环境 jsdom
 import { describe, it, expect, vi } from 'vitest';
 
-// paper.js self-initializes a Canvas 2D context on import, which crashes in
-// jsdom. Mock it before any transitive import can trigger the real module.
+// paper.js 在导入时自初始化 Canvas 2d 上下文，这会在 jsdom 中崩溃。 Mock 在任何传递导入之前都可以触发真正的模块。
 vi.mock('paper', () => ({
   default: {
     PaperScope: class {},
@@ -14,11 +13,11 @@ vi.mock('paper', () => ({
 import { parseSvgToNodes } from '@/utils/svg-parser';
 
 // ---------------------------------------------------------------------------
-// 1. SVG parser SKIP_TAGS — dangerous elements are stripped
+// 1. SVG 解析器 SKIP_TAGS — 危险元素被剥离
 // ---------------------------------------------------------------------------
 
 describe('SVG parser SKIP_TAGS', () => {
-  /** Recursively collect all node names in the tree */
+  /** Recursively 收集树中所有节点名称 */
   function collectNames(nodes: { name?: string; children?: any[] }[]): string[] {
     const names: string[] = [];
     for (const n of nodes) {
@@ -28,7 +27,7 @@ describe('SVG parser SKIP_TAGS', () => {
     return names;
   }
 
-  /** Recursively collect all node types */
+  /** Recursively 收集所有节点类型 */
   function collectTypes(nodes: { type?: string; children?: any[] }[]): string[] {
     const types: string[] = [];
     for (const n of nodes) {
@@ -47,7 +46,7 @@ describe('SVG parser SKIP_TAGS', () => {
     const nodes = parseSvgToNodes(svg);
     const names = collectNames(nodes).map((n) => n.toLowerCase());
     expect(names).not.toContain('script');
-    // The rect should still be present
+    // The 矩形应该仍然存在
     expect(nodes.length).toBeGreaterThan(0);
   });
 
@@ -76,7 +75,7 @@ describe('SVG parser SKIP_TAGS', () => {
       </svg>`;
     const nodes = parseSvgToNodes(svg);
     const types = collectTypes(nodes);
-    // Only rectangle-type nodes should remain, no animation nodes
+    // Only 矩形类型节点应保留，无动画节点
     for (const t of types) {
       expect(['rectangle', 'frame', 'path', 'ellipse', 'line', 'text', 'group']).toContain(t);
     }
@@ -91,7 +90,7 @@ describe('SVG parser SKIP_TAGS', () => {
         <foreignObject><body xmlns="http://www.w3.org/1999/xhtml"><iframe/></body></foreignObject>
       </svg>`;
     const nodes = parseSvgToNodes(svg);
-    // Should have a wrapping frame with 2 children (rect + circle)
+    // Should 有一个包含 2 个子元素的环绕框架（矩形 + 圆形）
     expect(nodes).toHaveLength(1);
     expect(nodes[0].type).toBe('frame');
     expect('children' in nodes[0] && nodes[0].children).toHaveLength(2);
@@ -99,7 +98,7 @@ describe('SVG parser SKIP_TAGS', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 2. SVG parser getAttr — ReDoS-safe regex escaping
+// 2. SVG 解析器 getAttr — ReDoS 安全正则表达式转义
 // ---------------------------------------------------------------------------
 
 describe('SVG parser getAttr ReDoS safety', () => {
@@ -113,7 +112,7 @@ describe('SVG parser getAttr ReDoS safety', () => {
     const nodes = parseSvgToNodes(svg);
     const elapsed = performance.now() - start;
 
-    // Must complete in under 100ms (would hang without escaping)
+    // Must 在 100 毫秒内完成（将挂起而不转义）
     expect(elapsed).toBeLessThan(100);
     expect(nodes.length).toBeGreaterThan(0);
   });
@@ -133,9 +132,7 @@ describe('SVG parser getAttr ReDoS safety', () => {
   });
 });
 
-// NOTE: Figma parser decompression limits are internal constants in
-// fig-parser.ts (MAX_COMPRESSED_SIZE / MAX_UNZIPPED_SIZE / MAX_IMAGE_SIZE).
-// They guard against zip bombs during .fig file decompression. Testing them
-// requires crafting valid .fig binaries with oversized payloads, and the
-// WASM-based parser hangs vitest's jsdom environment, so these are verified
-// via code review.
+// NOTE：Figma 解析器解压缩限制是 fig-parser.ts (MAX_COMPRESSED_SIZE /
+// MAX_UNZIPPED_SIZE / MAX_IMAGE_SIZE) 中的内部常量。 They 在 .fig 文件解压过程中防范 zip 炸弹。
+// Testing 它们需要制作具有超大有效负载的有效 .fig 二进制文件，并且基于 WASM 的解析器挂起 vitest 的 jsdom
+// 环境，因此这些是通过代码审查进行验证的。

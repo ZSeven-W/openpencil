@@ -46,7 +46,7 @@ export default function ExportDialog({ open, onClose }: ExportDialogProps) {
   const handleExport = () => {
     if (busy) return;
     setBusy(true);
-    // Yield to React so the spinner shows before the heavy CanvasKit work blocks the main thread.
+    // Yield 到 React，因此微调器会在繁重的 CanvasKit 工作阻塞主线程之前显示。
     setTimeout(() => {
       try {
         const doc = useDocumentStore.getState().document;

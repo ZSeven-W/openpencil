@@ -1,20 +1,18 @@
-// @vitest-environment jsdom
+// @vitest-环境 jsdom
 // apps/web/src/components/panels/git-panel/__tests__/git-panel-auth-form.test.tsx
 //
-// Shared auth form — used by BOTH pull and push retry flows. The tests
-// here cover the three acceptance criteria for Phase 6b:
-//   1. token-mode validation (token required) + username default
-//   2. SSH-mode selection from sshKeys
-//   3. remember toggle flows through to onSubmit
+// Shared 身份验证表单 — 由 BOTH 拉取和推送重试流程使用。 The 测试
+// 这里介绍 Phase 6b 的三个验收标准：
+//   1. 令牌模式验证（需要令牌）+用户名默认值
+//   2. SSH-从 sshKeys 中选择模式
+//   3. 记住切换流经 onSubmit
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/react';
 import type { GitPublicSshKeyInfo } from '@/services/git-types';
 
-// Mutable sshKeys so individual tests can seed the picker. The store mock
-// below re-reads the live value on every selector call.
+// Mutable sshKeys 因此单独的测试可以为选择器提供种子。下面的 The store 模拟会在每次选择器调用时重新读取实时值。
 let mockedSshKeys: GitPublicSshKeyInfo[] = [];
-// Mutable refreshSshKeys mock so tests can observe the mount-time fetch
-// and swap implementations. Reset in beforeEach.
+// Mutable refreshSshKeys 模拟，因此测试可以观察挂载时获取和交换实现。 Reset 中的 beforeEach。
 let mockedRefreshSshKeys = vi.fn(async () => {});
 
 interface StoreShape {

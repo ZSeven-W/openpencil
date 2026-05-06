@@ -14,12 +14,12 @@ import {
   getAllChildren,
 } from './document-tree-utils';
 
-/** Shortcut: get the active page's children from the current state. */
+/** Shortcut：从当前状态获取活动页面的子级。 */
 function _children(s: { document: PenDocument }): PenNode[] {
   return getActivePageChildren(s.document, useCanvasStore.getState().activePageId);
 }
 
-/** Shortcut: return a new document with active page's children replaced. */
+/** Shortcut：返回一个新文档，其中活动页面的子级已替换。 */
 function _setChildren(doc: PenDocument, children: PenNode[]): PenDocument {
   return setActivePageChildren(doc, useCanvasStore.getState().activePageId, children);
 }
@@ -46,7 +46,7 @@ export function createComponentActions(
       const children = _children(state);
       const node = findNodeInTree(children, nodeId);
       if (!node) return;
-      // Only container types (frame, group, rectangle) can be made reusable
+      // Only 容器类型（框架、组、矩形）可以重复使用
       if (node.type !== 'frame' && node.type !== 'group' && node.type !== 'rectangle') return;
       if ('reusable' in node && node.reusable) return;
       useHistoryStore.getState().pushState(state.document);
@@ -68,7 +68,7 @@ export function createComponentActions(
       const node = findNodeInTree(children, nodeId);
       if (!node) return;
 
-      // Case 1: Detach a reusable component (remove reusable flag)
+      // Case 1：Detach 可重用组件（删除可重用标志）
       if ('reusable' in node && node.reusable) {
         useHistoryStore.getState().pushState(state.document);
         set((s) => ({
@@ -83,21 +83,21 @@ export function createComponentActions(
         return nodeId;
       }
 
-      // Case 2: Detach an instance (RefNode -> independent node tree)
+      // Case 2：Detach 实例（RefNode -> 独立节点树）
       if (node.type === 'ref') {
         const component = findNodeInTree(allNodes, node.ref);
         if (!component) return;
 
         useHistoryStore.getState().pushState(state.document);
 
-        // Apply overrides to a copy of the component before cloning IDs
+        // Apply 在克隆 IDs 之前覆盖组件的副本
         const source = structuredClone(component);
-        // Apply top-level visual overrides (fill, stroke, etc.)
+        // Apply 顶级视觉覆盖（填充、描边等）
         const topOverrides = node.descendants?.[node.ref];
         if (topOverrides) {
           Object.assign(source, topOverrides);
         }
-        // Apply child-level overrides
+        // Apply 子级覆盖
         if (node.descendants && 'children' in source && source.children) {
           source.children = source.children.map((child: PenNode) => {
             const override = node.descendants?.[child.id];
@@ -105,9 +105,9 @@ export function createComponentActions(
           });
         }
 
-        // Clone with new IDs
+        // Clone 与新 IDs
         const detached = cloneNodeWithNewIds(source);
-        // Apply all direct instance properties (position, size, meta)
+        // Apply 所有直接实例属性（位置、大小、元）
         const detachedRecord = detached as unknown as Record<string, unknown>;
         for (const [key, val] of Object.entries(node)) {
           if (
@@ -125,7 +125,7 @@ export function createComponentActions(
         if (!detached.name) detached.name = source.name;
         delete detachedRecord.reusable;
 
-        // Replace the RefNode with the detached tree
+        // Replace 具有分离树的 RefNode
         const parent = findParentInTree(children, nodeId);
         const parentId = parent ? parent.id : null;
         const siblings = parent ? ('children' in parent ? (parent.children ?? []) : []) : children;

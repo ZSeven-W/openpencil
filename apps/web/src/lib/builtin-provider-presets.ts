@@ -8,11 +8,11 @@ export interface BuiltinPresetConfig {
   label: string;
   type: 'anthropic' | 'openai-compat';
   baseURL?: string;
-  /** Alternative baseURL for the other API format (if provider supports both) */
+  /** Alternative baseURL 用于其他 API 格式（如果提供商支持两者） */
   altBaseURL?: string;
   /** Region-specific alternative baseURLs (overrides altBaseURL when region is selected) */
   altRegions?: { cn: string; global: string };
-  /** The API format that altBaseURL corresponds to */
+  /** The API 对应的格式 */
   altType?: 'anthropic' | 'openai-compat';
   placeholder: string;
   modelPlaceholder: string;
@@ -236,10 +236,10 @@ const PRESET_URL_LOOKUP = Object.entries(BUILTIN_PROVIDER_PRESETS).reduce(
       acc[cfg.regions.cn.baseURL] = k;
       acc[cfg.regions.global.baseURL] = k;
     }
-    // Include alternative-format URLs so a saved Anthropic-format config
-    // for an OpenAI-default preset (or vice versa) still maps back to the
-    // correct preset on reload. Without this the canonicalize pass falls
-    // through to inferBuiltinProviderPreset and may collapse to 'custom'.
+    // Include 替代格式 URLs 所以保存了 Anthropic 格式配置
+// for an OpenAI-default preset (or vice versa) still maps back to the
+    // 重新加载时正确预设。 Without 这个规范化通行证落下
+    // 到 inferBuiltinProviderPreset 并可能折叠为“自定义”。
     if (cfg.altBaseURL) acc[cfg.altBaseURL] = k;
     if (cfg.altRegions) {
       acc[cfg.altRegions.cn] = k;
@@ -276,9 +276,9 @@ function lookupPresetByURL(url?: string): BuiltinProviderPreset | undefined {
   return PRESET_URL_LOOKUP[normalizedURL] ?? LEGACY_URL_LOOKUP[normalizedURL];
 }
 
-/** Whether `url` equals `base`, or `base` followed by a `/v<digits>` segment.
- *  Catches legacy entries where an extra version suffix was appended manually
- *  (`/v1`, `/v3`, etc.) on top of a base that already has its own version. */
+/** Whether `url` 等于 `base`，或 `base` 后跟 `/v<digits>` 段。 Catches
+ * 旧条目，在已有版本的基础之上手动附加额外版本后缀（`/v1`、`/v3` 等）。
+ *  */
 function urlMatchesIgnoringVersionSuffix(url: string, base: string): boolean {
   if (url === base) return true;
   if (!url.startsWith(base + '/')) return false;
@@ -318,7 +318,7 @@ export function inferBuiltinProviderRegion(
   return inferRegionFromURL(inferBuiltinProviderPreset(config), normalizeURL(config.baseURL));
 }
 
-/** Get baseURL for a specific API format. Returns altBaseURL if format matches altType. */
+/** Get baseURL 用于特定的 API 格式。 Returns altBaseURL 如果格式匹配 altType。 */
 export function getBaseURLForFormat(
   preset: BuiltinProviderPreset,
   format: 'anthropic' | 'openai-compat',
@@ -333,7 +333,7 @@ export function getBaseURLForFormat(
   return cfg.baseURL;
 }
 
-/** Check if a preset supports a given API format (has altBaseURL for it). */
+/** Check 如果预设支持给定的 API 格式（有 altBaseURL）。 */
 export function presetSupportsFormat(
   preset: BuiltinProviderPreset,
   format: 'anthropic' | 'openai-compat',
@@ -351,7 +351,7 @@ export function getCanonicalBuiltinBaseURL(
   return cfg.baseURL;
 }
 
-/** Whether the given preset's URL family covers `normalizedURL`. */
+/** Whether 给定预设的 URL 系列涵盖 `normalizedURL`。 */
 function presetMatchesURL(preset: BuiltinProviderPreset, normalizedURL: string): boolean {
   const cfg = BUILTIN_PROVIDER_PRESETS[preset];
   if (cfg.baseURL && urlMatchesIgnoringVersionSuffix(normalizedURL, cfg.baseURL)) return true;
@@ -373,13 +373,11 @@ export function canonicalizeBuiltinProviderConfig(
   if (config.preset === 'custom') return config;
 
   const normalizedURL = normalizeURL(config.baseURL);
-  // Respect an explicit preset when its URL family covers the configured
-  // baseURL — this is the path that disambiguates presets sharing the same
-  // alt URL (e.g. zhipu vs glm-coding both point at /api/anthropic). When
-  // the explicit preset is genuinely stale (URL no longer fits the family),
-  // fall back to URL-based lookup so legacy entries can self-heal.
-  // Note: config.preset === 'custom' is already handled by the early return above,
-  // so config.preset here is non-custom (or undefined).
+  // 当 URL 系列覆盖已配置的 baseURL 时，Respect 是一个显式预设 — 这是消除共享相同 alt URL
+  // 的预设歧义的路径（例如 zhipu 与 glm-coding 都指向 /api/anthropic）。 When
+  // 显式预设确实已经过时（URL 不再适合该系列），回退到基于 URL 的查找，以便遗留条目可以自我修复。 Note:
+  // config.preset === 'custom' 已经被上面的早期返回处理了，所以这里的 config.preset
+  // 是非自定义的（或未定义的）。
   const preset =
     config.preset &&
     BUILTIN_PROVIDER_PRESETS[config.preset] &&
@@ -389,9 +387,8 @@ export function canonicalizeBuiltinProviderConfig(
   if (preset === 'custom') return config;
 
   const region = inferRegionFromURL(preset, normalizedURL);
-  // Pick the canonical URL for the user's chosen API format. Without this
-  // the alternative-format selection (e.g. Anthropic on a preset whose
-  // default is OpenAI-compat) would be silently overwritten on save.
+  // Pick 用户选择的 API 格式的规范 URL。 Without 这个替代格式选择（例如默认为 OpenAI-compat 的预设上的
+  // Anthropic）将在保存时被静默覆盖。
   const canonicalBaseURL =
     getBaseURLForFormat(preset, config.type, region) ?? getCanonicalBuiltinBaseURL(preset, region);
 

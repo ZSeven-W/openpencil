@@ -39,7 +39,7 @@ import { addRecentFile } from '@/utils/recent-files';
 import { useAgentSettingsStore } from '@/stores/agent-settings-store';
 import type { AIProviderType } from '@/types/agent-settings';
 
-/** Convert a computed CSS color value (oklch/rgb/etc.) to #rrggbb via an offscreen canvas. */
+/** 用离屏 canvas 把 CSS 颜色值（oklch/rgb 等）转换成 `#rrggbb`。 */
 function cssToHex(raw: string): string | null {
   const v = raw.trim();
   if (!v) return null;
@@ -47,7 +47,7 @@ function cssToHex(raw: string): string | null {
     const ctx = document.createElement('canvas').getContext('2d');
     if (!ctx) return null;
     ctx.fillStyle = v;
-    const hex = ctx.fillStyle; // browser normalises to #rrggbb
+    const hex = ctx.fillStyle; // 浏览器标准化为#rrggbb
     return hex.startsWith('#') ? hex : null;
   } catch {
     return null;
@@ -140,10 +140,11 @@ export default function TopBar() {
   const [fileMenuOpen, setFileMenuOpen] = useState(false);
   const [saveIndicator, setSaveIndicator] = useState(false);
 
-  // Read computed CSS --card and --card-foreground as hex for Electron overlay
+  // 读取计算后的 `--card` / `--card-foreground`，
+  // 转成十六进制后同步给 Electron 标题栏覆盖层。
   const syncOverlayColors = useCallback((t: 'dark' | 'light') => {
     if (!window.electronAPI?.setTheme) return;
-    // Allow a frame for CSS to apply after class toggle
+    // 切换 class 后等一帧，确保 CSS 已经生效。
     requestAnimationFrame(() => {
       const s = getComputedStyle(document.documentElement);
       const bg = cssToHex(s.getPropertyValue('--card'));
@@ -152,9 +153,9 @@ export default function TopBar() {
     });
   }, []);
 
-  // Restore saved theme after hydration.
-  // initAppStorage() must run first in Electron to populate the IPC cache,
-  // since appStorage.getItem is synchronous.
+  // hydration 之后恢复上次保存的主题。
+  // 在 Electron 里要先执行 `initAppStorage()`，
+  // 因为 `appStorage.getItem()` 是同步读取，它依赖 IPC 缓存已准备好。
   useEffect(() => {
     const restore = async () => {
       await initAppStorage();
@@ -170,7 +171,7 @@ export default function TopBar() {
     restore();
   }, [syncOverlayColors]);
 
-  // Listen to fullscreen changes
+  // 监听全屏状态变化
   useEffect(() => {
     const handler = () => setIsFullscreen(!!document.fullscreenElement);
     document.addEventListener('fullscreenchange', handler);
@@ -197,9 +198,9 @@ export default function TopBar() {
     }
   }, []);
 
-  // Bare save: delegates to the store. Used by handleNew/handleOpenRecent
-  // when they need to save before discarding the current doc; the indicator
-  // flash is owned by handleSaveWithFeedback below.
+  // 纯保存动作：直接委托给 store。
+  // `handleNew` / `handleOpenRecent` 在丢弃当前文档前会调用它，
+  // 而“保存成功提示闪烁”的 UI 反馈由下面的 `handleSaveWithFeedback` 负责。
   const handleSave = useCallback(async (): Promise<string | null> => {
     try {
       syncCanvasPositionsToStore();
@@ -212,8 +213,8 @@ export default function TopBar() {
   const handleSaveWithFeedback = useCallback(async () => {
     const savedName = await handleSave();
     if (!savedName) {
-      // User cancelled the save dialog or save failed.
-      // Critically: do NOT add to recent files and do NOT flash the indicator.
+      // 用户取消了保存对话框，或保存本身失败了。
+      // 这里不要写入最近文件，也不要触发保存成功提示。
       return;
     }
     const filePath = useDocumentStore.getState().filePath;
@@ -228,8 +229,9 @@ export default function TopBar() {
     } catch (err) {
       console.error('[SaveAs] syncCanvasPositionsToStore failed:', err);
     }
-    // Direct saveAs() — does NOT pre-mutate filePath/fileHandle. The store
-    // action handles the dialog and only updates state on confirmed success.
+    // 直接调用 `saveAs()`。
+    // 这里不会预先改动 `filePath` / `fileHandle`，
+    // store 只会在用户确认且写入成功后更新状态。
     const savedName = await useDocumentStore.getState().saveAs();
     if (!savedName) return;
     const filePath = useDocumentStore.getState().filePath;
@@ -279,7 +281,7 @@ export default function TopBar() {
           useDocumentStore.getState().loadDocument(doc, name, null, result.filePath);
           requestAnimationFrame(() => zoomToFitContent());
         } catch {
-          /* invalid file */
+          /* 非法文件 */
         }
       });
     },
@@ -311,7 +313,7 @@ export default function TopBar() {
           useDocumentStore.getState().loadDocument(doc, name, null, result.filePath);
           requestAnimationFrame(() => zoomToFitContent());
         } catch {
-          /* invalid file */
+          /* 非法文件 */
         }
       });
     } else if (supportsFileSystemAccess()) {
@@ -335,7 +337,7 @@ export default function TopBar() {
 
   return (
     <div className="h-10 bg-card border-b border-border flex items-center px-2 shrink-0 select-none app-region-drag">
-      {/* Left section */}
+      {/* 左侧区域 */}
       <div className="flex items-center gap-0.5 app-region-no-drag electron-traffic-light-pad">
         <Tooltip>
           <TooltipTrigger asChild>
@@ -355,7 +357,7 @@ export default function TopBar() {
 
         <div className="w-px h-3.5 bg-border/60 mx-1" />
 
-        {/* File menu dropdown trigger */}
+        {/* 文件菜单下拉触发器 */}
         <div className="relative">
           <Tooltip>
             <TooltipTrigger asChild>
@@ -400,7 +402,7 @@ export default function TopBar() {
         </Tooltip>
       </div>
 
-      {/* Center section — file name + git indicator */}
+      {/* 中间区域：文件名 + Git 状态指示器 */}
       <div className="flex min-w-0 flex-1 items-center justify-center gap-1.5">
         <span className="truncate text-xs leading-none text-foreground" suppressHydrationWarning>
           {displayName}
@@ -418,7 +420,7 @@ export default function TopBar() {
         </div>
       </div>
 
-      {/* Right section */}
+      {/* 右侧区域 */}
       <div className="flex items-center gap-0.5 app-region-no-drag electron-win-controls-pad">
         <AgentStatusButton />
 

@@ -9,7 +9,7 @@ import { designMdColorsToVariables, extractDesignMdFromDocument } from '@/utils/
 import type { DesignMdSpec, DesignMdColor } from '@/types/design-md';
 
 // ---------------------------------------------------------------------------
-// useDesignMdActions — import/export, sync colors, clear
+// useDesignMdActions — import/export，同步颜色，清晰
 // ---------------------------------------------------------------------------
 
 export function useDesignMdActions() {
@@ -51,7 +51,7 @@ export function useDesignMdActions() {
 }
 
 // ---------------------------------------------------------------------------
-// DesignMdHeaderActions — import/export/AI buttons in the header bar
+// DesignMdHeaderActions — 标题栏中的 import/export/AI 按钮
 // ---------------------------------------------------------------------------
 
 interface DesignMdHeaderActionsProps {
@@ -113,7 +113,7 @@ export function DesignMdHeaderActions({
 }
 
 // ---------------------------------------------------------------------------
-// DesignMdEmptyState — shown when there is no parsed content
+// DesignMdEmptyState — 没有解析内容时显示
 // ---------------------------------------------------------------------------
 
 interface DesignMdEmptyStateProps {
@@ -136,7 +136,7 @@ export function DesignMdEmptyState({
   const { t } = useTranslation();
 
   if (designMd?.raw) {
-    // designMd exists but parser couldn't extract sections — show raw
+    // designMd 存在，但解析器无法提取部分 — 显示原始数据
     return (
       <div className="flex flex-col items-center justify-center h-full gap-4 px-6">
         <div className="w-full h-full flex flex-col gap-3 py-3">
@@ -167,7 +167,7 @@ export function DesignMdEmptyState({
     );
   }
 
-  // No designMd at all — empty state
+  // No designMd at all — 空状态
   return (
     <div className="flex flex-col items-center justify-center h-full gap-4 px-6">
       <div className="w-10 h-10 rounded-xl bg-muted/50 flex items-center justify-center">
@@ -196,7 +196,7 @@ export function DesignMdEmptyState({
 }
 
 // ---------------------------------------------------------------------------
-// DesignMdGeneratingOverlay — shown while AI is streaming
+// DesignMdGeneratingOverlay — 在 AI 流式传输时显示
 // ---------------------------------------------------------------------------
 
 interface DesignMdGeneratingOverlayProps {

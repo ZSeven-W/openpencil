@@ -1,10 +1,10 @@
 import { useState, useRef, useEffect } from 'react';
 import { cn } from '@/lib/utils';
 
-/** Convert any CSS color string to #rrggbb for <input type="color">. */
+/** Convert 任何 CSS 颜色字符串为 #rrggbb <input type="color">。 */
 function toHex7(color: string): string {
   if (color.startsWith('#') && color.length >= 7) return color.slice(0, 7);
-  // Handle rgb()/rgba() by parsing channels
+  // Handle rgb()/rgba() 通过解析通道
   const m = color.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/);
   if (m) {
     const r = Number(m[1]).toString(16).padStart(2, '0');

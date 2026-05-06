@@ -12,10 +12,11 @@ interface ModelEntry {
 }
 
 /**
- * POST /api/ai/provider-models
- * Proxies model list requests to external providers to avoid CORS issues.
- * Body: { baseURL: string, apiKey?: string }
- * Returns: { models: Array<{ id: string, name: string }> }
+ * POST /api/ai
+ * /provider-models Proxies
+ * 模型列出对外部提供商的请求，以避免 CORS 问题。 Body: { baseURL: 字符串, apiKey?: 字符串 }
+ * Returns: { 型号: Array<{ id: 字符串, 名称: 字符串 }>
+ }
  */
 export default defineEventHandler(async (event) => {
   const body = await readBody<ProviderModelsBody>(event);

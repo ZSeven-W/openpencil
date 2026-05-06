@@ -6,7 +6,7 @@ import {
 } from '@/canvas/canvas-text-measure';
 
 // ---------------------------------------------------------------------------
-// Pure utility functions extracted from design-generator.ts
+// Pure 从 design-generator.ts 中提取的实用函数
 // ---------------------------------------------------------------------------
 
 export function clamp(value: number, min: number, max: number): number {
@@ -86,12 +86,13 @@ export function parsePaddingValues(
 }
 
 // ---------------------------------------------------------------------------
-// Text measurement utilities
+// Text 测量实用程序
 // ---------------------------------------------------------------------------
 
 /**
- * Estimate auto-height for text with wrapping.
- * `canvasWidth` is used as fallback when parentContentWidth is unavailable.
+ * Estimate
+ * 自动换行文本高度。当 parentContentWidth
+ 不可用时，`canvasWidth` 用作后备。
  */
 export function estimateAutoHeight(
   text: string,
@@ -113,8 +114,7 @@ export function estimateAutoHeight(
 
   const logicalLines = text.split(/\r?\n/);
   const wrappedLineCount = logicalLines.reduce((sum, line) => {
-    // Use the canonical estimateLineWidth from canvas-text-measure with
-    // a safety factor to avoid underestimating wrapping.
+    // Use 来自 canvas-text-measure 的规范 estimateLineWidth ，具有安全系数以避免低估包装。
     const safetyW = _hasCjkText(line) ? 1.06 : 1.14;
     const lineWidth = estimateLineWidth(line, fontSize) * safetyW;
     return sum + Math.max(1, Math.ceil(lineWidth / availW));
@@ -210,7 +210,7 @@ export function estimateNodeIntrinsicHeight(
 }
 
 // ---------------------------------------------------------------------------
-// Color & fill utilities
+// Color 和填充实用程序
 // ---------------------------------------------------------------------------
 
 export function extractPrimaryColor(fill: unknown): string | null {
@@ -258,7 +258,7 @@ export function getPlaceholderColors(fill: unknown): {
 }
 
 // ---------------------------------------------------------------------------
-// Text helpers
+// Text 帮助者
 // ---------------------------------------------------------------------------
 
 export function getTextContentForNode(node: PenNode): string {
@@ -270,12 +270,11 @@ export function getTextContentForNode(node: PenNode): string {
       : '';
 }
 
-// Re-export canonical hasCjkText from canvas-text-measure so existing
-// importers (role-resolver, typography roles) continue to work.
+// Re-从 canvas-text-measure 导出规范的 hasCjkText，以便现有的导入器（角色解析器、排版角色）继续工作。
 export const hasCjkText = _hasCjkText;
 
 // ---------------------------------------------------------------------------
-// Phone placeholder SVG
+// Phone 占位符 SVG
 // ---------------------------------------------------------------------------
 
 export function createPhonePlaceholderDataUri(width: number, height: number, dark = true): string {

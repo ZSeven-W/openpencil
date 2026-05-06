@@ -3,7 +3,7 @@ import { Copy, Check, Wand2, ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 
-/** Check if a JSON string looks like PenNode data */
+/** Check 如果 JSON 字符串看起来像 PenNode 数据 */
 export function isDesignJson(code: string): boolean {
   return /^\s*[[{]/.test(code) && /"type"\s*:/.test(code) && /"id"\s*:/.test(code);
 }
@@ -32,7 +32,7 @@ export function parseMarkdown(
     if (line.startsWith('```') && inCodeBlock) {
       inCodeBlock = false;
       const code = codeContent.trimEnd();
-      // For JSON blocks that look like design data, use the collapsed view
+      // For JSON 看起来像设计数据的块，使用折叠视图
       if (codeLang === 'json' && isDesignJson(code)) {
         parts.push(
           <DesignJsonBlock
@@ -117,7 +117,7 @@ function parseInlineMarkdown(text: string): ReactNode[] | string {
   while (remaining.length > 0) {
     // Bold
     const boldMatch = remaining.match(/\*\*(.+?)\*\*/);
-    // Inline code
+    // Inline 代码
     const codeMatch = remaining.match(/`([^`]+)`/);
     // Italic
     const italicMatch = remaining.match(/\*(.+?)\*/);

@@ -29,7 +29,7 @@ function validatePresetFile(data: unknown): data is ThemePresetFile {
   );
 }
 
-/** Export current themes+variables as a .optheme file. */
+/** Export 当前主题+变量作为 .optheme 文件。 */
 export async function exportThemePreset(
   name: string,
   themes: Record<string, string[]>,

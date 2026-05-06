@@ -1,11 +1,11 @@
 // apps/web/src/components/panels/git-panel/git-panel-branch-row.tsx
 //
-// Presenter row for a single branch in the Phase 5 branch picker popover.
+// Phase 5 分支选择器弹出窗口中单个分支的 Presenter 行。
 //
 // Important layout invariant: the select button and the delete button are
-// SIBLINGS inside the outer div — NOT nested. Radix/A11y rules forbid
-// interactive controls inside other interactive controls, and the Phase 5
-// plan's self-review checklist calls this out specifically.
+// SIBLINGS inside the outer div — NOT nested. Radix/A11y 规则禁止
+// 其他交互控件内的交互控件，以及 Phase 5
+// 计划的自我审查清单特别指出了这一点。
 
 import { Check, Trash2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';

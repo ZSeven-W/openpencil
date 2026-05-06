@@ -1,6 +1,6 @@
 import type { ParsedStyleGuide, StyleGuideMeta } from './style-guide-types';
 
-/** Parse YAML frontmatter from a style guide markdown file */
+/** Parse YAML frontmatter 来自样式指南 Markdown 文件 */
 function parseFrontmatter(content: string): { meta: StyleGuideMeta; body: string } | null {
   const match = content.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/);
   if (!match) return null;
@@ -31,24 +31,24 @@ function parseFrontmatter(content: string): { meta: StyleGuideMeta; body: string
   };
 }
 
-/** Score how well a style guide matches the requested tags (Jaccard-like) */
+/** Score 样式指南与请求标签的匹配程度（类似 Jaccard） */
 function matchScore(guideTags: string[], requestTags: string[]): number {
   if (requestTags.length === 0) return 0;
   const intersection = requestTags.filter((t) => guideTags.includes(t));
   return intersection.length / requestTags.length;
 }
 
-/** Select best-matching style guide from registry */
+/** Select 注册表中的最佳匹配样式指南 */
 export function selectStyleGuide(
   guides: ParsedStyleGuide[],
   options: { tags?: string[]; name?: string; platform?: string },
 ): ParsedStyleGuide | null {
   if (options.name) {
     if (options.platform) {
-      // When platform is specified, only return a guide that matches both name AND platform
+      // 指定了 When 平台，仅返回与 AND 平台名称均匹配的指南
       return guides.find((g) => g.name === options.name && g.platform === options.platform) ?? null;
     }
-    // No platform constraint — match by name only (MCP tool without platform param)
+    // No 平台约束 — 仅按名称匹配（MCP 工具没有平台参数）
     return guides.find((g) => g.name === options.name) ?? null;
   }
 
@@ -59,7 +59,7 @@ export function selectStyleGuide(
   }
 
   if (!options.tags || options.tags.length === 0) {
-    // No tags and no name: return null to trigger fallback to style-defaults.md
+    // No 标签且无名称：返回 null 以触发回退到 style-defaults.md
     return null;
   }
 
@@ -71,7 +71,7 @@ export function selectStyleGuide(
   return scored[0]?.guide ?? null;
 }
 
-/** Parse a raw markdown string into a ParsedStyleGuide */
+/** Parse 将原始 Markdown 字符串转换为 ParsedStyleGuide */
 export function parseStyleGuideFile(raw: string): ParsedStyleGuide | null {
   const parsed = parseFrontmatter(raw);
   if (!parsed) return null;

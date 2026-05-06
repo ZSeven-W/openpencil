@@ -84,7 +84,7 @@ const ko: TranslationKeys = {
   'git.conflict.banner.continue': '계속',
   'git.conflict.banner.finalizeError': '적용 실패: {{message}}',
   'git.conflict.banner.pollError': '오류로 인해 상태 폴링이 일시 중지됨: {{message}}',
-  // placeholder — future localization
+  // placeholder — 未来的本地化
   'git.conflict.banner.reopenMessage':
     '패널이 병합 중 다시 열렸습니다 — 중단하고 다시 pull 하세요.',
 
@@ -120,7 +120,7 @@ const ko: TranslationKeys = {
   'git.error.retry': '다시 시도',
   'git.error.title': '문제가 발생했습니다',
 
-  // ── Git 빈 상태 ──
+  // ── Git 빈상태 ──
   'git.empty.heading': '아직 버전 기록이 없습니다',
   'git.empty.optional': 'Git은 선택 사항 — 건너뛰어도 됩니다',
   'git.empty.requireSavedFile': '기록을 만들려면 .op 파일을 먼저 저장하세요',

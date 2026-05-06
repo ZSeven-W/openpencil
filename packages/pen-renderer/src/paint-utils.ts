@@ -5,7 +5,7 @@ import { DEFAULT_FILL, DEFAULT_STROKE_WIDTH } from '@zseven-w/pen-core';
 export { cssFontFamily } from '@zseven-w/pen-core';
 
 // ---------------------------------------------------------------------------
-// Color parsing — ck.Color4f takes 0-1 floats for all channels (r, g, b, a)
+// Color 解析 — ck.Color4f 所有通道（r、g、b、a）采用 0-1 个浮点数
 // ---------------------------------------------------------------------------
 
 export function parseColor(ck: CanvasKit, color: string): Float32Array {
@@ -34,7 +34,7 @@ export function parseColor(ck: CanvasKit, color: string): Float32Array {
   if (color === 'transparent') return ck.Color4f(0, 0, 0, 0);
   if (color === 'white') return ck.Color4f(1, 1, 1, 1);
   if (color === 'black') return ck.Color4f(0, 0, 0, 1);
-  // rgba() parsing
+  // rgba() 解析
   const rgbaMatch = color.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\)/);
   if (rgbaMatch) {
     return ck.Color4f(
@@ -44,11 +44,11 @@ export function parseColor(ck: CanvasKit, color: string): Float32Array {
       rgbaMatch[4] !== undefined ? parseFloat(rgbaMatch[4]) : 1,
     );
   }
-  return ck.Color4f(0.82, 0.835, 0.858, 1); // fallback #d1d5db
+  return ck.Color4f(0.82, 0.835, 0.858, 1); // 后备 #d1d5db
 }
 
 // ---------------------------------------------------------------------------
-// Corner radius helpers
+// Corner 半径助手
 // ---------------------------------------------------------------------------
 
 export function cornerRadiusValue(
@@ -68,7 +68,7 @@ export function cornerRadii(
 }
 
 // ---------------------------------------------------------------------------
-// Fill / stroke helpers
+// Fill / 中风助手
 // ---------------------------------------------------------------------------
 
 export function resolveFillColor(fills?: PenFill[] | string): string {
@@ -113,10 +113,10 @@ export function shouldUseTransparentFallbackFill(
 }
 
 // ---------------------------------------------------------------------------
-// Text wrapping utilities
+// Text 包装实用程序
 // ---------------------------------------------------------------------------
 
-/** CJK character range check (for character-level line breaking). */
+/** CJK 字符范围检查（用于字符级换行）。 */
 function isCJK(ch: string): boolean {
   const c = ch.charCodeAt(0);
   return (
@@ -128,7 +128,7 @@ function isCJK(ch: string): boolean {
   );
 }
 
-/** Word-wrap a single line of text, appending wrapped lines to `out`. */
+/** Word-换行单行文本，将换行行附加到 `out`。 */
 export function wrapLine(ctx: CanvasRenderingContext2D, text: string, maxW: number, out: string[]) {
   if (ctx.measureText(text).width <= maxW) {
     out.push(text);

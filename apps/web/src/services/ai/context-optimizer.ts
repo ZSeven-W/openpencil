@@ -1,13 +1,13 @@
 /**
- * Context optimization utilities for AI chat.
- * Prevents unbounded growth of chat history and context size.
+ * Context 用于
+ * AI 聊天的优化实用程序。 Prevents 聊天历史和上下文大小无限增长。
  */
 
 export const DEFAULT_MAX_MESSAGES = 10;
 export const DEFAULT_MAX_CHARS = 32_000;
 /**
- * Leave a safety margin below the upstream 1,048,576 character limit.
- * This is a local guardrail, not an exact upstream token/character calculator.
+ * Leave 低于上游
+ * 1,048,576 个字符限制的安全裕度。 This 是一个本地护栏，而不是精确的上游 token/character 计算器。
  */
 export const MAX_CHAT_REQUEST_CHARS = 900_000;
 
@@ -31,12 +31,12 @@ function stripHistoricalAttachments<T extends MessageWithOptionalAttachments>(
 }
 
 /**
- * Estimate the character count of a chat request payload.
+ * Estimate
  *
- * Notes:
- * - This is an approximation for local preflight checks, not upstream billing
- *   or the true model context length.
- * - The goal is to reject obviously oversized requests early with an actionable error.
+ * 聊天请求负载的字符数。 Notes：- This 是本地预检检查的近似值，而不是上游计费或真实模型上下文长度。
+ * - The 的目标是尽早
+ * 拒绝明显过大的请求并出现
+ * 可操作的错误。
  */
 export function estimateChatPayloadChars(payload: unknown): number {
   try {

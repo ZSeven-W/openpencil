@@ -78,28 +78,28 @@ const zhTW: TranslationKeys = {
   'git.conflict.nonOp.unresolvedHeading_other': '{{count}} 個檔案需要處理',
   'git.conflict.nonOp.continue': '繼續合併',
   'git.conflict.nonOp.abort': '中止合併',
-  // ── Git 衝突橫幅 (Phase 7b) ──
+  // ── Git 冲突横幅 (Phase 7b) ──
   'git.conflict.banner.progress': '已解決 {{resolved}} / {{total}}',
   'git.conflict.banner.apply': '套用合併',
   'git.conflict.banner.continue': '繼續',
   'git.conflict.banner.finalizeError': '無法套用：{{message}}',
   'git.conflict.banner.pollError': '狀態輪詢因錯誤暫停：{{message}}',
-  // placeholder — future localization
+  // placeholder — 未来的本地化
   'git.conflict.banner.reopenMessage': '面板在合併過程中重新打開 — 請中止並重新拉取。',
 
-  // ── Git 衝突列表 (Phase 7c) ──
+  // ── Git 冲突列表 (Phase 7c) ──
   'git.conflict.list.heading': '所有衝突',
   'git.conflict.list.progress': '{{resolved}} / {{total}} 已解決',
   'git.conflict.list.allResolved': '全部解決',
   'git.conflict.list.allOurs': '全用我的',
   'git.conflict.list.allTheirs': '全用對方的',
 
-  // ── Git 衝突項目 (Phase 7c) ──
+  // ── Git 冲突项目 (Phase 7c) ──
   'git.conflict.item.nodeConflict': '節點衝突',
   'git.conflict.item.fieldConflict': '欄位衝突',
   'git.conflict.item.resolved': '已解決',
 
-  // ── Git 衝突卡片 (Phase 7c) ──
+  // ── Git 冲突配合 (Phase 7c) ──
   'git.conflict.card.ours': '我的',
   'git.conflict.card.theirs': '對方的',
   'git.conflict.card.base': '基底',
@@ -108,7 +108,7 @@ const zhTW: TranslationKeys = {
   'git.conflict.card.oursThumbnailAlt': '我的版本',
   'git.conflict.card.theirsThumbnailAlt': '對方的版本',
 
-  // ── Git 衝突 JSON 編輯器 (Phase 7c) ──
+  // ── Git 冲突 JSON 编辑器 (Phase 7c) ──
   'git.conflict.editor.editManually': '手動編輯',
   'git.conflict.editor.cancel': '取消',
   'git.conflict.editor.apply': '套用',
@@ -119,7 +119,7 @@ const zhTW: TranslationKeys = {
   'git.error.retry': '重試',
   'git.error.title': '發生問題',
 
-  // ── Git 空狀態 ──
+  // ── Git 空状态 ──
   'git.empty.heading': '這份檔案還沒有版本歷史',
   'git.empty.optional': 'Git 是選擇性的 — 略過也不影響使用',
   'git.empty.requireSavedFile': '請先儲存 .op 檔案以建立歷史',
@@ -130,7 +130,7 @@ const zhTW: TranslationKeys = {
   'git.empty.cloneCard': '複製',
   'git.empty.cloneCardDescription': '從遠端儲存庫',
 
-  // ── Git 作者表單 ──
+  // ── Git 填写表格 ──
   'git.author.heading': '提交署名',
   'git.author.subheading': '儲存第一次提交需要署名',
   'git.author.nameLabel': '姓名',
@@ -142,7 +142,7 @@ const zhTW: TranslationKeys = {
   'git.author.validationName': '請輸入姓名',
   'git.author.validationEmail': '請輸入有效的電子郵件',
 
-  // ── Git 選擇器 (Phase 4b) ──
+  // ── Git 选择器 (Phase 4b) ──
   'git.picker.heading': '這個儲存庫裡有 {{count}} 個 .op 檔案:',
   'git.picker.milestoneCount': '{{count}} 個里程碑',
   'git.picker.noHistory': '暫無歷史',
@@ -155,12 +155,12 @@ const zhTW: TranslationKeys = {
   'git.picker.empty.body': 'Git 面板需要至少一個 .op 檔案才能運作',
   'git.picker.empty.close': '關閉面板',
 
-  // ── Git 自動綁定提示 (Phase 4b) ──
+  // ── Git 自动绑定提示 (Phase 4b) ──
   'git.autoBind.confirmHeading': '已找到 {{fileName}},要在編輯器開啟嗎?',
   'git.autoBind.openButton': '開啟',
   'git.autoBind.dismissButton': '跳過',
 
-  // ── Git 相對時間 (Phase 4b) ──
+  // ── Git 相对时间 (Phase 4b) ──
   'git.relativeTime.justNow': '剛剛',
   'git.relativeTime.minutesAgo': '{{count}}分鐘前',
   'git.relativeTime.hoursAgo': '{{count}}小時前',
@@ -194,7 +194,7 @@ const zhTW: TranslationKeys = {
   'git.history.restoreButton': '還原',
   'git.history.copyHashButton': '複製雜湊',
   'git.history.copiedToast': '已複製',
-  // ── Git 歷史差異 (Phase 7b) ──
+  // ── Git 历史差异 (Phase 7b) ──
   'git.history.diff.loading': '載入差異中…',
   'git.history.diff.initialCommit': '初始提交 — 沒有父提交可對比',
   'git.history.diff.noChanges': '未偵測到變更',
@@ -213,7 +213,7 @@ const zhTW: TranslationKeys = {
   'git.autosave.messagePrefix': 'auto',
   'git.autosave.messageDiffSuffix': '',
 
-  // ── Git 分支選擇器 (Phase 5) ──
+  // ── Git 分支选择器 (Phase 5) ──
   'git.branch.listHeading': '分支',
   'git.branch.createAction': '新增分支',
   'git.branch.createPlaceholder': 'feature/login-redesign',
@@ -260,7 +260,7 @@ const zhTW: TranslationKeys = {
   'git.wizard.clone.error.auth-token-invalid': '存取權杖被拒絕,請產生新權杖後重試。',
   'git.wizard.clone.error.clone-failed': '複製失敗,請確認網址指向真實存在的儲存庫。',
   'git.wizard.clone.error.clone-target-exists': '目標資料夾已存在或不是空的。',
-  // ── Git 拉取 / 推送 (Phase 6b) ──
+  // ── Git 拉取 / 个体 (Phase 6b) ──
   'git.pull.label': '拉取',
   'git.pull.tooltip': '從 origin 拉取',
   'git.pull.noRemote': '未設定遠端 — 請在 Git 設定中新增',
@@ -276,7 +276,7 @@ const zhTW: TranslationKeys = {
   'git.push.rejectedPull': '立即拉取',
   'git.remote.dismissError': '關閉',
 
-  // ── Git 遠端設定 (Phase 6c) ──
+  // ── Git 终点设定 (Phase 6c) ──
   'git.remote.settingsLabel': '遠端設定',
   'git.remote.settingsHeading': '遠端',
   'git.remote.back': '返回',
@@ -300,7 +300,7 @@ const zhTW: TranslationKeys = {
   'git.remote.storedAuth.noHost': '未偵測到主機',
   'git.remote.clearAuthButton': '清除已儲存的憑證',
 
-  // ── Git SSH 金鑰 (Phase 6c) ──
+  // ── Git SSH 金钥匙 (Phase 6c) ──
   'git.ssh.label': 'SSH 金鑰',
   'git.ssh.heading': 'SSH 金鑰',
   'git.ssh.back': '返回',
@@ -332,7 +332,7 @@ const zhTW: TranslationKeys = {
   'git.ssh.providerLink': '開啟 {{host}} SSH 金鑰設定',
   'git.ssh.genericGuidance': '複製公鑰並新增到你的 Git 提供商 SSH 金鑰設定中。',
 
-  // ── Git 驗證表單 (Phase 6b) ──
+  // ── Git 验证表单 (Phase 6b) ──
   'git.auth.formLabel': 'Git 憑證',
   'git.auth.heading': '向 {{host}} 驗證',
   'git.auth.headingUnknown': '向該遠端驗證',

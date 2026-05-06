@@ -1,32 +1,32 @@
 /**
- * Cross-environment storage abstraction.
+ * Cross-环境存储抽象
  *
- * In Electron the Nitro server starts on a random port each launch, which
- * changes the origin and wipes `localStorage`. This module provides a
- * synchronous `getItem` / `setItem` / `removeItem` API that:
+ * 。 In Electron Nitro 服务器每次启动都会在随机端口上启动，
+ * 这会更改源并擦除
+ * `localStorage`。 This 模块提供同步 `getItem` / `setItem` / `removeItem` API： -
  *
- * - **Electron**: reads from an in-memory cache that was pre-loaded from a
- *   JSON preferences file via IPC at startup. Writes update the cache
- *   immediately (synchronous) and persist to disk asynchronously.
- * - **Web**: delegates directly to `localStorage`.
+ * **Electron**：从启动时通过 IPC 从 JSON 首选项文件预加载的内存缓存中读取。 Writes
+ * 立即更新缓存（同步）并异步保存到磁盘。 - **Web**：直接委托给 `localStorage`。 Call
+ * `initAppStor
+ * age()` 在应用程序启动时（在任何商店水合之前）一次，然后 `await` 结果。 In 网络模式它立即解决。
  *
- * Call `initAppStorage()` once at app startup (before any store hydration)
- * and `await` the result. In web mode it resolves instantly.
+ *
+ *
  */
 
-/** In-memory cache for Electron mode. */
+/** In - Electron 模式的内存缓存。 */
 let cache: Record<string, string> | null = null;
 let initPromise: Promise<void> | null = null;
 
-/** Whether we are running inside Electron with the IPC bridge available. */
+/** Whether 我们正在 Electron 中运行，并且 IPC 桥可用。 */
 function isElectron(): boolean {
   return typeof window !== 'undefined' && !!window.electronAPI?.getPreferences;
 }
 
 /**
- * Initialise the storage layer. Must be called (and awaited) before any
- * store hydration so that the cache is populated. Idempotent — multiple
- * calls return the same promise.
+ * Initialise
+ * 存储层。 Must 在任何存储水合作用之前被调用（并等待），以便填充缓存。 Idempotent — 多个调用返回相同的承诺。
+ *
  */
 export async function initAppStorage(): Promise<void> {
   if (typeof window === 'undefined') return;
@@ -43,7 +43,7 @@ export async function initAppStorage(): Promise<void> {
   return initPromise;
 }
 
-/** Synchronous get — reads from cache (Electron) or localStorage (web). */
+/** Synchronous get — 从缓存 (Electron) 或 localStorage (web) 读取。 */
 export function getItem(key: string): string | null {
   if (cache !== null) {
     return cache[key] ?? null;
@@ -56,7 +56,7 @@ export function getItem(key: string): string | null {
   }
 }
 
-/** Synchronous set — updates cache + fires async IPC write in Electron. */
+/** Synchronous set — 更新缓存+触发 Electron 中的异步 IPC 写入。 */
 export function setItem(key: string, value: string): void {
   if (cache !== null) {
     cache[key] = value;
@@ -66,11 +66,11 @@ export function setItem(key: string, value: string): void {
   try {
     localStorage.setItem(key, value);
   } catch {
-    // quota exceeded or private mode
+    // 超出配额或私人模式
   }
 }
 
-/** Synchronous remove — updates cache + fires async IPC write in Electron. */
+/** Synchronous 删除 — 更新缓存+触发 Electron 中的异步 IPC 写入。 */
 export function removeItem(key: string): void {
   if (cache !== null) {
     delete cache[key];
@@ -80,13 +80,13 @@ export function removeItem(key: string): void {
   try {
     localStorage.removeItem(key);
   } catch {
-    // ignore
+    // 忽略
   }
 }
 
 /**
- * Convenience re-export so stores can do:
+ * Convenience 重新导出，以便商店可以执行以下操作：
  *   import { appStorage } from '@/utils/app-storage'
- *   appStorage.getItem(...)
+ * appStorage.getItem(...)
  */
 export const appStorage = { getItem, setItem, removeItem };

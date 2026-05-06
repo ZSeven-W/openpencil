@@ -1,4 +1,4 @@
-// @vitest-environment jsdom
+// @vitest-环境 jsdom
 // apps/web/src/components/panels/git-panel/__tests__/git-panel-empty-state.test.tsx
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, fireEvent, cleanup } from '@testing-library/react';
@@ -27,8 +27,8 @@ vi.mock('@/stores/git-store', () => {
 let mockedFilePath: string | null = '/tmp/test.op';
 vi.mock('@/stores/document-store', () => {
   // Hook form: useDocumentStore((s) => s.filePath) — selector pattern.
-  // Each call reads the current mockedFilePath via closure so individual
-  // tests can mutate it before render.
+  // Each 调用通过闭包读取当前的 mockedFilePath，因此单独
+  // 测试可以在渲染之前改变它。
   const useDocumentStore = (selector: (s: { filePath: string | null }) => unknown) =>
     selector({ filePath: mockedFilePath });
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -50,10 +50,10 @@ describe('GitPanelEmptyState', () => {
   beforeEach(() => {
     mockedFilePath = '/tmp/test.op';
     vi.clearAllMocks();
-    // Attach electronAPI to the existing jsdom window — replacing the
-    // entire window object via vi.stubGlobal would clobber clearTimeout
-    // and other browser APIs that Radix Tooltip depends on.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    // Attach electronAPI 到现有的 jsdom 窗口 — 替换
+    // 通过 vi.stubGlobal 的整个窗口对象会破坏 clearTimeout
+    // 以及 Radix Tooltip 所依赖的其他浏览器 APIs。
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
     (window as any).electronAPI = {
       openDirectory: vi.fn(async () => '/tmp/repo'),
     };
@@ -68,7 +68,7 @@ describe('GitPanelEmptyState', () => {
   it('disables the new card when currentFilePath is null', () => {
     mockedFilePath = null;
     renderWithProvider(<GitPanelEmptyState />);
-    // The new card button is disabled — find by accessible name (label key).
+    // The 新卡按钮已禁用 - 按可访问名称（标签键）查找。
     const newButton = screen.getByText('git.empty.newCard').closest('button');
     expect(newButton).toBeTruthy();
     expect(newButton?.hasAttribute('disabled')).toBe(true);
@@ -79,7 +79,7 @@ describe('GitPanelEmptyState', () => {
     const newButton = screen.getByText('git.empty.newCard').closest('button');
     expect(newButton).not.toBeNull();
     fireEvent.click(newButton!);
-    // Wait a tick for the async handler.
+    // Wait 异步处理程序的勾号。
     await Promise.resolve();
     expect(initRepoMock).toHaveBeenCalledTimes(1);
     expect(initRepoMock).toHaveBeenCalledWith('/tmp/test.op');
@@ -90,11 +90,11 @@ describe('GitPanelEmptyState', () => {
     const openButton = screen.getByText('git.empty.openCard').closest('button');
     expect(openButton).not.toBeNull();
     fireEvent.click(openButton!);
-    // Wait for the async chain.
+    // Wait 用于异步链。
     await Promise.resolve();
     await Promise.resolve();
     expect(openRepoMock).toHaveBeenCalledTimes(1);
-    // openRepo gets the picked directory + the current file path.
+    // openRepo 获取选择的目录+当前文件路径。
     expect(openRepoMock).toHaveBeenCalledWith('/tmp/repo', '/tmp/test.op');
   });
 

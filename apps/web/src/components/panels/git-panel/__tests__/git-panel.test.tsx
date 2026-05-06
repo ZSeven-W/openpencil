@@ -1,18 +1,18 @@
-// @vitest-environment jsdom
+// @vitest-环境 jsdom
 // apps/web/src/components/panels/git-panel/__tests__/git-panel.test.tsx
 //
-// Phase 4a.1: GitPanel is now a thin body component inside a Popover.
-// The "renders null when closed/minimized" tests are gone — the Popover
-// ancestor controls visibility, so GitPanel always renders when visible.
+// Phase 4a.1：GitPanel 现在是 Popover 内的一个薄主体组件。
+// The“当 closed/minimized”测试消失时呈现 null — Popover
+// 祖先控制可见性，因此 GitPanel 始终在可见时渲染。
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, cleanup, fireEvent } from '@testing-library/react';
 import { TooltipProvider } from '@/components/ui/tooltip';
 
-// Mock the store before importing the component.
+// Mock 导入组件之前的存储。
 vi.mock('@/stores/git-store', () => {
   const baseState = {
     state: { kind: 'no-file' as const },
-    panelOpen: true, // always true by contract — popover controls visibility
+    panelOpen: true, // 契约总是正确的——弹出窗口控制可见性
     log: [],
     sshKeys: [],
     authorIdentity: null,
@@ -44,7 +44,7 @@ vi.mock('@/stores/git-store', () => {
     setAuthorIdentity: vi.fn(async () => {}),
     commitMilestone: vi.fn(async () => {}),
     retrySaveRequired: vi.fn(async () => {}),
-    // Phase 6b + 6c stubs: the ready-state header pulls these via selectors.
+    // Phase 6b + 6c 存根：就绪状态标头通过选择器拉出这些存根。
     pull: vi.fn(async () => {}),
     push: vi.fn(async () => {}),
     getAuth: vi.fn(async () => null),
@@ -129,7 +129,7 @@ describe('GitPanel (dropdown body)', () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (useGitStore as any).__set({ state: { kind: 'no-file' } });
     renderWithProvider(<GitPanel />);
-    // GitPanelEmptyState uses the 'git.empty.heading' i18n key.
+    // GitPanelEmptyState 使用 'git.empty.heading' i18n 键。
     expect(screen.getByText('git.empty.heading')).toBeTruthy();
   });
 
@@ -157,7 +157,7 @@ describe('GitPanel (dropdown body)', () => {
       },
     });
     renderWithProvider(<GitPanel />);
-    // Error card renders the title key and the message.
+    // Error 卡呈现标题键和消息。
     expect(screen.getByText('git.error.title')).toBeTruthy();
     expect(screen.getByText('init-failed: permission denied')).toBeTruthy();
   });
@@ -187,13 +187,13 @@ describe('GitPanel (dropdown body)', () => {
       },
     });
     renderWithProvider(<GitPanel />);
-    // Header renders the current branch name
+    // Header 渲染当前分支名称
     expect(screen.getByText('main')).toBeTruthy();
-    // Commit input renders
+    // Commit 输入渲染
     expect(screen.getByPlaceholderText('git.commit.placeholder')).toBeTruthy();
   });
 
-  // ---- Phase 6c smoke: overflow -> remote-settings / ssh-keys ----
+  // ---- Phase 6c 烟雾：溢出 -> 远程设置/ssh 密钥 ----
 
   it('overflow menu can enter and exit the remote-settings subview', () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -220,13 +220,13 @@ describe('GitPanel (dropdown body)', () => {
       },
     });
     renderWithProvider(<GitPanel />);
-    // Open overflow popover
+    // Open 溢出弹出框
     fireEvent.click(screen.getByLabelText('git.header.overflowMoreActions'));
-    // Enter the remote settings subview
+    // Enter 远程设置子视图
     fireEvent.click(screen.getByTestId('overflow-open-remote-settings'));
-    // Subview heading renders
+    // Subview 标题呈现
     expect(screen.getByText('git.remote.settingsHeading')).toBeTruthy();
-    // Back → menu (entry buttons reappear)
+    // Back → 菜单（输入按钮再次出现）
     fireEvent.click(screen.getByLabelText('git.remote.back'));
     expect(screen.getByTestId('overflow-open-remote-settings')).toBeTruthy();
   });

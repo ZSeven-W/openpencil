@@ -17,14 +17,14 @@ export function useEditShortcuts() {
 
       const isMod = e.metaKey || e.ctrlKey;
 
-      // Save: Cmd/Ctrl+S         → save in-place if .op file is known, else save-as
-      // Save As: Cmd/Ctrl+Shift+S → always show file picker (never overwrite silently)
+      // Save: Cmd/Ctrl+s → 如果 .op 文件已知则就地保存，否则另存为 Save As: Cmd/Ctrl+Shift+s →
+      // 始终显示文件选择器（绝不静默覆盖）
       if (isMod && e.key === 's') {
         e.preventDefault();
         try {
           syncCanvasPositionsToStore();
         } catch {
-          /* continue */
+          /* 继续 */
         }
         useDocumentStore
           .getState()
@@ -33,7 +33,7 @@ export function useEditShortcuts() {
         return;
       }
 
-      // Open: Cmd/Ctrl+O
+      // Open: Cmd/Ctrl+o
       if (isMod && e.key === 'o' && !e.shiftKey) {
         e.preventDefault();
         if (useDocumentStore.getState().isDirty) {
@@ -57,7 +57,7 @@ export function useEditShortcuts() {
         return;
       }
 
-      // Group: Cmd/Ctrl+G
+      // Group: Cmd/Ctrl+g
       if (isMod && e.key === 'g' && !e.shiftKey) {
         const { selectedIds } = useCanvasStore.getState().selection;
         if (selectedIds.length >= 2) {
@@ -70,7 +70,7 @@ export function useEditShortcuts() {
         return;
       }
 
-      // Create Component: Cmd/Ctrl+Alt+K
+      // Create Component: Cmd/Ctrl+Alt+k
       if (isMod && e.altKey && e.key.toLowerCase() === 'k') {
         const { selectedIds } = useCanvasStore.getState().selection;
         if (selectedIds.length === 1) {
@@ -80,7 +80,7 @@ export function useEditShortcuts() {
         return;
       }
 
-      // Ungroup: Cmd/Ctrl+Shift+G
+      // Ungroup: Cmd/Ctrl+Shift+g
       if (isMod && e.shiftKey && e.key.toLowerCase() === 'g') {
         const { selectedIds } = useCanvasStore.getState().selection;
         if (selectedIds.length === 1) {
@@ -95,7 +95,7 @@ export function useEditShortcuts() {
         return;
       }
 
-      // Boolean operations: Cmd/Ctrl+Alt+U (union), Cmd/Ctrl+Alt+S (subtract), Cmd/Ctrl+Alt+I (intersect)
+      // Boolean 运算：Cmd/Ctrl+Alt+u（并集）、Cmd/Ctrl+Alt+s（减法）、Cmd/Ctrl+Alt+i（相交）
       if (isMod && e.altKey && !e.shiftKey) {
         const booleanOps: Record<string, BooleanOpType> = {
           u: 'union',
@@ -124,7 +124,7 @@ export function useEditShortcuts() {
         }
       }
 
-      // Delete / Backspace: remove selected elements
+      // Delete / Backspace：删除选定的元素
       if (e.key === 'Delete' || e.key === 'Backspace') {
         const { selectedIds } = useCanvasStore.getState().selection;
         if (selectedIds.length > 0) {
@@ -143,7 +143,7 @@ export function useEditShortcuts() {
         return;
       }
 
-      // Cmd+A: select all (top-level nodes only, matching manual selection behavior)
+      // Cmd+a：选择全部（仅顶级节点，匹配手动选择行为）
       if (isMod && e.key === 'a') {
         e.preventDefault();
         const topLevelNodes = getActivePageChildren(
@@ -185,7 +185,7 @@ export function useEditShortcuts() {
         return;
       }
 
-      // Arrow keys: nudge
+      // Arrow 键：微移
       const nudgeKeys = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'];
       if (nudgeKeys.includes(e.key) && !isMod) {
         const { selectedIds } = useCanvasStore.getState().selection;

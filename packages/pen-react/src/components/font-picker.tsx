@@ -7,7 +7,7 @@ export interface FontInfo {
   source: 'bundled' | 'system';
 }
 
-/** Bundled font families (always available) */
+/** Bundled 字体系列（始终可用） */
 const BUNDLED_FAMILIES = [
   'Inter',
   'Poppins',
@@ -60,7 +60,7 @@ async function querySystemFonts(): Promise<string[]> {
         return systemFonts;
       }
     } catch {
-      // Permission denied or API not available
+      // Permission 被拒绝或 API 不可用
     }
     cachedSystemFonts = FALLBACK_SYSTEM_FONTS;
     return FALLBACK_SYSTEM_FONTS;

@@ -1,7 +1,7 @@
 /**
- * Recursively replace `$variable` references in a PenNode tree.
+ * Recursively
  *
- * Used when renaming or deleting a variable to keep the tree consistent.
+ * 替换 PenNode 树中的 `$variable` 引用。 Used 重命名或删除变量以保持树一致时。
  */
 
 import type { PenNode } from '@zseven-w/pen-types';
@@ -10,8 +10,9 @@ import type { VariableDefinition } from '@zseven-w/pen-types';
 import { resolveVariableRef } from './resolve.js';
 
 /**
- * Replace all occurrences of `$oldRef` with `$newRef` in the node tree.
- * When `newRef` is null (variable deleted), resolves to the concrete value.
+ * Replace
+ * 节点树中所有出现 `$oldRef` 和 `$newRef` 的情况。 When `newRef` 为
+ null（变量已删除），解析为具体值。
  */
 export function replaceVariableRefsInTree(
   nodes: PenNode[],

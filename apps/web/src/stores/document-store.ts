@@ -30,11 +30,11 @@ interface DocumentStoreState {
   document: PenDocument;
   fileName: string | null;
   isDirty: boolean;
-  /** Native file handle for save-in-place (File System Access API). */
+  /** Native 用于就地保存的文件句柄 (File System Access API)。 */
   fileHandle: FileSystemFileHandle | null;
-  /** Full file path for Electron save-in-place (bypasses FS Access API). */
+  /** Full 就地保存的 Full 文件路径（绕过 FS Access API）。 */
   filePath: string | null;
-  /** Whether the "save as" dialog is open (fallback for browsers without FS API). */
+  /** Whether “另存为”对话框打开（没有 FS API 的浏览器的回退）。 */
   saveDialogOpen: boolean;
 
   addNode: (parentId: string | null, node: PenNode, index?: number) => void;
@@ -59,17 +59,17 @@ interface DocumentStoreState {
   getFlatNodes: () => PenNode[];
   isDescendantOf: (nodeId: string, ancestorId: string) => boolean;
 
-  // Component management
+  // Component 管理
   makeReusable: (nodeId: string) => void;
   detachComponent: (nodeId: string) => string | undefined;
 
-  // Variable management
+  // Variable 管理
   setVariable: (name: string, definition: VariableDefinition) => void;
   removeVariable: (name: string) => void;
   renameVariable: (oldName: string, newName: string) => void;
   setThemes: (themes: Record<string, string[]>) => void;
 
-  // Page management
+  // Page 管理
   addPage: () => string;
   removePage: (pageId: string) => void;
   renamePage: (pageId: string, name: string) => void;
@@ -89,19 +89,19 @@ interface DocumentStoreState {
   setFileHandle: (handle: FileSystemFileHandle | null) => void;
   setSaveDialogOpen: (open: boolean) => void;
 
-  // --- Save pipeline (consolidated single entry point) ---
-  // save() saves to the existing target if any, falls back to saveAs() otherwise.
-  // saveAs(suggestedName?) always shows a save dialog. The suggestedName, when
-  // provided, overrides the auto-derived suggested name (used by the legacy
-  // SaveDialog component which collects a manual filename input — it MUST NOT
-  // mutate store state itself, so it passes the typed name here and only the
-  // store updates fileName/filePath after a confirmed write).
-  // saveToNewPath(path) writes to a specific given path (Electron-only;
-  // returns null in browser builds after logging an error). Used by future
-  // programmatic flows that already know the destination — currently has no
-  // in-tree callers but is required by the design for forward-compat. Like
-  // save() and saveAs(), it returns null on any failure (including the
-  // browser-build case) and emits 'saved' only on success.
+  // --- Save 管道（合并单一入口点） ---
+  // save() 保存到现有目标（如果有），否则回退到 saveAs()。
+  // saveAs(suggestedName?) 始终显示保存对话框。 The suggestedName，当
+  // 提供，覆盖自动派生的建议名称（由旧版本使用）
+  // SaveDialog 组件，收集手动文件名输入 - 它 MUST NOT
+  // 改变存储状态本身，因此它在此处传递键入的名称，并且仅传递
+  // 确认写入后存储更新 fileName/filePath）。
+// saveToNewPath(path) writes to a specific given path (Electron-only;
+  // 记录错误后在浏览器版本中返回 null）。 Used 由 未来
+  // 已经知道目的地的程序流 - 目前没有
+  // 树内调用者，但这是设计所需要的，以实现前向兼容。 Like
+  // save() 和 saveAs()，任何失败（包括
+  // 浏览器构建案例）并仅在成功时发出“已保存”。
   save: () => Promise<string | null>;
   saveAs: (suggestedName?: string) => Promise<string | null>;
   saveToNewPath: (filePath: string) => Promise<string | null>;
@@ -115,32 +115,31 @@ export const useDocumentStore = create<DocumentStoreState>((set, get) => ({
   filePath: null,
   saveDialogOpen: false,
 
-  // --- Node CRUD (extracted to document-store-node-actions.ts) ---
+  // --- Node CRUD（提取到 document-store-node-actions.ts） ---
   ...createNodeActions(set, get),
 
-  // --- Component management (extracted to document-store-component-actions.ts) ---
+  // --- Component 管理（提取到 document-store-component-actions.ts） ---
   ...createComponentActions(set, get),
 
-  // --- Variable management (extracted to document-store-variable-actions.ts) ---
+  // --- Variable 管理（提取到 document-store-variable-actions.ts） ---
   ...createVariableActions(set, get),
 
-  // --- Page management (extracted to document-store-pages.ts) ---
+  // --- Page 管理（提取到 document-store-pages.ts） ---
   ...createPageActions(set, get),
 
-  // --- Lifecycle actions (remain inline — small) ---
+  // --- Lifecycle 操作（保持内联 — 小）---
 
   applyExternalDocument: (doc) => {
-    // Push current state to history so MCP changes are undoable
+    // Push 当前状态为历史记录，因此 MCP 更改是不可撤销的
     useHistoryStore.getState().pushState(get().document);
-    // Normalize external document (fill object→array, text→content, etc.)
+    // Normalize 外部文档（填充对象→数组、文本→内容等）
     const normalized = normalizePenDocument(doc);
     const migrated = ensureDocumentNodeIds(migrateToPages(normalized));
-    // Preserve activePageId if page still exists
+    // Preserve activePageId 如果页面仍然存在
     const activePageId = useCanvasStore.getState().activePageId;
     const pageExists = migrated.pages?.some((p) => p.id === activePageId);
     const targetPageId = pageExists ? activePageId : migrated.pages?.[0]?.id;
-    // Force new children references on ALL pages so canvas sync detects
-    // changes when the user later switches to any page.
+    // Force ALL 页面上有新的子引用，因此当用户稍后切换到任何页面时，画布同步会检测到更改。
     if (migrated.pages) {
       for (const page of migrated.pages) {
         page.children = [...page.children];
@@ -164,14 +163,14 @@ export const useDocumentStore = create<DocumentStoreState>((set, get) => ({
       filePath: filePath ?? null,
       isDirty: false,
     });
-    // Track in recent files
+    // 最近文件中的 Track
     if (fileName) {
       addRecentFile({ fileName, filePath: filePath ?? null });
     }
-    // Set active page to the first page
+    // Set 活动页面到首页
     const firstPageId = migrated.pages?.[0]?.id ?? null;
     useCanvasStore.getState().setActivePageId(firstPageId);
-    // Sync design.md to this document (lazy import to avoid circular)
+    // Sync design.md 到此文档（延迟导入以避免循环）
     import('@/stores/design-md-store').then(({ useDesignMdStore }) => {
       useDesignMdStore.getState().syncToDocument(fileName ?? null, filePath ?? null);
     });
@@ -188,7 +187,7 @@ export const useDocumentStore = create<DocumentStoreState>((set, get) => ({
       isDirty: false,
     });
     useCanvasStore.getState().setActivePageId(doc.pages?.[0]?.id ?? DEFAULT_PAGE_ID);
-    // Clear design.md for new document
+    // Clear design.md 新文档
     import('@/stores/design-md-store').then(({ useDesignMdStore }) => {
       useDesignMdStore.getState().clearForNewDocument();
     });
@@ -203,7 +202,7 @@ export const useDocumentStore = create<DocumentStoreState>((set, get) => ({
     const { document: doc, fileName, fileHandle, filePath } = state;
     const isOpFile = fileName ? /\.op$/i.test(fileName) : false;
 
-    // Path 1: Electron with a known .op path → in-place write.
+    // Path 1：Electron 具有已知的 .op 路径 → 就地写入。
     if (isElectron() && filePath && isOpFile) {
       try {
         await writeToFilePath(filePath, doc);
@@ -216,7 +215,7 @@ export const useDocumentStore = create<DocumentStoreState>((set, get) => ({
       return fileName!;
     }
 
-    // Path 2: Browser with a valid .op file handle → in-place write.
+    // Path 2：Browser 具有有效的 .op 文件句柄 → 就地写入。
     if (fileHandle && isOpFile) {
       try {
         await writeToFileHandle(fileHandle, doc);
@@ -230,8 +229,7 @@ export const useDocumentStore = create<DocumentStoreState>((set, get) => ({
       }
     }
 
-    // Path 3: No in-place target → delegate to saveAs() which handles the
-    // dialog flow per backend.
+    // Path 3：No 就地目标 → 委托给 saveAs()，它处理每个后端的对话流。
     return get().saveAs();
   },
 

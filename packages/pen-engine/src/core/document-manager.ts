@@ -26,9 +26,9 @@ export interface DocumentManagerOptions {
 }
 
 /**
- * Manages the PenDocument tree with immutable snapshot semantics.
- * Each mutation creates a new document reference (structural sharing).
- * Extracted from apps/web/src/stores/document-store.ts + action slices.
+ * Manages
+ * 具有不可变快照语义的 PenDocument 树。 Each 突变创建新的文档引用（结构共享）。 Extracted 来自
+ * apps/web/src/stores/document-store.ts + 动作切片。
  */
 export class DocumentManager {
   private document: PenDocument;
@@ -45,18 +45,18 @@ export class DocumentManager {
 
   // ── Snapshot ──
 
-  /** Returns the current document (immutable reference). */
+  /** Returns 当前文档（不可变引用）。 */
   getDocument(): PenDocument {
     return this.document;
   }
 
-  /** Create a fresh empty document. */
+  /** Create 一个新的空文档。 */
   createDocument(): PenDocument {
     return ensureDocumentNodeIds(migrateToPages(createEmptyDocument()));
   }
 
   /**
-   * Load a document, replacing current state. Resets history.
+   * Load 一个文档，替换当前状态。 Resets 历史。
    */
   loadDocument(doc: PenDocument): void {
     this.history.clear();
@@ -64,7 +64,7 @@ export class DocumentManager {
     this.onChangeCb?.(this.document);
   }
 
-  // ── Internal helpers ──
+  // ── Internal 助手 ──
 
   private getPageChildren(): PenNode[] {
     return getActivePageChildren(this.document, this.getActivePageId());
@@ -180,7 +180,7 @@ export class DocumentManager {
     this.onChangeCb?.(this.document);
   }
 
-  /** Returns the children of the active page (public accessor for DesignEngine). */
+  /** Returns 活动页面的子级（DesignEngine 的公共访问器）。 */
   getActivePageChildren(): PenNode[] {
     return this.getPageChildren();
   }

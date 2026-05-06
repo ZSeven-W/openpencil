@@ -10,17 +10,15 @@ describe('git-sys', () => {
   it('isSystemGitAvailable returns a boolean and caches the result', async () => {
     const first = await isSystemGitAvailable();
     expect(typeof first).toBe('boolean');
-    // Second call should hit the cache and return the same value.
+    // Second 调用应该命中缓存并返回相同的值。
     const second = await isSystemGitAvailable();
     expect(second).toBe(first);
   });
 });
 
 describe('getSystemAuthor (injected exec)', () => {
-  // These tests use the injected-exec seam to stay deterministic and avoid
-  // depending on whatever user.name/user.email happen to be configured on the
-  // host running the suite. The seam short-circuits isSystemGitAvailable and
-  // runGit entirely, so we exercise only the parse/validate/catch logic.
+  // These 测试使用注入执行接缝来保持确定性，并避免依赖于运行套件的主机上碰巧配置的任何 user.name/user.email。 The
+  // 接缝使 isSystemGitAvailable 和 runGit 完全短路，因此我们仅练习 parse/validate/catch 逻辑。
 
   it('returns parsed name/email on success', async () => {
     const calls: string[][] = [];
@@ -43,14 +41,14 @@ describe('getSystemAuthor (injected exec)', () => {
     const calls: string[][] = [];
     const fakeExec = async (args: string[]) => {
       calls.push(args);
-      // Simulate `git config --get user.name` exiting non-zero when unset.
+      // Simulate `git config --get user.name` 未设置时退出非零。
       throw new Error('git config --get user.name failed: exit code 1');
     };
 
     const result = await getSystemAuthor(fakeExec);
 
     expect(result).toBeNull();
-    // First call throws, so the second call never happens.
+    // First 调用会抛出异常，因此第二个调用永远不会发生。
     expect(calls).toHaveLength(1);
   });
 
@@ -66,7 +64,7 @@ describe('getSystemAuthor (injected exec)', () => {
     const result = await getSystemAuthor(fakeExec);
 
     expect(result).toBeNull();
-    // Both calls happen because validation is post-fetch.
+    // Both 调用发生是因为验证是提取后的。
     expect(calls).toHaveLength(2);
   });
 });

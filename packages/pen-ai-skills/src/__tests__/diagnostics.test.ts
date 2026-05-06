@@ -122,17 +122,17 @@ describe('detectInvisibleContainers', () => {
   });
 
   it('perceptual mode: dark-on-dark issues downgraded to info severity (detect-only)', () => {
-    // The dark-theme card case: #111111 page bg, #1A1A1A card. The contrast
-    // ratio is ≈ 1.085 — technically "low contrast" by WCAG (the cards are
-    // genuinely subtle on this very dark background). The detector still
-    // flags it so the user/agent can SEE the issue in debug reports, but
-    // at INFO severity instead of warning.
-    //
-    // Why: the suggested auto-fix is a #E2E8F0 light-gray border, which
-    // would actively damage a dark theme. The pre-validation pipeline
-    // skips info severity, so the dark cards are never silently rewritten
-    // with a clashing border. The agent can decide manually whether to
-    // add a theme-appropriate stroke.
+    // The 深色主题卡盒：#111111 页面背景，#1a1a1a 卡。 The 对比
+    // 比率约为 1.085 — 从技术上讲，WCAG 的“低对比度”（卡片是
+    // 在这个非常暗的背景上确实很微妙）。 The 探测器仍然
+    // 对其进行标记，以便 user/agent 可以在调试报告中解决 SEE 问题，但是
+    // INFO 严重性而不是警告。
+//
+    // Why：建议的自动修复是 #E2E8F0 浅灰色边框，
+    // 会主动破坏黑暗主题。 The 预验证管道
+    // 跳过信息严重性，因此暗卡永远不会被默默地重写
+    // 与冲突的边界。 The 代理可以手动决定是否
+    // 添加适合主题的笔画。
     const root: PenNode = {
       id: 'r',
       type: 'frame',
@@ -155,12 +155,9 @@ describe('detectInvisibleContainers', () => {
   });
 
   it('perceptual mode: still flags near-identical light fills (#FAFAFA vs #F1F1F1) at WARNING severity', () => {
-    // The light-theme counter-test: a 9-unit channel diff on light bg is
-    // perceptually invisible (contrast ratio ≈ 1.084 ≤ 1.10) → flagged.
-    // Locks in that switching to WCAG contrast didn't weaken the original
-    // light-theme detection. Severity stays 'warning' (auto-fixable)
-    // because the suggested #E2E8F0 border actually works on light
-    // backgrounds.
+    // The 灯光主题反测试：灯光背景上的 9 单位通道差异在感知上是不可见的（对比度 ≈ 1.084 ≤ 1.10）→ 已标记。
+    // Locks，因为切换到 WCAG 对比度并没有削弱原始的浅色主题检测。 Severity 保持“警告”（可自动修复），因为建议的
+    // #E2E8F0 边框实际上适用于浅色背景。
     const root: PenNode = {
       id: 'r',
       type: 'frame',
@@ -199,7 +196,7 @@ describe('detectInvisibleContainers', () => {
         } as unknown as PenNode,
       ],
     } as unknown as PenNode;
-    // strict mode — different hex strings → NOT flagged
+    // 严格模式 — 不同的十六进制字符串 → NOT 标记
     const issues = detectInvisibleContainers(root, doc(root), { colorMatchMode: 'strict' });
     expect(issues).toHaveLength(0);
   });
@@ -220,7 +217,7 @@ describe('detectInvisibleContainers', () => {
         } as unknown as PenNode,
       ],
     } as unknown as PenNode;
-    // contrast ratio ≈ 1.34 > 1.10 → NOT flagged
+    // 对比度 ≈ 1.34 > 1.10 → NOT 标记
     const issues = detectInvisibleContainers(root, doc(root));
     expect(issues).toHaveLength(0);
   });
@@ -363,9 +360,8 @@ describe('detectSiblingInconsistencies', () => {
   });
 
   it('does NOT flag chrome-role sibling (tab-bar height=62) as inconsistent with 5 section frames', () => {
-    // 5 content sections with fit_content height + 1 tab-bar with fixed height=62
-    // The tab-bar is a different role-class (chrome) and should not join the
-    // sections' comparison group. Expect zero sibling inconsistency issues.
+    // 5 个具有 fit_content 高度的内容部分 + 1 个具有固定高度的选项卡栏=62 The
+    // 选项卡栏是不同的角色类（chrome），不应加入这些部分的比较组。 Expect 零兄弟不一致问题。
     const makeSection = (id: string) =>
       ({
         id,

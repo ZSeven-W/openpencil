@@ -1,9 +1,10 @@
 /**
- * Screenshot capture utilities for design validation.
+ * Screenshot
  *
- * Backed by SkiaEngine.captureRegion() which does a CanvasKit readPixels
- * on the live canvas. Only usable from the web side (not from pen-mcp —
- * see Phase 2 for the RPC-based external API).
+ * 用于设计验证的捕获实用程序。 Backed by SkiaEngine.captureRegion()
+ * 在实时画布上执行
+ * CanvasKit readPixels。 Only 可从 Web 端使用（不能从 pen-mcp 中使用 — 请参阅 Phase 2
+ 了解基于 RPC 的外部 API）。
  */
 
 import { getSkiaEngineRef } from '@/canvas/skia-engine-ref';
@@ -30,8 +31,8 @@ function computeBounds(node: PenNode): { x: number; y: number; w: number; h: num
 }
 
 /**
- * Capture a screenshot of a specific node. Returns a base64 PNG data URL,
- * or null if the canvas isn't ready or the node doesn't exist.
+ * Capture
+ * 特定节点的屏幕截图。 Returns 一个 base64 PNG 数据 URL，如果画布未准备好或节点不存在，则为 null。
  */
 export async function captureNodeScreenshot(nodeId: string): Promise<string | null> {
   const engine = getSkiaEngineRef();

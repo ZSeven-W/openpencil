@@ -589,14 +589,14 @@ export default defineEventHandler(async (event) => {
       }),
     );
 
-    // Build prompt from last user message
+    // Build 上次用户消息的提示
     const lastMsg = ((body.messages as any[]) ?? []).at(-1);
     const promptText =
       typeof lastMsg?.content === 'string'
         ? lastMsg.content
         : JSON.stringify(lastMsg?.content ?? '');
 
-    // Wire session/update notifications into SSE stream
+    // Wire session/update 通知进入 SSE 流
     const updateTarget = new EventTarget();
     conn.sessionUpdateEmitter = updateTarget;
 
@@ -609,8 +609,7 @@ export default defineEventHandler(async (event) => {
           try {
             controller.enqueue(chunk);
           } catch {
-            // Controller may have closed mid-notification (e.g. client disconnect,
-            // idle timeout). Mark closed and stop enqueuing to avoid noise.
+            // Controller 可能已在通知中关闭（例如客户端断开连接、空闲超时）。 Mark 关闭并停止排队以避免噪音。
             streamClosed = true;
           }
         };
@@ -621,8 +620,8 @@ export default defineEventHandler(async (event) => {
         };
         updateTarget.addEventListener('update', onUpdate);
 
-        // Keep-alive: prevent Bun's 10s idle timeout from killing the stream
-        // during long MCP tool calls (e.g. snapshot_layout → insert_node chain).
+        // Keep-alive：防止 Bun 的 10 秒空闲超时在长 MCP 工具调用期间杀死流（例如 snapshot_layout →
+        // insert_node 链）。
         const keepAlive = startSSEKeepAlive(
           () => safeEnqueue(encoder.encode(`: keepalive\n\n`)),
           5000,
@@ -665,7 +664,7 @@ export default defineEventHandler(async (event) => {
             try {
               controller.close();
             } catch {
-              /* already closed */
+              /* 已经关闭 */
             }
           }
         }
@@ -705,34 +704,34 @@ export default defineEventHandler(async (event) => {
   }
 
   // Diagnostic logging for the cross-provider empty-response bug.
-  // When a provider returns a 200 OK + message_start + immediate
-  // stream close (0 content blocks), the failure is silent at the
+  // When 提供者返回 200 OK + message_start + 立即数
+  // 流关闭（0 个内容块），失败在
   // provider edge. This log captures the ACTUAL upstream shape —
-  // NOT the raw body fields — because the server applies several
-  // transformations between reading the body and issuing the
+  // NOT 原始正文字段 - 因为服务器应用了多个
+  // 读取正文和发布内容之间的转换
   // upstream request:
-  //
+//
   //   1. teamMode && concurrency >= 2 appends
-  //      `buildTeamCapabilitiesPrompt(concurrency)` to systemPrompt
-  //   2. teamMode auto-registers the `spawn_member` tool on top of
-  //      whatever the client sent in `toolDefs`
-  //   3. Prior messages are filtered to `role in {user, assistant}
-  //      && typeof content === 'string'` before being seeded; the
-  //      LAST message becomes the new-turn prompt
+  // `buildTeamCapabilitiesPrompt(concurrency)` to systemPrompt
+  //   2. teamMode 自动注册 `spawn_member` 工具
+  // whatever the client sent in `toolDefs`
+  //   3. Prior 消息被过滤为“{用户，助理}中的角色”
+  // && typeof content === 'string'` before being seeded;的
+  // LAST message becomes the new-turn prompt
   //   4. `registerToolSchema` only sends `parameters` (with $schema
-  //      stripped), not the full `ToolDef`, so tool-schema size is
-  //      computed from `parameters` alone
-  //
+  // stripped), not the full `ToolDef`, so tool-schema size is
+  // computed from `parameters` alone
+//
   // This block mirrors all four transformations so the logged
   // numbers match what the native agent runtime actually sends to
-  // the provider edge.
-  //
+  // 提供商优势。
+//
   // Gated by a hard-coded constant so flipping it off is one line.
   const OUTER_AGENT_LOG_ENABLED = true;
   if (OUTER_AGENT_LOG_ENABLED) {
     const concurrency = body.concurrency ?? 1;
 
-    // (1) Effective system prompt — mirrors teamSystemPrompt logic below.
+    // (1) Effective 系统提示符 — 镜像下面的 teamSystemPrompt 逻辑。
     const effectiveSystemPrompt =
       body.teamMode && concurrency >= 2
         ? (body.systemPrompt ?? '') + buildTeamCapabilitiesPrompt(concurrency)
@@ -754,52 +753,49 @@ export default defineEventHandler(async (event) => {
     );
 
     // (2, 4) Effective tool count + on-wire schema bytes.
-    //
+//
     // On-wire tool list in team mode includes up to THREE classes
     // of additions on top of the client-supplied body.toolDefs:
-    //
-    //   a) `spawn_member` — registered ONLY when body.teamMode===true
-    //      via `registerToolSchema(tools, 'spawn_member', SPAWN_MEMBER_SCHEMA)`.
-    //
-    //   b) `delegate` — registered by `teamRegisterDelegate(team)`,
-    //      which runs whenever `body.teamMode || normalizedMembers.length`
-    //      (i.e. any team-mode branch). This is a NATIVE runtime-side
-    //      registration inside `team.registerDelegateTool()` in
-    //      packages/agent-native/src/team.zig. The schema it registers
-    //      has a fixed shape: `{type:"object", properties:{member_id,
-    //      task}, required:[member_id,task]}` — 159 bytes as the
-    //      `input_schema` parameters blob. I was missing this
-    //      entirely in the previous log.
-    //
-    //   c) Member-specific tools registered via addTeamMember() when
-    //      normalizedMembers.length > 0. Each member has its OWN
-    //      tool registry and those tools are NOT on the leader's
-    //      on-wire payload, so they don't count toward the leader
-    //      request shape we log here.
-    //
-    // Tool schemas are serialized as JSON.stringify(parameters) with
-    // `$schema` stripped — see registerToolSchema call below. We
-    // mirror that transform here so the log matches the bytes the
-    // native runtime actually pushes over the wire.
+//
+    // a) `spawn_member` — 当 body.teamMode===true 时注册 ONLY
+    // 通过 `registerToolSchema(tools, 'spawn_member', SPAWN_MEMBER_SCHEMA)`。
+//
+    // b) `delegate` — 由 `teamRegisterDelegate(team)` 注册，
+    // 每当 `body.teamMode || normalizedMembers.length` 时运行
+    // （即任何团队模式分支）。 This 是 NATIVE 运行时端
+    // 注册里面 `team.registerDelegateTool()` 中
+    // packages/agent-native/src/team.zig。它注册的 The 模式
+    // 有固定的形状：`{type:"object",properties:{member_id,
+    // 任务}，必需：[member_id，任务]}` — 159 字节
+    // `input_schema` 参数 blob。我错过了这个
+    // 完全在之前的日志中。
+//
+    // c) Member 特定工具通过 addTeamMember() 注册
+    // normalizedMembers.length > 0。Each 成员有其 OWN
+    // 工具注册表，这些工具是 NOT 在领导者的
+    // 在线有效负载，因此它们不计入领导者
+    // 请求形状，我们在这里记录。
+//
+    // Tool 模式序列化为 JSON.stringify(parameters)
+    // `$schema` 被剥离 — 请参阅下面的 registerToolSchema 调用。 We
+    // 镜像在此处进行转换，以便日志与字节匹配
+    // 本机运行时实际上会推动网络。
     const toolDefsChars = (body.toolDefs ?? []).reduce((sum, t) => {
       const params = t.parameters ? { ...(t.parameters as Record<string, unknown>) } : {};
       delete (params as Record<string, unknown>).$schema;
       return sum + JSON.stringify(params).length;
     }, 0);
 
-    // Delegate schema text, verbatim from team.zig::registerDelegateTool.
-    // Hard-coded here rather than imported because it lives inside a
-    // Zig function body and isn't exported. Keep in sync if the Zig
-    // side is ever edited (the unit test coverage in team.zig catches
-    // drift on that side; this side is a diagnostic log only).
+    // Delegate 模式文本，逐字来自 team.zig::registerDelegateTool。 Hard
+    // 在这里编码而不是导入，因为它位于 Zig 函数体内并且不导出。如果 Zig 端被编辑过，则 Keep 同步（team.zig
+    // 中的单元测试覆盖率捕获该端的漂移；这一端只是诊断日志）。
     const DELEGATE_INPUT_SCHEMA =
       '{"type":"object","properties":{"member_id":{"type":"string","description":"ID of the team member to delegate to"},"task":{"type":"string","description":"Task description for the member"}},"required":["member_id","task"]}';
-    // The team-mode branch below is gated on `body.teamMode ||
-    // normalizedMembers.length`. `normalizedMembers` is derived from
-    // `body.members` 1:1 (same length, just adds a normalized
-    // baseURL field), so the raw count matches. normalizedMembers
-    // itself is computed AFTER this log block, so we use body.members
-    // directly to predict whether the team branch will be taken.
+    // 下面的 The 团队模式分支在 `body.teamMode ||
+    // normalizedMembers.length` 上门控。 `normalizedMembers` 源自
+    // `body.members` 1:1（相同长度，只是添加标准化的 baseURL 字段），因此原始计数匹配。
+    // normalizedMembers 本身是计算 AFTER 这个日志块的，所以我们直接使用 body.members
+    // 来预测团队分支是否会被采取。
     const teamModeBranch = !!(body.teamMode || (body.members ?? []).length);
 
     let effectiveToolCount = (body.toolDefs ?? []).length;

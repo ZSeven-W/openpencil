@@ -44,14 +44,14 @@ import { classifyIntent } from './ai-chat-intent-classifier';
 import { buildContextString } from './ai-chat-context-builder';
 import { detectAgentIntent, getCrudToolDefs } from '@/services/ai/agent-tools';
 
-// Re-export for any external consumers
+// Re-为任何外部消费者导出
 export { buildContextString } from './ai-chat-context-builder';
 
 // ---------------------------------------------------------------------------
-// Agent mode SSE stream handler
+// Agent 模式 SSE 流处理程序
 // ---------------------------------------------------------------------------
 
-/** Agent tool instructions for CLI providers — delegates to orchestrator via generate_design. */
+/** Agent 提供者的 Agent 工具说明 — 通过 generate_design 委托给协调器。 */
 const AGENT_TOOL_INSTRUCTIONS_CLI = `You are a design assistant. You MUST use tools to do your work.
 
 RULE 1: To create or design ANYTHING, call generate_design. NEVER output JSON yourself.
@@ -67,7 +67,7 @@ IMPORTANT: Always end your turn with a short natural-language reply for the user
 
 FORBIDDEN: Do not output JSON, code blocks, or node definitions directly. Always use generate_design instead.`;
 
-/** Agent tool instructions for builtin providers — same generate_design pipeline as CLI. */
+/** 内置提供程序的 Agent 工具说明 — 与 CLI 相同的 generate_design 管道。 */
 const AGENT_TOOL_INSTRUCTIONS_BUILTIN = `You are a design assistant. You MUST use tools to do your work.
 
 RULE 1: To create or design ANYTHING, call generate_design. NEVER output JSON yourself.
@@ -76,7 +76,7 @@ RULE 3: Do NOT call generate_design more than once unless the user asks for a ne
 
 FORBIDDEN: Do not output JSON, code blocks, or node definitions directly. Always use generate_design instead.`;
 
-/** Lightweight prompt for CRUD operations — no design skills, just tool usage. */
+/** Lightweight 提示 CRUD 操作 — 没有设计技巧，只有工具使用。 */
 const AGENT_TOOL_INSTRUCTIONS_CRUD = `You are a design editor. Use tools to inspect, modify, insert, and delete elements on the canvas.
 
 WORKFLOW:
@@ -102,15 +102,15 @@ INSERT_NODE GUIDE — always include complete node data with children:
 
 Focus on the specific operation the user requested.`;
 
-/** Agent instructions for lead agents coordinating a team. */
+/** Agent 针对协调团队的首席代理的说明。 */
 const AGENT_TOOL_INSTRUCTIONS_TEAM = `You are a design lead coordinating a team.
 
 Do not create the design directly in this mode. Analyze the request, delegate the work to team members, then summarize the outcome for the user.`;
 
 /**
- * Build the agent system prompt based on provider type and detected intent.
- * CRUD intents (read/update/delete) get a lightweight prompt with no design skills.
- * Design intents get the full design generation pipeline.
+ * Build 代理系统根据
+ * 提供商类型和检测到的意图进行提示。 CRUD 意图 (read/update/delete) 获得轻量级提示，无需设计技能。 Design
+ * 意图获取完整的设计生成流程。
  */
 function buildAgentSystemPrompt(
   userMessage: string,
@@ -124,8 +124,8 @@ function buildAgentSystemPrompt(
 }
 
 /**
- * Parse SSE chunks from a ReadableStream and yield AgentEvents.
- * Handles partial chunks that may be split across reads.
+ * Parse SSE 来自
+ * ReadableStream 块并产生 AgentEvents。 Handles 可以在读取之间分割的部分块。
  */
 async function* parseAgentSSE(
   reader: ReadableStreamDefaultReader<Uint8Array>,
@@ -156,7 +156,7 @@ async function* parseAgentSSE(
   }
 }
 
-/** Provider config for the agent pipeline */
+/** Provider 代理管道的配置 */
 interface AgentProviderConfig {
   providerType: 'anthropic' | 'openai-compat' | 'acp';
   apiKey: string;
@@ -166,7 +166,7 @@ interface AgentProviderConfig {
   maxContextTokens?: number;
 }
 
-/** Strip <think>...</think> tags (closed and unclosed) from model text output. */
+/** Strip <think>...</think> 模型文本输出中的标签（闭合和未闭合）。 */
 function stripThinkTags(text: string): string {
   return text.replace(/<think>[\s\S]*?<\/think>\s*/g, '').replace(/<think>[\s\S]*$/g, '');
 }
@@ -196,9 +196,9 @@ function buildAgentEmptyOutputFallback({
 }
 
 /**
- * Send a message through the agent pipeline.
- * Opens an SSE connection to /api/ai/agent, dispatches tool calls
- * client-side, and updates the AI store in real time.
+ * Send 通过代理管道的
+ * 消息。 Opens 与 /api/ai/agent 的 SSE
+ * 连接，调度工具调用客户端，并实时更新 AI 存储。
  */
 async function runAgentStream(
   assistantMsgId: string,
@@ -222,7 +222,7 @@ async function runAgentStream(
   const context = buildContextString();
   const lastUserMsg = messages[messages.length - 1]?.content ?? '';
 
-  // Read document context for team member skill loading
+  // Read 团队成员技能加载的文档上下文
   const { useDesignMdStore } = await import('@/stores/design-md-store');
   const { useDocumentStore } = await import('@/stores/document-store');
   const { buildDesignMdStylePolicy } = await import('@/services/ai/ai-prompts');
@@ -257,8 +257,7 @@ async function runAgentStream(
     ...(hasVariables ? { hasVariables } : {}),
   };
 
-  // ACP: add agentId + config to the request body (config enables server-side
-  // auto-reconnect if the in-memory connection was lost due to dev server restart).
+  // ACP：将 agentId + config 添加到请求正文（如果由于开发服务器重新启动而导致内存中连接丢失，配置将启用服务器端自动重新连接）。
   if (providerConfig.providerType === 'acp') {
     const agentId = providerConfig.model.slice(4);
     const acpConfig = useAgentSettingsStore.getState().acpAgents.find((a) => a.id === agentId);
@@ -275,7 +274,7 @@ async function runAgentStream(
 
   if (!response.ok || !response.body) {
     const errText = await response.text().catch(() => 'Unknown error');
-    // h3 errors come as JSON: { message, error, status, ... } — extract just the message.
+    // h3 错误的形式为 JSON: { message, error, status, ... } — 仅提取消息。
     let errorMessage = errText;
     try {
       const parsed = JSON.parse(errText);
@@ -283,7 +282,7 @@ async function runAgentStream(
         errorMessage = parsed.message;
       }
     } catch {
-      /* not JSON — use raw text */
+      /* 不是 JSON — 使用原始文本 */
     }
     throw new Error(errorMessage);
   }
@@ -304,8 +303,7 @@ async function runAgentStream(
   let identityPool: AgentIdentity[] = [];
   let nextIdentityIdx = 0;
   const memberIdentities = new Map<string, AgentIdentity>();
-  // Track the most recent failed tool call so terminal `error_server` events
-  // (which carry no detail from the Zig engine) can surface what actually broke.
+  // Track 最近一次失败的工具调用，因此终端 `error_server` 事件（不包含来自 Zig 引擎的详细信息）可以显示实际发生的问题。
   const toolNames = new Map<string, string>();
   let lastToolError: { name: string; message: string } | null = null;
 

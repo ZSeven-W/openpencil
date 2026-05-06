@@ -1,9 +1,10 @@
 /**
- * Simple file logger for the Nitro server process.
+ * Simple 服务器进程
  *
- * Writes to `~/.openpencil/logs/server-{YYYY-MM-DD}.log`.
- * Also forwards to console for dev mode visibility.
- * Keeps the last 7 days of logs, auto-cleans on first write.
+ * 的 Simple 文件记录器。 Writes 至 `~/.openpencil/logs/ser
+ * ver-{YYYY-MM
+ * -DD}.log`。 Also 转发到控制台以获得开发模式可见性。 Keeps 最近 7
+ 天的日志，首次写入时自动清除。
  */
 
 import { appendFileSync, existsSync, mkdirSync, readdirSync, statSync, unlinkSync } from 'node:fs';
@@ -24,7 +25,7 @@ function ensureDir(): void {
     }
     dirEnsured = true;
   } catch {
-    // Silently fail — logging is best-effort
+    // Silently 失败 — 尽力记录
   }
 }
 

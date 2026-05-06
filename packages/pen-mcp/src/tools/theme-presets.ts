@@ -56,10 +56,10 @@ export async function handleLoadThemePreset(
     throw new Error('Invalid theme preset file');
   }
 
-  // Merge themes
+  // Merge 主题
   doc.themes = { ...doc.themes, ...data.themes };
 
-  // Merge variables
+  // Merge 变量
   doc.variables = { ...doc.variables, ...data.variables } as Record<string, VariableDefinition>;
 
   await saveDocument(filePath, doc);
@@ -94,7 +94,7 @@ export async function handleListThemePresets(
         presets.push({ name: data.name ?? basename(entry, '.optheme'), path: fullPath });
       }
     } catch {
-      // skip invalid files
+      // 跳过无效文件
     }
   }
 

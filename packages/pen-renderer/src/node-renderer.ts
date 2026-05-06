@@ -37,28 +37,28 @@ import type { RenderNode, IconLookupFn } from './types.js';
 const FALLBACK_ICON_D = 'M12 12m-3 0a3 3 0 1 0 6 0a3 3 0 1 0 -6 0';
 
 /**
- * Core node renderer for CanvasKit/Skia. Draws PenNode shapes, fills,
- * strokes, effects, text, and images. No editor overlays or store dependencies.
+ * Core CanvasK
+ * it/Skia 的节点渲染器。 Draws PenNode 形状、填充、描边、效果、文本和图像。 No 编辑器覆盖或存储依赖项。
  */
 export class SkiaNodeRenderer {
   protected ck: CanvasKit;
   private defaultTypeface: Typeface | null = null;
   private defaultFont: Font | null = null;
 
-  // Current viewport zoom (set by engine before each render frame)
+  // Current 视口缩放（在每个渲染帧之前由引擎设置）
   zoom = 1;
 
-  // Device pixel ratio
+  // Device 像素比
   devicePixelRatio: number | undefined;
 
-  // Sub-renderers
+  // Sub 渲染器
   private textRenderer: SkiaTextRenderer;
   imageLoader: SkiaImageLoader;
 
-  // Injectable icon lookup
+  // Injectable 图标查找
   private iconLookup: IconLookupFn | null = null;
 
-  /** Font manager — delegates to text renderer */
+  /** Font 管理器 — 委托给文本渲染器 */
   get fontManager(): SkiaFontManager {
     return this.textRenderer.fontManager;
   }
@@ -73,12 +73,12 @@ export class SkiaNodeRenderer {
     this.defaultFont = new this.ck.Font(null, 16);
   }
 
-  /** Set callback to trigger re-render when async images finish loading. */
+  /** Set 回调，用于在异步图像完成加载时触发重新渲染。 */
   setRedrawCallback(cb: () => void) {
     this.imageLoader.setOnLoaded(cb);
   }
 
-  /** Set injectable icon lookup function. */
+  /** Set 可注入图标查找功能。 */
   setIconLookup(fn: IconLookupFn) {
     this.iconLookup = fn;
   }
@@ -104,8 +104,8 @@ export class SkiaNodeRenderer {
   }
 
   // ---------------------------------------------------------------------------
-  // Fill paint
-  // ---------------------------------------------------------------------------
+  // Fill 油漆
+// ---------------------------------------------------------------------------
 
   private makeFillPaint(
     fills: PenFill[] | string | undefined,
@@ -410,8 +410,8 @@ export class SkiaNodeRenderer {
   }
 
   // ---------------------------------------------------------------------------
-  // Stroke paint
-  // ---------------------------------------------------------------------------
+  // Stroke 油漆
+// ---------------------------------------------------------------------------
 
   private makeStrokePaint(stroke: PenStroke | undefined, opacity: number): Paint | null {
     if (!stroke) return null;
@@ -442,7 +442,7 @@ export class SkiaNodeRenderer {
 
   // ---------------------------------------------------------------------------
   // Shadow
-  // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
 
   private applyShadowDirect(
     canvas: Canvas,
@@ -476,8 +476,8 @@ export class SkiaNodeRenderer {
   }
 
   // ---------------------------------------------------------------------------
-  // Draw a single render node (no selection/overlay logic)
-  // ---------------------------------------------------------------------------
+  // Draw 单个渲染节点（无 selection/overlay 逻辑）
+// ---------------------------------------------------------------------------
 
   drawNode(canvas: Canvas, rn: RenderNode) {
     const { node, absX, absY, absW, absH, clipRect } = rn;
@@ -486,11 +486,11 @@ export class SkiaNodeRenderer {
 
     if (('visible' in node ? node.visible : undefined) === false) return;
 
-    // Pass zoom to text renderer
+    // Pass 缩放到文本渲染器
     this.textRenderer.zoom = this.zoom;
     this.textRenderer.devicePixelRatio = this.devicePixelRatio;
 
-    // Apply clipping from parent frame
+    // Apply 从父框架剪辑
     let clipped = false;
     if (clipRect) {
       canvas.save();
@@ -514,7 +514,7 @@ export class SkiaNodeRenderer {
       }
     }
 
-    // Apply flip
+    // Apply 翻转
     const flipX = node.flipX === true,
       flipY = node.flipY === true;
     if (flipX || flipY) {
@@ -524,14 +524,14 @@ export class SkiaNodeRenderer {
       canvas.translate(-(absX + absW / 2), -(absY + absH / 2));
     }
 
-    // Apply rotation
+    // Apply 旋转
     const rotation = node.rotation ?? 0;
     if (rotation !== 0) {
       canvas.save();
       canvas.rotate(rotation, absX + absW / 2, absY + absH / 2);
     }
 
-    // Apply shadow (text uses glyph-shaped shadow, not rectangle)
+    // Apply 阴影（文本使用字形阴影，而不是矩形）
     const effects =
       'effects' in node ? (node as PenNode & { effects?: PenEffect[] }).effects : undefined;
     if (node.type !== 'text') {
@@ -573,8 +573,8 @@ export class SkiaNodeRenderer {
   }
 
   // ---------------------------------------------------------------------------
-  // Shape drawing
-  // ---------------------------------------------------------------------------
+  // Shape 绘图
+// ---------------------------------------------------------------------------
 
   private drawRect(
     canvas: Canvas,
@@ -962,8 +962,8 @@ export class SkiaNodeRenderer {
   }
 
   // ---------------------------------------------------------------------------
-  // Image drawing
-  // ---------------------------------------------------------------------------
+  // Image 绘图
+// ---------------------------------------------------------------------------
 
   private drawImage(
     canvas: Canvas,

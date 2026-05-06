@@ -99,7 +99,7 @@ describe('text-measure', () => {
     it('returns the widest line', () => {
       const width = estimateTextWidth('short\nmuch longer line', 16);
       const singleWidth = estimateTextWidth('much longer line', 16);
-      // Multi-line should return width of longest line
+      // Multi-line 应返回最长线的宽度
       expect(width).toBeCloseTo(singleWidth, 0);
     });
   });

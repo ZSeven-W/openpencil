@@ -101,7 +101,7 @@ function ToggleButton({
 }
 
 // ---------------------------------------------------------------------------
-// AlignmentGrid — 3×3 interactive alignment picker
+// AlignmentGrid — 3×3 交互式对齐选择器
 // ---------------------------------------------------------------------------
 
 function AlignmentGrid({

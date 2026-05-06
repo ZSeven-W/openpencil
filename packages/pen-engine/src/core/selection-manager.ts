@@ -4,8 +4,8 @@ export interface SelectionManagerOptions {
 }
 
 /**
- * Manages selection state with immutable snapshots.
- * Each select() call produces a new array reference.
+ * Manages
+ * 具有不可变快照的选择状态。 Each select() 调用产生一个新的数组引用。
  */
 export class SelectionManager {
   private selectedIds: string[] = [];
@@ -19,36 +19,36 @@ export class SelectionManager {
     this.onHoverCb = options?.onHover;
   }
 
-  /** Returns the current selection (immutable reference). */
+  /** Returns 当前选择（不可变引用）。 */
   getSelection(): string[] {
     return this.selectedIds;
   }
 
-  /** Returns the active (primary) node ID, or null. */
+  /** Returns 活动（主）节点 ID，或 null。 */
   getActiveId(): string | null {
     return this.activeId;
   }
 
-  /** Returns the hovered node ID, or null. */
+  /** Returns 悬停节点 ID，或 null。 */
   getHoveredId(): string | null {
     return this.hoveredId;
   }
 
-  /** Set the selection. Creates a new array reference. */
+  /** Set 选择。 Creates 一个新的数组引用。 */
   select(ids: string[], activeId?: string): void {
     this.selectedIds = [...ids];
     this.activeId = activeId ?? (ids.length === 1 ? ids[0] : null);
     this.onChangeCb?.(this.selectedIds);
   }
 
-  /** Clear selection. */
+  /** Clear 选择。 */
   clearSelection(): void {
     this.selectedIds = [];
     this.activeId = null;
     this.onChangeCb?.(this.selectedIds);
   }
 
-  /** Set the hovered node. */
+  /** Set 悬停节点。 */
   setHoveredId(id: string | null): void {
     this.hoveredId = id;
     this.onHoverCb?.(id);

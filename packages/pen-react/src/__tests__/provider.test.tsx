@@ -1,4 +1,4 @@
-// @vitest-environment jsdom
+// @vitest-环境 jsdom
 import { describe, it, expect, vi } from 'vitest';
 import { render, renderHook } from '@testing-library/react';
 import type { ReactNode } from 'react';

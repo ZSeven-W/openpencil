@@ -4,7 +4,7 @@ interface ChatMessageAttachmentsProps {
   attachments: ChatAttachment[];
 }
 
-/** Renders image attachments in a user message bubble */
+/** Renders 用户消息气泡中的图像附件 */
 export function ChatMessageAttachments({ attachments }: ChatMessageAttachmentsProps) {
   if (attachments.length === 0) return null;
 

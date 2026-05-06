@@ -1,18 +1,18 @@
 // apps/web/src/components/panels/git-panel/git-panel-clone-form.tsx
 //
-// Phase 6a clone wizard body. Replaces the placeholder text from Phase 4.
-// The form:
-//   - takes a remote URL (HTTPS or SSH)
-//   - lets the user pick a destination folder via window.electronAPI.openDirectory()
-//   - infers the auth mode from the URL scheme (HTTPS → token-or-anon, SSH → ssh)
-//   - allows anonymous clones for HTTPS by leaving username/token blank
-//   - shows inline recoverable errors under the form (set by the store's
-//     cloneRepo when a code in CLONE_INLINE_ERROR_CODES escapes)
-//   - calls cloneRepo() on submit; success transitions handled by the store
+// Phase 6a 克隆精灵本体。 Replaces 来自 Phase 4 的占位符文本。
+// The 形式：
+//   - 接受远程 URL（HTTPS 或 SSH）
+//   - 让用户通过 window.electronAPI.openDirectory() 选择目标文件夹
+//   - 从 URL 方案推断身份验证模式（HTTPS → token-or-anon，SSH → ssh）
+//   - 通过将 username/token 留空，允许匿名克隆 HTTPS
+//   - 在表单下显示内联可恢复错误（由商店设置
+// cloneRepo（当 CLONE_INLINE_ERROR_CODES 中的代码转义时）
+//   - 提交时调用 cloneRepo()；由商店处理的成功转换
 //
-// Cancel always returns to no-file via cancelCloneWizard() — git-panel.tsx's
-// detect-repo effect rehydrates the correct no-repo / ready state from the
-// currently-open document path on the next render.
+// Cancel 总是通过 cancelCloneWizard() 返回无文件 — git-panel.tsx 的
+// 检测回购效应从正确的无回购/就绪状态中重新水化
+// 下一次渲染时当前打开的文档路径。
 
 import { useMemo, useState } from 'react';
 import { Loader2 } from 'lucide-react';
@@ -36,13 +36,13 @@ interface ValidationErrors {
 }
 
 /**
- * Body of the wizard-clone screen. Reads the inline error and the `busy`
- * flag directly from the wizard-clone state. `busy` MUST live in the store
- * (not a local useState) so the form survives the wizard-clone → busy →
- * wizard-clone round-trip: a recoverable clone failure must leave the URL/
- * dest/token inputs exactly as the user typed them for retry. Keeping the
- * flag local would tie it to a component that, under the previous design,
- * unmounted mid-clone and wiped all the fields.
+ * 向导克隆屏幕的
+ * Body。 Reads 直接来自向导克隆状态的内联错误和 `busy` 标志。 `busy` MUST 存在于存储中（不是本地
+ * useState），因此表单在向导克隆 → 忙碌 → 向导克隆往返过程中仍然存在：可恢复的克隆故障必须使 URL/ dest/token
+ * 输入与用户键入的内容完全相同以进行重试。 Keeping 标志 local 会将其绑定到一个组件，该组件在之前的设计下会卸载中间克隆并擦除
+ * 所有字段。
+ *
+ *
  */
 export function GitPanelCloneForm() {
   const { t } = useTranslation();
@@ -81,11 +81,9 @@ export function GitPanelCloneForm() {
   const handleSubmit = async () => {
     if (busy) return;
     if (!validate()) return;
-    // No local busy tracking — the store flips wizard-clone.busy inside
-    // cloneRepo and flips it back on recoverable failure. On success the
-    // store transitions out of wizard-clone entirely, which unmounts this
-    // component; any `finally { setBusy(false) }` would hit an unmounted
-    // component and leak a state-update warning.
+    // No 本地繁忙跟踪 — 存储在 cloneRepo 内翻转 Wizard-clone.busy 并在发生可恢复故障时将其翻转回来。
+    // On 成功，商店完全脱离向导克隆，从而卸载该组件；任何 `finally { setBusy(false) }`
+    // 都会遇到未安装的组件并泄漏状态更新警告。
     const auth =
       authMode === 'token-or-anon' && token.trim()
         ? {

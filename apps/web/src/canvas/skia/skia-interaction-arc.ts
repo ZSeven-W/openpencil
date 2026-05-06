@@ -6,8 +6,8 @@ import { type InteractionContext, toolToCursor } from './skia-interaction-types'
 import type { ArcHandleType } from './skia-hit-handlers';
 
 /**
- * Handles arc editing interactions on ellipse nodes.
- * Manages start angle, end angle (sweep), and inner radius dragging.
+ * Handles
+ * 椭圆节点上的弧编辑交互。 Manages 起始角度、结束角度（扫描）和内半径拖动。
  */
 export class ArcHandler {
   private ctx: InteractionContext;
@@ -21,7 +21,7 @@ export class ArcHandler {
   }
 
   /**
-   * Try to start an arc drag. Returns true if an arc handle was hit.
+   * Try 开始圆弧拖动。 Returns 如果弧形手柄被击中则为 true。
    */
   startArcDrag(scene: { x: number; y: number }, engine: SkiaEngine): boolean {
     const arcHit = hitTestArcHandle(engine, scene.x, scene.y);

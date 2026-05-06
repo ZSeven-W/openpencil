@@ -1,10 +1,10 @@
 import type { PenNode } from '@zseven-w/pen-types';
 
 // ---------------------------------------------------------------------------
-// Sizing parser (shared by layout engine and text height estimation)
+// Sizing 解析器（由布局引擎和文本高度估计共享）
 // ---------------------------------------------------------------------------
 
-/** Parse a sizing value. Handles number, "fit_content", "fill_container" and parenthesized forms. */
+/** Parse 大小值。 Handles 数字、“fit_content”、“fill_container”和括号形式。 */
 export function parseSizing(value: unknown): number | 'fit' | 'fill' {
   if (typeof value === 'number') return value;
   if (typeof value !== 'string') return 0;
@@ -19,35 +19,35 @@ export function parseSizing(value: unknown): number | 'fit' | 'fill' {
 }
 
 // ---------------------------------------------------------------------------
-// Default line height — single source of truth for all modules
+// Default 行高 — 所有模块的单一事实来源
 // ---------------------------------------------------------------------------
 
 /**
- * Canonical default lineHeight when a text node has no explicit value.
- * Display/heading text (>=28px) gets tighter spacing; body text gets looser.
- * All modules (factory, layout engine, text estimation, AI generation)
- * MUST use this function instead of hardcoded fallbacks.
+ * 当文本节点没有显式值时，
+ * Canonical 默认为 lineHeight。 Display/heading 文本 (>=28px) 间距更紧；正文变得更加宽松。
+ * All 模块（工厂、布局引擎、文本估计、AI 生成） MUST 使用此函数而不是硬编码的后备。
+ *
  */
 export function defaultLineHeight(fontSize: number): number {
-  if (fontSize >= 40) return 1.0; // Display text: tight leading (matches Pencil 0.9-1.0)
-  if (fontSize >= 28) return 1.15; // Heading text: moderate (matches Pencil 1.0-1.2)
+  if (fontSize >= 40) return 1.0; // Display 文本：紧前导（匹配 Pencil 0.9-1.0）
+  if (fontSize >= 28) return 1.15; // Heading 文本：中等（匹配 Pencil 1.0-1.2）
   if (fontSize >= 20) return 1.2; // Subheading
-  return 1.5; // Body text: comfortable reading
+  return 1.5; // Body 文字：阅读舒适
 }
 
 // ---------------------------------------------------------------------------
-// CJK detection
+// CJK 检测
 // ---------------------------------------------------------------------------
 
 export function isCjkCodePoint(code: number): boolean {
   return (
     (code >= 0x4e00 && code <= 0x9fff) || // CJK Unified Ideographs
-    (code >= 0x3400 && code <= 0x4dbf) || // CJK Extension A
+    (code >= 0x3400 && code <= 0x4dbf) || // CJK Extension a
     (code >= 0x3040 && code <= 0x30ff) || // Hiragana + Katakana
     (code >= 0xac00 && code <= 0xd7af) || // Hangul
     (code >= 0x3000 && code <= 0x303f) || // CJK symbols/punctuation
     (code >= 0xff00 && code <= 0xffef)
-  ); // Full-width forms
+  ); // Full-宽度形式
 }
 
 export function hasCjkText(text: string): boolean {
@@ -59,12 +59,12 @@ export function hasCjkText(text: string): boolean {
 }
 
 // ---------------------------------------------------------------------------
-// Glyph / line width estimation
+// Glyph / 线宽估计
 // ---------------------------------------------------------------------------
 
 /**
- * Font weight multiplier — bold/semibold text is wider than regular text.
- * Values based on typical proportional font width scaling.
+ * Font 权重乘数 —
+ * bold/semibold 文本比常规文本更宽。 Values 基于典型的比例字体宽度缩放。
  */
 function fontWeightFactor(fontWeight?: string | number): number {
   const w = typeof fontWeight === 'string' ? parseInt(fontWeight, 10) : (fontWeight ?? 400);
@@ -112,8 +112,7 @@ export function estimateLineWidth(
 }
 
 export function widthSafetyFactor(text: string): number {
-  // Latin fonts vary a lot by weight/family; use a larger safety margin to
-  // avoid underestimating width and causing accidental wraps.
+  // Latin 字体因 weight/family 变化很大；使用较大的安全裕度以避免低估宽度并导致意外缠绕。
   return hasCjkText(text) ? 1.06 : 1.14;
 }
 
@@ -133,10 +132,10 @@ export function estimateTextWidth(
 }
 
 /**
- * Estimate text width WITHOUT safety factor.
- * Used for layout centering where the safety margin causes text to appear
- * off-center (the overestimated width shifts the text box left when centered).
- * For wrapping/sizing decisions, use estimateTextWidth() which includes the safety factor.
+ * Estimate
+ * 文字宽度 WITHOUT 安全系数。 Used 用于布局居中，其中安全边距导致文本出
+ * 现偏离中心（居中时高估的宽度使文本框向左移动）。 For wrapping/sizing 决策时，使用 estimateTextWidth()
+ * 其中包括安全系数。
  */
 export function estimateTextWidthPrecise(
   text: string,
@@ -151,14 +150,14 @@ export function estimateTextWidthPrecise(
 }
 
 // ---------------------------------------------------------------------------
-// Text content helpers
+// Text 内容助手
 // ---------------------------------------------------------------------------
 
 export function resolveTextContent(node: PenNode): string {
   if (node.type !== 'text') return '';
   if (typeof node.content === 'string') return node.content;
   if (Array.isArray(node.content)) return node.content.map((s) => s.text).join('');
-  // Fallback: MCP/CLI nodes may use `text` instead of `content`
+  // Fallback：MCP/CLI 节点可以使用 `text` 而不是 `content`
   if (typeof (node as unknown as Record<string, unknown>).text === 'string') {
     return (node as unknown as Record<string, unknown>).text as string;
   }
@@ -171,14 +170,14 @@ export function countExplicitTextLines(text: string): number {
 }
 
 // ---------------------------------------------------------------------------
-// Optical vertical correction for centered single-line text
+// Optical 居中单行文本的垂直校正
 // ---------------------------------------------------------------------------
 
 /**
- * Optical vertical correction for centered single-line text.
- * Within the Fabric text bounding box (fontSize * 1.13), glyph ink sits
- * slightly above the mathematical center due to ascent/descent asymmetry.
- * We nudge down proportionally to compensate.
+ * Optical
+ * 居中单行文本的垂直校正。 Within Fabric 文本边界框 (fontSize * 1.13)，由于
+ * ascent/descent 不对称，字形墨迹位于数学中心稍上方。 We 按比例向下微调以进行补偿。
+ *
  */
 export function getTextOpticalCenterYOffset(node: PenNode): number {
   if (node.type !== 'text') return 0;
@@ -189,19 +188,19 @@ export function getTextOpticalCenterYOffset(node: PenNode): number {
   const fontSize = node.fontSize ?? 16;
   const hasCjk = hasCjkText(text);
 
-  // CJK glyphs sit higher in the em box than Latin glyphs
+  // CJK 字形在 em 框中的位置比 Latin 字形更高
   const ratio = hasCjk ? 0.06 : 0.03;
   const offset = fontSize * ratio;
   return Math.max(0, Math.min(Math.round(fontSize * 0.05), Math.round(offset)));
 }
 
 // ---------------------------------------------------------------------------
-// Wrapped line count — injectable for browser/non-browser environments
+// Wrapped 行计数 — 可注入 browser/non-browser 环境
 // ---------------------------------------------------------------------------
 
 /**
- * Count wrapped lines using character-width estimation fallback.
- * This is the pure (non-browser) implementation.
+ * Count 使用字符宽度
+ * 估计回退换行。 This 是纯（非浏览器）实现。
  */
 export function countWrappedLinesFallback(
   rawLines: string[],
@@ -218,8 +217,8 @@ export function countWrappedLinesFallback(
 }
 
 /**
- * Injectable wrapped line counter. Browser environments can replace this
- * with a Canvas 2D-based implementation for accurate word-wrap prediction.
+ * Injectable
+ * 换行计数器。 Browser 环境可以将其替换为基于 Canvas 2d 的实现，以实现准确的自动换行预测。
  */
 export type WrappedLineCounter = (
   rawLines: string[],
@@ -232,28 +231,28 @@ export type WrappedLineCounter = (
 
 let _wrappedLineCounter: WrappedLineCounter | null = null;
 
-/** Set a custom wrapped line counter (e.g. Canvas 2D-based). */
+/** Set 自定义换行计数器（例如 Canvas 基于 2d）。 */
 export function setWrappedLineCounter(counter: WrappedLineCounter): void {
   _wrappedLineCounter = counter;
 }
 
 // ---------------------------------------------------------------------------
-// Text height estimation (multi-line wrapping aware)
+// Text 高度估计（多行换行感知）
 // ---------------------------------------------------------------------------
 
-/** Estimate text height including multi-line wrapping when available width is known. */
+/** Estimate 文本高度，包括已知可用宽度时的多行换行。 */
 export function estimateTextHeight(node: PenNode, availableWidth?: number): number {
-  // Access text-specific properties via Record to avoid union type issues
+  // Access 通过 Record 的文本特定属性以避免联合类型问题
   const n = node as unknown as Record<string, unknown>;
   const fontSize = typeof n.fontSize === 'number' ? n.fontSize : 16;
   const lineHeight = typeof n.lineHeight === 'number' ? n.lineHeight : defaultLineHeight(fontSize);
-  // Fabric.js uses _fontSizeMult = 1.13 for the glyph height of a single line.
-  // lineHeight spacing applies *between* lines, not below the last line.
+  // Fabric.js 使用 _fontsizemult = 1.13 作为单行的字形高度。 lineHeight
+  // 间距适用于*行之间，而不是最后一行下方。
   const FABRIC_FONT_MULT = 1.13;
   const glyphH = fontSize * FABRIC_FONT_MULT;
   const lineStep = fontSize * lineHeight;
 
-  // Get text content
+  // Get 文字内容
   const rawContent = n.content;
   const content =
     typeof rawContent === 'string'
@@ -263,7 +262,7 @@ export function estimateTextHeight(node: PenNode, availableWidth?: number): numb
         : '';
   if (!content) return glyphH;
 
-  // Determine the effective text width for wrapping estimation
+  // Determine 用于换行估计的有效文本宽度
   let textWidth = 0;
   if ('width' in node) {
     const w = parseSizing(node.width);
@@ -271,21 +270,21 @@ export function estimateTextHeight(node: PenNode, availableWidth?: number): numb
     else if (w === 'fill' && availableWidth && availableWidth > 0) textWidth = availableWidth;
   }
 
-  // If no width constraint is known, still count explicit newlines
+  // If 没有已知的宽度约束，仍然计算显式换行符
   if (textWidth <= 0) {
     const explicitLines = content.split(/\r?\n/).length;
     const n2 = Math.max(1, explicitLines);
     return Math.round(n2 <= 1 ? glyphH : (n2 - 1) * lineStep + glyphH);
   }
 
-  // Use custom wrapped line counter if set (e.g. Canvas 2D), else fallback
+  // Use 自定义换行计数器（如果设置）（例如 Canvas 2d），否则回退
   const fontWeight = n.fontWeight as string | number | undefined;
   const fontFamily =
     (typeof n.fontFamily === 'string' ? n.fontFamily : '') ||
     'Inter, -apple-system, "Noto Sans SC", "PingFang SC", system-ui, sans-serif';
   const letterSpacing = typeof n.letterSpacing === 'number' ? n.letterSpacing : 0;
   const rawLines = content.split(/\r?\n/);
-  // Add tolerance matching the renderer's wrapLine (w + fontSize * 0.2)
+  // Add 与渲染器的 wrapLine 容差匹配 (w + fontSize * 0.2)
   const wrapWidth = textWidth + fontSize * 0.2;
 
   const wrappedLineCount = _wrappedLineCounter

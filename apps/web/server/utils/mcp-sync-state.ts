@@ -1,6 +1,7 @@
 /**
- * In-memory sync state for MCP <-> Renderer real-time communication.
- * Shared across Nitro API endpoints: GET/POST /api/mcp/document, GET /api/mcp/events.
+ * In-MCP <->
+ * Renderer 实时通信的内存同步状态。 Shared 跨 Nitro API 端点：GET/POST
+ /api/mcp/document、GET /api/mcp/events。
  */
 
 import type { PenDocument } from '../../src/types/pen';
@@ -71,7 +72,7 @@ function broadcast(payload: Record<string, unknown>, excludeClientId?: string): 
     recipients.push(client);
   }
 
-  // Return early when there are no recipients to avoid pointless JSON serialization for large documents.
+  // Return 尽早在没有收件人的情况下避免对大型文档进行无意义的 JSON 序列化。
   if (recipients.length === 0) return;
 
   const data = JSON.stringify(payload);

@@ -1,12 +1,12 @@
 // apps/desktop/git/auth-store.ts
 //
-// Encrypted credential store backed by Electron safeStorage. The whole
-// credential map is encrypted as a single blob and persisted to disk on
-// every mutation. We don't shard per-host because the map is tiny (a
-// handful of hosts at most) and atomic single-file writes are simpler.
+// Encrypted 凭证存储由 Electron safeStorage 支持。 The 整体
+// 凭证映射被加密为单个 blob 并持久保存到磁盘上
+// 每一次突变。 We 不会对每个主机进行分片，因为地图很小（
+// 最多几个主机）并且原子单文件写入更简单。
 //
-// Tests inject a fake EncryptionBackend so they don't need a live Electron
-// process.
+// Tests 注入一个假的 EncryptionBackend 所以他们不需要实时的 Electron
+// 过程。
 
 import { promises as fsp } from 'node:fs';
 import { join } from 'node:path';
@@ -36,18 +36,16 @@ interface AuthStoreOpts {
 const PLAINTEXT_HEADER = '__OPENPENCIL_AUTH_PLAINTEXT_V1__';
 
 /**
- * Build an AuthStore around a file path and an encryption backend. The
+ * Build 和 AuthStore 围绕文件路径和加密后端。 The
  * default factory at the bottom of this file uses Electron's safeStorage;
- * tests use createInMemoryBackend() instead.
+ * 测试使用 createInMemoryBackend() 代替。
  */
 export function createAuthStore(opts: AuthStoreOpts): AuthStore {
   const { filePath, backend } = opts;
   let cache: Map<string, AuthCreds> | null = null;
   let warnedNoEncryption = false;
-  // Set when we detect an encrypted blob on disk but the encryption backend
-  // is unavailable. While locked, all reads return empty AND all writes throw
-  // — we refuse to overwrite the encrypted file with plaintext (which would
-  // destroy the user's stored credentials).
+  // Set 当我们在磁盘上检测到加密的 blob 但加密后端不可用时。 While 已锁定，所有读取都返回空 AND 所有写入都会抛出异常 -
+  // 我们拒绝用明文覆盖加密文件（这会破坏用户存储的凭据）。
   let lockedOut = false;
 
   async function load(): Promise<Map<string, AuthCreds>> {
@@ -55,8 +53,7 @@ export function createAuthStore(opts: AuthStoreOpts): AuthStore {
     try {
       const bytes = await fsp.readFile(filePath);
       let json: string;
-      // Plaintext file (from a previous run without encryption available)?
-      // Detect via the header marker.
+      // Plaintext 文件（来自先前运行且没有加密可用）？ Detect 通过标题标记。
       const head = bytes
         .slice(0, Math.min(PLAINTEXT_HEADER.length, bytes.length))
         .toString('utf-8');
@@ -65,9 +62,8 @@ export function createAuthStore(opts: AuthStoreOpts): AuthStore {
       } else if (backend.isAvailable()) {
         json = backend.decrypt(bytes);
       } else {
-        // Encrypted blob exists but no key. Lock the store: subsequent
-        // writes will throw rather than silently destroying the encrypted
-        // file by overwriting it with plaintext.
+        // Encrypted blob 存在，但没有密钥。 Lock 存储：后续写入将抛出异常，而不是通过用明文覆盖加密文件来默默
+        // 地销毁它。
         if (!warnedNoEncryption) {
           console.warn(
             '[git/auth-store] Encrypted credential file exists but safeStorage is unavailable. ' +
@@ -141,8 +137,8 @@ export function createAuthStore(opts: AuthStoreOpts): AuthStore {
 }
 
 /**
- * In-memory backend used by tests. Encrypt/decrypt are no-ops that wrap
- * the input in a marker so we can verify the round-trip happened.
+ * In-测试使用的内存后端
+ * 。 Encrypt/decrypt 是无操作，将输入包装在标记中，以便我们可以验证是否发生了往返。
  */
 export function createInMemoryBackend(): EncryptionBackend {
   return {
@@ -157,7 +153,7 @@ export function createInMemoryBackend(): EncryptionBackend {
 }
 
 /**
- * Test-only helper: build an unavailable backend that always returns false
+ * Test-only helper：构建一个始终返回 false 的不可用后端
  * for isAvailable() so tests can exercise the plaintext fallback.
  */
 export function createUnavailableBackend(): EncryptionBackend {
@@ -173,16 +169,16 @@ export function createUnavailableBackend(): EncryptionBackend {
 }
 
 /**
- * Default factory: build an AuthStore that uses the real Electron safeStorage
- * and the standard userData git-auth.bin location. Imported by ipc-handlers.ts.
+ * Default
+ * 工厂：构建一个 AuthStore，它使用真正的 Electron safeStorage 和标准 userData git-auth.bin 位置。
  *
- * NOTE: This factory must NOT be called at module load time — Electron's
- * safeStorage is only available after `app.whenReady()`. ipc-handlers.ts
- * calls this lazily inside setupGitIPC().
+ * Imported 作者：ipc-handlers.ts。 NOTE：This 工厂必须在模块加载时调用 NOT — Electron 的
+ * safeStorage
+ * 仅在 `app.whenReady()` 之后可用。 ipc-handlers.ts 在 setupGitIPC() 中懒惰地调用它。
  */
 export function createDefaultAuthStore(): AuthStore {
-  // Lazy require so tests don't pull in Electron.
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  // Lazy 需要，因此测试不会引入 Electron。
+// eslint-disable-next-line @typescript-eslint/no-require-imports
   const electron = require('electron');
   const userDataDir: string = electron.app.getPath('userData');
   const filePath = join(userDataDir, 'git-auth.bin');

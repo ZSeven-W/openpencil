@@ -83,7 +83,7 @@ const en = {
   'git.conflict.banner.continue': 'Continue',
   'git.conflict.banner.finalizeError': 'Could not apply: {{message}}',
   'git.conflict.banner.pollError': 'Status polling paused due to an error: {{message}}',
-  // I2: shown when the panel is reopened mid-merge and in-memory state was lost.
+  // I2：在合并过程中重新打开面板且内存状态丢失时显示。
   'git.conflict.banner.reopenMessage':
     'Panel reopened mid-merge — in-memory conflict state was lost. Please abort and re-pull.',
 
@@ -161,7 +161,7 @@ const en = {
   'git.autoBind.openButton': 'Open',
   'git.autoBind.dismissButton': 'Skip',
 
-  // ── Git Relative Time (Phase 4b — also used by Phase 4c history list) ──
+  // ── Git Relative Time （Phase 4b — 也被 Phase 4c 历史列表使用）──
   'git.relativeTime.justNow': 'just now',
   'git.relativeTime.minutesAgo': '{{count}}m ago',
   'git.relativeTime.hoursAgo': '{{count}}h ago',
@@ -342,7 +342,7 @@ const en = {
   'git.ssh.genericGuidance':
     'Copy the public key and add it to your Git provider’s SSH key settings.',
 
-  // ── Git Auth form (Phase 6b) ──
+  // ── Git Auth 形式 (Phase 6b) ──
   'git.auth.formLabel': 'Git credentials',
   'git.auth.heading': 'Authenticate with {{host}}',
   'git.auth.headingUnknown': 'Authenticate with this remote',

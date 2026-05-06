@@ -36,7 +36,7 @@ function defaultStops(): GradientStop[] {
   ];
 }
 
-/** Build a CSS gradient preview string for a gradient fill. */
+/** Build 用于渐变填充的 CSS 渐变预览字符串。 */
 function gradientPreviewCss(fill: PenFill): string | undefined {
   if (fill.type === 'linear_gradient') {
     const angle = fill.angle ?? 0;

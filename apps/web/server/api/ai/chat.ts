@@ -15,15 +15,15 @@ import {
   normalizeOptionalBaseURL,
   requireOpenAICompatBaseURL,
 } from './provider-url';
-// SENSITIVE_LOG_PATTERN + readDebugTail are now canonical in @zseven-w/pen-mcp.
-// Re-export here to keep existing consumers (tests, other modules) working.
+// SENSITIVE_LOG_PATTERN + readDebugTail 现在在 @zseven-w/pen-mcp 中是规范的。 Re-export
+// 保持现有使用者（测试、其他模块）正常工作。
 import { SENSITIVE_LOG_PATTERN, readDebugTail } from '@zseven-w/pen-mcp';
 export { SENSITIVE_LOG_PATTERN };
 
-/** Allowed media types for image attachments */
+/** Allowed 图像附件的媒体类型 */
 export const ALLOWED_MEDIA_TYPES = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp']);
 
-/** Resolve file extension from media type, falling back to 'png' for disallowed types */
+/** Resolve 文件扩展名来自媒体类型，对于不允许的类型则回退到“png” */
 export function resolveMediaExtension(mediaType: string): string {
   return ALLOWED_MEDIA_TYPES.has(mediaType) ? mediaType.split('/')[1] : 'png';
 }
@@ -31,7 +31,7 @@ export function resolveMediaExtension(mediaType: string): string {
 interface ChatAttachmentWire {
   name: string;
   mediaType: string;
-  data: string; // base64
+  data: string; // 64 位基数
 }
 
 interface ChatBody {
@@ -46,11 +46,11 @@ interface ChatBody {
   thinkingMode?: 'adaptive' | 'disabled' | 'enabled';
   thinkingBudgetTokens?: number;
   effort?: 'low' | 'medium' | 'high' | 'max';
-  /** For builtin provider: direct API key (not CLI-based) */
+  /** For 内置提供程序：直接 API 密钥（不是基于 CLI） */
   builtinApiKey?: string;
-  /** For builtin provider: API root base URL (e.g. https://api.openai.com/v1) */
+  /** For 内置提供程序：API 根基 URL（例如 https://api.openai.com/v1) */
   builtinBaseURL?: string;
-  /** For builtin provider: 'anthropic' or 'openai-compat' */
+  /** For 内置提供程序：“anthropic”或“openai-compat” */
   builtinType?: 'anthropic' | 'openai-compat';
 }
 
@@ -102,7 +102,7 @@ function buildClaudeExitHint(rawError: string, debugTail?: string[]): string | u
     }
   }
 
-  // If no debug info available, provide generic Windows guidance
+  // If 无可用调试信息，提供通用 Windows 指导
   if (hints.length === 0) {
     const isWin = process.platform === 'win32';
     if (isWin) {

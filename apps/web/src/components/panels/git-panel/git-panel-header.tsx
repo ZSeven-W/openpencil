@@ -1,19 +1,19 @@
 // apps/web/src/components/panels/git-panel/git-panel-header.tsx
 //
-// Header row for the Git panel ready/conflict states (Phase 4c → 6c).
-// Renders a flex row with two groups:
-//   Left:  branch picker (Phase 5) + pull/push remote controls (Phase 6b)
-//   Right: autosave-error dot + author-missing dot + overflow popover menu
+// Git 面板 ready/conflict 的 Header 行表示 (Phase 4c → 6c)。
+// Renders 具有两组的弹性行：
+// Left：分支选择器 (Phase 5) + pull/push 遥控器 (Phase 6b)
+// Right：自动保存错误点 + 作者缺失点 + 溢出弹出菜单
 //
-// Phase 6c expands the overflow popover into a LOCAL state machine mirroring
-// the Phase 5 branch picker pattern:
+// Phase 6c 将溢出弹出框扩展为 LOCAL 状态机镜像
+// Phase 5 分支选择器模式：
 //   { view: 'menu' | 'remote-settings' | 'ssh-keys' }
-// The menu view shows the existing three entries plus two new entries that
-// swap the popover content into the subviews defined in git-panel-remote-
-// settings.tsx / git-panel-ssh-keys.tsx. Subview state is NOT persisted to
-// the store — it lives entirely in this file and resets on popover close.
+// The 菜单视图显示现有的三个条目以及两个新条目
+// 将弹出窗口内容交换到 git-panel-remote- 中定义的子视图中
+// settings.tsx / git-panel-ssh-keys.tsx。 Subview 状态是 NOT 持续到
+// 商店 - 它完全存在于这个文件中，并在弹出窗口关闭时重置。
 //
-// The component returns null unless state.kind is 'ready' or 'conflict'.
+// The 组件返回 null，除非 state.kind 为“就绪”或“冲突”。
 
 import {
   ChevronRight,
@@ -58,15 +58,15 @@ export function GitPanelHeader() {
 
   return (
     <div className="flex items-center justify-between gap-1 border-b border-border/60 bg-card/40 px-2.5 py-1.5 backdrop-blur-sm">
-      {/* ── Left group: branch + remote controls ── */}
+      {/* ── Left 群组：分支+遥控器── */}
       <div className="flex items-center gap-0.5">
         <GitPanelBranchPicker />
         <GitPanelRemoteControls />
       </div>
 
-      {/* ── Right group: status dots + overflow menu ── */}
+      {/* ── Right 组：状态点+溢出菜单── */}
       <div className="flex items-center gap-1">
-        {/* Autosave error dot — rendered only when an error exists */}
+        {/* Autosave 错误点 — 仅在存在错误时呈现 */}
         {autosaveError !== null && (
           <Tooltip>
             <TooltipTrigger asChild>
@@ -86,17 +86,17 @@ export function GitPanelHeader() {
           </Tooltip>
         )}
 
-        {/* Author-missing dot — rendered only when no author identity set */}
+        {/* Author-missing dot — 仅在未设置作者身份时呈现 */}
         {authorIdentity === null && (
           <Tooltip>
             <TooltipTrigger asChild>
-              {/* Not clickable — tooltip-only hint */}
+              {/* Not clickable — 仅工具提示提示 */}
               <span
                 className="flex h-5 w-5 cursor-default items-center justify-center rounded-full"
                 role="status"
                 aria-label={t('git.header.authorMissingWarning')}
               >
-                {/* bg-yellow-500 is intentional — no shadcn token for "warning" */}
+                {/* bg-yellow-500 是故意的 — 没有用于“警告”的 shadcn 令牌 */}
                 <span className="block h-2 w-2 rounded-full bg-yellow-500" aria-hidden />
               </span>
             </TooltipTrigger>
@@ -106,14 +106,13 @@ export function GitPanelHeader() {
           </Tooltip>
         )}
 
-        {/* Overflow menu */}
+        {/* Overflow 菜单 */}
         <Popover
           open={overflowOpen}
           onOpenChange={(next) => {
             setOverflowOpen(next);
             if (next) {
-              // Always open on the menu view — a previous session's subview
-              // should never leak back in when the user reopens the popover.
+              // Always 在菜单视图上打开 - 当用户重新打开弹出窗口时，前一个会话的子视图不应该泄漏回来。
               setOverflowView('menu');
             }
           }}

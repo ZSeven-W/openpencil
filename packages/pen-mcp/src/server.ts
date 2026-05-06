@@ -8,7 +8,7 @@ import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { MCP_DEFAULT_PORT } from './constants';
 
-// Route modules
+// Route 模块
 import {
   DOCUMENT_TOOL_DEFINITIONS,
   DOCUMENT_TOOL_NAMES,
@@ -52,16 +52,16 @@ const DEBUG_ENABLED =
   process.env.OPENPENCIL_DEBUG_TOOLS === '1' || process.argv.includes('--debug');
 
 /**
- * MCP content block types supported by this server's tool handlers.
- * Phase 1 tools all return string (wrapped to a single text block); Phase 2
- * will add `debug_screenshot` which returns ToolContent[] directly.
- * See Decision 6 in docs/superpowers/specs/2026-04-06-mcp-debug-tools-design.md
+ * MCP 此服务器的工具处
+ * 理程序支持的内容块类型。 Phase 1 工具全部返回字符串（包装到单个文本块）； Phase 2 将添加
+ * `debug_screenshot` ，它直接返回 ToolContent[]。 See Decision 6 在
+ * docs/superpowers/specs/2026-04-06-mcp-debug-tools-design.md
  */
 export type ToolContent =
   | { type: 'text'; text: string }
   | { type: 'image'; data: string; mimeType: string };
 
-// --- Tool definitions (shared across all Server instances) ---
+// --- Tool 定义（在所有 Server 实例之间共享） ---
 
 const TOOL_DEFINITIONS = [
   ...DOCUMENT_TOOL_DEFINITIONS,
@@ -74,8 +74,7 @@ const TOOL_DEFINITIONS = [
   ...(DEBUG_ENABLED ? DEBUG_TOOL_DEFINITIONS : []),
 ];
 
-// --- Tool execution handler ---
-
+// --- Tool 执行处理程序 ---
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- MCP args are validated at runtime by the protocol
 async function handleToolCall(
   name: string,

@@ -13,7 +13,7 @@ export interface ThemeManagerProps {
   variables: Record<string, VariableDefinition> | undefined;
   setThemes: (themes: Record<string, string[]>) => void;
   setVariable: (name: string, def: VariableDefinition) => void;
-  /** Currently displayed theme axis */
+  /** Currently 显示主题轴 */
   currentAxis: string | null;
   themeAxis: string;
   themeValues: string[];
@@ -21,7 +21,7 @@ export interface ThemeManagerProps {
   onActiveAxisChange: (axis: string | null) => void;
 }
 
-/** Theme tabs header row — manages axes, presets, and import/export. */
+/** Theme 选项卡标题行 — 管理轴、预设和 import/export。 */
 function ThemeTabsHeaderInner({
   themes,
   variables,
@@ -49,7 +49,7 @@ function ThemeTabsHeaderInner({
   const presetNameInputRef = useRef<HTMLInputElement>(null);
   const themeRenameInputRef = useRef<HTMLInputElement>(null);
 
-  // Close menus on outside click
+  // Close 外部点击菜单
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (
@@ -89,7 +89,7 @@ function ThemeTabsHeaderInner({
     }
   }, [renamingTheme]);
 
-  /* --- Theme actions --- */
+  /* --- Theme 操作 --- */
   const handleAddTheme = () => {
     const current = themes ?? {};
     let counter = 1;

@@ -1,6 +1,6 @@
 /**
- * Validation fix application — applies property and structural fixes
- * returned by the vision validator to the document store.
+ * Validation
+ * 修复应用程序 — 将视觉验证器返回的属性和结构修复应用于文档存储。
  */
 
 import { nanoid } from 'nanoid';
@@ -56,7 +56,7 @@ export interface ValidationResult {
 }
 
 // ---------------------------------------------------------------------------
-// Safe fix constants
+// Safe 修复常量
 // ---------------------------------------------------------------------------
 
 export const SAFE_FIX_PROPERTIES: Record<
@@ -99,7 +99,7 @@ const VALID_TEXT_ALIGN = new Set(['left', 'center', 'right']);
 const VALID_TEXT_GROWTH = new Set(['auto', 'fixed-width', 'fixed-width-height']);
 
 // ---------------------------------------------------------------------------
-// Validation helpers
+// Validation 帮助者
 // ---------------------------------------------------------------------------
 
 export function isValidFixValue(property: string, value: unknown): boolean {
@@ -152,7 +152,7 @@ export function isValidStructuralFix(fix: unknown): fix is StructuralFix {
 }
 
 // ---------------------------------------------------------------------------
-// Apply fixes
+// Apply 修复
 // ---------------------------------------------------------------------------
 
 export async function applyValidationFixes(result: ValidationResult): Promise<number> {
@@ -164,7 +164,7 @@ export async function applyValidationFixes(result: ValidationResult): Promise<nu
   let applied = 0;
   const skipped: string[] = [];
 
-  // --- Property fixes ---
+  // --- Property 修复 ---
   for (const fix of result.fixes) {
     const node = store.getNodeById(fix.nodeId);
     if (!node) {

@@ -1,8 +1,9 @@
 /**
- * Isomorphic SVG parser: uses DOMParser in browser, regex fallback in Node.js.
- * Consolidated from:
- *   - apps/web/src/utils/svg-parser.ts  (browser, DOMParser + inline style support)
- *   - packages/pen-mcp/src/utils/svg-node-parser.ts  (Node.js, regex-based)
+ * Isomorphic
+ * SVG 解析器：在浏览器中使用 DOMParser，在 Node.js 中使用正则表达式回退。 Consolidated 来自： -
+ * apps/web/src/utils
+ * /svg-parser.ts（浏览器，DOMParser + 内联样式支持） - packages/pen-mcp/src/utils/svg-node-pa
+ rser.ts（Node.js，基于正则表达式）
  */
 
 import type { PenNode, PenNodeBase, LineNode } from '@zseven-w/pen-types';
@@ -37,8 +38,9 @@ const SKIP_TAGS = new Set([
 ]);
 
 /**
- * Parse an SVG string into editable PenNode array.
- * Isomorphic: uses DOMParser in browser environments, regex fallback in Node.js.
+ * Parse 将 SVG
+ * 字符串转换为可编辑的 PenNode 数组。 Isomorphic：在浏览器环境中使用
+ DOMParser，在 Node.js 中使用正则表达式回退。
  */
 export function parseSvgToNodes(svgText: string, maxDim = 400): PenNode[] {
   if (typeof DOMParser !== 'undefined') {
@@ -48,7 +50,7 @@ export function parseSvgToNodes(svgText: string, maxDim = 400): PenNode[] {
 }
 
 // ---------------------------------------------------------------------------
-// Shared dimension parsing
+// Shared 维度解析
 // ---------------------------------------------------------------------------
 
 function parseSvgDimensions(
@@ -101,7 +103,7 @@ function wrapIfMultiple(nodes: PenNode[], outW: number, outH: number): PenNode[]
 }
 
 // ---------------------------------------------------------------------------
-// Browser path (DOMParser)
+// Browser 路径 (DOMParser)
 // ---------------------------------------------------------------------------
 
 function parseSvgDOM(svgText: string, maxDim: number): PenNode[] {
@@ -280,7 +282,7 @@ function parseShapeDOM(
 }
 
 // ---------------------------------------------------------------------------
-// Node.js path (regex)
+// Node.js 路径（正则表达式）
 // ---------------------------------------------------------------------------
 
 function parseSvgRegex(svgText: string, maxDim: number): PenNode[] {
@@ -457,10 +459,10 @@ function parseRegexTag(
 }
 
 // ---------------------------------------------------------------------------
-// Style helpers — DOM path
+// Style 助手 — DOM 路径
 // ---------------------------------------------------------------------------
 
-/** Read an attribute from the element, checking inline style= first */
+/** Read 元素的属性，首先检查内联 style= */
 function getAttrDOM(el: Element, name: string): string | null {
   const style = el.getAttribute('style');
   if (style) {
@@ -502,7 +504,7 @@ function extractAttr(attrs: string, name: string): string | null {
   return attrs.match(re)?.[1] ?? null;
 }
 
-/** Extract attribute, checking inline style= first */
+/** Extract 属性，首先检查内联样式= */
 function extractStyleOrAttr(attrs: string, name: string): string | null {
   const styleMatch = attrs.match(/\bstyle\s*=\s*"([^"]*)"/);
   if (styleMatch) {

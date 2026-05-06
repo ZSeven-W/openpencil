@@ -1,14 +1,14 @@
 /**
- * Orchestrator for parallel design generation.
+ * 编排器：负责把一次设计请求拆解并组织执行。
  *
- * Flow:
- * 1. Fast "architect" API call decomposes the prompt into spatial sub-tasks
- * 2. Root frame is created on canvas
- * 3. Multiple sub-agents execute in parallel, each streaming JSONL
- * 4. Nodes are inserted to canvas in real-time with animation
- * 5. Post-generation screenshot validation (optional, requires API key)
+ * 主流程大致是：
+ * 1. 先让规划器模型把提示拆成空间子任务
+ * 2. 在画布上搭好根框架和必要脚手架
+ * 3. 调度多个子代理生成各自负责的区域
+ * 4. 流式把节点插入画布
+ * 5. 在最后做清理、补图和可选校验
  *
- * Falls back to single-call generation on any orchestrator failure.
+ * 如果编排链路某一步失败，会退回更简单的单次生成路径。
  */
 
 import type { PenNode, FrameNode } from '@/types/pen';
@@ -59,21 +59,23 @@ import { filterPlanningSkillsForPrompt, parseOrchestratorResponse } from './orch
 import { extractSidebarSurfaceColor } from './orchestrator-sidebar-color';
 
 // ---------------------------------------------------------------------------
-// Public API
+// 对外 API
 // ---------------------------------------------------------------------------
 
 const STATUS_BAR_NAME_RE =
   /status\s*[-_]?\s*bar|状态栏|system\s*[-_]?\s*(bar|chrome)|phone\s*(status|chrome)|ios\s*(bar|status)/i;
 
 /**
- * Removes AI-generated status-bar frames from root frames.
- * Re-reads from the store after each removal to avoid stale references.
- * Nodes with `role === 'status-bar'` (our pre-injected bar) are kept.
+ * 删除 AI 额外生成的重复状态栏。
+ *
+ * 预注入的状态栏（`role === 'status-bar'`）必须保留，
+ * 这里只清掉模型又多画出来的那部分。
+ * 每删除一次都会重新从 store 读取，避免用到过时引用。
  */
 function removeDuplicateStatusBars(rootNodes: FrameNode[]): void {
   const store = useDocumentStore.getState();
   for (const rn of rootNodes) {
-    // Re-read after each removal pass to get fresh children
+    // 每次删除后重新读取一遍子节点，保证后续扫描看到的是最新树结构
     let removed = true;
     while (removed) {
       removed = false;
@@ -83,9 +85,9 @@ function removeDuplicateStatusBars(rootNodes: FrameNode[]): void {
         if (isAIDuplicateStatusBar(child)) {
           store.removeNode(child.id);
           removed = true;
-          break; // restart scan with fresh children
+          break; // 重新启动新子扫描
         }
-        // One level deeper (e.g. inside a "Header" wrapper)
+        // 再向下看一层，覆盖包在 Header 之类容器里的重复状态栏
         if ('children' in child && Array.isArray(child.children)) {
           for (const gc of child.children) {
             if (isAIDuplicateStatusBar(gc)) {
@@ -504,16 +506,16 @@ export async function executeOrchestration(
   };
 
   try {
-    // -- Phase 1: Planning (streaming) --
+    // -- Phase 1：布局规划（流式） --
     renderPlanningStatus('Analyzing design structure...');
 
-    // Always attempt AI planning first — even for builtin providers.
-    // callOrchestrator already falls back to buildFallbackPlanFromPrompt
-    // when the model returns unparseable responses, so we don't need to
-    // skip the call preemptively.  Builtin providers get a tighter timeout
-    // (30s no-text / 60s hard) so planning fails fast when the provider
-    // can't handle the long system prompt, while still giving slow-but-capable
-    // models enough time once they start streaming.
+    // 总是优先尝试 AI 规划，即便是 builtin provider 也不例外。
+    // `callOrchestrator()` 内部已经带有 fallback：
+    // 模型返回不可解析结果时会退回 `buildFallbackPlanFromPrompt()`，
+    // 所以这里没必要预先跳过这一步。
+    // 对 builtin provider 使用更紧的超时，
+    // 这样在处理不了长 system prompt 时能快速失败，
+    // 同时仍给“慢但能做出来”的模型留出流式输出空间。
     const isBuiltin = (request.provider as string) === 'builtin';
     let plan: OrchestratorPlan;
     try {
@@ -527,9 +529,9 @@ export async function executeOrchestration(
         request.context?.designMd,
       );
     } catch (err) {
-      // User abort — propagate so the outer catch cleans up without mutating canvas
+      // 用户主动终止：直接抛出，让外层统一清理，不污染画布状态
       if (abortSignal?.aborted) throw err;
-      // Network error, timeout, or provider failure — use heuristic plan
+      // 网络错误、超时或 provider 失败时，退回启发式规划
       plan = buildFallbackPlanFromPrompt(
         preparedPrompt.orchestratorPrompt,
         request.context?.designMd,
@@ -542,9 +544,8 @@ export async function executeOrchestration(
 
     const appendResult = applyAppendContextToPlan(plan, request.context?.appendContext);
 
-    // Remove status-bar subtasks on mobile — the bar is pre-injected.
-    // In append mode the existing page already carries the status bar, so the
-    // planner-emitted one is stripped by applyAppendContextToPlan above.
+    // 移动端不需要模型再生成状态栏，因为状态栏已经预注入。
+    // append 模式也一样，已有页面本身就带着状态栏。
     const isMobileScreen = plan.rootFrame.width <= 480;
     if (isMobileScreen && !appendResult.skipStatusBar) {
       plan.subtasks = plan.subtasks.filter(
@@ -552,20 +553,20 @@ export async function executeOrchestration(
       );
     }
 
-    // Assign ID prefixes
+    // 给每个子任务分配独立的 ID 前缀，避免节点冲突
     for (const st of plan.subtasks) {
       st.idPrefix = st.id;
       st.parentFrameId = plan.rootFrame.id;
     }
 
-    // Set canvas width hint for accurate text height estimation
+    // 设置画布宽度提示，后续文本高度估算会用到
     setGenerationCanvasWidth(plan.rootFrame.width);
 
-    // Set context hint once with all subtask labels to avoid race conditions
-    // during concurrent sub-agent execution
+    // 一次性把所有子任务标签写进上下文提示，
+    // 避免并发子代理执行时互相覆盖
     setGenerationContextHint(request.prompt + ' ' + plan.subtasks.map((st) => st.label).join(' '));
 
-    // Show planning done + all subtask steps as pending
+    // 规划完成后，把所有子任务步骤先标成 pending
     emitProgress(
       plan,
       {
@@ -581,13 +582,13 @@ export async function executeOrchestration(
       callbacks,
     );
 
-    // -- Phase 2: Setup canvas --
+    // -- Phase 2：准备画布脚手架 --
     resetGenerationRemapping();
     const concurrency = request.concurrency ?? 1;
 
-    // Group subtasks by screen for concurrent mode.
-    // Only use concurrent path when there are MULTIPLE distinct screens.
-    // Single-page designs always use the sequential path (proven, simpler).
+    // 并发模式下，先按 screen 给子任务分组。
+    // 只有确实存在多个 screen 时才走并发分支；
+    // 单页设计始终走顺序路径，逻辑更稳也更简单。
     const screenGroups: { screen: string; indices: number[] }[] = [];
     if (concurrency > 1) {
       const hasAnyScreen = plan.subtasks.some((st) => st.screen);
@@ -606,16 +607,17 @@ export async function executeOrchestration(
       }
     }
 
-    // Effective concurrency: only parallel when there are multiple screen groups.
-    // Append mode is forced sequential — the concurrent branch creates multiple
-    // root frames which conflicts with reusing an existing content-root.
+    // 最终并发度：
+    // 只有多 screen 分组时才真正并发。
+    // append 模式强制顺序执行，因为并发分支会创建多个根框架，
+    // 这和“复用已有内容根节点”的 append 语义冲突。
     const effectiveConcurrency = appendResult.skipRootInsertion
       ? 1
       : screenGroups.length > 1
         ? concurrency
         : 1;
 
-    // Assign agent identities — one per screen group (concurrent) or per subtask (sequential)
+    // 分配代理身份：并发模式按 screen group 分，顺序模式则按子任务映射
     const subtaskIdentity = new Map<number, { color: string; name: string }>();
     if (effectiveConcurrency > 1) {
       const agentIdentities = assignAgentIdentities(screenGroups.length);
@@ -627,7 +629,7 @@ export async function executeOrchestration(
         }
       }
     } else {
-      // Sequential mode: single agent handles all subtasks
+      // 顺序模式下，由一个代理串行处理全部子任务
       const [identity] = assignAgentIdentities(1);
       if (identity) {
         for (let i = 0; i < plan.subtasks.length; i++) {
@@ -647,20 +649,18 @@ export async function executeOrchestration(
       { type: 'solid', color: plan.styleGuide?.palette?.background ?? '#FFFFFF' },
     ];
 
-    // Track all root frame nodes for result collection
+    // 记录所有根框架节点，后面汇总结果时会用到
     const rootNodes: FrameNode[] = [];
     let dashboardColumnIds: { sidebarId: string; mainId: string } | null = null;
 
     if (effectiveConcurrency > 1) {
-      // Concurrent mode: create one root frame per screen group.
-      // Subtasks sharing the same screen insert into the same root frame.
+      // 并发模式下，每个 screen group 都创建一个根框架，
+      // 同一 screen 的子任务都往这个根框架下插。
       //
-      // IMPORTANT: insertStreamingNode(node, null) has heavy side effects —
-      // it may replace the default empty frame (remapping the node ID to
-      // DEFAULT_FRAME_ID) and mutates generationRootFrameId. We only call it
-      // for the first frame to handle the empty-canvas case. Subsequent frames
-      // are inserted with addNode directly to avoid ID remapping and state
-      // corruption.
+      // 注意：`insertStreamingNode(node, null)` 副作用很重，
+      // 它可能替换默认空框架、重映射节点 ID，并改写 `generationRootFrameId`。
+      // 所以这里只让第一个根框架走它，用来处理“空画布首帧替换”；
+      // 其余根框架统一直接 `addNode`，避免状态被污染。
       const { addNode } = useDocumentStore.getState();
       const remappedIds = getGenerationRemappedIds();
       const gap = 100;
@@ -671,7 +671,7 @@ export async function executeOrchestration(
         const firstSt = plan.subtasks[group.indices[0]];
         const originalId = `${plan.rootFrame.id}-${group.screen}`;
 
-        // Height: sum of all subtask regions in this group (mobile uses fixed viewport)
+        // 高度估算：取当前分组内所有子任务区域高度之和
         const totalRegionHeight = group.indices.reduce(
           (sum, i) => sum + plan.subtasks[i].region.height,
           0,
@@ -680,7 +680,7 @@ export async function executeOrchestration(
           ? plan.rootFrame.height || 812
           : Math.max(320, totalRegionHeight);
 
-        // Frame name: use screen name if available, else first subtask's short name
+        // 框架名优先用 screen 名，否则退回第一个子任务的短标签
         const frameName = firstSt.screen
           ? firstSt.screen
           : firstSt.label.replace(/\s*[（(].+$/, '').trim() || firstSt.label;
@@ -701,7 +701,7 @@ export async function executeOrchestration(
         };
 
         if (g === 0) {
-          // First frame: use insertStreamingNode to handle empty canvas replacement
+          // 第一个根框架走 insertStreamingNode，专门处理空画布替换逻辑
           insertStreamingNode(rootNode, null);
           const actualId = remappedIds.get(originalId) ?? originalId;
           for (const idx of group.indices) {

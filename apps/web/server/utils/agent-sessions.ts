@@ -27,13 +27,13 @@ export interface NativeAgentSession {
   memberHandles?: Array<{ provider: ProviderHandle; tools: ToolRegistryHandle }>;
   createdAt: number;
   lastActivity: number;
-  /** toolCallId → memberId — routes async tool results to the correct member engine. */
+  /** toolCallId → memberId — 将异步工具结果路由到正确的成员引擎。 */
   toolOwners: Map<string, string>;
-  /** toolCallId → tool name — used for session-level tool guards and state updates. */
+  /** toolCallId → 工具名称 — 用于会话级工具防护和状态更新。 */
   toolNames: Map<string, string>;
-  /** memberId → role — used for delegation-time skill resolution. */
+  /** memberId → 角色 — 用于委派时间技能解析。 */
   memberRoles: Map<string, string>;
-  /** Session-local layout progress for builtin single-agent guardrails. */
+  /** Session-内置单代理护栏的本地布局进度。 */
   layoutPhase: LayoutPhase;
   layoutRootId: string | null;
 }
@@ -53,7 +53,7 @@ export interface AcpAgentSession {
 
 export type AgentSession = NativeAgentSession | AcpAgentSession;
 
-/** Create a native session with required defaults. */
+/** Create 具有所需默认值的本机会话。 */
 export function createSession(
   fields: Omit<
     NativeAgentSession,
@@ -77,7 +77,7 @@ export function createSession(
   };
 }
 
-/** Create an ACP session with required defaults. */
+/** Create 具有所需默认值的 ACP 会话。 */
 export function createAcpSession(fields: {
   acpSessionId: string;
   acpAgentId: string;
@@ -97,14 +97,14 @@ export function createAcpSession(fields: {
 
 export const agentSessions = new Map<string, AgentSession>();
 
-/** Mark a session as active so long-running external tool callbacks are not expired. */
+/** Mark 会话处于活动状态，因此长时间运行的外部工具回调不会过期。 */
 export function touchSession(session: Pick<AgentSession, 'lastActivity'>, now = Date.now()): void {
   session.lastActivity = now;
 }
 
-/** Idempotent cleanup — nullifies handles after destroying to prevent double-free. */
+/** Idempotent cleanup — 销毁后使句柄无效以防止双重释放。 */
 export function cleanup(session: AgentSession): void {
-  if (session.type === 'acp') return; // ACP connections managed by acp-connection-manager
+  if (session.type === 'acp') return; // ACP 连接由 acp-connection-manager 管理
   if (session.iter) {
     destroyIterator(session.iter);
     session.iter = undefined;
@@ -135,7 +135,7 @@ export function cleanup(session: AgentSession): void {
   }
 }
 
-/** Abort a session — makes pending nextEvent resolve null. */
+/** Abort 会话 — 使挂起的 nextEvent 解析为 null。 */
 export function abortSession(session: AgentSession): void {
   if (session.type === 'acp') {
     try {
@@ -147,7 +147,7 @@ export function abortSession(session: AgentSession): void {
   else if (session.engine) abortEngine(session.engine);
 }
 
-// Cleanup stale sessions every 60s (5-minute TTL from last activity)
+// 每 60 秒 Cleanup 陈旧会话（距上次活动 5 分钟的 TTL）
 setInterval(() => {
   try {
     const now = Date.now();
@@ -159,6 +159,6 @@ setInterval(() => {
       }
     }
   } catch {
-    /* ignore cleanup errors */
+    /* 忽略清理错误 */
   }
 }, 60_000);

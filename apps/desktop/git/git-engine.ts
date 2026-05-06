@@ -1,27 +1,27 @@
 // apps/desktop/git/git-engine.ts
 //
-// Engine adapter — the single backend interface for the git layer. Each
-// IPC handler is a one-line forward to one of the exported `engineX` fns
-// below. The engine owns:
+// Engine 适配器 — git 层的单一后端接口。 Each
+// IPC 处理程序是单行转发到导出的 `engineX` fns 之一
+// 下面。 The 引擎拥有：
 //
-//   - repoId allocation (via repoSession)
-//   - dual-ref milestone semantics (heads + autosaves)
-//   - workingDirty detection via blob OID comparison
-//   - candidate file walking for the needs-tracked-file picker
-//   - the iso vs sys decision (Phase 2a: always 'iso')
+//   - repoId 分配（通过 repoSession）
+//   - 双参考里程碑语义（头+自动保存）
+//   - 通过 blob OID 比较进行 workingDirty 检测
+//   - 需求跟踪文件选择器的候选文件遍历
+//   - iso 与 sys 的决定（Phase 2a：始终为“iso”）
 //
-// It does NOT own:
-//   - low-level git primitives (those live in git-iso.ts)
-//   - IPC serialization (that's ipc-handlers.ts)
+// It 拥有 NOT 拥有：
+//   - 低级 git 原语（位于 git-iso.ts 中的）
+//   - IPC 序列化（即 ipc-handlers.ts）
 //   - clone/fetch/push/auth/SSH/merge (Phase 2b/2c)
 //
-// FILE SIZE DEBT (Phase 7a): This file is ~1982 lines — approximately 2.5×
-// the 800-line guideline. The Phase 7a addition (engineBranchMergeFolderMode)
-// could not move to worktree-merge.ts because it needs session state
+// FILE SIZE DEBT (Phase 7a)：This 文件约为 1982 行 — 大约 2.5×
+// 800 行指南。 The Phase 7a 加法 (engineBranchMergeFolderMode)
+// 无法移动到 worktree-merge.ts，因为它需要会话状态
 // (repoSession, setInflightMerge) and ref-resolution helpers that live here;
-// worktree-merge.ts is intentionally kept as a pure shell-wrapper boundary
-// with no session coupling. Decomposition is deferred to a future phase —
-// revisit when this file crosses ~2100 lines or when session state is extracted.
+// worktree-merge.ts 有意保留为纯外壳包装边界
+// 没有会话耦合。 Decomposition 被推迟到未来阶段 —
+// 当此文件超过约 2100 行或提取会话状态时重新访问。
 
 import { resolve, basename, relative, join, sep } from 'node:path';
 import { promises as fsp } from 'node:fs';
@@ -88,8 +88,8 @@ import { runMerge, applyResolutions } from './merge-orchestrator';
 import { buildConflictBag, type ConflictBag, type ConflictResolution } from './merge-session';
 
 // ---------------------------------------------------------------------------
-// Public types — these are the wire shapes returned to the IPC layer.
-// They mirror the spec's IPC contract section.
+// Public 类型 — 这些是返回到 IPC 层的线形状。
+// They 镜像规范的 IPC 合同部分。
 // ---------------------------------------------------------------------------
 
 export interface RepoOpenInfo {
@@ -113,14 +113,14 @@ export interface CommitMeta {
 export interface BranchInfo {
   name: string;
   isCurrent: boolean;
-  ahead: number; // always 0 in Phase 2a (no remote tracking)
-  behind: number; // always 0 in Phase 2a
+  ahead: number; // Phase 2a 中始终为 0（无远程跟踪）
+  behind: number; // Phase 2a 中始终为 0
   lastCommit: { hash: string; message: string; timestamp: number } | null;
 }
 
 /**
- * Phase 6a: renderer-visible remote metadata for the single 'origin' remote.
- * Mirrors the wire shape declared in apps/web/src/services/git-types.ts.
+ * Phase 6a：单个“
+ * 原始”远程的渲染器可见远程元数据。 Mirrors 在 apps/web/src/services/git-types.ts 中声明的线形状。
  */
 export interface RemoteInfo {
   name: 'origin';
@@ -129,11 +129,11 @@ export interface RemoteInfo {
 }
 
 export interface StatusInfo {
-  /** Current branch from HEAD's symbolic ref. Always populated for normal
-   * repos — even on a fresh repo with no commits, isomorphic-git's
-   * currentBranch reads HEAD's symbolic value (e.g. 'main') without
-   * verifying the heads ref exists. The engine throws 'engine-crash' if
-   * HEAD is detached, so callers never see undefined here. */
+  /** Current 来自 HEAD 的符号引用的分支。 Always 为普通存储库填充 - 即使在没有提交的新存储库上，同构-git 的
+   * currentBranch 也会读取 HEAD 的符号值（例如“main”），而不验证头引用是否存在。如果 HEAD
+   * 被分离，The 引擎会抛出“engine-crash”，因此调用者永远不会在这里看到未定义的情况。
+   *
+   *  */
   branch: string;
   trackedFilePath: string | null;
   workingDirty: boolean;
@@ -143,24 +143,24 @@ export interface StatusInfo {
   behind: number;
   mergeInProgress: boolean;
   unresolvedFiles: string[];
-  /** Wire-format conflict bag when an in-flight merge has unresolved
-   * conflicts. null otherwise. Phase 2c populates this from the session's
-   * inflightMerge state. */
+  /** Wire-格式冲突包，当正在进行的合并有未解决的冲突时。否则为 null。 Phase 2c 从会话的
+   * inflightMerge 状态填充此值。
+   *  */
   conflicts: ConflictBag | null;
   /**
-   * I2: true when the panel was reopened mid-merge — MERGE_HEAD is present
-   * on disk but session.inflightMerge is null (new session, lost in-memory
-   * state). The renderer uses this to show an abort-only UI instead of the
-   * normal conflict resolution view.
+   * I2：在合并过程中重新打
+   * 开面板时为 true — MERGE_HEAD 存在于磁盘上，但 session.inflightMerge 为
+   * null（新会话，丢失内存中状态）。 The 渲染器使用它来显示仅中止的 UI 而不是正常的冲突解决视图。
+   *
    */
   reopenedMidMerge: boolean;
 }
 
 // ---------------------------------------------------------------------------
-// Internal helpers
+// Internal 帮助者
 // ---------------------------------------------------------------------------
 
-/** Return the session or throw GitError('no-file'). */
+/** Return 会话或抛出 GitError('no-file')。 */
 function requireSession(repoId: string): RepoSession {
   const s = getSession(repoId);
   if (!s) {
@@ -224,7 +224,7 @@ async function resolveSshKeyPath(keyId: string): Promise<string> {
  * Decide whether a network op needs system git.
  *
  * iso (isomorphic-git) only speaks HTTP/HTTPS. Everything else — SSH transport,
- * `file://` URLs, local file paths — must go through sys. SSH key auth always
+ * `file://` URLs，本地文件路径 — 必须通过 sys.path SSH 密钥验证始终
  * forces sys regardless of URL scheme.
  *
  * - `null` URL (anonymous, no remote info) → iso (default safe path)
@@ -239,12 +239,12 @@ export function shouldUseSys(url: string | null, auth?: AuthCreds): boolean {
 }
 
 /**
- * Extract the hostname from a git remote URL. Handles three formats:
- *   https://host/path           → host
- *   ssh://git@host:22/path      → host
- *   git@host:user/repo.git      → host (the SCP-style SSH form)
+ * Extract 来自
+ * git 远程 URL 的主机名。 Handles 三种格式： https://host/path → host
+ * ssh://git@host:22/path → host
+ * git@host:user/repo.git → host （SCP
  *
- * Returns null for unparseable URLs (e.g. local file paths used in tests).
+ * 样式 SSH 形式） Returns null 表示不可解析的 URLs （例如，测试中使用的本地文件路径）。
  */
 export function parseHost(url: string): string | null {
   if (url.startsWith('https://') || url.startsWith('http://') || url.startsWith('ssh://')) {
@@ -254,17 +254,17 @@ export function parseHost(url: string): string | null {
       return null;
     }
   }
-  // SCP-style: user@host:path
+  // SCP-风格：用户@主机：路径
   const m = url.match(/^[^@\s]+@([^:\s]+):/);
   if (m) return m[1];
   return null;
 }
 
 /**
- * Look up the remote URL configured for `<remote>` (default 'origin') on
- * the given handle. Uses isomorphic-git's listRemotes which only reads
- * .git/config — no network. Returns null if the remote isn't configured
- * or the gitdir is unreadable.
+ * Look 启动为给定句柄
+ * 上的 `<remote>`（默认“origin”）配置的远程 URL。 Uses 同构-git 的 listRemotes 只读取
+ * .git/config — 无网络。 Returns null 如果远程未配置或 gitdir 不可读。
+ *
  */
 export async function getRemoteUrl(
   handle: IsoRepoHandle,
@@ -280,15 +280,15 @@ export async function getRemoteUrl(
 }
 
 /**
- * Pick the auth credentials to use for a remote operation. Order of
- * precedence:
- *   1. The explicit `auth` argument passed to the IPC call (highest)
- *   2. A credential previously stored in auth-store, keyed by the URL's host
- *   3. undefined → anonymous / let iso fail with auth-required
+ * Pick 用于远程操作的
+ * 身份验证凭据。 Order 的优先级： 1. The 显式 `auth` 参数传递给 IPC 调用（最高） 2. 先前存储在
+ * auth-store
+ * 中的凭证，由 URL 的主机键入 3. 未定义 → 匿名 / 让 iso 因需要身份验证而失败 This 是 SINGLE
+ * 发生身份验证解析的地方。 Every 网络引擎 fn (clone/fetch/pull/push) 在决定 iso 与 sys
  *
- * This is the SINGLE place auth resolution happens. Every network engine fn
- * (clone/fetch/pull/push) calls it before deciding iso vs sys and before
- * passing creds into iso's onAuth callback.
+ * 之前以及将信用传递到 iso 的 onAuth 回调之前调用它。
+ *
+ *
  */
 export async function resolveAuthForRemote(
   url: string | null,
@@ -302,8 +302,9 @@ export async function resolveAuthForRemote(
 }
 
 /**
- * Map an iso (isomorphic-git) error to a GitErrorCode. iso errors carry
- * a `.code` property and sometimes a `.data.statusCode` for HTTP failures.
+ * Map 对 GitErr
+ * orCode 的 iso（同构-git）错误。 iso 错误带有 `.code` 属性，有时还带有 HTTP 故障的
+ `.data.statusCode`。
  */
 function mapIsoError(err: unknown): GitErrorCode {
   const e = err as { code?: string; data?: { statusCode?: number }; message?: string };
@@ -325,18 +326,18 @@ function mapIsoError(err: unknown): GitErrorCode {
 }
 
 // ---------------------------------------------------------------------------
-// Public engine fns
+// Public 发动机 fns
 // ---------------------------------------------------------------------------
 
 /**
- * Discover whether the given .op file lives inside a git repo. If found,
- * register a session and auto-bind the file path. If not found, return
+ * Discover 给定的 .op 文件是否存在于 git 存储库中。 If 发现，
+ * 注册会话并自动绑定文件路径。 If 未找到，返回
  * { mode: 'none' } and allocate no session.
  *
- * The candidate file walk is NOT performed here for the 'none' branch.
- * For the 'single-file' branch, candidates is always [opFile] (a single-file
- * repo can only contain one .op file by definition). For the 'folder' branch,
- * we run the full walk so the picker has data ready.
+ * The 候选文件遍历是 NOT 此处针对“none”分支执行的。
+ * For “单文件”分支，候选者始终是 [opFile] （单文件
+ * 根据定义，repo 只能包含一个 .op 文件）。 For '文件夹'分支，
+ * 我们运行完整的步行，以便选择器准备好数据。
  */
 export async function engineDetect(filePath: string): Promise<{ mode: 'none' } | RepoOpenInfo> {
   const detection = await detectRepo(filePath);
@@ -358,8 +359,8 @@ export async function engineDetect(filePath: string): Promise<{ mode: 'none' } |
 }
 
 /**
- * Initialize a fresh single-file repo at .op-history/<basename>.git next to
- * the file. Auto-binds the file as the tracked file.
+ * Initialize
+ * 一个新的单文件存储库，位于文件旁边的 .op-history/<basename>.git 中。 Auto-将该文件绑定为跟踪文件。
  */
 export async function engineInit(filePath: string): Promise<RepoOpenInfo> {
   const handle = await initSingleFile({ filePath });
@@ -374,7 +375,7 @@ export async function engineInit(filePath: string): Promise<RepoOpenInfo> {
 }
 
 // ---------------------------------------------------------------------------
-// Internal helpers (continued)
+// Internal 助手（续）
 // ---------------------------------------------------------------------------
 
 function toOpenInfo(session: RepoSession): RepoOpenInfo {
@@ -390,9 +391,9 @@ function toOpenInfo(session: RepoSession): RepoOpenInfo {
 }
 
 /**
- * Build a single CandidateFileInfo for a single-file repo. Counts come from
- * the heads + autosaves refs for the current branch (or zeros if no commits
- * yet). Used by engineDetect/Init in single-file mode.
+ * Build 用于单个文件
+ * 存储库的单个 CandidateFileInfo。 Counts 来自当前分支的头+自动保存引用（如果尚未提交则为零）。 Used by
+ * engineDetect/Init 在单文件模式下。
  */
 async function buildSingleFileCandidate(
   handle: IsoRepoHandle,
@@ -404,10 +405,10 @@ async function buildSingleFileCandidate(
 }
 
 /**
- * Compute the candidate metadata (counts + last commit) for one file by
- * walking the heads and autosaves refs of the current branch and checking
- * blob presence at each commit's tree. Used by both single-file and folder
- * walks.
+ * Compute
+ * 通过遍历当前分支的头和自动保存引用并检查每个提交树中是否存在 blob 来获取一个文件的候选元数据（计数 + 最后一次提交）。 Used
+ * 通过单文件和文件夹行走。
+ *
  */
 async function computeCandidateMeta(
   handle: IsoRepoHandle,

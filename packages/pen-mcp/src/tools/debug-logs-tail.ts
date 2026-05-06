@@ -16,7 +16,7 @@ interface LogsTailResponse {
   lines: string[];
 }
 
-// Override hook for tests.
+// 用于测试的 Override 挂钩。
 let _logDirOverride: string | null = null;
 export function __setLogDirForTests(dir: string | null): void {
   _logDirOverride = dir;
@@ -38,7 +38,7 @@ async function findLatestLog(): Promise<string | null> {
   } catch {
     return null;
   }
-  // Prefer today's file, else fall back to the newest server-*.log within 7 days.
+  // Prefer 今天的文件，否则在 7 天内回退到最新的服务器-*.log。
   const today = `server-${todayStamp()}.log`;
   if (files.includes(today)) return join(dir, today);
 

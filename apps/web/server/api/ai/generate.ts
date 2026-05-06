@@ -20,9 +20,9 @@ interface GenerateBody {
 }
 
 /**
- * Non-streaming AI generation endpoint.
- * Routes to the appropriate provider SDK based on the `provider` field.
- * Requires explicit provider and model; no fallback routing.
+ * Non-streamin
+ * g AI 生成端点。根据 `provider` 字段，将 Routes
+ * 发送至适当的提供商 SDK。 Requires 显式提供者和模型；没有后备路由。
  */
 export default defineEventHandler(async (event) => {
   const body = await readBody<GenerateBody>(event);
@@ -57,7 +57,7 @@ export default defineEventHandler(async (event) => {
   return { error: 'Missing or unsupported provider. Provider fallback is disabled.' };
 });
 
-/** Generate via Claude Agent SDK (uses local Claude Code OAuth login, no API key needed) */
+/** Generate 通过 Claude Agent SDK （使用本地 Claude Code OAuth 登录，无需 API 密钥） */
 async function generateViaAgentSDK(
   body: GenerateBody,
   requestedModel?: string,
@@ -65,7 +65,7 @@ async function generateViaAgentSDK(
   const runQuery = async (): Promise<{ text?: string; error?: string }> => {
     const { query } = await import('@anthropic-ai/claude-agent-sdk');
 
-    // Remove CLAUDECODE env to allow running from within a CC terminal
+    // Remove CLAUDECODE env 以允许从 CC 终端内运行
     const env = buildClaudeAgentEnv();
     const debugFile = getClaudeAgentDebugFilePath();
     const model = requestedModel;

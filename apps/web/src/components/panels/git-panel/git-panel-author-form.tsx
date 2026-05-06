@@ -1,13 +1,13 @@
 // apps/web/src/components/panels/git-panel/git-panel-author-form.tsx
 //
-// Inline name + email form for the first commit author identity. Per spec
-// lines 285-292: shown once when the user attempts a commit with no cached
-// identity. Phase 4a ships the component; Phase 4c's commit input owns the
-// trigger (via showAuthorPrompt() when authorIdentity === null).
+// Inline 首次提交作者身份的姓名 + 电子邮件形式。 Per 规格
+// 第 285-292 行：当用户尝试在没有缓存的情况下提交时显示一次
+// 身份。 Phase 4a 运送组件； Phase 4c 的提交输入拥有
+// 触发（当 authorIdentity === null 时通过 showAuthorPrompt()）。
 //
-// The form validates name (non-empty) and email (must contain @). On
-// submit, calls setAuthorIdentity which persists to OpenPencil prefs and
-// updates the in-memory cache. Cancel hides the form without persisting.
+// The 表单验证姓名（非空）和电子邮件（必须包含@）。 On
+// 提交，调用 setAuthorIdentity ，它会持续到 OpenPencil prefs 并
+// 更新内存缓存。 Cancel 隐藏表单而不保留。
 
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';

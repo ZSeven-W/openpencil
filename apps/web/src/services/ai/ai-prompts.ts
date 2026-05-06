@@ -1,14 +1,14 @@
 import { resolveSkills } from '@zseven-w/pen-ai-skills';
 import type { DesignMdSpec } from '@/types/design-md';
 
-// Safe code block delimiter
+// Safe 代码块分隔符
 const BLOCK = '```';
 
 // ---------------------------------------------------------------------------
-// buildDesignMdStylePolicy — condensed design.md style policy for AI prompts
+// buildDesignMdStylePolicy — AI 提示的压缩 design.md 样式策略
 // ---------------------------------------------------------------------------
 
-/** Build a condensed design.md style policy string for AI prompt injection. */
+/** Build 用于 AI 提示注入的压缩 design.md 样式策略字符串。 */
 export function buildDesignMdStylePolicy(spec: DesignMdSpec): string {
   const parts: string[] = [];
 

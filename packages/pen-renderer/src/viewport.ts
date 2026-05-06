@@ -4,15 +4,16 @@ import type { ViewportState } from './types.js';
 export type { ViewportState } from './types.js';
 
 /**
- * Compute the 3x3 transform matrix for CanvasKit from viewport state.
- * CanvasKit uses column-major [scaleX, skewX, transX, skewY, scaleY, transY, pers0, pers1, pers2]
+ * Compute
+ * 来自视口状态的 CanvasKit 的 3x3 变换矩阵。 CanvasKit 使用列主
+ [scaleX、skewX、transX、skewY、scaleY、transY、pers0、pers1、pers2]
  */
 export function viewportMatrix(vp: ViewportState): number[] {
   return [vp.zoom, 0, vp.panX, 0, vp.zoom, vp.panY, 0, 0, 1];
 }
 
 /**
- * Convert screen (client) coordinates to scene coordinates.
+ * Convert 屏幕（客户端）坐标到场景坐标。
  */
 export function screenToScene(
   clientX: number,
@@ -29,7 +30,7 @@ export function screenToScene(
 }
 
 /**
- * Convert scene coordinates to screen coordinates.
+ * Convert 场景坐标到屏幕坐标。
  */
 export function sceneToScreen(
   sceneX: number,
@@ -44,7 +45,7 @@ export function sceneToScreen(
 }
 
 /**
- * Zoom towards a point (in screen coordinates).
+ * Zoom 朝向一点（在屏幕坐标中）。
  */
 export function zoomToPoint(
   vp: ViewportState,
@@ -57,7 +58,7 @@ export function zoomToPoint(
   const sx = screenX - canvasRect.left;
   const sy = screenY - canvasRect.top;
 
-  // The scene point under the cursor should stay fixed
+  // The 光标下的场景点应保持固定
   const sceneX = (sx - vp.panX) / vp.zoom;
   const sceneY = (sy - vp.panY) / vp.zoom;
 
@@ -69,7 +70,7 @@ export function zoomToPoint(
 }
 
 /**
- * Get viewport bounds in scene coordinates.
+ * Get 场景坐标中的视口边界。
  */
 export function getViewportBounds(
   vp: ViewportState,
@@ -86,7 +87,7 @@ export function getViewportBounds(
 }
 
 /**
- * Check if a rect is within the viewport bounds.
+ * Check 如果矩形位于视口边界内。
  */
 export function isRectInViewport(
   rect: { x: number; y: number; w: number; h: number },

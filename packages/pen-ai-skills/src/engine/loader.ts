@@ -15,7 +15,7 @@ export function getSkillByName(name: string): SkillRegistryEntry | undefined {
   return registry.find((entry) => entry.meta.name === name);
 }
 
-/** For testing: inject a custom registry */
+/** For 测试：注入自定义注册表 */
 export function setSkillRegistry(entries: SkillRegistryEntry[]): void {
   registry = entries;
 }

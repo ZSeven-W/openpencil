@@ -106,7 +106,7 @@ code {
   font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New', monospace;
 }
 
-/* Syntax highlighting for code panel */
+/* Syntax 代码面板高亮显示 */
 .syn-keyword {
   color: #c792ea;
 }
@@ -130,13 +130,13 @@ code {
   color: #89ddff;
 }
 
-/* Thin scrollbars — standard property (Firefox, Edge, Chrome 121+) */
+/* Thin 滚动条 — 标准属性（Firefox、Edge、Chrome 121+） */
 * {
   scrollbar-width: thin;
   scrollbar-color: var(--border) transparent;
 }
 
-/* Thin scrollbars — WebKit fallback (older Chrome/Electron) */
+/* Thin 滚动条 — WebKit 后备（较旧的 Chrome/Electron） */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -152,7 +152,7 @@ code {
   background: var(--muted-foreground);
 }
 
-/* Electron window drag regions */
+/* Electron 窗口拖动区域 */
 .app-region-drag {
   -webkit-app-region: drag;
 }

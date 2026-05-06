@@ -3,8 +3,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { gitClient, isGitApiAvailable } from '@/services/git-client';
 import { GitError, GIT_ERROR_MARKER } from '@/services/git-error';
 
-// A minimal stub of window.electronAPI.git — we only implement the methods
-// the tests exercise.
+// window.electronAPI.git 的最小存根——我们只实现测试所使用的方法。
 function makeFakeApi(overrides: Record<string, unknown> = {}) {
   return {
     isElectron: true as const,
@@ -20,8 +19,8 @@ function makeFakeApi(overrides: Record<string, unknown> = {}) {
 
 describe('git-client', () => {
   afterEach(() => {
-    // Clean up the stub so tests don't leak.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    // Clean 增加存根，这样测试就不会泄漏。
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
     (globalThis as any).window = undefined;
   });
 
@@ -41,7 +40,7 @@ describe('git-client', () => {
 
   describe('method passthrough', () => {
     beforeEach(() => {
-      // Reset any stubs from previous tests.
+      // Reset 之前测试的任何存根。
       vi.unstubAllGlobals();
     });
 

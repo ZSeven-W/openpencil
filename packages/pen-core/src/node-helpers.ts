@@ -1,16 +1,16 @@
 import type { PenNode } from '@zseven-w/pen-types';
 
 /**
- * Check if a node is an overlay that uses absolute positioning and should
- * not participate in layout flow.
+ * Check 如果节点是使
+ * 用绝对定位的覆盖层并且不应参与布局流。 Requires 显式 `role: 'overlay'`。 Earlier 版本与 `role:
  *
- * Requires explicit `role: 'overlay'`. Earlier versions matched on
- * `role: 'badge' | 'pill' | 'tag'` plus name regexes, but those are
- * inline-component markers in this repo (see `role-resolver.ts` and
- * `strip-redundant-section-fills.ts` PROTECTED_ROLES) — pulling them out
- * of layout flow collapsed them to (0,0) of their parent and stacked
- * them on top of siblings. `role: 'overlay'` is the dedicated opt-in for
- * notification dots and true floating decorations.
+ * 'badge' | 'pill' | 'tag'`
+ * 加上名称正则表达式匹配，
+ * 但这些是此存储库中的内联组件标记（请参阅 `role-resolver.ts` 和
+ * `strip-redundant-section-fills.ts` PROTECTED_ROLES） -
+ * 将它们从布局流中拉出，将它们折叠到其父级的 (0,0) 并将它们堆叠在同级之上。 `role: 'overlay'`
+ * 是通知点和真正浮动装饰的专用选择。
+ *
  */
 export function isOverlayNode(node: PenNode): boolean {
   if ('role' in node) {
@@ -21,17 +21,18 @@ export function isOverlayNode(node: PenNode): boolean {
 }
 
 /**
- * @deprecated Renamed to `isOverlayNode`. Semantics also tightened:
- * this alias no longer returns true for `role: 'badge' | 'pill' | 'tag'`
- * (those are inline-component roles in this repo and should flow in
- * auto-layout, not float). Use `isOverlayNode` and mark true floating
- * decorations with `role: 'overlay'`.
+ * @deprecated Renamed 至 `isOverlayNode`。 Semantics 也收紧了：
+ * 此别名不再为 `role: 'badge' | 'pill' | 'tag'` 返回 true
+ * （这些是此存储库中的内联组件角色，应该流入
+ * 自动布局，而不是浮动）。 Use `isOverlayNode` 并标记为 true 浮动
+ * 装饰与 `role: 'overlay'`。
  */
 export const isBadgeOverlayNode = isOverlayNode;
 
 /**
- * Convert a name string to PascalCase.
- * Strips non-alphanumeric characters and joins words.
+ * Convert 到
+ * PascalCase 的名称字符串。 Strips
+ 非字母数字字符并连接单词。
  */
 export function sanitizeName(name: string): string {
   return name

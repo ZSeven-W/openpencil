@@ -19,10 +19,9 @@ export interface UpdaterState {
   error?: string;
 }
 
-// ---- Git API types (Phase 2a) ------------------------------------------------
-// These mirror the engine's RepoOpenInfo / StatusInfo / CommitMeta / BranchInfo
-// shapes so the renderer can type its IPC calls. The marker-based GitError
-// rehydration is implemented on the renderer side in Phase 3.
+// ---- Git API 类型 (Phase 2a) ------------------------------------------------
+// These 镜像引擎的 RepoOpenInfo / StatusInfo / CommitMeta / BranchInfo 形状，以便渲染器可以键入其
+// IPC 调用。 The 基于标记的 GitError 补水是在 Phase 3 的渲染器端实现的。
 
 export interface GitCandidateFileInfo {
   path: string;
@@ -103,9 +102,9 @@ export interface GitBranchInfo {
 }
 
 /**
- * Phase 6a: renderer-visible remote metadata for the single 'origin' remote.
- * Mirrors apps/web/src/services/git-types.ts so the renderer can type its
- * IPC calls without importing from the desktop side.
+ * Phase 6a：单个“
+ * 原始”远程的渲染器可见远程元数据。 Mirrors apps/web/src/services/git-types.ts，以便渲染器可以键入其
+ * IPC 调用，而无需从桌面端导入。
  */
 export interface GitRemoteInfo {
   name: 'origin';
@@ -145,7 +144,7 @@ export interface GitAPI {
   branchSwitch: (repoId: string, name: string) => Promise<void>;
   branchDelete: (repoId: string, name: string, opts?: { force?: boolean }) => Promise<void>;
 
-  // ---- Phase 2b: remote ops ----
+  // ---- Phase 2b：远程操作 ----
   clone: (opts: {
     url: string;
     dest: string;
@@ -167,7 +166,7 @@ export interface GitAPI {
     auth?: { kind: 'token'; username: string; token: string } | { kind: 'ssh'; keyId: string },
   ) => Promise<{ result: 'ok' }>;
 
-  // ---- Phase 2b: auth ----
+  // ---- Phase 2b：验证 ----
   authStore: (
     host: string,
     creds: { kind: 'token'; username: string; token: string } | { kind: 'ssh'; keyId: string },
@@ -179,7 +178,7 @@ export interface GitAPI {
   >;
   authClear: (host: string) => Promise<void>;
 
-  // ---- Phase 2b: ssh keys (privateKeyPath stripped) ----
+  // ---- Phase 2b：ssh 密钥（privateKeyPath 已剥离）----
   sshListKeys: () => Promise<
     Array<{
       id: string;
@@ -205,7 +204,7 @@ export interface GitAPI {
   }>;
   sshDeleteKey: (keyId: string) => Promise<void>;
 
-  // ---- Phase 2c: merge orchestration ----
+  // ---- Phase 2c：合并编排 ----
   diff: (
     repoId: string,
     fromCommit: string,
@@ -234,10 +233,10 @@ export interface GitAPI {
   applyMerge: (repoId: string) => Promise<{ hash: string; noop: boolean }>;
   abortMerge: (repoId: string) => Promise<void>;
 
-  // Phase 4a: author identity probe (system git config)
+  // Phase 4a：作者身份探测（系统 git 配置）
   getSystemAuthor: () => Promise<{ name: string; email: string } | null>;
 
-  // Phase 6a: remote metadata + config (no network)
+  // Phase 6a：远程元数据+配置（无网络）
   remoteGet: (repoId: string) => Promise<GitRemoteInfo>;
   remoteSet: (repoId: string, url: string | null) => Promise<GitRemoteInfo>;
 }
@@ -267,7 +266,7 @@ export interface ElectronAPI {
     cancelLabel: string;
   }) => Promise<'save' | 'discard' | 'cancel'>;
   syncRecentFiles: (files: Array<{ fileName: string; filePath: string }>) => void;
-  /** Resolve the absolute filesystem path of a File object obtained from drag-and-drop. */
+  /** Resolve 通过拖放获得的 File 对象的绝对文件系统路径。 */
   getPathForFile: (file: File) => string | null;
   updater: {
     getState: () => Promise<UpdaterState>;
@@ -386,24 +385,24 @@ const api: ElectronAPI = {
     branchDelete: (repoId: string, name: string, opts?: { force?: boolean }) =>
       ipcRenderer.invoke('git:branchDelete', repoId, name, opts),
 
-    // Phase 2b: remote ops
+    // Phase 2b：远程操作
     clone: (opts) => ipcRenderer.invoke('git:clone', opts),
     fetch: (repoId, auth) => ipcRenderer.invoke('git:fetch', repoId, auth),
     pull: (repoId, auth) => ipcRenderer.invoke('git:pull', repoId, auth),
     push: (repoId, auth) => ipcRenderer.invoke('git:push', repoId, auth),
 
-    // Phase 2b: auth
+    // Phase 2b：身份验证
     authStore: (host, creds) => ipcRenderer.invoke('git:authStore', host, creds),
     authGet: (host) => ipcRenderer.invoke('git:authGet', host),
     authClear: (host) => ipcRenderer.invoke('git:authClear', host),
 
-    // Phase 2b: ssh keys
+    // Phase 2b：ssh 密钥
     sshListKeys: () => ipcRenderer.invoke('git:sshListKeys'),
     sshGenerateKey: (opts) => ipcRenderer.invoke('git:sshGenerateKey', opts),
     sshImportKey: (opts) => ipcRenderer.invoke('git:sshImportKey', opts),
     sshDeleteKey: (keyId) => ipcRenderer.invoke('git:sshDeleteKey', keyId),
 
-    // Phase 2c: merge orchestration
+    // Phase 2c：合并编排
     diff: (repoId, fromCommit, toCommit) =>
       ipcRenderer.invoke('git:diff', repoId, fromCommit, toCommit),
     branchMerge: (repoId, fromBranch) => ipcRenderer.invoke('git:branchMerge', repoId, fromBranch),
@@ -412,10 +411,10 @@ const api: ElectronAPI = {
     applyMerge: (repoId) => ipcRenderer.invoke('git:applyMerge', repoId),
     abortMerge: (repoId) => ipcRenderer.invoke('git:abortMerge', repoId),
 
-    // Phase 4a: author identity probe
+    // Phase 4a：作者身份探测
     getSystemAuthor: () => ipcRenderer.invoke('git:getSystemAuthor'),
 
-    // Phase 6a: remote metadata + config
+    // Phase 6a：远程元数据+配置
     remoteGet: (repoId: string) => ipcRenderer.invoke('git:remoteGet', repoId),
     remoteSet: (repoId: string, url: string | null) =>
       ipcRenderer.invoke('git:remoteSet', repoId, url),

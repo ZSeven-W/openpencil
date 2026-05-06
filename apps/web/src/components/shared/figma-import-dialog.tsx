@@ -34,7 +34,7 @@ export default function FigmaImportDialog({ open, onClose }: FigmaImportDialogPr
   const [layoutMode, setLayoutMode] = useState<FigmaImportLayoutMode>('preserve');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Escape key to close
+  // Escape 关闭键
   useEffect(() => {
     if (!open) return;
     const handler = (e: KeyboardEvent) => {
@@ -72,7 +72,7 @@ export default function FigmaImportDialog({ open, onClose }: FigmaImportDialogPr
           return;
         }
 
-        // Always show page-select to let user choose layout mode
+        // Always 显示页面选择让用户选择布局模式
         setPages(figmaPages);
         setState('page-select');
       } catch (err) {
@@ -84,7 +84,7 @@ export default function FigmaImportDialog({ open, onClose }: FigmaImportDialogPr
     [t],
   );
 
-  // Reset state when dialog opens; auto-process pending .fig file from drag-and-drop
+  // Reset 对话框打开时的状态；通过拖放自动处理挂起的 .fig 文件
   useEffect(() => {
     if (open) {
       setState('idle');
@@ -110,7 +110,7 @@ export default function FigmaImportDialog({ open, onClose }: FigmaImportDialogPr
       setProgress(60);
 
       try {
-        // Use requestAnimationFrame to avoid blocking UI
+        // Use requestAnimationFrame 以避免阻塞 UI
         await new Promise((r) => requestAnimationFrame(r));
 
         const {
@@ -122,7 +122,7 @@ export default function FigmaImportDialog({ open, onClose }: FigmaImportDialogPr
           : figmaToPenDocument(decodedFile, name, pageIndex, layoutMode);
         setProgress(80);
 
-        // Resolve image blobs and hash-based images to data URLs across all pages
+        // Resolve 图像 blob 和基于哈希的图像到所有页面的数据 URLs
         let unresolved = 0;
         if (doc.pages && doc.pages.length > 0) {
           for (const page of doc.pages) {

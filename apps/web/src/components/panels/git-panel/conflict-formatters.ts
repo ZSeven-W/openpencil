@@ -1,19 +1,19 @@
 // apps/web/src/components/panels/git-panel/conflict-formatters.ts
 //
-// Pure helpers for formatting conflict-resolution UI labels. No React, no store
-// dependencies — safe to import anywhere and easy to unit-test.
+// Pure 帮助程序，用于格式化冲突解决 UI 标签。 No React，无商店
+// 依赖项——可以安全地导入到任何地方并且易于单元测试。
 
 import type { PenDocument, PenNode } from '@/types/pen';
 import type { GitConflictBag, GitConflictResolution } from '@/services/git-types';
 
 // ---------------------------------------------------------------------------
-// Document-order conflict sorting
+// Document-顺序冲突排序
 // ---------------------------------------------------------------------------
 
 /**
- * A node conflict entry with optional resolution state (matches ConflictBagState's
- * nodeConflicts value shape — typed here to avoid importing from git-store-types
- * which carries Zustand store baggage).
+ * 具有可选解决状态的节点冲
+ * 突条目（与 ConflictBagState 的 nodeConflicts 值形状匹配 - 在此处键入以避免从带有 Zustand 存储包的
+ * git-store-types 导入）。
  */
 export type NodeConflictEntry = GitConflictBag['nodeConflicts'][number] & {
   resolution?: GitConflictResolution;
@@ -24,8 +24,9 @@ export type FieldConflictEntry = GitConflictBag['docFieldConflicts'][number] & {
 };
 
 /**
- * Walk a PenNode tree depth-first, invoking `visit` for every node.
- * Visits `node.children` when present (not all PenNode variants have children).
+ * Walk 一个
+ * PenNode 深度优先树，为每个节点调用 `visit`。 Visits `node.children`（如果存在）（并非所有
+ PenNode 变体都有子代）。
  */
 function walkTreeDfs(nodes: PenNode[], visit: (n: PenNode) => void): void {
   for (const node of nodes) {
@@ -37,18 +38,18 @@ function walkTreeDfs(nodes: PenNode[], visit: (n: PenNode) => void): void {
 }
 
 /**
- * Produce an ordered flat list of conflict entries for the conflict-list UI.
+ * Produce 冲突列表
  *
- * Ordering rules:
- *   1. Node conflicts in document tree order (depth-first).  The conflict Map
- *      is keyed by `node:<pageId|_>:<nodeId>`, so we derive the nodeId by
- *      splitting on ":" and taking the last segment.
- *   2. Doc-field conflicts are document-level with no tree position.  They are
- *      emitted after the in-tree node conflicts, sorted alphabetically by the
- *      `path` field for a stable, user-readable sequence.
- *   3. Orphan node conflicts — conflicts whose nodeId is not present in the
- *      current document tree (e.g. theirs deleted the node) — are emitted last,
- *      preserving Map insertion order for stability.
+ * UI 的冲突条目的有序平面列表。 Ordering 规则： 1. Node 文档树顺序冲突（深度优先）。 The 冲突 Map 由
+ * `node:<pageI
+ * d|_>:<nodeId>`
+ * 键入，因此我们通过拆分“：”并获取最后一段来导出 nodeId。 2. Doc 字段冲突是文档级别的，没有树位置。 They
+ * 在树内节点冲突后发出，按 `path` 字段的字母顺序排序，以获得稳定的、用户可读的序列。 3. Orphan 节点冲突 —
+ * 当前文档树中不存在 nodeId 的冲突（例如，它们删除了该节点） — 最后发出，保留
+ * Map 插入顺序以保持稳定性。
+ *
+ *
+ *
  */
 export function orderConflicts(
   document: PenDocument,
@@ -57,15 +58,15 @@ export function orderConflicts(
 ): Array<NodeConflictEntry | FieldConflictEntry> {
   const result: Array<NodeConflictEntry | FieldConflictEntry> = [];
 
-  // Build a set of node-conflict entries ordered by document tree position.
+  // Build 一组按文档树位置排序的节点冲突条目。
   const emitted = new Set<string>();
 
-  // Walk each page separately so we can scope conflict matching by pageId.
-  // For single-page docs (no doc.pages), synthesise a virtual page with
-  // pageId === null so the key `node:_:<nodeId>` still matches.
-  //
-  // Node conflict key schema: `node:<pageId|_>:<nodeId>`
-  //   pageId stored in entry.pageId (null for single-page docs)
+  // Walk 每个页面单独，这样我们就可以通过 pageId 来确定冲突匹配范围。
+  // For 单页文档（无 doc.pages），合成一个虚拟页面
+  // pageId === null 因此键 `node:_:<nodeId>` 仍然匹配。
+//
+  // Node 冲突键架构：`node:<pageId|_>:<nodeId>`
+  // pageId 存储在 entry.pageId（单页文档为空）
   const pages: Array<{ pageId: string | null; children: PenNode[] }> =
     document?.pages && document.pages.length > 0
       ? document.pages.map((p) => ({ pageId: p.id, children: p.children }))
@@ -73,20 +74,20 @@ export function orderConflicts(
 
   for (const { pageId, children } of pages) {
     walkTreeDfs(children, (node) => {
-      // Each node conflict's key is `node:<pageId|_>:<nodeId>`.  We need to
-      // find the entry whose nodeId AND pageId both match this node.
+      // Each 节点冲突的键是 `node:<pageId|_>:<nodeId>`。 We 需要找到 nodeId AND pageId
+      // 都匹配该节点的条目。
       for (const [key, entry] of nodeConflicts) {
         if (emitted.has(key)) continue;
         if (entry.nodeId === node.id && entry.pageId === pageId) {
           result.push(entry);
           emitted.add(key);
-          break; // At most one conflict per (pageId, nodeId) pair.
+          break; // At 每对 (pageId, nodeId) 最多有一个冲突。
         }
       }
     });
   }
 
-  // Orphan node conflicts: referenced nodeId not found in current tree.
+  // Orphan 节点冲突：在当前树中找不到引用的 nodeId。
   for (const [key, entry] of nodeConflicts) {
     if (!emitted.has(key)) {
       result.push(entry);
@@ -94,7 +95,7 @@ export function orderConflicts(
     }
   }
 
-  // Doc-field conflicts: alphabetical by path.
+  // Doc 字段冲突：按路径按字母顺序排列。
   const fieldEntries = Array.from(fieldConflicts.values());
   fieldEntries.sort((a, b) => a.path.localeCompare(b.path));
   for (const entry of fieldEntries) {
@@ -105,7 +106,7 @@ export function orderConflicts(
 }
 
 // ---------------------------------------------------------------------------
-// Reason label mapping
+// Reason 标签映射
 // ---------------------------------------------------------------------------
 
 /** Human-readable label for a node conflict reason code. */
@@ -127,12 +128,12 @@ export function formatConflictReason(
 }
 
 // ---------------------------------------------------------------------------
-// JSON pretty-printing
+// JSON 漂亮的打印
 // ---------------------------------------------------------------------------
 
 /**
- * Pretty-print a value as indented JSON. Returns a placeholder string on
- * failure (e.g. circular reference, null value).
+ * Pretty -
+ * 将值打印为缩进的 JSON。 Returns 失败时的占位符字符串（例如循环引用、空值）。
  */
 export function prettyJson(value: unknown): string {
   if (value === undefined) return '(absent)';
@@ -145,12 +146,13 @@ export function prettyJson(value: unknown): string {
 }
 
 // ---------------------------------------------------------------------------
-// Validation helpers
+// Validation 帮助者
 // ---------------------------------------------------------------------------
 
 /**
- * Parse a JSON string and return `{ ok: true, value }` or `{ ok: false, error }`.
- * Used by the manual JSON editor to give instant parse-error feedback.
+ * Parse a JSON
+ * string and return `{ ok: true, value }` or `{ ok: false, error }`. Used by the
+ manual JSON editor to give instant parse-error feedback.
  */
 export function safeParseJson(
   text: string,
@@ -167,12 +169,12 @@ export function safeParseJson(
 }
 
 /**
- * Validate that a parsed JSON value is a PenNode-like object with the expected
- * `nodeId`. Returns a validation error string or null when valid.
+ * Validate
+ * 表明解析的 JSON 值是一个类似 PenNode 的对象，具有预期的 `nodeId`。 Returns a validation error
  *
- * We do a minimal structural check — the backend performs full schema
- * validation on applyMerge, so here we just need enough to give useful
- * feedback in the UI before the IPC round-trip.
+ * string or null when valid. We 进行最小的结构检查 - 后端对 applyMerge
+ * 执行完整的模式验证，因此
+ * 这里我们只需要足够的信息即可在 IPC 往返之前在 UI 中提供有用的反馈。
  */
 export function validateNodeJson(value: unknown, expectedNodeId: string): string | null {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) {
@@ -192,7 +194,7 @@ export function validateNodeJson(value: unknown, expectedNodeId: string): string
 }
 
 // ---------------------------------------------------------------------------
-// Truncation helpers
+// Truncation 帮助者
 // ---------------------------------------------------------------------------
 
 /** Truncate a string for display, adding an ellipsis when it exceeds maxLen. */

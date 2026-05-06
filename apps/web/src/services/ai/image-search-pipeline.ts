@@ -31,7 +31,7 @@ export function collectImageNodes(rootId: string): ImageNode[] {
   return images;
 }
 
-// Only match the known phone placeholder prefix, not user-uploaded SVGs
+// 只匹配我们自己生成的占位图前缀，不误伤用户上传的 SVG。
 const PHONE_PLACEHOLDER_PREFIX = 'data:image/svg+xml;charset=utf-8,%3Csvg';
 
 function isPlaceholderSrc(src?: string): boolean {
@@ -39,7 +39,7 @@ function isPlaceholderSrc(src?: string): boolean {
 }
 
 // ---------------------------------------------------------------------------
-// Incremental queue-based image search
+// 增量式、基于队列的图片搜索
 // ---------------------------------------------------------------------------
 
 interface QueuedImage {
@@ -49,14 +49,14 @@ interface QueuedImage {
 }
 
 const imageSearchQueue: QueuedImage[] = [];
-// Track IDs already queued or processed to avoid duplicates
+// 记录已经排队或处理过的节点 ID，避免重复搜索
 const queuedNodeIds = new Set<string>();
 let queueProcessing = false;
 let queueAbort: AbortController | null = null;
 
 /**
- * Enqueue a single image node for background search.
- * Called from insertStreamingNode as soon as an image node hits the canvas.
+ * 把单个图片节点加入后台搜索队列。
+ * 当流式生成过程中有图片节点落到画布上时，就会触发这里。
  */
 export function enqueueImageForSearch(node: PenNode): void {
   if (node.type !== 'image') return;
@@ -71,13 +71,11 @@ export function enqueueImageForSearch(node: PenNode): void {
   imageSearchQueue.push({ id: node.id, query, aspect });
   useCanvasStore.getState().setImageSearchStatus(node.id, 'pending');
 
-  // Start processing if not already running
+  // 如果处理器还没跑起来，就立即启动
   processQueue();
 }
 
-/**
- * Reset the queue state. Call when a new generation starts.
- */
+/** 重置队列状态。通常在开启新一轮生成时调用。 */
 export function resetImageSearchQueue(): void {
   queueAbort?.abort();
   queueAbort = null;
@@ -101,7 +99,7 @@ async function processQueue(): Promise<void> {
     if (abort.signal.aborted) break;
     const item = imageSearchQueue.shift()!;
 
-    // Re-check that the node still has a placeholder (may have been filled by user)
+    // 再检查一次节点是否仍然是占位图，避免用户已经手动替换后还继续搜索。
     const currentNode = useDocumentStore.getState().getNodeById(item.id);
     if (
       !currentNode ||
@@ -140,7 +138,7 @@ async function processQueue(): Promise<void> {
       }
     }
 
-    // Rate limit: 3s between requests to stay under Openverse 20/min burst
+    // 简单限速：请求间隔 3 秒，尽量压在 Openverse 20/min 爆发阈值以下。
     if (!abort.signal.aborted && imageSearchQueue.length > 0) {
       await new Promise((r) => setTimeout(r, 3000));
     }
@@ -153,7 +151,7 @@ async function processQueue(): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
-// Batch scan — final sweep to catch any missed placeholder images
+// 批量扫描：兜底抓取前面漏掉的占位图
 // ---------------------------------------------------------------------------
 
 export async function scanAndFillImages(rootId: string): Promise<void> {
@@ -162,7 +160,7 @@ export async function scanAndFillImages(rootId: string): Promise<void> {
 
   if (needsFill.length === 0) return;
 
-  // Enqueue any remaining unfilled nodes — the queue processor handles the rest
+  // 把所有还没填充的节点补进队列，剩下的交给队列处理器。
   for (const node of needsFill) {
     enqueueImageForSearch(node);
   }

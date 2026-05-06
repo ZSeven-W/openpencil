@@ -1,15 +1,15 @@
-// @vitest-environment jsdom
+// @vitest-环境 jsdom
 // apps/web/src/components/panels/git-panel/__tests__/git-panel-remote-controls.test.tsx
 //
-// Phase 6b: the pull/push header controls. Coverage matches the plan's
-// verification list:
-//   - disabled-without-remote
-//   - pull success
-//   - auth prompt path (pull)
-//   - pull conflict-non-op
-//   - push-rejected path
-//   - push-auth-failed path
-//   - loading state
+// Phase 6b：pull/push 标头控件。 Coverage 符合计划
+// 验证清单：
+//   - 禁用无远程
+//   - 拉成功
+//   - 身份验证提示路径（拉）
+//   - 拉取冲突非操作
+//   - 推拒绝路径
+//   - 推送验证失败的路径
+//   - 加载状态
 import React from 'react';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/react';
@@ -17,8 +17,7 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import { GitError } from '@/services/git-error';
 import type { GitAuthCreds, GitRemoteInfo } from '@/services/git-types';
 
-// Mutable fixtures so each test can swap the active store state and
-// mock responses without re-wiring the mock module.
+// Mutable 固定装置，因此每个测试都可以交换活动存储状态和模拟响应，而无需重新连接模拟模块。
 interface ReadyStateMock {
   kind: 'ready';
   repo: {
@@ -48,14 +47,14 @@ const fx = {
     },
   } as ReadyStateMock | ConflictStateMock,
   sshKeys: [] as Array<unknown>,
-  // The embedded auth form reads refreshSshKeys on mount (Phase 6b fix
-  // for first-time SSH pulls). Provide a no-op so the effect doesn't
-  // crash the render.
+  // The 嵌入式身份验证表单在挂载时读取 refreshSshKeys（Phase 6b 修复
+// for first-time SSH pulls). Provide a no-op so the effect doesn't
+  // 使渲染崩溃。
   refreshSshKeys: vi.fn(async () => {}),
   pull: vi.fn(async (_auth?: unknown) => {}),
   push: vi.fn(async (_auth?: unknown) => {}),
-  // Explicit return type so mockResolvedValueOnce can return either null
-  // or a stored credential record without fighting vitest's inference.
+  // Explicit 返回类型，因此 mockResolvedValueOnce 可以返回 null 或存储的凭证记录，而不会影响
+  // vitest 的推理。
   getAuth: vi.fn(async (_host: string): Promise<GitAuthCreds | null> => null),
   storeAuth: vi.fn(async (_host: string, _creds: unknown) => {}),
 };

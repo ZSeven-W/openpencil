@@ -1,20 +1,20 @@
 // packages/pen-renderer/src/__tests__/render-node-thumbnail.test.ts
 //
-// Output-shape and fallback tests for renderNodeThumbnail. We do NOT test
-// pixel-perfect output (requires a real CanvasKit WASM instance). Instead we
-// verify:
-//   1. Returns null gracefully when CanvasKit is unavailable (test env)
-//   2. Returns null for invalid / null inputs
-//   3. Returns null when size is invalid
-//   4. The function is exported and callable
-//   5. resolveNodeForCanvas is called with document variables + active theme (I6)
+// Output-renderNodeThumbnail 的形状和后备测试。 We 进行 NOT 测试
+// 像素完美的输出（需要真正的 CanvasKit WASM 实例）。 Instead 我们
+// 验证：
+//   1. 当 CanvasKit 不可用时，Returns 优雅地为 null（测试环境）
+//   2. Returns null 表示无效/空输入
+//   3. Returns 当大小无效时为 null
+//   4. The 函数已导出并可调用
+//   5. resolveNodeForCanvas 使用文档变量 + 活动主题调用 (I6)
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { PenDocument, PenNode } from '@zseven-w/pen-types';
 import * as penCore from '@zseven-w/pen-core';
 
-// Mock @zseven-w/pen-core to allow spying on resolveNodeForCanvas while
-// keeping all other exports from the real module intact.
+// Mock @zseven-w/pen-core 允许监视 resolveNodeForCanvas，同时保持真实模块的所有其他导出完好无损
+// 。
 vi.mock('@zseven-w/pen-core', async () => {
   const actual = await vi.importActual<typeof penCore>('@zseven-w/pen-core');
   return { ...actual };
@@ -22,8 +22,8 @@ vi.mock('@zseven-w/pen-core', async () => {
 
 import { renderNodeThumbnail } from '../render-node-thumbnail';
 
-// CanvasKit WASM is NOT available in the vitest/jsdom environment.
-// getCanvasKit() returns null, so renderNodeThumbnail must fall back to null
+// CanvasKit WASM 是 vitest/jsdom 环境中可用的 NOT。
+// getCanvasKit() 返回 null，因此 renderNodeThumbnail 必须回退为 null
 // for ALL inputs. These tests assert the graceful-fallback contract.
 
 const makeRect = (id = 'rect-1'): PenNode =>
@@ -50,7 +50,7 @@ describe('renderNodeThumbnail — output shape / fallback contract', () => {
       pageId: null,
       size: 128,
     });
-    // In test env, CanvasKit is not available → null
+    // In 测试环境，CanvasKit 不可用 → null
     expect(result).toBeNull();
   });
 
@@ -94,12 +94,12 @@ describe('renderNodeThumbnail — output shape / fallback contract', () => {
       document: makeDoc(),
       pageId: null,
     });
-    // In test env → null, but it must not throw.
+    // In test env → null，但不能抛出异常。
     expect(result).toBeNull();
   });
 
   it('uses default size of 128 when size is omitted', async () => {
-    // Just verify it does not throw — output is null in test env.
+    // Just 验证它不会抛出 — 测试环境中的输出为 null。
     const result = await renderNodeThumbnail(makeRect(), {
       document: makeDoc(),
       pageId: null,
@@ -136,14 +136,13 @@ describe('renderNodeThumbnail — output shape / fallback contract', () => {
   });
 
   it('result when non-null must be a data URL string (structural contract)', async () => {
-    // This test documents the expected non-null contract for when CanvasKit IS
-    // available. In the test env the mock returns null so we verify the type
-    // contract with a type assertion only — no runtime assertion possible here.
+    // This 测试记录了 CanvasKit IS 可用时预期的非空合约。 In 测试环境模拟返回 null，因此我们仅使用类型断言来验证类型约定
+    // - 这里不可能进行运行时断言。
     const result = await renderNodeThumbnail(makeRect(), {
       document: makeDoc(),
       pageId: null,
     });
-    // In test env always null. In a live env it would be string | null.
+    // In 测试环境始终为空。 In 一个实时环境，它将是字符串 |无效的。
     if (result !== null) {
       expect(typeof result).toBe('string');
       expect(result).toMatch(/^data:/);
@@ -153,11 +152,11 @@ describe('renderNodeThumbnail — output shape / fallback contract', () => {
   });
 
   // ---------------------------------------------------------------------------
-  // Gap 2: $variable resolution
-  // ---------------------------------------------------------------------------
+  // Gap 2：$可变分辨率
+// ---------------------------------------------------------------------------
 
   it('does not throw when node has a $variable fill reference and document has variables', async () => {
-    // Node with a $color-primary fill reference.
+    // Node 带有 $color-primary 填充参考。
     const nodeWithVar = {
       id: 'var-node-1',
       type: 'rectangle',
@@ -177,8 +176,8 @@ describe('renderNodeThumbnail — output shape / fallback contract', () => {
       },
     } as unknown as PenDocument;
 
-    // In test env CanvasKit is unavailable so result is null, but the
-    // resolveNodeForCanvas code path must execute without throwing.
+    // In 测试环境 CanvasKit 不可用，因此结果为 null，但 resolveNodeForCanvas
+    // 代码路径必须执行而不抛出异常。
     const result = await renderNodeThumbnail(nodeWithVar, {
       document: docWithVars,
       pageId: null,
@@ -216,13 +215,13 @@ describe('renderNodeThumbnail — output shape / fallback contract', () => {
       document: docWithThemes,
       pageId: null,
     });
-    // Still null in test env, but must not throw.
+    // Still 在测试环境中为 null，但不得抛出。
     expect(result).toBeNull();
   });
 
   // ---------------------------------------------------------------------------
-  // I6: Verify resolveNodeForCanvas is called with document variables + theme
-  // ---------------------------------------------------------------------------
+  // I6：用文档变量+主题调用 Verify resolveNodeForCanvas
+// ---------------------------------------------------------------------------
 
   describe('resolveNodeForCanvas invocation (I6)', () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -261,13 +260,12 @@ describe('renderNodeThumbnail — output shape / fallback contract', () => {
         pageId: null,
       });
 
-      // resolveNodeForCanvas must have been called — confirms the variable
-      // resolution code path executes rather than being silently bypassed.
+      // resolveNodeForCanvas 必须已被调用 - 确认变量解析代码路径执行而不是被静默绕过。
       expect(spy).toHaveBeenCalled();
-      // The first argument should be the node (or ref-resolved equivalent).
+      // The 第一个参数应该是节点（或引用解析的等效项）。
       const [calledNode, calledVars] = spy.mock.calls[0] as [PenNode, Record<string, unknown>];
       expect(calledNode).toMatchObject({ id: 'spy-node-1' });
-      // Variables must be the document's variables map.
+      // Variables 必须是文档的变量映射。
       expect(calledVars).toEqual(docWithVars.variables);
     });
 
@@ -303,9 +301,9 @@ describe('renderNodeThumbnail — output shape / fallback contract', () => {
       });
 
       expect(spy).toHaveBeenCalled();
-      // Third argument is the active theme object derived from getDefaultTheme.
+      // Third 参数是从 getDefaultTheme 派生的活动主题对象。
       const [, , calledTheme] = spy.mock.calls[0] as [PenNode, unknown, Record<string, string>];
-      // getDefaultTheme({'Mode': ['Light','Dark']}) returns { Mode: 'Light' }
+      // getDefaultTheme({'Mode': ['Light','Dark']}) 返回 { Mode: 'Light' }
       expect(calledTheme).toMatchObject({ Mode: 'Light' });
     });
   });

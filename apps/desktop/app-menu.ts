@@ -5,7 +5,7 @@ function sendMenuAction(action: string): void {
   win?.webContents.send('menu:action', action);
 }
 
-/** Recent files submenu — rebuilt each time the menu opens. */
+/** Recent 文件子菜单 — 每次打开菜单时都会重新构建。 */
 function buildRecentFilesSubmenu(): Electron.MenuItemConstructorOptions[] {
   const recent = app.isReady() ? ((global as any).__recentFiles ?? []) : [];
   if (recent.length === 0) {

@@ -19,11 +19,11 @@ export interface AttachCanvasOptions {
 }
 
 /**
- * Initialize CanvasKit WASM and bind engine to a canvas element for GPU rendering.
- * Returns a CanvasBinding for render lifecycle management.
+ * Initialize
+ * CanvasKit WASM 并将引擎绑定到画布元素以进行 GPU 渲染。 Returns 和 CanvasBinding 用于渲染生命周期管理。 The
  *
- * The binding subscribes to engine events (document:change, selection:change, etc.)
- * and automatically re-renders when state changes.
+ * 绑定订阅引擎事件（文档：更改、选择：更改等）并在状态更改时自动重新渲染。
+ *
  */
 export async function attachCanvas(
   engine: DesignEngine,
@@ -45,7 +45,7 @@ export async function attachCanvas(
   renderer.init(canvas);
   renderer.syncFromDocument();
 
-  // Subscribe to engine events for auto-rerender
+  // Subscribe 用于自动重新渲染的引擎事件
   const unsubs: (() => void)[] = [];
 
   unsubs.push(

@@ -1,5 +1,4 @@
-// Figma .fig binary file internal format type definitions
-// Decoded via kiwi-schema from the binary format
+// Figma .fig 二进制文件内部格式类型定义 Decoded 通过二进制格式的 kiwi-schema
 
 export interface FigmaGUID {
   sessionID: number;
@@ -120,9 +119,9 @@ export interface FigmaGuidPath {
   guids: FigmaGUID[];
 }
 
-/** Per-child override stored on an INSTANCE's symbolData.
- *  Extends FigmaNodeChange to support all overridable node properties
- *  (size, opacity, visible, strokes, layout, corner radii, etc.). */
+/** Per-child 覆盖存储在 INSTANCE 的 symbolData 上。 Extends
+ * FigmaNodeChange 支持所有可覆盖的节点属性（大小、不透明度、可见、笔画、布局、角半径等）。
+ *  */
 export interface FigmaSymbolOverride extends Omit<
   FigmaNodeChange,
   'guid' | 'parentIndex' | 'type' | 'phase' | 'symbolData' | 'derivedSymbolData' | 'componentKey'
@@ -130,7 +129,7 @@ export interface FigmaSymbolOverride extends Omit<
   guidPath?: FigmaGuidPath;
 }
 
-/** Pre-computed size/transform for each node inside an INSTANCE. */
+/** Pre 为 INSTANCE 内的每个节点计算 size/transform。 */
 export interface FigmaDerivedSymbolDataEntry {
   guidPath?: FigmaGuidPath;
   size?: FigmaVector;
@@ -196,7 +195,7 @@ export interface FigmaNodeChange {
   strokeJoin?: 'MITER' | 'BEVEL' | 'ROUND';
   dashPattern?: number[];
 
-  // Individual border weights
+  // Individual 边框权重
   borderStrokeWeightsIndependent?: boolean;
   borderTopWeight?: number;
   borderBottomWeight?: number;
@@ -206,7 +205,7 @@ export interface FigmaNodeChange {
   // Effects
   effects?: FigmaEffect[];
 
-  // Corner radius
+  // Corner 半径
   cornerRadius?: number;
   rectangleCornerRadiiIndependent?: boolean;
   rectangleTopLeftCornerRadius?: number;
@@ -226,7 +225,7 @@ export interface FigmaNodeChange {
   textCase?: 'ORIGINAL' | 'UPPER' | 'LOWER' | 'TITLE';
   textData?: FigmaTextData;
 
-  // Auto-layout (stack)
+  // Auto-布局（堆栈）
   stackMode?: 'NONE' | 'HORIZONTAL' | 'VERTICAL';
   stackSpacing?: number;
   stackPadding?: number;
@@ -242,7 +241,7 @@ export interface FigmaNodeChange {
   stackChildAlignSelf?: string;
   stackPositioning?: 'AUTO' | 'ABSOLUTE';
 
-  // Masking / clipping
+  // Masking / 剪辑
   frameMaskDisabled?: boolean;
 
   // Vector/Path
@@ -250,7 +249,7 @@ export interface FigmaNodeChange {
   fillGeometry?: FigmaPath[];
   strokeGeometry?: FigmaPath[];
 
-  // Ellipse arc
+  // Ellipse 弧
   arcData?: FigmaArcData;
 
   // Component/Instance

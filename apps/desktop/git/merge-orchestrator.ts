@@ -1,9 +1,9 @@
 // apps/desktop/git/merge-orchestrator.ts
 //
-// Single-file mode merge orchestration. Loads three PenDocument blobs from
-// git, calls pen-core's mergeDocuments, and produces the wire-format
-// ConflictBag with stable ids. Also applies user resolutions to a merged
-// document during applyMerge.
+// Single-文件模式合并编排。 Loads 三个 PenDocument blob
+// git，调用 pen-core 的 mergeDocuments，并生成有线格式
+// ConflictBag 具有稳定的 ID。 Also 将用户分辨率应用到合并的
+// applyMerge 期间的文档。
 
 import {
   mergeDocuments,
@@ -23,10 +23,10 @@ import {
 } from './merge-session';
 
 /**
- * Load the tracked file's content at three commits, JSON.parse, and run the
- * pen-core merge. Returns BOTH the raw MergeResult (so the caller can stash
- * it for later applyResolutions) AND the wire-format ConflictBag (so the
- * caller can return it across IPC immediately).
+ * Load 三个提交时跟踪
+ * 文件的内容，JSON.parse，并运行笔核合并。 Returns BOTH 原始 MergeResult （以便调用者可以将其存储以供以后使用
+ * applyResolutions） AND 有线格式 ConflictBag （以便调用者可以立即通过 IPC 返回它）。
+ *
  */
 export async function runMerge(opts: {
   handle: IsoRepoHandle;
@@ -67,21 +67,21 @@ export async function runMerge(opts: {
 }
 
 /**
- * Apply the user's conflict resolutions to a merged document. Returns a new
- * PenDocument with the chosen versions substituted in. Does NOT mutate the
+ * Apply 用户对合并文档的冲突解决方案。 Returns 一个新的
+ * PenDocument 替换为所选版本。 Does NOT 变异
  * input merged document.
  *
  * Resolution semantics:
- *   - 'ours' → leave the merged tree unchanged at that node/field (pen-core's
- *     mergeDocuments already places ours as the placeholder for unresolved
- *     conflicts, so 'ours' is a no-op).
- *   - 'theirs' → replace the conflicted node/field with the theirs version.
- *   - 'manual-node' → replace the conflicted node with the user's edited version.
- *   - 'manual-field' → set the doc-field value to the user's choice.
+ *   - 'ours' → 将合并树保留在 node/field 处不变（pen-core 的
+ * mergeDocuments 已经将我们的作为未解决的占位符
+ * 冲突，所以“我们的”是一个空操作）。
+ *   - 'theirs' → 将有冲突的 node/field 替换为 theirs 版本。
+ *   - 'manual-node' → 用用户编辑的版本替换冲突的节点。
+ *   - 'manual-field' → 将文档字段值设置为用户的选择。
  *
- * If a conflict has no resolution in the map, we default to 'ours' (the
- * pen-core placeholder). The applyMerge engine fn enforces "all conflicts
- * must be resolved" before calling this — but defaulting here makes the
+ * If 冲突在地图中没有解决方案，我们默认为“我们的”（
+ * pen-core placeholder). The applyMerge 引擎 fn 强制“所有冲突
+ * 必须在调用此之前解决” - 但此处默认使得
  * function safe to call in tests with partial resolution maps.
  */
 export function applyResolutions(opts: {
@@ -90,9 +90,9 @@ export function applyResolutions(opts: {
   resolutions: Map<string, ConflictResolution>;
 }): PenDocument {
   const { conflictMap, resolutions } = opts;
-  // We build a new document by deep-cloning via JSON round-trip. The merge
-  // result is already a fresh object from pen-core, but we don't want to
-  // mutate it in case the caller still holds a reference for diagnostics.
+  // We 通过 JSON 往返深度克隆构建新文档。 The merge result is already a fresh object
+  // from pen-core, but we don't want to mutate it in case the caller
+  // still holds a reference for diagnostics.
   let doc = JSON.parse(JSON.stringify(opts.merged)) as PenDocument;
 
   for (const [id, resolution] of resolutions) {

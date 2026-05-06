@@ -123,9 +123,8 @@ describe('SkiaEngine resize flash prevention', () => {
       (globalThis as any).window = originalWindow;
     }
 
-    // Synchronous render must have run: dirty cleared, surface flushed once.
-    // Without this, canvas.width = ... leaves the element transparent until
-    // the next RAF, causing a one-frame white flash on layout changes.
+    // Synchronous 渲染必须运行：脏清除，表面刷新一次。 Without this, canvas.width = ...
+    // 使元素透明，直到下一个 RAF，导致布局更改时出现一帧白色闪烁。
     expect((engine as any).dirty).toBe(false);
     expect(flushCount).toBe(1);
   });

@@ -12,33 +12,33 @@ import {
 import { resolveIconPathBySemanticName } from './icon-resolver';
 
 // ---------------------------------------------------------------------------
-// Context passed to each role rule function
+// Context 传递给每个角色规则函数
 // ---------------------------------------------------------------------------
 
 export interface RoleContext {
-  /** Role of the parent node, if any */
+  /** 父节点的 Role（如果有） */
   parentRole?: string;
-  /** Layout of the parent node */
+  /** 父节点的 Layout */
   parentLayout?: 'none' | 'vertical' | 'horizontal';
-  /** Width of the parent node's content area (px) */
+  /** Width 父节点的内容区域（px） */
   parentContentWidth?: number;
-  /** Root canvas width (1200 for desktop, 375 for mobile) */
+  /** Root 画布宽度（桌面版 1200，移动版 375） */
   canvasWidth: number;
-  /** Whether CJK text is detected in the design context */
+  /** Whether 在设计上下文中检测到 CJK 文本 */
   hasCjk?: boolean;
-  /** Whether this node is inside a table-like structure */
+  /** Whether 该节点位于表状结构内 */
   isTableContext?: boolean;
   /**
-   * Document theme detected from the page root fill at the start of
-   * `resolveTreeRoles`. Roles that have visual defaults (navbar, card,
-   * input, divider) read this so the LLM doesn't get a #FFFFFF default
-   * painted on top of an explicitly dark page background.
+   * 从 `resolveTr
+   * eeRoles` 开头的页面根填充中检测到 Document 主题。具有视觉默认值（导航栏、卡片、输入、分隔线）的 Roles
+   * 会读取此内容，因此 LLM 不会在明确的深色页面背景上绘制 #FFFFFF 默认值。
+   *
    */
   theme?: 'dark' | 'light';
 }
 
 // ---------------------------------------------------------------------------
-// Role defaults — partial properties that fill unset values on a node
+// Role defaults — 填充节点上未设置值的部分属性
 // ---------------------------------------------------------------------------
 
 export type RoleDefaults = Partial<{
@@ -61,7 +61,7 @@ export type RoleDefaults = Partial<{
   effects: PenEffect[];
 }>;
 
-/** A role rule function computes defaults based on context. */
+/** 角色规则函数根据上下文计算默认值。 */
 export type RoleRuleFn = (node: PenNode, ctx: RoleContext) => RoleDefaults;
 
 // ---------------------------------------------------------------------------
@@ -71,18 +71,18 @@ export type RoleRuleFn = (node: PenNode, ctx: RoleContext) => RoleDefaults;
 const roleRegistry = new Map<string, RoleRuleFn>();
 
 /**
- * Register a role rule. Any string is a valid role name.
- * If the same role is registered twice, the later one wins.
+ * Register
+ * 角色规则。 Any 字符串是有效的角色名称。 If 同一角色注册两次，后者获胜。
  */
 export function registerRole(role: string, ruleFn: RoleRuleFn): void {
   roleRegistry.set(role, ruleFn);
 }
 
 // ---------------------------------------------------------------------------
-// Name-based role inference for models that don't output `role`
+// 针对不输出 `role` 的模型进行基于 Name 的角色推断
 // ---------------------------------------------------------------------------
 
-/** Exact name → role mappings (case-insensitive). */
+/** Exact 名称 → 角色映射（不区分大小写）。 */
 const NAME_EXACT_MAP: Record<string, string> = {
   navbar: 'navbar',
   navigation: 'navbar',
@@ -109,23 +109,23 @@ const NAME_EXACT_MAP: Record<string, string> = {
   table: 'table',
 };
 
-/** Names that indicate a container rather than an individual component. */
+/** Names 表示容器而不是单个组件。 */
 const CONTAINER_SUFFIXES = /\b(group|row|container|wrapper|section|list|area|stack|grid|bar)s?\b/i;
 
 /**
- * Words that, when combined with a role-like word, turn the node into a
- * PART of that role rather than an instance of it. "Card Header",
- * "Card Body", "Card Footer" are all structural pieces inside a parent
- * card — they must NOT inherit the card's role defaults (white fill,
- * shadow, rounded corners…).
+ * Words，当与类似角色
+ * 的单词组合时，将节点转换为该角色的 PART 而不是它的实例。 “Card Header”、“Card Body”、“Card
+ * Footer”都是父卡内的结构部分 - 它们必须 NOT 继承卡的角色默认值（白色填充、阴影、圆角...）。 Stored
+ * 作为 Set （不是正则表达式），因为检查是“角色关键字之后的第一个单词恰好是其中一个” -
+ * 位置敏感和单词范围，而不是子字符串扫描。子字符串扫描会错误地拒绝诸如“Card with Icon”或“Button with
  *
- * Stored as a Set (not a regex) because the check is "is the first word
- * after the role keyword exactly one of these" — position-sensitive and
- * word-scoped, not a substring scan. A substring scan would wrongly
- * reject prepositional variants like "Card with Icon" or "Button with
- * Image", where the part word is separated from the role word by a
- * modifier ("with") and the whole name describes a variant of the role
- * rather than an internal piece of it.
+ * Image”之类的介词变体，其中部分词与角色词通过修
+ * 饰语（“with”）分开
+ * ，并且整个名称描述角色的变体而不是其内部部分。
+ *
+ *
+ *
+ *
  */
 const ROLE_PART_WORDS = new Set([
   'header',
@@ -154,25 +154,25 @@ const ROLE_PART_WORDS = new Set([
 ]);
 
 /**
- * Extract the first meaningful alphabetic token from a string, skipping
- * leading whitespace, punctuation, digits, and single-letter fragments.
- * Returns null when no qualifying token exists.
+ * Extract
+ * 字符串中第一个有意义的字母标记，跳过前导空格、标点符号、数字和单字母片段。当不存在合格标记时，Returns null。 Why 仅
+ * alpha 和最小长度 2：子代理经常使用角色词和部分词之间的数字索引来命名节点“Card 1 Content”、“Card 2
  *
- * Why alpha-only and min-length 2: sub-agents frequently name nodes
- * "Card 1 Content", "Card 2 Header", "Button 3 Label" with a numeric
- * index between the role word and the part word. A naive `\w+` would
- * match the index ("1") and lose the trailing "content"/"header"/
- * "label" that actually determines whether the node is a structural
- * piece. We skip anything non-alpha (or alpha shorter than 2 chars) and
- * scan forward until we land on a real word, so "Card 1 Content"
- * correctly surfaces "content" and gets treated as a card piece.
+ * Header”、“Button 3 Label”。天真的 `\w+`
+ * 将匹配索引（“1”）并丢
+ * 失实际上确定节点是否是结构片段的尾部“内容”/“标题”/“标签”。 We 跳过任何非 alpha（或短于 2 个字符的
+ * alpha）并向前扫描，直到我们找到真正的单词，因此“Card 1 Content”正确地显示“内容”并被视为卡片片段。
+ *
+ *
+ *
+ *
  */
 function firstWordToken(s: string): string | null {
   const m = /[a-z]{2,}/i.exec(s);
   return m ? m[0].toLowerCase() : null;
 }
 
-/** Substring patterns → role (checked in order, first match wins). */
+/** Substring 模式 → 角色（按顺序检查，第一个匹配获胜）。 */
 const NAME_PATTERN_MAP: [RegExp, string, boolean?][] = [
   [/\bbtn\b|\bbutton\b/i, 'button', true],
   [/\bcard\b/i, 'card', true],
@@ -189,8 +189,8 @@ const NAME_PATTERN_MAP: [RegExp, string, boolean?][] = [
 ];
 
 /**
- * Infer a semantic role from a node's name when no explicit role is set.
- * Only applies to frame nodes — text, path, image, etc. don't need role inference.
+ * Infer 当未设置显式
+ * 角色时，来自节点名称的语义角色。 Only 适用于框架节点 - 文本、路径、图像等不需要角色推断。
  */
 function inferRoleFromName(node: PenNode): string | undefined {
   if (node.type !== 'frame') return undefined;
@@ -199,29 +199,25 @@ function inferRoleFromName(node: PenNode): string | undefined {
 
   const lower = name.toLowerCase().trim();
 
-  // Exact match first
+  // Exact 首先匹配
   const exact = NAME_EXACT_MAP[lower];
   if (exact) return exact;
 
-  // Pattern match
+  // Pattern 比赛
   for (const [pattern, role, skipContainers] of NAME_PATTERN_MAP) {
-    // Use exec (not test) so we know WHERE in the name the role word sits.
-    // Position matters for the ROLE_PART_WORDS guard below.
+    // Use exec（不是测试），因此我们知道角色单词所在的名称中的 WHERE。 Position 对于下面的
+    // ROLE_PART_WORDS 后卫很重要。
     const match = pattern.exec(lower);
     if (!match) continue;
 
     if (skipContainers) {
-      // Skip container-like names (e.g. "Button Group", "Buttons Row")
+      // Skip 类似容器的名称（例如“Button Group”、“Buttons Row”）
       if (CONTAINER_SUFFIXES.test(lower)) continue;
-      // Skip "Card Header", "Card Body", "Button Label", etc. — when the
-      // FIRST word after the role keyword is a part word, the node is a
-      // PIECE of the role. Two positional guards matter here:
-      //   1. We look at the text AFTER the match, so "Icon Button"
-      //      (part word before role) is correctly kept as button.
-      //   2. We only check the FIRST word in that suffix, so
-      //      "Card with Icon" / "Button with Image" (prepositional
-      //      variants: "a card that HAS an icon") keep their role —
-      //      the first word is "with", not a part word.
+      // Skip "Card Header"、"Card Body"、"Button Label" 等 — 当角色关键字后面的
+      // FIRST 词是部分词时，节点是角色的 PIECE。 Two 位置守卫在这里很重要： 1. We 查看文本 AFTER
+      // 匹配，因此“Icon Button”（角色之前的部分单词）正确保留为按钮。 2. We 仅检查该后缀中的
+      // FIRST 单词，因此“Card with Icon”/“Button with Image”（介词变体：“一张
+      // HAS 图标的卡片”）保留其角色 - 第一个单词是“with”，而不是部分单词。
       const afterMatch = lower.slice(match.index + match[0].length);
       const nextWord = firstWordToken(afterMatch);
       if (nextWord && ROLE_PART_WORDS.has(nextWord)) continue;
@@ -233,32 +229,27 @@ function inferRoleFromName(node: PenNode): string | undefined {
 }
 
 // ---------------------------------------------------------------------------
-// Per-node resolution
+// Per-节点分辨率
 // ---------------------------------------------------------------------------
 
 /**
- * Apply role-based defaults to a single node.
- * Only fills in properties that are NOT already set by the AI.
- * The AI's explicit properties always win.
- * If no explicit role is set, attempts to infer one from the node name.
+ * Apply 基于角色默认
+ * 为单个节点。 Only 填充 NOT 已由 AI 设置的属性。 The AI
+ * 的显式属性总是获胜。 If 未设置显式角色，尝试从节点名称推断角色。
+ *
  */
 export function resolveNodeRole(node: PenNode, ctx: RoleContext): void {
   let role = node.role;
 
-  // Infer role from name if not explicitly set
+  // 如果未明确设置，则 Infer 角色来自名称
   if (!role) {
     role = inferRoleFromName(node);
 
-    // Page-chrome inference is wrong inside a card-family parent. The
-    // LLM frequently names a card's internal sections "Header" and
-    // "Footer" (the card's title row and action row, respectively),
-    // but `NAME_EXACT_MAP` blindly maps those to the page-level
-    // 'navbar' and 'footer' roles — which then inject navbar fill +
-    // border or footer padding into the inner card section, turning
-    // it into a glaring white bar (the heart-rate "Mini Chart"
-    // regression). Strip the inference when the immediate parent is
-    // already a card-family role: those are container roles whose
-    // children are card pieces, not page chrome.
+    // Page-chrome 推断在卡系列父级中是错误的。 The LLM 经常将卡片的内部部分命名为“Header”和“Foote
+    // r”（分别是卡片的标题行和操作行），但 `NAME_EXACT_MAP`
+    // 盲目地将这些映射到页面级“导航栏”和“页脚”角色 — 然后将导航栏填充 +
+    // 边框或页脚填充注入内部卡片部分，将其变成一个耀眼的白色条（心率“Mini Chart”回归）。 Strip
+    // 当直接父级已经是卡片系列角色时的推论：这些是容器角色，其子级是卡片片段，而不是页面镶边。
     if (
       role &&
       PAGE_CHROME_ROLES.has(role) &&
@@ -275,21 +266,21 @@ export function resolveNodeRole(node: PenNode, ctx: RoleContext): void {
 
   if (!role) return;
 
-  // Size sanity check for card-family roles. The `inferRoleFromName`
-  // pattern matcher is lexical — a 6×6 node named "Status Dot" trips
-  // the `/\bstat/` regex and gets `role: 'stat-card'`, which then
-  // injects 24px padding, a card shadow, and cornerRadius. Refuse to
-  // apply card-like roles on nodes too small to plausibly be a card;
-  // delete the role entirely so downstream passes also treat the
-  // node as unroled. This catches both name-inferred and LLM-
-  // emitted-directly versions of the same mistake.
+  // Size 卡系列角色的健全性检查。 The `inferRoleFromName`
+  // 模式匹配器是词法的 — 名为“Status Dot”的 6×6 节点
+  // `/\bstat/` 正则表达式并获取 `role: 'stat-card'`，然后
+  // 注入 24px 填充、卡片阴影和 cornerRadius。 Refuse 至
+// apply card-like roles on nodes too small to plausibly be a card;
+  // 完全删除该角色，以便下游通道也处理
+  // 节点已展开。 This 捕获名称推断和 LLM-
+  // 相同错误的直接发出版本。
   if (CARD_LIKE_ROLES.has(role) && isAbsurdlyTinyForCardRole(node)) {
     delete (node as { role?: string }).role;
     return;
   }
 
   const ruleFn = roleRegistry.get(role);
-  if (!ruleFn) return; // unknown role — pass through unchanged
+  if (!ruleFn) return; // 未知角色——不变地通过
 
   const defaults = ruleFn(node, ctx);
   if (!defaults) return;
@@ -298,17 +289,17 @@ export function resolveNodeRole(node: PenNode, ctx: RoleContext): void {
 }
 
 /**
- * Roles that inject heavy visual defaults (padding ≥ 16, card shadow,
- * cornerRadius ≥ 12, fill) which only make sense on a container large
- * enough to hold content. Applying them to a tiny element (e.g. a 6×6
- * status dot whose name happens to match `/\bstat/` and trips the
- * stat-card pattern) silently inflates it into an oversized card with
- * 24px padding and a drop shadow.
+ * Roles 注入大量视觉
+ * 默认值（填充 ≥ 16、卡片阴影、cornerRadius ≥ 12、填充），这仅在足以容纳内容的容器上才有意义。 Applying
+ * 它们到一个小元素（例如，一个 6×6 状态点，其名称恰好与 `/\bstat/` 匹配并触发 stat-card
+ * 模式）默默地将其膨胀为具有 24px 填充和投影的超大卡片。 When `resolveNodeRole` 在此列表中看到一个角色
+ * AND 节点声明的宽度或高度低于 `CARD_LIKE_MIN_DIMENSION`，在应用任何默认值之前，该角色将被剥离（设
+ * 置回未定义）。 The 节点保留其已有的任何内容。
  *
- * When `resolveNodeRole` sees a role in this list AND the node's
- * declared width or height is below `CARD_LIKE_MIN_DIMENSION`, the
- * role is stripped (set back to undefined) before any defaults are
- * applied. The node keeps whatever it already had.
+ *
+ *
+ *
+ *
  */
 const CARD_LIKE_ROLES = new Set([
   'card',
@@ -321,32 +312,32 @@ const CARD_LIKE_ROLES = new Set([
 const CARD_LIKE_MIN_DIMENSION = 40;
 
 /**
- * Roles that only make sense at the top of a page tree — they paint
- * page-level chrome (navbar bar across the top, footer band across
- * the bottom, full-bleed hero block, full-width call-to-action band).
+ * Roles 仅在页面树的
+ * 顶部有意义 - 它们绘制页面级镶边（顶部的导航栏、底部的页脚带、全出血英雄块、全宽号召性用语带）。 When LLM 将卡片的
+ * INTERNAL 部分命名为“Header”或“Footer”（卡片的标题行/操作行），`NAME_EXACT_MAP`
  *
- * When the LLM names a card's INTERNAL sections "Header" or "Footer"
- * (the card's title row / action row), the lexical name match in
- * `NAME_EXACT_MAP` blindly returns 'navbar' / 'footer' — which then
- * injects navbar fill + border or footer padding into a section
- * inside the card, turning it into a glaring white bar that doesn't
- * belong there. `resolveNodeRole` strips any of these inferred roles
- * whose immediate parent is in `CARD_LIKE_ROLES`, on the principle
- * that page-chrome roles cannot live inside a card.
+ * 中的词汇名称匹配盲目返回“导航栏”/“页脚”——然后将导航栏填充 + 边框或页脚填充注入到卡片内部的部分中，将其变成耀眼的白色不属于那
+ * 里的酒吧。 `resol
+ * veNodeRole` 会删除任何直接父级位于 `CARD_LIKE_ROLES`
+ * 中的推断角色，原则是页面镶边角色不能存在于卡内。搜索栏有意包含 NOT：搜索输入合法地出现在设置卡、个人资料卡等内部。搜索栏
+ * 的 The 视觉默认值也是无害的（圆角输入填充），因此即使它被错误推断，视觉成本也很小。
  *
- * search-bar is intentionally NOT included: a search input legitimately
- * appears inside settings cards, profile cards, etc. The visual
- * defaults for search-bar are also harmless (rounded input fill), so
- * even if it's mis-inferred the visual cost is small.
+ *
+ *
+ *
+ *
+ *
+ *
+ *
  */
 const PAGE_CHROME_ROLES = new Set(['navbar', 'footer', 'hero', 'cta-section']);
 
 /**
- * Read a declared dimension as a pixel number when possible. Returns
- * `null` for `'fill_container'`, `'fit_content'`, `undefined`, or any
- * non-numeric value — those sizing modes don't tell us whether the
- * final render will be small, so we refuse to make a decision from
- * them and fall back to the permissive default (apply the role).
+ * Read 如果可能，将声
+ * 明的尺寸作为像素数。 Returns `null` 代表 `'fill_container'`、`'fit_content'`、`u
+ * ndefined` 或任何非数字值 - 这些大小调整模式不会告诉我们最终渲染是否会很小，因此我们拒绝从它们中做出决定并回退到允许的默认
+ * 值（应用角色）。
+ *
  */
 function readDeclaredPixelSize(value: unknown): number | null {
   if (typeof value === 'number' && Number.isFinite(value)) return value;
@@ -357,15 +348,14 @@ function isAbsurdlyTinyForCardRole(node: PenNode): boolean {
   if (node.type !== 'frame') return false;
   const w = readDeclaredPixelSize((node as { width?: unknown }).width);
   const h = readDeclaredPixelSize((node as { height?: unknown }).height);
-  // Only reject when BOTH dimensions are declared numbers AND at least
-  // one is below the threshold. Unknown/sizing-keyword dimensions are
-  // left alone (we can't tell what they'll resolve to).
+  // 当 BOTH 维度被声明为数字 AND 至少有一个低于阈值时，Only 拒绝。 Unknown/sizing-keyword
+  // 维度保持不变（我们无法判断它们将解析为什么）。
   if (w == null || h == null) return false;
   return w < CARD_LIKE_MIN_DIMENSION || h < CARD_LIKE_MIN_DIMENSION;
 }
 
 /**
- * Apply defaults to a node, only setting properties that are undefined/missing.
+ * Apply 默认为节点，仅设置 undefined/missing 的属性。
  */
 function applyDefaults(node: PenNode, defaults: RoleDefaults): void {
   const record = node as unknown as Record<string, unknown>;
@@ -373,7 +363,7 @@ function applyDefaults(node: PenNode, defaults: RoleDefaults): void {
   for (const [key, value] of Object.entries(defaults)) {
     if (value === undefined) continue;
 
-    // Only set if the property is not already present on the node
+    // Only 如果该属性尚未存在于节点上则设置
     if (record[key] === undefined) {
       record[key] = value;
     }
@@ -381,12 +371,12 @@ function applyDefaults(node: PenNode, defaults: RoleDefaults): void {
 }
 
 // ---------------------------------------------------------------------------
-// Tree-level resolution
+// Tree 级分辨率
 // ---------------------------------------------------------------------------
 
 /**
- * Walk the tree depth-first, resolving roles for each node.
- * This replaces the old applyGenerationHeuristics tree walk.
+ * Walk 树深度优先，解
+ * 析每个节点的角色。 This 取代了旧的 applyGenerationHeuristics 树行走。
  */
 export function resolveTreeRoles(
   root: PenNode,
@@ -397,9 +387,8 @@ export function resolveTreeRoles(
   isTableContext = false,
   theme?: 'dark' | 'light',
 ): void {
-  // Detect theme from the root node's fill on the first (entry) call.
-  // Subsequent recursive calls inherit the parent's resolved theme so
-  // every node sees the same value.
+  // Detect 主题来自第一次（入口）调用时根节点的填充。 Subsequent
+  // 递归调用继承父级的已解析主题，因此每个节点都会看到相同的值。
   const resolvedTheme = theme ?? detectThemeFromNode(root);
 
   const ctx: RoleContext = {
@@ -411,7 +400,7 @@ export function resolveTreeRoles(
     theme: resolvedTheme,
   };
 
-  // Detect CJK in text nodes
+  // 文本节点中的 Detect CJK
   if (root.type === 'text') {
     const text = getTextContentForNode(root);
     ctx.hasCjk = hasCjkText(text);
@@ -419,7 +408,7 @@ export function resolveTreeRoles(
 
   resolveNodeRole(root, ctx);
 
-  // Recurse into children
+  // Recurse 进入儿童
   if (!('children' in root) || !Array.isArray(root.children)) return;
 
   const nodeW = toSizeNumber(
@@ -445,24 +434,24 @@ export function resolveTreeRoles(
 }
 
 /**
- * Detect light vs dark theme from a node's fill color.
+ * Detect 节点填充颜色的浅色主题与深色主题。
  *
- * Used by `resolveTreeRoles` (and exported for sanitize-time call sites
- * in `design-canvas-ops.ts`) so role default functions can pick a fill
- * that matches the page background instead of always defaulting to
- * light-theme `#FFFFFF`.
+ * Used by `resolveTreeRoles`（并导出用于清理时间调用站点
+ * 在 `design-canvas-ops.ts`）所以角色默认功能可以选择填充
+ * 与页面背景相匹配，而不是始终默认为
+ * 浅色主题 `#FFFFFF`。
  *
- * IMPORTANT: pass the actual PAGE ROOT here, not whatever sub-tree the
- * resolver is currently walking. A card inside a dark page has no fill
- * of its own (the LLM omitted it because it expected the dark page bg
- * to show through) — calling this on the card returns 'light' (default
- * fallback), which is the wrong answer. Always look up the document
- * page root and pass it explicitly when resolving an MCP-emitted
- * subtree before insertion.
+ * IMPORTANT: 在这里传递实际的 PAGE ROOT ，而不是任何子树
+ * 解析器当前正在行走。暗页内的卡片没有填充
+ * 它自己的（LLM 省略了它，因为它期望黑暗页面 bg
+ * 显示透）——在卡上调用它会返回“light”（默认
+ * 后备），这是错误的答案。 Always 查找文档
+ * 页面根目录并在解析 MCP-emissed 时显式传递它
+ * 插入之前的子树。
  *
- * Heuristic: if the first solid fill color has WCAG relative luminance
- * below 0.3, the design is dark theme. Otherwise (or when the fill is
- * missing / a variable ref / not a solid color) we default to 'light'
+ * Heuristic：如果第一个纯色填充颜色具有 WCAG 相对亮度
+ * 低于 0.3，设计为深色主题。 Otherwise （或者当填充时
+ * 缺少/变量引用/不是纯色）我们默认为“浅色”
  * for backward compatibility with all existing light-theme designs.
  */
 export function detectThemeFromNode(node: PenNode): 'dark' | 'light' {
@@ -471,7 +460,7 @@ export function detectThemeFromNode(node: PenNode): 'dark' | 'light' {
   const first = fills[0];
   if (!first || first.type !== 'solid' || typeof first.color !== 'string') return 'light';
   const color = first.color.trim();
-  // Skip variable refs ($color-1, etc.) — we can't resolve them here.
+  // Skip 变量引用（$color-1 等）——我们无法在这里解析它们。
   if (color.startsWith('$')) return 'light';
   const m = color.match(/^#([0-9a-fA-F]{3,8})$/);
   if (!m) return 'light';
@@ -486,7 +475,7 @@ export function detectThemeFromNode(node: PenNode): 'dark' | 'light' {
   const g = parseInt(hex.slice(2, 4), 16);
   const b = parseInt(hex.slice(4, 6), 16);
   if (Number.isNaN(r) || Number.isNaN(g) || Number.isNaN(b)) return 'light';
-  // sRGB → relative luminance
+  // sRGB → 相对亮度
   const lin = (v: number): number => {
     const s = v / 255;
     return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
@@ -496,12 +485,12 @@ export function detectThemeFromNode(node: PenNode): 'dark' | 'light' {
 }
 
 // ---------------------------------------------------------------------------
-// Post-pass: cross-node fixes that need the full tree
+// Post-pass：需要完整树的跨节点修复
 // ---------------------------------------------------------------------------
 
 /**
- * Apply cross-node fixes after the full tree has been role-resolved.
- * These fixes need sibling/parent context that per-node rules can't see.
+ * Apply 在完整树进行
+ * 角色解析后修复跨节点。 These 修复了每个节点规则看不到的需要 sibling/parent 上下文的问题。
  */
 export function resolveTreePostPass(
   root: PenNode,
@@ -513,16 +502,12 @@ export function resolveTreePostPass(
   if (root.type !== 'frame') return;
   if (!('children' in root) || !Array.isArray(root.children)) return;
 
-  // `updateNode` goes through Zustand's immutable `updateNodeInTree`, which
-  // shallow-clones every ancestor along the update path. Once we call it, our
-  // `root` parameter reference becomes detached from the store: later direct
-  // mutations to `root` (fill/effects) would be silently dropped, and stale
-  // reads (e.g. the fill we pass down to children as `parentNode`) could lie
-  // about the live tree state. After every updateNode call, re-fetch a fresh
-  // reference via `getNodeById` and rebind `currentRoot` + `children` before
-  // continuing. Children array identity is preserved across
-  // `updateNode(currentRoot.id, patch)` because the patch never touches
-  // `children`, but we rebind it via the fresh root for clarity and safety.
+  // `updateNode` 遍历 Zustand 的不可变 `updateNodeInTree`，它沿更新路径浅克隆每个祖先。 Once
+  // 我们称之为 Once，我们的 `root` 参数引用与存储分离：稍后对 `root` (fill/effects)
+  // 的直接突变将被默默删除，并且过时的读取（例如，我们传递给孩子的填充为 `parentNode`）可能会掩盖实时树状态。 After 每次
+  // updateNode 调用时，通过 `getNodeById` 重新获取新引用并重新绑定 `currentRoot` +
+  // `children`，然后再继续。 Children 数组标识在 `updateNode(currentRoot.id, patch)`
+  // 中保留，因为补丁从未触及 `children`，但为了清晰和安全，我们通过新根重新绑定它。
   let currentRoot: FrameNode = root as FrameNode;
   const refreshRoot = () => {
     if (!getNodeById) return;
@@ -534,12 +519,12 @@ export function resolveTreePostPass(
   const currentChildren = (): PenNode[] =>
     Array.isArray(currentRoot.children) ? currentRoot.children : [];
 
-  // --- Card row equalization ---
+  // --- Card 行均衡 ---
   if (currentRoot.layout === 'horizontal' && currentChildren().length >= 2) {
     equalizeCardRow(currentRoot, currentChildren());
   }
 
-  // --- Horizontal overflow fix ---
+  // --- Horizontal 溢出修复 ---
   if (
     currentRoot.layout === 'horizontal' &&
     typeof currentRoot.width === 'number' &&
@@ -548,7 +533,7 @@ export function resolveTreePostPass(
     fixHorizontalOverflow(currentRoot, currentChildren(), canvasWidth);
   }
 
-  // --- Form input consistency ---
+  // --- Form 输入一致性 ---
   if (
     currentRoot.layout === 'vertical' &&
     currentRoot.width !== 'fit_content' &&
@@ -557,20 +542,20 @@ export function resolveTreePostPass(
     normalizeFormInputWidths(currentRoot, currentChildren());
   }
 
-  // --- Input trailing icon alignment ---
+  // --- Input 尾随图标对齐 ---
   if (currentRoot.layout === 'horizontal' && currentChildren().length >= 2) {
     normalizeInputTrailingIconAlignment(currentRoot, currentChildren());
   }
 
-  // --- Placeholder icon repair ---
+  // --- Placeholder 图标修复 ---
   repairPlaceholderIcons(currentRoot, parentNode);
 
-  // --- Text height estimation ---
+  // --- Text 高度估计 ---
   if (currentRoot.layout && currentRoot.layout !== 'none') {
     fixTextHeights(currentRoot, currentChildren(), canvasWidth);
   }
 
-  // --- Frame height expansion ---
+  // --- Frame 高度扩展 ---
   if (
     typeof currentRoot.height === 'number' &&
     currentRoot.layout &&
@@ -588,7 +573,7 @@ export function resolveTreePostPass(
     }
   }
 
-  // --- clipContent for frames with cornerRadius + image children ---
+  // --- clipContent 用于带有 cornerRadius + 子图像 --- 的框架
   if (!currentRoot.clipContent) {
     const cr =
       typeof currentRoot.cornerRadius === 'number'
@@ -606,40 +591,40 @@ export function resolveTreePostPass(
     }
   }
 
-  // --- Button foreground contrast ---
+  // --- Button 前景对比 ---
   fixButtonForegroundContrast(currentRoot);
 
-  // --- Section background alternation ---
+  // --- Section 背景交替 ---
   if (currentRoot.layout === 'vertical' && currentChildren().length >= 3) {
     fixSectionAlternation(currentRoot, currentChildren());
   }
 
-  // --- Orphan container contrast ---
-  // This one is the primary motivation for the refreshRoot dance above:
-  // it mutates `currentRoot.fill` and `currentRoot.effects` directly, and
-  // would silently lose its writes if we still held the stale `root`.
+  // --- Orphan 容器对比 --- This 其中之一是上面
+  // refreshRoot 舞蹈的主要动机：它直接变异 `currentRoot.fill` 和
+  // `currentRoot.effects`，并且如果我们仍然持有陈旧的 `root`，则会默默地丢失其写入。
   fixOrphanContainerContrast(currentRoot, parentNode);
 
-  // --- Input sibling fill/stroke consistency ---
+  // --- Input 同级 fill/stroke 一致性 ---
   if (currentRoot.layout === 'vertical' && currentChildren().length >= 2) {
     fixInputSiblingConsistency(currentRoot, currentChildren());
   }
 
-  // Recurse. Pass `currentRoot` as the parentNode so descendants see
-  // whatever state this pass just wrote (e.g. a newly assigned fill from
-  // fixOrphanContainerContrast), not the pre-mutation snapshot.
+  // Recurse。 Pass `currentRoot` 与 parentNode
+  // 一样，因此后代看到此传递刚刚写入的任何状态（例如，从 fixOrphanContainerContrast
+  // 新分配的填充），而不是突变前快照。
   for (const child of currentChildren()) {
     resolveTreePostPass(child, canvasWidth, getNodeById, updateNode, currentRoot);
   }
 }
 
 // ---------------------------------------------------------------------------
-// Visual helpers (exported for testing)
+// Visual 助手（导出用于测试）
 // ---------------------------------------------------------------------------
 
 /**
- * Compute perceived luminance from a hex color string.
- * Returns 0 (black) to 1 (white). Handles #RRGGBB and #RRGGBBAA.
+ * Compute
+ * 从十六进制颜色字符串感知亮度。 Returns 0（黑色）到 1（白色）。 Handles
+ #RRGGBB 和 #RRGGBBAA。
  */
 export function hexLuminance(hex: string): number {
   const h = hex.replace('#', '');
@@ -650,43 +635,43 @@ export function hexLuminance(hex: string): number {
 }
 
 /**
- * Check if a node has a non-empty fill array.
- * Does NOT distinguish AI-explicit from role-default fills.
+ * Check 如果节点具有
+ * 非空填充数组。 Does NOT 区分 AI 显式填充和角色默认填充。
  */
 /**
- * Returns true when a node has ANY declared fill entry, visible or not.
+ * Returns
  *
- * This is the "overwrite protection" predicate: heuristics like
- * `fixOrphanContainerContrast` and `fixSectionAlternation` ask this to
- * decide whether the author has already made a deliberate fill choice
- * that they should respect. An explicit transparent fill
- * (`#00000000`, `"transparent"`, `"none"`) IS a deliberate choice —
- * "I want this container to be see-through" — and must be preserved,
- * not swapped for a default white background.
+ * 当节点具有 ANY 声明的填充条目（可见或不可见）时为 true。 This 是“覆盖保护”谓词：像
+ * `fixOrphanCo
+ * ntainerContrast` 和 `fixSectionAlternation`
+ * 这样的启发式方法要求它来决定作者是否已经做出了他们应该尊重的故意填充选择。 An
+ * 显式透明填充（`#00000000`、`"transparent"`、`"none"`） IS 是经过深思熟虑的选择 -
+ * “我希望此容器透明” - 并且必须保留，而不是交换为默认的白色背景。 When
+ * 您需要知道“这会在屏幕上绘制可见的颜色吗？” （例如，要确定按钮前景对比度通道是否需要以可读颜色绘制），请改用
  *
- * When you instead need to know "will this draw a visible color on
- * screen?" (e.g. to decide whether the button foreground contrast
- * pass needs to paint in a readable color), use `hasVisibleFill`
- * instead.
+ * `hasVisibleFill`。
+ *
+ *
+ *
  */
 export function hasFill(node: PenNode): boolean {
   return 'fill' in node && Array.isArray(node.fill) && node.fill.length > 0;
 }
 
 /**
- * Returns true when a node has a fill that will actually render a
- * visible color. Differs from `hasFill` by rejecting fills that draw
- * nothing:
- *   - Solid fills whose color is `#00000000`, any 8-digit hex with
- *     `00` alpha, or the CSS keywords `"transparent"` / `"none"`
- *   - Any fill (solid, gradient, image) whose `opacity` field is
- *     `0` (or any non-positive number — negative values are treated
- *     defensively as zero)
+ * Returns
+ * 当节点具有实际渲染可见颜色的填充时为 true。 Differs 从 `hasFill` 通过拒绝不绘制任何内容的填充： -
+ * Solid 填充其颜色为 `#00000000`、任何带 `00` alpha 的 8 位十六进制，或 CSS 关键字
+ * `"transparen
+ * t"` / `"none"` - Any 填充（实心、渐变、图像），其 `opacity` 字段为 `0` （或任何非正数
+ * - 负值被防御性地视为零） Use 在决定节点是否需要颜色时使用 PAINTED ONTO
+ * 它（按钮前景对比度、聚焦环电源等）。 Do NOT 使用此来决定是否覆盖作者的填充选择 - 透明是合法的选择。 See
+ * `hasFill` 对于这种情况。
  *
- * Use this when deciding whether a node needs a color PAINTED ONTO it
- * (button foreground contrast, focus ring supply, etc.). Do NOT use
- * this to decide whether to overwrite an author's fill choice —
- * transparent is a legitimate choice. See `hasFill` for that case.
+ *
+ *
+ *
+ *
  */
 export function hasVisibleFill(node: PenNode): boolean {
   if (!('fill' in node) || !Array.isArray(node.fill) || node.fill.length === 0) return false;
@@ -695,8 +680,8 @@ export function hasVisibleFill(node: PenNode): boolean {
   return !isFillInvisible(first);
 }
 
-/** A fill is invisible when its opacity is <= 0 or (for solids) its
- *  color is an explicit-transparent hex / CSS keyword. */
+/** 当填充的不透明度 <= 0 或（对于固体）其颜色是显式透明的十六进制 / CSS 关键字时，填充是不可见的。
+ *  */
 function isFillInvisible(fill: PenFill): boolean {
   const opacity = (fill as { opacity?: unknown }).opacity;
   if (typeof opacity === 'number' && opacity <= 0) return true;
@@ -710,15 +695,14 @@ function isInvisibleColor(color: unknown): boolean {
   if (typeof color !== 'string') return false;
   const c = color.trim().toLowerCase();
   if (c === 'transparent' || c === 'none') return true;
-  // 8-digit hex with 00 alpha (#RRGGBB00). Valid hex color literal, but
-  // it draws nothing.
+  // 带 00 alpha 的 8 位十六进制 (#RRGGBB00)。 Valid 十六进制颜色文字，但它什么也不绘制。
   if (/^#[0-9a-f]{6}00$/i.test(c)) return true;
   return false;
 }
 
 /**
- * Extract the first solid fill color from a node, or undefined.
- * Used by post-pass visual fixes (Tasks 5, 7, 8).
+ * Extract
+ * 节点中的第一个纯色填充颜色，或未定义。 Used 通过后期视觉修复（Tasks 5、7、8）。
  */
 export function getFirstSolidColor(node: PenNode): string | undefined {
   if (!hasFill(node)) return undefined;
@@ -728,14 +712,12 @@ export function getFirstSolidColor(node: PenNode): string | undefined {
 }
 
 // ---------------------------------------------------------------------------
-// Post-pass helpers
+// Post-pass 助手
 // ---------------------------------------------------------------------------
 
 function fixButtonForegroundContrast(parent: FrameNode): void {
   if (parent.role !== 'button' && parent.role !== 'icon-button') return;
-  // A transparent button has no background color to compute contrast
-  // against — nothing to do, and we definitely should not paint text
-  // white on an invisible button.
+  // 透明按钮没有背景颜色来计算对比度——无事可做，而且我们绝对不应该在不可见的按钮上将文本涂成白色。
   if (!hasVisibleFill(parent)) return;
 
   const bgColor = getFirstSolidColor(parent);
@@ -751,9 +733,8 @@ function fixButtonForegroundContrast(parent: FrameNode): void {
     const rec = child as unknown as Record<string, unknown>;
 
     if (child.type === 'text' || child.type === 'icon_font') {
-      // `hasVisibleFill` treats transparent-hex placeholder fills as
-      // unfilled, so the normalizer's #00000000 leftover does not
-      // block contrast from supplying a visible color.
+      // `hasVisibleFill` 将透明十六进制占位符填充视为未填充，因此标准化器的 #00000000
+      // 剩余部分不会阻止对比度提供可见颜色。
       if (!hasVisibleFill(child)) {
         rec.fill = fgFill;
       }
@@ -765,7 +746,7 @@ function fixButtonForegroundContrast(parent: FrameNode): void {
         (child.stroke as PenStroke).fill!.length > 0;
 
       if (hasVisibleFill(child)) {
-        // fill-style icon — already styled, skip
+        // 填充样式图标 — 已设置样式，跳过
       } else if (hasStroke && !hasStrokeFill) {
         (child.stroke as unknown as Record<string, unknown>).fill = fgFill;
       } else if (!hasStroke && !hasVisibleFill(child)) {
@@ -781,12 +762,9 @@ const ALTERNATING_BG = ['#FFFFFF', '#F8FAFC'];
 function fixSectionAlternation(parent: FrameNode, children: PenNode[]): void {
   if (parent.layout !== 'vertical') return;
 
-  // Only alternate on light-themed pages. ALTERNATING_BG is hardcoded to
-  // #FFFFFF/#F8FAFC, which paints visible white strips over a dark root
-  // background — the opposite of what the user wants. Dark themes rely on
-  // card/component internal contrast to group sections, not an outer
-  // section-background wash. When the parent has no solid fill we fall
-  // through to the existing (light-mode) behavior.
+  // Only 在浅色主题页面上交替出现。 ALTERNATING_BG 被硬编码为 #FFFFFF/#F8FAFC，它在深色根背景上绘制可见
+  // 的白色条带 - 与用户想要的相反。 Dark 主题依赖于 card/component 与组部分的内部对比，而不是外部部分背景清洗。
+  // When 父级没有实体填充，我们陷入现有（灯光模式）行为。
   const parentBg = getFirstSolidColor(parent);
   if (parentBg && hexLuminance(parentBg) < 0.5) return;
 

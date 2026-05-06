@@ -20,7 +20,7 @@ export interface StyleGuideValues {
 }
 
 /* ------------------------------------------------------------------ */
-/*  Section splitter                                                   */
+/* Section 分离器 */
 /* ------------------------------------------------------------------ */
 
 function getSections(content: string): Map<string, string> {
@@ -37,12 +37,12 @@ function getSections(content: string): Map<string, string> {
 }
 
 /* ------------------------------------------------------------------ */
-/*  Hex extraction helpers                                             */
+/* Hex 提取助手 */
 /* ------------------------------------------------------------------ */
 
 const HEX_RE = /#[0-9A-Fa-f]{6}\b/;
 
-/** Return the first hex color on a line matching `label` (case-insensitive). */
+/** Return 与 `label` 匹配的行上的第一个十六进制颜色（不区分大小写）。 */
 function hexNear(text: string, label: RegExp): string | undefined {
   for (const line of text.split('\n')) {
     if (label.test(line)) {
@@ -54,7 +54,7 @@ function hexNear(text: string, label: RegExp): string | undefined {
 }
 
 /* ------------------------------------------------------------------ */
-/*  Color extraction                                                   */
+/* Color 提取 */
 /* ------------------------------------------------------------------ */
 
 function extractColors(sections: Map<string, string>): StyleGuideValues['colors'] {
@@ -64,12 +64,12 @@ function extractColors(sections: Map<string, string>): StyleGuideValues['colors'
   const surface = hexNear(colorSection, /card\s+surface|surface/i);
   const border = hexNear(colorSection, /default\s+border|border|divider/i);
 
-  // Accent: look in the "Accent Colors" subsection first, fall back to any "Primary Accent" line
+  // Accent：首先查看“Accent Colors”小节，然后回到任何“Primary Accent”行
   const accentSubIdx = colorSection.toLowerCase().indexOf('accent color');
   const accentBlock = accentSubIdx !== -1 ? colorSection.slice(accentSubIdx) : colorSection;
   const accent = hexNear(accentBlock, /primary\s+accent|accent/i);
 
-  // Text colors subsection
+  // Text 颜色小节
   const textSubIdx = colorSection.toLowerCase().indexOf('text color');
   const textBlock = textSubIdx !== -1 ? colorSection.slice(textSubIdx) : colorSection;
 
@@ -81,23 +81,23 @@ function extractColors(sections: Map<string, string>): StyleGuideValues['colors'
 }
 
 /* ------------------------------------------------------------------ */
-/*  Typography extraction                                              */
+/* Typography 提取 */
 /* ------------------------------------------------------------------ */
 
 function extractTypography(sections: Map<string, string>): StyleGuideValues['typography'] {
   const typoSection = sections.get('typography') ?? '';
 
-  // Find the "Font Families" subsection
+  // Find “Font Families”小节
   const famIdx = typoSection.toLowerCase().indexOf('font families');
   if (famIdx === -1) return {};
 
   const famBlock = typoSection.slice(famIdx);
-  // Stop at the next ### heading or ## heading
+  // Stop 位于下一个 ### 标题或 ## 标题
   const endIdx = famBlock.indexOf('\n###', 10);
   const familyText = endIdx !== -1 ? famBlock.slice(0, endIdx) : famBlock;
 
-  // Parse table rows: | Role | Family | Usage |
-  // We expect up to 3 rows: display, body, data/mono
+  // Parse 表行： | Role | Family | Usage | We 预计最多
+  // 3 行：display、body、data/mono
   const rows: { role: string; family: string }[] = [];
   for (const line of familyText.split('\n')) {
     const cells = line
@@ -105,7 +105,7 @@ function extractTypography(sections: Map<string, string>): StyleGuideValues['typ
       .map((c) => c.trim())
       .filter(Boolean);
     if (cells.length < 2) continue;
-    // Skip header and divider rows
+    // Skip 标题行和分隔行
     if (cells[0].toLowerCase() === 'role' || cells[0].startsWith('-')) continue;
     rows.push({ role: cells[0].toLowerCase(), family: cells[1] });
   }
@@ -124,7 +124,7 @@ function extractTypography(sections: Map<string, string>): StyleGuideValues['typ
     }
   }
 
-  // If we didn't match by role keywords, fall back to positional order
+  // If 我们没有按角色关键字匹配，退回到位置顺序
   if (!displayFont && rows.length >= 1) displayFont = rows[0].family;
   if (!bodyFont && rows.length >= 2) bodyFont = rows[1].family;
   if (!dataFont && rows.length >= 3) dataFont = rows[2].family;
@@ -133,7 +133,7 @@ function extractTypography(sections: Map<string, string>): StyleGuideValues['typ
 }
 
 /* ------------------------------------------------------------------ */
-/*  Corner radius extraction                                           */
+/* Corner 半径提取 */
 /* ------------------------------------------------------------------ */
 
 function extractRadius(sections: Map<string, string>): StyleGuideValues['radius'] {
@@ -157,7 +157,7 @@ function extractRadius(sections: Map<string, string>): StyleGuideValues['radius'
     }
   }
 
-  // If "Everything" is 0px (brutalist style), both are 0
+  // If "Everything" 为 0px（野兽派风格），两者均为 0
   if (card === undefined && button === undefined) {
     const everythingLine = radiusSection
       .split('\n')
@@ -176,12 +176,13 @@ function extractRadius(sections: Map<string, string>): StyleGuideValues['radius'
 }
 
 /* ------------------------------------------------------------------ */
-/*  Public API                                                         */
+/* Public API */
 /* ------------------------------------------------------------------ */
 
 /**
- * Extract structured values from a style guide's markdown content.
- * Parses Color System, Typography, and Corner Radius sections.
+ * Extract
+ * 来自样式指南的 Markdown 内容的结构化值。 Parses Color System、Typography 和
+ Corner Radius 部分。
  */
 export function extractStyleGuideValues(content: string): StyleGuideValues {
   const sections = getSections(content);

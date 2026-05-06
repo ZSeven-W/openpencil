@@ -96,7 +96,7 @@ describe('unwrapFakePhoneMockups', () => {
   });
 
   it('does not unwrap a card-like frame with cornerRadius < phone bezel range', () => {
-    // Cards typically use cornerRadius 12-20, not 28-40.
+    // Cards 通常使用 cornerRadius 12-20，而不是 28-40。
     const card = frame({
       id: 'card',
       name: 'Stat Card',
@@ -113,7 +113,7 @@ describe('unwrapFakePhoneMockups', () => {
   });
 
   it('does not unwrap a wide frame even with cornerRadius 32', () => {
-    // A 600px wide hero card with cornerRadius 32 is not a phone mockup.
+    // 带有 cornerRadius 32 的 600px 宽英雄卡不是手机模型。
     const heroCard = frame({
       id: 'hero',
       name: 'Hero Card',
@@ -218,12 +218,12 @@ describe('unwrapFakePhoneMockups', () => {
   });
 
   it('sanitizes the root node when the root itself is a fake phone mockup', () => {
-    // The actual sub-agent path: bottomNav-root IS the fake wrapper. The
-    // function is called on the wrapper itself, with no parent in scope.
-    // We can't drop the root, so we sanitize: strip phone bezel visuals,
-    // restore vertical layout + fill_container width, drop the misleading
-    // name. The children stay (might be duplicates, but at least they're
-    // not crushed into a 260px column).
+    // The 实际子代理路径：bottomNav-root IS 假包装器。 The
+// function is called on the wrapper itself, with no parent in scope.
+    // We 无法删除根，因此我们进行清理：剥离手机边框视觉效果，
+    // 恢复垂直布局+fill_container 宽度，去掉误导
+    // 名字。 The 孩子留下来（可能是重复的，但至少他们是
+    // 没有被压碎成 260px 的列）。
     const fakePhoneRoot = frame({
       id: 'bottomNav-root',
       name: 'Phone Mockup',
@@ -241,22 +241,21 @@ describe('unwrapFakePhoneMockups', () => {
       layout?: unknown;
       name?: unknown;
     };
-    // Phone mockup visual signature must be gone
+    // Phone 模型视觉签名必须消失
     expect(sanitized.cornerRadius).toBeUndefined();
     expect(sanitized.width).toBe('fill_container');
     expect(sanitized.layout).toBe('vertical');
-    // Misleading name is cleared
+    // Misleading 名称已清除
     expect(sanitized.name).not.toBe('Phone Mockup');
-    // Children survive — at least they will render in a normal vertical stack
+    // Children 幸存下来——至少它们会在正常的垂直堆栈中渲染
     const kids = (fakePhoneRoot as PenNode & { children: PenNode[] }).children;
     expect(kids).toHaveLength(3);
     expect(kids[0].id).toBe('child1');
   });
 
   it('does not sanitize a real phone mockup root with 0 children', () => {
-    // Important: when called on a legitimate phone mockup root (no children),
-    // it must be left alone — the sanitize branch should only fire when the
-    // mockup is structurally invalid (children > 1 OR layout horizontal/vertical).
+    // Important：当在合法的手机模型根（无子级）上调用时，必须将其单独保留 - 只有当模型在结构上无效时才应触发清理分支（子级 > 1 OR
+    // 布局 horizontal/vertical）。
     const realPhoneRoot = frame({
       id: 'phone',
       name: 'Phone Mockup',
@@ -277,9 +276,8 @@ describe('unwrapFakePhoneMockups', () => {
   });
 
   it('reproduces the M2.7 health-tracker bottomNav case', () => {
-    // Direct repro of the actual failing case: bottomNav-root frame named
-    // "Phone Mockup", w=260, h=456, cornerRadius=32, layout=horizontal,
-    // wrapping a complete copy of the entire mobile app (6 sections).
+    // Direct 重现实际失败案例：bottomNav-根框架名为“Phone Mockup”，w=260，h=456，cornerRad
+    // ius=32，layout=horizontal，包装整个移动应用程序的完整副本（6 个部分）。
     const fakeBottomNav = frame({
       id: 'bottomNav-root',
       name: 'Phone Mockup',
@@ -312,11 +310,11 @@ describe('unwrapFakePhoneMockups', () => {
     });
     unwrapFakePhoneMockups(rootFrame);
     const kids = (rootFrame as PenNode & { children: PenNode[] }).children;
-    // Original 5 real sections + 6 unwrapped grandchildren = 11
+    // Original 5 个实数部分 + 6 个未包装的孙子 = 11
     expect(kids).toHaveLength(11);
-    // Fake wrapper is gone
+    // Fake 包装不见了
     expect(kids.find((c) => c.id === 'bottomNav-root')).toBeUndefined();
-    // Real tab-bar is now a direct child of root-frame
+    // Real tab-bar 现在是 root-frame 的直接子级
     expect(kids.find((c) => c.id === 'bottomNav-tab-bar')).toBeDefined();
   });
 });

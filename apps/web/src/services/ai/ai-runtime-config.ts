@@ -105,7 +105,7 @@ export const DESIGN_STREAM_TIMEOUTS = {
   effort: DEFAULT_THINKING_EFFORT,
 } as const;
 
-/** When false, skips the vision LLM validation loop (pre-validation heuristics still run) */
+/** When false，跳过视觉 LLM 验证循环（预验证启发式仍然运行） */
 export const VALIDATION_ENABLED = false;
 
 export const VALIDATION_TIMEOUT_MS = 180_000;

@@ -20,7 +20,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
-  // Clean up any test files
+  // Clean 启动任何测试文件
   const files = ['proto.op', 'normal.op', 'batch.op', 'batch-proto.op'];
   for (const f of files) {
     try {
@@ -77,7 +77,7 @@ describe('sanitizeObject', () => {
   });
 });
 
-// ---------- document-manager openDocument ----------
+// ---------- 文档管理器 openDocument ----------
 
 describe('openDocument', () => {
   it('does not pollute Object.prototype from __proto__ in file', async () => {
@@ -101,10 +101,10 @@ describe('openDocument', () => {
 
     const doc = await openDocument(fp);
 
-    // Object.prototype should not be polluted
+    // Object.prototype 不应被污染
     expect(({} as any).polluted).toBeUndefined();
     expect(({} as any).evil).toBeUndefined();
-    // Doc should still be valid
+    // Doc 应该仍然有效
     expect(doc.version).toBe('1.0.0');
     expect(doc.children.length).toBe(1);
   });
@@ -157,8 +157,8 @@ describe('live sync diagnostics', () => {
 
 describe('getReachableSyncUrl', () => {
   it('returns the IPv6 URL when only [::1] responds (Vite 6+ default)', async () => {
-    // Reproduces the OpenPencil dev server scenario: Vite binds to [::1] only,
-    // 127.0.0.1 / localhost both fail with connection refused.
+    // Reproduces OpenPencil 开发服务器场景：Vite 仅绑定到 [::1]，127.0.0.1 / localhost
+    // 均因连接被拒绝而失败。
     globalThis.fetch = vi.fn(async (input: string | URL | Request) => {
       const url = String(input);
       if (url.startsWith('http://[::1]:')) {
@@ -195,7 +195,7 @@ describe('getReachableSyncUrl', () => {
   });
 });
 
-// ---------- batch-design (parseJsonArg sanitization) ----------
+// ---------- 批量设计（parseJsonArg 清理） ----------
 
 describe('handleBatchDesign', () => {
   it('executes a normal insert operation', async () => {
@@ -223,7 +223,7 @@ describe('handleBatchDesign', () => {
     });
 
     expect(result.results.length).toBe(1);
-    // Object.prototype must not be polluted
+    // Object.prototype 不得被污染
     expect(({} as any).polluted).toBeUndefined();
     expect(result.nodeCount).toBe(1);
   });

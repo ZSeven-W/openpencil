@@ -6,11 +6,10 @@ import {
   getSyncDocument,
 } from '../../utils/mcp-sync-state';
 
-// Bun.serve has a default idleTimeout of 10s. Heartbeat must be shorter
-// to prevent the SSE connection from being killed.
+// Bun.serve 的默认 idleTimeout 为 10 秒。 Heartbeat 必须更短，以防止 SSE 连接被终止。
 const HEARTBEAT_MS = 8_000;
 
-/** GET /api/mcp/events — SSE stream for renderer to subscribe to live document changes. */
+/** GET /api/mcp/events — SSE 流，供渲染器订阅实时文档更改。 */
 export default defineEventHandler((event) => {
   const clientId = randomUUID();
   const stream = createEventStream(event);
@@ -29,10 +28,10 @@ export default defineEventHandler((event) => {
     stream.push(data).catch(cleanup);
   };
 
-  // Send client ID so renderer can use it as sourceClientId when pushing back
+  // Send 客户端 ID 因此渲染器在推回时可以将其用作 sourceClientId
   write(JSON.stringify({ type: 'client:id', clientId }));
 
-  // Send current document as initial state (if any)
+  // Send 当前文档作为初始状态（如果有）
   const { doc, version } = getSyncDocument();
   if (doc) {
     write(JSON.stringify({ type: 'document:init', version, document: doc }));
@@ -40,13 +39,13 @@ export default defineEventHandler((event) => {
 
   registerSSEClient(clientId, { push: write });
 
-  // Keep-alive heartbeat — must be shorter than Bun's idle timeout (10s)
+  // Keep-alive heartbeat — 必须短于 Bun 的空闲超时（10 秒）
   const heartbeat = setInterval(() => {
     if (closed) return;
     stream.push(':heartbeat').catch(cleanup);
   }, HEARTBEAT_MS);
 
-  // Clean up when client disconnects
+  // 当客户端断开连接时 Clean 启动
   stream.onClosed(cleanup);
 
   return stream.send();

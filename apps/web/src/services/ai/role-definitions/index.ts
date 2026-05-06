@@ -1,18 +1,18 @@
 /**
- * Role definitions for the AI design generation system.
- * All registerRole() calls are consolidated here for runtime registration.
+ * Role AI
+ * 设计生成系统的定义。 All registerRole() 调用在此处合并以进行运行时注册。 Theme
  *
- * Theme awareness: roles with visual defaults (cards, inputs, navbar,
- * dividers) read `ctx.theme` and pick a theme-appropriate fill/stroke.
- * Without this, an LLM generating a dark-theme design that omits the
- * fill on a card or navbar would have the role resolver paint a
- * `#FFFFFF` default on top of the dark page background — the visual
- * regression that motivated the change.
+ * 意识：具有视觉默认值（卡片、输入、导航栏、分隔线）的角色读取 `ctx.theme` 并选择适合主题的 fill/stroke。 Without
+ * 这个，一个 LLM
+ * 生成一个深色主题设计，省略卡片或导航栏上的填充，将使角色解析器在深色页面背景顶部绘制 `#FFFFFF` 默认值 -
+ * 引发更改的视觉回归。在页面根填充的 `resolveTreeRoles` 入口处检测一次 The 主题（亮度 < 0.3 = 暗）。
+ * All 下面默认使用辅助访问器 `cardFill / inputFill / navbarFill / etc.` 来保持一致。
  *
- * The theme is detected once at the entry of `resolveTreeRoles` from
- * the page root fill (luminance < 0.3 = dark). All defaults below use
- * the helper accessors `cardFill / inputFill / navbarFill / etc.` to
- * stay consistent.
+ *
+ *
+ *
+ *
+ *
  */
 
 import { registerRole } from '../role-resolver';
@@ -58,7 +58,7 @@ const dividerFill = (theme?: 'dark' | 'light'): PenFill[] => [
 ];
 
 // ---------------------------------------------------------------------------
-// Layout roles
+// Layout 角色
 // ---------------------------------------------------------------------------
 
 registerRole('section', (_node, ctx) => ({
@@ -120,7 +120,7 @@ registerRole('divider', (node, ctx) => {
 });
 
 // ---------------------------------------------------------------------------
-// Navigation roles
+// Navigation 角色
 // ---------------------------------------------------------------------------
 
 registerRole('navbar', (_node, ctx) => ({
@@ -146,7 +146,7 @@ registerRole('nav-link', (_node, _ctx) => ({
 }));
 
 // ---------------------------------------------------------------------------
-// Interactive roles
+// Interactive 角色
 // ---------------------------------------------------------------------------
 
 registerRole('button', (_node, ctx) => {
@@ -268,7 +268,7 @@ registerRole('search-bar', (_node, ctx) => ({
 }));
 
 // ---------------------------------------------------------------------------
-// Display roles
+// Display 角色
 // ---------------------------------------------------------------------------
 
 registerRole('card', (_node, ctx) => {
@@ -351,7 +351,7 @@ registerRole('image-card', (_node, _ctx) => ({
 }));
 
 // ---------------------------------------------------------------------------
-// Content roles
+// Content 角色
 // ---------------------------------------------------------------------------
 
 registerRole('hero', (_node, ctx) => ({
@@ -430,7 +430,7 @@ registerRole('stats-section', (_node, ctx) => ({
 }));
 
 // ---------------------------------------------------------------------------
-// Media roles
+// Media 角色
 // ---------------------------------------------------------------------------
 
 registerRole('phone-mockup', (_node, _ctx) => ({
@@ -472,7 +472,7 @@ registerRole('icon', (node, _ctx) =>
 );
 
 // ---------------------------------------------------------------------------
-// Typography roles
+// Typography 角色
 // ---------------------------------------------------------------------------
 
 registerRole('heading', (node, ctx) => {
@@ -522,7 +522,7 @@ registerRole('label', (_node, _ctx) => ({
 }));
 
 // ---------------------------------------------------------------------------
-// Table roles
+// Table 角色
 // ---------------------------------------------------------------------------
 
 registerRole('table', (_node, _ctx) => ({

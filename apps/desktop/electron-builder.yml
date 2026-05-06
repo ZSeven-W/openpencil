@@ -21,10 +21,9 @@ extraResources:
     to: mcp-server.cjs
   - from: apps/cli/dist/openpencil-cli.cjs
     to: openpencil-cli.cjs
-  # agent-native is external in Vite/Nitro build — ship it alongside server/ so
-  # Node can resolve `@zseven-w/agent-native` at runtime. The `napi/` directory
-  # IS the package root (contains package.json with name "@zseven-w/agent-native"
-  # and agent_napi.node copied by agent-native:bundle script).
+  # agent-native 在 Vite/Nitro 构建中是外部的 - 将其与 server/ 一起发送，因此 Node 可以在运行时解析
+  # `@zseven-w/agent-native`。 The `napi/` 目录 IS 包根目录（包含名为“@zseven-w/agent-nativ
+  # e”的 package.json 和由 agent-native:bundle 脚本复制的 agent_napi.node）。
   - from: packages/agent-native/napi
     to: server/node_modules/@zseven-w/agent-native
 

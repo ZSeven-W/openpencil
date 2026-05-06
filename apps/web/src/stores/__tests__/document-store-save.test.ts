@@ -1,4 +1,4 @@
-// @vitest-environment jsdom
+// @vitest-环境 jsdom
 // apps/web/src/stores/__tests__/document-store-save.test.ts
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { useDocumentStore } from '@/stores/document-store';
@@ -13,7 +13,7 @@ describe('useDocumentStore.save()', () => {
     documentEvents._clear();
     savedHandler = vi.fn();
     documentEvents.on('saved', savedHandler);
-    // Clean any window/electronAPI state
+    // Clean 任何 window/electronAPI 状态
     delete (window as unknown as Record<string, unknown>).electronAPI;
   });
 
@@ -22,9 +22,8 @@ describe('useDocumentStore.save()', () => {
   });
 
   it('returns null and does not emit when there is no file target and no fallback works', async () => {
-    // No electronAPI, no FSA, no anchor click in jsdom — downloadDocument will
-    // still succeed (it just creates a blob URL and clicks a synthetic anchor).
-    // To simulate a true failure we mock downloadDocument to throw.
+    // No electronAPI，没有 FSA，jsdom 中没有锚点点击 — downloadDocument 仍然会成功（它只是创建一个
+    // blob URL 并点击一个合成锚点）。 To 模拟我们模拟 downloadDocument 抛出的真实故障。
     const dl = vi.spyOn(fileOps, 'downloadDocument').mockImplementation(() => {
       throw new Error('cannot download');
     });
@@ -36,7 +35,7 @@ describe('useDocumentStore.save()', () => {
 
   it('emits saved exactly once when the download fallback succeeds', async () => {
     const dl = vi.spyOn(fileOps, 'downloadDocument').mockImplementation(() => {
-      // succeed silently
+      // 默默地成功
     });
     const result = await useDocumentStore.getState().save();
     expect(result).toBe('untitled.op');
@@ -109,7 +108,7 @@ describe('useDocumentStore.save()', () => {
     const result = await useDocumentStore.getState().save();
     expect(handleWriteSpy).toHaveBeenCalled();
     expect(useDocumentStore.getState().fileHandle).toBeNull();
-    // saveAs() succeeded via download fallback
+    // saveAs() 通过下载回退成功
     expect(result).toBe('login.op');
     expect(savedHandler).toHaveBeenCalledTimes(1);
     handleWriteSpy.mockRestore();
@@ -125,7 +124,7 @@ describe('useDocumentStore.save()', () => {
       handle: fakeHandle,
       fileName: 'design.op',
     });
-    // Pretend FSA is available
+    // Pretend FSA 可用
     (window as unknown as Record<string, unknown>).showSaveFilePicker = () => {};
     const result = await useDocumentStore.getState().saveAs();
     expect(fsaSpy).toHaveBeenCalled();
@@ -201,7 +200,7 @@ describe('useDocumentStore.save()', () => {
 
   it('saveToNewPath returns null and does not emit in browser builds', async () => {
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
-    // No electronAPI set → isElectron() returns false
+    // No electronAPI 设置 → isElectron() 返回 false
     const result = await useDocumentStore.getState().saveToNewPath('/tmp/explicit.op');
     expect(result).toBeNull();
     expect(savedHandler).not.toHaveBeenCalled();
@@ -212,7 +211,7 @@ describe('useDocumentStore.save()', () => {
     const electronSaveFile = vi
       .fn()
       .mockImplementation(async (_json: string, suggested: string) => {
-        // Echo the suggested name back as the saved path so the test can assert it
+        // Echo 将建议的名称返回为保存的路径，以便测试可以断言它
         return `/Users/foo/${suggested}`;
       });
     (window as unknown as Record<string, unknown>).electronAPI = {

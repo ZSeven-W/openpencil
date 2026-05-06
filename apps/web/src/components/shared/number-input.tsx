@@ -120,7 +120,7 @@ export default function NumberInput({
     dragStartY.current = e.clientY;
     dragStartValue.current = value;
 
-    // Batch all scrub-drag onChange calls into a single undo entry
+    // Batch 将所有 onChange 调用拖拽到单个撤消条目中
     useHistoryStore.getState().startBatch(useDocumentStore.getState().document);
 
     const handleMouseMove = (ev: MouseEvent) => {

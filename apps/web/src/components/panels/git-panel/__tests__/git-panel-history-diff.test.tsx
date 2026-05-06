@@ -1,8 +1,8 @@
-// @vitest-environment jsdom
+// @vitest-环境 jsdom
 // apps/web/src/components/panels/git-panel/__tests__/git-panel-history-diff.test.tsx
 //
-// Phase 7b: verifies the inline diff block loads on expand, handles initial
-// commit, surfaces compute errors inline, and renders the diff summary.
+// Phase 7b：验证展开时的内联差异块加载，处理初始
+// 提交，显示内联计算错误，并呈现差异摘要。
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, cleanup, act } from '@testing-library/react';

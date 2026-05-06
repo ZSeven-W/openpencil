@@ -1,7 +1,7 @@
 /**
- * Shared OpenCode client manager.
- * Reuses an existing server on port 4096; starts one on a random port as fallback.
- * Tracks spawned servers so they can be cleaned up on process exit.
+ * Shared OpenC
+ * ode 客户端管理器。 Reuses 端口 4096
+ * 上的现有服务器；在随机端口上启动一个作为后备。 Tracks 生成了服务器，因此可以在进程退出时清理它们。
  */
 import { execSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
@@ -10,13 +10,13 @@ import { homedir } from 'node:os';
 
 const activeServers = new Set<{ close(): void }>();
 
-// Clean up spawned OpenCode servers on process exit
+// Clean up 在进程退出时生成 OpenCode 服务器
 function cleanup() {
   for (const server of activeServers) {
     try {
       server.close();
     } catch {
-      /* ignore */
+      /* 忽略 */
     }
   }
   activeServers.clear();
@@ -28,14 +28,14 @@ process.on('SIGINT', cleanup);
 
 const isWindows = process.platform === 'win32';
 
-/** Cached resolved binary path */
+/** Cached 解析的二进制路径 */
 let _resolvedBinary: string | undefined | null = null;
 
-/** Resolve the opencode binary, with caching. */
+/** Resolve opencode 二进制文件，带缓存。 */
 function resolveOpencodeBinary(): string | undefined {
   if (_resolvedBinary !== null) return _resolvedBinary ?? undefined;
 
-  // PATH lookup
+  // PATH 查找
   try {
     const cmd = isWindows ? 'where opencode 2>nul' : 'which opencode 2>/dev/null';
     const result = execSync(cmd, { encoding: 'utf-8', timeout: 5000 })
@@ -47,10 +47,10 @@ function resolveOpencodeBinary(): string | undefined {
       return result;
     }
   } catch {
-    /* not on PATH */
+    /* 不在 PATH 上 */
   }
 
-  // Common install locations
+  // Common 安装位置
   const home = homedir();
   const candidates = isWindows
     ? [
@@ -81,13 +81,13 @@ function resolveOpencodeBinary(): string | undefined {
 export async function getOpencodeClient(binaryPath?: string) {
   const { createOpencodeClient, createOpencode } = await import('../opencode/index');
 
-  // Try connecting to an existing server first
+  // Try 首先连接到现有服务器
   try {
     const client = createOpencodeClient();
-    await client.config.providers(); // probe
+    await client.config.providers(); // 探针
     return { client, server: undefined };
   } catch {
-    // No running server — start a temporary one on a random port
+    // No running server — 在随机端口上启动一个临时服务器
     const resolvedPath = binaryPath ?? resolveOpencodeBinary();
     const timeout = isWindows ? 15_000 : 5000;
     const oc = await createOpencode({ port: 0, binaryPath: resolvedPath, timeout });
@@ -101,7 +101,7 @@ export function releaseOpencodeServer(server: { close(): void } | undefined) {
   try {
     server.close();
   } catch {
-    /* ignore */
+    /* 忽略 */
   }
   activeServers.delete(server);
 }

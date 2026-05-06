@@ -13,7 +13,7 @@ export function useHistoryShortcuts() {
 
       const isMod = e.metaKey || e.ctrlKey;
 
-      // Undo: Cmd/Ctrl+Z
+      // Undo: Cmd/Ctrl+z
       if (isMod && e.key === 'z' && !e.shiftKey) {
         e.preventDefault();
         const currentDoc = useDocumentStore.getState().document;
@@ -25,7 +25,7 @@ export function useHistoryShortcuts() {
         return;
       }
 
-      // Redo: Cmd/Ctrl+Shift+Z
+      // Redo: Cmd/Ctrl+Shift+z
       if (isMod && e.key === 'z' && e.shiftKey) {
         e.preventDefault();
         const currentDoc = useDocumentStore.getState().document;

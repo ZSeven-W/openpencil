@@ -16,38 +16,40 @@ interface StreamChatOptions {
   hardTimeoutMs?: number;
   noTextTimeoutMs?: number;
   /**
-   * Whether thinking events should reset the no-text timeout.
-   * Default: true (backward compatible). Set to false for fast calls
-   * where thinking should NOT prevent the no-text timeout from firing.
+   * `thinking` 事件是否应当重置“长时间无文本输出”的超时。
+   * 默认为 `true`，保持向后兼容。
+   * 如果你希望快速失败，可以设为 `false`，
+   * 这样模型即便还在思考，也不会阻止无文本超时触发。
    */
   thinkingResetsTimeout?: boolean;
   /**
-   * Whether keep-alive ping events reset the no-text timeout.
-   * Default: true (backward compatible). Set to false to avoid endless
-   * waiting when the server only emits pings.
+   * keep-alive `ping` 是否应当重置无文本超时。
+   * 默认为 `true`，保持向后兼容。
+   * 设为 `false` 可以避免服务器只发 ping 时无限等待。
    */
   pingResetsTimeout?: boolean;
   /**
-   * Max time to wait for the first non-empty text token.
-   * This timeout is independent from keep-alive pings/thinking chunks.
+   * 最长等待第一个非空文本 token 的时间。
+   * 这个超时与 keep-alive ping / thinking 块无关。
    */
   firstTextTimeoutMs?: number;
   /**
-   * Controls provider thinking mode.
-   * - adaptive: model decides thinking depth
-   * - disabled: disable extended thinking for faster first text
-   * - enabled: explicitly enable extended thinking
+   * 控制提供方的思考模式：
+   * - `adaptive`：由模型自行决定思考深度
+   * - `disabled`：关闭扩展思考，优先更快地返回首个文本
+   * - `enabled`：显式开启扩展思考
    */
   thinkingMode?: 'adaptive' | 'disabled' | 'enabled';
-  /** Thinking budget (used when thinkingMode === 'enabled'). */
+  /** 思考预算，仅在 `thinkingMode === 'enabled'` 时使用。 */
   thinkingBudgetTokens?: number;
-  /** Model effort level (low is usually faster). */
+  /** 模型 effort 等级，通常 `low` 会更快。 */
   effort?: 'low' | 'medium' | 'high' | 'max';
 }
 
 /**
- * Streams a chat response from the server-side AI endpoint.
- * The server routes to the appropriate provider SDK (no client-side key needed).
+ * 以流式方式消费服务端 AI 端点返回的聊天响应。
+ * 服务端会把请求路由到对应的 provider SDK，
+ * 因此客户端不需要直接持有这些 provider 的密钥。
  */
 export async function* streamChat(
   systemPrompt: string,
@@ -123,7 +125,7 @@ export async function* streamChat(
       ? AbortSignal.any([controller.signal, abortSignal])
       : controller.signal;
 
-    // For builtin provider, attach API key and config from agent settings store
+    // 对 builtin provider，额外从代理设置里补上 API Key 和配置。
     let builtinFields: Record<string, unknown> = {};
     if (provider === 'builtin') {
       const { useAgentSettingsStore } = await import('@/stores/agent-settings-store');
@@ -185,7 +187,7 @@ export async function* streamChat(
       return;
     }
 
-    // Server returned JSON instead of SSE stream — read body as JSON error
+    // 服务端返回了 JSON，而不是 SSE 流；按错误响应处理。
     const contentType = response.headers.get('content-type') ?? '';
     if (contentType.includes('application/json')) {
       const body = await response.text();
@@ -221,14 +223,14 @@ export async function* streamChat(
       const { done, value } = await reader.read();
       if (done) {
         if (buffer.trim().length > 0) {
-          // Remaining buffer may be a non-SSE response (e.g. JSON error)
+          // 剩余缓冲区可能是非 SSE 响应，例如一段 JSON 错误。
           try {
             const jsonErr = JSON.parse(buffer.trim());
             if (jsonErr.error) {
               yield { type: 'error', content: jsonErr.error } as AIStreamChunk;
             }
           } catch {
-            // Not JSON, ignore remaining buffer
+            // 不是 JSON，就忽略这段尾部内容。
           }
         }
         break;
@@ -236,7 +238,7 @@ export async function* streamChat(
 
       buffer += decoder.decode(value, { stream: true });
 
-      // Parse SSE events from the buffer
+      // 从缓冲区中解析 SSE 事件
       const lines = buffer.split('\n');
       buffer = lines.pop() ?? '';
 
@@ -254,12 +256,12 @@ export async function* streamChat(
               try {
                 await reader.cancel();
               } catch {
-                // ignore cancellation errors
+                // 忽略取消读取时的异常
               }
               return;
             }
 
-            // Keep-alive pings from server — reset activity timeout but don't yield
+            // 服务端 keep-alive ping：只重置活跃超时，不向上层产出 chunk。
             if (chunk.type === 'ping') {
               if (pingResetsTimeout) {
                 resetActivityTimeout();
@@ -271,8 +273,8 @@ export async function* streamChat(
               continue;
             }
 
-            // Any non-empty text counts as activity; thinking only resets
-            // the timeout when thinkingResetsTimeout is true (default).
+            // 任何非空文本都算“有活动”。
+            // `thinking` 是否重置超时，则取决于 `thinkingResetsTimeout`。
             if (chunk.type === 'text' && chunk.content.trim().length > 0) {
               sawText = true;
               clearFirstTextTimeout();
@@ -282,9 +284,9 @@ export async function* streamChat(
               chunk.content.trim().length > 0 &&
               thinkingResetsTimeout
             ) {
-              // Active reasoning is progress — the model isn't silent, so the
-              // "no first text yet" watchdog should stand down. noTextTimeout
-              // + hardTimeout still bound genuinely runaway reasoning.
+              // 主动思考也意味着模型没有“卡死”，
+              // 所以可以让“首个文本迟迟未到”的看门狗先退下。
+              // 真正的兜底仍由 `noTextTimeout` 和 `hardTimeout` 提供。
               clearFirstTextTimeout();
               resetActivityTimeout();
             }
@@ -297,18 +299,18 @@ export async function* streamChat(
               try {
                 await reader.cancel();
               } catch {
-                // ignore cancellation errors
+                // 忽略取消读取时的异常
               }
               return;
             }
           } catch {
-            // Skip malformed lines
+            // 跳过格式错误的行
           }
         }
       }
     }
 
-    // Process remaining buffer
+    // 处理最后剩下的缓冲区内容
     if (buffer.startsWith('data: ')) {
       const data = buffer.slice(6).trim();
       if (data) {
@@ -338,12 +340,12 @@ export async function* streamChat(
             return;
           }
         } catch {
-          // Skip
+          // 跳过空块
         }
       }
     }
   } catch (error) {
-    // User-initiated stop via external abort signal
+    // 外部中止信号触发的用户主动停止
     if (abortSignal?.aborted && !abortReason) {
       clearTimeout(hardTimeout);
       clearNoTextTimeout();
@@ -390,8 +392,8 @@ export async function* streamChat(
 }
 
 /**
- * Consume an SSE endpoint and accumulate the full text response.
- * Used by callers that don't need per-chunk streaming.
+ * 消费一个 SSE 端点，并把完整文本结果拼接出来。
+ * 适用于不需要逐 chunk 处理的调用方。
  */
 export async function consumeSSEAsText(response: Response): Promise<string> {
   if (!response.body) throw new Error('No response body');
@@ -422,8 +424,8 @@ export async function consumeSSEAsText(response: Response): Promise<string> {
 }
 
 /**
- * Non-streaming completion for design/code generation.
- * Calls the server-side endpoint which routes to the appropriate provider SDK.
+ * 面向设计 / 代码生成场景的非流式 completion 调用。
+ * 服务端会把请求路由到合适的 provider SDK。
  */
 export async function generateCompletion(
   systemPrompt: string,
@@ -457,8 +459,8 @@ export async function generateCompletion(
 }
 
 /**
- * Fetches available AI models from the server.
- * The server queries Claude Agent SDK for the supported model list.
+ * 从服务端拉取可用模型列表。
+ * 当前由服务端去查询 Claude Agent SDK 支持的模型集合。
  */
 export async function fetchAvailableModels(): Promise<AIModelInfo[]> {
   try {

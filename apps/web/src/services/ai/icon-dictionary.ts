@@ -2,18 +2,17 @@ import featherData from '@iconify-json/feather/icons.json';
 import lucideData from '@iconify-json/lucide/icons.json';
 
 // ---------------------------------------------------------------------------
-// Core UI icon paths (Lucide-style, 24x24 viewBox)
-// Hand-picked high-frequency icons for guaranteed instant sync resolution.
-// Feather icons are added at module init from the bundled @iconify-json/feather.
+// Core UI 图标路径（Lucide 样式，24x24 viewBox）
+// Hand-挑选高频图标以保证即时同步分辨率。
+// Feather 图标是在模块初始化时从捆绑的 @iconify-json/feather 添加的。
 // ---------------------------------------------------------------------------
 
 export type IconEntry = { d: string; style: 'stroke' | 'fill'; iconId: string };
-// Helpers keep definitions concise
+// Helpers 保持定义简洁
 const s = (d: string, id: string): IconEntry => ({ d, style: 'stroke', iconId: id });
 const f = (d: string, id: string): IconEntry => ({ d, style: 'fill', iconId: id });
 
-// Shared path objects — aliases reference the same entry, avoiding duplication.
-// Resolution still works because every alias key stays in the map.
+// Shared 路径对象 — 别名引用相同的条目，避免重复。 Resolution 仍然有效，因为每个别名键都保留在映射中。
 const _X = s('M18 6L6 18M6 6l12 12', 'lucide:x');
 const _PLUS = s('M12 5v14M5 12h14', 'lucide:plus');
 const _THUMBSUP = s(
@@ -73,7 +72,7 @@ const _TRASH = s(
 const _DOT = f('M12 12m-3 0a3 3 0 1 0 6 0a3 3 0 1 0 -6 0', 'lucide:circle');
 
 export const ICON_PATH_MAP: Record<string, IconEntry> = {
-  // -- Navigation & actions ---------------------------------------------------
+  // -- Navigation & 动作 ---------------------------------------------------
   menu: s('M4 6h16M4 12h16M4 18h16', 'lucide:menu'),
   check: s('M20 6L9 17l-5-5', 'lucide:check'),
   minus: s('M5 12h14', 'lucide:minus'),
@@ -86,12 +85,12 @@ export const ICON_PATH_MAP: Record<string, IconEntry> = {
   chevronleft: s('M15 18l-6-6 6-6', 'lucide:chevron-left'),
   chevrondown: s('M6 9l6 6 6-6', 'lucide:chevron-down'),
   chevronup: s('M18 15l-6-6-6 6', 'lucide:chevron-up'),
-  // aliases
+  // 别名
   x: _X,
   close: _X,
   plus: _PLUS,
   add: _PLUS,
-  // -- People & account -------------------------------------------------------
+  // -- People & 帐号 -------------------------------------------------------
   star: f(
     'M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z',
     'lucide:star',
@@ -107,11 +106,11 @@ export const ICON_PATH_MAP: Record<string, IconEntry> = {
     'M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8zM23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75',
     'lucide:users',
   ),
-  // aliases
+  // 别名
   like: _THUMBSUP,
   profile: _USER,
   avatar: _USER,
-  // -- System & settings ------------------------------------------------------
+  // -- System & 设置 ------------------------------------------------------
   settings: _SETTINGS,
   mail: _MAIL,
   eye: s(
@@ -125,12 +124,12 @@ export const ICON_PATH_MAP: Record<string, IconEntry> = {
   bell: _BELL,
   shield: s('M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z', 'lucide:shield'),
   zap: _ZAP,
-  // aliases
+  // 别名
   gear: _SETTINGS,
   email: _MAIL,
   notification: _BELL,
   bolt: _ZAP,
-  // -- Media & content --------------------------------------------------------
+  // -- Media & 内容 --------------------------------------------------------
   play: f('M5 3l14 9-14 9V3z', 'lucide:play'),
   pause: f('M6 4h4v16H6zM14 4h4v16h-4z', 'lucide:pause'),
   download: s('M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3', 'lucide:download'),
@@ -144,7 +143,7 @@ export const ICON_PATH_MAP: Record<string, IconEntry> = {
     'M23 7l-7 5 7 5V7zM1 5h15a2 2 0 012 2v10a2 2 0 01-2 2H1a2 2 0 01-2-2V7a2 2 0 012-2z',
     'lucide:video',
   ),
-  // alias
+  // 别名
   photo: _IMAGE,
   // -- Communication ----------------------------------------------------------
   message: _MESSAGE,
@@ -158,9 +157,9 @@ export const ICON_PATH_MAP: Record<string, IconEntry> = {
     'M12 22a10 10 0 100-20 10 10 0 000 20zM2 12h20M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z',
     'lucide:globe',
   ),
-  // alias
+  // 别名
   chat: _MESSAGE,
-  // -- Content & data ---------------------------------------------------------
+  // -- Content 和数据 ---------------------------------------------------------
   code: s('M16 18l6-6-6-6M8 6l-6 6 6 6', 'lucide:code-2'),
   bookmark: s('M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2v16z', 'lucide:bookmark'),
   tag: s(
@@ -187,24 +186,24 @@ export const ICON_PATH_MAP: Record<string, IconEntry> = {
     'M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z',
     'lucide:edit',
   ),
-  // pencil is a distinct icon (no bounding square)
+  // 铅笔是一个独特的图标（没有边框）
   pencil: s('M17 3a2.828 2.828 0 114 4L7.5 20.5 2 22l1.5-5.5L17 3z', 'lucide:pencil'),
   trash: _TRASH,
-  // alias
+  // 别名
   delete: _TRASH,
-  // -- Time & location --------------------------------------------------------
+  // -- Time 和位置 --------------------------------------------------------
   calendar: s(
     'M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V6a2 2 0 012-2z',
     'lucide:calendar',
   ),
   clock: s('M12 22a10 10 0 100-20 10 10 0 000 20zM12 6v6l4 2', 'lucide:clock'),
-  // timer is distinct: stopwatch with a top indicator
+  // 定时器是独特的：带有顶部指示器的秒表
   timer: s('M10 2h4M12 6v4l2 2M21 12a9 9 0 11-18 0 9 9 0 0118 0', 'lucide:timer'),
   mappin: _MAPPIN,
   map: s('M1 6v16l7-4 8 4 7-4V2l-7 4-8-4-7 4zM8 2v16M16 6v16', 'lucide:map'),
-  // alias
+  // 别名
   location: _MAPPIN,
-  // -- Analytics & status -----------------------------------------------------
+  // -- Analytics 和状态 -----------------------------------------------------
   barchart: _BARCHART,
   trendingup: s('M23 6l-9.5 9.5-5-5L1 18M17 6h6v6', 'lucide:trending-up'),
   activity: s('M22 12h-4l-3 9L9 3l-3 9H2', 'lucide:activity'),
@@ -214,7 +213,7 @@ export const ICON_PATH_MAP: Record<string, IconEntry> = {
   checkcircle: s('M22 11.08V12a10 10 0 11-5.93-9.14M22 4L12 14.01l-3-3', 'lucide:check-circle'),
   refresh: _REFRESH,
   filter: s('M22 3H2l8 9.46V19l4 2V12.46L22 3z', 'lucide:filter'),
-  // aliases
+  // 别名
   chart: _BARCHART,
   analytics: _BARCHART,
   warning: _ALERT,
@@ -231,39 +230,40 @@ export const ICON_PATH_MAP: Record<string, IconEntry> = {
   ),
   cart: _CART,
   award: s('M12 15a7 7 0 100-14 7 7 0 000 14zM8.21 13.89L7 23l5-3 5 3-1.21-9.12', 'lucide:award'),
-  // alias
+  // 别名
   shoppingcart: _CART,
   // -- Misc -------------------------------------------------------------------
   dot: _DOT,
   circlefill: f('M12 12m-4 0a4 4 0 1 0 8 0a4 4 0 1 0 -8 0', 'lucide:circle'),
-  // aliases
+  // 别名
   bullet: _DOT,
   point: _DOT,
 };
 
-// Snapshot the hand-picked keys BEFORE Feather expansion so BUILTIN_ICONS
-// only contains the curated Lucide/hand-written icons, not the full Feather set.
+// Snapshot 精心挑选的按键 BEFORE Feather 扩展，因此 BUILTIN_ICONS 仅包含精选的
+// Lucide/hand-written 图标，而不是完整的 Feather 集。
 const _handPickedKeys = new Set(Object.keys(ICON_PATH_MAP));
 
 // ---------------------------------------------------------------------------
-// Iconify icon sets — bundled from @iconify-json packages
-// Lucide (1700+ icons) is primary; Feather (286 icons) kept as fallback.
-// Populated at module init so AI-generated designs never need async fetches.
+// Iconify 图标集 — 从 @iconify-json 包捆绑
+// Lucide（1700+ 图标）是主要的； Feather（286 个图标）保留作为后备。
+// Populated 在模块 init 中，因此 AI 生成的设计永远不需要异步获取。
 // ---------------------------------------------------------------------------
 
 /**
- * Parse an Iconify SVG body string into a compound SVG path `d` string.
- * Handles <path>, <circle>, <rect>, <ellipse>, <line>, <polyline>, <polygon>.
+ * Parse 将
+ * Iconify SVG 正文字符串转换为复合 SVG 路径 `d` 字符串。 Handles
+ <路径>、<圆>、<矩形>、<椭圆>、<线>、<折线>、<多边形>。
  */
 function iconifyBodyToPathD(body: string): string | null {
   const parts: string[] = [];
 
-  // <path d="...">
+  // <路径 d =“...”>
   const pathRe = /\bd="([^"]+)"/g;
   let m: RegExpExecArray | null;
   while ((m = pathRe.exec(body)) !== null) parts.push(m[1]);
 
-  // <circle cx="x" cy="y" r="r"> -> two half-arcs forming a closed circle
+  // <circle cx="x" cy="y" r="r"> -> 两个半弧形成一个闭合圆
   const circleRe = /<circle[^>]+>/g;
   while ((m = circleRe.exec(body)) !== null) {
     const tag = m[0];

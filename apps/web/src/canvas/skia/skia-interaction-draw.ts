@@ -5,8 +5,8 @@ import { createNodeForTool } from '../canvas-node-creator';
 import type { ToolType } from '@/types/canvas';
 
 /**
- * Handles rubber-band drawing interactions for shape tools
- * (rectangle, ellipse, frame, line, polygon).
+ * Handles
+ * 形状工具（矩形、椭圆、框架、直线、多边形）的橡皮筋绘图交互。
  */
 export class DrawHandler {
   isDrawing = false;
@@ -54,8 +54,8 @@ export class DrawHandler {
   }
 
   /**
-   * Finish drawing: commit the shape to the document if it meets minimum size.
-   * Returns true if a shape was committed.
+   * Finish 绘图：如果
+   * 满足最小尺寸，则将形状提交到文档。 Returns 如果已提交形状，则为 true。
    */
   finishDrawing(engine: SkiaEngine): boolean {
     if (!this.isDrawing || !engine.previewShape) {

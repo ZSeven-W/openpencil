@@ -1,9 +1,9 @@
 // apps/web/src/stores/__tests__/git-store-helpers.test.ts
 //
-// Unit tests for the pure helpers in git-store-helpers.ts. These pin the
-// classification contract independently of the store so a future drift
-// (e.g. the helper stops importing REMOTE_AUTH_ERROR_CODES) is caught at
-// the unit level instead of leaking into integration tests.
+// Unit 测试 git-store-helpers.ts 中的纯助手。 These 固定
+// 分类合同独立于商店，因此未来会发生变化
+// （例如，助手停止导入 REMOTE_AUTH_ERROR_CODES）被捕获
+// 单元级别而不是泄漏到集成测试中。
 
 import { describe, it, expect } from 'vitest';
 import { GitError } from '@/services/git-error';
@@ -11,13 +11,10 @@ import { classifyRemoteAuthError } from '@/stores/git-store-helpers';
 import { REMOTE_AUTH_ERROR_CODES } from '@/stores/git-store-types';
 
 describe('classifyRemoteAuthError', () => {
-  // The contract: an auth code in REMOTE_AUTH_ERROR_CODES must classify
-  // as { kind: 'auth' } so the pull/push buttons know to open the shared
-  // auth form. Everything else must fall through to { kind: 'other' } so
-  // the component's generic error handling runs.
-
-  // Spread into a mutable array so it.each's tuple-vs-readonly-array typing
-  // doesn't fight us. REMOTE_AUTH_ERROR_CODES is `readonly [...]`.
+  // The 合约：REMOTE_AUTH_ERROR_CODES 中的身份验证代码必须分类为 { kind: 'auth' }，以便
+  // pull/push 按钮知道打开共享身份验证表单。 Everything else 必须落到 { kind: 'other' }
+  // 以便组件的通用错误处理运行。 Spread 到可变数组中，因此 it.each 的元组与只读数组类型不会与我们对抗。
+  // REMOTE_AUTH_ERROR_CODES 是 `readonly [...]`。
   it.each([...REMOTE_AUTH_ERROR_CODES])(
     'classifies GitError(%s) as { kind: "auth" } for both pull and push',
     (code) => {

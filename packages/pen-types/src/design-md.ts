@@ -1,5 +1,5 @@
 export interface DesignMdSpec {
-  /** Original markdown source (for round-trip fidelity) */
+  /** Original markdown 源（用于往返保真度） */
   raw: string;
   projectName?: string;
   visualTheme?: string;

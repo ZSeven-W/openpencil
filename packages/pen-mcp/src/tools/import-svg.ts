@@ -23,11 +23,11 @@ export interface ImportSvgParams {
 export async function handleImportSvg(
   params: ImportSvgParams,
 ): Promise<{ nodeIds: string[]; nodeCount: number; postProcessed?: boolean }> {
-  // Read SVG file
+  // Read SVG 文件
   const svgAbsPath = resolve(params.svgPath);
   const svgText = await readFile(svgAbsPath, 'utf-8');
 
-  // Parse SVG into PenNodes
+  // Parse SVG 变为 PenNodes
   const nodes = parseSvgToNodesServer(svgText, params.maxDim ?? 400);
   if (nodes.length === 0) {
     throw new Error(`No parseable elements found in SVG: ${svgAbsPath}`);

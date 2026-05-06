@@ -1,15 +1,15 @@
 /**
- * Visual Reference Orchestrator — full A+B+C pipeline.
+ * Visual Refer
  *
- * Orchestrates the visual reference pipeline:
- * Stage 0: Generate design system tokens (Phase B)
- * Stage 1: Generate HTML/CSS code with skill-enhanced prompts (Phase A+C)
- * Stage 2: Render HTML to screenshot (Phase C)
- * Stage 3: Run PenNode generation with visual reference context
- * Stage 4: Validate against reference screenshot
+ * ence Orchestrator — 完整的 a+b+c 管道。 Orchestrates
+ * 可视化参考管道：Stag
+ * e 0：Generate 设计系统标记 (Phase b) Stage
+ * 1：Generate HTML/CSS 代码，带有技能增强提示 (Phase a+c)
+ * Stage 2：Render HTML 进行屏幕截图(Phase c) Stage 3：使用视觉参考上下文生成 Run PenNode
+ * Stage 4：对照参考屏幕截图 Validate 关键见解：将“看起来不错”(Stag
  *
- * The key insight: separating "what looks good" (Stages 0-2) from
- * "how to encode it" (Stage 3) lets each LLM call focus on what it's best at.
+ * es 0-2) 与“如何编码”(Stage 3) 分开，让每个 LLM 呼吁专注于它最擅长的事情。
+ *
  */
 
 import type { PenNode } from '@/types/pen';
@@ -29,7 +29,7 @@ import { executeOrchestration } from './orchestrator';
 import { useDocumentStore } from '@/stores/document-store';
 
 // ---------------------------------------------------------------------------
-// Module state — reference data for the current generation
+// Module state — 当前一代的参考数据
 // ---------------------------------------------------------------------------
 
 let currentReference: VisualReference | null = null;
@@ -71,7 +71,7 @@ export async function executeVisualRefOrchestration(
       designSystem = getDefaultDesignSystem();
     }
 
-    // Write design tokens to document variables
+    // Write 设计标记来记录变量
     const variables = designSystemToVariables(designSystem);
     const store = useDocumentStore.getState();
     for (const [name, def] of Object.entries(variables)) {

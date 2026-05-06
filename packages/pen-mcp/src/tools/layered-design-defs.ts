@@ -1,6 +1,7 @@
 /**
- * Tool definitions for the layered design workflow:
- * design_skeleton → design_content → design_refine
+ * Tool 分层设计工作流
+ * 程的定义：design_skeleton → design_content →
+ design_refine
  */
 export const LAYERED_DESIGN_TOOLS = [
   {

@@ -2,7 +2,7 @@ import type { PenDocument } from '@/types/pen';
 import { parseAndPrepareImportedDocument } from './import-pen-document';
 
 // ---------------------------------------------------------------------------
-// Feature detection
+// Feature 检测
 // ---------------------------------------------------------------------------
 
 export function supportsFileSystemAccess(): boolean {
@@ -17,12 +17,12 @@ export function isElectron(): boolean {
 // File System Access API (Chrome / Edge)
 // ---------------------------------------------------------------------------
 
-/** Serialize document to JSON string. Throws on failure. */
+/** Serialize 文档到 JSON 字符串。 Throws 失败。 */
 function serializeDocument(doc: PenDocument): string {
   return JSON.stringify(doc);
 }
 
-/** Write document JSON to a FileSystemFileHandle. */
+/** Write 将 JSON 文件转换为 FileSystemFileHandle。 */
 export async function writeToFileHandle(
   handle: FileSystemFileHandle,
   doc: PenDocument,
@@ -33,7 +33,7 @@ export async function writeToFileHandle(
   await writable.close();
 }
 
-/** Write document to a known file path via Electron IPC. */
+/** 通过 Electron IPC 将 Write 文档保存到已知文件路径。 */
 export async function writeToFilePath(filePath: string, doc: PenDocument): Promise<void> {
   const api = window.electronAPI;
   if (!api?.saveToPath) throw new Error('Electron saveToPath not available');
@@ -41,7 +41,7 @@ export async function writeToFilePath(filePath: string, doc: PenDocument): Promi
   await api.saveToPath(filePath, json);
 }
 
-/** Show native save-file picker, write, and return the handle + name. */
+/** Show 本机保存文件选择器，写入并返回句柄+名称。 */
 export async function saveDocumentAs(
   doc: PenDocument,
   suggestedName?: string,
@@ -63,12 +63,12 @@ export async function saveDocumentAs(
     await writeToFileHandle(handle, doc);
     return { handle, fileName: handle.name };
   } catch {
-    // User cancelled or API error
+    // User 已取消或 API 错误
     return null;
   }
 }
 
-/** Open file via native picker, return doc + handle. */
+/** 通过本机选择器获取 Open 文件，返回 doc + 句柄。 */
 export async function openDocumentFS(): Promise<{
   doc: PenDocument;
   fileName: string;
@@ -101,10 +101,10 @@ export async function openDocumentFS(): Promise<{
 }
 
 // ---------------------------------------------------------------------------
-// Fallback: download / file-input (Firefox, Safari)
+// Fallback：下载/文件输入（Firefox、Safari）
 // ---------------------------------------------------------------------------
 
-/** Download document as a file (browser download). */
+/** Download 文档作为文件（浏览器下载）。 */
 export function downloadDocument(doc: PenDocument, fileName: string): void {
   const json = JSON.stringify(doc);
   const blob = new Blob([json], { type: 'application/json' });
@@ -116,7 +116,7 @@ export function downloadDocument(doc: PenDocument, fileName: string): void {
   URL.revokeObjectURL(url);
 }
 
-/** Open file via <input type="file"> (fallback). */
+/** Open 文件通过 <input type="file"> （后备）。 */
 export function openDocument(): Promise<{
   doc: PenDocument;
   fileName: string;

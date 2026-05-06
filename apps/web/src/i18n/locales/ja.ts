@@ -79,29 +79,29 @@ const ja: TranslationKeys = {
   'git.conflict.nonOp.unresolvedHeading_other': '{{count}} 個のファイルに対応が必要',
   'git.conflict.nonOp.continue': 'マージを続行',
   'git.conflict.nonOp.abort': 'マージを中止',
-  // ── Git 競合バナー (Phase 7b) ──
+  // ── Git 竞合バナー (Phase 7b) ──
   'git.conflict.banner.progress': '{{resolved}} / {{total}} 解決済み',
   'git.conflict.banner.apply': 'マージを適用',
   'git.conflict.banner.continue': '続行',
   'git.conflict.banner.finalizeError': '適用できませんでした: {{message}}',
   'git.conflict.banner.pollError': 'エラーのためステータスポーリングを一時停止中: {{message}}',
-  // placeholder — future localization
+  // placeholder — 未来的本地化
   'git.conflict.banner.reopenMessage':
     'マージ中にパネルが再開されました — 中止して再度プルしてください。',
 
-  // ── Git 競合リスト (Phase 7c) ──
+  // ── Git 竞合 risuto (Phase 7c) ──
   'git.conflict.list.heading': 'すべての競合',
   'git.conflict.list.progress': '{{resolved}} / {{total}} 解決済み',
   'git.conflict.list.allResolved': 'すべて解決済み',
   'git.conflict.list.allOurs': 'すべて自分のものに',
   'git.conflict.list.allTheirs': 'すべて相手のものに',
 
-  // ── Git 競合アイテム (Phase 7c) ──
+  // ── Git 竞合 aiitemu (Phase 7c) ──
   'git.conflict.item.nodeConflict': 'ノード競合',
   'git.conflict.item.fieldConflict': 'フィールド競合',
   'git.conflict.item.resolved': '解決済み',
 
-  // ── Git 競合カード (Phase 7c) ──
+  // ── Git 竞合カード (Phase 7c) ──
   'git.conflict.card.ours': '自分',
   'git.conflict.card.theirs': '相手',
   'git.conflict.card.base': 'ベース',
@@ -110,7 +110,7 @@ const ja: TranslationKeys = {
   'git.conflict.card.oursThumbnailAlt': '自分のバージョン',
   'git.conflict.card.theirsThumbnailAlt': '相手のバージョン',
 
-  // ── Git 競合 JSON エディタ (Phase 7c) ──
+  // ── Git 竞合 JSON エディタ (Phase 7c) ──
   'git.conflict.editor.editManually': '手動で編集',
   'git.conflict.editor.cancel': 'キャンセル',
   'git.conflict.editor.apply': '適用',
@@ -121,7 +121,7 @@ const ja: TranslationKeys = {
   'git.error.retry': '再試行',
   'git.error.title': '問題が発生しました',
 
-  // ── Git 空状態 ──
+  // ── Git 空状态 ──
   'git.empty.heading': 'まだバージョン履歴がありません',
   'git.empty.optional': 'Git は任意 — スキップしても問題ありません',
   'git.empty.requireSavedFile': '履歴を作成するには .op ファイルを保存してください',
@@ -132,7 +132,7 @@ const ja: TranslationKeys = {
   'git.empty.cloneCard': 'クローン',
   'git.empty.cloneCardDescription': 'リモートから',
 
-  // ── Git 作者フォーム ──
+  // ── Git 作者 foォーム ──
   'git.author.heading': 'コミット作者',
   'git.author.subheading': '最初のコミットには名前とメールが必要です',
   'git.author.nameLabel': '名前',
@@ -157,12 +157,12 @@ const ja: TranslationKeys = {
   'git.picker.empty.body': 'Git パネルには少なくとも 1 つの .op ファイルが必要です',
   'git.picker.empty.close': 'パネルを閉じる',
 
-  // ── Git 自動バインドバナー (Phase 4b) ──
+  // ── Git 自动バインドバナー (Phase 4b) ──
   'git.autoBind.confirmHeading': '{{fileName}} が見つかりました — エディタで開きますか?',
   'git.autoBind.openButton': '開く',
   'git.autoBind.dismissButton': 'スキップ',
 
-  // ── Git 相対時間 (Phase 4b) ──
+  // ── Git 相対时间 (Phase 4b) ──
   'git.relativeTime.justNow': '今',
   'git.relativeTime.minutesAgo': '{{count}}分前',
   'git.relativeTime.hoursAgo': '{{count}}時間前',
@@ -197,7 +197,7 @@ const ja: TranslationKeys = {
   'git.history.restoreButton': '復元',
   'git.history.copyHashButton': 'ハッシュをコピー',
   'git.history.copiedToast': 'コピー済み',
-  // ── Git 履歴差分 (Phase 7b) ──
+  // ── Git 履歴积分 (Phase 7b) ──
   'git.history.diff.loading': '差分を読み込み中…',
   'git.history.diff.initialCommit': '初回コミット — 比較できる親コミットがありません',
   'git.history.diff.noChanges': '変更なし',
@@ -270,7 +270,7 @@ const ja: TranslationKeys = {
   'git.wizard.clone.error.clone-target-exists':
     'コピー先フォルダが既に存在するか、空ではありません。',
 
-  // ── Git プル / プッシュ (Phase 6b) ──
+  // ── Git プル / プsshu (Phase 6b) ──
   'git.pull.label': 'プル',
   'git.pull.tooltip': 'origin からプル',
   'git.pull.noRemote': 'リモートが設定されていません — Git 設定で追加してください',
@@ -287,7 +287,7 @@ const ja: TranslationKeys = {
   'git.push.rejectedPull': '今すぐプル',
   'git.remote.dismissError': '閉じる',
 
-  // ── Git リモート設定 (Phase 6c) ──
+  // ── Git riboto 设定 (Phase 6c) ──
   'git.remote.settingsLabel': 'リモート設定',
   'git.remote.settingsHeading': 'リモート',
   'git.remote.back': '戻る',
@@ -312,7 +312,7 @@ const ja: TranslationKeys = {
   'git.remote.storedAuth.noHost': 'ホストが検出されません',
   'git.remote.clearAuthButton': '保存済み認証情報をクリア',
 
-  // ── Git SSH 鍵 (Phase 6c) ──
+  // ── Git SSH 键 (Phase 6c) ──
   'git.ssh.label': 'SSH 鍵',
   'git.ssh.heading': 'SSH 鍵',
   'git.ssh.back': '戻る',
@@ -344,7 +344,7 @@ const ja: TranslationKeys = {
   'git.ssh.providerLink': '{{host}} の SSH 鍵設定を開く',
   'git.ssh.genericGuidance': '公開鍵をコピーして、Git プロバイダの SSH 鍵設定に追加してください。',
 
-  // ── Git 認証フォーム (Phase 6b) ──
+  // ── Git 认证 foォーム (Phase 6b) ──
   'git.auth.formLabel': 'Git 認証情報',
   'git.auth.heading': '{{host}} に対して認証',
   'git.auth.headingUnknown': 'このリモートに対して認証',

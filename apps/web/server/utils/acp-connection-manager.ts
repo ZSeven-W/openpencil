@@ -2,9 +2,8 @@ import { connectAcpAgent, disconnectAcpAgent } from '@zseven-w/pen-acp';
 import type { AcpConnectionState, AcpConnectResult } from '@zseven-w/pen-acp';
 import type { AcpAgentConfig } from '../../src/types/agent-settings';
 
-// Use globalThis so connections survive Vite HMR / Nitro module reloads.
-// Without this, re-evaluating this module wipes the Map and existing UI
-// sessions get "ACP agent not connected" errors until reconnecting.
+// Use globalThis 因此连接在 Vite HMR / Nitro 模块重新加载后仍然存在。 Without
+// 这个，重新评估此模块会擦除 Map，并且现有的 UI 会话会收到“ACP 代理未连接”错误，直到重新连接。
 const globalStore = globalThis as unknown as {
   __acpConnections?: Map<string, AcpConnectionState>;
 };

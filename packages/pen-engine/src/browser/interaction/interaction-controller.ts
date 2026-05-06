@@ -21,11 +21,12 @@ function toolToCursor(tool: ToolType | string): string {
 }
 
 /**
- * Bind DOM mouse/keyboard events to drive engine interaction.
- * Returns a detach function that removes all listeners.
+ * Bind DOM
+ * mouse/keyboard 事件驱动引擎交互。 Returns 一个删除所有侦听器的分离函数。 Extracted
  *
- * Extracted from apps/web/src/canvas/skia/skia-interaction.ts.
- * Uses engine API instead of Zustand stores.
+ * 来自 apps/web/src/canvas/skia/skia-interaction.ts。 Uses
+ * 引擎 API 而不是
+ Zustand 商店。
  */
 export function attachInteraction(
   engine: DesignEngine,
@@ -126,7 +127,7 @@ export function attachInteraction(
       return;
     }
 
-    // Hover hit test (result available for future use)
+    // Hover 命中测试（结果可供将来使用）
     if (engine.getActiveTool() === 'select' && !spacePressed) {
       engine.hitTest(scene.x, scene.y);
     }
@@ -177,7 +178,7 @@ export function attachInteraction(
     e.preventDefault();
   }
 
-  // Subscribe to tool changes
+  // Subscribe 工具更改
   const unsubTool = engine.on('tool:change', (tool) => {
     if (!spacePressed && !resize.isResizing) {
       setCursor(toolToCursor(tool));

@@ -61,7 +61,7 @@ const vi: TranslationKeys = {
   'topbar.connected': 'đã kết nối',
   'topbar.agentStatus': '{{agents}} agent{{agentSuffix}} · {{mcp}} MCP',
 
-  // ── Bảng Git ──
+  // ── bảng Git ──
   'git.openPanel': 'Mở bảng Git',
   'git.closePanel': 'Đóng bảng Git',
   'git.title': 'Git · {{fileName}}',
@@ -78,13 +78,13 @@ const vi: TranslationKeys = {
   'git.conflict.nonOp.unresolvedHeading_other': '{{count}} tệp cần xử lý',
   'git.conflict.nonOp.continue': 'Tiếp tục gộp',
   'git.conflict.nonOp.abort': 'Hủy gộp',
-  // ── Git xung đột — banner (Phase 7b) ──
+  // ── Git xung đột — 横幅 (Phase 7b) ──
   'git.conflict.banner.progress': '{{resolved}} / {{total}} đã giải quyết',
   'git.conflict.banner.apply': 'Áp dụng gộp',
   'git.conflict.banner.continue': 'Tiếp tục',
   'git.conflict.banner.finalizeError': 'Không thể áp dụng: {{message}}',
   'git.conflict.banner.pollError': 'Kiểm tra trạng thái tạm dừng do lỗi: {{message}}',
-  // placeholder — future localization
+  // placeholder — 未来的本地化
   'git.conflict.banner.reopenMessage':
     'Bảng điều khiển được mở lại trong khi hợp nhất — vui lòng hủy và pull lại.',
 
@@ -143,7 +143,7 @@ const vi: TranslationKeys = {
   'git.author.validationName': 'Tên là bắt buộc',
   'git.author.validationEmail': 'Cần email hợp lệ',
 
-  // ── Bộ chọn Git (Phase 4b) ──
+  // ── bộ chọn Git (Phase 4b) ──
   'git.picker.heading': 'Kho này có {{count}} tệp .op:',
   'git.picker.milestoneCount': '{{count}} cột mốc',
   'git.picker.noHistory': 'Chưa có lịch sử',
@@ -214,7 +214,7 @@ const vi: TranslationKeys = {
   'git.autosave.messagePrefix': 'auto',
   'git.autosave.messageDiffSuffix': '',
 
-  // ── Git Bộ chọn nhánh (Phase 5) ──
+  // ── Git bộ chọn nhánh (Phase 5) ──
   'git.branch.listHeading': 'Nhánh',
   'git.branch.createAction': 'Nhánh mới',
   'git.branch.createPlaceholder': 'feature/login-redesign',
@@ -282,7 +282,7 @@ const vi: TranslationKeys = {
   'git.push.rejectedPull': 'Pull ngay',
   'git.remote.dismissError': 'Đóng',
 
-  // ── Git Cài đặt remote (Phase 6c) ──
+  // ── Git cài đặt 远程 (Phase 6c) ──
   'git.remote.settingsLabel': 'Cài đặt remote',
   'git.remote.settingsHeading': 'Remote',
   'git.remote.back': 'Quay lại',

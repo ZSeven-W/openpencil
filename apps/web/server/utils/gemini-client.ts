@@ -21,8 +21,9 @@ interface GeminiCliResult {
 const DEFAULT_GEMINI_TIMEOUT_MS = 15 * 60 * 1000;
 
 /**
- * Allowlist-based env filter for Gemini CLI subprocess.
- * Passes through safe system vars and Google/Gemini-specific prefixes.
+ * 用于 Gemini
+ * CLI 子进程的基于 Allowlist 的环境过滤器。 Passes 通过安全系统变量和
+ Google/Gemini-specific 前缀。
  */
 const GEMINI_ENV_ALLOWLIST = new Set([
   'PATH',
@@ -31,7 +32,7 @@ const GEMINI_ENV_ALLOWLIST = new Set([
   'LANG',
   'SHELL',
   'TMPDIR',
-  // Windows-essential
+  // Windows-必需品
   'SYSTEMROOT',
   'COMSPEC',
   'USERPROFILE',
@@ -63,9 +64,9 @@ function filterGeminiEnv(
 }
 
 /**
- * Run Gemini CLI in non-interactive mode with JSON output.
- * Passes prompt via stdin to avoid command-line length limits.
- * The CLI handles its own authentication (OAuth or API key).
+ * Run Gemini
+ * CLI 处于非交互模式，具有 JSON 输出。 Passes 通过标准输入提示以避免命令行长度限制。 The
+ * CLI 处理自己的身份验证（OAuth 或 API 密钥）。
  */
 export async function runGeminiExec(
   userPrompt: string,
@@ -84,8 +85,8 @@ export async function runGeminiExec(
     args.push('-m', options.model);
   }
 
-  // Use -p with a minimal marker; full prompt piped via stdin.
-  // Gemini CLI appends -p value after stdin content.
+  // Use -p 带有最小标记；通过标准输入传送的完整提示。 Gemini CLI 在 stdin 内容之后附加 -p
+  // 值。
   args.push('-p', ' ');
 
   try {
@@ -102,8 +103,8 @@ export async function runGeminiExec(
 }
 
 /**
- * Stream Gemini CLI output in real-time using `stream-json` format.
- * Passes prompt via stdin. Yields text deltas as they arrive.
+ * Stream Gemin
+ * i CLI 使用 `stream-json` 格式实时输出。 Passes 通过标准输入提示。 Yields 文本到达时出现增量。
  */
 export function streamGeminiExec(
   userPrompt: string,
@@ -130,7 +131,7 @@ export function streamGeminiExec(
     args.push('-m', options.model);
   }
 
-  // Use -p with minimal marker; full prompt piped via stdin.
+  // Use -p 带有最小标记；通过标准输入传送的完整提示。
   args.push('-p', ' ');
 
   const child = spawn(binPath, args, {
@@ -139,7 +140,7 @@ export function streamGeminiExec(
     ...(process.platform === 'win32' && { shell: true }),
   });
 
-  // Pipe prompt via stdin
+  // Pipe 通过标准输入提示
   if (child.stdin) {
     child.stdin.write(prompt);
     child.stdin.end();
@@ -157,7 +158,7 @@ export function streamGeminiExec(
     let buffer = '';
 
     child.stderr?.on('data', () => {
-      /* discard stderr */
+      /* 丢弃标准错误 */
     });
 
     try {
@@ -175,7 +176,7 @@ export function streamGeminiExec(
         }
       }
 
-      // Flush remaining buffer
+      // Flush 剩余缓冲区
       const tail = buffer.trim();
       if (tail) {
         const event = parseStreamJsonLine(tail);
@@ -228,7 +229,7 @@ async function executeGeminiCommand(
       ...(process.platform === 'win32' && { shell: true }),
     });
 
-    // Pipe prompt via stdin
+    // Pipe 通过标准输入提示
     if (stdinText && child.stdin) {
       child.stdin.write(stdinText);
       child.stdin.end();

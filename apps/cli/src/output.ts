@@ -1,4 +1,4 @@
-/** Output formatting and process exit helpers for the CLI. */
+/** Output CLI 的格式化和进程退出帮助程序。 */
 
 import { readFile } from 'node:fs/promises';
 
@@ -22,7 +22,7 @@ export function outputError(message: string, code = 1): never {
   process.exit(code);
 }
 
-/** Read all of stdin when not a TTY (piped input). */
+/** Read 当不是 TTY （管道输入）时，所有标准输入。 */
 export async function readStdin(): Promise<string> {
   if (process.stdin.isTTY) return '';
   const chunks: Buffer[] = [];
@@ -31,11 +31,11 @@ export async function readStdin(): Promise<string> {
 }
 
 /**
- * Resolve a CLI argument that may be:
- *  - `@filepath`  → read file contents
- *  - `-`          → read from stdin
- *  - raw string   → use as-is
- *  - undefined    → fall back to stdin (if piped)
+ * Resolve 一个
+ * CLI 参数，可能是： - `@filepath` → 读取文件内容
+ * - `-` → 从标准输入读取 - 原始字符串 → 按原样使用 -
+ * 未定义 → 回退到标准输入（如果通过管道传输）
+ *
  */
 export async function resolveArg(arg: string | undefined): Promise<string> {
   if (arg === '-') {

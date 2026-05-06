@@ -8,7 +8,7 @@ import { useTranslation } from 'react-i18next';
 type PaddingMode = 'single' | 'axis' | 'individual';
 
 // ---------------------------------------------------------------------------
-// RadioCircle (shared with GapSection)
+// RadioCircle（与 GapSection 共享）
 // ---------------------------------------------------------------------------
 
 export function RadioCircle({ selected, onClick }: { selected: boolean; onClick?: () => void }) {
@@ -81,7 +81,7 @@ export function parsePaddingValues(
 }
 
 // ---------------------------------------------------------------------------
-// PaddingSection — Uniform / V-H / T-R-B-L with gear popover
+// PaddingSection — Uniform / v-h / t-r-b-l 带齿轮弹出框
 // ---------------------------------------------------------------------------
 
 export default function PaddingSection({
@@ -142,7 +142,7 @@ export default function PaddingSection({
 
   return (
     <div className="space-y-1.5">
-      {/* Label row: "Padding" left, gear right */}
+      {/* Label 行：“Padding”左，齿轮右 */}
       <div className="flex items-center justify-between">
         <span className="text-[10px] text-muted-foreground">{t('padding.title')}</span>
         <div ref={popoverRef} className="relative">
@@ -178,7 +178,7 @@ export default function PaddingSection({
         </div>
       </div>
 
-      {/* Padding inputs */}
+      {/* Padding 输入 */}
       {mode === 'single' && (
         <NumberInput
           icon={PadVIcon}

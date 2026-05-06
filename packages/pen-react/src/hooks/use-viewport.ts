@@ -4,11 +4,12 @@ import { useDesignEngine } from './use-design-engine.js';
 import { useEngineSubscribe } from '../utils/use-engine-subscribe.js';
 
 /**
- * Returns viewport state (zoom, panX, panY).
- * Re-renders only on viewport:change events.
+ * Returns
+ * 视口状态（缩放、panX、panY）。 Re-仅在 viewport:change
  *
- * Caches the snapshot object so that useSyncExternalStore gets a stable
- * reference when values haven't changed — avoids infinite re-render loops.
+ * 事件上渲染。 Caches 快照对象，以便 useSyncExternalStore
+ * 在值未更改时获得稳定的引
+ 用 - 避免无限重新渲染循环。
  */
 export function useViewport(): ViewportState {
   const engine = useDesignEngine();

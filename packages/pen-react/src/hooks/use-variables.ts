@@ -12,8 +12,8 @@ interface VariablesState {
 }
 
 /**
- * Returns variable definitions and mutation actions.
- * Re-renders when the document changes (variables are part of PenDocument).
+ * Returns
+ * 变量定义和突变操作。 Re-当文档更改时渲染（变量是 PenDocument 的一部分）。
  */
 export function useVariables(): VariablesState {
   const engine = useDesignEngine();

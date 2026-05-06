@@ -1,12 +1,12 @@
-// @vitest-environment jsdom
+// @vitest-环境 jsdom
 // apps/web/src/components/panels/git-panel/__tests__/git-panel-ssh-keys.test.tsx
 //
-// Phase 6c: SSH keys subview. Coverage matches the plan's verification list:
-//   - refreshSshKeys on open
-//   - list keys (with current-host float)
-//   - generate / import / delete / copy public key
-//   - provider link visibility for github / gitlab, generic guidance otherwise
-//   - SSH iso gating banner
+// Phase 6c：SSH 键子视图。 Coverage 与计划的验证列表匹配：
+//   - refreshSshKeys 打开
+//   - 列表键（带有当前主机浮动）
+//   - 生成/导入/删除/复制公钥
+//   - github / gitlab 的提供商链接可见性，否则为通用指南
+//   - SSH iso 门控横幅
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/react';
 import { GitError } from '@/services/git-error';

@@ -5,7 +5,7 @@ import { figmaColorToHex } from './figma-color-utils';
 const IMAGE_TRANSFORM_EPSILON = 0.000001;
 
 /**
- * Convert Figma fillPaints (internal format) to PenFill[].
+ * Convert Figma fillPaints（内部格式）到 PenFill[]。
  */
 export function mapFigmaFills(paints: FigmaPaint[] | undefined): PenFill[] | undefined {
   if (!paints || paints.length === 0) return undefined;
@@ -63,7 +63,7 @@ function mapSingleFill(paint: FigmaPaint): PenFill | null {
     }
 
     case 'IMAGE': {
-      // Image fills reference blobs or ZIP image files; we'll resolve them later
+      // Image 填充参考 blob 或 ZIP 图像文件；我们稍后会解决它们
       let url = '';
       if (paint.image?.hash && paint.image.hash.length > 0) {
         url = `__hash:${Array.from(paint.image.hash)

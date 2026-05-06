@@ -17,13 +17,13 @@ import { EngineSpatialIndex } from './spatial-index.js';
 import { parseSvgToNodes } from './svg-parser.js';
 
 /**
- * DesignEngine -- headless design engine with zero DOM/React/Zustand dependencies.
+ * DesignEngine -- 零 DOM/React/Zustand 依赖性的无头设计引擎。
  *
- * Composes internal managers for document, history, selection, pages, variables,
- * viewport, and spatial indexing. All getters return immutable references.
- * Mutations increment the version counter and emit typed events.
+ * Composes 文档、历史记录、选择、页面、变量的内部管理器，
+ * 视口和空间索引。 All getters 返回不可变的引用。
+ * Mutations 增加版本计数器并发出类型化事件。
  *
- * Usage:
+ * Usage：
  * ```typescript
  * const engine = new DesignEngine();
  * engine.loadDocument(doc);
@@ -72,9 +72,9 @@ export class DesignEngine {
     this.pageManager = new PageManager({
       getDocument: () => this.documentManager.getDocument(),
       setDocument: (doc) => {
-        // Page mutations go through history
+        // Page 突变经历了历史
         this.historyManager.push(this.documentManager.getDocument());
-        // Direct assignment to avoid double-push via DocumentManager.mutate
+        // Direct 分配以避免通过 DocumentManager.mutate 进行双重推送
         (this.documentManager as any).document = doc;
         this.onDocumentMutated(doc);
       },
@@ -232,9 +232,9 @@ export class DesignEngine {
   }
 
   /**
-   * Compute the bounding box of all nodes on the active page.
-   * Returns null if the page is empty.
-   * Used by DesignCanvas to zoom-to-fit on initial load.
+   * Compute
+   * 活动页面上所有节点的边界框。如果页面为空，则 Returns null。 Used by DesignCanvas
+   * 在初始加载时缩放以适应。
    */
   getContentBounds(): { x: number; y: number; w: number; h: number } | null {
     const children = this.documentManager.getActivePageChildren();
@@ -265,7 +265,7 @@ export class DesignEngine {
     return this.viewportController.sceneToScreen(x, y);
   }
 
-  // ── Hit testing ──
+  // ── Hit 测试 ──
 
   hitTest(x: number, y: number): PenNode | null {
     return this.spatialIndex.hitTestNode(x, y);
@@ -275,7 +275,7 @@ export class DesignEngine {
     return this.spatialIndex.searchRectNodes(x, y, w, h);
   }
 
-  // ── Tool state ──
+  // ── Tool 状态 ──
 
   setActiveTool(tool: ToolType): void {
     this._activeTool = tool;
@@ -363,8 +363,7 @@ export class DesignEngine {
   }
 
   importFigma(_buffer: ArrayBuffer): PenDocument {
-    // Dynamic import to avoid bundling pen-figma in headless scenarios
-    // that don't use Figma import.
+    // Dynamic 导入以避免在不使用 Figma 导入的无头场景中捆绑 pen-figma。
     throw new Error(
       'importFigma requires the pen-figma package. Use: import { parseFigFile, figmaToPenDocument } from "@zseven-w/pen-figma"',
     );
@@ -382,7 +381,7 @@ export class DesignEngine {
 
   // ── Internal ──
 
-  /** Called when the document is mutated by any manager. */
+  /** Called 当文档被任何管理员更改时。 */
   private onDocumentMutated(doc: PenDocument): void {
     if (this._batchDepth > 0) {
       this._batchPendingChange = true;
@@ -393,14 +392,14 @@ export class DesignEngine {
   }
 
   /**
-   * Access to the spatial index for browser adapter.
-   * Not part of the public API spec, but needed internally.
+   * Access 到浏览器适
+   * 配器的空间索引。 Not 是公共 API 规范的一部分，但内部需要。
    */
   getSpatialIndex(): EngineSpatialIndex {
     return this.spatialIndex;
   }
 
-  /** Access to viewport controller for browser adapter. */
+  /** Access 到浏览器适配器的视口控制器。 */
   getViewportController(): ViewportController {
     return this.viewportController;
   }

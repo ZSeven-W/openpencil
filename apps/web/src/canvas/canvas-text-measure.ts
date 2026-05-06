@@ -1,4 +1,4 @@
-// Re-export pure functions from @zseven-w/pen-core
+// Re-从 @zseven-w/pen-core 导出纯函数
 export {
   parseSizing,
   defaultLineHeight,
@@ -25,8 +25,8 @@ import {
 import { cssFontFamily } from './font-utils';
 
 // ---------------------------------------------------------------------------
-// Canvas 2D measurement context (lazy singleton, browser-only)
-// Wire up the browser-based wrapped line counter at module load time.
+// Canvas 2d 测量上下文（惰性单例，仅限浏览器）
+// Wire 在模块加载时增加基于浏览器的换行计数器。
 // ---------------------------------------------------------------------------
 
 let _textMeasureCtx: CanvasRenderingContext2D | null = null;

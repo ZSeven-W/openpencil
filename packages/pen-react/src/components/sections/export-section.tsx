@@ -16,7 +16,7 @@ const FORMAT_OPTIONS = [
 interface ExportSectionProps {
   nodeId: string;
   nodeName: string;
-  /** Optional callback for export action — app-level implementation. */
+  /** Optional 导出操作回调 — 应用程序级实现。 */
   onExport?: (options: { nodeId: string; nodeName: string; scale: number; format: string }) => void;
 }
 

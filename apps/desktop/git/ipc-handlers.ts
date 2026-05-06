@@ -1,12 +1,12 @@
 // apps/desktop/git/ipc-handlers.ts
 //
-// Thin shim: each handler is a one-line forward to a git-engine function.
-// Tests call gitIpcHandlers directly. setupGitIPC wires them onto ipcMain.
+// Thin shim：每个处理程序都是单行转发到 git-engine 函数。
+// Tests 直接调用 gitIpcHandlers。 setupGitIPC 将它们连接到 ipcMain。
 //
-// Error serialization: Electron's structured-clone drops custom Error
-// subclasses (only `message` survives reliably). We tag GitError instances
-// by stuffing { __gitError, code, message, recoverable } into the message
-// field as JSON, prefixed with a marker the renderer detects on receive.
+// Error 序列化：Electron 的结构化克隆删除自定义 Error
+// 子类（只有 `message` 能够可靠地生存）。 We 标签 GitError 实例
+// 通过将 { __giterror, code, message, Recoveryable } 填充到消息中
+// 字段为 JSON，前缀为渲染器在接收时检测到的标记。
 
 import { ipcMain } from 'electron';
 import { GitError, isGitError } from './error';
@@ -46,9 +46,9 @@ import { createDefaultSshKeyManager, type SshKeyInfo, type SshKeyManager } from 
 import { getSystemAuthor as sysGetSystemAuthor } from './git-sys';
 
 // ---------------------------------------------------------------------------
-// Module-level singletons assigned by setupGitIPC at boot. We require Electron
-// to be ready (app.whenReady()) before instantiating because both auth-store
-// and ssh-keys lazy-import electron's `app` and `safeStorage`.
+// Module 级单例由 setupGitIPC 在启动时分配。 We 需要 Electron
+// 在实例化之前准备好（app.whenReady()），因为两个 auth-store
+// 和 ssh-keys 延迟导入电子的 `app` 和 `safeStorage`。
 // ---------------------------------------------------------------------------
 
 let authStore: AuthStore | null = null;
@@ -65,10 +65,10 @@ function requireSshKeyManager(): SshKeyManager {
 }
 
 /**
- * Strip the on-disk private key path before returning SSH key info to the
- * renderer. The path is backend-only — the renderer never needs it because
- * SSH transport is invoked via git-sys with GIT_SSH_COMMAND, never via the
- * renderer-side filesystem.
+ * 在将 SSH 密钥信息返
+ * 回给渲染器之前，Strip 是磁盘上的私钥路径。 The 路径仅用于后端 — 渲染器永远不需要它，因为 SSH 传输是通过 git-sys 和
+ * GIT_SSH_COMMAND 调用的，而不是通过渲染器端文件系统调用。
+ *
  */
 type PublicSshKeyInfo = Omit<SshKeyInfo, 'privateKeyPath'>;
 
@@ -81,9 +81,9 @@ function stripPrivatePath(info: SshKeyInfo): PublicSshKeyInfo {
 const GIT_ERROR_MARKER = '__GIT_ERROR__';
 
 /**
- * Serialize a GitError into an Error whose message is JSON-encoded with the
- * GIT_ERROR_MARKER prefix. The renderer's git-client (Phase 3) detects the
- * marker and rehydrates a GitError on its side.
+ * Serialize 将
+ * GitError 转换为 Error，其消息使用 GIT_ERROR_MARKER 前缀进行 JSON 编码。 The 渲染器的 git 客户端
+ * (Phase 3) 检测标记并在其侧面重新水化 GitError。
  */
 export function serializeGitError(err: GitError): Error {
   const payload = {

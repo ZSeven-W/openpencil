@@ -1,29 +1,29 @@
 #!/usr/bin/env node
-// Provisions the Zig NAPI addon binary by building it from source.
+// Provisions 通过从源代码构建 Zig NAPI 插件二进制文件。
 //
-// We always build from source on the host so the resulting `agent_napi.node`
-// matches the runner's platform/arch. Earlier revisions also tried to download
-// a prebuilt from a sibling release repo, but that path was racy: when the
-// prebuilt was missing for the current submodule SHA the build fell through
-// to source compilation, deposited the binary at `zig-out/napi/...`, and
-// electron-builder (which only ships `packages/agent-native/napi/`) silently
-// shipped without the addon — every chat request then died at the dynamic
-// `@zseven-w/agent-native` import.
+// We 始终从主机上的源代码构建，因此生成的 `agent_napi.node`
+// 与跑步者的 platform/arch 匹配。 Earlier 修改版也尝试下载
+// 从兄弟版本存储库中预构建的，但这条路径很活泼：当
+// 当前子模块 SHA 缺少预构建，构建失败
+// 进行源代码编译，将二进制文件存放在 `zig-out/napi/...` 处，并且
+// electronics-builder（仅发布 `packages/agent-native/napi/`）静默
+// 在没有插件的情况下发货 - 每个聊天请求都会在动态中终止
+// `@zseven-w/agent-native` 导入。
 //
-// Build prerequisite: Zig 0.15+ on PATH. CI workflows install it via
-// `mlugg/setup-zig`; local devs install once via their package manager.
+// Build 先决条件：PATH 上 Zig 0.15+。 CI 工作流程通过安装它
+// `mlugg/setup-zig`；本地开发人员通过他们的包管理器安装一次。
 //
-// Set OPENPENCIL_REQUIRE_AGENT_NATIVE=1 to fail the install when the build
-// can't run (electron CI uses this to surface missing prerequisites early).
+// Set OPENPENCIL_REQUIRE_AGENT_NATIVE=1 构建时安装失败
+// 无法运行（电子 CI 使用它来尽早显示缺少的先决条件）。
 //
-// Set OPENPENCIL_SKIP_AGENT_NATIVE=1 to no-op the script entirely. Useful for
-// workflows (npm publish, lint-only CI) that never load the addon at runtime
-// and would otherwise pay for a Zig build on every install.
+// Set OPENPENCIL_SKIP_AGENT_NATIVE=1 完全不对脚本执行任何操作。 Useful 为
+// 工作流程（npm 发布、仅 lint CI）在运行时从不加载插件
+// 否则将在每次安装时支付 Zig 构建费用。
 //
-// Set ZIG_TARGET to cross-compile for a non-host triple (e.g. on a macOS arm64
-// runner build for x86_64-macos with `ZIG_TARGET=x86_64-macos`). Without it
-// the build follows the host arch — fine for native runs, wrong when the
-// runner doesn't match the artifact you intend to ship.
+// Set ZIG_TARGET 交叉编译非主机三元组（例如在 macOS arm64 上
+// 使用 `ZIG_TARGET=x86_64-macos` 为 x86_64-macos 构建运行程序）。 Without 它
+// 构建遵循主机架构 - 对于本机运行来说很好，当
+// 跑步者与您打算运送的工件不匹配。
 
 const fs = require('fs');
 const path = require('path');

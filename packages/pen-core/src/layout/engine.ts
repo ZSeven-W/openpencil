@@ -38,7 +38,7 @@ export function resolvePadding(
 }
 
 // ---------------------------------------------------------------------------
-// Visibility check
+// Visibility 检查
 // ---------------------------------------------------------------------------
 
 export function isNodeVisible(node: PenNode): boolean {
@@ -49,15 +49,15 @@ export function isNodeVisible(node: PenNode): boolean {
 }
 
 // ---------------------------------------------------------------------------
-// Root fill-width fallback
+// Root 填充宽度回退
 // ---------------------------------------------------------------------------
 
 const DEFAULT_FRAME_ID = 'root-frame';
 
-/** Resolve root fill-width fallback. Pass root children to avoid store coupling. */
+/** Resolve 根填充宽度后备。 Pass root 子项以避免存储耦合。 */
 let _rootChildrenProvider: (() => PenNode[]) | null = null;
 
-/** Set a provider function for root children (called once from app initialization). */
+/** Set 根子级的提供程序函数（从应用程序初始化时调用一次）。 */
 export function setRootChildrenProvider(provider: () => PenNode[]): void {
   _rootChildrenProvider = provider;
 }
@@ -95,7 +95,7 @@ export function getRootFillWidthFallback(): number {
 }
 
 // ---------------------------------------------------------------------------
-// Layout inference — shared logic for detecting implicit layout
+// Layout 推理 — 用于检测隐式布局的共享逻辑
 // ---------------------------------------------------------------------------
 
 export function inferLayout(node: PenNode): 'horizontal' | undefined {
@@ -113,7 +113,7 @@ export function inferLayout(node: PenNode): 'horizontal' | undefined {
 }
 
 // ---------------------------------------------------------------------------
-// Fit-content size computation
+// Fit-内容大小计算
 // ---------------------------------------------------------------------------
 
 export function fitContentWidth(node: PenNode, parentAvail?: number): number {
@@ -172,7 +172,7 @@ export function fitContentHeight(node: PenNode, parentAvailW?: number): number {
 }
 
 // ---------------------------------------------------------------------------
-// Node dimension resolution
+// Node 尺寸分辨率
 // ---------------------------------------------------------------------------
 
 export function getNodeWidth(node: PenNode, parentAvail?: number): number {
@@ -243,7 +243,7 @@ export function getNodeHeight(node: PenNode, parentAvail?: number, parentAvailW?
 }
 
 // ---------------------------------------------------------------------------
-// Auto-layout position computation
+// Auto-布局位置计算
 // ---------------------------------------------------------------------------
 
 export function computeLayoutPositions(parent: PenNode, children: PenNode[]): PenNode[] {
@@ -436,25 +436,25 @@ function normalizeJustifyContent(
 }
 
 /**
- * Normalize a raw `alignItems` string into the three values the layout
- * engine actually implements: `start`, `center`, `end`.
+ * Normalize 将原始 `alignItems` 字符串转换为三个值的布局
+ * 引擎实际实现：`start`、`center`、`end`。
  *
- * Accepts a generous set of aliases from CSS/flexbox terminology so
- * AI-generated designs (and copy-pasted web snippets) don't silently
- * fall through to the `start` default when they meant something else.
+ * Accepts 一组来自 CSS/flexbox 术语的大量别名，因此
+ * AI 生成的设计（和复制粘贴的网页片段）不会默默地
+ * 当它们意味着其他含义时，就会陷入 `start` 默认值。
  *
- * `baseline` specifically is treated as `end`:
- *   OpenPencil's layout engine doesn't implement text-baseline
- *   alignment (there's no font-metrics pipeline in the position step).
- *   LLMs routinely emit `alignItems: 'baseline'` from web CSS reflex
+ * `baseline` 具体被视为 `end`：
+ * OpenPencil 的布局引擎未实现文本基线
+ * 对齐（位置步骤中没有字体度量管道）。
+ * LLMs 经常从网络 CSS 反射中发出 `alignItems: 'baseline'`
  *   for patterns like "big number + small unit" (e.g. "72 BPM"), where
- *   the intent is that the small text bottom-aligns with the big
- *   text's visual baseline. The best approximation we can render is
- *   `end` — it bottom-aligns both children to the cross-axis end,
- *   which for a horizontal row of a large heading and a small unit
- *   looks essentially identical to true baseline alignment. Falling
- *   through to `start` (the old behavior) would top-align the unit,
- *   which is visually wrong.
+ * 目的是小文本与大文本底部对齐
+ * 文本的视觉基线。我们可以渲染的 The 最佳近似值是
+ * `end` — 它将两个子项底部对齐到横轴端，
+ * 对于一个大标题和一个小单元的水平行
+ * 看起来与真实的基线对齐基本相同。 Falling
+ * 到 `start` （旧行为）将使单元顶部对齐，
+ * 这是视觉上错误的。
  */
 function normalizeAlignItems(value: unknown): 'start' | 'center' | 'end' {
   if (typeof value !== 'string') return 'start';
@@ -481,5 +481,5 @@ function normalizeAlignItems(value: unknown): 'start' | 'center' | 'end' {
   }
 }
 
-// Re-export estimateLineWidth for convenience
+// Re - 导出 estimateLineWidth 以方便使用
 export { estimateLineWidth };

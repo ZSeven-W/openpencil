@@ -77,13 +77,10 @@ jobs:
       - name: Verify CLI build
         run: node apps/cli/dist/openpencil-cli.cjs --version
 
-      # Publish in topological order. For each package:
-      #   1. Resolve the real name from its package.json (no hand-written
-      #      name — avoids drift between workflow and package manifest).
-      #   2. Query the registry for that exact name@version. If it already
-      #      exists, skip (idempotent re-runs of the same tag are safe).
-      #   3. Otherwise, publish. Real errors (auth, network, notarize, etc.)
-      #      still fail the step because we only skip on a verified hit.
+      # Publish 按拓扑顺序。 For 每个包： 1. Resolve 来自其
+      # package.json 的真实名称（无手写名称 — 避免工作流程和包清单之间的偏差）。 2. Query
+      # 注册表中的确切名称@版本。 If 它已经存在，跳过（同一标签的幂等重新运行是安全的）。 3.Otherwise，发布。
+      # Real 错误（身份验证、网络、公证等）仍然会导致该步骤失败，因为我们只跳过经过验证的命中。
       - name: Publish all packages (skip versions already on registry)
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

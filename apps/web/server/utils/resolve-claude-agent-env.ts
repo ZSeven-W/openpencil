@@ -14,15 +14,15 @@ interface ClaudeSettings {
 function normalizeEnvValue(key: string, value: unknown): string | undefined {
   if (value == null) return undefined;
   if (typeof value === 'string') {
-    // Filter out empty strings - they cause issues
+    // Filter 输出空字符串 - 它们会导致问题
     if (value.trim() === '') return undefined;
     return value;
   }
   if (typeof value === 'number' || typeof value === 'boolean') {
     return String(value);
   }
-  // ANTHROPIC_CUSTOM_HEADERS can be an object in settings.json — serialize it.
-  // Other object values are skipped to prevent "Invalid header name" errors.
+  // ANTHROPIC_CUSTOM_HEADERS 可以是 settings.json 中的对象 — 序列化它。跳过 Other
+  // 对象值以防止“Invalid header name”错误。
   if (typeof value === 'object') {
     if (key === 'ANTHROPIC_CUSTOM_HEADERS') {
       try {
@@ -56,8 +56,9 @@ function readSingleSettingsFile(filePath: string): EnvLike {
 }
 
 /**
- * Read env from ~/.claude/settings.json and ~/.claude/settings.local.json.
- * Local settings take priority (same as Claude Code's own precedence).
+ * 来自 ~/.claude
+ * /settings.json 和 ~/.claude/settings.local.json 的 Read 环境。 Local 设置优先（与
+ Claude Code 自身的优先级相同）。
  */
 function readClaudeSettingsEnv(): EnvLike {
   const claudeDir = join(homedir(), '.claude');
@@ -67,7 +68,7 @@ function readClaudeSettingsEnv(): EnvLike {
 }
 
 /**
- * Validate if a string is valid JSON (for ANTHROPIC_CUSTOM_HEADERS).
+ * Validate 如果字符串有效 JSON（对于 ANTHROPIC_CUSTOM_HEADERS）。
  */
 function isValidJson(str: string): boolean {
   try {
@@ -79,38 +80,40 @@ function isValidJson(str: string): boolean {
 }
 
 /**
- * On Windows, Claude Code SDK may fail with EPERM when writing to ~/.claude.json
- * or ~/.claude/ config files. Ensure the directory and config file exist and are writable.
+ * 写入 ~/.claude
+ * .json 或 ~/.claude/ 配置文件时，On Windows、Claude Code SDK 可能会失败并出现 EPERM。 Ensure
+ 目录和配置文件存在并且可写。
  */
 function ensureClaudeConfigWritable(): void {
   if (!IS_WIN) return;
   try {
     const claudeDir = join(homedir(), '.claude');
     mkdirSync(claudeDir, { recursive: true });
-    // Ensure .claude.json exists — Claude SDK crashes if it can't write/lock it
+    // Ensure .claude.json 存在 — Claude SDK 如果不能 write/lock 就会崩溃
     const configFile = join(homedir(), '.claude.json');
     if (!existsSync(configFile)) {
       writeFileSync(configFile, '{}', 'utf-8');
     }
-    // Ensure credentials.json exists — SDK may crash trying to read/write it
+    // Ensure credentials.json 存在 — SDK 尝试 read/write 时可能会崩溃
     const credFile = join(claudeDir, 'credentials.json');
     if (!existsSync(credFile)) {
       writeFileSync(credFile, '{}', 'utf-8');
     }
-    // Ensure statsig/ cache dir exists — SDK crashes writing feature gate cache
+    // Ensure statsig/ 缓存目录存在 — SDK 写入功能门缓存时崩溃
     const statsigDir = join(claudeDir, 'statsig');
     mkdirSync(statsigDir, { recursive: true });
   } catch {
-    // Best effort — if we can't fix it, the SDK error hint will guide the user
+    // Best 努力 — 如果我们无法修复它，SDK 错误提示将指导用户
   }
 }
 
 /**
- * Build env passed to Claude Agent SDK.
- * Priority: current process env > ~/.claude/settings.json env.
+ * Build env
+ * 传递给 Claude Agent SDK。 Priority：当前进程环境
+ > ~/.claude/settings.json 环境。
  */
 export function buildClaudeAgentEnv(): EnvLike {
-  // On Windows, pre-create config files to avoid EPERM errors
+  // On Windows，预先创建配置文件以避免 EPERM 错误
   ensureClaudeConfigWritable();
 
   const fromSettings = readClaudeSettingsEnv();
@@ -121,47 +124,47 @@ export function buildClaudeAgentEnv(): EnvLike {
     ...fromProcess,
   };
 
-  // Validate ANTHROPIC_CUSTOM_HEADERS if it exists - must be valid JSON
-  // If invalid, delete it to prevent "Invalid header name" errors
+  // Validate ANTHROPIC_CUSTOM_HEADERS 如果存在 - 必须有效 JSON If
+  // 无效，删除它以防止“Invalid header name”错误
   if (merged.ANTHROPIC_CUSTOM_HEADERS) {
     if (!isValidJson(merged.ANTHROPIC_CUSTOM_HEADERS)) {
       delete merged.ANTHROPIC_CUSTOM_HEADERS;
     }
   }
 
-  // Compatibility: use ANTHROPIC_AUTH_TOKEN as ANTHROPIC_API_KEY if no API key is set
+  // Compatibility：如果没有设置 API 键，则使用 ANTHROPIC_AUTH_TOKEN 作为 ANTHROPIC_API_KEY
   const authToken = merged.ANTHROPIC_AUTH_TOKEN;
   if (authToken && !merged.ANTHROPIC_API_KEY) {
     merged.ANTHROPIC_API_KEY = authToken;
   }
 
-  // Running inside Claude terminal can break nested Claude invocations.
+  // Claude 终端内的 Running 可以中断嵌套的 Claude 调用。
   delete merged.CLAUDECODE;
 
-  // Remove Electron-specific env vars that may confuse spawned CLI processes
+  // Remove Electron 特定的环境变量可能会混淆生成的 CLI 进程
   delete merged.ELECTRON_RUN_AS_NODE;
   delete merged.ELECTRON_RESOURCES_PATH;
   delete merged.CHROME_CRASHPAD_PIPE_NAME;
 
-  // Enable Agent SDK debug stderr so we can capture CLI crash diagnostics.
-  // Without this, the SDK sets stderr to "ignore" and crash output is lost.
+  // Enable Agent SDK 调试 stderr，以便我们可以捕获 CLI 崩溃诊断。 Without 这个，SDK 将 stderr
+  // 设置为“忽略”并且崩溃输出丢失。
   if (!merged.DEBUG_CLAUDE_AGENT_SDK) {
     merged.DEBUG_CLAUDE_AGENT_SDK = '1';
   }
 
   if (IS_WIN) {
-    // Redirect Claude debug output to temp to avoid write permission issues
+    // Redirect Claude 调试输出到临时以避免写权限问题
     if (!merged.CLAUDE_DEBUG_FILE) {
       const debugPath = getClaudeAgentDebugFilePath();
       if (debugPath) merged.CLAUDE_DEBUG_FILE = debugPath;
     }
-    // Set CLAUDE_CONFIG_DIR to a writable temp location as fallback
-    // if the default ~/.claude directory is not writable (common in Windows Electron)
+    // Set CLAUDE_CONFIG_DIR 到可写临时位置作为后备
+// if the default ~/.claude directory is not writable (common in Windows Electron)
     if (!merged.CLAUDE_CONFIG_DIR) {
       try {
         const fallbackDir = join(tmpdir(), 'openpencil-claude-config');
         mkdirSync(fallbackDir, { recursive: true });
-        // Only use fallback if we can't write to the default location
+        // Only 如果我们无法写入默认位置，则使用后备
         const defaultDir = join(homedir(), '.claude');
         const testFile = join(defaultDir, '.write-test');
         try {
@@ -169,11 +172,11 @@ export function buildClaudeAgentEnv(): EnvLike {
           const { unlinkSync } = require('node:fs');
           unlinkSync(testFile);
         } catch {
-          // Default dir is not writable — use fallback
+          // Default 目录不可写 — 使用后备
           merged.CLAUDE_CONFIG_DIR = fallbackDir;
         }
       } catch {
-        /* ignore */
+        /* 忽略 */
       }
     }
   }
@@ -182,8 +185,8 @@ export function buildClaudeAgentEnv(): EnvLike {
 }
 
 /**
- * Force Claude CLI debug output into a writable temp location.
- * This avoids crashes in restricted environments where ~/.claude/debug is not writable.
+ * Force Claude
+ * CLI 调试输出到可写临时位置。 This 避免在 ~/.claude/debug 不可写的受限环境中崩溃。
  */
 export function getClaudeAgentDebugFilePath(): string | undefined {
   try {
@@ -196,17 +199,17 @@ export function getClaudeAgentDebugFilePath(): string | undefined {
 }
 
 /**
- * Custom spawnClaudeCodeProcess for Windows.
- * On Windows, npm-installed CLIs are .cmd/.ps1 scripts that can't be spawned
- * directly without a shell.
+ * Custom spawn
+ * ClaudeCodeProcess 为 Windows。 On
+ * Windows、npm 安装的 CLIs 是 .cmd/.ps1 脚本，无法在没有 shell 的情况下直接生成。 - `.cmd` 文件：使用
  *
- * - `.cmd` files: use `cmd.exe /c` (PowerShell can't run .cmd directly)
- * - `.ps1` files: use `powershell.exe`
- * - `.exe` files: spawned directly without shell
- * - Others: use `cmd.exe /c` as safe default
+ * `cmd.exe /c`（PowerShell
+ * 无法直接运行 .cmd）
+ * - `.ps1` 文件：使用 `powershell.exe` - `.exe` 文件：不使用 shell 直接生成 -
+ * Others：使用 `cmd.exe /c` 作为安全默认值 Also
  *
- * Also captures stderr to the debug file — when Claude Code crashes early,
- * the debug file may be empty but stderr often contains the root cause.
+ * 将 stderr 捕获到调试文件 — 当 Claude 时 Code
+ * 早期崩溃，调试文件可能为空，但 stderr 通常包含根本原因。
  */
 export function buildSpawnClaudeCodeProcess() {
   if (process.platform !== 'win32') return undefined;
@@ -222,7 +225,7 @@ export function buildSpawnClaudeCodeProcess() {
 
     let child;
     if (isPowerShell) {
-      // For .ps1 scripts, invoke via PowerShell
+      // For .ps1 脚本，通过 PowerShell 调用
       const psArgs = ['-ExecutionPolicy', 'Bypass', '-File', cmd, ...options.args];
       child = spawn('powershell.exe', psArgs, {
         cwd: options.cwd,
@@ -232,7 +235,7 @@ export function buildSpawnClaudeCodeProcess() {
         windowsHide: true,
       });
     } else if (cmd.endsWith('.exe')) {
-      // .exe files can be spawned directly without shell
+      // 无需 shell 即可直接生成.exe 文件
       child = spawn(cmd, options.args, {
         cwd: options.cwd,
         env: options.env as NodeJS.ProcessEnv,
@@ -241,20 +244,19 @@ export function buildSpawnClaudeCodeProcess() {
         windowsHide: true,
       });
     } else {
-      // For .cmd or extensionless binaries, use shell.
-      // When shell: true on Windows, empty string args get swallowed.
-      // Filter out --setting-sources with empty value to prevent the next
-      // flag (e.g. --permission-mode) from being consumed as its value.
+      // For .cmd 或无扩展名二进制文件，使用 shell。 When shell：在
+      // Windows 上为 true，空字符串参数被吞掉。 Filter out --setting-sources
+      // 为空值，以防止下一个标志（例如 --permission-mode）被用作其值。
       const safeArgs: string[] = [];
       for (let i = 0; i < options.args.length; i++) {
         const arg = options.args[i];
-        // Skip --setting-sources followed by an empty string
+        // Skip --setting-sources 后跟一个空字符串
         if (
           arg === '--setting-sources' &&
           i + 1 < options.args.length &&
           options.args[i + 1] === ''
         ) {
-          i++; // skip the empty value too
+          i++; // 也跳过空值
           continue;
         }
         safeArgs.push(arg);
@@ -269,8 +271,7 @@ export function buildSpawnClaudeCodeProcess() {
       });
     }
 
-    // Capture stderr to debug file — helps diagnose crashes where the process
-    // exits before writing anything to the debug log
+    // Capture stderr 调试文件 — 在将任何内容写入调试日志之前帮助诊断进程退出时的崩溃
     const stderrChunks: Buffer[] = [];
     child.stderr?.on('data', (chunk: Buffer) => {
       stderrChunks.push(chunk);

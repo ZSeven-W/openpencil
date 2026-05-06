@@ -11,15 +11,15 @@ interface PersistedState {
 }
 
 interface UIKitStoreState {
-  /** All loaded kits (built-in + imported) */
+  /** All 加载套件（内置+进口） */
   kits: UIKit[];
-  /** Whether the browser panel is open */
+  /** Whether 浏览器面板已打开 */
   browserOpen: boolean;
-  /** Current search query */
+  /** Current 搜索查询 */
   searchQuery: string;
-  /** Active category filter (null = all) */
+  /** Active 类别过滤器（空 = 全部） */
   activeCategory: ComponentCategory | null;
-  /** Active kit filter (null = all) */
+  /** Active 套件过滤器（空 = 全部） */
   activeKitId: string | null;
 
   toggleBrowser: () => void;
@@ -62,7 +62,7 @@ export const useUIKitStore = create<UIKitStoreState>((set, get) => ({
     const { activeKitId } = get();
     set((s) => ({
       kits: s.kits.filter((k) => k.id !== kitId || k.builtIn),
-      // Reset filter if the deleted kit was selected
+      // Reset 过滤器（如果选择了已删除的套件）
       activeKitId: activeKitId === kitId ? null : activeKitId,
     }));
     get().persist();
@@ -74,7 +74,7 @@ export const useUIKitStore = create<UIKitStoreState>((set, get) => ({
       const imported = kits.filter((k) => !k.builtIn);
       appStorage.setItem(STORAGE_KEY, JSON.stringify({ importedKits: imported, browserOpen }));
     } catch {
-      // ignore — localStorage may be full
+      // 忽略 — localStorage 可能已满
     }
   },
 
@@ -86,13 +86,13 @@ export const useUIKitStore = create<UIKitStoreState>((set, get) => ({
       if (data.importedKits && Array.isArray(data.importedKits)) {
         const builtIn = getBuiltInKits();
         const builtInIds = new Set(builtIn.map((k) => k.id));
-        // Filter out any imported kits that clash with built-in IDs
+        // Filter 排除任何与内置 IDs 冲突的导入套件
         const imported = data.importedKits.filter((k) => !builtInIds.has(k.id));
         set({ kits: [...builtIn, ...imported] });
       }
       if (typeof data.browserOpen === 'boolean') set({ browserOpen: data.browserOpen });
     } catch {
-      // ignore
+      // 忽略
     }
   },
 }));

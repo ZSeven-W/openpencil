@@ -19,14 +19,14 @@ function DefaultLoadingSpinner() {
 }
 
 /**
- * Canvas component that uses pen-engine browser adapter for rendering and interaction.
+ * Canvas 组件，使用
  *
- * Uses:
- * - `attachCanvas(engine, canvasElement)` for CanvasKit/Skia GPU rendering
- * - `attachInteraction(engine, canvasElement)` for mouse/keyboard event binding
+ * 笔引擎浏览器适配器进行渲染和交互。 Uses： - `attachCanvas(engine, canvasElement)` 用于 CanvasKit/Skia
+ * GPU 渲染 -
+ * `attachInter
  *
- * Does NOT call engine.init() directly — all canvas/DOM binding goes through
- * the browser adapter functions.
+ * action(engine, canvasElement)` 用于 mouse/keyboard 事件绑定 Does NOT 直接调用
+ * engine.init() — 所有 canvas/DOM 绑定都通过浏览器适配器函数。
  */
 export function DesignCanvas({ className, onReady, loadingFallback }: DesignCanvasProps) {
   const engine = useDesignEngine();
@@ -35,7 +35,7 @@ export function DesignCanvas({ className, onReady, loadingFallback }: DesignCanv
   const bindingRef = useRef<CanvasBinding | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Attach CanvasKit rendering via browser adapter
+  // Attach CanvasKit 通过浏览器适配器渲染
   useEffect(() => {
     let disposed = false;
     const canvas = canvasRef.current;
@@ -50,10 +50,9 @@ export function DesignCanvas({ className, onReady, loadingFallback }: DesignCanv
       setLoading(false);
       binding.render();
 
-      // Zoom to fit document content after initial render.
-      // getContentBounds() returns the bounding box of all nodes on the
-      // active page (or null if empty). We pass this to zoomToRect along
-      // with the container dimensions so the viewport centers on the content.
+      // Zoom 以适应初始渲染后的文档内容。 getContentBounds()
+      // 返回活动页面上所有节点的边界框（如果为空则返回 null）。 We 将其与容器尺寸一起传递给
+      // zoomToRect，以便视口以内容为中心。
       const container = containerRef.current;
       if (container) {
         const { width, height } = container.getBoundingClientRect();
@@ -72,7 +71,7 @@ export function DesignCanvas({ className, onReady, loadingFallback }: DesignCanv
     };
   }, [engine]);
 
-  // Resize observer -> browser adapter binding
+  // Resize 观察者 -> 浏览器适配器绑定
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
@@ -86,14 +85,14 @@ export function DesignCanvas({ className, onReady, loadingFallback }: DesignCanv
     return () => observer.disconnect();
   }, []);
 
-  // Attach mouse/keyboard interaction via browser adapter
+  // Attach mouse/keyboard 通过浏览器适配器进行交互
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     return attachInteraction(engine, canvas);
   }, [engine]);
 
-  // Wheel zoom/pan -> engine core API (pure math)
+  // Wheel zoom/pan -> 引擎核心 API （纯数学）
   const handleWheel = useCallback(
     (e: WheelEvent) => {
       e.preventDefault();

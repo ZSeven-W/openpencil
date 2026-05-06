@@ -7,8 +7,8 @@ import {
 import type { DesignMdSpec } from '@zseven-w/pen-types';
 import { setDesignMdForPrompt } from './design-prompt';
 
-// In MCP context (stdio mode), there's no Zustand store.
-// We keep a module-level cache for the design.md spec.
+// In MCP 上下文（stdio 模式），没有 Zustand 存储。 We 为 design.md
+// 规范保留模块级缓存。
 let _mcpDesignMd: DesignMdSpec | undefined;
 
 export interface GetDesignMdParams {
@@ -17,9 +17,9 @@ export interface GetDesignMdParams {
 
 export interface SetDesignMdParams {
   filePath?: string;
-  /** Raw markdown content of design.md */
+  /** Raw design.md 的降价内容 */
   markdown?: string;
-  /** If true, auto-extract from existing document content */
+  /** If true，从现有文档内容中自动提取 */
   autoExtract?: boolean;
 }
 
@@ -27,11 +27,11 @@ export interface ExportDesignMdParams {
   filePath?: string;
 }
 
-/** Read the design.md spec. */
+/** Read design.md 规格。 */
 export async function handleGetDesignMd(
   params: GetDesignMdParams,
 ): Promise<{ hasDesignMd: boolean; spec?: DesignMdSpec; markdown?: string }> {
-  // Try module cache first
+  // Try 模块首先缓存
   if (_mcpDesignMd) {
     return {
       hasDesignMd: true,
@@ -40,7 +40,7 @@ export async function handleGetDesignMd(
     };
   }
 
-  // Try to auto-extract from document
+  // Try 从文档中自动提取
   const filePath = resolveDocPath(params.filePath);
   const doc = await openDocument(filePath);
   const spec = extractDesignMdFromDocument(doc);
@@ -58,7 +58,7 @@ export async function handleGetDesignMd(
   return { hasDesignMd: false };
 }
 
-/** Import design.md content. */
+/** Import design.md 内容。 */
 export async function handleSetDesignMd(
   params: SetDesignMdParams,
 ): Promise<{ success: boolean; spec?: DesignMdSpec }> {
@@ -80,7 +80,7 @@ export async function handleSetDesignMd(
   return { success: true, spec };
 }
 
-/** Export design.md as markdown text. */
+/** Export design.md 作为降价文本。 */
 export async function handleExportDesignMd(
   params: ExportDesignMdParams,
 ): Promise<{ markdown: string }> {
@@ -88,7 +88,7 @@ export async function handleExportDesignMd(
     return { markdown: generateDesignMd(_mcpDesignMd) };
   }
 
-  // Auto-extract from document
+  // Auto-从文档中提取
   const filePath = resolveDocPath(params.filePath);
   const doc = await openDocument(filePath);
   const spec = extractDesignMdFromDocument(doc);

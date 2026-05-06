@@ -13,7 +13,7 @@ function truncateContent(content: string, maxTokens: number): string {
 }
 
 export function trimByBudget(skills: SkillRegistryEntry[], totalBudget: number): ResolvedSkill[] {
-  // Step 1: Apply per-skill budget caps
+  // Step 1：Apply 每技能预算上限
   const withTokens = skills.map((skill) => {
     const perSkillBudget = skill.meta.budget;
     const rawTokens = estimateTokens(skill.content);
@@ -27,7 +27,7 @@ export function trimByBudget(skills: SkillRegistryEntry[], totalBudget: number):
     };
   });
 
-  // Step 2: Always keep base skills
+  // Step 2：Always 保持基础技能
   const base = withTokens.filter((s) => s.meta.category === 'base');
   const domain = withTokens.filter((s) => s.meta.category === 'domain');
   const knowledge = withTokens.filter((s) => s.meta.category === 'knowledge');
@@ -35,7 +35,7 @@ export function trimByBudget(skills: SkillRegistryEntry[], totalBudget: number):
   let usedTokens = base.reduce((sum, s) => sum + s.tokenCount, 0);
   const result: ResolvedSkill[] = [...base];
 
-  // Step 3: Add domain skills, truncating last if needed
+  // Step 3：Add 领域技能，如果需要则截断最后一个
   for (const skill of domain) {
     const remaining = totalBudget - usedTokens;
     if (remaining <= 0) break;
@@ -55,7 +55,7 @@ export function trimByBudget(skills: SkillRegistryEntry[], totalBudget: number):
     }
   }
 
-  // Step 4: Add knowledge skills only if budget remains
+  // Step 4：仅在预算充足的情况下才需要 Add 知识技能
   for (const skill of knowledge) {
     const remaining = totalBudget - usedTokens;
     if (remaining <= 0 || skill.tokenCount > remaining) break;

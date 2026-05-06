@@ -55,7 +55,7 @@ export { IconSection } from './components/sections/icon-section.js';
 export { ImageSection } from './components/sections/image-section.js';
 export { ExportSection } from './components/sections/export-section.js';
 
-// Task 11: Shared UI Components
+// Task 11：Shared UI Components
 export { ColorPicker } from './components/color-picker.js';
 export type { ColorPickerProps } from './components/color-picker.js';
 export { NumberInput } from './components/number-input.js';
@@ -68,7 +68,7 @@ export type { VariablePickerProps } from './components/variable-picker.js';
 export { IconPickerDialog } from './components/icon-picker-dialog.js';
 export type { IconPickerDialogProps, IconPickerPosition } from './components/icon-picker-dialog.js';
 
-// Task 12: BooleanToolbar, PageTabs, StatusBar
+// Task 12：BooleanToolbar、PageTabs、StatusBar
 export { BooleanToolbar } from './components/boolean-toolbar.js';
 export { PageTabs } from './components/page-tabs.js';
 export type { PageTabsProps } from './components/page-tabs.js';

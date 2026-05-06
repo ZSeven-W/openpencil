@@ -26,12 +26,12 @@ import { getEditablePathState } from './path-editing';
 import { resolveRuntimeAssetSource } from '@/utils/document-assets';
 import { fitSceneBoundsToViewport, getFocusBounds } from './focus-fit';
 
-// Re-export for use by canvas component
+// Re-导出供画布组件使用
 export { screenToScene } from '@zseven-w/pen-renderer';
 export { SpatialIndex } from '@zseven-w/pen-renderer';
 
 // ---------------------------------------------------------------------------
-// SkiaEngine — ties rendering, viewport, hit testing together
+// SkiaEngine — 将渲染、视口、命中测试联系在一起
 // ---------------------------------------------------------------------------
 
 export class SkiaEngine {
@@ -41,25 +41,21 @@ export class SkiaEngine {
   spatialIndex = new SpatialIndex();
   renderNodes: RenderNode[] = [];
 
-  // Component/instance IDs for colored frame labels
+  // Component/instance IDs 用于彩色框架标签
   private reusableIds = new Set<string>();
   private instanceIds = new Set<string>();
 
-  // Agent animation: track start time so glow only pulses ~2 times
+  // Agent 动画：跟踪开始时间，因此仅发光脉冲约 2 次
   private agentAnimStart = 0;
 
   private canvasEl: HTMLCanvasElement | null = null;
   private animFrameId = 0;
   private dirty = true;
 
-  // Ref counter — when > 0, render() skips the agent-overlay self-loop
-  // (further down). captureRegion increments this for the duration of
-  // waitForSettled + makeImageSnapshot so the loop terminates even when
-  // AI agents are actively painting indicators on the canvas. A counter
-  // (rather than a boolean) is used so that overlapping/nested captures
-  // don't re-enable the self-loop while an outer capture is still settling.
-  // Agent overlays are still drawn into each captured frame — we just
-  // don't schedule the next animation tick during capture.
+  // Ref 计数器 — 当 > 0 时，render() 跳过代理覆盖自循环（进一步向下）。 captureRegion 在
+  // waitForSettled + makeImageSnapshot 的持续时间内递增此值，因此即使 AI
+  // 代理正在画布上主动绘制指示器，循环也会终止。使用计数器（而不是布尔值），以便 overlapping/nested
+  // 捕获在外部捕获仍在稳定时不会重新启用自循环。 Agent 覆盖仍然绘制到每个捕获的帧中 - 我们只是在捕获期间不安排下一个动画刻度。
   private _captureRefcount = 0;
 
   // Viewport
@@ -67,11 +63,10 @@ export class SkiaEngine {
   panX = 0;
   panY = 0;
 
-  // Drag suppression — prevents syncFromDocument during drag
-  // so the layout engine doesn't override visual positions
+  // Drag 抑制 — 防止拖动期间出现 syncFromDocument，以便布局引擎不会覆盖视觉位置
   dragSyncSuppressed = false;
 
-  // Interaction state
+  // Interaction 状态
   hoveredNodeId: string | null = null;
   marquee: { x1: number; y1: number; x2: number; y2: number } | null = null;
   previewShape: {
@@ -86,7 +81,7 @@ export class SkiaEngine {
   constructor(ck: CanvasKit) {
     this.ck = ck;
     this.renderer = new SkiaRenderer(ck);
-    // Wire up icon lookup for icon_font nodes
+    // Wire 向上图标查找 icon_font 节点
     this.renderer.setIconLookup(lookupIconByName);
     if (
       typeof (this.renderer as { setImageSourceResolver?: unknown }).setImageSourceResolver ===

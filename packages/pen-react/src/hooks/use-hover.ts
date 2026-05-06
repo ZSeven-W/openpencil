@@ -2,8 +2,8 @@ import { useDesignEngine } from './use-design-engine.js';
 import { useEngineSubscribe } from '../utils/use-engine-subscribe.js';
 
 /**
- * Returns the currently hovered node ID, or null.
- * Re-renders only on node:hover events.
+ * Returns
+ * 当前悬停的节点 ID，或 null。 Re-仅在节点：悬停事件上渲染。
  */
 export function useHover(): string | null {
   const engine = useDesignEngine();

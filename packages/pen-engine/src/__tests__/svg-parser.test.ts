@@ -57,7 +57,7 @@ describe('parseSvgToNodes (isomorphic)', () => {
     const svg = `<svg viewBox="0 0 1000 1000"><rect x="0" y="0" width="1000" height="1000" fill="#F00" /></svg>`;
     const nodes = parseSvgToNodes(svg, 200);
     const node = nodes[0] as any;
-    // Dimensions should be scaled down
+    // Dimensions 应该缩小
     expect(node.width ?? node.children?.[0]?.width).toBeLessThanOrEqual(200);
   });
 

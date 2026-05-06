@@ -1,7 +1,7 @@
 import type { ViewportState } from '@zseven-w/pen-types';
 import { MIN_ZOOM } from '@zseven-w/pen-core';
 
-/** Maximum zoom level for the viewport (64x). */
+/** Maximum 视口的缩放级别 (64x)。 */
 const VIEWPORT_MAX_ZOOM = 64;
 
 export interface ViewportControllerOptions {
@@ -9,9 +9,9 @@ export interface ViewportControllerOptions {
 }
 
 /**
- * Pure math viewport controller -- no canvas/DOM dependency.
- * Manages zoom, pan, and coordinate transforms.
- * Extracted from apps/web/src/canvas/skia/skia-engine.ts viewport logic.
+ * Pure 数学视口控制器
+ * ——无 canvas/DOM 依赖性。 Manages 缩放、平移和坐标变换。 Extracted 来自
+ * apps/web/src/canvas/skia/skia-engine.ts 视口逻辑。
  */
 export class ViewportController {
   private _zoom = 1;
@@ -33,7 +33,7 @@ export class ViewportController {
     return this._panY;
   }
 
-  /** Set viewport state with zoom clamping. */
+  /** Set 具有缩放限制的视口状态。 */
   setViewport(zoom: number, panX: number, panY: number): void {
     this._zoom = Math.max(MIN_ZOOM, Math.min(VIEWPORT_MAX_ZOOM, zoom));
     this._panX = panX;
@@ -42,8 +42,8 @@ export class ViewportController {
   }
 
   /**
-   * Convert screen coordinates to scene coordinates.
-   * For use without a canvas rect (assumes 0,0 origin).
+   * Convert
+   * 屏幕坐标到场景坐标。 For 在没有画布矩形的情况下使用（假设原点为 0,0）。
    */
   screenToScene(screenX: number, screenY: number): { x: number; y: number } {
     return {
@@ -53,7 +53,7 @@ export class ViewportController {
   }
 
   /**
-   * Convert scene coordinates to screen coordinates.
+   * Convert 场景坐标到屏幕坐标。
    */
   sceneToScreen(sceneX: number, sceneY: number): { x: number; y: number } {
     return {
@@ -63,8 +63,8 @@ export class ViewportController {
   }
 
   /**
-   * Zoom to fit a rectangle within a container.
-   * Does not zoom past 1x (avoids over-zooming small content).
+   * Zoom 在容器内放置一
+   * 个矩形。 Does 不会缩放超过 1 倍（避免过度缩放小内容）。
    */
   zoomToRect(
     x: number,
@@ -85,7 +85,7 @@ export class ViewportController {
     this.setViewport(zoom, containerW / 2 - centerX * zoom, containerH / 2 - centerY * zoom);
   }
 
-  /** Get the viewport state as a plain object. */
+  /** Get 将视口状态作为普通对象。 */
   getState(): ViewportState {
     return { zoom: this._zoom, panX: this._panX, panY: this._panY };
   }

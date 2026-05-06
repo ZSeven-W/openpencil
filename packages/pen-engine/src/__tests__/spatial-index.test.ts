@@ -34,7 +34,7 @@ describe('EngineSpatialIndex', () => {
 
   it('hitTest should return topmost (highest z-index) first', () => {
     const results = si.hitTest(75, 75);
-    // b was added after a, so it should be first (topmost)
+    // b 是在 a 之后添加的，所以它应该是第一个（最上面）
     expect(results[0].node.id).toBe('b');
   });
 

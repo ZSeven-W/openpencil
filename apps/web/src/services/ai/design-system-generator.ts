@@ -1,10 +1,11 @@
 /**
- * Design System Generator (Stage 0 of visual reference pipeline).
+ * 设计系统生成器（视觉参考管道的 Stage 0）。
  *
- * Generates structured design tokens (colors, typography, spacing) from
- * a user's design request. The tokens serve dual purpose:
- * 1. Guide HTML code generation for consistent design
- * 2. Map to PenDocument.variables for design system integration
+ * 它会先从用户提示里提炼出结构化设计 token，
+ * 比如颜色、排版、间距和圆角。
+ * 这些 token 有两个用途：
+ * 1. 约束 HTML 参考代码的生成风格
+ * 2. 映射到 `PenDocument.variables`，接入文档级设计系统
  */
 
 import type { DesignSystem } from './ai-types';
@@ -14,8 +15,8 @@ import { generateCompletion } from './ai-service';
 import { getSkillByName } from '@zseven-w/pen-ai-skills';
 
 /**
- * Generate a design system from a user's prompt.
- * Uses a fast model (Haiku-class) for speed since output is small JSON.
+ * 根据用户提示生成一个设计系统。
+ * 这里通常可以使用更快的模型，因为输出体积很小，本质上只是一份结构化 JSON。
  */
 export async function generateDesignSystem(
   prompt: string,
@@ -29,24 +30,24 @@ export async function generateDesignSystem(
 }
 
 /**
- * Parse a design system from AI response text.
- * Tolerant of code fences and surrounding text.
+ * 从 AI 的响应文本里解析设计系统。
+ * 兼容代码围栏、解释性文字包裹等常见返回形式。
  */
 function parseDesignSystem(text: string): DesignSystem {
   const trimmed = text.trim();
 
-  // Try direct parse
+  // 先尝试直接按 JSON 解析
   const direct = tryParseDS(trimmed);
   if (direct) return direct;
 
-  // Try extracting from code fences
+  // 再尝试从代码围栏中提取 JSON
   const fenceMatch = trimmed.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
   if (fenceMatch) {
     const fenced = tryParseDS(fenceMatch[1].trim());
     if (fenced) return fenced;
   }
 
-  // Try extracting first { ... } block
+  // 最后尝试截取第一个 `{ ... }` 代码块
   const firstBrace = trimmed.indexOf('{');
   const lastBrace = trimmed.lastIndexOf('}');
   if (firstBrace >= 0 && lastBrace > firstBrace) {
@@ -54,7 +55,7 @@ function parseDesignSystem(text: string): DesignSystem {
     if (braced) return braced;
   }
 
-  // Fallback: return default design system
+  // 兜底：返回默认设计系统
   return DEFAULT_DESIGN_SYSTEM;
 }
 
@@ -124,29 +125,29 @@ const DEFAULT_DESIGN_SYSTEM: DesignSystem = {
 };
 
 // ---------------------------------------------------------------------------
-// Map design system → PenDocument.variables
+// 设计系统 → PenDocument.variables
 // ---------------------------------------------------------------------------
 
 /**
- * Convert a DesignSystem into PenDocument variable definitions.
- * These are stored in the document and referenced as $variable-name in nodes.
+ * 把 `DesignSystem` 转换为 `PenDocument` 的变量定义。
+ * 这些变量会存进文档，并在节点里通过 `$variable-name` 的形式引用。
  */
 export function designSystemToVariables(ds: DesignSystem): Record<string, VariableDefinition> {
   const vars: Record<string, VariableDefinition> = {};
 
-  // Colors
+  // 颜色变量
   for (const [key, value] of Object.entries(ds.palette)) {
     const name = `color-${kebab(key)}`;
     vars[name] = { type: 'color', value };
   }
 
-  // Spacing
+  // 间距变量
   const spacingNames = ['xs', 'sm', 'md', 'lg', 'xl', '2xl', '3xl', '4xl', '5xl', '6xl'];
   for (let i = 0; i < ds.spacing.scale.length && i < spacingNames.length; i++) {
     vars[`spacing-${spacingNames[i]}`] = { type: 'number', value: ds.spacing.scale[i] };
   }
 
-  // Radius
+  // 圆角变量
   const radiusNames = ['sm', 'md', 'lg', 'xl'];
   for (let i = 0; i < ds.radius.length && i < radiusNames.length; i++) {
     vars[`radius-${radiusNames[i]}`] = { type: 'number', value: ds.radius[i] };
@@ -155,9 +156,7 @@ export function designSystemToVariables(ds: DesignSystem): Record<string, Variab
   return vars;
 }
 
-/**
- * Build a concise design system context string for AI prompts.
- */
+/** 构造一段简洁的设计系统上下文文本，供 AI prompt 使用。 */
 export function designSystemToPromptContext(ds: DesignSystem): string {
   const p = ds.palette;
   return `DESIGN SYSTEM (use these values consistently):

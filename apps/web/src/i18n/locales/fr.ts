@@ -79,29 +79,29 @@ const fr: TranslationKeys = {
   'git.conflict.nonOp.unresolvedHeading_other': '{{count}} fichiers nécessitent une action',
   'git.conflict.nonOp.continue': 'Continuer la fusion',
   'git.conflict.nonOp.abort': 'Annuler la fusion',
-  // ── Conflit Git — bannière (Phase 7b) ──
+  // ── Conflit Git — 班尼埃尔 (Phase 7b) ──
   'git.conflict.banner.progress': 'Résolu {{resolved}} / {{total}}',
   'git.conflict.banner.apply': 'Appliquer la fusion',
   'git.conflict.banner.continue': 'Continuer',
   'git.conflict.banner.finalizeError': "Impossible d'appliquer : {{message}}",
   'git.conflict.banner.pollError': "Sondage d'état suspendu en raison d'une erreur : {{message}}",
-  // placeholder — future localization
+  // placeholder — 未来的本地化
   'git.conflict.banner.reopenMessage':
     'Panneau rouvert en cours de fusion — veuillez abandonner et re-tirer.',
 
-  // ── Conflit Git — liste (Phase 7c) ──
+  // ── Conflit Git — 列表 (Phase 7c) ──
   'git.conflict.list.heading': 'Tous les conflits',
   'git.conflict.list.progress': '{{resolved}} / {{total}} résolus',
   'git.conflict.list.allResolved': 'Tout résolu',
   'git.conflict.list.allOurs': 'Tout prendre le mien',
   'git.conflict.list.allTheirs': 'Tout prendre le leur',
 
-  // ── Conflit Git — élément (Phase 7c) ──
+  // ── Conflit Git — 元素 (Phase 7c) ──
   'git.conflict.item.nodeConflict': 'Conflit de nœud',
   'git.conflict.item.fieldConflict': 'Conflit de champ',
   'git.conflict.item.resolved': 'Résolu',
 
-  // ── Conflit Git — carte (Phase 7c) ──
+  // ── Conflit Git — 点菜 (Phase 7c) ──
   'git.conflict.card.ours': 'Le mien',
   'git.conflict.card.theirs': 'Le leur',
   'git.conflict.card.base': 'Base',
@@ -110,7 +110,7 @@ const fr: TranslationKeys = {
   'git.conflict.card.oursThumbnailAlt': 'Ma version',
   'git.conflict.card.theirsThumbnailAlt': 'Leur version',
 
-  // ── Conflit Git — éditeur JSON (Phase 7c) ──
+  // ── Conflit Git — 编辑 JSON (Phase 7c) ──
   'git.conflict.editor.editManually': 'Modifier manuellement',
   'git.conflict.editor.cancel': 'Annuler',
   'git.conflict.editor.apply': 'Appliquer',
@@ -121,7 +121,7 @@ const fr: TranslationKeys = {
   'git.error.retry': 'Réessayer',
   'git.error.title': 'Une erreur est survenue',
 
-  // ── État vide de Git ──
+  // ── Git 的视频 ──
   'git.empty.heading': "Pas encore d'historique de version",
   'git.empty.optional': 'Git est facultatif — vous pouvez ignorer',
   'git.empty.requireSavedFile': "Enregistrez d'abord le fichier .op pour activer l'historique",
@@ -132,7 +132,7 @@ const fr: TranslationKeys = {
   'git.empty.cloneCard': 'Cloner',
   'git.empty.cloneCardDescription': 'Depuis un dépôt distant',
 
-  // ── Formulaire auteur Git ──
+  // ── Formulaire 作者 Git ──
   'git.author.heading': 'Auteur du commit',
   'git.author.subheading': 'Le premier commit nécessite un nom et un email',
   'git.author.nameLabel': 'Nom',
@@ -144,26 +144,26 @@ const fr: TranslationKeys = {
   'git.author.validationName': 'Le nom est obligatoire',
   'git.author.validationEmail': 'Un email valide est requis',
 
-  // ── Sélecteur Git (Phase 4b) ──
+  // ── 选择者 Git (Phase 4b) ──
   'git.picker.heading': '{{count}} fichiers .op dans ce dépôt :',
   'git.picker.milestoneCount': '{{count}} jalons',
   'git.picker.noHistory': 'Aucun historique',
   'git.picker.lastCommit': '{{message}} · {{time}}',
   'git.picker.bindButton': 'Suivre ce fichier',
   'git.picker.bindAndOpenButton': 'Suivre et ouvrir',
-  // Phase 7b: back/cancel navigation
+  // Phase 7b：back/cancel 导航
   'git.picker.back': 'Retour',
   'git.picker.backClose': 'Annuler',
   'git.picker.empty.heading': 'Aucun fichier .op dans ce dépôt',
   'git.picker.empty.body': "Le panneau Git a besoin d'au moins un fichier .op pour fonctionner.",
   'git.picker.empty.close': 'Fermer le panneau',
 
-  // ── Bannière auto-liaison (Phase 4b) ──
+  // ── Bannière 自动联络 (Phase 4b) ──
   'git.autoBind.confirmHeading': "{{fileName}} trouvé — l'ouvrir ?",
   'git.autoBind.openButton': 'Ouvrir',
   'git.autoBind.dismissButton': 'Ignorer',
 
-  // ── Temps relatif (Phase 4b) ──
+  // ── Temps 相关 (Phase 4b) ──
   'git.relativeTime.justNow': "à l'instant",
   'git.relativeTime.minutesAgo': 'il y a {{count}}m',
   'git.relativeTime.hoursAgo': 'il y a {{count}}h',
@@ -198,7 +198,7 @@ const fr: TranslationKeys = {
   'git.history.restoreButton': 'Restaurer',
   'git.history.copyHashButton': 'Copier le hash',
   'git.history.copiedToast': 'Copié',
-  // Phase 7b: inline diff block
+  // Phase 7b：内联差异块
   'git.history.diff.loading': 'Chargement du diff…',
   'git.history.diff.initialCommit': 'Commit initial — pas de parent à comparer',
   'git.history.diff.noChanges': 'Aucun changement détecté',
@@ -217,7 +217,7 @@ const fr: TranslationKeys = {
   'git.autosave.messagePrefix': 'auto',
   'git.autosave.messageDiffSuffix': '',
 
-  // ── Git Sélecteur de branche (Phase 5) ──
+  // ── Git 分支选择器 (Phase 5) ──
   'git.branch.listHeading': 'Branches',
   'git.branch.createAction': 'Nouvelle branche',
   'git.branch.createPlaceholder': 'feature/login-redesign',
@@ -290,7 +290,7 @@ const fr: TranslationKeys = {
   'git.push.rejectedPull': 'Pull maintenant',
   'git.remote.dismissError': 'Fermer',
 
-  // ── Git Paramètres du remote (Phase 6c) ──
+  // ── Git Paramètres 远程 (Phase 6c) ──
   'git.remote.settingsLabel': 'Paramètres du remote',
   'git.remote.settingsHeading': 'Remote',
   'git.remote.back': 'Retour',
@@ -348,7 +348,7 @@ const fr: TranslationKeys = {
   'git.ssh.genericGuidance':
     'Copiez la clé publique et ajoutez-la aux paramètres de clés SSH de votre fournisseur Git.',
 
-  // ── Git Formulaire d'authentification (Phase 6b) ──
+  // ── Git Formulaire 认证 (Phase 6b) ──
   'git.auth.formLabel': 'Identifiants Git',
   'git.auth.heading': "S'authentifier auprès de {{host}}",
   'git.auth.headingUnknown': "S'authentifier auprès de ce remote",

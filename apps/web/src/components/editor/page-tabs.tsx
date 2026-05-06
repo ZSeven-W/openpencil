@@ -71,7 +71,7 @@ export default function PageTabs() {
   return (
     <>
       <div className="flex flex-col">
-        {/* Header */}
+        {/* 头部 */}
         <div className="h-8 flex items-center justify-between px-3 border-b border-border">
           <span className="text-xs font-medium text-muted-foreground tracking-wider">
             {t('pages.title')}
@@ -85,7 +85,7 @@ export default function PageTabs() {
           </button>
         </div>
 
-        {/* Page list */}
+        {/* 页面列表 */}
         <div className="py-1 px-1">
           {pages.map((page) => {
             const isActive = page.id === activePageId;
@@ -140,7 +140,7 @@ export default function PageTabs() {
         </div>
       </div>
 
-      {/* Context menu */}
+      {/* 右键菜单 */}
       {contextMenu && (
         <PageContextMenu
           x={contextMenu.x}

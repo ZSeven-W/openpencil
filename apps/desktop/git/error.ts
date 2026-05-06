@@ -1,15 +1,15 @@
 // apps/desktop/git/error.ts
 //
-// Unified error type for the desktop git layer. Phase 1b only emits a subset
-// of these codes; Phase 2 will throw the rest (auth, network, merge, etc.)
-// without modifying this file.
+// Unified 桌面 git 层的错误类型。 Phase 1b 仅发出一个子集
+// 这些代码； Phase 2 将抛出其余部分（身份验证、网络、合并等）
+// 无需修改此文件。
 
 /**
- * The complete error code union. New codes should land here, not in callsites,
- * so the renderer's error matrix in the spec stays in sync with the reality.
+ * The 完整错误代码联合
+ * 。 New 代码应该放在这里，而不是在调用站点中，因此规范中渲染器的错误矩阵与现实保持同步。
  */
 export type GitErrorCode =
-  // Phase 1b emits these:
+  // Phase 1b 发出这些：
   | 'init-failed'
   | 'open-failed'
   | 'not-a-repo'
@@ -18,7 +18,7 @@ export type GitErrorCode =
   | 'branch-current'
   | 'branch-unmerged'
   | 'engine-crash'
-  // Phase 2 will emit these (declared here for forward-compat):
+  // Phase 2 将发出这些（此处声明是为了向前兼容）：
   | 'no-file'
   | 'clone-failed'
   | 'clone-target-exists'
@@ -63,8 +63,8 @@ export class GitError extends Error {
 }
 
 /**
- * Type guard for catching GitError specifically (since `instanceof` across
- * realms can be flaky in tests, this is a defensive backup).
+ * Type 专门用于捕捉
+ * GitError 的守卫（因为跨领域的 `instanceof` 在测试中可能会不稳定，所以这是一个防御性备份）。
  */
 export function isGitError(err: unknown): err is GitError {
   return (

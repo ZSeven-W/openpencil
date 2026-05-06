@@ -19,15 +19,16 @@ type IconifySet = {
 const simpleIcons = simpleIconsData as unknown as IconifySet;
 const lucideIcons = lucideData as unknown as IconifySet;
 
-// In-memory cache: normalized name → result (null = confirmed miss)
+// In-内存缓存：规范化名称→结果（null = 确认未命中）
 const iconCache = new Map<string, IconResult | null>();
 
 /**
- * GET /api/ai/icon?name=google
+ * GET /api/ai/
  *
- * Resolves icon names to SVG path data using locally bundled icon sets.
- * Search order: lucide → simple-icons (brand icons)
- * No external network requests — instant, offline-capable.
+ * icon?name=google Resolves
+ * 使用本地捆绑的图标集将图
+ * 标名称命名为 SVG 路径数据。 Search 顺序：lucide → simple-icons（品牌图标） No 外部网络请求 —
+ 即时、可离线。
  */
 export default defineEventHandler(async (event) => {
   setResponseHeaders(event, { 'Content-Type': 'application/json' });
@@ -51,8 +52,8 @@ export default defineEventHandler(async (event) => {
   return { icon: result };
 });
 
-// Common name aliases for icons AI models frequently request.
-// Keep in sync with commonAliases in src/services/ai/icon-resolver.ts
+// Common 图标的别名 AI 模型经常请求。 Keep 与 src/services/ai/icon-resolve
+// r.ts 中的 commonAliases 同步
 const NAME_ALIASES: Record<string, string> = {
   burger: 'hamburger',
   sushi: 'fish',
@@ -125,15 +126,14 @@ function resolveIcon(name: string): IconResult | null {
   const candidates = new Set([name, kebab]);
   if (aliased) candidates.add(aliased);
 
-  // 1. Try simple-icons first (brand/product icons).
-  //    simple-icons only contains brand logos, so a hit here is unambiguously
-  //    a brand — no risk of shadowing UI icon names like "search" or "home".
+  // 1. 首先是 Try 简单图标（brand/product 图标）。 simple-icons
+  // 只包含品牌徽标，因此这里的点击毫无疑问是一个品牌 - 没有遮盖 UI 图标名称（如“搜索”或“主页”）的风险。
   for (const n of candidates) {
     const result = lookupLocal(simpleIcons, 'simple-icons', n);
     if (result) return result;
   }
 
-  // 2. Try Lucide (UI icons)
+  // 2.Try Lucide（UI 图标）
   for (const n of candidates) {
     const result = lookupLocal(lucideIcons, 'lucide', n);
     if (result) return result;

@@ -1,19 +1,18 @@
 import { describe, it, expect } from 'vitest';
 import en from '../locales/en';
 
-// Keys in this set bypass the audit rules below.
-// Add an entry here ONLY for a string that is genuinely future-roadmap copy
-// (i.e. the feature has not shipped and "Phase N" text is intentional).
-// Do NOT use the allowlist to paper over stale copy — fix the copy instead.
+// 此组中的 Keys 绕过下面的审核规则。 Add 此处的条目 ONLY
+// 代表真正的未来路线图副本的字符串（即该功能尚未发布，“Phase n”文本是有意的）。 Do NOT 使用白名单来掩盖过时的副本 -
+// 而是修复副本。
 const GIT_COPY_AUDIT_ALLOWLIST = new Set<string>();
 
-// ── helpers ──────────────────────────────────────────────────────────────────
+// ── 助手──────────────────────────────────────────────────────────────────
 
 type Violation = { key: string; value: string; reason: string };
 
 const gitEntries = Object.entries(en).filter(([key]) => key.startsWith('git.'));
 
-// Rule 1: no value mentions "coming in Phase <digit>" for a completed phase.
+// Rule 1：对于已完成的阶段，没有任何值提及“进入 Phase <数字>”。
 function ruleComingInPhase(entries: [string, string][]): Violation[] {
   return entries
     .filter(([key, value]) => {
@@ -23,7 +22,7 @@ function ruleComingInPhase(entries: [string, string][]): Violation[] {
     .map(([key, value]) => ({ key, value, reason: 'value contains "coming in Phase N"' }));
 }
 
-// Rule 2: no key under git.placeholder.* (these are dead UI scaffolding labels).
+// Rule 2：git.placeholder.* 下没有键（这些是死的 UI 脚手架标签）。
 function rulePlaceholderKey(entries: [string, string][]): Violation[] {
   return entries
     .filter(([key]) => {
@@ -37,8 +36,7 @@ function rulePlaceholderKey(entries: [string, string][]): Violation[] {
     }));
 }
 
-// Rule 3: no value that contains the word "placeholder" (case-insensitive).
-// UI strings should describe real behavior, not mark a future slot.
+// Rule 3：没有包含单词“占位符”的值（不区分大小写）。 UI 字符串应该描述真实的行为，而不是标记未来的插槽。
 function rulePlaceholderValue(entries: [string, string][]): Violation[] {
   return entries
     .filter(([key, value]) => {
@@ -48,7 +46,7 @@ function rulePlaceholderValue(entries: [string, string][]): Violation[] {
     .map(([key, value]) => ({ key, value, reason: 'value contains "placeholder"' }));
 }
 
-// ── tests ─────────────────────────────────────────────────────────────────────
+// ── 测试──────────────────────────────────────────────────────────────────────
 
 describe('Git locale audit (en.ts)', () => {
   it('no git.* value says "coming in Phase N"', () => {

@@ -1,16 +1,16 @@
 // apps/web/src/components/panels/git-panel/git-panel-commit-input.tsx
 //
-// Commit input: textarea + "保存为里程碑" button + lazy author form
-// trigger. Reads commitMessage from the store (so it persists across
-// panel re-mounts within a session). On submit:
-//   1. If commitMessage is empty, do nothing (button is also disabled).
-//   2. If authorIdentity is null, show the inline author form and mark
-//      the commit as pending-after-auth. The useEffect below re-fires
-//      the submit once the form succeeds.
-//   3. Call commitMilestone; the store's commitMilestone action handles
-//      post-success log refresh + clearCommitMessage. If the save gate
-//      trips, the store sets saveRequiredFor which the parent renders
-//      via <GitPanelSaveRequiredAlert>.
+// Commit 输入：文本区域+“保存为里程碑”按钮+懒惰作者表单
+// 触发。 Reads commitMessage 来自商店（因此它持续存在
+// 面板在会话中重新安装）。 On 提交：
+//   1. If commitMessage 为空，不执行任何操作（按钮也被禁用）。
+//   2. If authorIdentity 为空，显示内联作者表单和标记
+// 提交为待验证后。 The useEffect 下面重新触发
+// 表单成功后提交。
+//   3. Call commitMilestone；商店的 commitMilestone 操作手柄
+// 成功后日志刷新+clearCommitMessage。 If 保存门
+// Trips，商店设置父渲染的 saveRequiredFor
+// 通过<GitPanelSaveRequiredAlert>。
 
 import { Milestone } from 'lucide-react';
 import { useEffect, useState } from 'react';
@@ -34,7 +34,7 @@ export function GitPanelCommitInput() {
     const trimmed = commitMessage.trim();
     if (!trimmed) return;
 
-    // Lazy author form trigger — show once, remember we wanted to commit.
+    // Lazy 作者表单触发器 — 显示一次，记住我们想要提交。
     if (authorIdentity === null) {
       setPendingCommitAfterAuth(true);
       showAuthorPrompt();
@@ -43,29 +43,27 @@ export function GitPanelCommitInput() {
 
     try {
       await commitMilestone(trimmed, authorIdentity);
-      // commitMilestone clears commitMessage + refreshes log on success.
-      // If the save gate tripped, the store set saveRequiredFor which the
-      // parent renders via the save-required alert.
+      // commitMilestone 清除 commitMessage + 刷新登录成功。 If 保存门被触发，存储集
+      // saveRequiredFor 是父级通过需要保存的警报呈现的。
     } catch {
-      // Swallow — the store has transitioned to error state OR set
-      // saveRequiredFor. No extra work needed here.
+      // Swallow — 存储已转换为错误状态 OR 设置 saveRequiredFor。 No 这里需要额外的工作。
     }
   };
 
-  // Re-fire the commit after the author form succeeds.
+  // Re - 在作者表单成功后触发提交。
   useEffect(() => {
     if (pendingCommitAfterAuth && authorIdentity !== null && !authorPromptVisible) {
       setPendingCommitAfterAuth(false);
       void handleSubmit();
     }
-    // handleSubmit is intentionally omitted from deps. Because the textarea
-    // is replaced by <GitPanelAuthorForm> while authorPromptVisible is true,
-    // commitMessage cannot change during the auth flow. The handleSubmit
-    // closure captured when pendingCommitAfterAuth was set therefore still
-    // references the correct, up-to-date commitMessage, and re-invoking it
-    // here is safe. Including handleSubmit in deps would re-run the effect
-    // on every keystroke, which is not what we want.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // deps 中故意省略了 handleSubmit。 Because 文本区域
+    // 当 authorPromptVisible 为 true 时，被 <GitPanelAuthorForm> 替换，
+    // commitMessage 在身份验证流程中无法更改。 The handleSubmit
+    // 设置 pendingCommitAfterAuth 时捕获的闭包因此仍然
+    // 引用正确的、最新的 commitMessage，并重新调用它
+    // 这里很安全。 deps 中的 Including handleSubmit 将重新运行效果
+    // 每次击键时都会出现这种情况，这不是我们想要的。
+// eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pendingCommitAfterAuth, authorIdentity, authorPromptVisible]);
 
   const canSubmit = commitMessage.trim().length > 0;

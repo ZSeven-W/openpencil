@@ -1,6 +1,6 @@
 // packages/pen-core/src/merge/node-merge.ts
 //
-// Pure 3-way merge of PenDocument trees.
+// Pure PenDocument 树的 3 路合并。
 
 import type { PenDocument, PenNode } from '@zseven-w/pen-types';
 import {
@@ -49,38 +49,38 @@ export interface MergeResult {
 }
 
 /**
- * Per-id decision the classification step produces. Invariants:
- *   - Every id in the merged-id union is either present in the decisions map
- *     OR omitted entirely. A null `mergedNode` means "explicitly deleted by
- *     the merge"; an absent map entry means "the rebuild step shouldn't see
- *     this id at all" (which currently never happens — every id produces a
- *     decision). The two states are kept distinct so the rebuild step in
- *     Task 9 can assert on its inputs.
- *   - When `mergedNode` is non-null, `mergedFields` excludes the `children`
- *     field. The rebuild step in Task 9 produces children by walking the
- *     decision map, not by reading the merged-node value.
- *   - `index` is a HINT for ordering inside the new parent. The rebuild step
- *     prefers ours' indices when both sides modified the same parent (this
- *     matches the spec's "fall back to ours" tiebreaker).
+ * Per-id 决定分类步
+ * 骤产生的结果。 Invariants： - 合并 id 联合中的 Every id 要么存在于决策映射中，要么完全省略
+ * OR。 null `mergedNode` 表示“通过合并显式删除”；缺少的映射条目意味着“重建步骤根本不应该看到这个
+ * id”（目前这种情况从未发生过——每个 id 都会产生一个决定）。 The 两个状态保持不同，因此 Task 9
+ * 中的重建步骤可以对其输入进行断言。 - When `mergedNode` 为非空，`mergedFields` 不包括
+ * `children` 字段。 The 9 中的 The 重建步骤通过遍历决策图而不是读取合并节点值来生成子节点。 - `index` 是
+ * HINT，用于在新父级内部排序。当双方修改相同的父级时，The 重建步骤更喜欢我们的索引（这符合规范的“回退到我们的”决胜局）。
+ *
+ *
+ *
+ *
+ *
+ *
  */
 interface NodeDecision {
-  /** The merged node, with `children` left empty (the rebuild step fills them). null = deleted */
+  /** The 合并节点，`children` 留空（重建步骤填充它们）。空 = 已删除 */
   mergedNode: PenNode | null;
-  /** Where the merged node should live; null when mergedNode is null */
+  /** Where 合并节点应该存在；当 mergedNode 为 null 时为 null */
   pageId: string | null;
   parentId: string | null;
-  /** Position hint within parent.children; the rebuild step uses ours' index when available */
+  /** parent.children 中的 Position 提示；重建步骤使用我们的索引（如果可用） */
   index: number;
 }
 
 /**
- * Pure 3-way merge of PenDocument trees.
+ * Pure PenDocu
  *
- * Implementation is split:
- *   - Tasks 7-8: classify each node id, produce node-level conflicts
- *   - Task 9: rebuild the merged tree from decisions
- *   - Task 10: merge doc-level fields (variables, themes, pages-order, name, version)
- *   - Task 11: tests
+ * ment 树的 3 路合并。 Implementation 被拆分： -
+ * Tasks 7-8：对每
+ * 个节点 ID 进行分类，产生节点级冲突 -
+ * Task 9：根据决策重建合并树 - Task 10：合并文档级字段（变量、主题、页面顺序、名称、版本） - Task
+ * 11：测试
  */
 export function mergeDocuments(input: MergeInput): MergeResult {
   const { base, ours, theirs } = input;
@@ -105,11 +105,11 @@ export function mergeDocuments(input: MergeInput): MergeResult {
   const merged = rebuildDocument(ours, decisions);
   const docFieldConflicts: DocFieldConflict[] = [];
 
-  // Merge doc-level scalar fields (name, version)
+  // Merge 文档级标量字段（名称、版本）
   mergeDocScalarField(base, ours, theirs, 'name', merged, docFieldConflicts);
   mergeDocScalarField(base, ours, theirs, 'version', merged, docFieldConflicts);
 
-  // Merge variables (object map)
+  // Merge 变量（对象映射）
   merged.variables = mergeRecord(
     base.variables,
     ours.variables,
@@ -121,13 +121,13 @@ export function mergeDocuments(input: MergeInput): MergeResult {
     delete merged.variables;
   }
 
-  // Merge themes (object map of string[])
+  // Merge 主题（字符串 [] 的对象映射）
   merged.themes = mergeRecord(base.themes, ours.themes, theirs.themes, 'themes', docFieldConflicts);
   if (merged.themes && Object.keys(merged.themes).length === 0) {
     delete merged.themes;
   }
 
-  // Merge pages order (only if both sides have pages)
+  // Merge 页面顺序（仅当双方都有页面时）
   if (base.pages && ours.pages && theirs.pages) {
     const reorderConflict = detectPagesOrderConflict(base.pages, ours.pages, theirs.pages);
     if (reorderConflict) {
@@ -143,7 +143,7 @@ export function mergeDocuments(input: MergeInput): MergeResult {
 }
 
 /**
- * 3-way merge for a top-level scalar string field on PenDocument (name/version).
+ * PenDocument (name/version) 上顶级标量字符串字段的 3 路合并。
  */
 function mergeDocScalarField(
   base: PenDocument,
@@ -172,7 +172,7 @@ function mergeDocScalarField(
     if (ov !== undefined) merged[field] = ov as string;
     return;
   }
-  // Both changed differently — conflict; take ours as placeholder.
+  // Both 发生了不同的变化——冲突；以我们的作为占位符。
   if (ov !== undefined) merged[field] = ov as string;
   conflicts.push({
     field,
@@ -184,8 +184,8 @@ function mergeDocScalarField(
 }
 
 /**
- * 3-way merge for an object record (variables, themes). Walks every key from
- * the union and applies the per-key merge rules. Returns the merged record.
+ * 对象记录（变量、主题）的
+ * 三向合并。 Walks 联合中的每个键并应用每个键的合并规则。 Returns 合并记录。
  */
 function mergeRecord<V>(
   base: Record<string, V> | undefined,
@@ -208,7 +208,7 @@ function mergeRecord<V>(
     const inOurs = key in o;
     const inTheirs = key in t;
 
-    // Use the same 7-grid logic as nodes.
+    // Use 与节点相同的 7 网格逻辑。
     if (inBase && inOurs && inTheirs) {
       // ✓✓✓
       if (jsonEqual(ov, bv) && jsonEqual(tv, bv)) {

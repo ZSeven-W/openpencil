@@ -43,21 +43,21 @@ export interface PenNodeBase {
   id: string;
   type: PenNodeType;
   name?: string;
-  role?: string; // semantic role for AI generation ("button", "card", "heading", etc.)
-  explain?: string; // explanatory semantic layer for the AI consumer view
+  role?: string; // AI 生成的语义角色（“按钮”、“卡片”、“标题”等）
+  explain?: string; // AI 消费者视图的解释性语义层
   x?: number;
   y?: number;
   rotation?: number;
-  opacity?: number | string; // number or $variable
+  opacity?: number | string; // 数字或$变量
   enabled?: boolean | string;
-  visible?: boolean; // default true
-  locked?: boolean; // default false
+  visible?: boolean; // 默认 true
+  locked?: boolean; // 默认 false
   flipX?: boolean;
   flipY?: boolean;
   theme?: Record<string, string>;
 }
 
-// --- Container (shared layout props) ---
+// --- Container （共享布局道具） ---
 
 export interface ContainerProps {
   width?: SizingBehavior;
@@ -140,7 +140,7 @@ export interface PenPathAnchor {
 
 export interface PathNode extends PenNodeBase {
   type: 'path';
-  iconId?: string; // Iconify icon ID, e.g. "lucide:home"
+  iconId?: string; // Iconify 图标 ID，例如“光明：家”
   d: string;
   anchors?: PenPathAnchor[];
   closed?: boolean;
@@ -188,8 +188,8 @@ export interface ImageNode extends PenNodeBase {
   tint?: number; // -100 to 100
   highlights?: number; // -100 to 100
   shadows?: number; // -100 to 100
-  imagePrompt?: string; // Descriptive prompt for AI image generation (long)
-  imageSearchQuery?: string; // Short keywords for image search (e.g. "burger fries")
+  imagePrompt?: string; // Descriptive 生成 AI 图像的提示（长）
+  imageSearchQuery?: string; // Short 用于图像搜索的关键字（例如“汉堡薯条”）
 }
 
 export interface IconFontNode extends PenNodeBase {

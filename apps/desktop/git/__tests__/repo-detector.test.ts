@@ -58,7 +58,7 @@ describe('detectRepo', () => {
   });
 
   it('prefers single-file mode when both single-file and parent folder repos exist', async () => {
-    // Set up: a parent .git AND a sibling .op-history. Spec says single-file wins.
+    // Set up：父 .git AND 兄弟 .op-history。 Spec 表示单文件获胜。
     const repoRoot = await mkSubdir(temp.dir, 'project');
     const parentGit = await mkSubdir(repoRoot, '.git');
     await writeFile(join(parentGit, 'HEAD'), 'ref: refs/heads/main\n', 'utf-8');
@@ -80,7 +80,7 @@ describe('detectRepo', () => {
   });
 
   it('does not blow up when given a file path with non-existent parent directories', async () => {
-    // The walk-up should still produce a 'none' result, not throw.
+    // The 直接执行仍应产生“无”结果，而不是抛出。
     const fakePath = join(temp.dir, 'does-not-exist', 'nested', 'fake.op');
     const result = await detectRepo(fakePath);
     expect(result.mode).toBe('none');

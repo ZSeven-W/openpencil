@@ -8,7 +8,7 @@ interface ImageGeneratePopoverProps {
   initialPrompt: string;
   onGenerated: (url: string) => void;
   children: React.ReactNode;
-  /** Node dimensions — passed to the API for aspect-ratio-aware generation */
+  /** Node 尺寸 — 传递到 API 以进行纵横比感知生成 */
   width?: number;
   height?: number;
 }
@@ -36,7 +36,7 @@ export default function ImageGeneratePopover({
   const handleOpenChange = (next: boolean) => {
     setOpen(next);
     if (next) {
-      // Reset to idle when reopening
+      // Reset 重新打开时空闲
       setPrompt(initialPrompt);
       setState('idle');
       setPreviewUrl(null);

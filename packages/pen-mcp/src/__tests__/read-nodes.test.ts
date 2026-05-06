@@ -52,7 +52,7 @@ describe('handleReadNodes', () => {
     expect(Array.isArray(children)).toBe(true);
     if (Array.isArray(children)) {
       expect(children).toHaveLength(2);
-      // f2's children should be truncated at depth 1
+      // f2 的子级应在深度 1 处截断
       const f2 = children.find((c: any) => c.id === 'f2');
       expect(f2?.children).toBe('...');
     }

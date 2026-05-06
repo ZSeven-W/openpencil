@@ -1,16 +1,16 @@
 import type { FigmaNodeChange } from './figma-types';
 
 /**
- * Decode Figma binary path blob to SVG path `d` string.
- * Binary format: sequence of commands, each starting with a command byte:
- *   0x00 = closePath (Z) — 0 floats
- *   0x01 = moveTo (M)    — 2 float32 LE (x, y)
- *   0x02 = lineTo (L)    — 2 float32 LE (x, y)
- *   0x04 = cubicTo (C)   — 6 float32 LE (cp1x, cp1y, cp2x, cp2y, x, y)
- *   0x03 = quadTo (Q)    — 4 float32 LE (cpx, cpy, x, y)
+ * Decode Figma
+ * 二进制路径 blob 到 SVG 路径 `d` 字符串。 Binary 格式：命令序列，每个命令字节开头：
+ * 0x00 = closePath (z) — 0 floats 0x01 = moveTo (m) — 2 float32 LE (x, y)
+ * 0x02 = lineTo (l) — 2 float32
+ * LE (x, y) 0x04 = cubicTo (c) — 6 float32
+ * LE (cp1x, cp1y, cp2x, cp2y, x, y) 0x03 =
+ * quadTo (q) — 4 float32 LE (cpx, cpy, x, y)
  */
 function decodeFigmaPathBlob(blob: Uint8Array): string | null {
-  if (blob.length < 9) return null; // minimum: 1 cmd byte + 2 float32
+  if (blob.length < 9) return null; // 最小值：1 cmd 字节 + 2 float32
 
   const buf = new ArrayBuffer(blob.byteLength);
   new Uint8Array(buf).set(blob);
@@ -24,7 +24,7 @@ function decodeFigmaPathBlob(blob: Uint8Array): string | null {
     offset += 1;
 
     switch (cmd) {
-      case 0x00: // close
+      case 0x00: // 关闭
         parts.push('Z');
         break;
       case 0x01: {

@@ -14,7 +14,7 @@ interface CodexExecOptions {
   thinkingBudgetTokens?: number;
   effort?: ThinkingEffort;
   timeoutMs?: number;
-  /** Paths to temporary image files to reference in the prompt */
+  /** Paths 到临时图像文件以在提示中引用 */
   imageFiles?: string[];
 }
 
@@ -26,9 +26,9 @@ interface CodexCliResult {
 const DEFAULT_CODEX_TIMEOUT_MS = 15 * 60 * 1000;
 
 /**
- * Allowlist-based env filter for Codex CLI subprocess.
- * Only passes through safe system vars and provider-specific prefixes.
- * Prevents leaking secrets like ANTHROPIC_API_KEY, AWS_SECRET_KEY, GITHUB_TOKEN, etc.
+ * 用于 Codex CLI
+ * 子进程的基于 Allowlist 的环境过滤器。 Only 通过安全系统变量和特定于提供者的前缀。
+ * Prevents 泄露秘密，如 ANTHROPIC_API_KEY、AWS_SECRET_KEY、GITHUB_TOKEN 等。
  */
 const CODEX_ENV_ALLOWLIST = new Set([
   'PATH',
@@ -37,7 +37,7 @@ const CODEX_ENV_ALLOWLIST = new Set([
   'LANG',
   'SHELL',
   'TMPDIR',
-  // Windows-essential vars
+  // Windows-基本变量
   'SYSTEMROOT',
   'COMSPEC',
   'USERPROFILE',
@@ -52,11 +52,11 @@ const CODEX_ENV_ALLOWLIST = new Set([
 ]);
 
 /**
- * Extract provider-declared env_key entries from ~/.codex/config.toml.
+ * Extract
  *
- * This preserves the default safety boundary of not forwarding sensitive
- * environment variables automatically, while still letting user-defined
- * Codex providers opt in through config.toml as the single source of truth.
+ * 提供商声明的来自 ~/.codex/config.toml 的 env_key 条目。 This
+ * 保留不自动转发敏感环境变
+ * 量的默认安全边界，同时仍然允许用户定义的 Codex 提供程序通过 config.toml 选择作为单一事实来源。
  */
 export function extractCodexConfigEnvKeys(configToml: string): string[] {
   return Array.from(

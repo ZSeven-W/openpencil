@@ -79,29 +79,29 @@ const pt: TranslationKeys = {
   'git.conflict.nonOp.unresolvedHeading_other': '{{count}} arquivos precisam de atenção',
   'git.conflict.nonOp.continue': 'Continuar mesclagem',
   'git.conflict.nonOp.abort': 'Cancelar mesclagem',
-  // ── Conflito Git — banner (Phase 7b) ──
+  // ── Conflito Git — 横幅 (Phase 7b) ──
   'git.conflict.banner.progress': '{{resolved}} / {{total}} resolvidos',
   'git.conflict.banner.apply': 'Aplicar mesclagem',
   'git.conflict.banner.continue': 'Continuar',
   'git.conflict.banner.finalizeError': 'Não foi possível aplicar: {{message}}',
   'git.conflict.banner.pollError': 'Sondagem de status pausada devido a um erro: {{message}}',
-  // placeholder — future localization
+  // placeholder — 未来的本地化
   'git.conflict.banner.reopenMessage':
     'Painel reaberto durante a mesclagem — por favor, cancele e faça pull novamente.',
 
-  // ── Conflito Git — lista (Phase 7c) ──
+  // ── Conflito Git — 列表 (Phase 7c) ──
   'git.conflict.list.heading': 'Todos os conflitos',
   'git.conflict.list.progress': '{{resolved}} / {{total}} resolvidos',
   'git.conflict.list.allResolved': 'Tudo resolvido',
   'git.conflict.list.allOurs': 'Tudo o meu',
   'git.conflict.list.allTheirs': 'Tudo o deles',
 
-  // ── Conflito Git — item (Phase 7c) ──
+  // ── Conflito Git — 项目 (Phase 7c) ──
   'git.conflict.item.nodeConflict': 'Conflito de nó',
   'git.conflict.item.fieldConflict': 'Conflito de campo',
   'git.conflict.item.resolved': 'Resolvido',
 
-  // ── Conflito Git — cartão (Phase 7c) ──
+  // ── Conflito Git — 卡通 (Phase 7c) ──
   'git.conflict.card.ours': 'O meu',
   'git.conflict.card.theirs': 'O deles',
   'git.conflict.card.base': 'Base',
@@ -110,7 +110,7 @@ const pt: TranslationKeys = {
   'git.conflict.card.oursThumbnailAlt': 'Minha versão',
   'git.conflict.card.theirsThumbnailAlt': 'Versão deles',
 
-  // ── Conflito Git — editor JSON (Phase 7c) ──
+  // ── Conflito Git — 编辑 JSON (Phase 7c) ──
   'git.conflict.editor.editManually': 'Editar manualmente',
   'git.conflict.editor.cancel': 'Cancelar',
   'git.conflict.editor.apply': 'Aplicar',
@@ -121,7 +121,7 @@ const pt: TranslationKeys = {
   'git.error.retry': 'Tentar novamente',
   'git.error.title': 'Algo deu errado',
 
-  // ── Estado vazio do Git ──
+  // ── Estado Git ──
   'git.empty.heading': 'Ainda sem histórico de versões',
   'git.empty.optional': 'Git é opcional — pular está OK',
   'git.empty.requireSavedFile': 'Salve o arquivo .op primeiro para habilitar o histórico',
@@ -132,7 +132,7 @@ const pt: TranslationKeys = {
   'git.empty.cloneCard': 'Clonar',
   'git.empty.cloneCardDescription': 'De um remoto',
 
-  // ── Formulário de autor do Git ──
+  // ── Formulário 作者 Git ──
   'git.author.heading': 'Autor do commit',
   'git.author.subheading': 'Salvar o primeiro commit requer nome e e-mail',
   'git.author.nameLabel': 'Nome',
@@ -162,7 +162,7 @@ const pt: TranslationKeys = {
   'git.autoBind.openButton': 'Abrir',
   'git.autoBind.dismissButton': 'Pular',
 
-  // ── Tempo relativo (Phase 4b) ──
+  // ── Tempo 相对 (Phase 4b) ──
   'git.relativeTime.justNow': 'agora',
   'git.relativeTime.minutesAgo': 'há {{count}}m',
   'git.relativeTime.hoursAgo': 'há {{count}}h',
@@ -197,7 +197,7 @@ const pt: TranslationKeys = {
   'git.history.restoreButton': 'Restaurar',
   'git.history.copyHashButton': 'Copiar hash',
   'git.history.copiedToast': 'Copiado',
-  // ── Git Diff de histórico (Phase 7b) ──
+  // ── Git Diff 历史 (Phase 7b) ──
   'git.history.diff.loading': 'Carregando diff…',
   'git.history.diff.initialCommit': 'Commit inicial — sem pai para comparar',
   'git.history.diff.noChanges': 'Nenhuma alteração detectada',
@@ -216,7 +216,7 @@ const pt: TranslationKeys = {
   'git.autosave.messagePrefix': 'auto',
   'git.autosave.messageDiffSuffix': '',
 
-  // ── Git Seletor de ramos (Phase 5) ──
+  // ── Git Seletor 德拉莫斯 (Phase 5) ──
   'git.branch.listHeading': 'Ramos',
   'git.branch.createAction': 'Novo ramo',
   'git.branch.createPlaceholder': 'feature/login-redesign',

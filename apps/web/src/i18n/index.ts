@@ -2,8 +2,7 @@ import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
 import { appStorage } from '@/utils/app-storage';
 
-// Only English is bundled statically as the fallback language.
-// All other locales are loaded on demand via loadLocale().
+// Only English 作为后备语言静态捆绑。 All 其他语言环境通过 loadLocale() 按需加载。
 import en from '@/i18n/locales/en';
 
 export const SUPPORTED_LANGS = [
@@ -34,12 +33,12 @@ if (!i18n.isInitialized) {
   });
 }
 
-/** Lazy-load a locale's translations and switch to it. No-op for 'en'. */
+/** Lazy-加载语言环境的翻译并切换到它。 No-op 代表“en”。 */
 export async function loadLocale(lang: string): Promise<void> {
   if (lang === 'en') return;
   if (!SUPPORTED_LANGS.includes(lang)) return;
   if (!i18n.hasResourceBundle(lang, 'translation')) {
-    // File names are kebab-case (zh-TW → zh-tw.ts)
+    // File 名称采用短横线命名 (zh-TW → zh-tw.ts)
     const fileName = lang.toLowerCase();
     const mod = await import(`@/i18n/locales/${fileName}.ts`);
     i18n.addResourceBundle(lang, 'translation', mod.default, true, true);

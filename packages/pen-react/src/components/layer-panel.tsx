@@ -138,7 +138,7 @@ function LayerPanelInner() {
   const resizeStartX = useRef(0);
   const resizeStartWidth = useRef(0);
 
-  // Compute active page children
+  // Compute 活动页面子项
   const children: PenNode[] = (() => {
     if (!doc) return [];
     if (doc.pages && doc.pages.length > 0) {
@@ -219,7 +219,7 @@ function LayerPanelInner() {
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
-  // Auto-expand ancestors when selection changes
+  // Auto-当选择更改时展开祖先
   useEffect(() => {
     if (selectedIds.length === 0) return;
     const ancestorIds = new Set<string>();
@@ -442,7 +442,7 @@ function LayerPanelInner() {
       className="bg-card border-r border-border flex flex-col shrink-0 relative"
       style={{ width: panelWidth }}
     >
-      {/* Resize handle */}
+      {/* Resize 手柄 */}
       <div
         className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-primary/30 active:bg-primary/50 z-10"
         onMouseDown={handleResizeMouseDown}

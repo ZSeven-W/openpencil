@@ -2,7 +2,7 @@ import type { FigmaNodeChange } from './figma-types';
 import type { ContainerProps, SizingBehavior } from '@zseven-w/pen-types';
 
 /**
- * Map Figma stack (auto-layout) properties to PenNode ContainerProps.
+ * Map Figma 堆栈（自动布局）属性到 PenNode ContainerProps。
  */
 export function mapFigmaLayout(
   node: FigmaNodeChange,
@@ -23,10 +23,9 @@ export function mapFigmaLayout(
     result.justifyContent = mapJustifyContent(node.stackPrimaryAlignItems);
   }
 
-  // Set gap from stackSpacing, but skip when justifyContent is space_between.
-  // Figma stores the COMPUTED inter-item spacing in stackSpacing for
-  // SPACE_EVENLY mode — using it as an explicit gap would conflict with
-  // the dynamic spacing that space_between already provides.
+  // Set 与 stackSpacing 之间有差距，但当 justifyContent 为 space_between 时跳过。 Figma 将
+  // COMPUTED 项目间间距存储在 stackSpacing 中，用于 SPACE_EVENLY 模式 - 将其用作显式间隙会与
+  // space_between 已提供的动态间距发生冲突。
   if (
     node.stackSpacing !== undefined &&
     node.stackSpacing !== 0 &&
@@ -44,8 +43,8 @@ export function mapFigmaLayout(
     result.alignItems = mapAlignItems(node.stackCounterAlignItems);
   }
 
-  // Frames clip by default in Figma (frameMaskDisabled defaults to false).
-  // Only skip clipContent when explicitly disabled.
+  // Frames 默认剪辑在 Figma 中（frameMaskDisabled 默认为 false）。明确禁用时，Only 跳过
+  // clipContent。
   if (node.frameMaskDisabled !== true) {
     result.clipContent = true;
   }
@@ -56,14 +55,14 @@ export function mapFigmaLayout(
 function mapPadding(
   node: FigmaNodeChange,
 ): number | [number, number] | [number, number, number, number] | undefined {
-  // Check individual padding values first
+  // Check 首先是单独的填充值
   const hasHorizontal = node.stackHorizontalPadding !== undefined;
   const hasVertical = node.stackVerticalPadding !== undefined;
   const hasRight = node.stackPaddingRight !== undefined;
   const hasBottom = node.stackPaddingBottom !== undefined;
 
   if (!hasHorizontal && !hasVertical && !hasRight && !hasBottom) {
-    // Uniform padding
+    // Uniform 填充
     if (node.stackPadding && node.stackPadding > 0) return node.stackPadding;
     return undefined;
   }
@@ -110,10 +109,10 @@ function mapAlignItems(align: string): ContainerProps['alignItems'] {
 }
 
 /**
- * Determine width sizing behavior from Figma internal format.
+ * Determine Figma 内部格式的宽度大小调整行为。
  */
 export function mapWidthSizing(node: FigmaNodeChange, parentStackMode?: string): SizingBehavior {
-  // Check stack sizing for containers
+  // Check 容器的堆栈大小调整
   if (node.stackPrimarySizing === 'RESIZE_TO_FIT' && node.stackMode === 'HORIZONTAL') {
     return 'fit_content';
   }
@@ -121,7 +120,7 @@ export function mapWidthSizing(node: FigmaNodeChange, parentStackMode?: string):
     return 'fit_content';
   }
 
-  // Check child sizing within parent
+  // Check 父级中子级的大小调整
   if (node.stackChildPrimaryGrow === 1 && parentStackMode === 'HORIZONTAL') {
     return 'fill_container';
   }
@@ -133,7 +132,7 @@ export function mapWidthSizing(node: FigmaNodeChange, parentStackMode?: string):
 }
 
 /**
- * Determine height sizing behavior from Figma internal format.
+ * Determine 内部格式的 Figma 高度调整行为。
  */
 export function mapHeightSizing(node: FigmaNodeChange, parentStackMode?: string): SizingBehavior {
   if (node.stackPrimarySizing === 'RESIZE_TO_FIT' && node.stackMode === 'VERTICAL') {

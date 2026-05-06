@@ -8,8 +8,8 @@ export interface LayerDropMove {
 }
 
 /**
- * Resolve the destination for a layer-panel drag/drop and whether the move
- * needs absolute-position preservation because it crosses parent boundaries.
+ * Resolve
+ * 图层面板的目的地 drag/drop 以及移动是否需要绝对位置保留，因为它跨越了父边界。
  */
 export function resolveLayerDropMove(
   dragId: string,

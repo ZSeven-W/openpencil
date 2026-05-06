@@ -1,24 +1,25 @@
 /**
- * Patch srvx NodeResponse for Bun compatibility.
+ * Patch srvx
  *
- * Problem: srvx's Node adapter wraps all Response objects in NodeResponse.
- * Although NodeResponse inherits from Response via prototype chain,
- * Bun's HTTP runtime uses an internal brand check that rejects it.
+ * NodeResponse 用于 Bun 兼容性。 Problem：srvx 的 Node
+ * 适配器将所有 Respo
+ * nse 对象包装在 NodeResponse 中。 Although NodeResponse 通过原型链继承自 Response，Bun 的
  *
- * Fix: Make NodeResponse constructor return a native Response when running in Bun.
- * This is safe because Bun doesn't need srvx's Node.js stream bridging.
+ * HTTP 运行时使用内部品牌检查来拒绝它。 Fix：Make NodeResponse 构造函数在 Bun 中运行时返回本机
+ * Response。 This 是安全的，因为 Bun 不需要 srvx 的 Node.js 流桥接。 Run：bun
  *
- * Run: bun scripts/patch-srvx-bun.ts (called automatically via postinstall)
+ * scripts/patc
+ h-srvx-bun.ts（通过安装后自动调用）
  */
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-// Find srvx node adapter in various possible locations
+// Find srvx 节点适配器位于各个可能的位置
 const candidates = [
   resolve(import.meta.dir, '../node_modules/srvx/dist/adapters/node.mjs'),
   ...(() => {
     try {
-      // Bun hoists to .bun/ directory
+      // Bun 提升到 .bun/ 目录
       const bunDir = resolve(import.meta.dir, '../node_modules/.bun');
       const dirs = require('fs')
         .readdirSync(bunDir)
@@ -57,7 +58,7 @@ for (const filePath of candidates) {
   // so Bun's internal brand check passes.
   code = code.replace(
     endMarker,
-    `// __srvx_bun_patched__ — Bun bypass: return native Response instead of NodeResponse
+    `// __srvx_bun_patched__ — Bun 绕过：返回本机 Response 而不是 NodeResponse
 if (typeof globalThis.Bun !== 'undefined') {
   return NativeResponse;
 }

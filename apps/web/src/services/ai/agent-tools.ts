@@ -8,7 +8,7 @@ export interface ToolDef {
 }
 
 const TOOL_AUTH_MAP: Record<string, AuthLevel> = {
-  // read
+  // 读
   batch_get: 'read',
   snapshot_layout: 'read',
   get_selection: 'read',
@@ -18,7 +18,7 @@ const TOOL_AUTH_MAP: Record<string, AuthLevel> = {
   list_theme_presets: 'read',
   get_design_md: 'read',
 
-  // create
+  // 创造
   plan_layout: 'create',
   batch_insert: 'create',
   insert_node: 'create',
@@ -29,7 +29,7 @@ const TOOL_AUTH_MAP: Record<string, AuthLevel> = {
   save_theme_preset: 'create',
   generate_design: 'create',
 
-  // modify
+  // 修改
   update_node: 'modify',
   replace_node: 'modify',
   move_node: 'modify',
@@ -42,36 +42,34 @@ const TOOL_AUTH_MAP: Record<string, AuthLevel> = {
   set_design_md: 'modify',
   export_design_md: 'modify',
 
-  // delete
+  // 删除
   delete_node: 'delete',
   remove_page: 'delete',
 };
 
 // ---------------------------------------------------------------------------
-// Intent detection — determines which tools and prompts to load
+// Intent 检测 — 确定加载哪些工具和提示
 // ---------------------------------------------------------------------------
 
 export type AgentIntent = 'design' | 'crud';
 
-// CJK characters aren't `\w`, so `\b` boundaries silently fail for them.
-// Keep the English list boundary-anchored (avoids `app` matching `approach`,
-// `add` matching `address`, etc.) and run a separate boundary-free pass for
-// CJK keywords.
+// CJK 字符不是 `\w`，因此 `\b` 边界对它们来说默默地失败。 Keep 和 English 列表边界锚定（避免 `app` 匹配
+// `approach`、`add` 匹配 `address` 等），并为 CJK 关键字运行单独的无边界传递。
 const DESIGN_KEYWORDS_EN =
   /\b(design|create|make|build|generate|add|insert|landing|page|screen|app|dashboard|card|hero|navbar|form|layout)\b/i;
 const DESIGN_KEYWORDS_CJK =
   /(设计|创建|生成|画|做一个|新建|增加|添加|加一个|插入|页面|界面|登录|首页|仪表盘|卡片|表单)/;
 
-/** Detect whether the user's message is a design intent or a CRUD operation. */
+/** Detect 用户的消息是设计意图还是 CRUD 操作。 */
 export function detectAgentIntent(message: string): AgentIntent {
   return DESIGN_KEYWORDS_EN.test(message) || DESIGN_KEYWORDS_CJK.test(message) ? 'design' : 'crud';
 }
 
 // ---------------------------------------------------------------------------
-// Tool definitions by intent
+// Tool 按意图定义
 // ---------------------------------------------------------------------------
 
-/** CRUD-only tools — lightweight set for read/update/delete/move/insert operations. */
+/** CRUD-only 工具 — 用于 read/update/delete/move/insert 操作的轻量级工具集。 */
 export function getCrudToolDefs(): ToolDef[] {
   return [
     {
@@ -192,13 +190,13 @@ export function getCrudToolDefs(): ToolDef[] {
 }
 
 /**
- * Design tools — minimal set forcing the model through `generate_design`.
+ * Design 工具 —
  *
- * Weak models (e.g. MiniMax-M2.7) prefer per-node `insert_node` calls when
- * given the choice, producing scattered output instead of a coherent design.
- * Read tools (`batch_get`, `snapshot_layout`) stay so the model can inspect
- * existing context before generating. CRUD tools live in `getCrudToolDefs()`
- * and are reached via `detectAgentIntent('crud')` for surgical edits.
+ * 强制模型通过 `generate_design` 的最小集。 Weak 模型（例如 MiniMax-M2.7）在选择时更喜欢每个节点
+ * `insert_node
+ * ` 调用，从而产生分散的输出而不是连贯的设计。 Read 工具（`batch_get`、`snapshot_layout`）保留下来，以便模型可
+ * 以在生成之前检查现有上下文。 CRUD 工具位于 `getCrudToolDefs()` 中，可通过
+ * `detectAgentIntent('crud')` 进行手术编辑。
  */
 export function getDesignToolDefs(): ToolDef[] {
   return [
@@ -257,16 +255,16 @@ export function getDesignToolDefs(): ToolDef[] {
 }
 
 /**
- * Builtin single-agent flows create the frame via `plan_layout` and then
- * insert content with `batch_insert`. Do not expose `generate_design` here,
- * because in builtin mode it only creates the frame and is not a complete
- * design operation.
+ * Builtin
+ * 单代理流通过 `plan_layout` 创建框架，然后使用 `batch_insert` 插入内容。 Do 在这里不公开
+ * `generate_design`，因为在内置模式下它只创建框架，而不是完整的设计操作。
+ *
  */
 export function getBuiltinLeadToolDefs(): ToolDef[] {
   return getAllToolDefs().filter((def) => def.name !== 'generate_design');
 }
 
-/** All tool definitions — canonical schema source for both lead and member registries. */
+/** All 工具定义 — 主要注册机构和成员注册机构的规范模式源。 */
 export function getAllToolDefs(): ToolDef[] {
   return [
     ...getDesignToolDefs(),

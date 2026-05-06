@@ -1,9 +1,9 @@
 // apps/web/src/components/panels/git-panel/git-panel-empty-state.tsx
 //
-// 3-card chooser for the no-repo state. Per spec lines 91-111:
-//   - 新建: initRepo(currentFilePath). Disabled if no file path.
-//   - 打开: native folder picker → openRepo(repoPath, currentFilePath).
-//   - 克隆: enterCloneWizard() (Phase 6a — was disabled-with-tooltip in 4a).
+// 无回购状态的 3 卡选择器。 Per 规范第 91-111 行：
+//   - 新建：initRepo(currentFilePath)。 Disabled 如果没有文件路径。
+//   - 打开：本机文件夹选择器 → openRepo(repoPath, currentFilePath)。
+//   - 克隆：enterCloneWizard()（Phase 6a - 在 4a 中通过工具提示禁用）。
 
 import { FilePlus, FolderOpen, GitFork, History } from 'lucide-react';
 import { useTranslation } from 'react-i18next';

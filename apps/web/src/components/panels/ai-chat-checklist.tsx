@@ -5,7 +5,7 @@ import type { ChatMessage as ChatMessageType } from '@/services/ai/ai-types';
 import { useAIStore } from '@/stores/ai-store';
 import { parseStepBlocks, countDesignJsonBlocks, buildPipelineProgress } from './chat-message';
 
-/** Parse [done]/[pending]/[error] prefix from a detail line */
+/** Parse 详细信息行中的 [done]/[pending]/[error] 前缀 */
 function parseDetailStatus(line: string): {
   status: 'done' | 'pending' | 'error' | null;
   text: string;
@@ -15,7 +15,7 @@ function parseDetailStatus(line: string): {
   return { status: null, text: line };
 }
 
-/** Fixed collapsible checklist pinned between messages and input */
+/** Fixed 固定在消息和输入之间的可折叠清单 */
 export function FixedChecklist({
   messages,
   isStreaming,
@@ -25,7 +25,7 @@ export function FixedChecklist({
 }) {
   const [collapsed, setCollapsed] = useState(false);
 
-  // Find the last assistant message to extract checklist data
+  // Find 提取清单数据的最后一条助理消息
   const lastAssistant = useMemo(() => {
     for (let i = messages.length - 1; i >= 0; i--) {
       if (messages[i].role === 'assistant') return messages[i];
@@ -36,7 +36,7 @@ export function FixedChecklist({
   const agentSteps = useAIStore((s) => s.agentOrchestrationSteps);
 
   const items = useMemo(() => {
-    // Prefer agent orchestration steps (from tool execution) over message content
+    // Prefer 代理在消息内容上的编排步骤（来自工具执行）
     const content = agentSteps || (lastAssistant ? lastAssistant.content : '');
     if (!content) return [];
     const steps = parseStepBlocks(content, isStreaming);
@@ -56,12 +56,12 @@ export function FixedChecklist({
   const completed = items.filter((item) => item.done).length;
   const progress = items.length > 0 ? (completed / items.length) * 100 : 0;
 
-  // Hide checklist when streaming stopped with nothing completed
+  // Hide 流媒体停止且未完成任何操作时的清单
   if (!isStreaming && completed === 0) return null;
 
   return (
     <div className="shrink-0 border-t border-border bg-card/95 backdrop-blur-sm">
-      {/* Progress bar */}
+      {/* Progress 酒吧 */}
       <div className="h-[2px] bg-secondary/50">
         <div
           className="h-full bg-primary transition-all duration-500 ease-out"

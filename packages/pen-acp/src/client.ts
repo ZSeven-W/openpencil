@@ -3,7 +3,7 @@ import { Readable, Writable } from 'node:stream';
 import { ClientSideConnection, ndJsonStream, PROTOCOL_VERSION } from '@agentclientprotocol/sdk';
 import type { AcpAgentConfig, AcpConnectionState } from './types';
 
-/** Establish an ACP connection to a local process or remote endpoint. */
+/** Establish 与本地进程或远程端点的 ACP 连接。 */
 export async function connectAcpAgent(config: AcpAgentConfig): Promise<AcpConnectionState> {
   if (config.connectionType === 'local') {
     return connectLocal(config);
@@ -12,9 +12,9 @@ export async function connectAcpAgent(config: AcpAgentConfig): Promise<AcpConnec
 }
 
 /**
- * Create a ClientSideConnection from a bidirectional ndJSON stream.
- * The Client.sessionUpdate callback dispatches events to
- * state.sessionUpdateEmitter so the SSE handler can consume them.
+ * 来自双向 ndJSON
+ * 流的 Create 和 ClientSideConnection。 The Client.sessionUpdate
+ * 回调将事件分派到 state.sessionUpdateEmitter，以便 SSE 处理程序可以使用它们。
  */
 function createConnection(
   stream: ReturnType<typeof ndJsonStream>,
@@ -25,14 +25,12 @@ function createConnection(
       sessionUpdate: async (params) => {
         state.sessionUpdateEmitter?.dispatchEvent(new CustomEvent('update', { detail: params }));
       },
-      // Auto-approve all tool calls. The user already established trust by
-      // connecting this ACP agent in settings. Claude Agent ACP requests
-      // permission before each MCP tool call — if we don't approve, tools
-      // fail with "Tool use aborted".
-      // Future: route through AgentToolExecutor's TOOL_AUTH_MAP if per-call
-      // approval is needed for destructive operations.
+      // Auto-批准所有工具调用。 The 用户已通过在设置中连接此 ACP 代理建立了信任。 Claude Agent ACP 在每次
+      // MCP 工具调用之前请求权限 - 如果我们不批准，工具会失败并显示“Tool use aborted”。
+      // Future：如果破坏性操作需要每次调用批准，则通过 AgentToolExecutor 的 TOOL_AUTH_MAP
+      // 进行路由。
       requestPermission: async (params) => {
-        // Prefer the first allow option if present; fall back to generic allow.
+        // Prefer 第一个允许选项（如果存在）；回退到通用允许。
         const allowOption = params.options?.find(
           (o) =>
             o.kind === 'allow_once' || o.kind === 'allow_always' || o.optionId.startsWith('allow'),
@@ -57,9 +55,9 @@ async function connectLocal(config: AcpAgentConfig): Promise<AcpConnectionState>
     env: { ...process.env, ...config.env },
   });
 
-  // node:stream toWeb returns ReadableStream<any>; ndJsonStream expects
-  // ReadableStream<Uint8Array>. The runtime data is bytes, so the cast is
-  // safe — only TypeScript's variance is too strict here.
+  // 节点：流 toWeb 返回 ReadableStream<any>； ndJsonStream 需要
+  // ReadableStream<Uint8Array>。 The 运行时数据是字节，因此转换是安全的 - 只是 TypeScript
+  // 的方差在这里太严格。
   const input = Writable.toWeb(proc.stdin!) as WritableStream<Uint8Array>;
   const output = Readable.toWeb(proc.stdout!) as ReadableStream<Uint8Array>;
   const stream = ndJsonStream(input, output);

@@ -1,6 +1,6 @@
 /**
- * Lightweight syntax highlighter for JSX, HTML, and CSS.
- * Produces HTML strings with color spans.
+ * Lightweight
+ * JSX、HTML 和 CSS 的语法突出显示。 Produces HTML 具有颜色跨度的字符串。
  */
 
 interface TokenRule {
@@ -9,18 +9,18 @@ interface TokenRule {
 }
 
 const JSX_RULES: TokenRule[] = [
-  // Multi-line comments
-  { pattern: /\/\*[\s\S]*?\*\//g, className: 'syn-comment' },
-  // Single-line comments
+  // Multi-行评论
+  { pattern: /\/\*[\s\S]*?\*\//g, className: 'syn 注释' },
+  // Single-行评论
   { pattern: /\/\/.*/g, className: 'syn-comment' },
-  // JSX self-closing tags: <Tag ... />
+  // JSX 自闭合标签：<Tag ... />
   { pattern: /<\/?[A-Za-z][A-Za-z0-9.]*/g, className: 'syn-tag' },
-  // Closing bracket
+  // Closing 括号
   { pattern: /\/?>/g, className: 'syn-tag' },
-  // Strings (double and single quoted)
+  // Strings（双引号和单引号）
   { pattern: /"(?:[^"\\]|\\.)*"/g, className: 'syn-string' },
   { pattern: /'(?:[^'\\]|\\.)*'/g, className: 'syn-string' },
-  // Template literals
+  // Template 文字
   { pattern: /`(?:[^`\\]|\\.)*`/g, className: 'syn-string' },
   // Keywords
   {

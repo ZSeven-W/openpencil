@@ -1,4 +1,4 @@
-// @vitest-environment jsdom
+// @vitest-环境 jsdom
 import { describe, it, expect, vi } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import type { ReactNode } from 'react';
@@ -19,7 +19,7 @@ function createMockEngine() {
       };
     }),
     off: vi.fn(),
-    // Test helper: simulate document change
+    // Test 助手：模拟文档更改
     _setDocument(doc: any) {
       document = doc;
       listeners.get('document:change')?.forEach((cb) => cb(doc));

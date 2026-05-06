@@ -2,15 +2,15 @@ import type { OrchestratorPlan } from './ai-types';
 import type { DesignMdSpec } from '@/types/design-md';
 
 /**
- * Picks a color for the pre-built dashboard sidebar frame.
+ * Picks 预建仪表板侧
  *
- * Precedence:
- *   1. "Sidebar Surface" cell from a catalog style guide (legacy path).
- *   2. design.md palette role matching sidebar → panel → surface/card.
- *   3. undefined — caller falls back to rootFrame fill or a neutral default.
+ * 边栏框架的颜色。 Precedence：1. 目录样式指南中的“Sidebar
+ * Surface”单元格（
+ * 旧路径）。 2.desi
+ * gn.md 调色板角色匹配侧边栏→面板→surface/card。 3. 未定义 — 调用者退回到 rootFrame
  *
- * The design.md path is what keeps dashboards layered when the user
- * supplies their own spec (which deliberately skips the catalog lookup).
+ * 填充或中性默认值。 The design.md 路径是当用户提供自己的规范（故意跳过目录查找）时保持仪表板分层的路径。
+ *
  */
 export function extractSidebarSurfaceColor(
   plan: OrchestratorPlan,

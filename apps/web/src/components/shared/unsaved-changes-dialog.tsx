@@ -59,7 +59,7 @@ export default function UnsavedChangesDialog({
         onClick={() => onResult('cancel')}
       />
 
-      {/* Card wrapper */}
+      {/* Card 包装器 */}
       <div
         className="relative w-[340px] transition-all duration-600 ease-[cubic-bezier(0.16,1,0.3,1)]"
         style={{
@@ -67,7 +67,7 @@ export default function UnsavedChangesDialog({
           transform: visible ? 'translateY(0) scale(1)' : 'translateY(32px) scale(0.92)',
         }}
       >
-        {/* Glow — slow rotating, breathing opacity */}
+        {/* Glow — 缓慢旋转，呼吸不透明 */}
         <div
           className="absolute -inset-[1px] rounded-[18px]"
           style={{
@@ -89,7 +89,7 @@ export default function UnsavedChangesDialog({
           }}
         />
 
-        {/* Glass card */}
+        {/* Glass 卡 */}
         <div
           className="relative rounded-[18px] overflow-hidden"
           style={{

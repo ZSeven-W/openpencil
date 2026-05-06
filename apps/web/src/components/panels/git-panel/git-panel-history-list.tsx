@@ -1,18 +1,18 @@
 // apps/web/src/components/panels/git-panel/git-panel-history-list.tsx
 //
-// Scrollable history timeline. Walks gitStore.log (flat array of commits,
-// newest first), groups consecutive autosaves of 3+ into collapsible
-// <HistoryAutosaveGroup> blocks, and renders milestone rows as
-// <HistoryMilestoneRow>. Clicking a milestone opens an inline detail
-// card below the row with restore + copy-hash + "diff coming in Phase 6".
-// Clicking an autosave inside a group opens a detail card with
-// "restore" and "promote to milestone".
+// Scrollable 历史时间表。 Walks gitStore.log（提交的平面数组，
+// 最新的在前），将 3 个以上的连续自动保存分组为可折叠的
+// <HistoryAutosaveGroup> 块，并将里程碑行呈现为
+// <HistoryMilestoneRow>。 Clicking 里程碑打开内联详细信息
+// 卡位于带有恢复+复制哈希+“差异来自 Phase 6”的行下方。
+// Clicking 组内的自动保存会打开一张详细信息卡
+// “恢复”和“提升到里程碑”。
 //
-// Read-only mode (`readOnly={true}`) hides the restore and promote
-// buttons across all rows. Used by GitPanelConflict: mutating actions
-// during an in-flight merge are not legal, but the history list still
-// provides context about what's in the repo. Copy-hash stays available
-// because it is not a mutation.
+// Read-only 模式 (`readOnly={true}`) 隐藏恢复和升级
+// 所有行上的按钮。 Used by GitPanelConflict：变异动作
+// 在飞行中合并期间不合法，但历史列表仍然
+// 提供有关存储库中内容的上下文。 Copy-hash 保持可用
+// 因为它不是突变。
 
 import { useMemo, useState } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
@@ -31,9 +31,9 @@ type TimelineEntry =
   | { kind: 'autosave-group'; commits: GitCommitMeta[] };
 
 /**
- * Group the flat log into timeline entries. Runs of 3+ consecutive
- * autosaves become a single group entry; smaller runs are individual
- * autosave-row entries.
+ * Group 将平面日志记
+ * 录到时间线条目中。 Runs 3 个以上连续自动保存成为单个组条目；较小的运行是单独的自动保存行条目。
+ *
  */
 function groupLog(log: GitCommitMeta[]): TimelineEntry[] {
   const result: TimelineEntry[] = [];
@@ -68,8 +68,8 @@ export function GitPanelHistoryList({ readOnly = false }: { readOnly?: boolean }
   const log = useGitStore((s) => s.log);
 
   const entries = useMemo(() => groupLog(log), [log]);
-  // Note: git.history.loadMore is defined for a future paginated-load UX
-  //       (Phase 4d+); Phase 4c loads a fixed 50-item window.
+  // Note：git.history.loadMore 是为将来的分页加载 UX (Phase 4d+) 定义的； Phase 4c
+  // 加载固定的 50 项窗口。
 
   if (log.length === 0) {
     return (
@@ -81,7 +81,7 @@ export function GitPanelHistoryList({ readOnly = false }: { readOnly?: boolean }
 
   return (
     <div className="relative flex flex-col py-1.5">
-      {/* Timeline rail — a 1px line running down the icon-slot center. */}
+      {/* Timeline 导轨 — 沿着图标槽中心延伸的 1px 线。 */}
       <div
         className="pointer-events-none absolute left-5 top-0 h-full w-px bg-border/60"
         aria-hidden
@@ -101,7 +101,7 @@ export function GitPanelHistoryList({ readOnly = false }: { readOnly?: boolean }
             <HistoryAutosaveRow key={entry.commit.hash} commit={entry.commit} readOnly={readOnly} />
           );
         }
-        // autosave-group
+        // 自动保存组
         return (
           <HistoryAutosaveGroup
             key={`group-${idx}-${entry.commits[0]?.hash ?? idx}`}

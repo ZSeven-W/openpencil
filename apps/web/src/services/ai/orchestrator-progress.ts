@@ -1,14 +1,15 @@
 /**
- * Progress emission utilities for the orchestrator.
+ * Progress
  *
- * Formats orchestration progress as `<step>` tags so the chat panel can
- * render a live pipeline view during design generation.
+ * 协调器的发射实用程序。 Formats 编排进度作为 `<step>`
+ * 标签，以便聊天面板可以在
+ 设计生成期间呈现实时管道视图。
  */
 
 import type { OrchestratorPlan, OrchestrationProgress } from './ai-types';
 
 // ---------------------------------------------------------------------------
-// Progress emission — updates UI via <step> tags
+// Progress 发射 — 通过 <step> 标签更新 UI
 // ---------------------------------------------------------------------------
 
 export function emitProgress(
@@ -21,7 +22,7 @@ export function emitProgress(
 ): void {
   if (!callbacks?.onTextUpdate) return;
 
-  // Always show "Planning layout" as done first
+  // Always 显示“Planning 布局”，如首先完成的那样
   const planningStep =
     '<step title="Planning layout" status="done">Analyzing design structure...</step>';
 

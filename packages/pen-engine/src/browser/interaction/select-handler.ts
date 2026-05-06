@@ -2,8 +2,8 @@ import type { DesignEngine } from '../../core/design-engine.js';
 import { DRAG_THRESHOLD } from '../../core/constants.js';
 
 /**
- * Handles selection, node dragging, and marquee selection.
- * Engine-native: uses engine API instead of Zustand stores.
+ * Handles
+ * 选择、节点拖动和选取框选择。 Engine-native：使用引擎 API 而不是 Zustand 存储。
  */
 export class EngineSelectHandler {
   isDragging = false;

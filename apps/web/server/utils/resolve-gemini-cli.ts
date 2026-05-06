@@ -7,7 +7,7 @@ import { posixUserBinDirs, probeViaLoginShell } from './cli-resolver-helpers';
 
 const isWindows = process.platform === 'win32';
 
-/** Windows npm global installs may create .cmd or .ps1 wrappers — try both */
+/** Windows npm 全局安装可能会创建 .cmd 或 .ps1 包装器 - 两者都尝试一下 */
 function winNpmCandidates(dir: string, name: string): string[] {
   return [join(dir, `${name}.cmd`), join(dir, `${name}.ps1`)];
 }

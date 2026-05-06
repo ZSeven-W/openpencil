@@ -7,7 +7,7 @@ interface PostBody {
   sourceClientId?: string;
 }
 
-/** POST /api/mcp/selection — Receives selection update from renderer. */
+/** POST /api/mcp/selection — Receives 从渲染器选择更新。 */
 export default defineEventHandler(async (event) => {
   const body = await readBody<PostBody>(event);
   if (!body || !Array.isArray(body.selectedIds)) {

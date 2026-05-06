@@ -30,9 +30,8 @@ describe('stripRedundantSectionFills', () => {
   });
 
   it('strips a section fill that matches a common safe-dark tint', () => {
-    // Root has #1a1a2e (deep navy), section has #0A0A0A (near-black safe
-    // dark) — the classic M2.7 failure where the model picks a "safe"
-    // dark for every section root, hiding the intended root background.
+    // Root 有 #1a1a2e（深海军蓝），部分有 #0a0a0a（近黑色安全深色）——经典的 M2.7
+    // 失败，模型为每个部分根选择“安全”深色，隐藏了预期的根背景。
     const section = frame({
       id: 'sec1',
       name: 'Activity Rings Section',
@@ -108,8 +107,7 @@ describe('stripRedundantSectionFills', () => {
   });
 
   it('does not strip a fill that is clearly distinct from root (intentional)', () => {
-    // #FF5733 is nothing like root's #1a1a2e and is not a safe-dark — it
-    // is probably a deliberate accent / hero section. Leave it.
+    // #FF5733 与 root 的 #1a1a2e 完全不同，也不是安全黑暗 — 它可能是故意的口音/英雄部分。 Leave 吧。
     const hero = frame({
       id: 'hero',
       name: 'Hero Section',
@@ -142,9 +140,7 @@ describe('stripRedundantSectionFills', () => {
   });
 
   it('does not touch deeply nested frames inside a section', () => {
-    // Only direct children of the root are considered "section level". A
-    // card nested three levels deep with the same color should be left
-    // alone — it is not a top-level section.
+    // Only 根的直接子级被视为“节级别”。具有相同颜色的嵌套三层深度的卡片应该单独保留 - 它不是顶级部分。
     const deepCard = frame({
       id: 'deep-card',
       role: 'card',
@@ -162,9 +158,9 @@ describe('stripRedundantSectionFills', () => {
       children: [section],
     });
     stripRedundantSectionFills(root);
-    // Section (direct child) is stripped
+    // Section（直接子级）被剥离
     expect((section as PenNode & { fill?: unknown }).fill).toBeUndefined();
-    // Deep card is left alone
+    // Deep 卡被单独留下
     expect((deepCard as PenNode & { fill?: unknown }).fill).toEqual(solidFill('#0A0A0A'));
   });
 
@@ -173,11 +169,11 @@ describe('stripRedundantSectionFills', () => {
       id: 'root',
       fill: solidFill('#1a1a2e'),
       children: [
-        frame({ id: 's1' }), // no fill
+        frame({ id: 's1' }), // 无填充
         frame({
           id: 'card1',
           role: 'card',
-          fill: solidFill('#0A0A0A'), // card protected
+          fill: solidFill('#0A0A0A'), // 卡保护
         }),
       ],
     });
@@ -186,9 +182,7 @@ describe('stripRedundantSectionFills', () => {
   });
 
   it('handles a root frame without a fill (treats only safe-dark sections)', () => {
-    // Root has no fill; we still strip sections that carry a safe-dark
-    // "default" fill, because those are almost certainly the sub-agent
-    // hedging against a missing background spec.
+    // Root 没有填充；我们仍然剥离带有安全深色“默认”填充的部分，因为这些部分几乎肯定是对冲缺失背景规格的子代理。
     const section = frame({
       id: 'sec',
       fill: solidFill('#0A0A0A'),
@@ -202,22 +196,18 @@ describe('stripRedundantSectionFills', () => {
   });
 
   it('is strictly non-recursive: never touches grandchildren even when caller mis-targets a card', () => {
-    // Defensive: if a caller accidentally hands us a card frame instead of
-    // the page root, we must NOT recurse into it. Only the direct children
-    // of the passed node are ever considered — and a card header (no role,
-    // safe-dark fill) that is a DIRECT child of a card is still fair game,
-    // but anything deeper is untouched.
+    // Defensive：如果调用者不小心给了我们一个卡片框架而不是页面根，我们必须 NOT 递归到它。 Only
+    // 所传递节点的直接子节点会被考虑——并且作为卡片的 DIRECT 子节点的卡头（无角色，安全深色填充）仍然是公平的游戏，但任何更深层次的内
+    // 容都不会受到影响。
     const deepInner = frame({
       id: 'deep',
-      // no role, safe-dark — would normally be stripped, but is two levels
-      // down so must survive
+      // 没有角色，安全黑暗——通常会被剥夺，但要低两级，所以必须生存
       fill: solidFill('#0A0A0A'),
     });
     const cardBody = frame({ id: 'body', children: [deepInner] });
     const cardHeader = frame({
       id: 'header',
-      // no role, safe-dark — direct child of the mis-targeted parent, so
-      // will still be stripped (the caller is at fault)
+      // 没有角色，安全黑暗 - 错误定位的父级的直接子级，因此仍然会被剥夺（调用者有错）
       fill: solidFill('#0A0A0A'),
     });
     const card = frame({
@@ -226,21 +216,19 @@ describe('stripRedundantSectionFills', () => {
       fill: solidFill('#141414'),
       children: [cardHeader, cardBody],
     });
-    // Deliberately mis-target the card (not the page root). This must NOT
-    // crash and must NOT recurse into cardBody's grandchildren.
+    // Deliberately 错误定位卡（不是页面根目录）。 This 必须使 NOT 崩溃，并且 NOT 必须递归到 cardBody
+    // 的孙子中。
     stripRedundantSectionFills(card);
-    // Card itself is untouched (we never touch the passed node)
+    // Card 本身未受影响（我们从不触及传递的节点）
     expect((card as PenNode & { fill?: unknown }).fill).toEqual(solidFill('#141414'));
-    // deepInner survives because strip is strictly non-recursive
+    // deepInner 幸存下来是因为 strip 是严格非递归的
     expect((deepInner as PenNode & { fill?: unknown }).fill).toEqual(solidFill('#0A0A0A'));
   });
 
   it('strips stale #FFFFFF section fills on a dark root (legacy alternation residue)', () => {
-    // Regression guard for 2026-04-15: the legacy fixSectionAlternation
-    // painted #FFFFFF / #F8FAFC on unfilled section runs regardless of
-    // page theme. After the alternation skip for dark parents landed,
-    // stale docs (and weak-model hedges) still carry those whites.
-    // stripRedundantSectionFills must now clean them up.
+    // Regression 守卫 2026 年 4 月 15 日：遗留的 fixSectionAlternation 在未填充部分上绘制
+    // #FFFFFF / #F8FAFC 运行，无论页面主题如何。 After 黑人父母登陆的交替跳跃，陈旧的文档（和弱模型树篱）仍然
+    // 携带那些白人。 stripRedundantSectionFills 现在必须清理它们。
     const section1 = frame({
       id: 's1',
       name: 'Hero',
@@ -272,9 +260,8 @@ describe('stripRedundantSectionFills', () => {
   });
 
   it('strips a safe-light hedge even when the root has no fill', () => {
-    // Mirror of the existing "root frame without a fill" dark case: a
-    // bare #FFFFFF on a section root is almost certainly the sub-agent
-    // hedging against a missing background spec, not a deliberate choice.
+    // 现有的“没有填充的根框架”深色案例的 Mirror：节根上的裸#FFFFFF
+    // 几乎肯定是子代理对冲缺失的背景规范，而不是故意的选择。
     const section = frame({
       id: 'sec',
       fill: solidFill('#FAFAFA'),
@@ -288,9 +275,8 @@ describe('stripRedundantSectionFills', () => {
   });
 
   it('reproduces the M2.7 health-tracker case', () => {
-    // Direct repro of the actual failure: root #1a1a2e, six section roots
-    // all hardcoded #0A0A0A, including one real card. The six section
-    // fills get stripped, the card keeps its fill.
+    // Direct 实际故障重现：根#1a1a2e，六个部分根全部硬编码#0a0a0a，包括一张真实卡。 The
+    // 六部分填充被剥离，卡片保留其填充。
     const root = frame({
       id: 'root-frame',
       name: 'Health Dashboard',

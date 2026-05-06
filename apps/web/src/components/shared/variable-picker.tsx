@@ -7,13 +7,13 @@ import { isVariableRef, resolveVariableRef, getDefaultTheme } from '@/variables/
 import type { VariableDefinition } from '@/types/variables';
 
 interface VariablePickerProps {
-  /** Variable type to filter by */
+  /** Variable 过滤依据的类型 */
   type: 'color' | 'number' | 'string';
-  /** Current value — if it starts with '$', it's a variable reference */
+  /** Current 值 — 如果以 '$' 开头，则它是变量引用 */
   currentValue?: string | number;
-  /** Called when a variable is selected — value will be '$variableName' */
+  /** Called 当选择变量时 — 值将为 '$variableName' */
   onBind: (ref: string) => void;
-  /** Called when the variable binding is removed — should set the resolved concrete value */
+  /** Called 当变量绑定被删除时 — 应该设置解析的具体值 */
   onUnbind: (resolvedValue: string | number) => void;
   className?: string;
 }
@@ -34,7 +34,7 @@ export default function VariablePicker({
   const isBound = typeof currentValue === 'string' && isVariableRef(currentValue);
   const boundName = isBound ? (currentValue as string).slice(1) : null;
 
-  // Filter variables by matching type
+  // Filter 变量（按匹配类型）
   const matchingVars = useMemo(() => {
     if (!variables) return [];
     return Object.entries(variables)
@@ -42,7 +42,7 @@ export default function VariablePicker({
       .sort(([a], [b]) => a.localeCompare(b));
   }, [variables, type]);
 
-  // Close on outside click
+  // Close 外部点击
   useEffect(() => {
     if (!open) return;
     const handler = (e: MouseEvent) => {

@@ -1,33 +1,32 @@
 import type { CanvasKit, Path } from 'canvaskit-wasm';
 
 /**
- * Normalize SVG path data for CanvasKit's parser:
- * - Add spaces between command letters and numbers
- * - Handle negative-sign number separators (e.g. "10-5" -> "10 -5")
- * - Normalize comma separators to spaces
- * - Separate concatenated arc flags (e.g. "a2 2 0 012 2" -> "a2 2 0 0 1 2 2")
+ * Normalize
+ * SVG CanvasKit 解析器的路径数据： - Add 命令字母和数字之间的空格 -
+ * Handle 负号数字分隔符（例如“10-5”->“10 -5”） - Normalize
+ * 逗号分隔符到空格 - Separate 连接弧标志（例如“a2 2”） 0 012 2" -> "a2 2 0 0 1 2 2")
+ *
  */
 export function sanitizeSvgPath(d: string): string {
   let result = d
-    // Add space between command letter and following number/sign
+    // Add 命令字母和后面的 number/sign 之间有空格
     .replace(/([MLCQZAHVSmlcqzahvsTt])([0-9.+-])/g, '$1 $2')
-    // Add space between digit and following negative sign (number separator)
+    // Add 数字和后面的负号之间的空格（数字分隔符）
     .replace(/(\d)-/g, '$1 -')
-    // Replace commas with spaces
+    // Replace 逗号加空格
     .replace(/,/g, ' ')
-    // Collapse multiple spaces
+    // Collapse 多个空格
     .replace(/\s+/g, ' ')
     .trim();
 
-  // Separate concatenated arc flags: in SVG arc commands, the large-arc and
-  // sweep flags are single digits (0 or 1) that may be concatenated with each
-  // other and with the following number. e.g. "a2 2 0 012 2" -> "a2 2 0 0 1 2 2"
+  // Separate 连接弧标志：在 SVG arc 命令中，大弧和扫描标志是单个数字（0 或 1），可以相互连接并与以下数字连接。例如“a2 2
+  // 0 012 2”->“a2 2 0 0 1 2 2”
   result = result.replace(
     /([aA])\s*([\d.e+-]+)\s+([\d.e+-]+)\s+([\d.e+-]+)\s+([01])([01])([\d.+-])/g,
     '$1 $2 $3 $4 $5 $6 $7',
   );
-  // Handle the case where all three (rotation + flags) are concatenated without spaces,
-  // e.g. "a4 4 0100-8" where 0100 = rotation=0, large-arc=1, sweep=0, then 0 is start of x
+  // Handle 所有三个（旋转+标志）不带空格连接的情况，例如"a4 4 0100-8" 其中 0100 = 旋转 = 0，大弧 = 1，扫描 = 0，则 0 是 x
+  // 的开始
   result = result.replace(
     /([aA])\s*([\d.e+-]+)\s+([\d.e+-]+)\s+(\d)([01])([01])([\d.+-])/g,
     '$1 $2 $3 $4 $5 $6 $7',
@@ -36,14 +35,14 @@ export function sanitizeSvgPath(d: string): string {
   return result;
 }
 
-/** Returns true if the path string contains NaN or Infinity values. */
+/** 如果路径字符串包含 NaN 或 Infinity 值，则 Returns 为 true。 */
 export function hasInvalidNumbers(d: string): boolean {
   return /NaN|Infinity/i.test(d);
 }
 
 /**
- * Convert an SVG arc segment to cubic bezier curves and add them to the path.
- * Based on the W3C SVG implementation note for arc-to-cubic conversion.
+ * Convert 将
+ * SVG 圆弧段转换为三次贝塞尔曲线并将其添加到路径中。 Based 关于 W3C SVG 弧到立方转换的实现说明。
  */
 function arcToCubics(
   path: Path,
@@ -56,7 +55,7 @@ function arcToCubics(
   x2: number,
   y2: number,
 ): void {
-  // Degenerate: start == end
+  // Degenerate：开始==结束
   if (x1 === x2 && y1 === y2) return;
 
   let rx = Math.abs(rxIn);
@@ -64,11 +63,11 @@ function arcToCubics(
 
   const dx = (x1 - x2) / 2;
   const dy = (y1 - y2) / 2;
-  // Simplified: ignore rotation (most icons use rotation=0)
+  // Simplified：忽略旋转（大多数图标使用 rotation=0）
   const x1p = dx;
   const y1p = dy;
 
-  // Correct radii
+  // Correct 半径
   let lambda = (x1p * x1p) / (rx * rx) + (y1p * y1p) / (ry * ry);
   if (lambda > 1) {
     const s = Math.sqrt(lambda);
@@ -108,7 +107,7 @@ function arcToCubics(
   if (!sweep && dTheta > 0) dTheta -= 2 * Math.PI;
   if (sweep && dTheta < 0) dTheta += 2 * Math.PI;
 
-  // Split into segments of at most PI/2
+  // Split 最多分成 PI/2 的段
   const segments = Math.ceil(Math.abs(dTheta) / (Math.PI / 2));
   const segAngle = dTheta / segments;
 
@@ -138,23 +137,23 @@ function arcToCubics(
 }
 
 /**
- * Try building a CanvasKit path manually by tokenizing the SVG path string.
- * Handles edge cases that MakeFromSVGString may reject (e.g. missing spaces,
- * numbers with leading dots like ".5", relative commands, arcs).
+ * Try 通过标记 SVG
+ * 路径字符串来手动构建 CanvasKit 路径。 Handles 可能会拒绝 Handles
+ * 的边缘情况（例如，缺少空格、带有“.5”等前导点的数字、相对命令、弧线）。
  */
 export function tryManualPathParse(ck: CanvasKit, d: string): Path | null {
   try {
     const path = new ck.Path();
-    // Replace NaN/Infinity with 0 so commands keep their parameter count.
+    // Replace NaN/Infinity 为 0，因此命令保留其参数计数。
     const cleaned = d.replace(/-?NaN/g, '0').replace(/-?Infinity/g, '0');
-    // Tokenize: split on commands and extract numbers
+    // Tokenize：分割命令并提取数字
     const tokens = cleaned.match(/[MLCQZAHVSmlcqzahvs]|[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?/g);
     if (!tokens || tokens.length === 0) return null;
 
     let i = 0;
     let lastCmd = '';
     let cx = 0,
-      cy = 0; // current point
+      cy = 0; // 当前点
 
     while (i < tokens.length) {
       let cmd = tokens[i];
@@ -162,7 +161,7 @@ export function tryManualPathParse(ck: CanvasKit, d: string): Path | null {
         lastCmd = cmd;
         i++;
       } else if (lastCmd) {
-        // Implicit repeat of last command (M becomes L after first pair)
+        // Implicit 重复上一个命令（第一对后 m 变为 l）
         cmd = lastCmd === 'M' ? 'L' : lastCmd === 'm' ? 'l' : lastCmd;
       } else {
         i++;
@@ -311,7 +310,7 @@ export function tryManualPathParse(ck: CanvasKit, d: string): Path | null {
           break;
         case 'A':
         case 'a': {
-          // Arc: rx, ry, rotation, largeArc, sweep, x, y
+          // Arc：rx、ry、旋转、largeArc、扫描、x、y
           const p = nums(7);
           if (p.length === 7) {
             const [rx, ry, , largeArc, sweep, ex, ey] = p;
@@ -332,7 +331,7 @@ export function tryManualPathParse(ck: CanvasKit, d: string): Path | null {
       }
     }
 
-    // Check if path has any geometry
+    // Check 如果路径有任何几何图形
     const bounds = path.getBounds();
     if (bounds[2] - bounds[0] < 0.001 && bounds[3] - bounds[1] < 0.001) {
       path.delete();

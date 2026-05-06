@@ -31,8 +31,8 @@ export function toolToCursor(tool: ToolType | string): string {
 }
 
 /**
- * Shared context that every interaction handler receives.
- * Provides access to the engine, coordinate conversion, and the canvas element.
+ * 每个交互处理程序接收的
+ * Shared 上下文。 Provides 访问引擎、坐标转换和画布元素。
  */
 export interface InteractionContext {
   getEngine(): SkiaEngine | null;

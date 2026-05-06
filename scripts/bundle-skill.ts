@@ -1,9 +1,10 @@
 /**
- * Pre-build script: reads ../openpencil-skill/ and generates a JSON bundle
- * that gets embedded into the CLI binary by esbuild.
+ * Pre-build
+ * 脚本：读取 ../openpencil-skill/ 并生成 JSON 包，该包由 esbuild 嵌入到 CLI 二进制文件中。
  *
- * Usage: bun scripts/bundle-skill.ts
- * Output: apps/cli/src/commands/skill-bundle.json
+ * Usage：小圆面包 scripts/bundle-skill.ts
+ * Output：apps/
+ cli/src/commands/skill-bundle.json
  */
 
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
@@ -12,13 +13,13 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-// Allow override via env (useful for CI where the skill repo is cloned separately)
+// 通过 env 覆盖 Allow（对于单独克隆技能存储库的 CI 很有用）
 const SKILL_ROOT = process.env.SKILL_ROOT
   ? resolve(process.env.SKILL_ROOT)
   : resolve(__dirname, '../../openpencil-skill');
 const OUT = resolve(__dirname, '../apps/cli/src/commands/skill-bundle.json');
 
-// Files to embed (relative to openpencil-skill/)
+// Files 嵌入（相对于 openpencil-skill/）
 const FILES = [
   'skills/openpencil-design/SKILL.md',
   '.claude-plugin/plugin.json',

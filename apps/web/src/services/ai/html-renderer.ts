@@ -1,27 +1,28 @@
 /**
- * HTML Renderer (Stage 2 of visual reference pipeline).
+ * HTML Rendere
  *
- * Renders generated HTML/CSS to a screenshot using a hidden iframe + html2canvas.
- * Runs entirely client-side — no external browser process needed.
+ * r（可视化参考管道的 Stage 2）。 Renders 使用隐藏的 iframe +
+ * html2canvas
+ 生成 HTML/CSS 的屏幕截图。 Runs 完全是客户端 — 不需要外部浏览器进程。
  */
 
 import html2canvas from 'html2canvas';
 
 /**
- * Render an HTML string to a base64 PNG screenshot.
- * Creates a hidden iframe, writes the HTML, and captures with html2canvas.
+ * Render 将 HTML 字符串转换为 Base64 PNG 屏幕截图。
+ * Creates 一个隐藏的 iframe，写入 HTML，并使用 html2canvas 捕获。
  *
- * @param html - Complete HTML document string
- * @param width - Viewport width in pixels
- * @param height - Viewport height in pixels (0 = auto based on content)
- * @returns Base64 PNG string (without data: URL prefix)
+ * @param html - Complete HTML 文档字符串
+ * @param width - Viewport 宽度（以像素为单位）
+ * @param height - Viewport 高度（以像素为单位）（0 = 基于内容自动）
+ * @returns Base64 PNG 字符串（无数据：URL 前缀）
  */
 export async function renderHtmlToScreenshot(
   html: string,
   width: number,
   height: number,
 ): Promise<string> {
-  // Safety check — only runs in browser
+  // Safety 检查 — 仅在浏览器中运行
   if (typeof document === 'undefined') {
     throw new Error('renderHtmlToScreenshot requires a browser environment');
   }
@@ -29,7 +30,7 @@ export async function renderHtmlToScreenshot(
   const iframe = document.createElement('iframe');
 
   try {
-    // Position off-screen
+    // Position 离屏
     iframe.style.cssText = `
       position: fixed;
       left: -9999px;
@@ -47,18 +48,18 @@ export async function renderHtmlToScreenshot(
       throw new Error('Could not access iframe document');
     }
 
-    // Write the HTML into the iframe (same-origin blob)
+    // Write 将 HTML 放入 iframe（同源 blob）
     iframeDoc.open();
     iframeDoc.write(html);
     iframeDoc.close();
 
-    // Wait for fonts and rendering to settle
+    // Wait 用于字体和渲染解决
     await waitForRender(iframeDoc);
 
-    // Determine actual content height if height was auto
+    // Determine 如果高度为自动，则实际内容高度
     const captureHeight = height > 0 ? height : Math.min(iframeDoc.body.scrollHeight || 4000, 6000);
 
-    // Resize iframe to actual content height
+    // Resize iframe 到实际内容高度
     if (height <= 0) {
       iframe.style.height = `${captureHeight}px`;
       // Wait one more frame for resize to apply

@@ -40,15 +40,14 @@ import { convertText } from './text-converter.js';
 import { convertVector } from './path-converter.js';
 import type { PenNode } from '@zseven-w/pen-types';
 
-/** Convert all children of a parent TreeNode. */
+/** Convert 父项 TreeNode 的所有子项。 */
 export function convertChildren(parent: TreeNode, ctx: ConversionContext): PenNode[] {
   const parentStackMode = ctx.layoutMode === 'preserve' ? undefined : parent.figma.stackMode;
   const result: PenNode[] = [];
 
   for (const child of parent.children) {
     if (child.figma.visible === false) continue;
-    // Skip fully transparent nodes — their children are also invisible and
-    // the Skia renderer does not propagate parent opacity to descendants.
+    // Skip 完全透明节点 - 它们的子节点也是不可见的，并且 Skia 渲染器不会将父节点的不透明度传播到后代。
     if (child.figma.opacity !== undefined && child.figma.opacity <= 0) continue;
     const node = convertNode(child, parentStackMode, ctx);
     if (node) result.push(node);
@@ -57,12 +56,13 @@ export function convertChildren(parent: TreeNode, ctx: ConversionContext): PenNo
   return result;
 }
 
-// Inject convertChildren into frame-converter to avoid circular imports
+// Inject convertChildren 进入帧转换器以避免循环导入
 setConvertChildren(convertChildren);
 
 /**
- * Main dispatcher: convert a Figma TreeNode to a PenNode.
- * Returns null for unsupported/skipped node types.
+ * Main 调度程序：将
+ * Figma TreeNode 转换为 PenNode。 Returns null for
+ unsupported/skipped node types.
  */
 export function convertNode(
   treeNode: TreeNode,

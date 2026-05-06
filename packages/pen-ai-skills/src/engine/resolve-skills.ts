@@ -14,13 +14,13 @@ export function resolveSkills(
   const dynamicContent = options?.dynamicContent;
   const totalBudget = options?.budgetOverride ?? DEFAULT_BUDGETS[phase];
 
-  // Step 1: Phase filter
+  // Step 1：Phase 过滤器
   const phaseSkills = getSkillsByPhase(phase);
 
-  // Step 2: Intent + flag match
+  // Step 2：Intent + 标志匹配
   const matched = filterByIntent(phaseSkills, userMessage, flags);
 
-  // Memory loading rules per phase (moved before Step 3 so history is available for injection)
+  // Memory 每阶段加载规则（在 Step 3 之前移动，因此历史记录可用于注入）
   const memory: AgentContext['memory'] = {};
   if (options?.memory) {
     const { documentContext, generationHistory } = options.memory;
@@ -45,7 +45,7 @@ export function resolveSkills(
     }
   }
 
-  // Build merged dynamic content: caller-provided + recentHistory for anti-slop
+  // Build 合并动态内容：调用者提供 + recentHistory 用于防溢出
   let mergedDynamic = dynamicContent;
   if (phase === 'generation') {
     let historyStr = 'No recent history.';

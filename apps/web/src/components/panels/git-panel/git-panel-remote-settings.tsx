@@ -1,18 +1,18 @@
 // apps/web/src/components/panels/git-panel/git-panel-remote-settings.tsx
 //
-// Phase 6c: remote settings subview of the overflow menu. Scope (strict v1):
-//   - show the current `origin` URL
-//   - edit / save / clear the URL (clear requires an inline confirm step)
-//   - fetch-on-demand button
-//   - show ahead/behind counts
-//   - show the stored-auth mode (token / ssh / none) for the current host
-//   - clear the stored auth for the current host
-//   - surface SSH transport gating text when the iso engine meets an SSH URL
+// Phase 6c：溢出菜单的远程设置子视图。 Scope（严格 v1）：
+//   - 显示当前 `origin` URL
+//   - 编辑/保存/清除 URL（清除需要内联确认步骤）
+//   - 按需获取按钮
+//   - 显示 ahead/behind 计数
+//   - 显示当前主机的存储身份验证模式（令牌/ssh/无）
+//   - 清除当前主机存储的身份验证
+//   - 当 iso 引擎遇到 SSH URL 时，表面 SSH 传输选通文本
 //
-// Everything repo-level is pulled from the store; local state is limited to
-// the URL draft, in-flight flags, and the clear-origin confirm switch. The
-// subview is mounted inside the header overflow Popover and gets an
-// `onBack` prop to return to the menu.
+// Everything repo-level 从商店中提取；本地状态仅限于
+// URL 草稿、飞行中标志和清除原点确认开关。 The
+// 子视图安装在标头溢出 Popover 内并获取
+// `onBack` 属性返回菜单。
 
 import { ArrowLeft, Loader2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
@@ -55,22 +55,20 @@ export function GitPanelRemoteSettings({ onBack }: GitPanelRemoteSettingsProps) 
   const [inlineError, setInlineError] = useState<string | null>(null);
   const [storedAuth, setStoredAuth] = useState<StoredAuthMode>('unknown');
 
-  // Refresh the cached `repo.remote` on mount so a stale record (e.g. a
-  // terminal-driven git remote set-url) doesn't leak into the UI.
+  // Refresh 挂载时缓存的 `repo.remote`，因此陈旧记录（例如终端驱动的 git 远程 set-url）不会泄漏到 UI
+  // 中。
   useEffect(() => {
     void refreshRemote();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Keep the draft in sync with the canonical URL whenever it changes
-  // under us (store action, refreshRemote, external edit). The user only
-  // loses their typed draft if the authoritative URL itself changes.
+  // Keep 草稿与规范 URL 同步，只要它在我们的控制下发生变化（存储操作、refreshRemote、外部编辑）。仅当权威
+  // URL 本身发生更改时，The 用户才会丢失其键入的草稿。
   useEffect(() => {
     setUrlDraft(currentUrl ?? '');
   }, [currentUrl]);
 
-  // Load the stored-auth mode for the current host — shown as an at-a-glance
-  // badge and gates the "Clear saved auth" button.
+  // Load 当前主机的存储身份验证模式 — 显示为一目了然的徽章，并控制“Clear 已保存身份验证”按钮。
   useEffect(() => {
     let cancelled = false;
     if (!host) {
@@ -102,8 +100,7 @@ export function GitPanelRemoteSettings({ onBack }: GitPanelRemoteSettingsProps) 
     setInlineError(null);
     setBusyAction('save');
     try {
-      // Empty string normalises to null on the store side, but we never
-      // flow an empty save here — clear has its own explicit confirm path.
+      // Empty 字符串在存储端规范化为 null，但我们永远不会在这里进行空保存 — clear 有其自己的显式确认路径。
       await setRemoteUrl(trimmed);
     } catch (err) {
       setInlineError(extractMessage(err));

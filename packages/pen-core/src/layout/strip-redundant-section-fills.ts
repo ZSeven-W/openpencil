@@ -1,28 +1,28 @@
 import type { PenNode, PenFill, SolidFill } from '@zseven-w/pen-types';
 
 /**
- * Strip redundant "section-level" fills from the direct children of a
- * page root frame.
+ * Strip 多余的“节级
+ * ”从页面根框架的直接子级填充。 Weaker 子代理（MiniMax M2、GLM、Kimi）通常通过在它们生成的每个节根上编写硬编码
  *
- * Weaker sub-agents (MiniMax M2, GLM, Kimi) often hedge by writing a
- * hardcoded dark hex (`#0A0A0A`, `#111`, etc.) on every section root they
- * produce. That hex then completely covers the page root's intended
- * background color, breaking theme switching and creating visible seams
- * between sections. Cards, buttons, chips and other legitimately filled
- * components are NOT affected — only "section container" frames (direct
- * children of the root that either have no role or have a structural
- * role).
+ * 的暗十六进制（`#0A0A0A`
+ * 、`#111`
+ * 等）来进行对冲。然后 That 十六进制完全覆盖页面根部的预期背景颜色，破坏主题切换并在各部分之间创建可见的接缝。
+ * Cards、按钮、芯片和其他合法填充的组件都会受到 NOT 的影响 - 仅“部分容器”框架（根的直接子级，没有角色或具有结构角色）。 ⚠️
+ * SCOPE CONTRACT — 调用者 MUST 只传递真实的页面根框架。 Calling
+ * 在任意嵌套框架（卡片、组件、子代理自己的根，即页面根）上使用 Calling 会错误地将该框架的内部子项视为“部分”，并且可能会删除预期的
+ * 嵌套填充（例如，卡片自己的深色标题）。 The 函数本身是严格非递归的 - 它只触及传递节点的直接子节点 -
+ * 因此错误目标的调用是有限的，但仍然是错误的。 Returns `true` 当任何填充被剥离时，因此调用者可以发布商店更新。
  *
- * ⚠️ SCOPE CONTRACT — callers MUST only pass the true page root frame.
- * Calling this on an arbitrary nested frame (a card, a component, a
- * sub-agent's own root that is NOT the page root) will incorrectly treat
- * that frame's inner children as "sections" and may erase intended
- * nested fills (e.g. a card's own dark header). The function itself is
- * strictly non-recursive — it only touches direct children of the passed
- * node — so mis-targeted calls are bounded, but still wrong.
  *
- * Returns `true` when any fill was stripped, so the caller can publish a
- * store update.
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
  */
 export function stripRedundantSectionFills(rootFrame: PenNode): boolean {
   if (!('children' in rootFrame) || !Array.isArray(rootFrame.children)) return false;
@@ -47,8 +47,8 @@ export function stripRedundantSectionFills(rootFrame: PenNode): boolean {
 }
 
 /**
- * Roles that identify visually distinct components and must never have
- * their fill stripped.
+ * Roles 标识视觉上不
+ * 同的组件，并且绝不能剥离其填充。
  */
 const PROTECTED_ROLES = new Set([
   'card',
@@ -74,9 +74,9 @@ const PROTECTED_ROLES = new Set([
 ]);
 
 /**
- * Roles that are considered structural — just a container grouping other
- * nodes. These are candidates for fill stripping when they echo the root
- * background or hedge with a safe-dark fill.
+ * Roles 被认为是结构
+ * 性的——只是一个将其他节点分组的容器。当 These 与根部背景或树篱相呼应时，它们是填充剥离的候选对象。
+ *
  */
 const STRUCTURAL_ROLES = new Set([
   'section',
@@ -96,19 +96,18 @@ const STRUCTURAL_ROLES = new Set([
 
 function isSectionLevelFrame(node: PenNode): boolean {
   const role = (node as PenNode & { role?: string }).role;
-  if (!role) return true; // unrolled section root
+  if (!role) return true; // 展开的节根
   if (PROTECTED_ROLES.has(role)) return false;
   if (STRUCTURAL_ROLES.has(role)) return true;
-  // Unknown role: be conservative, treat as protected so we don't clobber
-  // future role additions.
+  // Unknown 角色：保守一点，视为受保护，这样我们就不会破坏未来的角色添加。
   return false;
 }
 
 /**
- * Hex tints that sub-agents reach for when they want a "safe dark"
- * background without knowing the real design background color. Any of
- * these on a section container is almost certainly a hedge, not an
- * intentional visual choice.
+ * Hex 是子代理在不知道
+ * 真实设计背景颜色的情况下想要“安全深色”背景时所采用的色调。 Any 在一个部分容器上的这些几乎可以肯定是一种对冲，而不是有意的
+ * 视觉选择。
+ *
  */
 const SAFE_DARK_HEXES = new Set([
   '#000000',
@@ -127,17 +126,17 @@ const SAFE_DARK_HEXES = new Set([
 ]);
 
 /**
- * Light-mode counterparts of SAFE_DARK_HEXES. Two sources produce these
- * on section roots:
- *   1. Weaker sub-agents that hedge with pure white / near-white instead
- *      of the role-correct transparent fill.
- *   2. The legacy `fixSectionAlternation` post-pass that painted an
- *      #FFFFFF / #F8FAFC ladder on every run of ≥3 unfilled sections.
- *      On dark pages that ladder leaves visible white strips; if a doc
- *      with those stale fills is re-opened or re-rendered after the
- *      alternation skip landed, the fills are still there and the skip
- *      alone won't remove them.
- * Treat these the same as safe-dark hedges: strip on any section root.
+ * Light 模式与
+ * SAFE_DARK_HEXES 对应。 Two 来源在部分根源上产生这些： 1. Weaker
+ * 子代理，用纯白色/近白色代替正确透
+ * 明填充的作用。 2. The 传统 `fixSectionAlternation` 后通道在每次运行 ≥3 个未填充部分时绘制
+ * #FFFFFF / #F8FAFC 梯子。 On
+ * 深色页面，梯子留下可见的白色条纹；如果在交替跳过着陆后重新打开或重新渲染具有这些过时填充的文档，则填充仍然存在，并且仅跳过不会
+ * 删除它们。 Treat 这些与安全黑暗树篱相同：剥去任何部分的根部。
+ *
+ *
+ *
+ *
  */
 const SAFE_LIGHT_HEXES = new Set([
   '#ffffff',
@@ -165,7 +164,7 @@ function shouldStripFill(childFill: string, rootFill: string | null): boolean {
 
 function normalizeHex(color: string): string {
   let c = color.trim().toLowerCase();
-  // Strip alpha if present (#rrggbbaa → #rrggbb)
+  // Strip alpha 如果存在 (#rrggbbaa → #rrggbb)
   if (c.length === 9 && c.startsWith('#')) c = c.slice(0, 7);
   return c;
 }

@@ -1,12 +1,10 @@
-# syntax=docker/dockerfile:1
-# ── Stage 1: Build web app ──
+# 语法=docker/dockerfile:1 ──
+# Stage 1: Build Web 应用程序 ──
 FROM oven/bun:1 AS builder
 
-# Install Zig. agent-native postinstall prefers downloading a prebuilt .node
-# matching the submodule commit from the ZSeven-W/agent release, but falls
-# back to `zig build napi` when no matching asset exists (e.g. building for
-# an arch we don't publish yet). Pin 0.15.2 because the Zig source uses the
-# unmanaged ArrayList / std.process.getEnvVarOwned shape introduced in 0.15.
+# Install Zig。 agent-native postinstall 更喜欢下载与 ZSeven-W/agent 版本的子模块提交匹配的预构建
+# .node，但当不存在匹配资产时会回退到 `zig build napi`（例如，为我们尚未发布的拱门构建）。 Pin 0.15.2，因为
+# Zig 源使用 0.15 中引入的非托管 ArrayList / std.process.getEnvVarOwned 形状。
 RUN apt-get update && apt-get install -y --no-install-recommends curl xz-utils ca-certificates \
     && ARCH="$(uname -m)" \
     && case "$ARCH" in \
@@ -22,15 +20,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends curl xz-utils c
 WORKDIR /app
 COPY package.json bun.lock ./
 COPY --parents packages/*/package.json apps/*/package.json ./
-# agent-native is a git submodule with a nested workspace package (napi/)
-# and Zig sources needed by the postinstall hook — copy it whole.
+# agent-native 是一个 git 子模块，带有嵌套工作区包 (napi/) 和 postinstall 挂钩所需的 Zig 源 -
+# 将其整个复制。
 COPY packages/agent-native ./packages/agent-native
 RUN bun install --frozen-lockfile
 COPY . .
 ENV NODE_OPTIONS="--max-old-space-size=4096"
 RUN bun --bun run build
 
-# ── Stage 2: Base (web only, no CLI) ──
+# ── Stage 2：Base（仅限网页，无 CLI）──
 FROM oven/bun:1-slim AS base
 
 WORKDIR /app
@@ -43,7 +41,7 @@ ENV NITRO_PORT=3000
 EXPOSE 3000
 CMD ["bun", "run", "./out/web/server/index.mjs"]
 
-# ── CLI variants ──
+# ── CLI 变种 ──
 
 FROM oven/bun:1 AS with-claude
 WORKDIR /app
@@ -90,7 +88,7 @@ ENV NODE_ENV=production NITRO_HOST=0.0.0.0 NITRO_PORT=3000
 EXPOSE 3000
 CMD ["bun", "run", "./out/web/server/index.mjs"]
 
-# ── Full: all CLI tools ──
+# ── Full：所有 CLI 工具 ──
 FROM oven/bun:1 AS full
 WORKDIR /app
 COPY --from=builder /app/out/web ./out/web

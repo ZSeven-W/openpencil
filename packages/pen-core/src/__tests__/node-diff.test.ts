@@ -73,10 +73,10 @@ describe('diffDocuments', () => {
     const f1 = frame('f1', [inner]);
     const f2 = frame('f2', []);
     const before = doc([f1, f2]);
-    // After: inner moved into f2
+    // After：内部移至 f2
     const after = doc([frame('f1', []), frame('f2', [rect('inner')])]);
     const patches = diffDocuments(before, after);
-    // Expect at least one move op for inner (and no modify since fields unchanged)
+    // Expect 至少有一个内部移动操作（并且由于字段未更改而没有修改）
     const moves = patches.filter((p) => p.op === 'move');
     expect(moves).toHaveLength(1);
     expect(moves[0].nodeId).toBe('inner');
@@ -123,7 +123,7 @@ describe('diffDocuments', () => {
     const after = doc([rect('b'), rect('a'), rect('c')]);
     const patches = diffDocuments(before, after);
     const moves = patches.filter((p) => p.op === 'move');
-    // a moves from index 0 to 1, b moves from index 1 to 0, c stays
+    // a 从索引 0 移动到 1，b 从索引 1 移动到 0，c 保持不变
     expect(moves.map((m) => m.nodeId).sort()).toEqual(['a', 'b']);
   });
 

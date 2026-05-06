@@ -70,7 +70,7 @@ export default function SkiaCanvas() {
     [],
   );
 
-  // Initialize CanvasKit + engine
+  // Initialize CanvasKit + 引擎
   useEffect(() => {
     let disposed = false;
 
@@ -87,7 +87,7 @@ export default function SkiaCanvas() {
         engineRef.current = engine;
         setSkiaEngineRef(engine);
 
-        // Initial sync
+        // Initial 同步
         engine.syncFromDocument();
         requestAnimationFrame(() => engine.zoomToFitContent());
       } catch (err) {
@@ -106,7 +106,7 @@ export default function SkiaCanvas() {
     };
   }, []);
 
-  // Resize observer
+  // Resize 观察者
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
@@ -122,7 +122,7 @@ export default function SkiaCanvas() {
     return () => observer.disconnect();
   }, []);
 
-  // Document sync: re-render when document changes
+  // Documentsync：文档更改时重新渲染
   useEffect(() => {
     const scheduler = createDocumentSyncScheduler(() => engineRef.current);
     const unsub = useDocumentStore.subscribe(() => {
@@ -134,7 +134,7 @@ export default function SkiaCanvas() {
     };
   }, []);
 
-  // Page sync: re-render when active page changes
+  // Page 同步：活动页面更改时重新渲染
   useEffect(() => {
     let prevPageId = useCanvasStore.getState().activePageId;
     const unsub = useCanvasStore.subscribe((state) => {
@@ -146,7 +146,7 @@ export default function SkiaCanvas() {
     return unsub;
   }, []);
 
-  // Selection sync: re-render when selection changes
+  // Selection 同步：选择更改时重新渲染
   useEffect(() => {
     let prevIds = useCanvasStore.getState().selection.selectedIds;
     const unsub = useCanvasStore.subscribe((state) => {
@@ -158,7 +158,7 @@ export default function SkiaCanvas() {
     return unsub;
   }, []);
 
-  // Wheel: zoom + pan
+  // Wheel：缩放+平移
   useEffect(() => {
     const canvasEl = canvasRef.current;
     if (!canvasEl) return;
@@ -190,7 +190,7 @@ export default function SkiaCanvas() {
     return () => canvasEl.removeEventListener('wheel', handleWheel);
   }, []);
 
-  // Mouse/keyboard interactions (select, move, resize, draw, hover, etc.)
+  // Mouse/keyboard 交互（选择、移动、调整大小、绘制、悬停等）
   useEffect(() => {
     const canvasEl = canvasRef.current;
     if (!canvasEl) return;

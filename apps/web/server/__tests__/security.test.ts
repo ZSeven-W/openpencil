@@ -3,7 +3,7 @@ import { extractCodexConfigEnvKeys, filterCodexEnv } from '../utils/codex-client
 import { SENSITIVE_LOG_PATTERN, ALLOWED_MEDIA_TYPES, resolveMediaExtension } from '../api/ai/chat';
 
 // ---------------------------------------------------------------------------
-// 1. Codex client env allowlist
+// 1. Codex 客户端环境白名单
 // ---------------------------------------------------------------------------
 describe('codex client env allowlist', () => {
   it('should strip dangerous env vars', () => {
@@ -97,7 +97,7 @@ env_key = "PACKYCODE"
 });
 
 // ---------------------------------------------------------------------------
-// 2. Debug tail sanitization
+// 2. Debug 尾部消毒
 // ---------------------------------------------------------------------------
 describe('debug tail sanitization', () => {
   it('should match ANTHROPIC_API_KEY leak', () => {
@@ -124,7 +124,7 @@ describe('debug tail sanitization', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 3. Media type allowlist
+// 3. Media 类型白名单
 // ---------------------------------------------------------------------------
 describe('media type allowlist', () => {
   it('should allow standard image types', () => {

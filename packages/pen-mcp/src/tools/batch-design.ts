@@ -28,15 +28,15 @@ interface OpResult {
 }
 
 /**
- * Parse and execute the batch_design operations DSL.
+ * Parse 并执行
  *
- * Supported operations (one per line):
- *   binding=I(parent, { ...nodeData })      — Insert
- *   binding=C(nodeId, parent, { ...data })   — Copy
- *   U(path, { ...updates })                 — Update
- *   binding=R(path, { ...nodeData })         — Replace
- *   M(nodeId, parent, index?)               — Move
- *   D(nodeId)                               — Delete
+ * batch_design 操作 DSL。 Supported 操作（每行一个）：
+ * 绑定=I(parent,
+ * { ...nodeData }) — Insert
+ * 绑定=C(nodeId, parent, { ...data }) — Copy U(path,
+ * { ...updates }) — Update 绑定=R(path, {
+ * ...nodeData }) — Replace M(nodeId, parent,
+ * index?) — Move D(nodeId) — Delete
  */
 export async function handleBatchDesign(params: BatchDesignParams): Promise<{
   results: OpResult[];
@@ -58,8 +58,7 @@ export async function handleBatchDesign(params: BatchDesignParams): Promise<{
     try {
       await executeLine(line, doc, bindings, results, pageId);
     } catch (err) {
-      // Best-effort: don't abort the entire batch on a single bad operation.
-      // Collect errors so the agent can see what failed and retry selectively.
+      // Best-effort：不要因单个错误操作而中止整个批次。 Collect 错误，以便代理可以查看失败的内容并有选择地重试。
       const preview = line.length > 200 ? `${line.slice(0, 200)}...` : line;
       errors.push({
         line: preview,
@@ -541,9 +540,9 @@ function parseJsonArg(str: string): Record<string, unknown> {
     // Replace single-quoted string delimiters with double quotes (not quotes inside strings)
     normalized = replaceSingleQuoteDelimiters(normalized);
     // Remove empty keys like `, ": 50,` (agent truncation artifact) —
-    // skip the property entirely so the rest of the object still parses.
+    // 完全跳过该属性，以便对象的其余部分仍然可以解析。
     normalized = normalized.replace(/,\s*""\s*:\s*[^,}\]]+/g, '');
-    // Remove trailing commas before } or ] (common agent mistake)
+    // Remove } 或 ] 之前的尾随逗号（常见代理错误）
     normalized = normalized.replace(/,(\s*[}\]])/g, '$1');
     try {
       parsed = JSON.parse(normalized);

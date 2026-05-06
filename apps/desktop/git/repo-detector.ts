@@ -2,38 +2,38 @@
 //
 // Discover whether a .op file lives inside a git repository, and if so,
 // in which mode (single-file or folder). Returns a discriminated union
-// the engine can match against without follow-up filesystem checks.
+// 引擎无需后续文件系统检查即可进行匹配。
 
 import { dirname, basename, resolve } from 'node:path';
 import { stat } from 'node:fs/promises';
 
 /**
- * Result of a successful detection. The shape is the same for both modes
- * so the engine can pass it directly to `openRepo` regardless of mode.
+ * Result of a
+ * successful detection.两种模式的 The 形状相同，因此无论模式如何，引擎都可以将其直接传递给 `openRepo`。
  */
 export interface RepoDetectionFound {
   mode: 'single-file' | 'folder';
   /** worktree root (parent of the .op file in single-file mode; repo root in folder mode) */
   rootPath: string;
-  /** absolute path to the gitdir */
+  /** gitdir 的绝对路径 */
   gitdir: string;
 }
 
 export type RepoDetection = RepoDetectionFound | { mode: 'none' };
 
 /**
- * Walk up from the given .op file looking for a tracked repository.
+ * Walk up from
  *
- * Order of checks (single-file wins per spec):
- *   1. <dirname(filePath)>/.op-history/<basename(filePath)>.git/HEAD exists
- *      → single-file mode
- *   2. Walk up parent dirs looking for any /.git/HEAD → folder mode
- *   3. Otherwise → none
+ * the given .op file looking for a tracked repository.检查
+ * Order（每个规范单文
+ * 件获胜）： 1. <dirname(filePath)>/.op-history/<ba
+ * sename(filePath)>.git/HEAD 存在 → 单文件模式 2. Walk 向上父目录查找任何 /.git/HEAD →
+ * 文件夹模式 3. Otherwise
  *
- * The function never throws on missing files; only on filesystem errors that
- * indicate something deeper is wrong (permissions, broken symlinks). Those
- * propagate as standard Node errors and are NOT wrapped in GitError — the
- * engine layer is responsible for translation.
+ * → 无 The 函数永远不会抛出丢失的文件；仅针对表明更深层次错误（权限、损坏的符号链接）的文件系统错误。 Those
+ * 作为标准 Node 错误传播，并且
+ * NOT 包装在
+ * GitError 中 - 引擎层负责翻译。
  */
 export async function detectRepo(filePath: string): Promise<RepoDetection> {
   const absFile = resolve(filePath);

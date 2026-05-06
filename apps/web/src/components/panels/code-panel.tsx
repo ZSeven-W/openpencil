@@ -107,11 +107,10 @@ function CodePanelInner() {
   const children = useDocumentStore((s) => getActivePageChildren(s.document, activePageId));
   const variables = useDocumentStore((s) => s.document?.variables);
   const model = useAIStore((s) => s.model);
-  // For builtin models, force provider to 'builtin' — modelGroups may report
-  // 'anthropic'/'openai' based on the upstream API type, but streamChat needs
-  // 'builtin' to route through streamViaBuiltin on the server. Mirrors
-  // ai-chat-handlers.ts behavior so the code panel uses the same model/provider
-  // as the chat panel.
+  // For 内置模型，强制提供程序为“内置” - modelGroups 可能会根据上游 API
+  // 类型报告“anthropic”/“openai”，但 streamChat 需要“内置”才能通过服务器上的 streamViaBuiltin
+  // 进行路由。 Mirrors ai-chat-handlers.ts 行为，因此代码面板使用与聊天面板相同的
+  // model/provider。
   const provider = useAIStore((s) => {
     if (s.model.startsWith('builtin:')) return 'builtin';
     return s.modelGroups.find((g) => g.models.some((m) => m.value === s.model))?.provider;
@@ -119,14 +118,14 @@ function CodePanelInner() {
 
   const selectionKey = selectedIds.join(',');
 
-  // Detect selection changes when code is already generated
+  // 当代码已经生成时，Detect 选择会发生变化
   useEffect(() => {
     if (panelState === 'complete' && selectionKey !== lastSelectionRef.current) {
       setSelectionChanged(true);
     }
   }, [panelState, selectionKey]);
 
-  // Cleanup on unmount
+  // 卸载时 Cleanup
   useEffect(() => {
     return () => {
       if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
@@ -228,7 +227,7 @@ function CodePanelInner() {
 
   const handleRetryChunk = useCallback(
     (_chunkId: string) => {
-      // Re-run the full pipeline (planning is fast, only failed/skipped chunks re-run)
+      // Re-运行完整的管道（规划速度很快，仅重新运行 failed/skipped 块）
       void handleGenerate();
     },
     [handleGenerate],

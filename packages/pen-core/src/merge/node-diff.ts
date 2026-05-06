@@ -1,13 +1,13 @@
 // packages/pen-core/src/merge/node-diff.ts
 //
-// One-direction diff: compute the patches needed to transform `base` into `next`.
+// One-direction diff：计算将 `base` 转换为 `next` 所需的补丁。
 
 import type { PenNode, PenDocument } from '@zseven-w/pen-types';
 import { indexNodesById, nodeFieldsEqual, stripChildren, jsonEqual } from './merge-helpers.js';
 
 export interface NodePatch {
   op: 'add' | 'remove' | 'modify' | 'move';
-  /** null for legacy single-page documents (no pages array) */
+  /** 对于旧版单页文档为 null（无页面数组） */
   pageId: string | null;
   nodeId: string;
   /** for `add` / `move`: target parent id; null = top-level on the page */
@@ -21,17 +21,17 @@ export interface NodePatch {
 }
 
 /**
- * Compute the patches needed to transform `base` into `next`. Walks both trees
- * by node id and emits one of `add` / `remove` / `modify` / `move` per change.
+ * Compute 将
+ * `base` 转换为 `next` 所需的补丁。 Walks 两棵树均按节点 id 排列，每次更改都会发出 `add` / `remove` /
  *
- * Algorithm:
- *   1. Index both documents by node id.
- *   2. For each id in base ∪ next:
- *      - in next only → `add`
- *      - in base only → `remove`
- *      - in both → check parent/index (if changed → `move`) and atomic fields
- *        (if any changed → `modify`); a single id may produce both a `move`
- *        and a `modify`.
+ * `modify` / `move` 之一。 Algorithm: 1. Index 两个文档均按节点 ID。 2. For 基∪下一个中的每个 id：
+ * - 仅在下一个中 →
+ * `add` - 仅在基中
+ * → `remove` - 在两者中 → 检查 parent/index
+ * （如果已更改 → `move`）和原子字段（如果有更改 →
+ * `modify`）；单个 id 可能会产生
+ * `move` 和 `modify`。
+ *
  */
 export function diffDocuments(base: PenDocument, next: PenDocument): NodePatch[] {
   const baseIdx = indexNodesById(base);
@@ -44,7 +44,7 @@ export function diffDocuments(base: PenDocument, next: PenDocument): NodePatch[]
     const n = nextIdx.get(id);
 
     if (!b && n) {
-      // Added.
+      // Added。
       patches.push({
         op: 'add',
         pageId: n.pageId,
@@ -57,7 +57,7 @@ export function diffDocuments(base: PenDocument, next: PenDocument): NodePatch[]
     }
 
     if (b && !n) {
-      // Removed.
+      // Removed。
       patches.push({
         op: 'remove',
         pageId: b.pageId,
@@ -67,9 +67,8 @@ export function diffDocuments(base: PenDocument, next: PenDocument): NodePatch[]
     }
 
     if (b && n) {
-      // Present in both. Check for `move` (parent or page changed) and `modify`
-      // (atomic fields changed). They are independent — one node may produce
-      // both kinds of patches.
+      // Present 两者都有。 Check 代表 `move`（父级或页面已更改）和 `modify`（原子字段已更改）。 They
+      // 是独立的——一个节点可以产生两种补丁。
       const moved = b.parentId !== n.parentId || b.pageId !== n.pageId || b.index !== n.index;
       if (moved) {
         patches.push({
@@ -97,9 +96,9 @@ export function diffDocuments(base: PenDocument, next: PenDocument): NodePatch[]
 }
 
 /**
- * Compute the per-field delta between two nodes. Returns the keys that changed
- * (in `next`) along with the original values (from `base`). Skips the `children`
- * field — it's handled separately by the recursive walk.
+ * Compute
+ * 两个节点之间的每个字段增量。 Returns 更改的键（在 `next` 中）以及原始值（从 `base` 中）。 Skips `children`
+ * 字段 — 它由递归遍历单独处理。
  */
 function diffFields(
   base: PenNode,

@@ -74,7 +74,7 @@ export default function VariablesPanel() {
     e.currentTarget.releasePointerCapture(e.pointerId);
   }, []);
 
-  /* --- Theme axes & variants --- */
+  /* --- Theme 轴和变体 --- */
   const themeAxes = useMemo(() => {
     if (!themes) return [];
     return Object.keys(themes);
@@ -112,10 +112,10 @@ export default function VariablesPanel() {
       className="absolute left-14 top-2 z-20 flex flex-col select-none"
       style={{ width: panelWidth, height: panelHeight }}
     >
-      {/* Background layer with rounded corners */}
+      {/* Background 圆角层 */}
       <div className="absolute inset-0 bg-card/95 backdrop-blur-sm border border-border/80 rounded-2xl shadow-2xl pointer-events-none" />
 
-      {/* Header: Theme tabs | Presets | Close */}
+      {/* Header: Theme 选项卡 | Presets | Close */}
       <div className="relative h-11 flex items-center px-4 shrink-0 gap-1 z-20">
         <ThemeTabsHeader
           themes={themes}
@@ -139,7 +139,7 @@ export default function VariablesPanel() {
         </button>
       </div>
 
-      {/* Column headers: Name | Default | Variant-1 | ... | + */}
+      {/* Column 标头：Name | Default | Variant-1 | ... | + */}
       <VariantColumnsHeader
         themeValues={themeValues}
         themeAxis={themeAxis}
@@ -165,7 +165,7 @@ export default function VariablesPanel() {
         </div>
       )}
 
-      {/* Variable rows */}
+      {/* Variable 行 */}
       <div className="relative flex-1 overflow-y-auto overflow-x-auto min-h-0 px-2 py-0.5">
         {entries.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full gap-1.5">
@@ -188,7 +188,7 @@ export default function VariablesPanel() {
         ))}
       </div>
 
-      {/* Footer: Add variable */}
+      {/* Footer：Add 变量 */}
       <VariableEditor
         variables={variables}
         themes={themes}
@@ -197,7 +197,7 @@ export default function VariablesPanel() {
         ensureThemes={ensureThemes}
       />
 
-      {/* Resize handles */}
+      {/* Resize 手柄 */}
       <div
         className="absolute top-0 right-0 w-1.5 h-full cursor-ew-resize hover:bg-primary/10 transition-colors z-10"
         onPointerDown={(e) => handleResizeStart('right', e)}

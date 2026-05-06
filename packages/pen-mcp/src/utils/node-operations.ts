@@ -12,10 +12,10 @@ export {
 import { getNodeBounds, resolveNodeForCanvas, getDefaultTheme } from '@zseven-w/pen-core';
 
 // ---------------------------------------------------------------------------
-// MCP-specific utilities
+// MCP 特定实用程序
 // ---------------------------------------------------------------------------
 
-/** Get the working children for an MCP operation. */
+/** Get MCP 操作的工作子级。 */
 export function getDocChildren(doc: PenDocument, pageId?: string): PenNode[] {
   if (doc.pages && doc.pages.length > 0) {
     if (pageId) {

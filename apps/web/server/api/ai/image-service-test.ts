@@ -15,10 +15,11 @@ interface ImageServiceTestResponse {
 }
 
 /**
- * POST /api/ai/image-service-test
+ * POST /api/ai
  *
- * Validates API keys for image generation services.
- * Returns { valid: boolean, error?: string }
+ * /image-service-test Validates
+ * API 用于图像生成服务
+ 的密钥。 Returns { 有效：布尔值，错误？：字符串 }
  */
 export default defineEventHandler(async (event): Promise<ImageServiceTestResponse> => {
   const body = await readBody<ImageServiceTestRequest>(event);

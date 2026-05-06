@@ -11,8 +11,9 @@ interface ActivePageState {
 }
 
 /**
- * Returns active page ID, page list, and setActivePage action.
- * Re-renders on page:change and document:change events.
+ * Returns 活动页面
+ * ID、页面列表和 setActivePage 操作。 Re-在 page:change 和
+ document:change 事件上呈现。
  */
 export function useActivePage(): ActivePageState {
   const engine = useDesignEngine();

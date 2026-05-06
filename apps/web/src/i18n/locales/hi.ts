@@ -61,7 +61,7 @@ const hi: TranslationKeys = {
   'topbar.connected': 'कनेक्टेड',
   'topbar.agentStatus': '{{agents}} एजेंट{{agentSuffix}} · {{mcp}} MCP',
 
-  // ── Git पैनल ──
+  // ── Git ──
   'git.openPanel': 'Git पैनल खोलें',
   'git.closePanel': 'Git पैनल बंद करें',
   'git.title': 'Git · {{fileName}}',
@@ -84,7 +84,7 @@ const hi: TranslationKeys = {
   'git.conflict.banner.continue': 'जारी रखें',
   'git.conflict.banner.finalizeError': 'लागू नहीं हो सका: {{message}}',
   'git.conflict.banner.pollError': 'एक त्रुटि के कारण स्थिति जाँच रुकी हुई है: {{message}}',
-  // placeholder — future localization
+  // placeholder — 未来的本地化
   'git.conflict.banner.reopenMessage':
     'पैनल मर्ज के बीच में फिर से खोला गया — कृपया रद्द करें और फिर से pull करें।',
 

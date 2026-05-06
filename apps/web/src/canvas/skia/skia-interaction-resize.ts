@@ -5,14 +5,14 @@ import { type HandleDir, handleCursors, hitTestHandle, hitTestRotation } from '.
 import { type InteractionContext, toolToCursor } from './skia-interaction-types';
 
 /**
- * Handles resize and rotation interactions on selected nodes.
- * Both modes are triggered from handle hit-testing in `handleSelectMouseDown`
- * and share lifecycle concerns, so they live together.
+ * Handles
+ * 在选定节点上调整大小和旋转交互。 Both 模式是由 `handleSelectMouseDown`
+ * 中的句柄命中测试触发的，并共享生命周期问题，因此它们一起存在。
  */
 export class ResizeRotateHandler {
   private ctx: InteractionContext;
 
-  // Resize state
+  // Resize 状态
   isResizing = false;
   private resizeHandle: HandleDir | null = null;
   private resizeNodeId: string | null = null;
@@ -23,7 +23,7 @@ export class ResizeRotateHandler {
   private resizeStartSceneX = 0;
   private resizeStartSceneY = 0;
 
-  // Rotation state
+  // Rotation 状态
   isRotating = false;
   private rotateNodeId: string | null = null;
   private rotateOrigAngle = 0;
@@ -36,7 +36,7 @@ export class ResizeRotateHandler {
   }
 
   /**
-   * Try to start a resize from a handle hit. Returns true if a handle was hit.
+   * Try 从手柄点击开始调整大小。 Returns 如果手柄被击中则为 true。
    */
   startResize(scene: { x: number; y: number }, engine: SkiaEngine): boolean {
     const handleHit = hitTestHandle(engine, scene.x, scene.y);
@@ -119,7 +119,7 @@ export class ResizeRotateHandler {
   }
 
   /**
-   * Try to start a rotation from a rotation zone hit. Returns true if hit.
+   * Try 从旋转区域命中开始旋转。 Returns 如果命中则为真。
    */
   startRotation(scene: { x: number; y: number }, engine: SkiaEngine): boolean {
     const rotHit = hitTestRotation(engine, scene.x, scene.y);

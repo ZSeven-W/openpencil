@@ -1,4 +1,4 @@
-// @vitest-environment jsdom
+// @vitest-环境 jsdom
 // apps/web/src/components/panels/git-panel/__tests__/git-panel-tracked-picker.test.tsx
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, fireEvent, cleanup } from '@testing-library/react';
@@ -20,15 +20,14 @@ type MockedState = {
   };
 };
 
-// vi.hoisted ensures the refs object is created before vi.mock factories
-// run (vi.mock is hoisted to the top of the file). The test body then
-// mutates `mocks.mockedState` etc. to drive each scenario.
+// vi.hoisted 确保在 vi.mock 工厂运行之前创建 refs 对象（vi.mock 被提升到文件的顶部）。然后 The
+// 测试主体改变 `mocks.mockedState` 等以驱动每个场景。
 const mocks = vi.hoisted(() => {
   return {
     bindTrackedFile: vi.fn(async (_: string) => {}),
     closePanel: vi.fn(),
     closeRepo: vi.fn(async () => {}),
-    // Phase 7b: exitTrackedFilePicker drives back/cancel navigation
+    // Phase 7b：exitTrackedFilePicker 驱动 back/cancel 导航
     exitTrackedFilePicker: vi.fn(async () => {}),
     loadOpFileFromPath: vi.fn(async (_: string) => true),
     mockedState: {

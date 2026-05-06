@@ -60,14 +60,14 @@ export default function ShapeToolDropdown({
 
   const isGroupActive = SHAPE_TOOLS.includes(activeTool);
 
-  // Track last used shape tool
+  // Track 最后使用的形状工具
   useEffect(() => {
     if (SHAPE_TOOLS.includes(activeTool)) {
       lastShapeTool.current = activeTool;
     }
   }, [activeTool]);
 
-  // Close on Escape
+  // Close 上 Escape
   useEffect(() => {
     if (!open) return;
     const handler = (e: KeyboardEvent) => {
@@ -142,7 +142,7 @@ export default function ShapeToolDropdown({
 
   return (
     <div ref={wrapperRef} className="relative flex flex-col items-center">
-      {/* Main shape tool button */}
+      {/* Main 形状工具按钮 */}
       <Tooltip>
         <TooltipTrigger asChild>
           <button

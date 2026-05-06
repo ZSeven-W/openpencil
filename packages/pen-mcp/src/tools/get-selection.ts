@@ -13,9 +13,9 @@ export interface GetSelectionResult {
 }
 
 /**
- * get_selection — Returns the currently selected nodes on the live canvas.
- * Fetches selection state from the Nitro sync endpoint, then reads the
- * full node data for each selected ID from the document.
+ * get_selectio
+ * n — Returns 实时画布上当前选定的节点。 Fetches 从 Nitro 同步端点选择状态，然后从文档中读取每个选定的 ID
+ * 的完整节点数据。
  */
 export async function handleGetSelection(params: GetSelectionParams): Promise<GetSelectionResult> {
   const { selectedIds, activePageId } = await fetchLiveSelection();

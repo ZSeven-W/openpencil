@@ -1,8 +1,8 @@
-// @vitest-environment jsdom
+// @vitest-环境 jsdom
 // apps/web/src/components/panels/git-panel/__tests__/git-panel-conflict-list.test.tsx
 //
-// Tests: document-order interleaving, orphan handling, field-ordering, bulk
-// ours/theirs, all-resolved state, null render when totalCount === 0.
+// Tests：文档顺序交错、孤儿处理、字段排序、批量
+// ours/theirs，全部解析状态，当 totalCount === 0 时为 null 渲染。
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, cleanup, fireEvent } from '@testing-library/react';
@@ -10,7 +10,7 @@ import type { GitConflictResolution } from '@/services/git-types';
 import type { PenDocument } from '@/types/pen';
 
 // ---------------------------------------------------------------------------
-// Shared mock state and actions
+// Shared 模拟状态和操作
 // ---------------------------------------------------------------------------
 
 type NodeConflict = {
@@ -89,7 +89,7 @@ const mocks = vi.hoisted(() => ({
   resolveConflict: vi.fn(async (_id: string, _choice: GitConflictResolution) => {}),
 }));
 
-// Document store mock — set currentDocument via the exported ref.
+// Document 存储模拟 — 通过导出的引用设置 currentDocument。
 let mockDocument: PenDocument = {
   id: 'doc-1',
   name: 'Test',

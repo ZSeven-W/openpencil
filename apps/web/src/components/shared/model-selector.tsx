@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { BuiltinProviderPreset } from '@/stores/agent-settings-store';
 
-/** Hardcoded model lists for providers that don't expose /models endpoint */
+/** Hardcoded 不公开 /models 端点的提供者的模型列表 */
 export const BUILTIN_MODEL_LISTS: Partial<
   Record<BuiltinProviderPreset, Array<{ id: string; name: string }>>
 > = {
@@ -55,7 +55,7 @@ export const BUILTIN_MODEL_LISTS: Partial<
   ],
 };
 
-/** Fetch model list from a provider via our server-side proxy */
+/** 通过我们的服务器端代理从提供商处获取 Fetch 模型列表 */
 export async function fetchProviderModels(
   baseURL: string,
   apiKey?: string,

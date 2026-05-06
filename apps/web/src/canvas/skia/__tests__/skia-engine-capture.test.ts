@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-// Must mock before importing SkiaEngine to prevent CanvasKit WASM initialization.
-// SkiaEngine → SkiaRenderer → SkiaNodeRenderer → CanvasKit TypefaceFontProvider.Make()
+// 在导入 SkiaEngine 之前进行 Must 模拟，以防止 CanvasKit WASM 初始化。 SkiaEngine → SkiaRenderer →
+// SkiaNodeRenderer → CanvasKit TypefaceFontProvider.Make()
 vi.mock('@zseven-w/pen-renderer', async () => {
-  // Minimal stub of SkiaNodeRenderer and associated exports
+  // SkiaNodeRenderer 的 Minimal 存根及相关导出
   const SkiaNodeRenderer = vi.fn().mockImplementation(() => ({
     setIconLookup: vi.fn(),
     setRedrawCallback: vi.fn(),
@@ -19,7 +19,7 @@ vi.mock('@zseven-w/pen-renderer', async () => {
       flushPending: async () => {},
     },
   }));
-  // Keep named exports used by skia-engine.ts
+  // Keep 被 skia-engine.ts 使用的命名导出
   return {
     SkiaNodeRenderer,
     SpatialIndex: vi.fn().mockImplementation(() => ({
@@ -78,9 +78,9 @@ vi.mock('@/canvas/agent-indicator', () => ({
 
 import { SkiaEngine } from '../skia-engine';
 
-// Provide requestAnimationFrame for Node.js test environment.
-// waitForSettled() uses it to yield one render cycle. We use setImmediate
-// so the callback fires on the next tick without a real animation frame.
+// Provide requestAnimationFrame 用于 Node.js 测试环境。
+// waitForSettled() 使用它来产生一个渲染周期。 We 使用 setImmediate，因此回调会在下一个 tick
+// 时触发，而无需真正的动画帧。
 let _rafCounter = 0;
 const _rafMap = new Map<number, NodeJS.Immediate>();
 if (typeof globalThis.requestAnimationFrame === 'undefined') {
@@ -104,7 +104,7 @@ if (typeof globalThis.requestAnimationFrame === 'undefined') {
   };
 }
 
-// Minimal stub renderer with the two manager APIs we need.
+// Minimal 存根渲染器以及我们需要的两个管理器 APIs。
 function makeStubRenderer(opts: { fontPending?: number; imagePending?: number }): unknown {
   let fontCount = opts.fontPending ?? 0;
   let imageCount = opts.imagePending ?? 0;
@@ -112,7 +112,7 @@ function makeStubRenderer(opts: { fontPending?: number; imagePending?: number })
     fontManager: {
       pendingCount: () => fontCount,
       flushPending: async () => {
-        // Drain pending counts on flush — simulates real flush behavior
+        // Drain 刷新时的挂起计数 — 模拟真实的刷新行为
         fontCount = 0;
       },
     },
@@ -132,7 +132,7 @@ describe('SkiaEngine.waitForSettled', () => {
 
   it('returns quickly when nothing is pending and dirty is false', async () => {
     const engine = new SkiaEngine({} as never);
-    // Inject minimal renderer stub + clean state
+    // Inject 最小渲染器存根 + 干净状态
     (engine as unknown as { renderer: unknown }).renderer = makeStubRenderer({});
     (engine as unknown as { dirty: boolean }).dirty = false;
 
@@ -150,7 +150,7 @@ describe('SkiaEngine.waitForSettled', () => {
     (engine as unknown as { dirty: boolean }).dirty = false;
 
     await engine.waitForSettled(2000);
-    // After two stable frames, both should be drained
+    // After 两个稳定的帧，都应该被排空
     const r = (
       engine as unknown as {
         renderer: {
@@ -165,10 +165,10 @@ describe('SkiaEngine.waitForSettled', () => {
 
   it('logs warning on timeout when state cannot stabilize', async () => {
     const engine = new SkiaEngine({} as never);
-    // Renderer that always reports new pending (never stable)
+    // Renderer 总是报告新的待处理（不稳定）
     (engine as unknown as { renderer: unknown }).renderer = {
       fontManager: {
-        pendingCount: () => 1, // Never zero
+        pendingCount: () => 1, // Never 零
         flushPending: async () => {},
       },
       imageLoader: {

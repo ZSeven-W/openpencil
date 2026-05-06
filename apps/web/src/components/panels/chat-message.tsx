@@ -5,7 +5,7 @@ import { parseMarkdown } from './chat-message-content';
 import { parseStepBlocks, stripStepBlocks, ActionSteps } from './chat-message-tool-call';
 import { ChatMessageAttachments } from './chat-message-attachment';
 
-// Re-export types and utilities used by other modules (ai-chat-checklist.tsx)
+// Re-导出其他模块使用的类型和实用程序 (ai-chat-checklist.tsx)
 export type { ParsedStep, PipelineItem } from './chat-message-tool-call';
 export {
   parseStepBlocks,
@@ -21,37 +21,37 @@ interface ChatMessageProps {
   attachments?: ChatAttachment[];
 }
 
-/** Strip raw tool-call / function-call XML that should never be shown to users */
+/** Strip 原始工具调用/函数调用 XML 永远不应该向用户显示 */
 function stripToolCallXml(text: string): string {
   let cleaned = text;
 
-  // Remove <function_calls> blocks
+  // Remove <function_calls> 块
   cleaned = cleaned.replace(/<function_calls>[\s\S]*?<\/function_calls>/g, '');
 
-  // Remove <result> blocks (often tool outputs)
+  // Remove <结果> 块（通常是工具输出）
   cleaned = cleaned.replace(/<result>[\s\S]*?<\/result>/g, '');
 
-  // Remove <inference_process> or similar internal blocks if they appear
+  // Remove <inference_process> 或类似的内部块（如果出现）
   cleaned = cleaned.replace(/<inference_process>[\s\S]*?<\/inference_process>/g, '');
 
-  // Remove <invoke> blocks (tool usage) - handle both closed and streaming/unclosed
+  // Remove <invoke> 块（工具使用） - 处理关闭和 streaming/unclosed
   cleaned = cleaned.replace(/<invoke[\s\S]*?<\/invoke>/g, '');
-  cleaned = cleaned.replace(/<invoke[\s\S]*?$/g, ''); // Hide unclosed invoke at end of stream
+  cleaned = cleaned.replace(/<invoke[\s\S]*?$/g, ''); // Hide 在流末尾未关闭调用
 
-  // Remove <parameter> blocks if they appear outside invoke for some reason
+  // Remove <parameter> 如果由于某种原因出现在调用之外，则会阻塞
   cleaned = cleaned.replace(/<parameter[\s\S]*?<\/parameter>/g, '');
 
-  // Remove stray tags
+  // Remove 流浪标签
   cleaned = cleaned.replace(/<\/?invoke.*?>/g, '');
   cleaned = cleaned.replace(/<\/?parameter.*?>/g, '');
   cleaned = cleaned.replace(/<\/?function_calls>/g, '');
-  cleaned = cleaned.replace(/<\/?search_quality_reflection>/g, ''); // Sometimes this appears too
-  cleaned = cleaned.replace(/<\/?thought_process>/g, ''); // And this
+  cleaned = cleaned.replace(/<\/?search_quality_reflection>/g, ''); // Sometimes 这也出现了
+  cleaned = cleaned.replace(/<\/?thought_process>/g, ''); // And 这个
 
-  // Remove the hidden marker so it doesn't show up in UI even as whitespace
+  // Remove 隐藏标记，因此它不会显示在 UI 中，即使是空白
   cleaned = cleaned.replace(/<!-- APPLIED -->/g, '');
 
-  // Collapse leftover blank lines into at most one
+  // Collapse 将剩余空白行最多插入一个
   cleaned = cleaned.replace(/\n{3,}/g, '\n\n');
   return cleaned.trim();
 }
@@ -70,7 +70,7 @@ export default function ChatMessage({
   );
 
   const isUser = role === 'user';
-  // Strip raw tool-call XML that the model may emit (should never be visible)
+  // Strip 模型可能发出的原始工具调用 XML （永远不应该可见）
   const displayContent = isUser ? content : stripToolCallXml(content);
   const steps = useMemo(
     () => (isUser ? [] : parseStepBlocks(displayContent, isStreaming)),
@@ -83,7 +83,7 @@ export default function ChatMessage({
   );
   const isEmpty = !contentWithoutSteps.trim() && !hasFlow;
 
-  // Don't render an empty non-streaming assistant message
+  // Don 不会呈现空的非流式助理消息
   const hadContent = content.trim().length > 0;
   if (!isUser && isEmpty && !isStreaming) {
     if (hadContent) {
@@ -107,7 +107,7 @@ export default function ChatMessage({
         </div>
       ) : (
         <div className="text-sm leading-relaxed text-foreground min-w-0 w-full overflow-hidden">
-          {/* Streaming with no content yet -> thinking indicator */}
+          {/* Streaming 还没有内容 -> 思考指示器 */}
           {isEmpty && isStreaming ? (
             <div className="flex items-center gap-1.5 bg-secondary/50 rounded-full w-fit py-1 px-2.5 mt-2">
               <span className="text-xs text-muted-foreground">Thinking</span>

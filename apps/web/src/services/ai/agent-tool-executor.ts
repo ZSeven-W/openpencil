@@ -5,15 +5,15 @@ import { detectAppendIntent } from './append-intent-detector';
 
 type ToolCallEvent = Extract<AgentEvent, { type: 'tool_call' }>;
 
-/** Auth levels that mutate the document and should be wrapped in an undo batch. */
+/** Auth 级别会改变文档，应包含在撤消批处理中。 */
 const WRITE_LEVELS: Set<AuthLevel> = new Set(['create', 'modify', 'delete']);
 
 /**
- * Client-side tool executor.
+ * Client 端工具执行
  *
- * Receives `tool_call` events from the SSE stream, dispatches them against the
- * live Zustand document store, wraps write operations in an undo batch, and
- * POSTs the result back to the server to unblock the agent loop.
+ * 器。来自 SSE 流的 Receives
+ * `tool_call`
+ * 事件，针对实时 Zustand 文档存储调度它们，将写入操作包装在撤消批处理中，并将 POSTs 结果返回到服务器以解锁代理循环。
  */
 export class AgentToolExecutor {
   private sessionId: string;
@@ -48,8 +48,7 @@ export class AgentToolExecutor {
       useHistoryStore.getState().endBatch(useDocumentStore.getState().document);
     }
 
-    // Post result back to server to unblock the agent loop.
-    // Retry once on failure — if the POST is lost, the agent hangs.
+    // Post 结果返回服务器以解锁代理循环。 Retry 一旦失败 — 如果 POST 丢失，代理将挂起。
     const payload = JSON.stringify({ sessionId: this.sessionId, toolCallId: id, result });
     const postHeaders = { 'Content-Type': 'application/json' };
     try {

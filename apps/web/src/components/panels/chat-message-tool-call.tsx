@@ -6,7 +6,7 @@ import { isDesignJson } from './chat-message-content';
 export interface ParsedStep {
   title: string;
   content: string;
-  /** Explicit status from orchestrator steps (undefined for normal steps) */
+  /** Explicit 协调器步骤的状态（对于正常步骤未定义） */
   status?: 'pending' | 'streaming' | 'done' | 'error';
 }
 
@@ -56,7 +56,7 @@ export function stripStepBlocks(text: string): string {
     .trim();
 }
 
-/** Count completed sections in JSONL content (direct children of root frame). */
+/** Count 完成了 JSONL 内容中的部分（根框架的直接子级）。 */
 function countJsonlSections(content: string): number {
   const lines = content.split('\n');
   let rootId: string | null = null;
@@ -88,7 +88,7 @@ export function countDesignJsonBlocks(text: string): number {
     const content = match[1].trim();
     if (!isDesignJson(content)) continue;
 
-    // JSONL format: count direct children of root as sections
+    // JSONL 格式：将根的直接子节点计为节
     if (/"_parent"\s*:/.test(content)) {
       count += countJsonlSections(content);
     } else {
@@ -102,7 +102,7 @@ export interface PipelineItem {
   label: string;
   done: boolean;
   active: boolean;
-  /** Optional detail lines (e.g. validation log) */
+  /** Optional 详细信息行（例如验证日志） */
   details?: string[];
 }
 
@@ -113,10 +113,10 @@ export function buildPipelineProgress(
   isApplied: boolean,
   hasError: boolean,
 ): PipelineItem[] {
-  // No steps = no checklist
+  // No 步骤 = 无清单
   if (steps.length === 0) return [];
 
-  // Parse detail lines from step content (one line per entry)
+  // Parse 步骤内容中的详细信息行（每个条目一行）
   function extractDetails(content: string): string[] | undefined {
     if (!content) return undefined;
     const lines = content
@@ -126,9 +126,8 @@ export function buildPipelineProgress(
     return lines.length > 0 ? lines : undefined;
   }
 
-  // If steps have explicit status (orchestrator mode), use that directly.
-  // Check this BEFORE terminal result logic so that user-stopped generations
-  // preserve the actual per-step status instead of marking everything done.
+  // If 步骤具有明确的状态（协调器模式），可以直接使用它。 Check 此 BEFORE
+  // 终端结果逻辑，以便用户停止的生成保留实际的每步状态，而不是将所有操作标记为已完成。
   const hasExplicitStatus = steps.some((s) => s.status !== undefined);
   if (hasExplicitStatus) {
     return steps.map((s) => ({
@@ -139,7 +138,7 @@ export function buildPipelineProgress(
     }));
   }
 
-  // If generation is complete and applied, mark all steps done
+  // If 生成已完成并应用，标记所有步骤已完成
   const hasTerminalResult = !isStreaming && !hasError && (isApplied || jsonBlockCount > 0);
   if (hasTerminalResult) {
     return steps.map((s) => ({
@@ -150,9 +149,9 @@ export function buildPipelineProgress(
     }));
   }
 
-  // Fallback: Map each step to done/active/pending based on completed JSON blocks.
-  // Step[i] is done when jsonBlockCount > i.
-  // The step at jsonBlockCount is active (currently being generated).
+  // Fallback：Map 到 done/active/pending 的每一步都基于已完成的 JSON 块。当 jsonBlockCount > i
+  // 时，Step[i] 完成。 jsonBlockCount 处的 The
+  // 步骤处于活动状态（当前正在生成）。
   return steps.map((s, index) => {
     const done = index < jsonBlockCount;
     const active = isStreaming && !done && index === jsonBlockCount;
@@ -160,9 +159,9 @@ export function buildPipelineProgress(
   });
 }
 
-/** Component for rendering a list of action steps as accordions.
- *  Only shows steps with non-empty content (e.g. thinking, analysis).
- *  Empty plan steps are shown in PipelineChecklist instead. */
+/** Component 用于将操作步骤列表呈现为手风琴。 Only 显示非空内容的步骤（例如思考、分析）。 Empty
+ * 计划步骤显示在 PipelineChecklist 中。
+ *  */
 export function ActionSteps({
   steps,
   isStreaming,
@@ -170,7 +169,7 @@ export function ActionSteps({
   steps: ParsedStep[];
   isStreaming?: boolean;
 }) {
-  // Filter to only show steps with actual content (not empty plan steps)
+  // Filter 仅显示具有实际内容的步骤（不是空的计划步骤）
   const stepsWithContent = steps.filter((s) => s.content.trim());
   if (stepsWithContent.length === 0) return null;
 

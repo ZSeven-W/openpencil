@@ -6,19 +6,19 @@ import type { ViewportState, ToolType } from './canvas.js';
 // ---------------------------------------------------------------------------
 
 export interface DesignEngineOptions {
-  /** URL pattern for CanvasKit WASM files. */
+  /** CanvasKit WASM 文件的 URL 模式。 */
   canvasKitPath?: string | ((file: string) => string);
-  /** Base URL for bundled font files. */
+  /** Base URL 用于捆绑字体文件。 */
   fontBasePath?: string;
-  /** Custom Google Fonts CSS endpoint. */
+  /** Custom Google Fonts CSS 端点。 */
   googleFontsCssUrl?: string;
-  /** Icon lookup function for resolving icon names to SVG path data. */
+  /** Icon 查找函数，用于将图标名称解析为 SVG 路径数据。 */
   iconLookup?: IconLookupFn;
-  /** Canvas background color. Default: '#1a1a1a' */
+  /** Canvas 背景颜色。 Default: '#1a1a1a' */
   backgroundColor?: string;
-  /** Device pixel ratio override. */
+  /** Device 像素比率覆盖。 */
   devicePixelRatio?: number;
-  /** Maximum undo/redo history states. Default: 300 */
+  /** Maximum undo/redo 历史状态。 Default: 300 */
   maxHistoryStates?: number;
 }
 
@@ -27,7 +27,7 @@ export interface DesignEngineOptions {
 // ---------------------------------------------------------------------------
 
 export interface DesignEngineEvents {
-  /** Fired after document mutation (batch-aware: only once per batch). Payload is immutable ref. */
+  /** 文档突变后的 Fired （批次感知：每批次仅一次）。 Payload 是不可变的引用。 */
   'document:change': (doc: PenDocument) => void;
   'selection:change': (ids: string[]) => void;
   'viewport:change': (state: ViewportState) => void;
@@ -35,7 +35,7 @@ export interface DesignEngineEvents {
   'history:change': (state: { canUndo: boolean; canRedo: boolean }) => void;
   'node:hover': (id: string | null) => void;
   'page:change': (pageId: string) => void;
-  /** Fired after canvas re-render (browser adapter only). */
+  /** Fired 画布重新渲染后（仅限浏览器适配器）。 */
   render: () => void;
 }
 
@@ -54,10 +54,10 @@ export type CodePlatform =
   | 'compose'
   | 'react-native';
 
-/** Structured code generation result. */
+/** Structured 代码生成结果。 */
 export interface CodeResult {
   files: Array<{ filename: string; content: string; language: string }>;
-  /** CSS variables block if the document uses design variables. */
+  /** 如果文档使用设计变量，则 CSS 变量块。 */
   variables?: string;
 }
 
@@ -65,7 +65,7 @@ export interface CodeResult {
 // Icon Lookup
 // ---------------------------------------------------------------------------
 
-/** Injectable icon lookup function for resolving icon names to SVG path data. */
+/** Injectable 图标查找功能，用于将图标名称解析为 SVG 路径数据。 */
 export interface IconLookupFn {
   (name: string): { d: string; iconId: string; style: 'stroke' | 'fill' } | null;
 }

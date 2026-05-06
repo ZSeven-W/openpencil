@@ -53,7 +53,7 @@ const PRESET_ORDER: BuiltinProviderPreset[] = [
   'custom',
 ];
 
-/* ---------- Shared field wrapper ---------- */
+/* ---------- Shared 字段包装 ---------- */
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="space-y-1">

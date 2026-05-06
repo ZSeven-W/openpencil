@@ -9,15 +9,15 @@ export interface PropertyReplacement {
 }
 
 /**
- * Build a property replacement mapping from one style guide's values to another.
- * Used with replace_all_matching_properties MCP tool for "style switching".
+ * Build 从一个样式指
+ * 南的值到另一个样式指南的值的属性替换映射。 Used 与 replace_all_matching_properties MCP 工具用于“风格切换”。
  *
- * Routes colors to the correct channel:
- * - background/surface/accent → fillColor (frame backgrounds)
- * - textPrimary/textSecondary/textMuted → textColor (text fills)
- * - border → strokeColor (border strokes)
+ * Routes 颜色到正确的通道： - background/surface/accent → fillColor（框架背景） -
+ * textPrimary/
+ * textSecondary/textMuted →
+ * textColor（文本填充） - 边框 → strokeColor（边框描边） Corner
  *
- * Corner radii are emitted as scalar numbers (not arrays) to match PenNode storage.
+ * 半径以标量数字（不是数组）形式发出，以匹配 PenNode 存储。
  */
 export function buildStyleMapping(
   from: StyleGuideValues,
@@ -29,7 +29,7 @@ export function buildStyleMapping(
   const fontFamily: PropertyReplacement['fontFamily'] = [];
   const cornerRadius: PropertyReplacement['cornerRadius'] = [];
 
-  // --- Fill colors (backgrounds, surfaces, accents) ---
+  // --- Fill 颜色（背景、表面、强调色） ---
   const fillKeys = ['background', 'surface', 'accent'] as const;
   for (const key of fillKeys) {
     const f = from.colors[key];
@@ -39,7 +39,7 @@ export function buildStyleMapping(
     }
   }
 
-  // --- Text colors ---
+  // --- Text 颜色 ---
   const textKeys = ['textPrimary', 'textSecondary', 'textMuted'] as const;
   for (const key of textKeys) {
     const f = from.colors[key];
@@ -49,12 +49,12 @@ export function buildStyleMapping(
     }
   }
 
-  // --- Border/stroke colors ---
+  // --- Border/stroke 颜色 ---
   if (from.colors.border && to.colors.border && from.colors.border !== to.colors.border) {
     strokeColor.push({ from: from.colors.border, to: to.colors.border });
   }
 
-  // --- Font family replacements ---
+  // --- Font 家族替代品 ---
   const fontKeys = ['displayFont', 'bodyFont', 'dataFont'] as const;
   for (const key of fontKeys) {
     const f = from.typography[key];
@@ -64,7 +64,7 @@ export function buildStyleMapping(
     }
   }
 
-  // --- Corner radius replacements (scalar numbers, matching PenNode storage) ---
+  // --- Corner 半径替换（标量数字，匹配 PenNode 存储） ---
   const radiusKeys = ['card', 'button'] as const;
   for (const key of radiusKeys) {
     const f = from.radius[key];
@@ -74,7 +74,7 @@ export function buildStyleMapping(
     }
   }
 
-  // Build result, omitting empty arrays
+  // Build 结果，省略空数组
   const result: PropertyReplacement = {};
   if (fillColor.length > 0) result.fillColor = fillColor;
   if (textColor.length > 0) result.textColor = textColor;

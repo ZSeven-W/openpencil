@@ -16,7 +16,7 @@ export function createSSEResponse(
         try {
           controller.enqueue(encoder.encode(raw));
         } catch {
-          /* closed */
+          /* 关闭 */
         }
       };
 

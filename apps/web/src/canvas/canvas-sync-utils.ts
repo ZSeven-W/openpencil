@@ -3,9 +3,9 @@ import { useCanvasStore } from '@/stores/canvas-store';
 import { getActivePageChildren, setActivePageChildren } from '@/stores/document-tree-utils';
 
 /**
- * Force the canvas sync subscriber to re-run by creating a new page children
- * reference. The old pattern `{ ...doc, children: [...doc.children] }` only
- * touched root-level children which are empty under the pages architecture.
+ * Force 画布同步订阅
+ * 者通过创建新的页面子引用来重新运行。 The 旧模式 `{ ...doc, children: [...doc.children] }`
+ * 只触及根级子级，这些子级在页面架构下是空的。
  */
 export function forcePageResync() {
   const doc = useDocumentStore.getState().document;

@@ -1,12 +1,12 @@
 // apps/desktop/git/git-sys.ts
 //
-// System git wrapper. Phase 2b makes this real: clone/fetch/push/pull-FF
-// run via execFile, returning typed results or throwing GitError on
-// recognized failure modes.
+// System git 包装器。 Phase 2b 使这成为现实：clone/fetch/push/pull-FF
+// 通过 execFile 运行，返回键入的结果或抛出 GitError
+// 公认的故障模式。
 //
-// All ops accept an optional env map so SSH callers can set
-// GIT_SSH_COMMAND='ssh -i <keyPath> -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new'
-// without affecting the parent process env.
+// All ops 接受可选的环境映射，因此 SSH 调用者可以设置
+// GIT_SSH_COMMAND='ssh -i <keyPath> -o IdentitiesOnly=是 -o StrictHostKeyChecking=接受新'
+// 不影响父进程环境。
 
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
@@ -45,8 +45,9 @@ interface RunResult {
 }
 
 /**
- * Run `git <args>` with the given env and cwd. On failure, maps stderr to a
- * GitError code and throws. Used by all the higher-level fns below.
+ * Run `git
+ * <args>` 具有给定的 env 和 cwd。 On 失败，将 stderr 映射到 GitError 代码并抛出。 Used
+ 由以下所有更高级别的 fns 执行。
  */
 async function runGit(args: string[], opts: RunOpts = {}): Promise<RunResult> {
   const env = { ...process.env, ...opts.env };

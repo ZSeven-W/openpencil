@@ -1,5 +1,4 @@
-// Agent event types — extracted from @zseven-w/agent for zero-runtime-dependency usage.
-// These types define the SSE protocol between server and client.
+// Agent 事件类型 — 从 @zseven-w/agent 中提取，以实现零运行时依赖性使用。 These 类型定义服务器和客户端之间的 SSE 协议。
 
 export type AuthLevel = 'read' | 'create' | 'modify' | 'delete' | 'orchestrate';
 

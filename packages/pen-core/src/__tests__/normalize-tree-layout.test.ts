@@ -36,10 +36,8 @@ describe('normalizeTreeLayout', () => {
   });
 
   it('does not overwrite horizontal layout set by a prior role resolver', () => {
-    // Simulates the navbar case: role resolver wrote layout='horizontal',
-    // children have no layout hints (inferLayout would return undefined),
-    // so normalize would otherwise fall back to 'vertical' and clobber the
-    // semantically correct value. It must not.
+    // Simulates 导航栏案例：角色解析器写入布局='水平'，子级没有布局提示（inferLayout
+    // 将返回未定义），因此规范化将回退到“垂直”并破坏语义上正确的值。 It 一定不能。
     const node = frame({
       layout: 'horizontal',
       children: [rect('logo'), rect('links'), rect('cta')],
@@ -49,10 +47,8 @@ describe('normalizeTreeLayout', () => {
   });
 
   it('preserves absolute positioning when all children carry x/y', () => {
-    // Frame with no layout and children that all carry explicit x/y is a
-    // deliberate absolute-positioning container (phone mockup internals,
-    // hero image with floating overlays, etc.). The fallback must not
-    // write `vertical` or strip the x/y.
+    // Frame 没有布局，并且子级都带有显式 x/y 是一个有意的绝对定位容器（手机模型内部结构、带有浮动覆盖层的英雄图像等）。 The
+    // 后备不得写入 `vertical` 或剥离 x/y。
     const node = frame({
       width: 300,
       height: 600,
@@ -74,9 +70,7 @@ describe('normalizeTreeLayout', () => {
   });
 
   it('preserves absolute positioning when even one child carries x/y', () => {
-    // If the model tagged at least one child with explicit coordinates, we
-    // treat the container as absolute-positioned. This is conservative but
-    // avoids destroying hand-placed overlays.
+    // If 该模型至少用显式坐标标记了一个子级，我们将容器视为绝对定位。 This 是保守的，但避免破坏手工放置的覆盖层。
     const node = frame({
       children: [rect('base'), rect('overlay', { x: 120, y: 80 })],
     });
@@ -93,7 +87,7 @@ describe('normalizeTreeLayout', () => {
       children: [rect('a'), rect('b')],
     });
     normalizeTreeLayout(node);
-    // inferLayout() currently treats gap as a horizontal signal — preserve that behavior.
+    // inferLayout() 目前将间隙视为水平信号 - 保留该行为。
     expect((node as PenNode & { layout?: string }).layout).toBe('horizontal');
   });
 
@@ -149,8 +143,7 @@ describe('normalizeTreeLayout', () => {
   });
 
   it('recurses into nested frames', () => {
-    // Neither inner nor outer children carry x/y, so both get the vertical
-    // fallback; the recursion visits the inner frame and writes its layout.
+    // Neither 内部或外部子级都携带 x/y，因此两者都获得垂直后备；递归访问内部框架并写入其布局。
     const inner = frame({
       id: 'inner',
       children: [rect('c'), rect('d')],
@@ -178,9 +171,7 @@ describe('normalizeTreeLayout', () => {
   });
 
   it('overlay-only children do not block the vertical fallback', () => {
-    // A container whose only positioned children are overlays is still
-    // considered "model forgot layout" — the overlays retain their
-    // coordinates while the base frame gets a vertical layout for the rest.
+    // 唯一定位的子级是覆盖层的容器仍然被认为是“模型忘记布局”——覆盖层保留它们的坐标，而基础框架为其余部分获取垂直布局。
     const overlay: PenNode = {
       id: 'overlay1',
       type: 'rectangle',
@@ -196,22 +187,22 @@ describe('normalizeTreeLayout', () => {
     normalizeTreeLayout(node);
     expect((node as PenNode & { layout?: string }).layout).toBe('vertical');
     const kids = (node as PenNode & { children: PenNode[] }).children;
-    // overlay still carries its absolute coordinates
+    // 覆盖层仍然带有其绝对坐标
     expect(kids[2].x).toBe(40);
     expect(kids[2].y).toBe(0);
   });
 
   it('does NOT verticalize when ALL non-overlay children are frames (overlay composition)', () => {
-    // This is the bug subagent diagnosed: AI emits a layout-less parent
-    // containing structured nested-frame children (e.g. ring + value-wrap,
-    // hero + floating-card overlay, badge stack). Children have no x/y
-    // because the AI assumed (0,0) would just work. The previous behavior
-    // would silently rewrite the parent to layout='vertical', stacking
-    // the frames into a list and breaking the intended overlay.
-    //
-    // New behavior: when every non-overlay child is a frame, treat it as
-    // an overlay container and leave layout undefined so the renderer
-    // respects the children's positions.
+    // This 是诊断出的错误子代理：AI 发出无布局的父代理
+    // 包含结构化嵌套框架子项（例如环+值包装，
+    // 英雄 + 浮动卡叠加、徽章堆叠）。 Children 没有 x/y
+    // 因为 AI 假设 (0,0) 就可以工作。 The 之前的行为
+    // 会默默地将父级重写为 layout='vertical', stacking
+    // 将帧放入列表中并破坏预期的覆盖。
+//
+    // New 行为：当每个非覆盖子级都是一个框架时，将其视为
+    // 覆盖容器并保留布局未定义，以便渲染器
+    // 尊重儿童的立场。
     const inner1 = frame({ id: 'inner1', width: 80, height: 80 });
     const inner2 = frame({ id: 'inner2', width: 80, height: 80 });
     const outer = frame({
@@ -225,12 +216,9 @@ describe('normalizeTreeLayout', () => {
   });
 
   it('still verticalizes mixed text+shape stacks (frame + text) where vertical is the right call', () => {
-    // Counter-test for the widened composition-primitive rule. The rule
-    // must not over-trigger: a frame containing a nested frame plus a
-    // text node is a content stack and SHOULD be verticalized.
-    // Homogeneous shape-only children (frame+frame, frame+rect,
-    // ellipse+ellipse) signal composition; text or icon_font mixed in
-    // breaks the heuristic.
+    // Counter-测试扩展的组合原语规则。 The 规则不得过度触发：包含嵌套框架加上文本节点的框架是内容堆栈，并且 SHOULD
+    // 是垂直的。 Homogeneous 仅形状子项（框架+框架、框架+矩形、椭圆+椭圆）信号合成；混合文本或 icon_font
+    // 会破坏启发式。
     const inner = frame({ id: 'inner', children: [rect('c'), rect('d')] });
     const outer = frame({
       id: 'outer',
@@ -241,13 +229,9 @@ describe('normalizeTreeLayout', () => {
   });
 
   it('does NOT verticalize all-ellipse concentric stacks (progress-ring pattern)', () => {
-    // The activity-rings regression: an LLM emits a layout-less parent
-    // with N concentric ellipses at (0,0), expecting them to render
-    // centered. The old all-FRAME-children heuristic missed this because
-    // the children were ellipses (not frames) and fell through to the
-    // vertical fallback, stacking the rings as a list. The widened
-    // composition-primitive rule now recognises ellipse-only children
-    // as a composition and leaves layout undefined.
+    // The 活动环回归：LLM 发出一个无布局的父级，在 (0,0) 处有 n 个同心椭圆，期望它们呈现居中。 The 旧的
+    // all-FRAME-children 启发式错过了这一点，因为子级是省略号（不是框架）并落入垂直回退，将环堆叠为列表。
+    // The 扩大的组合基元规则现在将仅限椭圆的子项识别为组合，并使布局未定义。
     const ellipse = (id: string, w: number, h: number): PenNode =>
       ({ id, type: 'ellipse', width: w, height: h }) as PenNode;
     const parent = frame({
@@ -261,10 +245,7 @@ describe('normalizeTreeLayout', () => {
   });
 
   it('does NOT verticalize frame + ellipse (ring wrapped in a frame)', () => {
-    // A common composition: an outer frame background with a nested
-    // ellipse ring on top. Both are composition primitives, so the
-    // heuristic keeps layout undefined and lets the renderer use the
-    // children's own positioning.
+    // 常见的构图：外框背景，顶部有嵌套的椭圆环。 Both 是组合基元，因此启发式保持布局未定义，并让渲染器使用子级自己的定位。
     const parent = frame({
       id: 'avatar',
       width: 80,
@@ -279,11 +260,8 @@ describe('normalizeTreeLayout', () => {
   });
 
   it('STILL verticalizes rectangle-only stacks (list of cards, not an overlay)', () => {
-    // Rectangles are intentionally NOT in the composition-primitive set.
-    // 3 rectangles with no layout hints is almost always a content
-    // stack (card list, nav buttons, divider rows), so we keep the
-    // vertical fallback for it. Authors who really want a rectangle
-    // overlay composition must declare x/y on at least one child.
+    // Rectangles 是故意在组合基元集中的 NOT。没有布局提示的 3 个矩形几乎总是内容堆栈（卡片列表、导航按钮、分隔行），因此
+    // 我们为其保留垂直回退。 Authors 如果确实想要一个矩形叠加组合，则必须在至少一个子元素上声明 x/y。
     const parent = frame({
       id: 'list',
       children: [rect('a'), rect('b'), rect('c')],

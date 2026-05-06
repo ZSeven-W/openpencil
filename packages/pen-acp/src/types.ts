@@ -1,6 +1,6 @@
 import type { ClientSideConnection } from '@agentclientprotocol/sdk';
 
-/** Persisted config for a user-configured ACP agent. */
+/** Persisted 用户配置的 ACP 代理的配置。 */
 export interface AcpAgentConfig {
   id: string;
   displayName: string;
@@ -12,30 +12,30 @@ export interface AcpAgentConfig {
   enabled: boolean;
 }
 
-/** Info returned by the ACP agent during initialize handshake. */
+/** Info 初始化握手期间由 ACP 代理返回。 */
 export interface AcpAgentInfo {
   name: string;
   title?: string;
   version?: string;
 }
 
-/** Result of a connect attempt. */
+/** Result 连接尝试。 */
 export interface AcpConnectResult {
   connected: boolean;
   agentInfo?: AcpAgentInfo;
   error?: string;
 }
 
-/** Live connection state held by the connection manager. */
+/** Live 连接管理器保存的连接状态。 */
 export interface AcpConnectionState {
   connection: ClientSideConnection;
   agentInfo: AcpAgentInfo;
   process?: import('node:child_process').ChildProcess;
   /**
-   * Session-scoped event emitter for session/update notifications.
-   * Set by the prompt handler before calling connection.prompt().
+   * 用于 session/update 通知的 Session 范围事件发射器。
+   * Set 在调用 connection.prompt() 之前由提示处理程序执行。
    * The Client.sessionUpdate callback pushes events here;
-   * the SSE stream handler consumes them.
+   * SSE 流处理程序使用它们。
    */
   sessionUpdateEmitter: EventTarget | null;
 }

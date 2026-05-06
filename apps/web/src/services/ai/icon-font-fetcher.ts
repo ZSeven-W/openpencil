@@ -4,17 +4,17 @@ import { toStrokeThicknessNumber, extractPrimaryColor } from './generation-utils
 import { ICON_PATH_MAP, type IconEntry } from './icon-dictionary';
 
 // ---------------------------------------------------------------------------
-// Pending async icon resolution tracking
+// Pending 异步图标分辨率跟踪
 // ---------------------------------------------------------------------------
 
-/** Maps nodeId -> normalized icon name for icons that need async resolution */
+/** Maps nodeId -> 需要异步解析的图标的规范化图标名称 */
 export const pendingIconResolutions = new Map<string, string>();
 
 /**
- * Fire an immediate icon fetch during streaming with a short timeout.
- * If the server responds in time, update the node right away and remove it
- * from pendingIconResolutions so post-streaming resolution can skip it.
- * On timeout or failure, the node stays in pendingIconResolutions as a fallback.
+ * Fire 在流式传输期间
+ * 立即获取图标，超时时间很短。 If 服务器及时响应，立即更新节点并将其从 pendingIconResolutions
+ * 中删除，以便流后解析可以跳过它。 On 超时或失败，节点停留在 pendingIconResolutions 作为后备。
+ *
  */
 export function tryImmediateIconResolution(nodeId: string, iconName: string): void {
   const controller = new AbortController();

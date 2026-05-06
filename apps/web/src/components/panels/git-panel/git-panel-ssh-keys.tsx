@@ -1,19 +1,19 @@
 // apps/web/src/components/panels/git-panel/git-panel-ssh-keys.tsx
 //
-// Phase 6c: SSH key manager subview of the overflow menu. Responsibilities:
-//   - refreshSshKeys() on open
-//   - list keys, with the keys for the current remote host floated to top
-//   - generate key (host, comment)
-//   - import key via window.electronAPI.openFile(), pass filePath into importSshKey
-//   - delete key (with inline confirm)
-//   - copy public key with a transient success hint
-//   - provider link for github.com / gitlab.com, else generic copy guidance
-//   - SSH transport gating banner when iso engine meets an SSH-ish URL
+// Phase 6c：SSH 溢出菜单的密钥管理器子视图。 Responsibilities:
+//   - refreshSshKeys() 打开
+//   - 列出键，当前远程主机的键浮动到顶部
+//   - 生成密钥（主持人、评论）
+//   - 通过 window.electronAPI.openFile()导入密钥，将 filePath 传递到 importSshKey
+//   - 删除键（带内联确认）
+//   - 复制公钥并显示短暂的成功提示
+//   - github.com / gitlab.com 的提供商链接，其他通用复制指南
+//   - 当 iso 引擎遇到 SSH-ish URL 时，SSH 传输门控横幅
 //
-// Local state machine:
-//   view = 'list' | 'generate' | 'import' | 'delete-confirm'
-// View state is local to this subview since it's purely a submenu of the
-// overflow popover and doesn't need to survive across opens.
+// Local 状态机：
+// 视图='列表'| '生成' | '导入' | '删除-确认'
+// View 状态是该子视图的本地状态，因为它纯粹是
+// 溢出弹出窗口，不需要在打开时生存。
 
 import { ArrowLeft, Copy, ExternalLink, Loader2, Plus, Trash2, Upload } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -53,32 +53,28 @@ export function GitPanelSshKeys({ onBack }: GitPanelSshKeysProps) {
   const [busy, setBusy] = useState(false);
   const [inlineError, setInlineError] = useState<string | null>(null);
   const [copiedKeyId, setCopiedKeyId] = useState<string | null>(null);
-  // Track the pending "copied" flash timer so it can be cleared on a second
-  // copy (debounces the flash) and, critically, on unmount — otherwise the
-  // timeout fires after the popover closes and setCopiedKeyId runs on a
-  // stale component.
+  // Track 挂起的“复制”闪存计时器，以便可以在第二个副本上清除它（使闪存去抖动），并且最重要的是，在卸载时清除 -
+  // 否则在弹出窗口关闭后会触发超时，并且 setCopiedKeyId 在陈旧组件上运行。
   const copyTimerRef = useRef<number | null>(null);
 
-  // Generate form fields
+  // Generate 表单字段
   const [genHost, setGenHost] = useState<string>(currentHost ?? '');
   const [genComment, setGenComment] = useState<string>('');
 
-  // Import form fields
+  // Import 表单字段
   const [importHost, setImportHost] = useState<string>(currentHost ?? '');
   const [importPath, setImportPath] = useState<string>('');
 
-  // Delete confirm target
+  // Delete 确认目标
   const [deleteTarget, setDeleteTarget] = useState<GitPublicSshKeyInfo | null>(null);
 
-  // On mount: refresh the key list so the subview never opens against a
-  // stale cache. Fire-and-forget; the store populates `sshKeys` when done.
+  // On mount：刷新键列表，以便子视图永远不会针对陈旧的缓存打开。 Fire-然后忘记；完成后，商店将填充 `sshKeys`。
   useEffect(() => {
     void refreshSshKeys();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Clean up any in-flight "copied" flash timer on unmount so it can't call
-  // setCopiedKeyId after the subview is gone.
+  // Clean 在卸载时启动任何正在运行的“复制”闪存计时器，以便在子视图消失后它无法调用 setCopiedKeyId。
   useEffect(() => {
     return () => {
       if (copyTimerRef.current !== null) {
@@ -88,7 +84,7 @@ export function GitPanelSshKeys({ onBack }: GitPanelSshKeysProps) {
     };
   }, []);
 
-  // Float keys bound to the current remote host to the top of the list.
+  // Float 将当前远程主机绑定的键添加到列表顶部。
   const sortedKeys = useMemo(() => {
     if (!currentHost) return sshKeys;
     const matching: GitPublicSshKeyInfo[] = [];
@@ -126,9 +122,8 @@ export function GitPanelSshKeys({ onBack }: GitPanelSshKeysProps) {
       setView('list');
       resetForms();
     } catch (err) {
-      // Symmetric with git-panel-remote-settings: translate the iso SSH
-      // transport gate to its localized hint so the user doesn't see a raw
-      // engine-level error string.
+      // Symmetric 与 git-panel-remote-settings：将 iso SSH
+      // 传输门转换为其本地化提示，以便用户不会看到原始引擎级错误字符串。
       if (isGitError(err) && err.code === 'ssh-not-supported-iso') {
         setInlineError(t('git.ssh.isoUnsupported'));
       } else {
@@ -143,8 +138,8 @@ export function GitPanelSshKeys({ onBack }: GitPanelSshKeysProps) {
     if (typeof window === 'undefined' || !window.electronAPI) return;
     const picked = await window.electronAPI.openFile();
     if (picked === null) return;
-    // openFile() returns { filePath, content }; importSshKey takes the
-    // path so the desktop side can copy + chmod the file out of band.
+    // openFile() 返回 { filePath, 内容 }; importSshKey 采用路径，以便桌面端可以在带外复制 +
+    // chmod 文件。
     setImportPath(picked.filePath);
   }
 
@@ -192,9 +187,8 @@ export function GitPanelSshKeys({ onBack }: GitPanelSshKeysProps) {
   }
 
   async function handleCopyPublicKey(key: GitPublicSshKeyInfo) {
-    // Feature-gate: navigator.clipboard is undefined in non-secure contexts
-    // (http://, file://, some jsdom test environments). Blindly reading
-    // `.writeText` would throw a raw TypeError with a confusing message.
+    // Feature-gate：navigator.clipboard 在非安全上下文中未定义（http://, file://，某些
+    // jsdom 测试环境）。 Blindly 读取 `.writeText` 会抛出原始 TypeError 并带有令人困惑的消息。
     if (typeof navigator === 'undefined' || !navigator.clipboard?.writeText) {
       setInlineError(t('git.ssh.copyUnsupported'));
       return;
@@ -202,10 +196,8 @@ export function GitPanelSshKeys({ onBack }: GitPanelSshKeysProps) {
     try {
       await navigator.clipboard.writeText(key.publicKey);
       setCopiedKeyId(key.id);
-      // Clear the copied hint after a moment so a later copy still flashes.
-      // Cancel any previous pending clear so rapid successive copies on
-      // different rows don't race each other, and store the handle so the
-      // unmount effect can cancel it if the subview closes first.
+      // Clear 稍后复制提示，因此稍后的副本仍然闪烁。 Cancel 任何先前挂起的清除如此快速的连续副本在不同的行上不会相互竞争，并存储
+      // 句柄，以便在子视图首先关闭时卸载效果可以取消它。
       if (copyTimerRef.current !== null) {
         window.clearTimeout(copyTimerRef.current);
       }
@@ -435,8 +427,8 @@ export function GitPanelSshKeys({ onBack }: GitPanelSshKeysProps) {
 }
 
 // ---------------------------------------------------------------------------
-// List subview — extracted so the key-row map stays readable without a
-// giant cascading conditional in the parent.
+// List 子视图 — 提取，以便键行映射保持可读，无需
+// 父级中有条件的巨型级联。
 // ---------------------------------------------------------------------------
 
 function ListView({

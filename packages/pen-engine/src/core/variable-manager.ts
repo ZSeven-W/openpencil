@@ -8,8 +8,9 @@ export interface VariableManagerOptions {
 }
 
 /**
- * Manages design variables with theme support.
- * Extracted from apps/web/src/stores/document-store-variable-actions.ts.
+ * Manages
+ * 设计变量与主题支持。 Extracted 来自 apps/web/src/stores/
+ document-store-variable-actions.ts。
  */
 export class VariableManager {
   private getDocument: () => PenDocument;
@@ -87,7 +88,7 @@ export class VariableManager {
     const doc = this.getDocument();
     const vars = doc.variables ?? {};
     const activeTheme = getDefaultTheme(doc.themes);
-    // Strip leading $ if present
+    // Strip 前导 $（如果存在）
     const name = ref.startsWith('$') ? ref.slice(1) : ref;
     const def = vars[name];
     if (!def) return undefined;

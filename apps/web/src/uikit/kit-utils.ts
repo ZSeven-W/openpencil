@@ -4,7 +4,7 @@ export { deepCloneNode } from '@/stores/document-tree-utils';
 import type { ComponentCategory, KitComponent } from '@/types/uikit';
 
 /**
- * Walk the document tree and extract all reusable nodes as KitComponent metadata.
+ * Walk 文档树并提取所有可重用节点作为 KitComponent 元数据。
  */
 export function extractComponentsFromDocument(
   doc: PenDocument,
@@ -30,14 +30,14 @@ export function extractComponentsFromDocument(
 }
 
 /**
- * Find a specific node in a document tree by ID.
+ * Find ID 文档树中的特定节点。
  */
 export function findReusableNode(doc: PenDocument, nodeId: string): PenNode | undefined {
   return findInTree(getAllChildren(doc), nodeId);
 }
 
 /**
- * Recursively collect all $variable references used by a node tree.
+ * Recursively 收集节点树使用的所有 $variable 引用。
  */
 export function collectVariableRefs(node: PenNode): Set<string> {
   const refs = new Set<string>();
@@ -45,10 +45,9 @@ export function collectVariableRefs(node: PenNode): Set<string> {
   return refs;
 }
 
-// deepCloneNode re-exported from pen-core via document-tree-utils
-
+// deepCloneNode 通过 document-tree-utils 从 pen-core 重新导出
 // ---------------------------------------------------------------------------
-// Internal helpers
+// Internal 帮助者
 // ---------------------------------------------------------------------------
 
 function walkTree(nodes: PenNode[], visitor: (node: PenNode) => void): void {

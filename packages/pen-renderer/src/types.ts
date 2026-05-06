@@ -11,26 +11,26 @@ export interface RenderNode {
   clipRect?: { x: number; y: number; w: number; h: number; rx: number };
 }
 
-/** Injectable icon lookup function for resolving icon names to SVG path data. */
+/** Injectable 图标查找功能，用于将图标名称解析为 SVG 路径数据。 */
 export interface IconLookupFn {
   (name: string): { d: string; iconId: string; style: 'stroke' | 'fill' } | null;
 }
 
 export interface PenRendererOptions {
-  /** URL pattern for CanvasKit WASM files. Default: '/canvaskit/' */
+  /** CanvasKit WASM 文件的 URL 模式。 Default: '/canvaskit/' */
   canvasKitPath?: string | ((file: string) => string);
-  /** Base URL for bundled font files. Default: '/fonts/' */
+  /** Base URL 用于捆绑字体文件。 Default: '/字体/' */
   fontBasePath?: string;
-  /** Custom Google Fonts CSS endpoint. Default: 'https://fonts.googleapis.com/css2' */
+  /** Custom Google Fonts CSS 端点。 Default: 'https://fonts.googleapis.com/css2' */
   googleFontsCssUrl?: string;
-  /** Icon lookup function. Default: null (icons render as fallback circle) */
+  /** Icon 查找功能。 Default：null（图标呈现为后备圆圈） */
   iconLookup?: IconLookupFn;
-  /** Theme variant to use for variable resolution. Default: first variant per axis */
+  /** Theme 变体用于可变分辨率。 Default：每个轴的第一个变体 */
   themeVariant?: Record<string, string>;
-  /** Background color. Default: '#1a1a1a' */
+  /** Background 颜色。 Default: '#1a1a1a' */
   backgroundColor?: string;
-  /** Device pixel ratio override. Default: window.devicePixelRatio */
+  /** Device 像素比率覆盖。 Default: 窗口.devicePixelRatio */
   devicePixelRatio?: number;
-  /** Default fonts to preload. Default: ['Inter', 'Noto Sans SC'] */
+  /** 要预加载的 Default 字体。 Default: ['Inter', 'Noto Sans SC'] */
   defaultFonts?: string[];
 }

@@ -10,8 +10,9 @@ interface ToolButtonProps {
 }
 
 /**
- * Reusable tool button that reads/writes the active tool via pen-engine.
- * Uses `isActive` conditional className (not Radix data-state) per code style guide.
+ * Reusable
+ * 工具按钮，通过笔引擎使 reads/writes 成为活动工具。 Uses `isActive` 条件 className （不是
+ Radix 数据状态）每个代码风格指南。
  */
 export function ToolButton({ tool, icon, label, shortcut }: ToolButtonProps) {
   const [activeTool, setActiveTool] = useActiveTool();

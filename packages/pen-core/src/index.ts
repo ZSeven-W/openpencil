@@ -1,7 +1,7 @@
-// ID generation
+// ID 一代
 export { generateId } from './id.js';
 
-// Tree utilities
+// Tree 实用程序
 export {
   DEFAULT_FRAME_ID,
   DEFAULT_PAGE_ID,
@@ -62,7 +62,7 @@ export { unwrapFakePhoneMockups } from './layout/unwrap-fake-phone-mockup.js';
 export { stripRedundantSectionFills } from './layout/strip-redundant-section-fills.js';
 export { normalizeStrokeFillSchema } from './normalize/normalize-stroke-fill-schema.js';
 
-// Text measurement
+// Text 测量
 export {
   parseSizing,
   defaultLineHeight,
@@ -122,10 +122,10 @@ export {
   GUIDE_DASH,
 } from './constants.js';
 
-// Sync lock
+// Sync 锁
 export { isFabricSyncLocked, setFabricSyncLock } from './sync-lock.js';
 
-// Arc path
+// Arc 路径
 export { buildEllipseArcPath, isArcEllipse } from './arc-path.js';
 export {
   anchorsToPathData,
@@ -136,16 +136,16 @@ export {
   type PathAnchorParseResult,
 } from './path-anchors.js';
 
-// Boolean operations
+// Boolean 操作
 export { type BooleanOpType, canBooleanOp, executeBooleanOp } from './boolean-ops.js';
 
-// Font utilities
+// Font 实用程序
 export { cssFontFamily } from './font-utils.js';
 
-// Node helpers
+// Node 帮助者
 export { isOverlayNode, isBadgeOverlayNode, sanitizeName } from './node-helpers.js';
 
-// Design-MD parser
+// Design-MD 解析器
 export {
   parseDesignMd,
   generateDesignMd,
@@ -153,7 +153,7 @@ export {
   extractDesignMdFromDocument,
 } from './design-md-parser.js';
 
-// --- Merge module ---
+// --- Merge 模块 ---
 export type { NodePatch } from './merge/node-diff.js';
 export { diffDocuments } from './merge/node-diff.js';
 export type {

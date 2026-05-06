@@ -1,13 +1,13 @@
 // apps/web/src/components/panels/git-panel/git-panel-node-conflict-card.tsx
 //
-// Card for a single node conflict. Shows:
-//   - Reason label
-//   - Ours / theirs thumbnails side by side (or placeholder when rendering unavailable)
-//   - Per-side choose buttons
-//   - Manual JSON editor toggle
+// Card 用于单节点冲突。 Shows:
+//   - Reason 标签
+//   - Ours / 他们的并排缩略图（或渲染不可用时的占位符）
+//   - Per-侧面选择按钮
+//   - Manual JSON 编辑器切换
 //
-// Resolution state is owned by the parent via the onResolve callback —
-// this card is stateless with respect to the store.
+// Resolution 状态由父级通过 onResolve 回调拥有 -
+// 这张卡对于商店来说是无状态的。
 
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -17,7 +17,7 @@ import { formatConflictReason, prettyJson } from './conflict-formatters';
 import type { GitConflictBag, GitConflictResolution } from '@/services/git-types';
 import { useDocumentStore } from '@/stores/document-store';
 
-/** Minimal inline badge — shadcn Badge not available in this project. */
+/** Minimal 内联徽章 — shadcn Badge 在此项目中不可用。 */
 function InlineBadge({
   children,
   variant = 'outline',
@@ -46,22 +46,21 @@ export function GitPanelNodeConflictCard({ conflict, onResolve }: GitPanelNodeCo
   const [showEditor, setShowEditor] = useState(false);
   const penDocument = useDocumentStore((s) => s.document);
 
-  // Thumbnail data URLs — null means "not rendered yet" or "unavailable".
+  // Thumbnail 数据 URLs — null 表示“尚未渲染”或“不可用”。
   const [oursThumbnail, setOursThumbnail] = useState<string | null>(null);
   const [theirsThumbnail, setTheirsThumbnail] = useState<string | null>(null);
 
   const isResolved = conflict.resolution != null;
 
-  // Attempt to render thumbnails via the pen-renderer helper.
-  // We import lazily so SSR / test environments that lack CanvasKit don't crash.
+  // Attempt 通过笔渲染器助手渲染缩略图。 We 延迟导入，因此缺少 CanvasKit 的 SSR /
+  // 测试环境不会崩溃。
   useEffect(() => {
     let cancelled = false;
 
     async function renderThumbnails() {
       try {
         const { renderNodeThumbnail } = await import('@zseven-w/pen-renderer');
-        // Use the real document so $variable references and ref-type nodes resolve
-        // correctly. A stub document with empty children silently broke resolution.
+        // Use 真实文档，因此 $variable 引用和 ref-type 节点可以正确解析。带有空子项的存根文件默默地破坏了解决方案。
         const ctx = { document: penDocument, pageId: conflict.pageId, size: 120 };
 
         if (conflict.ours && typeof conflict.ours === 'object') {
@@ -79,7 +78,7 @@ export function GitPanelNodeConflictCard({ conflict, onResolve }: GitPanelNodeCo
           if (!cancelled) setTheirsThumbnail(url);
         }
       } catch {
-        // Thumbnails are best-effort; rendering failures are silent.
+        // Thumbnails 尽力而为；渲染失败是无声的。
       }
     }
 

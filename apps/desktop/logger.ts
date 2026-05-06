@@ -1,15 +1,15 @@
 /**
- * Simple file logger for the Electron main process.
+ * Simple 主进程的 Electron 文件记录器。
  *
- * Writes to `{userData}/logs/main.log` with daily rotation.
- * Keeps the last 7 days of logs, auto-cleans on init.
+ * Writes 至 `{userData}/logs/main.log` 每日轮换。
+ * Keeps 最近 7 天的日志，在 init 时自动清理。
  *
- * Usage:
+ * Usage：
  *   import { initLogger, log } from './logger'
- *   await initLogger()    // call once at startup
- *   log.info('message')
- *   log.error('message')
- *   log.warn('message')
+ * wait initLogger() // 启动时调用一次
+ * 日志.info('message')
+ * 日志.error('message')
+ * 日志.warn('message')
  */
 
 import { appendFile, readdir, unlink, mkdir, stat } from 'node:fs/promises';

@@ -27,9 +27,8 @@ export function convertVector(
     const iconW = resolveWidth(figma, parentStackMode, ctx);
     const iconH = resolveHeight(figma, parentStackMode, ctx);
 
-    // Lucide/Feather icon paths use a 24×24 viewbox.  When the icon is
-    // rendered smaller, scale strokeWeight proportionally so lines don't
-    // appear disproportionately thick.
+    // Lucide/Feather icon paths use a 24×24 viewbox. When 图标会变小，按比例缩放
+    // strokeWeight，这样线条就不会显得不成比例的粗。
     const iconSize = Math.min(
       typeof iconW === 'number' ? iconW : 24,
       typeof iconH === 'number' ? iconH : 24,
@@ -70,9 +69,8 @@ export function convertVector(
     let width: SizingBehavior = resolveWidth(figma, parentStackMode, ctx);
     let height: SizingBehavior = resolveHeight(figma, parentStackMode, ctx);
 
-    // When Figma reports zero width or height for a vector node (common for
-    // chevron/arrow icons centered around the origin), derive the actual
-    // visual extent from the decoded path bounds and adjust position.
+    // When Figma 报告矢量节点的零宽度或高度（常见于以原点为中心的 chevron/arrow
+    // 图标），从解码的路径边界导出实际的视觉范围并调整位置。
     const sizeX = figma.size?.x ?? 0;
     const sizeY = figma.size?.y ?? 0;
     if ((sizeX < 0.01 || sizeY < 0.01) && typeof width === 'number' && typeof height === 'number') {
@@ -91,7 +89,7 @@ export function convertVector(
       }
     }
 
-    // Figma's strokeGeometry is the EXPANDED stroke outline (not a centerline).
+    // Figma 的 strokeGeometry 是 EXPANDED 笔划轮廓（不是中心线）。
     const hasVisibleFills = figma.fillPaints?.some((p: any) => p.visible !== false);
     const hasVisibleStrokes = figma.strokePaints?.some((p: any) => p.visible !== false);
     const isStrokeOnlyOutline =

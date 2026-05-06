@@ -1,12 +1,12 @@
 // apps/web/src/components/panels/git-panel/git-panel-field-conflict-card.tsx
 //
-// Card for a single document-field conflict. Shows:
-//   - Field name + path
-//   - Pretty-printed base / ours / theirs values
-//   - Choose buttons for ours / theirs
-//   - Manual JSON editor toggle (accepts any valid JSON value)
+// Card 用于单个文档字段冲突。 Shows:
+//   - Field 名称 + 路径
+//   - Pretty-打印基础/我们的/他们的价值观
+//   - 我们/他们的 Choose 按钮
+//   - Manual JSON 编辑器切换（接受任何有效的 JSON 值）
 //
-// Resolution state is owned by the parent via the onResolve callback.
+// Resolution 状态由父级通过 onResolve 回调拥有。
 
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -15,7 +15,7 @@ import { GitPanelConflictJsonEditor } from './git-panel-conflict-json-editor';
 import { prettyJson } from './conflict-formatters';
 import type { GitConflictBag, GitConflictResolution } from '@/services/git-types';
 
-/** Minimal inline badge — shadcn Badge not available in this project. */
+/** Minimal 内联徽章 — shadcn Badge 在此项目中不可用。 */
 function InlineBadge({
   children,
   variant = 'outline',

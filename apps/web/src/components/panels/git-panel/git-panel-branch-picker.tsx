@@ -1,30 +1,30 @@
 // apps/web/src/components/panels/git-panel/git-panel-branch-picker.tsx
 //
-// Phase 5 Task 3 + Task 4: branch picker for the git panel.
+// Phase 5 Task 3 + Task 4：git 面板的分支选择器。
 //
-// What this file DOES:
-//   - Declares the full state machine (mode, branchName, inlineError,
-//     deleteTarget, canForce, open).
-//   - Renders the trigger Button + Popover shell, with four sub-modes:
-//       * list           — branch rows + create/merge entry buttons
-//       * create         — inline branch-name form with local validation
-//       * delete-confirm — destructive confirm with opt-in force retry
-//       * merge          — list of non-current branches to merge into HEAD
-//   - Dispatches switchBranch for non-current rows and closes the popover
-//     on save-required so the existing panel save alert takes over.
-//   - For delete, surfaces engine errors inline; only offers a Force
-//     Delete retry when the store returns `branch-unmerged`.
-//   - For merge, relies on the store's conflict transition — mergeBranch
-//     does NOT throw on conflict; it flips state.kind to 'conflict' which
-//     fires this component's top-level early return on the next render.
-//   - Refreshes status + branches whenever the popover opens (so external
-//     terminal changes show up the next time the user looks).
-//   - Early-returns a disabled trigger + tooltip in conflict state (one
-//     branch instead of a disabled=flag in the main render path).
+// What 这个文件 DOES：
+//   - Declares 完整状态机（模式、branchName、inlineError、
+// deleteTarget、canForce，打开）。
+//   - Renders 触发 Button + Popover shell，有四个子模式：
+//       * list — 分支行 + create/merge 输入按钮
+//       * create — 具有本地验证的内联分支名称形式
+//       * 删除确认 — 通过选择强制重试进行破坏性确认
+//       * merge — 要合并到 HEAD 的非当前分支列表
+//   - Dispatches switchBranch 用于非当前行并关闭弹出窗口
+// 需要保存，以便现有面板保存警报接管。
+//   - For 删除，内联显示引擎错误；只提供 Force
+// 当存储返回 `branch-unmerged` 时重试 Delete。
+//   - For 合并，依赖于 store 的冲突转换 — mergeBranch
+// NOT 是否会引发冲突；它将 state.kind 翻转为“冲突”
+// 在下一次渲染时触发该组件的顶级早期返回。
+//   - Refreshes 状态 + 每当弹出窗口打开时分支（因此外部
+// 终端更改会在用户下次查看时显示）。
+//   - Early - 返回处于冲突状态的禁用触发器+工具提示（一个
+// 分支而不是主渲染路径中的禁用=标志）。
 //
-// Conflict state is a single early return (the disabled trigger is NOT a
-// `disabled` prop toggled in the main path); that keeps the list-mode
-// code path free of conditional branches it would never hit.
+// Conflict 状态是单个早期返回（禁用的触发器是 NOT a
+// `disabled` 属性在主路径中切换）；保持列表模式
+// 没有条件分支的代码路径永远不会命中。
 
 import { ChevronDown, ChevronRight, GitBranch } from 'lucide-react';
 import { useState } from 'react';
@@ -49,7 +49,7 @@ export function GitPanelBranchPicker() {
   const deleteBranch = useGitStore((s) => s.deleteBranch);
   const mergeBranch = useGitStore((s) => s.mergeBranch);
 
-  // State machine shared across list/create/merge/delete-confirm modes.
+  // State 机器在 list/create/merge/delete-confirm 模式之间共享。
   const [mode, setMode] = useState<BranchPickerMode>('list');
   const [branchName, setBranchName] = useState('');
   const [inlineError, setInlineError] = useState<string | null>(null);
@@ -84,10 +84,9 @@ export function GitPanelBranchPicker() {
     );
   }
 
-  // Narrowed alias so nested handlers do not need `repo!`. TS loses the
-  // `repo` null-narrowing inside nested function expressions, and the
-  // single alias here lets every handler below speak in terms of
-  // `activeRepo.branches` / `activeRepo.currentBranch`.
+  // Narrowed 别名，因此嵌套处理程序不需要 `repo!`。 TS 失去了嵌套函数表达式内的 `repo`
+  // 空缩小，并且这里的单个别名让下面的每个处理程序都可以使用 `activeRepo.branches` /
+  // `activeRepo.currentBranch` 来说话。
   const activeRepo = repo;
 
   async function handleSelectBranch(name: string, isCurrent: boolean) {
@@ -99,8 +98,8 @@ export function GitPanelBranchPicker() {
       setMode('list');
     } catch (err) {
       if (isGitError(err) && err.code === 'save-required') {
-        // The store has set saveRequiredFor; close the popover so the
-        // panel's <GitPanelSaveRequiredAlert> can take over.
+        // The 商店已设置 saveRequiredFor；关闭弹出窗口，以便面板的
+        // <GitPanelSaveRequiredAlert> 可以接管。
         setOpen(false);
         return;
       }
@@ -119,8 +118,8 @@ export function GitPanelBranchPicker() {
       return;
     }
     setInlineError(null);
-    // git-store.createBranch already calls refreshBranches internally, so
-    // we do NOT need a second refresh here.
+    // git-store.createBranch 已经在内部调用了 refreshBranches，所以我们 NOT
+    // 需要在这里进行第二次刷新。
     try {
       await createBranch({ name });
       setBranchName('');
@@ -145,10 +144,8 @@ export function GitPanelBranchPicker() {
       setCanForce(false);
       setMode('list');
     } catch (err) {
-      // Only upgrade to a force-delete retry when the store returns the
-      // specific `branch-unmerged` code — other errors (engine-crash,
-      // permission failures, etc.) surface as inline messages without
-      // offering force, because force cannot help in those cases.
+      // 当存储返回特定的 `branch-unmerged` 代码时，Only 升级到强制删除重试 -
+      // 其他错误（引擎崩溃、权限失败等）会以内联消息的形式出现，而不提供强制，因为在这些情况下强制无法提供帮助。
       if (isGitError(err) && err.code === 'branch-unmerged' && !force) {
         setInlineError(t('git.branch.deleteWarning', { name: deleteTarget }));
         setCanForce(true);
@@ -162,16 +159,14 @@ export function GitPanelBranchPicker() {
   async function handleMerge(fromBranch: string) {
     setInlineError(null);
     try {
-      // mergeBranch does NOT throw on conflict — it flips state.kind to
-      // 'conflict' and resolves. Our top-level early return observes that
-      // and renders the disabled-trigger tooltip on the next render, so
-      // the happy path here is simply "close the popover and go home".
+      // mergeBranch 会引发冲突 - 它将 state.kind 翻转为“冲突”并解决。 Our
+      // 顶级早期返回会观察到这一点，并在下一次渲染时渲染禁用触发工具提示，因此这里的快乐路径只是“关闭弹出窗口并回家”。
       await mergeBranch(fromBranch);
       setOpen(false);
       setMode('list');
     } catch (err) {
       if (isGitError(err) && err.code === 'save-required') {
-        // The panel's <GitPanelSaveRequiredAlert> takes over.
+        // The 面板的 <GitPanelSaveRequiredAlert> 接管。
         setOpen(false);
         return;
       }

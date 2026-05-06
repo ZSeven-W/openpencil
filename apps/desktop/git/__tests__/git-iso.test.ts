@@ -55,7 +55,7 @@ describe('git-iso', () => {
     it('respects the defaultBranch option', async () => {
       const opFile = await writeOpFile(temp.dir, 'login.op');
       const handle = await initSingleFile({ filePath: opFile, defaultBranch: 'trunk' });
-      // isomorphic-git writes HEAD as a symbolic ref string
+      // isomorphic-git 将 HEAD 写入符号引用字符串
       const fs = await import('node:fs/promises');
       const head = await fs.readFile(join(handle.gitdir, 'HEAD'), 'utf-8');
       expect(head.trim()).toBe('ref: refs/heads/trunk');
@@ -64,7 +64,7 @@ describe('git-iso', () => {
     it('writes core.worktree = ../.. so terminal git can inspect the repo', async () => {
       const opFile = await writeOpFile(temp.dir, 'login.op');
       const handle = await initSingleFile({ filePath: opFile });
-      // Read the on-disk config and verify both core.worktree and core.bare.
+      // Read 磁盘配置并验证 core.worktree 和 core.bare。
       const fsp = await import('node:fs/promises');
       const config = await fsp.readFile(join(handle.gitdir, 'config'), 'utf-8');
       expect(config).toMatch(/worktree\s*=\s*\.\.\/\.\./);
@@ -149,7 +149,7 @@ describe('git-iso', () => {
         author: { name: 't', email: 't@example.com' },
       });
 
-      // Mutate the file then commit again.
+      // Mutate 文件，然后再次提交。
       await writeOpFile(temp.dir, 'login.op', { version: '1.0.0', children: [{ id: 'r2' }] });
       const { hash: h2 } = await commitFile({
         handle,
@@ -160,10 +160,10 @@ describe('git-iso', () => {
       });
 
       expect(h2).not.toBe(h1);
-      // Verify h1 content is recoverable
+      // Verify h1 内容可恢复
       const c1 = await readBlobAtCommit({ handle, filepath: 'login.op', commitHash: h1 });
       expect(JSON.parse(c1).children[0].id).toBe('r1');
-      // Verify h2 content
+      // Verify h2 内容
       const c2 = await readBlobAtCommit({ handle, filepath: 'login.op', commitHash: h2 });
       expect(JSON.parse(c2).children[0].id).toBe('r2');
     });
@@ -218,7 +218,7 @@ describe('git-iso', () => {
         children: [{ id: 'r1' }],
       });
       const handle = await initSingleFile({ filePath: opFile });
-      // Make 3 commits.
+      // Make 3 次提交。
       for (let i = 0; i < 3; i++) {
         await writeOpFile(temp.dir, 'login.op', {
           version: '1.0.0',

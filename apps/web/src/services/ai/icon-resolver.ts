@@ -9,7 +9,7 @@ import {
 import { pendingIconResolutions, tryImmediateIconResolution } from './icon-font-fetcher';
 
 // ---------------------------------------------------------------------------
-// Re-exports — keep the public API surface unchanged for existing consumers
+// 重新导出：保持现有调用方的公共 API 不变
 // ---------------------------------------------------------------------------
 
 export {
@@ -33,31 +33,36 @@ export {
 export { applyNoEmojiIconHeuristic } from './icon-emoji-heuristics';
 
 // ---------------------------------------------------------------------------
-// Icon path resolution — main entry point + node property mutation
+// 图标路径解析：主入口 + 节点属性修正
 // ---------------------------------------------------------------------------
 
 /**
- * Reserved words that mark a path node as explicitly an icon/logo/symbol.
- * The `path` type is also used for legitimate custom geometry (chart
- * lines, progress arcs, waveforms, sparklines, illustrations), so we
- * MUST NOT blindly run icon resolution on every path node — that would
- * clobber the real geometry with a circle/bar-chart/arrow icon path.
+ * 用来显式标记“这是图标”的关键字集合。
  *
- * Only names that clearly signal "this is an icon" are candidates —
- * tested by splitting the name into words on camelCase, spaces, dashes
- * and underscores, then checking for an exact word hit.
+ * `path` 类型不仅会承载图标，也会承载真正的自定义几何图形，
+ * 例如图表线、进度弧、波形、迷你图或插画路径。
+ * 所以这里绝对不能对所有 path 节点盲目做图标解析，
+ * 否则很容易把真实几何图形误替换成 `circle`、`bar-chart`、`arrow` 一类图标路径。
+ *
+ * 只有名称里明确表达“这是一个图标”的节点，
+ * 才有资格进入后续解析流程。
  */
 const ICON_MARKER_WORDS = new Set(['icon', 'logo', 'symbol', 'glyph']);
 
 /**
- * Check whether a path node's name carries an explicit icon marker.
- * Handles "SearchIcon" (camelCase), "Search Icon" (spaced), "search_icon"
- * (snake), "search-icon" (kebab), and "BrandLogo" / "AppGlyph".
- * Rejects descriptive geometry names like "Heart Rate Chart",
- * "Steps Progress", "Chart Fill", "Heart Rate Waveform".
+ * 检查路径节点名称里是否存在显式的图标标记。
+ *
+ * 它可以处理：
+ * - `SearchIcon`（camelCase）
+ * - `Search Icon`（空格）
+ * - `search_icon`（下划线）
+ * - `BrandLogo` / `AppGlyph`
+ *
+ * 同时会排除“Heart Rate Chart”“Steps Progress”“Chart Fill”
+ * 这类描述几何用途的名字。
  */
 function hasExplicitIconMarker(name: string): boolean {
-  // Split on camelCase boundaries, then on whitespace/underscore/hyphen.
+  // 先按 camelCase 拆词，再按空格 / 下划线 / 连字符继续切分。
   const words = name
     .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
     .toLowerCase()
@@ -69,46 +74,45 @@ function hasExplicitIconMarker(name: string): boolean {
 }
 
 /**
- * Resolve icon path nodes by their name. When the AI generates a path node
- * with a name like "SearchIcon" or "MenuIcon", look up the verified SVG path
- * from ICON_PATH_MAP and replace the d attribute.
+ * 根据名称解析图标型 `path` 节点。
  *
- * On local map miss for icon-like names, sets a generic placeholder and
- * records the node for async resolution via the Iconify API.
+ * 如果 AI 生成了像 `SearchIcon`、`MenuIcon` 这样的路径节点，
+ * 就从 `ICON_PATH_MAP` 里找到对应的可信 SVG 路径，并替换它的 `d`。
  *
- * IMPORTANT: Only path nodes whose name explicitly says "icon"/"logo"/
- * "symbol"/"glyph" are considered. Everything else is treated as real
- * custom geometry and left alone — AI-generated data-viz paths like
- * "Heart Rate Chart", "Steps Progress", "Chart Fill" must never be
- * hijacked into a circle or bar-chart icon. The `icon_font` node type
- * is the canonical way for AI to emit icons; icon_resolver only exists
- * to salvage the rare case where AI picks `path` but still means an icon.
+ * 如果本地字典里没有，就先放一个通用占位图标，
+ * 再把该节点登记到异步 Iconify 解析流程里。
+ *
+ * 这里只处理名称中明确带有 `icon` / `logo` / `symbol` / `glyph`
+ * 标记的 path 节点。
+ * 其余 path 一律视为真实自定义几何图形，保持原样不动。
+ *
+ * `icon_font` 才是 AI 输出图标的规范节点类型；
+ * `icon-resolver` 更像是一层兜底，用来补救 AI 偶尔把图标错误地生成为 `path` 的情况。
  */
 export function applyIconPathResolution(node: PenNode): void {
   if (node.type !== 'path') return;
 
   const originalName = node.name ?? node.id ?? '';
-  // Hard gate: require an explicit icon/logo marker in the name.
-  // Without this guard, descriptive path names share substrings with icon
-  // dictionary keys (e.g. "Chart Fill" → prefix "chart") and get
-  // overwritten with the matched icon path.
+  // 强约束：名称里必须明确出现 icon/logo 标记。
+  // 没有这层保护的话，像 “Chart Fill” 这样的名字很容易因为共享子串
+  // 被误识别成图标词典里的条目。
   if (!hasExplicitIconMarker(originalName)) return;
 
   const rawName = originalName
     .toLowerCase()
-    .replace(/[-_\s]+/g, '') // normalize separators
-    .replace(/(icon|logo|symbol|glyph)$/, ''); // strip trailing marker
+    .replace(/[-_\s]+/g, '') // 标准化分隔符
+    .replace(/(icon|logo|symbol|glyph)$/, ''); // 剥离尾随标记
 
   let match = ICON_PATH_MAP[rawName];
 
   if (!match) {
-    // 1. Try prefix fallback: "arrowdowncircle" -> "arrowdown", "shieldcheck" -> "shield"
+    // 1. 先尝试前缀回退，例如 "arrowdowncircle" -> "arrowdown"
     const prefixKey = findPrefixFallback(rawName);
     if (prefixKey) match = ICON_PATH_MAP[prefixKey];
   }
 
   if (!match) {
-    // 2. Try substring fallback: "badgecheck" -> "check", "uploadcloud" -> "upload"
+    // 2. 再尝试子串回退，例如 "badgecheck" -> "check"
     const substringKey = findSubstringFallback(rawName);
     if (substringKey) match = ICON_PATH_MAP[substringKey];
   }
@@ -117,7 +121,7 @@ export function applyIconPathResolution(node: PenNode): void {
   const queueName = rawName || originalNormalized;
 
   if (!match) {
-    // 3. Last resort: circle from Feather, queued for async.
+    // 3. 最后兜底：先放一个通用 Feather 圆形图标，再排队走异步解析。
     if (isIconLikeName(node.name ?? '', queueName) && !isOverlyGenericFallbackName(queueName)) {
       const fallback = ICON_PATH_MAP['circle'] ?? ICON_PATH_MAP['feather:circle'];
       if (fallback) {
@@ -131,7 +135,7 @@ export function applyIconPathResolution(node: PenNode): void {
     return;
   }
 
-  // Replace with verified path data and mark as resolved icon
+  // 用可信路径数据替换，并记录解析出的 iconId
   node.d = match.d;
   node.iconId = match.iconId ?? `feather:${rawName}`;
   applyIconStyle(node, match.style);
@@ -147,17 +151,15 @@ export function resolveIconPathBySemanticName(node: PathNode, semanticName: stri
 }
 
 // ---------------------------------------------------------------------------
-// Internal helpers
+// 内部辅助函数
 // ---------------------------------------------------------------------------
 
 /**
- * Check if a name looks like an icon reference (not just any path node).
+ * 判断一个名字是否像“可解析的图标引用”。
  *
- * The top-level guard in applyIconPathResolution already requires an
- * explicit icon/logo/symbol/glyph marker, so by the time we get here we
- * know the caller believes this is an icon. We still want a short
- * non-empty normalized form so we can queue it for async Iconify
- * resolution (empty after normalization means there is nothing to look up).
+ * 走到这里时，上层已经确认名称带有显式图标标记；
+ * 这里额外要求规范化后的名字非空、且长度别太离谱，
+ * 这样才值得进入异步 Iconify 解析流程。
  */
 function isIconLikeName(_originalName: string, normalized: string): boolean {
   return normalized.length > 0 && normalized.length <= 30;

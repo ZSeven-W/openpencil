@@ -1,9 +1,9 @@
-// @vitest-environment jsdom
+// @vitest-环境 jsdom
 // apps/web/src/components/panels/git-panel/__tests__/git-panel-conflict-banner.test.tsx
 //
-// Phase 7b: tests for the upgraded conflict banner — progress display,
-// non-.op file list summary, dynamic apply/continue label, abort,
-// and inline finalizeError from merge-still-conflicted.
+// Phase 7b：测试升级后的冲突横幅 - 进度显示，
+// non-.op 文件列表摘要、动态 apply/continue 标签、中止、
+// 和来自 merge-still-conflicted 的内联 finalizeError。
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, cleanup, fireEvent } from '@testing-library/react';

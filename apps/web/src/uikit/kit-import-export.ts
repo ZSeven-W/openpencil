@@ -14,8 +14,8 @@ import { extractComponentsFromDocument } from './kit-utils';
 // ---------------------------------------------------------------------------
 
 /**
- * Import a .pen file as a UIKit via the native file picker.
- * Returns null if the user cancels or the file has no reusable components.
+ * Import 通过本机文
+ * 件选择器将 .pen 文件作为 UIKit。如果用户取消或文件没有可重用组件，则 Returns null。
  */
 export async function importKitFromFile(): Promise<UIKit | null> {
   const doc = await pickAndParsePenFile();
@@ -39,8 +39,8 @@ export async function importKitFromFile(): Promise<UIKit | null> {
 // ---------------------------------------------------------------------------
 
 /**
- * Export reusable components from the current document as a .pen kit file.
- * If componentIds is empty, exports all reusable components.
+ * Export 将当前文档
+ * 中的可重用组件作为 .pen 工具包文件。 If componentIds 为空，导出所有可重用组件。
  */
 export async function exportKit(
   sourceDoc: PenDocument,
@@ -64,7 +64,7 @@ export async function exportKit(
     children: selected.map((n) => structuredClone(n)),
   };
 
-  // Copy referenced variables
+  // Copy 引用变量
   if (sourceDoc.variables) {
     const refs = collectAllVariableRefs(selected);
     const vars: Record<string, unknown> = {};
@@ -79,7 +79,7 @@ export async function exportKit(
     }
   }
 
-  // Copy themes if variables were included
+  // Copy 主题（如果包含变量）
   if (kitDoc.variables && sourceDoc.themes) {
     kitDoc.themes = structuredClone(sourceDoc.themes);
   }

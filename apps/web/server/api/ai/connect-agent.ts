@@ -11,7 +11,7 @@ import {
   getClaudeAgentDebugFilePath,
 } from '../../utils/resolve-claude-agent-env';
 
-/** Windows npm global installs may create .cmd or .ps1 wrappers — try both */
+/** Windows npm 全局安装可能会创建 .cmd 或 .ps1 包装器 - 两者都尝试一下 */
 function winNpmCandidates(dir: string, name: string): string[] {
   return [join(dir, `${name}.cmd`), join(dir, `${name}.ps1`)];
 }
@@ -412,7 +412,7 @@ async function parseCodexLatestModelMd(codexHome: string): Promise<GroupedModel[
   }
 }
 
-/** Connect to Codex CLI and fetch its supported models from the local cache */
+/** Connect 到 Codex CLI 并从本地缓存中获取其支持的模型 */
 async function connectCodexCli(): Promise<ConnectResult> {
   serverLog.info('[connect-agent] connecting to Codex CLI...');
   try {

@@ -1,4 +1,4 @@
-// @vitest-environment jsdom
+// @vitest-环境 jsdom
 // apps/web/src/components/panels/git-panel/__tests__/git-panel-conflict.test.tsx
 import React from 'react';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
@@ -64,7 +64,7 @@ const mocks = vi.hoisted(() => {
     clearAuthorIdentity: vi.fn(async () => {}),
     closeRepo: vi.fn(async () => {}),
     refreshStatus: vi.fn(async () => {}),
-    // Phase 7b: computeDiff needed by GitPanelHistoryDiff inside expanded rows
+    // Phase 7b：扩展行内的 GitPanelHistoryDiff 需要 computeDiff
     computeDiff: vi.fn(async () => ({
       summary: { framesChanged: 0, nodesAdded: 0, nodesRemoved: 0, nodesModified: 0 },
       patches: [],

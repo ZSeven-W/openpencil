@@ -20,7 +20,7 @@ const PROVIDER_ICON: Record<AIProviderType, typeof ClaudeLogo> = {
 
 export { PROVIDER_ICON };
 
-/** Pick the best available model: keep current, fall back to preferred, then first. */
+/** Pick 最佳可用模型：保持当前状态，回退到首选，然后是第一个。 */
 export function resolveNextModel(
   models: Array<{ value: string }>,
   currentModel: string,
@@ -33,7 +33,7 @@ export function resolveNextModel(
 }
 
 /**
- * Compact concurrency selector — cycles 1x through 6x on click.
+ * Compact 并发选择器 — 单击时循环 1 次到 6 次。
  */
 export function ConcurrencyButton() {
   const { t } = useTranslation();
@@ -61,7 +61,7 @@ export function ConcurrencyButton() {
 }
 
 /**
- * Upward model dropdown with search, provider grouping, and builtin badges.
+ * Upward 模型下拉列表，包含搜索、提供商分组和内置徽章。
  */
 export function ModelDropdown({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { t } = useTranslation();
@@ -79,7 +79,7 @@ export function ModelDropdown({ open, onClose }: { open: boolean; onClose: () =>
     }
   }, [open]);
 
-  // Close on outside click
+  // Close 外部点击
   const dropdownRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!open) return;

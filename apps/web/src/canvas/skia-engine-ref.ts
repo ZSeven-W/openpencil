@@ -1,8 +1,8 @@
 /**
- * Module-level singleton reference to the active SkiaEngine instance.
- * Set by SkiaCanvas on mount, cleared on unmount.
- * Allows external code (keyboard shortcuts, AI orchestrator, etc.) to call
- * engine methods like zoomToFitContent() without prop-drilling.
+ * Module 级别对活动
+ * SkiaEngine 实例的单例引用。 Set 在安装时由 SkiaCanvas 执行，在卸载时清除。 Allows
+ * 外部代码（键盘快捷键、AI Orchestrator 等），用于调用
+ * zoomToFitContent() 等引擎方法，无需进行 prop-drilling。
  */
 
 import type { SkiaEngine } from './skia/skia-engine';
@@ -18,34 +18,33 @@ export function getSkiaEngineRef(): SkiaEngine | null {
 }
 
 /**
- * Zoom and pan so all document content fits in the visible canvas area.
- * Delegates to the active SkiaEngine instance.
+ * Zoom 并平移，使所有
+ * 文档内容都适合可见的画布区域。 Delegates 到活动 SkiaEngine 实例。
  */
 export function zoomToFitContent() {
   _engine?.zoomToFitContent();
 }
 
 /**
- * Returns the canvas element dimensions in CSS pixels.
- * Falls back to 800x600 if no engine is mounted.
+ * Returns
+ * 画布元素尺寸（以 CSS 像素为单位）。如果未安装引擎，Falls 返回 800x600。
  */
 export function getCanvasSize(): { width: number; height: number } {
   return _engine?.getCanvasSize() ?? { width: 800, height: 600 };
 }
 
 /**
- * No-op — with the Skia engine, document-store is always in sync.
- * Previously needed for Fabric.js where canvas objects held authoritative positions.
+ * No-op — 使用
+ * Skia 引擎，文档存储始终保持同步。 Previously 需要 Fabric.js，其中画布对象占据权威位置。
  */
 export function syncCanvasPositionsToStore() {
-  // Skia engine writes positions directly to document-store during interactions.
-  // No sync needed before save.
+  // Skia 引擎在交互过程中将位置直接写入文档存储。保存前需要 No 同步。
 }
 
 /**
- * Flag to skip depth-resolution on the next selection event.
- * Used by layer panel to programmatically select children without
- * auto-resolving them to their parent group.
+ * Flag 在下一个选择事
+ * 件中跳过深度分辨率。 Used 通过图层面板以编程方式选择子项，而不将它们自动解析到其父组。
+ *
  */
 let _skipNextDepthResolve = false;
 export function setSkipNextDepthResolve() {

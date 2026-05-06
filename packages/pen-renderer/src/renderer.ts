@@ -27,8 +27,8 @@ import { viewportMatrix, screenToScene, zoomToPoint as vpZoomToPoint } from './v
 import type { RenderNode, PenRendererOptions, ViewportState } from './types.js';
 
 /**
- * Standalone read-only renderer for OpenPencil (.op) design files.
- * No React, no Zustand, no TanStack — just pure TypeScript + CanvasKit.
+ * Standalone OpenPencil (.op) 设计文件的只读渲染器。
+ * No React，没有 Zustand，没有 TanStack — 只是纯粹的 TypeScript + CanvasKit。
  *
  * @example
  * ```ts
@@ -36,9 +36,9 @@ import type { RenderNode, PenRendererOptions, ViewportState } from './types.js';
  *
  * const ck = await loadCanvasKit('/canvaskit/')
  * const renderer = new PenRenderer(ck, { fontBasePath: '/fonts/' })
- * renderer.init(document.getElementById('canvas') as HTMLCanvasElement)
- * renderer.setDocument(myDocument)
- * renderer.zoomToFit()
+ * 渲染器.init(document.getElementById('canvas') 为 HTMLCanvasElement)
+ * 渲染器.setDocument(myDocument)
+ * 渲染器.zoomToFit()
  * ```
  */
 export class PenRenderer {
@@ -50,7 +50,7 @@ export class PenRenderer {
   private renderNodes: RenderNode[] = [];
   private options: PenRendererOptions;
 
-  // Component/instance IDs for colored frame labels
+  // Component/instance IDs 用于彩色框架标签
   private reusableIds = new Set<string>();
   private instanceIds = new Set<string>();
 
@@ -82,7 +82,7 @@ export class PenRenderer {
 
   // ---------------------------------------------------------------------------
   // Lifecycle
-  // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
 
   init(canvas: HTMLCanvasElement) {
     this.canvasEl = canvas;
@@ -101,13 +101,13 @@ export class PenRenderer {
     this.nodeRenderer.setRedrawCallback(() => this.markDirty());
     (this.nodeRenderer as any).textRenderer._onFontLoaded = () => this.markDirty();
 
-    // Pre-load default fonts
+    // Pre-加载默认字体
     const defaultFonts = this.options.defaultFonts ?? ['Inter', 'Noto Sans SC'];
     for (const font of defaultFonts) {
       this.nodeRenderer.fontManager.ensureFont(font).then(() => this.markDirty());
     }
 
-    // Wire up root children provider for layout engine fill-width fallback
+    // Wire 布局引擎填充宽度后备的根子提供程序
     setRootChildrenProvider(() => this.document?.children ?? []);
 
     this.startRenderLoop();
@@ -133,7 +133,7 @@ export class PenRenderer {
 
   // ---------------------------------------------------------------------------
   // Document
-  // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
 
   setDocument(doc: PenDocument) {
     this.document = doc;
@@ -147,7 +147,7 @@ export class PenRenderer {
 
   // ---------------------------------------------------------------------------
   // Pages
-  // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
 
   setPage(pageId: string) {
     this.activePageId = pageId;
@@ -164,7 +164,7 @@ export class PenRenderer {
 
   // ---------------------------------------------------------------------------
   // Viewport
-  // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
 
   setViewport(zoom: number, panX: number, panY: number) {
     this._zoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, zoom));
@@ -225,7 +225,7 @@ export class PenRenderer {
 
   // ---------------------------------------------------------------------------
   // Theme
-  // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
 
   setThemeVariant(variant: Record<string, string>) {
     this.options.themeVariant = variant;
@@ -233,8 +233,8 @@ export class PenRenderer {
   }
 
   // ---------------------------------------------------------------------------
-  // Hit testing
-  // ---------------------------------------------------------------------------
+  // Hit 测试
+// ---------------------------------------------------------------------------
 
   hitTest(screenX: number, screenY: number): PenNode | null {
     if (!this.canvasEl) return null;
@@ -255,8 +255,8 @@ export class PenRenderer {
   }
 
   // ---------------------------------------------------------------------------
-  // Internal: Document sync
-  // ---------------------------------------------------------------------------
+  // Internal：Document 同步
+// ---------------------------------------------------------------------------
 
   private syncFromDocument() {
     if (!this.document) return;
@@ -269,16 +269,16 @@ export class PenRenderer {
     collectReusableIds(pageChildren, this.reusableIds);
     collectInstanceIds(pageChildren, this.instanceIds);
 
-    // Resolve refs
+    // Resolve 参考
     const resolved = resolveRefs(pageChildren, allNodes);
 
-    // Resolve design variables
+    // Resolve 设计变量
     const variables = this.document.variables ?? {};
     const themes = this.document.themes;
     const activeTheme = this.options.themeVariant ?? getDefaultTheme(themes);
     const variableResolved = resolved.map((n) => resolveNodeForCanvas(n, variables, activeTheme));
 
-    // Pre-measure text heights
+    // Pre-测量文本高度
     const measured = premeasureTextHeights(variableResolved);
 
     this.renderNodes = flattenToRenderNodes(measured);
@@ -287,8 +287,8 @@ export class PenRenderer {
   }
 
   // ---------------------------------------------------------------------------
-  // Render loop
-  // ---------------------------------------------------------------------------
+  // Render 循环
+// ---------------------------------------------------------------------------
 
   private markDirty() {
     this.dirty = true;
@@ -314,20 +314,20 @@ export class PenRenderer {
     const bgColor = this.options.backgroundColor ?? CANVAS_BACKGROUND_DARK;
     canvas.clear(parseColor(ck, bgColor));
 
-    // Apply viewport transform
+    // Apply 视口变换
     canvas.save();
     canvas.scale(dpr, dpr);
     canvas.concat(viewportMatrix({ zoom: this._zoom, panX: this._panX, panY: this._panY }));
 
-    // Pass current zoom to renderer
+    // Pass 当前缩放到渲染器
     this.nodeRenderer.zoom = this._zoom;
 
-    // Draw all render nodes
+    // Draw 所有渲染节点
     for (const rn of this.renderNodes) {
       this.nodeRenderer.drawNode(canvas, rn);
     }
 
-    // Draw frame labels for root frames + reusable + instances
+    // Draw 根框架的框架标签+可重用+实例
     for (const rn of this.renderNodes) {
       if (!rn.node.name) continue;
       const isRootFrame = rn.node.type === 'frame' && !rn.clipRect;
@@ -341,7 +341,7 @@ export class PenRenderer {
     this.surface.flush();
   }
 
-  /** Simple frame label drawing for read-only renderer. */
+  /** Simple 只读渲染器的帧标签绘制。 */
   private drawFrameLabel(
     canvas: ReturnType<Surface['getCanvas']>,
     name: string,
@@ -352,7 +352,7 @@ export class PenRenderer {
     const fontSize = FRAME_LABEL_FONT_SIZE / this._zoom;
     const offsetY = FRAME_LABEL_OFFSET_Y / this._zoom;
 
-    // Use Canvas 2D to rasterize the label text
+    // Use Canvas 2d 光栅化标签文本
     const dpr = this.options.devicePixelRatio ?? window.devicePixelRatio ?? 1;
     const scale = Math.min(this._zoom * dpr, 4);
     const tmp = document.createElement('canvas');

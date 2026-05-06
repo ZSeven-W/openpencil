@@ -15,11 +15,10 @@ export function convertText(
   const textProps = mapFigmaTextProps(figma);
   const width = resolveWidth(figma, parentStackMode, ctx);
 
-  // Reconcile textGrowth with the resolved width:
-  // 1. Layout sizing string (fill_container, fit_content) — container dictates width,
-  //    so text must use fixed-width mode (Textbox) for wrapping.
-  // 2. textAutoResize missing (undefined in .fig binary) — Figma defaults to fixed
-  //    dimensions; treat as fixed-width so text wraps at the stored width.
+  // Reconcile textGrowth 具有已解析的宽度： 1. Layout
+  // 大小调整字符串 (fill_container、fit_content) — 容器规定宽度，因此文本必须使用固定宽度模式 (Textbox) 进行换行。 2.
+  // textAutoResize 缺失（.fig 二进制文件中未定义）——Figma
+  // 默认为固定维度；视为固定宽度，因此文本以存储的宽度换行。
   if (textProps.textGrowth === undefined) {
     if (typeof width === 'string' || !figma.textAutoResize) {
       textProps.textGrowth = 'fixed-width';

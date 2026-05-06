@@ -1,4 +1,4 @@
-/** @deprecated Legacy Fabric.js types — will be removed once export is migrated to CanvasKit */
+/** @deprecated Legacy Fabric.js 类型 — 一旦导出迁移到 CanvasKit 将被删除 */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Canvas = Record<string, any>;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

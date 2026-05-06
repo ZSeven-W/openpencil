@@ -8,7 +8,7 @@ interface PostBody {
   port?: number;
 }
 
-/** POST /api/mcp/server — Start or stop the standalone MCP HTTP server. */
+/** POST /api/mcp/server — Start 或停止独立 MCP HTTP 服务器。 */
 export default defineEventHandler(async (event) => {
   setResponseHeaders(event, { 'Content-Type': 'application/json' });
   const body = await readBody<PostBody>(event);

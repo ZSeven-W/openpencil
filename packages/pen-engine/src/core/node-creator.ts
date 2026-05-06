@@ -9,9 +9,9 @@ import {
 } from '@zseven-w/pen-core';
 
 /**
- * Create a default PenNode for the given tool type.
- * Extracted from apps/web/src/canvas/canvas-node-creator.ts.
- * No DOM/React dependencies.
+ * Create 给定工具类
+ * 型的默认 PenNode。 Extracted 来自 apps/web/src/canvas/ca
+ * nvas-node-creator.ts。 No DOM/React 依赖项。
  */
 export function createNodeForTool(
   tool: ToolType,
@@ -112,7 +112,7 @@ export function createNodeForTool(
   }
 }
 
-/** Whether a tool draws shapes (everything except select/hand). */
+/** Whether 一个绘制形状的工具（除了 select/hand 之外的所有形状）。 */
 export function isDrawingTool(tool: ToolType): boolean {
   return tool !== 'select' && tool !== 'hand';
 }

@@ -1,7 +1,7 @@
 import type { PenNode, PenDocument } from '@zseven-w/pen-types';
 import type { Issue } from './types';
 
-/** Extract the first fill color from a node (raw, including variable refs) */
+/** Extract 节点中的第一个填充颜色（原始，包括变量引用） */
 function getFirstFillColor(node: PenNode): string | null {
   if (!('fill' in node) || !Array.isArray(node.fill) || node.fill.length === 0) return null;
   const first = node.fill[0];
@@ -10,25 +10,25 @@ function getFirstFillColor(node: PenNode): string | null {
 }
 
 /**
- * Compare two color strings via WCAG relative-luminance contrast ratio.
- * Returns 1.0 for identical colors, growing toward 21.0 as they diverge,
- * or Infinity if either color cannot be parsed (e.g. variable refs).
+ * Compare 通过
+ * WCAG 相对亮度对比度计算两个颜色字符串。 Returns 1.0 对于相同的颜色，随着它们的发散而向 21.0 增长，或者
+ * Infinity 如果任一颜色无法解析（例如变量引用）。 Why WCAG 对比度而不是最大 RGB
  *
- * Why WCAG contrast ratio rather than max RGB channel diff:
- * the human eye is much more sensitive to small tonal differences on
- * dark backgrounds than light ones (Weber–Fechner / dark adaptation).
- * A 9-unit RGB diff means very different things at different lightness:
+ * 通道差异：人眼对深色背景上的微小色调差异比浅色背景更敏感（Weber–Fechner / 暗适应）。 9 单元 RGB diff
+ * 在不同的亮度下意味着非常
+ * 不同的东西： #FAFAFA vs #F1F1F1 (light, RGB diff 9)：对比度 ≈ 1.07
+ * → 不可见 #111111 vs #1a1a1a (dark, RGB diff 9)：对比度 ≈ 1.18 → 可区分
  *
- *   #FAFAFA vs #F1F1F1  (light, RGB diff 9): contrast ratio ≈ 1.07 → invisible
- *   #111111 vs #1A1A1A  (dark,  RGB diff 9): contrast ratio ≈ 1.18 → distinguishable
+ * Channel-diff 对它们一视同仁，并在黑暗主题卡上产生误报。 Contrast
+ * 比率是基于亮度的，感知上均匀，并且在两种情况下都给出了正确的答案。 It 还与度量 WCAG
  *
- * Channel-diff treats them identically and produces false positives on
- * dark theme cards. Contrast ratio is luminance-based, perceptually
- * uniform-ish, and gives the right answer in both regimes. It also
- * matches the metric WCAG and design tools (Stark, Figma) use.
+ * 和设计工具（Stark、
+ * Figma）使用相匹配。 Used by detectInvisibleContainers 来捕获填充颜色在视觉上几乎相同但不严格相等的情况。
  *
- * Used by detectInvisibleContainers to catch cases where fill colors are
- * visually nearly identical but not strictly equal.
+ *
+ *
+ *
+ *
  */
 function colorContrast(a: string, b: string): number {
   if (a === b) return 1;
@@ -42,7 +42,7 @@ function colorContrast(a: string, b: string): number {
   return (lighter + 0.05) / (darker + 0.05);
 }
 
-/** WCAG 2.x relative luminance for sRGB. Returns 0.0–1.0. */
+/** WCAG sRGB 2.x 相对亮度。 Returns 0.0–1.0。 */
 function relativeLuminance(c: { r: number; g: number; b: number }): number {
   const lin = (v: number): number => {
     const s = v / 255;
@@ -51,7 +51,7 @@ function relativeLuminance(c: { r: number; g: number; b: number }): number {
   return 0.2126 * lin(c.r) + 0.7152 * lin(c.g) + 0.0722 * lin(c.b);
 }
 
-/** Parse #rgb / #rrggbb / #rrggbbaa to {r,g,b}. Returns null on parse failure. */
+/** Parse #rgb / #rrggbb / #rrggbbaa 到 {r,g,b}。 Returns 解析失败时为 null。 */
 function parseHexColor(s: string): { r: number; g: number; b: number } | null {
   if (typeof s !== 'string') return null;
   const m = s.trim().match(/^#([0-9a-fA-F]{3,8})$/);
@@ -71,7 +71,7 @@ function parseHexColor(s: string): { r: number; g: number; b: number } | null {
   return { r, g, b };
 }
 
-/** Check if a node already has a visible stroke */
+/** Check 如果节点已经有可见的笔画 */
 function hasStroke(node: PenNode): boolean {
   if (!('stroke' in node)) return false;
   const s = node.stroke as { thickness?: number } | undefined;
@@ -82,7 +82,7 @@ interface PenDocumentLike {
   variables?: Record<string, unknown>;
 }
 
-/** Resolve border color: prefer $color-border variable if it exists, else neutral gray */
+/** Resolve 边框颜色：首选 $color-border 变量（如果存在），否则为中性灰色 */
 function getBorderStroke(doc: PenDocumentLike): {
   thickness: number;
   fill: Array<{ type: 'solid'; color: string }>;
@@ -94,32 +94,32 @@ function getBorderStroke(doc: PenDocumentLike): {
 
 export interface DetectInvisibleContainersOptions {
   /**
-   * 'perceptual' uses WCAG relative-luminance contrast ratio with
-   * `contrastRatioThreshold`. 'strict' uses === equality (the original
-   * behavior). Default: 'perceptual'.
+   * “感知”使用 WCAG
+   * 相对亮度对比度和 `contrastRatioThreshold`。 'strict' 使用 === 相等（原始行为）。
+   * Default：“感知”。
    */
   colorMatchMode?: 'strict' | 'perceptual';
   /**
-   * Maximum WCAG contrast ratio (1.0–21.0) below which two colors are
-   * considered "the same" in perceptual mode. Default: 1.10.
+   * Maximum WCAG
+   * 对比度 (1.0–21.0)，低于该对比度的两种颜色在感知模式下被视为“相同”。 Default：1.10。 Reference
    *
-   * Reference points:
-   *   1.00 = identical
-   *   1.10 = essentially indistinguishable on either light or dark bg
-   *   1.50 = subtly visible
-   *   3.00 = clearly visible (WCAG AA UI element)
-   *   4.50 = WCAG AA text contrast
+   * 分： 1.00 = 相同 1.10 = 在浅色或深色背景下基本无法区分 1.50 = 微妙可见 3.00 =
+   * 清晰可见（WCAG AA
+   * UI 元素） 4.50 =
+   * WCAG AA 文本对比度
+   * Higher = 更积极的检测（将标记更多对为“看不见”）。 Lower = 更严格（误报更少，遗漏更多）。
    *
-   * Higher = more aggressive detection (will flag more pairs as
-   * "invisible"). Lower = stricter (fewer false positives, more misses).
+   *
+   *
+   *
    */
   contrastRatioThreshold?: number;
 }
 
 /**
- * Detect frames whose fill matches their parent's fill (rendered "invisible")
- * and which contain visible content. Suggests adding a subtle stroke so the
- * container becomes distinguishable.
+ * Detect 帧的填充与
+ * 其父级的填充相匹配（呈现“不可见”）并且包含可见内容。 Suggests 添加微妙的笔划，使容器变得可区分。
+ *
  */
 export function detectInvisibleContainers(
   root: PenNode,
@@ -149,12 +149,9 @@ export function detectInvisibleContainers(
       const ratio = colorContrast(nodeFill, parentFillColor);
       const same = mode === 'strict' ? nodeFill === parentFillColor : ratio <= threshold;
       if (same) {
-        // Theme-aware severity: on dark backgrounds the suggested
-        // light-gray border (#E2E8F0) would actively damage the design.
-        // Downgrade dark-on-dark cases to 'info' (detect-only); pre-
-        // validation skips info severity so the user/agent can decide
-        // manually whether to add a dark-appropriate border. Light-on-
-        // light cases stay 'warning' and remain auto-fixable.
+        // Theme 感知严重性：在深色背景上，建议的浅灰色边框 (#E2E8F0) 会严重损坏设计。
+        // Downgrade 暗对暗情况为“信息”（仅检测）；预验证会跳过信息严重性，因此 user/agent
+        // 可以手动决定是否添加适合深色的边框。 Light-on-light 情况保持“警告”并保持自动修复。
         const parsedParent = parseHexColor(parentFillColor);
         const isDarkOnDark = parsedParent != null && relativeLuminance(parsedParent) < 0.1;
         issues.push({

@@ -1,6 +1,6 @@
 import type { SessionNotification } from '@agentclientprotocol/sdk';
 
-/** Convert an ACP session/update notification to an OpenPencil SSE event string. */
+/** Convert ACP session/update 通知至 OpenPencil SSE 事件字符串。 */
 export function acpUpdateToSSE(notification: SessionNotification): string | null {
   const update = notification.update;
   if (!update) return null;
@@ -15,8 +15,8 @@ export function acpUpdateToSSE(notification: SessionNotification): string | null
     }
 
     case 'tool_call': {
-      // ACP tool calls are display-only — the agent executes them via MCP.
-      // level: 'orchestrate' makes AgentToolExecutor skip execution.
+      // ACP 工具调用仅显示 - 代理通过 MCP 执行它们。 level: 'orchestrate' 使
+      // AgentToolExecutor 跳过执行。
       return formatSSE('tool_call', {
         type: 'tool_call',
         id: update.toolCallId,
@@ -28,8 +28,7 @@ export function acpUpdateToSSE(notification: SessionNotification): string | null
 
     case 'tool_call_update': {
       if (update.status === 'completed' || update.status === 'failed') {
-        // On failure, extract error details from content blocks (ACP places
-        // error text in content[].content when tool execution fails).
+        // On 失败，从内容块中提取错误详细信息（当工具执行失败时，ACP 将错误文本放置在 content[].content 中）。
         let errorMsg: string | undefined;
         if (update.status === 'failed') {
           const content = (update as { content?: Array<{ content?: unknown }> }).content;
@@ -40,7 +39,7 @@ export function acpUpdateToSSE(notification: SessionNotification): string | null
               }
             }
           }
-          // Log to server console for debugging
+          // Log 到服务器控制台进行调试
           console.error(
             `[acp] tool ${update.toolCallId} failed:`,
             errorMsg ?? JSON.stringify(update.rawOutput),

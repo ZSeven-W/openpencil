@@ -1,4 +1,4 @@
-// @vitest-environment jsdom
+// @vitest-环境 jsdom
 // apps/web/src/components/panels/git-panel/__tests__/git-panel-commit-input.test.tsx
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, fireEvent, cleanup } from '@testing-library/react';
@@ -10,7 +10,7 @@ const mocks = vi.hoisted(() => ({
   setCommitMessage: vi.fn(),
   showAuthorPrompt: vi.fn(),
   commitMilestone: vi.fn(async () => {}),
-  // Fields needed by GitPanelAuthorForm
+  // GitPanelAuthorForm 需要 Fields
   setAuthorIdentity: vi.fn(async () => {}),
   hideAuthorPrompt: vi.fn(),
 }));

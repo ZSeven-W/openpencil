@@ -9,7 +9,7 @@ import type { PenNode } from '@zseven-w/pen-types';
 import type { PenFill, PenStroke } from '@zseven-w/pen-types';
 
 // ---------------------------------------------------------------------------
-// Property helpers
+// Property 帮助者
 // ---------------------------------------------------------------------------
 
 type PropertyName =
@@ -37,7 +37,7 @@ const PROPERTY_ENUM: PropertyName[] = [
   'fontWeight',
 ];
 
-/** Extract the first solid fill color from a fill value (PenFill[] or string). */
+/** Extract 填充值（PenFill[] 或字符串）中的第一个纯色填充颜色。 */
 function extractFillColor(fill: unknown): string | undefined {
   if (typeof fill === 'string') return fill;
   if (Array.isArray(fill)) {
@@ -48,14 +48,14 @@ function extractFillColor(fill: unknown): string | undefined {
   return undefined;
 }
 
-/** Get the value of a property from a node. Returns undefined if not present. */
+/** Get 节点的属性值。 Returns 如果不存在则未定义。 */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function getPropertyValue(node: PenNode, prop: PropertyName): any {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const n = node as any;
   switch (prop) {
     case 'fillColor':
-      // For text nodes, fillColor and textColor are the same; skip text here
+      // For 文本节点，fillColor 和 textColor 相同；此处跳过文字
       if (node.type === 'text') return undefined;
       return extractFillColor(n.fill);
     case 'textColor':
@@ -88,8 +88,8 @@ function getPropertyValue(node: PenNode, prop: PropertyName): any {
 }
 
 /**
- * Compare two values for equality. Handles arrays (cornerRadius, padding)
- * and primitives.
+ * Compare
+ * 两个值相等。 Handles 数组（cornerRadius、填充）和基元。
  */
 function valuesEqual(a: unknown, b: unknown): boolean {
   if (a === b) return true;
@@ -101,8 +101,9 @@ function valuesEqual(a: unknown, b: unknown): boolean {
 }
 
 /**
- * Serialize a value for use as a unique key in a Set/Map.
- * Arrays are JSON-stringified so [1,2] and [1,2] are treated as equal.
+ * Serialize 用作
+ * Set/Map 中唯一键的值。 Arrays 是 JSON 字符串化的，因此 [1,2] 和 [1,2]
+ 被视为相等。
  */
 function serializeValue(v: unknown): string {
   if (v === undefined || v === null) return String(v);
@@ -111,12 +112,12 @@ function serializeValue(v: unknown): string {
 }
 
 // ---------------------------------------------------------------------------
-// Replace helpers
+// Replace 帮助者
 // ---------------------------------------------------------------------------
 
 /**
- * Replace fill color in a fill value. Mutates the fill array in-place if the
- * first solid fill matches `from`.
+ * Replace
+ * 填充值中的填充颜色。如果第一个实心填充与 `from` 匹配，则 Mutates 就地填充数组。
  */
 function replaceFillColor(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -152,7 +153,7 @@ function replaceFillColor(
 type ReplacementRule = { from: any; to: any };
 
 /**
- * Apply a single property replacement on a node. Returns true if replaced.
+ * Apply 节点上的单个属性替换。 Returns 如果替换则为 true。
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function applyReplacement(node: PenNode, prop: PropertyName, rule: ReplacementRule): boolean {
@@ -207,7 +208,7 @@ function applyReplacement(node: PenNode, prop: PropertyName, rule: ReplacementRu
       }
       return false;
     case 'fontWeight':
-      // fontWeight can be number or string; compare loosely
+      // fontWeight 可以是数字或字符串；松散比较
       if (String(n.fontWeight) === String(rule.from)) {
         n.fontWeight = rule.to;
         return true;
@@ -219,7 +220,7 @@ function applyReplacement(node: PenNode, prop: PropertyName, rule: ReplacementRu
 }
 
 // ---------------------------------------------------------------------------
-// Tool definitions
+// Tool 定义
 // ---------------------------------------------------------------------------
 
 export const STYLE_OPS_TOOL_DEFINITIONS = [
@@ -388,15 +389,15 @@ export const STYLE_OPS_TOOL_NAMES = new Set([
 // ---------------------------------------------------------------------------
 
 /**
- * Collect all descendant nodes (including the parent itself) for the given
- * parent IDs.
+ * Collect
+ * 给定父节点 IDs 的所有后代节点（包括父节点本身）。
  */
 function collectDescendants(children: PenNode[], parentIds: string[]): PenNode[] {
   const result: PenNode[] = [];
   for (const pid of parentIds) {
     const parent = findNodeInTree(children, pid);
     if (!parent) continue;
-    // Include parent and all its descendants
+    // Include 父级及其所有后代
     result.push(...flattenNodes([parent]));
   }
   return result;
@@ -454,7 +455,7 @@ export async function handleStyleOpsToolCall(
         }
       }
 
-      // Persist changes
+      // Persist 变化
       setDocChildren(doc, children, a.pageId);
       await saveDocument(filePath, doc);
 

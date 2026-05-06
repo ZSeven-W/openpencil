@@ -5,21 +5,21 @@ import { appStorage } from '@/utils/app-storage';
 const STORAGE_PREFIX = 'openpencil-design-md:';
 const CURRENT_KEY_STORAGE = 'openpencil-design-md-current-key';
 
-/** Derive a storage key from a file identifier. Returns null for untitled documents. */
+/** Derive 来自文件标识符的存储密钥。 Returns 无标题文档为 null。 */
 function fileKey(fileName: string | null, filePath: string | null): string | null {
   return filePath ?? fileName ?? null;
 }
 
 interface DesignMdStoreState {
-  /** Current design.md spec */
+  /** Current design.md 规格 */
   designMd: DesignMdSpec | undefined;
-  /** Current file key for persistence (null = untitled, skip persistence) */
+  /** Current 用于持久化的文件密钥（null = 无标题，跳过持久化） */
   _fileKey: string | null;
 
   setDesignMd: (spec: DesignMdSpec | undefined) => void;
-  /** Sync store to a document — restores persisted designMd or clears if none. */
+  /** Sync 存储到文档 — 恢复持久的 designMd 或清除（如果没有）。 */
   syncToDocument: (fileName: string | null, filePath: string | null) => void;
-  /** Called on new document — clears designMd. */
+  /** 新文档上的 Called — 清除 designMd。 */
   clearForNewDocument: () => void;
   hydrate: () => void;
 }
@@ -31,7 +31,7 @@ export const useDesignMdStore = create<DesignMdStoreState>((set, get) => ({
   setDesignMd: (spec) => {
     set({ designMd: spec });
     const key = get()._fileKey;
-    if (!key) return; // untitled — skip persistence
+    if (!key) return; // 无标题 — 跳过持久性
     try {
       if (spec) {
         appStorage.setItem(STORAGE_PREFIX + key, JSON.stringify(spec));
@@ -39,7 +39,7 @@ export const useDesignMdStore = create<DesignMdStoreState>((set, get) => ({
         appStorage.removeItem(STORAGE_PREFIX + key);
       }
     } catch {
-      /* ignore */
+      /* 忽略 */
     }
   },
 
@@ -52,7 +52,7 @@ export const useDesignMdStore = create<DesignMdStoreState>((set, get) => ({
       return;
     }
 
-    // Restore persisted designMd for this file
+    // Restore 为此文件保留了 designMd
     try {
       const raw = appStorage.getItem(STORAGE_PREFIX + key);
       if (raw) {
@@ -63,7 +63,7 @@ export const useDesignMdStore = create<DesignMdStoreState>((set, get) => ({
         }
       }
     } catch {
-      /* ignore */
+      /* 忽略 */
     }
 
     set({ designMd: undefined });
@@ -85,12 +85,12 @@ export const useDesignMdStore = create<DesignMdStoreState>((set, get) => ({
         set({ designMd: data });
       }
     } catch {
-      /* ignore */
+      /* 忽略 */
     }
   },
 }));
 
-// Persist the current file key whenever state changes
+// Persist 状态更改时的当前文件密钥
 let _prevFileKey: string | null = null;
 useDesignMdStore.subscribe((state) => {
   if (state._fileKey !== _prevFileKey) {
@@ -102,7 +102,7 @@ useDesignMdStore.subscribe((state) => {
         appStorage.removeItem(CURRENT_KEY_STORAGE);
       }
     } catch {
-      /* ignore */
+      /* 忽略 */
     }
   }
 });

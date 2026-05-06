@@ -35,7 +35,7 @@ import {
 } from './role-resolver';
 import type { RoleContext } from './role-resolver';
 import { rewriteLlmAntiPatterns } from './sanitize-llm-anti-patterns';
-// Trigger side-effect registration of all role definitions
+// 触发所有 role definition 的副作用注册
 import './role-definitions';
 import { extractJsonFromResponse } from './design-parser';
 import {
@@ -54,29 +54,26 @@ import {
 } from './design-node-sanitization';
 
 // ---------------------------------------------------------------------------
-// Cross-phase ID remapping -- tracks replaceEmptyFrame mappings so that
-// later phases recognise the root frame ID has been remapped to DEFAULT_FRAME_ID.
+// 跨阶段 ID 重映射：
+// 记录 `replaceEmptyFrame()` 做过的映射，
+// 让后续阶段知道模型生成的根帧 ID 已经换成了真实画布根帧 ID。
 // ---------------------------------------------------------------------------
 
 const generationRemappedIds = new Map<string, string>();
 let generationContextHint = '';
-/** Root frame width for the current generation (1200 desktop, 375 mobile) */
+/** 当前这一轮生成的根框架宽度（桌面通常是 1200，移动通常是 375）。 */
 let generationCanvasWidth = 1200;
-/** Root frame ID for the current generation — may differ from DEFAULT_FRAME_ID
- *  when canvas already has content and new content is placed beside it. */
+/** 当前这一轮生成所使用的根框架 ID。 */
 let generationRootFrameId: string = DEFAULT_FRAME_ID;
-/** Node IDs that existed on canvas before the current generation started.
- *  Used by upsert sanitization to avoid ID collisions with pre-existing content. */
+/** 当前这一轮开始前，画布里已经存在的节点 ID。 */
 let preExistingNodeIds = new Set<string>();
 
 /**
- * Return the id of the first top-level frame on the ACTIVE page, or null
- * if the page has no frame children yet. This is the correct "page root
- * frame id" for multi-page documents — DEFAULT_FRAME_ID ("root-frame")
- * only applies to Page 1 because addPage() assigns a fresh nanoid to
- * every subsequent page's initial frame. Use this helper anywhere you
- * previously wrote `getNodeById(DEFAULT_FRAME_ID)` with the intent of
- * locating "the current page's root frame".
+ * 返回当前活动页面上的第一个顶级 frame ID。
+ *
+ * 在多页文档里，真正的“当前页根框架”不能简单写死成 `DEFAULT_FRAME_ID`，
+ * 因为只有第一页会使用它；后续页面都会由 `addPage()` 生成新的 nanoid。
+ * 所以凡是想定位“当前页面根框架”的地方，都应该走这个辅助函数。
  */
 function getActivePagePrimaryFrameId(): string | null {
   const doc = useDocumentStore.getState().document;
@@ -90,18 +87,17 @@ function getActivePagePrimaryFrameId(): string | null {
 
 export function resetGenerationRemapping(): void {
   generationRemappedIds.clear();
-  // Fall back to DEFAULT_FRAME_ID only when the active page has no frame yet
-  // (e.g. first load, legacy docs). In the multi-page case this is the
-  // nanoid from addPage().
+  // 只有当前页还没有 frame（例如首次加载或遗留文档）时，
+  // 才退回 `DEFAULT_FRAME_ID`；否则优先使用真实的活动页根框架。
   generationRootFrameId = getActivePagePrimaryFrameId() ?? DEFAULT_FRAME_ID;
-  // Snapshot all existing node IDs so upsert can avoid collisions
+  // 快照当前所有节点 ID，后续 upsert 会用它避免冲突
   preExistingNodeIds = new Set(
     useDocumentStore
       .getState()
       .getFlatNodes()
       .map((n) => n.id),
   );
-  // Reset incremental image search queue for the new generation
+  // 重置这一轮生成的增量图片搜索队列
   resetImageSearchQueue();
 }
 
@@ -113,46 +109,50 @@ export function setGenerationCanvasWidth(width: number): void {
   generationCanvasWidth = width > 0 ? width : 1200;
 }
 
-/** Expose the current canvas width for use by other modules (read-only). */
+/** 对外暴露当前生成宽度（只读）。 */
 export function getGenerationCanvasWidth(): number {
   return generationCanvasWidth;
 }
 
-/** Expose the root frame ID for the current generation (read-only). */
+/** 对外暴露当前生成根框架 ID（只读）。 */
 export function getGenerationRootFrameId(): string {
   return generationRootFrameId;
 }
 
-/** Override the root frame ID — used by append-mode to reuse an existing page frame. */
+/** 覆盖当前根框架 ID，供追加模式复用已有页面框架。 */
 export function setGenerationRootFrameId(id: string): void {
   generationRootFrameId = id;
 }
 
-/** Expose the current remapped IDs map for use by other modules (read-only). */
+/** 对外暴露当前 ID 重映射表（只读）。 */
 export function getGenerationRemappedIds(): Map<string, string> {
   return generationRemappedIds;
 }
 
 // ---------------------------------------------------------------------------
-// Insert a single streaming node into the canvas
+// 将单个流式节点插入画布
 // ---------------------------------------------------------------------------
 
 /**
- * Insert a single streaming node into the canvas instantly.
- * Handles root frame replacement and parent ID remapping.
- * Note: tree-aware heuristics (button width, frame height, clipContent)
- * cannot run here because the node has no children yet during streaming.
- * Use applyPostStreamingTreeHeuristics() after all subtask nodes are inserted.
+ * 立即把一个流式节点插入画布。
+ *
+ * 这里会顺带处理：
+ * - 根框架替换
+ * - 父节点 ID 重映射
+ *
+ * 注意：依赖完整子树的启发式（例如按钮宽度、框架高度、clipContent）
+ * 在这里还跑不了，因为流式阶段节点到达时通常还没有子节点。
+ * 等整棵子树插完后，再调用 `applyPostStreamingTreeHeuristics()` 补跑。
  */
 /**
- * Normalize gradient stop offsets in all fills on a node (in-place).
- * Handles stops without an offset field by auto-distributing them evenly.
- * Also normalizes percentage-format offsets (>1) to the 0-1 range.
+ * 就地规范化节点填充里的渐变 stop 偏移。
+ * 没有 offset 时自动均匀分布；
+ * 百分比形式的 offset（>1）会被归一到 0~1。
  */
 function normalizeNodeFills(node: PenNode): void {
   const fills = 'fill' in node ? (node as { fill?: unknown }).fill : undefined;
 
-  // Convert string shorthand (e.g. "#000000") to PenFill array
+  // 把字符串简写（例如 "#000000"）转换成标准 PenFill 数组
   if (typeof fills === 'string') {
     (node as unknown as Record<string, unknown>).fill = [{ type: 'solid', color: fills }];
     return;
@@ -160,7 +160,7 @@ function normalizeNodeFills(node: PenNode): void {
 
   if (!Array.isArray(fills)) return;
 
-  // Convert any string elements in the array to solid fill objects
+  // 把数组里残留的字符串填充项也补成 solid fill 对象
   for (let i = 0; i < fills.length; i++) {
     if (typeof fills[i] === 'string') {
       fills[i] = { type: 'solid', color: fills[i] };
@@ -194,14 +194,13 @@ export function insertStreamingNode(node: PenNode, parentId: string | null): voi
   const { addNode, getNodeById } = useDocumentStore.getState();
   normalizeNodeFills(node);
 
-  // Ensure unique node IDs to avoid collisions with pre-existing canvas content.
-  // The upsert path already does this in sanitizeNodesForUpsert, but the streaming
-  // path was missing it — causing duplicate Fabric objects when two generations
-  // produce nodes with the same IDs (e.g. "header-title" in both FoodHome and Settings).
+  // 保证节点 ID 唯一，避免和画布里已有内容冲突。
+  // upsert 路径本来就会做这件事，但流式路径以前没有，
+  // 所以两轮生成如果碰巧用了相同 ID，就会出现重复对象。
   const streamCounters = new Map<string, number>();
   const streamRemaps = new Map<string, string>();
   ensureUniqueNodeIds(node, preExistingNodeIds, streamCounters, streamRemaps);
-  // Track the newly inserted IDs so subsequent streaming nodes don't collide either
+  // 把新插入的 ID 也登记进去，避免后续流节点再次撞 ID
   const trackNewIds = (n: PenNode) => {
     preExistingNodeIds.add(n.id);
     if ('children' in n && Array.isArray(n.children)) {
@@ -209,17 +208,17 @@ export function insertStreamingNode(node: PenNode, parentId: string | null): voi
     }
   };
   trackNewIds(node);
-  // Merge any remappings into the generation-wide remap table
+  // 把这次产生的重映射并入整轮生成的全局映射表
   for (const [from, to] of streamRemaps) {
     generationRemappedIds.set(from, to);
   }
 
-  // Ensure container nodes have children array for later child insertions
+  // 保证容器节点一定有 `children` 数组，方便后续继续往里插
   if ((node.type === 'frame' || node.type === 'group') && !('children' in node)) {
     (node as PenNode & { children: PenNode[] }).children = [];
   }
 
-  // Resolve remapped parent IDs (e.g., root frame -> DEFAULT_FRAME_ID)
+  // 解析父节点 ID 的重映射结果（例如模型根框架 -> 真实根框架）
   const resolvedParent = parentId ? (generationRemappedIds.get(parentId) ?? parentId) : null;
 
   const parentNode = resolvedParent ? getNodeById(resolvedParent) : null;
@@ -227,22 +226,22 @@ export function insertStreamingNode(node: PenNode, parentId: string | null): voi
   if (parentNode && hasActiveLayout(parentNode) && !isOverlayNode(node)) {
     if ('x' in node) delete (node as { x?: number }).x;
     if ('y' in node) delete (node as { y?: number }).y;
-    // Text defaults inside layout frames:
-    // - vertical layout: body text prefers fill width for wrapping
-    // - horizontal layout: short labels should hug content to avoid squeezing siblings
+    // 布局容器里的文本默认遵循一套经验规则：
+    // - 垂直布局中，正文更适合拉伸宽度后换行
+    // - 水平布局中，短标签更适合收缩包裹内容，避免挤压兄弟节点
     if (node.type === 'text') {
       const parentLayout = 'layout' in parentNode ? parentNode.layout : undefined;
       const content = 'content' in node ? ((node.content as string) ?? '') : '';
       const isLongText = content.length > 15;
 
       if (parentLayout === 'vertical') {
-        // Only force fill_container + fixed-width on LONG text that needs wrapping.
-        // Short labels/titles/numbers should hug content width (auto).
+        // 只有真正需要换行的长文本，才强制 `fill_container + fixed-width`。
+        // 短标签 / 标题 / 数字更适合自然包裹宽度。
         if (isLongText) {
           if (typeof node.width === 'number') node.width = 'fill_container';
           if (!node.textGrowth) node.textGrowth = 'fixed-width';
         } else {
-          // Short text in vertical layout: fix pixel width but don't force wrapping
+          // 垂直布局里的短文本：可以拉伸宽度，但不强制换行
           if (typeof node.width === 'number') node.width = 'fill_container';
         }
       } else if (parentLayout === 'horizontal') {
@@ -262,37 +261,29 @@ export function insertStreamingNode(node: PenNode, parentId: string | null): voi
           node.textGrowth = 'auto';
         }
       }
-      // Respect AI's explicit textGrowth setting; don't override if already set.
-
-      // Strip explicit pixel height on text nodes — always let the engine auto-size.
-      // AI models often output height values that cause text clipping/overlap.
+      // 尊重 AI 已经显式给出的 `textGrowth`。
+      // 但固定像素高度通常不可靠，容易造成文本裁切或重叠，
+      // 所以这里优先删掉，让引擎自己计算高度。
       if (typeof node.height === 'number' && node.textGrowth !== 'fixed-width-height') {
         delete (node as { height?: unknown }).height;
       }
-      // Default lineHeight based on text role (heading vs body)
+      // 默认行高按文本角色推断（标题 / 正文）
       if (!node.lineHeight) {
         node.lineHeight = defaultLineHeight(node.fontSize ?? 16);
       }
     }
   }
 
-  // Apply role-based defaults before legacy heuristics.
+  // 先基于 role 应用默认值，再跑传统启发式。
   //
-  // Theme detection for the streaming path: `detectActiveDocumentTheme`
-  // walks the live page root via `getActivePagePrimaryFrameId()`. For
-  // streaming, the page root frame is always committed to the store
-  // BEFORE any of its children (it's the first node emitted by the
-  // LLM and hits `replaceEmptyFrame` / `addNode` earlier in this same
-  // function for the root case). By the time a child streaming node
-  // reaches role resolution, the root is already in place and its fill
-  // is readable — so the theme lookup is always accurate for children.
+  // 这里的主题检测有一个流式场景专属细节：
+  // 页面根框架总是会先于子节点写入 store，
+  // 所以当子节点来到这里时，通常已经能从活动页根框架读到正确主题。
   //
-  // For the root node itself, `detectActiveDocumentTheme` sees the
-  // still-stale empty default root in the store (bad) UNLESS we also
-  // check the incoming `node` — which we do by passing `[node]` as
-  // the input-forest hint. If `node` has a solid fill (the LLM-supplied
-  // dark page bg), input-first detection wins. Falls back to the store
-  // cleanly for everything else.
+  // 但对“根节点自己”来说，store 里看到的可能还是旧的默认空框架。
+  // 因此这里会把当前 `node` 也一起参与主题检测：
+  // 如果当前流入的根节点本身就带有深色背景填充，
+  // 就优先用它；否则再退回 live store。
   const roleCtx: RoleContext = {
     parentRole: parentNode?.role,
     parentLayout: parentNode && 'layout' in parentNode ? parentNode.layout : undefined,
@@ -303,14 +294,13 @@ export function insertStreamingNode(node: PenNode, parentId: string | null): voi
 
   applyGenerationHeuristics(node);
 
-  // Recursively remove x/y from children inside layout containers so the
-  // layout engine can position them correctly during canvas sync.
+  // 递归删除布局容器子节点上的 `x/y`，
+  // 让布局引擎在同步时重新接管定位。
   const parentHasLayout = parentNode ? hasActiveLayout(parentNode) : false;
   sanitizeLayoutChildPositions(node, parentHasLayout);
 
-  // Skip AI-streamed children under phone placeholders. Placeholder internals are
-  // normalized post-streaming (at most one centered label text is allowed).
-  // Also skip if the parent node doesn't exist on canvas (was itself blocked).
+  // 如果父节点不存在，或者当前节点处在 Phone Placeholder 内部，就跳过。
+  // Placeholder 内部结构会在流结束后统一规范化。
   if (resolvedParent !== null && !parentNode) {
     return;
   }
@@ -320,14 +310,13 @@ export function insertStreamingNode(node: PenNode, parentId: string | null): voi
 
   if (resolvedParent === null && node.type === 'frame') {
     if (isCanvasOnlyEmptyFrame()) {
-      // Root frame replaces the active page's empty frame -- no animation
-      // needed. replaceEmptyFrame returns the real target id (nanoid for
-      // pages 2+, DEFAULT_FRAME_ID for page 1) so we can track it as the
-      // generation root.
+      // 根框架替换当前页空白框架，不需要动画。
+      // `replaceEmptyFrame()` 会返回真实目标 ID：
+      // 第 1 页通常是 `DEFAULT_FRAME_ID`，后续页面则是各自的 nanoid。
       const targetId = replaceEmptyFrame(node);
       if (targetId) generationRootFrameId = targetId;
     } else {
-      // Canvas already has content — add as new top-level frame beside existing ones
+      // 画布已有内容时，把它作为新的顶级框架加到现有内容旁边
       const { document: doc } = useDocumentStore.getState();
       const activePageId = useCanvasStore.getState().activePageId;
       const pageChildren = getActivePageChildren(doc, activePageId);
@@ -344,12 +333,12 @@ export function insertStreamingNode(node: PenNode, parentId: string | null): voi
     }
   } else {
     const effectiveParent = resolvedParent ?? generationRootFrameId;
-    // Verify parent exists, fall back to generation root frame
+    // 先确认父节点存在，不存在就回退到本轮生成根框架
     const parent = getNodeById(effectiveParent);
     const insertParent = parent ? effectiveParent : generationRootFrameId;
 
-    // Frames with fills appear instantly (background context for children).
-    // All other nodes fade in with staggered animation.
+    // 带填充的 frame 立即出现，方便子节点拿到正确背景上下文；
+    // 其他节点则走交错淡入动画。
     const nodeFill = 'fill' in node ? node.fill : undefined;
     const hasFill = Array.isArray(nodeFill)
       ? nodeFill.length > 0
@@ -360,49 +349,41 @@ export function insertStreamingNode(node: PenNode, parentId: string | null): voi
       startNewAnimationBatch();
     }
 
-    // Badge/overlay nodes prepend (index 0) so they render on top (earlier = higher z-order).
-    // All other nodes append to preserve auto-layout generation order.
+    // badge / overlay 节点插到最前面，保证视觉层级更高；
+    // 其余节点按追加顺序插入，保留自动布局生成顺序。
     addNode(insertParent, node, isOverlayNode(node) ? 0 : Infinity);
 
-    // When a frame is inserted into a horizontal layout, equalize sibling card widths
-    // to prevent overflow when multiple cards are placed in the same row.
+    // 向水平布局里插 frame 时，必要时把兄弟卡片宽度拉平，避免同一行溢出。
     if (node.type === 'frame') {
       equalizeHorizontalSiblings(insertParent);
     }
 
-    // When a top-level section is added directly under the generation root frame,
-    // progressively expand root height to fit the new content.
+    // 直接往生成根框架下挂顶级 section 时，顺手增量扩展根高度。
     if (insertParent === generationRootFrameId) {
       expandRootFrameHeight();
     }
   }
 
-  // Immediately enqueue image nodes for background search as they arrive
+  // 图片节点一落地就立刻排进后台补图队列
   if (node.type === 'image') {
     enqueueImageForSearch(node);
   }
 }
 
 // ---------------------------------------------------------------------------
-// Canvas apply/upsert operations
+// Canvas apply/upsert 操作
 // ---------------------------------------------------------------------------
 
 /**
- * Run the page-root post-pass cleanups after a non-streaming apply path
- * inserts its nodes into the store. This mirrors part of what
- * applyPostStreamingTreeHeuristics does for the streaming path:
- * specifically, strip redundant "safe-dark" section fills that sub-agents
- * or external MCP callers hedge with on section roots (they hide the real
- * page background and break theming).
+ * 非流式 apply 路径的页面根清理。
  *
- * OpenPencil documents are multi-page — only the FIRST page uses the
- * constant DEFAULT_FRAME_ID for its root frame. Pages added later via
- * addPage() receive a fresh nanoid, so we cannot look the page root up by
- * a well-known id. Instead we pull the active page's top-level children
- * and run stripRedundantSectionFills on every top-level frame we find.
- * In the common case that's a single page-root frame; edge cases with
- * multiple top-level frames on one page (comparison mockups, etc.) are
- * handled by iterating. Publishes once if any frame was modified.
+ * 它和 `applyPostStreamingTreeHeuristics()` 在流式路径里做的事情类似，
+ * 主要负责清理页面根上的冗余 section fill，
+ * 尤其是模型常见的那种“安全深色背景”硬编码。
+ *
+ * 因为 OpenPencil 是多页文档，不能再写死 `DEFAULT_FRAME_ID` 去找页面根，
+ * 所以这里会取活动页的所有顶级子节点，并对其中的顶级 frame 逐个处理。
+ * 如果任何 frame 被改动，就统一触发一次 resync。
  */
 function finalizePageRootAfterApply(): void {
   const doc = useDocumentStore.getState().document;
@@ -425,25 +406,22 @@ export function applyNodesToCanvas(nodes: PenNode[]): void {
   const existingIds = new Set(getFlatNodes().map((n) => n.id));
   const preparedNodes = sanitizeNodesForInsert(nodes, existingIds);
 
-  // If canvas only has one empty frame, replace it with the generated content
+  // 如果画布当前只有一个空框，就直接用生成结果替换它
   if (isCanvasOnlyEmptyFrame() && preparedNodes.length === 1 && preparedNodes[0].type === 'frame') {
     replaceEmptyFrame(preparedNodes[0]);
     finalizePageRootAfterApply();
     resolveAllPendingIcons().catch(console.warn);
-    // Use the active page's primary frame id, NOT generationRootFrameId.
-    // The latter is module-level state owned by the streaming path and
-    // is stale here (module init value or leftover from a previous
-    // streaming generation — on Page 2+ it would point at nothing on the
-    // current page).
+    // Use 活动页面的主框架 ID，NOT generationRootFrameId。 The
+    // 后者是流路径所拥有的模块级状态，并且在这里是过时的（模块初始值或上一流生成的剩余值 - 在 Page 2+
+    // 上，它不会指向当前页面上的任何内容）。
     const rootId = getActivePagePrimaryFrameId();
     if (rootId) scanAndFillImages(rootId).catch(() => {});
     return;
   }
 
   const { addNode } = useDocumentStore.getState();
-  // Insert into the active page's root frame if it exists, otherwise at
-  // document root. `getActivePagePrimaryFrameId` replaces the old
-  // DEFAULT_FRAME_ID lookup which only worked on Page 1.
+  // 优先插入到活动页根框架里；
+  // `getActivePagePrimaryFrameId()` 取代了过去只适用于第一页的 `DEFAULT_FRAME_ID` 查找。
   const parentId = getActivePagePrimaryFrameId();
   for (const node of preparedNodes) {
     addNode(parentId, node, Infinity);
@@ -469,7 +447,7 @@ export function upsertNodesToCanvas(nodes: PenNode[]): number {
   let count = 0;
 
   for (const node of preparedNodes) {
-    // Resolve remapped IDs (e.g., root frame that was mapped to DEFAULT_FRAME_ID in Phase 1)
+    // 解析被重映射过的 ID，例如 Phase 1 里被替换成真实根框架的节点
     const resolvedId = generationRemappedIds.get(node.id) ?? node.id;
     const existing = getNodeById(resolvedId);
     if (existing) {
@@ -484,15 +462,14 @@ export function upsertNodesToCanvas(nodes: PenNode[]): number {
 
   adjustRootFrameHeightToContent();
   finalizePageRootAfterApply();
-  // Use the active page's primary frame id, not the streaming path's
-  // generationRootFrameId (which is stale for non-streaming applies —
-  // see applyNodesToCanvas for the full explanation).
+  // 这里要用活动页真实根框架 ID，而不是流式路径里的 `generationRootFrameId`。
+  // 对非流式 apply 来说，后者通常是陈旧状态。
   const rootId = getActivePagePrimaryFrameId();
   if (rootId) scanAndFillImages(rootId).catch(() => {});
   return count;
 }
 
-/** Same as upsertNodesToCanvas but skips sanitization (caller already did it). */
+/** 与 `upsertNodesToCanvas` 相同，但跳过清理步骤（调用方已自行处理）。 */
 function upsertPreparedNodes(preparedNodes: PenNode[]): number {
   if (isCanvasOnlyEmptyFrame() && preparedNodes.length === 1 && preparedNodes[0].type === 'frame') {
     replaceEmptyFrame(preparedNodes[0]);
@@ -505,7 +482,7 @@ function upsertPreparedNodes(preparedNodes: PenNode[]): number {
   let count = 0;
 
   for (const node of preparedNodes) {
-    // Resolve remapped IDs (e.g., root frame that was mapped to DEFAULT_FRAME_ID in Phase 1)
+    // 解析被重映射过的 ID，例如被替换成真实根框架的节点
     const resolvedId = generationRemappedIds.get(node.id) ?? node.id;
     const existing = getNodeById(resolvedId);
     if (existing) {
@@ -524,9 +501,8 @@ function upsertPreparedNodes(preparedNodes: PenNode[]): number {
 }
 
 /**
- * Animate nodes onto the canvas with a staggered fade-in effect.
- * Synchronous -- nodes are inserted immediately, and canvas-sync
- * schedules fire-and-forget staggered opacity animations.
+ * 把节点以交错淡入的方式加到画布上。
+ * 节点本身是同步插入的，动画由 canvas-sync 异步驱动。
  */
 export function animateNodesToCanvas(nodes: PenNode[]): void {
   resetGenerationRemapping();
@@ -539,24 +515,23 @@ export function animateNodesToCanvas(nodes: PenNode[]): void {
   upsertPreparedNodes(prepared);
   useHistoryStore.getState().endBatch(useDocumentStore.getState().document);
 
-  // Resolve any icons queued for async (brand logos etc.) after nodes are in the store
+  // 把需要异步解析的图标（例如品牌 Logo）继续排队处理
   resolveAllPendingIcons().catch(console.warn);
-  // Scan images on the active page root. generationRootFrameId is refreshed
-  // by resetGenerationRemapping above, but going straight through
-  // getActivePagePrimaryFrameId keeps the source of truth consistent with
-  // the other non-streaming apply paths and doesn't rely on a specific
-  // ordering between reset and this call.
+  // 重新扫描活动页根节点下的图片占位符。
+  // 虽然 `resetGenerationRemapping()` 会刷新 `generationRootFrameId`，
+  // 但这里直接读活动页真实根节点更稳，也和其他非流式路径保持一致。
   const rootId = getActivePagePrimaryFrameId();
   if (rootId) scanAndFillImages(rootId).catch(() => {});
 }
 
 // ---------------------------------------------------------------------------
-// Extract + apply convenience wrappers
+// Extract + 应用便利包装
 // ---------------------------------------------------------------------------
 
 /**
- * Extract PenNode JSON from AI response text and apply to canvas.
- * Returns the number of top-level elements added (0 if nothing found/applied).
+ * Extract
+ * PenNode JSON 来自 AI 响应文本并应用于画布。 Returns 添加的顶级元素的数量（如果没有
+ found/applied，则为 0）。
  */
 export function extractAndApplyDesign(responseText: string): number {
   const nodes = extractJsonFromResponse(responseText);
@@ -572,8 +547,8 @@ export function extractAndApplyDesign(responseText: string): number {
 }
 
 /**
- * Extract PenNode JSON from AI response text and apply updates/insertions to canvas.
- * Handles both new nodes and modifications (matching by ID).
+ * Extract
+ * PenNode JSON 来自 AI 响应文本并将 updates/insertions 应用于画布。 Handles 新节点和修改（由 ID 匹配）。
  */
 export function extractAndApplyDesignModification(responseText: string): number {
   const nodes = extractJsonFromResponse(responseText);
@@ -587,13 +562,12 @@ export function extractAndApplyDesignModification(responseText: string): number 
     for (const node of nodes) {
       const existing = getNodeById(node.id);
       if (existing) {
-        // Update existing node
+        // Update 现有节点
         updateNode(node.id, node);
         count++;
       } else {
-        // It's a new node implied by the modification (e.g. "add a button").
-        // Parent it to the active page's root frame, whichever page we're
-        // on — not just the Page 1 constant.
+        // It 是修改隐含的新节点（例如“添加按钮”）。 Parent 它到活动页面的根框架，无论我们在哪个页面，而不仅仅是 Page 1
+        // 常量。
         const parentId = getActivePagePrimaryFrameId();
         addNode(parentId, node);
         count++;
@@ -607,29 +581,29 @@ export function extractAndApplyDesignModification(responseText: string): number 
 }
 
 // ---------------------------------------------------------------------------
-// Generation heuristics
+// Generation 启发式
 // ---------------------------------------------------------------------------
 
 /**
- * Lightweight post-parse cleanup applied to each node.
- * Handles icon path resolution, emoji removal, and image placeholder generation.
- * Layout/sizing heuristics are now handled by the role resolver.
+ * Lightweight
+ * 解析后清理应用于每个节点。 Handles 图标路径解析、表情符号删除和图像占位符生成。
+ * Layout/sizing 启发式现在由角色解析器处理。
  */
 export function applyGenerationHeuristics(node: PenNode): void {
-  // Skip pre-injected chrome (e.g. iPhone status bar) — its path data is
-  // hardcoded from the Pencil demo and must not be overwritten by icon resolver.
+  // Skip 预注入的 chrome（例如 iPhone 状态栏）——其路径数据是从 Pencil
+  // 演示中硬编码的，并且不得被图标解析器覆盖。
   if ('role' in node && (node as { role?: string }).role === 'status-bar') return;
 
-  // Default icon_font nodes to lucide family when unspecified
+  // Default icon_font 未指定时用于阐明族的节点
   if (node.type === 'icon_font' && !node.iconFontFamily) {
     node.iconFontFamily = 'lucide';
   }
 
   applyIconPathResolution(node);
   applyNoEmojiIconHeuristic(node);
-  // Re-run icon resolution on nodes converted from emoji text → path by the
-  // heuristic above. applyNoEmojiIconHeuristic sets a circle fallback path;
-  // the icon resolver can often match the name (e.g. "Pizza Emoji Path" → pizza).
+  // Re-在从表情符号文本→路径转换的节点上运行图标解析
+// heuristic above. applyNoEmojiIconHeuristic sets a circle fallback path;
+  // 图标解析器通常可以与名称匹配（例如“Pizza Emoji Path”→ 披萨）。
   if (node.type === 'path') {
     applyIconPathResolution(node);
   }
@@ -642,12 +616,12 @@ export function applyGenerationHeuristics(node: PenNode): void {
 }
 
 /**
- * Post-streaming tree heuristics -- applies tree-aware fixes after all nodes
- * of a subtask have been inserted into the store.
+ * Post-流式树启发式
+ * - 在子任务的所有节点都插入存储后应用树感知修复。 During 流式传输，节点是单独插入的（没有子节点），因此树感知启发式方法（例如按钮宽度扩展、
  *
- * During streaming, nodes are inserted individually (no children), so tree-aware
- * heuristics like button width expansion, frame height expansion, and clipContent
- * detection fail silently. This function re-runs them on the completed subtree.
+ * 框架高度扩展和 clipContent 检测）会默默失败。 This
+ * 函数在完成的子树上重新运
+ * 行它们。
  */
 export function applyPostStreamingTreeHeuristics(rootNodeId: string): void {
   const { getNodeById, updateNode } = useDocumentStore.getState();
@@ -655,98 +629,84 @@ export function applyPostStreamingTreeHeuristics(rootNodeId: string): void {
   if (!rootNode || rootNode.type !== 'frame') return;
   if (!Array.isArray(rootNode.children) || rootNode.children.length === 0) return;
 
-  // Schema-level normalization runs first: unwrap array-wrapped strokes,
-  // migrate fill-shaped stroke objects to proper PenStroke, drop illegal
-  // "none"/"transparent" CSS keyword fills. Sub-agents break these
-  // constraints constantly and downstream passes assume valid shapes.
+  // Schema 级规范化首先运行：展开数组包裹的笔划，将填充形状的笔划对象迁移到正确的
+  // PenStroke，删除非法的“无”/“透明”CSS 关键字填充。 Sub-agents 不断打破这些约束，下游通道采用有效的形状。
   normalizeStrokeFillSchema(rootNode);
 
-  // Earliest pass: strip fake phone mockup wrappers that weaker sub-agents
-  // generate when they misread the prompt's phone mockup guidance. Must run
-  // BEFORE resolveTreeRoles, otherwise the role resolver may write defaults
-  // (layout, fill) onto the wrapper and the children inside it that we then
-  // throw away.
-  // Return value is intentionally ignored — see the publish step at the end:
-  // we always publish, so the boolean would only be informational.
+  // Earliest pass：剥离较弱的子代理在误读提示的电话模型指导时生成的虚假电话模型包装。 Must 运行 BEFORE
+  // resolveTreeRoles，否则角色解析器可能会将默认值（布局、填充）写入包装器及其内部的子级，然后我们将其丢弃。 Return
+  // 值被故意忽略 - 请参阅最后的发布步骤：我们总是发布，因此布尔值仅提供信息。
   unwrapFakePhoneMockups(rootNode);
 
-  // Role-based tree resolution + cross-node post-pass.
-  // Runs FIRST so role defaults (e.g. navbar → horizontal, button → horizontal)
-  // can populate missing `layout` fields with semantically correct values.
+  // 基于 Role 的树解析+跨节点 post-pass。 Runs FIRST
+  // 因此角色默认值（例如导航栏 → 水平、按钮 → 水平）可以使用语义上正确的值填充缺失的 `layout` 字段。
   resolveTreeRoles(rootNode, generationCanvasWidth);
   resolveTreePostPass(rootNode, generationCanvasWidth, getNodeById, updateNode);
 
-  // Re-fetch the root from the store before running any subsequent pass.
-  // resolveTreePostPass calls `updateNode` in several places (height
-  // expansion, clipContent). Each call routes through `updateNodeInTree`,
-  // which shallow-clones every ancestor along the update path. Our original
-  // `rootNode` reference now points to a detached tree: further mutations on
-  // it would silently disappear for nodes that lived on those update paths.
-  // Always read a fresh reference for mutation passes that follow updateNode.
+  // Re - 在运行任何后续传递之前从存储中获取根。 resolveTreePostPass 在多个地方调用
+  // `updateNode`（高度扩展、clipContent）。 Each 调用通过 `updateNodeInTree`
+  // 进行路由，它会浅克隆沿更新路径的每个祖先。 Our 原始 `rootNode` 引用现在指向一棵独立的树：对于位于这些更新路径上的节点来说
+  // ，其上的进一步突变将悄然消失。 Always 阅读了 updateNode 之后的突变传递的新参考。
   const freshRoot = useDocumentStore.getState().getNodeById(rootNodeId);
   if (!freshRoot || freshRoot.type !== 'frame') return;
 
-  // Normalize layout as a final safety net: fills in `layout` for frames the
-  // role resolver did not touch (unknown roles, plain containers) and strips
-  // stale x/y from children of any auto-layout frame. MUST run AFTER role
-  // resolution — otherwise the 'vertical' fallback here freezes wrong layouts
-  // before role defaults can override them.
+  // Normalize 布局作为最终的安全网：为角色解析器未触及的框架（未知角色、普通容器）填充
+  // `layout`，并从任何自动布局框架的子级中删除陈旧的 x/y。 MUST run AFTER 角色解析 —
+  // 否则，此处的“垂直”回退会在角色默认值覆盖错误布局之前冻结它们。
   normalizeTreeLayout(freshRoot);
 
-  // Strip redundant section-level fills. Weaker sub-agents hedge by
-  // hardcoding a "safe dark" hex (e.g. #0A0A0A) on every section root they
-  // emit, which then completely covers the page root's intended background
-  // and breaks theme switching. This pass drops those redundant fills while
-  // preserving cards/buttons/badges. Must run AFTER role resolution so we
-  // can tell section containers apart from card/button/chip components by
-  // their resolved role.
-  //
-  // IMPORTANT: stripRedundantSectionFills must ONLY be called on the true
-  // page root frame. Calling it on an arbitrary sub-agent root (or any
-  // non-root nested frame) is wrong — the nested frame's direct children
-  // are components, not "sections", and stripping their fills would
-  // clobber intended visual styling (e.g. a card's own dark header).
-  //
-  // The page root is:
-  //   - `parentOfRoot` when the sub-agent's root was inserted as a child of
-  //     an existing page frame (the common case for a multi-section plan)
-  //   - `freshRoot` itself when the sub-agent's root IS the page frame
-  //     (replaceEmptyFrame remap, or a single-sub-agent page)
-  // Pick exactly one — never both.
+  // Strip 冗余节级填充。 Weaker 子代理对冲
+  // 在每个节根上硬编码一个“安全暗”十六进制（例如#0a0a0a）
+  // 发出，然后完全覆盖页面根目录的预期背景
+  // 并打破主题切换。 This pass 会删除那些多余的填充，而
+  // 保留 cards/buttons/badges。 Must 运行 AFTER 角色解析所以我们
+  // 可以通过以下方式区分节容器和 card/button/chip 组件
+  // 他们坚定的角色。
+//
+  // IMPORTANT: stripRedundantSectionFills 必须在 true 上调用 ONLY
+  // 页面根框架。 Calling 它在任意子代理根（或任何
+  // 非根嵌套框架）是错误的 - 嵌套框架的直接子级
+  // 是组件，而不是“部分”，并且剥离它们的填充会
+  // 破坏预期的视觉样式（例如卡片自己的深色标题）。
+//
+  // The 页面根目录是：
+  //   - `parentOfRoot` 当子代理的根作为子代理插入时
+  // 现有的页面框架（多部分计划的常见情况）
+  //   - `freshRoot` 本身当子代理的根 IS 的页框
+  // （replaceEmptyFrame 重新映射，或单子代理页面）
+  // Pick 恰好是一个——绝不会两者兼而有之。
   const parentOfRoot = useDocumentStore.getState().getParentOf(rootNodeId);
   const pageRoot = parentOfRoot && parentOfRoot.type === 'frame' ? parentOfRoot : freshRoot;
   stripRedundantSectionFills(pageRoot);
 
-  // Publish point. unwrap, resolveTreeRoles, and normalizeTreeLayout all
-  // mutate store-owned nodes in place; resolveTreePostPass mostly goes
-  // through updateNode but also has direct-mutation branches. Without an
-  // explicit publish, Zustand subscribers (canvas sync, MCP push) only fire
-  // if some later code path happens to call updateNode — and that path is
-  // skipped on sub-agent retry / no-op cases.
-  //
-  // We use forcePageResync (not a hand-rolled shallow doc spread) because
-  // canvas-document-sync subscribes to the active page's children array
-  // identity, not to the document object itself. A naive `{ ...document }`
-  // spread would NOT change `pages[0].children` and the canvas would never
-  // re-sync — see canvas-sync-utils.ts header comment for the trap.
-  // forcePageResync also bypasses mutateWithHistory so we don't push an
-  // undo entry for what is a deterministic post-streaming cleanup.
+  // Publish 点。展开、resolveTreeRoles 和 normalizeTreeLayout 全部
+  // 就地改变商店拥有的节点； resolveTreePostPass 大部分时间都去
+  // 通过 updateNode 但也有直接突变分支。 Without 一个
+  // 显式发布，Zustand 订阅者（画布同步，MCP 推送）仅触发
+// if some later code path happens to call updateNode — and that path is
+  // 在子代理重试/无操作情况下跳过。
+//
+  // We 使用 forcePageResync （不是手卷的浅文档传播），因为
+  // canvas-document-sync 订阅活动页面的子数组
+  // 身份，而不是文档对象本身。天真的 `{ ...document }`
+  // 传播会改变 NOT 而画布永远不会改变
+  // 重新同步 — 请参阅 canvas-sync-utils.ts 陷阱头注释。
+  // forcePageResync 也会绕过 mutateWithHistory 所以我们不会推送
+  // 确定性流后清理的撤消条目。
   forcePageResync();
 
-  // Resolve pending icons asynchronously via Iconify API (fire-and-forget)
+  // Resolve 通过 Iconify API 异步挂起图标（即发即忘）
   resolveAsyncIcons(rootNodeId).catch(console.warn);
 }
 
 // ---------------------------------------------------------------------------
-// Root frame height management
+// Root 框架高度管理
 // ---------------------------------------------------------------------------
 
 export function adjustRootFrameHeightToContent(frameId?: string): void {
   const { getNodeById, updateNode, getParentOf } = useDocumentStore.getState();
-  // Prefer the explicitly-passed frame, then the active page's primary
-  // frame (the correct default for non-streaming apply paths, which is
-  // where this function is called from), and finally the streaming
-  // path's generationRootFrameId as a last resort.
+  // Prefer 显式传递的帧，然后是活动页面的主框架（非流应用路径的正确默认值，这是调用此函数的位置），最后是流路径的
+  // generationRootFrameId 作为最后的手段。
   const rootId = frameId ?? getActivePagePrimaryFrameId() ?? generationRootFrameId;
   if (!rootId) return;
   const root = getNodeById(rootId);
@@ -764,13 +724,13 @@ export function adjustRootFrameHeightToContent(frameId?: string): void {
 }
 
 /**
- * Expand-only version of adjustRootFrameHeightToContent.
- * Used during streaming: only grows the root frame, never shrinks it.
- * This prevents visual jitter while sections are being progressively added.
+ * adjustRootFr
+ * ameHeightToContent 的仅 Expand 版本。 Used
+ * 在流式传输期间：仅增大根框架，从不缩小它。 This 在逐步添加部分时可防止视觉抖动。 When
  *
- * When a frame is inserted into a horizontal layout parent, check if sibling
- * frame children should be equalized to fill_container to prevent overflow.
- * This runs DURING streaming so cards distribute evenly as they arrive.
+ * 将一个框架插入到水平布局父级中，检查兄弟框架子级是否应等于 fill_container 以防止溢出。 This 运行 DURING
+ * 流，因此卡片到达时均匀分
+ * 布。
  */
 export function expandRootFrameHeight(frameId?: string): void {
   const { getNodeById, updateNode, getParentOf } = useDocumentStore.getState();
@@ -784,27 +744,27 @@ export function expandRootFrameHeight(frameId?: string): void {
   const minimumHeight = getParentOf(rootId) ? 0 : 320;
   const targetHeight = Math.max(minimumHeight, Math.round(requiredHeight));
   const currentHeight = toSizeNumber(root.height, 0);
-  // Only grow -- never shrink during progressive generation
+  // Only 增长——在渐进生成过程中从不收缩
   if (currentHeight > 0 && targetHeight <= currentHeight) return;
 
   updateNode(rootId, { height: targetHeight });
 }
 
 // ---------------------------------------------------------------------------
-// Internal helpers
+// Internal 帮助者
 // ---------------------------------------------------------------------------
 
 /**
- * Check if the active page has exactly one top-level frame and that frame
- * has no children yet. Used to decide whether an incoming batch/streaming
- * insert should REPLACE the empty boilerplate frame created by addPage()
- * vs. append new content beside it.
+ * Check 如果活动页面
+ * 恰好有一个顶级框架并且该框架还没有子级。 Used 来决定传入的 batch/streaming 插入是否应该 REPLACE 由
+ * addPage() 创建的空样板框架，而不是在其旁边附加新内容。 Previously 这个硬编码的
+ * DEFAULT_FRAME_ID，在第一个页面之后的每个页面上都会损坏：addPage() 为新页面提供基于 nanoid 的根框架
  *
- * Previously this hardcoded DEFAULT_FRAME_ID, which broke on every page
- * after the first: addPage() gives new pages a nanoid-based root frame id,
- * so the check was `false` on Page 2+ and the replace branch never fired.
- * The check now looks at the actual top-level frame of the active page,
- * whatever its id happens to be.
+ * id，因此在 Page 2+ 上检查为
+ * `false`，并且替换
+ * 分支从未触发。 The 检查现在查看活动页面的实际顶级框架，无论其 id 是什么。
+ *
+ *
  */
 function isCanvasOnlyEmptyFrame(): boolean {
   const { document } = useDocumentStore.getState();
@@ -817,23 +777,23 @@ function isCanvasOnlyEmptyFrame(): boolean {
 }
 
 /**
- * Replace the active page's empty root frame with the generated frame
- * node, preserving the existing frame id so canvas sync continues to
- * work. Returns the id of the frame that was updated, or null if the
- * active page has no frame to replace (caller should have gated this
- * call on isCanvasOnlyEmptyFrame).
+ * Replace
+ * 活动页面的空根框架与生成的框架节点，保留现有的框架 ID，以便画布同步继续工作。 Returns 已更新的框架的
+ * id，如果活动页面没有要替换的框架，则为 null（调用者应该在 isCanvasOnlyEmptyFrame 上门控此调用）。
+ * Previously 这个硬编码的 DEFAULT_FRAME_ID 作为更新目标，这意味着在 Page 2+ 上调用
+ * replaceEmptyFrame 会默默地修改 Page 1 的根框架，而不是用户实际编辑的页面。
  *
- * Previously this hardcoded DEFAULT_FRAME_ID as the update target, which
- * meant calling replaceEmptyFrame on Page 2+ would silently modify
- * Page 1's root frame instead of the page the user was actually editing.
+ *
+ *
+ *
  */
 function replaceEmptyFrame(generatedFrame: PenNode): string | null {
   const targetId = getActivePagePrimaryFrameId();
   if (!targetId) return null;
   const { updateNode } = useDocumentStore.getState();
-  // Record the remapping so subsequent phases can find this node by its original ID
+  // Record 重新映射，以便后续阶段可以通过其原始 ID 找到该节点
   generationRemappedIds.set(generatedFrame.id, targetId);
-  // Keep root frame ID and position (x=0, y=0), take everything else from generated frame
+  // Keep 根帧 ID 和位置 (x=0, y=0)，从生成的帧中获取其他所有内容
   const { id: _id, x: _x, y: _y, ...rest } = generatedFrame;
   updateNode(targetId, rest);
   return targetId;
@@ -846,7 +806,7 @@ function equalizeHorizontalSiblings(parentId: string): void {
   if (parent.layout !== 'horizontal') return;
   if (!Array.isArray(parent.children) || parent.children.length < 2) return;
 
-  // Skip if any card already uses fill_container -- the AI chose it deliberately
+  // Skip 如果任何卡已经使用 fill_container —— AI 故意选择它
   const cardCandidates = parent.children.filter(
     (c) =>
       c.type === 'frame' &&
@@ -864,19 +824,19 @@ function equalizeHorizontalSiblings(parentId: string): void {
   );
   if (fixedFrames.length < 2) return;
 
-  // Only equalize when widths vary significantly (ratio < 0.6)
+  // Only 当宽度变化很大时均衡（比率 < 0.6）
   const widths = fixedFrames.map((c) => toSizeNumber('width' in c ? c.width : undefined, 0));
   const maxW = Math.max(...widths);
   const minW = Math.min(...widths);
   if (maxW <= 0 || minW / maxW >= 0.6) return;
 
-  // Check if they look like a card row (similar heights)
+  // Check 如果它们看起来像一排卡片（相似高度）
   const heights = fixedFrames.map((c) => toSizeNumber('height' in c ? c.height : undefined, 0));
   const maxH = Math.max(...heights);
   const minH = Math.min(...heights);
   if (maxH <= 0 || minH / maxH <= 0.5) return;
 
-  // Convert to fill_container for even distribution and equal height
+  // Convert 至 fill_container 实现均匀分布和相等高度
   for (const child of fixedFrames) {
     updateNode(child.id, { width: 'fill_container', height: 'fill_container' } as Partial<PenNode>);
   }

@@ -1,10 +1,10 @@
 /**
- * Electron development workflow orchestrator.
+ * Electron
  *
- * 1. Start Vite dev server (bun run dev)
- * 2. Wait for it to be ready on port 3000
- * 3. Compile electron/ with esbuild
- * 4. Launch Electron pointing at the dev server
+ * 开发工作流程协调器。 1. Start Vite 开发服务器（bun run dev）
+ * 2. Wait 在端口
+ * 3000 上准备就绪 3. Compile electro/ 与
+ * esbuild 4. Launch Electron 指向开发服务器
  */
 
 import { spawn, execSync, type ChildProcess } from 'node:child_process';
@@ -83,7 +83,7 @@ async function waitForViteServer(
       });
       baseReachable = res.ok || res.status < 500;
     } catch {
-      // Server not ready yet.
+      // Server 尚未准备好。
     }
 
     try {
@@ -237,7 +237,7 @@ async function main(): Promise<void> {
   }
   console.log('[electron-dev] Vite is ready');
 
-  // 3. Compile MCP server + Electron files
+  // 3. Compile MCP 服务器 + Electron 文件
   try {
     compileSkills(join(ROOT, 'packages', 'pen-ai-skills'));
   } catch (err) {

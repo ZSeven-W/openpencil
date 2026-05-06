@@ -1,6 +1,6 @@
 import type { DesignMdSpec } from '@zseven-w/pen-types';
 
-/** Build a condensed design.md style policy string for AI prompt injection. */
+/** Build 用于 AI 提示注入的压缩 design.md 样式策略字符串。 */
 export function buildDesignMdStylePolicy(spec: DesignMdSpec): string {
   const parts: string[] = [];
 

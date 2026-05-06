@@ -142,7 +142,7 @@ export function setupAutoUpdater(): void {
   if (isDev) return;
 
   if (process.platform === 'darwin') {
-    // macOS needs a custom provider to select arm64 vs x64 channel
+    // macOS 需要自定义提供程序来选择 arm64 与 x64 通道
     autoUpdater.setFeedURL({
       provider: 'custom',
       updateProvider: MacGitHubUpdateProvider as any,
@@ -151,7 +151,7 @@ export function setupAutoUpdater(): void {
       releaseType: 'release',
     } as any);
   } else {
-    // Windows/Linux: use standard GitHub provider (reads from electron-builder.yml publish config)
+    // Windows/Linux：使用标准 GitHub 提供程序（从 electron-builder.yml 发布配置读取）
     autoUpdater.setFeedURL({
       provider: 'github',
       owner: GITHUB_OWNER,
@@ -164,11 +164,8 @@ export function setupAutoUpdater(): void {
   autoUpdater.autoInstallOnAppQuit = true;
   autoUpdater.allowPrerelease = true;
 
-  // Windows: custom signature verification for self-signed certificate.
-  // The default verifier requires the cert to be in the Windows trusted root
-  // store, which self-signed certs are not. This custom function still verifies
-  // the publisher name from the Authenticode signature — it just skips the
-  // trust chain check. This is NOT disabling verification.
+  // Windows：自签名证书的自定义签名验证。 The 默认验证程序要求证书位于 Windows 可信根存储中，而自签名证书则不然。
+  // This 自定义函数仍然根据 Authenticode 签名验证发布者名称 - 它只是跳过信任链检查。 This 是 NOT 禁用验证。
   if (process.platform === 'win32') {
     const nsisUpdater = autoUpdater as NsisUpdater;
     nsisUpdater.verifyUpdateCodeSignature = async (

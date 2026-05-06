@@ -5,11 +5,11 @@ export interface AIProviderConfig {
   displayName: string;
   isConnected: boolean;
   connectionMethod: 'claude-code' | 'codex-cli' | 'opencode' | 'copilot' | 'gemini-cli' | null;
-  /** Models fetched when the user connects this provider */
+  /** 当用户连接此提供商时获取 Models */
   models: GroupedModel[];
-  /** Human-readable connection status, e.g. "Connected via API key" */
+  /** Human-可读的连接状态，例如“Connected 通过 API 键” */
   connectionInfo?: string;
-  /** Config file path for the hint (client renders localized text) */
+  /** Config 提示的文件路径（客户端呈现本地化文本） */
   hintPath?: string;
 }
 
@@ -35,7 +35,7 @@ export interface GroupedModel {
   displayName: string;
   description: string;
   provider: AIProviderType | string;
-  /** When set, this model came from a built-in provider (API key) rather than a CLI tool */
+  /** When 设置，此模型来自内置提供程序（API 密钥）而不是 CLI 工具 */
   builtinProviderId?: string;
 }
 

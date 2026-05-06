@@ -1,18 +1,18 @@
-// @vitest-environment jsdom
+// @vitest-环境 jsdom
 // apps/web/src/components/panels/git-panel/__tests__/git-panel-branch-picker.test.tsx
 //
-// Phase 5 Task 2 + Task 3 + Task 4: branch picker tests.
+// Phase 5 Task 2 + Task 3 + Task 4：分支选择器测试。
 //
-// Task 2 shell: rendering + refresh plumbing + conflict disable.
-// Task 3: inline create + branch switching + save-required close behavior.
-// Task 4: delete-confirm (plain + force) and merge selection flows.
+// Task 2 shell：渲染+刷新管道+冲突禁用。
+// Task 3：内联创建+分支切换+需要保存的关闭行为。
+// Task 4：删除确认（普通+强制）并合并选择流程。
 //
-// Selector gotcha: once the popover is open, each <GitPanelBranchRow>
-// renders its own button with aria-label={branch.name}. That collides
-// with the trigger's aria-label (which matches the current branch name).
-// To avoid "found multiple elements" errors we click the trigger via
-// its data-testid ("branch-picker-trigger") — the tests below follow
-// that convention consistently.
+// Selector 陷阱：一旦弹出窗口打开，每个 <GitPanelBranchRow>
+// 使用 aria-label={branch.name} 呈现自己的按钮。 That 碰撞
+// 与触发器的 aria-label （与当前分支名称匹配）。
+// To 避免“找到多个元素”错误，我们通过以下方式单击触发器
+// 它的 data-testid (“branch-picker-trigger”) — 下面的测试如下
+// 该公约始终如一。
 import React from 'react';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, fireEvent, cleanup } from '@testing-library/react';

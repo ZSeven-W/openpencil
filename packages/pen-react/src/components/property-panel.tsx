@@ -16,7 +16,7 @@ import { IconSection } from './sections/icon-section.js';
 import { ImageSection } from './sections/image-section.js';
 import type { PenNode } from '@zseven-w/pen-types';
 
-/** Properties stored directly on the RefNode (instance-level), not as overrides. */
+/** Properties 直接存储在 RefNode（实例级）上，而不是作为覆盖。 */
 const INSTANCE_DIRECT_PROPS = new Set([
   'x',
   'y',
@@ -47,7 +47,7 @@ type ContainerProps = {
 };
 
 export interface PropertyPanelProps {
-  /** When true, renders without the outer panel wrapper (for embedding in a larger panel). */
+  /** When true，在没有外部面板包装器的情况下进行渲染（用于嵌入更大的面板）。 */
   embedded?: boolean;
 }
 
@@ -55,7 +55,7 @@ export function PropertyPanel({ embedded }: PropertyPanelProps = {}) {
   const engine = useDesignEngine();
   const selection = useSelection();
   const activeId = selection[0] ?? null;
-  // Subscribe to document changes so panel re-renders on node property updates
+  // Subscribe 记录更改，以便面板在节点属性更新时重新呈现
   void useDocument();
 
   const node = activeId ? engine.getNodeById(activeId) : undefined;
@@ -108,7 +108,7 @@ export function PropertyPanel({ embedded }: PropertyPanelProps = {}) {
     'reusable' in node && (node as unknown as Record<string, unknown>).reusable === true;
   const nodeIsInstance = node.type === 'ref';
 
-  // For RefNodes, resolve the referenced component to get visual properties.
+  // For RefNodes，解析引用的组件以获取视觉属性。
   let displayNode = node;
   if (nodeIsInstance) {
     const refNode = node as RefNode;

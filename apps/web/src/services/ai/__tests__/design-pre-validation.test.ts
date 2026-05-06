@@ -4,17 +4,17 @@ import { runPreValidationFixes } from '../design-pre-validation';
 import type { PenDocument, PenNode } from '@/types/pen';
 
 /**
- * Baseline behavior tests for design-pre-validation.
+ * Baseline
  *
- * Purpose: lock in the current behavior of `runPreValidationFixes()` so we
- * can refactor detect logic into pure functions without silently breaking
- * anything. Do not modify assertions when you do the refactor — if they
- * fail, the refactor has changed behavior.
+ * 设计预验证的行为测试。 Purpose：锁定 `runPreValidationFixes()`
+ * 的当前行为，这样我们就可
+ * 以将检测逻辑重构为纯函数，而不会默默地破坏任何东西。 Do 在进行重构时不会修改断言 - 如果断言失败，则重构已更改行为。 Fixture
+ * 注意：`runPreValidationFixes()` 在活动页面的子页面上调用 `getNodeById(DEFAULT_FRAME_ID
  *
- * Fixture note: `runPreValidationFixes()` calls `getNodeById(DEFAULT_FRAME_ID)`
- * ('root-frame') on the active page's children. Each fixture therefore wraps
- * the test nodes inside a root frame with id === DEFAULT_FRAME_ID so that
- * the function can find its entry point.
+ * )`（“根框架”）。因此，Each 固定装置将测试节点包装在 id === DEFAULT_FRAME_ID
+ * 的根框架内，以便该函数可以找到其入口点。
+ *
+ *
  */
 
 function loadDocument(doc: PenDocument): void {
@@ -22,8 +22,8 @@ function loadDocument(doc: PenDocument): void {
 }
 
 /**
- * Build a minimal PenDocument whose active page contains a single root frame
- * (id === DEFAULT_FRAME_ID) with `children` as its descendants.
+ * Build 一个最小的
+ * PenDocument，其活动页面包含单个根框架 (id === DEFAULT_FRAME_ID)，并以 `children` 作为其后代。
  */
 function makeDoc(children: PenNode[], variables: Record<string, unknown> = {}): PenDocument {
   return {
@@ -159,13 +159,10 @@ describe('design-pre-validation (baseline)', () => {
   });
 
   it('does NOT silently rewrite a rounded chrome cornerRadius across role boundaries', () => {
-    // The case Codex flagged: a tab-bar with intentionally rounded corners
-    // (cornerRadius=16) sitting among square content sections
-    // (cornerRadius=0). The detector's loose pass DOES emit an issue for
-    // the tab-bar (so debug tools surface it), but at 'info' severity.
-    // Pre-validation must NOT auto-apply 'info' issues — silently
-    // rewriting the tab-bar to cornerRadius=0 would destroy the
-    // intentional design choice.
+    // The 案例 Codex 标记：带有故意圆角的选项卡栏 (cornerRadius=16) 位于方形内容部分
+    // (cornerRadius=0) 之间。 The 检测器的松散传递 DOES
+    // 发出标签栏问题（因此调试工具会显示该问题），但严重程度为“信息”。 Pre-validation 必须 NOT 自动应用“信息”问题
+    // - 默默地将选项卡栏重写为 cornerRadius=0 会破坏有意的设计选择。
     const section = (id: string) =>
       ({
         id,

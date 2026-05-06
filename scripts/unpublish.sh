@@ -1,13 +1,13 @@
 #!/bin/bash
-# Unpublish all @zseven-w packages from npm for a given version.
+# Unpublish 来自 npm 的给定版本的所有 @zseven-w 软件包。
 #
-# Usage:
-#   bun run unpublish 0.5.1              # unpublish specific version from all packages
-#   bun run unpublish 0.5.1 --all        # unpublish ALL versions of all packages
-#   bun run unpublish 0.5.1 --deprecate  # deprecate instead of unpublish (fallback)
+# Usage：
+# Bun run unpublish 0.5.1 # 从所有包中取消发布特定版本
+# Bun run unpublish 0.5.1 --all # 取消发布所有软件包的 ALL 版本
+# Bun run unpublish 0.5.1 --deprecate # 弃用而不是取消发布（后备）
 #
-# Packages are removed in reverse topological order (dependents first, then dependencies)
-# to avoid npm's "has dependent packages" rejection.
+# Packages 按逆拓扑顺序删除（首先是依赖项，然后是依赖项）
+# 避免 npm 的“有依赖包”拒绝。
 
 set -euo pipefail
 
@@ -23,7 +23,7 @@ if [ -z "$VERSION" ]; then
   exit 1
 fi
 
-# Reverse topological order: dependents first, then dependencies
+# Reverse 拓扑顺序：首先是依赖项，然后是依赖项
 PACKAGES=(
   @zseven-w/openpencil
   @zseven-w/pen-sdk
@@ -59,7 +59,7 @@ for pkg in "${PACKAGES[@]}"; do
 done
 
 echo "================================"
-if [ ${#FAILED[@]} -eq 0 ]; then
+if [ ${#FAILED[@]} -eq 0 ];然后
   echo "All packages processed successfully."
 else
   echo "Failed packages:"

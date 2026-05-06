@@ -15,7 +15,7 @@ export type BlendMode =
 
 export interface SolidFill {
   type: 'solid';
-  color: string; // #RRGGBB or #RRGGBBAA
+  color: string; // #RRGGBB 或 #RRGGBBAA
   explain?: string;
   opacity?: number;
   blendMode?: BlendMode;

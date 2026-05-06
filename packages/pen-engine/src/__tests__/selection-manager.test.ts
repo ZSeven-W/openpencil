@@ -37,7 +37,7 @@ describe('SelectionManager', () => {
   it('should return stable reference when selection unchanged', () => {
     sm.select(['a', 'b']);
     const ref1 = sm.getSelection();
-    // Setting the same selection should keep the same reference
+    // Setting 相同的选择应保持相同的参考
     const ref2 = sm.getSelection();
     expect(ref1).toBe(ref2);
   });

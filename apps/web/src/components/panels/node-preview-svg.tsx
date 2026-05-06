@@ -22,7 +22,7 @@ type Vars = Record<string, VariableDefinition>;
 const MAX_DEPTH = 6;
 
 // ---------------------------------------------------------------------------
-// Color helpers
+// Color 帮助者
 // ---------------------------------------------------------------------------
 
 function resolveFillColor(fills: PenFill[] | undefined, vars: Vars): string | undefined {
@@ -66,7 +66,7 @@ function resolveStrokeWidth(node: PenNode, vars: Vars): number {
 }
 
 // ---------------------------------------------------------------------------
-// Size helpers (store-free)
+// Size 助手（无商店）
 // ---------------------------------------------------------------------------
 
 function nodeWidth(node: PenNode, parentAvail?: number): number {
@@ -101,7 +101,7 @@ function nodeHeight(node: PenNode, parentAvail?: number): number {
 }
 
 // ---------------------------------------------------------------------------
-// Layout computation (store-free)
+// Layout 计算（无存储）
 // ---------------------------------------------------------------------------
 
 interface LayoutChild {
@@ -152,7 +152,7 @@ function computeLayout(parent: PenNode, vars: Vars): LayoutChild[] {
   const availW = pW - pad.left - pad.right;
   const availH = pH - pad.top - pad.bottom;
 
-  // Measure children
+  // Measure 孩子们
   const sizes = visible.map((ch) => {
     const wSizing = 'width' in ch ? parseSizing(ch.width) : 0;
     const hSizing = 'height' in ch ? parseSizing(ch.height) : 0;
@@ -164,7 +164,7 @@ function computeLayout(parent: PenNode, vars: Vars): LayoutChild[] {
     };
   });
 
-  // Fill distribution on main axis
+  // Fill 主轴分布
   const totalGap = gap * Math.max(0, visible.length - 1);
   const fixedMain = sizes.reduce((sum, s) => {
     const mainProp = isVert ? s.h : s.w;
@@ -175,11 +175,11 @@ function computeLayout(parent: PenNode, vars: Vars): LayoutChild[] {
   const remaining = Math.max(0, (isVert ? availH : availW) - fixedMain - totalGap);
   const fillSize = fillCount > 0 ? remaining / fillCount : 0;
 
-  // Apply fill sizes
+  // Apply 填充尺寸
   for (const s of sizes) {
     if (isVert && s.hFill) s.h = fillSize;
     if (!isVert && s.wFill) s.w = fillSize;
-    // Cross-axis fill
+    // Cross 轴填充
     if (isVert && s.wFill) s.w = availW;
     if (!isVert && s.hFill) s.h = availH;
   }
@@ -226,7 +226,7 @@ function normalizeAlign(v: unknown): 'start' | 'center' | 'end' {
 }
 
 // ---------------------------------------------------------------------------
-// Rounded rect path (for per-corner radii)
+// Rounded 矩形路径（针对每个角的半径）
 // ---------------------------------------------------------------------------
 
 function roundedRectPath(
@@ -237,7 +237,7 @@ function roundedRectPath(
   br: number,
   bl: number,
 ): string {
-  // Clamp radii to half the smallest dimension
+  // Clamp 半径到最小尺寸的一半
   const maxR = Math.min(w, h) / 2;
   tl = Math.min(tl, maxR);
   tr = Math.min(tr, maxR);

@@ -22,9 +22,9 @@ import {
 export type { RenderNode } from '@zseven-w/pen-renderer';
 
 /**
- * Editor-specific renderer that extends the core SkiaNodeRenderer
- * with selection borders, hover outlines, agent indicators, and other
- * interactive overlays.
+ * Editor 特定渲染器
+ * ，通过选择边框、悬停轮廓、代理指示器和其他交互式叠加层扩展核心 SkiaNodeRenderer。
+ *
  */
 export class SkiaRenderer extends SkiaNodeRenderer {
   constructor(ck: CanvasKit) {
@@ -32,7 +32,7 @@ export class SkiaRenderer extends SkiaNodeRenderer {
   }
 
   /**
-   * Draw a single render node with optional selection highlight.
+   * Draw 具有可选选择突出显示的单个渲染节点。
    */
   drawNodeWithSelection(canvas: Canvas, rn: RenderNode, selectedIds: Set<string>) {
     super.drawNode(canvas, rn);
@@ -41,7 +41,7 @@ export class SkiaRenderer extends SkiaNodeRenderer {
     }
   }
 
-  // Drawing preview (semi-transparent shape while user drags to create)
+  // Drawing 预览（用户拖动创建时的半透明形状）
   drawPreview(canvas: Canvas, shape: { type: string; x: number; y: number; w: number; h: number }) {
     const ck = this.ck;
     const fillPaint = new ck.Paint();
@@ -92,7 +92,7 @@ export class SkiaRenderer extends SkiaNodeRenderer {
       canvas.drawPath(path, strokePaint);
       path.delete();
     } else {
-      // rectangle / frame
+      // 矩形/框架
       canvas.drawRect(ck.LTRBRect(x, y, x + w, y + h), fillPaint);
       canvas.drawRect(ck.LTRBRect(x, y, x + w, y + h), strokePaint);
     }
@@ -101,7 +101,7 @@ export class SkiaRenderer extends SkiaNodeRenderer {
     strokePaint.delete();
   }
 
-  // Overlay drawing (delegated to skia-overlays.ts)
+  // Overlay 绘图（委托给 skia-overlays.ts）
 
   drawSelectionBorder(canvas: Canvas, x: number, y: number, w: number, h: number) {
     _drawSelectionBorder(this.ck, canvas, x, y, w, h);

@@ -35,7 +35,7 @@ export async function handleValidationReport(
   const doc = docOverride ?? (await openDocument(resolveDocPath(params.filePath)));
   const pageChildren = getDocChildren(doc, params.pageId);
 
-  // Resolve root: explicit nodeId, else use a synthetic container over page children.
+  // Resolve root：显式 nodeId，否则在子页面上使用合成容器。
   let root: PenNode;
   if (params.rootNodeId) {
     const found = findNodeInTree(pageChildren, params.rootNodeId);
@@ -51,8 +51,7 @@ export async function handleValidationReport(
     }
     root = found;
   } else {
-    // Wrap page children in a synthetic frame — detectors walk the subtree
-    // from a PenNode, and this synthetic root never appears in the output.
+    // Wrap 页面合成框架中的子级 - 检测器从 PenNode 遍历子树，并且该合成根永远不会出现在输出中。
     root = {
       id: '__synthetic_root__',
       type: 'frame',

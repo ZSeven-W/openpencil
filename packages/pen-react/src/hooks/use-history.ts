@@ -10,11 +10,12 @@ interface HistoryState {
 }
 
 /**
- * Returns undo/redo availability and action functions.
- * Re-renders only on history:change events.
+ * Returns
+ * undo/redo 可用性和操作功能。 Re-仅渲染历史记录：更改事件。 The
  *
- * The snapshot object is cached by reference so that useSyncExternalStore
- * does not trigger an infinite re-render loop (new object === new snapshot).
+ * 快照对象通过引用进行缓存，以便 useSyncExternalStore
+ * 不会触发无限重新渲染循环
+ （新对象 === 新快照）。
  */
 export function useHistory(): HistoryState {
   const engine = useDesignEngine();

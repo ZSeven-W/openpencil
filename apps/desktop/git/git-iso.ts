@@ -1,8 +1,8 @@
 // apps/desktop/git/git-iso.ts
 //
-// Local git operations using isomorphic-git. This module is namespace-agnostic:
-// callers pass ref names (e.g. 'refs/heads/main') as parameters. The engine
-// in Phase 2 wraps these primitives with the actual ref naming convention
+// Local 使用 isomorphic-git 进行 git 操作。 This 模块与命名空间无关：
+// 调用者将引用名称（例如“refs/heads/main”）作为参数传递。 The 发动机
+// 在 Phase 2 中，使用实际的 ref 命名约定包装这些原语
 // for milestones (refs/heads/<branch>) and autosaves (refs/openpencil/autosaves/<branch>).
 
 import * as fs from 'node:fs';
@@ -13,9 +13,9 @@ import { GitError } from './error';
 import type { RepoDetectionFound } from './repo-detector';
 
 export interface IsoRepoHandle {
-  /** worktree (parent dir of .op file in single-file mode; repo root in folder mode) */
+  /** worktree（单文件模式下.op 文件的父目录；文件夹模式下 repo 根目录） */
   dir: string;
-  /** absolute path to the gitdir */
+  /** gitdir 的绝对路径 */
   gitdir: string;
   mode: 'single-file' | 'folder';
 }
@@ -28,30 +28,30 @@ export interface CommitMetaIso {
 }
 
 export interface InitOptions {
-  /** absolute path to the .op file (must already exist on disk) */
+  /** .op 文件的绝对路径（磁盘上必须已存在） */
   filePath: string;
-  /** branch name to initialize HEAD with; default 'main' */
+  /** 用于初始化 HEAD 的分支名称；默认“主” */
   defaultBranch?: string;
-  /** author for the initial empty commit; defaults to 'OpenPencil <noreply@openpencil>' */
+  /** 初始空提交的作者；默认为“OpenPencil <noreply@openpencil>” */
   authorName?: string;
   authorEmail?: string;
 }
 
 /**
- * Initialize a single-file repo at .op-history/<basename>.git next to the file.
- * Idempotent: if the gitdir already exists with a HEAD, returns the existing
- * handle without re-initializing.
+ * Initialize
+ * 文件旁边的 .op-history/<basename>.git 中的单文件存储库。 Idempotent：如果 gitdir 已存在且带有
+ * HEAD，则返回现有句柄而不重新初始化。 The 新存储库具有： - HEAD 指向 refs/heads/<defaultBranch> -
  *
- * The new repo has:
- *   - HEAD pointing at refs/heads/<defaultBranch>
- *   - `core.worktree = ../..` written into the gitdir's config file so that
- *     a user running `git -C <gitdir> status` from the terminal sees the
- *     correct working tree (the parent dir of the .op file). isomorphic-git
- *     itself doesn't need this — it accepts `dir` explicitly on every call —
- *     but the spec documents the on-disk shape with this setting and the
- *     CLI inspection use case demands it.
- *   - No initial commit (the engine will create one with the file's current
- *     content via commitFile).
+ * `core.worktree = ../..` 写入
+ * gitdir 的配置文件
+ * ，以便从终端运行 `git -C
+ * <gitdir> status` 的用户可以看到正确的工作树（.op 文件的父目录）。
+ * isomorphic-git 本身不需要这个 - 它在每次调用时都显式接受 `dir` - 但规范使用此设置记录了磁盘上的形状，并且 CLI
+ * 检查用例需要它。 - No 初始提交（引擎将通过 commitFile 创建包含文件当前内容的提交）。
+ *
+ *
+ *
+ *
  */
 export async function initSingleFile(opts: InitOptions): Promise<IsoRepoHandle> {
   const absFile = resolve(opts.filePath);

@@ -23,8 +23,8 @@ import {
   type CodegenAssetHint,
 } from './codegen-assets';
 
-// Inlined to avoid importing from @zseven-w/pen-mcp, which transitively pulls
-// node:fs/promises via document-manager and breaks Vite browser builds.
+// Inlined 以避免从 @zseven-w/pen-mcp 导入，这会通过文档管理器传递地拉取节点：fs/promises 并破坏 Vite
+// 浏览器构建。
 function validateContract(result: ChunkResult): ContractValidationResult {
   const issues: string[] = [];
   const { contract, code } = result;
@@ -38,11 +38,12 @@ function validateContract(result: ChunkResult): ContractValidationResult {
   return { valid: issues.length === 0, issues };
 }
 
-// ── Exported helpers (tested independently) ──
+// ── Exported 助手（独立测试）──
 
 /**
- * Hydrate a CodePlanFromAI with actual node data.
- * Strips chunks whose nodeIds don't match any input nodes.
+ * Hydrate 和
+ * CodePlanFromAI 包含实际节点数据。 Strips 块，其 nodeIds
+ 不匹配任何输入节点。
  */
 export function hydratePlan(plan: CodePlanFromAI, nodes: PenNode[]): CodeExecutionPlan {
   const nodeMap = new Map<string, PenNode>();
@@ -80,15 +81,16 @@ export function hydratePlan(plan: CodePlanFromAI, nodes: PenNode[]): CodeExecuti
 }
 
 /**
- * Compute execution order from dependency graph.
- * Chunks with no deps get order 0. Dependent chunks get max(dep orders) + 1.
+ * Compute
+ * 依赖关系图中的执行顺序。没有 deps 的 Chunks 获得顺序 0。Dependent
+ 块获得 max(dep orders) + 1。
  */
 export function computeExecutionOrder(chunks: PlannedChunk[]): Map<string, number> {
   const orders = new Map<string, number>();
 
   function resolve(id: string, visited: Set<string>): number {
     if (orders.has(id)) return orders.get(id)!;
-    if (visited.has(id)) return 0; // cycle guard
+    if (visited.has(id)) return 0; // 自行车护卫
     visited.add(id);
 
     const chunk = chunks.find((c) => c.id === id);
@@ -111,11 +113,11 @@ export function computeExecutionOrder(chunks: PlannedChunk[]): Map<string, numbe
 }
 
 /**
- * Parse a chunk generation response into code + contract.
- * Looks for ---CONTRACT--- separator.
+ * Parse 将块生成响应
+ * 转化为代码+合约。 Looks 为 ---CONTRACT--- 分隔符。
  */
 export function parseChunkResponse(response: string, chunkId: string): ChunkResult {
-  // Strategy 1: explicit ---CONTRACT--- separator
+  // Strategy 1：显式 ---CONTRACT--- 分隔符
   const separator = '---CONTRACT---';
   const sepIdx = response.indexOf(separator);
   if (sepIdx !== -1) {
@@ -125,14 +127,14 @@ export function parseChunkResponse(response: string, chunkId: string): ChunkResu
     if (contract) return { chunkId, code, contract };
   }
 
-  // Strategy 2: find a JSON block containing "componentName" (AI often wraps in ```json)
+  // Strategy 2：找到包含“componentName”的 JSON 块（AI 通常包裹在 ```json 中）
   const contractJsonMatch = response.match(/```json\s*\n([\s\S]*?)\n\s*```/);
   if (contractJsonMatch) {
     const jsonStr = contractJsonMatch[1].trim();
     if (jsonStr.includes('"componentName"')) {
       const contract = tryParseContract(jsonStr, chunkId);
       if (contract) {
-        // Everything before the JSON block is code
+        // JSON 块之前的 Everything 是代码
         const jsonBlockStart = response.indexOf(contractJsonMatch[0]);
         const code = cleanCode(response.slice(0, jsonBlockStart));
         return { chunkId, code, contract };
@@ -140,7 +142,7 @@ export function parseChunkResponse(response: string, chunkId: string): ChunkResu
     }
   }
 
-  // Strategy 3: find last JSON object with "componentName" in the response
+  // Strategy 3：查找响应中带有“componentName”的最后一个 JSON 对象
   const lastJsonMatch = response.match(/(\{[^{}]*"componentName"[^{}]*\})\s*$/);
   if (lastJsonMatch) {
     const contract = tryParseContract(lastJsonMatch[1], chunkId);
@@ -151,7 +153,7 @@ export function parseChunkResponse(response: string, chunkId: string): ChunkResu
     }
   }
 
-  // Strategy 4: infer contract from code (extract component name from export)
+  // Strategy 4：从代码推断合同（从导出中提取组件名称）
   const code = cleanCode(response);
   const inferredContract = inferContractFromCode(code, chunkId);
   return { chunkId, code, contract: inferredContract };
@@ -159,7 +161,7 @@ export function parseChunkResponse(response: string, chunkId: string): ChunkResu
 
 function tryParseContract(str: string, chunkId: string): ChunkContract | null {
   try {
-    // Strip markdown fences if present
+    // Strip 降价围栏（如果存在）
     const cleaned = str
       .replace(/^```\w*\n?/gm, '')
       .replace(/```\s*$/gm, '')
@@ -175,7 +177,7 @@ function tryParseContract(str: string, chunkId: string): ChunkContract | null {
       return parsed;
     }
   } catch {
-    /* not valid JSON */
+    /* 无效 JSON */
   }
   return null;
 }
@@ -183,18 +185,18 @@ function tryParseContract(str: string, chunkId: string): ChunkContract | null {
 function inferContractFromCode(code: string, chunkId: string): ChunkContract {
   const isSFC = code.includes('<script') || code.includes('<template') || code.includes('<style');
 
-  // Try to extract component name from export statements
-  // Skip export let/const for SFC (Svelte uses them for props, not component names)
+  // Try 从导出语句中提取组件名称 Skip 针对 SFC 导出 let/const （Svelte
+  // 将它们用作 props，而不是组件名称）
   const exportMatch =
     code.match(/export\s+default\s+function\s+(\w+)/) ??
-    code.match(/export\s+function\s+([A-Z]\w*)/) ?? // only PascalCase functions
+    code.match(/export\s+function\s+([A-Z]\w*)/) ?? // 仅 PascalCase 功能
     (!isSFC ? code.match(/export\s+default\s+class\s+(\w+)/) : null) ??
-    code.match(/fun\s+([A-Z]\w*)\s*\(/) ?? // Kotlin (PascalCase only)
+    code.match(/fun\s+([A-Z]\w*)\s*\(/) ?? // Kotlin（仅限 PascalCase）
     code.match(/struct\s+(\w+)\s*:\s*View/) ?? // SwiftUI
     code.match(/class\s+(\w+)\s+extends/); // Dart/Flutter
   const componentName = exportMatch?.[1] ?? '';
 
-  // Extract imports
+  // Extract 进口
   const importMatches = [...code.matchAll(/import\s+.*?from\s+['"](.+?)['"]/g)];
   const imports = importMatches.map((m) => ({
     source: m[1],
@@ -219,7 +221,7 @@ function cleanCode(raw: string): string {
     .trim();
 }
 
-// ── Main pipeline ──
+// ── Main 管道 ──
 
 export async function generateCode(
   nodes: PenNode[],
@@ -240,7 +242,7 @@ export async function generateCode(
     onProgress({ step: 'planning', status: 'done', plan: planFromAI });
   } catch (err) {
     if (abortSignal?.aborted) throw err;
-    // Retry once with stricter prompt
+    // Retry 一次，提示更严格
     try {
       planFromAI = await runPlanning(sanitizedNodes, framework, model, provider, abortSignal, true);
       onProgress({ step: 'planning', status: 'done', plan: planFromAI });
@@ -252,7 +254,7 @@ export async function generateCode(
     }
   }
 
-  // Hydrate plan with actual node data
+  // Hydrate 计划与实际节点数据
   const execPlan = hydratePlan(planFromAI, sanitizedNodes);
   if (execPlan.chunks.length === 0) {
     const msg = 'Planning produced no valid chunks';
@@ -261,7 +263,7 @@ export async function generateCode(
     throw new Error(msg);
   }
 
-  // Initialize all chunks as pending
+  // Initialize 所有块均处于待处理状态
   for (const chunk of execPlan.chunks) {
     onProgress({ step: 'chunk', chunkId: chunk.id, name: chunk.name, status: 'pending' });
   }
@@ -270,7 +272,7 @@ export async function generateCode(
   const results = new Map<string, ChunkResult>();
   const statuses = new Map<string, ChunkStatus>();
 
-  // Group by execution order
+  // Group 按执行顺序
   const maxOrder = Math.max(...execPlan.chunks.map((c) => c.order));
 
   for (let order = 0; order <= maxOrder; order++) {
@@ -278,7 +280,7 @@ export async function generateCode(
 
     const batch = execPlan.chunks.filter((c) => c.order === order);
     const batchPromises = batch.map(async (chunk) => {
-      // Check if dependencies failed
+      // Check 如果依赖失败
       const depsFailed = chunk.dependencies.some((depId) => statuses.get(depId) === 'failed');
       if (depsFailed) {
         statuses.set(chunk.id, 'skipped');
@@ -286,7 +288,7 @@ export async function generateCode(
         return;
       }
 
-      // Collect dependency contracts
+      // Collect 依赖合约
       const depContracts: ChunkContract[] = chunk.dependencies
         .map((depId) => results.get(depId)?.contract)
         .filter((c): c is ChunkContract => c !== undefined && c.componentName !== '');
@@ -307,7 +309,7 @@ export async function generateCode(
           assetHints,
         );
 
-        // Ensure componentName is valid PascalCase — AI may return kebab-case or empty
+        // Ensure componentName 有效 PascalCase — AI 可能返回 kebab-case 或空
         if (
           !result.contract.componentName ||
           !/^[A-Z][a-zA-Z0-9]*$/.test(result.contract.componentName)
@@ -327,7 +329,7 @@ export async function generateCode(
             result,
           });
         } else {
-          // Contract invalid — mark degraded
+          // Contract 无效 — 标记已降级
           results.set(chunk.id, result);
           statuses.set(chunk.id, 'degraded');
           onProgress({
@@ -340,7 +342,7 @@ export async function generateCode(
           });
         }
       } catch {
-        // Retry once
+        // Retry 一次
         try {
           const assetHints = collectChunkAssetHints(chunk.nodes, assets);
           const result = await runChunkGeneration(
@@ -433,7 +435,7 @@ export async function generateCode(
     );
     onProgress({ step: 'assembly', status: 'done' });
   } catch {
-    // Retry once
+    // Retry 一次
     try {
       finalCode = await runAssembly(
         chunkInputs,
@@ -447,7 +449,7 @@ export async function generateCode(
       );
       onProgress({ step: 'assembly', status: 'done' });
     } catch {
-      // Best-effort fallback: concatenate chunk codes
+      // Best-effort 后备：连接块代码
       finalCode = chunkInputs
         .filter((c) => c.code)
         .map((c) => `// ── ${c.name} (${c.status}) ──\n\n${c.code}`)

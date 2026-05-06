@@ -2,8 +2,9 @@ import type { PenNode } from '@zseven-w/pen-types';
 import type { ImageFill } from '@zseven-w/pen-types';
 
 /**
- * Resolve __blob:N and __hash:<hex> references in the PenNode tree to data URLs
- * using extracted image blobs and ZIP image files from the .fig file.
+ * Resolve
+ * __blob:n 和 __hash:<hex> 在 PenNode 树中引用数据 URLs，使用从 .fig 文件中提取的图像 blob 和 ZIP
+ 图像文件。
  */
 export function resolveImageBlobs(
   nodes: PenNode[],
@@ -12,13 +13,13 @@ export function resolveImageBlobs(
 ): number {
   if (imageBlobs.size === 0 && (!imageFiles || imageFiles.size === 0)) return 0;
 
-  // Convert blobs to data URLs
+  // Convert blob 到数据 URLs
   const dataUrls = new Map<number, string>();
   for (const [index, bytes] of imageBlobs) {
     dataUrls.set(index, blobToDataUrl(bytes));
   }
 
-  // Convert hash-based image files to data URLs
+  // Convert 基于哈希的图像文件到数据 URLs
   const hashDataUrls = new Map<string, string>();
   if (imageFiles) {
     for (const [hash, bytes] of imageFiles) {
@@ -34,7 +35,7 @@ export function resolveImageBlobs(
 }
 
 function blobToDataUrl(bytes: Uint8Array): string {
-  // Detect MIME type from magic bytes
+  // Detect MIME 魔法字节类型
   let mime = 'image/png';
   if (bytes[0] === 0xff && bytes[1] === 0xd8) {
     mime = 'image/jpeg';
@@ -44,7 +45,7 @@ function blobToDataUrl(bytes: Uint8Array): string {
     mime = 'image/webp';
   }
 
-  // Convert to base64
+  // Convert 转 base64
   let binary = '';
   const len = bytes.byteLength;
   for (let i = 0; i < len; i++) {

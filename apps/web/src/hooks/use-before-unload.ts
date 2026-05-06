@@ -2,17 +2,17 @@ import { useEffect } from 'react';
 import { useDocumentStore } from '@/stores/document-store';
 
 /**
- * Prevents accidental data loss by warning the user before closing the tab/window
- * when there are unsaved changes. In Electron, close confirmation is handled by
- * the main process via a native dialog, so this hook is skipped.
+ * Prevents
+ * 当存在未保存的更改时，在关闭 tab/window 之前警告用户，从而避免意外数据丢失。 In
+ * Electron，关闭确认由主进程通过本机对话框处理，因此跳过此钩子。
  */
 export function useBeforeUnload() {
   const isDirty = useDocumentStore((s) => s.isDirty);
 
   useEffect(() => {
-    // Electron handles close confirmation in the main process
+    // Electron 在主流程中处理关闭确认
     if (window.electronAPI) return;
-    // Skip in dev mode so Vite HMR doesn't trigger the "Leave page?" dialog
+    // Skip 处于开发模式，因此 Vite HMR 不会触发“Leave 页面？”对话
     if (import.meta.env.DEV) return;
     if (!isDirty) return;
 

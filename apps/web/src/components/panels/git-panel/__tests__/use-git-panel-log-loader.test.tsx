@@ -1,9 +1,9 @@
-// @vitest-environment jsdom
+// @vitest-环境 jsdom
 // apps/web/src/components/panels/git-panel/__tests__/use-git-panel-log-loader.test.tsx
 //
-// Phase 7b: verifies that useGitPanelLogLoader reads state.repo.currentBranch
-// instead of a hardcoded 'main' so branch switches and conflict → ready
-// transitions both see the correct log.
+// Phase 7b：验证 useGitPanelLogLoader 读取 state.repo.currentBranch
+// 而不是硬编码的“主”，因此分支切换和冲突→准备好
+// 转换都会看到正确的日志。
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, cleanup } from '@testing-library/react';
@@ -56,7 +56,7 @@ vi.mock('@/stores/git-store', () => ({
 
 import { useGitPanelLogLoader } from '@/components/panels/git-panel/use-git-panel-log-loader';
 
-/** Minimal test harness component that exercises the hook. */
+/** Minimal 练习挂钩的测试工具组件。 */
 function Harness({ kinds }: { kinds: ReadonlyArray<string> }) {
   useGitPanelLogLoader(kinds);
   return null;
@@ -124,7 +124,7 @@ describe('useGitPanelLogLoader', () => {
     expect(mocks.loadLog).toHaveBeenCalledTimes(1);
     expect(mocks.loadLog).toHaveBeenLastCalledWith({ ref: 'main', limit: 50 });
 
-    // Simulate a branch switch (same state kind, different currentBranch)
+    // Simulate 分支开关（相同状态类型，不同 currentBranch）
     mocks.state.repo.currentBranch = 'feature/x';
     rerender(<Harness kinds={['ready']} />);
     expect(mocks.loadLog).toHaveBeenCalledTimes(2);

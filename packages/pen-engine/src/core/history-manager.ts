@@ -7,9 +7,10 @@ export interface HistoryManagerOptions {
 }
 
 /**
- * Framework-agnostic undo/redo manager.
- * Extracted from apps/web/src/stores/history-store.ts.
- * Owns its state internally -- no Zustand dependency.
+ * Framework 与
+ * undo/redo 无关的管理器。 Extracted 来自
+ * apps/web/src/stores/history-store.ts。 Owns 其内部状态——没有
+ Zustand 依赖性。
  */
 export class HistoryManager {
   private undoStack: PenDocument[] = [];
@@ -34,9 +35,9 @@ export class HistoryManager {
   }
 
   /**
-   * Push the current document state before a mutation.
-   * In batch mode, pushes are suppressed (batch captures the base state).
-   * Debounces rapid pushes within HISTORY_DEBOUNCE_MS.
+   * Push 突变前的当前文
+   * 档状态。 In 批处理模式，推送被抑制（批处理捕获基本状态）。 Debounces 在
+   * HISTORY_DEBOUNCE_MS 内快速推进。
    */
   push(doc: PenDocument): void {
     if (this.batchDepth > 0) return;
@@ -65,8 +66,8 @@ export class HistoryManager {
   }
 
   /**
-   * Undo: restore the previous document state.
-   * Returns the restored document, or null if nothing to undo.
+   * Undo：恢复之前的文档
+   * 状态。 Returns 恢复的文档，如果没有要撤消的内容则为 null。
    */
   undo(currentDoc: PenDocument): PenDocument | null {
     if (this.undoStack.length === 0) return null;
@@ -78,8 +79,8 @@ export class HistoryManager {
   }
 
   /**
-   * Redo: restore the next document state.
-   * Returns the restored document, or null if nothing to redo.
+   * Redo：恢复下一个文档
+   * 状态。 Returns 已恢复的文档，如果无需重做，则为 null。
    */
   redo(currentDoc: PenDocument): PenDocument | null {
     if (this.redoStack.length === 0) return null;
@@ -91,8 +92,9 @@ export class HistoryManager {
   }
 
   /**
-   * Start a batch: all push() calls are suppressed until endBatch().
-   * Supports nesting. Only the outermost endBatch() commits.
+   * Start 一批：所有
+   * push() 调用都被抑制，直到 endBatch()。 Supports 嵌套。 Only 最外面的 endBatch()
+   提交。
    */
   startBatch(doc: PenDocument): void {
     if (this.batchDepth === 0) {
@@ -102,8 +104,8 @@ export class HistoryManager {
   }
 
   /**
-   * End a batch. On the outermost call, pushes the base state to undo stack
-   * (unless the document is unchanged).
+   * End 一批。 On
+   * 最外面的调用，将基本状态推送到撤消堆栈（除非文档未更改）。
    */
   endBatch(currentDoc?: PenDocument): void {
     if (this.batchDepth <= 0) return;
@@ -121,7 +123,7 @@ export class HistoryManager {
     }
   }
 
-  /** Clear all history. */
+  /** Clear 所有历史记录。 */
   clear(): void {
     this.undoStack = [];
     this.redoStack = [];

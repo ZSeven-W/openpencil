@@ -15,16 +15,16 @@ import type { ResizeRotateHandler } from './skia-interaction-resize';
 import type { ArcHandler } from './skia-interaction-arc';
 
 /**
- * Handles selection, node dragging, and marquee selection.
- * On mouse down, checks for arc/resize/rotate handles first (delegating
- * to the corresponding handlers), then falls through to hit-test selection.
+ * Handles
+ * 选择、节点拖动和选取框选择。 On 鼠标按下，首先检查 arc/resize/rotate
+ * 句柄（委托给相应的处理程序），然后进行命中测试选择。
  */
 export class SelectHandler {
   private ctx: InteractionContext;
   private resizeRotate: ResizeRotateHandler;
   private arc: ArcHandler;
 
-  // Drag state
+  // Drag 状态
   isDragging = false;
   private dragMoved = false;
   isMarquee = false;
@@ -43,17 +43,17 @@ export class SelectHandler {
   }
 
   /**
-   * Handle mouse down in select mode. Checks for handle hits first,
-   * then does spatial hit-testing for node selection and drag initiation.
+   * Handle 在选择模式
+   * 下按下鼠标。首先使用 Checks 进行手柄点击，然后对节点选择和拖动启动进行空间点击测试。
    */
   handleSelectMouseDown(e: MouseEvent, scene: { x: number; y: number }, engine: SkiaEngine): void {
-    // Check arc handles first
+    // Check 弧线首先处理
     if (this.arc.startArcDrag(scene, engine)) return;
 
-    // Check resize handle
+    // Check 调整手柄大小
     if (this.resizeRotate.startResize(scene, engine)) return;
 
-    // Check rotation zone
+    // Check 旋转区域
     if (this.resizeRotate.startRotation(scene, engine)) return;
 
     const hits = engine.spatialIndex.hitTest(scene.x, scene.y);
@@ -68,7 +68,7 @@ export class SelectHandler {
         (selId) => selId !== nodeId && docStore.isDescendantOf(nodeId, selId),
       );
       if (isChildOfSelected) {
-        // Don't change selection
+        // Don 不更改选择
       } else if (!currentSelection.includes(nodeId)) {
         const parent = docStore.getParentOf(nodeId);
         if (parent && (parent.type === 'frame' || parent.type === 'group')) {
@@ -90,7 +90,7 @@ export class SelectHandler {
         }
       }
 
-      // Start drag
+      // Start 拖动
       const selectedIds = useCanvasStore.getState().selection.selectedIds;
       this.isDragging = true;
       this.dragMoved = false;
@@ -102,7 +102,7 @@ export class SelectHandler {
         return { id, x: n?.x ?? 0, y: n?.y ?? 0 };
       });
     } else {
-      // Empty space -> start marquee or clear selection
+      // Empty space -> 开始选取框或清除选择
       if (!e.shiftKey) {
         useCanvasStore.getState().clearSelection();
       }
@@ -193,7 +193,7 @@ export class SelectHandler {
   }
 
   /**
-   * Finalize a drag operation: commit position updates and handle reparenting.
+   * Finalize 拖动操作：提交位置更新并处理重定父级。
    */
   handleDragEnd(engine: SkiaEngine): void {
     if (!this.isDragging || !this.dragMoved || this.dragOrigPositions.length === 0) {
@@ -213,7 +213,7 @@ export class SelectHandler {
         ? { x: draggedRN.absX, y: draggedRN.absY, w: draggedRN.absW, h: draggedRN.absH }
         : { x: orig.x + dx, y: orig.y + dy, w: 100, h: 100 };
 
-      // Check if dragged completely outside parent -> reparent
+      // Check 如果完全拖到父级之外 -> 重新父级
       if (parent) {
         const parentRN = engine.renderNodes.find((rn) => rn.node.id === parent.id);
         if (parentRN) {
@@ -278,7 +278,7 @@ export class SelectHandler {
   }
 
   /**
-   * Reset all drag/marquee state. Called on mouse up.
+   * Reset 所有 drag/marquee 状态。鼠标放在 Called 上。
    */
   resetDrag(): void {
     this.isDragging = false;

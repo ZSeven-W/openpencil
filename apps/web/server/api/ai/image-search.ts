@@ -44,7 +44,7 @@ interface WikimediaQueryResponse {
 }
 
 // ---------------------------------------------------------------------------
-// OAuth token cache
+// OAuth 令牌缓存
 // ---------------------------------------------------------------------------
 
 let cachedToken: string | null = null;
@@ -70,7 +70,7 @@ async function getOpenverseToken(clientId: string, clientSecret: string): Promis
     if (!res.ok) return null;
     const data = (await res.json()) as { access_token: string; expires_in: number };
     cachedToken = data.access_token;
-    // Refresh 60 seconds before expiry
+    // Refresh 到期前 60 秒
     tokenExpiresAt = now + (data.expires_in - 60) * 1000;
     return cachedToken;
   } catch {
@@ -79,7 +79,7 @@ async function getOpenverseToken(clientId: string, clientSecret: string): Promis
 }
 
 // ---------------------------------------------------------------------------
-// Query simplification — convert verbose AI prompts to search keywords
+// Query 简化 — 将详细的 AI 提示转换为搜索关键字
 // ---------------------------------------------------------------------------
 
 const STOP_WORDS = new Set([
@@ -177,9 +177,9 @@ const STOP_WORDS = new Set([
 ]);
 
 /**
- * Simplify a verbose image generation prompt into 2-4 search keywords.
- * "delicious burger with fries and fresh vegetables" → "burger fries vegetables"
- * "modern office workspace with natural lighting" → "modern office workspace"
+ * Simplify
+ * 将详细图像生成提示分为 2-4 个搜索关键字。 “美味的汉堡配薯条和新鲜蔬菜”→“汉堡薯条蔬菜”“自然采光的现代办公空间”→“现代办公空
+ * 间”
  */
 export function simplifySearchQuery(prompt: string): string {
   const words = prompt
@@ -188,13 +188,13 @@ export function simplifySearchQuery(prompt: string): string {
     .split(/\s+/)
     .filter((w) => w.length > 2 && !STOP_WORDS.has(w));
 
-  // Take up to 4 keywords
+  // Take 最多 4 个关键字
   const keywords = words.slice(0, 4);
   return keywords.join(' ') || prompt.slice(0, 30);
 }
 
 // ---------------------------------------------------------------------------
-// Mapping helpers (exported for testing)
+// Mapping 助手（导出用于测试）
 // ---------------------------------------------------------------------------
 
 export function mapOpenverseResult(r: OpenverseImageResult): ImageSearchResult {

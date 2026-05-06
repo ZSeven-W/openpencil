@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// CSS font family quoting — extracted for portability (no CanvasKit deps)
+// CSS 字体系列引用 — 出于可移植性而提取（无 CanvasKit deps）
 // ---------------------------------------------------------------------------
 
 const GENERIC_FAMILIES = new Set([
@@ -23,15 +23,15 @@ export function cssFontFamily(family: string): string {
     .map((f) => {
       const trimmed = f.trim();
       if (!trimmed) return trimmed;
-      // Already quoted
+      // Already 引用
       if (
         (trimmed.startsWith('"') && trimmed.endsWith('"')) ||
         (trimmed.startsWith("'") && trimmed.endsWith("'"))
       )
         return trimmed;
-      // Generic families must not be quoted
+      // Generic 系列不得被引用
       if (GENERIC_FAMILIES.has(trimmed.toLowerCase())) return trimmed;
-      // Quote everything else (safe even for single-word names)
+      // Quote 其他所有内容（即使对于单字名称也是安全的）
       return `"${trimmed}"`;
     })
     .join(', ');

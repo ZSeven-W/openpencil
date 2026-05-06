@@ -1,11 +1,11 @@
 // apps/web/src/components/panels/git-panel/git-panel-error-card.tsx
 //
-// Generic error display for state.kind === 'error'. Shows the error message
-// from the GitError, an optional retry button (when recoverable), and a
-// dismiss button (calls closeRepo to reset to no-file).
+// Generic state.kind === 'error' 的错误显示。 Shows 错误消息
+// 来自 GitError、一个可选的重试按钮（可恢复时）和一个
+// 关闭按钮（调用 closeRepo 重置为无文件）。
 //
-// Phase 4a ships this for the init/open/clone error paths. Phase 4c will
-// reuse it for autosave errors via the panel header indicator.
+// Phase 4a 将此用于 init/open/clone 错误路径。 Phase 4c 将
+// 通过面板标题指示器重用它来处理自动保存错误。
 
 import { AlertCircle } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -15,7 +15,7 @@ import { useGitStore } from '@/stores/git-store';
 interface GitPanelErrorCardProps {
   message: string;
   recoverable: boolean;
-  /** Optional retry handler. If omitted, the retry button calls closePanel. */
+  /** Optional 重试处理程序。 If 省略，重试按钮调用 closePanel。 */
   onRetry?: () => void;
 }
 

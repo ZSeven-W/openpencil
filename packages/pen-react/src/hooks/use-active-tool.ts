@@ -3,8 +3,8 @@ import { useDesignEngine } from './use-design-engine.js';
 import { useEngineSubscribe } from '../utils/use-engine-subscribe.js';
 
 /**
- * Returns the currently active tool type.
- * Re-renders only on tool:change events.
+ * Returns
+ * 当前活动的工具类型。 Re-仅在工具：更改事件上呈现。
  */
 export function useActiveTool(): [ToolType, (tool: ToolType) => void] {
   const engine = useDesignEngine();

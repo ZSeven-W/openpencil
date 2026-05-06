@@ -18,7 +18,7 @@ interface DesignMdContentProps {
 }
 
 // ---------------------------------------------------------------------------
-// DesignMdContent — renders all parsed design.md sections
+// DesignMdContent — 渲染所有已解析的 design.md 部分
 // ---------------------------------------------------------------------------
 
 export function DesignMdContent({
@@ -50,7 +50,7 @@ export function DesignMdContent({
 
   return (
     <div className="p-3 space-y-2">
-      {/* Project name */}
+      {/* Project 名称 */}
       {designMd.projectName && (
         <div className="px-1 pb-1">
           <h3 className="text-sm font-semibold text-foreground">{designMd.projectName}</h3>
@@ -284,10 +284,10 @@ function renderInline(text: string): React.ReactNode {
     const boldMatch = remaining.match(/\*\*(.+?)\*\*/);
     // Code: `text`
     const codeMatch = remaining.match(/`([^`]+)`/);
-    // Hex color: #XXXXXX
+    // Hex 颜色：#XXXXXX
     const colorMatch = remaining.match(/#([0-9A-Fa-f]{6})\b/);
 
-    // Find earliest match
+    // Find 最早匹配
     const matches = [
       boldMatch && {
         type: 'bold' as const,

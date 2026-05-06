@@ -37,9 +37,8 @@ import { mkTempDir, writeOpFile, mkSubdir } from './test-helpers';
 
 const execFileAsync = promisify(execFile);
 
-// Synchronous availability probe at module load — same pattern as
-// git-sys-real.test.ts. vitest's it.skipIf() reads its predicate at
-// test-collection time, before any beforeEach hook has run.
+// Synchronous 模块加载时的可用性探测 — 与 git-sys-real.test.ts 的模式相同。 vitest
+// 的 it.skipIf() 在测试收集时、在任何 beforeEach 挂钩运行之前读取其谓词。
 let systemGitAvailable: boolean;
 try {
   execFileSync('git', ['--version'], { stdio: 'ignore', timeout: 5000 });
@@ -71,9 +70,9 @@ describe('git-engine', () => {
 
     it('registers a session and auto-binds the file when a single-file repo exists', async () => {
       const opFile = await writeOpFile(temp.dir, 'login.op');
-      // Use engineInit to create the repo first.
+      // Use engineInit 首先创建存储库。
       const initResult = await engineInit(opFile);
-      // Drop the init session so detect re-allocates a fresh one.
+      // Drop init 会话，因此检测重新分配一个新会话。
       clearAllSessions();
 
       const result = await engineDetect(opFile);
@@ -175,7 +174,7 @@ describe('git-engine', () => {
       const bound = await engineBindTrackedFile(result.repoId, a);
       expect(bound.trackedFilePath).toBe(resolve(a));
 
-      // Outside path is rejected.
+      // Outside 路径被拒绝。
       await expect(
         engineBindTrackedFile(result.repoId, join(temp.dir, 'outside.op')),
       ).rejects.toMatchObject({ name: 'GitError', code: 'open-failed' });
@@ -189,7 +188,7 @@ describe('git-engine', () => {
       const result = await engineOpen(repoRoot);
       expect(result.candidates).toHaveLength(1);
 
-      // Add a new file outside OpenPencil and refresh.
+      // Add 在 OpenPencil 外部新建一个文件并刷新。
       await writeOpFile(repoRoot, 'b.op');
       const fresh = await engineListCandidates(result.repoId);
       expect(fresh).toHaveLength(2);
@@ -216,8 +215,8 @@ describe('git-engine', () => {
       const result = await engineInit(opFile);
       const status = await engineStatus(result.repoId);
       expect(status.trackedFilePath).toBe(resolve(opFile));
-      // currentBranch reads HEAD's symbolic ref which initSingleFile sets to
-      // refs/heads/main, so branch='main' even before any commit exists.
+      // currentBranch 读取 HEAD 的符号引用，其中 initSingleFile 设置为
+      // refs/heads/main，因此即使在任何提交存在之前，branch='main' 也是如此。
       expect(status.branch).toBe('main');
       expect(status.workingDirty).toBe(true);
       expect(status.otherFilesDirty).toBe(0);
@@ -242,8 +241,7 @@ describe('git-engine', () => {
         message: 'first',
         author: { name: 't', email: 't@example.com' },
       });
-      // Force the autosave ref to the same commit (this is what engineCommit
-      // milestone path will do in Task 8).
+      // Force 自动保存引用同一提交（这是 engineCommit 里程碑路径在 Task 8 中执行的操作）。
       await setRef({
         handle: session.handle,
         ref: 'refs/openpencil/autosaves/main',
@@ -254,7 +252,7 @@ describe('git-engine', () => {
       expect(cleanStatus.branch).toBe('main');
       expect(cleanStatus.workingDirty).toBe(false);
 
-      // Mutate the file on disk.
+      // Mutate 磁盘上的文件。
       await writeOpFile(temp.dir, 'login.op', {
         version: '1.0.0',
         children: [{ id: 'r2' }],
@@ -264,14 +262,13 @@ describe('git-engine', () => {
     });
 
     it('folder mode: a modified tracked .gitignore counts toward otherFilesDirty', async () => {
-      // Build a folder-mode repo with two tracked files: design.op and .gitignore.
-      const repoRoot = temp.dir; // use temp.dir directly so the gitdir is .git here
+      // Build 一个文件夹模式存储库，包含两个跟踪文件：design.op 和 .gitignore。
+      const repoRoot = temp.dir; // 直接使用 temp.dir 所以这里的 gitdir 是 .git
       const opFile = await writeOpFile(repoRoot, 'design.op');
       const gitignorePath = join(repoRoot, '.gitignore');
       await fsp.writeFile(gitignorePath, 'node_modules\n', 'utf-8');
 
-      // Init a folder-mode repo via isomorphic-git directly (engineInit only
-      // does single-file mode).
+      // Init 直接通过 isomorphic-git 的文件夹模式存储库（engineInit 仅适用于单文件模式）。
       const isoGit = await import('isomorphic-git');
       const fsMod = await import('node:fs');
       await isoGit.init({
@@ -279,7 +276,7 @@ describe('git-engine', () => {
         dir: repoRoot,
         defaultBranch: 'main',
       });
-      // Stage and commit BOTH files in one commit so both are in the heads tree.
+      // Stage 并在一次提交中提交 BOTH 文件，因此两者都位于头树中。
       await isoGit.add({ fs: fsMod, dir: repoRoot, filepath: 'design.op' });
       await isoGit.add({ fs: fsMod, dir: repoRoot, filepath: '.gitignore' });
       await isoGit.commit({
@@ -289,16 +286,16 @@ describe('git-engine', () => {
         author: { name: 't', email: 't@example.com' },
       });
 
-      // Open via the engine and bind design.op as the tracked file.
+      // Open 通过引擎并将 design.op 绑定为跟踪文件。
       const result = await engineOpen(repoRoot, opFile);
       expect(result.trackedFilePath).toBe(resolve(opFile));
 
-      // Clean state: both files match the tree → otherFilesDirty=0.
+      // Clean 状态：两个文件都匹配树 → otherFilesDirty=0。
       const cleanStatus = await engineStatus(result.repoId);
       expect(cleanStatus.otherFilesDirty).toBe(0);
       expect(cleanStatus.otherFilesPaths).toEqual([]);
 
-      // Modify .gitignore on disk and re-check.
+      // Modify .gitignore 在磁盘上并重新检查。
       await fsp.writeFile(gitignorePath, 'node_modules\n.DS_Store\n', 'utf-8');
       const dirtyStatus = await engineStatus(result.repoId);
       expect(dirtyStatus.otherFilesDirty).toBe(1);
@@ -325,7 +322,7 @@ describe('git-engine', () => {
 
       const result = await engineOpen(repoRoot, opFile);
 
-      // Delete notes.md from disk; the heads tree still has it.
+      // Delete notes.md 来自磁盘；头树仍然有它。
       await fsp.unlink(notesPath);
 
       const status = await engineStatus(result.repoId);
@@ -372,7 +369,7 @@ describe('git-engine', () => {
       const session = (await import('../repo-session')).getSession(result.repoId)!;
       const { commitFile, setRef } = await import('../git-iso');
 
-      // Milestone first.
+      // 首先是 Milestone。
       const { hash: m1 } = await commitFile({
         handle: session.handle,
         filepath: 'login.op',
@@ -385,7 +382,7 @@ describe('git-engine', () => {
         ref: 'refs/openpencil/autosaves/main',
         value: m1,
       });
-      // Then an autosave on top.
+      // Then 顶部有自动保存。
       await writeOpFile(temp.dir, 'login.op', {
         version: '1.0.0',
         children: [{ id: 'r2' }],
@@ -399,7 +396,7 @@ describe('git-engine', () => {
       });
 
       const log = await engineLog(result.repoId, { ref: 'autosaves', limit: 10 });
-      // log[0] = a1 (autosave), log[1] = m1 (milestone, reachable as parent)
+      // log[0] = a1（自动保存），log[1] = m1（里程碑，可作为父级访问）
       expect(log[0].hash).toBe(a1);
       expect(log[0].kind).toBe('autosave');
       expect(log[1].hash).toBe(m1);
@@ -415,7 +412,7 @@ describe('git-engine', () => {
       const session = (await import('../repo-session')).getSession(result.repoId)!;
       const { commitFile, setRef } = await import('../git-iso');
 
-      // Make 3 milestones.
+      // Make 3 个里程碑。
       for (let i = 0; i < 3; i++) {
         await writeOpFile(temp.dir, 'login.op', {
           version: '1.0.0',

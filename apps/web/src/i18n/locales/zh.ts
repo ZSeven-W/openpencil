@@ -78,15 +78,15 @@ const zh: TranslationKeys = {
   'git.conflict.nonOp.unresolvedHeading_other': '{{count}} 个文件需要处理',
   'git.conflict.nonOp.continue': '继续合并',
   'git.conflict.nonOp.abort': '中止合并',
-  // Phase 7b: unified banner keys (Phase 7c localised)
+  // Phase 7b：统一横幅键（Phase 7c 本地化）
   'git.conflict.banner.progress': '已解决 {{resolved}} / {{total}}',
   'git.conflict.banner.apply': '应用合并',
   'git.conflict.banner.continue': '继续',
   'git.conflict.banner.finalizeError': '无法应用: {{message}}',
   'git.conflict.banner.pollError': '状态轮询因错误暂停: {{message}}',
-  // placeholder — future localization
+  // placeholder — 未来的本地化
   'git.conflict.banner.reopenMessage': '面板在合并过程中重新打开 — 请中止并重新拉取。',
-  // Phase 7c: conflict list / item / card / editor keys
+  // Phase 7c：冲突列表/项目/卡片/编辑器键
   'git.conflict.list.heading': '所有冲突',
   'git.conflict.list.progress': '已解决 {{resolved}} / {{total}}',
   'git.conflict.list.allResolved': '全部已解决',
@@ -122,7 +122,7 @@ const zh: TranslationKeys = {
   'git.empty.cloneCard': '克隆',
   'git.empty.cloneCardDescription': '从远程仓库',
 
-  // ── Git 作者表单 ──
+  // ── Git 填写表格 ──
   'git.author.heading': '提交署名',
   'git.author.subheading': '保存第一次提交需要署名',
   'git.author.nameLabel': '姓名',
@@ -269,7 +269,7 @@ const zh: TranslationKeys = {
   'git.push.rejectedPull': '立即拉取',
   'git.remote.dismissError': '关闭',
 
-  // ── Git 远端设置 (Phase 6c) ──
+  // ── Git 末端设置 (Phase 6c) ──
   'git.remote.settingsLabel': '远端设置',
   'git.remote.settingsHeading': '远端',
   'git.remote.back': '返回',
@@ -293,7 +293,7 @@ const zh: TranslationKeys = {
   'git.remote.storedAuth.noHost': '未检测到主机',
   'git.remote.clearAuthButton': '清除已保存的凭据',
 
-  // ── Git SSH 密钥 (Phase 6c) ──
+  // ── Git SSH 按键 (Phase 6c) ──
   'git.ssh.label': 'SSH 密钥',
   'git.ssh.heading': 'SSH 密钥',
   'git.ssh.back': '返回',

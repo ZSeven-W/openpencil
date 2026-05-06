@@ -85,7 +85,7 @@ const de: TranslationKeys = {
   'git.conflict.banner.continue': 'Fortfahren',
   'git.conflict.banner.finalizeError': 'Konnte nicht anwenden: {{message}}',
   'git.conflict.banner.pollError': 'Status-Polling wegen eines Fehlers pausiert: {{message}}',
-  // placeholder — future localization
+  // placeholder — 未来的本地化
   'git.conflict.banner.reopenMessage':
     'Panel wurde mitten im Merge neu geöffnet — bitte abbrechen und erneut pullen.',
 
@@ -151,7 +151,7 @@ const de: TranslationKeys = {
   'git.picker.lastCommit': '{{message}} · {{time}}',
   'git.picker.bindButton': 'Diese Datei verfolgen',
   'git.picker.bindAndOpenButton': 'Verfolgen und öffnen',
-  // Phase 7b: back/cancel navigation
+  // Phase 7b：back/cancel 导航
   'git.picker.back': 'Zurück',
   'git.picker.backClose': 'Abbrechen',
   'git.picker.empty.heading': 'Keine .op-Dateien in diesem Repository',
@@ -198,7 +198,7 @@ const de: TranslationKeys = {
   'git.history.restoreButton': 'Wiederherstellen',
   'git.history.copyHashButton': 'Hash kopieren',
   'git.history.copiedToast': 'Kopiert',
-  // Phase 7b: inline diff block
+  // Phase 7b：内联差异块
   'git.history.diff.loading': 'Diff wird geladen…',
   'git.history.diff.initialCommit': 'Erster Commit — kein übergeordneter Diff',
   'git.history.diff.noChanges': 'Keine Änderungen erkannt',

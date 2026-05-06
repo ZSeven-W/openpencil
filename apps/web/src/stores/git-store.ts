@@ -1,15 +1,15 @@
 // apps/web/src/stores/git-store.ts
 //
-// Zustand store implementing the GitState state machine. Every mutating
-// action goes through withCleanWorkingTree so the renderer can never
-// overwrite disk with an out-of-sync tree. Pure helpers and the dirty/
-// runOrError wrappers live in git-store-helpers.ts to keep this file under
-// the 800-LoC cap.
+// Zustand 存储实现 GitState 状态机。 Every 变异
+// 动作经过 withCleanWorkingTree 所以渲染器永远不能
+// 用不同步的树覆盖磁盘。 Pure 助手和脏/
+// runOrError 包装器位于 git-store-helpers.ts 中以将此文件保存在
+// 800-LoC 上限。
 //
-// NOTE: this file is ~848 lines (48 over cap). Phase 7c extracted
-// makeReloadAfterApply to git-store-helpers.ts, but applyMerge's reload
-// orchestration and noop handling added lines back. Further extraction
-// deferred — see Phase 8+ for a dedicated refactor.
+// NOTE: 该文件大约有 848 行（超过上限 48 行）。 Phase 7c 提取
+// makeReloadAfterApply 到 git-store-helpers.ts，但是 applyMerge 重新加载
+// 编排和 noop 处理添加了线路。 Further 提取
+// 延迟 — 请参阅 Phase 8+ 了解专用重构。
 
 import { create } from 'zustand';
 import { gitClient } from '@/services/git-client';
@@ -34,23 +34,23 @@ import type { GitStore, PendingAction } from './git-store-types';
 
 export const useGitStore = create<GitStore>((set, get) => {
   /**
-   * Phase 6b: shared head-move sync (refreshStatus + refreshBranches +
-   * reload tracked file + loadLog). Called from pull/switchBranch/mergeBranch
-   * clean paths so all three head-moving actions stay in lockstep.
+   * Phase 6b：共享头
+   * 部移动同步（refreshStatus + refreshBranches + 重新加载跟踪文件 + loadLog）。
+   * Called 来自 pull/switchBranch/mergeBranch 干净的路径，因此所有三个头部移动动作保持同步。
    */
   const syncAfterHeadMove = makeSyncAfterHeadMove(get);
 
   /**
-   * Phase 7c: post-apply reload (reload tracked file + refreshStatus +
-   * loadLog). Called from applyMerge() on both the normal-success and noop
-   * paths. Extracted to git-store-helpers.ts to keep this file under the cap.
+   * Phase 7c：应用后
+   * 重新加载（重新加载跟踪文件+ refreshStatus + loadLog）。 Called 来自 applyMerge()
+   * 在正常成功和 noop 路径上。 Extracted 到 git-store-helpers.ts 以将此文件保持在上限之下。
    */
   const reloadAfterApply = makeReloadAfterApply(get);
 
   /**
-   * Guard a mutating action on `useDocumentStore.getState().isDirty`. Dirty →
-   * stash a PendingAction and throw GitError('save-required'); the UI shows
-   * an inline alert and retrySaveRequired re-runs the action after save.
+   * Guard 对
+   * `useDocumentStore.getState().isDirty` 的变异操作。 Dirty → 隐藏 PendingAction 并抛出
+   * GitError('save-required')； UI 显示内嵌警报，而 retrySaveRequired 在保存后重新运行该操作。
    */
   async function withCleanWorkingTree<T>(action: () => Promise<T>, label: string): Promise<T> {
     if (useDocumentStore.getState().isDirty) {
@@ -71,7 +71,7 @@ export const useGitStore = create<GitStore>((set, get) => {
     return action();
   }
 
-  /** Run an action; thrown GitError transitions to the generic error state. */
+  /** Run 一个动作；抛出 GitError 转换到一般错误状态。 */
   async function runOrError<T>(action: () => Promise<T>): Promise<T | undefined> {
     try {
       return await action();
@@ -93,48 +93,45 @@ export const useGitStore = create<GitStore>((set, get) => {
     log: [],
     sshKeys: [],
 
-    // Phase 4a: author identity (loadAuthorIdentity runs the lookup chain)
+    // Phase 4a：作者身份（loadAuthorIdentity 运行查找链）
     authorIdentity: null,
     authorPromptVisible: false,
 
-    // Phase 4b: auto-bind banner flag (set by openRepo/cloneRepo when
-    // auto-binding a single candidate; cleared by acknowledge actions)
+    // Phase 4b：自动绑定横幅标志（自动绑定单个候选者时由 openRepo/cloneRepo 设置；通过确认操作清除）
     lastAutoBindedPath: null,
 
-    // Phase 4c: commit input draft (ephemeral)
+    // Phase 4c：提交输入草稿（临时）
     commitMessage: '',
 
-    // Phase 4c: autosave error display (last error from the subscriber)
+    // Phase 4c：自动保存错误显示（来自订户的最后一个错误）
     autosaveError: null,
 
-    // Phase 4c: subscriber lifecycle handle (internal)
+    // Phase 4c：订阅者生命周期句柄（内部）
     __autosaveUnsub: null,
 
-    // ---- Panel lifecycle -------------------------------------------------
+    // ---- Panel 生命周期 -------------------------------------------------
     togglePanel: () => set((s) => ({ panelOpen: !s.panelOpen })),
     openPanel: () => set({ panelOpen: true }),
     closePanel: () => set({ panelOpen: false }),
 
-    // ---- Phase 4a: author identity actions ------------------------------
+    // ---- Phase 4a：作者身份操作 ------------------------------
     loadAuthorIdentity: async () => {
-      // The resolution chain (prefs → system git → null) lives in
-      // git-store-helpers.ts to keep this file under the 800-LoC cap.
+      // The 解析链（首选项 → 系统 git → null）位于 git-store-helpers.ts
+      // 中，以将此文件保持在 800-LoC 上限之下。
       const id = await resolveAuthorIdentity();
       set({ authorIdentity: id });
     },
 
     setAuthorIdentity: async (name, email) => {
-      // Persist to OpenPencil prefs first so a panel reopen rehydrates from
-      // them in step 1 of the chain. If preference IPC fails (e.g. browser
-      // mode), still update the in-memory cache so the current session
-      // works. SSR guard: skip the IPC entirely (bare `window` would
-      // ReferenceError) but still update the in-memory cache.
+      // 首先将 Persist 更改为 OpenPencil 首选项，以便面板在链的第 1 步中重新从它们重新水化。 If 首选项 IPC
+      // 失败（例如浏览器模式），仍然更新内存缓存，以便当前会话正常工作。 SSR 防护：完全跳过 IPC（裸 `window` 将
+      // ReferenceError），但仍更新内存中缓存。
       if (typeof window !== 'undefined') {
         try {
           await window.electronAPI?.setPreference('git.authorName', name);
           await window.electronAPI?.setPreference('git.authorEmail', email);
         } catch {
-          /* swallow — in-memory cache below still serves the session */
+          /* 吞下去——下面的内存缓存仍然为会话提供服务 */
         }
       }
       set({ authorIdentity: { name, email } });
@@ -143,70 +140,66 @@ export const useGitStore = create<GitStore>((set, get) => {
     showAuthorPrompt: () => set({ authorPromptVisible: true }),
     hideAuthorPrompt: () => set({ authorPromptVisible: false }),
 
-    // ---- Phase 4b: auto-bind banner actions ------------------------------
+    // ---- Phase 4b：自动绑定横幅操作 ------------------------------
     acknowledgeAutoBind: () => set({ lastAutoBindedPath: null }),
     acknowledgeAutoBindAndOpen: async () => {
       const path = get().lastAutoBindedPath;
       if (!path) return;
-      // Load the file into the editor via the shared helper. Fire-and-
-      // forget — failures are silent (the helper returns false but the
-      // banner clears regardless to avoid nagging).
+      // Load 通过共享帮助程序将文件放入编辑器中。 Fire-and-forget——失败是无声的（助手返回
+      // false，但横幅会清除，以避免烦人）。
       await loadOpFileFromPath(path);
       set({ lastAutoBindedPath: null });
     },
 
-    // ---- Phase 4c: commit input actions ---------------------------------
+    // ---- Phase 4c：提交输入操作 ---------------------------------
     setCommitMessage: (text) => set({ commitMessage: text }),
     clearCommitMessage: () => set({ commitMessage: '' }),
     cancelSaveRequired: () => set((s) => ({ state: dropSaveRequired(s.state) })),
 
-    // ---- Phase 4c: overflow menu actions --------------------------------
+    // ---- Phase 4c：溢出菜单操作 --------------------------------
     enterTrackedFilePicker: () =>
       set((s) => {
         if (s.state.kind !== 'ready') return s;
         return { state: { kind: 'needs-tracked-file', repo: s.state.repo } };
       }),
 
-    // ---- Phase 7b: exit the tracked-file picker -------------------------
+    // ---- Phase 7b：退出跟踪文件选择器 -------------------------
     exitTrackedFilePicker: async () => {
       const state = get().state;
       if (state.kind !== 'needs-tracked-file') return;
       if (state.repo.trackedFilePath !== null) {
-        // Entered from ready (re-binding): go back to ready.
+        // Entered 从就绪状态（重新绑定）：回到就绪状态。
         set({ state: { kind: 'ready', repo: state.repo } });
       } else {
-        // Entered as first post-open/clone screen: close the transient
-        // session and return to no-file so the empty state renders.
+        // Entered 作为第一个 post-open/clone 屏幕：关闭临时会话并返回到无文件状态，以便呈现空状态。
         try {
           await gitClient.close(state.repo.repoId);
         } catch {
-          // Best-effort: even if close fails, reset state to avoid a stale UI.
+          // Best-effort：即使关闭失败，也会重置状态以避免过时的 UI。
         }
         set({ state: { kind: 'no-file' } });
       }
     },
 
     clearAuthorIdentity: async () => {
-      // Remove the OpenPencil prefs first so a reload doesn't rehydrate.
-      // We must REMOVE the keys (not `setPreference(..., '')`), otherwise
-      // the lookup chain in resolveAuthorIdentity will see empty-string
-      // sentinels on disk and treat them as set-but-blank instead of
-      // absent — diverging from the documented "clear cache AND remove
-      // both prefs keys" contract.
+      // Remove 首先是 OpenPencil 首选项，因此重新加载不会再水化。 We 必须 REMOVE 键（而不是
+      // `setPreference(..., '')`），否则 resolveAuthorIdentity
+      // 中的查找链将在磁盘上看到空字符串哨兵，并将它们视为设置但空白而不是不存在 - 偏离记录的“清除缓存 AND
+      // 删除两个首选项键”合同。
       if (typeof window !== 'undefined') {
         try {
           await window.electronAPI?.removePreference('git.authorName');
           await window.electronAPI?.removePreference('git.authorEmail');
         } catch {
-          /* swallow — in-memory clear below still wins for this session */
+          /* 吞下 - 内存中清除在本次会议中仍然获胜 */
         }
       }
       set({ authorIdentity: null });
     },
 
-    // ---- Phase 4c: autosave subscriber lifecycle ------------------------
+    // ---- Phase 4c：自动保存订阅者生命周期 ------------------------
     initAutosaveSubscriber: () => {
-      // Idempotent: if already wired, return.
+      // Idempotent：如果已经连线，则返回。
       if (get().__autosaveUnsub !== null) return;
       const handler = makeAutosaveHandler(get, set);
       const unsub = documentEvents.on('saved', handler);
@@ -223,7 +216,7 @@ export const useGitStore = create<GitStore>((set, get) => {
 
     clearAutosaveError: () => set({ autosaveError: null }),
 
-    // ---- Repo discovery / creation --------------------------------------
+    // ---- Repo 发现/创建 --------------------------------------
     detectRepo: async (filePath) => {
       set({ state: { kind: 'initializing' } });
       await runOrError(async () => {
@@ -233,10 +226,9 @@ export const useGitStore = create<GitStore>((set, get) => {
           return;
         }
         set({ state: { kind: 'ready', repo: metaFromOpenInfo(result) } });
-        // Hydrate the placeholder fields in metaFromOpenInfo (currentBranch,
-        // branches, workingDirty, ahead/behind, remote) by polling status,
-        // branches, and remote metadata. Also reconciles in-flight merge
-        // state if the backend reports one.
+        // Hydrate 通过轮询状态、分支和远程元数据来获取 metaFromOpenInfo
+        // 中的占位符字段（currentBranch、分支、workingDirty、ahead/behind、远程）。如果后端报告状态，
+        // Also 会协调正在进行的合并状态。
         await get().refreshStatus();
         await get().refreshBranches();
         await get().refreshRemote();
@@ -259,10 +251,9 @@ export const useGitStore = create<GitStore>((set, get) => {
       await runOrError(async () => {
         const info = await gitClient.open(repoPath, currentFilePath);
 
-        // Phase 4b auto-bind: if the repo has exactly one candidate and
-        // open() didn't already set trackedFilePath, bind it now and skip
-        // the picker entirely. Surface the auto-bind banner so the user
-        // can also load the file into the editor if they want.
+        // Phase 4b 自动绑定：如果存储库只有一个候选者，并且 open() 尚未设置
+        // trackedFilePath，则立即绑定它并完全跳过选择器。 Surface
+        // 自动绑定横幅，因此用户也可以根据需要将文件加载到编辑器中。
         if (info.trackedFilePath === null && info.candidates.length === 1) {
           const only = info.candidates[0];
           await gitClient.bindTrackedFile(info.repoId, only.path);
@@ -285,10 +276,9 @@ export const useGitStore = create<GitStore>((set, get) => {
         } else {
           set({ state: { kind: 'ready', repo: meta } });
         }
-        // refreshStatus + refreshBranches both work in needs-tracked-file
-        // (requireRepoId accepts it). They populate currentBranch / branches /
-        // dirty counts even before the user picks a tracked file, so the
-        // picker can show "main · 3 ahead" header info.
+        // refreshStatus + refreshBranches 都在需求跟踪文件中工作（requireRepoId 接受它）。
+        // They 甚至在用户选择跟踪文件之前就填充 currentBranch / 分支 /
+        // 脏计数，因此选择器可以显示“main·3leading”标题信息。
         await get().refreshStatus();
         await get().refreshBranches();
         await get().refreshRemote();
@@ -296,15 +286,15 @@ export const useGitStore = create<GitStore>((set, get) => {
     },
 
     cloneRepo: async (opts) => {
-      // Phase 6a: a wizard-launched clone catches recoverable errors inline
-      // (so the form keeps its state for retry); a CLI-driven clone treats
-      // every code as fatal. classifyCloneError() encodes that policy.
-      //
-      // CRITICAL: when entering from the wizard we must NOT transition to
-      // `initializing` mid-flight — that would unmount the <GitPanelCloneForm>
-      // and wipe the URL/dest/token inputs on a recoverable retry. Instead we
-      // stay in `wizard-clone` and flip a `busy` flag the form reads as its
-      // loading indicator.
+      // Phase 6a：向导启动的克隆捕获可恢复的内联错误
+      // （因此表单保持其状态以供重试）； CLI 驱动的克隆治疗
+      // 每个代码都是致命的。 classifyCloneError() 对该策略进行编码。
+//
+      // CRITICAL：从向导进入时，我们必须 NOT 转换到
+      // `initializing` 飞行中 — 这将卸载 <GitPanelCloneForm>
+      // 并在可恢复重试时擦除 URL/dest/token 输入。 Instead 我们
+      // 留在 `wizard-clone` 并翻转 `busy` 标志，表格读取为
+      // 加载指示器。
       const prevWasWizard = get().state.kind === 'wizard-clone';
       if (prevWasWizard) {
         set({ state: { kind: 'wizard-clone', busy: true, error: null } });
@@ -314,9 +304,8 @@ export const useGitStore = create<GitStore>((set, get) => {
       try {
         const info = await gitClient.clone(opts);
 
-        // Phase 4b auto-bind: single candidate → ready + banner. Multi /
-        // zero candidates land in needs-tracked-file per spec line 109. Both
-        // branches naturally leave the wizard, so the form unmounts cleanly.
+        // Phase 4b 自动绑定：单个候选人 → 就绪 + 横幅。 Multi / 零个候选者按照规范第 109
+        // 行进入需求跟踪文件。Both 分支自然会离开向导，因此表单会干净地卸载。
         if (info.candidates.length === 1) {
           const only = info.candidates[0];
           await gitClient.bindTrackedFile(info.repoId, only.path);
@@ -336,8 +325,7 @@ export const useGitStore = create<GitStore>((set, get) => {
       } catch (err) {
         const decision = classifyCloneError(err, prevWasWizard);
         if (decision.kind === 'inline') {
-          // Keep the wizard mounted with the form state intact; flip busy
-          // off and surface the inline banner so the user can retry.
+          // Keep 向导已安装，表单状态完好；关闭忙碌并显示内嵌横幅，以便用户可以重试。
           set({
             state: {
               kind: 'wizard-clone',
@@ -368,7 +356,7 @@ export const useGitStore = create<GitStore>((set, get) => {
       const repoId = state.repo.repoId;
       await runOrError(async () => {
         await gitClient.bindTrackedFile(repoId, filePath);
-        // Transition needs-tracked-file → ready.
+        // Transition 需要跟踪文件 → 准备就绪。
         set((s) => {
           if (s.state.kind === 'needs-tracked-file') {
             return {
@@ -385,9 +373,8 @@ export const useGitStore = create<GitStore>((set, get) => {
           }
           return s;
         });
-        // After binding, status() can return file-specific dirty info (the
-        // backend's engineStatus uses session.trackedFilePath to compute
-        // workingDirty against the autosave-ref blob).
+        // After 绑定，status() 可以返回特定于文件的脏信息（后端的 engineStatus 使用
+        // session.trackedFilePath 根据 autosave-ref blob 计算 workingDirty）。
         await get().refreshStatus();
       });
     },
@@ -411,10 +398,8 @@ export const useGitStore = create<GitStore>((set, get) => {
 
     closeRepo: async () => {
       const state = get().state;
-      // Every state that holds a RepoMeta has an active main-process session
-      // — including needs-tracked-file. Calling close() on all of them
-      // prevents session leaks when the user opens or clones a repo and then
-      // closes the panel before binding a tracked file.
+      // 持有 RepoMeta 的 Every 状态有一个活动的主进程会话 — 包括需求跟踪文件。所有这些上的 Calling close()
+      // 都可以防止用户打开或克隆存储库，然后在绑定跟踪文件之前关闭面板时发生会话泄漏。
       if (
         state.kind === 'ready' ||
         state.kind === 'conflict' ||
@@ -423,21 +408,20 @@ export const useGitStore = create<GitStore>((set, get) => {
         try {
           await gitClient.close(state.repo.repoId);
         } catch {
-          // Best-effort: even if close fails (e.g. backend already cleaned
-          // up the session), we still want to reset the renderer state to
-          // avoid a stale UI. Swallow and continue.
+          // Best-effort：即使关闭失败（例如后端已经清理了会话），我们仍然希望重置渲染器状态以避免过时的 UI。
+          // Swallow 并继续。
         }
       }
       set({ state: { kind: 'no-file' }, log: [], lastAutoBindedPath: null });
     },
 
-    // ---- Status / log / diff --------------------------------------------
+    // ---- Status / 日志 / 差异 --------------------------------------------
     refreshStatus: async () => {
       const repoId = requireRepoId(get().state);
       const status = await gitClient.status(repoId);
 
-      // Step 1: copy the basic repo fields into RepoMeta. Applies to all
-      // states that hold a repo (ready / conflict / needs-tracked-file).
+      // Step 1：将基本存储库字段复制到 RepoMeta 中。 Applies
+      // 到持有存储库的所有状态（就绪/冲突/需求跟踪文件）。
       set((s) => {
         if (
           s.state.kind === 'ready' ||
@@ -462,28 +446,24 @@ export const useGitStore = create<GitStore>((set, get) => {
         return s;
       });
 
-      // Step 2: reconcile the conflict state. Phase 2c's engineStatus
-      // populates `mergeInProgress`, `conflicts`, and (Phase 6b)
-      // `unresolvedFiles`. We mirror all three into the renderer state
-      // machine so a panel reopened mid-merge sees the conflict view
-      // AND the non-`.op` file banner.
+      // Step 2：协调冲突状态。 Phase 2c 的 engineStatus 填充
+      // `mergeInProgress`、`conflicts` 和 (Phase 6b)
+      // `unresolvedFiles`。 We 将所有三个镜像到渲染器状态机中，因此在合并过程中重新打开的面板会看到冲突视图
+      // AND 和非 `.op` 文件横幅。
       const current = get().state;
       const unresolved = status.unresolvedFiles ?? [];
       const reopenedMidMerge = status.reopenedMidMerge ?? false;
-      // I2: also enter conflict state for the panel-reopen degraded mode —
-      // mergeInProgress + reopenedMidMerge is true even when unresolvedFiles
-      // is empty (tracked .op was filtered out) and conflicts is null.
+      // I2：也进入面板重新打开降级模式的冲突状态 — 即使 unresolvedFiles 为空（跟踪的 .op 被过滤掉）且冲突为
+      // null，mergeInProgress + reopenedMidMerge 也为 true。
       if (
         status.mergeInProgress &&
         (status.conflicts || unresolved.length > 0 || reopenedMidMerge)
       ) {
-        // Backend reports an in-flight merge.
+        // Backend 报告正在进行的合并。
         if (current.kind === 'conflict') {
-          // Already in conflict state: preserve in-memory resolutions and
-          // finalizeError — the .op conflict bag does not mutate during a
-          // merge session, and the user's resolution choices must survive
-          // the 3-second polling cycle. Only unresolvedFiles can change as
-          // the user resolves non-.op files externally.
+          // Already 处于冲突状态：保留内存中分辨率和 finalizeError — .op
+          // 冲突包在合并会话期间不会发生变化，并且用户的分辨率选择必须在 3 秒的轮询周期中幸存下来。当用户从外部解析 non-.op
+          // 文件时，Only unresolvedFiles 可能会发生变化。
           set({
             state: {
               ...current,
@@ -492,7 +472,7 @@ export const useGitStore = create<GitStore>((set, get) => {
             },
           });
         } else if (current.kind === 'ready') {
-          // Promote ready → conflict with a fresh bag (new entry into conflict state).
+          // Promote 准备好 → 与新包冲突（新进入冲突状态）。
           set({
             state: buildConflictState(
               current.repo,
@@ -504,9 +484,8 @@ export const useGitStore = create<GitStore>((set, get) => {
           });
         }
       } else if (!status.mergeInProgress && current.kind === 'conflict') {
-        // Backend says no merge in flight, but the renderer is in conflict
-        // state — the merge was finalized externally (e.g. terminal git, or
-        // applyMerge from another window). Transition back to ready.
+        // Backend 表示没有进行中合并，但渲染器处于冲突状态 - 合并是在外部完成的（例如终端 git 或来自另一个窗口的
+        // applyMerge）。 Transition 回到准备状态。
         set({ state: { kind: 'ready', repo: current.repo } });
       }
     },
@@ -522,13 +501,12 @@ export const useGitStore = create<GitStore>((set, get) => {
       return gitClient.diff(repoId, from, to);
     },
 
-    // ---- Commit / restore / promote (gated) -----------------------------
+    // ---- Commit / 恢复 / 提升（门控） -----------------------------
     commitMilestone: async (message, author) => {
       const repoId = requireRepoId(get().state);
       await withCleanWorkingTree(async () => {
         await gitClient.commit(repoId, { kind: 'milestone', message, author });
-        // Phase 4c: refresh the log and clear the draft on success so
-        // the history list shows the new commit and the input empties.
+        // Phase 4c：刷新日志并在成功时清除草稿，以便历史列表显示新的提交并且输入为空。
         await get().loadLog({ ref: currentLogRef(get()), limit: 50 });
         get().clearCommitMessage();
       }, 'commit milestone');
@@ -536,9 +514,8 @@ export const useGitStore = create<GitStore>((set, get) => {
 
     commitAutosave: async (message, author) => {
       const repoId = requireRepoId(get().state);
-      // Autosave is not in the withCleanWorkingTree set per spec — the
-      // autosave subscriber (Phase 4) runs AFTER a successful save, so the
-      // document is clean by construction.
+      // Autosave 不在按规范设置的 withCleanWorkingTree 中 — 自动保存订阅者 (Phase 4)
+      // 运行 AFTER 成功保存，因此文档在构造上是干净的。
       await gitClient.commit(repoId, { kind: 'autosave', message, author });
     },
 
@@ -546,12 +523,9 @@ export const useGitStore = create<GitStore>((set, get) => {
       const repoId = requireRepoId(get().state);
       await withCleanWorkingTree(async () => {
         await gitClient.restore(repoId, commitHash);
-        // The IPC overwrote the tracked .op file on disk. Reload it into
-        // document-store so the in-memory document matches the restored
-        // tree — otherwise the next Cmd+S / autosave would write the old
-        // in-memory content back to disk, silently undoing the restore.
-        // HEAD itself is unchanged by restore, so the log does not need
-        // a refresh.
+        // The IPC 覆盖磁盘上跟踪的 .op 文件。 Reload 将其放入文档存储中，以便内存中的文档与恢复的树相匹配 -
+        // 否则下一个 Cmd+s / autosave 会将旧的内存内容写回磁盘，默默地撤消恢复。 HEAD
+        // 本身在恢复过程中不会发生变化，因此日志不需要刷新。
         const state = get().state;
         if ((state.kind === 'ready' || state.kind === 'conflict') && state.repo.trackedFilePath) {
           await loadOpFileFromPath(state.repo.trackedFilePath);
@@ -563,9 +537,8 @@ export const useGitStore = create<GitStore>((set, get) => {
       const repoId = requireRepoId(get().state);
       await withCleanWorkingTree(async () => {
         await gitClient.promote(repoId, autosaveHash, message, author);
-        // Promote writes a new milestone commit at the autosave's tree.
-        // Reload the document for the same reason as restoreCommit — the
-        // on-disk tree may diverge from the in-memory document.
+        // Promote 在自动保存树中写入新的里程碑提交。 Reload 文档的原因与 restoreCommit 相同 -
+        // 磁盘上的树可能与内存中的文档不同。
         const state = get().state;
         if ((state.kind === 'ready' || state.kind === 'conflict') && state.repo.trackedFilePath) {
           await loadOpFileFromPath(state.repo.trackedFilePath);
@@ -600,9 +573,8 @@ export const useGitStore = create<GitStore>((set, get) => {
       const repoId = requireRepoId(get().state);
       await withCleanWorkingTree(async () => {
         await gitClient.branchSwitch(repoId, name);
-        // HEAD moved. syncAfterHeadMove refreshes status/branches, reloads
-        // the on-disk tracked file into document-store, and refreshes the
-        // history list for the now-active branch.
+        // HEAD 感动了。 syncAfterHeadMove 刷新 status/branches，将磁盘上的跟踪文件重新加载到文档存
+        // 储中，并刷新当前活动分支的历史列表。
         await syncAfterHeadMove();
       }, 'switch branch');
     },
@@ -622,24 +594,23 @@ export const useGitStore = create<GitStore>((set, get) => {
             if (s.state.kind !== 'ready') return s;
             return { state: buildConflictState(s.state.repo, result.conflicts!, []) };
           });
-          // Conflict path: state is fully hydrated — skip the sync cascade.
+          // Conflict 路径：状态完全水合 — 跳过同步级联。
           return;
         }
         if (result.result === 'conflict-non-op') {
-          // I3: non-.op conflict — merge is in flight but engine couldn't apply
-          // .op merge because non-`.op` files are unresolved. refreshStatus
-          // performs the full repo-meta update AND promotes ready → conflict
-          // with the unresolvedFiles list via the shared mergeInProgress branch.
+          // I3：non-.op 冲突 — 合并正在进行，但引擎无法应用 .op 合并，因为非 `.op` 文件未解析。
+          // refreshStatus 执行完整的 repo-meta 更新 AND 通过共享 mergeInProgress 分支促进与
+          // unresolvedFiles 列表的就绪 → 冲突。
           await get().refreshStatus();
           return;
         }
-        // Success paths (fast-forward, merge): HEAD moved. Delegate the
-        // cascade to the shared helper (see switchBranch for details).
+        // Success 路径（快进、合并）：HEAD 已移动。 Delegate 级联到共享助手（有关详细信息，请参阅
+        // switchBranch）。
         await syncAfterHeadMove();
       }, 'merge branch');
     },
 
-    // ---- Merge orchestration --------------------------------------------
+    // ---- Merge 编排 --------------------------------------------
     resolveConflict: async (conflictId, choice) => {
       const state = get().state;
       if (state.kind !== 'conflict') {
@@ -648,9 +619,8 @@ export const useGitStore = create<GitStore>((set, get) => {
         });
       }
       await gitClient.resolveConflict(state.repo.repoId, conflictId, choice);
-      // Update the local Map with the recorded resolution. Also clear any
-      // stale finalizeError so the banner doesn't show the old error after
-      // the user fixes another conflict.
+      // Update 具有记录分辨率的本地 Map。 Also 清除任何过时的 finalizeError，以便在用户修复另一个冲突后横幅
+      // 不会显示旧错误。
       set((s) => {
         if (s.state.kind !== 'conflict') return s;
         const nodeConflicts = new Map(s.state.conflicts.nodeConflicts);
@@ -678,9 +648,8 @@ export const useGitStore = create<GitStore>((set, get) => {
         try {
           await gitClient.applyMerge(repoId);
         } catch (err) {
-          // Phase 7b: `merge-still-conflicted` surfaces inline on the banner
-          // rather than transitioning to the generic error card. The user must
-          // resolve remaining conflicts and retry applyMerge.
+          // Phase 7b：`merge-still-conflicted` 在横幅上内联显示，而不是转换到通用错误卡。 The
+          // 用户必须解决剩余冲突并重试 applyMerge。
           if (isGitError(err) && err.code === 'merge-still-conflicted') {
             set((s) => {
               if (s.state.kind === 'conflict') {
@@ -688,23 +657,22 @@ export const useGitStore = create<GitStore>((set, get) => {
               }
               return s;
             });
-            // Immediately refresh status so the unresolved-file list is current.
+            // Immediately 刷新状态，以便未解析的文件列表是最新的。
             await get().refreshStatus();
-            return; // do NOT re-throw — banner owns the error display
+            return; // do NOT 重新抛出 — 横幅拥有错误显示
           }
           throw err;
         }
-        // Phase 7c: success (including noop: true) → transition conflict → ready
-        // and clear any stale finalizeError, then reload the tracked .op file
-        // and refresh the history log.
+        // Phase 7c：成功（包括 noop：true）→转换冲突→准备并清除任何陈旧的 finalizeError，然后重新加载跟踪的.op
+        // 文件并刷新历史日志。
         set((s) => {
           if (s.state.kind === 'conflict') {
             return { state: { kind: 'ready', repo: s.state.repo } };
           }
           return s;
         });
-        // Reload the tracked file and refresh log. reloadAfterApply reads the
-        // current state (now 'ready') so it can find trackedFilePath.
+        // Reload 跟踪的文件和刷新日志。 reloadAfterApply 读取当前状态（现在“就绪”），以便它可以找到
+        // trackedFilePath。
         await reloadAfterApply();
       }, 'apply merge');
     },
@@ -732,45 +700,38 @@ export const useGitStore = create<GitStore>((set, get) => {
       await withCleanWorkingTree(async () => {
         const result = await gitClient.pull(repoId, auth);
         if (result.result === 'fast-forward' || result.result === 'merge') {
-          // Clean head-move. Delegate the cascade so pull behaves like
-          // switchBranch / mergeBranch success paths — refresh status +
-          // branches, reload the tracked .op file, refresh the log.
+          // Clean 头部移动。 Delegate 级联 so pull 的行为类似于 switchBranch /
+          // mergeBranch 成功路径 - 刷新状态 + 分支，重新加载跟踪的 .op 文件，刷新日志。
           await syncAfterHeadMove();
           return;
         }
         if (result.result === 'conflict') {
-          // `.op` conflict bag. Transition ready → conflict with no
-          // unresolved non-op files; the manual-resolution UI covers
-          // everything here (landing in Phase 7).
+          // `.op` 冲突包。 Transition 就绪 → 与未解决的非操作文件冲突；手动分辨率 UI
+          // 涵盖了这里的所有内容（登陆 Phase 7）。
           set((s) => {
             if (s.state.kind !== 'ready') return s;
             return { state: buildConflictState(s.state.repo, result.conflicts ?? null, []) };
           });
           return;
         }
-        // result === 'conflict-non-op': the merge is in flight but the
-        // engine could not apply the .op merge because non-`.op` files
-        // are unresolved. refreshStatus performs the full repo-meta
-        // update (branch / ahead / behind / working dirty) AND promotes
-        // ready → conflict with the unresolvedFiles list via the shared
-        // mergeInProgress branch — no manual state build needed.
+        // 结果 === 'conflict-non-op'：合并正在进行中，但引擎无法应用 .op 合并，因为非 `.op`
+        // 文件未解析。 refreshStatus 执行完整的 repo-meta 更新（分支/前面/后面/脏工作） AND
+        // 通过共享的 mergeInProgress 分支促进就绪→与 unresolvedFiles 列表冲突 -
+        // 不需要手动状态构建。
         await get().refreshStatus();
       }, 'pull');
     },
 
     push: async (auth) => {
       const repoId = requireRepoId(get().state);
-      // Note: push IPC currently throws GitError('push-rejected') or
-      // GitError('auth-failed') on failure rather than returning a tagged
-      // result. We let those escape from here (not via runOrError) so the
-      // remote-controls button can catch and branch on err.code: a rejected
-      // push opens the "pull first" retry strip; an auth-failed push opens
-      // the shared auth form. Anything else propagates as a normal throw
-      // and the button shows a compact inline error.
+      // Note：push IPC 当前在失败时抛出 GitError('push-rejected') 或
+      // GitError('auth-failed')，而不是返回标记结果。 We 让那些人从这里逃脱（不是通过
+      // runOrError），这样远程控制按钮就可以捕获并在 err.code 上分支：被拒绝的推送会打开“先拉”重试条；身份验证失败的
+      // 推送将打开共享身份验证表单。 Anything else 作为正常抛出传播，按钮显示紧凑的内联错误。
       await withCleanWorkingTree(async () => {
         await gitClient.push(repoId, auth);
-        // Success: refresh status so ahead/behind zero out and the "nothing
-        // to push" hint takes over. No head move → no syncAfterHeadMove.
+        // Success：刷新状态，使 ahead/behind 归零并且“无内容可推送”提示接管。 No 头部移动 → 没有
+        // syncAfterHeadMove。
         await get().refreshStatus();
       }, 'push');
     },
@@ -780,13 +741,12 @@ export const useGitStore = create<GitStore>((set, get) => {
     getAuth: (host) => gitClient.authGet(host),
     clearAuth: (host) => gitClient.authClear(host),
 
-    // ---- Phase 6a: clone wizard + remote metadata -----------------------
+    // ---- Phase 6a：克隆向导 + 远程元数据 -----------------------
     enterCloneWizard: () => set({ state: { kind: 'wizard-clone', busy: false, error: null } }),
 
     cancelCloneWizard: () => {
-      // Always land in no-file. The git-panel.tsx detect-repo effect will
-      // immediately rehydrate the correct no-repo / ready state from the
-      // currently-open document path on the next render.
+      // Always 进入无文件状态。 The git-panel.tsx 检测回购效果将在下一次渲染时立即从当前打开的文档路径重新水化正
+      // 确的无回购/就绪状态。
       set({ state: { kind: 'no-file' } });
     },
 
@@ -805,18 +765,16 @@ export const useGitStore = create<GitStore>((set, get) => {
 
     setRemoteUrl: async (url) => {
       const repoId = requireRepoId(get().state);
-      // Normalize empty/whitespace-only strings to null so the desktop
-      // side can treat blank input as "remove origin" — form layer
-      // doesn't have to coerce.
+      // Normalize empty/whitespace-only 字符串为空，因此桌面端可以将空白输入视为“删除原点” -
+      // 表单层不必强制。
       const normalized = url === null || url.trim() === '' ? null : url.trim();
       const remote = await gitClient.remoteSet(repoId, normalized);
-      // Update renderer state IMMEDIATELY from the IPC return value. Per
-      // the Phase 6a contract, callers MUST NOT rely on a follow-up
-      // refreshRemote() to see the new value.
+      // Update 渲染器状态 IMMEDIATELY 来自 IPC 返回值。 Per 是 Phase 6a 合约，调用者 MUST
+      // NOT 依靠后续 refreshRemote() 来查看新值。
       set((s) => ({ state: patchRepoRemote(s.state, remote) }));
     },
 
-    // ---- SSH keys -------------------------------------------------------
+    // ---- SSH 键 -------------------------------------------------------
     refreshSshKeys: async () => {
       const keys = await gitClient.sshListKeys();
       set({ sshKeys: keys });
@@ -836,23 +794,23 @@ export const useGitStore = create<GitStore>((set, get) => {
       await get().refreshSshKeys();
     },
 
-    // ---- Retry queued action --------------------------------------------
+    // ---- Retry 排队操作 --------------------------------------------
     retrySaveRequired: async () => {
       const state = get().state;
       if (state.kind !== 'ready' && state.kind !== 'conflict') return;
       const pending = state.saveRequiredFor;
       if (!pending) return;
-      // Save first via the document store.
+      // 首先通过文档存储 Save。
       const saved = await useDocumentStore.getState().save();
       if (!saved) return;
-      // Clear the pending flag, then re-run.
+      // Clear 挂起标志，然后重新运行。
       set((s) => ({ state: dropSaveRequired(s.state) }));
       await pending.run();
     },
   };
 });
 
-// Test-only helper for resetting the store between tests.
+// Test-仅帮助程序，用于在测试之间重置存储。
 export function __resetGitStore(): void {
   useGitStore.setState({
     state: { kind: 'no-file' },

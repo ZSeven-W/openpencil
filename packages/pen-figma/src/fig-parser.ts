@@ -5,17 +5,15 @@ import type { FigmaDecodedFile } from './figma-types';
 
 // Magic bytes for "fig-kiwi"
 const FIG_KIWI_MAGIC = [102, 105, 103, 45, 107, 105, 119, 105];
-// Zstandard magic bytes: 0x28 0xB5 0x2F 0xFD
+// Zstandard magic bytes: 0x28 0xb5 0x2f 0xfd
 const ZSTD_MAGIC = [0x28, 0xb5, 0x2f, 0xfd];
-// PNG magic bytes
+// PNG 魔法字节
 const PNG_MAGIC_0 = 137;
 const PNG_MAGIC_1 = 80;
 
 const MB = 1024 * 1024;
-// Ceilings exist purely as zip-bomb defence — reject inputs whose decompressed
-// footprint would obviously blow up memory before we even hand them to UZIP.
-// Raised from the earlier 150/300/150 MB cap (issue #94) because real design
-// systems exported from Figma can clear the old limit with normal content.
+// Ceilings 纯粹作为压缩炸弹防御而存在——拒绝那些解压后的足迹显然会在我们将其交给 UZIP 之前炸毁内存的输入。 Raised 来自早期的
+// 150/300/150 MB 上限（问题＃94），因为从 Figma 导出的真实设计系统可以使用正常内容清除旧限制。
 const MAX_COMPRESSED_SIZE = 1024 * MB; // 1 GiB compressed input
 const MAX_UNZIPPED_SIZE = 2048 * MB; // 2 GiB total decompressed
 const MAX_IMAGE_SIZE = 512 * MB; // 512 MiB per embedded image

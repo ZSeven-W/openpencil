@@ -20,11 +20,11 @@ async function confirmUnsaved(): Promise<boolean> {
     try {
       syncCanvasPositionsToStore();
     } catch {
-      /* continue */
+      /* 继续 */
     }
     const savedName = await useDocumentStore.getState().save();
     if (!savedName) {
-      // user cancelled the save dialog or save failed — abort the close
+      // 用户取消了保存对话框或保存失败 - 中止关闭
       return false;
     }
   }
@@ -32,8 +32,8 @@ async function confirmUnsaved(): Promise<boolean> {
 }
 
 /**
- * Listens for Electron native menu actions and dispatches them to stores.
- * No-op when running in a browser (non-Electron) environment.
+ * Listens 用于
+ * Electron 本机菜单操作并将它们分派到商店。 No-op 在浏览器（非 Electron）环境中运行时。
  */
 export function useElectronMenu() {
   useEffect(() => {
@@ -46,13 +46,13 @@ export function useElectronMenu() {
 
     const cleanupOpenFile = api.onOpenFile?.(loadFileFromPath);
 
-    // Pull any pending file from cold start (double-click .op to launch app)
+    // Pull 冷启动中的任何待处理文件（双击 .op 启动应用程序）
     api.getPendingFile?.().then((filePath) => {
       if (filePath) loadFileFromPath(filePath);
     });
 
     const cleanup = api.onMenuAction((action: string) => {
-      // Handle open-recent:<filePath> actions
+      // Handle 最近打开：<filePath> 操作
       if (action.startsWith('open-recent:')) {
         const recentPath = action.slice('open-recent:'.length);
         (async () => {
@@ -94,7 +94,7 @@ export function useElectronMenu() {
                   useDocumentStore.getState().loadDocument(doc, name, null, result.filePath);
                   requestAnimationFrame(() => zoomToFitContent());
                 } catch {
-                  // Invalid file
+                  // Invalid 文件
                 }
               });
             } else if (supportsFileSystemAccess()) {
@@ -123,7 +123,7 @@ export function useElectronMenu() {
           try {
             syncCanvasPositionsToStore();
           } catch {
-            /* continue */
+            /* 继续 */
           }
           (async () => {
             const savedName = await useDocumentStore.getState().save();
@@ -140,7 +140,7 @@ export function useElectronMenu() {
           try {
             syncCanvasPositionsToStore();
           } catch {
-            /* continue */
+            /* 继续 */
           }
           (async () => {
             const savedName = await useDocumentStore.getState().saveAs();

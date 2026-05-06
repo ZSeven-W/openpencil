@@ -63,7 +63,7 @@ describe('auth-store (in-memory backend)', () => {
 
   it('persists across new store instances backed by the same file', async () => {
     await store.set('github.com', { kind: 'token', username: 'kay', token: 't' });
-    // New instance, same file + same backend type.
+    // New 实例，相同文件+相同后端类型。
     const store2 = createAuthStore({ filePath, backend: createInMemoryBackend() });
     const got = await store2.get('github.com');
     expect(got?.kind).toBe('token');
@@ -95,31 +95,28 @@ describe('auth-store (unavailable backend → plaintext fallback)', () => {
 
   it('locks the store when an existing encrypted file is read with no decryption key — refuses writes to avoid data loss', async () => {
     const filePath = join(temp.dir, 'git-auth.bin');
-    // Step 1: write an encrypted file via the in-memory backend.
+    // Step 1：通过内存后端写入加密文件。
     const enc = createAuthStore({ filePath, backend: createInMemoryBackend() });
     await enc.set('github.com', { kind: 'token', username: 'kay', token: 'precious-pat' });
     await enc.set('gitlab.com', { kind: 'token', username: 'kay', token: 'also-precious' });
 
-    // Step 2: open a fresh store pointing at the same file but with an
-    // unavailable backend. The encrypted bytes are NOT plaintext-marked, so
-    // the store should detect them and lock.
+    // Step 2：打开一个指向同一文件但后端不可用的新存储。 The 加密字节是 NOT 明文标记的，因此存储应该检测它们并锁定。
     const locked = createAuthStore({ filePath, backend: createUnavailableBackend() });
 
-    // Reads return empty (locked) but do not throw.
+    // Reads 返回空（锁定）但不抛出。
     expect(await locked.get('github.com')).toBeNull();
     expect(await locked.list()).toEqual([]);
 
-    // Writes throw the lock error.
+    // Writes 抛出锁定错误。
     await expect(
       locked.set('newhost.com', { kind: 'token', username: 'a', token: 'b' }),
     ).rejects.toThrow(/locked/);
     await expect(locked.clear('github.com')).rejects.toThrow(/locked/);
 
-    // Critical: the original encrypted file is unchanged.
+    // Critical：原始加密文件不变。
     const bytesAfter = await fsp.readFile(filePath, 'utf-8');
     expect(bytesAfter.startsWith('__OPENPENCIL_AUTH_PLAINTEXT_V1__')).toBe(false);
-    // And a new instance with the in-memory backend can still read both
-    // original credentials.
+    // And 具有内存后端的新实例仍然可以读取两个原始凭证。
     const recovered = createAuthStore({ filePath, backend: createInMemoryBackend() });
     expect((await recovered.get('github.com'))?.kind).toBe('token');
     expect((await recovered.get('gitlab.com'))?.kind).toBe('token');

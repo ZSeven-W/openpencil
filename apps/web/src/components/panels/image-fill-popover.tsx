@@ -25,7 +25,7 @@ interface ImageFillPopoverProps {
   fitMode: FitMode;
   adjustments: AdjustmentValues;
   documentPath?: string | null;
-  /** Bounding rect of the trigger element for positioning */
+  /** Bounding 用于定位的触发元素的矩形 */
   triggerRect: DOMRect;
   onFitModeChange: (mode: FitMode) => void;
   onAdjustmentChange: (key: keyof AdjustmentValues, value: number) => void;
@@ -66,7 +66,7 @@ export default function ImageFillPopover({
   const fileRef = useRef<HTMLInputElement>(null);
   const [panelHeight, setPanelHeight] = useState(0);
 
-  // Measure panel height for vertical centering
+  // Measure 垂直居中的面板高度
   useEffect(() => {
     if (panelRef.current) {
       setPanelHeight(panelRef.current.offsetHeight);
@@ -79,7 +79,7 @@ export default function ImageFillPopover({
         onClose();
       }
     };
-    // Use setTimeout to avoid the opening click triggering immediate close
+    // Use setTimeout 避免打开点击触发立即关闭
     const timer = setTimeout(() => {
       document.addEventListener('mousedown', handler);
     }, 0);
@@ -124,9 +124,9 @@ export default function ImageFillPopover({
 
   const hasImage = imageSrc && !imageSrc.startsWith('__');
 
-  // Position: to the left of the trigger element
+  // Position：触发元素的左侧
   const left = triggerRect.left - PANEL_WIDTH - PANEL_GAP;
-  // Vertically align with the trigger top, clamped to viewport
+  // Vertically 与扳机顶部对齐，夹在视口上
   let top = triggerRect.top;
   if (panelHeight > 0 && top + panelHeight > window.innerHeight - 8) {
     top = Math.max(8, window.innerHeight - panelHeight - 8);
@@ -146,7 +146,7 @@ export default function ImageFillPopover({
         </Button>
       </div>
 
-      {/* Fit mode row */}
+      {/* Fit 模式行 */}
       <div className="px-3 pb-2">
         <div className="flex items-center gap-0.5 bg-secondary rounded-md p-0.5">
           {(['fill', 'fit', 'crop', 'tile'] as FitMode[]).map((m) => (

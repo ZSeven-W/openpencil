@@ -46,7 +46,7 @@ export async function handleDesignContent(
   const pageId = params.pageId;
   const canvasWidth = params.canvasWidth ?? 1200;
 
-  // Find the section frame
+  // Find 截面框架
   const allChildren = getDocChildren(doc, pageId);
   const section = findNodeInTree(allChildren, params.sectionId);
   if (!section) {

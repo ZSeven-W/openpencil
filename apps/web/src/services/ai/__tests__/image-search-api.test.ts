@@ -152,7 +152,7 @@ describe('mapWikimediaPages', () => {
       '2': {
         pageid: 2,
         title: 'File:B.jpg',
-        // no imageinfo
+        // 没有图像信息
       },
       '3': {
         pageid: 3,
@@ -227,7 +227,7 @@ describe('mapWikimediaPages (continued)', () => {
             width: 200,
             height: 150,
             mime: 'image/jpeg',
-            // no extmetadata
+            // 无外部元数据
           },
         ],
       },

@@ -45,8 +45,8 @@ const CORNER_CLASSES: Record<PanelCorner, string> = {
 };
 
 /**
- * Minimized AI bar — a compact clickable pill.
- * Parent is responsible for placing it in the layout.
+ * Minimized AI
+ * bar — 一个紧凑的可点击药丸。 Parent 负责将其放置在布局中。
  */
 export function AIChatMinimizedBar() {
   const isMinimized = useAIStore((s) => s.isMinimized);
@@ -70,8 +70,8 @@ export function AIChatMinimizedBar() {
 }
 
 /**
- * Expanded AI chat panel — floating, draggable.
- * Only renders when NOT minimized.
+ * Expanded AI
+ * 聊天面板 — 浮动、可拖动。 Only 在 NOT 最小化时呈现。
  */
 export default function AIChatPanel() {
   const { t } = useTranslation();
@@ -115,12 +115,12 @@ export default function AIChatPanel() {
   const canUseModel = !isLoadingModels && availableModels.length > 0;
   const quickActionsDisabled = !canUseModel || isStreaming;
 
-  // Restore model preference from localStorage on page refresh.
+  // 页面刷新时 localStorage 的 Restore 模型首选项。
   useEffect(() => {
     hydrateModelPreference();
   }, [hydrateModelPreference]);
 
-  // Build model list from connected CLI providers + enabled built-in providers.
+  // 来自连接的 CLI 提供程序 + 启用的内置提供程序的 Build 模型列表。
   useEffect(() => {
     if (!providersHydrated) {
       setLoadingModels(true);
