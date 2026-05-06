@@ -9,20 +9,20 @@ budget: 2000
 category: knowledge
 ---
 
-# HTML + CSS Code Generation
+# HTML + CSS 代码生成
 
-Generate semantic HTML5 markup with CSS classes defined in a `<style>` block. No build tools, no framework dependencies.
+生成语义化 HTML5 markup，并在 `<style>` block 中定义 CSS classes。不依赖 build tools，也不依赖 framework。
 
-## Output Format
+## 输出格式
 
 - HTML5 (`.html`)
-- Semantic HTML elements
-- All styling via CSS classes in a `<style>` block
-- CSS custom properties for design variables
-- No inline styles, no framework, no build tools
-- Each node gets a unique, descriptive CSS class name derived from `node.name`
+- 使用语义化 HTML elements
+- 所有样式通过 `<style>` block 中的 CSS classes 实现
+- 使用 CSS custom properties 表示 design variables
+- 不使用 inline styles、不使用 framework、不依赖 build tools
+- 每个节点都需要一个由 `node.name` 派生的唯一且描述性的 CSS class name
 
-## Layout Mapping
+## layout 映射
 
 - `layout: "vertical"` → `display: flex; flex-direction: column`
 - `layout: "horizontal"` → `display: flex; flex-direction: row`
@@ -39,7 +39,7 @@ Generate semantic HTML5 markup with CSS classes defined in a `<style>` block. No
 - `alignItems: "end"` → `align-items: flex-end`
 - `clipContent: true` → `overflow: hidden`
 
-## Color & Fill Mapping
+## color 与 fill 映射
 
 - Solid fill `#hex` → `background: #hex`
 - Variable ref `$name` → `background: var(--name)`
@@ -47,25 +47,25 @@ Generate semantic HTML5 markup with CSS classes defined in a `<style>` block. No
 - Linear gradient → `background: linear-gradient(Ndeg, color1 0%, color2 100%)`
 - Radial gradient → `background: radial-gradient(circle, color1 0%, color2 100%)`
 
-## Border & Stroke Mapping
+## border 与 stroke 映射
 
 - `stroke.thickness` → `border-width: Npx; border-style: solid`
 - `stroke.color` → `border-color: #hex`
 - Variable ref → `border-width: var(--name)`, `border-color: var(--name)`
 
-## Corner Radius
+## cornerRadius
 
 - Uniform → `border-radius: Npx`
 - Per-corner `[tl, tr, br, bl]` → `border-radius: TLpx TRpx BRpx BLpx`
 - Ellipse → `border-radius: 50%`
 
-## Effects
+## effects
 
 - Drop shadow → `box-shadow: offsetXpx offsetYpx blurpx spreadpx color`
 - Inner shadow → `box-shadow: inset offsetXpx offsetYpx blurpx spreadpx color`
 - Multiple shadows comma-separated
 
-## Typography
+## typography
 
 - `fontSize` → `font-size: Npx`
 - `fontWeight` → `font-weight: N`
@@ -80,61 +80,61 @@ Generate semantic HTML5 markup with CSS classes defined in a `<style>` block. No
 - `underline` → `text-decoration: underline`
 - `strikethrough` → `text-decoration: line-through`
 
-## Dimensions
+## dimensions
 
 - Fixed → `width: Npx; height: Npx`
 - `fill_container` → `width: 100%` or `height: 100%`
-- Root container → `max-width: Npx; width: 100%; margin: 0 auto` for responsive centering
+- Root container → `max-width: Npx; width: 100%; margin: 0 auto`，用于响应式居中
 
-## Image Handling
+## image 处理
 
 - `<img class="className" src="src" alt="name" />`
 - `object-fit: contain|cover|fill` based on `objectFit` property:
   - `objectFit: "fit"` → `object-fit: contain`
   - `objectFit: "crop"` → `object-fit: cover`
   - default → `object-fit: fill`
-- Corner radius applied via CSS class
+- corner radius 通过 CSS class 应用
 
-## Opacity & Transform
+## opacity 与 transform
 
 - `opacity: N` → `opacity: N`
 - `rotation: N` → `transform: rotate(Ndeg)`
 
-## Positioning
+## positioning
 
 - Absolute children → `position: absolute; left: Xpx; top: Ypx`
 - Container → `position: relative`
 
-## Semantic HTML Tags
+## 语义化 HTML 标签
 
 - Font size >= 32 → `<h1>`
 - Font size >= 24 → `<h2>`
 - Font size >= 20 → `<h3>`
 - Other text → `<p>`
 - Lines → `<hr>`
-- Use `<nav>`, `<header>`, `<main>`, `<section>`, `<footer>`, `<article>` appropriately
+- 适当使用 `<nav>`、`<header>`、`<main>`、`<section>`、`<footer>`、`<article>`
 
-## Icon Handling
+## icon 处理
 
 - Icon font nodes → `<i class="className" data-lucide="icon-name"></i>`
-- Set `width`, `height`, and `color` via CSS class
-- Include Lucide CDN script for icon rendering
+- 通过 CSS class 设置 `width`、`height` 和 `color`
+- 引入 Lucide CDN script 以渲染 icon
 
-## SVG Elements
+## SVG elements
 
 - Path nodes → inline `<svg>` with `<path d="..." fill="color" />`
-- Set `viewBox`, `width`, `height` on SVG element
+- 在 SVG element 上设置 `viewBox`、`width`、`height`
 
-## Variable References
+## variable references
 
 - `$variable` refs → `var(--variable-name)` CSS custom properties
-- Define variables in `:root { --name: value; }` block
+- 在 `:root { --name: value; }` block 中定义 variables
 - Background: `background: var(--name)`
 - Text color: `color: var(--name)`
 - Border: `border-color: var(--name)`
 
-## Responsive Design
+## 响应式设计
 
-- Use `max-width` with `width: 100%` for fluid containers
-- Media queries at common breakpoints: `@media (min-width: 640px)`, `768px`, `1024px`, `1280px`
-- Use relative units where appropriate (`em`, `rem`, `%`)
+- Fluid containers 使用 `max-width` 搭配 `width: 100%`
+- 在常见断点使用 media queries：`@media (min-width: 640px)`、`768px`、`1024px`、`1280px`
+- 适当使用相对单位（`em`、`rem`、`%`）

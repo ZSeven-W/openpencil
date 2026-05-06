@@ -9,19 +9,19 @@ budget: 2000
 category: knowledge
 ---
 
-# React Native Code Generation
+# React Native 代码生成
 
-Generate React Native components with `StyleSheet.create()` style objects. No CSS, no web-specific styling.
+生成使用 `StyleSheet.create()` style objects 的 React Native components。不使用 CSS，也不使用 web-specific styling。
 
-## Output Format
+## 输出格式
 
 - TypeScript/JavaScript (`.tsx` or `.jsx`)
-- Functional components with `export function ComponentName()`
-- Import from `react-native`: `View`, `Text`, `Image`, `StyleSheet`
-- Import from `react-native-svg` when path/polygon nodes exist: `Svg`, `Path as SvgPath`, `Polygon as SvgPolygon`
-- All styling via inline style objects or `StyleSheet.create()` for performance
+- 使用 `export function ComponentName()` 的函数组件
+- 从 `react-native` 导入：`View`、`Text`、`Image`、`StyleSheet`
+- 当存在 path/polygon nodes 时，从 `react-native-svg` 导入：`Svg`、`Path as SvgPath`、`Polygon as SvgPolygon`
+- 为了性能，所有样式使用 inline style objects 或 `StyleSheet.create()`
 
-## Layout Mapping
+## layout 映射
 
 - `layout: "vertical"` → `flexDirection: 'column'`
 - `layout: "horizontal"` → `flexDirection: 'row'`
@@ -40,7 +40,7 @@ Generate React Native components with `StyleSheet.create()` style objects. No CS
 - `alignItems: "end"` → `alignItems: 'flex-end'`
 - `clipContent: true` → `overflow: 'hidden'`
 
-## Components
+## components
 
 - Container/frame/rectangle/group → `<View style={...} />`
 - Text → `<Text style={...}>content</Text>`
@@ -48,26 +48,26 @@ Generate React Native components with `StyleSheet.create()` style objects. No CS
 - Line → `<View style={{ width: N, height: thickness, backgroundColor: color }} />`
 - Ellipse → `<View style={{ borderRadius: min(w,h)/2, ...fill }} />`
 
-## Color & Fill Mapping
+## color 与 fill 映射
 
 - Solid fill `#hex` → `backgroundColor: '#hex'`
 - Variable ref `$name` → `/* var(--name) */ backgroundColor: '#000000'` (placeholder with comment)
 - Text fill → `color: '#hex'`
-- Gradients: not natively supported in React Native — use `react-native-linear-gradient` library or note as comment
+- Gradients：React Native 原生不支持；使用 `react-native-linear-gradient` library，或以 comment 标注
 
-## Border & Stroke Mapping
+## border 与 stroke 映射
 
 - `stroke.thickness` → `borderWidth: N` (numeric, no units)
 - `stroke.color` → `borderColor: '#hex'`
 - Variable ref → `/* var(--name) */ borderWidth: 1` placeholder
 
-## Corner Radius
+## cornerRadius
 
 - Uniform → `borderRadius: N`
 - Per-corner → `borderTopLeftRadius: TL, borderTopRightRadius: TR, borderBottomRightRadius: BR, borderBottomLeftRadius: BL`
 - Ellipse → `borderRadius: min(width, height) / 2`
 
-## Effects (Shadows)
+## effects（shadows）
 
 - Shadow color → `shadowColor: '#color'`
 - Shadow offset → `shadowOffset: { width: X, height: Y }`
@@ -75,7 +75,7 @@ Generate React Native components with `StyleSheet.create()` style objects. No CS
 - Shadow radius → `shadowRadius: blur`
 - Android elevation → `elevation: Math.round(blur / 2)` (minimum 1)
 
-## Typography
+## typography
 
 - `fontSize` → `fontSize: N` (numeric, no units)
 - `fontWeight` → `fontWeight: 'N'` (string: '100' through '900')
@@ -88,12 +88,12 @@ Generate React Native components with `StyleSheet.create()` style objects. No CS
 - `strikethrough` → `textDecorationLine: 'line-through'`
 - Both → `textDecorationLine: 'underline line-through'`
 
-## Dimensions
+## dimensions
 
 - Fixed → `width: N, height: N` (numeric, no units — React Native uses density-independent pixels)
 - `fill_container` → `flex: 1` or `width: '100%'`
 
-## Image Handling
+## image 处理
 
 - Network URL → `<Image source={{ uri: 'url' }} style={...} />`
 - Data URI → `<Image source={{ uri: 'data:image/...' }} style={...} />`
@@ -103,28 +103,28 @@ Generate React Native components with `StyleSheet.create()` style objects. No CS
 - `objectFit: "fill"` → `resizeMode: 'stretch'`
 - Corner radius applied directly in style object
 
-## Opacity & Transform
+## opacity 与 transform
 
 - `opacity: N` → `opacity: N` (numeric 0-1)
 - Variable ref → `/* var(--name) */ opacity: 1` placeholder
 - `rotation: N` → `transform: [{ rotate: 'Ndeg' }]` (string with deg suffix)
 
-## Positioning
+## positioning
 
 - Absolute children → `position: 'absolute', left: X, top: Y`
 - Container → `position: 'relative'` (default in RN, usually not needed)
 
-## SVG Elements (via react-native-svg)
+## SVG elements（通过 react-native-svg）
 
 - Path nodes → `<Svg width={W} height={H} viewBox="0 0 W H"><SvgPath d="..." fill="color" /></Svg>`
 - Polygon nodes → `<Svg><SvgPolygon points="x1,y1 x2,y2 ..." fill="color" /></Svg>`
 - Wrap in `<View style={positionStyles}>` if positioned
 
-## Icon Handling
+## icon 处理
 
 - Icon font nodes → `<IconName size={N} color="color" />` (kebab-to-PascalCase)
 
-## Style Values — Key Differences from CSS
+## style values：与 CSS 的关键差异
 
 - All numeric values are unitless (no `px`, `em`, `rem`)
 - String values must be quoted: `'center'`, `'row'`, `'absolute'`
@@ -133,7 +133,7 @@ Generate React Native components with `StyleSheet.create()` style objects. No CS
 - No CSS gradients — use third-party libraries
 - `transform` takes an array of objects: `[{ rotate: '45deg' }, { scale: 2 }]`
 
-## Responsive Design
+## 响应式设计
 
 - Use `Dimensions.get('window')` for screen width/height
 - Use `useWindowDimensions()` hook for reactive screen size

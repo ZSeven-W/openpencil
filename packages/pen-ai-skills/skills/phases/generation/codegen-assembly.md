@@ -11,9 +11,9 @@ category: base
 
 # Code Assembly
 
-You assemble multiple code chunks into a single production-ready file.
+你负责把多个 code chunks 组装成一个 production-ready source file。
 
-## Input
+## 输入
 
 1. An array of chunk results, each containing:
    - `chunkId` and `name`
@@ -24,48 +24,48 @@ You assemble multiple code chunks into a single production-ready file.
 3. Design variables and theme definitions
 4. Target framework name
 
-## Output
+## 输出
 
-A single, complete, production-ready source file that:
+输出一个单一、完整、production-ready 的 source file，必须：
 
-1. Imports all dependencies (deduplicated)
-2. Defines all chunk components
-3. Exports a root component that composes all chunks according to rootLayout
-4. Includes CSS variable definitions for design variables
+1. 导入所有 dependencies（去重）
+2. 定义所有 chunk components
+3. 导出一个 root component，并根据 rootLayout 组合所有 chunks
+4. 包含 design variables 对应的 CSS variable definitions
 
-## Assembly Rules
+## 组装规则
 
-### Import Deduplication
+### import 去重
 
 - Merge imports from the same source: `{ source: "react", specifiers: ["useState"] }` + `{ source: "react", specifiers: ["useEffect"] }` → `import { useState, useEffect } from 'react'`
-- Remove duplicate specifiers
-- Order: framework imports first, then external libraries, then local components
+- 移除重复 specifiers
+- 顺序：framework imports 优先，然后 external libraries，最后 local components
 
-### Root Component
+### root component
 
-- Name: use the page/document name or default to "Design"
-- Layout: apply `rootLayout.direction` and `rootLayout.gap` to arrange chunk components
-- If `responsive: true`: add responsive breakpoints (mobile-first)
+- 名称：使用 page/document name；没有时默认使用 `"Design"`
+- Layout：应用 `rootLayout.direction` 和 `rootLayout.gap` 来排列 chunk components
+- 如果 `responsive: true`：添加 responsive breakpoints（mobile-first）
 
-### Shared Styles
+### shared styles
 
-- Extract shared styles described in the plan into reusable CSS classes or styled components
-- Reference them in chunk components instead of duplicating
+- 将 plan 中描述的 shared styles 提取为 reusable CSS classes 或 styled components
+- 在 chunk components 中引用它们，避免重复
 
-### Design Variables
+### design variables
 
-- Generate CSS custom property definitions (`:root { --name: value }`) from the provided variables
-- Include theme variants if themes are defined
+- 根据提供的 variables 生成 CSS custom property definitions（`:root { --name: value }`）
+- 如果定义了 theme variants，也要包含对应变体
 
-### Handling Degraded/Failed Chunks
+### degraded/failed chunks 处理
 
-- For **degraded** chunks (code present, no contract): infer component names and imports from the raw code
-- For **failed** chunks: insert a placeholder comment: `/* TODO: {chunkName} — generation failed */`
-- Always note which chunks were degraded in a comment at the top of the file
+- 对 **degraded** chunks（有 code、无 contract）：从 raw code 推断 component names 和 imports
+- 对 **failed** chunks：插入 placeholder comment：`/* TODO: {chunkName} — generation failed */`
+- 始终在文件顶部 comment 中说明哪些 chunks 是 degraded
 
-### Quality Rules
+### 质量规则
 
-- Replace absolute pixel positioning with flex/grid layout where possible
-- Use semantic HTML elements (nav, header, main, section, footer, article)
-- Ensure all text is readable (sufficient contrast, reasonable font sizes)
-- Add responsive breakpoints for common widths (640px, 768px, 1024px, 1280px)
+- 尽可能用 flex/grid layout 替换 absolute pixel positioning
+- 使用 semantic HTML elements（nav, header, main, section, footer, article）
+- 确保所有文本可读（足够 contrast，合理 font sizes）
+- 为常见宽度添加 responsive breakpoints（640px, 768px, 1024px, 1280px）

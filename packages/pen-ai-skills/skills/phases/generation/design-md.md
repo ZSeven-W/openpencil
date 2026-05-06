@@ -9,5 +9,5 @@ budget: 2000
 category: base
 ---
 
-DESIGN SYSTEM (design.md — follow these rules for visual consistency):
+DESIGN SYSTEM（design.md — 为保持视觉一致性，必须遵循这些规则）：
 {{designMdContent}}

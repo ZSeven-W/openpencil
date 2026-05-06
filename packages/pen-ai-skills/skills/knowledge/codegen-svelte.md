@@ -9,19 +9,19 @@ budget: 2000
 category: knowledge
 ---
 
-# Svelte Component Code Generation
+# Svelte Component 代码生成
 
-Generate Svelte components with markup and scoped `<style>` blocks.
+生成包含 markup 和 scoped `<style>` blocks 的 Svelte components。
 
-## Output Format
+## 输出格式
 
 - Svelte component (`.svelte`)
-- `<script lang="ts">` for component logic (optional, only when props/logic needed)
+- `<script lang="ts">` 用于组件逻辑（可选，仅在需要 props/logic 时使用）
 - HTML template markup
-- `<style>` block with scoped CSS classes
-- Each node gets a unique, descriptive CSS class name derived from `node.name`
+- `<style>` block 中使用 scoped CSS classes
+- 每个节点都需要一个由 `node.name` 派生的唯一且描述性的 CSS class name
 
-## Layout Mapping
+## layout 映射
 
 - `layout: "vertical"` → `display: flex; flex-direction: column`
 - `layout: "horizontal"` → `display: flex; flex-direction: row`
@@ -38,7 +38,7 @@ Generate Svelte components with markup and scoped `<style>` blocks.
 - `alignItems: "end"` → `align-items: flex-end`
 - `clipContent: true` → `overflow: hidden`
 
-## Color & Fill Mapping
+## color 与 fill 映射
 
 - Solid fill `#hex` → `background: #hex`
 - Variable ref `$name` → `background: var(--name)`
@@ -46,25 +46,25 @@ Generate Svelte components with markup and scoped `<style>` blocks.
 - Linear gradient → `background: linear-gradient(Ndeg, color1 0%, color2 100%)`
 - Radial gradient → `background: radial-gradient(circle, color1 0%, color2 100%)`
 
-## Border & Stroke Mapping
+## border 与 stroke 映射
 
 - `stroke.thickness` → `border-width: Npx; border-style: solid`
 - `stroke.color` → `border-color: #hex`
 - Variable ref → `border-width: var(--name)`, `border-color: var(--name)`
 
-## Corner Radius
+## cornerRadius
 
 - Uniform → `border-radius: Npx`
 - Per-corner `[tl, tr, br, bl]` → `border-radius: TLpx TRpx BRpx BLpx`
 - Ellipse → `border-radius: 50%`
 
-## Effects
+## effects
 
 - Drop shadow → `box-shadow: offsetXpx offsetYpx blurpx spreadpx color`
 - Inner shadow → `box-shadow: inset offsetXpx offsetYpx blurpx spreadpx color`
 - Multiple shadows comma-separated
 
-## Typography
+## typography
 
 - `fontSize` → `font-size: Npx`
 - `fontWeight` → `font-weight: N`
@@ -76,27 +76,27 @@ Generate Svelte components with markup and scoped `<style>` blocks.
 - `underline` → `text-decoration: underline`
 - `strikethrough` → `text-decoration: line-through`
 
-## Dimensions
+## dimensions
 
 - Fixed → `width: Npx; height: Npx`
 - `fill_container` → `width: 100%` or `height: 100%`
 
-## Image Handling
+## image 处理
 
 - `<img class="className" src={src} alt={name} />`
-- `object-fit: contain|cover|fill` based on `objectFit` property
-- Corner radius applied via CSS class
+- 根据 `objectFit` property 使用 `object-fit: contain|cover|fill`
+- corner radius 通过 CSS class 应用
 
-## Opacity & Transform
+## opacity 与 transform
 
 - `opacity: N` → `opacity: N`
 - `rotation: N` → `transform: rotate(Ndeg)`
 
-## Positioning
+## positioning
 
 - Absolute children → `position: absolute; left: Xpx; top: Ypx`
 
-## Semantic HTML Tags
+## 语义化 HTML 标签
 
 - Font size >= 32 → `<h1>`
 - Font size >= 24 → `<h2>`
@@ -105,23 +105,23 @@ Generate Svelte components with markup and scoped `<style>` blocks.
 - Lines → `<hr>`
 - Use semantic elements (`<nav>`, `<header>`, `<main>`, `<section>`, `<footer>`)
 
-## Icon Handling
+## icon 处理
 
 - Icon font nodes → `<i class="className" data-lucide="icon-name" />`
-- Set `width`, `height`, and `color` via CSS class
+- 通过 CSS class 设置 `width`、`height` 和 `color`
 
-## Svelte-Specific Patterns
+## Svelte 专用模式
 
-- Use `{#each items as item}` for lists
-- Use `{#if condition}` / `{:else}` for conditional rendering
-- Use `class:active={isActive}` directive for conditional classes
-- Props declared with `export let propName: Type`
-- Event forwarding with `on:click`
-- Slot content with `<slot />` and named slots `<slot name="header" />`
-- Reactive declarations with `$:` label
-- Styles are automatically scoped to the component
+- 列表使用 `{#each items as item}`
+- 条件渲染使用 `{#if condition}` / `{:else}`
+- 条件 class 使用 `class:active={isActive}` directive
+- Props 使用 `export let propName: Type` 声明
+- 事件转发使用 `on:click`
+- Slot 内容使用 `<slot />` 和 named slots `<slot name="header" />`
+- 响应式声明使用 `$:` label
+- Styles 会自动 scoped 到当前 component
 
-## Variable References
+## variable references
 
 - `$variable` refs → `var(--variable-name)` in CSS
 - Background: `background: var(--name)`

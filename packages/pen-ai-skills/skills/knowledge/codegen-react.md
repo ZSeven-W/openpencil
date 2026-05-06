@@ -9,58 +9,58 @@ budget: 2000
 category: knowledge
 ---
 
-# React + Tailwind Code Generation
+# React + Tailwind 代码生成
 
-Generate React TSX components using Tailwind CSS utility classes.
+生成使用 Tailwind CSS utility classes 的 React TSX 组件。
 
-## Output Format
+## 输出格式
 
 - TypeScript TSX (`.tsx`)
-- Functional components with `export function ComponentName()`
-- Tailwind CSS for all styling (no inline styles, no CSS modules)
+- 使用 `export function ComponentName()` 的函数组件
+- 所有样式使用 Tailwind CSS（不使用 inline styles，不使用 CSS modules）
 
-## Layout Mapping
+## layout 映射
 
 - `layout: "vertical"` → `flex flex-col`
 - `layout: "horizontal"` → `flex flex-row`
 - `gap: N` → `gap-[Npx]`
-- `padding` → `p-[Npx]` or `pt-[N] pr-[N] pb-[N] pl-[N]` for per-side
+- `padding` → `p-[Npx]`；按边设置时使用 `pt-[N] pr-[N] pb-[N] pl-[N]`
 - `padding: [vertical, horizontal]` → `py-[Vpx] px-[Hpx]`
 - `justifyContent` → `justify-{start|center|end|between|around}`
 - `alignItems` → `items-{start|center|end|stretch}`
 - `clipContent: true` → `overflow-hidden`
 
-## Color & Fill Mapping
+## color 与 fill 映射
 
 - Solid fill `#hex` → `bg-[#hex]`
 - Variable ref `$name` → `bg-[var(--name)]`
 - Text fill → `text-[#hex]` or `text-[var(--name)]`
-- Gradient fills → `bg-gradient-to-{direction}` with `from-[color] to-[color]`
+- Gradient fills → 使用 `bg-gradient-to-{direction}` 搭配 `from-[color] to-[color]`
 
-## Border & Stroke Mapping
+## border 与 stroke 映射
 
 - `stroke.thickness` → `border-[Npx]`
 - `stroke.color` → `border-[#hex]`
 - Variable ref → `border-[var(--name)]`
 
-## Corner Radius
+## cornerRadius
 
 - Uniform → `rounded-[Npx]`
-- Per-corner `[tl, tr, br, bl]` → `rounded-[tl_tr_br_bl]` (Tailwind arbitrary values)
+- Per-corner `[tl, tr, br, bl]` → `rounded-[tl_tr_br_bl]`（Tailwind arbitrary values）
 - Ellipse → `rounded-full`
 
-## Effects
+## effects
 
 - Drop shadow → `shadow-[offsetXpx_offsetYpx_blurpx_spreadpx_color]`
-- Inner shadow → use `shadow-inner` variant
+- Inner shadow → 使用 `shadow-inner` variant
 - Blur → `blur-[Npx]`
 
-## Typography
+## typography
 
 - `fontSize` → `text-[Npx]`
-- `fontWeight` (numeric) → `font-[weight]`
+- `fontWeight`（数字）→ `font-[weight]`
 - `fontStyle: "italic"` → `italic`
-- `fontFamily` → `font-['Family_Name']` (spaces replaced with underscores)
+- `fontFamily` → `font-['Family_Name']`（空格替换为下划线）
 - `lineHeight` → `leading-[value]`
 - `letterSpacing` → `tracking-[Npx]`
 - `textAlign` → `text-{left|center|right|justify}`
@@ -70,54 +70,54 @@ Generate React TSX components using Tailwind CSS utility classes.
 - `underline` → `underline`
 - `strikethrough` → `line-through`
 
-## Dimensions
+## dimensions
 
 - Fixed → `w-[Npx] h-[Npx]`
 - `fill_container` width → `w-full`
 - `fill_container` height → `h-full`
-- Root component → `max-w-[Npx] w-full mx-auto` for responsive centering
+- Root component → `max-w-[Npx] w-full mx-auto`，用于响应式居中
 
-## Image Handling
+## image 处理
 
 - `<img src={src} alt={name} className="w-[N] h-[N] object-{fit}" />`
 - `objectFit: "fit"` → `object-contain`
 - `objectFit: "crop"` → `object-cover`
 - `objectFit: "fill"` → `object-fill`
-- Corner radius on images → add `rounded-[Npx]`
+- 图片上的 corner radius → 添加 `rounded-[Npx]`
 
-## Opacity & Transform
+## opacity 与 transform
 
-- `opacity: N` → `opacity-[N%]` (multiply by 100)
+- `opacity: N` → `opacity-[N%]`（乘以 100）
 - Variable ref opacity → `opacity-[var(--name)]`
 - `rotation: N` → `rotate-[Ndeg]`
 
-## Positioning
+## positioning
 
 - Absolute children → `absolute left-[Xpx] top-[Ypx]`
 
-## Semantic HTML Tags
+## 语义化 HTML 标签
 
 - Font size >= 32 → `<h1>`
 - Font size >= 24 → `<h2>`
 - Font size >= 20 → `<h3>`
 - Other text → `<p>`
 - Lines → `<hr>`
-- Use `<nav>`, `<header>`, `<main>`, `<section>`, `<footer>`, `<article>` appropriately
-- Interactive elements: `<button>`, `<a>`, `<input>` where role suggests
+- 适当使用 `<nav>`、`<header>`、`<main>`、`<section>`、`<footer>`、`<article>`
+- 当 role 表示可交互元素时，使用 `<button>`、`<a>`、`<input>`
 
-## Icon Handling
+## icon 处理
 
-- Icon font nodes → `<IconName size={N} color="color" />` (kebab-to-PascalCase)
+- Icon font nodes → `<IconName size={N} color="color" />`（kebab-to-PascalCase）
 
-## Responsive Design
+## 响应式设计
 
-- Mobile-first: base styles for mobile, `md:` for tablet, `lg:` for desktop
-- Convert fixed widths to `max-w-*` with `w-full`
-- Use `flex-wrap` for card grids on narrow viewports
+- Mobile-first：基础样式面向移动端，`md:` 面向平板，`lg:` 面向桌面端
+- 将固定宽度转换为 `max-w-*` 搭配 `w-full`
+- 窄视口中的 card grid 使用 `flex-wrap`
 
-## Variable References
+## variable references
 
-- `$variable` refs are output as `var(--variable-name)` CSS custom properties
+- `$variable` 引用输出为 `var(--variable-name)` CSS custom properties
 - Background: `bg-[var(--name)]`
 - Text color: `text-[var(--name)]`
 - Border: `border-[var(--name)]`

@@ -9,18 +9,18 @@ budget: 2000
 category: knowledge
 ---
 
-# Flutter (Dart) Code Generation
+# Flutter (Dart) 代码生成
 
-Generate Flutter widget trees using Material Design widgets.
+生成使用 Material Design widgets 的 Flutter widget trees。
 
-## Output Format
+## 输出格式
 
 - Dart file (`.dart`)
-- `StatelessWidget` class with `build()` method returning widget tree
+- 包含 `build()` method 并返回 widget tree 的 `StatelessWidget` class
 - Import `package:flutter/material.dart`
-- Import `dart:math` for path/polygon rendering
+- 为 path/polygon rendering 导入 `dart:math`
 
-## Layout Mapping
+## layout 映射
 
 - `layout: "vertical"` → `Column(children: [...])`
 - `layout: "horizontal"` → `Row(children: [...])`
@@ -36,7 +36,7 @@ Generate Flutter widget trees using Material Design widgets.
 - `alignItems: "end"` → `crossAxisAlignment: CrossAxisAlignment.end`
 - Always include `mainAxisSize: MainAxisSize.min` on Column/Row
 
-## Container & Decoration
+## container 与 decoration
 
 - Container nodes → `Container()` widget with named parameters
 - `width: N` → `width: N`
@@ -44,7 +44,7 @@ Generate Flutter widget trees using Material Design widgets.
 - `clipContent: true` → `clipBehavior: Clip.hardEdge`
 - Styling via `decoration: BoxDecoration(...)` parameter
 
-## Color & Fill Mapping
+## color 与 fill 映射
 
 - Solid fill `#RRGGBB` → `Color(0xFFRRGGBB)` (prefix FF for full alpha)
 - 8-digit hex `#RRGGBBAA` → `Color(0xAARRGGBB)` (alpha moved to front)
@@ -53,22 +53,22 @@ Generate Flutter widget trees using Material Design widgets.
 - Linear gradient → `gradient: LinearGradient(colors: [Color(...), Color(...)])`
 - Radial gradient → `gradient: RadialGradient(colors: [Color(...), Color(...)])`
 
-## Border & Stroke Mapping
+## border 与 stroke 映射
 
 - `stroke.thickness + stroke.color` → `border: Border.all(color: Color(...), width: N)`
 - Variable ref thickness → `/* var(--name) */ 1` placeholder
 
-## Corner Radius
+## cornerRadius
 
 - Uniform → `borderRadius: BorderRadius.circular(N)`
 - Per-corner → `borderRadius: BorderRadius.only(topLeft: Radius.circular(TL), topRight: Radius.circular(TR), bottomRight: Radius.circular(BR), bottomLeft: Radius.circular(BL))`
 
-## Effects
+## effects
 
 - Drop shadow → `boxShadow: [BoxShadow(color: Color(...), blurRadius: N, offset: Offset(X, Y))]`
 - Blur → `BackdropFilter(filter: ImageFilter.blur(sigmaX: N, sigmaY: N), child: ...)`
 
-## Typography
+## typography
 
 - Text nodes → `Text('content', style: TextStyle(...))`
 - `fontSize` → `fontSize: N`
@@ -83,19 +83,19 @@ Generate Flutter widget trees using Material Design widgets.
 - Combined → `decoration: TextDecoration.combine([TextDecoration.underline, TextDecoration.lineThrough])`
 - Fixed-size text → wrap in `SizedBox(width: N, height: N, child: Text(...))`
 
-## Padding
+## padding
 
 - Uniform → `padding: EdgeInsets.all(N)`
 - Symmetric → `padding: EdgeInsets.symmetric(vertical: V, horizontal: H)`
 - Per-side `[top, right, bottom, left]` → `padding: EdgeInsets.fromLTRB(left, top, right, bottom)`
 - Variable ref → `EdgeInsets.all(/* var(--name) */ 0)` placeholder
 
-## Dimensions
+## dimensions
 
 - Fixed → `width: N, height: N` on Container
 - Text sizing → wrap in `SizedBox`
 
-## Image Handling
+## image 处理
 
 - Network URL → `Image.network('url', width: N, height: N, fit: BoxFit.cover)`
 - Asset → `Image.asset('path', width: N, height: N, fit: BoxFit.cover)`
@@ -104,32 +104,32 @@ Generate Flutter widget trees using Material Design widgets.
 - `objectFit: "crop"` → `BoxFit.cover`
 - Corner radius on images → `ClipRRect(borderRadius: BorderRadius.circular(N), child: Image(...))`
 
-## Opacity & Transform
+## opacity 与 transform
 
 - Opacity → `Opacity(opacity: N, child: widget)` wrapper
 - Rotation → `Transform.rotate(angle: N * pi / 180, child: widget)` wrapper
-- Applied as wrapper widgets around the base widget
+- 作为 wrapper widgets 应用于 base widget 外层
 
-## Positioning
+## positioning
 
 - Absolute children → `Positioned(left: X, top: Y, child: widget)` inside `Stack`
 
-## Ellipse
+## ellipse
 
 - Circle/ellipse → `Container` with `BoxDecoration(shape: BoxShape.circle)`
 
-## Icon Handling
+## icon 处理
 
 - Icon font nodes → `Icon(LucideIcons.icon_name, size: N, color: Color(...))`
 - Icon name: kebab-case converted to snake_case
 
-## Path & Polygon
+## path 与 polygon
 
 - Path nodes → `CustomPaint(size: Size(W, H), painter: _PathPainter(pathData, color))`
 - Polygon nodes → `CustomPaint(size: Size(W, H), painter: _PolygonPainter(sides, color))`
-- Include helper `CustomPainter` classes at bottom of file
+- 在文件底部包含 helper `CustomPainter` classes
 
-## Responsive Design
+## 响应式设计
 
 - Use `MediaQuery.of(context).size` for screen dimensions
 - `LayoutBuilder` for parent-relative sizing

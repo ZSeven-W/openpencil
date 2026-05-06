@@ -9,19 +9,19 @@ budget: 2000
 category: knowledge
 ---
 
-# Vue 3 Single File Component Code Generation
+# Vue 3 Single File Component 代码生成
 
-Generate Vue 3 Single File Components with `<script setup>`, `<template>`, and `<style scoped>`.
+生成包含 `<script setup>`、`<template>` 和 `<style scoped>` 的 Vue 3 Single File Component。
 
-## Output Format
+## 输出格式
 
 - Vue 3 SFC (`.vue`)
-- `<script setup lang="ts">` for component logic
-- `<template>` with semantic HTML markup
-- `<style scoped>` with CSS classes (no Tailwind, no inline styles)
-- Each node gets a unique, descriptive CSS class name derived from `node.name`
+- 使用 `<script setup lang="ts">` 编写组件逻辑
+- `<template>` 使用语义化 HTML markup
+- `<style scoped>` 使用 CSS classes（不使用 Tailwind，不使用 inline styles）
+- 每个节点都需要一个由 `node.name` 派生的唯一且描述性的 CSS class name
 
-## Layout Mapping
+## layout 映射
 
 - `layout: "vertical"` → `display: flex; flex-direction: column`
 - `layout: "horizontal"` → `display: flex; flex-direction: row`
@@ -38,7 +38,7 @@ Generate Vue 3 Single File Components with `<script setup>`, `<template>`, and `
 - `alignItems: "end"` → `align-items: flex-end`
 - `clipContent: true` → `overflow: hidden`
 
-## Color & Fill Mapping
+## color 与 fill 映射
 
 - Solid fill `#hex` → `background: #hex`
 - Variable ref `$name` → `background: var(--name)`
@@ -46,25 +46,25 @@ Generate Vue 3 Single File Components with `<script setup>`, `<template>`, and `
 - Linear gradient → `background: linear-gradient(Ndeg, color1 0%, color2 100%)`
 - Radial gradient → `background: radial-gradient(circle, color1 0%, color2 100%)`
 
-## Border & Stroke Mapping
+## border 与 stroke 映射
 
 - `stroke.thickness` → `border-width: Npx; border-style: solid`
 - `stroke.color` → `border-color: #hex`
 - Variable ref → `border-width: var(--name)`, `border-color: var(--name)`
 
-## Corner Radius
+## cornerRadius
 
 - Uniform → `border-radius: Npx`
 - Per-corner `[tl, tr, br, bl]` → `border-radius: TLpx TRpx BRpx BLpx`
 - Ellipse → `border-radius: 50%`
 
-## Effects
+## effects
 
 - Drop shadow → `box-shadow: offsetXpx offsetYpx blurpx spreadpx color`
 - Inner shadow → `box-shadow: inset offsetXpx offsetYpx blurpx spreadpx color`
 - Multiple shadows comma-separated
 
-## Typography
+## typography
 
 - `fontSize` → `font-size: Npx`
 - `fontWeight` → `font-weight: N`
@@ -76,27 +76,27 @@ Generate Vue 3 Single File Components with `<script setup>`, `<template>`, and `
 - `underline` → `text-decoration: underline`
 - `strikethrough` → `text-decoration: line-through`
 
-## Dimensions
+## dimensions
 
 - Fixed → `width: Npx; height: Npx`
 - `fill_container` → `width: 100%` or `height: 100%`
 
-## Image Handling
+## image 处理
 
 - `<img class="className" :src="src" :alt="name" />`
-- `object-fit: contain|cover|fill` based on `objectFit` property
-- Corner radius applied via CSS class
+- 根据 `objectFit` property 使用 `object-fit: contain|cover|fill`
+- corner radius 通过 CSS class 应用
 
-## Opacity & Transform
+## opacity 与 transform
 
 - `opacity: N` → `opacity: N`
 - `rotation: N` → `transform: rotate(Ndeg)`
 
-## Positioning
+## positioning
 
 - Absolute children → `position: absolute; left: Xpx; top: Ypx`
 
-## Semantic HTML Tags
+## 语义化 HTML 标签
 
 - Font size >= 32 → `<h1>`
 - Font size >= 24 → `<h2>`
@@ -105,21 +105,21 @@ Generate Vue 3 Single File Components with `<script setup>`, `<template>`, and `
 - Lines → `<hr>`
 - Use semantic elements (`<nav>`, `<header>`, `<main>`, `<section>`, `<footer>`)
 
-## Icon Handling
+## icon 处理
 
 - Icon font nodes → `<i class="className" data-lucide="icon-name" />`
-- Set `width`, `height`, and `color` via CSS class
+- 通过 CSS class 设置 `width`、`height` 和 `color`
 
-## Vue-Specific Patterns
+## Vue 专用模式
 
-- Use `v-for` for repeated items: `<div v-for="item in items" :key="item.id">`
-- Use `v-if` / `v-else` for conditional rendering
-- Use `:class` binding for dynamic classes
-- Use `:style` binding sparingly (prefer CSS classes)
-- Props defined with `defineProps<{ ... }>()`
-- Emits defined with `defineEmits<{ ... }>()`
+- 重复项使用 `v-for`：`<div v-for="item in items" :key="item.id">`
+- 条件渲染使用 `v-if` / `v-else`
+- 动态 class 使用 `:class` binding
+- 谨慎使用 `:style` binding（优先 CSS classes）
+- Props 使用 `defineProps<{ ... }>()`
+- Emits 使用 `defineEmits<{ ... }>()`
 
-## Variable References
+## variable references
 
 - `$variable` refs → `var(--variable-name)` in CSS
 - Background: `background: var(--name)`

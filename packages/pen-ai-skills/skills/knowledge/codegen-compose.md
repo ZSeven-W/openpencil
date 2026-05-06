@@ -9,18 +9,18 @@ budget: 2000
 category: knowledge
 ---
 
-# Jetpack Compose (Kotlin) Code Generation
+# Jetpack Compose (Kotlin) 代码生成
 
-Generate Kotlin composable functions using Jetpack Compose UI toolkit.
+生成使用 Jetpack Compose UI toolkit 的 Kotlin composable functions。
 
-## Output Format
+## 输出格式
 
 - Kotlin file (`.kt`)
 - `@Composable fun ComponentName() { ... }`
 - Standard Compose imports: `androidx.compose.foundation.*`, `androidx.compose.material3.*`, `androidx.compose.ui.*`
-- Use `dp` for dimensions, `sp` for font sizes
+- dimensions 使用 `dp`，font sizes 使用 `sp`
 
-## Layout Mapping
+## layout 映射
 
 - `layout: "vertical"` → `Column(modifier, verticalArrangement, horizontalAlignment) { ... }`
 - `layout: "horizontal"` → `Row(modifier, horizontalArrangement, verticalAlignment) { ... }`
@@ -35,10 +35,10 @@ Generate Kotlin composable functions using Jetpack Compose UI toolkit.
   - `"center"` → `verticalAlignment = Alignment.CenterVertically`
   - `"end"` → `verticalAlignment = Alignment.Bottom`
 
-## Modifier Chain Pattern
+## Modifier chain 模式
 
 - Compose uses `Modifier` chains: `Modifier.size().background().border().padding()`
-- Order matters: modifiers apply outside-in
+- 顺序很重要：modifiers 按 outside-in 应用
 - Size before background: `.size(width = N.dp, height = N.dp)`
 - Width only: `.width(N.dp)`, height only: `.height(N.dp)`
 - `clipContent: true` → `.clipToBounds()`
@@ -46,7 +46,7 @@ Generate Kotlin composable functions using Jetpack Compose UI toolkit.
 - Rotation: `.rotate(Nf)`
 - Opacity: `.alpha(Nf)`
 
-## Color & Fill Mapping
+## color 与 fill 映射
 
 - Solid fill `#RRGGBB` → `Color(0xFFRRGGBB)` (uppercase hex, FF alpha prefix)
 - 8-digit hex `#RRGGBBAA` → `Color(0xAARRGGBB)` (alpha moved to front)
@@ -57,25 +57,25 @@ Generate Kotlin composable functions using Jetpack Compose UI toolkit.
 - Linear gradient → `Brush.linearGradient(listOf(Color(...), Color(...)))` as background
 - Radial gradient → `Brush.radialGradient(listOf(Color(...), Color(...)))` as background
 
-## Border & Stroke Mapping
+## border 与 stroke 映射
 
 - `stroke` → `.border(N.dp, Color(...), shape)`
 - Shape defaults to `RectangleShape` if no corner radius
 - With corner radius → `.border(N.dp, Color(...), RoundedCornerShape(N.dp))`
 - Variable ref thickness → `/* var(--name) */ 1.dp` placeholder
 
-## Corner Radius
+## cornerRadius
 
 - Uniform → `RoundedCornerShape(N.dp)`
 - Per-corner → `RoundedCornerShape(topStart = TL.dp, topEnd = TR.dp, bottomEnd = BR.dp, bottomStart = BL.dp)`
 - Applied via `.clip(shape)` or as parameter in `.background(color, shape)` / `.border()`
 
-## Effects
+## effects
 
 - Shadow → `.shadow(elevation = N.dp, shape = RoundedCornerShape(0.dp))`
 - Blur → `// .blur(radius = N.dp) — requires custom implementation` (not natively supported as modifier)
 
-## Typography
+## typography
 
 - Text nodes → `Text(text = "content", fontSize, fontWeight, color, ...)`
 - `fontSize` → `fontSize = N.sp`
@@ -91,20 +91,20 @@ Generate Kotlin composable functions using Jetpack Compose UI toolkit.
 - Short param list (2 or fewer) → inline single-line `Text(text, fontSize)`
 - Long param list → multi-line with indentation
 
-## Padding
+## padding
 
 - Uniform → `.padding(N.dp)`
 - Symmetric → `.padding(vertical = V.dp, horizontal = H.dp)`
 - Per-side → `.padding(start = L.dp, top = T.dp, end = R.dp, bottom = B.dp)`
 - Variable ref → `.padding(/* var(--name) */ 0.dp)` placeholder
 
-## Dimensions
+## dimensions
 
 - Both → `.size(width = N.dp, height = N.dp)`
 - Width only → `.width(N.dp)`
 - Height only → `.height(N.dp)`
 
-## Image Handling
+## image 处理
 
 - Network URL → `AsyncImage(model = "url", contentDescription = "name", modifier, contentScale)`
 - Local resource → `Image(painter = painterResource(id = R.drawable.name), contentDescription, modifier, contentScale)`
@@ -114,25 +114,25 @@ Generate Kotlin composable functions using Jetpack Compose UI toolkit.
 - `objectFit: "fill"` → `contentScale = ContentScale.FillBounds`
 - Corner radius on images → `.clip(RoundedCornerShape(N.dp))`
 
-## Ellipse
+## ellipse
 
 - Ellipse node → `Box(modifier = Modifier.size(...).clip(CircleShape).background(color))`
 
-## Icon Handling
+## icon 处理
 
 - Icon font nodes → `Icon(LucideIcons.IconName, contentDescription = "name", modifier = Modifier.size(N.dp), tint = Color(...))`
 - Icon name: kebab-case converted to PascalCase
 
-## Line Nodes
+## line nodes
 
 - Line → `Divider(color = Color(...), thickness = N.dp, modifier = Modifier.width(W.dp))`
 
-## Path & Polygon
+## path 与 polygon
 
 - Path nodes → `Canvas(modifier) { drawPath(PathParser().parsePathString(data).toPath(), color) }`
 - Polygon nodes → `Canvas(modifier) { ... }` with polygon path calculation using trigonometry
 
-## Responsive Design
+## 响应式设计
 
 - Use `BoxWithConstraints { ... }` for parent-relative sizing
 - `maxWidth` and `maxHeight` constraints available

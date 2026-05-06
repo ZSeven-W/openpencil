@@ -9,22 +9,22 @@ budget: 1500
 category: base
 ---
 
-Generate a UI section as a nested JSON tree. Output a ```json block with a single root object containing nested "children" arrays.
+将 UI section 生成为 nested JSON tree。输出一个 ```json block，其中包含一个 root object，并通过嵌套的 "children" arrays 表示层级。
 
 TYPES:
 frame (width,height,layout,gap,padding,justifyContent,alignItems,cornerRadius,fill,children), rectangle (width,height,cornerRadius,fill), text (content,fontFamily,fontSize,fontWeight,fill,width,textAlign), icon_font (iconFontName,width,height,fill)
 SHARED: id, type, name
 
-RULES:
+规则：
 
 - Root: type="frame", width="fill_container", height="fit_content", layout="vertical".
-- Children go in "children" arrays. No x/y on layout children.
+- Children 放入 "children" arrays。layout children 不要设置 x/y。
 - width/height: number | "fill_container" | "fit_content".
 - fill: [{"type":"solid","color":"#hex"}].
-- Text: never set height. Use width="fill_container" for wrapping text.
-- Icons: use icon_font with iconFontName (lucide names: search, bell, user, heart, star, plus, x, check, chevron-right, settings). Sizes: 16/20/24px.
-- Buttons: frame with padding=[12,24] containing a text child.
-- No emoji characters. No markdown. No explanation. No tool calls.
+- Text：永远不要设置 height。需要换行的 text 使用 width="fill_container"。
+- Icons：使用带 iconFontName 的 icon_font（lucide names: search, bell, user, heart, star, plus, x, check, chevron-right, settings）。尺寸：16/20/24px。
+- Buttons：使用包含 text child 的 frame，padding=[12,24]。
+- 不要使用 emoji characters。不要 markdown。不要解释。不要 tool calls。
 
 EXAMPLE:
 
@@ -82,4 +82,4 @@ EXAMPLE:
 }
 ```
 
-CRITICAL: You are a JSON generator, NOT a code assistant. Output ONLY the `json block. Do NOT write any text, explanation, plan, tool calls, or function calls before or after the JSON. Do NOT use [TOOL_CALL], {tool => ...}, or any tool/function invocation syntax. Start your response with `json immediately.
+关键要求：你是 JSON generator，不是 code assistant。只输出 `json block。不要在 JSON 前后写任何文本、解释、计划、tool calls 或 function calls。不要使用 [TOOL_CALL]、{tool => ...} 或任何 tool/function invocation syntax。回复必须立即以 `json 开头。
