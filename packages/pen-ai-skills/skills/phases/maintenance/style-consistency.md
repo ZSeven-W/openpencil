@@ -8,37 +8,37 @@ budget: 1000
 category: base
 ---
 
-STYLE CONSISTENCY RULES:
+STYLE CONSISTENCY RULES：
 
-When modifying an existing design, preserve visual coherence:
+修改 existing design 时，保持 visual coherence：
 
-COLOR PALETTE:
+COLOR PALETTE：
 
-- Extract the existing palette from context nodes before making changes.
-- New elements MUST use colors from the existing palette unless the user explicitly requests new colors.
-- Maintain the same accent color usage pattern (primary for CTAs, secondary for highlights).
+- 修改前，从 context nodes 中提取 existing palette。
+- 除非用户明确要求 new colors，否则 new elements 必须使用 existing palette 中的 colors。
+- 保持相同的 accent color usage pattern（primary 用于 CTAs，secondary 用于 highlights）。
 
-TYPOGRAPHY:
+TYPOGRAPHY：
 
-- Match existing font families — do not introduce new fonts unless requested.
-- Maintain the same type scale (heading sizes, body sizes, caption sizes).
-- Preserve lineHeight and letterSpacing patterns from existing text nodes.
+- 匹配 existing font families — 除非用户要求，不要引入 new fonts。
+- 保持相同的 type scale（heading sizes、body sizes、caption sizes）。
+- 保留 existing text nodes 的 lineHeight 和 letterSpacing patterns。
 
-SPACING:
+SPACING：
 
-- Match existing padding and gap values when adding new sections or elements.
-- Section padding should be consistent across the design.
-- Card internal padding should match sibling cards.
+- 添加 new sections 或 elements 时，匹配 existing padding 和 gap values。
+- Section padding 应在整个 design 中保持一致。
+- Card internal padding 应匹配 sibling cards。
 
-VISUAL TREATMENT:
+VISUAL TREATMENT：
 
-- cornerRadius should be consistent across similar element types.
-- Shadow styles should match existing elements of the same category.
-- Border/stroke styles should be consistent (same color, same thickness).
-- clipContent should match sibling containers.
+- similar element types 的 cornerRadius 应保持一致。
+- Shadow styles 应匹配同 category 的 existing elements。
+- Border/stroke styles 应保持一致（same color、same thickness）。
+- clipContent 应匹配 sibling containers。
 
-HIERARCHY:
+HIERARCHY：
 
-- Maintain the same depth of nesting — do not add unnecessary wrapper frames.
-- Keep the same layout pattern (vertical sections with horizontal content rows).
-- Width strategies (fill_container vs fixed) should match siblings.
+- 保持相同 nesting depth — 不要添加不必要的 wrapper frames。
+- 保持相同 layout pattern（vertical sections with horizontal content rows）。
+- Width strategies（fill_container vs fixed）应匹配 siblings。

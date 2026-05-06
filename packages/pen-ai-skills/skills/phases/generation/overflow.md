@@ -8,29 +8,29 @@ budget: 500
 category: base
 ---
 
-OVERFLOW PREVENTION (CRITICAL):
+OVERFLOW PREVENTION（关键）：
 
-- Text in vertical layout: width="fill_container" + textGrowth="fixed-width". In horizontal: width="fit_content".
-- NEVER set fixed pixel width on text inside layout frames (e.g. width:378 in 195px card - overflows!).
-- Fixed-width children must be <= parent content area (parent width - padding).
-- Badges: short labels only (CJK <=8 chars / Latin <=16 chars).
+- vertical layout 中的 text：width="fill_container" + textGrowth="fixed-width"。horizontal 中：width="fit_content"。
+- 绝不要在 layout frames 内的 text 上设置 fixed pixel width（例如 195px card 中 width:378 - 会 overflow！）。
+- Fixed-width children 必须 <= parent content area（parent width - padding）。
+- Badges：只使用短 labels（CJK <=8 chars / Latin <=16 chars）。
 
 ## HORIZONTAL SCROLL ROWS (cards / chips / categories)
 
-When the spec says "horizontal scrolling cards", "swipeable row", "chip row", or similar, generate EXACTLY this structure — do NOT just emit 6 cards inside a horizontal layout, the children will spill outside the page frame.
+当 spec 提到 "horizontal scrolling cards"、"swipeable row"、"chip row" 或类似内容时，必须生成下面这个精确结构 — 不要只在 horizontal layout 中输出 6 张 cards，否则 children 会溢出 page frame。
 
-Structure:
+结构：
 
-- A wrapper frame with `width="fill_container"`, `height="fit_content"`, `layout="vertical"`, `clipContent=true`.
-- Inside it, a row frame with `width="fit_content"`, `height="fit_content"`, `layout="horizontal"`, `gap=12`, `padding=[0,20]`.
-- The row frame holds the actual cards.
+- 一个 wrapper frame，设置 `width="fill_container"`、`height="fit_content"`、`layout="vertical"`、`clipContent=true`。
+- 内部是一个 row frame，设置 `width="fit_content"`、`height="fit_content"`、`layout="horizontal"`、`gap=12`、`padding=[0,20]`。
+- row frame 持有真正的 cards。
 
-Every card in the row MUST:
+row 中的每个 card 必须：
 
-- Have a FIXED numeric `width` (typically 120-160 for mobile, 200-260 for desktop). Never `fill_container`, never `fit_content` - fixed pixels.
-- Share identical width with its siblings for visual rhythm.
+- 拥有固定 numeric `width`（mobile 通常 120-160，desktop 通常 200-260）。不要使用 `fill_container`，不要使用 `fit_content` - 使用 fixed pixels。
+- 与 siblings 共享相同 width，以形成视觉节奏。
 
-Example - 6 workout cards inside a 375px-wide mobile page:
+示例 - 375px-wide mobile page 中的 6 张 workout cards：
 
 ```json
 {
@@ -82,9 +82,9 @@ Example - 6 workout cards inside a 375px-wide mobile page:
 }
 ```
 
-Anti-patterns (do NOT emit any of these):
+Anti-patterns（不要输出以下任何一种）：
 
-- Putting 5+ cards directly inside a `layout="horizontal"` page-root frame (they overflow the phone width).
-- Using `fill_container` on cards in a horizontal row (they squish down to invisibility).
-- Using `width="fit_content"` on cards - text-driven widths are unpredictable and break rhythm.
-- Skipping the `clipContent=true` wrapper and relying on Skia to clip (it doesn't — only `clipContent:true` enables clipping).
+- 将 5+ cards 直接放进 `layout="horizontal"` 的 page-root frame（它们会溢出 phone width）。
+- 在 horizontal row 的 cards 上使用 `fill_container`（它们会被压缩到不可见）。
+- 在 cards 上使用 `width="fit_content"` - text-driven widths 不可预测，会破坏节奏。
+- 跳过 `clipContent=true` wrapper 并依赖 Skia 裁剪（它不会 — 只有 `clipContent:true` 会启用 clipping）。

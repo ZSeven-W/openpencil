@@ -9,55 +9,55 @@ budget: 1000
 category: domain
 ---
 
-COMPONENT COMPOSITION (use when document has reusable components):
+COMPONENT COMPOSITION（当 document 有 reusable components 时使用）：
 
 ## Priority Rule
 
-Always use ref instantiation over creating from scratch. Existing components ensure visual consistency.
+始终优先使用 ref instantiation，而不是从零创建。Existing components 能确保 visual consistency。
 
 ## Slot System
 
-Frames with a `slot` property contain recommended child component IDs:
+带有 `slot` property 的 frames 包含 recommended child component IDs：
 
-- Insert recommended components: I(parentSlotPath, {type: "ref", ref: "recommendedId"})
-- Disable unused slots: U(instance+"/slotId", {enabled: false})
+- 插入 recommended components：I(parentSlotPath, {type: "ref", ref: "recommendedId"})
+- 禁用 unused slots：U(instance+"/slotId", {enabled: false})
 
 ## Descendant Overrides
 
-Modify instance content WITHOUT recreating the component:
+在不重建 component 的前提下修改 instance content：
 
-- Change properties: U(instance+"/childId", {content: "New Text"})
-- Replace a node: R(instance+"/slotId", {type: "frame", layout: "vertical", ...})
-- Nested instances use / path: instance+"/nestedRef/childId"
+- 修改 properties：U(instance+"/childId", {content: "New Text"})
+- 替换 node：R(instance+"/slotId", {type: "frame", layout: "vertical", ...})
+- Nested instances 使用 / path：instance+"/nestedRef/childId"
 
 ## Common Composition Patterns
 
-Sidebar + Content = Dashboard:
+Sidebar + Content = Dashboard：
 layout: horizontal, sidebar width 240-280px, content fill_container
 
-Header + Content = Standard Page:
+Header + Content = Standard Page：
 layout: vertical, header height 64px, content fill_container
 
-Card (3-slot architecture):
+Card（3-slot architecture）：
 Card Header (slot) — title, description
 Card Content (slot) — main content, form fields
 Card Actions (slot) — buttons, links
 
-Dialog = Card ref + custom header/actions:
+Dialog = Card ref + custom header/actions：
 descendants: {"headerSlot": {children: [Title, Description]}, "contentSlot": {enabled: false}}
 
-Modal = Card ref + shadow effect:
+Modal = Card ref + shadow effect：
 effect: [{type: "shadow", blur: 20, ...}]
 
-Table hierarchy:
+Table hierarchy：
 Table → Row (slot) → Cell (frame) → Content
-NEVER skip the Cell frame layer
+绝不要跳过 Cell frame layer
 
-Tabs:
+Tabs：
 Tabs container (slot) → Tab Item Active / Tab Item Inactive
 
 ## Copy Warnings
 
-- Copy creates NEW descendant IDs — do NOT Update a copied node's descendants by old ID
-- Use the `descendants` property in the Copy operation itself to override content
-- For post-copy modifications, read the new node to get updated IDs first
+- Copy 会创建新的 descendant IDs — 不要用旧 ID Update copied node 的 descendants
+- 使用 Copy operation 本身的 `descendants` property 来 override content
+- 对 post-copy modifications，请先读取 new node 获取更新后的 IDs

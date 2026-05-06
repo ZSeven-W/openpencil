@@ -15,10 +15,10 @@ category: base
 
 ## 输入
 
-1. An array of PenNode objects (the chunk's nodes with full properties)
-2. The target framework name and its framework-specific rules
-3. The chunk's suggested component name
-4. Contracts from dependency chunks (if any)
+1. PenNode objects array（chunk 的 nodes，带完整 properties）
+2. target framework name 及其 framework-specific rules
+3. chunk 的 suggested component name
+4. dependency chunks 的 contracts（如果有）
 
 ## 输出
 
@@ -77,6 +77,7 @@ export function NavBar() {
 ### text nodes（type: "text"）
 
 - `characters` → text content
+- 不要翻译、改写或统一语言；按输入 node 中已有 text content 原样映射，除非用户明确要求改文案
 - `fontSize`, `fontWeight`, `fontFamily` → typography
 - `lineHeight` → line spacing
 - `textAlign` → text alignment

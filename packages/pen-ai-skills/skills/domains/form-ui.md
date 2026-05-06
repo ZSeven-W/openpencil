@@ -44,16 +44,16 @@ budget: 1500
 category: domain
 ---
 
-DESIGN GUIDELINES:
+DESIGN GUIDELINES：
 
-- Mobile: 375x812. Web: 1200x800 (single) or 1200x3000-5000 (landing page).
-- "mobile"/"移动端" + screen type = ACTUAL 375x812 screen, NOT desktop with phone mockup.
-- Buttons: height 44-52px, cornerRadius 8-12, padding [12, 24]. Icon+text: layout="horizontal", gap=8.
-- Icon-only buttons: 44x44, justifyContent/alignItems="center", path icon 20-24px.
-- Inputs: height 44px, light bg, subtle border, width="fill_container" in forms.
-- Cards: cornerRadius 12-16, clipContent: true, subtle shadows.
-- CARD ROW ALIGNMENT: sibling cards in horizontal layout ALL use width/height="fill_container".
-- Navigation: justifyContent="space_between", 3 groups (logo | links | CTA), padding=[0,80].
-- Phone mockup: ONE "frame", width 260-300, height 520-580, cornerRadius 32. NEVER ellipse.
-- NEVER use ellipse for decorative shapes. Use frame/rectangle with cornerRadius.
-- NEVER use emoji as icons. Use path nodes with Feather icon names.
+- Mobile：375x812。Web：1200x800（single）或 1200x3000-5000（landing page）。
+- "mobile"/"移动端" + screen type = 实际 375x812 screen，不是带 phone mockup 的 desktop。
+- Buttons：height 44-52px，cornerRadius 8-12，padding [12, 24]。Icon+text：layout="horizontal"，gap=8。
+- Icon-only buttons：44x44，justifyContent/alignItems="center"，path icon 20-24px。
+- Inputs：height 44px，light bg，subtle border，forms 中 width="fill_container"。
+- Cards：cornerRadius 12-16，clipContent: true，subtle shadows。
+- CARD ROW ALIGNMENT：horizontal layout 中的 sibling cards 全部使用 width/height="fill_container"。
+- Navigation：justifyContent="space_between"，3 groups（logo | links | CTA），padding=[0,80]。
+- Phone mockup：一个 "frame"，width 260-300，height 520-580，cornerRadius 32。绝不要用 ellipse。
+- 绝不要把 ellipse 用作 decorative shapes。使用带 cornerRadius 的 frame/rectangle。
+- 绝不要使用 emoji 作为 icons。使用带 Feather icon names 的 path nodes。

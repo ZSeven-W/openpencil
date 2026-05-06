@@ -8,17 +8,17 @@ budget: 1000
 category: base
 ---
 
-ICONS:
+ICONS：
 
-- Use "path" nodes, size 16-24px. ONLY use Feather icon names — PascalCase + "Icon" suffix (e.g. "SearchIcon").
-- System auto-resolves names to SVG paths. "d" is replaced automatically.
-- NEVER use emoji as icons. Use icon_font nodes for lucide icons.
+- 使用 "path" nodes，size 16-24px。只使用 Feather icon names — PascalCase + "Icon" suffix（例如 "SearchIcon"）。
+- System 会自动把 names 解析为 SVG paths。"d" 会被自动替换。
+- 绝不要使用 emoji 作为 icons。lucide icons 使用 icon_font nodes。
 
-ICON_FONT NODES:
+ICON_FONT NODES：
 
-- Use icon_font type with iconFontName for lucide icons (e.g. iconFontName="search", "bell", "user").
-- Sizes: 14/20/24px. Fill can be a color string.
-- Icon-only buttons: frame(w=44, h=44, layout=none) > icon_font(x=12, y=12)
+- lucide icons 使用带 iconFontName 的 icon_font type（例如 iconFontName="search", "bell", "user"）。
+- Sizes：14/20/24px。Fill 可以是 color string。
+- Icon-only buttons：frame(w=44, h=44, layout=none) > icon_font(x=12, y=12)
 
 COMMON LUCIDE ICON NAMES:
 search, bell, user, heart, star, plus, x, check, chevron-right, chevron-left, chevron-down, chevron-up,

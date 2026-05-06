@@ -10,10 +10,10 @@ budget: 500
 category: domain
 ---
 
-CJK TYPOGRAPHY (Chinese/Japanese/Korean):
+CJK TYPOGRAPHY（Chinese/Japanese/Korean）：
 
-- Headings: "Noto Sans SC" (Chinese) / "Noto Sans JP" / "Noto Sans KR". NEVER "Space Grotesk"/"Manrope" for CJK.
-- Body: "Inter" (system CJK fallback) or "Noto Sans SC".
-- CJK lineHeight: headings 1.3-1.4 (NOT 1.1), body 1.6-1.8. letterSpacing: 0, NEVER negative.
-- CJK buttons: each char is approximately fontSize wide. Container width >= (charCount x fontSize) + padding.
-- Detect CJK from user request language — use CJK fonts for ALL text nodes.
+- Headings："Noto Sans SC"（Chinese）/ "Noto Sans JP" / "Noto Sans KR"。CJK 绝不要使用 "Space Grotesk"/"Manrope"。
+- Body："Inter"（system CJK fallback）或 "Noto Sans SC"。
+- CJK lineHeight：headings 1.3-1.4（不是 1.1），body 1.6-1.8。letterSpacing：0，绝不要为负数。
+- CJK buttons：每个 char 约等于 fontSize 宽。Container width >= (charCount x fontSize) + padding。
+- 从 user request language 检测 CJK — 所有 text nodes 都使用 CJK fonts。

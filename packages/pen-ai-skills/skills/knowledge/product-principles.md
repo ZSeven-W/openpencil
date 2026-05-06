@@ -8,41 +8,41 @@ budget: 800
 category: base
 ---
 
-PRODUCT DESIGN PRINCIPLES (apply to every screen):
+PRODUCT DESIGN PRINCIPLES（应用到每个 screen）：
 
 1. PURPOSE FIRST
-   Every screen must have one clearly defined primary purpose and one primary action.
-   If multiple goals compete, separate them into distinct surfaces.
+   每个 screen 必须有一个明确定义的 primary purpose 和一个 primary action。
+   如果多个 goals 相互竞争，把它们拆成不同 surfaces。
 
 2. DOMINANT REGION
-   Every screen must contain one dominant visual region.
-   Visual weight must reflect importance. Avoid equal-weight layouts and competing focal points.
+   每个 screen 必须包含一个 dominant visual region。
+   Visual weight 必须反映重要性。避免 equal-weight layouts 和 competing focal points。
 
 3. ACTION HIERARCHY
-   One primary action per screen or section. Secondary actions visually reduced.
-   Destructive actions clearly distinct. Rare actions in overflow menus.
-   Do not give equal emphasis to all actions.
+   每个 screen 或 section 只有一个 primary action。Secondary actions 视觉上弱化。
+   Destructive actions 明确区分。Rare actions 放在 overflow menus 中。
+   不要给所有 actions 同等强调。
 
 4. ENTITY INTEGRITY
-   When representing an entity (user, record, document, asset):
-   display its name prominently, surface its status clearly, show key metadata, make actions obvious.
+   表示 entity（user、record、document、asset）时：
+   突出显示其 name，清晰呈现 status，展示 key metadata，并让 actions 明显。
 
 5. DENSITY INTENTIONALITY
-   Choose one density mode per screen and commit:
+   每个 screen 选择一种 density mode 并保持一致：
 
 - Compact: high data environments (tables, dashboards)
 - Medium: balanced default (most screens)
 - Airy: low-complexity workflows (onboarding, settings)
-  Do not mix density modes within one screen.
+  不要在一个 screen 内混用 density modes。
 
 6. CONSTRAINT OVER DECORATION
-   If an element does not support navigation, understanding, decision-making, or action-taking,
-   it should not exist. As little design as possible.
+   如果某个 element 不支持 navigation、understanding、decision-making 或 action-taking，
+   它就不应该存在。尽可能少地设计。
 
 7. STRUCTURAL CONSISTENCY
-   Similar problems must have similar solutions. Navigation logic must remain stable.
-   Layout rhythm must feel system-driven. Spacing must follow a consistent scale.
+   相似问题必须有相似解法。Navigation logic 必须保持稳定。
+   Layout rhythm 应该有 system-driven 的感觉。Spacing 必须遵循 consistent scale。
 
 8. SYSTEM STATUS VISIBILITY
-   Every data-driven surface must support: loading state, empty state, error state,
-   success confirmation. No silent failure. No blank ambiguity.
+   每个 data-driven surface 都必须支持：loading state、empty state、error state、
+   success confirmation。不要 silent failure。不要 blank ambiguity。

@@ -9,30 +9,30 @@ budget: 1500
 category: domain
 ---
 
-INCREMENTAL ADDITION RULES:
+INCREMENTAL ADDITION RULES：
 
-When adding new elements to an existing design:
+向 existing design 添加 new elements 时：
 
-CONTEXT AWARENESS:
+CONTEXT AWARENESS：
 
-- Analyze the existing design structure before adding new elements.
-- Match the visual style (colors, fonts, spacing, cornerRadius) of existing siblings.
-- Place new elements in logical positions within the hierarchy.
+- 添加 new elements 前，先分析 existing design structure。
+- 匹配 existing siblings 的 visual style（colors、fonts、spacing、cornerRadius）。
+- 将 new elements 放在 hierarchy 中合乎逻辑的位置。
 
-SIBLING CONSISTENCY:
+SIBLING CONSISTENCY：
 
-- New cards in a card row MUST match existing cards' width/height strategy (typically fill_container).
-- New inputs in a form MUST match existing inputs' width and height.
-- New sections MUST use the same padding and gap patterns as existing sections.
+- card row 中的 new cards 必须匹配 existing cards 的 width/height strategy（通常是 fill_container）。
+- form 中的 new inputs 必须匹配 existing inputs 的 width 和 height。
+- new sections 必须使用与 existing sections 相同的 padding 和 gap patterns。
 
-INSERTION RULES:
+INSERTION RULES：
 
-- Use "\_parent" to specify where the new node belongs in the tree.
-- New sections append after the last existing section by default.
-- New items within a list/grid append after the last existing item.
-- Preserve z-order: overlay elements (badges, indicators) come BEFORE content.
+- 使用 "\_parent" 指定 new node 在 tree 中的位置。
+- New sections 默认追加到最后一个 existing section 之后。
+- list/grid 内的 new items 追加到最后一个 existing item 之后。
+- 保留 z-order：overlay elements（badges、indicators）放在 content 之前。
 
-COMMON PATTERNS:
+COMMON PATTERNS：
 
 - "Add a section" -> new frame with width="fill_container", height="fit_content", layout="vertical", matching section padding.
 - "Add a card" -> new frame matching sibling card structure (same children pattern, same styles).
@@ -40,7 +40,7 @@ COMMON PATTERNS:
 - "Add a button" -> new frame with role="button", matching existing button style.
 - "Add a row" -> new frame with layout="horizontal", appropriate gap and alignment.
 
-ID GENERATION:
+ID GENERATION：
 
-- Use unique descriptive IDs for new nodes (e.g. "new-feature-card", "contact-section").
-- Never reuse existing IDs.
+- 为 new nodes 使用唯一且描述性的 IDs（例如 "new-feature-card", "contact-section"）。
+- 绝不要复用 existing IDs。

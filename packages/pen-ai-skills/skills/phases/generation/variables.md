@@ -9,8 +9,8 @@ budget: 500
 category: base
 ---
 
-DESIGN VARIABLES:
+DESIGN VARIABLES：
 
-- When document has variables, use "$variableName" references instead of hardcoded values.
-- Color: [{ "type": "solid", "color": "$primary" }]. Number: "gap": "$spacing-md".
-- Only reference listed variables — do NOT invent names.
+- 当 document 有 variables 时，使用 "$variableName" references，而不是 hardcoded values。
+- Color: [{ "type": "solid", "color": "$primary" }]。Number: "gap": "$spacing-md"。
+- 只引用已列出的 variables — 不要发明 names。

@@ -15,13 +15,13 @@ category: base
 
 ## 输入
 
-1. An array of chunk results, each containing:
+1. chunk results array，每个 result 包含：
    - `chunkId` and `name`
-   - Generated `code`
+   - 生成的 `code`
    - `contract` (may be missing for degraded chunks — infer from code in that case)
    - Status: `successful`, `degraded` (no contract), or `failed` (code missing)
-2. The `CodePlanFromAI` with rootLayout and sharedStyles
-3. Design variables and theme definitions
+2. 带 rootLayout 和 sharedStyles 的 `CodePlanFromAI`
+3. Design variables 和 theme definitions
 4. Target framework name
 
 ## 输出
@@ -37,7 +37,7 @@ category: base
 
 ### import 去重
 
-- Merge imports from the same source: `{ source: "react", specifiers: ["useState"] }` + `{ source: "react", specifiers: ["useEffect"] }` → `import { useState, useEffect } from 'react'`
+- 合并来自同一 source 的 imports：`{ source: "react", specifiers: ["useState"] }` + `{ source: "react", specifiers: ["useEffect"] }` → `import { useState, useEffect } from 'react'`
 - 移除重复 specifiers
 - 顺序：framework imports 优先，然后 external libraries，最后 local components
 

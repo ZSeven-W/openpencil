@@ -33,9 +33,9 @@ budget: 2000
 category: knowledge
 ---
 
-SEMANTIC ROLES (add "role" to nodes — system fills unset props based on role):
+SEMANTIC ROLES（给 nodes 添加 "role" — system 会根据 role 填充未设置的 props）：
 
-Layout roles:
+Layout roles：
 
 - section: layout=vertical, width=fill_container, height=fit_content, gap=24, padding=[60,80] (mobile: [40,16]), alignItems=center
 - row: layout=horizontal, width=fill_container, gap=16, alignItems=center
@@ -45,13 +45,13 @@ Layout roles:
 - divider: width=fill_container, height=1, layout=none (vertical divider: width=1, height=fill_container)
 - spacer: width=fill_container, height=40
 
-Navigation roles:
+Navigation roles：
 
 - navbar: layout=horizontal, width=fill_container, height=72 (mobile: 56), padding=[0,80] (mobile: [0,16]), alignItems=center, justifyContent=space_between
 - nav-links: layout=horizontal, gap=24, alignItems=center
 - nav-link: textGrowth=auto, lineHeight=1.2
 
-Interactive roles:
+Interactive roles：
 
 - button: padding=[12,24], height=44, layout=horizontal, gap=8, alignItems=center, justifyContent=center, cornerRadius=8. In navbar: padding=[8,16], height=36. In form-group: width=fill_container, height=48, cornerRadius=10
 - icon-button: width=44, height=44, layout=horizontal, justifyContent=center, alignItems=center, cornerRadius=8
@@ -62,7 +62,7 @@ Interactive roles:
 - form-input: width=fill_container, height=48, layout=horizontal, padding=[12,16], alignItems=center, cornerRadius=8
 - search-bar: layout=horizontal, height=44, padding=[10,16], gap=8, alignItems=center, cornerRadius=22
 
-Display roles:
+Display roles：
 
 - card: layout=vertical, gap=12, cornerRadius=12, clipContent=true. In horizontal layout: width=fill_container, height=fill_container
 - stat-card: layout=vertical, gap=8, padding=[24,24], cornerRadius=12. In horizontal layout: width=fill_container, height=fill_container
@@ -70,18 +70,18 @@ Display roles:
 - image-card: layout=vertical, gap=0, cornerRadius=12, clipContent=true
 - feature-card: layout=vertical, gap=12, padding=[24,24], cornerRadius=12. In horizontal layout: width=fill_container, height=fill_container
 
-Media roles:
+Media roles：
 
 - phone-mockup: width=280, height=560, cornerRadius=32, layout=none
 - screenshot-frame: cornerRadius=12, clipContent=true
 - avatar: width/height=48, cornerRadius=24, clipContent=true (size adapts to explicit width)
 - icon: width=24, height=24
 
-Layout-escape roles:
+Layout-escape roles：
 
-- overlay: the ONLY way to place a child at absolute x/y inside a parent that uses `layout: vertical|horizontal`. Use for notification dots on an icon, corner ribbons on a card, floating status indicators. The child keeps its explicit `x`/`y` while siblings flow normally. Do NOT use `role: 'overlay'` for inline components — `badge`, `pill`, `tag` are inline (they flow in layout like any other child, NOT floating). Do NOT use `role: 'overlay'` as a substitute for `layout: 'none'` on the parent.
+- overlay: 在使用 `layout: vertical|horizontal` 的 parent 内，以 absolute x/y 放置 child 的唯一方式。用于 icon 上的 notification dots、card 角上的 ribbons、floating status indicators。该 child 保留其 explicit `x`/`y`，siblings 正常 flow。不要把 `role: 'overlay'` 用于 inline components — `badge`、`pill`、`tag` 都是 inline（它们像其他 child 一样参与 layout flow，不是 floating）。不要把 `role: 'overlay'` 当作 parent 上 `layout: 'none'` 的替代品。
 
-Typography roles:
+Typography roles：
 
 - heading: lineHeight=1.2 (CJK: 1.35), letterSpacing=-0.5 (CJK: 0). In vertical layout: textGrowth=fixed-width, width=fill_container
 - subheading: lineHeight=1.3 (CJK: 1.4), textGrowth=fixed-width, width=fill_container
@@ -89,7 +89,7 @@ Typography roles:
 - caption: lineHeight=1.3 (CJK: 1.4), textGrowth=auto
 - label: lineHeight=1.2, textGrowth=auto, textAlignVertical=middle
 
-Content roles:
+Content roles：
 
 - hero: layout=vertical, width=fill_container, height=fit_content, padding=[80,80] (mobile: [40,16]), gap=24, alignItems=center
 - feature-grid: layout=horizontal, width=fill_container, gap=24, alignItems=start
@@ -98,11 +98,11 @@ Content roles:
 - footer: layout=vertical, width=fill_container, height=fit_content, padding=[48,80] (mobile: [32,16]), gap=24
 - stats-section: layout=horizontal, width=fill_container, height=fit_content, padding=[48,80] (mobile: [32,16]), gap=32, justifyContent=center, alignItems=center
 
-Table roles:
+Table roles：
 
 - table: layout=vertical, width=fill_container, gap=0, clipContent=true
 - table-row: layout=horizontal, width=fill_container, alignItems=center, padding=[12,16]
 - table-header: layout=horizontal, width=fill_container, alignItems=center, padding=[12,16]
 - table-cell: width=fill_container
 
-Your explicit props ALWAYS override role defaults. Only unset properties get filled in.
+你的 explicit props 始终覆盖 role defaults。只有未设置的 properties 会被填充。
