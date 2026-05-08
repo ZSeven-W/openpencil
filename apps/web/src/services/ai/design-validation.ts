@@ -9,6 +9,7 @@
 import { DEFAULT_FRAME_ID, useDocumentStore } from '@/stores/document-store';
 import {
   VALIDATION_ENABLED,
+  VALIDATION_NODE_COUNT_THRESHOLD,
   VALIDATION_TIMEOUT_MS,
   MAX_VALIDATION_ROUNDS,
   VALIDATION_QUALITY_THRESHOLD,
@@ -39,6 +40,21 @@ function getValidationSystemPrompt(): string {
 // ---------------------------------------------------------------------------
 // Node tree dump — simplified for LLM context
 // ---------------------------------------------------------------------------
+
+function countNodesInActivePage(): number {
+  const store = useDocumentStore.getState();
+  const root = store.getNodeById(DEFAULT_FRAME_ID);
+  if (!root) return 0;
+  let count = 0;
+  function walk(node: PenNode): void {
+    count++;
+    if ('children' in node && Array.isArray(node.children)) {
+      for (const child of node.children) walk(child);
+    }
+  }
+  walk(root);
+  return count;
+}
 
 function buildNodeTreeDump(rootId: string): string {
   const store = useDocumentStore.getState();
@@ -272,6 +288,21 @@ export async function runPostGenerationValidation(options?: {
       preFixCount > 0
         ? `[done] Pre-checks: fixed ${preFixCount} issue${preFixCount > 1 ? 's' : ''}`
         : '[done] Pre-checks complete',
+    );
+    return { applied: totalApplied, skipped: false };
+  }
+
+  // Skip vision loop on small designs — vision validation only earns its
+  // ~30-90s latency on composite multi-section briefs. Single-component
+  // outputs (one badge, one chart) are not worth the round-trip.
+  const nodeCount = countNodesInActivePage();
+  if (nodeCount < VALIDATION_NODE_COUNT_THRESHOLD) {
+    clearVisualReference();
+    emit(
+      'done',
+      preFixCount > 0
+        ? `[done] Pre-checks: fixed ${preFixCount} issue${preFixCount > 1 ? 's' : ''} (vision skipped: ${nodeCount} nodes < ${VALIDATION_NODE_COUNT_THRESHOLD})`
+        : `[done] Pre-checks complete (vision skipped: ${nodeCount} nodes < ${VALIDATION_NODE_COUNT_THRESHOLD})`,
     );
     return { applied: totalApplied, skipped: false };
   }
