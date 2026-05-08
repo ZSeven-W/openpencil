@@ -11,15 +11,27 @@ category: base
 Split a UI request into cohesive subtasks. Each subtask = a meaningful UI section or component group. Output ONLY JSON, start with {.
 
 DESIGN TYPE DETECTION:
-Classify by the design's PURPOSE — reason about intent, do not keyword-match:
+Classify by the design's PURPOSE — reason about intent, do not keyword-match.
+
+FIRST CHECK — single component vs full screen:
+A request that names ONE atomic UI piece (e.g. "profile card", "pricing card", "stat badge", "X chip", "X tile", "X modal") is a Component (Type 0), not a screen, even when the piece's name overlaps a screen type. A "profile card" is NOT a "profile screen". A "pricing card" is NOT a pricing page. Use Type 2 only when the user clearly asks for a whole screen (e.g. "login screen", "settings page", "profile page").
+
+If Type 0:
+
+- width=400, height=0 (auto-expand), 1 subtask
+- NO status bar, NO navigation, NO footer, NO page chrome
+- DO NOT wrap inside a phone mockup or device shell
+
+OTHERWISE classify by purpose:
 
 1. Multi-section page — marketing, promotional, or informational content designed to be scrolled (e.g. product sites, portfolios, company pages):
    - Desktop: width=1200, height=0 (scrollable), 6-10 subtasks
    - Structure: navigation - hero - content sections - CTA - footer
 
-2. Single-task screen — functional UI focused on one user task (e.g. authentication, forms, settings, profiles, modals, onboarding):
+2. Single-task SCREEN — full functional screen for one user task (e.g. login screen, signup screen, settings page, profile page):
    - Mobile: width=375, height=812 (fixed viewport), 1-5 subtasks
    - Structure: header + focused content area only, no navigation/hero/footer
+   - NOT a single card/badge/modal — those are Type 0 components
 
 3. Data-rich workspace — overview screens with metrics, tables, or management panels (e.g. dashboards, admin consoles, analytics):
    - Desktop: width=1200, height=0, 2-5 subtasks
@@ -52,6 +64,6 @@ RULES:
 - For landing pages: navigation sections should preserve good horizontal balance, links evenly distributed in the center group.
 - Regions tile to fill rootFrame. vertical = top-to-bottom.
 - Mobile: 375x812 (both width AND height are fixed). Desktop: 1200x0 (width fixed, height auto-expands).
-- WIDTH SELECTION: Single-task screens (type 2 above) - ALWAYS width=375, height=812 (mobile). Multi-section pages and data-rich workspaces (types 1 & 3) - width=1200, height=0 (desktop). This is mandatory.
+- WIDTH SELECTION: Type 0 components - width=400, height=0. Type 2 single-task SCREENS (login screen, profile page, settings page) - width=375, height=812 (mobile). Multi-section pages and data-rich workspaces (types 1 & 3) - width=1200, height=0 (desktop). A "profile card" is Type 0 (width=400), NOT Type 2. This is mandatory.
 - MULTI-SCREEN APPS: When the request involves multiple distinct screens/pages (e.g. "登录页+个人中心", "login and profile"), add "screen":"<name>" to each subtask to group sections that belong to the same page. Use a concise page name (e.g. "登录", "Profile"). Subtasks sharing the same "screen" are placed in one root frame. Single-screen requests don't need "screen". Example: [{"id":"brand","label":"Brand Area","screen":"Login","region":{...}},{"id":"form","label":"Login Form","screen":"Login","region":{...}},{"id":"card","label":"User Card","screen":"Profile","region":{...}}]
 - NO explanation. NO markdown. NO tool calls. NO function calls. NO [TOOL_CALL]. JUST the JSON object. Start with {.
