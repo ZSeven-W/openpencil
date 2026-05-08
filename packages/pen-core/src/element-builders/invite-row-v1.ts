@@ -1,9 +1,8 @@
+import { coerceEnum } from './coerce-params.js';
 import type { ElementTree } from './helpers.js';
 import { resolveTheme, type V1Theme } from './resolve-theme.js';
 
 export type InviteV1Status = 'pending' | 'expired' | 'accepted';
-
-const VALID_INVITE_V1_STATUSES = new Set<string>(['pending', 'expired', 'accepted']);
 
 export interface InviteRowV1Params {
   /** Invitee email (e.g. "sarah@acme.com"). */
@@ -57,13 +56,13 @@ const STATUS_TONE_LIGHT: InviteStatusTone = {
  *                 accepted fg (#166534) → alertColors.successText
  */
 export function buildInviteRowV1(params: InviteRowV1Params): ElementTree {
-  const requestedStatus = (params.status ?? 'pending') as string;
-  if (!VALID_INVITE_V1_STATUSES.has(requestedStatus)) {
-    throw new Error(
-      `add_invite_row_v1: invalid status "${requestedStatus}"; expected one of: pending, expired, accepted`,
-    );
-  }
-  const status = requestedStatus as InviteV1Status;
+  const status = coerceEnum<InviteV1Status>(
+    params.status,
+    ['pending', 'expired', 'accepted'],
+    'pending',
+    'buildInviteRowV1',
+    'status',
+  );
   const actionLabel = params.action_label ?? 'Resend';
   const initial = (params.email.charAt(0) ?? '?').toUpperCase();
   const theme = params.theme ?? 'light';

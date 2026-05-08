@@ -1,3 +1,4 @@
+import { coerceEnum } from './coerce-params.js';
 import type { ElementTree } from './helpers.js';
 import { resolveTheme, type V1Theme } from './resolve-theme.js';
 
@@ -20,14 +21,6 @@ export interface ActivityLogV1Params {
    */
   theme?: V1Theme;
 }
-
-const VALID_ACTIVITY_LOG_TONES = new Set<string>([
-  'info',
-  'success',
-  'warning',
-  'danger',
-  'neutral',
-]);
 
 // Light-mode constants (must match v0 exactly for byte-parity)
 const ACTOR_FG_LIGHT = '#0F172A';
@@ -66,13 +59,13 @@ const NEUTRAL_FG_SYSTEM = '$color-text-muted';
  * neutral uses $color-surface / $color-text-muted.
  */
 export function buildActivityLogV1(params: ActivityLogV1Params): ElementTree {
-  const requestedTone = (params.tone ?? 'info') as string;
-  if (!VALID_ACTIVITY_LOG_TONES.has(requestedTone)) {
-    throw new Error(
-      `add_activity_log_v1: invalid tone "${requestedTone}"; expected one of: info, success, warning, danger, neutral`,
-    );
-  }
-  const tone = requestedTone as Tone;
+  const tone = coerceEnum<Tone>(
+    params.tone,
+    ['info', 'success', 'warning', 'danger', 'neutral'],
+    'info',
+    'buildActivityLogV1',
+    'tone',
+  );
   const theme = params.theme ?? 'light';
   const t = resolveTheme(theme);
   const isLight = theme === 'light';

@@ -1,3 +1,4 @@
+import { coerceNonEmptyArray } from './coerce-params.js';
 import type { ElementTree } from './helpers.js';
 import { resolveTheme, type V1Theme } from './resolve-theme.js';
 
@@ -30,6 +31,12 @@ export interface DataTableRowV1Params {
  *   selected row bg (#F8FAFC)    → bgDeep
  */
 export function buildDataTableRowV1(params: DataTableRowV1Params): ElementTree {
+  const columns = coerceNonEmptyArray<DataTableRowV1Column>(
+    params.columns,
+    [{ content: 'Cell' }],
+    'buildDataTableRowV1',
+    'columns',
+  );
   const isHeader = params.header === true;
   const isSelected = !isHeader && params.selected === true;
   const theme = params.theme ?? 'light';
@@ -58,7 +65,7 @@ export function buildDataTableRowV1(params: DataTableRowV1Params): ElementTree {
     gap: 16,
     alignItems: 'center',
     clipContent: true,
-    children: params.columns.map((col, i) =>
+    children: columns.map((col, i) =>
       buildCellV1(col, i, isHeader, cellTextSize, cellTextWeight, cellTextColor),
     ),
   };

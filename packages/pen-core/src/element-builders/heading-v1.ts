@@ -1,4 +1,5 @@
 import { cjkFontFamily, detectCjkScript } from './cjk-detect.js';
+import { coerceEnum } from './coerce-params.js';
 import { resolveTheme, type V1Theme } from './resolve-theme.js';
 import type { ElementTree } from './helpers.js';
 import type { HeadingLevel, HeadingParams } from './heading.js';
@@ -46,8 +47,6 @@ const V0_CJK_BASE = {
   h3: { fontSize: 20, fontWeight: 600, lineHeight: 1.4 },
 } as const;
 
-const VALID_HEADING_LEVELS = new Set<string>(['display', 'h1', 'h2', 'h3']);
-
 /**
  * Theme-aware typographic heading (v1).
  *
@@ -68,13 +67,13 @@ const VALID_HEADING_LEVELS = new Set<string>(['display', 'h1', 'h2', 'h3']);
  * fontFamily stays the concrete CJK family string if detected.
  */
 export function buildHeadingV1(params: HeadingV1Params): ElementTree {
-  const requestedLevel = (params.level ?? 'h2') as string;
-  if (!VALID_HEADING_LEVELS.has(requestedLevel)) {
-    throw new Error(
-      `add_heading_v1: invalid level "${requestedLevel}"; expected one of: display, h1, h2, h3`,
-    );
-  }
-  const level = requestedLevel as HeadingLevel;
+  const level = coerceEnum<HeadingLevel>(
+    params.level,
+    ['display', 'h1', 'h2', 'h3'],
+    'h2',
+    'buildHeadingV1',
+    'level',
+  );
   const theme = params.theme ?? 'light';
   const script = detectCjkScript(params.content);
   const cjkFont = cjkFontFamily(script);

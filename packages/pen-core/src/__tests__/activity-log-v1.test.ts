@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { clearCoerceWarnings, getCoerceWarnings } from '../element-builders/coerce-params.js';
 import { buildActivityLog } from '../element-builders/activity-log.js';
 import { buildActivityLogV1 } from '../element-builders/activity-log-v1.js';
 
@@ -66,10 +67,15 @@ describe('buildActivityLogV1 — byte-parity with v0 (light)', () => {
     expect(content[0].fill).toBe('#0F172A');
   });
 
-  it('throws on invalid tone', () => {
-    expect(() => buildActivityLogV1({ ...BASIC, tone: 'critical' as never })).toThrow(
-      /invalid tone/,
-    );
+  it('coerces invalid tone to default info and emits warning', () => {
+    clearCoerceWarnings();
+    const out = buildActivityLogV1({ ...BASIC, tone: 'critical' as never });
+    expect(out).toBeDefined();
+    const warnings = getCoerceWarnings();
+    expect(warnings.length).toBeGreaterThan(0);
+    expect(warnings[0].builder).toBe('buildActivityLogV1');
+    expect(warnings[0].param).toBe('tone');
+    expect(warnings[0].given).toBe('critical');
   });
 
   it('no icon: 3 children (no icon dot)', () => {
