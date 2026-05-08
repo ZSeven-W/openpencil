@@ -1,3 +1,4 @@
+import { coerceNonEmptyArray } from './coerce-params.js';
 import type { ElementTree } from './helpers.js';
 import { resolveTheme, type V1Theme } from './resolve-theme.js';
 
@@ -43,6 +44,12 @@ export interface ComboboxV1Params {
  *   shadow color (#0F172A1A)   → kept as-is (shadow is theme-agnostic in v0)
  */
 export function buildComboboxV1(params: ComboboxV1Params): ElementTree {
+  const options = coerceNonEmptyArray<ComboboxV1Option>(
+    params.options,
+    [{ label: 'Option 1' }, { label: 'Option 2' }, { label: 'Option 3' }],
+    'buildComboboxV1',
+    'options',
+  );
   const placeholder = params.placeholder ?? 'Search...';
   const value = params.value ?? '';
   const theme = params.theme ?? 'light';
@@ -126,7 +133,7 @@ export function buildComboboxV1(params: ComboboxV1Params): ElementTree {
         color: '#0F172A1A',
       },
     ],
-    children: params.options.map((opt, i) => ({
+    children: options.map((opt, i) => ({
       type: 'frame',
       name: `Option ${i + 1}`,
       role: opt.highlighted ? 'combobox-option-active' : 'combobox-option',

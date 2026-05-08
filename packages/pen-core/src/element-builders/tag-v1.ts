@@ -1,9 +1,8 @@
+import { coerceEnum } from './coerce-params.js';
 import type { ElementTree } from './helpers.js';
 import type { V1Theme } from './resolve-theme.js';
 
 export type TagV1Tone = 'default' | 'accent' | 'success' | 'warning' | 'error';
-
-const VALID_TAG_TONES = new Set<string>(['default', 'accent', 'success', 'warning', 'error']);
 
 export interface TagV1Params {
   label: string;
@@ -44,13 +43,14 @@ const TONES: Record<TagV1Tone, ToneSpec> = {
  * hardcoded across all theme modes. All modes produce identical trees.
  */
 export function buildTagV1(params: TagV1Params): ElementTree {
-  const requestedTone = (params.tone ?? 'default') as string;
-  if (!VALID_TAG_TONES.has(requestedTone)) {
-    throw new Error(
-      `add_tag_v1: invalid tone "${requestedTone}"; expected one of: default, accent, success, warning, error`,
-    );
-  }
-  const tone = TONES[requestedTone as TagV1Tone];
+  const toneKey = coerceEnum<TagV1Tone>(
+    params.tone,
+    ['default', 'accent', 'success', 'warning', 'error'],
+    'default',
+    'buildTagV1',
+    'tone',
+  );
+  const tone = TONES[toneKey];
   const removable = params.removable ?? true;
   const children: ElementTree[] = [
     {

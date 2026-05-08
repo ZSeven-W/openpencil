@@ -106,7 +106,17 @@ export const DESIGN_STREAM_TIMEOUTS = {
 } as const;
 
 /** When false, skips the vision LLM validation loop (pre-validation heuristics still run) */
-export const VALIDATION_ENABLED = false;
+export const VALIDATION_ENABLED = true;
+
+/**
+ * Minimum total node count in the active page to trigger the vision LLM
+ * validation loop. Briefs that produce fewer nodes than this threshold
+ * skip vision (saves +30-90s + vision API tokens) — pre-validation
+ * heuristics still run regardless. Composite designs (multi-section
+ * dashboards, full-page mockups) easily clear this; atomic single-tool
+ * outputs (one badge, one chart) stay fast.
+ */
+export const VALIDATION_NODE_COUNT_THRESHOLD = 30;
 
 export const VALIDATION_TIMEOUT_MS = 180_000;
 export const MAX_VALIDATION_ROUNDS = 3;

@@ -1,9 +1,8 @@
+import { coerceEnum } from './coerce-params.js';
 import type { ElementTree } from './helpers.js';
 import { resolveTheme, type V1Theme } from './resolve-theme.js';
 
 export type CalloutV1Tone = 'info' | 'success' | 'warning' | 'danger' | 'note';
-
-const VALID_CALLOUT_TONES = new Set<string>(['info', 'success', 'warning', 'danger', 'note']);
 
 export interface CalloutV1Params {
   /** Body text. Required. */
@@ -48,13 +47,13 @@ const TONES_LIGHT: Record<CalloutV1Tone, ToneSpec> = {
  * - note → surface2 bg + textPrimary fg (no dedicated alert token for note)
  */
 export function buildCalloutV1(params: CalloutV1Params): ElementTree {
-  const requestedTone = (params.tone ?? 'note') as string;
-  if (!VALID_CALLOUT_TONES.has(requestedTone)) {
-    throw new Error(
-      `add_callout_v1: invalid tone "${requestedTone}"; expected one of: info, success, warning, danger, note`,
-    );
-  }
-  const tone = requestedTone as CalloutV1Tone;
+  const tone = coerceEnum<CalloutV1Tone>(
+    params.tone,
+    ['info', 'success', 'warning', 'danger', 'note'],
+    'note',
+    'buildCalloutV1',
+    'tone',
+  );
   const theme = params.theme ?? 'light';
   const t = resolveTheme(theme);
   const isLight = theme === 'light';

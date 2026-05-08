@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { clearCoerceWarnings, getCoerceWarnings } from '../element-builders/coerce-params.js';
 import { buildHeading } from '../element-builders/heading.js';
 import { buildHeadingV1 } from '../element-builders/heading-v1.js';
 
@@ -71,9 +72,17 @@ describe('heading-v1 dark mode: emits dark hex values', () => {
 });
 
 describe('heading-v1 error handling', () => {
-  it('throws on invalid level (same guard as v0)', () => {
-    expect(() => buildHeadingV1({ content: 'T', level: 'caption' as never })).toThrow(
-      /add_heading_v1.*invalid level.*caption/,
-    );
+  it('coerces invalid level to default h2 and emits warning', () => {
+    clearCoerceWarnings();
+    const out = buildHeadingV1({ content: 'T', level: 'caption' as never }) as Record<
+      string,
+      unknown
+    >;
+    expect(out.fontSize).toBe(24); // h2 default
+    const warnings = getCoerceWarnings();
+    expect(warnings.length).toBeGreaterThan(0);
+    expect(warnings[0].builder).toBe('buildHeadingV1');
+    expect(warnings[0].param).toBe('level');
+    expect(warnings[0].given).toBe('caption');
   });
 });

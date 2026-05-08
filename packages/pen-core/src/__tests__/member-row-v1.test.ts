@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { clearCoerceWarnings, getCoerceWarnings } from '../element-builders/coerce-params.js';
 import { buildMemberRow } from '../element-builders/member-row.js';
 import { buildMemberRowV1 } from '../element-builders/member-row-v1.js';
 
@@ -83,13 +84,17 @@ describe('buildMemberRowV1 — byte-parity with v0 (light)', () => {
     expect(getFill(dot)).toBe('#10B981');
   });
 
-  it('throws on invalid status tone', () => {
-    expect(() =>
-      buildMemberRowV1({
-        name: 'X',
-        trailing: { kind: 'status_dot' as const, tone: 'ghost' as never },
-      }),
-    ).toThrow(/invalid trailing\.tone/);
+  it('coerces invalid status tone to default online and emits warning', () => {
+    clearCoerceWarnings();
+    const out = buildMemberRowV1({
+      name: 'X',
+      trailing: { kind: 'status_dot' as const, tone: 'ghost' as never },
+    });
+    expect(out).toBeDefined();
+    const warnings = getCoerceWarnings();
+    expect(warnings.length).toBeGreaterThan(0);
+    expect(warnings[0].builder).toBe('buildMemberRowV1');
+    expect(warnings[0].param).toBe('trailing.tone');
   });
 });
 

@@ -1,3 +1,4 @@
+import { coerceNumberArray } from './coerce-params.js';
 import type { ElementTree } from './helpers.js';
 import { resolveTheme, type V1Theme } from './resolve-theme.js';
 
@@ -26,11 +27,13 @@ export interface ChartBarsV1Params {
  * #2563EB for the migration contract).
  */
 export function buildChartBarsV1(params: ChartBarsV1Params): ElementTree {
-  const raw = Array.isArray(params.values) ? params.values : [];
-  if (raw.length === 0) {
-    throw new Error('buildChartBarsV1: values must contain at least one number');
-  }
-  const values = raw.map((v) => (Number.isFinite(v) ? Math.max(0, v) : 0));
+  const inputValues = coerceNumberArray(
+    params.values,
+    [10, 15, 12, 20, 18],
+    'buildChartBarsV1',
+    'values',
+  );
+  const values = inputValues.map((v) => Math.max(0, v));
   const max = Math.max(1, ...values);
   const barWidth = Math.max(4, Math.floor(params.bar_width ?? 24));
   const gap = Math.max(0, Math.floor(params.gap ?? 12));
