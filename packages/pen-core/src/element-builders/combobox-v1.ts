@@ -46,7 +46,7 @@ export interface ComboboxV1Params {
 export function buildComboboxV1(params: ComboboxV1Params): ElementTree {
   const options = coerceNonEmptyArray<ComboboxV1Option>(
     params.options,
-    [{ label: 'Option' }],
+    [{ label: 'Option 1' }, { label: 'Option 2' }, { label: 'Option 3' }],
     'buildComboboxV1',
     'options',
   );

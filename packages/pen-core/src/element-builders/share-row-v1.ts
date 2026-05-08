@@ -32,7 +32,11 @@ export interface ShareRowV1Params {
 export function buildShareRowV1(params: ShareRowV1Params): ElementTree {
   const targets = coerceNonEmptyArray<ShareV1Target>(
     params.targets,
-    [{ label: 'Share', icon: 'share-2' }],
+    [
+      { label: 'Twitter', icon: 'twitter' },
+      { label: 'Facebook', icon: 'facebook' },
+      { label: 'Copy Link', icon: 'link' },
+    ],
     'buildShareRowV1',
     'targets',
   );

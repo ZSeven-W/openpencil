@@ -41,7 +41,12 @@ const V0_DEFAULT_PALETTE = ['#2563EB', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6
  * Caller-supplied `colors` are passed through unchanged in all modes.
  */
 export function buildChartPieV1(params: ChartPieV1Params): ElementTree {
-  const inputValues = coerceNumberArray(params.values, [1], 'buildChartPieV1', 'values');
+  const inputValues = coerceNumberArray(
+    params.values,
+    [30, 25, 20, 15, 10],
+    'buildChartPieV1',
+    'values',
+  );
   let values = inputValues.map((v) => Math.max(0, v));
   let total = values.reduce((s, v) => s + v, 0);
   if (total <= 0) {

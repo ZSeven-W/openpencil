@@ -49,6 +49,11 @@ Multi-tool example — a "Notifications" settings section with a header + 4 togg
 - "drawer" / "side panel" / "sliding panel" → `add_drawer_shell_v1` (roles: `drawer-shell-right`, `drawer-shell-header`, `drawer-shell-title`, `drawer-shell-close`)
 - "cookie banner" / "GDPR notice" / "consent bar" → `add_cookie_banner_v1` (roles: `cookie-banner`, `cookie-banner-title`, `cookie-banner-body`, `cookie-banner-actions`)
 - "user card" / "person card" / "contact card" → `add_user_card_v1` (roles: `user-card-avatar`, `user-card-name`, `user-card-role`)
+- "chart legend" / "data series legend" / "color-coded legend" → `add_legend_item_v1` (roles: `legend-item`, `legend-item-marker`, `legend-item-label`, `legend-item-value`)
+- "skeleton" / "loading placeholder" / "shimmer rows" / "loading state" / "骨架屏" → `add_skeleton_v1` (roles: `skeleton`, `skeleton-row`)
+- "undo bar" / "inline action" / "inline ack" / "snack-style action" → `add_inline_action_v1` (roles: `inline-action-message`, `inline-action-cta`)
+- "share row" / "social share buttons" / "share targets" → `add_share_row_v1` (roles: `share-row`, `share-target`, `share-target-icon`, `share-target-label`)
+- "combobox" / "autocomplete" / "search-with-suggestions" / "下拉自动补全" → `add_combobox_v1` (roles: `combobox-input`, `combobox-dropdown`, `combobox-option-active`)
 
 Even if you must use batch_design (no v1 fits), still emit these EXACT role strings on each child node so the validator sees a complete shape.
 
