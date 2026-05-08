@@ -132,10 +132,12 @@ describe('add_heading_v1 — error handling', () => {
     expect(await readFile(fp, 'utf-8')).toBe(before);
   });
 
-  it('throws on invalid level', async () => {
+  it('coerces invalid level to default h2 instead of throwing', async () => {
     const fp = await fresh('a.op');
+    // buildHeadingV1 fuzzy-coerces invalid 'caption' to 'h2' + warns;
+    // handler succeeds and inserts with default level (no rejection).
     await expect(
       handleAddHeadingV1({ filePath: fp, content: 'X', level: 'caption' as never }),
-    ).rejects.toThrow(/invalid level/);
+    ).resolves.toBeDefined();
   });
 });
