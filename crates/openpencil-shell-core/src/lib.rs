@@ -28,6 +28,18 @@ pub use render_backend::{Color, Point2D, Rect, RenderBackend, TextLayout};
 /// consistent with Jian; OP-specific differentiation is at the canvas
 /// viewport / chrome layer (single-page + infinite canvas recommended,
 /// multi-page also supported), not at event-type abstraction.
+///
+/// Step 1b §2.4 additions (P0.5A jian PR):
+/// - `KeyEvent` + supporting `KeyValue` / `NamedKey` / `KeyCode` /
+///   `KeyLocation` / `KeyState` for browser + winit keyboard input.
+/// - `ImeEvent` + `ImeKind` for IME composition (UTF-8 byte-indexed
+///   selection per spec §2.4).
+/// - `FocusEvent` for window-level / widget-level focus transitions
+///   (separate from `FocusManager`'s internal Tab-ring chain).
+/// - `WheelEvent` + `ScrollMode` for W3C `WheelEvent.deltaMode` parity
+///   on browser + native winit hosts.
 pub use jian_core::gesture::{
-    Modifiers, MouseButtons, PointerEvent, PointerId, PointerKind, PointerPhase,
+    FocusEvent, ImeEvent, ImeKind, KeyCode, KeyEvent, KeyLocation, KeyState, KeyValue, Modifiers,
+    MouseButtons, NamedKey, PointerEvent, PointerId, PointerKind, PointerPhase, ScrollMode,
+    WheelEvent,
 };
