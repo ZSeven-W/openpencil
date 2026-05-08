@@ -69,10 +69,6 @@ export function buildImagePlaceholderV1(params: ImagePlaceholderV1Params): Eleme
       fill: [{ type: 'solid', color: iconColor }],
     },
   ];
-  // Conditional emit: builders never invent optional content, and an
-  // empty-content text node still consumes flex gap so it is not
-  // layout-neutral with a "no label" output. Callers wanting the
-  // image-placeholder-label role must pass a non-empty `label`.
   if (params.label) {
     children.push({
       type: 'text',

@@ -35,28 +35,6 @@ These narrow MCP tools emit well-known structures that batch_design frequently g
 
 Multi-tool example — a "Notifications" settings section with a header + 4 toggle rows is **5 tool calls** (1× `add_section_header_v1` + 4× `add_setting_row_v1`), NOT 1 batch_design.
 
-**MISSING-ROLE FAIL WATCH.** Top batch*design fallback traps measured in ab-v8 (40 obvious-T fails ≈ model dropped to batch_design and missed required roles). When the brief mentions ANY of these, ALWAYS use the matching `add*\*\_v1` — never write batch_design for these, because models forget the role names:
-
-- "modal" / "dialog" / "popup" / "confirm dialog" / "弹窗" → `add_modal_shell_v1` (roles: `modal-scrim`, `modal-shell-card`, `modal-title`, `modal-subtitle`)
-- "avatar group" / "stacked avatars" / "team list" / "+N more" → `add_avatar_group_v1` (roles: `avatar-group-item`, `avatar-group-initial`, `avatar-group-overflow`)
-- "metric comparison" / "KPI with trend" / "delta cell" → `add_metric_comparison_v1` (role: `metric-comparison-change`)
-- "image placeholder" / "photo slot" / "图片占位" → `add_image_placeholder_v1` (role: `image-placeholder-label`)
-- "tag" / "filter chip" / "removable label" → `add_tag_v1` (roles: `tag-label`, `tag-remove`)
-- "toolbar" / "icon button bar" / "桌面工具栏" → `add_toolbar_v1` (roles: `toolbar-item`, `toolbar-item-active`, `toolbar-divider`)
-- "callout" / "doc highlight" / "tinted block" → `add_callout_v1` (roles: `callout-icon`, `callout-title`, `callout-body`)
-- "profile header" / "centered avatar header" / "user banner" → `add_profile_header_v1` (roles: `profile-header-avatar`, `profile-header-name`, `profile-header-handle`, `profile-header-bio`)
-- "inbox" / "email list" / "message preview" → `add_inbox_message_v1` (roles: `inbox-message-from`, `inbox-message-subject`, `inbox-message-preview`, `inbox-message-unread`)
-- "drawer" / "side panel" / "sliding panel" → `add_drawer_shell_v1` (roles: `drawer-shell-right`, `drawer-shell-header`, `drawer-shell-title`, `drawer-shell-close`)
-- "cookie banner" / "GDPR notice" / "consent bar" → `add_cookie_banner_v1` (roles: `cookie-banner`, `cookie-banner-title`, `cookie-banner-body`, `cookie-banner-actions`)
-- "user card" / "person card" / "contact card" → `add_user_card_v1` (roles: `user-card-avatar`, `user-card-name`, `user-card-role`)
-- "chart legend" / "data series legend" / "color-coded legend" → `add_legend_item_v1` (roles: `legend-item`, `legend-item-marker`, `legend-item-label`, `legend-item-value`)
-- "skeleton" / "loading placeholder" / "shimmer rows" / "loading state" / "骨架屏" → `add_skeleton_v1` (roles: `skeleton`, `skeleton-row`)
-- "undo bar" / "inline action" / "inline ack" / "snack-style action" → `add_inline_action_v1` (roles: `inline-action-message`, `inline-action-cta`)
-- "share row" / "social share buttons" / "share targets" → `add_share_row_v1` (roles: `share-row`, `share-target`, `share-target-icon`, `share-target-label`)
-- "combobox" / "autocomplete" / "search-with-suggestions" / "下拉自动补全" → `add_combobox_v1` (roles: `combobox-input`, `combobox-dropdown`, `combobox-option-active`)
-
-Even if you must use batch_design (no v1 fits), still emit these EXACT role strings on each child node so the validator sees a complete shape.
-
 **`parent_id` is REAL or OMITTED — never invented.** Every `add_*_v1` tool's `parent_id` arg must either (1) be omitted entirely so the new node lands at the page root (the safe default for full-page composite briefs), or (2) name a real existing node id you already received from a prior tool call. The cookbook recipes below use placeholders like `<page>` / `<panel>` / `<sidebar>` as DOCUMENTATION shorthand only — when YOU emit the call in your output, OMIT the parent_id field entirely.
 
 ❌ WRONG — these all crash with `parent_id "X" not found in document` because every id was made up by the model, not handed to you by a prior tool call:

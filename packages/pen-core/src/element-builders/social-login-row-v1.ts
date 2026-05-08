@@ -1,4 +1,3 @@
-import { coerceNonEmptyArray } from './coerce-params.js';
 import type { ElementTree } from './helpers.js';
 import { resolveTheme, type V1Theme } from './resolve-theme.js';
 
@@ -64,12 +63,10 @@ const KNOWN_ICONS: Record<string, string> = {
  *   label text  (#0F172A slate-900)      → textPrimary token
  */
 export function buildSocialLoginRowV1(params: SocialLoginRowV1Params): ElementTree {
-  const raw = coerceNonEmptyArray<SocialLoginV1Provider>(
-    params.providers,
-    [{ name: 'google' }],
-    'buildSocialLoginRowV1',
-    'providers',
-  );
+  const raw = Array.isArray(params.providers) ? params.providers : [];
+  if (raw.length === 0) {
+    throw new Error('buildSocialLoginRowV1: providers array must not be empty');
+  }
   const providers = raw.slice(0, 6);
   const orientation = params.orientation ?? 'vertical';
   const isVertical = orientation === 'vertical';

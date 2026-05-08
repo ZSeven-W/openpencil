@@ -1,4 +1,3 @@
-import { coerceNonEmptyArray } from './coerce-params.js';
 import type { ElementTree } from './helpers.js';
 import { resolveTheme, type V1Theme } from './resolve-theme.js';
 
@@ -35,12 +34,6 @@ export interface ToolbarV1Params {
  * - Divider fill: #E2E8F0 → border
  */
 export function buildToolbarV1(params: ToolbarV1Params): ElementTree {
-  const items = coerceNonEmptyArray<ToolbarV1Item>(
-    params.items,
-    [{ icon: 'bold' }, { icon: 'italic', divider_after: true }, { icon: 'underline' }],
-    'buildToolbarV1',
-    'items',
-  );
   const theme = params.theme ?? 'light';
   const t = resolveTheme(theme);
 
@@ -53,7 +46,7 @@ export function buildToolbarV1(params: ToolbarV1Params): ElementTree {
   const divider = theme === 'light' ? '#E2E8F0' : t.colors.border;
 
   const children: ElementTree[] = [];
-  items.forEach((item, i) => {
+  params.items.forEach((item, i) => {
     children.push({
       type: 'frame',
       name: `Tool (${item.icon})`,
@@ -77,7 +70,7 @@ export function buildToolbarV1(params: ToolbarV1Params): ElementTree {
         },
       ],
     });
-    if (item.divider_after && i < items.length - 1) {
+    if (item.divider_after && i < params.items.length - 1) {
       children.push({
         type: 'frame',
         name: 'Toolbar Divider',

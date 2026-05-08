@@ -1,4 +1,3 @@
-import { coerceStringArray } from './coerce-params.js';
 import type { ElementTree } from './helpers.js';
 import { resolveTheme, type V1Theme } from './resolve-theme.js';
 
@@ -24,7 +23,10 @@ export interface KbdV1Params {
  *   glyph text has no explicit fill in v0 (inherits canvas text color)
  */
 export function buildKbdV1(params: KbdV1Params): ElementTree {
-  const keys = coerceStringArray(params.keys, ['?'], 'buildKbdV1', 'keys');
+  const keys = params.keys.filter((k): k is string => typeof k === 'string' && k.length > 0);
+  if (keys.length === 0) {
+    throw new Error('buildKbdV1 requires at least one non-empty key in `keys`.');
+  }
   const separator = params.separator ?? '+';
   const theme = params.theme ?? 'light';
   const isLight = theme === 'light';

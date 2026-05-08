@@ -1,4 +1,3 @@
-import { coerceNonEmptyArray } from './coerce-params.js';
 import type { ElementTree } from './helpers.js';
 import { resolveTheme, type V1Theme } from './resolve-theme.js';
 
@@ -53,12 +52,7 @@ const DEFAULT_PALETTE = [
 export function buildAvatarGroupV1(params: AvatarGroupV1Params): ElementTree {
   const size = Math.min(64, Math.max(24, Math.floor(params.size ?? 32)));
   const maxVisible = Math.min(10, Math.max(1, Math.floor(params.max_visible ?? 4)));
-  const items = coerceNonEmptyArray<AvatarGroupV1Item>(
-    params.items,
-    [{ initial: 'A' }, { initial: 'B' }, { initial: 'C' }, { initial: 'D' }, { initial: 'E' }],
-    'buildAvatarGroupV1',
-    'items',
-  );
+  const items = params.items ?? [];
   const visible = items.slice(0, maxVisible);
   const overflow = Math.max(0, items.length - maxVisible);
   const fontSize = Math.max(11, Math.round(size * 0.4));

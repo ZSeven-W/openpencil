@@ -1,4 +1,3 @@
-import { coerceNonEmptyArray } from './coerce-params.js';
 import type { ElementTree } from './helpers.js';
 import { resolveTheme, type V1Theme } from './resolve-theme.js';
 
@@ -30,16 +29,6 @@ export interface ShareRowV1Params {
  *   label text     (#475569 slate-600) → textMuted token
  */
 export function buildShareRowV1(params: ShareRowV1Params): ElementTree {
-  const targets = coerceNonEmptyArray<ShareV1Target>(
-    params.targets,
-    [
-      { label: 'Twitter', icon: 'twitter' },
-      { label: 'Facebook', icon: 'facebook' },
-      { label: 'Copy Link', icon: 'link' },
-    ],
-    'buildShareRowV1',
-    'targets',
-  );
   const theme = params.theme ?? 'light';
   const isLight = theme === 'light';
   const t = resolveTheme(theme);
@@ -58,7 +47,7 @@ export function buildShareRowV1(params: ShareRowV1Params): ElementTree {
     layout: 'horizontal',
     alignItems: 'start',
     gap: 16,
-    children: targets.map((target, i) => ({
+    children: params.targets.map((target, i) => ({
       type: 'frame',
       name: `Target ${i + 1}`,
       role: 'share-target',

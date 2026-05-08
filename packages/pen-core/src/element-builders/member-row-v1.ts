@@ -1,4 +1,3 @@
-import { coerceEnum } from './coerce-params.js';
 import type { ElementTree } from './helpers.js';
 import { resolveTheme, type V1Theme } from './resolve-theme.js';
 
@@ -31,6 +30,7 @@ export interface MemberRowV1Params {
 const KNOB_WHITE = '#FFFFFF';
 
 type StatusTone = 'online' | 'busy' | 'away' | 'offline';
+const VALID_STATUS_TONES = new Set<string>(['online', 'busy', 'away', 'offline']);
 
 // Status dot colors are semantic/fixed — not theme-dependent
 const STATUS_TONE_FILL: Record<StatusTone, string> = {
@@ -78,13 +78,13 @@ function buildTrailing(t: MemberRowV1Trailing, theme: V1Theme): ElementTree {
       fill: [{ type: 'solid', color: colors.textSubtle }],
     };
   }
-  const tone = coerceEnum<StatusTone>(
-    t.tone,
-    ['online', 'busy', 'away', 'offline'],
-    'online',
-    'buildMemberRowV1',
-    'trailing.tone',
-  );
+  const requestedTone = (t.tone ?? 'online') as string;
+  if (!VALID_STATUS_TONES.has(requestedTone)) {
+    throw new Error(
+      `add_member_row_v1: invalid trailing.tone "${requestedTone}"; expected one of: online, busy, away, offline`,
+    );
+  }
+  const tone = requestedTone as StatusTone;
   return {
     type: 'frame',
     name: 'Status Dot',

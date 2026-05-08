@@ -6,12 +6,9 @@
  * The LLM correlates visual issues with actual node IDs and returns fixes.
  */
 
-import { useCanvasStore } from '@/stores/canvas-store';
-import { useDocumentStore } from '@/stores/document-store';
-import { getActivePageChildren } from '@/stores/document-tree-utils';
+import { DEFAULT_FRAME_ID, useDocumentStore } from '@/stores/document-store';
 import {
   VALIDATION_ENABLED,
-  VALIDATION_NODE_COUNT_THRESHOLD,
   VALIDATION_TIMEOUT_MS,
   MAX_VALIDATION_ROUNDS,
   VALIDATION_QUALITY_THRESHOLD,
@@ -43,25 +40,8 @@ function getValidationSystemPrompt(): string {
 // Node tree dump — simplified for LLM context
 // ---------------------------------------------------------------------------
 
-function countNodesInActivePage(): number {
-  const doc = useDocumentStore.getState().document;
-  const activePageId = useCanvasStore.getState().activePageId;
-  const children = getActivePageChildren(doc, activePageId);
-  let count = 0;
-  function walk(node: PenNode): void {
-    count++;
-    if ('children' in node && Array.isArray(node.children)) {
-      for (const child of node.children) walk(child);
-    }
-  }
-  for (const child of children) walk(child);
-  return count;
-}
-
-function buildNodeTreeDump(): string {
-  const doc = useDocumentStore.getState().document;
-  const activePageId = useCanvasStore.getState().activePageId;
-  const roots = getActivePageChildren(doc, activePageId);
+function buildNodeTreeDump(rootId: string): string {
+  const store = useDocumentStore.getState();
   const lines: string[] = [];
 
   function walk(node: PenNode, depth: number) {
@@ -118,7 +98,8 @@ function buildNodeTreeDump(): string {
     }
   }
 
-  for (const root of roots) walk(root, 0);
+  const rootNode = store.getNodeById(rootId);
+  if (rootNode) walk(rootNode, 0);
   return lines.join('\n');
 }
 
@@ -295,21 +276,6 @@ export async function runPostGenerationValidation(options?: {
     return { applied: totalApplied, skipped: false };
   }
 
-  // Skip vision loop on small designs — vision validation only earns its
-  // ~30-90s latency on composite multi-section briefs. Single-component
-  // outputs (one badge, one chart) are not worth the round-trip.
-  const nodeCount = countNodesInActivePage();
-  if (nodeCount < VALIDATION_NODE_COUNT_THRESHOLD) {
-    clearVisualReference();
-    emit(
-      'done',
-      preFixCount > 0
-        ? `[done] Pre-checks: fixed ${preFixCount} issue${preFixCount > 1 ? 's' : ''} (vision skipped: ${nodeCount} nodes < ${VALIDATION_NODE_COUNT_THRESHOLD})`
-        : `[done] Pre-checks complete (vision skipped: ${nodeCount} nodes < ${VALIDATION_NODE_COUNT_THRESHOLD})`,
-    );
-    return { applied: totalApplied, skipped: false };
-  }
-
   for (let round = 1; round <= MAX_VALIDATION_ROUNDS; round++) {
     const isFirstRound = round === 1;
 
@@ -350,7 +316,7 @@ export async function runPostGenerationValidation(options?: {
       : `[done] Screenshot captured (round ${round})`;
     emit('streaming');
 
-    const nodeTreeDump = buildNodeTreeDump();
+    const nodeTreeDump = buildNodeTreeDump(DEFAULT_FRAME_ID);
     if (isFirstRound) {
       console.log(`[Validation] Node tree dump:\n${nodeTreeDump}`);
     }

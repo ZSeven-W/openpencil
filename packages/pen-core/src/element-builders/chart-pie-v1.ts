@@ -1,4 +1,3 @@
-import { coerceNumberArray } from './coerce-params.js';
 import type { ElementTree } from './helpers.js';
 import { resolveTheme, type V1Theme } from './resolve-theme.js';
 
@@ -41,17 +40,14 @@ const V0_DEFAULT_PALETTE = ['#2563EB', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6
  * Caller-supplied `colors` are passed through unchanged in all modes.
  */
 export function buildChartPieV1(params: ChartPieV1Params): ElementTree {
-  const inputValues = coerceNumberArray(
-    params.values,
-    [30, 25, 20, 15, 10],
-    'buildChartPieV1',
-    'values',
-  );
-  let values = inputValues.map((v) => Math.max(0, v));
-  let total = values.reduce((s, v) => s + v, 0);
+  const raw = Array.isArray(params.values) ? params.values : [];
+  if (raw.length === 0) {
+    throw new Error('buildChartPieV1: values must contain at least one number');
+  }
+  const values = raw.map((v) => (Number.isFinite(v) ? Math.max(0, v) : 0));
+  const total = values.reduce((s, v) => s + v, 0);
   if (total <= 0) {
-    values = [1];
-    total = 1;
+    throw new Error('buildChartPieV1: values must sum to > 0');
   }
   const diameter = Math.max(40, Math.floor(params.diameter ?? 160));
   const innerRatio = Math.max(0, Math.min(0.9, params.inner_radius_ratio ?? 0));

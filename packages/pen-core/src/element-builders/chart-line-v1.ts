@@ -1,4 +1,3 @@
-import { coerceNumberArray } from './coerce-params.js';
 import type { ElementTree } from './helpers.js';
 import { resolveTheme, type V1Theme } from './resolve-theme.js';
 
@@ -33,13 +32,11 @@ export interface ChartLineV1Params {
  * v0's #2563EB (or caller-supplied stroke_color) for byte-parity.
  */
 export function buildChartLineV1(params: ChartLineV1Params): ElementTree {
-  const inputValues = coerceNumberArray(
-    params.values,
-    [10, 15, 12, 20, 18],
-    'buildChartLineV1',
-    'values',
-  );
-  const values = inputValues.map((v) => Math.max(0, v));
+  const raw = Array.isArray(params.values) ? params.values : [];
+  if (raw.length === 0) {
+    throw new Error('buildChartLineV1: values must contain at least one number');
+  }
+  const values = raw.map((v) => (Number.isFinite(v) ? Math.max(0, v) : 0));
   const max = Math.max(1, ...values);
   const spacing = Math.max(8, Math.floor(params.point_spacing ?? 32));
   const chartHeight = Math.max(40, Math.floor(params.chart_height ?? 160));

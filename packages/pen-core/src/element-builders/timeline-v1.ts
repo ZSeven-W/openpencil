@@ -1,4 +1,3 @@
-import { coerceNonEmptyArray } from './coerce-params.js';
 import type { ElementTree } from './helpers.js';
 import { resolveTheme, type V1Theme } from './resolve-theme.js';
 
@@ -35,12 +34,10 @@ const ACCENT = '#2563EB';
  * - Subtitle text fill: #6B7280 → tokenized (textMuted)
  */
 export function buildTimelineV1(params: TimelineV1Params): ElementTree {
-  const items = coerceNonEmptyArray<TimelineV1Item>(
-    params.items,
-    [{ title: 'Item 1' }],
-    'buildTimelineV1',
-    'items',
-  );
+  const items = Array.isArray(params.items) ? params.items : [];
+  if (items.length === 0) {
+    throw new Error('buildTimelineV1: items must contain at least one entry');
+  }
   const theme = params.theme ?? 'light';
   const t = resolveTheme(theme);
 
