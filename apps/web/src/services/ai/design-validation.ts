@@ -6,7 +6,9 @@
  * The LLM correlates visual issues with actual node IDs and returns fixes.
  */
 
-import { DEFAULT_FRAME_ID, useDocumentStore } from '@/stores/document-store';
+import { useCanvasStore } from '@/stores/canvas-store';
+import { useDocumentStore } from '@/stores/document-store';
+import { getActivePageChildren } from '@/stores/document-tree-utils';
 import {
   VALIDATION_ENABLED,
   VALIDATION_NODE_COUNT_THRESHOLD,
@@ -42,9 +44,9 @@ function getValidationSystemPrompt(): string {
 // ---------------------------------------------------------------------------
 
 function countNodesInActivePage(): number {
-  const store = useDocumentStore.getState();
-  const root = store.getNodeById(DEFAULT_FRAME_ID);
-  if (!root) return 0;
+  const doc = useDocumentStore.getState().document;
+  const activePageId = useCanvasStore.getState().activePageId;
+  const children = getActivePageChildren(doc, activePageId);
   let count = 0;
   function walk(node: PenNode): void {
     count++;
@@ -52,12 +54,14 @@ function countNodesInActivePage(): number {
       for (const child of node.children) walk(child);
     }
   }
-  walk(root);
+  for (const child of children) walk(child);
   return count;
 }
 
-function buildNodeTreeDump(rootId: string): string {
-  const store = useDocumentStore.getState();
+function buildNodeTreeDump(): string {
+  const doc = useDocumentStore.getState().document;
+  const activePageId = useCanvasStore.getState().activePageId;
+  const roots = getActivePageChildren(doc, activePageId);
   const lines: string[] = [];
 
   function walk(node: PenNode, depth: number) {
@@ -114,8 +118,7 @@ function buildNodeTreeDump(rootId: string): string {
     }
   }
 
-  const rootNode = store.getNodeById(rootId);
-  if (rootNode) walk(rootNode, 0);
+  for (const root of roots) walk(root, 0);
   return lines.join('\n');
 }
 
@@ -347,7 +350,7 @@ export async function runPostGenerationValidation(options?: {
       : `[done] Screenshot captured (round ${round})`;
     emit('streaming');
 
-    const nodeTreeDump = buildNodeTreeDump(DEFAULT_FRAME_ID);
+    const nodeTreeDump = buildNodeTreeDump();
     if (isFirstRound) {
       console.log(`[Validation] Node tree dump:\n${nodeTreeDump}`);
     }

@@ -37,7 +37,7 @@ export interface ToolbarV1Params {
 export function buildToolbarV1(params: ToolbarV1Params): ElementTree {
   const items = coerceNonEmptyArray<ToolbarV1Item>(
     params.items,
-    [{ icon: 'circle' }],
+    [{ icon: 'bold' }, { icon: 'italic', divider_after: true }, { icon: 'underline' }],
     'buildToolbarV1',
     'items',
   );

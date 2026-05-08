@@ -1,3 +1,4 @@
+import { coerceNonEmptyString } from './coerce-params.js';
 import type { ElementTree } from './helpers.js';
 import { resolveTheme, type V1Theme } from './resolve-theme.js';
 
@@ -30,6 +31,7 @@ export interface UserCardV1Params {
  * - Initial text fill: #FFFFFF — always white on colored avatar, hardcoded all modes
  */
 export function buildUserCardV1(params: UserCardV1Params): ElementTree {
+  const name = coerceNonEmptyString(params.name, 'User Name', 'buildUserCardV1', 'name');
   const size = Math.min(96, Math.max(32, Math.floor(params.avatar_size ?? 48)));
   const initialFontSize = Math.max(12, Math.round(size * 0.4));
 
@@ -45,12 +47,16 @@ export function buildUserCardV1(params: UserCardV1Params): ElementTree {
       type: 'text',
       name: 'Name',
       role: 'user-card-name',
-      content: params.name,
+      content: name,
       fontSize: 15,
       fontWeight: 600,
       fill: [{ type: 'solid', color: nameColor }],
     },
   ];
+  // Conditional emit: builders never invent optional content, and an
+  // empty-content text node still consumes flex gap so it is not
+  // layout-neutral with a "no role line" output. Callers wanting the
+  // user-card-role node must pass a non-empty `role`.
   if (params.role) {
     stackChildren.push({
       type: 'text',

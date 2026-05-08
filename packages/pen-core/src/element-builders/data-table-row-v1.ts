@@ -33,7 +33,7 @@ export interface DataTableRowV1Params {
 export function buildDataTableRowV1(params: DataTableRowV1Params): ElementTree {
   const columns = coerceNonEmptyArray<DataTableRowV1Column>(
     params.columns,
-    [{ content: 'Cell' }],
+    [{ content: 'Col 1' }, { content: 'Col 2' }, { content: 'Col 3' }],
     'buildDataTableRowV1',
     'columns',
   );

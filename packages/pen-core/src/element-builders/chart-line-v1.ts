@@ -33,7 +33,12 @@ export interface ChartLineV1Params {
  * v0's #2563EB (or caller-supplied stroke_color) for byte-parity.
  */
 export function buildChartLineV1(params: ChartLineV1Params): ElementTree {
-  const inputValues = coerceNumberArray(params.values, [1], 'buildChartLineV1', 'values');
+  const inputValues = coerceNumberArray(
+    params.values,
+    [10, 15, 12, 20, 18],
+    'buildChartLineV1',
+    'values',
+  );
   const values = inputValues.map((v) => Math.max(0, v));
   const max = Math.max(1, ...values);
   const spacing = Math.max(8, Math.floor(params.point_spacing ?? 32));

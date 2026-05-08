@@ -27,7 +27,12 @@ export interface ChartBarsV1Params {
  * #2563EB for the migration contract).
  */
 export function buildChartBarsV1(params: ChartBarsV1Params): ElementTree {
-  const inputValues = coerceNumberArray(params.values, [1], 'buildChartBarsV1', 'values');
+  const inputValues = coerceNumberArray(
+    params.values,
+    [10, 15, 12, 20, 18],
+    'buildChartBarsV1',
+    'values',
+  );
   const values = inputValues.map((v) => Math.max(0, v));
   const max = Math.max(1, ...values);
   const barWidth = Math.max(4, Math.floor(params.bar_width ?? 24));
