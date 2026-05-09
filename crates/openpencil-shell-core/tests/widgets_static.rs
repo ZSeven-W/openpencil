@@ -1,13 +1,14 @@
-//! Phase B1 widget facade smoke tests.
+//! Phase B1 + B2 widget facade smoke tests.
 //!
-//! Proves the `Widget` trait + `PaintCx` / `LayoutCx` shape compiles and
-//! that a recording backend can be plugged in via the `&mut dyn
-//! RenderBackend` field. B2 lands the four real widgets and extends this
-//! file with per-widget paint-call assertions; today we only verify the
-//! plumbing.
+//! B1 piece: proves the `Widget` trait + `PaintCx` / `LayoutCx` shape
+//! compiles + that a recording backend plugs in via `&mut dyn
+//! RenderBackend`. B2 piece: proves the four inspector widgets (Tree /
+//! PropertyRow / Dropdown / TextInput) paint and emit accesskit nodes
+//! with the expected semantic roles.
 
 use openpencil_shell_core::widgets::{
-    LayoutBox, LayoutCx, PaintCx, ROOT_WIDGET_ID, Widget, WidgetId, rect,
+    Dropdown, DropdownState, LayoutBox, LayoutCx, PaintCx, PropertyRow, ROOT_WIDGET_ID, TextInput,
+    TextInputState, TreeWidget, Widget, WidgetId, rect,
 };
 use openpencil_shell_core::{Color, Point2D, Rect, RenderBackend, TextLayout};
 
@@ -131,7 +132,129 @@ fn widget_trait_dispatches_layout_and_paint() {
 
     // Trait surface check: access_node returns the placeholder
     // `Role::GenericContainer` advertised by `StubWidget`. Real B2 widgets
-    // will assert their semantic roles (TreeItem / EditableText / etc).
+    // assert their semantic roles in the tests below.
     let node = widget.access_node();
     assert_eq!(node.role(), accesskit::Role::GenericContainer);
+}
+
+// ---------------------------------------------------------------------
+// B2: four inspector widgets paint static content + expose semantic
+// accesskit roles.
+// ---------------------------------------------------------------------
+
+#[test]
+fn four_inspector_widgets_paint_static_content() {
+    let layout = LayoutCx {
+        available_width: 240.0,
+        dpi: 1.0,
+    };
+    let widgets: Vec<Box<dyn Widget>> = vec![
+        Box::new(TreeWidget::sample()),
+        Box::new(PropertyRow::new(200, "Width", "960")),
+        Box::new(Dropdown::sample()),
+        Box::new(TextInput::sample()),
+    ];
+    let mut backend = RecordingBackend::default();
+    for widget in widgets {
+        let box_ = widget.layout(&layout);
+        let mut cx = PaintCx {
+            backend: &mut backend,
+        };
+        widget.paint(&mut cx, box_.rect);
+    }
+
+    // Each widget paints at least its background fill (4); Tree adds one
+    // more for the selected row → ≥ 5. Stroked rects: PropertyRow,
+    // Dropdown, TextInput each stroke their border (3). Text runs:
+    // PropertyRow has 2 (label+value); Tree has 3 items; Dropdown has 1;
+    // TextInput has 1 → ≥ 7 total.
+    assert!(backend.rects >= 5, "fill_rect dispatch ≥ 5 (got {})", backend.rects);
+    assert!(backend.strokes >= 3, "stroke_rect dispatch ≥ 3 (got {})", backend.strokes);
+    assert!(backend.text >= 7, "draw_text dispatch ≥ 7 (got {})", backend.text);
+}
+
+#[test]
+fn tree_widget_advertises_tree_role_and_layers_label() {
+    let tree = TreeWidget::sample();
+    let node = tree.access_node();
+    assert_eq!(node.role(), accesskit::Role::Tree);
+    // accesskit::Node exposes label() returning Option<&str> in 0.24.
+    assert_eq!(node.label(), Some("Layers"));
+    // Sample tree has 3 items.
+    assert_eq!(tree.items.len(), 3);
+    assert!(tree.items.iter().any(|item| item.selected));
+}
+
+#[test]
+fn property_row_advertises_label_and_value() {
+    let row = PropertyRow::new(201, "Width", "960");
+    let node = row.access_node();
+    // `Role::Group` (not GenericContainer) so the label survives ARIA
+    // filtering — see codex B2 R1 CONCERN + the fix in prop_row.rs.
+    assert_eq!(node.role(), accesskit::Role::Group);
+    assert_eq!(node.label(), Some("Width 960"));
+}
+
+#[test]
+fn dropdown_advertises_combobox_role() {
+    let drop = Dropdown::sample();
+    let node = drop.access_node();
+    assert_eq!(node.role(), accesskit::Role::ComboBox);
+    assert_eq!(node.label(), Some("Blend"));
+    // Sample preserves the closed/first-selected state.
+    assert_eq!(drop.state.selected, 0);
+    assert!(!drop.state.open);
+}
+
+#[test]
+fn text_input_advertises_text_input_role_and_value() {
+    let input = TextInput::sample();
+    let node = input.access_node();
+    assert_eq!(node.role(), accesskit::Role::TextInput);
+    assert_eq!(node.label(), Some("Name"));
+    assert_eq!(node.value(), Some("Frame 1"));
+}
+
+#[test]
+fn text_input_paints_preedit_underline_when_composing() {
+    // The preedit-underline painting branch only fires when
+    // `state.preedit` is non-empty; verify it via the recording backend.
+    let mut input = TextInput::sample();
+    input.state.preedit = "你好".to_string();
+    let layout_cx = LayoutCx {
+        available_width: 240.0,
+        dpi: 1.0,
+    };
+    let layout = input.layout(&layout_cx);
+    let mut backend = RecordingBackend::default();
+    {
+        let mut cx = PaintCx {
+            backend: &mut backend,
+        };
+        input.paint(&mut cx, layout.rect);
+    }
+    // 1 fill (background) + 2 strokes (border + preedit underline) +
+    // 1 text run (preedit content).
+    assert_eq!(backend.rects, 1);
+    assert_eq!(backend.strokes, 2);
+    assert_eq!(backend.text, 1);
+}
+
+#[test]
+fn dropdown_state_independent_state_struct() {
+    // DropdownState lives on its own so input handling can swap it
+    // without taking ownership of the surrounding Dropdown widget.
+    let s = DropdownState {
+        selected: 2,
+        open: true,
+    };
+    assert_eq!(s.selected, 2);
+    assert!(s.open);
+}
+
+#[test]
+fn text_input_state_default_is_empty() {
+    let s = TextInputState::default();
+    assert_eq!(s.value, "");
+    assert_eq!(s.preedit, "");
 }
