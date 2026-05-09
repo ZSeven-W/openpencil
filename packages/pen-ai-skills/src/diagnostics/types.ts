@@ -9,7 +9,8 @@ export type IssueCategory =
   | 'text-corner-radius'
   | 'mixed-sibling-corner-radius'
   | 'text-effect'
-  | 'text-stroke';
+  | 'text-stroke'
+  | 'mixed-sibling-padding';
 
 export interface Issue {
   /** Node id where the issue was detected */
