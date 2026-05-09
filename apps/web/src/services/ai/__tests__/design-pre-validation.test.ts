@@ -363,4 +363,51 @@ describe('design-pre-validation (baseline)', () => {
     };
     expect(c3?.cornerRadius).toBe(8);
   });
+
+  it('text-effect: clears effects array on a text node', () => {
+    loadDocument(
+      makeDoc([
+        {
+          id: 'parent',
+          type: 'frame',
+          children: [
+            {
+              id: 'shadowed-text',
+              type: 'text',
+              content: 'hi',
+              fontSize: 14,
+              effects: [{ type: 'shadow', color: '#000', offsetX: 0, offsetY: 4, radius: 8 }],
+            } as unknown as PenNode,
+          ],
+        } as unknown as PenNode,
+      ]),
+    );
+    expect(runPreValidationFixes()).toBeGreaterThanOrEqual(1);
+    const text = useDocumentStore.getState().getNodeById('shadowed-text') as PenNode & {
+      effects?: unknown;
+    };
+    expect(text?.effects).toBeUndefined();
+  });
+
+  it('mixed-sibling-padding: rewrites the padding outlier to the modal value', () => {
+    loadDocument(
+      makeDoc([
+        {
+          id: 'parent',
+          type: 'frame',
+          children: [
+            { id: 'c1', type: 'frame', role: 'card', padding: 16, children: [] },
+            { id: 'c2', type: 'frame', role: 'card', padding: 16, children: [] },
+            { id: 'c3', type: 'frame', role: 'card', padding: 20, children: [] },
+          ],
+        } as unknown as PenNode,
+      ]),
+    );
+    expect(runPreValidationFixes()).toBeGreaterThanOrEqual(1);
+    const c3 = useDocumentStore.getState().getNodeById('c3') as PenNode & {
+      padding?: unknown;
+    };
+    // Modal collapsed back to scalar 16 (all 4 sides equal)
+    expect(c3?.padding).toBe(16);
+  });
 });
