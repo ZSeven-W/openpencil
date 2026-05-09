@@ -44,8 +44,12 @@ export function isImagePlaceholderFrame(node: PenNode | undefined | null): boole
  *   - frame node, has a name matching IMAGE_AREA_NAME_RE
  *   - has a single solid (non-image) fill — not a gradient, not already
  *     filled with type:'image'
- *   - has 0 or 1 children (an icon-only "broken image" child is OK; a
- *     content-rich frame is NOT a placeholder)
+ *   - has 0 children, OR exactly 1 icon_font child (the typical
+ *     "broken image" placeholder hint emitted alongside the colored
+ *     frame). A non-icon child means the frame holds real content
+ *     (e.g. a hero with a CTA button inside) — those must NEVER be
+ *     swept into a photo replacement, because the queue's update path
+ *     clears children when the fetch succeeds and would erase the CTA.
  *   - aspect ratio: width is a finite number >= 80 AND height >= 60
  *     (filters out 1px borders, tiny color swatches, dividers)
  *
@@ -75,10 +79,18 @@ export function isImageAreaFrameByHeuristic(node: PenNode | undefined | null): b
   const first = fill[0] as { type?: unknown } | undefined;
   if (first?.type === 'image') return false; // already filled
   if (first?.type !== 'solid') return false; // gradient = decorative, skip
-  // Children check — at most one (icon hint) child. A frame with full
-  // sub-content isn't a placeholder.
-  const children = (node as PenNode & { children?: unknown[] }).children;
-  if (Array.isArray(children) && children.length > 1) return false;
+  // Children check — 0 children, or exactly 1 icon_font child. A frame
+  // with multiple children OR a non-icon child holds real content
+  // (CTA / text / nested layout) and the queue's children:[] erase
+  // step would destroy it. Codex stop-time review on 2026-05-10 caught
+  // this: previously we accepted "0 or 1 children" with no type check,
+  // so a hero frame with a button would match and get its button wiped
+  // when the photo landed.
+  const children = (node as PenNode & { children?: PenNode[] }).children;
+  if (Array.isArray(children)) {
+    if (children.length > 1) return false;
+    if (children.length === 1 && children[0].type !== 'icon_font') return false;
+  }
   return true;
 }
 
