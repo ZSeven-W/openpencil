@@ -1464,6 +1464,7 @@ version = "0.1.0"
 dependencies = [
  "accesskit",
  "console_error_panic_hook",
+ "jian-core",
  "js-sys",
  "openpencil-shell-core",
  "skia-safe",
