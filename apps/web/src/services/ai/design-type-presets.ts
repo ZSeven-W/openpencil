@@ -12,15 +12,28 @@ export interface DesignTypePreset {
 
 /**
  * Component triggers — when the prompt names one atomic UI piece without a
- * surrounding screen ("X card", "X badge", "X chip", etc.). Mirrors the
- * Type 0 list in `pen-ai-skills/skills/phases/planning/design-type.md`.
+ * surrounding screen. Mirrors the Type 0 list in
+ * `pen-ai-skills/skills/phases/planning/design-type.md`:
+ *   - "X card" / "X 卡片" — profile / pricing / stat / event / user card
+ *   - "X badge" / "X chip" / "X tag" / "X tile" / "X label" / "X row" / "X item"
+ *   - "X button" / "X toggle" / "X switch" / "X selector"
+ *   - "X modal" / "X dialog" / "X tooltip" / "X popover" / "X sheet"
+ *   - "X widget" / "X panel" (when no surrounding screen)
+ *   - Single visualisations: "a chart" / "a pie chart" / "a stat" / "a metric"
  *
- * Match policy: word boundary + the noun must lead OR follow the qualifier
- * to keep noisy mid-sentence hits out (e.g. "shopping cart screen" should
- * not match "cart" as a component).
+ * The disqualifier regex below blocks the trigger when the prompt also
+ * names a screen / page / app, so "shopping cart screen" or "navbar with
+ * cart button" stays a non-component.
  */
-const COMPONENT_TRIGGER_RE =
-  /\b(?:[a-z一-鿿]+\s+)?(card|badge|chip|tile|tag|pill|toggle|switch|modal|dialog|tooltip|popover|sheet|widget|avatar|stepper|stat|metric)(?:\s+(?:design|component|widget))?\b/i;
+// Split into Latin and CJK matchers because JS `\b` is ASCII-only and never
+// fires between two CJK characters (so `\b卡片\b` would never match a prompt
+// like "design a 卡片"). Each matcher runs independently and either is enough
+// to classify as Type 0.
+const COMPONENT_TRIGGER_LATIN_RE =
+  /\b(card|badge|chip|tag|tile|pill|label|row|item|button|toggle|switch|selector|modal|dialog|tooltip|popover|sheet|widget|panel|avatar|stepper|stat|metric|chart)\b/i;
+const COMPONENT_TRIGGER_CJK_RE = /(卡片|徽章|标签|按钮|开关|对话框|提示|气泡|图表)/;
+
+const COMPONENT_DISQUALIFIER_RE = /\b(screen|page|app|home|onboarding|flow)\b|网页|页面|屏幕/i;
 
 /**
  * Minimal fallback design type detection.
@@ -36,7 +49,9 @@ export function detectDesignType(prompt: string): DesignTypePreset {
   // mobile/dashboard so a "profile card" prompt doesn't fall through to
   // landing-page (1200px) when AI parsing fails — the user gets a
   // sensibly-sized 400px component instead.
-  if (COMPONENT_TRIGGER_RE.test(prompt) && !/screen|page|app|网页|页面/i.test(prompt)) {
+  const matchesComponent =
+    COMPONENT_TRIGGER_LATIN_RE.test(prompt) || COMPONENT_TRIGGER_CJK_RE.test(prompt);
+  if (matchesComponent && !COMPONENT_DISQUALIFIER_RE.test(prompt)) {
     return {
       type: 'component',
       width: 400,
