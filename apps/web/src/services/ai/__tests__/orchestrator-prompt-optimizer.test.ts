@@ -208,6 +208,27 @@ describe('buildFallbackPlanFromPrompt', () => {
     expect(plan.rootFrame.width).not.toBe(400);
   });
 
+  // Codex review #6: keywords disqualifying a component fallback MUST
+  // also route the prompt to the right non-component preset. Otherwise
+  // "design a workspace with side panel" skipped component AND skipped
+  // dashboard (the regex only matched dashboard|admin|管理|后台|控制台)
+  // and fell through to landing-page (1200×0), which is the wrong shape
+  // for a workspace UI.
+  it.each([
+    ['design a workspace with side panel and metrics'],
+    ['design a console with charts and live metrics'],
+    ['设计一个工作台 with charts'],
+    ['设计一个工作区 with 卡片'],
+  ])('classifies "%s" as desktop-screen (1200×800), not landing-page', (prompt) => {
+    const plan = buildFallbackPlanFromPrompt(prompt);
+    expect(plan.rootFrame.width).toBe(1200);
+    expect(plan.rootFrame.height).toBe(800); // desktop-screen preset has rootHeight=800
+    // 3 default sections (Header / Main Content / Actions) — not the
+    // 4 sections of landing-page (Header / Main / Supporting / Footer).
+    expect(plan.subtasks).toHaveLength(3);
+    expect(plan.subtasks.map((st) => st.label)).toEqual(['Header', 'Main Content', 'Actions']);
+  });
+
   it('uses design.md background and style-guide name when designMd is present', () => {
     const designMd: DesignMdSpec = {
       raw: '# Test',

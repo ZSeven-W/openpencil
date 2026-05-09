@@ -45,7 +45,7 @@ const COMPONENT_TRIGGER_CJK_RE = /(卡片|徽章|标签|按钮|开关|对话框|
 //     the prompt also names a tile/panel/chart/metric inside it
 //     ("admin dashboard with metric tiles" must not become a Type 0 tile).
 const COMPONENT_DISQUALIFIER_RE =
-  /\b(screen|page|app|home|onboarding|flow|mobile|phone|ios|android|dashboard|admin|workspace|console)\b|网页|页面|屏幕|手机|移动端|管理|后台|控制台/i;
+  /\b(screen|page|app|home|onboarding|flow|mobile|phone|ios|android|dashboard|admin|workspace|console)\b|网页|页面|屏幕|手机|移动端|管理|后台|控制台|工作台|工作区/i;
 
 /**
  * Minimal fallback design type detection.
@@ -87,8 +87,13 @@ export function detectDesignType(prompt: string): DesignTypePreset {
     };
   }
 
-  // Fixed-height desktop screens
-  if (/dashboard|admin|管理|后台|控制台/i.test(prompt)) {
+  // Fixed-height desktop screens. Keep in sync with the workspace markers
+  // in COMPONENT_DISQUALIFIER_RE — every keyword that disqualifies a
+  // component fallback for "workspace context" MUST also be detected here,
+  // otherwise the prompt skips component AND skips dashboard and falls
+  // through to landing-page (1200×0) which is wrong for "design a workspace
+  // with side panel" / "design a console with metrics" (Codex review #6).
+  if (/dashboard|admin|workspace|console|管理|后台|控制台|工作台|工作区/i.test(prompt)) {
     return {
       type: 'desktop-screen',
       width: 1200,
