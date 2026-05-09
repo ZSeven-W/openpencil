@@ -9,5 +9,6 @@ export {
   detectTextCornerRadius,
   detectMixedSiblingCornerRadius,
   detectTextEffect,
+  detectTextStroke,
   detectAllIssues,
 } from './detectors';
