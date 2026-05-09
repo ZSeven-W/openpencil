@@ -184,7 +184,7 @@ function isGenericPlaceholderName(name: string): boolean {
  * "Image" name the model gave the placeholder. Bounded to 3 hops so a
  * deep page bg doesn't end up as the query.
  */
-function findParentSemanticName(nodeId: string, maxHops = 3): string | null {
+export function findParentSemanticName(nodeId: string, maxHops = 3): string | null {
   const { document: doc } = useDocumentStore.getState();
   // Build a parent map by walking the doc tree once. Cheap for typical
   // designs (< few hundred nodes) and avoids passing parent through
@@ -220,7 +220,7 @@ function findParentSemanticName(nodeId: string, maxHops = 3): string | null {
   return null;
 }
 
-function extractQueryForNode(node: PenNode): string {
+export function extractQueryForNode(node: PenNode): string {
   const r = node as PenNode & {
     imageSearchQuery?: string;
     name?: string;
