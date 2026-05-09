@@ -30,6 +30,59 @@ export function isImagePlaceholderFrame(node: PenNode | undefined | null): boole
 }
 
 /**
+ * Heuristic detector for "looks like an image area" frames the model
+ * emitted WITHOUT the canonical `role: 'image-placeholder'`. Common
+ * pattern: restaurant / product / event card whose top is a wide solid
+ * coloured frame named "Image" / "Photo" / "Cover" / "Hero" / "Thumbnail"
+ * — the model uses raw frame nodes instead of `add_image_placeholder_v1`,
+ * so the strict isImagePlaceholderFrame check misses them and the auto-
+ * search pipeline never fires. Result: cards land on canvas with empty
+ * coloured rectangles where photos should be (the "Bella Italia" card
+ * bug from the 2026-05-09 user report).
+ *
+ * Conservative match policy:
+ *   - frame node, has a name matching IMAGE_AREA_NAME_RE
+ *   - has a single solid (non-image) fill — not a gradient, not already
+ *     filled with type:'image'
+ *   - has 0 or 1 children (an icon-only "broken image" child is OK; a
+ *     content-rich frame is NOT a placeholder)
+ *   - aspect ratio: width is a finite number >= 80 AND height >= 60
+ *     (filters out 1px borders, tiny color swatches, dividers)
+ *
+ * False-positive risk: a real solid-colour decorative block named
+ * "Hero" or "Cover" gets searched and overwritten with a photo. Mitigated
+ * by the name regex requiring an image / photo / cover / hero / thumbnail
+ * keyword — purely decorative blocks are rarely named this way. Test
+ * coverage in image-search-pipeline.test.ts protects the boundary.
+ */
+const IMAGE_AREA_NAME_RE = /\b(image|photo|cover|hero|thumbnail|thumb|picture|banner|poster)\b/i;
+
+export function isImageAreaFrameByHeuristic(node: PenNode | undefined | null): boolean {
+  if (!node || node.type !== 'frame') return false;
+  // Already a canonical placeholder — handled by the strict path; skip
+  // here to avoid double-counting.
+  if ((node as PenNode & { role?: string }).role === 'image-placeholder') return false;
+  const name = (node as PenNode & { name?: string }).name;
+  if (typeof name !== 'string' || !IMAGE_AREA_NAME_RE.test(name)) return false;
+  // Width/height shape — skip non-image-shaped blocks.
+  const w = (node as PenNode & { width?: unknown }).width;
+  const h = (node as PenNode & { height?: unknown }).height;
+  if (typeof w !== 'number' || w < 80) return false;
+  if (typeof h !== 'number' || h < 60) return false;
+  // Single solid (non-image) fill only.
+  const fill = (node as PenNode & { fill?: unknown }).fill;
+  if (!Array.isArray(fill) || fill.length !== 1) return false;
+  const first = fill[0] as { type?: unknown } | undefined;
+  if (first?.type === 'image') return false; // already filled
+  if (first?.type !== 'solid') return false; // gradient = decorative, skip
+  // Children check — at most one (icon hint) child. A frame with full
+  // sub-content isn't a placeholder.
+  const children = (node as PenNode & { children?: unknown[] }).children;
+  if (Array.isArray(children) && children.length > 1) return false;
+  return true;
+}
+
+/**
  * True when the frame is a placeholder AND still carries the gray
  * solid fill (i.e. has not yet been filled by a previous scan). The
  * filled-frame flag we leave on the node is the fill itself: once a
@@ -73,6 +126,12 @@ export function collectImageSearchTargets(rootId: string): ImageSearchTarget[] {
       if (isUnfilledImagePlaceholderFrame(node)) {
         targets.push({ node, kind: 'placeholder-frame' });
       }
+      return;
+    } else if (isImageAreaFrameByHeuristic(node)) {
+      // Heuristic match — model emitted a "looks like an image area"
+      // frame without the canonical role. Treat as placeholder-frame so
+      // the search pipeline replaces its solid fill with a real photo.
+      targets.push({ node, kind: 'placeholder-frame' });
       return;
     }
     if ('children' in node && Array.isArray(node.children)) {
