@@ -42,6 +42,7 @@ export const DEBUG_TOOL_DEFINITIONS = [
               'unexpected-rotation',
               'text-corner-radius',
               'mixed-sibling-corner-radius',
+              'text-effect',
             ],
           },
           description: 'Filter to specific detector categories.',
