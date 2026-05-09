@@ -151,9 +151,49 @@ describe('buildFallbackPlanFromPrompt', () => {
     expect(plan.subtasks[0]?.region.height).toBe(200);
   });
 
-  it('does NOT misclassify "X card screen" as a component (must stay landing-page or mobile)', () => {
-    const plan = buildFallbackPlanFromPrompt('design a card screen page');
-    // "screen" / "page" disqualifier prevents the component shortcut.
+  // Codex review #4: cover every documented Type 0 trigger from
+  // pen-ai-skills/skills/phases/planning/design-type.md so the fallback
+  // doesn't silently route "design a primary button" to a 1200px landing
+  // page when AI parsing fails.
+  it.each([
+    ['design a profile card', 'card'],
+    ['design a 卡片', '卡片'],
+    ['design a primary button', 'button'],
+    ['design a status badge', 'badge'],
+    ['design a category chip', 'chip'],
+    ['design a price tag', 'tag'],
+    ['design a setting toggle', 'toggle'],
+    ['design a confirm dialog', 'dialog'],
+    ['design a tooltip with arrow', 'tooltip'],
+    ['design a popover with menu', 'popover'],
+    ['design a bottom sheet', 'sheet'],
+    ['design a stat tile', 'tile'],
+    ['design a notification row', 'row'],
+    ['design an inbox item', 'item'],
+    ['design a status label', 'label'],
+    ['design a segmented selector', 'selector'],
+    ['design a side panel', 'panel'],
+    ['design a metric widget', 'widget'],
+    ['design an avatar with initial', 'avatar'],
+    ['design a step stepper', 'stepper'],
+    ['design a revenue stat', 'stat'],
+    ['design a metric for sales', 'metric'],
+    ['design a pie chart', 'chart'],
+  ])('classifies "%s" as Type 0 component (matches "%s")', (prompt) => {
+    const plan = buildFallbackPlanFromPrompt(prompt);
+    expect(plan.rootFrame.width).toBe(400);
+    expect(plan.rootFrame.height).toBe(0);
+  });
+
+  it.each([
+    ['design a card screen page'],
+    ['design a profile page'],
+    ['design a settings screen'],
+    ['design a mobile login screen'],
+    ['design a dashboard home page'],
+    ['design an onboarding flow'],
+  ])('does NOT misclassify "%s" as a component', (prompt) => {
+    const plan = buildFallbackPlanFromPrompt(prompt);
     expect(plan.rootFrame.width).not.toBe(400);
   });
 
