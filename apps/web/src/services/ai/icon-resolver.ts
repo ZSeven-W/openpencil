@@ -68,7 +68,11 @@ const ICON_NOISE_WORDS = new Set([
   'fill',
   'svg',
   'graphic',
-  'image',
+  // Note: `image` is INTENTIONALLY not a noise word. It's a real lucide
+  // icon key, and "Image Icon" / "Image SVG" should resolve to lucide:image
+  // — not collapse to empty after stripping. Multi-word name patterns like
+  // "Image Placeholder Path" still resolve via the prefix fallback (`image`
+  // covers >= 50% of `imageplaceholder`).
 ]);
 
 function tokenizeName(name: string): string[] {
