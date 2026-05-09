@@ -56,6 +56,34 @@ fn map_key_value(key: &str) -> KeyValue {
         "ArrowDown" => KeyValue::Named(NamedKey::ArrowDown),
         "ArrowLeft" => KeyValue::Named(NamedKey::ArrowLeft),
         "ArrowRight" => KeyValue::Named(NamedKey::ArrowRight),
+        // Navigation extensions (codex Phase C gate CONCERN):
+        "Home" => KeyValue::Named(NamedKey::Home),
+        "End" => KeyValue::Named(NamedKey::End),
+        "PageUp" => KeyValue::Named(NamedKey::PageUp),
+        "PageDown" => KeyValue::Named(NamedKey::PageDown),
+        // Function keys F1-F12. jian's NamedKey covers them but
+        // KeyCode does not — `map_key_code` falls through to
+        // Unknown(code) for these on purpose.
+        "F1" => KeyValue::Named(NamedKey::F1),
+        "F2" => KeyValue::Named(NamedKey::F2),
+        "F3" => KeyValue::Named(NamedKey::F3),
+        "F4" => KeyValue::Named(NamedKey::F4),
+        "F5" => KeyValue::Named(NamedKey::F5),
+        "F6" => KeyValue::Named(NamedKey::F6),
+        "F7" => KeyValue::Named(NamedKey::F7),
+        "F8" => KeyValue::Named(NamedKey::F8),
+        "F9" => KeyValue::Named(NamedKey::F9),
+        "F10" => KeyValue::Named(NamedKey::F10),
+        "F11" => KeyValue::Named(NamedKey::F11),
+        "F12" => KeyValue::Named(NamedKey::F12),
+        // Modifier keys themselves (W3C `key` is just "Shift" etc;
+        // `code` is "ShiftLeft" / "ShiftRight" — handled in
+        // `map_key_code`).
+        "Shift" => KeyValue::Named(NamedKey::Shift),
+        "Control" => KeyValue::Named(NamedKey::Control),
+        "Alt" => KeyValue::Named(NamedKey::Alt),
+        "Meta" => KeyValue::Named(NamedKey::Meta),
+        "CapsLock" => KeyValue::Named(NamedKey::CapsLock),
         _ => {
             // `KeyValue::Char(char)` covers single-codepoint keys
             // (e.g. "a", "1", "你"). Anything else (multi-codepoint
@@ -118,6 +146,26 @@ fn map_key_code(code: &str) -> KeyCode {
         "ArrowDown" => KeyCode::ArrowDown,
         "ArrowLeft" => KeyCode::ArrowLeft,
         "ArrowRight" => KeyCode::ArrowRight,
+        // Navigation extensions (codex Phase C gate CONCERN):
+        "Home" => KeyCode::Home,
+        "End" => KeyCode::End,
+        "PageUp" => KeyCode::PageUp,
+        "PageDown" => KeyCode::PageDown,
+        // Modifier physical codes — distinguish left vs right per
+        // jian KeyCode. Note: "MetaLeft" / "MetaRight" cover the
+        // Cmd key on macOS, the Win key on Windows, and the Super
+        // key on Linux (per Jian Modifiers::CMD).
+        "ShiftLeft" => KeyCode::ShiftLeft,
+        "ShiftRight" => KeyCode::ShiftRight,
+        "ControlLeft" => KeyCode::ControlLeft,
+        "ControlRight" => KeyCode::ControlRight,
+        "AltLeft" => KeyCode::AltLeft,
+        "AltRight" => KeyCode::AltRight,
+        "MetaLeft" => KeyCode::MetaLeft,
+        "MetaRight" => KeyCode::MetaRight,
+        // F1-F12 KeyCode variants don't exist in jian (NamedKey
+        // covers them); fall to Unknown(code) for now. Phase D+
+        // may upstream F-key codes if a widget needs them.
         _ => KeyCode::Unknown(code.to_string()),
     }
 }

@@ -93,6 +93,76 @@ fn keyboard_unidentified_for_multi_char_keys() {
     assert_eq!(event.code, KeyCode::Unknown("Pause".to_string()));
 }
 
+#[test]
+fn keyboard_navigation_keys_mapped() {
+    // Codex Phase C gate Round 3 BLOCK: every NamedKey/KeyCode variant
+    // jian exposes must round-trip through the mapper rather than
+    // falling to Unidentified / Unknown(...).
+    for (k, expected) in [
+        ("Home", NamedKey::Home),
+        ("End", NamedKey::End),
+        ("PageUp", NamedKey::PageUp),
+        ("PageDown", NamedKey::PageDown),
+        ("CapsLock", NamedKey::CapsLock),
+    ] {
+        let event = map_keyboard_parts(k, k, 0, false, true, Modifiers::empty(), false);
+        assert_eq!(event.key, KeyValue::Named(expected), "key {k}");
+    }
+}
+
+#[test]
+fn keyboard_function_keys_mapped() {
+    use openpencil_shell_core::NamedKey::*;
+    for (k, expected) in [
+        ("F1", F1),
+        ("F2", F2),
+        ("F3", F3),
+        ("F4", F4),
+        ("F5", F5),
+        ("F6", F6),
+        ("F7", F7),
+        ("F8", F8),
+        ("F9", F9),
+        ("F10", F10),
+        ("F11", F11),
+        ("F12", F12),
+    ] {
+        let event = map_keyboard_parts(k, k, 0, false, true, Modifiers::empty(), false);
+        assert_eq!(event.key, KeyValue::Named(expected), "fn-key {k}");
+    }
+}
+
+#[test]
+fn keyboard_modifier_keys_mapped_to_named_values() {
+    // W3C `key` for modifier keys themselves is just the bare name;
+    // `code` carries left/right ("ShiftLeft" etc) which map_key_code
+    // covers. Verify both halves round-trip.
+    for (k, c, expected_key, expected_code) in [
+        ("Shift", "ShiftLeft", NamedKey::Shift, KeyCode::ShiftLeft),
+        ("Shift", "ShiftRight", NamedKey::Shift, KeyCode::ShiftRight),
+        (
+            "Control",
+            "ControlLeft",
+            NamedKey::Control,
+            KeyCode::ControlLeft,
+        ),
+        (
+            "Control",
+            "ControlRight",
+            NamedKey::Control,
+            KeyCode::ControlRight,
+        ),
+        ("Alt", "AltLeft", NamedKey::Alt, KeyCode::AltLeft),
+        ("Alt", "AltRight", NamedKey::Alt, KeyCode::AltRight),
+        ("Meta", "MetaLeft", NamedKey::Meta, KeyCode::MetaLeft),
+        ("Meta", "MetaRight", NamedKey::Meta, KeyCode::MetaRight),
+    ] {
+        let event = map_keyboard_parts(k, c, 0, false, true, Modifiers::empty(), false);
+        assert_eq!(event.key, KeyValue::Named(expected_key), "mod key {k}");
+        assert_eq!(event.code, expected_code, "mod code {c}");
+    }
+}
+
 // ---------------------------------------------------------------------
 // IME
 // ---------------------------------------------------------------------

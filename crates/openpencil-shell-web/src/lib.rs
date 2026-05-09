@@ -240,100 +240,126 @@ pub fn mount(canvas_id: &str) -> Result<WebShell, JsValue> {
     // which point the registration target gets parameterized.
     let win_target: web_sys::EventTarget = window.clone().into();
 
-    // ----- keyboard: keydown + keyup → WidgetHost::apply_key -----
-    {
-        let inner_kd = inner.clone();
-        add_listener::<KeyboardEvent, _>(
-            &win_target,
-            "keydown",
-            &mut listeners,
-            move |evt: KeyboardEvent| {
-                let key_event = keyboard::map_keyboard_parts(
-                    &evt.key(),
-                    &evt.code(),
-                    evt.location(),
-                    evt.repeat(),
-                    true, // pressed
-                    modifiers_from_keyboard(&evt),
-                    evt.is_composing(),
-                );
-                let mut inner = inner_kd.borrow_mut();
-                inner.host.apply_key(&key_event);
-                let _ = inner.repaint();
-            },
-        )?;
-    }
-    {
-        let inner_ku = inner.clone();
-        add_listener::<KeyboardEvent, _>(
-            &win_target,
-            "keyup",
-            &mut listeners,
-            move |evt: KeyboardEvent| {
-                let key_event = keyboard::map_keyboard_parts(
-                    &evt.key(),
-                    &evt.code(),
-                    evt.location(),
-                    evt.repeat(),
-                    false, // released
-                    modifiers_from_keyboard(&evt),
-                    evt.is_composing(),
-                );
-                let mut inner = inner_ku.borrow_mut();
-                inner.host.apply_key(&key_event);
-                let _ = inner.repaint();
-            },
-        )?;
-    }
+    // Codex Phase C gate BLOCK: registering N listeners with `?`
+    // is NOT exception-safe — if registration #K fails, the
+    // partially-built `listeners` vec drops without our `Drop for
+    // WebShell` ever firing (we never reach the `Ok(WebShell {
+    // ... })` line), and the K-1 already-registered DOM callbacks
+    // outlive their wasm-bindgen Closures. Wrap all registrations
+    // in an inner closure that, on Err, drains the partial vec
+    // and unregisters everything we managed to land before
+    // surfacing the error. The unregister loop is the same one
+    // `Drop for WebShell` runs.
+    let registration: Result<(), JsValue> = (|listeners: &mut Vec<Listener>| {
+        // ----- keyboard: keydown + keyup → WidgetHost::apply_key -----
+        {
+            let inner_kd = inner.clone();
+            add_listener::<KeyboardEvent, _>(
+                &win_target,
+                "keydown",
+                listeners,
+                move |evt: KeyboardEvent| {
+                    let key_event = keyboard::map_keyboard_parts(
+                        &evt.key(),
+                        &evt.code(),
+                        evt.location(),
+                        evt.repeat(),
+                        true, // pressed
+                        modifiers_from_keyboard(&evt),
+                        evt.is_composing(),
+                    );
+                    let mut inner = inner_kd.borrow_mut();
+                    inner.host.apply_key(&key_event);
+                    let _ = inner.repaint();
+                },
+            )?;
+        }
+        {
+            let inner_ku = inner.clone();
+            add_listener::<KeyboardEvent, _>(
+                &win_target,
+                "keyup",
+                listeners,
+                move |evt: KeyboardEvent| {
+                    let key_event = keyboard::map_keyboard_parts(
+                        &evt.key(),
+                        &evt.code(),
+                        evt.location(),
+                        evt.repeat(),
+                        false, // released
+                        modifiers_from_keyboard(&evt),
+                        evt.is_composing(),
+                    );
+                    let mut inner = inner_ku.borrow_mut();
+                    inner.host.apply_key(&key_event);
+                    let _ = inner.repaint();
+                },
+            )?;
+        }
 
-    // ----- IME: compositionstart / update / end → WidgetHost::apply_ime -----
-    // Phase C1 ime mappers do the UTF-16→UTF-8 selection remap when
-    // the browser supplies an IME-highlighted segment via
-    // `getTargetRanges()`; current browsers expose that range via
-    // a method we cannot call on `CompositionEvent` directly through
-    // web-sys 0.3.94 without an extra raw `Reflect::get` shim.
-    // For Step 1b we forward `data` only; selection lands in Phase D
-    // alongside the DOM mirror that already needs Reflect::get.
-    {
-        let inner_cs = inner.clone();
-        add_listener::<CompositionEvent, _>(
-            &win_target,
-            "compositionstart",
-            &mut listeners,
-            move |_evt: CompositionEvent| {
-                let mut inner = inner_cs.borrow_mut();
-                inner.host.apply_ime(&ime::composition_start());
-                let _ = inner.repaint();
-            },
-        )?;
-    }
-    {
-        let inner_cu = inner.clone();
-        add_listener::<CompositionEvent, _>(
-            &win_target,
-            "compositionupdate",
-            &mut listeners,
-            move |evt: CompositionEvent| {
-                let text = evt.data().unwrap_or_default();
-                let mut inner = inner_cu.borrow_mut();
-                inner.host.apply_ime(&ime::composition_update(text, None));
-                let _ = inner.repaint();
-            },
-        )?;
-    }
-    {
-        let inner_ce = inner.clone();
-        add_listener::<CompositionEvent, _>(
-            &win_target,
-            "compositionend",
-            &mut listeners,
-            move |evt: CompositionEvent| {
-                let text = evt.data().unwrap_or_default();
-                let mut inner = inner_ce.borrow_mut();
-                inner.host.apply_ime(&ime::composition_end(text));
-                let _ = inner.repaint();
-            },
-        )?;
+        // ----- IME: compositionstart / update / end → WidgetHost::apply_ime -----
+        // Phase C1 ime mappers do the UTF-16→UTF-8 selection remap when
+        // the browser supplies an IME-highlighted segment via
+        // `getTargetRanges()`; current browsers expose that range via
+        // a method we cannot call on `CompositionEvent` directly through
+        // web-sys 0.3.94 without an extra raw `Reflect::get` shim.
+        // For Step 1b we forward `data` only; selection lands in Phase D
+        // alongside the DOM mirror that already needs Reflect::get.
+        {
+            let inner_cs = inner.clone();
+            add_listener::<CompositionEvent, _>(
+                &win_target,
+                "compositionstart",
+                listeners,
+                move |_evt: CompositionEvent| {
+                    let mut inner = inner_cs.borrow_mut();
+                    inner.host.apply_ime(&ime::composition_start());
+                    let _ = inner.repaint();
+                },
+            )?;
+        }
+        {
+            let inner_cu = inner.clone();
+            add_listener::<CompositionEvent, _>(
+                &win_target,
+                "compositionupdate",
+                listeners,
+                move |evt: CompositionEvent| {
+                    let text = evt.data().unwrap_or_default();
+                    let mut inner = inner_cu.borrow_mut();
+                    inner.host.apply_ime(&ime::composition_update(text, None));
+                    let _ = inner.repaint();
+                },
+            )?;
+        }
+        {
+            let inner_ce = inner.clone();
+            add_listener::<CompositionEvent, _>(
+                &win_target,
+                "compositionend",
+                listeners,
+                move |evt: CompositionEvent| {
+                    let text = evt.data().unwrap_or_default();
+                    let mut inner = inner_ce.borrow_mut();
+                    inner.host.apply_ime(&ime::composition_end(text));
+                    let _ = inner.repaint();
+                },
+            )?;
+        }
+        Ok(())
+    })(&mut listeners);
+
+    if let Err(e) = registration {
+        // Unwind partial registration. Same body as `Drop for
+        // WebShell`; kept inline rather than refactored into a free
+        // function because the lifetimes only line up when the
+        // `Listener` vec is local to mount().
+        for l in listeners.drain(..) {
+            let _ = l
+                .target
+                .remove_event_listener_with_callback(l.name, l.closure.as_ref().unchecked_ref());
+        }
+        return Err(e);
     }
 
     Ok(WebShell { inner, listeners })
