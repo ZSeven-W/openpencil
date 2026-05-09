@@ -192,6 +192,17 @@ describe('buildFallbackPlanFromPrompt', () => {
     ['design a mobile login screen'],
     ['design a dashboard home page'],
     ['design an onboarding flow'],
+    // Codex review #5: dashboard / admin / workspace prompts that ALSO
+    // name a tile / panel / chart / metric must route to desktop-screen,
+    // not Type 0. These are the anchors we lost when broadening the
+    // trigger noun list to cover the full design-type.md catalog.
+    ['design an admin dashboard with metric tiles'],
+    ['design a dashboard with charts and stats'],
+    ['design an admin panel for user management'],
+    ['design a workspace with side panel and metrics'],
+    ['设计一个后台管理页面 with 卡片'],
+    ['design a mobile profile card screen'], // mobile keyword wins
+    ['design a phone home screen with badge'], // phone keyword wins
   ])('does NOT misclassify "%s" as a component', (prompt) => {
     const plan = buildFallbackPlanFromPrompt(prompt);
     expect(plan.rootFrame.width).not.toBe(400);

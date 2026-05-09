@@ -33,7 +33,19 @@ const COMPONENT_TRIGGER_LATIN_RE =
   /\b(card|badge|chip|tag|tile|pill|label|row|item|button|toggle|switch|selector|modal|dialog|tooltip|popover|sheet|widget|panel|avatar|stepper|stat|metric|chart)\b/i;
 const COMPONENT_TRIGGER_CJK_RE = /(卡片|徽章|标签|按钮|开关|对话框|提示|气泡|图表)/;
 
-const COMPONENT_DISQUALIFIER_RE = /\b(screen|page|app|home|onboarding|flow)\b|网页|页面|屏幕/i;
+// Disqualifiers fall into three buckets:
+//   - Screen-level nouns ("screen", "page", "app", "home", "onboarding",
+//     "flow", + zh-Hans equivalents) — the user named a whole screen, not
+//     a single piece.
+//   - Mobile-screen markers ("mobile", "phone", "ios", "android", "手机",
+//     "移动端") — a mobile-skewed prompt should hit the mobile-screen
+//     branch below, not the 400px-component branch.
+//   - Workspace markers ("dashboard", "admin", "workspace", "console",
+//     "管理", "后台", "控制台") — these anchor a desktop-screen, even when
+//     the prompt also names a tile/panel/chart/metric inside it
+//     ("admin dashboard with metric tiles" must not become a Type 0 tile).
+const COMPONENT_DISQUALIFIER_RE =
+  /\b(screen|page|app|home|onboarding|flow|mobile|phone|ios|android|dashboard|admin|workspace|console)\b|网页|页面|屏幕|手机|移动端|管理|后台|控制台/i;
 
 /**
  * Minimal fallback design type detection.
