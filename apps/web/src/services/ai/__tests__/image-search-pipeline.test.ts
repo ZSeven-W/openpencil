@@ -4,6 +4,7 @@ import {
   isImagePlaceholderFrame,
   isUnfilledImagePlaceholderFrame,
   isImageAreaFrameByHeuristic,
+  isFramePlaceholderStillUnfilled,
   collectImageSearchTargets,
   extractQueryForNode,
   findParentSemanticName,
@@ -541,5 +542,80 @@ describe('extractQueryForNode + findParentSemanticName', () => {
     // is non-generic ("My Custom Photo" — has "Photo" but it's not the
     // bare generic literal in the GENERIC_PLACEHOLDER_NAMES set).
     expect(extractQueryForNode(node)).toBe('My Custom Photo');
+  });
+});
+
+describe('isFramePlaceholderStillUnfilled (queue re-check predicate)', () => {
+  // Codex review #N (2026-05-10): the queue processor's still-needs-fill
+  // gate previously called isUnfilledImagePlaceholderFrame which rejects
+  // anything without role='image-placeholder'. Heuristic frames passed
+  // collectImageSearchTargets + enqueue but then got dropped here, so the
+  // food-app card photos still never landed. This helper combines both
+  // canonical and heuristic branches so the gate stays consistent with
+  // the enqueue path.
+
+  it('accepts canonical unfilled placeholder frame', () => {
+    const node = {
+      id: 'p',
+      type: 'frame',
+      role: 'image-placeholder',
+      width: 200,
+      height: 140,
+      fill: [{ type: 'solid', color: '#F1F5F9' }],
+    } as unknown as PenNode;
+    expect(isFramePlaceholderStillUnfilled(node)).toBe(true);
+  });
+
+  it('accepts heuristic-matched frame named "Image" with solid fill', () => {
+    const node = {
+      id: 'h',
+      type: 'frame',
+      name: 'Image',
+      width: 200,
+      height: 140,
+      fill: [{ type: 'solid', color: '#FCD34D' }],
+    } as unknown as PenNode;
+    expect(isFramePlaceholderStillUnfilled(node)).toBe(true);
+  });
+
+  it('rejects already-filled placeholder (image fill present)', () => {
+    const node = {
+      id: 'p',
+      type: 'frame',
+      role: 'image-placeholder',
+      width: 200,
+      height: 140,
+      fill: [{ type: 'image', url: 'http://x.png' }],
+    } as unknown as PenNode;
+    expect(isFramePlaceholderStillUnfilled(node)).toBe(false);
+  });
+
+  it('rejects already-filled heuristic frame (image fill present)', () => {
+    const node = {
+      id: 'h',
+      type: 'frame',
+      name: 'Image',
+      width: 200,
+      height: 140,
+      fill: [{ type: 'image', url: 'http://x.png' }],
+    } as unknown as PenNode;
+    expect(isFramePlaceholderStillUnfilled(node)).toBe(false);
+  });
+
+  it('rejects null / undefined', () => {
+    expect(isFramePlaceholderStillUnfilled(null)).toBe(false);
+    expect(isFramePlaceholderStillUnfilled(undefined)).toBe(false);
+  });
+
+  it('rejects unrelated frame (no role + name not in IMAGE_AREA_NAME_RE)', () => {
+    const node = {
+      id: 'x',
+      type: 'frame',
+      name: 'Card Wrapper',
+      width: 200,
+      height: 140,
+      fill: [{ type: 'solid', color: '#FFF' }],
+    } as unknown as PenNode;
+    expect(isFramePlaceholderStillUnfilled(node)).toBe(false);
   });
 });
