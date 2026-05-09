@@ -592,7 +592,99 @@ export function detectTextStroke(root: PenNode): Issue[] {
 }
 
 /**
- * Run all 9 detectors and return the deduplicated combined issue list.
+ * Aesthetic detector: siblings (>= 3 of the same type+role) with
+ * inconsistent padding. Mirrors detectMixedSiblingCornerRadius — picks
+ * the modal value, flags the outliers.
+ *
+ * Padding is normalised to a 4-tuple [top, right, bottom, left] for
+ * comparison so e.g. `padding: 16` (shorthand) and `padding: [16,16,16,16]`
+ * (explicit) compare equal. Numbers, 2-tuples [v, h] (CSS shorthand) and
+ * 4-tuples are all accepted; anything else is treated as "no padding".
+ *
+ * Picks up "three cards with padding 16 / 16 / 20" — the kind of
+ * 4px-mismatch the model emits when copying examples from different
+ * sources. The existing sibling-inconsistency detector already covers
+ * cards-vs-cards via FRAME_STRICT_PROPS, BUT it dedupes against
+ * cornerRadius and other props so the padding outlier sometimes drops.
+ * This is a stricter equal-or-report check on padding alone.
+ */
+export function detectMixedSiblingPadding(root: PenNode): Issue[] {
+  const issues: Issue[] = [];
+  function normalise(p: unknown): string | null {
+    if (typeof p === 'number') return `[${p},${p},${p},${p}]`;
+    if (Array.isArray(p)) {
+      if (p.length === 2) return `[${p[0]},${p[1]},${p[0]},${p[1]}]`;
+      if (p.length === 4) return `[${p[0]},${p[1]},${p[2]},${p[3]}]`;
+    }
+    return null;
+  }
+  function walk(node: PenNode): void {
+    if (!('children' in node) || !Array.isArray(node.children)) return;
+    if (node.children.length >= 3) {
+      const groups = new Map<string, PenNode[]>();
+      for (const c of node.children) {
+        const role = ((c as { role?: string }).role ?? '').toLowerCase() || '__none__';
+        if (role === 'divider' || role === 'spacer') continue;
+        const key = `${c.type}:${role}`;
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key)!.push(c);
+      }
+      for (const [, siblings] of groups) {
+        if (siblings.length < 3) continue;
+        const counts = new Map<string, number>();
+        const norms = siblings.map((s) => {
+          const p = (s as unknown as { padding?: unknown }).padding;
+          const n = normalise(p);
+          if (n) counts.set(n, (counts.get(n) ?? 0) + 1);
+          return n;
+        });
+        if (counts.size < 2) continue;
+        let modal = '';
+        let modalCount = 0;
+        for (const [val, count] of counts) {
+          if (count > modalCount) {
+            modal = val;
+            modalCount = count;
+          }
+        }
+        // Same 60% rule as cornerRadius — only flag when there's a
+        // clear majority. 1-1-1 splits get skipped (no canonical
+        // value to suggest).
+        if (modalCount / siblings.length < 0.6) continue;
+        siblings.forEach((s, i) => {
+          const norm = norms[i];
+          if (norm !== null && norm !== modal) {
+            // Parse modal back to a value the store can apply. Modal
+            // is always [a,b,c,d] form.
+            const m = modal.match(
+              /\[(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)\]/,
+            );
+            if (!m) return;
+            const [, a, b, c, d] = m;
+            const tup = [Number(a), Number(b), Number(c), Number(d)];
+            const allEqual = tup.every((n) => n === tup[0]);
+            const suggested: number | number[] = allEqual ? tup[0] : tup;
+            issues.push({
+              nodeId: s.id,
+              category: 'mixed-sibling-padding',
+              severity: 'warning',
+              property: 'padding',
+              currentValue: (s as unknown as { padding?: unknown }).padding,
+              suggestedValue: suggested,
+              reason: `padding ${norm} doesn't match the ${modalCount} other sibling(s) at ${modal}`,
+            });
+          }
+        });
+      }
+    }
+    for (const c of node.children) walk(c);
+  }
+  walk(root);
+  return issues;
+}
+
+/**
+ * Run all 10 detectors and return the deduplicated combined issue list.
  * Dedup key: `${nodeId}:${property}` (matches runPreValidationFixes).
  * On collision, the first issue wins (detector execution order below).
  */
@@ -607,6 +699,7 @@ export function detectAllIssues(root: PenNode, doc: PenDocument): Issue[] {
     ...detectMixedSiblingCornerRadius(root),
     ...detectTextEffect(root),
     ...detectTextStroke(root),
+    ...detectMixedSiblingPadding(root),
   ];
   const seen = new Set<string>();
   const unique: Issue[] = [];
