@@ -30,71 +30,6 @@ export function isImagePlaceholderFrame(node: PenNode | undefined | null): boole
 }
 
 /**
- * Heuristic detector for "looks like an image area" frames the model
- * emitted WITHOUT the canonical `role: 'image-placeholder'`. Common
- * pattern: restaurant / product / event card whose top is a wide solid
- * coloured frame named "Image" / "Photo" / "Cover" / "Hero" / "Thumbnail"
- * — the model uses raw frame nodes instead of `add_image_placeholder_v1`,
- * so the strict isImagePlaceholderFrame check misses them and the auto-
- * search pipeline never fires. Result: cards land on canvas with empty
- * coloured rectangles where photos should be (the "Bella Italia" card
- * bug from the 2026-05-09 user report).
- *
- * Conservative match policy:
- *   - frame node, has a name matching IMAGE_AREA_NAME_RE
- *   - has a single solid (non-image) fill — not a gradient, not already
- *     filled with type:'image'
- *   - has 0 children, OR exactly 1 icon_font child (the typical
- *     "broken image" placeholder hint emitted alongside the colored
- *     frame). A non-icon child means the frame holds real content
- *     (e.g. a hero with a CTA button inside) — those must NEVER be
- *     swept into a photo replacement, because the queue's update path
- *     clears children when the fetch succeeds and would erase the CTA.
- *   - aspect ratio: width is a finite number >= 80 AND height >= 60
- *     (filters out 1px borders, tiny color swatches, dividers)
- *
- * False-positive risk: a real solid-colour decorative block named
- * "Hero" or "Cover" gets searched and overwritten with a photo. Mitigated
- * by the name regex requiring an image / photo / cover / hero / thumbnail
- * keyword — purely decorative blocks are rarely named this way. Test
- * coverage in image-search-pipeline.test.ts protects the boundary.
- */
-const IMAGE_AREA_NAME_RE = /\b(image|photo|cover|hero|thumbnail|thumb|picture|banner|poster)\b/i;
-
-export function isImageAreaFrameByHeuristic(node: PenNode | undefined | null): boolean {
-  if (!node || node.type !== 'frame') return false;
-  // Already a canonical placeholder — handled by the strict path; skip
-  // here to avoid double-counting.
-  if ((node as PenNode & { role?: string }).role === 'image-placeholder') return false;
-  const name = (node as PenNode & { name?: string }).name;
-  if (typeof name !== 'string' || !IMAGE_AREA_NAME_RE.test(name)) return false;
-  // Width/height shape — skip non-image-shaped blocks.
-  const w = (node as PenNode & { width?: unknown }).width;
-  const h = (node as PenNode & { height?: unknown }).height;
-  if (typeof w !== 'number' || w < 80) return false;
-  if (typeof h !== 'number' || h < 60) return false;
-  // Single solid (non-image) fill only.
-  const fill = (node as PenNode & { fill?: unknown }).fill;
-  if (!Array.isArray(fill) || fill.length !== 1) return false;
-  const first = fill[0] as { type?: unknown } | undefined;
-  if (first?.type === 'image') return false; // already filled
-  if (first?.type !== 'solid') return false; // gradient = decorative, skip
-  // Children check — 0 children, or exactly 1 icon_font child. A frame
-  // with multiple children OR a non-icon child holds real content
-  // (CTA / text / nested layout) and the queue's children:[] erase
-  // step would destroy it. Codex stop-time review on 2026-05-10 caught
-  // this: previously we accepted "0 or 1 children" with no type check,
-  // so a hero frame with a button would match and get its button wiped
-  // when the photo landed.
-  const children = (node as PenNode & { children?: PenNode[] }).children;
-  if (Array.isArray(children)) {
-    if (children.length > 1) return false;
-    if (children.length === 1 && children[0].type !== 'icon_font') return false;
-  }
-  return true;
-}
-
-/**
  * True when the frame is a placeholder AND still carries the gray
  * solid fill (i.e. has not yet been filled by a previous scan). The
  * filled-frame flag we leave on the node is the fill itself: once a
@@ -113,19 +48,6 @@ export function isUnfilledImagePlaceholderFrame(node: PenNode | undefined | null
   const first = fill[0] as { type?: unknown } | undefined;
   // Already painted with an image fill = filled, skip.
   return first?.type !== 'image';
-}
-
-/**
- * Re-check predicate used by the queue processor before issuing a fetch.
- * The queue accepts both canonical placeholder frames (role-based) AND
- * heuristic-matched frames (named "Image" / "Photo" / "Cover" without
- * the role). Without combining both branches, heuristic frames enqueue
- * fine but get skipped at the still-needs-fill gate — the original bug
- * Codex flagged on 2026-05-10. This helper covers both kinds.
- */
-export function isFramePlaceholderStillUnfilled(node: PenNode | undefined | null): boolean {
-  if (!node) return false;
-  return isUnfilledImagePlaceholderFrame(node) || isImageAreaFrameByHeuristic(node);
 }
 
 interface ImageSearchTarget {
@@ -152,12 +74,6 @@ export function collectImageSearchTargets(rootId: string): ImageSearchTarget[] {
         targets.push({ node, kind: 'placeholder-frame' });
       }
       return;
-    } else if (isImageAreaFrameByHeuristic(node)) {
-      // Heuristic match — model emitted a "looks like an image area"
-      // frame without the canonical role. Treat as placeholder-frame so
-      // the search pipeline replaces its solid fill with a real photo.
-      targets.push({ node, kind: 'placeholder-frame' });
-      return;
     }
     if ('children' in node && Array.isArray(node.children)) {
       for (const child of node.children) walk(child);
@@ -174,78 +90,7 @@ function isPlaceholderSrc(src?: string): boolean {
   return !src || src.startsWith(PHONE_PLACEHOLDER_PREFIX);
 }
 
-/**
- * Names so generic that they tell the photo search API nothing useful.
- * For these, prefer mining context (parent frame name, sibling text)
- * over returning the name itself.
- */
-const GENERIC_PLACEHOLDER_NAMES = new Set([
-  'image',
-  'photo',
-  'cover',
-  'hero',
-  'thumbnail',
-  'thumb',
-  'picture',
-  'banner',
-  'poster',
-  'image placeholder',
-  'placeholder icon',
-  'placeholder',
-  'card image',
-  'card photo',
-  'product image',
-  'item image',
-]);
-
-function isGenericPlaceholderName(name: string): boolean {
-  return GENERIC_PLACEHOLDER_NAMES.has(name.trim().toLowerCase());
-}
-
-/**
- * Walk up to find a parent frame whose name carries product / restaurant
- * / event semantic. The image-search API hits much more useful results
- * with "Bella Italia" / "Margherita Pizza" than with the generic
- * "Image" name the model gave the placeholder. Bounded to 3 hops so a
- * deep page bg doesn't end up as the query.
- */
-export function findParentSemanticName(nodeId: string, maxHops = 3): string | null {
-  const { document: doc } = useDocumentStore.getState();
-  // Build a parent map by walking the doc tree once. Cheap for typical
-  // designs (< few hundred nodes) and avoids passing parent through
-  // every collectImageSearchTargets / enqueue call site.
-  const parentOf = new Map<string, PenNode>();
-  const walk = (n: PenNode): void => {
-    if ('children' in n && Array.isArray(n.children)) {
-      for (const c of n.children) {
-        parentOf.set(c.id, n);
-        walk(c);
-      }
-    }
-  };
-  const roots = doc.pages?.flatMap((p) => p.children ?? []) ?? doc.children ?? [];
-  for (const r of roots) walk(r);
-  let cur = parentOf.get(nodeId);
-  let hops = 0;
-  while (cur && hops < maxHops) {
-    const name = (cur as PenNode & { name?: string }).name;
-    if (typeof name === 'string' && name.length > 0 && !isGenericPlaceholderName(name)) {
-      // Filter common layout words so we don't end up searching for
-      // "Card" / "Wrapper" — neither yields useful photos.
-      const lower = name.toLowerCase();
-      if (
-        !/\b(card|wrapper|container|section|frame|root|page|stack|row|column|content)\b/.test(lower)
-      ) {
-        return name;
-      }
-    }
-    cur = parentOf.get(cur.id);
-    hops++;
-  }
-  return null;
-}
-
-export function extractQueryForNode(node: PenNode): string {
+function extractQueryForNode(node: PenNode): string {
   const r = node as PenNode & {
     imageSearchQuery?: string;
     name?: string;
@@ -253,6 +98,14 @@ export function extractQueryForNode(node: PenNode): string {
   };
   if (typeof r.imageSearchQuery === 'string' && r.imageSearchQuery.length > 0) {
     return r.imageSearchQuery;
+  }
+  if (
+    typeof r.name === 'string' &&
+    r.name.length > 0 &&
+    r.name !== 'Image Placeholder' &&
+    r.name !== 'Placeholder Icon'
+  ) {
+    return r.name;
   }
   // For placeholder frames, mine the optional label child for a hint
   // (e.g. "Hero image" / "Upload cover" — set by the caller).
@@ -267,15 +120,6 @@ export function extractQueryForNode(node: PenNode): string {
       }
     }
   }
-  // If the node's name is too generic to make a useful photo query
-  // (literal "Image" / "Photo" / "Cover" — common with the heuristic
-  // detector), walk up to find a semantic parent name (e.g. "Bella
-  // Italia" or "Margherita Pizza" from the food-app card scenario).
-  if (typeof r.name === 'string' && r.name.length > 0 && !isGenericPlaceholderName(r.name)) {
-    return r.name;
-  }
-  const parentName = findParentSemanticName(node.id);
-  if (parentName) return parentName;
   return r.name ?? 'placeholder';
 }
 
@@ -297,17 +141,12 @@ let queueProcessing = false;
 let queueAbort: AbortController | null = null;
 
 /**
- * Enqueue an image target for background search. Accepts:
- *   - real `image` node with a placeholder src
- *   - frame carrying `role: 'image-placeholder'` (canonical, from
- *     add_image_placeholder_v0/v1)
- *   - frame matching the isImageAreaFrameByHeuristic predicate (a
- *     non-canonical placeholder the model emitted as a plain colored
- *     "Image" / "Photo" / "Cover" / "Hero" frame — see the comment on
- *     that function for the full match policy)
+ * Enqueue an image target for background search. Accepts either a real
+ * `image` node with a placeholder src OR a `frame` carrying
+ * `role: 'image-placeholder'` (what `add_image_placeholder_v0/v1` emit).
  *
  * Called from insertStreamingNode for streamed image nodes, and from
- * `scanAndFillImages` for all shapes after a non-streaming insert (the
+ * `scanAndFillImages` for both shapes after a non-streaming insert (the
  * orchestrator-tail and per-subtask scans). Streaming intentionally
  * skips placeholder frames because their icon/label children stream in
  * separately — enqueueing the frame mid-stream and replacing children
@@ -319,8 +158,6 @@ export function enqueueImageForSearch(node: PenNode): void {
     if (!isPlaceholderSrc((node as ImageNode).src)) return;
     kind = 'image';
   } else if (isUnfilledImagePlaceholderFrame(node)) {
-    kind = 'placeholder-frame';
-  } else if (isImageAreaFrameByHeuristic(node)) {
     kind = 'placeholder-frame';
   } else {
     return;
@@ -373,7 +210,13 @@ async function processQueue(): Promise<void> {
       if (item.kind === 'image' && currentNode.type === 'image') {
         stillNeedsFill = isPlaceholderSrc((currentNode as ImageNode).src);
       } else if (item.kind === 'placeholder-frame') {
-        stillNeedsFill = isFramePlaceholderStillUnfilled(currentNode);
+        // Strict re-check: the frame must STILL be a placeholder AND not
+        // already filled with an image. Without the fill check, a
+        // follow-up generation that resets `queuedNodeIds` and re-runs
+        // `scanAndFillImages` on the same tree would re-search the
+        // already-good photo and overwrite it with whatever the new
+        // search returns.
+        stillNeedsFill = isUnfilledImagePlaceholderFrame(currentNode);
       }
     }
     if (!stillNeedsFill) {

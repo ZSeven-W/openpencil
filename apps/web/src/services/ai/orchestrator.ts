@@ -103,68 +103,6 @@ function removeDuplicateStatusBars(rootNodes: FrameNode[]): void {
   }
 }
 
-/**
- * Type 0 component plans always have exactly 1 subtask, and the sub-agent
- * conventionally emits a "section root frame" inside the orchestrator's
- * pre-inserted page rootFrame. For multi-section pages that wrapper is the
- * section container; for a Type 0 single-component design it's a redundant
- * "Notification Card → Notification Card" double wrap that shows up in the
- * layers panel and inflates layout depth for no visual benefit.
- *
- * This pass runs only for component-shaped plans (narrow + auto-height).
- * If the orchestrator rootFrame ends up with exactly one child frame whose
- * id was assigned the sub-agent section-root suffix (`-root` / `-section`)
- * OR whose name copies the parent name, hoist that child's children up to
- * the rootFrame and delete the wrapper. Conservative on any other shape —
- * never touches multi-section pages.
- */
-/**
- * Pure-function check (no store / no mutation) — returns true iff the
- * given root + plan satisfy the unwrap preconditions described above.
- * Extracted for unit testability; the integration path below feeds in
- * the live store-read root and applies the actual hoist + delete.
- */
-export function shouldUnwrapSingleComponentSectionRoot(
-  plan: OrchestratorPlan,
-  root: PenNode,
-): boolean {
-  if (plan.subtasks.length !== 1) return false;
-  if (plan.rootFrame.width > 480) return false;
-  if (typeof plan.rootFrame.height === 'number' && plan.rootFrame.height >= 480) return false;
-  if (!root || root.type !== 'frame' || !('children' in root) || !root.children) return false;
-  if (root.children.length !== 1) return false;
-  const wrapper = root.children[0];
-  if (wrapper.type !== 'frame') return false;
-  const wrapperChildren =
-    'children' in wrapper && Array.isArray(wrapper.children) ? wrapper.children : [];
-  if (wrapperChildren.length === 0) return false;
-  const wrapperName = ('name' in wrapper ? (wrapper as { name?: string }).name : '') ?? '';
-  const wrapperId = wrapper.id;
-  const rootName = ('name' in root ? (root as { name?: string }).name : '') ?? '';
-  return (
-    wrapperId.endsWith('-root') ||
-    wrapperId.endsWith('-section') ||
-    (rootName !== '' && wrapperName === rootName)
-  );
-}
-
-function unwrapSingleComponentSectionRoot(rootNodes: FrameNode[], plan: OrchestratorPlan): void {
-  const store = useDocumentStore.getState();
-  for (const rn of rootNodes) {
-    const root = store.getNodeById(rn.id);
-    if (!root) continue;
-    if (!shouldUnwrapSingleComponentSectionRoot(plan, root)) continue;
-    const wrapper = (root as { children: PenNode[] }).children[0];
-    const wrapperChildren = (wrapper as { children: PenNode[] }).children;
-    // Snapshot children ids in order before mutation, then move each one
-    // up to the rootFrame and remove the wrapper. moveNode preserves
-    // the relative order via the explicit index argument.
-    const childIds = wrapperChildren.map((c) => c.id);
-    childIds.forEach((cid, i) => store.moveNode(cid, root.id, i));
-    store.removeNode(wrapper.id);
-  }
-}
-
 function isAIDuplicateStatusBar(node: PenNode): boolean {
   if (node.type !== 'frame') return false;
   if ('role' in node && (node as { role?: string }).role === 'status-bar') return false;
@@ -1201,12 +1139,6 @@ export async function executeOrchestration(
       if (isMobile) {
         removeDuplicateStatusBars(rootNodes);
       }
-
-      // -- Phase 4c: Unwrap single-component section root (Type 0) --
-      // Runs only for component-shape plans (narrow + auto-height) and
-      // is a no-op for everything else, so mutually exclusive with the
-      // mobile dedup above. Must also run BEFORE height adjustment.
-      unwrapSingleComponentSectionRoot(rootNodes, plan);
 
       // Height adjustment runs after duplicate removal for both animated and
       // non-animated paths so the frame size reflects the cleaned node tree.

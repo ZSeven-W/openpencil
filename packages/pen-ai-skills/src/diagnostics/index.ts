@@ -5,13 +5,5 @@ export {
   detectEmptyPaths,
   detectTextExplicitHeights,
   detectSiblingInconsistencies,
-  detectUnexpectedRotation,
-  detectTextCornerRadius,
-  detectMixedSiblingCornerRadius,
-  detectTextEffect,
-  detectTextStroke,
-  detectMixedSiblingPadding,
-  detectExcessiveFrameEffects,
   detectAllIssues,
 } from './detectors';
-export { detectEdgeSectionPadding } from './detectors-spacing';

@@ -137,10 +137,7 @@ export function buildFallbackPlanFromPrompt(
   const designMdBg = designMd ? inferDesignMdBackground(designMd) : null;
 
   // Try to select a style guide based on prompt keywords (only when no design.md)
-  // Style-guide platform: only `mobile-screen` is genuinely mobile.
-  // `component` (Type 0) is small but takes webapp-style design tokens
-  // (no status bar / bottom nav / safe area), so it groups with webapp.
-  const platform = preset.type === 'mobile-screen' ? 'mobile' : 'webapp';
+  const platform = preset.width <= 500 ? 'mobile' : 'webapp';
   const tags = inferTagsFromPrompt(prompt);
   const guide = designMd ? null : selectStyleGuide(styleGuideRegistry, { tags, platform });
 
@@ -166,14 +163,11 @@ export function buildFallbackPlanFromPrompt(
   const sectionCount = Math.max(1, labels.length);
 
   // Mobile: split height evenly (no weighted allocation — sub-agent decides actual proportions)
-  // Component: single ~200px region (typical card height before content fills in)
   // Desktop: use standard weighted allocation
   let heights: number[];
   if (preset.type === 'mobile-screen') {
     const perSection = Math.floor(preset.height / sectionCount);
     heights = labels.map(() => perSection);
-  } else if (preset.type === 'component') {
-    heights = labels.map(() => 200);
   } else {
     const totalHeight = preset.height || (sectionCount >= 4 ? 4000 : 800);
     heights = allocateSectionHeights(totalHeight, sectionCount);
@@ -277,10 +271,7 @@ export function buildPlanningStyleGuideContext(
   }
 
   const preset = detectDesignType(prompt);
-  // Style-guide platform: only `mobile-screen` is genuinely mobile.
-  // `component` (Type 0) is small but takes webapp-style design tokens
-  // (no status bar / bottom nav / safe area), so it groups with webapp.
-  const platform = preset.type === 'mobile-screen' ? 'mobile' : 'webapp';
+  const platform = preset.width <= 500 ? 'mobile' : 'webapp';
   const tags = inferTagsFromPrompt(prompt);
   const tier = resolveModelProfile(model).tier;
   const ranked = rankStyleGuidesForPrompt(tags, platform);
@@ -364,10 +355,7 @@ export function buildCompactPlanningPrompt(
   designMd?: DesignMdSpec,
 ): CompactPlanningPrompt {
   const preset = detectDesignType(prompt);
-  // Style-guide platform: only `mobile-screen` is genuinely mobile.
-  // `component` (Type 0) is small but takes webapp-style design tokens
-  // (no status bar / bottom nav / safe area), so it groups with webapp.
-  const platform = preset.type === 'mobile-screen' ? 'mobile' : 'webapp';
+  const platform = preset.width <= 500 ? 'mobile' : 'webapp';
   const tags = inferTagsFromPrompt(prompt);
   const designMdBg = designMd ? inferDesignMdBackground(designMd) : null;
   const selectedGuide = designMd ? null : selectStyleGuide(styleGuideRegistry, { tags, platform });
@@ -383,9 +371,7 @@ export function buildCompactPlanningPrompt(
       ? 'Create 2-4 cohesive subtasks for one mobile app screen. Group related UI together.'
       : preset.type === 'desktop-screen'
         ? 'Create 2-5 cohesive workspace sections. Keep related dashboard panels together.'
-        : preset.type === 'component'
-          ? 'Create exactly 1 subtask for this single component (no surrounding screen, no chrome).'
-          : 'Create 4-8 scrollable page sections in top-to-bottom order.';
+        : 'Create 4-8 scrollable page sections in top-to-bottom order.';
   const mobileRules =
     preset.type === 'mobile-screen'
       ? [
@@ -393,14 +379,7 @@ export function buildCompactPlanningPrompt(
           'Do NOT create a status bar section. The status bar is inserted separately.',
           'Use width=375 and height=812 on the root frame.',
         ]
-      : preset.type === 'component'
-        ? [
-            'This is a single component (Type 0), not a screen.',
-            'Do NOT create a status bar, navigation, or footer section.',
-            'Use width=400 and height=0 on the root frame.',
-            'Use exactly 1 subtask for the component itself.',
-          ]
-        : ['Use width=1200 and height=0 on the root frame.'];
+      : ['Use width=1200 and height=0 on the root frame.'];
   const styleRule = designMd
     ? `Use styleGuideName="${DESIGN_MD_STYLE_GUIDE_NAME}" and rootFrame background ${backgroundColor} (from the user's design.md — overrides any catalog default).`
     : selectedGuide

@@ -4,15 +4,7 @@ export type IssueCategory =
   | 'invisible-container'
   | 'empty-path'
   | 'text-explicit-height'
-  | 'sibling-inconsistency'
-  | 'unexpected-rotation'
-  | 'text-corner-radius'
-  | 'mixed-sibling-corner-radius'
-  | 'text-effect'
-  | 'text-stroke'
-  | 'mixed-sibling-padding'
-  | 'excessive-frame-effects'
-  | 'edge-section-padding';
+  | 'sibling-inconsistency';
 
 export interface Issue {
   /** Node id where the issue was detected */

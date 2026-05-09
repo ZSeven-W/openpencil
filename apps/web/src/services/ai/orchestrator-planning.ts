@@ -192,17 +192,6 @@ function extractSubtaskCandidates(obj: Record<string, unknown>): unknown[] {
 
 function buildFallbackHeights(fallback: OrchestratorPlan, count: number): number[] {
   if (count <= 0) return [];
-  // Mobile screen: split the fixed 812 viewport evenly across sections.
-  // Component (narrow + auto-height): use a single section sized for a
-  // typical card (200px) — 812/n would be a misleading "tall mobile screen"
-  // height for a Type 0 component.
-  // Desktop / landing page: weighted allocation over the explicit height.
-  const isComponentShape =
-    fallback.rootFrame.width <= 480 &&
-    (fallback.rootFrame.height === 0 || fallback.rootFrame.height === undefined);
-  if (isComponentShape) {
-    return Array.from({ length: count }, () => Math.floor(200));
-  }
   if (fallback.rootFrame.width <= 500) {
     const perSection = Math.floor((fallback.rootFrame.height || 812) / count);
     return Array.from({ length: count }, () => perSection);

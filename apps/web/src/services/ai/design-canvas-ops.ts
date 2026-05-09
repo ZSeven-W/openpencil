@@ -18,7 +18,6 @@ import {
   normalizeTreeLayout,
   unwrapFakePhoneMockups,
   stripRedundantSectionFills,
-  clipCardImageCorners,
   injectMissingNavSurfaceFill,
   expandOverflowingFixedHeightCards,
   convertStackedOverlayToAbsolute,
@@ -689,23 +688,6 @@ export function applyPostStreamingTreeHeuristics(rootNodeId: string): void {
   // Always read a fresh reference for mutation passes that follow updateNode.
   const freshRoot = useDocumentStore.getState().getNodeById(rootNodeId);
   if (!freshRoot || freshRoot.type !== 'frame') return;
-
-  // Card-image corner cleanup: when a sub-agent emits a card whose first
-  // child is a full-width image with its own scalar cornerRadius, the
-  // image's BOTTOM corners render rounded inside the card while the
-  // title below sits flush — the visual artifact the 2026-05-10 user
-  // report flagged on the Taco Fiesta card. clipCardImageCorners turns
-  // that into clipContent on the card + scalar cornerRadius removed
-  // from the image, so the card's outer rounding cleanly clips the
-  // image's hypothetical bottom corners.
-  //
-  // MUST run AFTER resolveTreeRoles + resolveTreePostPass: the role
-  // resolver fills in default cornerRadius for role='card' and other
-  // container roles when the model didn't specify one. Running this
-  // pass before role defaults would silently miss every card that
-  // relied on the default — Codex stop-time review caught this on
-  // 2026-05-10.
-  clipCardImageCorners(freshRoot);
 
   // Detect layered hero / overlay containers BEFORE the normalize pass.
   // `convertStackedOverlayToAbsolute` switches `layout: 'vertical'` to

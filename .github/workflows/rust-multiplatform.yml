@@ -12,7 +12,6 @@ on:
       - 'Cargo.lock'
       - 'crates/**'
       - 'vendor/jian/**'
-      - 'vendor/skia-safe-op/**'
       - 'rust-toolchain.toml'
       - 'deny.toml'
       - '.github/workflows/rust-multiplatform.yml'
@@ -22,7 +21,6 @@ on:
       - 'Cargo.lock'
       - 'crates/**'
       - 'vendor/jian/**'
-      - 'vendor/skia-safe-op/**'
       - '.github/workflows/rust-multiplatform.yml'
   workflow_dispatch:
 
@@ -126,7 +124,7 @@ jobs:
           retention-days: 14
 
   wasm-web:
-    name: wasm32-unknown-unknown / openpencil-shell-web (compile guard)
+    name: wasm32-unknown-unknown / openpencil-shell-web
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -139,19 +137,14 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           key: wasm32
-      # Step 1b §1.2 wasm32-clean compile guard — without `skia` feature this
-      # is a stub mount (validates host canvas, does not paint). The real
-      # render artifact uses the SAME wasm32-unknown-unknown target plus
-      # `--features skia` (post C-hard.2 lock-in 2026-05-09) and ships
-      # via a separate Phase A job once the CI-side C-hard pipeline
-      # (brew emscripten install + EMSDK + .wasm.a symlink hack +
-      # wasm-bindgen + wasm-opt) lands. Until then this job only proves
-      # the public surface compiles wasm32-clean.
-      - run: cargo build -p openpencil-shell-web --target wasm32-unknown-unknown --release --no-default-features --features web
-      # Artifact upload deliberately removed: the stub `.wasm` from this
-      # path would mislead downstream consumers into thinking the shell can
-      # render. Restore the upload step once the skia-enabled build runs on
-      # this CI target.
+      - run: cargo build -p openpencil-shell-web --target wasm32-unknown-unknown --release
+      - name: Upload wasm bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: openpencil-shell-web-wasm
+          path: target/wasm32-unknown-unknown/release/openpencil_shell_web.wasm
+          if-no-files-found: warn
+          retention-days: 14
 
   mobile-check:
     name: ${{ matrix.label }} (cargo check only)

@@ -39,16 +39,6 @@ export function stripRedundantSectionFills(rootFrame: PenNode): boolean {
 
     if (shouldStripFill(childFill, rootFill)) {
       delete (child as PenNode & { fill?: unknown }).fill;
-      // Strip the wrapper-shaped chrome that travels with the hedge fill:
-      // a misroll wrapper sets fill + stroke + cornerRadius together to
-      // "look like a card" around the real content. The fill alone was
-      // the whole detection trigger; once that's gone, the leftover
-      // stroke + cornerRadius produce the long-standing "搜索框外面有
-      // 一个奇怪的圆角边框" bug — a visible inner pill around the
-      // address+search section. Strip both so the wrapper goes back to
-      // a transparent layout container.
-      delete (child as PenNode & { stroke?: unknown }).stroke;
-      delete (child as PenNode & { cornerRadius?: unknown }).cornerRadius;
       changed = true;
     }
   }
@@ -166,61 +156,11 @@ function isSectionLevelFrame(node: PenNode): boolean {
     // Container(role=input). The outer "search-bar" is just a section
     // wrapper. Treat as section-level so its hedge fill can be stripped.
     if (hasNestedFilledComponent(node, role)) return true;
-    // Container-component wrapper detection: a 'card' / 'banner' /
-    // 'pricing-card' / etc. that contains 2+ children with the SAME
-    // container role is the "Featured wrapper holding 3 restaurant
-    // cards" pattern from the 2026-05-10 user report. The outer is a
-    // section wrapper that the model misrolled; its safe-dark hedge
-    // fill (black Featured bg on a cream page) needs stripping just
-    // like any structural section wrapper. Container-roles only —
-    // atomics already handled by hasNestedFilledComponent above.
-    if (hasMultipleSameRoleChildren(node, role)) return true;
     return false;
   }
   if (STRUCTURAL_ROLES.has(role)) return true;
   // Unknown role: be conservative, treat as protected so we don't clobber
   // future role additions.
-  return false;
-}
-
-/**
- * Container-role wrapper detector: a frame with role=X is treated as a
- * section wrapper when ≥ 2 of its children carry the SAME role X. The
- * food-app "Featured" black-bg block matched this — it had role='card'
- * and held 3 restaurant cards each with role='card'. A real card very
- * rarely contains other cards as siblings (a card-of-cards is a list
- * pattern, which models render as a section, not a nested card).
- *
- * Limited to CONTAINER roles in PROTECTED_ROLES (card / banner /
- * stat-card / pricing-card / feature-card / image-card / testimonial /
- * metric-card / gallery-item / phone-mockup) — atomics are handled by
- * hasNestedFilledComponent above and have different "what counts as a
- * misroll" semantics.
- */
-const CONTAINER_PROTECTED_ROLES = new Set([
-  'card',
-  'stat-card',
-  'pricing-card',
-  'feature-card',
-  'image-card',
-  'testimonial',
-  'banner',
-  'metric-card',
-  'gallery-item',
-  'phone-mockup',
-]);
-
-function hasMultipleSameRoleChildren(node: PenNode, parentRole: string): boolean {
-  if (!CONTAINER_PROTECTED_ROLES.has(parentRole)) return false;
-  if (!('children' in node) || !Array.isArray(node.children)) return false;
-  let sameRoleCount = 0;
-  for (const child of node.children) {
-    const childRole = (child as PenNode & { role?: string }).role;
-    if (childRole === parentRole) {
-      sameRoleCount++;
-      if (sameRoleCount >= 2) return true;
-    }
-  }
   return false;
 }
 

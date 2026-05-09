@@ -20,15 +20,7 @@ import type { PenNode } from '@/types/pen';
 import type { AIProviderType } from '@/types/agent-settings';
 import { getCurrentVisualReference, clearVisualReference } from './visual-ref-orchestrator';
 import { resolveSkills } from '@zseven-w/pen-ai-skills';
-import { runPreValidationFixesDetailed } from './design-pre-validation';
-
-/** Stringify per-category counts as "3 text-effect, 2 unexpected-rotation". */
-function formatCategoryBreakdown(byCategory: Record<string, number>): string {
-  return Object.entries(byCategory)
-    .sort(([, a], [, b]) => b - a)
-    .map(([cat, n]) => `${n} ${cat}`)
-    .join(', ');
-}
+import { runPreValidationFixes } from './design-pre-validation';
 import { captureRootFrameScreenshot } from './design-screenshot';
 import {
   applyValidationFixes,
@@ -181,14 +173,7 @@ Cross-reference visual issues with the node IDs above. Return JSON fixes using r
 
     if (!response.ok) {
       console.warn(`[Validation] HTTP ${response.status}: ${response.statusText}`);
-      return {
-        issues: [],
-        fixes: [],
-        structuralFixes: [],
-        qualityScore: 0,
-        skipped: true,
-        skippedReason: `HTTP ${response.status} ${response.statusText}`,
-      };
+      return { issues: [], fixes: [], structuralFixes: [], qualityScore: 0, skipped: true };
     }
 
     const data = (await response.json()) as { text?: string; skipped?: boolean; error?: string };
@@ -201,14 +186,7 @@ Cross-reference visual issues with the node IDs above. Return JSON fixes using r
         provider,
         model,
       });
-      return {
-        issues: [],
-        fixes: [],
-        structuralFixes: [],
-        qualityScore: 0,
-        skipped: true,
-        skippedReason: data.error,
-      };
+      return { issues: [], fixes: [], structuralFixes: [], qualityScore: 0, skipped: true };
     }
 
     const parsed = parseValidationResponse(data.text);
@@ -295,14 +273,11 @@ export async function runPostGenerationValidation(options?: {
 
   // Pre-validation: pure code checks (no LLM needed)
   emit('streaming', '[pending] Running pre-checks...');
-  const preFix = runPreValidationFixesDetailed();
-  const preFixCount = preFix.total;
+  const preFixCount = runPreValidationFixes();
   if (preFixCount > 0) {
     totalApplied += preFixCount;
-    const breakdown = formatCategoryBreakdown(preFix.byCategory);
-    log[log.length - 1] = breakdown
-      ? `[done] Pre-checks: fixed ${preFixCount} (${breakdown})`
-      : `[done] Pre-checks: fixed ${preFixCount} issue${preFixCount > 1 ? 's' : ''}`;
+    log[log.length - 1] =
+      `[done] Pre-checks: fixed ${preFixCount} issue${preFixCount > 1 ? 's' : ''}`;
   } else {
     log[log.length - 1] = '[done] Pre-checks: OK';
   }
@@ -311,13 +286,10 @@ export async function runPostGenerationValidation(options?: {
   // If LLM validation is disabled, stop after pre-checks
   if (!VALIDATION_ENABLED) {
     clearVisualReference();
-    const breakdown = formatCategoryBreakdown(preFix.byCategory);
     emit(
       'done',
       preFixCount > 0
-        ? breakdown
-          ? `[done] Pre-checks: fixed ${preFixCount} (${breakdown})`
-          : `[done] Pre-checks: fixed ${preFixCount} issue${preFixCount > 1 ? 's' : ''}`
+        ? `[done] Pre-checks: fixed ${preFixCount} issue${preFixCount > 1 ? 's' : ''}`
         : '[done] Pre-checks complete',
     );
     return { applied: totalApplied, skipped: false };
@@ -329,13 +301,10 @@ export async function runPostGenerationValidation(options?: {
   const nodeCount = countNodesInActivePage();
   if (nodeCount < VALIDATION_NODE_COUNT_THRESHOLD) {
     clearVisualReference();
-    const breakdown = formatCategoryBreakdown(preFix.byCategory);
     emit(
       'done',
       preFixCount > 0
-        ? breakdown
-          ? `[done] Pre-checks: fixed ${preFixCount} (${breakdown}) (vision skipped: ${nodeCount} nodes < ${VALIDATION_NODE_COUNT_THRESHOLD})`
-          : `[done] Pre-checks: fixed ${preFixCount} issue${preFixCount > 1 ? 's' : ''} (vision skipped: ${nodeCount} nodes < ${VALIDATION_NODE_COUNT_THRESHOLD})`
+        ? `[done] Pre-checks: fixed ${preFixCount} issue${preFixCount > 1 ? 's' : ''} (vision skipped: ${nodeCount} nodes < ${VALIDATION_NODE_COUNT_THRESHOLD})`
         : `[done] Pre-checks complete (vision skipped: ${nodeCount} nodes < ${VALIDATION_NODE_COUNT_THRESHOLD})`,
     );
     return { applied: totalApplied, skipped: false };
@@ -412,13 +381,8 @@ export async function runPostGenerationValidation(options?: {
       console.log(
         `[Validation] Round ${round}: skipped (see warnings above for details; provider=${options?.provider}, model=${options?.model})`,
       );
-      // Replace "Analyzing..." with skipped reason. Prefer the
-      // server-provided explanation when present so the chat shows
-      // "(no vision provider)" instead of the generic timeout text.
-      const reasonShort = result.skippedReason
-        ? result.skippedReason.slice(0, 120)
-        : 'timeout or provider error';
-      log[log.length - 1] = `[error] Analysis skipped (${reasonShort})`;
+      // Replace "Analyzing..." with skipped reason
+      log[log.length - 1] = '[error] Analysis skipped (timeout or provider error)';
       if (isFirstRound) {
         clearVisualReference();
         emit('done');

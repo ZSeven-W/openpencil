@@ -1,4 +1,3 @@
-import { coerceNavTabIcon } from './coerce-params.js';
 import type { ElementTree } from './helpers.js';
 import type { V1Theme } from './resolve-theme.js';
 
@@ -49,12 +48,6 @@ export function buildBottomNavV1(params: BottomNavV1Params): ElementTree {
 }
 
 function buildTab(item: BottomNavV1Item): ElementTree {
-  // Common slip: model emits icon='shopping-bag' for a Cart tab. Bag and
-  // cart are visually different glyphs in lucide; the cart tab gets a bag
-  // shape and the user-reported "icon shape wrong" bug. coerceNavTabIcon
-  // normalises a small set of known wrong-glyph choices per title without
-  // touching legitimate custom icons.
-  const icon = coerceNavTabIcon(item.title, item.icon, 'buildBottomNavV1');
   return {
     type: 'frame',
     name: `Tab (${item.title})`,
@@ -69,7 +62,7 @@ function buildTab(item: BottomNavV1Item): ElementTree {
       {
         type: 'icon_font',
         name: 'Icon',
-        iconFontName: icon,
+        iconFontName: item.icon,
         iconFontFamily: 'lucide',
         width: 24,
         height: 24,

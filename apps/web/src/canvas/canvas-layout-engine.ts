@@ -15,7 +15,6 @@ export {
   normalizeTreeLayout,
   unwrapFakePhoneMockups,
   stripRedundantSectionFills,
-  clipCardImageCorners,
   injectMissingNavSurfaceFill,
   expandOverflowingFixedHeightCards,
   convertStackedOverlayToAbsolute,

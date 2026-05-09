@@ -21,33 +21,19 @@ import type { PenNode } from '@/types/pen';
  * Detected issues that are skipped — `info` severity (detect-only) and
  * protected status-bar removals — are not counted, so callers can rely on
  * the return value as a faithful "did anything change" signal.
- *
- * Use {@link runPreValidationFixesDetailed} when the caller needs the
- * per-category breakdown for surfacing in the UI.
  */
 export function runPreValidationFixes(): number {
-  return runPreValidationFixesDetailed().total;
-}
-
-export interface PreValidationResult {
-  total: number;
-  /** Number of fixes APPLIED per detector category (not detected). */
-  byCategory: Record<string, number>;
-}
-
-export function runPreValidationFixesDetailed(): PreValidationResult {
   const store = useDocumentStore.getState();
   const root = store.getNodeById(DEFAULT_FRAME_ID);
-  if (!root) return { total: 0, byCategory: {} };
+  if (!root) return 0;
 
   const issues = detectAllIssues(root, store.document);
   return applyFixes(issues);
 }
 
-function applyFixes(issues: Issue[]): PreValidationResult {
+function applyFixes(issues: Issue[]): number {
   const store = useDocumentStore.getState();
   let applied = 0;
-  const byCategory: Record<string, number> = {};
   for (const issue of issues) {
     // 'info' severity is detect-only — the detector emits the issue for
     // debug visibility but is not confident enough that an auto-fix would
@@ -65,18 +51,16 @@ function applyFixes(issues: Issue[]): PreValidationResult {
       }
       store.removeNode(issue.nodeId);
       applied++;
-      byCategory[issue.category] = (byCategory[issue.category] ?? 0) + 1;
       console.log(`[Pre-validation] ${issue.nodeId}: removed (${issue.reason})`);
     } else {
       store.updateNode(issue.nodeId, {
         [issue.property]: issue.suggestedValue,
       } as Partial<PenNode>);
       applied++;
-      byCategory[issue.category] = (byCategory[issue.category] ?? 0) + 1;
       console.log(
         `[Pre-validation] ${issue.nodeId}: ${issue.property} → ${JSON.stringify(issue.suggestedValue)} (${issue.reason})`,
       );
     }
   }
-  return { total: applied, byCategory };
+  return applied;
 }

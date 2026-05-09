@@ -1,13 +1,9 @@
 name: Rust release artifacts
 
-# Triggered on tag push (v*) — builds release binaries across desktop targets
-# and uploads them to a GitHub Release draft. The wasm web bundle is currently
-# DEFERRED (see comment block above the removed `wasm` job below); when the
-# CI-side C-hard pipeline (emscripten install + EMSDK + symlink hack +
-# wasm-bindgen + wasm-opt) lands it will re-enter the matrix. Step 1a
-# kill-spike only ships `openpencil-app` (a placeholder binary entry); real
-# desktop apps (DMG / AppImage / EXE installer) come in Step 1f and replace
-# this scaffolding.
+# Triggered on tag push (v*) — builds release binaries across desktop targets,
+# the WASM bundle, and uploads them to a GitHub Release draft. Step 1a kill-spike
+# only ships `openpencil-app` (a placeholder binary entry); real desktop apps
+# (DMG / AppImage / EXE installer) come in Step 1f and replace this scaffolding.
 
 on:
   push:
@@ -104,31 +100,36 @@ jobs:
             openpencil-app-${{ matrix.label }}.zip
           if-no-files-found: ignore
 
-  # Phase 1b release wasm artifact: explicitly DEFERRED (not silently
-  # dropped). The local C-hard pipeline (vendor/skia-safe-op fork +
-  # crates/wasm-libc-shim) does produce a runtime-loadable
-  # wasm32-unknown-unknown bundle today (verified 2026-05-09: 0 env.*
-  # imports, 597 KiB gzip). Re-introducing the release job requires
-  # CI-side automation that we have NOT yet built:
-  #   1. install brew emscripten 5.0.7 + EMSDK shim on ubuntu-latest
-  #   2. set EMSDK env var for the cargo build
-  #   3. run `cargo build … --features skia --release`
-  #   4. apply the `.wasm.a` → `.a` symlink hack in the
-  #      skia-bindings out/ dir (manual today; tracked as a follow-up
-  #      automation item — fold into `vendor/skia-safe-op` build.rs)
-  #   5. run `wasm-bindgen --target web` + `wasm-opt -Oz`
-  #   6. browser-side manual smoke (Phase E in spec) before publishing
-  #
-  # Until that pipeline lands, tagged releases ship desktop artifacts
-  # only. This is a CONSCIOUS choice — see plan §Cheat-sheet for the
-  # tracking item.
+  wasm:
+    name: wasm32 web bundle
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: '1.85'
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: release-wasm32
+      - run: cargo build -p openpencil-shell-web --target wasm32-unknown-unknown --release
+      - name: Package wasm artifact
+        run: |
+          cd target/wasm32-unknown-unknown/release
+          tar czf ../../../openpencil-shell-web-wasm.tar.gz \
+            openpencil_shell_web.wasm 2>/dev/null || true
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: openpencil-shell-web-wasm
+          path: openpencil-shell-web-wasm.tar.gz
+          if-no-files-found: warn
 
   release-draft:
     name: Create / update GitHub Release draft
-    # `wasm` job deferred (see comment block above); when the
-    # CI-side C-hard pipeline lands, re-add the job and append its
-    # name to this `needs:` list.
-    needs: [build]
+    needs: [build, wasm]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
     steps:
