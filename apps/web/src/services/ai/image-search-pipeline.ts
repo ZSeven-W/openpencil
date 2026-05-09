@@ -149,6 +149,77 @@ function isPlaceholderSrc(src?: string): boolean {
   return !src || src.startsWith(PHONE_PLACEHOLDER_PREFIX);
 }
 
+/**
+ * Names so generic that they tell the photo search API nothing useful.
+ * For these, prefer mining context (parent frame name, sibling text)
+ * over returning the name itself.
+ */
+const GENERIC_PLACEHOLDER_NAMES = new Set([
+  'image',
+  'photo',
+  'cover',
+  'hero',
+  'thumbnail',
+  'thumb',
+  'picture',
+  'banner',
+  'poster',
+  'image placeholder',
+  'placeholder icon',
+  'placeholder',
+  'card image',
+  'card photo',
+  'product image',
+  'item image',
+]);
+
+function isGenericPlaceholderName(name: string): boolean {
+  return GENERIC_PLACEHOLDER_NAMES.has(name.trim().toLowerCase());
+}
+
+/**
+ * Walk up to find a parent frame whose name carries product / restaurant
+ * / event semantic. The image-search API hits much more useful results
+ * with "Bella Italia" / "Margherita Pizza" than with the generic
+ * "Image" name the model gave the placeholder. Bounded to 3 hops so a
+ * deep page bg doesn't end up as the query.
+ */
+function findParentSemanticName(nodeId: string, maxHops = 3): string | null {
+  const { document: doc } = useDocumentStore.getState();
+  // Build a parent map by walking the doc tree once. Cheap for typical
+  // designs (< few hundred nodes) and avoids passing parent through
+  // every collectImageSearchTargets / enqueue call site.
+  const parentOf = new Map<string, PenNode>();
+  const walk = (n: PenNode): void => {
+    if ('children' in n && Array.isArray(n.children)) {
+      for (const c of n.children) {
+        parentOf.set(c.id, n);
+        walk(c);
+      }
+    }
+  };
+  const roots = doc.pages?.flatMap((p) => p.children ?? []) ?? doc.children ?? [];
+  for (const r of roots) walk(r);
+  let cur = parentOf.get(nodeId);
+  let hops = 0;
+  while (cur && hops < maxHops) {
+    const name = (cur as PenNode & { name?: string }).name;
+    if (typeof name === 'string' && name.length > 0 && !isGenericPlaceholderName(name)) {
+      // Filter common layout words so we don't end up searching for
+      // "Card" / "Wrapper" — neither yields useful photos.
+      const lower = name.toLowerCase();
+      if (
+        !/\b(card|wrapper|container|section|frame|root|page|stack|row|column|content)\b/.test(lower)
+      ) {
+        return name;
+      }
+    }
+    cur = parentOf.get(cur.id);
+    hops++;
+  }
+  return null;
+}
+
 function extractQueryForNode(node: PenNode): string {
   const r = node as PenNode & {
     imageSearchQuery?: string;
@@ -157,14 +228,6 @@ function extractQueryForNode(node: PenNode): string {
   };
   if (typeof r.imageSearchQuery === 'string' && r.imageSearchQuery.length > 0) {
     return r.imageSearchQuery;
-  }
-  if (
-    typeof r.name === 'string' &&
-    r.name.length > 0 &&
-    r.name !== 'Image Placeholder' &&
-    r.name !== 'Placeholder Icon'
-  ) {
-    return r.name;
   }
   // For placeholder frames, mine the optional label child for a hint
   // (e.g. "Hero image" / "Upload cover" — set by the caller).
@@ -179,6 +242,15 @@ function extractQueryForNode(node: PenNode): string {
       }
     }
   }
+  // If the node's name is too generic to make a useful photo query
+  // (literal "Image" / "Photo" / "Cover" — common with the heuristic
+  // detector), walk up to find a semantic parent name (e.g. "Bella
+  // Italia" or "Margherita Pizza" from the food-app card scenario).
+  if (typeof r.name === 'string' && r.name.length > 0 && !isGenericPlaceholderName(r.name)) {
+    return r.name;
+  }
+  const parentName = findParentSemanticName(node.id);
+  if (parentName) return parentName;
   return r.name ?? 'placeholder';
 }
 
@@ -200,12 +272,17 @@ let queueProcessing = false;
 let queueAbort: AbortController | null = null;
 
 /**
- * Enqueue an image target for background search. Accepts either a real
- * `image` node with a placeholder src OR a `frame` carrying
- * `role: 'image-placeholder'` (what `add_image_placeholder_v0/v1` emit).
+ * Enqueue an image target for background search. Accepts:
+ *   - real `image` node with a placeholder src
+ *   - frame carrying `role: 'image-placeholder'` (canonical, from
+ *     add_image_placeholder_v0/v1)
+ *   - frame matching the isImageAreaFrameByHeuristic predicate (a
+ *     non-canonical placeholder the model emitted as a plain colored
+ *     "Image" / "Photo" / "Cover" / "Hero" frame — see the comment on
+ *     that function for the full match policy)
  *
  * Called from insertStreamingNode for streamed image nodes, and from
- * `scanAndFillImages` for both shapes after a non-streaming insert (the
+ * `scanAndFillImages` for all shapes after a non-streaming insert (the
  * orchestrator-tail and per-subtask scans). Streaming intentionally
  * skips placeholder frames because their icon/label children stream in
  * separately — enqueueing the frame mid-stream and replacing children
@@ -217,6 +294,8 @@ export function enqueueImageForSearch(node: PenNode): void {
     if (!isPlaceholderSrc((node as ImageNode).src)) return;
     kind = 'image';
   } else if (isUnfilledImagePlaceholderFrame(node)) {
+    kind = 'placeholder-frame';
+  } else if (isImageAreaFrameByHeuristic(node)) {
     kind = 'placeholder-frame';
   } else {
     return;
