@@ -1,5 +1,6 @@
 import type { PenNode, PenDocument } from '@zseven-w/pen-types';
 import type { Issue } from './types';
+import { detectEdgeSectionPadding } from './detectors-spacing';
 
 /** Extract the first fill color from a node (raw, including variable refs) */
 function getFirstFillColor(node: PenNode): string | null {
@@ -750,7 +751,7 @@ export function detectExcessiveFrameEffects(root: PenNode): Issue[] {
 }
 
 /**
- * Run all 11 detectors and return the deduplicated combined issue list.
+ * Run all 12 detectors and return the deduplicated combined issue list.
  * Dedup key: `${nodeId}:${property}` (matches runPreValidationFixes).
  * On collision, the first issue wins (detector execution order below).
  */
@@ -767,6 +768,7 @@ export function detectAllIssues(root: PenNode, doc: PenDocument): Issue[] {
     ...detectTextStroke(root),
     ...detectMixedSiblingPadding(root),
     ...detectExcessiveFrameEffects(root),
+    ...detectEdgeSectionPadding(root),
   ];
   const seen = new Set<string>();
   const unique: Issue[] = [];
