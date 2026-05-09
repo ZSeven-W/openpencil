@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import type { PenNode } from '@zseven-w/pen-types';
+import type { PenNode, PenFill } from '@zseven-w/pen-types';
 import { stripRedundantSectionFills } from '../layout/strip-redundant-section-fills';
 
 const frame = (props: Partial<PenNode> & { children?: PenNode[] }): PenNode =>
@@ -534,5 +534,112 @@ describe('stripRedundantSectionFills', () => {
     for (const section of kids) {
       expect((section as PenNode & { fill?: unknown }).fill).toBeUndefined();
     }
+  });
+
+  // Container-role wrapper detection (2026-05-10 user report).
+  // The food-app "Featured" section landed with a black bg on a cream
+  // page because the model marked the wrapper role='card' AND the wrapper
+  // held 3 child frames each with role='card'. The original PROTECTED_ROLES
+  // gate kept the outer black bg untouched (cards legitimately have fills).
+  // The new hasMultipleSameRoleChildren branch identifies the misroll and
+  // strips the hedge fill — the 3 inner restaurant cards keep their own
+  // fills.
+  it("strips a 'card' wrapper that holds 2+ same-role children (Featured-block misroll)", () => {
+    const innerCard1 = frame({
+      id: 'r1',
+      name: 'Bella Napoli',
+      role: 'card',
+      fill: solidFill('#FFFFFF'),
+    });
+    const innerCard2 = frame({
+      id: 'r2',
+      name: 'Burger House',
+      role: 'card',
+      fill: solidFill('#FFFFFF'),
+    });
+    const innerCard3 = frame({
+      id: 'r3',
+      name: 'Sakura Sushi',
+      role: 'card',
+      fill: solidFill('#FFFFFF'),
+    });
+    const featured = frame({
+      id: 'featured',
+      name: 'Featured',
+      role: 'card', // misroll — actually a section wrapper
+      fill: solidFill('#000000'),
+      children: [innerCard1, innerCard2, innerCard3],
+    });
+    const root = frame({
+      id: 'root',
+      fill: solidFill('#FFF8F0'), // cream page bg
+      children: [featured],
+    });
+    const changed = stripRedundantSectionFills(root);
+    expect(changed).toBe(true);
+    // Wrapper's fill stripped — section now inherits page bg
+    expect((featured as PenNode & { fill?: unknown }).fill).toBeUndefined();
+    // Inner cards preserved — their own surface fills are intentional
+    expect((innerCard1 as PenNode & { fill?: PenFill[] }).fill).toEqual(solidFill('#FFFFFF'));
+    expect((innerCard2 as PenNode & { fill?: PenFill[] }).fill).toEqual(solidFill('#FFFFFF'));
+    expect((innerCard3 as PenNode & { fill?: PenFill[] }).fill).toEqual(solidFill('#FFFFFF'));
+  });
+
+  it('does NOT strip a real card holding ONE same-role child (e.g. card with badge inside)', () => {
+    // 1 child of the same role doesn't trigger — needs ≥ 2.
+    const innerBadge = frame({
+      id: 'b',
+      role: 'badge',
+      fill: solidFill('#DBEAFE'),
+    });
+    const card = frame({
+      id: 'c',
+      role: 'card',
+      fill: solidFill('#000000'),
+      children: [innerBadge],
+    });
+    const root = frame({
+      id: 'root',
+      fill: solidFill('#FFF8F0'),
+      children: [card],
+    });
+    const changed = stripRedundantSectionFills(root);
+    // Card has no nested SAME-role child, so the wrapper detection is silent;
+    // the strip-by-safe-dark-hex still does NOT fire because role='card' is
+    // PROTECTED. The card surface stays.
+    expect(changed).toBe(false);
+    expect((card as PenNode & { fill?: PenFill[] }).fill).toEqual(solidFill('#000000'));
+  });
+
+  it('strips a banner wrapper holding 2+ same-role banners', () => {
+    const banner1 = frame({
+      id: 'b1',
+      name: 'Promo 1',
+      role: 'banner',
+      fill: solidFill('#FF6B35'),
+    });
+    const banner2 = frame({
+      id: 'b2',
+      name: 'Promo 2',
+      role: 'banner',
+      fill: solidFill('#10B981'),
+    });
+    const wrapper = frame({
+      id: 'w',
+      role: 'banner',
+      fill: solidFill('#0A0A0A'),
+      children: [banner1, banner2],
+    });
+    const root = frame({
+      id: 'root',
+      fill: solidFill('#FFF8F0'),
+      children: [wrapper],
+    });
+    const changed = stripRedundantSectionFills(root);
+    expect(changed).toBe(true);
+    expect((wrapper as PenNode & { fill?: unknown }).fill).toBeUndefined();
+    // Inner banners keep their own brand fills
+    expect((banner1 as PenNode & { fill?: PenFill[] }).fill).toEqual(solidFill('#FF6B35'));
+    expect((banner2 as PenNode & { fill?: PenFill[] }).fill).toEqual(solidFill('#10B981'));
   });
 });
