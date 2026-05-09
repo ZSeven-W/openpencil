@@ -66,6 +66,19 @@ pub struct WebShell {
     /// Codex Phase C2 R1 will exercise this end-to-end.
     #[cfg(feature = "skia")]
     listeners: Vec<Listener>,
+
+    /// Hidden `<textarea>` that owns the IME composition target. The
+    /// composition listeners are registered on THIS element (not on
+    /// the window), so a browser-chrome IME context (URL bar, devtools
+    /// search box, etc.) cannot mutate the inspector's TextInput
+    /// state. The element stays focused for the page lifetime so CJK
+    /// IME sequences route here. Phase D widget chrome will swap
+    /// programmatic focus management in; Phase B static demo just
+    /// keeps focus pinned on this element. (Codex Phase C stop-hook
+    /// finding: "CJK IME listeners have no owned editable/focus
+    /// target".)
+    #[cfg(feature = "skia")]
+    ime_target: web_sys::HtmlElement,
 }
 
 #[cfg(feature = "skia")]
@@ -142,8 +155,8 @@ fn modifiers_from_keyboard(event: &web_sys::KeyboardEvent) -> Modifiers {
 /// helper accepts an `FnMut(SpecificEvent)` and adapts it to the
 /// type-erased `Closure<dyn FnMut(JsValue)>` stored in `Listener`.
 #[cfg(feature = "skia")]
-fn add_listener<E, F>(
-    target: &web_sys::EventTarget,
+fn add_listener<E, F, T>(
+    target: &T,
     name: &'static str,
     listeners: &mut Vec<Listener>,
     mut handler: F,
@@ -151,7 +164,15 @@ fn add_listener<E, F>(
 where
     E: wasm_bindgen::JsCast + 'static,
     F: FnMut(E) + 'static,
+    T: Clone + Into<web_sys::EventTarget>,
 {
+    // Clone the target into an owned EventTarget once; we need both
+    // `&EventTarget` for the registration call and an owned
+    // EventTarget to push into the Listener for later cleanup. The
+    // generic over T (`HtmlElement`, `EventTarget`, …) lets call
+    // sites pass a window-target or an HtmlElement-target without
+    // an explicit cast.
+    let target_owned: web_sys::EventTarget = target.clone().into();
     let closure: Closure<dyn FnMut(JsValue)> = Closure::new(move |raw: JsValue| {
         // Use `dyn_into` (runtime-checked) instead of
         // `unchecked_into` so a mismatched synthetic event dispatched
@@ -165,9 +186,9 @@ where
         };
         handler(event);
     });
-    target.add_event_listener_with_callback(name, closure.as_ref().unchecked_ref())?;
+    target_owned.add_event_listener_with_callback(name, closure.as_ref().unchecked_ref())?;
     listeners.push(Listener {
-        target: target.clone(),
+        target: target_owned,
         name,
         closure,
     });
@@ -186,6 +207,10 @@ impl Drop for WebShell {
                 .target
                 .remove_event_listener_with_callback(l.name, l.closure.as_ref().unchecked_ref());
         }
+        // Tear down the hidden IME textarea so leaving the page does
+        // not leave an orphan node + the browser does not ship dead
+        // composition state into the next document.
+        self.ime_target.remove();
     }
 }
 
@@ -203,7 +228,7 @@ impl Drop for WebShell {
 pub fn mount(canvas_id: &str) -> Result<WebShell, JsValue> {
     use crate::event::{ime, keyboard};
     use wasm_bindgen::JsCast;
-    use web_sys::{CompositionEvent, HtmlCanvasElement, KeyboardEvent};
+    use web_sys::{CompositionEvent, HtmlCanvasElement, HtmlElement, KeyboardEvent};
 
     // Install the panic hook on first call so panics print to the browser
     // console instead of being swallowed silently.
@@ -229,15 +254,45 @@ pub fn mount(canvas_id: &str) -> Result<WebShell, JsValue> {
     // callers do not see Ok with an unpainted canvas.
     inner.borrow_mut().repaint()?;
 
+    // Codex Phase C stop-hook fix: create a hidden <textarea> that
+    // owns the IME composition target. Without this, registering
+    // composition listeners on `window` would surface IME activity
+    // from the browser's URL bar / devtools / any other editable
+    // element on the page as if it were directed at our inspector
+    // TextInput. The textarea is positioned off-screen + transparent
+    // + aria-hidden so it does not interfere with screen readers or
+    // visual layout; programmatic focus on it routes the user's IME
+    // composition through our owned listeners.
+    let ime_textarea = document
+        .create_element("textarea")
+        .map_err(|e| {
+            JsValue::from_str(&format!(
+                "mount: could not create hidden IME textarea: {:?}",
+                e
+            ))
+        })?
+        .dyn_into::<HtmlElement>()
+        .map_err(|_| JsValue::from_str("mount: textarea is not HtmlElement"))?;
+    ime_textarea.set_attribute(
+        "style",
+        "position:fixed;left:-9999px;top:0;width:1px;height:1px;\
+         opacity:0;pointer-events:none;",
+    )?;
+    ime_textarea.set_attribute("aria-hidden", "true")?;
+    ime_textarea.set_attribute("tabindex", "-1")?;
+    let body = document
+        .body()
+        .ok_or_else(|| JsValue::from_str("mount: document.body unavailable"))?;
+    body.append_child(&ime_textarea)?;
+    // Best-effort focus — focus() returns Err if the document is not
+    // visible yet (e.g. tab in background), but the listener
+    // registration still works once the user gives the page focus.
+    let _ = ime_textarea.focus();
+
     let mut listeners: Vec<Listener> = Vec::new();
-    // Listener target = `window` rather than the canvas. Keyboard
-    // and composition events on the canvas only fire when the
-    // canvas has focus and a `tabindex` attribute; the smoke HTML
-    // does not set tabindex, and Phase B's static inspector demo
-    // doesn't need focus management. Window-level listeners always
-    // fire as long as no other element has captured the event.
-    // Phase D+ widget chrome may want focus-routed listeners, at
-    // which point the registration target gets parameterized.
+    // Keyboard events still go on window (the user expects shortcuts
+    // like Cmd+S to fire regardless of which element has focus); the
+    // codex stop-hook concern was about IME, not keyboard.
     let win_target: web_sys::EventTarget = window.clone().into();
 
     // Codex Phase C gate BLOCK: registering N listeners with `?`
@@ -254,7 +309,7 @@ pub fn mount(canvas_id: &str) -> Result<WebShell, JsValue> {
         // ----- keyboard: keydown + keyup → WidgetHost::apply_key -----
         {
             let inner_kd = inner.clone();
-            add_listener::<KeyboardEvent, _>(
+            add_listener::<KeyboardEvent, _, _>(
                 &win_target,
                 "keydown",
                 listeners,
@@ -276,7 +331,7 @@ pub fn mount(canvas_id: &str) -> Result<WebShell, JsValue> {
         }
         {
             let inner_ku = inner.clone();
-            add_listener::<KeyboardEvent, _>(
+            add_listener::<KeyboardEvent, _, _>(
                 &win_target,
                 "keyup",
                 listeners,
@@ -298,6 +353,11 @@ pub fn mount(canvas_id: &str) -> Result<WebShell, JsValue> {
         }
 
         // ----- IME: compositionstart / update / end → WidgetHost::apply_ime -----
+        // Listener target is the hidden textarea (codex Phase C
+        // stop-hook fix), NOT the window — only IME composition
+        // routed through our owned editable target reaches the
+        // inspector. Browser-chrome compositions stay isolated.
+        //
         // Phase C1 ime mappers do the UTF-16→UTF-8 selection remap when
         // the browser supplies an IME-highlighted segment via
         // `getTargetRanges()`; current browsers expose that range via
@@ -307,8 +367,8 @@ pub fn mount(canvas_id: &str) -> Result<WebShell, JsValue> {
         // alongside the DOM mirror that already needs Reflect::get.
         {
             let inner_cs = inner.clone();
-            add_listener::<CompositionEvent, _>(
-                &win_target,
+            add_listener::<CompositionEvent, _, _>(
+                &ime_textarea,
                 "compositionstart",
                 listeners,
                 move |_evt: CompositionEvent| {
@@ -320,8 +380,8 @@ pub fn mount(canvas_id: &str) -> Result<WebShell, JsValue> {
         }
         {
             let inner_cu = inner.clone();
-            add_listener::<CompositionEvent, _>(
-                &win_target,
+            add_listener::<CompositionEvent, _, _>(
+                &ime_textarea,
                 "compositionupdate",
                 listeners,
                 move |evt: CompositionEvent| {
@@ -334,8 +394,8 @@ pub fn mount(canvas_id: &str) -> Result<WebShell, JsValue> {
         }
         {
             let inner_ce = inner.clone();
-            add_listener::<CompositionEvent, _>(
-                &win_target,
+            add_listener::<CompositionEvent, _, _>(
+                &ime_textarea,
                 "compositionend",
                 listeners,
                 move |evt: CompositionEvent| {
@@ -353,16 +413,23 @@ pub fn mount(canvas_id: &str) -> Result<WebShell, JsValue> {
         // Unwind partial registration. Same body as `Drop for
         // WebShell`; kept inline rather than refactored into a free
         // function because the lifetimes only line up when the
-        // `Listener` vec is local to mount().
+        // `Listener` vec is local to mount(). Also detach the IME
+        // textarea so a failed mount does not leave an orphan node
+        // in the DOM.
         for l in listeners.drain(..) {
             let _ = l
                 .target
                 .remove_event_listener_with_callback(l.name, l.closure.as_ref().unchecked_ref());
         }
+        ime_textarea.remove();
         return Err(e);
     }
 
-    Ok(WebShell { inner, listeners })
+    Ok(WebShell {
+        inner,
+        listeners,
+        ime_target: ime_textarea,
+    })
 }
 
 /// Stub mount used by the kickoff §1.2 wasm32-clean compile guard CI.
