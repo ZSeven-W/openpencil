@@ -442,3 +442,36 @@ fn dropdown_apply_key_ignores_unrelated_keys() {
     assert_eq!(state.selected, 1);
     assert!(state.open);
 }
+
+#[test]
+fn dropdown_apply_key_ignores_keys_during_ime_composition() {
+    // Spec §2.4 widget rule: skip key dispatch while is_composing is
+    // true. ArrowDown during a CJK composition belongs to the IME's
+    // candidate-picker UI, NOT to the dropdown selection cycle.
+    // Codex Phase C stop-hook (#2): "focused IME textarea lets
+    // composing keys mutate dropdown state."
+    let mut state = DropdownState {
+        selected: 0,
+        open: false,
+    };
+    let composing_arrow = KeyEvent {
+        is_composing: true,
+        ..keydown(NamedKey::ArrowDown)
+    };
+    state.apply_key(&composing_arrow, 3);
+    assert_eq!(state.selected, 0, "composing ArrowDown must not advance");
+    assert!(!state.open, "composing ArrowDown must not open");
+
+    // Same protection for Enter / Escape — IME 'commit' shouldn't
+    // close the dropdown.
+    let mut state2 = DropdownState {
+        selected: 1,
+        open: true,
+    };
+    let composing_enter = KeyEvent {
+        is_composing: true,
+        ..keydown(NamedKey::Enter)
+    };
+    state2.apply_key(&composing_enter, 3);
+    assert!(state2.open, "composing Enter must not close");
+}
