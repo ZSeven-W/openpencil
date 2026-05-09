@@ -138,6 +138,25 @@ describe('buildFallbackPlanFromPrompt', () => {
     expect(plan.subtasks[1]?.elements).toContain('All remaining main UI content');
   });
 
+  it('detects component prompts and emits a 400-wide single-subtask plan (Type 0)', () => {
+    // Regression for Codex stop-time review: fallback path must not classify
+    // "X card" / "X badge" prompts as landing-page (1200x0) when AI parsing
+    // fails — that produces a desktop-wide page with multi-section sub-agents
+    // for what was meant to be a single 400px card.
+    const plan = buildFallbackPlanFromPrompt('design a clean profile card with avatar');
+    expect(plan.rootFrame.width).toBe(400);
+    expect(plan.rootFrame.height).toBe(0);
+    expect(plan.subtasks).toHaveLength(1);
+    expect(plan.subtasks[0]?.label).toBe('Component');
+    expect(plan.subtasks[0]?.region.height).toBe(200);
+  });
+
+  it('does NOT misclassify "X card screen" as a component (must stay landing-page or mobile)', () => {
+    const plan = buildFallbackPlanFromPrompt('design a card screen page');
+    // "screen" / "page" disqualifier prevents the component shortcut.
+    expect(plan.rootFrame.width).not.toBe(400);
+  });
+
   it('uses design.md background and style-guide name when designMd is present', () => {
     const designMd: DesignMdSpec = {
       raw: '# Test',
