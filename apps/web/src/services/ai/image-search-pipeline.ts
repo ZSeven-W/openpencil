@@ -103,6 +103,19 @@ export function isUnfilledImagePlaceholderFrame(node: PenNode | undefined | null
   return first?.type !== 'image';
 }
 
+/**
+ * Re-check predicate used by the queue processor before issuing a fetch.
+ * The queue accepts both canonical placeholder frames (role-based) AND
+ * heuristic-matched frames (named "Image" / "Photo" / "Cover" without
+ * the role). Without combining both branches, heuristic frames enqueue
+ * fine but get skipped at the still-needs-fill gate — the original bug
+ * Codex flagged on 2026-05-10. This helper covers both kinds.
+ */
+export function isFramePlaceholderStillUnfilled(node: PenNode | undefined | null): boolean {
+  if (!node) return false;
+  return isUnfilledImagePlaceholderFrame(node) || isImageAreaFrameByHeuristic(node);
+}
+
 interface ImageSearchTarget {
   node: PenNode;
   kind: 'image' | 'placeholder-frame';
@@ -348,13 +361,7 @@ async function processQueue(): Promise<void> {
       if (item.kind === 'image' && currentNode.type === 'image') {
         stillNeedsFill = isPlaceholderSrc((currentNode as ImageNode).src);
       } else if (item.kind === 'placeholder-frame') {
-        // Strict re-check: the frame must STILL be a placeholder AND not
-        // already filled with an image. Without the fill check, a
-        // follow-up generation that resets `queuedNodeIds` and re-runs
-        // `scanAndFillImages` on the same tree would re-search the
-        // already-good photo and overwrite it with whatever the new
-        // search returns.
-        stillNeedsFill = isUnfilledImagePlaceholderFrame(currentNode);
+        stillNeedsFill = isFramePlaceholderStillUnfilled(currentNode);
       }
     }
     if (!stillNeedsFill) {
