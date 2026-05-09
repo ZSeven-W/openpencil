@@ -684,7 +684,73 @@ export function detectMixedSiblingPadding(root: PenNode): Issue[] {
 }
 
 /**
- * Run all 10 detectors and return the deduplicated combined issue list.
+ * Aesthetic detector: frame node with shadow/blur effects whose parameters
+ * are outside typical UI ranges. Real product UI shadows are tight and
+ * subtle — blur 4-16, no positive spread, near-black low-alpha color. The
+ * AI hallucination signature is one of:
+ *   - blur >= 40 (too soft, looks like a glow / halo)
+ *   - spread > 0 (a positive spread "bleeds" the shadow outward and reads
+ *     as a colored bloom around the element — the "带尖的背景阴影"
+ *     ("pointy / spiked background shadow") the 2026-05-10 user report
+ *     called out on the Mexican badge)
+ *   - 3+ effects on one frame (badges / cards rarely stack 3+ shadows)
+ *
+ * Suggested fix is to remove the effects array; the user / agent can
+ * re-add a proper shadow afterwards if intentional.
+ */
+export function detectExcessiveFrameEffects(root: PenNode): Issue[] {
+  const issues: Issue[] = [];
+  // Threshold is "strictly greater than" — modal-shell + similar
+  // production builders legitimately use blur=40 for the modal scrim.
+  // A blur of 41+ is the AI-hallucination signature.
+  const TYPICAL_BLUR_MAX = 40;
+  function walk(node: PenNode): void {
+    if (node.type === 'frame') {
+      const eff = (node as unknown as { effects?: unknown }).effects;
+      if (Array.isArray(eff) && eff.length > 0) {
+        let suspect = false;
+        let reason = '';
+        if (eff.length >= 3) {
+          suspect = true;
+          reason = `${eff.length} stacked effects on one frame (typical UI uses 0-2)`;
+        } else {
+          for (const e of eff) {
+            const r = e as { blur?: unknown; spread?: unknown; type?: unknown };
+            if (typeof r.blur === 'number' && r.blur > TYPICAL_BLUR_MAX) {
+              suspect = true;
+              reason = `effect blur ${r.blur} > ${TYPICAL_BLUR_MAX} (glow / halo, atypical for UI)`;
+              break;
+            }
+            if (typeof r.spread === 'number' && r.spread > 0) {
+              suspect = true;
+              reason = `effect spread ${r.spread} > 0 (bleeds outward, "spiked" appearance)`;
+              break;
+            }
+          }
+        }
+        if (suspect) {
+          issues.push({
+            nodeId: node.id,
+            category: 'excessive-frame-effects',
+            severity: 'warning',
+            property: 'effects',
+            currentValue: eff,
+            suggestedValue: undefined,
+            reason,
+          });
+        }
+      }
+    }
+    if ('children' in node && Array.isArray(node.children)) {
+      for (const c of node.children) walk(c);
+    }
+  }
+  walk(root);
+  return issues;
+}
+
+/**
+ * Run all 11 detectors and return the deduplicated combined issue list.
  * Dedup key: `${nodeId}:${property}` (matches runPreValidationFixes).
  * On collision, the first issue wins (detector execution order below).
  */
@@ -700,6 +766,7 @@ export function detectAllIssues(root: PenNode, doc: PenDocument): Issue[] {
     ...detectTextEffect(root),
     ...detectTextStroke(root),
     ...detectMixedSiblingPadding(root),
+    ...detectExcessiveFrameEffects(root),
   ];
   const seen = new Set<string>();
   const unique: Issue[] = [];

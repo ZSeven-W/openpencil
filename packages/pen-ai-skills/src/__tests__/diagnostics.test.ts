@@ -10,6 +10,7 @@ import {
   detectTextEffect,
   detectTextStroke,
   detectMixedSiblingPadding,
+  detectExcessiveFrameEffects,
   detectAllIssues,
 } from '../diagnostics/detectors';
 import type { PenNode, PenDocument } from '@zseven-w/pen-types';
@@ -1057,5 +1058,134 @@ describe('detectMixedSiblingPadding', () => {
     // Only 2 cards have padding — no modal pair to compare against the
     // unpadded one, so silent.
     expect(detectMixedSiblingPadding(root)).toHaveLength(0);
+  });
+});
+
+describe('detectExcessiveFrameEffects', () => {
+  it('flags spread > 0 (the "spiked / bleeding" shadow on a badge)', () => {
+    const root = {
+      id: 'r',
+      type: 'frame',
+      children: [
+        {
+          id: 'badge',
+          type: 'frame',
+          name: 'Mexican',
+          effects: [{ type: 'shadow', offsetX: 0, offsetY: 0, blur: 8, spread: 4 }],
+          children: [],
+        } as unknown as PenNode,
+      ],
+    } as unknown as PenNode;
+    const issues = detectExcessiveFrameEffects(root);
+    expect(issues).toHaveLength(1);
+    expect(issues[0].nodeId).toBe('badge');
+    expect(issues[0].suggestedValue).toBeUndefined();
+    expect(issues[0].reason).toMatch(/spread/);
+  });
+
+  it('flags blur > 40 (atypical halo)', () => {
+    const root = {
+      id: 'r',
+      type: 'frame',
+      children: [
+        {
+          id: 'card',
+          type: 'frame',
+          effects: [{ type: 'shadow', blur: 64, spread: 0 }],
+          children: [],
+        } as unknown as PenNode,
+      ],
+    } as unknown as PenNode;
+    const issues = detectExcessiveFrameEffects(root);
+    expect(issues).toHaveLength(1);
+    expect(issues[0].reason).toMatch(/blur/);
+  });
+
+  it('does NOT flag blur exactly 40 (modal-shell scrim is legitimate)', () => {
+    const root = {
+      id: 'r',
+      type: 'frame',
+      children: [
+        {
+          id: 'modal-bg',
+          type: 'frame',
+          effects: [{ type: 'shadow', blur: 40, spread: 0 }],
+          children: [],
+        } as unknown as PenNode,
+      ],
+    } as unknown as PenNode;
+    expect(detectExcessiveFrameEffects(root)).toHaveLength(0);
+  });
+
+  it('flags 3+ stacked effects on one frame', () => {
+    const root = {
+      id: 'r',
+      type: 'frame',
+      children: [
+        {
+          id: 'card',
+          type: 'frame',
+          effects: [
+            { type: 'shadow', blur: 8 },
+            { type: 'shadow', blur: 4 },
+            { type: 'blur', radius: 2 },
+          ],
+          children: [],
+        } as unknown as PenNode,
+      ],
+    } as unknown as PenNode;
+    const issues = detectExcessiveFrameEffects(root);
+    expect(issues).toHaveLength(1);
+    expect(issues[0].reason).toMatch(/3 stacked|stacked effects/);
+  });
+
+  it('does NOT flag a typical subtle shadow (blur=8, spread=0, single)', () => {
+    const root = {
+      id: 'r',
+      type: 'frame',
+      children: [
+        {
+          id: 'card',
+          type: 'frame',
+          effects: [
+            {
+              type: 'shadow',
+              offsetX: 0,
+              offsetY: 4,
+              blur: 8,
+              spread: 0,
+              color: 'rgba(0,0,0,0.1)',
+            },
+          ],
+          children: [],
+        } as unknown as PenNode,
+      ],
+    } as unknown as PenNode;
+    expect(detectExcessiveFrameEffects(root)).toHaveLength(0);
+  });
+
+  it('does NOT flag a frame without effects', () => {
+    const root = {
+      id: 'r',
+      type: 'frame',
+      children: [{ id: 'plain', type: 'frame', children: [] } as unknown as PenNode],
+    } as unknown as PenNode;
+    expect(detectExcessiveFrameEffects(root)).toHaveLength(0);
+  });
+
+  it('does NOT flag text nodes (text-effect detector handles those)', () => {
+    const root = {
+      id: 'r',
+      type: 'frame',
+      children: [
+        {
+          id: 't',
+          type: 'text',
+          content: 'hi',
+          effects: [{ type: 'shadow', spread: 8 }],
+        } as unknown as PenNode,
+      ],
+    } as unknown as PenNode;
+    expect(detectExcessiveFrameEffects(root)).toHaveLength(0);
   });
 });

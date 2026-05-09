@@ -45,6 +45,7 @@ export const DEBUG_TOOL_DEFINITIONS = [
               'text-effect',
               'text-stroke',
               'mixed-sibling-padding',
+              'excessive-frame-effects',
             ],
           },
           description: 'Filter to specific detector categories.',

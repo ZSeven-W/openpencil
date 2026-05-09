@@ -11,5 +11,6 @@ export {
   detectTextEffect,
   detectTextStroke,
   detectMixedSiblingPadding,
+  detectExcessiveFrameEffects,
   detectAllIssues,
 } from './detectors';
