@@ -1,3 +1,4 @@
+import { coerceNavTabIcon } from './coerce-params.js';
 import type { ElementTree } from './helpers.js';
 import { resolveTheme, type V1Theme } from './resolve-theme.js';
 
@@ -99,6 +100,10 @@ function buildItemV1(
   inactiveLabelColor: string,
 ): ElementTree {
   const active = item.active === true;
+  // Same wrong-glyph swap pattern as bottom-nav-v1 (Cart→shopping-cart,
+  // Profile→user, etc). Reuses the shared helper so the convention is
+  // single-sourced.
+  const icon = coerceNavTabIcon(item.label, item.icon, 'buildSidebarNavV1');
   const node: ElementTree = {
     type: 'frame',
     name: `Item (${item.label})`,
@@ -115,7 +120,7 @@ function buildItemV1(
         type: 'icon_font',
         name: 'Icon',
         role: 'sidebar-nav-icon',
-        iconFontName: item.icon,
+        iconFontName: icon,
         iconFontFamily: 'lucide',
         width: 18,
         height: 18,
