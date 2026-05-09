@@ -3,6 +3,7 @@ import {
   inferAspectRatio,
   isImagePlaceholderFrame,
   isUnfilledImagePlaceholderFrame,
+  isImageAreaFrameByHeuristic,
   collectImageSearchTargets,
 } from '../image-search-pipeline';
 import { useDocumentStore } from '@/stores/document-store';
@@ -257,5 +258,144 @@ describe('collectImageSearchTargets', () => {
     const targets = collectImageSearchTargets('root');
     expect(targets).toHaveLength(1);
     expect(targets[0].node.id).toBe('ph-new');
+  });
+});
+
+describe('isImageAreaFrameByHeuristic', () => {
+  // Catches the "Bella Italia card" pattern from the 2026-05-09 user
+  // report — a wide colored block at the top of a restaurant card,
+  // emitted as a plain frame named "Image" / "Photo" / "Cover" without
+  // role: 'image-placeholder'. The heuristic supplements the strict
+  // role-based check so the auto-search pipeline still fires.
+
+  it('flags a frame named "Image" with solid fill and image-area dimensions', () => {
+    const node = {
+      id: 'card-image',
+      type: 'frame',
+      name: 'Image',
+      width: 200,
+      height: 140,
+      fill: [{ type: 'solid', color: '#FCD34D' }],
+      children: [],
+    } as unknown as PenNode;
+    expect(isImageAreaFrameByHeuristic(node)).toBe(true);
+  });
+
+  it('flags "Photo" / "Cover" / "Hero" / "Thumbnail" / "Banner" / "Poster" by name', () => {
+    for (const name of ['Photo', 'Cover', 'Hero Image', 'Thumbnail', 'Banner', 'Poster']) {
+      const node = {
+        id: 'x',
+        type: 'frame',
+        name,
+        width: 200,
+        height: 140,
+        fill: [{ type: 'solid', color: '#FCD34D' }],
+      } as unknown as PenNode;
+      expect(isImageAreaFrameByHeuristic(node)).toBe(true);
+    }
+  });
+
+  it('rejects when the canonical role is already set (handled by strict path)', () => {
+    const node = {
+      id: 'p',
+      type: 'frame',
+      name: 'Image',
+      role: 'image-placeholder',
+      width: 200,
+      height: 140,
+      fill: [{ type: 'solid', color: '#F1F5F9' }],
+    } as unknown as PenNode;
+    expect(isImageAreaFrameByHeuristic(node)).toBe(false);
+  });
+
+  it('rejects an unrelated frame name (e.g. "Card", "Wrapper")', () => {
+    for (const name of ['Card', 'Wrapper', 'Container', 'Section']) {
+      const node = {
+        id: 'x',
+        type: 'frame',
+        name,
+        width: 200,
+        height: 140,
+        fill: [{ type: 'solid', color: '#FCD34D' }],
+      } as unknown as PenNode;
+      expect(isImageAreaFrameByHeuristic(node)).toBe(false);
+    }
+  });
+
+  it('rejects when fill is already an image (already filled)', () => {
+    const node = {
+      id: 'x',
+      type: 'frame',
+      name: 'Image',
+      width: 200,
+      height: 140,
+      fill: [{ type: 'image', url: 'http://x.png' }],
+    } as unknown as PenNode;
+    expect(isImageAreaFrameByHeuristic(node)).toBe(false);
+  });
+
+  it('rejects gradient fills (decorative, not photo placeholder)', () => {
+    const node = {
+      id: 'x',
+      type: 'frame',
+      name: 'Hero',
+      width: 200,
+      height: 140,
+      fill: [{ type: 'linear_gradient', stops: [] }],
+    } as unknown as PenNode;
+    expect(isImageAreaFrameByHeuristic(node)).toBe(false);
+  });
+
+  it('rejects content-rich frame (>1 child = real layout, not placeholder)', () => {
+    const node = {
+      id: 'x',
+      type: 'frame',
+      name: 'Photo',
+      width: 200,
+      height: 140,
+      fill: [{ type: 'solid', color: '#FCD34D' }],
+      children: [
+        { id: 'c1', type: 'text', content: 'a' },
+        { id: 'c2', type: 'text', content: 'b' },
+      ],
+    } as unknown as PenNode;
+    expect(isImageAreaFrameByHeuristic(node)).toBe(false);
+  });
+
+  it('accepts single-icon-child frame (broken-image hint)', () => {
+    const node = {
+      id: 'x',
+      type: 'frame',
+      name: 'Cover',
+      width: 200,
+      height: 140,
+      fill: [{ type: 'solid', color: '#FCD34D' }],
+      children: [{ id: 'icon', type: 'icon_font', iconFontName: 'image' }],
+    } as unknown as PenNode;
+    expect(isImageAreaFrameByHeuristic(node)).toBe(true);
+  });
+
+  it('rejects undersize frames (60 < height threshold OR 80 < width)', () => {
+    const tiny = {
+      id: 'x',
+      type: 'frame',
+      name: 'Photo',
+      width: 50,
+      height: 30,
+      fill: [{ type: 'solid', color: '#FCD34D' }],
+    } as unknown as PenNode;
+    expect(isImageAreaFrameByHeuristic(tiny)).toBe(false);
+  });
+
+  it('rejects when width or height is non-numeric (fill_container etc.)', () => {
+    const fill = {
+      id: 'x',
+      type: 'frame',
+      name: 'Photo',
+      width: 'fill_container',
+      height: 'fit_content',
+      fill: [{ type: 'solid', color: '#FCD34D' }],
+    } as unknown as PenNode;
+    expect(isImageAreaFrameByHeuristic(fill)).toBe(false);
   });
 });
