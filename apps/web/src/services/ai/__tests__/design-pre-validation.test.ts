@@ -267,4 +267,100 @@ describe('design-pre-validation (baseline)', () => {
     };
     expect(s4?.cornerRadius).toBe(8);
   });
+
+  // Aesthetic detector pipeline tests — added 2026-05-10 alongside the new
+  // detectors (53435bf7 / 7aef1b14 / cd1e4325 / ad025c95). Each verifies
+  // the detector → applyFixes → store mutation chain end-to-end.
+
+  it('rotation: auto-fixes a tilted UI frame to rotation=0', () => {
+    loadDocument(
+      makeDoc([
+        {
+          id: 'tilted',
+          type: 'frame',
+          name: 'Card',
+          rotation: 12,
+          children: [
+            { id: 'content', type: 'text', text: 'hello', fontSize: 14 } as unknown as PenNode,
+          ],
+        } as unknown as PenNode,
+      ]),
+    );
+    expect(runPreValidationFixes()).toBeGreaterThanOrEqual(1);
+    const node = useDocumentStore.getState().getNodeById('tilted') as PenNode & {
+      rotation?: number;
+    };
+    expect(node?.rotation).toBe(0);
+  });
+
+  it('text-corner-radius: clears cornerRadius on a text node', () => {
+    loadDocument(
+      makeDoc([
+        {
+          id: 'parent',
+          type: 'frame',
+          children: [
+            {
+              id: 'rounded-text',
+              type: 'text',
+              content: 'hi',
+              cornerRadius: 8,
+              fontSize: 14,
+            } as unknown as PenNode,
+          ],
+        } as unknown as PenNode,
+      ]),
+    );
+    expect(runPreValidationFixes()).toBeGreaterThanOrEqual(1);
+    const text = useDocumentStore.getState().getNodeById('rounded-text') as PenNode & {
+      cornerRadius?: number;
+    };
+    expect(text?.cornerRadius).toBeUndefined();
+  });
+
+  it('text-stroke: clears stroke on a text node', () => {
+    loadDocument(
+      makeDoc([
+        {
+          id: 'parent',
+          type: 'frame',
+          children: [
+            {
+              id: 'outlined-text',
+              type: 'text',
+              content: 'hi',
+              fontSize: 14,
+              stroke: { thickness: 1, fill: [{ type: 'solid', color: '#000' }] },
+            } as unknown as PenNode,
+          ],
+        } as unknown as PenNode,
+      ]),
+    );
+    expect(runPreValidationFixes()).toBeGreaterThanOrEqual(1);
+    const text = useDocumentStore.getState().getNodeById('outlined-text') as PenNode & {
+      stroke?: unknown;
+    };
+    expect(text?.stroke).toBeUndefined();
+  });
+
+  it('mixed-sibling-corner-radius: rewrites the outlier card to the modal value', () => {
+    loadDocument(
+      makeDoc([
+        {
+          id: 'parent',
+          type: 'frame',
+          children: [
+            { id: 'c1', type: 'frame', role: 'card', cornerRadius: 8, children: [] },
+            { id: 'c2', type: 'frame', role: 'card', cornerRadius: 8, children: [] },
+            { id: 'c3', type: 'frame', role: 'card', cornerRadius: 12, children: [] },
+          ],
+        } as unknown as PenNode,
+      ]),
+    );
+    expect(runPreValidationFixes()).toBeGreaterThanOrEqual(1);
+    const c3 = useDocumentStore.getState().getNodeById('c3') as PenNode & {
+      cornerRadius?: number;
+    };
+    expect(c3?.cornerRadius).toBe(8);
+  });
 });
