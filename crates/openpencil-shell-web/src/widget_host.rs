@@ -35,6 +35,24 @@ impl WidgetHost {
         }
     }
 
+    /// Phase C2 IME forwarding: route a composition event into the
+    /// text-input widget's state. Phase D+ may choose a different
+    /// target widget (focus-follows-IME); for now the inspector's
+    /// only text input takes everything.
+    pub fn apply_ime(&mut self, event: &openpencil_shell_core::ImeEvent) { // glue:
+        self.text_input.state.apply_ime(event);
+    }
+
+    /// Phase C2 keyboard forwarding: arrow / Enter / Escape land on
+    /// the dropdown. Phase D+ may add focus-follows-key routing; for
+    /// now the dropdown is the only keyboard-aware widget in the
+    /// inspector slice.
+    pub fn apply_key(&mut self, event: &openpencil_shell_core::KeyEvent) { // glue:
+        self.dropdown
+            .state
+            .apply_key(event, self.dropdown.options.len());
+    }
+
     /// Dispatches paint to the shell-core widgets stacked vertically with
     /// 12 px gaps. The `// glue:` marker on the same line as the
     /// signature is what `tools/check-widget-boundary.sh` (Phase B4)

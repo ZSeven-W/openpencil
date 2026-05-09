@@ -13,6 +13,41 @@ pub struct DropdownState {
     pub open: bool,
 }
 
+impl DropdownState {
+    /// Phase C2 keyboard handler: arrow keys cycle the selection
+    /// (and open the menu), Enter / Escape close it. `option_count`
+    /// is the parent Dropdown's `options.len()` — passed in so this
+    /// stays a pure state mutator without borrowing the Dropdown
+    /// struct around it.
+    ///
+    /// Skips when the key is released or the dropdown has no options
+    /// (no-op rather than wrap-around / panic). Non-navigation keys
+    /// fall through unchanged so widget code can layer additional
+    /// handlers later (e.g. typeahead in Phase D+).
+    pub fn apply_key(&mut self, event: &crate::KeyEvent, option_count: usize) {
+        if event.state != crate::KeyState::Pressed || option_count == 0 {
+            return;
+        }
+        match event.key {
+            crate::KeyValue::Named(crate::NamedKey::ArrowDown) => {
+                self.open = true;
+                self.selected = (self.selected + 1).min(option_count - 1);
+            }
+            crate::KeyValue::Named(crate::NamedKey::ArrowUp) => {
+                self.open = true;
+                self.selected = self.selected.saturating_sub(1);
+            }
+            crate::KeyValue::Named(crate::NamedKey::Enter) => {
+                self.open = false;
+            }
+            crate::KeyValue::Named(crate::NamedKey::Escape) => {
+                self.open = false;
+            }
+            _ => {}
+        }
+    }
+}
+
 pub struct Dropdown {
     pub id: WidgetId,
     pub label: String,
