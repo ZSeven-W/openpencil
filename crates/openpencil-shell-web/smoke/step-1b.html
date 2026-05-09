@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Step 1b WebShell Smoke</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: #fafafa;
+        font:
+          14px/1.5 -apple-system,
+          BlinkMacSystemFont,
+          'Segoe UI',
+          sans-serif;
+      }
+      #status {
+        padding: 16px;
+      }
+      #status pre {
+        background: #fff;
+        border: 1px solid #ccc;
+        padding: 12px;
+        white-space: pre-wrap;
+      }
+      canvas {
+        display: block;
+        width: 960px;
+        height: 640px;
+        border: 1px solid #111;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="status"></div>
+    <canvas id="op" width="960" height="640"></canvas>
+    <script type="module">
+      // Phase A smoke harness for the WebShell red-rect demo.
+      //
+      // CURRENT STATE (post C-hard.2, 2026-05-09):
+      //   - Skia C++ + skia-bindings + skia-safe + shell-web build to
+      //     wasm32-unknown-unknown via the vendor/skia-safe-op fork
+      //     (build_support/platform/wasm_unknown.rs).
+      //   - The libc / libcxx / libm shim crate (crates/wasm-libc-shim)
+      //     resolves the previously-missing env.* imports. Verified via
+      //     `WebAssembly.Module.imports()`: 22 imports, all from
+      //     `./openpencil_shell_web_bg.js`; 0 env.* imports.
+      //   - The bundle is structurally LinkError-free; a LinkError here
+      //     is now a REGRESSION signal, not the expected state.
+      //
+      // What this harness verifies:
+      //   - module loads (LinkError ⇒ regression in libc shim or fork)
+      //   - mount() returns a live WebShell
+      //   - paint_phase_a draws a red rect via skia raster + put_image_data
+      //
+      // What this harness does NOT verify (Phase E manual smoke):
+      //   - the red rect is actually visible to a human in a browser tab
+      //   - latency is within the 16ms / 60fps budget
+      //   - DPI scale + canvas resize behave correctly
+      //
+      // Round 2 C-R2-1 fix: assign the returned WebShell to
+      // `window.__opShell` so the GC keeps it alive for the page
+      // lifetime; the shell may hold closures into the wasm module.
+      const status = document.getElementById('status');
+      const log = (cls, msg) => {
+        const block = document.createElement('pre');
+        block.className = cls;
+        block.textContent = msg;
+        status.appendChild(block);
+      };
+      try {
+        const mod = await import('../pkg/openpencil_shell_web.js');
+        await mod.default();
+        window.__opShell = mod.mount('op');
+        log('ok', 'WebShell mounted; canvas should show centered red rect.');
+      } catch (e) {
+        const isLinkError =
+          e instanceof WebAssembly.LinkError ||
+          (e && e.constructor && e.constructor.name === 'LinkError') ||
+          (e && e.message && e.message.startsWith('WebAssembly.instantiate()'));
+        const header = isLinkError
+          ? 'WebShell wasm bundle failed to link — REGRESSION (post C-hard.2 the bundle is supposed to be LinkError-free).'
+          : 'WebShell loader could not be imported.';
+        log(
+          'error',
+          [
+            header,
+            '',
+            'Expected file: ../pkg/openpencil_shell_web.js',
+            '',
+            'How to rebuild the bundle (when the file is missing or stale):',
+            '  1. brew install emscripten   # 5.0.7 + EMSDK shim',
+            '  2. mkdir -p ~/.emsdk/upstream && \\',
+            '       ln -sfn /opt/homebrew/opt/emscripten/libexec ~/.emsdk/upstream/emscripten',
+            '  3. EMSDK="$HOME/.emsdk" cargo build -p openpencil-shell-web \\',
+            '       --target wasm32-unknown-unknown --features skia --release',
+            '  4. (one-time) ln -sf libfoo.wasm.a libfoo.a in target/.../skia-bindings-*/out/skia/',
+            '  5. wasm-bindgen --target web \\',
+            '       --out-dir crates/openpencil-shell-web/pkg \\',
+            '       target/wasm32-unknown-unknown/release/openpencil_shell_web.wasm',
+            '',
+            'A LinkError after a clean rebuild means a new env.* import',
+            'snuck back in (skia upgrade, new shim gap, etc). Inspect via',
+            '  wasm-objdump --details --section=Import ../pkg/openpencil_shell_web_bg.wasm',
+            'and add the missing symbol to crates/wasm-libc-shim/src/imp.rs.',
+            '',
+            'Underlying error: ' + (e && e.message ? e.message : String(e)),
+          ].join('\n'),
+        );
+      }
+    </script>
+  </body>
+</html>

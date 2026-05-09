@@ -4,7 +4,7 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
-description = "OpenPencil shell — wasm32 web bundle entry (CanvasKit + accesskit_web + OPFS)"
+description = "OpenPencil shell — wasm32-unknown-unknown web bundle entry (Step 1b §1.2, C-hard pipeline)"
 
 [lib]
 name = "openpencil_shell_web"
@@ -13,13 +13,65 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 openpencil-shell-core = { path = "../openpencil-shell-core", version = "0.1.0" }
-wasm-bindgen = "0.2"
+# Step 1b §3.6: handwritten DOM mirror consumes accesskit::TreeUpdate (0.24).
+accesskit = "0.24"
+console_error_panic_hook = "0.1"
 js-sys = "0.3"
+# Pin to 0.2.117 — last wasm-bindgen-cli release compatible with the
+# workspace's Rust 1.85 toolchain. Newer 0.2.120+ requires rustc 1.86.
+# When the workspace bumps Rust, raise this bound.
+wasm-bindgen = "=0.2.117"
+
+# Step 1b §2.2 (post C-hard.2 lock-in 2026-05-09): wasm32-unknown-unknown
+# via the vendor/skia-safe-op fork + crates/wasm-libc-shim. Optional dep
+# behind the `skia` feature so `cargo check --target wasm32-unknown-
+# unknown --no-default-features --features web` (the kickoff §1.2
+# wasm32-clean CI baseline) still compile-checks without pulling skia
+# — that path uses the stub mount entry. Phase A and onward opt in via
+# `--features skia` to get the real WebBackend + raster paint loop.
+[dependencies.skia-safe]
+version = "0.97.0"
+default-features = false
+features = ["binary-cache", "textlayout"]
+optional = true
+
+# C-hard.2 libc/libcxx/libm shim — only linked when targeting
+# wasm32-unknown-unknown with the `skia` feature on. The crate's lib.rs
+# guards every symbol with `cfg(all(target_arch = "wasm32", target_os
+# = "unknown"))` so native builds (where this would conflict with the
+# host C runtime) link an empty crate.
+[target.'cfg(all(target_arch = "wasm32", target_os = "unknown"))'.dependencies]
+wasm-libc-shim = { path = "../wasm-libc-shim", optional = true }
 
 [dependencies.web-sys]
 version = "0.3"
-features = ["console", "Document", "Element", "HtmlCanvasElement", "Window"]
+features = [
+  "CanvasRenderingContext2d",
+  "CompositionEvent",
+  "console",
+  "Document",
+  "Element",
+  "Event",
+  "EventTarget",
+  "FocusEvent",
+  "HtmlCanvasElement",
+  "HtmlElement",
+  "ImageData",
+  "KeyboardEvent",
+  "PointerEvent",
+  "WheelEvent",
+  "Window",
+]
 
 [features]
+# `web` keeps the kickoff §1.2 wasm32-unknown-unknown CI baseline green —
+# the crate compile-checks as a wasm32-clean stub without pulling skia.
 default = ["web"]
 web = []
+# `skia` opts into the Phase A WebBackend (skia-safe + raster surface).
+# When the cargo target is wasm32-unknown-unknown the build also links
+# the libc/libcxx/libm shim crate so the bundle is runtime-loadable.
+# Native targets resolve the target-conditional shim dep to nothing.
+skia = ["dep:skia-safe", "wasm-libc-shim"]
+# Internal feature toggled on by `skia` to flip the cfg-target dep.
+wasm-libc-shim = ["dep:wasm-libc-shim"]
