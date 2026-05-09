@@ -378,6 +378,54 @@ describe('isImageAreaFrameByHeuristic', () => {
     expect(isImageAreaFrameByHeuristic(node)).toBe(true);
   });
 
+  it('rejects single-NON-icon-child frame (CTA / text / nested layout)', () => {
+    // Codex stop-time review 2026-05-10: a hero frame named "Hero" with
+    // exactly one CTA button child used to match the heuristic. The
+    // queue's children:[] erase step would then destroy the button when
+    // the photo landed. Now: must be 0 children or 1 icon_font child;
+    // any other shape is rejected so legitimate hero / banner content
+    // is preserved.
+    const heroWithButton = {
+      id: 'hero',
+      type: 'frame',
+      name: 'Hero',
+      width: 600,
+      height: 320,
+      fill: [{ type: 'solid', color: '#0EA5E9' }],
+      children: [
+        {
+          id: 'cta',
+          type: 'frame',
+          role: 'button',
+          children: [{ id: 'cta-text', type: 'text', content: 'Get Started' }],
+        },
+      ],
+    } as unknown as PenNode;
+    expect(isImageAreaFrameByHeuristic(heroWithButton)).toBe(false);
+
+    const bannerWithText = {
+      id: 'banner',
+      type: 'frame',
+      name: 'Banner',
+      width: 800,
+      height: 200,
+      fill: [{ type: 'solid', color: '#FF6B35' }],
+      children: [{ id: 't', type: 'text', content: 'Sale!' }],
+    } as unknown as PenNode;
+    expect(isImageAreaFrameByHeuristic(bannerWithText)).toBe(false);
+
+    const coverWithFrame = {
+      id: 'cover',
+      type: 'frame',
+      name: 'Cover',
+      width: 400,
+      height: 200,
+      fill: [{ type: 'solid', color: '#10B981' }],
+      children: [{ id: 'inner', type: 'frame', children: [] }],
+    } as unknown as PenNode;
+    expect(isImageAreaFrameByHeuristic(coverWithFrame)).toBe(false);
+  });
+
   it('rejects undersize frames (60 < height threshold OR 80 < width)', () => {
     const tiny = {
       id: 'x',
