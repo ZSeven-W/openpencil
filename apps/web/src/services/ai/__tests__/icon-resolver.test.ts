@@ -172,6 +172,11 @@ describe('applyIconPathResolution — opt-in marker gate', () => {
     // marker word so it bypasses the resolver entirely — that's correct
     // because the path could be a real SVG file ref.)
     ['Image Icon', /image/],
+    // `image` removal from noise must NOT regress the photo / camera /
+    // gallery aliases — they're real lucide icons. Verifies that the
+    // standard "X Icon" pattern still wins via the trailing-marker strip.
+    ['Photo Icon', /image|photo/], // photo aliases to image in commonAliases
+    ['Camera Icon', /camera/],
   ])('resolves multi-word path name "%s" to %s', (name, expectedIconId) => {
     const node = makePath({ name });
     applyIconPathResolution(node);
