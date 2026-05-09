@@ -17,6 +17,12 @@ openpencil-shell-core = { path = "../openpencil-shell-core", version = "0.1.0" }
 accesskit = "0.24"
 console_error_panic_hook = "0.1"
 js-sys = "0.3"
+# Phase C1 DOM event mappers build `jian_core::gesture::WheelEvent` etc
+# whose position/delta fields use `jian_core::geometry::Point`. The
+# `geometry` module is not re-exported by shell-core (which only
+# re-exports `gesture::*`), so pull jian-core directly. Same path-with-
+# version pattern as shell-core's own jian-core dep.
+jian-core = { path = "../../vendor/jian/crates/jian-core", version = "0.0.1" }
 # Pin to 0.2.117 — last wasm-bindgen-cli release compatible with the
 # workspace's Rust 1.85 toolchain. Newer 0.2.120+ requires rustc 1.86.
 # When the workspace bumps Rust, raise this bound.
