@@ -551,7 +551,48 @@ export function detectTextEffect(root: PenNode): Issue[] {
 }
 
 /**
- * Run all 8 detectors and return the deduplicated combined issue list.
+ * Aesthetic detector: text node with stroke (outlined text).
+ *
+ * Rationale: outlined text on a UI label is almost always an AI mistake
+ * — Lucide / SF / Material icons get stroked, but body / heading / label
+ * text is filled, not stroked. The model occasionally copies a generic
+ * "give it a stroke" instruction onto text nodes; the result on canvas
+ * is double-rendered glyphs that read as designed-by-AI.
+ *
+ * Suggest removing the stroke. Skip when stroke.thickness is 0 (some
+ * model JSON keeps an empty stroke object as a placeholder).
+ */
+export function detectTextStroke(root: PenNode): Issue[] {
+  const issues: Issue[] = [];
+  function walk(node: PenNode): void {
+    if (node.type === 'text') {
+      const stroke = (node as unknown as { stroke?: unknown }).stroke;
+      if (stroke && typeof stroke === 'object') {
+        const s = stroke as { thickness?: number };
+        if (typeof s.thickness === 'number' && s.thickness > 0) {
+          issues.push({
+            nodeId: node.id,
+            category: 'text-stroke',
+            severity: 'warning',
+            property: 'stroke',
+            currentValue: stroke,
+            suggestedValue: undefined,
+            reason:
+              'text node has stroke — outlined UI labels are almost always an AI hallucination',
+          });
+        }
+      }
+    }
+    if ('children' in node && Array.isArray(node.children)) {
+      for (const c of node.children) walk(c);
+    }
+  }
+  walk(root);
+  return issues;
+}
+
+/**
+ * Run all 9 detectors and return the deduplicated combined issue list.
  * Dedup key: `${nodeId}:${property}` (matches runPreValidationFixes).
  * On collision, the first issue wins (detector execution order below).
  */
@@ -565,6 +606,7 @@ export function detectAllIssues(root: PenNode, doc: PenDocument): Issue[] {
     ...detectTextCornerRadius(root),
     ...detectMixedSiblingCornerRadius(root),
     ...detectTextEffect(root),
+    ...detectTextStroke(root),
   ];
   const seen = new Set<string>();
   const unique: Issue[] = [];
