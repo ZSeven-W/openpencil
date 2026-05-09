@@ -4,7 +4,10 @@ export type IssueCategory =
   | 'invisible-container'
   | 'empty-path'
   | 'text-explicit-height'
-  | 'sibling-inconsistency';
+  | 'sibling-inconsistency'
+  | 'unexpected-rotation'
+  | 'text-corner-radius'
+  | 'mixed-sibling-corner-radius';
 
 export interface Issue {
   /** Node id where the issue was detected */

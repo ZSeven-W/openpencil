@@ -5,5 +5,8 @@ export {
   detectEmptyPaths,
   detectTextExplicitHeights,
   detectSiblingInconsistencies,
+  detectUnexpectedRotation,
+  detectTextCornerRadius,
+  detectMixedSiblingCornerRadius,
   detectAllIssues,
 } from './detectors';

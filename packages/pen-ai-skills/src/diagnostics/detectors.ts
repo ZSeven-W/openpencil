@@ -371,7 +371,151 @@ export function detectSiblingInconsistencies(root: PenNode): Issue[] {
 }
 
 /**
- * Run all 4 detectors and return the deduplicated combined issue list.
+ * Aesthetic detector: rotation on a UI-bearing node.
+ *
+ * Rationale: AI-generated layouts almost never want rotation on a text /
+ * frame / shape node. When a model emits `rotation: 12` on a frame the
+ * card visibly tilts — usually an artifact of a misread Figma export or
+ * a model copying decorative geometry into UI flow. Skip path / line /
+ * polygon nodes (legitimate decorative geometry frequently has
+ * rotation), skip exactly-0 and missing values, and skip rotation that
+ * is a multiple of 90 (intentional vertical text or grid rotation).
+ */
+export function detectUnexpectedRotation(root: PenNode): Issue[] {
+  const issues: Issue[] = [];
+  const SKIP_TYPES = new Set(['path', 'line', 'polygon', 'image']);
+  function walk(node: PenNode): void {
+    const rec = node as unknown as Record<string, unknown>;
+    const rotation = typeof rec.rotation === 'number' ? rec.rotation : 0;
+    if (
+      !SKIP_TYPES.has(node.type) &&
+      rotation !== 0 &&
+      Math.abs(rotation % 90) > 0.5 // 90/180/270 rotations are usually intentional
+    ) {
+      issues.push({
+        nodeId: node.id,
+        category: 'unexpected-rotation',
+        severity: 'warning',
+        property: 'rotation',
+        currentValue: rotation,
+        suggestedValue: 0,
+        reason: `${node.type} node has rotation=${rotation}; UI nodes are rarely tilted on purpose`,
+      });
+    }
+    if ('children' in node && Array.isArray(node.children)) {
+      for (const c of node.children) walk(c);
+    }
+  }
+  walk(root);
+  return issues;
+}
+
+/**
+ * Aesthetic detector: text node with cornerRadius.
+ *
+ * Rationale: cornerRadius on a text node has no rendering effect (text
+ * isn't drawn into a clipped rectangle), but it's a common AI hallucination
+ * — the model copies a generic "card-like" prop set onto a text run. The
+ * stale prop survives in the doc, confuses downstream code generators
+ * that round-trip the schema, and burns LLM context on subsequent
+ * batch_get calls. Suggest fixing to undefined (remove).
+ */
+export function detectTextCornerRadius(root: PenNode): Issue[] {
+  const issues: Issue[] = [];
+  function walk(node: PenNode): void {
+    if (node.type === 'text') {
+      const cr = (node as unknown as { cornerRadius?: unknown }).cornerRadius;
+      const num = typeof cr === 'number' ? cr : null;
+      if (num !== null && num > 0) {
+        issues.push({
+          nodeId: node.id,
+          category: 'text-corner-radius',
+          severity: 'warning',
+          property: 'cornerRadius',
+          currentValue: num,
+          suggestedValue: undefined,
+          reason: 'text nodes have no clip path — cornerRadius is silently dropped at render time',
+        });
+      }
+    }
+    if ('children' in node && Array.isArray(node.children)) {
+      for (const c of node.children) walk(c);
+    }
+  }
+  walk(root);
+  return issues;
+}
+
+/**
+ * Aesthetic detector: siblings (>= 3 of the same type+role) with
+ * inconsistent cornerRadius. Picks the modal value, flags the outliers.
+ *
+ * The existing `sibling-inconsistency` detector already catches this for
+ * frame nodes via FRAME_STRICT_PROPS, BUT only when the modal-vs-outlier
+ * delta is >= 50% of the modal value. For cornerRadius specifically the
+ * threshold misses tiny but visually obvious mismatches (8 vs 12 across
+ * three cards reads as ragged on canvas). This detector uses a strict
+ * "equal or report" check on cornerRadius alone.
+ */
+export function detectMixedSiblingCornerRadius(root: PenNode): Issue[] {
+  const issues: Issue[] = [];
+  function walk(node: PenNode): void {
+    if (!('children' in node) || !Array.isArray(node.children)) return;
+    if (node.children.length >= 3) {
+      const groups = new Map<string, PenNode[]>();
+      for (const c of node.children) {
+        const role = ((c as { role?: string }).role ?? '').toLowerCase() || '__none__';
+        if (role === 'divider' || role === 'spacer') continue;
+        const key = `${c.type}:${role}`;
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key)!.push(c);
+      }
+      for (const [, siblings] of groups) {
+        if (siblings.length < 3) continue;
+        const counts = new Map<number, number>();
+        for (const s of siblings) {
+          const cr = (s as unknown as { cornerRadius?: unknown }).cornerRadius;
+          const num = typeof cr === 'number' ? cr : 0;
+          counts.set(num, (counts.get(num) ?? 0) + 1);
+        }
+        if (counts.size < 2) continue;
+        let modal = 0;
+        let modalCount = 0;
+        for (const [val, count] of counts) {
+          if (count > modalCount) {
+            modal = val;
+            modalCount = count;
+          }
+        }
+        // Only flag if the modal is a clear majority (>= 60%) so we
+        // don't report a 1-1-1 three-way split as "outliers" — there's
+        // no canonical value to suggest in that case.
+        if (modalCount / siblings.length < 0.6) continue;
+        for (const s of siblings) {
+          const cr = (s as unknown as { cornerRadius?: unknown }).cornerRadius;
+          const num = typeof cr === 'number' ? cr : 0;
+          if (num !== modal) {
+            issues.push({
+              nodeId: s.id,
+              category: 'mixed-sibling-corner-radius',
+              severity: 'warning',
+              property: 'cornerRadius',
+              currentValue: num,
+              suggestedValue: modal,
+              reason: `cornerRadius ${num} doesn't match the ${modalCount} other ${node.children.length - 1} sibling(s) at ${modal}`,
+            });
+          }
+        }
+      }
+    }
+    for (const c of node.children) walk(c);
+  }
+  walk(root);
+  return issues;
+}
+
+/**
+ * Run all 7 detectors and return the deduplicated combined issue list.
  * Dedup key: `${nodeId}:${property}` (matches runPreValidationFixes).
  * On collision, the first issue wins (detector execution order below).
  */
@@ -381,6 +525,9 @@ export function detectAllIssues(root: PenNode, doc: PenDocument): Issue[] {
     ...detectEmptyPaths(root),
     ...detectTextExplicitHeights(root),
     ...detectSiblingInconsistencies(root),
+    ...detectUnexpectedRotation(root),
+    ...detectTextCornerRadius(root),
+    ...detectMixedSiblingCornerRadius(root),
   ];
   const seen = new Set<string>();
   const unique: Issue[] = [];

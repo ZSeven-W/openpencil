@@ -4,6 +4,9 @@ import {
   detectEmptyPaths,
   detectTextExplicitHeights,
   detectSiblingInconsistencies,
+  detectUnexpectedRotation,
+  detectTextCornerRadius,
+  detectMixedSiblingCornerRadius,
   detectAllIssues,
 } from '../diagnostics/detectors';
 import type { PenNode, PenDocument } from '@zseven-w/pen-types';
@@ -627,5 +630,205 @@ describe('detectAllIssues', () => {
     } as unknown as PenNode;
     const issues = detectAllIssues(root, doc(root));
     expect(issues).toHaveLength(0);
+  });
+});
+
+describe('detectUnexpectedRotation', () => {
+  it('flags a frame with non-axis-aligned rotation', () => {
+    const root = {
+      id: 'r',
+      type: 'frame',
+      rotation: 12,
+      children: [],
+    } as unknown as PenNode;
+    const issues = detectUnexpectedRotation(root);
+    expect(issues).toHaveLength(1);
+    expect(issues[0].category).toBe('unexpected-rotation');
+    expect(issues[0].nodeId).toBe('r');
+    expect(issues[0].suggestedValue).toBe(0);
+  });
+
+  it('does not flag rotation=0 (default)', () => {
+    const root = { id: 'r', type: 'frame', rotation: 0, children: [] } as unknown as PenNode;
+    expect(detectUnexpectedRotation(root)).toHaveLength(0);
+  });
+
+  it('does not flag missing rotation prop', () => {
+    const root = { id: 'r', type: 'frame', children: [] } as unknown as PenNode;
+    expect(detectUnexpectedRotation(root)).toHaveLength(0);
+  });
+
+  it('does not flag axis-aligned rotation (90/180/270 — intentional vertical text / grid)', () => {
+    const root = {
+      id: 'r',
+      type: 'frame',
+      children: [
+        { id: 'a', type: 'frame', rotation: 90, children: [] } as unknown as PenNode,
+        { id: 'b', type: 'frame', rotation: 180, children: [] } as unknown as PenNode,
+        { id: 'c', type: 'frame', rotation: -90, children: [] } as unknown as PenNode,
+      ],
+    } as unknown as PenNode;
+    expect(detectUnexpectedRotation(root)).toHaveLength(0);
+  });
+
+  it('does NOT flag path / line / polygon / image (decorative geometry often rotated)', () => {
+    const root = {
+      id: 'r',
+      type: 'frame',
+      children: [
+        { id: 'p', type: 'path', rotation: 30 } as unknown as PenNode,
+        { id: 'l', type: 'line', rotation: 45 } as unknown as PenNode,
+        { id: 'g', type: 'polygon', rotation: 17 } as unknown as PenNode,
+        { id: 'i', type: 'image', rotation: 12 } as unknown as PenNode,
+      ],
+    } as unknown as PenNode;
+    expect(detectUnexpectedRotation(root)).toHaveLength(0);
+  });
+
+  it('flags nested frame with rotation', () => {
+    const root = {
+      id: 'r',
+      type: 'frame',
+      children: [
+        {
+          id: 'wrapper',
+          type: 'frame',
+          children: [{ id: 'tilted', type: 'text', rotation: 7 } as unknown as PenNode],
+        } as unknown as PenNode,
+      ],
+    } as unknown as PenNode;
+    const issues = detectUnexpectedRotation(root);
+    expect(issues).toHaveLength(1);
+    expect(issues[0].nodeId).toBe('tilted');
+  });
+});
+
+describe('detectTextCornerRadius', () => {
+  it('flags text node with cornerRadius > 0', () => {
+    const root = {
+      id: 'r',
+      type: 'frame',
+      children: [{ id: 't', type: 'text', cornerRadius: 8, content: 'hi' } as unknown as PenNode],
+    } as unknown as PenNode;
+    const issues = detectTextCornerRadius(root);
+    expect(issues).toHaveLength(1);
+    expect(issues[0].category).toBe('text-corner-radius');
+    expect(issues[0].nodeId).toBe('t');
+    expect(issues[0].suggestedValue).toBeUndefined();
+  });
+
+  it('does not flag text without cornerRadius', () => {
+    const root = {
+      id: 'r',
+      type: 'frame',
+      children: [{ id: 't', type: 'text', content: 'hi' } as unknown as PenNode],
+    } as unknown as PenNode;
+    expect(detectTextCornerRadius(root)).toHaveLength(0);
+  });
+
+  it('does not flag text with cornerRadius=0', () => {
+    const root = {
+      id: 'r',
+      type: 'frame',
+      children: [{ id: 't', type: 'text', cornerRadius: 0, content: 'hi' } as unknown as PenNode],
+    } as unknown as PenNode;
+    expect(detectTextCornerRadius(root)).toHaveLength(0);
+  });
+
+  it('does not flag frame nodes with cornerRadius (only text)', () => {
+    const root = {
+      id: 'r',
+      type: 'frame',
+      cornerRadius: 12,
+      children: [],
+    } as unknown as PenNode;
+    expect(detectTextCornerRadius(root)).toHaveLength(0);
+  });
+});
+
+describe('detectMixedSiblingCornerRadius', () => {
+  it('flags an outlier when 2 of 3 same-role cards share cornerRadius', () => {
+    const root = {
+      id: 'r',
+      type: 'frame',
+      children: [
+        { id: 'c1', type: 'frame', role: 'card', cornerRadius: 8, children: [] },
+        { id: 'c2', type: 'frame', role: 'card', cornerRadius: 8, children: [] },
+        { id: 'c3', type: 'frame', role: 'card', cornerRadius: 12, children: [] },
+      ],
+    } as unknown as PenNode;
+    const issues = detectMixedSiblingCornerRadius(root);
+    expect(issues).toHaveLength(1);
+    expect(issues[0].nodeId).toBe('c3');
+    expect(issues[0].suggestedValue).toBe(8);
+  });
+
+  it('does not flag when all siblings share cornerRadius', () => {
+    const root = {
+      id: 'r',
+      type: 'frame',
+      children: [
+        { id: 'c1', type: 'frame', role: 'card', cornerRadius: 8, children: [] },
+        { id: 'c2', type: 'frame', role: 'card', cornerRadius: 8, children: [] },
+        { id: 'c3', type: 'frame', role: 'card', cornerRadius: 8, children: [] },
+      ],
+    } as unknown as PenNode;
+    expect(detectMixedSiblingCornerRadius(root)).toHaveLength(0);
+  });
+
+  it('does not flag a 1-1-1 three-way split (no canonical modal value)', () => {
+    const root = {
+      id: 'r',
+      type: 'frame',
+      children: [
+        { id: 'c1', type: 'frame', role: 'card', cornerRadius: 4, children: [] },
+        { id: 'c2', type: 'frame', role: 'card', cornerRadius: 8, children: [] },
+        { id: 'c3', type: 'frame', role: 'card', cornerRadius: 12, children: [] },
+      ],
+    } as unknown as PenNode;
+    expect(detectMixedSiblingCornerRadius(root)).toHaveLength(0);
+  });
+
+  it('does not flag siblings with mixed roles (card vs button — different design tier)', () => {
+    const root = {
+      id: 'r',
+      type: 'frame',
+      children: [
+        { id: 'c1', type: 'frame', role: 'card', cornerRadius: 8, children: [] },
+        { id: 'c2', type: 'frame', role: 'card', cornerRadius: 8, children: [] },
+        { id: 'b1', type: 'frame', role: 'button', cornerRadius: 4, children: [] },
+      ],
+    } as unknown as PenNode;
+    expect(detectMixedSiblingCornerRadius(root)).toHaveLength(0);
+  });
+
+  it('does not flag fewer than 3 siblings', () => {
+    const root = {
+      id: 'r',
+      type: 'frame',
+      children: [
+        { id: 'c1', type: 'frame', role: 'card', cornerRadius: 8, children: [] },
+        { id: 'c2', type: 'frame', role: 'card', cornerRadius: 12, children: [] },
+      ],
+    } as unknown as PenNode;
+    expect(detectMixedSiblingCornerRadius(root)).toHaveLength(0);
+  });
+
+  it('skips dividers and spacers when grouping (they should not count)', () => {
+    const root = {
+      id: 'r',
+      type: 'frame',
+      children: [
+        { id: 'c1', type: 'frame', role: 'card', cornerRadius: 8, children: [] },
+        { id: 'd1', type: 'frame', role: 'divider', cornerRadius: 0, children: [] },
+        { id: 'c2', type: 'frame', role: 'card', cornerRadius: 8, children: [] },
+        { id: 's1', type: 'frame', role: 'spacer', cornerRadius: 0, children: [] },
+        { id: 'c3', type: 'frame', role: 'card', cornerRadius: 12, children: [] },
+      ],
+    } as unknown as PenNode;
+    const issues = detectMixedSiblingCornerRadius(root);
+    // Only c1/c2/c3 are grouped (3 cards), modal=8, c3 is the outlier
+    expect(issues).toHaveLength(1);
+    expect(issues[0].nodeId).toBe('c3');
   });
 });
