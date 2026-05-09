@@ -8,6 +8,7 @@ import {
   detectTextCornerRadius,
   detectMixedSiblingCornerRadius,
   detectTextEffect,
+  detectTextStroke,
   detectAllIssues,
 } from '../diagnostics/detectors';
 import type { PenNode, PenDocument } from '@zseven-w/pen-types';
@@ -909,5 +910,62 @@ describe('detectTextEffect', () => {
       ],
     } as unknown as PenNode;
     expect(detectTextEffect(root)).toHaveLength(2);
+  });
+});
+
+describe('detectTextStroke', () => {
+  it('flags text node with stroke (outlined text)', () => {
+    const root = {
+      id: 'r',
+      type: 'frame',
+      children: [
+        {
+          id: 't',
+          type: 'text',
+          content: 'hi',
+          stroke: { thickness: 1, fill: [{ type: 'solid', color: '#000' }] },
+        } as unknown as PenNode,
+      ],
+    } as unknown as PenNode;
+    const issues = detectTextStroke(root);
+    expect(issues).toHaveLength(1);
+    expect(issues[0].category).toBe('text-stroke');
+    expect(issues[0].nodeId).toBe('t');
+    expect(issues[0].suggestedValue).toBeUndefined();
+  });
+
+  it('does not flag text without stroke', () => {
+    const root = {
+      id: 'r',
+      type: 'frame',
+      children: [{ id: 't', type: 'text', content: 'hi' } as unknown as PenNode],
+    } as unknown as PenNode;
+    expect(detectTextStroke(root)).toHaveLength(0);
+  });
+
+  it('does not flag text with stroke.thickness=0 (placeholder empty stroke)', () => {
+    const root = {
+      id: 'r',
+      type: 'frame',
+      children: [
+        {
+          id: 't',
+          type: 'text',
+          content: 'hi',
+          stroke: { thickness: 0, fill: [] },
+        } as unknown as PenNode,
+      ],
+    } as unknown as PenNode;
+    expect(detectTextStroke(root)).toHaveLength(0);
+  });
+
+  it('does not flag frame nodes with stroke (only text)', () => {
+    const root = {
+      id: 'r',
+      type: 'frame',
+      stroke: { thickness: 1, fill: [{ type: 'solid', color: '#000' }] },
+      children: [],
+    } as unknown as PenNode;
+    expect(detectTextStroke(root)).toHaveLength(0);
   });
 });

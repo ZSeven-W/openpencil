@@ -8,7 +8,8 @@ export type IssueCategory =
   | 'unexpected-rotation'
   | 'text-corner-radius'
   | 'mixed-sibling-corner-radius'
-  | 'text-effect';
+  | 'text-effect'
+  | 'text-stroke';
 
 export interface Issue {
   /** Node id where the issue was detected */
