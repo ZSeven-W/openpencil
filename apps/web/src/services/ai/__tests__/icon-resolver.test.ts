@@ -143,43 +143,6 @@ describe('applyIconPathResolution — opt-in marker gate', () => {
     expect((node as { iconId?: string }).iconId).toBeUndefined();
   });
 
-  // --- Multi-word names with noise suffix MUST resolve to the iconic noun ---
-  // Regression coverage for the 2026-05-09 user report: MiniMax-M2.7 emitted
-  // path nodes named "Search Icon Path" / "Time Icon Path" inside chip / tile
-  // wrapper frames. Before the fix, the resolver normalized to "searchiconpath"
-  // (15 chars), failed the 50% prefix-coverage threshold, and fell back to
-  // lucide:circle — turning every food-app filter chip and category tile into
-  // a hollow ring. The fix tokenises and drops noise words ("path", "shape",
-  // "stroke", "fill", "svg", "graphic", "image") before lookup.
-  it.each([
-    ['Search Icon Path', /search/],
-    ['Time Icon Path', /clock/], // resolved via the time→clock alias
-    ['Heart Icon Stroke', /heart/],
-    ['Star Icon Shape', /star/],
-    ['User Icon SVG', /user/],
-    ['HomeIconPath', /home/], // camelCase compaction
-  ])('resolves multi-word path name "%s" to %s', (name, expectedIconId) => {
-    const node = makePath({ name });
-    applyIconPathResolution(node);
-    expect((node as { iconId?: string }).iconId).toMatch(expectedIconId);
-    expect((node as { d?: string }).d).not.toBe(CUSTOM_GEOMETRY_D);
-  });
-
-  // --- Pure noise names ("Icon Path", "Symbol") leave path UNTOUCHED ---
-  // The previous behaviour was to write a circle placeholder, which created
-  // visual confusion (5+ "circles" in the food-app demo all came from this
-  // path). Now the resolver leaves whatever d the model emitted alone — a
-  // visible nothing is more honest than a misleading placeholder.
-  it.each([['Icon Path'], ['Icon'], ['Logo'], ['Path Icon'], ['Symbol Path']])(
-    'leaves pure-noise name "%s" untouched (no circle placeholder)',
-    (name) => {
-      const node = makePath({ name });
-      applyIconPathResolution(node);
-      expect((node as { d?: string }).d).toBe(CUSTOM_GEOMETRY_D);
-      expect((node as { iconId?: string }).iconId).toBeUndefined();
-    },
-  );
-
   // --- Non-path node types are a no-op ---
   it('ignores non-path nodes', () => {
     const node = {

@@ -27,7 +27,6 @@ import {
 } from './orchestrator-sub-agent-compact';
 import { tryParseAllElementToolOutputs } from './design-parser';
 import { dispatchElementToolCalls } from './element-tools-dispatcher';
-import { isMobileFullScreen } from './orchestrator-plan-classify';
 import { SUPPORTED_EMBEDDED_ELEMENT_TOOLS } from './element-tool-shims';
 import { needsElementTools, resolveModelProfile } from './model-profiles';
 import {
@@ -371,7 +370,7 @@ async function executeSubAgent(
   const designMd = request.context?.designMd;
   const variables = request.context?.variables;
   const modelProfile = resolveModelProfile(request.model);
-  const isMobileScreen = isMobileFullScreen(plan);
+  const isMobileScreen = plan.rootFrame.width <= 480;
 
   // Build design.md payload for the skill template. If the structured summary
   // is empty (a bare-minimum design.md with only free-form text), fall back to
@@ -730,7 +729,7 @@ CRITICAL LAYOUT CONSTRAINTS:
   // Prevent sub-agents from generating a duplicate status bar on mobile,
   // and explicitly tell them NOT to wrap their section in a phone mockup —
   // the design is already a mobile screen.
-  if (isMobileFullScreen(plan)) {
+  if (plan.rootFrame.width <= 480) {
     prompt += `\n\nMOBILE STATUS BAR: A status bar (time, signal, wifi, battery) has ALREADY been pre-inserted as the first child of the root page frame. Do NOT generate any status bar, system chrome, or OS-level indicators. Start your content directly.`;
     prompt += `\n\nNO PHONE MOCKUP WRAPPER: The whole design IS a mobile screen. Do NOT wrap your section in a phone-shaped frame (cornerRadius 32 dark bezel, fixed 260-300px width, name "Phone Mockup"). Your section's root frame must use width="fill_container" and contain only the content that belongs to this section — never the entire app's children.`;
   }
