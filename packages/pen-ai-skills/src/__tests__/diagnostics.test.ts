@@ -7,6 +7,7 @@ import {
   detectUnexpectedRotation,
   detectTextCornerRadius,
   detectMixedSiblingCornerRadius,
+  detectTextEffect,
   detectAllIssues,
 } from '../diagnostics/detectors';
 import type { PenNode, PenDocument } from '@zseven-w/pen-types';
@@ -830,5 +831,83 @@ describe('detectMixedSiblingCornerRadius', () => {
     // Only c1/c2/c3 are grouped (3 cards), modal=8, c3 is the outlier
     expect(issues).toHaveLength(1);
     expect(issues[0].nodeId).toBe('c3');
+  });
+});
+
+describe('detectTextEffect', () => {
+  it('flags text node with shadow effects', () => {
+    const root = {
+      id: 'r',
+      type: 'frame',
+      children: [
+        {
+          id: 't',
+          type: 'text',
+          content: 'hi',
+          effects: [{ type: 'shadow', color: '#000', offsetX: 0, offsetY: 4, radius: 8 }],
+        } as unknown as PenNode,
+      ],
+    } as unknown as PenNode;
+    const issues = detectTextEffect(root);
+    expect(issues).toHaveLength(1);
+    expect(issues[0].category).toBe('text-effect');
+    expect(issues[0].nodeId).toBe('t');
+    expect(issues[0].suggestedValue).toBeUndefined();
+  });
+
+  it('does not flag text without effects', () => {
+    const root = {
+      id: 'r',
+      type: 'frame',
+      children: [{ id: 't', type: 'text', content: 'hi' } as unknown as PenNode],
+    } as unknown as PenNode;
+    expect(detectTextEffect(root)).toHaveLength(0);
+  });
+
+  it('does not flag text with empty effects array', () => {
+    const root = {
+      id: 'r',
+      type: 'frame',
+      children: [{ id: 't', type: 'text', content: 'hi', effects: [] } as unknown as PenNode],
+    } as unknown as PenNode;
+    expect(detectTextEffect(root)).toHaveLength(0);
+  });
+
+  it('does not flag frame nodes with effects (only text)', () => {
+    const root = {
+      id: 'r',
+      type: 'frame',
+      effects: [{ type: 'shadow', color: '#000', offsetX: 0, offsetY: 4, radius: 8 }],
+      children: [],
+    } as unknown as PenNode;
+    expect(detectTextEffect(root)).toHaveLength(0);
+  });
+
+  it('flags multiple text nodes with effects in a tree', () => {
+    const root = {
+      id: 'r',
+      type: 'frame',
+      children: [
+        {
+          id: 't1',
+          type: 'text',
+          content: 'a',
+          effects: [{ type: 'shadow' }],
+        } as unknown as PenNode,
+        {
+          id: 'wrapper',
+          type: 'frame',
+          children: [
+            {
+              id: 't2',
+              type: 'text',
+              content: 'b',
+              effects: [{ type: 'blur' }],
+            } as unknown as PenNode,
+          ],
+        } as unknown as PenNode,
+      ],
+    } as unknown as PenNode;
+    expect(detectTextEffect(root)).toHaveLength(2);
   });
 });
