@@ -8,5 +8,6 @@ export {
   detectUnexpectedRotation,
   detectTextCornerRadius,
   detectMixedSiblingCornerRadius,
+  detectTextEffect,
   detectAllIssues,
 } from './detectors';
