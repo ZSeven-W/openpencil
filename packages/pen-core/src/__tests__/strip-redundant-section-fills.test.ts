@@ -611,6 +611,45 @@ describe('stripRedundantSectionFills', () => {
     expect((card as PenNode & { fill?: PenFill[] }).fill).toEqual(solidFill('#000000'));
   });
 
+  it('strips stroke + cornerRadius together with the fill on a misroll wrapper', () => {
+    // 2026-05-10 user report: search bar shows a "weird inner rounded
+    // border" because the wrapper around the address+search section sets
+    // fill + stroke + cornerRadius together. strip-redundant cleared the
+    // fill long ago but the leftover stroke + cornerRadius kept drawing
+    // a visible inner pill. Now the strip removes all three together so
+    // the wrapper goes back to being a transparent layout container.
+    const inner1 = frame({
+      id: 'addr',
+      name: 'Address Row',
+    });
+    const inner2 = frame({
+      id: 'search',
+      name: 'Search Input',
+      role: 'input',
+      fill: solidFill('#FFFFFF'),
+    });
+    const wrapper = frame({
+      id: 'search-section',
+      name: 'Search Section',
+      role: 'search-bar', // atomic misroll — wraps a real input inside
+      fill: solidFill('#FFFFFF'), // safe-light hedge
+      stroke: { thickness: 1, fill: solidFill('#E5E7EB') } as never,
+      cornerRadius: 24,
+      children: [inner1, inner2],
+    });
+    const root = frame({
+      id: 'root',
+      fill: solidFill('#FFF8F0'),
+      children: [wrapper],
+    });
+    stripRedundantSectionFills(root);
+    expect((wrapper as PenNode & { fill?: unknown }).fill).toBeUndefined();
+    expect((wrapper as PenNode & { stroke?: unknown }).stroke).toBeUndefined();
+    expect((wrapper as PenNode & { cornerRadius?: unknown }).cornerRadius).toBeUndefined();
+    // Inner real input keeps its own surface fill
+    expect((inner2 as PenNode & { fill?: PenFill[] }).fill).toEqual(solidFill('#FFFFFF'));
+  });
+
   it('strips a banner wrapper holding 2+ same-role banners', () => {
     const banner1 = frame({
       id: 'b1',
