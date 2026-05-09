@@ -10,5 +10,6 @@ export {
   detectMixedSiblingCornerRadius,
   detectTextEffect,
   detectTextStroke,
+  detectMixedSiblingPadding,
   detectAllIssues,
 } from './detectors';

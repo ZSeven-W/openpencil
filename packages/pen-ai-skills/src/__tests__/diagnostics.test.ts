@@ -9,6 +9,7 @@ import {
   detectMixedSiblingCornerRadius,
   detectTextEffect,
   detectTextStroke,
+  detectMixedSiblingPadding,
   detectAllIssues,
 } from '../diagnostics/detectors';
 import type { PenNode, PenDocument } from '@zseven-w/pen-types';
@@ -967,5 +968,94 @@ describe('detectTextStroke', () => {
       children: [],
     } as unknown as PenNode;
     expect(detectTextStroke(root)).toHaveLength(0);
+  });
+});
+
+describe('detectMixedSiblingPadding', () => {
+  it('flags an outlier when 2 of 3 cards share padding (number shorthand)', () => {
+    const root = {
+      id: 'r',
+      type: 'frame',
+      children: [
+        { id: 'c1', type: 'frame', role: 'card', padding: 16, children: [] },
+        { id: 'c2', type: 'frame', role: 'card', padding: 16, children: [] },
+        { id: 'c3', type: 'frame', role: 'card', padding: 20, children: [] },
+      ],
+    } as unknown as PenNode;
+    const issues = detectMixedSiblingPadding(root);
+    expect(issues).toHaveLength(1);
+    expect(issues[0].nodeId).toBe('c3');
+    expect(issues[0].suggestedValue).toBe(16); // collapses to scalar when all 4 sides equal
+  });
+
+  it('treats number 16 and array [16,16,16,16] as equal (no false positive)', () => {
+    const root = {
+      id: 'r',
+      type: 'frame',
+      children: [
+        { id: 'c1', type: 'frame', role: 'card', padding: 16, children: [] },
+        { id: 'c2', type: 'frame', role: 'card', padding: [16, 16, 16, 16], children: [] },
+        { id: 'c3', type: 'frame', role: 'card', padding: 16, children: [] },
+      ],
+    } as unknown as PenNode;
+    expect(detectMixedSiblingPadding(root)).toHaveLength(0);
+  });
+
+  it('treats CSS-shorthand 2-tuple [v,h] equivalent to [v,h,v,h]', () => {
+    const root = {
+      id: 'r',
+      type: 'frame',
+      children: [
+        { id: 'c1', type: 'frame', role: 'card', padding: [12, 24], children: [] },
+        { id: 'c2', type: 'frame', role: 'card', padding: [12, 24, 12, 24], children: [] },
+        { id: 'c3', type: 'frame', role: 'card', padding: [16, 16, 16, 16], children: [] },
+      ],
+    } as unknown as PenNode;
+    const issues = detectMixedSiblingPadding(root);
+    expect(issues).toHaveLength(1);
+    expect(issues[0].nodeId).toBe('c3');
+    // Modal is [12,24,12,24] — not all equal — suggested stays array
+    expect(issues[0].suggestedValue).toEqual([12, 24, 12, 24]);
+  });
+
+  it('does not flag a 1-1-1 three-way split (no canonical modal)', () => {
+    const root = {
+      id: 'r',
+      type: 'frame',
+      children: [
+        { id: 'c1', type: 'frame', role: 'card', padding: 8, children: [] },
+        { id: 'c2', type: 'frame', role: 'card', padding: 16, children: [] },
+        { id: 'c3', type: 'frame', role: 'card', padding: 24, children: [] },
+      ],
+    } as unknown as PenNode;
+    expect(detectMixedSiblingPadding(root)).toHaveLength(0);
+  });
+
+  it('does not flag siblings with mixed roles (card vs button)', () => {
+    const root = {
+      id: 'r',
+      type: 'frame',
+      children: [
+        { id: 'c1', type: 'frame', role: 'card', padding: 16, children: [] },
+        { id: 'c2', type: 'frame', role: 'card', padding: 16, children: [] },
+        { id: 'b1', type: 'frame', role: 'button', padding: 8, children: [] },
+      ],
+    } as unknown as PenNode;
+    expect(detectMixedSiblingPadding(root)).toHaveLength(0);
+  });
+
+  it('skips siblings with no padding prop (modal counts only set values)', () => {
+    const root = {
+      id: 'r',
+      type: 'frame',
+      children: [
+        { id: 'c1', type: 'frame', role: 'card', padding: 16, children: [] },
+        { id: 'c2', type: 'frame', role: 'card', padding: 16, children: [] },
+        { id: 'c3', type: 'frame', role: 'card', children: [] }, // no padding
+      ],
+    } as unknown as PenNode;
+    // Only 2 cards have padding — no modal pair to compare against the
+    // unpadded one, so silent.
+    expect(detectMixedSiblingPadding(root)).toHaveLength(0);
   });
 });

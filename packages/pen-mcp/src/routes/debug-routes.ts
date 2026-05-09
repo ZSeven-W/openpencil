@@ -44,6 +44,7 @@ export const DEBUG_TOOL_DEFINITIONS = [
               'mixed-sibling-corner-radius',
               'text-effect',
               'text-stroke',
+              'mixed-sibling-padding',
             ],
           },
           description: 'Filter to specific detector categories.',
