@@ -93,11 +93,26 @@ export function detectEdgeSectionPadding(root: PenNode): Issue[] {
 
   function walk(node: PenNode): void {
     const width = (node as unknown as { width?: unknown }).width;
-    const isMobileRoot =
+    const height = (node as unknown as { height?: unknown }).height;
+    // Page-shaped only — width AND height must look like a real mobile
+    // device. Width 320–480 alone matches a bottom-nav (393×88), a card
+    // (393×200), a modal (393×500) and similar components which would
+    // get a wrong page-level gutter forced on them. Height >= 568
+    // (iPhone SE 1st gen, the shortest production phone) excludes these
+    // while still covering iPhone 8 (667), iPhone 14 Pro (852), Pixel 8
+    // Pro (1080) and every taller device. Aspect ratio h/w >= 1.5 is a
+    // second guard against accidentally tall components like a side
+    // drawer or settings panel.
+    const looksLikeMobilePage =
       node.type === 'frame' &&
       typeof width === 'number' &&
       width >= 320 &&
       width <= 480 &&
+      typeof height === 'number' &&
+      height >= 568 &&
+      height >= width * 1.5;
+    const isMobileRoot =
+      looksLikeMobilePage &&
       'layout' in node &&
       (node as { layout?: unknown }).layout != null &&
       'children' in node &&

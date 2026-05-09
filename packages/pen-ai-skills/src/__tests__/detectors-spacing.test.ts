@@ -177,4 +177,67 @@ describe('detectEdgeSectionPadding', () => {
 
     expect(detectEdgeSectionPadding(root)).toHaveLength(0);
   });
+
+  // 2026-05-10 Codex stop-hook review — detector was firing on any
+  // mobile-width frame regardless of height, so a 393×88 bottom-nav
+  // component being designed in isolation got page-level horizontal
+  // padding forced on it. Height-and-aspect guards keep components out
+  // of the page-detection path.
+
+  it('does NOT flag a mobile-width bottom-nav component (393×88)', () => {
+    const root = {
+      id: 'botnav',
+      type: 'frame',
+      width: 393,
+      height: 88,
+      layout: 'horizontal',
+      children: [icon('home'), icon('search'), text('Cart'), text('Profile')],
+    } as unknown as PenNode;
+
+    expect(detectEdgeSectionPadding(root)).toHaveLength(0);
+  });
+
+  it('does NOT flag a mobile-width card-shaped component (393×200)', () => {
+    const root = {
+      id: 'card',
+      type: 'frame',
+      width: 393,
+      height: 200,
+      layout: 'vertical',
+      children: [section('row1', [text('t1'), text('t2')]), section('row2', [text('t3')])],
+    } as unknown as PenNode;
+
+    expect(detectEdgeSectionPadding(root)).toHaveLength(0);
+  });
+
+  it('does NOT flag a mobile-width short component (393×500)', () => {
+    // Aspect ratio 500/393 = 1.27 < 1.5 — fails the aspect guard even
+    // though height 500 alone would clear the absolute minimum.
+    const root = {
+      id: 'panel',
+      type: 'frame',
+      width: 393,
+      height: 500,
+      layout: 'vertical',
+      children: [section('a', [text('t1')]), section('b', [text('t2')])],
+    } as unknown as PenNode;
+
+    expect(detectEdgeSectionPadding(root)).toHaveLength(0);
+  });
+
+  it('flags an iPhone SE shaped page (320×568) — minimum legitimate phone', () => {
+    const root = {
+      id: 'page',
+      type: 'frame',
+      width: 320,
+      height: 568,
+      layout: 'vertical',
+      children: [section('cat', [text('t1')]), section('news', [text('t2')])],
+    } as unknown as PenNode;
+
+    const issues = detectEdgeSectionPadding(root);
+
+    expect(issues).toHaveLength(1);
+    expect(issues[0].nodeId).toBe('page');
+  });
 });
