@@ -158,6 +158,14 @@ describe('applyIconPathResolution — opt-in marker gate', () => {
     ['Star Icon Shape', /star/],
     ['User Icon SVG', /user/],
     ['HomeIconPath', /home/], // camelCase compaction
+    // Notification card dismiss-button name slips MiniMax emits — must
+    // resolve to lucide:x via the dismiss/closebutton/cancel/remove
+    // aliases. ("cross" is intentionally NOT aliased — Lucide already has
+    // a "cross" icon for the Christian-cross shape, and overriding it
+    // would lose that.)
+    ['Dismiss Icon', /x/],
+    ['Cancel Icon', /x/],
+    ['Remove Icon', /x/],
   ])('resolves multi-word path name "%s" to %s', (name, expectedIconId) => {
     const node = makePath({ name });
     applyIconPathResolution(node);
