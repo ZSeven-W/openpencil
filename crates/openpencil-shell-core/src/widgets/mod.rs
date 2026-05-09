@@ -2,13 +2,22 @@
 //! both shell-native and shell-web reuse it; only RenderBackend / DOM event
 //! mapping / accesskit DOM mirror are platform-owned).
 //!
-//! B1 (this commit): the bare trait + paint / layout contexts + WidgetId.
-//! B2 lands the four static inspector widgets (Tree / PropertyRow /
-//! Dropdown / TextInput) under this module's child modules; they are
-//! declared in B2 — keep the surface here minimal until then so the crate
-//! compiles standalone after B1.
+//! B1: the bare trait + paint / layout contexts + WidgetId.
+//! B2 (this commit): four static inspector widgets — `TreeWidget` /
+//! `PropertyRow` / `Dropdown` / `TextInput` — each with a sample/new
+//! constructor, stable WidgetId range, layout/paint/access_node impl.
 
 use crate::{Point2D, Rect, RenderBackend};
+
+pub mod dropdown;
+pub mod prop_row;
+pub mod text_input;
+pub mod tree;
+
+pub use dropdown::{Dropdown, DropdownState};
+pub use prop_row::PropertyRow;
+pub use text_input::{TextInput, TextInputState};
+pub use tree::{TreeItem, TreeWidget};
 
 /// Stable identifier assigned by the widget host. Used by accesskit
 /// (`accesskit::NodeId(WidgetId.0)`), the DOM mirror, and event routing.
