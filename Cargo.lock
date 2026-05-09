@@ -1426,6 +1426,7 @@ version = "0.1.0"
 name = "openpencil-shell-core"
 version = "0.1.0"
 dependencies = [
+ "accesskit",
  "bitflags 2.11.1",
  "glam",
  "jian-core",

@@ -18,6 +18,12 @@ tracing = { workspace = true }
 # v19 pivot: glam Vec2 used as Point2D; bitflags used for widget facade internal flags.
 glam = { version = "0.29", default-features = false, features = ["std"] }
 bitflags = "2"
+# Step 1b §3.6 widget facade: every Widget exposes an `accesskit::Node`
+# representation so the host (native + shell-web DOM mirror) can build a
+# unified accessibility tree. Pinned to 0.24 to match shell-web (the
+# version compatible with the upstream accesskit_winit Step 1a uses on
+# shell-native).
+accesskit = "0.24"
 
 # v19 pivot: re-export Jian render/geometry/scene types (spec §5.2 widget-facing facade
 # wraps jian-core; native-only deps live in shell-native, jian-core itself is wasm32-clean).
