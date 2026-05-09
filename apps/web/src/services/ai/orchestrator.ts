@@ -51,6 +51,7 @@ import { VALIDATION_ENABLED } from './ai-runtime-config';
 import { runPostGenerationValidation } from './design-validation';
 import { scanAndFillImages } from './image-search-pipeline';
 import { executeSubAgents } from './orchestrator-sub-agent';
+import { isMobileFullScreen } from './orchestrator-plan-classify';
 import { emitProgress, buildFinalStepTags } from './orchestrator-progress';
 import { assignAgentIdentities } from './agent-identity';
 import { addAgentFrame, clearAgentIndicators } from '@/canvas/agent-indicator';
@@ -676,7 +677,7 @@ export async function executeOrchestration(
     // Remove status-bar subtasks on mobile — the bar is pre-injected.
     // In append mode the existing page already carries the status bar, so the
     // planner-emitted one is stripped by applyAppendContextToPlan above.
-    const isMobileScreen = plan.rootFrame.width <= 480;
+    const isMobileScreen = isMobileFullScreen(plan);
     if (isMobileScreen && !appendResult.skipStatusBar) {
       plan.subtasks = plan.subtasks.filter(
         (st) => !STATUS_BAR_NAME_RE.test(`${st.id} ${st.label}`),
@@ -772,7 +773,7 @@ export async function executeOrchestration(
       useHistoryStore.getState().startBatch(useDocumentStore.getState().document);
     }
 
-    const isMobile = plan.rootFrame.width <= 480;
+    const isMobile = isMobileFullScreen(plan);
     const useDashboardColumns = shouldUseDashboardColumns(request.prompt, plan);
     const defaultFill: FrameNode['fill'] = (plan.rootFrame.fill as FrameNode['fill']) ?? [
       { type: 'solid', color: plan.styleGuide?.palette?.background ?? '#FFFFFF' },
