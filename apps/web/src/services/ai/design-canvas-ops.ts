@@ -18,6 +18,7 @@ import {
   normalizeTreeLayout,
   unwrapFakePhoneMockups,
   stripRedundantSectionFills,
+  clipCardImageCorners,
   injectMissingNavSurfaceFill,
   expandOverflowingFixedHeightCards,
   convertStackedOverlayToAbsolute,
@@ -672,6 +673,16 @@ export function applyPostStreamingTreeHeuristics(rootNodeId: string): void {
   // Return value is intentionally ignored — see the publish step at the end:
   // we always publish, so the boolean would only be informational.
   unwrapFakePhoneMockups(rootNode);
+
+  // Card-image corner cleanup: when a sub-agent emits a card whose first
+  // child is a full-width image with its own scalar cornerRadius, the
+  // image's BOTTOM corners render rounded inside the card while the
+  // title below sits flush — the visual artifact the 2026-05-10 user
+  // report flagged on the Taco Fiesta card. clipCardImageCorners turns
+  // that into clipContent on the card + scalar cornerRadius removed
+  // from the image, so the card's outer rounding cleanly clips the
+  // image's hypothetical bottom corners.
+  clipCardImageCorners(rootNode);
 
   // Role-based tree resolution + cross-node post-pass.
   // Runs FIRST so role defaults (e.g. navbar → horizontal, button → horizontal)
