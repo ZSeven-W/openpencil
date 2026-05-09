@@ -4,7 +4,7 @@ resolver = "2"
 # Phase 1 batch 2 的 workspace masking 反馈：列出未存在的 crate 会让 `cargo build -p X`
 # 在 resolve 阶段就挂掉）。glob 自动包含 crates/ 下所有 manifest，自然支持增量创建。
 members = ["crates/*"]
-exclude = ["vendor/agent", "vendor/jian", "node_modules"]
+exclude = ["vendor/agent", "vendor/jian", "vendor/skia-safe-op", "node_modules"]
 
 [workspace.package]
 version = "0.1.0"
@@ -24,3 +24,37 @@ tracing = "0.1"
 # WASM 边界相关（per kickoff §1.2 黑名单 = 不出现在这里）
 # 故意不在 workspace.dependencies 暴露 tokio / reqwest / agent / pen-agent-cli /
 # pen-server / native-tls —— 这些只在 native-only crate 内部用 dev-deps 或 target-specific deps。
+
+# Step 1b §3.2 P0.5B Run path (2026-05-09): wasm32-unknown-unknown skia
+# build via `vendor/skia-safe-op` — fork of rust-skia 0.97.0 with a new
+# build_support/platform/wasm_unknown.rs target that produces .o files
+# free of emscripten runtime imports.
+#
+# IMPORTANT: `[patch.crates-io]` is workspace-global, NOT target-scoped.
+# Every `skia-safe` / `skia-bindings` consumer in this workspace —
+# including `openpencil-shell-native` (macOS / Linux / Windows desktop,
+# `gl` feature) — now resolves through this fork on every target.
+# Cargo does not natively support per-target patches, so this is the
+# accepted blast radius.
+#
+# Compatibility surface vs upstream rust-skia 0.97.0:
+#   - every upstream platform module (macos / linux / windows /
+#     emscripten / android / ios / ohos / alpine) is byte-identical;
+#     only `wasm_unknown` is new
+#   - the dispatch table adds one new arm for
+#     `("wasm32", "unknown", "unknown", _)`; every existing target
+#     tuple still resolves to the same upstream module as before
+#   - the binary-cache feature URL + skia-binaries archive layout are
+#     untouched, so native desktop builds continue to download the
+#     prebuilt artifact instead of compiling Skia from source
+#
+# Trade-offs accepted:
+#   - upstream rust-skia patches will not flow until we re-vendor
+#   - `Cargo.lock` records `path` sources for skia-bindings/skia-safe
+#     instead of `registry+…`, surfacing the fork in audit tools
+#
+# When upstream rust-skia ships a wasm32-unknown-unknown platform
+# module of its own, this whole [patch] block can go away.
+[patch.crates-io]
+skia-bindings = { path = "vendor/skia-safe-op/skia-bindings" }
+skia-safe = { path = "vendor/skia-safe-op/skia-safe" }
