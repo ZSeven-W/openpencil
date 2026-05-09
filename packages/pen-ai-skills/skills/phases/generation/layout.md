@@ -88,3 +88,17 @@ RING / CIRCLE WITH CENTER CONTENT (Apple Activity Ring, progress ring, badge, av
   flex layout instead.
 - textAlignVertical is NOT supported. Use a layout=horizontal/vertical parent + alignItems=center
   - justifyContent=center to center text inside any container.
+
+AESTHETIC HYGIENE — keep these silent (never emit, the post-pass also strips them):
+
+- TEXT NODES NEVER GET: cornerRadius, stroke, effects, rotation. Text is filled glyphs — clip /
+  border / shadow / tilt all come out wrong on canvas. (Stroke is for icon-font nodes only.)
+- ROTATION on UI frames is almost always wrong. Use rotation=0 (or omit) on cards / buttons /
+  containers / labels. The only legitimate rotations are exact 90 / 180 / 270 (vertical text /
+  rotated grid) and rotation on path / line / polygon / image (decorative geometry).
+- SAME-ROLE SIBLINGS MUST USE THE SAME cornerRadius AND padding. Three cards in a row at
+  cornerRadius 8 / 8 / 12 reads as ragged. Pick one value per group and reuse it. Same for
+  padding — 16 / 16 / 20 across cards is visible noise.
+- INNER LAYOUT FRAMES (sections, wrappers, header / body containers inside a card) DO NOT need
+  fill, stroke, OR shadow. They inherit from the page / card surface. Only opt into a fill /
+  border / shadow on the OUTER card, button, badge, chip — NEVER on the wrapper that holds it.
