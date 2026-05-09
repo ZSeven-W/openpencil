@@ -166,6 +166,12 @@ describe('applyIconPathResolution — opt-in marker gate', () => {
     ['Dismiss Icon', /x/],
     ['Cancel Icon', /x/],
     ['Remove Icon', /x/],
+    // `image` must NOT be in the noise word list — "Image Icon" is the
+    // standard lucide:image lookup and the user almost certainly means
+    // a picture icon, not "no signal". (`Image SVG` alone has no icon
+    // marker word so it bypasses the resolver entirely — that's correct
+    // because the path could be a real SVG file ref.)
+    ['Image Icon', /image/],
   ])('resolves multi-word path name "%s" to %s', (name, expectedIconId) => {
     const node = makePath({ name });
     applyIconPathResolution(node);
