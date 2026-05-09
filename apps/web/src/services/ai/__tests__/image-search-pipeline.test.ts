@@ -5,6 +5,8 @@ import {
   isUnfilledImagePlaceholderFrame,
   isImageAreaFrameByHeuristic,
   collectImageSearchTargets,
+  extractQueryForNode,
+  findParentSemanticName,
 } from '../image-search-pipeline';
 import { useDocumentStore } from '@/stores/document-store';
 import type { PenNode } from '@/types/pen';
@@ -397,5 +399,147 @@ describe('isImageAreaFrameByHeuristic', () => {
       fill: [{ type: 'solid', color: '#FCD34D' }],
     } as unknown as PenNode;
     expect(isImageAreaFrameByHeuristic(fill)).toBe(false);
+  });
+});
+
+describe('extractQueryForNode + findParentSemanticName', () => {
+  beforeEach(() => {
+    useDocumentStore.setState({
+      document: { children: [], variables: [], themes: [], pages: [] },
+      isDirty: false,
+    } as never);
+  });
+
+  function loadTree(rootChildren: PenNode[]) {
+    useDocumentStore.setState({
+      document: {
+        children: [],
+        variables: [],
+        themes: [],
+        pages: [
+          {
+            id: 'page-1',
+            name: 'Page 1',
+            children: [
+              { id: 'root', type: 'frame', name: 'Page', children: rootChildren } as PenNode,
+            ],
+          },
+        ],
+      },
+      isDirty: false,
+    } as never);
+  }
+
+  it('extractQueryForNode prefers explicit imageSearchQuery over name', () => {
+    const node = {
+      id: 'i',
+      type: 'frame',
+      name: 'Image',
+      imageSearchQuery: 'sushi platter',
+    } as PenNode;
+    expect(extractQueryForNode(node)).toBe('sushi platter');
+  });
+
+  it('extractQueryForNode skips generic placeholder names and walks to parent', () => {
+    loadTree([
+      {
+        id: 'card',
+        type: 'frame',
+        name: 'Bella Italia',
+        children: [
+          {
+            id: 'image-area',
+            type: 'frame',
+            name: 'Image',
+            width: 200,
+            height: 140,
+            fill: [{ type: 'solid', color: '#FCD34D' }],
+          } as PenNode,
+        ],
+      } as PenNode,
+    ]);
+    const node = useDocumentStore.getState().getNodeById('image-area')!;
+    expect(extractQueryForNode(node)).toBe('Bella Italia');
+  });
+
+  it('findParentSemanticName skips layout words (Card / Wrapper / Container)', () => {
+    loadTree([
+      {
+        id: 'wrap',
+        type: 'frame',
+        name: 'Card Wrapper',
+        children: [
+          {
+            id: 'inner-card',
+            type: 'frame',
+            name: 'Margherita Pizza',
+            children: [
+              {
+                id: 'image-area',
+                type: 'frame',
+                name: 'Photo',
+                width: 200,
+                height: 140,
+              } as PenNode,
+            ],
+          } as PenNode,
+        ],
+      } as PenNode,
+    ]);
+    // Should skip "Card Wrapper" (matches the layout-word filter) and
+    // accept "Margherita Pizza" (semantic).
+    expect(findParentSemanticName('image-area')).toBe('Margherita Pizza');
+  });
+
+  it('findParentSemanticName returns null when no semantic parent within hops', () => {
+    loadTree([
+      {
+        id: 'wrap1',
+        type: 'frame',
+        name: 'Wrapper',
+        children: [
+          {
+            id: 'wrap2',
+            type: 'frame',
+            name: 'Container',
+            children: [
+              {
+                id: 'wrap3',
+                type: 'frame',
+                name: 'Section',
+                children: [
+                  {
+                    id: 'wrap4',
+                    type: 'frame',
+                    name: 'Frame',
+                    children: [
+                      {
+                        id: 'image-area',
+                        type: 'frame',
+                        name: 'Image',
+                      } as PenNode,
+                    ],
+                  } as PenNode,
+                ],
+              } as PenNode,
+            ],
+          } as PenNode,
+        ],
+      } as PenNode,
+    ]);
+    // Default maxHops=3; all 3 nearest parents are layout words.
+    expect(findParentSemanticName('image-area')).toBeNull();
+  });
+
+  it('extractQueryForNode falls back to name when parent walk yields nothing', () => {
+    const node = {
+      id: 'orphan',
+      type: 'frame',
+      name: 'My Custom Photo',
+    } as PenNode;
+    // Not loaded into store — parent map is empty, but the name itself
+    // is non-generic ("My Custom Photo" — has "Photo" but it's not the
+    // bare generic literal in the GENERIC_PLACEHOLDER_NAMES set).
+    expect(extractQueryForNode(node)).toBe('My Custom Photo');
   });
 });
