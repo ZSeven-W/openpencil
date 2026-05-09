@@ -21,7 +21,6 @@ LAYOUT ENGINE (flexbox-based):
 - Two-column: horizontal frame - two child frames each "fill_container" width.
 - Keep hierarchy shallow: no pointless wrappers. Only use wrappers with visual purpose (fill, padding).
 - Section root: width="fill_container", height="fit_content", layout="vertical".
-- TRANSPARENT INNER SECTIONS — interior section wrappers (Header, Search Section, Categories Section, Near You Section, etc.) MUST have `fill: []` (transparent / inherit page bg). Adding an explicit fill like `#FFFFFF` on inner sections creates an unwanted "white card" against a colored page bg. Only use an explicit fill when the section is INTENTIONALLY a card with its own surface (a promo banner, an inset card, a different surface tone). Default to `fill: []` and only opt into a fill when you want a visible surface boundary.
 - FORMS: ALL inputs AND primary button MUST use width="fill_container". Vertical layout, gap=16-20.
 
 HORIZONTAL ROW WIDTH MATH (CRITICAL — prevents off-canvas clipping):

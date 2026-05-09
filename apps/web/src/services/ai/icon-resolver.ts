@@ -50,36 +50,6 @@ export { applyNoEmojiIconHeuristic } from './icon-emoji-heuristics';
 const ICON_MARKER_WORDS = new Set(['icon', 'logo', 'symbol', 'glyph']);
 
 /**
- * Words the model adds around the iconic noun that carry no semantic
- * lookup signal. Stripped during keyword extraction so multi-word path
- * names like "Search Icon Path" / "Time Icon Path" / "Heart Icon Stroke"
- * resolve to the iconic noun ("search" / "time" / "heart") instead of
- * being rejected by the 50% prefix-coverage threshold and falling back
- * to a circle.
- */
-const ICON_NOISE_WORDS = new Set([
-  'icon',
-  'logo',
-  'symbol',
-  'glyph',
-  'path',
-  'shape',
-  'stroke',
-  'fill',
-  'svg',
-  'graphic',
-  'image',
-]);
-
-function tokenizeName(name: string): string[] {
-  return name
-    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
-    .toLowerCase()
-    .split(/[\s_-]+/)
-    .filter((w) => w.length > 0);
-}
-
-/**
  * Check whether a path node's name carries an explicit icon marker.
  * Handles "SearchIcon" (camelCase), "Search Icon" (spaced), "search_icon"
  * (snake), "search-icon" (kebab), and "BrandLogo" / "AppGlyph".
@@ -87,33 +57,15 @@ function tokenizeName(name: string): string[] {
  * "Steps Progress", "Chart Fill", "Heart Rate Waveform".
  */
 function hasExplicitIconMarker(name: string): boolean {
-  for (const word of tokenizeName(name)) {
+  // Split on camelCase boundaries, then on whitespace/underscore/hyphen.
+  const words = name
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .toLowerCase()
+    .split(/[\s_-]+/);
+  for (const word of words) {
     if (ICON_MARKER_WORDS.has(word)) return true;
   }
   return false;
-}
-
-/**
- * Extract the iconic noun(s) from a path name by tokenising on word
- * boundaries and dropping noise words ("icon" / "logo" / "path" / etc.).
- * Returns the surviving tokens concatenated, suitable for direct
- * dictionary lookup.
- *
- * Examples:
- * - "Search Icon Path" → "search"
- * - "Time Icon Path" → "time"
- * - "ChevronRightIcon" → "chevronright"
- * - "Icon Path" → "" (empty; caller should NOT fall back to a circle —
- *   nothing identifies what icon was intended)
- *
- * The hard `hasExplicitIconMarker` gate above ensures we only get here
- * when the path was tagged as an icon, so descriptive geometry like
- * "Heart Rate Chart" never reaches this function.
- */
-function extractIconKeyword(name: string): string {
-  return tokenizeName(name)
-    .filter((w) => !ICON_NOISE_WORDS.has(w))
-    .join('');
 }
 
 /**
@@ -142,21 +94,10 @@ export function applyIconPathResolution(node: PenNode): void {
   // overwritten with the matched icon path.
   if (!hasExplicitIconMarker(originalName)) return;
 
-  // Strip both icon markers AND generic noise words ("path", "shape",
-  // "stroke", etc.) from the name. This recovers the iconic noun in
-  // model-emitted multi-word names like "Search Icon Path" → "search"
-  // and "Time Icon Path" → "time" that the legacy trailing-only strip
-  // missed (because the trailing word is "path", not "icon").
-  const rawName = extractIconKeyword(originalName);
-
-  if (!rawName) {
-    // Name had ONLY noise words ("Icon Path", "Symbol", etc.) — no signal
-    // about which icon was intended. Falling back to a circle would mark
-    // every such node with the same misleading placeholder; better to
-    // leave the path's existing geometry alone so the failure is visible
-    // for what it is rather than masquerading as a deliberate dot.
-    return;
-  }
+  const rawName = originalName
+    .toLowerCase()
+    .replace(/[-_\s]+/g, '') // normalize separators
+    .replace(/(icon|logo|symbol|glyph)$/, ''); // strip trailing marker
 
   let match = ICON_PATH_MAP[rawName];
 

@@ -38,18 +38,27 @@ fn pointer_modifier_and_button_flags_keep_jian_names() {
 }
 
 #[test]
-fn key_event_is_re_exported_from_jian() {
+fn key_event_is_re_exported_from_jian_with_all_w3c_fields() {
     let event = KeyEvent {
         key: KeyValue::Named(NamedKey::Enter),
         code: KeyCode::Enter,
-        location: KeyLocation::Standard,
-        modifiers: Modifiers::empty(),
+        location: KeyLocation::Right,
+        modifiers: Modifiers::SHIFT,
         state: KeyState::Pressed,
-        repeat: false,
-        is_composing: false,
+        repeat: true,
+        is_composing: true,
     };
     let _: jian_core::gesture::KeyEvent = event.clone();
+    // Round 2 Q5 fix: assert every W3C field reads back the value we set
+    // so cross-crate type identity AND field-level binary compat are
+    // both verified through the OP re-export path.
     assert_eq!(event.key, KeyValue::Named(NamedKey::Enter));
+    assert_eq!(event.code, KeyCode::Enter);
+    assert_eq!(event.location, KeyLocation::Right);
+    assert!(event.modifiers.contains(Modifiers::SHIFT));
+    assert_eq!(event.state, KeyState::Pressed);
+    assert!(event.repeat);
+    assert!(event.is_composing);
 }
 
 #[test]
@@ -61,6 +70,7 @@ fn ime_event_is_re_exported_from_jian() {
         text: "你好".to_string(),
     };
     let _: jian_core::gesture::ImeEvent = event.clone();
+    assert_eq!(event.text, "你好");
     match event.kind {
         ImeKind::CompositionUpdate { selection } => assert_eq!(selection, Some(0..6)),
         _ => panic!("expected CompositionUpdate"),
@@ -68,22 +78,34 @@ fn ime_event_is_re_exported_from_jian() {
 }
 
 #[test]
-fn focus_event_is_re_exported_from_jian() {
+fn focus_event_is_re_exported_from_jian_with_all_w3c_fields() {
     let event = FocusEvent {
-        gained: true,
+        gained: false,
         node_id_hint: Some(11),
         related_node_id_hint: Some(7),
     };
     let _: jian_core::gesture::FocusEvent = event;
-    assert!(event.gained);
+    // Round 2 Q5 fix: assert all three W3C fields, not just gained.
+    assert!(!event.gained);
+    assert_eq!(event.node_id_hint, Some(11));
+    assert_eq!(event.related_node_id_hint, Some(7));
 }
 
 #[test]
-fn wheel_event_is_re_exported_from_jian() {
-    let event = WheelEvent::simple(
-        jian_core::geometry::Point::new(0.0, 0.0),
+fn wheel_event_is_re_exported_from_jian_with_w3c_fields() {
+    let mut event = WheelEvent::simple(
+        jian_core::geometry::Point::new(10.0, 20.0),
         jian_core::geometry::Point::new(0.0, 120.0),
     );
+    // Defaults from WheelEvent::simple
     assert_eq!(event.mode, ScrollMode::Pixel);
     assert_eq!(event.delta_z, 0.0);
+    // Round 2 Q5 fix: assert mode + delta_z mutability + roundtrip
+    // through the OP re-export path matches Jian's behavior.
+    event.mode = ScrollMode::Line;
+    event.delta_z = -3.0;
+    assert_eq!(event.mode, ScrollMode::Line);
+    assert_eq!(event.delta_z, -3.0);
+    assert_eq!(event.delta.x, 0.0);
+    assert_eq!(event.delta.y, 120.0);
 }
