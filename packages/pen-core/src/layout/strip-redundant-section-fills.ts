@@ -39,6 +39,16 @@ export function stripRedundantSectionFills(rootFrame: PenNode): boolean {
 
     if (shouldStripFill(childFill, rootFill)) {
       delete (child as PenNode & { fill?: unknown }).fill;
+      // Strip the wrapper-shaped chrome that travels with the hedge fill:
+      // a misroll wrapper sets fill + stroke + cornerRadius together to
+      // "look like a card" around the real content. The fill alone was
+      // the whole detection trigger; once that's gone, the leftover
+      // stroke + cornerRadius produce the long-standing "搜索框外面有
+      // 一个奇怪的圆角边框" bug — a visible inner pill around the
+      // address+search section. Strip both so the wrapper goes back to
+      // a transparent layout container.
+      delete (child as PenNode & { stroke?: unknown }).stroke;
+      delete (child as PenNode & { cornerRadius?: unknown }).cornerRadius;
       changed = true;
     }
   }
