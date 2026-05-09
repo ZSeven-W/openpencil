@@ -52,6 +52,23 @@ export default defineEventHandler(async (event) => {
     if (body.provider === 'gemini') {
       return await validateViaGemini(body, body.model);
     }
+    // Builtin providers (MiniMax / DeepSeek / Bailian / Ark / etc) are
+    // configured client-side and don't have vision support wired through
+    // here yet. Most of the configured models in this category are text-
+    // only anyway (MiniMax-M2.7, qwen3-coder-plus, ark-code-latest,
+    // deepseek-v4-pro), so a vision call would fail at the upstream API
+    // even if we did proxy it. Surface a clear `skipped` outcome so the
+    // post-generation loop logs "[error] Analysis skipped (provider has
+    // no vision support)" instead of the generic "unsupported provider"
+    // string — that one looks like a config bug to the user.
+    if (body.provider === 'builtin') {
+      return {
+        skipped: true,
+        error:
+          'Vision validation is not supported for builtin providers (text-only models). ' +
+          'Connect Claude Code, Codex, OpenCode, or Gemini CLI for the vision self-check loop.',
+      };
+    }
     return { error: 'Missing or unsupported provider. Provider fallback is disabled.' };
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
