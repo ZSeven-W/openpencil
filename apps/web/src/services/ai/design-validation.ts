@@ -173,7 +173,14 @@ Cross-reference visual issues with the node IDs above. Return JSON fixes using r
 
     if (!response.ok) {
       console.warn(`[Validation] HTTP ${response.status}: ${response.statusText}`);
-      return { issues: [], fixes: [], structuralFixes: [], qualityScore: 0, skipped: true };
+      return {
+        issues: [],
+        fixes: [],
+        structuralFixes: [],
+        qualityScore: 0,
+        skipped: true,
+        skippedReason: `HTTP ${response.status} ${response.statusText}`,
+      };
     }
 
     const data = (await response.json()) as { text?: string; skipped?: boolean; error?: string };
@@ -186,7 +193,14 @@ Cross-reference visual issues with the node IDs above. Return JSON fixes using r
         provider,
         model,
       });
-      return { issues: [], fixes: [], structuralFixes: [], qualityScore: 0, skipped: true };
+      return {
+        issues: [],
+        fixes: [],
+        structuralFixes: [],
+        qualityScore: 0,
+        skipped: true,
+        skippedReason: data.error,
+      };
     }
 
     const parsed = parseValidationResponse(data.text);
@@ -381,8 +395,13 @@ export async function runPostGenerationValidation(options?: {
       console.log(
         `[Validation] Round ${round}: skipped (see warnings above for details; provider=${options?.provider}, model=${options?.model})`,
       );
-      // Replace "Analyzing..." with skipped reason
-      log[log.length - 1] = '[error] Analysis skipped (timeout or provider error)';
+      // Replace "Analyzing..." with skipped reason. Prefer the
+      // server-provided explanation when present so the chat shows
+      // "(no vision provider)" instead of the generic timeout text.
+      const reasonShort = result.skippedReason
+        ? result.skippedReason.slice(0, 120)
+        : 'timeout or provider error';
+      log[log.length - 1] = `[error] Analysis skipped (${reasonShort})`;
       if (isFirstRound) {
         clearVisualReference();
         emit('done');
