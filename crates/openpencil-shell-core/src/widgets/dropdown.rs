@@ -20,12 +20,24 @@ impl DropdownState {
     /// stays a pure state mutator without borrowing the Dropdown
     /// struct around it.
     ///
-    /// Skips when the key is released or the dropdown has no options
-    /// (no-op rather than wrap-around / panic). Non-navigation keys
-    /// fall through unchanged so widget code can layer additional
-    /// handlers later (e.g. typeahead in Phase D+).
+    /// Skips when the key is released, the dropdown has no options,
+    /// OR an IME composition is in progress (`event.is_composing ==
+    /// true`). The IME-skip is required by spec §2.4: while the
+    /// user is composing CJK / dead-key sequences, arrow keys belong
+    /// to the IME's candidate-picker UI, NOT to widgets that read
+    /// keys directly. Without this guard, every arrow keystroke
+    /// during a composition would cycle the dropdown selection
+    /// behind the IME panel — surfaced by the codex Phase C
+    /// stop-hook ("focused IME textarea lets composing keys mutate
+    /// dropdown state").
+    ///
+    /// Non-navigation keys fall through unchanged so widget code can
+    /// layer additional handlers later (e.g. typeahead in Phase D+).
     pub fn apply_key(&mut self, event: &crate::KeyEvent, option_count: usize) {
-        if event.state != crate::KeyState::Pressed || option_count == 0 {
+        if event.state != crate::KeyState::Pressed
+            || option_count == 0
+            || event.is_composing
+        {
             return;
         }
         match event.key {
