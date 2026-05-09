@@ -20,7 +20,15 @@ import type { PenNode } from '@/types/pen';
 import type { AIProviderType } from '@/types/agent-settings';
 import { getCurrentVisualReference, clearVisualReference } from './visual-ref-orchestrator';
 import { resolveSkills } from '@zseven-w/pen-ai-skills';
-import { runPreValidationFixes } from './design-pre-validation';
+import { runPreValidationFixesDetailed } from './design-pre-validation';
+
+/** Stringify per-category counts as "3 text-effect, 2 unexpected-rotation". */
+function formatCategoryBreakdown(byCategory: Record<string, number>): string {
+  return Object.entries(byCategory)
+    .sort(([, a], [, b]) => b - a)
+    .map(([cat, n]) => `${n} ${cat}`)
+    .join(', ');
+}
 import { captureRootFrameScreenshot } from './design-screenshot';
 import {
   applyValidationFixes,
@@ -287,11 +295,14 @@ export async function runPostGenerationValidation(options?: {
 
   // Pre-validation: pure code checks (no LLM needed)
   emit('streaming', '[pending] Running pre-checks...');
-  const preFixCount = runPreValidationFixes();
+  const preFix = runPreValidationFixesDetailed();
+  const preFixCount = preFix.total;
   if (preFixCount > 0) {
     totalApplied += preFixCount;
-    log[log.length - 1] =
-      `[done] Pre-checks: fixed ${preFixCount} issue${preFixCount > 1 ? 's' : ''}`;
+    const breakdown = formatCategoryBreakdown(preFix.byCategory);
+    log[log.length - 1] = breakdown
+      ? `[done] Pre-checks: fixed ${preFixCount} (${breakdown})`
+      : `[done] Pre-checks: fixed ${preFixCount} issue${preFixCount > 1 ? 's' : ''}`;
   } else {
     log[log.length - 1] = '[done] Pre-checks: OK';
   }
@@ -300,10 +311,13 @@ export async function runPostGenerationValidation(options?: {
   // If LLM validation is disabled, stop after pre-checks
   if (!VALIDATION_ENABLED) {
     clearVisualReference();
+    const breakdown = formatCategoryBreakdown(preFix.byCategory);
     emit(
       'done',
       preFixCount > 0
-        ? `[done] Pre-checks: fixed ${preFixCount} issue${preFixCount > 1 ? 's' : ''}`
+        ? breakdown
+          ? `[done] Pre-checks: fixed ${preFixCount} (${breakdown})`
+          : `[done] Pre-checks: fixed ${preFixCount} issue${preFixCount > 1 ? 's' : ''}`
         : '[done] Pre-checks complete',
     );
     return { applied: totalApplied, skipped: false };
@@ -315,10 +329,13 @@ export async function runPostGenerationValidation(options?: {
   const nodeCount = countNodesInActivePage();
   if (nodeCount < VALIDATION_NODE_COUNT_THRESHOLD) {
     clearVisualReference();
+    const breakdown = formatCategoryBreakdown(preFix.byCategory);
     emit(
       'done',
       preFixCount > 0
-        ? `[done] Pre-checks: fixed ${preFixCount} issue${preFixCount > 1 ? 's' : ''} (vision skipped: ${nodeCount} nodes < ${VALIDATION_NODE_COUNT_THRESHOLD})`
+        ? breakdown
+          ? `[done] Pre-checks: fixed ${preFixCount} (${breakdown}) (vision skipped: ${nodeCount} nodes < ${VALIDATION_NODE_COUNT_THRESHOLD})`
+          : `[done] Pre-checks: fixed ${preFixCount} issue${preFixCount > 1 ? 's' : ''} (vision skipped: ${nodeCount} nodes < ${VALIDATION_NODE_COUNT_THRESHOLD})`
         : `[done] Pre-checks complete (vision skipped: ${nodeCount} nodes < ${VALIDATION_NODE_COUNT_THRESHOLD})`,
     );
     return { applied: totalApplied, skipped: false };
