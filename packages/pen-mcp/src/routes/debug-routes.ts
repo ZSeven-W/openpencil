@@ -43,6 +43,7 @@ export const DEBUG_TOOL_DEFINITIONS = [
               'text-corner-radius',
               'mixed-sibling-corner-radius',
               'text-effect',
+              'text-stroke',
             ],
           },
           description: 'Filter to specific detector categories.',
