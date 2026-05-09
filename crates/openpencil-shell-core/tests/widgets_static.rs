@@ -10,7 +10,10 @@ use openpencil_shell_core::widgets::{
     Dropdown, DropdownState, LayoutBox, LayoutCx, PaintCx, PropertyRow, ROOT_WIDGET_ID, TextInput,
     TextInputState, TreeWidget, Widget, WidgetId, rect,
 };
-use openpencil_shell_core::{Color, Point2D, Rect, RenderBackend, TextLayout};
+use openpencil_shell_core::{
+    Color, ImeEvent, ImeKind, KeyCode, KeyEvent, KeyLocation, KeyState, KeyValue, Modifiers,
+    NamedKey, Point2D, Rect, RenderBackend, TextLayout,
+};
 
 #[derive(Default)]
 struct RecordingBackend {
@@ -257,4 +260,185 @@ fn text_input_state_default_is_empty() {
     let s = TextInputState::default();
     assert_eq!(s.value, "");
     assert_eq!(s.preedit, "");
+}
+
+// ---------------------------------------------------------------------
+// C2 widget event handlers (apply_ime / apply_key)
+// ---------------------------------------------------------------------
+
+fn keydown(named: NamedKey) -> KeyEvent {
+    KeyEvent {
+        key: KeyValue::Named(named),
+        code: KeyCode::Unknown(String::new()),
+        location: KeyLocation::Standard,
+        modifiers: Modifiers::empty(),
+        state: KeyState::Pressed,
+        repeat: false,
+        is_composing: false,
+    }
+}
+
+fn keyup(named: NamedKey) -> KeyEvent {
+    KeyEvent {
+        state: KeyState::Released,
+        ..keydown(named)
+    }
+}
+
+#[test]
+fn text_input_apply_ime_start_clears_preedit() {
+    let mut state = TextInputState {
+        value: "Frame 1".into(),
+        preedit: "stale".into(),
+    };
+    state.apply_ime(&ImeEvent {
+        kind: ImeKind::CompositionStart,
+        text: String::new(),
+    });
+    assert_eq!(state.preedit, "");
+    // CompositionStart must NOT touch the committed value.
+    assert_eq!(state.value, "Frame 1");
+}
+
+#[test]
+fn text_input_apply_ime_update_replaces_preedit() {
+    let mut state = TextInputState {
+        value: "Frame ".into(),
+        preedit: String::new(),
+    };
+    state.apply_ime(&ImeEvent {
+        kind: ImeKind::CompositionUpdate { selection: None },
+        text: "你".into(),
+    });
+    assert_eq!(state.preedit, "你");
+    state.apply_ime(&ImeEvent {
+        kind: ImeKind::CompositionUpdate { selection: None },
+        text: "你好".into(),
+    });
+    assert_eq!(state.preedit, "你好");
+    // Update path NEVER mutates value.
+    assert_eq!(state.value, "Frame ");
+}
+
+#[test]
+fn text_input_apply_ime_end_appends_to_value_and_clears_preedit() {
+    let mut state = TextInputState {
+        value: "Frame ".into(),
+        preedit: "你好".into(),
+    };
+    state.apply_ime(&ImeEvent {
+        kind: ImeKind::CompositionEnd,
+        text: "你好".into(),
+    });
+    assert_eq!(state.value, "Frame 你好");
+    assert_eq!(state.preedit, "");
+}
+
+#[test]
+fn text_input_apply_ime_double_start_clears_preedit_each_time() {
+    // Pathological host state machine: a CompositionStart followed by
+    // another CompositionStart without an intervening End. Each Start
+    // unconditionally resets preedit; the committed value never moves.
+    // (Codex C2.1 R1 CONCERN-1.)
+    let mut state = TextInputState {
+        value: "Frame ".into(),
+        preedit: "old".into(),
+    };
+    state.apply_ime(&ImeEvent {
+        kind: ImeKind::CompositionStart,
+        text: String::new(),
+    });
+    assert_eq!(state.preedit, "");
+    state.preedit = "leftover".into();
+    state.apply_ime(&ImeEvent {
+        kind: ImeKind::CompositionStart,
+        text: String::new(),
+    });
+    assert_eq!(state.preedit, "");
+    assert_eq!(state.value, "Frame ");
+}
+
+#[test]
+fn dropdown_apply_key_arrow_down_advances_and_opens() {
+    let mut state = DropdownState {
+        selected: 0,
+        open: false,
+    };
+    state.apply_key(&keydown(NamedKey::ArrowDown), 3);
+    assert_eq!(state.selected, 1);
+    assert!(state.open);
+    state.apply_key(&keydown(NamedKey::ArrowDown), 3);
+    assert_eq!(state.selected, 2);
+    // Saturates at option_count - 1; does not wrap.
+    state.apply_key(&keydown(NamedKey::ArrowDown), 3);
+    assert_eq!(state.selected, 2);
+}
+
+#[test]
+fn dropdown_apply_key_arrow_up_retreats_with_saturating_sub() {
+    let mut state = DropdownState {
+        selected: 1,
+        open: false,
+    };
+    state.apply_key(&keydown(NamedKey::ArrowUp), 3);
+    assert_eq!(state.selected, 0);
+    assert!(state.open);
+    // Already at 0 — saturating_sub holds at 0, no panic.
+    state.apply_key(&keydown(NamedKey::ArrowUp), 3);
+    assert_eq!(state.selected, 0);
+}
+
+#[test]
+fn dropdown_apply_key_enter_and_escape_close() {
+    let mut state = DropdownState {
+        selected: 1,
+        open: true,
+    };
+    state.apply_key(&keydown(NamedKey::Enter), 3);
+    assert!(!state.open);
+    assert_eq!(state.selected, 1);
+
+    state.open = true;
+    state.apply_key(&keydown(NamedKey::Escape), 3);
+    assert!(!state.open);
+    // Escape closes the menu but does NOT mutate selection — confirm
+    // both halves of the close path leave selected stable (codex C2.1
+    // R1 CONCERN-2).
+    assert_eq!(state.selected, 1);
+}
+
+#[test]
+fn dropdown_apply_key_ignores_keyup() {
+    let mut state = DropdownState {
+        selected: 1,
+        open: false,
+    };
+    state.apply_key(&keyup(NamedKey::ArrowDown), 3);
+    // Released event is a no-op.
+    assert_eq!(state.selected, 1);
+    assert!(!state.open);
+}
+
+#[test]
+fn dropdown_apply_key_ignores_zero_options() {
+    let mut state = DropdownState {
+        selected: 0,
+        open: false,
+    };
+    state.apply_key(&keydown(NamedKey::ArrowDown), 0);
+    // No options → no-op rather than panic on `option_count - 1`.
+    assert_eq!(state.selected, 0);
+    assert!(!state.open);
+}
+
+#[test]
+fn dropdown_apply_key_ignores_unrelated_keys() {
+    let mut state = DropdownState {
+        selected: 1,
+        open: true,
+    };
+    state.apply_key(&keydown(NamedKey::Tab), 3);
+    // Tab is not bound; state should be unchanged.
+    assert_eq!(state.selected, 1);
+    assert!(state.open);
 }

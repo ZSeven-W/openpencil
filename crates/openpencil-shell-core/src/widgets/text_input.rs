@@ -16,6 +16,36 @@ pub struct TextInputState {
     pub preedit: String,
 }
 
+impl TextInputState {
+    /// Phase C2 IME handler: feed a `compositionstart / update / end`
+    /// event into the text input's preedit/value buffers. This is the
+    /// only stateful path Phase B widgets need before C2 wires browser
+    /// listeners; widget code stays platform-free.
+    ///
+    /// Semantics (per spec §2.4):
+    /// - `CompositionStart`: clear preedit (caret enters composing mode).
+    /// - `CompositionUpdate`: replace preedit with the in-flight text.
+    /// - `CompositionEnd`: append the commit text to value, clear preedit.
+    ///
+    /// `selection` is recorded by the host elsewhere (Phase D DOM mirror);
+    /// the static widget paint only needs the preedit string for the
+    /// underline branch in `TextInput::paint`.
+    pub fn apply_ime(&mut self, event: &crate::ImeEvent) {
+        match &event.kind {
+            crate::ImeKind::CompositionStart => {
+                self.preedit.clear();
+            }
+            crate::ImeKind::CompositionUpdate { selection: _ } => {
+                self.preedit = event.text.clone();
+            }
+            crate::ImeKind::CompositionEnd => {
+                self.value.push_str(&event.text);
+                self.preedit.clear();
+            }
+        }
+    }
+}
+
 pub struct TextInput {
     pub id: WidgetId,
     pub label: String,
