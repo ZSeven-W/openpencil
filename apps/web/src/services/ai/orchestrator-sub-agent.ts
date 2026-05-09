@@ -715,6 +715,7 @@ CRITICAL LAYOUT CONSTRAINTS:
 - Use justifyContent="space_between" to distribute items (e.g. navbar: logo | links | CTA). ${paddingHint}
 - For side-by-side layouts, nest a horizontal frame with child frames using "fill_container" width.
 - SECTION BACKGROUND: do NOT set \`fill\` on your section root frame. ${rootBgHint} Hardcoding a "safe dark" fill (e.g. #000 / #0A0A0A / #111) will cover the intended background and break theme switching. Only set \`fill\` on cards, buttons, chips, badges, and other visually distinct components — never on the section container itself.
+- ICONS: emit \`{"type":"icon_font","iconFontName":"<lucide-name>","iconFontFamily":"lucide","width":20,"height":20,"fill":[{"type":"solid","color":"<color>"}]}\`. NEVER emit \`{"type":"path","name":"X Icon","d":"…"}\` for an icon — the path-based pattern (legacy "PascalCase + Icon suffix") needs the resolver to guess the iconic noun and frequently falls back to a placeholder circle when the model adds extra words to the name (e.g. "Search Icon Path"). icon_font is the supported, drift-free path; the icon-catalog skill above lists the role→name map (Cart→shopping-cart, Profile→user, etc).
 - IDs prefix="${subtask.idPrefix}-". No <step> tags. Output \`\`\`json immediately.`;
 
   // Phone mockup guidance is only relevant when this subtask is actually
