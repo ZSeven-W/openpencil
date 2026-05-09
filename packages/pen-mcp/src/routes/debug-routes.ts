@@ -46,6 +46,7 @@ export const DEBUG_TOOL_DEFINITIONS = [
               'text-stroke',
               'mixed-sibling-padding',
               'excessive-frame-effects',
+              'edge-section-padding',
             ],
           },
           description: 'Filter to specific detector categories.',
