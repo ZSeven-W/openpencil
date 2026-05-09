@@ -118,29 +118,47 @@ function removeDuplicateStatusBars(rootNodes: FrameNode[]): void {
  * the rootFrame and delete the wrapper. Conservative on any other shape —
  * never touches multi-section pages.
  */
+/**
+ * Pure-function check (no store / no mutation) — returns true iff the
+ * given root + plan satisfy the unwrap preconditions described above.
+ * Extracted for unit testability; the integration path below feeds in
+ * the live store-read root and applies the actual hoist + delete.
+ */
+export function shouldUnwrapSingleComponentSectionRoot(
+  plan: OrchestratorPlan,
+  root: PenNode,
+): boolean {
+  if (plan.subtasks.length !== 1) return false;
+  if (plan.rootFrame.width > 480) return false;
+  if (typeof plan.rootFrame.height === 'number' && plan.rootFrame.height >= 480) return false;
+  if (!root || root.type !== 'frame' || !('children' in root) || !root.children) return false;
+  if (root.children.length !== 1) return false;
+  const wrapper = root.children[0];
+  if (wrapper.type !== 'frame') return false;
+  const wrapperChildren =
+    'children' in wrapper && Array.isArray(wrapper.children) ? wrapper.children : [];
+  if (wrapperChildren.length === 0) return false;
+  const wrapperName = ('name' in wrapper ? (wrapper as { name?: string }).name : '') ?? '';
+  const wrapperId = wrapper.id;
+  const rootName = ('name' in root ? (root as { name?: string }).name : '') ?? '';
+  return (
+    wrapperId.endsWith('-root') ||
+    wrapperId.endsWith('-section') ||
+    (rootName !== '' && wrapperName === rootName)
+  );
+}
+
 function unwrapSingleComponentSectionRoot(rootNodes: FrameNode[], plan: OrchestratorPlan): void {
-  if (plan.subtasks.length !== 1) return;
-  if (plan.rootFrame.width > 480) return;
-  if (typeof plan.rootFrame.height === 'number' && plan.rootFrame.height >= 480) return;
   const store = useDocumentStore.getState();
   for (const rn of rootNodes) {
     const root = store.getNodeById(rn.id);
-    if (!root || root.type !== 'frame' || !root.children || root.children.length !== 1) continue;
-    const wrapper = root.children[0];
-    if (wrapper.type !== 'frame') continue;
-    const wrapperChildren =
-      'children' in wrapper && Array.isArray(wrapper.children) ? wrapper.children : [];
-    if (wrapperChildren.length === 0) continue;
-    const wrapperName = ('name' in wrapper ? (wrapper as { name?: string }).name : '') ?? '';
-    const wrapperId = wrapper.id;
-    const looksLikeSectionRoot =
-      wrapperId.endsWith('-root') ||
-      wrapperId.endsWith('-section') ||
-      (root.name && wrapperName === root.name);
-    if (!looksLikeSectionRoot) continue;
+    if (!root) continue;
+    if (!shouldUnwrapSingleComponentSectionRoot(plan, root)) continue;
+    const wrapper = (root as { children: PenNode[] }).children[0];
+    const wrapperChildren = (wrapper as { children: PenNode[] }).children;
     // Snapshot children ids in order before mutation, then move each one
-    // up to the rootFrame and remove the wrapper. Re-read the wrapper node
-    // between moves so the indices stay consistent with the live tree.
+    // up to the rootFrame and remove the wrapper. moveNode preserves
+    // the relative order via the explicit index argument.
     const childIds = wrapperChildren.map((c) => c.id);
     childIds.forEach((cid, i) => store.moveNode(cid, root.id, i));
     store.removeNode(wrapper.id);
