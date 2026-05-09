@@ -621,8 +621,15 @@ export class AgentToolExecutor {
       const { insertStreamingNode, resetGenerationRemapping, setGenerationCanvasWidth } =
         await import('@/services/ai/design-canvas-ops');
       resetGenerationRemapping();
-      const isMobile = (node as any).width && (node as any).width <= 500;
-      setGenerationCanvasWidth(isMobile ? 375 : 1200);
+      // Use the inserted node's actual width as the text-estimation canvas
+      // hint instead of bucketing into 375/1200. The bucket misclassifies
+      // Type 0 components (a 400-wide profile card etc.) as 375-wide
+      // mobile, which under-allocates text width during height estimation.
+      const nodeWidth =
+        typeof (node as { width?: unknown }).width === 'number'
+          ? (node as { width: number }).width
+          : null;
+      setGenerationCanvasWidth(nodeWidth && nodeWidth > 0 ? nodeWidth : 1200);
       const insertRecursive = (n: PenNode, pid: string | null) => {
         const ch = 'children' in n && Array.isArray(n.children) ? [...n.children] : [];
         const nodeForInsert = { ...n } as PenNode;

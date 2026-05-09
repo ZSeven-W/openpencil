@@ -1,4 +1,4 @@
-export type DesignType = 'mobile-screen' | 'desktop-screen' | 'landing-page';
+export type DesignType = 'mobile-screen' | 'desktop-screen' | 'landing-page' | 'component';
 
 export interface DesignTypePreset {
   type: DesignType;
@@ -11,6 +11,18 @@ export interface DesignTypePreset {
 }
 
 /**
+ * Component triggers — when the prompt names one atomic UI piece without a
+ * surrounding screen ("X card", "X badge", "X chip", etc.). Mirrors the
+ * Type 0 list in `pen-ai-skills/skills/phases/planning/design-type.md`.
+ *
+ * Match policy: word boundary + the noun must lead OR follow the qualifier
+ * to keep noisy mid-sentence hits out (e.g. "shopping cart screen" should
+ * not match "cart" as a component).
+ */
+const COMPONENT_TRIGGER_RE =
+  /\b(?:[a-z一-鿿]+\s+)?(card|badge|chip|tile|tag|pill|toggle|switch|modal|dialog|tooltip|popover|sheet|widget|avatar|stepper|stat|metric)(?:\s+(?:design|component|widget))?\b/i;
+
+/**
  * Minimal fallback design type detection.
  *
  * ONLY used when the orchestrator fails to parse the AI's JSON plan.
@@ -20,6 +32,20 @@ export interface DesignTypePreset {
  * This fallback only needs to pick a reasonable width/height/section set.
  */
 export function detectDesignType(prompt: string): DesignTypePreset {
+  // Single-component prompts (Type 0 — see design-type.md). Checked BEFORE
+  // mobile/dashboard so a "profile card" prompt doesn't fall through to
+  // landing-page (1200px) when AI parsing fails — the user gets a
+  // sensibly-sized 400px component instead.
+  if (COMPONENT_TRIGGER_RE.test(prompt) && !/screen|page|app|网页|页面/i.test(prompt)) {
+    return {
+      type: 'component',
+      width: 400,
+      height: 0,
+      rootHeight: 0,
+      defaultSections: ['Component'],
+    };
+  }
+
   // Explicit mobile indicators (NOT "app" alone — too ambiguous)
   if (/mobile|手机|phone|移动端|ios|android/i.test(prompt)) {
     return {
