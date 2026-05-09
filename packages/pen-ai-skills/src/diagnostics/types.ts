@@ -7,7 +7,8 @@ export type IssueCategory =
   | 'sibling-inconsistency'
   | 'unexpected-rotation'
   | 'text-corner-radius'
-  | 'mixed-sibling-corner-radius';
+  | 'mixed-sibling-corner-radius'
+  | 'text-effect';
 
 export interface Issue {
   /** Node id where the issue was detected */

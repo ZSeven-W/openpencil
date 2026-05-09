@@ -515,7 +515,43 @@ export function detectMixedSiblingCornerRadius(root: PenNode): Issue[] {
 }
 
 /**
- * Run all 7 detectors and return the deduplicated combined issue list.
+ * Aesthetic detector: text node with effects (shadow / blur / etc).
+ *
+ * Rationale: drop-shadows and blurs on UI text almost always read as
+ * "designed by AI" — real product UIs use text shadows extremely
+ * sparingly (hero overlays on photos and a few brand elements). The
+ * model frequently sprinkles `effects: [{ type: 'shadow', … }]` onto
+ * body / label / caption text which makes the type look fuzzy and
+ * imprecise on canvas. Suggest removing the effects array.
+ */
+export function detectTextEffect(root: PenNode): Issue[] {
+  const issues: Issue[] = [];
+  function walk(node: PenNode): void {
+    if (node.type === 'text') {
+      const eff = (node as unknown as { effects?: unknown }).effects;
+      if (Array.isArray(eff) && eff.length > 0) {
+        issues.push({
+          nodeId: node.id,
+          category: 'text-effect',
+          severity: 'warning',
+          property: 'effects',
+          currentValue: eff,
+          suggestedValue: undefined,
+          reason:
+            'text node carries shadow / blur effects — almost always an AI hallucination on UI labels',
+        });
+      }
+    }
+    if ('children' in node && Array.isArray(node.children)) {
+      for (const c of node.children) walk(c);
+    }
+  }
+  walk(root);
+  return issues;
+}
+
+/**
+ * Run all 8 detectors and return the deduplicated combined issue list.
  * Dedup key: `${nodeId}:${property}` (matches runPreValidationFixes).
  * On collision, the first issue wins (detector execution order below).
  */
@@ -528,6 +564,7 @@ export function detectAllIssues(root: PenNode, doc: PenDocument): Issue[] {
     ...detectUnexpectedRotation(root),
     ...detectTextCornerRadius(root),
     ...detectMixedSiblingCornerRadius(root),
+    ...detectTextEffect(root),
   ];
   const seen = new Set<string>();
   const unique: Issue[] = [];
