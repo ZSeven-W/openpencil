@@ -309,16 +309,35 @@ registerRole('form-input', (_node, ctx) => ({
   stroke: inputStroke(ctx.theme),
 }));
 
-registerRole('search-bar', (_node, ctx) => ({
-  layout: 'horizontal' as const,
-  height: 44,
-  padding: [10, 16] as [number, number],
-  gap: 8,
-  alignItems: 'center' as const,
-  cornerRadius: 22,
-  fill: inputFill(ctx.theme),
-  stroke: inputStroke(ctx.theme),
-}));
+registerRole('search-bar', (_node, ctx) => {
+  // Models sometimes mis-tag a bottom-nav "Search" tab with role
+  // `search-bar`, expecting it to mean "the tab whose icon is a
+  // magnifier". Without a guard, the input-shaped pill styling
+  // (44px tall + 22 corner-radius + filled surface) gets stamped onto
+  // the nav cell — visible as a coloured pill highlight wrapping the
+  // icon + label inside an otherwise transparent tab row. Detect by
+  // the same TAB_PARENT_ROLES set used by the button branch and
+  // return zero style overrides; the nav-item / nav-item-active role
+  // (registered separately) governs the cell layout.
+  if (
+    ctx.parentRole &&
+    (ctx.parentRole === 'bottom-tab-bar' ||
+      ctx.parentRole === 'tab-bar' ||
+      ctx.parentRole === 'tab-row')
+  ) {
+    return {};
+  }
+  return {
+    layout: 'horizontal' as const,
+    height: 44,
+    padding: [10, 16] as [number, number],
+    gap: 8,
+    alignItems: 'center' as const,
+    cornerRadius: 22,
+    fill: inputFill(ctx.theme),
+    stroke: inputStroke(ctx.theme),
+  };
+});
 
 // ---------------------------------------------------------------------------
 // Display roles
