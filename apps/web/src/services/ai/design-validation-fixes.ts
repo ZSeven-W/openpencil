@@ -53,6 +53,11 @@ export interface ValidationResult {
   structuralFixes: StructuralFix[];
   qualityScore: number;
   skipped?: boolean;
+  /** Human-readable reason when `skipped` — surfaced in the chat panel
+   * status line so users can tell "no vision provider" apart from
+   * "request timed out". Empty when the skip is transient.
+   */
+  skippedReason?: string;
 }
 
 // ---------------------------------------------------------------------------
