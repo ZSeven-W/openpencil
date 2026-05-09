@@ -16,6 +16,8 @@
 
 #[cfg(feature = "skia")]
 mod backend;
+#[cfg(feature = "skia")]
+mod widget_host;
 
 // Force the wasm32-unknown-unknown libc/libcxx/libm shim to be linked
 // even though no Rust code calls it — its `#[no_mangle]` symbols are
@@ -38,21 +40,22 @@ use wasm_bindgen::prelude::*;
 pub struct WebShell {
     #[cfg(feature = "skia")]
     backend: backend::WebBackend,
+    #[cfg(feature = "skia")]
+    host: widget_host::WidgetHost,
 }
 
 #[cfg(feature = "skia")]
 impl WebShell {
-    /// Phase A red-rect demo: clear to white, draw a centered red rect,
-    /// snapshot to the host canvas. Returns the present error if the
-    /// final ImageData round-trip failed — callers MUST propagate this
-    /// to JS instead of treating mount as successful when the canvas
-    /// stayed blank.
-    ///
-    /// Phase B+ replaces this with the widget host paint loop.
-    fn paint_phase_a(&mut self) -> Result<(), JsValue> {
+    /// Phase B paint pass: clear the canvas to white, then dispatch to
+    /// the four shell-core inspector widgets via `WidgetHost`. Returns
+    /// the present error if the final ImageData round-trip failed —
+    /// callers MUST propagate this to JS instead of treating mount as
+    /// successful when the canvas stayed blank.
+    fn paint_inspector(&mut self) -> Result<(), JsValue> {
         use openpencil_shell_core::{Color, Point2D, Rect, RenderBackend};
+
         self.backend.begin_frame();
-        // Clear background.
+        // Clear to white so widget paints sit on a clean background.
         self.backend.fill_rect(
             Rect {
                 origin: Point2D::new(0.0, 0.0),
@@ -60,14 +63,8 @@ impl WebShell {
             },
             Color::WHITE,
         );
-        // Centered red rect: 320×120 inside the 960×640 canvas.
-        self.backend.fill_rect(
-            Rect {
-                origin: Point2D::new(320.0, 260.0),
-                size: Point2D::new(320.0, 120.0),
-            },
-            Color::RED,
-        );
+        // Inspector slice: 280 px wide column on the left half.
+        self.host.paint(&mut self.backend, 280.0);
         self.backend.end_frame();
         if let Some(err) = self.backend.take_present_error() {
             return Err(err);
@@ -107,11 +104,12 @@ pub fn mount(canvas_id: &str) -> Result<WebShell, JsValue> {
         .map_err(|_| JsValue::from_str("mount: target element is not <canvas>"))?;
 
     let backend = backend::WebBackend::new(canvas)?;
-    let mut shell = WebShell { backend };
-    // Phase A demo paints synchronously inside mount(); any present error
-    // (read_pixels / put_image_data) MUST surface as a JS exception so
-    // callers do not see Ok with an unpainted canvas.
-    shell.paint_phase_a()?;
+    let host = widget_host::WidgetHost::new();
+    let mut shell = WebShell { backend, host };
+    // Phase B inspector paints synchronously inside mount(); any present
+    // error (read_pixels / put_image_data) MUST surface as a JS exception
+    // so callers do not see Ok with an unpainted canvas.
+    shell.paint_inspector()?;
     Ok(shell)
 }
 
