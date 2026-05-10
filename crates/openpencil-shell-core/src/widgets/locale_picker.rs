@@ -78,22 +78,6 @@ impl Widget for LocalePicker {
     }
 
     fn paint(&self, cx: &mut PaintCx<'_>, rect: Rect) {
-        // Drop shadow — soft offset rect.
-        let shadow = Rect {
-            origin: Point2D::new(rect.origin.x, rect.origin.y + 4.0),
-            size: rect.size,
-        };
-        cx.backend.fill_round_rect(
-            shadow,
-            8.0,
-            Color {
-                r: 0.0,
-                g: 0.0,
-                b: 0.0,
-                a: 0.32,
-            },
-        );
-
         // Panel body.
         cx.backend.fill_round_rect(rect, 8.0, self.theme.popover);
         cx.backend
