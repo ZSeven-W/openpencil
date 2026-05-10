@@ -28,9 +28,9 @@ use crate::backend::WebBackend;
 use openpencil_shell_core::document::{ChatAnchor, Document};
 use openpencil_shell_core::widgets::{
     AIChatHit, AIChatPlaceholder, CanvasViewport, LayerPanel, LayoutCx, PaintCx, PropertyPanel,
-    StatusBar, Toolbar, TopBar, Widget, AI_CHAT_COLLAPSED_HEIGHT, AI_CHAT_COLLAPSED_WIDTH,
-    AI_CHAT_HEIGHT, AI_CHAT_WIDTH, LAYER_PANEL_WIDTH, PROPERTY_PANEL_WIDTH, STATUS_BAR_HEIGHT,
-    STATUS_BAR_WIDTH, TOOLBAR_WIDTH, TOP_BAR_HEIGHT,
+    StatusBar, Toolbar, TopBar, TopBarHit, Widget, AI_CHAT_COLLAPSED_HEIGHT,
+    AI_CHAT_COLLAPSED_WIDTH, AI_CHAT_HEIGHT, AI_CHAT_WIDTH, LAYER_PANEL_WIDTH,
+    PROPERTY_PANEL_WIDTH, STATUS_BAR_HEIGHT, STATUS_BAR_WIDTH, TOOLBAR_WIDTH, TOP_BAR_HEIGHT,
 };
 use openpencil_shell_core::{Point2D, Rect, RenderBackend, Theme};
 
@@ -79,7 +79,11 @@ impl WidgetHost {
     }
 
     fn canvas_region(&self, viewport_w: f32, viewport_h: f32) -> (f32, f32, f32, f32) {
-        let canvas_left = LAYER_PANEL_WIDTH;
+        let canvas_left = if self.document.ui.sidebar_open {
+            LAYER_PANEL_WIDTH
+        } else {
+            0.0
+        };
         let has_property = self.document.selected_node().is_some();
         let canvas_right = if has_property {
             viewport_w - PROPERTY_PANEL_WIDTH
@@ -92,7 +96,11 @@ impl WidgetHost {
     }
 
     fn over_canvas(&self, x: f32, y: f32, viewport_w: f32, viewport_h: f32) -> bool {
-        let canvas_left = LAYER_PANEL_WIDTH;
+        let canvas_left = if self.document.ui.sidebar_open {
+            LAYER_PANEL_WIDTH
+        } else {
+            0.0
+        };
         let has_property = self.document.selected_node().is_some();
         let canvas_right = if has_property {
             viewport_w - PROPERTY_PANEL_WIDTH
@@ -163,6 +171,25 @@ impl WidgetHost {
         viewport_width: f32,
         viewport_height: f32,
     ) -> bool {
+        // 0. TopBar — sidebar toggle button. Mirrors the native
+        //    host so web + native behave identically.
+        let top_bar_rect = Rect {
+            origin: Point2D::new(0.0, 0.0),
+            size: Point2D::new(viewport_width, TOP_BAR_HEIGHT),
+        };
+        let top_bar = TopBar::untitled();
+        if let Some(hit) = top_bar.hit_test(top_bar_rect, Point2D::new(x, y)) {
+            match hit {
+                TopBarHit::ToggleSidebar => {
+                    self.document.ui.sidebar_open = !self.document.ui.sidebar_open;
+                    return true;
+                }
+            }
+        }
+        if rect_contains(top_bar_rect, Point2D::new(x, y)) {
+            return false;
+        }
+
         // 1. AI chat panel — painted on top of toolbar so a
         //    click inside its rect is consumed here, even when
         //    that point lies inside the toolbar rect underneath.
@@ -210,9 +237,16 @@ impl WidgetHost {
             return true;
         }
 
-        // 4. Canvas pan-drag.
+        // 4. Empty-canvas click: clear selection (collapses the
+        //    PropertyPanel) + start a pan-drag, mirroring native.
         if self.over_canvas(x, y, viewport_width, viewport_height) {
+            let cleared =
+                self.document.selected != openpencil_shell_core::document::NodeId::NONE;
+            if cleared {
+                self.document.selected = openpencil_shell_core::document::NodeId::NONE;
+            }
             self.drag = Some(DragState { last_x: x, last_y: y });
+            return cleared;
         }
         false
     }
@@ -394,6 +428,9 @@ impl WidgetHost {
                 }
             }
         }
+        if !self.document.ui.sidebar_open {
+            return was_focused;
+        }
         let layer_rect = self.layer_panel_rect(viewport_h);
         let panel = LayerPanel::from_document(&self.document);
         if let Some(hit) = panel.hit_test(layer_rect, Point2D::new(x, y)) {
@@ -472,10 +509,11 @@ impl WidgetHost {
             top_bar.paint(&mut cx, top_bar_rect);
         }
 
-        // 3. LayerPanel — left rail.
-        let layer_panel_rect = self.layer_panel_rect(viewport_height);
-        let layer_panel = LayerPanel::from_document(&self.document);
-        {
+        // 3. LayerPanel — left rail (skipped when sidebar
+        //    collapsed; canvas extends to the left edge).
+        if self.document.ui.sidebar_open {
+            let layer_panel_rect = self.layer_panel_rect(viewport_height);
+            let layer_panel = LayerPanel::from_document(&self.document);
             let mut cx = PaintCx {
                 backend: &mut *backend,
             };
@@ -506,15 +544,10 @@ impl WidgetHost {
         }
 
         // 5. CanvasViewport — fills the middle band between the
-        //    rails, below the top bar.
-        let canvas_left = LAYER_PANEL_WIDTH;
-        let canvas_right = if property_panel.is_some() {
-            viewport_width - PROPERTY_PANEL_WIDTH
-        } else {
-            viewport_width
-        };
-        let canvas_w = (canvas_right - canvas_left).max(0.0);
-        let canvas_h = (viewport_height - TOP_BAR_HEIGHT).max(0.0);
+        //    rails, below the top bar. Respects the sidebar
+        //    collapse state via canvas_region.
+        let (canvas_left, _canvas_y, canvas_w, canvas_h) =
+            self.canvas_region(viewport_width, viewport_height);
         let canvas_rect = Rect {
             origin: Point2D::new(canvas_left, TOP_BAR_HEIGHT),
             size: Point2D::new(canvas_w, canvas_h),
@@ -562,6 +595,7 @@ impl WidgetHost {
         }
 
         // 8. StatusBar — floating bottom-right of canvas.
+        let canvas_right = canvas_left + canvas_w;
         if canvas_w > STATUS_BAR_WIDTH + STATUS_INSET * 2.0 {
             let status = StatusBar::new();
             let status_rect = Rect {
