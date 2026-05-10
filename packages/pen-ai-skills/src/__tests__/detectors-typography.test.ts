@@ -216,11 +216,12 @@ describe('detectTextBgContrast', () => {
     expect(issues[0].reason).toMatch(/bg=#FFF8E7/);
   });
 
-  it('skips wrapper with NODE-LEVEL opacity=0 and uses real bg further up', () => {
-    // 2026-05-10 second Codex stop-hook — node-level opacity is a
-    // separate path from fill-level opacity. A wrapper with white fill
-    // and node opacity=0 is fully invisible; the detector must not
-    // pick up its white as the bg.
+  it('does NOT flag text inside a node-level opacity=0 subtree (text itself is invisible)', () => {
+    // 2026-05-10 Codex round 3 — when a wrapper has node-level opacity=0
+    // the entire subtree is hidden from the user, so flagging the text's
+    // contrast (against whatever bg) is a false positive: there's no
+    // visible text-bg pair to read in the first place. The detector
+    // prunes hidden subtrees up front instead of walking into them.
     const wrap: PenNode = {
       id: 'wrap',
       type: 'frame',
@@ -230,12 +231,10 @@ describe('detectTextBgContrast', () => {
       children: [text('t1', solid('#FFF8E7'))],
     } as unknown as PenNode;
     const root = frame('page', [wrap], solid('#FFF8E7'));
-    const issues = detectTextBgContrast(root, emptyDoc);
-    expect(issues).toHaveLength(1);
-    expect(issues[0].reason).toMatch(/bg=#FFF8E7/);
+    expect(detectTextBgContrast(root, emptyDoc)).toHaveLength(0);
   });
 
-  it('skips wrapper with visible=false and uses real bg further up', () => {
+  it('does NOT flag text inside a visible=false subtree (text itself is invisible)', () => {
     const wrap: PenNode = {
       id: 'wrap',
       type: 'frame',
@@ -245,9 +244,7 @@ describe('detectTextBgContrast', () => {
       children: [text('t1', solid('#FFF8E7'))],
     } as unknown as PenNode;
     const root = frame('page', [wrap], solid('#FFF8E7'));
-    const issues = detectTextBgContrast(root, emptyDoc);
-    expect(issues).toHaveLength(1);
-    expect(issues[0].reason).toMatch(/bg=#FFF8E7/);
+    expect(detectTextBgContrast(root, emptyDoc)).toHaveLength(0);
   });
 
   it('still treats opacity=0.5 as visible (only opacity=0 is the alpha-0 sentinel)', () => {

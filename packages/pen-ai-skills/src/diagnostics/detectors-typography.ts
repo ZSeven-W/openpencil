@@ -134,7 +134,20 @@ export function detectTextBgContrast(
   walk(root, []);
   return issues;
 
+  function isHidden(node: PenNode): boolean {
+    // Whole subtree is invisible — node-level opacity=0 or visible=false.
+    // 2026-05-10 Codex round 3 caught this as a separate path from the
+    // ancestorBgColor guard: even if we'd correctly skip the wrapper as
+    // a bg, the TEXT inside still doesn't render, so flagging its
+    // contrast against whatever sits above is a false positive.
+    const n = node as PenNode & { opacity?: unknown; visible?: unknown };
+    if (n.opacity === 0) return true;
+    if (n.visible === false) return true;
+    return false;
+  }
+
   function walk(node: PenNode, ancestors: PenNode[]): void {
+    if (isHidden(node)) return; // prune the entire subtree
     if (node.type === 'text') {
       checkText(node, ancestors);
     }
