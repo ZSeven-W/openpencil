@@ -108,12 +108,12 @@ pub fn paint_create_component(
     cx.backend.fill_round_rect(btn_rect, 8.0, theme.muted);
     cx.backend
         .stroke_round_rect(btn_rect, 8.0, theme.border, 1.0);
-    // TS uses Diamond icon for the "create component" affordance
-    // (apps/web/src/components/panels/property-panel.tsx imports
-    // Diamond from lucide-react). Sparkles was a stand-in.
+    // TS uses Component icon (cluster of 4 small diamonds) for
+    // the "create component" affordance. Diamond is imported in
+    // the same file but used elsewhere (instance indicator).
     draw_icon(
         cx.backend,
-        Icon::Diamond,
+        Icon::Component,
         Point2D::new(btn_rect.origin.x + 12.0, btn_rect.origin.y + 9.0),
         18.0,
         theme.foreground,
