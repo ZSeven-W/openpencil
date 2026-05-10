@@ -120,6 +120,10 @@ impl<'a> RenderBackend for NativeFrameBackend<'a> {
     fn dpi_scale(&self) -> f32 {
         self.inner.dpi_scale()
     }
+
+    fn measure_text(&mut self, text: &str, font_size: f32) -> f32 {
+        self.inner.measure_text(text, font_size)
+    }
 }
 
 /// Native counterpart of shell-web's `WidgetHost`. Owns a

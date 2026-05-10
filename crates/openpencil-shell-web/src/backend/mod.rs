@@ -392,4 +392,29 @@ impl RenderBackend for WebBackend {
     fn dpi_scale(&self) -> f32 {
         self.dpi_scale
     }
+
+    fn measure_text(&mut self, text: &str, font_size: f32) -> f32 {
+        // Init typefaces if not already (mirrors draw_text).
+        if !self.typeface_tried {
+            self.typeface = skia_safe::FontMgr::custom_empty()
+                .and_then(|mgr| mgr.new_from_data(ROBOTO_TTF, None));
+            self.typeface_tried = true;
+        }
+        if !self.cjk_typeface_tried {
+            self.cjk_typeface = skia_safe::FontMgr::custom_empty()
+                .and_then(|mgr| mgr.new_from_data(NOTO_CJK_SUBSET, None));
+            self.cjk_typeface_tried = true;
+        }
+        let typeface = if text.is_ascii() {
+            self.typeface.as_ref()
+        } else {
+            self.cjk_typeface.as_ref().or(self.typeface.as_ref())
+        };
+        let Some(typeface) = typeface else {
+            return text.chars().count() as f32 * font_size * 0.55;
+        };
+        let font = skia_safe::Font::new(typeface, font_size);
+        let (advance, _bounds) = font.measure_str(text, None);
+        advance
+    }
 }

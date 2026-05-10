@@ -239,4 +239,23 @@ pub trait RenderBackend {
     // Viewport / DPI.
     fn resize(&mut self, width: u32, height: u32);
     fn dpi_scale(&self) -> f32;
+
+    /// Measure the rendered horizontal advance of `text` at
+    /// `font_size`. Used by widgets that need precise centering
+    /// or right-alignment without round-trip to a layout pass.
+    /// Default impl: rough heuristic (~0.55 × font_size per
+    /// ASCII char, ~1.0 × font_size per non-ASCII char). Backends
+    /// that own a real typeface (Web + Native) override with
+    /// `Font::measure_str` for pixel-accurate positioning.
+    fn measure_text(&mut self, text: &str, font_size: f32) -> f32 {
+        let mut w = 0.0;
+        for c in text.chars() {
+            w += if c.is_ascii() {
+                font_size * 0.55
+            } else {
+                font_size
+            };
+        }
+        w
+    }
 }

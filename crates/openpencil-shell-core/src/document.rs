@@ -349,12 +349,35 @@ pub struct Document {
 pub struct UiState {
     /// Whether the left LayerPanel is shown. Default true.
     pub sidebar_open: bool,
+    /// Which property-panel input has keyboard focus. `None` =
+    /// no input focused; the panel paints all inputs muted.
+    pub property_focus: Option<PropertyFocus>,
 }
 
 impl Default for UiState {
     fn default() -> Self {
-        Self { sidebar_open: true }
+        Self {
+            sidebar_open: true,
+            property_focus: None,
+        }
     }
+}
+
+/// Identifier for a property-panel input row. The host hit-tests
+/// the panel and stores the focused input here so paint can
+/// render the focused box with primary border + caret bar.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PropertyFocus {
+    PositionX,
+    PositionY,
+    Rotation,
+    PositionR,
+    SizeW,
+    SizeH,
+    Opacity,
+    FillHex,
+    StrokeHex,
+    StrokeWidth,
 }
 
 /// Floating AI chat panel state — mirrors the TS app's
