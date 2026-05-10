@@ -374,6 +374,16 @@ pub struct UiState {
     /// Globe to toggle; click a row to set + close; click outside
     /// to close.
     pub locale_picker_open: bool,
+    /// Whether the Toolbar shape-tool dropdown is open. The shape
+    /// slot in the toolbar shows the icon for `shape_tool`; click
+    /// it to toggle this picker. Picker rows: Rectangle / Ellipse /
+    /// Polygon / Line / Icon / Import Image or SVG / Pen.
+    pub shape_picker_open: bool,
+    /// Last-selected shape tool — drives the toolbar shape slot's
+    /// icon. Defaults to Rect. Always one of Rect / Ellipse /
+    /// Polygon / Line / Pen (Icon + Import are one-shot actions
+    /// that don't promote to the active tool).
+    pub shape_tool: Tool,
 }
 
 impl Default for UiState {
@@ -388,6 +398,8 @@ impl Default for UiState {
             theme_mode: ThemeMode::Dark,
             locale: Locale::ZhCn,
             locale_picker_open: false,
+            shape_picker_open: false,
+            shape_tool: Tool::Rect,
         }
     }
 }
@@ -673,6 +685,10 @@ impl Default for Viewport {
 pub enum Tool {
     Select,
     Rect,
+    Ellipse,
+    Polygon,
+    Line,
+    Pen,
     Text,
     Frame,
     Hand,
@@ -681,9 +697,13 @@ pub enum Tool {
 impl Tool {
     /// All tools, in toolbar display order. Single source of truth
     /// for the toolbar build path.
-    pub const ALL: [Tool; 5] = [
+    pub const ALL: [Tool; 9] = [
         Tool::Select,
         Tool::Rect,
+        Tool::Ellipse,
+        Tool::Polygon,
+        Tool::Line,
+        Tool::Pen,
         Tool::Text,
         Tool::Frame,
         Tool::Hand,
@@ -694,10 +714,25 @@ impl Tool {
         match self {
             Tool::Select => "select",
             Tool::Rect => "rect",
+            Tool::Ellipse => "ellipse",
+            Tool::Polygon => "polygon",
+            Tool::Line => "line",
+            Tool::Pen => "pen",
             Tool::Text => "text",
             Tool::Frame => "frame",
             Tool::Hand => "hand",
         }
+    }
+
+    /// Whether this tool sits inside the Toolbar's shape-tool
+    /// dropdown (Rect / Ellipse / Polygon / Line / Pen). The
+    /// shape slot in the toolbar paints whichever of these is
+    /// currently active.
+    pub fn is_shape(self) -> bool {
+        matches!(
+            self,
+            Tool::Rect | Tool::Ellipse | Tool::Polygon | Tool::Line | Tool::Pen
+        )
     }
 }
 

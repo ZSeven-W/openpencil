@@ -49,6 +49,7 @@ pub mod icons;
 // Step 4 — extra editor-chrome widgets (TS app parity).
 pub mod ai_chat_panel;
 pub mod locale_picker;
+pub mod shape_picker;
 pub mod status_bar;
 pub mod top_bar;
 
@@ -70,6 +71,7 @@ pub use ai_chat_panel::{
     AI_CHAT_HEIGHT, AI_CHAT_WIDTH,
 };
 pub use locale_picker::{LocalePicker, LOCALE_PICKER_WIDTH};
+pub use shape_picker::{ShapeChoice, ShapePicker, SHAPE_PICKER_WIDTH};
 pub use status_bar::{StatusBar, STATUS_BAR_HEIGHT, STATUS_BAR_WIDTH};
 pub use top_bar::{TopBar, TopBarHit, TOP_BAR_HEIGHT};
 // Re-export panel/toolbar width constants + hit enums so the host

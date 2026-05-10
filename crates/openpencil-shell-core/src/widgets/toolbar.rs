@@ -32,13 +32,18 @@ const PAD_TOP: f32 = 8.0;
 const PAD_BOTTOM: f32 = 8.0;
 
 /// Each entry in the toolbar — either a tool button (selectable),
-/// an action button (one-shot), or a separator that paints a
-/// hairline.
+/// an action button (one-shot), a separator that paints a
+/// hairline, or the shape-tool dropdown slot (icon driven by
+/// `Document.ui.shape_tool`, click toggles the picker).
 #[derive(Debug, Clone, Copy)]
 pub enum ToolbarItem {
     Tool(Tool, Icon),
     Action(ToolbarAction, Icon),
     Separator,
+    /// Compound shape slot. Paints the icon for whichever shape
+    /// variant the user last picked; click toggles the dropdown
+    /// listing all shape options.
+    ShapeSlot,
 }
 
 /// One-shot action a toolbar button can dispatch. Wired in P6.
@@ -55,6 +60,9 @@ pub enum ToolbarAction {
 pub enum ToolbarHit {
     Tool(Tool),
     Action(ToolbarAction),
+    /// User clicked the shape slot — host should toggle the
+    /// shape-tool picker (`Document.ui.shape_picker_open`).
+    ToggleShapePicker,
 }
 
 pub struct Toolbar {
@@ -62,6 +70,10 @@ pub struct Toolbar {
     pub items: Vec<ToolbarItem>,
     pub active: Tool,
     pub theme: Theme,
+    /// Which shape variant the shape slot paints. Read from
+    /// `Document.ui.shape_tool` so the icon flips after the user
+    /// picks a shape from the dropdown.
+    pub shape_tool: Tool,
 }
 
 impl Toolbar {
@@ -79,7 +91,7 @@ impl Toolbar {
             id: WidgetId::new(3000),
             items: vec![
                 ToolbarItem::Tool(Tool::Select, Icon::Cursor),
-                ToolbarItem::Tool(Tool::Rect, Icon::Square),
+                ToolbarItem::ShapeSlot,
                 ToolbarItem::Tool(Tool::Text, Icon::Type),
                 ToolbarItem::Tool(Tool::Frame, Icon::Frame),
                 ToolbarItem::Tool(Tool::Hand, Icon::Hand),
@@ -92,6 +104,7 @@ impl Toolbar {
             ],
             active: doc.tool,
             theme: doc.theme(),
+            shape_tool: doc.ui.shape_tool,
         }
     }
 
@@ -105,7 +118,7 @@ impl Toolbar {
                     h += if prev_was_item { SECTION_GAP } else { 0.0 };
                     prev_was_item = false;
                 }
-                _ => {
+                ToolbarItem::Tool(_, _) | ToolbarItem::Action(_, _) | ToolbarItem::ShapeSlot => {
                     if prev_was_item {
                         h += BUTTON_GAP;
                     }
@@ -115,6 +128,43 @@ impl Toolbar {
             }
         }
         h + PAD_BOTTOM
+    }
+
+    /// Returns the on-screen rect of the shape slot. Used by the
+    /// host to anchor the shape-tool picker dropdown immediately
+    /// to the right of this button. `None` if the toolbar wasn't
+    /// built with a shape slot (e.g. test fixtures).
+    pub fn shape_slot_rect(&self, rect: Rect) -> Option<Rect> {
+        let button_x = rect.origin.x + (rect.size.x - BUTTON_SIZE) / 2.0;
+        let mut y = rect.origin.y + PAD_TOP;
+        let mut prev_was_item = false;
+        for item in &self.items {
+            match item {
+                ToolbarItem::Separator => {
+                    if prev_was_item {
+                        y += SECTION_GAP;
+                    }
+                    prev_was_item = false;
+                }
+                ToolbarItem::ShapeSlot => {
+                    if prev_was_item {
+                        y += BUTTON_GAP;
+                    }
+                    return Some(Rect {
+                        origin: Point2D::new(button_x, y),
+                        size: Point2D::new(BUTTON_SIZE, BUTTON_SIZE),
+                    });
+                }
+                _ => {
+                    if prev_was_item {
+                        y += BUTTON_GAP;
+                    }
+                    y += BUTTON_SIZE;
+                    prev_was_item = true;
+                }
+            }
+        }
+        None
     }
 
     /// Resolve a pointer at `point` (host-coordinates, top-left of
@@ -168,9 +218,36 @@ impl Toolbar {
                     y += BUTTON_SIZE;
                     prev_was_item = true;
                 }
+                ToolbarItem::ShapeSlot => {
+                    if prev_was_item {
+                        y += BUTTON_GAP;
+                    }
+                    let button_rect = Rect {
+                        origin: Point2D::new(button_x, y),
+                        size: Point2D::new(BUTTON_SIZE, BUTTON_SIZE),
+                    };
+                    if hit(button_rect, point) {
+                        return Some(ToolbarHit::ToggleShapePicker);
+                    }
+                    y += BUTTON_SIZE;
+                    prev_was_item = true;
+                }
             }
         }
         None
+    }
+}
+
+/// Lucide icon for a shape variant. Used by the toolbar shape
+/// slot AND the dropdown rows so both stay visually aligned.
+pub fn icon_for_shape(tool: Tool) -> Icon {
+    match tool {
+        Tool::Rect => Icon::Square,
+        Tool::Ellipse => Icon::Circle,
+        Tool::Polygon => Icon::Triangle,
+        Tool::Line => Icon::Minus,
+        Tool::Pen => Icon::PenTool,
+        _ => Icon::Square,
     }
 }
 
@@ -241,6 +318,22 @@ impl Widget for Toolbar {
                     y += BUTTON_SIZE;
                     prev_was_item = true;
                 }
+                ToolbarItem::ShapeSlot => {
+                    if prev_was_item {
+                        y += BUTTON_GAP;
+                    }
+                    let active = self.active.is_shape();
+                    paint_button(
+                        cx,
+                        &self.theme,
+                        button_x,
+                        y,
+                        icon_for_shape(self.shape_tool),
+                        active,
+                    );
+                    y += BUTTON_SIZE;
+                    prev_was_item = true;
+                }
             }
         }
     }
@@ -284,7 +377,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn default_set_has_five_tools_plus_actions() {
+    fn default_set_has_four_tools_plus_shape_slot_plus_actions() {
         let toolbar = Toolbar::default_set();
         let tool_count = toolbar
             .items
@@ -296,7 +389,16 @@ mod tests {
             .iter()
             .filter(|i| matches!(i, ToolbarItem::Action(..)))
             .count();
-        assert_eq!(tool_count, 5);
+        let shape_slot_count = toolbar
+            .items
+            .iter()
+            .filter(|i| matches!(i, ToolbarItem::ShapeSlot))
+            .count();
+        // Select / Text / Frame / Hand are direct tool buttons;
+        // Rect / Ellipse / Polygon / Line / Pen live behind the
+        // single ShapeSlot dropdown.
+        assert_eq!(tool_count, 4);
+        assert_eq!(shape_slot_count, 1);
         assert_eq!(action_count, 4);
         assert_eq!(toolbar.active, Tool::Select);
     }

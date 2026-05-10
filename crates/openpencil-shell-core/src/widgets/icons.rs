@@ -95,6 +95,14 @@ pub enum Icon {
     Check,
     /// ArrowUpRight — link / external nav indicator.
     ArrowUpRight,
+    /// Circle — Ellipse shape.
+    Circle,
+    /// Triangle — Polygon shape.
+    Triangle,
+    /// PenTool — Pen shape.
+    PenTool,
+    /// ImagePlus — "Import image / SVG" shape-picker row.
+    ImagePlus,
 }
 
 impl Icon {
@@ -136,6 +144,10 @@ impl Icon {
             Icon::Unlink => UNLINK,
             Icon::Check => CHECK,
             Icon::ArrowUpRight => ARROW_UP_RIGHT,
+            Icon::Circle => CIRCLE,
+            Icon::Triangle => TRIANGLE,
+            Icon::PenTool => PEN_TOOL,
+            Icon::ImagePlus => IMAGE_PLUS,
         }
     }
 }
@@ -326,6 +338,30 @@ const CHECK: &[&str] = &["M20 6 9 17l-5-5"];
 
 // Lucide `arrow-up-right.svg`.
 const ARROW_UP_RIGHT: &[&str] = &["M7 7h10v10", "M7 17 17 7"];
+
+// Lucide `circle.svg`.
+const CIRCLE: &[&str] = &["M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Z"];
+
+// Lucide `triangle.svg`.
+const TRIANGLE: &[&str] =
+    &["M13.73 4a2 2 0 0 0-3.46 0l-8.15 14a2 2 0 0 0 1.73 3h16.34a2 2 0 0 0 1.73-3Z"];
+
+// Lucide `pen-tool.svg`.
+const PEN_TOOL: &[&str] = &[
+    "M15.707 21.293a1 1 0 0 1-1.414 0l-1.586-1.586a1 1 0 0 1 0-1.414l5.586-5.586a1 1 0 0 1 1.414 0l1.586 1.586a1 1 0 0 1 0 1.414z",
+    "m18 13-1.375-6.874a1 1 0 0 0-.746-.776L3.235 2.028a1 1 0 0 0-1.207 1.207L5.35 15.879a1 1 0 0 0 .776.746L13 18",
+    "m2.3 2.3 7.286 7.286",
+    "M11 11a2 2 0 1 1-4 0 2 2 0 0 1 4 0Z",
+];
+
+// Lucide `image-plus.svg`.
+const IMAGE_PLUS: &[&str] = &[
+    "M16 5h6",
+    "M19 2v6",
+    "M21 11.5V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7.5",
+    "m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21",
+    "M9 9a2 2 0 1 1-4 0 2 2 0 0 1 4 0Z",
+];
 
 /// Paint `icon` at `top_left`, scaled to `size × size` pixels, in
 /// `color` strokes of width `stroke_width`. The icon's lucide
