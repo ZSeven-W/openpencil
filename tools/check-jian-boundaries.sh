@@ -8,10 +8,17 @@
 #   `jian-*` crate — Jian is a shell-native implementation detail; the
 #   app only sees OP's `RenderBackend` / `ShellEvent` facade.
 #
-# Invariant 2 (§11.1, §12.3): mobile targets (`aarch64-linux-android`,
-#   `aarch64-apple-ios`) must NOT pull `jian-host-desktop` or `jian-skia`
-#   into the dependency closure — those carry the desktop GL stack +
-#   `skia-safe` build.rs that fails on cross-compile.
+# Invariant 2 (§11.1, §12.3 — REVISED 2026-05-10): mobile targets
+#   (`aarch64-linux-android`, `aarch64-apple-ios`) must NOT pull
+#   `jian-host-desktop` (desktop GUI host glue — winit / glutin /
+#   GLContextProvider impl that has no mobile equivalent). Per the
+#   2026-05-10 user directive ("extend, jian 最后也会需要 ios 和
+#   android"), `jian-skia` is now ALLOWED on mobile targets — the
+#   widget render stack (skia-safe + jian-skia + NativeBackend +
+#   widget_host) compiles for iOS / Android cargo check, leaving
+#   only the host-specific (Metal / Vulkan / event) integration to
+#   Step 1f via the existing `EaglProvider` / `AndroidEglProvider`
+#   plugin point.
 #
 # Invariant 3 (§11.1, §1.2): wasm32 builds of `openpencil-shell-web`
 #   must NOT pull `jian-host-desktop` or `jian-skia` (skia-safe build.rs
@@ -54,17 +61,20 @@ if [ -n "$forbidden_app" ]; then
     exit 1
 fi
 
-# ── Invariant 2: mobile targets don't pull jian-host-desktop / jian-skia. ──
-# We use `cargo tree` (which honours `--target` cfg-gates) and inspect
-# the dependency closure of `openpencil-shell-native` — only the deps
-# that actually compile under the mobile target are listed.
+# ── Invariant 2: mobile targets don't pull jian-host-desktop. ─────────
+# `cargo tree` honours `--target` cfg-gates so only the deps that
+# actually compile under the mobile target are listed. `jian-skia` IS
+# allowed on mobile (2026-05-10 user directive — widget render stack
+# extends to iOS / Android); we still forbid `jian-host-desktop`
+# because it pulls winit / glutin / desktop GLContextProvider impls
+# that have no mobile equivalent.
 for target in aarch64-linux-android aarch64-apple-ios; do
     tree_mobile="$(cargo tree -p openpencil-shell-native \
         --target "$target" \
         --prefix none \
         --edges normal,build 2>/dev/null || true)"
     forbidden_mobile="$(echo "$tree_mobile" \
-        | grep -oE '\bjian-(host-desktop|skia)\b' \
+        | grep -oE '\bjian-host-desktop\b' \
         | sort -u || true)"
     if [ -n "$forbidden_mobile" ]; then
         echo "INVARIANT 2 FAILED ($target): forbidden Jian crates in closure:" >&2

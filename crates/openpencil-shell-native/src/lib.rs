@@ -38,17 +38,53 @@ pub mod context;
 // that aren't fetched on iOS / Android (see Cargo.toml target-gated deps).
 // Spec §11 invariants 1 & 3: mobile builds compile shell-native without
 // these modules at all; mobile widget rendering lands in Step 1f.
-#[cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]
+// Cross-platform render stack: `backend` (NativeBackend) and
+// `widget_host` (NativeFrameBackend + WidgetHostNative) compile on
+// every target where `skia-safe` + `jian-skia` compile — desktop
+// trio + iOS + Android. Per the 2026-05-10 user directive
+// ("extend, jian 最后也会需要 ios 和 android") these used to be
+// desktop-only; lifting the gate is the first half of the mobile
+// extension. The other half (real `EaglProvider` / `AndroidEglProvider`
+// impls + Metal/Vulkan integration) lands in Step 1f.
+//
+// `canvas_view_stub` stays desktop-only — it pulls `glow` for a
+// GL-state-isolation probe that has no mobile equivalent.
+#[cfg(any(
+    target_os = "macos",
+    target_os = "linux",
+    target_os = "windows",
+    target_os = "ios",
+    target_os = "android"
+))]
 pub mod backend;
 #[cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]
 pub mod canvas_view_stub;
-#[cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]
+#[cfg(any(
+    target_os = "macos",
+    target_os = "linux",
+    target_os = "windows",
+    target_os = "ios",
+    target_os = "android"
+))]
 pub mod widget_host;
 
-#[cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]
+#[cfg(any(
+    target_os = "macos",
+    target_os = "linux",
+    target_os = "windows",
+    target_os = "ios",
+    target_os = "android"
+))]
 pub use backend::{to_jian_color, to_jian_rect, NativeBackend};
-#[cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]
+#[cfg(any(
+    target_os = "macos",
+    target_os = "linux",
+    target_os = "windows",
+    target_os = "ios",
+    target_os = "android"
+))]
 pub use widget_host::{NativeFrameBackend, WidgetHostNative};
+// canvas_view_stub stays desktop-only (uses glow GL-isolation probe).
 #[cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]
 pub use canvas_view_stub::CanvasViewportStub;
 
