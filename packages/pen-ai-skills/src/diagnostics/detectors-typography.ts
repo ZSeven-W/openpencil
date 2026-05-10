@@ -39,13 +39,35 @@ export interface DetectTextBgContrastOptions {
  * already a hard contrast call, and reading the gradient midpoint is
  * outside this detector's scope. Returns null when there's no usable
  * solid color (image fills, missing fills, transparent overlays).
+ *
+ * Effectively-transparent fills are skipped so the ancestor walk
+ * continues past invisible wrappers to the real visible bg:
+ *   - `fill.opacity === 0`
+ *   - 8-hex color with alpha = 00 (e.g. `#FFFFFF00`)
+ *
+ * Without these guards, a wrapper like
+ *   `frame{ fill: [{type:'solid', color:'#FFFFFF', opacity: 0}], children: [text] }`
+ * sitting on a cream page would make detectTextBgContrast treat the
+ * wrapper itself as a white bg and report a healthy contrast ratio,
+ * silently masking the cream-on-cream failure underneath.
  */
 function firstSolidColor(fills: unknown): string | null {
   if (!Array.isArray(fills) || fills.length === 0) return null;
   for (const fill of fills) {
     if (!fill || typeof fill !== 'object') continue;
-    const f = fill as { type?: string; color?: string; stops?: Array<{ color?: string }> };
-    if (f.type === 'solid' && typeof f.color === 'string') return f.color;
+    const f = fill as {
+      type?: string;
+      color?: string;
+      stops?: Array<{ color?: string }>;
+      opacity?: number;
+    };
+    if (typeof f.opacity === 'number' && f.opacity === 0) continue;
+    if (f.type === 'solid' && typeof f.color === 'string') {
+      // 8-hex with alpha 00 = fully transparent solid — same as opacity=0.
+      // Format is `#RRGGBBAA` (9 chars including the hash).
+      if (f.color.length === 9 && f.color.slice(7).toLowerCase() === '00') continue;
+      return f.color;
+    }
     if (
       (f.type === 'linear_gradient' || f.type === 'radial_gradient') &&
       Array.isArray(f.stops) &&

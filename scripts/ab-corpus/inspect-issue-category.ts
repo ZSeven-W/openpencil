@@ -26,9 +26,7 @@ async function main(): Promise<void> {
   const runId = process.argv[2];
   const wantCat = process.argv[3] as IssueCategory | undefined;
   if (!runId || !wantCat) {
-    console.error(
-      'usage: bun run scripts/ab-corpus/inspect-issue-category.ts <run-id> <category>',
-    );
+    console.error('usage: bun run scripts/ab-corpus/inspect-issue-category.ts <run-id> <category>');
     process.exit(1);
   }
   const path = join(import.meta.dir, 'runs', runId, 'scores.jsonl');
@@ -46,7 +44,9 @@ async function main(): Promise<void> {
     if (!root) continue;
     const issues: Issue[] = detectAllIssues(root, result.doc).filter((i) => i.category === wantCat);
     if (issues.length === 0) continue;
-    console.log(`\n=== ${r.promptId} [${r.category}/${r.difficulty}/${r.variant}] (${issues.length} hits) ===`);
+    console.log(
+      `\n=== ${r.promptId} [${r.category}/${r.difficulty}/${r.variant}] (${issues.length} hits) ===`,
+    );
     for (const issue of issues) {
       console.log(`  ${issue.nodeId.padEnd(50)}  ${issue.reason}`);
     }

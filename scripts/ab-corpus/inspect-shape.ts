@@ -56,14 +56,11 @@ async function main(): Promise<void> {
               ? 'desktop-w'
               : 'tiny-w'
         : `non-numeric:${typeof w}`;
-    const hKey =
-      typeof h === 'number'
-        ? h >= 568
-          ? 'tall'
-          : 'short'
-        : `non-numeric:${typeof h}`;
+    const hKey = typeof h === 'number' ? (h >= 568 ? 'tall' : 'short') : `non-numeric:${typeof h}`;
     const ratioKey =
-      typeof w === 'number' && typeof h === 'number' && w > 0 && h / w >= 1.5 ? 'aspect-ok' : 'aspect-low';
+      typeof w === 'number' && typeof h === 'number' && w > 0 && h / w >= 1.5
+        ? 'aspect-ok'
+        : 'aspect-low';
     const key = `${wKey} / ${hKey} / ${ratioKey} / children=${childCount}`;
     buckets.set(key, (buckets.get(key) ?? 0) + 1);
   }

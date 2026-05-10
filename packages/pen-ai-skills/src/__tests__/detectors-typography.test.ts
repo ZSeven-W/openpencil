@@ -184,6 +184,54 @@ describe('detectTextBgContrast', () => {
     expect(detectTextBgContrast(root, emptyDoc)).toHaveLength(1);
   });
 
+  // 2026-05-10 Codex stop-hook review caught: a wrapper with opacity=0
+  // or #RRGGBBAA alpha=00 was being treated as the bg color, masking
+  // contrast failures whose real bg lives further up the ancestor chain.
+
+  it('skips wrapper fill with opacity=0 and uses real bg further up', () => {
+    const transparentFill = [{ type: 'solid' as const, color: '#FFFFFF', opacity: 0 }];
+    // Page is cream; transparent white wrapper between page and text.
+    // Without the fix the detector would think bg=#FFFFFF (the wrapper)
+    // and pass cream-text-on-white. With the fix it walks past the
+    // invisible wrapper and flags cream-text-on-cream.
+    const root = frame(
+      'page',
+      [frame('wrap', [text('t1', solid('#FFF8E7'))], transparentFill)],
+      solid('#FFF8E7'),
+    );
+    const issues = detectTextBgContrast(root, emptyDoc);
+    expect(issues).toHaveLength(1);
+    expect(issues[0].reason).toMatch(/bg=#FFF8E7/);
+  });
+
+  it('skips wrapper fill with 8-hex alpha 00 and uses real bg further up', () => {
+    const transparentFill = [{ type: 'solid' as const, color: '#FFFFFF00' }];
+    const root = frame(
+      'page',
+      [frame('wrap', [text('t1', solid('#FFF8E7'))], transparentFill)],
+      solid('#FFF8E7'),
+    );
+    const issues = detectTextBgContrast(root, emptyDoc);
+    expect(issues).toHaveLength(1);
+    expect(issues[0].reason).toMatch(/bg=#FFF8E7/);
+  });
+
+  it('still treats opacity=0.5 as visible (only opacity=0 is the alpha-0 sentinel)', () => {
+    // We don't try to math a 50% wash against the layer below; that is
+    // outside the detector's scope. The fill stays as the bg.
+    const halfFill = [{ type: 'solid' as const, color: '#000000', opacity: 0.5 }];
+    const root = frame('page', [text('t1', solid('#FFFFFF'))], halfFill);
+    expect(detectTextBgContrast(root, emptyDoc)).toHaveLength(0);
+  });
+
+  it('does NOT skip 8-hex with alpha 80 (semi-transparent stays opaque)', () => {
+    // #00000080 is 50% black — out of scope for the detector, but it is
+    // NOT the same as alpha=00. Treat it as an opaque-enough bg.
+    const semi = [{ type: 'solid' as const, color: '#00000080' }];
+    const root = frame('page', [text('t1', solid('#FFFFFF'))], semi);
+    expect(detectTextBgContrast(root, emptyDoc)).toHaveLength(0);
+  });
+
   it('flags multiple offending texts in one pass', () => {
     const root = frame(
       'page',
