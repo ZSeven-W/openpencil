@@ -1,72 +1,52 @@
-//! Step 1b §1.4 native widget glue — the only file in shell-native
-//! allowed to call into `openpencil_shell_core::widgets`. Mirrors the
-//! shell-web `widget_host.rs` pattern so the four inspector widgets
-//! (Tree / PropertyRow / Dropdown / TextInput) defined in shell-core
-//! are truly cross-platform: shell-web reuses them via `WebBackend`,
-//! shell-native via `NativeBackend` + this glue.
+//! Step 4 native widget glue — the only file in shell-native allowed
+//! to call into `openpencil_shell_core::widgets`. Mirrors the
+//! shell-web `widget_host.rs` so the editor-UI composition is
+//! cross-platform: same widget code, same paint output.
 //!
-//! Two pieces:
-//!
-//! 1. [`NativeFrameBackend`] — a frame-scoped wrapper that holds a
-//!    `(&mut NativeBackend, &skia_safe::Canvas)` pair and `impl
-//!    RenderBackend` for it. Spec §5.2.1 explicitly defers the
-//!    `RenderBackend` impl on the canvas-borrow-bearing `NativeBackend`
-//!    to Step 1c+ widget tree work; this is that landing site.
-//!
-//! 2. [`WidgetHostNative`] — owns one of each of the Step 1b widgets +
-//!    a `paint(&self, &mut NativeFrameBackend, available_width)`
-//!    method that dispatches like shell-web's WidgetHost. Phase D will
-//!    add `apply_*` event handlers (winit input → shell-core
-//!    `apply_ime` / `apply_key`) once the desktop event pipeline
-//!    needs them.
+//! Layout matches `apps/web/src/components/editor/editor-layout.tsx`
+//! — TopBar / LayerPanel / Toolbar (vertical floating) / Canvas
+//! (fills) / RightPanel (only with selection) / StatusBar (floating
+//! bottom-right) / AIChatPlaceholder (floating bottom-center).
 //!
 //! ### Mobile (iOS / Android) — Step 1f path
 //!
-//! Per spec §11 invariants: shell-native is gated to desktop OS
-//! today (`backend` / `canvas_view_stub` / `widget_host` modules
-//! cfg-gated to `macos | linux | windows`). Mobile widget rendering
-//! lands in Step 1f via `context::EaglProvider` (iOS) /
-//! `context::AndroidEglProvider` (Android) — both are zero-sized
-//! placeholder structs in lib.rs today whose `GlContextProvider`
-//! impls `unimplemented!()`. Per the 2026-05-10 user directive
+//! Spec §11 — shell-native is desktop-gated (`backend` /
+//! `widget_host` modules cfg-gated to `macos | linux | windows`).
+//! Mobile widget rendering lands in Step 1f via `context::EaglProvider`
+//! / `context::AndroidEglProvider`. Per the 2026-05-10 directive
 //! ("安卓和ios 不需要 ipc / 本地 cli — 只需要 custom provider"):
-//! mobile rendering is purely a custom-provider plugin point on the
-//! existing `GlContextProvider` trait, NOT a separate IPC / CLI
-//! pipeline.
-//!
-//! Crucially the widget glue here is platform-agnostic in shape:
-//! - `NativeFrameBackend` only holds `&mut NativeBackend` +
-//!   `&skia_safe::Canvas`; both compile on any target where
-//!   skia-safe + jian-skia + the GL provider compile. No
-//!   desktop-specific type names or APIs leak in.
-//! - `WidgetHostNative` only consumes shell-core widgets + the
-//!   `RenderBackend` trait; no winit / glutin / EGL types appear.
-//! - When Step 1f promotes `NativeBackend` to compile on
-//!   mobile (drop the desktop-only cfg in lib.rs once
-//!   `EaglProvider` / `AndroidEglProvider` ship real impls),
-//!   `WidgetHostNative` follows automatically — no rewrite, no
-//!   additional glue. The mobile shell just constructs a different
-//!   `SharedSkiaContext` (or the mobile equivalent) backed by its
-//!   provider, then runs the same `host.paint(&mut frame, width)`.
+//! mobile rendering is a custom-provider plugin point on the
+//! `GlContextProvider` trait, not a separate IPC / CLI pipeline.
 
 use crate::backend::NativeBackend;
-use openpencil_shell_core::document::Document;
+use openpencil_shell_core::document::{ChatAnchor, Document};
 use openpencil_shell_core::widgets::{
-    CanvasViewport, LayerPanel, LayoutCx, PaintCx, PropertyPanel, Toolbar, Widget, MIN_RAIL_WIDTH,
+    AIChatHit, AIChatPlaceholder, CanvasViewport, LayerPanel, LayoutCx, PaintCx, PropertyPanel,
+    StatusBar, Toolbar, TopBar, TopBarHit, Widget, AI_CHAT_COLLAPSED_HEIGHT,
+    AI_CHAT_COLLAPSED_WIDTH, AI_CHAT_HEIGHT, AI_CHAT_WIDTH, LAYER_PANEL_WIDTH,
+    PROPERTY_PANEL_WIDTH, STATUS_BAR_HEIGHT, STATUS_BAR_WIDTH, TOOLBAR_WIDTH, TOP_BAR_HEIGHT,
 };
-use openpencil_shell_core::{Color, Point2D, Rect, RenderBackend, TextLayout};
+use openpencil_shell_core::{Color, Point2D, Rect, RenderBackend, TextLayout, Theme};
+
+const TOOLBAR_INSET_X: f32 = 12.0;
+const TOOLBAR_INSET_Y: f32 = 12.0;
+const STATUS_INSET: f32 = 16.0;
+
+fn rect_contains(r: Rect, p: Point2D) -> bool {
+    p.x >= r.origin.x
+        && p.x <= r.origin.x + r.size.x
+        && p.y >= r.origin.y
+        && p.y <= r.origin.y + r.size.y
+}
+/// Small breathing room from the canvas corner so the chat pill
+/// doesn't visually touch the canvas edge (per 2026-05-10 user
+/// note "稍微加一点上下偶有的间距，一点点").
+const AICHAT_INSET_BOTTOM: f32 = 12.0;
+const AICHAT_INSET_LEFT: f32 = 12.0;
 
 /// Frame-scoped `RenderBackend` adapter over `NativeBackend` +
 /// `&Canvas`. Lifetime-bound to the `SharedSkiaContext::with_frame`
 /// closure body so widget code never sees the canvas borrow directly.
-///
-/// Why this exists rather than `impl RenderBackend for NativeBackend`:
-/// `NativeBackend` deliberately does NOT carry a canvas borrow (spec
-/// §5.2.1 — the canvas reference is short-lived inside `with_frame`,
-/// while `NativeBackend` lives across frames so its `jian_skia::
-/// SkiaBackend` image cache survives). The wrapper gets the trait
-/// shape without entangling the lifetime onto the long-lived backend
-/// type.
 pub struct NativeFrameBackend<'a> {
     inner: &'a mut NativeBackend,
     canvas: &'a skia_safe::Canvas,
@@ -79,15 +59,8 @@ impl<'a> NativeFrameBackend<'a> {
 }
 
 impl<'a> RenderBackend for NativeFrameBackend<'a> {
-    fn begin_frame(&mut self) {
-        // No-op on native: `SharedSkiaContext::begin_frame` already
-        // ran when the caller entered `with_frame`.
-    }
-
-    fn end_frame(&mut self) {
-        // No-op on native: `SharedSkiaContext::present` runs after
-        // `with_frame` returns, outside the wrapper's lifetime.
-    }
+    fn begin_frame(&mut self) {}
+    fn end_frame(&mut self) {}
 
     fn fill_rect(&mut self, rect: Rect, color: Color) {
         self.inner.fill_rect(self.canvas, rect, color);
@@ -106,11 +79,7 @@ impl<'a> RenderBackend for NativeFrameBackend<'a> {
     }
 
     fn save(&mut self) {
-        // `NativeBackend::save` returns the pre-save count, used by
-        // `restore_to`. The trait-level `save` is fire-and-forget; we
-        // discard the count and rely on the caller pairing each
-        // `save` with one `restore`.
-        let _count = self.inner.save(self.canvas);
+        let _ = self.inner.save(self.canvas);
     }
 
     fn restore(&mut self) {
@@ -121,137 +90,636 @@ impl<'a> RenderBackend for NativeFrameBackend<'a> {
         self.inner.translate(self.canvas, offset);
     }
 
-    fn resize(&mut self, _width: u32, _height: u32) {
-        // No-op via the trait: surface resize is owned by
-        // `SharedSkiaContext::resize` and reaches `NativeBackend`
-        // separately. Mirrors `NativeBackend::resize`'s no-op.
+    fn stroke_line(&mut self, from: Point2D, to: Point2D, color: Color, width: f32) {
+        self.inner.stroke_line(self.canvas, from, to, color, width);
     }
+
+    fn fill_round_rect(&mut self, rect: Rect, radius: f32, color: Color) {
+        self.inner.fill_round_rect(self.canvas, rect, radius, color);
+    }
+
+    fn stroke_round_rect(&mut self, rect: Rect, radius: f32, color: Color, width: f32) {
+        self.inner
+            .stroke_round_rect(self.canvas, rect, radius, color, width);
+    }
+
+    fn stroke_svg_path(
+        &mut self,
+        d: &str,
+        top_left: Point2D,
+        size: f32,
+        color: Color,
+        width: f32,
+    ) {
+        self.inner
+            .stroke_svg_path(self.canvas, d, top_left, size, color, width);
+    }
+
+    fn resize(&mut self, _width: u32, _height: u32) {}
 
     fn dpi_scale(&self) -> f32 {
         self.inner.dpi_scale()
     }
 }
 
-/// Native counterpart of shell-web's `widget_host::WidgetHost`.
-/// Owns the document model + toolbar state; per-frame builds
-/// LayerPanel / PropertyPanel / CanvasViewport / Toolbar from the
-/// document and paints them in the same Toolbar-top + LayerPanel-
-/// left + CanvasViewport-center + PropertyPanel-right layout
-/// shell-web uses (Step 3), so cross-platform visual diff testing
-/// compares apples to apples.
-///
-/// Step 1b/2 holdovers (Dropdown + TextInput aux widgets) retired
-/// in Step 3 — the canvas viewport is the centerpiece now.
+/// Native counterpart of shell-web's `WidgetHost`. Owns a
+/// `Document` + composes the editor UI per frame in the
+/// TS-equivalent layout (Step 4 visual lift).
 pub struct WidgetHostNative {
     document: Document,
-    toolbar: Toolbar,
+    theme: Theme,
+    /// Active canvas pan-drag state — left-button press → motion
+    /// → release.
+    drag: Option<DragState>,
+    /// Active chat-panel drag state — present while the user
+    /// drags the floating AI chat panel by its header. Holds the
+    /// transient panel top-left position so paint can place the
+    /// panel at the cursor instead of its anchor; on release the
+    /// host computes the nearest corner via `ChatAnchor::nearest`
+    /// and snaps.
+    chat_drag: Option<ChatDragState>,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct DragState {
+    last_x: f32,
+    last_y: f32,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct ChatDragState {
+    /// Pointer offset within the panel rect when the drag began.
+    /// Subtracting from the live cursor position gives the panel
+    /// top-left, so the panel doesn't visually jump on press.
+    grab_dx: f32,
+    grab_dy: f32,
+    /// Live panel top-left (logical px, viewport-relative).
+    pos_x: f32,
+    pos_y: f32,
 }
 
 impl WidgetHostNative {
     pub fn new() -> Self {
         Self {
             document: Document::sample(),
-            toolbar: Toolbar::default_set(),
+            theme: Theme::dark(),
+            drag: None,
+            chat_drag: None,
         }
     }
 
-    /// Paint the editor-UI composition. Layout matches shell-web's
-    /// `WidgetHost::paint` for cross-platform parity:
-    ///   - Toolbar pinned top, full width
-    ///   - LayerPanel left rail
-    ///   - CanvasViewport center (real document render)
-    ///   - PropertyPanel right rail
-    ///
-    /// `// glue:` marker on the signature line keeps the future
-    /// `tools/check-widget-boundary.sh` happy if the boundary script
-    /// is extended to gate shell-native too (it currently scans only
-    /// shell-web; Step 3+ may parameterize).
+    /// Hit-test which screen region the cursor is over. Used by
+    /// the wheel + drag handlers so wheel-zoom + Hand-pan only
+    /// fire when the cursor is over the canvas (not over a panel).
+    fn over_canvas(&self, x: f32, y: f32, viewport_w: f32, viewport_h: f32) -> bool {
+        let canvas_left = LAYER_PANEL_WIDTH;
+        let has_property = self.document.selected_node().is_some();
+        let canvas_right = if has_property {
+            viewport_w - PROPERTY_PANEL_WIDTH
+        } else {
+            viewport_w
+        };
+        x >= canvas_left
+            && x <= canvas_right
+            && y >= TOP_BAR_HEIGHT
+            && y <= viewport_h
+    }
+
+    /// Apply a wheel event — zoom centered at `(x, y)` when over
+    /// the canvas. Returns true if a redraw is needed.
+    pub fn apply_wheel(
+        &mut self,
+        x: f32,
+        y: f32,
+        delta_y: f32,
+        viewport_width: f32,
+        viewport_height: f32,
+    ) -> bool {
+        if !self.over_canvas(x, y, viewport_width, viewport_height) {
+            return false;
+        }
+        let canvas_left = LAYER_PANEL_WIDTH;
+        let cursor = Point2D::new(x - canvas_left, y - TOP_BAR_HEIGHT);
+        self.document.viewport.zoom_at(cursor, delta_y);
+        true
+    }
+
+    /// Apply a 2-finger trackpad pan gesture — translate the
+    /// canvas viewport by `(dx, dy)` directly. Step 5 makes
+    /// trackpad swipes feel native (Figma convention: 2-finger
+    /// swipe pans, pinch / Cmd+swipe / mouse-wheel zoom). Returns
+    /// true if a redraw is needed.
+    pub fn apply_pan_gesture(
+        &mut self,
+        x: f32,
+        y: f32,
+        dx: f32,
+        dy: f32,
+        viewport_width: f32,
+        viewport_height: f32,
+    ) -> bool {
+        if !self.over_canvas(x, y, viewport_width, viewport_height) {
+            return false;
+        }
+        if dx == 0.0 && dy == 0.0 {
+            return false;
+        }
+        self.document.viewport.pan(dx, dy);
+        true
+    }
+
+    /// Mouse-press handler. Hit-test order:
+    ///   0. TopBar (panel-left toggles sidebar, etc.)
+    ///   1. AI chat panel — DragHandle starts a chat drag,
+    ///      everything else defers to apply_click
+    ///   2. Toolbar (gaps + buttons consume clicks)
+    ///   3. apply_click — LayerPanel + chat-defocus
+    ///   4. Otherwise: clear selection (collapses RightPanel) +
+    ///      start canvas pan-drag.
+    /// Returns whether anything visible changed.
+    pub fn apply_press(
+        &mut self,
+        x: f32,
+        y: f32,
+        viewport_width: f32,
+        viewport_height: f32,
+    ) -> bool {
+        // 0. TopBar — sidebar toggle button.
+        let top_bar_rect = Rect {
+            origin: Point2D::new(0.0, 0.0),
+            size: Point2D::new(viewport_width, TOP_BAR_HEIGHT),
+        };
+        let top_bar = TopBar::untitled();
+        if let Some(hit) = top_bar.hit_test(top_bar_rect, Point2D::new(x, y)) {
+            match hit {
+                TopBarHit::ToggleSidebar => {
+                    self.document.ui.sidebar_open = !self.document.ui.sidebar_open;
+                    return true;
+                }
+            }
+        }
+        if rect_contains(top_bar_rect, Point2D::new(x, y)) {
+            // Other top-bar gaps eat clicks but don't act.
+            return false;
+        }
+
+        // 1. AI chat panel — sits on top of the toolbar in paint
+        //    order, so any click inside its rect is consumed
+        //    here. DragHandle starts a chat drag; other AI hits
+        //    defer to apply_click for focus/send/example/toggle.
+        if let Some(chat_rect) = self.ai_chat_rect(viewport_width, viewport_height) {
+            let panel = AIChatPlaceholder::from_document(&self.document);
+            if let Some(hit) = panel.hit_test(chat_rect, Point2D::new(x, y)) {
+                if matches!(hit, AIChatHit::DragHandle) {
+                    self.chat_drag = Some(ChatDragState {
+                        grab_dx: x - chat_rect.origin.x,
+                        grab_dy: y - chat_rect.origin.y,
+                        pos_x: chat_rect.origin.x,
+                        pos_y: chat_rect.origin.y,
+                    });
+                    self.document.chat.focused = false;
+                    return true;
+                }
+                // Non-drag chat hit: route through apply_click +
+                // short-circuit so we never fall through to the
+                // toolbar (which is below the chat panel).
+                let _ = self.apply_click(x, y, viewport_width, viewport_height);
+                return true;
+            }
+        }
+
+        // 2. Toolbar — second-highest overlay. A click anywhere
+        //    inside its bounding rect is consumed (gaps + padding
+        //    too) so it never falls through to the canvas
+        //    (codex stop-hook fix: "toolbar panel gaps still
+        //    click through to the hidden chat panel").
+        let toolbar = Toolbar::for_document(&self.document);
+        let toolbar_h = toolbar
+            .layout(&LayoutCx {
+                available_width: TOOLBAR_WIDTH,
+                dpi: 1.0,
+            })
+            .rect
+            .size
+            .y;
+        let toolbar_rect = Rect {
+            origin: Point2D::new(
+                LAYER_PANEL_WIDTH + TOOLBAR_INSET_X,
+                TOP_BAR_HEIGHT + TOOLBAR_INSET_Y,
+            ),
+            size: Point2D::new(TOOLBAR_WIDTH, toolbar_h),
+        };
+        if rect_contains(toolbar_rect, Point2D::new(x, y)) {
+            if let Some(hit) = toolbar.hit_test(toolbar_rect, Point2D::new(x, y)) {
+                match hit {
+                    openpencil_shell_core::widgets::ToolbarHit::Tool(tool) => {
+                        self.document.tool = tool;
+                        return true;
+                    }
+                    openpencil_shell_core::widgets::ToolbarHit::Action(_) => {
+                        return false;
+                    }
+                }
+            }
+            return false;
+        }
+
+        // 3. apply_click — LayerPanel + chat-defocus.
+        let consumed = self.apply_click(x, y, viewport_width, viewport_height);
+        if consumed {
+            return true;
+        }
+
+        // 4. Empty-canvas click: clear selection (collapses the
+        //    PropertyPanel) + start a pan-drag. Selection clear
+        //    is the "click blank to deselect" UX the user
+        //    requested.
+        if self.over_canvas(x, y, viewport_width, viewport_height) {
+            let cleared =
+                self.document.selected != openpencil_shell_core::document::NodeId::NONE;
+            if cleared {
+                self.document.selected = openpencil_shell_core::document::NodeId::NONE;
+            }
+            self.drag = Some(DragState { last_x: x, last_y: y });
+            return cleared;
+        }
+        false
+    }
+
+    /// Cursor-move handler. Drives canvas pan-drag, chat-panel
+    /// drag, or no-op. Returns whether the host should repaint.
+    pub fn apply_cursor_move(&mut self, x: f32, y: f32) -> bool {
+        if let Some(d) = self.chat_drag.as_mut() {
+            d.pos_x = x - d.grab_dx;
+            d.pos_y = y - d.grab_dy;
+            return true;
+        }
+        if let Some(drag) = self.drag.as_mut() {
+            let dx = x - drag.last_x;
+            let dy = y - drag.last_y;
+            drag.last_x = x;
+            drag.last_y = y;
+            self.document.viewport.pan(dx, dy);
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Mouse-release handler. Ends the active drag (if any). For
+    /// chat-panel drag, snaps the panel to the nearest canvas
+    /// corner via `ChatAnchor::nearest`. Returns true if anything
+    /// visible changed.
+    pub fn apply_release_with_viewport(&mut self, viewport_w: f32, viewport_h: f32) -> bool {
+        if let Some(d) = self.chat_drag.take() {
+            let center = Point2D::new(
+                d.pos_x + AI_CHAT_WIDTH / 2.0,
+                d.pos_y + AI_CHAT_HEIGHT / 2.0,
+            );
+            let (cx0, cy0, cw, ch) = self.canvas_region(viewport_w, viewport_h);
+            self.document.chat.anchor = ChatAnchor::nearest(center, cx0, cy0, cw, ch);
+            return true;
+        }
+        let was_dragging = self.drag.is_some();
+        self.drag = None;
+        was_dragging
+    }
+
+    /// Mouse-release handler — viewport-less variant kept for
+    /// backwards compatibility with existing call sites.
+    pub fn apply_release(&mut self) -> bool {
+        // If a chat drag was in flight without a known viewport,
+        // we can't snap; just drop it (best effort).
+        if self.chat_drag.take().is_some() {
+            return true;
+        }
+        let was_dragging = self.drag.is_some();
+        self.drag = None;
+        was_dragging
+    }
+
+    /// Push a typed character into the focused chat input.
+    /// Returns true if anything changed.
+    pub fn apply_text(&mut self, c: char) -> bool {
+        if !self.document.chat.focused {
+            return false;
+        }
+        self.document.chat.input.push(c);
+        true
+    }
+
+    /// Backspace on the focused chat input.
+    pub fn apply_backspace(&mut self) -> bool {
+        if !self.document.chat.focused {
+            return false;
+        }
+        if self.document.chat.input.pop().is_some() {
+            return true;
+        }
+        false
+    }
+
+    /// Send the focused chat input.
+    pub fn apply_send(&mut self) -> bool {
+        if self.document.chat.input.trim().is_empty() {
+            return false;
+        }
+        self.document.chat.send();
+        true
+    }
+
+    /// Canvas region (logical px, viewport-relative). Reflects
+    /// the LayerPanel sidebar collapse state — when sidebar is
+    /// hidden the canvas stretches to the left edge.
+    fn canvas_region(&self, viewport_w: f32, viewport_h: f32) -> (f32, f32, f32, f32) {
+        let canvas_left = if self.document.ui.sidebar_open {
+            LAYER_PANEL_WIDTH
+        } else {
+            0.0
+        };
+        let has_property = self.document.selected_node().is_some();
+        let canvas_right = if has_property {
+            viewport_w - PROPERTY_PANEL_WIDTH
+        } else {
+            viewport_w
+        };
+        let canvas_w = (canvas_right - canvas_left).max(0.0);
+        let canvas_h = (viewport_h - TOP_BAR_HEIGHT).max(0.0);
+        (canvas_left, TOP_BAR_HEIGHT, canvas_w, canvas_h)
+    }
+
+    fn ai_chat_size(&self) -> (f32, f32) {
+        if self.document.chat.collapsed {
+            (AI_CHAT_COLLAPSED_WIDTH, AI_CHAT_COLLAPSED_HEIGHT)
+        } else {
+            (AI_CHAT_WIDTH, AI_CHAT_HEIGHT)
+        }
+    }
+
+    fn ai_chat_rect(&self, viewport_w: f32, viewport_h: f32) -> Option<Rect> {
+        let (cx0, cy0, cw, ch) = self.canvas_region(viewport_w, viewport_h);
+        let (panel_w, panel_h) = self.ai_chat_size();
+        if cw <= panel_w + AICHAT_INSET_LEFT + 16.0 || ch <= panel_h + 16.0 {
+            return None;
+        }
+        if let Some(d) = self.chat_drag {
+            return Some(Rect {
+                origin: Point2D::new(d.pos_x, d.pos_y),
+                size: Point2D::new(panel_w, panel_h),
+            });
+        }
+        let (x, y) = match self.document.chat.anchor {
+            ChatAnchor::TopLeft => (
+                cx0 + AICHAT_INSET_LEFT,
+                cy0 + AICHAT_INSET_BOTTOM,
+            ),
+            ChatAnchor::TopRight => (
+                cx0 + cw - panel_w - AICHAT_INSET_BOTTOM,
+                cy0 + AICHAT_INSET_BOTTOM,
+            ),
+            ChatAnchor::BottomLeft => (
+                cx0 + AICHAT_INSET_LEFT,
+                cy0 + ch - panel_h - AICHAT_INSET_BOTTOM,
+            ),
+            ChatAnchor::BottomRight => (
+                cx0 + cw - panel_w - AICHAT_INSET_BOTTOM,
+                cy0 + ch - panel_h - AICHAT_INSET_BOTTOM,
+            ),
+        };
+        Some(Rect {
+            origin: Point2D::new(x, y),
+            size: Point2D::new(panel_w, panel_h),
+        })
+    }
+
+    /// Apply a primary-button mouse click — routes to Toolbar /
+    /// LayerPanel / AI chat hit-test. Returns whether anything was
+    /// consumed (caller should request a redraw if so).
+    pub fn apply_click(
+        &mut self,
+        x: f32,
+        y: f32,
+        viewport_width: f32,
+        viewport_height: f32,
+    ) -> bool {
+        // AI chat panel sits ABOVE the canvas — check it first so
+        // clicks on the floating panel don't fall through to the
+        // canvas / Hand-tool drag.
+        if let Some(chat_rect) = self.ai_chat_rect(viewport_width, viewport_height) {
+            let panel = AIChatPlaceholder::from_document(&self.document);
+            if let Some(hit) = panel.hit_test(chat_rect, Point2D::new(x, y)) {
+                match hit {
+                    AIChatHit::FocusInput => {
+                        self.document.chat.focused = true;
+                        return true;
+                    }
+                    AIChatHit::Send => {
+                        self.document.chat.send();
+                        return true;
+                    }
+                    AIChatHit::Example(text) => {
+                        self.document.chat.input = text;
+                        self.document.chat.focused = true;
+                        return true;
+                    }
+                    AIChatHit::DragHandle => {
+                        // Drag handle is handled in apply_press
+                        // ahead of this; reaching here is a path
+                        // bypass — ignore.
+                        return false;
+                    }
+                    AIChatHit::ToggleCollapse => {
+                        self.document.chat.collapsed =
+                            !self.document.chat.collapsed;
+                        return true;
+                    }
+                }
+            }
+        }
+        // Click outside chat panel — defocus the input.
+        let was_focused = self.document.chat.focused;
+        self.document.chat.focused = false;
+        let _ = viewport_width;
+        let toolbar = Toolbar::for_document(&self.document);
+        let toolbar_h = toolbar
+            .layout(&LayoutCx {
+                available_width: TOOLBAR_WIDTH,
+                dpi: 1.0,
+            })
+            .rect
+            .size
+            .y;
+        let toolbar_rect = Rect {
+            origin: Point2D::new(
+                LAYER_PANEL_WIDTH + TOOLBAR_INSET_X,
+                TOP_BAR_HEIGHT + TOOLBAR_INSET_Y,
+            ),
+            size: Point2D::new(TOOLBAR_WIDTH, toolbar_h),
+        };
+        if let Some(hit) = toolbar.hit_test(toolbar_rect, Point2D::new(x, y)) {
+            match hit {
+                openpencil_shell_core::widgets::ToolbarHit::Tool(tool) => {
+                    self.document.tool = tool;
+                    return true;
+                }
+                openpencil_shell_core::widgets::ToolbarHit::Action(_) => return false,
+            }
+        }
+        let layer_rect = Rect {
+            origin: Point2D::new(0.0, TOP_BAR_HEIGHT),
+            size: Point2D::new(
+                LAYER_PANEL_WIDTH,
+                (viewport_height - TOP_BAR_HEIGHT).max(0.0),
+            ),
+        };
+        let panel = LayerPanel::from_document(&self.document);
+        if let Some(hit) = panel.hit_test(layer_rect, Point2D::new(x, y)) {
+            match hit {
+                openpencil_shell_core::widgets::LayerPanelHit::Page(idx) => {
+                    self.document.active_page_index = idx;
+                    self.document.selected =
+                        openpencil_shell_core::document::NodeId::NONE;
+                    return true;
+                }
+                openpencil_shell_core::widgets::LayerPanelHit::Layer(node_id) => {
+                    self.document.selected = node_id;
+                    return true;
+                }
+            }
+        }
+        // Click hit no chrome — return true if the prior focus
+        // state changed so the chrome repaints to drop the caret.
+        was_focused
+    }
+
+    /// Paint the editor-UI composition.
     pub fn paint(
         &self,
         frame: &mut NativeFrameBackend<'_>,
         viewport_width: f32,
         viewport_height: f32,
     ) { // glue:
-        let layout = LayoutCx {
-            available_width: viewport_width,
-            dpi: frame.dpi_scale(),
-        };
+        // 1. Background fill so previous-frame pixels never bleed.
+        frame.fill_rect(
+            Rect {
+                origin: Point2D::new(0.0, 0.0),
+                size: Point2D::new(viewport_width, viewport_height),
+            },
+            self.theme.background,
+        );
 
-        // Toolbar at the top of the viewport.
-        let toolbar_box = self.toolbar.layout(&layout);
-        let toolbar_rect = Rect {
+        let dpi = frame.dpi_scale();
+
+        // 2. TopBar.
+        let top_bar = TopBar::untitled();
+        let top_bar_rect = Rect {
             origin: Point2D::new(0.0, 0.0),
-            size: Point2D::new(viewport_width, toolbar_box.rect.size.y),
+            size: Point2D::new(viewport_width, TOP_BAR_HEIGHT),
         };
         {
             let mut cx = PaintCx {
                 backend: &mut *frame,
             };
-            self.toolbar.paint(&mut cx, toolbar_rect);
+            top_bar.paint(&mut cx, top_bar_rect);
         }
 
-        // Build editor-UI views from the current document.
-        let layer_panel = LayerPanel::from_document(&self.document);
-        let property_panel = PropertyPanel::for_selected(&self.document);
-        let canvas = CanvasViewport::from_document(&self.document);
-
-        // Rail widths clamped to non-negative + skipped below
-        // the minimum usable width (codex Step 2 R1 CONCERN-3).
-        // Rails take ~1/4 width each so the canvas gets the
-        // middle ~1/2.
-        let rail_w_raw = ((viewport_width / 4.0) - 8.0).min(240.0);
-        let rail_w = rail_w_raw.max(0.0);
-        if rail_w < MIN_RAIL_WIDTH {
-            return;
-        }
-        let rail_top_y = toolbar_rect.size.y + 8.0;
-        let rail_layout_cx = LayoutCx {
-            available_width: rail_w,
-            dpi: frame.dpi_scale(),
-        };
-
-        // LayerPanel pinned to the left.
-        let lp_layout = layer_panel.layout(&rail_layout_cx);
-        let lp_rect = Rect {
-            origin: Point2D::new(8.0, rail_top_y),
-            size: Point2D::new(rail_w, lp_layout.rect.size.y),
-        };
-        {
+        // 3. LayerPanel — skipped when the sidebar is collapsed.
+        if self.document.ui.sidebar_open {
+            let layer_panel = LayerPanel::from_document(&self.document);
+            let layer_panel_rect = Rect {
+                origin: Point2D::new(0.0, TOP_BAR_HEIGHT),
+                size: Point2D::new(LAYER_PANEL_WIDTH, (viewport_height - TOP_BAR_HEIGHT).max(0.0)),
+            };
             let mut cx = PaintCx {
                 backend: &mut *frame,
             };
-            layer_panel.paint(&mut cx, lp_rect);
+            layer_panel.paint(&mut cx, layer_panel_rect);
         }
 
-        // PropertyPanel pinned to the right.
-        let pp_layout = property_panel.layout(&rail_layout_cx);
-        let pp_rect = Rect {
-            origin: Point2D::new(viewport_width - rail_w - 8.0, rail_top_y),
-            size: Point2D::new(rail_w, pp_layout.rect.size.y),
-        };
-        {
+        // 4. PropertyPanel — only when selection.
+        let property_panel = PropertyPanel::for_selection(&self.document);
+        let has_property = property_panel.is_some();
+        if let Some(panel) = property_panel.as_ref() {
+            let property_rect = Rect {
+                origin: Point2D::new(viewport_width - PROPERTY_PANEL_WIDTH, TOP_BAR_HEIGHT),
+                size: Point2D::new(
+                    PROPERTY_PANEL_WIDTH,
+                    (viewport_height - TOP_BAR_HEIGHT).max(0.0),
+                ),
+            };
             let mut cx = PaintCx {
                 backend: &mut *frame,
             };
-            property_panel.paint(&mut cx, pp_rect);
+            panel.paint(&mut cx, property_rect);
         }
 
-        // CanvasViewport in the middle band — between the two
-        // rails, below the toolbar. Height comes from the
-        // caller-supplied `viewport_height` (codex Step 3
-        // stop-hook fix — was previously a hardcoded 600.0 that
-        // assumed the default winit window size).
-        let canvas_x = lp_rect.origin.x + lp_rect.size.x + 8.0;
-        let canvas_w = (pp_rect.origin.x - canvas_x - 8.0).max(0.0);
-        if canvas_w >= MIN_RAIL_WIDTH {
-            let canvas_rect = Rect {
-                origin: Point2D::new(canvas_x, rail_top_y),
-                size: Point2D::new(canvas_w, (viewport_height - rail_top_y).max(0.0)),
-            };
+        // 5. CanvasViewport — middle band, respects sidebar
+        //    collapse state.
+        let (canvas_left, _canvas_y, canvas_w, canvas_h) =
+            self.canvas_region(viewport_width, viewport_height);
+        let _ = has_property;
+        let canvas_rect = Rect {
+            origin: Point2D::new(canvas_left, TOP_BAR_HEIGHT),
+            size: Point2D::new(canvas_w, canvas_h),
+        };
+        if canvas_w > 0.0 && canvas_h > 0.0 {
+            let canvas = CanvasViewport::from_document(&self.document);
             let mut cx = PaintCx {
                 backend: &mut *frame,
             };
             canvas.paint(&mut cx, canvas_rect);
+        }
+
+        // 6. Toolbar — floating column.
+        let toolbar = Toolbar::for_document(&self.document);
+        let toolbar_h = toolbar
+            .layout(&LayoutCx {
+                available_width: TOOLBAR_WIDTH,
+                dpi,
+            })
+            .rect
+            .size
+            .y;
+        let toolbar_rect = Rect {
+            origin: Point2D::new(
+                canvas_left + TOOLBAR_INSET_X,
+                TOP_BAR_HEIGHT + TOOLBAR_INSET_Y,
+            ),
+            size: Point2D::new(TOOLBAR_WIDTH, toolbar_h),
+        };
+        if canvas_w > TOOLBAR_WIDTH + TOOLBAR_INSET_X * 2.0 {
+            let mut cx = PaintCx {
+                backend: &mut *frame,
+            };
+            toolbar.paint(&mut cx, toolbar_rect);
+        }
+
+        // 7. AIChatPlaceholder — painted LAST so it sits on top
+        //    of the toolbar in any overlap region (matches the
+        //    user's requested z-order: chat above toolbar).
+        if let Some(chat_rect) = self.ai_chat_rect(viewport_width, viewport_height) {
+            let chat = AIChatPlaceholder::from_document(&self.document);
+            let mut cx = PaintCx {
+                backend: &mut *frame,
+            };
+            chat.paint(&mut cx, chat_rect);
+        }
+
+        // 8. StatusBar — floating bottom-right.
+        let canvas_right = canvas_left + canvas_w;
+        if canvas_w > STATUS_BAR_WIDTH + STATUS_INSET * 2.0 {
+            let status = StatusBar::new();
+            let status_rect = Rect {
+                origin: Point2D::new(
+                    canvas_right - STATUS_BAR_WIDTH - STATUS_INSET,
+                    TOP_BAR_HEIGHT + canvas_h - STATUS_BAR_HEIGHT - STATUS_INSET,
+                ),
+                size: Point2D::new(STATUS_BAR_WIDTH, STATUS_BAR_HEIGHT),
+            };
+            let mut cx = PaintCx {
+                backend: &mut *frame,
+            };
+            status.paint(&mut cx, status_rect);
         }
     }
 }

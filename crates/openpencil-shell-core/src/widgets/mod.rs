@@ -36,11 +36,20 @@ pub mod tree;
 // `crate::document::Document`).
 pub mod layer_panel;
 pub mod property_panel;
+pub mod property_panel_sections;
 pub mod toolbar;
 
 // Step 3 — center canvas that renders document nodes as actual
 // visual primitives (frame fills, rect strokes, text strings).
 pub mod canvas_viewport;
+
+// Step 4 — icon glyph drawer for editor chrome (lucide-flavored line art).
+pub mod icons;
+
+// Step 4 — extra editor-chrome widgets (TS app parity).
+pub mod ai_chat_panel;
+pub mod status_bar;
+pub mod top_bar;
 
 pub use dropdown::{Dropdown, DropdownState};
 pub use prop_row::PropertyRow;
@@ -52,6 +61,20 @@ pub use property_panel::PropertyPanel;
 pub use toolbar::Toolbar;
 
 pub use canvas_viewport::CanvasViewport;
+
+pub use icons::{draw_icon, Icon};
+
+pub use ai_chat_panel::{
+    AIChatHit, AIChatPlaceholder, AI_CHAT_COLLAPSED_HEIGHT, AI_CHAT_COLLAPSED_WIDTH,
+    AI_CHAT_HEIGHT, AI_CHAT_WIDTH,
+};
+pub use status_bar::{StatusBar, STATUS_BAR_HEIGHT, STATUS_BAR_WIDTH};
+pub use top_bar::{TopBar, TopBarHit, TOP_BAR_HEIGHT};
+// Re-export panel/toolbar width constants + hit enums so the host
+// can size them consistently and route hits.
+pub use layer_panel::{LayerPanelHit, LAYER_PANEL_WIDTH};
+pub use property_panel::PROPERTY_PANEL_WIDTH;
+pub use toolbar::{ToolbarAction, ToolbarHit, TOOLBAR_WIDTH};
 
 /// Stable identifier assigned by the widget host. Used by accesskit
 /// (`accesskit::NodeId(WidgetId.0)`), the DOM mirror, and event routing.

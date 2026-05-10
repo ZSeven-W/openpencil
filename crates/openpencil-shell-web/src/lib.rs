@@ -240,7 +240,9 @@ impl Drop for WebShell {
 pub fn mount(canvas_id: &str) -> Result<WebShell, JsValue> {
     use crate::event::{ime, keyboard};
     use wasm_bindgen::JsCast;
-    use web_sys::{CompositionEvent, HtmlCanvasElement, HtmlElement, KeyboardEvent};
+    use web_sys::{
+        CompositionEvent, HtmlCanvasElement, HtmlElement, KeyboardEvent, MouseEvent, WheelEvent,
+    };
 
     // Install the panic hook on first call so panics print to the browser
     // console instead of being swallowed silently.
@@ -418,6 +420,152 @@ pub fn mount(canvas_id: &str) -> Result<WebShell, JsValue> {
                 },
             )?;
         }
+
+        // ----- mouse: down / move / up / wheel → WidgetHost -----
+        // Step 5: chrome interactions, infinite-canvas pan/zoom,
+        // chat panel input. Listeners attached to the canvas
+        // element so events outside the canvas don't fire.
+        let canvas_target: web_sys::EventTarget = canvas.clone().into();
+        {
+            let inner_md = inner.clone();
+            add_listener::<MouseEvent, _, _>(
+                &canvas_target,
+                "mousedown",
+                listeners,
+                move |evt: MouseEvent| {
+                    if evt.button() != 0 {
+                        return;
+                    }
+                    let mut inner = inner_md.borrow_mut();
+                    let (w, h) = (
+                        inner.backend.canvas_width() as f32,
+                        inner.backend.canvas_height() as f32,
+                    );
+                    let consumed = inner.host.apply_press(
+                        evt.offset_x() as f32,
+                        evt.offset_y() as f32,
+                        w,
+                        h,
+                    );
+                    if consumed {
+                        let _ = inner.repaint();
+                    }
+                },
+            )?;
+        }
+        {
+            let inner_mm = inner.clone();
+            add_listener::<MouseEvent, _, _>(
+                &canvas_target,
+                "mousemove",
+                listeners,
+                move |evt: MouseEvent| {
+                    let mut inner = inner_mm.borrow_mut();
+                    let consumed = inner
+                        .host
+                        .apply_cursor_move(evt.offset_x() as f32, evt.offset_y() as f32);
+                    if consumed {
+                        let _ = inner.repaint();
+                    }
+                },
+            )?;
+        }
+        {
+            let inner_mu = inner.clone();
+            add_listener::<MouseEvent, _, _>(
+                &canvas_target,
+                "mouseup",
+                listeners,
+                move |evt: MouseEvent| {
+                    if evt.button() != 0 {
+                        return;
+                    }
+                    let mut inner = inner_mu.borrow_mut();
+                    let (w, h) = (
+                        inner.backend.canvas_width() as f32,
+                        inner.backend.canvas_height() as f32,
+                    );
+                    let consumed = inner.host.apply_release_with_viewport(w, h);
+                    if consumed {
+                        let _ = inner.repaint();
+                    }
+                },
+            )?;
+        }
+        {
+            let inner_wh = inner.clone();
+            add_listener::<WheelEvent, _, _>(
+                &canvas_target,
+                "wheel",
+                listeners,
+                move |evt: WheelEvent| {
+                    // Prevent page scroll; we own the gesture.
+                    evt.prevent_default();
+                    let mut inner = inner_wh.borrow_mut();
+                    let (w, h) = (
+                        inner.backend.canvas_width() as f32,
+                        inner.backend.canvas_height() as f32,
+                    );
+                    // W3C deltaY: positive = scroll-down. Invert
+                    // so wheel-up zooms in, wheel-down zooms out
+                    // (matches the TS canvas convention).
+                    let delta = -evt.delta_y() as f32;
+                    let consumed = inner.host.apply_wheel(
+                        evt.offset_x() as f32,
+                        evt.offset_y() as f32,
+                        delta,
+                        w,
+                        h,
+                    );
+                    if consumed {
+                        let _ = inner.repaint();
+                    }
+                },
+            )?;
+        }
+
+        // ----- chat input: keyboard text → WidgetHost::apply_text -----
+        // Separate keydown listener that drives the chat input when
+        // it's focused. Runs alongside the existing keyboard
+        // listener above (which forwards Jian KeyEvents to the
+        // widget tree); the chat path checks `focused` itself so
+        // typing only routes when the user has clicked the input.
+        {
+            let inner_kt = inner.clone();
+            add_listener::<KeyboardEvent, _, _>(
+                &win_target,
+                "keydown",
+                listeners,
+                move |evt: KeyboardEvent| {
+                    let mut inner = inner_kt.borrow_mut();
+                    let key = evt.key();
+                    let mut consumed = false;
+                    match key.as_str() {
+                        "Backspace" => {
+                            consumed = inner.host.apply_backspace();
+                        }
+                        "Enter" => {
+                            consumed = inner.host.apply_send();
+                        }
+                        _ => {
+                            // Single-char `key` strings represent
+                            // typed printable characters (W3C KeyboardEvent).
+                            let mut chars = key.chars();
+                            if let (Some(c), None) = (chars.next(), chars.next()) {
+                                if !c.is_control() && inner.host.apply_text(c) {
+                                    consumed = true;
+                                }
+                            }
+                        }
+                    }
+                    if consumed {
+                        evt.prevent_default();
+                        let _ = inner.repaint();
+                    }
+                },
+            )?;
+        }
+
         Ok(())
     })(&mut listeners);
 

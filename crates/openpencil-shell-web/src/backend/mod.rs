@@ -32,6 +32,18 @@ use web_sys::{CanvasRenderingContext2d, HtmlCanvasElement, ImageData};
 /// into the bundle once at build time.
 const ROBOTO_TTF: &[u8] = include_bytes!("../../assets/Roboto-Regular.ttf");
 
+/// Embedded Noto Sans CJK subset (~8.7 KB, SIL OFL 1.1 — copy of
+/// the rust-skia test resource at
+/// `vendor/skia-safe-op/.../resources/fonts/NotoSansCJK-VF-subset.otf.ttc`).
+/// Step 4 codex stop-hook fix: shell-core chrome strings include
+/// CJK (`页面 / 图层 / 未命名 / 用 AI 开始设计` etc.) which Roboto
+/// has no glyphs for, so the Roboto-only text path was rendering
+/// `.notdef` boxes. The subset bundles enough Han / Latin coverage
+/// to keep all chrome labels legible at <10 KB cost (bundle is
+/// still well under the 1 MiB §6 ceiling — 916 KB vs 1 MiB after
+/// adding this).
+const NOTO_CJK_SUBSET: &[u8] = include_bytes!("../../assets/NotoSansCJK-Subset.ttc");
+
 pub struct WebBackend {
     surface: skia_safe::Surface,
     canvas_element: HtmlCanvasElement,
@@ -52,6 +64,12 @@ pub struct WebBackend {
     /// the FontMgr / from_data round-trip if `typeface` is
     /// still None.
     typeface_tried: bool,
+    /// Lazy-initialised CJK fallback typeface backed by
+    /// [`NOTO_CJK_SUBSET`]. Same lazy + sticky-flag pattern as
+    /// `typeface` above; covers the Han glyphs the chrome strings
+    /// need without forcing a Roboto-only `.notdef` path.
+    cjk_typeface: Option<skia_safe::Typeface>,
+    cjk_typeface_tried: bool,
     /// Most recent present() error captured via the infallible
     /// `end_frame` trait method. Callers that need to propagate errors
     /// (e.g. `WebShell::mount`) call `take_present_error()` after the
@@ -74,6 +92,8 @@ impl WebBackend {
             dpi_scale: 1.0,
             typeface: None,
             typeface_tried: false,
+            cjk_typeface: None,
+            cjk_typeface_tried: false,
             last_present_error: None,
         })
     }
@@ -194,13 +214,82 @@ impl RenderBackend for WebBackend {
         );
     }
 
+    fn stroke_line(&mut self, from: Point2D, to: Point2D, color: Color, width: f32) {
+        let mut paint = skia_safe::Paint::new(
+            skia_safe::Color4f::new(color.r, color.g, color.b, color.a),
+            None,
+        );
+        paint.set_stroke(true);
+        paint.set_stroke_width(width);
+        paint.set_anti_alias(true);
+        paint.set_stroke_cap(skia_safe::PaintCap::Round);
+        self.surface
+            .canvas()
+            .draw_line((from.x, from.y), (to.x, to.y), &paint);
+    }
+
+    fn fill_round_rect(&mut self, rect: Rect, radius: f32, color: Color) {
+        let paint = skia_safe::Paint::new(
+            skia_safe::Color4f::new(color.r, color.g, color.b, color.a),
+            None,
+        );
+        let sk_rect =
+            skia_safe::Rect::from_xywh(rect.origin.x, rect.origin.y, rect.size.x, rect.size.y);
+        self.surface
+            .canvas()
+            .draw_round_rect(sk_rect, radius, radius, &paint);
+    }
+
+    fn stroke_round_rect(&mut self, rect: Rect, radius: f32, color: Color, width: f32) {
+        let mut paint = skia_safe::Paint::new(
+            skia_safe::Color4f::new(color.r, color.g, color.b, color.a),
+            None,
+        );
+        paint.set_stroke(true);
+        paint.set_stroke_width(width);
+        paint.set_anti_alias(true);
+        let sk_rect =
+            skia_safe::Rect::from_xywh(rect.origin.x, rect.origin.y, rect.size.x, rect.size.y);
+        self.surface
+            .canvas()
+            .draw_round_rect(sk_rect, radius, radius, &paint);
+    }
+
+    fn stroke_svg_path(
+        &mut self,
+        d: &str,
+        top_left: Point2D,
+        size: f32,
+        color: Color,
+        width: f32,
+    ) {
+        let Some(path) = skia_safe::utils::parse_path::from_svg(d) else {
+            return;
+        };
+        let s = size / 24.0;
+        let mut matrix = skia_safe::Matrix::new_identity();
+        matrix.set_scale_translate((s, s), (top_left.x, top_left.y));
+        let path = path.with_transform(&matrix);
+        let mut paint = skia_safe::Paint::new(
+            skia_safe::Color4f::new(color.r, color.g, color.b, color.a),
+            None,
+        );
+        paint.set_stroke(true);
+        paint.set_stroke_width(width);
+        paint.set_anti_alias(true);
+        paint.set_stroke_cap(skia_safe::PaintCap::Round);
+        paint.set_stroke_join(skia_safe::PaintJoin::Round);
+        self.surface.canvas().draw_path(&path, &paint);
+    }
+
     fn draw_text(&mut self, layout: &TextLayout, origin: Point2D) {
         // Step 3 codex stop-hook fix: actually render text via
-        // `Canvas::draw_str` + the embedded Roboto Typeface (the
-        // C-hard `custom_empty` font manager has no system fonts).
-        // Lazy-init the typeface on first call; if the build fails
-        // we leave `self.typeface = None` and silently no-op
-        // subsequent calls so a font issue never crashes paint.
+        // `Canvas::draw_str` + embedded Typefaces (the C-hard
+        // `custom_empty` font manager has no system fonts on
+        // wasm32). Lazy-init both typefaces on first call; if a
+        // build fails we leave the slot at `None` and silently
+        // skip glyphs from that script so a font issue never
+        // crashes paint.
         if !self.typeface_tried {
             // The C-hard wasm32-unknown-unknown skia build uses
             // FontMgr::custom_empty() — there's no system font
@@ -215,10 +304,31 @@ impl RenderBackend for WebBackend {
                 .and_then(|mgr| mgr.new_from_data(ROBOTO_TTF, None));
             self.typeface_tried = true;
         }
-        let Some(typeface) = self.typeface.as_ref() else {
-            return;
-        };
+        if !self.cjk_typeface_tried {
+            // Step 4 codex stop-hook fix: chrome includes CJK
+            // labels (`页面`, `图层`, `未命名` etc.) so a
+            // Roboto-only path produces `.notdef` boxes for every
+            // non-ASCII run. Build a second typeface from the
+            // embedded Noto Sans CJK subset.
+            self.cjk_typeface = skia_safe::FontMgr::custom_empty()
+                .and_then(|mgr| mgr.new_from_data(NOTO_CJK_SUBSET, None));
+            self.cjk_typeface_tried = true;
+        }
         for run in layout.runs() {
+            let typeface = if run.content.is_ascii() {
+                self.typeface.as_ref()
+            } else {
+                // Non-ASCII run — prefer the CJK subset; if it
+                // failed to init, fall back to Roboto (still
+                // wrong, but at least the run isn't dropped
+                // silently).
+                self.cjk_typeface
+                    .as_ref()
+                    .or(self.typeface.as_ref())
+            };
+            let Some(typeface) = typeface else {
+                continue;
+            };
             let font = skia_safe::Font::new(typeface, run.font_size);
             let jc = run.color;
             let paint = skia_safe::Paint::new(
