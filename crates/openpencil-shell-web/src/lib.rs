@@ -131,7 +131,7 @@ impl Inner {
             },
             Color::WHITE,
         );
-        self.host.paint(&mut self.backend, viewport_w);
+        self.host.paint(&mut self.backend, viewport_w, viewport_h);
         self.backend.end_frame();
         if let Some(err) = self.backend.take_present_error() {
             return Err(err);

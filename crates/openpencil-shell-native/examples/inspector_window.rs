@@ -57,6 +57,7 @@ fn paint_inspector(
     backend: &mut NativeBackend,
     host: &WidgetHostNative,
     viewport_width: f32,
+    viewport_height: f32,
 ) {
     ctx.begin_frame();
     ctx.with_frame(|canvas, _glow| {
@@ -71,11 +72,11 @@ fn paint_inspector(
         frame.fill_rect(
             Rect {
                 origin: Point2D::new(0.0, 0.0),
-                size: Point2D::new(viewport_width.max(INITIAL_VIEWPORT_W), INITIAL_VIEWPORT_H),
+                size: Point2D::new(viewport_width, viewport_height),
             },
             Color::WHITE,
         );
-        host.paint(&mut frame, viewport_width);
+        host.paint(&mut frame, viewport_width, viewport_height);
     });
     ctx.present();
 }
@@ -85,10 +86,13 @@ struct InspectorApp {
     ctx: Option<SharedSkiaContext>,
     backend: Option<NativeBackend>,
     host: WidgetHostNative,
-    /// Cached physical viewport width — refreshed on Resumed +
+    /// Cached physical viewport size — refreshed on Resumed +
     /// Resized so the host paints into the right rect even when
-    /// the user drags the window.
+    /// the user drags the window. Both axes plumb into
+    /// `WidgetHostNative::paint` (codex Step 3 stop-hook fix
+    /// for the prior height-hardcode regression).
     viewport_width: f32,
+    viewport_height: f32,
     error: Option<SharedSkiaError>,
 }
 
@@ -100,6 +104,7 @@ impl InspectorApp {
             backend: None,
             host: WidgetHostNative::new(),
             viewport_width: INITIAL_VIEWPORT_W,
+            viewport_height: INITIAL_VIEWPORT_H,
             error: None,
         }
     }
@@ -141,7 +146,7 @@ impl ApplicationHandler for InspectorApp {
         self.window = Some(window);
 
         if let (Some(ctx), Some(backend)) = (self.ctx.as_mut(), self.backend.as_mut()) {
-            paint_inspector(ctx, backend, &self.host, self.viewport_width);
+            paint_inspector(ctx, backend, &self.host, self.viewport_width, self.viewport_height);
         }
     }
 
@@ -164,6 +169,7 @@ impl ApplicationHandler for InspectorApp {
                     }
                 }
                 self.viewport_width = size.width as f32;
+                self.viewport_height = size.height as f32;
                 if let Some(window) = self.window.as_ref() {
                     window.request_redraw();
                 }
@@ -175,7 +181,7 @@ impl ApplicationHandler for InspectorApp {
             }
             WindowEvent::RedrawRequested => {
                 if let (Some(ctx), Some(backend)) = (self.ctx.as_mut(), self.backend.as_mut()) {
-                    paint_inspector(ctx, backend, &self.host, self.viewport_width);
+                    paint_inspector(ctx, backend, &self.host, self.viewport_width, self.viewport_height);
                 }
             }
             _ => {}

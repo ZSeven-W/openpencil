@@ -66,7 +66,12 @@ impl WidgetHost {
     ///   - LayerPanel left rail
     ///   - CanvasViewport center (the actual document render)
     ///   - PropertyPanel right rail
-    pub fn paint(&self, backend: &mut WebBackend, viewport_width: f32) { // glue:
+    pub fn paint(
+        &self,
+        backend: &mut WebBackend,
+        viewport_width: f32,
+        viewport_height: f32,
+    ) { // glue:
         let layout_cx_top = LayoutCx {
             available_width: viewport_width,
             dpi: backend.dpi_scale(),
@@ -138,7 +143,7 @@ impl WidgetHost {
         if canvas_w >= MIN_RAIL_WIDTH {
             let canvas_rect = Rect {
                 origin: Point2D::new(canvas_x, rail_top_y),
-                size: Point2D::new(canvas_w, 640.0 - rail_top_y),
+                size: Point2D::new(canvas_w, (viewport_height - rail_top_y).max(0.0)),
             };
             let mut cx = PaintCx {
                 backend: &mut *backend,

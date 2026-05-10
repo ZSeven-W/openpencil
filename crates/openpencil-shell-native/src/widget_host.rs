@@ -166,7 +166,12 @@ impl WidgetHostNative {
     /// `tools/check-widget-boundary.sh` happy if the boundary script
     /// is extended to gate shell-native too (it currently scans only
     /// shell-web; Step 3+ may parameterize).
-    pub fn paint(&self, frame: &mut NativeFrameBackend<'_>, viewport_width: f32) { // glue:
+    pub fn paint(
+        &self,
+        frame: &mut NativeFrameBackend<'_>,
+        viewport_width: f32,
+        viewport_height: f32,
+    ) { // glue:
         let layout = LayoutCx {
             available_width: viewport_width,
             dpi: frame.dpi_scale(),
@@ -232,16 +237,16 @@ impl WidgetHostNative {
         }
 
         // CanvasViewport in the middle band — between the two
-        // rails, below the toolbar. Window height isn't passed
-        // through this signature; assume 600 px (matches default
-        // winit window in inspector_window) minus the top rail
-        // start. Step 4+ may pass viewport_height too.
+        // rails, below the toolbar. Height comes from the
+        // caller-supplied `viewport_height` (codex Step 3
+        // stop-hook fix — was previously a hardcoded 600.0 that
+        // assumed the default winit window size).
         let canvas_x = lp_rect.origin.x + lp_rect.size.x + 8.0;
         let canvas_w = (pp_rect.origin.x - canvas_x - 8.0).max(0.0);
         if canvas_w >= MIN_RAIL_WIDTH {
             let canvas_rect = Rect {
                 origin: Point2D::new(canvas_x, rail_top_y),
-                size: Point2D::new(canvas_w, 600.0 - rail_top_y),
+                size: Point2D::new(canvas_w, (viewport_height - rail_top_y).max(0.0)),
             };
             let mut cx = PaintCx {
                 backend: &mut *frame,
