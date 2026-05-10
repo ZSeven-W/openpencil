@@ -88,6 +88,12 @@ pub struct AIChatPlaceholder<'a> {
     /// [`jian_core::anim::blink_visible`]. `0` = host hasn't
     /// installed a clock yet (caret stays solid).
     pub now_ms: u64,
+    /// Localised chrome strings — resolved at construction time
+    /// from `Document::t` so the panel reflows when the user
+    /// flips the TopBar Globe icon.
+    pub label_new_chat: String,
+    pub label_start_with_ai: String,
+    pub label_input_placeholder: String,
 }
 
 impl<'a> AIChatPlaceholder<'a> {
@@ -103,6 +109,9 @@ impl<'a> AIChatPlaceholder<'a> {
             theme: doc.theme(),
             state: &doc.chat,
             now_ms,
+            label_new_chat: doc.t("chat.new_chat").to_string(),
+            label_start_with_ai: doc.t("chat.start_with_ai").to_string(),
+            label_input_placeholder: doc.t("chat.input_placeholder").to_string(),
         }
     }
 
@@ -207,7 +216,7 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
             );
             // "New Chat" label.
             let title = TextLayout::single_run(
-                "New Chat",
+                &self.label_new_chat,
                 "system-ui",
                 13.0,
                 to_jian_color(self.theme.foreground),
@@ -246,7 +255,7 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
             1.4,
         );
         let title = TextLayout::single_run(
-            "New Chat",
+            &self.label_new_chat,
             "system-ui",
             14.0,
             to_jian_color(self.theme.foreground),
@@ -282,7 +291,7 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
         };
 
         if self.state.messages.is_empty() {
-            paint_examples(cx, &self.theme, rect);
+            paint_examples(cx, &self.theme, rect, &self.label_start_with_ai);
         } else {
             paint_messages(cx, &self.theme, body_rect, &self.state.messages);
         }
@@ -311,7 +320,10 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
 
         // Input text — buffer if non-empty, placeholder otherwise.
         let (text, color) = if self.state.input.is_empty() {
-            ("用 Agent 设计…", self.theme.muted_foreground)
+            (
+                self.label_input_placeholder.as_str(),
+                self.theme.muted_foreground,
+            )
         } else {
             (self.state.input.as_str(), self.theme.foreground)
         };
@@ -400,9 +412,9 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
     }
 }
 
-fn paint_examples(cx: &mut PaintCx<'_>, theme: &Theme, rect: Rect) {
+fn paint_examples(cx: &mut PaintCx<'_>, theme: &Theme, rect: Rect, hint_label: &str) {
     let hint = TextLayout::single_run(
-        "用 AI 开始设计",
+        hint_label,
         "system-ui",
         12.0,
         to_jian_color(theme.muted_foreground),
