@@ -73,6 +73,7 @@ export {
 export { normalizeTreeLayout } from './layout/normalize-tree.js';
 export { unwrapFakePhoneMockups } from './layout/unwrap-fake-phone-mockup.js';
 export { stripRedundantSectionFills } from './layout/strip-redundant-section-fills.js';
+export { stripNestedCardDecoration } from './layout/strip-nested-card-decoration.js';
 export { clipCardImageCorners } from './layout/clip-card-image-corners.js';
 export { injectMissingNavSurfaceFill } from './layout/inject-nav-surface-fill.js';
 export { expandOverflowingFixedHeightCards } from './layout/expand-overflowing-fixed-height-cards.js';

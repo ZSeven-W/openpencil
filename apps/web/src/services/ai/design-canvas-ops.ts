@@ -18,6 +18,7 @@ import {
   normalizeTreeLayout,
   unwrapFakePhoneMockups,
   stripRedundantSectionFills,
+  stripNestedCardDecoration,
   clipCardImageCorners,
   injectMissingNavSurfaceFill,
   expandOverflowingFixedHeightCards,
@@ -420,6 +421,12 @@ function finalizePageRootAfterApply(): void {
     if (stripRedundantSectionFills(node)) {
       anyChanged = true;
     }
+    // Run AFTER stripRedundantSectionFills so the fill heuristic gets
+    // first crack at fill decisions; then this pass cleans up nested
+    // card-style decoration (stroke / cornerRadius / shadow stack).
+    if (stripNestedCardDecoration(node)) {
+      anyChanged = true;
+    }
   }
   if (anyChanged) forcePageResync();
 }
@@ -755,6 +762,14 @@ export function applyPostStreamingTreeHeuristics(rootNodeId: string): void {
   const parentOfRoot = useDocumentStore.getState().getParentOf(rootNodeId);
   const pageRoot = parentOfRoot && parentOfRoot.type === 'frame' ? parentOfRoot : freshRoot;
   stripRedundantSectionFills(pageRoot);
+  // 2026-05-11 user-reported "Popular Restaurants" card-within-a-card —
+  // outer `role: card` carried stroke + cornerRadius + 2-shadow elevation
+  // and the inner `Card Info` frame ALSO had role: card with the same
+  // shadow stack and own cornerRadius. The doubled decoration rendered
+  // as a visible "border" / box-in-box. This pass strips the redundant
+  // inner stroke / cornerRadius / shadow when an ancestor already
+  // carries the same kind of decoration.
+  stripNestedCardDecoration(pageRoot);
   // Add a default surface fill on top-level navigation frames the
   // sub-agent left transparent — without this the bottom nav floats on
   // the cream root background with no surface to anchor it. See
