@@ -58,13 +58,18 @@ raw-window-handle = "0.6.2"
 # provider, not via skia-safe's bundled GL bindings here).
 # Mobile cargo check pulls skia-safe with no GL feature, exercising
 # only the raster + textlayout paths that the inspector slice needs.
-# Spec §12.3 jian boundary invariants 2 & 3 are unchanged: jian-skia
-# stays out of iOS / Android cargo check until Step 1f wires real
-# providers — the per-target cfg below moves the line forward by
-# allowing the trait + raster paths to compile, leaving the
-# host-specific (GL/Metal/EGL) code in target-conditional impls.
+# Spec §12.3 jian boundary invariants 2 & 3 — REVISED 2026-05-10:
+# Invariant 2 now allows `jian-skia` on mobile (the widget render
+# stack uses it); `jian-host-desktop` remains forbidden on mobile
+# because it carries winit / glutin / desktop-only host glue.
+# Invariant 3 (wasm32 forbids both) is unchanged. The
+# `tools/check-jian-boundaries.sh` script enforces the revised set
+# alongside the script header rationale.
 [target.'cfg(any(target_os = "macos", target_os = "linux", target_os = "windows", target_os = "ios", target_os = "android"))'.dependencies]
-skia-safe = { version = "0.97.0", default-features = false, features = ["binary-cache", "textlayout"] }
+skia-safe = { version = "0.97.0", default-features = false, features = [
+  "binary-cache",
+  "textlayout",
+] }
 jian-skia = { path = "../../vendor/jian/crates/jian-skia", version = "0.0.1", features = [
   "textlayout",
 ] }
@@ -80,7 +85,11 @@ jian-skia = { path = "../../vendor/jian/crates/jian-skia", version = "0.0.1", fe
 # `compile_error!`. macOS / Windows backends auto-enable via
 # cfg(target_os) and need no feature flag.
 [target.'cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))'.dependencies]
-skia-safe = { version = "0.97.0", default-features = false, features = ["binary-cache", "textlayout", "gl"] }
+skia-safe = { version = "0.97.0", default-features = false, features = [
+  "binary-cache",
+  "textlayout",
+  "gl",
+] }
 glutin = "0.32.3"
 glutin-winit = "0.5.0"
 winit = { version = "0.30.13", default-features = false, features = [
