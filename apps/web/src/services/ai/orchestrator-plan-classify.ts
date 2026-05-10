@@ -1,6 +1,23 @@
 import type { OrchestratorPlan } from './ai-types';
 
 /**
+ * Memoize the classification on a per-plan basis so call sites that hit
+ * the helper AFTER the orchestrator strips the status-bar subtask still
+ * see the original answer. The strip is a real mutation
+ * (`plan.subtasks = plan.subtasks.filter(...)`), so the second classify
+ * has a smaller subtask count than the first. Without this memo, a plan
+ * that came in as [status-bar, content] (2 items, height=0 from LLM
+ * emitting a non-numeric height) flips from "mobile" → "not-mobile"
+ * across the strip, and downstream consumers (sub-agent prompt
+ * builders, status-bar injection branches) disagree about chrome
+ * handling. Codex stop-hook 2026-05-10 caught this.
+ *
+ * WeakMap keeps the memo out of the plan's type surface and lets it
+ * vanish naturally when the plan goes out of scope.
+ */
+const memo = new WeakMap<OrchestratorPlan, boolean>();
+
+/**
  * A plan represents a full mobile screen only when the root frame is narrow
  * AND tall. Narrow + auto-height (or small fixed height) is a Type 0 component
  * — a single card / badge / modal — and must not trigger phone-screen logic
@@ -14,6 +31,14 @@ import type { OrchestratorPlan } from './ai-types';
  * 2026-05-09).
  */
 export function isMobileFullScreen(plan: OrchestratorPlan): boolean {
+  const cached = memo.get(plan);
+  if (cached !== undefined) return cached;
+  const result = computeIsMobileFullScreen(plan);
+  memo.set(plan, result);
+  return result;
+}
+
+function computeIsMobileFullScreen(plan: OrchestratorPlan): boolean {
   if (plan.rootFrame.width > 480) return false;
   if (plan.rootFrame.height >= 480) return true;
   // Width-narrow + height-zero/auto: distinguish a single Type 0
