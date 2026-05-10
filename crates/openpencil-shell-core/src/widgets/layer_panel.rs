@@ -49,6 +49,8 @@ pub struct LayerPanel {
     pub pages: Vec<PageItem>,
     pub items: Vec<LayerItem>,
     pub theme: Theme,
+    pub pages_label: String,
+    pub layers_label: String,
 }
 
 impl LayerPanel {
@@ -77,6 +79,8 @@ impl LayerPanel {
             pages,
             items,
             theme: doc.theme(),
+            pages_label: doc.t("layer_panel.pages").to_string(),
+            layers_label: doc.t("layer_panel.layers").to_string(),
         }
     }
 
@@ -86,6 +90,8 @@ impl LayerPanel {
             pages: Vec::new(),
             items: Vec::new(),
             theme: Theme::dark(),
+            pages_label: "Pages".to_string(),
+            layers_label: "Layers".to_string(),
         }
     }
 
@@ -187,7 +193,7 @@ impl Widget for LayerPanel {
         let mut y = rect.origin.y + 8.0;
 
         // Pages section header.
-        paint_section_header(cx, &self.theme, rect.origin.x, y, rect.size.x, "页面");
+        paint_section_header(cx, &self.theme, rect.origin.x, y, rect.size.x, &self.pages_label);
         // "+" add-page affordance, top-right of header row.
         let plus_x = rect.origin.x + rect.size.x - ROW_PAD_X - 12.0;
         let plus_y = y + (SECTION_HEADER_HEIGHT - 14.0) / 2.0;
@@ -232,7 +238,7 @@ impl Widget for LayerPanel {
         y += SECTION_GAP;
 
         // Layers section header.
-        paint_section_header(cx, &self.theme, rect.origin.x, y, rect.size.x, "图层");
+        paint_section_header(cx, &self.theme, rect.origin.x, y, rect.size.x, &self.layers_label);
         y += SECTION_HEADER_HEIGHT;
 
         // Layer rows.
