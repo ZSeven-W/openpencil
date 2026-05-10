@@ -1,5 +1,5 @@
 import type { PenNode, PenDocument } from '@zseven-w/pen-types';
-import { resolveColorRef, getDefaultTheme } from '@zseven-w/pen-core';
+import { resolveColorRef, getDefaultTheme, isNodeVisible } from '@zseven-w/pen-core';
 import type { Issue } from './types';
 import { colorContrast } from './color-utils';
 
@@ -134,20 +134,22 @@ export function detectTextBgContrast(
   walk(root, []);
   return issues;
 
-  function isHidden(node: PenNode): boolean {
-    // Whole subtree is invisible — node-level opacity=0 or visible=false.
-    // 2026-05-10 Codex round 3 caught this as a separate path from the
-    // ancestorBgColor guard: even if we'd correctly skip the wrapper as
-    // a bg, the TEXT inside still doesn't render, so flagging its
-    // contrast against whatever sits above is a false positive.
-    const n = node as PenNode & { opacity?: unknown; visible?: unknown };
-    if (n.opacity === 0) return true;
-    if (n.visible === false) return true;
-    return false;
-  }
-
   function walk(node: PenNode, ancestors: PenNode[]): void {
-    if (isHidden(node)) return; // prune the entire subtree
+    // Align prune with the canonical render-time visibility check
+    // (pen-core's isNodeVisible — `visible !== false && enabled !== false`).
+    // 2026-05-10 Codex round 4 caught a divergence: my earlier prune also
+    // checked `opacity === 0`, but the renderer treats opacity as a paint
+    // alpha, not a "skip rendering" flag — opacity=0 nodes still get
+    // walked + laid out, just painted with alpha 0. Pruning on opacity=0
+    // would disagree with what users actually see when they probe the
+    // tree elsewhere. Stay aligned with the shared helper instead.
+    //
+    // Side note: opacity=0 nodes still get caught upstream — they paint
+    // nothing, so ancestorBgColor() further down still skips them when
+    // resolving the real bg. The text inside an opacity=0 wrapper IS
+    // walked, but its contrast is computed against whatever sits BEHIND
+    // the invisible wrapper, which is the user-visible truth.
+    if (!isNodeVisible(node)) return;
     if (node.type === 'text') {
       checkText(node, ancestors);
     }

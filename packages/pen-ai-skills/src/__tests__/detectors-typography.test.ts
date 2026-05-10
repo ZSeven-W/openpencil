@@ -216,12 +216,14 @@ describe('detectTextBgContrast', () => {
     expect(issues[0].reason).toMatch(/bg=#FFF8E7/);
   });
 
-  it('does NOT flag text inside a node-level opacity=0 subtree (text itself is invisible)', () => {
-    // 2026-05-10 Codex round 3 — when a wrapper has node-level opacity=0
-    // the entire subtree is hidden from the user, so flagging the text's
-    // contrast (against whatever bg) is a false positive: there's no
-    // visible text-bg pair to read in the first place. The detector
-    // prunes hidden subtrees up front instead of walking into them.
+  // 2026-05-10 Codex round 4 — align the walk prune with pen-core's
+  // canonical isNodeVisible (visible/enabled, NOT opacity). Renderer
+  // treats opacity as paint alpha; pruning on opacity=0 would diverge
+  // from what the renderer walks, so a contrast detector should match.
+  // opacity=0 wrappers still get bypassed at the bg-resolution layer
+  // because alpha-0 fills paint nothing visible.
+
+  it('walks into opacity=0 subtree but uses real bg from behind the invisible wrapper', () => {
     const wrap: PenNode = {
       id: 'wrap',
       type: 'frame',
@@ -231,16 +233,31 @@ describe('detectTextBgContrast', () => {
       children: [text('t1', solid('#FFF8E7'))],
     } as unknown as PenNode;
     const root = frame('page', [wrap], solid('#FFF8E7'));
-    expect(detectTextBgContrast(root, emptyDoc)).toHaveLength(0);
+    const issues = detectTextBgContrast(root, emptyDoc);
+    expect(issues).toHaveLength(1);
+    expect(issues[0].reason).toMatch(/bg=#FFF8E7/);
   });
 
-  it('does NOT flag text inside a visible=false subtree (text itself is invisible)', () => {
+  it('does NOT flag text inside a visible=false subtree (canonical hidden)', () => {
     const wrap: PenNode = {
       id: 'wrap',
       type: 'frame',
       layout: 'vertical',
       fill: solid('#FFFFFF'),
       visible: false,
+      children: [text('t1', solid('#FFF8E7'))],
+    } as unknown as PenNode;
+    const root = frame('page', [wrap], solid('#FFF8E7'));
+    expect(detectTextBgContrast(root, emptyDoc)).toHaveLength(0);
+  });
+
+  it('does NOT flag text inside an enabled=false subtree (canonical hidden)', () => {
+    const wrap: PenNode = {
+      id: 'wrap',
+      type: 'frame',
+      layout: 'vertical',
+      fill: solid('#FFFFFF'),
+      enabled: false,
       children: [text('t1', solid('#FFF8E7'))],
     } as unknown as PenNode;
     const root = frame('page', [wrap], solid('#FFF8E7'));
