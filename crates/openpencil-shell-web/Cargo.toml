@@ -38,7 +38,13 @@ wasm-bindgen = "=0.2.117"
 [dependencies.skia-safe]
 version = "0.97.0"
 default-features = false
-features = ["binary-cache", "textlayout"]
+# Step 3 codex stop-hook fix: text rendering uses
+# `Canvas::draw_str` + raw Font + Typeface (NOT skia paragraph
+# builder), so the `textlayout` feature is unnecessary on web.
+# Dropping it removes ICU + Harfbuzz from the bundle (~400 KB
+# gzip) and avoids the env.* import explosion that came with
+# textlayout's filesystem font lookups.
+features = ["binary-cache"]
 optional = true
 
 # C-hard.2 libc/libcxx/libm shim — only linked when targeting

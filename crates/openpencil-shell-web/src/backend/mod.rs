@@ -20,6 +20,18 @@ use wasm_bindgen::Clamped;
 use wasm_bindgen::JsCast;
 use web_sys::{CanvasRenderingContext2d, HtmlCanvasElement, ImageData};
 
+/// Embedded Roboto-Regular TTF (35 KB, Apache 2.0 — copy of the
+/// rust-skia test font asset). Step 3 codex stop-hook fix: the
+/// C-hard wasm32-unknown-unknown build uses the
+/// `skia_enable_fontmgr_custom_empty=yes` GN flag (see
+/// `vendor/skia-safe-op/skia-bindings/build_support/platform/
+/// wasm_unknown.rs`), which means there are NO system fonts
+/// available to skia. Without an embedded TTF + Typeface, every
+/// `draw_str` call silently produces no glyphs (Step 3 web smoke
+/// "could not render the claimed canvas text"). We bake the font
+/// into the bundle once at build time.
+const ROBOTO_TTF: &[u8] = include_bytes!("../../assets/Roboto-Regular.ttf");
+
 pub struct WebBackend {
     surface: skia_safe::Surface,
     canvas_element: HtmlCanvasElement,
@@ -27,6 +39,12 @@ pub struct WebBackend {
     width: u32,
     height: u32,
     dpi_scale: f32,
+    /// Lazy-initialised typeface backed by the embedded Roboto
+    /// TTF. Built on first text draw so a no-text canvas pays no
+    /// cost. `None` after a failed build (typeface invalid /
+    /// alloc failure); subsequent draw_text calls become no-ops
+    /// rather than retrying.
+    typeface: Option<skia_safe::Typeface>,
     /// Most recent present() error captured via the infallible
     /// `end_frame` trait method. Callers that need to propagate errors
     /// (e.g. `WebShell::mount`) call `take_present_error()` after the
@@ -47,6 +65,7 @@ impl WebBackend {
             width,
             height,
             dpi_scale: 1.0,
+            typeface: None,
             last_present_error: None,
         })
     }
@@ -152,9 +171,49 @@ impl RenderBackend for WebBackend {
         );
     }
 
-    fn draw_text(&mut self, _layout: &TextLayout, _origin: Point2D) {
-        // Phase B will route through jian-skia textlayout; Phase A red-rect
-        // demo does not draw text.
+    fn draw_text(&mut self, layout: &TextLayout, origin: Point2D) {
+        // Step 3 codex stop-hook fix: actually render text via
+        // `Canvas::draw_str` + the embedded Roboto Typeface (the
+        // C-hard `custom_empty` font manager has no system fonts).
+        // Lazy-init the typeface on first call; if the build fails
+        // we leave `self.typeface = None` and silently no-op
+        // subsequent calls so a font issue never crashes paint.
+        if self.typeface.is_none() {
+            // The C-hard wasm32-unknown-unknown skia build uses
+            // FontMgr::custom_empty() — there's no system font
+            // path. Construct one explicitly + register the
+            // embedded Roboto bytes via new_from_data; both
+            // calls return `Option`, so `None` propagates up
+            // and the typeface stays None on any failure.
+            self.typeface = skia_safe::FontMgr::custom_empty()
+                .and_then(|mgr| mgr.new_from_data(ROBOTO_TTF, None));
+        }
+        let Some(typeface) = self.typeface.as_ref() else {
+            return;
+        };
+        for run in layout.runs() {
+            let font = skia_safe::Font::new(typeface, run.font_size);
+            let jc = run.color;
+            let paint = skia_safe::Paint::new(
+                skia_safe::Color4f::new(
+                    f32::from(jc.r()) / 255.0,
+                    f32::from(jc.g()) / 255.0,
+                    f32::from(jc.b()) / 255.0,
+                    f32::from(jc.a()) / 255.0,
+                ),
+                None,
+            );
+            let run_origin = run.origin;
+            self.surface.canvas().draw_str(
+                run.content.as_str(),
+                (
+                    origin.x + run_origin.x,
+                    origin.y + run_origin.y,
+                ),
+                &font,
+                &paint,
+            );
+        }
     }
 
     fn clip_rect(&mut self, rect: Rect) {
