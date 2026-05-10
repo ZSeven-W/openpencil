@@ -171,18 +171,13 @@ impl WidgetHostNative {
     /// Hit-test which screen region the cursor is over. Used by
     /// the wheel + drag handlers so wheel-zoom + Hand-pan only
     /// fire when the cursor is over the canvas (not over a panel).
+    /// Uses `canvas_region` so it stays in sync with paint when
+    /// the sidebar is collapsed (codex Step 6 stop-hook fix:
+    /// "native collapsed-sidebar canvas input still uses the old
+    /// left offset").
     fn over_canvas(&self, x: f32, y: f32, viewport_w: f32, viewport_h: f32) -> bool {
-        let canvas_left = LAYER_PANEL_WIDTH;
-        let has_property = self.document.selected_node().is_some();
-        let canvas_right = if has_property {
-            viewport_w - PROPERTY_PANEL_WIDTH
-        } else {
-            viewport_w
-        };
-        x >= canvas_left
-            && x <= canvas_right
-            && y >= TOP_BAR_HEIGHT
-            && y <= viewport_h
+        let (cx0, cy0, cw, ch) = self.canvas_region(viewport_w, viewport_h);
+        x >= cx0 && x <= cx0 + cw && y >= cy0 && y <= cy0 + ch
     }
 
     /// Apply a wheel event — zoom centered at `(x, y)` when over
@@ -198,8 +193,11 @@ impl WidgetHostNative {
         if !self.over_canvas(x, y, viewport_width, viewport_height) {
             return false;
         }
-        let canvas_left = LAYER_PANEL_WIDTH;
-        let cursor = Point2D::new(x - canvas_left, y - TOP_BAR_HEIGHT);
+        // Cursor in canvas-local coords — use canvas_region's
+        // dynamic left edge so cursor-centered zoom stays anchored
+        // when the sidebar is collapsed.
+        let (cx0, cy0, _cw, _ch) = self.canvas_region(viewport_width, viewport_height);
+        let cursor = Point2D::new(x - cx0, y - cy0);
         self.document.viewport.zoom_at(cursor, delta_y);
         true
     }
@@ -567,6 +565,13 @@ impl WidgetHostNative {
                 }
                 openpencil_shell_core::widgets::ToolbarHit::Action(_) => return false,
             }
+        }
+        // LayerPanel hits only land when the sidebar is open —
+        // when collapsed the panel isn't painted (codex stop-hook
+        // fix: native collapsed-sidebar input was still resolving
+        // canvas clicks to the LayerPanel rect underneath).
+        if !self.document.ui.sidebar_open {
+            return was_focused;
         }
         let layer_rect = Rect {
             origin: Point2D::new(0.0, TOP_BAR_HEIGHT),
