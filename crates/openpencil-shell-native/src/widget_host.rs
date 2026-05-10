@@ -21,9 +21,9 @@
 use crate::backend::NativeBackend;
 use openpencil_shell_core::document::{ChatAnchor, Document};
 use openpencil_shell_core::widgets::{
-    AIChatHit, AIChatPlaceholder, CanvasViewport, LayerPanel, LayoutCx, PaintCx, PropertyPanel,
-    StatusBar, Toolbar, TopBar, TopBarHit, Widget, AI_CHAT_COLLAPSED_HEIGHT,
-    AI_CHAT_COLLAPSED_WIDTH, AI_CHAT_HEIGHT, AI_CHAT_WIDTH, LAYER_PANEL_WIDTH,
+    AIChatHit, AIChatPlaceholder, CanvasViewport, LayerPanel, LayoutCx, LocalePicker, PaintCx,
+    PropertyPanel, StatusBar, Toolbar, TopBar, TopBarHit, Widget, AI_CHAT_COLLAPSED_HEIGHT,
+    AI_CHAT_COLLAPSED_WIDTH, AI_CHAT_HEIGHT, AI_CHAT_WIDTH, LAYER_PANEL_WIDTH, LOCALE_PICKER_WIDTH,
     PROPERTY_PANEL_WIDTH, STATUS_BAR_HEIGHT, STATUS_BAR_WIDTH, TOOLBAR_WIDTH, TOP_BAR_HEIGHT,
 };
 use openpencil_shell_core::{Color, Point2D, Rect, RenderBackend, TextLayout, Theme};
@@ -274,7 +274,24 @@ impl WidgetHostNative {
         viewport_width: f32,
         viewport_height: f32,
     ) -> bool {
-        // 0. TopBar — sidebar toggle button.
+        // 0a. Locale picker overlay — when open, it sits on top of
+        //     everything. Row click sets locale + closes; outside
+        //     click closes without changing locale.
+        if self.document.ui.locale_picker_open {
+            let panel_rect = self.locale_picker_rect(viewport_width);
+            let picker = LocalePicker::for_document(&self.document);
+            if let Some(locale) = picker.hit_test(panel_rect, Point2D::new(x, y)) {
+                self.document.ui.locale = locale;
+                self.document.ui.locale_picker_open = false;
+                return true;
+            }
+            self.document.ui.locale_picker_open = false;
+            // Fall through so the underlying click can also act
+            // (e.g. clicking the Globe again should re-toggle, not
+            // require a second click).
+        }
+
+        // 0b. TopBar — sidebar toggle button + theme + locale picker.
         let top_bar_rect = Rect {
             origin: Point2D::new(0.0, 0.0),
             size: Point2D::new(viewport_width, TOP_BAR_HEIGHT),
@@ -291,7 +308,7 @@ impl WidgetHostNative {
                     return true;
                 }
                 TopBarHit::ToggleLocale => {
-                    self.document.ui.locale = self.document.ui.locale.next();
+                    self.document.ui.locale_picker_open = !self.document.ui.locale_picker_open;
                     return true;
                 }
             }
@@ -490,6 +507,25 @@ impl WidgetHostNative {
         let canvas_w = (canvas_right - canvas_left).max(0.0);
         let canvas_h = (viewport_h - TOP_BAR_HEIGHT).max(0.0);
         (canvas_left, TOP_BAR_HEIGHT, canvas_w, canvas_h)
+    }
+
+    fn locale_picker_rect(&self, viewport_w: f32) -> Rect {
+        let top_bar_rect = Rect {
+            origin: Point2D::new(0.0, 0.0),
+            size: Point2D::new(viewport_w, TOP_BAR_HEIGHT),
+        };
+        let globe = TopBar::globe_rect(top_bar_rect);
+        let panel_h = LocalePicker::panel_height();
+        // Anchor under the globe icon, right-aligned to its center
+        // so the panel doesn't run off the right edge.
+        let x = (globe.origin.x + globe.size.x / 2.0 - LOCALE_PICKER_WIDTH / 2.0)
+            .max(8.0)
+            .min(viewport_w - LOCALE_PICKER_WIDTH - 8.0);
+        let y = globe.origin.y + globe.size.y + 6.0;
+        Rect {
+            origin: Point2D::new(x, y),
+            size: Point2D::new(LOCALE_PICKER_WIDTH, panel_h),
+        }
     }
 
     fn ai_chat_size(&self) -> (f32, f32) {
@@ -769,6 +805,17 @@ impl WidgetHostNative {
                 backend: &mut *frame,
             };
             status.paint(&mut cx, status_rect);
+        }
+
+        // 9. LocalePicker — top-most overlay so it covers chat /
+        //    toolbar / status when open.
+        if self.document.ui.locale_picker_open {
+            let picker_rect = self.locale_picker_rect(viewport_width);
+            let picker = LocalePicker::for_document(&self.document);
+            let mut cx = PaintCx {
+                backend: &mut *frame,
+            };
+            picker.paint(&mut cx, picker_rect);
         }
     }
 }

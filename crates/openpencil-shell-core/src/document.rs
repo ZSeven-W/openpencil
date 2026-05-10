@@ -356,6 +356,10 @@ pub struct UiState {
     /// UI locale — cycled via the TopBar Globe icon. Drives the
     /// `t(key)` lookup widgets use for chrome strings.
     pub locale: Locale,
+    /// Whether the TopBar Globe-icon dropdown is open. Click the
+    /// Globe to toggle; click a row to set + close; click outside
+    /// to close.
+    pub locale_picker_open: bool,
 }
 
 impl Default for UiState {
@@ -365,6 +369,7 @@ impl Default for UiState {
             property_focus: None,
             theme_mode: ThemeMode::Dark,
             locale: Locale::ZhCn,
+            locale_picker_open: false,
         }
     }
 }
