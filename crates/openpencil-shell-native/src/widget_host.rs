@@ -140,6 +140,11 @@ pub struct WidgetHostNative {
     /// within the resize gutter of LayerPanel's right edge or
     /// PropertyPanel's left edge.
     panel_resize: Option<PanelResize>,
+    /// Active node-drag — set when the user presses on a node in
+    /// the canvas with the Select tool. Tracks the document-space
+    /// cursor anchor so each `apply_cursor_move` translates the
+    /// selected node by the delta.
+    node_drag: Option<NodeDragState>,
     /// Host-supplied frame timestamp in milliseconds. Drives the
     /// caret blink via `jian_core::anim::blink_visible`. The
     /// inspector_window runner refreshes this once per
@@ -179,6 +184,17 @@ const PANEL_RESIZE_GUTTER: f32 = 4.0;
 const PANEL_MIN_WIDTH: f32 = 180.0;
 const PANEL_MAX_WIDTH: f32 = 480.0;
 
+/// Active node-drag — tracks the previous cursor position in
+/// SCREEN coordinates. Each `apply_cursor_move` divides the
+/// screen-space delta by the active zoom to get a doc-space
+/// translation, which sidesteps canvas_region offset math (the
+/// offset cancels for incremental deltas).
+#[derive(Debug, Clone, Copy)]
+struct NodeDragState {
+    last_screen_x: f32,
+    last_screen_y: f32,
+}
+
 #[derive(Debug, Clone, Copy)]
 struct ChatDragState {
     /// Pointer offset within the panel rect when the drag began.
@@ -199,6 +215,7 @@ impl WidgetHostNative {
             drag: None,
             chat_drag: None,
             panel_resize: None,
+            node_drag: None,
             now_ms: 0,
         }
     }
@@ -532,11 +549,34 @@ impl WidgetHostNative {
             return true;
         }
 
-        // 4. Empty-canvas click: clear selection (collapses the
-        //    PropertyPanel) + start a pan-drag. Selection clear
-        //    is the "click blank to deselect" UX the user
-        //    requested.
+        // 4. Canvas click — the Hand tool always pans; otherwise
+        //    hit-test nodes first (select + start a node-drag), and
+        //    fall back to "click blank to deselect + start pan" only
+        //    when no node is under the cursor.
         if self.over_canvas(x, y, viewport_width, viewport_height) {
+            if matches!(
+                self.document.tool,
+                openpencil_shell_core::document::Tool::Hand
+            ) {
+                self.drag = Some(DragState {
+                    last_x: x,
+                    last_y: y,
+                });
+                return false;
+            }
+            let (cx0, cy0, _cw, _ch) = self.canvas_region(viewport_width, viewport_height);
+            let canvas_local = Point2D::new(x - cx0, y - cy0);
+            let doc_point = self.document.viewport.to_document(canvas_local);
+            if let Some(node_id) = self.document.node_at_doc_point(doc_point) {
+                let was_selected = self.document.selected == node_id;
+                self.document.selected = node_id;
+                self.node_drag = Some(NodeDragState {
+                    last_screen_x: x,
+                    last_screen_y: y,
+                });
+                return !was_selected;
+            }
+            // Empty canvas — clear selection + start pan-drag.
             let cleared = self.document.selected != openpencil_shell_core::document::NodeId::NONE;
             if cleared {
                 self.document.selected = openpencil_shell_core::document::NodeId::NONE;
@@ -553,6 +593,18 @@ impl WidgetHostNative {
     /// Cursor-move handler. Drives canvas pan-drag, chat-panel
     /// drag, or no-op. Returns whether the host should repaint.
     pub fn apply_cursor_move(&mut self, x: f32, y: f32) -> bool {
+        if let Some(drag) = self.node_drag.as_mut() {
+            let zoom = self.document.viewport.zoom.max(0.0001);
+            let dx = (x - drag.last_screen_x) / zoom;
+            let dy = (y - drag.last_screen_y) / zoom;
+            drag.last_screen_x = x;
+            drag.last_screen_y = y;
+            if dx != 0.0 || dy != 0.0 {
+                self.document.translate_selected(dx, dy);
+                return true;
+            }
+            return false;
+        }
         if let Some(resize) = self.panel_resize {
             let dx = x - resize.start_x;
             match resize.kind {
@@ -592,6 +644,9 @@ impl WidgetHostNative {
         if self.panel_resize.take().is_some() {
             return true;
         }
+        if self.node_drag.take().is_some() {
+            return true;
+        }
         if let Some(d) = self.chat_drag.take() {
             let center = Point2D::new(
                 d.pos_x + AI_CHAT_WIDTH / 2.0,
@@ -610,6 +665,9 @@ impl WidgetHostNative {
     /// backwards compatibility with existing call sites.
     pub fn apply_release(&mut self) -> bool {
         if self.panel_resize.take().is_some() {
+            return true;
+        }
+        if self.node_drag.take().is_some() {
             return true;
         }
         // If a chat drag was in flight without a known viewport,

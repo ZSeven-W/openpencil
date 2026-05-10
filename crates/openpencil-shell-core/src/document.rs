@@ -854,6 +854,42 @@ impl Document {
             .expect("Document::first_page on empty pages — use Document::empty for a default page")
     }
 
+    /// Hit-test the active page at a document-space point. Returns
+    /// the topmost node id whose bounds (or aggregate bounds for
+    /// containers) contain `point`. Walks children in reverse z-
+    /// order (last child = top-most) so a stack of overlapping
+    /// rects resolves to the visually topmost one. `None` if the
+    /// click is in canvas dead space or no active page exists.
+    pub fn node_at_doc_point(&self, point: crate::Point2D) -> Option<NodeId> {
+        let page = self.active_page()?;
+        for child in page.children.iter().rev() {
+            if let Some(hit) = hit_test_walk(child, point) {
+                return Some(hit);
+            }
+        }
+        None
+    }
+
+    /// Translate the selected node by `(dx, dy)` document px. Leaf
+    /// nodes (with their own bounds) move directly; container
+    /// nodes (Group / unbounded Frame) translate every descendant
+    /// that carries bounds. No-op when nothing is selected or the
+    /// active page is missing.
+    pub fn translate_selected(&mut self, dx: f32, dy: f32) {
+        if !self.selected.is_real() {
+            return;
+        }
+        let sel = self.selected;
+        let Some(page) = self.pages.get_mut(self.active_page_index) else {
+            return;
+        };
+        for child in &mut page.children {
+            if translate_walk(child, sel, dx, dy) {
+                return;
+            }
+        }
+    }
+
     /// Apply a parsed property edit to the selected node. Mirrors
     /// the TS `useDocumentStore` mutation handlers — only this
     /// helper writes back to bounds, so call sites can stay
@@ -935,6 +971,61 @@ impl Document {
             ));
         }
         Ok(())
+    }
+}
+
+/// Recursive helper for `Document::node_at_doc_point` — returns
+/// the topmost id whose bounds contain `point`.
+fn hit_test_walk(node: &Node, point: crate::Point2D) -> Option<NodeId> {
+    // Walk children top-most first.
+    for child in node.children.iter().rev() {
+        if let Some(hit) = hit_test_walk(child, point) {
+            return Some(hit);
+        }
+    }
+    // No child covers the point — does this node?
+    let bounds = node.aggregate_bounds();
+    if bounds.size.x > 0.0
+        && bounds.size.y > 0.0
+        && point.x >= bounds.origin.x
+        && point.x <= bounds.origin.x + bounds.size.x
+        && point.y >= bounds.origin.y
+        && point.y <= bounds.origin.y + bounds.size.y
+    {
+        return Some(node.id);
+    }
+    None
+}
+
+/// Recursive helper for `Document::translate_selected`. Returns
+/// `true` once `target` has been translated.
+fn translate_walk(node: &mut Node, target: NodeId, dx: f32, dy: f32) -> bool {
+    if node.id == target {
+        if node.bounds.size.x > 0.0 || node.bounds.size.y > 0.0 {
+            node.bounds.origin.x += dx;
+            node.bounds.origin.y += dy;
+        } else {
+            for child in &mut node.children {
+                translate_subtree(child, dx, dy);
+            }
+        }
+        return true;
+    }
+    for child in &mut node.children {
+        if translate_walk(child, target, dx, dy) {
+            return true;
+        }
+    }
+    false
+}
+
+fn translate_subtree(node: &mut Node, dx: f32, dy: f32) {
+    if node.bounds.size.x > 0.0 || node.bounds.size.y > 0.0 {
+        node.bounds.origin.x += dx;
+        node.bounds.origin.y += dy;
+    }
+    for child in &mut node.children {
+        translate_subtree(child, dx, dy);
     }
 }
 
