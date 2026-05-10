@@ -77,6 +77,24 @@ pub enum Icon {
     ChevronUp,
     /// MessageSquare — chat bubble icon (collapsed AI chat pill).
     MessageSquare,
+    /// LayoutGrid — 2×2 grid layout-mode (弹性布局 / RightPanel).
+    LayoutGrid,
+    /// Rows3 — horizontal rows layout-mode.
+    Rows3,
+    /// Columns3 — vertical columns layout-mode.
+    Columns3,
+    /// RotateCw — rotation handle for 位置 section.
+    RotateCw,
+    /// Diamond — "create component" button glyph.
+    Diamond,
+    /// Component — component instance indicator.
+    Component,
+    /// Unlink — detach component instance.
+    Unlink,
+    /// Check — checkbox tick.
+    Check,
+    /// ArrowUpRight — link / external nav indicator.
+    ArrowUpRight,
 }
 
 impl Icon {
@@ -109,6 +127,15 @@ impl Icon {
             Icon::Close => CLOSE,
             Icon::ChevronUp => CHEVRON_UP,
             Icon::MessageSquare => MESSAGE_SQUARE,
+            Icon::LayoutGrid => LAYOUT_GRID,
+            Icon::Rows3 => ROWS_3,
+            Icon::Columns3 => COLUMNS_3,
+            Icon::RotateCw => ROTATE_CW,
+            Icon::Diamond => DIAMOND,
+            Icon::Component => COMPONENT,
+            Icon::Unlink => UNLINK,
+            Icon::Check => CHECK,
+            Icon::ArrowUpRight => ARROW_UP_RIGHT,
         }
     }
 }
@@ -245,6 +272,63 @@ const MESSAGE_SQUARE: &[&str] = &[
     "M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z",
 ];
 
+// Lucide `layout-grid.svg` — 4 rounded-rect cells.
+const LAYOUT_GRID: &[&str] = &[
+    "M4 3h5a1 1 0 0 1 1 1v5a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z",
+    "M15 3h5a1 1 0 0 1 1 1v5a1 1 0 0 1-1 1h-5a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z",
+    "M15 14h5a1 1 0 0 1 1 1v5a1 1 0 0 1-1 1h-5a1 1 0 0 1-1-1v-5a1 1 0 0 1 1-1z",
+    "M4 14h5a1 1 0 0 1 1 1v5a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-5a1 1 0 0 1 1-1z",
+];
+
+// Lucide `rows-3.svg` — round-rect with 2 horizontal dividers.
+const ROWS_3: &[&str] = &[
+    "M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z",
+    "M21 9H3",
+    "M21 15H3",
+];
+
+// Lucide `columns-3.svg` — round-rect with 2 vertical dividers.
+const COLUMNS_3: &[&str] = &[
+    "M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z",
+    "M9 3v18",
+    "M15 3v18",
+];
+
+// Lucide `rotate-cw.svg`.
+const ROTATE_CW: &[&str] = &[
+    "M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8",
+    "M21 3v5h-5",
+];
+
+// Lucide `diamond.svg`.
+const DIAMOND: &[&str] = &[
+    "M2.7 10.3a2.41 2.41 0 0 0 0 3.41l7.59 7.59a2.41 2.41 0 0 0 3.41 0l7.59-7.59a2.41 2.41 0 0 0 0-3.41l-7.59-7.59a2.41 2.41 0 0 0-3.41 0Z",
+];
+
+// Lucide `component.svg`.
+const COMPONENT: &[&str] = &[
+    "M15.536 11.293a1 1 0 0 0 0 1.414l2.376 2.377a1 1 0 0 0 1.414 0l2.377-2.377a1 1 0 0 0 0-1.414l-2.377-2.377a1 1 0 0 0-1.414 0z",
+    "M2.297 11.293a1 1 0 0 0 0 1.414l2.377 2.377a1 1 0 0 0 1.414 0l2.377-2.377a1 1 0 0 0 0-1.414L6.088 8.916a1 1 0 0 0-1.414 0z",
+    "M8.916 17.912a1 1 0 0 0 0 1.415l2.377 2.376a1 1 0 0 0 1.414 0l2.377-2.376a1 1 0 0 0 0-1.415l-2.377-2.376a1 1 0 0 0-1.414 0z",
+    "M8.916 4.674a1 1 0 0 0 0 1.414l2.377 2.376a1 1 0 0 0 1.414 0l2.377-2.376a1 1 0 0 0 0-1.414l-2.377-2.377a1 1 0 0 0-1.414 0z",
+];
+
+// Lucide `unlink.svg`.
+const UNLINK: &[&str] = &[
+    "m18.84 12.25 1.72-1.71h-.02a5.004 5.004 0 0 0-.12-7.07 5.006 5.006 0 0 0-6.95 0l-1.72 1.71",
+    "m5.17 11.75-1.71 1.71a5.004 5.004 0 0 0 .12 7.07 5.006 5.006 0 0 0 6.95 0l1.71-1.71",
+    "M8 2L8 5",
+    "M2 8L5 8",
+    "M16 19L16 22",
+    "M19 16L22 16",
+];
+
+// Lucide `check.svg`.
+const CHECK: &[&str] = &["M20 6 9 17l-5-5"];
+
+// Lucide `arrow-up-right.svg`.
+const ARROW_UP_RIGHT: &[&str] = &["M7 7h10v10", "M7 17 17 7"];
+
 /// Paint `icon` at `top_left`, scaled to `size × size` pixels, in
 /// `color` strokes of width `stroke_width`. The icon's lucide
 /// path data is rendered via `RenderBackend::stroke_svg_path`.
@@ -351,6 +435,15 @@ mod tests {
             Icon::Close,
             Icon::ChevronUp,
             Icon::MessageSquare,
+            Icon::LayoutGrid,
+            Icon::Rows3,
+            Icon::Columns3,
+            Icon::RotateCw,
+            Icon::Diamond,
+            Icon::Component,
+            Icon::Unlink,
+            Icon::Check,
+            Icon::ArrowUpRight,
         ] {
             let b = paint_one(icon);
             assert!(b.paths > 0, "{:?} drew nothing", icon);
