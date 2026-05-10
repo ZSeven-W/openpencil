@@ -458,16 +458,33 @@ export class SkiaNodeRenderer {
     const shadow = effects.find((e): e is ShadowEffect => e.type === 'shadow');
     if (!shadow) return false;
 
+    // LLM-emitted shadows often omit `spread` / `offsetX` / `offsetY` even
+    // though the TS type marks them required — coerce missing / non-numeric
+    // values to 0 so we never feed NaN into CanvasKit. NaN-armed RRectXY
+    // throws inside the WASM module, the throw escapes drawNode (no
+    // try/catch in the loop at renderer.ts:326), and the entire frame stops
+    // rendering past that node → user sees a fully blank canvas.
+    const offsetX =
+      typeof shadow.offsetX === 'number' && Number.isFinite(shadow.offsetX) ? shadow.offsetX : 0;
+    const offsetY =
+      typeof shadow.offsetY === 'number' && Number.isFinite(shadow.offsetY) ? shadow.offsetY : 0;
+    const blur =
+      typeof shadow.blur === 'number' && Number.isFinite(shadow.blur)
+        ? Math.max(0, shadow.blur)
+        : 0;
+    const spread =
+      typeof shadow.spread === 'number' && Number.isFinite(shadow.spread) ? shadow.spread : 0;
+
     const ck = this.ck;
     const paint = new ck.Paint();
     paint.setStyle(ck.PaintStyle.Fill);
     paint.setAntiAlias(true);
     paint.setColor(parseColor(ck, shadow.color));
-    paint.setMaskFilter(ck.MaskFilter.MakeBlur(ck.BlurStyle.Normal, shadow.blur / 2, true));
-    const left = x + shadow.offsetX - shadow.spread;
-    const top = y + shadow.offsetY - shadow.spread;
-    const right = x + w + shadow.offsetX + shadow.spread;
-    const bottom = y + h + shadow.offsetY + shadow.spread;
+    paint.setMaskFilter(ck.MaskFilter.MakeBlur(ck.BlurStyle.Normal, blur / 2, true));
+    const left = x + offsetX - spread;
+    const top = y + offsetY - spread;
+    const right = x + w + offsetX + spread;
+    const bottom = y + h + offsetY + spread;
     const rect = ck.LTRBRect(left, top, right, bottom);
     if (cornerRadiusX > 0 || cornerRadiusY > 0) {
       // 2026-05-10 user-reported "圆角元素的尖角阴影" — drawRect was producing
@@ -495,8 +512,8 @@ export class SkiaNodeRenderer {
       const shadowH = Math.max(0, bottom - top);
       const maxShadowRX = shadowW / 2;
       const maxShadowRY = shadowH / 2;
-      const shadowRX = Math.min(maxShadowRX, Math.max(0, cornerRadiusX + shadow.spread));
-      const shadowRY = Math.min(maxShadowRY, Math.max(0, cornerRadiusY + shadow.spread));
+      const shadowRX = Math.min(maxShadowRX, Math.max(0, cornerRadiusX + spread));
+      const shadowRY = Math.min(maxShadowRY, Math.max(0, cornerRadiusY + spread));
       canvas.drawRRect(ck.RRectXY(rect, shadowRX, shadowRY), paint);
     } else {
       canvas.drawRect(rect, paint);
