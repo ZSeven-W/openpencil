@@ -79,8 +79,8 @@ impl LayerPanel {
             pages,
             items,
             theme: doc.theme(),
-            pages_label: doc.t("layer_panel.pages").to_string(),
-            layers_label: doc.t("layer_panel.layers").to_string(),
+            pages_label: doc.t("pages.title").to_string(),
+            layers_label: doc.t("layers.title").to_string(),
         }
     }
 

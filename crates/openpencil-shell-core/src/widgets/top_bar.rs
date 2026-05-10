@@ -54,7 +54,7 @@ impl TopBar {
     pub fn for_document(doc: &Document) -> Self {
         Self {
             id: WidgetId::new(5000),
-            file_name: doc.t("topbar.untitled").to_string(),
+            file_name: doc.t("common.untitled").to_string(),
             agent_count: 1,
             theme: doc.theme(),
         }

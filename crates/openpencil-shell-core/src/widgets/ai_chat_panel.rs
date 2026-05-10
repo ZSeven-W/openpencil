@@ -109,9 +109,9 @@ impl<'a> AIChatPlaceholder<'a> {
             theme: doc.theme(),
             state: &doc.chat,
             now_ms,
-            label_new_chat: doc.t("chat.new_chat").to_string(),
-            label_start_with_ai: doc.t("chat.start_with_ai").to_string(),
-            label_input_placeholder: doc.t("chat.input_placeholder").to_string(),
+            label_new_chat: doc.t("ai.newChat").to_string(),
+            label_start_with_ai: doc.t("ai.tryExample").to_string(),
+            label_input_placeholder: doc.t("ai.designWithAgent").to_string(),
         }
     }
 
