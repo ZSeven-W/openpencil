@@ -109,26 +109,29 @@ impl Inner {
     fn repaint(&mut self) -> Result<(), JsValue> {
         use openpencil_shell_core::{Color, Point2D, Rect, RenderBackend};
 
+        // Pull the actual canvas dimensions from the backend
+        // every frame so a host that swaps the `<canvas>` width
+        // attribute (responsive layouts, devtool resizing,
+        // future programmatic mount with a different size)
+        // gets a layout that matches reality. Codex Step 3
+        // stop-hook "web repaint ignores actual canvas size"
+        // caught the prior hardcoded `960.0` — this swap also
+        // resolves the "web smoke paints only the toolbar"
+        // regression since the smoke canvas is 960×640 and the
+        // first frame still gets the full width.
+        let viewport_w = self.backend.canvas_width() as f32;
+        let viewport_h = self.backend.canvas_height() as f32;
+
         self.backend.begin_frame();
         // Clear to white so widget paints sit on a clean background.
         self.backend.fill_rect(
             Rect {
                 origin: Point2D::new(0.0, 0.0),
-                size: Point2D::new(960.0, 640.0),
+                size: Point2D::new(viewport_w, viewport_h),
             },
             Color::WHITE,
         );
-        // Step 3: pass the FULL canvas width (matches the smoke
-        // HTML's `<canvas id="op" width="960">`). The host's
-        // `paint(&self, backend, viewport_width)` lays out
-        // Toolbar-top + LayerPanel-left + CanvasViewport-center
-        // + PropertyPanel-right; viewport_width below the
-        // MIN_RAIL_WIDTH cutoff would silently skip everything
-        // except the toolbar — codex stop-hook
-        // "web smoke paints only the toolbar" caught this when
-        // the leftover Step 1b 280-px hardcode was still in
-        // place.
-        self.host.paint(&mut self.backend, 960.0);
+        self.host.paint(&mut self.backend, viewport_w);
         self.backend.end_frame();
         if let Some(err) = self.backend.take_present_error() {
             return Err(err);
