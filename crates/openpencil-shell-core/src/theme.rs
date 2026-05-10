@@ -60,9 +60,12 @@ pub struct Theme {
     pub destructive: Color,
     /// Solid background of an icon-only toolbar button on hover.
     pub button_hover: Color,
-    /// Slightly lighter than `card` — used for the selected row in
-    /// the layer panel + active page tab.
+    /// Slightly lighter than `card` — used for the active page
+    /// tab + neutral row highlights.
     pub row_selected: Color,
+    /// Primary-tinted row highlight (e.g. selected layer row).
+    /// Approximates `bg-blue-500/15` from the TS app.
+    pub row_selected_primary: Color,
 }
 
 impl Theme {
@@ -87,6 +90,7 @@ impl Theme {
             destructive: rgb(0xef, 0x44, 0x44),
             button_hover: rgba(0xff, 0xff, 0xff, 0.06),
             row_selected: rgb(0x26, 0x26, 0x26),
+            row_selected_primary: rgba(0x3b, 0x82, 0xf6, 0.18),
         }
     }
 
@@ -111,6 +115,7 @@ impl Theme {
             destructive: rgb(0xef, 0x44, 0x44),
             button_hover: rgba(0x00, 0x00, 0x00, 0.06),
             row_selected: rgb(0xe5, 0xe5, 0xe5),
+            row_selected_primary: rgba(0x3b, 0x82, 0xf6, 0.15),
         }
     }
 }

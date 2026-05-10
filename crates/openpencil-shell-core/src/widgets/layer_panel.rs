@@ -242,23 +242,30 @@ impl Widget for LayerPanel {
                 size: Point2D::new(rect.size.x - 12.0, LAYER_ROW_HEIGHT - 4.0),
             };
             if item.selected {
+                // TS uses bg-blue-500/15 + primary text + primary
+                // icon for the selected layer row.
                 cx.backend
-                    .fill_round_rect(row, 6.0, self.theme.row_selected);
+                    .fill_round_rect(row, 6.0, self.theme.row_selected_primary);
             }
 
             let indent = ROW_PAD_X + f32::from(item.depth) * 12.0;
-            // Kind icon.
+            // Kind icon — switches to primary color when selected.
+            let icon_color = if item.selected {
+                self.theme.primary
+            } else {
+                self.theme.muted_foreground
+            };
             draw_icon(
                 cx.backend,
                 item.icon,
                 Point2D::new(row.origin.x + indent, row.origin.y + 6.0),
                 14.0,
-                self.theme.muted_foreground,
+                icon_color,
                 1.4,
             );
             // Name label.
             let label_color = if item.selected {
-                self.theme.foreground
+                self.theme.primary
             } else {
                 self.theme.card_foreground
             };

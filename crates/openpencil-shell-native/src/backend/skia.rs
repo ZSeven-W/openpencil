@@ -208,6 +208,25 @@ impl NativeBackend {
         self.draw_op(canvas, &op);
     }
 
+    /// Measure the rendered horizontal advance of `text` at
+    /// `font_size`. Uses the same per-script typeface dispatch as
+    /// `draw_text` so the measurement matches what's painted.
+    /// Falls back to a conservative heuristic when typefaces
+    /// aren't available.
+    pub fn measure_text(&mut self, text: &str, font_size: f32) -> f32 {
+        let typeface = if text.is_ascii() {
+            self.ensure_typeface().cloned()
+        } else {
+            self.ensure_cjk_typeface().cloned()
+        };
+        let Some(typeface) = typeface else {
+            return text.chars().count() as f32 * font_size * 0.55;
+        };
+        let font = skia_safe::Font::new(&typeface, font_size);
+        let (advance, _) = font.measure_str(text, None);
+        advance
+    }
+
     /// Render every shaped run in the layout via cached typefaces +
     /// `Canvas::draw_str` (Step 4 perf fix — see comment on the
     /// `typeface` / `cjk_typeface` fields).

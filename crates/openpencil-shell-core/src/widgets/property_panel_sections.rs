@@ -3,11 +3,20 @@
 //! ceiling. Each `paint_*_section` returns the y-coordinate just
 //! below itself so the parent can chain them.
 
+use crate::document::PropertyFocus;
 use crate::theme::Theme;
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::PaintCx;
 use crate::widgets::property_panel::NodeSnapshot;
 use crate::{Color, Point2D, Rect, TextLayout};
+
+/// Hit-result for a click on the property panel — payload is the
+/// input the click landed on (host stores in
+/// `Document.ui.property_focus`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PropertyPanelHit {
+    Input(PropertyFocus),
+}
 
 const PAD_X: f32 = 16.0;
 /// Vertical breathing room between a divider line and the next
@@ -612,8 +621,27 @@ fn paint_input_with_prefix(
     prefix: &str,
     value: &str,
 ) {
+    paint_input_with_prefix_focused(cx, theme, rect, prefix, value, false);
+}
+
+/// Same as [`paint_input_with_prefix`] but renders a primary-color
+/// border around the box when `focused` is true. Used by the
+/// property panel to render which input the user clicked into.
+fn paint_input_with_prefix_focused(
+    cx: &mut PaintCx<'_>,
+    theme: &Theme,
+    rect: Rect,
+    prefix: &str,
+    value: &str,
+    focused: bool,
+) {
     cx.backend
         .fill_round_rect(rect, INPUT_RADIUS, theme.muted);
+    if focused {
+        cx.backend
+            .stroke_round_rect(rect, INPUT_RADIUS, theme.primary, 1.5);
+    }
+    // Prefix label hugs the left padding.
     let prefix_layout = TextLayout::single_run(
         prefix,
         "system-ui",
@@ -621,8 +649,13 @@ fn paint_input_with_prefix(
         to_jian_color(theme.muted_foreground),
         Point2D::new(0.0, 0.0),
     );
-    cx.backend
-        .draw_text(&prefix_layout, Point2D::new(rect.origin.x + 10.0, rect.origin.y + 17.0));
+    cx.backend.draw_text(
+        &prefix_layout,
+        Point2D::new(rect.origin.x + 10.0, rect.origin.y + rect.size.y / 2.0 + 4.0),
+    );
+    // Value uses the real text-measure API so it stays anchored at
+    // a consistent gap from the prefix regardless of digit count.
+    let prefix_w = cx.backend.measure_text(prefix, 12.0);
     let value_layout = TextLayout::single_run(
         value,
         "system-ui",
@@ -632,7 +665,10 @@ fn paint_input_with_prefix(
     );
     cx.backend.draw_text(
         &value_layout,
-        Point2D::new(rect.origin.x + 24.0, rect.origin.y + 17.0),
+        Point2D::new(
+            rect.origin.x + 10.0 + prefix_w + 8.0,
+            rect.origin.y + rect.size.y / 2.0 + 4.0,
+        ),
     );
 }
 
