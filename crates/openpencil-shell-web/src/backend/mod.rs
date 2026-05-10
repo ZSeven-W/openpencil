@@ -85,6 +85,21 @@ impl WebBackend {
         self.last_present_error.take()
     }
 
+    /// Current physical width of the host `<canvas>` element, refreshed
+    /// at construction + on every `resize` call. Hosts use this so a
+    /// repaint after the canvas DOM attribute changes pulls the new
+    /// width through the WidgetHost layout (codex Step 3 stop-hook
+    /// "web repaint ignores actual canvas size").
+    pub fn canvas_width(&self) -> u32 {
+        self.width
+    }
+
+    /// Current physical height of the host `<canvas>` element. Same
+    /// refresh contract as `canvas_width`.
+    pub fn canvas_height(&self) -> u32 {
+        self.height
+    }
+
     /// Snapshot the raster surface and `put_image_data` it onto the host
     /// `<canvas>`'s 2D context. Spec §5.3 raster-fallback contract:
     /// N32_PREMUL surface, RGBA8888 + Unpremul read, full-frame copy each
