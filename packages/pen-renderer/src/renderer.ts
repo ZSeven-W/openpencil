@@ -322,9 +322,21 @@ export class PenRenderer {
     // Pass current zoom to renderer
     this.nodeRenderer.zoom = this._zoom;
 
-    // Draw all render nodes
+    // Draw all render nodes. Per-node try/catch isolates failures so a
+    // single bad node (malformed effects, NaN coordinates, missing fill)
+    // doesn't abort the whole render loop and blank the canvas. The
+    // 2026-05-10 user report (Bistro generation, layer panel populated,
+    // canvas empty) was traced to NaN feeding RRectXY when an LLM-emitted
+    // shadow omitted `spread` — the throw escaped the loop and every
+    // sibling stopped rendering. The shadow path now coerces missing
+    // numeric fields to 0; this catch is the structural backstop.
     for (const rn of this.renderNodes) {
-      this.nodeRenderer.drawNode(canvas, rn);
+      try {
+        this.nodeRenderer.drawNode(canvas, rn);
+      } catch (err) {
+        const id = rn.node.id ?? '<no-id>';
+        console.error(`[pen-renderer] drawNode threw for node ${id}:`, err);
+      }
     }
 
     // Draw frame labels for root frames + reusable + instances
