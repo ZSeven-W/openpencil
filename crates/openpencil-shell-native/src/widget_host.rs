@@ -290,9 +290,12 @@ impl WidgetHostNative {
 
         // 2. Toolbar — second-highest overlay. A click anywhere
         //    inside its bounding rect is consumed (gaps + padding
-        //    too) so it never falls through to the canvas
-        //    (codex stop-hook fix: "toolbar panel gaps still
-        //    click through to the hidden chat panel").
+        //    too) so it never falls through to the canvas. The
+        //    toolbar's x anchor follows `canvas_region`, so when
+        //    the sidebar is collapsed it shifts left along with
+        //    the canvas (codex stop-hook fix: "collapsed-sidebar
+        //    interactions break").
+        let (cx0, _cy0, _cw, _ch) = self.canvas_region(viewport_width, viewport_height);
         let toolbar = Toolbar::for_document(&self.document);
         let toolbar_h = toolbar
             .layout(&LayoutCx {
@@ -304,7 +307,7 @@ impl WidgetHostNative {
             .y;
         let toolbar_rect = Rect {
             origin: Point2D::new(
-                LAYER_PANEL_WIDTH + TOOLBAR_INSET_X,
+                cx0 + TOOLBAR_INSET_X,
                 TOP_BAR_HEIGHT + TOOLBAR_INSET_Y,
             ),
             size: Point2D::new(TOOLBAR_WIDTH, toolbar_h),
@@ -539,7 +542,7 @@ impl WidgetHostNative {
         // Click outside chat panel — defocus the input.
         let was_focused = self.document.chat.focused;
         self.document.chat.focused = false;
-        let _ = viewport_width;
+        let (cx0, _cy0, _cw, _ch) = self.canvas_region(viewport_width, viewport_height);
         let toolbar = Toolbar::for_document(&self.document);
         let toolbar_h = toolbar
             .layout(&LayoutCx {
@@ -551,7 +554,7 @@ impl WidgetHostNative {
             .y;
         let toolbar_rect = Rect {
             origin: Point2D::new(
-                LAYER_PANEL_WIDTH + TOOLBAR_INSET_X,
+                cx0 + TOOLBAR_INSET_X,
                 TOP_BAR_HEIGHT + TOOLBAR_INSET_Y,
             ),
             size: Point2D::new(TOOLBAR_WIDTH, toolbar_h),

@@ -125,7 +125,10 @@ impl WidgetHost {
         if !self.over_canvas(x, y, viewport_width, viewport_height) {
             return false;
         }
-        let cursor = Point2D::new(x - LAYER_PANEL_WIDTH, y - TOP_BAR_HEIGHT);
+        // Cursor is in canvas-local coords — subtract the live
+        // canvas-region offset (sidebar collapse aware).
+        let (cx0, cy0, _cw, _ch) = self.canvas_region(viewport_width, viewport_height);
+        let cursor = Point2D::new(x - cx0, y - cy0);
         self.document.viewport.zoom_at(cursor, delta_y);
         true
     }
@@ -459,7 +462,11 @@ impl WidgetHost {
         }
     }
 
-    fn toolbar_rect(&self, _viewport_w: f32) -> Rect {
+    fn toolbar_rect(&self, viewport_w: f32) -> Rect {
+        // Anchor follows canvas_region (sidebar-collapse aware) so
+        // hit-test matches paint regardless of sidebar state.
+        let (cx0, _cy0, _cw, _ch) =
+            self.canvas_region(viewport_w, f32::INFINITY);
         let toolbar = Toolbar::for_document(&self.document);
         let h = toolbar
             .layout(&LayoutCx {
@@ -470,7 +477,7 @@ impl WidgetHost {
             .size
             .y;
         Rect {
-            origin: Point2D::new(LAYER_PANEL_WIDTH + TOOLBAR_INSET_X, TOP_BAR_HEIGHT + TOOLBAR_INSET_Y),
+            origin: Point2D::new(cx0 + TOOLBAR_INSET_X, TOP_BAR_HEIGHT + TOOLBAR_INSET_Y),
             size: Point2D::new(TOOLBAR_WIDTH, h),
         }
     }
