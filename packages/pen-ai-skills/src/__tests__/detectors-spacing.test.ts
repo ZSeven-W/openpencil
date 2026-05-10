@@ -1,6 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import type { PenNode } from '@zseven-w/pen-types';
-import { detectEdgeSectionPadding } from '../diagnostics/detectors-spacing';
+import {
+  detectEdgeSectionPadding,
+  detectStackedHorizontalPadding,
+} from '../diagnostics/detectors-spacing';
 
 // 2026-05-09 user report — image 6: "Categories" mobile section had its
 // chip text glued to the screen edge because both the page root and the
@@ -239,5 +242,87 @@ describe('detectEdgeSectionPadding', () => {
 
     expect(issues).toHaveLength(1);
     expect(issues[0].nodeId).toBe('page');
+  });
+});
+
+// 2026-05-10 user report — DeepSeek "Bistro" mobile food app shipped with
+// root padding [0,16,0,16] AND a "Today's Specials" section padding [0,24],
+// effective 40px gutter on a 375px page. Looked pinched / "too much
+// padding". detectStackedHorizontalPadding catches the page-vs-section
+// double-pad pattern (info-only — section can legitimately want larger
+// inset for emphasis, so detect-only and let user/agent decide).
+
+describe('detectStackedHorizontalPadding', () => {
+  it('flags section whose horizontal padding stacks with mobile root', () => {
+    const root = mobileRoot(
+      [section('specials', [text('t1')], { padding: [0, 24] }), section('news', [text('t2')])],
+      [0, 16, 0, 16],
+    );
+    const issues = detectStackedHorizontalPadding(root);
+    expect(issues).toHaveLength(1);
+    expect(issues[0].nodeId).toBe('specials');
+    expect(issues[0].category).toBe('stacked-horizontal-padding');
+    expect(issues[0].severity).toBe('info');
+    expect(issues[0].reason).toMatch(/stacks with root/);
+  });
+
+  it('flags multiple offending sections in one root', () => {
+    const root = mobileRoot(
+      [
+        section('a', [text('t1')], { padding: [0, 24] }),
+        section('b', [text('t2')], { padding: 16 }),
+        section('c', [text('t3')]),
+      ],
+      [0, 16, 0, 16],
+    );
+    const issues = detectStackedHorizontalPadding(root);
+    expect(issues).toHaveLength(2);
+    expect(new Set(issues.map((i) => i.nodeId))).toEqual(new Set(['a', 'b']));
+  });
+
+  it('does NOT flag when only root has horizontal padding (the goal state)', () => {
+    const root = mobileRoot(
+      [section('a', [text('t1')]), section('b', [text('t2')])],
+      [0, 16, 0, 16],
+    );
+    expect(detectStackedHorizontalPadding(root)).toHaveLength(0);
+  });
+
+  it('does NOT flag when root has 0 horizontal padding (sections own gutter is the only one)', () => {
+    const root = mobileRoot([
+      section('a', [text('t1')], { padding: [0, 24] }),
+      section('b', [text('t2')], { padding: [0, 24] }),
+    ]);
+    expect(detectStackedHorizontalPadding(root)).toHaveLength(0);
+  });
+
+  it('does NOT flag full-bleed roles (top-nav / hero / banner) even when their padding stacks', () => {
+    const root = mobileRoot(
+      [
+        section('topnav', [text('Title')], { role: 'top-nav', padding: [0, 24] }),
+        section('hero', [text('h')], { role: 'hero', padding: [0, 24] }),
+      ],
+      [0, 16, 0, 16],
+    );
+    expect(detectStackedHorizontalPadding(root)).toHaveLength(0);
+  });
+
+  it('does NOT flag desktop-shaped roots (component-internal padding stacking is legitimate)', () => {
+    // The detector is page-shape-only: a 1200px desktop card with a chip
+    // having internal padding is a totally normal nested-component pattern,
+    // not the page-gutter doubling we care about.
+    const root = {
+      id: 'page',
+      type: 'frame',
+      width: 1200,
+      height: 800,
+      layout: 'vertical',
+      padding: [0, 24, 0, 24],
+      children: [
+        section('a', [text('t1')], { padding: [0, 16] }),
+        section('b', [text('t2')], { padding: [0, 16] }),
+      ],
+    } as unknown as PenNode;
+    expect(detectStackedHorizontalPadding(root)).toHaveLength(0);
   });
 });
