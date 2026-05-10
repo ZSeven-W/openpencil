@@ -476,26 +476,27 @@ export class SkiaNodeRenderer {
       // shadows MUST follow the node's outline, otherwise the corners poke
       // out from under the rounded shape.
       //
-      // Spread expands (or contracts) the visible shadow edge by `spread`
-      // px on each side, so each visible corner radius needs the same
-      // offset to stay parallel to the node — clamp to ≥ 0 so a negative
-      // spread doesn't invert the curve. Independent rx / ry let an
-      // ellipse render its shadow as a true ellipse (rx=w/2, ry=h/2)
-      // instead of a stadium when w ≠ h.
+      // Contract: cornerRadiusX / cornerRadiusY are the BODY's actually-
+      // rendered radii (post any half-extent clamp the caller did to
+      // match drawOval / body drawRRect). The shadow just adds `spread`
+      // (visible edge offsets by spread px on each side, so the visible
+      // curve needs the same offset to stay parallel) and clamps each
+      // axis to the spread-adjusted shadow rect's own half-extent so
+      // CanvasKit's RRectXY doesn't degenerate. Negative-spread inset
+      // still ≥ 0.
       //
-      // Upper clamp: RRect rx / ry must not exceed the half-extent of the
-      // (already-spread-expanded) shadow rect, otherwise CanvasKit
-      // degenerates the shape — the body's drawRRect at L643 / L1108
-      // already does this with `Math.min(cr, maxR)`; the shadow path
-      // needs the same guard against a too-large radius (e.g. a small
-      // 60×60 ellipse shadow with spread=4 has maxR ≈ 34, so a raw
-      // rx=cr+spread=34+4=38 would visibly distort).
+      // Codex stop-hook 2026-05-10: the prior version did its own clamp
+      // on raw cornerRadius which diverged from the body when
+      // cornerRadius exceeded the body's half-extent (e.g. 60×60 frame
+      // with cr=100 — body clamps to 30 but shadow drew at 100+spread).
+      // Pushing the body clamp to the call site keeps the shadow in
+      // lockstep with whatever the body actually rendered.
       const shadowW = Math.max(0, right - left);
       const shadowH = Math.max(0, bottom - top);
-      const maxRX = shadowW / 2;
-      const maxRY = shadowH / 2;
-      const shadowRX = Math.min(maxRX, Math.max(0, cornerRadiusX + shadow.spread));
-      const shadowRY = Math.min(maxRY, Math.max(0, cornerRadiusY + shadow.spread));
+      const maxShadowRX = shadowW / 2;
+      const maxShadowRY = shadowH / 2;
+      const shadowRX = Math.min(maxShadowRX, Math.max(0, cornerRadiusX + shadow.spread));
+      const shadowRY = Math.min(maxShadowRY, Math.max(0, cornerRadiusY + shadow.spread));
       canvas.drawRRect(ck.RRectXY(rect, shadowRX, shadowRY), paint);
     } else {
       canvas.drawRect(rect, paint);
@@ -570,25 +571,33 @@ export class SkiaNodeRenderer {
     const effects =
       'effects' in node ? (node as PenNode & { effects?: PenEffect[] }).effects : undefined;
     if (node.type !== 'text') {
-      // Pass the node's effective corner radii (rx, ry) so the drop shadow
-      // follows the rounded / elliptical outline.
+      // Pass the node's effective POST-CLAMP corner radii (rx, ry) so the
+      // drop shadow follows the body's actual rendered outline, not the
+      // raw cornerRadius. Codex 2026-05-10 caught the divergence when
+      // raw cornerRadius exceeds the body's half-extent — body clamps
+      // (drawRRect at L664 / L1108 use Math.min(cr, min(w/2,h/2))) but
+      // shadow then ran with raw value + spread, drifting visibly past
+      // the body's curve.
       //
-      // Frame / rectangle / image: rx === ry === cornerRadius (single value).
-      // Ellipse: rx = w/2, ry = h/2 — drawRRect with these radii produces
-      //   a true ellipse shadow that matches drawOval's outline (instead
-      //   of the previous stadium approximation when w ≠ h).
-      // Path / line / polygon: no cornerRadius, both fall through to 0 →
-      //   plain drawRect (correct for arbitrary path geometry).
+      //   Frame / rectangle / image (symmetric body): rx = ry =
+      //     min(cornerRadius, min(w/2, h/2)) — matches body's drawRRect.
+      //   Ellipse (asymmetric body): rx = w/2, ry = h/2 — matches the
+      //     body's drawOval outline; produces a true ellipse shadow
+      //     instead of a stadium when w ≠ h.
+      //   Path / line / polygon: no cornerRadius → 0/0, falls through
+      //     to plain drawRect (correct for arbitrary path geometry).
       let crX = 0;
       let crY = 0;
       if (node.type === 'ellipse') {
         crX = absW / 2;
         crY = absH / 2;
       } else {
-        crX = cornerRadiusValue(
+        const raw = cornerRadiusValue(
           (node as PenNode & { cornerRadius?: number | [number, number, number, number] })
             .cornerRadius,
         );
+        const bodyMaxR = Math.min(absW / 2, absH / 2);
+        crX = Math.min(raw, bodyMaxR);
         crY = crX;
       }
       this.applyShadowDirect(canvas, effects, absX, absY, absW, absH, crX, crY);
