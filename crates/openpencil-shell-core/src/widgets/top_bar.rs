@@ -329,7 +329,7 @@ mod tests {
     }
 
     #[test]
-    fn layout_reports_full_width_and_48_height() {
+    fn layout_reports_full_width_and_top_bar_height() {
         let bar = TopBar::untitled();
         let cx = LayoutCx {
             available_width: 1000.0,
@@ -337,7 +337,7 @@ mod tests {
         };
         let lb = bar.layout(&cx);
         assert_eq!(lb.rect.size.x, 1000.0);
-        assert_eq!(lb.rect.size.y, 48.0);
+        assert_eq!(lb.rect.size.y, TOP_BAR_HEIGHT);
     }
 
     #[test]

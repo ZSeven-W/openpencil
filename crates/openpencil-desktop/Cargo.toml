@@ -1,0 +1,30 @@
+[package]
+name = "openpencil-desktop"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "OpenPencil desktop runner — winit + skia-safe binary that drives the Rust shell on macOS / Linux / Windows"
+
+[[bin]]
+name = "openpencil-desktop"
+path = "src/main.rs"
+
+# Desktop-only binary. The shell-native lib is multi-platform (mobile
+# stubs land in Step 1f) but the runner here pulls winit + glutin via
+# shell-native's desktop dep set, so the whole crate is gated to
+# macos / linux / windows.
+[target.'cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))'.dependencies]
+openpencil-shell-core = { path = "../openpencil-shell-core", version = "0.1.0" }
+openpencil-shell-native = { path = "../openpencil-shell-native", version = "0.1.0" }
+skia-safe = { version = "0.97.0", default-features = false, features = [
+  "binary-cache",
+  "textlayout",
+  "gl",
+] }
+winit = { version = "0.30.13", default-features = false, features = [
+  "x11",
+  "wayland",
+  "wayland-csd-adwaita",
+  "rwh_06",
+] }
