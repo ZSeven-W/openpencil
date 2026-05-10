@@ -52,15 +52,32 @@ describe('detectTextBgContrast', () => {
     expect(detectTextBgContrast(root, emptyDoc)).toHaveLength(0);
   });
 
-  it('flags light-gray text on white (ratio ~3.9 < AA 4.5)', () => {
-    const root = frame('page', [text('t1', solid('#888888'))], solid('#FFFFFF'));
+  it('flags very-low-contrast gray on white (ratio ~2.1 < default 2.5)', () => {
+    // 2026-05-10 calibration — was #888888 (ratio 3.95) when threshold was
+    // WCAG AA 4.5; corpus replay showed the strict threshold flagging
+    // industry-standard caption patterns. Lowered to 2.5 normal / 2.0 large
+    // so only genuinely-broken contrast trips. #B0B0B0 is the lighter
+    // boundary still failing 2.5.
+    const root = frame('page', [text('t1', solid('#B0B0B0'))], solid('#FFFFFF'));
     const issues = detectTextBgContrast(root, emptyDoc);
     expect(issues).toHaveLength(1);
     expect(issues[0].nodeId).toBe('t1');
     expect(issues[0].category).toBe('text-bg-contrast');
     expect(issues[0].severity).toBe('info');
     expect(issues[0].suggestedValue).toBeNull();
-    expect(issues[0].reason).toMatch(/below WCAG AA/);
+    expect(issues[0].reason).toMatch(/below 2\.5:1/);
+  });
+
+  it('does NOT flag Tailwind slate-400 captions on white (ratio ~2.56 — intentional tertiary text)', () => {
+    // The 2026-05-08 corpus replay was 43% noise because WCAG-AA strict
+    // flagged this pattern. New threshold tolerates it.
+    const root = frame('page', [text('t1', solid('#94A3B8'))], solid('#FFFFFF'));
+    expect(detectTextBgContrast(root, emptyDoc)).toHaveLength(0);
+  });
+
+  it('does NOT flag Tailwind blue-600 chips on blue-100 (ratio ~4.24 — chip pattern)', () => {
+    const root = frame('page', [text('t1', solid('#2563EB'))], solid('#DBEAFE'));
+    expect(detectTextBgContrast(root, emptyDoc)).toHaveLength(0);
   });
 
   it('flags white text on white bg (ratio 1.0 — invisible)', () => {
@@ -85,20 +102,29 @@ describe('detectTextBgContrast', () => {
     expect(detectTextBgContrast(root, emptyDoc)).toHaveLength(1);
   });
 
-  it('uses the LARGE-text threshold (3.0) for fontSize >= 24', () => {
-    // Ratio ~3.5 — fails normal 4.5 but passes large 3.0
-    const root = frame('page', [text('t1', solid('#787878'), 32)], solid('#FFFFFF'));
+  it('uses the LARGE-text threshold (2.0) for fontSize >= 24', () => {
+    // #B0B0B0 on white = ratio ~2.13 — fails normal 2.5 but passes large 2.0
+    const root = frame('page', [text('t1', solid('#B0B0B0'), 32)], solid('#FFFFFF'));
     expect(detectTextBgContrast(root, emptyDoc)).toHaveLength(0);
   });
 
-  it('uses the LARGE-text threshold (3.0) for fontSize >= 19 + bold weight', () => {
-    const root = frame('page', [text('t1', solid('#787878'), 20, 700)], solid('#FFFFFF'));
+  it('uses the LARGE-text threshold (2.0) for fontSize >= 19 + bold weight', () => {
+    const root = frame('page', [text('t1', solid('#B0B0B0'), 20, 700)], solid('#FFFFFF'));
     expect(detectTextBgContrast(root, emptyDoc)).toHaveLength(0);
   });
 
   it('still flags >=19px non-bold text (large rule needs 700+ weight)', () => {
-    const root = frame('page', [text('t1', solid('#888888'), 20, 400)], solid('#FFFFFF'));
+    // Non-bold large text uses the NORMAL threshold (2.5); 2.13 < 2.5 → flag.
+    const root = frame('page', [text('t1', solid('#B0B0B0'), 20, 400)], solid('#FFFFFF'));
     expect(detectTextBgContrast(root, emptyDoc)).toHaveLength(1);
+  });
+
+  it('honors caller-supplied opts.normalThreshold to enforce stricter audits', () => {
+    // 2.56:1 (slate-400) is silenced by default 2.5 but should re-fire when
+    // a stricter audit asks for WCAG-AA 4.5.
+    const root = frame('page', [text('t1', solid('#94A3B8'))], solid('#FFFFFF'));
+    expect(detectTextBgContrast(root, emptyDoc)).toHaveLength(0);
+    expect(detectTextBgContrast(root, emptyDoc, { normalThreshold: 4.5 })).toHaveLength(1);
   });
 
   it('walks ancestor chain to find first non-transparent bg', () => {
@@ -123,13 +149,13 @@ describe('detectTextBgContrast', () => {
 
   it('resolves $variable refs through doc.variables / theme', () => {
     const doc = docWithVars({
-      'color-text': { type: 'color', value: '#888888' },
+      'color-text': { type: 'color', value: '#B0B0B0' },
       'color-bg': { type: 'color', value: '#FFFFFF' },
     });
     const root = frame('page', [text('t1', solid('$color-text'))], solid('$color-bg'));
     const issues = detectTextBgContrast(root, doc);
     expect(issues).toHaveLength(1);
-    expect(issues[0].reason).toMatch(/text=#888888 on bg=#FFFFFF/);
+    expect(issues[0].reason).toMatch(/text=#B0B0B0 on bg=#FFFFFF/);
   });
 
   it('skips text whose color ref does not resolve (no false positive)', () => {

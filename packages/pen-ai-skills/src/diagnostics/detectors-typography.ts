@@ -3,10 +3,35 @@ import { resolveColorRef, getDefaultTheme } from '@zseven-w/pen-core';
 import type { Issue } from './types';
 import { colorContrast } from './color-utils';
 
-/** WCAG 2.x AA threshold for normal-size text. */
-const WCAG_AA_NORMAL = 4.5;
-/** WCAG 2.x AA threshold for large text (>= 18pt or >= 14pt bold). */
-const WCAG_AA_LARGE = 3.0;
+/**
+ * Default contrast thresholds — looser than WCAG 2.x AA on purpose.
+ *
+ * 2026-05-10 calibration against `2026-05-08-rank4-gpt55` corpus (104 real
+ * GPT-5.5 dashboard outputs, 95 applied successfully):
+ *
+ *   - WCAG-AA strict (4.5/3.0) → 41 hits, ~43% of designs flagged.
+ *     Most hits were industry-standard Tailwind palettes used as
+ *     intentional tertiary text (slate-400 captions on white = 2.56:1,
+ *     blue-600 chips on blue-100 = 4.24:1, emerald-500 deltas on white
+ *     = 2.54:1). These pass design review at Linear / Vercel / Notion /
+ *     GitHub and feel like false positives to the user.
+ *   - 2.5/2.0 → expected ~5 hits. Catches the user's reported pain
+ *     (white-on-cream = 1.10:1, white-on-white = 1.0:1, white-on-near-
+ *     white) without flagging muted-caption patterns.
+ *
+ * This detector reports physical readability, not WCAG compliance.
+ * Callers can override via opts.normalThreshold / opts.largeThreshold
+ * if they want stricter audits without re-implementing the walk.
+ */
+const DEFAULT_NORMAL_THRESHOLD = 2.5;
+const DEFAULT_LARGE_THRESHOLD = 2.0;
+
+export interface DetectTextBgContrastOptions {
+  /** Contrast ratio below which normal-size text is flagged. Default 2.5. */
+  normalThreshold?: number;
+  /** Contrast ratio below which large text (>=24px or >=19px bold) is flagged. Default 2.0. */
+  largeThreshold?: number;
+}
 
 /**
  * Pull the first solid color out of a fill array. Gradients get reduced to
@@ -73,10 +98,16 @@ function isLargeText(node: PenNode): boolean {
  * audit panel and chat status line so the user / agent can decide,
  * without silently rewriting their fills.
  */
-export function detectTextBgContrast(root: PenNode, doc: PenDocument): Issue[] {
+export function detectTextBgContrast(
+  root: PenNode,
+  doc: PenDocument,
+  opts: DetectTextBgContrastOptions = {},
+): Issue[] {
   const issues: Issue[] = [];
   const variables = doc.variables ?? {};
   const theme = getDefaultTheme(doc.themes);
+  const normalThreshold = opts.normalThreshold ?? DEFAULT_NORMAL_THRESHOLD;
+  const largeThreshold = opts.largeThreshold ?? DEFAULT_LARGE_THRESHOLD;
 
   walk(root, []);
   return issues;
@@ -117,7 +148,7 @@ export function detectTextBgContrast(root: PenNode, doc: PenDocument): Issue[] {
     const ratio = colorContrast(textColor, bgColor);
     if (!Number.isFinite(ratio)) return; // either color failed to parse
 
-    const threshold = isLargeText(node) ? WCAG_AA_LARGE : WCAG_AA_NORMAL;
+    const threshold = isLargeText(node) ? largeThreshold : normalThreshold;
     if (ratio >= threshold) return;
 
     issues.push({
@@ -131,7 +162,7 @@ export function detectTextBgContrast(root: PenNode, doc: PenDocument): Issue[] {
       // No suggestedValue: the right replacement depends on the design
       // system + theme + intent, which only the user/agent can decide.
       suggestedValue: null,
-      reason: `text/bg contrast ${ratio.toFixed(2)}:1 below WCAG AA ${threshold}:1 (text=${textColor} on bg=${bgColor})`,
+      reason: `text/bg contrast ${ratio.toFixed(2)}:1 below ${threshold}:1 (text=${textColor} on bg=${bgColor})`,
     });
   }
 }
