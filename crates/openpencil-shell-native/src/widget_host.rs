@@ -22,9 +22,10 @@ use crate::backend::NativeBackend;
 use openpencil_shell_core::document::{ChatAnchor, Document, PropertyFocus};
 use openpencil_shell_core::widgets::{
     AIChatHit, AIChatPlaceholder, CanvasViewport, LayerPanel, LayoutCx, LocalePicker, PaintCx,
-    PropertyPanel, StatusBar, Toolbar, TopBar, TopBarHit, Widget, AI_CHAT_COLLAPSED_HEIGHT,
-    AI_CHAT_COLLAPSED_WIDTH, AI_CHAT_HEIGHT, AI_CHAT_WIDTH, LOCALE_PICKER_WIDTH, STATUS_BAR_HEIGHT,
-    STATUS_BAR_WIDTH, TOOLBAR_WIDTH, TOP_BAR_HEIGHT,
+    PropertyPanel, ShapeChoice, ShapePicker, StatusBar, Toolbar, TopBar, TopBarHit, Widget,
+    AI_CHAT_COLLAPSED_HEIGHT, AI_CHAT_COLLAPSED_WIDTH, AI_CHAT_HEIGHT, AI_CHAT_WIDTH,
+    LOCALE_PICKER_WIDTH, SHAPE_PICKER_WIDTH, STATUS_BAR_HEIGHT, STATUS_BAR_WIDTH, TOOLBAR_WIDTH,
+    TOP_BAR_HEIGHT,
 };
 use openpencil_shell_core::{Color, Point2D, Rect, RenderBackend, TextLayout, Theme};
 
@@ -346,6 +347,32 @@ impl WidgetHostNative {
             }
         }
 
+        // 0ab. Shape picker overlay — same dismissal rules as the
+        //      locale picker. Row hit sets the shape tool + closes;
+        //      click anywhere else closes silently and swallows
+        //      the press so the same click can't re-toggle the
+        //      picker via the toolbar shape slot below.
+        if self.document.ui.shape_picker_open {
+            let panel_rect = self.shape_picker_rect(viewport_width, viewport_height);
+            let picker = ShapePicker::for_document(&self.document);
+            if let Some(choice) = picker.hit_test(panel_rect, Point2D::new(x, y)) {
+                match choice {
+                    ShapeChoice::Tool(tool) => {
+                        self.document.ui.shape_tool = tool;
+                        self.document.tool = tool;
+                    }
+                    ShapeChoice::OpenIconPicker | ShapeChoice::ImportImageOrSvg => {
+                        // Host-side dispatch lands when the icon
+                        // picker / file dialog widgets ship.
+                    }
+                }
+                self.document.ui.shape_picker_open = false;
+                return true;
+            }
+            self.document.ui.shape_picker_open = false;
+            return true;
+        }
+
         // 0a. Locale picker overlay — when open, it sits on top of
         //     everything. Row click sets locale + closes; ANY
         //     other click (including the Globe button itself, the
@@ -483,10 +510,16 @@ impl WidgetHostNative {
                 match hit {
                     openpencil_shell_core::widgets::ToolbarHit::Tool(tool) => {
                         self.document.tool = tool;
+                        self.document.ui.shape_picker_open = false;
                         return true;
                     }
                     openpencil_shell_core::widgets::ToolbarHit::Action(_) => {
+                        self.document.ui.shape_picker_open = false;
                         return false;
+                    }
+                    openpencil_shell_core::widgets::ToolbarHit::ToggleShapePicker => {
+                        self.document.ui.shape_picker_open = !self.document.ui.shape_picker_open;
+                        return true;
                     }
                 }
             }
@@ -725,6 +758,37 @@ impl WidgetHostNative {
         (canvas_left, TOP_BAR_HEIGHT, canvas_w, canvas_h)
     }
 
+    fn shape_picker_rect(&self, viewport_w: f32, viewport_h: f32) -> Rect {
+        let (cx0, _cy, cw, _ch) = self.canvas_region(viewport_w, viewport_h);
+        let toolbar = Toolbar::for_document(&self.document);
+        let toolbar_h = toolbar
+            .layout(&LayoutCx {
+                available_width: TOOLBAR_WIDTH,
+                dpi: 1.0,
+            })
+            .rect
+            .size
+            .y;
+        let toolbar_rect = Rect {
+            origin: Point2D::new(cx0 + TOOLBAR_INSET_X, TOP_BAR_HEIGHT + TOOLBAR_INSET_Y),
+            size: Point2D::new(TOOLBAR_WIDTH, toolbar_h),
+        };
+        let slot = toolbar
+            .shape_slot_rect(toolbar_rect)
+            .unwrap_or(toolbar_rect);
+        let panel_h = ShapePicker::panel_height();
+        // Anchor immediately to the right of the shape slot. Clamp
+        // so the panel never runs off the right edge of the canvas
+        // (when the toolbar is squeezed against the property panel).
+        let max_x = cx0 + cw - SHAPE_PICKER_WIDTH - 4.0;
+        let x = (slot.origin.x + slot.size.x + 6.0).min(max_x);
+        let y = slot.origin.y;
+        Rect {
+            origin: Point2D::new(x, y),
+            size: Point2D::new(SHAPE_PICKER_WIDTH, panel_h),
+        }
+    }
+
     fn locale_picker_rect(&self, viewport_w: f32) -> Rect {
         let top_bar_rect = Rect {
             origin: Point2D::new(0.0, 0.0),
@@ -854,6 +918,10 @@ impl WidgetHostNative {
                     return true;
                 }
                 openpencil_shell_core::widgets::ToolbarHit::Action(_) => return false,
+                openpencil_shell_core::widgets::ToolbarHit::ToggleShapePicker => {
+                    self.document.ui.shape_picker_open = !self.document.ui.shape_picker_open;
+                    return true;
+                }
             }
         }
         // LayerPanel hits only land when the sidebar is open —
@@ -1026,8 +1094,19 @@ impl WidgetHostNative {
             status.paint(&mut cx, status_rect);
         }
 
-        // 9. LocalePicker — top-most overlay so it covers chat /
-        //    toolbar / status when open.
+        // 9. ShapePicker — anchored to the right of the toolbar
+        //    shape slot; same z-priority as the locale picker.
+        if self.document.ui.shape_picker_open {
+            let picker_rect = self.shape_picker_rect(viewport_width, viewport_height);
+            let picker = ShapePicker::for_document(&self.document);
+            let mut cx = PaintCx {
+                backend: &mut *frame,
+            };
+            picker.paint(&mut cx, picker_rect);
+        }
+
+        // 10. LocalePicker — top-most overlay so it covers chat /
+        //     toolbar / status when open.
         if self.document.ui.locale_picker_open {
             let picker_rect = self.locale_picker_rect(viewport_width);
             let picker = LocalePicker::for_document(&self.document);
