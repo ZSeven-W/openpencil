@@ -352,6 +352,13 @@ pub struct UiState {
     /// Which property-panel input has keyboard focus. `None` =
     /// no input focused; the panel paints all inputs muted.
     pub property_focus: Option<PropertyFocus>,
+    /// Active theme — swapped by the TopBar Sun icon. Drives
+    /// every widget's `Theme` lookup so the entire chrome flips
+    /// together.
+    pub theme_mode: ThemeMode,
+    /// UI locale — cycled via the TopBar Globe icon. Drives the
+    /// `t(key)` lookup widgets use for chrome strings.
+    pub locale: Locale,
 }
 
 impl Default for UiState {
@@ -359,6 +366,43 @@ impl Default for UiState {
         Self {
             sidebar_open: true,
             property_focus: None,
+            theme_mode: ThemeMode::Dark,
+            locale: Locale::ZhCn,
+        }
+    }
+}
+
+/// Light/dark switch — light palette is stubbed in
+/// [`crate::theme::Theme::light`] and ready to use.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ThemeMode {
+    Dark,
+    Light,
+}
+
+impl ThemeMode {
+    pub fn flipped(self) -> Self {
+        match self {
+            ThemeMode::Dark => ThemeMode::Light,
+            ThemeMode::Light => ThemeMode::Dark,
+        }
+    }
+}
+
+/// UI locale. Step 6: zh-CN default + en-US fallback. More
+/// locales added when the chrome strings stabilise.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Locale {
+    ZhCn,
+    EnUs,
+}
+
+impl Locale {
+    /// Cycle to the next locale (round-trips through the list).
+    pub fn next(self) -> Self {
+        match self {
+            Locale::ZhCn => Locale::EnUs,
+            Locale::EnUs => Locale::ZhCn,
         }
     }
 }
@@ -582,6 +626,24 @@ impl Tool {
 }
 
 impl Document {
+    /// Active theme — driven by `ui.theme_mode`. Widgets call this
+    /// instead of hardcoding `Theme::dark()` so the entire chrome
+    /// flips together when the user clicks the TopBar Sun icon.
+    pub fn theme(&self) -> crate::Theme {
+        match self.ui.theme_mode {
+            ThemeMode::Dark => crate::Theme::dark(),
+            ThemeMode::Light => crate::Theme::light(),
+        }
+    }
+
+    /// Translate a chrome string by key. Keys are stable English
+    /// identifiers; values come from a per-locale table. Unknown
+    /// keys fall through to the key itself so callers get a
+    /// visible "missing translation" instead of an empty render.
+    pub fn t<'a>(&self, key: &'a str) -> &'a str {
+        crate::i18n::translate(self.ui.locale, key)
+    }
+
     /// Empty document with one empty default page named "Page 1".
     /// Used by host smoke fixtures.
     pub fn empty() -> Self {

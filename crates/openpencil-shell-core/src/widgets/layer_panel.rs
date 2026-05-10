@@ -76,7 +76,7 @@ impl LayerPanel {
             id: WidgetId::new(1000),
             pages,
             items,
-            theme: Theme::dark(),
+            theme: doc.theme(),
         }
     }
 

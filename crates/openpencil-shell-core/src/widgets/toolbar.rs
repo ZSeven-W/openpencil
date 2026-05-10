@@ -71,9 +71,9 @@ impl Toolbar {
         Self::for_document(&Document::empty())
     }
 
-    /// Build the toolbar bound to the document's active tool. The
-    /// active highlight reads `doc.tool`; the rest is the static
-    /// item list.
+    /// Build the toolbar bound to the document's active tool +
+    /// theme. The active highlight reads `doc.tool`; theme reads
+    /// `doc.theme()` so the toolbar flips with TopBar Sun click.
     pub fn for_document(doc: &Document) -> Self {
         Self {
             id: WidgetId::new(3000),
@@ -91,7 +91,7 @@ impl Toolbar {
                 ToolbarItem::Action(ToolbarAction::ToggleDesignPanel, Icon::BookOpen),
             ],
             active: doc.tool,
-            theme: Theme::dark(),
+            theme: doc.theme(),
         }
     }
 

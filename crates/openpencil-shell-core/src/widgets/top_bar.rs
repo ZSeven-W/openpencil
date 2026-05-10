@@ -5,6 +5,7 @@
 //! agent-status + i18n + fullscreen on the right. Click handling is
 //! a P6 follow-up; Step 4 paints only.
 
+use crate::document::Document;
 use crate::theme::Theme;
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::{LayoutBox, LayoutCx, PaintCx, Widget, WidgetId};
@@ -20,6 +21,10 @@ const PAD: f32 = 12.0;
 pub enum TopBarHit {
     /// PanelLeft icon — toggle sidebar (LayerPanel) visibility.
     ToggleSidebar,
+    /// Sun icon — flip theme dark↔light.
+    ToggleTheme,
+    /// Globe icon — cycle through UI locales.
+    ToggleLocale,
 }
 
 pub struct TopBar {
@@ -43,10 +48,22 @@ impl TopBar {
         Self::new("未命名")
     }
 
-    /// Hit-test the title bar at `point`. Returns `Some(hit)` for
-    /// the panel-left icon (toggles the LayerPanel) and `None`
-    /// otherwise. The button's icon-rect lives at the very left
-    /// of the bar, inset by `PAD`.
+    /// Document-aware constructor — reads the active theme + the
+    /// localised "untitled" label so the bar flips with theme +
+    /// locale toggles.
+    pub fn for_document(doc: &Document) -> Self {
+        Self {
+            id: WidgetId::new(5000),
+            file_name: doc.t("topbar.untitled").to_string(),
+            agent_count: 1,
+            theme: doc.theme(),
+        }
+    }
+
+    /// Hit-test the title bar at `point`. Recognised buttons:
+    ///   - PanelLeft (left edge) → ToggleSidebar
+    ///   - Sun (third from right) → ToggleTheme
+    ///   - Globe (fourth from right) → ToggleLocale
     pub fn hit_test(&self, rect: Rect, point: Point2D) -> Option<TopBarHit> {
         if !rect_contains(rect, point) {
             return None;
@@ -57,6 +74,29 @@ impl TopBar {
         };
         if rect_contains(panel_left_rect, point) {
             return Some(TopBarHit::ToggleSidebar);
+        }
+        // Right cluster: Maximize / Sun / Globe (right→left).
+        // Each ICON_BUTTON wide, no extra gap. Mirror of paint:
+        //   rx = right - PAD - ICON_BUTTON  →  Maximize
+        //   rx -= ICON_BUTTON              →  Sun
+        //   rx -= ICON_BUTTON              →  Globe
+        let right = rect.origin.x + rect.size.x;
+        let sun_x = right - PAD - ICON_BUTTON * 2.0;
+        let globe_x = right - PAD - ICON_BUTTON * 3.0;
+        let icon_y = rect.origin.y + 8.0;
+        let sun_rect = Rect {
+            origin: Point2D::new(sun_x, icon_y),
+            size: Point2D::new(ICON_BUTTON, ICON_BUTTON),
+        };
+        if rect_contains(sun_rect, point) {
+            return Some(TopBarHit::ToggleTheme);
+        }
+        let globe_rect = Rect {
+            origin: Point2D::new(globe_x, icon_y),
+            size: Point2D::new(ICON_BUTTON, ICON_BUTTON),
+        };
+        if rect_contains(globe_rect, point) {
+            return Some(TopBarHit::ToggleLocale);
         }
         None
     }

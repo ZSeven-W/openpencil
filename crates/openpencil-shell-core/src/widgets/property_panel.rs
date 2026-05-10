@@ -80,7 +80,7 @@ impl PropertyPanel {
         Some(Self {
             id: WidgetId::new(2000),
             snapshot: NodeSnapshot::from_node(node),
-            theme: Theme::dark(),
+            theme: doc.theme(),
         })
     }
 }

@@ -100,7 +100,7 @@ impl<'a> AIChatPlaceholder<'a> {
     pub fn from_document_at(doc: &'a Document, now_ms: u64) -> Self {
         Self {
             id: WidgetId::new(7000),
-            theme: Theme::dark(),
+            theme: doc.theme(),
             state: &doc.chat,
             now_ms,
         }

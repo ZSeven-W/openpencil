@@ -45,7 +45,7 @@ const GRID_SPACING: f32 = 32.0;
 
 impl<'a> CanvasViewport<'a> {
     pub fn from_document(document: &'a Document) -> Self {
-        let theme = Theme::dark();
+        let theme = document.theme();
         Self {
             id: WidgetId::new(4000),
             document,

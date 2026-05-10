@@ -42,6 +42,16 @@ impl StatusBar {
             ..Self::new()
         }
     }
+
+    /// Build the bar with theme + zoom from the document.
+    pub fn for_document(doc: &crate::document::Document) -> Self {
+        let zoom = (doc.viewport.zoom * 100.0).round() as u32;
+        Self {
+            id: WidgetId::new(6000),
+            zoom_percent: zoom.max(1),
+            theme: doc.theme(),
+        }
+    }
 }
 
 impl Default for StatusBar {
