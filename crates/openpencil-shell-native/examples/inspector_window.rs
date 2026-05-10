@@ -35,12 +35,14 @@ use openpencil_shell_core::{Color, Point2D, Rect, RenderBackend};
 use openpencil_shell_native::{
     NativeBackend, NativeFrameBackend, SharedSkiaContext, SharedSkiaError, WidgetHostNative,
 };
-use winit::application::ApplicationHandler;
 use std::time::{Duration, Instant};
-use winit::event::{ElementState, KeyEvent, MouseButton, MouseScrollDelta, StartCause, WindowEvent};
+use winit::application::ApplicationHandler;
+use winit::event::{
+    ElementState, KeyEvent, MouseButton, MouseScrollDelta, StartCause, WindowEvent,
+};
 use winit::event_loop::ControlFlow;
-use winit::keyboard::{Key, NamedKey};
 use winit::event_loop::{ActiveEventLoop, EventLoop};
+use winit::keyboard::{Key, NamedKey};
 use winit::window::{Window, WindowId};
 
 /// Default starting viewport — matches `with_inner_size` below so
@@ -256,8 +258,7 @@ impl ApplicationHandler for InspectorApp {
                 // (or back to event-driven `Wait` when no animation
                 // is pending).
                 if let Some(deadline_ms) = self.host.next_animation_deadline_ms() {
-                    let deadline =
-                        self.clock_start + Duration::from_millis(deadline_ms);
+                    let deadline = self.clock_start + Duration::from_millis(deadline_ms);
                     event_loop.set_control_flow(ControlFlow::WaitUntil(deadline));
                 } else {
                     event_loop.set_control_flow(ControlFlow::Wait);
@@ -297,10 +298,9 @@ impl ApplicationHandler for InspectorApp {
                 button: MouseButton::Left,
                 ..
             } => {
-                let consumed = self.host.apply_release_with_viewport(
-                    self.viewport_width,
-                    self.viewport_height,
-                );
+                let consumed = self
+                    .host
+                    .apply_release_with_viewport(self.viewport_width, self.viewport_height);
                 if consumed {
                     if let Some(window) = self.window.as_ref() {
                         window.request_redraw();
@@ -371,8 +371,7 @@ impl ApplicationHandler for InspectorApp {
                 // Track Cmd / Ctrl so 2-finger swipe can be
                 // promoted to zoom while held.
                 let state = mods.state();
-                self.zoom_modifier =
-                    state.super_key() || state.control_key();
+                self.zoom_modifier = state.super_key() || state.control_key();
             }
             WindowEvent::KeyboardInput {
                 event:

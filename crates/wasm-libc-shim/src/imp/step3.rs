@@ -135,9 +135,7 @@ pub unsafe extern "C" fn strtol(
     }
     let mut effective_base = base;
     if effective_base == 0 {
-        if *p == b'0' as c_char
-            && (*p.add(1) == b'x' as c_char || *p.add(1) == b'X' as c_char)
-        {
+        if *p == b'0' as c_char && (*p.add(1) == b'x' as c_char || *p.add(1) == b'X' as c_char) {
             effective_base = 16;
             p = p.add(2);
         } else if *p == b'0' as c_char {
@@ -274,12 +272,7 @@ pub extern "C" fn fstat(_fd: c_int, _statbuf: *mut c_void) -> c_int {
 }
 
 #[no_mangle]
-pub extern "C" fn pread(
-    _fd: c_int,
-    _buf: *mut c_void,
-    _count: usize,
-    _offset: i64,
-) -> isize {
+pub extern "C" fn pread(_fd: c_int, _buf: *mut c_void, _count: usize, _offset: i64) -> isize {
     -1
 }
 
@@ -341,9 +334,6 @@ pub extern "C" fn longjmp(_env: *mut c_void, _val: c_int) -> ! {
 //     `_ZnwmRKSt9nothrow_t` = `operator new(size_t,
 //     std::nothrow_t const&)`.
 #[no_mangle]
-pub unsafe extern "C" fn _ZnwmRKSt9nothrow_t(
-    size: usize,
-    _nothrow: *const c_void,
-) -> *mut c_void {
+pub unsafe extern "C" fn _ZnwmRKSt9nothrow_t(size: usize, _nothrow: *const c_void) -> *mut c_void {
     super::malloc(size.max(1))
 }

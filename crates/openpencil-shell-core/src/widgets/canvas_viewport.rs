@@ -331,8 +331,16 @@ mod tests {
         //   - 1 selected highlight stroke (Title is selected) on
         //     the title's bounds
         //   - 2 text draws (Title + Click me)
-        assert!(backend.rects >= 3, "expected ≥3 fills, got {}", backend.rects);
-        assert!(backend.strokes >= 2, "expected ≥2 strokes (frame + selection highlight), got {}", backend.strokes);
+        assert!(
+            backend.rects >= 3,
+            "expected ≥3 fills, got {}",
+            backend.rects
+        );
+        assert!(
+            backend.strokes >= 2,
+            "expected ≥2 strokes (frame + selection highlight), got {}",
+            backend.strokes
+        );
         assert_eq!(backend.text, 2, "two text nodes draw two text runs");
     }
 

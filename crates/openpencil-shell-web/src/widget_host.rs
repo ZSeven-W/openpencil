@@ -107,10 +107,7 @@ impl WidgetHost {
         } else {
             viewport_w
         };
-        x >= canvas_left
-            && x <= canvas_right
-            && y >= TOP_BAR_HEIGHT
-            && y <= viewport_h
+        x >= canvas_left && x <= canvas_right && y >= TOP_BAR_HEIGHT && y <= viewport_h
     }
 
     /// Wheel zoom centered on the cursor when over the canvas.
@@ -251,12 +248,14 @@ impl WidgetHost {
         // 4. Empty-canvas click: clear selection (collapses the
         //    PropertyPanel) + start a pan-drag, mirroring native.
         if self.over_canvas(x, y, viewport_width, viewport_height) {
-            let cleared =
-                self.document.selected != openpencil_shell_core::document::NodeId::NONE;
+            let cleared = self.document.selected != openpencil_shell_core::document::NodeId::NONE;
             if cleared {
                 self.document.selected = openpencil_shell_core::document::NodeId::NONE;
             }
-            self.drag = Some(DragState { last_x: x, last_y: y });
+            self.drag = Some(DragState {
+                last_x: x,
+                last_y: y,
+            });
             return cleared;
         }
         false
@@ -416,8 +415,7 @@ impl WidgetHost {
                         return false;
                     }
                     AIChatHit::ToggleCollapse => {
-                        self.document.chat.collapsed =
-                            !self.document.chat.collapsed;
+                        self.document.chat.collapsed = !self.document.chat.collapsed;
                         return true;
                     }
                 }
@@ -448,8 +446,7 @@ impl WidgetHost {
             match hit {
                 openpencil_shell_core::widgets::LayerPanelHit::Page(idx) => {
                     self.document.active_page_index = idx;
-                    self.document.selected =
-                        openpencil_shell_core::document::NodeId::NONE;
+                    self.document.selected = openpencil_shell_core::document::NodeId::NONE;
                     return true;
                 }
                 openpencil_shell_core::widgets::LayerPanelHit::Layer(node_id) => {
@@ -473,8 +470,7 @@ impl WidgetHost {
     fn toolbar_rect(&self, viewport_w: f32) -> Rect {
         // Anchor follows canvas_region (sidebar-collapse aware) so
         // hit-test matches paint regardless of sidebar state.
-        let (cx0, _cy0, _cw, _ch) =
-            self.canvas_region(viewport_w, f32::INFINITY);
+        let (cx0, _cy0, _cw, _ch) = self.canvas_region(viewport_w, f32::INFINITY);
         let toolbar = Toolbar::for_document(&self.document);
         let h = toolbar
             .layout(&LayoutCx {
@@ -491,12 +487,8 @@ impl WidgetHost {
     }
 
     /// Dispatches paint to the editor-UI composition.
-    pub fn paint(
-        &self,
-        backend: &mut WebBackend,
-        viewport_width: f32,
-        viewport_height: f32,
-    ) { // glue:
+    pub fn paint(&self, backend: &mut WebBackend, viewport_width: f32, viewport_height: f32) {
+        // glue:
         // 1. Background. Even before any widget paints, fill the
         //    whole viewport with `theme.background` so `<canvas>`
         //    pixels left over from a smaller previous frame don't

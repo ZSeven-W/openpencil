@@ -83,8 +83,7 @@ pub struct NativeBackend {
     cjk_typeface_tried: bool,
 }
 
-const ROBOTO_TTF: &[u8] =
-    include_bytes!("../../../openpencil-shell-web/assets/Roboto-Regular.ttf");
+const ROBOTO_TTF: &[u8] = include_bytes!("../../../openpencil-shell-web/assets/Roboto-Regular.ttf");
 
 impl NativeBackend {
     /// Spec §5.2.1 / plan v7 Task 2 Step 11: take an externally
@@ -277,10 +276,7 @@ impl NativeBackend {
             );
             canvas.draw_str(
                 run.content.as_str(),
-                (
-                    origin.x + run.origin.x,
-                    origin.y + run.origin.y,
-                ),
+                (origin.x + run.origin.x, origin.y + run.origin.y),
                 &font,
                 &paint,
             );

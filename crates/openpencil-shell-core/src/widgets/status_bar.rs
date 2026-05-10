@@ -78,12 +78,8 @@ impl Widget for StatusBar {
         // Pill background.
         cx.backend
             .fill_round_rect(rect, STATUS_BAR_HEIGHT / 2.0, self.theme.popover);
-        cx.backend.stroke_round_rect(
-            rect,
-            STATUS_BAR_HEIGHT / 2.0,
-            self.theme.border,
-            1.0,
-        );
+        cx.backend
+            .stroke_round_rect(rect, STATUS_BAR_HEIGHT / 2.0, self.theme.border, 1.0);
 
         let center_y = rect.origin.y + rect.size.y / 2.0;
         let icon_y = center_y - ICON_SIZE / 2.0;

@@ -97,8 +97,7 @@ impl LayerPanel {
 
     fn intrinsic_height(&self) -> f32 {
         let pages_h = SECTION_HEADER_HEIGHT + self.pages.len() as f32 * PAGE_ROW_HEIGHT;
-        let layers_h =
-            SECTION_HEADER_HEIGHT + self.items.len().max(1) as f32 * LAYER_ROW_HEIGHT;
+        let layers_h = SECTION_HEADER_HEIGHT + self.items.len().max(1) as f32 * LAYER_ROW_HEIGHT;
         pages_h + SECTION_GAP + layers_h + 16.0
     }
 
@@ -193,7 +192,14 @@ impl Widget for LayerPanel {
         let mut y = rect.origin.y + 8.0;
 
         // Pages section header.
-        paint_section_header(cx, &self.theme, rect.origin.x, y, rect.size.x, &self.pages_label);
+        paint_section_header(
+            cx,
+            &self.theme,
+            rect.origin.x,
+            y,
+            rect.size.x,
+            &self.pages_label,
+        );
         // "+" add-page affordance, top-right of header row.
         let plus_x = rect.origin.x + rect.size.x - ROW_PAD_X - 12.0;
         let plus_y = y + (SECTION_HEADER_HEIGHT - 14.0) / 2.0;
@@ -238,7 +244,14 @@ impl Widget for LayerPanel {
         y += SECTION_GAP;
 
         // Layers section header.
-        paint_section_header(cx, &self.theme, rect.origin.x, y, rect.size.x, &self.layers_label);
+        paint_section_header(
+            cx,
+            &self.theme,
+            rect.origin.x,
+            y,
+            rect.size.x,
+            &self.layers_label,
+        );
         y += SECTION_HEADER_HEIGHT;
 
         // Layer rows.

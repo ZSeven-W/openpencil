@@ -222,14 +222,7 @@ pub trait RenderBackend {
     /// parser and render with round caps + joins to match
     /// lucide's visual style. Used by the icon module so widgets
     /// just declare which lucide path to draw.
-    fn stroke_svg_path(
-        &mut self,
-        d: &str,
-        top_left: Point2D,
-        size: f32,
-        color: Color,
-        width: f32,
-    );
+    fn stroke_svg_path(&mut self, d: &str, top_left: Point2D, size: f32, color: Color, width: f32);
 
     // Transform stack.
     fn save(&mut self);

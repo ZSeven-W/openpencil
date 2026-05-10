@@ -136,7 +136,10 @@ impl<'a> AIChatPlaceholder<'a> {
             return Some(AIChatHit::ToggleCollapse);
         }
         let input_rect = Rect {
-            origin: Point2D::new(rect.origin.x + PAD, rect.origin.y + rect.size.y - INPUT_HEIGHT - PAD),
+            origin: Point2D::new(
+                rect.origin.x + PAD,
+                rect.origin.y + rect.size.y - INPUT_HEIGHT - PAD,
+            ),
             size: Point2D::new(rect.size.x - PAD * 2.0, INPUT_HEIGHT),
         };
         if rect_contains(input_rect, point) {
@@ -242,7 +245,8 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
         }
 
         cx.backend.fill_round_rect(rect, 14.0, self.theme.popover);
-        cx.backend.stroke_round_rect(rect, 14.0, self.theme.border, 1.0);
+        cx.backend
+            .stroke_round_rect(rect, 14.0, self.theme.border, 1.0);
 
         // Expanded header.
         let header_y = rect.origin.y + 8.0;
@@ -343,11 +347,7 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
         // on focus + every keystroke so the caret is solid right
         // after the user types instead of mid-fade.
         let caret_visible = self.state.focused
-            && jian_core::anim::blink_visible(
-                self.now_ms,
-                self.state.caret_anchor_ms,
-                500,
-            );
+            && jian_core::anim::blink_visible(self.now_ms, self.state.caret_anchor_ms, 500);
         if caret_visible {
             // Use the backend's text-measure API to anchor the
             // caret at the actual rendered trailing edge of the
@@ -492,10 +492,7 @@ fn paint_messages(
     for msg in &messages[start..] {
         let bubble_rect = match msg.role {
             ChatRole::User => Rect {
-                origin: Point2D::new(
-                    body_rect.origin.x + body_rect.size.x * 0.25,
-                    y,
-                ),
+                origin: Point2D::new(body_rect.origin.x + body_rect.size.x * 0.25, y),
                 size: Point2D::new(body_rect.size.x * 0.75 - 4.0, row_h - 6.0),
             },
             ChatRole::Assistant => Rect {

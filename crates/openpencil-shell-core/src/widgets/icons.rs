@@ -268,9 +268,7 @@ const CHEVRON_UP: &[&str] = &["m18 15-6-6-6 6"];
 
 // Lucide `message-square.svg` — speech-bubble outline used by the
 // collapsed AI chat pill.
-const MESSAGE_SQUARE: &[&str] = &[
-    "M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z",
-];
+const MESSAGE_SQUARE: &[&str] = &["M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"];
 
 // Lucide `layout-grid.svg` — 4 rounded-rect cells.
 const LAYOUT_GRID: &[&str] = &[

@@ -200,7 +200,8 @@ impl Widget for Toolbar {
         // popover-ish background so it reads as a panel against any
         // canvas content beneath.
         cx.backend.fill_round_rect(rect, 12.0, self.theme.popover);
-        cx.backend.stroke_round_rect(rect, 12.0, self.theme.border, 1.0);
+        cx.backend
+            .stroke_round_rect(rect, 12.0, self.theme.border, 1.0);
 
         let button_x = rect.origin.x + (rect.size.x - BUTTON_SIZE) / 2.0;
         let mut y = rect.origin.y + PAD_TOP;
@@ -251,14 +252,7 @@ impl Widget for Toolbar {
     }
 }
 
-fn paint_button(
-    cx: &mut PaintCx<'_>,
-    theme: &Theme,
-    x: f32,
-    y: f32,
-    icon: Icon,
-    active: bool,
-) {
+fn paint_button(cx: &mut PaintCx<'_>, theme: &Theme, x: f32, y: f32, icon: Icon, active: bool) {
     let button_rect = Rect {
         origin: Point2D::new(x, y),
         size: Point2D::new(BUTTON_SIZE, BUTTON_SIZE),
@@ -335,10 +329,7 @@ mod tests {
             size: Point2D::new(TOOLBAR_WIDTH, toolbar.intrinsic_height()),
         };
         // Center of the first button.
-        let center = Point2D::new(
-            (TOOLBAR_WIDTH) / 2.0,
-            PAD_TOP + BUTTON_SIZE / 2.0,
-        );
+        let center = Point2D::new((TOOLBAR_WIDTH) / 2.0, PAD_TOP + BUTTON_SIZE / 2.0);
         assert_eq!(
             toolbar.hit_test(rect, center),
             Some(ToolbarHit::Tool(Tool::Select))
@@ -352,14 +343,8 @@ mod tests {
             origin: Point2D::new(0.0, 0.0),
             size: Point2D::new(TOOLBAR_WIDTH, toolbar.intrinsic_height()),
         };
-        assert_eq!(
-            toolbar.hit_test(rect, Point2D::new(-10.0, -10.0)),
-            None
-        );
-        assert_eq!(
-            toolbar.hit_test(rect, Point2D::new(1000.0, 1000.0)),
-            None
-        );
+        assert_eq!(toolbar.hit_test(rect, Point2D::new(-10.0, -10.0)), None);
+        assert_eq!(toolbar.hit_test(rect, Point2D::new(1000.0, 1000.0)), None);
     }
 
     #[test]
@@ -372,11 +357,8 @@ mod tests {
         // First Action item is Undo. After 5 tool buttons + 4 button
         // gaps + 1 separator + button advance, hit-test the center
         // of the Undo button.
-        let undo_y = PAD_TOP
-            + 5.0 * BUTTON_SIZE
-            + 4.0 * BUTTON_GAP
-            + SECTION_GAP
-            + BUTTON_SIZE / 2.0;
+        let undo_y =
+            PAD_TOP + 5.0 * BUTTON_SIZE + 4.0 * BUTTON_GAP + SECTION_GAP + BUTTON_SIZE / 2.0;
         let center = Point2D::new(TOOLBAR_WIDTH / 2.0, undo_y);
         assert_eq!(
             toolbar.hit_test(rect, center),

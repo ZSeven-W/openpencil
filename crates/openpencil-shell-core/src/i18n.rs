@@ -98,7 +98,10 @@ mod tests {
     #[test]
     fn en_us_returns_english_chrome_strings() {
         assert_eq!(translate(Locale::EnUs, "layer_panel.pages"), "Pages");
-        assert_eq!(translate(Locale::EnUs, "property_panel.position"), "Position");
+        assert_eq!(
+            translate(Locale::EnUs, "property_panel.position"),
+            "Position"
+        );
     }
 
     #[test]
