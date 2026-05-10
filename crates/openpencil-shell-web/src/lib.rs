@@ -109,17 +109,29 @@ impl Inner {
     fn repaint(&mut self) -> Result<(), JsValue> {
         use openpencil_shell_core::{Color, Point2D, Rect, RenderBackend};
 
+        // Pull the actual canvas dimensions from the backend
+        // every frame so a host that swaps the `<canvas>` width
+        // attribute (responsive layouts, devtool resizing,
+        // future programmatic mount with a different size)
+        // gets a layout that matches reality. Codex Step 3
+        // stop-hook "web repaint ignores actual canvas size"
+        // caught the prior hardcoded `960.0` — this swap also
+        // resolves the "web smoke paints only the toolbar"
+        // regression since the smoke canvas is 960×640 and the
+        // first frame still gets the full width.
+        let viewport_w = self.backend.canvas_width() as f32;
+        let viewport_h = self.backend.canvas_height() as f32;
+
         self.backend.begin_frame();
         // Clear to white so widget paints sit on a clean background.
         self.backend.fill_rect(
             Rect {
                 origin: Point2D::new(0.0, 0.0),
-                size: Point2D::new(960.0, 640.0),
+                size: Point2D::new(viewport_w, viewport_h),
             },
             Color::WHITE,
         );
-        // Inspector slice: 280 px wide column on the left.
-        self.host.paint(&mut self.backend, 280.0);
+        self.host.paint(&mut self.backend, viewport_w, viewport_h);
         self.backend.end_frame();
         if let Some(err) = self.backend.take_present_error() {
             return Err(err);

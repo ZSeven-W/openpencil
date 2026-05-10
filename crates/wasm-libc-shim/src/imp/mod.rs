@@ -1,5 +1,18 @@
 //! Implementation module for the wasm32-unknown-unknown libc/libcxx/libm shim.
 //! See `lib.rs` for the high-level rationale and category breakdown.
+//!
+//! Split layout (per repo `openpencil/CLAUDE.md` 800-line ceiling):
+//! - this `mod.rs` carries the original C-hard.2 surface (allocator
+//!   + libm + libc string + libc misc + C++ ABI + operator new/delete +
+//!   sem / threads + libcxx panic stubs)
+//! - `step3` carries the Skia font-path additions (extra string ops,
+//!   file I/O sentinels, mmap, setjmp/longjmp, `_ZnwmRKSt9nothrow_t`)
+//!
+//! Both files emit `#[no_mangle]` symbols at the same flat namespace —
+//! wasm-ld resolves them identically regardless of which Rust module
+//! they came from.
+
+mod step3;
 
 use core::ffi::{c_char, c_int, c_void};
 
@@ -268,7 +281,9 @@ pub unsafe extern "C" fn strtoull(
     }
 }
 
-unsafe fn is_space(c: c_char) -> bool {
+// `pub(super)` so `imp::step3::strtol` can reuse it without
+// re-implementing the whitespace check.
+pub(super) unsafe fn is_space(c: c_char) -> bool {
     matches!(c as u8, b' ' | b'\t' | b'\n' | b'\r' | 0x0b | 0x0c)
 }
 
@@ -300,7 +315,6 @@ pub unsafe extern "C" fn wasm_libc_shim_stdio_panic(name: *const c_char) -> ! {
     );
 }
 
-// ---------------------------------------------------------------------
 // libc misc.
 // ---------------------------------------------------------------------
 

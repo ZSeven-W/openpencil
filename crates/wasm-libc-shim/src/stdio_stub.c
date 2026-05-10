@@ -44,3 +44,15 @@ int vfprintf(void *stream, const char *fmt, va_list ap) {
     (void)ap;
     wasm_libc_shim_stdio_panic("vfprintf");
 }
+
+/* Step 3 codex stop-hook addition: fprintf is variadic so it
+ * needs the C-side stub treatment. Skia uses it for diagnostic
+ * messages on freetype error paths; happy text-rendering path
+ * doesn't reach it. Same fail-fast policy as the snprintf
+ * family — easier to find a real call than to debug an empty
+ * silent return. */
+int fprintf(void *stream, const char *fmt, ...) {
+    (void)stream;
+    (void)fmt;
+    wasm_libc_shim_stdio_panic("fprintf");
+}
