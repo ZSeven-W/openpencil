@@ -7,8 +7,9 @@ Native + web editor chrome implemented in Rust against jian-skia. Goal: TS-equiv
 ```
 crates/
 ├── openpencil-shell-core/      Platform-free widgets + Document model + RenderBackend trait
-├── openpencil-shell-native/    Desktop runner: winit + skia-safe + accesskit
+├── openpencil-shell-native/    Native lib: WidgetHostNative + NativeBackend + SharedSkiaContext
 ├── openpencil-shell-web/       Browser runner: wasm32-unknown-unknown + skia-safe-op fork
+├── openpencil-desktop/         Desktop binary: winit event loop + skia-safe GL surface
 └── wasm-libc-shim/             ~95 env.* shims (libc / libm / libcxx) for the wasm32 build
 ```
 
@@ -82,18 +83,20 @@ resize / dpi_scale
 
 `stroke_svg_path` parses lucide d-strings via `skia_safe::utils::parse_path::from_svg`. PaintCap::Round + PaintJoin::Round to match lucide's stroke style.
 
-## Native runner (`shell-native/`)
+## Desktop binary (`openpencil-desktop/`)
 
-Entry: `examples/inspector_window.rs` — winit ApplicationHandler, GL surface via `jian-skia`. Logs:
+`crates/openpencil-desktop/src/main.rs` is the production desktop entry. It owns the winit `ApplicationHandler`, opens a GL window via `SharedSkiaContext::new_desktop`, and dispatches every `WindowEvent` onto `WidgetHostNative::apply_*`. Behaviour:
 
 - DPI scale via `canvas.scale((dpi, dpi))` per frame (preceded by `reset_matrix()` so it doesn't compound)
 - LOGICAL viewport sizes (physical / dpi)
 - Cursor position cached on `CursorMoved`, dispatched on `MouseInput`
 - `MouseScrollDelta::PixelDelta` → trackpad pan; `LineDelta` / `PinchGesture` → zoom; modifier (Cmd/Ctrl) promotes pixel-delta to zoom
+- Cursor flips to `EwResize` when over a panel-resize gutter (`host.panel_resize_hover`)
+- `WaitUntil(host.next_animation_deadline_ms())` pumps the caret-blink redraw
 
-Native font path bypasses jian-skia's `textlayout` (which builds a fresh `FontCollection` per call → 605ms chrome frame): `NativeBackend` caches a Roboto Typeface + a system CJK Typeface (resolved via `FontMgr::match_family_style_character('一')`) and renders via `Canvas::draw_str`.
+Native font path bypasses jian-skia's `textlayout` (which builds a fresh `FontCollection` per call → 605ms chrome frame): `NativeBackend` caches a Roboto Typeface + per-codepoint system fonts (resolved via `FontMgr::match_family_style_character`, cached per `i32`) so multi-script chrome (한국어 / हिन्दी / ไทย / Tiếng Việt) renders against the right font. `draw_text` segments each run by typeface and dispatches each segment via `Canvas::draw_str`.
 
-Run: `cargo run -p openpencil-shell-native --example inspector_window --release`.
+Run: `cargo run -p openpencil-desktop --release`.
 
 ## Web runner (`shell-web/`)
 

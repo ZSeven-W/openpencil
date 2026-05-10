@@ -1423,6 +1423,16 @@ name = "openpencil-app"
 version = "0.1.0"
 
 [[package]]
+name = "openpencil-desktop"
+version = "0.1.0"
+dependencies = [
+ "openpencil-shell-core",
+ "openpencil-shell-native",
+ "skia-safe",
+ "winit",
+]
+
+[[package]]
 name = "openpencil-shell-core"
 version = "0.1.0"
 dependencies = [
