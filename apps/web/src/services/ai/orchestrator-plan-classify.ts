@@ -15,5 +15,19 @@ import type { OrchestratorPlan } from './ai-types';
  */
 export function isMobileFullScreen(plan: OrchestratorPlan): boolean {
   if (plan.rootFrame.width > 480) return false;
-  return plan.rootFrame.height >= 480;
+  if (plan.rootFrame.height >= 480) return true;
+  // Width-narrow + height-zero/auto: distinguish a single Type 0
+  // component from a mobile page whose declared height got lost in
+  // plan coercion. The LLM frequently emits a non-numeric height
+  // ("fit_content" / "auto") which asNonNegativeNumber rejects → the
+  // parser falls back to the landing-page preset's rootHeight=0 →
+  // we'd misclassify as Type 0 and skip status-bar injection.
+  //
+  // 2026-05-10 user reported a DeepSeek "Bistro" mobile design that
+  // arrived with a 375-wide root and missing iOS status bar; the live
+  // tree had 6+ section frames so it was structurally a multi-section
+  // mobile page, not a single card. A subtask-count discriminator
+  // catches this without re-relaxing the height check for genuine
+  // Type 0 components (badge / single card / modal — always 1 subtask).
+  return plan.subtasks.length >= 2;
 }
