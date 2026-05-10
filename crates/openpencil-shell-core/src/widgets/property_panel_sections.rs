@@ -10,11 +10,19 @@ use crate::widgets::property_panel::NodeSnapshot;
 use crate::{Color, Point2D, Rect, TextLayout};
 
 const PAD_X: f32 = 16.0;
-const SECTION_GAP: f32 = 1.0;
+/// Vertical breathing room between a divider line and the next
+/// section's label.
+const SECTION_GAP: f32 = 8.0;
 const ROW_HEIGHT: f32 = 28.0;
-const INPUT_HEIGHT: f32 = 26.0;
+/// Input pill height — tuned to match TS Frame inspector
+/// (apps/web/src/components/panels/size-section.tsx `Input`
+/// renders at ~30 px). Bumped from 26 so values + prefix labels
+/// breathe like the TS reference.
+const INPUT_HEIGHT: f32 = 30.0;
 const INPUT_RADIUS: f32 = 6.0;
-const SECTION_HEADER_HEIGHT: f32 = 28.0;
+/// Title strip at the top of a section ("位置" / "尺寸" / ...).
+/// Matches TS `text-[11px] uppercase` headings.
+const SECTION_HEADER_HEIGHT: f32 = 24.0;
 const TAB_HEIGHT: f32 = 36.0;
 const HEADER_HEIGHT: f32 = 30.0;
 
@@ -551,15 +559,17 @@ pub fn paint_section_label(
     y: f32,
     _w: f32,
 ) -> f32 {
+    // 11.5 px (rendered at 12) muted-foreground header — matches
+    // TS `text-[11px] tracking-wide text-muted-foreground`.
     let label_layout = TextLayout::single_run(
         label,
         "system-ui",
         12.0,
-        to_jian_color(theme.muted_foreground),
+        to_jian_color(theme.foreground),
         Point2D::new(0.0, 0.0),
     );
     cx.backend
-        .draw_text(&label_layout, Point2D::new(x + PAD_X, y + 18.0));
+        .draw_text(&label_layout, Point2D::new(x + PAD_X, y + 16.0));
     y + SECTION_HEADER_HEIGHT
 }
 
@@ -584,10 +594,12 @@ pub fn paint_section_label_with_add(
 }
 
 fn paint_section_divider(cx: &mut PaintCx<'_>, theme: &Theme, x: f32, y: f32, width: f32) {
+    // Full-width hairline (no PAD_X inset) — matches the TS
+    // PropertyPanel where section dividers go edge-to-edge.
     cx.backend.fill_rect(
         Rect {
-            origin: Point2D::new(x + PAD_X, y),
-            size: Point2D::new(width - PAD_X * 2.0, 1.0),
+            origin: Point2D::new(x, y),
+            size: Point2D::new(width, 1.0),
         },
         theme.border,
     );
