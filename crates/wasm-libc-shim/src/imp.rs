@@ -1,7 +1,7 @@
 //! Implementation module for the wasm32-unknown-unknown libc/libcxx/libm shim.
 //! See `lib.rs` for the high-level rationale and category breakdown.
 
-use core::ffi::{c_char, c_int, c_void};
+use core::ffi::{c_char, c_int, c_long, c_void};
 
 // ---------------------------------------------------------------------
 // Allocator — dlmalloc-rs with a 16-byte size header per allocation so
@@ -406,10 +406,12 @@ pub unsafe extern "C" fn strtol(
     nptr: *const c_char,
     endptr: *mut *mut c_char,
     base: c_int,
-) -> i64 {
-    // Mirror the strtoull impl but signed. Skia uses this only
-    // for integer parsing in font name tables etc; happy path is
-    // not exercised on our raster pipeline.
+) -> c_long {
+    // Returns `c_long`, NOT `i64` (codex Step 3 R1 CONCERN —
+    // wasm32-unknown-unknown sizes `long` as 32-bit, so an i64
+    // return triggered a `signature_mismatch:strtol` trap stub
+    // in wasm-ld). Mirrors strtoull but signed; explicit `0x`
+    // prefix accepted when `base == 16` (codex NIT-2).
     let mut p = nptr;
     while is_space(*p) {
         p = p.add(1);
@@ -434,8 +436,16 @@ pub unsafe extern "C" fn strtol(
         } else {
             effective_base = 10;
         }
+    } else if effective_base == 16
+        && *p == b'0' as c_char
+        && (*p.add(1) == b'x' as c_char || *p.add(1) == b'X' as c_char)
+    {
+        // Codex Step 3 R1 NIT-2: explicit `0x` prefix when caller
+        // passed base=16. strtoull already handles this; mirror
+        // for parity.
+        p = p.add(2);
     }
-    let mut acc: i64 = 0;
+    let mut acc: c_long = 0;
     loop {
         let c = *p as u8;
         let digit = match c {
@@ -447,8 +457,8 @@ pub unsafe extern "C" fn strtol(
         if digit as c_int >= effective_base {
             break;
         }
-        acc = acc.wrapping_mul(effective_base as i64);
-        acc = acc.wrapping_add(digit as i64);
+        acc = acc.wrapping_mul(effective_base as c_long);
+        acc = acc.wrapping_add(digit as c_long);
         p = p.add(1);
     }
     if !endptr.is_null() {
@@ -487,9 +497,17 @@ pub unsafe extern "C" fn qsort(
     let base = base as *mut u8;
     let mut tmp_buf = [0u8; 256];
     let tmp = tmp_buf.as_mut_ptr();
-    debug_assert!(size <= 256, "qsort: element size > 256 unsupported in shim");
     if size > 256 {
-        return;
+        // Codex Step 3 R1 NIT-3: previous version silently
+        // returned unsorted data on size > 256, which would
+        // corrupt the caller's array invariants. Panic loudly
+        // so a real call site gets a usable diagnostic; tiny
+        // arrays (font feature lists / glyph runs) stay under
+        // the threshold.
+        panic!(
+            "wasm-libc-shim: qsort element size {} > 256 — bump tmp_buf in imp.rs::qsort",
+            size
+        );
     }
     for i in 1..nmemb {
         // Copy element i into tmp.
@@ -556,12 +574,17 @@ pub extern "C" fn pread(
 }
 
 #[no_mangle]
-pub extern "C" fn ftell(_stream: *mut c_void) -> i64 {
+pub extern "C" fn ftell(_stream: *mut c_void) -> c_long {
+    // c_long (32-bit on wasm32) per the C standard. Codex Step 3
+    // R1 CONCERN: prior i64 return triggered a wasm-ld
+    // `signature_mismatch:ftell` trap stub.
     -1
 }
 
 #[no_mangle]
-pub extern "C" fn fseek(_stream: *mut c_void, _offset: i64, _whence: c_int) -> c_int {
+pub extern "C" fn fseek(_stream: *mut c_void, _offset: c_long, _whence: c_int) -> c_int {
+    // Same as ftell — `offset` is `long`, NOT `int64_t`. Codex
+    // Step 3 R1 CONCERN.
     -1
 }
 

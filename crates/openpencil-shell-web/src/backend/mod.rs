@@ -42,9 +42,16 @@ pub struct WebBackend {
     /// Lazy-initialised typeface backed by the embedded Roboto
     /// TTF. Built on first text draw so a no-text canvas pays no
     /// cost. `None` after a failed build (typeface invalid /
-    /// alloc failure); subsequent draw_text calls become no-ops
-    /// rather than retrying.
+    /// alloc failure); the separate `typeface_tried` flag below
+    /// gates retry so subsequent draw_text calls don't re-parse
+    /// the TTF on every frame after a one-time failure (codex
+    /// Step 3 R1 NIT-1).
     typeface: Option<skia_safe::Typeface>,
+    /// Sticky flag: true once we've attempted typeface init,
+    /// regardless of outcome. Subsequent draw_text calls skip
+    /// the FontMgr / from_data round-trip if `typeface` is
+    /// still None.
+    typeface_tried: bool,
     /// Most recent present() error captured via the infallible
     /// `end_frame` trait method. Callers that need to propagate errors
     /// (e.g. `WebShell::mount`) call `take_present_error()` after the
@@ -66,6 +73,7 @@ impl WebBackend {
             height,
             dpi_scale: 1.0,
             typeface: None,
+            typeface_tried: false,
             last_present_error: None,
         })
     }
@@ -178,15 +186,19 @@ impl RenderBackend for WebBackend {
         // Lazy-init the typeface on first call; if the build fails
         // we leave `self.typeface = None` and silently no-op
         // subsequent calls so a font issue never crashes paint.
-        if self.typeface.is_none() {
+        if !self.typeface_tried {
             // The C-hard wasm32-unknown-unknown skia build uses
             // FontMgr::custom_empty() — there's no system font
             // path. Construct one explicitly + register the
             // embedded Roboto bytes via new_from_data; both
             // calls return `Option`, so `None` propagates up
             // and the typeface stays None on any failure.
+            // `typeface_tried` flips to true regardless of
+            // success so a one-time failure doesn't re-parse
+            // the TTF on every frame (codex Step 3 R1 NIT-1).
             self.typeface = skia_safe::FontMgr::custom_empty()
                 .and_then(|mgr| mgr.new_from_data(ROBOTO_TTF, None));
+            self.typeface_tried = true;
         }
         let Some(typeface) = self.typeface.as_ref() else {
             return;
