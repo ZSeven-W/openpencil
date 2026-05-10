@@ -64,10 +64,19 @@ impl Widget for Toolbar {
                 origin: Point2D::new(x, y),
                 size: Point2D::new(BUTTON_WIDTH, BUTTON_HEIGHT),
             };
-            // Stop early if we'd overflow the toolbar's reported
-            // width — keeps rendering predictable when the host
-            // constrains the toolbar narrower than the natural
-            // button strip width.
+            // **Overflow handling, Step 2 scope (codex Step 2 R1
+            // CONCERN-4)**: Buttons that would overflow the
+            // toolbar's reported width are silently dropped. This
+            // keeps rendering predictable on narrow / mobile
+            // viewports but is a UX cliff — the user can't reach
+            // hidden tools. Step 3+ replaces this with one of:
+            //   - horizontal scroll inside the toolbar rect
+            //     (drag / wheel)
+            //   - "More tools" overflow dropdown anchored to the
+            //     right edge
+            //   - icon-only mode at narrower widths
+            // Phase D pointer/wheel routing has to land before
+            // any of those is wirable.
             if x + BUTTON_WIDTH > rect.origin.x + rect.size.x - PAD {
                 break;
             }

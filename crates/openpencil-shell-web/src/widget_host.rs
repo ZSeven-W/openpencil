@@ -28,6 +28,13 @@ use openpencil_shell_core::widgets::{
 };
 use openpencil_shell_core::{Point2D, Rect, RenderBackend};
 
+/// Below this viewport width (in CSS px) we paint the Toolbar
+/// only and skip both rails — there's not enough horizontal
+/// space for a usable LayerPanel + PropertyPanel split. Codex
+/// Step 2 R1 CONCERN-3: clamp `rail_w` to non-negative AND skip
+/// when too small to be useful.
+const MIN_RAIL_WIDTH: f32 = 80.0;
+
 /// The Step 2 editor-UI host. Owns the document model + a sliver of
 /// auxiliary widget state (dropdown / text-input) that's not yet
 /// part of the document model itself; per-frame builds LayerPanel /
@@ -100,7 +107,19 @@ impl WidgetHost {
         let layer_panel = LayerPanel::from_document(&self.document);
         let property_panel = PropertyPanel::for_selected(&self.document);
 
-        let rail_w = 240.0_f32.min(viewport_width / 2.0 - 8.0);
+        // Clamp rail_w to a non-negative value (codex Step 2 R1
+        // CONCERN-3: a < 32 px viewport made `viewport_width / 2.0
+        // - 8.0` go negative, producing negative-size rects). At
+        // tiny viewport widths we just skip the rails entirely —
+        // there's no usable space to paint into.
+        let rail_w_raw = (viewport_width / 2.0 - 8.0).min(240.0);
+        let rail_w = rail_w_raw.max(0.0);
+        if rail_w < MIN_RAIL_WIDTH {
+            // Toolbar already painted; rails are skipped on
+            // sub-minimum viewports. Aux widgets also skip — Step
+            // 3 may scroll-collapse instead.
+            return;
+        }
         let rail_top_y = toolbar_rect.size.y + 8.0;
         let layer_panel_layout_cx = LayoutCx {
             available_width: rail_w,
