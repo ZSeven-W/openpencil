@@ -387,6 +387,9 @@ impl ApplicationHandler for DesktopApp {
                     Key::Named(NamedKey::Enter) => {
                         consumed = self.host.apply_send();
                     }
+                    Key::Named(NamedKey::Escape) => {
+                        consumed = self.host.apply_escape();
+                    }
                     _ => {
                         if let Some(s) = text.as_deref() {
                             for c in s.chars() {

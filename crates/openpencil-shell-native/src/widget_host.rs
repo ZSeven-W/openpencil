@@ -19,7 +19,7 @@
 //! `GlContextProvider` trait, not a separate IPC / CLI pipeline.
 
 use crate::backend::NativeBackend;
-use openpencil_shell_core::document::{ChatAnchor, Document};
+use openpencil_shell_core::document::{ChatAnchor, Document, PropertyFocus};
 use openpencil_shell_core::widgets::{
     AIChatHit, AIChatPlaceholder, CanvasViewport, LayerPanel, LayoutCx, LocalePicker, PaintCx,
     PropertyPanel, StatusBar, Toolbar, TopBar, TopBarHit, Widget, AI_CHAT_COLLAPSED_HEIGHT,
@@ -219,15 +219,21 @@ impl WidgetHostNative {
     /// Next millisecond at which the host should wake to repaint
     /// the caret blink phase. `None` = no animation pending.
     pub fn next_animation_deadline_ms(&self) -> Option<u64> {
+        if self.document.ui.property_focus.is_some() {
+            return Some(jian_core::anim::next_blink_flip_ms(
+                self.now_ms,
+                self.document.ui.property_caret_anchor_ms,
+                500,
+            ));
+        }
         if self.document.chat.focused {
-            Some(jian_core::anim::next_blink_flip_ms(
+            return Some(jian_core::anim::next_blink_flip_ms(
                 self.now_ms,
                 self.document.chat.caret_anchor_ms,
                 500,
-            ))
-        } else {
-            None
+            ));
         }
+        None
     }
 
     /// Hit-test which screen region the cursor is over. Used by
@@ -304,6 +310,23 @@ impl WidgetHostNative {
         viewport_width: f32,
         viewport_height: f32,
     ) -> bool {
+        // 0aa. Commit-on-blur for property-panel inputs — if a
+        //      click lands outside the property panel while an
+        //      input is focused, commit the draft (parse + write to
+        //      node) before processing the new click. The
+        //      property-panel hit-test below replaces it with the
+        //      new focus when the click was inside the panel.
+        if self.document.ui.property_focus.is_some() {
+            let property_left = if self.document.selected_node().is_some() {
+                viewport_width - self.document.ui.property_panel_width
+            } else {
+                viewport_width
+            };
+            if x < property_left {
+                self.commit_property_focus_if_any();
+            }
+        }
+
         // 0z. Panel-resize gutter — clicks within ±4 px of the
         //     LayerPanel right edge or PropertyPanel left edge
         //     start a resize drag. Below TopBar so the gutter
@@ -367,6 +390,46 @@ impl WidgetHostNative {
         if rect_contains(top_bar_rect, Point2D::new(x, y)) {
             // Other top-bar gaps eat clicks but don't act.
             return false;
+        }
+
+        // 0c. PropertyPanel input row — focus the row + seed the
+        //     edit draft from the snapshot value. Any other click
+        //     (canvas, chat, toolbar, layer panel) commits + clears
+        //     the focused input via the catch-all branches below.
+        if let Some(panel) = PropertyPanel::for_selection(&self.document) {
+            let property_rect = Rect {
+                origin: Point2D::new(
+                    viewport_width - self.document.ui.property_panel_width,
+                    TOP_BAR_HEIGHT,
+                ),
+                size: Point2D::new(
+                    self.document.ui.property_panel_width,
+                    (viewport_height - TOP_BAR_HEIGHT).max(0.0),
+                ),
+            };
+            if let Some(focus) = panel.hit_test(property_rect, Point2D::new(x, y)) {
+                self.commit_property_focus_if_any();
+                let initial = match focus {
+                    openpencil_shell_core::document::PropertyFocus::PositionX => {
+                        panel.snapshot.x.to_string()
+                    }
+                    openpencil_shell_core::document::PropertyFocus::PositionY => {
+                        panel.snapshot.y.to_string()
+                    }
+                    openpencil_shell_core::document::PropertyFocus::SizeW => {
+                        panel.snapshot.width.to_string()
+                    }
+                    openpencil_shell_core::document::PropertyFocus::SizeH => {
+                        panel.snapshot.height.to_string()
+                    }
+                    _ => String::new(),
+                };
+                self.document.ui.property_focus = Some(focus);
+                self.document.ui.property_input_draft = initial;
+                self.document.ui.property_caret_anchor_ms = self.now_ms;
+                self.document.chat.focused = false;
+                return true;
+            }
         }
 
         // 1. AI chat panel — sits on top of the toolbar in paint
@@ -529,6 +592,24 @@ impl WidgetHostNative {
     /// Push a typed character into the focused chat input.
     /// Returns true if anything changed.
     pub fn apply_text(&mut self, c: char) -> bool {
+        if let Some(focus) = self.document.ui.property_focus {
+            // Only accept characters that fit a number input.
+            // Position / size only need digits + a leading minus.
+            let allowed = c.is_ascii_digit()
+                || (c == '-' && self.document.ui.property_input_draft.is_empty())
+                || (c == '.'
+                    && matches!(
+                        focus,
+                        PropertyFocus::Opacity | PropertyFocus::Rotation | PropertyFocus::PositionR
+                    )
+                    && !self.document.ui.property_input_draft.contains('.'));
+            if !allowed {
+                return false;
+            }
+            self.document.ui.property_input_draft.push(c);
+            self.document.ui.property_caret_anchor_ms = self.now_ms;
+            return true;
+        }
         if !self.document.chat.focused {
             return false;
         }
@@ -539,8 +620,16 @@ impl WidgetHostNative {
         true
     }
 
-    /// Backspace on the focused chat input.
+    /// Backspace — routes to whichever input is currently focused
+    /// (property edit field if any, else chat).
     pub fn apply_backspace(&mut self) -> bool {
+        if self.document.ui.property_focus.is_some() {
+            if self.document.ui.property_input_draft.pop().is_some() {
+                self.document.ui.property_caret_anchor_ms = self.now_ms;
+                return true;
+            }
+            return false;
+        }
         if !self.document.chat.focused {
             return false;
         }
@@ -551,13 +640,41 @@ impl WidgetHostNative {
         false
     }
 
-    /// Send the focused chat input.
+    /// Enter — commits the focused property edit (parses the draft
+    /// as f32, writes to the selected node, clears focus) or
+    /// sends the focused chat input.
     pub fn apply_send(&mut self) -> bool {
+        if self.document.ui.property_focus.is_some() {
+            self.commit_property_focus_if_any();
+            return true;
+        }
         if self.document.chat.input.trim().is_empty() {
             return false;
         }
         self.document.chat.send();
         true
+    }
+
+    /// Escape — drops the focused property edit without committing.
+    pub fn apply_escape(&mut self) -> bool {
+        if self.document.ui.property_focus.take().is_some() {
+            self.document.ui.property_input_draft.clear();
+            return true;
+        }
+        false
+    }
+
+    /// Parse `property_input_draft` as f32 and apply it to the
+    /// selected node via `Document::commit_property_edit`. Always
+    /// clears focus + draft. No-op when nothing is focused.
+    fn commit_property_focus_if_any(&mut self) {
+        let Some(focus) = self.document.ui.property_focus.take() else {
+            return;
+        };
+        let draft = std::mem::take(&mut self.document.ui.property_input_draft);
+        if let Ok(value) = draft.trim().parse::<f32>() {
+            let _ = self.document.commit_property_edit(focus, value);
+        }
     }
 
     /// Canvas region (logical px, viewport-relative). Reflects
@@ -821,7 +938,7 @@ impl WidgetHostNative {
         }
 
         // 4. PropertyPanel — only when selection.
-        let property_panel = PropertyPanel::for_selection(&self.document);
+        let property_panel = PropertyPanel::for_selection_at(&self.document, self.now_ms);
         let has_property = property_panel.is_some();
         if let Some(panel) = property_panel.as_ref() {
             let property_rect = Rect {

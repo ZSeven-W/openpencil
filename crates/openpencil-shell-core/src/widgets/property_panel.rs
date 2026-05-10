@@ -23,7 +23,7 @@
 //! Host calls [`PropertyPanel::for_selection`] which returns
 //! `Option<Self>`; `None` = panel hidden entirely.
 
-use crate::document::{Document, Node, Stroke};
+use crate::document::{Document, Node, PropertyFocus, Stroke};
 use crate::theme::Theme;
 use crate::widgets::property_panel_sections as sections;
 use crate::widgets::{LayoutBox, LayoutCx, PaintCx, Widget, WidgetId};
@@ -70,19 +70,71 @@ pub struct PropertyPanel {
     pub id: WidgetId,
     pub snapshot: NodeSnapshot,
     pub theme: Theme,
+    /// Localised chrome strings — `Document::t` lookups resolved
+    /// once at construction time so every section paint hands
+    /// straight to the renderer without re-walking the i18n table.
+    pub labels: sections::PropertyLabels,
+    /// Which input row the user is editing. `None` when no input
+    /// is focused (panel paints all values from the snapshot).
+    pub focus: Option<PropertyFocus>,
+    /// Live edit-buffer for the focused input. Empty when nothing
+    /// is focused. The host fills this on click + mutates on
+    /// keystroke; the panel paints it as the field's value.
+    pub draft: String,
+    /// Caret-blink anchor (ms since host start) for the focused
+    /// input. Drives the same `jian_core::anim::blink_visible`
+    /// helper the chat caret uses.
+    pub caret_anchor_ms: u64,
+    /// Host clock (ms since start) — paired with `caret_anchor_ms`
+    /// to drive caret visibility. `0` = host hasn't installed a
+    /// clock yet.
+    pub now_ms: u64,
 }
 
 impl PropertyPanel {
     /// Conditional builder — returns `Some` only when the document
     /// has an active selection. Mirrors TS `{hasSelection && ...}`.
     pub fn for_selection(doc: &Document) -> Option<Self> {
+        Self::for_selection_at(doc, 0)
+    }
+
+    /// Same as [`for_selection`] but threads the host's monotonic
+    /// millisecond clock through so the focused-input caret can
+    /// blink off the same animation timer as the chat input.
+    pub fn for_selection_at(doc: &Document, now_ms: u64) -> Option<Self> {
         let node = doc.selected_node()?;
         Some(Self {
             id: WidgetId::new(2000),
             snapshot: NodeSnapshot::from_node(node),
             theme: doc.theme(),
+            labels: sections::PropertyLabels::for_document(doc),
+            focus: doc.ui.property_focus,
+            draft: doc.ui.property_input_draft.clone(),
+            caret_anchor_ms: doc.ui.property_caret_anchor_ms,
+            now_ms,
         })
     }
+
+    /// Hit-test the panel at `point` and return which input row
+    /// (if any) contains the click. Only rows wired for editing
+    /// are reported — currently the X / Y / W / H number inputs.
+    /// Other rows (rotation, hex, opacity) return `None` until
+    /// the underlying node schema accepts the field.
+    pub fn hit_test(&self, panel_rect: Rect, point: Point2D) -> Option<PropertyFocus> {
+        for (focus, rect) in sections::editable_input_rects(panel_rect) {
+            if rect_contains(rect, point) {
+                return Some(focus);
+            }
+        }
+        None
+    }
+}
+
+fn rect_contains(r: Rect, p: Point2D) -> bool {
+    p.x >= r.origin.x
+        && p.x <= r.origin.x + r.size.x
+        && p.y >= r.origin.y
+        && p.y <= r.origin.y + r.size.y
 }
 
 impl Widget for PropertyPanel {
@@ -115,17 +167,41 @@ impl Widget for PropertyPanel {
         let x = rect.origin.x;
         let w = rect.size.x;
         let mut y = rect.origin.y;
-        y = sections::paint_tab_strip(cx, &self.theme, x, y, w);
+        let edit_ctx = sections::EditContext {
+            focus: self.focus,
+            draft: self.draft.as_str(),
+            caret_anchor_ms: self.caret_anchor_ms,
+            now_ms: self.now_ms,
+        };
+        y = sections::paint_tab_strip(cx, &self.theme, &self.labels, x, y, w);
         y = sections::paint_node_header(cx, &self.theme, &self.snapshot, x, y, w);
-        y = sections::paint_create_component(cx, &self.theme, x, y, w);
-        y = sections::paint_position_section(cx, &self.theme, &self.snapshot, x, y, w);
-        y = sections::paint_flex_section(cx, &self.theme, x, y, w);
-        y = sections::paint_size_section(cx, &self.theme, &self.snapshot, x, y, w);
-        y = sections::paint_layer_section(cx, &self.theme, x, y, w);
-        y = sections::paint_fill_section(cx, &self.theme, &self.snapshot, x, y, w);
-        y = sections::paint_stroke_section(cx, &self.theme, &self.snapshot, x, y, w);
-        y = sections::paint_effects_section(cx, &self.theme, x, y, w);
-        let _ = sections::paint_export_section(cx, &self.theme, x, y, w);
+        y = sections::paint_create_component(cx, &self.theme, &self.labels, x, y, w);
+        y = sections::paint_position_section(
+            cx,
+            &self.theme,
+            &self.snapshot,
+            &edit_ctx,
+            &self.labels,
+            x,
+            y,
+            w,
+        );
+        y = sections::paint_flex_section(cx, &self.theme, &self.labels, x, y, w);
+        y = sections::paint_size_section(
+            cx,
+            &self.theme,
+            &self.snapshot,
+            &edit_ctx,
+            &self.labels,
+            x,
+            y,
+            w,
+        );
+        y = sections::paint_layer_section(cx, &self.theme, &self.labels, x, y, w);
+        y = sections::paint_fill_section(cx, &self.theme, &self.snapshot, &self.labels, x, y, w);
+        y = sections::paint_stroke_section(cx, &self.theme, &self.snapshot, &self.labels, x, y, w);
+        y = sections::paint_effects_section(cx, &self.theme, &self.labels, x, y, w);
+        let _ = sections::paint_export_section(cx, &self.theme, &self.labels, x, y, w);
     }
 
     fn access_node(&self) -> accesskit::Node {
