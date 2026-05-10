@@ -21,8 +21,8 @@ use crate::widgets::{LayoutBox, LayoutCx, PaintCx, Widget, WidgetId};
 use crate::{Color, Point2D, Rect};
 
 /// Outer column width (matches the TS app's `w-12` toolbar).
-pub const TOOLBAR_WIDTH: f32 = 48.0;
-const BUTTON_SIZE: f32 = 36.0;
+pub const TOOLBAR_WIDTH: f32 = 44.0;
+const BUTTON_SIZE: f32 = 32.0;
 const BUTTON_RADIUS: f32 = 8.0;
 const ICON_SIZE: f32 = 18.0;
 const STROKE_W: f32 = 1.6;

@@ -66,6 +66,11 @@ pub struct Theme {
     /// Primary-tinted row highlight (e.g. selected layer row).
     /// Approximates `bg-blue-500/15` from the TS app.
     pub row_selected_primary: Color,
+    /// Infinite-canvas surface behind document nodes. Slightly
+    /// lighter than `background` so the canvas reads as a distinct
+    /// surface (matches the TS app's `oklch(0.145 0 0)` ≈ `#252525`
+    /// canvas tone, dialed back a touch for OP's chrome).
+    pub canvas_surface: Color,
 }
 
 impl Theme {
@@ -91,6 +96,7 @@ impl Theme {
             button_hover: rgba(0xff, 0xff, 0xff, 0.06),
             row_selected: rgb(0x26, 0x26, 0x26),
             row_selected_primary: rgba(0x3b, 0x82, 0xf6, 0.18),
+            canvas_surface: rgb(0x18, 0x18, 0x18),
         }
     }
 
@@ -116,6 +122,7 @@ impl Theme {
             button_hover: rgba(0x00, 0x00, 0x00, 0.06),
             row_selected: rgb(0xe5, 0xe5, 0xe5),
             row_selected_primary: rgba(0x3b, 0x82, 0xf6, 0.15),
+            canvas_surface: rgb(0xfa, 0xfa, 0xfa),
         }
     }
 }
