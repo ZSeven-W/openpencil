@@ -14,6 +14,4 @@ export {
   detectExcessiveFrameEffects,
   detectAllIssues,
 } from './detectors';
-export { detectEdgeSectionPadding, detectStackedHorizontalPadding } from './detectors-spacing';
-export { detectTextBgContrast } from './detectors-typography';
-export { colorContrast, parseHexColor, relativeLuminance } from './color-utils';
+export { detectEdgeSectionPadding } from './detectors-spacing';

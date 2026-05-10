@@ -1,41 +1,184 @@
-//! `Toolbar` — top-strip tool selector.
+//! `Toolbar` — vertical icon-only tool column anchored to the left
+//! edge of the canvas (Step 4 visual lift).
 //!
-//! Step 2 scope: paint a horizontal row of fixed-width tool
-//! buttons (Select / Rect / Text / Pen). The active tool's button
-//! is filled blue; others are white with a black stroke. Click /
-//! keyboard tool-switching wires up in Step 3 alongside pointer
-//! handling.
+//! Layout matches `apps/web/src/components/editor/toolbar.tsx`:
+//! tools at the top (Select / Rect / Text / Frame / Hand), a hairline
+//! separator, undo/redo, another separator, then panel toggles
+//! (Code / Design system).
+//!
+//! Active tool gets a `theme.primary` filled rounded square + the
+//! white foreground icon. Inactive items render the icon in
+//! `theme.muted_foreground` with a transparent background.
+//!
+//! Click events are wired by the host in P6; the toolbar exposes
+//! [`Toolbar::hit_test`] so a `(x, y)` mouse position resolves to
+//! either a `Tool` change or an `Action` (Undo / Redo / TogglePanel).
 
+use crate::document::{Document, Tool};
+use crate::theme::Theme;
+use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::{LayoutBox, LayoutCx, PaintCx, Widget, WidgetId};
-use crate::{Color, Point2D, Rect, TextLayout};
+use crate::{Color, Point2D, Rect};
 
-/// Width of one tool button in pixels. Toolbar layout reports
-/// `tools.len() * BUTTON_WIDTH + (tools.len() - 1) * GAP +
-/// 2 * PAD` as its total width contribution; the host typically
-/// constrains the toolbar to the full window width and lets the
-/// button strip pin to the left.
-const BUTTON_WIDTH: f32 = 64.0;
-const BUTTON_HEIGHT: f32 = 28.0;
-const GAP: f32 = 6.0;
-const PAD: f32 = 8.0;
+/// Outer column width (matches the TS app's `w-12` toolbar).
+pub const TOOLBAR_WIDTH: f32 = 48.0;
+const BUTTON_SIZE: f32 = 36.0;
+const BUTTON_RADIUS: f32 = 8.0;
+const ICON_SIZE: f32 = 18.0;
+const STROKE_W: f32 = 1.6;
+const BUTTON_GAP: f32 = 4.0;
+const SECTION_GAP: f32 = 12.0;
+const PAD_TOP: f32 = 8.0;
+const PAD_BOTTOM: f32 = 8.0;
+
+/// Each entry in the toolbar — either a tool button (selectable),
+/// an action button (one-shot), or a separator that paints a
+/// hairline.
+#[derive(Debug, Clone, Copy)]
+pub enum ToolbarItem {
+    Tool(Tool, Icon),
+    Action(ToolbarAction, Icon),
+    Separator,
+}
+
+/// One-shot action a toolbar button can dispatch. Wired in P6.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ToolbarAction {
+    Undo,
+    Redo,
+    ToggleCodePanel,
+    ToggleDesignPanel,
+}
+
+/// Hit-test result for a mouse click inside the toolbar rect.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ToolbarHit {
+    Tool(Tool),
+    Action(ToolbarAction),
+}
 
 pub struct Toolbar {
     pub id: WidgetId,
-    pub tools: Vec<&'static str>,
-    pub active: usize,
+    pub items: Vec<ToolbarItem>,
+    pub active: Tool,
+    pub theme: Theme,
 }
 
 impl Toolbar {
-    /// Default Step 2 tool set — Select / Rect / Text / Pen.
-    /// Reserved id range 3000-3999 (toolbar = 3000, per-button
-    /// ids are 3001..). `active` defaults to 0 = Select.
+    /// Default Step 4 set — TS app order:
+    /// Select / Rect / Text / Frame / Hand · Undo / Redo · Code / Design.
     pub fn default_set() -> Self {
+        Self::for_document(&Document::empty())
+    }
+
+    /// Build the toolbar bound to the document's active tool. The
+    /// active highlight reads `doc.tool`; the rest is the static
+    /// item list.
+    pub fn for_document(doc: &Document) -> Self {
         Self {
             id: WidgetId::new(3000),
-            tools: vec!["Select", "Rect", "Text", "Pen"],
-            active: 0,
+            items: vec![
+                ToolbarItem::Tool(Tool::Select, Icon::Cursor),
+                ToolbarItem::Tool(Tool::Rect, Icon::Square),
+                ToolbarItem::Tool(Tool::Text, Icon::Type),
+                ToolbarItem::Tool(Tool::Frame, Icon::Frame),
+                ToolbarItem::Tool(Tool::Hand, Icon::Hand),
+                ToolbarItem::Separator,
+                ToolbarItem::Action(ToolbarAction::Undo, Icon::Undo),
+                ToolbarItem::Action(ToolbarAction::Redo, Icon::Redo),
+                ToolbarItem::Separator,
+                ToolbarItem::Action(ToolbarAction::ToggleCodePanel, Icon::Braces),
+                ToolbarItem::Action(ToolbarAction::ToggleDesignPanel, Icon::BookOpen),
+            ],
+            active: doc.tool,
+            theme: Theme::dark(),
         }
     }
+
+    /// Total intrinsic height = padding + each item's slot.
+    fn intrinsic_height(&self) -> f32 {
+        let mut h = PAD_TOP;
+        let mut prev_was_item = false;
+        for item in &self.items {
+            match item {
+                ToolbarItem::Separator => {
+                    h += if prev_was_item { SECTION_GAP } else { 0.0 };
+                    prev_was_item = false;
+                }
+                _ => {
+                    if prev_was_item {
+                        h += BUTTON_GAP;
+                    }
+                    h += BUTTON_SIZE;
+                    prev_was_item = true;
+                }
+            }
+        }
+        h + PAD_BOTTOM
+    }
+
+    /// Resolve a pointer at `point` (host-coordinates, top-left of
+    /// the toolbar rect at `rect.origin`) to a tool / action.
+    /// Returns `None` for a click outside any button or on a
+    /// separator gap.
+    pub fn hit_test(&self, rect: Rect, point: Point2D) -> Option<ToolbarHit> {
+        if point.x < rect.origin.x
+            || point.x > rect.origin.x + rect.size.x
+            || point.y < rect.origin.y
+            || point.y > rect.origin.y + rect.size.y
+        {
+            return None;
+        }
+        let button_x = rect.origin.x + (rect.size.x - BUTTON_SIZE) / 2.0;
+        let mut y = rect.origin.y + PAD_TOP;
+        let mut prev_was_item = false;
+        for item in &self.items {
+            match item {
+                ToolbarItem::Separator => {
+                    if prev_was_item {
+                        y += SECTION_GAP;
+                    }
+                    prev_was_item = false;
+                }
+                ToolbarItem::Tool(tool, _) => {
+                    if prev_was_item {
+                        y += BUTTON_GAP;
+                    }
+                    let button_rect = Rect {
+                        origin: Point2D::new(button_x, y),
+                        size: Point2D::new(BUTTON_SIZE, BUTTON_SIZE),
+                    };
+                    if hit(button_rect, point) {
+                        return Some(ToolbarHit::Tool(*tool));
+                    }
+                    y += BUTTON_SIZE;
+                    prev_was_item = true;
+                }
+                ToolbarItem::Action(action, _) => {
+                    if prev_was_item {
+                        y += BUTTON_GAP;
+                    }
+                    let button_rect = Rect {
+                        origin: Point2D::new(button_x, y),
+                        size: Point2D::new(BUTTON_SIZE, BUTTON_SIZE),
+                    };
+                    if hit(button_rect, point) {
+                        return Some(ToolbarHit::Action(*action));
+                    }
+                    y += BUTTON_SIZE;
+                    prev_was_item = true;
+                }
+            }
+        }
+        None
+    }
+}
+
+fn hit(r: Rect, p: Point2D) -> bool {
+    p.x >= r.origin.x
+        && p.x <= r.origin.x + r.size.x
+        && p.y >= r.origin.y
+        && p.y <= r.origin.y + r.size.y
 }
 
 impl Widget for Toolbar {
@@ -43,61 +186,61 @@ impl Widget for Toolbar {
         self.id
     }
 
-    fn layout(&self, cx: &LayoutCx) -> LayoutBox {
-        // Toolbar always reports the host's available width — it
-        // pins to the top strip and the button row aligns to the
-        // left within that width.
+    fn layout(&self, _cx: &LayoutCx) -> LayoutBox {
         LayoutBox {
             rect: Rect {
                 origin: Point2D::new(0.0, 0.0),
-                size: Point2D::new(cx.available_width, BUTTON_HEIGHT + 2.0 * PAD),
+                size: Point2D::new(TOOLBAR_WIDTH, self.intrinsic_height()),
             },
         }
     }
 
     fn paint(&self, cx: &mut PaintCx<'_>, rect: Rect) {
-        cx.backend.fill_rect(rect, Color::WHITE);
-        let mut x = rect.origin.x + PAD;
-        let y = rect.origin.y + PAD;
-        for (idx, label) in self.tools.iter().enumerate() {
-            let button = Rect {
-                origin: Point2D::new(x, y),
-                size: Point2D::new(BUTTON_WIDTH, BUTTON_HEIGHT),
-            };
-            // **Overflow handling, Step 2 scope (codex Step 2 R1
-            // CONCERN-4)**: Buttons that would overflow the
-            // toolbar's reported width are silently dropped. This
-            // keeps rendering predictable on narrow / mobile
-            // viewports but is a UX cliff — the user can't reach
-            // hidden tools. Step 3+ replaces this with one of:
-            //   - horizontal scroll inside the toolbar rect
-            //     (drag / wheel)
-            //   - "More tools" overflow dropdown anchored to the
-            //     right edge
-            //   - icon-only mode at narrower widths
-            // Phase D pointer/wheel routing has to land before
-            // any of those is wirable.
-            if x + BUTTON_WIDTH > rect.origin.x + rect.size.x - PAD {
-                break;
+        // Floating column on top of the canvas — paint a translucent
+        // popover-ish background so it reads as a panel against any
+        // canvas content beneath.
+        cx.backend.fill_round_rect(rect, 12.0, self.theme.popover);
+        cx.backend.stroke_round_rect(rect, 12.0, self.theme.border, 1.0);
+
+        let button_x = rect.origin.x + (rect.size.x - BUTTON_SIZE) / 2.0;
+        let mut y = rect.origin.y + PAD_TOP;
+        let mut prev_was_item = false;
+        for item in &self.items {
+            match item {
+                ToolbarItem::Separator => {
+                    if prev_was_item {
+                        y += SECTION_GAP / 2.0;
+                    }
+                    let sep_x = rect.origin.x + 10.0;
+                    let sep_w = rect.size.x - 20.0;
+                    cx.backend.fill_rect(
+                        Rect {
+                            origin: Point2D::new(sep_x, y),
+                            size: Point2D::new(sep_w, 1.0),
+                        },
+                        self.theme.border,
+                    );
+                    y += SECTION_GAP / 2.0;
+                    prev_was_item = false;
+                }
+                ToolbarItem::Tool(tool, icon) => {
+                    if prev_was_item {
+                        y += BUTTON_GAP;
+                    }
+                    let active = *tool == self.active;
+                    paint_button(cx, &self.theme, button_x, y, *icon, active);
+                    y += BUTTON_SIZE;
+                    prev_was_item = true;
+                }
+                ToolbarItem::Action(_, icon) => {
+                    if prev_was_item {
+                        y += BUTTON_GAP;
+                    }
+                    paint_button(cx, &self.theme, button_x, y, *icon, false);
+                    y += BUTTON_SIZE;
+                    prev_was_item = true;
+                }
             }
-            if idx == self.active {
-                cx.backend.fill_rect(button, Color::BLUE);
-            } else {
-                cx.backend.fill_rect(button, Color::WHITE);
-                cx.backend.stroke_rect(button, Color::BLACK, 1.0);
-            }
-            let text = TextLayout::single_run(
-                label,
-                "system-ui",
-                12.0,
-                jian_core::scene::Color::rgb(20, 20, 20),
-                Point2D::new(0.0, 0.0),
-            );
-            cx.backend.draw_text(
-                &text,
-                Point2D::new(button.origin.x + 8.0, button.origin.y + 19.0),
-            );
-            x += BUTTON_WIDTH + GAP;
         }
     }
 
@@ -108,30 +251,137 @@ impl Widget for Toolbar {
     }
 }
 
+fn paint_button(
+    cx: &mut PaintCx<'_>,
+    theme: &Theme,
+    x: f32,
+    y: f32,
+    icon: Icon,
+    active: bool,
+) {
+    let button_rect = Rect {
+        origin: Point2D::new(x, y),
+        size: Point2D::new(BUTTON_SIZE, BUTTON_SIZE),
+    };
+    let icon_color: Color;
+    if active {
+        cx.backend
+            .fill_round_rect(button_rect, BUTTON_RADIUS, theme.primary);
+        icon_color = theme.primary_foreground;
+    } else {
+        icon_color = theme.muted_foreground;
+    }
+    let icon_origin = Point2D::new(
+        x + (BUTTON_SIZE - ICON_SIZE) / 2.0,
+        y + (BUTTON_SIZE - ICON_SIZE) / 2.0,
+    );
+    draw_icon(
+        cx.backend,
+        icon,
+        icon_origin,
+        ICON_SIZE,
+        icon_color,
+        STROKE_W,
+    );
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn default_set_has_four_tools_and_active_zero() {
+    fn default_set_has_five_tools_plus_actions() {
         let toolbar = Toolbar::default_set();
-        assert_eq!(toolbar.tools.len(), 4);
-        assert_eq!(toolbar.tools[0], "Select");
-        assert_eq!(toolbar.tools[3], "Pen");
-        assert_eq!(toolbar.active, 0);
+        let tool_count = toolbar
+            .items
+            .iter()
+            .filter(|i| matches!(i, ToolbarItem::Tool(..)))
+            .count();
+        let action_count = toolbar
+            .items
+            .iter()
+            .filter(|i| matches!(i, ToolbarItem::Action(..)))
+            .count();
+        assert_eq!(tool_count, 5);
+        assert_eq!(action_count, 4);
+        assert_eq!(toolbar.active, Tool::Select);
     }
 
     #[test]
-    fn layout_reports_full_width_and_44px_height() {
+    fn intrinsic_height_accommodates_all_items() {
         let toolbar = Toolbar::default_set();
-        let cx = LayoutCx {
-            available_width: 800.0,
-            dpi: 1.0,
+        let h = toolbar.intrinsic_height();
+        // 5 tool buttons + 4 action buttons = 9 buttons; their total
+        // is at minimum 9 * BUTTON_SIZE = 324, plus padding +
+        // separator gaps. Sanity-check the height is in a
+        // reasonable band.
+        assert!(h > 9.0 * BUTTON_SIZE, "toolbar shorter than its buttons");
+        assert!(h < 9.0 * BUTTON_SIZE + 200.0, "toolbar bloated: {h}");
+    }
+
+    #[test]
+    fn for_document_picks_up_active_tool() {
+        let mut doc = Document::sample();
+        doc.tool = Tool::Frame;
+        let toolbar = Toolbar::for_document(&doc);
+        assert_eq!(toolbar.active, Tool::Frame);
+    }
+
+    #[test]
+    fn hit_test_inside_first_button_returns_select() {
+        let toolbar = Toolbar::default_set();
+        let rect = Rect {
+            origin: Point2D::new(0.0, 0.0),
+            size: Point2D::new(TOOLBAR_WIDTH, toolbar.intrinsic_height()),
         };
-        let lb = toolbar.layout(&cx);
-        assert_eq!(lb.rect.size.x, 800.0);
-        // BUTTON_HEIGHT(28) + 2 * PAD(8) = 44
-        assert_eq!(lb.rect.size.y, 44.0);
+        // Center of the first button.
+        let center = Point2D::new(
+            (TOOLBAR_WIDTH) / 2.0,
+            PAD_TOP + BUTTON_SIZE / 2.0,
+        );
+        assert_eq!(
+            toolbar.hit_test(rect, center),
+            Some(ToolbarHit::Tool(Tool::Select))
+        );
+    }
+
+    #[test]
+    fn hit_test_outside_returns_none() {
+        let toolbar = Toolbar::default_set();
+        let rect = Rect {
+            origin: Point2D::new(0.0, 0.0),
+            size: Point2D::new(TOOLBAR_WIDTH, toolbar.intrinsic_height()),
+        };
+        assert_eq!(
+            toolbar.hit_test(rect, Point2D::new(-10.0, -10.0)),
+            None
+        );
+        assert_eq!(
+            toolbar.hit_test(rect, Point2D::new(1000.0, 1000.0)),
+            None
+        );
+    }
+
+    #[test]
+    fn hit_test_resolves_action_button() {
+        let toolbar = Toolbar::default_set();
+        let rect = Rect {
+            origin: Point2D::new(0.0, 0.0),
+            size: Point2D::new(TOOLBAR_WIDTH, toolbar.intrinsic_height()),
+        };
+        // First Action item is Undo. After 5 tool buttons + 4 button
+        // gaps + 1 separator + button advance, hit-test the center
+        // of the Undo button.
+        let undo_y = PAD_TOP
+            + 5.0 * BUTTON_SIZE
+            + 4.0 * BUTTON_GAP
+            + SECTION_GAP
+            + BUTTON_SIZE / 2.0;
+        let center = Point2D::new(TOOLBAR_WIDTH / 2.0, undo_y);
+        assert_eq!(
+            toolbar.hit_test(rect, center),
+            Some(ToolbarHit::Action(ToolbarAction::Undo))
+        );
     }
 
     #[test]
@@ -140,12 +390,5 @@ mod tests {
         let node = toolbar.access_node();
         assert_eq!(node.role(), accesskit::Role::Toolbar);
         assert_eq!(node.label(), Some("Toolbar"));
-    }
-
-    #[test]
-    fn active_index_round_trips() {
-        let mut toolbar = Toolbar::default_set();
-        toolbar.active = 2;
-        assert_eq!(toolbar.tools[toolbar.active], "Text");
     }
 }

@@ -19,10 +19,12 @@
 pub mod document;
 pub mod jian;
 pub mod render_backend;
+pub mod theme;
 pub mod widgets;
 
 // Re-export the primary API for upstream crates / widgets / tests.
 pub use render_backend::{Color, Point2D, Rect, RenderBackend, TextLayout};
+pub use theme::Theme;
 
 /// Re-exports of Jian gesture / event types so shell consumers can use the
 /// canonical Jian types directly without an OP-specific translation layer.

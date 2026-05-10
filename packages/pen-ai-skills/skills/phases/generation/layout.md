@@ -102,10 +102,3 @@ AESTHETIC HYGIENE — keep these silent (never emit, the post-pass also strips t
 - INNER LAYOUT FRAMES (sections, wrappers, header / body containers inside a card) DO NOT need
   fill, stroke, OR shadow. They inherit from the page / card surface. Only opt into a fill /
   border / shadow on the OUTER card, button, badge, chip — NEVER on the wrapper that holds it.
-- PAGE GUTTER GOES ON ONE LAYER, NOT BOTH. Pick: either the root frame carries horizontal padding
-  (e.g. `padding: [0,16]` on root) and direct child sections use horizontal padding 0, OR the root
-  carries 0 horizontal padding and each section sets its own. Stacking both produces a doubled
-  inset (root 16 + section 24 = 40px gutter on a 375px page → only 295px content). Default
-  convention: PUT HORIZONTAL PADDING ON THE ROOT, sections set vertical padding only. Hero /
-  banner / image-bleed sections then sit edge-to-edge by simply NOT adding horizontal padding (the
-  root's gutter shows through them naturally).

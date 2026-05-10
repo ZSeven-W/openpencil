@@ -50,6 +50,27 @@ impl RenderBackend for RecordingBackend {
     fn translate(&mut self, _offset: Point2D) {
         self.translates += 1;
     }
+    fn stroke_line(&mut self, _from: Point2D, _to: Point2D, _color: Color, _width: f32) {
+        // Counted alongside strokes for the existing test asserts;
+        // a separate counter is unnecessary for Step 4 visual lift.
+        self.strokes += 1;
+    }
+    fn fill_round_rect(&mut self, _rect: Rect, _radius: f32, _color: Color) {
+        self.rects += 1;
+    }
+    fn stroke_round_rect(&mut self, _rect: Rect, _radius: f32, _color: Color, _width: f32) {
+        self.strokes += 1;
+    }
+    fn stroke_svg_path(
+        &mut self,
+        _d: &str,
+        _top_left: Point2D,
+        _size: f32,
+        _color: Color,
+        _width: f32,
+    ) {
+        self.strokes += 1;
+    }
     fn resize(&mut self, _width: u32, _height: u32) {}
     fn dpi_scale(&self) -> f32 {
         1.0

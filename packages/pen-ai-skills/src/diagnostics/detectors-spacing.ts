@@ -31,17 +31,6 @@ function getPaddingLeft(node: PenNode): number {
   return 0;
 }
 
-function getPaddingRight(node: PenNode): number {
-  const p = (node as unknown as { padding?: unknown }).padding;
-  if (typeof p === 'number') return p;
-  if (Array.isArray(p)) {
-    if (p.length === 4) return Number(p[1] ?? 0);
-    if (p.length === 2) return Number(p[1] ?? 0);
-    if (p.length === 1) return Number(p[0] ?? 0);
-  }
-  return 0;
-}
-
 function hasTextOrIconDescendant(node: PenNode): boolean {
   if (node.type === 'text') return true;
   if ((node.type as string) === 'icon_font') return true;
@@ -163,83 +152,6 @@ export function detectEdgeSectionPadding(root: PenNode): Issue[] {
             currentValue: currentPad ?? null,
             suggestedValue: suggested,
             reason: `mobile root has 0 horizontal padding while ${offendingChildren.length} content section(s) glue text/icon to screen edge`,
-          });
-        }
-      }
-    }
-
-    if ('children' in node && Array.isArray(node.children)) {
-      for (const c of node.children) walk(c);
-    }
-  }
-}
-
-/**
- * Aesthetic detector: page root and a direct content section both apply
- * horizontal padding, producing a doubled inset.
- *
- * 2026-05-10 user-reported "Bistro" mobile design hit this: root carried
- * `padding: [0, 16, 0, 16]` and `Today's Specials` section carried
- * `padding: [0, 24]`. Effective gutter = 16 + 24 = 40px on a 375px page,
- * leaving only 295px for content. Read as "too much padding" / pinched.
- *
- * The skill prompt now teaches "page gutter goes on ONE layer, not both"
- * (see layout.md AESTHETIC HYGIENE). This detector is the cheap
- * post-pass guard for when the LLM ignores the rule.
- *
- * Severity is INFO (detect-only). Auto-fix is tempting (zero out section
- * horizontal padding, keep root) but a section may legitimately want a
- * larger inset for visual emphasis (a hero card with deeper gutter than
- * surrounding sections). Surface in the audit panel; let the user/agent
- * decide. The skill rule covers the preventive side.
- *
- * Page-shape filter mirrors detectEdgeSectionPadding to avoid firing on
- * components-with-internal-padding (chip → status-badge stacking is
- * legitimate; the doubled-gutter problem is unique to mobile pages).
- */
-export function detectStackedHorizontalPadding(root: PenNode): Issue[] {
-  const issues: Issue[] = [];
-  walk(root);
-  return issues;
-
-  function walk(node: PenNode): void {
-    const width = (node as unknown as { width?: unknown }).width;
-    const height = (node as unknown as { height?: unknown }).height;
-    const looksLikeMobilePage =
-      node.type === 'frame' &&
-      typeof width === 'number' &&
-      width >= 320 &&
-      width <= 480 &&
-      typeof height === 'number' &&
-      height >= 568 &&
-      height >= width * 1.5;
-
-    if (
-      looksLikeMobilePage &&
-      'children' in node &&
-      Array.isArray(node.children) &&
-      node.children.length >= 2
-    ) {
-      const rootL = getPaddingLeft(node);
-      const rootR = getPaddingRight(node);
-      if (rootL > 0 || rootR > 0) {
-        for (const child of (node as { children: PenNode[] }).children) {
-          if (child.type !== 'frame') continue;
-          const role = ((child as { role?: string }).role ?? '').toLowerCase();
-          if (FULL_BLEED_ROLES.has(role)) continue;
-          const childL = getPaddingLeft(child);
-          const childR = getPaddingRight(child);
-          if (childL === 0 && childR === 0) continue;
-          // Section's horizontal padding stacks with root's. Flag the section
-          // (the offender — root is the established gutter holder).
-          issues.push({
-            nodeId: child.id,
-            category: 'stacked-horizontal-padding',
-            severity: 'info',
-            property: 'padding',
-            currentValue: (child as unknown as { padding?: unknown }).padding,
-            suggestedValue: null,
-            reason: `section h-padding [${childL}/${childR}] stacks with root h-padding [${rootL}/${rootR}] — combined gutter ${rootL + childL}/${rootR + childR}`,
           });
         }
       }

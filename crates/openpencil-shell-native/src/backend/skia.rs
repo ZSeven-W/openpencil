@@ -42,6 +42,18 @@ fn to_sk_rect(r: Rect) -> skia_safe::Rect {
     skia_safe::Rect::from_xywh(r.origin.x, r.origin.y, r.size.x, r.size.y)
 }
 
+/// OP `Color` → `skia_safe::Color4f` — used by the direct-canvas
+/// helpers (stroke_line / fill_round_rect / stroke_round_rect)
+/// that skip the jian DrawOp pipeline.
+fn jian_color_to_color4f(c: Color) -> skia_safe::Color4f {
+    skia_safe::Color4f::new(
+        c.r.clamp(0.0, 1.0),
+        c.g.clamp(0.0, 1.0),
+        c.b.clamp(0.0, 1.0),
+        c.a.clamp(0.0, 1.0),
+    )
+}
+
 /// Frame-scoped Jian-DrawOp adapter (spec v19 §5.2.1).
 ///
 /// The struct stays alive across frames so its underlying
@@ -51,7 +63,28 @@ fn to_sk_rect(r: Rect) -> skia_safe::Rect {
 pub struct NativeBackend {
     skia: jian_skia::SkiaBackend,
     dpi: f32,
+    /// Lazy-initialised typeface backed by the embedded Roboto TTF
+    /// (shared with shell-web). Step 4 perf fix: jian-skia's
+    /// `textlayout` path allocates a fresh `FontCollection` +
+    /// `FontMgr` per `DrawOp::Text` (~15ms each on M1), so a chrome
+    /// frame with ~30 text draws cost ~600ms. We bypass that path
+    /// entirely for chrome by caching typefaces here and rendering
+    /// via `Canvas::draw_str`.
+    ///
+    /// `typeface` covers ASCII (Roboto). `cjk_typeface` is resolved
+    /// lazily via `FontMgr::match_family_style_character` so non-
+    /// ASCII labels (`页面 / 图层 / 未命名 / 用 AI 开始设计 / ...`)
+    /// render through a system CJK font (PingFang on macOS,
+    /// Noto CJK on Linux/Windows) without re-paying jian-skia's
+    /// per-call FontCollection cost.
+    typeface: Option<skia_safe::Typeface>,
+    typeface_tried: bool,
+    cjk_typeface: Option<skia_safe::Typeface>,
+    cjk_typeface_tried: bool,
 }
+
+const ROBOTO_TTF: &[u8] =
+    include_bytes!("../../../openpencil-shell-web/assets/Roboto-Regular.ttf");
 
 impl NativeBackend {
     /// Spec §5.2.1 / plan v7 Task 2 Step 11: take an externally
@@ -60,7 +93,43 @@ impl NativeBackend {
     /// image cache. The convenience `with_dpi` covers the common
     /// "fresh backend" path.
     pub fn new(skia: jian_skia::SkiaBackend, dpi: f32) -> Self {
-        Self { skia, dpi }
+        Self {
+            skia,
+            dpi,
+            typeface: None,
+            typeface_tried: false,
+            cjk_typeface: None,
+            cjk_typeface_tried: false,
+        }
+    }
+
+    /// Lazy-init the Step 4 cached Roboto typeface (ASCII path).
+    fn ensure_typeface(&mut self) -> Option<&skia_safe::Typeface> {
+        if !self.typeface_tried {
+            self.typeface = skia_safe::FontMgr::new().new_from_data(ROBOTO_TTF, None);
+            self.typeface_tried = true;
+        }
+        self.typeface.as_ref()
+    }
+
+    /// Lazy-resolve a system typeface that has CJK glyph coverage.
+    /// Picks whichever font the system FontMgr would use for the
+    /// canonical Han ideograph U+4E00 — on macOS this is PingFang SC,
+    /// on Linux it's Noto Sans CJK, on Windows it's Microsoft YaHei
+    /// or similar. Cached for the lifetime of the backend so we
+    /// don't pay the FontMgr lookup more than once.
+    fn ensure_cjk_typeface(&mut self) -> Option<&skia_safe::Typeface> {
+        if !self.cjk_typeface_tried {
+            let mgr = skia_safe::FontMgr::new();
+            self.cjk_typeface = mgr.match_family_style_character(
+                "",
+                skia_safe::FontStyle::default(),
+                &[],
+                '一' as i32,
+            );
+            self.cjk_typeface_tried = true;
+        }
+        self.cjk_typeface.as_ref()
     }
 
     /// Convenience constructor for tests and the basic-window demo.
@@ -139,22 +208,153 @@ impl NativeBackend {
         self.draw_op(canvas, &op);
     }
 
-    /// Submit every shaped run in the layout as a `DrawOp::Text`,
-    /// translated by `origin`. The translation is non-mutating
-    /// (`TextLayout::translated` returns a fresh layout), so callers can
-    /// reuse the same layout from multiple paint passes.
+    /// Render every shaped run in the layout via cached typefaces +
+    /// `Canvas::draw_str` (Step 4 perf fix — see comment on the
+    /// `typeface` / `cjk_typeface` fields).
+    ///
+    /// Two fast paths + one fallback:
+    ///   - run is ASCII-only → cached Roboto + draw_str
+    ///   - run contains non-ASCII → cached system CJK typeface +
+    ///     draw_str (PingFang / Noto CJK / etc.). PingFang covers
+    ///     Latin too, so mixed runs like "美食 App 首页" render
+    ///     correctly.
+    ///   - the system has no CJK font (rare; Linux without Noto)
+    ///     → fall back to jian-skia's textlayout path so glyphs
+    ///     don't drop. Still slow on that branch, but functional.
     #[tracing::instrument(skip(self, canvas, layout))]
     pub fn draw_text(&mut self, canvas: &skia_safe::Canvas, layout: &TextLayout, origin: Point2D) {
-        let translated = layout.translated(origin);
-        for run in translated.runs() {
-            let op = jian_core::render::DrawOp::Text(run.clone());
-            self.draw_op(canvas, &op);
+        let runs: Vec<_> = layout.runs().to_vec();
+        let ascii_typeface = self.ensure_typeface().cloned();
+        for run in runs {
+            let is_ascii = run.content.is_ascii();
+            let typeface = if is_ascii {
+                ascii_typeface.clone()
+            } else {
+                self.ensure_cjk_typeface().cloned()
+            };
+            let Some(typeface) = typeface else {
+                // No suitable typeface — use jian-skia's textlayout
+                // fallback (slow but correct) so we never silently
+                // drop user-visible text.
+                let mut translated = run.clone();
+                translated.origin = jian_core::geometry::Point::new(
+                    origin.x + run.origin.x,
+                    origin.y + run.origin.y,
+                );
+                let op = jian_core::render::DrawOp::Text(translated);
+                self.draw_op(canvas, &op);
+                continue;
+            };
+            let font = skia_safe::Font::new(&typeface, run.font_size);
+            let jc = run.color;
+            let paint = skia_safe::Paint::new(
+                skia_safe::Color4f::new(
+                    f32::from(jc.r()) / 255.0,
+                    f32::from(jc.g()) / 255.0,
+                    f32::from(jc.b()) / 255.0,
+                    f32::from(jc.a()) / 255.0,
+                ),
+                None,
+            );
+            canvas.draw_str(
+                run.content.as_str(),
+                (
+                    origin.x + run.origin.x,
+                    origin.y + run.origin.y,
+                ),
+                &font,
+                &paint,
+            );
         }
     }
 
     /// Push a clip region. Spec §5.2.1 / plan Step 14f.
     pub fn clip_rect(&self, canvas: &skia_safe::Canvas, rect: Rect) {
         canvas.clip_rect(to_sk_rect(rect), None, None);
+    }
+
+    /// Stroke a single line segment. Step 4 visual lift addition —
+    /// `jian_core::render::DrawOp` lacks a `Line` variant, so this
+    /// bypasses jian and calls `Canvas::draw_line` directly. Same
+    /// shape as `clip_rect`'s direct-canvas pattern. Skia stroke cap
+    /// is set to `Round` so icon endpoints look like the lucide-react
+    /// reference.
+    pub fn stroke_line(
+        &self,
+        canvas: &skia_safe::Canvas,
+        from: Point2D,
+        to: Point2D,
+        color: Color,
+        width: f32,
+    ) {
+        let mut paint = skia_safe::Paint::new(jian_color_to_color4f(color), None);
+        paint.set_stroke(true);
+        paint.set_stroke_width(width);
+        paint.set_anti_alias(true);
+        paint.set_stroke_cap(skia_safe::PaintCap::Round);
+        canvas.draw_line((from.x, from.y), (to.x, to.y), &paint);
+    }
+
+    /// Filled rounded rectangle — used for shadcn-style chip / panel /
+    /// button surfaces. Bypasses jian for the same reason as
+    /// `stroke_line`.
+    pub fn fill_round_rect(
+        &self,
+        canvas: &skia_safe::Canvas,
+        rect: Rect,
+        radius: f32,
+        color: Color,
+    ) {
+        let paint = skia_safe::Paint::new(jian_color_to_color4f(color), None);
+        canvas.draw_round_rect(to_sk_rect(rect), radius, radius, &paint);
+    }
+
+    /// Stroked rounded rectangle. Pairs with `fill_round_rect` for
+    /// outlined chips / buttons.
+    pub fn stroke_round_rect(
+        &self,
+        canvas: &skia_safe::Canvas,
+        rect: Rect,
+        radius: f32,
+        color: Color,
+        width: f32,
+    ) {
+        let mut paint = skia_safe::Paint::new(jian_color_to_color4f(color), None);
+        paint.set_stroke(true);
+        paint.set_stroke_width(width);
+        paint.set_anti_alias(true);
+        canvas.draw_round_rect(to_sk_rect(rect), radius, radius, &paint);
+    }
+
+    /// Step 5 SVG icons: parse an SVG path `d` string, scale from
+    /// a 24×24 viewBox to `size × size` at `top_left`, and stroke
+    /// it with round caps + joins (matches lucide's visual style).
+    /// Falls back to a no-op when the path string fails to parse —
+    /// silently dropping a single icon is better than panicking
+    /// the paint loop.
+    pub fn stroke_svg_path(
+        &self,
+        canvas: &skia_safe::Canvas,
+        d: &str,
+        top_left: Point2D,
+        size: f32,
+        color: Color,
+        width: f32,
+    ) {
+        let Some(path) = skia_safe::utils::parse_path::from_svg(d) else {
+            return;
+        };
+        let s = size / 24.0;
+        let mut matrix = skia_safe::Matrix::new_identity();
+        matrix.set_scale_translate((s, s), (top_left.x, top_left.y));
+        let path = path.with_transform(&matrix);
+        let mut paint = skia_safe::Paint::new(jian_color_to_color4f(color), None);
+        paint.set_stroke(true);
+        paint.set_stroke_width(width);
+        paint.set_anti_alias(true);
+        paint.set_stroke_cap(skia_safe::PaintCap::Round);
+        paint.set_stroke_join(skia_safe::PaintJoin::Round);
+        canvas.draw_path(&path, &paint);
     }
 
     /// Save the current canvas state. Returns the save count so

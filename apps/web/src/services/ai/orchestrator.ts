@@ -835,15 +835,7 @@ export async function executeOrchestration(
       useHistoryStore.getState().startBatch(useDocumentStore.getState().document);
     }
 
-    // Reuse the L742 classification — `isMobileScreen` was computed BEFORE
-    // the status-bar subtask got stripped from `plan.subtasks`. Re-running
-    // `isMobileFullScreen(plan)` here would see the post-strip count, and
-    // a plan that originally had [status-bar, content] (2 items, fits the
-    // narrow + multi-subtask fallback added 2026-05-10 for height-loss
-    // cases) would drop to 1 item and misclassify as Type 0 → no status
-    // bar injection. Codex stop-hook 2026-05-10 caught this; the in-place
-    // strip + re-classify pattern is the fragile bit.
-    const isMobile = isMobileScreen;
+    const isMobile = isMobileFullScreen(plan);
     const useDashboardColumns = shouldUseDashboardColumns(request.prompt, plan);
     const defaultFill: FrameNode['fill'] = (plan.rootFrame.fill as FrameNode['fill']) ?? [
       { type: 'solid', color: plan.styleGuide?.palette?.background ?? '#FFFFFF' },
