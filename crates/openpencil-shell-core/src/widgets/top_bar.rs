@@ -212,8 +212,7 @@ impl Widget for TopBar {
             origin: Point2D::new(rx - chip_w - 6.0, center_y - 13.0),
             size: Point2D::new(chip_w, 26.0),
         };
-        cx.backend
-            .stroke_round_rect(chip_rect, 13.0, self.theme.border, 1.0);
+        // No border ring — TS empty-state chip has no outline.
         draw_icon(
             cx.backend,
             leading_icon,
