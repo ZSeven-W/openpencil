@@ -451,6 +451,7 @@ export class SkiaNodeRenderer {
     y: number,
     w: number,
     h: number,
+    cornerRadius: number = 0,
   ): boolean {
     if (!effects) return false;
     const shadow = effects.find((e): e is ShadowEffect => e.type === 'shadow');
@@ -462,15 +463,28 @@ export class SkiaNodeRenderer {
     paint.setAntiAlias(true);
     paint.setColor(parseColor(ck, shadow.color));
     paint.setMaskFilter(ck.MaskFilter.MakeBlur(ck.BlurStyle.Normal, shadow.blur / 2, true));
-    canvas.drawRect(
-      ck.LTRBRect(
-        x + shadow.offsetX - shadow.spread,
-        y + shadow.offsetY - shadow.spread,
-        x + w + shadow.offsetX + shadow.spread,
-        y + h + shadow.offsetY + shadow.spread,
-      ),
-      paint,
+    const rect = ck.LTRBRect(
+      x + shadow.offsetX - shadow.spread,
+      y + shadow.offsetY - shadow.spread,
+      x + w + shadow.offsetX + shadow.spread,
+      y + h + shadow.offsetY + shadow.spread,
     );
+    if (cornerRadius > 0) {
+      // 2026-05-10 user-reported "圆角元素的尖角阴影" — drawRect was producing
+      // a sharp-cornered shadow under rounded frames / cards because the
+      // shadow geometry never inherited the node's cornerRadius. Drop
+      // shadows MUST follow the node's outline, otherwise the corners poke
+      // out from under the rounded shape.
+      //
+      // Spread expands (or contracts) the visible shadow edge by `spread`
+      // px on each side, so the visible corner radius needs the same
+      // offset to stay parallel to the node — clamp to ≥ 0 so a negative
+      // spread doesn't invert the curve.
+      const shadowR = Math.max(0, cornerRadius + shadow.spread);
+      canvas.drawRRect(ck.RRectXY(rect, shadowR, shadowR), paint);
+    } else {
+      canvas.drawRect(rect, paint);
+    }
     paint.delete();
     return true;
   }
@@ -541,7 +555,22 @@ export class SkiaNodeRenderer {
     const effects =
       'effects' in node ? (node as PenNode & { effects?: PenEffect[] }).effects : undefined;
     if (node.type !== 'text') {
-      this.applyShadowDirect(canvas, effects, absX, absY, absW, absH);
+      // Pass the node's cornerRadius so the drop-shadow follows the rounded
+      // outline. Path / line / polygon don't carry cornerRadius and fall
+      // through with cr=0 (rectangular shadow, which is fine for them).
+      // Ellipse maps to cornerRadius = min(w,h)/2 — RRect with rx=ry=
+      // half-min produces a stadium / circle shadow that matches a
+      // symmetric ellipse outline; asymmetric ellipses get a stadium
+      // approximation rather than a true ellipse, accepted as known
+      // simplification (avatar / status-dot use circles).
+      const cr =
+        node.type === 'ellipse'
+          ? Math.min(absW, absH) / 2
+          : cornerRadiusValue(
+              (node as PenNode & { cornerRadius?: number | [number, number, number, number] })
+                .cornerRadius,
+            );
+      this.applyShadowDirect(canvas, effects, absX, absY, absW, absH, cr);
     }
 
     switch (node.type) {
