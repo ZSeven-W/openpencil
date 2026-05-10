@@ -17,6 +17,7 @@
 //!   (single-page + infinite canvas recommended, multi-page also supported).
 
 pub mod document;
+pub mod i18n;
 pub mod jian;
 pub mod render_backend;
 pub mod theme;

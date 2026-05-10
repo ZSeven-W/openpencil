@@ -286,11 +286,19 @@ impl WidgetHostNative {
             origin: Point2D::new(0.0, 0.0),
             size: Point2D::new(viewport_width, TOP_BAR_HEIGHT),
         };
-        let top_bar = TopBar::untitled();
+        let top_bar = TopBar::for_document(&self.document);
         if let Some(hit) = top_bar.hit_test(top_bar_rect, Point2D::new(x, y)) {
             match hit {
                 TopBarHit::ToggleSidebar => {
                     self.document.ui.sidebar_open = !self.document.ui.sidebar_open;
+                    return true;
+                }
+                TopBarHit::ToggleTheme => {
+                    self.document.ui.theme_mode = self.document.ui.theme_mode.flipped();
+                    return true;
+                }
+                TopBarHit::ToggleLocale => {
+                    self.document.ui.locale = self.document.ui.locale.next();
                     return true;
                 }
             }
@@ -664,7 +672,7 @@ impl WidgetHostNative {
         let dpi = frame.dpi_scale();
 
         // 2. TopBar.
-        let top_bar = TopBar::untitled();
+        let top_bar = TopBar::for_document(&self.document);
         let top_bar_rect = Rect {
             origin: Point2D::new(0.0, 0.0),
             size: Point2D::new(viewport_width, TOP_BAR_HEIGHT),
@@ -762,7 +770,7 @@ impl WidgetHostNative {
         // 8. StatusBar — floating bottom-right.
         let canvas_right = canvas_left + canvas_w;
         if canvas_w > STATUS_BAR_WIDTH + STATUS_INSET * 2.0 {
-            let status = StatusBar::new();
+            let status = StatusBar::for_document(&self.document);
             let status_rect = Rect {
                 origin: Point2D::new(
                     canvas_right - STATUS_BAR_WIDTH - STATUS_INSET,
