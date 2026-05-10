@@ -36,7 +36,9 @@ use openpencil_shell_native::{
     NativeBackend, NativeFrameBackend, SharedSkiaContext, SharedSkiaError, WidgetHostNative,
 };
 use winit::application::ApplicationHandler;
-use winit::event::{ElementState, KeyEvent, MouseButton, MouseScrollDelta, WindowEvent};
+use std::time::{Duration, Instant};
+use winit::event::{ElementState, KeyEvent, MouseButton, MouseScrollDelta, StartCause, WindowEvent};
+use winit::event_loop::ControlFlow;
 use winit::keyboard::{Key, NamedKey};
 use winit::event_loop::{ActiveEventLoop, EventLoop};
 use winit::window::{Window, WindowId};
@@ -110,6 +112,11 @@ struct InspectorApp {
     dpi: f32,
     /// Cmd / Ctrl held — promotes 2-finger swipe from pan to zoom.
     zoom_modifier: bool,
+    /// Monotonic clock anchor — `Instant.elapsed().as_millis()`
+    /// from this is fed into `WidgetHostNative::set_now_ms` so
+    /// `jian_core::anim::blink_visible` can drive the caret
+    /// blink (and any future time-based UI animation).
+    clock_start: Instant,
     error: Option<SharedSkiaError>,
 }
 
@@ -126,12 +133,24 @@ impl InspectorApp {
             cursor_y: 0.0,
             dpi: 1.0,
             zoom_modifier: false,
+            clock_start: Instant::now(),
             error: None,
         }
     }
 }
 
 impl ApplicationHandler for InspectorApp {
+    fn new_events(&mut self, _event_loop: &ActiveEventLoop, cause: StartCause) {
+        // When the WaitUntil deadline fires, the next redraw paints
+        // the next caret-blink phase. winit doesn't auto-redraw on
+        // ResumeTimeReached, so we have to request it here.
+        if matches!(cause, StartCause::ResumeTimeReached { .. }) {
+            if let Some(window) = self.window.as_ref() {
+                window.request_redraw();
+            }
+        }
+    }
+
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         if self.window.is_some() {
             return;
@@ -212,6 +231,10 @@ impl ApplicationHandler for InspectorApp {
                 }
             }
             WindowEvent::RedrawRequested => {
+                // Refresh the host's frame clock — `jian_core::anim`
+                // reads this for the caret blink phase.
+                let now_ms = self.clock_start.elapsed().as_millis() as u64;
+                self.host.set_now_ms(now_ms);
                 if let (Some(ctx), Some(backend)) = (self.ctx.as_mut(), self.backend.as_mut()) {
                     paint_inspector(
                         ctx,
@@ -221,6 +244,16 @@ impl ApplicationHandler for InspectorApp {
                         self.viewport_height,
                         self.dpi,
                     );
+                }
+                // Schedule next wake-up at the caret blink boundary
+                // (or back to event-driven `Wait` when no animation
+                // is pending).
+                if let Some(deadline_ms) = self.host.next_animation_deadline_ms() {
+                    let deadline =
+                        self.clock_start + Duration::from_millis(deadline_ms);
+                    event_loop.set_control_flow(ControlFlow::WaitUntil(deadline));
+                } else {
+                    event_loop.set_control_flow(ControlFlow::Wait);
                 }
             }
             WindowEvent::CursorMoved { position, .. } => {
