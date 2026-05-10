@@ -14,3 +14,4 @@ export {
   detectExcessiveFrameEffects,
   detectAllIssues,
 } from './detectors';
+export { detectEdgeSectionPadding } from './detectors-spacing';
