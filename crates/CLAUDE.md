@@ -31,29 +31,35 @@ Document
 ├── pages: Vec<Page>          (id + name + nodes)
 ├── active_page_index
 ├── selected: NodeId          (NONE = no selection)
-├── tool: Tool                (Select/Rect/Text/Frame/Hand)
-├── viewport: Viewport        (pan_x/pan_y/zoom + zoom_at + pan)
+├── tool: Tool                (Select / Rect / Ellipse / Polygon / Line / Pen / Text / Frame / Hand)
+├── viewport: Viewport        (pan_x / pan_y / zoom + zoom_at + pan)
 ├── chat: ChatState           (messages, input, focused, anchor, collapsed)
-└── ui: UiState               (sidebar_open)
+└── ui: UiState               (sidebar_open, layer_panel_width, property_panel_width,
+                               property_focus, property_input_draft, property_caret_anchor_ms,
+                               theme_mode, locale, locale_picker_open,
+                               shape_picker_open, shape_tool)
 ```
+
+`Document::commit_property_edit(focus, value)` writes a parsed PropertyPanel input back into the selected node's bounds. `Tool::is_shape()` reports membership in the shape-slot group (Rect / Ellipse / Polygon / Line / Pen).
 
 `Node::aggregate_bounds` returns child-union bounds for container nodes (Group / unbounded Frame) so the property panel reports meaningful W/H.
 
 ## Widgets (`shell-core/src/widgets/`)
 
-| Widget            | Section                                                            | File                                                           |
-| ----------------- | ------------------------------------------------------------------ | -------------------------------------------------------------- |
-| TopBar            | Top — file name, agent chip, theme/i18n/fullscreen, sidebar toggle | `top_bar.rs`                                                   |
-| LayerPanel        | Left rail — Pages + Layers sections                                | `layer_panel.rs`                                               |
-| Toolbar           | Vertical floating column — tool selection + actions (44×32)        | `toolbar.rs`                                                   |
-| CanvasViewport    | Center — node tree + grid + viewport transform                     | `canvas_viewport.rs`                                           |
-| PropertyPanel     | Right rail — 设计/代码 tabs + 10 sections                          | `property_panel.rs` + `property_panel_sections.rs`             |
-| AIChatPlaceholder | Floating — chat with drag + 4-corner snap + collapse pill          | `ai_chat_panel.rs`                                             |
-| LocalePicker      | TopBar Globe-button dropdown (15 native names + Check)             | `locale_picker.rs`                                             |
-| StatusBar         | Floating bottom-right — zoom controls                              | `status_bar.rs`                                                |
-| icons             | lucide d-string library (21 icons)                                 | `icons.rs`                                                     |
-| theme             | shadcn-dark palette tokens (incl. `canvas_surface`)                | `theme.rs`                                                     |
-| i18n              | 15 locale tables (706 keys each, TS-mirrored)                      | `i18n/{en,zh_cn,zh_tw,ja,ko,fr,es,de,pt,ru,hi,tr,th,vi,id}.rs` |
+| Widget            | Section                                                                             | File                                                           |
+| ----------------- | ----------------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| TopBar            | Top — file name, agent chip, theme/i18n/fullscreen, sidebar toggle                  | `top_bar.rs`                                                   |
+| LayerPanel        | Left rail — Pages + Layers sections                                                 | `layer_panel.rs`                                               |
+| Toolbar           | Vertical floating column — Select / shape slot / Text / Frame / Hand                | `toolbar.rs`                                                   |
+| ShapePicker       | Toolbar shape-slot dropdown (Rect / Ellipse / Polygon / Line / Pen / Icon / Import) | `shape_picker.rs`                                              |
+| CanvasViewport    | Center — node tree + grid + viewport transform                                      | `canvas_viewport.rs`                                           |
+| PropertyPanel     | Right rail — 设计/代码 tabs + 10 sections + X/Y/W/H input editing                   | `property_panel.rs` + `property_panel_sections.rs`             |
+| AIChatPlaceholder | Floating — chat with drag + 4-corner snap + collapse pill                           | `ai_chat_panel.rs`                                             |
+| LocalePicker      | TopBar Globe-button dropdown (15 native names + Check)                              | `locale_picker.rs`                                             |
+| StatusBar         | Floating bottom-right — zoom controls                                               | `status_bar.rs`                                                |
+| icons             | lucide d-string library (35 icons)                                                  | `icons.rs`                                                     |
+| theme             | shadcn-dark palette tokens (incl. `canvas_surface`)                                 | `theme.rs`                                                     |
+| i18n              | 15 locale tables (706 keys each, TS-mirrored)                                       | `i18n/{en,zh_cn,zh_tw,ja,ko,fr,es,de,pt,ru,hi,tr,th,vi,id}.rs` |
 
 ## Theme + i18n
 
@@ -71,6 +77,30 @@ Document
   ```
 
   Each locale file is ≤ 730 lines (under the 800-line ceiling). Cross-locale fallback: missing keys try EN before falling through to the key itself for debug visibility.
+
+## Toolbar shape-tool dropdown
+
+The toolbar's compound `ShapeSlot` paints whichever shape variant is current (`ui.shape_tool`, default `Rect`) plus a small chevron-down in the gutter directly below the button (`SHAPE_SLOT_BOTTOM_EXTRA = 10 px`). Click anywhere on the slot — including the chevron — to toggle `ui.shape_picker_open`.
+
+`ShapePicker::for_document(doc)` paints a 220 × 7-row dropdown anchored to the right of the slot. The seven rows mirror the TS shape-tool-dropdown verbatim:
+
+- Rectangle / Ellipse / Polygon / Line / Pen → `ShapeChoice::Tool(Tool::*)` — the host writes `ui.shape_tool` + `doc.tool` and closes the panel.
+- Icon → `ShapeChoice::OpenIconPicker` (host follow-up).
+- Import Image or SVG… → `ShapeChoice::ImportImageOrSvg` (host follow-up).
+
+Click anywhere outside the panel closes it silently. Locale lookups for the row labels (`shapes.rectangle / ellipse / polygon / line / icon / importImageSvg / pen`) come straight from the TS table; missing keys fall back to English literals.
+
+## PropertyPanel input editing
+
+`Document.ui` carries the focused property field, a draft buffer, and a caret-blink anchor:
+
+- `property_focus: Option<PropertyFocus>` — `PositionX / PositionY / SizeW / SizeH / Rotation / Opacity / FillHex / StrokeHex / StrokeWidth`. Currently wired for X / Y / W / H editing; the others accept focus + clear cleanly but no-op at commit.
+- `property_input_draft: String` — live keystrokes accumulate here; `apply_text` filters digits / leading minus / single decimal.
+- `property_caret_anchor_ms: u64` — drives caret blink off the same `jian_core::anim::blink_visible` cadence as the chat input.
+
+`PropertyPanel::for_selection_at(doc, now_ms)` is the entry point; the host calls `panel.hit_test(panel_rect, point)` to map clicks onto a `PropertyFocus`. Commit on Enter (parses f32, calls `Document::commit_property_edit`), discard on Escape, auto-commit on click outside the property panel.
+
+`PropertyLabels::for_document(doc)` resolves every section title (位置/弹性布局/尺寸/图层/填充/描边/效果/导出), the 设计/代码 tabs, the 创建组件 button, and the size checkboxes (填充宽/高 / 适应宽/高 / 裁剪内容) via `Document::t`, falling back to English when a key isn't in the TS locale table.
 
 ## RenderBackend trait
 
