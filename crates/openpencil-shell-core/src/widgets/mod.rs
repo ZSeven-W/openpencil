@@ -2,22 +2,41 @@
 //! both shell-native and shell-web reuse it; only RenderBackend / DOM event
 //! mapping / accesskit DOM mirror are platform-owned).
 //!
-//! B1: the bare trait + paint / layout contexts + WidgetId.
-//! B2 (this commit): four static inspector widgets — `TreeWidget` /
-//! `PropertyRow` / `Dropdown` / `TextInput` — each with a sample/new
-//! constructor, stable WidgetId range, layout/paint/access_node impl.
+//! Two layers in one module:
+//!
+//! - **Primitives** (Phase B1+B2): the four reusable building blocks
+//!   `TreeWidget` / `PropertyRow` / `Dropdown` / `TextInput`.
+//! - **Compositions** (Step 2): `LayerPanel` / `PropertyPanel` /
+//!   `Toolbar` — view models built from a `crate::document::Document`
+//!   that compose the primitives into the actual editor UI surface.
+//!   These were briefly housed in a `chrome/` submodule; the name
+//!   collided with the higher-level "OP chrome = openpencil-shell"
+//!   architectural term, so they live alongside the primitives now
+//!   (every entry here `impl Widget`, primitives + compositions
+//!   alike).
 
 use crate::{Point2D, Rect, RenderBackend};
 
+// Phase B primitives.
 pub mod dropdown;
 pub mod prop_row;
 pub mod text_input;
 pub mod tree;
 
+// Step 2 compositions (built on top of the primitives, driven by
+// `crate::document::Document`).
+pub mod layer_panel;
+pub mod property_panel;
+pub mod toolbar;
+
 pub use dropdown::{Dropdown, DropdownState};
 pub use prop_row::PropertyRow;
 pub use text_input::{TextInput, TextInputState};
 pub use tree::{TreeItem, TreeWidget};
+
+pub use layer_panel::{LayerItem, LayerPanel};
+pub use property_panel::PropertyPanel;
+pub use toolbar::Toolbar;
 
 /// Stable identifier assigned by the widget host. Used by accesskit
 /// (`accesskit::NodeId(WidgetId.0)`), the DOM mirror, and event routing.

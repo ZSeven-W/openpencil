@@ -16,6 +16,7 @@
 //!   differentiation lives at the canvas viewport / chrome layer
 //!   (single-page + infinite canvas recommended, multi-page also supported).
 
+pub mod document;
 pub mod jian;
 pub mod render_backend;
 pub mod widgets;

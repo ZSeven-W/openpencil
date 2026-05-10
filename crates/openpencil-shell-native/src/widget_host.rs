@@ -50,8 +50,9 @@
 //!   provider, then runs the same `host.paint(&mut frame, width)`.
 
 use crate::backend::NativeBackend;
+use openpencil_shell_core::document::Document;
 use openpencil_shell_core::widgets::{
-    Dropdown, LayoutCx, PaintCx, PropertyRow, TextInput, TreeWidget, Widget,
+    Dropdown, LayerPanel, LayoutCx, PaintCx, PropertyPanel, TextInput, Toolbar, Widget,
 };
 use openpencil_shell_core::{Color, Point2D, Rect, RenderBackend, TextLayout};
 
@@ -132,52 +133,115 @@ impl<'a> RenderBackend for NativeFrameBackend<'a> {
 }
 
 /// Native counterpart of shell-web's `widget_host::WidgetHost`. Owns
-/// one of each Step 1b inspector widget so the desktop demo paints
-/// the same composition shell-web does. Phase D will add `apply_*`
-/// event-routing methods alongside the desktop input pipeline.
+/// the document model + auxiliary widget state; per-frame builds
+/// LayerPanel / PropertyPanel / Toolbar from the document and paints
+/// them into the same Toolbar-top + LayerPanel-left + PropertyPanel-
+/// right layout shell-web uses, so cross-platform visual diff
+/// testing (Phase E) compares apples to apples.
+///
+/// Step 1b sample widgets (TreeWidget / PropertyRow direct) were
+/// removed in the Step 2 pivot — their callers (smoke fixtures,
+/// inspector tests) build the same shapes by constructing a
+/// `Document::sample()` and reading the resulting LayerPanel /
+/// PropertyPanel.
 pub struct WidgetHostNative {
-    tree: TreeWidget,
-    width: PropertyRow,
-    dropdown: Dropdown,
-    text_input: TextInput,
+    document: Document,
+    toolbar: Toolbar,
+    /// Auxiliary widgets — Step 1b holdovers (Dropdown +
+    /// TextInput) painted under the property panel until Step 3
+    /// folds them into the document-driven property section sets.
+    aux_dropdown: Dropdown,
+    aux_text_input: TextInput,
 }
 
 impl WidgetHostNative {
     pub fn new() -> Self {
         Self {
-            tree: TreeWidget::sample(),
-            width: PropertyRow::new(200, "Width", "960"),
-            dropdown: Dropdown::sample(),
-            text_input: TextInput::sample(),
+            document: Document::sample(),
+            toolbar: Toolbar::default_set(),
+            aux_dropdown: Dropdown::sample(),
+            aux_text_input: TextInput::sample(),
         }
     }
 
-    /// Paint the inspector slice at `(16, y)` stacking with 12 px
-    /// gaps, in a 280 px column. Mirrors shell-web's
-    /// `WidgetHost::paint` so the visual layout is identical between
-    /// platforms (Phase E manual-smoke acceptance criterion).
+    /// Paint the editor-UI composition. Layout matches shell-web's
+    /// `WidgetHost::paint` for cross-platform parity (Phase E
+    /// manual-smoke acceptance criterion):
+    ///   - Toolbar pinned to the top.
+    ///   - LayerPanel left rail.
+    ///   - PropertyPanel right rail.
+    ///   - Aux Dropdown + TextInput stacked under the property
+    ///     panel.
     ///
     /// `// glue:` marker on the signature line keeps the future
     /// `tools/check-widget-boundary.sh` happy if the boundary script
     /// is extended to gate shell-native too (it currently scans only
-    /// shell-web; Phase D may parameterize).
-    pub fn paint(&self, frame: &mut NativeFrameBackend<'_>, available_width: f32) { // glue:
+    /// shell-web; Step 3+ may parameterize).
+    pub fn paint(&self, frame: &mut NativeFrameBackend<'_>, viewport_width: f32) { // glue:
         let layout = LayoutCx {
-            available_width,
+            available_width: viewport_width,
             dpi: frame.dpi_scale(),
         };
-        let mut y = 16.0;
-        let widgets: [&dyn Widget; 4] = [
-            &self.tree,
-            &self.width,
-            &self.dropdown,
-            &self.text_input,
-        ];
-        for widget in widgets {
-            let box_ = widget.layout(&layout);
+
+        // Toolbar at the top of the viewport.
+        let toolbar_box = self.toolbar.layout(&layout);
+        let toolbar_rect = Rect {
+            origin: Point2D::new(0.0, 0.0),
+            size: Point2D::new(viewport_width, toolbar_box.rect.size.y),
+        };
+        {
+            let mut cx = PaintCx {
+                backend: &mut *frame,
+            };
+            self.toolbar.paint(&mut cx, toolbar_rect);
+        }
+
+        // Build editor-UI panels from the current document.
+        let layer_panel = LayerPanel::from_document(&self.document);
+        let property_panel = PropertyPanel::for_selected(&self.document);
+
+        let rail_w = 240.0_f32.min(viewport_width / 2.0 - 8.0);
+        let rail_top_y = toolbar_rect.size.y + 8.0;
+        let rail_layout_cx = LayoutCx {
+            available_width: rail_w,
+            dpi: frame.dpi_scale(),
+        };
+
+        // LayerPanel pinned to the left.
+        let lp_layout = layer_panel.layout(&rail_layout_cx);
+        let lp_rect = Rect {
+            origin: Point2D::new(8.0, rail_top_y),
+            size: Point2D::new(rail_w, lp_layout.rect.size.y),
+        };
+        {
+            let mut cx = PaintCx {
+                backend: &mut *frame,
+            };
+            layer_panel.paint(&mut cx, lp_rect);
+        }
+
+        // PropertyPanel pinned to the right.
+        let pp_layout = property_panel.layout(&rail_layout_cx);
+        let pp_rect = Rect {
+            origin: Point2D::new(viewport_width - rail_w - 8.0, rail_top_y),
+            size: Point2D::new(rail_w, pp_layout.rect.size.y),
+        };
+        {
+            let mut cx = PaintCx {
+                backend: &mut *frame,
+            };
+            property_panel.paint(&mut cx, pp_rect);
+        }
+
+        // Aux dropdown + text input under the property panel.
+        let aux_top = pp_rect.origin.y + pp_rect.size.y + 12.0;
+        let aux_widgets: [&dyn Widget; 2] = [&self.aux_dropdown, &self.aux_text_input];
+        let mut y = aux_top;
+        for widget in aux_widgets {
+            let widget_layout = widget.layout(&rail_layout_cx);
             let rect = Rect {
-                origin: Point2D::new(16.0, y),
-                size: Point2D::new(available_width, box_.rect.size.y),
+                origin: Point2D::new(viewport_width - rail_w - 8.0, y),
+                size: Point2D::new(rail_w, widget_layout.rect.size.y),
             };
             // PaintCx borrows the frame backend mutably; reborrow per
             // iteration with `&mut *frame` so subsequent iterations
