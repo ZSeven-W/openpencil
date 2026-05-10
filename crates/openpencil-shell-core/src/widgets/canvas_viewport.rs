@@ -49,7 +49,7 @@ impl<'a> CanvasViewport<'a> {
         Self {
             id: WidgetId::new(4000),
             document,
-            canvas_background: theme.background,
+            canvas_background: theme.canvas_surface,
             theme,
         }
     }

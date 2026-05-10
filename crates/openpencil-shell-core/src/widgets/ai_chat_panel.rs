@@ -29,7 +29,13 @@ pub const AI_CHAT_COLLAPSED_WIDTH: f32 = 150.0;
 pub const AI_CHAT_COLLAPSED_HEIGHT: f32 = 36.0;
 const PAD: f32 = 16.0;
 const HEADER_HEIGHT: f32 = 36.0;
-const INPUT_HEIGHT: f32 = 44.0;
+/// Tall textarea-style input region (placeholder / typed buffer).
+const INPUT_AREA_HEIGHT: f32 = 56.0;
+/// Toolbar below the textarea — model picker on left, attach +
+/// send on right. Mirrors the TS panel's bottom row.
+const INPUT_TOOLBAR_HEIGHT: f32 = 40.0;
+/// Total reserved space for the input + toolbar block.
+const INPUT_HEIGHT: f32 = INPUT_AREA_HEIGHT + INPUT_TOOLBAR_HEIGHT;
 
 #[derive(Debug, Clone)]
 struct ExampleCard {
@@ -94,6 +100,13 @@ pub struct AIChatPlaceholder<'a> {
     pub label_new_chat: String,
     pub label_start_with_ai: String,
     pub label_input_placeholder: String,
+    /// "提示：在对话前选中画布上的元素以提供上下文。" — bottom of
+    /// the empty-state body, between the example cards and the
+    /// separator above the input.
+    pub label_tip_select_elements: String,
+    /// Localised "Default" model label — appears in the bottom
+    /// toolbar's model picker.
+    pub label_default_model: String,
 }
 
 impl<'a> AIChatPlaceholder<'a> {
@@ -112,6 +125,8 @@ impl<'a> AIChatPlaceholder<'a> {
             label_new_chat: doc.t("ai.newChat").to_string(),
             label_start_with_ai: doc.t("ai.tryExample").to_string(),
             label_input_placeholder: doc.t("ai.designWithAgent").to_string(),
+            label_tip_select_elements: doc.t("ai.tipSelectElements").to_string(),
+            label_default_model: "Default".to_string(),
         }
     }
 
@@ -300,29 +315,23 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
             paint_messages(cx, &self.theme, body_rect, &self.state.messages);
         }
 
-        // Input.
-        let input_rect = Rect {
-            origin: Point2D::new(
-                rect.origin.x + PAD,
-                rect.origin.y + rect.size.y - INPUT_HEIGHT - PAD,
-            ),
-            size: Point2D::new(rect.size.x - PAD * 2.0, INPUT_HEIGHT),
-        };
-        let input_bg = if self.state.focused {
-            self.theme.accent
-        } else {
-            self.theme.muted
-        };
-        cx.backend.fill_round_rect(input_rect, 8.0, input_bg);
-        let border_color = if self.state.focused {
-            self.theme.primary
-        } else {
-            self.theme.border
-        };
-        cx.backend
-            .stroke_round_rect(input_rect, 8.0, border_color, 1.0);
+        // Separator hairline between body and input area
+        // (matches the TS panel's bottom-bordered body region).
+        let sep_y = rect.origin.y + rect.size.y - INPUT_HEIGHT;
+        cx.backend.fill_rect(
+            Rect {
+                origin: Point2D::new(rect.origin.x + PAD, sep_y),
+                size: Point2D::new(rect.size.x - PAD * 2.0, 1.0),
+            },
+            self.theme.border,
+        );
 
-        // Input text — buffer if non-empty, placeholder otherwise.
+        // Textarea region — borderless, single line of placeholder /
+        // typed text, 14 px to mirror the TS app's textarea style.
+        let input_rect = Rect {
+            origin: Point2D::new(rect.origin.x + PAD, sep_y + 1.0),
+            size: Point2D::new(rect.size.x - PAD * 2.0, INPUT_AREA_HEIGHT),
+        };
         let (text, color) = if self.state.input.is_empty() {
             (
                 self.label_input_placeholder.as_str(),
@@ -334,74 +343,106 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
         let input_label = TextLayout::single_run(
             text,
             "system-ui",
-            13.0,
+            14.0,
             to_jian_color(color),
             Point2D::new(0.0, 0.0),
         );
         cx.backend.draw_text(
             &input_label,
-            Point2D::new(input_rect.origin.x + 12.0, input_rect.origin.y + 26.0),
+            Point2D::new(input_rect.origin.x, input_rect.origin.y + 22.0),
         );
-        // Caret bar when focused — visibility driven by jian's
-        // square-wave blink primitive. `caret_anchor_ms` resets
-        // on focus + every keystroke so the caret is solid right
-        // after the user types instead of mid-fade.
         let caret_visible = self.state.focused
             && jian_core::anim::blink_visible(self.now_ms, self.state.caret_anchor_ms, 500);
         if caret_visible {
-            // Use the backend's text-measure API to anchor the
-            // caret at the actual rendered trailing edge of the
-            // typed text — works for mixed Latin + CJK without
-            // hardcoded per-char widths.
-            let text_w = cx.backend.measure_text(&self.state.input, 13.0);
-            let caret_x = input_rect.origin.x + 12.0 + text_w;
+            let text_w = cx.backend.measure_text(&self.state.input, 14.0);
+            let caret_x = input_rect.origin.x + text_w;
             cx.backend.fill_rect(
                 Rect {
-                    origin: Point2D::new(caret_x, input_rect.origin.y + 12.0),
-                    size: Point2D::new(1.5, INPUT_HEIGHT - 24.0),
+                    origin: Point2D::new(caret_x, input_rect.origin.y + 8.0),
+                    size: Point2D::new(1.5, 18.0),
                 },
-                self.theme.primary,
+                self.theme.foreground,
             );
         }
-        // Send chip — small primary-tinted square at right of input.
-        let send_size = 30.0;
+
+        // Bottom toolbar — model picker on the left, send + attach
+        // on the right (mirrors the TS panel's bottom row).
+        let toolbar_y = input_rect.origin.y + INPUT_AREA_HEIGHT;
+        let toolbar_center_y = toolbar_y + INPUT_TOOLBAR_HEIGHT / 2.0;
+        // Sparkles glyph + "Default" + chevron — model picker.
+        let mut model_x = rect.origin.x + PAD;
+        draw_icon(
+            cx.backend,
+            Icon::Sparkles,
+            Point2D::new(model_x, toolbar_center_y - 7.0),
+            14.0,
+            self.theme.muted_foreground,
+            1.4,
+        );
+        model_x += 20.0;
+        let model_label = TextLayout::single_run(
+            &self.label_default_model,
+            "system-ui",
+            12.0,
+            to_jian_color(self.theme.muted_foreground),
+            Point2D::new(0.0, 0.0),
+        );
+        cx.backend
+            .draw_text(&model_label, Point2D::new(model_x, toolbar_center_y + 4.0));
+        let model_w = cx.backend.measure_text(&self.label_default_model, 12.0);
+        model_x += model_w + 4.0;
+        draw_icon(
+            cx.backend,
+            Icon::ChevronUp,
+            Point2D::new(model_x, toolbar_center_y - 5.0),
+            10.0,
+            self.theme.muted_foreground,
+            1.4,
+        );
+
+        // Right cluster — send button (and attach plus icon).
+        let mut rx = rect.origin.x + rect.size.x - PAD;
+        let send_size = 24.0;
         let send_rect = Rect {
-            origin: Point2D::new(
-                input_rect.origin.x + input_rect.size.x - send_size - 6.0,
-                input_rect.origin.y + (INPUT_HEIGHT - send_size) / 2.0,
-            ),
+            origin: Point2D::new(rx - send_size, toolbar_center_y - send_size / 2.0),
             size: Point2D::new(send_size, send_size),
         };
         let send_active = !self.state.input.trim().is_empty();
-        let send_bg = if send_active {
-            self.theme.primary
+        let (send_bg, icon_color) = if send_active {
+            (self.theme.primary, self.theme.primary_foreground)
         } else {
-            self.theme.muted_foreground
+            (self.theme.muted, self.theme.muted_foreground)
         };
         cx.backend.fill_round_rect(send_rect, 6.0, send_bg);
-        // Triangle "play" arrow rendered as 3 strokes.
-        let icon_color = if send_active {
-            self.theme.primary_foreground
-        } else {
-            self.theme.background
-        };
+        // Lucide "send" arrow drawn as 3 short strokes.
         cx.backend.stroke_line(
-            Point2D::new(send_rect.origin.x + 11.0, send_rect.origin.y + 9.0),
-            Point2D::new(send_rect.origin.x + 21.0, send_rect.origin.y + 15.0),
+            Point2D::new(send_rect.origin.x + 7.0, send_rect.origin.y + 7.0),
+            Point2D::new(send_rect.origin.x + 17.0, send_rect.origin.y + 12.0),
             icon_color,
             1.6,
         );
         cx.backend.stroke_line(
-            Point2D::new(send_rect.origin.x + 21.0, send_rect.origin.y + 15.0),
-            Point2D::new(send_rect.origin.x + 11.0, send_rect.origin.y + 21.0),
+            Point2D::new(send_rect.origin.x + 17.0, send_rect.origin.y + 12.0),
+            Point2D::new(send_rect.origin.x + 7.0, send_rect.origin.y + 17.0),
             icon_color,
             1.6,
         );
         cx.backend.stroke_line(
-            Point2D::new(send_rect.origin.x + 11.0, send_rect.origin.y + 9.0),
-            Point2D::new(send_rect.origin.x + 11.0, send_rect.origin.y + 21.0),
+            Point2D::new(send_rect.origin.x + 7.0, send_rect.origin.y + 7.0),
+            Point2D::new(send_rect.origin.x + 7.0, send_rect.origin.y + 17.0),
             icon_color,
             1.6,
+        );
+        rx -= send_size + 8.0;
+        // Attach (paperclip — not yet wired). Use Plus glyph as a
+        // placeholder; lucide-paperclip would be a follow-up.
+        draw_icon(
+            cx.backend,
+            Icon::Plus,
+            Point2D::new(rx - 16.0, toolbar_center_y - 8.0),
+            16.0,
+            self.theme.muted_foreground,
+            1.4,
         );
     }
 
