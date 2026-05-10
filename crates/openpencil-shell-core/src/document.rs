@@ -325,13 +325,26 @@ impl Document {
 
     /// Run light invariant checks on the document. Returns `Err`
     /// with a human-readable message on the first violation:
+    /// - `pages` is empty (a document must have at least one
+    ///   page; use `Document::empty()` to construct a default
+    ///   single-page document)
     /// - duplicate node id anywhere in any page
-    /// - `active_page_index` out of range (when there are pages)
+    /// - `active_page_index` out of range
+    ///
+    /// Codex Step 2 R2 CONCERN-1: the prior version skipped the
+    /// `active_page_index` check when `pages.is_empty()`, leaving
+    /// a (Document { pages: vec![], active_page_index: 99, … })
+    /// silently valid. Empty pages is itself an invariant
+    /// violation; this version rejects it explicitly so the
+    /// active_page_index check applies unconditionally.
     pub fn validate(&self) -> Result<(), String> {
+        if self.pages.is_empty() {
+            return Err("Document::pages is empty (use Document::empty() for the default single-page shape)".to_string());
+        }
         if let Some(dup) = self.find_duplicate_id() {
             return Err(format!("duplicate NodeId: {:?}", dup));
         }
-        if !self.pages.is_empty() && self.active_page_index >= self.pages.len() {
+        if self.active_page_index >= self.pages.len() {
             return Err(format!(
                 "active_page_index {} out of range (pages.len()={})",
                 self.active_page_index,
@@ -478,6 +491,44 @@ mod tests {
         let result = doc.validate();
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("active_page_index"));
+    }
+
+    #[test]
+    fn document_validate_catches_empty_pages() {
+        // Codex Step 2 R2 CONCERN-1: an empty-pages document with
+        // any active_page_index used to silently pass validate().
+        // Now empty pages is itself a violation.
+        let doc = Document {
+            pages: Vec::new(),
+            active_page_index: 0,
+            selected: NodeId::NONE,
+        };
+        let result = doc.validate();
+        assert!(result.is_err());
+        assert!(
+            result.unwrap_err().contains("pages is empty"),
+            "validate should mention empty pages"
+        );
+
+        // Also covers the previously-uncaught case: empty pages
+        // + bogus active_page_index → still rejected, AND the
+        // empty-check fires FIRST (not the range check). Codex
+        // Step 2 R3 CONCERN: prior version only asserted
+        // `is_err()`, leaving ordering ambiguous.
+        let doc2 = Document {
+            pages: Vec::new(),
+            active_page_index: 99,
+            selected: NodeId::NONE,
+        };
+        let err2 = doc2.validate().unwrap_err();
+        assert!(
+            err2.contains("pages is empty"),
+            "empty-pages check must fire before active_page_index range check; got: {err2}"
+        );
+        assert!(
+            !err2.contains("active_page_index"),
+            "empty-pages check must short-circuit; got both: {err2}"
+        );
     }
 
     #[test]
