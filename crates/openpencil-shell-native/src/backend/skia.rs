@@ -356,7 +356,11 @@ impl NativeBackend {
         radius: f32,
         color: Color,
     ) {
-        let paint = skia_safe::Paint::new(jian_color_to_color4f(color), None);
+        let mut paint = skia_safe::Paint::new(jian_color_to_color4f(color), None);
+        // Skia paints aren't AA by default — chip / button edges
+        // come out stair-stepped without this. Same call mirrored
+        // into stroke_round_rect / stroke_line / stroke_svg_path.
+        paint.set_anti_alias(true);
         canvas.draw_round_rect(to_sk_rect(rect), radius, radius, &paint);
     }
 
