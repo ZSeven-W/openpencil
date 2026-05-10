@@ -56,6 +56,12 @@ use openpencil_shell_core::widgets::{
 };
 use openpencil_shell_core::{Color, Point2D, Rect, RenderBackend, TextLayout};
 
+/// Below this viewport width (in physical px) we paint the Toolbar
+/// only and skip both rails. Mirrors shell-web's `MIN_RAIL_WIDTH`
+/// constant so cross-platform behaviour at narrow viewports stays
+/// in sync. Codex Step 2 R1 CONCERN-3.
+const MIN_RAIL_WIDTH: f32 = 80.0;
+
 /// Frame-scoped `RenderBackend` adapter over `NativeBackend` +
 /// `&Canvas`. Lifetime-bound to the `SharedSkiaContext::with_frame`
 /// closure body so widget code never sees the canvas borrow directly.
@@ -200,7 +206,13 @@ impl WidgetHostNative {
         let layer_panel = LayerPanel::from_document(&self.document);
         let property_panel = PropertyPanel::for_selected(&self.document);
 
-        let rail_w = 240.0_f32.min(viewport_width / 2.0 - 8.0);
+        // Clamp rail_w to non-negative; skip rails entirely below
+        // the minimum usable width (codex Step 2 R1 CONCERN-3).
+        let rail_w_raw = (viewport_width / 2.0 - 8.0).min(240.0);
+        let rail_w = rail_w_raw.max(0.0);
+        if rail_w < MIN_RAIL_WIDTH {
+            return;
+        }
         let rail_top_y = toolbar_rect.size.y + 8.0;
         let rail_layout_cx = LayoutCx {
             available_width: rail_w,

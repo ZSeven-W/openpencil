@@ -31,12 +31,16 @@ pub struct LayerPanel {
 }
 
 impl LayerPanel {
-    /// Build a flat depth-walked view of `Document::pages[0]`.
-    /// Multi-page documents are Step 3+; today the first page is
-    /// the whole canvas.
+    /// Build a flat depth-walked view of the document's **active
+    /// page** (`Document::active_page()`). Codex Step 2 R1
+    /// CONCERN-1: selection must scope to the same page as
+    /// LayerPanel, so both `LayerPanel::from_document` and
+    /// `Document::selected_node` go through `active_page` to
+    /// guarantee the rail and the property panel agree on
+    /// "what's selected here".
     pub fn from_document(doc: &Document) -> Self {
         let mut items = Vec::new();
-        if let Some(page) = doc.pages.first() {
+        if let Some(page) = doc.active_page() {
             for child in &page.children {
                 walk(child, doc.selected, 0, &mut items);
             }
@@ -221,9 +225,35 @@ mod tests {
                 "p",
                 vec![Node::leaf(2, NodeKind::Other("Custom".into()), "n")],
             )],
+            active_page_index: 0,
             selected: NodeId::NONE,
         };
         let panel = LayerPanel::from_document(&doc);
         assert_eq!(panel.items[0].kind_label, "Custom");
+    }
+
+    #[test]
+    fn from_document_scopes_to_active_page_only() {
+        // Codex Step 2 R1 CONCERN-1: LayerPanel must NOT pull
+        // nodes from non-active pages; selection-scoping happens
+        // at the page level so both rail + property panel agree.
+        let page1 = crate::document::Page::new(
+            1,
+            "Page 1",
+            vec![Node::leaf(2, crate::document::NodeKind::Frame, "P1-Node")],
+        );
+        let page2 = crate::document::Page::new(
+            3,
+            "Page 2",
+            vec![Node::leaf(4, crate::document::NodeKind::Frame, "P2-Node")],
+        );
+        let doc = Document {
+            pages: vec![page1, page2],
+            active_page_index: 1, // Page 2 active
+            selected: NodeId::NONE,
+        };
+        let panel = LayerPanel::from_document(&doc);
+        assert_eq!(panel.items.len(), 1);
+        assert_eq!(panel.items[0].label, "P2-Node");
     }
 }
