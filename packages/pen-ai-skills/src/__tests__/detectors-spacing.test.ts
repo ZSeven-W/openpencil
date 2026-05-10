@@ -131,6 +131,27 @@ describe('detectEdgeSectionPadding', () => {
     expect(detectEdgeSectionPadding(root)).toHaveLength(0);
   });
 
+  // 2026-05-11 user-reported "Today's Special Deal" mobile design — Header,
+  // Categories, and Bottom Nav each carried their own horizontal padding,
+  // but Hero (the Today's Special card) did not. Previous version saw
+  // Hero's missing padding + ≥1 offending child and flagged → root got
+  // 16px gutter on top of every per-section-padded sibling, doubling the
+  // inset everywhere except Hero. New rule: if ANY non-fullbleed content
+  // child already has its own padding, the design has chosen the per-
+  // section gutter mode and root MUST NOT be flagged.
+  it('does NOT flag when ANY content section already has its own h-padding (per-section mode)', () => {
+    const root = mobileRoot([
+      section('hero', [text('hero-text')]), // no padding — would have flagged alone
+      section('categories', [icon('i1'), icon('i2')], { padding: [12, 16] }), // per-section
+      section('content', [text('t')], { padding: [0, 24] }), // per-section
+    ]);
+
+    // Categories + content set per-section gutters; Hero is left edge-to-
+    // edge by design (banner-style fits even without `role: hero`). Root
+    // should stay 0 — flagging would double-pad categories/content.
+    expect(detectEdgeSectionPadding(root)).toHaveLength(0);
+  });
+
   it('preserves vertical padding when suggesting the fix', () => {
     const root = mobileRoot(
       [section('a', [text('t1')]), section('b', [text('t2')])],

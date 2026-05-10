@@ -133,17 +133,39 @@ export function detectEdgeSectionPadding(root: PenNode): Issue[] {
     if (isMobileRoot) {
       const rootPadL = getPaddingLeft(node);
       if (rootPadL === 0) {
+        // Two-pass scan over content children (skipping full-bleed
+        // chrome / image-only banners which are intentionally edge-to-
+        // edge):
+        //   - any with own h-padding > 0  → design has chosen the
+        //                                   per-section gutter pattern,
+        //                                   adding root padding would
+        //                                   double-inset everything else
+        //   - any with no padding but text/icon descendants → would
+        //                                   genuinely glue content to
+        //                                   the viewport edge, so flag
+        //
+        // 2026-05-11 user feedback: previous version flagged whenever
+        // ≥1 child had no padding, even when other siblings already
+        // carried per-section padding. Result: root got extra 16px on
+        // top of the existing per-section gutters → "边距过大". The new
+        // rule treats any per-section-padded sibling as a signal that
+        // the design has opted out of root-level gutter and aborts the
+        // detector entirely.
+        let hasPerSectionPaddedSibling = false;
         const offendingChildren: PenNode[] = [];
         for (const child of (node as { children: PenNode[] }).children) {
           if (child.type !== 'frame') continue;
           const role = ((child as { role?: string }).role ?? '').toLowerCase();
           if (FULL_BLEED_ROLES.has(role)) continue;
           if (isImageOnlySection(child)) continue;
-          if (getPaddingLeft(child) > 0) continue;
+          if (getPaddingLeft(child) > 0) {
+            hasPerSectionPaddedSibling = true;
+            continue;
+          }
           if (!hasTextOrIconDescendant(child)) continue;
           offendingChildren.push(child);
         }
-        if (offendingChildren.length > 0) {
+        if (offendingChildren.length > 0 && !hasPerSectionPaddedSibling) {
           const currentPad = (node as unknown as { padding?: unknown }).padding;
           let suggested: number[];
           if (Array.isArray(currentPad) && currentPad.length === 4) {
