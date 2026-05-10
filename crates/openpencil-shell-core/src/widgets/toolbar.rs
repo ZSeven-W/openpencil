@@ -27,6 +27,10 @@ const BUTTON_RADIUS: f32 = 8.0;
 const ICON_SIZE: f32 = 18.0;
 const STROKE_W: f32 = 1.6;
 const BUTTON_GAP: f32 = 4.0;
+/// Extra vertical room reserved AFTER the shape slot so the
+/// chevron-down affordance has space to sit below the button
+/// without overlapping the next item (matches the TS layout).
+const SHAPE_SLOT_BOTTOM_EXTRA: f32 = 10.0;
 const SECTION_GAP: f32 = 12.0;
 const PAD_TOP: f32 = 8.0;
 const PAD_BOTTOM: f32 = 8.0;
@@ -118,11 +122,18 @@ impl Toolbar {
                     h += if prev_was_item { SECTION_GAP } else { 0.0 };
                     prev_was_item = false;
                 }
-                ToolbarItem::Tool(_, _) | ToolbarItem::Action(_, _) | ToolbarItem::ShapeSlot => {
+                ToolbarItem::Tool(_, _) | ToolbarItem::Action(_, _) => {
                     if prev_was_item {
                         h += BUTTON_GAP;
                     }
                     h += BUTTON_SIZE;
+                    prev_was_item = true;
+                }
+                ToolbarItem::ShapeSlot => {
+                    if prev_was_item {
+                        h += BUTTON_GAP;
+                    }
+                    h += BUTTON_SIZE + SHAPE_SLOT_BOTTOM_EXTRA;
                     prev_was_item = true;
                 }
             }
@@ -222,14 +233,17 @@ impl Toolbar {
                     if prev_was_item {
                         y += BUTTON_GAP;
                     }
+                    // Hit area covers the button + its chevron
+                    // gutter so a click on the chevron itself
+                    // also opens the picker.
                     let button_rect = Rect {
                         origin: Point2D::new(button_x, y),
-                        size: Point2D::new(BUTTON_SIZE, BUTTON_SIZE),
+                        size: Point2D::new(BUTTON_SIZE, BUTTON_SIZE + SHAPE_SLOT_BOTTOM_EXTRA),
                     };
                     if hit(button_rect, point) {
                         return Some(ToolbarHit::ToggleShapePicker);
                     }
-                    y += BUTTON_SIZE;
+                    y += BUTTON_SIZE + SHAPE_SLOT_BOTTOM_EXTRA;
                     prev_was_item = true;
                 }
             }
@@ -331,27 +345,20 @@ impl Widget for Toolbar {
                         icon_for_shape(self.shape_tool),
                         active,
                     );
-                    // Tiny chevron-down at the lower-right of the
-                    // button — signals the dropdown affordance the
-                    // way the TS shape-tool-dropdown does.
-                    let chev_size = 8.0;
-                    let chev_color = if active {
-                        self.theme.primary_foreground
-                    } else {
-                        self.theme.muted_foreground
-                    };
+                    // Chevron-down sits just BELOW the button,
+                    // horizontally centered — matches the TS
+                    // shape-tool-dropdown affordance (caret in the
+                    // gutter, not overlapping the icon).
+                    let chev_size = 10.0;
                     draw_icon(
                         cx.backend,
                         Icon::ChevronDown,
-                        Point2D::new(
-                            button_x + BUTTON_SIZE - chev_size - 3.0,
-                            y + BUTTON_SIZE - chev_size - 3.0,
-                        ),
+                        Point2D::new(button_x + (BUTTON_SIZE - chev_size) / 2.0, y + BUTTON_SIZE),
                         chev_size,
-                        chev_color,
-                        1.6,
+                        self.theme.muted_foreground,
+                        1.4,
                     );
-                    y += BUTTON_SIZE;
+                    y += BUTTON_SIZE + SHAPE_SLOT_BOTTOM_EXTRA;
                     prev_was_item = true;
                 }
             }
