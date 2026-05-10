@@ -62,8 +62,10 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "git.close" => "Tutup",
         "git.initializing" => "Menginisialisasi repositori…",
         "git.conflict.title" => "Konflik merge",
+        "git.conflict.description" => "Selesaikan setiap konflik menggunakan kartu di bawah, lalu terapkan penggabungan.",
         "git.conflict.abort" => "Batalkan merge",
         "git.conflict.nonOp.title" => "Penggabungan dijeda pada file non-.op",
+        "git.conflict.nonOp.description" => "Penggabungan .op selesai, tetapi file lain di repo masih belum terselesaikan. Selesaikan di luar OpenPencil, lalu lanjutkan.",
         "git.conflict.nonOp.unresolvedHeading_one" => "1 file perlu perhatian",
         "git.conflict.nonOp.unresolvedHeading_other" => "{{count}} file perlu perhatian",
         "git.conflict.nonOp.continue" => "Lanjutkan penggabungan",
@@ -73,6 +75,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "git.conflict.banner.continue" => "Lanjutkan",
         "git.conflict.banner.finalizeError" => "Tidak dapat diterapkan: {{message}}",
         "git.conflict.banner.pollError" => "Polling status dijeda karena kesalahan: {{message}}",
+        "git.conflict.banner.reopenMessage" => "Panel dibuka kembali saat penggabungan — silakan batalkan dan pull ulang.",
         "git.conflict.list.heading" => "Semua konflik",
         "git.conflict.list.progress" => "{{resolved}} / {{total}} diselesaikan",
         "git.conflict.list.allResolved" => "Semua selesai",
@@ -98,9 +101,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "git.error.title" => "Terjadi kesalahan",
         "git.empty.heading" => "Belum ada riwayat versi",
         "git.empty.optional" => "Git opsional — boleh dilewati",
-        "git.empty.requireSavedFile" => {
-            "Simpan file .op terlebih dahulu untuk mengaktifkan riwayat"
-        }
+        "git.empty.requireSavedFile" => "Simpan file .op terlebih dahulu untuk mengaktifkan riwayat",
         "git.empty.newCard" => "Baru",
         "git.empty.newCardDescription" => "Buat riwayat lokal",
         "git.empty.openCard" => "Buka",
@@ -138,6 +139,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "git.commit.placeholder" => "Jelaskan perubahan ini…",
         "git.commit.submitButton" => "Simpan milestone",
         "git.commit.saveRequiredTitle" => "Simpan dokumen dulu",
+        "git.commit.saveRequiredBody" => "Anda memiliki perubahan yang belum disimpan. Simpan dokumen untuk melanjutkan: {{label}}",
         "git.commit.saveRequiredSave" => "Simpan",
         "git.commit.saveRequiredCancel" => "Batal",
         "git.header.autosaveError" => "Error auto-save",
@@ -209,19 +211,15 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "git.wizard.clone.submit" => "Klon",
         "git.wizard.clone.validationUrl" => "URL jarak jauh wajib diisi",
         "git.wizard.clone.validationDest" => "Folder tujuan wajib diisi",
-        "git.wizard.clone.validationTokenUsername" => {
-            "Nama pengguna wajib diisi saat token disediakan"
-        }
-        "git.wizard.clone.error.network" => {
-            "Kesalahan jaringan. Periksa koneksi Anda dan coba lagi."
-        }
+        "git.wizard.clone.validationTokenUsername" => "Nama pengguna wajib diisi saat token disediakan",
+        "git.wizard.clone.error.clone-network" => "Kesalahan jaringan saat klon. Periksa koneksi Anda dan coba lagi.",
+        "git.wizard.clone.error.network" => "Kesalahan jaringan. Periksa koneksi Anda dan coba lagi.",
+        "git.wizard.clone.error.timeout" => "Klon kehabisan waktu. Coba lagi atau gunakan repositori yang lebih kecil.",
         "git.wizard.clone.error.auth-required" => "Repositori ini memerlukan autentikasi.",
-        "git.wizard.clone.error.auth-failed" => {
-            "Autentikasi gagal. Periksa nama pengguna dan token Anda."
-        }
-        "git.wizard.clone.error.clone-target-exists" => {
-            "Folder tujuan sudah ada atau tidak kosong."
-        }
+        "git.wizard.clone.error.auth-failed" => "Autentikasi gagal. Periksa nama pengguna dan token Anda.",
+        "git.wizard.clone.error.auth-token-invalid" => "Token akses ditolak. Buat token baru dan coba lagi.",
+        "git.wizard.clone.error.clone-failed" => "Klon gagal. Pastikan URL menunjuk ke repositori yang sebenarnya.",
+        "git.wizard.clone.error.clone-target-exists" => "Folder tujuan sudah ada atau tidak kosong.",
         "git.pull.label" => "Pull",
         "git.pull.tooltip" => "Pull dari origin",
         "git.pull.noRemote" => "Tidak ada remote yang dikonfigurasi — tambahkan di pengaturan Git",
@@ -232,6 +230,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "git.push.noRemote" => "Tidak ada remote yang dikonfigurasi — tambahkan di pengaturan Git",
         "git.push.upToDate" => "Tidak ada yang di-push — Anda sudah up-to-date",
         "git.push.retry" => "Coba push lagi",
+        "git.push.rejectedBody" => "Remote memiliki commit yang belum Anda miliki. Pull terlebih dahulu, lalu push lagi.",
         "git.push.rejectedDismiss" => "Tutup",
         "git.push.rejectedPull" => "Pull sekarang",
         "git.remote.dismissError" => "Tutup",
@@ -249,6 +248,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "git.remote.clearConfirmAction" => "Konfirmasi",
         "git.remote.aheadBehind" => "{{ahead}} di depan · {{behind}} di belakang",
         "git.remote.fetchButton" => "Fetch",
+        "git.remote.sshIsoUnsupported" => "Transport SSH tidak didukung oleh mesin bawaan. Instal git sistem atau gunakan URL remote HTTPS.",
         "git.remote.storedAuthLabel" => "Kredensial tersimpan",
         "git.remote.storedAuth.token" => "Token",
         "git.remote.storedAuth.ssh" => "Kunci SSH",
@@ -260,6 +260,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "git.ssh.heading" => "Kunci SSH",
         "git.ssh.back" => "Kembali",
         "git.ssh.cancel" => "Batal",
+        "git.ssh.isoUnsupported" => "Remote saat ini menggunakan SSH, tetapi mesin bawaan tidak dapat melakukan transport SSH. Instal git sistem atau ubah URL remote menjadi HTTPS.",
         "git.ssh.emptyList" => "Belum ada kunci SSH.",
         "git.ssh.generateAction" => "Buat baru",
         "git.ssh.importAction" => "Impor yang ada",
@@ -283,6 +284,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "git.ssh.validationComment" => "Komentar wajib diisi",
         "git.ssh.validationImportPath" => "Pilih file kunci privat untuk diimpor",
         "git.ssh.providerLink" => "Buka pengaturan kunci SSH {{host}}",
+        "git.ssh.genericGuidance" => "Salin kunci publik dan tambahkan ke pengaturan kunci SSH penyedia Git Anda.",
         "git.auth.formLabel" => "Kredensial Git",
         "git.auth.heading" => "Autentikasi dengan {{host}}",
         "git.auth.headingUnknown" => "Autentikasi dengan remote ini",
@@ -293,6 +295,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "git.auth.tokenLabel" => "Token akses",
         "git.auth.tokenPlaceholder" => "ghp_… atau PAT",
         "git.auth.sshKeyLabel" => "Kunci SSH",
+        "git.auth.sshNoKeys" => "Tidak ada kunci SSH yang tersedia. Impor atau buat satu di pengaturan Git terlebih dahulu.",
         "git.auth.rememberLabel" => "Ingat kredensial ini untuk host ini",
         "git.auth.rememberHint" => "Ingat kredensial ini untuk host ini",
         "git.auth.cancel" => "Batal",
@@ -324,6 +327,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "updater.restartInstall" => "Mulai Ulang & Pasang",
         "updater.installing" => "Memasang...",
         "updater.releaseDate" => "Tanggal rilis: {{date}}",
+        "updater.restartHint" => "Mulai ulang untuk menerapkan pembaruan. Proses mulai ulang biasanya memakan waktu 10-15 detik.",
         "updater.unknownError" => "Kesalahan pembaruan tidak diketahui.",
         "updater.title.checking" => "Memeriksa pembaruan",
         "updater.title.available" => "Pembaruan ditemukan",
@@ -334,9 +338,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "updater.subtitle.available" => "Versi {{version}} tersedia.",
         "updater.subtitle.availableGeneric" => "Versi baru tersedia.",
         "updater.subtitle.downloading" => "Versi {{version}} sedang diunduh di latar belakang.",
-        "updater.subtitle.downloadingGeneric" => {
-            "Paket pembaruan sedang diunduh di latar belakang."
-        }
+        "updater.subtitle.downloadingGeneric" => "Paket pembaruan sedang diunduh di latar belakang.",
         "updater.subtitle.downloaded" => "Versi {{version}} telah diunduh.",
         "updater.subtitle.downloadedGeneric" => "Pembaruan telah diunduh.",
         "updater.subtitle.error" => "Tidak dapat memeriksa atau mengunduh pembaruan.",
@@ -432,9 +434,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "textLayout.autoWidth" => "Auto L",
         "textLayout.autoWidthDesc" => "Lebar Otomatis — teks meluas secara horizontal",
         "textLayout.autoHeight" => "Auto T",
-        "textLayout.autoHeightDesc" => {
-            "Tinggi Otomatis — lebar tetap, tinggi menyesuaikan otomatis"
-        }
+        "textLayout.autoHeightDesc" => "Tinggi Otomatis — lebar tetap, tinggi menyesuaikan otomatis",
         "textLayout.fixed" => "Tetap",
         "textLayout.fixedDesc" => "Ukuran Tetap — lebar dan tinggi tetap",
         "textLayout.fillWidth" => "Isi Lebar",
@@ -500,9 +500,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "ai.newChat" => "Chat baru",
         "ai.collapse" => "Ciutkan",
         "ai.tryExample" => "Coba contoh untuk mendesain...",
-        "ai.tipSelectElements" => {
-            "Tips: Pilih elemen di canvas sebelum chat untuk memberikan konteks."
-        }
+        "ai.tipSelectElements" => "Tips: Pilih elemen di canvas sebelum chat untuk memberikan konteks.",
         "ai.generating" => "Membuat...",
         "ai.designWithAgent" => "Desain dengan Agent...",
         "ai.attachImage" => "Lampirkan gambar",
@@ -513,10 +511,13 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "ai.searchModels" => "Cari model...",
         "ai.noModelsFound" => "Model tidak ditemukan",
         "ai.quickAction.loginScreen" => "Desain layar login mobile",
+        "ai.quickAction.loginScreenPrompt" => "Desain layar login mobile modern dengan input email, input kata sandi, tombol login, dan opsi login sosial",
         "ai.quickAction.foodApp" => "Beranda aplikasi makanan",
         "ai.quickAction.foodAppPrompt" => "Generate a well-designed food mobile app homepage",
         "ai.quickAction.bottomNav" => "Desain bilah navigasi bawah",
+        "ai.quickAction.bottomNavPrompt" => "Desain bilah navigasi bawah aplikasi mobile dengan 5 tab: Beranda, Cari, Tambah, Pesan, Profil",
         "ai.quickAction.colorPalette" => "Sarankan palet warna untuk aplikasi saya",
+        "ai.quickAction.colorPalettePrompt" => "Sarankan palet warna modern untuk aplikasi perawatan hewan peliharaan",
         "ai.startDesigning" => "Start designing with AI",
         "ai.maximize" => "Maximize",
         "ai.restore" => "Restore",
@@ -540,6 +541,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "fileMenu.daysAgo" => "{{count}}d ago",
         "unsaved.title" => "Unsaved changes",
         "unsaved.message" => "Save changes to \"{{name}}\"?",
+        "unsaved.dontSave" => "Don't Save",
         "code.reactTailwind" => "React + Tailwind",
         "code.htmlCss" => "HTML + CSS",
         "code.cssVariables" => "CSS Variables",
@@ -563,6 +565,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "agents.transport" => "Transport",
         "agents.port" => "Port",
         "agents.mcpRestart" => "Integrasi MCP akan berlaku setelah terminal dimulai ulang.",
+        "agents.mcpReinstallHint" => "Setelah memperbarui OpenPencil, silakan instal ulang integrasi MCP untuk memastikan kompatibilitas.",
         "agents.modelCount" => "{{count}} model",
         "agents.connectionFailed" => "Koneksi gagal",
         "agents.serverError" => "Kesalahan server {{status}}",
@@ -629,9 +632,11 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "builtin.custom" => "Kustom",
         "builtin.apiKeyBadge" => "API Key",
         "builtin.viaApiKey" => "melalui API Key {{name}}",
+        "builtin.errorProviderNotFound" => "Penyedia bawaan tidak ditemukan. Silakan periksa pengaturan Anda.",
         "builtin.errorApiKeyEmpty" => "API Key kosong. Silakan tambahkan API Key di pengaturan.",
         "builtin.parallelAgents" => "Sub-agen paralel: {{count}}x (klik untuk berganti)",
         "builtin.baseUrlPlaceholder" => "https://api.example.com/v1",
+        "builtin.teamDescription" => "Pilih model untuk pembuatan desain. Jika diatur, tugas desain akan otomatis didelegasikan ke agen spesialis yang menggunakan model ini.",
         "builtin.teamDesignModel" => "Model Desain",
         "builtin.teamSelectModel" => "Tidak ada (agen tunggal)",
         "acp.title" => "ACP Agent",

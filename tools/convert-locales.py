@@ -40,16 +40,32 @@ LOCALES = {
     "id": "id",
 }
 
-KEY_RE = re.compile(r"^\s*'([^']+)':\s*'((?:[^'\\]|\\.)*)',?\s*$")
+# Match `'key': 'value'` / `'key': "value"` on one logical line.
+# Spans newline because some entries split key + value across lines:
+#   'long.key.name':
+#       'value here',
+KEY_RE = re.compile(
+    r"""^\s*'([^']+)':\s*(?:
+        '((?:[^'\\]|\\.)*)'
+      | "((?:[^"\\]|\\.)*)"
+    ),?\s*$""",
+    re.VERBOSE | re.MULTILINE,
+)
+KEY_AND_VALUE_RE = re.compile(
+    r"""'([^']+)':\s*(?:
+        '((?:[^'\\]|\\.)*)'
+      | "((?:[^"\\]|\\.)*)"
+    )\s*,?""",
+    re.VERBOSE,
+)
 
 
 def parse_ts(path: Path) -> list[tuple[str, str]]:
-    rows = []
-    for line in path.read_text(encoding="utf-8").splitlines():
-        m = KEY_RE.match(line)
-        if not m:
-            continue
-        key, value = m.group(1), m.group(2)
+    text = path.read_text(encoding="utf-8")
+    rows: list[tuple[str, str]] = []
+    for m in KEY_AND_VALUE_RE.finditer(text):
+        key = m.group(1)
+        value = m.group(2) if m.group(2) is not None else m.group(3)
         # TS uses \u escapes + \n / \t — Python read_text already
         # decoded the file as UTF-8, but the JS-style \uXXXX
         # escapes are still literal. Decode them.
