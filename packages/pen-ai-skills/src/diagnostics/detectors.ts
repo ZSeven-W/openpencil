@@ -1,6 +1,8 @@
 import type { PenNode, PenDocument } from '@zseven-w/pen-types';
 import type { Issue } from './types';
-import { detectEdgeSectionPadding } from './detectors-spacing';
+import { detectEdgeSectionPadding, detectStackedHorizontalPadding } from './detectors-spacing';
+import { detectTextBgContrast } from './detectors-typography';
+import { colorContrast, parseHexColor, relativeLuminance } from './color-utils';
 
 /** Extract the first fill color from a node (raw, including variable refs) */
 function getFirstFillColor(node: PenNode): string | null {
@@ -8,68 +10,6 @@ function getFirstFillColor(node: PenNode): string | null {
   const first = node.fill[0];
   if (first && 'color' in first && first.color) return first.color;
   return null;
-}
-
-/**
- * Compare two color strings via WCAG relative-luminance contrast ratio.
- * Returns 1.0 for identical colors, growing toward 21.0 as they diverge,
- * or Infinity if either color cannot be parsed (e.g. variable refs).
- *
- * Why WCAG contrast ratio rather than max RGB channel diff:
- * the human eye is much more sensitive to small tonal differences on
- * dark backgrounds than light ones (Weber–Fechner / dark adaptation).
- * A 9-unit RGB diff means very different things at different lightness:
- *
- *   #FAFAFA vs #F1F1F1  (light, RGB diff 9): contrast ratio ≈ 1.07 → invisible
- *   #111111 vs #1A1A1A  (dark,  RGB diff 9): contrast ratio ≈ 1.18 → distinguishable
- *
- * Channel-diff treats them identically and produces false positives on
- * dark theme cards. Contrast ratio is luminance-based, perceptually
- * uniform-ish, and gives the right answer in both regimes. It also
- * matches the metric WCAG and design tools (Stark, Figma) use.
- *
- * Used by detectInvisibleContainers to catch cases where fill colors are
- * visually nearly identical but not strictly equal.
- */
-function colorContrast(a: string, b: string): number {
-  if (a === b) return 1;
-  const pa = parseHexColor(a);
-  const pb = parseHexColor(b);
-  if (!pa || !pb) return Infinity;
-  const lumA = relativeLuminance(pa);
-  const lumB = relativeLuminance(pb);
-  const lighter = Math.max(lumA, lumB);
-  const darker = Math.min(lumA, lumB);
-  return (lighter + 0.05) / (darker + 0.05);
-}
-
-/** WCAG 2.x relative luminance for sRGB. Returns 0.0–1.0. */
-function relativeLuminance(c: { r: number; g: number; b: number }): number {
-  const lin = (v: number): number => {
-    const s = v / 255;
-    return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
-  };
-  return 0.2126 * lin(c.r) + 0.7152 * lin(c.g) + 0.0722 * lin(c.b);
-}
-
-/** Parse #rgb / #rrggbb / #rrggbbaa to {r,g,b}. Returns null on parse failure. */
-function parseHexColor(s: string): { r: number; g: number; b: number } | null {
-  if (typeof s !== 'string') return null;
-  const m = s.trim().match(/^#([0-9a-fA-F]{3,8})$/);
-  if (!m) return null;
-  let hex = m[1];
-  if (hex.length === 3) {
-    hex = hex
-      .split('')
-      .map((c) => c + c)
-      .join('');
-  }
-  if (hex.length !== 6 && hex.length !== 8) return null;
-  const r = parseInt(hex.slice(0, 2), 16);
-  const g = parseInt(hex.slice(2, 4), 16);
-  const b = parseInt(hex.slice(4, 6), 16);
-  if (Number.isNaN(r) || Number.isNaN(g) || Number.isNaN(b)) return null;
-  return { r, g, b };
 }
 
 /** Check if a node already has a visible stroke */
@@ -751,7 +691,7 @@ export function detectExcessiveFrameEffects(root: PenNode): Issue[] {
 }
 
 /**
- * Run all 12 detectors and return the deduplicated combined issue list.
+ * Run all 14 detectors and return the deduplicated combined issue list.
  * Dedup key: `${nodeId}:${property}` (matches runPreValidationFixes).
  * On collision, the first issue wins (detector execution order below).
  */
@@ -769,6 +709,8 @@ export function detectAllIssues(root: PenNode, doc: PenDocument): Issue[] {
     ...detectMixedSiblingPadding(root),
     ...detectExcessiveFrameEffects(root),
     ...detectEdgeSectionPadding(root),
+    ...detectStackedHorizontalPadding(root),
+    ...detectTextBgContrast(root, doc),
   ];
   const seen = new Set<string>();
   const unique: Issue[] = [];

@@ -130,6 +130,7 @@
       "name": "@zseven-w/pen-ai-skills",
       "version": "0.8.0",
       "dependencies": {
+        "@zseven-w/pen-core": "workspace:*",
         "@zseven-w/pen-types": "workspace:*",
         "gray-matter": "^4.0.3",
         "js-yaml": "^4.1.1",
