@@ -275,8 +275,12 @@ impl WidgetHostNative {
         viewport_height: f32,
     ) -> bool {
         // 0a. Locale picker overlay — when open, it sits on top of
-        //     everything. Row click sets locale + closes; outside
-        //     click closes without changing locale.
+        //     everything. Row click sets locale + closes; ANY
+        //     other click (including the Globe button itself, the
+        //     canvas, the toolbar, the chip) just closes the
+        //     picker. The click is swallowed so the same press
+        //     doesn't simultaneously re-toggle the picker open
+        //     via the Globe button hit-test below.
         if self.document.ui.locale_picker_open {
             let panel_rect = self.locale_picker_rect(viewport_width);
             let picker = LocalePicker::for_document(&self.document);
@@ -286,9 +290,7 @@ impl WidgetHostNative {
                 return true;
             }
             self.document.ui.locale_picker_open = false;
-            // Fall through so the underlying click can also act
-            // (e.g. clicking the Globe again should re-toggle, not
-            // require a second click).
+            return true;
         }
 
         // 0b. TopBar — sidebar toggle button + theme + locale picker.

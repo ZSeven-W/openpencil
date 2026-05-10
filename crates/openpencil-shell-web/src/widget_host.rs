@@ -172,7 +172,9 @@ impl WidgetHost {
         viewport_height: f32,
     ) -> bool {
         // 0a. Locale picker overlay — top-most when open. Row hit
-        //     sets locale + closes; outside hit closes silently.
+        //     sets locale + closes; ANY other hit (including the
+        //     Globe button itself) closes the picker AND swallows
+        //     the click so the same press doesn't re-toggle open.
         if self.document.ui.locale_picker_open {
             let panel_rect = self.locale_picker_rect(viewport_width);
             let picker = LocalePicker::for_document(&self.document);
@@ -182,6 +184,7 @@ impl WidgetHost {
                 return true;
             }
             self.document.ui.locale_picker_open = false;
+            return true;
         }
 
         // 0b. TopBar — sidebar toggle button. Mirrors the native
