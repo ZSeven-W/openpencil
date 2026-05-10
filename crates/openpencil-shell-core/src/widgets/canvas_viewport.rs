@@ -75,20 +75,38 @@ impl<'a> Widget for CanvasViewport<'a> {
     }
 
     fn paint(&self, cx: &mut PaintCx<'_>, rect: Rect) {
-        // 1. Paint the canvas background.
+        // Wrap the entire viewport paint in save/clip/restore so
+        // nodes whose document coords extend beyond the
+        // canvas-widget rect cannot spill onto neighbouring
+        // widgets (LayerPanel / PropertyPanel etc). Codex Step 3
+        // stop-hook fix "canvas viewport is not paint-isolated".
+        // Skip the wrapping when the host gave us an empty rect
+        // (e.g. the host clamped MIN_RAIL_WIDTH and skipped this
+        // call already; defensive double-check).
+        if rect.size.x <= 0.0 || rect.size.y <= 0.0 {
+            return;
+        }
+        cx.backend.save();
+        cx.backend.clip_rect(rect);
+
+        // 1. Paint the canvas background INSIDE the clip region.
         cx.backend.fill_rect(rect, self.canvas_background);
 
         // 2. Walk the active page's nodes; each translated into
         //    the canvas rect (document-local origin → viewport
-        //    origin offset). The host clips to `rect` upstream
-        //    if needed; for Step 3 we trust the document's
-        //    bounds to fit.
+        //    origin offset). The clip above guarantees nothing
+        //    leaves the widget's rect even when document bounds
+        //    overflow — a frame at document (40, 40)–(960, 640)
+        //    drawn into a 300-px-wide canvas widget paints only
+        //    the part that fits.
         if let Some(page) = self.document.active_page() {
             let viewport_origin = rect.origin;
             for child in &page.children {
                 paint_node(cx, child, viewport_origin, self.document.selected);
             }
         }
+
+        cx.backend.restore();
     }
 
     fn access_node(&self) -> accesskit::Node {
@@ -180,8 +198,23 @@ fn paint_fill_then_stroke(cx: &mut PaintCx<'_>, node: &Node, world_rect: Rect) {
 mod tests {
     use super::*;
 
+    /// Records the *order* of operations so the codex
+    /// "canvas viewport is not paint-isolated" regression is
+    /// caught: a clip-isolated paint must look like
+    /// `Save, Clip, Fill(canvas_bg), …node paints…, Restore`.
+    #[derive(Debug, PartialEq, Eq)]
+    enum Op {
+        Save,
+        Restore,
+        Clip,
+        Fill,
+        Stroke,
+        Text,
+    }
+
     #[derive(Default)]
     struct RecordingBackend {
+        ops: Vec<Op>,
         rects: usize,
         strokes: usize,
         text: usize,
@@ -192,16 +225,25 @@ mod tests {
         fn end_frame(&mut self) {}
         fn fill_rect(&mut self, _: Rect, _: Color) {
             self.rects += 1;
+            self.ops.push(Op::Fill);
         }
         fn stroke_rect(&mut self, _: Rect, _: Color, _: f32) {
             self.strokes += 1;
+            self.ops.push(Op::Stroke);
         }
         fn draw_text(&mut self, _: &TextLayout, _: Point2D) {
             self.text += 1;
+            self.ops.push(Op::Text);
         }
-        fn clip_rect(&mut self, _: Rect) {}
-        fn save(&mut self) {}
-        fn restore(&mut self) {}
+        fn clip_rect(&mut self, _: Rect) {
+            self.ops.push(Op::Clip);
+        }
+        fn save(&mut self) {
+            self.ops.push(Op::Save);
+        }
+        fn restore(&mut self) {
+            self.ops.push(Op::Restore);
+        }
         fn translate(&mut self, _: Point2D) {}
         fn resize(&mut self, _: u32, _: u32) {}
         fn dpi_scale(&self) -> f32 {
@@ -274,6 +316,61 @@ mod tests {
         let node = viewport.access_node();
         assert_eq!(node.role(), accesskit::Role::Canvas);
         assert_eq!(node.label(), Some("Canvas"));
+    }
+
+    #[test]
+    fn paint_is_clip_isolated_save_clip_then_restore() {
+        // Codex Step 3 stop-hook: nodes whose document coords
+        // extend past the canvas-widget rect must NOT spill onto
+        // neighbouring widgets. Verify the canvas paint wraps in
+        // Save → Clip(rect) → … → Restore so the host's clip
+        // stack is balanced and the recursive paint stays
+        // confined.
+        let doc = Document::sample();
+        let viewport = CanvasViewport::from_document(&doc);
+        let mut backend = RecordingBackend::default();
+        {
+            let mut cx = PaintCx {
+                backend: &mut backend,
+            };
+            viewport.paint(&mut cx, Rect::xywh(0.0, 0.0, 800.0, 600.0));
+        }
+        // First three ops: Save, Clip, Fill (the canvas bg).
+        assert_eq!(
+            &backend.ops[..3],
+            &[Op::Save, Op::Clip, Op::Fill],
+            "canvas paint must open with Save → Clip → bg Fill"
+        );
+        // Last op: Restore (closes the save).
+        assert_eq!(
+            backend.ops.last(),
+            Some(&Op::Restore),
+            "canvas paint must close with Restore"
+        );
+        // Save / Restore counts balance (one of each from
+        // CanvasViewport — node paint helpers don't push more).
+        let saves = backend.ops.iter().filter(|o| **o == Op::Save).count();
+        let restores = backend.ops.iter().filter(|o| **o == Op::Restore).count();
+        assert_eq!(saves, restores, "balanced save/restore");
+        assert_eq!(saves, 1);
+    }
+
+    #[test]
+    fn paint_with_zero_size_rect_skips_entirely() {
+        // Defensive guard: hosts may pass an empty rect when the
+        // canvas band has zero usable space. We must NOT call
+        // save/clip/restore in that case (would still be balanced
+        // but unnecessary), and we must NOT walk the document.
+        let doc = Document::sample();
+        let viewport = CanvasViewport::from_document(&doc);
+        let mut backend = RecordingBackend::default();
+        {
+            let mut cx = PaintCx {
+                backend: &mut backend,
+            };
+            viewport.paint(&mut cx, Rect::xywh(0.0, 0.0, 0.0, 0.0));
+        }
+        assert!(backend.ops.is_empty(), "zero-size rect must paint nothing");
     }
 
     #[test]
