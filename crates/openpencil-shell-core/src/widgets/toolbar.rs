@@ -331,6 +331,26 @@ impl Widget for Toolbar {
                         icon_for_shape(self.shape_tool),
                         active,
                     );
+                    // Tiny chevron-down at the lower-right of the
+                    // button — signals the dropdown affordance the
+                    // way the TS shape-tool-dropdown does.
+                    let chev_size = 8.0;
+                    let chev_color = if active {
+                        self.theme.primary_foreground
+                    } else {
+                        self.theme.muted_foreground
+                    };
+                    draw_icon(
+                        cx.backend,
+                        Icon::ChevronDown,
+                        Point2D::new(
+                            button_x + BUTTON_SIZE - chev_size - 3.0,
+                            y + BUTTON_SIZE - chev_size - 3.0,
+                        ),
+                        chev_size,
+                        chev_color,
+                        1.6,
+                    );
                     y += BUTTON_SIZE;
                     prev_was_item = true;
                 }
