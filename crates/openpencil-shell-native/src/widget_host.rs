@@ -52,15 +52,9 @@
 use crate::backend::NativeBackend;
 use openpencil_shell_core::document::Document;
 use openpencil_shell_core::widgets::{
-    CanvasViewport, LayerPanel, LayoutCx, PaintCx, PropertyPanel, Toolbar, Widget,
+    CanvasViewport, LayerPanel, LayoutCx, PaintCx, PropertyPanel, Toolbar, Widget, MIN_RAIL_WIDTH,
 };
 use openpencil_shell_core::{Color, Point2D, Rect, RenderBackend, TextLayout};
-
-/// Below this viewport width (in physical px) we paint the Toolbar
-/// only and skip both rails. Mirrors shell-web's `MIN_RAIL_WIDTH`
-/// constant so cross-platform behaviour at narrow viewports stays
-/// in sync. Codex Step 2 R1 CONCERN-3.
-const MIN_RAIL_WIDTH: f32 = 80.0;
 
 /// Frame-scoped `RenderBackend` adapter over `NativeBackend` +
 /// `&Canvas`. Lifetime-bound to the `SharedSkiaContext::with_frame`

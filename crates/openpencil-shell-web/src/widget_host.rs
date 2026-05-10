@@ -24,16 +24,9 @@
 use crate::backend::WebBackend;
 use openpencil_shell_core::document::Document;
 use openpencil_shell_core::widgets::{
-    CanvasViewport, LayerPanel, LayoutCx, PaintCx, PropertyPanel, Toolbar, Widget,
+    CanvasViewport, LayerPanel, LayoutCx, PaintCx, PropertyPanel, Toolbar, Widget, MIN_RAIL_WIDTH,
 };
 use openpencil_shell_core::{Point2D, Rect, RenderBackend};
-
-/// Below this viewport width (in CSS px) we paint the Toolbar
-/// only and skip both rails — there's not enough horizontal
-/// space for a usable LayerPanel + PropertyPanel split. Codex
-/// Step 2 R1 CONCERN-3: clamp `rail_w` to non-negative AND skip
-/// when too small to be useful.
-const MIN_RAIL_WIDTH: f32 = 80.0;
 
 /// The Step 3 editor-UI host. Owns the document model + toolbar
 /// tool selection; per-frame builds LayerPanel / PropertyPanel /
