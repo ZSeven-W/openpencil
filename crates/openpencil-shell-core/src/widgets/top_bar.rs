@@ -73,6 +73,17 @@ impl TopBar {
         }
     }
 
+    /// Returns the on-screen rect of the Globe icon button. Used
+    /// by the host to anchor the LocalePicker dropdown directly
+    /// underneath when `Document.ui.locale_picker_open == true`.
+    pub fn globe_rect(top_bar_rect: Rect) -> Rect {
+        let right = top_bar_rect.origin.x + top_bar_rect.size.x;
+        Rect {
+            origin: Point2D::new(right - PAD - ICON_BUTTON * 3.0, top_bar_rect.origin.y + 8.0),
+            size: Point2D::new(ICON_BUTTON, ICON_BUTTON),
+        }
+    }
+
     /// Hit-test the title bar at `point`. Recognised buttons:
     ///   - PanelLeft (left edge) → ToggleSidebar
     ///   - Sun (third from right) → ToggleTheme

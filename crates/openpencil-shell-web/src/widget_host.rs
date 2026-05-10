@@ -27,9 +27,9 @@
 use crate::backend::WebBackend;
 use openpencil_shell_core::document::{ChatAnchor, Document};
 use openpencil_shell_core::widgets::{
-    AIChatHit, AIChatPlaceholder, CanvasViewport, LayerPanel, LayoutCx, PaintCx, PropertyPanel,
-    StatusBar, Toolbar, TopBar, TopBarHit, Widget, AI_CHAT_COLLAPSED_HEIGHT,
-    AI_CHAT_COLLAPSED_WIDTH, AI_CHAT_HEIGHT, AI_CHAT_WIDTH, LAYER_PANEL_WIDTH,
+    AIChatHit, AIChatPlaceholder, CanvasViewport, LayerPanel, LayoutCx, LocalePicker, PaintCx,
+    PropertyPanel, StatusBar, Toolbar, TopBar, TopBarHit, Widget, AI_CHAT_COLLAPSED_HEIGHT,
+    AI_CHAT_COLLAPSED_WIDTH, AI_CHAT_HEIGHT, AI_CHAT_WIDTH, LAYER_PANEL_WIDTH, LOCALE_PICKER_WIDTH,
     PROPERTY_PANEL_WIDTH, STATUS_BAR_HEIGHT, STATUS_BAR_WIDTH, TOOLBAR_WIDTH, TOP_BAR_HEIGHT,
 };
 use openpencil_shell_core::{Point2D, Rect, RenderBackend, Theme};
@@ -171,8 +171,21 @@ impl WidgetHost {
         viewport_width: f32,
         viewport_height: f32,
     ) -> bool {
-        // 0. TopBar — sidebar toggle button. Mirrors the native
-        //    host so web + native behave identically.
+        // 0a. Locale picker overlay — top-most when open. Row hit
+        //     sets locale + closes; outside hit closes silently.
+        if self.document.ui.locale_picker_open {
+            let panel_rect = self.locale_picker_rect(viewport_width);
+            let picker = LocalePicker::for_document(&self.document);
+            if let Some(locale) = picker.hit_test(panel_rect, Point2D::new(x, y)) {
+                self.document.ui.locale = locale;
+                self.document.ui.locale_picker_open = false;
+                return true;
+            }
+            self.document.ui.locale_picker_open = false;
+        }
+
+        // 0b. TopBar — sidebar toggle button. Mirrors the native
+        //     host so web + native behave identically.
         let top_bar_rect = Rect {
             origin: Point2D::new(0.0, 0.0),
             size: Point2D::new(viewport_width, TOP_BAR_HEIGHT),
@@ -189,7 +202,7 @@ impl WidgetHost {
                     return true;
                 }
                 TopBarHit::ToggleLocale => {
-                    self.document.ui.locale = self.document.ui.locale.next();
+                    self.document.ui.locale_picker_open = !self.document.ui.locale_picker_open;
                     return true;
                 }
             }
@@ -349,6 +362,23 @@ impl WidgetHost {
             (AI_CHAT_COLLAPSED_WIDTH, AI_CHAT_COLLAPSED_HEIGHT)
         } else {
             (AI_CHAT_WIDTH, AI_CHAT_HEIGHT)
+        }
+    }
+
+    fn locale_picker_rect(&self, viewport_w: f32) -> Rect {
+        let top_bar_rect = Rect {
+            origin: Point2D::new(0.0, 0.0),
+            size: Point2D::new(viewport_w, TOP_BAR_HEIGHT),
+        };
+        let globe = TopBar::globe_rect(top_bar_rect);
+        let panel_h = LocalePicker::panel_height();
+        let x = (globe.origin.x + globe.size.x / 2.0 - LOCALE_PICKER_WIDTH / 2.0)
+            .max(8.0)
+            .min(viewport_w - LOCALE_PICKER_WIDTH - 8.0);
+        let y = globe.origin.y + globe.size.y + 6.0;
+        Rect {
+            origin: Point2D::new(x, y),
+            size: Point2D::new(LOCALE_PICKER_WIDTH, panel_h),
         }
     }
 
@@ -616,6 +646,17 @@ impl WidgetHost {
                 backend: &mut *backend,
             };
             status.paint(&mut cx, status_rect);
+        }
+
+        // 9. LocalePicker — top-most overlay so it covers chat /
+        //    toolbar / status when open.
+        if self.document.ui.locale_picker_open {
+            let picker_rect = self.locale_picker_rect(viewport_width);
+            let picker = LocalePicker::for_document(&self.document);
+            let mut cx = PaintCx {
+                backend: &mut *backend,
+            };
+            picker.paint(&mut cx, picker_rect);
         }
     }
 }
