@@ -13,7 +13,8 @@ export type IssueCategory =
   | 'mixed-sibling-padding'
   | 'excessive-frame-effects'
   | 'edge-section-padding'
-  | 'text-bg-contrast';
+  | 'text-bg-contrast'
+  | 'stacked-horizontal-padding';
 
 export interface Issue {
   /** Node id where the issue was detected */

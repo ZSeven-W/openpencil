@@ -1,6 +1,6 @@
 import type { PenNode, PenDocument } from '@zseven-w/pen-types';
 import type { Issue } from './types';
-import { detectEdgeSectionPadding } from './detectors-spacing';
+import { detectEdgeSectionPadding, detectStackedHorizontalPadding } from './detectors-spacing';
 import { detectTextBgContrast } from './detectors-typography';
 import { colorContrast, parseHexColor, relativeLuminance } from './color-utils';
 
@@ -691,7 +691,7 @@ export function detectExcessiveFrameEffects(root: PenNode): Issue[] {
 }
 
 /**
- * Run all 13 detectors and return the deduplicated combined issue list.
+ * Run all 14 detectors and return the deduplicated combined issue list.
  * Dedup key: `${nodeId}:${property}` (matches runPreValidationFixes).
  * On collision, the first issue wins (detector execution order below).
  */
@@ -709,6 +709,7 @@ export function detectAllIssues(root: PenNode, doc: PenDocument): Issue[] {
     ...detectMixedSiblingPadding(root),
     ...detectExcessiveFrameEffects(root),
     ...detectEdgeSectionPadding(root),
+    ...detectStackedHorizontalPadding(root),
     ...detectTextBgContrast(root, doc),
   ];
   const seen = new Set<string>();
