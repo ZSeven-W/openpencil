@@ -18,6 +18,100 @@ pub enum PropertyPanelHit {
     Input(PropertyFocus),
 }
 
+/// State plumbed from `PropertyPanel` down into the per-section
+/// paint helpers so the focused input can render its primary
+/// border + caret + draft text. Unused for non-editable rows.
+pub struct EditContext<'a> {
+    pub focus: Option<PropertyFocus>,
+    pub draft: &'a str,
+    pub caret_anchor_ms: u64,
+    pub now_ms: u64,
+}
+
+/// Localised chrome strings for the PropertyPanel sections.
+/// Resolved once at panel-construction time from `Document::t` so
+/// every section's `paint_section_label` call gets the
+/// locale-appropriate text without each helper hitting the
+/// translation layer.
+#[derive(Debug, Clone)]
+pub struct PropertyLabels {
+    pub tab_design: String,
+    pub tab_code: String,
+    pub create_component: String,
+    pub position: String,
+    pub flex_layout: String,
+    pub size: String,
+    pub layer: String,
+    pub opacity: String,
+    pub fill: String,
+    pub stroke: String,
+    pub effects: String,
+    pub export: String,
+    pub fill_width: String,
+    pub fill_height: String,
+    pub hug_width: String,
+    pub hug_height: String,
+    pub clip_content: String,
+}
+
+impl PropertyLabels {
+    /// Builder — looks up every chrome string the property panel
+    /// shows. Falls back to a hardcoded English literal when the
+    /// translation layer returns the key itself (some keys aren't
+    /// in the TS table because the TS panel hardcodes them).
+    pub fn for_document(doc: &crate::document::Document) -> Self {
+        // Some labels exist in TS, some don't. `pick` returns the
+        // localised string, the EN fallback, OR a literal we
+        // hardcode here so the panel never paints a raw dotted key.
+        let pick = |key: &'static str, fallback: &'static str| -> String {
+            let translated = doc.t(key);
+            if translated == key {
+                fallback.to_string()
+            } else {
+                translated.to_string()
+            }
+        };
+        Self {
+            tab_design: pick("rightPanel.design", "Design"),
+            tab_code: pick("rightPanel.code", "Code"),
+            create_component: pick("property.createComponent", "Create Component"),
+            position: pick("size.position", "Position"),
+            flex_layout: pick("layout.flexLayout", "Flex Layout"),
+            size: pick("layout.dimensions", "Size"),
+            layer: pick("appearance.layer", "Layer"),
+            opacity: pick("appearance.opacity", "Opacity"),
+            fill: pick("fill.title", "Fill"),
+            stroke: pick("stroke.title", "Stroke"),
+            effects: pick("effects.title", "Effects"),
+            export: pick("export.title", "Export"),
+            fill_width: pick("layout.fillWidth", "Fill Width"),
+            fill_height: pick("layout.fillHeight", "Fill Height"),
+            hug_width: pick("layout.hugWidth", "Hug Width"),
+            hug_height: pick("layout.hugHeight", "Hug Height"),
+            clip_content: pick("layout.clipContent", "Clip Content"),
+        }
+    }
+}
+
+impl<'a> EditContext<'a> {
+    /// Convenience for paint helpers — returns the value to render
+    /// for the given field: the live edit draft when this field is
+    /// focused, or the snapshot fallback otherwise.
+    pub fn value_for<'b>(&'b self, focus: PropertyFocus, fallback: &'b str) -> &'b str {
+        if self.focus == Some(focus) {
+            self.draft
+        } else {
+            fallback
+        }
+    }
+
+    /// Whether this field currently shows the caret.
+    pub fn caret_visible(&self, focus: PropertyFocus) -> bool {
+        self.focus == Some(focus)
+            && jian_core::anim::blink_visible(self.now_ms, self.caret_anchor_ms, 500)
+    }
+}
+
 const PAD_X: f32 = 16.0;
 /// Vertical breathing room between a divider line and the next
 /// section's label.
@@ -35,18 +129,86 @@ const SECTION_HEADER_HEIGHT: f32 = 24.0;
 const TAB_HEIGHT: f32 = 36.0;
 const HEADER_HEIGHT: f32 = 30.0;
 
+/// Compute the on-screen rects of every editable input the
+/// PropertyPanel hit-tests. Same math as the per-section paint
+/// helpers; factored out so paint + hit-test stay aligned.
+///
+/// Currently emits the X / Y / W / H number inputs. Rotation,
+/// opacity, hex, etc. land here as their schema grows.
+///
+/// `panel_rect` is the rect the panel paints into (origin +
+/// width = panel width).
+pub fn editable_input_rects(panel_rect: Rect) -> Vec<(PropertyFocus, Rect)> {
+    let x0 = panel_rect.origin.x;
+    let w = panel_rect.size.x;
+    let usable_w = w - PAD_X * 2.0;
+    let half_w = (usable_w - 8.0) / 2.0;
+
+    // Match the `PropertyPanel::paint` order:
+    //   tab_strip (TAB_HEIGHT)
+    // → node_header (HEADER_HEIGHT)
+    // → create_component (8 + 36 + 12 = 56)
+    // → position section header (SECTION_HEADER_HEIGHT) → X/Y row
+    let mut y = panel_rect.origin.y;
+    y += TAB_HEIGHT;
+    y += HEADER_HEIGHT;
+    y += 8.0 + 36.0 + 12.0;
+    // Position section.
+    y += SECTION_HEADER_HEIGHT;
+    let x_rect = Rect {
+        origin: Point2D::new(x0 + PAD_X, y),
+        size: Point2D::new(half_w, INPUT_HEIGHT),
+    };
+    let y_rect = Rect {
+        origin: Point2D::new(x0 + PAD_X + half_w + 8.0, y),
+        size: Point2D::new(half_w, INPUT_HEIGHT),
+    };
+    // Position section: X/Y row + 6 px + Rotation/R row + 12 px + 8 (gap).
+    y += INPUT_HEIGHT + 6.0;
+    y += INPUT_HEIGHT + 12.0;
+    y += SECTION_GAP;
+    // Flex section: header + 32 px button row + 12 px + section_gap.
+    y += SECTION_HEADER_HEIGHT;
+    y += 32.0 + 12.0;
+    y += SECTION_GAP;
+    // Size section: header + W/H row.
+    y += SECTION_HEADER_HEIGHT;
+    let w_rect = Rect {
+        origin: Point2D::new(x0 + PAD_X, y),
+        size: Point2D::new(half_w, INPUT_HEIGHT),
+    };
+    let h_rect = Rect {
+        origin: Point2D::new(x0 + PAD_X + half_w + 8.0, y),
+        size: Point2D::new(half_w, INPUT_HEIGHT),
+    };
+    vec![
+        (PropertyFocus::PositionX, x_rect),
+        (PropertyFocus::PositionY, y_rect),
+        (PropertyFocus::SizeW, w_rect),
+        (PropertyFocus::SizeH, h_rect),
+    ]
+}
+
 // ── Tab strip ─────────────────────────────────────────────────────
 
-pub fn paint_tab_strip(cx: &mut PaintCx<'_>, theme: &Theme, x: f32, y: f32, width: f32) -> f32 {
+pub fn paint_tab_strip(
+    cx: &mut PaintCx<'_>,
+    theme: &Theme,
+    labels: &PropertyLabels,
+    x: f32,
+    y: f32,
+    width: f32,
+) -> f32 {
     let pad = 14.0;
     let tab_y = y + 6.0;
+    let active_w = (cx.backend.measure_text(&labels.tab_design, 13.0) + 24.0).max(48.0);
     let active_rect = Rect {
         origin: Point2D::new(x + pad, tab_y),
-        size: Point2D::new(48.0, 26.0),
+        size: Point2D::new(active_w, 26.0),
     };
     cx.backend.fill_round_rect(active_rect, 6.0, theme.muted);
     let active_label = TextLayout::single_run(
-        "设计",
+        &labels.tab_design,
         "system-ui",
         13.0,
         to_jian_color(theme.foreground),
@@ -54,10 +216,10 @@ pub fn paint_tab_strip(cx: &mut PaintCx<'_>, theme: &Theme, x: f32, y: f32, widt
     );
     cx.backend.draw_text(
         &active_label,
-        Point2D::new(active_rect.origin.x + 13.0, active_rect.origin.y + 18.0),
+        Point2D::new(active_rect.origin.x + 12.0, active_rect.origin.y + 18.0),
     );
     let inactive_label = TextLayout::single_run(
-        "代码",
+        &labels.tab_code,
         "system-ui",
         13.0,
         to_jian_color(theme.muted_foreground),
@@ -107,6 +269,7 @@ pub fn paint_node_header(
 pub fn paint_create_component(
     cx: &mut PaintCx<'_>,
     theme: &Theme,
+    labels: &PropertyLabels,
     x: f32,
     y: f32,
     width: f32,
@@ -132,13 +295,13 @@ pub fn paint_create_component(
         1.4,
     );
     let label = TextLayout::single_run(
-        "创建组件",
+        &labels.create_component,
         "system-ui",
         13.0,
         to_jian_color(theme.foreground),
         Point2D::new(0.0, 0.0),
     );
-    let label_w = 4.0 * 13.0;
+    let label_w = cx.backend.measure_text(&labels.create_component, 13.0);
     cx.backend.draw_text(
         &label,
         Point2D::new(
@@ -155,32 +318,42 @@ pub fn paint_position_section(
     cx: &mut PaintCx<'_>,
     theme: &Theme,
     snapshot: &NodeSnapshot,
+    edit: &EditContext<'_>,
+    labels: &PropertyLabels,
     x: f32,
     y: f32,
     width: f32,
 ) -> f32 {
-    let mut y = paint_section_label(cx, theme, "位置", x, y, width);
+    let mut y = paint_section_label(cx, theme, &labels.position, x, y, width);
     let usable_w = width - PAD_X * 2.0;
     let half_w = (usable_w - 8.0) / 2.0;
-    paint_input_with_prefix(
+    let x_rect = Rect {
+        origin: Point2D::new(x + PAD_X, y),
+        size: Point2D::new(half_w, INPUT_HEIGHT),
+    };
+    let y_rect = Rect {
+        origin: Point2D::new(x + PAD_X + half_w + 8.0, y),
+        size: Point2D::new(half_w, INPUT_HEIGHT),
+    };
+    let x_value = snapshot.x.to_string();
+    paint_input_with_prefix_focused(
         cx,
         theme,
-        Rect {
-            origin: Point2D::new(x + PAD_X, y),
-            size: Point2D::new(half_w, INPUT_HEIGHT),
-        },
+        x_rect,
         "X",
-        &snapshot.x.to_string(),
+        edit.value_for(PropertyFocus::PositionX, &x_value),
+        edit.focus == Some(PropertyFocus::PositionX),
+        edit.caret_visible(PropertyFocus::PositionX),
     );
-    paint_input_with_prefix(
+    let y_value = snapshot.y.to_string();
+    paint_input_with_prefix_focused(
         cx,
         theme,
-        Rect {
-            origin: Point2D::new(x + PAD_X + half_w + 8.0, y),
-            size: Point2D::new(half_w, INPUT_HEIGHT),
-        },
+        y_rect,
         "Y",
-        &snapshot.y.to_string(),
+        edit.value_for(PropertyFocus::PositionY, &y_value),
+        edit.focus == Some(PropertyFocus::PositionY),
+        edit.caret_visible(PropertyFocus::PositionY),
     );
     y += INPUT_HEIGHT + 6.0;
     // TS uses RotateCw for the rotation input (layout-section.tsx).
@@ -212,8 +385,15 @@ pub fn paint_position_section(
 
 // ── Flex layout section ──────────────────────────────────────────
 
-pub fn paint_flex_section(cx: &mut PaintCx<'_>, theme: &Theme, x: f32, y: f32, width: f32) -> f32 {
-    let mut y = paint_section_label(cx, theme, "弹性布局", x, y, width);
+pub fn paint_flex_section(
+    cx: &mut PaintCx<'_>,
+    theme: &Theme,
+    labels: &PropertyLabels,
+    x: f32,
+    y: f32,
+    width: f32,
+) -> f32 {
+    let mut y = paint_section_label(cx, theme, &labels.flex_layout, x, y, width);
     // TS layout-section.tsx uses Columns3 / Rows3 / LayoutGrid for
     // the three flex modes; LayoutGrid is the default-active mode
     // (Free / 自由布局).
@@ -259,42 +439,66 @@ pub fn paint_size_section(
     cx: &mut PaintCx<'_>,
     theme: &Theme,
     snapshot: &NodeSnapshot,
+    edit: &EditContext<'_>,
+    labels: &PropertyLabels,
     x: f32,
     y: f32,
     width: f32,
 ) -> f32 {
-    let mut y = paint_section_label(cx, theme, "尺寸", x, y, width);
+    let mut y = paint_section_label(cx, theme, &labels.size, x, y, width);
     let usable_w = width - PAD_X * 2.0;
     let half_w = (usable_w - 8.0) / 2.0;
-    paint_input_with_prefix(
+    let w_rect = Rect {
+        origin: Point2D::new(x + PAD_X, y),
+        size: Point2D::new(half_w, INPUT_HEIGHT),
+    };
+    let h_rect = Rect {
+        origin: Point2D::new(x + PAD_X + half_w + 8.0, y),
+        size: Point2D::new(half_w, INPUT_HEIGHT),
+    };
+    let w_value = snapshot.width.to_string();
+    paint_input_with_prefix_focused(
         cx,
         theme,
-        Rect {
-            origin: Point2D::new(x + PAD_X, y),
-            size: Point2D::new(half_w, INPUT_HEIGHT),
-        },
+        w_rect,
         "W",
-        &snapshot.width.to_string(),
+        edit.value_for(PropertyFocus::SizeW, &w_value),
+        edit.focus == Some(PropertyFocus::SizeW),
+        edit.caret_visible(PropertyFocus::SizeW),
     );
-    paint_input_with_prefix(
+    let h_value = snapshot.height.to_string();
+    paint_input_with_prefix_focused(
         cx,
         theme,
-        Rect {
-            origin: Point2D::new(x + PAD_X + half_w + 8.0, y),
-            size: Point2D::new(half_w, INPUT_HEIGHT),
-        },
+        h_rect,
         "H",
-        &snapshot.height.to_string(),
+        edit.value_for(PropertyFocus::SizeH, &h_value),
+        edit.focus == Some(PropertyFocus::SizeH),
+        edit.caret_visible(PropertyFocus::SizeH),
     );
     y += INPUT_HEIGHT + 10.0;
     let row_h = 22.0;
-    paint_check_row(cx, theme, x + PAD_X, y, half_w, "填充宽度");
-    paint_check_row(cx, theme, x + PAD_X + half_w + 8.0, y, half_w, "填充高度");
+    paint_check_row(cx, theme, x + PAD_X, y, half_w, &labels.fill_width);
+    paint_check_row(
+        cx,
+        theme,
+        x + PAD_X + half_w + 8.0,
+        y,
+        half_w,
+        &labels.fill_height,
+    );
     y += row_h;
-    paint_check_row(cx, theme, x + PAD_X, y, half_w, "适应宽度");
-    paint_check_row(cx, theme, x + PAD_X + half_w + 8.0, y, half_w, "适应高度");
+    paint_check_row(cx, theme, x + PAD_X, y, half_w, &labels.hug_width);
+    paint_check_row(
+        cx,
+        theme,
+        x + PAD_X + half_w + 8.0,
+        y,
+        half_w,
+        &labels.hug_height,
+    );
     y += row_h;
-    paint_check_row(cx, theme, x + PAD_X, y, usable_w, "裁剪内容");
+    paint_check_row(cx, theme, x + PAD_X, y, usable_w, &labels.clip_content);
     y += row_h + 12.0;
     paint_section_divider(cx, theme, x, y, width);
     y + SECTION_GAP
@@ -319,8 +523,15 @@ fn paint_check_row(cx: &mut PaintCx<'_>, theme: &Theme, x: f32, y: f32, _w: f32,
 
 // ── Layer (opacity) section ───────────────────────────────────────
 
-pub fn paint_layer_section(cx: &mut PaintCx<'_>, theme: &Theme, x: f32, y: f32, width: f32) -> f32 {
-    let mut y = paint_section_label(cx, theme, "图层", x, y, width);
+pub fn paint_layer_section(
+    cx: &mut PaintCx<'_>,
+    theme: &Theme,
+    labels: &PropertyLabels,
+    x: f32,
+    y: f32,
+    width: f32,
+) -> f32 {
+    let mut y = paint_section_label(cx, theme, &labels.layer, x, y, width);
     let usable_w = width - PAD_X * 2.0;
     let row = Rect {
         origin: Point2D::new(x + PAD_X, y),
@@ -338,11 +549,12 @@ pub fn paint_fill_section(
     cx: &mut PaintCx<'_>,
     theme: &Theme,
     snapshot: &NodeSnapshot,
+    labels: &PropertyLabels,
     x: f32,
     y: f32,
     width: f32,
 ) -> f32 {
-    let mut y = paint_section_label_with_add(cx, theme, "填充", x, y, width);
+    let mut y = paint_section_label_with_add(cx, theme, &labels.fill, x, y, width);
     let usable_w = width - PAD_X * 2.0;
     let fill = snapshot.fill.unwrap_or(Color::WHITE);
     let swatch_rect = Rect {
@@ -460,11 +672,12 @@ pub fn paint_stroke_section(
     cx: &mut PaintCx<'_>,
     theme: &Theme,
     snapshot: &NodeSnapshot,
+    labels: &PropertyLabels,
     x: f32,
     y: f32,
     width: f32,
 ) -> f32 {
-    let mut y = paint_section_label(cx, theme, "描边", x, y, width);
+    let mut y = paint_section_label(cx, theme, &labels.stroke, x, y, width);
     let usable_w = width - PAD_X * 2.0;
     let stroke_color = snapshot.stroke.map(|s| s.color).unwrap_or(Color {
         r: 0x37 as f32 / 255.0,
@@ -528,11 +741,12 @@ pub fn paint_stroke_section(
 pub fn paint_effects_section(
     cx: &mut PaintCx<'_>,
     theme: &Theme,
+    labels: &PropertyLabels,
     x: f32,
     y: f32,
     width: f32,
 ) -> f32 {
-    let y = paint_section_label_with_add(cx, theme, "效果", x, y, width);
+    let y = paint_section_label_with_add(cx, theme, &labels.effects, x, y, width);
     let after = y + 8.0;
     paint_section_divider(cx, theme, x, after, width);
     after + SECTION_GAP
@@ -543,11 +757,12 @@ pub fn paint_effects_section(
 pub fn paint_export_section(
     cx: &mut PaintCx<'_>,
     theme: &Theme,
+    labels: &PropertyLabels,
     x: f32,
     y: f32,
     width: f32,
 ) -> f32 {
-    let mut y = paint_section_label(cx, theme, "导出", x, y, width);
+    let mut y = paint_section_label(cx, theme, &labels.export, x, y, width);
     let usable_w = width - PAD_X * 2.0;
     let half_w = (usable_w - 8.0) / 2.0;
     paint_dropdown(
@@ -635,12 +850,13 @@ fn paint_input_with_prefix(
     prefix: &str,
     value: &str,
 ) {
-    paint_input_with_prefix_focused(cx, theme, rect, prefix, value, false);
+    paint_input_with_prefix_focused(cx, theme, rect, prefix, value, false, false);
 }
 
-/// Same as [`paint_input_with_prefix`] but renders a primary-color
-/// border around the box when `focused` is true. Used by the
-/// property panel to render which input the user clicked into.
+/// Same as [`paint_input_with_prefix`] but with explicit focus +
+/// caret-blink controls. The property panel uses this to render
+/// the live edit-buffer of the focused row with a primary-tinted
+/// border + a single-pixel blinking caret.
 fn paint_input_with_prefix_focused(
     cx: &mut PaintCx<'_>,
     theme: &Theme,
@@ -648,6 +864,7 @@ fn paint_input_with_prefix_focused(
     prefix: &str,
     value: &str,
     focused: bool,
+    caret_visible: bool,
 ) {
     cx.backend.fill_round_rect(rect, INPUT_RADIUS, theme.muted);
     if focused {
@@ -672,6 +889,8 @@ fn paint_input_with_prefix_focused(
     // Value uses the real text-measure API so it stays anchored at
     // a consistent gap from the prefix regardless of digit count.
     let prefix_w = cx.backend.measure_text(prefix, 12.0);
+    let value_x = rect.origin.x + 10.0 + prefix_w + 8.0;
+    let baseline_y = rect.origin.y + rect.size.y / 2.0 + 4.0;
     let value_layout = TextLayout::single_run(
         value,
         "system-ui",
@@ -679,13 +898,18 @@ fn paint_input_with_prefix_focused(
         to_jian_color(theme.foreground),
         Point2D::new(0.0, 0.0),
     );
-    cx.backend.draw_text(
-        &value_layout,
-        Point2D::new(
-            rect.origin.x + 10.0 + prefix_w + 8.0,
-            rect.origin.y + rect.size.y / 2.0 + 4.0,
-        ),
-    );
+    cx.backend
+        .draw_text(&value_layout, Point2D::new(value_x, baseline_y));
+    if caret_visible {
+        let value_w = cx.backend.measure_text(value, 12.0);
+        cx.backend.fill_rect(
+            Rect {
+                origin: Point2D::new(value_x + value_w, rect.origin.y + 6.0),
+                size: Point2D::new(1.5, rect.size.y - 12.0),
+            },
+            theme.foreground,
+        );
+    }
 }
 
 fn paint_input_with_suffix(
