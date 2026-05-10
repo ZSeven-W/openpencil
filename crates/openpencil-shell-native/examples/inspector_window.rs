@@ -40,16 +40,23 @@ use winit::event::WindowEvent;
 use winit::event_loop::{ActiveEventLoop, EventLoop};
 use winit::window::{Window, WindowId};
 
-const INSPECTOR_WIDTH: f32 = 280.0;
+/// Default starting viewport — matches `with_inner_size` below so
+/// the first frame has the right layout. Resize is handled in the
+/// `Resized` arm: we re-cache the host viewport via `set_viewport`
+/// so the next paint matches the new physical size.
+const INITIAL_VIEWPORT_W: f32 = 1100.0;
+const INITIAL_VIEWPORT_H: f32 = 700.0;
 
-/// Paint pass — clear to white, then dispatch the inspector widgets
-/// through `WidgetHostNative`. Pulled into a free function so the
-/// initial `Resumed` paint and `RedrawRequested` redraws share the
-/// exact same draw list (same pattern as `basic_window`).
+/// Paint pass — clear to white, then dispatch the editor-UI
+/// composition through `WidgetHostNative`. Pulled into a free
+/// function so the initial `Resumed` paint and `RedrawRequested`
+/// redraws share the exact same draw list (same pattern as
+/// `basic_window`).
 fn paint_inspector(
     ctx: &mut SharedSkiaContext,
     backend: &mut NativeBackend,
     host: &WidgetHostNative,
+    viewport_width: f32,
 ) {
     ctx.begin_frame();
     ctx.with_frame(|canvas, _glow| {
@@ -64,11 +71,11 @@ fn paint_inspector(
         frame.fill_rect(
             Rect {
                 origin: Point2D::new(0.0, 0.0),
-                size: Point2D::new(960.0, 640.0),
+                size: Point2D::new(viewport_width.max(INITIAL_VIEWPORT_W), INITIAL_VIEWPORT_H),
             },
             Color::WHITE,
         );
-        host.paint(&mut frame, INSPECTOR_WIDTH);
+        host.paint(&mut frame, viewport_width);
     });
     ctx.present();
 }
@@ -78,6 +85,10 @@ struct InspectorApp {
     ctx: Option<SharedSkiaContext>,
     backend: Option<NativeBackend>,
     host: WidgetHostNative,
+    /// Cached physical viewport width — refreshed on Resumed +
+    /// Resized so the host paints into the right rect even when
+    /// the user drags the window.
+    viewport_width: f32,
     error: Option<SharedSkiaError>,
 }
 
@@ -88,6 +99,7 @@ impl InspectorApp {
             ctx: None,
             backend: None,
             host: WidgetHostNative::new(),
+            viewport_width: INITIAL_VIEWPORT_W,
             error: None,
         }
     }
@@ -99,8 +111,11 @@ impl ApplicationHandler for InspectorApp {
             return;
         }
         let attrs = Window::default_attributes()
-            .with_title("OpenPencil — inspector_window (Step 1b §1.4 native)")
-            .with_inner_size(winit::dpi::LogicalSize::new(800u32, 600u32));
+            .with_title("OpenPencil — inspector_window (Step 3 native)")
+            .with_inner_size(winit::dpi::LogicalSize::new(
+                INITIAL_VIEWPORT_W as u32,
+                INITIAL_VIEWPORT_H as u32,
+            ));
         let window = match event_loop.create_window(attrs) {
             Ok(w) => w,
             Err(err) => {
@@ -126,7 +141,7 @@ impl ApplicationHandler for InspectorApp {
         self.window = Some(window);
 
         if let (Some(ctx), Some(backend)) = (self.ctx.as_mut(), self.backend.as_mut()) {
-            paint_inspector(ctx, backend, &self.host);
+            paint_inspector(ctx, backend, &self.host, self.viewport_width);
         }
     }
 
@@ -148,6 +163,7 @@ impl ApplicationHandler for InspectorApp {
                         event_loop.exit();
                     }
                 }
+                self.viewport_width = size.width as f32;
                 if let Some(window) = self.window.as_ref() {
                     window.request_redraw();
                 }
@@ -159,7 +175,7 @@ impl ApplicationHandler for InspectorApp {
             }
             WindowEvent::RedrawRequested => {
                 if let (Some(ctx), Some(backend)) = (self.ctx.as_mut(), self.backend.as_mut()) {
-                    paint_inspector(ctx, backend, &self.host);
+                    paint_inspector(ctx, backend, &self.host, self.viewport_width);
                 }
             }
             _ => {}

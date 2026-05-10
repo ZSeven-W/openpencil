@@ -121,17 +121,46 @@ impl NodeKind {
     }
 }
 
-/// Document tree node — id + kind + display name + children.
+/// Solid stroke (outline) descriptor for [`Node::stroke`]. Step 3
+/// keeps it minimal — color + width. Future `pen-types` parity adds
+/// line cap / join / dash array.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Stroke {
+    pub color: crate::Color,
+    pub width: f32,
+}
+
+/// Document tree node — id + kind + display name + children, plus
+/// Step 3 paint data:
+/// - `bounds` (origin + size in document px) — `Rect::ZERO` for
+///   container nodes that only use their children's bounds.
+/// - `fill` (optional solid color) — None = no fill.
+/// - `stroke` (optional outline) — None = no stroke.
+/// - `text` (optional string) — populated for `NodeKind::Text` (the
+///   `name` field is the layer-list label, this is the actual
+///   rendered text).
 ///
-/// Step 2 deliberately omits fills / strokes / transform — editor-UI
-/// widgets only need `id`, `kind`, `name`, `children` to draw the
-/// inspector. Render-side primitives (Color, Rect bounds, etc.)
-/// land in Step 3 alongside the canvas-render surface.
+/// Builder-style mutators (`with_bounds` / `with_fill` /
+/// `with_stroke` / `with_text`) chain off `Node::leaf` /
+/// `Node::with_children` so existing call sites keep working
+/// while sample fixtures + Step 4+ document I/O can fluently
+/// configure paint data.
 #[derive(Debug, Clone)]
 pub struct Node {
     pub id: NodeId,
     pub kind: NodeKind,
     pub name: String,
+    /// Document-space rectangle for this node. `Rect::ZERO` means
+    /// "use children's bounds" / "container only".
+    pub bounds: crate::Rect,
+    pub fill: Option<crate::Color>,
+    pub stroke: Option<Stroke>,
+    /// Rendered text content — only meaningful for `NodeKind::Text`
+    /// nodes. CanvasViewport draws this string at `bounds.origin`
+    /// at a fixed font size; richer typography (per-run color,
+    /// weight, etc.) lands in Step 4+ alongside `pen-types`
+    /// `TextRun` parity.
+    pub text: Option<String>,
     pub children: Vec<Node>,
 }
 
@@ -141,6 +170,10 @@ impl Node {
             id: NodeId::new(id),
             kind,
             name: name.into(),
+            bounds: crate::Rect::ZERO,
+            fill: None,
+            stroke: None,
+            text: None,
             children: Vec::new(),
         }
     }
@@ -155,8 +188,37 @@ impl Node {
             id: NodeId::new(id),
             kind,
             name: name.into(),
+            bounds: crate::Rect::ZERO,
+            fill: None,
+            stroke: None,
+            text: None,
             children,
         }
+    }
+
+    /// Builder: set bounds (consume self, return new Node).
+    pub fn with_bounds(mut self, bounds: crate::Rect) -> Self {
+        self.bounds = bounds;
+        self
+    }
+
+    /// Builder: set solid fill.
+    pub fn with_fill(mut self, fill: crate::Color) -> Self {
+        self.fill = Some(fill);
+        self
+    }
+
+    /// Builder: set stroke (color + width).
+    pub fn with_stroke(mut self, color: crate::Color, width: f32) -> Self {
+        self.stroke = Some(Stroke { color, width });
+        self
+    }
+
+    /// Builder: set the rendered text (only meaningful when
+    /// `kind == NodeKind::Text`).
+    pub fn with_text(mut self, text: impl Into<String>) -> Self {
+        self.text = Some(text.into());
+        self
     }
 
     /// Search the subtree for a node with the given id, returning a
@@ -243,20 +305,45 @@ impl Document {
         }
     }
 
-    /// Sample document for the Step 2 editor-UI demo: one page
+    /// Sample document for the Step 2/3 editor-UI demo: one page
     /// with a frame containing a title (text) + a button (group
     /// of rect + text). Driven by document data instead of
     /// hardcoded TreeWidget items. Selection is set to the title
-    /// so PropertyPanel has something to render.
+    /// so PropertyPanel has something to render. Step 3 adds
+    /// concrete geometry + fills + strokes + text content so the
+    /// CanvasViewport can actually render a recognisable mock.
     pub fn sample() -> Self {
+        use crate::{Color, Rect};
+
         // Id allocations: page=1, frame=10, title=11, button=12,
         // button_rect=13, button_text=14. Stable across runs so
         // tests can assert specific ids.
-        let title = Node::leaf(11, NodeKind::Text, "Title");
-        let button_rect = Node::leaf(13, NodeKind::Rect, "Button background");
-        let button_text = Node::leaf(14, NodeKind::Text, "Click me");
-        let button = Node::with_children(12, NodeKind::Group, "Button", vec![button_rect, button_text]);
-        let frame = Node::with_children(10, NodeKind::Frame, "Frame", vec![title, button]);
+        //
+        // Layout (document coordinates, top-left origin):
+        //   Frame    (40, 40)–(360, 240)   white fill, black 1px stroke
+        //     Title  (60, 60)–(*, *)       text "Hello OpenPencil", no bg
+        //     Button group at (60, 130)
+        //       Rect   (60, 130)–(180, 36) blue fill, no stroke
+        //       Text   (76, 152)–(*, *)    text "Click me", no bg
+        let title = Node::leaf(11, NodeKind::Text, "Title")
+            .with_bounds(Rect::xywh(60.0, 60.0, 240.0, 28.0))
+            .with_text("Hello OpenPencil");
+        let button_rect = Node::leaf(13, NodeKind::Rect, "Button background")
+            .with_bounds(Rect::xywh(60.0, 130.0, 180.0, 36.0))
+            .with_fill(Color::BLUE);
+        let button_text = Node::leaf(14, NodeKind::Text, "Click me")
+            .with_bounds(Rect::xywh(76.0, 152.0, 160.0, 16.0))
+            .with_text("Click me");
+        let button = Node::with_children(
+            12,
+            NodeKind::Group,
+            "Button",
+            vec![button_rect, button_text],
+        );
+        let frame = Node::with_children(10, NodeKind::Frame, "Frame", vec![title, button])
+            .with_bounds(Rect::xywh(40.0, 40.0, 360.0, 240.0))
+            .with_fill(Color::WHITE)
+            .with_stroke(Color::BLACK, 1.0);
         let doc = Self {
             pages: vec![Page::new(1, "Page 1", vec![frame])],
             active_page_index: 0,
