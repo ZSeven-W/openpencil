@@ -16,6 +16,9 @@
 
 #[cfg(feature = "skia")]
 mod backend;
+pub mod event;
+#[cfg(feature = "skia")]
+mod widget_host;
 
 // Force the wasm32-unknown-unknown libc/libcxx/libm shim to be linked
 // even though no Rust code calls it — its `#[no_mangle]` symbols are
@@ -27,6 +30,14 @@ extern crate wasm_libc_shim as _;
 
 use wasm_bindgen::prelude::*;
 
+#[cfg(feature = "skia")]
+use std::cell::RefCell;
+#[cfg(feature = "skia")]
+use std::rc::Rc;
+
+#[cfg(feature = "skia")]
+use openpencil_shell_core::Modifiers;
+
 /// Long-lived shell handle. The smoke HTML must keep this alive (e.g.
 /// `window.__opShell = mount("op")`) so closures stored on the shell
 /// remain reachable for the page lifetime.
@@ -36,23 +47,70 @@ use wasm_bindgen::prelude::*;
 /// public surface.
 #[wasm_bindgen]
 pub struct WebShell {
+    /// Shared inner state. `Rc<RefCell<...>>` is necessary because every
+    /// browser closure registered in `mount()` needs its own owned
+    /// reference to the backend + host (`'static` is required by
+    /// wasm-bindgen's `Closure::new`); each closure clones the Rc and
+    /// borrow_muts on dispatch. `WebShell` itself never reads back
+    /// through this field directly (all access goes through closure
+    /// clones); the field exists to anchor the original ownership so
+    /// the Rc is not dropped before `Drop` removes the listeners.
     #[cfg(feature = "skia")]
-    backend: backend::WebBackend,
+    #[allow(dead_code)]
+    inner: Rc<RefCell<Inner>>,
+
+    /// Registered DOM event listeners. Kept alive for the WebShell's
+    /// lifetime so the closures the browser holds remain valid; the
+    /// `Drop` impl below removes each listener on shell drop so the
+    /// page can navigate away cleanly without dangling JS callbacks.
+    /// Codex Phase C2 R1 will exercise this end-to-end.
+    #[cfg(feature = "skia")]
+    listeners: Vec<Listener>,
+
+    /// Hidden `<textarea>` that owns the IME composition target. The
+    /// composition listeners are registered on THIS element (not on
+    /// the window), so a browser-chrome IME context (URL bar, devtools
+    /// search box, etc.) cannot mutate the inspector's TextInput
+    /// state. The element stays focused for the page lifetime so CJK
+    /// IME sequences route here. Phase D widget chrome will swap
+    /// programmatic focus management in; Phase B static demo just
+    /// keeps focus pinned on this element. (Codex Phase C stop-hook
+    /// finding: "CJK IME listeners have no owned editable/focus
+    /// target".)
+    #[cfg(feature = "skia")]
+    ime_target: web_sys::HtmlElement,
 }
 
 #[cfg(feature = "skia")]
-impl WebShell {
-    /// Phase A red-rect demo: clear to white, draw a centered red rect,
-    /// snapshot to the host canvas. Returns the present error if the
-    /// final ImageData round-trip failed — callers MUST propagate this
-    /// to JS instead of treating mount as successful when the canvas
-    /// stayed blank.
-    ///
-    /// Phase B+ replaces this with the widget host paint loop.
-    fn paint_phase_a(&mut self) -> Result<(), JsValue> {
+struct Inner {
+    backend: backend::WebBackend,
+    host: widget_host::WidgetHost,
+}
+
+#[cfg(feature = "skia")]
+struct Listener {
+    target: web_sys::EventTarget,
+    name: &'static str,
+    /// Type-erased Closure storage. We use
+    /// `Closure<dyn FnMut(JsValue)>` uniformly across event types and
+    /// runtime-checked `dyn_into::<SpecificEvent>()` inside each
+    /// handler body so `Listener` carries one concrete generic
+    /// argument across the entire vec; mismatched synthetic events
+    /// from same-page JS skip the handler instead of producing a
+    /// wrong-type reference (codex C2.2 R1 CONCERN-3).
+    closure: Closure<dyn FnMut(JsValue)>,
+}
+
+#[cfg(feature = "skia")]
+impl Inner {
+    /// Phase B inspector paint. Called from `mount()` for the first
+    /// frame and from every closure body after a state mutation.
+    /// Returns the present error if the ImageData round-trip failed.
+    fn repaint(&mut self) -> Result<(), JsValue> {
         use openpencil_shell_core::{Color, Point2D, Rect, RenderBackend};
+
         self.backend.begin_frame();
-        // Clear background.
+        // Clear to white so widget paints sit on a clean background.
         self.backend.fill_rect(
             Rect {
                 origin: Point2D::new(0.0, 0.0),
@@ -60,19 +118,99 @@ impl WebShell {
             },
             Color::WHITE,
         );
-        // Centered red rect: 320×120 inside the 960×640 canvas.
-        self.backend.fill_rect(
-            Rect {
-                origin: Point2D::new(320.0, 260.0),
-                size: Point2D::new(320.0, 120.0),
-            },
-            Color::RED,
-        );
+        // Inspector slice: 280 px wide column on the left.
+        self.host.paint(&mut self.backend, 280.0);
         self.backend.end_frame();
         if let Some(err) = self.backend.take_present_error() {
             return Err(err);
         }
         Ok(())
+    }
+}
+
+/// Build a Jian `Modifiers` bitset from a W3C `KeyboardEvent`. Mirrors
+/// the four standard modifier keys; per spec §2.4 we treat
+/// `metaKey` (browser) → `Modifiers::CMD` (Jian) — both name the
+/// "Cmd on macOS / Win key on Windows / Super on Linux" modifier.
+#[cfg(feature = "skia")]
+fn modifiers_from_keyboard(event: &web_sys::KeyboardEvent) -> Modifiers {
+    let mut m = Modifiers::empty();
+    if event.shift_key() {
+        m |= Modifiers::SHIFT;
+    }
+    if event.ctrl_key() {
+        m |= Modifiers::CTRL;
+    }
+    if event.alt_key() {
+        m |= Modifiers::ALT;
+    }
+    if event.meta_key() {
+        m |= Modifiers::CMD;
+    }
+    m
+}
+
+/// Register a JS event listener on `target` and store the Closure in
+/// `listeners` so it stays alive for the WebShell's lifetime. The
+/// helper accepts an `FnMut(SpecificEvent)` and adapts it to the
+/// type-erased `Closure<dyn FnMut(JsValue)>` stored in `Listener`.
+#[cfg(feature = "skia")]
+fn add_listener<E, F, T>(
+    target: &T,
+    name: &'static str,
+    listeners: &mut Vec<Listener>,
+    mut handler: F,
+) -> Result<(), JsValue>
+where
+    E: wasm_bindgen::JsCast + 'static,
+    F: FnMut(E) + 'static,
+    T: Clone + Into<web_sys::EventTarget>,
+{
+    // Clone the target into an owned EventTarget once; we need both
+    // `&EventTarget` for the registration call and an owned
+    // EventTarget to push into the Listener for later cleanup. The
+    // generic over T (`HtmlElement`, `EventTarget`, …) lets call
+    // sites pass a window-target or an HtmlElement-target without
+    // an explicit cast.
+    let target_owned: web_sys::EventTarget = target.clone().into();
+    let closure: Closure<dyn FnMut(JsValue)> = Closure::new(move |raw: JsValue| {
+        // Use `dyn_into` (runtime-checked) instead of
+        // `unchecked_into` so a mismatched synthetic event dispatched
+        // by same-page JS (e.g. `new Event("keydown")` rather than
+        // `new KeyboardEvent("keydown")`) silently skips the handler
+        // instead of producing a wrong-type reference whose getter
+        // calls would return garbage. Codex C2.2 R1 CONCERN-3.
+        let event: E = match raw.dyn_into::<E>() {
+            Ok(e) => e,
+            Err(_) => return,
+        };
+        handler(event);
+    });
+    target_owned.add_event_listener_with_callback(name, closure.as_ref().unchecked_ref())?;
+    listeners.push(Listener {
+        target: target_owned,
+        name,
+        closure,
+    });
+    Ok(())
+}
+
+#[cfg(feature = "skia")]
+impl Drop for WebShell {
+    fn drop(&mut self) {
+        for l in self.listeners.drain(..) {
+            // Best-effort removal; if the target has already been
+            // detached from the DOM the call is a no-op. The Closure
+            // is dropped at end of scope, releasing its wasm-bindgen
+            // closure slot back to the wasm linear memory pool.
+            let _ = l
+                .target
+                .remove_event_listener_with_callback(l.name, l.closure.as_ref().unchecked_ref());
+        }
+        // Tear down the hidden IME textarea so leaving the page does
+        // not leave an orphan node + the browser does not ship dead
+        // composition state into the next document.
+        self.ime_target.remove();
     }
 }
 
@@ -88,8 +226,9 @@ impl WebShell {
 #[cfg(feature = "skia")]
 #[wasm_bindgen]
 pub fn mount(canvas_id: &str) -> Result<WebShell, JsValue> {
+    use crate::event::{ime, keyboard};
     use wasm_bindgen::JsCast;
-    use web_sys::HtmlCanvasElement;
+    use web_sys::{CompositionEvent, HtmlCanvasElement, HtmlElement, KeyboardEvent};
 
     // Install the panic hook on first call so panics print to the browser
     // console instead of being swallowed silently.
@@ -107,12 +246,190 @@ pub fn mount(canvas_id: &str) -> Result<WebShell, JsValue> {
         .map_err(|_| JsValue::from_str("mount: target element is not <canvas>"))?;
 
     let backend = backend::WebBackend::new(canvas)?;
-    let mut shell = WebShell { backend };
-    // Phase A demo paints synchronously inside mount(); any present error
-    // (read_pixels / put_image_data) MUST surface as a JS exception so
+    let host = widget_host::WidgetHost::new();
+    let inner = Rc::new(RefCell::new(Inner { backend, host }));
+
+    // Phase B inspector paints the first frame synchronously inside
+    // mount(); any present error MUST surface as a JS exception so
     // callers do not see Ok with an unpainted canvas.
-    shell.paint_phase_a()?;
-    Ok(shell)
+    inner.borrow_mut().repaint()?;
+
+    // Codex Phase C stop-hook fix: create a hidden <textarea> that
+    // owns the IME composition target. Without this, registering
+    // composition listeners on `window` would surface IME activity
+    // from the browser's URL bar / devtools / any other editable
+    // element on the page as if it were directed at our inspector
+    // TextInput. The textarea is positioned off-screen + transparent
+    // + aria-hidden so it does not interfere with screen readers or
+    // visual layout; programmatic focus on it routes the user's IME
+    // composition through our owned listeners.
+    let ime_textarea = document
+        .create_element("textarea")
+        .map_err(|e| {
+            JsValue::from_str(&format!(
+                "mount: could not create hidden IME textarea: {:?}",
+                e
+            ))
+        })?
+        .dyn_into::<HtmlElement>()
+        .map_err(|_| JsValue::from_str("mount: textarea is not HtmlElement"))?;
+    ime_textarea.set_attribute(
+        "style",
+        "position:fixed;left:-9999px;top:0;width:1px;height:1px;\
+         opacity:0;pointer-events:none;",
+    )?;
+    ime_textarea.set_attribute("aria-hidden", "true")?;
+    ime_textarea.set_attribute("tabindex", "-1")?;
+    let body = document
+        .body()
+        .ok_or_else(|| JsValue::from_str("mount: document.body unavailable"))?;
+    body.append_child(&ime_textarea)?;
+    // Best-effort focus — focus() returns Err if the document is not
+    // visible yet (e.g. tab in background), but the listener
+    // registration still works once the user gives the page focus.
+    let _ = ime_textarea.focus();
+
+    let mut listeners: Vec<Listener> = Vec::new();
+    // Keyboard events still go on window (the user expects shortcuts
+    // like Cmd+S to fire regardless of which element has focus); the
+    // codex stop-hook concern was about IME, not keyboard.
+    let win_target: web_sys::EventTarget = window.clone().into();
+
+    // Codex Phase C gate BLOCK: registering N listeners with `?`
+    // is NOT exception-safe — if registration #K fails, the
+    // partially-built `listeners` vec drops without our `Drop for
+    // WebShell` ever firing (we never reach the `Ok(WebShell {
+    // ... })` line), and the K-1 already-registered DOM callbacks
+    // outlive their wasm-bindgen Closures. Wrap all registrations
+    // in an inner closure that, on Err, drains the partial vec
+    // and unregisters everything we managed to land before
+    // surfacing the error. The unregister loop is the same one
+    // `Drop for WebShell` runs.
+    let registration: Result<(), JsValue> = (|listeners: &mut Vec<Listener>| {
+        // ----- keyboard: keydown + keyup → WidgetHost::apply_key -----
+        {
+            let inner_kd = inner.clone();
+            add_listener::<KeyboardEvent, _, _>(
+                &win_target,
+                "keydown",
+                listeners,
+                move |evt: KeyboardEvent| {
+                    let key_event = keyboard::map_keyboard_parts(
+                        &evt.key(),
+                        &evt.code(),
+                        evt.location(),
+                        evt.repeat(),
+                        true, // pressed
+                        modifiers_from_keyboard(&evt),
+                        evt.is_composing(),
+                    );
+                    let mut inner = inner_kd.borrow_mut();
+                    inner.host.apply_key(&key_event);
+                    let _ = inner.repaint();
+                },
+            )?;
+        }
+        {
+            let inner_ku = inner.clone();
+            add_listener::<KeyboardEvent, _, _>(
+                &win_target,
+                "keyup",
+                listeners,
+                move |evt: KeyboardEvent| {
+                    let key_event = keyboard::map_keyboard_parts(
+                        &evt.key(),
+                        &evt.code(),
+                        evt.location(),
+                        evt.repeat(),
+                        false, // released
+                        modifiers_from_keyboard(&evt),
+                        evt.is_composing(),
+                    );
+                    let mut inner = inner_ku.borrow_mut();
+                    inner.host.apply_key(&key_event);
+                    let _ = inner.repaint();
+                },
+            )?;
+        }
+
+        // ----- IME: compositionstart / update / end → WidgetHost::apply_ime -----
+        // Listener target is the hidden textarea (codex Phase C
+        // stop-hook fix), NOT the window — only IME composition
+        // routed through our owned editable target reaches the
+        // inspector. Browser-chrome compositions stay isolated.
+        //
+        // Phase C1 ime mappers do the UTF-16→UTF-8 selection remap when
+        // the browser supplies an IME-highlighted segment via
+        // `getTargetRanges()`; current browsers expose that range via
+        // a method we cannot call on `CompositionEvent` directly through
+        // web-sys 0.3.94 without an extra raw `Reflect::get` shim.
+        // For Step 1b we forward `data` only; selection lands in Phase D
+        // alongside the DOM mirror that already needs Reflect::get.
+        {
+            let inner_cs = inner.clone();
+            add_listener::<CompositionEvent, _, _>(
+                &ime_textarea,
+                "compositionstart",
+                listeners,
+                move |_evt: CompositionEvent| {
+                    let mut inner = inner_cs.borrow_mut();
+                    inner.host.apply_ime(&ime::composition_start());
+                    let _ = inner.repaint();
+                },
+            )?;
+        }
+        {
+            let inner_cu = inner.clone();
+            add_listener::<CompositionEvent, _, _>(
+                &ime_textarea,
+                "compositionupdate",
+                listeners,
+                move |evt: CompositionEvent| {
+                    let text = evt.data().unwrap_or_default();
+                    let mut inner = inner_cu.borrow_mut();
+                    inner.host.apply_ime(&ime::composition_update(text, None));
+                    let _ = inner.repaint();
+                },
+            )?;
+        }
+        {
+            let inner_ce = inner.clone();
+            add_listener::<CompositionEvent, _, _>(
+                &ime_textarea,
+                "compositionend",
+                listeners,
+                move |evt: CompositionEvent| {
+                    let text = evt.data().unwrap_or_default();
+                    let mut inner = inner_ce.borrow_mut();
+                    inner.host.apply_ime(&ime::composition_end(text));
+                    let _ = inner.repaint();
+                },
+            )?;
+        }
+        Ok(())
+    })(&mut listeners);
+
+    if let Err(e) = registration {
+        // Unwind partial registration. Same body as `Drop for
+        // WebShell`; kept inline rather than refactored into a free
+        // function because the lifetimes only line up when the
+        // `Listener` vec is local to mount(). Also detach the IME
+        // textarea so a failed mount does not leave an orphan node
+        // in the DOM.
+        for l in listeners.drain(..) {
+            let _ = l
+                .target
+                .remove_event_listener_with_callback(l.name, l.closure.as_ref().unchecked_ref());
+        }
+        ime_textarea.remove();
+        return Err(e);
+    }
+
+    Ok(WebShell {
+        inner,
+        listeners,
+        ime_target: ime_textarea,
+    })
 }
 
 /// Stub mount used by the kickoff §1.2 wasm32-clean compile guard CI.

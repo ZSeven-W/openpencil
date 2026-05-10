@@ -26,7 +26,12 @@ use jian_core::render::{TextAlign, TextRun};
 pub type Point2D = glam::Vec2;
 
 /// Rectangle (origin + size as two Vec2s).
-#[derive(Debug, Clone, Copy)]
+///
+/// Derives `PartialEq` so `widgets::LayoutBox` can compare layout
+/// results in tests. `Eq` is intentionally NOT derived: `Vec2` carries
+/// floats, and exact float equality is only meaningful when callers
+/// have been careful about how the values were produced.
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Rect {
     pub origin: Point2D,
     pub size: Point2D,
