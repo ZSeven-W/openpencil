@@ -17,6 +17,15 @@
 
 use crate::{Point2D, Rect, RenderBackend};
 
+/// Minimum width (in CSS / physical px) below which the editor-UI
+/// host paints the Toolbar only and skips the LayerPanel /
+/// CanvasViewport / PropertyPanel rails. Single canonical
+/// definition consumed by both `openpencil-shell-web::WidgetHost`
+/// and `openpencil-shell-native::WidgetHostNative` so they stay in
+/// lock-step (codex Step 3 R1 BLOCK fix — was duplicated as
+/// `const MIN_RAIL_WIDTH` in each host).
+pub const MIN_RAIL_WIDTH: f32 = 80.0;
+
 // Phase B primitives.
 pub mod dropdown;
 pub mod prop_row;
