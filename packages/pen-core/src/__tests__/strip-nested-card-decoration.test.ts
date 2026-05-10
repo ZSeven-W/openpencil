@@ -189,6 +189,62 @@ describe('stripNestedCardDecoration', () => {
     expect((inner as PenNode & { cornerRadius?: unknown }).cornerRadius).toBeUndefined();
   });
 
+  // 2026-05-11 Codex stop-hook caught: cornerRadius on a media-clipping
+  // frame (clipContent: true wrapping an image / video) is doing the
+  // rounding work, not stacking card decoration. Stripping it would
+  // un-round the photo against the user's intent.
+
+  it('preserves cornerRadius on a clipContent frame wrapping an image', () => {
+    const image = frame({ id: 'img', type: 'image' as const } as never);
+    const clipper = frame({
+      id: 'clipper',
+      cornerRadius: 12,
+      clipContent: true,
+      stroke: stroke(),
+      effects: shadow(),
+      children: [image],
+    } as never);
+    const card = frame({
+      id: 'card',
+      role: 'card',
+      cornerRadius: 16,
+      stroke: stroke(),
+      effects: shadow(),
+      children: [clipper],
+    } as never);
+
+    stripNestedCardDecoration(card);
+
+    // cornerRadius preserved (media clip role).
+    expect((clipper as PenNode & { cornerRadius?: unknown }).cornerRadius).toBe(12);
+    // stroke + shadow still get stripped (those are pure decoration).
+    expect((clipper as PenNode & { stroke?: unknown }).stroke).toBeUndefined();
+    expect((clipper as PenNode & { effects?: unknown }).effects).toBeUndefined();
+  });
+
+  it('preserves cornerRadius on frames with media role (image-placeholder, thumbnail, cover)', () => {
+    for (const role of ['image-placeholder', 'thumbnail', 'cover-image', 'gallery-item']) {
+      const inner = frame({
+        id: `inner-${role}`,
+        role,
+        cornerRadius: 8,
+      } as never);
+      const card = frame({
+        id: 'card',
+        role: 'card',
+        cornerRadius: 16,
+        children: [inner],
+      } as never);
+
+      stripNestedCardDecoration(card);
+
+      expect(
+        (inner as PenNode & { cornerRadius?: unknown }).cornerRadius,
+        `${role} should retain cornerRadius`,
+      ).toBe(8);
+    }
+  });
+
   it('returns false when nothing was modified', () => {
     const card = frame({
       id: 'plain-card',

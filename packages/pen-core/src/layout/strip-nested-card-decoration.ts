@@ -56,6 +56,30 @@ const KEEP_DECORATION_ROLES = new Set([
   'segmented-control',
 ]);
 
+/**
+ * Roles that semantically carry MEDIA — their cornerRadius is doing
+ * clipping work (rounded photo / video / thumbnail) rather than
+ * card-style decoration. Stripping the radius would un-round the
+ * media against the user's clear intent. Codex 2026-05-11 stop-hook
+ * caught the regression: a card with cornerRadius wrapping an
+ * image-placeholder would have the placeholder's own cornerRadius
+ * (used for `clipContent: true` rounding) stripped → square corners
+ * on the photo even though the surrounding card was rounded.
+ */
+const MEDIA_CLIP_ROLES = new Set([
+  'image',
+  'image-card',
+  'image-placeholder',
+  'video',
+  'video-placeholder',
+  'media',
+  'media-thumbnail',
+  'thumbnail',
+  'cover',
+  'cover-image',
+  'gallery-item',
+]);
+
 interface DecoFlags {
   hasStroke: boolean;
   hasCornerRadius: boolean;
@@ -83,6 +107,26 @@ function isRoleProtected(node: PenNode): boolean {
 }
 
 /**
+ * Frames acting as media-clipping containers — `clipContent: true` plus
+ * a direct image / video child mean the cornerRadius is rounding the
+ * photo, not stacking card decoration. Detector preserves cornerRadius
+ * on these (other decorations still get stripped if redundant).
+ */
+function isMediaClipper(node: PenNode): boolean {
+  const role = ((node as { role?: string }).role ?? '').toLowerCase();
+  if (MEDIA_CLIP_ROLES.has(role)) return true;
+  const clipContent = (node as PenNode & { clipContent?: unknown }).clipContent;
+  if (clipContent !== true) return false;
+  if (!('children' in node) || !Array.isArray(node.children)) return false;
+  return node.children.some((c) => {
+    if (!c) return false;
+    if (c.type === 'image') return true;
+    const childRole = ((c as { role?: string }).role ?? '').toLowerCase();
+    return MEDIA_CLIP_ROLES.has(childRole);
+  });
+}
+
+/**
  * Returns true if any node was modified.
  */
 export function stripNestedCardDecoration(root: PenNode): boolean {
@@ -105,6 +149,7 @@ export function stripNestedCardDecoration(root: PenNode): boolean {
         );
       const own = readDecoration(node);
       const isProtected = isRoleProtected(node);
+      const mediaClipper = isMediaClipper(node);
       if (!isProtected) {
         const n = node as PenNode & {
           stroke?: unknown;
@@ -115,7 +160,10 @@ export function stripNestedCardDecoration(root: PenNode): boolean {
           delete n.stroke;
           changed = true;
         }
-        if (own.hasCornerRadius && ancestorDeco.hasCornerRadius) {
+        // Preserve cornerRadius on media-clipping frames — the radius is
+        // rounding the photo, not stacking card decoration. Other
+        // decorations (stroke / shadow) still get stripped if redundant.
+        if (own.hasCornerRadius && ancestorDeco.hasCornerRadius && !mediaClipper) {
           delete n.cornerRadius;
           changed = true;
         }
