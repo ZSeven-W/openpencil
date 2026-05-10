@@ -18,6 +18,7 @@
 
 pub mod jian;
 pub mod render_backend;
+pub mod widgets;
 
 // Re-export the primary API for upstream crates / widgets / tests.
 pub use render_backend::{Color, Point2D, Rect, RenderBackend, TextLayout};
