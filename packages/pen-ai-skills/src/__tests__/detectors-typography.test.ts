@@ -216,6 +216,40 @@ describe('detectTextBgContrast', () => {
     expect(issues[0].reason).toMatch(/bg=#FFF8E7/);
   });
 
+  it('skips wrapper with NODE-LEVEL opacity=0 and uses real bg further up', () => {
+    // 2026-05-10 second Codex stop-hook — node-level opacity is a
+    // separate path from fill-level opacity. A wrapper with white fill
+    // and node opacity=0 is fully invisible; the detector must not
+    // pick up its white as the bg.
+    const wrap: PenNode = {
+      id: 'wrap',
+      type: 'frame',
+      layout: 'vertical',
+      fill: solid('#FFFFFF'),
+      opacity: 0,
+      children: [text('t1', solid('#FFF8E7'))],
+    } as unknown as PenNode;
+    const root = frame('page', [wrap], solid('#FFF8E7'));
+    const issues = detectTextBgContrast(root, emptyDoc);
+    expect(issues).toHaveLength(1);
+    expect(issues[0].reason).toMatch(/bg=#FFF8E7/);
+  });
+
+  it('skips wrapper with visible=false and uses real bg further up', () => {
+    const wrap: PenNode = {
+      id: 'wrap',
+      type: 'frame',
+      layout: 'vertical',
+      fill: solid('#FFFFFF'),
+      visible: false,
+      children: [text('t1', solid('#FFF8E7'))],
+    } as unknown as PenNode;
+    const root = frame('page', [wrap], solid('#FFF8E7'));
+    const issues = detectTextBgContrast(root, emptyDoc);
+    expect(issues).toHaveLength(1);
+    expect(issues[0].reason).toMatch(/bg=#FFF8E7/);
+  });
+
   it('still treats opacity=0.5 as visible (only opacity=0 is the alpha-0 sentinel)', () => {
     // We don't try to math a 50% wash against the layer below; that is
     // outside the detector's scope. The fill stays as the bg.

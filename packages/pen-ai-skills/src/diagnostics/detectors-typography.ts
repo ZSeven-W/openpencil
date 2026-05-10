@@ -150,7 +150,15 @@ export function detectTextBgContrast(
     // default and avoids the "everything fails" report when a doc has
     // no explicit page fill.
     for (let i = ancestors.length - 1; i >= 0; i--) {
-      const fill = (ancestors[i] as unknown as { fill?: unknown }).fill;
+      // Node-level opacity=0 / visible=false hides the WHOLE wrapper
+      // including its fill. The 2026-05-10 Codex review caught this as
+      // a separate path from fill-level opacity (the inner `firstSolid
+      // Color` guard) — both have to skip or a node-opacity-0 wrapper
+      // masks the real bg further up.
+      const ancestor = ancestors[i] as PenNode & { opacity?: unknown; visible?: unknown };
+      if (ancestor.opacity === 0) continue;
+      if (ancestor.visible === false) continue;
+      const fill = (ancestor as unknown as { fill?: unknown }).fill;
       const raw = firstSolidColor(fill);
       if (!raw) continue;
       const resolved = resolveColorRef(raw, variables, theme);
