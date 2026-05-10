@@ -205,6 +205,25 @@ pub trait RenderBackend {
     fn draw_text(&mut self, layout: &TextLayout, origin: Point2D);
     fn clip_rect(&mut self, rect: Rect);
 
+    // Step 4 visual lift — line + rounded rect primitives so widgets can
+    // draw lucide-style icons and shadcn-style chip / panel / button
+    // backgrounds without dropping back to per-backend skia calls.
+    /// Stroke a single line segment from `from` to `to`. Used for
+    /// icon line art (cursor arrow, T glyph, hash strokes, etc.).
+    fn stroke_line(&mut self, from: Point2D, to: Point2D, color: Color, width: f32);
+    /// Filled rectangle with corner radius. `radius` is uniform on
+    /// all four corners.
+    fn fill_round_rect(&mut self, rect: Rect, radius: f32, color: Color);
+    /// Stroked rounded rectangle. Mirrors `stroke_rect` + `radius`.
+    fn stroke_round_rect(&mut self, rect: Rect, radius: f32, color: Color, width: f32);
+    /// Step 5 SVG icons: stroke an SVG path `d` string scaled from
+    /// a 24×24 viewBox into a `size × size` square anchored at
+    /// `top_left`. Backends parse the d-string via skia's path
+    /// parser and render with round caps + joins to match
+    /// lucide's visual style. Used by the icon module so widgets
+    /// just declare which lucide path to draw.
+    fn stroke_svg_path(&mut self, d: &str, top_left: Point2D, size: f32, color: Color, width: f32);
+
     // Transform stack.
     fn save(&mut self);
     fn restore(&mut self);
@@ -213,4 +232,23 @@ pub trait RenderBackend {
     // Viewport / DPI.
     fn resize(&mut self, width: u32, height: u32);
     fn dpi_scale(&self) -> f32;
+
+    /// Measure the rendered horizontal advance of `text` at
+    /// `font_size`. Used by widgets that need precise centering
+    /// or right-alignment without round-trip to a layout pass.
+    /// Default impl: rough heuristic (~0.55 × font_size per
+    /// ASCII char, ~1.0 × font_size per non-ASCII char). Backends
+    /// that own a real typeface (Web + Native) override with
+    /// `Font::measure_str` for pixel-accurate positioning.
+    fn measure_text(&mut self, text: &str, font_size: f32) -> f32 {
+        let mut w = 0.0;
+        for c in text.chars() {
+            w += if c.is_ascii() {
+                font_size * 0.55
+            } else {
+                font_size
+            };
+        }
+        w
+    }
 }

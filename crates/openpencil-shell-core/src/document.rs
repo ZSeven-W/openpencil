@@ -236,6 +236,36 @@ impl Node {
         }
         None
     }
+
+    /// Effective bounds for the node — returns `bounds` directly
+    /// when the node carries its own rect, otherwise unions the
+    /// `aggregate_bounds` of every child (recursively). Container
+    /// nodes (Group / Other / unbounded Frame) ship with
+    /// `bounds = Rect::ZERO`; the property panel needs the visual
+    /// extent of their subtree to show meaningful W/H rather than
+    /// "0 × 0" (codex Step 6 stop-hook fix: "group bounds").
+    pub fn aggregate_bounds(&self) -> crate::Rect {
+        if self.bounds.size.x > 0.0 || self.bounds.size.y > 0.0 {
+            return self.bounds;
+        }
+        let mut iter = self
+            .children
+            .iter()
+            .map(Node::aggregate_bounds)
+            .filter(|r| r.size.x > 0.0 || r.size.y > 0.0);
+        let Some(first) = iter.next() else {
+            return crate::Rect::ZERO;
+        };
+        let (mut min_x, mut min_y) = (first.origin.x, first.origin.y);
+        let (mut max_x, mut max_y) = (first.origin.x + first.size.x, first.origin.y + first.size.y);
+        for r in iter {
+            min_x = min_x.min(r.origin.x);
+            min_y = min_y.min(r.origin.y);
+            max_x = max_x.max(r.origin.x + r.size.x);
+            max_y = max_y.max(r.origin.y + r.size.y);
+        }
+        crate::Rect::xywh(min_x, min_y, max_x - min_x, max_y - min_y)
+    }
 }
 
 /// A document page. `pen-types::PenPage` mirror — id + name +
@@ -292,9 +322,404 @@ pub struct Document {
     /// `NodeId::NONE` = no selection. Multi-selection (a
     /// `Vec<NodeId>`) lands when the editor needs it.
     pub selected: NodeId,
+    /// Currently-active editor tool. Mirrors the TS app's
+    /// `canvas-store.tool` field — drives toolbar highlight + the
+    /// canvas hit-test mode. Defaults to `Tool::Select`.
+    pub tool: Tool,
+    /// Pan/zoom state for the canvas viewport. Step 5 infinite
+    /// canvas — `CanvasViewport` applies this transform when
+    /// painting nodes; mouse wheel + Hand-tool drag mutate it.
+    pub viewport: Viewport,
+    /// AI chat panel state — input buffer, message list, focus.
+    /// Step 5 P2: drives the floating AIChatPanel dynamic UI.
+    pub chat: ChatState,
+    /// Step 6: chrome layout flags (left sidebar open / closed,
+    /// right rail visibility, etc). Mirrors the TS app's
+    /// `canvas-store.layerPanelOpen` field.
+    pub ui: UiState,
+}
+
+/// Chrome-level UI state — toggles for collapsible chrome
+/// surfaces. Kept on `Document` so toggling propagates through
+/// the same store as everything else.
+#[derive(Debug, Clone)]
+pub struct UiState {
+    /// Whether the left LayerPanel is shown. Default true.
+    pub sidebar_open: bool,
+    /// Resizable LayerPanel width (logical px). Drag the right
+    /// edge of the panel to resize.
+    pub layer_panel_width: f32,
+    /// Resizable PropertyPanel width (logical px). Drag the left
+    /// edge of the panel to resize.
+    pub property_panel_width: f32,
+    /// Which property-panel input has keyboard focus. `None` =
+    /// no input focused; the panel paints all inputs muted.
+    pub property_focus: Option<PropertyFocus>,
+    /// Draft string for the focused property-panel input. Filled
+    /// from the snapshot value when a row is clicked, mutated by
+    /// `apply_text` / `apply_backspace`, parsed + committed on
+    /// Enter, discarded on Escape.
+    pub property_input_draft: String,
+    /// Caret-blink anchor for the focused property-panel input —
+    /// reset on focus + every keystroke (mirrors `chat.caret_anchor_ms`).
+    pub property_caret_anchor_ms: u64,
+    /// Active theme — swapped by the TopBar Sun icon. Drives
+    /// every widget's `Theme` lookup so the entire chrome flips
+    /// together.
+    pub theme_mode: ThemeMode,
+    /// UI locale — cycled via the TopBar Globe icon. Drives the
+    /// `t(key)` lookup widgets use for chrome strings.
+    pub locale: Locale,
+    /// Whether the TopBar Globe-icon dropdown is open. Click the
+    /// Globe to toggle; click a row to set + close; click outside
+    /// to close.
+    pub locale_picker_open: bool,
+}
+
+impl Default for UiState {
+    fn default() -> Self {
+        Self {
+            sidebar_open: true,
+            layer_panel_width: 240.0,
+            property_panel_width: 280.0,
+            property_focus: None,
+            property_input_draft: String::new(),
+            property_caret_anchor_ms: 0,
+            theme_mode: ThemeMode::Dark,
+            locale: Locale::ZhCn,
+            locale_picker_open: false,
+        }
+    }
+}
+
+/// Light/dark switch — light palette is stubbed in
+/// [`crate::theme::Theme::light`] and ready to use.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ThemeMode {
+    Dark,
+    Light,
+}
+
+impl ThemeMode {
+    pub fn flipped(self) -> Self {
+        match self {
+            ThemeMode::Dark => ThemeMode::Light,
+            ThemeMode::Light => ThemeMode::Dark,
+        }
+    }
+}
+
+/// UI locale — full set of 15 mirrored from
+/// `apps/web/src/i18n/locales/`. ZhCn + EnUs ship with complete
+/// chrome translation tables; the rest fall through to EnUs
+/// (visually obvious that translation is pending).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Locale {
+    EnUs,
+    ZhCn,
+    ZhTw,
+    Ja,
+    Ko,
+    Fr,
+    Es,
+    De,
+    Pt,
+    Ru,
+    Hi,
+    Tr,
+    Th,
+    Vi,
+    Id,
+}
+
+impl Locale {
+    /// All locales in TopBar dropdown order — matches TS app.
+    pub const ALL: [Locale; 15] = [
+        Locale::EnUs,
+        Locale::ZhCn,
+        Locale::ZhTw,
+        Locale::Ja,
+        Locale::Ko,
+        Locale::Fr,
+        Locale::Es,
+        Locale::De,
+        Locale::Pt,
+        Locale::Ru,
+        Locale::Hi,
+        Locale::Tr,
+        Locale::Th,
+        Locale::Vi,
+        Locale::Id,
+    ];
+
+    /// Cycle to the next locale (round-trips through `ALL`).
+    pub fn next(self) -> Self {
+        let i = Self::ALL.iter().position(|&l| l == self).unwrap_or(0);
+        Self::ALL[(i + 1) % Self::ALL.len()]
+    }
+
+    /// Native-script display name (matches the TS dropdown).
+    pub fn display_name(self) -> &'static str {
+        match self {
+            Locale::EnUs => "English",
+            Locale::ZhCn => "简体中文",
+            Locale::ZhTw => "繁體中文",
+            Locale::Ja => "日本語",
+            Locale::Ko => "한국어",
+            Locale::Fr => "Français",
+            Locale::Es => "Español",
+            Locale::De => "Deutsch",
+            Locale::Pt => "Português",
+            Locale::Ru => "Русский",
+            Locale::Hi => "हिन्दी",
+            Locale::Tr => "Türkçe",
+            Locale::Th => "ไทย",
+            Locale::Vi => "Tiếng Việt",
+            Locale::Id => "Bahasa Indonesia",
+        }
+    }
+}
+
+/// Identifier for a property-panel input row. The host hit-tests
+/// the panel and stores the focused input here so paint can
+/// render the focused box with primary border + caret bar.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PropertyFocus {
+    PositionX,
+    PositionY,
+    Rotation,
+    PositionR,
+    SizeW,
+    SizeH,
+    Opacity,
+    FillHex,
+    StrokeHex,
+    StrokeWidth,
+}
+
+/// Floating AI chat panel state — mirrors the TS app's
+/// `useAIStore` (messages, input draft, focused flag).
+#[derive(Debug, Clone)]
+pub struct ChatState {
+    pub messages: Vec<ChatMessage>,
+    pub input: String,
+    pub focused: bool,
+    /// Which canvas corner the floating chat panel snaps to.
+    /// User can drag the panel by its header; on release the
+    /// host computes the nearest corner and updates this field.
+    pub anchor: ChatAnchor,
+    /// Collapsed state — when true the panel paints only the
+    /// 36 px header strip (clicking the chevron toggles).
+    pub collapsed: bool,
+    /// Last user-action timestamp (focus / keystroke) in
+    /// milliseconds — drives the caret blink phase via
+    /// [`jian_core::anim::blink_visible`]. Reset on focus and on
+    /// every key event so the caret reappears immediately when
+    /// the user types instead of mid-blink.
+    pub caret_anchor_ms: u64,
+}
+
+impl Default for ChatState {
+    fn default() -> Self {
+        Self {
+            messages: Vec::new(),
+            input: String::new(),
+            focused: false,
+            anchor: ChatAnchor::BottomLeft,
+            collapsed: false,
+            caret_anchor_ms: 0,
+        }
+    }
+}
+
+/// Which corner of the canvas region the AI chat panel sits in.
+/// Step 5 P2: 4-corner edge snap on drag release.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ChatAnchor {
+    TopLeft,
+    TopRight,
+    BottomLeft,
+    BottomRight,
+}
+
+impl ChatAnchor {
+    /// Pick the nearest corner to the given panel-center point
+    /// inside the canvas rect. `(canvas_x0, canvas_y0)` is the
+    /// canvas top-left, `(canvas_w, canvas_h)` its size.
+    pub fn nearest(
+        center: crate::Point2D,
+        canvas_x0: f32,
+        canvas_y0: f32,
+        canvas_w: f32,
+        canvas_h: f32,
+    ) -> Self {
+        let mid_x = canvas_x0 + canvas_w / 2.0;
+        let mid_y = canvas_y0 + canvas_h / 2.0;
+        let left = center.x < mid_x;
+        let top = center.y < mid_y;
+        match (top, left) {
+            (true, true) => ChatAnchor::TopLeft,
+            (true, false) => ChatAnchor::TopRight,
+            (false, true) => ChatAnchor::BottomLeft,
+            (false, false) => ChatAnchor::BottomRight,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ChatRole {
+    User,
+    Assistant,
+}
+
+#[derive(Debug, Clone)]
+pub struct ChatMessage {
+    pub role: ChatRole,
+    pub content: String,
+}
+
+impl ChatState {
+    /// Append the focused input as a new user message + a stub
+    /// assistant echo, then clear the buffer. Real AI streaming
+    /// lands in Step 6+ (matches TS app's `aiStore.send` flow).
+    pub fn send(&mut self) {
+        let trimmed = self.input.trim();
+        if trimmed.is_empty() {
+            return;
+        }
+        let user_msg = ChatMessage {
+            role: ChatRole::User,
+            content: trimmed.to_string(),
+        };
+        let echo = ChatMessage {
+            role: ChatRole::Assistant,
+            content: format!("(stub) Got it — \"{}\"", trimmed),
+        };
+        self.messages.push(user_msg);
+        self.messages.push(echo);
+        self.input.clear();
+    }
+}
+
+/// Pan + zoom state for the infinite canvas. Mirrors the TS app's
+/// `canvas-store.viewport` field (panX / panY / zoom).
+///
+/// Pan units are LOGICAL canvas pixels (top-left origin matches
+/// the canvas widget rect). Zoom is a multiplier — 1.0 = 100%
+/// (one canvas pixel = one document pixel), 2.0 = 200%, etc.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Viewport {
+    pub pan_x: f32,
+    pub pan_y: f32,
+    pub zoom: f32,
+}
+
+impl Viewport {
+    /// Identity viewport — origin pan, 100% zoom.
+    pub const IDENTITY: Viewport = Viewport {
+        pan_x: 0.0,
+        pan_y: 0.0,
+        zoom: 1.0,
+    };
+    /// Min/max zoom — matches the TS app's `canvas-constants`
+    /// (10% to 800%). Anything tighter clips usability without
+    /// adding precision.
+    pub const MIN_ZOOM: f32 = 0.1;
+    pub const MAX_ZOOM: f32 = 8.0;
+
+    /// Apply a wheel zoom step centered on `cursor` (canvas-local
+    /// coordinates). Positive `delta` zooms in, negative out.
+    /// Keeps the document point under the cursor stationary.
+    pub fn zoom_at(&mut self, cursor: crate::Point2D, delta: f32) {
+        let prev_zoom = self.zoom;
+        let factor = (delta * 0.0015).exp();
+        let new_zoom = (prev_zoom * factor).clamp(Self::MIN_ZOOM, Self::MAX_ZOOM);
+        // Recover the document-space point at cursor BEFORE zoom,
+        // then re-anchor pan so it stays at cursor AFTER zoom.
+        let doc_x = (cursor.x - self.pan_x) / prev_zoom;
+        let doc_y = (cursor.y - self.pan_y) / prev_zoom;
+        self.zoom = new_zoom;
+        self.pan_x = cursor.x - doc_x * new_zoom;
+        self.pan_y = cursor.y - doc_y * new_zoom;
+    }
+
+    /// Translate pan by `(dx, dy)` (canvas-local pixels). Used by
+    /// the Hand-tool drag.
+    pub fn pan(&mut self, dx: f32, dy: f32) {
+        self.pan_x += dx;
+        self.pan_y += dy;
+    }
+
+    /// Convert a canvas-local point to document space (inverse of
+    /// the painted transform).
+    pub fn to_document(&self, p: crate::Point2D) -> crate::Point2D {
+        crate::Point2D::new(
+            (p.x - self.pan_x) / self.zoom,
+            (p.y - self.pan_y) / self.zoom,
+        )
+    }
+}
+
+impl Default for Viewport {
+    fn default() -> Self {
+        Self::IDENTITY
+    }
+}
+
+/// Editor tool — what action a primary mouse drag on the canvas
+/// performs. Subset of the TS `canvas-store` tool union; expanded
+/// in lockstep as Rust shell hit-test logic catches up.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Tool {
+    Select,
+    Rect,
+    Text,
+    Frame,
+    Hand,
+}
+
+impl Tool {
+    /// All tools, in toolbar display order. Single source of truth
+    /// for the toolbar build path.
+    pub const ALL: [Tool; 5] = [
+        Tool::Select,
+        Tool::Rect,
+        Tool::Text,
+        Tool::Frame,
+        Tool::Hand,
+    ];
+
+    /// Stable accesskit / DOM id token (lowercase ASCII).
+    pub fn ident(self) -> &'static str {
+        match self {
+            Tool::Select => "select",
+            Tool::Rect => "rect",
+            Tool::Text => "text",
+            Tool::Frame => "frame",
+            Tool::Hand => "hand",
+        }
+    }
 }
 
 impl Document {
+    /// Active theme — driven by `ui.theme_mode`. Widgets call this
+    /// instead of hardcoding `Theme::dark()` so the entire chrome
+    /// flips together when the user clicks the TopBar Sun icon.
+    pub fn theme(&self) -> crate::Theme {
+        match self.ui.theme_mode {
+            ThemeMode::Dark => crate::Theme::dark(),
+            ThemeMode::Light => crate::Theme::light(),
+        }
+    }
+
+    /// Translate a chrome string by key. Keys are stable English
+    /// identifiers; values come from a per-locale table. Unknown
+    /// keys fall through to the key itself so callers get a
+    /// visible "missing translation" instead of an empty render.
+    pub fn t<'a>(&self, key: &'a str) -> &'a str {
+        crate::i18n::translate(self.ui.locale, key)
+    }
+
     /// Empty document with one empty default page named "Page 1".
     /// Used by host smoke fixtures.
     pub fn empty() -> Self {
@@ -302,6 +727,10 @@ impl Document {
             pages: vec![Page::new(1, "Page 1", Vec::new())],
             active_page_index: 0,
             selected: NodeId::NONE,
+            tool: Tool::Select,
+            viewport: Viewport::IDENTITY,
+            chat: ChatState::default(),
+            ui: UiState::default(),
         }
     }
 
@@ -348,6 +777,10 @@ impl Document {
             pages: vec![Page::new(1, "Page 1", vec![frame])],
             active_page_index: 0,
             selected: NodeId::new(11), // "Title"
+            tool: Tool::Select,
+            viewport: Viewport::IDENTITY,
+            chat: ChatState::default(),
+            ui: UiState::default(),
         };
         debug_assert!(
             doc.validate().is_ok(),
@@ -384,6 +817,34 @@ impl Document {
         self.pages
             .first()
             .expect("Document::first_page on empty pages — use Document::empty for a default page")
+    }
+
+    /// Apply a parsed property edit to the selected node. Mirrors
+    /// the TS `useDocumentStore` mutation handlers — only this
+    /// helper writes back to bounds, so call sites can stay
+    /// declarative ("commit X = 120" rather than "find the node,
+    /// clone bounds, mutate one axis, write back").
+    ///
+    /// Returns `true` if the edit landed on a real node; `false`
+    /// when there's no selection or the active page can't be
+    /// found. Container nodes (Group / unbounded Frame) currently
+    /// no-op — their bounds are derived from children — but the
+    /// API still returns `true` because the host should still
+    /// clear the input draft + focus.
+    pub fn commit_property_edit(&mut self, focus: PropertyFocus, value: f32) -> bool {
+        if !self.selected.is_real() {
+            return false;
+        }
+        let sel = self.selected;
+        let Some(page) = self.pages.get_mut(self.active_page_index) else {
+            return false;
+        };
+        for child in &mut page.children {
+            if commit_property_walk(child, sel, focus, value) {
+                return true;
+            }
+        }
+        false
     }
 
     /// Walk every node id in every page, returning the first
@@ -440,6 +901,37 @@ impl Document {
         }
         Ok(())
     }
+}
+
+/// Recursive helper for `Document::commit_property_edit`. Returns
+/// `true` once the edit lands on the matching node.
+fn commit_property_walk(node: &mut Node, sel: NodeId, focus: PropertyFocus, value: f32) -> bool {
+    if node.id == sel {
+        match focus {
+            PropertyFocus::PositionX => node.bounds.origin.x = value,
+            PropertyFocus::PositionY => node.bounds.origin.y = value,
+            PropertyFocus::SizeW => node.bounds.size.x = value.max(0.0),
+            PropertyFocus::SizeH => node.bounds.size.y = value.max(0.0),
+            // Rotation / Opacity / hex inputs are owned by the
+            // selection's metadata and not yet wired to the node
+            // model. The caller still treats this as a successful
+            // edit (clears focus); the value just doesn't persist
+            // until those fields reach the node schema.
+            PropertyFocus::Rotation
+            | PropertyFocus::PositionR
+            | PropertyFocus::Opacity
+            | PropertyFocus::FillHex
+            | PropertyFocus::StrokeHex
+            | PropertyFocus::StrokeWidth => {}
+        }
+        return true;
+    }
+    for child in &mut node.children {
+        if commit_property_walk(child, sel, focus, value) {
+            return true;
+        }
+    }
+    false
 }
 
 fn find_duplicate_walk(
@@ -562,6 +1054,10 @@ mod tests {
             )],
             active_page_index: 0,
             selected: NodeId::NONE,
+            tool: Tool::Select,
+            viewport: Viewport::IDENTITY,
+            chat: ChatState::default(),
+            ui: UiState::default(),
         };
         let result = doc.validate();
         assert!(result.is_err());
@@ -589,6 +1085,10 @@ mod tests {
             pages: Vec::new(),
             active_page_index: 0,
             selected: NodeId::NONE,
+            tool: Tool::Select,
+            viewport: Viewport::IDENTITY,
+            chat: ChatState::default(),
+            ui: UiState::default(),
         };
         let result = doc.validate();
         assert!(result.is_err());
@@ -606,6 +1106,10 @@ mod tests {
             pages: Vec::new(),
             active_page_index: 99,
             selected: NodeId::NONE,
+            tool: Tool::Select,
+            viewport: Viewport::IDENTITY,
+            chat: ChatState::default(),
+            ui: UiState::default(),
         };
         let err2 = doc2.validate().unwrap_err();
         assert!(
@@ -622,20 +1126,16 @@ mod tests {
     fn document_selected_node_scopes_to_active_page() {
         // Codex Step 2 R1 CONCERN-1: a selection on page 1 must
         // NOT show up when page 2 is active.
-        let page1 = Page::new(
-            1,
-            "p1",
-            vec![Node::leaf(10, NodeKind::Rect, "P1-A")],
-        );
-        let page2 = Page::new(
-            2,
-            "p2",
-            vec![Node::leaf(20, NodeKind::Rect, "P2-A")],
-        );
+        let page1 = Page::new(1, "p1", vec![Node::leaf(10, NodeKind::Rect, "P1-A")]);
+        let page2 = Page::new(2, "p2", vec![Node::leaf(20, NodeKind::Rect, "P2-A")]);
         let doc = Document {
             pages: vec![page1, page2],
-            active_page_index: 1, // page 2 active
+            active_page_index: 1,      // page 2 active
             selected: NodeId::new(10), // selection points at page 1's node
+            tool: Tool::Select,
+            viewport: Viewport::IDENTITY,
+            chat: ChatState::default(),
+            ui: UiState::default(),
         };
         // Selection is on a non-active page → returns None.
         assert!(doc.selected_node().is_none());
@@ -658,6 +1158,10 @@ mod tests {
             ],
             active_page_index: 1,
             selected: NodeId::NONE,
+            tool: Tool::Select,
+            viewport: Viewport::IDENTITY,
+            chat: ChatState::default(),
+            ui: UiState::default(),
         };
         assert_eq!(doc.active_page().unwrap().name, "second");
     }
@@ -668,6 +1172,10 @@ mod tests {
             pages: vec![Page::new(1, "only", vec![])],
             active_page_index: 5,
             selected: NodeId::NONE,
+            tool: Tool::Select,
+            viewport: Viewport::IDENTITY,
+            chat: ChatState::default(),
+            ui: UiState::default(),
         };
         assert!(doc.active_page().is_none());
     }

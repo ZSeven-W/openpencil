@@ -53,9 +53,25 @@ fn named_key_mapping_handles_escape() {
 
 #[test]
 fn keyboard_location_maps_left_right_numpad() {
-    let l = map_keyboard_parts("Shift", "ShiftLeft", 1, false, true, Modifiers::empty(), false);
+    let l = map_keyboard_parts(
+        "Shift",
+        "ShiftLeft",
+        1,
+        false,
+        true,
+        Modifiers::empty(),
+        false,
+    );
     assert_eq!(l.location, KeyLocation::Left);
-    let r = map_keyboard_parts("Shift", "ShiftRight", 2, false, true, Modifiers::empty(), false);
+    let r = map_keyboard_parts(
+        "Shift",
+        "ShiftRight",
+        2,
+        false,
+        true,
+        Modifiers::empty(),
+        false,
+    );
     assert_eq!(r.location, KeyLocation::Right);
     let n = map_keyboard_parts("1", "Numpad1", 3, false, true, Modifiers::empty(), false);
     assert_eq!(n.location, KeyLocation::Numpad);

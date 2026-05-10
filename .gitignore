@@ -36,3 +36,5 @@ dist-electron/
 Cargo.lock.merge-conflict
 /crates/*/target
 /vendor/agent/target
+
+tools/__pycache__/
