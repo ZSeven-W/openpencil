@@ -11,9 +11,9 @@ use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::{LayoutBox, LayoutCx, PaintCx, Widget, WidgetId};
 use crate::{Color, Point2D, Rect, TextLayout};
 
-pub const TOP_BAR_HEIGHT: f32 = 48.0;
-const ICON_SIZE: f32 = 18.0;
-const ICON_BUTTON: f32 = 32.0;
+pub const TOP_BAR_HEIGHT: f32 = 40.0;
+const ICON_SIZE: f32 = 16.0;
+const ICON_BUTTON: f32 = 28.0;
 /// Globe locale-picker button — wider than a normal icon button so a
 /// chevron-down sits next to the globe glyph (signals the dropdown).
 const GLOBE_BUTTON_WIDTH: f32 = 44.0;

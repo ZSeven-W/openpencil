@@ -80,13 +80,13 @@ impl WidgetHost {
 
     fn canvas_region(&self, viewport_w: f32, viewport_h: f32) -> (f32, f32, f32, f32) {
         let canvas_left = if self.document.ui.sidebar_open {
-            LAYER_PANEL_WIDTH
+            self.document.ui.layer_panel_width
         } else {
             0.0
         };
         let has_property = self.document.selected_node().is_some();
         let canvas_right = if has_property {
-            viewport_w - PROPERTY_PANEL_WIDTH
+            viewport_w - self.document.ui.property_panel_width
         } else {
             viewport_w
         };
@@ -97,13 +97,13 @@ impl WidgetHost {
 
     fn over_canvas(&self, x: f32, y: f32, viewport_w: f32, viewport_h: f32) -> bool {
         let canvas_left = if self.document.ui.sidebar_open {
-            LAYER_PANEL_WIDTH
+            self.document.ui.layer_panel_width
         } else {
             0.0
         };
         let has_property = self.document.selected_node().is_some();
         let canvas_right = if has_property {
-            viewport_w - PROPERTY_PANEL_WIDTH
+            viewport_w - self.document.ui.property_panel_width
         } else {
             viewport_w
         };
@@ -496,7 +496,10 @@ impl WidgetHost {
     fn layer_panel_rect(&self, viewport_h: f32) -> Rect {
         Rect {
             origin: Point2D::new(0.0, TOP_BAR_HEIGHT),
-            size: Point2D::new(LAYER_PANEL_WIDTH, (viewport_h - TOP_BAR_HEIGHT).max(0.0)),
+            size: Point2D::new(
+                self.document.ui.layer_panel_width,
+                (viewport_h - TOP_BAR_HEIGHT).max(0.0),
+            ),
         }
     }
 
@@ -564,9 +567,12 @@ impl WidgetHost {
         let property_panel = PropertyPanel::for_selection(&self.document);
         let property_rect = if property_panel.is_some() {
             Rect {
-                origin: Point2D::new(viewport_width - PROPERTY_PANEL_WIDTH, TOP_BAR_HEIGHT),
+                origin: Point2D::new(
+                    viewport_width - self.document.ui.property_panel_width,
+                    TOP_BAR_HEIGHT,
+                ),
                 size: Point2D::new(
-                    PROPERTY_PANEL_WIDTH,
+                    self.document.ui.property_panel_width,
                     (viewport_height - TOP_BAR_HEIGHT).max(0.0),
                 ),
             }

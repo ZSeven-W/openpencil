@@ -342,13 +342,27 @@ pub struct Document {
 /// Chrome-level UI state — toggles for collapsible chrome
 /// surfaces. Kept on `Document` so toggling propagates through
 /// the same store as everything else.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct UiState {
     /// Whether the left LayerPanel is shown. Default true.
     pub sidebar_open: bool,
+    /// Resizable LayerPanel width (logical px). Drag the right
+    /// edge of the panel to resize.
+    pub layer_panel_width: f32,
+    /// Resizable PropertyPanel width (logical px). Drag the left
+    /// edge of the panel to resize.
+    pub property_panel_width: f32,
     /// Which property-panel input has keyboard focus. `None` =
     /// no input focused; the panel paints all inputs muted.
     pub property_focus: Option<PropertyFocus>,
+    /// Draft string for the focused property-panel input. Filled
+    /// from the snapshot value when a row is clicked, mutated by
+    /// `apply_text` / `apply_backspace`, parsed + committed on
+    /// Enter, discarded on Escape.
+    pub property_input_draft: String,
+    /// Caret-blink anchor for the focused property-panel input —
+    /// reset on focus + every keystroke (mirrors `chat.caret_anchor_ms`).
+    pub property_caret_anchor_ms: u64,
     /// Active theme — swapped by the TopBar Sun icon. Drives
     /// every widget's `Theme` lookup so the entire chrome flips
     /// together.
@@ -366,7 +380,11 @@ impl Default for UiState {
     fn default() -> Self {
         Self {
             sidebar_open: true,
+            layer_panel_width: 240.0,
+            property_panel_width: 280.0,
             property_focus: None,
+            property_input_draft: String::new(),
+            property_caret_anchor_ms: 0,
             theme_mode: ThemeMode::Dark,
             locale: Locale::ZhCn,
             locale_picker_open: false,
@@ -801,6 +819,34 @@ impl Document {
             .expect("Document::first_page on empty pages — use Document::empty for a default page")
     }
 
+    /// Apply a parsed property edit to the selected node. Mirrors
+    /// the TS `useDocumentStore` mutation handlers — only this
+    /// helper writes back to bounds, so call sites can stay
+    /// declarative ("commit X = 120" rather than "find the node,
+    /// clone bounds, mutate one axis, write back").
+    ///
+    /// Returns `true` if the edit landed on a real node; `false`
+    /// when there's no selection or the active page can't be
+    /// found. Container nodes (Group / unbounded Frame) currently
+    /// no-op — their bounds are derived from children — but the
+    /// API still returns `true` because the host should still
+    /// clear the input draft + focus.
+    pub fn commit_property_edit(&mut self, focus: PropertyFocus, value: f32) -> bool {
+        if !self.selected.is_real() {
+            return false;
+        }
+        let sel = self.selected;
+        let Some(page) = self.pages.get_mut(self.active_page_index) else {
+            return false;
+        };
+        for child in &mut page.children {
+            if commit_property_walk(child, sel, focus, value) {
+                return true;
+            }
+        }
+        false
+    }
+
     /// Walk every node id in every page, returning the first
     /// duplicate id found (or `None` if all ids are unique). Used
     /// by `Document::sample()` debug-asserts and by `validate`.
@@ -855,6 +901,37 @@ impl Document {
         }
         Ok(())
     }
+}
+
+/// Recursive helper for `Document::commit_property_edit`. Returns
+/// `true` once the edit lands on the matching node.
+fn commit_property_walk(node: &mut Node, sel: NodeId, focus: PropertyFocus, value: f32) -> bool {
+    if node.id == sel {
+        match focus {
+            PropertyFocus::PositionX => node.bounds.origin.x = value,
+            PropertyFocus::PositionY => node.bounds.origin.y = value,
+            PropertyFocus::SizeW => node.bounds.size.x = value.max(0.0),
+            PropertyFocus::SizeH => node.bounds.size.y = value.max(0.0),
+            // Rotation / Opacity / hex inputs are owned by the
+            // selection's metadata and not yet wired to the node
+            // model. The caller still treats this as a successful
+            // edit (clears focus); the value just doesn't persist
+            // until those fields reach the node schema.
+            PropertyFocus::Rotation
+            | PropertyFocus::PositionR
+            | PropertyFocus::Opacity
+            | PropertyFocus::FillHex
+            | PropertyFocus::StrokeHex
+            | PropertyFocus::StrokeWidth => {}
+        }
+        return true;
+    }
+    for child in &mut node.children {
+        if commit_property_walk(child, sel, focus, value) {
+            return true;
+        }
+    }
+    false
 }
 
 fn find_duplicate_walk(

@@ -270,6 +270,20 @@ impl ApplicationHandler for InspectorApp {
                 // coordinate space widgets paint in.
                 self.cursor_x = position.x as f32 / self.dpi;
                 self.cursor_y = position.y as f32 / self.dpi;
+                if let Some(window) = self.window.as_ref() {
+                    let viewport_w = window.inner_size().width as f32 / self.dpi;
+                    let over_gutter = self
+                        .host
+                        .panel_resize_hover(self.cursor_x, self.cursor_y, viewport_w)
+                        .is_some();
+                    let resizing = self.host.is_resizing_panel();
+                    let icon = if over_gutter || resizing {
+                        winit::window::CursorIcon::EwResize
+                    } else {
+                        winit::window::CursorIcon::Default
+                    };
+                    window.set_cursor(icon);
+                }
                 if self.host.apply_cursor_move(self.cursor_x, self.cursor_y) {
                     if let Some(window) = self.window.as_ref() {
                         window.request_redraw();

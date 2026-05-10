@@ -23,8 +23,8 @@ use openpencil_shell_core::document::{ChatAnchor, Document};
 use openpencil_shell_core::widgets::{
     AIChatHit, AIChatPlaceholder, CanvasViewport, LayerPanel, LayoutCx, LocalePicker, PaintCx,
     PropertyPanel, StatusBar, Toolbar, TopBar, TopBarHit, Widget, AI_CHAT_COLLAPSED_HEIGHT,
-    AI_CHAT_COLLAPSED_WIDTH, AI_CHAT_HEIGHT, AI_CHAT_WIDTH, LAYER_PANEL_WIDTH, LOCALE_PICKER_WIDTH,
-    PROPERTY_PANEL_WIDTH, STATUS_BAR_HEIGHT, STATUS_BAR_WIDTH, TOOLBAR_WIDTH, TOP_BAR_HEIGHT,
+    AI_CHAT_COLLAPSED_WIDTH, AI_CHAT_HEIGHT, AI_CHAT_WIDTH, LOCALE_PICKER_WIDTH, STATUS_BAR_HEIGHT,
+    STATUS_BAR_WIDTH, TOOLBAR_WIDTH, TOP_BAR_HEIGHT,
 };
 use openpencil_shell_core::{Color, Point2D, Rect, RenderBackend, TextLayout, Theme};
 
@@ -135,6 +135,10 @@ pub struct WidgetHostNative {
     /// host computes the nearest corner via `ChatAnchor::nearest`
     /// and snaps.
     chat_drag: Option<ChatDragState>,
+    /// Active panel-resize drag — set when the cursor is pressed
+    /// within the resize gutter of LayerPanel's right edge or
+    /// PropertyPanel's left edge.
+    panel_resize: Option<PanelResize>,
     /// Host-supplied frame timestamp in milliseconds. Drives the
     /// caret blink via `jian_core::anim::blink_visible`. The
     /// inspector_window runner refreshes this once per
@@ -148,6 +152,31 @@ struct DragState {
     last_x: f32,
     last_y: f32,
 }
+
+/// Which panel edge is being dragged, plus the press anchor +
+/// the panel width at press time. Live width is computed as
+/// `start_width + (live_x - start_x) * sign`.
+#[derive(Debug, Clone, Copy)]
+struct PanelResize {
+    kind: PanelResizeKind,
+    start_x: f32,
+    start_width: f32,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PanelResizeKind {
+    LayerRight,
+    PropertyLeft,
+}
+
+/// Pixel half-thickness of the resize gutter on each panel edge —
+/// click within this distance of the edge to begin a resize drag.
+const PANEL_RESIZE_GUTTER: f32 = 4.0;
+/// Hard floor / ceiling for resizable panels (TS app uses similar
+/// limits — left/right rails can't shrink below ~180 or grow past
+/// half the viewport).
+const PANEL_MIN_WIDTH: f32 = 180.0;
+const PANEL_MAX_WIDTH: f32 = 480.0;
 
 #[derive(Debug, Clone, Copy)]
 struct ChatDragState {
@@ -168,6 +197,7 @@ impl WidgetHostNative {
             theme: Theme::dark(),
             drag: None,
             chat_drag: None,
+            panel_resize: None,
             now_ms: 0,
         }
     }
@@ -274,6 +304,25 @@ impl WidgetHostNative {
         viewport_width: f32,
         viewport_height: f32,
     ) -> bool {
+        // 0z. Panel-resize gutter — clicks within ±4 px of the
+        //     LayerPanel right edge or PropertyPanel left edge
+        //     start a resize drag. Below TopBar so the gutter
+        //     doesn't eat title-bar clicks.
+        if y >= TOP_BAR_HEIGHT {
+            if let Some(kind) = self.panel_resize_hover(x, y, viewport_width) {
+                let start_width = match kind {
+                    PanelResizeKind::LayerRight => self.document.ui.layer_panel_width,
+                    PanelResizeKind::PropertyLeft => self.document.ui.property_panel_width,
+                };
+                self.panel_resize = Some(PanelResize {
+                    kind,
+                    start_x: x,
+                    start_width,
+                });
+                return true;
+            }
+        }
+
         // 0a. Locale picker overlay — when open, it sits on top of
         //     everything. Row click sets locale + closes; ANY
         //     other click (including the Globe button itself, the
@@ -408,6 +457,20 @@ impl WidgetHostNative {
     /// Cursor-move handler. Drives canvas pan-drag, chat-panel
     /// drag, or no-op. Returns whether the host should repaint.
     pub fn apply_cursor_move(&mut self, x: f32, y: f32) -> bool {
+        if let Some(resize) = self.panel_resize {
+            let dx = x - resize.start_x;
+            match resize.kind {
+                PanelResizeKind::LayerRight => {
+                    let new_w = (resize.start_width + dx).clamp(PANEL_MIN_WIDTH, PANEL_MAX_WIDTH);
+                    self.document.ui.layer_panel_width = new_w;
+                }
+                PanelResizeKind::PropertyLeft => {
+                    let new_w = (resize.start_width - dx).clamp(PANEL_MIN_WIDTH, PANEL_MAX_WIDTH);
+                    self.document.ui.property_panel_width = new_w;
+                }
+            }
+            return true;
+        }
         if let Some(d) = self.chat_drag.as_mut() {
             d.pos_x = x - d.grab_dx;
             d.pos_y = y - d.grab_dy;
@@ -430,6 +493,9 @@ impl WidgetHostNative {
     /// corner via `ChatAnchor::nearest`. Returns true if anything
     /// visible changed.
     pub fn apply_release_with_viewport(&mut self, viewport_w: f32, viewport_h: f32) -> bool {
+        if self.panel_resize.take().is_some() {
+            return true;
+        }
         if let Some(d) = self.chat_drag.take() {
             let center = Point2D::new(
                 d.pos_x + AI_CHAT_WIDTH / 2.0,
@@ -447,6 +513,9 @@ impl WidgetHostNative {
     /// Mouse-release handler — viewport-less variant kept for
     /// backwards compatibility with existing call sites.
     pub fn apply_release(&mut self) -> bool {
+        if self.panel_resize.take().is_some() {
+            return true;
+        }
         // If a chat drag was in flight without a known viewport,
         // we can't snap; just drop it (best effort).
         if self.chat_drag.take().is_some() {
@@ -494,15 +563,43 @@ impl WidgetHostNative {
     /// Canvas region (logical px, viewport-relative). Reflects
     /// the LayerPanel sidebar collapse state — when sidebar is
     /// hidden the canvas stretches to the left edge.
+    /// True when the cursor is over either resize gutter — used by
+    /// the runner to set `CursorIcon::EwResize`. None = no gutter.
+    pub fn panel_resize_hover(&self, x: f32, y: f32, viewport_w: f32) -> Option<PanelResizeKind> {
+        if y < TOP_BAR_HEIGHT {
+            return None;
+        }
+        if self.document.ui.sidebar_open {
+            let edge = self.document.ui.layer_panel_width;
+            if (x - edge).abs() <= PANEL_RESIZE_GUTTER {
+                return Some(PanelResizeKind::LayerRight);
+            }
+        }
+        if self.document.selected_node().is_some() {
+            let edge = viewport_w - self.document.ui.property_panel_width;
+            if (x - edge).abs() <= PANEL_RESIZE_GUTTER {
+                return Some(PanelResizeKind::PropertyLeft);
+            }
+        }
+        None
+    }
+
+    /// Whether a panel resize is in progress. Runner uses this to
+    /// keep the resize cursor active even when the cursor briefly
+    /// leaves the gutter mid-drag.
+    pub fn is_resizing_panel(&self) -> bool {
+        self.panel_resize.is_some()
+    }
+
     fn canvas_region(&self, viewport_w: f32, viewport_h: f32) -> (f32, f32, f32, f32) {
         let canvas_left = if self.document.ui.sidebar_open {
-            LAYER_PANEL_WIDTH
+            self.document.ui.layer_panel_width
         } else {
             0.0
         };
         let has_property = self.document.selected_node().is_some();
         let canvas_right = if has_property {
-            viewport_w - PROPERTY_PANEL_WIDTH
+            viewport_w - self.document.ui.property_panel_width
         } else {
             viewport_w
         };
@@ -652,7 +749,7 @@ impl WidgetHostNative {
         let layer_rect = Rect {
             origin: Point2D::new(0.0, TOP_BAR_HEIGHT),
             size: Point2D::new(
-                LAYER_PANEL_WIDTH,
+                self.document.ui.layer_panel_width,
                 (viewport_height - TOP_BAR_HEIGHT).max(0.0),
             ),
         };
@@ -713,7 +810,7 @@ impl WidgetHostNative {
             let layer_panel_rect = Rect {
                 origin: Point2D::new(0.0, TOP_BAR_HEIGHT),
                 size: Point2D::new(
-                    LAYER_PANEL_WIDTH,
+                    self.document.ui.layer_panel_width,
                     (viewport_height - TOP_BAR_HEIGHT).max(0.0),
                 ),
             };
@@ -728,9 +825,12 @@ impl WidgetHostNative {
         let has_property = property_panel.is_some();
         if let Some(panel) = property_panel.as_ref() {
             let property_rect = Rect {
-                origin: Point2D::new(viewport_width - PROPERTY_PANEL_WIDTH, TOP_BAR_HEIGHT),
+                origin: Point2D::new(
+                    viewport_width - self.document.ui.property_panel_width,
+                    TOP_BAR_HEIGHT,
+                ),
                 size: Point2D::new(
-                    PROPERTY_PANEL_WIDTH,
+                    self.document.ui.property_panel_width,
                     (viewport_height - TOP_BAR_HEIGHT).max(0.0),
                 ),
             };

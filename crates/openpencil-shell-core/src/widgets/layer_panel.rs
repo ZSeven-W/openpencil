@@ -189,6 +189,16 @@ impl Widget for LayerPanel {
         // Card background.
         cx.backend.fill_rect(rect, self.theme.card);
 
+        // Right-edge hairline so the LayerPanel reads as a
+        // distinct surface from the canvas next to it.
+        cx.backend.fill_rect(
+            Rect {
+                origin: Point2D::new(rect.origin.x + rect.size.x - 1.0, rect.origin.y),
+                size: Point2D::new(1.0, rect.size.y),
+            },
+            self.theme.border,
+        );
+
         let mut y = rect.origin.y + 8.0;
 
         // Pages section header.
@@ -242,6 +252,16 @@ impl Widget for LayerPanel {
         }
 
         y += SECTION_GAP;
+
+        // Hairline between Pages and Layers sections — mirrors
+        // the TS LayerPanel's `border-t border-border`.
+        cx.backend.fill_rect(
+            Rect {
+                origin: Point2D::new(rect.origin.x + ROW_PAD_X, y - SECTION_GAP / 2.0),
+                size: Point2D::new(rect.size.x - ROW_PAD_X * 2.0, 1.0),
+            },
+            self.theme.border,
+        );
 
         // Layers section header.
         paint_section_header(
