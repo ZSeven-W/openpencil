@@ -32,6 +32,13 @@ pub struct TopBar {
     pub file_name: String,
     pub agent_count: u32,
     pub theme: Theme,
+    /// Localised "Agents 与 MCP" label — rendered when
+    /// `agent_count == 0` (empty state).
+    pub label_agents_and_mcp: String,
+    /// Localised "agent" / "agents" label — appended to the
+    /// count when `agent_count > 0`. Falls back to "agent"
+    /// when the locale doesn't ship the key.
+    pub label_agent_singular: String,
 }
 
 impl TopBar {
@@ -41,6 +48,8 @@ impl TopBar {
             file_name: file_name.into(),
             agent_count: 1,
             theme: Theme::dark(),
+            label_agents_and_mcp: "Agents & MCP".to_string(),
+            label_agent_singular: "agent".to_string(),
         }
     }
 
@@ -50,13 +59,17 @@ impl TopBar {
 
     /// Document-aware constructor — reads the active theme + the
     /// localised "untitled" label so the bar flips with theme +
-    /// locale toggles.
+    /// locale toggles. Default `agent_count = 0` matches the TS
+    /// app's empty state ("Agents 与 MCP" affordance instead of
+    /// the green-dot "1 agent" chip).
     pub fn for_document(doc: &Document) -> Self {
         Self {
             id: WidgetId::new(5000),
             file_name: doc.t("common.untitled").to_string(),
-            agent_count: 1,
+            agent_count: 0,
             theme: doc.theme(),
+            label_agents_and_mcp: doc.t("topbar.agentsAndMcp").to_string(),
+            label_agent_singular: doc.t("topbar.agentSingular").to_string(),
         }
     }
 
@@ -178,45 +191,55 @@ impl Widget for TopBar {
         // i18n globe.
         paint_icon_button(cx, &self.theme, rx, center_y, Icon::Globe);
 
-        // Agent indicator chip (sparkles + green dot + "N agent").
+        // Agent chip — two states:
+        //   - empty (agent_count == 0): LayoutGrid icon + "Agents
+        //     与 MCP" label. Affordance for "set up agents/MCP".
+        //   - active (≥ 1): Sparkles + green dot + "N agent" text.
         // Anchored just left of the globe icon button (+small gap).
-        let chip_text = format!("{} agent", self.agent_count);
-        let chip_w =
-            8.0 + ICON_SIZE + 6.0 + 8.0 + 6.0 + chip_text.chars().count() as f32 * 7.0 + 8.0;
+        let (chip_text, leading_icon, show_dot) = if self.agent_count == 0 {
+            (self.label_agents_and_mcp.clone(), Icon::LayoutGrid, false)
+        } else {
+            (
+                format!("{} {}", self.agent_count, self.label_agent_singular),
+                Icon::Sparkles,
+                true,
+            )
+        };
+        let dot_w = if show_dot { 8.0 + 6.0 } else { 0.0 };
+        let text_w = cx.backend.measure_text(&chip_text, 12.0);
+        let chip_w = 8.0 + ICON_SIZE + 6.0 + dot_w + text_w + 12.0;
         let chip_rect = Rect {
             origin: Point2D::new(rx - chip_w - 6.0, center_y - 13.0),
             size: Point2D::new(chip_w, 26.0),
         };
         cx.backend
             .stroke_round_rect(chip_rect, 13.0, self.theme.border, 1.0);
-        // Sparkles icon at the chip's left.
         draw_icon(
             cx.backend,
-            Icon::Sparkles,
+            leading_icon,
             Point2D::new(chip_rect.origin.x + 8.0, chip_rect.origin.y + 4.0),
             ICON_SIZE,
             self.theme.foreground,
             1.4,
         );
-        // Green dot.
-        let dot_color = Color {
-            r: 0.0,
-            g: 0.85,
-            b: 0.4,
-            a: 1.0,
-        };
-        cx.backend.fill_round_rect(
-            Rect {
-                origin: Point2D::new(
-                    chip_rect.origin.x + 8.0 + ICON_SIZE + 6.0,
-                    chip_rect.origin.y + chip_rect.size.y / 2.0 - 4.0,
-                ),
-                size: Point2D::new(8.0, 8.0),
-            },
-            4.0,
-            dot_color,
-        );
-        // "N agent" text.
+        let mut text_x = chip_rect.origin.x + 8.0 + ICON_SIZE + 6.0;
+        if show_dot {
+            let dot_color = Color {
+                r: 0.0,
+                g: 0.85,
+                b: 0.4,
+                a: 1.0,
+            };
+            cx.backend.fill_round_rect(
+                Rect {
+                    origin: Point2D::new(text_x, chip_rect.origin.y + chip_rect.size.y / 2.0 - 4.0),
+                    size: Point2D::new(8.0, 8.0),
+                },
+                4.0,
+                dot_color,
+            );
+            text_x += 8.0 + 6.0;
+        }
         let chip_label = TextLayout::single_run(
             &chip_text,
             "system-ui",
@@ -224,13 +247,8 @@ impl Widget for TopBar {
             to_jian_color(self.theme.foreground),
             Point2D::new(0.0, 0.0),
         );
-        cx.backend.draw_text(
-            &chip_label,
-            Point2D::new(
-                chip_rect.origin.x + 8.0 + ICON_SIZE + 6.0 + 14.0,
-                chip_rect.origin.y + 18.0,
-            ),
-        );
+        cx.backend
+            .draw_text(&chip_label, Point2D::new(text_x, chip_rect.origin.y + 18.0));
     }
 
     fn access_node(&self) -> accesskit::Node {
