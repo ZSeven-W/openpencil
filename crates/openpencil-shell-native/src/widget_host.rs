@@ -1,0 +1,198 @@
+//! Step 1b §1.4 native widget glue — the only file in shell-native
+//! allowed to call into `openpencil_shell_core::widgets`. Mirrors the
+//! shell-web `widget_host.rs` pattern so the four inspector widgets
+//! (Tree / PropertyRow / Dropdown / TextInput) defined in shell-core
+//! are truly cross-platform: shell-web reuses them via `WebBackend`,
+//! shell-native via `NativeBackend` + this glue.
+//!
+//! Two pieces:
+//!
+//! 1. [`NativeFrameBackend`] — a frame-scoped wrapper that holds a
+//!    `(&mut NativeBackend, &skia_safe::Canvas)` pair and `impl
+//!    RenderBackend` for it. Spec §5.2.1 explicitly defers the
+//!    `RenderBackend` impl on the canvas-borrow-bearing `NativeBackend`
+//!    to Step 1c+ widget tree work; this is that landing site.
+//!
+//! 2. [`WidgetHostNative`] — owns one of each of the Step 1b widgets +
+//!    a `paint(&self, &mut NativeFrameBackend, available_width)`
+//!    method that dispatches like shell-web's WidgetHost. Phase D will
+//!    add `apply_*` event handlers (winit input → shell-core
+//!    `apply_ime` / `apply_key`) once the desktop event pipeline
+//!    needs them.
+//!
+//! ### Mobile (iOS / Android) — Step 1f path
+//!
+//! Per spec §11 invariants: shell-native is gated to desktop OS
+//! today (`backend` / `canvas_view_stub` / `widget_host` modules
+//! cfg-gated to `macos | linux | windows`). Mobile widget rendering
+//! lands in Step 1f via `context::EaglProvider` (iOS) /
+//! `context::AndroidEglProvider` (Android) — both are zero-sized
+//! placeholder structs in lib.rs today whose `GlContextProvider`
+//! impls `unimplemented!()`. Per the 2026-05-10 user directive
+//! ("安卓和ios 不需要 ipc / 本地 cli — 只需要 custom provider"):
+//! mobile rendering is purely a custom-provider plugin point on the
+//! existing `GlContextProvider` trait, NOT a separate IPC / CLI
+//! pipeline.
+//!
+//! Crucially the widget glue here is platform-agnostic in shape:
+//! - `NativeFrameBackend` only holds `&mut NativeBackend` +
+//!   `&skia_safe::Canvas`; both compile on any target where
+//!   skia-safe + jian-skia + the GL provider compile. No
+//!   desktop-specific type names or APIs leak in.
+//! - `WidgetHostNative` only consumes shell-core widgets + the
+//!   `RenderBackend` trait; no winit / glutin / EGL types appear.
+//! - When Step 1f promotes `NativeBackend` to compile on
+//!   mobile (drop the desktop-only cfg in lib.rs once
+//!   `EaglProvider` / `AndroidEglProvider` ship real impls),
+//!   `WidgetHostNative` follows automatically — no rewrite, no
+//!   additional glue. The mobile shell just constructs a different
+//!   `SharedSkiaContext` (or the mobile equivalent) backed by its
+//!   provider, then runs the same `host.paint(&mut frame, width)`.
+
+use crate::backend::NativeBackend;
+use openpencil_shell_core::widgets::{
+    Dropdown, LayoutCx, PaintCx, PropertyRow, TextInput, TreeWidget, Widget,
+};
+use openpencil_shell_core::{Color, Point2D, Rect, RenderBackend, TextLayout};
+
+/// Frame-scoped `RenderBackend` adapter over `NativeBackend` +
+/// `&Canvas`. Lifetime-bound to the `SharedSkiaContext::with_frame`
+/// closure body so widget code never sees the canvas borrow directly.
+///
+/// Why this exists rather than `impl RenderBackend for NativeBackend`:
+/// `NativeBackend` deliberately does NOT carry a canvas borrow (spec
+/// §5.2.1 — the canvas reference is short-lived inside `with_frame`,
+/// while `NativeBackend` lives across frames so its `jian_skia::
+/// SkiaBackend` image cache survives). The wrapper gets the trait
+/// shape without entangling the lifetime onto the long-lived backend
+/// type.
+pub struct NativeFrameBackend<'a> {
+    inner: &'a mut NativeBackend,
+    canvas: &'a skia_safe::Canvas,
+}
+
+impl<'a> NativeFrameBackend<'a> {
+    pub fn new(inner: &'a mut NativeBackend, canvas: &'a skia_safe::Canvas) -> Self {
+        Self { inner, canvas }
+    }
+}
+
+impl<'a> RenderBackend for NativeFrameBackend<'a> {
+    fn begin_frame(&mut self) {
+        // No-op on native: `SharedSkiaContext::begin_frame` already
+        // ran when the caller entered `with_frame`.
+    }
+
+    fn end_frame(&mut self) {
+        // No-op on native: `SharedSkiaContext::present` runs after
+        // `with_frame` returns, outside the wrapper's lifetime.
+    }
+
+    fn fill_rect(&mut self, rect: Rect, color: Color) {
+        self.inner.fill_rect(self.canvas, rect, color);
+    }
+
+    fn stroke_rect(&mut self, rect: Rect, color: Color, width: f32) {
+        self.inner.stroke_rect(self.canvas, rect, color, width);
+    }
+
+    fn draw_text(&mut self, layout: &TextLayout, origin: Point2D) {
+        self.inner.draw_text(self.canvas, layout, origin);
+    }
+
+    fn clip_rect(&mut self, rect: Rect) {
+        self.inner.clip_rect(self.canvas, rect);
+    }
+
+    fn save(&mut self) {
+        // `NativeBackend::save` returns the pre-save count, used by
+        // `restore_to`. The trait-level `save` is fire-and-forget; we
+        // discard the count and rely on the caller pairing each
+        // `save` with one `restore`.
+        let _count = self.inner.save(self.canvas);
+    }
+
+    fn restore(&mut self) {
+        self.inner.restore(self.canvas);
+    }
+
+    fn translate(&mut self, offset: Point2D) {
+        self.inner.translate(self.canvas, offset);
+    }
+
+    fn resize(&mut self, _width: u32, _height: u32) {
+        // No-op via the trait: surface resize is owned by
+        // `SharedSkiaContext::resize` and reaches `NativeBackend`
+        // separately. Mirrors `NativeBackend::resize`'s no-op.
+    }
+
+    fn dpi_scale(&self) -> f32 {
+        self.inner.dpi_scale()
+    }
+}
+
+/// Native counterpart of shell-web's `widget_host::WidgetHost`. Owns
+/// one of each Step 1b inspector widget so the desktop demo paints
+/// the same composition shell-web does. Phase D will add `apply_*`
+/// event-routing methods alongside the desktop input pipeline.
+pub struct WidgetHostNative {
+    tree: TreeWidget,
+    width: PropertyRow,
+    dropdown: Dropdown,
+    text_input: TextInput,
+}
+
+impl WidgetHostNative {
+    pub fn new() -> Self {
+        Self {
+            tree: TreeWidget::sample(),
+            width: PropertyRow::new(200, "Width", "960"),
+            dropdown: Dropdown::sample(),
+            text_input: TextInput::sample(),
+        }
+    }
+
+    /// Paint the inspector slice at `(16, y)` stacking with 12 px
+    /// gaps, in a 280 px column. Mirrors shell-web's
+    /// `WidgetHost::paint` so the visual layout is identical between
+    /// platforms (Phase E manual-smoke acceptance criterion).
+    ///
+    /// `// glue:` marker on the signature line keeps the future
+    /// `tools/check-widget-boundary.sh` happy if the boundary script
+    /// is extended to gate shell-native too (it currently scans only
+    /// shell-web; Phase D may parameterize).
+    pub fn paint(&self, frame: &mut NativeFrameBackend<'_>, available_width: f32) { // glue:
+        let layout = LayoutCx {
+            available_width,
+            dpi: frame.dpi_scale(),
+        };
+        let mut y = 16.0;
+        let widgets: [&dyn Widget; 4] = [
+            &self.tree,
+            &self.width,
+            &self.dropdown,
+            &self.text_input,
+        ];
+        for widget in widgets {
+            let box_ = widget.layout(&layout);
+            let rect = Rect {
+                origin: Point2D::new(16.0, y),
+                size: Point2D::new(available_width, box_.rect.size.y),
+            };
+            // PaintCx borrows the frame backend mutably; reborrow per
+            // iteration with `&mut *frame` so subsequent iterations
+            // don't fail the borrow check on the moved reference.
+            let mut cx = PaintCx {
+                backend: &mut *frame,
+            };
+            widget.paint(&mut cx, rect);
+            y += rect.size.y + 12.0;
+        }
+    }
+}
+
+impl Default for WidgetHostNative {
+    fn default() -> Self {
+        Self::new()
+    }
+}

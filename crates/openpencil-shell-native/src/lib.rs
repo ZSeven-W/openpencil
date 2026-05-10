@@ -42,9 +42,13 @@ pub mod context;
 pub mod backend;
 #[cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]
 pub mod canvas_view_stub;
+#[cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]
+pub mod widget_host;
 
 #[cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]
 pub use backend::{to_jian_color, to_jian_rect, NativeBackend};
+#[cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]
+pub use widget_host::{NativeFrameBackend, WidgetHostNative};
 #[cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]
 pub use canvas_view_stub::CanvasViewportStub;
 
