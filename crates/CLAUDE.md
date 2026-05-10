@@ -98,8 +98,12 @@ Hit-test runs in REVERSE paint order so the topmost overlay always wins:
 1. TopBar (sidebar toggle button) — also eats other top-bar gaps
 2. AI chat panel (DragHandle starts drag; FocusInput / Send / Example / ToggleCollapse defer to apply_click)
 3. Toolbar (button hits dispatch tools; gaps inside the bounding rect eat clicks)
-4. apply_click → LayerPanel rows / Page rows + chat-defocus
+4. apply_click → LayerPanel rows / Page rows + chat-defocus (skipped when sidebar collapsed)
 5. Empty canvas press → clear `selected` (collapses RightPanel) + start pan-drag
+
+### Coordinate invariant
+
+Every input path that reasons about the canvas region MUST derive its rects from `canvas_region(viewport_w, viewport_h)`. Never reuse `LAYER_PANEL_WIDTH` for hit-test — paint follows `canvas_region`, which collapses to `canvas_left = 0` when `Document.ui.sidebar_open == false`. Sites that proved this rule by violating it: `over_canvas`, `apply_wheel` cursor offset, toolbar hit rect in `apply_press` / `apply_click`. Web `apply_wheel` zoom anchor + `toolbar_rect()` helper follow the same rule.
 
 ## Performance gotchas
 
