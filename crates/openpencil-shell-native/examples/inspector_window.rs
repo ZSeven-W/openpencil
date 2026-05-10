@@ -204,6 +204,14 @@ impl ApplicationHandler for InspectorApp {
         _window_id: WindowId,
         event: WindowEvent,
     ) {
+        // Refresh the host's monotonic clock at the top of every
+        // WindowEvent so `apply_press` / `apply_text` /
+        // `apply_backspace` etc. stamp `caret_anchor_ms` with the
+        // CURRENT timestamp, not the one captured at the previous
+        // RedrawRequested (codex Step 6 stop-hook fix: "caret
+        // reset can use a stale clock").
+        let now_ms = self.clock_start.elapsed().as_millis() as u64;
+        self.host.set_now_ms(now_ms);
         match event {
             WindowEvent::CloseRequested => {
                 event_loop.exit();
@@ -231,10 +239,9 @@ impl ApplicationHandler for InspectorApp {
                 }
             }
             WindowEvent::RedrawRequested => {
-                // Refresh the host's frame clock — `jian_core::anim`
-                // reads this for the caret blink phase.
-                let now_ms = self.clock_start.elapsed().as_millis() as u64;
-                self.host.set_now_ms(now_ms);
+                // now_ms was already pushed into the host at the
+                // top of `window_event` — paint reads the same
+                // value via `host.now_ms`.
                 if let (Some(ctx), Some(backend)) = (self.ctx.as_mut(), self.backend.as_mut()) {
                     paint_inspector(
                         ctx,
