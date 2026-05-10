@@ -14,6 +14,10 @@ use crate::{Color, Point2D, Rect, TextLayout};
 pub const TOP_BAR_HEIGHT: f32 = 48.0;
 const ICON_SIZE: f32 = 18.0;
 const ICON_BUTTON: f32 = 32.0;
+/// Globe locale-picker button — wider than a normal icon button so a
+/// chevron-down sits next to the globe glyph (signals the dropdown).
+const GLOBE_BUTTON_WIDTH: f32 = 44.0;
+const CHEVRON_SIZE: f32 = 12.0;
 const PAD: f32 = 12.0;
 
 /// What a click in the top bar resolved to.
@@ -73,14 +77,20 @@ impl TopBar {
         }
     }
 
-    /// Returns the on-screen rect of the Globe icon button. Used
-    /// by the host to anchor the LocalePicker dropdown directly
-    /// underneath when `Document.ui.locale_picker_open == true`.
+    /// Returns the on-screen rect of the Globe-plus-chevron locale
+    /// button. Used by the host to anchor the LocalePicker dropdown
+    /// directly underneath when `Document.ui.locale_picker_open ==
+    /// true`. The button itself is wider than a normal icon button
+    /// so the chevron-down has room to render.
     pub fn globe_rect(top_bar_rect: Rect) -> Rect {
         let right = top_bar_rect.origin.x + top_bar_rect.size.x;
+        // Right-cluster layout (right → left): Maximize | Sun | Globe.
+        // Maximize + Sun are normal ICON_BUTTON wide; Globe is the
+        // wider GLOBE_BUTTON_WIDTH so the chevron fits inside it.
+        let globe_x = right - PAD - ICON_BUTTON * 2.0 - GLOBE_BUTTON_WIDTH;
         Rect {
-            origin: Point2D::new(right - PAD - ICON_BUTTON * 3.0, top_bar_rect.origin.y + 8.0),
-            size: Point2D::new(ICON_BUTTON, ICON_BUTTON),
+            origin: Point2D::new(globe_x, top_bar_rect.origin.y + 8.0),
+            size: Point2D::new(GLOBE_BUTTON_WIDTH, ICON_BUTTON),
         }
     }
 
@@ -99,14 +109,11 @@ impl TopBar {
         if rect_contains(panel_left_rect, point) {
             return Some(TopBarHit::ToggleSidebar);
         }
-        // Right cluster: Maximize / Sun / Globe (right→left).
-        // Each ICON_BUTTON wide, no extra gap. Mirror of paint:
-        //   rx = right - PAD - ICON_BUTTON  →  Maximize
-        //   rx -= ICON_BUTTON              →  Sun
-        //   rx -= ICON_BUTTON              →  Globe
+        // Right cluster: Maximize / Sun / Globe-with-chevron (right→left).
+        // Maximize + Sun are normal ICON_BUTTON wide; Globe is
+        // GLOBE_BUTTON_WIDTH wide because it carries a chevron.
         let right = rect.origin.x + rect.size.x;
         let sun_x = right - PAD - ICON_BUTTON * 2.0;
-        let globe_x = right - PAD - ICON_BUTTON * 3.0;
         let icon_y = rect.origin.y + 8.0;
         let sun_rect = Rect {
             origin: Point2D::new(sun_x, icon_y),
@@ -115,11 +122,7 @@ impl TopBar {
         if rect_contains(sun_rect, point) {
             return Some(TopBarHit::ToggleTheme);
         }
-        let globe_rect = Rect {
-            origin: Point2D::new(globe_x, icon_y),
-            size: Point2D::new(ICON_BUTTON, ICON_BUTTON),
-        };
-        if rect_contains(globe_rect, point) {
+        if rect_contains(Self::globe_rect(rect), point) {
             return Some(TopBarHit::ToggleLocale);
         }
         None
@@ -186,9 +189,8 @@ impl Widget for TopBar {
         );
 
         // ── Right cluster ──────────────────────────────────────
-        // Tight spacing: icons sit close together (4 px) and the
-        // agent chip sits flush against them (just 4 px gap, not
-        // the previous 8 + ICON_BUTTON).
+        // Right → left: Maximize | Sun | Globe+Chevron. Globe is a
+        // wider compound button (signals the dropdown affordance).
         let mut rx = rect.origin.x + rect.size.x - PAD - ICON_BUTTON;
 
         // Fullscreen.
@@ -197,10 +199,36 @@ impl Widget for TopBar {
 
         // Theme toggle.
         paint_icon_button(cx, &self.theme, rx, center_y, Icon::Sun);
-        rx -= ICON_BUTTON;
+        rx -= GLOBE_BUTTON_WIDTH;
 
-        // i18n globe.
-        paint_icon_button(cx, &self.theme, rx, center_y, Icon::Globe);
+        // i18n globe + chevron-down (single hit-target).
+        let globe_button = Rect {
+            origin: Point2D::new(rx, center_y - ICON_BUTTON / 2.0),
+            size: Point2D::new(GLOBE_BUTTON_WIDTH, ICON_BUTTON),
+        };
+        // Globe glyph at the left half.
+        draw_icon(
+            cx.backend,
+            Icon::Globe,
+            Point2D::new(globe_button.origin.x + 4.0, center_y - ICON_SIZE / 2.0),
+            ICON_SIZE,
+            self.theme.muted_foreground,
+            1.4,
+        );
+        // Chevron-down at the right side, smaller.
+        draw_icon(
+            cx.backend,
+            Icon::ChevronDown,
+            Point2D::new(
+                globe_button.origin.x + 4.0 + ICON_SIZE + 4.0,
+                center_y - CHEVRON_SIZE / 2.0,
+            ),
+            CHEVRON_SIZE,
+            self.theme.muted_foreground,
+            1.4,
+        );
+        // `rx` now points at the LEFT edge of the globe button —
+        // the chip anchors immediately to its left (small gap).
 
         // Agent chip — two states:
         //   - empty (agent_count == 0): LayoutGrid icon + "Agents

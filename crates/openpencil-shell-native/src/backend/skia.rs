@@ -81,6 +81,13 @@ pub struct NativeBackend {
     typeface_tried: bool,
     cjk_typeface: Option<skia_safe::Typeface>,
     cjk_typeface_tried: bool,
+    /// Per-codepoint typeface cache. Populated on first sight of a
+    /// non-ASCII character so multi-script chrome (Korean 한국어,
+    /// Devanagari हिन्दी, Thai ไทย, Vietnamese precomposed
+    /// `Tiếng Việt` …) renders against the right system font
+    /// instead of falling through to the single `cjk_typeface`
+    /// (which only covers Han / Hiragana / Katakana on most OSes).
+    char_typeface_cache: std::collections::HashMap<i32, Option<skia_safe::Typeface>>,
 }
 
 const ROBOTO_TTF: &[u8] = include_bytes!("../../../openpencil-shell-web/assets/Roboto-Regular.ttf");
@@ -99,7 +106,51 @@ impl NativeBackend {
             typeface_tried: false,
             cjk_typeface: None,
             cjk_typeface_tried: false,
+            char_typeface_cache: std::collections::HashMap::new(),
         }
+    }
+
+    /// Resolve a typeface that covers `c`. Cached per codepoint —
+    /// `FontMgr::match_family_style_character` is fast on first call
+    /// but we still avoid the look-up on every chrome paint.
+    /// Falls back to the cached CJK typeface, then the cached
+    /// Roboto, so a worst-case missing-font system still renders
+    /// something rather than dropping the glyph.
+    fn typeface_for_char(&mut self, c: char) -> Option<skia_safe::Typeface> {
+        if c.is_ascii() {
+            return self.ensure_typeface().cloned();
+        }
+        let cp = c as i32;
+        if let Some(cached) = self.char_typeface_cache.get(&cp) {
+            return cached.clone();
+        }
+        let mgr = skia_safe::FontMgr::new();
+        let tf = mgr.match_family_style_character("", skia_safe::FontStyle::default(), &[], cp);
+        let resolved = tf.or_else(|| self.ensure_cjk_typeface().cloned());
+        self.char_typeface_cache.insert(cp, resolved.clone());
+        resolved
+    }
+
+    /// Split `text` into contiguous segments that share a typeface,
+    /// preserving char order. Glyphs without any covering typeface
+    /// are bucketed with the previous segment so they at least
+    /// occupy space (rather than disappearing).
+    fn segment_text(&mut self, text: &str) -> Vec<(skia_safe::Typeface, String)> {
+        let mut segments: Vec<(skia_safe::Typeface, String)> = Vec::new();
+        for c in text.chars() {
+            let tf = self.typeface_for_char(c);
+            let Some(tf) = tf else {
+                if let Some(last) = segments.last_mut() {
+                    last.1.push(c);
+                }
+                continue;
+            };
+            match segments.last_mut() {
+                Some(last) if last.0.unique_id() == tf.unique_id() => last.1.push(c),
+                _ => segments.push((tf, c.to_string())),
+            }
+        }
+        segments
     }
 
     /// Lazy-init the Step 4 cached Roboto typeface (ASCII path).
@@ -213,16 +264,16 @@ impl NativeBackend {
     /// Falls back to a conservative heuristic when typefaces
     /// aren't available.
     pub fn measure_text(&mut self, text: &str, font_size: f32) -> f32 {
-        let typeface = if text.is_ascii() {
-            self.ensure_typeface().cloned()
-        } else {
-            self.ensure_cjk_typeface().cloned()
-        };
-        let Some(typeface) = typeface else {
-            return text.chars().count() as f32 * font_size * 0.55;
-        };
-        let font = skia_safe::Font::new(&typeface, font_size);
-        let (advance, _) = font.measure_str(text, None);
+        let segments = self.segment_text(text);
+        if segments.is_empty() {
+            return 0.0;
+        }
+        let mut advance = 0.0_f32;
+        for (typeface, segment) in segments {
+            let font = skia_safe::Font::new(&typeface, font_size);
+            let (a, _) = font.measure_str(&segment, None);
+            advance += a;
+        }
         advance
     }
 
@@ -242,28 +293,11 @@ impl NativeBackend {
     #[tracing::instrument(skip(self, canvas, layout))]
     pub fn draw_text(&mut self, canvas: &skia_safe::Canvas, layout: &TextLayout, origin: Point2D) {
         let runs: Vec<_> = layout.runs().to_vec();
-        let ascii_typeface = self.ensure_typeface().cloned();
         for run in runs {
-            let is_ascii = run.content.is_ascii();
-            let typeface = if is_ascii {
-                ascii_typeface.clone()
-            } else {
-                self.ensure_cjk_typeface().cloned()
-            };
-            let Some(typeface) = typeface else {
-                // No suitable typeface — use jian-skia's textlayout
-                // fallback (slow but correct) so we never silently
-                // drop user-visible text.
-                let mut translated = run.clone();
-                translated.origin = jian_core::geometry::Point::new(
-                    origin.x + run.origin.x,
-                    origin.y + run.origin.y,
-                );
-                let op = jian_core::render::DrawOp::Text(translated);
-                self.draw_op(canvas, &op);
+            let segments = self.segment_text(run.content.as_str());
+            if segments.is_empty() {
                 continue;
-            };
-            let font = skia_safe::Font::new(&typeface, run.font_size);
+            }
             let jc = run.color;
             let paint = skia_safe::Paint::new(
                 skia_safe::Color4f::new(
@@ -274,12 +308,14 @@ impl NativeBackend {
                 ),
                 None,
             );
-            canvas.draw_str(
-                run.content.as_str(),
-                (origin.x + run.origin.x, origin.y + run.origin.y),
-                &font,
-                &paint,
-            );
+            let mut x = origin.x + run.origin.x;
+            let y = origin.y + run.origin.y;
+            for (typeface, segment) in segments {
+                let font = skia_safe::Font::new(&typeface, run.font_size);
+                canvas.draw_str(&segment, (x, y), &font, &paint);
+                let (advance, _) = font.measure_str(&segment, None);
+                x += advance;
+            }
         }
     }
 
