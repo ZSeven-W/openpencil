@@ -330,10 +330,28 @@ export class PenRenderer {
     // shadow omitted `spread` — the throw escaped the loop and every
     // sibling stopped rendering. The shadow path now coerces missing
     // numeric fields to 0; this catch is the structural backstop.
+    //
+    // Snapshot the canvas save count before each node so a throw mid-
+    // way through drawNode (which pushes save() / clip() per ancestor
+    // clipStack entry, plus more for rotation / flip — see node-
+    // renderer.ts:548, 574, 583, 701, 1094, 1102) can roll the canvas
+    // state back to a clean baseline. Without this, the leaked clip /
+    // rotation state corrupts every subsequent node's draw — Codex
+    // stop-hook 2026-05-10 caught the bare-catch leak.
     for (const rn of this.renderNodes) {
+      const saveCount = canvas.getSaveCount();
       try {
         this.nodeRenderer.drawNode(canvas, rn);
       } catch (err) {
+        try {
+          canvas.restoreToCount(saveCount);
+        } catch {
+          // restoreToCount itself can throw if the snapshot count is
+          // somehow above the current depth (shouldn't happen in
+          // practice — drawNode only pushes saves, never pops below
+          // its entry depth — but guard so the error reporter still
+          // logs).
+        }
         const id = rn.node.id ?? '<no-id>';
         console.error(`[pen-renderer] drawNode threw for node ${id}:`, err);
       }
