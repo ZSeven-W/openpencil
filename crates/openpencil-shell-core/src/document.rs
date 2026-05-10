@@ -394,6 +394,12 @@ pub struct ChatState {
     /// Collapsed state — when true the panel paints only the
     /// 36 px header strip (clicking the chevron toggles).
     pub collapsed: bool,
+    /// Last user-action timestamp (focus / keystroke) in
+    /// milliseconds — drives the caret blink phase via
+    /// [`jian_core::anim::blink_visible`]. Reset on focus and on
+    /// every key event so the caret reappears immediately when
+    /// the user types instead of mid-blink.
+    pub caret_anchor_ms: u64,
 }
 
 impl Default for ChatState {
@@ -404,6 +410,7 @@ impl Default for ChatState {
             focused: false,
             anchor: ChatAnchor::BottomLeft,
             collapsed: false,
+            caret_anchor_ms: 0,
         }
     }
 }

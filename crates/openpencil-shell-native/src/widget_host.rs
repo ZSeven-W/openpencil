@@ -142,6 +142,12 @@ pub struct WidgetHostNative {
     /// host computes the nearest corner via `ChatAnchor::nearest`
     /// and snaps.
     chat_drag: Option<ChatDragState>,
+    /// Host-supplied frame timestamp in milliseconds. Drives the
+    /// caret blink via `jian_core::anim::blink_visible`. The
+    /// inspector_window runner refreshes this once per
+    /// `RedrawRequested` from a single `Instant` start anchor;
+    /// any other host (mobile / browser) installs its own clock.
+    now_ms: u64,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -169,6 +175,35 @@ impl WidgetHostNative {
             theme: Theme::dark(),
             drag: None,
             chat_drag: None,
+            now_ms: 0,
+        }
+    }
+
+    /// Push the host's monotonic millisecond timestamp into the
+    /// host. Drives caret blink + any future time-based
+    /// animations via `jian_core::anim`.
+    pub fn set_now_ms(&mut self, now_ms: u64) {
+        self.now_ms = now_ms;
+    }
+
+    /// Whether the chat input is focused — runner uses this to
+    /// decide whether to schedule a periodic wake-up for caret
+    /// blink.
+    pub fn chat_focused(&self) -> bool {
+        self.document.chat.focused
+    }
+
+    /// Next millisecond at which the host should wake to repaint
+    /// the caret blink phase. `None` = no animation pending.
+    pub fn next_animation_deadline_ms(&self) -> Option<u64> {
+        if self.document.chat.focused {
+            Some(jian_core::anim::next_blink_flip_ms(
+                self.now_ms,
+                self.document.chat.caret_anchor_ms,
+                500,
+            ))
+        } else {
+            None
         }
     }
 
@@ -410,6 +445,9 @@ impl WidgetHostNative {
             return false;
         }
         self.document.chat.input.push(c);
+        // Reset blink so the caret is solid right after the
+        // keystroke instead of mid-fade.
+        self.document.chat.caret_anchor_ms = self.now_ms;
         true
     }
 
@@ -419,6 +457,7 @@ impl WidgetHostNative {
             return false;
         }
         if self.document.chat.input.pop().is_some() {
+            self.document.chat.caret_anchor_ms = self.now_ms;
             return true;
         }
         false
@@ -516,6 +555,7 @@ impl WidgetHostNative {
                 match hit {
                     AIChatHit::FocusInput => {
                         self.document.chat.focused = true;
+                        self.document.chat.caret_anchor_ms = self.now_ms;
                         return true;
                     }
                     AIChatHit::Send => {
@@ -525,6 +565,7 @@ impl WidgetHostNative {
                     AIChatHit::Example(text) => {
                         self.document.chat.input = text;
                         self.document.chat.focused = true;
+                        self.document.chat.caret_anchor_ms = self.now_ms;
                         return true;
                     }
                     AIChatHit::DragHandle => {
@@ -710,7 +751,8 @@ impl WidgetHostNative {
         //    of the toolbar in any overlap region (matches the
         //    user's requested z-order: chat above toolbar).
         if let Some(chat_rect) = self.ai_chat_rect(viewport_width, viewport_height) {
-            let chat = AIChatPlaceholder::from_document(&self.document);
+            let chat =
+                AIChatPlaceholder::from_document_at(&self.document, self.now_ms);
             let mut cx = PaintCx {
                 backend: &mut *frame,
             };

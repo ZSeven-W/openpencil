@@ -83,14 +83,26 @@ pub struct AIChatPlaceholder<'a> {
     pub id: WidgetId,
     pub theme: Theme,
     pub state: &'a ChatState,
+    /// Host-supplied frame timestamp (milliseconds since the host
+    /// started). Drives caret blink via
+    /// [`jian_core::anim::blink_visible`]. `0` = host hasn't
+    /// installed a clock yet (caret stays solid).
+    pub now_ms: u64,
 }
 
 impl<'a> AIChatPlaceholder<'a> {
     pub fn from_document(doc: &'a Document) -> Self {
+        Self::from_document_at(doc, 0)
+    }
+
+    /// Same as `from_document` but threads through the host's
+    /// current millisecond timestamp so the caret can blink.
+    pub fn from_document_at(doc: &'a Document, now_ms: u64) -> Self {
         Self {
             id: WidgetId::new(7000),
             theme: Theme::dark(),
             state: &doc.chat,
+            now_ms,
         }
     }
 
@@ -314,18 +326,23 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
             &input_label,
             Point2D::new(input_rect.origin.x + 12.0, input_rect.origin.y + 26.0),
         );
-        // Caret bar when focused. Approximate per-char advance:
-        // ASCII glyphs (Roboto 13 px) ≈ 7 px wide; CJK / emoji
-        // glyphs in our subset are full-width ≈ 13 px. Without an
-        // actual text-measure API on `RenderBackend` (Step 7+
-        // would add one), this two-tier sum keeps the caret
-        // visually anchored at the trailing edge of typed text
-        // for mixed Latin + CJK input (matches the TS app).
-        if self.state.focused {
-            let mut caret_x = input_rect.origin.x + 12.0;
-            for c in self.state.input.chars() {
-                caret_x += if c.is_ascii() { 7.0 } else { 13.0 };
-            }
+        // Caret bar when focused — visibility driven by jian's
+        // square-wave blink primitive. `caret_anchor_ms` resets
+        // on focus + every keystroke so the caret is solid right
+        // after the user types instead of mid-fade.
+        let caret_visible = self.state.focused
+            && jian_core::anim::blink_visible(
+                self.now_ms,
+                self.state.caret_anchor_ms,
+                500,
+            );
+        if caret_visible {
+            // Use the backend's text-measure API to anchor the
+            // caret at the actual rendered trailing edge of the
+            // typed text — works for mixed Latin + CJK without
+            // hardcoded per-char widths.
+            let text_w = cx.backend.measure_text(&self.state.input, 13.0);
+            let caret_x = input_rect.origin.x + 12.0 + text_w;
             cx.backend.fill_rect(
                 Rect {
                     origin: Point2D::new(caret_x, input_rect.origin.y + 12.0),
