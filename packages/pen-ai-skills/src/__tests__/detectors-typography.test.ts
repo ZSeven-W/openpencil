@@ -1,0 +1,175 @@
+import { describe, it, expect } from 'vitest';
+import type { PenNode, PenDocument } from '@zseven-w/pen-types';
+import { detectTextBgContrast } from '../diagnostics/detectors-typography';
+
+// 2026-05-09 user reported black-card-with-white-text mixed into a cream
+// page — the white-on-cream paths read as "muddy" and the AA check is the
+// systematic way to flag it. Auto-fix is intentionally omitted; the right
+// replacement depends on the design system + theme so this stays detect-only.
+
+const text = (
+  id: string,
+  fill: unknown,
+  fontSize: number = 16,
+  fontWeight?: number | string,
+): PenNode =>
+  ({
+    id,
+    type: 'text',
+    content: 'sample',
+    fontSize,
+    fontWeight,
+    fill,
+  }) as unknown as PenNode;
+
+const frame = (id: string, children: PenNode[], fill?: unknown): PenNode =>
+  ({
+    id,
+    type: 'frame',
+    layout: 'vertical',
+    fill,
+    children,
+  }) as unknown as PenNode;
+
+const solid = (color: string) => [{ type: 'solid' as const, color }];
+
+const emptyDoc: PenDocument = {
+  children: [],
+  variables: undefined,
+  themes: undefined,
+} as unknown as PenDocument;
+
+const docWithVars = (vars: Record<string, unknown>, themes?: Record<string, string[]>) =>
+  ({
+    children: [],
+    variables: vars,
+    themes,
+  }) as unknown as PenDocument;
+
+describe('detectTextBgContrast', () => {
+  it('does NOT flag black text on white background (ratio 21:1)', () => {
+    const root = frame('page', [text('t1', solid('#000000'))], solid('#FFFFFF'));
+    expect(detectTextBgContrast(root, emptyDoc)).toHaveLength(0);
+  });
+
+  it('flags light-gray text on white (ratio ~3.9 < AA 4.5)', () => {
+    const root = frame('page', [text('t1', solid('#888888'))], solid('#FFFFFF'));
+    const issues = detectTextBgContrast(root, emptyDoc);
+    expect(issues).toHaveLength(1);
+    expect(issues[0].nodeId).toBe('t1');
+    expect(issues[0].category).toBe('text-bg-contrast');
+    expect(issues[0].severity).toBe('info');
+    expect(issues[0].suggestedValue).toBeNull();
+    expect(issues[0].reason).toMatch(/below WCAG AA/);
+  });
+
+  it('flags white text on white bg (ratio 1.0 — invisible)', () => {
+    const root = frame('page', [text('t1', solid('#FFFFFF'))], solid('#FFFFFF'));
+    expect(detectTextBgContrast(root, emptyDoc)).toHaveLength(1);
+  });
+
+  it('does NOT flag white text on dark cream-styled card (the user-reported good case)', () => {
+    // Cream page with a dark card; white text on the dark card should pass.
+    const root = frame(
+      'page',
+      [frame('card', [text('t1', solid('#FFFFFF'))], solid('#1A1A1A'))],
+      solid('#FFF8E7'), // cream
+    );
+    expect(detectTextBgContrast(root, emptyDoc)).toHaveLength(0);
+  });
+
+  it('flags white text on cream page (the user-reported bad case)', () => {
+    // The same white text but with no dark card wrapping — sits directly
+    // on the cream page background; ratio ~1.10, fails AA hard.
+    const root = frame('page', [text('t1', solid('#FFFFFF'))], solid('#FFF8E7'));
+    expect(detectTextBgContrast(root, emptyDoc)).toHaveLength(1);
+  });
+
+  it('uses the LARGE-text threshold (3.0) for fontSize >= 24', () => {
+    // Ratio ~3.5 — fails normal 4.5 but passes large 3.0
+    const root = frame('page', [text('t1', solid('#787878'), 32)], solid('#FFFFFF'));
+    expect(detectTextBgContrast(root, emptyDoc)).toHaveLength(0);
+  });
+
+  it('uses the LARGE-text threshold (3.0) for fontSize >= 19 + bold weight', () => {
+    const root = frame('page', [text('t1', solid('#787878'), 20, 700)], solid('#FFFFFF'));
+    expect(detectTextBgContrast(root, emptyDoc)).toHaveLength(0);
+  });
+
+  it('still flags >=19px non-bold text (large rule needs 700+ weight)', () => {
+    const root = frame('page', [text('t1', solid('#888888'), 20, 400)], solid('#FFFFFF'));
+    expect(detectTextBgContrast(root, emptyDoc)).toHaveLength(1);
+  });
+
+  it('walks ancestor chain to find first non-transparent bg', () => {
+    // Outer page has cream; inner section has no fill (transparent);
+    // the text's effective bg should still resolve to cream.
+    const root = frame(
+      'page',
+      [
+        frame('section', [text('t1', solid('#FFF8E7'))]), // section has no fill
+      ],
+      solid('#FFF8E7'),
+    );
+    expect(detectTextBgContrast(root, emptyDoc)).toHaveLength(1);
+  });
+
+  it('defaults to white bg when no ancestor has any fill', () => {
+    // No page fill at all — detector falls back to the canvas default
+    // (white). White text on white = invisible.
+    const root = frame('page', [text('t1', solid('#FFFFFF'))]);
+    expect(detectTextBgContrast(root, emptyDoc)).toHaveLength(1);
+  });
+
+  it('resolves $variable refs through doc.variables / theme', () => {
+    const doc = docWithVars({
+      'color-text': { type: 'color', value: '#888888' },
+      'color-bg': { type: 'color', value: '#FFFFFF' },
+    });
+    const root = frame('page', [text('t1', solid('$color-text'))], solid('$color-bg'));
+    const issues = detectTextBgContrast(root, doc);
+    expect(issues).toHaveLength(1);
+    expect(issues[0].reason).toMatch(/text=#888888 on bg=#FFFFFF/);
+  });
+
+  it('skips text whose color ref does not resolve (no false positive)', () => {
+    const doc = docWithVars({}); // no variables, ref will not resolve
+    const root = frame('page', [text('t1', solid('$nonexistent'))], solid('#FFFFFF'));
+    expect(detectTextBgContrast(root, doc)).toHaveLength(0);
+  });
+
+  it('skips text with no fill array (renderer default applies)', () => {
+    const root = frame('page', [text('t1', undefined)], solid('#FFFFFF'));
+    expect(detectTextBgContrast(root, emptyDoc)).toHaveLength(0);
+  });
+
+  it('approximates gradient bg by first stop', () => {
+    const gradientBg = [
+      {
+        type: 'linear_gradient' as const,
+        stops: [
+          { color: '#FFFFFF', offset: 0 },
+          { color: '#000000', offset: 1 },
+        ],
+      },
+    ];
+    // First stop is white → light bg; white text fails.
+    const root = frame('page', [text('t1', solid('#FFFFFF'))], gradientBg);
+    expect(detectTextBgContrast(root, emptyDoc)).toHaveLength(1);
+  });
+
+  it('flags multiple offending texts in one pass', () => {
+    const root = frame(
+      'page',
+      [
+        text('good', solid('#000000')),
+        text('bad-1', solid('#FFFFFF')),
+        text('bad-2', solid('#EEEEEE')),
+      ],
+      solid('#FFFFFF'),
+    );
+    const issues = detectTextBgContrast(root, emptyDoc);
+    expect(issues).toHaveLength(2);
+    expect(new Set(issues.map((i) => i.nodeId))).toEqual(new Set(['bad-1', 'bad-2']));
+  });
+});

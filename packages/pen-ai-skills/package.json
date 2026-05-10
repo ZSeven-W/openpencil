@@ -40,6 +40,7 @@
     }
   },
   "dependencies": {
+    "@zseven-w/pen-core": "workspace:*",
     "@zseven-w/pen-types": "workspace:*",
     "gray-matter": "^4.0.3",
     "js-yaml": "^4.1.1"

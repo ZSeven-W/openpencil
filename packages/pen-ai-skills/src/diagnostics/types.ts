@@ -12,7 +12,8 @@ export type IssueCategory =
   | 'text-stroke'
   | 'mixed-sibling-padding'
   | 'excessive-frame-effects'
-  | 'edge-section-padding';
+  | 'edge-section-padding'
+  | 'text-bg-contrast';
 
 export interface Issue {
   /** Node id where the issue was detected */
