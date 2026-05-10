@@ -118,8 +118,17 @@ impl Inner {
             },
             Color::WHITE,
         );
-        // Inspector slice: 280 px wide column on the left.
-        self.host.paint(&mut self.backend, 280.0);
+        // Step 3: pass the FULL canvas width (matches the smoke
+        // HTML's `<canvas id="op" width="960">`). The host's
+        // `paint(&self, backend, viewport_width)` lays out
+        // Toolbar-top + LayerPanel-left + CanvasViewport-center
+        // + PropertyPanel-right; viewport_width below the
+        // MIN_RAIL_WIDTH cutoff would silently skip everything
+        // except the toolbar — codex stop-hook
+        // "web smoke paints only the toolbar" caught this when
+        // the leftover Step 1b 280-px hardcode was still in
+        // place.
+        self.host.paint(&mut self.backend, 960.0);
         self.backend.end_frame();
         if let Some(err) = self.backend.take_present_error() {
             return Err(err);
