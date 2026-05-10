@@ -65,6 +65,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "git.conflict.description" => "아래 카드로 각 충돌을 해결한 다음 병합을 적용하세요.",
         "git.conflict.abort" => "병합 중단",
         "git.conflict.nonOp.title" => ".op 이외 파일로 병합이 일시 중지됨",
+        "git.conflict.nonOp.description" => ".op 파일 병합은 완료되었지만 저장소의 다른 파일이 아직 해결되지 않았습니다. OpenPencil 외부에서 해결한 후 계속하세요.",
         "git.conflict.nonOp.unresolvedHeading_one" => "1개 파일에 조치가 필요함",
         "git.conflict.nonOp.unresolvedHeading_other" => "{{count}}개 파일에 조치가 필요함",
         "git.conflict.nonOp.continue" => "병합 계속",
@@ -74,6 +75,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "git.conflict.banner.continue" => "계속",
         "git.conflict.banner.finalizeError" => "적용 실패: {{message}}",
         "git.conflict.banner.pollError" => "오류로 인해 상태 폴링이 일시 중지됨: {{message}}",
+        "git.conflict.banner.reopenMessage" => "패널이 병합 중 다시 열렸습니다 — 중단하고 다시 pull 하세요.",
         "git.conflict.list.heading" => "모든 충돌",
         "git.conflict.list.progress" => "{{resolved}} / {{total}} 해결됨",
         "git.conflict.list.allResolved" => "모두 해결됨",
@@ -137,6 +139,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "git.commit.placeholder" => "이 변경 설명…",
         "git.commit.submitButton" => "마일스톤으로 저장",
         "git.commit.saveRequiredTitle" => "문서를 먼저 저장하세요",
+        "git.commit.saveRequiredBody" => "저장되지 않은 변경 사항이 있습니다. 계속하려면 문서를 저장하세요: {{label}}",
         "git.commit.saveRequiredSave" => "저장",
         "git.commit.saveRequiredCancel" => "취소",
         "git.header.autosaveError" => "자동 저장 오류",
@@ -209,14 +212,14 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "git.wizard.clone.validationUrl" => "원격 URL을 입력하세요",
         "git.wizard.clone.validationDest" => "대상 폴더를 선택하세요",
         "git.wizard.clone.validationTokenUsername" => "토큰을 제공할 때 사용자 이름이 필요합니다",
+        "git.wizard.clone.error.clone-network" => "복제 중 네트워크 오류가 발생했습니다. 연결을 확인하고 다시 시도하세요.",
         "git.wizard.clone.error.network" => "네트워크 오류. 연결을 확인하고 다시 시도하세요.",
+        "git.wizard.clone.error.timeout" => "복제 시간이 초과되었습니다. 다시 시도하거나 더 작은 저장소를 사용하세요.",
         "git.wizard.clone.error.auth-required" => "이 저장소는 인증이 필요합니다.",
-        "git.wizard.clone.error.auth-failed" => {
-            "인증에 실패했습니다. 사용자 이름과 토큰을 확인하세요."
-        }
-        "git.wizard.clone.error.clone-target-exists" => {
-            "대상 폴더가 이미 존재하거나 비어 있지 않습니다."
-        }
+        "git.wizard.clone.error.auth-failed" => "인증에 실패했습니다. 사용자 이름과 토큰을 확인하세요.",
+        "git.wizard.clone.error.auth-token-invalid" => "액세스 토큰이 거부되었습니다. 새 토큰을 생성하고 다시 시도하세요.",
+        "git.wizard.clone.error.clone-failed" => "복제에 실패했습니다. URL이 실제 저장소를 가리키는지 확인하세요.",
+        "git.wizard.clone.error.clone-target-exists" => "대상 폴더가 이미 존재하거나 비어 있지 않습니다.",
         "git.pull.label" => "풀",
         "git.pull.tooltip" => "origin에서 풀",
         "git.pull.noRemote" => "원격이 구성되지 않음 — Git 설정에서 추가하세요",
@@ -227,9 +230,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "git.push.noRemote" => "원격이 구성되지 않음 — Git 설정에서 추가하세요",
         "git.push.upToDate" => "푸시할 내용이 없음 — 최신 상태입니다",
         "git.push.retry" => "푸시 다시 시도",
-        "git.push.rejectedBody" => {
-            "원격에 아직 받지 않은 커밋이 있습니다. 먼저 풀한 뒤 다시 푸시하세요."
-        }
+        "git.push.rejectedBody" => "원격에 아직 받지 않은 커밋이 있습니다. 먼저 풀한 뒤 다시 푸시하세요.",
         "git.push.rejectedDismiss" => "닫기",
         "git.push.rejectedPull" => "지금 풀",
         "git.remote.dismissError" => "닫기",
@@ -247,6 +248,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "git.remote.clearConfirmAction" => "확인",
         "git.remote.aheadBehind" => "{{ahead}} 앞서고 · {{behind}} 뒤처짐",
         "git.remote.fetchButton" => "Fetch",
+        "git.remote.sshIsoUnsupported" => "내장 엔진은 SSH 전송을 지원하지 않습니다. 시스템 git을 설치하거나 HTTPS 원격 URL로 전환하세요.",
         "git.remote.storedAuthLabel" => "저장된 자격 증명",
         "git.remote.storedAuth.token" => "토큰",
         "git.remote.storedAuth.ssh" => "SSH 키",
@@ -258,6 +260,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "git.ssh.heading" => "SSH 키",
         "git.ssh.back" => "뒤로",
         "git.ssh.cancel" => "취소",
+        "git.ssh.isoUnsupported" => "현재 원격은 SSH를 사용하지만 내장 엔진은 SSH 전송을 수행할 수 없습니다. 시스템 git을 설치하거나 원격 URL을 HTTPS로 변경하세요.",
         "git.ssh.emptyList" => "아직 SSH 키가 없습니다.",
         "git.ssh.generateAction" => "새로 생성",
         "git.ssh.importAction" => "기존 항목 가져오기",
@@ -292,9 +295,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "git.auth.tokenLabel" => "액세스 토큰",
         "git.auth.tokenPlaceholder" => "ghp_… 또는 PAT",
         "git.auth.sshKeyLabel" => "SSH 키",
-        "git.auth.sshNoKeys" => {
-            "사용 가능한 SSH 키가 없습니다. 먼저 Git 설정에서 가져오거나 생성하세요."
-        }
+        "git.auth.sshNoKeys" => "사용 가능한 SSH 키가 없습니다. 먼저 Git 설정에서 가져오거나 생성하세요.",
         "git.auth.rememberLabel" => "이 호스트의 자격 증명 기억",
         "git.auth.rememberHint" => "이 호스트의 자격 증명 기억",
         "git.auth.cancel" => "취소",
@@ -302,6 +303,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "git.auth.validationSshKey" => "SSH 키를 선택하세요",
         "git.auth.error.auth-required" => "이 원격에는 인증이 필요합니다.",
         "git.auth.error.auth-failed" => "인증 실패. 자격 증명을 확인하고 다시 시도하세요.",
+        "git.auth.error.auth-token-invalid" => "액세스 토큰이 거부되었습니다. 새 토큰을 생성한 후 다시 시도하세요.",
         "rightPanel.design" => "디자인",
         "rightPanel.code" => "코드",
         "rightPanel.noSelection" => "요소를 선택하세요",
@@ -325,9 +327,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "updater.restartInstall" => "재시작 및 설치",
         "updater.installing" => "설치 중...",
         "updater.releaseDate" => "출시일: {{date}}",
-        "updater.restartHint" => {
-            "업데이트를 적용하려면 재시작하세요. 재실행은 보통 10~15초 소요됩니다."
-        }
+        "updater.restartHint" => "업데이트를 적용하려면 재시작하세요. 재실행은 보통 10~15초 소요됩니다.",
         "updater.unknownError" => "알 수 없는 업데이트 오류입니다.",
         "updater.title.checking" => "업데이트 확인 중",
         "updater.title.available" => "업데이트 발견",
@@ -338,9 +338,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "updater.subtitle.available" => "버전 {{version}}을 사용할 수 있습니다.",
         "updater.subtitle.availableGeneric" => "새 버전을 사용할 수 있습니다.",
         "updater.subtitle.downloading" => "버전 {{version}}을 백그라운드에서 다운로드 중입니다.",
-        "updater.subtitle.downloadingGeneric" => {
-            "업데이트 패키지를 백그라운드에서 다운로드 중입니다."
-        }
+        "updater.subtitle.downloadingGeneric" => "업데이트 패키지를 백그라운드에서 다운로드 중입니다.",
         "updater.subtitle.downloaded" => "버전 {{version}}이 다운로드되었습니다.",
         "updater.subtitle.downloadedGeneric" => "업데이트가 다운로드되었습니다.",
         "updater.subtitle.error" => "업데이트를 확인하거나 다운로드할 수 없습니다.",
@@ -502,9 +500,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "ai.newChat" => "새 대화",
         "ai.collapse" => "접기",
         "ai.tryExample" => "예시로 디자인 해보세요...",
-        "ai.tipSelectElements" => {
-            "팁: 대화 전에 캔버스에서 요소를 선택하면 컨텍스트를 제공할 수 있습니다."
-        }
+        "ai.tipSelectElements" => "팁: 대화 전에 캔버스에서 요소를 선택하면 컨텍스트를 제공할 수 있습니다.",
         "ai.generating" => "생성 중...",
         "ai.designWithAgent" => "에이전트로 디자인...",
         "ai.attachImage" => "이미지 첨부",
@@ -515,10 +511,13 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "ai.searchModels" => "모델 검색...",
         "ai.noModelsFound" => "일치하는 모델이 없습니다",
         "ai.quickAction.loginScreen" => "모바일 로그인 화면 디자인",
+        "ai.quickAction.loginScreenPrompt" => "이메일 입력, 비밀번호 입력, 로그인 버튼, 소셜 로그인 옵션이 있는 모던 모바일 로그인 화면을 디자인해 주세요",
         "ai.quickAction.foodApp" => "음식 앱 홈페이지",
         "ai.quickAction.foodAppPrompt" => "Generate a well-designed food mobile app homepage",
         "ai.quickAction.bottomNav" => "하단 네비게이션 바 디자인",
+        "ai.quickAction.bottomNavPrompt" => "홈, 검색, 추가, 메시지, 프로필 5개 탭이 있는 모바일 앱 하단 네비게이션 바를 디자인해 주세요",
         "ai.quickAction.colorPalette" => "앱에 맞는 색상 팔레트 추천",
+        "ai.quickAction.colorPalettePrompt" => "반려동물 관리 앱에 어울리는 모던한 색상 팔레트를 추천해 주세요",
         "ai.startDesigning" => "Start designing with AI",
         "ai.maximize" => "Maximize",
         "ai.restore" => "Restore",
@@ -542,6 +541,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "fileMenu.daysAgo" => "{{count}}d ago",
         "unsaved.title" => "Unsaved changes",
         "unsaved.message" => "Save changes to \"{{name}}\"?",
+        "unsaved.dontSave" => "Don't Save",
         "code.reactTailwind" => "React + Tailwind",
         "code.htmlCss" => "HTML + CSS",
         "code.cssVariables" => "CSS Variables",
@@ -565,6 +565,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "agents.transport" => "전송 방식",
         "agents.port" => "포트",
         "agents.mcpRestart" => "MCP 연동은 터미널을 재시작한 후 적용됩니다.",
+        "agents.mcpReinstallHint" => "OpenPencil 버전 업그레이드 후 호환성을 위해 MCP 통합을 다시 설치해 주세요.",
         "agents.modelCount" => "모델 {{count}}개",
         "agents.connectionFailed" => "연결 실패",
         "agents.serverError" => "서버 오류 {{status}}",
@@ -635,6 +636,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "builtin.errorApiKeyEmpty" => "API 키가 비어 있습니다. 설정에서 API 키를 추가해 주세요.",
         "builtin.parallelAgents" => "병렬 하위 에이전트: {{count}}x (클릭하여 전환)",
         "builtin.baseUrlPlaceholder" => "https://api.example.com/v1",
+        "builtin.teamDescription" => "디자인 생성용 모델을 선택하세요. 설정하면 디자인 작업이 이 모델을 사용하는 전문 에이전트에 자동으로 위임됩니다.",
         "builtin.teamDesignModel" => "디자인 모델",
         "builtin.teamSelectModel" => "없음 (단일 에이전트)",
         "acp.title" => "ACP Agent",
@@ -669,9 +671,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "figma.convertFailed" => "Figma 파일 변환에 실패했습니다",
         "figma.parsing" => ".fig 파일 파싱 중...",
         "figma.converting" => "노드 변환 중...",
-        "figma.selectPage" => {
-            "이 파일에는 {{count}}개의 페이지가 있습니다. 가져올 페이지를 선택하세요:"
-        }
+        "figma.selectPage" => "이 파일에는 {{count}}개의 페이지가 있습니다. 가져올 페이지를 선택하세요:",
         "figma.layers" => "{{count}}개 레이어",
         "figma.importAll" => "모든 페이지 가져오기",
         "figma.importComplete" => "가져오기 완료!",

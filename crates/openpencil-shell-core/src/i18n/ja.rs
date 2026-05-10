@@ -62,8 +62,10 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "git.close" => "閉じる",
         "git.initializing" => "リポジトリを初期化中…",
         "git.conflict.title" => "マージコンフリクト",
+        "git.conflict.description" => "以下のカードで各コンフリクトを解決してから、マージを適用してください。",
         "git.conflict.abort" => "マージを中止",
         "git.conflict.nonOp.title" => ".op 以外のファイルによりマージが一時停止しました",
+        "git.conflict.nonOp.description" => ".op ファイルのマージは完了しましたが、このリポジトリ内の他のファイルがまだ未解決です。OpenPencil の外で解決してから続行してください。",
         "git.conflict.nonOp.unresolvedHeading_one" => "1 個のファイルに対応が必要",
         "git.conflict.nonOp.unresolvedHeading_other" => "{{count}} 個のファイルに対応が必要",
         "git.conflict.nonOp.continue" => "マージを続行",
@@ -72,9 +74,8 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "git.conflict.banner.apply" => "マージを適用",
         "git.conflict.banner.continue" => "続行",
         "git.conflict.banner.finalizeError" => "適用できませんでした: {{message}}",
-        "git.conflict.banner.pollError" => {
-            "エラーのためステータスポーリングを一時停止中: {{message}}"
-        }
+        "git.conflict.banner.pollError" => "エラーのためステータスポーリングを一時停止中: {{message}}",
+        "git.conflict.banner.reopenMessage" => "マージ中にパネルが再開されました — 中止して再度プルしてください。",
         "git.conflict.list.heading" => "すべての競合",
         "git.conflict.list.progress" => "{{resolved}} / {{total}} 解決済み",
         "git.conflict.list.allResolved" => "すべて解決済み",
@@ -138,6 +139,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "git.commit.placeholder" => "この変更を説明…",
         "git.commit.submitButton" => "マイルストーンとして保存",
         "git.commit.saveRequiredTitle" => "まず文書を保存してください",
+        "git.commit.saveRequiredBody" => "未保存の変更があります。続行するには文書を保存してください: {{label}}",
         "git.commit.saveRequiredSave" => "保存",
         "git.commit.saveRequiredCancel" => "キャンセル",
         "git.header.autosaveError" => "自動保存エラー",
@@ -200,9 +202,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "git.wizard.clone.usernameLabel" => "ユーザー名(任意)",
         "git.wizard.clone.tokenLabel" => "アクセストークン(任意)",
         "git.wizard.clone.tokenPlaceholder" => "ghp_… 公開リポジトリは空欄可",
-        "git.wizard.clone.anonymousHint" => {
-            "空欄のままにすると匿名でクローンします(公開リポジトリのみ)。"
-        }
+        "git.wizard.clone.anonymousHint" => "空欄のままにすると匿名でクローンします(公開リポジトリのみ)。",
         "git.wizard.clone.sshHint" => "この URL には SSH 鍵認証が必要です。",
         "git.wizard.clone.hostDetected" => "検出: {{host}} · {{mode}}",
         "git.wizard.clone.authMode.token-or-anon" => "トークンまたは匿名",
@@ -211,13 +211,15 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "git.wizard.clone.submit" => "クローン",
         "git.wizard.clone.validationUrl" => "リモート URL を入力してください",
         "git.wizard.clone.validationDest" => "コピー先フォルダを選択してください",
-        "git.wizard.clone.validationTokenUsername" => {
-            "トークンを指定する場合はユーザー名が必要です"
-        }
-        "git.wizard.clone.error.network" => {
-            "ネットワークエラー。接続を確認して再試行してください。"
-        }
+        "git.wizard.clone.validationTokenUsername" => "トークンを指定する場合はユーザー名が必要です",
+        "git.wizard.clone.error.clone-network" => "クローン中にネットワークエラーが発生しました。接続を確認して再試行してください。",
+        "git.wizard.clone.error.network" => "ネットワークエラー。接続を確認して再試行してください。",
+        "git.wizard.clone.error.timeout" => "クローンがタイムアウトしました。再試行するか、より小さなリポジトリを使用してください。",
         "git.wizard.clone.error.auth-required" => "このリポジトリは認証が必要です。",
+        "git.wizard.clone.error.auth-failed" => "認証に失敗しました。ユーザー名とトークンを確認してください。",
+        "git.wizard.clone.error.auth-token-invalid" => "アクセストークンが拒否されました。新しいトークンを生成して再試行してください。",
+        "git.wizard.clone.error.clone-failed" => "クローンに失敗しました。URL が実在するリポジトリを指していることを確認してください。",
+        "git.wizard.clone.error.clone-target-exists" => "コピー先フォルダが既に存在するか、空ではありません。",
         "git.pull.label" => "プル",
         "git.pull.tooltip" => "origin からプル",
         "git.pull.noRemote" => "リモートが設定されていません — Git 設定で追加してください",
@@ -228,6 +230,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "git.push.noRemote" => "リモートが設定されていません — Git 設定で追加してください",
         "git.push.upToDate" => "プッシュする内容はありません — 最新の状態です",
         "git.push.retry" => "プッシュを再試行",
+        "git.push.rejectedBody" => "リモートに未取得のコミットがあります。先にプルしてから再度プッシュしてください。",
         "git.push.rejectedDismiss" => "閉じる",
         "git.push.rejectedPull" => "今すぐプル",
         "git.remote.dismissError" => "閉じる",
@@ -245,6 +248,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "git.remote.clearConfirmAction" => "確認",
         "git.remote.aheadBehind" => "{{ahead}} 先行 · {{behind}} 遅延",
         "git.remote.fetchButton" => "Fetch",
+        "git.remote.sshIsoUnsupported" => "内蔵エンジンは SSH トランスポートをサポートしていません。システム git をインストールするか、HTTPS リモート URL に切り替えてください。",
         "git.remote.storedAuthLabel" => "保存済み認証情報",
         "git.remote.storedAuth.token" => "トークン",
         "git.remote.storedAuth.ssh" => "SSH 鍵",
@@ -256,14 +260,13 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "git.ssh.heading" => "SSH 鍵",
         "git.ssh.back" => "戻る",
         "git.ssh.cancel" => "キャンセル",
+        "git.ssh.isoUnsupported" => "現在のリモートは SSH を使用していますが、内蔵エンジンは SSH トランスポートを実行できません。システム git をインストールするか、リモート URL を HTTPS に変更してください。",
         "git.ssh.emptyList" => "SSH 鍵はまだありません。",
         "git.ssh.generateAction" => "新しく生成",
         "git.ssh.importAction" => "既存のものをインポート",
         "git.ssh.copyPublicKey" => "公開鍵をコピー",
         "git.ssh.copiedHint" => "コピーしました",
-        "git.ssh.copyUnsupported" => {
-            "クリップボードを利用できません。この鍵を手動でコピーしてください。"
-        }
+        "git.ssh.copyUnsupported" => "クリップボードを利用できません。この鍵を手動でコピーしてください。",
         "git.ssh.deleteKey" => "{{name}} を削除",
         "git.ssh.deletePrompt" => "SSH 鍵 {{name}} を削除しますか?",
         "git.ssh.deleteConfirm" => "削除",
@@ -281,9 +284,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "git.ssh.validationComment" => "コメントを入力してください",
         "git.ssh.validationImportPath" => "インポートする秘密鍵ファイルを選択してください",
         "git.ssh.providerLink" => "{{host}} の SSH 鍵設定を開く",
-        "git.ssh.genericGuidance" => {
-            "公開鍵をコピーして、Git プロバイダの SSH 鍵設定に追加してください。"
-        }
+        "git.ssh.genericGuidance" => "公開鍵をコピーして、Git プロバイダの SSH 鍵設定に追加してください。",
         "git.auth.formLabel" => "Git 認証情報",
         "git.auth.heading" => "{{host}} に対して認証",
         "git.auth.headingUnknown" => "このリモートに対して認証",
@@ -294,15 +295,15 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "git.auth.tokenLabel" => "アクセストークン",
         "git.auth.tokenPlaceholder" => "ghp_… または PAT",
         "git.auth.sshKeyLabel" => "SSH キー",
+        "git.auth.sshNoKeys" => "利用可能な SSH キーがありません。先に Git 設定でインポートまたは生成してください。",
         "git.auth.rememberLabel" => "このホストの認証情報を記憶する",
         "git.auth.rememberHint" => "このホストの認証情報を記憶する",
         "git.auth.cancel" => "キャンセル",
         "git.auth.validationToken" => "アクセストークンは必須です",
         "git.auth.validationSshKey" => "SSH キーを選択してください",
         "git.auth.error.auth-required" => "このリモートには認証が必要です。",
-        "git.auth.error.auth-failed" => {
-            "認証に失敗しました。認証情報を確認して再度お試しください。"
-        }
+        "git.auth.error.auth-failed" => "認証に失敗しました。認証情報を確認して再度お試しください。",
+        "git.auth.error.auth-token-invalid" => "アクセストークンが拒否されました。新しいトークンを生成してから再試行してください。",
         "rightPanel.design" => "デザイン",
         "rightPanel.code" => "コード",
         "rightPanel.noSelection" => "要素を選択してください",
@@ -326,9 +327,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "updater.restartInstall" => "再起動してインストール",
         "updater.installing" => "インストール中...",
         "updater.releaseDate" => "リリース日：{{date}}",
-        "updater.restartHint" => {
-            "再起動してアップデートを適用します。再起動には通常 10〜15 秒かかります。"
-        }
+        "updater.restartHint" => "再起動してアップデートを適用します。再起動には通常 10〜15 秒かかります。",
         "updater.unknownError" => "不明なアップデートエラーです。",
         "updater.title.checking" => "アップデートを確認中",
         "updater.title.available" => "アップデートが見つかりました",
@@ -338,9 +337,8 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "updater.subtitle.checking" => "最新リリースを確認中...",
         "updater.subtitle.available" => "バージョン {{version}} が利用可能です。",
         "updater.subtitle.availableGeneric" => "新しいバージョンが利用可能です。",
-        "updater.subtitle.downloading" => {
-            "バージョン {{version}} をバックグラウンドでダウンロード中。"
-        }
+        "updater.subtitle.downloading" => "バージョン {{version}} をバックグラウンドでダウンロード中。",
+        "updater.subtitle.downloadingGeneric" => "アップデートパッケージをバックグラウンドでダウンロード中。",
         "updater.subtitle.downloaded" => "バージョン {{version}} のダウンロードが完了しました。",
         "updater.subtitle.downloadedGeneric" => "アップデートのダウンロードが完了しました。",
         "updater.subtitle.error" => "アップデートの確認またはダウンロードができませんでした。",
@@ -502,6 +500,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "ai.newChat" => "新しいチャット",
         "ai.collapse" => "折りたたむ",
         "ai.tryExample" => "サンプルを試してデザイン...",
+        "ai.tipSelectElements" => "ヒント：チャットの前にキャンバス上の要素を選択するとコンテキストが提供されます。",
         "ai.generating" => "生成中...",
         "ai.designWithAgent" => "Agent でデザイン...",
         "ai.attachImage" => "画像を添付",
@@ -512,10 +511,13 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "ai.searchModels" => "モデルを検索...",
         "ai.noModelsFound" => "モデルが見つかりません",
         "ai.quickAction.loginScreen" => "モバイルログイン画面をデザイン",
+        "ai.quickAction.loginScreenPrompt" => "メール入力、パスワード入力、ログインボタン、ソーシャルログインオプションを含む、モダンなモバイルログイン画面をデザインしてください",
         "ai.quickAction.foodApp" => "フードアプリのホームページ",
         "ai.quickAction.foodAppPrompt" => "Generate a well-designed food mobile app homepage",
         "ai.quickAction.bottomNav" => "ボトムナビゲーションバーをデザイン",
+        "ai.quickAction.bottomNavPrompt" => "ホーム、検索、追加、メッセージ、プロフィールの 5 つのタブを含むモバイルアプリのボトムナビゲーションバーをデザインしてください",
         "ai.quickAction.colorPalette" => "アプリのカラーパレットを提案",
+        "ai.quickAction.colorPalettePrompt" => "ペットケアアプリ向けのモダンなカラーパレットを提案してください",
         "ai.startDesigning" => "Start designing with AI",
         "ai.maximize" => "Maximize",
         "ai.restore" => "Restore",
@@ -539,6 +541,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "fileMenu.daysAgo" => "{{count}}d ago",
         "unsaved.title" => "Unsaved changes",
         "unsaved.message" => "Save changes to \"{{name}}\"?",
+        "unsaved.dontSave" => "Don't Save",
         "code.reactTailwind" => "React + Tailwind",
         "code.htmlCss" => "HTML + CSS",
         "code.cssVariables" => "CSS Variables",
@@ -562,6 +565,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "agents.transport" => "トランスポート",
         "agents.port" => "ポート",
         "agents.mcpRestart" => "MCP 連携はターミナルの再起動後に有効になります。",
+        "agents.mcpReinstallHint" => "OpenPencil のバージョンアップ後、互換性を確保するため MCP 統合を再インストールしてください。",
         "agents.modelCount" => "{{count}} 個のモデル",
         "agents.connectionFailed" => "接続に失敗しました",
         "agents.serverError" => "サーバーエラー {{status}}",
@@ -628,12 +632,11 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "builtin.custom" => "カスタム",
         "builtin.apiKeyBadge" => "API Key",
         "builtin.viaApiKey" => "{{name}} API Key 経由",
-        "builtin.errorProviderNotFound" => {
-            "組み込みプロバイダーが見つかりません。設定を確認してください。"
-        }
+        "builtin.errorProviderNotFound" => "組み込みプロバイダーが見つかりません。設定を確認してください。",
         "builtin.errorApiKeyEmpty" => "API キーが空です。設定で API キーを追加してください。",
         "builtin.parallelAgents" => "並列サブエージェント：{{count}}x（クリックで切替）",
         "builtin.baseUrlPlaceholder" => "https://api.example.com/v1",
+        "builtin.teamDescription" => "デザイン生成用のモデルを選択します。設定すると、デザインタスクはこのモデルを使用する専門エージェントに自動的に委任されます。",
         "builtin.teamDesignModel" => "デザインモデル",
         "builtin.teamSelectModel" => "なし（シングルエージェント）",
         "acp.title" => "ACP Agent",
@@ -668,6 +671,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "figma.convertFailed" => "Figma ファイルの変換に失敗しました",
         "figma.parsing" => ".fig ファイルを解析中...",
         "figma.converting" => "ノードを変換中...",
+        "figma.selectPage" => "このファイルには {{count}} ページあります。インポートするページを選択してください：",
         "figma.layers" => "{{count}} レイヤー",
         "figma.importAll" => "すべてのページをインポート",
         "figma.importComplete" => "インポート完了！",

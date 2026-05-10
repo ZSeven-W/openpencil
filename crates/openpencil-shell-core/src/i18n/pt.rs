@@ -62,8 +62,10 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "git.close" => "Fechar",
         "git.initializing" => "Inicializando repositório…",
         "git.conflict.title" => "Conflito de mesclagem",
+        "git.conflict.description" => "Resolva cada conflito usando os cartões abaixo, depois aplique a mesclagem.",
         "git.conflict.abort" => "Abortar mesclagem",
         "git.conflict.nonOp.title" => "Mesclagem pausada em arquivos não .op",
+        "git.conflict.nonOp.description" => "A mesclagem dos arquivos .op foi concluída, mas outros arquivos do repositório ainda não foram resolvidos. Resolva-os fora do OpenPencil e continue.",
         "git.conflict.nonOp.unresolvedHeading_one" => "1 arquivo precisa de atenção",
         "git.conflict.nonOp.unresolvedHeading_other" => "{{count}} arquivos precisam de atenção",
         "git.conflict.nonOp.continue" => "Continuar mesclagem",
@@ -72,9 +74,8 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "git.conflict.banner.apply" => "Aplicar mesclagem",
         "git.conflict.banner.continue" => "Continuar",
         "git.conflict.banner.finalizeError" => "Não foi possível aplicar: {{message}}",
-        "git.conflict.banner.pollError" => {
-            "Sondagem de status pausada devido a um erro: {{message}}"
-        }
+        "git.conflict.banner.pollError" => "Sondagem de status pausada devido a um erro: {{message}}",
+        "git.conflict.banner.reopenMessage" => "Painel reaberto durante a mesclagem — por favor, cancele e faça pull novamente.",
         "git.conflict.list.heading" => "Todos os conflitos",
         "git.conflict.list.progress" => "{{resolved}} / {{total}} resolvidos",
         "git.conflict.list.allResolved" => "Tudo resolvido",
@@ -126,9 +127,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "git.picker.back" => "Voltar",
         "git.picker.backClose" => "Cancelar",
         "git.picker.empty.heading" => "Nenhum arquivo .op neste repositório",
-        "git.picker.empty.body" => {
-            "O painel Git precisa de pelo menos um arquivo .op para funcionar."
-        }
+        "git.picker.empty.body" => "O painel Git precisa de pelo menos um arquivo .op para funcionar.",
         "git.picker.empty.close" => "Fechar painel",
         "git.autoBind.confirmHeading" => "{{fileName}} encontrado — abrir?",
         "git.autoBind.openButton" => "Abrir",
@@ -140,6 +139,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "git.commit.placeholder" => "Descreva esta alteração…",
         "git.commit.submitButton" => "Salvar marco",
         "git.commit.saveRequiredTitle" => "Salve o documento primeiro",
+        "git.commit.saveRequiredBody" => "Você tem alterações não salvas. Salve o documento para continuar: {{label}}",
         "git.commit.saveRequiredSave" => "Salvar",
         "git.commit.saveRequiredCancel" => "Cancelar",
         "git.header.autosaveError" => "Erro de auto-salvamento",
@@ -202,6 +202,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "git.wizard.clone.usernameLabel" => "Usuário (opcional)",
         "git.wizard.clone.tokenLabel" => "Token de acesso (opcional)",
         "git.wizard.clone.tokenPlaceholder" => "ghp_… deixe em branco para repos públicos",
+        "git.wizard.clone.anonymousHint" => "Deixe em branco para clonar anonimamente (apenas repos públicos).",
         "git.wizard.clone.sshHint" => "Esta URL exige autenticação por chave SSH.",
         "git.wizard.clone.hostDetected" => "Detectado: {{host}} · {{mode}}",
         "git.wizard.clone.authMode.token-or-anon" => "token ou anônimo",
@@ -210,19 +211,15 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "git.wizard.clone.submit" => "Clonar",
         "git.wizard.clone.validationUrl" => "A URL remota é obrigatória",
         "git.wizard.clone.validationDest" => "A pasta de destino é obrigatória",
-        "git.wizard.clone.validationTokenUsername" => {
-            "O usuário é obrigatório quando um token é fornecido"
-        }
-        "git.wizard.clone.error.network" => {
-            "Erro de rede. Verifique sua conexão e tente novamente."
-        }
+        "git.wizard.clone.validationTokenUsername" => "O usuário é obrigatório quando um token é fornecido",
+        "git.wizard.clone.error.clone-network" => "Erro de rede ao clonar. Verifique sua conexão e tente novamente.",
+        "git.wizard.clone.error.network" => "Erro de rede. Verifique sua conexão e tente novamente.",
+        "git.wizard.clone.error.timeout" => "Tempo limite ao clonar. Tente novamente ou use um repositório menor.",
         "git.wizard.clone.error.auth-required" => "Este repositório exige autenticação.",
-        "git.wizard.clone.error.auth-failed" => {
-            "Falha na autenticação. Verifique seu usuário e token."
-        }
-        "git.wizard.clone.error.clone-target-exists" => {
-            "A pasta de destino já existe ou não está vazia."
-        }
+        "git.wizard.clone.error.auth-failed" => "Falha na autenticação. Verifique seu usuário e token.",
+        "git.wizard.clone.error.auth-token-invalid" => "O token de acesso foi rejeitado. Gere um novo e tente novamente.",
+        "git.wizard.clone.error.clone-failed" => "Falha ao clonar. Verifique se a URL aponta para um repositório real.",
+        "git.wizard.clone.error.clone-target-exists" => "A pasta de destino já existe ou não está vazia.",
         "git.pull.label" => "Pull",
         "git.pull.tooltip" => "Pull do origin",
         "git.pull.noRemote" => "Nenhum remoto configurado — adicione um nas configurações do Git",
@@ -233,6 +230,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "git.push.noRemote" => "Nenhum remoto configurado — adicione um nas configurações do Git",
         "git.push.upToDate" => "Nada para enviar — você está em dia",
         "git.push.retry" => "Tentar push novamente",
+        "git.push.rejectedBody" => "O remoto tem commits que você ainda não possui. Faça pull primeiro e depois push novamente.",
         "git.push.rejectedDismiss" => "Fechar",
         "git.push.rejectedPull" => "Fazer pull agora",
         "git.remote.dismissError" => "Fechar",
@@ -250,6 +248,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "git.remote.clearConfirmAction" => "Confirmar",
         "git.remote.aheadBehind" => "{{ahead}} à frente · {{behind}} atrás",
         "git.remote.fetchButton" => "Buscar",
+        "git.remote.sshIsoUnsupported" => "Transporte SSH não é suportado pelo motor integrado. Instale o git do sistema ou use uma URL remota HTTPS.",
         "git.remote.storedAuthLabel" => "Credenciais salvas",
         "git.remote.storedAuth.token" => "Token",
         "git.remote.storedAuth.ssh" => "Chave SSH",
@@ -261,14 +260,13 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "git.ssh.heading" => "Chaves SSH",
         "git.ssh.back" => "Voltar",
         "git.ssh.cancel" => "Cancelar",
+        "git.ssh.isoUnsupported" => "O remoto atual usa SSH, mas o motor integrado não pode executar transporte SSH. Instale o git do sistema ou mude a URL remota para HTTPS.",
         "git.ssh.emptyList" => "Ainda não há chaves SSH.",
         "git.ssh.generateAction" => "Gerar nova",
         "git.ssh.importAction" => "Importar existente",
         "git.ssh.copyPublicKey" => "Copiar chave pública",
         "git.ssh.copiedHint" => "Copiada",
-        "git.ssh.copyUnsupported" => {
-            "Área de transferência indisponível — copie esta chave manualmente."
-        }
+        "git.ssh.copyUnsupported" => "Área de transferência indisponível — copie esta chave manualmente.",
         "git.ssh.deleteKey" => "Excluir {{name}}",
         "git.ssh.deletePrompt" => "Excluir a chave SSH {{name}}?",
         "git.ssh.deleteConfirm" => "Excluir",
@@ -286,6 +284,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "git.ssh.validationComment" => "O comentário é obrigatório",
         "git.ssh.validationImportPath" => "Escolha um arquivo de chave privada para importar",
         "git.ssh.providerLink" => "Abrir configurações de chaves SSH de {{host}}",
+        "git.ssh.genericGuidance" => "Copie a chave pública e adicione-a às configurações de chaves SSH do seu provedor Git.",
         "git.auth.formLabel" => "Credenciais do Git",
         "git.auth.heading" => "Autenticar em {{host}}",
         "git.auth.headingUnknown" => "Autenticar neste remoto",
@@ -296,12 +295,15 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "git.auth.tokenLabel" => "Token de acesso",
         "git.auth.tokenPlaceholder" => "ghp_… ou PAT",
         "git.auth.sshKeyLabel" => "Chave SSH",
+        "git.auth.sshNoKeys" => "Nenhuma chave SSH disponível. Importe ou gere uma primeiro nas configurações do Git.",
         "git.auth.rememberLabel" => "Lembrar esta credencial para este host",
         "git.auth.rememberHint" => "Lembrar esta credencial para este host",
         "git.auth.cancel" => "Cancelar",
         "git.auth.validationToken" => "O token de acesso é obrigatório",
         "git.auth.validationSshKey" => "Selecione uma chave SSH",
         "git.auth.error.auth-required" => "Este remoto requer autenticação.",
+        "git.auth.error.auth-failed" => "Falha na autenticação. Verifique suas credenciais e tente novamente.",
+        "git.auth.error.auth-token-invalid" => "O token de acesso foi rejeitado. Gere um novo e tente novamente.",
         "rightPanel.design" => "Design",
         "rightPanel.code" => "Código",
         "rightPanel.noSelection" => "Selecione um elemento",
@@ -325,6 +327,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "updater.restartInstall" => "Reiniciar e instalar",
         "updater.installing" => "Instalando...",
         "updater.releaseDate" => "Data de lançamento: {{date}}",
+        "updater.restartHint" => "Reinicie para aplicar a atualização. A reinicialização geralmente leva de 10 a 15 segundos.",
         "updater.unknownError" => "Erro desconhecido do atualizador.",
         "updater.title.checking" => "Verificando atualizações",
         "updater.title.available" => "Atualização encontrada",
@@ -334,9 +337,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "updater.subtitle.checking" => "Procurando a versão mais recente...",
         "updater.subtitle.available" => "A versão {{version}} está disponível.",
         "updater.subtitle.availableGeneric" => "Uma nova versão está disponível.",
-        "updater.subtitle.downloading" => {
-            "A versão {{version}} está sendo baixada em segundo plano."
-        }
+        "updater.subtitle.downloading" => "A versão {{version}} está sendo baixada em segundo plano.",
         "updater.subtitle.downloadingGeneric" => "Baixando pacote de atualização em segundo plano.",
         "updater.subtitle.downloaded" => "A versão {{version}} foi baixada.",
         "updater.subtitle.downloadedGeneric" => "A atualização foi baixada.",
@@ -499,6 +500,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "ai.newChat" => "Novo chat",
         "ai.collapse" => "Recolher",
         "ai.tryExample" => "Experimente um exemplo para criar...",
+        "ai.tipSelectElements" => "Dica: Selecione elementos no canvas antes de conversar para dar contexto.",
         "ai.generating" => "Gerando...",
         "ai.designWithAgent" => "Criar com Agente...",
         "ai.attachImage" => "Anexar imagem",
@@ -509,9 +511,11 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "ai.searchModels" => "Pesquisar modelos...",
         "ai.noModelsFound" => "Nenhum modelo encontrado",
         "ai.quickAction.loginScreen" => "Criar uma tela de login mobile",
+        "ai.quickAction.loginScreenPrompt" => "Design a modern mobile login screen with email input, password input, login button, and social login options",
         "ai.quickAction.foodApp" => "Página inicial de app de comida",
         "ai.quickAction.foodAppPrompt" => "Generate a well-designed food mobile app homepage",
         "ai.quickAction.bottomNav" => "Criar uma barra de navegação inferior",
+        "ai.quickAction.bottomNavPrompt" => "Design a mobile app bottom navigation bar with 5 tabs: Home, Search, Add, Messages, Profile",
         "ai.quickAction.colorPalette" => "Sugerir uma paleta de cores para meu app",
         "ai.quickAction.colorPalettePrompt" => "Suggest a modern color palette for a pet care app",
         "ai.startDesigning" => "Start designing with AI",
@@ -537,6 +541,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "fileMenu.daysAgo" => "{{count}}d ago",
         "unsaved.title" => "Unsaved changes",
         "unsaved.message" => "Save changes to \"{{name}}\"?",
+        "unsaved.dontSave" => "Don't Save",
         "code.reactTailwind" => "React + Tailwind",
         "code.htmlCss" => "HTML + CSS",
         "code.cssVariables" => "CSS Variables",
@@ -560,6 +565,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "agents.transport" => "Transporte",
         "agents.port" => "Porta",
         "agents.mcpRestart" => "As integrações MCP entrarão em vigor após reiniciar o terminal.",
+        "agents.mcpReinstallHint" => "Após atualizar o OpenPencil, reinstale as integrações MCP para garantir a compatibilidade.",
         "agents.modelCount" => "{{count}} modelo(s)",
         "agents.connectionFailed" => "Falha na conexão",
         "agents.serverError" => "Erro do servidor {{status}}",
@@ -599,8 +605,10 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "settings.images" => "Images",
         "settings.system" => "Sistema",
         "settings.autoUpdateDesc" => "Verificar automaticamente novas versões ao iniciar",
+        "settings.systemDesktopOnly" => "As configurações do sistema estão disponíveis no aplicativo de desktop.",
         "settings.envHint" => "Você pode definir variáveis de ambiente adicionais em {{path}}.",
         "builtin.title" => "Provedores integrados",
+        "builtin.description" => "Configure as chaves de API diretamente — sem ferramentas CLI necessárias.",
         "builtin.addProvider" => "Adicionar provedor",
         "builtin.empty" => "Nenhum provedor integrado configurado ainda.",
         "builtin.displayName" => "Nome de exibição",
@@ -624,8 +632,11 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "builtin.custom" => "Personalizado",
         "builtin.apiKeyBadge" => "API Key",
         "builtin.viaApiKey" => "via API Key de {{name}}",
+        "builtin.errorProviderNotFound" => "Provedor integrado não encontrado. Por favor, verifique suas configurações.",
+        "builtin.errorApiKeyEmpty" => "A API key está vazia. Por favor, adicione sua API key nas configurações.",
         "builtin.parallelAgents" => "Sub-agentes paralelos: {{count}}x (clique para alternar)",
         "builtin.baseUrlPlaceholder" => "https://api.example.com/v1",
+        "builtin.teamDescription" => "Selecione um modelo para geração de design. Quando definido, tarefas de design são automaticamente delegadas a um agente especializado usando este modelo.",
         "builtin.teamDesignModel" => "Modelo de design",
         "builtin.teamSelectModel" => "Nenhum (agente único)",
         "acp.title" => "ACP Agent",

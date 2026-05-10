@@ -65,6 +65,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "git.conflict.description" => "नीचे दिए कार्ड्स से प्रत्येक विरोध हल करें, फिर मर्ज लागू करें।",
         "git.conflict.abort" => "विलय रद्द करें",
         "git.conflict.nonOp.title" => ".op से भिन्न फ़ाइलों पर विलय रोका गया",
+        "git.conflict.nonOp.description" => ".op विलय पूरा हो गया है, लेकिन रेपो की अन्य फ़ाइलें अभी भी अनसुलझी हैं। उन्हें OpenPencil के बाहर हल करें, फिर जारी रखें।",
         "git.conflict.nonOp.unresolvedHeading_one" => "1 फ़ाइल को ध्यान चाहिए",
         "git.conflict.nonOp.unresolvedHeading_other" => "{{count}} फ़ाइलों को ध्यान चाहिए",
         "git.conflict.nonOp.continue" => "विलय जारी रखें",
@@ -74,6 +75,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "git.conflict.banner.continue" => "जारी रखें",
         "git.conflict.banner.finalizeError" => "लागू नहीं हो सका: {{message}}",
         "git.conflict.banner.pollError" => "एक त्रुटि के कारण स्थिति जाँच रुकी हुई है: {{message}}",
+        "git.conflict.banner.reopenMessage" => "पैनल मर्ज के बीच में फिर से खोला गया — कृपया रद्द करें और फिर से pull करें।",
         "git.conflict.list.heading" => "सभी संघर्ष",
         "git.conflict.list.progress" => "{{resolved}} / {{total}} हल किए",
         "git.conflict.list.allResolved" => "सब हल हो गया",
@@ -137,9 +139,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "git.commit.placeholder" => "इस बदलाव का वर्णन करें…",
         "git.commit.submitButton" => "माइलस्टोन सहेजें",
         "git.commit.saveRequiredTitle" => "पहले दस्तावेज़ सहेजें",
-        "git.commit.saveRequiredBody" => {
-            "आपके पास सहेजे न गए बदलाव हैं। जारी रखने के लिए दस्तावेज़ सहेजें: {{label}}"
-        }
+        "git.commit.saveRequiredBody" => "आपके पास सहेजे न गए बदलाव हैं। जारी रखने के लिए दस्तावेज़ सहेजें: {{label}}",
         "git.commit.saveRequiredSave" => "सहेजें",
         "git.commit.saveRequiredCancel" => "रद्द करें",
         "git.header.autosaveError" => "ऑटो-सेव त्रुटि",
@@ -202,9 +202,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "git.wizard.clone.usernameLabel" => "उपयोगकर्ता नाम (वैकल्पिक)",
         "git.wizard.clone.tokenLabel" => "एक्सेस टोकन (वैकल्पिक)",
         "git.wizard.clone.tokenPlaceholder" => "ghp_… सार्वजनिक के लिए खाली छोड़ें",
-        "git.wizard.clone.anonymousHint" => {
-            "गुमनाम रूप से क्लोन करने के लिए खाली छोड़ें (केवल सार्वजनिक रिपॉज़िटरी)।"
-        }
+        "git.wizard.clone.anonymousHint" => "गुमनाम रूप से क्लोन करने के लिए खाली छोड़ें (केवल सार्वजनिक रिपॉज़िटरी)।",
         "git.wizard.clone.sshHint" => "इस URL के लिए SSH कुंजी प्रमाणीकरण आवश्यक है।",
         "git.wizard.clone.hostDetected" => "पहचाना गया: {{host}} · {{mode}}",
         "git.wizard.clone.authMode.token-or-anon" => "टोकन या गुमनाम",
@@ -214,12 +212,13 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "git.wizard.clone.validationUrl" => "रिमोट URL आवश्यक है",
         "git.wizard.clone.validationDest" => "गंतव्य फ़ोल्डर आवश्यक है",
         "git.wizard.clone.validationTokenUsername" => "टोकन प्रदान करते समय उपयोगकर्ता नाम आवश्यक है",
+        "git.wizard.clone.error.clone-network" => "क्लोन करते समय नेटवर्क त्रुटि। अपना कनेक्शन जांचें और फिर से प्रयास करें।",
         "git.wizard.clone.error.network" => "नेटवर्क त्रुटि। अपना कनेक्शन जांचें और फिर से प्रयास करें।",
+        "git.wizard.clone.error.timeout" => "क्लोन का समय समाप्त हो गया। फिर से प्रयास करें या छोटी रिपॉज़िटरी का उपयोग करें।",
         "git.wizard.clone.error.auth-required" => "इस रिपॉज़िटरी के लिए प्रमाणीकरण आवश्यक है।",
         "git.wizard.clone.error.auth-failed" => "प्रमाणीकरण विफल। अपना उपयोगकर्ता नाम और टोकन जांचें।",
-        "git.wizard.clone.error.auth-token-invalid" => {
-            "एक्सेस टोकन अस्वीकृत। नया टोकन बनाएं और फिर से प्रयास करें।"
-        }
+        "git.wizard.clone.error.auth-token-invalid" => "एक्सेस टोकन अस्वीकृत। नया टोकन बनाएं और फिर से प्रयास करें।",
+        "git.wizard.clone.error.clone-failed" => "क्लोन विफल। सत्यापित करें कि URL किसी वास्तविक रिपॉज़िटरी की ओर इशारा करता है।",
         "git.wizard.clone.error.clone-target-exists" => "गंतव्य फ़ोल्डर पहले से मौजूद है या खाली नहीं है।",
         "git.pull.label" => "पुल",
         "git.pull.tooltip" => "origin से पुल",
@@ -249,6 +248,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "git.remote.clearConfirmAction" => "पुष्टि करें",
         "git.remote.aheadBehind" => "{{ahead}} आगे · {{behind}} पीछे",
         "git.remote.fetchButton" => "फ़ेच",
+        "git.remote.sshIsoUnsupported" => "बिल्ट-इन इंजन SSH ट्रांसपोर्ट का समर्थन नहीं करता। सिस्टम git इंस्टॉल करें या HTTPS रिमोट URL पर स्विच करें।",
         "git.remote.storedAuthLabel" => "सहेजे गए क्रेडेंशियल",
         "git.remote.storedAuth.token" => "टोकन",
         "git.remote.storedAuth.ssh" => "SSH कुंजी",
@@ -260,6 +260,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "git.ssh.heading" => "SSH कुंजियाँ",
         "git.ssh.back" => "वापस",
         "git.ssh.cancel" => "रद्द करें",
+        "git.ssh.isoUnsupported" => "वर्तमान रिमोट SSH का उपयोग कर रहा है, लेकिन बिल्ट-इन इंजन SSH ट्रांसपोर्ट नहीं कर सकता। सिस्टम git इंस्टॉल करें या रिमोट URL को HTTPS में बदलें।",
         "git.ssh.emptyList" => "अभी तक कोई SSH कुंजी नहीं।",
         "git.ssh.generateAction" => "नई बनाएँ",
         "git.ssh.importAction" => "मौजूदा आयात करें",
@@ -283,9 +284,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "git.ssh.validationComment" => "टिप्पणी आवश्यक है",
         "git.ssh.validationImportPath" => "आयात करने के लिए निजी कुंजी फ़ाइल चुनें",
         "git.ssh.providerLink" => "{{host}} SSH कुंजी सेटिंग्स खोलें",
-        "git.ssh.genericGuidance" => {
-            "सार्वजनिक कुंजी कॉपी करें और अपने Git प्रदाता की SSH कुंजी सेटिंग्स में जोड़ें।"
-        }
+        "git.ssh.genericGuidance" => "सार्वजनिक कुंजी कॉपी करें और अपने Git प्रदाता की SSH कुंजी सेटिंग्स में जोड़ें।",
         "git.auth.formLabel" => "Git क्रेडेंशियल",
         "git.auth.heading" => "{{host}} के साथ प्रमाणीकरण",
         "git.auth.headingUnknown" => "इस रिमोट के साथ प्रमाणीकरण",
@@ -304,9 +303,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "git.auth.validationSshKey" => "एक SSH कुंजी चुनें",
         "git.auth.error.auth-required" => "इस रिमोट के लिए प्रमाणीकरण आवश्यक है।",
         "git.auth.error.auth-failed" => "प्रमाणीकरण विफल। अपने क्रेडेंशियल जांचें और पुनः प्रयास करें।",
-        "git.auth.error.auth-token-invalid" => {
-            "एक्सेस टोकन अस्वीकृत किया गया। नया बनाएं और फिर से प्रयास करें।"
-        }
+        "git.auth.error.auth-token-invalid" => "एक्सेस टोकन अस्वीकृत किया गया। नया बनाएं और फिर से प्रयास करें।",
         "rightPanel.design" => "डिज़ाइन",
         "rightPanel.code" => "कोड",
         "rightPanel.noSelection" => "एक तत्व चुनें",
@@ -330,9 +327,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "updater.restartInstall" => "पुनः आरंभ करें और इंस्टॉल करें",
         "updater.installing" => "इंस्टॉल हो रहा है...",
         "updater.releaseDate" => "रिलीज़ तिथि: {{date}}",
-        "updater.restartHint" => {
-            "अपडेट लागू करने के लिए पुनः आरंभ करें। पुनः लॉन्च में आमतौर पर 10-15 सेकंड लगते हैं।"
-        }
+        "updater.restartHint" => "अपडेट लागू करने के लिए पुनः आरंभ करें। पुनः लॉन्च में आमतौर पर 10-15 सेकंड लगते हैं।",
         "updater.unknownError" => "अज्ञात अपडेटर त्रुटि।",
         "updater.title.checking" => "अपडेट की जाँच हो रही है",
         "updater.title.available" => "अपडेट मिला",
@@ -516,9 +511,11 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "ai.searchModels" => "मॉडल खोजें...",
         "ai.noModelsFound" => "कोई मॉडल नहीं मिला",
         "ai.quickAction.loginScreen" => "मोबाइल लॉगिन स्क्रीन डिज़ाइन करें",
+        "ai.quickAction.loginScreenPrompt" => "ईमेल इनपुट, पासवर्ड इनपुट, लॉगिन बटन और सोशल लॉगिन विकल्पों के साथ एक आधुनिक मोबाइल लॉगिन स्क्रीन डिज़ाइन करें",
         "ai.quickAction.foodApp" => "फ़ूड ऐप होमपेज",
         "ai.quickAction.foodAppPrompt" => "Generate a well-designed food mobile app homepage",
         "ai.quickAction.bottomNav" => "बॉटम नेविगेशन बार डिज़ाइन करें",
+        "ai.quickAction.bottomNavPrompt" => "5 टैब के साथ एक मोबाइल ऐप बॉटम नेविगेशन बार डिज़ाइन करें: होम, खोजें, जोड़ें, संदेश, प्रोफ़ाइल",
         "ai.quickAction.colorPalette" => "मेरे ऐप के लिए कलर पैलेट सुझाएँ",
         "ai.quickAction.colorPalettePrompt" => "एक पेट केयर ऐप के लिए आधुनिक कलर पैलेट सुझाएँ",
         "ai.startDesigning" => "Start designing with AI",
@@ -544,6 +541,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "fileMenu.daysAgo" => "{{count}}d ago",
         "unsaved.title" => "Unsaved changes",
         "unsaved.message" => "Save changes to \"{{name}}\"?",
+        "unsaved.dontSave" => "Don't Save",
         "code.reactTailwind" => "React + Tailwind",
         "code.htmlCss" => "HTML + CSS",
         "code.cssVariables" => "CSS Variables",
@@ -567,6 +565,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "agents.transport" => "ट्रांसपोर्ट",
         "agents.port" => "पोर्ट",
         "agents.mcpRestart" => "MCP इंटीग्रेशन टर्मिनल पुनः आरंभ करने के बाद प्रभावी होंगे।",
+        "agents.mcpReinstallHint" => "OpenPencil अपग्रेड करने के बाद, संगतता सुनिश्चित करने के लिए कृपया MCP इंटीग्रेशन पुनः इंस्टॉल करें।",
         "agents.modelCount" => "{{count}} मॉडल",
         "agents.connectionFailed" => "कनेक्शन विफल",
         "agents.serverError" => "सर्वर त्रुटि {{status}}",
@@ -637,6 +636,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "builtin.errorApiKeyEmpty" => "API key खाली है। कृपया सेटिंग्स में अपनी API key जोड़ें।",
         "builtin.parallelAgents" => "समानांतर सब-एजेंट: {{count}}x (बदलने के लिए क्लिक करें)",
         "builtin.baseUrlPlaceholder" => "https://api.example.com/v1",
+        "builtin.teamDescription" => "डिज़ाइन जनरेशन के लिए एक मॉडल चुनें। सेट करने पर, डिज़ाइन कार्य स्वचालित रूप से इस मॉडल का उपयोग करने वाले विशेषज्ञ एजेंट को सौंपे जाते हैं।",
         "builtin.teamDesignModel" => "डिज़ाइन मॉडल",
         "builtin.teamSelectModel" => "कोई नहीं (एकल एजेंट)",
         "acp.title" => "ACP Agent",

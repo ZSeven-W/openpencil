@@ -49,6 +49,8 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "topbar.exitFullscreen" => "Exit fullscreen",
         "topbar.edited" => "— Edited",
         "topbar.closeConfirmMessage" => "Do you want to save changes before closing?",
+        "topbar.closeConfirmDetail" => "Your changes will be lost if you don't save them.",
+        "topbar.dontSave" => "Don't Save",
         "topbar.agentsAndMcp" => "Agents & MCP",
         "topbar.setupAgentsMcp" => "Setup Agents & MCP",
         "topbar.connected" => "connected",
@@ -60,11 +62,10 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "git.close" => "Close",
         "git.initializing" => "Initializing repository…",
         "git.conflict.title" => "Merge conflict",
-        "git.conflict.description" => {
-            "Resolve each conflict using the cards below, then apply the merge."
-        }
+        "git.conflict.description" => "Resolve each conflict using the cards below, then apply the merge.",
         "git.conflict.abort" => "Abort merge",
         "git.conflict.nonOp.title" => "Merge paused on non-.op files",
+        "git.conflict.nonOp.description" => "The .op merge finished, but other files in this repo are still unresolved. Fix them outside OpenPencil, then continue.",
         "git.conflict.nonOp.unresolvedHeading_one" => "1 file needs attention",
         "git.conflict.nonOp.unresolvedHeading_other" => "{{count}} files need attention",
         "git.conflict.nonOp.continue" => "Continue merge",
@@ -74,6 +75,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "git.conflict.banner.continue" => "Continue",
         "git.conflict.banner.finalizeError" => "Could not apply: {{message}}",
         "git.conflict.banner.pollError" => "Status polling paused due to an error: {{message}}",
+        "git.conflict.banner.reopenMessage" => "Panel reopened mid-merge — in-memory conflict state was lost. Please abort and re-pull.",
         "git.conflict.list.heading" => "All conflicts",
         "git.conflict.list.progress" => "{{resolved}} / {{total}} resolved",
         "git.conflict.list.allResolved" => "All resolved",
@@ -137,6 +139,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "git.commit.placeholder" => "Describe this change…",
         "git.commit.submitButton" => "Save milestone",
         "git.commit.saveRequiredTitle" => "Save the document first",
+        "git.commit.saveRequiredBody" => "You have unsaved changes. Save the document to continue: {{label}}",
         "git.commit.saveRequiredSave" => "Save",
         "git.commit.saveRequiredCancel" => "Cancel",
         "git.header.autosaveError" => "Autosave error",
@@ -208,17 +211,15 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "git.wizard.clone.submit" => "Clone",
         "git.wizard.clone.validationUrl" => "Remote URL is required",
         "git.wizard.clone.validationDest" => "Destination folder is required",
-        "git.wizard.clone.validationTokenUsername" => {
-            "Username is required when a token is provided"
-        }
+        "git.wizard.clone.validationTokenUsername" => "Username is required when a token is provided",
+        "git.wizard.clone.error.clone-network" => "Network error while cloning. Check your connection and try again.",
         "git.wizard.clone.error.network" => "Network error. Check your connection and try again.",
-        "git.wizard.clone.error.timeout" => {
-            "Clone timed out. Try again or use a smaller repository."
-        }
+        "git.wizard.clone.error.timeout" => "Clone timed out. Try again or use a smaller repository.",
         "git.wizard.clone.error.auth-required" => "Authentication is required for this repository.",
-        "git.wizard.clone.error.auth-failed" => {
-            "Authentication failed. Check your username and token."
-        }
+        "git.wizard.clone.error.auth-failed" => "Authentication failed. Check your username and token.",
+        "git.wizard.clone.error.auth-token-invalid" => "The access token was rejected. Generate a new one and try again.",
+        "git.wizard.clone.error.clone-failed" => "Clone failed. Verify the URL points at a real repository.",
+        "git.wizard.clone.error.clone-target-exists" => "The destination folder already exists or is not empty.",
         "git.pull.label" => "Pull",
         "git.pull.tooltip" => "Pull from origin",
         "git.pull.noRemote" => "No remote configured — add one in Git settings",
@@ -229,6 +230,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "git.push.noRemote" => "No remote configured — add one in Git settings",
         "git.push.upToDate" => "Nothing to push — you are up to date",
         "git.push.retry" => "Retry push",
+        "git.push.rejectedBody" => "The remote has commits you do not have yet. Pull first, then push again.",
         "git.push.rejectedDismiss" => "Dismiss",
         "git.push.rejectedPull" => "Pull now",
         "git.remote.dismissError" => "Dismiss",
@@ -246,6 +248,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "git.remote.clearConfirmAction" => "Confirm",
         "git.remote.aheadBehind" => "{{ahead}} ahead · {{behind}} behind",
         "git.remote.fetchButton" => "Fetch",
+        "git.remote.sshIsoUnsupported" => "SSH transport is not supported on the built-in engine. Install system git or switch to an HTTPS remote URL.",
         "git.remote.storedAuthLabel" => "Stored credentials",
         "git.remote.storedAuth.token" => "Token",
         "git.remote.storedAuth.ssh" => "SSH key",
@@ -257,6 +260,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "git.ssh.heading" => "SSH keys",
         "git.ssh.back" => "Back",
         "git.ssh.cancel" => "Cancel",
+        "git.ssh.isoUnsupported" => "The current remote uses SSH but the built-in engine cannot perform SSH transport. Install system git or switch the remote URL to HTTPS.",
         "git.ssh.emptyList" => "No SSH keys yet.",
         "git.ssh.generateAction" => "Generate new",
         "git.ssh.importAction" => "Import existing",
@@ -280,6 +284,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "git.ssh.validationComment" => "Comment is required",
         "git.ssh.validationImportPath" => "Pick a private key file to import",
         "git.ssh.providerLink" => "Open {{host}} SSH key settings",
+        "git.ssh.genericGuidance" => "Copy the public key and add it to your Git provider’s SSH key settings.",
         "git.auth.formLabel" => "Git credentials",
         "git.auth.heading" => "Authenticate with {{host}}",
         "git.auth.headingUnknown" => "Authenticate with this remote",
@@ -290,18 +295,15 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "git.auth.tokenLabel" => "Access token",
         "git.auth.tokenPlaceholder" => "ghp_… or PAT",
         "git.auth.sshKeyLabel" => "SSH key",
-        "git.auth.sshNoKeys" => {
-            "No SSH keys available. Import or generate one in Git settings first."
-        }
+        "git.auth.sshNoKeys" => "No SSH keys available. Import or generate one in Git settings first.",
         "git.auth.rememberLabel" => "Remember this credential for this host",
         "git.auth.rememberHint" => "Remember this credential for this host",
         "git.auth.cancel" => "Cancel",
         "git.auth.validationToken" => "Access token is required",
         "git.auth.validationSshKey" => "Select an SSH key",
         "git.auth.error.auth-required" => "Authentication is required for this remote.",
-        "git.auth.error.auth-failed" => {
-            "Authentication failed. Check your credentials and try again."
-        }
+        "git.auth.error.auth-failed" => "Authentication failed. Check your credentials and try again.",
+        "git.auth.error.auth-token-invalid" => "The access token was rejected. Generate a new one and try again.",
         "rightPanel.design" => "Design",
         "rightPanel.code" => "Code",
         "rightPanel.noSelection" => "Select an element",
@@ -509,9 +511,11 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "ai.searchModels" => "Search models...",
         "ai.noModelsFound" => "No models found",
         "ai.quickAction.loginScreen" => "Design a mobile login screen",
+        "ai.quickAction.loginScreenPrompt" => "Design a modern mobile login screen with email input, password input, login button, and social login options",
         "ai.quickAction.foodApp" => "Food app homepage",
         "ai.quickAction.foodAppPrompt" => "Generate a well-designed food mobile app homepage",
         "ai.quickAction.bottomNav" => "Design a bottom navigation bar",
+        "ai.quickAction.bottomNavPrompt" => "Design a mobile app bottom navigation bar with 5 tabs: Home, Search, Add, Messages, Profile",
         "ai.quickAction.colorPalette" => "Suggest a color palette for my app",
         "ai.quickAction.colorPalettePrompt" => "Suggest a modern color palette for a pet care app",
         "ai.startDesigning" => "Start designing with AI",
@@ -537,6 +541,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "fileMenu.daysAgo" => "{{count}}d ago",
         "unsaved.title" => "Unsaved changes",
         "unsaved.message" => "Save changes to \"{{name}}\"?",
+        "unsaved.dontSave" => "Don't Save",
         "code.reactTailwind" => "React + Tailwind",
         "code.htmlCss" => "HTML + CSS",
         "code.cssVariables" => "CSS Variables",
@@ -560,6 +565,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "agents.transport" => "Transport",
         "agents.port" => "Port",
         "agents.mcpRestart" => "MCP integrations will take effect after restarting the terminal.",
+        "agents.mcpReinstallHint" => "After upgrading OpenPencil, please reinstall MCP integrations to ensure compatibility.",
         "agents.modelCount" => "{{count}} model(s)",
         "agents.connectionFailed" => "Connection failed",
         "agents.serverError" => "Server error {{status}}",
@@ -626,12 +632,11 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "builtin.custom" => "Custom",
         "builtin.apiKeyBadge" => "API Key",
         "builtin.viaApiKey" => "via {{name}} API Key",
-        "builtin.errorProviderNotFound" => {
-            "Built-in provider not found. Please check your settings."
-        }
+        "builtin.errorProviderNotFound" => "Built-in provider not found. Please check your settings.",
         "builtin.errorApiKeyEmpty" => "API key is empty. Please add your API key in settings.",
         "builtin.parallelAgents" => "Parallel sub-agents: {{count}}x (click to cycle)",
         "builtin.baseUrlPlaceholder" => "https://api.example.com/v1",
+        "builtin.teamDescription" => "Select a model for design generation. When set, design tasks are automatically delegated to a specialist agent using this model.",
         "builtin.teamDesignModel" => "Design Model",
         "builtin.teamSelectModel" => "None (single agent)",
         "acp.title" => "ACP Agents",

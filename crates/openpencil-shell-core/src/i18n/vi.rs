@@ -62,11 +62,10 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "git.close" => "Đóng",
         "git.initializing" => "Đang khởi tạo kho…",
         "git.conflict.title" => "Xung đột hợp nhất",
-        "git.conflict.description" => {
-            "Giải quyết từng xung đột bằng các thẻ bên dưới, sau đó áp dụng gộp."
-        }
+        "git.conflict.description" => "Giải quyết từng xung đột bằng các thẻ bên dưới, sau đó áp dụng gộp.",
         "git.conflict.abort" => "Hủy hợp nhất",
         "git.conflict.nonOp.title" => "Gộp tạm dừng ở các tệp không phải .op",
+        "git.conflict.nonOp.description" => "Gộp .op đã hoàn tất, nhưng các tệp khác trong kho vẫn chưa được giải quyết. Giải quyết chúng bên ngoài OpenPencil, sau đó tiếp tục.",
         "git.conflict.nonOp.unresolvedHeading_one" => "1 tệp cần xử lý",
         "git.conflict.nonOp.unresolvedHeading_other" => "{{count}} tệp cần xử lý",
         "git.conflict.nonOp.continue" => "Tiếp tục gộp",
@@ -76,6 +75,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "git.conflict.banner.continue" => "Tiếp tục",
         "git.conflict.banner.finalizeError" => "Không thể áp dụng: {{message}}",
         "git.conflict.banner.pollError" => "Kiểm tra trạng thái tạm dừng do lỗi: {{message}}",
+        "git.conflict.banner.reopenMessage" => "Bảng điều khiển được mở lại trong khi hợp nhất — vui lòng hủy và pull lại.",
         "git.conflict.list.heading" => "Tất cả xung đột",
         "git.conflict.list.progress" => "{{resolved}} / {{total}} đã giải quyết",
         "git.conflict.list.allResolved" => "Đã giải quyết tất cả",
@@ -139,9 +139,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "git.commit.placeholder" => "Mô tả thay đổi này…",
         "git.commit.submitButton" => "Lưu mốc",
         "git.commit.saveRequiredTitle" => "Hãy lưu tài liệu trước",
-        "git.commit.saveRequiredBody" => {
-            "Bạn có thay đổi chưa lưu. Lưu tài liệu để tiếp tục: {{label}}"
-        }
+        "git.commit.saveRequiredBody" => "Bạn có thay đổi chưa lưu. Lưu tài liệu để tiếp tục: {{label}}",
         "git.commit.saveRequiredSave" => "Lưu",
         "git.commit.saveRequiredCancel" => "Hủy",
         "git.header.autosaveError" => "Lỗi tự động lưu",
@@ -213,14 +211,14 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "git.wizard.clone.submit" => "Sao chép",
         "git.wizard.clone.validationUrl" => "Cần URL từ xa",
         "git.wizard.clone.validationDest" => "Cần thư mục đích",
-        "git.wizard.clone.validationTokenUsername" => {
-            "Cần tên người dùng khi cung cấp mã thông báo"
-        }
-        "git.wizard.clone.error.clone-network" => {
-            "Lỗi mạng khi sao chép. Kiểm tra kết nối và thử lại."
-        }
+        "git.wizard.clone.validationTokenUsername" => "Cần tên người dùng khi cung cấp mã thông báo",
+        "git.wizard.clone.error.clone-network" => "Lỗi mạng khi sao chép. Kiểm tra kết nối và thử lại.",
         "git.wizard.clone.error.network" => "Lỗi mạng. Kiểm tra kết nối và thử lại.",
+        "git.wizard.clone.error.timeout" => "Sao chép hết thời gian. Thử lại hoặc dùng kho lưu trữ nhỏ hơn.",
         "git.wizard.clone.error.auth-required" => "Kho lưu trữ này cần xác thực.",
+        "git.wizard.clone.error.auth-failed" => "Xác thực thất bại. Kiểm tra tên người dùng và mã thông báo.",
+        "git.wizard.clone.error.auth-token-invalid" => "Mã thông báo truy cập bị từ chối. Tạo mã mới và thử lại.",
+        "git.wizard.clone.error.clone-failed" => "Sao chép thất bại. Hãy xác minh URL trỏ đến một kho lưu trữ thực sự.",
         "git.wizard.clone.error.clone-target-exists" => "Thư mục đích đã tồn tại hoặc không trống.",
         "git.pull.label" => "Pull",
         "git.pull.tooltip" => "Pull từ origin",
@@ -250,6 +248,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "git.remote.clearConfirmAction" => "Xác nhận",
         "git.remote.aheadBehind" => "Trước {{ahead}} · Sau {{behind}}",
         "git.remote.fetchButton" => "Fetch",
+        "git.remote.sshIsoUnsupported" => "Engine tích hợp không hỗ trợ truyền tải SSH. Cài đặt git hệ thống hoặc chuyển sang URL remote HTTPS.",
         "git.remote.storedAuthLabel" => "Thông tin xác thực đã lưu",
         "git.remote.storedAuth.token" => "Token",
         "git.remote.storedAuth.ssh" => "Khóa SSH",
@@ -261,14 +260,13 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "git.ssh.heading" => "Khóa SSH",
         "git.ssh.back" => "Quay lại",
         "git.ssh.cancel" => "Hủy",
+        "git.ssh.isoUnsupported" => "Remote hiện tại dùng SSH, nhưng engine tích hợp không thể thực hiện truyền tải SSH. Cài đặt git hệ thống hoặc đổi URL remote sang HTTPS.",
         "git.ssh.emptyList" => "Chưa có khóa SSH nào.",
         "git.ssh.generateAction" => "Tạo mới",
         "git.ssh.importAction" => "Nhập khóa có sẵn",
         "git.ssh.copyPublicKey" => "Sao chép khóa công khai",
         "git.ssh.copiedHint" => "Đã sao chép",
-        "git.ssh.copyUnsupported" => {
-            "Không có clipboard — vui lòng sao chép khóa này theo cách thủ công."
-        }
+        "git.ssh.copyUnsupported" => "Không có clipboard — vui lòng sao chép khóa này theo cách thủ công.",
         "git.ssh.deleteKey" => "Xóa {{name}}",
         "git.ssh.deletePrompt" => "Xóa khóa SSH {{name}}?",
         "git.ssh.deleteConfirm" => "Xóa",
@@ -286,6 +284,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "git.ssh.validationComment" => "Ghi chú là bắt buộc",
         "git.ssh.validationImportPath" => "Chọn tệp khóa riêng để nhập",
         "git.ssh.providerLink" => "Mở cài đặt khóa SSH {{host}}",
+        "git.ssh.genericGuidance" => "Sao chép khóa công khai và thêm vào cài đặt khóa SSH của nhà cung cấp Git của bạn.",
         "git.auth.formLabel" => "Thông tin xác thực Git",
         "git.auth.heading" => "Xác thực với {{host}}",
         "git.auth.headingUnknown" => "Xác thực với remote này",
@@ -296,9 +295,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "git.auth.tokenLabel" => "Access token",
         "git.auth.tokenPlaceholder" => "ghp_… hoặc PAT",
         "git.auth.sshKeyLabel" => "Khóa SSH",
-        "git.auth.sshNoKeys" => {
-            "Không có khóa SSH khả dụng. Nhập hoặc tạo mới trong cài đặt Git trước."
-        }
+        "git.auth.sshNoKeys" => "Không có khóa SSH khả dụng. Nhập hoặc tạo mới trong cài đặt Git trước.",
         "git.auth.rememberLabel" => "Ghi nhớ thông tin xác thực cho máy chủ này",
         "git.auth.rememberHint" => "Ghi nhớ thông tin xác thực cho máy chủ này",
         "git.auth.cancel" => "Hủy",
@@ -330,6 +327,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "updater.restartInstall" => "Khởi động lại & Cài đặt",
         "updater.installing" => "Đang cài đặt...",
         "updater.releaseDate" => "Ngày phát hành: {{date}}",
+        "updater.restartHint" => "Khởi động lại để áp dụng bản cập nhật. Quá trình khởi động lại thường mất 10-15 giây.",
         "updater.unknownError" => "Lỗi cập nhật không xác định.",
         "updater.title.checking" => "Đang kiểm tra bản cập nhật",
         "updater.title.available" => "Đã tìm thấy bản cập nhật",
@@ -436,6 +434,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "textLayout.autoWidth" => "Tự động R",
         "textLayout.autoWidthDesc" => "Tự động chiều rộng — văn bản mở rộng theo chiều ngang",
         "textLayout.autoHeight" => "Tự động C",
+        "textLayout.autoHeightDesc" => "Tự động chiều cao — chiều rộng cố định, chiều cao tự điều chỉnh",
         "textLayout.fixed" => "Cố định",
         "textLayout.fixedDesc" => "Kích thước cố định — cả chiều rộng và chiều cao đều cố định",
         "textLayout.fillWidth" => "Lấp đầy chiều rộng",
@@ -501,6 +500,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "ai.newChat" => "Cuộc trò chuyện mới",
         "ai.collapse" => "Thu gọn",
         "ai.tryExample" => "Thử một ví dụ để thiết kế...",
+        "ai.tipSelectElements" => "Mẹo: Chọn các phần tử trên canvas trước khi trò chuyện để cung cấp ngữ cảnh.",
         "ai.generating" => "Đang tạo...",
         "ai.designWithAgent" => "Thiết kế với Agent...",
         "ai.attachImage" => "Đính kèm hình ảnh",
@@ -511,13 +511,13 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "ai.searchModels" => "Tìm kiếm mô hình...",
         "ai.noModelsFound" => "Không tìm thấy mô hình",
         "ai.quickAction.loginScreen" => "Thiết kế màn hình đăng nhập di động",
+        "ai.quickAction.loginScreenPrompt" => "Thiết kế màn hình đăng nhập di động hiện đại với ô nhập email, ô nhập mật khẩu, nút đăng nhập và các tuỳ chọn đăng nhập bằng mạng xã hội",
         "ai.quickAction.foodApp" => "Trang chủ ứng dụng ẩm thực",
         "ai.quickAction.foodAppPrompt" => "Generate a well-designed food mobile app homepage",
         "ai.quickAction.bottomNav" => "Thiết kế thanh điều hướng dưới cùng",
+        "ai.quickAction.bottomNavPrompt" => "Thiết kế thanh điều hướng dưới cùng cho ứng dụng di động với 5 tab: Trang chủ, Tìm kiếm, Thêm, Tin nhắn, Hồ sơ",
         "ai.quickAction.colorPalette" => "Gợi ý bảng màu cho ứng dụng",
-        "ai.quickAction.colorPalettePrompt" => {
-            "Gợi ý bảng màu hiện đại cho ứng dụng chăm sóc thú cưng"
-        }
+        "ai.quickAction.colorPalettePrompt" => "Gợi ý bảng màu hiện đại cho ứng dụng chăm sóc thú cưng",
         "ai.startDesigning" => "Start designing with AI",
         "ai.maximize" => "Maximize",
         "ai.restore" => "Restore",
@@ -541,6 +541,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "fileMenu.daysAgo" => "{{count}}d ago",
         "unsaved.title" => "Unsaved changes",
         "unsaved.message" => "Save changes to \"{{name}}\"?",
+        "unsaved.dontSave" => "Don't Save",
         "code.reactTailwind" => "React + Tailwind",
         "code.htmlCss" => "HTML + CSS",
         "code.cssVariables" => "CSS Variables",
@@ -564,6 +565,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "agents.transport" => "Giao thức",
         "agents.port" => "Cổng",
         "agents.mcpRestart" => "Các tích hợp MCP sẽ có hiệu lực sau khi khởi động lại terminal.",
+        "agents.mcpReinstallHint" => "Sau khi nâng cấp OpenPencil, vui lòng cài đặt lại tích hợp MCP để đảm bảo tương thích.",
         "agents.modelCount" => "{{count}} mô hình",
         "agents.connectionFailed" => "Kết nối thất bại",
         "agents.serverError" => "Lỗi máy chủ {{status}}",
@@ -630,9 +632,11 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "builtin.custom" => "Tùy chỉnh",
         "builtin.apiKeyBadge" => "API Key",
         "builtin.viaApiKey" => "qua API Key của {{name}}",
+        "builtin.errorProviderNotFound" => "Không tìm thấy nhà cung cấp tích hợp. Vui lòng kiểm tra cài đặt của bạn.",
         "builtin.errorApiKeyEmpty" => "API Key đang trống. Vui lòng thêm API Key trong cài đặt.",
         "builtin.parallelAgents" => "Tác nhân phụ song song: {{count}}x (nhấn để chuyển đổi)",
         "builtin.baseUrlPlaceholder" => "https://api.example.com/v1",
+        "builtin.teamDescription" => "Chọn mô hình để tạo thiết kế. Khi được đặt, các tác vụ thiết kế sẽ tự động được giao cho agent chuyên dụng sử dụng mô hình này.",
         "builtin.teamDesignModel" => "Mô hình thiết kế",
         "builtin.teamSelectModel" => "Không (agent đơn)",
         "acp.title" => "ACP Agent",

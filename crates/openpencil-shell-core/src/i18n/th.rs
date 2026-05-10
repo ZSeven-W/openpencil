@@ -65,6 +65,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "git.conflict.description" => "แก้ไขแต่ละความขัดแย้งโดยใช้การ์ดด้านล่าง จากนั้นใช้การรวม",
         "git.conflict.abort" => "ยกเลิกการรวม",
         "git.conflict.nonOp.title" => "การรวมหยุดชั่วคราวที่ไฟล์ที่ไม่ใช่ .op",
+        "git.conflict.nonOp.description" => "การรวมไฟล์ .op เสร็จแล้ว แต่ไฟล์อื่นในที่เก็บยังไม่ได้แก้ไข แก้ไขนอก OpenPencil แล้วดำเนินการต่อ",
         "git.conflict.nonOp.unresolvedHeading_one" => "ต้องการการแก้ไข 1 ไฟล์",
         "git.conflict.nonOp.unresolvedHeading_other" => "ต้องการการแก้ไข {{count}} ไฟล์",
         "git.conflict.nonOp.continue" => "ดำเนินการรวมต่อ",
@@ -138,9 +139,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "git.commit.placeholder" => "อธิบายการเปลี่ยนแปลงนี้…",
         "git.commit.submitButton" => "บันทึก milestone",
         "git.commit.saveRequiredTitle" => "บันทึกเอกสารก่อน",
-        "git.commit.saveRequiredBody" => {
-            "คุณมีการเปลี่ยนแปลงที่ยังไม่ได้บันทึก บันทึกเอกสารเพื่อดำเนินการต่อ: {{label}}"
-        }
+        "git.commit.saveRequiredBody" => "คุณมีการเปลี่ยนแปลงที่ยังไม่ได้บันทึก บันทึกเอกสารเพื่อดำเนินการต่อ: {{label}}",
         "git.commit.saveRequiredSave" => "บันทึก",
         "git.commit.saveRequiredCancel" => "ยกเลิก",
         "git.header.autosaveError" => "ข้อผิดพลาดการบันทึกอัตโนมัติ",
@@ -213,17 +212,13 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "git.wizard.clone.validationUrl" => "จำเป็นต้องระบุ URL ระยะไกล",
         "git.wizard.clone.validationDest" => "จำเป็นต้องระบุโฟลเดอร์ปลายทาง",
         "git.wizard.clone.validationTokenUsername" => "ต้องระบุชื่อผู้ใช้เมื่อใช้โทเคน",
-        "git.wizard.clone.error.clone-network" => {
-            "เกิดข้อผิดพลาดเครือข่ายขณะโคลน ตรวจสอบการเชื่อมต่อแล้วลองใหม่"
-        }
+        "git.wizard.clone.error.clone-network" => "เกิดข้อผิดพลาดเครือข่ายขณะโคลน ตรวจสอบการเชื่อมต่อแล้วลองใหม่",
         "git.wizard.clone.error.network" => "ข้อผิดพลาดเครือข่าย ตรวจสอบการเชื่อมต่อแล้วลองใหม่",
         "git.wizard.clone.error.timeout" => "การโคลนหมดเวลา ลองใหม่หรือใช้ repository ที่เล็กกว่า",
         "git.wizard.clone.error.auth-required" => "repository นี้ต้องการการยืนยันตัวตน",
         "git.wizard.clone.error.auth-failed" => "การยืนยันตัวตนล้มเหลว ตรวจสอบชื่อผู้ใช้และโทเคน",
         "git.wizard.clone.error.auth-token-invalid" => "โทเคนเข้าถึงถูกปฏิเสธ สร้างโทเคนใหม่แล้วลองอีกครั้ง",
-        "git.wizard.clone.error.clone-failed" => {
-            "การโคลนล้มเหลว ตรวจสอบว่า URL ชี้ไปยัง repository ที่มีอยู่จริง"
-        }
+        "git.wizard.clone.error.clone-failed" => "การโคลนล้มเหลว ตรวจสอบว่า URL ชี้ไปยัง repository ที่มีอยู่จริง",
         "git.wizard.clone.error.clone-target-exists" => "โฟลเดอร์ปลายทางมีอยู่แล้วหรือไม่ว่างเปล่า",
         "git.pull.label" => "ดึง",
         "git.pull.tooltip" => "ดึงจาก origin",
@@ -253,6 +248,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "git.remote.clearConfirmAction" => "ยืนยัน",
         "git.remote.aheadBehind" => "นำหน้า {{ahead}} · ตามหลัง {{behind}}",
         "git.remote.fetchButton" => "Fetch",
+        "git.remote.sshIsoUnsupported" => "เอนจินในตัวไม่รองรับการส่งผ่าน SSH ติดตั้ง git ระบบหรือเปลี่ยนเป็น URL รีโมต HTTPS",
         "git.remote.storedAuthLabel" => "ข้อมูลรับรองที่บันทึกไว้",
         "git.remote.storedAuth.token" => "โทเคน",
         "git.remote.storedAuth.ssh" => "คีย์ SSH",
@@ -264,6 +260,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "git.ssh.heading" => "คีย์ SSH",
         "git.ssh.back" => "กลับ",
         "git.ssh.cancel" => "ยกเลิก",
+        "git.ssh.isoUnsupported" => "รีโมตปัจจุบันใช้ SSH แต่เอนจินในตัวไม่สามารถส่งผ่าน SSH ได้ ติดตั้ง git ระบบหรือเปลี่ยน URL รีโมตเป็น HTTPS",
         "git.ssh.emptyList" => "ยังไม่มีคีย์ SSH",
         "git.ssh.generateAction" => "สร้างใหม่",
         "git.ssh.importAction" => "นำเข้าที่มีอยู่",
@@ -514,9 +511,11 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "ai.searchModels" => "ค้นหาโมเดล...",
         "ai.noModelsFound" => "ไม่พบโมเดล",
         "ai.quickAction.loginScreen" => "ออกแบบหน้าจอเข้าสู่ระบบมือถือ",
+        "ai.quickAction.loginScreenPrompt" => "ออกแบบหน้าจอเข้าสู่ระบบมือถือที่ทันสมัย พร้อมช่องกรอกอีเมล รหัสผ่าน ปุ่มเข้าสู่ระบบ และตัวเลือกเข้าสู่ระบบผ่านโซเชียล",
         "ai.quickAction.foodApp" => "หน้าแรกแอปอาหาร",
         "ai.quickAction.foodAppPrompt" => "Generate a well-designed food mobile app homepage",
         "ai.quickAction.bottomNav" => "ออกแบบแถบนำทางด้านล่าง",
+        "ai.quickAction.bottomNavPrompt" => "ออกแบบแถบนำทางด้านล่างของแอปมือถือ 5 แท็บ: หน้าแรก, ค้นหา, เพิ่ม, ข้อความ, โปรไฟล์",
         "ai.quickAction.colorPalette" => "แนะนำจานสีสำหรับแอปของฉัน",
         "ai.quickAction.colorPalettePrompt" => "แนะนำจานสีที่ทันสมัยสำหรับแอปดูแลสัตว์เลี้ยง",
         "ai.startDesigning" => "Start designing with AI",
@@ -542,6 +541,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "fileMenu.daysAgo" => "{{count}}d ago",
         "unsaved.title" => "Unsaved changes",
         "unsaved.message" => "Save changes to \"{{name}}\"?",
+        "unsaved.dontSave" => "Don't Save",
         "code.reactTailwind" => "React + Tailwind",
         "code.htmlCss" => "HTML + CSS",
         "code.cssVariables" => "CSS Variables",
@@ -565,6 +565,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "agents.transport" => "การส่งข้อมูล",
         "agents.port" => "พอร์ต",
         "agents.mcpRestart" => "การผสานรวม MCP จะมีผลหลังจากรีสตาร์ทเทอร์มินัล",
+        "agents.mcpReinstallHint" => "หลังจากอัปเกรด OpenPencil กรุณาติดตั้ง MCP Integration ใหม่เพื่อให้แน่ใจว่าเข้ากันได้",
         "agents.modelCount" => "{{count}} โมเดล",
         "agents.connectionFailed" => "การเชื่อมต่อล้มเหลว",
         "agents.serverError" => "ข้อผิดพลาดของเซิร์ฟเวอร์ {{status}}",
@@ -635,6 +636,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "builtin.errorApiKeyEmpty" => "API Key ว่างเปล่า กรุณาเพิ่ม API Key ในการตั้งค่า",
         "builtin.parallelAgents" => "ตัวแทนย่อยแบบขนาน: {{count}}x (คลิกเพื่อสลับ)",
         "builtin.baseUrlPlaceholder" => "https://api.example.com/v1",
+        "builtin.teamDescription" => "เลือกโมเดลสำหรับสร้างงานออกแบบ เมื่อตั้งค่าแล้ว งานออกแบบจะถูกมอบหมายให้เอเจนต์ผู้เชี่ยวชาญที่ใช้โมเดลนี้โดยอัตโนมัติ",
         "builtin.teamDesignModel" => "โมเดลออกแบบ",
         "builtin.teamSelectModel" => "ไม่มี (เอเจนต์เดี่ยว)",
         "acp.title" => "ACP Agent",
