@@ -100,9 +100,12 @@ pub fn paint_create_component(
     cx.backend.fill_round_rect(btn_rect, 8.0, theme.muted);
     cx.backend
         .stroke_round_rect(btn_rect, 8.0, theme.border, 1.0);
+    // TS uses Diamond icon for the "create component" affordance
+    // (apps/web/src/components/panels/property-panel.tsx imports
+    // Diamond from lucide-react). Sparkles was a stand-in.
     draw_icon(
         cx.backend,
-        Icon::Sparkles,
+        Icon::Diamond,
         Point2D::new(btn_rect.origin.x + 12.0, btn_rect.origin.y + 9.0),
         18.0,
         theme.foreground,
@@ -160,6 +163,7 @@ pub fn paint_position_section(
         &snapshot.y.to_string(),
     );
     y += INPUT_HEIGHT + 6.0;
+    // TS uses RotateCw for the rotation input (layout-section.tsx).
     paint_input_with_icon(
         cx,
         theme,
@@ -167,7 +171,7 @@ pub fn paint_position_section(
             origin: Point2D::new(x + PAD_X, y),
             size: Point2D::new(half_w, INPUT_HEIGHT),
         },
-        Icon::Redo,
+        Icon::RotateCw,
         "0",
         Some("°"),
     );
@@ -190,40 +194,40 @@ pub fn paint_position_section(
 
 pub fn paint_flex_section(cx: &mut PaintCx<'_>, theme: &Theme, x: f32, y: f32, width: f32) -> f32 {
     let mut y = paint_section_label(cx, theme, "弹性布局", x, y, width);
+    // TS layout-section.tsx uses Columns3 / Rows3 / LayoutGrid for
+    // the three flex modes; LayoutGrid is the default-active mode
+    // (Free / 自由布局).
     let btn_w = 56.0;
     let gap = 8.0;
     let row_x = x + PAD_X;
-    let active = Rect {
-        origin: Point2D::new(row_x, y),
-        size: Point2D::new(btn_w, 32.0),
-    };
-    cx.backend.fill_round_rect(active, 6.0, theme.primary);
-    draw_icon(
-        cx.backend,
-        Icon::Square,
-        Point2D::new(active.origin.x + (btn_w - 18.0) / 2.0, active.origin.y + 7.0),
-        18.0,
-        theme.primary_foreground,
-        1.4,
-    );
-    let mut bx = row_x + btn_w + gap;
-    for icon in [Icon::Frame, Icon::FolderOpen] {
+    let icons = [Icon::LayoutGrid, Icon::Rows3, Icon::Columns3];
+    for (i, icon) in icons.iter().enumerate() {
+        let bx = row_x + i as f32 * (btn_w + gap);
         let rect = Rect {
             origin: Point2D::new(bx, y),
             size: Point2D::new(btn_w, 32.0),
         };
-        cx.backend.fill_round_rect(rect, 6.0, theme.muted);
-        cx.backend
-            .stroke_round_rect(rect, 6.0, theme.border, 1.0);
+        let is_active = i == 0;
+        if is_active {
+            cx.backend.fill_round_rect(rect, 6.0, theme.primary);
+        } else {
+            cx.backend.fill_round_rect(rect, 6.0, theme.muted);
+            cx.backend
+                .stroke_round_rect(rect, 6.0, theme.border, 1.0);
+        }
+        let icon_color = if is_active {
+            theme.primary_foreground
+        } else {
+            theme.muted_foreground
+        };
         draw_icon(
             cx.backend,
-            icon,
+            *icon,
             Point2D::new(rect.origin.x + (btn_w - 18.0) / 2.0, rect.origin.y + 7.0),
             18.0,
-            theme.muted_foreground,
+            icon_color,
             1.4,
         );
-        bx += btn_w + gap;
     }
     y += 32.0 + 12.0;
     paint_section_divider(cx, theme, x, y, width);
