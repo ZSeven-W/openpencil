@@ -777,11 +777,12 @@ impl WidgetHostNative {
             .shape_slot_rect(toolbar_rect)
             .unwrap_or(toolbar_rect);
         let panel_h = ShapePicker::panel_height();
-        // Anchor immediately to the right of the shape slot. Clamp
-        // so the panel never runs off the right edge of the canvas
-        // (when the toolbar is squeezed against the property panel).
+        // Anchor to the right of the toolbar PANEL (not just the
+        // button) plus a small breathing-room gap, so the dropdown
+        // doesn't visually touch the toolbar edge.
         let max_x = cx0 + cw - SHAPE_PICKER_WIDTH - 4.0;
-        let x = (slot.origin.x + slot.size.x + 6.0).min(max_x);
+        let toolbar_right = toolbar_rect.origin.x + toolbar_rect.size.x;
+        let x = (toolbar_right + 8.0).min(max_x);
         let y = slot.origin.y;
         Rect {
             origin: Point2D::new(x, y),
