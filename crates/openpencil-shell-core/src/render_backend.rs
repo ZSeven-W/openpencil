@@ -37,12 +37,34 @@ pub struct Rect {
     pub size: Point2D,
 }
 
+impl Rect {
+    /// Zero-sized rect at the origin. Used by Document::Node as the
+    /// "no bounds set" / container-only sentinel, and by tests
+    /// constructing throwaway rects.
+    pub const ZERO: Rect = Rect {
+        origin: Point2D::new(0.0, 0.0),
+        size: Point2D::new(0.0, 0.0),
+    };
+
+    /// Convenience builder: `Rect::xywh(x, y, w, h)`.
+    pub const fn xywh(x: f32, y: f32, width: f32, height: f32) -> Self {
+        Rect {
+            origin: Point2D::new(x, y),
+            size: Point2D::new(width, height),
+        }
+    }
+}
+
 /// RGBA color (widget facade layer; all components 0.0..=1.0).
 ///
 /// Named constants live at the OP layer (spec v19 round 5 CONCERN-R5-3 fix);
 /// `jian_core::scene::Color` is `Color(pub u32)` packed RGBA without RED/BLACK/etc
 /// named constants — callers must construct it explicitly via `JianColor::rgb(...)`.
-#[derive(Debug, Clone, Copy)]
+// PartialEq + no Eq: f32 components mean exact equality is rare,
+// but Step 3's `Document::Node::fill: Option<Color>` and
+// `Stroke { color: Color }` need PartialEq for derived comparisons
+// in test assertions.
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Color {
     pub r: f32,
     pub g: f32,

@@ -24,7 +24,7 @@
 use crate::backend::WebBackend;
 use openpencil_shell_core::document::Document;
 use openpencil_shell_core::widgets::{
-    Dropdown, LayerPanel, LayoutCx, PaintCx, PropertyPanel, TextInput, Toolbar, Widget,
+    CanvasViewport, LayerPanel, LayoutCx, PaintCx, PropertyPanel, Toolbar, Widget,
 };
 use openpencil_shell_core::{Point2D, Rect, RenderBackend};
 
@@ -35,21 +35,17 @@ use openpencil_shell_core::{Point2D, Rect, RenderBackend};
 /// when too small to be useful.
 const MIN_RAIL_WIDTH: f32 = 80.0;
 
-/// The Step 2 editor-UI host. Owns the document model + a sliver of
-/// auxiliary widget state (dropdown / text-input) that's not yet
-/// part of the document model itself; per-frame builds LayerPanel /
-/// PropertyPanel / Toolbar from the document.
+/// The Step 3 editor-UI host. Owns the document model + toolbar
+/// tool selection; per-frame builds LayerPanel / PropertyPanel /
+/// CanvasViewport from the document. Aux Dropdown / TextInput
+/// (Step 1b holdovers) retired — keyboard / IME wiring stays
+/// (apply_key / apply_ime are no-ops without a target until Step
+/// 4+ wires per-widget focus).
 pub struct WidgetHost {
     document: Document,
     /// Toolbar state (active tool index). Lives on the host until
     /// the document model gains a "current tool" field.
     toolbar: Toolbar,
-    /// Aux widget state for the right-rail dropdown + text input
-    /// — these are still sample fixtures (Step 1b inspector
-    /// holdovers) until the property panel is fully document-driven
-    /// in Step 3+.
-    aux_dropdown: Dropdown,
-    aux_text_input: TextInput,
 }
 
 impl WidgetHost {
@@ -57,33 +53,26 @@ impl WidgetHost {
         Self {
             document: Document::sample(),
             toolbar: Toolbar::default_set(),
-            aux_dropdown: Dropdown::sample(),
-            aux_text_input: TextInput::sample(),
         }
     }
 
-    /// Phase C2 IME forwarding: route a composition event into the
-    /// auxiliary text-input widget's state.
-    pub fn apply_ime(&mut self, event: &openpencil_shell_core::ImeEvent) { // glue:
-        self.aux_text_input.state.apply_ime(event);
+    /// Phase C2 IME forwarding stub. Step 3 retired the aux
+    /// TextInput target; Step 4+ wires per-widget focus before
+    /// IME composition can be routed back to the document.
+    pub fn apply_ime(&mut self, _event: &openpencil_shell_core::ImeEvent) { // glue:
     }
 
-    /// Phase C2 keyboard forwarding: arrow / Enter / Escape land on
-    /// the auxiliary dropdown.
-    pub fn apply_key(&mut self, event: &openpencil_shell_core::KeyEvent) { // glue:
-        self.aux_dropdown
-            .state
-            .apply_key(event, self.aux_dropdown.options.len());
+    /// Phase C2 keyboard forwarding stub. Step 3 retired the aux
+    /// Dropdown target; Step 4+ wires document selection so arrow
+    /// keys can navigate the canvas / layer panel.
+    pub fn apply_key(&mut self, _event: &openpencil_shell_core::KeyEvent) { // glue:
     }
 
-    /// Dispatches paint to the editor-UI composition. The
-    /// `// glue:` marker keeps the boundary script happy. Layout:
-    ///   - Toolbar pinned to top: `(0..viewport_w, 0..toolbar_h)`
-    ///   - LayerPanel left: `(0..left_rail_w, toolbar_h..)`
-    ///   - PropertyPanel right: `(viewport_w - right_rail_w..viewport_w, toolbar_h..)`
-    ///   - Aux widgets stacked under the property panel for now
-    ///     (Step 3 absorbs them into the document-driven property
-    ///     section sets).
+    /// Dispatches paint to the editor-UI composition. Layout:
+    ///   - Toolbar pinned top, full width
+    ///   - LayerPanel left rail
+    ///   - CanvasViewport center (the actual document render)
+    ///   - PropertyPanel right rail
     pub fn paint(&self, backend: &mut WebBackend, viewport_width: f32) { // glue:
         let layout_cx_top = LayoutCx {
             available_width: viewport_width,
@@ -106,28 +95,23 @@ impl WidgetHost {
         // Build editor-UI panels from the current document.
         let layer_panel = LayerPanel::from_document(&self.document);
         let property_panel = PropertyPanel::for_selected(&self.document);
+        let canvas = CanvasViewport::from_document(&self.document);
 
-        // Clamp rail_w to a non-negative value (codex Step 2 R1
-        // CONCERN-3: a < 32 px viewport made `viewport_width / 2.0
-        // - 8.0` go negative, producing negative-size rects). At
-        // tiny viewport widths we just skip the rails entirely —
-        // there's no usable space to paint into.
-        let rail_w_raw = (viewport_width / 2.0 - 8.0).min(240.0);
+        // Rail widths clamped to non-negative + skipped below
+        // the minimum usable width (codex Step 2 R1 CONCERN-3).
+        let rail_w_raw = ((viewport_width / 4.0) - 8.0).min(240.0);
         let rail_w = rail_w_raw.max(0.0);
         if rail_w < MIN_RAIL_WIDTH {
-            // Toolbar already painted; rails are skipped on
-            // sub-minimum viewports. Aux widgets also skip — Step
-            // 3 may scroll-collapse instead.
             return;
         }
         let rail_top_y = toolbar_rect.size.y + 8.0;
-        let layer_panel_layout_cx = LayoutCx {
+        let rail_layout_cx = LayoutCx {
             available_width: rail_w,
             dpi: backend.dpi_scale(),
         };
 
         // LayerPanel pinned to the left.
-        let lp_layout = layer_panel.layout(&layer_panel_layout_cx);
+        let lp_layout = layer_panel.layout(&rail_layout_cx);
         let lp_rect = Rect {
             origin: Point2D::new(8.0, rail_top_y),
             size: Point2D::new(rail_w, lp_layout.rect.size.y),
@@ -140,7 +124,7 @@ impl WidgetHost {
         }
 
         // PropertyPanel pinned to the right.
-        let pp_layout = property_panel.layout(&layer_panel_layout_cx);
+        let pp_layout = property_panel.layout(&rail_layout_cx);
         let pp_rect = Rect {
             origin: Point2D::new(viewport_width - rail_w - 8.0, rail_top_y),
             size: Point2D::new(rail_w, pp_layout.rect.size.y),
@@ -152,23 +136,21 @@ impl WidgetHost {
             property_panel.paint(&mut cx, pp_rect);
         }
 
-        // Aux dropdown + text input under the property panel.
-        // Step 1b holdovers; Step 3 absorbs into PropertyPanel
-        // sections.
-        let aux_top = pp_rect.origin.y + pp_rect.size.y + 12.0;
-        let aux_widgets: [&dyn Widget; 2] = [&self.aux_dropdown, &self.aux_text_input];
-        let mut y = aux_top;
-        for widget in aux_widgets {
-            let widget_layout = widget.layout(&layer_panel_layout_cx);
-            let rect = Rect {
-                origin: Point2D::new(viewport_width - rail_w - 8.0, y),
-                size: Point2D::new(rail_w, widget_layout.rect.size.y),
+        // CanvasViewport in the middle band — between the two
+        // rails, below the toolbar. The canvas takes whatever
+        // height the host gives it; in practice the smoke HTML
+        // gives 640 px so we paint a 640-px-tall band here too.
+        let canvas_x = lp_rect.origin.x + lp_rect.size.x + 8.0;
+        let canvas_w = (pp_rect.origin.x - canvas_x - 8.0).max(0.0);
+        if canvas_w >= MIN_RAIL_WIDTH {
+            let canvas_rect = Rect {
+                origin: Point2D::new(canvas_x, rail_top_y),
+                size: Point2D::new(canvas_w, 640.0 - rail_top_y),
             };
             let mut cx = PaintCx {
                 backend: &mut *backend,
             };
-            widget.paint(&mut cx, rect);
-            y += rect.size.y + 12.0;
+            canvas.paint(&mut cx, canvas_rect);
         }
     }
 }

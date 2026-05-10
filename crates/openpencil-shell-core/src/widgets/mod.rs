@@ -29,6 +29,10 @@ pub mod layer_panel;
 pub mod property_panel;
 pub mod toolbar;
 
+// Step 3 — center canvas that renders document nodes as actual
+// visual primitives (frame fills, rect strokes, text strings).
+pub mod canvas_viewport;
+
 pub use dropdown::{Dropdown, DropdownState};
 pub use prop_row::PropertyRow;
 pub use text_input::{TextInput, TextInputState};
@@ -37,6 +41,8 @@ pub use tree::{TreeItem, TreeWidget};
 pub use layer_panel::{LayerItem, LayerPanel};
 pub use property_panel::PropertyPanel;
 pub use toolbar::Toolbar;
+
+pub use canvas_viewport::CanvasViewport;
 
 /// Stable identifier assigned by the widget host. Used by accesskit
 /// (`accesskit::NodeId(WidgetId.0)`), the DOM mirror, and event routing.

@@ -52,7 +52,7 @@
 use crate::backend::NativeBackend;
 use openpencil_shell_core::document::Document;
 use openpencil_shell_core::widgets::{
-    Dropdown, LayerPanel, LayoutCx, PaintCx, PropertyPanel, TextInput, Toolbar, Widget,
+    CanvasViewport, LayerPanel, LayoutCx, PaintCx, PropertyPanel, Toolbar, Widget,
 };
 use openpencil_shell_core::{Color, Point2D, Rect, RenderBackend, TextLayout};
 
@@ -138,26 +138,19 @@ impl<'a> RenderBackend for NativeFrameBackend<'a> {
     }
 }
 
-/// Native counterpart of shell-web's `widget_host::WidgetHost`. Owns
-/// the document model + auxiliary widget state; per-frame builds
-/// LayerPanel / PropertyPanel / Toolbar from the document and paints
-/// them into the same Toolbar-top + LayerPanel-left + PropertyPanel-
-/// right layout shell-web uses, so cross-platform visual diff
-/// testing (Phase E) compares apples to apples.
+/// Native counterpart of shell-web's `widget_host::WidgetHost`.
+/// Owns the document model + toolbar state; per-frame builds
+/// LayerPanel / PropertyPanel / CanvasViewport / Toolbar from the
+/// document and paints them in the same Toolbar-top + LayerPanel-
+/// left + CanvasViewport-center + PropertyPanel-right layout
+/// shell-web uses (Step 3), so cross-platform visual diff testing
+/// compares apples to apples.
 ///
-/// Step 1b sample widgets (TreeWidget / PropertyRow direct) were
-/// removed in the Step 2 pivot — their callers (smoke fixtures,
-/// inspector tests) build the same shapes by constructing a
-/// `Document::sample()` and reading the resulting LayerPanel /
-/// PropertyPanel.
+/// Step 1b/2 holdovers (Dropdown + TextInput aux widgets) retired
+/// in Step 3 — the canvas viewport is the centerpiece now.
 pub struct WidgetHostNative {
     document: Document,
     toolbar: Toolbar,
-    /// Auxiliary widgets — Step 1b holdovers (Dropdown +
-    /// TextInput) painted under the property panel until Step 3
-    /// folds them into the document-driven property section sets.
-    aux_dropdown: Dropdown,
-    aux_text_input: TextInput,
 }
 
 impl WidgetHostNative {
@@ -165,19 +158,15 @@ impl WidgetHostNative {
         Self {
             document: Document::sample(),
             toolbar: Toolbar::default_set(),
-            aux_dropdown: Dropdown::sample(),
-            aux_text_input: TextInput::sample(),
         }
     }
 
     /// Paint the editor-UI composition. Layout matches shell-web's
-    /// `WidgetHost::paint` for cross-platform parity (Phase E
-    /// manual-smoke acceptance criterion):
-    ///   - Toolbar pinned to the top.
-    ///   - LayerPanel left rail.
-    ///   - PropertyPanel right rail.
-    ///   - Aux Dropdown + TextInput stacked under the property
-    ///     panel.
+    /// `WidgetHost::paint` for cross-platform parity:
+    ///   - Toolbar pinned top, full width
+    ///   - LayerPanel left rail
+    ///   - CanvasViewport center (real document render)
+    ///   - PropertyPanel right rail
     ///
     /// `// glue:` marker on the signature line keeps the future
     /// `tools/check-widget-boundary.sh` happy if the boundary script
@@ -202,13 +191,16 @@ impl WidgetHostNative {
             self.toolbar.paint(&mut cx, toolbar_rect);
         }
 
-        // Build editor-UI panels from the current document.
+        // Build editor-UI views from the current document.
         let layer_panel = LayerPanel::from_document(&self.document);
         let property_panel = PropertyPanel::for_selected(&self.document);
+        let canvas = CanvasViewport::from_document(&self.document);
 
-        // Clamp rail_w to non-negative; skip rails entirely below
+        // Rail widths clamped to non-negative + skipped below
         // the minimum usable width (codex Step 2 R1 CONCERN-3).
-        let rail_w_raw = (viewport_width / 2.0 - 8.0).min(240.0);
+        // Rails take ~1/4 width each so the canvas gets the
+        // middle ~1/2.
+        let rail_w_raw = ((viewport_width / 4.0) - 8.0).min(240.0);
         let rail_w = rail_w_raw.max(0.0);
         if rail_w < MIN_RAIL_WIDTH {
             return;
@@ -245,24 +237,22 @@ impl WidgetHostNative {
             property_panel.paint(&mut cx, pp_rect);
         }
 
-        // Aux dropdown + text input under the property panel.
-        let aux_top = pp_rect.origin.y + pp_rect.size.y + 12.0;
-        let aux_widgets: [&dyn Widget; 2] = [&self.aux_dropdown, &self.aux_text_input];
-        let mut y = aux_top;
-        for widget in aux_widgets {
-            let widget_layout = widget.layout(&rail_layout_cx);
-            let rect = Rect {
-                origin: Point2D::new(viewport_width - rail_w - 8.0, y),
-                size: Point2D::new(rail_w, widget_layout.rect.size.y),
+        // CanvasViewport in the middle band — between the two
+        // rails, below the toolbar. Window height isn't passed
+        // through this signature; assume 600 px (matches default
+        // winit window in inspector_window) minus the top rail
+        // start. Step 4+ may pass viewport_height too.
+        let canvas_x = lp_rect.origin.x + lp_rect.size.x + 8.0;
+        let canvas_w = (pp_rect.origin.x - canvas_x - 8.0).max(0.0);
+        if canvas_w >= MIN_RAIL_WIDTH {
+            let canvas_rect = Rect {
+                origin: Point2D::new(canvas_x, rail_top_y),
+                size: Point2D::new(canvas_w, 600.0 - rail_top_y),
             };
-            // PaintCx borrows the frame backend mutably; reborrow per
-            // iteration with `&mut *frame` so subsequent iterations
-            // don't fail the borrow check on the moved reference.
             let mut cx = PaintCx {
                 backend: &mut *frame,
             };
-            widget.paint(&mut cx, rect);
-            y += rect.size.y + 12.0;
+            canvas.paint(&mut cx, canvas_rect);
         }
     }
 }
