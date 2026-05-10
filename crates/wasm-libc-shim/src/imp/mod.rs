@@ -99,7 +99,11 @@ pub unsafe extern "C" fn realloc(ptr: *mut c_void, new_size: usize) -> *mut c_vo
     if new.is_null() {
         return core::ptr::null_mut();
     }
-    let copy = if old_size < new_size { old_size } else { new_size };
+    let copy = if old_size < new_size {
+        old_size
+    } else {
+        new_size
+    };
     core::ptr::copy_nonoverlapping(ptr.cast::<u8>(), new.cast::<u8>(), copy);
     free(ptr);
     new

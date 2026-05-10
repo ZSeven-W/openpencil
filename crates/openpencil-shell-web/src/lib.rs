@@ -441,12 +441,10 @@ pub fn mount(canvas_id: &str) -> Result<WebShell, JsValue> {
                         inner.backend.canvas_width() as f32,
                         inner.backend.canvas_height() as f32,
                     );
-                    let consumed = inner.host.apply_press(
-                        evt.offset_x() as f32,
-                        evt.offset_y() as f32,
-                        w,
-                        h,
-                    );
+                    let consumed =
+                        inner
+                            .host
+                            .apply_press(evt.offset_x() as f32, evt.offset_y() as f32, w, h);
                     if consumed {
                         let _ = inner.repaint();
                     }

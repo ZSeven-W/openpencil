@@ -257,10 +257,7 @@ impl Node {
             return crate::Rect::ZERO;
         };
         let (mut min_x, mut min_y) = (first.origin.x, first.origin.y);
-        let (mut max_x, mut max_y) = (
-            first.origin.x + first.size.x,
-            first.origin.y + first.size.y,
-        );
+        let (mut max_x, mut max_y) = (first.origin.x + first.size.x, first.origin.y + first.size.y);
         for r in iter {
             min_x = min_x.min(r.origin.x);
             min_y = min_y.min(r.origin.y);
@@ -580,7 +577,10 @@ impl Viewport {
     /// Convert a canvas-local point to document space (inverse of
     /// the painted transform).
     pub fn to_document(&self, p: crate::Point2D) -> crate::Point2D {
-        crate::Point2D::new((p.x - self.pan_x) / self.zoom, (p.y - self.pan_y) / self.zoom)
+        crate::Point2D::new(
+            (p.x - self.pan_x) / self.zoom,
+            (p.y - self.pan_y) / self.zoom,
+        )
     }
 }
 
@@ -991,19 +991,11 @@ mod tests {
     fn document_selected_node_scopes_to_active_page() {
         // Codex Step 2 R1 CONCERN-1: a selection on page 1 must
         // NOT show up when page 2 is active.
-        let page1 = Page::new(
-            1,
-            "p1",
-            vec![Node::leaf(10, NodeKind::Rect, "P1-A")],
-        );
-        let page2 = Page::new(
-            2,
-            "p2",
-            vec![Node::leaf(20, NodeKind::Rect, "P2-A")],
-        );
+        let page1 = Page::new(1, "p1", vec![Node::leaf(10, NodeKind::Rect, "P1-A")]);
+        let page2 = Page::new(2, "p2", vec![Node::leaf(20, NodeKind::Rect, "P2-A")]);
         let doc = Document {
             pages: vec![page1, page2],
-            active_page_index: 1, // page 2 active
+            active_page_index: 1,      // page 2 active
             selected: NodeId::new(10), // selection points at page 1's node
             tool: Tool::Select,
             viewport: Viewport::IDENTITY,

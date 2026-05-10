@@ -255,14 +255,7 @@ impl RenderBackend for WebBackend {
             .draw_round_rect(sk_rect, radius, radius, &paint);
     }
 
-    fn stroke_svg_path(
-        &mut self,
-        d: &str,
-        top_left: Point2D,
-        size: f32,
-        color: Color,
-        width: f32,
-    ) {
+    fn stroke_svg_path(&mut self, d: &str, top_left: Point2D, size: f32, color: Color, width: f32) {
         let Some(path) = skia_safe::utils::parse_path::from_svg(d) else {
             return;
         };
@@ -322,9 +315,7 @@ impl RenderBackend for WebBackend {
                 // failed to init, fall back to Roboto (still
                 // wrong, but at least the run isn't dropped
                 // silently).
-                self.cjk_typeface
-                    .as_ref()
-                    .or(self.typeface.as_ref())
+                self.cjk_typeface.as_ref().or(self.typeface.as_ref())
             };
             let Some(typeface) = typeface else {
                 continue;
@@ -343,10 +334,7 @@ impl RenderBackend for WebBackend {
             let run_origin = run.origin;
             self.surface.canvas().draw_str(
                 run.content.as_str(),
-                (
-                    origin.x + run_origin.x,
-                    origin.y + run_origin.y,
-                ),
+                (origin.x + run_origin.x, origin.y + run_origin.y),
                 &font,
                 &paint,
             );

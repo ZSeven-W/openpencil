@@ -6,8 +6,8 @@
 use crate::document::PropertyFocus;
 use crate::theme::Theme;
 use crate::widgets::icons::{draw_icon, Icon};
-use crate::widgets::PaintCx;
 use crate::widgets::property_panel::NodeSnapshot;
+use crate::widgets::PaintCx;
 use crate::{Color, Point2D, Rect, TextLayout};
 
 /// Hit-result for a click on the property panel — payload is the
@@ -65,7 +65,10 @@ pub fn paint_tab_strip(cx: &mut PaintCx<'_>, theme: &Theme, x: f32, y: f32, widt
     );
     cx.backend.draw_text(
         &inactive_label,
-        Point2D::new(active_rect.origin.x + active_rect.size.x + 14.0, tab_y + 18.0),
+        Point2D::new(
+            active_rect.origin.x + active_rect.size.x + 14.0,
+            tab_y + 18.0,
+        ),
     );
     cx.backend.fill_rect(
         Rect {
@@ -229,8 +232,7 @@ pub fn paint_flex_section(cx: &mut PaintCx<'_>, theme: &Theme, x: f32, y: f32, w
             cx.backend.fill_round_rect(rect, 6.0, theme.primary);
         } else {
             cx.backend.fill_round_rect(rect, 6.0, theme.muted);
-            cx.backend
-                .stroke_round_rect(rect, 6.0, theme.border, 1.0);
+            cx.backend.stroke_round_rect(rect, 6.0, theme.border, 1.0);
         }
         let icon_color = if is_active {
             theme.primary_foreground
@@ -303,7 +305,8 @@ fn paint_check_row(cx: &mut PaintCx<'_>, theme: &Theme, x: f32, y: f32, _w: f32,
         origin: Point2D::new(x, y + 3.0),
         size: Point2D::new(16.0, 16.0),
     };
-    cx.backend.stroke_round_rect(box_rect, 4.0, theme.border, 1.0);
+    cx.backend
+        .stroke_round_rect(box_rect, 4.0, theme.border, 1.0);
     let lbl = TextLayout::single_run(
         label,
         "system-ui",
@@ -311,8 +314,7 @@ fn paint_check_row(cx: &mut PaintCx<'_>, theme: &Theme, x: f32, y: f32, _w: f32,
         to_jian_color(theme.foreground),
         Point2D::new(0.0, 0.0),
     );
-    cx.backend
-        .draw_text(&lbl, Point2D::new(x + 22.0, y + 16.0));
+    cx.backend.draw_text(&lbl, Point2D::new(x + 22.0, y + 16.0));
 }
 
 // ── Layer (opacity) section ───────────────────────────────────────
@@ -391,8 +393,10 @@ pub fn paint_fill_section(
         to_jian_color(theme.foreground),
         Point2D::new(0.0, 0.0),
     );
-    cx.backend
-        .draw_text(&pct, Point2D::new(pct_rect.origin.x + 10.0, pct_rect.origin.y + 17.0));
+    cx.backend.draw_text(
+        &pct,
+        Point2D::new(pct_rect.origin.x + 10.0, pct_rect.origin.y + 17.0),
+    );
     let pct_unit = TextLayout::single_run(
         "%",
         "system-ui",
@@ -402,7 +406,10 @@ pub fn paint_fill_section(
     );
     cx.backend.draw_text(
         &pct_unit,
-        Point2D::new(pct_rect.origin.x + pct_rect.size.x - 14.0, pct_rect.origin.y + 17.0),
+        Point2D::new(
+            pct_rect.origin.x + pct_rect.size.x - 14.0,
+            pct_rect.origin.y + 17.0,
+        ),
     );
     draw_icon(
         cx.backend,
@@ -438,8 +445,10 @@ pub fn paint_fill_section(
         to_jian_color(theme.foreground),
         Point2D::new(0.0, 0.0),
     );
-    cx.backend
-        .draw_text(&hex, Point2D::new(hex_rect.origin.x + 30.0, hex_rect.origin.y + 17.0));
+    cx.backend.draw_text(
+        &hex,
+        Point2D::new(hex_rect.origin.x + 30.0, hex_rect.origin.y + 17.0),
+    );
     y += INPUT_HEIGHT + 12.0;
     paint_section_divider(cx, theme, x, y, width);
     y + SECTION_GAP
@@ -487,13 +496,16 @@ pub fn paint_stroke_section(
         to_jian_color(theme.foreground),
         Point2D::new(0.0, 0.0),
     );
-    cx.backend
-        .draw_text(&hex, Point2D::new(hex_rect.origin.x + 30.0, hex_rect.origin.y + 17.0));
+    cx.backend.draw_text(
+        &hex,
+        Point2D::new(hex_rect.origin.x + 30.0, hex_rect.origin.y + 17.0),
+    );
     let w_rect = Rect {
         origin: Point2D::new(hex_rect.origin.x + hex_rect.size.x + 8.0, y),
         size: Point2D::new(width_w, INPUT_HEIGHT),
     };
-    cx.backend.fill_round_rect(w_rect, INPUT_RADIUS, theme.muted);
+    cx.backend
+        .fill_round_rect(w_rect, INPUT_RADIUS, theme.muted);
     let w_text = format!("{}", stroke_width.round() as i32);
     let w_label = TextLayout::single_run(
         &w_text,
@@ -502,8 +514,10 @@ pub fn paint_stroke_section(
         to_jian_color(theme.foreground),
         Point2D::new(0.0, 0.0),
     );
-    cx.backend
-        .draw_text(&w_label, Point2D::new(w_rect.origin.x + 12.0, w_rect.origin.y + 17.0));
+    cx.backend.draw_text(
+        &w_label,
+        Point2D::new(w_rect.origin.x + 12.0, w_rect.origin.y + 17.0),
+    );
     y += INPUT_HEIGHT + 12.0;
     paint_section_divider(cx, theme, x, y, width);
     y + SECTION_GAP
@@ -635,8 +649,7 @@ fn paint_input_with_prefix_focused(
     value: &str,
     focused: bool,
 ) {
-    cx.backend
-        .fill_round_rect(rect, INPUT_RADIUS, theme.muted);
+    cx.backend.fill_round_rect(rect, INPUT_RADIUS, theme.muted);
     if focused {
         cx.backend
             .stroke_round_rect(rect, INPUT_RADIUS, theme.primary, 1.5);
@@ -651,7 +664,10 @@ fn paint_input_with_prefix_focused(
     );
     cx.backend.draw_text(
         &prefix_layout,
-        Point2D::new(rect.origin.x + 10.0, rect.origin.y + rect.size.y / 2.0 + 4.0),
+        Point2D::new(
+            rect.origin.x + 10.0,
+            rect.origin.y + rect.size.y / 2.0 + 4.0,
+        ),
     );
     // Value uses the real text-measure API so it stays anchored at
     // a consistent gap from the prefix regardless of digit count.
@@ -679,8 +695,7 @@ fn paint_input_with_suffix(
     value: &str,
     unit: &str,
 ) {
-    cx.backend
-        .fill_round_rect(rect, INPUT_RADIUS, theme.muted);
+    cx.backend.fill_round_rect(rect, INPUT_RADIUS, theme.muted);
     let value_layout = TextLayout::single_run(
         value,
         "system-ui",
@@ -688,8 +703,10 @@ fn paint_input_with_suffix(
         to_jian_color(theme.foreground),
         Point2D::new(0.0, 0.0),
     );
-    cx.backend
-        .draw_text(&value_layout, Point2D::new(rect.origin.x + 10.0, rect.origin.y + 17.0));
+    cx.backend.draw_text(
+        &value_layout,
+        Point2D::new(rect.origin.x + 10.0, rect.origin.y + 17.0),
+    );
     let unit_layout = TextLayout::single_run(
         unit,
         "system-ui",
@@ -711,8 +728,7 @@ fn paint_input_with_icon(
     value: &str,
     unit: Option<&str>,
 ) {
-    cx.backend
-        .fill_round_rect(rect, INPUT_RADIUS, theme.muted);
+    cx.backend.fill_round_rect(rect, INPUT_RADIUS, theme.muted);
     draw_icon(
         cx.backend,
         icon,
@@ -728,8 +744,10 @@ fn paint_input_with_icon(
         to_jian_color(theme.foreground),
         Point2D::new(0.0, 0.0),
     );
-    cx.backend
-        .draw_text(&value_layout, Point2D::new(rect.origin.x + 26.0, rect.origin.y + 17.0));
+    cx.backend.draw_text(
+        &value_layout,
+        Point2D::new(rect.origin.x + 26.0, rect.origin.y + 17.0),
+    );
     if let Some(u) = unit {
         let unit_layout = TextLayout::single_run(
             u,
@@ -746,8 +764,7 @@ fn paint_input_with_icon(
 }
 
 fn paint_dropdown(cx: &mut PaintCx<'_>, theme: &Theme, rect: Rect, value: &str) {
-    cx.backend
-        .fill_round_rect(rect, INPUT_RADIUS, theme.muted);
+    cx.backend.fill_round_rect(rect, INPUT_RADIUS, theme.muted);
     let value_layout = TextLayout::single_run(
         value,
         "system-ui",
@@ -755,8 +772,10 @@ fn paint_dropdown(cx: &mut PaintCx<'_>, theme: &Theme, rect: Rect, value: &str) 
         to_jian_color(theme.foreground),
         Point2D::new(0.0, 0.0),
     );
-    cx.backend
-        .draw_text(&value_layout, Point2D::new(rect.origin.x + 12.0, rect.origin.y + 17.0));
+    cx.backend.draw_text(
+        &value_layout,
+        Point2D::new(rect.origin.x + 12.0, rect.origin.y + 17.0),
+    );
     draw_icon(
         cx.backend,
         Icon::ChevronDown,

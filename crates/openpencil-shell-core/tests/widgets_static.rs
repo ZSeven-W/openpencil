@@ -7,8 +7,8 @@
 //! with the expected semantic roles.
 
 use openpencil_shell_core::widgets::{
-    Dropdown, DropdownState, LayoutBox, LayoutCx, PaintCx, PropertyRow, ROOT_WIDGET_ID, TextInput,
-    TextInputState, TreeWidget, Widget, WidgetId, rect,
+    rect, Dropdown, DropdownState, LayoutBox, LayoutCx, PaintCx, PropertyRow, TextInput,
+    TextInputState, TreeWidget, Widget, WidgetId, ROOT_WIDGET_ID,
 };
 use openpencil_shell_core::{
     Color, ImeEvent, ImeKind, KeyCode, KeyEvent, KeyLocation, KeyState, KeyValue, Modifiers,
@@ -192,9 +192,21 @@ fn four_inspector_widgets_paint_static_content() {
     // Dropdown, TextInput each stroke their border (3). Text runs:
     // PropertyRow has 2 (label+value); Tree has 3 items; Dropdown has 1;
     // TextInput has 1 → ≥ 7 total.
-    assert!(backend.rects >= 5, "fill_rect dispatch ≥ 5 (got {})", backend.rects);
-    assert!(backend.strokes >= 3, "stroke_rect dispatch ≥ 3 (got {})", backend.strokes);
-    assert!(backend.text >= 7, "draw_text dispatch ≥ 7 (got {})", backend.text);
+    assert!(
+        backend.rects >= 5,
+        "fill_rect dispatch ≥ 5 (got {})",
+        backend.rects
+    );
+    assert!(
+        backend.strokes >= 3,
+        "stroke_rect dispatch ≥ 3 (got {})",
+        backend.strokes
+    );
+    assert!(
+        backend.text >= 7,
+        "draw_text dispatch ≥ 7 (got {})",
+        backend.text
+    );
 }
 
 #[test]

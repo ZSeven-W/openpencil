@@ -103,14 +103,7 @@ impl<'a> RenderBackend for NativeFrameBackend<'a> {
             .stroke_round_rect(self.canvas, rect, radius, color, width);
     }
 
-    fn stroke_svg_path(
-        &mut self,
-        d: &str,
-        top_left: Point2D,
-        size: f32,
-        color: Color,
-        width: f32,
-    ) {
+    fn stroke_svg_path(&mut self, d: &str, top_left: Point2D, size: f32, color: Color, width: f32) {
         self.inner
             .stroke_svg_path(self.canvas, d, top_left, size, color, width);
     }
@@ -351,10 +344,7 @@ impl WidgetHostNative {
             .size
             .y;
         let toolbar_rect = Rect {
-            origin: Point2D::new(
-                cx0 + TOOLBAR_INSET_X,
-                TOP_BAR_HEIGHT + TOOLBAR_INSET_Y,
-            ),
+            origin: Point2D::new(cx0 + TOOLBAR_INSET_X, TOP_BAR_HEIGHT + TOOLBAR_INSET_Y),
             size: Point2D::new(TOOLBAR_WIDTH, toolbar_h),
         };
         if rect_contains(toolbar_rect, Point2D::new(x, y)) {
@@ -383,12 +373,14 @@ impl WidgetHostNative {
         //    is the "click blank to deselect" UX the user
         //    requested.
         if self.over_canvas(x, y, viewport_width, viewport_height) {
-            let cleared =
-                self.document.selected != openpencil_shell_core::document::NodeId::NONE;
+            let cleared = self.document.selected != openpencil_shell_core::document::NodeId::NONE;
             if cleared {
                 self.document.selected = openpencil_shell_core::document::NodeId::NONE;
             }
-            self.drag = Some(DragState { last_x: x, last_y: y });
+            self.drag = Some(DragState {
+                last_x: x,
+                last_y: y,
+            });
             return cleared;
         }
         false
@@ -521,10 +513,7 @@ impl WidgetHostNative {
             });
         }
         let (x, y) = match self.document.chat.anchor {
-            ChatAnchor::TopLeft => (
-                cx0 + AICHAT_INSET_LEFT,
-                cy0 + AICHAT_INSET_BOTTOM,
-            ),
+            ChatAnchor::TopLeft => (cx0 + AICHAT_INSET_LEFT, cy0 + AICHAT_INSET_BOTTOM),
             ChatAnchor::TopRight => (
                 cx0 + cw - panel_w - AICHAT_INSET_BOTTOM,
                 cy0 + AICHAT_INSET_BOTTOM,
@@ -583,8 +572,7 @@ impl WidgetHostNative {
                         return false;
                     }
                     AIChatHit::ToggleCollapse => {
-                        self.document.chat.collapsed =
-                            !self.document.chat.collapsed;
+                        self.document.chat.collapsed = !self.document.chat.collapsed;
                         return true;
                     }
                 }
@@ -604,10 +592,7 @@ impl WidgetHostNative {
             .size
             .y;
         let toolbar_rect = Rect {
-            origin: Point2D::new(
-                cx0 + TOOLBAR_INSET_X,
-                TOP_BAR_HEIGHT + TOOLBAR_INSET_Y,
-            ),
+            origin: Point2D::new(cx0 + TOOLBAR_INSET_X, TOP_BAR_HEIGHT + TOOLBAR_INSET_Y),
             size: Point2D::new(TOOLBAR_WIDTH, toolbar_h),
         };
         if let Some(hit) = toolbar.hit_test(toolbar_rect, Point2D::new(x, y)) {
@@ -638,8 +623,7 @@ impl WidgetHostNative {
             match hit {
                 openpencil_shell_core::widgets::LayerPanelHit::Page(idx) => {
                     self.document.active_page_index = idx;
-                    self.document.selected =
-                        openpencil_shell_core::document::NodeId::NONE;
+                    self.document.selected = openpencil_shell_core::document::NodeId::NONE;
                     return true;
                 }
                 openpencil_shell_core::widgets::LayerPanelHit::Layer(node_id) => {
@@ -659,7 +643,8 @@ impl WidgetHostNative {
         frame: &mut NativeFrameBackend<'_>,
         viewport_width: f32,
         viewport_height: f32,
-    ) { // glue:
+    ) {
+        // glue:
         // 1. Background fill so previous-frame pixels never bleed.
         frame.fill_rect(
             Rect {
@@ -689,7 +674,10 @@ impl WidgetHostNative {
             let layer_panel = LayerPanel::from_document(&self.document);
             let layer_panel_rect = Rect {
                 origin: Point2D::new(0.0, TOP_BAR_HEIGHT),
-                size: Point2D::new(LAYER_PANEL_WIDTH, (viewport_height - TOP_BAR_HEIGHT).max(0.0)),
+                size: Point2D::new(
+                    LAYER_PANEL_WIDTH,
+                    (viewport_height - TOP_BAR_HEIGHT).max(0.0),
+                ),
             };
             let mut cx = PaintCx {
                 backend: &mut *frame,
@@ -759,8 +747,7 @@ impl WidgetHostNative {
         //    of the toolbar in any overlap region (matches the
         //    user's requested z-order: chat above toolbar).
         if let Some(chat_rect) = self.ai_chat_rect(viewport_width, viewport_height) {
-            let chat =
-                AIChatPlaceholder::from_document_at(&self.document, self.now_ms);
+            let chat = AIChatPlaceholder::from_document_at(&self.document, self.now_ms);
             let mut cx = PaintCx {
                 backend: &mut *frame,
             };

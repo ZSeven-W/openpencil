@@ -34,10 +34,7 @@ impl DropdownState {
     /// Non-navigation keys fall through unchanged so widget code can
     /// layer additional handlers later (e.g. typeahead in Phase D+).
     pub fn apply_key(&mut self, event: &crate::KeyEvent, option_count: usize) {
-        if event.state != crate::KeyState::Pressed
-            || option_count == 0
-            || event.is_composing
-        {
+        if event.state != crate::KeyState::Pressed || option_count == 0 || event.is_composing {
             return;
         }
         match event.key {
