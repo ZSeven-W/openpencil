@@ -9,6 +9,14 @@
 use super::walkers::*;
 use super::*;
 
+/// Whether `reorder_relative` drops the source before or after the
+/// anchor. Internal helper for `reorder_before` / `reorder_after`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum RelativePosition {
+    Before,
+    After,
+}
+
 impl Document {
     /// Active theme — driven by `ui.theme_mode`. Widgets call this
     /// instead of hardcoding `Theme::dark()` so the entire chrome
@@ -671,6 +679,59 @@ impl Document {
             return false;
         };
         reorder_in_children(&mut page.children, target, direction)
+    }
+
+    /// Move `source` immediately before `anchor` in the document
+    /// tree. Supports cross-parent reparenting. Backs LayerPanel
+    /// drag-to-reorder. No-ops on: same id, missing node, locked
+    /// or hidden source, or cycle (anchor inside source's subtree).
+    pub fn reorder_before(&mut self, source: NodeId, anchor: NodeId) -> bool {
+        self.reorder_relative(source, anchor, RelativePosition::Before)
+    }
+
+    /// Same as `reorder_before`, but drops `source` immediately
+    /// after `anchor`.
+    pub fn reorder_after(&mut self, source: NodeId, anchor: NodeId) -> bool {
+        self.reorder_relative(source, anchor, RelativePosition::After)
+    }
+
+    fn reorder_relative(
+        &mut self,
+        source: NodeId,
+        anchor: NodeId,
+        position: RelativePosition,
+    ) -> bool {
+        if source == anchor || !source.is_real() || !anchor.is_real() {
+            return false;
+        }
+        if !self.is_subtree_editable(source) {
+            return false;
+        }
+        let Some(page) = self.pages.get(self.active_page_index) else {
+            return false;
+        };
+        let Some(source_ref) = page.find(source) else {
+            return false;
+        };
+        if descendant_contains(source_ref, anchor) {
+            return false;
+        }
+        if !children_contain_descendant(&page.children, anchor) {
+            return false;
+        }
+        let page = self.pages.get_mut(self.active_page_index).unwrap();
+        let Some(node) = extract_node(&mut page.children, source) else {
+            return false;
+        };
+        let insert_result = match position {
+            RelativePosition::Before => insert_before_in_children(&mut page.children, anchor, node),
+            RelativePosition::After => insert_after_in_children(&mut page.children, anchor, node),
+        };
+        debug_assert!(
+            insert_result.is_ok(),
+            "anchor pre-check should ensure insert"
+        );
+        insert_result.is_ok()
     }
 
     /// Clear the active selection. Distinct from

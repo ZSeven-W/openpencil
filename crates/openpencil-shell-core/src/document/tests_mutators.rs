@@ -111,6 +111,117 @@ fn reorder_selected_at_edges_is_noop() {
 }
 
 #[test]
+fn reorder_before_moves_source_to_anchor_position() {
+    let mut doc = Document::empty();
+    let root_idx = doc.active_page_index;
+    doc.pages[root_idx].children = vec![
+        Node::leaf(1, NodeKind::Rect, "A"),
+        Node::leaf(2, NodeKind::Rect, "B"),
+        Node::leaf(3, NodeKind::Rect, "C"),
+    ];
+    // Move C before A → [C, A, B]
+    assert!(doc.reorder_before(NodeId::new(3), NodeId::new(1)));
+    let order: Vec<&str> = doc.pages[root_idx]
+        .children
+        .iter()
+        .map(|n| n.name.as_str())
+        .collect();
+    assert_eq!(order, vec!["C", "A", "B"]);
+}
+
+#[test]
+fn reorder_after_moves_source_to_anchor_position() {
+    let mut doc = Document::empty();
+    let root_idx = doc.active_page_index;
+    doc.pages[root_idx].children = vec![
+        Node::leaf(1, NodeKind::Rect, "A"),
+        Node::leaf(2, NodeKind::Rect, "B"),
+        Node::leaf(3, NodeKind::Rect, "C"),
+    ];
+    // Move A after C → [B, C, A]
+    assert!(doc.reorder_after(NodeId::new(1), NodeId::new(3)));
+    let order: Vec<&str> = doc.pages[root_idx]
+        .children
+        .iter()
+        .map(|n| n.name.as_str())
+        .collect();
+    assert_eq!(order, vec!["B", "C", "A"]);
+}
+
+#[test]
+fn reorder_supports_cross_parent_reparenting() {
+    let mut doc = Document::empty();
+    let root_idx = doc.active_page_index;
+    let target = Node::leaf(20, NodeKind::Rect, "target");
+    let frame_a = Node::with_children(10, NodeKind::Frame, "A", vec![target]);
+    let frame_b = Node::leaf(30, NodeKind::Frame, "B");
+    doc.pages[root_idx].children = vec![frame_a, frame_b];
+
+    // Move `target` (currently inside A) to be after `B` at top
+    // level — re-parents out of A.
+    assert!(doc.reorder_after(NodeId::new(20), NodeId::new(30)));
+    let kids = &doc.pages[root_idx].children;
+    assert_eq!(kids.len(), 3);
+    assert_eq!(kids[0].name, "A");
+    assert_eq!(kids[0].children.len(), 0, "target must be removed from A");
+    assert_eq!(kids[1].name, "B");
+    assert_eq!(kids[2].name, "target");
+}
+
+#[test]
+fn reorder_rejects_cycle_creating_move() {
+    let mut doc = Document::empty();
+    let root_idx = doc.active_page_index;
+    let grandchild = Node::leaf(20, NodeKind::Rect, "g");
+    let frame = Node::with_children(10, NodeKind::Frame, "frame", vec![grandchild]);
+    doc.pages[root_idx].children = vec![frame];
+
+    // Move `frame` (source) before its own descendant `g` — would
+    // create a cycle. Must be rejected.
+    assert!(!doc.reorder_before(NodeId::new(10), NodeId::new(20)));
+    // Tree unchanged.
+    assert_eq!(doc.pages[root_idx].children.len(), 1);
+    assert_eq!(doc.pages[root_idx].children[0].id, NodeId::new(10));
+    assert_eq!(
+        doc.pages[root_idx].children[0].children[0].id,
+        NodeId::new(20)
+    );
+}
+
+#[test]
+fn reorder_rejects_locked_or_hidden_source() {
+    let mut doc = Document::empty();
+    let root_idx = doc.active_page_index;
+    let mut locked = Node::leaf(1, NodeKind::Rect, "locked");
+    locked.locked = true;
+    let other = Node::leaf(2, NodeKind::Rect, "other");
+    doc.pages[root_idx].children = vec![locked, other];
+    assert!(!doc.reorder_before(NodeId::new(1), NodeId::new(2)));
+    assert!(!doc.reorder_after(NodeId::new(1), NodeId::new(2)));
+
+    let mut hidden = Node::leaf(3, NodeKind::Rect, "hidden");
+    hidden.hidden = true;
+    let other2 = Node::leaf(4, NodeKind::Rect, "other2");
+    doc.pages[root_idx].children = vec![hidden, other2];
+    assert!(!doc.reorder_before(NodeId::new(3), NodeId::new(4)));
+}
+
+#[test]
+fn reorder_rejects_same_id_or_missing_node() {
+    let mut doc = Document::empty();
+    let root_idx = doc.active_page_index;
+    doc.pages[root_idx].children = vec![
+        Node::leaf(1, NodeKind::Rect, "A"),
+        Node::leaf(2, NodeKind::Rect, "B"),
+    ];
+    assert!(!doc.reorder_before(NodeId::new(1), NodeId::new(1)));
+    // Anchor missing
+    assert!(!doc.reorder_before(NodeId::new(1), NodeId::new(99)));
+    // Source missing
+    assert!(!doc.reorder_before(NodeId::new(99), NodeId::new(1)));
+}
+
+#[test]
 fn duplicate_selected_lifts_allocator_past_existing_max_id() {
     // Codex CONCERN-1 regression: external docs may carry ids
     // larger than the host's `next_node_id` counter. The

@@ -46,7 +46,8 @@ impl WidgetHostNative {
 
         // 3. LayerPanel — skipped when the sidebar is collapsed.
         if self.document.ui.sidebar_open {
-            let layer_panel = LayerPanel::from_document(&self.document);
+            // Compute the active drop target so the panel can paint
+            // the drop-indicator line during a drag-to-reorder.
             let layer_panel_rect = Rect {
                 origin: Point2D::new(0.0, TOP_BAR_HEIGHT),
                 size: Point2D::new(
@@ -54,6 +55,14 @@ impl WidgetHostNative {
                     (viewport_height - TOP_BAR_HEIGHT).max(0.0),
                 ),
             };
+            let drop_target = self.layer_drag.and_then(|d| {
+                if !d.active {
+                    return None;
+                }
+                let probe = LayerPanel::from_document(&self.document);
+                probe.drop_target_at(layer_panel_rect, Point2D::new(d.current_x, d.current_y))
+            });
+            let layer_panel = LayerPanel::from_document_with_drop(&self.document, drop_target);
             let mut cx = PaintCx {
                 backend: &mut *frame,
             };

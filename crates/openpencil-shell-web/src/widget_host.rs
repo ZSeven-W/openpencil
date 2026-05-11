@@ -59,6 +59,10 @@ pub struct WidgetHost {
     /// intersecting top-level node joins (or extends) the
     /// selection on release.
     pub(in crate::widget_host) marquee_drag: Option<MarqueeDragState>,
+    /// Active LayerPanel drag-to-reorder gesture. Mirrors the
+    /// native host — press a layer row, drag past threshold, drop
+    /// before/after the hovered row to reparent.
+    pub(in crate::widget_host) layer_drag: Option<LayerDragState>,
     /// Counter for minting fresh `NodeId`s when the user duplicates
     /// a node. Bumped past the highest sample id so new + sample
     /// nodes never collide on the same key. Matches the native
@@ -99,6 +103,17 @@ pub(in crate::widget_host) struct MarqueeDragState {
     /// release REPLACES the selection or adds intersecting nodes
     /// to the existing set (ADD-only — never removes).
     pub(in crate::widget_host) additive: bool,
+}
+
+/// Active LayerPanel drag-to-reorder gesture. Mirrors the native
+/// host's `LayerDragState`.
+#[derive(Debug, Clone, Copy)]
+pub(in crate::widget_host) struct LayerDragState {
+    pub(in crate::widget_host) source: openpencil_shell_core::document::NodeId,
+    pub(in crate::widget_host) start_y: f32,
+    pub(in crate::widget_host) current_x: f32,
+    pub(in crate::widget_host) current_y: f32,
+    pub(in crate::widget_host) active: bool,
 }
 
 /// Mirrors the native `apply_property_action` — wired off the
@@ -157,6 +172,7 @@ impl WidgetHost {
             drag: None,
             chat_drag: None,
             marquee_drag: None,
+            layer_drag: None,
             next_node_id: 100,
             shift_held: false,
         }
@@ -381,6 +397,26 @@ impl WidgetHost {
         }
 
         // 3. apply_click — LayerPanel + chat-defocus.
+        //    Pre-seed a `layer_drag` candidate when the press lands
+        //    on a Layer row so a subsequent move past the threshold
+        //    promotes the gesture to a drag-to-reorder (mirrors
+        //    native; see `widget_host/press.rs`).
+        if self.document.ui.sidebar_open {
+            use openpencil_shell_core::widgets::{LayerPanel, LayerPanelHit};
+            let layer_rect = self.layer_panel_rect(viewport_height);
+            let panel = LayerPanel::from_document(&self.document);
+            if let Some(LayerPanelHit::Layer(node_id)) =
+                panel.hit_test(layer_rect, Point2D::new(x, y))
+            {
+                self.layer_drag = Some(LayerDragState {
+                    source: node_id,
+                    start_y: y,
+                    current_x: x,
+                    current_y: y,
+                    active: false,
+                });
+            }
+        }
         if self.apply_click(x, y, viewport_width, viewport_height) {
             return true;
         }
@@ -489,6 +525,14 @@ impl WidgetHost {
             m.current_screen_y = y;
             return true;
         }
+        if let Some(d) = self.layer_drag.as_mut() {
+            d.current_x = x;
+            d.current_y = y;
+            if !d.active && (y - d.start_y).abs() > 4.0 {
+                d.active = true;
+            }
+            return true;
+        }
         if let Some(d) = self.chat_drag.as_mut() {
             d.pos_x = x - d.grab_dx;
             d.pos_y = y - d.grab_dy;
@@ -560,6 +604,9 @@ impl WidgetHost {
             self.commit_marquee_selection(m, viewport_w, viewport_h);
             return true;
         }
+        if let Some(d) = self.layer_drag.take() {
+            return self.commit_layer_drag(d, viewport_h);
+        }
         if let Some(d) = self.chat_drag.take() {
             // Use the live panel size (expanded vs collapsed) so a
             // dragged collapsed pill snaps to the corner closest to
@@ -583,12 +630,48 @@ impl WidgetHost {
             // aware variant is the one runners should call.
             return true;
         }
+        if self.layer_drag.take().is_some() {
+            // Same — drop_target_at needs the panel rect (and thus
+            // viewport_h). Drop the candidate without committing.
+            return true;
+        }
         if self.chat_drag.take().is_some() {
             return true;
         }
         let was_dragging = self.drag.is_some();
         self.drag = None;
         was_dragging
+    }
+
+    /// Resolve a layer drag-to-reorder gesture on release. Mirrors
+    /// native `WidgetHostNative::commit_layer_drag`.
+    pub(in crate::widget_host) fn commit_layer_drag(
+        &mut self,
+        d: LayerDragState,
+        viewport_h: f32,
+    ) -> bool {
+        if !d.active {
+            return false;
+        }
+        use openpencil_shell_core::widgets::{DropPosition, LayerPanel};
+        let layer_rect = self.layer_panel_rect(viewport_h);
+        let panel = LayerPanel::from_document(&self.document);
+        let cursor = Point2D::new(d.current_x, d.current_y);
+        let Some(drop) = panel.drop_target_at(layer_rect, cursor) else {
+            return true;
+        };
+        if drop.anchor == d.source {
+            return true;
+        }
+        match drop.position {
+            DropPosition::Before => {
+                self.document.reorder_before(d.source, drop.anchor);
+            }
+            DropPosition::After => {
+                self.document.reorder_after(d.source, drop.anchor);
+            }
+        }
+        true
     }
 
     // Keyboard / clipboard handlers (`apply_text` / `apply_backspace`

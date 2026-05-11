@@ -17,11 +17,11 @@ use crate::{Color, Point2D, Rect, TextLayout};
 /// panel; used by the host layout.
 pub const LAYER_PANEL_WIDTH: f32 = 240.0;
 
-const SECTION_HEADER_HEIGHT: f32 = 28.0;
-const PAGE_ROW_HEIGHT: f32 = 32.0;
-const LAYER_ROW_HEIGHT: f32 = 28.0;
-const ROW_PAD_X: f32 = 12.0;
-const SECTION_GAP: f32 = 8.0;
+pub(crate) const SECTION_HEADER_HEIGHT: f32 = 28.0;
+pub(crate) const PAGE_ROW_HEIGHT: f32 = 32.0;
+pub(crate) const LAYER_ROW_HEIGHT: f32 = 28.0;
+pub(crate) const ROW_PAD_X: f32 = 12.0;
+pub(crate) const SECTION_GAP: f32 = 8.0;
 const HEADER_FONT: f32 = 12.0;
 const ROW_FONT: f32 = 13.0;
 
@@ -69,6 +69,10 @@ pub struct LayerPanel {
     pub theme: Theme,
     pub pages_label: String,
     pub layers_label: String,
+    /// Active drop target while a drag-to-reorder gesture is in
+    /// flight. `None` outside of a drag. Drives the drop-indicator
+    /// paint between rows.
+    pub drop_target: Option<DropTarget>,
 }
 
 impl LayerPanel {
@@ -99,7 +103,16 @@ impl LayerPanel {
             theme: doc.theme(),
             pages_label: doc.t("pages.title").to_string(),
             layers_label: doc.t("layers.title").to_string(),
+            drop_target: None,
         }
+    }
+
+    /// Variant that lets the host pre-compute a drop target so the
+    /// drop-indicator paints between rows during a drag.
+    pub fn from_document_with_drop(doc: &Document, drop_target: Option<DropTarget>) -> Self {
+        let mut panel = Self::from_document(doc);
+        panel.drop_target = drop_target;
+        panel
     }
 
     pub fn empty() -> Self {
@@ -110,19 +123,60 @@ impl LayerPanel {
             theme: Theme::dark(),
             pages_label: "Pages".to_string(),
             layers_label: "Layers".to_string(),
+            drop_target: None,
         }
     }
 
-    fn intrinsic_height(&self) -> f32 {
+    pub(crate) fn intrinsic_height(&self) -> f32 {
         let pages_h = SECTION_HEADER_HEIGHT + self.pages.len() as f32 * PAGE_ROW_HEIGHT;
         let layers_h = SECTION_HEADER_HEIGHT + self.items.len().max(1) as f32 * LAYER_ROW_HEIGHT;
         pages_h + SECTION_GAP + layers_h + 16.0
     }
 
-    /// Hit test a (rect, point) — returns either `Page(idx)` for a
-    /// page row click, `Layer(node_id)` for a layer row click, or
-    /// `AddPage` for a click on the `+` affordance on the Pages
-    /// section header.
+    /// Compute the drop target for a drag-in-progress over the
+    /// layer rows. Returns `None` when the cursor isn't over a
+    /// layer row. `Before` when the cursor is in the upper half
+    /// of the row, `After` in the lower half; `indicator_y` is
+    /// where the host paints the drop-indicator line.
+    pub fn drop_target_at(&self, rect: Rect, point: Point2D) -> Option<DropTarget> {
+        if !rect_contains(rect, point) {
+            return None;
+        }
+        let mut y = rect.origin.y
+            + 8.0
+            + SECTION_HEADER_HEIGHT
+            + self.pages.len() as f32 * PAGE_ROW_HEIGHT
+            + SECTION_GAP
+            + SECTION_HEADER_HEIGHT;
+        for item in &self.items {
+            let row_top = y;
+            let row_bottom = y + LAYER_ROW_HEIGHT;
+            if point.y >= row_top && point.y <= row_bottom {
+                let mid = row_top + LAYER_ROW_HEIGHT / 2.0;
+                let position = if point.y < mid {
+                    DropPosition::Before
+                } else {
+                    DropPosition::After
+                };
+                let indicator_y = match position {
+                    DropPosition::Before => row_top,
+                    DropPosition::After => row_bottom,
+                };
+                return Some(DropTarget {
+                    anchor: item.node_id,
+                    position,
+                    indicator_y,
+                });
+            }
+            y = row_bottom;
+        }
+        None
+    }
+
+    /// Hit test a (rect, point) — returns `Page(idx)` for a page
+    /// row, `Layer(node_id)` for a layer row, eye/lock/chevron
+    /// toggles for the trailing icons, or `AddPage` for the `+`
+    /// on the Pages section header.
     pub fn hit_test(&self, rect: Rect, point: Point2D) -> Option<LayerPanelHit> {
         if !rect_contains(rect, point) {
             return None;
@@ -229,6 +283,29 @@ pub enum LayerPanelHit {
     /// Click on the `+` add-page affordance in the Pages section
     /// header — host should append a fresh page and switch to it.
     AddPage,
+}
+
+/// Where a layer-drag would drop relative to the hovered anchor row.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DropPosition {
+    /// Drop slides in immediately ABOVE the anchor row in the
+    /// flat layer list (parent's children vec index decreases by
+    /// one for a same-parent move).
+    Before,
+    /// Drop slides in immediately BELOW the anchor row.
+    After,
+}
+
+/// Hit-test result for a drag-in-progress over the LayerPanel rows.
+/// Carries the anchor NodeId (the row the cursor is over), the
+/// relative position (top half = Before, bottom half = After), and
+/// the y in panel-local space where the drop-indicator should
+/// paint (between rows).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct DropTarget {
+    pub anchor: NodeId,
+    pub position: DropPosition,
+    pub indicator_y: f32,
 }
 
 fn rect_contains(r: Rect, p: Point2D) -> bool {
@@ -463,14 +540,12 @@ impl Widget for LayerPanel {
             );
             cx.backend
                 .draw_text(&label, Point2D::new(icon_x + 20.0, row.origin.y + 17.0));
-            // Trailing eye + lock icons. The ICON SHAPE itself
-            // signals state (Eye/EyeOff, Lock/LockOpen) — TS
-            // parity. Locked icon also paints in a warm orange
-            // so it reads as a "can't edit" alert.
+            // Trailing eye + lock icons. Icon shape signals state
+            // (Eye/EyeOff, Lock/LockOpen); locked Lock paints in
+            // warm orange so it reads as a "can't edit" alert.
+            // Eye-to-lock gap (22 px) matches hit-test spacing.
             let trailing_right = row.origin.x + row.size.x - 8.0;
             let lock_x = trailing_right - 14.0;
-            // Match hit-test spacing (22 px gap) so eye-vs-lock
-            // hit-test slop boxes don't overlap.
             let eye_x = lock_x - 22.0;
             let eye_icon = if item.hidden { Icon::EyeOff } else { Icon::Eye };
             let lock_icon = if item.locked {
@@ -478,17 +553,11 @@ impl Widget for LayerPanel {
             } else {
                 Icon::LockOpen
             };
-            // Default trailing color matches the rest of the row
-            // chrome (primary tint on selected rows, muted
-            // otherwise). Hidden dim_factor cascades.
             let trailing_default = if item.selected {
                 dim(self.theme.primary, dim_factor)
             } else {
                 dim(self.theme.muted_foreground, dim_factor)
             };
-            // Warm orange for the locked state — signals "this
-            // row is protected" without depending on a separate
-            // theme token (TS uses a comparable hue).
             let lock_locked = Color {
                 r: 0.92,
                 g: 0.49,
@@ -501,10 +570,7 @@ impl Widget for LayerPanel {
             } else {
                 trailing_default
             };
-            // Trailing icons are slimmer than the leading
-            // chevron / kind icon — 12 px @ 1.2 stroke reads as
-            // a "metadata affordance" rather than a primary
-            // glyph (TS parity).
+            // Slimmer than the leading icons (12 px @ 1.2 stroke).
             let trailing_size = 12.0;
             let trailing_stroke = 1.2;
             let trailing_y = row.origin.y + 7.0;
@@ -535,6 +601,18 @@ impl Widget for LayerPanel {
                 );
             }
             y += LAYER_ROW_HEIGHT;
+        }
+
+        // Drop-indicator — a 2 px primary-tint line painted between
+        // rows when a drag-to-reorder gesture is in flight. Sits on
+        // top of all row chrome so it remains visible regardless of
+        // hover/selected backgrounds underneath.
+        if let Some(drop) = self.drop_target {
+            let indicator_rect = Rect {
+                origin: Point2D::new(rect.origin.x + ROW_PAD_X, drop.indicator_y - 1.0),
+                size: Point2D::new(rect.size.x - ROW_PAD_X * 2.0, 2.0),
+            };
+            cx.backend.fill_rect(indicator_rect, self.theme.primary);
         }
     }
 
@@ -569,146 +647,4 @@ fn to_jian_color(c: Color) -> jian_core::scene::Color {
         (v.clamp(0.0, 1.0) * 255.0).round() as u8
     }
     jian_core::scene::Color::rgba(ch(c.r), ch(c.g), ch(c.b), ch(c.a))
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn from_sample_doc_flattens_to_5_layer_rows() {
-        let doc = Document::sample();
-        let panel = LayerPanel::from_document(&doc);
-        assert_eq!(panel.items.len(), 5);
-        assert_eq!(panel.items[0].label, "Frame");
-        assert_eq!(panel.items[0].depth, 0);
-        assert_eq!(panel.items[1].depth, 1);
-    }
-
-    #[test]
-    fn from_sample_doc_has_one_active_page() {
-        let doc = Document::sample();
-        let panel = LayerPanel::from_document(&doc);
-        assert_eq!(panel.pages.len(), 1);
-        assert!(panel.pages[0].active);
-        assert_eq!(panel.pages[0].label, "Page 1");
-    }
-
-    #[test]
-    fn selection_flag_marks_only_selected_row() {
-        let doc = Document::sample(); // selected = Title
-        let panel = LayerPanel::from_document(&doc);
-        let selected = panel.items.iter().filter(|i| i.selected).count();
-        assert_eq!(selected, 1);
-    }
-
-    #[test]
-    fn empty_document_yields_one_default_page_no_layers() {
-        let doc = Document::empty();
-        let panel = LayerPanel::from_document(&doc);
-        assert_eq!(panel.pages.len(), 1);
-        assert!(panel.items.is_empty());
-    }
-
-    #[test]
-    fn hit_test_resolves_first_layer_row() {
-        let doc = Document::sample();
-        let panel = LayerPanel::from_document(&doc);
-        let rect = Rect {
-            origin: Point2D::new(0.0, 0.0),
-            size: Point2D::new(LAYER_PANEL_WIDTH, panel.intrinsic_height()),
-        };
-        // Skip pages section (header + 1 page row + section gap +
-        // layers header) → land on the first layer row.
-        let layer_y = 8.0
-            + SECTION_HEADER_HEIGHT
-            + PAGE_ROW_HEIGHT
-            + SECTION_GAP
-            + SECTION_HEADER_HEIGHT
-            + LAYER_ROW_HEIGHT / 2.0;
-        let p = Point2D::new(rect.size.x / 2.0, layer_y);
-        match panel.hit_test(rect, p) {
-            Some(LayerPanelHit::Layer(id)) => assert_eq!(id, panel.items[0].node_id),
-            other => panic!("expected first layer hit, got {:?}", other),
-        }
-    }
-
-    #[test]
-    fn hit_test_resolves_add_page_plus_icon() {
-        let doc = Document::sample();
-        let panel = LayerPanel::from_document(&doc);
-        let rect = Rect {
-            origin: Point2D::new(0.0, 0.0),
-            size: Point2D::new(LAYER_PANEL_WIDTH, panel.intrinsic_height()),
-        };
-        // Mirror the paint geometry: plus_x = right edge - ROW_PAD_X
-        // - 12, plus_y = 8 + (SECTION_HEADER_HEIGHT - 14) / 2.
-        let plus_x = rect.size.x - ROW_PAD_X - 12.0;
-        let plus_y = 8.0 + (SECTION_HEADER_HEIGHT - 14.0) / 2.0;
-        // Centre of the 14 px icon.
-        assert_eq!(
-            panel.hit_test(rect, Point2D::new(plus_x + 7.0, plus_y + 7.0)),
-            Some(LayerPanelHit::AddPage)
-        );
-        // Edge-of-slop sample — 3 px LEFT of the icon's left edge,
-        // inside the 4 px slop band. Locks the slop contract: a
-        // regression that shrank slop below 3 px would fail here.
-        assert_eq!(
-            panel.hit_test(rect, Point2D::new(plus_x - 3.0, plus_y + 7.0)),
-            Some(LayerPanelHit::AddPage)
-        );
-    }
-
-    #[test]
-    fn hit_test_resolves_first_page_row() {
-        let doc = Document::sample();
-        let panel = LayerPanel::from_document(&doc);
-        let rect = Rect {
-            origin: Point2D::new(0.0, 0.0),
-            size: Point2D::new(LAYER_PANEL_WIDTH, panel.intrinsic_height()),
-        };
-        let page_y = 8.0 + SECTION_HEADER_HEIGHT + PAGE_ROW_HEIGHT / 2.0;
-        let p = Point2D::new(rect.size.x / 2.0, page_y);
-        assert_eq!(panel.hit_test(rect, p), Some(LayerPanelHit::Page(0)));
-    }
-
-    #[test]
-    fn access_node_advertises_tree_role_and_layers_label() {
-        let doc = Document::sample();
-        let panel = LayerPanel::from_document(&doc);
-        let node = panel.access_node();
-        assert_eq!(node.role(), accesskit::Role::Tree);
-        assert_eq!(node.label(), Some("Layers"));
-    }
-
-    #[test]
-    fn from_document_scopes_to_active_page_only() {
-        let page1 = crate::document::Page::new(
-            1,
-            "Page 1",
-            vec![Node::leaf(2, crate::document::NodeKind::Frame, "P1-Node")],
-        );
-        let page2 = crate::document::Page::new(
-            3,
-            "Page 2",
-            vec![Node::leaf(4, crate::document::NodeKind::Frame, "P2-Node")],
-        );
-        let doc = Document {
-            pages: vec![page1, page2],
-            active_page_index: 1,
-            selected: NodeId::NONE,
-            selected_set: Vec::new(),
-            clipboard: Vec::new(),
-            tool: crate::document::Tool::Select,
-            viewport: crate::document::Viewport::IDENTITY,
-            chat: crate::document::ChatState::default(),
-            ui: crate::document::UiState::default(),
-        };
-        let panel = LayerPanel::from_document(&doc);
-        assert_eq!(panel.items.len(), 1);
-        assert_eq!(panel.items[0].label, "P2-Node");
-        assert_eq!(panel.pages.len(), 2);
-        assert!(!panel.pages[0].active);
-        assert!(panel.pages[1].active);
-    }
 }
