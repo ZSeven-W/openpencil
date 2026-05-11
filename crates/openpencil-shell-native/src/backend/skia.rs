@@ -412,6 +412,44 @@ impl NativeBackend {
         canvas.draw_path(&path, &paint);
     }
 
+    /// Filled ellipse inscribed in `bounds`. Uses skia's native
+    /// oval primitive so the curve is properly anti-aliased.
+    pub fn fill_oval(&self, canvas: &skia_safe::Canvas, bounds: Rect, color: Color) {
+        let mut paint = skia_safe::Paint::new(jian_color_to_color4f(color), None);
+        paint.set_anti_alias(true);
+        canvas.draw_oval(to_sk_rect(bounds), &paint);
+    }
+
+    /// Stroked ellipse inscribed in `bounds`.
+    pub fn stroke_oval(&self, canvas: &skia_safe::Canvas, bounds: Rect, color: Color, width: f32) {
+        let mut paint = skia_safe::Paint::new(jian_color_to_color4f(color), None);
+        paint.set_anti_alias(true);
+        paint.set_stroke(true);
+        paint.set_stroke_width(width);
+        canvas.draw_oval(to_sk_rect(bounds), &paint);
+    }
+
+    /// Fill a closed polygon outlined by `points`. Builds a fresh
+    /// `Path` per call; cheap for triangles + handful-of-vertex
+    /// shapes.
+    pub fn fill_polygon(&self, canvas: &skia_safe::Canvas, points: &[Point2D], color: Color) {
+        if points.len() < 3 {
+            return;
+        }
+        // skia-safe 0.97 splits path construction onto `PathBuilder`;
+        // `Path::new()` itself is immutable for traversal.
+        let mut builder = skia_safe::PathBuilder::new();
+        builder.move_to((points[0].x, points[0].y));
+        for p in &points[1..] {
+            builder.line_to((p.x, p.y));
+        }
+        builder.close();
+        let path = builder.detach();
+        let mut paint = skia_safe::Paint::new(jian_color_to_color4f(color), None);
+        paint.set_anti_alias(true);
+        canvas.draw_path(&path, &paint);
+    }
+
     /// Save the current canvas state. Returns the save count so
     /// `restore_to` can pop back to it. (`Canvas::save` returns the
     /// pre-save count; we pass it through.)
@@ -433,6 +471,14 @@ impl NativeBackend {
     /// Translate the current canvas matrix.
     pub fn translate(&self, canvas: &skia_safe::Canvas, offset: Point2D) {
         canvas.translate((offset.x, offset.y));
+    }
+
+    /// Rotate the current canvas matrix `radians` clockwise about
+    /// `pivot`. Skia's `rotate_with_pivot` takes degrees, so the
+    /// conversion happens here.
+    pub fn rotate(&self, canvas: &skia_safe::Canvas, radians: f32, pivot: Point2D) {
+        let degrees = radians.to_degrees();
+        canvas.rotate(degrees, Some(skia_safe::Point::new(pivot.x, pivot.y)));
     }
 
     /// No-op; surface resize is owned by `SharedSkiaContext::resize`.

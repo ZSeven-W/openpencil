@@ -35,8 +35,11 @@ pub enum Icon {
     Cursor,
     /// Square — Rect tool.
     Square,
-    /// ChevronDown — dropdown affordance.
+    /// ChevronDown — dropdown affordance / expanded tree row.
     ChevronDown,
+    /// ChevronRight — collapsed tree row (LayerPanel collapsed
+    /// container shows `>`; expanding swaps it to `v`).
+    ChevronRight,
     /// Type — Text tool.
     Type,
     /// Frame — Frame tool.
@@ -103,6 +106,22 @@ pub enum Icon {
     PenTool,
     /// ImagePlus — "Import image / SVG" shape-picker row.
     ImagePlus,
+    /// Eye — visibility-toggle affordance on each LayerPanel row
+    /// (TS `Eye` from lucide-react). Paints when the row is
+    /// visible.
+    Eye,
+    /// EyeOff — open eye with diagonal slash. Paints in place
+    /// of `Eye` when the LayerPanel row is hidden, so the icon
+    /// itself signals the state (TS parity — strike-through
+    /// distinguishes hidden from visible rows).
+    EyeOff,
+    /// Lock — closed-shackle lock. Paints when the LayerPanel
+    /// row is locked.
+    Lock,
+    /// LockOpen — open-shackle lock. Paints in place of `Lock`
+    /// when the row is unlocked, so the icon shape itself
+    /// signals the state (TS parity).
+    LockOpen,
 }
 
 impl Icon {
@@ -115,6 +134,7 @@ impl Icon {
             Icon::Cursor => CURSOR,
             Icon::Square => SQUARE,
             Icon::ChevronDown => CHEVRON_DOWN,
+            Icon::ChevronRight => CHEVRON_RIGHT,
             Icon::Type => TYPE,
             Icon::Frame => FRAME,
             Icon::Hand => HAND,
@@ -148,6 +168,10 @@ impl Icon {
             Icon::Triangle => TRIANGLE,
             Icon::PenTool => PEN_TOOL,
             Icon::ImagePlus => IMAGE_PLUS,
+            Icon::Eye => EYE,
+            Icon::EyeOff => EYE_OFF,
+            Icon::Lock => LOCK,
+            Icon::LockOpen => LOCK_OPEN,
         }
     }
 }
@@ -167,6 +191,8 @@ const SQUARE: &[&str] = &[
 ];
 
 const CHEVRON_DOWN: &[&str] = &["m6 9 6 6 6-6"];
+
+const CHEVRON_RIGHT: &[&str] = &["m9 18 6-6-6-6"];
 
 const TYPE: &[&str] = &[
     "M12 4v16",
@@ -361,6 +387,33 @@ const IMAGE_PLUS: &[&str] = &[
     "M21 11.5V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7.5",
     "m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21",
     "M9 9a2 2 0 1 1-4 0 2 2 0 0 1 4 0Z",
+];
+
+// Lucide `eye.svg`.
+const EYE: &[&str] = &[
+    "M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0Z",
+    "M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z",
+];
+
+// Lucide `lock.svg` — rect body + closed shackle.
+const LOCK: &[&str] = &[
+    "M5 11h14a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2z",
+    "M7 11V7a5 5 0 0 1 10 0v4",
+];
+
+// Lucide `lock-open.svg` — rect body + half-open shackle
+// (right side of the arc is cut so the lock reads as "open").
+const LOCK_OPEN: &[&str] = &[
+    "M5 11h14a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2z",
+    "M7 11V7a5 5 0 0 1 9.9-1",
+];
+
+// Lucide `eye-off.svg` — eye with diagonal strike.
+const EYE_OFF: &[&str] = &[
+    "M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49",
+    "M14.084 14.158a3 3 0 0 1-4.242-4.242",
+    "M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143",
+    "m2 2 20 20",
 ];
 
 /// Paint `icon` at `top_left`, scaled to `size × size` pixels, in

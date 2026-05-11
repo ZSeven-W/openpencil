@@ -29,6 +29,151 @@ use crate::theme::Theme;
 use crate::widgets::{LayoutBox, LayoutCx, PaintCx, Widget, WidgetId};
 use crate::{Color, Point2D, Rect, TextLayout};
 
+/// One of the 8 selection handles (corners + edge midpoints) the
+/// selection overlay paints. Used by the host to dispatch resize
+/// drags: each variant fixes the corresponding edge / corner of
+/// the selected bounds.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SelectionHandle {
+    TopLeft,
+    Top,
+    TopRight,
+    Right,
+    BottomRight,
+    Bottom,
+    BottomLeft,
+    Left,
+}
+
+/// Radius (screen px) of the rotation ring that sits OUTSIDE the
+/// 4 selection corners. Matches the TS `ROTATE_OUTER_RADIUS`.
+const ROTATE_OUTER_RADIUS: f32 = 16.0;
+
+/// Hit-test the rotation ring that sits just outside the four
+/// corner handles. Returns the nearest corner (so the runner can
+/// hint which way the rotation drag is anchored) or `None` if the
+/// cursor isn't in a rotation zone.
+///
+/// The rotation zone is an annulus around each corner — beyond
+/// the 6 px handle slop and inside the 16 px outer radius. Matches
+/// the TS `hitTestRotation` logic.
+pub fn rotation_corner_at_point(
+    canvas_rect: Rect,
+    doc: &Document,
+    point: Point2D,
+) -> Option<SelectionHandle> {
+    // Rotation rings are only painted on single-select (the
+    // multi-select overlay is outline-only), so gate the hit-test
+    // to match — otherwise non-anchor "rotation zones" would
+    // intercept clicks on dead air.
+    if doc.selection_count() != 1 {
+        return None;
+    }
+    let node = doc.selected_node()?;
+    let bounds = node.aggregate_bounds();
+    if bounds.size.x <= 0.0 || bounds.size.y <= 0.0 {
+        return None;
+    }
+    let viewport = &doc.viewport;
+    let left = canvas_rect.origin.x + viewport.pan_x + bounds.origin.x * viewport.zoom;
+    let top = canvas_rect.origin.y + viewport.pan_y + bounds.origin.y * viewport.zoom;
+    let right = left + bounds.size.x * viewport.zoom;
+    let bottom = top + bounds.size.y * viewport.zoom;
+    // Inverse-rotate the cursor into the node's local space so the
+    // hit-test annulus tracks the rendered (rotated) corners.
+    let cx = (left + right) / 2.0;
+    let cy = (top + bottom) / 2.0;
+    let local = inverse_rotate(point, Point2D::new(cx, cy), node.rotation);
+    let inner = 6.0_f32;
+    let outer = ROTATE_OUTER_RADIUS;
+    let corners = [
+        (SelectionHandle::TopLeft, left, top),
+        (SelectionHandle::TopRight, right, top),
+        (SelectionHandle::BottomLeft, left, bottom),
+        (SelectionHandle::BottomRight, right, bottom),
+    ];
+    for (kind, cx, cy) in corners {
+        let dx = local.x - cx;
+        let dy = local.y - cy;
+        let dist = (dx * dx + dy * dy).sqrt();
+        if dist > inner && dist <= outer {
+            return Some(kind);
+        }
+    }
+    None
+}
+
+/// Apply the inverse of a rotation about `pivot` to `point`. Used
+/// by hit-tests so a rotated selection's handles + rotation ring
+/// + body all match the rendered (rotated) geometry.
+fn inverse_rotate(point: Point2D, pivot: Point2D, radians: f32) -> Point2D {
+    if radians.abs() < f32::EPSILON {
+        return point;
+    }
+    let dx = point.x - pivot.x;
+    let dy = point.y - pivot.y;
+    let cos_t = (-radians).cos();
+    let sin_t = (-radians).sin();
+    Point2D::new(
+        pivot.x + dx * cos_t - dy * sin_t,
+        pivot.y + dx * sin_t + dy * cos_t,
+    )
+}
+
+/// Hit-test the 8 selection handles around the currently-selected
+/// node. Returns the handle at `point` (a small slop around each
+/// handle center counts) or `None` if no selection / no handle.
+///
+/// `canvas_rect` is the on-screen rect the canvas widget paints
+/// into (same value passed to `CanvasViewport::paint`). The
+/// transform from document → screen is identical to paint so a
+/// handle the user clicks is the handle they see.
+pub fn selection_handle_at_point(
+    canvas_rect: Rect,
+    doc: &Document,
+    point: Point2D,
+) -> Option<SelectionHandle> {
+    // Handles are only painted on single-select (the multi-select
+    // overlay is outline-only — Figma parity), so gate the hit-
+    // test to match. Otherwise the "anchor's handles" would hit-
+    // test even though no handles are visible anywhere.
+    if doc.selection_count() != 1 {
+        return None;
+    }
+    let node = doc.selected_node()?;
+    let bounds = node.aggregate_bounds();
+    if bounds.size.x <= 0.0 || bounds.size.y <= 0.0 {
+        return None;
+    }
+    let viewport = &doc.viewport;
+    let left = canvas_rect.origin.x + viewport.pan_x + bounds.origin.x * viewport.zoom;
+    let top = canvas_rect.origin.y + viewport.pan_y + bounds.origin.y * viewport.zoom;
+    let right = left + bounds.size.x * viewport.zoom;
+    let bottom = top + bounds.size.y * viewport.zoom;
+    let mid_x = (left + right) / 2.0;
+    let mid_y = (top + bottom) / 2.0;
+    // Inverse-rotate the cursor so handle hit-test tracks rendered
+    // (rotated) handle positions.
+    let local = inverse_rotate(point, Point2D::new(mid_x, mid_y), node.rotation);
+    let slop = 6.0;
+    let anchors = [
+        (SelectionHandle::TopLeft, left, top),
+        (SelectionHandle::Top, mid_x, top),
+        (SelectionHandle::TopRight, right, top),
+        (SelectionHandle::Right, right, mid_y),
+        (SelectionHandle::BottomRight, right, bottom),
+        (SelectionHandle::Bottom, mid_x, bottom),
+        (SelectionHandle::BottomLeft, left, bottom),
+        (SelectionHandle::Left, left, mid_y),
+    ];
+    for (kind, hx, hy) in anchors {
+        if (local.x - hx).abs() <= slop && (local.y - hy).abs() <= slop {
+            return Some(kind);
+        }
+    }
+    None
+}
+
 pub struct CanvasViewport<'a> {
     pub id: WidgetId,
     pub document: &'a Document,
@@ -110,6 +255,59 @@ impl<'a> Widget for CanvasViewport<'a> {
             }
         }
 
+        // 4. Selection overlay — outline for every selected node,
+        //    plus 8 grab handles ONLY when the selection is a
+        //    single node (Figma parity — multi-select shows
+        //    outlines but no per-node handles). Painted last so
+        //    overlays sit on top of sibling node paints.
+        let show_handles = self.document.selection_count() == 1;
+        if let Some(page) = self.document.active_page() {
+            for id in &self.document.selected_set {
+                let Some(node) = page.find(*id) else {
+                    continue;
+                };
+                // Hidden nodes don't paint on canvas (paint_node
+                // early-returns), so painting a selection overlay
+                // on top would leak the ring onto blank space.
+                // Skip the overlay too — TS parity, since hidden
+                // nodes are excluded from `flattenToRenderNodes`.
+                if node.hidden {
+                    continue;
+                }
+                let bounds = node.aggregate_bounds();
+                if bounds.size.x <= 0.0 || bounds.size.y <= 0.0 {
+                    continue;
+                }
+                let world_rect = Rect {
+                    origin: Point2D::new(
+                        rect.origin.x + viewport.pan_x + bounds.origin.x * viewport.zoom,
+                        rect.origin.y + viewport.pan_y + bounds.origin.y * viewport.zoom,
+                    ),
+                    size: Point2D::new(
+                        bounds.size.x * viewport.zoom,
+                        bounds.size.y * viewport.zoom,
+                    ),
+                };
+                let is_container = matches!(
+                    node.kind,
+                    NodeKind::Frame | NodeKind::Group | NodeKind::Other(_)
+                );
+                let rotated = node.rotation.abs() > f32::EPSILON;
+                if rotated {
+                    let pivot = Point2D::new(
+                        world_rect.origin.x + world_rect.size.x / 2.0,
+                        world_rect.origin.y + world_rect.size.y / 2.0,
+                    );
+                    cx.backend.save();
+                    cx.backend.rotate(node.rotation, pivot);
+                }
+                paint_selection_overlay(cx, world_rect, &self.theme, is_container, show_handles);
+                if rotated {
+                    cx.backend.restore();
+                }
+            }
+        }
+
         cx.backend.restore();
     }
 
@@ -130,6 +328,11 @@ fn paint_node(
     zoom: f32,
     selected: NodeId,
 ) {
+    // Hidden nodes (and their subtree) skip canvas paint entirely.
+    // Layer panel still shows them, dimmed, so the user can unhide.
+    if node.hidden {
+        return;
+    }
     let world_rect = Rect {
         origin: Point2D::new(
             viewport_origin.x + node.bounds.origin.x * zoom,
@@ -137,6 +340,20 @@ fn paint_node(
         ),
         size: Point2D::new(node.bounds.size.x * zoom, node.bounds.size.y * zoom),
     };
+
+    // Wrap the paint in save/rotate/restore if the node carries a
+    // non-zero rotation. Rotation pivots around the node's own
+    // bounds centre — for containers, this is the aggregate centre.
+    let rotated = node.rotation.abs() > f32::EPSILON;
+    if rotated {
+        let pivot_doc = node.aggregate_bounds();
+        let pivot = Point2D::new(
+            viewport_origin.x + (pivot_doc.origin.x + pivot_doc.size.x / 2.0) * zoom,
+            viewport_origin.y + (pivot_doc.origin.y + pivot_doc.size.y / 2.0) * zoom,
+        );
+        cx.backend.save();
+        cx.backend.rotate(node.rotation, pivot);
+    }
 
     match &node.kind {
         NodeKind::Frame => {
@@ -153,13 +370,71 @@ fn paint_node(
         NodeKind::Rect => {
             paint_fill_then_stroke(cx, node, world_rect, zoom);
         }
+        NodeKind::Ellipse => {
+            if let Some(fill) = node.fill {
+                cx.backend.fill_oval(world_rect, fill);
+            }
+            if let Some(stroke) = node.stroke {
+                cx.backend
+                    .stroke_oval(world_rect, stroke.color, stroke.width * zoom);
+            }
+        }
+        NodeKind::Polygon => {
+            // Default triangle: top-centre, bottom-left, bottom-right.
+            let cx_pt = world_rect.origin.x + world_rect.size.x / 2.0;
+            let top_y = world_rect.origin.y;
+            let bottom_y = world_rect.origin.y + world_rect.size.y;
+            let left_x = world_rect.origin.x;
+            let right_x = world_rect.origin.x + world_rect.size.x;
+            let pts = [
+                Point2D::new(cx_pt, top_y),
+                Point2D::new(left_x, bottom_y),
+                Point2D::new(right_x, bottom_y),
+            ];
+            if let Some(fill) = node.fill {
+                cx.backend.fill_polygon(&pts, fill);
+            }
+            if let Some(stroke) = node.stroke {
+                cx.backend
+                    .stroke_polygon(&pts, stroke.color, stroke.width * zoom);
+            }
+        }
+        NodeKind::Line => {
+            // Top-left → bottom-right diagonal across the bounds,
+            // stroked at the stroke width (or 1.5 if no stroke).
+            let from = Point2D::new(world_rect.origin.x, world_rect.origin.y);
+            let to = Point2D::new(
+                world_rect.origin.x + world_rect.size.x,
+                world_rect.origin.y + world_rect.size.y,
+            );
+            let (color, width) = match node.stroke {
+                Some(s) => (s.color, s.width * zoom),
+                None => (
+                    node.fill.unwrap_or(crate::Color::BLACK),
+                    (1.5_f32).max(zoom),
+                ),
+            };
+            cx.backend.stroke_line(from, to, color, width);
+        }
         NodeKind::Text => {
             if let Some(text) = node.text.as_deref() {
+                // Ink colour follows `Node.fill` (defaults to near
+                // black if unset) so editing the Fill hex repaints
+                // the rendered text.
+                let ink = node.fill.unwrap_or(crate::Color {
+                    r: 0.08,
+                    g: 0.08,
+                    b: 0.08,
+                    a: 1.0,
+                });
+                fn ch(v: f32) -> u8 {
+                    (v.clamp(0.0, 1.0) * 255.0).round() as u8
+                }
                 let layout = TextLayout::single_run(
                     text,
                     "system-ui",
                     13.0 * zoom,
-                    jian_core::scene::Color::rgb(20, 20, 20),
+                    jian_core::scene::Color::rgba(ch(ink.r), ch(ink.g), ch(ink.b), ch(ink.a)),
                     Point2D::new(0.0, 0.0),
                 );
                 cx.backend.draw_text(
@@ -170,27 +445,23 @@ fn paint_node(
         }
     }
 
-    if node.id == selected && node.bounds.size.x > 0.0 && node.bounds.size.y > 0.0 {
-        let highlight_color = Color {
-            r: 0.18,
-            g: 0.50,
-            b: 1.0,
-            a: 1.0,
-        };
-        cx.backend
-            .stroke_rect(world_rect, highlight_color, 2.0_f32.max(zoom));
+    if rotated {
+        cx.backend.restore();
     }
+
+    // Selection outline + 8 handles are painted as a top-of-stack
+    // overlay in `CanvasViewport::paint`; nothing per-node here.
+    let _ = selected;
 }
 
-fn paint_fill_then_stroke(cx: &mut PaintCx<'_>, node: &Node, world_rect: Rect, zoom: f32) {
-    if let Some(fill) = node.fill {
-        cx.backend.fill_rect(world_rect, fill);
-    }
-    if let Some(stroke) = node.stroke {
-        cx.backend
-            .stroke_rect(world_rect, stroke.color, stroke.width * zoom);
-    }
-}
+/// Paints the selection outline + 8 resize handles around the
+/// world-space rect of the selected node. Matches the TS app's
+/// Figma-style affordance: 1 px primary outline (4 AA stroke
+/// lines), small white-filled handles with a 1 px primary stroke
+/// at the four corners + four edge midpoints. Container nodes
+/// (Frame / Group / Other) get a slightly more translucent
+/// outline so the visual reads "wrapper" instead of "leaf".
+use crate::widgets::canvas_viewport_overlay::{paint_fill_then_stroke, paint_selection_overlay};
 
 /// Paint a dotted grid across the canvas widget rect. The grid is
 /// drawn in canvas-local coordinates and offset by `viewport.pan`
@@ -367,7 +638,7 @@ mod tests {
     #[test]
     fn unselected_document_skips_highlight_stroke() {
         let mut doc = Document::sample();
-        doc.selected = NodeId::NONE; // deselect
+        doc.clear_selection(); // deselect
         let viewport = CanvasViewport::from_document(&doc);
         let mut backend = RecordingBackend::default();
         {
@@ -457,6 +728,8 @@ mod tests {
             pages: vec![crate::document::Page::new(1, "p", vec![group])],
             active_page_index: 0,
             selected: NodeId::NONE,
+            selected_set: Vec::new(),
+            clipboard: Vec::new(),
             tool: crate::document::Tool::Select,
             viewport: crate::document::Viewport::IDENTITY,
             chat: crate::document::ChatState::default(),

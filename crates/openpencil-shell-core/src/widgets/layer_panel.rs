@@ -34,6 +34,24 @@ pub struct LayerItem {
     pub icon: Icon,
     pub depth: u8,
     pub selected: bool,
+    /// True when this node has any children — drives the leading
+    /// chevron-down expand caret on the row (TS LayerRow shows
+    /// the caret only on container rows).
+    pub has_children: bool,
+    /// Hidden flag — drives the dimmed-row visual + an
+    /// emphasised eye icon so the user can tell at a glance
+    /// which rows are hidden.
+    pub hidden: bool,
+    /// Locked flag — drives an emphasised lock icon.
+    pub locked: bool,
+    /// Collapsed flag — drives the leading chevron direction
+    /// (`▼` when expanded, `▶` when collapsed) and tells the
+    /// walker to skip descending into children.
+    pub collapsed: bool,
+    /// Hovered flag — true iff the cursor is over this row.
+    /// Drives the hover-reveal of the trailing eye + lock
+    /// icons (TS parity: only the active row exposes them).
+    pub hovered: bool,
 }
 
 /// Pages-section row.
@@ -71,7 +89,7 @@ impl LayerPanel {
         let mut items = Vec::new();
         if let Some(page) = doc.active_page() {
             for child in &page.children {
-                walk(child, doc.selected, 0, &mut items);
+                walk(child, doc.selected, doc.ui.hovered_layer_id, 0, &mut items);
             }
         }
         Self {
@@ -102,10 +120,28 @@ impl LayerPanel {
     }
 
     /// Hit test a (rect, point) — returns either `Page(idx)` for a
-    /// page row click or `Layer(node_id)` for a layer row click.
+    /// page row click, `Layer(node_id)` for a layer row click, or
+    /// `AddPage` for a click on the `+` affordance on the Pages
+    /// section header.
     pub fn hit_test(&self, rect: Rect, point: Point2D) -> Option<LayerPanelHit> {
         if !rect_contains(rect, point) {
             return None;
+        }
+        // Pages section header — `+` add-page affordance at top-right.
+        // Geometry mirrors the paint pass:
+        //   plus_x = rect.origin.x + rect.size.x - ROW_PAD_X - 12.0
+        //   plus_y = (rect.origin.y + 8.0) + (SECTION_HEADER_HEIGHT - 14.0) / 2.0
+        //   size   = 14 px
+        // 4 px slop so a sloppy click still lands.
+        let plus_x = rect.origin.x + rect.size.x - ROW_PAD_X - 12.0;
+        let plus_y = rect.origin.y + 8.0 + (SECTION_HEADER_HEIGHT - 14.0) / 2.0;
+        let slop = 4.0;
+        if point.x >= plus_x - slop
+            && point.x <= plus_x + 14.0 + slop
+            && point.y >= plus_y - slop
+            && point.y <= plus_y + 14.0 + slop
+        {
+            return Some(LayerPanelHit::AddPage);
         }
         let mut y = rect.origin.y + 8.0 + SECTION_HEADER_HEIGHT;
         for page in &self.pages {
@@ -125,6 +161,49 @@ impl LayerPanel {
                 size: Point2D::new(rect.size.x, LAYER_ROW_HEIGHT),
             };
             if rect_contains(row, point) {
+                // Match the paint geometry — same 14 px icon
+                // boxes positioned at `trailing_right` minus 14 /
+                // 32 (lock / eye). Slop of 4 px around each so
+                // small mouse offsets still register.
+                let inner = Rect {
+                    origin: Point2D::new(row.origin.x + 6.0, y + 2.0),
+                    size: Point2D::new(row.size.x - 12.0, LAYER_ROW_HEIGHT - 4.0),
+                };
+                let trailing_right = inner.origin.x + inner.size.x - 8.0;
+                let lock_x = trailing_right - 14.0;
+                // Widen eye-to-lock gap (was 18 → 22) so 14 px
+                // icons + 4 px slop each side don't overlap.
+                let eye_x = lock_x - 22.0;
+                let icon_y = inner.origin.y + 6.0;
+                let slop = 4.0;
+                if point.x >= lock_x - slop
+                    && point.x <= lock_x + 14.0 + slop
+                    && point.y >= icon_y - slop
+                    && point.y <= icon_y + 14.0 + slop
+                {
+                    return Some(LayerPanelHit::ToggleLocked(item.node_id));
+                }
+                if point.x >= eye_x - slop
+                    && point.x <= eye_x + 14.0 + slop
+                    && point.y >= icon_y - slop
+                    && point.y <= icon_y + 14.0 + slop
+                {
+                    return Some(LayerPanelHit::ToggleHidden(item.node_id));
+                }
+                // Leading chevron — only present on container
+                // rows. Painted at `inner.origin.x + indent`
+                // where indent = ROW_PAD_X + depth*12.
+                if item.has_children {
+                    let indent = ROW_PAD_X + f32::from(item.depth) * 12.0;
+                    let chev_x = inner.origin.x + indent;
+                    if point.x >= chev_x - slop
+                        && point.x <= chev_x + 14.0 + slop
+                        && point.y >= icon_y - slop
+                        && point.y <= icon_y + 14.0 + slop
+                    {
+                        return Some(LayerPanelHit::ToggleCollapsed(item.node_id));
+                    }
+                }
                 return Some(LayerPanelHit::Layer(item.node_id));
             }
             y += LAYER_ROW_HEIGHT;
@@ -137,6 +216,19 @@ impl LayerPanel {
 pub enum LayerPanelHit {
     Page(usize),
     Layer(NodeId),
+    /// Click on the eye icon — host should toggle the node's
+    /// `hidden` flag.
+    ToggleHidden(NodeId),
+    /// Click on the lock icon — host should toggle the node's
+    /// `locked` flag.
+    ToggleLocked(NodeId),
+    /// Click on the leading chevron — host should toggle the
+    /// node's `collapsed` flag so children show/hide in the
+    /// layer tree.
+    ToggleCollapsed(NodeId),
+    /// Click on the `+` add-page affordance in the Pages section
+    /// header — host should append a fresh page and switch to it.
+    AddPage,
 }
 
 fn rect_contains(r: Rect, p: Point2D) -> bool {
@@ -146,7 +238,13 @@ fn rect_contains(r: Rect, p: Point2D) -> bool {
         && p.y <= r.origin.y + r.size.y
 }
 
-fn walk(node: &Node, selected: NodeId, depth: u8, out: &mut Vec<LayerItem>) {
+fn walk(
+    node: &Node,
+    selected: NodeId,
+    hovered: Option<NodeId>,
+    depth: u8,
+    out: &mut Vec<LayerItem>,
+) {
     out.push(LayerItem {
         node_id: node.id,
         label: node.name.clone(),
@@ -154,9 +252,19 @@ fn walk(node: &Node, selected: NodeId, depth: u8, out: &mut Vec<LayerItem>) {
         icon: icon_for_kind(&node.kind),
         depth,
         selected: node.id == selected,
+        has_children: !node.children.is_empty(),
+        hidden: node.hidden,
+        locked: node.locked,
+        collapsed: node.collapsed,
+        hovered: hovered == Some(node.id),
     });
-    for child in &node.children {
-        walk(child, selected, depth.saturating_add(1), out);
+    // Collapsed nodes hide their subtree from the LayerPanel
+    // (canvas paint / hit-test are unaffected — that's a
+    // tree-view-only concern).
+    if !node.collapsed {
+        for child in &node.children {
+            walk(child, selected, hovered, depth.saturating_add(1), out);
+        }
     }
 }
 
@@ -166,6 +274,9 @@ fn icon_for_kind(kind: &crate::document::NodeKind) -> Icon {
         NodeKind::Frame => Icon::Hash,
         NodeKind::Group => Icon::Square,
         NodeKind::Rect => Icon::Square,
+        NodeKind::Ellipse => Icon::Circle,
+        NodeKind::Polygon => Icon::Triangle,
+        NodeKind::Line => Icon::Minus,
         NodeKind::Text => Icon::Type,
         NodeKind::Other(_) => Icon::Square,
     }
@@ -288,25 +399,60 @@ impl Widget for LayerPanel {
             }
 
             let indent = ROW_PAD_X + f32::from(item.depth) * 12.0;
-            // Kind icon — switches to primary color when selected.
-            let icon_color = if item.selected {
-                self.theme.primary
-            } else {
-                self.theme.muted_foreground
+            // Hidden rows dim everything by 50 % alpha — TS parity
+            // with `opacity-50` on hidden layer rows.
+            let dim = |c: Color, factor: f32| -> Color {
+                Color {
+                    r: c.r,
+                    g: c.g,
+                    b: c.b,
+                    a: c.a * factor,
+                }
             };
+            let dim_factor = if item.hidden { 0.45 } else { 1.0 };
+            let icon_color = if item.selected {
+                dim(self.theme.primary, dim_factor)
+            } else {
+                dim(self.theme.muted_foreground, dim_factor)
+            };
+            // Leading chevron — only for container rows (TS
+            // `LayerRow` shows the caret only when the node has
+            // children). 12 px slot so the kind icon aligns to
+            // the same x regardless.
+            if item.has_children {
+                let chev_icon = if item.collapsed {
+                    Icon::ChevronRight
+                } else {
+                    Icon::ChevronDown
+                };
+                draw_icon(
+                    cx.backend,
+                    chev_icon,
+                    Point2D::new(row.origin.x + indent, row.origin.y + 6.0),
+                    14.0,
+                    icon_color,
+                    1.4,
+                );
+            }
+            // 18 px slot for the chevron (was 14, no breathing
+            // room between chevron and kind icon — user feedback
+            // 2026-05-11).
+            let icon_x = row.origin.x + indent + 18.0;
+            // Kind icon — switches to primary color when selected.
             draw_icon(
                 cx.backend,
                 item.icon,
-                Point2D::new(row.origin.x + indent, row.origin.y + 6.0),
+                Point2D::new(icon_x, row.origin.y + 6.0),
                 14.0,
                 icon_color,
                 1.4,
             );
-            // Name label.
+            // Name label — dims to muted when hidden so the user
+            // can tell at a glance which rows are invisible.
             let label_color = if item.selected {
-                self.theme.primary
+                dim(self.theme.primary, dim_factor)
             } else {
-                self.theme.card_foreground
+                dim(self.theme.card_foreground, dim_factor)
             };
             let label = TextLayout::single_run(
                 &item.label,
@@ -315,10 +461,79 @@ impl Widget for LayerPanel {
                 to_jian_color(label_color),
                 Point2D::new(0.0, 0.0),
             );
-            cx.backend.draw_text(
-                &label,
-                Point2D::new(row.origin.x + indent + 22.0, row.origin.y + 17.0),
-            );
+            cx.backend
+                .draw_text(&label, Point2D::new(icon_x + 20.0, row.origin.y + 17.0));
+            // Trailing eye + lock icons. The ICON SHAPE itself
+            // signals state (Eye/EyeOff, Lock/LockOpen) — TS
+            // parity. Locked icon also paints in a warm orange
+            // so it reads as a "can't edit" alert.
+            let trailing_right = row.origin.x + row.size.x - 8.0;
+            let lock_x = trailing_right - 14.0;
+            // Match hit-test spacing (22 px gap) so eye-vs-lock
+            // hit-test slop boxes don't overlap.
+            let eye_x = lock_x - 22.0;
+            let eye_icon = if item.hidden { Icon::EyeOff } else { Icon::Eye };
+            let lock_icon = if item.locked {
+                Icon::Lock
+            } else {
+                Icon::LockOpen
+            };
+            // Default trailing color matches the rest of the row
+            // chrome (primary tint on selected rows, muted
+            // otherwise). Hidden dim_factor cascades.
+            let trailing_default = if item.selected {
+                dim(self.theme.primary, dim_factor)
+            } else {
+                dim(self.theme.muted_foreground, dim_factor)
+            };
+            // Warm orange for the locked state — signals "this
+            // row is protected" without depending on a separate
+            // theme token (TS uses a comparable hue).
+            let lock_locked = Color {
+                r: 0.92,
+                g: 0.49,
+                b: 0.20,
+                a: 1.0,
+            };
+            let eye_color = trailing_default;
+            let lock_color = if item.locked {
+                lock_locked
+            } else {
+                trailing_default
+            };
+            // Trailing icons are slimmer than the leading
+            // chevron / kind icon — 12 px @ 1.2 stroke reads as
+            // a "metadata affordance" rather than a primary
+            // glyph (TS parity).
+            let trailing_size = 12.0;
+            let trailing_stroke = 1.2;
+            let trailing_y = row.origin.y + 7.0;
+            // Eye only paints on hover / selected / hidden — TS
+            // parity (hover reveal). Hidden always shows so
+            // the user sees state at a glance.
+            let show_eye = item.hovered || item.selected || item.hidden;
+            // Lock paints on hover / selected / locked.
+            let show_lock = item.hovered || item.selected || item.locked;
+            if show_eye {
+                draw_icon(
+                    cx.backend,
+                    eye_icon,
+                    Point2D::new(eye_x, trailing_y),
+                    trailing_size,
+                    eye_color,
+                    trailing_stroke,
+                );
+            }
+            if show_lock {
+                draw_icon(
+                    cx.backend,
+                    lock_icon,
+                    Point2D::new(lock_x, trailing_y),
+                    trailing_size,
+                    lock_color,
+                    trailing_stroke,
+                );
+            }
             y += LAYER_ROW_HEIGHT;
         }
     }
@@ -419,6 +634,32 @@ mod tests {
     }
 
     #[test]
+    fn hit_test_resolves_add_page_plus_icon() {
+        let doc = Document::sample();
+        let panel = LayerPanel::from_document(&doc);
+        let rect = Rect {
+            origin: Point2D::new(0.0, 0.0),
+            size: Point2D::new(LAYER_PANEL_WIDTH, panel.intrinsic_height()),
+        };
+        // Mirror the paint geometry: plus_x = right edge - ROW_PAD_X
+        // - 12, plus_y = 8 + (SECTION_HEADER_HEIGHT - 14) / 2.
+        let plus_x = rect.size.x - ROW_PAD_X - 12.0;
+        let plus_y = 8.0 + (SECTION_HEADER_HEIGHT - 14.0) / 2.0;
+        // Centre of the 14 px icon.
+        assert_eq!(
+            panel.hit_test(rect, Point2D::new(plus_x + 7.0, plus_y + 7.0)),
+            Some(LayerPanelHit::AddPage)
+        );
+        // Edge-of-slop sample — 3 px LEFT of the icon's left edge,
+        // inside the 4 px slop band. Locks the slop contract: a
+        // regression that shrank slop below 3 px would fail here.
+        assert_eq!(
+            panel.hit_test(rect, Point2D::new(plus_x - 3.0, plus_y + 7.0)),
+            Some(LayerPanelHit::AddPage)
+        );
+    }
+
+    #[test]
     fn hit_test_resolves_first_page_row() {
         let doc = Document::sample();
         let panel = LayerPanel::from_document(&doc);
@@ -456,6 +697,8 @@ mod tests {
             pages: vec![page1, page2],
             active_page_index: 1,
             selected: NodeId::NONE,
+            selected_set: Vec::new(),
+            clipboard: Vec::new(),
             tool: crate::document::Tool::Select,
             viewport: crate::document::Viewport::IDENTITY,
             chat: crate::document::ChatState::default(),

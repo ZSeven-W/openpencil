@@ -2,13 +2,18 @@
 # tools/check-widget-boundary.sh — Step 1b §1.4 widget boundary invariant.
 #
 # Per spec §1.4: widget logic (Widget impls, layout/paint/access_node)
-# lives in `crates/openpencil-shell-core/src/widgets/`. shell-web is
-# allowed exactly one glue file (`crates/openpencil-shell-web/src/
-# widget_host.rs`); the `// glue:` marker on its paint signature is
-# the only line allowed to host a `fn paint(` that drives widgets.
+# lives in `crates/openpencil-shell-core/src/widgets/`. shell-web's
+# widget glue is scoped to a single module — `widget_host.rs` plus
+# its sibling submodules under `widget_host/` (spec amendment
+# 2026-05-11: the original "one file" constraint conflicted with
+# the 800-line file cap once the host grew real keyboard /
+# clipboard / paint coordination, so the module is now allowed to
+# span multiple sibling files inside the `widget_host/` directory).
+# The `// glue:` marker on the paint signature is still the only
+# `fn paint(` allowed to drive widgets from this crate.
 # Any function or file in shell-web that pulls
-# `openpencil_shell_core::widgets::*` must live in widget_host.rs
-# (the spec's "any function pulling shell-core widgets" clause).
+# `openpencil_shell_core::widgets::*` must live in the widget_host
+# module (the spec's "any function pulling shell-core widgets" clause).
 #
 # Reverse direction: shell-core/src/widgets/ MUST contain four impl
 # files (tree, prop_row, dropdown, text_input) AND each file must
@@ -76,14 +81,64 @@ fi
 # F3's exemption only needs to bless the documented paint signature).
 # ---------------------------------------------------------------------
 paint_hits="$(grep -RInE \
-    'fn[[:space:]]+paint\(' \
+    'fn[[:space:]]+paint[[:space:]]*[<(]' \
     "${WEB_SRC}" 2>/dev/null || true)"
 if [ -n "${paint_hits}" ]; then
-  illegal_paint="$(printf '%s\n' "${paint_hits}" \
-    | grep -v '^crates/openpencil-shell-web/src/widget_host\.rs:.*// glue:' \
-    || true)"
-  if [ -n "${illegal_paint}" ]; then
-    fail_lines+=("Forward F3: fn paint( outside widget_host.rs's // glue: line:" "${illegal_paint}")
+  # Allow `fn paint(` in `widget_host.rs` or any sibling under
+  # `widget_host/`, provided the marker `// glue:` is on the
+  # IMMEDIATELY PRECEDING line. This ties the marker to a
+  # specific function (codex CONCERN: a file-level marker was
+  # too permissive — a developer could add `// glue:` once
+  # anywhere and then sneak in arbitrary extra `fn paint`
+  # helpers). The marker on the line above is rustfmt-stable:
+  # fmt never reorders comment-then-fn pairs.
+  #
+  # Implementation: a single `awk` pass over the allowed files,
+  # plus a separate grep for `fn paint(` in non-allowed files
+  # (those are unconditional violations). No while loop / no
+  # here-string — codex CONCERN about `set -euo pipefail`
+  # interactions.
+  #
+  # `glue_violations` — `fn paint(` lines inside the widget_host
+  # module whose preceding line is NOT `// glue:`.
+  glue_violations="$(awk '
+    /^[[:space:]]*\/\/[[:space:]]*glue:[[:space:]]*$/ {
+      prev_was_glue = 1; next
+    }
+    /fn[[:space:]]+paint[[:space:]]*[<(]/ {
+      if (!prev_was_glue) {
+        printf "%s:%d:%s\n", FILENAME, FNR, $0
+      }
+      prev_was_glue = 0
+      next
+    }
+    { prev_was_glue = 0 }
+  ' "${WEB_SRC}/widget_host.rs" "${WEB_SRC}/widget_host"/*.rs 2>/dev/null || true)"
+  # `outside_module_files` — files in shell-web/src/ that
+  # define `fn paint(` but are NOT in the widget_host module
+  # at all. These violate F3 unconditionally.
+  outside_module_files="$(grep -RIlE \
+    'fn[[:space:]]+paint[[:space:]]*[<(]' \
+    "${WEB_SRC}" 2>/dev/null \
+    | grep -vE '^crates/openpencil-shell-web/src/widget_host(\.rs|/[^/]+\.rs)$' \
+    | LC_ALL=C sort -u || true)"
+  outside_module_hits=""
+  if [ -n "${outside_module_files}" ]; then
+    outside_module_hits="$(grep -nE \
+      'fn[[:space:]]+paint[[:space:]]*[<(]' \
+      ${outside_module_files} 2>/dev/null || true)"
+  fi
+  combined_paint=""
+  [ -n "${glue_violations}" ] && combined_paint="${glue_violations}"
+  if [ -n "${outside_module_hits}" ]; then
+    if [ -n "${combined_paint}" ]; then
+      combined_paint="${combined_paint}"$'\n'"${outside_module_hits}"
+    else
+      combined_paint="${outside_module_hits}"
+    fi
+  fi
+  if [ -n "${combined_paint}" ]; then
+    fail_lines+=("Forward F3: fn paint( in shell-web without a '// glue:' marker on the immediately preceding line, OR outside the widget_host module (allowed locations: widget_host.rs and widget_host/* sibling files):" "${combined_paint}")
   fi
 fi
 
@@ -109,9 +164,11 @@ core_ref_hits="$(grep -RIn 'openpencil_shell_core' "${WEB_SRC}" 2>/dev/null || t
 if [ -n "${core_ref_hits}" ]; then
   # Filter to lines that ALSO mention `widgets`, then drop the
   # widget_host.rs allowance.
+  # widget_host module is allowed to span sibling files under
+  # `widget_host/` (spec amendment 2026-05-11).
   illegal_imports="$(printf '%s\n' "${core_ref_hits}" \
     | grep 'widgets' \
-    | grep -v '^crates/openpencil-shell-web/src/widget_host\.rs:' \
+    | grep -vE '^crates/openpencil-shell-web/src/widget_host(\.rs|/[^/]+\.rs):' \
     || true)"
   if [ -n "${illegal_imports}" ]; then
     fail_lines+=("Forward F4: openpencil_shell_core::widgets reference outside widget_host.rs (covers direct + grouped use forms):" "${illegal_imports}")

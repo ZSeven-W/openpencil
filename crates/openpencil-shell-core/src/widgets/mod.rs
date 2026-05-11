@@ -36,12 +36,16 @@ pub mod tree;
 // `crate::document::Document`).
 pub mod layer_panel;
 pub mod property_panel;
+pub mod property_panel_fill;
+pub mod property_panel_inputs;
+pub mod property_panel_layout;
 pub mod property_panel_sections;
 pub mod toolbar;
 
 // Step 3 — center canvas that renders document nodes as actual
 // visual primitives (frame fills, rect strokes, text strings).
 pub mod canvas_viewport;
+pub mod canvas_viewport_overlay;
 
 // Step 4 — icon glyph drawer for editor chrome (lucide-flavored line art).
 pub mod icons;
@@ -59,10 +63,12 @@ pub use text_input::{TextInput, TextInputState};
 pub use tree::{TreeItem, TreeWidget};
 
 pub use layer_panel::{LayerItem, LayerPanel};
-pub use property_panel::PropertyPanel;
+pub use property_panel::{PropertyPanel, PropertyPanelAction};
 pub use toolbar::Toolbar;
 
-pub use canvas_viewport::CanvasViewport;
+pub use canvas_viewport::{
+    rotation_corner_at_point, selection_handle_at_point, CanvasViewport, SelectionHandle,
+};
 
 pub use icons::{draw_icon, Icon};
 
