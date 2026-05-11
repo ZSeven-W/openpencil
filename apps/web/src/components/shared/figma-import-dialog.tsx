@@ -157,8 +157,8 @@ export default function FigmaImportDialog({ open, onClose }: FigmaImportDialogPr
           engine.renderer.fontManager.ensureFonts([...fontFamilies]);
         }
 
-        // Load into the document store
-        useDocumentStore.getState().loadDocument(doc, `${name}.op`);
+        // Load into the document store, preserving the current cloud file when present.
+        useDocumentStore.getState().replaceDocumentContent(doc, `${name}.op`);
         // Double-RAF ensures React effects (canvas sync) complete before fitting
         requestAnimationFrame(() => requestAnimationFrame(() => zoomToFitContent()));
 

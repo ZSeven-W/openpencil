@@ -57,7 +57,7 @@ export function buildPlanningPrompt(
       'Node tree:',
       summary,
       '',
-      'Analyze this node tree and output a JSON code generation plan.',
+      '分析这个 node tree，并输出 JSON code generation plan。',
     ].join('\n'),
   };
 }
@@ -80,7 +80,7 @@ export function buildChunkPrompt(
       ? [
           '',
           '## Dependency Contracts',
-          'The following components are available from upstream chunks. Import and use them:',
+          '以下 components 来自 upstream chunks，可用。请 import 并使用它们：',
           '',
           ...depContracts.map(
             (c) =>
@@ -94,7 +94,7 @@ export function buildChunkPrompt(
       ? [
           '',
           '## Exported Image Assets',
-          'The following image assets were exported from the design. Use these relative paths directly as src/background-image URLs. Do NOT inline base64.',
+          '以下 image assets 从 design 导出。请直接把这些 relative paths 用作 src/background-image URLs。不要 inline base64。',
           '',
           ...assetHints.map(
             (asset) =>
@@ -106,14 +106,14 @@ export function buildChunkPrompt(
   return {
     system: [chunkSkill, '', '---', '', frameworkSkill].join('\n'),
     user: [
-      `Generate a ${framework} component named "${suggestedComponentName}".`,
+      `生成一个名为 "${suggestedComponentName}" 的 ${framework} component。`,
       '',
       'Nodes (JSON):',
       compactNodes(nodes),
       depSection,
       assetSection,
       '',
-      'Output the code followed by ---CONTRACT--- and the JSON contract.',
+      '先输出 code，然后输出 ---CONTRACT---，再输出 JSON contract。',
     ].join('\n'),
   };
 }
@@ -140,11 +140,11 @@ export function buildAssemblyPrompt(
   const chunksSection = chunkResults
     .map((r) => {
       if (r.status === 'failed') {
-        return `### ${r.name} (FAILED)\nThis chunk failed to generate. Insert a placeholder comment.`;
+        return `### ${r.name} (FAILED)\n这个 chunk 生成失败。请插入 placeholder comment。`;
       }
       const contractNote =
         r.status === 'degraded'
-          ? '\n*NOTE: No contract available. Infer component name and imports from the code.*'
+          ? '\n*NOTE: 没有可用 contract。请从 code 中推断 component name 和 imports。*'
           : `\nContract: ${JSON.stringify(r.contract)}`;
       return `### ${r.name} (${r.status})\n\`\`\`\n${r.code}\n\`\`\`${contractNote}`;
     })
@@ -153,8 +153,8 @@ export function buildAssemblyPrompt(
   const assetSection =
     exportedAssetPaths.length > 0
       ? [
-          'Exported image assets are available under ./assets/.',
-          'Keep any existing ./assets/... references unchanged in the final code.',
+          'Exported image assets 位于 ./assets/ 下。',
+          '最终 code 中请保留所有已有 ./assets/... references 不变。',
           `Assets: ${exportedAssetPaths.join(', ')}`,
           '',
         ].join('\n')
@@ -163,7 +163,7 @@ export function buildAssemblyPrompt(
   return {
     system: [assemblySkill, '', '---', '', frameworkSkill].join('\n'),
     user: [
-      `Assemble the following ${framework} code chunks into a single production-ready file.`,
+      `将以下 ${framework} code chunks 组装成一个 production-ready 单文件。`,
       '',
       `Root layout: ${JSON.stringify(plan.rootLayout)}`,
       `Shared styles: ${JSON.stringify(plan.sharedStyles)}`,
@@ -174,7 +174,7 @@ export function buildAssemblyPrompt(
       '',
       chunksSection,
       '',
-      'Output ONLY the final assembled source code.',
+      '只输出最终 assembled source code。',
     ]
       .filter(Boolean)
       .join('\n'),

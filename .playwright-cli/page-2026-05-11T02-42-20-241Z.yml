@@ -1,0 +1,28 @@
+- generic [ref=e19]:
+  - banner [ref=e20]:
+    - generic [ref=e21]:
+      - generic [ref=e22]:
+        - img [ref=e23]
+        - generic [ref=e28]:
+          - heading "OpenPencil Cloud" [level=1] [ref=e29]
+          - paragraph [ref=e30]: linlingqin77@qq.com
+      - generic [ref=e31]:
+        - button "Refresh" [ref=e32]:
+          - img
+          - text: Refresh
+        - button "Import .op" [ref=e33]:
+          - img
+          - text: Import .op
+        - button "New" [ref=e34]:
+          - img
+          - text: New
+        - button "Sign out" [ref=e35]:
+          - img
+  - main [ref=e36]:
+    - generic [ref=e38]:
+      - button "小程序.op rev 5 · 5月11日 09:16" [ref=e39]:
+        - img [ref=e41]
+        - paragraph [ref=e46]: 小程序.op
+        - paragraph [ref=e47]: rev 5 · 5月11日 09:16
+      - button "Delete 小程序.op" [ref=e49]:
+        - img

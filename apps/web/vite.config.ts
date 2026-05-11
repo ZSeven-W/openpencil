@@ -28,6 +28,11 @@ function copyCanvasKitWasm() {
 }
 copyCanvasKitWasm();
 
+function safeNitroChunkFileName(chunk: { name?: string }) {
+  const name = (chunk.name || 'chunk').replace(/[^a-zA-Z0-9_.-]+/g, '_');
+  return `_chunks/${name}-[hash].mjs`;
+}
+
 const config = defineConfig({
   test: {
     teardownTimeout: 1000,
@@ -61,6 +66,9 @@ const config = defineConfig({
           'canvaskit-wasm',
           '@zseven-w/agent-native',
         ],
+        output: {
+          chunkFileNames: safeNitroChunkFileName,
+        },
       },
       serverDir: './server',
       output: { dir: '../../out/web' },

@@ -25,6 +25,12 @@ import {
   downloadDocument,
 } from '@/utils/file-operations';
 import { documentEvents } from '@/utils/document-events';
+import type { CloudFileRecord, CloudSaveState, CloudVersionSource } from '@/types/cloud';
+import { CloudApiError } from '@/services/cloud/cloud-fetch';
+import { createCloudFilePayloadTooLargeMessage } from '@/constants/cloud';
+import { CloudFilePayloadTooLargeError } from '@/services/cloud/cloud-file-payload';
+import { createCloudFile, saveCloudFile } from '@/services/cloud/cloud-files';
+import { useCloudAuthStore } from '@/stores/cloud-auth-store';
 
 interface DocumentStoreState {
   document: PenDocument;
@@ -36,6 +42,10 @@ interface DocumentStoreState {
   filePath: string | null;
   /** Whether “另存为”对话框打开（没有 FS API 的浏览器的回退）。 */
   saveDialogOpen: boolean;
+  cloudFileId: string | null;
+  cloudRevision: number | null;
+  cloudSaveState: CloudSaveState;
+  cloudSaveError: string | null;
 
   addNode: (parentId: string | null, node: PenNode, index?: number) => void;
   updateNode: (id: string, updates: Partial<PenNode>) => void;
@@ -84,6 +94,7 @@ interface DocumentStoreState {
     fileHandle?: FileSystemFileHandle | null,
     filePath?: string | null,
   ) => void;
+  replaceDocumentContent: (doc: PenDocument, fileName?: string) => void;
   newDocument: () => void;
   markClean: () => void;
   setFileHandle: (handle: FileSystemFileHandle | null) => void;
@@ -105,6 +116,15 @@ interface DocumentStoreState {
   save: () => Promise<string | null>;
   saveAs: (suggestedName?: string) => Promise<string | null>;
   saveToNewPath: (filePath: string) => Promise<string | null>;
+  exportOp: (suggestedName?: string) => Promise<string | null>;
+  saveCloud: (
+    source?: Exclude<CloudVersionSource, 'import' | 'restore'>,
+    label?: string,
+    snapshot?: boolean,
+  ) => Promise<string | null>;
+  loadCloudDocument: (file: CloudFileRecord) => void;
+  setCloudMetadata: (fileId: string | null, revision: number | null) => void;
+  clearCloudError: () => void;
 }
 
 export const useDocumentStore = create<DocumentStoreState>((set, get) => ({
@@ -114,6 +134,10 @@ export const useDocumentStore = create<DocumentStoreState>((set, get) => ({
   fileHandle: null,
   filePath: null,
   saveDialogOpen: false,
+  cloudFileId: null,
+  cloudRevision: null,
+  cloudSaveState: 'idle',
+  cloudSaveError: null,
 
   // --- Node CRUD（提取到 document-store-node-actions.ts） ---
   ...createNodeActions(set, get),
@@ -162,6 +186,10 @@ export const useDocumentStore = create<DocumentStoreState>((set, get) => ({
       fileHandle: fileHandle ?? null,
       filePath: filePath ?? null,
       isDirty: false,
+      cloudFileId: null,
+      cloudRevision: null,
+      cloudSaveState: 'idle',
+      cloudSaveError: null,
     });
     // 最近文件中的 Track
     if (fileName) {
@@ -176,6 +204,25 @@ export const useDocumentStore = create<DocumentStoreState>((set, get) => ({
     });
   },
 
+  replaceDocumentContent: (doc, fileName) => {
+    useHistoryStore.getState().clear();
+    const migrated = ensureDocumentNodeIds(migrateToPages(normalizePenDocument(doc)));
+    set({
+      document: migrated,
+      fileName: fileName ?? get().fileName,
+      fileHandle: null,
+      filePath: null,
+      isDirty: true,
+      cloudSaveState: 'idle',
+      cloudSaveError: null,
+    });
+    const firstPageId = migrated.pages?.[0]?.id ?? null;
+    useCanvasStore.getState().setActivePageId(firstPageId);
+    import('@/stores/design-md-store').then(({ useDesignMdStore }) => {
+      useDesignMdStore.getState().syncToDocument(fileName ?? get().fileName, null);
+    });
+  },
+
   newDocument: () => {
     useHistoryStore.getState().clear();
     const doc = createEmptyDocument();
@@ -185,6 +232,10 @@ export const useDocumentStore = create<DocumentStoreState>((set, get) => ({
       fileHandle: null,
       filePath: null,
       isDirty: false,
+      cloudFileId: null,
+      cloudRevision: null,
+      cloudSaveState: 'idle',
+      cloudSaveError: null,
     });
     useCanvasStore.getState().setActivePageId(doc.pages?.[0]?.id ?? DEFAULT_PAGE_ID);
     // Clear design.md 新文档
@@ -196,9 +247,40 @@ export const useDocumentStore = create<DocumentStoreState>((set, get) => ({
   markClean: () => set({ isDirty: false }),
   setFileHandle: (fileHandle) => set({ fileHandle }),
   setSaveDialogOpen: (saveDialogOpen) => set({ saveDialogOpen }),
+  setCloudMetadata: (cloudFileId, cloudRevision) =>
+    set({ cloudFileId, cloudRevision, cloudSaveState: 'idle', cloudSaveError: null }),
+  clearCloudError: () => set({ cloudSaveState: 'idle', cloudSaveError: null }),
 
   save: async () => {
     const state = get();
+    if (state.cloudFileId) {
+      return get().saveCloud('manual_save', 'Manual save', true);
+    }
+
+    if (useCloudAuthStore.getState().status === 'authenticated') {
+      set({ cloudSaveState: 'saving', cloudSaveError: null });
+      try {
+        const created = await createCloudFile({
+          name: state.fileName ?? state.document.name ?? 'Untitled',
+          document: state.document,
+          source: 'manual_save',
+        });
+        get().loadCloudDocument(created);
+        documentEvents.emit('saved', {
+          filePath: null,
+          fileName: created.name,
+          document: created.document,
+        });
+        return created.name;
+      } catch (err) {
+        set({
+          cloudSaveState: 'error',
+          cloudSaveError: getCloudSaveErrorMessage(err, 'Failed to create cloud file'),
+        });
+        return null;
+      }
+    }
+
     const { document: doc, fileName, fileHandle, filePath } = state;
     const isOpFile = fileName ? /\.op$/i.test(fileName) : false;
 
@@ -267,16 +349,20 @@ export const useDocumentStore = create<DocumentStoreState>((set, get) => ({
 
     // Path B: Browser File System Access API.
     if (supportsFileSystemAccess()) {
-      const result = await fsaSaveDocumentAs(doc, suggestedName);
-      if (!result) return null; // user cancelled or API error
-      set({
-        fileName: result.fileName,
-        fileHandle: result.handle,
-        filePath: null,
-        isDirty: false,
-      });
-      documentEvents.emit('saved', { filePath: null, fileName: result.fileName, document: doc });
-      return result.fileName;
+      try {
+        const result = await fsaSaveDocumentAs(doc, suggestedName);
+        if (!result) return null; // user cancelled
+        set({
+          fileName: result.fileName,
+          fileHandle: result.handle,
+          filePath: null,
+          isDirty: false,
+        });
+        documentEvents.emit('saved', { filePath: null, fileName: result.fileName, document: doc });
+        return result.fileName;
+      } catch (err) {
+        console.warn('[document-store.saveAs] File System Access save failed, downloading:', err);
+      }
     }
 
     // Path C: Last-resort browser download. We treat the download as a save
@@ -314,7 +400,124 @@ export const useDocumentStore = create<DocumentStoreState>((set, get) => ({
     documentEvents.emit('saved', { filePath, fileName: savedName, document: doc });
     return savedName;
   },
+
+  exportOp: async (suggestedName) => {
+    const state = get();
+    const { document: doc, fileName } = state;
+    const suggested = suggestedName
+      ? suggestedName.endsWith('.op')
+        ? suggestedName
+        : `${suggestedName}.op`
+      : fileName
+        ? fileName.replace(/\.(pen|op|json)$/i, '') + '.op'
+        : 'untitled.op';
+
+    if (isElectron()) {
+      return get().saveAs(suggested);
+    }
+
+    try {
+      downloadDocument(doc, suggested);
+    } catch (err) {
+      console.error('[document-store.exportOp] downloadDocument failed:', err);
+      return null;
+    }
+    documentEvents.emit('saved', { filePath: null, fileName: suggested, document: doc });
+    return suggested;
+  },
+
+  saveCloud: async (source = 'manual_save', label, snapshot = true) => {
+    const state = get();
+    if (!state.cloudFileId || !state.cloudRevision) {
+      return null;
+    }
+    if (state.cloudSaveState === 'conflict') {
+      return null;
+    }
+    const submittedDocument = state.document;
+
+    set({ cloudSaveState: 'saving', cloudSaveError: null });
+    try {
+      const saved = await saveCloudFile({
+        id: state.cloudFileId,
+        name: state.fileName ?? state.document.name ?? 'Untitled',
+        document: state.document,
+        expectedRevision: state.cloudRevision,
+        source,
+        label,
+        snapshot,
+      });
+      const current = get();
+      const hasNewerLocalEdits =
+        current.cloudFileId === state.cloudFileId &&
+        current.cloudRevision === state.cloudRevision &&
+        current.document !== submittedDocument;
+      set({
+        document: hasNewerLocalEdits ? current.document : saved.document,
+        fileName: saved.name,
+        fileHandle: null,
+        filePath: null,
+        isDirty: hasNewerLocalEdits ? true : false,
+        cloudFileId: saved.id,
+        cloudRevision: saved.revision,
+        cloudSaveState: 'saved',
+        cloudSaveError: null,
+      });
+      documentEvents.emit('saved', {
+        filePath: null,
+        fileName: saved.name,
+        document: saved.document,
+      });
+      return saved.name;
+    } catch (err) {
+      const current = get();
+      if (current.cloudFileId !== state.cloudFileId || current.cloudRevision !== state.cloudRevision) {
+        return null;
+      }
+      if (err instanceof CloudApiError && err.status === 409) {
+        set({
+          cloudSaveState: 'conflict',
+          cloudSaveError: err.message,
+          cloudRevision: state.cloudRevision,
+        });
+        return null;
+      }
+      set({
+        cloudSaveState: 'error',
+        cloudSaveError: getCloudSaveErrorMessage(err, 'Failed to save cloud file'),
+      });
+      return null;
+    }
+  },
+
+  loadCloudDocument: (file) => {
+    useHistoryStore.getState().clear();
+    const migrated = ensureDocumentNodeIds(migrateToPages(file.document));
+    set({
+      document: migrated,
+      fileName: file.name,
+      fileHandle: null,
+      filePath: null,
+      isDirty: false,
+      cloudFileId: file.id,
+      cloudRevision: file.revision,
+      cloudSaveState: 'idle',
+      cloudSaveError: null,
+    });
+    const firstPageId = migrated.pages?.[0]?.id ?? null;
+    useCanvasStore.getState().setActivePageId(firstPageId);
+    import('@/stores/design-md-store').then(({ useDesignMdStore }) => {
+      useDesignMdStore.getState().syncToDocument(file.name, null);
+    });
+  },
 }));
+
+function getCloudSaveErrorMessage(err: unknown, fallback: string): string {
+  if (err instanceof CloudFilePayloadTooLargeError) {
+    return createCloudFilePayloadTooLargeMessage(err.sizeBytes, err.maxBytes);
+  }
+  return err instanceof Error ? err.message : fallback;
+}
 
 export {
   createEmptyDocument,

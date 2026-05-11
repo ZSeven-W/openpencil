@@ -41,6 +41,7 @@ const vi: TranslationKeys = {
   'shapes.moreShapeTools': 'Thêm công cụ hình dạng',
 
   // ── Top Bar ──
+  'topbar.backToFiles': 'Back to files',
   'topbar.hideLayers': 'Ẩn lớp',
   'topbar.showLayers': 'Hiện lớp',
   'topbar.new': 'Tạo mới',
@@ -641,6 +642,8 @@ const vi: TranslationKeys = {
   'fileMenu.openFile': 'Open file...',
   'fileMenu.save': 'Save',
   'fileMenu.saveAs': 'Save as...',
+  'fileMenu.importOp': 'Import .op...',
+  'fileMenu.exportOp': 'Export .op...',
   'fileMenu.exportImage': 'Xuất hình ảnh...',
   'fileMenu.recentFiles': 'Recent files',
   'fileMenu.clearHistory': 'Clear history',
@@ -810,6 +813,28 @@ const vi: TranslationKeys = {
   'figma.preserveLayout': 'Giữ nguyên bố cục Figma',
   'figma.autoLayout': 'Bố cục tự động OpenPencil',
   'figma.comingSoon': 'Sắp ra mắt',
+
+  // ── Code Panel ──
+  'codePanel.view.code': 'Code',
+  'codePanel.view.preview': 'Preview',
+  'codePanel.view.history': 'History',
+  'codePanel.history.empty': 'No saved generations for this target.',
+  'codePanel.history.count_one': '{{count}} saved generation for this target',
+  'codePanel.history.count_other': '{{count}} saved generations for this target',
+  'codePanel.history.pageTarget': 'page',
+  'codePanel.history.selectionTarget': '{{count}} selected',
+  'codePanel.modelUnavailable': 'Connect an AI model before generating code.',
+  'codePanel.history.delete': 'Delete',
+  'codePanel.history.deleteConfirm': 'Delete this generation history record?',
+  'codePanel.preview.action': 'Preview',
+  'codePanel.preview.unavailable': 'Preview unavailable',
+  'codePanel.preview.popupBlocked': 'The preview window was blocked. Allow pop-ups for this site and try again.',
+  'codePanel.preview.reason.historyAssetsUnavailable':
+    'History assets are unavailable for preview. Regenerate or download the bundle.',
+  'codePanel.preview.reason.vueTemplateRequired': 'Vue preview requires a <template> block.',
+  'codePanel.preview.reason.reactUnsupported': 'React preview is not supported in v1.',
+  'codePanel.preview.reason.frameworkUnsupported':
+    'This framework cannot be previewed in the browser yet.',
 
   // ── Landing Page ──
   'landing.open': 'Open',

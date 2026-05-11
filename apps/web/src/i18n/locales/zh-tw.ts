@@ -41,6 +41,7 @@ const zhTW: TranslationKeys = {
   'shapes.moreShapeTools': '更多形狀工具',
 
   // ── Top Bar ──
+  'topbar.backToFiles': 'Back to files',
   'topbar.hideLayers': '隱藏圖層',
   'topbar.showLayers': '顯示圖層',
   'topbar.new': '新增',
@@ -631,6 +632,8 @@ const zhTW: TranslationKeys = {
   'fileMenu.openFile': '開啟檔案...',
   'fileMenu.save': '儲存',
   'fileMenu.saveAs': '另存為...',
+  'fileMenu.importOp': 'Import .op...',
+  'fileMenu.exportOp': 'Export .op...',
   'fileMenu.exportImage': '匯出圖片...',
   'fileMenu.recentFiles': '最近檔案',
   'fileMenu.clearHistory': '清除歷史',
@@ -798,6 +801,28 @@ const zhTW: TranslationKeys = {
   'figma.preserveLayout': '保留 Figma 佈局',
   'figma.autoLayout': 'OpenPencil 自動佈局',
   'figma.comingSoon': '即將推出',
+
+  // ── Code Panel ──
+  'codePanel.view.code': 'Code',
+  'codePanel.view.preview': 'Preview',
+  'codePanel.view.history': 'History',
+  'codePanel.history.empty': 'No saved generations for this target.',
+  'codePanel.history.count_one': '{{count}} saved generation for this target',
+  'codePanel.history.count_other': '{{count}} saved generations for this target',
+  'codePanel.history.pageTarget': 'page',
+  'codePanel.history.selectionTarget': '{{count}} selected',
+  'codePanel.modelUnavailable': 'Connect an AI model before generating code.',
+  'codePanel.history.delete': 'Delete',
+  'codePanel.history.deleteConfirm': 'Delete this generation history record?',
+  'codePanel.preview.action': 'Preview',
+  'codePanel.preview.unavailable': 'Preview unavailable',
+  'codePanel.preview.popupBlocked': 'The preview window was blocked. Allow pop-ups for this site and try again.',
+  'codePanel.preview.reason.historyAssetsUnavailable':
+    'History assets are unavailable for preview. Regenerate or download the bundle.',
+  'codePanel.preview.reason.vueTemplateRequired': 'Vue preview requires a <template> block.',
+  'codePanel.preview.reason.reactUnsupported': 'React preview is not supported in v1.',
+  'codePanel.preview.reason.frameworkUnsupported':
+    'This framework cannot be previewed in the browser yet.',
 
   // ── Landing Page ──
   'landing.open': 'Open',

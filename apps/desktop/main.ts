@@ -282,7 +282,7 @@ async function startNitroServer(): Promise<number> {
             writePortFile(newPort);
             log.info(`[nitro] Restarted on port ${newPort}`);
             if (mainWindow && !mainWindow.isDestroyed()) {
-              mainWindow.loadURL(`http://${NITRO_HOST}:${newPort}/editor`);
+              mainWindow.loadURL(`http://${NITRO_HOST}:${newPort}/`);
             }
           })
           .catch((err) => {
@@ -421,8 +421,8 @@ function createWindow(): void {
   }
 
   const url = isDev
-    ? `http://本地主机：${VITE_DEV_PORT}/editor`
-    : `http://${NITRO_HOST}:${serverPort}/editor`;
+    ? `http://localhost:${VITE_DEV_PORT}/`
+    : `http://${NITRO_HOST}:${serverPort}/`;
 
   // Inject traffic-light padding CSS then show window (no flash)
   mainWindow.webContents.on('did-finish-load', async () => {

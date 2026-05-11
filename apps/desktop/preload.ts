@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer, webUtils, type IpcRendererEvent } from 'electron';
+import { clipboard, contextBridge, ipcRenderer, webUtils, type IpcRendererEvent } from 'electron';
 
 export type UpdaterStatus =
   | 'disabled'
@@ -253,6 +253,7 @@ export interface ElectronAPI {
   readFile: (filePath: string) => Promise<{ filePath: string; content: string } | null>;
   getPendingFile: () => Promise<string | null>;
   getLogDir: () => Promise<string>;
+  writeClipboardText: (text: string) => Promise<void>;
   setTheme: (theme: 'dark' | 'light', colors?: { bg: string; fg: string }) => void;
   getPreferences: () => Promise<Record<string, string>>;
   setPreference: (key: string, value: string) => Promise<void>;
@@ -344,6 +345,10 @@ const api: ElectronAPI = {
   confirmUnsavedChanges: (payload) => ipcRenderer.invoke('dialog:confirmUnsavedChanges', payload),
 
   getLogDir: () => ipcRenderer.invoke('log:getDir'),
+
+  writeClipboardText: async (text: string) => {
+    clipboard.writeText(text);
+  },
 
   updater: {
     getState: () => ipcRenderer.invoke('updater:getState'),

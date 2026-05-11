@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { copySelectedNodesToInternalClipboard } from '@/canvas/canvas-clipboard-actions';
 import { useCanvasStore } from '@/stores/canvas-store';
 import { useDocumentStore } from '@/stores/document-store';
 import { cloneNodesWithNewIds } from '@/utils/node-clone';
@@ -30,10 +31,7 @@ export function useClipboardShortcuts() {
         const { selectedIds } = useCanvasStore.getState().selection;
         if (selectedIds.length > 0) {
           e.preventDefault();
-          const nodes = selectedIds
-            .map((id) => useDocumentStore.getState().getNodeById(id))
-            .filter((n): n is NonNullable<typeof n> => n != null);
-          useCanvasStore.getState().setClipboard(structuredClone(nodes));
+          copySelectedNodesToInternalClipboard();
         }
         return;
       }

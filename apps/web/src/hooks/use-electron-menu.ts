@@ -7,8 +7,17 @@ import { zoomToFitContent } from '@/canvas/skia-engine-ref';
 import { syncCanvasPositionsToStore } from '@/canvas/skia-engine-ref';
 import { parseAndPrepareImportedDocument } from '@/utils/import-pen-document';
 import { addRecentFile, clearRecentFiles } from '@/utils/recent-files';
-import { supportsFileSystemAccess, openDocumentFS, openDocument } from '@/utils/file-operations';
-import { loadOpFileFromPath } from '@/utils/load-op-file';
+import { createCloudFile } from '@/services/cloud/cloud-files';
+import { createEmptyDocument } from '@/stores/document-store';
+
+async function importDocumentToCloud(doc: ReturnType<typeof createEmptyDocument>, name: string) {
+  const file = await createCloudFile({
+    name: name.replace(/\.(pen|op|json)$/i, '') || name,
+    document: doc,
+    source: 'import',
+  });
+  window.location.href = `/editor/${file.id}`;
+}
 
 async function confirmUnsaved(): Promise<boolean> {
   const showDialog = (window as any).__showUnsavedDialog;
@@ -41,7 +50,16 @@ export function useElectronMenu() {
     if (!api?.onMenuAction) return;
 
     const loadFileFromPath = (filePath: string) => {
-      void loadOpFileFromPath(filePath);
+      void api.readFile(filePath).then((result) => {
+        if (!result) return;
+        const name = result.filePath.split(/[/\\]/).pop() || 'untitled.op';
+        const prepared = parseAndPrepareImportedDocument(result.content, {
+          fileName: name,
+          filePath: result.filePath,
+        });
+        if (!prepared) return;
+        void importDocumentToCloud(prepared.doc, name);
+      });
     };
 
     const cleanupOpenFile = api.onOpenFile?.(loadFileFromPath);
@@ -70,8 +88,13 @@ export function useElectronMenu() {
             if (useDocumentStore.getState().isDirty) {
               if (!(await confirmUnsaved())) return;
             }
-            useDocumentStore.getState().newDocument();
-            requestAnimationFrame(() => zoomToFitContent());
+            createCloudFile({
+              name: 'Untitled',
+              document: createEmptyDocument(),
+              source: 'manual_save',
+            }).then((file) => {
+              window.location.href = `/editor/${file.id}`;
+            });
           })();
           break;
 
@@ -80,40 +103,23 @@ export function useElectronMenu() {
             if (useDocumentStore.getState().isDirty) {
               if (!(await confirmUnsaved())) return;
             }
-            if (api) {
-              api.openFile().then((result) => {
-                if (!result) return;
-                try {
-                  const name = result.filePath.split(/[/\\]/).pop() || 'untitled.op';
-                  const prepared = parseAndPrepareImportedDocument(result.content, {
-                    fileName: name,
-                    filePath: result.filePath,
-                  });
-                  if (!prepared) return;
-                  const { doc } = prepared;
-                  useDocumentStore.getState().loadDocument(doc, name, null, result.filePath);
+            api.openFile().then((result) => {
+              if (!result) return;
+              try {
+                const name = result.filePath.split(/[/\\]/).pop() || 'untitled.op';
+                const prepared = parseAndPrepareImportedDocument(result.content, {
+                  fileName: name,
+                  filePath: result.filePath,
+                });
+                if (!prepared) return;
+                const { doc } = prepared;
+                void importDocumentToCloud(doc, name).then(() => {
                   requestAnimationFrame(() => zoomToFitContent());
-                } catch {
-                  // Invalid 文件
-                }
-              });
-            } else if (supportsFileSystemAccess()) {
-              openDocumentFS().then((result) => {
-                if (result) {
-                  useDocumentStore
-                    .getState()
-                    .loadDocument(result.doc, result.fileName, result.handle);
-                  requestAnimationFrame(() => zoomToFitContent());
-                }
-              });
-            } else {
-              openDocument().then((result) => {
-                if (result) {
-                  useDocumentStore.getState().loadDocument(result.doc, result.fileName);
-                  requestAnimationFrame(() => zoomToFitContent());
-                }
-              });
-            }
+                });
+              } catch {
+                // Invalid 文件
+              }
+            });
           })();
           break;
 
@@ -143,7 +149,7 @@ export function useElectronMenu() {
             /* 继续 */
           }
           (async () => {
-            const savedName = await useDocumentStore.getState().saveAs();
+            const savedName = await useDocumentStore.getState().exportOp();
             if (savedName) {
               const filePath = useDocumentStore.getState().filePath;
               addRecentFile({ fileName: savedName, filePath });

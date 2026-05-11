@@ -23,6 +23,18 @@ import {
   type CodegenAssetHint,
 } from './codegen-assets';
 
+export type CodegenTextCollector = (
+  systemPrompt: string,
+  userMessage: string,
+  model: string,
+  provider: string | undefined,
+  abortSignal?: AbortSignal,
+) => Promise<string>;
+
+export interface GenerateCodeOptions {
+  collectText?: CodegenTextCollector;
+}
+
 // Inlined 以避免从 @zseven-w/pen-mcp 导入，这会通过文档管理器传递地拉取节点：fs/promises 并破坏 Vite
 // 浏览器构建。
 function validateContract(result: ChunkResult): ContractValidationResult {
@@ -231,20 +243,38 @@ export async function generateCode(
   model: string,
   provider: string | undefined,
   abortSignal?: AbortSignal,
+  options: GenerateCodeOptions = {},
 ): Promise<{ code: string; degraded: boolean; assets: CodegenAssetFile[] }> {
   const { nodes: sanitizedNodes, assets } = extractCodegenAssets(nodes);
+  const collectText = options.collectText ?? collectStreamText;
   // ── Step 1: Planning ──
   onProgress({ step: 'planning', status: 'running' });
 
   let planFromAI: CodePlanFromAI;
   try {
-    planFromAI = await runPlanning(sanitizedNodes, framework, model, provider, abortSignal);
+    planFromAI = await runPlanning(
+      sanitizedNodes,
+      framework,
+      model,
+      provider,
+      abortSignal,
+      false,
+      collectText,
+    );
     onProgress({ step: 'planning', status: 'done', plan: planFromAI });
   } catch (err) {
     if (abortSignal?.aborted) throw err;
     // Retry 一次，提示更严格
     try {
-      planFromAI = await runPlanning(sanitizedNodes, framework, model, provider, abortSignal, true);
+      planFromAI = await runPlanning(
+        sanitizedNodes,
+        framework,
+        model,
+        provider,
+        abortSignal,
+        true,
+        collectText,
+      );
       onProgress({ step: 'planning', status: 'done', plan: planFromAI });
     } catch (retryErr) {
       const msg = retryErr instanceof Error ? retryErr.message : 'Planning failed';
@@ -307,6 +337,7 @@ export async function generateCode(
           provider,
           abortSignal,
           assetHints,
+          collectText,
         );
 
         // Ensure componentName 有效 PascalCase — AI 可能返回 kebab-case 或空
@@ -355,6 +386,7 @@ export async function generateCode(
             provider,
             abortSignal,
             assetHints,
+            collectText,
           );
           if (
             !result.contract.componentName ||
@@ -432,6 +464,7 @@ export async function generateCode(
       provider,
       abortSignal,
       exportedAssetPaths,
+      collectText,
     );
     onProgress({ step: 'assembly', status: 'done' });
   } catch {
@@ -446,6 +479,7 @@ export async function generateCode(
         provider,
         abortSignal,
         exportedAssetPaths,
+        collectText,
       );
       onProgress({ step: 'assembly', status: 'done' });
     } catch {
@@ -506,13 +540,14 @@ async function runPlanning(
   provider: string | undefined,
   abortSignal?: AbortSignal,
   strict?: boolean,
+  collectText: CodegenTextCollector = collectStreamText,
 ): Promise<CodePlanFromAI> {
   const { system, user } = buildPlanningPrompt(nodes, framework);
   const systemPrompt = strict
     ? system + '\n\nCRITICAL: Respond with ONLY valid JSON. No markdown, no explanation.'
     : system;
 
-  const fullResponse = await collectStreamText(systemPrompt, user, model, provider, abortSignal);
+  const fullResponse = await collectText(systemPrompt, user, model, provider, abortSignal);
 
   // Extract JSON from response
   const jsonMatch = fullResponse.match(/\{[\s\S]*\}/);
@@ -537,6 +572,7 @@ async function runChunkGeneration(
   provider: string | undefined,
   abortSignal?: AbortSignal,
   assetHints: CodegenAssetHint[] = [],
+  collectText: CodegenTextCollector = collectStreamText,
 ): Promise<ChunkResult> {
   const { system, user } = buildChunkPrompt(
     nodes,
@@ -546,7 +582,7 @@ async function runChunkGeneration(
     assetHints,
   );
 
-  const fullResponse = await collectStreamText(system, user, model, provider, abortSignal);
+  const fullResponse = await collectText(system, user, model, provider, abortSignal);
 
   return parseChunkResponse(fullResponse, chunkId);
 }
@@ -566,6 +602,7 @@ async function runAssembly(
   provider: string | undefined,
   abortSignal?: AbortSignal,
   exportedAssetPaths: string[] = [],
+  collectText: CodegenTextCollector = collectStreamText,
 ): Promise<string> {
   const { system, user } = buildAssemblyPrompt(
     chunkResults,
@@ -575,7 +612,7 @@ async function runAssembly(
     exportedAssetPaths,
   );
 
-  const fullResponse = await collectStreamText(system, user, model, provider, abortSignal);
+  const fullResponse = await collectText(system, user, model, provider, abortSignal);
 
   return cleanCode(fullResponse);
 }

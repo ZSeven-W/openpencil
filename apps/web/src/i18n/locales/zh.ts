@@ -41,6 +41,7 @@ const zh: TranslationKeys = {
   'shapes.moreShapeTools': '更多形状工具',
 
   // ── Top Bar ──
+  'topbar.backToFiles': '返回文件库',
   'topbar.hideLayers': '隐藏图层',
   'topbar.showLayers': '显示图层',
   'topbar.new': '新建',
@@ -624,6 +625,8 @@ const zh: TranslationKeys = {
   'fileMenu.openFile': '打开文件...',
   'fileMenu.save': '保存',
   'fileMenu.saveAs': '另存为...',
+  'fileMenu.importOp': 'Import .op...',
+  'fileMenu.exportOp': 'Export .op...',
   'fileMenu.exportImage': '导出图片...',
   'fileMenu.recentFiles': '最近文件',
   'fileMenu.clearHistory': '清除历史',
@@ -791,6 +794,27 @@ const zh: TranslationKeys = {
   'figma.preserveLayout': '保留 Figma 布局',
   'figma.autoLayout': 'OpenPencil 自动布局',
   'figma.comingSoon': '即将推出',
+
+  // ── 代码面板 ──
+  'codePanel.view.code': '代码',
+  'codePanel.view.preview': '预览',
+  'codePanel.view.history': '历史',
+  'codePanel.history.empty': '当前目标还没有保存的生成记录。',
+  'codePanel.history.count_one': '当前目标有 {{count}} 条生成记录',
+  'codePanel.history.count_other': '当前目标有 {{count}} 条生成记录',
+  'codePanel.history.pageTarget': '整页',
+  'codePanel.history.selectionTarget': '已选 {{count}} 个',
+  'codePanel.modelUnavailable': '请先连接可用的 AI 模型，再生成代码。',
+  'codePanel.history.delete': '删除',
+  'codePanel.history.deleteConfirm': '确定删除这条代码生成历史记录吗？',
+  'codePanel.preview.action': '预览',
+  'codePanel.preview.unavailable': '暂不支持预览',
+  'codePanel.preview.popupBlocked': '预览窗口被浏览器拦截。请允许本站弹窗后重试。',
+  'codePanel.preview.reason.historyAssetsUnavailable':
+    '历史记录中的资源不可用于预览。请重新生成，或下载包后查看。',
+  'codePanel.preview.reason.vueTemplateRequired': 'Vue 预览需要 <template> 代码块。',
+  'codePanel.preview.reason.reactUnsupported': 'v1 暂不支持 React 在线预览。',
+  'codePanel.preview.reason.frameworkUnsupported': '当前框架暂不能在浏览器中预览。',
 
   // ── Landing Page ──
   'landing.open': 'Open',

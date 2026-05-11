@@ -54,6 +54,7 @@ declare global {
       cancelLabel: string;
     }) => Promise<'save' | 'discard' | 'cancel'>;
     getLogDir: () => Promise<string>;
+    writeClipboardText: (text: string) => Promise<void>;
     setTheme: (theme: 'dark' | 'light', colors?: { bg: string; fg: string }) => void;
     getPreferences: () => Promise<Record<string, string>>;
     setPreference: (key: string, value: string) => Promise<void>;

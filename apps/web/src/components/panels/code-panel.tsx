@@ -6,40 +6,34 @@ import {
   RefreshCw,
   Sparkles,
   Check,
-  Loader2,
   AlertTriangle,
-  MinusCircle,
-  SkipForward,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import CodeHistoryList from './code-history-list';
+import { resolveCodegenModelConfig } from './codegen-model-config';
+import { getPreviewReasonKey, openPreviewHtml } from './code-preview-window';
+import ProgressItem from './code-progress-item';
 import { useCanvasStore } from '@/stores/canvas-store';
 import { useDocumentStore, getActivePageChildren } from '@/stores/document-store';
 import { useAIStore } from '@/stores/ai-store';
+import { useAgentSettingsStore } from '@/stores/agent-settings-store';
+import { useCodegenStore, type CodegenHistoryEntry } from '@/stores/codegen-store';
 import { generateCode } from '@/services/ai/code-generation-pipeline';
-import { buildCodegenBundleManifest, type CodegenAssetFile } from '@/services/ai/codegen-assets';
+import { buildCodegenBundleManifest } from '@/services/ai/codegen-assets';
+import { buildCodegenTarget } from '@/services/cloud/codegen-history';
+import { buildCodePreviewDocument } from '@/services/cloud/codegen-preview';
 import { buildAIStructureBundle, encodeAIStructureBundleZip } from '@/services/ai/structure-bundle';
 import { highlightCode } from '@/utils/syntax-highlight';
-import type { Framework, CodeGenProgress, ChunkStatus } from '@zseven-w/pen-types';
+import type { Framework, CodeGenProgress } from '@zseven-w/pen-types';
 import { FRAMEWORKS } from '@zseven-w/pen-types';
 import type { PenNode } from '@/types/pen';
 import type { SyntaxLanguage } from '@/utils/syntax-highlight';
 import { encode as encodeZip } from 'uzip';
+import { useTranslation } from 'react-i18next';
 
 type PanelState = 'empty' | 'generating' | 'complete';
-
-interface ChunkProgress {
-  chunkId: string;
-  name: string;
-  status: ChunkStatus;
-  error?: string;
-}
-
-interface GeneratedCodeBundle {
-  code: string;
-  degraded: boolean;
-  assets: CodegenAssetFile[];
-}
+export type CodePanelView = 'code' | 'history';
 
 const TAB_LABELS: Record<Framework, string> = {
   react: 'React',
@@ -63,6 +57,8 @@ const HIGHLIGHT_LANG: Record<Framework, SyntaxLanguage> = {
   'react-native': 'jsx',
 };
 
+const EMPTY_HISTORY: CodegenHistoryEntry[] = [];
+
 function triggerDownload(blob: Blob, fileName: string) {
   const url = URL.createObjectURL(blob);
   const link = globalThis.document.createElement('a');
@@ -75,61 +71,78 @@ function triggerDownload(blob: Blob, fileName: string) {
 }
 
 function CodePanelInner() {
-  const [activeTab, setActiveTab] = useState<Framework>('react');
-  const [codeCache, setCodeCache] = useState<Partial<Record<Framework, GeneratedCodeBundle>>>({});
-  const [isDegraded, setIsDegraded] = useState(false);
-  const [isGenerating, setIsGenerating] = useState(false);
+  const { t } = useTranslation();
   const [copied, setCopied] = useState(false);
-  const [planningStatus, setPlanningStatus] = useState<'idle' | 'running' | 'done' | 'failed'>(
-    'idle',
-  );
-  const [planningError, setPlanningError] = useState<string>();
-  const [assemblyStatus, setAssemblyStatus] = useState<'idle' | 'running' | 'done' | 'failed'>(
-    'idle',
-  );
-  const [chunks, setChunks] = useState<ChunkProgress[]>([]);
-  const [selectionChanged, setSelectionChanged] = useState(false);
-  const [generateError, setGenerateError] = useState<string>();
+  const [panelView, setPanelView] = useState<CodePanelView>('code');
+  const activeTab = useCodegenStore((s) => s.activeTab);
+  const codeCache = useCodegenStore((s) => s.codeCache);
+  const isGenerating = useCodegenStore((s) => s.isGenerating);
+  const planningStatus = useCodegenStore((s) => s.planningStatus);
+  const planningError = useCodegenStore((s) => s.planningError);
+  const assemblyStatus = useCodegenStore((s) => s.assemblyStatus);
+  const chunks = useCodegenStore((s) => s.chunks);
+  const selectionChanged = useCodegenStore((s) => s.selectionChanged);
+  const generateError = useCodegenStore((s) => s.generateError);
+  const lastSelectionKey = useCodegenStore((s) => s.lastSelectionKey);
+  const setActiveTab = useCodegenStore((s) => s.setActiveTab);
+  const clearGenerateError = useCodegenStore((s) => s.clearGenerateError);
+  const setSelectionChanged = useCodegenStore((s) => s.setSelectionChanged);
+  const startGeneration = useCodegenStore((s) => s.startGeneration);
+  const applyProgress = useCodegenStore((s) => s.applyProgress);
+  const completeGeneration = useCodegenStore((s) => s.completeGeneration);
+  const failGeneration = useCodegenStore((s) => s.failGeneration);
+  const cancelGeneration = useCodegenStore((s) => s.cancelGeneration);
+  const loadHistory = useCodegenStore((s) => s.loadHistory);
+  const saveHistory = useCodegenStore((s) => s.saveHistory);
+  const selectHistoryEntry = useCodegenStore((s) => s.selectHistoryEntry);
+  const historyLoading = useCodegenStore((s) => s.historyLoading);
+  const historyError = useCodegenStore((s) => s.historyError);
+  const history = useCodegenStore((s) => s.history[activeTab] ?? EMPTY_HISTORY);
+  const selectedHistoryId = useCodegenStore((s) => s.selectedHistoryId[activeTab]);
 
   const cached = codeCache[activeTab];
   const generatedCode = cached?.code ?? '';
+  const isDegraded = cached?.degraded ?? false;
   const exportedAssets = cached?.assets ?? [];
   const hasExportedAssets = exportedAssets.length > 0;
   const panelState: PanelState = isGenerating ? 'generating' : cached ? 'complete' : 'empty';
 
-  const abortRef = useRef<AbortController | null>(null);
-  const lastSelectionRef = useRef<string>('');
   const copyTimeoutRef = useRef<ReturnType<typeof setTimeout>>(null);
 
   const selectedIds = useCanvasStore((s) => s.selection.selectedIds);
   const activePageId = useCanvasStore((s) => s.activePageId);
   const getNodeById = useDocumentStore((s) => s.getNodeById);
   const children = useDocumentStore((s) => getActivePageChildren(s.document, activePageId));
-  const variables = useDocumentStore((s) => s.document?.variables);
+  const document = useDocumentStore((s) => s.document);
+  const variables = document?.variables;
   const model = useAIStore((s) => s.model);
-  // For 内置模型，强制提供程序为“内置” - modelGroups 可能会根据上游 API
-  // 类型报告“anthropic”/“openai”，但 streamChat 需要“内置”才能通过服务器上的 streamViaBuiltin
-  // 进行路由。 Mirrors ai-chat-handlers.ts 行为，因此代码面板使用与聊天面板相同的
-  // model/provider。
-  const provider = useAIStore((s) => {
-    if (s.model.startsWith('builtin:')) return 'builtin';
-    return s.modelGroups.find((g) => g.models.some((m) => m.value === s.model))?.provider;
-  });
+  const modelGroups = useAIStore((s) => s.modelGroups);
+  const builtinProviders = useAgentSettingsStore((s) => s.builtinProviders);
 
   const selectionKey = selectedIds.join(',');
+  const modelConfig = useMemo(
+    () => resolveCodegenModelConfig(model, modelGroups, builtinProviders),
+    [builtinProviders, model, modelGroups],
+  );
+  const modelUnavailable = !modelConfig;
+  const codegenTarget = useMemo(
+    () => buildCodegenTarget({ pageId: activePageId, selectedIds }),
+    [activePageId, selectedIds],
+  );
 
-  // 当代码已经生成时，Detect 选择会发生变化
   useEffect(() => {
-    if (panelState === 'complete' && selectionKey !== lastSelectionRef.current) {
-      setSelectionChanged(true);
-    }
-  }, [panelState, selectionKey]);
+    void loadHistory(activeTab, codegenTarget);
+  }, [activeTab, codegenTarget, loadHistory]);
 
-  // 卸载时 Cleanup
+  useEffect(() => {
+    if (panelState === 'complete') {
+      setSelectionChanged(selectionKey !== lastSelectionKey);
+    }
+  }, [lastSelectionKey, panelState, selectionKey, setSelectionChanged]);
+
   useEffect(() => {
     return () => {
       if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
-      abortRef.current?.abort();
     };
   }, []);
 
@@ -142,92 +155,67 @@ function CodePanelInner() {
 
   const handleGenerate = useCallback(async () => {
     const nodes = getTargetNodes();
-    if (nodes.length === 0) return;
+    if (nodes.length === 0 || !modelConfig) return;
 
-    abortRef.current = new AbortController();
-    setIsGenerating(true);
-    setPlanningStatus('idle');
-    setPlanningError(undefined);
-    setAssemblyStatus('idle');
-    setChunks([]);
-    setIsDegraded(false);
-    setSelectionChanged(false);
-    setGenerateError(undefined);
-    lastSelectionRef.current = selectionKey;
+    const abortController = new AbortController();
+    const runId = startGeneration(selectionKey, abortController);
+    const generationFramework = activeTab;
 
     const handleProgress = (event: CodeGenProgress) => {
-      switch (event.step) {
-        case 'planning':
-          setPlanningStatus(event.status);
-          if (event.error) setPlanningError(event.error);
-          break;
-        case 'chunk':
-          setChunks((prev) => {
-            const existing = prev.findIndex((c) => c.chunkId === event.chunkId);
-            const entry: ChunkProgress = {
-              chunkId: event.chunkId,
-              name: event.name,
-              status: event.status,
-              error: event.error,
-            };
-            if (existing >= 0) {
-              const next = [...prev];
-              next[existing] = entry;
-              return next;
-            }
-            return [...prev, entry];
-          });
-          break;
-        case 'assembly':
-          setAssemblyStatus(event.status);
-          break;
-        case 'complete':
-          setIsDegraded(event.degraded);
-          setIsGenerating(false);
-          break;
-        case 'error':
-          setGenerateError(event.message);
-          setIsGenerating(false);
-          break;
-      }
+      applyProgress(runId, generationFramework, event);
     };
 
     try {
       const result = await generateCode(
         nodes,
-        activeTab,
+        generationFramework,
         variables,
         handleProgress,
-        model,
-        provider,
-        abortRef.current.signal,
+        modelConfig?.model ?? model,
+        modelConfig?.provider,
+        abortController.signal,
       );
-      setCodeCache((prev) => ({
-        ...prev,
-        [activeTab]: {
-          code: result.code,
-          degraded: result.degraded,
-          assets: result.assets,
-        },
-      }));
-      setIsDegraded(result.degraded);
+      const bundle = {
+        code: result.code,
+        degraded: result.degraded,
+        assets: result.assets,
+      };
+      completeGeneration(runId, generationFramework, bundle);
+      void saveHistory(
+        generationFramework,
+        codegenTarget,
+        bundle,
+        modelConfig?.model ?? model,
+        modelConfig?.provider,
+      );
+      setPanelView('code');
     } catch (err) {
-      if (!abortRef.current?.signal.aborted) {
+      if (!abortController.signal.aborted) {
         const msg = err instanceof Error ? err.message : 'Code generation failed';
-        setGenerateError(msg);
+        failGeneration(runId, msg);
       }
-      setIsGenerating(false);
     }
-  }, [getTargetNodes, activeTab, variables, selectionKey, model, provider]);
+  }, [
+    activeTab,
+    applyProgress,
+    completeGeneration,
+    failGeneration,
+    getTargetNodes,
+    model,
+    modelConfig,
+    codegenTarget,
+    saveHistory,
+    selectionKey,
+    startGeneration,
+    variables,
+  ]);
 
   const handleCancel = useCallback(() => {
-    abortRef.current?.abort();
-    setIsGenerating(false);
-  }, []);
+    cancelGeneration();
+  }, [cancelGeneration]);
 
   const handleRetryChunk = useCallback(
     (_chunkId: string) => {
-      // Re-运行完整的管道（规划速度很快，仅重新运行 failed/skipped 块）
       void handleGenerate();
     },
     [handleGenerate],
@@ -307,12 +295,41 @@ function CodePanelInner() {
   const handleTabChange = useCallback(
     (tab: Framework) => {
       setActiveTab(tab);
-      setGenerateError(undefined);
-      // isDegraded follows the cached tab's value
-      const tabCache = codeCache[tab];
-      setIsDegraded(tabCache?.degraded ?? false);
+      clearGenerateError();
+      setPanelView('code');
     },
-    [codeCache],
+    [clearGenerateError, setActiveTab],
+  );
+
+  const handleSelectHistory = useCallback(
+    (generationId: string) => {
+      selectHistoryEntry(activeTab, generationId);
+      setPanelView('code');
+    },
+    [activeTab, selectHistoryEntry],
+  );
+
+  const handlePreviewHistory = useCallback(
+    (entry: CodegenHistoryEntry) => {
+      const currentAssets = cached?.historyId === entry.id ? cached.assets : [];
+      const preview = buildCodePreviewDocument({
+        framework: activeTab,
+        code: entry.finalCode ?? '',
+        assets: currentAssets ?? [],
+        assetsManifest: entry.assetsManifest,
+      });
+
+      if (preview.kind === 'unsupported') {
+        const reason = t(getPreviewReasonKey(preview.reason));
+        window.alert(`${t('codePanel.preview.unavailable')}\n${reason}`);
+        return;
+      }
+
+      if (!openPreviewHtml(preview.srcDoc)) {
+        window.alert(t('codePanel.preview.popupBlocked'));
+      }
+    },
+    [activeTab, cached, t],
   );
 
   const nodeCount = selectedIds.length > 0 ? selectedIds.length : children.length;
@@ -321,7 +338,6 @@ function CodePanelInner() {
     if (!generatedCode) return '';
     const lang = HIGHLIGHT_LANG[activeTab];
 
-    // HTML / Vue / Svelte: split at <style to highlight CSS portion separately
     if (activeTab === 'html' || activeTab === 'vue' || activeTab === 'svelte') {
       const styleIdx = generatedCode.indexOf('<style');
       if (styleIdx !== -1) {
@@ -360,7 +376,6 @@ function CodePanelInner() {
 
   return (
     <div className="flex flex-1 min-h-0 flex-col">
-      {/* Tab Bar */}
       <div className="flex items-center border-b border-border px-1.5 shrink-0">
         <div className="flex gap-0.5 overflow-x-auto py-1 scrollbar-none">
           {FRAMEWORKS.map((fw) => (
@@ -381,9 +396,7 @@ function CodePanelInner() {
         </div>
       </div>
 
-      {/* Content */}
       <div className="flex-1 min-h-0 flex flex-col">
-        {/* Empty State */}
         {panelState === 'empty' && (
           <div className="flex h-full flex-col items-center justify-center gap-4 p-6 text-center">
             <div className="relative">
@@ -404,12 +417,12 @@ function CodePanelInner() {
             </div>
             <Button
               onClick={handleGenerate}
-              disabled={nodeCount === 0}
+              disabled={nodeCount === 0 || modelUnavailable}
               size="sm"
               className="h-8 gap-1.5 text-xs shadow-sm"
             >
               <Sparkles className="h-3.5 w-3.5" />
-              Generate {TAB_LABELS[activeTab]}
+              {`Generate ${TAB_LABELS[activeTab]}`}
             </Button>
             <Button
               variant="ghost"
@@ -427,6 +440,19 @@ function CodePanelInner() {
                 <div className="mt-1 break-words opacity-80">{generateError}</div>
               </div>
             )}
+            {modelUnavailable && (
+              <div className="max-w-[260px] rounded-lg border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+                {t('codePanel.modelUnavailable')}
+              </div>
+            )}
+            {historyLoading && (
+              <div className="text-[11px] text-muted-foreground">Loading code history...</div>
+            )}
+            {historyError && (
+              <div className="max-w-[260px] rounded-lg border border-destructive/20 bg-destructive/8 px-3 py-2 text-xs text-destructive">
+                {historyError}
+              </div>
+            )}
             {selectionChanged && (
               <div className="flex items-center gap-1.5 text-[11px] text-amber-500">
                 <AlertTriangle className="h-3 w-3" />
@@ -436,10 +462,8 @@ function CodePanelInner() {
           </div>
         )}
 
-        {/* Generating State */}
         {panelState === 'generating' && (
           <div className="flex flex-1 flex-col">
-            {/* Progress bar */}
             <div className="h-[2px] shrink-0 bg-muted">
               <div
                 className="h-full bg-primary transition-all duration-500 ease-out"
@@ -448,7 +472,6 @@ function CodePanelInner() {
             </div>
 
             <div className="flex flex-col gap-1 p-3">
-              {/* Planning */}
               <ProgressItem
                 label="Planning"
                 status={
@@ -463,7 +486,6 @@ function CodePanelInner() {
                 error={planningError}
               />
 
-              {/* Chunks */}
               {chunks.map((chunk) => (
                 <ProgressItem
                   key={chunk.chunkId}
@@ -476,7 +498,6 @@ function CodePanelInner() {
                 />
               ))}
 
-              {/* Assembly */}
               {assemblyStatus !== 'idle' && (
                 <ProgressItem
                   label="Assembly"
@@ -503,7 +524,6 @@ function CodePanelInner() {
           </div>
         )}
 
-        {/* Complete State */}
         {panelState === 'complete' && (
           <>
             {isDegraded && (
@@ -541,59 +561,101 @@ function CodePanelInner() {
                 </div>
               </div>
             )}
-            <div className="flex-1 min-h-0 overflow-auto p-2">
-              <pre className="text-[10px] leading-relaxed font-mono text-foreground/80 whitespace-pre-wrap break-all">
-                <code dangerouslySetInnerHTML={{ __html: highlightedHTML }} />
-              </pre>
+            {history.length > 0 && (
+              <div className="border-b border-border/50 bg-muted/30 px-3 py-1.5 text-[11px] text-muted-foreground shrink-0">
+                {t('codePanel.history.count', { count: history.length })}
+              </div>
+            )}
+            <div className="border-b border-border/50 bg-card px-1.5 py-1 shrink-0">
+              <div className="grid grid-cols-2 rounded-md bg-muted/35 p-0.5">
+                {(['code', 'history'] as CodePanelView[]).map((view) => (
+                  <button
+                    key={view}
+                    type="button"
+                    onClick={() => setPanelView(view)}
+                    className={cn(
+                      'rounded px-2 py-1 text-[11px] font-medium capitalize transition-colors',
+                      panelView === view
+                        ? 'bg-background text-foreground shadow-sm'
+                        : 'text-muted-foreground hover:text-foreground',
+                    )}
+                  >
+                    {t(`codePanel.view.${view}`)}
+                    {view === 'history' && history.length > 0 ? ` ${history.length}` : ''}
+                  </button>
+                ))}
+              </div>
             </div>
-            <div className="flex items-center gap-px border-t border-border px-1 py-1 shrink-0 bg-card">
-              <Button
-                variant="ghost"
-                size="sm"
-                className={cn(
-                  'h-7 flex-1 px-1 text-[11px] transition-colors',
-                  copied ? 'text-green-500' : 'text-muted-foreground hover:text-foreground',
-                )}
-                onClick={handleCopy}
-              >
-                {copied ? (
-                  <Check className="mr-1 h-3 w-3 shrink-0" />
-                ) : (
-                  <Copy className="mr-1 h-3 w-3 shrink-0" />
-                )}
-                <span className="truncate">{copied ? 'Copied' : 'Copy'}</span>
-              </Button>
-              <div className="w-px h-4 bg-border/50" />
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-7 flex-1 px-1 text-[11px] text-muted-foreground hover:text-foreground"
-                onClick={handleDownload}
-              >
-                <Download className="mr-1 h-3 w-3 shrink-0" />
-                <span className="truncate">{hasExportedAssets ? 'Download ZIP' : 'Download'}</span>
-              </Button>
-              <div className="w-px h-4 bg-border/50" />
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-7 flex-1 px-1 text-[11px] text-muted-foreground hover:text-foreground"
-                onClick={() => void handleDownloadStructureBundle()}
-              >
-                <FileJson className="mr-1 h-3 w-3 shrink-0" />
-                <span className="truncate">AI Bundle</span>
-              </Button>
-              <div className="w-px h-4 bg-border/50" />
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-7 flex-1 px-1 text-[11px] text-muted-foreground hover:text-foreground"
-                onClick={handleGenerate}
-              >
-                <RefreshCw className="mr-1 h-3 w-3 shrink-0" />
-                <span className="truncate">Regenerate</span>
-              </Button>
+            <div className="flex-1 min-h-0">
+              {panelView === 'code' && (
+                <div className="h-full overflow-auto p-2">
+                  <pre className="text-[10px] leading-relaxed font-mono text-foreground/80 whitespace-pre-wrap break-all">
+                    <code dangerouslySetInnerHTML={{ __html: highlightedHTML }} />
+                  </pre>
+                </div>
+              )}
+              {panelView === 'history' && (
+                <CodeHistoryList
+                  history={history}
+                  selectedId={selectedHistoryId}
+                  onSelect={handleSelectHistory}
+                  onPreview={handlePreviewHistory}
+                />
+              )}
             </div>
+            {panelView !== 'history' && (
+              <div className="flex items-center gap-px border-t border-border px-1 py-1 shrink-0 bg-card">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className={cn(
+                    'h-7 flex-1 px-1 text-[11px] transition-colors',
+                    copied ? 'text-green-500' : 'text-muted-foreground hover:text-foreground',
+                  )}
+                  onClick={handleCopy}
+                >
+                  {copied ? (
+                    <Check className="mr-1 h-3 w-3 shrink-0" />
+                  ) : (
+                    <Copy className="mr-1 h-3 w-3 shrink-0" />
+                  )}
+                  <span className="truncate">{copied ? 'Copied' : 'Copy'}</span>
+                </Button>
+                <div className="w-px h-4 bg-border/50" />
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 flex-1 px-1 text-[11px] text-muted-foreground hover:text-foreground"
+                  onClick={handleDownload}
+                >
+                  <Download className="mr-1 h-3 w-3 shrink-0" />
+                  <span className="truncate">
+                    {hasExportedAssets ? 'Download ZIP' : 'Download'}
+                  </span>
+                </Button>
+                <div className="w-px h-4 bg-border/50" />
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 flex-1 px-1 text-[11px] text-muted-foreground hover:text-foreground"
+                  onClick={() => void handleDownloadStructureBundle()}
+                >
+                  <FileJson className="mr-1 h-3 w-3 shrink-0" />
+                  <span className="truncate">AI Bundle</span>
+                </Button>
+                <div className="w-px h-4 bg-border/50" />
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 flex-1 px-1 text-[11px] text-muted-foreground hover:text-foreground"
+                  onClick={handleGenerate}
+                  disabled={modelUnavailable}
+                >
+                  <RefreshCw className="mr-1 h-3 w-3 shrink-0" />
+                  <span className="truncate">Regenerate</span>
+                </Button>
+              </div>
+            )}
           </>
         )}
       </div>
@@ -602,71 +664,3 @@ function CodePanelInner() {
 }
 
 export default memo(CodePanelInner);
-
-// ── Progress Item Sub-Component ──
-
-function ProgressItem({
-  label,
-  status,
-  error,
-  onRetry,
-}: {
-  label: string;
-  status: ChunkStatus | 'running' | 'done' | 'failed' | 'pending';
-  error?: string;
-  onRetry?: () => void;
-}) {
-  const icons: Record<string, React.ReactNode> = {
-    pending: <div className="h-3 w-3 rounded-full border border-muted-foreground/20" />,
-    running: <Loader2 className="h-3 w-3 animate-spin text-primary" />,
-    done: <Check className="h-3 w-3 text-green-500" />,
-    degraded: <AlertTriangle className="h-3 w-3 text-amber-500" />,
-    failed: <MinusCircle className="h-3 w-3 text-destructive" />,
-    skipped: <SkipForward className="h-3 w-3 text-muted-foreground/50" />,
-  };
-
-  const sublabels: Record<string, string> = {
-    degraded: 'generated without contract',
-    skipped: 'skipped (dependency failed)',
-  };
-
-  return (
-    <div
-      className={cn(
-        'flex items-start gap-2 rounded-md px-2 py-1.5 text-[12px] transition-colors',
-        status === 'running' && 'bg-primary/5',
-        status === 'failed' && 'bg-destructive/5',
-      )}
-    >
-      <div className="mt-[3px] shrink-0">{icons[status]}</div>
-      <div className="flex-1 min-w-0">
-        <div
-          className={cn(
-            'font-medium truncate',
-            status === 'pending' && 'text-muted-foreground/60',
-            status === 'running' && 'text-foreground',
-            status === 'done' && 'text-foreground/70',
-            status === 'failed' && 'text-destructive',
-            status === 'degraded' && 'text-amber-600',
-            status === 'skipped' && 'text-muted-foreground/50',
-          )}
-        >
-          {label}
-        </div>
-        {sublabels[status] && (
-          <div className="text-[10px] text-muted-foreground/60 mt-0.5">{sublabels[status]}</div>
-        )}
-        {error && <div className="text-[10px] text-destructive/80 mt-0.5 break-words">{error}</div>}
-      </div>
-      {onRetry && (
-        <button
-          type="button"
-          className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium text-primary hover:bg-primary/10 transition-colors"
-          onClick={onRetry}
-        >
-          Retry
-        </button>
-      )}
-    </div>
-  );
-}

@@ -65,6 +65,7 @@
     "@radix-ui/react-switch": "^1.2.6",
     "@radix-ui/react-toggle": "^1.1.10",
     "@radix-ui/react-tooltip": "^1.2.8",
+    "@supabase/supabase-js": "^2.105.3",
     "@tailwindcss/vite": "^4.1.18",
     "@tanstack/react-router": "1.168.1",
     "@tanstack/react-router-ssr-query": "1.166.10",
@@ -117,7 +118,10 @@
     "oxfmt": "^0.42.0",
     "oxlint": "^1.57.0",
     "typescript": "^5.7.2",
-    "vite": "^7.1.7",
+    "vite": "7.1.7",
     "vitest": "^3.0.5"
+  },
+  "overrides": {
+    "vite": "7.1.7"
   }
 }

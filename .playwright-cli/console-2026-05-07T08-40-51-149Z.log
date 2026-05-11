@@ -1,0 +1,70 @@
+[     477ms] [LOG] [HMR] Waiting for update signal from WDS... @ webpack-internal:///./node_modules/webpack/hot/log.js:23
+[     766ms] [INFO] Download the Vue Devtools extension for a better development experience:
+https://github.com/vuejs/vue-devtools @ webpack-internal:///./node_modules/vue/dist/vue.runtime.esm.js:8411
+[     835ms] [INFO] Download the Vue Devtools extension for a better development experience:
+https://github.com/vuejs/vue-devtools @ webpack-internal:///./node_modules/vue2-verify/node_modules/vue/dist/vue.runtime.esm.js:8461
+[     835ms] [INFO] You are running Vue in development mode.
+Make sure to turn on production mode when deploying for production.
+See more tips at https://vuejs.org/guide/deployment.html @ webpack-internal:///./node_modules/vue2-verify/node_modules/vue/dist/vue.runtime.esm.js:8471
+[     857ms] [INFO] [WDS] Hot Module Replacement enabled. @ webpack-internal:///./node_modules/webpack-dev-server/client/index.js?http://192.168.2.62:8000/sockjs-node:86
+[     857ms] [INFO] [WDS] Live Reloading enabled. @ webpack-internal:///./node_modules/webpack-dev-server/client/index.js?http://192.168.2.62:8000/sockjs-node:90
+[  360870ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/sockjs-node/info?t=1778143612017:0
+[  361909ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://192.168.2.62:8000/sockjs-node/info?t=1778143613056:0
+[  364945ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/sockjs-node/info?t=1778143616093:0
+[  369960ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://192.168.2.62:8000/sockjs-node/info?t=1778143621107:0
+[  380959ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/sockjs-node/info?t=1778143632106:0
+[  420803ms] [LOG] [HMR] Waiting for update signal from WDS... @ webpack-internal:///./node_modules/webpack/hot/log.js:23
+[  420905ms] [INFO] Download the Vue Devtools extension for a better development experience:
+https://github.com/vuejs/vue-devtools @ webpack-internal:///./node_modules/vue/dist/vue.runtime.esm.js:8411
+[  420932ms] [INFO] Download the Vue Devtools extension for a better development experience:
+https://github.com/vuejs/vue-devtools @ webpack-internal:///./node_modules/vue2-verify/node_modules/vue/dist/vue.runtime.esm.js:8461
+[  420932ms] [INFO] You are running Vue in development mode.
+Make sure to turn on production mode when deploying for production.
+See more tips at https://vuejs.org/guide/deployment.html @ webpack-internal:///./node_modules/vue2-verify/node_modules/vue/dist/vue.runtime.esm.js:8471
+[ 1372176ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/sockjs-node/info?t=1778144623319:0
+[ 1373111ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://192.168.2.62:8000/sockjs-node/info?t=1778144624258:0
+[ 1376207ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/sockjs-node/info?t=1778144627351:0
+[ 1381200ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://192.168.2.62:8000/sockjs-node/info?t=1778144632346:0
+[ 1392282ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/sockjs-node/info?t=1778144643429:0
+[ 1413248ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://192.168.2.62:8000/sockjs-node/info?t=1778144664395:0
+[ 1487794ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8000/a761391fa84da5321883.hot-update.json:0
+[ 1487902ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8000/user/login?redirect=%2F:0
+[ 1866437ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8000/user/login?redirect=%2F:0
+[ 2169945ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8000/user/login?redirect=%2F:0
+[ 2330065ms] [LOG] [HMR] Waiting for update signal from WDS... @ webpack-internal:///./node_modules/webpack/hot/log.js:23
+[ 2330397ms] [INFO] Download the Vue Devtools extension for a better development experience:
+https://github.com/vuejs/vue-devtools @ webpack-internal:///./node_modules/vue/dist/vue.runtime.esm.js:8411
+[ 2330442ms] [INFO] Download the Vue Devtools extension for a better development experience:
+https://github.com/vuejs/vue-devtools @ webpack-internal:///./node_modules/vue2-verify/node_modules/vue/dist/vue.runtime.esm.js:8461
+[ 2330442ms] [INFO] You are running Vue in development mode.
+Make sure to turn on production mode when deploying for production.
+See more tips at https://vuejs.org/guide/deployment.html @ webpack-internal:///./node_modules/vue2-verify/node_modules/vue/dist/vue.runtime.esm.js:8471
+[25710750ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_TIMED_OUT @ http://192.168.2.62:8000/sockjs-node/info?t=1778168960948:0
+[27633193ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_TIMED_OUT @ http://192.168.2.62:8000/sockjs-node/info?t=1778169972042:0
+[145844104ms] [LOG] [HMR] Waiting for update signal from WDS... @ webpack-internal:///./node_modules/webpack/hot/log.js:23
+[145844431ms] [INFO] Download the Vue Devtools extension for a better development experience:
+https://github.com/vuejs/vue-devtools @ webpack-internal:///./node_modules/vue/dist/vue.runtime.esm.js:8411
+[145844469ms] [INFO] Download the Vue Devtools extension for a better development experience:
+https://github.com/vuejs/vue-devtools @ webpack-internal:///./node_modules/vue2-verify/node_modules/vue/dist/vue.runtime.esm.js:8461
+[145844469ms] [INFO] You are running Vue in development mode.
+Make sure to turn on production mode when deploying for production.
+See more tips at https://vuejs.org/guide/deployment.html @ webpack-internal:///./node_modules/vue2-verify/node_modules/vue/dist/vue.runtime.esm.js:8471
+[152712320ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/sockjs-node/info?t=1778295963464:0
+[152713269ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://192.168.2.82:8000/sockjs-node/info?t=1778295964414:0
+[152716417ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/sockjs-node/info?t=1778295967562:0
+[152721301ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://192.168.2.82:8000/sockjs-node/info?t=1778295972448:0
+[152815709ms] [LOG] [HMR] Waiting for update signal from WDS... @ webpack-internal:///./node_modules/webpack/hot/log.js:23
+[152816010ms] [INFO] Download the Vue Devtools extension for a better development experience:
+https://github.com/vuejs/vue-devtools @ webpack-internal:///./node_modules/vue/dist/vue.runtime.esm.js:8417
+[181019259ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://192.168.2.82:8000/sockjs-node/info?t=1778324270400:0
+[181021307ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://192.168.2.82:8000/sockjs-node/info?t=1778324272454:0
+[181025370ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://192.168.2.82:8000/sockjs-node/info?t=1778324276516:0
+[185662830ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ http://192.168.2.82:8000/sockjs-node/info?t=1778328913973:0
+[185664853ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ http://192.168.2.82:8000/sockjs-node/info?t=1778328915997:0
+[185668898ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ http://192.168.2.82:8000/sockjs-node/info?t=1778328920043:0
+[185676981ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ http://192.168.2.82:8000/sockjs-node/info?t=1778328928125:0
+[185693067ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ http://192.168.2.82:8000/sockjs-node/info?t=1778328944213:0
+[185725123ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ http://192.168.2.82:8000/sockjs-node/info?t=1778328976268:0
+[185789156ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ http://192.168.2.82:8000/sockjs-node/info?t=1778329040302:0
+[185917261ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ http://192.168.2.82:8000/sockjs-node/info?t=1778329168407:0
+[186173339ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ http://192.168.2.82:8000/sockjs-node/info?t=1778329424485:0

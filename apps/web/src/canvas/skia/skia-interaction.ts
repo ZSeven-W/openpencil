@@ -28,6 +28,8 @@ import {
 } from './skia-hit-handlers';
 import { bakeSceneAnchorsToPathNode, getEditablePathState, movePathControl } from './path-editing';
 import { shouldAutoReparentOnDragOutsideParent } from './drag-reparent-policy';
+import { handleCanvasContextMenu, type CanvasContextMenuState } from './skia-context-menu';
+import { getPrimarySelectionIdForHit } from './skia-selection-hit';
 
 export interface TextEditState {
   nodeId: string;
@@ -80,13 +82,6 @@ export function toolToCursor(tool: ToolType): string {
   }
 }
 
-function hasImageVisual(node: PenNode | undefined): boolean {
-  if (!node) return false;
-  if (node.type === 'image') return true;
-  if (!('fill' in node)) return false;
-  return Array.isArray(node.fill) && node.fill.some((fill: any) => fill?.type === 'image');
-}
-
 /**
  * Encapsulates
  * 所有画布 mouse/keyboard 交互状态和处理程序。 SkiaCanvas 中的 Extracted 让组件专注于生命周期和渲染。
@@ -96,6 +91,7 @@ export class SkiaInteractionManager {
   private canvasEl: HTMLCanvasElement;
   private onEditText: (state: TextEditState | null) => void;
   private onPathAnchorContextMenu: (state: PathAnchorContextMenuState | null) => void;
+  private onCanvasContextMenu: (state: CanvasContextMenuState | null) => void;
 
   // Shared 状态
   private isPanning = false;
@@ -179,11 +175,13 @@ export class SkiaInteractionManager {
     canvasEl: HTMLCanvasElement,
     onEditText: (state: TextEditState | null) => void,
     onPathAnchorContextMenu: (state: PathAnchorContextMenuState | null) => void = () => {},
+    onCanvasContextMenu: (state: CanvasContextMenuState | null) => void = () => {},
   ) {
     this.engineRef = engineRef;
     this.canvasEl = canvasEl;
     this.onEditText = onEditText;
     this.onPathAnchorContextMenu = onPathAnchorContextMenu;
+    this.onCanvasContextMenu = onCanvasContextMenu;
     this.penTool = new SkiaPenTool(() => this.engineRef.current);
   }
 
@@ -379,18 +377,7 @@ export class SkiaInteractionManager {
       if (isChildOfSelected) {
         // Don 不更改选择
       } else if (!currentSelection.includes(nodeId)) {
-        const clickedNode = docStore.getNodeById(nodeId);
-        const parent = docStore.getParentOf(nodeId);
-        if (
-          !hasImageVisual(clickedNode) &&
-          parent &&
-          (parent.type === 'frame' || parent.type === 'group')
-        ) {
-          const grandparent = docStore.getParentOf(parent.id);
-          if (!grandparent || grandparent.type === 'frame') {
-            nodeId = parent.id;
-          }
-        }
+        nodeId = getPrimarySelectionIdForHit(nodeId);
 
         if (e.shiftKey) {
           if (currentSelection.includes(nodeId)) {
@@ -1309,18 +1296,12 @@ export class SkiaInteractionManager {
       const scene = this.getScene(e);
       if (!scene) return;
 
-      const pathHit = hitTestPathControl(engine, scene.x, scene.y);
-      if (!pathHit) {
-        this.onPathAnchorContextMenu(null);
-        return;
-      }
-
-      useCanvasStore.getState().setSelection([pathHit.nodeId], pathHit.nodeId);
-      this.onPathAnchorContextMenu({
-        x: e.clientX,
-        y: e.clientY,
-        nodeId: pathHit.nodeId,
-        anchorIndex: pathHit.anchorIndex,
+      handleCanvasContextMenu({
+        event: e,
+        scene,
+        engine,
+        onPathAnchorContextMenu: this.onPathAnchorContextMenu,
+        onCanvasContextMenu: this.onCanvasContextMenu,
       });
     };
 

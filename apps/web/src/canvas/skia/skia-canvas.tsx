@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { Copy } from 'lucide-react';
+import { copySelectedNodeIdsToClipboard } from '@/canvas/canvas-clipboard-actions';
 import { loadCanvasKit } from './skia-init';
 import { SkiaEngine } from './skia-engine';
 import { useCanvasStore } from '@/stores/canvas-store';
@@ -16,6 +18,7 @@ import {
   type PathAnchorContextMenuState,
   type TextEditState,
 } from './skia-interaction';
+import type { CanvasContextMenuState } from './skia-context-menu';
 import { createDocumentSyncScheduler } from './document-sync-scheduler';
 import { projectTextEditStateToViewport } from './text-edit-overlay';
 
@@ -26,6 +29,7 @@ export default function SkiaCanvas() {
   const [error, setError] = useState<string | null>(null);
   const [editingText, setEditingText] = useState<TextEditState | null>(null);
   const [pathContextMenu, setPathContextMenu] = useState<PathAnchorContextMenuState | null>(null);
+  const [canvasContextMenu, setCanvasContextMenu] = useState<CanvasContextMenuState | null>(null);
   const viewport = useCanvasStore((state) => state.viewport);
   const editingTextOverlay = editingText
     ? projectTextEditStateToViewport(editingText, viewport)
@@ -33,6 +37,10 @@ export default function SkiaCanvas() {
 
   const closePathContextMenu = useCallback(() => {
     setPathContextMenu(null);
+  }, []);
+
+  const closeCanvasContextMenu = useCallback(() => {
+    setCanvasContextMenu(null);
   }, []);
 
   const updatePathAnchor = useCallback(
@@ -200,6 +208,7 @@ export default function SkiaCanvas() {
       canvasEl,
       setEditingText,
       setPathContextMenu,
+      setCanvasContextMenu,
     );
     return manager.attach();
   }, []);
@@ -264,11 +273,72 @@ export default function SkiaCanvas() {
         />
       )}
 
+      {canvasContextMenu && (
+        <CanvasContextMenu
+          x={canvasContextMenu.x}
+          y={canvasContextMenu.y}
+          onCopy={() => {
+            void copySelectedNodeIdsToClipboard();
+            closeCanvasContextMenu();
+          }}
+          onClose={closeCanvasContextMenu}
+        />
+      )}
+
       {error && (
         <div className="absolute inset-0 flex items-center justify-center text-destructive">
           Failed to load CanvasKit: {error}
         </div>
       )}
+    </div>
+  );
+}
+
+function CanvasContextMenu({
+  x,
+  y,
+  onCopy,
+  onClose,
+}: {
+  x: number;
+  y: number;
+  onCopy: () => void;
+  onClose: () => void;
+}) {
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleMouseDown = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        onClose();
+      }
+    };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+
+    document.addEventListener('mousedown', handleMouseDown);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handleMouseDown);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [onClose]);
+
+  return (
+    <div
+      ref={menuRef}
+      className="fixed z-50 min-w-[140px] rounded-md border border-border bg-popover py-1 shadow-md"
+      style={{ left: x, top: y }}
+    >
+      <button
+        type="button"
+        className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs text-popover-foreground transition-colors hover:bg-accent"
+        onClick={onCopy}
+      >
+        <Copy size={12} aria-hidden />
+        Copy ID
+      </button>
     </div>
   );
 }

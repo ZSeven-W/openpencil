@@ -47,7 +47,7 @@ export default function SaveDialog({ open, onClose }: SaveDialogProps) {
     // Pass 作为明确建议的键入名称。 The 存储操作处理 dialog/picker、写入、fileName/filePath
     // 突变、isDirty=false 和“已保存”发射 - 但 ONLY 已确认成功。 We
     // 不预先改变存储状态；如果保存失败或用户取消，存储将保持不变并且对话框保持打开状态，以便用户可以重试或更改名称。
-    const savedName = await useDocumentStore.getState().saveAs(trimmed);
+    const savedName = await useDocumentStore.getState().exportOp(trimmed);
     if (savedName) {
       onClose();
     }

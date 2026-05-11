@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { useCanvasStore } from '@/stores/canvas-store';
-import { useDocumentStore } from '@/stores/document-store';
+import { createEmptyDocument, useDocumentStore } from '@/stores/document-store';
 import { useHistoryStore } from '@/stores/history-store';
 import type { PenNode } from '@/types/pen';
 import type { PenDocument } from '@/types/pen';
@@ -27,6 +27,53 @@ function resetStores(document: PenDocument) {
 }
 
 describe('document-store moveNode', () => {
+  it('replaces imported content without dropping cloud file metadata', () => {
+    useDocumentStore.getState().loadCloudDocument({
+      id: 'cloud-file-1',
+      name: 'Untitled',
+      revision: 7,
+      thumbnailPath: null,
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+      document: createEmptyDocument(),
+    });
+
+    const importedDoc: PenDocument = {
+      version: '1.0.0',
+      name: 'Imported Figma',
+      pages: [
+        {
+          id: 'figma-page-1',
+          name: 'Figma Page',
+          children: [
+            {
+              id: 'figma-frame-1',
+              type: 'frame',
+              name: 'Imported frame',
+              width: 320,
+              height: 240,
+              children: [],
+            },
+          ],
+        },
+      ],
+      children: [],
+    };
+
+    useDocumentStore.getState().replaceDocumentContent(importedDoc, 'imported-figma.op');
+
+    const state = useDocumentStore.getState();
+    expect(state.cloudFileId).toBe('cloud-file-1');
+    expect(state.cloudRevision).toBe(7);
+    expect(state.cloudSaveState).toBe('idle');
+    expect(state.fileName).toBe('imported-figma.op');
+    expect(state.fileHandle).toBeNull();
+    expect(state.filePath).toBeNull();
+    expect(state.isDirty).toBe(true);
+    expect(state.document.name).toBe('Imported Figma');
+    expect(useCanvasStore.getState().activePageId).toBe('figma-page-1');
+  });
+
   it('addNode should push history before mutating document', () => {
     useDocumentStore.getState().newDocument();
     useHistoryStore.getState().clear();

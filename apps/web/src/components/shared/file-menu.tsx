@@ -1,5 +1,5 @@
 import { useRef, useEffect } from 'react';
-import { Plus, Folder, Save, SaveAll, FileText, Download } from 'lucide-react';
+import { Plus, Save, FileText, Download, Upload } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { getRecentFiles, clearRecentFiles, relativeTime } from '@/utils/recent-files';
 
@@ -9,7 +9,7 @@ interface FileMenuProps {
   onNew: () => void;
   onOpen: () => void;
   onSave: () => void;
-  onSaveAs: () => void;
+  onExportOp: () => void;
   onExport: () => void;
   onOpenRecent: (filePath: string) => void;
 }
@@ -20,7 +20,7 @@ export default function FileMenu({
   onNew,
   onOpen,
   onSave,
-  onSaveAs,
+  onExportOp,
   onExport,
   onOpenRecent,
 }: FileMenuProps) {
@@ -81,22 +81,22 @@ export default function FileMenu({
   return (
     <div
       ref={menuRef}
-      className="absolute top-full left-0 mt-1 z-50 w-52 rounded-lg border border-border bg-card shadow-xl py-1.5 px-0.5"
+      className="app-region-no-drag absolute top-full left-0 mt-1 z-50 w-52 rounded-lg border border-border bg-card shadow-xl py-1.5 px-0.5"
     >
       <MenuItem icon={Plus} label={t('fileMenu.newFile')} shortcut={`${mod}N`} onClick={onNew} />
       <MenuItem
-        icon={Folder}
-        label={t('fileMenu.openFile')}
+        icon={Upload}
+        label={t('fileMenu.importOp')}
         shortcut={`${mod}O`}
         onClick={onOpen}
       />
       <div className="h-px bg-border/50 mx-2.5 my-1" />
       <MenuItem icon={Save} label={t('fileMenu.save')} shortcut={`${mod}S`} onClick={onSave} />
       <MenuItem
-        icon={SaveAll}
-        label={t('fileMenu.saveAs')}
+        icon={Download}
+        label={t('fileMenu.exportOp')}
         shortcut={`${mod}\u21E7S`}
-        onClick={onSaveAs}
+        onClick={onExportOp}
       />
       <div className="h-px bg-border/50 mx-2.5 my-1" />
       <MenuItem

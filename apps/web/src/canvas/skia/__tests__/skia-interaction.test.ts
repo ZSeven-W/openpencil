@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createEmptyDocument } from '@/stores/document-tree-utils';
 import { useCanvasStore } from '@/stores/canvas-store';
@@ -6,6 +6,7 @@ import { useDocumentStore } from '@/stores/document-store';
 import type { PenNode } from '@/types/pen';
 
 import { SkiaInteractionManager } from '../skia-interaction';
+import { handleCanvasContextMenu } from '../skia-context-menu';
 
 function createCanvasStub() {
   return {
@@ -350,5 +351,50 @@ describe('SkiaInteractionManager continuous interaction commits', () => {
     expect(renderNode.clipRect).toMatchObject({ x: 65, y: 70, w: 210, h: 130, rx: 8 });
     expect(engine.rebuildCount).toBeGreaterThan(0);
     expect(engine.dirtyCount).toBeGreaterThan(0);
+  });
+
+  it('opens the canvas context menu for the current selection on right-click', () => {
+    const rect = {
+      id: 'rect-1',
+      type: 'rectangle',
+      x: 10,
+      y: 20,
+      width: 100,
+      height: 80,
+    } as PenNode;
+
+    useDocumentStore.setState({
+      getNodeById: (id: string) => (id === rect.id ? rect : undefined),
+      getParentOf: () => undefined,
+      isDescendantOf: () => false,
+    } as any);
+
+    const engine = createEngineStub([
+      {
+        node: { ...rect },
+        absX: 10,
+        absY: 20,
+        absW: 100,
+        absH: 80,
+      },
+    ]);
+    (engine as any).spatialIndex.hitTest = () => [{ node: rect } as any];
+
+    const onCanvasContextMenu = vi.fn();
+    const event = {
+      clientX: 42,
+      clientY: 55,
+    } as MouseEvent;
+
+    handleCanvasContextMenu({
+      event,
+      scene: { x: 42, y: 55 },
+      engine: engine as any,
+      onPathAnchorContextMenu: () => {},
+      onCanvasContextMenu,
+    });
+
+    expect(useCanvasStore.getState().selection.selectedIds).toEqual(['rect-1']);
+    expect(onCanvasContextMenu).toHaveBeenCalledWith({ x: 42, y: 55 });
   });
 });

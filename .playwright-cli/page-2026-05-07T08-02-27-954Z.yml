@@ -1,0 +1,124 @@
+- generic [ref=e33]:
+  - generic [ref=e34]:
+    - generic [ref=e35]:
+      - button [ref=e36]:
+        - img
+      - button [ref=e39]:
+        - img
+        - img
+      - button [ref=e41]:
+        - img
+    - generic [ref=e43]: Untitled
+    - generic [ref=e44]:
+      - button "Agents 与 MCP" [ref=e45]:
+        - generic [ref=e46]:
+          - img
+          - generic [ref=e47]: Agents 与 MCP
+      - combobox [ref=e49]:
+        - img [ref=e50]
+        - img [ref=e53]
+      - button [ref=e55]:
+        - img
+      - button [ref=e56]:
+        - img
+  - generic [ref=e58]:
+    - generic [ref=e59]:
+      - generic [ref=e61]:
+        - generic [ref=e62]:
+          - generic [ref=e63]: 页面
+          - button "添加页面" [ref=e64]:
+            - img [ref=e65]
+        - button "Page 1" [ref=e67]:
+          - generic [ref=e68]: Page 1
+      - generic [ref=e70]: 图层
+      - generic [ref=e74] [cursor=pointer]:
+        - img [ref=e75]
+        - generic [ref=e76]: Frame
+        - button "Hide" [ref=e77]:
+          - img [ref=e78]
+        - button "Lock" [ref=e81]:
+          - img [ref=e82]
+    - generic [ref=e85]:
+      - generic [ref=e88]:
+        - button "选择" [pressed] [ref=e89]:
+          - img [ref=e90]
+        - generic [ref=e92]:
+          - button "形状工具" [ref=e93]:
+            - img [ref=e94]
+          - button "更多形状工具" [ref=e96] [cursor=pointer]:
+            - img [ref=e97]
+        - button "文本" [ref=e99]:
+          - img [ref=e100]
+        - button "画框" [ref=e102]:
+          - img [ref=e103]
+        - button "抓手" [ref=e104]:
+          - img [ref=e105]
+        - button [disabled]:
+          - img
+        - button [disabled]:
+          - img
+        - button "变量" [ref=e110]:
+          - img [ref=e111]
+        - button "设计系统" [ref=e114]:
+          - img [ref=e115]
+        - button "UIKit 浏览器" [ref=e117]:
+          - img [ref=e118]
+      - generic [ref=e124]:
+        - button "适配全部内容" [ref=e125]:
+          - img
+        - button "缩小" [ref=e126]:
+          - img
+        - button "重置缩放" [ref=e127] [cursor=pointer]: 69%
+        - button "放大" [ref=e128]:
+          - img
+      - generic [ref=e129]:
+        - generic [ref=e138]:
+          - generic [ref=e139]:
+            - button "收起" [ref=e140]:
+              - img
+            - generic "New Chat" [ref=e141]
+          - generic [ref=e142]:
+            - button "最大化" [ref=e143]:
+              - img
+            - button "新对话" [ref=e144]:
+              - img
+        - generic [ref=e146]:
+          - paragraph [ref=e147]: 用 AI 开始设计
+          - generic [ref=e148]:
+            - button "📱 设计一个移动端登录页面 带社交登录的移动端页面" [disabled] [ref=e149]:
+              - generic [ref=e150]:
+                - generic [ref=e151]: 📱
+                - generic [ref=e152]: 设计一个移动端登录页面
+              - generic [ref=e153]: 带社交登录的移动端页面
+            - button "🍕 美食App首页 App 首页设计" [disabled] [ref=e154]:
+              - generic [ref=e155]:
+                - generic [ref=e156]: 🍕
+                - generic [ref=e157]: 美食App首页
+              - generic [ref=e158]: App 首页设计
+            - button "⬇️ 设计一个底部导航栏 5 个 Tab 导航栏" [disabled] [ref=e159]:
+              - generic [ref=e160]:
+                - generic [ref=e161]: ⬇️
+                - generic [ref=e162]: 设计一个底部导航栏
+              - generic [ref=e163]: 5 个 Tab 导航栏
+            - button "🎨 为我的应用推荐配色方案 应用配色推荐" [disabled] [ref=e164]:
+              - generic [ref=e165]:
+                - generic [ref=e166]: 🎨
+                - generic [ref=e167]: 为我的应用推荐配色方案
+              - generic [ref=e168]: 应用配色推荐
+          - paragraph [ref=e169]: 提示：在对话前选中画布上的元素以提供上下文。
+        - generic [ref=e170]:
+          - textbox "用 Agent 设计..." [ref=e171]
+          - generic [ref=e172]:
+            - generic [ref=e173]:
+              - button "未连接模型" [disabled] [ref=e174]:
+                - generic [ref=e175]: 未连接模型
+                - img [ref=e176]
+              - button "1x" [ref=e178]:
+                - img [ref=e179]
+                - generic [ref=e181]: 1x
+              - generic [ref=e182]: 已选择 0 个
+            - generic [ref=e183]:
+              - button "附加图片" [ref=e184]:
+                - img
+              - button "发送消息" [disabled]:
+                - img

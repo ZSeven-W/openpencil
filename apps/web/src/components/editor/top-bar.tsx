@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { appStorage, initAppStorage } from '@/utils/app-storage';
 import type { ComponentType, SVGProps } from 'react';
 import {
+  ArrowLeft,
   PanelLeft,
   Folder,
   ChevronDown,
@@ -26,11 +27,9 @@ import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { useCanvasStore } from '@/stores/canvas-store';
 import { useDocumentStore } from '@/stores/document-store';
+import { createEmptyDocument } from '@/stores/document-store';
 import {
-  supportsFileSystemAccess,
   isElectron,
-  openDocumentFS,
-  openDocument,
 } from '@/utils/file-operations';
 import { syncCanvasPositionsToStore } from '@/canvas/skia-engine-ref';
 import { zoomToFitContent } from '@/canvas/skia-engine-ref';
@@ -38,6 +37,8 @@ import { parseAndPrepareImportedDocument } from '@/utils/import-pen-document';
 import { addRecentFile } from '@/utils/recent-files';
 import { useAgentSettingsStore } from '@/stores/agent-settings-store';
 import type { AIProviderType } from '@/types/agent-settings';
+import { createCloudFile, getCloudFile } from '@/services/cloud/cloud-files';
+import { useNavigate } from '@tanstack/react-router';
 
 /** 用离屏 canvas 把 CSS 颜色值（oklch/rgb 等）转换成 `#rrggbb`。 */
 function cssToHex(raw: string): string | null {
@@ -130,15 +131,20 @@ function AgentStatusButton() {
 
 export default function TopBar() {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const toggleLayerPanel = useCanvasStore((s) => s.toggleLayerPanel);
   const layerPanelOpen = useCanvasStore((s) => s.layerPanelOpen);
   const fileName = useDocumentStore((s) => s.fileName);
   const isDirty = useDocumentStore((s) => s.isDirty);
+  const cloudFileId = useDocumentStore((s) => s.cloudFileId);
+  const cloudSaveState = useDocumentStore((s) => s.cloudSaveState);
+  const cloudSaveError = useDocumentStore((s) => s.cloudSaveError);
 
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [fileMenuOpen, setFileMenuOpen] = useState(false);
   const [saveIndicator, setSaveIndicator] = useState(false);
+  const importInputRef = useRef<HTMLInputElement>(null);
 
   // 读取计算后的 `--card` / `--card-foreground`，
   // 转成十六进制后同步给 Electron 标题栏覆盖层。
@@ -210,17 +216,18 @@ export default function TopBar() {
     return useDocumentStore.getState().save();
   }, []);
 
-  const handleSaveWithFeedback = useCallback(async () => {
+  const handleSaveWithFeedback = useCallback(async (): Promise<boolean> => {
     const savedName = await handleSave();
     if (!savedName) {
       // 用户取消了保存对话框，或保存本身失败了。
       // 这里不要写入最近文件，也不要触发保存成功提示。
-      return;
+      return false;
     }
     const filePath = useDocumentStore.getState().filePath;
     addRecentFile({ fileName: savedName, filePath: filePath ?? null });
     setSaveIndicator(true);
     setTimeout(() => setSaveIndicator(false), 2000);
+    return true;
   }, [handleSave]);
 
   const handleSaveAs = useCallback(async () => {
@@ -232,7 +239,7 @@ export default function TopBar() {
     // 直接调用 `saveAs()`。
     // 这里不会预先改动 `filePath` / `fileHandle`，
     // store 只会在用户确认且写入成功后更新状态。
-    const savedName = await useDocumentStore.getState().saveAs();
+    const savedName = await useDocumentStore.getState().exportOp();
     if (!savedName) return;
     const filePath = useDocumentStore.getState().filePath;
     addRecentFile({ fileName: savedName, filePath: filePath ?? null });
@@ -248,12 +255,16 @@ export default function TopBar() {
           useDocumentStore.getState().fileName || t('common.untitled'),
         );
         if (result === 'cancel') return;
-        if (result === 'save') await handleSaveWithFeedback();
+        if (result === 'save' && !(await handleSaveWithFeedback())) return;
       }
     }
-    useDocumentStore.getState().newDocument();
-    requestAnimationFrame(() => zoomToFitContent());
-  }, [t, handleSaveWithFeedback]);
+    const id = await createCloudFile({
+      name: 'Untitled',
+      document: createEmptyDocument(),
+      source: 'manual_save',
+    }).then((file) => file.id);
+    void navigate({ to: '/editor/$fileId', params: { fileId: id } });
+  }, [t, handleSaveWithFeedback, navigate]);
 
   const handleOpenRecent = useCallback(
     async (filePath: string) => {
@@ -265,7 +276,7 @@ export default function TopBar() {
             useDocumentStore.getState().fileName || t('common.untitled'),
           );
           if (result === 'cancel') return;
-          if (result === 'save') await handleSaveWithFeedback();
+          if (result === 'save' && !(await handleSaveWithFeedback())) return;
         }
       }
       window.electronAPI!.readFile(filePath).then((result) => {
@@ -278,27 +289,69 @@ export default function TopBar() {
           });
           if (!prepared) return;
           const { doc } = prepared;
-          useDocumentStore.getState().loadDocument(doc, name, null, result.filePath);
-          requestAnimationFrame(() => zoomToFitContent());
+          createCloudFile({
+            name: name.replace(/\.(pen|op|json)$/i, '') || name,
+            document: doc,
+            source: 'import',
+          }).then((file) => {
+            void navigate({ to: '/editor/$fileId', params: { fileId: file.id } });
+            requestAnimationFrame(() => zoomToFitContent());
+          });
         } catch {
           /* 非法文件 */
         }
       });
     },
-    [t, handleSaveWithFeedback],
+    [t, handleSaveWithFeedback, navigate],
   );
 
-  const handleOpen = useCallback(async () => {
+  const createImportedCloudFile = useCallback(
+    async (doc: ReturnType<typeof createEmptyDocument>, rawName: string) => {
+      const file = await createCloudFile({
+        name: rawName.replace(/\.(pen|op|json)$/i, '') || rawName,
+        document: doc,
+        source: 'import',
+      });
+      void navigate({ to: '/editor/$fileId', params: { fileId: file.id } });
+      requestAnimationFrame(() => zoomToFitContent());
+    },
+    [navigate],
+  );
+
+  const confirmDiscardOrSaveCurrent = useCallback(async () => {
     if (useDocumentStore.getState().isDirty) {
       const showDialog = (window as any).__showUnsavedDialog;
       if (showDialog) {
         const result = await showDialog(
           useDocumentStore.getState().fileName || t('common.untitled'),
         );
-        if (result === 'cancel') return;
-        if (result === 'save') await handleSaveWithFeedback();
+        if (result === 'cancel') return false;
+        if (result === 'save') return handleSaveWithFeedback();
       }
     }
+    return true;
+  }, [t, handleSaveWithFeedback]);
+
+  const handleBackToFiles = useCallback(async () => {
+    if (!(await confirmDiscardOrSaveCurrent())) return;
+    void navigate({ to: '/' });
+  }, [confirmDiscardOrSaveCurrent, navigate]);
+
+  const handleImportFile = useCallback(
+    async (file: File) => {
+      const text = await file.text();
+      const prepared = parseAndPrepareImportedDocument(text, { fileName: file.name });
+      if (!prepared) {
+        window.alert('Invalid .op file.');
+        return;
+      }
+      await createImportedCloudFile(prepared.doc, file.name);
+    },
+    [createImportedCloudFile],
+  );
+
+  const handleOpen = useCallback(async () => {
+    if (!(await confirmDiscardOrSaveCurrent())) return;
     if (isElectron()) {
       window.electronAPI!.openFile().then((result) => {
         if (!result) return;
@@ -310,28 +363,31 @@ export default function TopBar() {
           });
           if (!prepared) return;
           const { doc } = prepared;
-          useDocumentStore.getState().loadDocument(doc, name, null, result.filePath);
-          requestAnimationFrame(() => zoomToFitContent());
+          void createImportedCloudFile(doc, name);
         } catch {
           /* 非法文件 */
         }
       });
-    } else if (supportsFileSystemAccess()) {
-      openDocumentFS().then((result) => {
-        if (result) {
-          useDocumentStore.getState().loadDocument(result.doc, result.fileName, result.handle);
-          requestAnimationFrame(() => zoomToFitContent());
-        }
-      });
     } else {
-      openDocument().then((result) => {
-        if (result) {
-          useDocumentStore.getState().loadDocument(result.doc, result.fileName);
-          requestAnimationFrame(() => zoomToFitContent());
-        }
-      });
+      importInputRef.current?.click();
     }
-  }, [t, handleSaveWithFeedback]);
+  }, [confirmDiscardOrSaveCurrent, createImportedCloudFile]);
+
+  const handleReloadCloudVersion = useCallback(async () => {
+    if (!cloudFileId) return;
+    const file = await getCloudFile(cloudFileId);
+    useDocumentStore.getState().loadCloudDocument(file);
+  }, [cloudFileId]);
+
+  const handleSaveCloudCopy = useCallback(async () => {
+    const state = useDocumentStore.getState();
+    const file = await createCloudFile({
+      name: `${state.fileName ?? 'Untitled'} copy`,
+      document: state.document,
+      source: 'manual_save',
+    });
+    void navigate({ to: '/editor/$fileId', params: { fileId: file.id } });
+  }, [navigate]);
 
   const displayName = fileName ?? t('common.untitled');
 
@@ -339,6 +395,24 @@ export default function TopBar() {
     <div className="h-10 bg-card border-b border-border flex items-center px-2 shrink-0 select-none app-region-drag">
       {/* 左侧区域 */}
       <div className="flex items-center gap-0.5 app-region-no-drag electron-traffic-light-pad">
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              aria-label={t('topbar.backToFiles')}
+              onClick={() => void handleBackToFiles()}
+              className="text-muted-foreground hover:text-foreground"
+            >
+              <ArrowLeft size={15} strokeWidth={1.5} />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">{t('topbar.backToFiles')}</TooltipContent>
+        </Tooltip>
+
+        <div className="w-px h-3.5 bg-border/60 mx-1" />
+
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
@@ -379,9 +453,20 @@ export default function TopBar() {
             onNew={handleNew}
             onOpen={handleOpen}
             onSave={handleSaveWithFeedback}
-            onSaveAs={handleSaveAs}
+            onExportOp={handleSaveAs}
             onExport={() => useCanvasStore.getState().setExportDialogOpen(true)}
             onOpenRecent={handleOpenRecent}
+          />
+          <input
+            ref={importInputRef}
+            type="file"
+            accept=".op,.pen,.json"
+            className="hidden"
+            onChange={(event) => {
+              const file = event.currentTarget.files?.[0];
+              event.currentTarget.value = '';
+              if (file) void handleImportFile(file);
+            }}
           />
         </div>
 
@@ -414,6 +499,34 @@ export default function TopBar() {
           <span className="text-[10px] leading-none text-emerald-500 animate-pulse">
             {t('fileMenu.saved')}
           </span>
+        )}
+        {cloudSaveState === 'saving' && (
+          <span className="text-[10px] leading-none text-muted-foreground">Saving...</span>
+        )}
+        {(cloudSaveState === 'conflict' || cloudSaveState === 'error') && (
+          <div className="flex items-center gap-1 app-region-no-drag">
+            <span className="max-w-44 truncate text-[10px] leading-none text-destructive">
+              {cloudSaveError ?? cloudSaveState}
+            </span>
+            {cloudSaveState === 'conflict' && (
+              <>
+                <button
+                  type="button"
+                  className="text-[10px] text-primary hover:underline"
+                  onClick={() => void handleReloadCloudVersion()}
+                >
+                  Reload
+                </button>
+                <button
+                  type="button"
+                  className="text-[10px] text-primary hover:underline"
+                  onClick={() => void handleSaveCloudCopy()}
+                >
+                  Save copy
+                </button>
+              </>
+            )}
+          </div>
         )}
         <div className="app-region-no-drag flex items-center">
           <GitButton />

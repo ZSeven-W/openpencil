@@ -1,4 +1,4 @@
-// @vitest-环境 jsdom
+// @vitest-environment jsdom
 // apps/web/src/stores/__tests__/document-store-save.test.ts
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { useDocumentStore } from '@/stores/document-store';
@@ -144,6 +144,34 @@ describe('useDocumentStore.save()', () => {
     expect(result).toBeNull();
     expect(savedHandler).not.toHaveBeenCalled();
     fsaSpy.mockRestore();
+    delete (window as unknown as Record<string, unknown>).showSaveFilePicker;
+  });
+
+  it('falls back to download when the FSA save picker throws unexpectedly', async () => {
+    const fsaSpy = vi.spyOn(fileOps, 'saveDocumentAs').mockRejectedValue(new Error('blocked'));
+    const dl = vi.spyOn(fileOps, 'downloadDocument').mockImplementation(() => {});
+    (window as unknown as Record<string, unknown>).showSaveFilePicker = () => {};
+    const result = await useDocumentStore.getState().saveAs('fallback-export');
+    expect(fsaSpy).toHaveBeenCalled();
+    expect(dl).toHaveBeenCalledWith(expect.any(Object), 'fallback-export.op');
+    expect(result).toBe('fallback-export.op');
+    expect(savedHandler).toHaveBeenCalledTimes(1);
+    fsaSpy.mockRestore();
+    dl.mockRestore();
+    delete (window as unknown as Record<string, unknown>).showSaveFilePicker;
+  });
+
+  it('exportOp downloads directly in browser even when the FSA picker exists', async () => {
+    const fsaSpy = vi.spyOn(fileOps, 'saveDocumentAs');
+    const dl = vi.spyOn(fileOps, 'downloadDocument').mockImplementation(() => {});
+    (window as unknown as Record<string, unknown>).showSaveFilePicker = () => {};
+    const result = await useDocumentStore.getState().exportOp('direct-export');
+    expect(fsaSpy).not.toHaveBeenCalled();
+    expect(dl).toHaveBeenCalledWith(expect.any(Object), 'direct-export.op');
+    expect(result).toBe('direct-export.op');
+    expect(savedHandler).toHaveBeenCalledTimes(1);
+    fsaSpy.mockRestore();
+    dl.mockRestore();
     delete (window as unknown as Record<string, unknown>).showSaveFilePicker;
   });
 

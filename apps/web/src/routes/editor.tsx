@@ -1,7 +1,6 @@
-import { createFileRoute } from '@tanstack/react-router';
-import EditorLayout from '@/components/editor/editor-layout';
-import { useKeyboardShortcuts } from '@/hooks/use-keyboard-shortcuts';
-import { useBeforeUnload } from '@/hooks/use-before-unload';
+import { useEffect } from 'react';
+import { Outlet, createFileRoute, useLocation, useNavigate } from '@tanstack/react-router';
+import { AuthGate } from '@/components/cloud/auth-gate';
 
 export const Route = createFileRoute('/editor')({
   component: EditorPage,
@@ -12,8 +11,24 @@ export const Route = createFileRoute('/editor')({
 });
 
 function EditorPage() {
-  useKeyboardShortcuts();
-  useBeforeUnload();
+  const navigate = useNavigate();
+  const location = useLocation();
 
-  return <EditorLayout />;
+  useEffect(() => {
+    if (location.pathname === '/editor') {
+      void navigate({ to: '/' });
+    }
+  }, [location.pathname, navigate]);
+
+  if (location.pathname !== '/editor') {
+    return <Outlet />;
+  }
+
+  return (
+    <AuthGate>
+      <div className="min-h-screen bg-background text-foreground flex items-center justify-center">
+        <span className="text-sm text-muted-foreground">Redirecting to cloud files...</span>
+      </div>
+    </AuthGate>
+  );
 }

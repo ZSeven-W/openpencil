@@ -119,6 +119,15 @@ function collectCollapsibleNodeIds(
   return result;
 }
 
+function areSetsEqual(a: Set<string>, b: Set<string>): boolean {
+  if (a === b) return true;
+  if (a.size !== b.size) return false;
+  for (const value of a) {
+    if (!b.has(value)) return false;
+  }
+  return true;
+}
+
 function LayerPanelInner() {
   const { t } = useTranslation();
   const [panelWidth, setPanelWidth] = useState(LAYER_DEFAULT_WIDTH);
@@ -204,6 +213,7 @@ function LayerPanelInner() {
           next.add(id);
         }
       }
+      if (areSetsEqual(prev, next)) return prev;
       return next;
     });
 

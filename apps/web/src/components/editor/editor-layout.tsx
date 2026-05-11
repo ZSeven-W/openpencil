@@ -29,6 +29,7 @@ import { useElectronMenu } from '@/hooks/use-electron-menu';
 import { useFigmaPaste } from '@/hooks/use-figma-paste';
 import { useMcpSync } from '@/hooks/use-mcp-sync';
 import { useFileDrop } from '@/hooks/use-file-drop';
+import { useCloudAutosave } from '@/hooks/use-cloud-autosave';
 import { initAppStorage } from '@/utils/app-storage';
 import { getRecentFiles } from '@/utils/recent-files';
 import SkiaCanvas from '@/canvas/skia/skia-canvas';
@@ -183,6 +184,7 @@ export default function EditorLayout() {
 
   // MCP ↔ 画布实时同步
   useMcpSync();
+  useCloudAutosave();
 
   // 处理拖放打开文件
   const isDragging = useFileDrop();

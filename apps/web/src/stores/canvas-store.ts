@@ -17,6 +17,15 @@ interface CanvasPreferences {
   rightPanelTab?: RightPanelTab;
 }
 
+function areStringArraysEqual(a: string[], b: string[]): boolean {
+  if (a === b) return true;
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i += 1) {
+    if (a[i] !== b[i]) return false;
+  }
+  return true;
+}
+
 interface CanvasStoreState {
   activeTool: ToolType;
   viewport: ViewportState;
@@ -111,12 +120,31 @@ export const useCanvasStore = create<CanvasStoreState>((set, get) => ({
   setPan: (panX, panY) => set((s) => ({ viewport: { ...s.viewport, panX, panY } })),
 
   setSelection: (selectedIds, activeId) =>
-    set((s) => ({ selection: { ...s.selection, selectedIds, activeId } })),
+    set((s) => {
+      const sameIds = areStringArraysEqual(s.selection.selectedIds, selectedIds);
+      const sameActiveId = s.selection.activeId === activeId;
+      if (sameIds && sameActiveId) return s;
+
+      return {
+        selection: {
+          ...s.selection,
+          selectedIds: [...selectedIds],
+          activeId,
+        },
+      };
+    }),
 
   clearSelection: () =>
-    set((s) => ({ selection: { ...s.selection, selectedIds: [], activeId: null } })),
+    set((s) => {
+      if (s.selection.selectedIds.length === 0 && s.selection.activeId === null) return s;
+      return { selection: { ...s.selection, selectedIds: [], activeId: null } };
+    }),
 
-  setHoveredId: (hoveredId) => set((s) => ({ selection: { ...s.selection, hoveredId } })),
+  setHoveredId: (hoveredId) =>
+    set((s) => {
+      if (s.selection.hoveredId === hoveredId) return s;
+      return { selection: { ...s.selection, hoveredId } };
+    }),
 
   enterFrame: (frameId) =>
     set((s) => ({
@@ -245,9 +273,21 @@ export function initCanvasStoreBridge(engine: DesignEngine): () => void {
 
   unsubs.push(
     engine.on('selection:change', (ids) => {
-      useCanvasStore.setState((s) => ({
-        selection: { ...s.selection, selectedIds: ids },
-      }));
+      useCanvasStore.setState((s) => {
+        if (areStringArraysEqual(s.selection.selectedIds, ids)) return s;
+        return {
+          selection: {
+            ...s.selection,
+            selectedIds: [...ids],
+            activeId:
+              ids.length === 0
+                ? null
+                : s.selection.activeId && ids.includes(s.selection.activeId)
+                  ? s.selection.activeId
+                  : (ids[0] ?? null),
+          },
+        };
+      });
     }),
   );
 

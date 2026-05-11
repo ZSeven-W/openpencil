@@ -6,7 +6,19 @@ import { parseAndPrepareImportedDocument } from './import-pen-document';
 // ---------------------------------------------------------------------------
 
 export function supportsFileSystemAccess(): boolean {
-  return 'showSaveFilePicker' in window;
+  return (
+    typeof window !== 'undefined' &&
+    typeof (window as unknown as { showSaveFilePicker?: unknown }).showSaveFilePicker ===
+      'function'
+  );
+}
+
+export function supportsOpenFilePicker(): boolean {
+  return (
+    typeof window !== 'undefined' &&
+    typeof (window as unknown as { showOpenFilePicker?: unknown }).showOpenFilePicker ===
+      'function'
+  );
 }
 
 export function isElectron(): boolean {
@@ -112,8 +124,11 @@ export function downloadDocument(doc: PenDocument, fileName: string): void {
   const a = document.createElement('a');
   a.href = url;
   a.download = fileName;
+  a.style.display = 'none';
+  document.body.appendChild(a);
   a.click();
-  URL.revokeObjectURL(url);
+  a.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
 /** Open 文件通过 <input type="file"> （后备）。 */
