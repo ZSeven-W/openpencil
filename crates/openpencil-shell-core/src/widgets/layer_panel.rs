@@ -115,6 +115,50 @@ impl LayerPanel {
         panel
     }
 
+    /// Build a panel for a drag-in-progress: the layer list excludes
+    /// the dragged source's entire subtree, mirroring the post-commit
+    /// layout. Both `drop_target_at` (called during paint AND on
+    /// release) and the visible row stack walk this trimmed item
+    /// list, so the indicator y the user sees during the drag is the
+    /// exact y the source lands at after `reorder_before/after`. Was
+    /// a real bug before this method existed — dragging downward
+    /// painted the indicator one row below where the source actually
+    /// landed (codex stop-gate review caught this).
+    pub fn from_document_with_drag_source(doc: &Document, drag_source: NodeId) -> Self {
+        let pages = doc
+            .pages
+            .iter()
+            .enumerate()
+            .map(|(i, p)| PageItem {
+                page_index: i,
+                label: p.name.clone(),
+                active: i == doc.active_page_index,
+            })
+            .collect();
+        let mut items = Vec::new();
+        if let Some(page) = doc.active_page() {
+            for child in &page.children {
+                walk_excluding(
+                    child,
+                    doc.selected,
+                    doc.ui.hovered_layer_id,
+                    drag_source,
+                    0,
+                    &mut items,
+                );
+            }
+        }
+        Self {
+            id: WidgetId::new(1000),
+            pages,
+            items,
+            theme: doc.theme(),
+            pages_label: doc.t("pages.title").to_string(),
+            layers_label: doc.t("layers.title").to_string(),
+            drop_target: None,
+        }
+    }
+
     pub fn empty() -> Self {
         Self {
             id: WidgetId::new(1000),
@@ -357,6 +401,47 @@ fn walk(
     if !node.collapsed {
         for child in &node.children {
             walk(child, selected, hovered, depth.saturating_add(1), out);
+        }
+    }
+}
+
+/// Variant of `walk` that skips `excluded`'s entire subtree. Used
+/// by `from_document_with_drag_source` to mirror the post-commit
+/// row layout while a drag-to-reorder is in flight.
+fn walk_excluding(
+    node: &Node,
+    selected: NodeId,
+    hovered: Option<NodeId>,
+    excluded: NodeId,
+    depth: u8,
+    out: &mut Vec<LayerItem>,
+) {
+    if node.id == excluded {
+        return;
+    }
+    out.push(LayerItem {
+        node_id: node.id,
+        label: node.name.clone(),
+        kind_label: node.kind.label().to_string(),
+        icon: icon_for_kind(&node.kind),
+        depth,
+        selected: node.id == selected,
+        has_children: !node.children.is_empty(),
+        hidden: node.hidden,
+        locked: node.locked,
+        collapsed: node.collapsed,
+        hovered: hovered == Some(node.id),
+    });
+    if !node.collapsed {
+        for child in &node.children {
+            walk_excluding(
+                child,
+                selected,
+                hovered,
+                excluded,
+                depth.saturating_add(1),
+                out,
+            );
         }
     }
 }

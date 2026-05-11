@@ -144,6 +144,55 @@ fn from_document_scopes_to_active_page_only() {
 }
 
 #[test]
+fn drop_indicator_matches_post_commit_layout_when_dragging_down() {
+    // Regression: the drop indicator could paint at one row, but
+    // commit would land the source at a different row (preview lied
+    // when dragging downward past other rows). With the source
+    // excluded from the panel's item list, indicator_y == the source's
+    // top edge in the post-commit panel.
+    let mut doc = Document::empty();
+    let p = doc.active_page_index;
+    doc.pages[p].children = vec![
+        Node::leaf(1, NodeKind::Rect, "A"),
+        Node::leaf(2, NodeKind::Rect, "B"),
+        Node::leaf(3, NodeKind::Rect, "C"),
+        Node::leaf(4, NodeKind::Rect, "D"),
+    ];
+    let panel = LayerPanel::from_document_with_drag_source(&doc, NodeId::new(1));
+    assert_eq!(panel.items.len(), 3); // A excluded → [B, C, D]
+    let rect = Rect {
+        origin: Point2D::new(0.0, 0.0),
+        size: Point2D::new(LAYER_PANEL_WIDTH, panel.intrinsic_height()),
+    };
+    let layers_top = 8.0
+        + SECTION_HEADER_HEIGHT
+        + panel.pages.len() as f32 * PAGE_ROW_HEIGHT
+        + SECTION_GAP
+        + SECTION_HEADER_HEIGHT;
+    let row_top_of_d = layers_top + 2.0 * LAYER_ROW_HEIGHT;
+    let drop = panel
+        .drop_target_at(rect, Point2D::new(rect.size.x / 2.0, row_top_of_d + 4.0))
+        .unwrap();
+    assert_eq!(drop.position, DropPosition::Before);
+    assert!((drop.indicator_y - row_top_of_d).abs() < 0.5);
+    // Commit and check A's new row top matches indicator_y.
+    assert!(doc.reorder_before(NodeId::new(1), drop.anchor));
+    let post = LayerPanel::from_document(&doc);
+    let a_idx = post
+        .items
+        .iter()
+        .position(|i| i.node_id == NodeId::new(1))
+        .unwrap();
+    let a_row_top = layers_top + a_idx as f32 * LAYER_ROW_HEIGHT;
+    assert!(
+        (drop.indicator_y - a_row_top).abs() < 0.5,
+        "preview/commit y mismatch: indicator at {} but A lands at {}",
+        drop.indicator_y,
+        a_row_top
+    );
+}
+
+#[test]
 fn drop_target_at_resolves_before_and_after_halves() {
     let doc = Document::sample();
     let panel = LayerPanel::from_document(&doc);
