@@ -149,6 +149,34 @@ pub struct NodeSnapshot {
 }
 
 impl NodeSnapshot {
+    /// Build an aggregate snapshot for a multi-node selection.
+    /// Returns None when nothing on the active page resolves from
+    /// `selected_set`. Uses `Document::selection_bounds` (the union
+    /// of every selected node's `aggregate_bounds`) for x/y/w/h.
+    /// Rotation / fill / stroke are zeroed in v1 — broadcasting
+    /// "Mixed" or per-axis aggregation is a follow-up; the panel
+    /// hides those inputs anyway since `is_multi` flips them
+    /// inert.
+    fn from_multi_selection(doc: &Document) -> Option<Self> {
+        let bounds = doc.selection_bounds()?;
+        let n = doc.selection_count();
+        Some(Self {
+            kind: format!("{} items", n),
+            name: format!("{} selected", n),
+            x: bounds.origin.x.round() as i32,
+            y: bounds.origin.y.round() as i32,
+            width: bounds.size.x.round() as i32,
+            height: bounds.size.y.round() as i32,
+            rotation_deg: 0.0,
+            fill: None,
+            stroke: None,
+            // Frame variant hides Effects + Export sections AND
+            // suppresses the stroke section — closest match for an
+            // aggregate "untyped multi-selection" placeholder.
+            kind_variant: crate::document::NodeKind::Frame,
+        })
+    }
+
     fn from_node(node: &Node) -> Self {
         // Use `aggregate_bounds` so Group / unbounded container
         // nodes (Frame without explicit bounds, Other(_)) report
@@ -201,6 +229,10 @@ pub struct PropertyPanel {
     pub fill_type: crate::document::FillType,
     /// Whether the fill-type picker is open.
     pub fill_type_picker_open: bool,
+    /// True iff the panel is showing an aggregate over >1 selected
+    /// nodes. Drives the inert-input mode (hit_test returns None,
+    /// focus is None) and the "N items" header label.
+    pub is_multi: bool,
 }
 
 impl PropertyPanel {
@@ -214,21 +246,55 @@ impl PropertyPanel {
     /// millisecond clock through so the focused-input caret can
     /// blink off the same animation timer as the chat input.
     pub fn for_selection_at(doc: &Document, now_ms: u64) -> Option<Self> {
-        // Single-select only — multi-select hides the panel
-        // until the aggregated-properties UI lands (TS shows
-        // averaged X / Y / W / H across selectedIds; deferred
-        // until we have per-node property writeback parity).
-        if doc.selection_count() != 1 {
-            return None;
+        if doc.selection_count() == 1 {
+            let node = doc.selected_node()?;
+            return Some(Self::build_from_snapshot(
+                doc,
+                NodeSnapshot::from_node(node),
+                node.fill_type,
+                now_ms,
+                false,
+            ));
         }
-        let node = doc.selected_node()?;
-        Some(Self {
+        if doc.selection_count() >= 2 {
+            let snapshot = NodeSnapshot::from_multi_selection(doc)?;
+            return Some(Self::build_from_snapshot(
+                doc,
+                snapshot,
+                crate::document::FillType::Solid,
+                now_ms,
+                true,
+            ));
+        }
+        None
+    }
+
+    fn build_from_snapshot(
+        doc: &Document,
+        snapshot: NodeSnapshot,
+        fill_type: crate::document::FillType,
+        now_ms: u64,
+        is_multi: bool,
+    ) -> Self {
+        Self {
             id: WidgetId::new(2000),
-            snapshot: NodeSnapshot::from_node(node),
+            snapshot,
             theme: doc.theme(),
             labels: sections::PropertyLabels::for_document(doc),
-            focus: doc.ui.property_focus,
-            draft: doc.ui.property_input_draft.clone(),
+            // Multi-select inputs are inert in v1 — broadcast edits
+            // to all selected nodes lands later. Force focus to None
+            // so the panel paints all values muted and hit_test
+            // returns None (see `hit_test` is_multi short-circuit).
+            focus: if is_multi {
+                None
+            } else {
+                doc.ui.property_focus
+            },
+            draft: if is_multi {
+                String::new()
+            } else {
+                doc.ui.property_input_draft.clone()
+            },
             caret_anchor_ms: doc.ui.property_caret_anchor_ms,
             now_ms,
             flex_layout: doc.ui.flex_layout,
@@ -239,14 +305,10 @@ impl PropertyPanel {
                 hug_height: doc.ui.size_hug_height,
                 clip_content: doc.ui.size_clip_content,
             },
-            // Per-node fill_type — was a shared `doc.ui.fill_type`
-            // until 2026-05-11; codex flagged that the shared
-            // slot leaked the picker's choice across selection
-            // changes. The picker now writes to the selected
-            // node's `fill_type` directly.
-            fill_type: node.fill_type,
+            fill_type,
             fill_type_picker_open: doc.ui.fill_type_picker_open,
-        })
+            is_multi,
+        }
     }
 
     /// Hit-test the flex / size buttons + checkboxes. Returns the
@@ -254,6 +316,10 @@ impl PropertyPanel {
     /// missed every clickable shape. Called AFTER `hit_test` so
     /// text inputs win over the action rects they overlap with.
     pub fn hit_test_action(&self, panel_rect: Rect, point: Point2D) -> Option<PropertyPanelAction> {
+        if self.is_multi {
+            // Multi-select inputs / toggles are inert in v1.
+            return None;
+        }
         let caps = SectionCapabilities::for_kind(&self.snapshot.kind_variant);
         let visible = sections::VisibleSections {
             flex_layout: caps.flex_layout,
@@ -285,6 +351,10 @@ impl PropertyPanel {
     /// per-kind section filtering applied in `paint`, so rects
     /// after a skipped section don't drift out of alignment.
     pub fn hit_test(&self, panel_rect: Rect, point: Point2D) -> Option<PropertyFocus> {
+        if self.is_multi {
+            // Inputs inert in v1 multi-select aggregate view.
+            return None;
+        }
         let caps = SectionCapabilities::for_kind(&self.snapshot.kind_variant);
         let visible = sections::VisibleSections {
             flex_layout: caps.flex_layout,
@@ -509,5 +579,52 @@ mod tests {
         assert_eq!(format_color_hex(Color::WHITE), "#FFFFFF");
         assert_eq!(format_color_hex(Color::BLACK), "#000000");
         assert_eq!(format_color_hex(Color::RED), "#FF0000");
+    }
+
+    #[test]
+    fn multi_selection_panel_shows_union_bounds_and_is_inert() {
+        let mut doc = Document::sample();
+        // Select Title (id 11, bounds 60,60,240,28) + Button (id 12,
+        // aggregate bounds 60,130,180,38). Union: x=60, y=60,
+        // w=240-60+? = 60+240→300; the button right edge is 60+180=240
+        // → max_x = 300 (from title). Union: x=60, y=60, w=240, h=108.
+        doc.set_single_selection(NodeId::new(11));
+        doc.toggle_selection(NodeId::new(12));
+        assert_eq!(doc.selection_count(), 2);
+
+        let panel = PropertyPanel::for_selection(&doc).expect("multi-select must paint");
+        assert!(panel.is_multi);
+        assert_eq!(panel.snapshot.kind, "2 items");
+        assert_eq!(panel.snapshot.x, 60);
+        assert_eq!(panel.snapshot.y, 60);
+        // Union is at least as wide / tall as the larger node.
+        assert!(panel.snapshot.width >= 240);
+        assert!(panel.snapshot.height >= 108);
+        // Inputs inert.
+        assert!(panel.focus.is_none());
+        let rect = Rect {
+            origin: Point2D::new(0.0, 0.0),
+            size: Point2D::new(280.0, 600.0),
+        };
+        // Center of the panel — over an input row in single-select.
+        // In multi-select, hit_test must return None.
+        assert!(panel.hit_test(rect, Point2D::new(140.0, 100.0)).is_none());
+        assert!(panel
+            .hit_test_action(rect, Point2D::new(140.0, 100.0))
+            .is_none());
+    }
+
+    #[test]
+    fn property_panel_visible_handles_multi() {
+        let mut doc = Document::sample();
+        // Empty → not visible.
+        doc.clear_selection();
+        assert!(!doc.property_panel_visible());
+        // Single → visible (existing behavior).
+        doc.set_single_selection(NodeId::new(11));
+        assert!(doc.property_panel_visible());
+        // Multi with valid union bounds → visible.
+        doc.toggle_selection(NodeId::new(12));
+        assert!(doc.property_panel_visible());
     }
 }

@@ -220,11 +220,7 @@ fn nodes_intersecting_doc_rect_skips_degenerate_nodes() {
 }
 
 #[test]
-fn property_panel_visible_only_for_single_selection() {
-    // Codex stop-hook guard: the host's canvas_region uses
-    // this gate to decide whether to reserve the right rail.
-    // Multi-select must hide the panel AND give the canvas
-    // back the rail's width.
+fn property_panel_visible_for_single_and_multi_selection() {
     let mut doc = Document::sample();
     // No selection → hidden.
     doc.clear_selection();
@@ -232,10 +228,11 @@ fn property_panel_visible_only_for_single_selection() {
     // Single selection → visible.
     doc.set_single_selection(NodeId::new(10));
     assert!(doc.property_panel_visible());
-    // Multi-select → hidden.
+    // Multi-select with valid union bounds → visible (aggregate
+    // view; was hidden before the multi-select panel landed).
     doc.toggle_selection(NodeId::new(11));
     assert_eq!(doc.selection_count(), 2);
-    assert!(!doc.property_panel_visible());
+    assert!(doc.property_panel_visible());
     // Back to single → visible.
     doc.set_single_selection(NodeId::new(10));
     assert!(doc.property_panel_visible());

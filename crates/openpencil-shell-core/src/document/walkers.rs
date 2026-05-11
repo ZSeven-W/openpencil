@@ -600,6 +600,35 @@ pub(in crate::document) fn max_id_walk(node: &Node) -> u64 {
     max
 }
 
+/// Union of `aggregate_bounds` across `ids` (only those that
+/// resolve in `page`). Skips zero-size rects so unresolved /
+/// empty subtrees don't anchor the union at (0, 0).
+pub(in crate::document) fn union_aggregate_bounds(
+    page: &Page,
+    ids: &[NodeId],
+) -> Option<crate::Rect> {
+    let mut iter = ids
+        .iter()
+        .filter_map(|id| page.find(*id))
+        .map(Node::aggregate_bounds)
+        .filter(|r| r.size.x > 0.0 || r.size.y > 0.0);
+    let first = iter.next()?;
+    let (mut min_x, mut min_y) = (first.origin.x, first.origin.y);
+    let (mut max_x, mut max_y) = (first.origin.x + first.size.x, first.origin.y + first.size.y);
+    for r in iter {
+        min_x = min_x.min(r.origin.x);
+        min_y = min_y.min(r.origin.y);
+        max_x = max_x.max(r.origin.x + r.size.x);
+        max_y = max_y.max(r.origin.y + r.size.y);
+    }
+    Some(crate::Rect::xywh(
+        min_x,
+        min_y,
+        max_x - min_x,
+        max_y - min_y,
+    ))
+}
+
 pub(in crate::document) fn find_duplicate_walk(
     node: &Node,
     seen: &mut std::collections::HashSet<NodeId>,
