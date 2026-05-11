@@ -255,6 +255,57 @@ impl RenderBackend for WebBackend {
             .draw_round_rect(sk_rect, radius, radius, &paint);
     }
 
+    fn fill_oval(&mut self, bounds: Rect, color: Color) {
+        let mut paint = skia_safe::Paint::new(
+            skia_safe::Color4f::new(color.r, color.g, color.b, color.a),
+            None,
+        );
+        paint.set_anti_alias(true);
+        let sk_rect = skia_safe::Rect::from_xywh(
+            bounds.origin.x,
+            bounds.origin.y,
+            bounds.size.x,
+            bounds.size.y,
+        );
+        self.surface.canvas().draw_oval(sk_rect, &paint);
+    }
+
+    fn stroke_oval(&mut self, bounds: Rect, color: Color, width: f32) {
+        let mut paint = skia_safe::Paint::new(
+            skia_safe::Color4f::new(color.r, color.g, color.b, color.a),
+            None,
+        );
+        paint.set_anti_alias(true);
+        paint.set_stroke(true);
+        paint.set_stroke_width(width);
+        let sk_rect = skia_safe::Rect::from_xywh(
+            bounds.origin.x,
+            bounds.origin.y,
+            bounds.size.x,
+            bounds.size.y,
+        );
+        self.surface.canvas().draw_oval(sk_rect, &paint);
+    }
+
+    fn fill_polygon(&mut self, points: &[Point2D], color: Color) {
+        if points.len() < 3 {
+            return;
+        }
+        let mut builder = skia_safe::PathBuilder::new();
+        builder.move_to((points[0].x, points[0].y));
+        for p in &points[1..] {
+            builder.line_to((p.x, p.y));
+        }
+        builder.close();
+        let path = builder.detach();
+        let mut paint = skia_safe::Paint::new(
+            skia_safe::Color4f::new(color.r, color.g, color.b, color.a),
+            None,
+        );
+        paint.set_anti_alias(true);
+        self.surface.canvas().draw_path(&path, &paint);
+    }
+
     fn stroke_svg_path(&mut self, d: &str, top_left: Point2D, size: f32, color: Color, width: f32) {
         let Some(path) = skia_safe::utils::parse_path::from_svg(d) else {
             return;
@@ -359,6 +410,13 @@ impl RenderBackend for WebBackend {
 
     fn translate(&mut self, offset: Point2D) {
         self.surface.canvas().translate((offset.x, offset.y));
+    }
+
+    fn rotate(&mut self, radians: f32, pivot: Point2D) {
+        let degrees = radians.to_degrees();
+        self.surface
+            .canvas()
+            .rotate(degrees, Some(skia_safe::Point::new(pivot.x, pivot.y)));
     }
 
     fn resize(&mut self, width: u32, height: u32) {

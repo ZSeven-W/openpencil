@@ -437,6 +437,9 @@ pub fn mount(canvas_id: &str) -> Result<WebShell, JsValue> {
                         return;
                     }
                     let mut inner = inner_md.borrow_mut();
+                    // Forward the press-time shift state into the
+                    // host so apply_press can branch on shift+click.
+                    inner.host.set_modifier_shift(evt.shift_key());
                     let (w, h) = (
                         inner.backend.canvas_width() as f32,
                         inner.backend.canvas_height() as f32,
@@ -459,10 +462,12 @@ pub fn mount(canvas_id: &str) -> Result<WebShell, JsValue> {
                 listeners,
                 move |evt: MouseEvent| {
                     let mut inner = inner_mm.borrow_mut();
-                    let consumed = inner
-                        .host
-                        .apply_cursor_move(evt.offset_x() as f32, evt.offset_y() as f32);
-                    if consumed {
+                    let h = inner.backend.canvas_height() as f32;
+                    let x = evt.offset_x() as f32;
+                    let y = evt.offset_y() as f32;
+                    let hover_changed = inner.host.update_layer_hover(x, y, h);
+                    let consumed = inner.host.apply_cursor_move(x, y);
+                    if consumed || hover_changed {
                         let _ = inner.repaint();
                     }
                 },
@@ -535,23 +540,81 @@ pub fn mount(canvas_id: &str) -> Result<WebShell, JsValue> {
                 "keydown",
                 listeners,
                 move |evt: KeyboardEvent| {
+                    use openpencil_shell_core::document::ReorderDirection;
                     let mut inner = inner_kt.borrow_mut();
                     let key = evt.key();
+                    let is_mod = evt.meta_key() || evt.ctrl_key();
+                    let shift = evt.shift_key();
+                    let nudge = if shift { 10.0 } else { 1.0 };
                     let mut consumed = false;
                     match key.as_str() {
-                        "Backspace" => {
+                        // Named-key editor shortcuts only fire
+                        // when no Cmd / Ctrl is held — matches
+                        // the native shell so Cmd+Backspace,
+                        // Cmd+Arrow, Cmd+Enter etc. don't
+                        // silently mutate editor state on top of
+                        // their OS / browser bindings.
+                        "Backspace" if !is_mod => {
                             consumed = inner.host.apply_backspace();
                         }
-                        "Enter" => {
+                        "Delete" if !is_mod => {
+                            consumed = inner.host.apply_delete();
+                        }
+                        "Enter" if !is_mod => {
                             consumed = inner.host.apply_send();
                         }
+                        "Escape" if !is_mod => {
+                            consumed = inner.host.apply_escape();
+                        }
+                        "ArrowUp" if !is_mod => {
+                            consumed = inner.host.apply_nudge(0.0, -nudge);
+                        }
+                        "ArrowDown" if !is_mod => {
+                            consumed = inner.host.apply_nudge(0.0, nudge);
+                        }
+                        "ArrowLeft" if !is_mod => {
+                            consumed = inner.host.apply_nudge(-nudge, 0.0);
+                        }
+                        "ArrowRight" if !is_mod => {
+                            consumed = inner.host.apply_nudge(nudge, 0.0);
+                        }
+                        "[" if !is_mod => {
+                            consumed = inner.host.apply_reorder(ReorderDirection::Down);
+                        }
+                        "]" if !is_mod => {
+                            consumed = inner.host.apply_reorder(ReorderDirection::Up);
+                        }
+                        "d" if is_mod && !shift => {
+                            consumed = inner.host.apply_duplicate();
+                        }
+                        "a" if is_mod && !shift => {
+                            consumed = inner.host.apply_select_all();
+                        }
+                        "c" if is_mod && !shift => {
+                            consumed = inner.host.apply_copy();
+                        }
+                        "x" if is_mod && !shift => {
+                            consumed = inner.host.apply_cut();
+                        }
+                        "v" if is_mod && !shift => {
+                            consumed = inner.host.apply_paste();
+                        }
                         _ => {
-                            // Single-char `key` strings represent
-                            // typed printable characters (W3C KeyboardEvent).
-                            let mut chars = key.chars();
-                            if let (Some(c), None) = (chars.next(), chars.next()) {
-                                if !c.is_control() && inner.host.apply_text(c) {
-                                    consumed = true;
+                            // Suppress apply_text whenever Cmd /
+                            // Ctrl is held — Cmd-anything that
+                            // isn't bound above must NOT type
+                            // into a focused chat / property
+                            // input. Otherwise Cmd+Shift+D (and
+                            // other unbound chords) would inject
+                            // "D" into the focused input.
+                            if !is_mod {
+                                // Single-char `key` strings represent
+                                // typed printable characters.
+                                let mut chars = key.chars();
+                                if let (Some(c), None) = (chars.next(), chars.next()) {
+                                    if !c.is_control() && inner.host.apply_text(c) {
+                                        consumed = true;
+                                    }
                                 }
                             }
                         }

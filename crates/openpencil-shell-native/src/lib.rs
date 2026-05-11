@@ -83,7 +83,7 @@ pub use backend::{to_jian_color, to_jian_rect, NativeBackend};
     target_os = "ios",
     target_os = "android"
 ))]
-pub use widget_host::{NativeFrameBackend, WidgetHostNative};
+pub use widget_host::{CursorHint, NativeFrameBackend, WidgetHostNative};
 // canvas_view_stub stays desktop-only (uses glow GL-isolation probe).
 #[cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]
 pub use canvas_view_stub::CanvasViewportStub;

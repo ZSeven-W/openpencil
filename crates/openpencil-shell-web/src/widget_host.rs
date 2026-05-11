@@ -24,19 +24,21 @@
 //! Functions that pull in `openpencil_shell_core::widgets::*` MUST live
 //! in this file (per spec §1.4). Phase B4 boundary check enforces.
 
-use crate::backend::WebBackend;
 use openpencil_shell_core::document::{ChatAnchor, Document};
 use openpencil_shell_core::widgets::{
-    AIChatHit, AIChatPlaceholder, CanvasViewport, LayerPanel, LayoutCx, LocalePicker, PaintCx,
-    PropertyPanel, StatusBar, Toolbar, TopBar, TopBarHit, Widget, AI_CHAT_COLLAPSED_HEIGHT,
-    AI_CHAT_COLLAPSED_WIDTH, AI_CHAT_HEIGHT, AI_CHAT_WIDTH, LAYER_PANEL_WIDTH, LOCALE_PICKER_WIDTH,
-    PROPERTY_PANEL_WIDTH, STATUS_BAR_HEIGHT, STATUS_BAR_WIDTH, TOOLBAR_WIDTH, TOP_BAR_HEIGHT,
+    AIChatHit, AIChatPlaceholder, LayerPanel, LayoutCx, LocalePicker, PropertyPanel, Toolbar,
+    TopBar, TopBarHit, Widget, AI_CHAT_COLLAPSED_HEIGHT, AI_CHAT_COLLAPSED_WIDTH, AI_CHAT_HEIGHT,
+    AI_CHAT_WIDTH, LAYER_PANEL_WIDTH, LOCALE_PICKER_WIDTH, PROPERTY_PANEL_WIDTH, TOOLBAR_WIDTH,
+    TOP_BAR_HEIGHT,
 };
-use openpencil_shell_core::{Point2D, Rect, RenderBackend, Theme};
+use openpencil_shell_core::{Point2D, Rect, Theme};
 
-const TOOLBAR_INSET_X: f32 = 12.0;
-const TOOLBAR_INSET_Y: f32 = 12.0;
-const STATUS_INSET: f32 = 16.0;
+mod keyboard;
+mod paint;
+
+pub(in crate::widget_host) const TOOLBAR_INSET_X: f32 = 12.0;
+pub(in crate::widget_host) const TOOLBAR_INSET_Y: f32 = 12.0;
+pub(in crate::widget_host) const STATUS_INSET: f32 = 16.0;
 const AICHAT_INSET_BOTTOM: f32 = 12.0;
 const AICHAT_INSET_LEFT: f32 = 12.0;
 
@@ -48,10 +50,25 @@ fn rect_contains(r: Rect, p: Point2D) -> bool {
 }
 
 pub struct WidgetHost {
-    document: Document,
-    theme: Theme,
+    pub(in crate::widget_host) document: Document,
+    pub(in crate::widget_host) theme: Theme,
     drag: Option<DragState>,
     chat_drag: Option<ChatDragState>,
+    /// Active marquee rect-select drag. Mirrors the native host —
+    /// drag a rect on empty canvas with the Select tool, every
+    /// intersecting top-level node joins (or extends) the
+    /// selection on release.
+    pub(in crate::widget_host) marquee_drag: Option<MarqueeDragState>,
+    /// Counter for minting fresh `NodeId`s when the user duplicates
+    /// a node. Bumped past the highest sample id so new + sample
+    /// nodes never collide on the same key. Matches the native
+    /// host's allocator.
+    next_node_id: u64,
+    /// Whether the shift key is currently held. The DOM listener
+    /// updates this from every keyboard / mouse event so apply_press
+    /// can branch on shift+click for multi-select. Matches the
+    /// native host's `shift_held` flag.
+    pub(in crate::widget_host) shift_held: bool,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -68,6 +85,70 @@ struct ChatDragState {
     pos_y: f32,
 }
 
+/// Active marquee rect-select state, mirroring the native host.
+/// Endpoints are SCREEN coords so paint can draw without re-
+/// deriving the canvas→screen transform; release converts to doc
+/// space once to ask the document which nodes overlap.
+#[derive(Debug, Clone, Copy)]
+pub(in crate::widget_host) struct MarqueeDragState {
+    pub(in crate::widget_host) start_screen_x: f32,
+    pub(in crate::widget_host) start_screen_y: f32,
+    pub(in crate::widget_host) current_screen_x: f32,
+    pub(in crate::widget_host) current_screen_y: f32,
+    /// Whether shift was held at press time. Drives whether
+    /// release REPLACES the selection or adds intersecting nodes
+    /// to the existing set (ADD-only — never removes).
+    pub(in crate::widget_host) additive: bool,
+}
+
+/// Mirrors the native `apply_property_action` — wired off the
+/// shared `PropertyPanelAction` enum so the web shell dispatches
+/// flex-layout / size-checkbox clicks the same way the desktop
+/// shell does.
+fn apply_property_action_impl(
+    document: &mut Document,
+    action: openpencil_shell_core::widgets::PropertyPanelAction,
+) {
+    use openpencil_shell_core::widgets::PropertyPanelAction as A;
+    match action {
+        A::SetFlexLayout(mode) => document.ui.flex_layout = mode,
+        A::ToggleSizeFillWidth => {
+            document.ui.size_fill_width = !document.ui.size_fill_width;
+        }
+        A::ToggleSizeFillHeight => {
+            document.ui.size_fill_height = !document.ui.size_fill_height;
+        }
+        A::ToggleSizeHugWidth => {
+            document.ui.size_hug_width = !document.ui.size_hug_width;
+        }
+        A::ToggleSizeHugHeight => {
+            document.ui.size_hug_height = !document.ui.size_hug_height;
+        }
+        A::ToggleSizeClipContent => {
+            document.ui.size_clip_content = !document.ui.size_clip_content;
+        }
+        A::ToggleFillTypePicker => {
+            document.ui.fill_type_picker_open = !document.ui.fill_type_picker_open;
+        }
+        A::SetFillType(t) => {
+            // Per-node now (was `document.ui.fill_type` until
+            // 2026-05-11). Mirrors native — gated by `is_editable`
+            // inside the mutator.
+            document.set_selected_fill_type(t);
+            document.ui.fill_type_picker_open = false;
+        }
+    }
+}
+
+impl WidgetHost {
+    fn apply_property_action(
+        &mut self,
+        action: openpencil_shell_core::widgets::PropertyPanelAction,
+    ) {
+        apply_property_action_impl(&mut self.document, action);
+    }
+}
+
 impl WidgetHost {
     pub fn new() -> Self {
         Self {
@@ -75,16 +156,31 @@ impl WidgetHost {
             theme: Theme::dark(),
             drag: None,
             chat_drag: None,
+            marquee_drag: None,
+            next_node_id: 100,
+            shift_held: false,
         }
     }
 
-    fn canvas_region(&self, viewport_w: f32, viewport_h: f32) -> (f32, f32, f32, f32) {
+    /// Forward the latest shift-key state from the DOM listener
+    /// so apply_press can branch on shift+click. Web reads
+    /// `MouseEvent.shiftKey` / `KeyboardEvent.shiftKey` per event
+    /// and calls this just before dispatch.
+    pub fn set_modifier_shift(&mut self, held: bool) {
+        self.shift_held = held;
+    }
+
+    pub(in crate::widget_host) fn canvas_region(
+        &self,
+        viewport_w: f32,
+        viewport_h: f32,
+    ) -> (f32, f32, f32, f32) {
         let canvas_left = if self.document.ui.sidebar_open {
             self.document.ui.layer_panel_width
         } else {
             0.0
         };
-        let has_property = self.document.selected_node().is_some();
+        let has_property = self.document.property_panel_visible();
         let canvas_right = if has_property {
             viewport_w - self.document.ui.property_panel_width
         } else {
@@ -101,7 +197,7 @@ impl WidgetHost {
         } else {
             0.0
         };
-        let has_property = self.document.selected_node().is_some();
+        let has_property = self.document.property_panel_visible();
         let canvas_right = if has_property {
             viewport_w - self.document.ui.property_panel_width
         } else {
@@ -214,6 +310,28 @@ impl WidgetHost {
             return false;
         }
 
+        // 0c. PropertyPanel button / checkbox — flex modes + size
+        //     flags. Runs AFTER locale picker + TopBar so the
+        //     dropdown overlays still win (codex stop-hook fix:
+        //     "web property-panel action hit-test intercepts the
+        //     locale picker").
+        if let Some(panel) = PropertyPanel::for_selection(&self.document) {
+            let property_rect = Rect {
+                origin: Point2D::new(
+                    viewport_width - self.document.ui.property_panel_width,
+                    TOP_BAR_HEIGHT,
+                ),
+                size: Point2D::new(
+                    self.document.ui.property_panel_width,
+                    (viewport_height - TOP_BAR_HEIGHT).max(0.0),
+                ),
+            };
+            if let Some(action) = panel.hit_test_action(property_rect, Point2D::new(x, y)) {
+                self.apply_property_action(action);
+                return true;
+            }
+        }
+
         // 1. AI chat panel — painted on top of toolbar so a
         //    click inside its rect is consumed here, even when
         //    that point lies inside the toolbar rect underneath.
@@ -246,10 +364,16 @@ impl WidgetHost {
                 match hit {
                     openpencil_shell_core::widgets::ToolbarHit::Tool(tool) => {
                         self.document.tool = tool;
+                        self.document.ui.shape_picker_open = false;
                         return true;
                     }
                     openpencil_shell_core::widgets::ToolbarHit::Action(_) => {
+                        self.document.ui.shape_picker_open = false;
                         return false;
+                    }
+                    openpencil_shell_core::widgets::ToolbarHit::ToggleShapePicker => {
+                        self.document.ui.shape_picker_open = !self.document.ui.shape_picker_open;
+                        return true;
                     }
                 }
             }
@@ -261,25 +385,110 @@ impl WidgetHost {
             return true;
         }
 
-        // 4. Empty-canvas click: clear selection (collapses the
-        //    PropertyPanel) + start a pan-drag, mirroring native.
+        // 4. Canvas click — branch on tool.
+        //    - Hand: pan-drag.
+        //    - Select + node hit: set/toggle selection.
+        //    - Select + empty: marquee.
         if self.over_canvas(x, y, viewport_width, viewport_height) {
-            let cleared = self.document.selected != openpencil_shell_core::document::NodeId::NONE;
-            if cleared {
-                self.document.selected = openpencil_shell_core::document::NodeId::NONE;
+            use openpencil_shell_core::document::Tool;
+            if matches!(self.document.tool, Tool::Hand) {
+                self.drag = Some(DragState {
+                    last_x: x,
+                    last_y: y,
+                });
+                return false;
             }
+            if matches!(self.document.tool, Tool::Select) {
+                // Convert screen → doc to ask which node (if any)
+                // is under the cursor.
+                let (cx0, cy0, _cw, _ch) = self.canvas_region(viewport_width, viewport_height);
+                let canvas_local = Point2D::new(x - cx0, y - cy0);
+                let doc_point = self.document.viewport.to_document(canvas_local);
+                if let Some(node_id) = self.document.node_at_doc_point(doc_point) {
+                    if self.shift_held {
+                        self.document.toggle_selection(node_id);
+                    } else {
+                        let already_in_set = self.document.is_selected(node_id);
+                        if !already_in_set || self.document.selection_count() == 1 {
+                            self.document.set_single_selection(node_id);
+                        }
+                    }
+                    return true;
+                }
+                // Empty canvas with Select → marquee.
+                let cleared_now = if !self.shift_held {
+                    let was_set = !self.document.selected_set.is_empty();
+                    if was_set {
+                        self.document.clear_selection();
+                    }
+                    was_set
+                } else {
+                    false
+                };
+                self.marquee_drag = Some(MarqueeDragState {
+                    start_screen_x: x,
+                    start_screen_y: y,
+                    current_screen_x: x,
+                    current_screen_y: y,
+                    additive: self.shift_held,
+                });
+                return cleared_now;
+            }
+            // Any other tool on empty canvas — fall back to pan
+            // (web doesn't ship shape-creation drag yet).
             self.drag = Some(DragState {
                 last_x: x,
                 last_y: y,
             });
-            return cleared;
+            return false;
         }
         false
     }
 
-    /// Cursor-move handler — drives canvas pan-drag, chat drag,
-    /// or no-op.
+    /// Update `Document.ui.hovered_layer_id` from the cursor.
+    /// Returns true if hover state changed (caller should
+    /// repaint). Mirrors the native host.
+    pub fn update_layer_hover(&mut self, x: f32, y: f32, viewport_h: f32) -> bool {
+        use openpencil_shell_core::widgets::{LayerPanel, LayerPanelHit, TOP_BAR_HEIGHT};
+        let new_hover = if self.document.ui.sidebar_open
+            && y >= TOP_BAR_HEIGHT
+            && x >= 0.0
+            && x <= self.document.ui.layer_panel_width
+        {
+            let layer_rect = Rect {
+                origin: Point2D::new(0.0, TOP_BAR_HEIGHT),
+                size: Point2D::new(
+                    self.document.ui.layer_panel_width,
+                    (viewport_h - TOP_BAR_HEIGHT).max(0.0),
+                ),
+            };
+            let panel = LayerPanel::from_document(&self.document);
+            match panel.hit_test(layer_rect, Point2D::new(x, y)) {
+                Some(LayerPanelHit::Layer(id))
+                | Some(LayerPanelHit::ToggleHidden(id))
+                | Some(LayerPanelHit::ToggleLocked(id))
+                | Some(LayerPanelHit::ToggleCollapsed(id)) => Some(id),
+                _ => None,
+            }
+        } else {
+            None
+        };
+        if new_hover != self.document.ui.hovered_layer_id {
+            self.document.ui.hovered_layer_id = new_hover;
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Cursor-move handler — drives canvas pan-drag, marquee
+    /// drag, chat drag, or no-op.
     pub fn apply_cursor_move(&mut self, x: f32, y: f32) -> bool {
+        if let Some(m) = self.marquee_drag.as_mut() {
+            m.current_screen_x = x;
+            m.current_screen_y = y;
+            return true;
+        }
         if let Some(d) = self.chat_drag.as_mut() {
             d.pos_x = x - d.grab_dx;
             d.pos_y = y - d.grab_dy;
@@ -297,15 +506,66 @@ impl WidgetHost {
         }
     }
 
-    /// Mouse-release handler — snaps the chat panel to the
-    /// nearest canvas corner if a chat drag was in flight; else
-    /// ends the canvas pan-drag.
+    /// Convert a marquee drag (screen-space) into a doc-space
+    /// rect, ask the document which top-level nodes overlap it,
+    /// and either replace or extend the selection. Mirrors
+    /// native `WidgetHostNative::commit_marquee_selection`.
+    pub(in crate::widget_host) fn commit_marquee_selection(
+        &mut self,
+        m: MarqueeDragState,
+        viewport_w: f32,
+        viewport_h: f32,
+    ) {
+        // Near-zero marquee = a click without drag. Threshold is
+        // measured in SCREEN pixels (2 px) so it stays consistent
+        // regardless of canvas zoom — matches native.
+        let screen_dx = (m.current_screen_x - m.start_screen_x).abs();
+        let screen_dy = (m.current_screen_y - m.start_screen_y).abs();
+        if screen_dx < 2.0 && screen_dy < 2.0 {
+            return;
+        }
+        let (cx0, cy0, _cw, _ch) = self.canvas_region(viewport_w, viewport_h);
+        let to_doc = |sx: f32, sy: f32| -> Point2D {
+            let local = Point2D::new(sx - cx0, sy - cy0);
+            self.document.viewport.to_document(local)
+        };
+        let p0 = to_doc(m.start_screen_x, m.start_screen_y);
+        let p1 = to_doc(m.current_screen_x, m.current_screen_y);
+        let x = p0.x.min(p1.x);
+        let y = p0.y.min(p1.y);
+        let w = (p1.x - p0.x).abs();
+        let h = (p1.y - p0.y).abs();
+        let rect = Rect::xywh(x, y, w, h);
+        let ids = self.document.nodes_intersecting_doc_rect(rect);
+        if m.additive {
+            // ADD-only: every hit joins the set; already-selected
+            // hits stay selected. Shift-marquee never removes.
+            for id in ids {
+                if !self.document.is_selected(id) {
+                    self.document.toggle_selection(id);
+                }
+            }
+        } else if !ids.is_empty() {
+            let anchor = *ids.last().unwrap();
+            self.document.selected_set = ids;
+            self.document.selected = anchor;
+        }
+    }
+
+    /// Mouse-release handler — commits any marquee drag, snaps a
+    /// chat-panel drag to the nearest corner, or ends the canvas
+    /// pan-drag.
     pub fn apply_release_with_viewport(&mut self, viewport_w: f32, viewport_h: f32) -> bool {
+        if let Some(m) = self.marquee_drag.take() {
+            self.commit_marquee_selection(m, viewport_w, viewport_h);
+            return true;
+        }
         if let Some(d) = self.chat_drag.take() {
-            let center = Point2D::new(
-                d.pos_x + AI_CHAT_WIDTH / 2.0,
-                d.pos_y + AI_CHAT_HEIGHT / 2.0,
-            );
+            // Use the live panel size (expanded vs collapsed) so a
+            // dragged collapsed pill snaps to the corner closest to
+            // its actual center, matching native.
+            let (panel_w, panel_h) = self.ai_chat_size();
+            let center = Point2D::new(d.pos_x + panel_w / 2.0, d.pos_y + panel_h / 2.0);
             let (cx0, cy0, cw, ch) = self.canvas_region(viewport_w, viewport_h);
             self.document.chat.anchor = ChatAnchor::nearest(center, cx0, cy0, cw, ch);
             return true;
@@ -317,6 +577,12 @@ impl WidgetHost {
 
     /// Mouse-release handler — viewport-less variant.
     pub fn apply_release(&mut self) -> bool {
+        if self.marquee_drag.take().is_some() {
+            // Can't compute the doc-space marquee rect without a
+            // viewport; drop without committing. The viewport-
+            // aware variant is the one runners should call.
+            return true;
+        }
         if self.chat_drag.take().is_some() {
             return true;
         }
@@ -325,40 +591,13 @@ impl WidgetHost {
         was_dragging
     }
 
-    /// Step 5 P2: push a typed character into the focused chat
-    /// input. Returns true if anything changed.
-    pub fn apply_text(&mut self, c: char) -> bool {
-        if !self.document.chat.focused {
-            return false;
-        }
-        self.document.chat.input.push(c);
-        true
-    }
-
-    /// Backspace on the focused chat input.
-    pub fn apply_backspace(&mut self) -> bool {
-        if !self.document.chat.focused {
-            return false;
-        }
-        self.document.chat.input.pop().is_some()
-    }
-
-    /// Send the focused chat input.
-    pub fn apply_send(&mut self) -> bool {
-        if self.document.chat.input.trim().is_empty() {
-            return false;
-        }
-        self.document.chat.send();
-        true
-    }
-
-    /// Phase C2 IME forwarding stub — Step 5+ wires per-widget focus.
-    pub fn apply_ime(&mut self, _event: &openpencil_shell_core::ImeEvent) { // glue:
-    }
-
-    /// Phase C2 keyboard forwarding stub.
-    pub fn apply_key(&mut self, _event: &openpencil_shell_core::KeyEvent) { // glue:
-    }
+    // Keyboard / clipboard handlers (`apply_text` / `apply_backspace`
+    // / `apply_send` / `apply_delete` / `apply_duplicate` /
+    // `apply_nudge` / `apply_select_all` / `apply_copy` /
+    // `apply_cut` / `apply_paste` / `apply_reorder` /
+    // `apply_escape` / `apply_ime` / `apply_key`) live in
+    // `widget_host/keyboard.rs` — split out to keep this spine
+    // file under the 800-line ceiling.
 
     fn ai_chat_size(&self) -> (f32, f32) {
         if self.document.chat.collapsed {
@@ -368,7 +607,7 @@ impl WidgetHost {
         }
     }
 
-    fn locale_picker_rect(&self, viewport_w: f32) -> Rect {
+    pub(in crate::widget_host) fn locale_picker_rect(&self, viewport_w: f32) -> Rect {
         let top_bar_rect = Rect {
             origin: Point2D::new(0.0, 0.0),
             size: Point2D::new(viewport_w, TOP_BAR_HEIGHT),
@@ -385,7 +624,11 @@ impl WidgetHost {
         }
     }
 
-    fn ai_chat_rect(&self, viewport_w: f32, viewport_h: f32) -> Option<Rect> {
+    pub(in crate::widget_host) fn ai_chat_rect(
+        &self,
+        viewport_w: f32,
+        viewport_h: f32,
+    ) -> Option<Rect> {
         let (cx0, cy0, cw, ch) = self.canvas_region(viewport_w, viewport_h);
         let (panel_w, panel_h) = self.ai_chat_size();
         if cw <= panel_w + AICHAT_INSET_LEFT + 16.0 || ch <= panel_h + 16.0 {
@@ -468,6 +711,10 @@ impl WidgetHost {
                 openpencil_shell_core::widgets::ToolbarHit::Action(_) => {
                     return false;
                 }
+                openpencil_shell_core::widgets::ToolbarHit::ToggleShapePicker => {
+                    self.document.ui.shape_picker_open = !self.document.ui.shape_picker_open;
+                    return true;
+                }
             }
         }
         if !self.document.ui.sidebar_open {
@@ -479,11 +726,31 @@ impl WidgetHost {
             match hit {
                 openpencil_shell_core::widgets::LayerPanelHit::Page(idx) => {
                     self.document.active_page_index = idx;
-                    self.document.selected = openpencil_shell_core::document::NodeId::NONE;
+                    self.document.clear_selection();
                     return true;
                 }
                 openpencil_shell_core::widgets::LayerPanelHit::Layer(node_id) => {
-                    self.document.selected = node_id;
+                    if self.shift_held {
+                        self.document.toggle_selection(node_id);
+                    } else {
+                        self.document.set_single_selection(node_id);
+                    }
+                    return true;
+                }
+                openpencil_shell_core::widgets::LayerPanelHit::ToggleHidden(node_id) => {
+                    self.document.toggle_node_hidden(node_id);
+                    return true;
+                }
+                openpencil_shell_core::widgets::LayerPanelHit::ToggleLocked(node_id) => {
+                    self.document.toggle_node_locked(node_id);
+                    return true;
+                }
+                openpencil_shell_core::widgets::LayerPanelHit::ToggleCollapsed(node_id) => {
+                    self.document.toggle_node_collapsed(node_id);
+                    return true;
+                }
+                openpencil_shell_core::widgets::LayerPanelHit::AddPage => {
+                    let _ = self.document.add_page();
                     return true;
                 }
             }
@@ -493,7 +760,7 @@ impl WidgetHost {
         was_focused
     }
 
-    fn layer_panel_rect(&self, viewport_h: f32) -> Rect {
+    pub(in crate::widget_host) fn layer_panel_rect(&self, viewport_h: f32) -> Rect {
         Rect {
             origin: Point2D::new(0.0, TOP_BAR_HEIGHT),
             size: Point2D::new(
@@ -522,152 +789,8 @@ impl WidgetHost {
         }
     }
 
-    /// Dispatches paint to the editor-UI composition.
-    pub fn paint(&self, backend: &mut WebBackend, viewport_width: f32, viewport_height: f32) {
-        // glue:
-        // 1. Background. Even before any widget paints, fill the
-        //    whole viewport with `theme.background` so `<canvas>`
-        //    pixels left over from a smaller previous frame don't
-        //    bleed through.
-        backend.fill_rect(
-            Rect {
-                origin: Point2D::new(0.0, 0.0),
-                size: Point2D::new(viewport_width, viewport_height),
-            },
-            self.theme.background,
-        );
-
-        let dpi = backend.dpi_scale();
-
-        // 2. TopBar — full width, pinned top.
-        let top_bar = TopBar::for_document(&self.document);
-        let top_bar_rect = Rect {
-            origin: Point2D::new(0.0, 0.0),
-            size: Point2D::new(viewport_width, TOP_BAR_HEIGHT),
-        };
-        {
-            let mut cx = PaintCx {
-                backend: &mut *backend,
-            };
-            top_bar.paint(&mut cx, top_bar_rect);
-        }
-
-        // 3. LayerPanel — left rail (skipped when sidebar
-        //    collapsed; canvas extends to the left edge).
-        if self.document.ui.sidebar_open {
-            let layer_panel_rect = self.layer_panel_rect(viewport_height);
-            let layer_panel = LayerPanel::from_document(&self.document);
-            let mut cx = PaintCx {
-                backend: &mut *backend,
-            };
-            layer_panel.paint(&mut cx, layer_panel_rect);
-        }
-
-        // 4. PropertyPanel — right rail, ONLY when selection exists.
-        let property_panel = PropertyPanel::for_selection(&self.document);
-        let property_rect = if property_panel.is_some() {
-            Rect {
-                origin: Point2D::new(
-                    viewport_width - self.document.ui.property_panel_width,
-                    TOP_BAR_HEIGHT,
-                ),
-                size: Point2D::new(
-                    self.document.ui.property_panel_width,
-                    (viewport_height - TOP_BAR_HEIGHT).max(0.0),
-                ),
-            }
-        } else {
-            Rect {
-                origin: Point2D::new(viewport_width, TOP_BAR_HEIGHT),
-                size: Point2D::new(0.0, 0.0),
-            }
-        };
-        if let Some(panel) = property_panel.as_ref() {
-            let mut cx = PaintCx {
-                backend: &mut *backend,
-            };
-            panel.paint(&mut cx, property_rect);
-        }
-
-        // 5. CanvasViewport — fills the middle band between the
-        //    rails, below the top bar. Respects the sidebar
-        //    collapse state via canvas_region.
-        let (canvas_left, _canvas_y, canvas_w, canvas_h) =
-            self.canvas_region(viewport_width, viewport_height);
-        let canvas_rect = Rect {
-            origin: Point2D::new(canvas_left, TOP_BAR_HEIGHT),
-            size: Point2D::new(canvas_w, canvas_h),
-        };
-        let canvas = CanvasViewport::from_document(&self.document);
-        if canvas_w > 0.0 && canvas_h > 0.0 {
-            let mut cx = PaintCx {
-                backend: &mut *backend,
-            };
-            canvas.paint(&mut cx, canvas_rect);
-        }
-
-        // 6. Toolbar — floating column.
-        let toolbar = Toolbar::for_document(&self.document);
-        let toolbar_h = toolbar
-            .layout(&LayoutCx {
-                available_width: TOOLBAR_WIDTH,
-                dpi,
-            })
-            .rect
-            .size
-            .y;
-        let toolbar_rect = Rect {
-            origin: Point2D::new(
-                canvas_left + TOOLBAR_INSET_X,
-                TOP_BAR_HEIGHT + TOOLBAR_INSET_Y,
-            ),
-            size: Point2D::new(TOOLBAR_WIDTH, toolbar_h),
-        };
-        if canvas_w > TOOLBAR_WIDTH + TOOLBAR_INSET_X * 2.0 {
-            let mut cx = PaintCx {
-                backend: &mut *backend,
-            };
-            toolbar.paint(&mut cx, toolbar_rect);
-        }
-
-        // 7. AIChatPlaceholder — painted LAST so it sits on top
-        //    of the toolbar in any overlap region.
-        if let Some(chat_rect) = self.ai_chat_rect(viewport_width, viewport_height) {
-            let chat = AIChatPlaceholder::from_document(&self.document);
-            let mut cx = PaintCx {
-                backend: &mut *backend,
-            };
-            chat.paint(&mut cx, chat_rect);
-        }
-
-        // 8. StatusBar — floating bottom-right of canvas.
-        let canvas_right = canvas_left + canvas_w;
-        if canvas_w > STATUS_BAR_WIDTH + STATUS_INSET * 2.0 {
-            let status = StatusBar::for_document(&self.document);
-            let status_rect = Rect {
-                origin: Point2D::new(
-                    canvas_right - STATUS_BAR_WIDTH - STATUS_INSET,
-                    TOP_BAR_HEIGHT + canvas_h - STATUS_BAR_HEIGHT - STATUS_INSET,
-                ),
-                size: Point2D::new(STATUS_BAR_WIDTH, STATUS_BAR_HEIGHT),
-            };
-            let mut cx = PaintCx {
-                backend: &mut *backend,
-            };
-            status.paint(&mut cx, status_rect);
-        }
-
-        // 9. LocalePicker — top-most overlay so it covers chat /
-        //    toolbar / status when open.
-        if self.document.ui.locale_picker_open {
-            let picker_rect = self.locale_picker_rect(viewport_width);
-            let picker = LocalePicker::for_document(&self.document);
-            let mut cx = PaintCx {
-                backend: &mut *backend,
-            };
-            picker.paint(&mut cx, picker_rect);
-        }
-    }
+    // `paint` lives in `widget_host/paint.rs` — split out to keep
+    // this file under the 800-line ceiling.
 }
 
 impl Default for WidgetHost {

@@ -224,10 +224,55 @@ pub trait RenderBackend {
     /// just declare which lucide path to draw.
     fn stroke_svg_path(&mut self, d: &str, top_left: Point2D, size: f32, color: Color, width: f32);
 
+    /// Filled ellipse inscribed in `bounds`. Used by Ellipse-kind
+    /// document nodes. Default impl falls back to a rounded
+    /// rectangle (visually wrong but compiles); native + web
+    /// override with `Canvas::draw_oval`.
+    fn fill_oval(&mut self, bounds: Rect, color: Color) {
+        let radius = bounds.size.x.min(bounds.size.y) / 2.0;
+        self.fill_round_rect(bounds, radius, color);
+    }
+
+    /// Stroked ellipse inscribed in `bounds`. Pairs with
+    /// `fill_oval`. Default-impl behaves like `stroke_round_rect`
+    /// at max corner radius.
+    fn stroke_oval(&mut self, bounds: Rect, color: Color, width: f32) {
+        let radius = bounds.size.x.min(bounds.size.y) / 2.0;
+        self.stroke_round_rect(bounds, radius, color, width);
+    }
+
+    /// Fill a closed polygon outlined by `points` (≥ 3 vertices).
+    /// Default impl emits a `stroke_svg_path` fill — works for
+    /// triangles + small polygons; backends with a richer canvas
+    /// override.
+    fn fill_polygon(&mut self, _points: &[Point2D], _color: Color) {
+        // Default no-op so non-overriding backends just skip the
+        // fill. Native + web override.
+    }
+
+    /// Stroke a closed polygon outlined by `points`. Default impl
+    /// walks the points and emits N `stroke_line` calls.
+    fn stroke_polygon(&mut self, points: &[Point2D], color: Color, width: f32) {
+        if points.len() < 2 {
+            return;
+        }
+        for i in 0..points.len() {
+            let a = points[i];
+            let b = points[(i + 1) % points.len()];
+            self.stroke_line(a, b, color, width);
+        }
+    }
+
     // Transform stack.
     fn save(&mut self);
     fn restore(&mut self);
     fn translate(&mut self, offset: Point2D);
+    /// Rotate the current transform `radians` clockwise about
+    /// `pivot` (in current-space coordinates, BEFORE the rotation
+    /// is applied). Default impl is a no-op so backends without
+    /// rotation support degrade gracefully; native + web override
+    /// using skia's `Canvas::rotate(angle, point)`.
+    fn rotate(&mut self, _radians: f32, _pivot: Point2D) {}
 
     // Viewport / DPI.
     fn resize(&mut self, width: u32, height: u32);

@@ -19,7 +19,7 @@ crates/
 
 - **shell-core stays wasm32-clean** (spec v19 §1.2). No skia-safe / winit / accesskit_winit. The `RenderBackend` trait is the only seam between widget code and platform.
 - **Widget code lives in shell-core only.** Hosts (shell-native `widget_host.rs`, shell-web `widget_host.rs`) are the ONLY files allowed to call `openpencil_shell_core::widgets::*`. Boundary script: `tools/check-widget-boundary.sh`.
-- **Max 800 lines per file** — same rule as the TS workspace. `property_panel.rs` was split into `property_panel.rs` + `property_panel_sections.rs` to honor this.
+- **Max 800 lines per file** — same rule as the TS workspace. `property_panel.rs` is split into 5 files (see PropertyPanel row in the widget table). `widget_host.rs` (shell-native) is split into a slim spine + 6 sibling submodules under `widget_host/` (see "Native widget_host layout" below).
 - **Web bundle ceiling: 1 MiB gzip + 0 env.\* imports.** Enforced by `tools/check-wasm-bundle.sh`. Ceiling currently at ~916 KB after embedding Roboto + NotoSansCJK subset.
 
 ## Document model (`shell-core/src/document.rs`)
@@ -36,30 +36,51 @@ Document
 ├── chat: ChatState           (messages, input, focused, anchor, collapsed)
 └── ui: UiState               (sidebar_open, layer_panel_width, property_panel_width,
                                property_focus, property_input_draft, property_caret_anchor_ms,
+                               property_draft_select_all,
                                theme_mode, locale, locale_picker_open,
-                               shape_picker_open, shape_tool)
+                               shape_picker_open, shape_tool,
+                               flex_layout, size_fill_width / fill_height / hug_width /
+                               hug_height / clip_content, fill_type, fill_type_picker_open)
 ```
 
-`Document::commit_property_edit(focus, value)` writes a parsed PropertyPanel input back into the selected node's bounds. `Tool::is_shape()` reports membership in the shape-slot group (Rect / Ellipse / Polygon / Line / Pen).
+Mutators on `Document`:
+
+- `commit_property_edit(focus, value)` — write parsed f32 to position / size / rotation / stroke width.
+- `set_selected_color(is_fill, color)` — write hex-parsed `Color` to fill or stroke.
+- `set_selected_bounds(rect)` — handle-drag resize.
+- `set_selected_rotation(radians)` — rotation-ring drag.
+- `translate_selected(dx, dy)` — node-drag move (recurses into descendants when the matched node is bounded so children don't detach).
+- `delete_selected()` — remove the selected node from its parent's children (Delete / Backspace shortcut).
+- `duplicate_selected(&mut next_id, offset_doc_px)` — deep-clone with fresh ids; lifts the allocator past `max_node_id() + 1` (`checked_add` so `u64::MAX` returns None instead of colliding).
+- `reorder_selected(ReorderDirection::Up | Down)` — swap with next/prev sibling (`[` / `]`).
+- `deselect_all()` — clear selection (Escape last tier).
+- `max_node_id()` — largest raw id across pages + children, for the duplicate allocator guard.
+- `node_at_doc_point(p)` — top-most-first hit-test honoring per-node rotation.
+
+`Node.rotation: f32` (radians, cw +); paint applies `RenderBackend::rotate(radians, pivot)` around the node's centre. Bounded-Frame drag carries descendants — children's bounds are document-space-absolute.
 
 `Node::aggregate_bounds` returns child-union bounds for container nodes (Group / unbounded Frame) so the property panel reports meaningful W/H.
 
+`NodeKind` now spans Frame / Group / Rect / Ellipse / Polygon / Line / Text / Other; each has its own canvas paint (oval, triangle polygon, diagonal line, fill+stroke rect, draw_str). The `RenderBackend` trait grew `fill_oval` / `stroke_oval` / `fill_polygon` / `stroke_polygon` / `rotate` so both native + web backends can paint them.
+
+`FillType { Solid, LinearGradient, RadialGradient, Image }` + `FlexLayout { Free, Vertical, Horizontal }` drive the property panel's dropdowns / button groups; both live on `Document.ui` so toggles persist across selection changes.
+
 ## Widgets (`shell-core/src/widgets/`)
 
-| Widget            | Section                                                                             | File                                                           |
-| ----------------- | ----------------------------------------------------------------------------------- | -------------------------------------------------------------- |
-| TopBar            | Top — file name, agent chip, theme/i18n/fullscreen, sidebar toggle                  | `top_bar.rs`                                                   |
-| LayerPanel        | Left rail — Pages + Layers sections                                                 | `layer_panel.rs`                                               |
-| Toolbar           | Vertical floating column — Select / shape slot / Text / Frame / Hand                | `toolbar.rs`                                                   |
-| ShapePicker       | Toolbar shape-slot dropdown (Rect / Ellipse / Polygon / Line / Pen / Icon / Import) | `shape_picker.rs`                                              |
-| CanvasViewport    | Center — node tree + grid + viewport transform                                      | `canvas_viewport.rs`                                           |
-| PropertyPanel     | Right rail — 设计/代码 tabs + 10 sections + X/Y/W/H input editing                   | `property_panel.rs` + `property_panel_sections.rs`             |
-| AIChatPlaceholder | Floating — chat with drag + 4-corner snap + collapse pill                           | `ai_chat_panel.rs`                                             |
-| LocalePicker      | TopBar Globe-button dropdown (15 native names + Check)                              | `locale_picker.rs`                                             |
-| StatusBar         | Floating bottom-right — zoom controls                                               | `status_bar.rs`                                                |
-| icons             | lucide d-string library (35 icons)                                                  | `icons.rs`                                                     |
-| theme             | shadcn-dark palette tokens (incl. `canvas_surface`)                                 | `theme.rs`                                                     |
-| i18n              | 15 locale tables (706 keys each, TS-mirrored)                                       | `i18n/{en,zh_cn,zh_tw,ja,ko,fr,es,de,pt,ru,hi,tr,th,vi,id}.rs` |
+| Widget            | Section                                                                                                                              | File                                                                                                                                    |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------- |
+| TopBar            | Top — file name, agent chip, theme/i18n/fullscreen, sidebar toggle                                                                   | `top_bar.rs`                                                                                                                            |
+| LayerPanel        | Left rail — Pages + Layers sections                                                                                                  | `layer_panel.rs`                                                                                                                        |
+| Toolbar           | Vertical floating column — Select / shape slot / Text / Frame / Hand                                                                 | `toolbar.rs`                                                                                                                            |
+| ShapePicker       | Toolbar shape-slot dropdown (Rect / Ellipse / Polygon / Line / Pen / Icon / Import)                                                  | `shape_picker.rs`                                                                                                                       |
+| CanvasViewport    | Center — node tree + grid + viewport transform                                                                                       | `canvas_viewport.rs`                                                                                                                    |
+| PropertyPanel     | Right rail — 设计/代码 tabs + 10 sections + interactive inputs (X/Y/W/H/R, hex, stroke width) + flex/size toggles + fill-type picker | `property_panel.rs` + `property_panel_sections.rs` + `property_panel_inputs.rs` + `property_panel_layout.rs` + `property_panel_fill.rs` |
+| AIChatPlaceholder | Floating — chat with drag + 4-corner snap + collapse pill                                                                            | `ai_chat_panel.rs`                                                                                                                      |
+| LocalePicker      | TopBar Globe-button dropdown (15 native names + Check)                                                                               | `locale_picker.rs`                                                                                                                      |
+| StatusBar         | Floating bottom-right — zoom controls                                                                                                | `status_bar.rs`                                                                                                                         |
+| icons             | lucide d-string library (35 icons)                                                                                                   | `icons.rs`                                                                                                                              |
+| theme             | shadcn-dark palette tokens (incl. `canvas_surface`)                                                                                  | `theme.rs`                                                                                                                              |
+| i18n              | 15 locale tables (706 keys each, TS-mirrored)                                                                                        | `i18n/{en,zh_cn,zh_tw,ja,ko,fr,es,de,pt,ru,hi,tr,th,vi,id}.rs`                                                                          |
 
 ## Theme + i18n
 
@@ -94,11 +115,54 @@ Click anywhere outside the panel closes it silently. Locale lookups for the row 
 
 `Document.ui` carries the focused property field, a draft buffer, and a caret-blink anchor:
 
-- `property_focus: Option<PropertyFocus>` — `PositionX / PositionY / SizeW / SizeH / Rotation / Opacity / FillHex / StrokeHex / StrokeWidth`. Currently wired for X / Y / W / H editing; the others accept focus + clear cleanly but no-op at commit.
-- `property_input_draft: String` — live keystrokes accumulate here; `apply_text` filters digits / leading minus / single decimal.
+- `property_focus: Option<PropertyFocus>` — `PositionX / PositionY / SizeW / SizeH / Rotation / Opacity / FillHex / StrokeHex / StrokeWidth`. **All variants are wired end-to-end:** numeric focuses go through `Document::commit_property_edit`, hex focuses through `set_selected_color(is_fill, color)`.
+- `property_input_draft: String` — live keystrokes accumulate here. `apply_text` is focus-aware:
+  - Numeric focuses (Position / Size / Rotation / Opacity / StrokeWidth) gate `[0-9]`, leading `-`, and a single `.`.
+  - Hex focuses (FillHex / StrokeHex) preserve a sticky `#` prefix, accept `[0-9a-fA-F]` only, and cap the draft at 7 chars (`#RRGGBB`). No select-all-on-focus — backspace removes one char at a time, typing appends one.
 - `property_caret_anchor_ms: u64` — drives caret blink off the same `jian_core::anim::blink_visible` cadence as the chat input.
 
-`PropertyPanel::for_selection_at(doc, now_ms)` is the entry point; the host calls `panel.hit_test(panel_rect, point)` to map clicks onto a `PropertyFocus`. Commit on Enter (parses f32, calls `Document::commit_property_edit`), discard on Escape, auto-commit on click outside the property panel.
+Hex parsing is forgiving: `parse_hex_color` zero-pads 1-5 char inputs to 6 and expands CSS shorthand `#RGB` → `#RRGGBB`, so mid-edit commits don't visibly "reset" the colour.
+
+`PropertyPanel::for_selection_at(doc, now_ms)` is the entry point. The host calls `panel.hit_test(panel_rect, point)` to map clicks onto a `PropertyFocus`, and `panel.hit_test_action(panel_rect, point)` to map clicks onto a `PropertyPanelAction`. Commit on Enter, discard on Escape, auto-commit on click outside the property panel.
+
+### Buttons + checkboxes — `PropertyPanelAction`
+
+```
+PropertyPanelAction
+├── SetFlexLayout(FlexLayout)        Free / Vertical / Horizontal
+├── ToggleSizeFillWidth / FillHeight
+├── ToggleSizeHugWidth / HugHeight
+├── ToggleSizeClipContent
+├── ToggleFillTypePicker             head-row dropdown
+└── SetFillType(FillType)            Solid / LinearGradient / RadialGradient / Image
+```
+
+The hit-test walker `action_button_rects_with_fill_picker(panel_rect, visible, fill_picker_open)` lives in `property_panel_layout.rs` and emits one `Rect` per action. Same y-walk math as `editable_input_rects` so paint + hit-test stay in sync regardless of which sections are filtered.
+
+### Fill-type dropdown
+
+`FillType { Solid, LinearGradient, RadialGradient, Image }` lives on `Document.ui`. The Fill section head row paints `<swatch> <type-label ▾> <opacity%> <X>`; clicking the label opens an overlay popover with 4 rows. Body branches per type:
+
+- **Solid** — hex input + caret.
+- **LinearGradient** — Angle row + 色标 header + 2 default stops.
+- **RadialGradient** — 色标 header + 2 stops (no angle).
+- **Image** — 填充 row.
+
+`fill_body_height(fill_type)` in `property_panel_layout.rs` returns the body height per variant; layout walkers thread it through `VisibleSections { …, fill_type }` so sections after Fill stay aligned with paint when the user flips type. Outside clicks close the picker via a dedicated swallow branch in `apply_press`, above all other property-panel hit-tests.
+
+### Per-NodeKind section filtering
+
+`SectionCapabilities::for_kind(NodeKind)` returns which sections paint for the current selection (Frame omits Stroke, Text omits Effects/Export, etc.). The returned `VisibleSections` is threaded through every paint routine _and_ both layout walkers so hidden sections cause subsequent rects to shift up by the right amount.
+
+### File split
+
+`property_panel_sections.rs` was split into 5 files to honor the 800-line ceiling:
+
+- `property_panel.rs` — `PropertyPanel`, snapshot, `SectionCapabilities`, hit-test entry points.
+- `property_panel_sections.rs` — section paint routines + `PropertyLabels` + `EditContext`.
+- `property_panel_inputs.rs` — shared paint helpers (label / divider / input variants), layout constants, `format_color_hex`, `to_jian_color`.
+- `property_panel_layout.rs` — `VisibleSections` / `SizeFlags` / `fill_body_height` + the two layout walkers.
+- `property_panel_fill.rs` — fill-type label table, picker overlay, head row, all 4 body variants.
 
 `PropertyLabels::for_document(doc)` resolves every section title (位置/弹性布局/尺寸/图层/填充/描边/效果/导出), the 设计/代码 tabs, the 创建组件 button, and the size checkboxes (填充宽/高 / 适应宽/高 / 裁剪内容) via `Document::t`, falling back to English when a key isn't in the TS locale table.
 
@@ -112,6 +176,36 @@ resize / dpi_scale
 ```
 
 `stroke_svg_path` parses lucide d-strings via `skia_safe::utils::parse_path::from_svg`. PaintCap::Round + PaintJoin::Round to match lucide's stroke style.
+
+## Native widget_host layout
+
+`crates/openpencil-shell-native/src/widget_host.rs` is a slim spine (~265 lines) holding the public surface — `WidgetHostNative` struct, drag-state structs, `CursorHint` enum, `PanelResizeKind` enum, the constructor and tiny accessors (`set_now_ms` / `chat_focused` / `next_animation_deadline_ms`) — plus `mod` declarations for the sibling submodules under `widget_host/`:
+
+| File                           | Purpose                                                                                                                                                                                                                |
+| ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `widget_host/frame_backend.rs` | `NativeFrameBackend` (`RenderBackend` impl over `NativeBackend` + `&Canvas`)                                                                                                                                           |
+| `widget_host/helpers.rs`       | `parse_hex_color` / `color_to_hex` / `rect_contains` / `resize_bounds` + the inset / gutter / width constants                                                                                                          |
+| `widget_host/geometry.rs`      | `impl WidgetHostNative` — canvas-region / panel-resize hover / cursor hint / picker rect math                                                                                                                          |
+| `widget_host/input.rs`         | `impl WidgetHostNative` — `apply_wheel` / `_pan_gesture` / `_cursor_move` / `_release[_with_viewport]` / `_text` / `_backspace` / `_send` / `_escape` / `_property_action` / `commit_property_focus_if_any` / `_click` |
+| `widget_host/press.rs`         | `impl WidgetHostNative` — `apply_press` + `create_node_for_active_tool` (largest single method; routes through 10 hit-test layers)                                                                                     |
+| `widget_host/paint.rs`         | `impl WidgetHostNative::paint` — full editor-UI composition pass                                                                                                                                                       |
+
+### Keyboard shortcuts
+
+Native (`openpencil-desktop`) + web (`shell-web`) both dispatch the following P1 keyboard shortcuts through `WidgetHostNative` / `WidgetHost` methods. The desktop runner reads modifier state from `WindowEvent::ModifiersChanged` (`zoom_modifier` = Cmd/Ctrl, `shift_modifier` = Shift); the web shell reads `evt.meta_key() || evt.ctrl_key()` and `evt.shift_key()` from `KeyboardEvent`.
+
+| Key                       | Method                | Behaviour (TS parity: `use-edit-shortcuts.ts` + `use-clipboard-shortcuts.ts`)                                                      |
+| ------------------------- | --------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `Backspace`               | `apply_backspace`     | Pops a char when an input is focused; else `delete_selected()`.                                                                    |
+| `Delete`                  | `apply_delete`        | `delete_selected()` regardless of which non-text overlay is open.                                                                  |
+| `Cmd/Ctrl+D`              | `apply_duplicate`     | `duplicate_selected(&mut next_node_id, 10.0)` and selects the clone.                                                               |
+| `ArrowUp/Down/Left/Right` | `apply_nudge(dx, dy)` | Translates selection by 1 doc px, or 10 with `Shift`.                                                                              |
+| `[`                       | `apply_reorder(Down)` | Swap with previous sibling (back in z-order).                                                                                      |
+| `]`                       | `apply_reorder(Up)`   | Swap with next sibling (forward in z-order).                                                                                       |
+| `Escape`                  | `apply_escape`        | One layer per press, in priority order: property-focus → locale picker → shape picker → fill-type picker → chat focus → selection. |
+| `Enter`                   | `apply_send`          | Commits property edit or sends chat.                                                                                               |
+
+All struct fields and intra-module helpers are scoped `pub(in crate::widget_host)` so submodule `impl` blocks can reach them while the public surface stays minimal. Each file is under 480 lines.
 
 ## Desktop binary (`openpencil-desktop/`)
 
