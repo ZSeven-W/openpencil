@@ -465,6 +465,16 @@ impl WidgetHost {
         if !d.active {
             return false;
         }
+        // Defensive source-validity check (mirrors native) — bail
+        // if the dragged node disappeared between move and release.
+        if self
+            .document
+            .active_page()
+            .map(|p| p.find(d.source).is_none())
+            .unwrap_or(true)
+        {
+            return false;
+        }
         use openpencil_shell_core::widgets::{DropPosition, LayerPanel};
         let layer_rect = self.layer_panel_rect(viewport_h);
         let panel = LayerPanel::from_document(&self.document);
