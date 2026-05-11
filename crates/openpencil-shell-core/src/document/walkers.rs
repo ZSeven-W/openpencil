@@ -614,3 +614,85 @@ pub(in crate::document) fn find_duplicate_walk(
     }
     None
 }
+
+/// Drain the node identified by `target` out of `children` (or any
+/// descendant `children` vec) and return it. Returns `None` when the
+/// target isn't found in the subtree. Backs the drag-to-reorder
+/// extraction phase — the caller holds the extracted node on the
+/// stack and then re-inserts it via `insert_before_in_children` /
+/// `insert_after_in_children`.
+pub(in crate::document) fn extract_node(children: &mut Vec<Node>, target: NodeId) -> Option<Node> {
+    if let Some(idx) = children.iter().position(|n| n.id == target) {
+        return Some(children.remove(idx));
+    }
+    for child in children.iter_mut() {
+        if let Some(extracted) = extract_node(&mut child.children, target) {
+            return Some(extracted);
+        }
+    }
+    None
+}
+
+/// Insert `node` immediately before `anchor` in `children` (or any
+/// descendant `children` vec). On success returns `Ok(())`; on miss
+/// returns `Err(node)` so the caller can recover the orphaned
+/// payload. Pre-check the anchor via `children_contain_descendant`
+/// if you want to avoid the Err arm entirely.
+pub(in crate::document) fn insert_before_in_children(
+    children: &mut Vec<Node>,
+    anchor: NodeId,
+    node: Node,
+) -> Result<(), Node> {
+    if let Some(idx) = children.iter().position(|n| n.id == anchor) {
+        children.insert(idx, node);
+        return Ok(());
+    }
+    let mut carry = node;
+    for child in children.iter_mut() {
+        match insert_before_in_children(&mut child.children, anchor, carry) {
+            Ok(()) => return Ok(()),
+            Err(returned) => carry = returned,
+        }
+    }
+    Err(carry)
+}
+
+/// Insert `node` immediately after `anchor` in `children` (or any
+/// descendant `children` vec). On success returns `Ok(())`; on miss
+/// returns `Err(node)`.
+pub(in crate::document) fn insert_after_in_children(
+    children: &mut Vec<Node>,
+    anchor: NodeId,
+    node: Node,
+) -> Result<(), Node> {
+    if let Some(idx) = children.iter().position(|n| n.id == anchor) {
+        children.insert(idx + 1, node);
+        return Ok(());
+    }
+    let mut carry = node;
+    for child in children.iter_mut() {
+        match insert_after_in_children(&mut child.children, anchor, carry) {
+            Ok(()) => return Ok(()),
+            Err(returned) => carry = returned,
+        }
+    }
+    Err(carry)
+}
+
+/// True iff `anchor_id` is found anywhere in the children forest
+/// rooted at `children`. Cheap O(n) scan used as a pre-check before
+/// `extract_node` so callers don't have to handle the lost-node case.
+pub(in crate::document) fn children_contain_descendant(
+    children: &[Node],
+    anchor_id: NodeId,
+) -> bool {
+    for child in children {
+        if child.id == anchor_id {
+            return true;
+        }
+        if children_contain_descendant(&child.children, anchor_id) {
+            return true;
+        }
+    }
+    false
+}

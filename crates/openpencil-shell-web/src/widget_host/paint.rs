@@ -53,7 +53,14 @@ impl WidgetHost {
 
         if self.document.ui.sidebar_open {
             let layer_panel_rect = self.layer_panel_rect(viewport_height);
-            let layer_panel = LayerPanel::from_document(&self.document);
+            let drop_target = self.layer_drag.and_then(|d| {
+                if !d.active {
+                    return None;
+                }
+                let probe = LayerPanel::from_document(&self.document);
+                probe.drop_target_at(layer_panel_rect, Point2D::new(d.current_x, d.current_y))
+            });
+            let layer_panel = LayerPanel::from_document_with_drop(&self.document, drop_target);
             let mut cx = PaintCx {
                 backend: &mut *backend,
             };

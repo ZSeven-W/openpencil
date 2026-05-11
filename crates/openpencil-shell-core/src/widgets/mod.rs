@@ -35,6 +35,8 @@ pub mod tree;
 // Step 2 compositions (built on top of the primitives, driven by
 // `crate::document::Document`).
 pub mod layer_panel;
+#[cfg(test)]
+mod layer_panel_tests;
 pub mod property_panel;
 pub mod property_panel_fill;
 pub mod property_panel_inputs;
@@ -82,7 +84,7 @@ pub use status_bar::{StatusBar, STATUS_BAR_HEIGHT, STATUS_BAR_WIDTH};
 pub use top_bar::{TopBar, TopBarHit, TOP_BAR_HEIGHT};
 // Re-export panel/toolbar width constants + hit enums so the host
 // can size them consistently and route hits.
-pub use layer_panel::{LayerPanelHit, LAYER_PANEL_WIDTH};
+pub use layer_panel::{DropPosition, DropTarget, LayerPanelHit, LAYER_PANEL_WIDTH};
 pub use property_panel::PROPERTY_PANEL_WIDTH;
 pub use toolbar::{ToolbarAction, ToolbarHit, TOOLBAR_WIDTH};
 

@@ -317,6 +317,36 @@ impl WidgetHostNative {
         }
 
         // 3. apply_click — LayerPanel + chat-defocus.
+        //    Before forwarding to apply_click, peek at the LayerPanel
+        //    hit-test ourselves: if the press lands on a Layer row
+        //    (with the sidebar open), seed a `layer_drag` candidate
+        //    so a subsequent cursor_move past the activation
+        //    threshold can promote it to a drag-to-reorder. The
+        //    candidate doesn't change apply_click semantics — the
+        //    row still selects on press; release decides whether to
+        //    fall back to click or commit the reorder.
+        if self.document.ui.sidebar_open {
+            use openpencil_shell_core::widgets::{LayerPanel, LayerPanelHit, TOP_BAR_HEIGHT};
+            let layer_rect = openpencil_shell_core::Rect {
+                origin: openpencil_shell_core::Point2D::new(0.0, TOP_BAR_HEIGHT),
+                size: openpencil_shell_core::Point2D::new(
+                    self.document.ui.layer_panel_width,
+                    (viewport_height - TOP_BAR_HEIGHT).max(0.0),
+                ),
+            };
+            let panel = LayerPanel::from_document(&self.document);
+            if let Some(LayerPanelHit::Layer(node_id)) =
+                panel.hit_test(layer_rect, openpencil_shell_core::Point2D::new(x, y))
+            {
+                self.layer_drag = Some(crate::widget_host::LayerDragState {
+                    source: node_id,
+                    start_y: y,
+                    current_x: x,
+                    current_y: y,
+                    active: false,
+                });
+            }
+        }
         let consumed = self.apply_click(x, y, viewport_width, viewport_height);
         if consumed {
             return true;

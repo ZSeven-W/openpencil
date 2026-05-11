@@ -120,6 +120,13 @@ pub struct WidgetHostNative {
     /// joins the selection (replaces if `additive == false`,
     /// toggles each if `additive == true`).
     pub(in crate::widget_host) marquee_drag: Option<MarqueeDragState>,
+    /// Active layer drag-to-reorder gesture — set when the user
+    /// presses a LayerPanel row with the press-y exceeding a
+    /// small threshold during move. Carries the source NodeId and
+    /// the live cursor y in panel-local space. Resolved on
+    /// release into `Document::reorder_before` /
+    /// `reorder_after` via `LayerPanel::drop_target_at`.
+    pub(in crate::widget_host) layer_drag: Option<LayerDragState>,
     /// Counter for minting fresh `NodeId`s for newly-created nodes.
     /// Bumped past the highest sample id so new + sample nodes
     /// never collide on the same key.
@@ -223,6 +230,25 @@ pub(in crate::widget_host) struct MarqueeDragState {
     pub(in crate::widget_host) additive: bool,
 }
 
+/// Active LayerPanel drag-to-reorder gesture.
+#[derive(Debug, Clone, Copy)]
+pub(in crate::widget_host) struct LayerDragState {
+    /// NodeId of the row the user pressed on — what gets moved on
+    /// release.
+    pub(in crate::widget_host) source: openpencil_shell_core::document::NodeId,
+    /// Cursor y at press time, panel-local. Used to suppress drag
+    /// activation until the cursor has moved a few pixels (avoids
+    /// promoting a regular click into a drag).
+    pub(in crate::widget_host) start_y: f32,
+    /// Live cursor x / y for the drop-target hit-test.
+    pub(in crate::widget_host) current_x: f32,
+    pub(in crate::widget_host) current_y: f32,
+    /// Whether the cursor has moved past the activation threshold.
+    /// False = still a candidate click; True = committed drag (paint
+    /// the drop indicator).
+    pub(in crate::widget_host) active: bool,
+}
+
 #[derive(Debug, Clone, Copy)]
 pub(in crate::widget_host) struct ChatDragState {
     /// Pointer offset within the panel rect when the drag began.
@@ -248,6 +274,7 @@ impl WidgetHostNative {
             rotate_drag: None,
             create_drag: None,
             marquee_drag: None,
+            layer_drag: None,
             next_node_id: 100,
             now_ms: 0,
             shift_held: false,

@@ -112,6 +112,17 @@ impl WidgetHostNative {
             m.current_screen_y = y;
             return true;
         }
+        if let Some(d) = self.layer_drag.as_mut() {
+            d.current_x = x;
+            d.current_y = y;
+            // Promote to active drag once the cursor moves past the
+            // 4 px screen-space threshold — same heuristic the
+            // marquee uses to suppress accidental drag on click.
+            if !d.active && (y - d.start_y).abs() > 4.0 {
+                d.active = true;
+            }
+            return true;
+        }
         if let Some(resize) = self.panel_resize {
             let dx = x - resize.start_x;
             match resize.kind {
@@ -171,6 +182,9 @@ impl WidgetHostNative {
             self.commit_marquee_selection(m, viewport_w, viewport_h);
             return true;
         }
+        if let Some(d) = self.layer_drag.take() {
+            return self.commit_layer_drag(d, viewport_h);
+        }
         if let Some(d) = self.chat_drag.take() {
             // Use the live panel size (expanded vs collapsed) so a
             // dragged collapsed pill snaps to the corner closest to
@@ -209,6 +223,11 @@ impl WidgetHostNative {
             // Can't compute the doc-space marquee rect without a
             // viewport; drop without committing. The viewport-
             // aware variant is the one runners should call.
+            return true;
+        }
+        if self.layer_drag.take().is_some() {
+            // Same story as marquee — no viewport, can't compute
+            // drop target. Drop the candidate without committing.
             return true;
         }
         // If a chat drag was in flight without a known viewport,
@@ -327,6 +346,49 @@ impl WidgetHostNative {
     /// Convert a marquee drag (in screen-space) into a doc-space
     /// rect, ask the document which top-level nodes overlap it,
     /// and either replace or extend the selection.
+    /// Resolve a layer drag-to-reorder gesture on release. Returns
+    /// `true` if anything changed (caller repaints). Drops the
+    /// drag silently if it never activated (treated as a click
+    /// that already selected the row on press) or if the cursor
+    /// isn't over a layer row at release time.
+    pub(in crate::widget_host) fn commit_layer_drag(
+        &mut self,
+        d: super::LayerDragState,
+        viewport_h: f32,
+    ) -> bool {
+        if !d.active {
+            // Never moved past threshold — selection on press is the
+            // only effect, nothing more to do.
+            return false;
+        }
+        use openpencil_shell_core::widgets::{DropPosition, LayerPanel, TOP_BAR_HEIGHT};
+        let layer_rect = openpencil_shell_core::Rect {
+            origin: openpencil_shell_core::Point2D::new(0.0, TOP_BAR_HEIGHT),
+            size: openpencil_shell_core::Point2D::new(
+                self.document.ui.layer_panel_width,
+                (viewport_h - TOP_BAR_HEIGHT).max(0.0),
+            ),
+        };
+        let panel = LayerPanel::from_document(&self.document);
+        let cursor = openpencil_shell_core::Point2D::new(d.current_x, d.current_y);
+        let Some(drop) = panel.drop_target_at(layer_rect, cursor) else {
+            return true;
+        };
+        if drop.anchor == d.source {
+            // Self-drop is a no-op.
+            return true;
+        }
+        match drop.position {
+            DropPosition::Before => {
+                self.document.reorder_before(d.source, drop.anchor);
+            }
+            DropPosition::After => {
+                self.document.reorder_after(d.source, drop.anchor);
+            }
+        }
+        true
+    }
+
     pub(in crate::widget_host) fn commit_marquee_selection(
         &mut self,
         m: super::MarqueeDragState,
