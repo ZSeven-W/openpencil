@@ -378,6 +378,19 @@ impl WidgetHostNative {
             // only effect, nothing more to do.
             return false;
         }
+        // Defensive source-validity check — symmetric with the
+        // cursor_move and paint guards. `reorder_before/after`
+        // already silently no-ops on a missing source, but bailing
+        // here keeps the rest of this method (drop_target_at +
+        // dispatch) from running pointlessly on a dead drag.
+        if self
+            .document
+            .active_page()
+            .map(|p| p.find(d.source).is_none())
+            .unwrap_or(true)
+        {
+            return false;
+        }
         use openpencil_shell_core::widgets::{DropPosition, LayerPanel, TOP_BAR_HEIGHT};
         let layer_rect = openpencil_shell_core::Rect {
             origin: openpencil_shell_core::Point2D::new(0.0, TOP_BAR_HEIGHT),
