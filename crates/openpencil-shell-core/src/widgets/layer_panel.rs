@@ -133,21 +133,24 @@ impl LayerPanel {
         pages_h + SECTION_GAP + layers_h + 16.0
     }
 
-    /// Compute the drop target for a drag-in-progress over the
-    /// layer rows. Returns `None` when the cursor isn't over a
-    /// layer row. `Before` when the cursor is in the upper half
-    /// of the row, `After` in the lower half; `indicator_y` is
-    /// where the host paints the drop-indicator line.
+    /// Compute the drop target for a drag-in-progress. Over a
+    /// layer row: `Before` for the upper half, `After` for the
+    /// lower half. In the empty area below all rows (still inside
+    /// the panel rect): `After(last_layer)`, indicator at the
+    /// bottom of the row stack. Outside the panel or above the
+    /// rows section: `None`. `indicator_y` is where the host
+    /// paints the drop-indicator line.
     pub fn drop_target_at(&self, rect: Rect, point: Point2D) -> Option<DropTarget> {
         if !rect_contains(rect, point) {
             return None;
         }
-        let mut y = rect.origin.y
+        let layers_top = rect.origin.y
             + 8.0
             + SECTION_HEADER_HEIGHT
             + self.pages.len() as f32 * PAGE_ROW_HEIGHT
             + SECTION_GAP
             + SECTION_HEADER_HEIGHT;
+        let mut y = layers_top;
         for item in &self.items {
             let row_top = y;
             let row_bottom = y + LAYER_ROW_HEIGHT;
@@ -169,6 +172,19 @@ impl LayerPanel {
                 });
             }
             y = row_bottom;
+        }
+        // Cursor is below the last row but still inside the panel —
+        // drop at end (anchor = last layer, position = After). `y`
+        // already points at the bottom of the final row, which is
+        // exactly where the indicator paints.
+        if point.y > layers_top {
+            if let Some(last) = self.items.last() {
+                return Some(DropTarget {
+                    anchor: last.node_id,
+                    position: DropPosition::After,
+                    indicator_y: y,
+                });
+            }
         }
         None
     }

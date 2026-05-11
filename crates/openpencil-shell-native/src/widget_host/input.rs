@@ -115,9 +115,12 @@ impl WidgetHostNative {
         if let Some(d) = self.layer_drag.as_mut() {
             d.current_x = x;
             d.current_y = y;
-            // Promote to active drag once the cursor moves past the
-            // 4 px screen-space threshold — same heuristic the
-            // marquee uses to suppress accidental drag on click.
+            // Activation is VERTICAL-ONLY by design: layer drag-to-
+            // reorder operates on a flat row stack, so the meaningful
+            // axis is y. Pure horizontal wiggle on a row mustn't
+            // activate (would steal click-feel from selection +
+            // eye/lock-toggle gestures). 4 px screen-space matches
+            // the marquee's small-motion threshold.
             if !d.active && (y - d.start_y).abs() > 4.0 {
                 d.active = true;
             }
