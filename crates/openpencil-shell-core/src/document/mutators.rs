@@ -356,14 +356,10 @@ impl Document {
     /// paint. Single source of truth so the host's
     /// `canvas_region` math, the panel's `for_selection_at`
     /// gate, and `apply_press` commit-on-blur all stay in lock-
-    /// step. Today: single-select with a resolvable anchor.
-    /// Multi-select hides pending an aggregated-properties UI;
-    /// stale single anchors (e.g. selection points at a node on
-    /// a non-active page, or an id that's been removed) hide too
-    /// since the panel itself returns `None` from
-    /// `for_selection_at` in that case (codex stop-hook fix:
-    /// reserving the rail when the panel won't paint left a
-    /// blank strip).
+    /// step. Visible when at least one id in `selected_set`
+    /// resolves on the active page — same gate for single and
+    /// multi-select (multi-select paints an aggregate snapshot
+    /// via `NodeSnapshot::from_multi_selection`).
     pub fn property_panel_visible(&self) -> bool {
         // Single + multi treat 0x0 nodes identically: panel shows
         // as long as at least one id resolves on the active page.
