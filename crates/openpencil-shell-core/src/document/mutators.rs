@@ -133,9 +133,11 @@ impl Document {
         Some(new_index)
     }
 
-    /// Get the anchor-selected node (TS `selectedIds[0]`). ONLY
-    /// searches the active page (codex Step 2 R1 CONCERN-1). A
-    /// selection on a non-active page returns `None`.
+    /// Get the anchor-selected node. The anchor is the LAST entry
+    /// in `selected_set` (Rust convention — most-recently-added /
+    /// most-recently-surviving id; differs from TS's `selectedIds[0]`).
+    /// ONLY searches the active page; a selection on a non-active
+    /// page returns `None`.
     pub fn selected_node(&self) -> Option<&Node> {
         if !self.selected.is_real() {
             return None;
