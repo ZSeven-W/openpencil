@@ -117,16 +117,11 @@ impl Document {
         self.pages.get(self.active_page_index)
     }
 
-    /// Append a fresh empty page and switch to it. The page's id
-    /// is minted past `max_node_id() + 1` so it can't collide with
-    /// any existing node id; the name follows the `"Page N"` pattern
-    /// (where N = pages.len() + 1 BEFORE the insert) to match the
-    /// existing default-page-name convention. The new selection is
-    /// cleared since the freshly-added page has no children.
-    ///
-    /// Returns the new page's index, or `None` when id allocation
-    /// would overflow `u64::MAX`. Mirrors TS `addPage()` (the `+`
-    /// button on the LayerPanel Pages header).
+    /// Append a fresh empty page named `"Page N"` (where N =
+    /// `pages.len() + 1` BEFORE the insert) and switch to it. The
+    /// new page's id is minted past `max_node_id() + 1`. Returns
+    /// the new index, or `None` on id overflow. Mirrors TS
+    /// `addPage()` — backs the LayerPanel `+` button.
     pub fn add_page(&mut self) -> Option<usize> {
         let next_id = self.max_node_id().checked_add(1)?;
         let n = self.pages.len() + 1;
@@ -370,7 +365,17 @@ impl Document {
     /// reserving the rail when the panel won't paint left a
     /// blank strip).
     pub fn property_panel_visible(&self) -> bool {
-        self.selection_count() == 1 && self.selected_node().is_some()
+        match self.selection_count() {
+            1 => self.selected_node().is_some(),
+            n if n >= 2 => self.selection_bounds().is_some(),
+            _ => false,
+        }
+    }
+
+    /// Union of `aggregate_bounds` across selected nodes on the
+    /// active page. Backs the multi-select panel's X/Y/W/H.
+    pub fn selection_bounds(&self) -> Option<crate::Rect> {
+        union_aggregate_bounds(self.active_page()?, &self.selected_set)
     }
 
     /// Cmd/Ctrl+A — select every top-level node on the active
@@ -765,20 +770,11 @@ impl Document {
         None
     }
 
-    /// Run light invariant checks on the document. Returns `Err`
-    /// with a human-readable message on the first violation:
-    /// - `pages` is empty (a document must have at least one
-    ///   page; use `Document::empty()` to construct a default
-    ///   single-page document)
-    /// - duplicate node id anywhere in any page
-    /// - `active_page_index` out of range
-    ///
-    /// Codex Step 2 R2 CONCERN-1: the prior version skipped the
-    /// `active_page_index` check when `pages.is_empty()`, leaving
-    /// a (Document { pages: vec![], active_page_index: 99, … })
-    /// silently valid. Empty pages is itself an invariant
-    /// violation; this version rejects it explicitly so the
-    /// active_page_index check applies unconditionally.
+    /// Run light invariant checks; Err on first violation: empty
+    /// `pages`, duplicate node id, or `active_page_index` out of
+    /// range. The empty-pages check fires BEFORE the index check
+    /// so a document with `pages: vec![]` + `active_page_index:
+    /// 99` is consistently rejected.
     pub fn validate(&self) -> Result<(), String> {
         if self.pages.is_empty() {
             return Err("Document::pages is empty (use Document::empty() for the default single-page shape)".to_string());
