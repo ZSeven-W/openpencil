@@ -158,7 +158,15 @@ impl NodeSnapshot {
     /// hides those inputs anyway since `is_multi` flips them
     /// inert.
     fn from_multi_selection(doc: &Document) -> Option<Self> {
-        let bounds = doc.selection_bounds()?;
+        // Confirm at least one selected id resolves on the active
+        // page — bails on cross-page selections (where nothing
+        // resolves) but NOT on all-zero-size selections (matches
+        // single-select semantics, which paint the panel even
+        // for a 0x0 node).
+        if !doc.property_panel_visible() || doc.selection_count() < 2 {
+            return None;
+        }
+        let bounds = doc.selection_bounds().unwrap_or(crate::Rect::ZERO);
         let n = doc.selection_count();
         Some(Self {
             kind: format!("{} items", n),
@@ -520,7 +528,7 @@ impl Widget for PropertyPanel {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::document::NodeId;
+    use crate::document::{NodeId, NodeKind};
 
     #[test]
     fn for_selection_with_real_node_builds_snapshot() {
@@ -637,6 +645,30 @@ mod tests {
         // Position is always shown (informational X/Y/W/H).
         // Verify the aggregate flag too as a sanity guard.
         assert!(panel.is_multi);
+    }
+
+    #[test]
+    fn multi_select_panel_shows_even_when_all_zero_size() {
+        // Symmetry with single-select: a 0x0 node still shows the
+        // panel, so two 0x0 nodes selected together must too.
+        let mut doc = Document::empty();
+        let p = doc.active_page_index;
+        // Two leaf nodes whose `aggregate_bounds` is `Rect::ZERO`
+        // (no bounds, no children). `Node::leaf` defaults to
+        // zero-sized bounds.
+        doc.pages[p].children = vec![
+            Node::leaf(50, NodeKind::Rect, "A"),
+            Node::leaf(51, NodeKind::Rect, "B"),
+        ];
+        doc.set_single_selection(NodeId::new(50));
+        doc.toggle_selection(NodeId::new(51));
+        assert_eq!(doc.selection_count(), 2);
+        // Visible despite the union being None.
+        assert!(doc.property_panel_visible());
+        let panel = PropertyPanel::for_selection(&doc).expect("0x0 multi-select must paint");
+        assert!(panel.is_multi);
+        assert_eq!(panel.snapshot.width, 0);
+        assert_eq!(panel.snapshot.height, 0);
     }
 
     #[test]

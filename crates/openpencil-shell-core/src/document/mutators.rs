@@ -365,10 +365,13 @@ impl Document {
     /// reserving the rail when the panel won't paint left a
     /// blank strip).
     pub fn property_panel_visible(&self) -> bool {
+        // Single + multi treat 0x0 nodes identically: panel shows
+        // as long as at least one id resolves on the active page.
         match self.selection_count() {
-            1 => self.selected_node().is_some(),
-            n if n >= 2 => self.selection_bounds().is_some(),
-            _ => false,
+            0 => false,
+            _ => self
+                .active_page()
+                .is_some_and(|p| self.selected_set.iter().any(|id| p.find(*id).is_some())),
         }
     }
 
