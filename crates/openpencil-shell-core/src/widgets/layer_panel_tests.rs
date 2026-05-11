@@ -169,3 +169,28 @@ fn drop_target_at_resolves_before_and_after_halves() {
     assert_eq!(after.position, DropPosition::After);
     assert!((after.indicator_y - (y0 + LAYER_ROW_HEIGHT)).abs() < 0.5);
 }
+
+#[test]
+fn drop_target_at_in_empty_area_below_rows_drops_at_end() {
+    let doc = Document::sample();
+    let panel = LayerPanel::from_document(&doc);
+    // Make the panel rect tall enough that there's real empty
+    // space below the last layer row.
+    let rect = Rect {
+        origin: Point2D::new(0.0, 0.0),
+        size: Point2D::new(LAYER_PANEL_WIDTH, panel.intrinsic_height() + 200.0),
+    };
+    let layers_top = 8.0
+        + SECTION_HEADER_HEIGHT
+        + panel.pages.len() as f32 * PAGE_ROW_HEIGHT
+        + SECTION_GAP
+        + SECTION_HEADER_HEIGHT;
+    let rows_bottom = layers_top + panel.items.len() as f32 * LAYER_ROW_HEIGHT;
+    // Cursor 50 px below the last row — still inside panel rect.
+    let drop = panel
+        .drop_target_at(rect, Point2D::new(rect.size.x / 2.0, rows_bottom + 50.0))
+        .expect("below-rows hit should drop at end");
+    assert_eq!(drop.position, DropPosition::After);
+    assert_eq!(drop.anchor, panel.items.last().unwrap().node_id);
+    assert!((drop.indicator_y - rows_bottom).abs() < 0.5);
+}

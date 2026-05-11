@@ -528,6 +528,9 @@ impl WidgetHost {
         if let Some(d) = self.layer_drag.as_mut() {
             d.current_x = x;
             d.current_y = y;
+            // VERTICAL-ONLY activation (4 px). See the native host
+            // for the rationale: pure horizontal wiggle must not
+            // steal click-feel from row-level gestures.
             if !d.active && (y - d.start_y).abs() > 4.0 {
                 d.active = true;
             }
