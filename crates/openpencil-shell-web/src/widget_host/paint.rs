@@ -57,6 +57,17 @@ impl WidgetHost {
                 if !d.active {
                     return None;
                 }
+                // Suppress the indicator when the source has been
+                // removed from the active page mid-drag — see the
+                // native host for the rationale.
+                if self
+                    .document
+                    .active_page()
+                    .map(|p| p.find(d.source).is_none())
+                    .unwrap_or(true)
+                {
+                    return None;
+                }
                 let probe = LayerPanel::from_document(&self.document);
                 probe.drop_target_at(layer_panel_rect, Point2D::new(d.current_x, d.current_y))
             });

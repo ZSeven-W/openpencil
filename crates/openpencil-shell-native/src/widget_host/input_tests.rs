@@ -213,3 +213,85 @@ fn marquee_drag_with_shift_extends_existing_selection() {
     ids.sort();
     assert_eq!(ids, vec![60, 61, 62]);
 }
+
+#[test]
+fn layer_drag_to_reorder_commits_on_release_with_threshold_move() {
+    use openpencil_shell_core::document::{Node, NodeKind};
+    use openpencil_shell_core::widgets::TOP_BAR_HEIGHT;
+    let mut host = WidgetHostNative::new();
+    let page_idx = host.document.active_page_index;
+    // Three top-level nodes, ids 70 / 71 / 72 — children
+    // already painted as flat layer rows.
+    host.document.pages[page_idx].children = vec![
+        Node::leaf(70, NodeKind::Rect, "A"),
+        Node::leaf(71, NodeKind::Rect, "B"),
+        Node::leaf(72, NodeKind::Rect, "C"),
+    ];
+    host.document.clear_selection();
+    // LayerPanel row geometry — has to match the panel paint
+    // (8 px top inset + Pages section header + 1 page row +
+    // section gap + Layers section header, all walked from
+    // TOP_BAR_HEIGHT).
+    let row_h = 28.0; // LAYER_ROW_HEIGHT
+    let page_row_h = 32.0; // PAGE_ROW_HEIGHT
+    let section_header_h = 28.0;
+    let section_gap = 8.0;
+    let viewport_w = 1440.0;
+    let viewport_h = 900.0;
+    let layers_top =
+        TOP_BAR_HEIGHT + 8.0 + section_header_h + page_row_h + section_gap + section_header_h;
+    let row_y = |i: usize| layers_top + (i as f32) * row_h + row_h / 2.0;
+    let row_x = host.document.ui.layer_panel_width / 2.0;
+    // Press on row "A" (index 0) — seeds layer_drag.
+    host.apply_press(row_x, row_y(0), viewport_w, viewport_h);
+    assert!(host.layer_drag.is_some());
+    assert!(!host.layer_drag.unwrap().active);
+    // Move past threshold to row "C" (index 2) — activates drag,
+    // updates current_y so drop_target_at picks "C" After on
+    // release.
+    host.apply_cursor_move(row_x, row_y(2) + row_h / 2.0 - 4.0);
+    assert!(host.layer_drag.unwrap().active);
+    host.apply_release_with_viewport(viewport_w, viewport_h);
+    assert!(host.layer_drag.is_none(), "drag must be cleared on release");
+    // A moved after C → final order [B, C, A].
+    let order: Vec<u64> = host.document.pages[page_idx]
+        .children
+        .iter()
+        .map(|n| n.id.raw())
+        .collect();
+    assert_eq!(order, vec![71, 72, 70]);
+}
+
+#[test]
+fn layer_drag_below_activation_threshold_is_a_click_not_a_reorder() {
+    use openpencil_shell_core::document::{Node, NodeKind};
+    use openpencil_shell_core::widgets::TOP_BAR_HEIGHT;
+    let mut host = WidgetHostNative::new();
+    let page_idx = host.document.active_page_index;
+    host.document.pages[page_idx].children = vec![
+        Node::leaf(80, NodeKind::Rect, "X"),
+        Node::leaf(81, NodeKind::Rect, "Y"),
+    ];
+    host.document.clear_selection();
+    let row_y_first = TOP_BAR_HEIGHT + 8.0 + 28.0 + 32.0 + 8.0 + 28.0 + 14.0;
+    let row_x = host.document.ui.layer_panel_width / 2.0;
+    let viewport_w = 1440.0;
+    let viewport_h = 900.0;
+    host.apply_press(row_x, row_y_first, viewport_w, viewport_h);
+    // Sub-threshold move (2 px, less than 4 px activation).
+    host.apply_cursor_move(row_x, row_y_first + 2.0);
+    assert!(
+        host.layer_drag.is_some() && !host.layer_drag.unwrap().active,
+        "sub-threshold move must not activate"
+    );
+    host.apply_release_with_viewport(viewport_w, viewport_h);
+    // Click semantics: selection is on the first row, tree is
+    // unchanged.
+    let order: Vec<u64> = host.document.pages[page_idx]
+        .children
+        .iter()
+        .map(|n| n.id.raw())
+        .collect();
+    assert_eq!(order, vec![80, 81]);
+    assert_eq!(host.document.selected, NodeId::new(80));
+}

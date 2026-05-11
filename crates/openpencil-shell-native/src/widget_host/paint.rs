@@ -59,6 +59,18 @@ impl WidgetHostNative {
                 if !d.active {
                     return None;
                 }
+                // Don't paint the indicator if the dragged source
+                // has disappeared from the active page (delete /
+                // page switch mid-drag would otherwise paint a
+                // ghost indicator that no release can resolve).
+                if self
+                    .document
+                    .active_page()
+                    .map(|p| p.find(d.source).is_none())
+                    .unwrap_or(true)
+                {
+                    return None;
+                }
                 let probe = LayerPanel::from_document(&self.document);
                 probe.drop_target_at(layer_panel_rect, Point2D::new(d.current_x, d.current_y))
             });
