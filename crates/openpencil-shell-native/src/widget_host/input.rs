@@ -399,7 +399,11 @@ impl WidgetHostNative {
                 (viewport_h - TOP_BAR_HEIGHT).max(0.0),
             ),
         };
-        let panel = LayerPanel::from_document(&self.document);
+        // Build the panel with the source excluded so `drop_target_at`
+        // sees the same row layout the paint pass shows the user. If
+        // we built from the raw doc the indicator y the user saw
+        // could disagree with where the source actually lands.
+        let panel = LayerPanel::from_document_with_drag_source(&self.document, d.source);
         let cursor = openpencil_shell_core::Point2D::new(d.current_x, d.current_y);
         let Some(drop) = panel.drop_target_at(layer_rect, cursor) else {
             return true;

@@ -55,26 +55,28 @@ impl WidgetHostNative {
                     (viewport_height - TOP_BAR_HEIGHT).max(0.0),
                 ),
             };
-            let drop_target = self.layer_drag.and_then(|d| {
-                if !d.active {
-                    return None;
-                }
-                // Don't paint the indicator if the dragged source
-                // has disappeared from the active page (delete /
-                // page switch mid-drag would otherwise paint a
-                // ghost indicator that no release can resolve).
-                if self
-                    .document
-                    .active_page()
-                    .map(|p| p.find(d.source).is_none())
-                    .unwrap_or(true)
-                {
-                    return None;
-                }
-                let probe = LayerPanel::from_document(&self.document);
-                probe.drop_target_at(layer_panel_rect, Point2D::new(d.current_x, d.current_y))
+            // Build the panel for paint. While a drag is active,
+            // exclude the source's subtree so the rendered row stack
+            // mirrors the post-commit layout — both the visible rows
+            // and the drop-indicator y the user sees are then exactly
+            // what `reorder_before/after` produces on release.
+            let active_drag = self.layer_drag.filter(|d| {
+                d.active
+                    && self
+                        .document
+                        .active_page()
+                        .map(|p| p.find(d.source).is_some())
+                        .unwrap_or(false)
             });
-            let layer_panel = LayerPanel::from_document_with_drop(&self.document, drop_target);
+            let mut layer_panel = if let Some(d) = active_drag {
+                LayerPanel::from_document_with_drag_source(&self.document, d.source)
+            } else {
+                LayerPanel::from_document(&self.document)
+            };
+            if let Some(d) = active_drag {
+                layer_panel.drop_target = layer_panel
+                    .drop_target_at(layer_panel_rect, Point2D::new(d.current_x, d.current_y));
+            }
             let mut cx = PaintCx {
                 backend: &mut *frame,
             };

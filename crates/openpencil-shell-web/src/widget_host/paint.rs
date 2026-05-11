@@ -53,25 +53,25 @@ impl WidgetHost {
 
         if self.document.ui.sidebar_open {
             let layer_panel_rect = self.layer_panel_rect(viewport_height);
-            let drop_target = self.layer_drag.and_then(|d| {
-                if !d.active {
-                    return None;
-                }
-                // Suppress the indicator when the source has been
-                // removed from the active page mid-drag — see the
-                // native host for the rationale.
-                if self
-                    .document
-                    .active_page()
-                    .map(|p| p.find(d.source).is_none())
-                    .unwrap_or(true)
-                {
-                    return None;
-                }
-                let probe = LayerPanel::from_document(&self.document);
-                probe.drop_target_at(layer_panel_rect, Point2D::new(d.current_x, d.current_y))
+            // While a drag is active, paint against a panel with the
+            // source's subtree excluded — see native paint.rs.
+            let active_drag = self.layer_drag.filter(|d| {
+                d.active
+                    && self
+                        .document
+                        .active_page()
+                        .map(|p| p.find(d.source).is_some())
+                        .unwrap_or(false)
             });
-            let layer_panel = LayerPanel::from_document_with_drop(&self.document, drop_target);
+            let mut layer_panel = if let Some(d) = active_drag {
+                LayerPanel::from_document_with_drag_source(&self.document, d.source)
+            } else {
+                LayerPanel::from_document(&self.document)
+            };
+            if let Some(d) = active_drag {
+                layer_panel.drop_target = layer_panel
+                    .drop_target_at(layer_panel_rect, Point2D::new(d.current_x, d.current_y));
+            }
             let mut cx = PaintCx {
                 backend: &mut *backend,
             };

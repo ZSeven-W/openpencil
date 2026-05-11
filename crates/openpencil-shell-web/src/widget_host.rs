@@ -477,11 +477,18 @@ impl WidgetHost {
         }
         use openpencil_shell_core::widgets::{DropPosition, LayerPanel};
         let layer_rect = self.layer_panel_rect(viewport_h);
-        let panel = LayerPanel::from_document(&self.document);
+        // Source-excluded panel so the indicator y the user saw and
+        // the row landed on match the post-commit layout — see the
+        // native `commit_layer_drag` for the rationale.
+        let panel = LayerPanel::from_document_with_drag_source(&self.document, d.source);
         let cursor = Point2D::new(d.current_x, d.current_y);
         let Some(drop) = panel.drop_target_at(layer_rect, cursor) else {
             return true;
         };
+        // With the source excluded from `panel.items`, `drop.anchor`
+        // can never equal `d.source` — the self-drop case is gone,
+        // but keep a defensive equality check in case the walker
+        // contract changes.
         if drop.anchor == d.source {
             return true;
         }
