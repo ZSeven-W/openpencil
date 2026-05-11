@@ -113,6 +113,20 @@ impl WidgetHostNative {
             return true;
         }
         if let Some(d) = self.layer_drag.as_mut() {
+            // Drop the gesture if the source has disappeared from the
+            // active page (e.g., user deleted it via Cmd-X or
+            // switched pages mid-drag). Avoids stale drop-indicator
+            // paint that invites a no-op release.
+            let source_id = d.source;
+            let still_present = self
+                .document
+                .active_page()
+                .map(|p| p.find(source_id).is_some())
+                .unwrap_or(false);
+            if !still_present {
+                self.layer_drag = None;
+                return true;
+            }
             d.current_x = x;
             d.current_y = y;
             // Activation is VERTICAL-ONLY by design: layer drag-to-
