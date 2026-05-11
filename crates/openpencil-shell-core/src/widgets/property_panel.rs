@@ -65,6 +65,22 @@ struct SectionCapabilities {
 }
 
 impl SectionCapabilities {
+    /// Capability mask for the multi-select aggregate snapshot.
+    /// Keeps Size (so the union W/H actually paint), hides
+    /// fill/stroke (no aggregation in v1), keeps Layer/Effects/
+    /// Export (paint safely with the zeroed snapshot fields).
+    fn for_multi() -> Self {
+        Self {
+            flex_layout: false,
+            size_options: true,
+            opacity: true,
+            fill: false,
+            stroke: false,
+            effects: true,
+            export: true,
+        }
+    }
+
     fn for_kind(kind: &crate::document::NodeKind) -> Self {
         use crate::document::NodeKind as K;
         match kind {
@@ -178,14 +194,12 @@ impl NodeSnapshot {
             rotation_deg: 0.0,
             fill: None,
             stroke: None,
-            // Group variant in `SectionCapabilities`: flex_layout =
-            // false, size_options = false, fill = false, stroke =
-            // false — exactly the right "hide misleading default
-            // paint" mask for the v1 aggregate view. Leaves only
-            // Position (informational X/Y/W/H), Layer (opacity),
-            // Effects, and Export sections — all of which paint
-            // safely with the zeroed fields.
-            kind_variant: crate::document::NodeKind::Group,
+            // `kind_variant` is informational for the snapshot
+            // header label only — the paint capability mask is
+            // driven by `SectionCapabilities::for_multi()` instead
+            // of `for_kind`, see `paint`. Frame chosen so any
+            // future kind-specific lookups paint a neutral default.
+            kind_variant: crate::document::NodeKind::Frame,
         })
     }
 
@@ -429,7 +443,11 @@ impl Widget for PropertyPanel {
             now_ms: self.now_ms,
         };
         use crate::document::NodeKind;
-        let caps = SectionCapabilities::for_kind(&self.snapshot.kind_variant);
+        let caps = if self.is_multi {
+            SectionCapabilities::for_multi()
+        } else {
+            SectionCapabilities::for_kind(&self.snapshot.kind_variant)
+        };
         y = sections::paint_tab_strip(cx, &self.theme, &self.labels, x, y, w);
         y = sections::paint_node_header(cx, &self.theme, &self.snapshot, x, y, w);
         y = sections::paint_create_component(cx, &self.theme, &self.labels, x, y, w);
@@ -627,24 +645,21 @@ mod tests {
     }
 
     #[test]
-    fn multi_select_panel_hides_fill_and_stroke_sections() {
-        // Codex CONCERN: with `kind_variant = Frame` the fill +
-        // stroke sections would paint default placeholder values
-        // even though the snapshot's `fill` / `stroke` are None
-        // (multi-select doesn't aggregate them in v1). Using the
-        // Group variant in the snapshot mutes both sections via
-        // the existing `SectionCapabilities::for_kind` table.
+    fn multi_select_caps_keep_size_hide_fill_and_stroke() {
+        // Multi-select must paint the union W/H (Size section)
+        // while hiding fill/stroke sections that don't aggregate
+        // in v1. `for_multi` capability mask is what `paint` uses
+        // when `is_multi`, not `for_kind`.
         let mut doc = Document::sample();
         doc.set_single_selection(NodeId::new(11));
         doc.toggle_selection(NodeId::new(12));
         let panel = PropertyPanel::for_selection(&doc).expect("multi-select panel");
-        // The snapshot's kind_variant decides which sections paint.
-        let caps = SectionCapabilities::for_kind(&panel.snapshot.kind_variant);
+        assert!(panel.is_multi);
+        let caps = SectionCapabilities::for_multi();
+        assert!(caps.size_options, "multi-select must paint W/H");
         assert!(!caps.fill, "multi-select must hide fill section");
         assert!(!caps.stroke, "multi-select must hide stroke section");
-        // Position is always shown (informational X/Y/W/H).
-        // Verify the aggregate flag too as a sanity guard.
-        assert!(panel.is_multi);
+        assert!(!caps.flex_layout, "multi-select hides flex");
     }
 
     #[test]
