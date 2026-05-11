@@ -54,14 +54,14 @@ pub enum PropertyPanelAction {
 /// fill picker, a Frame hides Text properties, etc. Sections that
 /// always apply (Position / Layer / Export) aren't gated here.
 #[derive(Debug, Clone, Copy)]
-struct SectionCapabilities {
-    flex_layout: bool,
-    size_options: bool,
-    opacity: bool,
-    fill: bool,
-    stroke: bool,
-    effects: bool,
-    export: bool,
+pub(crate) struct SectionCapabilities {
+    pub(crate) flex_layout: bool,
+    pub(crate) size_options: bool,
+    pub(crate) opacity: bool,
+    pub(crate) fill: bool,
+    pub(crate) stroke: bool,
+    pub(crate) effects: bool,
+    pub(crate) export: bool,
 }
 
 impl SectionCapabilities {
@@ -262,6 +262,24 @@ pub struct PropertyPanel {
 }
 
 impl PropertyPanel {
+    /// Capability mask that drives which sections paint for this
+    /// panel state. Multi-select uses a dedicated mask (`for_multi`)
+    /// that keeps Size + Position + Layer + Effects + Export and
+    /// hides Flex + Fill + Stroke; single-select falls back to the
+    /// snapshot's `kind_variant` (`for_kind`). Paint + hit-test
+    /// must call this rather than `SectionCapabilities::for_kind`
+    /// directly so the multi-select carve-out can't regress
+    /// silently.
+    pub(crate) fn capabilities(&self) -> SectionCapabilities {
+        if self.is_multi {
+            SectionCapabilities::for_multi()
+        } else {
+            SectionCapabilities::for_kind(&self.snapshot.kind_variant)
+        }
+    }
+}
+
+impl PropertyPanel {
     /// Conditional builder — returns `Some` only when the document
     /// has an active selection. Mirrors TS `{hasSelection && ...}`.
     pub fn for_selection(doc: &Document) -> Option<Self> {
@@ -443,11 +461,7 @@ impl Widget for PropertyPanel {
             now_ms: self.now_ms,
         };
         use crate::document::NodeKind;
-        let caps = if self.is_multi {
-            SectionCapabilities::for_multi()
-        } else {
-            SectionCapabilities::for_kind(&self.snapshot.kind_variant)
-        };
+        let caps = self.capabilities();
         y = sections::paint_tab_strip(cx, &self.theme, &self.labels, x, y, w);
         y = sections::paint_node_header(cx, &self.theme, &self.snapshot, x, y, w);
         y = sections::paint_create_component(cx, &self.theme, &self.labels, x, y, w);
@@ -646,20 +660,28 @@ mod tests {
 
     #[test]
     fn multi_select_caps_keep_size_hide_fill_and_stroke() {
-        // Multi-select must paint the union W/H (Size section)
-        // while hiding fill/stroke sections that don't aggregate
-        // in v1. `for_multi` capability mask is what `paint` uses
-        // when `is_multi`, not `for_kind`.
+        // Codex CONCERN: asserting `SectionCapabilities::for_multi()`
+        // directly would self-verify the function — a regression in
+        // `paint` that swapped back to `for_kind` would still pass.
+        // Instead drive through `panel.capabilities()`, which is the
+        // single source of truth that `paint` calls.
         let mut doc = Document::sample();
         doc.set_single_selection(NodeId::new(11));
         doc.toggle_selection(NodeId::new(12));
         let panel = PropertyPanel::for_selection(&doc).expect("multi-select panel");
         assert!(panel.is_multi);
-        let caps = SectionCapabilities::for_multi();
+        let caps = panel.capabilities();
         assert!(caps.size_options, "multi-select must paint W/H");
         assert!(!caps.fill, "multi-select must hide fill section");
         assert!(!caps.stroke, "multi-select must hide stroke section");
         assert!(!caps.flex_layout, "multi-select hides flex");
+        // Cross-check the single-select fallback: a Rect selection
+        // routes through `for_kind`, which exposes fill/stroke.
+        doc.set_single_selection(NodeId::new(13)); // Button background (Rect)
+        let single = PropertyPanel::for_selection(&doc).expect("single-select panel");
+        let caps_single = single.capabilities();
+        assert!(caps_single.fill, "single Rect must paint fill");
+        assert!(caps_single.stroke, "single Rect must paint stroke");
     }
 
     #[test]
