@@ -19,10 +19,10 @@ crates/
 
 - **shell-core stays wasm32-clean** (spec v19 §1.2). No skia-safe / winit / accesskit_winit. The `RenderBackend` trait is the only seam between widget code and platform.
 - **Widget code lives in shell-core only.** Hosts (shell-native `widget_host.rs`, shell-web `widget_host.rs`) are the ONLY files allowed to call `openpencil_shell_core::widgets::*`. Boundary script: `tools/check-widget-boundary.sh`.
-- **Max 800 lines per file** — same rule as the TS workspace. `property_panel.rs` is split into 5 files (see PropertyPanel row in the widget table). `widget_host.rs` (shell-native) is split into a slim spine + 6 sibling submodules under `widget_host/` (see "Native widget_host layout" below).
+- **Max 800 lines per file** — same rule as the TS workspace. `property_panel.rs` is split into 5 files (see PropertyPanel row in the widget table). `widget_host.rs` (shell-native) is split into a slim spine + 6 sibling submodules under `widget_host/` (see "Native widget_host layout" below). `document.rs` is split into a spine + 5 sibling submodules under `document/` — types in `document.rs`, `impl Document` in `mutators.rs`, free walkers + `ReorderDirection` in `walkers.rs`, chat types in `chat.rs`, tests split into `tests_mutators.rs` + `tests_geometry.rs`.
 - **Web bundle ceiling: 1 MiB gzip + 0 env.\* imports.** Enforced by `tools/check-wasm-bundle.sh`. Ceiling currently at ~916 KB after embedding Roboto + NotoSansCJK subset.
 
-## Document model (`shell-core/src/document.rs`)
+## Document model (`shell-core/src/document/`)
 
 Single source of truth for editor state — mirrors TS `useCanvasStore` + `useDocumentStore` + `useAIStore` collapsed into one.
 
