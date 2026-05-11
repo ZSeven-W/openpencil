@@ -170,10 +170,14 @@ impl NodeSnapshot {
             rotation_deg: 0.0,
             fill: None,
             stroke: None,
-            // Frame variant hides Effects + Export sections AND
-            // suppresses the stroke section — closest match for an
-            // aggregate "untyped multi-selection" placeholder.
-            kind_variant: crate::document::NodeKind::Frame,
+            // Group variant in `SectionCapabilities`: flex_layout =
+            // false, size_options = false, fill = false, stroke =
+            // false — exactly the right "hide misleading default
+            // paint" mask for the v1 aggregate view. Leaves only
+            // Position (informational X/Y/W/H), Layer (opacity),
+            // Effects, and Export sections — all of which paint
+            // safely with the zeroed fields.
+            kind_variant: crate::document::NodeKind::Group,
         })
     }
 
@@ -612,6 +616,27 @@ mod tests {
         assert!(panel
             .hit_test_action(rect, Point2D::new(140.0, 100.0))
             .is_none());
+    }
+
+    #[test]
+    fn multi_select_panel_hides_fill_and_stroke_sections() {
+        // Codex CONCERN: with `kind_variant = Frame` the fill +
+        // stroke sections would paint default placeholder values
+        // even though the snapshot's `fill` / `stroke` are None
+        // (multi-select doesn't aggregate them in v1). Using the
+        // Group variant in the snapshot mutes both sections via
+        // the existing `SectionCapabilities::for_kind` table.
+        let mut doc = Document::sample();
+        doc.set_single_selection(NodeId::new(11));
+        doc.toggle_selection(NodeId::new(12));
+        let panel = PropertyPanel::for_selection(&doc).expect("multi-select panel");
+        // The snapshot's kind_variant decides which sections paint.
+        let caps = SectionCapabilities::for_kind(&panel.snapshot.kind_variant);
+        assert!(!caps.fill, "multi-select must hide fill section");
+        assert!(!caps.stroke, "multi-select must hide stroke section");
+        // Position is always shown (informational X/Y/W/H).
+        // Verify the aggregate flag too as a sanity guard.
+        assert!(panel.is_multi);
     }
 
     #[test]
