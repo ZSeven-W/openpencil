@@ -658,6 +658,74 @@ mod tests {
             .is_none());
     }
 
+    /// Minimal `RenderBackend` that counts paint ops — used by the
+    /// next test to observe what `paint` actually emits. Mirrors the
+    /// canvas_viewport tests' `RecordingBackend`.
+    #[derive(Default)]
+    struct CountingBackend {
+        text: usize,
+        round_rects: usize,
+    }
+    impl crate::RenderBackend for CountingBackend {
+        fn begin_frame(&mut self) {}
+        fn end_frame(&mut self) {}
+        fn fill_rect(&mut self, _: Rect, _: Color) {}
+        fn stroke_rect(&mut self, _: Rect, _: Color, _: f32) {}
+        fn draw_text(&mut self, _: &crate::TextLayout, _: Point2D) {
+            self.text += 1;
+        }
+        fn clip_rect(&mut self, _: Rect) {}
+        fn save(&mut self) {}
+        fn restore(&mut self) {}
+        fn translate(&mut self, _: Point2D) {}
+        fn stroke_line(&mut self, _: Point2D, _: Point2D, _: Color, _: f32) {}
+        fn fill_round_rect(&mut self, _: Rect, _: f32, _: Color) {
+            self.round_rects += 1;
+        }
+        fn stroke_round_rect(&mut self, _: Rect, _: f32, _: Color, _: f32) {}
+        fn stroke_svg_path(&mut self, _: &str, _: Point2D, _: f32, _: Color, _: f32) {}
+        fn resize(&mut self, _: u32, _: u32) {}
+        fn dpi_scale(&self) -> f32 {
+            1.0
+        }
+    }
+
+    #[test]
+    fn multi_select_paint_diverges_from_full_section_paint() {
+        // Paint-output integration test: multi-select hides
+        // fill+stroke+flex via `for_multi`; single-Frame paints all
+        // sections via `for_kind`. If `paint` regressed to bypass
+        // `capabilities()` for the multi panel, the two would emit
+        // identical ops.
+        let mut doc = Document::sample();
+        doc.set_single_selection(NodeId::new(11));
+        doc.toggle_selection(NodeId::new(12));
+        let panel_multi = PropertyPanel::for_selection(&doc).expect("multi");
+        doc.set_single_selection(NodeId::new(10));
+        let panel_frame = PropertyPanel::for_selection(&doc).expect("frame");
+        assert!(!panel_frame.is_multi);
+
+        let rect = Rect {
+            origin: Point2D::new(0.0, 0.0),
+            size: Point2D::new(280.0, 1200.0),
+        };
+        let multi = paint_and_count(&panel_multi, rect);
+        let frame = paint_and_count(&panel_frame, rect);
+        assert_ne!(multi, frame, "multi must paint fewer ops than single-Frame");
+        assert!(multi.0 > 5 && multi.1 > 0, "Size section must paint");
+    }
+
+    fn paint_and_count(panel: &PropertyPanel, rect: Rect) -> (usize, usize) {
+        let mut backend = CountingBackend::default();
+        {
+            let mut cx = PaintCx {
+                backend: &mut backend,
+            };
+            panel.paint(&mut cx, rect);
+        }
+        (backend.text, backend.round_rects)
+    }
+
     #[test]
     fn multi_select_caps_keep_size_hide_fill_and_stroke() {
         // Codex CONCERN: asserting `SectionCapabilities::for_multi()`
