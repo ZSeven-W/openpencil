@@ -40,6 +40,7 @@ pub enum AgentSettingsHit {
     ToggleImagesAdvanced,
     TestImageSearch,
     AddGenConfig,
+    FocusMcpPort,
     Outside,
     Inside,
 }
@@ -113,6 +114,7 @@ impl<'a> AgentSettingsPanel<'a> {
             AgentSettingsTab::Mcp => match agent_settings_mcp::hit_test(content_rect(panel), scrolled) {
                 McpHit::ToggleServer => return AgentSettingsHit::ToggleMcpServer,
                 McpHit::ToggleCli(cli) => return AgentSettingsHit::ToggleMcpCli(cli),
+                McpHit::FocusPort => return AgentSettingsHit::FocusMcpPort,
                 McpHit::None => {}
             },
             AgentSettingsTab::Images => match agent_settings_images::hit_test(
