@@ -144,7 +144,29 @@ pub fn apply_payload(doc: &mut Document, payload: DocPayload) -> Result<(), Stri
     } else {
         doc.active_page_index = payload.active_page_index.min(doc.pages.len() - 1);
     }
+    // Open replaces the document tree — every reference to a NodeId
+    // from the previous doc would point at a dead row. Wipe the
+    // undo stack + any in-progress UI state so a stale `pen_in_progress
+    // = Some(NodeId(42))` left over from the old doc doesn't trigger
+    // a phantom pen render or a panic on the next press.
     doc.clear_selection();
+    doc.history.past.clear();
+    doc.history.future.clear();
+    doc.ui.pen_in_progress = None;
+    doc.ui.pen_cursor_doc = None;
+    doc.ui.pending_pen_history = None;
+    doc.ui.text_editing = None;
+    doc.ui.layer_rename = None;
+    doc.ui.color_picker = None;
+    doc.ui.property_focus = None;
+    doc.ui.property_input_draft.clear();
+    doc.ui.settings_input_draft.clear();
+    doc.ui.agent_settings.focus = None;
+    doc.ui.agent_settings_drag = None;
+    doc.ui.layer_context_menu = None;
+    doc.ui.locale_picker_open = false;
+    doc.ui.shape_picker_open = false;
+    doc.ui.fill_type_picker_open = false;
     Ok(())
 }
 
