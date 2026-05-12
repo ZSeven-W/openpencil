@@ -30,8 +30,10 @@ mod zh_cn;
 mod zh_tw;
 
 /// Translate `key` for `locale`. Returns the key itself when no
-/// entry exists (debug-friendly fallback).
-pub fn translate<'a>(locale: Locale, key: &'a str) -> &'a str {
+/// entry exists. `'static` because every per-locale table value is
+/// a string literal and callers pass static keys — letting widget
+/// builders store the slice instead of cloning a `String` per frame.
+pub fn translate(locale: Locale, key: &'static str) -> &'static str {
     let lookup = match locale {
         Locale::EnUs => en::lookup(key),
         Locale::ZhCn => zh_cn::lookup(key),

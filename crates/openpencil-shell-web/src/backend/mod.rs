@@ -326,6 +326,29 @@ impl RenderBackend for WebBackend {
         self.surface.canvas().draw_path(&path, &paint);
     }
 
+    fn fill_svg_path(
+        &mut self,
+        d: &str,
+        top_left: Point2D,
+        size: f32,
+        viewbox: f32,
+        color: Color,
+    ) {
+        let Some(path) = skia_safe::utils::parse_path::from_svg(d) else {
+            return;
+        };
+        let s = size / viewbox;
+        let mut matrix = skia_safe::Matrix::new_identity();
+        matrix.set_scale_translate((s, s), (top_left.x, top_left.y));
+        let path = path.with_transform(&matrix);
+        let mut paint = skia_safe::Paint::new(
+            skia_safe::Color4f::new(color.r, color.g, color.b, color.a),
+            None,
+        );
+        paint.set_anti_alias(true);
+        self.surface.canvas().draw_path(&path, &paint);
+    }
+
     fn draw_text(&mut self, layout: &TextLayout, origin: Point2D) {
         // Step 3 codex stop-hook fix: actually render text via
         // `Canvas::draw_str` + embedded Typefaces (the C-hard

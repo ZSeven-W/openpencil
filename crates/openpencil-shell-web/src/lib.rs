@@ -235,6 +235,16 @@ impl Drop for WebShell {
 /// Without the `skia` feature this is a stub that returns the
 /// fields-less `WebShell` after validating the canvas element exists
 /// — useful only for the kickoff §1.2 wasm32-clean compile guard CI.
+/// Wall-clock ms since navigation. Falls back to 0 if either
+/// `window` or `performance` is unavailable (e.g. WebWorker).
+#[cfg(feature = "skia")]
+fn now_ms_perf() -> u64 {
+    web_sys::window()
+        .and_then(|w| w.performance())
+        .map(|p| p.now() as u64)
+        .unwrap_or(0)
+}
+
 #[cfg(feature = "skia")]
 #[wasm_bindgen]
 pub fn mount(canvas_id: &str) -> Result<WebShell, JsValue> {
@@ -433,24 +443,39 @@ pub fn mount(canvas_id: &str) -> Result<WebShell, JsValue> {
                 "mousedown",
                 listeners,
                 move |evt: MouseEvent| {
-                    if evt.button() != 0 {
+                    let button = evt.button();
+                    if button != 0 && button != 2 {
                         return;
                     }
                     let mut inner = inner_md.borrow_mut();
-                    // Forward the press-time shift state into the
-                    // host so apply_press can branch on shift+click.
                     inner.host.set_modifier_shift(evt.shift_key());
+                    inner.host.set_now_ms(now_ms_perf());
                     let (w, h) = (
                         inner.backend.canvas_width() as f32,
                         inner.backend.canvas_height() as f32,
                     );
-                    let consumed =
-                        inner
-                            .host
-                            .apply_press(evt.offset_x() as f32, evt.offset_y() as f32, w, h);
+                    let x = evt.offset_x() as f32;
+                    let y = evt.offset_y() as f32;
+                    let consumed = if button == 2 {
+                        inner.host.apply_right_press(x, y, w, h)
+                    } else {
+                        inner.host.apply_press(x, y, w, h)
+                    };
                     if consumed {
                         let _ = inner.repaint();
                     }
+                },
+            )?;
+        }
+        // Suppress browser's native context menu over the canvas so
+        // the right-click is reserved for our layer-row menu.
+        {
+            add_listener::<MouseEvent, _, _>(
+                &canvas_target,
+                "contextmenu",
+                listeners,
+                move |evt: MouseEvent| {
+                    evt.prevent_default();
                 },
             )?;
         }
@@ -598,6 +623,15 @@ pub fn mount(canvas_id: &str) -> Result<WebShell, JsValue> {
                         }
                         "v" if is_mod && !shift => {
                             consumed = inner.host.apply_paste();
+                        }
+                        "z" if is_mod && !shift => {
+                            consumed = inner.host.apply_undo();
+                        }
+                        "Z" if is_mod && shift => {
+                            consumed = inner.host.apply_redo();
+                        }
+                        "y" if is_mod && !shift => {
+                            consumed = inner.host.apply_redo();
                         }
                         _ => {
                             // Suppress apply_text whenever Cmd /

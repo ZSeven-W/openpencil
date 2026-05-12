@@ -76,6 +76,16 @@ pub enum Icon {
     Sparkles,
     /// X — close affordance.
     Close,
+    /// Trash2 — proper delete affordance (line-art trash can).
+    Trash,
+    /// Copy — duplicate / overlapping rectangles.
+    Copy,
+    /// Pencil — rename / edit affordance.
+    Pencil,
+    /// ArrowUp — move up.
+    ArrowUp,
+    /// ArrowDown — move down.
+    ArrowDown,
     /// ChevronUp — collapse/expand pair with [`Icon::ChevronDown`].
     ChevronUp,
     /// MessageSquare — chat bubble icon (collapsed AI chat pill).
@@ -122,6 +132,16 @@ pub enum Icon {
     /// when the row is unlocked, so the icon shape itself
     /// signals the state (TS parity).
     LockOpen,
+    /// Lucide `github.svg` — used for the GitHub Copilot provider.
+    Github,
+    /// Lucide `bot.svg` — used for OpenCode / generic-bot providers.
+    Bot,
+    /// Lucide `terminal.svg` — used for CLI providers.
+    Terminal,
+    /// Lucide `image.svg` — used for the Images settings tab.
+    Image,
+    /// Lucide `settings.svg` — used for the System settings tab.
+    Settings,
 }
 
 impl Icon {
@@ -153,6 +173,11 @@ impl Icon {
             Icon::FolderOpen => FOLDER_OPEN,
             Icon::Sparkles => SPARKLES,
             Icon::Close => CLOSE,
+            Icon::Trash => TRASH,
+            Icon::Copy => COPY,
+            Icon::Pencil => PENCIL,
+            Icon::ArrowUp => ARROW_UP,
+            Icon::ArrowDown => ARROW_DOWN,
             Icon::ChevronUp => CHEVRON_UP,
             Icon::MessageSquare => MESSAGE_SQUARE,
             Icon::LayoutGrid => LAYOUT_GRID,
@@ -172,6 +197,11 @@ impl Icon {
             Icon::EyeOff => EYE_OFF,
             Icon::Lock => LOCK,
             Icon::LockOpen => LOCK_OPEN,
+            Icon::Github => GITHUB,
+            Icon::Bot => BOT,
+            Icon::Terminal => TERMINAL,
+            Icon::Image => IMAGE,
+            Icon::Settings => SETTINGS,
         }
     }
 }
@@ -362,6 +392,44 @@ const UNLINK: &[&str] = &[
 // Lucide `check.svg`.
 const CHECK: &[&str] = &["M20 6 9 17l-5-5"];
 
+// Lucide `github.svg`.
+const GITHUB: &[&str] = &[
+    "M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.403 5.403 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4",
+    "M9 18c-4.51 2-5-2-7-2",
+];
+
+// Lucide `bot.svg` — friendly robot, used for code-CLI providers.
+const BOT: &[&str] = &[
+    "M12 8V4H8",
+    "M2 14h2",
+    "M20 14h2",
+    "M15 13v2",
+    "M9 13v2",
+    "M12 8H8a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2h-4",
+];
+
+// Lucide `square-terminal.svg` — chevron + underline inside a
+// rounded square. Three separate <path>/<rect> elements lifted
+// straight from the source SVG.
+const TERMINAL: &[&str] = &[
+    "m7 11 2-2-2-2",
+    "M11 13h4",
+    "M3 5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z",
+];
+
+// Lucide `image.svg`.
+const IMAGE: &[&str] = &[
+    "M21 15V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-4",
+    "M9 9a2 2 0 1 0 0 .01",
+    "m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21",
+];
+
+// Lucide `settings.svg`.
+const SETTINGS: &[&str] = &[
+    "M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z",
+    "M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z",
+];
+
 // Lucide `arrow-up-right.svg`.
 const ARROW_UP_RIGHT: &[&str] = &["M7 7h10v10", "M7 17 17 7"];
 
@@ -432,6 +500,33 @@ pub fn draw_icon(
         backend.stroke_svg_path(d, top_left, size, color, stroke_width);
     }
 }
+
+// Lucide `trash-2` — line-art trash can.
+const TRASH: &[&str] = &[
+    "M3 6h18",
+    "M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6",
+    "M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2",
+    "M10 11v6",
+    "M14 11v6",
+];
+
+// Lucide `copy` — two stacked rectangles.
+const COPY: &[&str] = &[
+    "M20 9h-9a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h9a2 2 0 0 0 2-2v-9a2 2 0 0 0-2-2z",
+    "M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1",
+];
+
+// Lucide `pencil`.
+const PENCIL: &[&str] = &[
+    "M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z",
+    "M15 5l4 4",
+];
+
+// Lucide `arrow-up`.
+const ARROW_UP: &[&str] = &["M12 19V5", "M5 12l7-7 7 7"];
+
+// Lucide `arrow-down`.
+const ARROW_DOWN: &[&str] = &["M12 5v14", "M5 12l7 7 7-7"];
 
 #[cfg(test)]
 mod tests {

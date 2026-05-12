@@ -76,7 +76,13 @@ impl WidgetHostNative {
             if let Some(d) = active_drag {
                 layer_panel.drop_target = layer_panel
                     .drop_target_at(layer_panel_rect, Point2D::new(d.current_x, d.current_y));
+                // Floating ghost — keeps the source visible mid-drag.
+                if let Some(item) = LayerPanel::ghost_item_for(&self.document, d.source) {
+                    layer_panel.drag_ghost = Some((item, d.current_y));
+                }
             }
+            layer_panel.now_ms = self.now_ms;
+            layer_panel.caret_anchor_ms = self.document.ui.rename_caret_anchor_ms;
             let mut cx = PaintCx {
                 backend: &mut *frame,
             };
@@ -113,7 +119,8 @@ impl WidgetHostNative {
             size: Point2D::new(canvas_w, canvas_h),
         };
         if canvas_w > 0.0 && canvas_h > 0.0 {
-            let canvas = CanvasViewport::from_document(&self.document);
+            let mut canvas = CanvasViewport::from_document(&self.document);
+            canvas.now_ms = self.now_ms;
             let mut cx = PaintCx {
                 backend: &mut *frame,
             };
@@ -220,6 +227,54 @@ impl WidgetHostNative {
                 backend: &mut *frame,
             };
             picker.paint(&mut cx, picker_rect);
+        }
+
+        // 10a. Agent-settings modal — top-most overlay when open.
+        if self.document.ui.agent_settings_open {
+            use openpencil_shell_core::widgets::agent_settings_panel::AgentSettingsPanel;
+            // Dim scrim across the full viewport.
+            let scrim_color = openpencil_shell_core::Color {
+                r: 0.0,
+                g: 0.0,
+                b: 0.0,
+                a: 0.45,
+            };
+            frame.fill_rect(
+                Rect {
+                    origin: Point2D::new(0.0, 0.0),
+                    size: Point2D::new(viewport_width, viewport_height),
+                },
+                scrim_color,
+            );
+            let panel = AgentSettingsPanel::for_document(&self.document);
+            let panel_rect = panel.rect(viewport_width, viewport_height);
+            let mut cx = PaintCx {
+                backend: &mut *frame,
+            };
+            panel.paint(&mut cx, panel_rect);
+        }
+
+        // 10b. Color picker — floating overlay near the right rail.
+        if let Some(state) = self.document.ui.color_picker.clone() {
+            use openpencil_shell_core::widgets::color_picker::ColorPicker;
+            let picker = ColorPicker::for_state(&self.document, state);
+            let picker_rect = picker.rect(viewport_width, viewport_height);
+            let mut cx = PaintCx {
+                backend: &mut *frame,
+            };
+            picker.paint(&mut cx, picker_rect);
+        }
+
+        // 11. Layer context menu — right-click overlay above
+        //     everything else.
+        if let Some(state) = self.document.ui.layer_context_menu {
+            use openpencil_shell_core::widgets::layer_context_menu::LayerContextMenu;
+            let menu = LayerContextMenu::for_state(&self.document, state);
+            let menu_rect = menu.rect();
+            let mut cx = PaintCx {
+                backend: &mut *frame,
+            };
+            menu.paint(&mut cx, menu_rect);
         }
     }
 }

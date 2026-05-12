@@ -1,18 +1,11 @@
-//! Non-press input handlers on `WidgetHostNative`: wheel, pan
-//! gesture, cursor-move (drives every active drag), mouse release
-//! (with + without viewport), keyboard text / backspace / send /
-//! escape, property-panel action dispatch, click (AI chat panel +
-//! Toolbar + LayerPanel rows + chat-defocus).
-//!
-//! Pulled out of `widget_host.rs` to keep the spine file under the
-//! 800-line ceiling. `apply_press` lives in `press.rs`.
+//! Non-press input handlers on `WidgetHostNative`. press → press.rs.
 
 use super::helpers::{
     parse_hex_color, resize_bounds, PANEL_MAX_WIDTH, PANEL_MIN_WIDTH, TOOLBAR_INSET_X,
     TOOLBAR_INSET_Y,
 };
 use super::{PanelResizeKind, WidgetHostNative};
-use openpencil_shell_core::document::{ChatAnchor, PropertyFocus, ReorderDirection};
+use openpencil_shell_core::document::{ChatAnchor, PropertyFocus};
 use openpencil_shell_core::widgets::{
     AIChatHit, AIChatPlaceholder, LayerPanel, LayoutCx, Toolbar, Widget, TOOLBAR_WIDTH,
     TOP_BAR_HEIGHT,
@@ -20,8 +13,15 @@ use openpencil_shell_core::widgets::{
 use openpencil_shell_core::{Point2D, Rect};
 
 impl WidgetHostNative {
-    /// Apply a wheel event — zoom centered at `(x, y)` when over
-    /// the canvas. Returns true if a redraw is needed.
+    /// True iff a text-input surface owns the keyboard.
+    pub(in crate::widget_host) fn input_active(&self) -> bool {
+        self.document.ui.layer_rename.is_some()
+            || self.document.ui.text_editing.is_some()
+            || self.document.ui.property_focus.is_some()
+            || self.document.chat.focused
+    }
+
+    /// Wheel event — zoom centered at (x, y) over the canvas.
     pub fn apply_wheel(
         &mut self,
         x: f32,
@@ -30,23 +30,36 @@ impl WidgetHostNative {
         viewport_width: f32,
         viewport_height: f32,
     ) -> bool {
+        // Agent-settings modal owns wheel.
+        if self.document.ui.agent_settings_open {
+            use openpencil_shell_core::widgets::agent_settings_panel::AgentSettingsPanel;
+            let panel = AgentSettingsPanel::for_document(&self.document);
+            let panel_rect = panel.rect(viewport_width, viewport_height);
+            if panel_rect.origin.x <= x
+                && x <= panel_rect.origin.x + panel_rect.size.x
+                && panel_rect.origin.y <= y
+                && y <= panel_rect.origin.y + panel_rect.size.y
+            {
+                let total = panel.content_total_height();
+                let viewport_h_inner = panel_rect.size.y - 48.0;
+                let max_scroll = (total - viewport_h_inner).max(0.0);
+                let next =
+                    (self.document.ui.agent_settings.scroll_y - delta_y).clamp(0.0, max_scroll);
+                self.document.ui.agent_settings.scroll_y = next;
+                return true;
+            }
+        }
         if !self.over_canvas(x, y, viewport_width, viewport_height) {
             return false;
         }
-        // Cursor in canvas-local coords — use canvas_region's
-        // dynamic left edge so cursor-centered zoom stays anchored
-        // when the sidebar is collapsed.
+        // Canvas-local coords keep the zoom anchor under the cursor.
         let (cx0, cy0, _cw, _ch) = self.canvas_region(viewport_width, viewport_height);
         let cursor = Point2D::new(x - cx0, y - cy0);
         self.document.viewport.zoom_at(cursor, delta_y);
         true
     }
 
-    /// Apply a 2-finger trackpad pan gesture — translate the
-    /// canvas viewport by `(dx, dy)` directly. Step 5 makes
-    /// trackpad swipes feel native (Figma convention: 2-finger
-    /// swipe pans, pinch / Cmd+swipe / mouse-wheel zoom). Returns
-    /// true if a redraw is needed.
+    /// 2-finger trackpad pan — translate viewport by (dx, dy).
     pub fn apply_pan_gesture(
         &mut self,
         x: f32,
@@ -56,6 +69,24 @@ impl WidgetHostNative {
         viewport_width: f32,
         viewport_height: f32,
     ) -> bool {
+        // Agent-settings modal owns trackpad scroll same as wheel.
+        if self.document.ui.agent_settings_open {
+            use openpencil_shell_core::widgets::agent_settings_panel::AgentSettingsPanel;
+            let panel = AgentSettingsPanel::for_document(&self.document);
+            let panel_rect = panel.rect(viewport_width, viewport_height);
+            if panel_rect.origin.x <= x
+                && x <= panel_rect.origin.x + panel_rect.size.x
+                && panel_rect.origin.y <= y
+                && y <= panel_rect.origin.y + panel_rect.size.y
+            {
+                let total = panel.content_total_height();
+                let viewport_h_inner = panel_rect.size.y - 48.0;
+                let max_scroll = (total - viewport_h_inner).max(0.0);
+                let next = (self.document.ui.agent_settings.scroll_y - dy).clamp(0.0, max_scroll);
+                self.document.ui.agent_settings.scroll_y = next;
+                return true;
+            }
+        }
         if !self.over_canvas(x, y, viewport_width, viewport_height) {
             return false;
         }
@@ -66,9 +97,49 @@ impl WidgetHostNative {
         true
     }
 
-    /// Cursor-move handler. Drives canvas pan-drag, chat-panel
-    /// drag, or no-op. Returns whether the host should repaint.
     pub fn apply_cursor_move(&mut self, x: f32, y: f32) -> bool {
+        if self.document.ui.agent_settings_open && self.update_agent_settings_hover(x, y) { return true; }
+        if let Some(state) = self.document.ui.color_picker.clone() {
+            if let Some(kind) = state.drag {
+                use openpencil_shell_core::document::ColorPickerDrag;
+                use openpencil_shell_core::widgets::color_picker::ColorPicker;
+                let picker = ColorPicker::for_state(&self.document, state.clone());
+                let panel = picker.rect(self.last_viewport_w, self.last_viewport_h);
+                let point = Point2D::new(x, y);
+                match kind {
+                    ColorPickerDrag::SvBox => {
+                        let (s, v) = picker.sv_at(panel, point);
+                        let _ = self.document.color_picker_set_hsv(state.hue, s, v);
+                    }
+                    ColorPickerDrag::HueSlider => {
+                        let h = picker.hue_at(panel, point);
+                        let _ = self.document.color_picker_set_hsv(h, state.sat, state.val);
+                    }
+                }
+                return true;
+            }
+        }
+        // Pen rubber-band — track cursor doc coord for preview.
+        if self.document.ui.pen_in_progress.is_some() {
+            let (cx0, cy0) = self.canvas_origin();
+            let canvas_local = Point2D::new(x - cx0, y - cy0);
+            let doc = self.document.viewport.to_document(canvas_local);
+            self.document.ui.pen_cursor_doc = Some(doc);
+            return true;
+        }
+        if let Some(state) = self.document.ui.layer_context_menu {
+            use openpencil_shell_core::widgets::layer_context_menu::LayerContextMenu;
+            let menu = LayerContextMenu::for_state(&self.document, state);
+            let new_hover = menu.hovered_row_at(Point2D::new(x, y)).map(|i| i as u8);
+            if new_hover != state.hovered_row {
+                self.document.ui.layer_context_menu =
+                    Some(openpencil_shell_core::document::LayerContextMenuState {
+                        hovered_row: new_hover,
+                        ..state
+                    });
+                return true;
+            }
+        }
         if let Some(drag) = self.rotate_drag {
             let cursor_angle = (y - drag.center_screen_y).atan2(x - drag.center_screen_x);
             let new_rotation = drag.start_rotation + (cursor_angle - drag.start_cursor_angle);
@@ -89,8 +160,15 @@ impl WidgetHostNative {
             let cur = self.document.viewport.to_document(canvas_local);
             let min_x = drag.start_doc_x.min(cur.x);
             let min_y = drag.start_doc_y.min(cur.y);
-            let w = (drag.start_doc_x - cur.x).abs().max(1.0);
-            let h = (drag.start_doc_y - cur.y).abs().max(1.0);
+            // Text needs room for the placeholder glyphs; shape
+            // tools start at 1 px so the drag immediately sizes
+            // the node to the cursor.
+            let (min_w, min_h) = match self.document.tool {
+                openpencil_shell_core::document::Tool::Text => (96.0_f32, 24.0_f32),
+                _ => (1.0_f32, 1.0_f32),
+            };
+            let w = (drag.start_doc_x - cur.x).abs().max(min_w);
+            let h = (drag.start_doc_y - cur.y).abs().max(min_h);
             let new_bounds = Rect::xywh(min_x, min_y, w, h);
             self.document.set_selected_bounds(new_bounds);
             return true;
@@ -113,10 +191,6 @@ impl WidgetHostNative {
             return true;
         }
         if let Some(d) = self.layer_drag.as_mut() {
-            // Drop the gesture if the source has disappeared from the
-            // active page (e.g., user deleted it via Cmd-X or
-            // switched pages mid-drag). Avoids stale drop-indicator
-            // paint that invites a no-op release.
             let source_id = d.source;
             let still_present = self
                 .document
@@ -129,12 +203,8 @@ impl WidgetHostNative {
             }
             d.current_x = x;
             d.current_y = y;
-            // Activation is VERTICAL-ONLY by design: layer drag-to-
-            // reorder operates on a flat row stack, so the meaningful
-            // axis is y. Pure horizontal wiggle on a row mustn't
-            // activate (would steal click-feel from selection +
-            // eye/lock-toggle gestures). 4 px screen-space matches
-            // the marquee's small-motion threshold.
+            // Vertical-only activation — horizontal wiggle preserved
+            // for selection / eye / lock click-feel.
             if !d.active && (y - d.start_y).abs() > 4.0 {
                 d.active = true;
             }
@@ -171,11 +241,15 @@ impl WidgetHostNative {
         }
     }
 
-    /// Mouse-release handler. Ends the active drag (if any). For
-    /// chat-panel drag, snaps the panel to the nearest canvas
-    /// corner via `ChatAnchor::nearest`. Returns true if anything
-    /// visible changed.
+    /// Mouse-release — ends active drag; chat-panel snaps corner.
     pub fn apply_release_with_viewport(&mut self, viewport_w: f32, viewport_h: f32) -> bool {
+        // Drop color-picker drag.
+        if self.document.ui.color_picker.is_some() {
+            self.document.color_picker_set_drag(None);
+        }
+        if self.document.ui.agent_settings_drag.is_some() {
+            self.document.ui.agent_settings_drag = None;
+        }
         if self.panel_resize.take().is_some() {
             return true;
         }
@@ -217,8 +291,7 @@ impl WidgetHostNative {
         was_dragging
     }
 
-    /// Mouse-release handler — viewport-less variant kept for
-    /// backwards compatibility with existing call sites.
+    /// Viewport-less release variant — drops viewport-bound drags.
     pub fn apply_release(&mut self) -> bool {
         if self.panel_resize.take().is_some() {
             return true;
@@ -247,8 +320,7 @@ impl WidgetHostNative {
             // drop target. Drop the candidate without committing.
             return true;
         }
-        // If a chat drag was in flight without a known viewport,
-        // we can't snap; just drop it (best effort).
+        // Chat drag without viewport — drop it (best effort).
         if self.chat_drag.take().is_some() {
             return true;
         }
@@ -257,9 +329,25 @@ impl WidgetHostNative {
         was_dragging
     }
 
-    /// Push a typed character into the focused chat input.
-    /// Returns true if anything changed.
+    /// Typed-char router: rename → property → chat.
     pub fn apply_text(&mut self, c: char) -> bool {
+        if self.document.ui.layer_rename.is_some() && !c.is_control() {
+            let mut s = [0u8; 4];
+            let _ = self.document.rename_append(c.encode_utf8(&mut s));
+            self.document.ui.rename_caret_anchor_ms = self.now_ms;
+            return true;
+        }
+        if self.document.ui.text_editing.is_some() && !c.is_control() {
+            let mut s = [0u8; 4];
+            if self
+                .document
+                .text_edit_append(c.encode_utf8(&mut s), self.now_ms)
+            {
+                self.document.ui.text_edit_caret_anchor_ms = self.now_ms;
+                return true;
+            }
+            return false;
+        }
         if let Some(focus) = self.document.ui.property_focus {
             self.document.ui.property_draft_select_all = false;
             let is_hex_focus = matches!(focus, PropertyFocus::FillHex | PropertyFocus::StrokeHex);
@@ -293,19 +381,27 @@ impl WidgetHostNative {
             return false;
         }
         self.document.chat.input.push(c);
-        // Reset blink so the caret is solid right after the
-        // keystroke instead of mid-fade.
+        // Reset blink so the caret is solid right after the keystroke.
         self.document.chat.caret_anchor_ms = self.now_ms;
         true
     }
 
-    /// Backspace — routes to whichever input is currently focused
-    /// (property edit field, then chat). When no text is focused,
-    /// Backspace deletes the selected canvas node (TS parity:
-    /// `use-edit-shortcuts.ts` treats Delete and Backspace
-    /// identically when the focus target is not an `<input>` /
-    /// `<textarea>`).
+    /// Backspace — rename → text-edit → property → chat → delete_selected.
     pub fn apply_backspace(&mut self) -> bool {
+        if self.document.ui.layer_rename.is_some() {
+            let ok = self.document.rename_backspace();
+            if ok {
+                self.document.ui.rename_caret_anchor_ms = self.now_ms;
+            }
+            return ok;
+        }
+        if self.document.ui.text_editing.is_some() {
+            let ok = self.document.text_edit_backspace(self.now_ms);
+            if ok {
+                self.document.ui.text_edit_caret_anchor_ms = self.now_ms;
+            }
+            return ok;
+        }
         if self.document.ui.property_focus.is_some() {
             self.document.ui.property_draft_select_all = false;
             if self.document.ui.property_input_draft.pop().is_some() {
@@ -321,53 +417,76 @@ impl WidgetHostNative {
             }
             return false;
         }
-        self.document.delete_selected()
+        if !self.document.selected.is_real() {
+            return false;
+        }
+        let snap = self.document.snapshot_for_history();
+        if self.document.delete_selected() {
+            self.document.history_push_past(snap);
+            return true;
+        }
+        false
     }
 
-    /// Delete key — same selected-node delete as
-    /// `apply_backspace` when no text is focused, but never
-    /// touches text drafts. Use this when the host wants Delete
-    /// to be strictly destructive regardless of focus.
+    /// Delete — pops a char from rename / text-edit when active;
+    /// otherwise deletes the selected node.
     pub fn apply_delete(&mut self) -> bool {
-        if self.document.ui.property_focus.is_some() || self.document.chat.focused {
-            return false;
+        if self.document.ui.layer_rename.is_some() {
+            let ok = self.document.rename_backspace();
+            if ok {
+                self.document.ui.rename_caret_anchor_ms = self.now_ms;
+            }
+            return ok;
         }
-        self.document.delete_selected()
-    }
-
-    /// Cmd/Ctrl+D — duplicate the selected node as a sibling
-    /// offset by ~10 doc px. Selection follows the clone.
-    pub fn apply_duplicate(&mut self) -> bool {
-        if self.document.ui.property_focus.is_some() || self.document.chat.focused {
-            return false;
+        if self.document.ui.text_editing.is_some() {
+            let ok = self.document.text_edit_backspace(self.now_ms);
+            if ok {
+                self.document.ui.text_edit_caret_anchor_ms = self.now_ms;
+            }
+            return ok;
         }
-        self.document
-            .duplicate_selected(&mut self.next_node_id, 10.0)
-            .is_some()
-    }
-
-    /// Arrow-key nudge — translate the selected node by
-    /// `(dx, dy)` document px. Shift-arrow callers pass 10 px;
-    /// plain arrows pass 1 px.
-    pub fn apply_nudge(&mut self, dx: f32, dy: f32) -> bool {
         if self.document.ui.property_focus.is_some() || self.document.chat.focused {
             return false;
         }
         if !self.document.selected.is_real() {
             return false;
         }
+        let snap = self.document.snapshot_for_history();
+        if self.document.delete_selected() {
+            self.document.history_push_past(snap);
+            return true;
+        }
+        false
+    }
+
+    /// Cmd-D — duplicate selection as a sibling at +10 doc px.
+    pub fn apply_duplicate(&mut self) -> bool {
+        if self.input_active() {
+            return false;
+        }
+        if !self.document.selected.is_real() {
+            return false;
+        }
+        self.document.commit_history();
+        self.document
+            .duplicate_selected(&mut self.next_node_id, 10.0)
+            .is_some()
+    }
+
+    /// Arrow-key nudge — translate selection by (dx, dy) doc px.
+    pub fn apply_nudge(&mut self, dx: f32, dy: f32) -> bool {
+        if self.input_active() {
+            return false;
+        }
+        if !self.document.selected.is_real() {
+            return false;
+        }
+        self.document.commit_history();
         self.document.translate_selected(dx, dy);
         true
     }
 
-    /// Convert a marquee drag (in screen-space) into a doc-space
-    /// rect, ask the document which top-level nodes overlap it,
-    /// and either replace or extend the selection.
-    /// Resolve a layer drag-to-reorder gesture on release. Returns
-    /// `true` if anything changed (caller repaints). Drops the
-    /// drag silently if it never activated (treated as a click
-    /// that already selected the row on press) or if the cursor
-    /// isn't over a layer row at release time.
+    /// Layer drag release → reorder_before/after/into.
     pub(in crate::widget_host) fn commit_layer_drag(
         &mut self,
         d: super::LayerDragState,
@@ -378,11 +497,6 @@ impl WidgetHostNative {
             // only effect, nothing more to do.
             return false;
         }
-        // Defensive source-validity check — symmetric with the
-        // cursor_move and paint guards. `reorder_before/after`
-        // already silently no-ops on a missing source, but bailing
-        // here keeps the rest of this method (drop_target_at +
-        // dispatch) from running pointlessly on a dead drag.
         if self
             .document
             .active_page()
@@ -399,18 +513,14 @@ impl WidgetHostNative {
                 (viewport_h - TOP_BAR_HEIGHT).max(0.0),
             ),
         };
-        // Build the panel with the source excluded so `drop_target_at`
-        // sees the same row layout the paint pass shows the user. If
-        // we built from the raw doc the indicator y the user saw
-        // could disagree with where the source actually lands.
+        // Build with source excluded so indicator y matches post-commit.
         let panel = LayerPanel::from_document_with_drag_source(&self.document, d.source);
         let cursor = openpencil_shell_core::Point2D::new(d.current_x, d.current_y);
         let Some(drop) = panel.drop_target_at(layer_rect, cursor) else {
             return true;
         };
         if drop.anchor == d.source {
-            // Self-drop is a no-op.
-            return true;
+            return true; // self-drop no-op
         }
         match drop.position {
             DropPosition::Before => {
@@ -418,6 +528,9 @@ impl WidgetHostNative {
             }
             DropPosition::After => {
                 self.document.reorder_after(d.source, drop.anchor);
+            }
+            DropPosition::Into => {
+                self.document.reorder_into(d.source, drop.anchor);
             }
         }
         true
@@ -429,12 +542,7 @@ impl WidgetHostNative {
         viewport_w: f32,
         viewport_h: f32,
     ) {
-        // Near-zero marquee = a click without drag. Threshold is
-        // measured in SCREEN pixels (codex CONCERN: doc-space
-        // threshold became zoom-dependent — at 10% zoom a 4-px
-        // drag registered as a real marquee, at 1000% zoom a
-        // huge drag could fall below). 2 screen px matches the
-        // TS `useMarqueeStart` threshold.
+        // 2 screen-px marquee threshold (TS `useMarqueeStart`).
         let screen_dx = (m.current_screen_x - m.start_screen_x).abs();
         let screen_dy = (m.current_screen_y - m.start_screen_y).abs();
         if screen_dx < 2.0 && screen_dy < 2.0 {
@@ -476,61 +584,17 @@ impl WidgetHostNative {
         // nothing else to do.
     }
 
-    /// Cmd/Ctrl+C — copy the current selection into the
-    /// clipboard. No-op when nothing is selected. Doesn't touch
-    /// any UI focus state.
-    pub fn apply_copy(&mut self) -> bool {
-        if self.document.ui.property_focus.is_some() || self.document.chat.focused {
-            return false;
-        }
-        self.document.copy_selected()
-    }
-
-    /// Cmd/Ctrl+X — copy then delete the selection.
-    pub fn apply_cut(&mut self) -> bool {
-        if self.document.ui.property_focus.is_some() || self.document.chat.focused {
-            return false;
-        }
-        self.document.cut_selected()
-    }
-
-    /// Cmd/Ctrl+V — paste the clipboard at the active page,
-    /// offset by 10 doc px from the original positions. Selection
-    /// follows the new clones.
-    pub fn apply_paste(&mut self) -> bool {
-        if self.document.ui.property_focus.is_some() || self.document.chat.focused {
-            return false;
-        }
-        !self
-            .document
-            .paste_clipboard(&mut self.next_node_id, 10.0)
-            .is_empty()
-    }
-
-    /// Cmd/Ctrl+A — replace the selection with every top-level
-    /// node on the active page. TS parity:
-    /// `useCanvasStore.setSelection(topLevelIds, topLevelIds[0])`.
-    pub fn apply_select_all(&mut self) -> bool {
-        if self.document.ui.property_focus.is_some() || self.document.chat.focused {
-            return false;
-        }
-        self.document.select_all_top_level()
-    }
-
-    /// `[` / `]` — bump the selected node down / up by one
-    /// position in its parent's children vec (changing paint
-    /// order).
-    pub fn apply_reorder(&mut self, direction: ReorderDirection) -> bool {
-        if self.document.ui.property_focus.is_some() || self.document.chat.focused {
-            return false;
-        }
-        self.document.reorder_selected(direction)
-    }
-
-    /// Enter — commits the focused property edit (parses the draft
-    /// as f32, writes to the selected node, clears focus) or
-    /// sends the focused chat input.
+    /// Enter — commits rename → text-edit → pen → property edit → chat.
     pub fn apply_send(&mut self) -> bool {
+        if self.document.ui.layer_rename.is_some() {
+            return self.document.rename_commit();
+        }
+        if self.document.ui.text_editing.is_some() {
+            return self.document.text_edit_commit();
+        }
+        if self.document.ui.pen_in_progress.is_some() {
+            return self.document.finish_pen_path();
+        }
         if self.document.ui.property_focus.is_some() {
             self.commit_property_focus_if_any();
             return true;
@@ -542,15 +606,23 @@ impl WidgetHostNative {
         true
     }
 
-    /// Escape — handles one layer per press, in priority order
-    /// (TS parity):
-    ///   1. Active property-panel input → discard draft + clear focus
-    ///   2. Locale picker open → close it
-    ///   3. Shape picker open → close it
-    ///   4. Fill-type picker open → close it
-    ///   5. Chat input focused → defocus
-    ///   6. Canvas selection → clear it
+    /// Escape — priority cascade: rename → property → pickers →
+    /// chat → selection. One layer per press.
     pub fn apply_escape(&mut self) -> bool {
+        if self.document.ui.agent_settings_open {
+            self.document.ui.agent_settings_open = false;
+            self.document.ui.agent_settings_drag = None;
+            return true;
+        }
+        if self.document.rename_cancel() {
+            return true;
+        }
+        if self.document.text_edit_commit() {
+            return true;
+        }
+        if self.document.finish_pen_path() {
+            return true;
+        }
         if self.document.ui.property_focus.take().is_some() {
             self.document.ui.property_input_draft.clear();
             self.document.ui.property_draft_select_all = false;
@@ -579,79 +651,7 @@ impl WidgetHostNative {
         false
     }
 
-    /// Dispatch a property-panel button / checkbox press.
-    pub(in crate::widget_host) fn apply_property_action(
-        &mut self,
-        action: openpencil_shell_core::widgets::PropertyPanelAction,
-    ) {
-        use openpencil_shell_core::widgets::PropertyPanelAction as A;
-        match action {
-            A::SetFlexLayout(mode) => self.document.ui.flex_layout = mode,
-            A::ToggleSizeFillWidth => {
-                self.document.ui.size_fill_width = !self.document.ui.size_fill_width;
-            }
-            A::ToggleSizeFillHeight => {
-                self.document.ui.size_fill_height = !self.document.ui.size_fill_height;
-            }
-            A::ToggleSizeHugWidth => {
-                self.document.ui.size_hug_width = !self.document.ui.size_hug_width;
-            }
-            A::ToggleSizeHugHeight => {
-                self.document.ui.size_hug_height = !self.document.ui.size_hug_height;
-            }
-            A::ToggleSizeClipContent => {
-                self.document.ui.size_clip_content = !self.document.ui.size_clip_content;
-            }
-            A::ToggleFillTypePicker => {
-                self.document.ui.fill_type_picker_open = !self.document.ui.fill_type_picker_open;
-            }
-            A::SetFillType(t) => {
-                // Per-node now (was `doc.ui.fill_type` until
-                // 2026-05-11). Editable-gated by the mutator so
-                // locked / hidden selections silently no-op.
-                self.document.set_selected_fill_type(t);
-                self.document.ui.fill_type_picker_open = false;
-            }
-        }
-    }
-
-    /// Parse `property_input_draft` as f32 and apply it to the
-    /// selected node via `Document::commit_property_edit`. Always
-    /// clears focus + draft. No-op when nothing is focused.
-    pub(in crate::widget_host) fn commit_property_focus_if_any(&mut self) {
-        let Some(focus) = self.document.ui.property_focus.take() else {
-            return;
-        };
-        self.document.ui.property_draft_select_all = false;
-        let draft = std::mem::take(&mut self.document.ui.property_input_draft);
-        match focus {
-            PropertyFocus::FillHex => {
-                let stripped = draft.trim().trim_start_matches('#');
-                if !stripped.is_empty() {
-                    if let Some(color) = parse_hex_color(draft.trim()) {
-                        let _ = self.document.set_selected_color(true, color);
-                    }
-                }
-            }
-            PropertyFocus::StrokeHex => {
-                let stripped = draft.trim().trim_start_matches('#');
-                if !stripped.is_empty() {
-                    if let Some(color) = parse_hex_color(draft.trim()) {
-                        let _ = self.document.set_selected_color(false, color);
-                    }
-                }
-            }
-            _ => {
-                if let Ok(value) = draft.trim().parse::<f32>() {
-                    let _ = self.document.commit_property_edit(focus, value);
-                }
-            }
-        }
-    }
-
-    /// Apply a primary-button mouse click — routes to Toolbar /
-    /// LayerPanel / AI chat hit-test. Returns whether anything was
-    /// consumed (caller should request a redraw if so).
+    /// Primary-button click — routes to AI chat / Toolbar / Layer.
     pub fn apply_click(
         &mut self,
         x: f32,
@@ -659,9 +659,7 @@ impl WidgetHostNative {
         viewport_width: f32,
         viewport_height: f32,
     ) -> bool {
-        // AI chat panel sits ABOVE the canvas — check it first so
-        // clicks on the floating panel don't fall through to the
-        // canvas / Hand-tool drag.
+        // AI chat panel sits above canvas — check first.
         if let Some(chat_rect) = self.ai_chat_rect(viewport_width, viewport_height) {
             let panel = AIChatPlaceholder::from_document(&self.document);
             if let Some(hit) = panel.hit_test(chat_rect, Point2D::new(x, y)) {
@@ -724,10 +722,7 @@ impl WidgetHostNative {
                 }
             }
         }
-        // LayerPanel hits only land when the sidebar is open —
-        // when collapsed the panel isn't painted (codex stop-hook
-        // fix: native collapsed-sidebar input was still resolving
-        // canvas clicks to the LayerPanel rect underneath).
+        // Panel hits only when sidebar is open.
         if !self.document.ui.sidebar_open {
             return was_focused;
         }
@@ -740,16 +735,36 @@ impl WidgetHostNative {
         };
         let panel = LayerPanel::from_document(&self.document);
         if let Some(hit) = panel.hit_test(layer_rect, Point2D::new(x, y)) {
+            use openpencil_shell_core::document::LayerContextTarget;
+            use openpencil_shell_core::widgets::LayerPanelHit as H;
+            let target_for_dbl = match hit {
+                H::Layer(id) => Some(LayerContextTarget::Layer(id)),
+                H::Page(idx) => Some(LayerContextTarget::Page(idx)),
+                _ => None,
+            };
+            if let Some(target) = target_for_dbl {
+                if let Some((prev, prev_ms)) = self.document.ui.last_layer_click {
+                    if prev == target && self.now_ms.saturating_sub(prev_ms) < 400 {
+                        let started = match target {
+                            LayerContextTarget::Layer(id) => self.document.start_rename_layer(id),
+                            LayerContextTarget::Page(idx) => self.document.start_rename_page(idx),
+                        };
+                        if started {
+                            self.document.ui.rename_caret_anchor_ms = self.now_ms;
+                        }
+                        self.document.ui.last_layer_click = None;
+                        return true;
+                    }
+                }
+                self.document.ui.last_layer_click = Some((target, self.now_ms));
+            }
             match hit {
-                openpencil_shell_core::widgets::LayerPanelHit::Page(idx) => {
+                H::Page(idx) => {
                     self.document.active_page_index = idx;
                     self.document.clear_selection();
                     return true;
                 }
-                openpencil_shell_core::widgets::LayerPanelHit::Layer(node_id) => {
-                    // Shift+click on a layer row toggles set
-                    // membership (TS parity with the layer panel
-                    // multi-select); plain click sets single.
+                H::Layer(node_id) => {
                     if self.shift_held {
                         self.document.toggle_selection(node_id);
                     } else {
@@ -757,26 +772,29 @@ impl WidgetHostNative {
                     }
                     return true;
                 }
-                openpencil_shell_core::widgets::LayerPanelHit::ToggleHidden(node_id) => {
+                H::ToggleHidden(node_id) => {
                     self.document.toggle_node_hidden(node_id);
                     return true;
                 }
-                openpencil_shell_core::widgets::LayerPanelHit::ToggleLocked(node_id) => {
+                H::ToggleLocked(node_id) => {
                     self.document.toggle_node_locked(node_id);
                     return true;
                 }
-                openpencil_shell_core::widgets::LayerPanelHit::ToggleCollapsed(node_id) => {
+                H::ToggleCollapsed(node_id) => {
                     self.document.toggle_node_collapsed(node_id);
                     return true;
                 }
-                openpencil_shell_core::widgets::LayerPanelHit::AddPage => {
+                H::AddPage => {
                     let _ = self.document.add_page();
+                    return true;
+                }
+                H::DeletePage(idx) => {
+                    let _ = self.document.remove_page(idx);
                     return true;
                 }
             }
         }
-        // Click hit no chrome — return true if the prior focus
-        // state changed so the chrome repaints to drop the caret.
+        // Click hit no chrome — repaint if focus changed.
         was_focused
     }
 }

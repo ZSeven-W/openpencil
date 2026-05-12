@@ -134,6 +134,7 @@ fn from_document_scopes_to_active_page_only() {
         viewport: crate::document::Viewport::IDENTITY,
         chat: crate::document::ChatState::default(),
         ui: crate::document::UiState::default(),
+        history: crate::document::History::default(),
     };
     let panel = LayerPanel::from_document(&doc);
     assert_eq!(panel.items.len(), 1);

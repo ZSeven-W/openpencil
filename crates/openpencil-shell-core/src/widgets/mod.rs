@@ -34,10 +34,14 @@ pub mod tree;
 
 // Step 2 compositions (built on top of the primitives, driven by
 // `crate::document::Document`).
+pub mod layer_context_menu;
 pub mod layer_panel;
+mod layer_panel_paint;
 #[cfg(test)]
 mod layer_panel_tests;
+mod layer_panel_walkers;
 pub mod property_panel;
+pub mod property_panel_code;
 pub mod property_panel_fill;
 pub mod property_panel_inputs;
 pub mod property_panel_layout;
@@ -52,8 +56,19 @@ pub mod canvas_viewport_overlay;
 // Step 4 — icon glyph drawer for editor chrome (lucide-flavored line art).
 pub mod icons;
 
+// Step 5 — brand logos for agent provider cards (filled SVG paths,
+// not lucide stroke art). Sourced verbatim from `apps/web/src/
+// components/icons/*-logo.tsx`.
+pub mod brand_icons;
+
 // Step 4 — extra editor-chrome widgets (TS app parity).
+pub mod agent_settings_i18n;
+pub mod agent_settings_images;
+pub mod agent_settings_mcp;
+pub mod agent_settings_panel;
+pub mod agent_settings_system;
 pub mod ai_chat_panel;
+pub mod color_picker;
 pub mod locale_picker;
 pub mod shape_picker;
 pub mod status_bar;

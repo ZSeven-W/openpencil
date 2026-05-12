@@ -8,7 +8,7 @@ use crate::theme::Theme;
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::property_panel::NodeSnapshot;
 use crate::widgets::property_panel_inputs::{
-    format_color_hex, paint_dropdown, paint_input_with_icon_focused, paint_input_with_prefix,
+    format_color_hex, paint_dropdown, paint_input_with_icon_focused,
     paint_input_with_prefix_focused, paint_input_with_suffix_focused, paint_section_divider,
     paint_section_label, paint_section_label_with_add, to_jian_color, HEADER_HEIGHT, INPUT_HEIGHT,
     INPUT_RADIUS, PAD_X, SECTION_GAP, TAB_HEIGHT,
@@ -46,42 +46,39 @@ pub struct EditContext<'a> {
 /// every section's `paint_section_label` call gets the
 /// locale-appropriate text without each helper hitting the
 /// translation layer.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub struct PropertyLabels {
-    pub tab_design: String,
-    pub tab_code: String,
-    pub create_component: String,
-    pub position: String,
-    pub flex_layout: String,
-    pub size: String,
-    pub layer: String,
-    pub opacity: String,
-    pub fill: String,
-    pub stroke: String,
-    pub effects: String,
-    pub export: String,
-    pub fill_width: String,
-    pub fill_height: String,
-    pub hug_width: String,
-    pub hug_height: String,
-    pub clip_content: String,
+    pub tab_design: &'static str,
+    pub tab_code: &'static str,
+    pub create_component: &'static str,
+    pub position: &'static str,
+    pub flex_layout: &'static str,
+    pub size: &'static str,
+    pub layer: &'static str,
+    pub opacity: &'static str,
+    pub fill: &'static str,
+    pub stroke: &'static str,
+    pub effects: &'static str,
+    pub export: &'static str,
+    pub fill_width: &'static str,
+    pub fill_height: &'static str,
+    pub hug_width: &'static str,
+    pub hug_height: &'static str,
+    pub clip_content: &'static str,
 }
 
 impl PropertyLabels {
-    /// Builder — looks up every chrome string the property panel
-    /// shows. Falls back to a hardcoded English literal when the
-    /// translation layer returns the key itself (some keys aren't
-    /// in the TS table because the TS panel hardcodes them).
     pub fn for_document(doc: &crate::document::Document) -> Self {
-        // Some labels exist in TS, some don't. `pick` returns the
-        // localised string, the EN fallback, OR a literal we
-        // hardcode here so the panel never paints a raw dotted key.
-        let pick = |key: &'static str, fallback: &'static str| -> String {
+        // `pick` returns either the localised value or the English
+        // fallback when the key isn't in the table. Both branches
+        // are `&'static str` so the whole struct is `Copy` and
+        // zero-allocation per build.
+        let pick = |key: &'static str, fallback: &'static str| -> &'static str {
             let translated = doc.t(key);
             if translated == key {
-                fallback.to_string()
+                fallback
             } else {
-                translated.to_string()
+                translated
             }
         };
         Self {
@@ -143,42 +140,60 @@ pub fn paint_tab_strip(
     cx: &mut PaintCx<'_>,
     theme: &Theme,
     labels: &PropertyLabels,
+    active: crate::document::PropertyTab,
     x: f32,
     y: f32,
     width: f32,
 ) -> f32 {
+    use crate::document::PropertyTab;
     let pad = 14.0;
     let tab_y = y + 6.0;
-    let active_w = (cx.backend.measure_text(&labels.tab_design, 13.0) + 24.0).max(48.0);
-    let active_rect = Rect {
+    let design_w = (cx.backend.measure_text(&labels.tab_design, 13.0) + 24.0).max(48.0);
+    let design_rect = Rect {
         origin: Point2D::new(x + pad, tab_y),
-        size: Point2D::new(active_w, 26.0),
+        size: Point2D::new(design_w, 26.0),
     };
-    cx.backend.fill_round_rect(active_rect, 6.0, theme.muted);
-    let active_label = TextLayout::single_run(
+    let code_w = (cx.backend.measure_text(&labels.tab_code, 13.0) + 24.0).max(48.0);
+    let code_rect = Rect {
+        origin: Point2D::new(design_rect.origin.x + design_rect.size.x + 6.0, tab_y),
+        size: Point2D::new(code_w, 26.0),
+    };
+    if matches!(active, PropertyTab::Design) {
+        cx.backend.fill_round_rect(design_rect, 6.0, theme.muted);
+    } else {
+        cx.backend.fill_round_rect(code_rect, 6.0, theme.muted);
+    }
+    let design_color = if matches!(active, PropertyTab::Design) {
+        theme.foreground
+    } else {
+        theme.muted_foreground
+    };
+    let code_color = if matches!(active, PropertyTab::Code) {
+        theme.foreground
+    } else {
+        theme.muted_foreground
+    };
+    let design_label = TextLayout::single_run(
         &labels.tab_design,
         "system-ui",
         13.0,
-        to_jian_color(theme.foreground),
+        to_jian_color(design_color),
         Point2D::new(0.0, 0.0),
     );
     cx.backend.draw_text(
-        &active_label,
-        Point2D::new(active_rect.origin.x + 12.0, active_rect.origin.y + 18.0),
+        &design_label,
+        Point2D::new(design_rect.origin.x + 12.0, design_rect.origin.y + 18.0),
     );
-    let inactive_label = TextLayout::single_run(
+    let code_label = TextLayout::single_run(
         &labels.tab_code,
         "system-ui",
         13.0,
-        to_jian_color(theme.muted_foreground),
+        to_jian_color(code_color),
         Point2D::new(0.0, 0.0),
     );
     cx.backend.draw_text(
-        &inactive_label,
-        Point2D::new(
-            active_rect.origin.x + active_rect.size.x + 14.0,
-            tab_y + 18.0,
-        ),
+        &code_label,
+        Point2D::new(code_rect.origin.x + 12.0, code_rect.origin.y + 18.0),
     );
     cx.backend.fill_rect(
         Rect {
@@ -321,18 +336,21 @@ pub fn paint_position_section(
         edit.focus == Some(PropertyFocus::Rotation),
         edit.caret_visible(PropertyFocus::Rotation),
     );
-    // Corner radius (R) — placeholder; not yet wired to the node
-    // schema (no radius field). Keep the input visually but it
-    // stays read-only until the field lands.
-    paint_input_with_prefix(
+    // Corner radius (R) — editable input bound to Node::corner_radius
+    // via PropertyFocus::PositionR.
+    let r_rect = Rect {
+        origin: Point2D::new(x + PAD_X + half_w + 8.0, y),
+        size: Point2D::new(half_w, INPUT_HEIGHT),
+    };
+    let r_value = format!("{}", snapshot.corner_radius.round() as i32);
+    paint_input_with_prefix_focused(
         cx,
         theme,
-        Rect {
-            origin: Point2D::new(x + PAD_X + half_w + 8.0, y),
-            size: Point2D::new(half_w, INPUT_HEIGHT),
-        },
+        r_rect,
         "R",
-        "0",
+        edit.value_for(PropertyFocus::PositionR, &r_value),
+        edit.focus == Some(PropertyFocus::PositionR),
+        edit.caret_visible(PropertyFocus::PositionR),
     );
     y += INPUT_HEIGHT + 12.0;
     paint_section_divider(cx, theme, x, y, width);

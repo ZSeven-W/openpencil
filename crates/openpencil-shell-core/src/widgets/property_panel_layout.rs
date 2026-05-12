@@ -181,6 +181,15 @@ pub fn action_button_rects_with_fill_picker(
     }
     if visible.fill {
         y += SECTION_HEADER_HEIGHT;
+        // Swatch hit-test mirrors the paint rect in property_panel_fill.rs.
+        let swatch_rect = Rect {
+            origin: Point2D::new(x0 + PAD_X, y + 2.0),
+            size: Point2D::new(22.0, 22.0),
+        };
+        out.push((
+            PropertyPanelAction::OpenColorPicker(crate::document::ColorTarget::Fill),
+            swatch_rect,
+        ));
         let dropdown_rect = Rect {
             origin: Point2D::new(x0 + PAD_X + 22.0 + 6.0, y),
             size: Point2D::new(usable_w - 22.0 - 6.0 - 50.0 - 22.0 - 12.0, INPUT_HEIGHT),
@@ -241,6 +250,10 @@ pub fn editable_input_rects(
         origin: Point2D::new(x0 + PAD_X, y),
         size: Point2D::new(half_w, INPUT_HEIGHT),
     };
+    let radius_rect = Rect {
+        origin: Point2D::new(x0 + PAD_X + half_w + 8.0, y),
+        size: Point2D::new(half_w, INPUT_HEIGHT),
+    };
     y += INPUT_HEIGHT + 12.0;
     y += SECTION_GAP;
     if visible.flex_layout {
@@ -252,6 +265,7 @@ pub fn editable_input_rects(
         (PropertyFocus::PositionX, x_rect),
         (PropertyFocus::PositionY, y_rect),
         (PropertyFocus::Rotation, rotation_rect),
+        (PropertyFocus::PositionR, radius_rect),
     ];
     if visible.size_options {
         y += SECTION_HEADER_HEIGHT;

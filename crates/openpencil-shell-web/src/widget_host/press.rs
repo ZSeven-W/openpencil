@@ -15,6 +15,88 @@ use super::{
 };
 
 impl WidgetHost {
+    /// Right-click handler — opens the LayerPanel context menu on
+    /// a layer or page row.
+    pub fn apply_right_press(&mut self, x: f32, y: f32, _viewport_w: f32, viewport_h: f32) -> bool {
+        if !self.document.ui.sidebar_open {
+            return false;
+        }
+        use openpencil_shell_core::document::{LayerContextMenuState, LayerContextTarget};
+        let layer_rect = self.layer_panel_rect(viewport_h);
+        let panel = LayerPanel::from_document(&self.document);
+        match panel.hit_test(layer_rect, Point2D::new(x, y)) {
+            Some(LayerPanelHit::Layer(id)) => {
+                self.document.set_single_selection(id);
+                self.document.ui.layer_context_menu = Some(LayerContextMenuState {
+                    target: LayerContextTarget::Layer(id),
+                    anchor_x: x,
+                    anchor_y: y,
+                    hovered_row: None,
+                });
+                return true;
+            }
+            Some(LayerPanelHit::Page(idx)) => {
+                self.document.ui.layer_context_menu = Some(LayerContextMenuState {
+                    target: LayerContextTarget::Page(idx),
+                    anchor_x: x,
+                    anchor_y: y,
+                    hovered_row: None,
+                });
+                return true;
+            }
+            _ => {}
+        }
+        if self.document.ui.layer_context_menu.take().is_some() {
+            return true;
+        }
+        false
+    }
+
+    fn dispatch_layer_context_action(
+        &mut self,
+        action: openpencil_shell_core::widgets::layer_context_menu::LayerContextAction,
+        target: openpencil_shell_core::document::LayerContextTarget,
+    ) {
+        use openpencil_shell_core::document::LayerContextTarget as T;
+        use openpencil_shell_core::widgets::layer_context_menu::LayerContextAction as A;
+        match (action, target) {
+            (A::Duplicate, T::Layer(id)) => {
+                self.document.set_single_selection(id);
+                self.document.commit_history();
+                let _ = self
+                    .document
+                    .duplicate_selected(&mut self.next_node_id, 10.0);
+            }
+            (A::Delete, T::Layer(id)) => {
+                self.document.set_single_selection(id);
+                self.document.commit_history();
+                let _ = self.document.delete_selected();
+            }
+            (A::ToggleLock, T::Layer(id)) => self.document.toggle_node_locked(id),
+            (A::ToggleVisibility, T::Layer(id)) => self.document.toggle_node_hidden(id),
+            (A::CreateComponent, T::Layer(_)) => {}
+            (A::DuplicatePage, T::Page(idx)) => {
+                let _ = self.document.duplicate_page(idx);
+            }
+            (A::MovePageUp, T::Page(idx)) => {
+                let _ = self.document.move_page_up(idx);
+            }
+            (A::MovePageDown, T::Page(idx)) => {
+                let _ = self.document.move_page_down(idx);
+            }
+            (A::DeletePage, T::Page(idx)) => {
+                let _ = self.document.remove_page(idx);
+            }
+            (A::RenamePage, T::Page(idx)) => {
+                let _ = self.document.start_rename_page(idx);
+            }
+            (A::RenameLayer, T::Layer(id)) => {
+                let _ = self.document.start_rename_layer(id);
+            }
+            _ => {}
+        }
+    }
+
     pub fn apply_press(
         &mut self,
         x: f32,
@@ -22,6 +104,30 @@ impl WidgetHost {
         viewport_width: f32,
         viewport_height: f32,
     ) -> bool {
+        // 0-pre. Commit any in-flight rename + canvas text-edit on
+        // first press anywhere. Tracked so the final return reports
+        // the visible change.
+        let rename_committed =
+            self.document.ui.layer_rename.is_some() && self.document.rename_commit();
+        let text_edit_was_active = self.document.ui.text_editing.is_some();
+        let text_edit_committed = self.document.text_edit_commit();
+        if self.document.ui.agent_settings_open
+            && self.dispatch_agent_settings_press(x, y, viewport_width, viewport_height)
+        {
+            return true;
+        }
+        // 0. Layer context menu — top-most overlay when open.
+        if let Some(state) = self.document.ui.layer_context_menu {
+            use openpencil_shell_core::widgets::layer_context_menu::LayerContextMenu;
+            let menu = LayerContextMenu::for_state(&self.document, state);
+            if let Some(action) = menu.hit_test(Point2D::new(x, y)) {
+                self.dispatch_layer_context_action(action, state.target);
+                self.document.ui.layer_context_menu = None;
+                return true;
+            }
+            self.document.ui.layer_context_menu = None;
+            return true;
+        }
         // 0a. Locale picker overlay — top-most when open. Row hit
         //     sets locale + closes; ANY other hit (including the
         //     Globe button itself) closes the picker AND swallows
@@ -59,10 +165,14 @@ impl WidgetHost {
                     self.document.ui.locale_picker_open = !self.document.ui.locale_picker_open;
                     return true;
                 }
+                TopBarHit::OpenAgentSettings => {
+                    self.document.ui.agent_settings_open = true;
+                    return true;
+                }
             }
         }
         if rect_contains(top_bar_rect, Point2D::new(x, y)) {
-            return false;
+            return rename_committed || text_edit_committed;
         }
 
         // 0c. PropertyPanel button / checkbox — flex modes + size
@@ -122,9 +232,15 @@ impl WidgetHost {
                         self.document.ui.shape_picker_open = false;
                         return true;
                     }
-                    openpencil_shell_core::widgets::ToolbarHit::Action(_) => {
+                    openpencil_shell_core::widgets::ToolbarHit::Action(action) => {
+                        use openpencil_shell_core::widgets::ToolbarAction;
                         self.document.ui.shape_picker_open = false;
-                        return false;
+                        let acted = match action {
+                            ToolbarAction::Undo => self.document.undo(),
+                            ToolbarAction::Redo => self.document.redo(),
+                            _ => false,
+                        };
+                        return acted || rename_committed;
                     }
                     openpencil_shell_core::widgets::ToolbarHit::ToggleShapePicker => {
                         self.document.ui.shape_picker_open = !self.document.ui.shape_picker_open;
@@ -132,7 +248,7 @@ impl WidgetHost {
                     }
                 }
             }
-            return false;
+            return rename_committed || text_edit_committed;
         }
 
         // 3. apply_click — LayerPanel + chat-defocus.
@@ -169,7 +285,7 @@ impl WidgetHost {
                     last_x: x,
                     last_y: y,
                 });
-                return false;
+                return rename_committed || text_edit_committed;
             }
             if matches!(self.document.tool, Tool::Select) {
                 // Convert screen → doc to ask which node (if any)
@@ -178,6 +294,18 @@ impl WidgetHost {
                 let canvas_local = Point2D::new(x - cx0, y - cy0);
                 let doc_point = self.document.viewport.to_document(canvas_local);
                 if let Some(node_id) = self.document.node_at_doc_point(doc_point) {
+                    // Canvas double-click: 400 ms same-node → enter
+                    // text-edit on Text nodes.
+                    let is_double = matches!(
+                        self.document.ui.last_canvas_click,
+                        Some((prev, t)) if prev == node_id && self.now_ms.saturating_sub(t) < 400
+                    );
+                    self.document.ui.last_canvas_click = Some((node_id, self.now_ms));
+                    if is_double && !text_edit_was_active && self.document.start_text_edit(node_id)
+                    {
+                        self.document.ui.text_edit_caret_anchor_ms = self.now_ms;
+                        return true;
+                    }
                     if self.shift_held {
                         self.document.toggle_selection(node_id);
                     } else {
@@ -205,7 +333,7 @@ impl WidgetHost {
                     current_screen_y: y,
                     additive: self.shift_held,
                 });
-                return cleared_now;
+                return cleared_now || rename_committed || text_edit_committed;
             }
             // Any other tool on empty canvas — fall back to pan
             // (web doesn't ship shape-creation drag yet).
@@ -213,9 +341,9 @@ impl WidgetHost {
                 last_x: x,
                 last_y: y,
             });
-            return false;
+            return rename_committed || text_edit_committed;
         }
-        false
+        rename_committed || text_edit_committed
     }
 
     pub fn apply_click(&mut self, x: f32, y: f32, viewport_w: f32, viewport_h: f32) -> bool {
@@ -260,8 +388,13 @@ impl WidgetHost {
                     self.document.tool = tool;
                     return true;
                 }
-                openpencil_shell_core::widgets::ToolbarHit::Action(_) => {
-                    return false;
+                openpencil_shell_core::widgets::ToolbarHit::Action(action) => {
+                    use openpencil_shell_core::widgets::ToolbarAction;
+                    return match action {
+                        ToolbarAction::Undo => self.document.undo(),
+                        ToolbarAction::Redo => self.document.redo(),
+                        _ => false,
+                    };
                 }
                 openpencil_shell_core::widgets::ToolbarHit::ToggleShapePicker => {
                     self.document.ui.shape_picker_open = !self.document.ui.shape_picker_open;
@@ -305,10 +438,47 @@ impl WidgetHost {
                     let _ = self.document.add_page();
                     return true;
                 }
+                openpencil_shell_core::widgets::LayerPanelHit::DeletePage(idx) => {
+                    let _ = self.document.remove_page(idx);
+                    return true;
+                }
             }
         }
         // Defocusing the chat input itself is a visible change —
         // the caller should still repaint to drop the caret.
         was_focused
+    }
+
+    /// Cmd+, settings modal — dispatch hit-tests on the modal.
+    /// Returns true once the modal swallowed the press.
+    fn dispatch_agent_settings_press(&mut self, x: f32, y: f32, vw: f32, vh: f32) -> bool {
+        use openpencil_shell_core::widgets::agent_settings_panel::{AgentSettingsHit, AgentSettingsPanel};
+        let panel = AgentSettingsPanel::for_document(&self.document);
+        let panel_rect = panel.rect(vw, vh);
+        match panel.hit_test(panel_rect, Point2D::new(x, y)) {
+            AgentSettingsHit::Close | AgentSettingsHit::Outside => {
+                self.document.ui.agent_settings_open = false;
+            }
+            AgentSettingsHit::SelectTab(t) => {
+                self.document.ui.agent_settings.tab = t;
+                self.document.ui.agent_settings.scroll_y = 0.0;
+            }
+            AgentSettingsHit::Connect(p) => {
+                let idx = openpencil_shell_core::document::AgentProvider::ALL.iter().position(|x| *x == p).unwrap_or(0);
+                self.document.ui.agent_settings.connected[idx] ^= true;
+            }
+            AgentSettingsHit::ToggleMcpServer => {
+                self.document.ui.agent_settings.mcp_server.running ^= true;
+            }
+            AgentSettingsHit::ToggleMcpCli(cli) => {
+                let idx = openpencil_shell_core::document::McpCli::ALL.iter().position(|x| *x == cli).unwrap_or(0);
+                self.document.ui.agent_settings.mcp_cli_enabled[idx] ^= true;
+            }
+            AgentSettingsHit::ToggleImagesAdvanced => {
+                self.document.ui.agent_settings.images_advanced_open ^= true;
+            }
+            AgentSettingsHit::AddProvider | AgentSettingsHit::AddAcpAgent | AgentSettingsHit::TestImageSearch | AgentSettingsHit::AddGenConfig | AgentSettingsHit::Inside => {}
+        }
+        true
     }
 }

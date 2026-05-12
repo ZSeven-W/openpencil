@@ -41,6 +41,8 @@ mod input;
 mod input_tests;
 mod paint;
 mod press;
+mod property_dispatch;
+mod shortcuts;
 
 pub use frame_backend::NativeFrameBackend;
 
@@ -141,6 +143,11 @@ pub struct WidgetHostNative {
     /// this via `set_modifier_shift` on every modifier change.
     /// Drives shift+click multi-select in `apply_press`.
     pub(in crate::widget_host) shift_held: bool,
+    /// Last viewport size seen by paint/press. Used by handlers
+    /// that don't receive viewport dims (e.g. apply_cursor_move
+    /// driving the color-picker drag).
+    pub(in crate::widget_host) last_viewport_w: f32,
+    pub(in crate::widget_host) last_viewport_h: f32,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -278,6 +285,8 @@ impl WidgetHostNative {
             next_node_id: 100,
             now_ms: 0,
             shift_held: false,
+            last_viewport_w: 0.0,
+            last_viewport_h: 0.0,
         }
     }
 
@@ -305,6 +314,27 @@ impl WidgetHostNative {
     /// Next millisecond at which the host should wake to repaint
     /// the caret blink phase. `None` = no animation pending.
     pub fn next_animation_deadline_ms(&self) -> Option<u64> {
+        if self.document.ui.text_editing.is_some() {
+            return Some(jian_core::anim::next_blink_flip_ms(
+                self.now_ms,
+                self.document.ui.text_edit_caret_anchor_ms,
+                500,
+            ));
+        }
+        if self.document.ui.layer_rename.is_some() {
+            return Some(jian_core::anim::next_blink_flip_ms(
+                self.now_ms,
+                self.document.ui.rename_caret_anchor_ms,
+                500,
+            ));
+        }
+        if self.document.ui.text_editing.is_some() {
+            return Some(jian_core::anim::next_blink_flip_ms(
+                self.now_ms,
+                self.document.ui.text_edit_caret_anchor_ms,
+                500,
+            ));
+        }
         if self.document.ui.property_focus.is_some() {
             return Some(jian_core::anim::next_blink_flip_ms(
                 self.now_ms,

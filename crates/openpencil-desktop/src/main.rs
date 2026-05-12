@@ -1,42 +1,5 @@
-//! OpenPencil desktop runner.
-//!
-//! winit + skia-safe binary that wires `WidgetHostNative` (from
-//! `openpencil-shell-native`) into a real OS window. Owns the
-//! event loop, GL surface, DPI tracking, animation timer, and the
-//! cursor / input plumbing — everything that's specific to "OS
-//! window with skia GL surface" and not shared with the wasm32
-//! browser host or the (Step 1f) mobile shells.
-//!
-//! ### Run
-//!
-//! ```text
-//! cargo run -p openpencil-desktop --release
-//! ```
-//!
-//! ### Layout
-//!
-//! - `WidgetHostNative` (in `openpencil-shell-native`) owns the
-//!   `Document`, paints widgets, and routes input — platform-free
-//!   beyond the `RenderBackend` impl.
-//! - `SharedSkiaContext` + `NativeBackend` (also in shell-native)
-//!   wrap jian-skia + glutin so the same widget code paints on
-//!   macOS / Linux / Windows.
-//! - This binary glues winit's `ApplicationHandler` events
-//!   (Resumed / Resized / RedrawRequested / CursorMoved /
-//!   MouseInput / MouseWheel / PinchGesture / KeyboardInput /
-//!   ModifiersChanged / ScaleFactorChanged) onto the host's
-//!   `apply_*` methods + `paint`.
-//!
-//! ### Mobile (iOS / Android) — Step 1f
-//!
-//! The desktop crate is gated to macOS / Linux / Windows. Mobile
-//! shells will live in their own crates with platform-specific
-//! `GlContextProvider` impls (`EaglProvider` on iOS,
-//! `AndroidEglProvider` on Android — both already stubbed in
-//! shell-native; spec §11 + 2026-05-10 directive). The widget glue
-//! `WidgetHostNative` is platform-agnostic; mobile runners reuse
-//! `host.paint(&mut frame, w, h)` once their provider ships real
-//! `make_current` / `swap_buffers`.
+//! OpenPencil desktop runner — winit + skia-safe + WidgetHostNative.
+//! Owns the event loop, GL surface, DPI, animation timer + cursor input.
 
 #![cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]
 
@@ -187,6 +150,22 @@ struct DesktopApp {
     zoom_modifier: bool,
     /// Shift held — promotes arrow-key nudge from 1 px to 10 px.
     shift_modifier: bool,
+    /// Latest cursor position deferred for the next paint pass.
+    /// `CursorMoved` fires at mouse-input rate (up to 1000 Hz on
+    /// high-poll-rate trackpads); apply_cursor_move runs through
+    /// per-drag mutators that allocate and rebuild widgets, so we
+    /// coalesce all events between paints into a single apply call
+    /// driven from `RedrawRequested`.
+    pending_cursor_move: Option<(f32, f32)>,
+    /// True iff a `request_redraw` is already in flight. Suppresses
+    /// duplicate redraw requests when many input events fire
+    /// between paints.
+    redraw_pending: bool,
+    /// True when the pending redraw is known to need a paint even if
+    /// a coalesced cursor move drains to a no-op. Cursor moves queue
+    /// redraws speculatively; presses / keys / wheel / timers mark
+    /// the frame dirty because visible state already changed.
+    redraw_dirty: bool,
     /// Monotonic clock anchor — `Instant.elapsed().as_millis()`
     /// from this is fed into `WidgetHostNative::set_now_ms` so
     /// `jian_core::anim::blink_visible` can drive the caret blink
@@ -213,10 +192,83 @@ impl DesktopApp {
             dpi: 1.0,
             zoom_modifier: false,
             shift_modifier: false,
+            pending_cursor_move: None,
+            redraw_pending: false,
+            redraw_dirty: false,
             clock_start: Instant::now(),
             rotate_cursor: None,
             error: None,
         }
+    }
+
+    fn request_redraw(&mut self, dirty: bool) -> bool {
+        if dirty {
+            self.redraw_dirty = true;
+        }
+        if self.redraw_pending {
+            return false;
+        }
+        self.redraw_pending = true;
+        if let Some(window) = self.window.as_ref() {
+            window.request_redraw();
+        }
+        true
+    }
+
+    fn drain_pending_cursor_move(&mut self) -> bool {
+        if let Some((cx, cy)) = self.pending_cursor_move.take() {
+            let hover_changed = self.host.update_layer_hover(cx, cy, self.viewport_height);
+            let cursor_changed = self.host.apply_cursor_move(cx, cy);
+            hover_changed || cursor_changed
+        } else {
+            false
+        }
+    }
+
+    fn prepare_redraw(&mut self) -> bool {
+        let tracked_request = self.redraw_pending;
+        self.redraw_pending = false;
+        let mut should_paint = !tracked_request || self.redraw_dirty;
+        self.redraw_dirty = false;
+        should_paint |= self.drain_pending_cursor_move();
+        should_paint
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn cursor_only_redraw_without_visible_state_change_skips_present() {
+        let mut app = DesktopApp::new();
+        app.redraw_pending = true;
+        app.pending_cursor_move = Some((1200.0, 20.0));
+
+        assert!(!app.prepare_redraw());
+        assert!(!app.redraw_pending);
+        assert!(app.pending_cursor_move.is_none());
+    }
+
+    #[test]
+    fn consumed_press_dirties_existing_cursor_redraw_without_second_request() {
+        let mut app = DesktopApp::new();
+        app.redraw_pending = true;
+
+        assert!(!app.request_redraw(true));
+        assert!(app.prepare_redraw());
+    }
+
+    #[test]
+    fn cursor_redraw_still_paints_when_layer_hover_changes() {
+        let mut app = DesktopApp::new();
+        app.redraw_pending = true;
+        app.pending_cursor_move = Some((
+            20.0,
+            openpencil_shell_core::widgets::TOP_BAR_HEIGHT + 8.0 + 28.0 + 16.0,
+        ));
+
+        assert!(app.prepare_redraw());
     }
 }
 
@@ -226,9 +278,7 @@ impl ApplicationHandler for DesktopApp {
         // the next caret-blink phase. winit doesn't auto-redraw on
         // ResumeTimeReached, so we have to request it here.
         if matches!(cause, StartCause::ResumeTimeReached { .. }) {
-            if let Some(window) = self.window.as_ref() {
-                window.request_redraw();
-            }
+            self.request_redraw(true);
         }
     }
 
@@ -250,6 +300,10 @@ impl ApplicationHandler for DesktopApp {
                 return;
             }
         };
+        // Enable IME so macOS / X11 / Wayland route Chinese / Japanese /
+        // Korean composition through `WindowEvent::Ime` instead of
+        // dropping the keystrokes.
+        window.set_ime_allowed(true);
 
         let dpi = window.scale_factor() as f32;
         self.dpi = dpi;
@@ -317,9 +371,7 @@ impl ApplicationHandler for DesktopApp {
                 }
                 self.viewport_width = size.width as f32 / self.dpi;
                 self.viewport_height = size.height as f32 / self.dpi;
-                if let Some(window) = self.window.as_ref() {
-                    window.request_redraw();
-                }
+                self.request_redraw(true);
             }
             WindowEvent::ScaleFactorChanged { scale_factor, .. } => {
                 self.dpi = scale_factor as f32;
@@ -337,19 +389,22 @@ impl ApplicationHandler for DesktopApp {
                     let size = window.inner_size();
                     self.viewport_width = size.width as f32 / self.dpi;
                     self.viewport_height = size.height as f32 / self.dpi;
-                    window.request_redraw();
                 }
+                self.request_redraw(true);
             }
             WindowEvent::RedrawRequested => {
-                if let (Some(ctx), Some(backend)) = (self.ctx.as_mut(), self.backend.as_mut()) {
-                    paint(
-                        ctx,
-                        backend,
-                        &self.host,
-                        self.viewport_width,
-                        self.viewport_height,
-                        self.dpi,
-                    );
+                let should_paint = self.prepare_redraw();
+                if should_paint {
+                    if let (Some(ctx), Some(backend)) = (self.ctx.as_mut(), self.backend.as_mut()) {
+                        paint(
+                            ctx,
+                            backend,
+                            &self.host,
+                            self.viewport_width,
+                            self.viewport_height,
+                            self.dpi,
+                        );
+                    }
                 }
                 if let Some(deadline_ms) = self.host.next_animation_deadline_ms() {
                     let deadline = self.clock_start + Duration::from_millis(deadline_ms);
@@ -391,22 +446,27 @@ impl ApplicationHandler for DesktopApp {
                         window.set_cursor(icon);
                     }
                 }
-                let hover_changed = self.host.update_layer_hover(
-                    self.cursor_x,
-                    self.cursor_y,
-                    self.viewport_height,
-                );
-                if self.host.apply_cursor_move(self.cursor_x, self.cursor_y) || hover_changed {
-                    if let Some(window) = self.window.as_ref() {
-                        window.request_redraw();
-                    }
-                }
+                // Coalesce: stash the latest cursor for the next
+                // paint pass instead of running apply_cursor_move
+                // (which mutates drag state + may rebuild widgets)
+                // on every input event. Mouse poll rates can hit
+                // 1000 Hz on modern trackpads — without this the
+                // host runs ~16× more per-event work than the
+                // display rate. Apply lands in RedrawRequested.
+                self.pending_cursor_move = Some((self.cursor_x, self.cursor_y));
+                self.request_redraw(false);
             }
             WindowEvent::MouseInput {
                 state: ElementState::Pressed,
                 button: MouseButton::Left,
                 ..
             } => {
+                // Drain any queued cursor move first so the host's
+                // hover / cursor-tracking state is current when the
+                // press lands.
+                if self.drain_pending_cursor_move() {
+                    self.redraw_dirty = true;
+                }
                 let consumed = self.host.apply_press(
                     self.cursor_x,
                     self.cursor_y,
@@ -414,9 +474,25 @@ impl ApplicationHandler for DesktopApp {
                     self.viewport_height,
                 );
                 if consumed {
-                    if let Some(window) = self.window.as_ref() {
-                        window.request_redraw();
-                    }
+                    self.request_redraw(true);
+                }
+            }
+            WindowEvent::MouseInput {
+                state: ElementState::Pressed,
+                button: MouseButton::Right,
+                ..
+            } => {
+                if self.drain_pending_cursor_move() {
+                    self.redraw_dirty = true;
+                }
+                let consumed = self.host.apply_right_press(
+                    self.cursor_x,
+                    self.cursor_y,
+                    self.viewport_width,
+                    self.viewport_height,
+                );
+                if consumed {
+                    self.request_redraw(true);
                 }
             }
             WindowEvent::MouseInput {
@@ -424,13 +500,18 @@ impl ApplicationHandler for DesktopApp {
                 button: MouseButton::Left,
                 ..
             } => {
+                // Drain any cursor moves queued since the last paint
+                // BEFORE releasing — otherwise a drag that ended mid-
+                // motion would commit using the previous frame's
+                // cursor and lose the final position.
+                if self.drain_pending_cursor_move() {
+                    self.redraw_dirty = true;
+                }
                 let consumed = self
                     .host
                     .apply_release_with_viewport(self.viewport_width, self.viewport_height);
                 if consumed {
-                    if let Some(window) = self.window.as_ref() {
-                        window.request_redraw();
-                    }
+                    self.request_redraw(true);
                 }
             }
             WindowEvent::MouseWheel { delta, .. } => {
@@ -471,9 +552,7 @@ impl ApplicationHandler for DesktopApp {
                     }
                 };
                 if consumed {
-                    if let Some(window) = self.window.as_ref() {
-                        window.request_redraw();
-                    }
+                    self.request_redraw(true);
                 }
             }
             WindowEvent::PinchGesture { delta, .. } => {
@@ -485,8 +564,23 @@ impl ApplicationHandler for DesktopApp {
                     self.viewport_height,
                 );
                 if consumed {
-                    if let Some(window) = self.window.as_ref() {
-                        window.request_redraw();
+                    self.request_redraw(true);
+                }
+            }
+            WindowEvent::Ime(ime) => {
+                // CJK composition: macOS / X11 / Wayland route the
+                // committed candidate string through here. We don't
+                // paint the preedit yet; only the final commit is
+                // pushed into the focused input.
+                if let winit::event::Ime::Commit(text) = ime {
+                    let mut consumed = false;
+                    for ch in text.chars() {
+                        if self.host.apply_text(ch) {
+                            consumed = true;
+                        }
+                    }
+                    if consumed {
+                        self.request_redraw(true);
                     }
                 }
             }
@@ -559,10 +653,71 @@ impl ApplicationHandler for DesktopApp {
                             "c" => consumed = self.host.apply_copy(),
                             "x" => consumed = self.host.apply_cut(),
                             "v" => consumed = self.host.apply_paste(),
+                            "z" => consumed = self.host.apply_undo(),
+                            "y" => consumed = self.host.apply_redo(),
+                            "g" => consumed = self.host.apply_group(),
+                            "j" => consumed = self.host.apply_toggle_chat(),
+                            "," => consumed = self.host.apply_toggle_agent_settings(),
                             _ => {}
                         }
                     }
-                    // `[` / `]` — z-order reorder (no modifier).
+                    // Cmd+Shift+letter: Z = redo, G = ungroup, C = code panel.
+                    Key::Character(ref ch) if self.zoom_modifier && self.shift_modifier => {
+                        match ch.to_lowercase().as_str() {
+                            "z" => consumed = self.host.apply_redo(),
+                            "g" => consumed = self.host.apply_ungroup(),
+                            "c" => consumed = self.host.apply_toggle_code_panel(),
+                            _ => {}
+                        }
+                    }
+                    // Single-letter tool switches (no modifier). Only
+                    // fire when no input is focused so typing in a
+                    // text node / chat / rename doesn't switch tools.
+                    Key::Character(ref ch)
+                        if !self.zoom_modifier && !self.host.input_active_pub() =>
+                    {
+                        let lower = ch.to_lowercase();
+                        let mut handled = true;
+                        match lower.as_str() {
+                            "v" => self
+                                .host
+                                .apply_set_tool(openpencil_shell_core::document::Tool::Select),
+                            "r" => self
+                                .host
+                                .apply_set_tool(openpencil_shell_core::document::Tool::Rect),
+                            "o" => self
+                                .host
+                                .apply_set_tool(openpencil_shell_core::document::Tool::Ellipse),
+                            "l" => self
+                                .host
+                                .apply_set_tool(openpencil_shell_core::document::Tool::Line),
+                            "t" => self
+                                .host
+                                .apply_set_tool(openpencil_shell_core::document::Tool::Text),
+                            "f" => self
+                                .host
+                                .apply_set_tool(openpencil_shell_core::document::Tool::Frame),
+                            "p" => self
+                                .host
+                                .apply_set_tool(openpencil_shell_core::document::Tool::Pen),
+                            "h" => self
+                                .host
+                                .apply_set_tool(openpencil_shell_core::document::Tool::Hand),
+                            "[" => {
+                                consumed = self.host.apply_reorder(ReorderDirection::Down);
+                                handled = false;
+                            }
+                            "]" => {
+                                consumed = self.host.apply_reorder(ReorderDirection::Up);
+                                handled = false;
+                            }
+                            _ => handled = false,
+                        }
+                        if handled {
+                            consumed = true;
+                        }
+                    }
+                    // `[` / `]` — z-order reorder when an input is focused (still gated by apply_reorder internally).
                     Key::Character(ref ch) if !self.zoom_modifier => match ch.as_str() {
                         "[" => consumed = self.host.apply_reorder(ReorderDirection::Down),
                         "]" => consumed = self.host.apply_reorder(ReorderDirection::Up),
@@ -595,9 +750,7 @@ impl ApplicationHandler for DesktopApp {
                     }
                 }
                 if consumed {
-                    if let Some(window) = self.window.as_ref() {
-                        window.request_redraw();
-                    }
+                    self.request_redraw(true);
                 }
             }
             _ => {}

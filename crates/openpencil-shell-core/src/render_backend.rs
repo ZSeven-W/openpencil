@@ -224,6 +224,22 @@ pub trait RenderBackend {
     /// just declare which lucide path to draw.
     fn stroke_svg_path(&mut self, d: &str, top_left: Point2D, size: f32, color: Color, width: f32);
 
+    /// Fill an SVG path scaled from `viewbox` × `viewbox` to
+    /// `size × size` anchored at `top_left`. Used for brand
+    /// logos whose source paths are designed as filled shapes
+    /// (Claude, OpenAI, etc.) rather than lucide's stroked
+    /// 24×24 grid. Default-impl is a no-op so backends without
+    /// a path-fill primitive degrade gracefully.
+    fn fill_svg_path(
+        &mut self,
+        _d: &str,
+        _top_left: Point2D,
+        _size: f32,
+        _viewbox: f32,
+        _color: Color,
+    ) {
+    }
+
     /// Filled ellipse inscribed in `bounds`. Used by Ellipse-kind
     /// document nodes. Default impl falls back to a rounded
     /// rectangle (visually wrong but compiles); native + web

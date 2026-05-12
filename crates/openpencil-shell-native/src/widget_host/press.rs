@@ -1,21 +1,4 @@
-//! Mouse-press dispatcher on `WidgetHostNative` — the largest
-//! single method in the host. Pulled into its own file so the
-//! spine `widget_host.rs` stays under the 800-line ceiling.
-//!
-//! Hit-test order (top-most overlay first):
-//!   0aa. Commit-on-blur for property-panel inputs
-//!   0z.  Panel-resize gutters (LayerPanel right / PropertyPanel left)
-//!   0ab. Shape picker overlay
-//!   0a.  Locale picker overlay
-//!   0b.  TopBar (sidebar / theme / locale toggle)
-//!   0c0. Fill-type picker overlay
-//!   0c.  PropertyPanel input row + action button
-//!   1.   AI chat panel (DragHandle starts chat drag; other hits
-//!        defer to apply_click)
-//!   2.   Toolbar (gaps + buttons consume clicks)
-//!   3.   apply_click — LayerPanel + chat-defocus
-//!   4.   Canvas — Select / shape / Hand branch
-
+//! Mouse-press dispatcher.
 use super::helpers::color_to_hex;
 use super::helpers::{rect_contains, TOOLBAR_INSET_X, TOOLBAR_INSET_Y};
 use super::{
@@ -30,6 +13,103 @@ use openpencil_shell_core::widgets::{
 use openpencil_shell_core::{Point2D, Rect};
 
 impl WidgetHostNative {
+    fn dispatch_layer_context_action(
+        &mut self,
+        action: openpencil_shell_core::widgets::layer_context_menu::LayerContextAction,
+        target: openpencil_shell_core::document::LayerContextTarget,
+    ) {
+        use openpencil_shell_core::document::LayerContextTarget as T;
+        use openpencil_shell_core::widgets::layer_context_menu::LayerContextAction as A;
+        match (action, target) {
+            (A::Duplicate, T::Layer(id)) => {
+                self.document.set_single_selection(id);
+                self.document.commit_history();
+                let _ = self
+                    .document
+                    .duplicate_selected(&mut self.next_node_id, 10.0);
+            }
+            (A::Delete, T::Layer(id)) => {
+                self.document.set_single_selection(id);
+                self.document.commit_history();
+                let _ = self.document.delete_selected();
+            }
+            (A::ToggleLock, T::Layer(id)) => {
+                self.document.toggle_node_locked(id);
+            }
+            (A::ToggleVisibility, T::Layer(id)) => {
+                self.document.toggle_node_hidden(id);
+            }
+            (A::CreateComponent, T::Layer(_)) => {} // stub
+            (A::DuplicatePage, T::Page(idx)) => {
+                let _ = self.document.duplicate_page(idx);
+            }
+            (A::MovePageUp, T::Page(idx)) => {
+                let _ = self.document.move_page_up(idx);
+            }
+            (A::MovePageDown, T::Page(idx)) => {
+                let _ = self.document.move_page_down(idx);
+            }
+            (A::DeletePage, T::Page(idx)) => {
+                let _ = self.document.remove_page(idx);
+            }
+            (A::RenamePage, T::Page(idx)) => {
+                if self.document.start_rename_page(idx) {
+                    self.document.ui.rename_caret_anchor_ms = self.now_ms;
+                }
+            }
+            (A::RenameLayer, T::Layer(id)) => {
+                if self.document.start_rename_layer(id) {
+                    self.document.ui.rename_caret_anchor_ms = self.now_ms;
+                }
+            }
+            _ => {} // mismatched action/target — no-op
+        }
+    }
+
+    /// Right-click handler — opens the LayerPanel context menu on
+    /// a layer row OR page row.
+    pub fn apply_right_press(&mut self, x: f32, y: f32, _viewport_w: f32, viewport_h: f32) -> bool {
+        if !self.document.ui.sidebar_open {
+            return false;
+        }
+        use openpencil_shell_core::document::{LayerContextMenuState, LayerContextTarget};
+        use openpencil_shell_core::widgets::{LayerPanel, LayerPanelHit};
+        let layer_rect = Rect {
+            origin: Point2D::new(0.0, TOP_BAR_HEIGHT),
+            size: Point2D::new(
+                self.document.ui.layer_panel_width,
+                (viewport_h - TOP_BAR_HEIGHT).max(0.0),
+            ),
+        };
+        let panel = LayerPanel::from_document(&self.document);
+        match panel.hit_test(layer_rect, Point2D::new(x, y)) {
+            Some(LayerPanelHit::Layer(id)) => {
+                self.document.set_single_selection(id);
+                self.document.ui.layer_context_menu = Some(LayerContextMenuState {
+                    target: LayerContextTarget::Layer(id),
+                    anchor_x: x,
+                    anchor_y: y,
+                    hovered_row: None,
+                });
+                return true;
+            }
+            Some(LayerPanelHit::Page(idx)) => {
+                self.document.ui.layer_context_menu = Some(LayerContextMenuState {
+                    target: LayerContextTarget::Page(idx),
+                    anchor_x: x,
+                    anchor_y: y,
+                    hovered_row: None,
+                });
+                return true;
+            }
+            _ => {}
+        }
+        if self.document.ui.layer_context_menu.take().is_some() {
+            return true;
+        }
+        false
+    }
+
     /// Mouse-press handler. Returns whether anything visible changed.
     pub fn apply_press(
         &mut self,
@@ -38,12 +118,75 @@ impl WidgetHostNative {
         viewport_width: f32,
         viewport_height: f32,
     ) -> bool {
-        // 0aa. Commit-on-blur for property-panel inputs — if a
-        //      click lands outside the property panel while an
-        //      input is focused, commit the draft (parse + write to
-        //      node) before processing the new click. The
-        //      property-panel hit-test below replaces it with the
-        //      new focus when the click was inside the panel.
+        self.last_viewport_w = viewport_width;
+        self.last_viewport_h = viewport_height;
+        // Blur-commit rename + text-edit; track to repaint on click.
+        let rename_committed =
+            self.document.ui.layer_rename.is_some() && self.document.rename_commit();
+        let text_edit_was_active = self.document.ui.text_editing.is_some();
+        let text_edit_committed = self.document.text_edit_commit();
+        if self.document.ui.agent_settings_open
+            && self.dispatch_agent_settings_press(x, y, viewport_width, viewport_height)
+        {
+            return true;
+        }
+        // 0-color. Color picker overlay — top-most when open.
+        if let Some(state) = self.document.ui.color_picker.clone() {
+            use openpencil_shell_core::widgets::color_picker::{
+                drag_for_hit, ColorPicker, ColorPickerHit,
+            };
+            let picker = ColorPicker::for_state(&self.document, state.clone());
+            let panel = picker.rect(viewport_width, viewport_height);
+            let point = Point2D::new(x, y);
+            match picker.hit_test(panel, point) {
+                Some(ColorPickerHit::Close) => {
+                    let _ = self.document.close_color_picker();
+                    return true;
+                }
+                Some(ColorPickerHit::Eyedropper) | Some(ColorPickerHit::Inside) => {
+                    return true;
+                }
+                Some(hit @ (ColorPickerHit::SvBox | ColorPickerHit::HueSlider)) => {
+                    if let Some(kind) = drag_for_hit(hit) {
+                        // Live-apply once for the press point.
+                        match hit {
+                            ColorPickerHit::SvBox => {
+                                let (s, v) = picker.sv_at(panel, point);
+                                let _ = self.document.color_picker_set_hsv(state.hue, s, v);
+                            }
+                            ColorPickerHit::HueSlider => {
+                                let h = picker.hue_at(panel, point);
+                                let _ = self.document.color_picker_set_hsv(h, state.sat, state.val);
+                            }
+                            _ => {}
+                        }
+                        self.document.color_picker_set_drag(Some(kind));
+                    }
+                    return true;
+                }
+                None => {
+                    // Press outside the panel — close it; the click
+                    // continues to the next overlay so the user can
+                    // immediately interact with whatever they aimed
+                    // at.
+                    let _ = self.document.close_color_picker();
+                }
+            }
+        }
+
+        // 0. Layer context menu — top-most when open.
+        if let Some(state) = self.document.ui.layer_context_menu {
+            use openpencil_shell_core::widgets::layer_context_menu::LayerContextMenu;
+            let menu = LayerContextMenu::for_state(&self.document, state);
+            if let Some(action) = menu.hit_test(Point2D::new(x, y)) {
+                self.dispatch_layer_context_action(action, state.target);
+                self.document.ui.layer_context_menu = None;
+                return true;
+            }
+            self.document.ui.layer_context_menu = None;
+            return true;
+        }
+        // 0aa. Commit-on-blur for property-panel inputs.
         if self.document.ui.property_focus.is_some() {
             let property_left = if self.document.property_panel_visible() {
                 viewport_width - self.document.ui.property_panel_width
@@ -55,10 +198,7 @@ impl WidgetHostNative {
             }
         }
 
-        // 0z. Panel-resize gutter — clicks within ±4 px of the
-        //     LayerPanel right edge or PropertyPanel left edge
-        //     start a resize drag. Below TopBar so the gutter
-        //     doesn't eat title-bar clicks.
+        // 0z. Panel-resize gutter — ±4 px from rail edges.
         if y >= TOP_BAR_HEIGHT {
             if let Some(kind) = self.panel_resize_hover(x, y, viewport_width) {
                 let start_width = match kind {
@@ -74,17 +214,14 @@ impl WidgetHostNative {
             }
         }
 
-        // 0ab. Shape picker overlay — same dismissal rules as the
-        //      locale picker. Row hit sets the shape tool + closes;
-        //      click anywhere else closes silently and swallows
-        //      the press so the same click can't re-toggle the
-        //      picker via the toolbar shape slot below.
+        // 0ab. Shape picker overlay.
         if self.document.ui.shape_picker_open {
             let panel_rect = self.shape_picker_rect(viewport_width, viewport_height);
             let picker = ShapePicker::for_document(&self.document);
             if let Some(choice) = picker.hit_test(panel_rect, Point2D::new(x, y)) {
                 match choice {
                     ShapeChoice::Tool(tool) => {
+                        let _ = self.document.finish_pen_path();
                         self.document.ui.shape_tool = tool;
                         self.document.tool = tool;
                     }
@@ -139,11 +276,15 @@ impl WidgetHostNative {
                     self.document.ui.locale_picker_open = !self.document.ui.locale_picker_open;
                     return true;
                 }
+                TopBarHit::OpenAgentSettings => {
+                    self.document.ui.agent_settings_open = true;
+                    return true;
+                }
             }
         }
         if rect_contains(top_bar_rect, Point2D::new(x, y)) {
             // Other top-bar gaps eat clicks but don't act.
-            return false;
+            return rename_committed || text_edit_committed;
         }
 
         // 0c0. Fill-type picker: any click that isn't a row /
@@ -197,7 +338,14 @@ impl WidgetHostNative {
             // Button / checkbox click first (flex modes + size flags).
             if let Some(action) = panel.hit_test_action(property_rect, Point2D::new(x, y)) {
                 self.commit_property_focus_if_any();
-                self.apply_property_action(action);
+                if let openpencil_shell_core::widgets::PropertyPanelAction::OpenColorPicker(
+                    target,
+                ) = action
+                {
+                    let _ = self.document.open_color_picker(target, y);
+                } else {
+                    self.apply_property_action(action);
+                }
                 return true;
             }
             if let Some(focus) = panel.hit_test(property_rect, Point2D::new(x, y)) {
@@ -218,6 +366,9 @@ impl WidgetHostNative {
                     openpencil_shell_core::document::PropertyFocus::Rotation => {
                         (panel.snapshot.rotation_deg.round() as i32).to_string()
                     }
+                    openpencil_shell_core::document::PropertyFocus::PositionR => {
+                        (panel.snapshot.corner_radius.round() as i32).to_string()
+                    }
                     openpencil_shell_core::document::PropertyFocus::Opacity => "100".to_string(),
                     openpencil_shell_core::document::PropertyFocus::FillHex => panel
                         .snapshot
@@ -234,15 +385,11 @@ impl WidgetHostNative {
                         .stroke
                         .map(|s| format!("{}", s.width.round() as i32))
                         .unwrap_or_else(|| "1".to_string()),
-                    _ => String::new(),
                 };
                 self.document.ui.property_focus = Some(focus);
                 self.document.ui.property_input_draft = initial;
                 self.document.ui.property_caret_anchor_ms = self.now_ms;
-                // No select-all-on-focus: the user can edit the
-                // seeded value character-by-character via
-                // backspace + typing. Replacing the whole field
-                // means backspacing through it.
+                // No select-all-on-focus.
                 self.document.ui.property_draft_select_all = false;
                 self.document.chat.focused = false;
                 return true;
@@ -299,13 +446,20 @@ impl WidgetHostNative {
             if let Some(hit) = toolbar.hit_test(toolbar_rect, Point2D::new(x, y)) {
                 match hit {
                     openpencil_shell_core::widgets::ToolbarHit::Tool(tool) => {
+                        let _ = self.document.finish_pen_path();
                         self.document.tool = tool;
                         self.document.ui.shape_picker_open = false;
                         return true;
                     }
-                    openpencil_shell_core::widgets::ToolbarHit::Action(_) => {
+                    openpencil_shell_core::widgets::ToolbarHit::Action(action) => {
+                        use openpencil_shell_core::widgets::ToolbarAction;
                         self.document.ui.shape_picker_open = false;
-                        return false;
+                        let acted = match action {
+                            ToolbarAction::Undo => self.document.undo(),
+                            ToolbarAction::Redo => self.document.redo(),
+                            _ => false,
+                        };
+                        return acted || rename_committed || text_edit_committed;
                     }
                     openpencil_shell_core::widgets::ToolbarHit::ToggleShapePicker => {
                         self.document.ui.shape_picker_open = !self.document.ui.shape_picker_open;
@@ -313,7 +467,7 @@ impl WidgetHostNative {
                     }
                 }
             }
-            return false;
+            return rename_committed || text_edit_committed;
         }
 
         // 3. apply_click — LayerPanel + chat-defocus.
@@ -363,7 +517,7 @@ impl WidgetHostNative {
                     last_x: x,
                     last_y: y,
                 });
-                return false;
+                return rename_committed || text_edit_committed;
             }
             let (cx0, cy0, cw, ch) = self.canvas_region(viewport_width, viewport_height);
             let canvas_rect = Rect {
@@ -394,6 +548,7 @@ impl WidgetHostNative {
                         // fall through to node-drag / pan.
                         let raw = node.bounds;
                         if raw.size.x > 0.0 || raw.size.y > 0.0 {
+                            self.document.commit_history();
                             self.handle_drag = Some(HandleDragState {
                                 handle,
                                 start_screen_x: x,
@@ -418,16 +573,30 @@ impl WidgetHostNative {
                             + self.document.viewport.pan_y
                             + cy_doc * self.document.viewport.zoom;
                         let start_cursor_angle = (y - center_screen_y).atan2(x - center_screen_x);
+                        let start_rotation = node.rotation;
+                        self.document.commit_history();
                         self.rotate_drag = Some(RotateDragState {
                             center_screen_x,
                             center_screen_y,
                             start_cursor_angle,
-                            start_rotation: node.rotation,
+                            start_rotation,
                         });
                         return true;
                     }
                 }
                 if let Some(node_id) = self.document.node_at_doc_point(doc_point) {
+                    // Canvas double-click: 400 ms same-node → enter
+                    // text-edit on Text nodes (no-op on others).
+                    let is_double = matches!(
+                        self.document.ui.last_canvas_click,
+                        Some((prev, t)) if prev == node_id && self.now_ms.saturating_sub(t) < 400
+                    );
+                    self.document.ui.last_canvas_click = Some((node_id, self.now_ms));
+                    if is_double && !text_edit_was_active && self.document.start_text_edit(node_id)
+                    {
+                        self.document.ui.text_edit_caret_anchor_ms = self.now_ms;
+                        return true;
+                    }
                     if self.shift_held {
                         // Shift+click toggles set membership.
                         // Only start a node-drag if the click
@@ -453,6 +622,7 @@ impl WidgetHostNative {
                     if !already_in_set || self.document.selection_count() == 1 {
                         self.document.set_single_selection(node_id);
                     }
+                    self.document.commit_history();
                     self.node_drag = Some(NodeDragState {
                         last_screen_x: x,
                         last_screen_y: y,
@@ -487,9 +657,25 @@ impl WidgetHostNative {
                 return cleared_now;
             }
 
+            // Pen tool: click-add anchors to an in-progress Path.
+            // First click creates the node; subsequent clicks push
+            // an anchor; Enter/Escape commits.
+            if matches!(self.document.tool, Tool::Pen) {
+                if self.document.ui.pen_in_progress.is_some() {
+                    self.document.add_pen_point(doc_point);
+                } else {
+                    let _ = self
+                        .document
+                        .start_pen_path(&mut self.next_node_id, doc_point);
+                }
+                return true;
+            }
+
             // Shape / Frame / Text tool: spawn a new node at the
             // press point and drag-resize via cursor-move.
+            let pre_create = self.document.snapshot_for_history();
             if let Some(node_id) = self.create_node_for_active_tool(doc_point) {
+                self.document.history_push_past(pre_create);
                 self.document.set_single_selection(node_id);
                 self.create_drag = Some(CreateDragState {
                     start_doc_x: doc_point.x,
@@ -503,9 +689,9 @@ impl WidgetHostNative {
                 last_x: x,
                 last_y: y,
             });
-            return false;
+            return rename_committed || text_edit_committed;
         }
-        false
+        rename_committed || text_edit_committed
     }
 
     /// Spawn a fresh document node for the active shape/frame/text
@@ -541,11 +727,21 @@ impl WidgetHostNative {
         self.next_node_id = self.next_node_id.max(safe);
         let id = NodeId::new(self.next_node_id);
         self.next_node_id = self.next_node_id.checked_add(1)?;
+        // Sensible default size for click-create (no drag). Text
+        // gets enough room to render its placeholder "Text" string;
+        // shape tools start at 1 px so a real drag overrides
+        // immediately. (codex stop-hook fix: text was inheriting
+        // the shape 1×1 default, painting an unselectable speck.)
+        let (init_w, init_h) = if matches!(kind, NodeKind::Text) {
+            (96.0_f32, 24.0_f32)
+        } else {
+            (1.0, 1.0)
+        };
         let mut node = Node::leaf(id.raw(), kind, name).with_bounds(Rect::xywh(
             doc_point.x,
             doc_point.y,
-            1.0,
-            1.0,
+            init_w,
+            init_h,
         ));
         if let Some(c) = fill {
             node = node.with_fill(c);
@@ -562,5 +758,40 @@ impl WidgetHostNative {
             .get_mut(self.document.active_page_index)?;
         page.children.push(node);
         Some(id)
+    }
+
+    fn dispatch_agent_settings_press(&mut self, x: f32, y: f32, vw: f32, vh: f32) -> bool {
+        use openpencil_shell_core::widgets::agent_settings_panel::{
+            AgentSettingsHit, AgentSettingsPanel,
+        };
+        let panel = AgentSettingsPanel::for_document(&self.document);
+        let panel_rect = panel.rect(vw, vh);
+        let point = Point2D::new(x, y);
+        match panel.hit_test(panel_rect, point) {
+            AgentSettingsHit::Close | AgentSettingsHit::Outside => {
+                self.document.ui.agent_settings_open = false;
+                self.document.ui.agent_settings_drag = None;
+            }
+            AgentSettingsHit::SelectTab(t) => {
+                self.document.ui.agent_settings.tab = t;
+                self.document.ui.agent_settings.scroll_y = 0.0;
+            }
+            AgentSettingsHit::Connect(p) => {
+                let idx = openpencil_shell_core::document::AgentProvider::ALL.iter().position(|x| *x == p).unwrap_or(0);
+                self.document.ui.agent_settings.connected[idx] ^= true;
+            }
+            AgentSettingsHit::ToggleMcpServer => {
+                self.document.ui.agent_settings.mcp_server.running ^= true;
+            }
+            AgentSettingsHit::ToggleMcpCli(cli) => {
+                let idx = openpencil_shell_core::document::McpCli::ALL.iter().position(|x| *x == cli).unwrap_or(0);
+                self.document.ui.agent_settings.mcp_cli_enabled[idx] ^= true;
+            }
+            AgentSettingsHit::ToggleImagesAdvanced => {
+                self.document.ui.agent_settings.images_advanced_open ^= true;
+            }
+            AgentSettingsHit::AddProvider | AgentSettingsHit::AddAcpAgent | AgentSettingsHit::TestImageSearch | AgentSettingsHit::AddGenConfig | AgentSettingsHit::Inside => {}
+        }
+        true
     }
 }

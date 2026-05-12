@@ -9,6 +9,16 @@ impl WidgetHost {
     /// Step 5 P2: push a typed character into the focused chat
     /// input. Returns true if anything changed.
     pub fn apply_text(&mut self, c: char) -> bool {
+        if self.document.ui.layer_rename.is_some() && !c.is_control() {
+            let mut s = [0u8; 4];
+            return self.document.rename_append(c.encode_utf8(&mut s));
+        }
+        if self.document.ui.text_editing.is_some() && !c.is_control() {
+            let mut s = [0u8; 4];
+            return self
+                .document
+                .text_edit_append(c.encode_utf8(&mut s), self.now_ms);
+        }
         if !self.document.chat.focused {
             return false;
         }
@@ -16,18 +26,34 @@ impl WidgetHost {
         true
     }
 
-    /// Backspace on the focused chat input. When nothing is
-    /// focused, deletes the selected canvas node (TS parity
-    /// with `use-edit-shortcuts.ts`).
     pub fn apply_backspace(&mut self) -> bool {
+        if self.document.ui.layer_rename.is_some() {
+            return self.document.rename_backspace();
+        }
+        if self.document.ui.text_editing.is_some() {
+            return self.document.text_edit_backspace(self.now_ms);
+        }
         if self.document.chat.focused {
             return self.document.chat.input.pop().is_some();
         }
-        self.document.delete_selected()
+        if !self.document.selected.is_real() {
+            return false;
+        }
+        let snap = self.document.snapshot_for_history();
+        if self.document.delete_selected() {
+            self.document.history_push_past(snap);
+            return true;
+        }
+        false
     }
 
-    /// Send the focused chat input.
     pub fn apply_send(&mut self) -> bool {
+        if self.document.ui.layer_rename.is_some() {
+            return self.document.rename_commit();
+        }
+        if self.document.ui.text_editing.is_some() {
+            return self.document.text_edit_commit();
+        }
         if self.document.chat.input.trim().is_empty() {
             return false;
         }
@@ -39,18 +65,39 @@ impl WidgetHost {
     /// drafts. Use this when the host wants Delete strictly
     /// destructive regardless of focus.
     pub fn apply_delete(&mut self) -> bool {
+        if self.document.ui.layer_rename.is_some() {
+            return self.document.rename_backspace();
+        }
+        if self.document.ui.text_editing.is_some() {
+            return self.document.text_edit_backspace(self.now_ms);
+        }
         if self.document.chat.focused {
             return false;
         }
-        self.document.delete_selected()
+        if !self.document.selected.is_real() {
+            return false;
+        }
+        let snap = self.document.snapshot_for_history();
+        if self.document.delete_selected() {
+            self.document.history_push_past(snap);
+            return true;
+        }
+        false
     }
 
     /// Cmd/Ctrl+D — duplicate the selected node as a sibling
     /// offset by ~10 doc px. Selection follows the clone.
     pub fn apply_duplicate(&mut self) -> bool {
-        if self.document.chat.focused {
+        if self.document.ui.layer_rename.is_some()
+            || self.document.ui.text_editing.is_some()
+            || self.document.chat.focused
+        {
             return false;
         }
+        if !self.document.selected.is_real() {
+            return false;
+        }
+        self.document.commit_history();
         self.document
             .duplicate_selected(&mut self.next_node_id, 10.0)
             .is_some()
@@ -60,12 +107,16 @@ impl WidgetHost {
     /// `(dx, dy)` document px. Shift-arrow callers pass 10 px;
     /// plain arrows pass 1 px.
     pub fn apply_nudge(&mut self, dx: f32, dy: f32) -> bool {
-        if self.document.chat.focused {
+        if self.document.ui.layer_rename.is_some()
+            || self.document.ui.text_editing.is_some()
+            || self.document.chat.focused
+        {
             return false;
         }
         if !self.document.selected.is_real() {
             return false;
         }
+        self.document.commit_history();
         self.document.translate_selected(dx, dy);
         true
     }
@@ -73,7 +124,10 @@ impl WidgetHost {
     /// Cmd/Ctrl+A — replace selection with every top-level node
     /// on the active page (TS `setSelection(topLevelIds, …)`).
     pub fn apply_select_all(&mut self) -> bool {
-        if self.document.chat.focused {
+        if self.document.ui.layer_rename.is_some()
+            || self.document.ui.text_editing.is_some()
+            || self.document.chat.focused
+        {
             return false;
         }
         self.document.select_all_top_level()
@@ -81,7 +135,10 @@ impl WidgetHost {
 
     /// Cmd/Ctrl+C — copy the selection into the clipboard.
     pub fn apply_copy(&mut self) -> bool {
-        if self.document.chat.focused {
+        if self.document.ui.layer_rename.is_some()
+            || self.document.ui.text_editing.is_some()
+            || self.document.chat.focused
+        {
             return false;
         }
         self.document.copy_selected()
@@ -89,9 +146,16 @@ impl WidgetHost {
 
     /// Cmd/Ctrl+X — copy then delete the selection.
     pub fn apply_cut(&mut self) -> bool {
-        if self.document.chat.focused {
+        if self.document.ui.layer_rename.is_some()
+            || self.document.ui.text_editing.is_some()
+            || self.document.chat.focused
+        {
             return false;
         }
+        if !self.document.selected.is_real() {
+            return false;
+        }
+        self.document.commit_history();
         self.document.cut_selected()
     }
 
@@ -99,13 +163,34 @@ impl WidgetHost {
     /// offset by 10 doc px from the originals. Selection follows
     /// the new clones.
     pub fn apply_paste(&mut self) -> bool {
-        if self.document.chat.focused {
+        if self.document.ui.layer_rename.is_some()
+            || self.document.ui.text_editing.is_some()
+            || self.document.chat.focused
+        {
             return false;
         }
+        if self.document.clipboard.is_empty() {
+            return false;
+        }
+        self.document.commit_history();
         !self
             .document
             .paste_clipboard(&mut self.next_node_id, 10.0)
             .is_empty()
+    }
+
+    pub fn apply_undo(&mut self) -> bool {
+        if self.document.ui.layer_rename.is_some() || self.document.chat.focused {
+            return false;
+        }
+        self.document.undo()
+    }
+
+    pub fn apply_redo(&mut self) -> bool {
+        if self.document.ui.layer_rename.is_some() || self.document.chat.focused {
+            return false;
+        }
+        self.document.redo()
     }
 
     /// `[` / `]` — bump the selected node down / up by one
@@ -115,9 +200,16 @@ impl WidgetHost {
         &mut self,
         direction: openpencil_shell_core::document::ReorderDirection,
     ) -> bool {
-        if self.document.chat.focused {
+        if self.document.ui.layer_rename.is_some()
+            || self.document.ui.text_editing.is_some()
+            || self.document.chat.focused
+        {
             return false;
         }
+        if !self.document.selected.is_real() {
+            return false;
+        }
+        self.document.commit_history();
         self.document.reorder_selected(direction)
     }
 
@@ -127,6 +219,12 @@ impl WidgetHost {
     /// property input editing yet — so when web grows that path,
     /// no Escape-priority reordering is needed.
     pub fn apply_escape(&mut self) -> bool {
+        if self.document.rename_cancel() {
+            return true;
+        }
+        if self.document.text_edit_commit() {
+            return true;
+        }
         if self.document.ui.property_focus.take().is_some() {
             self.document.ui.property_input_draft.clear();
             return true;
