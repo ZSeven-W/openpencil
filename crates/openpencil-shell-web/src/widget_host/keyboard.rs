@@ -9,9 +9,12 @@ impl WidgetHost {
     /// Step 5 P2: push a typed character into the focused chat
     /// input. Returns true if anything changed.
     pub fn apply_text(&mut self, c: char) -> bool {
-        if self.document.ui.agent_settings.focus.is_some() && c.is_ascii_digit() {
-            return self.document.ui.settings_input_draft.len() < 5
-                && { self.document.ui.settings_input_draft.push(c); true };
+        if self.document.ui.agent_settings.focus.is_some() {
+            if c.is_ascii_digit() && self.document.ui.settings_input_draft.len() < 5 {
+                self.document.ui.settings_input_draft.push(c);
+                return true;
+            }
+            return false;
         }
         if self.document.ui.layer_rename.is_some() && !c.is_control() {
             let mut s = [0u8; 4];
