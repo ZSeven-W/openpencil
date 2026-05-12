@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
+  createCloudRevisionConflictDetails,
   isOptimisticUpdateMiss,
   throwCloudRevisionConflict,
 } from '../cloud-revision-conflict';
@@ -17,6 +18,14 @@ function makeSupabaseMock(revision: number | null) {
 }
 
 describe('cloud revision conflict helpers', () => {
+  it('creates stable structured conflict details', () => {
+    expect(createCloudRevisionConflictDetails('file-1', 7, 12)).toEqual({
+      fileId: 'file-1',
+      expectedRevision: 7,
+      serverRevision: 12,
+    });
+  });
+
   it('recognizes an optimistic update miss from PostgREST single-row errors', () => {
     expect(isOptimisticUpdateMiss(null, { code: 'PGRST116' })).toBe(true);
     expect(isOptimisticUpdateMiss(undefined, null)).toBe(true);
@@ -28,14 +37,18 @@ describe('cloud revision conflict helpers', () => {
     const mock = makeSupabaseMock(12);
 
     await expect(
-      throwCloudRevisionConflict(mock.supabase as never, 'file-1', 'user-1'),
+      throwCloudRevisionConflict(mock.supabase as never, 'file-1', 'user-1', 7),
     ).rejects.toMatchObject({
       statusCode: 409,
       statusMessage: 'Cloud file has a newer revision',
       data: {
         error: {
           code: 'revision_conflict',
-          details: { serverRevision: 12 },
+          details: {
+            fileId: 'file-1',
+            expectedRevision: 7,
+            serverRevision: 12,
+          },
         },
       },
     });

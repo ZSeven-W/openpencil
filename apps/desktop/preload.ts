@@ -241,6 +241,63 @@ export interface GitAPI {
   remoteSet: (repoId: string, url: string | null) => Promise<GitRemoteInfo>;
 }
 
+export interface CodegenOutputFile {
+  path: string;
+  content: string;
+}
+
+export interface WrittenCodegenOutputFile {
+  path: string;
+  absolutePath: string;
+  bytes: number;
+}
+
+export interface WriteCodegenOutputResult {
+  rootDir: string;
+  writtenFiles: WrittenCodegenOutputFile[];
+}
+
+export type CodegenOutputGitStatus =
+  | {
+      mode: 'repo';
+      rootDir: string;
+      repoRoot: string;
+      branch: string;
+      changedFiles: string[];
+      diff: string;
+      hasRemote: boolean;
+    }
+  | { mode: 'none'; rootDir: string };
+
+export interface CodegenAPI {
+  selectOutputDirectory: () => Promise<string | null>;
+  writeFiles: (payload: {
+    rootDir: string;
+    files: CodegenOutputFile[];
+  }) => Promise<WriteCodegenOutputResult>;
+  revealPath: (path: string) => Promise<void>;
+  gitStatus: (payload: {
+    rootDir: string;
+    files: CodegenOutputFile[];
+  }) => Promise<CodegenOutputGitStatus>;
+  gitCommit: (payload: {
+    rootDir: string;
+    files: CodegenOutputFile[];
+    message: string;
+    author: { name: string; email: string };
+  }) => Promise<{ hash: string; changedFiles: string[] }>;
+  gitPush: (payload: { rootDir: string }) => Promise<{ result: 'ok' }>;
+}
+
+export interface CloudAuthAPI {
+  getItem: (key: string) => Promise<string | null>;
+  setItem: (key: string, value: string) => Promise<void>;
+  removeItem: (key: string) => Promise<void>;
+  getPendingOAuthCallback: () => Promise<string | null>;
+  openOAuthUrl: (url: string) => Promise<void>;
+  onOAuthCallback: (callback: (url: string) => void) => () => void;
+}
+
 export interface ElectronAPI {
   isElectron: true;
   openFile: () => Promise<{ filePath: string; content: string } | null>;
@@ -278,6 +335,8 @@ export interface ElectronAPI {
     onStateChange: (callback: (state: UpdaterState) => void) => () => void;
   };
   git: GitAPI;
+  codegen: CodegenAPI;
+  cloudAuth: CloudAuthAPI;
 }
 
 const api: ElectronAPI = {
@@ -294,6 +353,23 @@ const api: ElectronAPI = {
 
   saveToPath: (filePath: string, content: string) =>
     ipcRenderer.invoke('dialog:saveToPath', { filePath, content }),
+
+  cloudAuth: {
+    getItem: (key: string) => ipcRenderer.invoke('cloud-auth:getItem', key),
+    setItem: (key: string, value: string) => ipcRenderer.invoke('cloud-auth:setItem', key, value),
+    removeItem: (key: string) => ipcRenderer.invoke('cloud-auth:removeItem', key),
+    getPendingOAuthCallback: () => ipcRenderer.invoke('cloud-auth:getPendingOAuthCallback'),
+    openOAuthUrl: (url: string) => ipcRenderer.invoke('cloud-auth:openOAuthUrl', url),
+    onOAuthCallback: (callback: (url: string) => void) => {
+      const listener = (_event: IpcRendererEvent, url: string) => {
+        callback(url);
+      };
+      ipcRenderer.on('cloud-auth:oauth-callback', listener);
+      return () => {
+        ipcRenderer.removeListener('cloud-auth:oauth-callback', listener);
+      };
+    },
+  },
 
   setTheme: (theme: 'dark' | 'light', colors?: { bg: string; fg: string }) =>
     ipcRenderer.invoke('theme:set', theme, colors),
@@ -423,6 +499,15 @@ const api: ElectronAPI = {
     remoteGet: (repoId: string) => ipcRenderer.invoke('git:remoteGet', repoId),
     remoteSet: (repoId: string, url: string | null) =>
       ipcRenderer.invoke('git:remoteSet', repoId, url),
+  },
+
+  codegen: {
+    selectOutputDirectory: () => ipcRenderer.invoke('codegen:selectOutputDirectory'),
+    writeFiles: (payload) => ipcRenderer.invoke('codegen:writeFiles', payload),
+    revealPath: (path: string) => ipcRenderer.invoke('codegen:revealPath', path),
+    gitStatus: (payload) => ipcRenderer.invoke('codegen:gitStatus', payload),
+    gitCommit: (payload) => ipcRenderer.invoke('codegen:gitCommit', payload),
+    gitPush: (payload) => ipcRenderer.invoke('codegen:gitPush', payload),
   },
 };
 

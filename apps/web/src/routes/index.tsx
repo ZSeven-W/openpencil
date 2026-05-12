@@ -1,18 +1,9 @@
 import { createFileRoute } from '@tanstack/react-router';
-import { AuthGate } from '@/components/cloud/auth-gate';
-import { CloudFileLibrary } from '@/components/cloud/cloud-file-library';
+import { AppEntryPage } from '@/components/cloud/app-entry-page';
 
 export const Route = createFileRoute('/')({
-  component: LandingPage,
+  component: AppEntryPage,
   head: () => ({
     meta: [{ title: 'OpenPencil - Design as Code' }],
   }),
 });
-
-function LandingPage() {
-  return (
-    <AuthGate>
-      <CloudFileLibrary />
-    </AuthGate>
-  );
-}

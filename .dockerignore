@@ -1,6 +1,9 @@
 .git
 .github
 .vscode
+.env
+.env.*
+!.env.example
 out
 node_modules
 dist

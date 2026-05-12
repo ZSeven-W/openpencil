@@ -1,6 +1,12 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { toApiError } from './cloud-supabase';
 
+export interface CloudRevisionConflictDetails {
+  fileId: string;
+  expectedRevision: number;
+  serverRevision: number | null;
+}
+
 export function isOptimisticUpdateMiss(data: unknown, error: unknown): boolean {
   if (data) return false;
   if (!error) return true;
@@ -8,10 +14,19 @@ export function isOptimisticUpdateMiss(data: unknown, error: unknown): boolean {
   return code === 'PGRST116';
 }
 
+export function createCloudRevisionConflictDetails(
+  fileId: string,
+  expectedRevision: number,
+  serverRevision: number | null,
+): CloudRevisionConflictDetails {
+  return { fileId, expectedRevision, serverRevision };
+}
+
 export async function throwCloudRevisionConflict(
   supabase: SupabaseClient,
   fileId: string,
   userId: string,
+  expectedRevision: number,
 ): Promise<never> {
   const current = await supabase
     .from('design_files')
@@ -21,6 +36,10 @@ export async function throwCloudRevisionConflict(
     .maybeSingle();
 
   throw toApiError(409, 'revision_conflict', 'Cloud file has a newer revision', {
-    serverRevision: current.data ? Number(current.data.revision) : null,
+    ...createCloudRevisionConflictDetails(
+      fileId,
+      expectedRevision,
+      current.data ? Number(current.data.revision) : null,
+    ),
   });
 }

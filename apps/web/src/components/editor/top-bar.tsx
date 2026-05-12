@@ -11,6 +11,7 @@ import {
   Maximize,
   Minimize,
   Blocks,
+  History,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import ClaudeLogo from '@/components/icons/claude-logo';
@@ -39,6 +40,7 @@ import { useAgentSettingsStore } from '@/stores/agent-settings-store';
 import type { AIProviderType } from '@/types/agent-settings';
 import { createCloudFile, getCloudFile } from '@/services/cloud/cloud-files';
 import { useNavigate } from '@tanstack/react-router';
+import { useCloudVersionPanelStore } from '@/stores/cloud-version-panel-store';
 
 /** 用离屏 canvas 把 CSS 颜色值（oklch/rgb 等）转换成 `#rrggbb`。 */
 function cssToHex(raw: string): string | null {
@@ -139,6 +141,8 @@ export default function TopBar() {
   const cloudFileId = useDocumentStore((s) => s.cloudFileId);
   const cloudSaveState = useDocumentStore((s) => s.cloudSaveState);
   const cloudSaveError = useDocumentStore((s) => s.cloudSaveError);
+  const cloudSaveConflict = useDocumentStore((s) => s.cloudSaveConflict);
+  const setVersionPanelOpen = useCloudVersionPanelStore((s) => s.setOpen);
 
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -334,7 +338,7 @@ export default function TopBar() {
 
   const handleBackToFiles = useCallback(async () => {
     if (!(await confirmDiscardOrSaveCurrent())) return;
-    void navigate({ to: '/' });
+    void navigate({ to: '/cloud' });
   }, [confirmDiscardOrSaveCurrent, navigate]);
 
   const handleImportFile = useCallback(
@@ -390,6 +394,10 @@ export default function TopBar() {
   }, [navigate]);
 
   const displayName = fileName ?? t('common.untitled');
+  const conflictLabel =
+    cloudSaveState === 'conflict' && cloudSaveConflict?.serverRevision
+      ? `${cloudSaveError ?? 'Cloud file has a newer revision'} (remote rev ${cloudSaveConflict.serverRevision})`
+      : cloudSaveError ?? cloudSaveState;
 
   return (
     <div className="h-10 bg-card border-b border-border flex items-center px-2 shrink-0 select-none app-region-drag">
@@ -412,6 +420,24 @@ export default function TopBar() {
         </Tooltip>
 
         <div className="w-px h-3.5 bg-border/60 mx-1" />
+
+        {cloudFileId && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                aria-label="Version history"
+                className="text-muted-foreground"
+                onClick={() => setVersionPanelOpen(true)}
+              >
+                <History size={14} />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">Version history</TooltipContent>
+          </Tooltip>
+        )}
 
         <Tooltip>
           <TooltipTrigger asChild>
@@ -506,7 +532,7 @@ export default function TopBar() {
         {(cloudSaveState === 'conflict' || cloudSaveState === 'error') && (
           <div className="flex items-center gap-1 app-region-no-drag">
             <span className="max-w-44 truncate text-[10px] leading-none text-destructive">
-              {cloudSaveError ?? cloudSaveState}
+              {conflictLabel}
             </span>
             {cloudSaveState === 'conflict' && (
               <>

@@ -11,11 +11,19 @@ export type CloudVersionSource =
 
 export interface CloudFileSummary {
   id: string;
+  projectId: string | null;
+  folderId: string | null;
   name: string;
   thumbnailPath: string | null;
   revision: number;
+  metadata: Record<string, unknown>;
+  starred: boolean;
+  lastOpenedAt: string | null;
+  deletedAt: string | null;
   createdAt: string;
   updatedAt: string;
+  shareRole?: CloudShareRole;
+  sharedByEmail?: string | null;
 }
 
 export interface CloudFileRecord extends CloudFileSummary {
@@ -28,12 +36,87 @@ export interface CloudFileVersion {
   revision: number;
   source: CloudVersionSource;
   label: string | null;
+  actorId: string | null;
+  sizeBytes: number;
   createdAt: string;
 }
 
+export type CloudActivityEventType =
+  | 'file_created'
+  | 'file_saved'
+  | 'file_restored'
+  | 'file_renamed'
+  | 'file_moved'
+  | 'file_shared'
+  | 'file_share_revoked'
+  | 'file_deleted'
+  | 'file_restored_from_trash'
+  | 'file_permanently_deleted'
+  | 'codegen_created'
+  | 'codegen_promoted'
+  | 'codegen_deleted'
+  | 'version_labeled'
+  | 'file_force_saved';
+
+export interface CloudActivityEvent {
+  id: string;
+  fileId: string | null;
+  generationId: string | null;
+  actorId: string | null;
+  ownerId: string;
+  type: CloudActivityEventType;
+  metadata: Record<string, unknown>;
+  createdAt: string;
+}
+
+export interface CloudActivityPage {
+  data: CloudActivityEvent[];
+  nextCursor: string | null;
+  limit: number;
+}
+
+export interface CloudProject {
+  id: string;
+  name: string;
+  description: string | null;
+  icon: string | null;
+  color: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CloudFolder {
+  id: string;
+  projectId: string;
+  parentId: string | null;
+  name: string;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type CloudShareRole = 'viewer' | 'editor';
+
+export interface CloudFileShare {
+  id: string;
+  fileId: string;
+  ownerId: string;
+  sharedWithUserId: string | null;
+  sharedWithEmail: string | null;
+  role: CloudShareRole;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type CloudFileView = 'all' | 'recent' | 'starred' | 'shared' | 'trash';
+export type CloudFileLayout = 'list' | 'grid';
+export type CloudFileSort = 'updated_desc' | 'updated_asc' | 'name_asc' | 'name_desc' | 'created_desc';
+
 export interface CloudSaveConflict {
   code: 'revision_conflict';
-  serverRevision: number;
+  fileId: string;
+  expectedRevision: number;
+  serverRevision: number | null;
 }
 
 export type CodegenTargetKind = 'page' | 'selection';
@@ -79,14 +162,40 @@ export interface CloudCodegenChunk {
   orderIndex?: number;
 }
 
+export type CodegenFileRole =
+  | 'entry'
+  | 'page'
+  | 'component'
+  | 'style'
+  | 'config'
+  | 'asset'
+  | 'other';
+
+export interface SaveCodegenFileInput {
+  path: string;
+  language: string;
+  role: CodegenFileRole;
+  content: string;
+  orderIndex?: number;
+}
+
+export interface CloudCodegenFile extends SaveCodegenFileInput {
+  id: string;
+  generationId: string;
+  sizeBytes: number;
+  createdAt: string;
+}
+
 export interface SaveCodeGenerationInput extends CodegenTarget {
   fileId: string;
   framework: Framework;
   documentRevision: number;
   status: 'done' | 'degraded' | 'failed';
   finalCode?: string;
+  entryFile?: string;
   degraded: boolean;
   assets: SaveCodegenAssetInput[];
+  files?: SaveCodegenFileInput[];
   model?: string;
   provider?: string;
   error?: string;
@@ -100,6 +209,7 @@ export interface CloudCodeGeneration extends CodegenTarget {
   documentRevision: number;
   status: 'done' | 'degraded' | 'failed';
   finalCode: string | null;
+  entryFile?: string | null;
   degraded: boolean;
   assetsManifest: CodegenAssetManifestEntry[];
   model: string | null;
@@ -107,8 +217,10 @@ export interface CloudCodeGeneration extends CodegenTarget {
   error: string | null;
   createdAt: string;
   completedAt: string | null;
+  promotedAt?: string | null;
 }
 
 export interface CloudCodeGenerationDetail extends CloudCodeGeneration {
+  files?: CloudCodegenFile[];
   chunks: CloudCodegenChunk[];
 }

@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { PenTool } from 'lucide-react';
+import { Github, PenTool } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useCloudAuthStore } from '@/stores/cloud-auth-store';
 
@@ -14,6 +14,7 @@ export function AuthGate({ children }: AuthGateProps) {
   const initialize = useCloudAuthStore((s) => s.initialize);
   const signIn = useCloudAuthStore((s) => s.signIn);
   const signUp = useCloudAuthStore((s) => s.signUp);
+  const signInWithGitHub = useCloudAuthStore((s) => s.signInWithGitHub);
   const [mode, setMode] = useState<'sign-in' | 'sign-up'>('sign-in');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -68,6 +69,15 @@ export function AuthGate({ children }: AuthGateProps) {
     }
   };
 
+  const submitGitHub = async () => {
+    setBusy(true);
+    try {
+      await signInWithGitHub();
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background text-foreground flex items-center justify-center px-6">
       <form onSubmit={submit} className="w-full max-w-sm border border-border bg-card p-6">
@@ -77,6 +87,23 @@ export function AuthGate({ children }: AuthGateProps) {
             <h1 className="text-xl font-semibold">OpenPencil Cloud</h1>
             <p className="text-sm text-muted-foreground">Sign in to manage your design files.</p>
           </div>
+        </div>
+
+        <Button
+          type="button"
+          variant="outline"
+          className="w-full"
+          disabled={busy}
+          onClick={() => void submitGitHub()}
+        >
+          <Github size={16} />
+          Continue with GitHub
+        </Button>
+
+        <div className="my-5 flex items-center gap-3">
+          <span className="h-px flex-1 bg-border" />
+          <span className="text-[11px] text-muted-foreground">or</span>
+          <span className="h-px flex-1 bg-border" />
         </div>
 
         <label className="block text-xs font-medium text-muted-foreground" htmlFor="cloud-email">
@@ -124,4 +151,3 @@ export function AuthGate({ children }: AuthGateProps) {
     </div>
   );
 }
-

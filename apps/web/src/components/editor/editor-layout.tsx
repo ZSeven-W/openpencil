@@ -16,6 +16,8 @@ import AgentSettingsDialog from '@/components/shared/agent-settings-dialog';
 import FigmaImportDialog from '@/components/shared/figma-import-dialog';
 import UnsavedChangesDialog from '@/components/shared/unsaved-changes-dialog';
 import type { UnsavedResult } from '@/components/shared/unsaved-changes-dialog';
+import { CloudSaveConflictDialog } from '@/components/cloud/cloud-save-conflict-dialog';
+import { CloudVersionHistoryPanel } from '@/components/cloud/cloud-version-history-panel';
 import UpdateReadyBanner from './update-ready-banner';
 import { useAIStore } from '@/stores/ai-store';
 import { useCanvasStore } from '@/stores/canvas-store';
@@ -230,6 +232,8 @@ export default function EditorLayout() {
               {/* 浮动 UIKit 浏览器面板 */}
               {browserOpen && <ComponentBrowserPanel />}
 
+              <CloudVersionHistoryPanel />
+
               {/* 底部栏：最小化 AI（左）+ 缩放控件（右） */}
               <div className="absolute bottom-2 left-2 right-2 z-10 flex items-center justify-between pointer-events-none">
                 <div className="pointer-events-auto">
@@ -255,6 +259,7 @@ export default function EditorLayout() {
           fileName={unsavedDialog.fileName}
           onResult={unsavedDialog.onResult}
         />
+        <CloudSaveConflictDialog />
 
         {/* 拖放区域遮罩 */}
         {isDragging && (

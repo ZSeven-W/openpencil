@@ -45,6 +45,28 @@ describe('buildCodePreviewDocument', () => {
     }
   });
 
+  it('extracts a UniApp page from a generated multi-file bundle', () => {
+    const result = buildCodePreviewDocument({
+      framework: 'uniapp',
+      code: [
+        '---FILE: App.vue---',
+        '<script setup lang="ts"></script><style>page{background:#fff}</style>',
+        '---FILE: pages/index/index.vue---',
+        '<script setup lang="ts">const ignored = true</script>',
+        '<template><view class="page">UniApp</view></template>',
+        '<style scoped>.page{color:purple}</style>',
+      ].join('\n'),
+      assets: [],
+    });
+
+    expect(result.kind).toBe('previewable');
+    if (result.kind === 'previewable') {
+      expect(result.srcDoc).toContain('<view class="page">UniApp</view>');
+      expect(result.srcDoc).toContain('.page{color:purple}');
+      expect(result.srcDoc).not.toContain('const ignored');
+    }
+  });
+
   it('extracts static markup and style from Svelte output', () => {
     const result = buildCodePreviewDocument({
       framework: 'svelte',

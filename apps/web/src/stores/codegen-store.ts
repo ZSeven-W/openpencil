@@ -1,13 +1,17 @@
 import { create } from 'zustand';
 import type { CodeGenProgress, ChunkStatus, Framework } from '@zseven-w/pen-types';
 import type { CodegenAssetFile } from '@/services/ai/codegen-assets';
+import { buildCodegenFiles } from '@/services/ai/codegen-files';
 import type {
   CloudCodeGeneration,
   CodegenAssetManifestEntry,
   CodegenTarget,
+  SaveCodegenFileInput,
 } from '@/types/cloud';
 import {
+  deleteCodeGenerationHistory,
   listCodeGenerationHistory,
+  promoteCodeGenerationHistory,
   saveCodeGenerationHistory,
 } from '@/services/cloud/codegen-history';
 import { useDocumentStore } from '@/stores/document-store';
@@ -28,6 +32,7 @@ export interface GeneratedCodeBundle {
   historyId?: string;
   status?: 'done' | 'degraded' | 'failed';
   assetsManifest?: CodegenAssetManifestEntry[];
+  files?: SaveCodegenFileInput[];
 }
 
 export interface CodegenHistoryEntry {
@@ -46,6 +51,8 @@ export interface CodegenHistoryEntry {
   targetKind?: 'page' | 'selection';
   nodeIds?: string[];
   targetHash?: string;
+  entryFile?: string | null;
+  promotedAt?: string | null;
 }
 
 interface CodegenState {
@@ -71,15 +78,13 @@ interface CodegenState {
   setSelectionChanged: (changed: boolean) => void;
   startGeneration: (selectionKey: string, abortController: AbortController) => string;
   applyProgress: (runId: string, framework: Framework, event: CodeGenProgress) => void;
-  completeGeneration: (
-    runId: string,
-    framework: Framework,
-    bundle: GeneratedCodeBundle,
-  ) => void;
+  completeGeneration: (runId: string, framework: Framework, bundle: GeneratedCodeBundle) => void;
   failGeneration: (runId: string, message: string) => void;
   cancelGeneration: () => void;
   loadHistory: (framework: Framework, target: CodegenTarget) => Promise<void>;
   selectHistoryEntry: (framework: Framework, generationId: string) => void;
+  promoteHistoryEntry: (framework: Framework, generationId: string) => Promise<void>;
+  deleteHistoryEntry: (framework: Framework, generationId: string) => Promise<void>;
   saveHistory: (
     framework: Framework,
     target: CodegenTarget,
@@ -145,6 +150,8 @@ function mapHistoryEntry(entry: CloudCodeGeneration): CodegenHistoryEntry {
     targetKind: entry.targetKind,
     nodeIds: entry.nodeIds,
     targetHash: entry.targetHash,
+    entryFile: entry.entryFile,
+    promotedAt: entry.promotedAt,
   };
 }
 
@@ -210,6 +217,7 @@ export const useCodegenStore = create<CodegenState>((set, get) => ({
                 code: event.finalCode,
                 degraded: event.degraded,
                 assets: [],
+                files: buildCodegenFiles({ framework, code: event.finalCode }),
               },
             },
           };
@@ -233,7 +241,10 @@ export const useCodegenStore = create<CodegenState>((set, get) => ({
         generateError: undefined,
         codeCache: {
           ...state.codeCache,
-          [framework]: bundle,
+          [framework]: {
+            ...bundle,
+            files: bundle.files ?? buildCodegenFiles({ framework, code: bundle.code }),
+          },
         },
       };
     }),
@@ -279,6 +290,7 @@ export const useCodegenStore = create<CodegenState>((set, get) => ({
             historyId: latest.id,
             status: latest.status,
             assetsManifest: latest.assetsManifest,
+            files: buildCodegenFiles({ framework, code: latest.finalCode }),
           };
         } else {
           delete codeCache[framework];
@@ -319,6 +331,7 @@ export const useCodegenStore = create<CodegenState>((set, get) => ({
           historyId: entry.id,
           status: entry.status,
           assetsManifest: entry.assetsManifest,
+          files: buildCodegenFiles({ framework, code: entry.finalCode }),
         };
       } else {
         delete codeCache[framework];
@@ -333,6 +346,77 @@ export const useCodegenStore = create<CodegenState>((set, get) => ({
       };
     }),
 
+  promoteHistoryEntry: async (framework, generationId) => {
+    try {
+      const promoted = await promoteCodeGenerationHistory(generationId);
+      const promotedEntry = mapHistoryEntry(promoted);
+      set((state) => ({
+        historyError: undefined,
+        history: {
+          ...state.history,
+          [framework]: (state.history[framework] ?? []).map((entry) =>
+            entry.id === generationId
+              ? { ...entry, ...promotedEntry }
+              : { ...entry, promotedAt: null },
+          ),
+        },
+      }));
+    } catch (err) {
+      set({
+        historyError: err instanceof Error ? err.message : 'Failed to promote code history',
+      });
+    }
+  },
+
+  deleteHistoryEntry: async (framework, generationId) => {
+    try {
+      await deleteCodeGenerationHistory(generationId);
+      set((state) => {
+        const nextHistory = (state.history[framework] ?? []).filter(
+          (entry) => entry.id !== generationId,
+        );
+        const currentSelectedId = state.selectedHistoryId[framework];
+        const nextSelected =
+          currentSelectedId === generationId
+            ? nextHistory.find((entry) => entry.finalCode)
+            : nextHistory.find((entry) => entry.id === currentSelectedId);
+        const codeCache = { ...state.codeCache };
+        if (currentSelectedId === generationId) {
+          if (nextSelected?.finalCode) {
+            codeCache[framework] = {
+              code: nextSelected.finalCode,
+              degraded: nextSelected.degraded,
+              assets: [],
+              historyId: nextSelected.id,
+              status: nextSelected.status,
+              assetsManifest: nextSelected.assetsManifest,
+              files: buildCodegenFiles({ framework, code: nextSelected.finalCode }),
+            };
+          } else {
+            delete codeCache[framework];
+          }
+        }
+
+        return {
+          historyError: undefined,
+          history: {
+            ...state.history,
+            [framework]: nextHistory,
+          },
+          selectedHistoryId: {
+            ...state.selectedHistoryId,
+            [framework]: nextSelected?.id,
+          },
+          codeCache,
+        };
+      });
+    } catch (err) {
+      set({
+        historyError: err instanceof Error ? err.message : 'Failed to delete code history',
+      });
+    }
+  },
+
   saveHistory: async (framework, target, bundle, model, provider) => {
     const { cloudFileId, cloudRevision } = useDocumentStore.getState();
     if (!cloudFileId || !cloudRevision) return;
@@ -346,6 +430,7 @@ export const useCodegenStore = create<CodegenState>((set, get) => ({
         finalCode: bundle.code,
         degraded: bundle.degraded,
         assets: bundle.assets,
+        files: bundle.files ?? buildCodegenFiles({ framework, code: bundle.code }),
         model,
         provider,
         chunks: get().chunks.map((chunk, index) => ({
@@ -373,6 +458,10 @@ export const useCodegenStore = create<CodegenState>((set, get) => ({
             historyId: saved.id,
             status: saved.status,
             assetsManifest: saved.assetsManifest,
+            files:
+              saved.files ??
+              bundle.files ??
+              buildCodegenFiles({ framework, code: saved.finalCode ?? bundle.code }),
           },
         },
       }));

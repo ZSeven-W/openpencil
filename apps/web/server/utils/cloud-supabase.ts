@@ -22,10 +22,11 @@ export function getCloudEnv(): { url: string; anonKey: string } {
 export function getBearerToken(event: H3Event): string {
   const header = getRequestHeader(event, 'authorization');
   const match = /^Bearer\s+(.+)$/i.exec(header ?? '');
-  if (!match?.[1]) {
+  const token = match?.[1]?.trim();
+  if (!token) {
     throw createError({ statusCode: 401, statusMessage: 'Missing bearer token' });
   }
-  return match[1];
+  return token;
 }
 
 export async function getCloudSupabase(event: H3Event): Promise<CloudSupabaseContext> {
@@ -59,4 +60,3 @@ export function toApiError(statusCode: number, code: string, message: string, de
     },
   });
 }
-

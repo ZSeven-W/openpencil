@@ -1,0 +1,211 @@
+name: Deploy Web to Tencent Cloud
+
+on:
+  push:
+    branches:
+      - prod
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  DEPLOY_DIR: /opt/openpencil
+  DOCKER_TARGET: full
+
+# 需要在 GitHub 仓库中配置的变量和密钥：
+# Variables（Repository variables）：
+#   APP_DOMAIN：解析到腾讯云 CVM 的公网域名，Caddy 用它申请和续期 HTTPS 证书。
+#   SUPABASE_URL：Supabase 项目地址，Vite 构建期和 Nitro 服务端运行期都会使用。
+#   TENCENT_PORT：腾讯云 CVM 的 SSH 端口，可选；未设置时默认使用 22。
+# Secrets（Repository secrets）：
+#   SUPABASE_ANON_KEY：Supabase anon key。它本身可用于前端，但仍放在 Secret
+#     里，避免出现在日志、提交记录或普通变量列表中。
+#   TENCENT_HOST：腾讯云 CVM 公网 IP 或可解析主机名。
+#   TENCENT_USER：CVM 上的 SSH 用户，必须有执行 Docker 命令的权限。
+#   TENCENT_SSH_KEY：TENCENT_USER 对应的 SSH 私钥。
+#   GHCR_USERNAME：CVM 拉取 GHCR 镜像时使用的 GitHub 用户名。
+#   GHCR_READ_TOKEN：CVM 拉取 GHCR 镜像时使用的 GitHub PAT，需要 read:packages 权限。
+
+concurrency:
+  group: web-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Build image and deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Validate deployment configuration
+        env:
+          # GitHub Repository Variable：公网域名，例如 openpencil.example.com。
+          APP_DOMAIN: ${{ vars.APP_DOMAIN }}
+          # GitHub Repository Variable：Supabase 项目地址。
+          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          # GitHub Repository Secret：Supabase anon key。
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          # 腾讯云 CVM 的 SSH 目标和登录凭据。
+          TENCENT_HOST: ${{ secrets.TENCENT_HOST }}
+          TENCENT_USER: ${{ secrets.TENCENT_USER }}
+          TENCENT_SSH_KEY: ${{ secrets.TENCENT_SSH_KEY }}
+          # 服务器执行 docker compose pull 时登录 GHCR 用的凭据。
+          GHCR_USERNAME: ${{ secrets.GHCR_USERNAME }}
+          GHCR_READ_TOKEN: ${{ secrets.GHCR_READ_TOKEN }}
+        run: |
+          set -euo pipefail
+          missing=0
+          for name in APP_DOMAIN SUPABASE_URL SUPABASE_ANON_KEY TENCENT_HOST TENCENT_USER TENCENT_SSH_KEY GHCR_USERNAME GHCR_READ_TOKEN; do
+            if [ -z "${!name}" ]; then
+              case "$name" in
+                APP_DOMAIN) hint="Repository Variable：解析到 CVM 的公网域名，例如 openpencil.example.com。" ;;
+                SUPABASE_URL) hint="Repository Variable：Supabase 项目地址，例如 https://xxxx.supabase.co。" ;;
+                SUPABASE_ANON_KEY) hint="Repository Secret：浏览器和服务端运行期使用的 Supabase anon key。" ;;
+                TENCENT_HOST) hint="Repository Secret：腾讯云 CVM 公网 IP 或主机名。" ;;
+                TENCENT_USER) hint="Repository Secret：CVM 上有 Docker 权限的 SSH 用户。" ;;
+                TENCENT_SSH_KEY) hint="Repository Secret：TENCENT_USER 对应的 SSH 私钥。" ;;
+                GHCR_USERNAME) hint="Repository Secret：CVM 拉取 GHCR 镜像时使用的 GitHub 用户名。" ;;
+                GHCR_READ_TOKEN) hint="Repository Secret：CVM 拉取 GHCR 镜像时使用的 GitHub PAT，需要 read:packages 权限。" ;;
+              esac
+              echo "::error::$name 是腾讯云部署必需配置。$hint"
+              missing=1
+            fi
+          done
+          exit "$missing"
+
+      - name: Compute image tags
+        id: image
+        shell: bash
+        run: |
+          set -euo pipefail
+          image_name="${REGISTRY}/${GITHUB_REPOSITORY,,}"
+          short_sha="${GITHUB_SHA::12}"
+          sha_image="${image_name}:sha-${short_sha}"
+          prod_image="${image_name}:prod"
+
+          {
+            echo "name=${image_name}"
+            echo "tag=sha-${short_sha}"
+            echo "sha_image=${sha_image}"
+            echo "prod_image=${prod_image}"
+            echo "tags<<EOF"
+            echo "${sha_image}"
+            if [ "$GITHUB_REF" = "refs/heads/prod" ]; then
+              echo "${prod_image}"
+            fi
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push web image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: ${{ env.DOCKER_TARGET }}
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.image.outputs.tags }}
+          build-args: |
+            VITE_SUPABASE_URL=${{ vars.SUPABASE_URL }}
+            VITE_SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }}
+          cache-from: type=gha,scope=web-deploy-${{ env.DOCKER_TARGET }}
+          cache-to: type=gha,mode=max,scope=web-deploy-${{ env.DOCKER_TARGET }}
+
+      - name: Configure SSH
+        env:
+          TENCENT_HOST: ${{ secrets.TENCENT_HOST }}
+          TENCENT_SSH_KEY: ${{ secrets.TENCENT_SSH_KEY }}
+          TENCENT_PORT: ${{ vars.TENCENT_PORT || '22' }}
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$TENCENT_SSH_KEY" > ~/.ssh/tencent_cloud
+          chmod 600 ~/.ssh/tencent_cloud
+          ssh-keyscan -p "$TENCENT_PORT" "$TENCENT_HOST" >> ~/.ssh/known_hosts
+
+      - name: Copy deployment files
+        env:
+          TENCENT_HOST: ${{ secrets.TENCENT_HOST }}
+          TENCENT_USER: ${{ secrets.TENCENT_USER }}
+          TENCENT_PORT: ${{ vars.TENCENT_PORT || '22' }}
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/tencent_cloud -p "$TENCENT_PORT" "$TENCENT_USER@$TENCENT_HOST" "mkdir -p '${DEPLOY_DIR}'"
+          scp -i ~/.ssh/tencent_cloud -P "$TENCENT_PORT" \
+            deploy/docker-compose.prod.yml \
+            deploy/Caddyfile \
+            "$TENCENT_USER@$TENCENT_HOST:${DEPLOY_DIR}/"
+
+      - name: Write remote environment
+        env:
+          APP_DOMAIN: ${{ vars.APP_DOMAIN }}
+          OPENPENCIL_IMAGE: ${{ steps.image.outputs.sha_image }}
+          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+          TENCENT_HOST: ${{ secrets.TENCENT_HOST }}
+          TENCENT_USER: ${{ secrets.TENCENT_USER }}
+          TENCENT_PORT: ${{ vars.TENCENT_PORT || '22' }}
+        run: |
+          set -euo pipefail
+          env_file="$(mktemp)"
+          {
+            echo "APP_DOMAIN=${APP_DOMAIN}"
+            echo "OPENPENCIL_IMAGE=${OPENPENCIL_IMAGE}"
+            echo "NODE_ENV=production"
+            echo "NITRO_HOST=0.0.0.0"
+            echo "NITRO_PORT=3000"
+            echo "SUPABASE_URL=${SUPABASE_URL}"
+            echo "SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}"
+            echo "VITE_SUPABASE_URL=${SUPABASE_URL}"
+            echo "VITE_SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}"
+            echo "ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}"
+            echo "OPENAI_API_KEY=${OPENAI_API_KEY}"
+            echo "GEMINI_API_KEY=${GEMINI_API_KEY}"
+            echo "GOOGLE_API_KEY=${GOOGLE_API_KEY}"
+          } > "$env_file"
+
+          scp -i ~/.ssh/tencent_cloud -P "$TENCENT_PORT" \
+            "$env_file" \
+            "$TENCENT_USER@$TENCENT_HOST:${DEPLOY_DIR}/.env"
+          rm -f "$env_file"
+          ssh -i ~/.ssh/tencent_cloud -p "$TENCENT_PORT" "$TENCENT_USER@$TENCENT_HOST" "chmod 600 '${DEPLOY_DIR}/.env'"
+
+      - name: Restart Tencent Cloud service
+        env:
+          GHCR_USERNAME: ${{ secrets.GHCR_USERNAME }}
+          GHCR_READ_TOKEN: ${{ secrets.GHCR_READ_TOKEN }}
+          TENCENT_HOST: ${{ secrets.TENCENT_HOST }}
+          TENCENT_USER: ${{ secrets.TENCENT_USER }}
+          TENCENT_PORT: ${{ vars.TENCENT_PORT || '22' }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$GHCR_READ_TOKEN" | ssh -i ~/.ssh/tencent_cloud -p "$TENCENT_PORT" "$TENCENT_USER@$TENCENT_HOST" \
+            "docker login ghcr.io -u '$GHCR_USERNAME' --password-stdin"
+
+          ssh -i ~/.ssh/tencent_cloud -p "$TENCENT_PORT" "$TENCENT_USER@$TENCENT_HOST" "cd '${DEPLOY_DIR}' && \
+            docker compose --env-file .env -f docker-compose.prod.yml pull && \
+            docker compose --env-file .env -f docker-compose.prod.yml up -d --remove-orphans && \
+            docker image prune -f && \
+            docker compose --env-file .env -f docker-compose.prod.yml ps"

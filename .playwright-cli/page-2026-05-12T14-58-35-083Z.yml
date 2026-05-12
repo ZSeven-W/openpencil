@@ -1,0 +1,82 @@
+- generic [ref=e27]:
+  - banner [ref=e28]:
+    - generic [ref=e29]:
+      - generic [ref=e30]:
+        - img [ref=e32]
+        - generic [ref=e37]:
+          - generic [ref=e38]:
+            - heading "OpenPencil Cloud" [level=1] [ref=e39]
+            - generic [ref=e40]: 0 files
+          - paragraph [ref=e41]: op-test-1778597881@example.com
+      - generic [ref=e42]:
+        - button "Refresh" [disabled]:
+          - img
+          - text: Refresh
+        - button "Import .op" [ref=e43]:
+          - img
+          - text: Import .op
+        - button "New" [ref=e44]:
+          - img
+          - text: New
+        - button "Sign out" [ref=e45]:
+          - img
+  - main [ref=e46]:
+    - complementary [ref=e47]:
+      - generic [ref=e49]:
+        - paragraph [ref=e50]: Projects
+        - generic [ref=e51]:
+          - generic [ref=e52]: Loading
+          - button "New project" [ref=e53]:
+            - img
+      - generic [ref=e54]:
+        - paragraph [ref=e55]: Views
+        - generic [ref=e56]:
+          - button "All files" [ref=e57]:
+            - img [ref=e58]
+            - generic [ref=e60]: All files
+          - button "Recent" [ref=e61]:
+            - img [ref=e62]
+            - generic [ref=e65]: Recent
+          - button "Starred" [ref=e66]:
+            - img [ref=e67]
+            - generic [ref=e69]: Starred
+          - button "Shared with me" [ref=e70]:
+            - img [ref=e71]
+            - generic [ref=e77]: Shared with me
+          - button "Trash" [ref=e78]:
+            - img [ref=e79]
+            - generic [ref=e82]: Trash
+      - generic [ref=e83]:
+        - generic [ref=e84]:
+          - paragraph [ref=e85]: Folders
+          - button "New folder" [disabled]:
+            - img
+        - generic [ref=e86]:
+          - button "Project root" [ref=e87]:
+            - img [ref=e88]
+            - generic [ref=e90]: Project root
+          - paragraph [ref=e91]: Loading folders...
+    - generic [ref=e92]:
+      - generic [ref=e93]:
+        - generic [ref=e94]:
+          - paragraph [ref=e95]: Cloud files
+          - paragraph [ref=e96]: Project root
+        - generic [ref=e97]:
+          - generic [ref=e98]:
+            - img
+            - textbox "Search files" [ref=e99]
+          - combobox "Sort files" [ref=e100]:
+            - option "Updated newest" [selected]
+            - option "Updated oldest"
+            - option "Name A-Z"
+            - option "Name Z-A"
+            - option "Created newest"
+          - generic [ref=e101]:
+            - button "List view" [ref=e102]:
+              - img
+            - button "Grid view" [ref=e103]:
+              - img
+          - button "Folder" [ref=e104]:
+            - img
+            - text: Folder
+      - generic [ref=e105]: Loading files...

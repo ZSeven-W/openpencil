@@ -1,0 +1,16 @@
+- generic [ref=e4]:
+  - generic [ref=e5]:
+    - img [ref=e6]
+    - generic [ref=e11]:
+      - heading "OpenPencil Cloud" [level=1] [ref=e12]
+      - paragraph [ref=e13]: Sign in to manage your design files.
+  - button "Continue with GitHub" [ref=e14]:
+    - img
+    - text: Continue with GitHub
+  - generic [ref=e17]: or
+  - generic [ref=e19]: Email
+  - textbox "Email" [ref=e20]: op-test-1778597881@example.com
+  - generic [ref=e21]: Password
+  - textbox "Password" [ref=e22]: test123456
+  - button "Create account" [ref=e25]
+  - button "Use an existing account" [active] [ref=e26]

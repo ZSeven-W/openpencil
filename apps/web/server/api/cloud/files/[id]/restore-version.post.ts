@@ -7,6 +7,9 @@ import {
   prepareCloudDocumentForStorage,
   resolveCloudDocumentFromStorage,
 } from '../../../../utils/cloud-document-storage';
+import { CLOUD_FILE_SELECT } from '../../../../utils/cloud-file-management';
+import { recordCloudActivity } from '../../../../utils/cloud-activity-events';
+import { assertCloudFileEditable } from '../../../../utils/cloud-file-management';
 import {
   isOptimisticUpdateMiss,
   throwCloudRevisionConflict,
@@ -26,12 +29,18 @@ export default defineEventHandler(async (event) => {
   }
 
   const { supabase, user } = await getCloudSupabase(event);
+  const access = await assertCloudFileEditable({
+    supabase,
+    userId: user.id,
+    userEmail: user.email,
+    fileId: id,
+  });
   const version = await supabase
     .from('design_file_versions')
     .select('document')
     .eq('id', parsed.data.versionId)
     .eq('file_id', id)
-    .eq('owner_id', user.id)
+    .eq('owner_id', access.ownerId)
     .single();
   if (version.error || !version.data) {
     throw createError({ statusCode: 404, statusMessage: 'Version not found' });
@@ -41,7 +50,7 @@ export default defineEventHandler(async (event) => {
     .from('design_files')
     .select('revision')
     .eq('id', id)
-    .eq('owner_id', user.id)
+    .eq('owner_id', access.ownerId)
     .is('deleted_at', null)
     .single();
   if (current.error || !current.data) {
@@ -63,12 +72,12 @@ export default defineEventHandler(async (event) => {
     .from('design_files')
     .update({ document: preparedDocument.storedDocument, revision: nextRevision })
     .eq('id', id)
-    .eq('owner_id', user.id)
+    .eq('owner_id', access.ownerId)
     .eq('revision', current.data.revision)
-    .select('id,name,document,thumbnail_path,revision,created_at,updated_at')
+    .select(CLOUD_FILE_SELECT)
     .single();
   if (isOptimisticUpdateMiss(updated.data, updated.error)) {
-    await throwCloudRevisionConflict(supabase, id, user.id);
+    await throwCloudRevisionConflict(supabase, id, access.ownerId, Number(current.data.revision));
   }
   if (updated.error || !updated.data) {
     throw createError({
@@ -79,15 +88,30 @@ export default defineEventHandler(async (event) => {
 
   const snapshot = await supabase.from('design_file_versions').insert({
     file_id: id,
-    owner_id: user.id,
+    owner_id: access.ownerId,
+    actor_id: user.id,
     revision: nextRevision,
     document: preparedDocument.storedDocument,
     source: 'restore',
     label: `Restored ${parsed.data.versionId}`,
+    size_bytes: new TextEncoder().encode(JSON.stringify(preparedDocument.storedDocument)).byteLength,
   });
   if (snapshot.error) {
     throw createError({ statusCode: 500, statusMessage: snapshot.error.message });
   }
+
+  await recordCloudActivity({
+    supabase,
+    ownerId: access.ownerId,
+    actorId: user.id,
+    fileId: id,
+    type: 'file_restored',
+    metadata: {
+      versionId: parsed.data.versionId,
+      revision: nextRevision,
+      previousRevision: Number(current.data.revision),
+    },
+  });
 
   return { data: mapFileRecord({ ...updated.data, document }) };
 });

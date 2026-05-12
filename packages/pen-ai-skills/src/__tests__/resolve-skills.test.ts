@@ -152,6 +152,7 @@ describe('resolveSkills against the REAL skill registry — codegen gate', () =>
       'codegen-html',
       'codegen-swiftui',
       'codegen-compose',
+      'codegen-uniapp',
     ];
     for (const skill of platformCodegen) {
       expect(names, `expected ${skill} not to load`).not.toContain(skill);

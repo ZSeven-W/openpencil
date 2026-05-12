@@ -1,4 +1,4 @@
-// @vitest-环境 jsdom
+// @vitest-environment jsdom
 // apps/web/src/components/panels/git-panel/__tests__/git-panel.test.tsx
 //
 // Phase 4a.1：GitPanel 现在是 Popover 内的一个薄主体组件。

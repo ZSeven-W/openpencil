@@ -10,7 +10,8 @@ export type Framework =
   | 'flutter'
   | 'swiftui'
   | 'compose'
-  | 'react-native';
+  | 'react-native'
+  | 'uniapp';
 
 export const FRAMEWORKS: Framework[] = [
   'react',
@@ -21,6 +22,7 @@ export const FRAMEWORKS: Framework[] = [
   'swiftui',
   'compose',
   'react-native',
+  'uniapp',
 ];
 
 // === Step 1 输出：AI 规划器返回此（无节点数据，最小标记）===
@@ -65,6 +67,7 @@ export interface ChunkContract {
   cssClasses: string[];
   cssVariables: string[];
   imports: ImportDef[];
+  outputFiles?: string[];
 }
 
 export interface PropDef {

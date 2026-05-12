@@ -1,0 +1,81 @@
+- generic [ref=e25]:
+  - banner [ref=e26]:
+    - generic [ref=e27]:
+      - generic [ref=e28]:
+        - img [ref=e30]
+        - generic [ref=e35]:
+          - generic [ref=e36]:
+            - heading "OpenPencil Cloud" [level=1] [ref=e37]
+            - generic [ref=e38]: 0 files
+          - paragraph [ref=e39]: linlingqin77@qq.com
+      - generic [ref=e40]:
+        - button "Refresh" [ref=e104]:
+          - img
+          - text: Refresh
+        - button "Import .op" [ref=e41]:
+          - img
+          - text: Import .op
+        - button "New" [ref=e42]:
+          - img
+          - text: New
+        - button "Sign out" [ref=e43]:
+          - img
+  - main [ref=e44]:
+    - complementary [ref=e45]:
+      - generic [ref=e47]:
+        - paragraph [ref=e48]: Projects
+        - button "New project" [ref=e51]:
+          - img
+      - generic [ref=e52]:
+        - paragraph [ref=e53]: Views
+        - generic [ref=e54]:
+          - button "All files" [ref=e55]:
+            - img [ref=e56]
+            - generic [ref=e58]: All files
+          - button "Recent" [ref=e59]:
+            - img [ref=e60]
+            - generic [ref=e63]: Recent
+          - button "Starred" [ref=e64]:
+            - img [ref=e65]
+            - generic [ref=e67]: Starred
+          - button "Shared with me" [active] [ref=e68]:
+            - img [ref=e69]
+            - generic [ref=e75]: Shared with me
+          - button "Trash" [ref=e76]:
+            - img [ref=e77]
+            - generic [ref=e80]: Trash
+      - generic [ref=e81]:
+        - generic [ref=e82]:
+          - paragraph [ref=e83]: Folders
+          - button "New folder" [disabled]:
+            - img
+        - button "Project root" [ref=e85]:
+          - img [ref=e86]
+          - generic [ref=e88]: Project root
+    - generic [ref=e90]:
+      - generic [ref=e111]: Could not find the table 'public.design_file_shares' in the schema cache
+      - generic [ref=e91]:
+        - generic [ref=e92]:
+          - paragraph [ref=e93]: Cloud files
+          - paragraph [ref=e94]: Shared with me
+        - generic [ref=e95]:
+          - generic [ref=e96]:
+            - img
+            - textbox "Search files" [ref=e97]
+          - combobox "Sort files" [ref=e98]:
+            - option "Updated newest" [selected]
+            - option "Updated oldest"
+            - option "Name A-Z"
+            - option "Name Z-A"
+            - option "Created newest"
+          - generic [ref=e99]:
+            - button "List view" [ref=e100]:
+              - img
+            - button "Grid view" [ref=e101]:
+              - img
+          - button "Folder" [ref=e102]:
+            - img
+            - text: Folder
+      - generic [ref=e103]:
+        - paragraph [ref=e112]: No shared files
+        - paragraph [ref=e113]: Files shared with your account will appear here.

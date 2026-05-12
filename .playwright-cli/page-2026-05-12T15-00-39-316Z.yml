@@ -1,0 +1,88 @@
+- generic [ref=e137]:
+  - banner [ref=e138]:
+    - generic [ref=e139]:
+      - generic [ref=e140]:
+        - img [ref=e142]
+        - generic [ref=e147]:
+          - generic [ref=e148]:
+            - heading "OpenPencil Cloud" [level=1] [ref=e149]
+            - generic [ref=e150]: 0 files
+          - paragraph [ref=e151]: linlingqin77@qq.com
+      - generic [ref=e152]:
+        - button "Refresh" [ref=e216]:
+          - img
+          - text: Refresh
+        - button "Import .op" [ref=e153]:
+          - img
+          - text: Import .op
+        - button "New" [ref=e154]:
+          - img
+          - text: New
+        - button "Sign out" [ref=e155]:
+          - img
+  - main [ref=e156]:
+    - complementary [ref=e157]:
+      - generic [ref=e159]:
+        - paragraph [ref=e160]: Projects
+        - button "New project" [ref=e163]:
+          - img
+      - generic [ref=e164]:
+        - paragraph [ref=e165]: Views
+        - generic [ref=e166]:
+          - button "All files" [ref=e167]:
+            - img [ref=e168]
+            - generic [ref=e170]: All files
+          - button "Recent" [ref=e171]:
+            - img [ref=e172]
+            - generic [ref=e175]: Recent
+          - button "Starred" [ref=e176]:
+            - img [ref=e177]
+            - generic [ref=e179]: Starred
+          - button "Shared with me" [ref=e180]:
+            - img [ref=e181]
+            - generic [ref=e187]: Shared with me
+          - button "Trash" [ref=e188]:
+            - img [ref=e189]
+            - generic [ref=e192]: Trash
+      - generic [ref=e193]:
+        - generic [ref=e194]:
+          - paragraph [ref=e195]: Folders
+          - button "New folder" [disabled]:
+            - img
+        - button "Project root" [ref=e197]:
+          - img [ref=e198]
+          - generic [ref=e200]: Project root
+    - generic [ref=e202]:
+      - generic [ref=e223]: Could not find the table 'public.projects' in the schema cache
+      - generic [ref=e203]:
+        - generic [ref=e204]:
+          - paragraph [ref=e205]: Cloud files
+          - paragraph [ref=e206]: Project root
+        - generic [ref=e207]:
+          - generic [ref=e208]:
+            - img
+            - textbox "Search files" [ref=e209]
+          - combobox "Sort files" [ref=e210]:
+            - option "Updated newest" [selected]
+            - option "Updated oldest"
+            - option "Name A-Z"
+            - option "Name Z-A"
+            - option "Created newest"
+          - generic [ref=e211]:
+            - button "List view" [ref=e212]:
+              - img
+            - button "Grid view" [ref=e213]:
+              - img
+          - button "Folder" [ref=e214]:
+            - img
+            - text: Folder
+      - generic [ref=e215]:
+        - paragraph [ref=e224]: No files in this view
+        - paragraph [ref=e225]: "Create a design, import an `.op` file, or adjust your filters."
+        - generic [ref=e226]:
+          - button "New design" [ref=e227]:
+            - img
+            - text: New design
+          - button "Import .op" [ref=e228]:
+            - img
+            - text: Import .op

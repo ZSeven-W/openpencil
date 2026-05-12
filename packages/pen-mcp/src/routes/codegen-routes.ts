@@ -81,7 +81,17 @@ export const CODEGEN_TOOL_DEFINITIONS = [
         planId: { type: 'string', description: 'Plan ID from codegen_plan.' },
         framework: {
           type: 'string',
-          enum: ['react', 'vue', 'svelte', 'html', 'flutter', 'swiftui', 'compose', 'react-native'],
+          enum: [
+            'react',
+            'vue',
+            'svelte',
+            'html',
+            'flutter',
+            'swiftui',
+            'compose',
+            'react-native',
+            'uniapp',
+          ],
           description: 'Target framework.',
         },
       },

@@ -22,6 +22,7 @@ import {
   type CodegenAssetFile,
   type CodegenAssetHint,
 } from './codegen-assets';
+import { buildCodegenFiles, validateCodegenFiles } from './codegen-files';
 
 export type CodegenTextCollector = (
   systemPrompt: string,
@@ -186,6 +187,9 @@ function tryParseContract(str: string, chunkId: string): ChunkContract | null {
       parsed.cssClasses = parsed.cssClasses ?? [];
       parsed.cssVariables = parsed.cssVariables ?? [];
       parsed.imports = parsed.imports ?? [];
+      parsed.outputFiles = Array.isArray(parsed.outputFiles)
+        ? parsed.outputFiles.filter((file): file is string => typeof file === 'string')
+        : undefined;
       return parsed;
     }
   } catch {
@@ -223,6 +227,7 @@ function inferContractFromCode(code: string, chunkId: string): ChunkContract {
     cssClasses: [],
     cssVariables: [],
     imports,
+    outputFiles: [],
   };
 }
 
@@ -495,6 +500,19 @@ export async function generateCode(
         error: 'Assembly failed — showing concatenated chunks',
       });
     }
+  }
+
+  const filesValidation = validateCodegenFiles(
+    framework,
+    buildCodegenFiles({ framework, code: finalCode }),
+  );
+  if (!filesValidation.valid) {
+    degraded = true;
+    onProgress({
+      step: 'assembly',
+      status: 'failed',
+      error: filesValidation.issues.join('; '),
+    });
   }
 
   onProgress({ step: 'complete', finalCode, degraded });

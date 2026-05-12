@@ -8,7 +8,7 @@ import {
 import { execSync } from 'node:child_process';
 import { fork, type ChildProcess } from 'node:child_process';
 import { createServer } from 'node:net';
-import { join, extname } from 'node:path';
+import { join } from 'node:path';
 import { homedir, tmpdir } from 'node:os';
 import { existsSync, readFileSync, unlinkSync } from 'node:fs';
 import { readFile, writeFile, mkdir, unlink } from 'node:fs/promises';
@@ -45,11 +45,17 @@ import {
   mapUnsavedChangesResponse,
 } from './unsaved-changes-dialog';
 import { setupGitIPC } from './git/ipc-handlers';
+import {
+  CLOUD_AUTH_PROTOCOL,
+  extractCloudAuthCallbackUrl,
+} from './cloud/oauth-deep-link';
+import { getFilePathFromArgs, setupAppOpenHandlers } from './app-open-handlers';
 
 let mainWindow: BrowserWindow | null = null;
 let nitroProcess: ChildProcess | null = null;
 let serverPort = 0;
 let pendingFilePath: string | null = null;
+let pendingCloudAuthCallbackUrl: string | null = null;
 
 const isDev = !app.isPackaged;
 // Settings 存储在平台标准应用程序数据目录中（Electron 托管）： macOS: ~/Library/Application
@@ -566,6 +572,10 @@ function initIPC(): void {
     clearPendingFilePath: () => {
       pendingFilePath = null;
     },
+    getPendingOAuthCallbackUrl: () => pendingCloudAuthCallbackUrl,
+    clearPendingOAuthCallbackUrl: () => {
+      pendingCloudAuthCallbackUrl = null;
+    },
     prefsCache,
     schedulePrefsWrite,
     writeAppSettings,
@@ -573,60 +583,30 @@ function initIPC(): void {
   setupGitIPC();
 }
 
-// ---------------------------------------------------------------------------
-// File association: open .op files
-// ---------------------------------------------------------------------------
-
-/** Extract .op file path from command-line arguments. */
-function getFilePathFromArgs(args: string[]): string | null {
-  for (const arg of args) {
-    // Skip flags and the Electron binary/script path
-    if (arg.startsWith('-') || arg.startsWith('--')) continue;
-    const ext = extname(arg).toLowerCase();
-    if (ext === '.op' || ext === '.pen') {
-      return arg;
+function registerCloudAuthProtocol(): void {
+  try {
+    if (isDev && process.defaultApp) {
+      app.setAsDefaultProtocolClient(CLOUD_AUTH_PROTOCOL, process.execPath, [
+        process.argv[1],
+      ]);
+      return;
     }
-  }
-  return null;
-}
-
-/** Send a file path to the renderer for loading. */
-function sendOpenFile(filePath: string): void {
-  if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.webContents.send('file:open', filePath);
-  } else {
-    pendingFilePath = filePath;
+    app.setAsDefaultProtocolClient(CLOUD_AUTH_PROTOCOL);
+  } catch (err) {
+    log.warn(`[cloud-auth] Failed to register OAuth protocol: ${err}`);
   }
 }
 
-// macOS: open-file fires when user double-clicks a .op file
-app.on('open-file', (event, filePath) => {
-  event.preventDefault();
-  if (app.isReady()) {
-    sendOpenFile(filePath);
-  } else {
+setupAppOpenHandlers({
+  app,
+  getMainWindow: () => mainWindow,
+  setPendingFilePath: (filePath) => {
     pendingFilePath = filePath;
-  }
+  },
+  setPendingCloudAuthCallbackUrl: (url) => {
+    pendingCloudAuthCallbackUrl = url;
+  },
 });
-
-// Single instance lock (Windows/Linux: second instance passes file path as arg)
-const gotTheLock = app.requestSingleInstanceLock();
-
-if (!gotTheLock) {
-  app.quit();
-} else {
-  app.on('second-instance', (_event, argv) => {
-    const filePath = getFilePathFromArgs(argv);
-    if (filePath) {
-      sendOpenFile(filePath);
-    }
-    // Focus existing window
-    if (mainWindow) {
-      if (mainWindow.isMinimized()) mainWindow.restore();
-      mainWindow.focus();
-    }
-  });
-}
 
 // ---------------------------------------------------------------------------
 // App lifecycle
@@ -636,6 +616,7 @@ app.on('ready', async () => {
   await initLogger(app.getPath('userData'));
   fixPath();
   await loadPrefs();
+  registerCloudAuthProtocol();
   initIPC();
   buildAppMenu();
 
@@ -665,6 +646,10 @@ app.on('ready', async () => {
   // via file:getPending IPC when the React app mounts (useElectronMenu hook).
   if (!pendingFilePath) {
     pendingFilePath = getFilePathFromArgs(process.argv);
+  }
+
+  if (!pendingCloudAuthCallbackUrl) {
+    pendingCloudAuthCallbackUrl = extractCloudAuthCallbackUrl(process.argv);
   }
 
   if (!isDev) {

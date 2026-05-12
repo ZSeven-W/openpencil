@@ -84,7 +84,7 @@ export function buildChunkPrompt(
           '',
           ...depContracts.map(
             (c) =>
-              `- \`${c.componentName}\` (chunk: ${c.chunkId}): props=[${c.exportedProps.map((p) => `${p.name}: ${p.type}`).join(', ')}], slots=[${c.slots.map((s) => s.name).join(', ')}]`,
+              `- \`${c.componentName}\` (chunk: ${c.chunkId}): props=[${c.exportedProps.map((p) => `${p.name}: ${p.type}`).join(', ')}], slots=[${c.slots.map((s) => s.name).join(', ')}], outputFiles=[${(c.outputFiles ?? []).join(', ')}]`,
           ),
         ].join('\n')
       : '';
@@ -103,6 +103,14 @@ export function buildChunkPrompt(
         ].join('\n')
       : '';
 
+  const contractInstruction =
+    framework === 'uniapp'
+      ? [
+          '',
+          'UniApp contract 需要额外包含 `outputFiles`，列出这个 chunk 预期贡献的文件路径，例如 ["components/HeroCard.vue"] 或 ["pages/index/index.vue"]。',
+        ].join('\n')
+      : '';
+
   return {
     system: [chunkSkill, '', '---', '', frameworkSkill].join('\n'),
     user: [
@@ -112,6 +120,7 @@ export function buildChunkPrompt(
       compactNodes(nodes),
       depSection,
       assetSection,
+      contractInstruction,
       '',
       '先输出 code，然后输出 ---CONTRACT---，再输出 JSON contract。',
     ].join('\n'),
@@ -160,10 +169,36 @@ export function buildAssemblyPrompt(
         ].join('\n')
       : '';
 
+  const assemblyIntro =
+    framework === 'uniapp'
+      ? '将以下 uniapp code chunks 组装成一个 production-ready UniApp 多文件 bundle。'
+      : `将以下 ${framework} code chunks 组装成一个 production-ready 单文件。`;
+  const outputInstruction =
+    framework === 'uniapp'
+      ? [
+          '输出多个文件，使用以下严格格式：',
+          '---FILE: App.vue---',
+          '<App.vue source>',
+          '---FILE: main.ts---',
+          '<main.ts source>',
+          '---FILE: pages.json---',
+          '<pages.json source>',
+          '---FILE: manifest.json---',
+          '<manifest.json source>',
+          '---FILE: uni.scss---',
+          '<uni.scss source>',
+          '---FILE: pages/index/index.vue---',
+          '<page source>',
+          '',
+          '必须包含 App.vue、main.ts、pages.json、manifest.json、uni.scss、至少一个 pages/.../index.vue。',
+          '只输出最终 UniApp 多文件 bundle，不要解释。',
+        ].join('\n')
+      : '只输出最终 assembled source code。';
+
   return {
     system: [assemblySkill, '', '---', '', frameworkSkill].join('\n'),
     user: [
-      `将以下 ${framework} code chunks 组装成一个 production-ready 单文件。`,
+      assemblyIntro,
       '',
       `Root layout: ${JSON.stringify(plan.rootLayout)}`,
       `Shared styles: ${JSON.stringify(plan.sharedStyles)}`,
@@ -174,7 +209,7 @@ export function buildAssemblyPrompt(
       '',
       chunksSection,
       '',
-      '只输出最终 assembled source code。',
+      outputInstruction,
     ]
       .filter(Boolean)
       .join('\n'),

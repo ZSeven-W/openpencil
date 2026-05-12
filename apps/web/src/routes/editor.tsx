@@ -16,7 +16,7 @@ function EditorPage() {
 
   useEffect(() => {
     if (location.pathname === '/editor') {
-      void navigate({ to: '/' });
+      void navigate({ to: '/cloud' });
     }
   }, [location.pathname, navigate]);
 

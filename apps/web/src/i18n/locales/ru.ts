@@ -830,11 +830,15 @@ const ru: TranslationKeys = {
   'codePanel.history.pageTarget': 'page',
   'codePanel.history.selectionTarget': '{{count}} selected',
   'codePanel.modelUnavailable': 'Connect an AI model before generating code.',
+  'codePanel.history.promoted': 'promoted',
+  'codePanel.history.promote': 'Promote',
+  'codePanel.history.downloadZip': 'Download ZIP',
   'codePanel.history.delete': 'Delete',
   'codePanel.history.deleteConfirm': 'Delete this generation history record?',
   'codePanel.preview.action': 'Preview',
   'codePanel.preview.unavailable': 'Preview unavailable',
-  'codePanel.preview.popupBlocked': 'The preview window was blocked. Allow pop-ups for this site and try again.',
+  'codePanel.preview.popupBlocked':
+    'The preview window was blocked. Allow pop-ups for this site and try again.',
   'codePanel.preview.reason.historyAssetsUnavailable':
     'History assets are unavailable for preview. Regenerate or download the bundle.',
   'codePanel.preview.reason.vueTemplateRequired': 'Vue preview requires a <template> block.',

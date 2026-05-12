@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
 
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PenNode } from '@/types/pen';
 import { useCodegenStore } from '@/stores/codegen-store';
 import type { CloudCodeGeneration } from '@/types/cloud';
+import type { GitAPI } from '@/services/git-types';
 import '@/i18n';
 
 const selectedNode: PenNode = {
@@ -34,6 +35,31 @@ vi.mock('@/stores/canvas-store', () => ({
 }));
 
 const listCodeGenerationHistoryMock = vi.fn(async () => [] as CloudCodeGeneration[]);
+const exportCodeGenerationZipMock = vi.fn(async (_generationId: string) => ({
+  blob: new Blob([new Uint8Array([4, 5, 6])], { type: 'application/zip' }),
+  fileName: 'design-uniapp.zip',
+}));
+const promoteCodeGenerationHistoryMock = vi.fn(async (generationId: string) => ({
+  id: generationId,
+  fileId: 'file-1',
+  pageId: 'page-1',
+  framework: 'html',
+  targetKind: 'selection',
+  nodeIds: ['node-1'],
+  targetHash: 'hash-1',
+  documentRevision: 2,
+  status: 'done',
+  finalCode: '<main>History tools</main>',
+  degraded: false,
+  assetsManifest: [],
+  model: 'model-a',
+  provider: 'builtin',
+  error: null,
+  createdAt: '2026-05-09T10:00:00.000Z',
+  completedAt: '2026-05-09T10:00:01.000Z',
+  promotedAt: '2026-05-09T10:05:00.000Z',
+}));
+const deleteCodeGenerationHistoryMock = vi.fn(async (_generationId: string) => {});
 const saveCodeGenerationHistoryMock = vi.fn(async () => ({
   id: 'saved-generation',
   fileId: 'file-1',
@@ -61,8 +87,42 @@ vi.mock('@/services/cloud/codegen-history', async () => {
   );
   return {
     ...actual,
+    deleteCodeGenerationHistory: (generationId: string) => {
+      deleteCodeGenerationHistoryMock(generationId);
+      return Promise.resolve();
+    },
+    exportCodeGenerationZip: (generationId: string) => {
+      exportCodeGenerationZipMock(generationId);
+      return Promise.resolve({
+        blob: new Blob([new Uint8Array([4, 5, 6])], { type: 'application/zip' }),
+        fileName: 'design-uniapp.zip',
+      });
+    },
     listCodeGenerationHistory: (_input: Parameters<typeof actual.listCodeGenerationHistory>[0]) =>
       listCodeGenerationHistoryMock(),
+    promoteCodeGenerationHistory: (generationId: string) => {
+      promoteCodeGenerationHistoryMock(generationId);
+      return Promise.resolve({
+        id: generationId,
+        fileId: 'file-1',
+        pageId: 'page-1',
+        framework: 'html',
+        targetKind: 'selection',
+        nodeIds: ['node-1'],
+        targetHash: 'hash-1',
+        documentRevision: 2,
+        status: 'done',
+        finalCode: '<main>History tools</main>',
+        degraded: false,
+        assetsManifest: [],
+        model: 'model-a',
+        provider: 'builtin',
+        error: null,
+        createdAt: '2026-05-09T10:00:00.000Z',
+        completedAt: '2026-05-09T10:00:01.000Z',
+        promotedAt: '2026-05-09T10:05:00.000Z',
+      });
+    },
     saveCodeGenerationHistory: (_input: Parameters<typeof actual.saveCodeGenerationHistory>[0]) =>
       saveCodeGenerationHistoryMock(),
   };
@@ -71,11 +131,11 @@ vi.mock('@/services/cloud/codegen-history', async () => {
 vi.mock('@/stores/document-store', () => ({
   useDocumentStore: Object.assign(
     (selector: (state: unknown) => unknown) =>
-    selector({
-      getNodeById: (id: string) => (id === 'node-1' ? selectedNode : undefined),
-      document: { variables: {} },
-      cloudFileId: documentState.cloudFileId,
-    }),
+      selector({
+        getNodeById: (id: string) => (id === 'node-1' ? selectedNode : undefined),
+        document: { variables: {} },
+        cloudFileId: documentState.cloudFileId,
+      }),
     {
       getState: () => ({
         cloudFileId: 'file-1',
@@ -146,18 +206,53 @@ vi.mock('@/utils/syntax-highlight', () => ({
 
 import CodePanel from './code-panel';
 
+let restoreGlobalObjectUrls: (() => void) | undefined;
+
+beforeEach(() => {
+  restoreGlobalObjectUrls = mockObjectUrls();
+});
+
 afterEach(() => {
   cleanup();
+  delete (window as unknown as Record<string, unknown>).electronAPI;
+  restoreGlobalObjectUrls?.();
+  restoreGlobalObjectUrls = undefined;
   generateCodeMock.mockReset();
   generateCodeMock.mockImplementation(defaultGenerateCodeImplementation);
   listCodeGenerationHistoryMock.mockReset();
   listCodeGenerationHistoryMock.mockResolvedValue([]);
+  promoteCodeGenerationHistoryMock.mockClear();
+  deleteCodeGenerationHistoryMock.mockClear();
+  exportCodeGenerationZipMock.mockClear();
   saveCodeGenerationHistoryMock.mockClear();
   useCodegenStore.getState().reset();
   aiState.model = 'test-model';
   aiState.modelGroups = [{ provider: 'builtin', models: [{ value: 'test-model' }] }];
   documentState.cloudFileId = undefined;
 });
+
+function mockObjectUrls() {
+  const originalCreateObjectURL = URL.createObjectURL;
+  const originalRevokeObjectURL = URL.revokeObjectURL;
+  Object.defineProperty(URL, 'createObjectURL', {
+    configurable: true,
+    value: vi.fn(() => 'blob:codegen-asset'),
+  });
+  Object.defineProperty(URL, 'revokeObjectURL', {
+    configurable: true,
+    value: vi.fn(),
+  });
+  return () => {
+    Object.defineProperty(URL, 'createObjectURL', {
+      configurable: true,
+      value: originalCreateObjectURL,
+    });
+    Object.defineProperty(URL, 'revokeObjectURL', {
+      configurable: true,
+      value: originalRevokeObjectURL,
+    });
+  };
+}
 
 describe('CodePanel export affordances', () => {
   it('shows the AI bundle export action in the empty state', () => {
@@ -224,7 +319,60 @@ describe('CodePanel export affordances', () => {
     await waitFor(() => {
       expect(screen.getAllByRole('button', { name: /AI Bundle/i }).length).toBeGreaterThan(0);
       expect(screen.getByRole('button', { name: /Download ZIP/i })).toBeTruthy();
+      expect(screen.getByText('Assets')).toBeTruthy();
+      expect(screen.getByAltText('Hero Card')).toBeTruthy();
     });
+  });
+
+  it('generates UniApp code when the UniApp tab is active', async () => {
+    useCodegenStore.setState({ activeTab: 'uniapp' });
+    const uniappCode = [
+      '---FILE: App.vue---',
+      '<template><view /></template>',
+      '---FILE: pages.json---',
+      '{"pages":[{"path":"pages/index/index"}]}',
+      '---FILE: manifest.json---',
+      '{"name":"OpenPencil"}',
+      '---FILE: uni.scss---',
+      '$uni-color-primary: #0f172a;',
+      '---FILE: pages/index/index.vue---',
+      '<template><view>UniApp</view></template>',
+    ].join('\n');
+    generateCodeMock.mockImplementation(async (args: unknown[]) => {
+      const onProgress = args[3] as ((event: Record<string, unknown>) => void) | undefined;
+      onProgress?.({
+        step: 'complete',
+        finalCode: uniappCode,
+        degraded: false,
+      });
+      return {
+        code: uniappCode,
+        degraded: false,
+        assets: [],
+      };
+    });
+
+    render(<CodePanel />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Generate UniApp/i }));
+
+    await waitFor(() => {
+      expect(generateCodeMock).toHaveBeenCalled();
+      expect(screen.getByText('Files')).toBeTruthy();
+      expect(screen.getByText('App.vue')).toBeTruthy();
+      expect(screen.getByText('manifest.json')).toBeTruthy();
+      expect(screen.getByText('uni.scss')).toBeTruthy();
+      expect(screen.getByText('pages/index/index.vue')).toBeTruthy();
+      expect(screen.getByRole('button', { name: /Download ZIP/i })).toBeTruthy();
+    });
+
+    fireEvent.click(screen.getByText('pages.json').closest('button')!);
+
+    expect(screen.getByText(/"pages"/i)).toBeTruthy();
+    expect(
+      screen.getAllByText(/pages\/index\/index/i).some((element) => element.tagName === 'CODE'),
+    ).toBe(true);
+    expect(generateCodeMock.mock.calls[0]?.[0]?.[1]).toBe('uniapp');
   });
 
   it('keeps generated code when the panel unmounts and mounts again', async () => {
@@ -291,6 +439,60 @@ describe('CodePanel export affordances', () => {
       expect(screen.getByRole('button', { name: /^Code$/i })).toBeTruthy();
       expect(screen.queryByRole('button', { name: /^Preview$/i })).toBeNull();
       expect(screen.getByRole('button', { name: /^History/i })).toBeTruthy();
+    });
+  });
+
+  it('writes generated files to a local desktop output folder', async () => {
+    const selectOutputDirectory = vi.fn(async () => '/tmp/generated');
+    const writeFiles = vi.fn(async () => ({
+      rootDir: '/tmp/generated',
+      writtenFiles: [
+        { path: 'design.tsx', absolutePath: '/tmp/generated/design.tsx', bytes: 48 },
+      ],
+    }));
+    const gitStatus = vi.fn(async () => ({
+      mode: 'repo' as const,
+      rootDir: '/tmp/generated',
+      repoRoot: '/tmp/generated',
+      branch: 'main',
+      changedFiles: ['design.tsx'],
+      diff: '+export default function Design',
+      hasRemote: false,
+    }));
+    (window as unknown as { electronAPI: Partial<ElectronAPI> }).electronAPI = {
+      isElectron: true,
+      codegen: {
+        selectOutputDirectory,
+        writeFiles,
+        revealPath: vi.fn(async () => {}),
+        gitStatus,
+        gitCommit: vi.fn(),
+        gitPush: vi.fn(),
+      },
+      git: {
+        getSystemAuthor: vi.fn(async () => ({
+          name: 'OpenPencil Test',
+          email: 'test@openpencil.local',
+        })),
+      } as unknown as GitAPI,
+    };
+    render(<CodePanel />);
+
+    fireEvent.click(screen.getAllByRole('button', { name: /Generate React/i })[0]);
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Write Local/i })).toBeTruthy();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /Write Local/i }));
+
+    await waitFor(() => {
+      expect(writeFiles).toHaveBeenCalledWith({
+        rootDir: '/tmp/generated',
+        files: [{ path: 'design.tsx', content: generatedResult.code }],
+      });
+      expect(screen.getByText(/Wrote 1 file/i)).toBeTruthy();
+      expect(screen.getByText(/\+export default function Design/i)).toBeTruthy();
     });
   });
 
@@ -394,5 +596,108 @@ describe('CodePanel export affordances', () => {
     expect(saveCodeGenerationHistoryMock).not.toHaveBeenCalled();
 
     windowOpen.mockRestore();
+  });
+
+  it('shows signed history assets in the code view', async () => {
+    listCodeGenerationHistoryMock.mockResolvedValue([
+      {
+        id: 'gen-html',
+        fileId: 'file-1',
+        pageId: 'page-1',
+        framework: 'html',
+        targetKind: 'selection',
+        nodeIds: ['node-1'],
+        targetHash: 'hash-1',
+        documentRevision: 2,
+        status: 'done',
+        finalCode: '<main>History asset</main>',
+        degraded: false,
+        assetsManifest: [
+          {
+            id: 'asset-1',
+            relativePath: './assets/card.png',
+            zipPath: 'assets/card.png',
+            mimeType: 'image/png',
+            sizeBytes: 3,
+            signedUrl: 'https://example.test/card.png',
+            sourceNodeId: 'node-1',
+            sourceNodeName: 'Card asset',
+            sourceKind: 'image-fill',
+          },
+        ],
+        model: 'model-a',
+        provider: 'builtin',
+        error: null,
+        createdAt: '2026-05-09T10:00:00.000Z',
+        completedAt: '2026-05-09T10:00:01.000Z',
+      },
+    ]);
+
+    useCodegenStore.setState({ activeTab: 'html' });
+    render(<CodePanel />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Assets')).toBeTruthy();
+      expect(screen.getByAltText('Card asset').getAttribute('src')).toBe(
+        'https://example.test/card.png',
+      );
+    });
+  });
+
+  it('runs promote, download, and delete actions from the history list', async () => {
+    listCodeGenerationHistoryMock.mockResolvedValue([
+      {
+        id: 'gen-html',
+        fileId: 'file-1',
+        pageId: 'page-1',
+        framework: 'html',
+        targetKind: 'selection',
+        nodeIds: ['node-1'],
+        targetHash: 'hash-1',
+        documentRevision: 2,
+        status: 'done',
+        finalCode: '<main>History tools</main>',
+        degraded: false,
+        assetsManifest: [],
+        model: 'model-a',
+        provider: 'builtin',
+        error: null,
+        createdAt: '2026-05-09T10:00:00.000Z',
+        completedAt: '2026-05-09T10:00:01.000Z',
+      },
+    ]);
+    const promoteSpy = vi.spyOn(useCodegenStore.getState(), 'promoteHistoryEntry');
+    const deleteSpy = vi.spyOn(useCodegenStore.getState(), 'deleteHistoryEntry');
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    const originalClick = HTMLAnchorElement.prototype.click;
+    HTMLAnchorElement.prototype.click = vi.fn();
+    const createObjectURL = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:history-zip');
+    const revokeObjectURL = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
+
+    useCodegenStore.setState({ activeTab: 'html' });
+    render(<CodePanel />);
+
+    await waitFor(() => {
+      expect(screen.getByText(/History tools/i)).toBeTruthy();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /^History/i }));
+    fireEvent.click(screen.getByTitle('Promote'));
+    fireEvent.click(screen.getByTitle('Download ZIP'));
+    fireEvent.click(screen.getByTitle('Delete'));
+
+    expect(promoteSpy).toHaveBeenCalledWith('html', 'gen-html');
+    await waitFor(() => {
+      expect(exportCodeGenerationZipMock).toHaveBeenCalledWith('gen-html');
+    });
+    expect(confirmSpy).toHaveBeenCalled();
+    expect(deleteSpy).toHaveBeenCalledWith('html', 'gen-html');
+
+    promoteSpy.mockRestore();
+    deleteSpy.mockRestore();
+    confirmSpy.mockRestore();
+    createObjectURL.mockRestore();
+    revokeObjectURL.mockRestore();
+    HTMLAnchorElement.prototype.click = originalClick;
   });
 });

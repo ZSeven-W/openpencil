@@ -16,14 +16,19 @@ const querySchema = z.object({
 export default defineEventHandler(async (event) => {
   const parsed = querySchema.safeParse(getQuery(event));
   if (!parsed.success) {
-    throw toApiError(400, 'validation_error', 'Invalid code generation query', parsed.error.flatten());
+    throw toApiError(
+      400,
+      'validation_error',
+      'Invalid code generation query',
+      parsed.error.flatten(),
+    );
   }
 
   const { supabase, user } = await getCloudSupabase(event);
   const { data, error } = await supabase
     .from('code_generations')
     .select(
-      'id,file_id,page_id,framework,target_kind,node_ids,target_hash,document_revision,status,final_code,degraded,assets_manifest,model,provider,error,created_at,completed_at',
+      'id,file_id,page_id,framework,target_kind,node_ids,target_hash,document_revision,status,final_code,entry_file,degraded,assets_manifest,model,provider,error,created_at,completed_at,promoted_at',
     )
     .eq('owner_id', user.id)
     .eq('file_id', parsed.data.fileId)

@@ -2,6 +2,7 @@
 
 import { describe, it, expect } from 'vitest';
 import {
+  generateCode,
   hydratePlan,
   computeExecutionOrder,
   parseChunkResponse,
@@ -137,5 +138,80 @@ export function HeroSection() { return <div /> }
     expect(result.code).toContain('HeroSection');
     expect(result.contract.componentName).toBe('HeroSection');
     expect(result.contract.chunkId).toBe('c2');
+  });
+
+  it('preserves outputFiles in parsed chunk contracts', () => {
+    const response = `<template><view>Home</view></template>
+---CONTRACT---
+{"chunkId":"c1","componentName":"HomePage","exportedProps":[],"slots":[],"cssClasses":[],"cssVariables":[],"imports":[],"outputFiles":["pages/index/index.vue"]}`;
+
+    const result = parseChunkResponse(response, 'c1');
+
+    expect(result.contract.outputFiles).toEqual(['pages/index/index.vue']);
+  });
+});
+
+describe('generateCode', () => {
+  const node = {
+    id: 'n1',
+    type: 'frame',
+    name: 'Home',
+    x: 0,
+    y: 0,
+    width: 320,
+    height: 640,
+  } as PenNode;
+
+  it('marks incomplete UniApp assembly as degraded', async () => {
+    const events: unknown[] = [];
+    const responses = [
+      JSON.stringify({
+        chunks: [
+          {
+            id: 'chunk-1',
+            name: 'Home',
+            nodeIds: ['n1'],
+            role: 'page',
+            suggestedComponentName: 'HomePage',
+            dependencies: [],
+          },
+        ],
+        sharedStyles: [],
+        rootLayout: { direction: 'vertical', gap: 0, responsive: true },
+      }),
+      [
+        '<template><view>Home</view></template>',
+        '---CONTRACT---',
+        '{"chunkId":"chunk-1","componentName":"HomePage","exportedProps":[],"slots":[],"cssClasses":[],"cssVariables":[],"imports":[]}',
+      ].join('\n'),
+      [
+        '---FILE: App.vue---',
+        '<template><view /></template>',
+        '---FILE: pages.json---',
+        '{"pages":[{"path":"pages/index/index"}]}',
+      ].join('\n'),
+    ];
+    const collectText = async () => responses.shift() ?? '';
+
+    const result = await generateCode(
+      [node],
+      'uniapp',
+      undefined,
+      (event) => events.push(event),
+      'test-model',
+      'builtin',
+      undefined,
+      { collectText },
+    );
+
+    expect(result.degraded).toBe(true);
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        step: 'assembly',
+        status: 'failed',
+        error: expect.stringContaining('UniApp output missing main.ts'),
+      }),
+    );
+    expect(events).toContainEqual(expect.objectContaining({ step: 'complete', degraded: true }));
   });
 });

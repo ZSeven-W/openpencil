@@ -52,7 +52,8 @@ export type CodePlatform =
   | 'flutter'
   | 'swiftui'
   | 'compose'
-  | 'react-native';
+  | 'react-native'
+  | 'uniapp';
 
 /** Structured 代码生成结果。 */
 export interface CodeResult {

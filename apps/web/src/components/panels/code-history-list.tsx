@@ -1,4 +1,4 @@
-import { CheckCircle2, ExternalLink } from 'lucide-react';
+import { CheckCircle2, Download, ExternalLink, Star, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import type { CodegenHistoryEntry } from '@/stores/codegen-store';
@@ -9,6 +9,9 @@ interface CodeHistoryListProps {
   selectedId?: string;
   onSelect: (id: string) => void;
   onPreview: (entry: CodegenHistoryEntry) => void;
+  onPromote: (id: string) => void;
+  onDownload: (id: string) => void;
+  onDelete: (id: string) => void;
 }
 
 function formatHistoryTime(value: string): string {
@@ -29,15 +32,16 @@ export default function CodeHistoryList({
   selectedId,
   onSelect,
   onPreview,
+  onPromote,
+  onDownload,
+  onDelete,
 }: CodeHistoryListProps) {
   const { t } = useTranslation();
 
   if (history.length === 0) {
     return (
       <div className="flex h-full items-center justify-center p-5 text-center">
-        <div className="text-xs text-muted-foreground">
-          {t('codePanel.history.empty')}
-        </div>
+        <div className="text-xs text-muted-foreground">{t('codePanel.history.empty')}</div>
       </div>
     );
   }
@@ -81,6 +85,7 @@ export default function CodeHistoryList({
               </div>
               <div className="mt-1 flex flex-wrap gap-x-2 gap-y-1 text-[10px] text-muted-foreground/80">
                 <span>rev {entry.documentRevision}</span>
+                {entry.promotedAt && <span>{t('codePanel.history.promoted')}</span>}
                 {entry.model && <span>{entry.model}</span>}
                 {entry.provider && <span>{entry.provider}</span>}
                 {entry.targetKind && (
@@ -102,10 +107,49 @@ export default function CodeHistoryList({
               variant="ghost"
               size="sm"
               onClick={() => onPreview(entry)}
-              className="h-7 shrink-0 gap-1 px-2 text-[10px] text-muted-foreground hover:text-foreground"
+              className="h-7 shrink-0 px-2 text-muted-foreground hover:text-foreground"
+              aria-label={t('codePanel.preview.action')}
+              title={t('codePanel.preview.action')}
             >
               <ExternalLink className="h-3 w-3" />
-              {t('codePanel.preview.action')}
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => onPromote(entry.id)}
+              className={cn(
+                'h-7 shrink-0 px-2',
+                entry.promotedAt
+                  ? 'text-primary hover:text-primary'
+                  : 'text-muted-foreground hover:text-foreground',
+              )}
+              aria-label={t('codePanel.history.promote')}
+              title={t('codePanel.history.promote')}
+            >
+              <Star className="h-3 w-3" />
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => onDownload(entry.id)}
+              className="h-7 shrink-0 px-2 text-muted-foreground hover:text-foreground"
+              aria-label={t('codePanel.history.downloadZip')}
+              title={t('codePanel.history.downloadZip')}
+            >
+              <Download className="h-3 w-3" />
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => onDelete(entry.id)}
+              className="h-7 shrink-0 px-2 text-muted-foreground hover:text-destructive"
+              aria-label={t('codePanel.history.delete')}
+              title={t('codePanel.history.delete')}
+            >
+              <Trash2 className="h-3 w-3" />
             </Button>
           </div>
         );

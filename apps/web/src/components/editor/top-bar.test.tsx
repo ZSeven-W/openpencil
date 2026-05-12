@@ -6,6 +6,11 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import '@/i18n';
 
 const navigateMock = vi.fn();
+const getCloudFileMock = vi.hoisted(() => vi.fn());
+const createCloudFileMock = vi.hoisted(() => vi.fn());
+const versionPanelStoreMock = vi.hoisted(() => ({
+  setOpen: vi.fn(),
+}));
 
 vi.mock('@tanstack/react-router', () => ({
   useNavigate: () => navigateMock,
@@ -34,6 +39,17 @@ const documentState = {
   cloudFileId: 'file-1' as string | null,
   cloudSaveState: 'idle',
   cloudSaveError: null as string | null,
+  cloudSaveConflict: null as {
+    code: 'revision_conflict';
+    fileId: string;
+    expectedRevision: number;
+    serverRevision: number | null;
+  } | null,
+  document: {
+    version: '1.0.0',
+    name: 'Untitled',
+    pages: [{ id: 'page-1', name: 'Page 1', children: [] }],
+  },
   save: vi.fn(async () => 'Cloud File'),
   exportOp: vi.fn(async () => 'Cloud File.op'),
   loadCloudDocument: vi.fn(),
@@ -73,6 +89,14 @@ vi.mock('@/stores/agent-settings-store', () => ({
   ),
 }));
 
+vi.mock('@/stores/cloud-version-panel-store', () => ({
+  useCloudVersionPanelStore: Object.assign(
+    (selector: (state: typeof versionPanelStoreMock) => unknown) =>
+      selector(versionPanelStoreMock),
+    { getState: () => versionPanelStoreMock },
+  ),
+}));
+
 vi.mock('@/components/shared/file-menu', () => ({
   default: () => null,
 }));
@@ -106,8 +130,8 @@ vi.mock('@/utils/file-operations', () => ({
 }));
 
 vi.mock('@/services/cloud/cloud-files', () => ({
-  createCloudFile: vi.fn(),
-  getCloudFile: vi.fn(),
+  createCloudFile: createCloudFileMock,
+  getCloudFile: getCloudFileMock,
 }));
 
 vi.mock('@/utils/import-pen-document', () => ({
@@ -128,8 +152,17 @@ afterEach(() => {
   cleanup();
   navigateMock.mockClear();
   documentState.isDirty = false;
+  documentState.cloudFileId = 'file-1';
+  documentState.cloudSaveState = 'idle';
+  documentState.cloudSaveError = null;
+  documentState.cloudSaveConflict = null;
+  documentState.fileName = 'Cloud File';
   documentState.save.mockClear();
   documentState.save.mockResolvedValue('Cloud File');
+  documentState.loadCloudDocument.mockClear();
+  getCloudFileMock.mockReset();
+  createCloudFileMock.mockReset();
+  versionPanelStoreMock.setOpen.mockClear();
   delete (window as unknown as { __showUnsavedDialog?: unknown }).__showUnsavedDialog;
 });
 
@@ -140,7 +173,7 @@ describe('TopBar back to files', () => {
     fireEvent.click(screen.getByRole('button', { name: /Back to files/i }));
 
     await waitFor(() => {
-      expect(navigateMock).toHaveBeenCalledWith({ to: '/' });
+      expect(navigateMock).toHaveBeenCalledWith({ to: '/cloud' });
     });
   });
 
@@ -175,7 +208,71 @@ describe('TopBar back to files', () => {
 
     await waitFor(() => {
       expect(documentState.save).toHaveBeenCalled();
-      expect(navigateMock).toHaveBeenCalledWith({ to: '/' });
+      expect(navigateMock).toHaveBeenCalledWith({ to: '/cloud' });
+    });
+  });
+
+  it('opens cloud version history for cloud files', () => {
+    renderTopBar();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Version history' }));
+
+    expect(versionPanelStoreMock.setOpen).toHaveBeenCalledWith(true);
+  });
+
+  it('shows cloud revision conflicts and can reload the remote version', async () => {
+    const remoteFile = {
+      id: 'file-1',
+      name: 'Cloud File',
+      revision: 9,
+      document: documentState.document,
+    };
+    documentState.cloudSaveState = 'conflict';
+    documentState.cloudSaveError = 'Cloud file has a newer revision';
+    documentState.cloudSaveConflict = {
+      code: 'revision_conflict',
+      fileId: 'file-1',
+      expectedRevision: 7,
+      serverRevision: 9,
+    };
+    getCloudFileMock.mockResolvedValue(remoteFile);
+
+    renderTopBar();
+
+    expect(screen.getByText(/remote rev 9/i)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Reload' }));
+
+    await waitFor(() => {
+      expect(getCloudFileMock).toHaveBeenCalledWith('file-1');
+      expect(documentState.loadCloudDocument).toHaveBeenCalledWith(remoteFile);
+    });
+  });
+
+  it('saves conflicted local work as a new cloud copy', async () => {
+    documentState.cloudSaveState = 'conflict';
+    documentState.cloudSaveError = 'Cloud file has a newer revision';
+    documentState.cloudSaveConflict = {
+      code: 'revision_conflict',
+      fileId: 'file-1',
+      expectedRevision: 7,
+      serverRevision: 9,
+    };
+    createCloudFileMock.mockResolvedValue({ id: 'copy-file-1' });
+
+    renderTopBar();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save copy' }));
+
+    await waitFor(() => {
+      expect(createCloudFileMock).toHaveBeenCalledWith({
+        name: 'Cloud File copy',
+        document: documentState.document,
+        source: 'manual_save',
+      });
+      expect(navigateMock).toHaveBeenCalledWith({
+        to: '/editor/$fileId',
+        params: { fileId: 'copy-file-1' },
+      });
     });
   });
 });

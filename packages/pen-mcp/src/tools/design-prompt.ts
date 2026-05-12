@@ -250,7 +250,8 @@ type PromptSection =
   | 'codegen-flutter'
   | 'codegen-swiftui'
   | 'codegen-compose'
-  | 'codegen-react-native';
+  | 'codegen-react-native'
+  | 'codegen-uniapp';
 
 // Dynamic 部分图 — 来自注册表的技能，planning/variables/design-md 的本地部分
 const SECTION_MAP: Record<PromptSection, () => string> = {
@@ -280,6 +281,7 @@ const SECTION_MAP: Record<PromptSection, () => string> = {
   'codegen-swiftui': () => getSkillContent('codegen-swiftui'),
   'codegen-compose': () => getSkillContent('codegen-compose'),
   'codegen-react-native': () => getSkillContent('codegen-react-native'),
+  'codegen-uniapp': () => getSkillContent('codegen-uniapp'),
 };
 
 // Design.md 通过 setDesignMdForPrompt() 注入的内容

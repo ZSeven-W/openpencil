@@ -26,6 +26,19 @@ const chunkSchema = z.object({
   orderIndex: z.number().int().optional(),
 });
 
+const fileSchema = z.object({
+  path: z
+    .string()
+    .min(1)
+    .refine((path) => !path.startsWith('/') && !path.split('/').includes('..'), {
+      message: 'File path must be relative and cannot contain parent segments',
+    }),
+  language: z.string().min(1),
+  role: z.enum(['entry', 'page', 'component', 'style', 'config', 'asset', 'other']),
+  content: z.string(),
+  orderIndex: z.number().int().optional(),
+});
+
 const createSchema = z.object({
   fileId: z.string().uuid(),
   pageId: z.string().min(1),
@@ -36,8 +49,10 @@ const createSchema = z.object({
   documentRevision: z.number().int().positive(),
   status: z.enum(['done', 'degraded', 'failed']),
   finalCode: z.string().optional(),
+  entryFile: z.string().optional(),
   degraded: z.boolean(),
   assets: z.array(assetSchema).default([]),
+  files: z.array(fileSchema).default([]),
   model: z.string().optional(),
   provider: z.string().optional(),
   error: z.string().optional(),
@@ -79,8 +94,10 @@ export default defineEventHandler(async (event) => {
     documentRevision: parsed.data.documentRevision,
     status: parsed.data.status,
     finalCode: parsed.data.finalCode,
+    entryFile: parsed.data.entryFile,
     degraded: parsed.data.degraded,
     assets: parsed.data.assets,
+    files: parsed.data.files,
     model: parsed.data.model,
     provider: parsed.data.provider,
     error: parsed.data.error,

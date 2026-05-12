@@ -12,7 +12,8 @@ todos.json
 .openpencil-tmp/
 .superpowers/
 
-docs/
+docs/*
+!docs/desktop-ci-cd.md
 
 # Build outputs
 out/

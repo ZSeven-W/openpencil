@@ -11,20 +11,30 @@ import { AlertCircle } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { useGitStore } from '@/stores/git-store';
+import { cn } from '@/lib/utils';
 
 interface GitPanelErrorCardProps {
   message: string;
   recoverable: boolean;
   /** Optional 重试处理程序。 If 省略，重试按钮调用 closePanel。 */
   onRetry?: () => void;
+  onDismiss?: () => void;
+  className?: string;
 }
 
-export function GitPanelErrorCard({ message, recoverable, onRetry }: GitPanelErrorCardProps) {
+export function GitPanelErrorCard({
+  message,
+  recoverable,
+  onRetry,
+  onDismiss,
+  className,
+}: GitPanelErrorCardProps) {
   const { t } = useTranslation();
   const closeRepo = useGitStore((s) => s.closeRepo);
+  const dismiss = onDismiss ?? (() => void closeRepo());
 
   return (
-    <div className="flex flex-col items-center justify-center gap-3 p-6 text-center">
+    <div className={cn('flex flex-col items-center justify-center gap-3 p-6 text-center', className)}>
       <AlertCircle size={28} className="text-destructive" aria-hidden />
       <div className="text-sm font-medium text-foreground">{t('git.error.title')}</div>
       <div className="text-xs text-muted-foreground max-w-[280px] break-words">{message}</div>
@@ -38,14 +48,14 @@ export function GitPanelErrorCard({ message, recoverable, onRetry }: GitPanelErr
               if (onRetry) {
                 onRetry();
               } else {
-                void closeRepo();
+                dismiss();
               }
             }}
           >
             {t('git.error.retry')}
           </Button>
         )}
-        <Button type="button" variant="ghost" size="sm" onClick={() => void closeRepo()}>
+        <Button type="button" variant="ghost" size="sm" onClick={dismiss}>
           {t('git.error.dismiss')}
         </Button>
       </div>

@@ -7,17 +7,6 @@ import { zoomToFitContent } from '@/canvas/skia-engine-ref';
 import { syncCanvasPositionsToStore } from '@/canvas/skia-engine-ref';
 import { parseAndPrepareImportedDocument } from '@/utils/import-pen-document';
 import { addRecentFile, clearRecentFiles } from '@/utils/recent-files';
-import { createCloudFile } from '@/services/cloud/cloud-files';
-import { createEmptyDocument } from '@/stores/document-store';
-
-async function importDocumentToCloud(doc: ReturnType<typeof createEmptyDocument>, name: string) {
-  const file = await createCloudFile({
-    name: name.replace(/\.(pen|op|json)$/i, '') || name,
-    document: doc,
-    source: 'import',
-  });
-  window.location.href = `/editor/${file.id}`;
-}
 
 async function confirmUnsaved(): Promise<boolean> {
   const showDialog = (window as any).__showUnsavedDialog;
@@ -40,6 +29,11 @@ async function confirmUnsaved(): Promise<boolean> {
   return true;
 }
 
+function navigateToLocalEditor(): void {
+  window.history.pushState({}, '', '/editor/local');
+  window.dispatchEvent(new PopStateEvent('popstate'));
+}
+
 /**
  * Listens 用于
  * Electron 本机菜单操作并将它们分派到商店。 No-op 在浏览器（非 Electron）环境中运行时。
@@ -58,7 +52,8 @@ export function useElectronMenu() {
           filePath: result.filePath,
         });
         if (!prepared) return;
-        void importDocumentToCloud(prepared.doc, name);
+        useDocumentStore.getState().loadDocument(prepared.doc, name, null, result.filePath);
+        navigateToLocalEditor();
       });
     };
 
@@ -88,13 +83,8 @@ export function useElectronMenu() {
             if (useDocumentStore.getState().isDirty) {
               if (!(await confirmUnsaved())) return;
             }
-            createCloudFile({
-              name: 'Untitled',
-              document: createEmptyDocument(),
-              source: 'manual_save',
-            }).then((file) => {
-              window.location.href = `/editor/${file.id}`;
-            });
+            useDocumentStore.getState().newDocument();
+            navigateToLocalEditor();
           })();
           break;
 
@@ -113,9 +103,9 @@ export function useElectronMenu() {
                 });
                 if (!prepared) return;
                 const { doc } = prepared;
-                void importDocumentToCloud(doc, name).then(() => {
-                  requestAnimationFrame(() => zoomToFitContent());
-                });
+                useDocumentStore.getState().loadDocument(doc, name, null, result.filePath);
+                navigateToLocalEditor();
+                requestAnimationFrame(() => zoomToFitContent());
               } catch {
                 // Invalid 文件
               }

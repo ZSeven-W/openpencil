@@ -30,9 +30,15 @@ describe('document-store moveNode', () => {
   it('replaces imported content without dropping cloud file metadata', () => {
     useDocumentStore.getState().loadCloudDocument({
       id: 'cloud-file-1',
+      projectId: 'project-1',
+      folderId: null,
       name: 'Untitled',
       revision: 7,
       thumbnailPath: null,
+      metadata: {},
+      starred: false,
+      lastOpenedAt: null,
+      deletedAt: null,
       createdAt: '2026-01-01T00:00:00.000Z',
       updatedAt: '2026-01-01T00:00:00.000Z',
       document: createEmptyDocument(),

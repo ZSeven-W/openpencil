@@ -1,16 +1,11 @@
 import { useState, useRef, useCallback, useEffect, useMemo, memo } from 'react';
-import {
-  Copy,
-  Download,
-  FileJson,
-  RefreshCw,
-  Sparkles,
-  Check,
-  AlertTriangle,
-} from 'lucide-react';
+import { Copy, Download, FileJson, RefreshCw, Sparkles, Check, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import CodeAssetPreviewStrip from './code-asset-preview-strip';
 import CodeHistoryList from './code-history-list';
+import CodeFileTree from './code-file-tree';
+import CodeLocalOutputActions from './code-local-output-actions';
 import { resolveCodegenModelConfig } from './codegen-model-config';
 import { getPreviewReasonKey, openPreviewHtml } from './code-preview-window';
 import ProgressItem from './code-progress-item';
@@ -21,13 +16,15 @@ import { useAgentSettingsStore } from '@/stores/agent-settings-store';
 import { useCodegenStore, type CodegenHistoryEntry } from '@/stores/codegen-store';
 import { generateCode } from '@/services/ai/code-generation-pipeline';
 import { buildCodegenBundleManifest } from '@/services/ai/codegen-assets';
-import { buildCodegenTarget } from '@/services/cloud/codegen-history';
+import { buildCodegenFiles, getDefaultCodegenFilePath } from '@/services/ai/codegen-files';
+import { buildCodegenTarget, exportCodeGenerationZip } from '@/services/cloud/codegen-history';
 import { buildCodePreviewDocument } from '@/services/cloud/codegen-preview';
 import { buildAIStructureBundle, encodeAIStructureBundleZip } from '@/services/ai/structure-bundle';
 import { highlightCode } from '@/utils/syntax-highlight';
 import type { Framework, CodeGenProgress } from '@zseven-w/pen-types';
 import { FRAMEWORKS } from '@zseven-w/pen-types';
 import type { PenNode } from '@/types/pen';
+import type { SaveCodegenFileInput } from '@/types/cloud';
 import type { SyntaxLanguage } from '@/utils/syntax-highlight';
 import { encode as encodeZip } from 'uzip';
 import { useTranslation } from 'react-i18next';
@@ -44,6 +41,7 @@ const TAB_LABELS: Record<Framework, string> = {
   swiftui: 'SwiftUI',
   compose: 'Compose',
   'react-native': 'RN',
+  uniapp: 'UniApp',
 };
 
 const HIGHLIGHT_LANG: Record<Framework, SyntaxLanguage> = {
@@ -55,9 +53,30 @@ const HIGHLIGHT_LANG: Record<Framework, SyntaxLanguage> = {
   swiftui: 'swift',
   compose: 'kotlin',
   'react-native': 'jsx',
+  uniapp: 'html',
 };
 
 const EMPTY_HISTORY: CodegenHistoryEntry[] = [];
+
+function getFileHighlightLanguage(
+  file: SaveCodegenFileInput,
+  fallback: SyntaxLanguage,
+): SyntaxLanguage {
+  if (file.language === 'css' || file.language === 'scss') return 'css';
+  if (file.language === 'dart') return 'dart';
+  if (file.language === 'kotlin') return 'kotlin';
+  if (file.language === 'swift') return 'swift';
+  if (
+    file.language === 'html' ||
+    file.language === 'vue' ||
+    file.language === 'svelte' ||
+    file.language === 'json'
+  ) {
+    return 'html';
+  }
+  if (file.language === 'ts' || file.language === 'tsx') return 'jsx';
+  return fallback;
+}
 
 function triggerDownload(blob: Blob, fileName: string) {
   const url = URL.createObjectURL(blob);
@@ -74,6 +93,7 @@ function CodePanelInner() {
   const { t } = useTranslation();
   const [copied, setCopied] = useState(false);
   const [panelView, setPanelView] = useState<CodePanelView>('code');
+  const [selectedFilePath, setSelectedFilePath] = useState<string | null>(null);
   const activeTab = useCodegenStore((s) => s.activeTab);
   const codeCache = useCodegenStore((s) => s.codeCache);
   const isGenerating = useCodegenStore((s) => s.isGenerating);
@@ -95,6 +115,8 @@ function CodePanelInner() {
   const loadHistory = useCodegenStore((s) => s.loadHistory);
   const saveHistory = useCodegenStore((s) => s.saveHistory);
   const selectHistoryEntry = useCodegenStore((s) => s.selectHistoryEntry);
+  const promoteHistoryEntry = useCodegenStore((s) => s.promoteHistoryEntry);
+  const deleteHistoryEntry = useCodegenStore((s) => s.deleteHistoryEntry);
   const historyLoading = useCodegenStore((s) => s.historyLoading);
   const historyError = useCodegenStore((s) => s.historyError);
   const history = useCodegenStore((s) => s.history[activeTab] ?? EMPTY_HISTORY);
@@ -104,7 +126,9 @@ function CodePanelInner() {
   const generatedCode = cached?.code ?? '';
   const isDegraded = cached?.degraded ?? false;
   const exportedAssets = cached?.assets ?? [];
+  const exportedAssetsManifest = cached?.assetsManifest ?? [];
   const hasExportedAssets = exportedAssets.length > 0;
+  const requiresZipBundle = activeTab === 'uniapp' || hasExportedAssets;
   const panelState: PanelState = isGenerating ? 'generating' : cached ? 'complete' : 'empty';
 
   const copyTimeoutRef = useRef<ReturnType<typeof setTimeout>>(null);
@@ -129,10 +153,31 @@ function CodePanelInner() {
     () => buildCodegenTarget({ pageId: activePageId, selectedIds }),
     [activePageId, selectedIds],
   );
+  const generatedFiles = useMemo(
+    () =>
+      cached?.files ??
+      (generatedCode ? buildCodegenFiles({ framework: activeTab, code: generatedCode }) : []),
+    [activeTab, cached?.files, generatedCode],
+  );
+  const selectedFile = useMemo(
+    () => generatedFiles.find((file) => file.path === selectedFilePath) ?? generatedFiles[0],
+    [generatedFiles, selectedFilePath],
+  );
+  const displayedCode = selectedFile?.content ?? generatedCode;
 
   useEffect(() => {
     void loadHistory(activeTab, codegenTarget);
   }, [activeTab, codegenTarget, loadHistory]);
+
+  useEffect(() => {
+    if (generatedFiles.length === 0) {
+      setSelectedFilePath(null);
+      return;
+    }
+    if (!selectedFilePath || !generatedFiles.some((file) => file.path === selectedFilePath)) {
+      setSelectedFilePath(generatedFiles[0].path);
+    }
+  }, [generatedFiles, selectedFilePath]);
 
   useEffect(() => {
     if (panelState === 'complete') {
@@ -179,6 +224,7 @@ function CodePanelInner() {
         code: result.code,
         degraded: result.degraded,
         assets: result.assets,
+        files: buildCodegenFiles({ framework: generationFramework, code: result.code }),
       };
       completeGeneration(runId, generationFramework, bundle);
       void saveHistory(
@@ -222,56 +268,54 @@ function CodePanelInner() {
   );
 
   const handleCopy = useCallback(async () => {
-    await navigator.clipboard.writeText(generatedCode);
+    await navigator.clipboard.writeText(displayedCode);
     setCopied(true);
     if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
     copyTimeoutRef.current = setTimeout(() => setCopied(false), 2000);
-  }, [generatedCode]);
+  }, [displayedCode]);
 
   const handleDownload = useCallback(() => {
-    const extensions: Record<Framework, string> = {
-      react: '.tsx',
-      vue: '.vue',
-      svelte: '.svelte',
-      html: '.html',
-      flutter: '.dart',
-      swiftui: '.swift',
-      compose: '.kt',
-      'react-native': '.tsx',
-    };
-    const codeFileName = `design${extensions[activeTab]}`;
+    const codeFileName = getDefaultCodegenFilePath(activeTab);
     const assets = exportedAssets;
-    const codeBytes = new TextEncoder().encode(generatedCode);
+    const encoder = new TextEncoder();
+    const codeBytes = encoder.encode(generatedCode);
 
     void (async () => {
-      const blob =
-        assets.length > 0
-          ? new Blob(
-              [
-                encodeZip({
-                  [codeFileName]: codeBytes,
-                  'manifest.json': new TextEncoder().encode(
-                    JSON.stringify(
-                      await buildCodegenBundleManifest({
-                        framework: activeTab,
-                        codeFile: codeFileName,
-                        codeBytes,
-                        assets,
-                      }),
-                      null,
-                      2,
-                    ),
-                  ),
-                  ...Object.fromEntries(assets.map((asset) => [asset.zipPath, asset.bytes])),
-                }),
-              ],
-              { type: 'application/zip' },
-            )
-          : new Blob([generatedCode], { type: 'text/plain;charset=utf-8' });
+      if (requiresZipBundle) {
+        const codeFiles = activeTab === 'uniapp' ? generatedFiles : [];
+        const manifestFileName =
+          activeTab === 'uniapp' ? 'openpencil-codegen-manifest.json' : 'manifest.json';
+        const zipEntries: Record<string, Uint8Array> = {
+          [codeFileName]: codeBytes,
+          ...Object.fromEntries(codeFiles.map((file) => [file.path, encoder.encode(file.content)])),
+          [manifestFileName]: encoder.encode(
+            JSON.stringify(
+              await buildCodegenBundleManifest({
+                framework: activeTab,
+                codeFile: codeFileName,
+                codeBytes,
+                assets,
+              }),
+              null,
+              2,
+            ),
+          ),
+          ...Object.fromEntries(assets.map((asset) => [asset.zipPath, asset.bytes])),
+        };
 
-      triggerDownload(blob, assets.length > 0 ? `design-${activeTab}.zip` : codeFileName);
+        triggerDownload(
+          new Blob([encodeZip(zipEntries)], { type: 'application/zip' }),
+          `design-${activeTab}.zip`,
+        );
+        return;
+      }
+
+      triggerDownload(
+        new Blob([generatedCode], { type: 'text/plain;charset=utf-8' }),
+        codeFileName,
+      );
     })();
-  }, [generatedCode, activeTab, exportedAssets]);
+  }, [generatedCode, activeTab, exportedAssets, requiresZipBundle, generatedFiles]);
 
   const handleDownloadStructureBundle = useCallback(() => {
     const nodes = getTargetNodes();
@@ -297,6 +341,7 @@ function CodePanelInner() {
       setActiveTab(tab);
       clearGenerateError();
       setPanelView('code');
+      setSelectedFilePath(null);
     },
     [clearGenerateError, setActiveTab],
   );
@@ -305,6 +350,7 @@ function CodePanelInner() {
     (generationId: string) => {
       selectHistoryEntry(activeTab, generationId);
       setPanelView('code');
+      setSelectedFilePath(null);
     },
     [activeTab, selectHistoryEntry],
   );
@@ -332,17 +378,47 @@ function CodePanelInner() {
     [activeTab, cached, t],
   );
 
+  const handlePromoteHistory = useCallback(
+    (generationId: string) => {
+      void promoteHistoryEntry(activeTab, generationId);
+    },
+    [activeTab, promoteHistoryEntry],
+  );
+
+  const handleDownloadHistory = useCallback((generationId: string) => {
+    void (async () => {
+      const result = await exportCodeGenerationZip(generationId);
+      triggerDownload(result.blob, result.fileName);
+    })();
+  }, []);
+
+  const handleDeleteHistory = useCallback(
+    (generationId: string) => {
+      if (!window.confirm(t('codePanel.history.deleteConfirm'))) return;
+      void deleteHistoryEntry(activeTab, generationId);
+    },
+    [activeTab, deleteHistoryEntry, t],
+  );
+
   const nodeCount = selectedIds.length > 0 ? selectedIds.length : children.length;
 
   const highlightedHTML = useMemo(() => {
-    if (!generatedCode) return '';
-    const lang = HIGHLIGHT_LANG[activeTab];
+    if (!displayedCode) return '';
+    const lang = selectedFile
+      ? getFileHighlightLanguage(selectedFile, HIGHLIGHT_LANG[activeTab])
+      : HIGHLIGHT_LANG[activeTab];
 
-    if (activeTab === 'html' || activeTab === 'vue' || activeTab === 'svelte') {
-      const styleIdx = generatedCode.indexOf('<style');
+    if (
+      lang === 'html' &&
+      (activeTab === 'html' ||
+        activeTab === 'vue' ||
+        activeTab === 'svelte' ||
+        activeTab === 'uniapp')
+    ) {
+      const styleIdx = displayedCode.indexOf('<style');
       if (styleIdx !== -1) {
-        const templatePart = generatedCode.slice(0, styleIdx);
-        const stylePart = generatedCode.slice(styleIdx);
+        const templatePart = displayedCode.slice(0, styleIdx);
+        const stylePart = displayedCode.slice(styleIdx);
         const styleTagEnd = stylePart.indexOf('>\n');
         if (styleTagEnd !== -1) {
           const styleTag = stylePart.slice(0, styleTagEnd + 1);
@@ -364,8 +440,8 @@ function CodePanelInner() {
       }
     }
 
-    return highlightCode(generatedCode, lang);
-  }, [activeTab, generatedCode]);
+    return highlightCode(displayedCode, lang);
+  }, [activeTab, displayedCode, selectedFile]);
 
   const totalSteps = 1 + chunks.length + (assemblyStatus !== 'idle' ? 1 : 0);
   const completedSteps =
@@ -547,17 +623,20 @@ function CodePanelInner() {
                 </button>
               </div>
             )}
-            {hasExportedAssets && (
+            {requiresZipBundle && (
               <div className="border-b border-border/50 bg-muted/40 px-3 py-2 shrink-0">
                 <div className="flex items-center gap-2 text-xs font-medium text-foreground">
                   <Download className="h-3.5 w-3.5 shrink-0" />
-                  This generation includes {exportedAssets.length} image asset
-                  {exportedAssets.length > 1 ? 's' : ''}. Download will export a ZIP bundle.
+                  {activeTab === 'uniapp'
+                    ? 'UniApp generations download as a ZIP bundle.'
+                    : `This generation includes ${exportedAssets.length} image asset${
+                        exportedAssets.length > 1 ? 's' : ''
+                      }. Download will export a ZIP bundle.`}
                 </div>
                 <div className="mt-1 text-[11px] text-muted-foreground">
-                  The ZIP contains the code file, exported assets, and a
-                  <code className="font-mono"> manifest.json </code>
-                  index.
+                  {activeTab === 'uniapp'
+                    ? 'The ZIP contains generated UniApp files, the raw bundle, exported assets, and an OpenPencil manifest.'
+                    : 'The ZIP contains the code file, exported assets, and a manifest.json index.'}
                 </div>
               </div>
             )}
@@ -588,10 +667,22 @@ function CodePanelInner() {
             </div>
             <div className="flex-1 min-h-0">
               {panelView === 'code' && (
-                <div className="h-full overflow-auto p-2">
-                  <pre className="text-[10px] leading-relaxed font-mono text-foreground/80 whitespace-pre-wrap break-all">
-                    <code dangerouslySetInnerHTML={{ __html: highlightedHTML }} />
-                  </pre>
+                <div className="flex h-full min-h-0 flex-col">
+                  <CodeAssetPreviewStrip
+                    assets={exportedAssets}
+                    assetsManifest={exportedAssetsManifest}
+                  />
+                  <CodeLocalOutputActions framework={activeTab} files={generatedFiles} />
+                  <CodeFileTree
+                    files={generatedFiles}
+                    selectedPath={selectedFile?.path ?? null}
+                    onSelect={setSelectedFilePath}
+                  />
+                  <div className="min-h-0 flex-1 overflow-auto p-2">
+                    <pre className="text-[10px] leading-relaxed font-mono text-foreground/80 whitespace-pre-wrap break-all">
+                      <code dangerouslySetInnerHTML={{ __html: highlightedHTML }} />
+                    </pre>
+                  </div>
                 </div>
               )}
               {panelView === 'history' && (
@@ -600,6 +691,9 @@ function CodePanelInner() {
                   selectedId={selectedHistoryId}
                   onSelect={handleSelectHistory}
                   onPreview={handlePreviewHistory}
+                  onPromote={handlePromoteHistory}
+                  onDownload={handleDownloadHistory}
+                  onDelete={handleDeleteHistory}
                 />
               )}
             </div>
@@ -630,7 +724,7 @@ function CodePanelInner() {
                 >
                   <Download className="mr-1 h-3 w-3 shrink-0" />
                   <span className="truncate">
-                    {hasExportedAssets ? 'Download ZIP' : 'Download'}
+                    {requiresZipBundle ? 'Download ZIP' : 'Download'}
                   </span>
                 </Button>
                 <div className="w-px h-4 bg-border/50" />

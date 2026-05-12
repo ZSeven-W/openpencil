@@ -147,6 +147,26 @@ function buildVuePreview(code: string): PreviewBuildResult {
   return { kind: 'previewable', srcDoc: wrapPreviewDocument(template, style) };
 }
 
+function extractUniAppPreviewCode(code: string): string {
+  const markers = Array.from(code.matchAll(/^---FILE:\s*(.+?)\s*---\s*$/gm));
+  let firstVueFile: string | null = null;
+
+  for (let i = 0; i < markers.length; i++) {
+    const marker = markers[i];
+    const rawPath = marker[1]?.trim() ?? '';
+    if (!rawPath.endsWith('.vue') || marker.index === undefined) continue;
+
+    const contentStart = marker.index + marker[0].length;
+    const nextMarkerIndex = markers[i + 1]?.index ?? code.length;
+    const content = code.slice(contentStart, nextMarkerIndex).replace(/^\r?\n/, '');
+    if (!content.trim()) continue;
+    firstVueFile ??= content;
+    if (rawPath.startsWith('pages/') && extractBlock(content, 'template')) return content;
+  }
+
+  return firstVueFile ?? code;
+}
+
 function buildSveltePreview(code: string): string {
   const style = extractBlock(code, 'style') ?? '';
   const body = removeBlocks(code, ['script', 'style']);
@@ -174,6 +194,11 @@ export function buildCodePreviewDocument(input: BuildCodePreviewInput): PreviewB
       return { kind: 'previewable', srcDoc: buildHtmlPreview(code) };
     case 'vue': {
       const result = buildVuePreview(code);
+      if (result.kind === 'unsupported') return result;
+      return result;
+    }
+    case 'uniapp': {
+      const result = buildVuePreview(extractUniAppPreviewCode(code));
       if (result.kind === 'unsupported') return result;
       return result;
     }

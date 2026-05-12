@@ -31,6 +31,63 @@ declare global {
     error?: string;
   }
 
+  interface CodegenOutputFile {
+    path: string;
+    content: string;
+  }
+
+  interface WrittenCodegenOutputFile {
+    path: string;
+    absolutePath: string;
+    bytes: number;
+  }
+
+  interface WriteCodegenOutputResult {
+    rootDir: string;
+    writtenFiles: WrittenCodegenOutputFile[];
+  }
+
+  type CodegenOutputGitStatus =
+    | {
+        mode: 'repo';
+        rootDir: string;
+        repoRoot: string;
+        branch: string;
+        changedFiles: string[];
+        diff: string;
+        hasRemote: boolean;
+      }
+    | { mode: 'none'; rootDir: string };
+
+  interface CodegenAPI {
+    selectOutputDirectory: () => Promise<string | null>;
+    writeFiles: (payload: {
+      rootDir: string;
+      files: CodegenOutputFile[];
+    }) => Promise<WriteCodegenOutputResult>;
+    revealPath: (path: string) => Promise<void>;
+    gitStatus: (payload: {
+      rootDir: string;
+      files: CodegenOutputFile[];
+    }) => Promise<CodegenOutputGitStatus>;
+    gitCommit: (payload: {
+      rootDir: string;
+      files: CodegenOutputFile[];
+      message: string;
+      author: { name: string; email: string };
+    }) => Promise<{ hash: string; changedFiles: string[] }>;
+    gitPush: (payload: { rootDir: string }) => Promise<{ result: 'ok' }>;
+  }
+
+  interface CloudAuthAPI {
+    getItem: (key: string) => Promise<string | null>;
+    setItem: (key: string, value: string) => Promise<void>;
+    removeItem: (key: string) => Promise<void>;
+    getPendingOAuthCallback: () => Promise<string | null>;
+    openOAuthUrl: (url: string) => Promise<void>;
+    onOAuthCallback: (callback: (url: string) => void) => () => void;
+  }
+
   interface ElectronAPI {
     isElectron: true;
     openFile: () => Promise<{ filePath: string; content: string } | null>;
@@ -69,6 +126,8 @@ declare global {
     };
     /** Phase 3+：git IPC 表面。 See apps/web/src/services/git-types.ts。 */
     git: GitAPI;
+    codegen: CodegenAPI;
+    cloudAuth: CloudAuthAPI;
   }
 
   interface Window {

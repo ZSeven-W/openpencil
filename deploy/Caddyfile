@@ -1,0 +1,4 @@
+{$APP_DOMAIN} {
+	encode zstd gzip
+	reverse_proxy openpencil:3000
+}

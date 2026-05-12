@@ -812,11 +812,15 @@ const zhTW: TranslationKeys = {
   'codePanel.history.pageTarget': 'page',
   'codePanel.history.selectionTarget': '{{count}} selected',
   'codePanel.modelUnavailable': 'Connect an AI model before generating code.',
+  'codePanel.history.promoted': '已推薦',
+  'codePanel.history.promote': '設為推薦版本',
+  'codePanel.history.downloadZip': '下載 ZIP',
   'codePanel.history.delete': 'Delete',
   'codePanel.history.deleteConfirm': 'Delete this generation history record?',
   'codePanel.preview.action': 'Preview',
   'codePanel.preview.unavailable': 'Preview unavailable',
-  'codePanel.preview.popupBlocked': 'The preview window was blocked. Allow pop-ups for this site and try again.',
+  'codePanel.preview.popupBlocked':
+    'The preview window was blocked. Allow pop-ups for this site and try again.',
   'codePanel.preview.reason.historyAssetsUnavailable':
     'History assets are unavailable for preview. Regenerate or download the bundle.',
   'codePanel.preview.reason.vueTemplateRequired': 'Vue preview requires a <template> block.',

@@ -51,9 +51,13 @@ export function NavBar() {
   "slots": [],
   "cssClasses": [],
   "cssVariables": [],
-  "imports": [{ "source": "react", "specifiers": ["default"] }]
+  "imports": [{ "source": "react", "specifiers": ["default"] }],
+  "outputFiles": ["components/NavBar.tsx"]
 }
 ```
+
+`outputFiles` 是可选字段。多文件框架（例如 UniApp）必须填写该 chunk 预计贡献的文件路径，例如
+`pages/index/index.vue`、`components/HeroCard.vue`；单文件框架可以省略或填写组件文件名。
 
 ## Node-to-Code 映射规则
 

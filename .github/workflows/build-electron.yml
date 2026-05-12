@@ -3,10 +3,16 @@ name: Build Electron
 on:
   push:
     branches:
-      - main
+      - prod
     tags:
       - 'v*'
+  pull_request:
+    branches:
+      - prod
   workflow_dispatch:
+
+env:
+  CSC_IDENTITY_AUTO_DISCOVERY: 'false'
 
 jobs:
   build:
@@ -14,7 +20,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     permissions:
-      contents: write
+      contents: read
     strategy:
       fail-fast: false
       matrix:
@@ -94,6 +100,7 @@ jobs:
         run: npx electron-builder --config apps/desktop/electron-builder.yml ${{ matrix.build_args }} --publish never
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CSC_IDENTITY_AUTO_DISCOVERY: ${{ env.CSC_IDENTITY_AUTO_DISCOVERY }}
           CSC_LINK: ${{ secrets.CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
           WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
@@ -122,7 +129,7 @@ jobs:
             out/release/latest*.yml
             out/release/*.blockmap
             !out/release/builder-debug.yml
-          retention-days: 30
+          retention-days: ${{ startsWith(github.ref, 'refs/tags/v') && 30 || 7 }}
 
   release:
     name: Create Release
@@ -155,13 +162,27 @@ jobs:
     runs-on: ubuntu-latest
     needs: release
     if: startsWith(github.ref, 'refs/tags/v')
+    env:
+      TAP_GITHUB_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
 
     steps:
+      - name: Check tap token
+        id: tap-token
+        run: |
+          if [ -n "$TAP_GITHUB_TOKEN" ]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "TAP_GITHUB_TOKEN is not configured; skipping Homebrew cask update."
+          fi
+
       - name: Get version
         id: version
+        if: steps.tap-token.outputs.configured == 'true'
         run: echo "version=${GITHUB_REF#refs/tags/v}" >> "$GITHUB_OUTPUT"
 
       - name: Download macOS zips and compute sha256
+        if: steps.tap-token.outputs.configured == 'true'
         run: |
           VERSION=${{ steps.version.outputs.version }}
           curl -fSL "https://github.com/zseven-w/openpencil/releases/download/v${VERSION}/OpenPencil-${VERSION}-arm64-mac.zip" -o arm64.zip
@@ -170,12 +191,14 @@ jobs:
           echo "SHA_X64=$(sha256sum x64.zip | cut -d' ' -f1)" >> "$GITHUB_ENV"
 
       - name: Checkout tap repo
+        if: steps.tap-token.outputs.configured == 'true'
         uses: actions/checkout@v4
         with:
           repository: zseven-w/homebrew-openpencil
-          token: ${{ secrets.TAP_GITHUB_TOKEN }}
+          token: ${{ env.TAP_GITHUB_TOKEN }}
 
       - name: Update cask formula
+        if: steps.tap-token.outputs.configured == 'true'
         run: |
           VERSION=${{ steps.version.outputs.version }}
           mkdir -p Casks
@@ -207,6 +230,7 @@ jobs:
           EOF
 
       - name: Commit and push
+        if: steps.tap-token.outputs.configured == 'true'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -220,25 +244,41 @@ jobs:
     runs-on: ubuntu-latest
     needs: release
     if: startsWith(github.ref, 'refs/tags/v')
+    env:
+      TAP_GITHUB_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
 
     steps:
+      - name: Check tap token
+        id: tap-token
+        run: |
+          if [ -n "$TAP_GITHUB_TOKEN" ]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "TAP_GITHUB_TOKEN is not configured; skipping Scoop bucket update."
+          fi
+
       - name: Get version
         id: version
+        if: steps.tap-token.outputs.configured == 'true'
         run: echo "version=${GITHUB_REF#refs/tags/v}" >> "$GITHUB_OUTPUT"
 
       - name: Download Windows portable and compute sha256
+        if: steps.tap-token.outputs.configured == 'true'
         run: |
           VERSION=${{ steps.version.outputs.version }}
           curl -fSL "https://github.com/zseven-w/openpencil/releases/download/v${VERSION}/OpenPencil-${VERSION}-x64-win.exe" -o win64.exe
           echo "SHA_WIN64=$(sha256sum win64.exe | cut -d' ' -f1)" >> "$GITHUB_ENV"
 
       - name: Checkout scoop bucket
+        if: steps.tap-token.outputs.configured == 'true'
         uses: actions/checkout@v4
         with:
           repository: zseven-w/scoop-openpencil
-          token: ${{ secrets.TAP_GITHUB_TOKEN }}
+          token: ${{ env.TAP_GITHUB_TOKEN }}
 
       - name: Update manifest
+        if: steps.tap-token.outputs.configured == 'true'
         run: |
           VERSION=${{ steps.version.outputs.version }}
           mkdir -p bucket
@@ -272,6 +312,7 @@ jobs:
           EOF
 
       - name: Commit and push
+        if: steps.tap-token.outputs.configured == 'true'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"

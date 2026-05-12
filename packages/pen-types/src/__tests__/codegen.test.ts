@@ -1,12 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import { FRAMEWORKS } from '../codegen';
-import type { NodeSnapshot, ResolvedDepContract } from '../codegen';
+import type { ChunkContract, NodeSnapshot, ResolvedDepContract } from '../codegen';
 
 describe('codegen types', () => {
-  it('FRAMEWORKS contains all 8 frameworks', () => {
-    expect(FRAMEWORKS).toHaveLength(8);
+  it('FRAMEWORKS contains all 9 frameworks', () => {
+    expect(FRAMEWORKS).toHaveLength(9);
     expect(FRAMEWORKS).toContain('react');
     expect(FRAMEWORKS).toContain('flutter');
+    expect(FRAMEWORKS).toContain('uniapp');
   });
 
   it('NodeSnapshot allows truncated children', () => {
@@ -32,5 +33,20 @@ describe('codegen types', () => {
   it('ResolvedDepContract allows null', () => {
     const resolved: ResolvedDepContract = null;
     expect(resolved).toBeNull();
+  });
+
+  it('ChunkContract can include generated output file paths', () => {
+    const contract: ChunkContract = {
+      chunkId: 'chunk-1',
+      componentName: 'HomePage',
+      exportedProps: [],
+      slots: [],
+      cssClasses: [],
+      cssVariables: [],
+      imports: [],
+      outputFiles: ['pages/index/index.vue'],
+    };
+
+    expect(contract.outputFiles).toEqual(['pages/index/index.vue']);
   });
 });

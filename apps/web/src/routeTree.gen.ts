@@ -10,7 +10,9 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as EditorRouteImport } from './routes/editor'
+import { Route as CloudRouteImport } from './routes/cloud'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as EditorLocalRouteImport } from './routes/editor.local'
 import { Route as EditorFileIdRouteImport } from './routes/editor.$fileId'
 
 const EditorRoute = EditorRouteImport.update({
@@ -18,10 +20,20 @@ const EditorRoute = EditorRouteImport.update({
   path: '/editor',
   getParentRoute: () => rootRouteImport,
 } as any)
+const CloudRoute = CloudRouteImport.update({
+  id: '/cloud',
+  path: '/cloud',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
+} as any)
+const EditorLocalRoute = EditorLocalRouteImport.update({
+  id: '/local',
+  path: '/local',
+  getParentRoute: () => EditorRoute,
 } as any)
 const EditorFileIdRoute = EditorFileIdRouteImport.update({
   id: '/$fileId',
@@ -31,30 +43,43 @@ const EditorFileIdRoute = EditorFileIdRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/cloud': typeof CloudRoute
   '/editor': typeof EditorRouteWithChildren
   '/editor/$fileId': typeof EditorFileIdRoute
+  '/editor/local': typeof EditorLocalRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/cloud': typeof CloudRoute
   '/editor': typeof EditorRouteWithChildren
   '/editor/$fileId': typeof EditorFileIdRoute
+  '/editor/local': typeof EditorLocalRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/cloud': typeof CloudRoute
   '/editor': typeof EditorRouteWithChildren
   '/editor/$fileId': typeof EditorFileIdRoute
+  '/editor/local': typeof EditorLocalRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/editor' | '/editor/$fileId'
+  fullPaths: '/' | '/cloud' | '/editor' | '/editor/$fileId' | '/editor/local'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/editor' | '/editor/$fileId'
-  id: '__root__' | '/' | '/editor' | '/editor/$fileId'
+  to: '/' | '/cloud' | '/editor' | '/editor/$fileId' | '/editor/local'
+  id:
+    | '__root__'
+    | '/'
+    | '/cloud'
+    | '/editor'
+    | '/editor/$fileId'
+    | '/editor/local'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  CloudRoute: typeof CloudRoute
   EditorRoute: typeof EditorRouteWithChildren
 }
 
@@ -67,12 +92,26 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof EditorRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/cloud': {
+      id: '/cloud'
+      path: '/cloud'
+      fullPath: '/cloud'
+      preLoaderRoute: typeof CloudRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/editor/local': {
+      id: '/editor/local'
+      path: '/local'
+      fullPath: '/editor/local'
+      preLoaderRoute: typeof EditorLocalRouteImport
+      parentRoute: typeof EditorRoute
     }
     '/editor/$fileId': {
       id: '/editor/$fileId'
@@ -86,10 +125,12 @@ declare module '@tanstack/react-router' {
 
 interface EditorRouteChildren {
   EditorFileIdRoute: typeof EditorFileIdRoute
+  EditorLocalRoute: typeof EditorLocalRoute
 }
 
 const EditorRouteChildren: EditorRouteChildren = {
   EditorFileIdRoute: EditorFileIdRoute,
+  EditorLocalRoute: EditorLocalRoute,
 }
 
 const EditorRouteWithChildren =
@@ -97,6 +138,7 @@ const EditorRouteWithChildren =
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  CloudRoute: CloudRoute,
   EditorRoute: EditorRouteWithChildren,
 }
 export const routeTree = rootRouteImport

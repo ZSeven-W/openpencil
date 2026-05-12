@@ -36,7 +36,9 @@ mac:
     - zip
   hardenedRuntime: true
   gatekeeperAssess: false
-  notarize: true
+  # 当前 CI 暂无 Apple Developer 签名/公证凭据，先关闭 notarize，保证 unsigned
+  # 构建可以稳定产出。后续配置好签名密钥后再恢复为 true。
+  notarize: false
 
 dmg:
   title: '${productName} ${version}'
@@ -82,5 +84,10 @@ fileAssociations:
     mimeType: application/x-openpencil
     role: Editor
     icon: apps/desktop/build/icon
+
+protocols:
+  - name: OpenPencil Cloud Auth
+    schemes:
+      - openpencil
 
 asar: true

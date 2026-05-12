@@ -2,12 +2,14 @@ import type { Framework } from '@zseven-w/pen-types';
 import type {
   CloudCodeGeneration,
   CloudCodeGenerationDetail,
+  CloudCodegenFile,
   CodegenTarget,
   SaveCodeGenerationInput,
   SaveCodegenAssetInput,
 } from '@/types/cloud';
 import type { CodegenAssetFile } from '@/services/ai/codegen-assets';
-import { cloudFetch } from './cloud-fetch';
+import { buildCodegenFiles } from '@/services/ai/codegen-files';
+import { cloudFetch, cloudFetchRaw } from './cloud-fetch';
 
 type SaveCodeGenerationHistoryInput = Omit<SaveCodeGenerationInput, 'assets'> & {
   assets: CodegenAssetFile[];
@@ -91,16 +93,77 @@ export async function listCodeGenerationHistory(input: {
   return res.data;
 }
 
+export async function getCodeGenerationHistoryDetail(
+  generationId: string,
+): Promise<CloudCodeGenerationDetail> {
+  const res = await cloudFetch<{ data: CloudCodeGenerationDetail }>(
+    `/api/cloud/code-generations/${generationId}`,
+  );
+  return res.data;
+}
+
+export async function listCodeGenerationFiles(generationId: string): Promise<CloudCodegenFile[]> {
+  const res = await cloudFetch<{ data: CloudCodegenFile[] }>(
+    `/api/cloud/code-generations/${generationId}/files`,
+  );
+  return res.data;
+}
+
 export async function saveCodeGenerationHistory(
   input: SaveCodeGenerationHistoryInput,
 ): Promise<CloudCodeGenerationDetail> {
+  const files =
+    input.files ?? buildCodegenFiles({ framework: input.framework, code: input.finalCode ?? '' });
   const body: SaveCodeGenerationInput = {
     ...input,
+    entryFile: input.entryFile ?? files[0]?.path,
     assets: serializeCodegenAssets(input.assets),
+    files,
   };
   const res = await cloudFetch<{ data: CloudCodeGenerationDetail }>('/api/cloud/code-generations', {
     method: 'POST',
     body: JSON.stringify(body),
   });
   return res.data;
+}
+
+export async function promoteCodeGenerationHistory(
+  generationId: string,
+): Promise<CloudCodeGeneration> {
+  const res = await cloudFetch<{ data: CloudCodeGeneration }>(
+    `/api/cloud/code-generations/${generationId}/promote`,
+    { method: 'POST' },
+  );
+  return res.data;
+}
+
+export async function deleteCodeGenerationHistory(generationId: string): Promise<void> {
+  await cloudFetchRaw(`/api/cloud/code-generations/${generationId}`, {
+    method: 'DELETE',
+  });
+}
+
+function getFileNameFromContentDisposition(value: string | null): string | null {
+  if (!value) return null;
+  const utf8Match = /filename\*=UTF-8''([^;]+)/i.exec(value);
+  if (utf8Match?.[1]) return decodeURIComponent(utf8Match[1]);
+  const quotedMatch = /filename="([^"]+)"/i.exec(value);
+  if (quotedMatch?.[1]) return quotedMatch[1];
+  const plainMatch = /filename=([^;]+)/i.exec(value);
+  return plainMatch?.[1]?.trim() ?? null;
+}
+
+export async function exportCodeGenerationZip(generationId: string): Promise<{
+  blob: Blob;
+  fileName: string;
+}> {
+  const response = await cloudFetchRaw(`/api/cloud/code-generations/${generationId}/export-zip`, {
+    method: 'POST',
+  });
+  return {
+    blob: await response.blob(),
+    fileName:
+      getFileNameFromContentDisposition(response.headers.get('Content-Disposition')) ??
+      'design-codegen.zip',
+  };
 }

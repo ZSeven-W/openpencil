@@ -25,7 +25,13 @@ import {
   downloadDocument,
 } from '@/utils/file-operations';
 import { documentEvents } from '@/utils/document-events';
-import type { CloudFileRecord, CloudSaveState, CloudVersionSource } from '@/types/cloud';
+import type {
+  CloudFileRecord,
+  CloudShareRole,
+  CloudSaveConflict,
+  CloudSaveState,
+  CloudVersionSource,
+} from '@/types/cloud';
 import { CloudApiError } from '@/services/cloud/cloud-fetch';
 import { createCloudFilePayloadTooLargeMessage } from '@/constants/cloud';
 import { CloudFilePayloadTooLargeError } from '@/services/cloud/cloud-file-payload';
@@ -44,8 +50,10 @@ interface DocumentStoreState {
   saveDialogOpen: boolean;
   cloudFileId: string | null;
   cloudRevision: number | null;
+  cloudShareRole: CloudShareRole | null;
   cloudSaveState: CloudSaveState;
   cloudSaveError: string | null;
+  cloudSaveConflict: CloudSaveConflict | null;
 
   addNode: (parentId: string | null, node: PenNode, index?: number) => void;
   updateNode: (id: string, updates: Partial<PenNode>) => void;
@@ -121,9 +129,14 @@ interface DocumentStoreState {
     source?: Exclude<CloudVersionSource, 'import' | 'restore'>,
     label?: string,
     snapshot?: boolean,
+    options?: { force?: boolean },
   ) => Promise<string | null>;
   loadCloudDocument: (file: CloudFileRecord) => void;
-  setCloudMetadata: (fileId: string | null, revision: number | null) => void;
+  setCloudMetadata: (
+    fileId: string | null,
+    revision: number | null,
+    shareRole?: CloudShareRole | null,
+  ) => void;
   clearCloudError: () => void;
 }
 
@@ -136,8 +149,10 @@ export const useDocumentStore = create<DocumentStoreState>((set, get) => ({
   saveDialogOpen: false,
   cloudFileId: null,
   cloudRevision: null,
+  cloudShareRole: null,
   cloudSaveState: 'idle',
   cloudSaveError: null,
+  cloudSaveConflict: null,
 
   // --- Node CRUD（提取到 document-store-node-actions.ts） ---
   ...createNodeActions(set, get),
@@ -188,8 +203,10 @@ export const useDocumentStore = create<DocumentStoreState>((set, get) => ({
       isDirty: false,
       cloudFileId: null,
       cloudRevision: null,
+      cloudShareRole: null,
       cloudSaveState: 'idle',
       cloudSaveError: null,
+      cloudSaveConflict: null,
     });
     // 最近文件中的 Track
     if (fileName) {
@@ -215,6 +232,7 @@ export const useDocumentStore = create<DocumentStoreState>((set, get) => ({
       isDirty: true,
       cloudSaveState: 'idle',
       cloudSaveError: null,
+      cloudSaveConflict: null,
     });
     const firstPageId = migrated.pages?.[0]?.id ?? null;
     useCanvasStore.getState().setActivePageId(firstPageId);
@@ -234,8 +252,10 @@ export const useDocumentStore = create<DocumentStoreState>((set, get) => ({
       isDirty: false,
       cloudFileId: null,
       cloudRevision: null,
+      cloudShareRole: null,
       cloudSaveState: 'idle',
       cloudSaveError: null,
+      cloudSaveConflict: null,
     });
     useCanvasStore.getState().setActivePageId(doc.pages?.[0]?.id ?? DEFAULT_PAGE_ID);
     // Clear design.md 新文档
@@ -247,9 +267,17 @@ export const useDocumentStore = create<DocumentStoreState>((set, get) => ({
   markClean: () => set({ isDirty: false }),
   setFileHandle: (fileHandle) => set({ fileHandle }),
   setSaveDialogOpen: (saveDialogOpen) => set({ saveDialogOpen }),
-  setCloudMetadata: (cloudFileId, cloudRevision) =>
-    set({ cloudFileId, cloudRevision, cloudSaveState: 'idle', cloudSaveError: null }),
-  clearCloudError: () => set({ cloudSaveState: 'idle', cloudSaveError: null }),
+  setCloudMetadata: (cloudFileId, cloudRevision, cloudShareRole = null) =>
+    set({
+      cloudFileId,
+      cloudRevision,
+      cloudShareRole,
+      cloudSaveState: 'idle',
+      cloudSaveError: null,
+      cloudSaveConflict: null,
+    }),
+  clearCloudError: () =>
+    set({ cloudSaveState: 'idle', cloudSaveError: null, cloudSaveConflict: null }),
 
   save: async () => {
     const state = get();
@@ -258,7 +286,7 @@ export const useDocumentStore = create<DocumentStoreState>((set, get) => ({
     }
 
     if (useCloudAuthStore.getState().status === 'authenticated') {
-      set({ cloudSaveState: 'saving', cloudSaveError: null });
+      set({ cloudSaveState: 'saving', cloudSaveError: null, cloudSaveConflict: null });
       try {
         const created = await createCloudFile({
           name: state.fileName ?? state.document.name ?? 'Untitled',
@@ -276,6 +304,7 @@ export const useDocumentStore = create<DocumentStoreState>((set, get) => ({
         set({
           cloudSaveState: 'error',
           cloudSaveError: getCloudSaveErrorMessage(err, 'Failed to create cloud file'),
+          cloudSaveConflict: null,
         });
         return null;
       }
@@ -426,17 +455,25 @@ export const useDocumentStore = create<DocumentStoreState>((set, get) => ({
     return suggested;
   },
 
-  saveCloud: async (source = 'manual_save', label, snapshot = true) => {
+  saveCloud: async (source = 'manual_save', label, snapshot = true, options) => {
     const state = get();
     if (!state.cloudFileId || !state.cloudRevision) {
       return null;
     }
-    if (state.cloudSaveState === 'conflict') {
+    if (state.cloudShareRole === 'viewer') {
+      set({
+        cloudSaveState: 'error',
+        cloudSaveError: 'View-only shared files cannot be saved',
+        cloudSaveConflict: null,
+      });
+      return null;
+    }
+    if (state.cloudSaveState === 'conflict' && !options?.force) {
       return null;
     }
     const submittedDocument = state.document;
 
-    set({ cloudSaveState: 'saving', cloudSaveError: null });
+    set({ cloudSaveState: 'saving', cloudSaveError: null, cloudSaveConflict: null });
     try {
       const saved = await saveCloudFile({
         id: state.cloudFileId,
@@ -446,6 +483,7 @@ export const useDocumentStore = create<DocumentStoreState>((set, get) => ({
         source,
         label,
         snapshot,
+        force: options?.force,
       });
       const current = get();
       const hasNewerLocalEdits =
@@ -460,8 +498,10 @@ export const useDocumentStore = create<DocumentStoreState>((set, get) => ({
         isDirty: hasNewerLocalEdits ? true : false,
         cloudFileId: saved.id,
         cloudRevision: saved.revision,
+        cloudShareRole: saved.shareRole ?? null,
         cloudSaveState: 'saved',
         cloudSaveError: null,
+        cloudSaveConflict: null,
       });
       documentEvents.emit('saved', {
         filePath: null,
@@ -475,16 +515,28 @@ export const useDocumentStore = create<DocumentStoreState>((set, get) => ({
         return null;
       }
       if (err instanceof CloudApiError && err.status === 409) {
+        const details = err.details as Partial<CloudSaveConflict> | undefined;
         set({
           cloudSaveState: 'conflict',
           cloudSaveError: err.message,
           cloudRevision: state.cloudRevision,
+          cloudSaveConflict: {
+            code: 'revision_conflict',
+            fileId: typeof details?.fileId === 'string' ? details.fileId : state.cloudFileId,
+            expectedRevision:
+              typeof details?.expectedRevision === 'number'
+                ? details.expectedRevision
+                : state.cloudRevision,
+            serverRevision:
+              typeof details?.serverRevision === 'number' ? details.serverRevision : null,
+          },
         });
         return null;
       }
       set({
         cloudSaveState: 'error',
         cloudSaveError: getCloudSaveErrorMessage(err, 'Failed to save cloud file'),
+        cloudSaveConflict: null,
       });
       return null;
     }
@@ -501,8 +553,10 @@ export const useDocumentStore = create<DocumentStoreState>((set, get) => ({
       isDirty: false,
       cloudFileId: file.id,
       cloudRevision: file.revision,
+      cloudShareRole: file.shareRole ?? null,
       cloudSaveState: 'idle',
       cloudSaveError: null,
+      cloudSaveConflict: null,
     });
     const firstPageId = migrated.pages?.[0]?.id ?? null;
     useCanvasStore.getState().setActivePageId(firstPageId);
