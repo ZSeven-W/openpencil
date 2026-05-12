@@ -606,6 +606,13 @@ impl ApplicationHandler for DesktopApp {
                 use openpencil_shell_core::document::ReorderDirection;
                 let mut consumed = false;
                 let nudge = if self.shift_modifier { 10.0 } else { 1.0 };
+                // While a settings-modal input owns the keyboard, the
+                // ONLY allowed paths are text / backspace / send /
+                // escape. Editor shortcuts (Cmd+D, Cmd+G, Cmd+Z,
+                // arrow nudges, Delete, [ / ], single-letter tool
+                // switches, …) would otherwise silently mutate the
+                // document while the user thinks they're typing a port.
+                let settings_focused = self.host.settings_focus_active();
                 match logical_key {
                     // Named-key editor shortcuts only fire when no
                     // Cmd / Ctrl is held — Cmd+Backspace,
@@ -616,7 +623,7 @@ impl ApplicationHandler for DesktopApp {
                     Key::Named(NamedKey::Backspace) if !self.zoom_modifier => {
                         consumed = self.host.apply_backspace();
                     }
-                    Key::Named(NamedKey::Delete) if !self.zoom_modifier => {
+                    Key::Named(NamedKey::Delete) if !self.zoom_modifier && !settings_focused => {
                         consumed = self.host.apply_delete();
                     }
                     Key::Named(NamedKey::Enter) if !self.zoom_modifier => {
@@ -625,16 +632,16 @@ impl ApplicationHandler for DesktopApp {
                     Key::Named(NamedKey::Escape) if !self.zoom_modifier => {
                         consumed = self.host.apply_escape();
                     }
-                    Key::Named(NamedKey::ArrowUp) if !self.zoom_modifier => {
+                    Key::Named(NamedKey::ArrowUp) if !self.zoom_modifier && !settings_focused => {
                         consumed = self.host.apply_nudge(0.0, -nudge);
                     }
-                    Key::Named(NamedKey::ArrowDown) if !self.zoom_modifier => {
+                    Key::Named(NamedKey::ArrowDown) if !self.zoom_modifier && !settings_focused => {
                         consumed = self.host.apply_nudge(0.0, nudge);
                     }
-                    Key::Named(NamedKey::ArrowLeft) if !self.zoom_modifier => {
+                    Key::Named(NamedKey::ArrowLeft) if !self.zoom_modifier && !settings_focused => {
                         consumed = self.host.apply_nudge(-nudge, 0.0);
                     }
-                    Key::Named(NamedKey::ArrowRight) if !self.zoom_modifier => {
+                    Key::Named(NamedKey::ArrowRight) if !self.zoom_modifier && !settings_focused => {
                         consumed = self.host.apply_nudge(nudge, 0.0);
                     }
                     // Cmd/Ctrl-gated editor shortcuts. Match on the
@@ -648,6 +655,11 @@ impl ApplicationHandler for DesktopApp {
                     Key::Character(ref ch) if self.zoom_modifier && !self.shift_modifier => {
                         let lower = ch.to_lowercase();
                         match lower.as_str() {
+                            // Cmd+, always allowed — it toggles the
+                            // modal itself; closing while focused
+                            // also commits via the close path.
+                            "," => consumed = self.host.apply_toggle_agent_settings(),
+                            _ if settings_focused => {}
                             "d" => consumed = self.host.apply_duplicate(),
                             "a" => consumed = self.host.apply_select_all(),
                             "c" => consumed = self.host.apply_copy(),
@@ -657,12 +669,10 @@ impl ApplicationHandler for DesktopApp {
                             "y" => consumed = self.host.apply_redo(),
                             "g" => consumed = self.host.apply_group(),
                             "j" => consumed = self.host.apply_toggle_chat(),
-                            "," => consumed = self.host.apply_toggle_agent_settings(),
                             _ => {}
                         }
                     }
-                    // Cmd+Shift+letter: Z = redo, G = ungroup, C = code panel.
-                    Key::Character(ref ch) if self.zoom_modifier && self.shift_modifier => {
+                    Key::Character(ref ch) if self.zoom_modifier && self.shift_modifier && !settings_focused => {
                         match ch.to_lowercase().as_str() {
                             "z" => consumed = self.host.apply_redo(),
                             "g" => consumed = self.host.apply_ungroup(),
@@ -719,8 +729,8 @@ impl ApplicationHandler for DesktopApp {
                     }
                     // `[` / `]` — z-order reorder when an input is focused (still gated by apply_reorder internally).
                     Key::Character(ref ch) if !self.zoom_modifier => match ch.as_str() {
-                        "[" => consumed = self.host.apply_reorder(ReorderDirection::Down),
-                        "]" => consumed = self.host.apply_reorder(ReorderDirection::Up),
+                        "[" if !settings_focused => consumed = self.host.apply_reorder(ReorderDirection::Down),
+                        "]" if !settings_focused => consumed = self.host.apply_reorder(ReorderDirection::Up),
                         _ => {
                             if let Some(s) = text.as_deref() {
                                 for c in s.chars() {

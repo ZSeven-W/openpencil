@@ -18,8 +18,11 @@ impl WidgetHostNative {
         self.document.ui.layer_rename.is_some()
             || self.document.ui.text_editing.is_some()
             || self.document.ui.property_focus.is_some()
+            || self.document.ui.agent_settings.focus.is_some()
             || self.document.chat.focused
     }
+
+    pub fn settings_focus_active(&self) -> bool { self.document.ui.agent_settings.focus.is_some() }
 
     /// Wheel event — zoom centered at (x, y) over the canvas.
     pub fn apply_wheel(
