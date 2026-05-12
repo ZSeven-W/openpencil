@@ -331,9 +331,15 @@ impl WidgetHostNative {
 
     /// Typed-char router: rename → property → chat.
     pub fn apply_text(&mut self, c: char) -> bool {
-        if self.document.ui.agent_settings.focus.is_some() && c.is_ascii_digit() {
-            return self.document.ui.settings_input_draft.len() < 5
-                && { self.document.ui.settings_input_draft.push(c); true };
+        // Settings input owns the keyboard while focused — swallow
+        // every keystroke so non-digit chars don't slip through to
+        // chat / rename / text-edit downstream.
+        if self.document.ui.agent_settings.focus.is_some() {
+            if c.is_ascii_digit() && self.document.ui.settings_input_draft.len() < 5 {
+                self.document.ui.settings_input_draft.push(c);
+                return true;
+            }
+            return false;
         }
         if self.document.ui.layer_rename.is_some() && !c.is_control() {
             let mut s = [0u8; 4];
