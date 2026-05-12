@@ -304,6 +304,19 @@ impl WidgetHostNative {
         self.now_ms = now_ms;
     }
 
+    /// Read-only document accessor for file-I/O code in the desktop
+    /// binary. Internal mutators go through the existing apply_*
+    /// methods, but `persistence::to_payload` needs a borrow to
+    /// snapshot the tree and `persistence::apply_payload` swaps the
+    /// page list in place. Public for desktop-side use.
+    pub fn document(&self) -> &Document {
+        &self.document
+    }
+
+    pub fn document_mut(&mut self) -> &mut Document {
+        &mut self.document
+    }
+
     /// Whether the chat input is focused — runner uses this to
     /// decide whether to schedule a periodic wake-up for caret
     /// blink.

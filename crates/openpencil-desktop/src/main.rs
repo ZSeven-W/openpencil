@@ -3,10 +3,13 @@
 
 #![cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]
 
+mod persistence;
+
 use openpencil_shell_core::{Color, Point2D, Rect, RenderBackend};
 use openpencil_shell_native::{
     NativeBackend, NativeFrameBackend, SharedSkiaContext, SharedSkiaError, WidgetHostNative,
 };
+use std::path::PathBuf;
 use std::time::{Duration, Instant};
 use winit::application::ApplicationHandler;
 use winit::event::{
@@ -16,17 +19,10 @@ use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::keyboard::{Key, NamedKey};
 use winit::window::{Window, WindowId};
 
-/// Default starting viewport — matches `with_inner_size` below so
-/// the first frame has the right layout. Resize is handled in the
-/// `Resized` arm: we cache the LOGICAL viewport so the next paint
-/// matches the new size at DPI-independent coordinates.
 const INITIAL_VIEWPORT_W: f32 = 1440.0;
 const INITIAL_VIEWPORT_H: f32 = 900.0;
 
 /// Paint pass — clear, scale by DPI, dispatch to the widget host.
-/// The matrix `reset_matrix` is required because skia's canvas
-/// matrix is stateful across `with_frame` invocations; without it
-/// `scale(dpi, dpi)` would compound per redraw.
 fn paint(
     ctx: &mut SharedSkiaContext,
     backend: &mut NativeBackend,
@@ -129,16 +125,10 @@ struct DesktopApp {
     ctx: Option<SharedSkiaContext>,
     backend: Option<NativeBackend>,
     host: WidgetHostNative,
-    /// Cached LOGICAL viewport size — refreshed on Resumed +
-    /// Resized so the host paints at DPI-independent coordinates.
-    /// The canvas is scaled by DPI inside `paint`; the underlying
-    /// skia surface (set up by `SharedSkiaContext`) is physical.
+    /// Cached LOGICAL viewport size (refreshed on Resumed + Resized).
     viewport_width: f32,
     viewport_height: f32,
-    /// Last cursor position (logical, top-left origin). winit's
-    /// `CursorMoved` reports a `PhysicalPosition`; we divide by
-    /// the cached DPI so `WidgetHostNative::apply_*` receives
-    /// the same logical coordinate space the widgets paint in.
+    /// Last cursor position (logical, top-left origin).
     cursor_x: f32,
     cursor_y: f32,
     /// Cached scale factor — refreshed on Resumed +
@@ -175,6 +165,8 @@ struct DesktopApp {
     /// reused for every CursorHint::Rotate to avoid re-decoding
     /// the bitmap every move. None until the event loop is ready.
     rotate_cursor: Option<winit::window::CustomCursor>,
+    /// Path of the currently-open .pen/.op document; None when unsaved.
+    current_path: Option<PathBuf>,
     error: Option<SharedSkiaError>,
 }
 
@@ -197,6 +189,7 @@ impl DesktopApp {
             redraw_dirty: false,
             clock_start: Instant::now(),
             rotate_cursor: None,
+            current_path: None,
             error: None,
         }
     }
@@ -659,6 +652,8 @@ impl ApplicationHandler for DesktopApp {
                             // modal itself; closing while focused
                             // also commits via the close path.
                             "," => consumed = self.host.apply_toggle_agent_settings(),
+                            "s" => consumed = persistence::handle_save(&mut self.host, &mut self.current_path, self.window.as_ref()),
+                            "o" => consumed = persistence::handle_open(&mut self.host, &mut self.current_path, self.window.as_ref()),
                             _ if settings_focused => {}
                             "d" => consumed = self.host.apply_duplicate(),
                             "a" => consumed = self.host.apply_select_all(),
@@ -672,8 +667,11 @@ impl ApplicationHandler for DesktopApp {
                             _ => {}
                         }
                     }
-                    Key::Character(ref ch) if self.zoom_modifier && self.shift_modifier && !settings_focused => {
+                    Key::Character(ref ch) if self.zoom_modifier && self.shift_modifier => {
                         match ch.to_lowercase().as_str() {
+                            // Cmd+Shift+S = Save As; always allowed.
+                            "s" => consumed = persistence::handle_save_as(&mut self.host, &mut self.current_path, self.window.as_ref()),
+                            _ if settings_focused => {}
                             "z" => consumed = self.host.apply_redo(),
                             "g" => consumed = self.host.apply_ungroup(),
                             "c" => consumed = self.host.apply_toggle_code_panel(),

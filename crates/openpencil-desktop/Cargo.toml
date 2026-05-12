@@ -28,3 +28,11 @@ winit = { version = "0.30.13", default-features = false, features = [
   "wayland-csd-adwaita",
   "rwh_06",
 ] }
+# Document Save / Open (.pen / .op). Serialization lives in
+# `src/persistence.rs` as a hand-rolled DTO so shell-core stays
+# serde-free (Color / Rect / Point2D come from glam + jian-core
+# which would otherwise need wrapper types). rfd pops the native
+# Save/Open file dialogs so the user picks the path.
+serde = { workspace = true }
+serde_json = { workspace = true }
+rfd = "0.14"
