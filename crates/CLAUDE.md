@@ -19,7 +19,7 @@ crates/
 
 - **shell-core stays wasm32-clean** (spec v19 §1.2). No skia-safe / winit / accesskit_winit. The `RenderBackend` trait is the only seam between widget code and platform.
 - **Widget code lives in shell-core only.** Hosts (shell-native `widget_host.rs`, shell-web `widget_host.rs`) are the ONLY files allowed to call `openpencil_shell_core::widgets::*`. Boundary script: `tools/check-widget-boundary.sh`.
-- **Max 800 lines per file** — same rule as the TS workspace. `property_panel.rs` is split into 5 files (see PropertyPanel row in the widget table). `widget_host.rs` (shell-native) is split into a slim spine + 6 sibling submodules under `widget_host/` (see "Native widget_host layout" below). `document.rs` is split into a spine + 5 sibling submodules under `document/` — types in `document.rs`, `impl Document` in `mutators.rs`, free walkers + `ReorderDirection` in `walkers.rs`, chat types in `chat.rs`, tests split into `tests_mutators.rs` + `tests_geometry.rs`.
+- **Max 800 lines per file** — same rule as the TS workspace. `property_panel.rs` is split into 5 files (see PropertyPanel row in the widget table). `widget_host.rs` (shell-native) is split into a slim spine + 8 sibling submodules under `widget_host/` (see "Native widget_host layout" below). `document.rs` is split into a spine + sibling submodules under `document/` — types in `document.rs`, `impl Document` in `mutators.rs`, free walkers + `ReorderDirection` in `walkers.rs`, chat types in `chat.rs`, pen-tool ops in `pen.rs`, color-picker state in `color_picker.rs`, group/ungroup ops in `grouping.rs`, page CRUD in `page_mutators.rs`, tests split into `tests_mutators.rs` + `tests_geometry.rs`.
 - **Web bundle ceiling: 1 MiB gzip + 0 env.\* imports.** Enforced by `tools/check-wasm-bundle.sh`. Ceiling currently at ~916 KB after embedding Roboto + NotoSansCJK subset.
 
 ## Document model (`shell-core/src/document/`)
@@ -37,10 +37,17 @@ Document
 └── ui: UiState               (sidebar_open, layer_panel_width, property_panel_width,
                                property_focus, property_input_draft, property_caret_anchor_ms,
                                property_draft_select_all,
+                               settings_input_draft,
+                               agent_settings_open, agent_settings (focus, tab, connected[5],
+                               mcp_server, mcp_cli_enabled[6], images_*, hover_provider),
+                               color_picker, pen_in_progress, pen_cursor_doc,
+                               pending_pen_history,
+                               layer_context_menu, page_context_menu,
                                theme_mode, locale, locale_picker_open,
                                shape_picker_open, shape_tool,
                                flex_layout, size_fill_width / fill_height / hug_width /
-                               hug_height / clip_content, fill_type, fill_type_picker_open)
+                               hug_height / clip_content, fill_type, fill_type_picker_open,
+                               property_tab (Design|Code))
 ```
 
 Mutators on `Document`:
@@ -56,12 +63,16 @@ Mutators on `Document`:
 - `deselect_all()` — clear selection (Escape last tier).
 - `max_node_id()` — largest raw id across pages + children, for the duplicate allocator guard.
 - `node_at_doc_point(p)` — top-most-first hit-test honoring per-node rotation.
+- `start_pen_path` / `add_pen_point` / `finish_pen_path` (`document/pen.rs`) — multi-anchor `NodeKind::Path` builder; history snapshot captured BEFORE the first anchor so undo restores pre-pen state; finish strips 1-anchor (invisible) paths instead of polluting the undo stack.
+- `group_selected` / `ungroup_selected` (`document/grouping.rs`) — Cmd+G / Cmd+Shift+G; group wraps selected siblings under a fresh `NodeKind::Group` whose `aggregate_bounds` covers the union.
+- `add_page` / `duplicate_page` / `remove_page` / `rename_page_committed` (`document/page_mutators.rs`).
+- `open_color_picker(target, click_y)` (`document/color_picker.rs`) — anchors a floating HSV picker; HSV stays anchored across the RGB-rounding cycle so dragging the hue slider doesn't visibly snap.
 
-`Node.rotation: f32` (radians, cw +); paint applies `RenderBackend::rotate(radians, pivot)` around the node's centre. Bounded-Frame drag carries descendants — children's bounds are document-space-absolute.
+`Node.rotation: f32` (radians, cw +); paint applies `RenderBackend::rotate(radians, pivot)` around the node's centre. Bounded-Frame drag carries descendants — children's bounds are document-space-absolute. `Node.corner_radius: f32` (doc-px) is honored by Rect / Frame paint via `fill_round_rect` / `stroke_round_rect` when `radius * zoom > 0.5`; below that threshold paint collapses to `fill_rect` / `stroke_rect`.
 
 `Node::aggregate_bounds` returns child-union bounds for container nodes (Group / unbounded Frame) so the property panel reports meaningful W/H.
 
-`NodeKind` now spans Frame / Group / Rect / Ellipse / Polygon / Line / Text / Other; each has its own canvas paint (oval, triangle polygon, diagonal line, fill+stroke rect, draw_str). The `RenderBackend` trait grew `fill_oval` / `stroke_oval` / `fill_polygon` / `stroke_polygon` / `rotate` so both native + web backends can paint them.
+`NodeKind` now spans Frame / Group / Rect / Ellipse / Polygon / Line / Text / Path / Other; each has its own canvas paint (oval, triangle polygon, diagonal line, fill+stroke rect, polyline through `node.points`, draw_str). The `RenderBackend` trait grew `fill_oval` / `stroke_oval` / `fill_polygon` / `stroke_polygon` / `rotate` / `fill_svg_path` so both native + web backends can paint them; `fill_svg_path` covers brand logos that ship as filled SVG paths in a non-24×24 viewBox.
 
 `FillType { Solid, LinearGradient, RadialGradient, Image }` + `FlexLayout { Free, Vertical, Horizontal }` drive the property panel's dropdowns / button groups; both live on `Document.ui` so toggles persist across selection changes.
 
@@ -78,7 +89,11 @@ Mutators on `Document`:
 | AIChatPlaceholder | Floating — chat with drag + 4-corner snap + collapse pill                                                                            | `ai_chat_panel.rs`                                                                                                                      |
 | LocalePicker      | TopBar Globe-button dropdown (15 native names + Check)                                                                               | `locale_picker.rs`                                                                                                                      |
 | StatusBar         | Floating bottom-right — zoom controls                                                                                                | `status_bar.rs`                                                                                                                         |
-| icons             | lucide d-string library (35 icons)                                                                                                   | `icons.rs`                                                                                                                              |
+| icons             | lucide d-string library (50+ icons; 24×24 viewBox stroke art)                                                                        | `icons.rs`                                                                                                                              |
+| brand_icons       | Claude / OpenAI / Gemini / Copilot / OpenCode brand logos (filled SVG paths, non-24×24 viewBoxes)                                    | `brand_icons.rs`                                                                                                                        |
+| ColorPicker       | HSV overlay (Cmd-Shift-C or fill/stroke swatch click) — sat/value box + hue strip + hex input                                        | `color_picker.rs`                                                                                                                       |
+| LayerContextMenu  | Right-click overlay on layer rows + page tabs (Rename / Duplicate / Delete / Group / Ungroup / Lock / Hide; subset on page tabs)     | `layer_context_menu.rs`                                                                                                                 |
+| AgentSettings     | Cmd+, modal — 880×640 with sidebar nav (Agents / MCP / Images / System) + scrollable right pane                                      | `agent_settings_panel.rs` + `agent_settings_{i18n,images,mcp,system}.rs`                                                                |
 | theme             | shadcn-dark palette tokens (incl. `canvas_surface`)                                                                                  | `theme.rs`                                                                                                                              |
 | i18n              | 15 locale tables (706 keys each, TS-mirrored)                                                                                        | `i18n/{en,zh_cn,zh_tw,ja,ko,fr,es,de,pt,ru,hi,tr,th,vi,id}.rs`                                                                          |
 
@@ -115,7 +130,7 @@ Click anywhere outside the panel closes it silently. Locale lookups for the row 
 
 `Document.ui` carries the focused property field, a draft buffer, and a caret-blink anchor:
 
-- `property_focus: Option<PropertyFocus>` — `PositionX / PositionY / SizeW / SizeH / Rotation / Opacity / FillHex / StrokeHex / StrokeWidth`. **All variants are wired end-to-end:** numeric focuses go through `Document::commit_property_edit`, hex focuses through `set_selected_color(is_fill, color)`.
+- `property_focus: Option<PropertyFocus>` — `PositionX / PositionY / Rotation / PositionR / SizeW / SizeH / Opacity / FillHex / StrokeHex / StrokeWidth`. **All 10 variants are wired end-to-end:** numeric focuses go through `Document::commit_property_edit` (`PositionR` writes `node.corner_radius`), hex focuses through `set_selected_color(is_fill, color)`.
 - `property_input_draft: String` — live keystrokes accumulate here. `apply_text` is focus-aware:
   - Numeric focuses (Position / Size / Rotation / Opacity / StrokeWidth) gate `[0-9]`, leading `-`, and a single `.`.
   - Hex focuses (FillHex / StrokeHex) preserve a sticky `#` prefix, accept `[0-9a-fA-F]` only, and cap the draft at 7 chars (`#RRGGBB`). No select-all-on-focus — backspace removes one char at a time, typing appends one.
@@ -251,8 +266,76 @@ Hit-test runs in REVERSE paint order so the topmost overlay always wins:
 
 Every input path that reasons about the canvas region MUST derive its rects from `canvas_region(viewport_w, viewport_h)`. Never reuse `LAYER_PANEL_WIDTH` for hit-test — paint follows `canvas_region`, which collapses to `canvas_left = 0` when `Document.ui.sidebar_open == false`. Sites that proved this rule by violating it: `over_canvas`, `apply_wheel` cursor offset, toolbar hit rect in `apply_press` / `apply_click`. Web `apply_wheel` zoom anchor + `toolbar_rect()` helper follow the same rule.
 
+## Settings modal (`Cmd+,`)
+
+`agent_settings_panel.rs` + 4 tab modules render an 880×640 modal opened from the TopBar agent chip or `Cmd+,`. Sidebar nav: Agents / MCP / Images / System. Right pane scrolls; modal paints last (over dim scrim) so it covers every other widget.
+
+- **Agents** — `+ 添加服务商` and `+ 添加 Agent` actions in two empty-state sections, then 5 provider cards (Claude / Codex / OpenCode / GitHub Copilot / Gemini) with real brand logos from `widgets/brand_icons.rs`. Hovering a connected card swaps the green `✓ Connected` row for a red `断开连接` button; both lifecycle actions toggle `agent_settings.connected[i]`.
+- **MCP** — server status card with port input + Start/Stop button, then a 2×3 grid of CLI integration toggles (Claude Code / Codex / Gemini / OpenCode / Kiro / GitHub Copilot). Port input is editable (see "Settings input editing" below).
+- **Images** — Image Search Ready/Not-configured indicator + collapsible Advanced section (Openverse OAuth Client ID / Secret + Register link + Test button), then Image Generation section with `+ Add` empty state.
+- **System** — read-only Auto-update status card (no updater backend wired yet — a togglable switch would lie to the user; the row paints as informational text).
+
+`agent_settings_i18n.rs` carries a hand-maintained EN/ZH key table (~50 keys, `settings.tab.*` / `settings.agents.*` / `settings.mcp.*` / `settings.images.*` / `settings.system.*` / `settings.provider.*`). The repo's main `i18n/{en,zh_cn,…}.rs` tables stay untouched (they're auto-generated from `apps/web/src/i18n/locales/*.ts`); when those TS tables grow `settings.*` keys, this hand-table collapses into per-locale `lookup` calls.
+
+### Settings input editing
+
+`SettingsFocus { McpPort }` is to settings inputs what `PropertyFocus` is to property-panel inputs. Click on the port field → `AgentSettingsHit::FocusMcpPort` → `agent_settings.focus = Some(McpPort)` + `UiState.settings_input_draft` seeded from current port. `apply_text` / `apply_backspace` / `apply_send` / `apply_escape` all route to the draft FIRST (swallowing every keystroke so non-digit chars don't leak into chat / rename / text-edit). Commit parses u16 and clamps ≥1024. Close / Outside / SelectTab / re-Focus all commit any pending draft first so a typed value isn't silently lost.
+
+Mirrored on native (`widget_host/property_dispatch.rs::commit_settings_focus_if_any`) and web (`widget_host/keyboard.rs::commit_settings_focus`).
+
+## Pen tool
+
+`document/pen.rs` builds a `NodeKind::Path` with `points: Vec<Point2D>` (doc coords). State on `Document.ui`:
+
+- `pen_in_progress: Option<NodeId>` — the path being authored (None when idle).
+- `pen_cursor_doc: Option<Point2D>` — last cursor doc coord, drives the rubber-band preview from the last anchor to the cursor while authoring.
+- `pending_pen_history: Option<DocumentSnapshot>` — snapshot captured BEFORE `start_pen_path` mutates the tree. Pushed onto the undo stack only when the path commits with ≥ 2 anchors; a lone-anchor (invisible) path is stripped without polluting history.
+
+Press while `tool == Pen` calls `start_pen_path` or `add_pen_point` depending on `pen_in_progress`. Enter / Escape / tool change → `finish_pen_path`. Canvas paints the path through `node.points` as a polyline, plus a dashed preview line from `points.last()` to `pen_cursor_doc` while authoring.
+
+## Color picker (HSV)
+
+`document/color_picker.rs` + `widgets/color_picker.rs`. State: `ColorPickerState { target (Fill|Stroke), hue, sat, val, drag (None|SvBox|HueSlider), anchor_y }`. Open via `Cmd-Shift-C` or fill/stroke swatch click. **HSV stays anchored across the RGB-rounding cycle** — dragging the hue slider rewrites only `hue` and reconstructs RGB from the cached `(hue, sat, val)`, so the saturation+value crosshair doesn't visibly snap as round-trip rounding pulls a slightly different RGB out of the same HSV.
+
+Hit-test order on the picker: hex input row → SvBox → HueSlider → close X. Outside-click closes silently. `apply_cursor_move` reads `state.drag` to feed live SvBox / HueSlider updates.
+
+## Layer panel right-click + drag-into-container
+
+`widgets/layer_context_menu.rs` paints a 200×N overlay on right-click of a layer row or page tab. Rows are gated on `LayerContextTarget`:
+
+- **Layer**: Rename / Duplicate / Delete / Group / Ungroup / Lock / Hide (most rows route to dedicated `Document::*_selected` ops; Group/Ungroup live in `document/grouping.rs`).
+- **Page**: Rename / Duplicate / Delete (`document/page_mutators.rs`).
+
+Cursor-move feeds `hovered_row` so the menu highlights the row under the cursor. Outside-click closes silently. The menu paints AFTER the layer panel and BEFORE the settings modal so it sits below modals but above everything else.
+
+Layer-panel drag now supports **cross-parent reparenting**: a drag whose drop-target falls inside a container row (Frame / Group with `children`) reparents the dragged node under that container instead of just reordering siblings. The walker in `widgets/layer_panel_walkers.rs` returns a `DropTarget { parent, before, into_container }` triple so the commit step can call `move_into_container` vs `reorder_in_place`.
+
 ## Performance gotchas
 
 - Native chrome paint: ~30 text draws × jian-skia textlayout's per-call `FontCollection::new()` = ~600ms/frame. Fix is the cached typeface path described above. Don't add new draw_text calls without cache awareness.
 - skia canvas matrix is stateful across `with_frame` — `canvas.reset_matrix()` before applying DPI scale each frame, otherwise scale compounds.
-- jian-skia's `DrawOp::Rect` / `DrawOp::Text` go through its image-cached path. `stroke_line` / `fill_round_rect` / `stroke_round_rect` / `stroke_svg_path` bypass jian and call skia canvas directly (necessary because jian doesn't have those DrawOp variants).
+- jian-skia's `DrawOp::Rect` / `DrawOp::Text` go through its image-cached path. `stroke_line` / `fill_round_rect` / `stroke_round_rect` / `stroke_svg_path` / `fill_svg_path` bypass jian and call skia canvas directly (necessary because jian doesn't have those DrawOp variants).
+
+### Hot-path optimizations (v0.8.0)
+
+- **History via VecDeque** (`document/mutators.rs`) — `pop_front` + `push_back` capped at 100 entries; the old `Vec::remove(0)` was O(n) on every commit past the cap.
+- **`Document::t` returns `&'static str`** — every locale value is a string literal, so chrome paint stores `&'static str` instead of cloning a `String` per frame. `PropertyLabels` is a `Copy` struct of static slices; widget builders propagate the `'static` lifetime so no per-paint allocations happen for labels.
+- **Viewport culling** (`widgets/canvas_viewport.rs`) — `paint_node` takes a `cull: Rect` (canvas region + 64 px stroke/handle margin). Leaf nodes outside the cull skip paint entirely; containers always recurse so off-screen-parent / on-screen-child still renders.
+- **Redraw scheduler** (`openpencil-desktop/src/main.rs`) — `request_redraw(dirty: bool)` + a `prepare_redraw` step that skips paint when only a tracked redraw fired and no visible state changed (kills the first-click chip flicker because macOS GL swap chain didn't perfectly hide `canvas.clear(BLACK)` between same-output frames).
+- **Cursor-move coalescing** — `apply_cursor_move` cached as `pending_cursor_move`, drained on `RedrawRequested` AND right before `apply_press` / `apply_release` / `apply_right_press` (so the final drag-end frame isn't dropped). Without the press-time drain a fast drag-release could fire press before the queued cursor-move and the release saw stale hover state.
+- **Font cache prewarm** (`openpencil-shell-native/src/backend/skia.rs`) — `NativeBackend::new` walks `PREWARM_CJK_CODEPOINTS` (~50 chars covering every CJK glyph used in the chrome + settings modal) through `FontMgr::match_family_style_character` at startup. Without this the first cross-tab paint stutters because each unseen CJK char triggers a synchronous system font scan.
+
+## Native widget_host layout (expanded)
+
+The shell-native `widget_host/` directory now houses 8 sibling submodules under the slim spine:
+
+| File                               | Purpose                                                                                                                                                               |
+| ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `widget_host/frame_backend.rs`     | `NativeFrameBackend` (`RenderBackend` impl over `NativeBackend` + `&Canvas`)                                                                                          |
+| `widget_host/helpers.rs`           | `parse_hex_color` / `color_to_hex` / `rect_contains` / `resize_bounds` + the inset / gutter / width constants                                                         |
+| `widget_host/geometry.rs`          | Canvas region / panel-resize hover / cursor hint / picker rect math + `update_agent_settings_hover` (hover-card tracking for the agent cards)                         |
+| `widget_host/input.rs`             | `apply_*` (non-press input handlers) including the settings-focus keyboard early-return                                                                               |
+| `widget_host/press.rs`             | `apply_press` + `create_node_for_active_tool` (largest single method; routes through 10+ hit-test layers including the settings modal + color picker + layer context) |
+| `widget_host/paint.rs`             | `WidgetHostNative::paint` — full editor-UI composition pass                                                                                                           |
+| `widget_host/property_dispatch.rs` | Property-panel action dispatch + `commit_property_focus_if_any` + `commit_settings_focus_if_any`                                                                      |
+| `widget_host/shortcuts.rs`         | Keyboard shortcut helpers (Cmd-Shift-C color picker, Cmd-Shift-G ungroup, etc.)                                                                                       |
