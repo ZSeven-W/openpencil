@@ -477,6 +477,10 @@ impl WidgetHost {
             AgentSettingsHit::ToggleImagesAdvanced => {
                 self.document.ui.agent_settings.images_advanced_open ^= true;
             }
+            AgentSettingsHit::FocusMcpPort => {
+                self.document.ui.agent_settings.focus = Some(openpencil_shell_core::document::SettingsFocus::McpPort);
+                self.document.ui.settings_input_draft = self.document.ui.agent_settings.mcp_server.port.to_string();
+            }
             AgentSettingsHit::AddProvider | AgentSettingsHit::AddAcpAgent | AgentSettingsHit::TestImageSearch | AgentSettingsHit::AddGenConfig | AgentSettingsHit::Inside => {}
         }
         true
