@@ -18,9 +18,7 @@ enum RelativePosition {
 }
 
 impl Document {
-    /// Active theme — driven by `ui.theme_mode`. Widgets call this
-    /// instead of hardcoding `Theme::dark()` so the entire chrome
-    /// flips together when the user clicks the TopBar Sun icon.
+    /// Active theme driven by `ui.theme_mode`.
     pub fn theme(&self) -> crate::Theme {
         match self.ui.theme_mode {
             ThemeMode::Dark => crate::Theme::dark(),
@@ -28,11 +26,11 @@ impl Document {
         }
     }
 
-    /// Translate a chrome string by key. Keys are stable English
-    /// identifiers; values come from a per-locale table. Unknown
-    /// keys fall through to the key itself so callers get a
-    /// visible "missing translation" instead of an empty render.
-    pub fn t<'a>(&self, key: &'a str) -> &'a str {
+    /// Translate `key` via the active locale; falls through to `key`.
+    /// `key` is `&'static str` so the result is also `'static`,
+    /// letting callers store the string slice instead of cloning
+    /// it into an owned `String` per paint frame.
+    pub fn t(&self, key: &'static str) -> &'static str {
         crate::i18n::translate(self.ui.locale, key)
     }
 
@@ -49,16 +47,11 @@ impl Document {
             viewport: Viewport::IDENTITY,
             chat: ChatState::default(),
             ui: UiState::default(),
+            history: History::default(),
         }
     }
 
-    /// Sample document for the Step 2/3 editor-UI demo: one page
-    /// with a frame containing a title (text) + a button (group
-    /// of rect + text). Driven by document data instead of
-    /// hardcoded TreeWidget items. Selection is set to the title
-    /// so PropertyPanel has something to render. Step 3 adds
-    /// concrete geometry + fills + strokes + text content so the
-    /// CanvasViewport can actually render a recognisable mock.
+    /// Sample document for the editor-UI demo.
     pub fn sample() -> Self {
         use crate::{Color, Rect};
 
@@ -101,6 +94,7 @@ impl Document {
             viewport: Viewport::IDENTITY,
             chat: ChatState::default(),
             ui: UiState::default(),
+            history: History::default(),
         };
         debug_assert!(
             doc.validate().is_ok(),
@@ -109,33 +103,68 @@ impl Document {
         doc
     }
 
-    /// The page currently shown in the editor viewport. Returns
-    /// `None` if `active_page_index` is out of range (only happens
-    /// after an external mutation that didn't preserve the
-    /// invariant; callers can use `Document::validate` to detect).
+    /// The page currently shown in the editor viewport.
     pub fn active_page(&self) -> Option<&Page> {
         self.pages.get(self.active_page_index)
     }
 
-    /// Append a fresh empty page named `"Page N"` (where N =
-    /// `pages.len() + 1` BEFORE the insert) and switch to it. The
-    /// new page's id is minted past `max_node_id() + 1`. Returns
-    /// the new index, or `None` on id overflow. Mirrors TS
-    /// `addPage()` — backs the LayerPanel `+` button.
-    pub fn add_page(&mut self) -> Option<usize> {
-        let next_id = self.max_node_id().checked_add(1)?;
-        let n = self.pages.len() + 1;
-        let page = Page::new(next_id, format!("Page {}", n), Vec::new());
-        self.pages.push(page);
-        let new_index = self.pages.len() - 1;
-        self.active_page_index = new_index;
-        self.clear_selection();
-        Some(new_index)
+    fn snapshot(&self) -> DocumentSnapshot {
+        DocumentSnapshot {
+            pages: self.pages.clone(),
+            active_page_index: self.active_page_index,
+            selected: self.selected,
+            selected_set: self.selected_set.clone(),
+        }
     }
 
-    /// Get the anchor-selected node. The anchor is the LAST entry
-    /// in `selected_set` (Rust convention — most-recently-added /
-    /// most-recently-surviving id; differs from TS's `selectedIds[0]`).
+    fn restore(&mut self, snap: DocumentSnapshot) {
+        self.pages = snap.pages;
+        self.active_page_index = snap.active_page_index;
+        self.selected = snap.selected;
+        self.selected_set = snap.selected_set;
+    }
+
+    /// Capture without pushing; use with `history_push_past`.
+    pub fn snapshot_for_history(&self) -> DocumentSnapshot {
+        self.snapshot()
+    }
+
+    /// Push snapshot to undo + clear redo. Cap = 100 (O(1) drop).
+    pub fn history_push_past(&mut self, snap: DocumentSnapshot) {
+        self.history.past.push_back(snap);
+        if self.history.past.len() > 100 {
+            self.history.past.pop_front();
+        }
+        self.history.future.clear();
+    }
+
+    /// Push current state to undo + clear redo. Call BEFORE a
+    /// transactional change so undo reverts to here.
+    pub fn commit_history(&mut self) {
+        let snap = self.snapshot();
+        self.history_push_past(snap);
+    }
+
+    pub fn undo(&mut self) -> bool {
+        let Some(prev) = self.history.past.pop_back() else {
+            return false;
+        };
+        let cur = self.snapshot();
+        self.history.future.push_back(cur);
+        self.restore(prev);
+        true
+    }
+
+    pub fn redo(&mut self) -> bool {
+        let Some(next) = self.history.future.pop_back() else {
+            return false;
+        };
+        let cur = self.snapshot();
+        self.history.past.push_back(cur);
+        self.restore(next);
+        true
+    }
+    /// Get the anchor-selected node — last entry in `selected_set`.
     /// ONLY searches the active page; a selection on a non-active
     /// page returns `None`.
     pub fn selected_node(&self) -> Option<&Node> {
@@ -155,8 +184,7 @@ impl Document {
         self.selected_set.len()
     }
 
-    /// Replace the selection with a single node + anchor on it.
-    /// TS parity: `setSelection([id], id)`. Idempotent.
+    /// Replace selection with `id` + anchor on it. Idempotent.
     pub fn set_single_selection(&mut self, id: NodeId) {
         if id.is_real() {
             self.selected_set.clear();
@@ -203,12 +231,9 @@ impl Document {
         !node.hidden && !node.locked
     }
 
-    /// Whether `id` AND every descendant are editable — stricter
-    /// gate than `is_editable`, used by destructive ops
-    /// (`delete_selected`) so deleting an editable Frame can't
-    /// wipe a locked / hidden child along with it. A locked or
-    /// hidden node anywhere in the subtree protects the
-    /// ancestor.
+    /// Stricter form of `is_editable` — every descendant must also
+    /// be editable. Gates destructive ops so a locked/hidden child
+    /// protects its ancestor from deletion.
     pub fn is_subtree_editable(&self, id: NodeId) -> bool {
         let Some(node) = self.active_page().and_then(|p| p.find(id)) else {
             return false;
@@ -243,10 +268,8 @@ impl Document {
         toggle_locked_walk(&mut page.children, id)
     }
 
-    /// Copy every node in the selection set into the clipboard
-    /// (deep clones, original ids preserved). Returns true when
-    /// at least one node was copied; false when nothing was
-    /// selected. Mirrors TS `Cmd+C`.
+    /// Cmd+C: deep-clone selected nodes (ids preserved) into the
+    /// clipboard. True iff anything was copied.
     pub fn copy_selected(&mut self) -> bool {
         if self.selected_set.is_empty() {
             return false;
@@ -276,17 +299,11 @@ impl Document {
         self.delete_selected()
     }
 
-    /// Paste every clipboard node into the active page as a
-    /// top-level sibling, offset by `(offset_doc_px, offset_doc_px)`,
-    /// minting fresh ids from `next_id`. Replaces selection with
-    /// the new ids. Returns the new ids in paste order, or empty
-    /// when nothing was pasted (empty clipboard or id-allocator
-    /// overflow). Mirrors TS `Cmd+V`.
-    ///
-    /// Anchor-aware insertion (paste-inside-container,
-    /// paste-as-sibling) is the TS polish; v1 always pastes at
-    /// the top level — matches TS's fallback path when no anchor
-    /// is selected.
+    /// Paste clipboard nodes into the active page as top-level
+    /// siblings offset by `offset_doc_px`. Mints fresh ids from
+    /// `next_id`; replaces selection with the new ids. Returns
+    /// the new ids in paste order, or empty on no-op (empty
+    /// clipboard or id-allocator overflow). Mirrors TS `Cmd+V`.
     pub fn paste_clipboard(&mut self, next_id: &mut u64, offset_doc_px: f32) -> Vec<NodeId> {
         if self.clipboard.is_empty() {
             return Vec::new();
@@ -354,14 +371,10 @@ impl Document {
         out
     }
 
-    /// Whether the right-rail property panel should currently
-    /// paint. Single source of truth so the host's
-    /// `canvas_region` math, the panel's `for_selection_at`
-    /// gate, and `apply_press` commit-on-blur all stay in lock-
-    /// step. Visible when at least one id in `selected_set`
-    /// resolves on the active page — same gate for single and
-    /// multi-select (multi-select paints an aggregate snapshot
-    /// via `NodeSnapshot::from_multi_selection`).
+    /// Right-rail visibility gate. Visible when at least one id
+    /// in `selected_set` resolves on the active page. Shared
+    /// source of truth for canvas_region math + panel build +
+    /// commit-on-blur.
     pub fn property_panel_visible(&self) -> bool {
         // Single + multi treat 0x0 nodes identically: panel shows
         // as long as at least one id resolves on the active page.
@@ -405,12 +418,8 @@ impl Document {
             .expect("Document::first_page on empty pages — use Document::empty for a default page")
     }
 
-    /// Hit-test the active page at a document-space point. Returns
-    /// the topmost node id whose bounds (or aggregate bounds for
-    /// containers) contain `point`. Walks children in reverse z-
-    /// order (last child = top-most) so a stack of overlapping
-    /// rects resolves to the visually topmost one. `None` if the
-    /// click is in canvas dead space or no active page exists.
+    /// Topmost node id whose bounds contain `point` on the active
+    /// page. Walks children in reverse z-order. None on dead space.
     pub fn node_at_doc_point(&self, point: crate::Point2D) -> Option<NodeId> {
         let zoom = self.viewport.zoom.max(0.0001);
         let page = self.active_page()?;
@@ -438,11 +447,9 @@ impl Document {
         }
     }
 
-    /// Overwrite the selected leaf node's bounds. Only updates
-    /// nodes that carry their own bounds (size > 0); container
-    /// nodes (Group / unbounded Frame) are skipped — their
-    /// "bounds" are derived from children and resizing them needs
-    /// per-child scaling which lands in a later milestone.
+    /// Overwrite the selected leaf node's bounds. Container nodes
+    /// (Group / unbounded Frame) no-op — child-derived bounds need
+    /// per-child scaling (later milestone).
     pub fn set_selected_bounds(&mut self, bounds: crate::Rect) {
         if !self.selected.is_real() || !self.is_editable(self.selected) {
             return;
@@ -459,13 +466,8 @@ impl Document {
     }
 
     /// Translate every node in the selection set by `(dx, dy)`
-    /// document px. Container nodes cascade to descendants
-    /// (`translate_walk`'s subtree translate). When two selected
-    /// nodes have an ancestor-descendant relationship, only the
-    /// ancestor is translated so the descendant isn't shifted
-    /// twice (TS parity with the dedup in `use-edit-shortcuts.ts`
-    /// nudge handler). No-op when nothing is selected or the
-    /// active page is missing.
+    /// document px. Containers cascade; ancestor-descendant
+    /// dedup so descendants aren't shifted twice.
     pub fn translate_selected(&mut self, dx: f32, dy: f32) {
         if self.selected_set.is_empty() {
             return;
@@ -499,18 +501,10 @@ impl Document {
         }
     }
 
-    /// Apply a parsed property edit to the selected node. Mirrors
-    /// the TS `useDocumentStore` mutation handlers — only this
-    /// helper writes back to bounds, so call sites can stay
-    /// declarative ("commit X = 120" rather than "find the node,
-    /// clone bounds, mutate one axis, write back").
-    ///
-    /// Returns `true` if the edit landed on a real node; `false`
-    /// when there's no selection or the active page can't be
-    /// found. Container nodes (Group / unbounded Frame) currently
-    /// no-op — their bounds are derived from children — but the
-    /// API still returns `true` because the host should still
-    /// clear the input draft + focus.
+    /// Apply a parsed property edit to the selected node. Returns
+    /// `true` on a real selection (callers clear input draft +
+    /// focus on `true`); container nodes silently no-op since
+    /// their bounds are child-derived.
     pub fn commit_property_edit(&mut self, focus: PropertyFocus, value: f32) -> bool {
         if !self.selected.is_real() || !self.is_editable(self.selected) {
             return false;
@@ -624,17 +618,8 @@ impl Document {
         if self.selected_set.is_empty() {
             return None;
         }
-        // Lift the allocator past every existing id so we never
-        // mint a duplicate even when the document was loaded
-        // with ids greater than the host's running counter (codex
-        // CONCERN: external docs with ids ≥ next_id would
-        // otherwise silently collide).
-        //
-        // `checked_add(1)` instead of `saturating_add` so a
-        // document carrying `NodeId(u64::MAX)` returns None
-        // cleanly instead of saturating to u64::MAX and minting
-        // a collision (the saturating overflow lane was a
-        // theoretical edge but worth being explicit about).
+        // Lift allocator past every existing id. checked_add so
+        // u64::MAX returns None cleanly (no overflow → collision).
         let safe = self.max_node_id().checked_add(1)?;
         *next_id = (*next_id).max(safe);
         let targets: Vec<NodeId> = self.selected_set.clone();
@@ -687,18 +672,40 @@ impl Document {
         reorder_in_children(&mut page.children, target, direction)
     }
 
-    /// Move `source` immediately before `anchor` in the document
-    /// tree. Supports cross-parent reparenting. Backs LayerPanel
-    /// drag-to-reorder. No-ops on: same id, missing node, locked
-    /// or hidden source, or cycle (anchor inside source's subtree).
+    /// Move `source` to be a sibling immediately before/after
+    /// `anchor`. Cross-parent reparenting supported. No-ops on
+    /// same id, missing node, locked/hidden source, or cycle.
     pub fn reorder_before(&mut self, source: NodeId, anchor: NodeId) -> bool {
         self.reorder_relative(source, anchor, RelativePosition::Before)
     }
 
-    /// Same as `reorder_before`, but drops `source` immediately
-    /// after `anchor`.
     pub fn reorder_after(&mut self, source: NodeId, anchor: NodeId) -> bool {
         self.reorder_relative(source, anchor, RelativePosition::After)
+    }
+
+    /// Move `source` so it becomes the LAST child of `parent`.
+    /// Same guards as `reorder_before/after`.
+    pub fn reorder_into(&mut self, source: NodeId, parent: NodeId) -> bool {
+        if source == parent || !source.is_real() || !parent.is_real() {
+            return false;
+        }
+        if !self.is_subtree_editable(source) {
+            return false;
+        }
+        let Some(page) = self.pages.get(self.active_page_index) else {
+            return false;
+        };
+        let Some(source_ref) = page.find(source) else {
+            return false;
+        };
+        if descendant_contains(source_ref, parent) || page.find(parent).is_none() {
+            return false;
+        }
+        let page = self.pages.get_mut(self.active_page_index).unwrap();
+        let Some(node) = extract_node(&mut page.children, source) else {
+            return false;
+        };
+        append_into(&mut page.children, parent, node).is_ok()
     }
 
     fn reorder_relative(
@@ -729,15 +736,12 @@ impl Document {
         let Some(node) = extract_node(&mut page.children, source) else {
             return false;
         };
-        let insert_result = match position {
+        let r = match position {
             RelativePosition::Before => insert_before_in_children(&mut page.children, anchor, node),
             RelativePosition::After => insert_after_in_children(&mut page.children, anchor, node),
         };
-        debug_assert!(
-            insert_result.is_ok(),
-            "anchor pre-check should ensure insert"
-        );
-        insert_result.is_ok()
+        debug_assert!(r.is_ok(), "anchor pre-check should ensure insert");
+        r.is_ok()
     }
 
     /// Clear the active selection. Distinct from

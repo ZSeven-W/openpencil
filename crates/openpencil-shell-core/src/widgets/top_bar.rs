@@ -29,31 +29,28 @@ pub enum TopBarHit {
     ToggleTheme,
     /// Globe icon — cycle through UI locales.
     ToggleLocale,
+    /// Agents 与 MCP chip — open the agent settings modal.
+    OpenAgentSettings,
 }
 
 pub struct TopBar {
     pub id: WidgetId,
-    pub file_name: String,
+    pub file_name: &'static str,
     pub agent_count: u32,
     pub theme: Theme,
-    /// Localised "Agents 与 MCP" label — rendered when
-    /// `agent_count == 0` (empty state).
-    pub label_agents_and_mcp: String,
-    /// Localised "agent" / "agents" label — appended to the
-    /// count when `agent_count > 0`. Falls back to "agent"
-    /// when the locale doesn't ship the key.
-    pub label_agent_singular: String,
+    pub label_agents_and_mcp: &'static str,
+    pub label_agent_singular: &'static str,
 }
 
 impl TopBar {
-    pub fn new(file_name: impl Into<String>) -> Self {
+    pub fn new(file_name: &'static str) -> Self {
         Self {
             id: WidgetId::new(5000),
-            file_name: file_name.into(),
+            file_name,
             agent_count: 1,
             theme: Theme::dark(),
-            label_agents_and_mcp: "Agents & MCP".to_string(),
-            label_agent_singular: "agent".to_string(),
+            label_agents_and_mcp: "Agents & MCP",
+            label_agent_singular: "agent",
         }
     }
 
@@ -61,19 +58,14 @@ impl TopBar {
         Self::new("未命名")
     }
 
-    /// Document-aware constructor — reads the active theme + the
-    /// localised "untitled" label so the bar flips with theme +
-    /// locale toggles. Default `agent_count = 0` matches the TS
-    /// app's empty state ("Agents 与 MCP" affordance instead of
-    /// the green-dot "1 agent" chip).
     pub fn for_document(doc: &Document) -> Self {
         Self {
             id: WidgetId::new(5000),
-            file_name: doc.t("common.untitled").to_string(),
+            file_name: doc.t("common.untitled"),
             agent_count: 0,
             theme: doc.theme(),
-            label_agents_and_mcp: doc.t("topbar.agentsAndMcp").to_string(),
-            label_agent_singular: doc.t("topbar.agentSingular").to_string(),
+            label_agents_and_mcp: doc.t("topbar.agentsAndMcp"),
+            label_agent_singular: doc.t("topbar.agentSingular"),
         }
     }
 
@@ -122,8 +114,38 @@ impl TopBar {
         if rect_contains(sun_rect, point) {
             return Some(TopBarHit::ToggleTheme);
         }
-        if rect_contains(Self::globe_rect(rect), point) {
+        let globe = Self::globe_rect(rect);
+        if rect_contains(globe, point) {
             return Some(TopBarHit::ToggleLocale);
+        }
+        // Agent chip hit area — slightly larger than the painted
+        // chip so off-by-a-few-pixels clicks still register. The
+        // exact paint geometry uses skia text measurement which the
+        // hit-test can't replicate without a backend; an over-wide
+        // CJK glyph estimate (12 px / char) plus 8 px padding on
+        // each side keeps the click target slightly looser than
+        // the visible chip so the first press always lands.
+        let chip_chars = if self.agent_count == 0 {
+            self.label_agents_and_mcp.chars().count()
+        } else {
+            // "{N} {label}" without allocating a String — counts the
+            // count digits + 1 space + label chars.
+            let digits = (self.agent_count as f32).log10().floor() as usize + 1;
+            digits + 1 + self.label_agent_singular.chars().count()
+        };
+        let dot_w = if self.agent_count == 0 {
+            0.0
+        } else {
+            8.0 + 6.0
+        };
+        let approx_text_w = chip_chars as f32 * 12.0;
+        let chip_w = 8.0 + ICON_SIZE + 6.0 + dot_w + approx_text_w + 12.0 + 16.0;
+        let chip_rect = Rect {
+            origin: Point2D::new(globe.origin.x - chip_w - 6.0, rect.origin.y + 4.0),
+            size: Point2D::new(chip_w, rect.size.y - 8.0),
+        };
+        if rect_contains(chip_rect, point) {
+            return Some(TopBarHit::OpenAgentSettings);
         }
         None
     }
@@ -235,17 +257,15 @@ impl Widget for TopBar {
         //     与 MCP" label. Affordance for "set up agents/MCP".
         //   - active (≥ 1): Sparkles + green dot + "N agent" text.
         // Anchored just left of the globe icon button (+small gap).
-        let (chip_text, leading_icon, show_dot) = if self.agent_count == 0 {
-            (self.label_agents_and_mcp.clone(), Icon::LayoutGrid, false)
+        let count_label;
+        let (chip_text, leading_icon, show_dot): (&str, Icon, bool) = if self.agent_count == 0 {
+            (self.label_agents_and_mcp, Icon::LayoutGrid, false)
         } else {
-            (
-                format!("{} {}", self.agent_count, self.label_agent_singular),
-                Icon::Sparkles,
-                true,
-            )
+            count_label = format!("{} {}", self.agent_count, self.label_agent_singular);
+            (count_label.as_str(), Icon::Sparkles, true)
         };
         let dot_w = if show_dot { 8.0 + 6.0 } else { 0.0 };
-        let text_w = cx.backend.measure_text(&chip_text, 12.0);
+        let text_w = cx.backend.measure_text(chip_text, 12.0);
         let chip_w = 8.0 + ICON_SIZE + 6.0 + dot_w + text_w + 12.0;
         let chip_rect = Rect {
             origin: Point2D::new(rx - chip_w - 6.0, center_y - 13.0),
@@ -279,7 +299,7 @@ impl Widget for TopBar {
             text_x += 8.0 + 6.0;
         }
         let chip_label = TextLayout::single_run(
-            &chip_text,
+            chip_text,
             "system-ui",
             12.0,
             to_jian_color(self.theme.foreground),

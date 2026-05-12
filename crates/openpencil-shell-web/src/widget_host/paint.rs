@@ -71,7 +71,14 @@ impl WidgetHost {
             if let Some(d) = active_drag {
                 layer_panel.drop_target = layer_panel
                     .drop_target_at(layer_panel_rect, Point2D::new(d.current_x, d.current_y));
+                if let Some(item) = LayerPanel::ghost_item_for(&self.document, d.source) {
+                    layer_panel.drag_ghost = Some((item, d.current_y));
+                }
             }
+            // Web has no per-frame time source; caret paints solid
+            // (now == anchor == 0 ⇒ blink_visible returns true).
+            layer_panel.now_ms = 0;
+            layer_panel.caret_anchor_ms = 0;
             let mut cx = PaintCx {
                 backend: &mut *backend,
             };
@@ -104,6 +111,7 @@ impl WidgetHost {
         };
         if canvas_w > 0.0 && canvas_h > 0.0 {
             let canvas = CanvasViewport::from_document(&self.document);
+            // Web has no per-frame clock; caret stays solid.
             let mut cx = PaintCx {
                 backend: &mut *backend,
             };
@@ -189,6 +197,37 @@ impl WidgetHost {
                 backend: &mut *backend,
             };
             picker.paint(&mut cx, picker_rect);
+        }
+
+        // Layer context menu — right-click overlay, top of stack.
+        if let Some(state) = self.document.ui.layer_context_menu {
+            use openpencil_shell_core::widgets::layer_context_menu::LayerContextMenu;
+            let menu = LayerContextMenu::for_state(&self.document, state);
+            let menu_rect = menu.rect();
+            let mut cx = PaintCx {
+                backend: &mut *backend,
+            };
+            menu.paint(&mut cx, menu_rect);
+        }
+
+        // Settings modal — Cmd+, overlay, top-most.
+        if self.document.ui.agent_settings_open {
+            use openpencil_shell_core::widgets::agent_settings_panel::AgentSettingsPanel;
+            let panel = AgentSettingsPanel::for_document(&self.document);
+            let panel_rect = panel.rect(viewport_width, viewport_height);
+            // Dim scrim behind the modal so the underlying canvas
+            // reads as "blocked." Matches the native shell's chrome.
+            backend.fill_rect(
+                Rect {
+                    origin: Point2D::new(0.0, 0.0),
+                    size: Point2D::new(viewport_width, viewport_height),
+                },
+                openpencil_shell_core::Color { r: 0.0, g: 0.0, b: 0.0, a: 0.5 },
+            );
+            let mut cx = PaintCx {
+                backend: &mut *backend,
+            };
+            panel.paint(&mut cx, panel_rect);
         }
     }
 }

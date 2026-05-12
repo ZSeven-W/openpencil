@@ -68,7 +68,7 @@ impl WidgetHostNative {
     /// panel re-paints the eye/lock affordances).
     pub fn update_layer_hover(&mut self, x: f32, y: f32, viewport_h: f32) -> bool {
         use openpencil_shell_core::widgets::{LayerPanel, LayerPanelHit};
-        let new_hover = if self.document.ui.sidebar_open
+        let (new_layer, new_page) = if self.document.ui.sidebar_open
             && y >= openpencil_shell_core::widgets::TOP_BAR_HEIGHT
             && x >= 0.0
             && x <= self.document.ui.layer_panel_width
@@ -88,18 +88,20 @@ impl WidgetHostNative {
                 Some(LayerPanelHit::Layer(id))
                 | Some(LayerPanelHit::ToggleHidden(id))
                 | Some(LayerPanelHit::ToggleLocked(id))
-                | Some(LayerPanelHit::ToggleCollapsed(id)) => Some(id),
-                _ => None,
+                | Some(LayerPanelHit::ToggleCollapsed(id)) => (Some(id), None),
+                Some(LayerPanelHit::Page(idx)) | Some(LayerPanelHit::DeletePage(idx)) => {
+                    (None, Some(idx))
+                }
+                _ => (None, None),
             }
         } else {
-            None
+            (None, None)
         };
-        if new_hover != self.document.ui.hovered_layer_id {
-            self.document.ui.hovered_layer_id = new_hover;
-            true
-        } else {
-            false
-        }
+        let changed = new_layer != self.document.ui.hovered_layer_id
+            || new_page != self.document.ui.hovered_page_index;
+        self.document.ui.hovered_layer_id = new_layer;
+        self.document.ui.hovered_page_index = new_page;
+        changed
     }
 
     /// True when the cursor is over a draggable node inside the
@@ -133,8 +135,37 @@ impl WidgetHostNative {
     /// runner used to compute piecemeal (resize gutter, in-flight
     /// drag, handle / rotation ring, node hover). The runner just
     /// maps the `CursorHint` to its platform cursor.
+    /// Recompute the hovered provider-card index on the agent
+    /// settings modal. Returns true iff the cached value changed
+    /// and a repaint is needed (drives the hover red-disconnect
+    /// affordance on connected cards).
+    pub fn update_agent_settings_hover(&mut self, x: f32, y: f32) -> bool {
+        use openpencil_shell_core::document::AgentSettingsTab;
+        use openpencil_shell_core::widgets::agent_settings_panel::AgentSettingsPanel;
+        if !matches!(self.document.ui.agent_settings.tab, AgentSettingsTab::Agents) {
+            return false;
+        }
+        let panel = AgentSettingsPanel::for_document(&self.document);
+        let panel_rect = panel.rect(self.last_viewport_w, self.last_viewport_h);
+        let new_val = panel
+            .card_at(panel_rect, Point2D::new(x, y))
+            .unwrap_or(usize::MAX);
+        let prev = self.document.ui.agent_settings.hover_provider;
+        if new_val != prev {
+            self.document.ui.agent_settings.hover_provider = new_val;
+            return true;
+        }
+        false
+    }
+
     pub fn cursor_hint(&self, x: f32, y: f32, viewport_w: f32, viewport_h: f32) -> CursorHint {
         use openpencil_shell_core::document::Tool;
+        // Modal overlays — keep the pointer the OS default so the
+        // sidebar nav and toggle rows don't show a Move cursor as
+        // if the user could drag the underlying canvas.
+        if self.document.ui.agent_settings_open || self.document.ui.color_picker.is_some() {
+            return CursorHint::Default;
+        }
         // Chrome / drag-in-flight wins regardless of tool.
         if self.panel_resize_hover(x, y, viewport_w).is_some() || self.is_resizing_panel() {
             return CursorHint::ResizeEw;

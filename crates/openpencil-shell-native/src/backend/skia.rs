@@ -92,6 +92,38 @@ pub struct NativeBackend {
 
 const ROBOTO_TTF: &[u8] = include_bytes!("../../../openpencil-shell-web/assets/Roboto-Regular.ttf");
 
+/// Union of every CJK codepoint that appears in the editor chrome
+/// + settings modal. Pre-warmed at `NativeBackend::new` so the
+/// first cross-tab paint doesn't synchronously call
+/// `FontMgr::match_family_style_character` for ~50 fresh glyphs.
+const PREWARM_CJK_CODEPOINTS: &str = "\
+设置\
+内置服务商添加直接配置密钥无需工具\
+尚未\
+连接外部兼容的\
+你可以在中设置额外的环境变量\
+模型\
+服务器已停止运行中端口启动\
+终端集成将在重启后生效\
+升级版本请重新安装确保兼容性\
+断开链接\
+代码\
+设计图层填充描边效果导出创建组件\
+弹性布局\
+位置尺寸不透明度旋转\
+形状矩形椭圆多边形直线钢笔\
+画布缩放\
+新建未命名页面\
+帧组文本路径\
+撤销重做\
+你可以在\
+普通粗体斜体下划线删除线\
+左中右两端对齐分散\
+颜色\
+红绿蓝色调饱和度明亮\
+搜索准备就绪\
+图片生成";
+
 impl NativeBackend {
     /// Spec §5.2.1 / plan v7 Task 2 Step 11: take an externally
     /// constructed `SkiaBackend` so callers can re-use one across
@@ -99,7 +131,7 @@ impl NativeBackend {
     /// image cache. The convenience `with_dpi` covers the common
     /// "fresh backend" path.
     pub fn new(skia: jian_skia::SkiaBackend, dpi: f32) -> Self {
-        Self {
+        let mut this = Self {
             skia,
             dpi,
             typeface: None,
@@ -107,7 +139,17 @@ impl NativeBackend {
             cjk_typeface: None,
             cjk_typeface_tried: false,
             char_typeface_cache: std::collections::HashMap::new(),
+        };
+        // Pre-warm the per-codepoint typeface cache with every CJK
+        // glyph that appears in the chrome (top bar, layer panel,
+        // settings modal, etc.). Without this, the first paint that
+        // touches a previously unseen codepoint pays the cost of a
+        // `FontMgr::match_family_style_character` call — visible to
+        // the user as a stutter the first time a tab is opened.
+        for c in PREWARM_CJK_CODEPOINTS.chars() {
+            let _ = this.typeface_for_char(c);
         }
+        this
     }
 
     /// Resolve a typeface that covers `c`. Cached per codepoint —
@@ -409,6 +451,31 @@ impl NativeBackend {
         paint.set_anti_alias(true);
         paint.set_stroke_cap(skia_safe::PaintCap::Round);
         paint.set_stroke_join(skia_safe::PaintJoin::Round);
+        canvas.draw_path(&path, &paint);
+    }
+
+    /// Fill an SVG path scaled from `viewbox × viewbox` to
+    /// `size × size`. Brand logos ship as filled paths in their
+    /// own viewBox; the same parser as `stroke_svg_path` is
+    /// reused but paint is configured for `Fill` not `Stroke`.
+    pub fn fill_svg_path(
+        &self,
+        canvas: &skia_safe::Canvas,
+        d: &str,
+        top_left: Point2D,
+        size: f32,
+        viewbox: f32,
+        color: Color,
+    ) {
+        let Some(path) = skia_safe::utils::parse_path::from_svg(d) else {
+            return;
+        };
+        let s = size / viewbox;
+        let mut matrix = skia_safe::Matrix::new_identity();
+        matrix.set_scale_translate((s, s), (top_left.x, top_left.y));
+        let path = path.with_transform(&matrix);
+        let mut paint = skia_safe::Paint::new(jian_color_to_color4f(color), None);
+        paint.set_anti_alias(true);
         canvas.draw_path(&path, &paint);
     }
 

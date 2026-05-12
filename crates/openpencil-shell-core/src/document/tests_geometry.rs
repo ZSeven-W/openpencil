@@ -471,6 +471,7 @@ fn document_validate_catches_duplicate_node_id() {
         viewport: Viewport::IDENTITY,
         chat: ChatState::default(),
         ui: UiState::default(),
+        history: crate::document::History::default(),
     };
     let result = doc.validate();
     assert!(result.is_err());
@@ -504,6 +505,7 @@ fn document_validate_catches_empty_pages() {
         viewport: Viewport::IDENTITY,
         chat: ChatState::default(),
         ui: UiState::default(),
+        history: crate::document::History::default(),
     };
     let result = doc.validate();
     assert!(result.is_err());
@@ -527,6 +529,7 @@ fn document_validate_catches_empty_pages() {
         viewport: Viewport::IDENTITY,
         chat: ChatState::default(),
         ui: UiState::default(),
+        history: crate::document::History::default(),
     };
     let err2 = doc2.validate().unwrap_err();
     assert!(
@@ -555,6 +558,7 @@ fn document_selected_node_scopes_to_active_page() {
         viewport: Viewport::IDENTITY,
         chat: ChatState::default(),
         ui: UiState::default(),
+        history: crate::document::History::default(),
     };
     // Selection is on a non-active page → returns None.
     assert!(doc.selected_node().is_none());
@@ -583,6 +587,7 @@ fn document_active_page_returns_indexed_page() {
         viewport: Viewport::IDENTITY,
         chat: ChatState::default(),
         ui: UiState::default(),
+        history: crate::document::History::default(),
     };
     assert_eq!(doc.active_page().unwrap().name, "second");
 }
@@ -599,6 +604,7 @@ fn document_active_page_returns_none_when_index_out_of_range() {
         viewport: Viewport::IDENTITY,
         chat: ChatState::default(),
         ui: UiState::default(),
+        history: crate::document::History::default(),
     };
     assert!(doc.active_page().is_none());
 }
@@ -650,6 +656,7 @@ fn add_page_returns_none_on_id_overflow() {
         viewport: Viewport::IDENTITY,
         chat: ChatState::default(),
         ui: UiState::default(),
+        history: crate::document::History::default(),
     };
     let mut doc = doc;
     assert_eq!(doc.add_page(), None);

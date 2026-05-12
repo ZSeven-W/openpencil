@@ -27,7 +27,7 @@ use crate::document::{Document, Node, PropertyFocus, Stroke};
 use crate::theme::Theme;
 use crate::widgets::property_panel_sections as sections;
 use crate::widgets::{LayoutBox, LayoutCx, PaintCx, Widget, WidgetId};
-use crate::{Color, Point2D, Rect};
+use crate::{Color, Point2D, Rect, TextLayout};
 
 pub const PROPERTY_PANEL_WIDTH: f32 = 280.0;
 
@@ -47,6 +47,9 @@ pub enum PropertyPanelAction {
     ToggleFillTypePicker,
     /// User picked a fill type from the dropdown.
     SetFillType(crate::document::FillType),
+    /// User clicked a colour swatch (Fill or Stroke section). Host
+    /// opens the floating colour picker tied to that target.
+    OpenColorPicker(crate::document::ColorTarget),
 }
 
 /// Per-NodeKind toggles for which property-panel sections render.
@@ -117,8 +120,8 @@ impl SectionCapabilities {
                 effects: true,
                 export: true,
             },
-            // Line: only outline — fill doesn't apply.
-            K::Line => Self {
+            // Line / Path: only outline — fill doesn't apply.
+            K::Line | K::Path => Self {
                 flex_layout: false,
                 size_options: true,
                 opacity: true,
@@ -152,15 +155,13 @@ pub struct NodeSnapshot {
     pub y: i32,
     pub width: i32,
     pub height: i32,
-    /// Rotation in degrees (clockwise positive). Document stores
-    /// radians on `Node.rotation`; the snapshot pre-formats it
-    /// here so the panel doesn't reach for trigonometry per paint.
+    /// Rotation in degrees (clockwise positive).
     pub rotation_deg: f32,
+    /// Uniform corner radius in doc-px.
+    pub corner_radius: f32,
     pub fill: Option<Color>,
     pub stroke: Option<Stroke>,
-    /// Underlying NodeKind — drives per-kind section filtering so
-    /// a Line doesn't show a fill picker, a Frame hides the Text
-    /// section, etc.
+    /// Drives per-kind section filtering (Line hides fill, etc.).
     pub kind_variant: crate::document::NodeKind,
 }
 
@@ -192,6 +193,7 @@ impl NodeSnapshot {
             width: bounds.size.x.round() as i32,
             height: bounds.size.y.round() as i32,
             rotation_deg: 0.0,
+            corner_radius: 0.0,
             fill: None,
             stroke: None,
             // `kind_variant` is informational for the snapshot
@@ -217,6 +219,7 @@ impl NodeSnapshot {
             width: bounds.size.x.round() as i32,
             height: bounds.size.y.round() as i32,
             rotation_deg: node.rotation.to_degrees(),
+            corner_radius: node.corner_radius,
             fill: node.fill,
             stroke: node.stroke,
             kind_variant: node.kind.clone(),
@@ -243,9 +246,7 @@ pub struct PropertyPanel {
     /// input. Drives the same `jian_core::anim::blink_visible`
     /// helper the chat caret uses.
     pub caret_anchor_ms: u64,
-    /// Host clock (ms since start) — paired with `caret_anchor_ms`
-    /// to drive caret visibility. `0` = host hasn't installed a
-    /// clock yet.
+    /// Host clock ms; paired with `caret_anchor_ms` for caret blink.
     pub now_ms: u64,
     /// Active flex-layout button.
     pub flex_layout: crate::document::FlexLayout,
@@ -253,12 +254,11 @@ pub struct PropertyPanel {
     pub size_flags: sections::SizeFlags,
     /// Active fill type — drives the dropdown label + picker.
     pub fill_type: crate::document::FillType,
-    /// Whether the fill-type picker is open.
     pub fill_type_picker_open: bool,
-    /// True iff the panel is showing an aggregate over >1 selected
-    /// nodes. Drives the inert-input mode (hit_test returns None,
-    /// focus is None) and the "N items" header label.
+    /// True for multi-select aggregate (inputs inert, "N items").
     pub is_multi: bool,
+    /// Active header tab — toggled by Cmd+Shift+C.
+    pub tab: crate::document::PropertyTab,
 }
 
 impl PropertyPanel {
@@ -352,6 +352,7 @@ impl PropertyPanel {
             fill_type,
             fill_type_picker_open: doc.ui.fill_type_picker_open,
             is_multi,
+            tab: doc.ui.property_tab,
         }
     }
 
@@ -424,6 +425,8 @@ fn rect_contains(r: Rect, p: Point2D) -> bool {
         && p.y <= r.origin.y + r.size.y
 }
 
+use crate::widgets::property_panel_code::paint_code_placeholder;
+
 impl Widget for PropertyPanel {
     fn id(&self) -> WidgetId {
         self.id
@@ -462,7 +465,11 @@ impl Widget for PropertyPanel {
         };
         use crate::document::NodeKind;
         let caps = self.capabilities();
-        y = sections::paint_tab_strip(cx, &self.theme, &self.labels, x, y, w);
+        y = sections::paint_tab_strip(cx, &self.theme, &self.labels, self.tab, x, y, w);
+        if matches!(self.tab, crate::document::PropertyTab::Code) {
+            paint_code_placeholder(cx, &self.theme, &self.snapshot, x, y, w);
+            return;
+        }
         y = sections::paint_node_header(cx, &self.theme, &self.snapshot, x, y, w);
         y = sections::paint_create_component(cx, &self.theme, &self.labels, x, y, w);
         y = sections::paint_position_section(

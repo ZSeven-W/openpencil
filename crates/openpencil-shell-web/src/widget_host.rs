@@ -68,12 +68,21 @@ pub struct WidgetHost {
     /// a node. Bumped past the highest sample id so new + sample
     /// nodes never collide on the same key. Matches the native
     /// host's allocator.
-    next_node_id: u64,
+    pub(in crate::widget_host) next_node_id: u64,
     /// Whether the shift key is currently held. The DOM listener
     /// updates this from every keyboard / mouse event so apply_press
     /// can branch on shift+click for multi-select. Matches the
     /// native host's `shift_held` flag.
     pub(in crate::widget_host) shift_held: bool,
+    /// Host clock in ms — set by `lib.rs` on each event from
+    /// `performance.now()`. Used for double-click detection.
+    pub(in crate::widget_host) now_ms: u64,
+}
+
+impl WidgetHost {
+    pub fn set_now_ms(&mut self, now_ms: u64) {
+        self.now_ms = now_ms;
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -153,6 +162,9 @@ fn apply_property_action_impl(
             document.set_selected_fill_type(t);
             document.ui.fill_type_picker_open = false;
         }
+        A::OpenColorPicker(target) => {
+            let _ = document.open_color_picker(target, 0.0);
+        }
     }
 }
 
@@ -176,6 +188,7 @@ impl WidgetHost {
             layer_drag: None,
             next_node_id: 100,
             shift_held: false,
+            now_ms: 0,
         }
     }
 
@@ -283,7 +296,7 @@ impl WidgetHost {
     /// repaint). Mirrors the native host.
     pub fn update_layer_hover(&mut self, x: f32, y: f32, viewport_h: f32) -> bool {
         use openpencil_shell_core::widgets::{LayerPanel, LayerPanelHit, TOP_BAR_HEIGHT};
-        let new_hover = if self.document.ui.sidebar_open
+        let (new_layer, new_page) = if self.document.ui.sidebar_open
             && y >= TOP_BAR_HEIGHT
             && x >= 0.0
             && x <= self.document.ui.layer_panel_width
@@ -300,23 +313,38 @@ impl WidgetHost {
                 Some(LayerPanelHit::Layer(id))
                 | Some(LayerPanelHit::ToggleHidden(id))
                 | Some(LayerPanelHit::ToggleLocked(id))
-                | Some(LayerPanelHit::ToggleCollapsed(id)) => Some(id),
-                _ => None,
+                | Some(LayerPanelHit::ToggleCollapsed(id)) => (Some(id), None),
+                Some(LayerPanelHit::Page(idx)) | Some(LayerPanelHit::DeletePage(idx)) => {
+                    (None, Some(idx))
+                }
+                _ => (None, None),
             }
         } else {
-            None
+            (None, None)
         };
-        if new_hover != self.document.ui.hovered_layer_id {
-            self.document.ui.hovered_layer_id = new_hover;
-            true
-        } else {
-            false
-        }
+        let changed = new_layer != self.document.ui.hovered_layer_id
+            || new_page != self.document.ui.hovered_page_index;
+        self.document.ui.hovered_layer_id = new_layer;
+        self.document.ui.hovered_page_index = new_page;
+        changed
     }
 
     /// Cursor-move handler — drives canvas pan-drag, marquee
     /// drag, chat drag, or no-op.
     pub fn apply_cursor_move(&mut self, x: f32, y: f32) -> bool {
+        if let Some(state) = self.document.ui.layer_context_menu {
+            use openpencil_shell_core::widgets::layer_context_menu::LayerContextMenu;
+            let menu = LayerContextMenu::for_state(&self.document, state);
+            let new_hover = menu.hovered_row_at(Point2D::new(x, y)).map(|i| i as u8);
+            if new_hover != state.hovered_row {
+                self.document.ui.layer_context_menu =
+                    Some(openpencil_shell_core::document::LayerContextMenuState {
+                        hovered_row: new_hover,
+                        ..state
+                    });
+                return true;
+            }
+        }
         if let Some(m) = self.marquee_drag.as_mut() {
             m.current_screen_x = x;
             m.current_screen_y = y;
@@ -498,6 +526,9 @@ impl WidgetHost {
             }
             DropPosition::After => {
                 self.document.reorder_after(d.source, drop.anchor);
+            }
+            DropPosition::Into => {
+                self.document.reorder_into(d.source, drop.anchor);
             }
         }
         true

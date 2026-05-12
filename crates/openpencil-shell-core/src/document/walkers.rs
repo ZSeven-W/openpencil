@@ -1,10 +1,56 @@
 //! Free tree-walk helpers for `Document` mutators.
-//!
-//! All functions are `pub(super)` so the parent `document` module
-//! can `use walkers::*` and call them unqualified — keeping the
-//! `impl Document` call sites unchanged across the split.
 
 use super::*;
+
+/// Walks `node` and descendants until it finds `target`, then
+/// overwrites its `name`. Backs `Document::rename_commit`.
+pub(in crate::document) fn set_name_walk(node: &mut Node, target: NodeId, new_name: &str) -> bool {
+    if node.id == target {
+        node.name = new_name.to_string();
+        return true;
+    }
+    for child in &mut node.children {
+        if set_name_walk(child, target, new_name) {
+            return true;
+        }
+    }
+    false
+}
+
+/// Mut ref to a Path node's `points`. None if missing or not Path.
+pub(in crate::document) fn path_points_mut_walk<'a>(
+    node: &'a mut Node,
+    target: NodeId,
+) -> Option<&'a mut Vec<crate::Point2D>> {
+    if node.id == target {
+        if matches!(node.kind, NodeKind::Path) {
+            return Some(&mut node.points);
+        }
+        return None;
+    }
+    for child in &mut node.children {
+        if let Some(p) = path_points_mut_walk(child, target) {
+            return Some(p);
+        }
+    }
+    None
+}
+
+/// Mut ref to node's `text`; auto-inserts `Some("")` when missing.
+pub(in crate::document) fn text_mut_walk<'a>(
+    node: &'a mut Node,
+    target: NodeId,
+) -> Option<&'a mut String> {
+    if node.id == target {
+        return Some(node.text.get_or_insert_with(String::new));
+    }
+    for child in &mut node.children {
+        if let Some(t) = text_mut_walk(child, target) {
+            return Some(t);
+        }
+    }
+    None
+}
 
 /// Recursive helper for `Document::set_selected_color`.
 pub(in crate::document) fn set_color_walk(
@@ -363,14 +409,11 @@ pub(in crate::document) fn commit_property_walk(
                     width: value.max(0.0),
                 });
             }
+            PropertyFocus::PositionR => node.corner_radius = value.max(0.0),
             // Hex inputs go through `Document::set_selected_color`
-            // (Color isn't a single f32). Opacity + corner-radius
-            // are visual-only until the node schema grows the
-            // field — accept the edit but don't persist.
-            PropertyFocus::PositionR
-            | PropertyFocus::Opacity
-            | PropertyFocus::FillHex
-            | PropertyFocus::StrokeHex => {}
+            // (Color isn't a single f32). Opacity is visual-only
+            // until the node schema grows the field.
+            PropertyFocus::Opacity | PropertyFocus::FillHex | PropertyFocus::StrokeHex => {}
         }
         return true;
     }
@@ -501,6 +544,8 @@ pub(in crate::document) fn deep_clone_with_new_ids(node: &Node, next_id: &mut u6
         locked: node.locked,
         collapsed: node.collapsed,
         fill_type: node.fill_type,
+        corner_radius: node.corner_radius,
+        points: node.points.clone(),
         children,
     }
 }
@@ -660,6 +705,29 @@ pub(in crate::document) fn extract_node(children: &mut Vec<Node>, target: NodeId
         }
     }
     None
+}
+
+/// Append `node` as the LAST child of `parent` anywhere in the
+/// children forest. `Ok(())` on success; `Err(node)` bounces the
+/// payload back on miss so the caller can recover (mirrors
+/// `insert_before/after_in_children`).
+pub(in crate::document) fn append_into(
+    children: &mut Vec<Node>,
+    parent: NodeId,
+    node: Node,
+) -> Result<(), Node> {
+    if let Some(idx) = children.iter().position(|n| n.id == parent) {
+        children[idx].children.push(node);
+        return Ok(());
+    }
+    let mut carry = node;
+    for child in children.iter_mut() {
+        match append_into(&mut child.children, parent, carry) {
+            Ok(()) => return Ok(()),
+            Err(returned) => carry = returned,
+        }
+    }
+    Err(carry)
 }
 
 /// Insert `node` immediately before `anchor` in `children` (or any

@@ -1,29 +1,50 @@
-//! `LayerPanel` — left-rail document tree (Step 4 visual lift).
-//!
-//! Rebuilt to match the TS app's left sidebar: a "Pages" section at
-//! the top with a `+` add-page affordance and the active page row
-//! highlighted, then a "Layers" section walking the active page's
-//! node tree. Dark-theme aware via [`crate::theme::Theme`].
-//!
-//! Step 2 scope: paint only. P6 wires click → selection.
+//! `LayerPanel` — left-rail document tree (Pages + Layers sections).
 
-use crate::document::{Document, Node, NodeId};
+use crate::document::{Document, NodeId};
 use crate::theme::Theme;
 use crate::widgets::icons::{draw_icon, Icon};
+use crate::widgets::layer_panel_walkers::{icon_for_kind, walk, walk_excluding};
 use crate::widgets::{LayoutBox, LayoutCx, PaintCx, Widget, WidgetId};
 use crate::{Color, Point2D, Rect, TextLayout};
 
-/// Outer width of the panel — matches the TS `w-72` (288 px) layer
-/// panel; used by the host layout.
+/// Outer panel width; host layout uses this.
 pub const LAYER_PANEL_WIDTH: f32 = 240.0;
+
+/// Rename draft for the given page index, when one is active.
+fn rename_override_page(doc: &Document, idx: usize) -> Option<String> {
+    use crate::document::LayerContextTarget;
+    doc.ui.layer_rename.as_ref().and_then(|s| match s.target {
+        LayerContextTarget::Page(i) if i == idx => Some(s.draft.clone()),
+        _ => None,
+    })
+}
+
+/// Rename draft for the given layer id, when one is active.
+fn rename_override_layer(doc: &Document, id: NodeId) -> Option<String> {
+    use crate::document::LayerContextTarget;
+    doc.ui.layer_rename.as_ref().and_then(|s| match s.target {
+        LayerContextTarget::Layer(i) if i == id => Some(s.draft.clone()),
+        _ => None,
+    })
+}
+
+fn rename_is_page(doc: &Document, idx: usize) -> bool {
+    use crate::document::LayerContextTarget;
+    matches!(
+        doc.ui.layer_rename.as_ref().map(|s| s.target),
+        Some(LayerContextTarget::Page(i)) if i == idx
+    )
+}
 
 pub(crate) const SECTION_HEADER_HEIGHT: f32 = 28.0;
 pub(crate) const PAGE_ROW_HEIGHT: f32 = 32.0;
 pub(crate) const LAYER_ROW_HEIGHT: f32 = 28.0;
 pub(crate) const ROW_PAD_X: f32 = 12.0;
 pub(crate) const SECTION_GAP: f32 = 8.0;
-const HEADER_FONT: f32 = 12.0;
-const ROW_FONT: f32 = 13.0;
+use crate::widgets::layer_panel_paint::{
+    paint_drag_ghost, paint_rename_input, paint_section_header, to_jian_color, truncate_to_fit,
+    ROW_FONT,
+};
 
 /// One row in the layers tree — flat depth-walked view.
 #[derive(Debug, Clone)]
@@ -34,24 +55,16 @@ pub struct LayerItem {
     pub icon: Icon,
     pub depth: u8,
     pub selected: bool,
-    /// True when this node has any children — drives the leading
-    /// chevron-down expand caret on the row (TS LayerRow shows
-    /// the caret only on container rows).
     pub has_children: bool,
-    /// Hidden flag — drives the dimmed-row visual + an
-    /// emphasised eye icon so the user can tell at a glance
-    /// which rows are hidden.
     pub hidden: bool,
-    /// Locked flag — drives an emphasised lock icon.
     pub locked: bool,
-    /// Collapsed flag — drives the leading chevron direction
-    /// (`▼` when expanded, `▶` when collapsed) and tells the
-    /// walker to skip descending into children.
     pub collapsed: bool,
-    /// Hovered flag — true iff the cursor is over this row.
-    /// Drives the hover-reveal of the trailing eye + lock
-    /// icons (TS parity: only the active row exposes them).
     pub hovered: bool,
+    /// True when the row can host children (Frame/Group); gates
+    /// the middle drag-Into band.
+    pub is_container: bool,
+    /// Active inline-rename target — paints the input instead.
+    pub renaming: bool,
 }
 
 /// Pages-section row.
@@ -60,6 +73,8 @@ pub struct PageItem {
     pub page_index: usize,
     pub label: String,
     pub active: bool,
+    pub hovered: bool,
+    pub renaming: bool,
 }
 
 pub struct LayerPanel {
@@ -67,18 +82,15 @@ pub struct LayerPanel {
     pub pages: Vec<PageItem>,
     pub items: Vec<LayerItem>,
     pub theme: Theme,
-    pub pages_label: String,
-    pub layers_label: String,
-    /// Active drop target while a drag-to-reorder gesture is in
-    /// flight. `None` outside of a drag. Drives the drop-indicator
-    /// paint between rows.
+    pub pages_label: &'static str,
+    pub layers_label: &'static str,
     pub drop_target: Option<DropTarget>,
+    pub drag_ghost: Option<(LayerItem, f32)>,
+    pub now_ms: u64,
+    pub caret_anchor_ms: u64,
 }
 
 impl LayerPanel {
-    /// Build a panel from the document. Pages list mirrors `doc.pages`
-    /// with the active row flagged; layers list walks `doc.active_page()`
-    /// depth-first.
     pub fn from_document(doc: &Document) -> Self {
         let pages = doc
             .pages
@@ -86,8 +98,10 @@ impl LayerPanel {
             .enumerate()
             .map(|(i, p)| PageItem {
                 page_index: i,
-                label: p.name.clone(),
+                label: rename_override_page(doc, i).unwrap_or_else(|| p.name.clone()),
                 active: i == doc.active_page_index,
+                hovered: doc.ui.hovered_page_index == Some(i),
+                renaming: rename_is_page(doc, i),
             })
             .collect();
         let mut items = Vec::new();
@@ -96,34 +110,55 @@ impl LayerPanel {
                 walk(child, doc.selected, doc.ui.hovered_layer_id, 0, &mut items);
             }
         }
+        for item in &mut items {
+            if let Some(draft) = rename_override_layer(doc, item.node_id) {
+                item.label = draft;
+                item.renaming = true;
+            }
+        }
         Self {
             id: WidgetId::new(1000),
             pages,
             items,
             theme: doc.theme(),
-            pages_label: doc.t("pages.title").to_string(),
-            layers_label: doc.t("layers.title").to_string(),
+            pages_label: doc.t("pages.title"),
+            layers_label: doc.t("layers.title"),
             drop_target: None,
+            drag_ghost: None,
+            now_ms: 0,
+            caret_anchor_ms: 0,
         }
     }
 
-    /// Variant that lets the host pre-compute a drop target so the
-    /// drop-indicator paints between rows during a drag.
-    pub fn from_document_with_drop(doc: &Document, drop_target: Option<DropTarget>) -> Self {
-        let mut panel = Self::from_document(doc);
-        panel.drop_target = drop_target;
-        panel
+    /// Floating ghost row for the dragged source — host paints it
+    /// at the cursor's y. None when the source isn't on the
+    /// active page.
+    pub fn ghost_item_for(doc: &Document, source: NodeId) -> Option<LayerItem> {
+        let node = doc.active_page()?.find(source)?;
+        Some(LayerItem {
+            node_id: node.id,
+            label: node.name.clone(),
+            kind_label: node.kind.label().to_string(),
+            icon: icon_for_kind(&node.kind),
+            depth: 0,
+            selected: false,
+            has_children: !node.children.is_empty(),
+            hidden: node.hidden,
+            locked: node.locked,
+            collapsed: node.collapsed,
+            hovered: false,
+            is_container: matches!(
+                node.kind,
+                crate::document::NodeKind::Frame | crate::document::NodeKind::Group
+            ),
+            renaming: false,
+        })
     }
 
-    /// Build a panel for a drag-in-progress: the layer list excludes
-    /// the dragged source's entire subtree, mirroring the post-commit
-    /// layout. Both `drop_target_at` (called during paint AND on
-    /// release) and the visible row stack walk this trimmed item
-    /// list, so the indicator y the user sees during the drag is the
-    /// exact y the source lands at after `reorder_before/after`. Was
-    /// a real bug before this method existed — dragging downward
-    /// painted the indicator one row below where the source actually
-    /// landed (codex stop-gate review caught this).
+    /// Panel for a drag-in-progress — layer list excludes the
+    /// dragged source's subtree, mirroring the post-commit layout
+    /// so `drop_target_at` returns y values that match where the
+    /// source lands after reorder.
     pub fn from_document_with_drag_source(doc: &Document, drag_source: NodeId) -> Self {
         let pages = doc
             .pages
@@ -131,8 +166,10 @@ impl LayerPanel {
             .enumerate()
             .map(|(i, p)| PageItem {
                 page_index: i,
-                label: p.name.clone(),
+                label: rename_override_page(doc, i).unwrap_or_else(|| p.name.clone()),
                 active: i == doc.active_page_index,
+                hovered: doc.ui.hovered_page_index == Some(i),
+                renaming: rename_is_page(doc, i),
             })
             .collect();
         let mut items = Vec::new();
@@ -153,9 +190,12 @@ impl LayerPanel {
             pages,
             items,
             theme: doc.theme(),
-            pages_label: doc.t("pages.title").to_string(),
-            layers_label: doc.t("layers.title").to_string(),
+            pages_label: doc.t("pages.title"),
+            layers_label: doc.t("layers.title"),
             drop_target: None,
+            drag_ghost: None,
+            now_ms: 0,
+            caret_anchor_ms: 0,
         }
     }
 
@@ -165,9 +205,12 @@ impl LayerPanel {
             pages: Vec::new(),
             items: Vec::new(),
             theme: Theme::dark(),
-            pages_label: "Pages".to_string(),
-            layers_label: "Layers".to_string(),
+            pages_label: "Pages",
+            layers_label: "Layers",
             drop_target: None,
+            drag_ghost: None,
+            now_ms: 0,
+            caret_anchor_ms: 0,
         }
     }
 
@@ -177,13 +220,10 @@ impl LayerPanel {
         pages_h + SECTION_GAP + layers_h + 16.0
     }
 
-    /// Compute the drop target for a drag-in-progress. Over a
-    /// layer row: `Before` for the upper half, `After` for the
-    /// lower half. In the empty area below all rows (still inside
-    /// the panel rect): `After(last_layer)`, indicator at the
-    /// bottom of the row stack. Outside the panel or above the
-    /// rows section: `None`. `indicator_y` is where the host
-    /// paints the drop-indicator line.
+    /// Drop target for a drag-in-progress. Over a row: top-25 %
+    /// Before, middle 50 % Into (container rows only), bottom 25 %
+    /// After. Below-rows area: After-last. Outside / above rows:
+    /// None.
     pub fn drop_target_at(&self, rect: Rect, point: Point2D) -> Option<DropTarget> {
         if !rect_contains(rect, point) {
             return None;
@@ -199,8 +239,20 @@ impl LayerPanel {
             let row_top = y;
             let row_bottom = y + LAYER_ROW_HEIGHT;
             if point.y >= row_top && point.y <= row_bottom {
-                let mid = row_top + LAYER_ROW_HEIGHT / 2.0;
-                let position = if point.y < mid {
+                // Three-zone split for container rows: top 25 % →
+                // Before, middle 50 % → Into (child of anchor),
+                // bottom 25 % → After. Non-container rows fall back
+                // to two-zone Before/After (no middle band).
+                let local = point.y - row_top;
+                let position = if item.is_container {
+                    if local < LAYER_ROW_HEIGHT * 0.25 {
+                        DropPosition::Before
+                    } else if local > LAYER_ROW_HEIGHT * 0.75 {
+                        DropPosition::After
+                    } else {
+                        DropPosition::Into
+                    }
+                } else if local < LAYER_ROW_HEIGHT / 2.0 {
                     DropPosition::Before
                 } else {
                     DropPosition::After
@@ -208,6 +260,11 @@ impl LayerPanel {
                 let indicator_y = match position {
                     DropPosition::Before => row_top,
                     DropPosition::After => row_bottom,
+                    // For Into the host paints a row-outline
+                    // highlight rather than a horizontal line —
+                    // `indicator_y` is the row TOP so the paint
+                    // helper can derive the full row rect.
+                    DropPosition::Into => row_top,
                 };
                 return Some(DropTarget {
                     anchor: item.node_id,
@@ -264,6 +321,21 @@ impl LayerPanel {
                 size: Point2D::new(rect.size.x, PAGE_ROW_HEIGHT),
             };
             if rect_contains(row, point) {
+                // × delete button — only hit-tested when the row is
+                // hovered (paint shows it under the same gate). 14
+                // px icon, right-aligned with 4 px slop.
+                if page.hovered {
+                    let close_x = rect.origin.x + rect.size.x - ROW_PAD_X - 14.0;
+                    let close_y = y + (PAGE_ROW_HEIGHT - 14.0) / 2.0;
+                    let slop = 4.0;
+                    if point.x >= close_x - slop
+                        && point.x <= close_x + 14.0 + slop
+                        && point.y >= close_y - slop
+                        && point.y <= close_y + 14.0 + slop
+                    {
+                        return Some(LayerPanelHit::DeletePage(page.page_index));
+                    }
+                }
                 return Some(LayerPanelHit::Page(page.page_index));
             }
             y += PAGE_ROW_HEIGHT;
@@ -343,6 +415,11 @@ pub enum LayerPanelHit {
     /// Click on the `+` add-page affordance in the Pages section
     /// header — host should append a fresh page and switch to it.
     AddPage,
+    /// Click on the trailing × on a page row — host should
+    /// remove the page via `Document::remove_page(idx)`. Only
+    /// hit-tested when the row's `hovered` flag is true so the
+    /// affordance stays click-only-on-hover.
+    DeletePage(usize),
 }
 
 /// Where a layer-drag would drop relative to the hovered anchor row.
@@ -354,13 +431,14 @@ pub enum DropPosition {
     Before,
     /// Drop slides in immediately BELOW the anchor row.
     After,
+    /// Drop becomes the LAST child of the anchor (a container —
+    /// Frame / Group). Cursor in the middle band of the row,
+    /// only when the anchor's `NodeKind` can host children.
+    Into,
 }
 
-/// Hit-test result for a drag-in-progress over the LayerPanel rows.
-/// Carries the anchor NodeId (the row the cursor is over), the
-/// relative position (top half = Before, bottom half = After), and
-/// the y in panel-local space where the drop-indicator should
-/// paint (between rows).
+/// Drop-target result: anchor node, drop position, and the
+/// panel-local y where the indicator paints.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct DropTarget {
     pub anchor: NodeId,
@@ -373,91 +451,6 @@ fn rect_contains(r: Rect, p: Point2D) -> bool {
         && p.x <= r.origin.x + r.size.x
         && p.y >= r.origin.y
         && p.y <= r.origin.y + r.size.y
-}
-
-fn walk(
-    node: &Node,
-    selected: NodeId,
-    hovered: Option<NodeId>,
-    depth: u8,
-    out: &mut Vec<LayerItem>,
-) {
-    out.push(LayerItem {
-        node_id: node.id,
-        label: node.name.clone(),
-        kind_label: node.kind.label().to_string(),
-        icon: icon_for_kind(&node.kind),
-        depth,
-        selected: node.id == selected,
-        has_children: !node.children.is_empty(),
-        hidden: node.hidden,
-        locked: node.locked,
-        collapsed: node.collapsed,
-        hovered: hovered == Some(node.id),
-    });
-    // Collapsed nodes hide their subtree from the LayerPanel
-    // (canvas paint / hit-test are unaffected — that's a
-    // tree-view-only concern).
-    if !node.collapsed {
-        for child in &node.children {
-            walk(child, selected, hovered, depth.saturating_add(1), out);
-        }
-    }
-}
-
-/// Variant of `walk` that skips `excluded`'s entire subtree. Used
-/// by `from_document_with_drag_source` to mirror the post-commit
-/// row layout while a drag-to-reorder is in flight.
-fn walk_excluding(
-    node: &Node,
-    selected: NodeId,
-    hovered: Option<NodeId>,
-    excluded: NodeId,
-    depth: u8,
-    out: &mut Vec<LayerItem>,
-) {
-    if node.id == excluded {
-        return;
-    }
-    out.push(LayerItem {
-        node_id: node.id,
-        label: node.name.clone(),
-        kind_label: node.kind.label().to_string(),
-        icon: icon_for_kind(&node.kind),
-        depth,
-        selected: node.id == selected,
-        has_children: !node.children.is_empty(),
-        hidden: node.hidden,
-        locked: node.locked,
-        collapsed: node.collapsed,
-        hovered: hovered == Some(node.id),
-    });
-    if !node.collapsed {
-        for child in &node.children {
-            walk_excluding(
-                child,
-                selected,
-                hovered,
-                excluded,
-                depth.saturating_add(1),
-                out,
-            );
-        }
-    }
-}
-
-fn icon_for_kind(kind: &crate::document::NodeKind) -> Icon {
-    use crate::document::NodeKind;
-    match kind {
-        NodeKind::Frame => Icon::Hash,
-        NodeKind::Group => Icon::Square,
-        NodeKind::Rect => Icon::Square,
-        NodeKind::Ellipse => Icon::Circle,
-        NodeKind::Polygon => Icon::Triangle,
-        NodeKind::Line => Icon::Minus,
-        NodeKind::Text => Icon::Type,
-        NodeKind::Other(_) => Icon::Square,
-    }
 }
 
 impl Widget for LayerPanel {
@@ -522,21 +515,51 @@ impl Widget for LayerPanel {
                 cx.backend
                     .fill_round_rect(row, 6.0, self.theme.row_selected);
             }
-            let label = TextLayout::single_run(
-                &page.label,
-                "system-ui",
-                ROW_FONT,
-                to_jian_color(if page.active {
-                    self.theme.foreground
-                } else {
-                    self.theme.muted_foreground
-                }),
-                Point2D::new(0.0, 0.0),
-            );
-            cx.backend.draw_text(
-                &label,
-                Point2D::new(row.origin.x + 12.0, row.origin.y + 19.0),
-            );
+            let label_x = row.origin.x + 12.0;
+            let label_max_x = rect.origin.x + rect.size.x - ROW_PAD_X - 18.0;
+            let available_w = (label_max_x - label_x).max(0.0);
+            if page.renaming {
+                paint_rename_input(
+                    cx,
+                    &self.theme,
+                    &page.label,
+                    label_x,
+                    y + 2.0,
+                    available_w,
+                    self.now_ms,
+                    self.caret_anchor_ms,
+                );
+            } else {
+                let display = truncate_to_fit(&page.label, ROW_FONT, available_w);
+                let label = TextLayout::single_run(
+                    &display,
+                    "system-ui",
+                    ROW_FONT,
+                    to_jian_color(if page.active {
+                        self.theme.foreground
+                    } else {
+                        self.theme.muted_foreground
+                    }),
+                    Point2D::new(0.0, 0.0),
+                );
+                cx.backend
+                    .draw_text(&label, Point2D::new(label_x, row.origin.y + 19.0));
+            }
+            // Hover-reveal × delete button on the trailing edge —
+            // matches TS page-row hover affordance. Hit-test geometry
+            // mirrors the paint exactly.
+            if page.hovered {
+                let close_x = rect.origin.x + rect.size.x - ROW_PAD_X - 14.0;
+                let close_y = y + (PAGE_ROW_HEIGHT - 14.0) / 2.0;
+                draw_icon(
+                    cx.backend,
+                    Icon::Close,
+                    Point2D::new(close_x, close_y),
+                    14.0,
+                    self.theme.muted_foreground,
+                    1.4,
+                );
+            }
             y += PAGE_ROW_HEIGHT;
         }
 
@@ -632,15 +655,34 @@ impl Widget for LayerPanel {
             } else {
                 dim(self.theme.card_foreground, dim_factor)
             };
-            let label = TextLayout::single_run(
-                &item.label,
-                "system-ui",
-                ROW_FONT,
-                to_jian_color(label_color),
-                Point2D::new(0.0, 0.0),
-            );
-            cx.backend
-                .draw_text(&label, Point2D::new(icon_x + 20.0, row.origin.y + 17.0));
+            let label_x = icon_x + 20.0;
+            // Reserve space for trailing eye + lock so the label
+            // doesn't overlap them when the row is hovered/selected.
+            let label_max_x = row.origin.x + row.size.x - 8.0 - 14.0 - 22.0 - 4.0;
+            let available_w = (label_max_x - label_x).max(0.0);
+            if item.renaming {
+                paint_rename_input(
+                    cx,
+                    &self.theme,
+                    &item.label,
+                    label_x,
+                    row.origin.y,
+                    available_w,
+                    self.now_ms,
+                    self.caret_anchor_ms,
+                );
+            } else {
+                let display = truncate_to_fit(&item.label, ROW_FONT, available_w);
+                let label = TextLayout::single_run(
+                    &display,
+                    "system-ui",
+                    ROW_FONT,
+                    to_jian_color(label_color),
+                    Point2D::new(0.0, 0.0),
+                );
+                cx.backend
+                    .draw_text(&label, Point2D::new(label_x, row.origin.y + 17.0));
+            }
             // Trailing eye + lock icons. Icon shape signals state
             // (Eye/EyeOff, Lock/LockOpen); locked Lock paints in
             // warm orange so it reads as a "can't edit" alert.
@@ -704,16 +746,33 @@ impl Widget for LayerPanel {
             y += LAYER_ROW_HEIGHT;
         }
 
-        // Drop-indicator — a 2 px primary-tint line painted between
-        // rows when a drag-to-reorder gesture is in flight. Sits on
-        // top of all row chrome so it remains visible regardless of
-        // hover/selected backgrounds underneath.
+        // Drop-indicator — paints AFTER row chrome so it sits on top.
+        // Before/After: a 2 px horizontal line between rows.
+        // Into: a 1.5 px outline around the target row (signals
+        // "drop becomes child of this container").
         if let Some(drop) = self.drop_target {
-            let indicator_rect = Rect {
-                origin: Point2D::new(rect.origin.x + ROW_PAD_X, drop.indicator_y - 1.0),
-                size: Point2D::new(rect.size.x - ROW_PAD_X * 2.0, 2.0),
-            };
-            cx.backend.fill_rect(indicator_rect, self.theme.primary);
+            match drop.position {
+                DropPosition::Before | DropPosition::After => {
+                    let indicator_rect = Rect {
+                        origin: Point2D::new(rect.origin.x + ROW_PAD_X, drop.indicator_y - 1.0),
+                        size: Point2D::new(rect.size.x - ROW_PAD_X * 2.0, 2.0),
+                    };
+                    cx.backend.fill_rect(indicator_rect, self.theme.primary);
+                }
+                DropPosition::Into => {
+                    // 1.5 px outline rect spanning the full row.
+                    let outline = Rect {
+                        origin: Point2D::new(rect.origin.x + 6.0, drop.indicator_y + 2.0),
+                        size: Point2D::new(rect.size.x - 12.0, LAYER_ROW_HEIGHT - 4.0),
+                    };
+                    cx.backend
+                        .stroke_round_rect(outline, 6.0, self.theme.primary, 1.5);
+                }
+            }
+        }
+
+        if let Some((ghost, cursor_y)) = &self.drag_ghost {
+            paint_drag_ghost(cx, &self.theme, ghost, *cursor_y, rect);
         }
     }
 
@@ -722,30 +781,4 @@ impl Widget for LayerPanel {
         node.set_label("Layers");
         node
     }
-}
-
-fn paint_section_header(
-    cx: &mut PaintCx<'_>,
-    theme: &Theme,
-    x: f32,
-    y: f32,
-    _width: f32,
-    label: &str,
-) {
-    let header_text = TextLayout::single_run(
-        label,
-        "system-ui",
-        HEADER_FONT,
-        to_jian_color(theme.muted_foreground),
-        Point2D::new(0.0, 0.0),
-    );
-    cx.backend
-        .draw_text(&header_text, Point2D::new(x + ROW_PAD_X, y + 19.0));
-}
-
-fn to_jian_color(c: Color) -> jian_core::scene::Color {
-    fn ch(v: f32) -> u8 {
-        (v.clamp(0.0, 1.0) * 255.0).round() as u8
-    }
-    jian_core::scene::Color::rgba(ch(c.r), ch(c.g), ch(c.b), ch(c.a))
 }
