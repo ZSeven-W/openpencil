@@ -167,6 +167,11 @@ pub fn apply_payload(doc: &mut Document, payload: DocPayload) -> Result<(), Stri
     doc.ui.locale_picker_open = false;
     doc.ui.shape_picker_open = false;
     doc.ui.fill_type_picker_open = false;
+    // Cross-doc clipboard contents are nodes carrying old NodeIds —
+    // pasting them into the freshly-loaded doc would re-introduce
+    // ids the new allocator doesn't know about (or collide with
+    // freshly-loaded rows). Empty the clipboard on Open.
+    doc.clipboard.clear();
     Ok(())
 }
 
