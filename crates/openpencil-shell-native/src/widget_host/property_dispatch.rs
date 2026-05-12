@@ -45,6 +45,28 @@ impl WidgetHostNative {
         }
     }
 
+    /// Commit any focused settings-modal input (currently only the
+    /// MCP port). Parses the draft, clamps to a valid port range,
+    /// writes it back, and clears focus + draft. No-op when nothing
+    /// is focused.
+    pub(in crate::widget_host) fn commit_settings_focus_if_any(&mut self) {
+        use openpencil_shell_core::document::SettingsFocus;
+        let Some(focus) = self.document.ui.agent_settings.focus.take() else {
+            return;
+        };
+        let draft = std::mem::take(&mut self.document.ui.settings_input_draft);
+        match focus {
+            SettingsFocus::McpPort => {
+                if let Ok(port) = draft.trim().parse::<u16>() {
+                    // Keep ports above 1024 to avoid root-only ranges;
+                    // anything below silently falls back to 1024 so
+                    // the user still gets a usable value.
+                    self.document.ui.agent_settings.mcp_server.port = port.max(1024);
+                }
+            }
+        }
+    }
+
     pub(in crate::widget_host) fn commit_property_focus_if_any(&mut self) {
         let Some(focus) = self.document.ui.property_focus.take() else {
             return;

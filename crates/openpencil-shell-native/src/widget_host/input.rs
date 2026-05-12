@@ -331,6 +331,10 @@ impl WidgetHostNative {
 
     /// Typed-char router: rename → property → chat.
     pub fn apply_text(&mut self, c: char) -> bool {
+        if self.document.ui.agent_settings.focus.is_some() && c.is_ascii_digit() {
+            return self.document.ui.settings_input_draft.len() < 5
+                && { self.document.ui.settings_input_draft.push(c); true };
+        }
         if self.document.ui.layer_rename.is_some() && !c.is_control() {
             let mut s = [0u8; 4];
             let _ = self.document.rename_append(c.encode_utf8(&mut s));
@@ -351,9 +355,8 @@ impl WidgetHostNative {
         if let Some(focus) = self.document.ui.property_focus {
             self.document.ui.property_draft_select_all = false;
             let is_hex_focus = matches!(focus, PropertyFocus::FillHex | PropertyFocus::StrokeHex);
+            // Hex caps at 7 (`#RRGGBB`); numeric accepts digits, leading `-`, and one `.` for float focuses.
             let allowed = if is_hex_focus {
-                // Hex inputs accept 0-9, a-f, A-F, and an optional
-                // leading `#`. Length capped at 7 (`#RRGGBB`).
                 self.document.ui.property_input_draft.len() < 7
                     && (c.is_ascii_hexdigit()
                         || (c == '#' && self.document.ui.property_input_draft.is_empty()))
@@ -381,13 +384,12 @@ impl WidgetHostNative {
             return false;
         }
         self.document.chat.input.push(c);
-        // Reset blink so the caret is solid right after the keystroke.
         self.document.chat.caret_anchor_ms = self.now_ms;
         true
     }
 
-    /// Backspace — rename → text-edit → property → chat → delete_selected.
     pub fn apply_backspace(&mut self) -> bool {
+        if self.document.ui.agent_settings.focus.is_some() { self.document.ui.settings_input_draft.pop(); return true; }
         if self.document.ui.layer_rename.is_some() {
             let ok = self.document.rename_backspace();
             if ok {
@@ -584,8 +586,8 @@ impl WidgetHostNative {
         // nothing else to do.
     }
 
-    /// Enter — commits rename → text-edit → pen → property edit → chat.
     pub fn apply_send(&mut self) -> bool {
+        if self.document.ui.agent_settings.focus.is_some() { self.commit_settings_focus_if_any(); return true; }
         if self.document.ui.layer_rename.is_some() {
             return self.document.rename_commit();
         }
@@ -595,13 +597,8 @@ impl WidgetHostNative {
         if self.document.ui.pen_in_progress.is_some() {
             return self.document.finish_pen_path();
         }
-        if self.document.ui.property_focus.is_some() {
-            self.commit_property_focus_if_any();
-            return true;
-        }
-        if self.document.chat.input.trim().is_empty() {
-            return false;
-        }
+        if self.document.ui.property_focus.is_some() { self.commit_property_focus_if_any(); return true; }
+        if self.document.chat.input.trim().is_empty() { return false; }
         self.document.chat.send();
         true
     }
@@ -609,20 +606,12 @@ impl WidgetHostNative {
     /// Escape — priority cascade: rename → property → pickers →
     /// chat → selection. One layer per press.
     pub fn apply_escape(&mut self) -> bool {
-        if self.document.ui.agent_settings_open {
-            self.document.ui.agent_settings_open = false;
-            self.document.ui.agent_settings_drag = None;
-            return true;
-        }
-        if self.document.rename_cancel() {
-            return true;
-        }
-        if self.document.text_edit_commit() {
-            return true;
-        }
-        if self.document.finish_pen_path() {
-            return true;
-        }
+        // Settings input focus: clear draft first, second press closes modal.
+        if self.document.ui.agent_settings.focus.take().is_some() { self.document.ui.settings_input_draft.clear(); return true; }
+        if self.document.ui.agent_settings_open { self.document.ui.agent_settings_open = false; self.document.ui.agent_settings_drag = None; return true; }
+        if self.document.rename_cancel() { return true; }
+        if self.document.text_edit_commit() { return true; }
+        if self.document.finish_pen_path() { return true; }
         if self.document.ui.property_focus.take().is_some() {
             self.document.ui.property_input_draft.clear();
             self.document.ui.property_draft_select_all = false;

@@ -237,13 +237,7 @@ impl WidgetHostNative {
             return true;
         }
 
-        // 0a. Locale picker overlay — when open, it sits on top of
-        //     everything. Row click sets locale + closes; ANY
-        //     other click (including the Globe button itself, the
-        //     canvas, the toolbar, the chip) just closes the
-        //     picker. The click is swallowed so the same press
-        //     doesn't simultaneously re-toggle the picker open
-        //     via the Globe button hit-test below.
+        // 0a. Locale picker overlay — top-most when open; click outside closes.
         if self.document.ui.locale_picker_open {
             let panel_rect = self.locale_picker_rect(viewport_width);
             let picker = LocalePicker::for_document(&self.document);
@@ -769,10 +763,12 @@ impl WidgetHostNative {
         let point = Point2D::new(x, y);
         match panel.hit_test(panel_rect, point) {
             AgentSettingsHit::Close | AgentSettingsHit::Outside => {
+                self.commit_settings_focus_if_any();
                 self.document.ui.agent_settings_open = false;
                 self.document.ui.agent_settings_drag = None;
             }
             AgentSettingsHit::SelectTab(t) => {
+                self.commit_settings_focus_if_any();
                 self.document.ui.agent_settings.tab = t;
                 self.document.ui.agent_settings.scroll_y = 0.0;
             }
@@ -789,6 +785,11 @@ impl WidgetHostNative {
             }
             AgentSettingsHit::ToggleImagesAdvanced => {
                 self.document.ui.agent_settings.images_advanced_open ^= true;
+            }
+            AgentSettingsHit::FocusMcpPort => {
+                self.commit_settings_focus_if_any();
+                self.document.ui.agent_settings.focus = Some(openpencil_shell_core::document::SettingsFocus::McpPort);
+                self.document.ui.settings_input_draft = self.document.ui.agent_settings.mcp_server.port.to_string();
             }
             AgentSettingsHit::AddProvider | AgentSettingsHit::AddAcpAgent | AgentSettingsHit::TestImageSearch | AgentSettingsHit::AddGenConfig | AgentSettingsHit::Inside => {}
         }

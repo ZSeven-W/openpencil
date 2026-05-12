@@ -121,6 +121,15 @@ impl Default for McpServer {
     }
 }
 
+/// Editable inputs on the settings modal that aren't tied to a
+/// `Node` (so they don't fit the property-panel's `PropertyFocus`).
+/// Currently just the MCP server port; OAuth fields will likely
+/// reuse this enum when wired.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SettingsFocus {
+    McpPort,
+}
+
 #[derive(Debug, Clone, Copy)]
 pub struct AgentSettings {
     pub tab: AgentSettingsTab,
@@ -133,6 +142,10 @@ pub struct AgentSettings {
     pub mcp_cli_enabled: [bool; 6],
     pub images_advanced_open: bool,
     pub images_search_ready: bool,
+    /// Currently-focused editable input on the modal. `None` while
+    /// nothing is in edit mode; flips to `Some(SettingsFocus::*)`
+    /// on click and back to `None` on Enter/Escape/outside-click.
+    pub focus: Option<SettingsFocus>,
     /// Index into `AgentProvider::ALL` of the card the cursor is
     /// currently hovering, used to flip the connect button into a
     /// red 断开连接 affordance on already-connected cards. `usize::MAX`
@@ -152,6 +165,7 @@ impl Default for AgentSettings {
             mcp_cli_enabled: [false; 6],
             images_advanced_open: true,
             images_search_ready: true,
+            focus: None,
             hover_provider: usize::MAX,
         }
     }

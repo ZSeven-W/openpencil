@@ -1,6 +1,6 @@
 //! MCP tab of the settings modal.
 
-use crate::document::{AgentSettings, Document, McpCli};
+use crate::document::{AgentSettings, Document, McpCli, SettingsFocus};
 use crate::theme::Theme;
 use crate::widgets::agent_settings_i18n::t as t_settings;
 use crate::widgets::PaintCx;
@@ -47,6 +47,7 @@ pub(super) fn content_height() -> f32 {
 pub enum McpHit {
     ToggleServer,
     ToggleCli(McpCli),
+    FocusPort,
     None,
 }
 
@@ -68,6 +69,17 @@ fn server_button_rect(content: Rect) -> Rect {
     }
 }
 
+fn port_field_rect(content: Rect) -> Rect {
+    let card = server_card_rect(content);
+    let btn = server_button_rect(content);
+    let mid_y = card.origin.y + SERVER_CARD_H / 2.0;
+    let port_field_x = btn.origin.x - 8.0 - PORT_FIELD_W;
+    Rect {
+        origin: Point2D::new(port_field_x, mid_y - PORT_FIELD_H / 2.0),
+        size: Point2D::new(PORT_FIELD_W, PORT_FIELD_H),
+    }
+}
+
 fn cli_cell_rect(content: Rect, idx: usize) -> Rect {
     let col = (idx % 2) as f32;
     let row = (idx / 2) as f32;
@@ -84,6 +96,9 @@ fn cli_cell_rect(content: Rect, idx: usize) -> Rect {
 pub fn hit_test(content: Rect, scrolled: Point2D) -> McpHit {
     if rect_contains(server_button_rect(content), scrolled) {
         return McpHit::ToggleServer;
+    }
+    if rect_contains(port_field_rect(content), scrolled) {
+        return McpHit::FocusPort;
     }
     for (i, cli) in McpCli::ALL.iter().enumerate() {
         if rect_contains(cli_cell_rect(content, i), scrolled) {
@@ -200,12 +215,19 @@ fn paint_server_card(
         &port_label,
         Point2D::new(port_field_x - 8.0 - port_label_w, mid_y + 4.0),
     );
-    let port_field = Rect {
-        origin: Point2D::new(port_field_x, mid_y - PORT_FIELD_H / 2.0),
-        size: Point2D::new(PORT_FIELD_W, PORT_FIELD_H),
+    let port_field = port_field_rect(content);
+    let focused = matches!(settings.focus, Some(SettingsFocus::McpPort));
+    let port_str = if focused {
+        doc.ui.settings_input_draft.clone()
+    } else {
+        format!("{}", settings.mcp_server.port)
     };
-    cx.backend.stroke_round_rect(port_field, 6.0, theme.border, 1.0);
-    let port_str = format!("{}", settings.mcp_server.port);
+    let (border_color, border_w) = if focused {
+        (theme.primary, 1.5)
+    } else {
+        (theme.border, 1.0)
+    };
+    cx.backend.stroke_round_rect(port_field, 6.0, border_color, border_w);
     let port_w = cx.backend.measure_text(&port_str, 12.0);
     let port_layout = TextLayout::single_run(
         &port_str,
@@ -214,13 +236,20 @@ fn paint_server_card(
         to_jian(theme.foreground),
         Point2D::new(0.0, 0.0),
     );
-    cx.backend.draw_text(
-        &port_layout,
-        Point2D::new(
-            port_field.origin.x + (PORT_FIELD_W - port_w) / 2.0,
-            port_field.origin.y + PORT_FIELD_H / 2.0 + 5.0,
-        ),
-    );
+    let port_x = port_field.origin.x + (PORT_FIELD_W - port_w) / 2.0;
+    let port_y = port_field.origin.y + PORT_FIELD_H / 2.0 + 5.0;
+    cx.backend
+        .draw_text(&port_layout, Point2D::new(port_x, port_y));
+    if focused {
+        // Static caret at the end of the draft — chrome caret blink
+        // would require threading `now_ms`; the static bar is enough
+        // to signal "this field is accepting keystrokes".
+        let caret = Rect {
+            origin: Point2D::new(port_x + port_w + 1.0, port_field.origin.y + 6.0),
+            size: Point2D::new(1.5, PORT_FIELD_H - 12.0),
+        };
+        cx.backend.fill_rect(caret, theme.foreground);
+    }
 
     let btn_bg = if running { theme.muted } else { theme.primary };
     let btn_fg = if running { theme.foreground } else { theme.primary_foreground };

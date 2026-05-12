@@ -302,6 +302,11 @@ pub struct UiState {
     /// Draft for the focused property input; committed on Enter,
     /// discarded on Escape.
     pub property_input_draft: String,
+    /// Draft for the focused settings-modal input (e.g. MCP port).
+    /// Lives on UiState because `AgentSettings` is `Copy` and can't
+    /// hold a `String` — the focus discriminator stays on
+    /// `AgentSettings::focus` so its lifecycle is tied to the modal.
+    pub settings_input_draft: String,
     /// Caret-blink anchor for the focused property-panel input —
     /// reset on focus + every keystroke (mirrors `chat.caret_anchor_ms`).
     pub property_caret_anchor_ms: u64,
@@ -419,6 +424,7 @@ pub enum PropertyTab {
 
 pub use crate::agent_settings_state::{
     AgentProvider, AgentSettings, AgentSettingsDrag, AgentSettingsTab, McpCli, McpServer,
+    SettingsFocus,
 };
 
 /// Floating colour-picker state. HSV stays anchored across the
@@ -503,6 +509,7 @@ impl Default for UiState {
             property_panel_width: 280.0,
             property_focus: None,
             property_input_draft: String::new(),
+            settings_input_draft: String::new(),
             property_caret_anchor_ms: 0,
             property_draft_select_all: false,
             theme_mode: ThemeMode::Dark,
