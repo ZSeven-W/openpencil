@@ -9,6 +9,10 @@ impl WidgetHost {
     /// Step 5 P2: push a typed character into the focused chat
     /// input. Returns true if anything changed.
     pub fn apply_text(&mut self, c: char) -> bool {
+        if self.document.ui.agent_settings.focus.is_some() && c.is_ascii_digit() {
+            return self.document.ui.settings_input_draft.len() < 5
+                && { self.document.ui.settings_input_draft.push(c); true };
+        }
         if self.document.ui.layer_rename.is_some() && !c.is_control() {
             let mut s = [0u8; 4];
             return self.document.rename_append(c.encode_utf8(&mut s));
@@ -27,6 +31,10 @@ impl WidgetHost {
     }
 
     pub fn apply_backspace(&mut self) -> bool {
+        if self.document.ui.agent_settings.focus.is_some() {
+            self.document.ui.settings_input_draft.pop();
+            return true;
+        }
         if self.document.ui.layer_rename.is_some() {
             return self.document.rename_backspace();
         }
@@ -48,6 +56,10 @@ impl WidgetHost {
     }
 
     pub fn apply_send(&mut self) -> bool {
+        if self.document.ui.agent_settings.focus.is_some() {
+            self.commit_settings_focus();
+            return true;
+        }
         if self.document.ui.layer_rename.is_some() {
             return self.document.rename_commit();
         }
@@ -219,6 +231,10 @@ impl WidgetHost {
     /// property input editing yet — so when web grows that path,
     /// no Escape-priority reordering is needed.
     pub fn apply_escape(&mut self) -> bool {
+        if self.document.ui.agent_settings.focus.take().is_some() {
+            self.document.ui.settings_input_draft.clear();
+            return true;
+        }
         if self.document.rename_cancel() {
             return true;
         }
@@ -258,5 +274,23 @@ impl WidgetHost {
 
     /// Phase C2 keyboard forwarding stub.
     pub fn apply_key(&mut self, _event: &openpencil_shell_core::KeyEvent) { // glue:
+    }
+
+    /// Commit the in-progress settings-modal input draft (currently
+    /// just the MCP server port). Parses u16, clamps ≥1024, writes
+    /// back, clears focus + draft. Mirrors the native helper.
+    pub(super) fn commit_settings_focus(&mut self) {
+        use openpencil_shell_core::document::SettingsFocus;
+        let Some(focus) = self.document.ui.agent_settings.focus.take() else {
+            return;
+        };
+        let draft = std::mem::take(&mut self.document.ui.settings_input_draft);
+        match focus {
+            SettingsFocus::McpPort => {
+                if let Ok(port) = draft.trim().parse::<u16>() {
+                    self.document.ui.agent_settings.mcp_server.port = port.max(1024);
+                }
+            }
+        }
     }
 }

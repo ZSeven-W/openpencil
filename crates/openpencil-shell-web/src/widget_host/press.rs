@@ -457,9 +457,11 @@ impl WidgetHost {
         let panel_rect = panel.rect(vw, vh);
         match panel.hit_test(panel_rect, Point2D::new(x, y)) {
             AgentSettingsHit::Close | AgentSettingsHit::Outside => {
+                self.commit_settings_focus();
                 self.document.ui.agent_settings_open = false;
             }
             AgentSettingsHit::SelectTab(t) => {
+                self.commit_settings_focus();
                 self.document.ui.agent_settings.tab = t;
                 self.document.ui.agent_settings.scroll_y = 0.0;
             }
@@ -478,6 +480,7 @@ impl WidgetHost {
                 self.document.ui.agent_settings.images_advanced_open ^= true;
             }
             AgentSettingsHit::FocusMcpPort => {
+                self.commit_settings_focus();
                 self.document.ui.agent_settings.focus = Some(openpencil_shell_core::document::SettingsFocus::McpPort);
                 self.document.ui.settings_input_draft = self.document.ui.agent_settings.mcp_server.port.to_string();
             }
