@@ -17,6 +17,10 @@ impl Document {
         let raw = (*next_id).max(safe);
         *next_id = raw.checked_add(1)?;
         let id = NodeId::new(raw);
+        // Snapshot BEFORE any mutation so a later undo restores the
+        // pre-pen document state — otherwise the snapshot already
+        // contains the new path node and undo is a no-op visually.
+        let pre = self.snapshot_for_history();
         let mut node = Node::leaf(raw, NodeKind::Path, "Path")
             .with_stroke(crate::Color::BLACK, 2.0)
             .with_bounds(crate::Rect {
@@ -27,7 +31,7 @@ impl Document {
         let active = self.active_page_index;
         let page = self.pages.get_mut(active)?;
         page.children.push(node);
-        self.ui.pending_pen_history = Some(self.snapshot_for_history());
+        self.ui.pending_pen_history = Some(pre);
         self.ui.pen_in_progress = Some(id);
         self.set_single_selection(id);
         Some(id)
