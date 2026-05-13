@@ -35,15 +35,14 @@ if (!i18n.isInitialized) {
 
 /** Lazy-加载语言环境的翻译并切换到它。 No-op 代表“en”。 */
 export async function loadLocale(lang: string): Promise<void> {
-  if (lang === 'en') return;
   if (!SUPPORTED_LANGS.includes(lang)) return;
-  if (!i18n.hasResourceBundle(lang, 'translation')) {
+  if (lang !== 'en' && !i18n.hasResourceBundle(lang, 'translation')) {
     // File 名称采用短横线命名 (zh-TW → zh-tw.ts)
     const fileName = lang.toLowerCase();
     const mod = await import(`@/i18n/locales/${fileName}.ts`);
     i18n.addResourceBundle(lang, 'translation', mod.default, true, true);
   }
-  i18n.changeLanguage(lang);
+  await i18n.changeLanguage(lang);
 }
 
 // Persist language changes

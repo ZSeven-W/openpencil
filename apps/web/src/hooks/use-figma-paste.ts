@@ -95,7 +95,7 @@ function processFigmaHtml(html: string): boolean {
   useHistoryStore.getState().endBatch(useDocumentStore.getState().document);
 
   // Select 粘贴的节点
-  useCanvasStore.getState().setSelection(newIds, newIds[0] ?? null);
+  useCanvasStore.getState().setSelection(newIds, null);
   return true;
 }
 

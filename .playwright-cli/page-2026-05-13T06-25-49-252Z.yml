@@ -1,0 +1,12 @@
+- generic [ref=e3]:
+  - generic [ref=e4]:
+    - img [ref=e5]
+    - generic [ref=e10]:
+      - heading "OpenPencil 云端" [level=1] [ref=e11]
+      - paragraph [ref=e12]: 登录后管理你的设计文件。
+  - generic [ref=e13]: 邮箱
+  - textbox "邮箱" [active] [ref=e14]
+  - generic [ref=e15]: 密码
+  - textbox "密码" [ref=e16]: linlingqin77@qq.comllq123456
+  - button "登录" [ref=e17]
+  - button "创建新账号" [ref=e18]

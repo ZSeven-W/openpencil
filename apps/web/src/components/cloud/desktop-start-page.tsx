@@ -1,10 +1,12 @@
 import { Cloud, FilePlus2, FolderOpen, HardDrive } from 'lucide-react';
 import { useNavigate } from '@tanstack/react-router';
+import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { useDocumentStore } from '@/stores/document-store';
 import { parseAndPrepareImportedDocument } from '@/utils/import-pen-document';
 
 export function DesktopStartPage() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
 
   const openCloudFiles = () => {
@@ -40,9 +42,11 @@ export function DesktopStartPage() {
               <HardDrive className="h-5 w-5 text-primary" />
             </div>
             <div>
-              <h1 className="text-xl font-semibold tracking-normal">OpenPencil Workspace</h1>
+              <h1 className="text-xl font-semibold tracking-normal">
+                {t('desktopStart.title')}
+              </h1>
               <p className="mt-1 text-sm text-muted-foreground">
-                Choose a cloud workspace or keep working with local OpenPencil files.
+                {t('desktopStart.subtitle')}
               </p>
             </div>
           </div>
@@ -55,16 +59,15 @@ export function DesktopStartPage() {
                 <Cloud className="h-4 w-4 text-primary" />
               </div>
               <div className="min-w-0">
-                <h2 className="text-sm font-semibold">Cloud Files</h2>
+                <h2 className="text-sm font-semibold">{t('desktopStart.cloudTitle')}</h2>
                 <p className="mt-1 text-sm leading-6 text-muted-foreground">
-                  Open your Supabase-backed library for synced files, code generation history, and
-                  cross-device work.
+                  {t('desktopStart.cloudDescription')}
                 </p>
               </div>
             </div>
             <Button className="mt-5 w-full justify-center" onClick={openCloudFiles}>
               <Cloud className="h-4 w-4" />
-              Open Cloud Files
+              {t('desktopStart.openCloudFiles')}
             </Button>
           </section>
 
@@ -74,21 +77,20 @@ export function DesktopStartPage() {
                 <FolderOpen className="h-4 w-4 text-primary" />
               </div>
               <div className="min-w-0">
-                <h2 className="text-sm font-semibold">Local Files</h2>
+                <h2 className="text-sm font-semibold">{t('desktopStart.localTitle')}</h2>
                 <p className="mt-1 text-sm leading-6 text-muted-foreground">
-                  Create or open a local `.op` file. Local files stay independent from your cloud
-                  library unless you explicitly save them to cloud later.
+                  {t('desktopStart.localDescription')}
                 </p>
               </div>
             </div>
             <div className="mt-5 grid grid-cols-2 gap-2">
               <Button variant="outline" className="justify-center" onClick={createLocalFile}>
                 <FilePlus2 className="h-4 w-4" />
-                New Local File
+                {t('desktopStart.newLocalFile')}
               </Button>
               <Button variant="outline" className="justify-center" onClick={() => void openLocalFile()}>
                 <FolderOpen className="h-4 w-4" />
-                Open Local File
+                {t('desktopStart.openLocalFile')}
               </Button>
             </div>
           </section>

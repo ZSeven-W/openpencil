@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { ShieldCheck, Trash2 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import {
   createCloudFileShare,
@@ -13,6 +14,7 @@ interface CloudFileSharingSectionProps {
 }
 
 export function CloudFileSharingSection({ file }: CloudFileSharingSectionProps) {
+  const { t } = useTranslation();
   const [shares, setShares] = useState<CloudFileShare[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -32,7 +34,9 @@ export function CloudFileSharingSection({ file }: CloudFileSharingSectionProps) 
         if (!cancelled) setShares(items);
       })
       .catch((err) => {
-        if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load shares');
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : t('cloudLibrary.share.errorLoad'));
+        }
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -53,7 +57,7 @@ export function CloudFileSharingSection({ file }: CloudFileSharingSectionProps) 
       setEmail('');
       setRole('viewer');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to add share');
+      setError(err instanceof Error ? err.message : t('cloudLibrary.share.errorAdd'));
     } finally {
       setSaving(false);
     }
@@ -65,21 +69,26 @@ export function CloudFileSharingSection({ file }: CloudFileSharingSectionProps) 
       await revokeCloudFileShare({ fileId: file.id, shareId });
       setShares((items) => items.filter((item) => item.id !== shareId));
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to revoke share');
+      setError(err instanceof Error ? err.message : t('cloudLibrary.share.errorRevoke'));
     }
   };
 
   if (isSharedWithMe) {
     return (
       <section className="mt-5 border-t border-border pt-4 text-xs">
-        <p className="mb-2 font-medium">Shared access</p>
+        <p className="mb-2 font-medium">{t('cloudLibrary.share.title')}</p>
         <div className="rounded-md border border-border bg-card p-3">
           <p className="flex items-center gap-2 font-medium">
             <ShieldCheck size={14} className="text-primary" />
-            Shared with you
+            {t('cloudLibrary.share.sharedWithYou')}
           </p>
           <p className="mt-1 text-muted-foreground">
-            Your role is {file.shareRole === 'editor' ? 'editor' : 'viewer'}.
+            {t('cloudLibrary.share.yourRole', {
+              role:
+                file.shareRole === 'editor'
+                  ? t('cloudLibrary.share.role.editor')
+                  : t('cloudLibrary.share.role.viewer'),
+            })}
           </p>
         </div>
       </section>
@@ -88,10 +97,10 @@ export function CloudFileSharingSection({ file }: CloudFileSharingSectionProps) 
 
   return (
     <section className="mt-5 border-t border-border pt-4 text-xs">
-      <p className="mb-3 font-medium">Shared access</p>
+      <p className="mb-3 font-medium">{t('cloudLibrary.share.title')}</p>
       <div className="space-y-2">
         <input
-          aria-label="Share email"
+          aria-label={t('cloudLibrary.share.email')}
           value={email}
           onChange={(event) => setEmail(event.target.value)}
           placeholder="teammate@example.com"
@@ -99,31 +108,34 @@ export function CloudFileSharingSection({ file }: CloudFileSharingSectionProps) 
         />
         <div className="flex gap-2">
           <select
-            aria-label="Share role"
+            aria-label={t('cloudLibrary.share.roleLabel')}
             value={role}
             onChange={(event) => setRole(event.target.value as CloudShareRole)}
             className="h-8 min-w-0 flex-1 rounded-md border border-input bg-background px-2 text-xs outline-none focus:border-ring"
           >
-            <option value="viewer">Viewer</option>
-            <option value="editor">Editor</option>
+            <option value="viewer">{t('cloudLibrary.share.role.viewer')}</option>
+            <option value="editor">{t('cloudLibrary.share.role.editor')}</option>
           </select>
           <Button size="sm" onClick={() => void addShare()} disabled={saving || !email.trim()}>
-            Add share
+            {t('cloudLibrary.share.add')}
           </Button>
         </div>
       </div>
 
       {error && <p className="mt-3 text-xs text-destructive">{error}</p>}
       {loading ? (
-        <p className="mt-3 text-xs text-muted-foreground">Loading shares...</p>
+        <p className="mt-3 text-xs text-muted-foreground">{t('cloudLibrary.share.loading')}</p>
       ) : shares.length === 0 ? (
         <p className="mt-3 rounded-md border border-border bg-card px-3 py-2 text-muted-foreground">
-          No active shares
+          {t('cloudLibrary.share.empty')}
         </p>
       ) : (
         <div className="mt-3 space-y-2">
           {shares.map((share) => {
-            const recipient = share.sharedWithEmail ?? share.sharedWithUserId ?? 'Unknown recipient';
+            const recipient =
+              share.sharedWithEmail ??
+              share.sharedWithUserId ??
+              t('cloudLibrary.share.unknownRecipient');
             return (
               <div
                 key={share.id}
@@ -131,13 +143,15 @@ export function CloudFileSharingSection({ file }: CloudFileSharingSectionProps) 
               >
                 <div className="min-w-0">
                   <p className="truncate font-medium">{recipient}</p>
-                  <p className="capitalize text-muted-foreground">{share.role}</p>
+                  <p className="capitalize text-muted-foreground">
+                    {t(`cloudLibrary.share.role.${share.role}`)}
+                  </p>
                 </div>
                 <Button
                   variant="ghost"
                   size="icon-sm"
                   className="hover:text-destructive"
-                  aria-label={`Revoke share for ${recipient}`}
+                  aria-label={t('cloudLibrary.share.revokeFor', { recipient })}
                   onClick={() => void revokeShare(share.id)}
                 >
                   <Trash2 size={13} />

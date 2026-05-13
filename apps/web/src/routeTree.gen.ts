@@ -9,12 +9,20 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as TasksRouteImport } from './routes/tasks'
 import { Route as EditorRouteImport } from './routes/editor'
 import { Route as CloudRouteImport } from './routes/cloud'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as TasksWorkersRouteImport } from './routes/tasks.workers'
+import { Route as TasksJobIdRouteImport } from './routes/tasks.$jobId'
 import { Route as EditorLocalRouteImport } from './routes/editor.local'
 import { Route as EditorFileIdRouteImport } from './routes/editor.$fileId'
 
+const TasksRoute = TasksRouteImport.update({
+  id: '/tasks',
+  path: '/tasks',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const EditorRoute = EditorRouteImport.update({
   id: '/editor',
   path: '/editor',
@@ -29,6 +37,16 @@ const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
+} as any)
+const TasksWorkersRoute = TasksWorkersRouteImport.update({
+  id: '/workers',
+  path: '/workers',
+  getParentRoute: () => TasksRoute,
+} as any)
+const TasksJobIdRoute = TasksJobIdRouteImport.update({
+  id: '/$jobId',
+  path: '/$jobId',
+  getParentRoute: () => TasksRoute,
 } as any)
 const EditorLocalRoute = EditorLocalRouteImport.update({
   id: '/local',
@@ -45,46 +63,82 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/cloud': typeof CloudRoute
   '/editor': typeof EditorRouteWithChildren
+  '/tasks': typeof TasksRouteWithChildren
   '/editor/$fileId': typeof EditorFileIdRoute
   '/editor/local': typeof EditorLocalRoute
+  '/tasks/$jobId': typeof TasksJobIdRoute
+  '/tasks/workers': typeof TasksWorkersRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/cloud': typeof CloudRoute
   '/editor': typeof EditorRouteWithChildren
+  '/tasks': typeof TasksRouteWithChildren
   '/editor/$fileId': typeof EditorFileIdRoute
   '/editor/local': typeof EditorLocalRoute
+  '/tasks/$jobId': typeof TasksJobIdRoute
+  '/tasks/workers': typeof TasksWorkersRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/cloud': typeof CloudRoute
   '/editor': typeof EditorRouteWithChildren
+  '/tasks': typeof TasksRouteWithChildren
   '/editor/$fileId': typeof EditorFileIdRoute
   '/editor/local': typeof EditorLocalRoute
+  '/tasks/$jobId': typeof TasksJobIdRoute
+  '/tasks/workers': typeof TasksWorkersRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/cloud' | '/editor' | '/editor/$fileId' | '/editor/local'
+  fullPaths:
+    | '/'
+    | '/cloud'
+    | '/editor'
+    | '/tasks'
+    | '/editor/$fileId'
+    | '/editor/local'
+    | '/tasks/$jobId'
+    | '/tasks/workers'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/cloud' | '/editor' | '/editor/$fileId' | '/editor/local'
+  to:
+    | '/'
+    | '/cloud'
+    | '/editor'
+    | '/tasks'
+    | '/editor/$fileId'
+    | '/editor/local'
+    | '/tasks/$jobId'
+    | '/tasks/workers'
   id:
     | '__root__'
     | '/'
     | '/cloud'
     | '/editor'
+    | '/tasks'
     | '/editor/$fileId'
     | '/editor/local'
+    | '/tasks/$jobId'
+    | '/tasks/workers'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   CloudRoute: typeof CloudRoute
   EditorRoute: typeof EditorRouteWithChildren
+  TasksRoute: typeof TasksRouteWithChildren
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/tasks': {
+      id: '/tasks'
+      path: '/tasks'
+      fullPath: '/tasks'
+      preLoaderRoute: typeof TasksRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/editor': {
       id: '/editor'
       path: '/editor'
@@ -105,6 +159,20 @@ declare module '@tanstack/react-router' {
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/tasks/workers': {
+      id: '/tasks/workers'
+      path: '/workers'
+      fullPath: '/tasks/workers'
+      preLoaderRoute: typeof TasksWorkersRouteImport
+      parentRoute: typeof TasksRoute
+    }
+    '/tasks/$jobId': {
+      id: '/tasks/$jobId'
+      path: '/$jobId'
+      fullPath: '/tasks/$jobId'
+      preLoaderRoute: typeof TasksJobIdRouteImport
+      parentRoute: typeof TasksRoute
     }
     '/editor/local': {
       id: '/editor/local'
@@ -136,10 +204,23 @@ const EditorRouteChildren: EditorRouteChildren = {
 const EditorRouteWithChildren =
   EditorRoute._addFileChildren(EditorRouteChildren)
 
+interface TasksRouteChildren {
+  TasksJobIdRoute: typeof TasksJobIdRoute
+  TasksWorkersRoute: typeof TasksWorkersRoute
+}
+
+const TasksRouteChildren: TasksRouteChildren = {
+  TasksJobIdRoute: TasksJobIdRoute,
+  TasksWorkersRoute: TasksWorkersRoute,
+}
+
+const TasksRouteWithChildren = TasksRoute._addFileChildren(TasksRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   CloudRoute: CloudRoute,
   EditorRoute: EditorRouteWithChildren,
+  TasksRoute: TasksRouteWithChildren,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

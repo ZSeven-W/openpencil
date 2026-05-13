@@ -1,0 +1,378 @@
+- generic [ref=e400]:
+  - generic [ref=e401]:
+    - generic [ref=e402]:
+      - button "返回文件库" [ref=e403]:
+        - img
+      - button "Version history" [ref=e405]:
+        - img
+      - button [ref=e406]:
+        - img
+      - button [ref=e409]:
+        - img
+        - img
+      - button [ref=e411]:
+        - img
+    - generic [ref=e413]: 小程序.op
+    - generic [ref=e414]:
+      - button "Agents 与 MCP" [ref=e415]:
+        - generic [ref=e416]:
+          - img
+          - generic [ref=e417]: Agents 与 MCP
+      - combobox [ref=e419]:
+        - img [ref=e420]
+        - img [ref=e423]
+      - button [ref=e425]:
+        - img
+      - button [ref=e426]:
+        - img
+  - generic [ref=e428]:
+    - generic [ref=e429]:
+      - generic [ref=e431]:
+        - generic [ref=e432]:
+          - generic [ref=e433]: 页面
+          - button "添加页面" [ref=e434]:
+            - img [ref=e435]
+        - button "微企服" [ref=e437]:
+          - generic [ref=e438]: 微企服
+      - generic [ref=e440]: 图层
+      - generic [ref=e441]:
+        - generic [ref=e444] [cursor=pointer]:
+          - button [ref=e445]:
+            - img [ref=e446]
+          - img [ref=e448]
+          - generic [ref=e449]: Group 29
+          - button "Hide" [ref=e450]:
+            - img [ref=e451]
+          - button "Lock" [ref=e454]:
+            - img [ref=e455]
+        - generic [ref=e460] [cursor=pointer]:
+          - button [ref=e461]:
+            - img [ref=e462]
+          - img [ref=e464]
+          - generic [ref=e465]: Group 26
+          - button "Hide" [ref=e466]:
+            - img [ref=e467]
+          - button "Lock" [ref=e470]:
+            - img [ref=e471]
+        - generic [ref=e476] [cursor=pointer]:
+          - img [ref=e477]
+          - generic [ref=e479]: 微企服，代账公司专属客户服务助手
+          - button "Hide" [ref=e480]:
+            - img [ref=e481]
+          - button "Lock" [ref=e484]:
+            - img [ref=e485]
+        - generic [ref=e490] [cursor=pointer]:
+          - button [ref=e491]:
+            - img [ref=e492]
+          - img [ref=e494]
+          - generic [ref=e495]: Group 21
+          - button "Hide" [ref=e496]:
+            - img [ref=e497]
+          - button "Lock" [ref=e500]:
+            - img [ref=e501]
+        - generic [ref=e506] [cursor=pointer]:
+          - img [ref=e507]
+          - generic [ref=e509]: 7014b9eadce1f59315a54767451874c0e47ab29b182922-jy49MF_fw1200 1
+          - button "Hide" [ref=e510]:
+            - img [ref=e511]
+          - button "Lock" [ref=e514]:
+            - img [ref=e515]
+        - generic [ref=e520] [cursor=pointer]:
+          - img [ref=e521]
+          - generic [ref=e523]: Rectangle 35
+          - button "Hide" [ref=e524]:
+            - img [ref=e525]
+          - button "Lock" [ref=e528]:
+            - img [ref=e529]
+        - generic [ref=e534] [cursor=pointer]:
+          - img [ref=e535]
+          - generic [ref=e537]: 企业微信截图_9566749a-b5a5-49cc-b81e-6b08394cdb02 1
+          - button "Hide" [ref=e538]:
+            - img [ref=e539]
+          - button "Lock" [ref=e542]:
+            - img [ref=e543]
+        - generic [ref=e548] [cursor=pointer]:
+          - img [ref=e549]
+          - generic [ref=e551]: 服务报告长图 1
+          - button "Hide" [ref=e552]:
+            - img [ref=e553]
+          - button "Lock" [ref=e556]:
+            - img [ref=e557]
+        - generic [ref=e562] [cursor=pointer]:
+          - button [ref=e563]:
+            - img [ref=e564]
+          - img [ref=e566]
+          - generic [ref=e567]: 弹窗
+          - button "Hide" [ref=e568]:
+            - img [ref=e569]
+          - button "Lock" [ref=e572]:
+            - img [ref=e573]
+        - generic [ref=e578] [cursor=pointer]:
+          - button [ref=e579]:
+            - img [ref=e580]
+          - img [ref=e582]
+          - generic [ref=e583]: Frame 2
+          - button "Hide" [ref=e584]:
+            - img [ref=e585]
+          - button "Lock" [ref=e588]:
+            - img [ref=e589]
+        - generic [ref=e594] [cursor=pointer]:
+          - button [ref=e595]:
+            - img [ref=e596]
+          - img [ref=e598]
+          - generic [ref=e599]: Frame 1
+          - button "Hide" [ref=e600]:
+            - img [ref=e601]
+          - button "Lock" [ref=e604]:
+            - img [ref=e605]
+        - generic [ref=e610] [cursor=pointer]:
+          - button [ref=e611]:
+            - img [ref=e612]
+          - img [ref=e614]
+          - generic [ref=e615]: Group 7
+          - button "Hide" [ref=e616]:
+            - img [ref=e617]
+          - button "Lock" [ref=e620]:
+            - img [ref=e621]
+        - generic [ref=e626] [cursor=pointer]:
+          - button [ref=e627]:
+            - img [ref=e628]
+          - img [ref=e630]
+          - generic [ref=e631]: Group 5
+          - button "Hide" [ref=e632]:
+            - img [ref=e633]
+          - button "Lock" [ref=e636]:
+            - img [ref=e637]
+        - generic [ref=e642] [cursor=pointer]:
+          - button [ref=e643]:
+            - img [ref=e644]
+          - img [ref=e646]
+          - generic [ref=e647]: Group 4
+          - button "Hide" [ref=e648]:
+            - img [ref=e649]
+          - button "Lock" [ref=e652]:
+            - img [ref=e653]
+        - generic [ref=e658] [cursor=pointer]:
+          - img [ref=e659]
+          - generic [ref=e661]: 规范流程·落地有保障
+          - button "Hide" [ref=e662]:
+            - img [ref=e663]
+          - button "Lock" [ref=e666]:
+            - img [ref=e667]
+        - generic [ref=e672] [cursor=pointer]:
+          - button [ref=e673]:
+            - img [ref=e674]
+          - img [ref=e676]
+          - generic [ref=e677]: Group 3
+          - button "Hide" [ref=e678]:
+            - img [ref=e679]
+          - button "Lock" [ref=e682]:
+            - img [ref=e683]
+        - generic [ref=e688] [cursor=pointer]:
+          - button [ref=e689]:
+            - img [ref=e690]
+          - img [ref=e692]
+          - generic [ref=e693]: 首页
+          - button "Hide" [ref=e694]:
+            - img [ref=e695]
+          - button "Lock" [ref=e698]:
+            - img [ref=e699]
+        - generic [ref=e704] [cursor=pointer]:
+          - button [ref=e705]:
+            - img [ref=e706]
+          - img [ref=e708]
+          - generic [ref=e709]: 开票平台
+          - button "Hide" [ref=e710]:
+            - img [ref=e711]
+          - button "Lock" [ref=e714]:
+            - img [ref=e715]
+        - generic [ref=e720] [cursor=pointer]:
+          - button [ref=e721]:
+            - img [ref=e722]
+          - img [ref=e724]
+          - generic [ref=e725]: 首页
+          - button "Hide" [ref=e726]:
+            - img [ref=e727]
+          - button "Lock" [ref=e730]:
+            - img [ref=e731]
+    - generic [ref=e734]:
+      - generic [ref=e737]:
+        - button "选择" [pressed] [ref=e738]:
+          - img [ref=e739]
+        - generic [ref=e741]:
+          - button "形状工具" [ref=e742]:
+            - img [ref=e743]
+          - button "更多形状工具" [ref=e745] [cursor=pointer]:
+            - img [ref=e746]
+        - button "文本" [ref=e748]:
+          - img [ref=e749]
+        - button "画框" [ref=e751]:
+          - img [ref=e752]
+        - button "抓手" [ref=e753]:
+          - img [ref=e754]
+        - button [disabled]:
+          - img
+        - button [disabled]:
+          - img
+        - button "变量" [ref=e759]:
+          - img [ref=e760]
+        - button "设计系统" [ref=e763]:
+          - img [ref=e764]
+        - button "UIKit 浏览器" [ref=e766]:
+          - img [ref=e767]
+      - generic [ref=e773]:
+        - button "聚焦选中内容" [ref=e834]:
+          - img
+        - button "缩小" [ref=e775]:
+          - img
+        - button "重置缩放" [ref=e776] [cursor=pointer]: 15%
+        - button "放大" [ref=e777]:
+          - img
+      - generic [ref=e778]:
+        - generic [ref=e787]:
+          - generic [ref=e788]:
+            - button "收起" [ref=e789]:
+              - img
+            - generic "New Chat" [ref=e790]
+          - generic [ref=e791]:
+            - button "最大化" [ref=e792]:
+              - img
+            - button "新对话" [ref=e793]:
+              - img
+        - generic [ref=e795]:
+          - paragraph [ref=e796]: 用 AI 开始设计
+          - generic [ref=e797]:
+            - button "📱 设计一个移动端登录页面 带社交登录的移动端页面" [disabled] [ref=e798]:
+              - generic [ref=e799]:
+                - generic [ref=e800]: 📱
+                - generic [ref=e801]: 设计一个移动端登录页面
+              - generic [ref=e802]: 带社交登录的移动端页面
+            - button "🍕 美食App首页 App 首页设计" [disabled] [ref=e803]:
+              - generic [ref=e804]:
+                - generic [ref=e805]: 🍕
+                - generic [ref=e806]: 美食App首页
+              - generic [ref=e807]: App 首页设计
+            - button "⬇️ 设计一个底部导航栏 5 个 Tab 导航栏" [disabled] [ref=e808]:
+              - generic [ref=e809]:
+                - generic [ref=e810]: ⬇️
+                - generic [ref=e811]: 设计一个底部导航栏
+              - generic [ref=e812]: 5 个 Tab 导航栏
+            - button "🎨 为我的应用推荐配色方案 应用配色推荐" [disabled] [ref=e813]:
+              - generic [ref=e814]:
+                - generic [ref=e815]: 🎨
+                - generic [ref=e816]: 为我的应用推荐配色方案
+              - generic [ref=e817]: 应用配色推荐
+          - paragraph [ref=e818]: 提示：在对话前选中画布上的元素以提供上下文。
+        - generic [ref=e819]:
+          - textbox "用 Agent 设计..." [ref=e820]
+          - generic [ref=e821]:
+            - generic [ref=e822]:
+              - button "未连接模型" [disabled] [ref=e823]:
+                - generic [ref=e824]: 未连接模型
+                - img [ref=e825]
+              - button "1x" [ref=e827]:
+                - img [ref=e828]
+                - generic [ref=e830]: 1x
+              - generic [ref=e831]: 已选择 1 个
+            - generic [ref=e832]:
+              - button "附加图片" [ref=e833]:
+                - img
+              - button "发送消息" [disabled]:
+                - img
+    - generic [ref=e835]:
+      - generic [ref=e837]:
+        - button "设计" [ref=e838]
+        - button "代码" [ref=e839]
+      - generic [ref=e840]:
+        - generic [ref=e842]: Group 29
+        - generic [ref=e843]:
+          - button "创建组件" [ref=e845]:
+            - img
+            - text: 创建组件
+          - generic [ref=e847]:
+            - text: 位置
+            - generic [ref=e848]:
+              - generic [ref=e849]:
+                - generic [ref=e850]: X
+                - textbox [ref=e851]: "1106"
+              - generic [ref=e852]:
+                - generic [ref=e853]: "Y"
+                - textbox [ref=e854]: "2621"
+              - generic [ref=e855]:
+                - img [ref=e857]
+                - textbox [ref=e860]: "0"
+                - generic [ref=e861]: °
+              - generic [ref=e862]:
+                - generic [ref=e863]: R
+                - textbox [ref=e864]: "0"
+          - generic [ref=e866]:
+            - text: 弹性布局
+            - generic [ref=e867]:
+              - button "自由（无布局）" [ref=e868]:
+                - img [ref=e869]
+              - button "垂直布局" [ref=e874]:
+                - img [ref=e875]
+              - button "水平布局" [ref=e877]:
+                - img [ref=e878]
+            - generic [ref=e880]:
+              - generic [ref=e881]: 尺寸
+              - generic [ref=e882]:
+                - generic [ref=e883]:
+                  - generic [ref=e884]: W
+                  - textbox [ref=e885]: "544"
+                - generic [ref=e886]:
+                  - generic [ref=e887]: H
+                  - textbox [ref=e888]: "281"
+            - generic [ref=e889]:
+              - generic [ref=e890]:
+                - generic [ref=e891] [cursor=pointer]:
+                  - checkbox "填充宽度" [ref=e892]
+                  - generic [ref=e893]: 填充宽度
+                - generic [ref=e894] [cursor=pointer]:
+                  - checkbox "填充高度" [ref=e895]
+                  - generic [ref=e896]: 填充高度
+                - generic [ref=e897] [cursor=pointer]:
+                  - checkbox "适应宽度" [ref=e898]
+                  - generic [ref=e899]: 适应宽度
+                - generic [ref=e900] [cursor=pointer]:
+                  - checkbox "适应高度" [ref=e901]
+                  - generic [ref=e902]: 适应高度
+              - generic [ref=e903] [cursor=pointer]:
+                - checkbox "裁剪内容" [checked] [ref=e904]:
+                  - img [ref=e905]
+                - generic [ref=e907]: 裁剪内容
+          - generic [ref=e909]:
+            - generic [ref=e911]: 图层
+            - generic [ref=e915]:
+              - generic [ref=e916]: 不透明度
+              - textbox [ref=e917]: "100"
+              - generic [ref=e918]: "%"
+          - generic [ref=e920]:
+            - generic [ref=e921]:
+              - generic [ref=e922]: 填充
+              - button [ref=e924]:
+                - img
+            - generic [ref=e928]:
+              - textbox [ref=e930] [cursor=pointer]: "#d1d5db"
+              - textbox "#000000" [ref=e931]: "#d1d5db"
+          - generic [ref=e933]:
+            - generic [ref=e935]: 描边
+            - generic [ref=e936]:
+              - generic [ref=e939]:
+                - textbox [ref=e941] [cursor=pointer]: "#374151"
+                - textbox "#000000" [ref=e942]: "#374151"
+              - textbox [ref=e944]: "0"
+          - generic [ref=e947]:
+            - generic [ref=e948]: 效果
+            - button [ref=e950]:
+              - img
+          - generic [ref=e952]:
+            - generic [ref=e954]: 导出
+            - generic [ref=e955]:
+              - combobox [ref=e956]:
+                - generic: 1x
+                - img [ref=e957]
+              - combobox [ref=e959]:
+                - generic: PNG
+                - img [ref=e960]
+            - button "导出图层" [ref=e962]

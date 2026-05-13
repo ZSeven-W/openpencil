@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { AlertTriangle, Copy, RefreshCw, Save, X } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { createCloudFile, getCloudFile } from '@/services/cloud/cloud-files';
 import { useDocumentStore } from '@/stores/document-store';
@@ -9,6 +10,7 @@ interface CloudSaveConflictDialogProps {
 }
 
 export function CloudSaveConflictDialog({ onSavedCopy }: CloudSaveConflictDialogProps) {
+  const { t } = useTranslation();
   const cloudFileId = useDocumentStore((s) => s.cloudFileId);
   const cloudSaveState = useDocumentStore((s) => s.cloudSaveState);
   const cloudSaveError = useDocumentStore((s) => s.cloudSaveError);
@@ -25,7 +27,7 @@ export function CloudSaveConflictDialog({ onSavedCopy }: CloudSaveConflictDialog
       const file = await getCloudFile(cloudFileId);
       useDocumentStore.getState().loadCloudDocument(file);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to reload remote version');
+      setError(err instanceof Error ? err.message : t('cloudConflict.errorReload'));
     } finally {
       setBusyAction(null);
     }
@@ -37,14 +39,16 @@ export function CloudSaveConflictDialog({ onSavedCopy }: CloudSaveConflictDialog
     try {
       const state = useDocumentStore.getState();
       const file = await createCloudFile({
-        name: `${state.fileName ?? 'Untitled'} copy`,
+        name: t('cloudConflict.copyName', {
+          name: state.fileName ?? t('common.untitled'),
+        }),
         document: state.document,
         source: 'manual_save',
       });
       state.clearCloudError();
       onSavedCopy?.(file.id);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save cloud copy');
+      setError(err instanceof Error ? err.message : t('cloudConflict.errorSaveCopy'));
     } finally {
       setBusyAction(null);
     }
@@ -56,10 +60,10 @@ export function CloudSaveConflictDialog({ onSavedCopy }: CloudSaveConflictDialog
     try {
       const result = await useDocumentStore
         .getState()
-        .saveCloud('manual_save', 'Forced overwrite', true, { force: true });
-      if (!result) setError('Failed to overwrite the remote version');
+        .saveCloud('manual_save', t('cloudConflict.forceOverwriteLabel'), true, { force: true });
+      if (!result) setError(t('cloudConflict.errorOverwrite'));
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to overwrite remote version');
+      setError(err instanceof Error ? err.message : t('cloudConflict.errorOverwrite'));
     } finally {
       setBusyAction(null);
     }
@@ -70,7 +74,7 @@ export function CloudSaveConflictDialog({ onSavedCopy }: CloudSaveConflictDialog
       <section
         role="dialog"
         aria-modal="true"
-        aria-label="Save conflict"
+        aria-label={t('cloudConflict.title')}
         className="w-full max-w-md rounded-lg border border-border bg-card p-4 text-card-foreground shadow-lg"
       >
         <div className="mb-3 flex items-start justify-between gap-3">
@@ -79,16 +83,16 @@ export function CloudSaveConflictDialog({ onSavedCopy }: CloudSaveConflictDialog
               <AlertTriangle size={16} />
             </span>
             <div className="min-w-0">
-              <h2 className="text-sm font-semibold">Save conflict</h2>
+              <h2 className="text-sm font-semibold">{t('cloudConflict.title')}</h2>
               <p className="mt-1 text-xs text-muted-foreground">
-                {cloudSaveError ?? 'The cloud file has changed on another device.'}
+                {cloudSaveError ?? t('cloudConflict.description')}
               </p>
             </div>
           </div>
           <Button
             variant="ghost"
             size="icon-sm"
-            aria-label="Dismiss conflict"
+            aria-label={t('cloudConflict.dismiss')}
             onClick={() => useDocumentStore.getState().clearCloudError()}
           >
             <X size={14} />
@@ -97,13 +101,19 @@ export function CloudSaveConflictDialog({ onSavedCopy }: CloudSaveConflictDialog
 
         <div className="mb-4 grid grid-cols-2 gap-2 text-xs">
           <div className="rounded-md border border-border bg-background p-3">
-            <p className="text-muted-foreground">Local base</p>
-            <p className="mt-1 font-medium">Local rev {cloudSaveConflict.expectedRevision}</p>
+            <p className="text-muted-foreground">{t('cloudConflict.localBase')}</p>
+            <p className="mt-1 font-medium">
+              {t('cloudConflict.localRevision', {
+                revision: cloudSaveConflict.expectedRevision,
+              })}
+            </p>
           </div>
           <div className="rounded-md border border-border bg-background p-3">
-            <p className="text-muted-foreground">Remote file</p>
+            <p className="text-muted-foreground">{t('cloudConflict.remoteFile')}</p>
             <p className="mt-1 font-medium">
-              Remote rev {cloudSaveConflict.serverRevision ?? 'unknown'}
+              {t('cloudConflict.remoteRevision', {
+                revision: cloudSaveConflict.serverRevision ?? t('cloudConflict.unknownRevision'),
+              })}
             </p>
           </div>
         </div>
@@ -118,11 +128,11 @@ export function CloudSaveConflictDialog({ onSavedCopy }: CloudSaveConflictDialog
             disabled={busyAction !== null}
           >
             <Copy size={14} />
-            {busyAction === 'copy' ? 'Saving...' : 'Save as copy'}
+            {busyAction === 'copy' ? t('cloudConflict.saving') : t('cloudConflict.saveAsCopy')}
           </Button>
           <Button size="sm" onClick={() => void reloadRemote()} disabled={busyAction !== null}>
             <RefreshCw size={14} />
-            {busyAction === 'reload' ? 'Reloading...' : 'Reload remote'}
+            {busyAction === 'reload' ? t('cloudConflict.reloading') : t('cloudConflict.reloadRemote')}
           </Button>
           <Button
             variant="destructive"
@@ -131,7 +141,7 @@ export function CloudSaveConflictDialog({ onSavedCopy }: CloudSaveConflictDialog
             disabled={busyAction !== null}
           >
             <Save size={14} />
-            {busyAction === 'force' ? 'Overwriting...' : 'Overwrite remote'}
+            {busyAction === 'force' ? t('cloudConflict.overwriting') : t('cloudConflict.overwriteRemote')}
           </Button>
         </div>
       </section>

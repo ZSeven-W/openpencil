@@ -88,6 +88,16 @@ declare global {
     onOAuthCallback: (callback: (url: string) => void) => () => void;
   }
 
+  interface DesktopNotificationPayload {
+    title: string;
+    body?: string;
+    route?: string;
+  }
+
+  interface DesktopNotificationsAPI {
+    show: (payload: DesktopNotificationPayload) => Promise<void>;
+  }
+
   interface ElectronAPI {
     isElectron: true;
     openFile: () => Promise<{ filePath: string; content: string } | null>;
@@ -128,6 +138,7 @@ declare global {
     git: GitAPI;
     codegen: CodegenAPI;
     cloudAuth: CloudAuthAPI;
+    notifications: DesktopNotificationsAPI;
   }
 
   interface Window {

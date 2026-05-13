@@ -1,0 +1,311 @@
+- generic [ref=e134]:
+  - generic [ref=e135]:
+    - generic [ref=e136]:
+      - button "返回文件库" [ref=e137]:
+        - img
+      - button "Version history" [ref=e139]:
+        - img
+      - button [ref=e140]:
+        - img
+      - button [ref=e143]:
+        - img
+        - img
+      - button [ref=e145]:
+        - img
+    - generic [ref=e147]: 小程序.op
+    - generic [ref=e148]:
+      - button "Agents 与 MCP" [ref=e149]:
+        - generic [ref=e150]:
+          - img
+          - generic [ref=e151]: Agents 与 MCP
+      - combobox [ref=e153]:
+        - img [ref=e154]
+        - img [ref=e157]
+      - button [ref=e159]:
+        - img
+      - button [ref=e160]:
+        - img
+  - generic [ref=e162]:
+    - generic [ref=e163]:
+      - generic [ref=e165]:
+        - generic [ref=e166]:
+          - generic [ref=e167]: 页面
+          - button "添加页面" [ref=e168]:
+            - img [ref=e169]
+        - button "微企服" [ref=e171]:
+          - generic [ref=e172]: 微企服
+      - generic [ref=e174]: 图层
+      - generic [ref=e175]:
+        - generic [ref=e178] [cursor=pointer]:
+          - button [ref=e179]:
+            - img [ref=e180]
+          - img [ref=e182]
+          - generic [ref=e183]: Group 29
+          - button "Hide" [ref=e184]:
+            - img [ref=e185]
+          - button "Lock" [ref=e188]:
+            - img [ref=e189]
+        - generic [ref=e194] [cursor=pointer]:
+          - button [ref=e195]:
+            - img [ref=e196]
+          - img [ref=e198]
+          - generic [ref=e199]: Group 26
+          - button "Hide" [ref=e200]:
+            - img [ref=e201]
+          - button "Lock" [ref=e204]:
+            - img [ref=e205]
+        - generic [ref=e210] [cursor=pointer]:
+          - img [ref=e211]
+          - generic [ref=e213]: 微企服，代账公司专属客户服务助手
+          - button "Hide" [ref=e214]:
+            - img [ref=e215]
+          - button "Lock" [ref=e218]:
+            - img [ref=e219]
+        - generic [ref=e224] [cursor=pointer]:
+          - button [ref=e225]:
+            - img [ref=e226]
+          - img [ref=e228]
+          - generic [ref=e229]: Group 21
+          - button "Hide" [ref=e230]:
+            - img [ref=e231]
+          - button "Lock" [ref=e234]:
+            - img [ref=e235]
+        - generic [ref=e240] [cursor=pointer]:
+          - img [ref=e241]
+          - generic [ref=e243]: 7014b9eadce1f59315a54767451874c0e47ab29b182922-jy49MF_fw1200 1
+          - button "Hide" [ref=e244]:
+            - img [ref=e245]
+          - button "Lock" [ref=e248]:
+            - img [ref=e249]
+        - generic [ref=e254] [cursor=pointer]:
+          - img [ref=e255]
+          - generic [ref=e257]: Rectangle 35
+          - button "Hide" [ref=e258]:
+            - img [ref=e259]
+          - button "Lock" [ref=e262]:
+            - img [ref=e263]
+        - generic [ref=e268] [cursor=pointer]:
+          - img [ref=e269]
+          - generic [ref=e271]: 企业微信截图_9566749a-b5a5-49cc-b81e-6b08394cdb02 1
+          - button "Hide" [ref=e272]:
+            - img [ref=e273]
+          - button "Lock" [ref=e276]:
+            - img [ref=e277]
+        - generic [ref=e282] [cursor=pointer]:
+          - img [ref=e283]
+          - generic [ref=e285]: 服务报告长图 1
+          - button "Hide" [ref=e286]:
+            - img [ref=e287]
+          - button "Lock" [ref=e290]:
+            - img [ref=e291]
+        - generic [ref=e296] [cursor=pointer]:
+          - button [ref=e297]:
+            - img [ref=e298]
+          - img [ref=e300]
+          - generic [ref=e301]: 弹窗
+          - button "Hide" [ref=e302]:
+            - img [ref=e303]
+          - button "Lock" [ref=e306]:
+            - img [ref=e307]
+        - generic [ref=e312] [cursor=pointer]:
+          - button [ref=e313]:
+            - img [ref=e314]
+          - img [ref=e316]
+          - generic [ref=e317]: Frame 2
+          - button "Hide" [ref=e318]:
+            - img [ref=e319]
+          - button "Lock" [ref=e322]:
+            - img [ref=e323]
+        - generic [ref=e328] [cursor=pointer]:
+          - button [ref=e329]:
+            - img [ref=e330]
+          - img [ref=e332]
+          - generic [ref=e333]: Frame 1
+          - button "Hide" [ref=e334]:
+            - img [ref=e335]
+          - button "Lock" [ref=e338]:
+            - img [ref=e339]
+        - generic [ref=e344] [cursor=pointer]:
+          - button [ref=e345]:
+            - img [ref=e346]
+          - img [ref=e348]
+          - generic [ref=e349]: Group 7
+          - button "Hide" [ref=e350]:
+            - img [ref=e351]
+          - button "Lock" [ref=e354]:
+            - img [ref=e355]
+        - generic [ref=e360] [cursor=pointer]:
+          - button [ref=e361]:
+            - img [ref=e362]
+          - img [ref=e364]
+          - generic [ref=e365]: Group 5
+          - button "Hide" [ref=e366]:
+            - img [ref=e367]
+          - button "Lock" [ref=e370]:
+            - img [ref=e371]
+        - generic [ref=e376] [cursor=pointer]:
+          - button [ref=e377]:
+            - img [ref=e378]
+          - img [ref=e380]
+          - generic [ref=e381]: Group 4
+          - button "Hide" [ref=e382]:
+            - img [ref=e383]
+          - button "Lock" [ref=e386]:
+            - img [ref=e387]
+        - generic [ref=e392] [cursor=pointer]:
+          - img [ref=e393]
+          - generic [ref=e395]: 规范流程·落地有保障
+          - button "Hide" [ref=e396]:
+            - img [ref=e397]
+          - button "Lock" [ref=e400]:
+            - img [ref=e401]
+        - generic [ref=e406] [cursor=pointer]:
+          - button [ref=e407]:
+            - img [ref=e408]
+          - img [ref=e410]
+          - generic [ref=e411]: Group 3
+          - button "Hide" [ref=e412]:
+            - img [ref=e413]
+          - button "Lock" [ref=e416]:
+            - img [ref=e417]
+        - generic [ref=e422] [cursor=pointer]:
+          - button [ref=e423]:
+            - img [ref=e424]
+          - img [ref=e426]
+          - generic [ref=e427]: 首页
+          - button "Hide" [ref=e428]:
+            - img [ref=e429]
+          - button "Lock" [ref=e432]:
+            - img [ref=e433]
+        - generic [ref=e438] [cursor=pointer]:
+          - button [ref=e439]:
+            - img [ref=e440]
+          - img [ref=e442]
+          - generic [ref=e443]: 开票平台
+          - button "Hide" [ref=e444]:
+            - img [ref=e445]
+          - button "Lock" [ref=e448]:
+            - img [ref=e449]
+        - generic [ref=e454] [cursor=pointer]:
+          - button [ref=e455]:
+            - img [ref=e456]
+          - img [ref=e458]
+          - generic [ref=e459]: 首页
+          - button "Hide" [ref=e460]:
+            - img [ref=e461]
+          - button "Lock" [ref=e464]:
+            - img [ref=e465]
+    - generic [ref=e468]:
+      - generic [ref=e471]:
+        - button "选择" [pressed] [ref=e472]:
+          - img [ref=e473]
+        - generic [ref=e475]:
+          - button "形状工具" [ref=e476]:
+            - img [ref=e477]
+          - button "更多形状工具" [ref=e479] [cursor=pointer]:
+            - img [ref=e480]
+        - button "文本" [ref=e482]:
+          - img [ref=e483]
+        - button "画框" [ref=e485]:
+          - img [ref=e486]
+        - button "抓手" [ref=e487]:
+          - img [ref=e488]
+        - button [disabled]:
+          - img
+        - button [disabled]:
+          - img
+        - button "变量" [ref=e493]:
+          - img [ref=e494]
+        - button "设计系统" [ref=e497]:
+          - img [ref=e498]
+        - button "UIKit 浏览器" [ref=e500]:
+          - img [ref=e501]
+      - generic [ref=e507]:
+        - button "聚焦选中内容" [ref=e568]:
+          - img
+        - button "缩小" [ref=e509]:
+          - img
+        - button "重置缩放" [ref=e510] [cursor=pointer]: 15%
+        - button "放大" [ref=e511]:
+          - img
+      - generic [ref=e512]:
+        - generic [ref=e521]:
+          - generic [ref=e522]:
+            - button "收起" [ref=e523]:
+              - img
+            - generic "New Chat" [ref=e524]
+          - generic [ref=e525]:
+            - button "最大化" [ref=e526]:
+              - img
+            - button "新对话" [ref=e527]:
+              - img
+        - generic [ref=e529]:
+          - paragraph [ref=e530]: 用 AI 开始设计
+          - generic [ref=e531]:
+            - button "📱 设计一个移动端登录页面 带社交登录的移动端页面" [disabled] [ref=e532]:
+              - generic [ref=e533]:
+                - generic [ref=e534]: 📱
+                - generic [ref=e535]: 设计一个移动端登录页面
+              - generic [ref=e536]: 带社交登录的移动端页面
+            - button "🍕 美食App首页 App 首页设计" [disabled] [ref=e537]:
+              - generic [ref=e538]:
+                - generic [ref=e539]: 🍕
+                - generic [ref=e540]: 美食App首页
+              - generic [ref=e541]: App 首页设计
+            - button "⬇️ 设计一个底部导航栏 5 个 Tab 导航栏" [disabled] [ref=e542]:
+              - generic [ref=e543]:
+                - generic [ref=e544]: ⬇️
+                - generic [ref=e545]: 设计一个底部导航栏
+              - generic [ref=e546]: 5 个 Tab 导航栏
+            - button "🎨 为我的应用推荐配色方案 应用配色推荐" [disabled] [ref=e547]:
+              - generic [ref=e548]:
+                - generic [ref=e549]: 🎨
+                - generic [ref=e550]: 为我的应用推荐配色方案
+              - generic [ref=e551]: 应用配色推荐
+          - paragraph [ref=e552]: 提示：在对话前选中画布上的元素以提供上下文。
+        - generic [ref=e553]:
+          - textbox "用 Agent 设计..." [ref=e554]
+          - generic [ref=e555]:
+            - generic [ref=e556]:
+              - button "未连接模型" [disabled] [ref=e557]:
+                - generic [ref=e558]: 未连接模型
+                - img [ref=e559]
+              - button "1x" [ref=e561]:
+                - img [ref=e562]
+                - generic [ref=e564]: 1x
+              - generic [ref=e565]: 已选择 1 个
+            - generic [ref=e566]:
+              - button "附加图片" [ref=e567]:
+                - img
+              - button "发送消息" [disabled]:
+                - img
+    - generic [ref=e569]:
+      - generic [ref=e571]:
+        - button "设计" [ref=e572]
+        - button "代码" [active] [ref=e573]
+      - generic [ref=e820]:
+        - generic [ref=e822]:
+          - button "React" [ref=e823]
+          - button "Vue" [ref=e824]
+          - button "Svelte" [ref=e825]
+          - button "HTML" [ref=e826]
+          - button "Flutter" [ref=e827]
+          - button "SwiftUI" [ref=e828]
+          - button "Compose" [ref=e829]
+          - button "RN" [ref=e830]
+          - button "UniApp" [ref=e831]
+        - generic [ref=e833]:
+          - img [ref=e837]
+          - generic [ref=e840]:
+            - generic [ref=e841]: 已选择 1 个节点
+            - generic [ref=e842]: 生成可用于生产的代码
+          - button "生成 React" [disabled]:
+            - img
+            - text: 生成 React
+          - button "后台生成" [disabled]:
+            - img
+            - text: 后台生成
+          - button "导出 AI 包" [ref=e843]:
+            - img
+            - text: 导出 AI 包
+          - generic [ref=e844]: 请先连接可用的 AI 模型，再生成代码。

@@ -16,7 +16,7 @@ export interface CloudFileSummary {
   name: string;
   thumbnailPath: string | null;
   revision: number;
-  metadata: Record<string, unknown>;
+  metadata?: Record<string, unknown>;
   starred: boolean;
   lastOpenedAt: string | null;
   deletedAt: string | null;
@@ -53,6 +53,11 @@ export type CloudActivityEventType =
   | 'file_restored_from_trash'
   | 'file_permanently_deleted'
   | 'codegen_created'
+  | 'codegen_job_created'
+  | 'codegen_job_succeeded'
+  | 'codegen_job_failed'
+  | 'codegen_job_canceled'
+  | 'codegen_job_replayed'
   | 'codegen_promoted'
   | 'codegen_deleted'
   | 'version_labeled'
@@ -65,7 +70,7 @@ export interface CloudActivityEvent {
   actorId: string | null;
   ownerId: string;
   type: CloudActivityEventType;
-  metadata: Record<string, unknown>;
+  metadata?: Record<string, unknown>;
   createdAt: string;
 }
 
@@ -200,6 +205,7 @@ export interface SaveCodeGenerationInput extends CodegenTarget {
   provider?: string;
   error?: string;
   chunks: CloudCodegenChunk[];
+  metadata?: Record<string, unknown>;
 }
 
 export interface CloudCodeGeneration extends CodegenTarget {
@@ -212,6 +218,7 @@ export interface CloudCodeGeneration extends CodegenTarget {
   entryFile?: string | null;
   degraded: boolean;
   assetsManifest: CodegenAssetManifestEntry[];
+  metadata?: Record<string, unknown>;
   model: string | null;
   provider: string | null;
   error: string | null;
@@ -223,4 +230,227 @@ export interface CloudCodeGeneration extends CodegenTarget {
 export interface CloudCodeGenerationDetail extends CloudCodeGeneration {
   files?: CloudCodegenFile[];
   chunks: CloudCodegenChunk[];
+}
+
+export type CodegenJobStatus = 'pending' | 'running' | 'succeeded' | 'failed' | 'canceled';
+export type CodegenJobKind = 'full_generation' | 'patch_generation';
+export type CodegenJobFailureType =
+  | 'rate_limit'
+  | 'timeout'
+  | 'provider_error'
+  | 'canceled'
+  | 'execution_error';
+export type CodegenJobAgentRole =
+  | 'planner'
+  | 'page_codegen'
+  | 'reviewer_repair'
+  | 'bundler_persist';
+
+export interface CloudCodegenJobStep {
+  id: string;
+  jobId: string;
+  agentRole: CodegenJobAgentRole;
+  attempt: number;
+  status: CodegenJobStatus;
+  progress: number;
+  input: Record<string, unknown>;
+  output: Record<string, unknown>;
+  error: string | null;
+  startedAt: string | null;
+  completedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CloudCodegenJobEvent {
+  id: string;
+  jobId: string;
+  type: string;
+  message: string | null;
+  metadata: Record<string, unknown>;
+  createdAt: string;
+}
+
+export interface CloudCodegenJob {
+  id: string;
+  fileId: string;
+  ownerId: string;
+  generationId: string | null;
+  jobKind: CodegenJobKind;
+  status: CodegenJobStatus;
+  framework: Framework;
+  pageId: string;
+  targetKind: CodegenTargetKind;
+  nodeIds: string[];
+  targetHash: string;
+  documentRevision: number;
+  provider: string | null;
+  model: string | null;
+  priority: number;
+  progress: number;
+  attempts: number;
+  maxAttempts: number;
+  lockedBy: string | null;
+  lockedUntil: string | null;
+  lastHeartbeatAt?: string | null;
+  nextRunAt?: string | null;
+  deadLetteredAt?: string | null;
+  lastError?: string | null;
+  failureType?: CodegenJobFailureType | null;
+  inputSnapshot: Record<string, unknown>;
+  output: Record<string, unknown>;
+  error: string | null;
+  createdAt: string;
+  updatedAt: string;
+  startedAt: string | null;
+  completedAt: string | null;
+  canceledAt: string | null;
+  steps?: CloudCodegenJobStep[];
+  events?: CloudCodegenJobEvent[];
+}
+
+export interface CodegenWorkerHeartbeat {
+  workerId: string;
+  hostname?: string | null;
+  pid?: number | null;
+  metadata?: Record<string, unknown>;
+  startedAt?: string | null;
+  lastHeartbeatAt: string;
+  active: boolean;
+}
+
+export interface CodegenProviderHealth {
+  provider: string;
+  total: number;
+  failed: number;
+  failureRate: number;
+  consecutiveFailures: number;
+  lastFailureType?: string | null;
+  lastError?: string | null;
+  circuitOpenUntil?: string | null;
+  lastRequestAt?: string | null;
+  updatedAt?: string | null;
+}
+
+export interface CodegenProviderConfig {
+  provider: string;
+  enabled: boolean;
+  maxPerMinute: number;
+  circuitThreshold: number;
+  circuitOpenMs: number;
+  updatedBy: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type CodegenQueueRole = 'viewer' | 'operator' | 'admin';
+
+export interface CodegenQueueAccess {
+  role: CodegenQueueRole;
+  bootstrapMode: boolean;
+  canViewWorkers: boolean;
+  canReplayFailed: boolean;
+  canManageProviders: boolean;
+}
+
+export interface CodegenProviderConfigAudit {
+  id: string;
+  provider: string;
+  actorId: string | null;
+  actorEmail: string | null;
+  beforeConfig: Record<string, unknown>;
+  afterConfig: Record<string, unknown>;
+  reason: string | null;
+  createdAt: string;
+}
+
+export interface CodegenWorkerStatsBucket {
+  bucket: string;
+  total: number;
+  pending: number;
+  running: number;
+  succeeded: number;
+  failed: number;
+  canceled: number;
+  averageDurationMs: number;
+  failureRate: number;
+}
+
+export interface CodegenProviderStats {
+  provider: string;
+  total: number;
+  failed: number;
+  succeeded: number;
+  averageDurationMs: number;
+  failureRate: number;
+}
+
+export interface CodegenWorkerRuntimeStats {
+  buckets: CodegenWorkerStatsBucket[];
+  providers: CodegenProviderStats[];
+  workers: {
+    active: number;
+    stale: number;
+  };
+}
+
+export interface CodegenWorkerOverviewMetrics {
+  total: number;
+  pending: number;
+  running: number;
+  succeeded: number;
+  failed: number;
+  canceled: number;
+  deadLettered: number;
+  averageDurationMs: number;
+  failureRate: number;
+}
+
+export interface CodegenQueuePage {
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface CodegenWorkerOverview {
+  workers: CodegenWorkerHeartbeat[];
+  metrics: CodegenWorkerOverviewMetrics;
+  providers: CodegenProviderHealth[];
+  failedJobs: CloudCodegenJob[];
+  pages: {
+    workers: CodegenQueuePage;
+    providers: CodegenQueuePage;
+    failedJobs: CodegenQueuePage;
+  };
+}
+
+export interface CreateCloudCodegenJobInput extends CodegenTarget {
+  jobKind?: CodegenJobKind;
+  fileId: string;
+  framework: Framework;
+  documentRevision: number;
+  model: string;
+  provider: string;
+  nodes: unknown[];
+  variables?: Record<string, unknown>;
+  baseGenerationId?: string;
+  patchInstruction?: string;
+}
+
+export type TaskNotificationKind =
+  | 'codegen_job_succeeded'
+  | 'codegen_job_failed'
+  | 'codegen_job_canceled';
+
+export interface TaskNotification {
+  id: string;
+  ownerId: string;
+  jobId: string | null;
+  fileId: string | null;
+  generationId: string | null;
+  kind: TaskNotificationKind;
+  title: string;
+  message: string | null;
+  readAt: string | null;
+  createdAt: string;
 }

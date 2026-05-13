@@ -382,7 +382,7 @@ export class SkiaInteractionManager {
         if (e.shiftKey) {
           if (currentSelection.includes(nodeId)) {
             const next = currentSelection.filter((id) => id !== nodeId);
-            useCanvasStore.getState().setSelection(next, next[0] ?? null);
+            useCanvasStore.getState().setSelection(next, null);
           } else {
             useCanvasStore.getState().setSelection([...currentSelection, nodeId], nodeId);
           }
@@ -932,7 +932,7 @@ export class SkiaInteractionManager {
       engine.marquee!.y2,
     );
     const ids = marqueeHits.map((rn) => rn.node.id);
-    useCanvasStore.getState().setSelection(ids, ids[0] ?? null);
+    useCanvasStore.getState().setSelection(ids, null);
   }
 
   private handleHoverCursor(scene: { x: number; y: number }, engine: SkiaEngine) {

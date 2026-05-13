@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 
 import '@/i18n';
 import { detectLanguagePostHydration } from '@/i18n';
+import { TaskNotificationListener } from '@/components/tasks/task-notification-listener';
 import appCss from '../styles.css?url';
 
 export const Route = createRootRoute({
@@ -42,7 +43,12 @@ function NotFoundComponent() {
 }
 
 function RootComponent() {
-  return <Outlet />;
+  return (
+    <>
+      <Outlet />
+      <TaskNotificationListener />
+    </>
+  );
 }
 
 function RootDocument({ children }: { children: React.ReactNode }) {

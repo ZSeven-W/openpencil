@@ -1,0 +1,118 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e19]:
+    - banner [ref=e20]:
+      - generic [ref=e21]:
+        - generic [ref=e22]:
+          - heading "任务中心" [level=1] [ref=e23]
+          - paragraph [ref=e24]: 跨云文件追踪后台 AI 和代码生成任务。
+        - generic [ref=e25]:
+          - button "Worker 管理" [ref=e26]:
+            - img
+            - text: Worker 管理
+          - button "刷新" [ref=e27]
+    - main [ref=e28]:
+      - complementary [ref=e29]:
+        - button "全部" [ref=e30]:
+          - img [ref=e31]
+          - text: 全部
+        - button "等待中" [ref=e34]:
+          - img [ref=e35]
+          - text: 等待中
+        - button "运行中" [ref=e38]:
+          - img [ref=e39]
+          - text: 运行中
+        - button "已完成" [ref=e41]:
+          - img [ref=e42]
+          - text: 已完成
+        - button "失败" [ref=e45]:
+          - img [ref=e46]
+          - text: 失败
+        - button "已取消" [ref=e50]:
+          - img [ref=e51]
+          - text: 已取消
+      - generic [ref=e56]:
+        - article [ref=e57]:
+          - generic [ref=e58]:
+            - generic [ref=e59]:
+              - checkbox "选择任务 c8e8f4ca-7b31-480a-9d54-441b8a5f885d" [ref=e60]
+              - generic [ref=e61]:
+                - generic [ref=e62]:
+                  - img [ref=e63]
+                  - heading "html 代码生成" [level=2] [ref=e65]
+                  - generic [ref=e66]: AI 局部修复
+                - paragraph [ref=e67]: 5月13日 18:53 · 运行中 · 第 1 / 2 次
+            - generic [ref=e68]:
+              - button "取消" [ref=e69]
+              - button "打开文件" [ref=e70]:
+                - img
+                - text: 打开文件
+              - button "详情" [ref=e71]
+        - article [ref=e74]:
+          - generic [ref=e75]:
+            - generic [ref=e76]:
+              - checkbox "选择任务 5e6f7097-a527-44eb-bced-24b92f486f72" [ref=e77]
+              - generic [ref=e78]:
+                - generic [ref=e79]:
+                  - img [ref=e80]
+                  - heading "react 代码生成" [level=2] [ref=e83]
+                  - generic [ref=e84]: 完整生成
+                - paragraph [ref=e85]: 5月13日 18:35 · 已完成 · 第 1 / 2 次
+            - generic [ref=e86]:
+              - button "打开文件" [ref=e87]:
+                - img
+                - text: 打开文件
+              - button "详情" [ref=e88]
+        - article [ref=e91]:
+          - generic [ref=e92]:
+            - generic [ref=e93]:
+              - checkbox "选择任务 d61d0102-4d14-4556-b58e-1f1cf05dd2ef" [ref=e94]
+              - generic [ref=e95]:
+                - generic [ref=e96]:
+                  - img [ref=e97]
+                  - heading "html 代码生成" [level=2] [ref=e100]
+                  - generic [ref=e101]: AI 局部修复
+                - paragraph [ref=e102]: 5月13日 17:10 · 已完成 · 第 1 / 2 次
+            - generic [ref=e103]:
+              - button "打开文件" [ref=e104]:
+                - img
+                - text: 打开文件
+              - button "详情" [ref=e105]
+        - article [ref=e108]:
+          - generic [ref=e109]:
+            - generic [ref=e110]:
+              - checkbox "选择任务 c654bc50-d76c-41ea-b41f-9c5baae94648" [ref=e111]
+              - generic [ref=e112]:
+                - generic [ref=e113]:
+                  - img [ref=e114]
+                  - heading "html 代码生成" [level=2] [ref=e117]
+                  - generic [ref=e118]: 完整生成
+                - paragraph [ref=e119]: 5月13日 06:19 · 已完成 · 第 1 / 2 次
+            - generic [ref=e120]:
+              - button "打开文件" [ref=e121]:
+                - img
+                - text: 打开文件
+              - button "详情" [ref=e122]
+      - complementary [ref=e125]:
+        - generic [ref=e126]:
+          - generic [ref=e127]:
+            - img [ref=e128]
+            - text: 通知
+          - generic [ref=e131]: "3"
+        - generic [ref=e132]:
+          - button "代码生成已完成 react 代码生成结果已就绪。" [ref=e133]:
+            - paragraph [ref=e134]: 代码生成已完成
+            - paragraph [ref=e135]: react 代码生成结果已就绪。
+          - button "代码生成已完成 html 代码生成结果已就绪。" [ref=e136]:
+            - paragraph [ref=e137]: 代码生成已完成
+            - paragraph [ref=e138]: html 代码生成结果已就绪。
+          - button "代码生成已完成 html 代码生成结果已就绪。" [ref=e139]:
+            - paragraph [ref=e140]: 代码生成已完成
+            - paragraph [ref=e141]: html 代码生成结果已就绪。
+  - generic [ref=e143]:
+    - img [ref=e144]
+    - button "代码生成已完成 html 代码生成结果已就绪。 打开任务" [ref=e147]:
+      - paragraph [ref=e148]: 代码生成已完成
+      - paragraph [ref=e149]: html 代码生成结果已就绪。
+      - paragraph [ref=e150]: 打开任务
+    - button "关闭" [ref=e151]:
+      - img

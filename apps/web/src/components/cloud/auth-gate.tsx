@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { Github, PenTool } from 'lucide-react';
+import { PenTool } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { useCloudAuthStore } from '@/stores/cloud-auth-store';
 
@@ -8,13 +9,13 @@ interface AuthGateProps {
 }
 
 export function AuthGate({ children }: AuthGateProps) {
+  const { t } = useTranslation();
   const status = useCloudAuthStore((s) => s.status);
   const error = useCloudAuthStore((s) => s.error);
   const initialized = useCloudAuthStore((s) => s.initialized);
   const initialize = useCloudAuthStore((s) => s.initialize);
   const signIn = useCloudAuthStore((s) => s.signIn);
   const signUp = useCloudAuthStore((s) => s.signUp);
-  const signInWithGitHub = useCloudAuthStore((s) => s.signInWithGitHub);
   const [mode, setMode] = useState<'sign-in' | 'sign-up'>('sign-in');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -27,7 +28,7 @@ export function AuthGate({ children }: AuthGateProps) {
   if (!initialized || status === 'loading') {
     return (
       <div className="min-h-screen bg-background text-foreground flex items-center justify-center">
-        <span className="text-sm text-muted-foreground">Loading cloud workspace...</span>
+        <span className="text-sm text-muted-foreground">{t('auth.loadingCloudWorkspace')}</span>
       </div>
     );
   }
@@ -39,10 +40,9 @@ export function AuthGate({ children }: AuthGateProps) {
           <div className="flex items-center gap-3">
             <PenTool size={24} className="text-primary" />
             <div>
-              <h1 className="text-lg font-semibold">Supabase is not configured</h1>
+              <h1 className="text-lg font-semibold">{t('auth.supabaseNotConfiguredTitle')}</h1>
               <p className="mt-1 text-sm text-muted-foreground">
-                Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY for the renderer, plus
-                SUPABASE_URL and SUPABASE_ANON_KEY for Nitro.
+                {t('auth.supabaseNotConfiguredBody')}
               </p>
             </div>
           </div>
@@ -69,45 +69,19 @@ export function AuthGate({ children }: AuthGateProps) {
     }
   };
 
-  const submitGitHub = async () => {
-    setBusy(true);
-    try {
-      await signInWithGitHub();
-    } finally {
-      setBusy(false);
-    }
-  };
-
   return (
     <div className="min-h-screen bg-background text-foreground flex items-center justify-center px-6">
       <form onSubmit={submit} className="w-full max-w-sm border border-border bg-card p-6">
         <div className="mb-6 flex items-center gap-3">
           <PenTool size={28} className="text-primary" />
           <div>
-            <h1 className="text-xl font-semibold">OpenPencil Cloud</h1>
-            <p className="text-sm text-muted-foreground">Sign in to manage your design files.</p>
+            <h1 className="text-xl font-semibold">{t('auth.cloudTitle')}</h1>
+            <p className="text-sm text-muted-foreground">{t('auth.cloudSubtitle')}</p>
           </div>
         </div>
 
-        <Button
-          type="button"
-          variant="outline"
-          className="w-full"
-          disabled={busy}
-          onClick={() => void submitGitHub()}
-        >
-          <Github size={16} />
-          Continue with GitHub
-        </Button>
-
-        <div className="my-5 flex items-center gap-3">
-          <span className="h-px flex-1 bg-border" />
-          <span className="text-[11px] text-muted-foreground">or</span>
-          <span className="h-px flex-1 bg-border" />
-        </div>
-
         <label className="block text-xs font-medium text-muted-foreground" htmlFor="cloud-email">
-          Email
+          {t('auth.email')}
         </label>
         <input
           id="cloud-email"
@@ -122,7 +96,7 @@ export function AuthGate({ children }: AuthGateProps) {
           className="mt-4 block text-xs font-medium text-muted-foreground"
           htmlFor="cloud-password"
         >
-          Password
+          {t('auth.password')}
         </label>
         <input
           id="cloud-password"
@@ -137,7 +111,11 @@ export function AuthGate({ children }: AuthGateProps) {
         {error && <p className="mt-3 text-xs text-destructive">{error}</p>}
 
         <Button type="submit" className="mt-5 w-full" disabled={busy}>
-          {busy ? 'Working...' : mode === 'sign-in' ? 'Sign in' : 'Create account'}
+          {busy
+            ? t('auth.working')
+            : mode === 'sign-in'
+              ? t('auth.signIn')
+              : t('auth.createAccount')}
         </Button>
 
         <button
@@ -145,7 +123,7 @@ export function AuthGate({ children }: AuthGateProps) {
           className="mt-4 w-full text-center text-xs text-muted-foreground hover:text-foreground"
           onClick={() => setMode(mode === 'sign-in' ? 'sign-up' : 'sign-in')}
         >
-          {mode === 'sign-in' ? 'Create a new account' : 'Use an existing account'}
+          {mode === 'sign-in' ? t('auth.createNewAccount') : t('auth.useExistingAccount')}
         </button>
       </form>
     </div>

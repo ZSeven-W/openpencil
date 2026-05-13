@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { AlertTriangle, Check, Loader2, MinusCircle, SkipForward } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import type { ChunkStatus } from '@zseven-w/pen-types';
 import { cn } from '@/lib/utils';
 
@@ -11,6 +12,7 @@ interface ProgressItemProps {
 }
 
 export default function ProgressItem({ label, status, error, onRetry }: ProgressItemProps) {
+  const { t } = useTranslation();
   const icons: Record<string, ReactNode> = {
     pending: <div className="h-3 w-3 rounded-full border border-muted-foreground/20" />,
     running: <Loader2 className="h-3 w-3 animate-spin text-primary" />,
@@ -20,9 +22,9 @@ export default function ProgressItem({ label, status, error, onRetry }: Progress
     skipped: <SkipForward className="h-3 w-3 text-muted-foreground/50" />,
   };
 
-  const sublabels: Record<string, string> = {
-    degraded: 'generated without contract',
-    skipped: 'skipped (dependency failed)',
+  const sublabels: Record<string, string | undefined> = {
+    degraded: t('codePanel.progress.degraded'),
+    skipped: t('codePanel.progress.skipped'),
   };
 
   return (
@@ -59,7 +61,7 @@ export default function ProgressItem({ label, status, error, onRetry }: Progress
           className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium text-primary hover:bg-primary/10 transition-colors"
           onClick={onRetry}
         >
-          Retry
+          {t('git.error.retry')}
         </button>
       )}
     </div>

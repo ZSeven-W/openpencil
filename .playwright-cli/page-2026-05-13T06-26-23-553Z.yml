@@ -1,0 +1,121 @@
+- generic [ref=e19]:
+  - banner [ref=e20]:
+    - generic [ref=e21]:
+      - generic [ref=e22]:
+        - button "返回任务中心" [ref=e23]:
+          - img
+          - text: 返回任务中心
+        - generic [ref=e24]:
+          - img [ref=e25]
+          - heading "Worker 管理" [level=1] [ref=e36]
+        - paragraph [ref=e37]: 监控 Worker 心跳、Provider 健康、失败重放和队列可靠性。
+      - generic [ref=e38]:
+        - button "重放当前页" [disabled]:
+          - img
+          - text: 重放当前页
+        - button "刷新" [disabled]:
+          - img
+          - text: 刷新
+  - main [ref=e39]:
+    - generic [ref=e40]:
+      - generic [ref=e41]:
+        - generic [ref=e42]:
+          - img [ref=e43]
+          - text: 总数
+        - paragraph [ref=e45]: "0"
+      - generic [ref=e46]:
+        - generic [ref=e47]:
+          - img [ref=e48]
+          - text: 运行中
+        - paragraph [ref=e51]: "0"
+      - generic [ref=e52]:
+        - generic [ref=e53]:
+          - img [ref=e54]
+          - text: 死信
+        - paragraph [ref=e58]: "0"
+      - generic [ref=e59]:
+        - generic [ref=e60]:
+          - img [ref=e61]
+          - text: 失败率
+        - paragraph [ref=e64]: 0%
+        - paragraph [ref=e65]: 平均耗时 0 ms
+    - generic [ref=e67]:
+      - generic [ref=e68]:
+        - heading "队列权限" [level=2] [ref=e69]
+        - paragraph [ref=e70]: 队列角色：viewer
+      - generic [ref=e71]:
+        - generic [ref=e72]: "查看 Worker: 是"
+        - generic [ref=e73]: "重放失败任务: 否"
+        - generic [ref=e74]: "管理 Provider: 否"
+    - generic [ref=e75]:
+      - generic [ref=e76]:
+        - img [ref=e77]
+        - heading "运行统计" [level=2] [ref=e80]
+      - generic [ref=e81]:
+        - generic [ref=e82]:
+          - paragraph [ref=e83]: 活跃
+          - paragraph [ref=e84]: "0"
+        - generic [ref=e85]:
+          - paragraph [ref=e86]: 失联
+          - paragraph [ref=e87]: "0"
+        - generic [ref=e88]:
+          - paragraph [ref=e89]: 统计分桶
+          - paragraph [ref=e90]: "0"
+    - generic [ref=e92]:
+      - generic [ref=e93]:
+        - text: Provider
+        - textbox "Provider" [ref=e94]:
+          - /placeholder: openai
+      - generic [ref=e95]:
+        - text: 失败类型
+        - combobox "失败类型" [ref=e96]:
+          - option "全部" [selected]
+          - option "速率限制"
+          - option "超时"
+          - option "Provider 错误"
+          - option "执行错误"
+          - option "已取消"
+      - generic [ref=e97]:
+        - text: 死信开始时间
+        - textbox "死信开始时间" [ref=e98]
+      - generic [ref=e99]:
+        - text: 死信结束时间
+        - textbox "死信结束时间" [ref=e100]
+      - generic [ref=e101]:
+        - button "按筛选重放" [disabled]:
+          - img
+          - text: 按筛选重放
+    - generic [ref=e102]:
+      - generic [ref=e103]:
+        - generic [ref=e104]:
+          - generic [ref=e105]:
+            - heading "Worker 列表" [level=2] [ref=e106]
+            - generic [ref=e107]:
+              - generic [ref=e108]: 0-0 / 0
+              - button "上一页" [disabled]
+              - button "下一页" [disabled]
+          - paragraph [ref=e110]: 还没有 Worker 心跳上报。
+        - generic [ref=e111]:
+          - generic [ref=e112]:
+            - heading "Provider 健康" [level=2] [ref=e113]
+            - generic [ref=e114]:
+              - generic [ref=e115]: 0-0 / 0
+              - button "上一页" [disabled]
+              - button "下一页" [disabled]
+          - paragraph [ref=e117]: 暂无 Provider 健康数据。
+        - generic [ref=e118]:
+          - heading "Provider 限流配置" [level=2] [ref=e119]
+          - paragraph [ref=e121]: 暂无 Provider 配置。
+      - complementary [ref=e122]:
+        - generic [ref=e123]:
+          - heading "失败重放" [level=2] [ref=e124]
+          - generic [ref=e125]:
+            - generic [ref=e126]: 0-0 / 0
+            - button "上一页" [disabled]
+            - button "下一页" [disabled]
+        - paragraph [ref=e128]: 暂无需要重放的失败任务。
+    - generic [ref=e129]:
+      - generic [ref=e130]:
+        - img [ref=e131]
+        - heading "配置变更历史" [level=2] [ref=e135]
+      - paragraph [ref=e137]: 暂无 Provider 配置变更。

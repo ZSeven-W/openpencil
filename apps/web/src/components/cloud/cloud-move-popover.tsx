@@ -1,4 +1,5 @@
 import { FolderInput } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import type { CloudFolder } from '@/types/cloud';
@@ -18,8 +19,9 @@ export function CloudMovePopover({
   folderPath,
   onMove,
 }: CloudMovePopoverProps) {
+  const { t } = useTranslation();
   const targets = [
-    { id: null, label: 'Project root' },
+    { id: null, label: t('cloudLibrary.projectRoot') },
     ...folders
       .slice()
       .sort((a, b) => folderPath(a.id).localeCompare(folderPath(b.id)))
@@ -29,13 +31,19 @@ export function CloudMovePopover({
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <Button variant="outline" size="sm" aria-label={`Choose move target for ${fileName}`}>
+        <Button
+          variant="outline"
+          size="sm"
+          aria-label={t('cloudLibrary.move.chooseTarget', { name: fileName })}
+        >
           <FolderInput size={14} />
-          Move
+          {t('cloudLibrary.action.move')}
         </Button>
       </PopoverTrigger>
       <PopoverContent align="start" className="w-72 p-2" arrow={false}>
-        <p className="mb-2 truncate px-1 text-xs font-medium">Move {fileName}</p>
+        <p className="mb-2 truncate px-1 text-xs font-medium">
+          {t('cloudLibrary.move.title', { name: fileName })}
+        </p>
         <div className="max-h-72 space-y-1 overflow-y-auto">
           {targets.map((target) => (
             <button
@@ -47,7 +55,9 @@ export function CloudMovePopover({
             >
               <span className="truncate">{target.label}</span>
               {target.id === currentFolderId && (
-                <span className="text-[11px] text-muted-foreground">Current</span>
+                <span className="text-[11px] text-muted-foreground">
+                  {t('cloudLibrary.move.currentBadge')}
+                </span>
               )}
             </button>
           ))}

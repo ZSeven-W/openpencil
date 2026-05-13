@@ -9,6 +9,7 @@ import {
   Star,
   Trash2,
 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import type { CloudFileSummary } from '@/types/cloud';
 
@@ -43,17 +44,22 @@ export function CloudFileActionsMenu({
   onRestore,
   onPermanentDelete,
 }: CloudFileActionsMenuProps) {
+  const { t } = useTranslation();
   return (
     <div
       role="menu"
-      aria-label={`File actions for ${file.name}`}
+      aria-label={t('cloudLibrary.action.fileActionsFor', { name: file.name })}
       className="absolute right-5 z-20 mt-1 w-52 rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-md"
     >
       {isTrash ? (
         <>
-          <MenuItem label="Restore" onClick={onRestore} icon={<ArchiveRestore size={14} />} />
           <MenuItem
-            label="Delete forever"
+            label={t('cloudLibrary.action.restore')}
+            onClick={onRestore}
+            icon={<ArchiveRestore size={14} />}
+          />
+          <MenuItem
+            label={t('cloudLibrary.action.deleteForever')}
             onClick={onPermanentDelete}
             icon={<Trash2 size={14} />}
             destructive
@@ -61,20 +67,53 @@ export function CloudFileActionsMenu({
         </>
       ) : (
         <>
-          <MenuItem label="Open" onClick={onOpen} icon={<ExternalLink size={14} />} />
-          <MenuItem label="Details" onClick={onDetails} icon={<FileText size={14} />} />
           <MenuItem
-            label={file.starred ? 'Unfavorite' : 'Favorite'}
+            label={t('cloudLibrary.action.open')}
+            onClick={onOpen}
+            icon={<ExternalLink size={14} />}
+          />
+          <MenuItem
+            label={t('cloudLibrary.action.details')}
+            onClick={onDetails}
+            icon={<FileText size={14} />}
+          />
+          <MenuItem
+            label={
+              file.starred
+                ? t('cloudLibrary.action.unfavorite')
+                : t('cloudLibrary.action.favorite')
+            }
             onClick={onFavorite}
             icon={<Star size={14} />}
           />
-          <MenuItem label="Rename" onClick={onRename} icon={<Pencil size={14} />} />
-          <MenuItem label="Copy" onClick={onCopy} icon={<Copy size={14} />} />
-          <MenuItem label="Share" onClick={onShare} icon={<Share2 size={14} />} />
+          <MenuItem
+            label={t('common.rename')}
+            onClick={onRename}
+            icon={<Pencil size={14} />}
+          />
+          <MenuItem
+            label={t('cloudLibrary.action.copy')}
+            onClick={onCopy}
+            icon={<Copy size={14} />}
+          />
+          <MenuItem
+            label={t('cloudLibrary.action.share')}
+            onClick={onShare}
+            icon={<Share2 size={14} />}
+          />
           {canMove && (
-            <MenuItem label="Move" onClick={onMove} icon={<FolderInput size={14} />} />
+            <MenuItem
+              label={t('cloudLibrary.action.move')}
+              onClick={onMove}
+              icon={<FolderInput size={14} />}
+            />
           )}
-          <MenuItem label="Delete" onClick={onDelete} icon={<Trash2 size={14} />} destructive />
+          <MenuItem
+            label={t('common.delete')}
+            onClick={onDelete}
+            icon={<Trash2 size={14} />}
+            destructive
+          />
         </>
       )}
     </div>

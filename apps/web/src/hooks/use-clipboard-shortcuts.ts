@@ -103,7 +103,7 @@ export function useClipboardShortcuts() {
             newIds.push(cloned.id);
             if (insertIndex !== undefined) insertIndex += 1;
           }
-          useCanvasStore.getState().setSelection(newIds, newIds[0] ?? null);
+          useCanvasStore.getState().setSelection(newIds, null);
         } else {
           // Internal 剪贴板为空 — 尝试从系统剪贴板读取 Figma 数据。当不可编辑元素（画布）具有焦点时，The 本机 `paste`
           // 事件可能不会触发，因此我们还通过 Clipboard API 读取作为后备。
@@ -124,7 +124,7 @@ export function useClipboardShortcuts() {
             if (newId) newIds.push(newId);
           }
           if (newIds.length > 0) {
-            useCanvasStore.getState().setSelection(newIds, newIds[0]);
+            useCanvasStore.getState().setSelection(newIds, null);
           }
         }
         return;

@@ -170,6 +170,7 @@ describe('cloud file management helpers', () => {
     const copiedSelect = vi.fn(() => ({ single: copiedSingle }));
     const fileInsert = vi.fn(() => ({ select: copiedSelect }));
     const versionInsert = vi.fn(async () => ({ data: null, error: null }));
+    const activityInsert = vi.fn(async () => ({ data: null, error: null }));
     const from = vi.fn((table: string) => {
       if (table === 'design_files') {
         return { select: sourceQuery.select, insert: fileInsert };
@@ -177,6 +178,7 @@ describe('cloud file management helpers', () => {
       if (table === 'projects') return { select: projectQuery.select };
       if (table === 'folders') return { select: folderQuery.select };
       if (table === 'design_file_versions') return { insert: versionInsert };
+      if (table === 'activity_events') return { insert: activityInsert };
       throw new Error(`Unexpected table ${table}`);
     });
 
@@ -247,6 +249,7 @@ describe('cloud file management helpers', () => {
     const copiedSelect = vi.fn(() => ({ single: copiedSingle }));
     const fileInsert = vi.fn(() => ({ select: copiedSelect }));
     const versionInsert = vi.fn(async () => ({ data: null, error: null }));
+    const activityInsert = vi.fn(async () => ({ data: null, error: null }));
     const download = vi.fn(async () => ({
       data: new Blob([JSON.stringify(document)], { type: 'application/json' }),
       error: null,
@@ -258,6 +261,7 @@ describe('cloud file management helpers', () => {
       }
       if (table === 'projects') return { select: projectQuery.select };
       if (table === 'design_file_versions') return { insert: versionInsert };
+      if (table === 'activity_events') return { insert: activityInsert };
       throw new Error(`Unexpected table ${table}`);
     });
 

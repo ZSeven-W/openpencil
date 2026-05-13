@@ -298,6 +298,16 @@ export interface CloudAuthAPI {
   onOAuthCallback: (callback: (url: string) => void) => () => void;
 }
 
+export interface DesktopNotificationPayload {
+  title: string;
+  body?: string;
+  route?: string;
+}
+
+export interface DesktopNotificationsAPI {
+  show: (payload: DesktopNotificationPayload) => Promise<void>;
+}
+
 export interface ElectronAPI {
   isElectron: true;
   openFile: () => Promise<{ filePath: string; content: string } | null>;
@@ -337,6 +347,7 @@ export interface ElectronAPI {
   git: GitAPI;
   codegen: CodegenAPI;
   cloudAuth: CloudAuthAPI;
+  notifications: DesktopNotificationsAPI;
 }
 
 const api: ElectronAPI = {
@@ -508,6 +519,10 @@ const api: ElectronAPI = {
     gitStatus: (payload) => ipcRenderer.invoke('codegen:gitStatus', payload),
     gitCommit: (payload) => ipcRenderer.invoke('codegen:gitCommit', payload),
     gitPush: (payload) => ipcRenderer.invoke('codegen:gitPush', payload),
+  },
+
+  notifications: {
+    show: (payload) => ipcRenderer.invoke('notification:show', payload),
   },
 };
 

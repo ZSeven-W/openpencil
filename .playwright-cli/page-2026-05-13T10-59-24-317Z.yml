@@ -1,0 +1,23 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e19]:
+    - banner [ref=e20]:
+      - generic [ref=e22]:
+        - button "返回任务中心" [ref=e23]:
+          - img
+          - text: 返回任务中心
+        - generic [ref=e24]:
+          - img [ref=e25]
+          - heading "任务详情" [level=1] [ref=e27]
+    - main [ref=e28]:
+      - generic [ref=e30]: 正在加载任务...
+      - complementary [ref=e31]:
+        - heading "事件" [level=2] [ref=e32]
+        - paragraph [ref=e34]: 暂无事件记录。
+  - generic [ref=e36]:
+    - img [ref=e37]
+    - button "代码生成已完成 html 代码生成结果已就绪。 打开任务" [ref=e40]:
+      - paragraph [ref=e41]: 代码生成已完成
+      - paragraph [ref=e42]: html 代码生成结果已就绪。
+      - paragraph [ref=e43]: 打开任务
+    - button "关闭" [ref=e44]:
+      - img

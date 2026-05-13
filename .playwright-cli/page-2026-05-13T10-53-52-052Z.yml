@@ -1,0 +1,338 @@
+- generic [ref=e2]:
+  - generic [ref=e3]:
+    - generic [ref=e4]:
+      - button "返回文件库" [ref=e5]:
+        - img
+      - button "Version history" [ref=e7]:
+        - img
+      - button [ref=e8]:
+        - img
+      - button [ref=e11]:
+        - img
+        - img
+      - button [ref=e13]:
+        - img
+    - generic [ref=e15]: 小程序.op
+    - generic [ref=e16]:
+      - button "1 agent" [ref=e17]:
+        - generic [ref=e18]:
+          - generic [ref=e20]:
+            - img
+          - generic [ref=e22]: 1 agent
+      - combobox [ref=e24]:
+        - img [ref=e25]
+        - img [ref=e28]
+      - button [ref=e30]:
+        - img
+      - button [ref=e31]:
+        - img
+  - generic [ref=e33]:
+    - generic [ref=e34]:
+      - generic [ref=e36]:
+        - generic [ref=e37]:
+          - generic [ref=e38]: 页面
+          - button "添加页面" [ref=e39]:
+            - img [ref=e40]
+        - button "微企服" [ref=e42]:
+          - generic [ref=e43]: 微企服
+      - generic [ref=e45]: 图层
+      - generic [ref=e46]:
+        - generic [ref=e49] [cursor=pointer]:
+          - button [ref=e50]:
+            - img [ref=e51]
+          - img [ref=e53]
+          - generic [ref=e54]: Group 29
+          - button "Hide" [ref=e55]:
+            - img [ref=e56]
+          - button "Lock" [ref=e59]:
+            - img [ref=e60]
+        - generic [ref=e65] [cursor=pointer]:
+          - button [ref=e66]:
+            - img [ref=e67]
+          - img [ref=e69]
+          - generic [ref=e70]: Group 26
+          - button "Hide" [ref=e71]:
+            - img [ref=e72]
+          - button "Lock" [ref=e75]:
+            - img [ref=e76]
+        - generic [ref=e81] [cursor=pointer]:
+          - img [ref=e82]
+          - generic [ref=e84]: 微企服，代账公司专属客户服务助手
+          - button "Hide" [ref=e85]:
+            - img [ref=e86]
+          - button "Lock" [ref=e89]:
+            - img [ref=e90]
+        - generic [ref=e95] [cursor=pointer]:
+          - button [ref=e96]:
+            - img [ref=e97]
+          - img [ref=e99]
+          - generic [ref=e100]: Group 21
+          - button "Hide" [ref=e101]:
+            - img [ref=e102]
+          - button "Lock" [ref=e105]:
+            - img [ref=e106]
+        - generic [ref=e111] [cursor=pointer]:
+          - img [ref=e112]
+          - generic [ref=e114]: 7014b9eadce1f59315a54767451874c0e47ab29b182922-jy49MF_fw1200 1
+          - button "Hide" [ref=e115]:
+            - img [ref=e116]
+          - button "Lock" [ref=e119]:
+            - img [ref=e120]
+        - generic [ref=e125] [cursor=pointer]:
+          - img [ref=e126]
+          - generic [ref=e128]: Rectangle 35
+          - button "Hide" [ref=e129]:
+            - img [ref=e130]
+          - button "Lock" [ref=e133]:
+            - img [ref=e134]
+        - generic [ref=e139] [cursor=pointer]:
+          - img [ref=e140]
+          - generic [ref=e142]: 企业微信截图_9566749a-b5a5-49cc-b81e-6b08394cdb02 1
+          - button "Hide" [ref=e143]:
+            - img [ref=e144]
+          - button "Lock" [ref=e147]:
+            - img [ref=e148]
+        - generic [ref=e153] [cursor=pointer]:
+          - img [ref=e154]
+          - generic [ref=e156]: 服务报告长图 1
+          - button "Hide" [ref=e157]:
+            - img [ref=e158]
+          - button "Lock" [ref=e161]:
+            - img [ref=e162]
+        - generic [ref=e167] [cursor=pointer]:
+          - button [ref=e168]:
+            - img [ref=e169]
+          - img [ref=e171]
+          - generic [ref=e172]: 弹窗
+          - button "Hide" [ref=e173]:
+            - img [ref=e174]
+          - button "Lock" [ref=e177]:
+            - img [ref=e178]
+        - generic [ref=e183] [cursor=pointer]:
+          - button [ref=e184]:
+            - img [ref=e185]
+          - img [ref=e187]
+          - generic [ref=e188]: Frame 2
+          - button "Hide" [ref=e189]:
+            - img [ref=e190]
+          - button "Lock" [ref=e193]:
+            - img [ref=e194]
+        - generic [ref=e199] [cursor=pointer]:
+          - button [ref=e200]:
+            - img [ref=e201]
+          - img [ref=e203]
+          - generic [ref=e204]: Frame 1
+          - button "Hide" [ref=e205]:
+            - img [ref=e206]
+          - button "Lock" [ref=e209]:
+            - img [ref=e210]
+        - generic [ref=e215] [cursor=pointer]:
+          - button [ref=e216]:
+            - img [ref=e217]
+          - img [ref=e219]
+          - generic [ref=e220]: Group 7
+          - button "Hide" [ref=e221]:
+            - img [ref=e222]
+          - button "Lock" [ref=e225]:
+            - img [ref=e226]
+        - generic [ref=e231] [cursor=pointer]:
+          - button [ref=e232]:
+            - img [ref=e233]
+          - img [ref=e235]
+          - generic [ref=e236]: Group 5
+          - button "Hide" [ref=e237]:
+            - img [ref=e238]
+          - button "Lock" [ref=e241]:
+            - img [ref=e242]
+        - generic [ref=e247] [cursor=pointer]:
+          - button [ref=e248]:
+            - img [ref=e249]
+          - img [ref=e251]
+          - generic [ref=e252]: Group 4
+          - button "Hide" [ref=e253]:
+            - img [ref=e254]
+          - button "Lock" [ref=e257]:
+            - img [ref=e258]
+        - generic [ref=e263] [cursor=pointer]:
+          - img [ref=e264]
+          - generic [ref=e266]: 规范流程·落地有保障
+          - button "Hide" [ref=e267]:
+            - img [ref=e268]
+          - button "Lock" [ref=e271]:
+            - img [ref=e272]
+        - generic [ref=e277] [cursor=pointer]:
+          - button [ref=e278]:
+            - img [ref=e279]
+          - img [ref=e281]
+          - generic [ref=e282]: Group 3
+          - button "Hide" [ref=e283]:
+            - img [ref=e284]
+          - button "Lock" [ref=e287]:
+            - img [ref=e288]
+        - generic [ref=e293] [cursor=pointer]:
+          - button [ref=e294]:
+            - img [ref=e295]
+          - img [ref=e297]
+          - generic [ref=e298]: 首页
+          - button "Hide" [ref=e299]:
+            - img [ref=e300]
+          - button "Lock" [ref=e303]:
+            - img [ref=e304]
+        - generic [ref=e309] [cursor=pointer]:
+          - button [ref=e310]:
+            - img [ref=e311]
+          - img [ref=e313]
+          - generic [ref=e314]: 开票平台
+          - button "Hide" [ref=e315]:
+            - img [ref=e316]
+          - button "Lock" [ref=e319]:
+            - img [ref=e320]
+        - generic [ref=e325] [cursor=pointer]:
+          - button [ref=e326]:
+            - img [ref=e327]
+          - img [ref=e329]
+          - generic [ref=e330]: 首页
+          - button "Hide" [ref=e331]:
+            - img [ref=e332]
+          - button "Lock" [ref=e335]:
+            - img [ref=e336]
+    - generic [ref=e339]:
+      - generic [ref=e342]:
+        - button "选择" [pressed] [ref=e343]:
+          - img [ref=e344]
+        - generic [ref=e346]:
+          - button "形状工具" [ref=e347]:
+            - img [ref=e348]
+          - button "更多形状工具" [ref=e350] [cursor=pointer]:
+            - img [ref=e351]
+        - button "文本" [ref=e353]:
+          - img [ref=e354]
+        - button "画框" [ref=e356]:
+          - img [ref=e357]
+        - button "抓手" [ref=e358]:
+          - img [ref=e359]
+        - button [disabled]:
+          - img
+        - button [disabled]:
+          - img
+        - button "变量" [ref=e364]:
+          - img [ref=e365]
+        - button "设计系统" [ref=e368]:
+          - img [ref=e369]
+        - button "UIKit 浏览器" [ref=e371]:
+          - img [ref=e372]
+      - generic [ref=e378]:
+        - button "聚焦选中内容" [ref=e442]:
+          - img
+        - button "缩小" [ref=e380]:
+          - img
+        - button "重置缩放" [ref=e381] [cursor=pointer]: 15%
+        - button "放大" [ref=e382]:
+          - img
+      - generic [ref=e383]:
+        - generic [ref=e392]:
+          - generic [ref=e393]:
+            - button "收起" [ref=e394]:
+              - img
+            - generic "New Chat" [ref=e395]
+          - generic [ref=e396]:
+            - button "最大化" [ref=e397]:
+              - img
+            - button "新对话" [ref=e398]:
+              - img
+        - generic [ref=e400]:
+          - paragraph [ref=e401]: 用 AI 开始设计
+          - generic [ref=e402]:
+            - button "📱 设计一个移动端登录页面 带社交登录的移动端页面" [ref=e403]:
+              - generic [ref=e404]:
+                - generic [ref=e405]: 📱
+                - generic [ref=e406]: 设计一个移动端登录页面
+              - generic [ref=e407]: 带社交登录的移动端页面
+            - button "🍕 美食App首页 App 首页设计" [ref=e408]:
+              - generic [ref=e409]:
+                - generic [ref=e410]: 🍕
+                - generic [ref=e411]: 美食App首页
+              - generic [ref=e412]: App 首页设计
+            - button "⬇️ 设计一个底部导航栏 5 个 Tab 导航栏" [ref=e413]:
+              - generic [ref=e414]:
+                - generic [ref=e415]: ⬇️
+                - generic [ref=e416]: 设计一个底部导航栏
+              - generic [ref=e417]: 5 个 Tab 导航栏
+            - button "🎨 为我的应用推荐配色方案 应用配色推荐" [ref=e418]:
+              - generic [ref=e419]:
+                - generic [ref=e420]: 🎨
+                - generic [ref=e421]: 为我的应用推荐配色方案
+              - generic [ref=e422]: 应用配色推荐
+          - paragraph [ref=e423]: 提示：在对话前选中画布上的元素以提供上下文。
+        - generic [ref=e424]:
+          - textbox "用 Agent 设计..." [ref=e425]
+          - generic [ref=e426]:
+            - generic [ref=e427]:
+              - button "GPT-5.4" [ref=e428]:
+                - img [ref=e429]
+                - generic [ref=e432]: GPT-5.4
+                - img [ref=e433]
+              - button "1x" [ref=e435]:
+                - img [ref=e436]
+                - generic [ref=e438]: 1x
+              - generic [ref=e439]: 已选择 1 个
+            - generic [ref=e440]:
+              - button "附加图片" [ref=e441]:
+                - img
+              - button "发送消息" [disabled]:
+                - img
+    - generic [ref=e443]:
+      - generic [ref=e445]:
+        - button "设计" [ref=e446]
+        - button "代码" [ref=e447]
+      - generic [ref=e721]:
+        - generic [ref=e723]:
+          - button "React" [ref=e724]
+          - button "Vue" [ref=e725]
+          - button "Svelte" [ref=e726]
+          - button "HTML" [ref=e727]
+          - button "Flutter" [ref=e728]
+          - button "SwiftUI" [ref=e729]
+          - button "Compose" [ref=e730]
+          - button "RN" [ref=e731]
+          - button "UniApp" [ref=e732]
+        - generic [ref=e733]:
+          - generic [ref=e749]:
+            - generic [ref=e750]:
+              - img [ref=e751]
+              - text: 选择内容已变化
+            - button "重新生成" [ref=e753]
+          - generic [ref=e754]: 当前目标有 2 条生成记录
+          - generic [ref=e756]:
+            - button "代码" [ref=e757]
+            - button "历史 2" [ref=e758]
+          - generic [ref=e760]:
+            - generic [ref=e761]:
+              - generic [ref=e762]:
+                - generic [ref=e763]: 文件
+                - generic [ref=e764]: "1"
+              - button "design.html entry" [ref=e766]:
+                - img [ref=e767]
+                - generic [ref=e772]: design.html
+                - generic [ref=e773]: entry
+            - code [ref=e776]: "<!doctype html> <html lang=\"zh-CN\"> <head> <meta charset=\"UTF-8\" /> <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\" /> <title>服务简报（2025年10月）</title> <!-- Assembled from 7 successful chunks. Degraded chunks: none. Duplicate shells and chrome were normalized into the single report document below. --> <style> :root { --report-page-bg: #f3f7fc; --report-page-blue: #227aff; --report-accent: #0b7eff; --report-accent-light: #65aeff; --report-surface: #ffffff; --report-text: #333333; --report-muted: #666666; --report-divider: #e9e9e9; --report-quote: #e8f3ff; --report-shadow: 0 28px 72px rgba(12, 73, 163, 0.18); --report-font-family: \"Microsoft YaHei\", \"PingFang SC\", \"Helvetica Neue\", Arial, sans-serif; --report-stage-width: 711px; --report-sheet-radius: 6px; --report-panel-radius: 19px; } * { box-sizing: border-box; } html, body { margin: 0; min-height: 100%; } body { background: var(--report-page-bg); color: var(--report-text); font-family: var(--report-font-family); } h1, h2, h3, p { margin: 0; } .design-root { padding: 24px 12px; overflow-x: auto; } .report-stage { width: 100%; max-width: var(--report-stage-width); margin: 0 auto; } .service-report { position: relative; width: 100%; aspect-ratio: 711 / 2387; overflow: hidden; border-radius: var(--report-sheet-radius); background: var(--report-surface); box-shadow: var(--report-shadow); } .service-report__blue-surface { position: absolute; left: 0; width: 100%; border-radius: 16px; background: var(--report-page-blue); } .service-report__blue-surface--top { top: 0; height: 100%; } .service-report__blue-surface--bottom { top: 52.786%; height: 100%; } .service-report__hero-image { position: absolute; left: -2.813%; top: 0; width: 105.485%; height: 61.416%; object-fit: fill; display: block; } .paper-panel-surface { border-radius: var(--report-panel-radius); background: var(--report-surface); overflow: hidden; } .section-heading-type { font-size: clamp(20px, 4.2vw, 30px); line-height: 1.467; font-weight: 600; color: var(--report-text); } .metric-grid-type .metric-card__label { margin-bottom: clamp(4px, 1vw, 8px); font-size: clamp(14px, 3vw, 22px); line-height: 2; font-weight: 400; color: var(--report-muted); } .metric-grid-type .metric-card__value { font-size: clamp(18px, 4.2vw, 30px); line-height: 1.467; font-weight: 400; color: var(--report-text); white-space: nowrap; } .service-report__header { position: absolute; inset: 0 0 auto 0; height: 7.792%; } .service-report__company-name { position: absolute; left: 10.689%; top: 2.053%; width: 78.762%; font-size: clamp(24px, 5.6vw, 40px); line-height: 1; font-weight: 700; text-align: center; color: var(--report-surface); } .service-report__title-pill { position: absolute; left: 26.019%; top: 5.362%; width: 48.101%; height: 2.43%; border-radius: 34px; background: var(--report-surface); } .service-report__title { position: absolute; left: 29.114%; top: 5.782%; width: 44.164%; font-size: clamp(18px, 3.9vw, 28px); line-height: 1; font-weight: 600; text-align: center; color: var(--report-accent); } .service-report__intro { position: absolute; left: 3.938%; top: 8.881%; width: 92.264%; height: 5.32%; padding: clamp(18px, 3vw, 20px) clamp(20px, 4.2vw, 30px); } .service-report__intro-copy { font-size: clamp(16px, 3.4vw, 24px); line-height: 1.833; font-weight: 400; color: var(--report-text); white-space: pre-line; } .service-report__overview, .service-report__collaboration, .service-report__message { position: absolute; left: 3.938%; width: 92.264%; } .service-report__overview { top: 15.292%; height: 51.613%; padding: clamp(22px, 3.8vw, 30px) clamp(20px, 3.8vw, 27px) clamp(24px, 4vw, 34px); } .service-report__collaboration { top: 68.076%; height: 12.191%; padding: clamp(22px, 3.8vw, 30px) clamp(20px, 3.8vw, 27px) clamp(24px, 4vw, 30px); } .service-report__message { top: 81.483%; height: 16.883%; padding: clamp(64px, 10vw, 79px) clamp(24px, 5vw, 40px) clamp(30px, 4vw, 35px); } .report-panel { display: flex; flex-direction: column; } .report-panel__header { display: flex; align-items: center; justify-content: center; gap: clamp(16px, 2.8vw, 24px); } .report-panel__index { width: clamp(24px, 4.8vw, 34px); height: clamp(24px, 4.8vw, 34px); border-radius: 5px; background: var(--report-accent); display: flex; align-items: center; justify-content: center; flex: 0 0 auto; } .report-panel__index-text { font-size: clamp(18px, 3.7vw, 26px); line-height: 1; font-weight: 600; color: #ffffff; text-align: center; } .service-report__overview-body, .service-report__collaboration-body { position: relative; display: flex; flex: 1; flex-direction: column; min-height: 0; } .service-report__overview-body { margin-top: clamp(16px, 2.8vw, 22px); } .service-report__collaboration-body { margin-top: clamp(12px, 2vw, 18px); gap: clamp(16px, 2.8vw, 22px); } .report-subsection { position: relative; } .report-subsection--invoice { flex: 1.02; } .report-subsection--work { flex: 1.2; } .report-subsection--finance { flex: 3.55; } .report-subsection--tax { flex: 1.22; } .report-subsection--onsite { flex: 1; } .report-subsection__header { display: flex; align-items: center; gap: clamp(12px, 2vw, 15px); margin-bottom: clamp(14px, 2.3vw, 18px); } .report-subsection__title { font-size: clamp(18px, 3.6vw, 26px); line-height: 1.692; font-weight: 400; color: var(--report-text); } .report-accent-bars { width: clamp(32px, 6.2vw, 44px); height: clamp(14px, 2.7vw, 19px); flex: 0 0 auto; color: var(--report-accent); } .report-accent-bars path { fill: currentColor; } .report-divider { width: 100%; height: 0; border: 0; border-top: 2px solid var(--report-divider); margin: clamp(10px, 1.8vw, 14px) 0; } .metric-grid-type { display: grid; } .metric-grid-type--two { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: clamp(18px, 3vw, 28px) clamp(18px, 4vw, 40px); } .metric-grid-type--three { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: clamp(18px, 3vw, 24px) clamp(14px, 2.6vw, 28px); } .metric-grid-type--work { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: clamp(14px, 2.6vw, 18px); } .metric-card--wide { grid-column: 1 / span 2; max-width: 240px; } .service-report__work-note { margin-top: clamp(14px, 2.2vw, 18px); font-size: clamp(14px, 2.8vw, 20px); line-height: 1.75; color: var(--report-text); } .service-report__message-banner { position: absolute; left: 50%; top: 0; width: 45.122%; height: clamp(44px, 8vw, 60px); transform: translateX(-50%); } .service-report__message-ribbon { width: 100%; height: 100%; display: block; } .service-report__message-title { position: absolute; inset: clamp(6px, 1vw, 7px) 0 auto 0; font-size: clamp(20px, 4.2vw, 30px); line-height: 1.467; font-weight: 400; letter-spacing: 7.2px; text-align: center; color: #ffffff; } .service-report__message-copy { font-size: clamp(16px, 3.4vw, 24px); line-height: 1.667; font-weight: 400; color: var(--report-text); white-space: pre-line; } .service-report__message-footer { margin-top: auto; display: flex; align-items: flex-end; justify-content: space-between; gap: clamp(18px, 3vw, 24px); } .service-report__quote-mark { width: clamp(96px, 19vw, 140px); aspect-ratio: 140 / 110.75; height: auto; flex: 0 0 auto; color: var(--report-quote); } .service-report__signature { max-width: 384px; margin-left: auto; font-size: clamp(16px, 3.4vw, 24px); line-height: 1.667; font-weight: 400; color: var(--report-text); text-align: right; white-space: pre-line; } @media (max-width: 639px) { .design-root { padding: 16px 8px; } .metric-grid-type--three, .metric-grid-type--work { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 16px; } .metric-card--wide { grid-column: 1 / -1; max-width: none; } .service-report__message-footer { align-items: flex-start; flex-direction: column; } .service-report__signature { max-width: none; width: 100%; } } @media (min-width: 640px) { .report-stage { max-width: 711px; } } @media (min-width: 768px) { .design-root { padding: 28px 16px; } } @media (min-width: 1024px) { .design-root { padding: 32px 24px; } } @media (min-width: 1280px) { .design-root { padding: 40px 24px; } } </style> </head> <body> <main class=\"design-root\" aria-label=\"服务简报（2025年10月）\"> <div class=\"report-stage\"> <article class=\"service-report\"> <div class=\"service-report__blue-surface service-report__blue-surface--top\" aria-hidden=\"true\"></div> <div class=\"service-report__blue-surface service-report__blue-surface--bottom\" aria-hidden=\"true\"></div> <img class=\"service-report__hero-image\" src=\"./assets/image-2-1.png\" alt=\"服务简报背景图\" /> <header class=\"service-report__header\"> <h1 class=\"service-report__company-name\">培管（厦门）数字科技有限公司</h1> <div class=\"service-report__title-pill\" aria-hidden=\"true\"></div> <h2 class=\"service-report__title\">服务简报（2025年10月）</h2> </header> <section class=\"service-report__intro paper-panel-surface\" aria-labelledby=\"report-intro-heading\"> <p class=\"service-report__intro-copy\" id=\"report-intro-heading\"> 尊敬的客户，您好，现就您的企业“培管（厦门）数字科技有限公司”2025年10月的服务情况做简要汇报： </p> </section> <section class=\"service-report__overview report-panel paper-panel-surface\" aria-labelledby=\"report-overview-title\"> <header class=\"report-panel__header\"> <div class=\"report-panel__index\" aria-hidden=\"true\"> <p class=\"report-panel__index-text\">1</p> </div> <h2 class=\"section-heading-type\" id=\"report-overview-title\">月度票财税基本情况</h2> </header> <div class=\"service-report__overview-body\"> <section class=\"report-subsection report-subsection--invoice\" aria-labelledby=\"report-invoice-title\"> <div class=\"report-subsection__header\"> <svg class=\"report-accent-bars\" viewBox=\"0 0 44 19\" xmlns=\"http://www.w3.org/2000/svg\" aria-hidden=\"true\"> <path d=\"M7.2082 0L17.62 0L10.4118 19L0 19L7.2082 0ZM20.3732 0L30.785 0L23.5768 19L13.165 19L20.3732 0ZM33.5882 0L44 0L36.7918 19L26.38 19L33.5882 0Z\"></path> </svg> <h3 class=\"report-subsection__title\" id=\"report-invoice-title\">发票</h3> </div> <div class=\"metric-grid-type metric-grid-type--two\"> <article class=\"metric-card\"> <p class=\"metric-card__label\">收票（4份）</p> <p class=\"metric-card__value\">82.35</p> </article> <article class=\"metric-card\"> <p class=\"metric-card__label\">开票（--份）</p> <p class=\"metric-card__value\">--</p> </article> </div> </section> <hr class=\"report-divider\" /> <section class=\"report-subsection report-subsection--work\" aria-labelledby=\"report-work-title\"> <div class=\"report-subsection__header\"> <svg class=\"report-accent-bars\" viewBox=\"0 0 44 19\" xmlns=\"http://www.w3.org/2000/svg\" aria-hidden=\"true\"> <path d=\"M7.2082 0L17.62 0L10.4118 19L0 19L7.2082 0ZM20.3732 0L30.785 0L23.5768 19L13.165 19L20.3732 0ZM33.5882 0L44 0L36.7918 19L26.38 19L33.5882 0Z\"></path> </svg> <h3 class=\"report-subsection__title\" id=\"report-work-title\">工作简报</h3> </div> <div class=\"metric-grid-type metric-grid-type--work\"> <article class=\"metric-card\"> <p class=\"metric-card__label\">已录入发票（份）</p> <p class=\"metric-card__value\">4</p> </article> <article class=\"metric-card\"> <p class=\"metric-card__label\">已录入凭证（张）</p> <p class=\"metric-card__value\">--</p> </article> <article class=\"metric-card\"> <p class=\"metric-card__label\">已录入流水（条）</p> <p class=\"metric-card__value\">--</p> </article> </div> <p class=\"service-report__work-note\"> 本月持续完成票据归集、凭证核对与流水整理，关键财税数据已同步更新，线上协同保持畅通。 </p> </section> <hr class=\"report-divider\" /> <section class=\"report-subsection report-subsection--finance\" aria-labelledby=\"report-finance-title\"> <div class=\"report-subsection__header\"> <svg class=\"report-accent-bars\" viewBox=\"0 0 44 19\" xmlns=\"http://www.w3.org/2000/svg\" aria-hidden=\"true\"> <path d=\"M7.2082 0L17.62 0L10.4118 19L0 19L7.2082 0ZM20.3732 0L30.785 0L23.5768 19L13.165 19L20.3732 0ZM33.5882 0L44 0L36.7918 19L26.38 19L33.5882 0Z\"></path> </svg> <h3 class=\"report-subsection__title\" id=\"report-finance-title\">财务简报</h3> </div> <div class=\"metric-grid-type metric-grid-type--three\"> <article class=\"metric-card\"> <p class=\"metric-card__label\">资产（元）</p> <p class=\"metric-card__value\">--</p> </article> <article class=\"metric-card\"> <p class=\"metric-card__label\">负债（元）</p> <p class=\"metric-card__value\">--</p> </article> <article class=\"metric-card\"> <p class=\"metric-card__label\">资产负债率（%）</p> <p class=\"metric-card__value\">--</p> </article> <article class=\"metric-card\"> <p class=\"metric-card__label\">收入（元）</p> <p class=\"metric-card__value\">--</p> </article> <article class=\"metric-card\"> <p class=\"metric-card__label\">成本（元）</p> <p class=\"metric-card__value\">2</p> </article> <article class=\"metric-card\"> <p class=\"metric-card__label\">利润（元）</p> <p class=\"metric-card__value\">--</p> </article> <article class=\"metric-card\"> <p class=\"metric-card__label\">存货（元）</p> <p class=\"metric-card__value\">1021</p> </article> <article class=\"metric-card\"> <p class=\"metric-card__label\">应收账款（元）</p> <p class=\"metric-card__value\">5</p> </article> <article class=\"metric-card\"> <p class=\"metric-card__label\">应付账款（元）</p> <p class=\"metric-card__value\">--</p> </article> <article class=\"metric-card metric-card--wide\"> <p class=\"metric-card__label\">其他应收账款（元）</p> <p class=\"metric-card__value\">--</p> </article> </div> </section> <hr class=\"report-divider\" /> <section class=\"report-subsection report-subsection--tax\" aria-labelledby=\"report-tax-title\"> <div class=\"report-subsection__header\"> <svg class=\"report-accent-bars\" viewBox=\"0 0 44 19\" xmlns=\"http://www.w3.org/2000/svg\" aria-hidden=\"true\"> <path d=\"M7.2082 0L17.62 0L10.4118 19L0 19L7.2082 0ZM20.3732 0L30.785 0L23.5768 19L13.165 19L20.3732 0ZM33.5882 0L44 0L36.7918 19L26.38 19L33.5882 0Z\"></path> </svg> <h3 class=\"report-subsection__title\" id=\"report-tax-title\">纳税状况</h3> </div> <div class=\"metric-grid-type metric-grid-type--two\"> <article class=\"metric-card\"> <p class=\"metric-card__label\">总税额（元）</p> <p class=\"metric-card__value\">82.35</p> </article> <article class=\"metric-card\"> <p class=\"metric-card__label\">年增值税税负率（%）</p> <p class=\"metric-card__value\">--</p> </article> </div> </section> </div> </section> <section class=\"service-report__collaboration report-panel paper-panel-surface\" aria-labelledby=\"report-collaboration-title\"> <header class=\"report-panel__header\"> <div class=\"report-panel__index\" aria-hidden=\"true\"> <p class=\"report-panel__index-text\">2</p> </div> <h2 class=\"section-heading-type\" id=\"report-collaboration-title\">月度沟通协同情况</h2> </header> <div class=\"service-report__collaboration-body\"> <section class=\"report-subsection report-subsection--onsite\" aria-labelledby=\"report-onsite-title\"> <div class=\"report-subsection__header\"> <svg class=\"report-accent-bars\" viewBox=\"0 0 44 19\" xmlns=\"http://www.w3.org/2000/svg\" aria-hidden=\"true\"> <path d=\"M7.2082 0L17.62 0L10.4118 19L0 19L7.2082 0ZM20.3732 0L30.785 0L23.5768 19L13.165 19L20.3732 0ZM33.5882 0L44 0L36.7918 19L26.38 19L33.5882 0Z\"></path> </svg> <h3 class=\"report-subsection__title\" id=\"report-onsite-title\">上门办事</h3> </div> <div class=\"metric-grid-type metric-grid-type--two\"> <article class=\"metric-card\"> <p class=\"metric-card__label\">上门次数</p> <p class=\"metric-card__value\">0</p> </article> <article class=\"metric-card\"> <p class=\"metric-card__label\">VIP线上协同</p> <p class=\"metric-card__value\">已开通</p> </article> </div> </section> </div> </section> <section class=\"service-report__message report-panel paper-panel-surface\" aria-labelledby=\"report-message-title\"> <div class=\"service-report__message-banner\"> <svg class=\"service-report__message-ribbon\" viewBox=\"0 0 296 60\" xmlns=\"http://www.w3.org/2000/svg\" aria-hidden=\"true\"> <defs> <linearGradient id=\"service-report-ribbon-gradient\" x1=\"148\" y1=\"0\" x2=\"148\" y2=\"60\" gradientUnits=\"userSpaceOnUse\"> <stop offset=\"0%\" stop-color=\"#65aeff\"></stop> <stop offset=\"100%\" stop-color=\"#0b7eff\"></stop> </linearGradient> </defs> <path d=\"M0 0H296L285.929 50.353C284.808 55.963 279.883 60 274.162 60H21.838C16.117 60 11.193 55.963 10.071 50.353L0 0Z\" fill=\"url(#service-report-ribbon-gradient)\"></path> </svg> <h2 class=\"service-report__message-title\" id=\"report-message-title\">寄语</h2> </div> <p class=\"service-report__message-copy\">本服务报告由“厦门铸远中嘉税务师事务所有限公司”提供， 我们始终秉持专业立身、服务为本、客户至上的理念， 未来将继续助力企业稳健合规经营，携手同行，再创佳绩。</p> <footer class=\"service-report__message-footer\"> <svg class=\"service-report__quote-mark\" viewBox=\"0 0 140 111\" xmlns=\"http://www.w3.org/2000/svg\" aria-hidden=\"true\"> <path d=\"M80 110.75V50.75L106.5 0H133L108.25 48.25H140V110.75H80ZM0 110.75V50.75L26.5 0H53L28.25 48.25H60V110.75H0Z\" fill=\"currentColor\"></path> </svg> <p class=\"service-report__signature\"> 厦门铸远中嘉税务师事务所有限公司 2025-10-24 全体同仁 </p> </footer> </section> </article> </div> </main> </body> </html>"
+          - generic [ref=e778]: 后台生成已加入队列。可打开任务中心查看进度。
+          - generic [ref=e779]:
+            - button "复制" [ref=e780]:
+              - img
+              - generic [ref=e781]: 复制
+            - button "下载" [ref=e782]:
+              - img
+              - generic [ref=e783]: 下载
+            - button "AI 包" [ref=e784]:
+              - img
+              - generic [ref=e785]: AI 包
+            - button "后台生成" [ref=e786]:
+              - img
+              - generic [ref=e787]: 后台生成
+            - button "局部修复" [ref=e788]:
+              - img
+              - generic [ref=e789]: 局部修复
+            - button "重新生成" [ref=e790]:
+              - img
+              - generic [ref=e791]: 重新生成

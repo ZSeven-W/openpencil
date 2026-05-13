@@ -1,0 +1,4 @@
+[    4199ms] [LOG] true isPermission @ http://localhost:3101/finance/src/publicModules/aiChat/AiCustomer.vue:1480
+[    4206ms] [LOG] [all, false] newVa2222l @ http://localhost:3101/finance/src/publicModules/teacherGuide/teacherGuide.vue:556
+[    5113ms] [VERBOSE] [DOM] Input elements should have autocomplete attributes (suggested: "current-password"): (More info: https://goo.gl/9p2vKq) %o @ http://localhost:3100/manage/auth/login?redirect=/home/Index:0
+[   28267ms] [VERBOSE] [DOM] Input elements should have autocomplete attributes (suggested: "current-password"): (More info: https://goo.gl/9p2vKq) %o @ http://localhost:3100/manage/auth/login?redirect=/home/Index:0

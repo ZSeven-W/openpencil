@@ -21,6 +21,7 @@ import { createRequire } from 'node:module';
 
 // Import 通过 vite 的转换管道进行“反应”——与 pen-react hooks 使用的实例相同
 import * as viteTranformedReact from 'react';
+import i18n from '@/i18n';
 
 // Load 通过本机 CJS require 进行反应 — 与 React-dom 内部使用的实例相同。 Resolve
 // 通过节点自己的模块查找动态地进行，因此该文件不绑定到任何单个开发人员的计算机（之前的硬编码绝对路径在该用户家之外的每次结帐时破坏了整个 apps/web
@@ -46,4 +47,8 @@ if (viteInternals && cjsInternals && viteInternals !== cjsInternals) {
       enumerable: true,
     });
   }
+}
+
+if (i18n.language !== 'en') {
+  await i18n.changeLanguage('en');
 }

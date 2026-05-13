@@ -20,6 +20,7 @@ function makeEvent(authorization?: string) {
 function getCloudRouteFiles(dir = join(process.cwd(), 'server/api/cloud')): string[] {
   return readdirSync(dir).flatMap((entry) => {
     const fullPath = join(dir, entry);
+    if (fullPath.includes(`${join('server/api/cloud', '__tests__')}`)) return [];
     return statSync(fullPath).isDirectory() ? getCloudRouteFiles(fullPath) : [fullPath];
   });
 }

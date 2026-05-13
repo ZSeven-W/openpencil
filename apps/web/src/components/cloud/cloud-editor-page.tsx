@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { NavigateFn } from '@tanstack/react-router';
+import { useTranslation } from 'react-i18next';
 import EditorLayout from '@/components/editor/editor-layout';
 import { useKeyboardShortcuts } from '@/hooks/use-keyboard-shortcuts';
 import { useBeforeUnload } from '@/hooks/use-before-unload';
@@ -9,10 +10,12 @@ import { getCloudFile } from '@/services/cloud/cloud-files';
 
 interface CloudEditorPageProps {
   fileId: string;
+  generationId?: string;
   navigate: NavigateFn;
 }
 
-export function CloudEditorPage({ fileId, navigate }: CloudEditorPageProps) {
+export function CloudEditorPage({ fileId, generationId, navigate }: CloudEditorPageProps) {
+  const { t } = useTranslation();
   const status = useCloudAuthStore((s) => s.status);
   const initialized = useCloudAuthStore((s) => s.initialized);
   const initialize = useCloudAuthStore((s) => s.initialize);
@@ -45,7 +48,7 @@ export function CloudEditorPage({ fileId, navigate }: CloudEditorPageProps) {
       .catch((err) => {
         if (cancelled) return;
         setLoadState('error');
-        setError(err instanceof Error ? err.message : 'Failed to load cloud file');
+        setError(err instanceof Error ? err.message : t('cloudEditor.errorLoad'));
       });
     return () => {
       cancelled = true;
@@ -57,7 +60,7 @@ export function CloudEditorPage({ fileId, navigate }: CloudEditorPageProps) {
       <div className="min-h-screen bg-background text-foreground flex items-center justify-center">
         <div className="text-center">
           <p className="text-sm text-muted-foreground">
-            {loadState === 'error' ? (error ?? 'Failed to load cloud file') : 'Loading file...'}
+            {loadState === 'error' ? (error ?? t('cloudEditor.errorLoad')) : t('cloudEditor.loading')}
           </p>
           {loadState === 'error' && (
             <button
@@ -65,7 +68,7 @@ export function CloudEditorPage({ fileId, navigate }: CloudEditorPageProps) {
               className="mt-3 text-sm text-primary hover:underline"
               onClick={() => void navigate({ to: '/cloud' })}
             >
-              Back to files
+              {t('topbar.backToFiles')}
             </button>
           )}
         </div>
@@ -73,5 +76,5 @@ export function CloudEditorPage({ fileId, navigate }: CloudEditorPageProps) {
     );
   }
 
-  return <EditorLayout />;
+  return <EditorLayout generationId={generationId} />;
 }

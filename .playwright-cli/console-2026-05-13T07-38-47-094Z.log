@@ -1,0 +1,334 @@
+[     535ms] [LOG] 获取所属期 @ http://localhost:3101/finance/src/router/guard/index.ts:39
+[     621ms] [LOG] {code: 0, data: Object, message: } 121212 @ http://localhost:3101/finance/src/api/generated/core/request.ts:57
+[     738ms] [LOG] true isPermission @ http://localhost:3101/finance/src/publicModules/aiChat/AiCustomer.vue:1480
+[     743ms] [LOG] [all, false] newVa2222l @ http://localhost:3101/finance/src/publicModules/teacherGuide/teacherGuide.vue:556
+[     912ms] [LOG] {code: 0, data: Array(32), message: } 121212 @ http://localhost:3101/finance/src/api/generated/core/request.ts:57
+[     965ms] [LOG] {code: 0, data: Object, message: } 121212 @ http://localhost:3101/finance/src/api/generated/core/request.ts:57
+[     992ms] [LOG] {code: 0, data: Object, message: } 121212 @ http://localhost:3101/finance/src/api/generated/core/request.ts:57
+[    1014ms] [LOG] {code: 0, data: Object, message: } 121212 @ http://localhost:3101/finance/src/api/generated/core/request.ts:57
+[   12221ms] [LOG] true isPermission @ http://localhost:3101/finance/src/publicModules/aiChat/AiCustomer.vue:1480
+[   12227ms] [LOG] [all, false] newVa2222l @ http://localhost:3101/finance/src/publicModules/teacherGuide/teacherGuide.vue:556
+[   12347ms] [LOG] {code: 0, data: Array(32), message: } 121212 @ http://localhost:3101/finance/src/api/generated/core/request.ts:57
+[   12381ms] [LOG] {code: 0, data: Object, message: } 121212 @ http://localhost:3101/finance/src/api/generated/core/request.ts:57
+[   12421ms] [LOG] {code: 0, data: Object, message: } 121212 @ http://localhost:3101/finance/src/api/generated/core/request.ts:57
+[   12422ms] [LOG] {code: 0, data: Object, message: } 121212 @ http://localhost:3101/finance/src/api/generated/core/request.ts:57
+[   15175ms] [WARNING] [Vue warn]: Invalid prop: type check failed for prop "current". Expected Number with value 0, got String with value "". 
+  at <MonthSelectorScroll class="selector-time__scroll" onClickItem=fn<selectMonth> current=""  ... > 
+  at <Index onVnodeUnmounted=fn<onVnodeUnmounted> ref=Ref< null > key="/voucher/checkVoucher?accountSetId=019da9ac8e4979be9b77b6a3894e865f" > 
+  at <KeepAlive key=0 include= [checkVoucher] > 
+  at <RouterView> 
+  at <PageView> 
+  at <Anonymous hasSider=undefined prefixCls="ant-layout-content" tagName="main" > 
+  at <ALayoutContent> 
+  at <Anonymous hasSider=undefined prefixCls="ant-layout" tagName="section"  ... > 
+  at <ALayout style= {position: relative} > 
+  at <Anonymous hasSider=true prefixCls="ant-layout" tagName="section" > 
+  at <ALayout has-sider="" > 
+  at <ASpin spinning=false > 
+  at <ProLayout onVnodeUnmounted=fn<onVnodeUnmounted> ref=Ref< Proxy(Object) > > 
+  at <RouterView> 
+  at <ALocaleProvider locale= {locale: zh-cn, Pagination: Object, DatePicker: Object, TimePicker: Object, Calendar: Object} ANT_MARK__="internalMark" > 
+  at <LocaleReceiver children=fn<children> > 
+  at <AConfigProvider locale= {locale: zh-cn, Pagination: Object, DatePicker: Object, TimePicker: Object, Calendar: Object} > 
+  at <App> @ http://localhost:3101/finance/node_modules/.vite/deps/chunk-F6P7Z22E.js?v=290f2014:2475
+[   15191ms] [LOG] convertToChineseCurrency 零元整 @ http://localhost:3101/finance/src/components/voucher/RecordVoucher.vue:2360
+[   15191ms] [LOG] Proxy(Object) init @ http://localhost:3101/finance/src/components/voucher/RecordVoucher.vue:2220
+[   15191ms] [LOG] 没有数据 @ http://localhost:3101/finance/src/components/voucher/RecordVoucher.vue:2355
+[   15204ms] [LOG] onActivated 恢复缓存数据 id  @ http://localhost:3101/finance/src/components/voucher/RecordVoucher.vue:2690
+[   15205ms] [LOG] undefined subjectItemsubjectItemsubjectItemsubjectItem @ http://localhost:3101/finance/src/components/voucher/RecordVoucher.vue:1034
+[   15205ms] [LOG] [] 相同科目的凭证分录列表 @ http://localhost:3101/finance/src/components/voucher/RecordVoucher.vue:1035
+[   15205ms] [LOG] undefined subjectItemsubjectItemsubjectItemsubjectItem @ http://localhost:3101/finance/src/components/voucher/RecordVoucher.vue:1034
+[   15205ms] [LOG] [] 相同科目的凭证分录列表 @ http://localhost:3101/finance/src/components/voucher/RecordVoucher.vue:1035
+[   15205ms] [LOG] undefined subjectItemsubjectItemsubjectItemsubjectItem @ http://localhost:3101/finance/src/components/voucher/RecordVoucher.vue:1034
+[   15205ms] [LOG] [] 相同科目的凭证分录列表 @ http://localhost:3101/finance/src/components/voucher/RecordVoucher.vue:1035
+[   15205ms] [LOG] undefined subjectItemsubjectItemsubjectItemsubjectItem @ http://localhost:3101/finance/src/components/voucher/RecordVoucher.vue:1034
+[   15205ms] [LOG] [] 相同科目的凭证分录列表 @ http://localhost:3101/finance/src/components/voucher/RecordVoucher.vue:1035
+[   15205ms] [LOG] undefined subjectItemsubjectItemsubjectItemsubjectItem @ http://localhost:3101/finance/src/components/voucher/RecordVoucher.vue:1034
+[   15205ms] [LOG] [] 相同科目的凭证分录列表 @ http://localhost:3101/finance/src/components/voucher/RecordVoucher.vue:1035
+[   15206ms] [WARNING] [Vue warn]: Invalid prop: type check failed for prop "current". Expected Number with value 202604, got String with value "202604". 
+  at <MonthSelectorScroll class="selector-time__scroll" onClickItem=fn<selectMonth> current="202604"  ... > 
+  at <Index onVnodeUnmounted=fn<onVnodeUnmounted> ref=Ref< Proxy(Object) > key="/voucher/checkVoucher?accountSetId=019da9ac8e4979be9b77b6a3894e865f" > 
+  at <KeepAlive key=0 include= [checkVoucher] > 
+  at <RouterView> 
+  at <PageView> 
+  at <Anonymous hasSider=undefined prefixCls="ant-layout-content" tagName="main" > 
+  at <ALayoutContent> 
+  at <Anonymous hasSider=undefined prefixCls="ant-layout" tagName="section"  ... > 
+  at <ALayout style= {position: relative} > 
+  at <Anonymous hasSider=true prefixCls="ant-layout" tagName="section" > 
+  at <ALayout has-sider="" > 
+  at <ASpin spinning=false > 
+  at <ProLayout onVnodeUnmounted=fn<onVnodeUnmounted> ref=Ref< Proxy(Object) > > 
+  at <RouterView> 
+  at <ALocaleProvider locale= {locale: zh-cn, Pagination: Object, DatePicker: Object, TimePicker: Object, Calendar: Object} ANT_MARK__="internalMark" > 
+  at <LocaleReceiver children=fn<children> > 
+  at <AConfigProvider locale= {locale: zh-cn, Pagination: Object, DatePicker: Object, TimePicker: Object, Calendar: Object} > 
+  at <App> @ http://localhost:3101/finance/node_modules/.vite/deps/chunk-F6P7Z22E.js?v=290f2014:2475
+[   15306ms] [LOG] {code: 0, data: 001, message: } 121212 @ http://localhost:3101/finance/src/api/generated/core/request.ts:57
+[   15308ms] [LOG] {code: 0, data: Object, message: } 121212 @ http://localhost:3101/finance/src/api/generated/core/request.ts:57
+[   15308ms] [LOG] {code: 0, data: Object, message: } 断号检查 @ http://localhost:3101/finance/src/views/voucher/checkVoucher/index.vue:436
+[   15343ms] [LOG] {code: 0, data: 001, message: } 121212 @ http://localhost:3101/finance/src/api/generated/core/request.ts:57
+[   15402ms] [LOG] {code: 0, data: Object, message: } 121212 @ http://localhost:3101/finance/src/api/generated/core/request.ts:57
+[   15402ms] [LOG] 0 total @ http://localhost:3101/finance/src/views/voucher/checkVoucher/index.vue:573
+[   15433ms] [LOG] {code: 0, data: Object, message: } 121212 @ http://localhost:3101/finance/src/api/generated/core/request.ts:57
+[   15433ms] [LOG] false false getVoucherButtonFn @ http://localhost:3101/finance/src/components/voucher/RecordVoucher.vue:727
+[   15477ms] [LOG] {code: 0, data: Object, message: } 121212 @ http://localhost:3101/finance/src/api/generated/core/request.ts:57
+[   15477ms] [LOG] {hasGap: false, gapCount: 0, gapPositions: Array(0)} checkVoucherGapFn @ http://localhost:3101/finance/src/components/voucher/RecordVoucher.vue:476
+[   15483ms] [LOG] {code: 0, data: Object, message: } 121212 @ http://localhost:3101/finance/src/api/generated/core/request.ts:57
+[   15484ms] [LOG] {printFormat: 1, voucherType: 2, leftOffset: 10, topOffset: 10} 获取打印设置详情 @ http://localhost:3101/finance/src/views/voucher/checkVoucher/index.vue:540
+[  411799ms] [WARNING] [Vue warn]: Invalid prop: type check failed for prop "current". Expected Number with value 202604, got String with value "202604". 
+  at <MonthSelectorScroll class="selector-time__scroll" onClickItem=fn<selectMonth> current="202604"  ... > 
+  at <Index onVnodeUnmounted=fn<onVnodeUnmounted> ref=Ref< Proxy(Object) > key="/voucher/checkVoucher?accountSetId=019da9ac8e4979be9b77b6a3894e865f" > 
+  at <KeepAlive key=0 include= [checkVoucher] > 
+  at <RouterView> 
+  at <PageView> 
+  at <Anonymous hasSider=undefined prefixCls="ant-layout-content" tagName="main" > 
+  at <ALayoutContent> 
+  at <Anonymous hasSider=undefined prefixCls="ant-layout" tagName="section"  ... > 
+  at <ALayout style= {position: relative} > 
+  at <Anonymous hasSider=true prefixCls="ant-layout" tagName="section" > 
+  at <ALayout has-sider="" > 
+  at <ASpin spinning=false > 
+  at <ProLayout onVnodeUnmounted=fn<onVnodeUnmounted> ref=Ref< Proxy(Object) > > 
+  at <RouterView> 
+  at <ALocaleProvider locale= {locale: zh-cn, Pagination: Object, DatePicker: Object, TimePicker: Object, Calendar: Object} ANT_MARK__="internalMark" > 
+  at <LocaleReceiver children=fn<children> > 
+  at <AConfigProvider locale= {locale: zh-cn, Pagination: Object, DatePicker: Object, TimePicker: Object, Calendar: Object} > 
+  at <App> @ http://localhost:3101/finance/node_modules/.vite/deps/chunk-F6P7Z22E.js?v=290f2014:2475
+[  431796ms] [WARNING] [Vue warn]: Property "entryArrangeVisible" was accessed during render but is not defined on instance. 
+  at <Index onVnodeUnmounted=fn<onVnodeUnmounted> ref=Ref< Proxy(Object) > key="/voucher/checkVoucher?accountSetId=019da9ac8e4979be9b77b6a3894e865f" > 
+  at <KeepAlive key=0 include= [checkVoucher] > 
+  at <RouterView> 
+  at <PageView> 
+  at <Anonymous hasSider=undefined prefixCls="ant-layout-content" tagName="main" > 
+  at <ALayoutContent> 
+  at <Anonymous hasSider=undefined prefixCls="ant-layout" tagName="section"  ... > 
+  at <ALayout style= {position: relative} > 
+  at <Anonymous hasSider=true prefixCls="ant-layout" tagName="section" > 
+  at <ALayout has-sider="" > 
+  at <ASpin spinning=false > 
+  at <ProLayout onVnodeUnmounted=fn<onVnodeUnmounted> ref=Ref< Proxy(Object) > > 
+  at <RouterView> 
+  at <ALocaleProvider locale= {locale: zh-cn, Pagination: Object, DatePicker: Object, TimePicker: Object, Calendar: Object} ANT_MARK__="internalMark" > 
+  at <LocaleReceiver children=fn<children> > 
+  at <AConfigProvider locale= {locale: zh-cn, Pagination: Object, DatePicker: Object, TimePicker: Object, Calendar: Object} > 
+  at <App> @ http://localhost:3101/finance/node_modules/.vite/deps/chunk-F6P7Z22E.js?v=290f2014:2475
+[  431796ms] [WARNING] [Vue warn]: Property "handleEntryArrange" was accessed during render but is not defined on instance. 
+  at <Index onVnodeUnmounted=fn<onVnodeUnmounted> ref=Ref< Proxy(Object) > key="/voucher/checkVoucher?accountSetId=019da9ac8e4979be9b77b6a3894e865f" > 
+  at <KeepAlive key=0 include= [checkVoucher] > 
+  at <RouterView> 
+  at <PageView> 
+  at <Anonymous hasSider=undefined prefixCls="ant-layout-content" tagName="main" > 
+  at <ALayoutContent> 
+  at <Anonymous hasSider=undefined prefixCls="ant-layout" tagName="section"  ... > 
+  at <ALayout style= {position: relative} > 
+  at <Anonymous hasSider=true prefixCls="ant-layout" tagName="section" > 
+  at <ALayout has-sider="" > 
+  at <ASpin spinning=false > 
+  at <ProLayout onVnodeUnmounted=fn<onVnodeUnmounted> ref=Ref< Proxy(Object) > > 
+  at <RouterView> 
+  at <ALocaleProvider locale= {locale: zh-cn, Pagination: Object, DatePicker: Object, TimePicker: Object, Calendar: Object} ANT_MARK__="internalMark" > 
+  at <LocaleReceiver children=fn<children> > 
+  at <AConfigProvider locale= {locale: zh-cn, Pagination: Object, DatePicker: Object, TimePicker: Object, Calendar: Object} > 
+  at <App> @ http://localhost:3101/finance/node_modules/.vite/deps/chunk-F6P7Z22E.js?v=290f2014:2475
+[  431796ms] [WARNING] [Vue warn]: Invalid prop: type check failed for prop "current". Expected Number with value 202604, got String with value "202604". 
+  at <MonthSelectorScroll class="selector-time__scroll" onClickItem=fn<selectMonth> current="202604"  ... > 
+  at <Index onVnodeUnmounted=fn<onVnodeUnmounted> ref=Ref< Proxy(Object) > key="/voucher/checkVoucher?accountSetId=019da9ac8e4979be9b77b6a3894e865f" > 
+  at <KeepAlive key=0 include= [checkVoucher] > 
+  at <RouterView> 
+  at <PageView> 
+  at <Anonymous hasSider=undefined prefixCls="ant-layout-content" tagName="main" > 
+  at <ALayoutContent> 
+  at <Anonymous hasSider=undefined prefixCls="ant-layout" tagName="section"  ... > 
+  at <ALayout style= {position: relative} > 
+  at <Anonymous hasSider=true prefixCls="ant-layout" tagName="section" > 
+  at <ALayout has-sider="" > 
+  at <ASpin spinning=false > 
+  at <ProLayout onVnodeUnmounted=fn<onVnodeUnmounted> ref=Ref< Proxy(Object) > > 
+  at <RouterView> 
+  at <ALocaleProvider locale= {locale: zh-cn, Pagination: Object, DatePicker: Object, TimePicker: Object, Calendar: Object} ANT_MARK__="internalMark" > 
+  at <LocaleReceiver children=fn<children> > 
+  at <AConfigProvider locale= {locale: zh-cn, Pagination: Object, DatePicker: Object, TimePicker: Object, Calendar: Object} > 
+  at <App> @ http://localhost:3101/finance/node_modules/.vite/deps/chunk-F6P7Z22E.js?v=290f2014:2475
+[  448838ms] [WARNING] [Vue warn]: Property "handleEntryArrange" was accessed during render but is not defined on instance. 
+  at <Index onVnodeUnmounted=fn<onVnodeUnmounted> ref=Ref< null > key="/voucher/checkVoucher?accountSetId=019da9ac8e4979be9b77b6a3894e865f" > 
+  at <KeepAlive key=0 include= [checkVoucher] > 
+  at <RouterView> 
+  at <PageView> 
+  at <Anonymous hasSider=undefined prefixCls="ant-layout-content" tagName="main" > 
+  at <ALayoutContent> 
+  at <Anonymous hasSider=undefined prefixCls="ant-layout" tagName="section"  ... > 
+  at <ALayout style= {position: relative} > 
+  at <Anonymous hasSider=true prefixCls="ant-layout" tagName="section" > 
+  at <ALayout has-sider="" > 
+  at <ASpin spinning=false > 
+  at <ProLayout onVnodeUnmounted=fn<onVnodeUnmounted> ref=Ref< Proxy(Object) > > 
+  at <RouterView> 
+  at <ALocaleProvider locale= {locale: zh-cn, Pagination: Object, DatePicker: Object, TimePicker: Object, Calendar: Object} ANT_MARK__="internalMark" > 
+  at <LocaleReceiver children=fn<children> > 
+  at <AConfigProvider locale= {locale: zh-cn, Pagination: Object, DatePicker: Object, TimePicker: Object, Calendar: Object} > 
+  at <App> @ http://localhost:3101/finance/node_modules/.vite/deps/chunk-F6P7Z22E.js?v=290f2014:2475
+[  448839ms] [WARNING] [Vue warn]: Invalid prop: type check failed for prop "current". Expected Number with value 0, got String with value "". 
+  at <MonthSelectorScroll class="selector-time__scroll" onClickItem=fn<selectMonth> current=""  ... > 
+  at <Index onVnodeUnmounted=fn<onVnodeUnmounted> ref=Ref< null > key="/voucher/checkVoucher?accountSetId=019da9ac8e4979be9b77b6a3894e865f" > 
+  at <KeepAlive key=0 include= [checkVoucher] > 
+  at <RouterView> 
+  at <PageView> 
+  at <Anonymous hasSider=undefined prefixCls="ant-layout-content" tagName="main" > 
+  at <ALayoutContent> 
+  at <Anonymous hasSider=undefined prefixCls="ant-layout" tagName="section"  ... > 
+  at <ALayout style= {position: relative} > 
+  at <Anonymous hasSider=true prefixCls="ant-layout" tagName="section" > 
+  at <ALayout has-sider="" > 
+  at <ASpin spinning=false > 
+  at <ProLayout onVnodeUnmounted=fn<onVnodeUnmounted> ref=Ref< Proxy(Object) > > 
+  at <RouterView> 
+  at <ALocaleProvider locale= {locale: zh-cn, Pagination: Object, DatePicker: Object, TimePicker: Object, Calendar: Object} ANT_MARK__="internalMark" > 
+  at <LocaleReceiver children=fn<children> > 
+  at <AConfigProvider locale= {locale: zh-cn, Pagination: Object, DatePicker: Object, TimePicker: Object, Calendar: Object} > 
+  at <App> @ http://localhost:3101/finance/node_modules/.vite/deps/chunk-F6P7Z22E.js?v=290f2014:2475
+[  448855ms] [LOG] convertToChineseCurrency 零元整 @ http://localhost:3101/finance/src/components/voucher/RecordVoucher.vue?t=1778658375798:2360
+[  448855ms] [LOG] Proxy(Object) init @ http://localhost:3101/finance/src/components/voucher/RecordVoucher.vue?t=1778658375798:2220
+[  448855ms] [LOG] 没有数据 @ http://localhost:3101/finance/src/components/voucher/RecordVoucher.vue?t=1778658375798:2355
+[  448877ms] [LOG] onActivated 恢复缓存数据 id  @ http://localhost:3101/finance/src/components/voucher/RecordVoucher.vue?t=1778658375798:2690
+[  448877ms] [LOG] undefined subjectItemsubjectItemsubjectItemsubjectItem @ http://localhost:3101/finance/src/components/voucher/RecordVoucher.vue?t=1778658375798:1034
+[  448878ms] [LOG] [] 相同科目的凭证分录列表 @ http://localhost:3101/finance/src/components/voucher/RecordVoucher.vue?t=1778658375798:1035
+[  448878ms] [LOG] undefined subjectItemsubjectItemsubjectItemsubjectItem @ http://localhost:3101/finance/src/components/voucher/RecordVoucher.vue?t=1778658375798:1034
+[  448878ms] [LOG] [] 相同科目的凭证分录列表 @ http://localhost:3101/finance/src/components/voucher/RecordVoucher.vue?t=1778658375798:1035
+[  448878ms] [LOG] undefined subjectItemsubjectItemsubjectItemsubjectItem @ http://localhost:3101/finance/src/components/voucher/RecordVoucher.vue?t=1778658375798:1034
+[  448878ms] [LOG] [] 相同科目的凭证分录列表 @ http://localhost:3101/finance/src/components/voucher/RecordVoucher.vue?t=1778658375798:1035
+[  448878ms] [LOG] undefined subjectItemsubjectItemsubjectItemsubjectItem @ http://localhost:3101/finance/src/components/voucher/RecordVoucher.vue?t=1778658375798:1034
+[  448878ms] [LOG] [] 相同科目的凭证分录列表 @ http://localhost:3101/finance/src/components/voucher/RecordVoucher.vue?t=1778658375798:1035
+[  448878ms] [LOG] undefined subjectItemsubjectItemsubjectItemsubjectItem @ http://localhost:3101/finance/src/components/voucher/RecordVoucher.vue?t=1778658375798:1034
+[  448878ms] [LOG] [] 相同科目的凭证分录列表 @ http://localhost:3101/finance/src/components/voucher/RecordVoucher.vue?t=1778658375798:1035
+[  448878ms] [WARNING] [Vue warn]: Property "handleEntryArrange" was accessed during render but is not defined on instance. 
+  at <Index onVnodeUnmounted=fn<onVnodeUnmounted> ref=Ref< Proxy(Object) > key="/voucher/checkVoucher?accountSetId=019da9ac8e4979be9b77b6a3894e865f" > 
+  at <KeepAlive key=0 include= [checkVoucher] > 
+  at <RouterView> 
+  at <PageView> 
+  at <Anonymous hasSider=undefined prefixCls="ant-layout-content" tagName="main" > 
+  at <ALayoutContent> 
+  at <Anonymous hasSider=undefined prefixCls="ant-layout" tagName="section"  ... > 
+  at <ALayout style= {position: relative} > 
+  at <Anonymous hasSider=true prefixCls="ant-layout" tagName="section" > 
+  at <ALayout has-sider="" > 
+  at <ASpin spinning=false > 
+  at <ProLayout onVnodeUnmounted=fn<onVnodeUnmounted> ref=Ref< Proxy(Object) > > 
+  at <RouterView> 
+  at <ALocaleProvider locale= {locale: zh-cn, Pagination: Object, DatePicker: Object, TimePicker: Object, Calendar: Object} ANT_MARK__="internalMark" > 
+  at <LocaleReceiver children=fn<children> > 
+  at <AConfigProvider locale= {locale: zh-cn, Pagination: Object, DatePicker: Object, TimePicker: Object, Calendar: Object} > 
+  at <App> @ http://localhost:3101/finance/node_modules/.vite/deps/chunk-F6P7Z22E.js?v=290f2014:2475
+[  448879ms] [WARNING] [Vue warn]: Invalid prop: type check failed for prop "current". Expected Number with value 202604, got String with value "202604". 
+  at <MonthSelectorScroll class="selector-time__scroll" onClickItem=fn<selectMonth> current="202604"  ... > 
+  at <Index onVnodeUnmounted=fn<onVnodeUnmounted> ref=Ref< Proxy(Object) > key="/voucher/checkVoucher?accountSetId=019da9ac8e4979be9b77b6a3894e865f" > 
+  at <KeepAlive key=0 include= [checkVoucher] > 
+  at <RouterView> 
+  at <PageView> 
+  at <Anonymous hasSider=undefined prefixCls="ant-layout-content" tagName="main" > 
+  at <ALayoutContent> 
+  at <Anonymous hasSider=undefined prefixCls="ant-layout" tagName="section"  ... > 
+  at <ALayout style= {position: relative} > 
+  at <Anonymous hasSider=true prefixCls="ant-layout" tagName="section" > 
+  at <ALayout has-sider="" > 
+  at <ASpin spinning=false > 
+  at <ProLayout onVnodeUnmounted=fn<onVnodeUnmounted> ref=Ref< Proxy(Object) > > 
+  at <RouterView> 
+  at <ALocaleProvider locale= {locale: zh-cn, Pagination: Object, DatePicker: Object, TimePicker: Object, Calendar: Object} ANT_MARK__="internalMark" > 
+  at <LocaleReceiver children=fn<children> > 
+  at <AConfigProvider locale= {locale: zh-cn, Pagination: Object, DatePicker: Object, TimePicker: Object, Calendar: Object} > 
+  at <App> @ http://localhost:3101/finance/node_modules/.vite/deps/chunk-F6P7Z22E.js?v=290f2014:2475
+[  449141ms] [LOG] {code: 0, data: Object, message: } 121212 @ http://localhost:3101/finance/src/api/generated/core/request.ts?t=1778658375798:57
+[  449141ms] [LOG] {code: 0, data: Object, message: } 断号检查 @ http://localhost:3101/finance/src/views/voucher/checkVoucher/index.vue?t=1778658375798:437
+[  449141ms] [LOG] {code: 0, data: 001, message: } 121212 @ http://localhost:3101/finance/src/api/generated/core/request.ts?t=1778658375798:57
+[  449285ms] [LOG] {code: 0, data: 001, message: } 121212 @ http://localhost:3101/finance/src/api/generated/core/request.ts?t=1778658375798:57
+[  449417ms] [LOG] {code: 0, data: Object, message: } 121212 @ http://localhost:3101/finance/src/api/generated/core/request.ts?t=1778658375798:57
+[  449417ms] [LOG] 0 total @ http://localhost:3101/finance/src/views/voucher/checkVoucher/index.vue?t=1778658375798:574
+[  449417ms] [WARNING] [Vue warn]: Property "handleEntryArrange" was accessed during render but is not defined on instance. 
+  at <Index onVnodeUnmounted=fn<onVnodeUnmounted> ref=Ref< Proxy(Object) > key="/voucher/checkVoucher?accountSetId=019da9ac8e4979be9b77b6a3894e865f" > 
+  at <KeepAlive key=0 include= [checkVoucher] > 
+  at <RouterView> 
+  at <PageView> 
+  at <Anonymous hasSider=undefined prefixCls="ant-layout-content" tagName="main" > 
+  at <ALayoutContent> 
+  at <Anonymous hasSider=undefined prefixCls="ant-layout" tagName="section"  ... > 
+  at <ALayout style= {position: relative} > 
+  at <Anonymous hasSider=true prefixCls="ant-layout" tagName="section" > 
+  at <ALayout has-sider="" > 
+  at <ASpin spinning=false > 
+  at <ProLayout onVnodeUnmounted=fn<onVnodeUnmounted> ref=Ref< Proxy(Object) > > 
+  at <RouterView> 
+  at <ALocaleProvider locale= {locale: zh-cn, Pagination: Object, DatePicker: Object, TimePicker: Object, Calendar: Object} ANT_MARK__="internalMark" > 
+  at <LocaleReceiver children=fn<children> > 
+  at <AConfigProvider locale= {locale: zh-cn, Pagination: Object, DatePicker: Object, TimePicker: Object, Calendar: Object} > 
+  at <App> @ http://localhost:3101/finance/node_modules/.vite/deps/chunk-F6P7Z22E.js?v=290f2014:2475
+[  449467ms] [LOG] {code: 0, data: Object, message: } 121212 @ http://localhost:3101/finance/src/api/generated/core/request.ts?t=1778658375798:57
+[  449467ms] [LOG] false false getVoucherButtonFn @ http://localhost:3101/finance/src/components/voucher/RecordVoucher.vue?t=1778658375798:727
+[  449495ms] [LOG] {code: 0, data: Object, message: } 121212 @ http://localhost:3101/finance/src/api/generated/core/request.ts?t=1778658375798:57
+[  449496ms] [LOG] {printFormat: 1, voucherType: 2, leftOffset: 10, topOffset: 10} 获取打印设置详情 @ http://localhost:3101/finance/src/views/voucher/checkVoucher/index.vue?t=1778658375798:541
+[  449508ms] [LOG] {code: 0, data: Object, message: } 121212 @ http://localhost:3101/finance/src/api/generated/core/request.ts?t=1778658375798:57
+[  449508ms] [LOG] {hasGap: false, gapCount: 0, gapPositions: Array(0)} checkVoucherGapFn @ http://localhost:3101/finance/src/components/voucher/RecordVoucher.vue?t=1778658375798:476
+[  471888ms] [WARNING] [Vue warn]: Invalid prop: type check failed for prop "current". Expected Number with value 0, got String with value "". 
+  at <MonthSelectorScroll class="selector-time__scroll" onClickItem=fn<selectMonth> current=""  ... > 
+  at <Index onVnodeUnmounted=fn<onVnodeUnmounted> ref=Ref< null > key="/voucher/checkVoucher?accountSetId=019da9ac8e4979be9b77b6a3894e865f" > 
+  at <KeepAlive key=0 include= [checkVoucher] > 
+  at <RouterView> 
+  at <PageView> 
+  at <Anonymous hasSider=undefined prefixCls="ant-layout-content" tagName="main" > 
+  at <ALayoutContent> 
+  at <Anonymous hasSider=undefined prefixCls="ant-layout" tagName="section"  ... > 
+  at <ALayout style= {position: relative} > 
+  at <Anonymous hasSider=true prefixCls="ant-layout" tagName="section" > 
+  at <ALayout has-sider="" > 
+  at <ASpin spinning=false > 
+  at <ProLayout onVnodeUnmounted=fn<onVnodeUnmounted> ref=Ref< Proxy(Object) > > 
+  at <RouterView> 
+  at <ALocaleProvider locale= {locale: zh-cn, Pagination: Object, DatePicker: Object, TimePicker: Object, Calendar: Object} ANT_MARK__="internalMark" > 
+  at <LocaleReceiver children=fn<children> > 
+  at <AConfigProvider locale= {locale: zh-cn, Pagination: Object, DatePicker: Object, TimePicker: Object, Calendar: Object} > 
+  at <App> @ http://localhost:3101/finance/node_modules/.vite/deps/chunk-F6P7Z22E.js?v=290f2014:2475
+[  471900ms] [LOG] convertToChineseCurrency 零元整 @ http://localhost:3101/finance/src/components/voucher/RecordVoucher.vue?t=1778658398807:2360
+[  471900ms] [LOG] Proxy(Object) init @ http://localhost:3101/finance/src/components/voucher/RecordVoucher.vue?t=1778658398807:2220
+[  471900ms] [LOG] 没有数据 @ http://localhost:3101/finance/src/components/voucher/RecordVoucher.vue?t=1778658398807:2355
+[  471919ms] [LOG] onActivated 恢复缓存数据 id  @ http://localhost:3101/finance/src/components/voucher/RecordVoucher.vue?t=1778658398807:2690
+[  471919ms] [LOG] undefined subjectItemsubjectItemsubjectItemsubjectItem @ http://localhost:3101/finance/src/components/voucher/RecordVoucher.vue?t=1778658398807:1034
+[  471919ms] [LOG] [] 相同科目的凭证分录列表 @ http://localhost:3101/finance/src/components/voucher/RecordVoucher.vue?t=1778658398807:1035
+[  471919ms] [LOG] undefined subjectItemsubjectItemsubjectItemsubjectItem @ http://localhost:3101/finance/src/components/voucher/RecordVoucher.vue?t=1778658398807:1034
+[  471919ms] [LOG] [] 相同科目的凭证分录列表 @ http://localhost:3101/finance/src/components/voucher/RecordVoucher.vue?t=1778658398807:1035
+[  471919ms] [LOG] undefined subjectItemsubjectItemsubjectItemsubjectItem @ http://localhost:3101/finance/src/components/voucher/RecordVoucher.vue?t=1778658398807:1034
+[  471919ms] [LOG] [] 相同科目的凭证分录列表 @ http://localhost:3101/finance/src/components/voucher/RecordVoucher.vue?t=1778658398807:1035
+[  471919ms] [LOG] undefined subjectItemsubjectItemsubjectItemsubjectItem @ http://localhost:3101/finance/src/components/voucher/RecordVoucher.vue?t=1778658398807:1034
+[  471919ms] [LOG] [] 相同科目的凭证分录列表 @ http://localhost:3101/finance/src/components/voucher/RecordVoucher.vue?t=1778658398807:1035
+[  471919ms] [LOG] undefined subjectItemsubjectItemsubjectItemsubjectItem @ http://localhost:3101/finance/src/components/voucher/RecordVoucher.vue?t=1778658398807:1034
+[  471919ms] [LOG] [] 相同科目的凭证分录列表 @ http://localhost:3101/finance/src/components/voucher/RecordVoucher.vue?t=1778658398807:1035
+[  471920ms] [WARNING] [Vue warn]: Invalid prop: type check failed for prop "current". Expected Number with value 202604, got String with value "202604". 
+  at <MonthSelectorScroll class="selector-time__scroll" onClickItem=fn<selectMonth> current="202604"  ... > 
+  at <Index onVnodeUnmounted=fn<onVnodeUnmounted> ref=Ref< Proxy(Object) > key="/voucher/checkVoucher?accountSetId=019da9ac8e4979be9b77b6a3894e865f" > 
+  at <KeepAlive key=0 include= [checkVoucher] > 
+  at <RouterView> 
+  at <PageView> 
+  at <Anonymous hasSider=undefined prefixCls="ant-layout-content" tagName="main" > 
+  at <ALayoutContent> 
+  at <Anonymous hasSider=undefined prefixCls="ant-layout" tagName="section"  ... > 
+  at <ALayout style= {position: relative} > 
+  at <Anonymous hasSider=true prefixCls="ant-layout" tagName="section" > 
+  at <ALayout has-sider="" > 
+  at <ASpin spinning=false > 
+  at <ProLayout onVnodeUnmounted=fn<onVnodeUnmounted> ref=Ref< Proxy(Object) > > 
+  at <RouterView> 
+  at <ALocaleProvider locale= {locale: zh-cn, Pagination: Object, DatePicker: Object, TimePicker: Object, Calendar: Object} ANT_MARK__="internalMark" > 
+  at <LocaleReceiver children=fn<children> > 
+  at <AConfigProvider locale= {locale: zh-cn, Pagination: Object, DatePicker: Object, TimePicker: Object, Calendar: Object} > 
+  at <App> @ http://localhost:3101/finance/node_modules/.vite/deps/chunk-F6P7Z22E.js?v=290f2014:2475
+[  472283ms] [LOG] {code: 0, data: 001, message: } 121212 @ http://localhost:3101/finance/src/api/generated/core/request.ts?t=1778658398807:57
+[  472286ms] [LOG] {code: 0, data: Object, message: } 121212 @ http://localhost:3101/finance/src/api/generated/core/request.ts?t=1778658398807:57
+[  472286ms] [LOG] {code: 0, data: Object, message: } 断号检查 @ http://localhost:3101/finance/src/views/voucher/checkVoucher/index.vue?t=1778658398807:449
+[  472326ms] [LOG] {code: 0, data: 001, message: } 121212 @ http://localhost:3101/finance/src/api/generated/core/request.ts?t=1778658398807:57
+[  472360ms] [LOG] {code: 0, data: Object, message: } 121212 @ http://localhost:3101/finance/src/api/generated/core/request.ts?t=1778658398807:57
+[  472360ms] [LOG] 0 total @ http://localhost:3101/finance/src/views/voucher/checkVoucher/index.vue?t=1778658398807:586
+[  472402ms] [LOG] {code: 0, data: Object, message: } 121212 @ http://localhost:3101/finance/src/api/generated/core/request.ts?t=1778658398807:57
+[  472402ms] [LOG] false false getVoucherButtonFn @ http://localhost:3101/finance/src/components/voucher/RecordVoucher.vue?t=1778658398807:727
+[  472462ms] [LOG] {code: 0, data: Object, message: } 121212 @ http://localhost:3101/finance/src/api/generated/core/request.ts?t=1778658398807:57
+[  472462ms] [LOG] {printFormat: 1, voucherType: 2, leftOffset: 10, topOffset: 10} 获取打印设置详情 @ http://localhost:3101/finance/src/views/voucher/checkVoucher/index.vue?t=1778658398807:553
+[  472463ms] [LOG] {code: 0, data: Object, message: } 121212 @ http://localhost:3101/finance/src/api/generated/core/request.ts?t=1778658398807:57
+[  472463ms] [LOG] {hasGap: false, gapCount: 0, gapPositions: Array(0)} checkVoucherGapFn @ http://localhost:3101/finance/src/components/voucher/RecordVoucher.vue?t=1778658398807:476

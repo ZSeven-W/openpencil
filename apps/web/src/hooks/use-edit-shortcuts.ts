@@ -89,7 +89,7 @@ export function useEditShortcuts() {
           if (node && node.type === 'group' && 'children' in node && node.children) {
             const childIds = node.children.map((c) => c.id);
             useDocumentStore.getState().ungroupNode(selectedIds[0]);
-            useCanvasStore.getState().setSelection(childIds, childIds[0] ?? null);
+            useCanvasStore.getState().setSelection(childIds, null);
           }
         }
         return;
@@ -151,7 +151,7 @@ export function useEditShortcuts() {
           useCanvasStore.getState().activePageId,
         );
         const ids = topLevelNodes.map((n) => n.id);
-        useCanvasStore.getState().setSelection(ids, ids[0] ?? null);
+        useCanvasStore.getState().setSelection(ids, null);
         return;
       }
 

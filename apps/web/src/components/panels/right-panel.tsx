@@ -10,7 +10,11 @@ const MIN_WIDTH = 256; // 16 雷姆 (w-64)
 const MAX_WIDTH = 640; // 40 雷姆
 const DEFAULT_WIDTH = 256;
 
-export default function RightPanel() {
+interface RightPanelProps {
+  generationId?: string;
+}
+
+export default function RightPanel({ generationId }: RightPanelProps = {}) {
   const { t } = useTranslation();
   const activeTab = useCanvasStore((s) => s.rightPanelTab);
   const setTab = useCanvasStore((s) => s.setRightPanelTab);
@@ -86,7 +90,7 @@ export default function RightPanel() {
       </div>
 
       {/* Content */}
-      {activeTab === 'design' ? <PropertyPanel embedded /> : <CodePanel />}
+      {activeTab === 'design' ? <PropertyPanel embedded /> : <CodePanel generationId={generationId} />}
     </div>
   );
 }

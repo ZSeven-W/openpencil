@@ -1,4 +1,16 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
+vi.mock('@zseven-w/agent-native', () => ({
+  abortEngine: vi.fn(),
+  abortTeam: vi.fn(),
+  destroyEngine: vi.fn(),
+  destroyIterator: vi.fn(),
+  destroyProvider: vi.fn(),
+  destroyQueryEngine: vi.fn(),
+  destroyTeam: vi.fn(),
+  destroyToolRegistry: vi.fn(),
+}));
+
 import { startSSEKeepAlive } from '../utils/sse-keepalive';
 import { touchSession } from '../utils/agent-sessions';
 

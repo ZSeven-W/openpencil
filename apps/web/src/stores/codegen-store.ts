@@ -33,6 +33,7 @@ export interface GeneratedCodeBundle {
   status?: 'done' | 'degraded' | 'failed';
   assetsManifest?: CodegenAssetManifestEntry[];
   files?: SaveCodegenFileInput[];
+  metadata?: Record<string, unknown>;
 }
 
 export interface CodegenHistoryEntry {
@@ -53,6 +54,7 @@ export interface CodegenHistoryEntry {
   targetHash?: string;
   entryFile?: string | null;
   promotedAt?: string | null;
+  metadata?: Record<string, unknown>;
 }
 
 interface CodegenState {
@@ -146,6 +148,7 @@ function mapHistoryEntry(entry: CloudCodeGeneration): CodegenHistoryEntry {
     error: entry.error,
     documentRevision: entry.documentRevision,
     assetsManifest: entry.assetsManifest,
+    metadata: entry.metadata,
     pageId: entry.pageId,
     targetKind: entry.targetKind,
     nodeIds: entry.nodeIds,
@@ -290,6 +293,7 @@ export const useCodegenStore = create<CodegenState>((set, get) => ({
             historyId: latest.id,
             status: latest.status,
             assetsManifest: latest.assetsManifest,
+            metadata: latest.metadata,
             files: buildCodegenFiles({ framework, code: latest.finalCode }),
           };
         } else {
@@ -331,6 +335,7 @@ export const useCodegenStore = create<CodegenState>((set, get) => ({
           historyId: entry.id,
           status: entry.status,
           assetsManifest: entry.assetsManifest,
+          metadata: entry.metadata,
           files: buildCodegenFiles({ framework, code: entry.finalCode }),
         };
       } else {
@@ -390,6 +395,7 @@ export const useCodegenStore = create<CodegenState>((set, get) => ({
               historyId: nextSelected.id,
               status: nextSelected.status,
               assetsManifest: nextSelected.assetsManifest,
+              metadata: nextSelected.metadata,
               files: buildCodegenFiles({ framework, code: nextSelected.finalCode }),
             };
           } else {
@@ -458,6 +464,7 @@ export const useCodegenStore = create<CodegenState>((set, get) => ({
             historyId: saved.id,
             status: saved.status,
             assetsManifest: saved.assetsManifest,
+            metadata: saved.metadata,
             files:
               saved.files ??
               bundle.files ??

@@ -19,7 +19,7 @@ import { CLOUD_DOCUMENT_STORAGE_BUCKET } from './cloud-document-storage';
 import { recordCloudActivity } from './cloud-activity-events';
 
 const CODE_GENERATION_SELECT =
-  'id,file_id,page_id,framework,target_kind,node_ids,target_hash,document_revision,status,final_code,entry_file,degraded,assets_manifest,model,provider,error,created_at,completed_at,promoted_at';
+  'id,file_id,page_id,framework,target_kind,node_ids,target_hash,document_revision,status,final_code,entry_file,degraded,assets_manifest,metadata,model,provider,error,created_at,completed_at,promoted_at';
 
 interface CodeGenerationRecordRow {
   id: string;
@@ -35,6 +35,7 @@ interface CodeGenerationRecordRow {
   entry_file: string | null;
   degraded: boolean;
   assets_manifest: CodegenAssetManifestEntry[];
+  metadata?: Record<string, unknown> | null;
   model: string | null;
   provider: string | null;
   error: string | null;
@@ -63,6 +64,7 @@ export interface CreateCodeGenerationRecordInput {
   provider?: string;
   error?: string;
   chunks: CloudCodegenChunk[];
+  metadata?: Record<string, unknown>;
 }
 
 export interface GetCodeGenerationDetailInput {
@@ -310,6 +312,7 @@ export async function createCodeGenerationRecord(
       entry_file: input.entryFile ?? input.files[0]?.path ?? null,
       degraded: input.degraded,
       assets_manifest: [],
+      metadata: input.metadata ?? {},
       model: input.model ?? null,
       provider: input.provider ?? null,
       error: input.error ?? null,
@@ -406,6 +409,7 @@ export async function createCodeGenerationRecord(
       documentRevision: input.documentRevision,
       status: input.status,
       fileCount: files.length,
+      ...(input.metadata ?? {}),
     },
   });
 

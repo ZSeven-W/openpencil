@@ -1,0 +1,218 @@
+- generic [ref=e152]:
+  - banner [ref=e153]:
+    - generic [ref=e154]:
+      - generic [ref=e155]:
+        - button "返回任务中心" [ref=e156]:
+          - img
+          - text: 返回任务中心
+        - generic [ref=e157]:
+          - img [ref=e158]
+          - heading "Worker 管理" [level=1] [ref=e169]
+        - paragraph [ref=e170]: 监控 Worker 心跳、Provider 健康、失败重放和队列可靠性。
+      - generic [ref=e171]:
+        - button "重放当前页" [disabled]:
+          - img
+          - text: 重放当前页
+        - button "刷新" [ref=e172]
+  - main [ref=e173]:
+    - generic [ref=e174]:
+      - generic [ref=e175]:
+        - generic [ref=e176]:
+          - img [ref=e177]
+          - text: 总数
+        - paragraph [ref=e179]: "4"
+      - generic [ref=e180]:
+        - generic [ref=e181]:
+          - img [ref=e182]
+          - text: 运行中
+        - paragraph [ref=e185]: "0"
+      - generic [ref=e186]:
+        - generic [ref=e187]:
+          - img [ref=e188]
+          - text: 死信
+        - paragraph [ref=e192]: "0"
+      - generic [ref=e193]:
+        - generic [ref=e194]:
+          - img [ref=e195]
+          - text: 失败率
+        - paragraph [ref=e198]: 0%
+        - paragraph [ref=e199]: 平均耗时 778.4 s
+    - generic [ref=e201]:
+      - generic [ref=e202]:
+        - heading "队列权限" [level=2] [ref=e203]
+        - paragraph [ref=e204]: 队列角色：admin
+      - generic [ref=e205]:
+        - generic [ref=e206]: "查看 Worker: 是"
+        - generic [ref=e207]: "重放失败任务: 是"
+        - generic [ref=e208]: "管理 Provider: 是"
+    - generic [ref=e209]:
+      - generic [ref=e210]:
+        - img [ref=e211]
+        - heading "运行统计" [level=2] [ref=e214]
+      - generic [ref=e215]:
+        - generic [ref=e216]:
+          - paragraph [ref=e217]: 活跃
+          - paragraph [ref=e218]: "2"
+        - generic [ref=e219]:
+          - paragraph [ref=e220]: 失联
+          - paragraph [ref=e221]: "2"
+        - generic [ref=e222]:
+          - paragraph [ref=e223]: 统计分桶
+          - paragraph [ref=e224]: "2"
+      - generic [ref=e225]:
+        - generic [ref=e226]:
+          - generic [ref=e227]:
+            - generic [ref=e228]: 2026-05-12
+            - generic [ref=e229]: 0%
+          - generic "2026-05-12：共 1 个，失败 0 个" [ref=e230]
+          - paragraph [ref=e232]: "总数: 1 · 已完成: 1 · 失败: 0"
+        - generic [ref=e233]:
+          - generic [ref=e234]:
+            - generic [ref=e235]: 2026-05-13
+            - generic [ref=e236]: 0%
+          - generic "2026-05-13：共 3 个，失败 0 个" [ref=e237]
+          - paragraph [ref=e239]: "总数: 3 · 已完成: 3 · 失败: 0"
+      - generic [ref=e240]:
+        - heading "Provider 运行统计" [level=3] [ref=e241]
+        - generic [ref=e242]:
+          - generic [ref=e243]: openai
+          - generic "openai：共 4 个，失败 0 个" [ref=e244]
+          - generic [ref=e246]: 0%
+    - generic [ref=e248]:
+      - generic [ref=e249]:
+        - text: Provider
+        - textbox "Provider" [ref=e250]:
+          - /placeholder: openai
+      - generic [ref=e251]:
+        - text: 失败类型
+        - combobox "失败类型" [ref=e252]:
+          - option "全部" [selected]
+          - option "速率限制"
+          - option "超时"
+          - option "Provider 错误"
+          - option "执行错误"
+          - option "已取消"
+      - generic [ref=e253]:
+        - text: 死信开始时间
+        - textbox "死信开始时间" [ref=e254]
+      - generic [ref=e255]:
+        - text: 死信结束时间
+        - textbox "死信结束时间" [ref=e256]
+      - button "按筛选重放" [ref=e258]:
+        - img
+        - text: 按筛选重放
+    - generic [ref=e259]:
+      - generic [ref=e260]:
+        - generic [ref=e261]:
+          - generic [ref=e262]:
+            - heading "Worker 列表" [level=2] [ref=e263]
+            - generic [ref=e264]:
+              - generic [ref=e265]: 1-4 / 4
+              - button "上一页" [disabled]
+              - button "下一页" [disabled]
+          - generic [ref=e266]:
+            - generic [ref=e267]:
+              - generic [ref=e268]:
+                - generic [ref=e269]: standalone-53768-1778667371755
+                - generic [ref=e270]: 活跃
+              - paragraph [ref=e271]: "最近心跳: 5月13日 18:57:42"
+            - generic [ref=e272]:
+              - generic [ref=e273]:
+                - generic [ref=e274]: nitro-53769
+                - generic [ref=e275]: 活跃
+              - paragraph [ref=e276]: "最近心跳: 5月13日 18:57:24"
+            - generic [ref=e277]:
+              - generic [ref=e278]:
+                - generic [ref=e279]: validation-worker-20260513
+                - generic [ref=e280]: 空闲
+              - paragraph [ref=e281]: "最近心跳: 5月13日 17:36:29"
+            - generic [ref=e282]:
+              - generic [ref=e283]:
+                - generic [ref=e284]: nitro-36170
+                - generic [ref=e285]: 空闲
+              - paragraph [ref=e286]: "最近心跳: 5月13日 14:31:47"
+        - generic [ref=e287]:
+          - generic [ref=e288]:
+            - heading "Provider 健康" [level=2] [ref=e289]
+            - generic [ref=e290]:
+              - generic [ref=e291]: 1-1 / 1
+              - button "上一页" [disabled]
+              - button "下一页" [disabled]
+          - generic [ref=e293]:
+            - generic [ref=e294]:
+              - generic [ref=e295]: openai
+              - generic [ref=e296]:
+                - img [ref=e297]
+                - text: 熔断关闭
+            - generic [ref=e300]:
+              - generic [ref=e301]: "总数: 3"
+              - generic [ref=e302]: "失败: 0"
+              - generic [ref=e303]: "失败率: 0%"
+        - generic [ref=e304]:
+          - heading "Provider 限流配置" [level=2] [ref=e305]
+          - generic [ref=e306]:
+            - generic [ref=e307]:
+              - generic [ref=e308]:
+                - generic [ref=e309]: gemini
+                - generic [ref=e310]:
+                  - checkbox "启用" [checked] [ref=e311]
+                  - text: 启用
+              - generic [ref=e312]:
+                - generic [ref=e313]:
+                  - text: 每分钟上限
+                  - spinbutton "每分钟上限" [ref=e314]: "30"
+                - generic [ref=e315]:
+                  - text: 熔断阈值
+                  - spinbutton "熔断阈值" [ref=e316]: "3"
+                - generic [ref=e317]:
+                  - text: 熔断时长 ms
+                  - spinbutton "熔断时长 ms" [ref=e318]: "60000"
+              - generic [ref=e319]:
+                - generic [ref=e320]:
+                  - text: 变更原因
+                  - textbox "变更原因" [ref=e321]
+                - button "保存配置" [ref=e322]:
+                  - img
+                  - text: 保存配置
+            - generic [ref=e323]:
+              - generic [ref=e324]:
+                - generic [ref=e325]: openai
+                - generic [ref=e326]:
+                  - checkbox "启用" [checked] [ref=e327]
+                  - text: 启用
+              - generic [ref=e328]:
+                - generic [ref=e329]:
+                  - text: 每分钟上限
+                  - spinbutton "每分钟上限" [ref=e330]: "30"
+                - generic [ref=e331]:
+                  - text: 熔断阈值
+                  - spinbutton "熔断阈值" [ref=e332]: "3"
+                - generic [ref=e333]:
+                  - text: 熔断时长 ms
+                  - spinbutton "熔断时长 ms" [ref=e334]: "60000"
+              - generic [ref=e335]:
+                - generic [ref=e336]:
+                  - text: 变更原因
+                  - textbox "变更原因" [ref=e337]
+                - button "保存配置" [ref=e338]:
+                  - img
+                  - text: 保存配置
+      - complementary [ref=e339]:
+        - generic [ref=e340]:
+          - heading "失败重放" [level=2] [ref=e341]
+          - generic [ref=e342]:
+            - generic [ref=e343]: 0-0 / 0
+            - button "上一页" [disabled]
+            - button "下一页" [disabled]
+        - paragraph [ref=e345]: 暂无需要重放的失败任务。
+    - generic [ref=e346]:
+      - generic [ref=e347]:
+        - img [ref=e348]
+        - heading "配置变更历史" [level=2] [ref=e352]
+      - generic [ref=e354]:
+        - generic [ref=e355]:
+          - generic [ref=e356]: openai
+          - generic [ref=e357]: 5月13日 14:27:02
+        - paragraph [ref=e358]: linlingqin77@qq.com
+        - paragraph [ref=e359]: browser acceptance capacity check
+        - paragraph [ref=e360]: "{\"enabled\":true,\"provider\":\"openai\",\"created_at\":\"2026-05-13T05:31:14.413279+00:00\",\"updated_at\":\"2026-05-13T06:27:01.696+00:00\",\"updated_by\":\"2013f317-8f92-4fd0-bde9-03f866e40348\",\"max_per_minute\":31,\"circuit_open_ms\":60000,\"circuit_threshold\":3}"

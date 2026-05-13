@@ -1,0 +1,44 @@
+[     337ms] [ERROR] Failed to load resource: the server responded with a status of 404 () @ http://localhost:3010/favicon.ico:0
+[     368ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:3010/node_modules/.vite/deps/react-dom_client.js?v=a41b5b22:20102
+[     371ms] [INFO] 🌐 i18next is made possible by our own product, Locize — consider powering your project with managed localization (AI, CDN, integrations): https://locize.com 💙 @ http://localhost:3010/node_modules/.vite/deps/chunk-EZBKAI6A.js?v=a41b5b22:1783
+[     596ms] [VERBOSE] [DOM] Input elements should have autocomplete attributes (suggested: "current-password"): (More info: https://goo.gl/9p2vKq) %o @ http://localhost:3010/:0
+[  204524ms] [WARNING] [mcp-sync] Skip oversized document push: 9.24MiB > 2.00MiB @ http://localhost:3010/src/routes/__root.tsx:54
+[  581568ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Missing bearer token) @ http://localhost:3010/api/cloud/codegen-jobs?limit=50:0
+[ 1012590ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:3010/node_modules/.vite/deps/react-dom_client.js?v=a41b5b22:20102
+[ 1012594ms] [INFO] 🌐 i18next is made possible by our own product, Locize — consider powering your project with managed localization (AI, CDN, integrations): https://locize.com 💙 @ http://localhost:3010/node_modules/.vite/deps/chunk-EZBKAI6A.js?v=a41b5b22:1783
+[ 1016489ms] [WARNING] [mcp-sync] Skip oversized document push: 9.24MiB > 2.00MiB @ http://localhost:3010/src/routes/__root.tsx:54
+[ 1793275ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:3010/node_modules/.vite/deps/react-dom_client.js?v=a41b5b22:20102
+[ 1793276ms] [INFO] 🌐 i18next is made possible by our own product, Locize — consider powering your project with managed localization (AI, CDN, integrations): https://locize.com 💙 @ http://localhost:3010/node_modules/.vite/deps/chunk-EZBKAI6A.js?v=a41b5b22:1783
+[ 1796862ms] [WARNING] [mcp-sync] Skip oversized document push: 9.24MiB > 2.00MiB @ http://localhost:3010/src/routes/__root.tsx:54
+[ 1823256ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:3010/node_modules/.vite/deps/react-dom_client.js?v=a41b5b22:20102
+[ 1823257ms] [INFO] 🌐 i18next is made possible by our own product, Locize — consider powering your project with managed localization (AI, CDN, integrations): https://locize.com 💙 @ http://localhost:3010/node_modules/.vite/deps/chunk-EZBKAI6A.js?v=a41b5b22:1783
+[ 2178879ms] [ERROR] %o
+
+%s
+
+%s
+ NotFoundError: Failed to execute 'removeChild' on 'Node': The node to be removed is not a child of this node.
+    at removeChild (http://localhost:3010/node_modules/.vite/deps/react-dom_client.js?v=a41b5b22:15918:24)
+    at runWithFiberInDEV (http://localhost:3010/node_modules/.vite/deps/react-dom_client.js?v=a41b5b22:997:72)
+    at commitDeletionEffectsOnFiber (http://localhost:3010/node_modules/.vite/deps/react-dom_client.js?v=a41b5b22:10190:19)
+    at recursivelyTraverseDeletionEffects (http://localhost:3010/node_modules/.vite/deps/react-dom_client.js?v=a41b5b22:10115:11)
+    at commitDeletionEffectsOnFiber (http://localhost:3010/node_modules/.vite/deps/react-dom_client.js?v=a41b5b22:10237:13)
+    at recursivelyTraverseDeletionEffects (http://localhost:3010/node_modules/.vite/deps/react-dom_client.js?v=a41b5b22:10115:11)
+    at commitDeletionEffectsOnFiber (http://localhost:3010/node_modules/.vite/deps/react-dom_client.js?v=a41b5b22:10237:13)
+    at recursivelyTraverseDeletionEffects (http://localhost:3010/node_modules/.vite/deps/react-dom_client.js?v=a41b5b22:10115:11)
+    at commitDeletionEffectsOnFiber (http://localhost:3010/node_modules/.vite/deps/react-dom_client.js?v=a41b5b22:10146:13)
+    at recursivelyTraverseDeletionEffects (http://localhost:3010/node_modules/.vite/deps/react-dom_client.js?v=a41b5b22:10115:11) The above error occurred in the <link> component. React will try to recreate this component tree from scratch using the error boundary you provided, CatchBoundaryImpl. @ http://localhost:3010/src/routes/__root.tsx:54
+[ 2178880ms] [WARNING] Warning: The following error wasn't caught by any route! At the very least, consider setting an 'errorComponent' in your RootRoute! @ http://localhost:3010/src/routes/__root.tsx:54
+[ 2178881ms] [WARNING] Warning: Failed to execute 'removeChild' on 'Node': The node to be removed is not a child of this node. @ http://localhost:3010/src/routes/__root.tsx:54
+[ 2310501ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:3010/node_modules/.vite/deps/react-dom_client.js?v=a41b5b22:20102
+[ 2310502ms] [INFO] 🌐 i18next is made possible by our own product, Locize — consider powering your project with managed localization (AI, CDN, integrations): https://locize.com 💙 @ http://localhost:3010/node_modules/.vite/deps/chunk-EZBKAI6A.js?v=a41b5b22:1783
+[ 2410260ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:3010/node_modules/.vite/deps/react-dom_client.js?v=a41b5b22:20102
+[ 2410262ms] [INFO] 🌐 i18next is made possible by our own product, Locize — consider powering your project with managed localization (AI, CDN, integrations): https://locize.com 💙 @ http://localhost:3010/node_modules/.vite/deps/chunk-EZBKAI6A.js?v=a41b5b22:1783
+[ 2479938ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:3010/node_modules/.vite/deps/react-dom_client.js?v=a41b5b22:20102
+[ 2479939ms] [INFO] 🌐 i18next is made possible by our own product, Locize — consider powering your project with managed localization (AI, CDN, integrations): https://locize.com 💙 @ http://localhost:3010/node_modules/.vite/deps/chunk-EZBKAI6A.js?v=a41b5b22:1783
+[ 2606543ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:3010/node_modules/.vite/deps/react-dom_client.js?v=a41b5b22:20102
+[ 2606545ms] [INFO] 🌐 i18next is made possible by our own product, Locize — consider powering your project with managed localization (AI, CDN, integrations): https://locize.com 💙 @ http://localhost:3010/node_modules/.vite/deps/chunk-EZBKAI6A.js?v=a41b5b22:1783
+[ 2610178ms] [WARNING] [mcp-sync] Skip oversized document push: 9.24MiB > 2.00MiB @ http://localhost:3010/src/routes/__root.tsx?t=1778664538015:54
+[ 2666264ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:3010/node_modules/.vite/deps/react-dom_client.js?v=a41b5b22:20102
+[ 2666265ms] [INFO] 🌐 i18next is made possible by our own product, Locize — consider powering your project with managed localization (AI, CDN, integrations): https://locize.com 💙 @ http://localhost:3010/node_modules/.vite/deps/chunk-EZBKAI6A.js?v=a41b5b22:1783
+[ 2671073ms] [WARNING] [mcp-sync] Skip oversized document push: 9.24MiB > 2.00MiB @ http://localhost:3010/src/routes/__root.tsx?t=1778664538015:54

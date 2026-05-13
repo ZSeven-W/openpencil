@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Activity, ChevronDown, Pencil, RotateCcw, Save, X } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import {
   listCloudFileActivity,
@@ -21,29 +22,37 @@ function formatBytes(value: number) {
   return `${Math.round(value / 1024 / 102.4) / 10} MB`;
 }
 
-const ACTIVITY_FILTERS: Array<{ value: CloudActivityEventType | 'all'; label: string }> = [
-  { value: 'all', label: 'All activity' },
-  { value: 'file_saved', label: 'Saves' },
-  { value: 'file_restored', label: 'Restores' },
-  { value: 'file_shared', label: 'Shares' },
-  { value: 'codegen_created', label: 'Codegen' },
-  { value: 'version_labeled', label: 'Labels' },
+const ACTIVITY_FILTERS: Array<{ value: CloudActivityEventType | 'all'; labelKey: string }> = [
+  { value: 'all', labelKey: 'versionHistory.activityFilter.all' },
+  { value: 'file_saved', labelKey: 'versionHistory.activityFilter.saves' },
+  { value: 'file_restored', labelKey: 'versionHistory.activityFilter.restores' },
+  { value: 'file_shared', labelKey: 'versionHistory.activityFilter.shares' },
+  { value: 'codegen_created', labelKey: 'versionHistory.activityFilter.codegen' },
+  { value: 'codegen_job_created', labelKey: 'versionHistory.activityFilter.codegenJobs' },
+  { value: 'version_labeled', labelKey: 'versionHistory.activityFilter.labels' },
 ];
 
-function formatActivityType(type: CloudActivityEventType) {
-  return type.replaceAll('_', ' ');
+function getActivityTypeKey(type: CloudActivityEventType) {
+  return `versionHistory.activityType.${type}`;
 }
 
-function formatActivitySummary(item: CloudActivityEvent) {
+function formatActivitySummary(
+  item: CloudActivityEvent,
+  t: ReturnType<typeof useTranslation>['t'],
+) {
+  const metadata = item.metadata ?? {};
   const revision =
-    typeof item.metadata.revision === 'number' ? `rev ${item.metadata.revision}` : null;
-  const label = typeof item.metadata.label === 'string' ? item.metadata.label : null;
-  const framework = typeof item.metadata.framework === 'string' ? item.metadata.framework : null;
+    typeof metadata.revision === 'number'
+      ? t('versionHistory.revisionValue', { revision: metadata.revision })
+      : null;
+  const label = typeof metadata.label === 'string' ? metadata.label : null;
+  const framework = typeof metadata.framework === 'string' ? metadata.framework : null;
   const parts = [revision, label, framework].filter(Boolean);
-  return parts.length > 0 ? parts.join(' · ') : 'No extra details';
+  return parts.length > 0 ? parts.join(' · ') : t('versionHistory.noExtraDetails');
 }
 
 export function CloudVersionHistoryPanel() {
+  const { t } = useTranslation();
   const open = useCloudVersionPanelStore((s) => s.open);
   const setOpen = useCloudVersionPanelStore((s) => s.setOpen);
   const cloudFileId = useDocumentStore((s) => s.cloudFileId);
@@ -76,7 +85,9 @@ export function CloudVersionHistoryPanel() {
         }
       })
       .catch((err) => {
-        if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load versions');
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : t('versionHistory.errorLoad'));
+        }
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -104,7 +115,7 @@ export function CloudVersionHistoryPanel() {
       useDocumentStore.getState().loadCloudDocument(file);
       setVersions(await listCloudFileVersions(cloudFileId));
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to restore version');
+      setError(err instanceof Error ? err.message : t('versionHistory.errorRestore'));
     } finally {
       setRestoringId(null);
     }
@@ -125,7 +136,7 @@ export function CloudVersionHistoryPanel() {
       setActivityCursor(page.nextCursor);
       setEditingId(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to update version label');
+      setError(err instanceof Error ? err.message : t('versionHistory.errorLabel'));
     } finally {
       setSavingLabelId(null);
     }
@@ -140,7 +151,7 @@ export function CloudVersionHistoryPanel() {
       setActivity((items) => [...items, ...page.data]);
       setActivityCursor(page.nextCursor);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load more activity');
+      setError(err instanceof Error ? err.message : t('versionHistory.errorLoadMoreActivity'));
     } finally {
       setLoadingMoreActivity(false);
     }
@@ -149,23 +160,27 @@ export function CloudVersionHistoryPanel() {
   return (
     <aside
       role="complementary"
-      aria-label="Version history"
+      aria-label={t('versionHistory.title')}
       className="absolute right-3 top-3 z-30 flex max-h-[calc(100%-1.5rem)] w-80 flex-col rounded-lg border border-border bg-card text-card-foreground shadow-lg"
     >
       <div className="flex items-start justify-between gap-3 border-b border-border p-3">
         <div>
-          <h2 className="text-sm font-semibold">Version history</h2>
+          <h2 className="text-sm font-semibold">{t('versionHistory.title')}</h2>
           <p className="mt-1 text-xs text-muted-foreground">
-            Current rev {cloudRevision ?? 'unknown'}
+            {t('versionHistory.currentRevision', {
+              revision: cloudRevision ?? t('versionHistory.unknownRevision'),
+            })}
           </p>
           {cloudShareRole === 'viewer' && (
-            <p className="mt-1 text-xs text-muted-foreground">View-only shared file</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {t('versionHistory.viewOnlySharedFile')}
+            </p>
           )}
         </div>
         <Button
           variant="ghost"
           size="icon-sm"
-          aria-label="Close version history"
+          aria-label={t('versionHistory.close')}
           onClick={() => setOpen(false)}
         >
           <X size={14} />
@@ -175,10 +190,10 @@ export function CloudVersionHistoryPanel() {
       <div className="min-h-0 flex-1 overflow-auto p-3">
         {error && <p className="mb-3 text-xs text-destructive">{error}</p>}
         {loading ? (
-          <p className="text-xs text-muted-foreground">Loading versions...</p>
+          <p className="text-xs text-muted-foreground">{t('versionHistory.loading')}</p>
         ) : versions.length === 0 ? (
           <p className="rounded-md border border-border bg-background p-3 text-xs text-muted-foreground">
-            No saved versions yet.
+            {t('versionHistory.empty')}
           </p>
         ) : (
           <div className="space-y-2">
@@ -191,18 +206,25 @@ export function CloudVersionHistoryPanel() {
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <p className="font-medium">rev {version.revision}</p>
+                      <p className="font-medium">
+                        {t('versionHistory.revisionValue', { revision: version.revision })}
+                      </p>
                       <p className="mt-1 truncate text-muted-foreground">{title}</p>
                       <p className="mt-1 text-muted-foreground">
                         {formatVersionDate(version.createdAt)}
                       </p>
                       <p className="mt-1 text-muted-foreground">
-                        {formatBytes(version.sizeBytes)} · actor {version.actorId ?? 'unknown'}
+                        {t('versionHistory.versionMeta', {
+                          size: formatBytes(version.sizeBytes),
+                          actor: version.actorId ?? t('versionHistory.unknownActor'),
+                        })}
                       </p>
                       {editingId === version.id && (
                         <div className="mt-2 flex gap-2">
                           <input
-                            aria-label={`Label rev ${version.revision}`}
+                            aria-label={t('versionHistory.labelRevision', {
+                              revision: version.revision,
+                            })}
                             value={labelDraft}
                             onChange={(event) => setLabelDraft(event.currentTarget.value)}
                             className="min-w-0 flex-1 rounded-md border border-border bg-card px-2 py-1 text-xs outline-none"
@@ -210,7 +232,9 @@ export function CloudVersionHistoryPanel() {
                           <Button
                             variant="outline"
                             size="icon-sm"
-                            aria-label={`Save label rev ${version.revision}`}
+                            aria-label={t('versionHistory.saveLabelRevision', {
+                              revision: version.revision,
+                            })}
                             onClick={() => void saveLabel(version)}
                             disabled={savingLabelId !== null}
                           >
@@ -224,7 +248,9 @@ export function CloudVersionHistoryPanel() {
                         <Button
                           variant="ghost"
                           size="icon-sm"
-                          aria-label={`Edit label rev ${version.revision}`}
+                          aria-label={t('versionHistory.editLabelRevision', {
+                            revision: version.revision,
+                          })}
                           onClick={() => {
                             setEditingId(version.id);
                             setLabelDraft(version.label ?? '');
@@ -235,12 +261,16 @@ export function CloudVersionHistoryPanel() {
                         <Button
                           variant="outline"
                           size="sm"
-                          aria-label={`Restore rev ${version.revision}`}
+                          aria-label={t('versionHistory.restoreRevision', {
+                            revision: version.revision,
+                          })}
                           onClick={() => void restoreVersion(version)}
                           disabled={restoringId !== null || version.revision === cloudRevision}
                         >
                           <RotateCcw size={13} />
-                          {restoringId === version.id ? 'Restoring' : 'Restore'}
+                          {restoringId === version.id
+                            ? t('versionHistory.restoring')
+                            : t('versionHistory.restore')}
                         </Button>
                       </div>
                     )}
@@ -255,19 +285,19 @@ export function CloudVersionHistoryPanel() {
           <div className="mb-2 flex items-center justify-between gap-2">
             <div className="flex items-center gap-2 text-xs font-medium">
               <Activity size={13} />
-              Activity
+              {t('versionHistory.activity')}
             </div>
             <label className="flex items-center gap-1 text-xs text-muted-foreground">
-              <span className="sr-only">Filter activity</span>
+              <span className="sr-only">{t('versionHistory.filterActivity')}</span>
               <select
-                aria-label="Filter activity"
+                aria-label={t('versionHistory.filterActivity')}
                 value={activityFilter}
                 onChange={(event) => setActivityFilter(event.currentTarget.value as CloudActivityEventType | 'all')}
                 className="rounded-md border border-border bg-background px-2 py-1 text-xs outline-none"
               >
                 {ACTIVITY_FILTERS.map((filter) => (
                   <option key={filter.value} value={filter.value}>
-                    {filter.label}
+                    {t(filter.labelKey)}
                   </option>
                 ))}
               </select>
@@ -275,19 +305,19 @@ export function CloudVersionHistoryPanel() {
           </div>
           {activity.length === 0 ? (
             <p className="rounded-md border border-border bg-background p-3 text-xs text-muted-foreground">
-              No activity yet.
+              {t('versionHistory.noActivity')}
             </p>
           ) : (
             <div className="space-y-2">
               {activity.map((item) => (
                 <div key={item.id} className="rounded-md border border-border bg-background p-2 text-xs">
                   <div className="flex items-start justify-between gap-2">
-                    <p className="font-medium">{formatActivityType(item.type)}</p>
+                    <p className="font-medium">{t(getActivityTypeKey(item.type))}</p>
                     <p className="shrink-0 text-muted-foreground">
-                      {item.actorId ? 'actor' : 'system'}
+                      {item.actorId ? t('versionHistory.actor') : t('versionHistory.systemActor')}
                     </p>
                   </div>
-                  <p className="mt-1 text-muted-foreground">{formatActivitySummary(item)}</p>
+                  <p className="mt-1 text-muted-foreground">{formatActivitySummary(item, t)}</p>
                   <p className="mt-1 text-muted-foreground">{formatVersionDate(item.createdAt)}</p>
                 </div>
               ))}
@@ -300,7 +330,9 @@ export function CloudVersionHistoryPanel() {
                   className="w-full"
                 >
                   <ChevronDown size={13} />
-                  {loadingMoreActivity ? 'Loading activity...' : 'Load more activity'}
+                  {loadingMoreActivity
+                    ? t('versionHistory.loadingActivity')
+                    : t('versionHistory.loadMoreActivity')}
                 </Button>
               )}
             </div>

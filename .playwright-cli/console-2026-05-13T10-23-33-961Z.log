@@ -1,0 +1,8 @@
+[    1159ms] [ERROR] Failed to load resource: the server responded with a status of 404 () @ http://localhost:3001/favicon.ico:0
+[    2500ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:3001/node_modules/.vite/deps/react-dom_client.js?v=a41b5b22:20102
+[    2503ms] [INFO] 🌐 i18next is made possible by our own product, Locize — consider powering your project with managed localization (AI, CDN, integrations): https://locize.com 💙 @ http://localhost:3001/node_modules/.vite/deps/chunk-EZBKAI6A.js?v=a41b5b22:1783
+[    3166ms] [VERBOSE] [DOM] Input elements should have autocomplete attributes (suggested: "current-password"): (More info: https://goo.gl/9p2vKq) %o @ http://localhost:3001/tasks:0
+[  176130ms] [WARNING] [mcp-sync] Skip oversized document push: 9.24MiB > 2.00MiB @ http://localhost:3001/src/routes/__root.tsx:54
+[  675712ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:3001/node_modules/.vite/deps/react-dom_client.js?v=a41b5b22:20102
+[  675715ms] [INFO] 🌐 i18next is made possible by our own product, Locize — consider powering your project with managed localization (AI, CDN, integrations): https://locize.com 💙 @ http://localhost:3001/node_modules/.vite/deps/chunk-EZBKAI6A.js?v=a41b5b22:1783
+[  679159ms] [WARNING] [mcp-sync] Skip oversized document push: 9.24MiB > 2.00MiB @ http://localhost:3001/src/routes/__root.tsx:54

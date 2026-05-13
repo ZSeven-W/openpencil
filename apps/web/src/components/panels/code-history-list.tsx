@@ -27,6 +27,10 @@ function formatHistoryTime(value: string): string {
   }
 }
 
+function isPatchGeneration(entry: CodegenHistoryEntry): boolean {
+  return entry.metadata?.jobKind === 'patch_generation';
+}
+
 export default function CodeHistoryList({
   history,
   selectedId,
@@ -50,6 +54,7 @@ export default function CodeHistoryList({
     <div className="flex h-full flex-col gap-1 overflow-auto p-2">
       {history.map((entry) => {
         const selected = entry.id === selectedId;
+        const patchGeneration = isPatchGeneration(entry);
         return (
           <div
             key={entry.id}
@@ -86,6 +91,11 @@ export default function CodeHistoryList({
               <div className="mt-1 flex flex-wrap gap-x-2 gap-y-1 text-[10px] text-muted-foreground/80">
                 <span>rev {entry.documentRevision}</span>
                 {entry.promotedAt && <span>{t('codePanel.history.promoted')}</span>}
+                {patchGeneration && (
+                  <span className="rounded bg-primary/10 px-1.5 py-0.5 text-primary">
+                    {t('codePanel.history.patchGenerated')}
+                  </span>
+                )}
                 {entry.model && <span>{entry.model}</span>}
                 {entry.provider && <span>{entry.provider}</span>}
                 {entry.targetKind && (

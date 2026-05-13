@@ -1,4 +1,4 @@
-import { ipcMain, dialog, shell, type BrowserWindow } from 'electron';
+import { ipcMain, dialog, shell, Notification, type BrowserWindow } from 'electron';
 import { relative, resolve, extname, sep } from 'node:path';
 import { readFile, writeFile } from 'node:fs/promises';
 import { app } from 'electron';
@@ -194,6 +194,32 @@ export function setupIPC(deps: IpcDeps): void {
     const rootDir = requireCodegenOutputDirectory(payload.rootDir);
     return pushCodegenOutput({ rootDir });
   });
+
+  ipcMain.handle(
+    'notification:show',
+    (_event, payload: { title: string; body?: string; route?: string }) => {
+      const mainWindow = getMainWindow();
+      if (!Notification.isSupported() || !payload.title.trim()) {
+        mainWindow?.focus();
+        return;
+      }
+
+      const notification = new Notification({
+        title: payload.title,
+        body: payload.body,
+      });
+      notification.on('click', () => {
+        const win = getMainWindow();
+        if (!win || win.isDestroyed()) return;
+        if (win.isMinimized()) win.restore();
+        win.focus();
+        if (payload.route) {
+          win.webContents.send('menu:action', `navigate:${payload.route}`);
+        }
+      });
+      notification.show();
+    },
+  );
 
   ipcMain.handle(
     'dialog:saveFile',

@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import { Globe } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
+import { loadLocale } from '@/i18n';
 
 const LANGUAGES = [
   { code: 'en', label: 'English' },
@@ -24,7 +25,7 @@ export default function LanguageSelector() {
   const { i18n } = useTranslation();
 
   return (
-    <Select value={i18n.language} onValueChange={(code) => i18n.changeLanguage(code)}>
+    <Select value={i18n.language} onValueChange={(code) => void loadLocale(code)}>
       <SelectTrigger className="h-7 w-7 px-0 border-none bg-transparent shadow-none">
         <Globe size={15} className="text-muted-foreground" />
       </SelectTrigger>

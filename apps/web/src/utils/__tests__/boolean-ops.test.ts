@@ -1,6 +1,143 @@
-import { describe, it, expect } from 'vitest';
+import { afterAll, describe, it, expect, vi } from 'vitest';
 import { canBooleanOp, executeBooleanOp } from '../boolean-ops';
 import type { PenNode, RectangleNode, EllipseNode, PathNode, PolygonNode } from '@/types/pen';
+
+type TestBounds = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  center: { x: number; y: number };
+};
+
+const paperMock = vi.hoisted(() => {
+  function makeBounds(x: number, y: number, width: number, height: number): TestBounds {
+    return {
+      x,
+      y,
+      width,
+      height,
+      center: { x: x + width / 2, y: y + height / 2 },
+    };
+  }
+
+  function parseBounds(pathData: string): TestBounds {
+    const values = Array.from(pathData.matchAll(/-?\d+(?:\.\d+)?/g), (match) =>
+      Number(match[0]),
+    );
+    const points: Array<[number, number]> = [];
+    for (let index = 0; index + 1 < values.length; index += 2) {
+      points.push([values[index], values[index + 1]]);
+    }
+    if (points.length === 0) return makeBounds(0, 0, 0, 0);
+    const xs = points.map(([x]) => x);
+    const ys = points.map(([, y]) => y);
+    const minX = Math.min(...xs);
+    const maxX = Math.max(...xs);
+    const minY = Math.min(...ys);
+    const maxY = Math.max(...ys);
+    return makeBounds(minX, minY, maxX - minX, maxY - minY);
+  }
+
+  class MockPathItem {
+    bounds: TestBounds;
+
+    constructor(bounds: TestBounds) {
+      this.bounds = bounds;
+    }
+
+    get pathData() {
+      const { x, y, width, height } = this.bounds;
+      if (width <= 0 || height <= 0) return '';
+      return `M ${x} ${y} L ${x + width} ${y} L ${x + width} ${y + height} L ${x} ${
+        y + height
+      } Z`;
+    }
+
+    translate(point: { x: number; y: number }) {
+      this.bounds = makeBounds(
+        this.bounds.x + point.x,
+        this.bounds.y + point.y,
+        this.bounds.width,
+        this.bounds.height,
+      );
+    }
+
+    rotate() {}
+
+    unite(path: MockPathItem) {
+      const x = Math.min(this.bounds.x, path.bounds.x);
+      const y = Math.min(this.bounds.y, path.bounds.y);
+      const right = Math.max(this.bounds.x + this.bounds.width, path.bounds.x + path.bounds.width);
+      const bottom = Math.max(
+        this.bounds.y + this.bounds.height,
+        path.bounds.y + path.bounds.height,
+      );
+      return new MockPathItem(makeBounds(x, y, right - x, bottom - y));
+    }
+
+    subtract() {
+      return new MockPathItem(this.bounds);
+    }
+
+    intersect(path: MockPathItem) {
+      const x = Math.max(this.bounds.x, path.bounds.x);
+      const y = Math.max(this.bounds.y, path.bounds.y);
+      const right = Math.min(this.bounds.x + this.bounds.width, path.bounds.x + path.bounds.width);
+      const bottom = Math.min(
+        this.bounds.y + this.bounds.height,
+        path.bounds.y + path.bounds.height,
+      );
+      return new MockPathItem(makeBounds(x, y, Math.max(0, right - x), Math.max(0, bottom - y)));
+    }
+
+    remove() {}
+  }
+
+  return {
+    PaperScope: class {
+      Size = class {
+        constructor(
+          public width: number,
+          public height: number,
+        ) {}
+      };
+
+      Point = class {
+        constructor(
+          public x: number,
+          public y: number,
+        ) {}
+      };
+
+      CompoundPath = {
+        create: (pathData: string) => new MockPathItem(parseBounds(pathData)),
+      };
+
+      setup() {}
+
+      activate() {}
+    },
+    Point: class {
+      constructor(
+        public x: number,
+        public y: number,
+      ) {}
+    },
+  };
+});
+
+vi.mock('paper', () => paperMock);
+
+const originalRequire = (globalThis as { require?: (id: string) => unknown }).require;
+(globalThis as { require?: (id: string) => unknown }).require = (id: string) => {
+  if (id === 'paper') return paperMock;
+  return originalRequire?.(id);
+};
+
+afterAll(() => {
+  (globalThis as { require?: (id: string) => unknown }).require = originalRequire;
+});
 
 function makeRect(id: string, x: number, y: number, w: number, h: number): RectangleNode {
   return {

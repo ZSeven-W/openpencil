@@ -22,5 +22,16 @@ describe('i18n lazy locale loading', () => {
     const { loadLocale, default: i18n } = await import('../index');
     expect(i18n.hasResourceBundle('en', 'translation')).toBe(true);
     await loadLocale('en'); // 不应该扔
+    expect(i18n.language).toBe('en');
+  });
+
+  it('switches from lazy zh locale back to bundled en locale', async () => {
+    const { loadLocale, default: i18n } = await import('../index');
+    await loadLocale('zh');
+    expect(i18n.language).toBe('zh');
+
+    await loadLocale('en');
+
+    expect(i18n.language).toBe('en');
   });
 });

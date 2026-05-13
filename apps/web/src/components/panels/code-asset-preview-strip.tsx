@@ -1,4 +1,5 @@
 import { useEffect, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { CodegenAssetFile } from '@/services/ai/codegen-assets';
 import type { CodegenAssetManifestEntry } from '@/types/cloud';
 
@@ -17,6 +18,7 @@ export default function CodeAssetPreviewStrip({
   assets,
   assetsManifest = [],
 }: CodeAssetPreviewStripProps) {
+  const { t } = useTranslation();
   const objectUrls = useMemo(
     () => assets.map((asset) => ({ asset, url: bytesToObjectUrl(asset) })),
     [assets],
@@ -38,7 +40,7 @@ export default function CodeAssetPreviewStrip({
   return (
     <div className="shrink-0 border-b border-border/50 bg-muted/20 px-2 py-2">
       <div className="mb-1.5 flex items-center justify-between text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
-        <span>Assets</span>
+        <span>{t('codePanel.assets')}</span>
         <span>{count}</span>
       </div>
       <div className="flex gap-1.5 overflow-x-auto">

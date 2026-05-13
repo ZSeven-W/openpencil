@@ -19,6 +19,8 @@ env:
 # Secrets（Repository secrets）：
 #   SUPABASE_ANON_KEY：Supabase anon key。它本身可用于前端，但仍放在 Secret
 #     里，避免出现在日志、提交记录或普通变量列表中。
+#   SUPABASE_SERVICE_ROLE_KEY：Supabase service role key。仅 Nitro/Worker 服务端读取，
+#     不能加 VITE_ 前缀，不能暴露给浏览器或桌面端。
 #   TENCENT_HOST：腾讯云 CVM 公网 IP 或可解析主机名。
 #   TENCENT_USER：CVM 上的 SSH 用户，必须有执行 Docker 命令的权限。
 #   TENCENT_SSH_KEY：TENCENT_USER 对应的 SSH 私钥。
@@ -51,6 +53,8 @@ jobs:
           SUPABASE_URL: ${{ vars.SUPABASE_URL }}
           # GitHub Repository Secret：Supabase anon key。
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          # GitHub Repository Secret：Supabase service role key，仅服务端使用。
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           # 腾讯云 CVM 的 SSH 目标和登录凭据。
           TENCENT_HOST: ${{ secrets.TENCENT_HOST }}
           TENCENT_USER: ${{ secrets.TENCENT_USER }}
@@ -61,12 +65,13 @@ jobs:
         run: |
           set -euo pipefail
           missing=0
-          for name in APP_DOMAIN SUPABASE_URL SUPABASE_ANON_KEY TENCENT_HOST TENCENT_USER TENCENT_SSH_KEY GHCR_USERNAME GHCR_READ_TOKEN; do
+          for name in APP_DOMAIN SUPABASE_URL SUPABASE_ANON_KEY SUPABASE_SERVICE_ROLE_KEY TENCENT_HOST TENCENT_USER TENCENT_SSH_KEY GHCR_USERNAME GHCR_READ_TOKEN; do
             if [ -z "${!name}" ]; then
               case "$name" in
                 APP_DOMAIN) hint="Repository Variable：解析到 CVM 的公网域名，例如 openpencil.example.com。" ;;
                 SUPABASE_URL) hint="Repository Variable：Supabase 项目地址，例如 https://xxxx.supabase.co。" ;;
                 SUPABASE_ANON_KEY) hint="Repository Secret：浏览器和服务端运行期使用的 Supabase anon key。" ;;
+                SUPABASE_SERVICE_ROLE_KEY) hint="Repository Secret：仅 Nitro/Worker 服务端使用的 Supabase service role key，不能加 VITE_ 前缀。" ;;
                 TENCENT_HOST) hint="Repository Secret：腾讯云 CVM 公网 IP 或主机名。" ;;
                 TENCENT_USER) hint="Repository Secret：CVM 上有 Docker 权限的 SSH 用户。" ;;
                 TENCENT_SSH_KEY) hint="Repository Secret：TENCENT_USER 对应的 SSH 私钥。" ;;
@@ -160,6 +165,7 @@ jobs:
           OPENPENCIL_IMAGE: ${{ steps.image.outputs.sha_image }}
           SUPABASE_URL: ${{ vars.SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
@@ -178,6 +184,7 @@ jobs:
             echo "NITRO_PORT=3000"
             echo "SUPABASE_URL=${SUPABASE_URL}"
             echo "SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}"
+            echo "SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}"
             echo "VITE_SUPABASE_URL=${SUPABASE_URL}"
             echo "VITE_SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}"
             echo "ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}"

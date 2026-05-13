@@ -9,6 +9,7 @@ import {
   Star,
   Trash2,
 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { CloudFileActionsMenu } from './cloud-file-actions-menu';
 import { cn } from '@/lib/utils';
@@ -59,14 +60,15 @@ export function CloudFileTable({
   onPermanentDelete,
   onToggleActions,
 }: CloudFileTableProps) {
+  const { t } = useTranslation();
   return (
     <div className="overflow-hidden border border-border bg-card">
       <div className="grid grid-cols-[36px_minmax(220px,1fr)_110px_150px_200px] border-b border-border px-3 py-2 text-xs font-medium text-muted-foreground">
         <span />
-        <span>Name</span>
-        <span>Revision</span>
-        <span>Updated</span>
-        <span className="text-right">Actions</span>
+        <span>{t('common.name')}</span>
+        <span>{t('cloudLibrary.details.revision')}</span>
+        <span>{t('cloudLibrary.details.updated')}</span>
+        <span className="text-right">{t('cloudLibrary.table.actions')}</span>
       </div>
       {files.map((file) => {
         const busy = Boolean(operatingIds[file.id]);
@@ -85,14 +87,14 @@ export function CloudFileTable({
           >
             <input
               type="checkbox"
-              aria-label={`Select ${file.name}`}
+              aria-label={t('cloudLibrary.action.selectFile', { name: file.name })}
               checked={selectedFileIds.includes(file.id)}
               onChange={() => onToggleSelected(file.id)}
               className="h-4 w-4 rounded border-border"
             />
             <button
               type="button"
-              aria-label={`Open ${file.name}`}
+              aria-label={t('cloudLibrary.action.openFile', { name: file.name })}
               className="flex min-w-0 items-center gap-3 text-left"
               onClick={() => onOpen(file.id)}
               disabled={isTrashView}
@@ -113,14 +115,14 @@ export function CloudFileTable({
               {isTrashView ? (
                 <>
                   <IconButton
-                    label={`Restore ${file.name}`}
+                    label={t('cloudLibrary.action.restoreFile', { name: file.name })}
                     disabled={busy}
                     onClick={() => onRestore(file)}
                   >
                     <ArchiveRestore size={14} />
                   </IconButton>
                   <IconButton
-                    label={`Permanently delete ${file.name}`}
+                    label={t('cloudLibrary.action.permanentlyDeleteFile', { name: file.name })}
                     disabled={busy}
                     destructive
                     onClick={() => onPermanentDelete(file)}
@@ -131,42 +133,58 @@ export function CloudFileTable({
               ) : (
                 <>
                   <IconButton
-                    label={`Details ${file.name}`}
+                    label={t('cloudLibrary.action.detailsFile', { name: file.name })}
                     disabled={busy}
                     onClick={() => onShowDetails(file.id)}
                   >
                     <FileJson size={14} />
                   </IconButton>
                   <IconButton
-                    label={`Favorite ${file.name}`}
+                    label={t('cloudLibrary.action.favoriteFile', { name: file.name })}
                     disabled={busy}
                     onClick={() => onToggleFavorite(file)}
                   >
                     <Star size={14} className={cn(file.starred && 'fill-current text-primary')} />
                   </IconButton>
-                  <IconButton label={`Rename ${file.name}`} disabled={busy} onClick={() => onRename(file)}>
+                  <IconButton
+                    label={t('cloudLibrary.action.renameFile', { name: file.name })}
+                    disabled={busy}
+                    onClick={() => onRename(file)}
+                  >
                     <Pencil size={14} />
                   </IconButton>
-                  <IconButton label={`Copy ${file.name}`} disabled={busy} onClick={() => onCopy(file)}>
+                  <IconButton
+                    label={t('cloudLibrary.action.copyFile', { name: file.name })}
+                    disabled={busy}
+                    onClick={() => onCopy(file)}
+                  >
                     <Copy size={14} />
                   </IconButton>
                   {canMove && (
-                    <IconButton label={`Move ${file.name}`} disabled={busy} onClick={() => onMove(file)}>
+                    <IconButton
+                      label={t('cloudLibrary.action.moveFile', { name: file.name })}
+                      disabled={busy}
+                      onClick={() => onMove(file)}
+                    >
                       <FolderInput size={14} />
                     </IconButton>
                   )}
-                  <IconButton label={`Share ${file.name}`} disabled={busy} onClick={() => onShare(file)}>
+                  <IconButton
+                    label={t('cloudLibrary.action.shareFile', { name: file.name })}
+                    disabled={busy}
+                    onClick={() => onShare(file)}
+                  >
                     <Share2 size={14} />
                   </IconButton>
                   <IconButton
-                    label={`More actions ${file.name}`}
+                    label={t('cloudLibrary.action.moreActionsFor', { name: file.name })}
                     disabled={busy}
                     onClick={() => onToggleActions(actionsFileId === file.id ? null : file.id)}
                   >
                     <MoreHorizontal size={14} />
                   </IconButton>
                   <IconButton
-                    label={`Delete ${file.name}`}
+                    label={t('cloudLibrary.action.deleteFile', { name: file.name })}
                     disabled={busy}
                     destructive
                     onClick={() => onDelete(file)}

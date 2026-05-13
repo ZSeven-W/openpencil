@@ -7,6 +7,7 @@ import {
   Save,
   Upload,
 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { GitPanelErrorCard } from './git-panel/git-panel-error-card';
@@ -39,6 +40,7 @@ function buildDefaultCommitMessage(framework: Framework): string {
 }
 
 export default function CodeLocalOutputActions({ framework, files }: CodeLocalOutputActionsProps) {
+  const { t } = useTranslation();
   const [isAvailable] = useState(() => isCodegenLocalOutputAvailable());
   const [outputDir, setOutputDir] = useState('');
   const [isWriting, setIsWriting] = useState(false);
@@ -125,7 +127,7 @@ export default function CodeLocalOutputActions({ framework, files }: CodeLocalOu
       setCommitHash('');
       await refreshGitStatus(result.rootDir);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to write generated files');
+      setError(err instanceof Error ? err.message : t('codePanel.localOutput.errorWrite'));
       setRetryAction(() => handleWrite);
     } finally {
       setIsWriting(false);
@@ -142,7 +144,7 @@ export default function CodeLocalOutputActions({ framework, files }: CodeLocalOu
     const rootDir = writeResult?.rootDir || outputDir;
     if (!rootDir) return;
     if (!authorName.trim() || !authorEmail.trim()) {
-      setError('Git author name and email are required');
+      setError(t('codePanel.localOutput.errorAuthor'));
       setRetryAction(null);
       return;
     }
@@ -160,7 +162,7 @@ export default function CodeLocalOutputActions({ framework, files }: CodeLocalOu
       setCommitHash(result.hash);
       await refreshGitStatus(rootDir);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to commit generated files');
+      setError(err instanceof Error ? err.message : t('codePanel.localOutput.errorCommit'));
       setRetryAction(() => handleCommit);
     } finally {
       setIsCommitting(false);
@@ -188,7 +190,7 @@ export default function CodeLocalOutputActions({ framework, files }: CodeLocalOu
       setPushDone(true);
       await refreshGitStatus(rootDir);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to push generated code');
+      setError(err instanceof Error ? err.message : t('codePanel.localOutput.errorPush'));
       setRetryAction(() => handlePush);
     } finally {
       setIsPushing(false);
@@ -206,10 +208,10 @@ export default function CodeLocalOutputActions({ framework, files }: CodeLocalOu
         <div className="min-w-0">
           <div className="flex items-center gap-1.5 text-xs font-medium text-foreground">
             <Save className="h-3.5 w-3.5 shrink-0" />
-            Local Output
+            {t('codePanel.localOutput.title')}
           </div>
           <div className="mt-0.5 truncate text-muted-foreground">
-            {outputDir || 'Choose a folder to write generated files'}
+            {outputDir || t('codePanel.localOutput.chooseFolderHint')}
           </div>
         </div>
         <Button
@@ -219,7 +221,7 @@ export default function CodeLocalOutputActions({ framework, files }: CodeLocalOu
           onClick={handleSelectDirectory}
         >
           <FolderOpen className="mr-1 h-3 w-3" />
-          Choose
+          {t('codePanel.localOutput.choose')}
         </Button>
       </div>
 
@@ -232,7 +234,7 @@ export default function CodeLocalOutputActions({ framework, files }: CodeLocalOu
           onClick={handleWrite}
         >
           <Save className="mr-1 h-3 w-3" />
-          {isWriting ? 'Writing...' : 'Write Local'}
+          {isWriting ? t('codePanel.localOutput.writing') : t('codePanel.localOutput.writeLocal')}
         </Button>
         <Button
           variant="ghost"
@@ -246,15 +248,19 @@ export default function CodeLocalOutputActions({ framework, files }: CodeLocalOu
       </div>
 
       <div className="mt-2 text-muted-foreground">
-        {fileCount} file{fileCount === 1 ? '' : 's'} · {formatBytes(totalBytes)}
+        {t('codePanel.localOutput.fileCount', {
+          count: fileCount,
+          size: formatBytes(totalBytes),
+        })}
       </div>
 
       {writeResult && (
         <div className="mt-2 rounded-md border border-border bg-muted/25 px-2 py-1.5 text-muted-foreground">
           <div className="flex items-center gap-1.5 text-foreground">
             <Check className="h-3 w-3 text-green-500" />
-            Wrote {writeResult.writtenFiles.length} file
-            {writeResult.writtenFiles.length === 1 ? '' : 's'}
+            {t('codePanel.localOutput.wroteFiles', {
+              count: writeResult.writtenFiles.length,
+            })}
           </div>
           <div className="mt-1 truncate">
             {writeResult.writtenFiles
@@ -270,7 +276,12 @@ export default function CodeLocalOutputActions({ framework, files }: CodeLocalOu
           <div className="flex items-center justify-between gap-2 text-muted-foreground">
             <span className="flex items-center gap-1.5">
               <GitCompare className="h-3 w-3" />
-              {isGitLoading ? 'Checking Git...' : `${gitStatus.branch} · ${gitStatus.changedFiles.length} change(s)`}
+              {isGitLoading
+                ? t('codePanel.localOutput.checkingGit')
+                : t('codePanel.localOutput.gitChanges', {
+                    branch: gitStatus.branch,
+                    count: gitStatus.changedFiles.length,
+                  })}
             </span>
             {commitHash && <span className="font-mono text-[10px]">{commitHash.slice(0, 7)}</span>}
           </div>
@@ -284,20 +295,20 @@ export default function CodeLocalOutputActions({ framework, files }: CodeLocalOu
               className="h-7 rounded border border-border bg-background px-2 text-[11px] text-foreground outline-none"
               value={authorName}
               onChange={(event) => setAuthorName(event.target.value)}
-              placeholder="Author name"
+              placeholder={t('codePanel.localOutput.authorName')}
             />
             <input
               className="h-7 rounded border border-border bg-background px-2 text-[11px] text-foreground outline-none"
               value={authorEmail}
               onChange={(event) => setAuthorEmail(event.target.value)}
-              placeholder="Author email"
+              placeholder={t('codePanel.localOutput.authorEmail')}
             />
           </div>
           <input
             className="mt-1 h-7 w-full rounded border border-border bg-background px-2 text-[11px] text-foreground outline-none"
             value={commitMessage}
             onChange={(event) => setCommitMessage(event.target.value)}
-            placeholder="Commit message"
+            placeholder={t('codePanel.localOutput.commitMessage')}
           />
           <div className="mt-2 flex items-center gap-1">
             <Button
@@ -308,7 +319,7 @@ export default function CodeLocalOutputActions({ framework, files }: CodeLocalOu
               onClick={handleCommit}
             >
               <GitCommitHorizontal className="mr-1 h-3 w-3" />
-              {isCommitting ? 'Committing...' : 'Commit'}
+              {isCommitting ? t('codePanel.localOutput.committing') : t('codePanel.localOutput.commit')}
             </Button>
             <Button
               variant="ghost"
@@ -321,7 +332,11 @@ export default function CodeLocalOutputActions({ framework, files }: CodeLocalOu
               onClick={handlePush}
             >
               <Upload className="mr-1 h-3 w-3" />
-              {isPushing ? 'Pushing...' : pushDone ? 'Pushed' : 'Push'}
+              {isPushing
+                ? t('codePanel.localOutput.pushing')
+                : pushDone
+                  ? t('codePanel.localOutput.pushed')
+                  : t('codePanel.localOutput.push')}
             </Button>
           </div>
         </div>
@@ -329,7 +344,7 @@ export default function CodeLocalOutputActions({ framework, files }: CodeLocalOu
 
       {gitStatus?.mode === 'none' && outputDir && (
         <div className="mt-2 rounded-md border border-border bg-muted/25 px-2 py-1.5 text-muted-foreground">
-          The output folder is not inside a Git repository.
+          {t('codePanel.localOutput.notGitRepository')}
         </div>
       )}
 

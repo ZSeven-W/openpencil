@@ -36,6 +36,12 @@ function safeNitroChunkFileName(chunk: { name?: string }) {
 const config = defineConfig({
   test: {
     teardownTimeout: 1000,
+    fileParallelism: false,
+    environment: 'node',
+    environmentMatchGlobs: [
+      ['src/**/*.test.tsx', 'jsdom'],
+      ['../../packages/pen-react/src/**/*.test.tsx', 'jsdom'],
+    ],
     include: [
       'src/**/*.test.{ts,tsx}',
       'server/**/*.test.ts',

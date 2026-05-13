@@ -26,6 +26,7 @@ Repository secrets：
 | 名称 | 含义 | 备注 |
 | --- | --- | --- |
 | `SUPABASE_ANON_KEY` | Supabase anon API key，浏览器和服务端运行期都会使用。 | anon key 本身可用于前端，但仍建议放 Secret，避免误打到日志或提交中。 |
+| `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role key，仅 Nitro/Worker 服务端使用。 | 必须放 Secret，不能加 `VITE_` 前缀，不能暴露给浏览器或桌面端。 |
 | `TENCENT_HOST` | 腾讯云 CVM 公网 IP 或可解析主机名。 | `ssh`、`scp`、`ssh-keyscan` 都会使用。 |
 | `TENCENT_USER` | CVM 上的 SSH 用户。 | 必须有执行 Docker 命令的权限。 |
 | `TENCENT_SSH_KEY` | `TENCENT_USER` 对应的 SSH 私钥。 | 填完整私钥内容，包括 begin/end 行。 |
@@ -38,6 +39,18 @@ Repository secrets：
 
 服务器上的 `.env` 文件由流水线每次部署时自动生成。具体运行时变量模板见
 `deploy/.env.example`，实际文件会写入 `/opt/openpencil/.env`。
+
+## Supabase 服务端 Key
+
+`SUPABASE_SERVICE_ROLE_KEY` 只允许在 Nitro/Worker 服务端环境中读取，不能写成
+`VITE_SUPABASE_SERVICE_ROLE_KEY`，也不能在前端、桌面端或日志中输出。它用于阶段 9
+队列管理能力，包括读取/维护 `codegen_queue_members`、
+`codegen_provider_configs`、`codegen_provider_config_audits`，以及 Worker 管理页的
+管理员/操作员统计、provider 限流配置、配置变更审计和失败重放。
+
+如果生产环境没有配置该变量，普通云文件和用户态任务列表仍可使用 anon key 访问，
+但 `/tasks/workers` 会降级为只读 viewer 能力，provider 配置、配置变更历史、队列
+角色和失败重放等管理功能无法正常工作。
 
 ## 流水线行为
 

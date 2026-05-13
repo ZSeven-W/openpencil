@@ -1,4 +1,5 @@
 import { FolderInput, X } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import type { CloudFileSummary, CloudFolder } from '@/types/cloud';
 
@@ -17,8 +18,9 @@ export function CloudMoveTargetPanel({
   onMove,
   onClose,
 }: CloudMoveTargetPanelProps) {
+  const { t } = useTranslation();
   const targets = [
-    { id: null, label: 'Project root' },
+    { id: null, label: t('cloudLibrary.projectRoot') },
     ...folders
       .slice()
       .sort((a, b) => folderPath(a.id).localeCompare(folderPath(b.id)))
@@ -28,15 +30,24 @@ export function CloudMoveTargetPanel({
   return (
     <section
       role="dialog"
-      aria-label="Move file"
+      aria-label={t('cloudLibrary.move.file')}
       className="mb-3 rounded-md border border-border bg-card p-3"
     >
       <div className="mb-3 flex items-center justify-between gap-3">
         <div className="min-w-0">
-          <p className="truncate text-sm font-medium">Move {file.name}</p>
-          <p className="text-xs text-muted-foreground">Current: {folderPath(file.folderId)}</p>
+          <p className="truncate text-sm font-medium">
+            {t('cloudLibrary.move.title', { name: file.name })}
+          </p>
+          <p className="text-xs text-muted-foreground">
+            {t('cloudLibrary.move.current', { location: folderPath(file.folderId) })}
+          </p>
         </div>
-        <Button variant="ghost" size="icon-sm" aria-label="Close move target selector" onClick={onClose}>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          aria-label={t('cloudLibrary.move.close')}
+          onClick={onClose}
+        >
           <X size={14} />
         </Button>
       </div>

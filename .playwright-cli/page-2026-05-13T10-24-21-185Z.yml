@@ -1,0 +1,49 @@
+- generic [ref=e19]:
+  - banner [ref=e20]:
+    - generic [ref=e21]:
+      - generic [ref=e22]:
+        - heading "任务中心" [level=1] [ref=e23]
+        - paragraph [ref=e24]: 跨云文件追踪后台 AI 和代码生成任务。
+      - generic [ref=e25]:
+        - button "Worker 管理" [ref=e26]:
+          - img
+          - text: Worker 管理
+        - button "刷新" [disabled]:
+          - img
+          - text: 刷新
+  - main [ref=e27]:
+    - complementary [ref=e28]:
+      - button "全部" [ref=e29]:
+        - img [ref=e30]
+        - text: 全部
+      - button "等待中" [ref=e33]:
+        - img [ref=e34]
+        - text: 等待中
+      - button "运行中" [ref=e37]:
+        - img [ref=e38]
+        - text: 运行中
+      - button "已完成" [ref=e40]:
+        - img [ref=e41]
+        - text: 已完成
+      - button "失败" [ref=e44]:
+        - img [ref=e45]
+        - text: 失败
+      - button "已取消" [ref=e49]:
+        - img [ref=e50]
+        - text: 已取消
+    - generic [ref=e55]:
+      - paragraph [ref=e56]: 当前视图没有任务
+      - paragraph [ref=e57]: 后台代码生成任务会显示在这里。
+    - complementary [ref=e58]:
+      - generic [ref=e59]:
+        - generic [ref=e60]:
+          - img [ref=e61]
+          - text: 通知
+        - generic [ref=e64]: "2"
+      - generic [ref=e65]:
+        - button "代码生成已完成 html 代码生成结果已就绪。" [ref=e66]:
+          - paragraph [ref=e67]: 代码生成已完成
+          - paragraph [ref=e68]: html 代码生成结果已就绪。
+        - button "代码生成已完成 html 代码生成结果已就绪。" [ref=e69]:
+          - paragraph [ref=e70]: 代码生成已完成
+          - paragraph [ref=e71]: html 代码生成结果已就绪。

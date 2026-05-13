@@ -18,8 +18,13 @@ const cloudFileMocks = vi.hoisted(() => ({
   getCloudFile: vi.fn(),
 }));
 
+const editorLayoutMock = vi.hoisted(() => vi.fn());
+
 vi.mock('@/components/editor/editor-layout', () => ({
-  default: () => <div>Editor Ready</div>,
+  default: (props: { generationId?: string }) => {
+    editorLayoutMock(props);
+    return <div>Editor Ready</div>;
+  },
 }));
 
 vi.mock('@/hooks/use-keyboard-shortcuts', () => ({
@@ -87,6 +92,15 @@ describe('CloudEditorPage', () => {
       expect(cloudFileMocks.getCloudFile).toHaveBeenCalledWith('file-1');
       expect(documentMocks.loadCloudDocument).toHaveBeenCalledWith(cloudFile);
       expect(screen.getByText('Editor Ready')).toBeTruthy();
+    });
+  });
+
+  it('passes a target code generation id through to the editor layout', async () => {
+    render(<CloudEditorPage fileId="file-1" generationId="gen-1" navigate={navigate} />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Editor Ready')).toBeTruthy();
+      expect(editorLayoutMock).toHaveBeenCalledWith({ generationId: 'gen-1' });
     });
   });
 

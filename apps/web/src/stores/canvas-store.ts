@@ -121,15 +121,19 @@ export const useCanvasStore = create<CanvasStoreState>((set, get) => ({
 
   setSelection: (selectedIds, activeId) =>
     set((s) => {
+      const nextActiveId =
+        activeId && selectedIds.includes(activeId)
+          ? activeId
+          : (selectedIds[selectedIds.length - 1] ?? null);
       const sameIds = areStringArraysEqual(s.selection.selectedIds, selectedIds);
-      const sameActiveId = s.selection.activeId === activeId;
+      const sameActiveId = s.selection.activeId === nextActiveId;
       if (sameIds && sameActiveId) return s;
 
       return {
         selection: {
           ...s.selection,
           selectedIds: [...selectedIds],
-          activeId,
+          activeId: nextActiveId,
         },
       };
     }),

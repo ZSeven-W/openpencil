@@ -47,6 +47,18 @@ describe('canvas-store selection', () => {
     expect(useCanvasStore.getState().selection).toBe(previousSelection);
   });
 
+  it('uses the last selected id as active when activeId is omitted', () => {
+    useCanvasStore.getState().setSelection(['node-1', 'node-2'], null);
+
+    expect(useCanvasStore.getState().selection.activeId).toBe('node-2');
+  });
+
+  it('keeps explicit activeId when it belongs to the selection', () => {
+    useCanvasStore.getState().setSelection(['node-1', 'node-2'], 'node-1');
+
+    expect(useCanvasStore.getState().selection.activeId).toBe('node-1');
+  });
+
   it('does not notify subscribers when clearing an already empty selection', () => {
     const previousSelection = useCanvasStore.getState().selection;
     let calls = 0;

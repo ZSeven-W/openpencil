@@ -1,4 +1,6 @@
-import { FileJson, Star, X } from 'lucide-react';
+import { FileJson, ListTodo, Star, X } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
+import { useNavigate } from '@tanstack/react-router';
 import { Button } from '@/components/ui/button';
 import { CloudFileSharingSection } from './cloud-file-sharing-section';
 import type { CloudFileSummary } from '@/types/cloud';
@@ -20,9 +22,11 @@ export function CloudFileDetailsPanel({
   createdLabel,
   onClose,
 }: CloudFileDetailsPanelProps) {
+  const { t } = useTranslation();
+  const navigate = useNavigate();
   return (
     <aside
-      aria-label="File details"
+      aria-label={t('cloudLibrary.details.title')}
       className="border-l border-border bg-background p-4"
     >
       <div className="mb-4 flex items-start justify-between gap-3">
@@ -32,28 +36,46 @@ export function CloudFileDetailsPanel({
           </span>
           <div className="min-w-0">
             <p className="truncate text-sm font-semibold">{file.name}</p>
-            <p className="text-xs text-muted-foreground">{file.starred ? 'Favorite file' : 'Cloud design file'}</p>
+            <p className="text-xs text-muted-foreground">
+              {file.starred
+                ? t('cloudLibrary.details.favoriteFile')
+                : t('cloudLibrary.details.cloudDesignFile')}
+            </p>
           </div>
         </div>
-        <Button variant="ghost" size="icon-sm" aria-label="Close details" onClick={onClose}>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          aria-label={t('cloudLibrary.details.close')}
+          onClick={onClose}
+        >
           <X size={14} />
         </Button>
       </div>
 
       <dl className="space-y-3 text-xs">
-        <DetailRow label="Revision" value={`rev ${file.revision}`} />
-        <DetailRow label="Project" value={projectName} />
-        <DetailRow label="Location" value={location} />
-        <DetailRow label="Updated" value={updatedLabel} />
-        <DetailRow label="Created" value={createdLabel} />
+        <DetailRow label={t('cloudLibrary.details.revision')} value={`rev ${file.revision}`} />
+        <DetailRow label={t('cloudLibrary.details.project')} value={projectName} />
+        <DetailRow label={t('cloudLibrary.details.location')} value={location} />
+        <DetailRow label={t('cloudLibrary.details.updated')} value={updatedLabel} />
+        <DetailRow label={t('cloudLibrary.details.created')} value={createdLabel} />
         <div className="flex items-center justify-between gap-3 border-t border-border pt-3">
-          <dt className="text-muted-foreground">Starred</dt>
+          <dt className="text-muted-foreground">{t('cloudLibrary.details.starred')}</dt>
           <dd className="flex items-center gap-1 font-medium">
             <Star size={13} className={file.starred ? 'fill-current text-primary' : 'text-muted-foreground'} />
-            {file.starred ? 'Yes' : 'No'}
+            {file.starred ? t('common.yes') : t('common.no')}
           </dd>
         </div>
       </dl>
+      <Button
+        variant="outline"
+        size="sm"
+        className="mt-4 w-full"
+        onClick={() => void navigate({ to: '/tasks', search: { fileId: file.id } })}
+      >
+        <ListTodo size={14} />
+        {t('cloudLibrary.details.openFileTasks')}
+      </Button>
       <CloudFileSharingSection file={file} />
     </aside>
   );

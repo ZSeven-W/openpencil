@@ -1,4 +1,5 @@
 import { FileCode2 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { cn } from '@/lib/utils';
 import type { SaveCodegenFileInput } from '@/types/cloud';
 
@@ -13,12 +14,13 @@ function getDepth(path: string): number {
 }
 
 export default function CodeFileTree({ files, selectedPath, onSelect }: CodeFileTreeProps) {
+  const { t } = useTranslation();
   if (files.length === 0) return null;
 
   return (
     <div className="shrink-0 border-b border-border/50 bg-muted/20">
       <div className="flex items-center justify-between px-2 py-1.5 text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
-        <span>Files</span>
+        <span>{t('codePanel.files')}</span>
         <span>{files.length}</span>
       </div>
       <div className="max-h-28 overflow-auto px-1 pb-1">

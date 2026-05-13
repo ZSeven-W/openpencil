@@ -1,0 +1,4 @@
+[     276ms] [ERROR] Failed to load resource: the server responded with a status of 404 () @ http://localhost:3010/favicon.ico:0
+[     352ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:3010/node_modules/.vite/deps/react-dom_client.js?v=a41b5b22:20102
+[     354ms] [INFO] 🌐 i18next is made possible by our own product, Locize — consider powering your project with managed localization (AI, CDN, integrations): https://locize.com 💙 @ http://localhost:3010/node_modules/.vite/deps/chunk-EZBKAI6A.js?v=a41b5b22:1783
+[     608ms] [VERBOSE] [DOM] Input elements should have autocomplete attributes (suggested: "current-password"): (More info: https://goo.gl/9p2vKq) %o @ http://localhost:3010/:0

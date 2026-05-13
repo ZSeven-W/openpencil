@@ -1,0 +1,186 @@
+- generic [ref=e19]:
+  - banner [ref=e20]:
+    - generic [ref=e21]:
+      - generic [ref=e22]:
+        - button "返回任务中心" [ref=e23]:
+          - img
+          - text: 返回任务中心
+        - generic [ref=e24]:
+          - img [ref=e25]
+          - heading "Worker 管理" [level=1] [ref=e36]
+        - paragraph [ref=e37]: 监控 Worker 心跳、Provider 健康、失败重放和队列可靠性。
+      - generic [ref=e38]:
+        - button "重放当前页" [disabled]:
+          - img
+          - text: 重放当前页
+        - button "刷新" [ref=e138]
+  - main [ref=e39]:
+    - generic [ref=e40]:
+      - generic [ref=e41]:
+        - generic [ref=e42]:
+          - img [ref=e43]
+          - text: 总数
+        - paragraph [ref=e45]: "1"
+      - generic [ref=e46]:
+        - generic [ref=e47]:
+          - img [ref=e48]
+          - text: 运行中
+        - paragraph [ref=e51]: "0"
+      - generic [ref=e52]:
+        - generic [ref=e53]:
+          - img [ref=e54]
+          - text: 死信
+        - paragraph [ref=e58]: "0"
+      - generic [ref=e59]:
+        - generic [ref=e60]:
+          - img [ref=e61]
+          - text: 失败率
+        - paragraph [ref=e64]: 0%
+        - paragraph [ref=e65]: 平均耗时 1857.3 s
+    - generic [ref=e67]:
+      - generic [ref=e68]:
+        - heading "队列权限" [level=2] [ref=e69]
+        - paragraph [ref=e70]: 队列角色：admin
+      - generic [ref=e71]:
+        - generic [ref=e72]: "查看 Worker: 是"
+        - generic [ref=e73]: "重放失败任务: 是"
+        - generic [ref=e74]: "管理 Provider: 是"
+    - generic [ref=e75]:
+      - generic [ref=e76]:
+        - img [ref=e77]
+        - heading "运行统计" [level=2] [ref=e80]
+      - generic [ref=e81]:
+        - generic [ref=e82]:
+          - paragraph [ref=e83]: 活跃
+          - paragraph [ref=e84]: "1"
+        - generic [ref=e85]:
+          - paragraph [ref=e86]: 失联
+          - paragraph [ref=e87]: "0"
+        - generic [ref=e88]:
+          - paragraph [ref=e89]: 统计分桶
+          - paragraph [ref=e90]: "1"
+      - generic [ref=e140]:
+        - generic [ref=e141]:
+          - generic [ref=e142]: 2026-05-12
+          - generic [ref=e143]: 0%
+        - generic "2026-05-12：共 1 个，失败 0 个" [ref=e144]
+        - paragraph [ref=e146]: "总数: 1 · 已完成: 1 · 失败: 0"
+      - generic [ref=e147]:
+        - heading "Provider 运行统计" [level=3] [ref=e148]
+        - generic [ref=e149]:
+          - generic [ref=e150]: openai
+          - generic "openai：共 1 个，失败 0 个" [ref=e151]
+          - generic [ref=e153]: 0%
+    - generic [ref=e92]:
+      - generic [ref=e93]:
+        - text: Provider
+        - textbox "Provider" [ref=e94]:
+          - /placeholder: openai
+      - generic [ref=e95]:
+        - text: 失败类型
+        - combobox "失败类型" [ref=e96]:
+          - option "全部" [selected]
+          - option "速率限制"
+          - option "超时"
+          - option "Provider 错误"
+          - option "执行错误"
+          - option "已取消"
+      - generic [ref=e97]:
+        - text: 死信开始时间
+        - textbox "死信开始时间" [ref=e98]
+      - generic [ref=e99]:
+        - text: 死信结束时间
+        - textbox "死信结束时间" [ref=e100]
+      - button "按筛选重放" [ref=e154]:
+        - img
+        - text: 按筛选重放
+    - generic [ref=e102]:
+      - generic [ref=e103]:
+        - generic [ref=e104]:
+          - generic [ref=e105]:
+            - heading "Worker 列表" [level=2] [ref=e106]
+            - generic [ref=e210]:
+              - generic [ref=e211]: 1-1 / 1
+              - button "上一页" [disabled]
+              - button "下一页" [disabled]
+          - generic [ref=e157]:
+            - generic [ref=e158]:
+              - generic [ref=e159]: nitro-36170
+              - generic [ref=e160]: 活跃
+            - paragraph [ref=e161]: "最近心跳: 5月13日 14:26:17"
+        - generic [ref=e111]:
+          - generic [ref=e112]:
+            - heading "Provider 健康" [level=2] [ref=e113]
+            - generic [ref=e212]:
+              - generic [ref=e213]: 0-0 / 0
+              - button "上一页" [disabled]
+              - button "下一页" [disabled]
+          - paragraph [ref=e117]: 暂无 Provider 健康数据。
+        - generic [ref=e118]:
+          - heading "Provider 限流配置" [level=2] [ref=e119]
+          - generic [ref=e120]:
+            - generic [ref=e164]:
+              - generic [ref=e165]:
+                - generic [ref=e166]: gemini
+                - generic [ref=e167]:
+                  - checkbox "启用" [checked] [ref=e168]
+                  - text: 启用
+              - generic [ref=e169]:
+                - generic [ref=e170]:
+                  - text: 每分钟上限
+                  - spinbutton "每分钟上限" [ref=e171]: "30"
+                - generic [ref=e172]:
+                  - text: 熔断阈值
+                  - spinbutton "熔断阈值" [ref=e173]: "3"
+                - generic [ref=e174]:
+                  - text: 熔断时长 ms
+                  - spinbutton "熔断时长 ms" [ref=e175]: "60000"
+              - generic [ref=e176]:
+                - generic [ref=e177]:
+                  - text: 变更原因
+                  - textbox "变更原因" [ref=e178]
+                - button "保存配置" [ref=e179]:
+                  - img
+                  - text: 保存配置
+            - generic [ref=e180]:
+              - generic [ref=e181]:
+                - generic [ref=e182]: openai
+                - generic [ref=e183]:
+                  - checkbox "启用" [checked] [ref=e184]
+                  - text: 启用
+              - generic [ref=e185]:
+                - generic [ref=e186]:
+                  - text: 每分钟上限
+                  - spinbutton "每分钟上限" [ref=e187]: "31"
+                - generic [ref=e188]:
+                  - text: 熔断阈值
+                  - spinbutton "熔断阈值" [ref=e189]: "3"
+                - generic [ref=e190]:
+                  - text: 熔断时长 ms
+                  - spinbutton "熔断时长 ms" [ref=e191]: "60000"
+              - generic [ref=e192]:
+                - generic [ref=e193]:
+                  - text: 变更原因
+                  - textbox "变更原因" [ref=e194]: browser acceptance capacity check
+                - button "保存配置" [active] [ref=e195]:
+                  - img
+                  - text: 保存配置
+      - complementary [ref=e122]:
+        - generic [ref=e123]:
+          - heading "失败重放" [level=2] [ref=e124]
+          - generic [ref=e214]:
+            - generic [ref=e215]: 0-0 / 0
+            - button "上一页" [disabled]
+            - button "下一页" [disabled]
+        - paragraph [ref=e128]: 暂无需要重放的失败任务。
+    - generic [ref=e129]:
+      - generic [ref=e130]:
+        - img [ref=e131]
+        - heading "配置变更历史" [level=2] [ref=e135]
+      - generic [ref=e216]:
+        - generic [ref=e217]:
+          - generic [ref=e218]: openai
+          - generic [ref=e219]: 5月13日 14:27:02
+        - paragraph [ref=e220]: linlingqin77@qq.com
+        - paragraph [ref=e221]: browser acceptance capacity check
+        - paragraph [ref=e222]: "{\"enabled\":true,\"provider\":\"openai\",\"created_at\":\"2026-05-13T05:31:14.413279+00:00\",\"updated_at\":\"2026-05-13T06:27:01.696+00:00\",\"updated_by\":\"2013f317-8f92-4fd0-bde9-03f866e40348\",\"max_per_minute\":31,\"circuit_open_ms\":60000,\"circuit_threshold\":3}"

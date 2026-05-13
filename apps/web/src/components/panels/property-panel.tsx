@@ -175,8 +175,10 @@ export default function PropertyPanel({ embedded }: { embedded?: boolean } = {})
     }
   };
 
+  const panelKey = `${activeId}:${displayNode.type}`;
+
   const content = (
-    <>
+    <div key={panelKey} className="flex min-h-0 flex-1 flex-col">
       {/* Header */}
       <div className="h-8 flex items-center px-2 border-b border-border gap-1 shrink-0">
         {(nodeIsReusable || nodeIsInstance) && (
@@ -385,7 +387,7 @@ export default function PropertyPanel({ embedded }: { embedded?: boolean } = {})
           <ExportSection nodeId={node.id} nodeName={node.name ?? node.type} />
         </div>
       </div>
-    </>
+    </div>
   );
 
   if (embedded) return content;

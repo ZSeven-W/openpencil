@@ -36,7 +36,11 @@ import { initAppStorage } from '@/utils/app-storage';
 import { getRecentFiles } from '@/utils/recent-files';
 import SkiaCanvas from '@/canvas/skia/skia-canvas';
 
-export default function EditorLayout() {
+interface EditorLayoutProps {
+  generationId?: string;
+}
+
+export default function EditorLayout({ generationId }: EditorLayoutProps = {}) {
   const toggleMinimize = useAIStore((s) => s.toggleMinimize);
   const hasSelection = useCanvasStore((s) => s.selection.activeId !== null);
   const layerPanelOpen = useCanvasStore((s) => s.layerPanelOpen);
@@ -81,6 +85,12 @@ export default function EditorLayout() {
       delete (window as any).__showUnsavedDialog;
     };
   }, [showUnsavedDialog]);
+
+  useEffect(() => {
+    if (generationId) {
+      useCanvasStore.getState().setRightPanelTab('code');
+    }
+  }, [generationId]);
 
   // Phase 4c：在编辑器生命周期内只挂载一次 Git 自动保存订阅器。
   // `initAutosaveSubscriber()` 是幂等的，会先检查现有句柄，
@@ -247,7 +257,7 @@ export default function EditorLayout() {
               {/* 展开的 AI 面板（浮动、可拖动） */}
               <AIChatPanel />
             </div>
-            {hasSelection && <RightPanel />}
+            {(hasSelection || generationId) && <RightPanel generationId={generationId} />}
           </div>
         </div>
         <ExportDialog open={exportOpen} onClose={closeExport} />

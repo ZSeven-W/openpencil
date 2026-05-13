@@ -1,0 +1,213 @@
+- generic [ref=e107]:
+  - banner [ref=e108]:
+    - generic [ref=e109]:
+      - generic [ref=e110]:
+        - button "返回任务中心" [ref=e111]:
+          - img
+          - text: 返回任务中心
+        - generic [ref=e112]:
+          - img [ref=e113]
+          - heading "Worker 管理" [level=1] [ref=e124]
+        - paragraph [ref=e125]: 监控 Worker 心跳、Provider 健康、失败重放和队列可靠性。
+      - generic [ref=e126]:
+        - button "重放当前页" [disabled]:
+          - img
+          - text: 重放当前页
+        - button "刷新" [ref=e127]
+  - main [ref=e128]:
+    - generic [ref=e129]:
+      - generic [ref=e130]:
+        - generic [ref=e131]:
+          - img [ref=e132]
+          - text: 总数
+        - paragraph [ref=e134]: "2"
+      - generic [ref=e135]:
+        - generic [ref=e136]:
+          - img [ref=e137]
+          - text: 运行中
+        - paragraph [ref=e140]: "0"
+      - generic [ref=e141]:
+        - generic [ref=e142]:
+          - img [ref=e143]
+          - text: 死信
+        - paragraph [ref=e147]: "0"
+      - generic [ref=e148]:
+        - generic [ref=e149]:
+          - img [ref=e150]
+          - text: 失败率
+        - paragraph [ref=e153]: 0%
+        - paragraph [ref=e154]: 平均耗时 1032.5 s
+    - generic [ref=e156]:
+      - generic [ref=e157]:
+        - heading "队列权限" [level=2] [ref=e158]
+        - paragraph [ref=e159]: 队列角色：admin
+      - generic [ref=e160]:
+        - generic [ref=e161]: "查看 Worker: 是"
+        - generic [ref=e162]: "重放失败任务: 是"
+        - generic [ref=e163]: "管理 Provider: 是"
+    - generic [ref=e164]:
+      - generic [ref=e165]:
+        - img [ref=e166]
+        - heading "运行统计" [level=2] [ref=e169]
+      - generic [ref=e170]:
+        - generic [ref=e171]:
+          - paragraph [ref=e172]: 活跃
+          - paragraph [ref=e173]: "1"
+        - generic [ref=e174]:
+          - paragraph [ref=e175]: 失联
+          - paragraph [ref=e176]: "2"
+        - generic [ref=e177]:
+          - paragraph [ref=e178]: 统计分桶
+          - paragraph [ref=e179]: "2"
+      - generic [ref=e180]:
+        - generic [ref=e181]:
+          - generic [ref=e182]:
+            - generic [ref=e183]: 2026-05-12
+            - generic [ref=e184]: 0%
+          - generic "2026-05-12：共 1 个，失败 0 个" [ref=e185]
+          - paragraph [ref=e187]: "总数: 1 · 已完成: 1 · 失败: 0"
+        - generic [ref=e188]:
+          - generic [ref=e189]:
+            - generic [ref=e190]: 2026-05-13
+            - generic [ref=e191]: 0%
+          - generic "2026-05-13：共 1 个，失败 0 个" [ref=e192]
+          - paragraph [ref=e194]: "总数: 1 · 已完成: 1 · 失败: 0"
+      - generic [ref=e195]:
+        - heading "Provider 运行统计" [level=3] [ref=e196]
+        - generic [ref=e197]:
+          - generic [ref=e198]: openai
+          - generic "openai：共 2 个，失败 0 个" [ref=e199]
+          - generic [ref=e201]: 0%
+    - generic [ref=e203]:
+      - generic [ref=e204]:
+        - text: Provider
+        - textbox "Provider" [ref=e205]:
+          - /placeholder: openai
+      - generic [ref=e206]:
+        - text: 失败类型
+        - combobox "失败类型" [ref=e207]:
+          - option "全部" [selected]
+          - option "速率限制"
+          - option "超时"
+          - option "Provider 错误"
+          - option "执行错误"
+          - option "已取消"
+      - generic [ref=e208]:
+        - text: 死信开始时间
+        - textbox "死信开始时间" [ref=e209]
+      - generic [ref=e210]:
+        - text: 死信结束时间
+        - textbox "死信结束时间" [ref=e211]
+      - button "按筛选重放" [ref=e213]:
+        - img
+        - text: 按筛选重放
+    - generic [ref=e214]:
+      - generic [ref=e215]:
+        - generic [ref=e216]:
+          - generic [ref=e217]:
+            - heading "Worker 列表" [level=2] [ref=e218]
+            - generic [ref=e219]:
+              - generic [ref=e220]: 1-3 / 3
+              - button "上一页" [disabled]
+              - button "下一页" [disabled]
+          - generic [ref=e221]:
+            - generic [ref=e222]:
+              - generic [ref=e223]:
+                - generic [ref=e224]: standalone-53768-1778667371755
+                - generic [ref=e225]: 活跃
+              - paragraph [ref=e226]: "最近心跳: 5月13日 18:25:12"
+            - generic [ref=e227]:
+              - generic [ref=e228]:
+                - generic [ref=e229]: validation-worker-20260513
+                - generic [ref=e230]: 空闲
+              - paragraph [ref=e231]: "最近心跳: 5月13日 17:36:29"
+            - generic [ref=e232]:
+              - generic [ref=e233]:
+                - generic [ref=e234]: nitro-36170
+                - generic [ref=e235]: 空闲
+              - paragraph [ref=e236]: "最近心跳: 5月13日 14:31:47"
+        - generic [ref=e237]:
+          - generic [ref=e238]:
+            - heading "Provider 健康" [level=2] [ref=e239]
+            - generic [ref=e240]:
+              - generic [ref=e241]: 1-1 / 1
+              - button "上一页" [disabled]
+              - button "下一页" [disabled]
+          - generic [ref=e243]:
+            - generic [ref=e244]:
+              - generic [ref=e245]: openai
+              - generic [ref=e246]:
+                - img [ref=e247]
+                - text: 熔断关闭
+            - generic [ref=e250]:
+              - generic [ref=e251]: "总数: 1"
+              - generic [ref=e252]: "失败: 0"
+              - generic [ref=e253]: "失败率: 0%"
+        - generic [ref=e254]:
+          - heading "Provider 限流配置" [level=2] [ref=e255]
+          - generic [ref=e256]:
+            - generic [ref=e257]:
+              - generic [ref=e258]:
+                - generic [ref=e259]: gemini
+                - generic [ref=e260]:
+                  - checkbox "启用" [checked] [ref=e261]
+                  - text: 启用
+              - generic [ref=e262]:
+                - generic [ref=e263]:
+                  - text: 每分钟上限
+                  - spinbutton "每分钟上限" [ref=e264]: "30"
+                - generic [ref=e265]:
+                  - text: 熔断阈值
+                  - spinbutton "熔断阈值" [ref=e266]: "3"
+                - generic [ref=e267]:
+                  - text: 熔断时长 ms
+                  - spinbutton "熔断时长 ms" [ref=e268]: "60000"
+              - generic [ref=e269]:
+                - generic [ref=e270]:
+                  - text: 变更原因
+                  - textbox "变更原因" [ref=e271]
+                - button "保存配置" [ref=e272]:
+                  - img
+                  - text: 保存配置
+            - generic [ref=e273]:
+              - generic [ref=e274]:
+                - generic [ref=e275]: openai
+                - generic [ref=e276]:
+                  - checkbox "启用" [checked] [ref=e277]
+                  - text: 启用
+              - generic [ref=e278]:
+                - generic [ref=e279]:
+                  - text: 每分钟上限
+                  - spinbutton "每分钟上限" [ref=e280]: "30"
+                - generic [ref=e281]:
+                  - text: 熔断阈值
+                  - spinbutton "熔断阈值" [ref=e282]: "3"
+                - generic [ref=e283]:
+                  - text: 熔断时长 ms
+                  - spinbutton "熔断时长 ms" [ref=e284]: "60000"
+              - generic [ref=e285]:
+                - generic [ref=e286]:
+                  - text: 变更原因
+                  - textbox "变更原因" [ref=e287]
+                - button "保存配置" [ref=e288]:
+                  - img
+                  - text: 保存配置
+      - complementary [ref=e289]:
+        - generic [ref=e290]:
+          - heading "失败重放" [level=2] [ref=e291]
+          - generic [ref=e292]:
+            - generic [ref=e293]: 0-0 / 0
+            - button "上一页" [disabled]
+            - button "下一页" [disabled]
+        - paragraph [ref=e295]: 暂无需要重放的失败任务。
+    - generic [ref=e296]:
+      - generic [ref=e297]:
+        - img [ref=e298]
+        - heading "配置变更历史" [level=2] [ref=e302]
+      - generic [ref=e304]:
+        - generic [ref=e305]:
+          - generic [ref=e306]: openai
+          - generic [ref=e307]: 5月13日 14:27:02
+        - paragraph [ref=e308]: linlingqin77@qq.com
+        - paragraph [ref=e309]: browser acceptance capacity check
+        - paragraph [ref=e310]: "{\"enabled\":true,\"provider\":\"openai\",\"created_at\":\"2026-05-13T05:31:14.413279+00:00\",\"updated_at\":\"2026-05-13T06:27:01.696+00:00\",\"updated_by\":\"2013f317-8f92-4fd0-bde9-03f866e40348\",\"max_per_minute\":31,\"circuit_open_ms\":60000,\"circuit_threshold\":3}"

@@ -1,11 +1,26 @@
 import { useState, useRef, useCallback, useEffect, useMemo, memo } from 'react';
-import { Copy, Download, FileJson, RefreshCw, Sparkles, Check, AlertTriangle } from 'lucide-react';
+import {
+  Copy,
+  Download,
+  FileJson,
+  RefreshCw,
+  Sparkles,
+  Check,
+  AlertTriangle,
+  WandSparkles,
+} from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import CodeAssetPreviewStrip from './code-asset-preview-strip';
 import CodeHistoryList from './code-history-list';
 import CodeFileTree from './code-file-tree';
 import CodeLocalOutputActions from './code-local-output-actions';
+import {
+  getFileHighlightLanguage,
+  HIGHLIGHT_LANG,
+  TAB_LABELS,
+  triggerDownload,
+} from './code-panel-utils';
 import { resolveCodegenModelConfig } from './codegen-model-config';
 import { getPreviewReasonKey, openPreviewHtml } from './code-preview-window';
 import ProgressItem from './code-progress-item';
@@ -14,86 +29,34 @@ import { useDocumentStore, getActivePageChildren } from '@/stores/document-store
 import { useAIStore } from '@/stores/ai-store';
 import { useAgentSettingsStore } from '@/stores/agent-settings-store';
 import { useCodegenStore, type CodegenHistoryEntry } from '@/stores/codegen-store';
+import { useCodegenJobStore } from '@/stores/codegen-job-store';
 import { generateCode } from '@/services/ai/code-generation-pipeline';
 import { buildCodegenBundleManifest } from '@/services/ai/codegen-assets';
 import { buildCodegenFiles, getDefaultCodegenFilePath } from '@/services/ai/codegen-files';
-import { buildCodegenTarget, exportCodeGenerationZip } from '@/services/cloud/codegen-history';
+import { buildCodegenTarget, exportCodeGenerationZip, getCodeGenerationHistoryDetail } from '@/services/cloud/codegen-history';
 import { buildCodePreviewDocument } from '@/services/cloud/codegen-preview';
 import { buildAIStructureBundle, encodeAIStructureBundleZip } from '@/services/ai/structure-bundle';
 import { highlightCode } from '@/utils/syntax-highlight';
 import type { Framework, CodeGenProgress } from '@zseven-w/pen-types';
 import { FRAMEWORKS } from '@zseven-w/pen-types';
 import type { PenNode } from '@/types/pen';
-import type { SaveCodegenFileInput } from '@/types/cloud';
-import type { SyntaxLanguage } from '@/utils/syntax-highlight';
 import { encode as encodeZip } from 'uzip';
 import { useTranslation } from 'react-i18next';
 
 type PanelState = 'empty' | 'generating' | 'complete';
 export type CodePanelView = 'code' | 'history';
 
-const TAB_LABELS: Record<Framework, string> = {
-  react: 'React',
-  vue: 'Vue',
-  svelte: 'Svelte',
-  html: 'HTML',
-  flutter: 'Flutter',
-  swiftui: 'SwiftUI',
-  compose: 'Compose',
-  'react-native': 'RN',
-  uniapp: 'UniApp',
-};
-
-const HIGHLIGHT_LANG: Record<Framework, SyntaxLanguage> = {
-  react: 'jsx',
-  vue: 'html',
-  svelte: 'html',
-  html: 'html',
-  flutter: 'dart',
-  swiftui: 'swift',
-  compose: 'kotlin',
-  'react-native': 'jsx',
-  uniapp: 'html',
-};
-
 const EMPTY_HISTORY: CodegenHistoryEntry[] = [];
 
-function getFileHighlightLanguage(
-  file: SaveCodegenFileInput,
-  fallback: SyntaxLanguage,
-): SyntaxLanguage {
-  if (file.language === 'css' || file.language === 'scss') return 'css';
-  if (file.language === 'dart') return 'dart';
-  if (file.language === 'kotlin') return 'kotlin';
-  if (file.language === 'swift') return 'swift';
-  if (
-    file.language === 'html' ||
-    file.language === 'vue' ||
-    file.language === 'svelte' ||
-    file.language === 'json'
-  ) {
-    return 'html';
-  }
-  if (file.language === 'ts' || file.language === 'tsx') return 'jsx';
-  return fallback;
-}
+type CodePanelProps = { generationId?: string };
 
-function triggerDownload(blob: Blob, fileName: string) {
-  const url = URL.createObjectURL(blob);
-  const link = globalThis.document.createElement('a');
-  link.href = url;
-  link.download = fileName;
-  globalThis.document.body.appendChild(link);
-  link.click();
-  globalThis.document.body.removeChild(link);
-  setTimeout(() => URL.revokeObjectURL(url), 0);
-}
-
-function CodePanelInner() {
+function CodePanelInner({ generationId }: CodePanelProps) {
   const { t } = useTranslation();
   const [copied, setCopied] = useState(false);
   const [panelView, setPanelView] = useState<CodePanelView>('code');
   const [selectedFilePath, setSelectedFilePath] = useState<string | null>(null);
+  const [patchOpen, setPatchOpen] = useState(false);
+  const [patchInstruction, setPatchInstruction] = useState('');
   const activeTab = useCodegenStore((s) => s.activeTab);
   const codeCache = useCodegenStore((s) => s.codeCache);
   const isGenerating = useCodegenStore((s) => s.isGenerating);
@@ -121,6 +84,10 @@ function CodePanelInner() {
   const historyError = useCodegenStore((s) => s.historyError);
   const history = useCodegenStore((s) => s.history[activeTab] ?? EMPTY_HISTORY);
   const selectedHistoryId = useCodegenStore((s) => s.selectedHistoryId[activeTab]);
+  const createBackgroundJob = useCodegenJobStore((s) => s.createJob);
+  const jobLoading = useCodegenJobStore((s) => s.loading);
+  const jobError = useCodegenJobStore((s) => s.error);
+  const lastCreatedJobId = useCodegenJobStore((s) => s.lastCreatedJobId);
 
   const cached = codeCache[activeTab];
   const generatedCode = cached?.code ?? '';
@@ -138,6 +105,8 @@ function CodePanelInner() {
   const getNodeById = useDocumentStore((s) => s.getNodeById);
   const children = useDocumentStore((s) => getActivePageChildren(s.document, activePageId));
   const document = useDocumentStore((s) => s.document);
+  const cloudFileId = useDocumentStore((s) => s.cloudFileId);
+  const cloudRevision = useDocumentStore((s) => s.cloudRevision);
   const variables = document?.variables;
   const model = useAIStore((s) => s.model);
   const modelGroups = useAIStore((s) => s.modelGroups);
@@ -164,10 +133,59 @@ function CodePanelInner() {
     [generatedFiles, selectedFilePath],
   );
   const displayedCode = selectedFile?.content ?? generatedCode;
+  const nodeCount = selectedIds.length > 0 ? selectedIds.length : children.length;
+  const activeHistoryId = cached?.historyId ?? selectedHistoryId ?? null;
+  const canQueueBackgroundJob =
+    nodeCount > 0 && !modelUnavailable && !!cloudFileId && !!cloudRevision && !jobLoading;
+  const targetNodes = useMemo(() => {
+    if (selectedIds.length > 0) {
+      return selectedIds.map((id) => getNodeById(id)).filter((n): n is PenNode => n !== undefined);
+    }
+    return children;
+  }, [children, getNodeById, selectedIds]);
+  const patchTargetLabel = useMemo(() => {
+    if (targetNodes.length === 0) return t('codePanel.patch.noSelection');
+    if (targetNodes.length === 1) return targetNodes[0]?.name || targetNodes[0]?.id;
+    return t('codePanel.patch.multipleSelection', { count: targetNodes.length });
+  }, [targetNodes, t]);
+  const activeHistoryShortId = activeHistoryId ? activeHistoryId.slice(0, 8) : null;
 
   useEffect(() => {
+    if (generationId) return;
     void loadHistory(activeTab, codegenTarget);
-  }, [activeTab, codegenTarget, loadHistory]);
+  }, [activeTab, codegenTarget, generationId, loadHistory]);
+
+  useEffect(() => {
+    if (!generationId) return;
+
+    let cancelled = false;
+    void (async () => {
+      try {
+        const detail = await getCodeGenerationHistoryDetail(generationId);
+        if (cancelled) return;
+        const framework = detail.framework;
+        setPanelView('history');
+        setSelectedFilePath(null);
+        setActiveTab(framework);
+        await loadHistory(framework, {
+          pageId: detail.pageId,
+          targetKind: detail.targetKind,
+          nodeIds: detail.nodeIds,
+          targetHash: detail.targetHash,
+        });
+        if (cancelled) return;
+        selectHistoryEntry(framework, generationId);
+        setPanelView('history');
+        setSelectedFilePath(null);
+      } catch (err) {
+        console.error('[CodePanel] failed to open generation history', err);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [generationId, loadHistory, selectHistoryEntry, setActiveTab]);
 
   useEffect(() => {
     if (generatedFiles.length === 0) {
@@ -192,11 +210,8 @@ function CodePanelInner() {
   }, []);
 
   const getTargetNodes = useCallback((): PenNode[] => {
-    if (selectedIds.length > 0) {
-      return selectedIds.map((id) => getNodeById(id)).filter((n): n is PenNode => n !== undefined);
-    }
-    return children;
-  }, [selectedIds, getNodeById, children]);
+    return targetNodes;
+  }, [targetNodes]);
 
   const handleGenerate = useCallback(async () => {
     const nodes = getTargetNodes();
@@ -237,7 +252,7 @@ function CodePanelInner() {
       setPanelView('code');
     } catch (err) {
       if (!abortController.signal.aborted) {
-        const msg = err instanceof Error ? err.message : 'Code generation failed';
+        const msg = err instanceof Error ? err.message : t('codePanel.error.generationFailed');
         failGeneration(runId, msg);
       }
     }
@@ -253,6 +268,77 @@ function CodePanelInner() {
     saveHistory,
     selectionKey,
     startGeneration,
+    t,
+    variables,
+  ]);
+
+  const handleCreateBackgroundJob = useCallback(async () => {
+    const nodes = getTargetNodes();
+    if (nodes.length === 0 || !modelConfig || !cloudFileId || !cloudRevision) return;
+    await createBackgroundJob({
+      jobKind: 'full_generation',
+      fileId: cloudFileId,
+      framework: activeTab,
+      ...codegenTarget,
+      documentRevision: cloudRevision,
+      model: modelConfig.model ?? model,
+      provider: modelConfig.provider,
+      nodes,
+      variables: variables as Record<string, unknown> | undefined,
+    });
+  }, [
+    activeTab,
+    cloudFileId,
+    cloudRevision,
+    codegenTarget,
+    createBackgroundJob,
+    getTargetNodes,
+    model,
+    modelConfig,
+    variables,
+  ]);
+
+  const handleCreatePatchJob = useCallback(async () => {
+    const nodes = getTargetNodes();
+    const instruction = patchInstruction.trim();
+    if (
+      nodes.length === 0 ||
+      !modelConfig ||
+      !cloudFileId ||
+      !cloudRevision ||
+      !activeHistoryId ||
+      !instruction
+    ) {
+      return;
+    }
+    const job = await createBackgroundJob({
+      jobKind: 'patch_generation',
+      fileId: cloudFileId,
+      framework: activeTab,
+      ...codegenTarget,
+      documentRevision: cloudRevision,
+      model: modelConfig.model ?? model,
+      provider: modelConfig.provider,
+      nodes,
+      variables: variables as Record<string, unknown> | undefined,
+      baseGenerationId: activeHistoryId,
+      patchInstruction: instruction,
+    });
+    if (job) {
+      setPatchInstruction('');
+      setPatchOpen(false);
+    }
+  }, [
+    activeHistoryId,
+    activeTab,
+    cloudFileId,
+    cloudRevision,
+    codegenTarget,
+    createBackgroundJob,
+    getTargetNodes,
+    model,
+    modelConfig,
+    patchInstruction,
     variables,
   ]);
 
@@ -400,8 +486,6 @@ function CodePanelInner() {
     [activeTab, deleteHistoryEntry, t],
   );
 
-  const nodeCount = selectedIds.length > 0 ? selectedIds.length : children.length;
-
   const highlightedHTML = useMemo(() => {
     if (!displayedCode) return '';
     const lang = selectedFile
@@ -484,11 +568,11 @@ function CodePanelInner() {
             <div className="space-y-1">
               <div className="text-xs font-medium text-foreground/80">
                 {nodeCount > 0
-                  ? `${nodeCount} node${nodeCount > 1 ? 's' : ''} selected`
-                  : 'No nodes on page'}
+                  ? t('codePanel.empty.nodeCount', { count: nodeCount })
+                  : t('codePanel.empty.noNodes')}
               </div>
               <div className="text-[11px] text-muted-foreground">
-                Generate production-ready code
+                {t('codePanel.empty.description')}
               </div>
             </div>
             <Button
@@ -498,7 +582,17 @@ function CodePanelInner() {
               className="h-8 gap-1.5 text-xs shadow-sm"
             >
               <Sparkles className="h-3.5 w-3.5" />
-              {`Generate ${TAB_LABELS[activeTab]}`}
+              {t('codePanel.generate', { framework: TAB_LABELS[activeTab] })}
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => void handleCreateBackgroundJob()}
+              disabled={!canQueueBackgroundJob}
+              size="sm"
+              className="h-8 gap-1.5 text-xs"
+            >
+              <RefreshCw className="h-3.5 w-3.5" />
+              {jobLoading ? t('codePanel.background.creating') : t('codePanel.background.create')}
             </Button>
             <Button
               variant="ghost"
@@ -508,11 +602,21 @@ function CodePanelInner() {
               className="h-8 gap-1.5 text-xs"
             >
               <FileJson className="h-3.5 w-3.5" />
-              Export AI Bundle
+              {t('codePanel.exportAiBundle')}
             </Button>
+            {lastCreatedJobId && (
+              <div className="max-w-[260px] rounded-lg border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+                {t('codePanel.background.queued')}
+              </div>
+            )}
+            {jobError && (
+              <div className="max-w-[260px] rounded-lg border border-destructive/20 bg-destructive/8 px-3 py-2 text-xs text-destructive">
+                {jobError}
+              </div>
+            )}
             {generateError && (
               <div className="max-w-[260px] rounded-lg border border-destructive/20 bg-destructive/8 px-3 py-2 text-xs text-destructive">
-                <div className="font-medium">Generation failed</div>
+                <div className="font-medium">{t('codePanel.generationFailed')}</div>
                 <div className="mt-1 break-words opacity-80">{generateError}</div>
               </div>
             )}
@@ -522,7 +626,7 @@ function CodePanelInner() {
               </div>
             )}
             {historyLoading && (
-              <div className="text-[11px] text-muted-foreground">Loading code history...</div>
+              <div className="text-[11px] text-muted-foreground">{t('codePanel.history.loading')}</div>
             )}
             {historyError && (
               <div className="max-w-[260px] rounded-lg border border-destructive/20 bg-destructive/8 px-3 py-2 text-xs text-destructive">
@@ -532,7 +636,7 @@ function CodePanelInner() {
             {selectionChanged && (
               <div className="flex items-center gap-1.5 text-[11px] text-amber-500">
                 <AlertTriangle className="h-3 w-3" />
-                Selection changed since last generation
+                {t('codePanel.selectionChangedSinceLastGeneration')}
               </div>
             )}
           </div>
@@ -549,7 +653,7 @@ function CodePanelInner() {
 
             <div className="flex flex-col gap-1 p-3">
               <ProgressItem
-                label="Planning"
+                label={t('codePanel.step.planning')}
                 status={
                   planningStatus === 'running'
                     ? 'running'
@@ -576,7 +680,7 @@ function CodePanelInner() {
 
               {assemblyStatus !== 'idle' && (
                 <ProgressItem
-                  label="Assembly"
+                  label={t('codePanel.step.assembly')}
                   status={
                     assemblyStatus === 'running'
                       ? 'running'
@@ -594,7 +698,7 @@ function CodePanelInner() {
                 onClick={handleCancel}
                 className="w-full rounded-md py-1.5 text-[11px] font-medium text-muted-foreground transition-colors hover:text-foreground hover:bg-muted/60"
               >
-                Cancel
+                {t('common.cancel')}
               </button>
             </div>
           </div>
@@ -605,21 +709,21 @@ function CodePanelInner() {
             {isDegraded && (
               <div className="flex items-center gap-2 border-b border-amber-500/20 bg-amber-500/8 px-3 py-1.5 text-[11px] text-amber-600 shrink-0">
                 <AlertTriangle className="h-3 w-3 shrink-0" />
-                Some chunks failed. Output may not compile.
+                {t('codePanel.degradedWarning')}
               </div>
             )}
             {selectionChanged && (
               <div className="flex items-center justify-between border-b border-border/50 bg-muted/40 px-3 py-1 text-[11px] text-muted-foreground shrink-0">
                 <span className="flex items-center gap-1.5">
                   <AlertTriangle className="h-3 w-3 text-amber-500" />
-                  Selection changed
+                  {t('codePanel.selectionChanged')}
                 </span>
                 <button
                   type="button"
                   className="text-[11px] font-medium text-primary hover:text-primary/80 transition-colors"
                   onClick={handleGenerate}
                 >
-                  Regenerate
+                  {t('codePanel.regenerate')}
                 </button>
               </div>
             )}
@@ -628,15 +732,13 @@ function CodePanelInner() {
                 <div className="flex items-center gap-2 text-xs font-medium text-foreground">
                   <Download className="h-3.5 w-3.5 shrink-0" />
                   {activeTab === 'uniapp'
-                    ? 'UniApp generations download as a ZIP bundle.'
-                    : `This generation includes ${exportedAssets.length} image asset${
-                        exportedAssets.length > 1 ? 's' : ''
-                      }. Download will export a ZIP bundle.`}
+                    ? t('codePanel.bundle.uniappTitle')
+                    : t('codePanel.bundle.assetsTitle', { count: exportedAssets.length })}
                 </div>
                 <div className="mt-1 text-[11px] text-muted-foreground">
                   {activeTab === 'uniapp'
-                    ? 'The ZIP contains generated UniApp files, the raw bundle, exported assets, and an OpenPencil manifest.'
-                    : 'The ZIP contains the code file, exported assets, and a manifest.json index.'}
+                    ? t('codePanel.bundle.uniappDescription')
+                    : t('codePanel.bundle.assetsDescription')}
                 </div>
               </div>
             )}
@@ -698,6 +800,73 @@ function CodePanelInner() {
               )}
             </div>
             {panelView !== 'history' && (
+              <>
+              {patchOpen && (
+                <div className="border-t border-border bg-card p-2">
+                  <div className="mb-2 rounded-md border border-border bg-muted/25 p-2 text-[11px]">
+                    <div className="grid gap-1.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-muted-foreground">{t('codePanel.patch.selectedLayer')}</span>
+                        <span className="min-w-0 truncate font-medium text-foreground">
+                          {patchTargetLabel}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-muted-foreground">{t('codePanel.patch.baseGeneration')}</span>
+                        <span className="font-mono text-[10px] text-foreground">
+                          {activeHistoryShortId ?? '-'}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-muted-foreground">{t('codePanel.patch.framework')}</span>
+                        <span className="font-medium text-foreground">{TAB_LABELS[activeTab]}</span>
+                      </div>
+                      {patchInstruction.trim() && (
+                        <div>
+                          <div className="text-muted-foreground">{t('codePanel.patch.preview')}</div>
+                          <div className="mt-1 line-clamp-2 whitespace-pre-wrap text-foreground">
+                            {patchInstruction.trim()}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <textarea
+                    value={patchInstruction}
+                    onChange={(event) => setPatchInstruction(event.target.value)}
+                    placeholder={t('codePanel.patch.placeholder')}
+                    className="min-h-20 w-full resize-none rounded-md border border-input bg-background p-2 text-xs text-foreground outline-none focus:border-ring"
+                  />
+                  <div className="mt-2 flex items-center justify-end gap-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 text-xs"
+                      onClick={() => setPatchOpen(false)}
+                    >
+                      {t('common.cancel')}
+                    </Button>
+                    <Button
+                      size="sm"
+                      className="h-7 text-xs"
+                      onClick={() => void handleCreatePatchJob()}
+                      disabled={
+                        !canQueueBackgroundJob || !activeHistoryId || !patchInstruction.trim()
+                      }
+                    >
+                      {jobLoading ? t('codePanel.background.creating') : t('codePanel.patch.queue')}
+                    </Button>
+                  </div>
+                </div>
+              )}
+              {(lastCreatedJobId || jobError) && (
+                <div className="border-t border-border bg-card px-2 py-1.5 text-[11px]">
+                  {lastCreatedJobId && (
+                    <div className="text-muted-foreground">{t('codePanel.background.queued')}</div>
+                  )}
+                  {jobError && <div className="text-destructive">{jobError}</div>}
+                </div>
+              )}
               <div className="flex items-center gap-px border-t border-border px-1 py-1 shrink-0 bg-card">
                 <Button
                   variant="ghost"
@@ -713,7 +882,9 @@ function CodePanelInner() {
                   ) : (
                     <Copy className="mr-1 h-3 w-3 shrink-0" />
                   )}
-                  <span className="truncate">{copied ? 'Copied' : 'Copy'}</span>
+                  <span className="truncate">
+                    {copied ? t('codePanel.copied') : t('codePanel.copy')}
+                  </span>
                 </Button>
                 <div className="w-px h-4 bg-border/50" />
                 <Button
@@ -724,7 +895,7 @@ function CodePanelInner() {
                 >
                   <Download className="mr-1 h-3 w-3 shrink-0" />
                   <span className="truncate">
-                    {requiresZipBundle ? 'Download ZIP' : 'Download'}
+                    {requiresZipBundle ? t('codePanel.downloadZip') : t('codePanel.download')}
                   </span>
                 </Button>
                 <div className="w-px h-4 bg-border/50" />
@@ -735,7 +906,31 @@ function CodePanelInner() {
                   onClick={() => void handleDownloadStructureBundle()}
                 >
                   <FileJson className="mr-1 h-3 w-3 shrink-0" />
-                  <span className="truncate">AI Bundle</span>
+                  <span className="truncate">{t('codePanel.aiBundle')}</span>
+                </Button>
+                <div className="w-px h-4 bg-border/50" />
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 flex-1 px-1 text-[11px] text-muted-foreground hover:text-foreground"
+                  onClick={() => void handleCreateBackgroundJob()}
+                  disabled={!canQueueBackgroundJob}
+                >
+                  <RefreshCw className="mr-1 h-3 w-3 shrink-0" />
+                  <span className="truncate">
+                    {jobLoading ? t('codePanel.background.creating') : t('codePanel.background.create')}
+                  </span>
+                </Button>
+                <div className="w-px h-4 bg-border/50" />
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 flex-1 px-1 text-[11px] text-muted-foreground hover:text-foreground"
+                  onClick={() => setPatchOpen((open) => !open)}
+                  disabled={!canQueueBackgroundJob || !activeHistoryId}
+                >
+                  <WandSparkles className="mr-1 h-3 w-3 shrink-0" />
+                  <span className="truncate">{t('codePanel.patch.action')}</span>
                 </Button>
                 <div className="w-px h-4 bg-border/50" />
                 <Button
@@ -746,9 +941,10 @@ function CodePanelInner() {
                   disabled={modelUnavailable}
                 >
                   <RefreshCw className="mr-1 h-3 w-3 shrink-0" />
-                  <span className="truncate">Regenerate</span>
+                  <span className="truncate">{t('codePanel.regenerate')}</span>
                 </Button>
               </div>
+              </>
             )}
           </>
         )}

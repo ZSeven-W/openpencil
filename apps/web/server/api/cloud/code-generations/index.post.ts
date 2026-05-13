@@ -57,6 +57,7 @@ const createSchema = z.object({
   provider: z.string().optional(),
   error: z.string().optional(),
   chunks: z.array(chunkSchema).default([]),
+  metadata: z.record(z.string(), z.unknown()).optional(),
 });
 
 export default defineEventHandler(async (event) => {
@@ -102,6 +103,7 @@ export default defineEventHandler(async (event) => {
     provider: parsed.data.provider,
     error: parsed.data.error,
     chunks: parsed.data.chunks,
+    metadata: parsed.data.metadata,
   });
   setResponseStatus(event, 201);
   return { data: saved };

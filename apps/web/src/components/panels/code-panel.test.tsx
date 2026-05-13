@@ -4,6 +4,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PenNode } from '@/types/pen';
 import { useCodegenStore } from '@/stores/codegen-store';
+import { useCodegenJobStore } from '@/stores/codegen-job-store';
 import type { CloudCodeGeneration } from '@/types/cloud';
 import type { GitAPI } from '@/services/git-types';
 import '@/i18n';
@@ -27,6 +28,7 @@ const aiState = {
 };
 const documentState = {
   cloudFileId: undefined as string | undefined,
+  cloudRevision: 2 as number | undefined,
 };
 const pageChildren = [selectedNode];
 
@@ -35,6 +37,28 @@ vi.mock('@/stores/canvas-store', () => ({
 }));
 
 const listCodeGenerationHistoryMock = vi.fn(async () => [] as CloudCodeGeneration[]);
+const getCodeGenerationHistoryDetailMock = vi.fn(async (generationId: string) => ({
+  id: generationId,
+  fileId: 'file-1',
+  pageId: 'page-2',
+  framework: 'uniapp',
+  targetKind: 'page',
+  nodeIds: [],
+  targetHash: 'hash-2',
+  documentRevision: 6,
+  status: 'done',
+  finalCode: '---FILE: pages/index/index.vue---\n<template><view>Target history</view></template>',
+  degraded: false,
+  assetsManifest: [],
+  model: 'target-model',
+  provider: 'openai',
+  error: null,
+  metadata: {},
+  createdAt: '2026-05-13T08:00:00.000Z',
+  completedAt: '2026-05-13T08:00:03.000Z',
+  files: [],
+  chunks: [],
+} satisfies CloudCodeGeneration & { files: unknown[]; chunks: unknown[] }));
 const exportCodeGenerationZipMock = vi.fn(async (_generationId: string) => ({
   blob: new Blob([new Uint8Array([4, 5, 6])], { type: 'application/zip' }),
   fileName: 'design-uniapp.zip',
@@ -55,6 +79,7 @@ const promoteCodeGenerationHistoryMock = vi.fn(async (generationId: string) => (
   model: 'model-a',
   provider: 'builtin',
   error: null,
+  metadata: {},
   createdAt: '2026-05-09T10:00:00.000Z',
   completedAt: '2026-05-09T10:00:01.000Z',
   promotedAt: '2026-05-09T10:05:00.000Z',
@@ -76,6 +101,7 @@ const saveCodeGenerationHistoryMock = vi.fn(async () => ({
   model: 'test-model',
   provider: 'builtin',
   error: null,
+  metadata: {},
   createdAt: '2026-05-09T10:00:00.000Z',
   completedAt: '2026-05-09T10:00:01.000Z',
   chunks: [],
@@ -100,6 +126,8 @@ vi.mock('@/services/cloud/codegen-history', async () => {
     },
     listCodeGenerationHistory: (_input: Parameters<typeof actual.listCodeGenerationHistory>[0]) =>
       listCodeGenerationHistoryMock(),
+    getCodeGenerationHistoryDetail: (generationId: string) =>
+      getCodeGenerationHistoryDetailMock(generationId),
     promoteCodeGenerationHistory: (generationId: string) => {
       promoteCodeGenerationHistoryMock(generationId);
       return Promise.resolve({
@@ -118,6 +146,7 @@ vi.mock('@/services/cloud/codegen-history', async () => {
         model: 'model-a',
         provider: 'builtin',
         error: null,
+        metadata: {},
         createdAt: '2026-05-09T10:00:00.000Z',
         completedAt: '2026-05-09T10:00:01.000Z',
         promotedAt: '2026-05-09T10:05:00.000Z',
@@ -135,6 +164,7 @@ vi.mock('@/stores/document-store', () => ({
         getNodeById: (id: string) => (id === 'node-1' ? selectedNode : undefined),
         document: { variables: {} },
         cloudFileId: documentState.cloudFileId,
+        cloudRevision: documentState.cloudRevision,
       }),
     {
       getState: () => ({
@@ -221,14 +251,17 @@ afterEach(() => {
   generateCodeMock.mockImplementation(defaultGenerateCodeImplementation);
   listCodeGenerationHistoryMock.mockReset();
   listCodeGenerationHistoryMock.mockResolvedValue([]);
+  getCodeGenerationHistoryDetailMock.mockClear();
   promoteCodeGenerationHistoryMock.mockClear();
   deleteCodeGenerationHistoryMock.mockClear();
   exportCodeGenerationZipMock.mockClear();
   saveCodeGenerationHistoryMock.mockClear();
   useCodegenStore.getState().reset();
+  useCodegenJobStore.getState().reset();
   aiState.model = 'test-model';
   aiState.modelGroups = [{ provider: 'builtin', models: [{ value: 'test-model' }] }];
   documentState.cloudFileId = undefined;
+  documentState.cloudRevision = 2;
 });
 
 function mockObjectUrls() {
@@ -294,6 +327,7 @@ describe('CodePanel export affordances', () => {
         model: 'model-a',
         provider: 'builtin',
         error: null,
+        metadata: {},
         createdAt: '2026-05-09T10:00:00.000Z',
         completedAt: '2026-05-09T10:00:01.000Z',
       },
@@ -322,6 +356,114 @@ describe('CodePanel export affordances', () => {
       expect(screen.getByText('Assets')).toBeTruthy();
       expect(screen.getByAltText('Hero Card')).toBeTruthy();
     });
+  });
+
+  it('shows background generation and patch actions after a saved generation exists', async () => {
+    documentState.cloudFileId = '33333333-3333-4333-8333-333333333333';
+    const createJob = vi.fn(async () => ({ id: 'job-1' }));
+    useCodegenJobStore.setState({ createJob } as any);
+
+    render(<CodePanel />);
+
+    fireEvent.click(screen.getAllByRole('button', { name: /Generate React/i })[0]);
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Run in background/i })).toBeTruthy();
+      expect(screen.getByRole('button', { name: /Fix part/i })).toBeTruthy();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /Run in background/i }));
+
+    await waitFor(() => {
+      expect(createJob).toHaveBeenCalledWith(
+        expect.objectContaining({
+          jobKind: 'full_generation',
+          fileId: documentState.cloudFileId,
+          framework: 'react',
+        }),
+      );
+    });
+  });
+
+  it('queues an AI patch job from the current selection and base generation', async () => {
+    documentState.cloudFileId = '33333333-3333-4333-8333-333333333333';
+    const createJob = vi.fn(async () => ({ id: 'patch-job-1' }));
+    useCodegenJobStore.setState({ createJob } as any);
+
+    render(<CodePanel />);
+
+    fireEvent.click(screen.getAllByRole('button', { name: /Generate React/i })[0]);
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Fix part/i })).toBeTruthy();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /Fix part/i }));
+    expect(screen.getByText('Selected layer')).toBeTruthy();
+    expect(screen.getByText('node-1')).toBeTruthy();
+    expect(screen.getByText('Base generation')).toBeTruthy();
+    expect(screen.getByText('saved-ge')).toBeTruthy();
+    expect(screen.getByText('Framework')).toBeTruthy();
+    expect(screen.getAllByText('React').length).toBeGreaterThan(1);
+    fireEvent.change(screen.getByPlaceholderText(/Describe what is wrong/i), {
+      target: { value: 'Make the selected card spacing tighter.' },
+    });
+    expect(screen.getByText('Instruction preview')).toBeTruthy();
+    expect(screen.getAllByText('Make the selected card spacing tighter.').length).toBeGreaterThan(
+      1,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /Queue fix/i }));
+
+    await waitFor(() => {
+      expect(createJob).toHaveBeenCalledWith(
+        expect.objectContaining({
+          jobKind: 'patch_generation',
+          baseGenerationId: 'saved-generation',
+          patchInstruction: 'Make the selected card spacing tighter.',
+          nodeIds: selectedIds,
+          nodes: [selectedNode],
+        }),
+      );
+    });
+  });
+
+  it('marks generation history entries created by AI patch', async () => {
+    listCodeGenerationHistoryMock.mockResolvedValue([
+      {
+        id: 'gen-patch',
+        fileId: 'file-1',
+        pageId: 'page-1',
+        framework: 'react',
+        targetKind: 'selection',
+        nodeIds: ['node-1'],
+        targetHash: 'hash-1',
+        documentRevision: 3,
+        status: 'done',
+        finalCode: 'export default function Patched() { return null; }',
+        degraded: false,
+        assetsManifest: [],
+        model: 'patch-model',
+        provider: 'builtin',
+        error: null,
+        metadata: {
+          jobKind: 'patch_generation',
+          baseGenerationId: 'gen-base',
+          patchInstruction: 'Fix spacing.',
+        },
+        createdAt: '2026-05-09T11:00:00.000Z',
+        completedAt: '2026-05-09T11:00:01.000Z',
+      },
+    ]);
+
+    render(<CodePanel />);
+
+    await waitFor(() => {
+      expect(screen.getByText(/function Patched/i)).toBeTruthy();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /^History/i }));
+
+    expect(screen.getByText(/generated by patch/i)).toBeTruthy();
   });
 
   it('generates UniApp code when the UniApp tab is active', async () => {
@@ -514,6 +656,7 @@ describe('CodePanel export affordances', () => {
         model: 'new-model',
         provider: 'builtin',
         error: null,
+        metadata: {},
         createdAt: '2026-05-09T10:00:00.000Z',
         completedAt: '2026-05-09T10:00:01.000Z',
       },
@@ -533,6 +676,7 @@ describe('CodePanel export affordances', () => {
         model: 'old-model',
         provider: 'builtin',
         error: null,
+        metadata: {},
         createdAt: '2026-05-09T09:00:00.000Z',
         completedAt: '2026-05-09T09:00:01.000Z',
       },
@@ -569,6 +713,7 @@ describe('CodePanel export affordances', () => {
         model: 'model-a',
         provider: 'builtin',
         error: null,
+        metadata: {},
         createdAt: '2026-05-09T10:00:00.000Z',
         completedAt: '2026-05-09T10:00:01.000Z',
       },
@@ -628,6 +773,7 @@ describe('CodePanel export affordances', () => {
         model: 'model-a',
         provider: 'builtin',
         error: null,
+        metadata: {},
         createdAt: '2026-05-09T10:00:00.000Z',
         completedAt: '2026-05-09T10:00:01.000Z',
       },
@@ -662,6 +808,7 @@ describe('CodePanel export affordances', () => {
         model: 'model-a',
         provider: 'builtin',
         error: null,
+        metadata: {},
         createdAt: '2026-05-09T10:00:00.000Z',
         completedAt: '2026-05-09T10:00:01.000Z',
       },
@@ -699,5 +846,40 @@ describe('CodePanel export affordances', () => {
     createObjectURL.mockRestore();
     revokeObjectURL.mockRestore();
     HTMLAnchorElement.prototype.click = originalClick;
+  });
+
+  it('opens and selects a generation history entry from a task deep link', async () => {
+    listCodeGenerationHistoryMock.mockImplementation(async () => [
+      {
+        id: 'gen-target',
+        fileId: 'file-1',
+        pageId: 'page-2',
+        framework: 'uniapp',
+        targetKind: 'page',
+        nodeIds: [],
+        targetHash: 'hash-2',
+        documentRevision: 6,
+        status: 'done',
+        finalCode: '---FILE: pages/index/index.vue---\n<template><view>Target history</view></template>',
+        degraded: false,
+        assetsManifest: [],
+        model: 'target-model',
+        provider: 'openai',
+        error: null,
+        metadata: {},
+        createdAt: '2026-05-13T08:00:00.000Z',
+        completedAt: '2026-05-13T08:00:03.000Z',
+      },
+    ]);
+
+    render(<CodePanel generationId="gen-target" />);
+
+    await waitFor(() => {
+      expect(getCodeGenerationHistoryDetailMock).toHaveBeenCalledWith('gen-target');
+      expect(screen.getByText(/target-model/i)).toBeTruthy();
+      expect(useCodegenStore.getState().activeTab).toBe('uniapp');
+      expect(useCodegenStore.getState().selectedHistoryId.uniapp).toBe('gen-target');
+      expect(screen.getByRole('button', { name: /^History/i })).toBeTruthy();
+    });
   });
 });

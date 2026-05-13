@@ -11,6 +11,12 @@ import type {
   CloudCodegenChunk,
   CloudCodegenFile,
   CloudActivityEvent,
+  CloudCodegenJob,
+  CloudCodegenJobEvent,
+  CloudCodegenJobStep,
+  CodegenProviderConfig,
+  CodegenProviderConfigAudit,
+  TaskNotification,
 } from '../../src/types/cloud';
 import type { PenDocument } from '../../src/types/pen';
 import type { Framework } from '@zseven-w/pen-types';
@@ -103,6 +109,7 @@ interface CodeGenerationRow {
   entry_file?: string | null;
   degraded: boolean;
   assets_manifest: CodegenAssetManifestEntry[];
+  metadata?: Record<string, unknown> | null;
   model: string | null;
   provider: string | null;
   error: string | null;
@@ -130,6 +137,102 @@ interface CodeGenerationFileRow {
   content: string;
   size_bytes: number;
   order_index: number;
+  created_at: string;
+}
+
+interface CodegenJobRow {
+  id: string;
+  file_id: string;
+  owner_id: string;
+  generation_id: string | null;
+  job_kind?: CloudCodegenJob['jobKind'] | null;
+  status: CloudCodegenJob['status'];
+  framework: Framework;
+  page_id: string;
+  target_kind: CloudCodegenJob['targetKind'];
+  node_ids: string[];
+  target_hash: string;
+  document_revision: number;
+  provider: string | null;
+  model: string | null;
+  priority: number;
+  progress: number;
+  attempts: number;
+  max_attempts: number;
+  locked_by: string | null;
+  locked_until: string | null;
+  last_heartbeat_at?: string | null;
+  next_run_at?: string | null;
+  dead_lettered_at?: string | null;
+  last_error?: string | null;
+  failure_type?: CloudCodegenJob['failureType'] | null;
+  input_snapshot?: Record<string, unknown> | null;
+  output?: Record<string, unknown> | null;
+  error: string | null;
+  created_at: string;
+  updated_at: string;
+  started_at: string | null;
+  completed_at: string | null;
+  canceled_at: string | null;
+}
+
+interface CodegenJobStepRow {
+  id: string;
+  job_id: string;
+  agent_role: CloudCodegenJobStep['agentRole'];
+  attempt?: number | null;
+  status: CloudCodegenJobStep['status'];
+  progress: number;
+  input?: Record<string, unknown> | null;
+  output?: Record<string, unknown> | null;
+  error: string | null;
+  started_at: string | null;
+  completed_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+interface CodegenJobEventRow {
+  id: string;
+  job_id: string;
+  type: string;
+  message: string | null;
+  metadata?: Record<string, unknown> | null;
+  created_at: string;
+}
+
+interface TaskNotificationRow {
+  id: string;
+  owner_id: string;
+  job_id: string | null;
+  file_id: string | null;
+  generation_id: string | null;
+  kind: TaskNotification['kind'];
+  title: string;
+  message: string | null;
+  read_at: string | null;
+  created_at: string;
+}
+
+interface CodegenProviderConfigRow {
+  provider: string;
+  enabled?: boolean | null;
+  max_per_minute?: number | null;
+  circuit_threshold?: number | null;
+  circuit_open_ms?: number | null;
+  updated_by?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+interface CodegenProviderConfigAuditRow {
+  id: string;
+  provider: string;
+  actor_id?: string | null;
+  actor_email?: string | null;
+  before_config?: Record<string, unknown> | null;
+  after_config?: Record<string, unknown> | null;
+  reason?: string | null;
   created_at: string;
 }
 
@@ -237,6 +340,7 @@ export function mapCodeGeneration(row: CodeGenerationRow): CloudCodeGeneration {
     entryFile: row.entry_file ?? null,
     degraded: row.degraded,
     assetsManifest: row.assets_manifest ?? [],
+    metadata: row.metadata ?? {},
     model: row.model,
     provider: row.provider,
     error: row.error,
@@ -268,6 +372,126 @@ export function mapCodeGenerationFile(row: CodeGenerationFileRow): CloudCodegenF
     content: row.content,
     sizeBytes: Number(row.size_bytes),
     orderIndex: row.order_index,
+    createdAt: row.created_at,
+  };
+}
+
+export function mapCodegenJobStep(row: CodegenJobStepRow): CloudCodegenJobStep {
+  return {
+    id: row.id,
+    jobId: row.job_id,
+    agentRole: row.agent_role,
+    attempt: Number(row.attempt ?? 1),
+    status: row.status,
+    progress: Number(row.progress),
+    input: row.input ?? {},
+    output: row.output ?? {},
+    error: row.error,
+    startedAt: row.started_at,
+    completedAt: row.completed_at,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+export function mapCodegenJobEvent(row: CodegenJobEventRow): CloudCodegenJobEvent {
+  return {
+    id: row.id,
+    jobId: row.job_id,
+    type: row.type,
+    message: row.message,
+    metadata: row.metadata ?? {},
+    createdAt: row.created_at,
+  };
+}
+
+export function mapCodegenJob(
+  row: CodegenJobRow,
+  extras: {
+    steps?: CodegenJobStepRow[];
+    events?: CodegenJobEventRow[];
+  } = {},
+): CloudCodegenJob {
+  return {
+    id: row.id,
+    fileId: row.file_id,
+    ownerId: row.owner_id,
+    generationId: row.generation_id,
+    jobKind: row.job_kind ?? 'full_generation',
+    status: row.status,
+    framework: row.framework,
+    pageId: row.page_id,
+    targetKind: row.target_kind,
+    nodeIds: row.node_ids ?? [],
+    targetHash: row.target_hash,
+    documentRevision: Number(row.document_revision),
+    provider: row.provider,
+    model: row.model,
+    priority: Number(row.priority),
+    progress: Number(row.progress),
+    attempts: Number(row.attempts),
+    maxAttempts: Number(row.max_attempts),
+    lockedBy: row.locked_by,
+    lockedUntil: row.locked_until,
+    lastHeartbeatAt: row.last_heartbeat_at ?? null,
+    nextRunAt: row.next_run_at ?? null,
+    deadLetteredAt: row.dead_lettered_at ?? null,
+    lastError: row.last_error ?? null,
+    failureType: row.failure_type ?? null,
+    inputSnapshot: row.input_snapshot ?? {},
+    output: row.output ?? {},
+    error: row.error,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    startedAt: row.started_at,
+    completedAt: row.completed_at,
+    canceledAt: row.canceled_at,
+    steps: extras.steps?.map(mapCodegenJobStep),
+    events: extras.events?.map(mapCodegenJobEvent),
+  };
+}
+
+export function mapTaskNotification(row: TaskNotificationRow): TaskNotification {
+  return {
+    id: row.id,
+    ownerId: row.owner_id,
+    jobId: row.job_id,
+    fileId: row.file_id,
+    generationId: row.generation_id,
+    kind: row.kind,
+    title: row.title,
+    message: row.message,
+    readAt: row.read_at,
+    createdAt: row.created_at,
+  };
+}
+
+export function mapCodegenProviderConfig(
+  row: CodegenProviderConfigRow,
+): CodegenProviderConfig {
+  return {
+    provider: row.provider,
+    enabled: row.enabled ?? true,
+    maxPerMinute: Number(row.max_per_minute ?? 30),
+    circuitThreshold: Number(row.circuit_threshold ?? 3),
+    circuitOpenMs: Number(row.circuit_open_ms ?? 60_000),
+    updatedBy: row.updated_by ?? null,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+export function mapCodegenProviderConfigAudit(
+  row: CodegenProviderConfigAuditRow,
+): CodegenProviderConfigAudit {
+  return {
+    id: row.id,
+    provider: row.provider,
+    actorId: row.actor_id ?? null,
+    actorEmail: row.actor_email ?? null,
+    beforeConfig: row.before_config ?? {},
+    afterConfig: row.after_config ?? {},
+    reason: row.reason ?? null,
     createdAt: row.created_at,
   };
 }
