@@ -704,6 +704,42 @@ fn apply_mcp_command_routes_insert_node() {
 }
 
 #[test]
+fn apply_mcp_command_insert_rejects_when_id_space_exhausted() {
+    // Codex stop-gate: when an existing node sits at u64::MAX
+    // the previous saturating_add(1) wrapped back to u64::MAX and
+    // silently overwrote the live node. Now `next_node_id_seed`
+    // returns None on overflow + apply_mcp_command fails cleanly.
+    use crate::document::{Document, Node, NodeKind};
+    let mut doc = Document::empty();
+    // Plant a node at the maximum id directly in active page.
+    let mut max_node = Node::leaf(u64::MAX, NodeKind::Rect, "max-id-node");
+    max_node.bounds = crate::Rect::xywh(0.0, 0.0, 10.0, 10.0);
+    doc.pages[0].children.push(max_node);
+    let before_len = doc.pages[0].children.len();
+
+    let cmd = McpCommand::InsertNode {
+        kind: "rect".into(),
+        name: "should-fail".into(),
+        x: 0,
+        y: 0,
+        width: 10,
+        height: 10,
+        fill_hex: None,
+    };
+    assert!(!doc.apply_mcp_command(&cmd), "id-space-exhausted must reject");
+    assert_eq!(
+        doc.pages[0].children.len(),
+        before_len,
+        "no node should have been appended"
+    );
+    // Live u64::MAX node still has its original name.
+    assert_eq!(
+        doc.pages[0].children.last().unwrap().name,
+        "max-id-node"
+    );
+}
+
+#[test]
 fn apply_mcp_command_rejects_invalid_node_kind() {
     use crate::document::Document;
     let mut doc = Document::empty();
