@@ -13,6 +13,7 @@ pub mod tools;
 #[cfg(test)] mod tools_tests;
 pub mod write_tools;
 #[cfg(test)] mod write_tools_tests;
+#[cfg(test)] mod copy_node_tests;
 
 // Re-export the public surface of submodules so callers can keep
 // using `mcp::parse_tool_call` / `mcp::GetDocumentInfo` after the
@@ -24,9 +25,10 @@ pub use tools::{
     GetSelection, ListPages, ListVariables, NodeRecord, VariableRecord,
 };
 pub use write_tools::{
-    delete_node_snapshot, insert_node_snapshot, move_node_snapshot,
+    copy_node_snapshot, delete_node_snapshot, insert_node_snapshot, move_node_snapshot,
     set_active_axis_value_snapshot, set_variable_color_snapshot, update_node_snapshot,
-    DeleteNode, InsertNode, MoveNode, SetActiveAxisValue, SetVariableColor, UpdateNode,
+    CopyNode, DeleteNode, InsertNode, MoveNode, SetActiveAxisValue, SetVariableColor,
+    UpdateNode,
 };
 
 /// JSON-RPC-style request id. Strings + integers both supported by
@@ -161,6 +163,17 @@ pub enum McpCommand {
     /// where the target would create a cycle (target is a
     /// descendant of the moved node).
     MoveNode {
+        node_id: u64,
+        target_parent_id: u64,
+    },
+    /// Deep-clone a node + every descendant under a new parent.
+    /// `target_parent_id == 0` puts the copy at the active page
+    /// root. Fresh ids are allocated by the applier starting past
+    /// `max_node_id()` so the clone can't collide with any live
+    /// node. Returns the new root id in the result payload
+    /// (`new_root_id` field) so callers can chain follow-up
+    /// commands against the clone without re-querying.
+    CopyNode {
         node_id: u64,
         target_parent_id: u64,
     },
