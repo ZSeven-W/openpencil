@@ -376,14 +376,19 @@ impl VariableTable {
             None => return false,
         };
         // Reject kind/scalar mismatch — a Number variable must
-        // receive a Num scalar, etc. Color variables go through
-        // `set_color_hex` (Color stores its value as a hex string,
-        // not a separate variant).
+        // receive a Num scalar, etc. Color variables are
+        // FORBIDDEN from this path: they need hex validation
+        // before mutation, which only `set_color_hex` provides.
+        // Codex stop-gate flagged that accepting Color+Str here
+        // would let a misrouted `set_variable_string` call write
+        // garbage into a Color variable (the tool snapshot
+        // wouldn't admit the name, but defense in depth says the
+        // apply layer should reject too).
         let kind_matches = match (&var.kind, &scalar) {
             (VariableKind::Number, VariableScalar::Num(_)) => true,
             (VariableKind::String, VariableScalar::Str(_)) => true,
             (VariableKind::Boolean, VariableScalar::Bool(_)) => true,
-            (VariableKind::Color, VariableScalar::Str(_)) => true,
+            (VariableKind::Color, _) => false,
             _ => false,
         };
         if !kind_matches {
