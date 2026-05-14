@@ -172,7 +172,7 @@ export class SkiaNodeRenderer {
           positions,
           ck.TileMode.Clamp,
         );
-        if (shader) paint.setShader(shader);
+        if (shader) { paint.setShader(shader); shader.delete(); }
       } else {
         const c = parseColor(ck, stops[0]?.color ?? DEFAULT_FILL);
         c[3] *= fillOpacity;
@@ -198,7 +198,7 @@ export class SkiaNodeRenderer {
           positions,
           ck.TileMode.Clamp,
         );
-        if (shader) paint.setShader(shader);
+        if (shader) { paint.setShader(shader); shader.delete(); }
       } else {
         const c = parseColor(ck, stops[0]?.color ?? DEFAULT_FILL);
         c[3] *= fillOpacity;
@@ -278,10 +278,10 @@ export class SkiaNodeRenderer {
         localMatrix,
       );
       if (shader) {
-        paint.setShader(shader);
+        paint.setShader(shader); shader.delete();
         if (fillOpacity < 1) paint.setAlphaf(fillOpacity);
         const cf = this.buildImageAdjustmentFilter(fill);
-        if (cf) paint.setColorFilter(cf);
+        if (cf) { paint.setColorFilter(cf); cf.delete(); }
       }
       return { needsDrawImageRect: false };
     }
@@ -313,7 +313,7 @@ export class SkiaNodeRenderer {
     paint.setAntiAlias(true);
     if (fillOpacity < 1) paint.setAlphaf(fillOpacity);
     const adjFilter = this.buildImageAdjustmentFilter(fill);
-    if (adjFilter) paint.setColorFilter(adjFilter);
+    if (adjFilter) { paint.setColorFilter(adjFilter); adjFilter.delete(); }
 
     if (mode === 'fit') {
       const scale = Math.min(w / imgW, h / imgH);
@@ -434,7 +434,7 @@ export class SkiaNodeRenderer {
     else if (stroke.cap === 'square') paint.setStrokeCap(ck.StrokeCap.Square);
     if (stroke.dashPattern && stroke.dashPattern.length >= 2) {
       const effect = ck.PathEffect.MakeDash(stroke.dashPattern, stroke.dashOffset ?? 0);
-      if (effect) paint.setPathEffect(effect);
+      if (effect) { paint.setPathEffect(effect); effect.delete(); }
     }
 
     return paint;
@@ -684,7 +684,7 @@ export class SkiaNodeRenderer {
         const { paint: fillPaint } = this.makeFillPaint(fillSource, w, h, opacity, x, y);
         if (cr > 0) {
           const effect = ck.PathEffect.MakeCorner(cr);
-          if (effect) fillPaint.setPathEffect(effect);
+          if (effect) { fillPaint.setPathEffect(effect); effect.delete(); }
         }
         canvas.drawPath(path, fillPaint);
         fillPaint.delete();
@@ -692,7 +692,7 @@ export class SkiaNodeRenderer {
         if (strokePaint) {
           if (cr > 0) {
             const effect = ck.PathEffect.MakeCorner(cr);
-            if (effect) strokePaint.setPathEffect(effect);
+            if (effect) { strokePaint.setPathEffect(effect); effect.delete(); }
           }
           canvas.drawPath(path, strokePaint);
           strokePaint.delete();
@@ -777,7 +777,7 @@ export class SkiaNodeRenderer {
     const { paint: fillPaint } = this.makeFillPaint(fillSource, w, h, opacity, x, y);
     if (cr > 0) {
       const effect = ck.PathEffect.MakeCorner(cr);
-      if (effect) fillPaint.setPathEffect(effect);
+      if (effect) { fillPaint.setPathEffect(effect); effect.delete(); }
     }
     canvas.drawPath(path, fillPaint);
     fillPaint.delete();
@@ -785,7 +785,7 @@ export class SkiaNodeRenderer {
     if (strokePaint) {
       if (cr > 0) {
         const effect = ck.PathEffect.MakeCorner(cr);
-        if (effect) strokePaint.setPathEffect(effect);
+        if (effect) { strokePaint.setPathEffect(effect); effect.delete(); }
       }
       canvas.drawPath(path, strokePaint);
       strokePaint.delete();
@@ -1025,7 +1025,7 @@ export class SkiaNodeRenderer {
     paint.setAntiAlias(true);
     if (opacity < 1) paint.setAlphaf(opacity);
     const adjFilter = this.buildImageAdjustmentFilter(iNode);
-    if (adjFilter) paint.setColorFilter(adjFilter);
+    if (adjFilter) { paint.setColorFilter(adjFilter); adjFilter.delete(); }
 
     const fit = iNode.objectFit ?? 'fill';
     if (fit === 'tile') {
@@ -1038,7 +1038,7 @@ export class SkiaNodeRenderer {
         tileMatrix,
       );
       if (shader) {
-        paint.setShader(shader);
+        paint.setShader(shader); shader.delete();
         canvas.drawRect(ck.LTRBRect(x, y, x + w, y + h), paint);
       }
     } else if (fit === 'fit') {
@@ -1113,7 +1113,7 @@ export class SkiaNodeRenderer {
     strokeColor[3] *= opacity;
     strokePaint.setColor(strokeColor);
     const dash = ck.PathEffect.MakeDash([8, 6], 0);
-    if (dash) strokePaint.setPathEffect(dash);
+    if (dash) { strokePaint.setPathEffect(dash); dash.delete(); }
 
     if (cr > 0) {
       canvas.drawRRect(ck.RRectXY(rect, maxR, maxR), strokePaint);
