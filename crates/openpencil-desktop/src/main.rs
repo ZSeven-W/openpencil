@@ -140,6 +140,7 @@ struct DesktopApp {
     dpi: f32,
     /// Cmd / Ctrl held — promotes scroll to zoom + gates editor shortcuts.
     zoom_modifier: bool,
+    alt_modifier: bool,
     /// Shift held — arrow-key nudge 1→10 px.
     shift_modifier: bool,
     /// Cursor moves coalesced between paints; drained on RedrawRequested
@@ -178,6 +179,7 @@ impl DesktopApp {
             cursor_y: 0.0,
             dpi: 1.0,
             zoom_modifier: false,
+            alt_modifier: false,
             shift_modifier: false,
             pending_cursor_move: None,
             redraw_pending: false,
@@ -582,6 +584,7 @@ impl ApplicationHandler for DesktopApp {
                 let state = mods.state();
                 self.zoom_modifier = state.super_key() || state.control_key();
                 self.shift_modifier = state.shift_key();
+                self.alt_modifier = state.alt_key();
                 // Forward shift state into the host so the next
                 // mouse press can branch on shift+click for
                 // multi-select.
@@ -646,6 +649,20 @@ impl ApplicationHandler for DesktopApp {
                     // Cmd+Shift+G "ungroup", etc) stay reserved for
                     // future bindings — TS parity with the
                     // `!e.shiftKey` guards in `use-clipboard-shortcuts`.
+                    // Cmd/Ctrl+Alt+U/S/I/X — path boolean ops (TS
+                    // parity with Paper.js via `use-edit-shortcuts.ts`).
+                    Key::Character(ref ch)
+                        if self.zoom_modifier && self.alt_modifier && !self.shift_modifier =>
+                    {
+                        use openpencil_shell_core::document::BooleanOp;
+                        match ch.to_lowercase().as_str() {
+                            "u" => consumed = self.host.apply_boolean_op(BooleanOp::Union),
+                            "s" => consumed = self.host.apply_boolean_op(BooleanOp::Subtract),
+                            "i" => consumed = self.host.apply_boolean_op(BooleanOp::Intersect),
+                            "x" => consumed = self.host.apply_boolean_op(BooleanOp::Exclude),
+                            _ => {}
+                        }
+                    }
                     Key::Character(ref ch) if self.zoom_modifier && !self.shift_modifier => {
                         let lower = ch.to_lowercase();
                         match lower.as_str() {
