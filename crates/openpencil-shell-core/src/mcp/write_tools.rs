@@ -514,6 +514,12 @@ pub fn copy_node_snapshot() -> CopyNode {
 /// children of the replacement default to empty). TS-equivalent
 /// behavior for primitives; subtree-replacement requires a JSON
 /// Node parser that doesn't live on this side yet.
+///
+/// **Destructive on containers**: replacing a Frame / Group / node
+/// with children drops every descendant of the old node without
+/// warning. Use `update_node` to patch a container in place;
+/// reserve `replace_node` for primitive → primitive swaps where
+/// the loss is intended.
 pub struct ReplaceNode;
 
 impl McpTool for ReplaceNode {
