@@ -81,5 +81,11 @@ async-trait = "0.1"
 # Async runtime — agent-rs is async; the BuiltIn ChatProvider impl
 # bridges its `EventStream` into the sync `Iterator<ChatDelta>`
 # shape via a tokio task + std::sync::mpsc channel.
-tokio = { version = "1", default-features = false, features = ["rt-multi-thread", "macros", "sync"] }
+tokio = { version = "1", default-features = false, features = [
+  "rt-multi-thread",
+  "macros",
+  "sync",
+  "io-util",
+  "process",
+] }
 futures = { version = "0.3", default-features = false, features = ["std"] }

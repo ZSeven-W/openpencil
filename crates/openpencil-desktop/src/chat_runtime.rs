@@ -37,7 +37,7 @@ use tokio::runtime::{Builder, Runtime};
 /// provider so abort controllers + reqwest connection pools stay
 /// shared. Initialized lazily on first chat send so cold startup
 /// (open file menu, draw chrome) doesn't pay the spawn cost.
-fn shared_runtime() -> &'static Runtime {
+pub(crate) fn shared_runtime() -> &'static Runtime {
     static RUNTIME: OnceLock<Runtime> = OnceLock::new();
     RUNTIME.get_or_init(|| {
         Builder::new_multi_thread()
