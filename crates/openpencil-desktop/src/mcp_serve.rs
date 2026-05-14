@@ -28,8 +28,9 @@ use openpencil_shell_core::mcp::{
     get_active_theme_snapshot, get_node_snapshot, insert_node_snapshot,
     list_pages_snapshot, list_variables_snapshot, move_node_snapshot,
     replace_node_snapshot, run_stdio_with_applier, selection_snapshot,
-    set_active_axis_value_snapshot, set_variable_color_snapshot,
-    update_node_snapshot, ToolRegistry,
+    set_active_axis_value_snapshot, set_variable_boolean_snapshot,
+    set_variable_color_snapshot, set_variable_number_snapshot,
+    set_variable_string_snapshot, update_node_snapshot, ToolRegistry,
 };
 
 use crate::persistence::{load_from_path, save_to_path};
@@ -145,6 +146,9 @@ fn rebuild_registry(doc: &Document) -> ToolRegistry {
     r.register(Box::new(copy_node_snapshot()));
     r.register(Box::new(replace_node_snapshot()));
     r.register(Box::new(batch_design_snapshot()));
+    r.register(Box::new(set_variable_number_snapshot(doc)));
+    r.register(Box::new(set_variable_string_snapshot(doc)));
+    r.register(Box::new(set_variable_boolean_snapshot(doc)));
     r
 }
 
@@ -360,6 +364,9 @@ const TOOL_SCHEMAS: &[&str] = &[
     // --- write tools ---
     r##"{"name":"set_variable_color","description":"Set a Color-kind variable's value.","inputSchema":{"type":"object","properties":{"name":{"type":"string"},"hex":{"type":"string","description":"#rgb / #rrggbb / #rrggbbaa"}},"required":["name","hex"]}}"##,
     r#"{"name":"batch_design","description":"Insert N leaf nodes on the active page in one atomic shot. nodes_json must be a JSON array string of {kind,name,x,y,width,height,fill_hex?} descriptors.","inputSchema":{"type":"object","properties":{"nodes_json":{"type":"string","description":"JSON array of node descriptors"}},"required":["nodes_json"]}}"#,
+    r#"{"name":"set_variable_number","description":"Set a Number-kind variable's value (decimal, may be negative or fractional).","inputSchema":{"type":"object","properties":{"name":{"type":"string"},"value":{"type":"string"}},"required":["name","value"]}}"#,
+    r#"{"name":"set_variable_string","description":"Set a String-kind variable's value (free-form text).","inputSchema":{"type":"object","properties":{"name":{"type":"string"},"value":{"type":"string"}},"required":["name","value"]}}"#,
+    r#"{"name":"set_variable_boolean","description":"Set a Boolean-kind variable's value (\"true\" or \"false\").","inputSchema":{"type":"object","properties":{"name":{"type":"string"},"value":{"type":"string","enum":["true","false"]}},"required":["name","value"]}}"#,
     r#"{"name":"set_active_axis_value","description":"Pin a theme axis to one of its allowed values.","inputSchema":{"type":"object","properties":{"axis":{"type":"string"},"value":{"type":"string"}},"required":["axis","value"]}}"#,
     r#"{"name":"insert_node","description":"Create a new leaf node on the active page.","inputSchema":{"type":"object","properties":{"kind":{"type":"string","enum":["frame","group","rect","ellipse","polygon","line","text","path"]},"name":{"type":"string"},"x":{"type":"string"},"y":{"type":"string"},"width":{"type":"string"},"height":{"type":"string"},"fill_hex":{"type":"string"}},"required":["kind","name","x","y","width","height"]}}"#,
     r#"{"name":"update_node","description":"Patch fields on an existing node. Pass any subset of x/y/width/height/name/fill_hex.","inputSchema":{"type":"object","properties":{"node_id":{"type":"string"},"x":{"type":"string"},"y":{"type":"string"},"width":{"type":"string"},"height":{"type":"string"},"name":{"type":"string"},"fill_hex":{"type":"string"}},"required":["node_id"]}}"#,
@@ -413,7 +420,7 @@ mod tests {
     }
 
     #[test]
-    fn tools_list_response_includes_all_fifteen_tools() {
+    fn tools_list_response_includes_all_eighteen_tools() {
         let r = tools_list_response("3");
         for name in [
             "get_document_info",
@@ -431,6 +438,9 @@ mod tests {
             "copy_node",
             "replace_node",
             "batch_design",
+            "set_variable_number",
+            "set_variable_string",
+            "set_variable_boolean",
         ] {
             assert!(r.contains(name), "tools/list must include {name}: {r}");
         }
