@@ -257,8 +257,12 @@ impl WidgetHostNative {
         } else {
             0.0
         };
-        let has_property = self.document.property_panel_visible();
-        let canvas_right = if has_property {
+        // Any right-rail widget (PropertyPanel OR VariablesPanel)
+        // claims the rail width. Using `right_rail_visible` keeps
+        // canvas + rail mutually exclusive so the canvas never paints
+        // over an open Variables panel (codex BLOCK fix).
+        let rail_occupied = self.document.right_rail_visible();
+        let canvas_right = if rail_occupied {
             viewport_w - self.document.ui.property_panel_width
         } else {
             viewport_w
