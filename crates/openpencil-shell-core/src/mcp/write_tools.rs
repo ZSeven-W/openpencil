@@ -673,6 +673,46 @@ pub fn set_variable_color_snapshot(
     SetVariableColor { known_colors }
 }
 
+/// First-party `instantiate_component` tool — drop a clone of a
+/// registered component's root subtree onto the active page.
+/// Required arg: `component_id` (the id of the component's root,
+/// returned by `list_components`). The applier handles fresh-id
+/// allocation + history snapshot.
+pub struct InstantiateComponent;
+
+impl McpTool for InstantiateComponent {
+    fn name(&self) -> &str {
+        "instantiate_component"
+    }
+    fn call(&self, args: &BTreeMap<String, String>) -> ToolOutcome {
+        let Some(raw) = args.get("component_id") else {
+            return ToolOutcome::Err(
+                ToolErrorCode::MissingArgument,
+                "component_id is required (from list_components.components `name|id`)".into(),
+            );
+        };
+        let component_id: u64 = match raw.parse() {
+            Ok(n) if n > 0 => n,
+            _ => {
+                return ToolOutcome::Err(
+                    ToolErrorCode::InvalidArgument,
+                    format!("component_id must be a positive u64, got {raw:?}"),
+                );
+            }
+        };
+        let mut out = BTreeMap::new();
+        out.insert("wrote".into(), "true".into());
+        ToolOutcome::OkWithCommand(
+            out,
+            McpCommand::InstantiateComponent { component_id },
+        )
+    }
+}
+
+pub fn instantiate_component_snapshot() -> InstantiateComponent {
+    InstantiateComponent
+}
+
 /// `#rgb`, `#rrggbb`, `#rrggbbaa` — matches the format
 /// `VariableTable::parse_hex_color` accepts. Lenient on case;
 /// requires the leading `#`.
