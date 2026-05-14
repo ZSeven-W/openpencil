@@ -17,6 +17,7 @@
 //!   (single-page + infinite canvas recommended, multi-page also supported).
 
 pub mod agent_settings_state;
+pub mod codegen;
 pub mod document;
 pub mod i18n;
 pub mod jian;
