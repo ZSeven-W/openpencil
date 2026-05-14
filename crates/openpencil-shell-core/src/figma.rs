@@ -40,25 +40,86 @@ pub fn detect_kind(bytes: &[u8]) -> FigFileKind {
     FigFileKind::Unknown
 }
 
-/// Convert a `.fig` byte stream to a `PenDocument`. Returns Err
-/// when the file is unrecognised; returns Err("not yet implemented")
-/// when the kind IS recognised but the parser hasn't shipped.
-/// Real implementations land in `pen-figma` ports in follow-ups.
+/// Convert a `.fig` byte stream to a `ParsedFigStub`. For clipboard
+/// JSON, extracts the top-level shape (`type` + children count); for
+/// binary `.fig`, recognises the magic but defers full parsing to
+/// the upcoming Zstd-backed pipeline. Returns `UnknownFormat` on
+/// unrecognised bytes.
 pub fn parse_fig(bytes: &[u8]) -> Result<ParsedFigStub, FigParseError> {
     match detect_kind(bytes) {
-        FigFileKind::Binary => Err(FigParseError::NotYetImplemented(FigFileKind::Binary)),
+        FigFileKind::Binary => {
+            // Binary format requires Zstd decompression before the
+            // schema-encoded body becomes readable. Adding a Zstd
+            // dep to shell-core (wasm32-clean) is the work for the
+            // dedicated server-side parser binary; the stub kind
+            // recognition stays here.
+            Err(FigParseError::NotYetImplemented(FigFileKind::Binary))
+        }
         FigFileKind::ClipboardJson => {
-            Err(FigParseError::NotYetImplemented(FigFileKind::ClipboardJson))
+            let s =
+                std::str::from_utf8(bytes).map_err(|_| FigParseError::UnknownFormat)?;
+            let children = count_top_level_children(s).unwrap_or(0);
+            Ok(ParsedFigStub {
+                kind: FigFileKind::ClipboardJson,
+                top_level_children: children,
+            })
         }
         FigFileKind::Unknown => Err(FigParseError::UnknownFormat),
     }
 }
 
-/// Successful parse result (placeholder — the real type holds a
-/// `jian_ops_schema::PenDocument` once the parser ports finish).
+/// Walk a clipboard-JSON payload and count the top-level entries in
+/// the `"children": [ ... ]` array. Hand-rolled parser (no serde,
+/// shell-core stays wasm32-light) — counts `{` openings at depth 1
+/// inside the children array. Returns `None` when the children key
+/// is absent or the brace tracker can't find a matching close.
+fn count_top_level_children(s: &str) -> Option<usize> {
+    let needle = "\"children\"";
+    let key_at = s.find(needle)?;
+    let after = &s[key_at + needle.len()..];
+    let bracket = after.find('[')?;
+    let mut depth = 0i32;
+    let mut count = 0usize;
+    let mut in_string = false;
+    let mut escape = false;
+    for c in after[bracket..].chars().skip(1) {
+        if escape {
+            escape = false;
+            continue;
+        }
+        if c == '\\' {
+            escape = true;
+            continue;
+        }
+        if c == '"' {
+            in_string = !in_string;
+            continue;
+        }
+        if in_string {
+            continue;
+        }
+        match c {
+            '{' => {
+                if depth == 0 {
+                    count += 1;
+                }
+                depth += 1;
+            }
+            '}' => depth -= 1,
+            ']' if depth == 0 => return Some(count),
+            _ => {}
+        }
+    }
+    None
+}
+
+/// Successful parse result. Carries the kind + (for clipboard JSON)
+/// the top-level children count. Placeholder until the full Figma →
+/// PenNode mapping ports.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ParsedFigStub {
     pub kind: FigFileKind,
+    pub top_level_children: usize,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -92,18 +153,38 @@ mod tests {
     }
 
     #[test]
-    fn parse_fig_returns_not_yet_for_recognised_kinds() {
+    fn parse_fig_binary_returns_not_yet() {
         let mut bin = b"fig-kiwi".to_vec();
         bin.extend_from_slice(&[0u8; 4]);
         assert_eq!(
             parse_fig(&bin),
             Err(FigParseError::NotYetImplemented(FigFileKind::Binary))
         );
-        let json = br#"{"type":"FIGMA_DOCUMENT"}"#;
-        assert_eq!(
-            parse_fig(json),
-            Err(FigParseError::NotYetImplemented(FigFileKind::ClipboardJson))
-        );
+    }
+
+    #[test]
+    fn parse_fig_clipboard_returns_children_count() {
+        let json = br#"{"type":"FIGMA_DOCUMENT","children":[{"id":"1"},{"id":"2"},{"id":"3"}]}"#;
+        let parsed = parse_fig(json).unwrap();
+        assert_eq!(parsed.kind, FigFileKind::ClipboardJson);
+        assert_eq!(parsed.top_level_children, 3);
+    }
+
+    #[test]
+    fn parse_fig_clipboard_handles_nested_objects_correctly() {
+        // 2 top-level entries, each with a nested object — only top-
+        // level entries should be counted.
+        let json = br#"{"type":"FIGMA_DOCUMENT","children":[{"id":"a","child":{"id":"a1"}},{"id":"b","child":{"id":"b1"}}]}"#;
+        let parsed = parse_fig(json).unwrap();
+        assert_eq!(parsed.top_level_children, 2);
+    }
+
+    #[test]
+    fn parse_fig_clipboard_handles_quoted_braces() {
+        let json = br#"{"type":"FIGMA_DOCUMENT","children":[{"name":"has \"{\" in name"},{"id":"b"}]}"#;
+        let parsed = parse_fig(json).unwrap();
+        // Quoted `{` must NOT bump the count.
+        assert_eq!(parsed.top_level_children, 2);
     }
 
     #[test]
