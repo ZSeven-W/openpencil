@@ -28,6 +28,8 @@ const HEADER_HEIGHT: f32 = 28.0;
 const CHIP_HEIGHT: f32 = 20.0;
 const PAD_X: f32 = 12.0;
 const SWATCH_SIZE: f32 = 18.0;
+const DROPDOWN_WIDTH: f32 = 140.0;
+const DROPDOWN_ROW_HEIGHT: f32 = 24.0;
 /// Width of the Variables rail when it docks alongside the layer
 /// panel. Matches the LAYER_PANEL_WIDTH default so the chrome reads
 /// symmetrically; the host can resize via the existing panel-resize
@@ -37,12 +39,18 @@ pub const VARIABLES_PANEL_WIDTH: f32 = 240.0;
 /// Hit kinds for `VariablesPanel::hit_test`. Row index is into the
 /// `variables` slice the panel was built from, so callers can map
 /// straight back to the source [`Variable`].
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum VariablesPanelHit {
     /// Click on a variable row.
     Row(usize),
-    /// Click on a theme-axis chip in the header.
+    /// Click on a theme-axis chip in the header. Host toggles
+    /// `Document.ui.axis_dropdown_open` for that axis name.
     AxisChip(usize),
+    /// Click on a value row inside an open axis dropdown.
+    /// Carries the axis name + the picked value so the host
+    /// can pin `var_table.active_theme[axis] = value`. The host
+    /// is also responsible for clearing `axis_dropdown_open`.
+    AxisDropdownItem { axis: String, value: String },
 }
 
 /// View model for the Variables panel. Borrows from the document
@@ -52,6 +60,10 @@ pub struct VariablesPanel<'a> {
     /// Cached snapshot of axis chips painted in the header row.
     /// Stored so `hit_test` doesn't need to re-walk the table.
     chips: Vec<AxisChip>,
+    /// If `Some(axis_name)` AND the axis matches one of `chips`,
+    /// paint a dropdown overlay anchored to that chip. The list
+    /// is sourced from `VariableTable::themes`.
+    dropdown_open: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -62,7 +74,9 @@ struct AxisChip {
 
 impl<'a> VariablesPanel<'a> {
     pub fn for_document(doc: &'a Document) -> Self {
-        Self::for_table(&doc.var_table)
+        let mut panel = Self::for_table(&doc.var_table);
+        panel.dropdown_open = doc.ui.axis_dropdown_open.clone();
+        panel
     }
 
     pub fn for_table(table: &'a VariableTable) -> Self {
@@ -74,7 +88,11 @@ impl<'a> VariablesPanel<'a> {
                 value: value.clone(),
             })
             .collect();
-        Self { table, chips }
+        Self {
+            table,
+            chips,
+            dropdown_open: None,
+        }
     }
 
     /// Number of variable rows the panel paints.
@@ -99,12 +117,76 @@ impl<'a> VariablesPanel<'a> {
         HEADER_HEIGHT + chip_row + (self.row_count() as f32) * ROW_HEIGHT
     }
 
+    /// Anchor rect of the chip at index `i` within `rect`. Mirrors
+    /// the paint walk in `paint` so hit-test + dropdown anchoring
+    /// stay aligned without re-measuring.
+    fn chip_rect(&self, rect: Rect, idx: usize) -> Rect {
+        let mut x = rect.origin.x + PAD_X;
+        for (i, chip) in self.chips.iter().enumerate() {
+            let w = chip_width(chip);
+            if i == idx {
+                return Rect {
+                    origin: Point2D::new(x, rect.origin.y + HEADER_HEIGHT),
+                    size: Point2D::new(w, CHIP_HEIGHT),
+                };
+            }
+            x += w + 6.0;
+        }
+        Rect {
+            origin: Point2D::new(rect.origin.x + PAD_X, rect.origin.y + HEADER_HEIGHT),
+            size: Point2D::new(0.0, CHIP_HEIGHT),
+        }
+    }
+
     /// Map a screen-space point to the row or chip it falls in.
+    /// Honors `dropdown_open` first so a click on a value row of
+    /// the open dropdown overlay wins over the chip / row beneath.
     pub fn hit_test(&self, rect: Rect, point: Point2D) -> Option<VariablesPanelHit> {
         if !rect_contains(rect, point) {
             return None;
         }
         let mut y = rect.origin.y + HEADER_HEIGHT;
+        // Dropdown overlay — top-most. Paints when the host
+        // marked an axis open AND that axis is one of the
+        // active-theme chips.
+        if let Some(open_axis) = self.dropdown_open.as_deref() {
+            if let Some((chip_idx, _chip)) = self
+                .chips
+                .iter()
+                .enumerate()
+                .find(|(_, c)| c.axis == open_axis)
+            {
+                if let Some(values) = self
+                    .table
+                    .themes
+                    .iter()
+                    .find(|t| t.name == open_axis)
+                    .map(|t| t.values.as_slice())
+                {
+                    let chip_rect = self.chip_rect(rect, chip_idx);
+                    let menu_y_start = chip_rect.origin.y + CHIP_HEIGHT + 4.0;
+                    let menu_rect = Rect {
+                        origin: Point2D::new(chip_rect.origin.x, menu_y_start),
+                        size: Point2D::new(
+                            DROPDOWN_WIDTH,
+                            DROPDOWN_ROW_HEIGHT * (values.len() as f32),
+                        ),
+                    };
+                    if rect_contains(menu_rect, point) {
+                        let row = ((point.y - menu_y_start) / DROPDOWN_ROW_HEIGHT).floor();
+                        if row >= 0.0 {
+                            let r = row as usize;
+                            if r < values.len() {
+                                return Some(VariablesPanelHit::AxisDropdownItem {
+                                    axis: open_axis.to_string(),
+                                    value: values[r].clone(),
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+        }
         // Chip row.
         if !self.chips.is_empty() {
             let chip_y = y;
@@ -237,6 +319,66 @@ impl<'a> Widget for VariablesPanel<'a> {
             paint_preview(cx, &theme, var, self.table, preview_x, row.origin.y + 7.0);
             y += ROW_HEIGHT;
         }
+        // Axis dropdown overlay — paints LAST so it covers the
+        // chip row + variable rows beneath. Anchored under the
+        // chip whose axis matches `dropdown_open`.
+        if let Some(open_axis) = self.dropdown_open.as_deref() {
+            if let Some((chip_idx, _)) = self
+                .chips
+                .iter()
+                .enumerate()
+                .find(|(_, c)| c.axis == open_axis)
+            {
+                if let Some(values) = self
+                    .table
+                    .themes
+                    .iter()
+                    .find(|t| t.name == open_axis)
+                    .map(|t| t.values.as_slice())
+                {
+                    let chip_rect = self.chip_rect(rect, chip_idx);
+                    let menu_y = chip_rect.origin.y + CHIP_HEIGHT + 4.0;
+                    let menu_rect = Rect {
+                        origin: Point2D::new(chip_rect.origin.x, menu_y),
+                        size: Point2D::new(
+                            DROPDOWN_WIDTH,
+                            DROPDOWN_ROW_HEIGHT * (values.len() as f32),
+                        ),
+                    };
+                    cx.backend.fill_round_rect(menu_rect, 6.0, theme.popover);
+                    cx.backend
+                        .stroke_round_rect(menu_rect, 6.0, theme.border, 1.0);
+                    let active_value = self
+                        .table
+                        .active_theme
+                        .get(open_axis)
+                        .cloned()
+                        .unwrap_or_default();
+                    for (i, v) in values.iter().enumerate() {
+                        let row_y = menu_y + (i as f32) * DROPDOWN_ROW_HEIGHT;
+                        let is_active = *v == active_value;
+                        if is_active {
+                            let highlight = Rect {
+                                origin: Point2D::new(menu_rect.origin.x + 2.0, row_y),
+                                size: Point2D::new(menu_rect.size.x - 4.0, DROPDOWN_ROW_HEIGHT),
+                            };
+                            cx.backend.fill_round_rect(highlight, 4.0, theme.muted);
+                        }
+                        let label = crate::TextLayout::single_run(
+                            v,
+                            "system-ui",
+                            11.0,
+                            to_jian_color(theme.foreground),
+                            Point2D::new(0.0, 0.0),
+                        );
+                        cx.backend.draw_text(
+                            &label,
+                            Point2D::new(menu_rect.origin.x + 10.0, row_y + 16.0),
+                        );
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -362,6 +504,43 @@ mod tests {
         });
         let p2 = VariablesPanel::for_table(&t);
         assert!(p2.intrinsic_height() > empty_h);
+    }
+
+    #[test]
+    fn axis_dropdown_hit_routes_to_named_value() {
+        let mut t = table_with_three_vars();
+        t.themes.push(crate::document::ThemeAxis {
+            name: "mode".into(),
+            values: vec!["light".into(), "dark".into(), "system".into()],
+        });
+        let mut p = VariablesPanel::for_table(&t);
+        p.dropdown_open = Some("mode".into());
+        let rect = Rect {
+            origin: Point2D::new(0.0, 0.0),
+            size: Point2D::new(VARIABLES_PANEL_WIDTH, p.intrinsic_height()),
+        };
+        // Hit row 0 of the dropdown (== "light"). Chip anchor is
+        // (PAD_X, HEADER_HEIGHT); dropdown starts CHIP_HEIGHT+4
+        // below it.
+        let menu_y = HEADER_HEIGHT + CHIP_HEIGHT + 4.0;
+        let click_y = menu_y + DROPDOWN_ROW_HEIGHT * 0.5;
+        let click_x = PAD_X + 10.0; // inside DROPDOWN_WIDTH
+        match p.hit_test(rect, Point2D::new(click_x, click_y)) {
+            Some(VariablesPanelHit::AxisDropdownItem { axis, value }) => {
+                assert_eq!(axis, "mode");
+                assert_eq!(value, "light");
+            }
+            other => panic!("expected AxisDropdownItem for row 0, got {other:?}"),
+        }
+        // Row 2 = "system".
+        let click_y_sys = menu_y + DROPDOWN_ROW_HEIGHT * 2.5;
+        match p.hit_test(rect, Point2D::new(click_x, click_y_sys)) {
+            Some(VariablesPanelHit::AxisDropdownItem { axis, value }) => {
+                assert_eq!(axis, "mode");
+                assert_eq!(value, "system");
+            }
+            other => panic!("expected AxisDropdownItem for row 2, got {other:?}"),
+        }
     }
 
     #[test]

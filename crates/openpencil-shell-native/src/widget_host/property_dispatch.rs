@@ -285,11 +285,25 @@ impl WidgetHostNative {
                     .cloned();
                 if let Some(name) = axis {
                     self.commit_property_focus_if_any();
-                    let snap = self.document.snapshot_for_history();
-                    if self.document.var_table.cycle_active_axis_value(&name) {
-                        self.document.history_push_past(snap);
+                    // Toggle the dropdown for this axis. Click on
+                    // the same chip again closes; click on a
+                    // different chip switches.
+                    if self.document.ui.axis_dropdown_open.as_deref() == Some(name.as_str()) {
+                        self.document.ui.axis_dropdown_open = None;
+                    } else {
+                        self.document.ui.axis_dropdown_open = Some(name);
                     }
                 }
+                true
+            }
+            VariablesPanelHit::AxisDropdownItem { axis, value } => {
+                self.commit_property_focus_if_any();
+                let snap = self.document.snapshot_for_history();
+                self.document
+                    .var_table
+                    .set_active_theme(axis.clone(), value.clone());
+                self.document.history_push_past(snap);
+                self.document.ui.axis_dropdown_open = None;
                 true
             }
         }
