@@ -22,6 +22,19 @@ impl NodeId {
         Self(id)
     }
 
+    /// Non-panicking construction. Returns `None` when `id == 0`
+    /// (the NONE sentinel). Used by code that accepts an arbitrary
+    /// id from the wire (MCP write tools) and needs to reject 0
+    /// without panicking.
+    #[inline]
+    pub const fn new_opt(id: u64) -> Option<Self> {
+        if id == 0 {
+            None
+        } else {
+            Some(Self(id))
+        }
+    }
+
     /// Inner numeric id.
     #[inline]
     pub const fn raw(self) -> u64 { self.0 }

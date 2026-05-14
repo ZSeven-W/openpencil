@@ -170,7 +170,7 @@ fn run_stdio_demotes_write_tool_response_to_error_without_applier() {
     // the response to ToolErrorCode::Internal so the misleading
     // success can't reach the client.
     use std::io::{BufReader, Cursor};
-    use crate::mcp::tools::set_variable_color_snapshot;
+    use crate::mcp::write_tools::set_variable_color_snapshot;
     use crate::document::{Document, Variable, VariableKind, VariableScalar, VariableValue};
     let mut doc = Document::empty();
     doc.var_table.variables.push(Variable {
@@ -200,7 +200,7 @@ fn run_stdio_with_applier_applies_write_command_then_writes_success() {
     // response. Mirrors what a real MCP server would do
     // (Document::apply_mcp_command threaded in as the closure).
     use std::io::{BufReader, Cursor};
-    use crate::mcp::tools::set_variable_color_snapshot;
+    use crate::mcp::write_tools::set_variable_color_snapshot;
     use crate::document::{Document, Variable, VariableKind, VariableScalar, VariableValue};
     let mut doc = Document::empty();
     doc.var_table.variables.push(Variable {
@@ -240,7 +240,7 @@ fn run_stdio_with_applier_demotes_when_applier_rejects() {
     // deleted mid-flight). Wire response becomes Internal so
     // the client knows the mutation didn't land.
     use std::io::{BufReader, Cursor};
-    use crate::mcp::tools::set_variable_color_snapshot;
+    use crate::mcp::write_tools::set_variable_color_snapshot;
     use crate::document::{Document, Variable, VariableKind, VariableScalar, VariableValue};
     let mut doc = Document::empty();
     doc.var_table.variables.push(Variable {

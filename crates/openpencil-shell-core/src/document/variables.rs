@@ -177,12 +177,13 @@ impl VariableTable {
                 self.active_theme.insert(axis.clone(), value.clone());
                 true
             }
-            crate::mcp::McpCommand::InsertNode { .. } => {
-                // Not a VariableTable mutation — InsertNode lives on
-                // the wider `Document::apply_mcp_command` since it
-                // needs Pages + the id allocator. Return false here
-                // so callers that only have a VariableTable handle
-                // know this variant wasn't theirs to apply.
+            crate::mcp::McpCommand::InsertNode { .. }
+            | crate::mcp::McpCommand::UpdateNode { .. }
+            | crate::mcp::McpCommand::DeleteNode { .. } => {
+                // Not VariableTable mutations — Pages-level commands
+                // live on `Document::apply_mcp_command`. Return false
+                // so callers with only a VariableTable handle know
+                // these variants aren't theirs.
                 false
             }
         }
