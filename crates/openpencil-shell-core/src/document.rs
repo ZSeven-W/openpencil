@@ -789,8 +789,7 @@ mod mutators;
 mod page_mutators;
 mod pen;
 mod variables;
-#[cfg(test)]
-mod variables_tests;
+#[cfg(test)] mod variables_tests;
 mod walkers;
 pub use align::AlignAction;
 pub use components::{Component, ComponentLibrary};
