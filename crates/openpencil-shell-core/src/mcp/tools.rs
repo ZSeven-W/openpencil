@@ -466,17 +466,27 @@ impl McpTool for GetActiveTheme {
         "get_active_theme"
     }
     fn call(&self, _args: &BTreeMap<String, String>) -> ToolOutcome {
+        // `axes` is a 2-level format (`;`-records of `|`-pairs) —
+        // same shape as list_variables, so it MUST use the legacy
+        // `escape_record_field` (3-char set) for wire compatibility.
+        // Clients decode with the standard `unescape_record_field`
+        // and would otherwise see stray `\,` sequences (codex stop-
+        // gate fix).
         let active_encoded: Vec<String> = self
             .active
             .iter()
             .map(|(axis, value)| {
                 format!(
                     "{}|{}",
-                    escape_layered_field(axis),
-                    escape_layered_field(value)
+                    escape_record_field(axis),
+                    escape_record_field(value)
                 )
             })
             .collect();
+        // `options` is a 3-level format (`;`-records of `|`-pairs
+        // whose value side is `,`-joined). Only THIS field uses the
+        // layered escape, because the inner `,` separator needs
+        // protection from literal commas inside individual values.
         let options_encoded: Vec<String> = self
             .options
             .iter()
@@ -615,6 +625,43 @@ mod tests {
             }
             _ => panic!("expected Ok"),
         }
+    }
+
+    #[test]
+    fn get_active_theme_axes_field_does_not_escape_commas() {
+        // Codex stop-gate (third pass): `axes` is a 2-level format
+        // (`;`-records of `|`-pairs) identical in shape to
+        // list_variables, so it must keep the legacy 3-char escape
+        // set (`\;|`) — clients decode with standard
+        // unescape_record_field which doesn't strip `\,`.
+        //
+        // The previous commit had me using escape_layered_field for
+        // BOTH `axes` and `options`. Splitting them: `axes` uses
+        // `escape_record_field` (no comma escape); `options` uses
+        // `escape_layered_field` (comma escape required for inner
+        // value list).
+        use crate::document::Document;
+        let mut doc = Document::empty();
+        // Active selection where the value carries a comma (rare
+        // but valid — schema doesn't forbid).
+        doc.var_table
+            .set_active_theme("axis,with,commas", "value,with,commas");
+        let tool = get_active_theme_snapshot(&doc);
+        let axes = match tool.call(&BTreeMap::new()) {
+            ToolOutcome::Ok(o) => o.get("axes").unwrap().clone(),
+            _ => panic!(),
+        };
+        // axis name + value commas must pass through verbatim —
+        // the standard list_variables-compatible decoder would
+        // otherwise see `\,` as a literal 2-char sequence.
+        assert!(
+            axes.contains("axis,with,commas|value,with,commas"),
+            "axes must not escape commas; got {axes}"
+        );
+        assert!(
+            !axes.contains("\\,"),
+            "axes must not contain backslash-comma; got {axes}"
+        );
     }
 
     #[test]
