@@ -261,13 +261,54 @@ impl WidgetHostNative {
         match hit {
             VariablesPanelHit::Row(idx) => {
                 if let Some(var) = self.document.var_table.variables.get(idx) {
-                    if matches!(
-                        var.kind,
-                        openpencil_shell_core::document::VariableKind::Color
-                    ) {
-                        let name = var.name.clone();
-                        self.commit_property_focus_if_any();
-                        let _ = self.document.open_color_picker_for_variable(name, y);
+                    use openpencil_shell_core::document::{
+                        VariableKind, VariableScalar,
+                    };
+                    match var.kind {
+                        VariableKind::Color => {
+                            let name = var.name.clone();
+                            self.commit_property_focus_if_any();
+                            let _ = self.document.open_color_picker_for_variable(name, y);
+                        }
+                        VariableKind::Boolean => {
+                            // Click toggles the boolean value. The
+                            // resolve walk through set_scalar honors
+                            // the active-theme routing (subset match
+                            // / no default clobber / no other-axis
+                            // shadow), so a toggle under
+                            // theme=dark only writes the dark
+                            // entry, leaving light untouched.
+                            let name = var.name.clone();
+                            let current = self
+                                .document
+                                .var_table
+                                .resolve(&name)
+                                .and_then(|s| {
+                                    if let VariableScalar::Bool(b) = s {
+                                        Some(*b)
+                                    } else {
+                                        None
+                                    }
+                                })
+                                .unwrap_or(false);
+                            self.commit_property_focus_if_any();
+                            let snap = self.document.snapshot_for_history();
+                            if self
+                                .document
+                                .var_table
+                                .set_scalar(&name, VariableScalar::Bool(!current))
+                            {
+                                self.document.history_push_past(snap);
+                            }
+                        }
+                        VariableKind::Number | VariableKind::String => {
+                            // Inline editor for numeric / string
+                            // values not built yet — the MCP path
+                            // (set_variable_number / _string) is
+                            // the available write surface today.
+                            // Clicking the row is a no-op rather
+                            // than a misleading focus.
+                        }
                     }
                 }
                 true
