@@ -285,7 +285,20 @@ fn parse_flat_object_body(body: &str) -> Option<BTreeMap<String, String>> {
                 i += 1; // closing quote
             }
             b'{' | b'[' => {
-                // Skip nested by depth tracking.
+                // Walk past the nested literal with depth tracking so the
+                // outer parse continues past it; insert a sentinel value
+                // for the key so tools see the arg as present-but-non-
+                // scalar (and reject it) instead of silently absent.
+                // The sentinel is deliberately not a valid value for any
+                // scalar argument: it's neither a bool / decimal / hex /
+                // enum that any tool accepts, so every existing tool's
+                // own validation surfaces it as `InvalidArgument`.
+                // Codex flagged the previous behavior (silently dropping
+                // the key) as a destructive-swap guard bypass — a caller
+                // sending `{ "drop_children": {} }` saw the arg as
+                // missing and got the safe default; same for any
+                // structured value sent to a tool that uses scalar
+                // defaults. Fail loudly instead.
                 let open = bytes[i];
                 let close = if open == b'{' { b'}' } else { b']' };
                 let mut depth = 1i32;
@@ -311,8 +324,8 @@ fn parse_flat_object_body(body: &str) -> Option<BTreeMap<String, String>> {
                     }
                     i += 1;
                 }
-                // Nested values not surfaced — tools take scalar
-                // args. Leave the key out of the map.
+                let sentinel = if open == b'{' { "{...}" } else { "[...]" };
+                out.insert(key, sentinel.into());
             }
             _ => {
                 // Number / true / false / null — read until comma /
