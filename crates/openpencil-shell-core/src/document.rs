@@ -449,17 +449,14 @@ pub struct RecentFile {
 
 /// File-menu choices the desktop runner has to handle (rfd dialogs
 /// + serde live there, not in shell-core).
-/// File-menu choices. ExportImage opens the picker; ExportImageConfirm
-/// commits with `ui.export_format` + `ui.export_scale`.
+/// File-menu choices. ExportImage opens the picker; ExportImageConfirm commits.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FileAction {
-    New, Open, Save, SaveAs,
-    ExportImage, ExportImageConfirm,
+    New, Open, Save, SaveAs, ExportImage, ExportImageConfirm,
     ImportFigma, OpenRecent(usize), ClearRecent,
 }
 
-/// Path boolean operations. Mirrors the four ops the TS app exposes
-/// via Paper.js (Ctrl+Alt+U / S / I / X).
+/// Path boolean ops — TS parity with Paper.js (Ctrl+Alt+U/S/I/X).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BooleanOp { Union, Subtract, Intersect, Exclude }
 
@@ -793,8 +790,10 @@ mod grouping;
 mod mutators;
 mod page_mutators;
 mod pen;
+mod variables;
 mod walkers;
 pub use align::AlignAction;
+pub use variables::{ThemeAxis, ThemedValue, Variable, VariableKind, VariableScalar, VariableValue};
 pub use walkers::ReorderDirection;
 
 #[cfg(test)] mod tests_geometry;
