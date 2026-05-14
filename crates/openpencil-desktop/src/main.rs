@@ -578,8 +578,17 @@ impl ApplicationHandler for DesktopApp {
                             // modal itself; closing while focused
                             // also commits via the close path.
                             "," => consumed = self.host.apply_toggle_agent_settings(),
-                            "s" => consumed = persistence::handle_save(&mut self.host, &mut self.current_path, self.window.as_ref()),
-                            "o" => consumed = persistence::handle_open(&mut self.host, &mut self.current_path, self.window.as_ref()),
+                            "s" => {
+                                // Codex stop-gate: commit any pending
+                                // variable-row inline edit before save
+                                // so the typed value lands on disk.
+                                self.host.commit_variable_row_focus_if_any_pub();
+                                consumed = persistence::handle_save(&mut self.host, &mut self.current_path, self.window.as_ref());
+                            }
+                            "o" => {
+                                self.host.commit_variable_row_focus_if_any_pub();
+                                consumed = persistence::handle_open(&mut self.host, &mut self.current_path, self.window.as_ref());
+                            }
                             _ if settings_focused => {}
                             "d" => consumed = self.host.apply_duplicate(),
                             "a" => consumed = self.host.apply_select_all(),
@@ -596,8 +605,12 @@ impl ApplicationHandler for DesktopApp {
                     Key::Character(ref ch) if self.zoom_modifier && self.shift_modifier => {
                         match ch.to_lowercase().as_str() {
                             // Cmd+Shift+S = Save As; always allowed.
-                            "s" => consumed = persistence::handle_save_as(&mut self.host, &mut self.current_path, self.window.as_ref()),
+                            "s" => {
+                                self.host.commit_variable_row_focus_if_any_pub();
+                                consumed = persistence::handle_save_as(&mut self.host, &mut self.current_path, self.window.as_ref());
+                            }
                             "p" => {
+                                self.host.commit_variable_row_focus_if_any_pub();
                                 persistence::run_action(openpencil_shell_core::document::FileAction::ExportImage, &mut self.host, &mut self.current_path, self.window.as_ref());
                                 consumed = true;
                             }

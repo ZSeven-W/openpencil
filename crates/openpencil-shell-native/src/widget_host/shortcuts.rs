@@ -53,6 +53,7 @@ impl WidgetHostNative {
     /// exiting edit mode (each pause-bounded burst is its own
     /// history entry).
     pub fn apply_undo(&mut self) -> bool {
+        self.commit_variable_row_focus_if_any();
         if self.document.ui.layer_rename.is_some() || self.document.chat.focused {
             return false;
         }
@@ -60,6 +61,7 @@ impl WidgetHostNative {
     }
 
     pub fn apply_redo(&mut self) -> bool {
+        self.commit_variable_row_focus_if_any();
         if self.document.ui.layer_rename.is_some() || self.document.chat.focused {
             return false;
         }
@@ -68,6 +70,7 @@ impl WidgetHostNative {
 
     /// Cmd+G — wrap the current selection in a new Group node.
     pub fn apply_group(&mut self) -> bool {
+        self.commit_variable_row_focus_if_any();
         if self.document.ui.layer_rename.is_some() || self.document.chat.focused {
             return false;
         }
@@ -88,6 +91,7 @@ impl WidgetHostNative {
 
     /// Cmd+Shift+G — unwrap a Group selection (children replace it).
     pub fn apply_ungroup(&mut self) -> bool {
+        self.commit_variable_row_focus_if_any();
         if self.document.ui.layer_rename.is_some() || self.document.chat.focused {
             return false;
         }
@@ -117,6 +121,7 @@ impl WidgetHostNative {
 
     /// Cmd+Shift+C — toggle the PropertyPanel between Design / Code.
     pub fn apply_toggle_code_panel(&mut self) -> bool {
+        self.commit_variable_row_focus_if_any();
         use openpencil_shell_core::document::PropertyTab;
         self.document.ui.property_tab = match self.document.ui.property_tab {
             PropertyTab::Design => PropertyTab::Code,
@@ -127,6 +132,7 @@ impl WidgetHostNative {
 
     /// Cmd+, — open / close the floating agent-settings modal.
     pub fn apply_toggle_agent_settings(&mut self) -> bool {
+        self.commit_variable_row_focus_if_any();
         self.document.ui.agent_settings_open = !self.document.ui.agent_settings_open;
         if !self.document.ui.agent_settings_open {
             self.document.ui.agent_settings_drag = None;
@@ -138,6 +144,7 @@ impl WidgetHostNative {
     /// commits any in-flight pen path so switching away from Pen
     /// doesn't leave a dangling rubber-band.
     pub fn apply_set_tool(&mut self, tool: openpencil_shell_core::document::Tool) {
+        self.commit_variable_row_focus_if_any();
         let _ = self.document.finish_pen_path();
         self.document.tool = tool;
         if let openpencil_shell_core::document::Tool::Rect
@@ -155,6 +162,15 @@ impl WidgetHostNative {
     /// keyboard.
     pub fn input_active_pub(&self) -> bool {
         self.input_active()
+    }
+
+    /// Public proxy for the variable-row inline editor commit.
+    /// External call sites in the desktop binary (Cmd+S / Cmd+O /
+    /// Cmd+Shift+S / Cmd+Shift+P) call this before persistence /
+    /// export actions so the typed value lands before the file
+    /// op runs.
+    pub fn commit_variable_row_focus_if_any_pub(&mut self) {
+        self.commit_variable_row_focus_if_any();
     }
 
     /// `[` / `]` — bump selection up/down within parent siblings.

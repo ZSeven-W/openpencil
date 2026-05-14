@@ -339,6 +339,10 @@ impl WidgetHostNative {
         &mut self,
         op: openpencil_shell_core::document::BooleanOp,
     ) -> bool {
+        // Codex stop-gate: boolean op shortcuts (Cmd+Alt+U/S/I/X)
+        // mutate the document — commit any pending variable-row
+        // edit first so the dirty draft lands before this op runs.
+        self.commit_variable_row_focus_if_any();
         crate::boolean_ops::apply_boolean_op(&mut self.document, op, &mut self.next_node_id)
     }
 
