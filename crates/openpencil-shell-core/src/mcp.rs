@@ -41,9 +41,10 @@ pub use write_tools::{
 pub use component_tools::{
     add_page_snapshot, create_component_snapshot, delete_component_snapshot,
     delete_page_snapshot, duplicate_page_snapshot, instantiate_component_snapshot,
-    rename_component_snapshot, rename_page_snapshot, set_active_page_snapshot, AddPage,
-    CreateComponent, DeleteComponent, DeletePage, DuplicatePage, InstantiateComponent,
-    RenameComponent, RenamePage, SetActivePage,
+    rename_component_snapshot, rename_page_snapshot, reorder_page_snapshot,
+    set_active_page_snapshot, AddPage, CreateComponent, DeleteComponent, DeletePage,
+    DuplicatePage, InstantiateComponent, RenameComponent, RenamePage, ReorderPage,
+    SetActivePage,
 };
 pub use batch_design::{
     batch_design_snapshot, design_content_snapshot, design_refine_snapshot,
@@ -316,6 +317,13 @@ pub enum McpCommand {
     /// `duplicatePage(idx)`.
     DuplicatePage {
         index: u32,
+    },
+    /// Move the page at `from` to `to`. `to` is clamped into
+    /// `[0, page_count)`. The applier keeps `active_page_index`
+    /// tracking the moved page.
+    ReorderPage {
+        from: u32,
+        to: u32,
     },
 }
 

@@ -519,6 +519,9 @@ impl Document {
             crate::mcp::McpCommand::DuplicatePage { index } => {
                 self.duplicate_page(*index as usize).is_some()
             }
+            crate::mcp::McpCommand::ReorderPage { from, to } => {
+                self.reorder_page(*from as usize, *to as usize)
+            }
             crate::mcp::McpCommand::BatchInsert { items } => {
                 // Validate EVERY descriptor before any mutation.
                 // A single bad entry rejects the entire batch so

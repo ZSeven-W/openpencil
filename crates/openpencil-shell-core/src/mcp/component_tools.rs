@@ -358,3 +358,52 @@ pub fn duplicate_page_snapshot() -> DuplicatePage {
     DuplicatePage
 }
 
+/// First-party `reorder_page` tool — move a page from one index
+/// to another. The applier clamps `to` into `[0, page_count)`.
+pub struct ReorderPage;
+
+impl McpTool for ReorderPage {
+    fn name(&self) -> &str {
+        "reorder_page"
+    }
+    fn call(&self, args: &BTreeMap<String, String>) -> ToolOutcome {
+        let from: u32 = match args.get("from").map(|s| s.parse::<u32>()) {
+            Some(Ok(n)) => n,
+            Some(_) => {
+                return ToolOutcome::Err(
+                    ToolErrorCode::InvalidArgument,
+                    "from must be a u32".into(),
+                );
+            }
+            None => {
+                return ToolOutcome::Err(
+                    ToolErrorCode::MissingArgument,
+                    "from is required (0-based source page index)".into(),
+                );
+            }
+        };
+        let to: u32 = match args.get("to").map(|s| s.parse::<u32>()) {
+            Some(Ok(n)) => n,
+            Some(_) => {
+                return ToolOutcome::Err(
+                    ToolErrorCode::InvalidArgument,
+                    "to must be a u32".into(),
+                );
+            }
+            None => {
+                return ToolOutcome::Err(
+                    ToolErrorCode::MissingArgument,
+                    "to is required (0-based target page index)".into(),
+                );
+            }
+        };
+        let mut out = BTreeMap::new();
+        out.insert("wrote".into(), "true".into());
+        ToolOutcome::OkWithCommand(out, McpCommand::ReorderPage { from, to })
+    }
+}
+
+pub fn reorder_page_snapshot() -> ReorderPage {
+    ReorderPage
+}
+
