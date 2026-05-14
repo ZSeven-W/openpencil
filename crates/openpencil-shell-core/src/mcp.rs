@@ -12,9 +12,11 @@ pub mod parser;
 pub mod tools;
 #[cfg(test)] mod tools_tests;
 pub mod write_tools;
+pub mod batch_design;
 #[cfg(test)] mod write_tools_tests;
 #[cfg(test)] mod copy_node_tests;
 #[cfg(test)] mod replace_node_tests;
+#[cfg(test)] mod batch_design_tests;
 
 // Re-export the public surface of submodules so callers can keep
 // using `mcp::parse_tool_call` / `mcp::GetDocumentInfo` after the
@@ -31,6 +33,7 @@ pub use write_tools::{
     update_node_snapshot, CopyNode, DeleteNode, InsertNode, MoveNode, ReplaceNode,
     SetActiveAxisValue, SetVariableColor, UpdateNode,
 };
+pub use batch_design::{batch_design_snapshot, BatchDesign};
 
 /// JSON-RPC-style request id. Strings + integers both supported by
 /// the spec; we accept either over the wire.
@@ -218,6 +221,31 @@ pub enum McpCommand {
         /// destructive swap; `true` is explicit consent.
         drop_children: bool,
     },
+    /// Insert N leaf nodes on the active page in one atomic
+    /// shot. Mirrors TS `batch_design` for the leaf subset
+    /// (frame / group / rect / ellipse / polygon / line / text /
+    /// path). Apply path validates EVERY descriptor before any
+    /// mutation; a single bad entry rejects the whole batch so
+    /// callers never see a partial design. Each emitted node
+    /// gets a fresh non-colliding id from `next_node_id_seed`,
+    /// advanced for the batch.
+    BatchInsert {
+        items: Vec<BatchInsertItem>,
+    },
+}
+
+/// Per-item descriptor for `McpCommand::BatchInsert`. Same shape
+/// as `InsertNode`'s args; carried in a Vec so the applier can
+/// validate-then-mutate the whole set atomically.
+#[derive(Debug, Clone, PartialEq)]
+pub struct BatchInsertItem {
+    pub kind: String,
+    pub name: String,
+    pub x: i32,
+    pub y: i32,
+    pub width: i32,
+    pub height: i32,
+    pub fill_hex: Option<String>,
 }
 
 /// Trait every MCP tool implements. The MCP server walks its

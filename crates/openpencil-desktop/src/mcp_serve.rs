@@ -24,7 +24,7 @@ use std::path::PathBuf;
 
 use openpencil_shell_core::document::Document;
 use openpencil_shell_core::mcp::{
-    copy_node_snapshot, delete_node_snapshot, document_info_snapshot,
+    batch_design_snapshot, copy_node_snapshot, delete_node_snapshot, document_info_snapshot,
     get_active_theme_snapshot, get_node_snapshot, insert_node_snapshot,
     list_pages_snapshot, list_variables_snapshot, move_node_snapshot,
     replace_node_snapshot, run_stdio_with_applier, selection_snapshot,
@@ -144,6 +144,7 @@ fn rebuild_registry(doc: &Document) -> ToolRegistry {
     r.register(Box::new(move_node_snapshot()));
     r.register(Box::new(copy_node_snapshot()));
     r.register(Box::new(replace_node_snapshot()));
+    r.register(Box::new(batch_design_snapshot()));
     r
 }
 
@@ -358,6 +359,7 @@ const TOOL_SCHEMAS: &[&str] = &[
     r#"{"name":"get_active_theme","description":"Return the active theme axis pinning per axis.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}}"#,
     // --- write tools ---
     r##"{"name":"set_variable_color","description":"Set a Color-kind variable's value.","inputSchema":{"type":"object","properties":{"name":{"type":"string"},"hex":{"type":"string","description":"#rgb / #rrggbb / #rrggbbaa"}},"required":["name","hex"]}}"##,
+    r#"{"name":"batch_design","description":"Insert N leaf nodes on the active page in one atomic shot. nodes_json must be a JSON array string of {kind,name,x,y,width,height,fill_hex?} descriptors.","inputSchema":{"type":"object","properties":{"nodes_json":{"type":"string","description":"JSON array of node descriptors"}},"required":["nodes_json"]}}"#,
     r#"{"name":"set_active_axis_value","description":"Pin a theme axis to one of its allowed values.","inputSchema":{"type":"object","properties":{"axis":{"type":"string"},"value":{"type":"string"}},"required":["axis","value"]}}"#,
     r#"{"name":"insert_node","description":"Create a new leaf node on the active page.","inputSchema":{"type":"object","properties":{"kind":{"type":"string","enum":["frame","group","rect","ellipse","polygon","line","text","path"]},"name":{"type":"string"},"x":{"type":"string"},"y":{"type":"string"},"width":{"type":"string"},"height":{"type":"string"},"fill_hex":{"type":"string"}},"required":["kind","name","x","y","width","height"]}}"#,
     r#"{"name":"update_node","description":"Patch fields on an existing node. Pass any subset of x/y/width/height/name/fill_hex.","inputSchema":{"type":"object","properties":{"node_id":{"type":"string"},"x":{"type":"string"},"y":{"type":"string"},"width":{"type":"string"},"height":{"type":"string"},"name":{"type":"string"},"fill_hex":{"type":"string"}},"required":["node_id"]}}"#,
@@ -411,7 +413,7 @@ mod tests {
     }
 
     #[test]
-    fn tools_list_response_includes_all_fourteen_tools() {
+    fn tools_list_response_includes_all_fifteen_tools() {
         let r = tools_list_response("3");
         for name in [
             "get_document_info",
@@ -428,6 +430,7 @@ mod tests {
             "move_node",
             "copy_node",
             "replace_node",
+            "batch_design",
         ] {
             assert!(r.contains(name), "tools/list must include {name}: {r}");
         }
