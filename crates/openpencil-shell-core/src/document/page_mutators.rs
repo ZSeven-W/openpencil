@@ -5,6 +5,23 @@ use super::walkers::{deep_clone_with_new_ids, set_name_walk, text_mut_walk};
 use super::*;
 
 impl Document {
+    /// Switch the active page to `idx`. Returns true on success,
+    /// false when `idx` is out of bounds. Mirrors TS
+    /// `setActivePage(idx)` — used by the MCP `set_active_page`
+    /// write tool so LLM-driven sessions can target different
+    /// pages for subsequent insert / batch_design ops.
+    pub fn set_active_page(&mut self, idx: usize) -> bool {
+        if idx >= self.pages.len() {
+            return false;
+        }
+        if self.active_page_index == idx {
+            return true;
+        }
+        self.active_page_index = idx;
+        self.clear_selection();
+        true
+    }
+
     /// Append a fresh empty page named `"Page N"` (where N =
     /// `pages.len() + 1` BEFORE the insert) and switch to it. The
     /// new page's id is minted past `max_node_id() + 1`. Returns

@@ -14,6 +14,7 @@ pub mod tools;
 pub mod write_tools;
 pub mod batch_design;
 pub mod scalar_vars;
+pub mod component_tools;
 #[cfg(test)] mod write_tools_tests;
 #[cfg(test)] mod copy_node_tests;
 #[cfg(test)] mod replace_node_tests;
@@ -32,13 +33,15 @@ pub use tools::{
     NodeRecord, VariableRecord,
 };
 pub use write_tools::{
-    copy_node_snapshot, create_component_snapshot, delete_component_snapshot,
-    delete_node_snapshot, insert_node_snapshot, instantiate_component_snapshot,
-    move_node_snapshot, rename_component_snapshot, replace_node_snapshot,
-    set_active_axis_value_snapshot, set_variable_color_snapshot, update_node_snapshot,
-    CopyNode, CreateComponent, DeleteComponent, DeleteNode, InsertNode,
-    InstantiateComponent, MoveNode, RenameComponent, ReplaceNode, SetActiveAxisValue,
-    SetVariableColor, UpdateNode,
+    copy_node_snapshot, delete_node_snapshot, insert_node_snapshot, move_node_snapshot,
+    replace_node_snapshot, set_active_axis_value_snapshot, set_variable_color_snapshot,
+    update_node_snapshot, CopyNode, DeleteNode, InsertNode, MoveNode, ReplaceNode,
+    SetActiveAxisValue, SetVariableColor, UpdateNode,
+};
+pub use component_tools::{
+    create_component_snapshot, delete_component_snapshot, instantiate_component_snapshot,
+    rename_component_snapshot, set_active_page_snapshot, CreateComponent, DeleteComponent,
+    InstantiateComponent, RenameComponent, SetActivePage,
 };
 pub use batch_design::{
     batch_design_snapshot, design_content_snapshot, design_refine_snapshot,
@@ -284,6 +287,11 @@ pub enum McpCommand {
     RenameComponent {
         component_id: u64,
         name: String,
+    },
+    /// Switch the active page. Subsequent inserts / batch_design /
+    /// design_* commands target the new active page.
+    SetActivePage {
+        index: u32,
     },
 }
 
