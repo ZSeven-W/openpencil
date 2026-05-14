@@ -221,6 +221,16 @@ impl WidgetHostNative {
     }
 
     pub(in crate::widget_host) fn commit_property_focus_if_any(&mut self) {
+        // Commit any pending variable-row edit first so all
+        // existing "outside-click commits the focused input"
+        // call sites cover both editor surfaces. Without this,
+        // typing into a Number row + clicking on the canvas
+        // (or any other outside-the-variables-panel target)
+        // would leave the variable_row_focus set and continue
+        // routing keystrokes into the variable draft instead
+        // of, e.g., the canvas (codex stop-gate: "variable row
+        // focus leaks outside the inline editor").
+        self.commit_variable_row_focus_if_any();
         let Some(focus) = self.document.ui.property_focus.take() else {
             return;
         };
