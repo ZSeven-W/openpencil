@@ -3,6 +3,7 @@
 
 #![cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]
 
+mod chat_runtime;
 mod export;
 mod export_pdf;
 mod pen_doc_adapter;

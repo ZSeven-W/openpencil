@@ -64,3 +64,22 @@ glam = { version = "0.29", default-features = false, features = ["std"] }
 # Linux  → ~/.config/openpencil/settings.json
 # Windows → %APPDATA%/openpencil/settings.json
 dirs = "5"
+# Cross-product Rust agent runtime — provides `QueryEngine` + the
+# generic `Provider` trait + streaming `Event`s. Lives outside the
+# openpencil workspace at /Users/kayshen/Workspace/ZSeven-W/agent-rs,
+# referenced by relative path so the BuiltIn ChatProvider in
+# `src/chat_runtime.rs` can drive a real LLM turn.
+#
+# Compiled with NO default features today — the `anthropic` feature
+# would drag in reqwest's TLS stack (rustls / icu / idna) which needs
+# rustc ≥ 1.86 while this workspace pins 1.85. The BuiltIn bridge ships
+# the trait + the engine wiring + `from_provider`; concrete
+# Provider impls (Anthropic / OpenAI-compat / Ollama) flip on once the
+# workspace rust-toolchain bumps.
+agent = { path = "../../../agent-rs/crates/agent", default-features = false }
+async-trait = "0.1"
+# Async runtime — agent-rs is async; the BuiltIn ChatProvider impl
+# bridges its `EventStream` into the sync `Iterator<ChatDelta>`
+# shape via a tokio task + std::sync::mpsc channel.
+tokio = { version = "1", default-features = false, features = ["rt-multi-thread", "macros", "sync"] }
+futures = { version = "0.3", default-features = false, features = ["std"] }
