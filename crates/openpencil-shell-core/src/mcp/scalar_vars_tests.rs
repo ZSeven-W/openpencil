@@ -89,6 +89,32 @@ fn set_variable_boolean_emits_command_and_rejects_bad_strings() {
 }
 
 #[test]
+fn apply_mcp_command_rejects_color_through_scalar_path() {
+    // Codex stop-gate: set_variable_string snapshot wouldn't
+    // include a Color variable name, but a misrouted call (or a
+    // forged McpCommand) MUST be rejected at apply time too.
+    // The Color variable must keep its original value.
+    use crate::document::{VariableKind, VariableScalar, VariableValue};
+    let mut doc = doc_with(VariableKind::Color, "primary");
+    // Stamp a known-good hex so we can detect mutation.
+    if let Some(v) = doc.var_table.variables.iter_mut().find(|v| v.name == "primary") {
+        v.value = VariableValue::Scalar(VariableScalar::Str("#abcdef".into()));
+    }
+    let cmd = McpCommand::SetVariableScalar {
+        name: "primary".into(),
+        scalar: VariableScalarPayload::String("garbage".into()),
+    };
+    assert!(!doc.var_table.apply_mcp_command(&cmd), "Color must reject scalar path");
+    let v = doc.var_table.variables.iter().find(|v| v.name == "primary").unwrap();
+    match &v.value {
+        VariableValue::Scalar(VariableScalar::Str(s)) => {
+            assert_eq!(s, "#abcdef", "Color value must be unchanged");
+        }
+        other => panic!("expected unchanged hex, got {other:?}"),
+    }
+}
+
+#[test]
 fn apply_mcp_command_routes_to_set_scalar() {
     use crate::document::{Document, VariableKind, VariableScalar, VariableValue};
     let mut doc = doc_with(VariableKind::Number, "size");
