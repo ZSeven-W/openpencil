@@ -14,6 +14,7 @@ pub mod tools;
 pub mod write_tools;
 #[cfg(test)] mod write_tools_tests;
 #[cfg(test)] mod copy_node_tests;
+#[cfg(test)] mod replace_node_tests;
 
 // Re-export the public surface of submodules so callers can keep
 // using `mcp::parse_tool_call` / `mcp::GetDocumentInfo` after the
@@ -26,9 +27,9 @@ pub use tools::{
 };
 pub use write_tools::{
     copy_node_snapshot, delete_node_snapshot, insert_node_snapshot, move_node_snapshot,
-    set_active_axis_value_snapshot, set_variable_color_snapshot, update_node_snapshot,
-    CopyNode, DeleteNode, InsertNode, MoveNode, SetActiveAxisValue, SetVariableColor,
-    UpdateNode,
+    replace_node_snapshot, set_active_axis_value_snapshot, set_variable_color_snapshot,
+    update_node_snapshot, CopyNode, DeleteNode, InsertNode, MoveNode, ReplaceNode,
+    SetActiveAxisValue, SetVariableColor, UpdateNode,
 };
 
 /// JSON-RPC-style request id. Strings + integers both supported by
@@ -179,6 +180,31 @@ pub enum McpCommand {
     CopyNode {
         node_id: u64,
         target_parent_id: u64,
+    },
+    /// Replace an existing node with a freshly-built one at the
+    /// same parent slot + same index. Captures the same shape as
+    /// `InsertNode` (kind / name / bounds / fill_hex) plus the
+    /// target `node_id` to swap. Useful when the LLM wants to
+    /// change kind (rect → ellipse) or radically alter the node
+    /// in one atomic op rather than via incremental `UpdateNode`
+    /// patches. The new node gets a fresh id past `max_node_id()`
+    /// so the wire response is still fire-and-forget (callers
+    /// re-query to learn the new id).
+    ///
+    /// Bounded scope: today only the leaf-style fields land on
+    /// the replacement node. A future patch may grow this to
+    /// carry children / a full subtree once a JSON Node parser
+    /// lives on the host. The current contract matches what TS
+    /// `replace_node` accepts for primitives, minus children.
+    ReplaceNode {
+        node_id: u64,
+        kind: String,
+        name: String,
+        x: i32,
+        y: i32,
+        width: i32,
+        height: i32,
+        fill_hex: Option<String>,
     },
 }
 

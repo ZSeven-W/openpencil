@@ -181,7 +181,8 @@ impl VariableTable {
             | crate::mcp::McpCommand::UpdateNode { .. }
             | crate::mcp::McpCommand::DeleteNode { .. }
             | crate::mcp::McpCommand::MoveNode { .. }
-            | crate::mcp::McpCommand::CopyNode { .. } => {
+            | crate::mcp::McpCommand::CopyNode { .. }
+            | crate::mcp::McpCommand::ReplaceNode { .. } => {
                 // Not VariableTable mutations — Pages-level commands
                 // live on `Document::apply_mcp_command`. Return false
                 // so callers with only a VariableTable handle know

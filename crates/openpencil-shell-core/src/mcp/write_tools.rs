@@ -507,6 +507,119 @@ pub fn copy_node_snapshot() -> CopyNode {
     CopyNode
 }
 
+/// First-party `replace_node` tool — swap an existing node with a
+/// freshly-built one at the same parent slot. Required args:
+/// node_id, kind, name, x, y, width, height. Optional: fill_hex.
+/// Bounded scope: only leaf-style fields are accepted today (the
+/// children of the replacement default to empty). TS-equivalent
+/// behavior for primitives; subtree-replacement requires a JSON
+/// Node parser that doesn't live on this side yet.
+pub struct ReplaceNode;
+
+impl McpTool for ReplaceNode {
+    fn name(&self) -> &str {
+        "replace_node"
+    }
+    fn call(&self, args: &BTreeMap<String, String>) -> ToolOutcome {
+        let raw = match args.get("node_id") {
+            Some(s) => s,
+            None => {
+                return ToolOutcome::Err(
+                    ToolErrorCode::MissingArgument,
+                    "node_id is required".into(),
+                );
+            }
+        };
+        let node_id: u64 = match raw.parse() {
+            Ok(n) if n > 0 => n,
+            _ => {
+                return ToolOutcome::Err(
+                    ToolErrorCode::InvalidArgument,
+                    format!("node_id must be a positive u64, got {raw:?}"),
+                );
+            }
+        };
+        let kind = match args.get("kind") {
+            Some(s) => s.clone(),
+            None => {
+                return ToolOutcome::Err(
+                    ToolErrorCode::MissingArgument,
+                    "kind is required".into(),
+                );
+            }
+        };
+        if !ALLOWED_KINDS.iter().any(|k| *k == kind) {
+            return ToolOutcome::Err(
+                ToolErrorCode::InvalidArgument,
+                format!(
+                    "kind {kind:?} not supported; allowed: {}",
+                    ALLOWED_KINDS.join(", ")
+                ),
+            );
+        }
+        let name = match args.get("name") {
+            Some(s) => s.clone(),
+            None => {
+                return ToolOutcome::Err(
+                    ToolErrorCode::MissingArgument,
+                    "name is required".into(),
+                );
+            }
+        };
+        let x = match parse_i32_arg(args, "x") {
+            Ok(v) => v,
+            Err(e) => return e,
+        };
+        let y = match parse_i32_arg(args, "y") {
+            Ok(v) => v,
+            Err(e) => return e,
+        };
+        let width = match parse_i32_arg(args, "width") {
+            Ok(v) => v,
+            Err(e) => return e,
+        };
+        let height = match parse_i32_arg(args, "height") {
+            Ok(v) => v,
+            Err(e) => return e,
+        };
+        if width < 0 || height < 0 {
+            return ToolOutcome::Err(
+                ToolErrorCode::InvalidArgument,
+                "width / height must be non-negative".into(),
+            );
+        }
+        let fill_hex = match args.get("fill_hex") {
+            None => None,
+            Some(s) if !validate_hex(s) => {
+                return ToolOutcome::Err(
+                    ToolErrorCode::InvalidArgument,
+                    format!("fill_hex must be #rgb/#rrggbb/#rrggbbaa, got {s:?}"),
+                );
+            }
+            Some(s) => Some(s.clone()),
+        };
+        let mut out = BTreeMap::new();
+        out.insert("wrote".into(), "true".into());
+        ToolOutcome::OkWithCommand(
+            out,
+            McpCommand::ReplaceNode {
+                node_id,
+                kind,
+                name,
+                x,
+                y,
+                width,
+                height,
+                fill_hex,
+            },
+        )
+    }
+}
+
+pub fn replace_node_snapshot() -> ReplaceNode {
+    ReplaceNode
+}
+
 pub fn set_active_axis_value_snapshot(
     doc: &crate::document::Document,
 ) -> SetActiveAxisValue {
