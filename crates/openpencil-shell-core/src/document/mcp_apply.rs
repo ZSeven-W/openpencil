@@ -494,6 +494,12 @@ impl Document {
                 self.create_component_from_node(target, name.clone())
                     .is_some()
             }
+            crate::mcp::McpCommand::DeleteComponent { component_id } => {
+                let Some(target) = NodeId::new_opt(*component_id) else {
+                    return false;
+                };
+                self.components.remove(target)
+            }
             crate::mcp::McpCommand::BatchInsert { items } => {
                 // Validate EVERY descriptor before any mutation.
                 // A single bad entry rejects the entire batch so
