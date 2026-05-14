@@ -120,7 +120,7 @@ pub fn export_raster(
     Ok(())
 }
 
-fn page_bounds(page: &openpencil_shell_core::document::Page) -> Option<Rect> {
+pub(crate) fn page_bounds(page: &openpencil_shell_core::document::Page) -> Option<Rect> {
     let mut acc = BoundsAcc::new();
     for n in &page.children {
         collect_bounds(n, glam::Affine2::IDENTITY, &mut acc);
@@ -282,7 +282,7 @@ fn own_paint_corners(n: &Node) -> Option<Vec<glam::Vec2>> {
 }
 
 
-fn paint_node(canvas: &Canvas, node: &Node) {
+pub(crate) fn paint_node(canvas: &Canvas, node: &Node) {
     if node.hidden {
         return;
     }

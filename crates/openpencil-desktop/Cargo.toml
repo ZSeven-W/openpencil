@@ -38,6 +38,7 @@ skia-safe = { version = "0.97.0", default-features = false, features = [
   "binary-cache",
   "textlayout",
   "gl",
+  "pdf",
 ] }
 winit = { version = "0.30.13", default-features = false, features = [
   "x11",

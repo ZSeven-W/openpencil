@@ -4,6 +4,7 @@
 #![cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]
 
 mod export;
+mod export_pdf;
 mod pen_doc_adapter;
 mod pen_doc_path_bounds;
 mod persistence;
