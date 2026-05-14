@@ -350,10 +350,17 @@ impl McpTool for ListVariables {
     }
 }
 
-/// Escape `\` / `;` / `|` so the encoded `name|kind|value` triplets
-/// stay unambiguous regardless of variable content. Backslash-prefix
-/// is the standard pattern — clients invert it by walking bytes and
+/// Escape every delimiter the MCP wire format uses, so encoded
+/// fields stay unambiguous regardless of payload content.
+/// Escaped chars: `\`, `;`, `|`, `,`. Backslash-prefix is the
+/// standard pattern — clients invert it by walking bytes and
 /// promoting `\X` → `X` whenever they see an escape introducer.
+///
+/// Comma is in the set because `get_active_theme.options` joins
+/// per-axis value lists with `,` (codex stop-gate: a theme value
+/// like `"red, white, and blue"` would otherwise mis-split into 3
+/// fake values on decode). `list_variables` doesn't use `,` as a
+/// delimiter so the escaped form is harmless there.
 fn escape_record_field(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
     for c in s.chars() {
@@ -361,6 +368,7 @@ fn escape_record_field(s: &str) -> String {
             '\\' => out.push_str("\\\\"),
             ';' => out.push_str("\\;"),
             '|' => out.push_str("\\|"),
+            ',' => out.push_str("\\,"),
             c => out.push(c),
         }
     }
@@ -376,7 +384,7 @@ pub fn unescape_record_field(s: &str) -> String {
     while let Some(c) = chars.next() {
         if c == '\\' {
             match chars.next() {
-                Some(esc @ ('\\' | ';' | '|')) => out.push(esc),
+                Some(esc @ ('\\' | ';' | '|' | ',')) => out.push(esc),
                 Some(other) => {
                     out.push('\\');
                     out.push(other);
@@ -586,6 +594,72 @@ mod tests {
             }
             _ => panic!("expected Ok"),
         }
+    }
+
+    #[test]
+    fn get_active_theme_round_trips_comma_in_value() {
+        // Codex stop-gate: theme values can legitimately contain
+        // commas (e.g. a description-style value like "red, white,
+        // and blue"). The comma joiner inside `options` would
+        // otherwise mis-split into multiple fake values.
+        //
+        // Decoding strategy is LAYERED: each split level only
+        // unescapes the delimiter for THAT level, leaving other
+        // escapes intact for inner splits. A walker that unescapes
+        // every delimiter at once over-decodes the comma escapes
+        // before the inner split sees them.
+        use crate::document::{Document, ThemeAxis};
+        let mut doc = Document::empty();
+        doc.var_table.themes.push(ThemeAxis {
+            name: "palette".into(),
+            values: vec!["a,b,c".into(), "plain".into()],
+        });
+        let tool = get_active_theme_snapshot(&doc);
+        let opts = match tool.call(&BTreeMap::new()) {
+            ToolOutcome::Ok(o) => o.get("options").unwrap().clone(),
+            _ => panic!(),
+        };
+        // Split on `|` — only `\|` is unescaped at this level;
+        // `\,` and `\;` pass through verbatim into the inner blob.
+        let fields = layered_split(&opts, '|');
+        assert_eq!(fields.len(), 2);
+        assert_eq!(fields[0], "palette");
+        // Split fields[1] on `,` — only `\,` is unescaped here.
+        let values = layered_split(&fields[1], ',');
+        assert_eq!(
+            values,
+            vec!["a,b,c".to_string(), "plain".to_string()],
+            "comma must round-trip through escape"
+        );
+    }
+
+    /// Split `s` on unescaped `delim`. Only `\<delim>` is unescaped
+    /// to a literal `<delim>` byte; every other backslash sequence
+    /// passes through verbatim so inner splits can decode their own
+    /// delimiters. Decoder-side counterpart to `escape_record_field`
+    /// for hierarchical wire formats like `get_active_theme.options`
+    /// (`axis|v1,v2,v3;axis2|v1,v2`).
+    fn layered_split(s: &str, delim: char) -> Vec<String> {
+        let mut out = Vec::new();
+        let mut cur = String::new();
+        let mut chars = s.chars().peekable();
+        while let Some(c) = chars.next() {
+            if c == '\\' {
+                match chars.peek() {
+                    Some(&n) if n == delim => {
+                        chars.next();
+                        cur.push(delim);
+                    }
+                    _ => cur.push(c),
+                }
+            } else if c == delim {
+                out.push(std::mem::take(&mut cur));
+            } else {
+                cur.push(c);
+            }
+        }
+        out.push(cur);
+        out
     }
 
     #[test]
