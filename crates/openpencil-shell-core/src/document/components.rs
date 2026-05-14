@@ -49,6 +49,31 @@ impl Document {
     /// id, or None when nothing is selected / selection isn't a
     /// container kind. Mirrors TS "Make Component" in the right-click
     /// context menu.
+    /// Like `create_component_from_selected`, but takes the target
+    /// node id explicitly instead of reading `self.selected`.
+    /// Used by the MCP `create_component` write tool where there
+    /// is no UI selection state. Returns the component's id on
+    /// success (== the source node id), or `None` if the id
+    /// doesn't resolve or the node isn't a Frame / Group.
+    pub fn create_component_from_node(
+        &mut self,
+        node_id: NodeId,
+        name: impl Into<String>,
+    ) -> Option<NodeId> {
+        let page = self.active_page()?;
+        let node = page.find(node_id)?;
+        if !matches!(node.kind, super::NodeKind::Frame | super::NodeKind::Group) {
+            return None;
+        }
+        let comp = Component {
+            id: node_id,
+            name: name.into(),
+            root: node.clone(),
+        };
+        self.components.insert(comp);
+        Some(node_id)
+    }
+
     pub fn create_component_from_selected(&mut self, name: impl Into<String>) -> Option<NodeId> {
         if !self.selected.is_real() {
             return None;
