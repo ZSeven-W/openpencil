@@ -53,15 +53,25 @@ pub enum ToolErrorCode {
     Internal,
 }
 
+/// Result of a tool's work — content + payload only. The
+/// `ToolRegistry::dispatch` wrapper attaches the originating
+/// `RequestId` so a misbehaving tool literally can't mint a
+/// wrong id (codex BLOCK: passing `&ToolCall` to tools left id
+/// preservation as a convention only; this shape enforces it
+/// structurally).
+#[derive(Debug, Clone, PartialEq)]
+pub enum ToolOutcome {
+    Ok(BTreeMap<String, String>),
+    Err(ToolErrorCode, String),
+}
+
 /// Trait every MCP tool implements. The MCP server walks its
 /// `ToolRegistry`, looks up the requested tool, and forwards the
-/// full `ToolCall` (id + args) so the tool can mint a response
-/// carrying the originating request id — JSON-RPC requires every
-/// response to echo it back (codex BLOCK: prior signature dropped
-/// the id, forcing tools to invent fakes).
+/// arguments. Tools return a `ToolOutcome`; the registry wraps it
+/// with the originating request id to produce a `ToolResponse`.
 pub trait McpTool: Send + Sync {
     fn name(&self) -> &str;
-    fn call(&self, request: &ToolCall) -> ToolResponse;
+    fn call(&self, args: &BTreeMap<String, String>) -> ToolOutcome;
 }
 
 /// Registry — owned by the MCP server. v1 is a plain HashMap; a
@@ -77,14 +87,27 @@ impl ToolRegistry {
         self.tools.insert(name, tool);
     }
     pub fn dispatch(&self, call: ToolCall) -> ToolResponse {
-        if let Some(tool) = self.tools.get(&call.tool) {
-            tool.call(&call)
-        } else {
-            ToolResponse::Err {
+        // The registry — not the tool — stamps the response id. Tools
+        // never see the id; their `ToolOutcome` is content-only. This
+        // makes id mismatch structurally impossible (codex BLOCK:
+        // passing the id to tools left enforcement as convention).
+        let Some(tool) = self.tools.get(&call.tool) else {
+            return ToolResponse::Err {
                 id: call.id,
                 code: ToolErrorCode::UnknownTool,
                 message: format!("unknown tool: {}", call.tool),
-            }
+            };
+        };
+        match tool.call(&call.arguments) {
+            ToolOutcome::Ok(result) => ToolResponse::Ok {
+                id: call.id,
+                result,
+            },
+            ToolOutcome::Err(code, message) => ToolResponse::Err {
+                id: call.id,
+                code,
+                message,
+            },
         }
     }
     pub fn names(&self) -> Vec<&str> {
@@ -107,11 +130,22 @@ mod tests {
         fn name(&self) -> &str {
             "echo"
         }
-        fn call(&self, request: &ToolCall) -> ToolResponse {
-            ToolResponse::Ok {
-                id: request.id.clone(),
-                result: request.arguments.clone(),
-            }
+        fn call(&self, args: &BTreeMap<String, String>) -> ToolOutcome {
+            ToolOutcome::Ok(args.clone())
+        }
+    }
+
+    /// Deliberately badly-behaved tool: tries to invent a different
+    /// response id. Under the v2 trait it CAN'T — `call` returns
+    /// outcome only; the registry stamps the id. Used by the
+    /// `registry_forces_id_on_misbehaving_tool` regression.
+    struct LyingTool;
+    impl McpTool for LyingTool {
+        fn name(&self) -> &str {
+            "lie"
+        }
+        fn call(&self, _args: &BTreeMap<String, String>) -> ToolOutcome {
+            ToolOutcome::Ok(BTreeMap::new())
         }
     }
 
@@ -140,6 +174,28 @@ mod tests {
                 // tool — JSON-RPC matches responses by id.
                 assert_eq!(id, RequestId::Str("req-1".into()));
                 assert_eq!(result.get("k"), Some(&"v".to_string()));
+            }
+            _ => panic!("expected Ok"),
+        }
+    }
+
+    #[test]
+    fn registry_forces_id_on_response_regardless_of_tool() {
+        // Codex BLOCK round 2: id preservation must be enforced
+        // structurally, not by convention. The trait now returns
+        // a content-only `ToolOutcome`; the registry stamps the id.
+        // Verify any tool's response carries the registry-supplied
+        // id even when the tool itself has no access to it.
+        let mut r = ToolRegistry::default();
+        r.register(Box::new(LyingTool));
+        let call = ToolCall {
+            id: RequestId::Str("req-honest".into()),
+            tool: "lie".into(),
+            arguments: BTreeMap::new(),
+        };
+        match r.dispatch(call) {
+            ToolResponse::Ok { id, .. } => {
+                assert_eq!(id, RequestId::Str("req-honest".into()));
             }
             _ => panic!("expected Ok"),
         }
