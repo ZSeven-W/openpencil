@@ -35,7 +35,10 @@ pub use write_tools::{
     update_node_snapshot, CopyNode, DeleteNode, InsertNode, MoveNode, ReplaceNode,
     SetActiveAxisValue, SetVariableColor, UpdateNode,
 };
-pub use batch_design::{batch_design_snapshot, BatchDesign};
+pub use batch_design::{
+    batch_design_snapshot, design_content_snapshot, design_refine_snapshot,
+    design_skeleton_snapshot, BatchDesign, DesignContent, DesignRefine, DesignSkeleton,
+};
 pub use scalar_vars::{
     set_variable_boolean_snapshot, set_variable_number_snapshot,
     set_variable_string_snapshot, SetVariableBoolean, SetVariableNumber, SetVariableString,
