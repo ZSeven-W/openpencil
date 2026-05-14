@@ -268,6 +268,53 @@ fn extract_field<'a>(line: &'a str, key: &str) -> Option<&'a str> {
     Some(line[val_start..val_start + end_rel].trim())
 }
 
+/// First-party `get_document_info` tool — reports the active
+/// page index, page count, and total node count. The simplest of
+/// the MCP tools TS `pen-mcp` exposes; serves as a wire-format
+/// smoke test for real LLM clients.
+pub struct GetDocumentInfo {
+    pub page_count: usize,
+    pub active_page_index: usize,
+    pub total_nodes: usize,
+}
+
+impl McpTool for GetDocumentInfo {
+    fn name(&self) -> &str {
+        "get_document_info"
+    }
+    fn call(&self, _args: &BTreeMap<String, String>) -> ToolOutcome {
+        let mut out = BTreeMap::new();
+        out.insert("page_count".into(), self.page_count.to_string());
+        out.insert(
+            "active_page_index".into(),
+            self.active_page_index.to_string(),
+        );
+        out.insert("total_nodes".into(), self.total_nodes.to_string());
+        ToolOutcome::Ok(out)
+    }
+}
+
+/// Snapshot the document into a `GetDocumentInfo` tool. Counts all
+/// nodes recursively across every page. The MCP server registers
+/// one of these per document; replays on every `get_document_info`
+/// call without re-walking the tree.
+pub fn document_info_snapshot(doc: &crate::document::Document) -> GetDocumentInfo {
+    let total_nodes: usize = doc
+        .pages
+        .iter()
+        .map(|p| p.children.iter().map(count_subtree).sum::<usize>())
+        .sum();
+    GetDocumentInfo {
+        page_count: doc.pages.len(),
+        active_page_index: doc.active_page_index,
+        total_nodes,
+    }
+}
+
+fn count_subtree(n: &crate::document::Node) -> usize {
+    1 + n.children.iter().map(count_subtree).sum::<usize>()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -437,6 +484,41 @@ mod tests {
         let j = response_to_json(&r);
         assert!(j.contains(r#""x\"y""#));
         assert!(j.contains(r#""line1\nline2""#));
+    }
+
+    #[test]
+    fn get_document_info_reports_snapshot_via_registry() {
+        use crate::document::{Document, Node, NodeKind};
+        let mut doc = Document::empty();
+        let page = doc.pages.get_mut(0).unwrap();
+        page.children.clear();
+        page.children.push(Node::with_children(
+            10,
+            NodeKind::Frame,
+            "F",
+            vec![
+                Node::leaf(11, NodeKind::Rect, "a"),
+                Node::leaf(12, NodeKind::Rect, "b"),
+            ],
+        ));
+        let info = document_info_snapshot(&doc);
+        // Frame + 2 children = 3 nodes total.
+        assert_eq!(info.total_nodes, 3);
+        let mut r = ToolRegistry::default();
+        r.register(Box::new(info));
+        let call = ToolCall {
+            id: RequestId::Num(1),
+            tool: "get_document_info".into(),
+            arguments: BTreeMap::new(),
+        };
+        match r.dispatch(call) {
+            ToolResponse::Ok { result, .. } => {
+                assert_eq!(result.get("total_nodes"), Some(&"3".to_string()));
+                assert_eq!(result.get("page_count"), Some(&"1".to_string()));
+                assert_eq!(result.get("active_page_index"), Some(&"0".to_string()));
+            }
+            _ => panic!("expected Ok"),
+        }
     }
 
     #[test]
