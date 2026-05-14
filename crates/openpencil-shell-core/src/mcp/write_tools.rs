@@ -713,6 +713,54 @@ pub fn instantiate_component_snapshot() -> InstantiateComponent {
     InstantiateComponent
 }
 
+/// First-party `create_component` tool — promote an existing
+/// Frame or Group on the active page to a registered component.
+/// Required args: `node_id`, `name`. The applier rejects non-
+/// container kinds + unknown ids.
+pub struct CreateComponent;
+
+impl McpTool for CreateComponent {
+    fn name(&self) -> &str {
+        "create_component"
+    }
+    fn call(&self, args: &BTreeMap<String, String>) -> ToolOutcome {
+        let Some(raw_id) = args.get("node_id") else {
+            return ToolOutcome::Err(
+                ToolErrorCode::MissingArgument,
+                "node_id is required".into(),
+            );
+        };
+        let node_id: u64 = match raw_id.parse() {
+            Ok(n) if n > 0 => n,
+            _ => {
+                return ToolOutcome::Err(
+                    ToolErrorCode::InvalidArgument,
+                    format!("node_id must be a positive u64, got {raw_id:?}"),
+                );
+            }
+        };
+        let Some(name) = args.get("name") else {
+            return ToolOutcome::Err(
+                ToolErrorCode::MissingArgument,
+                "name is required".into(),
+            );
+        };
+        let mut out = BTreeMap::new();
+        out.insert("wrote".into(), "true".into());
+        ToolOutcome::OkWithCommand(
+            out,
+            McpCommand::CreateComponent {
+                node_id,
+                name: name.clone(),
+            },
+        )
+    }
+}
+
+pub fn create_component_snapshot() -> CreateComponent {
+    CreateComponent
+}
+
 /// `#rgb`, `#rrggbb`, `#rrggbbaa` — matches the format
 /// `VariableTable::parse_hex_color` accepts. Lenient on case;
 /// requires the leading `#`.

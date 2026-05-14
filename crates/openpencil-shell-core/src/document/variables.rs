@@ -194,7 +194,8 @@ impl VariableTable {
             | crate::mcp::McpCommand::CopyNode { .. }
             | crate::mcp::McpCommand::ReplaceNode { .. }
             | crate::mcp::McpCommand::BatchInsert { .. }
-            | crate::mcp::McpCommand::InstantiateComponent { .. } => {
+            | crate::mcp::McpCommand::InstantiateComponent { .. }
+            | crate::mcp::McpCommand::CreateComponent { .. } => {
                 // Not VariableTable mutations — Pages-level commands
                 // live on `Document::apply_mcp_command`. Return false
                 // so callers with only a VariableTable handle know

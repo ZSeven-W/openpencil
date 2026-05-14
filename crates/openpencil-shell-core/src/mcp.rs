@@ -31,11 +31,12 @@ pub use tools::{
     ListVariables, NodeRecord, VariableRecord,
 };
 pub use write_tools::{
-    copy_node_snapshot, delete_node_snapshot, insert_node_snapshot,
-    instantiate_component_snapshot, move_node_snapshot, replace_node_snapshot,
-    set_active_axis_value_snapshot, set_variable_color_snapshot, update_node_snapshot,
-    CopyNode, DeleteNode, InsertNode, InstantiateComponent, MoveNode, ReplaceNode,
-    SetActiveAxisValue, SetVariableColor, UpdateNode,
+    copy_node_snapshot, create_component_snapshot, delete_node_snapshot,
+    insert_node_snapshot, instantiate_component_snapshot, move_node_snapshot,
+    replace_node_snapshot, set_active_axis_value_snapshot, set_variable_color_snapshot,
+    update_node_snapshot, CopyNode, CreateComponent, DeleteNode, InsertNode,
+    InstantiateComponent, MoveNode, ReplaceNode, SetActiveAxisValue, SetVariableColor,
+    UpdateNode,
 };
 pub use batch_design::{
     batch_design_snapshot, design_content_snapshot, design_refine_snapshot,
@@ -260,6 +261,15 @@ pub enum McpCommand {
     /// id is unknown.
     InstantiateComponent {
         component_id: u64,
+    },
+    /// Promote an existing Frame / Group node to a registered
+    /// component. `node_id` must resolve on the active page +
+    /// must be a Frame or Group (the applier rejects other
+    /// kinds). The component is keyed by the node's id; instances
+    /// later spawn via `InstantiateComponent`.
+    CreateComponent {
+        node_id: u64,
+        name: String,
     },
 }
 
