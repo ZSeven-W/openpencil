@@ -568,6 +568,83 @@ impl McpTool for SetVariableColor {
     }
 }
 
+/// First-party `set_active_axis_value` tool — programmatic
+/// counterpart to the VariablesPanel chip-cycle interaction. LLM
+/// clients use this when they want to pin an axis to a specific
+/// value rather than advance through the cycle (e.g. "set mode to
+/// dark" instead of "cycle mode"). Validates that the axis exists
+/// AND the value is in `themes[axis].values`; the host's applier
+/// (`VariableTable::apply_mcp_command`) re-validates against live
+/// state and rejects on drift.
+///
+/// Wire shape:
+///   args   — { "axis": "<axis>", "value": "<value>" }
+///   result — { "wrote": "true" } when queued
+///   command — `McpCommand::SetActiveAxisValue { axis, value }`
+pub struct SetActiveAxisValue {
+    /// Snapshot of axis → allowed-values, mirroring
+    /// `VariableTable::themes`. Validation only — the host re-runs
+    /// the same check at apply time so a stale snapshot can't slip
+    /// an unauthorized value through.
+    pub axes: BTreeMap<String, Vec<String>>,
+}
+
+impl McpTool for SetActiveAxisValue {
+    fn name(&self) -> &str {
+        "set_active_axis_value"
+    }
+    fn call(&self, args: &BTreeMap<String, String>) -> ToolOutcome {
+        let Some(axis) = args.get("axis") else {
+            return ToolOutcome::Err(
+                ToolErrorCode::MissingArgument,
+                "axis is required".into(),
+            );
+        };
+        let Some(value) = args.get("value") else {
+            return ToolOutcome::Err(
+                ToolErrorCode::MissingArgument,
+                "value is required".into(),
+            );
+        };
+        let Some(allowed) = self.axes.get(axis) else {
+            return ToolOutcome::Err(
+                ToolErrorCode::ToolFailed,
+                format!("axis {axis:?} not defined in themes"),
+            );
+        };
+        if !allowed.iter().any(|v| v == value) {
+            return ToolOutcome::Err(
+                ToolErrorCode::InvalidArgument,
+                format!(
+                    "value {value:?} not in axis {axis:?}; allowed: {}",
+                    allowed.join(", ")
+                ),
+            );
+        }
+        let mut out = BTreeMap::new();
+        out.insert("wrote".into(), "true".into());
+        ToolOutcome::OkWithCommand(
+            out,
+            McpCommand::SetActiveAxisValue {
+                axis: axis.clone(),
+                value: value.clone(),
+            },
+        )
+    }
+}
+
+pub fn set_active_axis_value_snapshot(
+    doc: &crate::document::Document,
+) -> SetActiveAxisValue {
+    let axes = doc
+        .var_table
+        .themes
+        .iter()
+        .map(|t| (t.name.clone(), t.values.clone()))
+        .collect();
+    SetActiveAxisValue { axes }
+}
+
 pub fn set_variable_color_snapshot(
     doc: &crate::document::Document,
 ) -> SetVariableColor {

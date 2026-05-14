@@ -18,9 +18,9 @@ pub mod tools;
 pub use parser::parse_tool_call;
 pub use tools::{
     document_info_snapshot, get_active_theme_snapshot, get_node_snapshot, list_pages_snapshot,
-    list_variables_snapshot, selection_snapshot, set_variable_color_snapshot, GetActiveTheme,
-    GetDocumentInfo, GetNode, GetSelection, ListPages, ListVariables, NodeRecord,
-    SetVariableColor, VariableRecord,
+    list_variables_snapshot, selection_snapshot, set_active_axis_value_snapshot,
+    set_variable_color_snapshot, GetActiveTheme, GetDocumentInfo, GetNode, GetSelection,
+    ListPages, ListVariables, NodeRecord, SetActiveAxisValue, SetVariableColor, VariableRecord,
 };
 
 /// JSON-RPC-style request id. Strings + integers both supported by

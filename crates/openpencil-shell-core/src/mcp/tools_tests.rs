@@ -477,3 +477,105 @@ fn apply_mcp_command_routes_set_variable_color_to_var_table() {
     assert!((c.g - 0xcc as f32 / 255.0).abs() < 0.01);
     assert!((c.b - 0xaa as f32 / 255.0).abs() < 0.01);
 }
+
+fn doc_with_theme_axis(name: &str, values: &[&str]) -> crate::document::Document {
+    use crate::document::{Document, ThemeAxis};
+    let mut doc = Document::empty();
+    doc.var_table.themes.push(ThemeAxis {
+        name: name.into(),
+        values: values.iter().map(|s| s.to_string()).collect(),
+    });
+    doc
+}
+
+#[test]
+fn set_active_axis_value_validates_args_and_returns_command() {
+    let doc = doc_with_theme_axis("mode", &["light", "dark"]);
+    let tool = set_active_axis_value_snapshot(&doc);
+    let mut args = BTreeMap::new();
+    args.insert("axis".into(), "mode".into());
+    args.insert("value".into(), "dark".into());
+    match tool.call(&args) {
+        ToolOutcome::OkWithCommand(out, cmd) => {
+            assert_eq!(out.get("wrote"), Some(&"true".to_string()));
+            match cmd {
+                McpCommand::SetActiveAxisValue { axis, value } => {
+                    assert_eq!(axis, "mode");
+                    assert_eq!(value, "dark");
+                }
+                other => panic!("expected SetActiveAxisValue, got {other:?}"),
+            }
+        }
+        other => panic!("expected OkWithCommand, got {other:?}"),
+    }
+}
+
+#[test]
+fn set_active_axis_value_errors_on_missing_args() {
+    let doc = doc_with_theme_axis("mode", &["light", "dark"]);
+    let tool = set_active_axis_value_snapshot(&doc);
+    match tool.call(&BTreeMap::new()) {
+        ToolOutcome::Err(code, _) => assert_eq!(code, ToolErrorCode::MissingArgument),
+        _ => panic!(),
+    }
+    let mut args = BTreeMap::new();
+    args.insert("axis".into(), "mode".into());
+    match tool.call(&args) {
+        ToolOutcome::Err(code, msg) => {
+            assert_eq!(code, ToolErrorCode::MissingArgument);
+            assert!(msg.contains("value"));
+        }
+        _ => panic!(),
+    }
+}
+
+#[test]
+fn set_active_axis_value_errors_on_unknown_axis() {
+    let doc = doc_with_theme_axis("mode", &["light", "dark"]);
+    let tool = set_active_axis_value_snapshot(&doc);
+    let mut args = BTreeMap::new();
+    args.insert("axis".into(), "density".into());
+    args.insert("value".into(), "compact".into());
+    match tool.call(&args) {
+        ToolOutcome::Err(code, msg) => {
+            assert_eq!(code, ToolErrorCode::ToolFailed);
+            assert!(msg.contains("density"));
+        }
+        _ => panic!(),
+    }
+}
+
+#[test]
+fn set_active_axis_value_errors_on_value_not_in_axis() {
+    let doc = doc_with_theme_axis("mode", &["light", "dark"]);
+    let tool = set_active_axis_value_snapshot(&doc);
+    let mut args = BTreeMap::new();
+    args.insert("axis".into(), "mode".into());
+    args.insert("value".into(), "sepia".into());
+    match tool.call(&args) {
+        ToolOutcome::Err(code, msg) => {
+            assert_eq!(code, ToolErrorCode::InvalidArgument);
+            assert!(msg.contains("light"));
+            assert!(msg.contains("dark"));
+        }
+        _ => panic!(),
+    }
+}
+
+#[test]
+fn apply_mcp_command_routes_set_active_axis_value() {
+    let mut doc = doc_with_theme_axis("mode", &["light", "dark"]);
+    let cmd = McpCommand::SetActiveAxisValue {
+        axis: "mode".into(),
+        value: "dark".into(),
+    };
+    assert!(doc.var_table.apply_mcp_command(&cmd));
+    assert_eq!(doc.var_table.active_theme.get("mode"), Some(&"dark".to_string()));
+
+    // Invalid value rejected at apply time too (host re-validates).
+    let bad = McpCommand::SetActiveAxisValue {
+        axis: "mode".into(),
+        value: "sepia".into(),
+    };
+    assert!(!doc.var_table.apply_mcp_command(&bad));
+}
