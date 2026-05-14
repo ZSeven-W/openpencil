@@ -77,6 +77,17 @@ dirs = "5"
 # Provider impls (Anthropic / OpenAI-compat / Ollama) flip on once the
 # workspace rust-toolchain bumps.
 agent = { path = "../../../agent-rs/crates/agent", default-features = false }
+# Forked from bartolli/anthropic-agent-sdk — lives under
+# `crates/anthropic-agent-sdk/` so OP owns the source and can diverge
+# from upstream. Provides the Claude Code CLI subprocess transport +
+# stream-json message parser that `src/chat_claude.rs` wraps as a
+# `ChatProvider`. Default features (no rmcp) keep the dep set tight.
+anthropic-agent-sdk = { path = "../anthropic-agent-sdk" }
+# Forked from copilot-community-sdk/copilot-sdk-rust — same story:
+# in-workspace fork, OP-owned, evolves separately from upstream.
+# Powers the GitHub Copilot CLI bridge via Content-Length-framed
+# JSON-RPC.
+copilot-sdk = { path = "../copilot-sdk" }
 async-trait = "0.1"
 # Async runtime — agent-rs is async; the BuiltIn ChatProvider impl
 # bridges its `EventStream` into the sync `Iterator<ChatDelta>`

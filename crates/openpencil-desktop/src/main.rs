@@ -3,6 +3,7 @@
 
 #![cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]
 
+mod chat_claude;
 mod chat_runtime;
 mod chat_subprocess;
 mod export;
