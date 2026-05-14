@@ -368,6 +368,46 @@ impl WidgetHostNative {
         })
     }
 
+    /// When the active selection is a single Path node + the Pen
+    /// tool is selected, hit-test whether `(screen_x, screen_y)`
+    /// lands on any anchor handle. Returns Some(index) on hit.
+    /// Handle radius is 4 doc-px scaled by viewport zoom so the hit
+    /// box stays a constant ~8 screen-px regardless of zoom.
+    pub(in crate::widget_host) fn path_anchor_hit(
+        &self,
+        x: f32,
+        y: f32,
+        viewport_w: f32,
+        viewport_h: f32,
+    ) -> Option<(openpencil_shell_core::document::NodeId, usize)> {
+        use openpencil_shell_core::document::{NodeKind, Tool};
+        if !matches!(self.document.tool, Tool::Pen) {
+            return None;
+        }
+        if self.document.selection_count() != 1 {
+            return None;
+        }
+        let sel = self.document.selected;
+        let node = self.document.active_page()?.find(sel)?;
+        if !matches!(node.kind, NodeKind::Path) {
+            return None;
+        }
+        let (cx0, cy0, _cw, _ch) = self.canvas_region(viewport_w, viewport_h);
+        let zoom = self.document.viewport.zoom.max(0.0001);
+        let canvas_local = Point2D::new(x - cx0, y - cy0);
+        let doc_point = self.document.viewport.to_document(canvas_local);
+        // 4 doc-px hit radius at 1× zoom (8 screen-px diameter).
+        let r2 = 16.0 / (zoom * zoom);
+        for (i, p) in node.points.iter().enumerate() {
+            let dx = doc_point.x - p.x;
+            let dy = doc_point.y - p.y;
+            if dx * dx + dy * dy <= r2 {
+                return Some((sel, i));
+            }
+        }
+        None
+    }
+
     /// Resolve a screen point to an `AlignAction` if it lands on the
     /// floating align toolbar (visible when 2+ selected). Returns
     /// None when the toolbar isn't shown or the cursor misses every

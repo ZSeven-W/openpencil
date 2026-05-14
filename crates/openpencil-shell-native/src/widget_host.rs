@@ -129,6 +129,11 @@ pub struct WidgetHostNative {
     /// release into `Document::reorder_before` /
     /// `reorder_after` via `LayerPanel::drop_target_at`.
     pub(in crate::widget_host) layer_drag: Option<LayerDragState>,
+    /// Active path-anchor drag — set when the user presses on a
+    /// per-anchor handle of a selected Path node with the Pen tool.
+    /// Each `apply_cursor_move` snaps the anchor to the current
+    /// document-space cursor; release commits a history snapshot.
+    pub(in crate::widget_host) path_anchor_drag: Option<PathAnchorDragState>,
     /// Counter for minting fresh `NodeId`s for newly-created nodes.
     /// Bumped past the highest sample id so new + sample nodes
     /// never collide on the same key.
@@ -256,6 +261,19 @@ pub(in crate::widget_host) struct LayerDragState {
     pub(in crate::widget_host) active: bool,
 }
 
+/// Path-anchor drag — tracks which anchor of which Path node is
+/// being dragged by the pen tool. Move dispatches snap the anchor
+/// to the cursor; release commits a history snapshot.
+#[derive(Debug, Clone)]
+pub(in crate::widget_host) struct PathAnchorDragState {
+    pub(in crate::widget_host) node_id: openpencil_shell_core::document::NodeId,
+    pub(in crate::widget_host) anchor_index: usize,
+    /// Snapshot captured at drag-start so release can push history
+    /// regardless of how many cursor-move frames fire.
+    pub(in crate::widget_host) pre_drag_snapshot:
+        openpencil_shell_core::document::DocumentSnapshot,
+}
+
 #[derive(Debug, Clone, Copy)]
 pub(in crate::widget_host) struct ChatDragState {
     /// Pointer offset within the panel rect when the drag began.
@@ -277,6 +295,7 @@ impl WidgetHostNative {
             chat_drag: None,
             panel_resize: None,
             node_drag: None,
+            path_anchor_drag: None,
             handle_drag: None,
             rotate_drag: None,
             create_drag: None,

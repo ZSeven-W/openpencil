@@ -231,6 +231,16 @@ impl WidgetHostNative {
             }
             return false;
         }
+        // Path-anchor drag — snap the picked anchor to the cursor's
+        // document-space position. History was captured at drag-start.
+        if let Some(drag) = self.path_anchor_drag.as_ref().cloned() {
+            let (cx0, cy0) = self.canvas_origin();
+            let canvas_local = Point2D::new(x - cx0, y - cy0);
+            let doc_point = self.document.viewport.to_document(canvas_local);
+            self.document
+                .set_path_anchor_position(drag.node_id, drag.anchor_index, doc_point);
+            return true;
+        }
         if let Some(m) = self.marquee_drag.as_mut() {
             m.current_screen_x = x;
             m.current_screen_y = y;
@@ -325,6 +335,12 @@ impl WidgetHostNative {
             return true;
         }
         if self.node_drag.take().is_some() {
+            return true;
+        }
+        if let Some(drag) = self.path_anchor_drag.take() {
+            // Commit the pre-drag snapshot only on real motion —
+            // a press-without-move is a no-op (no anchor moved).
+            self.document.history_push_past(drag.pre_drag_snapshot);
             return true;
         }
         if let Some(m) = self.marquee_drag.take() {

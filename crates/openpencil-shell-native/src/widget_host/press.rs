@@ -653,10 +653,23 @@ impl WidgetHostNative {
                 return cleared_now;
             }
 
-            // Pen tool: click-add anchors to an in-progress Path.
-            // First click creates the node; subsequent clicks push
-            // an anchor; Enter/Escape commits.
+            // Pen tool: click on an existing anchor of the selected
+            // Path → start anchor drag (edit). Otherwise click-add
+            // anchors to an in-progress Path (author).
             if matches!(self.document.tool, Tool::Pen) {
+                if self.document.ui.pen_in_progress.is_none() {
+                    if let Some((node_id, anchor_index)) =
+                        self.path_anchor_hit(x, y, viewport_width, viewport_height)
+                    {
+                        let pre = self.document.snapshot_for_history();
+                        self.path_anchor_drag = Some(super::PathAnchorDragState {
+                            node_id,
+                            anchor_index,
+                            pre_drag_snapshot: pre,
+                        });
+                        return true;
+                    }
+                }
                 if self.document.ui.pen_in_progress.is_some() {
                     self.document.add_pen_point(doc_point);
                 } else {
