@@ -474,6 +474,83 @@ impl Document {
                 }
                 true
             }
+            crate::mcp::McpCommand::BatchInsert { items } => {
+                // Validate EVERY descriptor before any mutation.
+                // A single bad entry rejects the entire batch so
+                // callers can't end up with a partial design tree.
+                if items.is_empty() {
+                    return false;
+                }
+                let active_idx = self.active_page_index;
+                if self.pages.get(active_idx).is_none() {
+                    return false;
+                }
+                // Pre-validate kinds + geometry + fill_hex up front.
+                struct Resolved {
+                    kind: NodeKind,
+                    name: String,
+                    x: i32,
+                    y: i32,
+                    width: i32,
+                    height: i32,
+                    fill: Option<crate::Color>,
+                }
+                let mut resolved: Vec<Resolved> = Vec::with_capacity(items.len());
+                for item in items {
+                    let Some(kind) = parse_node_kind(&item.kind) else {
+                        return false;
+                    };
+                    if item.width < 0 || item.height < 0 {
+                        return false;
+                    }
+                    let fill = match &item.fill_hex {
+                        None => None,
+                        Some(hex) => match parse_hex_color(hex) {
+                            Some(c) => Some(c),
+                            None => return false,
+                        },
+                    };
+                    resolved.push(Resolved {
+                        kind,
+                        name: item.name.clone(),
+                        x: item.x,
+                        y: item.y,
+                        width: item.width,
+                        height: item.height,
+                        fill,
+                    });
+                }
+                // Allocate fresh ids up front; bail if id space
+                // would be exhausted partway through.
+                let mut next_id = match self.next_node_id_seed() {
+                    Some(n) => n,
+                    None => return false,
+                };
+                let mut allocated_ids: Vec<u64> = Vec::with_capacity(resolved.len());
+                for _ in 0..resolved.len() {
+                    allocated_ids.push(next_id);
+                    next_id = match next_id.checked_add(1) {
+                        Some(n) => n,
+                        None => return false,
+                    };
+                }
+                // All validation + allocation passed — now mutate.
+                let page = &mut self.pages[active_idx];
+                for (r, id) in resolved.into_iter().zip(allocated_ids) {
+                    let mut node = Node::leaf(id, r.kind, r.name);
+                    node.bounds = crate::Rect::xywh(
+                        r.x as f32,
+                        r.y as f32,
+                        r.width as f32,
+                        r.height as f32,
+                    );
+                    if let Some(c) = r.fill {
+                        node.fill = Some(c);
+                    }
+                    page.children.push(node);
+                }
+                true
+            }
             _ => self.var_table.apply_mcp_command(cmd),
         }
     }

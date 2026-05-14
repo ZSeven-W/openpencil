@@ -214,7 +214,7 @@ impl McpTool for InsertNode {
     }
 }
 
-const ALLOWED_KINDS: &[&str] = &[
+pub(super) const ALLOWED_KINDS: &[&str] = &[
     "frame", "group", "rect", "ellipse", "polygon", "line", "text", "path",
 ];
 
@@ -676,10 +676,11 @@ pub fn set_variable_color_snapshot(
 /// `#rgb`, `#rrggbb`, `#rrggbbaa` — matches the format
 /// `VariableTable::parse_hex_color` accepts. Lenient on case;
 /// requires the leading `#`.
-fn validate_hex(s: &str) -> bool {
+pub(super) fn validate_hex(s: &str) -> bool {
     let Some(rest) = s.trim().strip_prefix('#') else {
         return false;
     };
     matches!(rest.len(), 3 | 6 | 8)
         && rest.chars().all(|c| c.is_ascii_hexdigit())
 }
+
