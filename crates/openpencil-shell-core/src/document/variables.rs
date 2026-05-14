@@ -257,23 +257,26 @@ impl VariableTable {
                     }
                     return true;
                 }
-                // Active theme set + no subset match — push a new
-                // entry keyed to the active theme. The default entry
-                // (if any) stays untouched so other axes keep their
-                // original values.
+                // Active theme set + no subset match — append a
+                // new entry keyed to the active theme at the END
+                // of the vec (codex stop-gate: front insertion
+                // shadowed pre-existing themed entries on OTHER
+                // axes — e.g. an existing {density:compact} entry
+                // would never resolve under active=dark+compact if
+                // a {mode:dark} entry was front-inserted because
+                // resolve's first-match walk picks the front entry
+                // for ANY active whose keys are a superset).
                 //
-                // Insert at the FRONT so the resolve walk reaches
-                // the new entry before any pre-existing themed entry
-                // whose theme is a superset of ours (resolve uses
-                // subset matching against active, so a more-specific
-                // entry placed first wins under the active theme).
-                entries.insert(
-                    0,
-                    ThemedValue {
-                        value: VariableScalar::Str(normalized),
-                        theme: Some(active),
-                    },
-                );
+                // End-push is safe because Step 1 (subset match)
+                // already proved no existing entry is a subset of
+                // `active`. So under the active theme our new
+                // entry is the unique subset match regardless of
+                // position; under OTHER actives, every pre-existing
+                // entry retains its original resolve precedence.
+                entries.push(ThemedValue {
+                    value: VariableScalar::Str(normalized),
+                    theme: Some(active),
+                });
                 true
             }
         }
@@ -707,6 +710,67 @@ mod tests {
                 a: 1.0,
             }),
             "light entry must NOT have been clobbered"
+        );
+    }
+
+    #[test]
+    fn set_color_hex_does_not_shadow_existing_entries_on_other_axes() {
+        // Codex stop-gate (round 3): when the write pushes a new
+        // themed entry, it must NOT shadow pre-existing entries
+        // whose theme references a different axis. The pathological
+        // case is an existing entry keyed to `{density:compact}`
+        // and a write under `{mode:dark}`. A naive front-insert
+        // would mean active=`{mode:dark, density:compact}` resolves
+        // to the new entry instead of the compact entry, silently
+        // changing the resolved colour for the combined axis.
+        let mut tbl = super::VariableTable::default();
+        tbl.variables.push(Variable {
+            name: "bg".into(),
+            kind: VariableKind::Color,
+            value: VariableValue::Themed(vec![ThemedValue {
+                value: VariableScalar::Str("#11ccaa".into()),
+                theme: Some({
+                    let mut m = BTreeMap::new();
+                    m.insert("density".into(), "compact".into());
+                    m
+                }),
+            }]),
+        });
+        // Active theme = mode:dark only (no compact axis set, so the
+        // existing entry doesn't subset-match — the write must push
+        // a new entry).
+        tbl.set_active_theme("mode", "dark");
+        assert!(tbl.set_color_hex("bg", "#000000"));
+        // Under mode:dark — the new entry is reachable.
+        assert_eq!(
+            tbl.resolve_color("bg"),
+            Some(crate::Color {
+                r: 0.0,
+                g: 0.0,
+                b: 0.0,
+                a: 1.0,
+            })
+        );
+        // Now flip active to the combined axes — mode:dark +
+        // density:compact. Under that resolve walk:
+        //   - The pre-existing {density:compact} entry must still
+        //     win (it's earlier in the vec AND its theme is a
+        //     subset of the active combo).
+        //   - The new {mode:dark} entry, end-pushed, is also a
+        //     subset of the active combo, but it's later. First
+        //     subset match wins.
+        // Pre-fix (front-insert) this would have read #000000
+        // instead — that was the codex BLOCK.
+        tbl.set_active_theme("density", "compact");
+        assert_eq!(
+            tbl.resolve_color("bg"),
+            Some(crate::Color {
+                r: 0x11 as f32 / 255.0,
+                g: 0xcc as f32 / 255.0,
+                b: 0xaa as f32 / 255.0,
+                a: 1.0,
+            }),
+            "compact entry must not be shadowed by the end-pushed dark entry"
         );
     }
 
