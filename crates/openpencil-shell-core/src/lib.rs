@@ -24,6 +24,7 @@ pub mod figma;
 pub mod i18n;
 pub mod jian;
 pub mod mcp;
+#[cfg(test)] mod mcp_tests;
 pub mod render_backend;
 pub mod theme;
 pub mod widgets;
