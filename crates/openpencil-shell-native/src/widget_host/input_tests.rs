@@ -331,6 +331,47 @@ fn anchor_press_release_without_motion_does_not_push_history() {
 }
 
 #[test]
+fn anchor_drag_back_to_start_lands_at_start() {
+    // Codex BLOCK: previous code only wrote the anchor when the
+    // cursor differed from start_doc, so dragging away and back
+    // skipped the final write — the anchor stuck at the last
+    // off-start frame.
+    use openpencil_shell_core::document::{Node, NodeKind, Tool};
+    use openpencil_shell_core::{Point2D, Rect};
+    let mut host = WidgetHostNative::new();
+    let page_idx = host.document.active_page_index;
+    let mut path = Node::leaf(60, NodeKind::Path, "p");
+    path.bounds = Rect::xywh(0.0, 0.0, 100.0, 50.0);
+    path.points = vec![Point2D::new(0.0, 0.0), Point2D::new(50.0, 25.0)];
+    host.document.pages[page_idx].children = vec![path];
+    host.document.set_single_selection(NodeId::new(60));
+    host.document.tool = Tool::Pen;
+    let snap = host.document.snapshot_for_history();
+    // Seed drag state at the anchor (50, 25).
+    host.path_anchor_drag = Some(crate::widget_host::PathAnchorDragState {
+        node_id: NodeId::new(60),
+        anchor_index: 1,
+        start_doc: Point2D::new(50.0, 25.0),
+        moved: false,
+        pre_drag_snapshot: snap,
+    });
+    let viewport_w = 1440.0;
+    let viewport_h = 900.0;
+    let (cx0, cy0, _cw, _ch) = host.canvas_region(viewport_w, viewport_h);
+    // Drag away to doc (80, 25) — first move sets `moved = true`.
+    host.apply_cursor_move(cx0 + 80.0, cy0 + 25.0);
+    let after_first = host.document.pages[page_idx].children[0].points[1];
+    assert!((after_first.x - 80.0).abs() < 0.5);
+    // Drag BACK to start (50, 25) — must write the new position.
+    host.apply_cursor_move(cx0 + 50.0, cy0 + 25.0);
+    let after_return = host.document.pages[page_idx].children[0].points[1];
+    assert!(
+        (after_return.x - 50.0).abs() < 0.5,
+        "anchor must follow cursor back to start; got {after_return:?}"
+    );
+}
+
+#[test]
 fn anchor_drag_with_motion_pushes_one_history_entry() {
     // Inverse of the above — when the user actually moved the
     // anchor, exactly one entry lands on the undo stack so Cmd-Z
