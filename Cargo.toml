@@ -8,13 +8,6 @@ exclude = [
   "vendor/agent",
   "vendor/jian",
   "vendor/skia-safe-op",
-  # Vendored Claude Code SDK from bartolli/anthropic-agent-sdk + the
-  # community Copilot SDK from copilot-community-sdk/copilot-sdk-rust.
-  # Both stay out of OP's `--workspace` build because they ship `edition
-  # = "2024"` (OP root pins 2021) and their test/dev dep sets diverge
-  # from ours. openpencil-desktop consumes them via direct path deps.
-  "vendor/anthropic-agent-sdk",
-  "vendor/copilot-sdk-rust",
   "node_modules",
 ]
 
