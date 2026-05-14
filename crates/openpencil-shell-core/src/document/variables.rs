@@ -217,20 +217,25 @@ impl VariableTable {
                 true
             }
             VariableValue::Themed(entries) => {
-                // Codex stop-gate: the write path MUST match the
-                // resolve path's subset-matching semantics, otherwise
-                // a successful write can fail to change the resolved
-                // value (an earlier-in-vec themed entry whose `theme`
-                // is a subset of active_theme would still win the
-                // resolve walk, shadowing the new entry we pushed at
-                // the end). Mirror `Variable::resolve` exactly:
+                // Write-routing rules — the resolve walk picks an
+                // entry; we must update THAT entry when it's a
+                // subset match for the active theme. When no subset
+                // entry matches, the user's intent depends on the
+                // active theme:
                 //
-                //   1. First themed entry whose `theme` is a subset
-                //      of active_theme → write there.
-                //   2. Else, the `theme: None` default entry → write
-                //      there.
-                //   3. Else, push a fresh entry keyed to the active
-                //      theme (or None when active is empty).
+                //   - active_theme EMPTY: the user is editing with
+                //     no theme axis selected, so the write targets
+                //     the `theme: None` default entry (the resolve
+                //     fallback). Creates one if absent.
+                //
+                //   - active_theme NON-EMPTY: the user is editing
+                //     under a specific theme combo. The edit must
+                //     scope to THAT combo. Pushing a new entry keyed
+                //     to active_theme is correct; mutating the
+                //     `theme: None` default would clobber the value
+                //     under every OTHER theme axis too (codex stop-
+                //     gate flag — fallback writes were silently
+                //     reaching across themes).
                 let subset_idx = entries.iter().position(|e| match &e.theme {
                     Some(t) => t.iter().all(|(k, v)| active.get(k) == Some(v)),
                     None => false,
@@ -239,16 +244,36 @@ impl VariableTable {
                     entries[i].value = VariableScalar::Str(normalized);
                     return true;
                 }
-                let default_idx = entries.iter().position(|e| e.theme.is_none());
-                if let Some(i) = default_idx {
-                    entries[i].value = VariableScalar::Str(normalized);
+                if active.is_empty() {
+                    // No theme selected — target the default entry.
+                    let default_idx = entries.iter().position(|e| e.theme.is_none());
+                    if let Some(i) = default_idx {
+                        entries[i].value = VariableScalar::Str(normalized);
+                    } else {
+                        entries.push(ThemedValue {
+                            value: VariableScalar::Str(normalized),
+                            theme: None,
+                        });
+                    }
                     return true;
                 }
-                let new_theme = if active.is_empty() { None } else { Some(active) };
-                entries.push(ThemedValue {
-                    value: VariableScalar::Str(normalized),
-                    theme: new_theme,
-                });
+                // Active theme set + no subset match — push a new
+                // entry keyed to the active theme. The default entry
+                // (if any) stays untouched so other axes keep their
+                // original values.
+                //
+                // Insert at the FRONT so the resolve walk reaches
+                // the new entry before any pre-existing themed entry
+                // whose theme is a superset of ours (resolve uses
+                // subset matching against active, so a more-specific
+                // entry placed first wins under the active theme).
+                entries.insert(
+                    0,
+                    ThemedValue {
+                        value: VariableScalar::Str(normalized),
+                        theme: Some(active),
+                    },
+                );
                 true
             }
         }
@@ -605,11 +630,15 @@ mod tests {
     }
 
     #[test]
-    fn set_color_hex_falls_back_to_default_entry_when_no_subset_match() {
-        // Themed entry that doesn't match + a `theme: None` default.
-        // Active theme matches NEITHER themed entry → write must
-        // update the default entry (which is what resolve falls
-        // back to) and not append a new themed entry.
+    fn set_color_hex_under_active_theme_does_not_clobber_default() {
+        // Codex stop-gate (round 2): when active_theme is non-empty
+        // and no subset-matching themed entry exists, the write
+        // must scope to the active theme (push a new entry), NOT
+        // mutate the `theme: None` default. Mutating the default
+        // would silently change the value under EVERY OTHER theme
+        // axis the user hasn't explicitly authored, which is
+        // never what an editor user clicking a colour swatch in
+        // dark mode means.
         let mut tbl = super::VariableTable::default();
         tbl.variables.push(Variable {
             name: "bg".into(),
@@ -630,7 +659,7 @@ mod tests {
             ]),
         });
         tbl.set_active_theme("mode", "dark"); // matches neither
-        // Pre-write: resolves to the default.
+        // Pre-write: resolves to the default (#888) under dark.
         assert_eq!(
             tbl.resolve_color("bg"),
             Some(crate::Color {
@@ -640,9 +669,64 @@ mod tests {
                 a: 1.0,
             })
         );
-        // Write should update the default entry, not push a new dark
-        // entry (which would still leave resolve walking the default
-        // for the SAME active=dark theme).
+        // Write under active=dark must scope to dark only.
+        assert!(tbl.set_color_hex("bg", "#000000"));
+        // Under dark — new value reads back.
+        assert_eq!(
+            tbl.resolve_color("bg"),
+            Some(crate::Color {
+                r: 0.0,
+                g: 0.0,
+                b: 0.0,
+                a: 1.0,
+            }),
+        );
+        // The default entry must be untouched. Flipping to a
+        // never-authored axis value (e.g. mode=sepia) should still
+        // resolve to the original default #888888, NOT the new dark
+        // value.
+        tbl.set_active_theme("mode", "sepia");
+        assert_eq!(
+            tbl.resolve_color("bg"),
+            Some(crate::Color {
+                r: 0x88 as f32 / 255.0,
+                g: 0x88 as f32 / 255.0,
+                b: 0x88 as f32 / 255.0,
+                a: 1.0,
+            }),
+            "default entry must NOT have been clobbered by the dark write"
+        );
+        // Light entry also untouched.
+        tbl.set_active_theme("mode", "light");
+        assert_eq!(
+            tbl.resolve_color("bg"),
+            Some(crate::Color {
+                r: 1.0,
+                g: 1.0,
+                b: 1.0,
+                a: 1.0,
+            }),
+            "light entry must NOT have been clobbered"
+        );
+    }
+
+    #[test]
+    fn set_color_hex_empty_active_theme_targets_default_entry() {
+        // The flip side: when active_theme IS empty (no axis
+        // selected), writes target the default `theme: None`
+        // entry — that's what resolve falls back to in this state.
+        // Editing with no theme selected is the explicit "edit the
+        // universal value" path.
+        let mut tbl = super::VariableTable::default();
+        tbl.variables.push(Variable {
+            name: "bg".into(),
+            kind: VariableKind::Color,
+            value: VariableValue::Themed(vec![ThemedValue {
+                value: VariableScalar::Str("#888888".into()),
+                theme: None,
+            }]),
+        });
+        // No active theme set.
         assert!(tbl.set_color_hex("bg", "#aabbcc"));
         assert_eq!(
             tbl.resolve_color("bg"),
