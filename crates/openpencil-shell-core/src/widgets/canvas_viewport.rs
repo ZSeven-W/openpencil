@@ -258,6 +258,7 @@ impl<'a> Widget for CanvasViewport<'a> {
                     self.document.selected,
                     edit_caret,
                     cull,
+                    &self.document.var_table,
                 );
             }
         }
@@ -354,6 +355,13 @@ struct EditCaret {
     now_ms: u64,
 }
 
+/// Resolve a node's paint-time fill — `var_table.fill_for` (a
+/// registered `$ref`) wins over `node.fill`. Mirrors TS
+/// `resolveNodeForCanvas` (`pen-core/variables/resolve.ts`).
+fn node_fill(node: &Node, var_table: &crate::document::VariableTable) -> Option<crate::Color> {
+    var_table.fill_for(node.id).or(node.fill)
+}
+
 fn paint_node(
     cx: &mut PaintCx<'_>,
     node: &Node,
@@ -362,6 +370,7 @@ fn paint_node(
     selected: NodeId,
     edit_caret: Option<EditCaret>,
     cull: Rect,
+    var_table: &crate::document::VariableTable,
 ) {
     // Hidden nodes (and their subtree) skip canvas paint entirely.
     // Layer panel still shows them, dimmed, so the user can unhide.
@@ -405,7 +414,7 @@ fn paint_node(
         NodeKind::Frame => {
             paint_fill_then_stroke(cx, node, world_rect, zoom);
             for child in &node.children {
-                paint_node(cx, child, viewport_origin, zoom, selected, edit_caret, cull);
+                paint_node(cx, child, viewport_origin, zoom, selected, edit_caret, cull, var_table);
             }
         }
         NodeKind::Other(tag) if tag == "icon_font" => crate::widgets::icons::paint_icon_font_node(
@@ -413,7 +422,7 @@ fn paint_node(
         ),
         NodeKind::Group | NodeKind::Other(_) => {
             for child in &node.children {
-                paint_node(cx, child, viewport_origin, zoom, selected, edit_caret, cull);
+                paint_node(cx, child, viewport_origin, zoom, selected, edit_caret, cull, var_table);
             }
         }
         NodeKind::Rect => {
