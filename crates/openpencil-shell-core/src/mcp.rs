@@ -539,6 +539,46 @@ mod tests {
     }
 
     #[test]
+    fn get_node_surfaces_fill_and_stroke_refs() {
+        // When a node's fill / stroke colour follows a variable
+        // (`var_table.fill_refs[id] = "color-primary"`), the
+        // `get_node` payload must expose the variable name so LLM
+        // clients can pick "bump the variable" vs "override the
+        // node's literal colour" without re-walking the document.
+        use crate::document::{Document, NodeId};
+        let mut doc = Document::sample();
+        doc.var_table
+            .fill_refs
+            .insert(NodeId::new(11), "color-primary".into());
+        doc.var_table
+            .stroke_refs
+            .insert(NodeId::new(11), "color-accent".into());
+        let tool = get_node_snapshot(&doc);
+        let mut args = BTreeMap::new();
+        args.insert("node_id".into(), "11".into());
+        match tool.call(&args) {
+            ToolOutcome::Ok(out) => {
+                assert_eq!(out.get("fill_ref"), Some(&"color-primary".to_string()));
+                assert_eq!(out.get("stroke_ref"), Some(&"color-accent".to_string()));
+            }
+            other => panic!("expected Ok, got {other:?}"),
+        }
+        // Nodes WITHOUT a ref-mapping must return empty strings
+        // (not omit the field) so clients can probe with a single
+        // `out.get("fill_ref") == Some("")` instead of branching
+        // on Option<String> AND Option<&str>.
+        let mut args2 = BTreeMap::new();
+        args2.insert("node_id".into(), "12".into());
+        match tool.call(&args2) {
+            ToolOutcome::Ok(out) => {
+                assert_eq!(out.get("fill_ref"), Some(&String::new()));
+                assert_eq!(out.get("stroke_ref"), Some(&String::new()));
+            }
+            other => panic!("expected Ok, got {other:?}"),
+        }
+    }
+
+    #[test]
     fn get_node_errors_on_non_numeric_arg() {
         let doc = crate::document::Document::sample();
         let tool = get_node_snapshot(&doc);
