@@ -144,6 +144,39 @@ pub fn response_to_json(r: &ToolResponse) -> String {
     format!(r#"{{"jsonrpc":"2.0","id":{},{}}}"#, id_repr, body)
 }
 
+/// Read line-delimited JSON-RPC from `reader`, dispatch each request
+/// through `registry`, write each response (followed by `\n`) to
+/// `writer`. Loops until EOF or a write error. Pure stdlib I/O —
+/// works on top of stdin/stdout, a TCP stream, or in-memory bufs
+/// for tests. The actual `openpencil-mcp` binary just wraps this
+/// with `BufReader::new(stdin())` + `stdout()`.
+pub fn run_stdio<R: std::io::BufRead, W: std::io::Write>(
+    registry: &ToolRegistry,
+    reader: &mut R,
+    writer: &mut W,
+) -> std::io::Result<()> {
+    let mut line = String::new();
+    loop {
+        line.clear();
+        let n = reader.read_line(&mut line)?;
+        if n == 0 {
+            return Ok(()); // EOF
+        }
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        let Some(call) = parse_tool_call(trimmed) else {
+            // Skip malformed input — production server logs;
+            // here we just keep the loop alive.
+            continue;
+        };
+        let response = registry.dispatch(call);
+        writeln!(writer, "{}", response_to_json(&response))?;
+        writer.flush()?;
+    }
+}
+
 /// Parse a JSON-RPC request line into a `ToolCall`. Returns None on
 /// malformed input. Same minimal-parser strategy as `response_to_json`
 /// — hand-rolled, no serde. Real production servers should use serde
@@ -355,6 +388,43 @@ mod tests {
             ToolResponse::Ok { id, .. } => assert_eq!(id, RequestId::Num(42)),
             _ => panic!(),
         }
+    }
+
+    #[test]
+    fn run_stdio_dispatches_multi_line_stream() {
+        use std::io::{BufReader, Cursor};
+        let mut r = ToolRegistry::default();
+        r.register(Box::new(EchoTool));
+        let input = b"{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"echo\",\"params\":{}}\n\
+                      {\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"echo\",\"params\":{}}\n\
+                      {\"jsonrpc\":\"2.0\",\"id\":\"x\",\"method\":\"unknown\",\"params\":{}}\n";
+        let mut reader = BufReader::new(Cursor::new(input.as_ref()));
+        let mut writer: Vec<u8> = Vec::new();
+        run_stdio(&r, &mut reader, &mut writer).unwrap();
+        let out = String::from_utf8(writer).unwrap();
+        // 3 input lines → 3 response lines.
+        let lines: Vec<&str> = out.lines().collect();
+        assert_eq!(lines.len(), 3);
+        assert!(lines[0].contains(r#""id":1"#));
+        assert!(lines[1].contains(r#""id":2"#));
+        assert!(lines[2].contains(r#""id":"x""#));
+        assert!(lines[2].contains(r#""code":-32601"#));
+    }
+
+    #[test]
+    fn run_stdio_skips_malformed_lines() {
+        use std::io::{BufReader, Cursor};
+        let mut r = ToolRegistry::default();
+        r.register(Box::new(EchoTool));
+        let input = b"garbage\n\n{\"jsonrpc\":\"2.0\",\"id\":7,\"method\":\"echo\",\"params\":{}}\n";
+        let mut reader = BufReader::new(Cursor::new(input.as_ref()));
+        let mut writer: Vec<u8> = Vec::new();
+        run_stdio(&r, &mut reader, &mut writer).unwrap();
+        let out = String::from_utf8(writer).unwrap();
+        // Only the valid 3rd line produces output.
+        let lines: Vec<&str> = out.lines().collect();
+        assert_eq!(lines.len(), 1);
+        assert!(lines[0].contains(r#""id":7"#));
     }
 
     #[test]
