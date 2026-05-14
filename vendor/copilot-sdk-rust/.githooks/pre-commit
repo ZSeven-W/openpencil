@@ -1,0 +1,25 @@
+#!/bin/sh
+# Pre-commit hook for copilot-sdk-rust
+# Runs formatting and linting checks before allowing commits
+
+set -e
+
+echo "Running pre-commit checks..."
+
+# Check formatting
+echo "Checking formatting (cargo fmt)..."
+cargo fmt --all --check || {
+    echo ""
+    echo "Formatting check failed. Run 'cargo fmt' to fix."
+    exit 1
+}
+
+# Run clippy
+echo "Running clippy..."
+cargo clippy --all-targets --all-features -- -D warnings || {
+    echo ""
+    echo "Clippy check failed. Fix the warnings above."
+    exit 1
+}
+
+echo "Pre-commit checks passed!"

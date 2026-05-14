@@ -1,0 +1,9 @@
+[alias]
+# Linting
+lint = "clippy --all-targets --all-features -- -D warnings"
+lint-src = "clippy --lib --tests --all-features -- -D warnings -D clippy::pedantic"
+lint-pedantic = "clippy --all-targets --all-features -- -W clippy::pedantic"
+lint-strict = "clippy --all-targets --all-features -- -D warnings -D clippy::pedantic"
+fix-pedantic = "clippy --fix --all-targets --allow-dirty --allow-staged -- -W clippy::pedantic"
+
+# Note: For full check, run: cargo build && cargo test && cargo lint-src
