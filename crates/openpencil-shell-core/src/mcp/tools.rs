@@ -419,6 +419,72 @@ pub fn list_variables_snapshot(doc: &crate::document::Document) -> ListVariables
     ListVariables { variables }
 }
 
+/// First-party `get_active_theme` tool — reports the document's
+/// current theme-axis selection AND the available options per axis.
+/// LLM clients use this to know which axes can be flipped (per
+/// `cycle_active_axis_value`) and what values they can be set to.
+///
+/// Wire shape:
+///   axes  — `axis|value;axis2|value2` (active selection, with the
+///           same backslash-escape rules as `list_variables`).
+///   options — `axis|v1,v2,v3;axis2|v1,v2` (every axis defined in
+///           `themes` + its full value list). `axis` appears here
+///           even when not yet in `active_theme`, so clients can
+///           seed it via `set_active_axis_value` (future write tool).
+pub struct GetActiveTheme {
+    pub active: Vec<(String, String)>,
+    pub options: Vec<(String, Vec<String>)>,
+}
+
+impl McpTool for GetActiveTheme {
+    fn name(&self) -> &str {
+        "get_active_theme"
+    }
+    fn call(&self, _args: &BTreeMap<String, String>) -> ToolOutcome {
+        let active_encoded: Vec<String> = self
+            .active
+            .iter()
+            .map(|(axis, value)| {
+                format!(
+                    "{}|{}",
+                    escape_record_field(axis),
+                    escape_record_field(value)
+                )
+            })
+            .collect();
+        let options_encoded: Vec<String> = self
+            .options
+            .iter()
+            .map(|(axis, values)| {
+                let escaped_values: Vec<String> =
+                    values.iter().map(|v| escape_record_field(v)).collect();
+                format!("{}|{}", escape_record_field(axis), escaped_values.join(","))
+            })
+            .collect();
+        let mut out = BTreeMap::new();
+        out.insert("axes".into(), active_encoded.join(";"));
+        out.insert("options".into(), options_encoded.join(";"));
+        out.insert("axis_count".into(), self.options.len().to_string());
+        ToolOutcome::Ok(out)
+    }
+}
+
+pub fn get_active_theme_snapshot(doc: &crate::document::Document) -> GetActiveTheme {
+    let active: Vec<(String, String)> = doc
+        .var_table
+        .active_theme
+        .iter()
+        .map(|(k, v)| (k.clone(), v.clone()))
+        .collect();
+    let options: Vec<(String, Vec<String>)> = doc
+        .var_table
+        .themes
+        .iter()
+        .map(|t| (t.name.clone(), t.values.clone()))
+        .collect();
+    GetActiveTheme { active, options }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -474,6 +540,100 @@ mod tests {
             }
             other => panic!("expected Ok, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn get_active_theme_reports_active_axes_and_options() {
+        use crate::document::{Document, ThemeAxis};
+        let mut doc = Document::empty();
+        doc.var_table.themes.push(ThemeAxis {
+            name: "mode".into(),
+            values: vec!["light".into(), "dark".into(), "sepia".into()],
+        });
+        doc.var_table.themes.push(ThemeAxis {
+            name: "density".into(),
+            values: vec!["compact".into(), "comfortable".into()],
+        });
+        doc.var_table.set_active_theme("mode", "dark");
+        // Only `mode` is in active_theme; `density` is defined but
+        // not yet selected.
+        let tool = get_active_theme_snapshot(&doc);
+        match tool.call(&BTreeMap::new()) {
+            ToolOutcome::Ok(out) => {
+                assert_eq!(out.get("axis_count"), Some(&"2".to_string()));
+                // Active selection: only mode|dark.
+                assert_eq!(out.get("axes"), Some(&"mode|dark".to_string()));
+                // Options carry both axes + full value lists.
+                let opts = out.get("options").expect("options field");
+                assert!(opts.contains("density|compact,comfortable"));
+                assert!(opts.contains("mode|light,dark,sepia"));
+                // Two records → one separator.
+                assert_eq!(opts.matches(';').count(), 1);
+            }
+            other => panic!("expected Ok, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn get_active_theme_empty_document_is_zero() {
+        let doc = crate::document::Document::empty();
+        let tool = get_active_theme_snapshot(&doc);
+        match tool.call(&BTreeMap::new()) {
+            ToolOutcome::Ok(out) => {
+                assert_eq!(out.get("axis_count"), Some(&"0".to_string()));
+                assert_eq!(out.get("axes"), Some(&String::new()));
+                assert_eq!(out.get("options"), Some(&String::new()));
+            }
+            _ => panic!("expected Ok"),
+        }
+    }
+
+    #[test]
+    fn get_active_theme_escapes_pipe_and_semicolon_in_values() {
+        // Theme axis values with weird payloads (unusual but valid
+        // per the canonical schema — values are strings). The
+        // backslash-escape rules from list_variables apply here too.
+        use crate::document::{Document, ThemeAxis};
+        let mut doc = Document::empty();
+        doc.var_table.themes.push(ThemeAxis {
+            name: "weird".into(),
+            values: vec!["a|b".into(), "c;d".into(), "e\\f".into()],
+        });
+        let tool = get_active_theme_snapshot(&doc);
+        let opts = match tool.call(&BTreeMap::new()) {
+            ToolOutcome::Ok(o) => o.get("options").unwrap().clone(),
+            _ => panic!(),
+        };
+        // Pipe inside values is escaped → split on `|` yields exactly
+        // 2 fields (axis | comma-joined-values).
+        let mut depth_safe_split: Vec<String> = Vec::new();
+        let mut cur = String::new();
+        let mut chars = opts.chars().peekable();
+        while let Some(c) = chars.next() {
+            if c == '\\' {
+                if let Some(&n) = chars.peek() {
+                    if matches!(n, '\\' | ';' | '|') {
+                        cur.push(chars.next().unwrap());
+                        continue;
+                    }
+                }
+                cur.push(c);
+            } else if c == '|' {
+                depth_safe_split.push(std::mem::take(&mut cur));
+            } else {
+                cur.push(c);
+            }
+        }
+        depth_safe_split.push(cur);
+        assert_eq!(depth_safe_split.len(), 2, "expected axis|values, got {depth_safe_split:?}");
+        assert_eq!(depth_safe_split[0], "weird");
+        // Values comma-joined; each value individually escaped.
+        // Decode the comma-separated values and verify each survived.
+        let decoded: Vec<String> = depth_safe_split[1]
+            .split(',')
+            .map(unescape_record_field)
+            .collect();
+        assert_eq!(decoded, vec!["a|b", "c;d", "e\\f"]);
     }
 
     #[test]
