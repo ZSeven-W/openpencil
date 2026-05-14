@@ -121,6 +121,54 @@ impl VariableTable {
     pub fn resolve(&self, name: &str) -> Option<&VariableScalar> {
         self.find(name)?.resolve(&self.active_theme)
     }
+    /// Resolve a `$ref` into a paintable `Color`. Returns None when
+    /// the variable is unknown, isn't of `Color` kind, or its scalar
+    /// isn't a parseable hex string (`#rgb`, `#rrggbb`, `#rrggbbaa`).
+    /// Used by paint-time `$ref` substitution.
+    pub fn resolve_color(&self, name: &str) -> Option<crate::Color> {
+        let v = self.find(name)?;
+        if !matches!(v.kind, VariableKind::Color) {
+            return None;
+        }
+        let scalar = v.resolve(&self.active_theme)?;
+        if let VariableScalar::Str(s) = scalar {
+            return parse_hex_color(s);
+        }
+        None
+    }
+}
+
+/// Parse `#rgb` / `#rrggbb` / `#rrggbbaa` into a `Color`. Mirrors the
+/// TS paint helpers — lenient on case, requires the leading `#`.
+fn parse_hex_color(s: &str) -> Option<crate::Color> {
+    let s = s.trim().strip_prefix('#')?;
+    let (r, g, b, a) = match s.len() {
+        3 => {
+            let r = u8::from_str_radix(&s[0..1].repeat(2), 16).ok()?;
+            let g = u8::from_str_radix(&s[1..2].repeat(2), 16).ok()?;
+            let b = u8::from_str_radix(&s[2..3].repeat(2), 16).ok()?;
+            (r, g, b, 255)
+        }
+        6 => (
+            u8::from_str_radix(&s[0..2], 16).ok()?,
+            u8::from_str_radix(&s[2..4], 16).ok()?,
+            u8::from_str_radix(&s[4..6], 16).ok()?,
+            255,
+        ),
+        8 => (
+            u8::from_str_radix(&s[0..2], 16).ok()?,
+            u8::from_str_radix(&s[2..4], 16).ok()?,
+            u8::from_str_radix(&s[4..6], 16).ok()?,
+            u8::from_str_radix(&s[6..8], 16).ok()?,
+        ),
+        _ => return None,
+    };
+    Some(crate::Color {
+        r: r as f32 / 255.0,
+        g: g as f32 / 255.0,
+        b: b as f32 / 255.0,
+        a: a as f32 / 255.0,
+    })
 }
 
 #[cfg(test)]
@@ -196,6 +244,67 @@ mod tests {
             VariableScalar::Str(s) => assert_eq!(s, "#888888"),
             _ => panic!(),
         }
+    }
+
+    #[test]
+    fn resolve_color_parses_rrggbb_hex() {
+        let mut tbl = super::VariableTable::default();
+        tbl.variables.push(Variable {
+            name: "accent".into(),
+            kind: VariableKind::Color,
+            value: VariableValue::Scalar(VariableScalar::Str("#ff8040".into())),
+        });
+        let c = tbl.resolve_color("accent").unwrap();
+        assert!((c.r - 1.0).abs() < 0.01);
+        assert!((c.g - (128.0 / 255.0)).abs() < 0.01);
+        assert!((c.b - (64.0 / 255.0)).abs() < 0.01);
+        assert_eq!(c.a, 1.0);
+    }
+
+    #[test]
+    fn resolve_color_picks_themed_active_value() {
+        let mut tbl = super::VariableTable::default();
+        tbl.variables.push(Variable {
+            name: "bg".into(),
+            kind: VariableKind::Color,
+            value: VariableValue::Themed(vec![
+                ThemedValue {
+                    value: VariableScalar::Str("#ffffff".into()),
+                    theme: Some(axis("mode", "light")),
+                },
+                ThemedValue {
+                    value: VariableScalar::Str("#000000".into()),
+                    theme: Some(axis("mode", "dark")),
+                },
+            ]),
+        });
+        tbl.active_theme = axis("mode", "dark");
+        let c = tbl.resolve_color("bg").unwrap();
+        assert_eq!(c.r, 0.0);
+        assert_eq!(c.g, 0.0);
+        assert_eq!(c.b, 0.0);
+    }
+
+    #[test]
+    fn resolve_color_rejects_non_color_variables() {
+        let mut tbl = super::VariableTable::default();
+        tbl.variables.push(Variable {
+            name: "spacing".into(),
+            kind: VariableKind::Number,
+            value: VariableValue::Scalar(VariableScalar::Num(12.0)),
+        });
+        assert!(tbl.resolve_color("spacing").is_none());
+    }
+
+    #[test]
+    fn resolve_color_rejects_invalid_hex() {
+        let mut tbl = super::VariableTable::default();
+        tbl.variables.push(Variable {
+            name: "broken".into(),
+            kind: VariableKind::Color,
+            value: VariableValue::Scalar(VariableScalar::Str("not-hex".into())),
+        });
+        assert!(tbl.resolve_color("broken").is_none());
     }
 
     #[test]
