@@ -455,7 +455,18 @@ impl ApplicationHandler for DesktopApp {
                 if self.drain_pending_cursor_move() { self.redraw_dirty = true; }
                 let consumed = self.host.apply_press(self.cursor_x, self.cursor_y, self.viewport_width, self.viewport_height);
                 if let Some(action) = self.host.document_mut().ui.pending_file_action.take() {
-                    persistence::run_action(action, &mut self.host, &mut self.current_path, self.window.as_ref());
+                    // ExportImage opens the picker dialog; close any
+                    // source overlay first so its hit-test isn't
+                    // shadowed (codex CONCERN). ExportImageConfirm +
+                    // everything else falls through to run_action.
+                    if matches!(action, openpencil_shell_core::document::FileAction::ExportImage) {
+                        let ui = &mut self.host.document_mut().ui;
+                        ui.file_menu_open = false; ui.file_menu_hover = None;
+                        ui.export_dialog_open = true;
+                        self.request_redraw(true);
+                    } else {
+                        persistence::run_action(action, &mut self.host, &mut self.current_path, self.window.as_ref());
+                    }
                 }
                 if consumed { self.request_redraw(true); }
             }

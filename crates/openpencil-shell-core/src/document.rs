@@ -258,9 +258,7 @@ impl Page {
 #[derive(Debug, Clone)]
 pub struct Document {
     pub pages: Vec<Page>,
-    /// Index into `pages` for the page currently shown in the
-    /// editor viewport. Defaults to 0; multi-page picker UI lives
-    /// in Step 3+.
+    /// Index into `pages` for the page currently shown in the editor.
     pub active_page_index: usize,
     /// Anchor selection — last entry of `selected_set`, or `NONE`.
     pub selected: NodeId,
@@ -272,8 +270,7 @@ pub struct Document {
     pub viewport: Viewport,
     pub chat: ChatState,
     pub ui: UiState,
-    /// Undo / redo stacks. Pushed via `commit_history` BEFORE a
-    /// transactional mutation.
+    /// Undo / redo stacks. Push BEFORE a transactional mutation.
     pub history: History,
 }
 
@@ -329,6 +326,10 @@ pub struct UiState {
     pub locale_picker_hover: Option<Locale>,
     pub shape_picker_hover: Option<crate::widgets::shape_picker::ShapeChoice>,
     pub align_toolbar_hover: Option<AlignAction>,
+    /// Raster export scale (1.0 / 2.0 / 3.0). Default 2.0.
+    pub export_scale: f32,
+    pub export_dialog_open: bool,
+    pub export_format: crate::widgets::export_dialog::ExportFormat,
     /// Pending file-menu action.
     pub pending_file_action: Option<FileAction>,
     /// Recent files (head = newest, cap 10).
@@ -448,16 +449,13 @@ pub struct RecentFile {
 
 /// File-menu choices the desktop runner has to handle (rfd dialogs
 /// + serde live there, not in shell-core).
+/// File-menu choices. ExportImage opens the picker; ExportImageConfirm
+/// commits with `ui.export_format` + `ui.export_scale`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FileAction {
-    New,
-    Open,
-    Save,
-    SaveAs,
-    ExportImage,
-    ImportFigma,
-    OpenRecent(usize),
-    ClearRecent,
+    New, Open, Save, SaveAs,
+    ExportImage, ExportImageConfirm,
+    ImportFigma, OpenRecent(usize), ClearRecent,
 }
 
 /// Floating colour-picker state. HSV stays anchored across the
@@ -470,8 +468,7 @@ pub struct ColorPickerState {
     pub val: f32,
     pub pre_snap: Option<DocumentSnapshot>,
     pub drag: Option<ColorPickerDrag>,
-    /// Viewport-y of the click that opened the picker — centers it
-    /// next to the section the user is editing.
+    /// Viewport-y of the click that opened the picker.
     pub anchor_y: f32,
 }
 
@@ -491,9 +488,7 @@ pub struct LayerRenameState {
 /// What the LayerPanel right-click context menu is acting on.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LayerContextTarget {
-    /// Right-click on a layer row.
     Layer(NodeId),
-    /// Right-click on a page row.
     Page(usize),
 }
 
@@ -503,8 +498,7 @@ pub struct LayerContextMenuState {
     pub target: LayerContextTarget,
     pub anchor_x: f32,
     pub anchor_y: f32,
-    /// Index of the currently-hovered row within the menu (drives
-    /// the row-highlight on paint). `None` when no row is hovered.
+    /// Hovered row index for the menu paint. None when no row is hovered.
     pub hovered_row: Option<u8>,
 }
 
@@ -553,6 +547,9 @@ impl Default for UiState {
             locale_picker_hover: None,
             shape_picker_hover: None,
             align_toolbar_hover: None,
+            export_scale: 2.0,
+            export_dialog_open: false,
+            export_format: crate::widgets::export_dialog::ExportFormat::Png,
             pending_file_action: None,
             recent_files: Vec::new(),
             file_name_display: None,
