@@ -38,14 +38,24 @@ pub fn parse_tool_call(line: &str) -> Option<ToolCall> {
         // Real MCP: tool name + arguments live inside params.
         let params_body = extract_params_body(line)?;
         let name = extract_string_field(&params_body, "name")?;
-        // `arguments` is nested object inside params.
-        let arguments = extract_object_body(&params_body, "arguments")
-            .and_then(|body| parse_flat_object_body(&body))
-            .unwrap_or_default();
+        // `arguments` is nested object inside params. Three-way:
+        //   no `arguments` key → empty args, parse succeeds.
+        //   present + scalar-only → those args.
+        //   present + any nested value → reject the parse so
+        //     no tool sees a malformed input as a real scalar.
+        let arguments = match extract_object_body(&params_body, "arguments") {
+            None => BTreeMap::new(),
+            Some(body) => parse_flat_object_body(&body)?,
+        };
         (name, arguments)
     } else {
         // Legacy: method is the tool name; params is the args.
-        let arguments = extract_params_object(line).unwrap_or_default();
+        // Same three-way as above.
+        let arguments = match params_body_if_present(line) {
+            ParamsResult::Missing => BTreeMap::new(),
+            ParamsResult::Body(body) => parse_flat_object_body(&body)?,
+            ParamsResult::Malformed => return None,
+        };
         (method, arguments)
     };
     Some(ToolCall {
@@ -168,28 +178,36 @@ fn extract_object_body(body: &str, key: &str) -> Option<String> {
     None
 }
 
-/// Find the `"params":{...}` object in `line` and parse it into a
-/// flat key→stringified-value map. Returns `None` when there's no
-/// params key (treated as empty map). Handles three value kinds:
-///
-/// - **Strings**: `"node_id":"42"` — quotes stripped, escaped chars
-///   passed through (no `\u` decode today; if it matters when MCP
-///   clients send Unicode keys we'll switch to serde).
-/// - **Numbers / bools / null**: `"page":1`, `"active":true` —
-///   stored as their literal text representation, so the tool's
-///   `parse::<u64>()` / `.parse::<bool>()` work the same as if the
-///   client had sent them as strings.
-/// - Nested objects / arrays are skipped (no tool needs them yet).
-fn extract_params_object(line: &str) -> Option<BTreeMap<String, String>> {
+/// Tri-state result of looking for `"params"` on a legacy JSON-RPC
+/// line. The caller distinguishes "no params key" (legit empty
+/// args) from "params present but malformed" (full call rejection,
+/// e.g. a nested value for a key would otherwise have been
+/// silently dropped) — see [`parse_tool_call`].
+enum ParamsResult {
+    Missing,
+    Body(String),
+    Malformed,
+}
+
+/// Locate `"params":{...}` on `line` and return its body without
+/// the surrounding braces. Mirrors the brace-walking logic in
+/// `extract_params_body` but with a tri-state result so callers
+/// can react to "params present but unparseable" separately from
+/// "params missing".
+fn params_body_if_present(line: &str) -> ParamsResult {
     let needle = "\"params\"";
-    let start = line.find(needle)? + needle.len();
+    let Some(found) = line.find(needle) else {
+        return ParamsResult::Missing;
+    };
+    let start = found + needle.len();
     let after_colon = &line[start..];
-    let colon = after_colon.find(':')? + 1;
-    let rest = after_colon[colon..].trim_start();
+    let Some(colon_off) = after_colon.find(':') else {
+        return ParamsResult::Malformed;
+    };
+    let rest = after_colon[colon_off + 1..].trim_start();
     if !rest.starts_with('{') {
-        return None;
+        return ParamsResult::Malformed;
     }
-    // Find the matching close-brace by tracking depth + quotes.
     let bytes = rest.as_bytes();
     let mut depth = 0i32;
     let mut in_str = false;
@@ -220,10 +238,9 @@ fn extract_params_object(line: &str) -> Option<BTreeMap<String, String>> {
         }
     }
     if depth != 0 {
-        return None;
+        return ParamsResult::Malformed;
     }
-    let body = &rest[1..end_byte];
-    parse_flat_object_body(body)
+    ParamsResult::Body(rest[1..end_byte].to_string())
 }
 
 /// Parse the body of a JSON object (the content between `{` and `}`)
@@ -285,47 +302,20 @@ fn parse_flat_object_body(body: &str) -> Option<BTreeMap<String, String>> {
                 i += 1; // closing quote
             }
             b'{' | b'[' => {
-                // Walk past the nested literal with depth tracking so the
-                // outer parse continues past it; insert a sentinel value
-                // for the key so tools see the arg as present-but-non-
-                // scalar (and reject it) instead of silently absent.
-                // The sentinel is deliberately not a valid value for any
-                // scalar argument: it's neither a bool / decimal / hex /
-                // enum that any tool accepts, so every existing tool's
-                // own validation surfaces it as `InvalidArgument`.
-                // Codex flagged the previous behavior (silently dropping
-                // the key) as a destructive-swap guard bypass — a caller
-                // sending `{ "drop_children": {} }` saw the arg as
-                // missing and got the safe default; same for any
-                // structured value sent to a tool that uses scalar
-                // defaults. Fail loudly instead.
-                let open = bytes[i];
-                let close = if open == b'{' { b'}' } else { b']' };
-                let mut depth = 1i32;
-                i += 1;
-                let mut in_str = false;
-                let mut escape = false;
-                while i < bytes.len() && depth > 0 {
-                    let c = bytes[i];
-                    if in_str {
-                        if escape {
-                            escape = false;
-                        } else if c == b'\\' {
-                            escape = true;
-                        } else if c == b'"' {
-                            in_str = false;
-                        }
-                    } else if c == b'"' {
-                        in_str = true;
-                    } else if c == open {
-                        depth += 1;
-                    } else if c == close {
-                        depth -= 1;
-                    }
-                    i += 1;
-                }
-                let sentinel = if open == b'{' { "{...}" } else { "[...]" };
-                out.insert(key, sentinel.into());
+                // Reject the entire parse when a structured value
+                // shows up for any key. Tool args are scalars by
+                // contract; surfacing a sentinel here would either
+                // collide with a legitimate scalar (Codex flagged
+                // `{...}` could match a real variable name) or
+                // leave string-accepting tools unable to tell wire
+                // malformed input from a real value. The wire
+                // dispatch loop continues to the next line on
+                // None, so the client sees no response for the
+                // malformed call — same as any other unparseable
+                // JSON-RPC frame. Any future tool that legitimately
+                // needs structured args must add its own typed
+                // path here.
+                return None;
             }
             _ => {
                 // Number / true / false / null — read until comma /
