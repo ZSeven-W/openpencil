@@ -179,6 +179,66 @@ impl VariableTable {
         }
         None
     }
+
+    /// Mutable lookup parallel to `find`. Returns None when no
+    /// variable with that name exists. Editor surfaces use this to
+    /// stage an in-progress write back into the live document.
+    pub fn find_mut(&mut self, name: &str) -> Option<&mut Variable> {
+        self.variables.iter_mut().find(|v| v.name == name)
+    }
+
+    /// Write a new hex string into a `Color`-kind variable. Returns
+    /// `true` when the variable existed AND was Color-kind AND the
+    /// hex parsed cleanly; `false` otherwise (no mutation). For
+    /// themed variables this overwrites the entry matching the
+    /// current `active_theme` (or creates one if absent); for
+    /// scalar variables it overwrites the single value.
+    ///
+    /// The ColorPicker commits through this helper when the
+    /// VariablesPanel routes a row click into the picker — the
+    /// model-layer write path is unified across "edit a node's
+    /// fill" and "edit a variable", so paint sees the change on
+    /// the next frame regardless of which surface the user touched.
+    pub fn set_color_hex(&mut self, name: &str, hex: &str) -> bool {
+        // Validate the hex up front so a malformed input never
+        // corrupts the stored scalar.
+        if parse_hex_color(hex).is_none() {
+            return false;
+        }
+        let active = self.active_theme.clone();
+        let var = match self.find_mut(name) {
+            Some(v) if matches!(v.kind, VariableKind::Color) => v,
+            _ => return false,
+        };
+        let normalized = hex.trim().to_string();
+        match &mut var.value {
+            VariableValue::Scalar(s) => {
+                *s = VariableScalar::Str(normalized);
+                true
+            }
+            VariableValue::Themed(entries) => {
+                // Find the entry whose `theme` matches every k/v in
+                // the active map (or the default `theme: None`
+                // entry when no themed match exists). Write through
+                // — or push a new entry keyed to the active theme
+                // when no exact match.
+                let exact_idx = entries.iter().position(|e| match &e.theme {
+                    Some(t) => t == &active,
+                    None => active.is_empty(),
+                });
+                if let Some(i) = exact_idx {
+                    entries[i].value = VariableScalar::Str(normalized);
+                    return true;
+                }
+                let new_theme = if active.is_empty() { None } else { Some(active) };
+                entries.push(ThemedValue {
+                    value: VariableScalar::Str(normalized),
+                    theme: new_theme,
+                });
+                true
+            }
+        }
+    }
 }
 
 /// Parse `#rgb` / `#rrggbb` / `#rrggbbaa` into a `Color`. Mirrors the
@@ -419,5 +479,124 @@ mod tests {
         };
         let theme = BTreeMap::new();
         assert!(v.resolve(&theme).is_none());
+    }
+
+    #[test]
+    fn set_color_hex_writes_scalar_variable() {
+        let mut tbl = super::VariableTable::default();
+        tbl.variables.push(Variable {
+            name: "color-1".into(),
+            kind: VariableKind::Color,
+            value: VariableValue::Scalar(VariableScalar::Str("#ff0000".into())),
+        });
+        assert!(tbl.set_color_hex("color-1", "#00ff00"));
+        assert_eq!(
+            tbl.resolve_color("color-1"),
+            Some(crate::Color {
+                r: 0.0,
+                g: 1.0,
+                b: 0.0,
+                a: 1.0,
+            })
+        );
+    }
+
+    #[test]
+    fn set_color_hex_rejects_malformed_input() {
+        let mut tbl = super::VariableTable::default();
+        tbl.variables.push(Variable {
+            name: "color-1".into(),
+            kind: VariableKind::Color,
+            value: VariableValue::Scalar(VariableScalar::Str("#ff0000".into())),
+        });
+        assert!(!tbl.set_color_hex("color-1", "not-hex"));
+        // Scalar must be unchanged after a rejected write.
+        assert_eq!(
+            tbl.resolve_color("color-1"),
+            Some(crate::Color {
+                r: 1.0,
+                g: 0.0,
+                b: 0.0,
+                a: 1.0,
+            })
+        );
+    }
+
+    #[test]
+    fn set_color_hex_returns_false_for_unknown_variable() {
+        let mut tbl = super::VariableTable::default();
+        assert!(!tbl.set_color_hex("does-not-exist", "#ffffff"));
+    }
+
+    #[test]
+    fn set_color_hex_returns_false_for_wrong_kind() {
+        let mut tbl = super::VariableTable::default();
+        tbl.variables.push(Variable {
+            name: "spacing".into(),
+            kind: VariableKind::Number,
+            value: VariableValue::Scalar(VariableScalar::Num(16.0)),
+        });
+        // Number-kind variable: write rejected.
+        assert!(!tbl.set_color_hex("spacing", "#ffffff"));
+    }
+
+    #[test]
+    fn set_color_hex_writes_themed_entry_matching_active_axis() {
+        let mut tbl = super::VariableTable::default();
+        tbl.variables.push(Variable {
+            name: "bg".into(),
+            kind: VariableKind::Color,
+            value: VariableValue::Themed(vec![
+                ThemedValue {
+                    value: VariableScalar::Str("#ffffff".into()),
+                    theme: Some({
+                        let mut m = BTreeMap::new();
+                        m.insert("mode".into(), "light".into());
+                        m
+                    }),
+                },
+                ThemedValue {
+                    value: VariableScalar::Str("#000000".into()),
+                    theme: Some({
+                        let mut m = BTreeMap::new();
+                        m.insert("mode".into(), "dark".into());
+                        m
+                    }),
+                },
+            ]),
+        });
+        tbl.set_active_theme("mode", "dark");
+        // Resolves to dark first.
+        assert_eq!(
+            tbl.resolve_color("bg"),
+            Some(crate::Color {
+                r: 0.0,
+                g: 0.0,
+                b: 0.0,
+                a: 1.0,
+            })
+        );
+        // Write under the active theme → updates only the dark entry.
+        assert!(tbl.set_color_hex("bg", "#3344ff"));
+        assert_eq!(
+            tbl.resolve_color("bg"),
+            Some(crate::Color {
+                r: 0x33 as f32 / 255.0,
+                g: 0x44 as f32 / 255.0,
+                b: 1.0,
+                a: 1.0,
+            })
+        );
+        // Flip to light — original light entry untouched.
+        tbl.set_active_theme("mode", "light");
+        assert_eq!(
+            tbl.resolve_color("bg"),
+            Some(crate::Color {
+                r: 1.0,
+                g: 1.0,
+                b: 1.0,
+                a: 1.0,
+            })
+        );
     }
 }
