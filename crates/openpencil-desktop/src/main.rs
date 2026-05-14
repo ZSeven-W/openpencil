@@ -439,13 +439,7 @@ impl ApplicationHandler for DesktopApp {
                         window.set_cursor(icon);
                     }
                 }
-                // Coalesce: stash the latest cursor for the next
-                // paint pass instead of running apply_cursor_move
-                // (which mutates drag state + may rebuild widgets)
-                // on every input event. Mouse poll rates can hit
-                // 1000 Hz on modern trackpads — without this the
-                // host runs ~16× more per-event work than the
-                // display rate. Apply lands in RedrawRequested.
+                // Coalesce cursor moves — apply once per redraw, not per 1000 Hz input event.
                 self.pending_cursor_move = Some((self.cursor_x, self.cursor_y));
                 self.request_redraw(false);
             }
@@ -458,10 +452,7 @@ impl ApplicationHandler for DesktopApp {
                 if self.drain_pending_cursor_move() { self.redraw_dirty = true; }
                 let consumed = self.host.apply_press(self.cursor_x, self.cursor_y, self.viewport_width, self.viewport_height);
                 if let Some(action) = self.host.document_mut().ui.pending_file_action.take() {
-                    // ExportImage opens the picker dialog; close any
-                    // source overlay first so its hit-test isn't
-                    // shadowed (codex CONCERN). ExportImageConfirm +
-                    // everything else falls through to run_action.
+                    // ExportImage → close source overlay + open picker dialog.
                     if matches!(action, openpencil_shell_core::document::FileAction::ExportImage) {
                         let ui = &mut self.host.document_mut().ui;
                         ui.file_menu_open = false; ui.file_menu_hover = None;
@@ -496,10 +487,7 @@ impl ApplicationHandler for DesktopApp {
                 button: MouseButton::Left,
                 ..
             } => {
-                // Drain any cursor moves queued since the last paint
-                // BEFORE releasing — otherwise a drag that ended mid-
-                // motion would commit using the previous frame's
-                // cursor and lose the final position.
+                // Drain pending cursor moves before release so drag-end commits final position.
                 if self.drain_pending_cursor_move() {
                     self.redraw_dirty = true;
                 }
@@ -511,10 +499,7 @@ impl ApplicationHandler for DesktopApp {
                 }
             }
             WindowEvent::MouseWheel { delta, .. } => {
-                // Figma-style routing: PixelDelta (trackpad 2-finger
-                // swipe) pans, LineDelta (mouse wheel) zooms. Cmd /
-                // Ctrl held promotes pixel-delta to zoom too, since
-                // trackpad-only laptops need a way to zoom without
+                // Figma-style routing: pixel-delta pans, line-delta zooms; Cmd promotes pixel→zoom for trackpad-only laptops
                 // a pinch sensor.
                 let consumed = match delta {
                     MouseScrollDelta::LineDelta(_, y) => self.host.apply_wheel(
@@ -611,12 +596,7 @@ impl ApplicationHandler for DesktopApp {
                 // document while the user thinks they're typing a port.
                 let settings_focused = self.host.settings_focus_active();
                 match logical_key {
-                    // Named-key editor shortcuts only fire when no
-                    // Cmd / Ctrl is held — Cmd+Backspace,
-                    // Cmd+Delete, Cmd+Arrow, Cmd+Enter, Cmd+Escape
-                    // are reserved for OS / browser bindings (move
-                    // to trash, cursor-jump in text inputs, etc.)
-                    // and shouldn't silently mutate editor state.
+                    // Named-key shortcuts fire only when no Cmd/Ctrl is held.
                     Key::Named(NamedKey::Backspace) if !self.zoom_modifier => {
                         consumed = self.host.apply_backspace();
                     }
@@ -641,16 +621,7 @@ impl ApplicationHandler for DesktopApp {
                     Key::Named(NamedKey::ArrowRight) if !self.zoom_modifier && !settings_focused => {
                         consumed = self.host.apply_nudge(nudge, 0.0);
                     }
-                    // Cmd/Ctrl-gated editor shortcuts. Match on the
-                    // logical character to be insensitive to layout
-                    // quirks while the modifier is held.
-                    // Cmd/Ctrl-letter shortcuts, with NO shift. Shift-
-                    // variants (Cmd+Shift+C "paste without formatting",
-                    // Cmd+Shift+G "ungroup", etc) stay reserved for
-                    // future bindings — TS parity with the
-                    // `!e.shiftKey` guards in `use-clipboard-shortcuts`.
-                    // Cmd/Ctrl+Alt+U/S/I/X — path boolean ops (TS
-                    // parity with Paper.js via `use-edit-shortcuts.ts`).
+                    // Cmd/Ctrl+Alt+U/S/I/X — path boolean ops (Paper.js parity).
                     Key::Character(ref ch)
                         if self.zoom_modifier && self.alt_modifier && !self.shift_modifier =>
                     {
