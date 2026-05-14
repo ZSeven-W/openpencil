@@ -231,10 +231,7 @@ impl WidgetHostNative {
             }
             return false;
         }
-        // Path-anchor drag — snap the picked anchor to the cursor's
-        // document-space position. History was captured at drag-start;
-        // we just flip `moved` true on the first real-delta frame so
-        // release knows whether to push the snapshot.
+        // Path-anchor drag — snap to cursor; flip `moved` only on real delta so release knows.
         if self.path_anchor_drag.is_some() {
             let (cx0, cy0) = self.canvas_origin();
             let canvas_local = Point2D::new(x - cx0, y - cy0);
@@ -303,10 +300,7 @@ impl WidgetHostNative {
             self.document.viewport.pan(dx, dy);
             return true;
         }
-        // No drag active — sync align toolbar hover. Lives AFTER
-        // drag detection (codex CONCERN: an active drag's cursor
-        // sweeping over the toolbar must not be intercepted by a
-        // hover update).
+        // Align toolbar hover sync — AFTER drag detection (codex: active drag must not be intercepted).
         let new_hover = if self.document.selection_count() >= 2 {
             self.align_toolbar_hit(x, y, self.last_viewport_w, self.last_viewport_h)
         } else {
@@ -419,9 +413,7 @@ impl WidgetHostNative {
 
     /// Typed-char router: rename → property → chat.
     pub fn apply_text(&mut self, c: char) -> bool {
-        // Settings input owns the keyboard while focused — swallow
-        // every keystroke so non-digit chars don't slip through to
-        // chat / rename / text-edit downstream.
+        // Settings input owns the keyboard while focused — swallow every keystroke.
         if self.document.ui.agent_settings.focus.is_some() {
             if c.is_ascii_digit() && self.document.ui.settings_input_draft.len() < 5 {
                 self.document.ui.settings_input_draft.push(c);
