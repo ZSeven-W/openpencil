@@ -239,6 +239,34 @@ fn property_panel_visible_for_single_and_multi_selection() {
 }
 
 #[test]
+fn right_rail_visible_tracks_property_panel_and_variables() {
+    use crate::document::{Variable, VariableKind, VariableScalar, VariableValue};
+    // No selection + empty var table → no right rail.
+    let mut doc = Document::empty();
+    assert!(!doc.right_rail_visible());
+
+    // Variables-only document (typical for `.op` files with themes
+    // loaded but nothing selected on first paint) — rail occupied,
+    // canvas_region must shrink so the panel isn't painted over.
+    // Codex BLOCK: canvas previously extended full-width here.
+    doc.var_table.variables.push(Variable {
+        name: "color-1".into(),
+        kind: VariableKind::Color,
+        value: VariableValue::Scalar(VariableScalar::Str("#ff0000".into())),
+    });
+    assert!(doc.right_rail_visible());
+
+    // Selection-only document → rail occupied (legacy gate path).
+    let mut doc2 = Document::sample();
+    assert!(doc2.right_rail_visible());
+
+    // Clearing both selection + vars hides the rail again.
+    doc2.clear_selection();
+    doc2.var_table.variables.clear();
+    assert!(!doc2.right_rail_visible());
+}
+
+#[test]
 fn property_panel_visible_hides_stale_single_anchor() {
     // Codex stop-hook BLOCK guard: the panel paint gate
     // requires `selected_node().is_some()`, so the canvas-

@@ -387,6 +387,18 @@ impl Document {
         }
     }
 
+    /// True when ANY widget occupies the right rail today —
+    /// PropertyPanel (gated on selection) or VariablesPanel
+    /// (gated on a non-empty var table). `canvas_region` uses
+    /// this to size the canvas so it doesn't paint over the
+    /// rail content (codex BLOCK: `no-selection VariablesPanel
+    /// is painted under the canvas` — without this gate the
+    /// canvas extended full-width when nothing was selected,
+    /// hiding the Variables panel).
+    pub fn right_rail_visible(&self) -> bool {
+        self.property_panel_visible() || !self.var_table.variables.is_empty()
+    }
+
     /// Union of `aggregate_bounds` across selected nodes on the
     /// active page. Backs the multi-select panel's X/Y/W/H.
     pub fn selection_bounds(&self) -> Option<crate::Rect> {
