@@ -523,7 +523,7 @@ impl ChatProvider for SubprocessProvider {
 /// Parse a single CLI stdout line into a `ChatDelta`. Recognized
 /// shapes documented in module header; everything else degrades to a
 /// raw text delta carrying the line + a trailing newline.
-fn parse_line(line: &str) -> ChatDelta {
+pub(crate) fn parse_line(line: &str) -> ChatDelta {
     let trimmed = line.trim_start();
     if !trimmed.starts_with('{') {
         // Not JSON — surface as raw text so CLIs that just stream
