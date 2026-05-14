@@ -811,6 +811,7 @@ mod tests {
             ui: crate::document::UiState::default(),
             history: crate::document::History::default(),
             var_table: crate::document::VariableTable::default(),
+            components: crate::document::ComponentLibrary::default(),
         };
         let viewport = CanvasViewport::from_document(&doc);
         let mut backend = RecordingBackend::default();
