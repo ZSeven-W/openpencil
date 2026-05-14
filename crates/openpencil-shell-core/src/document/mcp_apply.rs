@@ -134,8 +134,10 @@ impl Document {
                 let Some(target) = NodeId::new_opt(*node_id) else {
                     return false;
                 };
-                // Pre-validate fill_hex BEFORE the mutable borrow,
-                // so an invalid hex doesn't partially apply.
+                // Pre-validate EVERY field BEFORE the mutable
+                // borrow + writes (codex stop-gate: partial mutation
+                // before rejecting invalid geometry — width<0 was
+                // checked AFTER x/y had already been applied).
                 let fill = match fill_hex {
                     None => None,
                     Some(hex) => match parse_hex_color(hex) {
@@ -143,9 +145,21 @@ impl Document {
                         None => return false,
                     },
                 };
+                if let Some(nw) = width {
+                    if *nw < 0 {
+                        return false;
+                    }
+                }
+                if let Some(nh) = height {
+                    if *nh < 0 {
+                        return false;
+                    }
+                }
                 let Some(node) = find_node_mut_in_doc(self, target) else {
                     return false;
                 };
+                // All validation passed — every field now applies
+                // atomically (no early-return after this point).
                 if let Some(nx) = x {
                     node.bounds.origin.x = *nx as f32;
                 }
@@ -153,15 +167,9 @@ impl Document {
                     node.bounds.origin.y = *ny as f32;
                 }
                 if let Some(nw) = width {
-                    if *nw < 0 {
-                        return false;
-                    }
                     node.bounds.size.x = *nw as f32;
                 }
                 if let Some(nh) = height {
-                    if *nh < 0 {
-                        return false;
-                    }
                     node.bounds.size.y = *nh as f32;
                 }
                 if let Some(new_name) = name {
