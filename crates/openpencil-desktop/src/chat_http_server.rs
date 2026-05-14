@@ -1,28 +1,40 @@
-//! HTTP-server CLI bridge — for CLIs that run as a local HTTP
-//! server we POST JSON requests to. Codex (`codex serve`) and
-//! OpenCode (`opencode serve`) are the two first-party targets.
+//! HTTP-server CLI bridge — structural lifecycle for CLIs that
+//! run as a local HTTP server we POST JSON requests to. Per the
+//! user's architecture note ("opencode 和 codex 我们调用 http
+//! server, 通过 ipc 启动本地的 server 模式") the model is: spawn
+//! the binary in server mode, watch stdout for a "Listening on …"
+//! line that announces the bind port, then send chat requests to
+//! that local HTTP endpoint.
 //!
-//! Per the user's architecture note ("opencode 和 codex 我们调用 http
-//! server, 通过 ipc 启动本地的 server 模式"): spawn the binary in
-//! server mode, watch stdout for a "Listening on …" line that
-//! announces the bind port, then send chat requests to that
-//! local HTTP endpoint. The CLI's own auth, model selection,
-//! conversation history, etc. all live server-side.
+//! **Honest scope note (2026-05-14):** the wire protocol — URL
+//! path, request body JSON shape, response stream shape — is NOT
+//! verified against any real `codex serve` / `opencode serve`
+//! implementation:
 //!
-//! The wire protocol between OP and the local server is templated
-//! because Codex / OpenCode each have their own URL paths +
-//! request/response JSON shapes. Today the bridge supports:
+//! - As of writing, OpenAI's `codex` CLI does **not** ship a
+//!   `serve` subcommand. Calling `HttpServerProvider::with_binary
+//!   ("codex", ...)` will fail at spawn time.
+//! - sst/opencode does ship an HTTP server (`opencode serve`), but
+//!   its real request / response shapes haven't been wired up here
+//!   yet. The defaults below (`/v1/chat`, `{ "message": ... }`,
+//!   newline-delimited generic envelope) are placeholders.
 //!
-//! - A configurable `chat_path` (default `/v1/chat`) where we POST
-//!   `{ "message": <user_message> }` as the body.
-//! - Newline-delimited JSON response parsing — each `\n`-terminated
-//!   line is parsed as a structured event (same shape recognized by
-//!   `chat_subprocess::parse_line`'s `text` / `thinking` /
-//!   `tool_use` / `done` / `error` variants).
+//! For that reason `HttpServerProvider::for_cli(CliName)` always
+//! returns `None` today — callers can't accidentally route Codex /
+//! OpenCode through an unverified protocol. Use
+//! [`HttpServerProvider::with_binary`] with explicit binary + serve
+//! args + chat_path once you've validated a server's real protocol.
 //!
-//! When a user wires up a CLI whose protocol differs, swap the
-//! `chat_path` + response-shape interpretation. The lifecycle
-//! (spawn + listen + POST + stream) stays the same.
+//! Lifecycle pieces that ARE structurally correct:
+//! - Spawn + stderr drain + stdout listen-line discovery
+//!   ([`parse_listening_line`] handles three observed formats).
+//! - Receiver-drop kills the child so iterator teardown is clean.
+//! - reqwest streaming response body parsing — split on `\n`, feed
+//!   each non-empty line through `chat_subprocess::parse_line`
+//!   (`text` / `thinking` / `tool_use` / `done` / `error` envelope).
+//!
+//! When a real server lands, swap the body builder + response
+//! parser to match its shape; the lifecycle plumbing stays.
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -55,24 +67,18 @@ pub struct HttpServerProvider {
 }
 
 impl HttpServerProvider {
-    /// Build a provider for a known [`CliName`]. Only Codex /
-    /// OpenCode have HttpServer semantics; the subprocess-IPC CLIs
-    /// (Claude Code / Gemini / Copilot) return `None` so callers
-    /// don't accidentally route them through this transport.
+    /// Always returns `None` today. Both Codex and OpenCode are
+    /// architecturally HttpServer-kind CLIs, but their real wire
+    /// protocols haven't been wired up — see the module-level
+    /// "honest scope note". Constructing through this function
+    /// would pretend Codex / OpenCode just work, which they don't.
+    ///
+    /// Callers who've verified a server's real protocol should use
+    /// [`HttpServerProvider::with_binary`] with explicit serve args
+    /// + chat_path + body shape.
     #[allow(dead_code)]
-    pub fn for_cli(cli: CliName) -> Option<Self> {
-        let (serve_args, chat_path): (Vec<String>, &str) = match cli {
-            CliName::Codex => (vec!["serve".into()], "/v1/chat"),
-            CliName::OpenCode => (vec!["serve".into()], "/v1/chat"),
-            _ => return None,
-        };
-        Some(Self {
-            binary: cli.default_binary().into(),
-            serve_args,
-            chat_path: chat_path.into(),
-            listen_timeout: Duration::from_secs(10),
-            label: cli.label().into(),
-        })
+    pub fn for_cli(_cli: CliName) -> Option<Self> {
+        None
     }
 
     /// Build a provider with a user-supplied binary + serve args +
@@ -412,12 +418,26 @@ mod tests {
     use super::*;
 
     #[test]
-    fn for_cli_only_http_server_kinds() {
-        assert!(HttpServerProvider::for_cli(CliName::Codex).is_some());
-        assert!(HttpServerProvider::for_cli(CliName::OpenCode).is_some());
-        assert!(HttpServerProvider::for_cli(CliName::ClaudeCode).is_none());
-        assert!(HttpServerProvider::for_cli(CliName::Gemini).is_none());
-        assert!(HttpServerProvider::for_cli(CliName::Copilot).is_none());
+    fn for_cli_returns_none_pending_real_protocol_wiring() {
+        // Both Codex + OpenCode are HttpServer-kind in the
+        // architecture memo, but the wire protocols (URL path,
+        // body shape, response stream format) are not yet
+        // verified against either real CLI — see module docs.
+        // Until that lands, for_cli refuses to construct a
+        // bridge so callers don't accidentally pretend it works.
+        for cli in &[
+            CliName::Codex,
+            CliName::OpenCode,
+            CliName::ClaudeCode,
+            CliName::Gemini,
+            CliName::Copilot,
+        ] {
+            assert!(
+                HttpServerProvider::for_cli(*cli).is_none(),
+                "for_cli should refuse {:?} until protocol is wired",
+                cli
+            );
+        }
     }
 
     #[test]
@@ -448,26 +468,15 @@ mod tests {
     }
 
     #[test]
-    fn provider_constructs_as_chat_provider_trait_object() {
-        let _: Arc<dyn ChatProvider> =
-            Arc::new(HttpServerProvider::for_cli(CliName::Codex).unwrap());
-        let _: Arc<dyn ChatProvider> =
-            Arc::new(HttpServerProvider::for_cli(CliName::OpenCode).unwrap());
-    }
-
-    #[test]
-    fn provider_labels_match_cli_names() {
-        assert_eq!(
-            HttpServerProvider::for_cli(CliName::Codex)
-                .unwrap()
-                .provider_label(),
-            "Codex"
-        );
-        assert_eq!(
-            HttpServerProvider::for_cli(CliName::OpenCode)
-                .unwrap()
-                .provider_label(),
-            "OpenCode"
-        );
+    fn with_binary_constructs_as_chat_provider_trait_object() {
+        // The supported construction path is `with_binary` — caller
+        // supplies the verified binary + serve args + chat path.
+        let p: Arc<dyn ChatProvider> = Arc::new(HttpServerProvider::with_binary(
+            "echo",
+            vec!["serve".into()],
+            "/chat",
+            "Echo",
+        ));
+        assert_eq!(p.provider_label(), "Echo");
     }
 }
