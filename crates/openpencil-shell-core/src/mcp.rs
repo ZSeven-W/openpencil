@@ -24,9 +24,9 @@ pub use tools::{
     GetSelection, ListPages, ListVariables, NodeRecord, VariableRecord,
 };
 pub use write_tools::{
-    delete_node_snapshot, insert_node_snapshot, set_active_axis_value_snapshot,
-    set_variable_color_snapshot, update_node_snapshot, DeleteNode, InsertNode,
-    SetActiveAxisValue, SetVariableColor, UpdateNode,
+    delete_node_snapshot, insert_node_snapshot, move_node_snapshot,
+    set_active_axis_value_snapshot, set_variable_color_snapshot, update_node_snapshot,
+    DeleteNode, InsertNode, MoveNode, SetActiveAxisValue, SetVariableColor, UpdateNode,
 };
 
 /// JSON-RPC-style request id. Strings + integers both supported by
@@ -155,6 +155,15 @@ pub enum McpCommand {
     /// resolve OR points at a Page root (use page mutators for
     /// page deletion).
     DeleteNode { node_id: u64 },
+    /// Reparent a node. `target_parent_id == 0` reparents to the
+    /// page root of the currently-active page. Non-zero ids must
+    /// resolve to an existing node; the applier rejects moves
+    /// where the target would create a cycle (target is a
+    /// descendant of the moved node).
+    MoveNode {
+        node_id: u64,
+        target_parent_id: u64,
+    },
 }
 
 /// Trait every MCP tool implements. The MCP server walks its

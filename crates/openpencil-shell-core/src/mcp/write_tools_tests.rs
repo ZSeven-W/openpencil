@@ -595,3 +595,119 @@ fn apply_mcp_command_update_node_is_atomic_on_invalid_hex() {
     assert_eq!(title.bounds.origin.y, before.origin.y);
     assert_eq!(title.name, "Title");
 }
+
+#[test]
+fn move_node_validates_args() {
+    let tool = move_node_snapshot();
+    // Missing both.
+    match tool.call(&BTreeMap::new()) {
+        ToolOutcome::Err(code, _) => assert_eq!(code, ToolErrorCode::MissingArgument),
+        _ => panic!(),
+    }
+    // node_id only.
+    let mut args = BTreeMap::new();
+    args.insert("node_id".into(), "10".into());
+    match tool.call(&args) {
+        ToolOutcome::Err(code, msg) => {
+            assert_eq!(code, ToolErrorCode::MissingArgument);
+            assert!(msg.contains("target_parent_id"));
+        }
+        _ => panic!(),
+    }
+    // node_id == 0 invalid.
+    args.insert("node_id".into(), "0".into());
+    args.insert("target_parent_id".into(), "5".into());
+    match tool.call(&args) {
+        ToolOutcome::Err(code, _) => assert_eq!(code, ToolErrorCode::InvalidArgument),
+        _ => panic!(),
+    }
+    // node_id == target_parent_id.
+    args.insert("node_id".into(), "10".into());
+    args.insert("target_parent_id".into(), "10".into());
+    match tool.call(&args) {
+        ToolOutcome::Err(code, _) => assert_eq!(code, ToolErrorCode::InvalidArgument),
+        _ => panic!(),
+    }
+}
+
+#[test]
+fn move_node_returns_command_with_zero_target_for_page_root() {
+    let tool = move_node_snapshot();
+    let mut args = BTreeMap::new();
+    args.insert("node_id".into(), "11".into());
+    args.insert("target_parent_id".into(), "0".into());
+    match tool.call(&args) {
+        ToolOutcome::OkWithCommand(_, McpCommand::MoveNode { node_id, target_parent_id }) => {
+            assert_eq!(node_id, 11);
+            assert_eq!(target_parent_id, 0);
+        }
+        other => panic!("expected MoveNode, got {other:?}"),
+    }
+}
+
+#[test]
+fn apply_mcp_command_move_node_reparents_to_page_root() {
+    use crate::document::Document;
+    // Sample doc layout: page → frame(10) → [title(11), button(12) → [rect(13), text(14)]]
+    let mut doc = Document::sample();
+    let cmd = McpCommand::MoveNode {
+        node_id: 11,
+        target_parent_id: 0, // page root
+    };
+    assert!(doc.apply_mcp_command(&cmd));
+    // Title is now a sibling of Frame at the page root.
+    let root = &doc.pages[0].children;
+    assert!(root.iter().any(|n| n.id.raw() == 11), "title at page root");
+    // Frame no longer carries Title.
+    let frame = root.iter().find(|n| n.id.raw() == 10).unwrap();
+    assert!(frame.children.iter().all(|n| n.id.raw() != 11));
+}
+
+#[test]
+fn apply_mcp_command_move_node_reparents_to_another_node() {
+    use crate::document::Document;
+    let mut doc = Document::sample();
+    // Move Title (id 11) under the Button group (id 12).
+    let cmd = McpCommand::MoveNode {
+        node_id: 11,
+        target_parent_id: 12,
+    };
+    assert!(doc.apply_mcp_command(&cmd));
+    let frame = doc.pages[0].children.iter().find(|n| n.id.raw() == 10).unwrap();
+    let button = frame.children.iter().find(|n| n.id.raw() == 12).unwrap();
+    assert!(button.children.iter().any(|n| n.id.raw() == 11), "title under button");
+    assert!(frame.children.iter().all(|n| n.id.raw() != 11), "title detached from frame");
+}
+
+#[test]
+fn apply_mcp_command_move_node_rejects_cycle() {
+    use crate::document::Document;
+    let mut doc = Document::sample();
+    // Frame (id 10) contains Button (id 12). Move Frame UNDER Button
+    // — that would cycle. Apply must reject.
+    let cmd = McpCommand::MoveNode {
+        node_id: 10,
+        target_parent_id: 12,
+    };
+    assert!(!doc.apply_mcp_command(&cmd), "cycle move must reject");
+    // Frame is still at the page root with Button as child.
+    let root = &doc.pages[0].children;
+    let frame = root.iter().find(|n| n.id.raw() == 10).unwrap();
+    assert!(frame.children.iter().any(|n| n.id.raw() == 12));
+}
+
+#[test]
+fn apply_mcp_command_move_node_rejects_unknown_id() {
+    use crate::document::Document;
+    let mut doc = Document::sample();
+    // Unknown source.
+    assert!(!doc.apply_mcp_command(&McpCommand::MoveNode {
+        node_id: 99999,
+        target_parent_id: 10,
+    }));
+    // Unknown target.
+    assert!(!doc.apply_mcp_command(&McpCommand::MoveNode {
+        node_id: 11,
+        target_parent_id: 99999,
+    }));
+}
