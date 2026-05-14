@@ -272,6 +272,9 @@ pub struct Document {
     pub ui: UiState,
     /// Undo / redo stacks. Push BEFORE a transactional mutation.
     pub history: History,
+    /// Design variables + theme registry. Populated by the canonical
+    /// `.op` loader; lookup via `Variable::resolve` / `VariableTable::resolve`.
+    pub var_table: VariableTable,
 }
 
 /// Document undo / redo stacks. Snapshot = deep copy of the

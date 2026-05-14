@@ -392,7 +392,11 @@ fn load_from_path(doc: &mut Document, path: &std::path::Path) -> Result<(), Stri
     // its own Save), then fall back to the canonical `.op` /
     // `.pen` schema so files from the TS editor, Jian apps, or
     // anything else emitting the format load through the shared
-    // parser instead of a private adapter.
+    // parser instead of a private adapter. Side-channel: when the
+    // canonical path fires, also harvest `variables` + `themes` into
+    // a VariableTable for assignment after apply_payload (which
+    // resets Document state via Default).
+    let mut canonical_var_table: Option<openpencil_shell_core::document::VariableTable> = None;
     let payload = match serde_json::from_slice::<DocPayload>(&bytes) {
         Ok(p) => p,
         Err(_) => {
@@ -402,9 +406,7 @@ fn load_from_path(doc: &mut Document, path: &std::path::Path) -> Result<(), Stri
             for w in &loaded.warnings {
                 eprintln!("[open] schema warning: {:?}", w);
             }
-            // jian-core's `LayoutEngine` runs inside the adapter,
-            // so the returned payload already carries absolute
-            // scene-coord rects on every node.
+            canonical_var_table = Some(crate::pen_doc_adapter::build_var_table(&loaded.value));
             let adapted = crate::pen_doc_adapter::pen_document_to_payload(&loaded.value);
             adapted.payload
         }
@@ -412,6 +414,9 @@ fn load_from_path(doc: &mut Document, path: &std::path::Path) -> Result<(), Stri
     let page_count = payload.pages.len();
     let node_count: usize = payload.pages.iter().map(|p| count_nodes(&p.children)).sum();
     apply_payload(doc, payload)?;
+    if let Some(tbl) = canonical_var_table {
+        doc.var_table = tbl;
+    }
     let bb = active_page_bbox(doc);
     eprintln!(
         "[open] {} pages, {} nodes; content bbox {:?}; viewport pan=({:.1},{:.1}) zoom={:.2}",

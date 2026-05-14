@@ -81,6 +81,68 @@ pub fn pen_document_to_payload(doc: &PenDocument) -> LoadedDoc {
     }
 }
 
+/// Copy `PenDocument.variables` + `.themes` into a shell-core
+/// `VariableTable`. Caller assigns the result to `Document.var_table`
+/// AFTER `apply_payload` (which clears it via Default). Lossless on
+/// the supported `VariableDefinition` variants; unknown future
+/// `VariableKind`s round-trip via their `Color/Number/Boolean/String`
+/// label since the enums are isomorphic.
+pub fn build_var_table(doc: &PenDocument) -> openpencil_shell_core::document::VariableTable {
+    use openpencil_shell_core::document::{
+        ThemeAxis, ThemedValue, Variable, VariableKind, VariableScalar, VariableTable,
+        VariableValue,
+    };
+    let mut out = VariableTable::default();
+    if let Some(themes) = &doc.themes {
+        for (axis_name, values) in themes {
+            out.themes.push(ThemeAxis {
+                name: axis_name.clone(),
+                values: values.clone(),
+            });
+        }
+    }
+    if let Some(vars) = &doc.variables {
+        for (name, def) in vars {
+            let kind = match def.kind {
+                jian_ops_schema::variable::VariableKind::Color => VariableKind::Color,
+                jian_ops_schema::variable::VariableKind::Number => VariableKind::Number,
+                jian_ops_schema::variable::VariableKind::Boolean => VariableKind::Boolean,
+                jian_ops_schema::variable::VariableKind::String => VariableKind::String,
+            };
+            let value = match &def.value {
+                jian_ops_schema::variable::VariableValue::Scalar(s) => {
+                    VariableValue::Scalar(map_scalar(s))
+                }
+                jian_ops_schema::variable::VariableValue::Themed(arr) => VariableValue::Themed(
+                    arr.iter()
+                        .map(|tv| ThemedValue {
+                            value: map_scalar(&tv.value),
+                            theme: tv.theme.clone(),
+                        })
+                        .collect(),
+                ),
+            };
+            out.variables.push(Variable {
+                name: name.clone(),
+                kind,
+                value,
+            });
+        }
+    }
+    out
+}
+
+fn map_scalar(
+    s: &jian_ops_schema::variable::VariableScalar,
+) -> openpencil_shell_core::document::VariableScalar {
+    use openpencil_shell_core::document::VariableScalar;
+    match s {
+        jian_ops_schema::variable::VariableScalar::Bool(b) => VariableScalar::Bool(*b),
+        jian_ops_schema::variable::VariableScalar::Num(n) => VariableScalar::Num(*n),
+        jian_ops_schema::variable::VariableScalar::Str(s) => VariableScalar::Str(s.clone()),
+    }
+}
+
 fn build_page(id: &str, name: &str, roots: &[PenNode], page_idx: usize) -> PagePayload {
     let mut layout_rects: BTreeMap<String, [f32; 4]> = BTreeMap::new();
     for root in roots {
