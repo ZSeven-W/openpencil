@@ -497,6 +497,42 @@ fn parse_tool_call_rejects_structured_arg_values() {
 }
 
 #[test]
+fn parse_tool_call_rejects_structured_values_in_mcp_tools_call_shape() {
+    // Same rejection contract applies on the MCP `tools/call`
+    // path (codex stop-gate: the previous structured-rejection
+    // tests only exercised the legacy/direct shape).
+    let with_obj = r#"{"id":1,"method":"tools/call","params":{"name":"get_node","arguments":{"node_id":"42","nested":{"a":1}}}}"#;
+    assert!(parse_tool_call(with_obj).is_none(), "object value inside arguments must reject");
+    let with_arr = r#"{"id":1,"method":"tools/call","params":{"name":"get_node","arguments":{"node_id":"42","arr":[1]}}}"#;
+    assert!(parse_tool_call(with_arr).is_none(), "array value inside arguments must reject");
+    // Scalar-only still parses.
+    let ok = r#"{"id":1,"method":"tools/call","params":{"name":"get_node","arguments":{"node_id":"42"}}}"#;
+    let call = parse_tool_call(ok).expect("scalar-only must parse");
+    assert_eq!(call.tool, "get_node");
+    assert_eq!(call.arguments.get("node_id"), Some(&"42".to_string()));
+}
+
+#[test]
+fn parse_tool_call_rejects_non_object_arguments_field() {
+    // Codex stop-gate: `arguments` present but not an object
+    // (e.g. `"arguments":"oops"` or `"arguments":42`) used to
+    // downgrade to empty args via `extract_object_body` returning
+    // None. Now it rejects the parse so a wire-shape error
+    // doesn't silently land at the dispatcher as a no-arg call.
+    let str_args = r#"{"id":1,"method":"tools/call","params":{"name":"get_node","arguments":"oops"}}"#;
+    assert!(parse_tool_call(str_args).is_none(), "string `arguments` must reject");
+    let num_args = r#"{"id":1,"method":"tools/call","params":{"name":"get_node","arguments":42}}"#;
+    assert!(parse_tool_call(num_args).is_none(), "number `arguments` must reject");
+    let arr_args = r#"{"id":1,"method":"tools/call","params":{"name":"get_node","arguments":[]}}"#;
+    assert!(parse_tool_call(arr_args).is_none(), "array `arguments` must reject");
+    // `arguments` legitimately omitted → empty args, parse OK.
+    let no_args = r#"{"id":1,"method":"tools/call","params":{"name":"list_pages"}}"#;
+    let call = parse_tool_call(no_args).expect("missing `arguments` is legit");
+    assert_eq!(call.tool, "list_pages");
+    assert!(call.arguments.is_empty());
+}
+
+#[test]
 fn get_node_reachable_through_stdio_path() {
     // End-to-end: the wire `params` parser feeds the tool's
     // required `node_id`, dispatch returns Ok with kind=frame.
