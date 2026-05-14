@@ -69,6 +69,10 @@ impl WidgetHostNative {
     /// Right-click handler — opens the LayerPanel context menu on
     /// a layer row OR page row.
     pub fn apply_right_press(&mut self, x: f32, y: f32, _viewport_w: f32, viewport_h: f32) -> bool {
+        // Codex stop-gate: right-click outside the variables panel
+        // (e.g. on a layer row) must commit any pending row focus
+        // so subsequent keystrokes don't leak into the draft.
+        self.commit_variable_row_focus_if_any();
         if !self.document.ui.sidebar_open {
             return false;
         }

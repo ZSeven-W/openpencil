@@ -104,6 +104,10 @@ impl WidgetHostNative {
 
     /// Cmd+J — focus / defocus the AI chat input.
     pub fn apply_toggle_chat(&mut self) -> bool {
+        // Codex stop-gate: shifting focus to chat must commit
+        // any pending variable-row edit first so subsequent
+        // keystrokes don't keep routing into the variable draft.
+        self.commit_variable_row_focus_if_any();
         self.document.chat.focused = !self.document.chat.focused;
         if self.document.chat.focused {
             self.document.chat.caret_anchor_ms = self.now_ms;
