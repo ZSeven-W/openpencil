@@ -56,9 +56,6 @@ impl Document {
         let target = self.selected;
         let page = self.active_page()?;
         let node = page.find(target)?;
-        // v1: only Frame / Group can become a Component. Loose
-        // shapes (Rect / Ellipse / Text / Path) need to be wrapped
-        // in a Frame first — same restriction TS imposes.
         if !matches!(node.kind, super::NodeKind::Frame | super::NodeKind::Group) {
             return None;
         }
@@ -71,6 +68,50 @@ impl Document {
         self.components.insert(comp);
         Some(target)
     }
+
+    /// "Insert Instance" mutator. Deep-clones the component's root
+    /// subtree with fresh `NodeId`s and appends it to the active
+    /// page's top-level children. Returns the new instance's root
+    /// id, or None when the component id is unknown / the next-id
+    /// allocator can't advance. Mirrors TS drag-from-Components-
+    /// panel insertion.
+    pub fn instantiate_component(
+        &mut self,
+        component_id: NodeId,
+        next_id: &mut u64,
+    ) -> Option<NodeId> {
+        let comp = self.components.find_by_id(component_id)?.clone();
+        let pre = self.snapshot_for_history();
+        // Mint a fresh id past the high-water mark (same guard as
+        // duplicate_selected / group_selected).
+        let safe = self.max_node_id().checked_add(1)?;
+        let raw = (*next_id).max(safe);
+        *next_id = raw.checked_add(1)?;
+        let new_root = clone_node_with_new_ids(&comp.root, raw, next_id);
+        let new_id = new_root.id;
+        let active = self.active_page_index;
+        self.pages.get_mut(active)?.children.push(new_root);
+        self.selected_set.clear();
+        self.selected_set.push(new_id);
+        self.selected = new_id;
+        self.history_push_past(pre);
+        Some(new_id)
+    }
+}
+
+fn clone_node_with_new_ids(src: &Node, new_id: u64, next_id: &mut u64) -> Node {
+    let mut out = src.clone();
+    out.id = NodeId::new(new_id);
+    out.children = src
+        .children
+        .iter()
+        .map(|c| {
+            let raw = *next_id;
+            *next_id = next_id.checked_add(1).unwrap_or(raw);
+            clone_node_with_new_ids(c, raw, next_id)
+        })
+        .collect();
+    out
 }
 
 #[cfg(test)]
@@ -135,6 +176,54 @@ mod tests {
         doc.set_single_selection(NodeId::new(10));
         assert!(doc.create_component_from_selected("Card").is_none());
         assert!(doc.components.components.is_empty());
+    }
+
+    #[test]
+    fn instantiate_component_clones_subtree_with_fresh_ids() {
+        use crate::document::NodeKind;
+        let mut doc = Document::empty();
+        let page = doc.pages.get_mut(0).unwrap();
+        page.children.clear();
+        let mut frame = Node::with_children(
+            10,
+            NodeKind::Frame,
+            "F",
+            vec![
+                Node::leaf(11, NodeKind::Rect, "r1"),
+                Node::leaf(12, NodeKind::Rect, "r2"),
+            ],
+        );
+        // Bound the frame so the resulting clone is meaningful.
+        frame.bounds = crate::Rect::xywh(0.0, 0.0, 100.0, 100.0);
+        page.children.push(frame);
+        doc.set_single_selection(NodeId::new(10));
+        doc.create_component_from_selected("Card");
+        // Now instantiate.
+        let mut next = 100u64;
+        let inst_id = doc.instantiate_component(NodeId::new(10), &mut next).unwrap();
+        // Fresh root id is past the source id.
+        assert!(inst_id.raw() >= 100);
+        let inst = doc.active_page().unwrap().find(inst_id).unwrap();
+        // Same shape: 2 children.
+        assert_eq!(inst.children.len(), 2);
+        // Child ids fresh (not 11/12).
+        for c in &inst.children {
+            assert_ne!(c.id, NodeId::new(11));
+            assert_ne!(c.id, NodeId::new(12));
+        }
+        // Selection landed on the new instance root.
+        assert_eq!(doc.selected, inst_id);
+        // History snapshot pushed.
+        assert_eq!(doc.history.past.len(), 1);
+    }
+
+    #[test]
+    fn instantiate_component_unknown_id_returns_none() {
+        let mut doc = Document::empty();
+        let mut next = 100u64;
+        assert!(doc
+            .instantiate_component(NodeId::new(99), &mut next)
+            .is_none());
     }
 
     #[test]
