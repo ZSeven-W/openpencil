@@ -3,7 +3,52 @@
 //! more write commands land.
 
 use super::variables::parse_hex_color;
-use super::{Document, Node, NodeKind};
+use super::{Document, Node, NodeId, NodeKind};
+
+/// Find a mutable reference to the node with `target` id anywhere
+/// in the document, walking every page + every descendant. None
+/// when the id doesn't resolve. The walk uses raw recursion rather
+/// than the existing `Document::find` because that returns `&Node`,
+/// not `&mut Node`.
+fn find_node_mut_in_doc(doc: &mut Document, target: NodeId) -> Option<&mut Node> {
+    for page in doc.pages.iter_mut() {
+        if let Some(node) = find_in_subtree(&mut page.children, target) {
+            return Some(node);
+        }
+    }
+    None
+}
+
+fn find_in_subtree(children: &mut [Node], target: NodeId) -> Option<&mut Node> {
+    // Locate by id first using a fresh iter (immutable position
+    // scan); separate the recursive walk so the borrow checker
+    // doesn't see two overlapping `iter_mut` ranges on the same
+    // slice.
+    if let Some(idx) = children.iter().position(|n| n.id == target) {
+        return Some(&mut children[idx]);
+    }
+    for node in children.iter_mut() {
+        if let Some(found) = find_in_subtree(&mut node.children, target) {
+            return Some(found);
+        }
+    }
+    None
+}
+
+/// Remove the node with `target` id from `children` or any nested
+/// descendant. Returns true when removed.
+fn remove_in_subtree(children: &mut Vec<Node>, target: NodeId) -> bool {
+    if let Some(idx) = children.iter().position(|n| n.id == target) {
+        children.remove(idx);
+        return true;
+    }
+    for node in children.iter_mut() {
+        if remove_in_subtree(&mut node.children, target) {
+            return true;
+        }
+    }
+    false
+}
 
 /// Resolve an MCP `kind` arg into a NodeKind. Accepts the same
 /// lowercase strings the read-side tools emit (`frame`, `group`,
@@ -76,6 +121,69 @@ impl Document {
                 }
                 page.children.push(node);
                 true
+            }
+            crate::mcp::McpCommand::UpdateNode {
+                node_id,
+                x,
+                y,
+                width,
+                height,
+                name,
+                fill_hex,
+            } => {
+                let Some(target) = NodeId::new_opt(*node_id) else {
+                    return false;
+                };
+                // Pre-validate fill_hex BEFORE the mutable borrow,
+                // so an invalid hex doesn't partially apply.
+                let fill = match fill_hex {
+                    None => None,
+                    Some(hex) => match parse_hex_color(hex) {
+                        Some(c) => Some(c),
+                        None => return false,
+                    },
+                };
+                let Some(node) = find_node_mut_in_doc(self, target) else {
+                    return false;
+                };
+                if let Some(nx) = x {
+                    node.bounds.origin.x = *nx as f32;
+                }
+                if let Some(ny) = y {
+                    node.bounds.origin.y = *ny as f32;
+                }
+                if let Some(nw) = width {
+                    if *nw < 0 {
+                        return false;
+                    }
+                    node.bounds.size.x = *nw as f32;
+                }
+                if let Some(nh) = height {
+                    if *nh < 0 {
+                        return false;
+                    }
+                    node.bounds.size.y = *nh as f32;
+                }
+                if let Some(new_name) = name {
+                    node.name = new_name.clone();
+                }
+                if let Some(c) = fill {
+                    node.fill = Some(c);
+                }
+                true
+            }
+            crate::mcp::McpCommand::DeleteNode { node_id } => {
+                let Some(target) = NodeId::new_opt(*node_id) else {
+                    return false;
+                };
+                let mut removed = false;
+                for page in self.pages.iter_mut() {
+                    if remove_in_subtree(&mut page.children, target) {
+                        removed = true;
+                        break;
+                    }
+                }
+                removed
             }
             _ => self.var_table.apply_mcp_command(cmd),
         }

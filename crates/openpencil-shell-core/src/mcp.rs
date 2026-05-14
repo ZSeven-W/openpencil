@@ -11,17 +11,22 @@ use std::collections::BTreeMap;
 pub mod parser;
 pub mod tools;
 #[cfg(test)] mod tools_tests;
+pub mod write_tools;
+#[cfg(test)] mod write_tools_tests;
 
 // Re-export the public surface of submodules so callers can keep
 // using `mcp::parse_tool_call` / `mcp::GetDocumentInfo` after the
 // split. Mirrors the `widgets::*` re-export pattern.
 pub use parser::parse_tool_call;
 pub use tools::{
-    document_info_snapshot, get_active_theme_snapshot, get_node_snapshot, insert_node_snapshot,
-    list_pages_snapshot, list_variables_snapshot, selection_snapshot,
-    set_active_axis_value_snapshot, set_variable_color_snapshot, GetActiveTheme,
-    GetDocumentInfo, GetNode, GetSelection, InsertNode, ListPages, ListVariables, NodeRecord,
-    SetActiveAxisValue, SetVariableColor, VariableRecord,
+    document_info_snapshot, get_active_theme_snapshot, get_node_snapshot, list_pages_snapshot,
+    list_variables_snapshot, selection_snapshot, GetActiveTheme, GetDocumentInfo, GetNode,
+    GetSelection, ListPages, ListVariables, NodeRecord, VariableRecord,
+};
+pub use write_tools::{
+    delete_node_snapshot, insert_node_snapshot, set_active_axis_value_snapshot,
+    set_variable_color_snapshot, update_node_snapshot, DeleteNode, InsertNode,
+    SetActiveAxisValue, SetVariableColor, UpdateNode,
 };
 
 /// JSON-RPC-style request id. Strings + integers both supported by
@@ -131,6 +136,25 @@ pub enum McpCommand {
         height: i32,
         fill_hex: Option<String>,
     },
+    /// Patch fields on an existing node. Every field is optional;
+    /// `None` leaves the live value unchanged. Bounds writes
+    /// replace coordinates piecemeal — caller can move (x, y)
+    /// without resizing or resize (w, h) without moving.
+    UpdateNode {
+        node_id: u64,
+        x: Option<i32>,
+        y: Option<i32>,
+        width: Option<i32>,
+        height: Option<i32>,
+        name: Option<String>,
+        fill_hex: Option<String>,
+    },
+    /// Remove a node + all its descendants from its parent. The
+    /// applier walks pages to find the parent vec containing the
+    /// id and `retain`s it out. Returns false when the id doesn't
+    /// resolve OR points at a Page root (use page mutators for
+    /// page deletion).
+    DeleteNode { node_id: u64 },
 }
 
 /// Trait every MCP tool implements. The MCP server walks its
