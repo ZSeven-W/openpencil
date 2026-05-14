@@ -412,7 +412,7 @@ fn paint_node(
 
     match &node.kind {
         NodeKind::Frame => {
-            paint_fill_then_stroke(cx, node, world_rect, zoom);
+            paint_fill_then_stroke(cx, node, world_rect, zoom, node_fill(node, var_table));
             for child in &node.children {
                 paint_node(cx, child, viewport_origin, zoom, selected, edit_caret, cull, var_table);
             }
@@ -426,7 +426,7 @@ fn paint_node(
             }
         }
         NodeKind::Rect => {
-            paint_fill_then_stroke(cx, node, world_rect, zoom);
+            paint_fill_then_stroke(cx, node, world_rect, zoom, node_fill(node, var_table));
         }
         NodeKind::Ellipse => {
             if let Some(fill) = node.fill {
