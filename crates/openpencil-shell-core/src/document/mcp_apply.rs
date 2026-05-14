@@ -130,6 +130,43 @@ fn clone_subtree(node: &Node, next_id: &mut u64) -> Option<Node> {
     Some(clone)
 }
 
+/// Replace the node with `target` id with `replacement` at its
+/// current slot. Walks every page; on the first match,
+/// swaps in place (`children[idx] = replacement`) so the
+/// sibling order is preserved. Returns true on success.
+fn replace_node_in_doc(doc: &mut Document, target: NodeId, replacement: Node) -> bool {
+    // Wrap the replacement in an Option so we can take() it inside
+    // the recursive walk without giving up the Some-on-failure
+    // contract (replacement returned untouched is irrelevant here
+    // — we either consumed it or replace_node already returned).
+    let mut slot = Some(replacement);
+    for page in doc.pages.iter_mut() {
+        if replace_in_subtree(&mut page.children, target, &mut slot) {
+            return true;
+        }
+    }
+    false
+}
+
+fn replace_in_subtree(
+    children: &mut [Node],
+    target: NodeId,
+    slot: &mut Option<Node>,
+) -> bool {
+    if let Some(idx) = children.iter().position(|n| n.id == target) {
+        if let Some(replacement) = slot.take() {
+            children[idx] = replacement;
+            return true;
+        }
+    }
+    for node in children.iter_mut() {
+        if replace_in_subtree(&mut node.children, target, slot) {
+            return true;
+        }
+    }
+    false
+}
+
 /// Resolve an MCP `kind` arg into a NodeKind. Accepts the same
 /// lowercase strings the read-side tools emit (`frame`, `group`,
 /// `rect`, `ellipse`, `polygon`, `line`, `text`, `path`).
@@ -322,6 +359,51 @@ impl Document {
                     }
                 }
                 true
+            }
+            crate::mcp::McpCommand::ReplaceNode {
+                node_id,
+                kind,
+                name,
+                x,
+                y,
+                width,
+                height,
+                fill_hex,
+            } => {
+                let Some(target) = NodeId::new_opt(*node_id) else {
+                    return false;
+                };
+                let Some(node_kind) = parse_node_kind(kind) else {
+                    return false;
+                };
+                // Pre-validate EVERYTHING before mutating (same
+                // discipline as update_node + move_node — no
+                // half-mutated state on a bad arg).
+                if *width < 0 || *height < 0 {
+                    return false;
+                }
+                let fill = match fill_hex {
+                    None => None,
+                    Some(hex) => match parse_hex_color(hex) {
+                        Some(c) => Some(c),
+                        None => return false,
+                    },
+                };
+                if find_node_in_doc(self, target).is_none() {
+                    return false;
+                }
+                let Some(next_id) = self.next_node_id_seed() else {
+                    return false;
+                };
+                let mut replacement = Node::leaf(next_id, node_kind, name.clone());
+                replacement.bounds = crate::Rect::xywh(
+                    *x as f32,
+                    *y as f32,
+                    *width as f32,
+                    *height as f32,
+                );
+                replacement.fill = fill;
+                replace_node_in_doc(self, target, replacement)
             }
             crate::mcp::McpCommand::MoveNode {
                 node_id,

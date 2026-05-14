@@ -1,0 +1,148 @@
+//! Tests for `mcp::write_tools::ReplaceNode` + the matching
+//! `Document::apply_mcp_command(ReplaceNode)` branch. Sibling
+//! file (same rationale as `copy_node_tests.rs`) — keeps
+//! `write_tools_tests.rs` under the 800-line cap as the write
+//! surface grows.
+
+use super::write_tools::*;
+use super::{McpCommand, McpTool, ToolErrorCode, ToolOutcome};
+use std::collections::BTreeMap;
+
+#[test]
+fn replace_node_validates_required_args() {
+    let tool = replace_node_snapshot();
+    match tool.call(&BTreeMap::new()) {
+        ToolOutcome::Err(code, _) => assert_eq!(code, ToolErrorCode::MissingArgument),
+        _ => panic!(),
+    }
+    let mut args = BTreeMap::new();
+    args.insert("node_id".into(), "11".into());
+    match tool.call(&args) {
+        ToolOutcome::Err(code, msg) => {
+            assert_eq!(code, ToolErrorCode::MissingArgument);
+            assert!(msg.contains("kind"));
+        }
+        _ => panic!(),
+    }
+    args.insert("kind".into(), "rect".into());
+    args.insert("name".into(), "Replacement".into());
+    args.insert("x".into(), "10".into());
+    args.insert("y".into(), "20".into());
+    args.insert("width".into(), "100".into());
+    args.insert("height".into(), "30".into());
+    match tool.call(&args) {
+        ToolOutcome::OkWithCommand(_, McpCommand::ReplaceNode { node_id, kind, name, x, y, width, height, fill_hex }) => {
+            assert_eq!(node_id, 11);
+            assert_eq!(kind, "rect");
+            assert_eq!(name, "Replacement");
+            assert_eq!(x, 10);
+            assert_eq!(y, 20);
+            assert_eq!(width, 100);
+            assert_eq!(height, 30);
+            assert!(fill_hex.is_none());
+        }
+        other => panic!("expected ReplaceNode, got {other:?}"),
+    }
+}
+
+#[test]
+fn replace_node_rejects_bad_kind_and_geometry_and_fill() {
+    let tool = replace_node_snapshot();
+    let mut args = BTreeMap::new();
+    args.insert("node_id".into(), "11".into());
+    args.insert("kind".into(), "blob".into()); // not in ALLOWED_KINDS
+    args.insert("name".into(), "X".into());
+    args.insert("x".into(), "0".into());
+    args.insert("y".into(), "0".into());
+    args.insert("width".into(), "10".into());
+    args.insert("height".into(), "10".into());
+    match tool.call(&args) {
+        ToolOutcome::Err(code, _) => assert_eq!(code, ToolErrorCode::InvalidArgument),
+        _ => panic!(),
+    }
+    args.insert("kind".into(), "rect".into());
+    args.insert("width".into(), "-5".into());
+    match tool.call(&args) {
+        ToolOutcome::Err(code, _) => assert_eq!(code, ToolErrorCode::InvalidArgument),
+        _ => panic!(),
+    }
+    args.insert("width".into(), "5".into());
+    args.insert("fill_hex".into(), "not-a-hex".into());
+    match tool.call(&args) {
+        ToolOutcome::Err(code, _) => assert_eq!(code, ToolErrorCode::InvalidArgument),
+        _ => panic!(),
+    }
+}
+
+#[test]
+fn apply_mcp_command_replace_node_swaps_at_same_slot() {
+    use crate::document::Document;
+    let mut doc = Document::sample();
+    let pre_max = doc.max_node_id();
+    // Title (id 11) is at frame.children[0]. Replace it with a Rect.
+    let cmd = McpCommand::ReplaceNode {
+        node_id: 11,
+        kind: "rect".into(),
+        name: "Swapped".into(),
+        x: 0,
+        y: 0,
+        width: 50,
+        height: 50,
+        fill_hex: Some("#ff0000".into()),
+    };
+    assert!(doc.apply_mcp_command(&cmd));
+    let frame = doc.pages[0].children.iter().find(|n| n.id.raw() == 10).unwrap();
+    // Slot 0 now holds the replacement; old id is gone.
+    assert!(frame.children.iter().all(|n| n.id.raw() != 11));
+    let swapped = &frame.children[0];
+    assert_eq!(swapped.name, "Swapped");
+    assert!(swapped.id.raw() > pre_max, "fresh id past pre_max");
+    // Sibling (Button group, id 12) still at slot 1.
+    assert_eq!(frame.children[1].id.raw(), 12);
+}
+
+#[test]
+fn apply_mcp_command_replace_node_rejects_unknown_id() {
+    use crate::document::Document;
+    let mut doc = Document::sample();
+    let pre_root_len = doc.pages[0].children.len();
+    let cmd = McpCommand::ReplaceNode {
+        node_id: 99999,
+        kind: "rect".into(),
+        name: "Ghost".into(),
+        x: 0,
+        y: 0,
+        width: 10,
+        height: 10,
+        fill_hex: None,
+    };
+    assert!(!doc.apply_mcp_command(&cmd));
+    // Doc unchanged.
+    assert_eq!(doc.pages[0].children.len(), pre_root_len);
+}
+
+#[test]
+fn apply_mcp_command_replace_node_atomic_on_invalid_fill_hex() {
+    // The applier pre-validates fill_hex BEFORE allocating the
+    // fresh id or mutating pages (same atomicity pattern as
+    // update_node + move_node).
+    use crate::document::Document;
+    let mut doc = Document::sample();
+    let pre_max = doc.max_node_id();
+    let cmd = McpCommand::ReplaceNode {
+        node_id: 11,
+        kind: "rect".into(),
+        name: "WouldFail".into(),
+        x: 0,
+        y: 0,
+        width: 10,
+        height: 10,
+        fill_hex: Some("not-hex".into()),
+    };
+    assert!(!doc.apply_mcp_command(&cmd));
+    // Title still in place under Frame.
+    let frame = doc.pages[0].children.iter().find(|n| n.id.raw() == 10).unwrap();
+    assert!(frame.children.iter().any(|n| n.id.raw() == 11));
+    // No id was allocated.
+    assert_eq!(doc.max_node_id(), pre_max);
+}
