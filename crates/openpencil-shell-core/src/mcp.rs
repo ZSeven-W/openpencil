@@ -203,11 +203,55 @@ pub fn response_to_json(r: &ToolResponse) -> String {
 /// works on top of stdin/stdout, a TCP stream, or in-memory bufs
 /// for tests. The actual `openpencil-mcp` binary just wraps this
 /// with `BufReader::new(stdin())` + `stdout()`.
+///
+/// **Read-only path** — when a tool returns `ToolOutcome::
+/// OkWithCommand`, this function REJECTS it as `ToolErrorCode::
+/// Internal` so the client never sees a misleading success for
+/// a mutation that was never applied (codex stop-gate: previously
+/// the response was written without applying the command, so
+/// clients saw "wrote: true" on a no-op). Hosts that need write
+/// tools should use [`run_stdio_with_applier`] which threads in
+/// a closure for command application.
 pub fn run_stdio<R: std::io::BufRead, W: std::io::Write>(
     registry: &ToolRegistry,
     reader: &mut R,
     writer: &mut W,
 ) -> std::io::Result<()> {
+    run_stdio_with_applier(registry, reader, writer, |_| {
+        // No applier → write tools are unsupported on this path.
+        // Returning false demotes ToolResponse::Ok to an Err so
+        // the client doesn't see a fake success.
+        false
+    })
+}
+
+/// Variant of [`run_stdio`] that accepts an applier closure for
+/// MCP write commands. The applier returns `true` when the
+/// command actually mutated the document (caller may push undo
+/// snapshots etc.) and `false` when it rejected — typically
+/// because the document's state drifted between tool validation
+/// (snapshotted) and command application (live).
+///
+/// Wire behaviour:
+/// - read tools (no command) → response written verbatim.
+/// - write tools, applier returns `true` → response written with
+///   `result` carrying the tool's payload; the host has already
+///   applied the mutation.
+/// - write tools, applier returns `false` → demoted to
+///   `ToolErrorCode::Internal` with message describing which
+///   command rejected, so the client knows the mutation didn't
+///   land.
+pub fn run_stdio_with_applier<R, W, F>(
+    registry: &ToolRegistry,
+    reader: &mut R,
+    writer: &mut W,
+    mut apply: F,
+) -> std::io::Result<()>
+where
+    R: std::io::BufRead,
+    W: std::io::Write,
+    F: FnMut(&McpCommand) -> bool,
+{
     let mut line = String::new();
     loop {
         line.clear();
@@ -220,11 +264,28 @@ pub fn run_stdio<R: std::io::BufRead, W: std::io::Write>(
             continue;
         }
         let Some(call) = parse_tool_call(trimmed) else {
-            // Skip malformed input — production server logs;
-            // here we just keep the loop alive.
             continue;
         };
-        let response = registry.dispatch(call);
+        let mut response = registry.dispatch(call);
+        // Apply any queued command before reporting success. If
+        // application fails (applier returns false), demote the
+        // ToolResponse::Ok to a typed Err so the client sees the
+        // mutation didn't land.
+        if let ToolResponse::Ok {
+            id,
+            command: Some(cmd),
+            ..
+        } = &response
+        {
+            if !apply(cmd) {
+                let id = id.clone();
+                response = ToolResponse::Err {
+                    id,
+                    code: ToolErrorCode::Internal,
+                    message: format!("host rejected command: {cmd:?}"),
+                };
+            }
+        }
         writeln!(writer, "{}", response_to_json(&response))?;
         writer.flush()?;
     }
@@ -441,6 +502,104 @@ mod tests {
         let lines: Vec<&str> = out.lines().collect();
         assert_eq!(lines.len(), 1);
         assert!(lines[0].contains(r#""id":7"#));
+    }
+
+    #[test]
+    fn run_stdio_demotes_write_tool_response_to_error_without_applier() {
+        // Codex stop-gate: a write tool returning OkWithCommand on
+        // the read-only `run_stdio` path was being written as
+        // success — clients saw "wrote: true" even though no
+        // command had been applied. Now the read-only path demotes
+        // the response to ToolErrorCode::Internal so the misleading
+        // success can't reach the client.
+        use std::io::{BufReader, Cursor};
+        use crate::mcp::tools::set_variable_color_snapshot;
+        use crate::document::{Document, Variable, VariableKind, VariableScalar, VariableValue};
+        let mut doc = Document::empty();
+        doc.var_table.variables.push(Variable {
+            name: "brand".into(),
+            kind: VariableKind::Color,
+            value: VariableValue::Scalar(VariableScalar::Str("#ff8800".into())),
+        });
+        let mut r = ToolRegistry::default();
+        r.register(Box::new(set_variable_color_snapshot(&doc)));
+        let input = b"{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"set_variable_color\",\"params\":{\"name\":\"brand\",\"hex\":\"#00ff00\"}}\n";
+        let mut reader = BufReader::new(Cursor::new(input.as_ref()));
+        let mut writer: Vec<u8> = Vec::new();
+        run_stdio(&r, &mut reader, &mut writer).unwrap();
+        let out = String::from_utf8(writer).unwrap();
+        assert!(
+            out.contains(r#""code":-32603"#),
+            "read-only run_stdio must demote write OkWithCommand to Internal; got {out}"
+        );
+        assert!(out.contains("host rejected command"));
+    }
+
+    #[test]
+    fn run_stdio_with_applier_applies_write_command_then_writes_success() {
+        // The companion path: with an applier the write tool's
+        // OkWithCommand is honored — the closure receives the
+        // command, returns true, and the client sees a normal Ok
+        // response. Mirrors what a real MCP server would do
+        // (Document::apply_mcp_command threaded in as the closure).
+        use std::io::{BufReader, Cursor};
+        use crate::mcp::tools::set_variable_color_snapshot;
+        use crate::document::{Document, Variable, VariableKind, VariableScalar, VariableValue};
+        let mut doc = Document::empty();
+        doc.var_table.variables.push(Variable {
+            name: "brand".into(),
+            kind: VariableKind::Color,
+            value: VariableValue::Scalar(VariableScalar::Str("#ff8800".into())),
+        });
+        let mut r = ToolRegistry::default();
+        r.register(Box::new(set_variable_color_snapshot(&doc)));
+        let input = b"{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"set_variable_color\",\"params\":{\"name\":\"brand\",\"hex\":\"#00ff00\"}}\n";
+        let mut reader = BufReader::new(Cursor::new(input.as_ref()));
+        let mut writer: Vec<u8> = Vec::new();
+        let mut applied_commands: Vec<McpCommand> = Vec::new();
+        let result = run_stdio_with_applier(&r, &mut reader, &mut writer, |cmd| {
+            applied_commands.push(cmd.clone());
+            true
+        });
+        result.unwrap();
+        // The applier saw the command exactly once + the response
+        // is a normal Ok (no error code).
+        assert_eq!(applied_commands.len(), 1);
+        assert!(matches!(
+            applied_commands[0],
+            McpCommand::SetVariableColor { ref name, ref hex }
+            if name == "brand" && hex == "#00ff00"
+        ));
+        let out = String::from_utf8(writer).unwrap();
+        assert!(out.contains(r#""id":1"#));
+        assert!(out.contains(r#""wrote":"true""#));
+        assert!(!out.contains(r#""code":"#), "no error code: {out}");
+    }
+
+    #[test]
+    fn run_stdio_with_applier_demotes_when_applier_rejects() {
+        // Applier returns false (e.g. host's document state drifted
+        // between tool registration + dispatch; the variable was
+        // deleted mid-flight). Wire response becomes Internal so
+        // the client knows the mutation didn't land.
+        use std::io::{BufReader, Cursor};
+        use crate::mcp::tools::set_variable_color_snapshot;
+        use crate::document::{Document, Variable, VariableKind, VariableScalar, VariableValue};
+        let mut doc = Document::empty();
+        doc.var_table.variables.push(Variable {
+            name: "brand".into(),
+            kind: VariableKind::Color,
+            value: VariableValue::Scalar(VariableScalar::Str("#ff8800".into())),
+        });
+        let mut r = ToolRegistry::default();
+        r.register(Box::new(set_variable_color_snapshot(&doc)));
+        let input = b"{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"set_variable_color\",\"params\":{\"name\":\"brand\",\"hex\":\"#00ff00\"}}\n";
+        let mut reader = BufReader::new(Cursor::new(input.as_ref()));
+        let mut writer: Vec<u8> = Vec::new();
+        run_stdio_with_applier(&r, &mut reader, &mut writer, |_| false).unwrap();
+        let out = String::from_utf8(writer).unwrap();
+        assert!(out.contains(r#""code":-32603"#));
+        assert!(out.contains("host rejected"));
     }
 
     #[test]
