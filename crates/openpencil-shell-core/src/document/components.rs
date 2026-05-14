@@ -40,6 +40,18 @@ impl ComponentLibrary {
             self.components.push(c);
         }
     }
+    /// Remove a component by id. Returns true when a component was
+    /// removed, false when the id didn't resolve. Live instances
+    /// (clones already on the page) are unaffected — they carry
+    /// their own ids; the registry only holds the prototype.
+    pub fn remove(&mut self, id: NodeId) -> bool {
+        if let Some(pos) = self.components.iter().position(|c| c.id == id) {
+            self.components.remove(pos);
+            true
+        } else {
+            false
+        }
+    }
 }
 
 impl Document {

@@ -31,12 +31,12 @@ pub use tools::{
     ListVariables, NodeRecord, VariableRecord,
 };
 pub use write_tools::{
-    copy_node_snapshot, create_component_snapshot, delete_node_snapshot,
-    insert_node_snapshot, instantiate_component_snapshot, move_node_snapshot,
-    replace_node_snapshot, set_active_axis_value_snapshot, set_variable_color_snapshot,
-    update_node_snapshot, CopyNode, CreateComponent, DeleteNode, InsertNode,
-    InstantiateComponent, MoveNode, ReplaceNode, SetActiveAxisValue, SetVariableColor,
-    UpdateNode,
+    copy_node_snapshot, create_component_snapshot, delete_component_snapshot,
+    delete_node_snapshot, insert_node_snapshot, instantiate_component_snapshot,
+    move_node_snapshot, replace_node_snapshot, set_active_axis_value_snapshot,
+    set_variable_color_snapshot, update_node_snapshot, CopyNode, CreateComponent,
+    DeleteComponent, DeleteNode, InsertNode, InstantiateComponent, MoveNode, ReplaceNode,
+    SetActiveAxisValue, SetVariableColor, UpdateNode,
 };
 pub use batch_design::{
     batch_design_snapshot, design_content_snapshot, design_refine_snapshot,
@@ -270,6 +270,12 @@ pub enum McpCommand {
     CreateComponent {
         node_id: u64,
         name: String,
+    },
+    /// Remove a component from the registry by id. Live instances
+    /// already dropped on the page are NOT affected — they're
+    /// independent clones at apply time.
+    DeleteComponent {
+        component_id: u64,
     },
 }
 

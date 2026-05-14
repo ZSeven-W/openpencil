@@ -761,6 +761,44 @@ pub fn create_component_snapshot() -> CreateComponent {
     CreateComponent
 }
 
+/// First-party `delete_component` tool — remove a component from
+/// the registry by id. Live instances already on the page are
+/// not affected (they're independent clones).
+pub struct DeleteComponent;
+
+impl McpTool for DeleteComponent {
+    fn name(&self) -> &str {
+        "delete_component"
+    }
+    fn call(&self, args: &BTreeMap<String, String>) -> ToolOutcome {
+        let Some(raw) = args.get("component_id") else {
+            return ToolOutcome::Err(
+                ToolErrorCode::MissingArgument,
+                "component_id is required".into(),
+            );
+        };
+        let component_id: u64 = match raw.parse() {
+            Ok(n) if n > 0 => n,
+            _ => {
+                return ToolOutcome::Err(
+                    ToolErrorCode::InvalidArgument,
+                    format!("component_id must be a positive u64, got {raw:?}"),
+                );
+            }
+        };
+        let mut out = BTreeMap::new();
+        out.insert("wrote".into(), "true".into());
+        ToolOutcome::OkWithCommand(
+            out,
+            McpCommand::DeleteComponent { component_id },
+        )
+    }
+}
+
+pub fn delete_component_snapshot() -> DeleteComponent {
+    DeleteComponent
+}
+
 /// `#rgb`, `#rrggbb`, `#rrggbbaa` — matches the format
 /// `VariableTable::parse_hex_color` accepts. Lenient on case;
 /// requires the leading `#`.
