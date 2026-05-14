@@ -360,6 +360,11 @@ pub struct UiState {
     /// it to toggle this picker. Picker rows: Rectangle / Ellipse /
     /// Polygon / Line / Icon / Import Image or SVG / Pen.
     pub shape_picker_open: bool,
+    /// Active-theme axis whose value picker is open. `None` =
+    /// closed. Click on the chip toggles open; click on a value
+    /// row sets `var_table.active_theme[axis] = value` + closes;
+    /// click outside the panel closes silently.
+    pub axis_dropdown_open: Option<String>,
     /// Last-selected shape tool — drives the toolbar shape slot's
     /// icon. Defaults to Rect. Always one of Rect / Ellipse /
     /// Polygon / Line / Pen (Icon + Import are one-shot actions
@@ -582,6 +587,7 @@ impl Default for UiState {
             file_name_display: None,
             figma_import_open: false,
             shape_picker_open: false,
+            axis_dropdown_open: None,
             shape_tool: Tool::Rect,
             flex_layout: FlexLayout::Free,
             size_fill_width: false,
