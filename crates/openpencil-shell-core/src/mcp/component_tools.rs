@@ -239,3 +239,122 @@ pub fn add_page_snapshot() -> AddPage {
     AddPage
 }
 
+/// First-party `rename_page` tool — set a page's display name.
+/// Rejects out-of-range indices + empty / whitespace-only names.
+pub struct RenamePage;
+
+impl McpTool for RenamePage {
+    fn name(&self) -> &str {
+        "rename_page"
+    }
+    fn call(&self, args: &BTreeMap<String, String>) -> ToolOutcome {
+        let Some(raw) = args.get("index") else {
+            return ToolOutcome::Err(
+                ToolErrorCode::MissingArgument,
+                "index is required (0-based page index)".into(),
+            );
+        };
+        let index: u32 = match raw.parse() {
+            Ok(n) => n,
+            _ => {
+                return ToolOutcome::Err(
+                    ToolErrorCode::InvalidArgument,
+                    format!("index must be a u32, got {raw:?}"),
+                );
+            }
+        };
+        let Some(name) = args.get("name") else {
+            return ToolOutcome::Err(
+                ToolErrorCode::MissingArgument,
+                "name is required".into(),
+            );
+        };
+        if name.trim().is_empty() {
+            return ToolOutcome::Err(
+                ToolErrorCode::InvalidArgument,
+                "name must not be empty / whitespace-only".into(),
+            );
+        }
+        let mut out = BTreeMap::new();
+        out.insert("wrote".into(), "true".into());
+        ToolOutcome::OkWithCommand(
+            out,
+            McpCommand::RenamePage {
+                index,
+                name: name.clone(),
+            },
+        )
+    }
+}
+
+pub fn rename_page_snapshot() -> RenamePage {
+    RenamePage
+}
+
+/// First-party `delete_page` tool — remove a page by index.
+pub struct DeletePage;
+
+impl McpTool for DeletePage {
+    fn name(&self) -> &str {
+        "delete_page"
+    }
+    fn call(&self, args: &BTreeMap<String, String>) -> ToolOutcome {
+        let Some(raw) = args.get("index") else {
+            return ToolOutcome::Err(
+                ToolErrorCode::MissingArgument,
+                "index is required (0-based page index)".into(),
+            );
+        };
+        let index: u32 = match raw.parse() {
+            Ok(n) => n,
+            _ => {
+                return ToolOutcome::Err(
+                    ToolErrorCode::InvalidArgument,
+                    format!("index must be a u32, got {raw:?}"),
+                );
+            }
+        };
+        let mut out = BTreeMap::new();
+        out.insert("wrote".into(), "true".into());
+        ToolOutcome::OkWithCommand(out, McpCommand::DeletePage { index })
+    }
+}
+
+pub fn delete_page_snapshot() -> DeletePage {
+    DeletePage
+}
+
+/// First-party `duplicate_page` tool — clone the page at `index`
+/// and switch the active page to the clone.
+pub struct DuplicatePage;
+
+impl McpTool for DuplicatePage {
+    fn name(&self) -> &str {
+        "duplicate_page"
+    }
+    fn call(&self, args: &BTreeMap<String, String>) -> ToolOutcome {
+        let Some(raw) = args.get("index") else {
+            return ToolOutcome::Err(
+                ToolErrorCode::MissingArgument,
+                "index is required (0-based page index)".into(),
+            );
+        };
+        let index: u32 = match raw.parse() {
+            Ok(n) => n,
+            _ => {
+                return ToolOutcome::Err(
+                    ToolErrorCode::InvalidArgument,
+                    format!("index must be a u32, got {raw:?}"),
+                );
+            }
+        };
+        let mut out = BTreeMap::new();
+        out.insert("wrote".into(), "true".into());
+        ToolOutcome::OkWithCommand(out, McpCommand::DuplicatePage { index })
+    }
+}
+
+pub fn duplicate_page_snapshot() -> DuplicatePage {
+    DuplicatePage
+}
+
