@@ -87,5 +87,7 @@ tokio = { version = "1", default-features = false, features = [
   "sync",
   "io-util",
   "process",
+  "net",
+  "time",
 ] }
 futures = { version = "0.3", default-features = false, features = ["std"] }
