@@ -37,6 +37,93 @@ use tokio::sync::mpsc;
 
 use crate::chat_runtime::{shared_runtime, BlockingRecvIter};
 
+/// Build a `tokio::process::Command` that spawns `binary` with `args`.
+/// Handles the three desktop platforms identically wherever possible,
+/// and papers over the well-known cross-platform binary-lookup gaps:
+///
+/// - **macOS / Linux**: a bare command name resolves via the usual
+///   PATH execvp lookup. We forward straight to `Command::new`.
+/// - **Windows**: Win32 `CreateProcessW` does **not** honor PATHEXT,
+///   so a bare `claude` only spawns when an exact `claude` (no
+///   extension) is on PATH. npm / bun / Volta / scoop / winget all
+///   ship Node-based CLIs as `claude.cmd` / `claude.bat` / `claude.ps1`
+///   shims. To make those work we route through `cmd /c <binary>`
+///   when the binary doesn't already look like a fully-resolved path
+///   ending in `.exe`. The binary names we ship from `for_cli` are
+///   hardcoded constants (no user-controlled metacharacters) so this
+///   is safe from shell injection. Users passing a custom binary via
+///   `with_binary` are responsible for not embedding shell payload.
+///
+/// On every platform stdin / stdout / stderr are piped, and the child
+/// is detached from any controlling terminal (`process_group(0)` on
+/// Unix so Ctrl-C in the OP terminal doesn't kill the CLI; on Windows
+/// `creation_flags(CREATE_NO_WINDOW)` so spawning the CLI doesn't
+/// pop a console window for users running the GUI build).
+fn build_command(binary: &str, args: &[String]) -> Command {
+    #[cfg(windows)]
+    {
+        // CREATE_NO_WINDOW from winbase.h — keeps the console hidden
+        // when OpenPencil launches from a non-console parent (e.g.,
+        // double-click on the .exe from Explorer).
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        let bare = std::path::Path::new(binary);
+        let has_path_sep = bare.parent().map(|p| !p.as_os_str().is_empty()).unwrap_or(false);
+        let looks_like_exe = bare
+            .extension()
+            .and_then(|e| e.to_str())
+            .map(|e| e.eq_ignore_ascii_case("exe"))
+            .unwrap_or(false);
+        if has_path_sep || looks_like_exe {
+            let mut cmd = Command::new(binary);
+            cmd.args(args);
+            use std::os::windows::process::CommandExt;
+            cmd.creation_flags(CREATE_NO_WINDOW);
+            cmd
+        } else {
+            // Route through `cmd /c` so PATHEXT (.cmd / .bat / .ps1)
+            // expansion kicks in. /c runs the command and exits.
+            let mut cmd = Command::new("cmd");
+            cmd.arg("/c").arg(binary).args(args);
+            use std::os::windows::process::CommandExt;
+            cmd.creation_flags(CREATE_NO_WINDOW);
+            cmd
+        }
+    }
+    #[cfg(not(windows))]
+    {
+        let mut cmd = Command::new(binary);
+        cmd.args(args);
+        // process_group(0) puts the child in its own group so signals
+        // sent to OP's pgroup (e.g., Ctrl-C in the terminal that
+        // launched the GUI) don't propagate to the CLI mid-stream.
+        // The chat bridge has its own kill-on-receiver-drop path, so
+        // we never depend on signal propagation for cleanup.
+        #[cfg(unix)]
+        {
+            use std::os::unix::process::CommandExt;
+            cmd.process_group(0);
+        }
+        cmd
+    }
+}
+
+/// Stringify an `ExitStatus` for chat error reporting. Cross-platform:
+/// on Unix `.code()` is `None` when killed by signal — show the signal
+/// number instead; on Windows `.code()` is always populated.
+fn exit_status_label(status: &std::process::ExitStatus) -> String {
+    if let Some(code) = status.code() {
+        return code.to_string();
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::ExitStatusExt;
+        if let Some(sig) = status.signal() {
+            return format!("signal {sig}");
+        }
+    }
+    "?".into()
+}
+
 /// `ChatProvider` impl that bridges to a CLI binary via stdio.
 /// Construct via [`SubprocessProvider::for_cli`] or
 /// [`SubprocessProvider::with_binary`] for a custom binary path.
@@ -107,13 +194,11 @@ impl ChatProvider for SubprocessProvider {
         let args = Arc::new(self.args.clone());
         let (tx, rx) = mpsc::channel::<ChatDelta>(64);
         shared_runtime().spawn(async move {
-            let mut child = match Command::new(&binary)
-                .args(args.iter())
-                .stdin(std::process::Stdio::piped())
+            let mut cmd = build_command(&binary, &args);
+            cmd.stdin(std::process::Stdio::piped())
                 .stdout(std::process::Stdio::piped())
-                .stderr(std::process::Stdio::piped())
-                .spawn()
-            {
+                .stderr(std::process::Stdio::piped());
+            let mut child = match cmd.spawn() {
                 Ok(c) => c,
                 Err(e) => {
                     let _ = tx
@@ -232,13 +317,12 @@ impl ChatProvider for SubprocessProvider {
             if !emitted_done && !terminal_error {
                 let nonzero = status.as_ref().map(|s| !s.success()).unwrap_or(false);
                 if nonzero {
-                    let code = status
+                    let label = status
                         .as_ref()
-                        .and_then(|s| s.code())
-                        .map(|c| c.to_string())
+                        .map(exit_status_label)
                         .unwrap_or_else(|| "?".into());
                     let _ = tx
-                        .send(ChatDelta::Error(format!("CLI exited with status {code}")))
+                        .send(ChatDelta::Error(format!("CLI exited with status {label}")))
                         .await;
                     let _ = tx
                         .send(ChatDelta::Done {
@@ -455,8 +539,19 @@ mod tests {
     #[test]
     fn spawn_failure_surfaces_error_and_done() {
         // Use a binary path that's guaranteed not to exist on PATH.
+        // Cross-platform expectation:
+        //   - macOS / Linux: `Command::new` returns spawn-time Err
+        //     because execvp fails → `ChatDelta::Error("spawn ...")`
+        //     emitted before EOF.
+        //   - Windows: `build_command` routes through `cmd /c`, which
+        //     successfully spawns. The inner CLI then exits non-zero
+        //     ("not recognized as an internal or external command")
+        //     → `ChatDelta::Error("CLI exited with status N")` from
+        //     the exit-status path.
+        // Either way the bridge must emit at least one Error delta
+        // plus a terminal Done.
         let p = SubprocessProvider::with_binary(
-            "/definitely/not/a/binary-3kf9j2",
+            "definitely-not-a-binary-3kf9j2-xyz",
             Vec::new(),
             "bogus",
         );
@@ -468,8 +563,8 @@ mod tests {
             })
             .collect();
         assert!(
-            deltas.iter().any(|d| matches!(d, ChatDelta::Error(s) if s.contains("spawn"))),
-            "expected spawn error in deltas, got {:?}",
+            deltas.iter().any(|d| matches!(d, ChatDelta::Error(_))),
+            "expected at least one Error delta, got {:?}",
             deltas
         );
         assert!(

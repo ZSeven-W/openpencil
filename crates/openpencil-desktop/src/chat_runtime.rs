@@ -50,26 +50,31 @@ pub(crate) fn shared_runtime() -> &'static Runtime {
 }
 
 /// `ChatProvider` impl that drives `agent::QueryEngine` directly. The
-/// engine carries its own message store, so repeated `send` calls
-/// retain conversation history across turns (multi-turn chat).
+/// engine is built once at construct time and reused across every
+/// `send` call so its `MessageStore` (agent-rs's internal conversation
+/// history) persists across turns. This is critical: the LLM sees the
+/// full multi-turn history, not just each user message in isolation
+/// (codex BLOCK — per-turn engine rebuild discarded history).
 ///
-/// Per-`ChatRequest` `system_prompt` + `max_output_tokens` are honored
-/// by rebuilding a turn-local engine that shares the provider +
-/// message-store handle. `with_system` clones cheaply (provider is
-/// `Arc<dyn Provider>`), so each `send` pays at most a few small
-/// allocations.
+/// Trade-off: `ChatRequest.system_prompt` + `max_output_tokens` are
+/// **not** honored per-turn — they're set once via the constructor
+/// and any per-request override is ignored. The settings modal carries
+/// these fields, so per-turn overrides aren't a real use case (the TS
+/// app behaves the same way: system prompt + max tokens are settings,
+/// not per-message inputs). If a future flow needs per-turn override,
+/// the right fix lands in agent-rs (a `QueryEngine::with_overrides`
+/// method on a turn-scoped builder), not by tearing down the store.
 pub struct BuiltInProvider {
-    provider: Arc<dyn Provider>,
-    model: String,
-    default_system: Option<String>,
-    default_max_output_tokens: u32,
+    engine: Arc<QueryEngine>,
     label: String,
 }
 
 impl BuiltInProvider {
     /// Build a BuiltIn provider from a hand-rolled `Provider` impl.
     /// Used by tests + future settings tabs that need a custom backend
-    /// (e.g., a local proxy or a mocked HTTP server).
+    /// (e.g., a local proxy or a mocked HTTP server). `system_prompt`
+    /// + `max_output_tokens` apply to every turn for the lifetime of
+    /// the provider; rebuild a new `BuiltInProvider` to change them.
     #[allow(dead_code)]
     pub fn from_provider(
         provider: Arc<dyn Provider>,
@@ -78,11 +83,13 @@ impl BuiltInProvider {
         max_output_tokens: u32,
         label: impl Into<String>,
     ) -> Self {
+        let mut engine = QueryEngine::new(provider, model)
+            .with_max_output_tokens(max_output_tokens.max(1));
+        if let Some(sys) = system_prompt {
+            engine = engine.with_system(sys);
+        }
         Self {
-            provider,
-            model: model.into(),
-            default_system: system_prompt,
-            default_max_output_tokens: max_output_tokens.max(1),
+            engine: Arc::new(engine),
             label: label.into(),
         }
     }
@@ -97,26 +104,13 @@ impl ChatProvider for BuiltInProvider {
         &self,
         request: ChatRequest,
     ) -> Box<dyn Iterator<Item = ChatDelta> + Send> {
-        // Build a per-turn engine so the request's `system_prompt`
-        // and `max_output_tokens` actually take effect (codex CONCERN
-        // 1). Provider is `Arc`'d so this is cheap.
-        let system = if request.system_prompt.is_empty() {
-            self.default_system.clone()
-        } else {
-            Some(request.system_prompt.clone())
-        };
-        let max_tokens = if request.max_output_tokens == 0 {
-            self.default_max_output_tokens
-        } else {
-            request.max_output_tokens
-        };
-        let mut engine =
-            QueryEngine::new(self.provider.clone(), self.model.clone())
-                .with_max_output_tokens(max_tokens);
-        if let Some(sys) = system {
-            engine = engine.with_system(sys);
-        }
-        let engine = Arc::new(engine);
+        // Engine handle is shared across turns so the MessageStore
+        // accumulates history; `Arc` clone is cheap. Per-turn
+        // overrides on `request.system_prompt` / `max_output_tokens`
+        // are documented as no-ops (see struct comment).
+        let _ = request.system_prompt;
+        let _ = request.max_output_tokens;
+        let engine = self.engine.clone();
         let abort = AbortController::new();
         let (tx, rx) = mpsc::channel::<ChatDelta>(64);
         shared_runtime().spawn(async move {
