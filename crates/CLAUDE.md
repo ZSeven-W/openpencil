@@ -399,7 +399,7 @@ Every host close path clears its respective hover state so reopening starts un-h
 
 ### Tool catalog
 
-Eight first-party tools registered today (v0.8.0+):
+Twenty-one first-party tools registered today (v0.8.0+):
 
 | Tool                    | Kind  | Args                                                                                               | Command emitted                | File                  |
 | ----------------------- | ----- | -------------------------------------------------------------------------------------------------- | ------------------------------ | --------------------- |
@@ -469,4 +469,3 @@ mcp_tests.rs (in crate root) Cross-cutting: stdio dispatch, parser invariants, w
 - A real JSON Node parser would unlock `replace_node`'s subtree path + grow batch_design / design_skeleton beyond leaf-only.
 - Per-phase apply semantics for the design\_\* workflow (e.g. design_refine emitting UpdateNode batches against existing nodes instead of fresh inserts).
 - HttpServer / streamable-http MCP transport (lifecycle scaffold exists in `chat_http_server.rs`; wire protocol unverified).
-- HttpServer / streamable-http transport (currently the spawn-from-IPC scaffold has the lifecycle but not the wire format).
