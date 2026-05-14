@@ -401,22 +401,26 @@ Every host close path clears its respective hover state so reopening starts un-h
 
 Eight first-party tools registered today (v0.8.0+):
 
-| Tool                    | Kind  | Args                                                                                               | Command emitted      | File                 |
-| ----------------------- | ----- | -------------------------------------------------------------------------------------------------- | -------------------- | -------------------- |
-| `get_document_info`     | read  | —                                                                                                  | —                    | `mcp/tools.rs`       |
-| `get_selection`         | read  | —                                                                                                  | —                    | `mcp/tools.rs`       |
-| `get_node`              | read  | `node_id`                                                                                          | —                    | `mcp/tools.rs`       |
-| `list_pages`            | read  | —                                                                                                  | —                    | `mcp/tools.rs`       |
-| `list_variables`        | read  | —                                                                                                  | —                    | `mcp/tools.rs`       |
-| `get_active_theme`      | read  | —                                                                                                  | —                    | `mcp/tools.rs`       |
-| `set_variable_color`    | write | `name`, `hex`                                                                                      | `SetVariableColor`   | `mcp/write_tools.rs` |
-| `set_active_axis_value` | write | `axis`, `value`                                                                                    | `SetActiveAxisValue` | `mcp/write_tools.rs` |
-| `insert_node`           | write | `kind`, `name`, `x`/`y`/`width`/`height`, optional `fill_hex`                                      | `InsertNode`         | `mcp/write_tools.rs` |
-| `update_node`           | write | `node_id` + any of `x`/`y`/`width`/`height`/`name`/`fill_hex`                                      | `UpdateNode`         | `mcp/write_tools.rs` |
-| `delete_node`           | write | `node_id`                                                                                          | `DeleteNode`         | `mcp/write_tools.rs` |
-| `move_node`             | write | `node_id`, `target_parent_id` (0 = page root)                                                      | `MoveNode`           | `mcp/write_tools.rs` |
-| `copy_node`             | write | `node_id`, `target_parent_id` (0 = page root)                                                      | `CopyNode`           | `mcp/write_tools.rs` |
-| `replace_node`          | write | `node_id`, `kind`, `name`, `x`/`y`/`width`/`height`, optional `fill_hex`, optional `drop_children` | `ReplaceNode`        | `mcp/write_tools.rs` |
+| Tool                    | Kind  | Args                                                                                               | Command emitted      | File                  |
+| ----------------------- | ----- | -------------------------------------------------------------------------------------------------- | -------------------- | --------------------- |
+| `get_document_info`     | read  | —                                                                                                  | —                    | `mcp/tools.rs`        |
+| `get_selection`         | read  | —                                                                                                  | —                    | `mcp/tools.rs`        |
+| `get_node`              | read  | `node_id`                                                                                          | —                    | `mcp/tools.rs`        |
+| `list_pages`            | read  | —                                                                                                  | —                    | `mcp/tools.rs`        |
+| `list_variables`        | read  | —                                                                                                  | —                    | `mcp/tools.rs`        |
+| `get_active_theme`      | read  | —                                                                                                  | —                    | `mcp/tools.rs`        |
+| `set_variable_color`    | write | `name`, `hex`                                                                                      | `SetVariableColor`   | `mcp/write_tools.rs`  |
+| `set_active_axis_value` | write | `axis`, `value`                                                                                    | `SetActiveAxisValue` | `mcp/write_tools.rs`  |
+| `insert_node`           | write | `kind`, `name`, `x`/`y`/`width`/`height`, optional `fill_hex`                                      | `InsertNode`         | `mcp/write_tools.rs`  |
+| `update_node`           | write | `node_id` + any of `x`/`y`/`width`/`height`/`name`/`fill_hex`                                      | `UpdateNode`         | `mcp/write_tools.rs`  |
+| `delete_node`           | write | `node_id`                                                                                          | `DeleteNode`         | `mcp/write_tools.rs`  |
+| `move_node`             | write | `node_id`, `target_parent_id` (0 = page root)                                                      | `MoveNode`           | `mcp/write_tools.rs`  |
+| `copy_node`             | write | `node_id`, `target_parent_id` (0 = page root)                                                      | `CopyNode`           | `mcp/write_tools.rs`  |
+| `replace_node`          | write | `node_id`, `kind`, `name`, `x`/`y`/`width`/`height`, optional `fill_hex`, optional `drop_children` | `ReplaceNode`        | `mcp/write_tools.rs`  |
+| `batch_design`          | write | `nodes_json` (JSON array of `{kind,name,x,y,width,height,fill_hex?}`)                              | `BatchInsert`        | `mcp/batch_design.rs` |
+| `set_variable_number`   | write | `name`, `value` (finite f64)                                                                       | `SetVariableScalar`  | `mcp/scalar_vars.rs`  |
+| `set_variable_string`   | write | `name`, `value` (free-form text)                                                                   | `SetVariableScalar`  | `mcp/scalar_vars.rs`  |
+| `set_variable_boolean`  | write | `name`, `value` (`"true"`/`"false"`)                                                               | `SetVariableScalar`  | `mcp/scalar_vars.rs`  |
 
 Read tools snapshot `Document` state at registration time. Write tools stay `&self`: they validate args and return `ToolOutcome::OkWithCommand(result, command)` for the host to apply via `Document::apply_mcp_command(command)`. The apply path follows pre-validate-then-mutate discipline (id space, target existence, geometry, hex, container-children consent) so a bad arg never leaves the document half-mutated.
 
@@ -438,15 +442,27 @@ mcp.rs                       Spine: types + ToolRegistry + run_stdio* + JSON ser
 mcp/parser.rs                Wire parse — tri-state arguments_field, top-level walker
 mcp/tools.rs                 Read tools (6)
 mcp/tools_tests.rs           Read-tool tests
-mcp/write_tools.rs           Write tools (8) + snapshot factories
+mcp/write_tools.rs           Core write tools (insert/update/delete/move/copy/replace + 2 var tools)
 mcp/write_tools_tests.rs     Write-tool tests (SetVariableColor / SetActiveAxisValue / Insert / Update / Delete / Move)
+mcp/batch_design.rs          BatchDesign tool + hand-rolled nodes_json parser
+mcp/batch_design_tests.rs    BatchDesign + BatchInsert apply tests
+mcp/scalar_vars.rs           SetVariableNumber / SetVariableString / SetVariableBoolean
+mcp/scalar_vars_tests.rs     Scalar tools + Color-rejection regression
 mcp/copy_node_tests.rs       Sibling — CopyNode tests
 mcp/replace_node_tests.rs    Sibling — ReplaceNode tests (incl. destructive-swap guard)
 mcp_tests.rs (in crate root) Cross-cutting: stdio dispatch, parser invariants, wire-shape regression
 ```
 
+### Host wiring
+
+`openpencil-desktop --mcp <path>` (`crates/openpencil-desktop/src/mcp_serve.rs`) runs a JSON-RPC stdio MCP server backed by the .op file at `<path>`. External CLIs (Claude Code / Codex / Gemini / Copilot) spawn the binary in this mode to drive the Rust editor the same way they drive TS pen-mcp.
+
+- Handshake: `initialize` returns protocol version + capabilities + serverInfo; `tools/list` enumerates all 18 tools with JSON inputSchemas; `notifications/initialized` + `ping` handled inline.
+- Per-call lifecycle: re-build the `ToolRegistry` against the live document (so read-tool snapshots reflect prior writes) → dispatch through `run_stdio_with_applier` → applier closure mutates the doc + saves to disk on each successful write.
+- Top-level method / id sniffing uses the same key-walker discipline as the wire parser so nested keys can't shadow the real top-level fields.
+
 ### Pending
 
-- Wire `pen-server` (or the desktop binary) to register the `ToolRegistry` + spawn `run_stdio_with_applier` against the live document.
-- Outstanding TS-parity write tools: `batch_design`, `design_skeleton`, `design_content`, `design_refine` — all require a JSON Node parser to accept full subtrees.
+- Layered design workflow tools (`design_skeleton`, `design_content`, `design_refine`) — currently `batch_design` covers single-shot leaf generation; the layered variants need either intent-phase metadata or richer subtree shapes.
+- A real JSON Node parser would unlock `replace_node`'s subtree path + grow batch_design beyond leaf-only.
 - HttpServer / streamable-http transport (currently the spawn-from-IPC scaffold has the lifecycle but not the wire format).
