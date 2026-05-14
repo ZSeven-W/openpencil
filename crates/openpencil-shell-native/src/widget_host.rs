@@ -39,6 +39,7 @@ mod helpers;
 mod input;
 #[cfg(test)]
 mod input_tests;
+mod keyboard;
 mod paint;
 mod press;
 mod property_dispatch;
