@@ -367,4 +367,27 @@ impl WidgetHostNative {
             size: Point2D::new(panel_w, panel_h),
         })
     }
+
+    /// Resolve a screen point to an `AlignAction` if it lands on the
+    /// floating align toolbar (visible when 2+ selected). Returns
+    /// None when the toolbar isn't shown or the cursor misses every
+    /// button. Used by press dispatch + cursor-move hover sync so
+    /// the geometry stays in one place.
+    pub(in crate::widget_host) fn align_toolbar_hit(
+        &self,
+        x: f32,
+        y: f32,
+        viewport_w: f32,
+        viewport_h: f32,
+    ) -> Option<openpencil_shell_core::document::AlignAction> {
+        use openpencil_shell_core::widgets::AlignToolbar;
+        use openpencil_shell_core::widgets::TOP_BAR_HEIGHT;
+        let (cx, _, cw, ch) = self.canvas_region(viewport_w, viewport_h);
+        let canvas_region = Rect {
+            origin: Point2D::new(cx, TOP_BAR_HEIGHT),
+            size: Point2D::new(cw, ch),
+        };
+        AlignToolbar::for_canvas_region(canvas_region, &self.document)?
+            .hit_test(Point2D::new(x, y))
+    }
 }

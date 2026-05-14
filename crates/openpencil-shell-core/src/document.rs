@@ -326,10 +326,9 @@ pub struct UiState {
     /// Row currently hovered while the file menu is open — drives
     /// the per-row tint so the user can see which action will fire.
     pub file_menu_hover: Option<crate::widgets::file_menu::FileMenuChoice>,
-    /// Locale picker hover — same shape as `file_menu_hover`.
     pub locale_picker_hover: Option<Locale>,
-    /// Shape picker hover — same shape, keyed by `ShapeChoice`.
     pub shape_picker_hover: Option<crate::widgets::shape_picker::ShapeChoice>,
+    pub align_toolbar_hover: Option<AlignAction>,
     /// Pending file-menu action.
     pub pending_file_action: Option<FileAction>,
     /// Recent files (head = newest, cap 10).
@@ -553,6 +552,7 @@ impl Default for UiState {
             file_menu_hover: None,
             locale_picker_hover: None,
             shape_picker_hover: None,
+            align_toolbar_hover: None,
             pending_file_action: None,
             recent_files: Vec::new(),
             file_name_display: None,
@@ -785,15 +785,15 @@ impl Tool {
     }
 }
 
+mod align;
 mod color_picker;
 mod grouping;
 mod mutators;
 mod page_mutators;
 mod pen;
 mod walkers;
+pub use align::AlignAction;
 pub use walkers::ReorderDirection;
 
-#[cfg(test)]
-mod tests_geometry;
-#[cfg(test)]
-mod tests_mutators;
+#[cfg(test)] mod tests_geometry;
+#[cfg(test)] mod tests_mutators;

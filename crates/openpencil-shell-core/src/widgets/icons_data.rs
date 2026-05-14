@@ -619,3 +619,72 @@ pub(super) const SETTINGS2: &[&str] = &[
     "M14 17a3 3 0 1 0 6 0 3 3 0 0 0-6 0z",
     "M4 7a3 3 0 1 0 6 0 3 3 0 0 0-6 0z",
 ];
+
+// === Align toolbar icons (lucide@0.545.0) ===
+// Rounded rects expanded to "M…H…A…V…A…H…A…V…A…Z" paths.
+
+pub(super) const ALIGN_LEFT: &[&str] = &[
+    // align-start-vertical: small + wide rect snapped to x=6, vert. spine at x=2.
+    "M8 14 H13 A2 2 0 0 1 15 16 V18 A2 2 0 0 1 13 20 H8 A2 2 0 0 1 6 18 V16 A2 2 0 0 1 8 14 Z",
+    "M8 4 H20 A2 2 0 0 1 22 6 V8 A2 2 0 0 1 20 10 H8 A2 2 0 0 1 6 8 V6 A2 2 0 0 1 8 4 Z",
+    "M2 2v20",
+];
+
+pub(super) const ALIGN_CENTER_H: &[&str] = &[
+    // align-center-vertical: center spine + two pill clips.
+    "M12 2v20",
+    "M8 10H4a2 2 0 0 1-2-2V6c0-1.1.9-2 2-2h4",
+    "M16 10h4a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-4",
+    "M8 20H7a2 2 0 0 1-2-2v-2c0-1.1.9-2 2-2h1",
+    "M16 14h1a2 2 0 0 1 2 2v2a2 2 0 0 1-2 2h-1",
+];
+
+pub(super) const ALIGN_RIGHT: &[&str] = &[
+    // align-end-vertical: rects flush to spine on right (x=22).
+    "M4 4 H16 A2 2 0 0 1 18 6 V8 A2 2 0 0 1 16 10 H4 A2 2 0 0 1 2 8 V6 A2 2 0 0 1 4 4 Z",
+    "M11 14 H16 A2 2 0 0 1 18 16 V18 A2 2 0 0 1 16 20 H11 A2 2 0 0 1 9 18 V16 A2 2 0 0 1 11 14 Z",
+    "M22 22V2",
+];
+
+pub(super) const ALIGN_TOP: &[&str] = &[
+    // align-start-horizontal: tall + short rect snapped to y=6, horiz. spine at y=2.
+    "M6 6 H8 A2 2 0 0 1 10 8 V20 A2 2 0 0 1 8 22 H6 A2 2 0 0 1 4 20 V8 A2 2 0 0 1 6 6 Z",
+    "M16 6 H18 A2 2 0 0 1 20 8 V13 A2 2 0 0 1 18 15 H16 A2 2 0 0 1 14 13 V8 A2 2 0 0 1 16 6 Z",
+    "M22 2H2",
+];
+
+pub(super) const ALIGN_CENTER_V: &[&str] = &[
+    // align-center-horizontal: center spine + two pill clips top/bottom.
+    "M2 12h20",
+    "M10 16v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-4",
+    "M10 8V4a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v4",
+    "M20 16v1a2 2 0 0 1-2 2h-2a2 2 0 0 1-2-2v-1",
+    "M14 8V7c0-1.1.9-2 2-2h2a2 2 0 0 1 2 2v1",
+];
+
+pub(super) const ALIGN_BOTTOM: &[&str] = &[
+    // align-end-horizontal: rects flush to spine on bottom (y=22).
+    "M6 2 H8 A2 2 0 0 1 10 4 V16 A2 2 0 0 1 8 18 H6 A2 2 0 0 1 4 16 V4 A2 2 0 0 1 6 2 Z",
+    "M16 9 H18 A2 2 0 0 1 20 11 V16 A2 2 0 0 1 18 18 H16 A2 2 0 0 1 14 16 V11 A2 2 0 0 1 16 9 Z",
+    "M22 22H2",
+];
+
+pub(super) const DISTRIBUTE_H: &[&str] = &[
+    // align-horizontal-distribute-center: two rects + tick marks above/below.
+    "M6 5 H8 A2 2 0 0 1 10 7 V17 A2 2 0 0 1 8 19 H6 A2 2 0 0 1 4 17 V7 A2 2 0 0 1 6 5 Z",
+    "M16 7 H18 A2 2 0 0 1 20 9 V15 A2 2 0 0 1 18 17 H16 A2 2 0 0 1 14 15 V9 A2 2 0 0 1 16 7 Z",
+    "M17 22v-5",
+    "M17 7V2",
+    "M7 22v-3",
+    "M7 5V2",
+];
+
+pub(super) const DISTRIBUTE_V: &[&str] = &[
+    // align-vertical-distribute-center: two rects + tick marks left/right.
+    "M22 17h-3",
+    "M22 7h-5",
+    "M5 17H2",
+    "M7 7H2",
+    "M7 14 H17 A2 2 0 0 1 19 16 V18 A2 2 0 0 1 17 20 H7 A2 2 0 0 1 5 18 V16 A2 2 0 0 1 7 14 Z",
+    "M9 4 H15 A2 2 0 0 1 17 6 V8 A2 2 0 0 1 15 10 H9 A2 2 0 0 1 7 8 V6 A2 2 0 0 1 9 4 Z",
+];

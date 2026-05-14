@@ -295,3 +295,54 @@ fn layer_drag_below_activation_threshold_is_a_click_not_a_reorder() {
     assert_eq!(order, vec![80, 81]);
     assert_eq!(host.document.selected, NodeId::new(80));
 }
+
+#[test]
+fn node_drag_not_intercepted_by_align_toolbar_hover() {
+    // Codex CONCERN: with 2+ selected, an active node-drag must
+    // continue moving the nodes when the cursor sweeps over the
+    // floating align toolbar's hit region. Earlier code's early
+    // return on hover-state change would have stolen the drag's
+    // delta for that frame.
+    use openpencil_shell_core::document::{Node, NodeKind};
+    use openpencil_shell_core::widgets::TOP_BAR_HEIGHT;
+    use openpencil_shell_core::Rect;
+    let mut host = WidgetHostNative::new();
+    let page_idx = host.document.active_page_index;
+    host.document.pages[page_idx].children = vec![
+        Node::leaf(90, NodeKind::Rect, "a").with_bounds(Rect::xywh(50.0, 200.0, 20.0, 20.0)),
+        Node::leaf(91, NodeKind::Rect, "b").with_bounds(Rect::xywh(120.0, 200.0, 20.0, 20.0)),
+    ];
+    // Two-node selection so the align toolbar is shown.
+    host.document.selected_set = vec![NodeId::new(90), NodeId::new(91)];
+    host.document.selected = NodeId::new(91);
+    let viewport_w = 1440.0;
+    let viewport_h = 900.0;
+    let (cx0, cy0, _cw, _ch) = host.canvas_region(viewport_w, viewport_h);
+    // Press on node "a" — promotes to a node-drag.
+    let press_x = cx0 + 60.0;
+    let press_y = cy0 + 210.0;
+    host.apply_press(press_x, press_y, viewport_w, viewport_h);
+    assert!(host.node_drag.is_some(), "node_drag must seed on press");
+    // Move the cursor toward the canvas-top center — the align
+    // toolbar's hit region sits there (y = TOP_BAR_HEIGHT + 16).
+    let zoom = host.document.viewport.zoom.max(0.0001);
+    let target_x = host.document.ui.layer_panel_width + 400.0;
+    let target_y = TOP_BAR_HEIGHT + 24.0; // inside align toolbar y-band
+    let expected_dx = (target_x - press_x) / zoom;
+    let expected_dy = (target_y - press_y) / zoom;
+    host.apply_cursor_move(target_x, target_y);
+    // Nodes must have translated by (expected_dx, expected_dy).
+    let bounds_a = host.document.pages[page_idx].children[0].bounds;
+    let bounds_b = host.document.pages[page_idx].children[1].bounds;
+    assert!(
+        (bounds_a.origin.x - (50.0 + expected_dx)).abs() < 0.5
+            && (bounds_a.origin.y - (200.0 + expected_dy)).abs() < 0.5,
+        "node-drag delta lost on a; got {:?}, expected start+delta",
+        bounds_a
+    );
+    assert!(
+        (bounds_b.origin.x - (120.0 + expected_dx)).abs() < 0.5,
+        "node-drag delta lost on b; got {:?}",
+        bounds_b
+    );
+}

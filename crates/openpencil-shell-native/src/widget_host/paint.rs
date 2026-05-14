@@ -6,9 +6,9 @@ use super::frame_backend::NativeFrameBackend;
 use super::helpers::{STATUS_INSET, TOOLBAR_INSET_X, TOOLBAR_INSET_Y};
 use super::WidgetHostNative;
 use openpencil_shell_core::widgets::{
-    AIChatPlaceholder, CanvasViewport, LayerPanel, LayoutCx, LocalePicker, PaintCx, PropertyPanel,
-    ShapePicker, StatusBar, Toolbar, TopBar, Widget, STATUS_BAR_HEIGHT, STATUS_BAR_WIDTH,
-    TOOLBAR_WIDTH, TOP_BAR_HEIGHT,
+    AIChatPlaceholder, AlignToolbar, CanvasViewport, LayerPanel, LayoutCx, LocalePicker, PaintCx,
+    PropertyPanel, ShapePicker, StatusBar, Toolbar, TopBar, Widget, STATUS_BAR_HEIGHT,
+    STATUS_BAR_WIDTH, TOOLBAR_WIDTH, TOP_BAR_HEIGHT,
 };
 use openpencil_shell_core::{Point2D, Rect, RenderBackend};
 
@@ -177,6 +177,21 @@ impl WidgetHostNative {
                 backend: &mut *frame,
             };
             status.paint(&mut cx, status_rect);
+        }
+
+        // 8.4. Floating align/distribute toolbar — visible whenever
+        //      2+ nodes are selected. Sits above the canvas but
+        //      below status / modal overlays.
+        let canvas_region = Rect {
+            origin: Point2D::new(canvas_left, TOP_BAR_HEIGHT),
+            size: Point2D::new(canvas_w, canvas_h),
+        };
+        if let Some(toolbar) = AlignToolbar::for_canvas_region(canvas_region, &self.document) {
+            toolbar.paint(
+                &mut *frame,
+                &self.theme,
+                self.document.ui.align_toolbar_hover,
+            );
         }
 
         // 8.5. Marquee selection rect — painted above canvas but

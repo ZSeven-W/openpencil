@@ -193,6 +193,7 @@ impl Document {
         } else {
             self.clear_selection();
         }
+        self.ui.align_toolbar_hover = None;
     }
 
     /// Shift-click semantics: if `id` is already in the set,
@@ -204,19 +205,19 @@ impl Document {
         }
         if let Some(pos) = self.selected_set.iter().position(|n| *n == id) {
             self.selected_set.remove(pos);
-            // Anchor needs a new home. Last entry (most-recently
-            // added survivor) is the natural choice.
             self.selected = self.selected_set.last().copied().unwrap_or(NodeId::NONE);
         } else {
             self.selected_set.push(id);
             self.selected = id;
         }
+        if self.selected_set.len() < 2 { self.ui.align_toolbar_hover = None; }
     }
 
     /// Clear both anchor + set. Idempotent.
     pub fn clear_selection(&mut self) {
         self.selected_set.clear();
         self.selected = NodeId::NONE;
+        self.ui.align_toolbar_hover = None;
     }
 
     /// Whether `id` resolves to a node that can be mutated via

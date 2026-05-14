@@ -1,0 +1,291 @@
+//! Floating align / distribute toolbar — appears above the canvas
+//! whenever the active selection has 2+ nodes (distribute also
+//! requires 3+; the 2-node case still shows the buttons, but the
+//! distribute presses no-op gracefully via `align_selected`).
+//!
+//! Layout: three button groups separated by ~12 px gutters:
+//!   - Align L / Center-H / Right
+//!   - Align Top / Center-V / Bottom
+//!   - Distribute H / Distribute V
+//! Anchored to the horizontal center of the canvas region, ~16 px
+//! below the canvas top edge.
+
+use crate::document::{AlignAction, Document};
+use crate::theme::Theme;
+use crate::widgets::icons::{draw_icon, Icon};
+use crate::{Point2D, Rect, RenderBackend};
+
+pub const ALIGN_TOOLBAR_HEIGHT: f32 = 36.0;
+const BUTTON_SIZE: f32 = 28.0;
+const ICON_SIZE: f32 = 16.0;
+const INNER_GAP: f32 = 2.0;
+const GROUP_GAP: f32 = 10.0;
+const SIDE_PAD: f32 = 6.0;
+const CORNER_RADIUS: f32 = 8.0;
+
+/// (8 buttons × 28) + (6 inner gaps × 2) + (2 group gaps × 10) + (2 sides × 6).
+pub const ALIGN_TOOLBAR_WIDTH: f32 =
+    BUTTON_SIZE * 8.0 + INNER_GAP * 6.0 + GROUP_GAP * 2.0 + SIDE_PAD * 2.0;
+
+/// Pixels reserved on the canvas-left edge for the vertical Toolbar
+/// column. Mirrors paint-side geometry: `TOOLBAR_INSET_X` (12 in
+/// shell-native `widget_host/helpers.rs` and shell-web `widget_host.rs`)
+/// + `TOOLBAR_WIDTH` (44) = 56 — leaves the tool column unobscured.
+/// Has to be a shell-core local because shell-core can't depend on
+/// either host crate's helpers. Keep in sync if either constant moves.
+const VERTICAL_TOOLBAR_RESERVE: f32 = 56.0;
+
+const ITEMS: &[(AlignAction, Icon)] = &[
+    (AlignAction::Left, Icon::AlignLeft),
+    (AlignAction::CenterH, Icon::AlignCenterH),
+    (AlignAction::Right, Icon::AlignRight),
+    (AlignAction::Top, Icon::AlignTop),
+    (AlignAction::CenterV, Icon::AlignCenterV),
+    (AlignAction::Bottom, Icon::AlignBottom),
+    (AlignAction::DistributeH, Icon::DistributeH),
+    (AlignAction::DistributeV, Icon::DistributeV),
+];
+
+/// Group divider indices (after these positions, insert a `GROUP_GAP`
+/// instead of the default `INNER_GAP`). Two dividers split the 8
+/// buttons into [3, 3, 2].
+const GROUP_BREAKS: &[usize] = &[3, 6];
+
+pub struct AlignToolbar {
+    rect: Rect,
+}
+
+impl AlignToolbar {
+    /// Build a toolbar centered horizontally inside `canvas_region`
+    /// when `doc.selection_count() >= 2`. Returns `None` otherwise
+    /// so the host can skip paint + hit-test entirely.
+    pub fn for_canvas_region(canvas_region: Rect, doc: &Document) -> Option<Self> {
+        if doc.selection_count() < 2 {
+            return None;
+        }
+        // Center horizontally, then clamp into
+        // [canvas_left + VERTICAL_TOOLBAR_RESERVE, canvas_right - W].
+        // The min_x reserve keeps the floating toolbar from overlapping
+        // the vertical Toolbar's column on the canvas-left edge; the
+        // max_x clamp keeps it inside the right rail. When the canvas
+        // can't fit both, hide entirely — never render a clipped or
+        // out-of-region pill with stale hit-test geometry.
+        let min_x = canvas_region.origin.x + VERTICAL_TOOLBAR_RESERVE;
+        let max_x = canvas_region.origin.x + canvas_region.size.x - ALIGN_TOOLBAR_WIDTH;
+        if max_x < min_x {
+            return None;
+        }
+        let cx = canvas_region.origin.x + canvas_region.size.x / 2.0;
+        let mut x = cx - ALIGN_TOOLBAR_WIDTH / 2.0;
+        if x < min_x {
+            x = min_x;
+        }
+        if x > max_x {
+            x = max_x;
+        }
+        let y = canvas_region.origin.y + 16.0;
+        Some(Self {
+            rect: Rect::xywh(x, y, ALIGN_TOOLBAR_WIDTH, ALIGN_TOOLBAR_HEIGHT),
+        })
+    }
+
+    pub fn rect(&self) -> Rect {
+        self.rect
+    }
+
+    /// Paint the toolbar background + 8 buttons. `hovered` tints the
+    /// matching button with `theme.muted`.
+    pub fn paint(
+        &self,
+        backend: &mut dyn RenderBackend,
+        theme: &Theme,
+        hovered: Option<AlignAction>,
+    ) {
+        backend.fill_round_rect(self.rect, CORNER_RADIUS, theme.popover);
+        backend.stroke_round_rect(self.rect, CORNER_RADIUS, theme.border, 1.0);
+        for (i, (action, icon)) in ITEMS.iter().enumerate() {
+            let r = self.button_rect(i);
+            if hovered == Some(*action) {
+                backend.fill_round_rect(r, 5.0, theme.muted);
+            }
+            let icon_x = r.origin.x + (r.size.x - ICON_SIZE) / 2.0;
+            let icon_y = r.origin.y + (r.size.y - ICON_SIZE) / 2.0;
+            draw_icon(
+                backend,
+                *icon,
+                Point2D::new(icon_x, icon_y),
+                ICON_SIZE,
+                theme.foreground,
+                1.5,
+            );
+        }
+    }
+
+    /// Map a screen point to an `AlignAction`. None when the point
+    /// lands outside the toolbar or in a gutter.
+    pub fn hit_test(&self, point: Point2D) -> Option<AlignAction> {
+        if !rect_contains(self.rect, point) {
+            return None;
+        }
+        for (i, (action, _)) in ITEMS.iter().enumerate() {
+            if rect_contains(self.button_rect(i), point) {
+                return Some(*action);
+            }
+        }
+        None
+    }
+
+    fn button_rect(&self, index: usize) -> Rect {
+        let mut x = self.rect.origin.x + SIDE_PAD;
+        for i in 0..index {
+            x += BUTTON_SIZE;
+            x += if GROUP_BREAKS.contains(&(i + 1)) {
+                GROUP_GAP
+            } else {
+                INNER_GAP
+            };
+        }
+        let y = self.rect.origin.y + (self.rect.size.y - BUTTON_SIZE) / 2.0;
+        Rect::xywh(x, y, BUTTON_SIZE, BUTTON_SIZE)
+    }
+}
+
+fn rect_contains(r: Rect, p: Point2D) -> bool {
+    p.x >= r.origin.x
+        && p.x < r.origin.x + r.size.x
+        && p.y >= r.origin.y
+        && p.y < r.origin.y + r.size.y
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::document::{Node, NodeId, NodeKind};
+
+    fn doc_with_n_selected(n: usize) -> Document {
+        let mut doc = Document::empty();
+        let page = doc.pages.get_mut(0).unwrap();
+        page.children.clear();
+        for i in 0..n {
+            let mut node = Node::leaf(100 + i as u64, NodeKind::Rect, "r");
+            node.bounds = Rect::xywh(i as f32 * 50.0, 0.0, 40.0, 20.0);
+            page.children.push(node);
+        }
+        let ids: Vec<NodeId> = (0..n).map(|i| NodeId::new(100 + i as u64)).collect();
+        doc.selected_set = ids.clone();
+        doc.selected = ids.last().copied().unwrap_or(NodeId::NONE);
+        doc
+    }
+
+    fn canvas() -> Rect {
+        Rect::xywh(0.0, 0.0, 1000.0, 600.0)
+    }
+
+    #[test]
+    fn single_select_hides_toolbar() {
+        let doc = doc_with_n_selected(1);
+        assert!(AlignToolbar::for_canvas_region(canvas(), &doc).is_none());
+    }
+
+    #[test]
+    fn empty_selection_hides_toolbar() {
+        let mut doc = doc_with_n_selected(2);
+        doc.selected_set.clear();
+        doc.selected = NodeId::NONE;
+        assert!(AlignToolbar::for_canvas_region(canvas(), &doc).is_none());
+    }
+
+    #[test]
+    fn two_selected_shows_toolbar_centered() {
+        let doc = doc_with_n_selected(2);
+        let tb = AlignToolbar::for_canvas_region(canvas(), &doc).unwrap();
+        // Horizontally centered in canvas (cx = 500).
+        let expected_x = 500.0 - ALIGN_TOOLBAR_WIDTH / 2.0;
+        assert!((tb.rect.origin.x - expected_x).abs() < 0.5);
+        // Sits 16 px below canvas top.
+        assert_eq!(tb.rect.origin.y, 16.0);
+        assert_eq!(tb.rect.size.x, ALIGN_TOOLBAR_WIDTH);
+        assert_eq!(tb.rect.size.y, ALIGN_TOOLBAR_HEIGHT);
+    }
+
+    #[test]
+    fn hit_test_maps_buttons_to_actions() {
+        let doc = doc_with_n_selected(3);
+        let tb = AlignToolbar::for_canvas_region(canvas(), &doc).unwrap();
+        for (i, (action, _)) in ITEMS.iter().enumerate() {
+            let r = tb.button_rect(i);
+            let center = Point2D::new(
+                r.origin.x + r.size.x / 2.0,
+                r.origin.y + r.size.y / 2.0,
+            );
+            assert_eq!(tb.hit_test(center), Some(*action), "button {i}");
+        }
+    }
+
+    #[test]
+    fn hit_test_misses_outside_toolbar() {
+        let doc = doc_with_n_selected(2);
+        let tb = AlignToolbar::for_canvas_region(canvas(), &doc).unwrap();
+        assert_eq!(tb.hit_test(Point2D::new(-10.0, -10.0)), None);
+        assert_eq!(tb.hit_test(Point2D::new(500.0, 500.0)), None);
+    }
+
+    #[test]
+    fn narrow_canvas_hides_toolbar() {
+        // Codex CONCERN-3: hide when canvas can't fit both the
+        // align toolbar AND the vertical Toolbar reserve on the
+        // left. Threshold = ALIGN_TOOLBAR_WIDTH + 56.
+        let doc = doc_with_n_selected(2);
+        let too_narrow = Rect::xywh(
+            100.0,
+            0.0,
+            ALIGN_TOOLBAR_WIDTH + VERTICAL_TOOLBAR_RESERVE - 1.0,
+            600.0,
+        );
+        assert!(AlignToolbar::for_canvas_region(too_narrow, &doc).is_none());
+        // At exactly the threshold the toolbar appears, pinned to
+        // canvas_left + reserve.
+        let exact = Rect::xywh(
+            100.0,
+            0.0,
+            ALIGN_TOOLBAR_WIDTH + VERTICAL_TOOLBAR_RESERVE,
+            600.0,
+        );
+        let tb = AlignToolbar::for_canvas_region(exact, &doc).unwrap();
+        assert_eq!(tb.rect.origin.x, 100.0 + VERTICAL_TOOLBAR_RESERVE);
+    }
+
+    #[test]
+    fn toolbar_clamp_reserves_vertical_toolbar_column() {
+        // Codex stop-gate CONCERN: the centered candidate would
+        // push past the vertical Toolbar (occupying ~56 px on the
+        // canvas-left edge). Clamp pins min_x to canvas_left + 56
+        // so the two widgets never visually overlap. Otherwise a
+        // user-visible align button could be eaten by the
+        // already-painted vertical Toolbar's hit-test region.
+        let doc = doc_with_n_selected(2);
+        // Just enough width to require clamping. Centered candidate
+        // = canvas_left + 50 (overlaps with the Toolbar column).
+        let canvas = Rect::xywh(0.0, 0.0, ALIGN_TOOLBAR_WIDTH + 100.0, 600.0);
+        let tb = AlignToolbar::for_canvas_region(canvas, &doc).unwrap();
+        // Centered would be x=50; clamp pushes to 56.
+        assert_eq!(tb.rect.origin.x, VERTICAL_TOOLBAR_RESERVE);
+    }
+
+    #[test]
+    fn buttons_grouped_with_wider_gap_at_breaks() {
+        let doc = doc_with_n_selected(2);
+        let tb = AlignToolbar::for_canvas_region(canvas(), &doc).unwrap();
+        // Distance between button 2 (Right, last in group 1) and
+        // button 3 (Top, first in group 2) is GROUP_GAP, not INNER_GAP.
+        let b2 = tb.button_rect(2);
+        let b3 = tb.button_rect(3);
+        let gap = b3.origin.x - (b2.origin.x + b2.size.x);
+        assert!((gap - GROUP_GAP).abs() < 0.01);
+        // Distance between button 0 (Left) and 1 (CenterH) is INNER_GAP.
+        let b0 = tb.button_rect(0);
+        let b1 = tb.button_rect(1);
+        let gap = b1.origin.x - (b0.origin.x + b0.size.x);
+        assert!((gap - INNER_GAP).abs() < 0.01);
+    }
+}
