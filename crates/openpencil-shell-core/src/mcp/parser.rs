@@ -38,14 +38,16 @@ pub fn parse_tool_call(line: &str) -> Option<ToolCall> {
         // Real MCP: tool name + arguments live inside params.
         let params_body = extract_params_body(line)?;
         let name = extract_string_field(&params_body, "name")?;
-        // `arguments` is nested object inside params. Three-way:
-        //   no `arguments` key → empty args, parse succeeds.
-        //   present + scalar-only → those args.
-        //   present + any nested value → reject the parse so
-        //     no tool sees a malformed input as a real scalar.
-        let arguments = match extract_object_body(&params_body, "arguments") {
-            None => BTreeMap::new(),
-            Some(body) => parse_flat_object_body(&body)?,
+        // `arguments` is nested object inside params. Tri-state:
+        //   key missing → empty args (legit MCP can omit it).
+        //   key present + value is `{...}` → parse the body.
+        //   key present + scalar (e.g. `"arguments":"oops"`) → reject
+        //     the parse (codex stop-gate: previously downgraded to
+        //     empty args, hiding wire-shape errors).
+        let arguments = match arguments_field(&params_body) {
+            ParamsResult::Missing => BTreeMap::new(),
+            ParamsResult::Body(body) => parse_flat_object_body(&body)?,
+            ParamsResult::Malformed => return None,
         };
         (name, arguments)
     } else {
@@ -135,6 +137,58 @@ fn extract_string_field(body: &str, key: &str) -> Option<String> {
         return None;
     }
     Some(rest[val_start..i].to_string())
+}
+
+/// Tri-state lookup for MCP `arguments` inside a `params` block:
+///   - Missing: `arguments` key absent (legit empty args).
+///   - Body(s): `arguments` is an object; returns its body without
+///     the braces.
+///   - Malformed: `arguments` is present but not an object
+///     (e.g. `"arguments":"oops"` or `"arguments":42`). Caller
+///     rejects the call rather than downgrading to empty args
+///     (codex stop-gate: previously downgraded silently).
+fn arguments_field(body: &str) -> ParamsResult {
+    let needle = "\"arguments\"";
+    let Some(found) = body.find(needle) else {
+        return ParamsResult::Missing;
+    };
+    let start = found + needle.len();
+    let after = &body[start..];
+    let Some(colon_off) = after.find(':') else {
+        return ParamsResult::Malformed;
+    };
+    let rest = after[colon_off + 1..].trim_start();
+    if !rest.starts_with('{') {
+        return ParamsResult::Malformed;
+    }
+    let bytes = rest.as_bytes();
+    let mut depth = 0i32;
+    let mut in_str = false;
+    let mut escape = false;
+    for (i, &b) in bytes.iter().enumerate() {
+        if in_str {
+            if escape {
+                escape = false;
+            } else if b == b'\\' {
+                escape = true;
+            } else if b == b'"' {
+                in_str = false;
+            }
+            continue;
+        }
+        match b {
+            b'"' => in_str = true,
+            b'{' => depth += 1,
+            b'}' => {
+                depth -= 1;
+                if depth == 0 {
+                    return ParamsResult::Body(rest[1..i].to_string());
+                }
+            }
+            _ => {}
+        }
+    }
+    ParamsResult::Malformed
 }
 
 /// Extract a nested object field's body (without the surrounding
@@ -244,8 +298,12 @@ fn params_body_if_present(line: &str) -> ParamsResult {
 }
 
 /// Parse the body of a JSON object (the content between `{` and `}`)
-/// into a flat key→stringified-value map. Skips nested objects /
-/// arrays so deeper structure doesn't poison the result.
+/// into a flat key→stringified-value map. Returns `None` the moment
+/// any value is structured (`{` / `[`) — wire input that pretends a
+/// scalar arg is an object/array would otherwise need either a
+/// sentinel (which can collide with a legitimate user-supplied
+/// string) or per-tool defensive code. Reject at the wire layer
+/// instead, so every tool downstream is guaranteed to see scalars.
 fn parse_flat_object_body(body: &str) -> Option<BTreeMap<String, String>> {
     let mut out: BTreeMap<String, String> = BTreeMap::new();
     let bytes = body.as_bytes();
