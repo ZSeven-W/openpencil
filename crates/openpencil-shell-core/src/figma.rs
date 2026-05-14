@@ -223,6 +223,24 @@ pub struct FigmaClipboardNode {
 }
 
 impl FigmaClipboardNode {
+    /// Build a Document `Node` from this clipboard entry. Mints a
+    /// fresh id from `next_id`, picks the closest `NodeKind` via
+    /// `to_node_kind`, copies the name. Geometry / fill / stroke
+    /// all stay at defaults — that's what the per-kind specialised
+    /// mappers (`figma-fill-mapper` etc) port over in follow-ups.
+    /// Returns the constructed node so the caller can append to
+    /// `Document.active_page().children`.
+    pub fn to_node(&self, next_id: &mut u64) -> crate::document::Node {
+        let raw = *next_id;
+        *next_id = next_id.checked_add(1).unwrap_or(raw);
+        let name = if self.name.is_empty() {
+            self.kind.to_lowercase()
+        } else {
+            self.name.clone()
+        };
+        crate::document::Node::leaf(raw, self.to_node_kind(), name)
+    }
+
     /// Map this clipboard node's Figma kind string onto the
     /// closest `NodeKind` in the shell-core document model.
     /// Unknown kinds round-trip as `NodeKind::Other(kind)` so the
@@ -379,6 +397,34 @@ mod tests {
             };
             assert_eq!(n.to_node_kind(), expected, "{input}");
         }
+    }
+
+    #[test]
+    fn figma_clipboard_node_to_node_mints_fresh_id() {
+        let entry = FigmaClipboardNode {
+            kind: "RECTANGLE".into(),
+            name: "Hero".into(),
+        };
+        let mut next = 100u64;
+        let n1 = entry.to_node(&mut next);
+        let n2 = entry.to_node(&mut next);
+        assert_eq!(n1.id.raw(), 100);
+        assert_eq!(n2.id.raw(), 101);
+        assert_eq!(next, 102);
+        assert_eq!(n1.name, "Hero");
+    }
+
+    #[test]
+    fn figma_clipboard_node_falls_back_to_kind_as_name() {
+        let entry = FigmaClipboardNode {
+            kind: "ELLIPSE".into(),
+            name: String::new(),
+        };
+        let mut next = 1u64;
+        let n = entry.to_node(&mut next);
+        // Empty name → lowercased kind so the layer panel has
+        // something to render.
+        assert_eq!(n.name, "ellipse");
     }
 
     #[test]
