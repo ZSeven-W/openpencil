@@ -27,12 +27,7 @@ pub fn parse_tool_call(line: &str) -> Option<ToolCall> {
     //    Tool name comes straight from `method`; arguments from
     //    top-level `params`. Kept for tests + tools/list style
     //    introspection calls.
-    let id = extract_field(line, "id")?;
-    let id = if let Ok(n) = id.parse::<i64>() {
-        RequestId::Num(n)
-    } else {
-        RequestId::Str(id.trim_matches('"').to_string())
-    };
+    let id = extract_request_id(line)?;
     let method = extract_field(line, "method")?.trim_matches('"').to_string();
     let (tool, arguments) = if method == "tools/call" {
         // Real MCP: tool name + arguments live inside params.
@@ -64,6 +59,21 @@ pub fn parse_tool_call(line: &str) -> Option<ToolCall> {
         id,
         tool,
         arguments,
+    })
+}
+
+/// Pull the JSON-RPC request id out of `line` without doing a full
+/// `parse_tool_call`. Used by the stdio dispatcher to surface a
+/// typed error response when the full parse fails — without the
+/// id the client can't correlate the response and would hang
+/// waiting on it. Returns `None` only when the id field itself is
+/// missing or unreadable.
+pub fn extract_request_id(line: &str) -> Option<RequestId> {
+    let raw = extract_field(line, "id")?;
+    Some(if let Ok(n) = raw.parse::<i64>() {
+        RequestId::Num(n)
+    } else {
+        RequestId::Str(raw.trim_matches('"').to_string())
     })
 }
 
@@ -304,47 +314,6 @@ fn arguments_field(body: &str) -> ParamsResult {
         }
     }
     ParamsResult::Missing
-}
-
-/// Extract a nested object field's body (without the surrounding
-/// braces). Used to find the `arguments` map inside MCP `params`.
-fn extract_object_body(body: &str, key: &str) -> Option<String> {
-    let needle = format!("\"{key}\"");
-    let start = body.find(&needle)? + needle.len();
-    let after = &body[start..];
-    let colon = after.find(':')? + 1;
-    let rest = after[colon..].trim_start();
-    if !rest.starts_with('{') {
-        return None;
-    }
-    let bytes = rest.as_bytes();
-    let mut depth = 0i32;
-    let mut in_str = false;
-    let mut escape = false;
-    for (i, &b) in bytes.iter().enumerate() {
-        if in_str {
-            if escape {
-                escape = false;
-            } else if b == b'\\' {
-                escape = true;
-            } else if b == b'"' {
-                in_str = false;
-            }
-            continue;
-        }
-        match b {
-            b'"' => in_str = true,
-            b'{' => depth += 1,
-            b'}' => {
-                depth -= 1;
-                if depth == 0 {
-                    return Some(rest[1..i].to_string());
-                }
-            }
-            _ => {}
-        }
-    }
-    None
 }
 
 /// Tri-state result of looking for `"params"` on a legacy JSON-RPC

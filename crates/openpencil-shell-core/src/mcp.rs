@@ -372,6 +372,24 @@ where
             continue;
         }
         let Some(call) = parse_tool_call(trimmed) else {
+            // Codex stop-gate: structured-arg rejection (or any
+            // other parse failure) used to silently `continue`,
+            // leaving JSON-RPC clients waiting on a correlated
+            // response that never came. Surface a typed error
+            // with the request id when we can recover it so the
+            // client can fail fast. If even the id is missing
+            // (e.g. wire-level malformed JSON, no id field at
+            // all) we drop the line — there's nothing to
+            // correlate against.
+            if let Some(id) = parser::extract_request_id(trimmed) {
+                let err = ToolResponse::Err {
+                    id,
+                    code: ToolErrorCode::InvalidArgument,
+                    message: "malformed tool call: unparseable or structured arguments".into(),
+                };
+                writeln!(writer, "{}", response_to_json(&err))?;
+                writer.flush()?;
+            }
             continue;
         };
         let mut response = registry.dispatch(call);

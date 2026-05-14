@@ -162,6 +162,50 @@ fn run_stdio_skips_malformed_lines() {
 }
 
 #[test]
+fn run_stdio_emits_error_when_parse_fails_so_clients_dont_hang() {
+    // Codex stop-time gate: when `parse_tool_call` returned None
+    // (e.g. structured-arg rejection), the dispatcher silently
+    // continued. JSON-RPC clients waiting for a response keyed
+    // off the request id never got one — the call hung.
+    //
+    // Now any line that has an extractable `id` but otherwise
+    // fails parsing emits a typed error response so the client
+    // can correlate + recover.
+    use std::io::{BufReader, Cursor};
+    let mut r = ToolRegistry::default();
+    r.register(Box::new(EchoTool));
+    // Structured `drop_children` (object) — fails parse but has
+    // a valid id. The dispatcher MUST emit a response.
+    let bad = br#"{"jsonrpc":"2.0","id":42,"method":"replace_node","params":{"node_id":"1","drop_children":{}}}"#;
+    let mut input: Vec<u8> = bad.to_vec();
+    input.push(b'\n');
+    let mut reader = BufReader::new(Cursor::new(input));
+    let mut writer: Vec<u8> = Vec::new();
+    run_stdio(&r, &mut reader, &mut writer).unwrap();
+    let out = String::from_utf8(writer).unwrap();
+    assert!(out.contains(r#""id":42"#), "response must echo the request id: {out}");
+    assert!(out.contains(r#""error""#), "response must be a typed error: {out}");
+    assert!(out.contains("malformed tool call"), "error message must name the cause: {out}");
+}
+
+#[test]
+fn run_stdio_skips_lines_without_an_id() {
+    // A line that lacks an id field at all has nothing to
+    // correlate against. The dispatcher drops it silently —
+    // emitting an unaddressed error would only confuse the
+    // client. Existing skip-malformed behavior unchanged.
+    use std::io::{BufReader, Cursor};
+    let mut r = ToolRegistry::default();
+    r.register(Box::new(EchoTool));
+    let input = b"garbage\n{\"method\":\"x\",\"params\":{}}\n";
+    let mut reader = BufReader::new(Cursor::new(input.as_ref()));
+    let mut writer: Vec<u8> = Vec::new();
+    run_stdio(&r, &mut reader, &mut writer).unwrap();
+    let out = String::from_utf8(writer).unwrap();
+    assert!(out.is_empty(), "id-less lines must be dropped silently: {out:?}");
+}
+
+#[test]
 fn run_stdio_demotes_write_tool_response_to_error_without_applier() {
     // Codex stop-gate: a write tool returning OkWithCommand on
     // the read-only `run_stdio` path was being written as
