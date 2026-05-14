@@ -516,10 +516,13 @@ pub fn copy_node_snapshot() -> CopyNode {
 /// Node parser that doesn't live on this side yet.
 ///
 /// **Destructive on containers**: replacing a Frame / Group / node
-/// with children drops every descendant of the old node without
-/// warning. Use `update_node` to patch a container in place;
-/// reserve `replace_node` for primitive → primitive swaps where
-/// the loss is intended.
+/// with children drops every descendant of the old node. The
+/// applier refuses the swap when the target has children unless
+/// the optional `drop_children` arg is the string `"true"` —
+/// callers that genuinely want to discard the subtree must opt
+/// in. Reserve `replace_node` for primitive → primitive swaps
+/// where the loss is intended; use `update_node` to patch a
+/// container in place.
 pub struct ReplaceNode;
 
 impl McpTool for ReplaceNode {
@@ -604,6 +607,21 @@ impl McpTool for ReplaceNode {
             }
             Some(s) => Some(s.clone()),
         };
+        // Optional opt-in for destructive swaps. The applier
+        // refuses to drop a container's children unless this is
+        // `"true"`. Any other value (including "false" / "1" /
+        // missing) leaves the guard active.
+        let drop_children = match args.get("drop_children") {
+            Some(s) if s == "true" => true,
+            Some(s) if s == "false" || s.is_empty() => false,
+            None => false,
+            Some(s) => {
+                return ToolOutcome::Err(
+                    ToolErrorCode::InvalidArgument,
+                    format!("drop_children must be \"true\" or \"false\", got {s:?}"),
+                );
+            }
+        };
         let mut out = BTreeMap::new();
         out.insert("wrote".into(), "true".into());
         ToolOutcome::OkWithCommand(
@@ -617,6 +635,7 @@ impl McpTool for ReplaceNode {
                 width,
                 height,
                 fill_hex,
+                drop_children,
             },
         )
     }
