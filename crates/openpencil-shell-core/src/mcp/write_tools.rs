@@ -383,6 +383,70 @@ pub fn delete_node_snapshot() -> DeleteNode {
     DeleteNode
 }
 
+/// First-party `move_node` tool — reparent a node. Required args:
+/// node_id, target_parent_id. `target_parent_id == "0"` reparents
+/// to the active page root. Non-zero ids must resolve to an
+/// existing node; the applier rejects cycles (target descendant
+/// of source) at apply time.
+pub struct MoveNode;
+
+impl McpTool for MoveNode {
+    fn name(&self) -> &str {
+        "move_node"
+    }
+    fn call(&self, args: &BTreeMap<String, String>) -> ToolOutcome {
+        let Some(raw_id) = args.get("node_id") else {
+            return ToolOutcome::Err(
+                ToolErrorCode::MissingArgument,
+                "node_id is required".into(),
+            );
+        };
+        let node_id: u64 = match raw_id.parse() {
+            Ok(n) if n > 0 => n,
+            _ => {
+                return ToolOutcome::Err(
+                    ToolErrorCode::InvalidArgument,
+                    format!("node_id must be a positive u64, got {raw_id:?}"),
+                );
+            }
+        };
+        let Some(raw_target) = args.get("target_parent_id") else {
+            return ToolOutcome::Err(
+                ToolErrorCode::MissingArgument,
+                "target_parent_id is required (0 = page root)".into(),
+            );
+        };
+        let target_parent_id: u64 = match raw_target.parse() {
+            Ok(n) => n,
+            Err(_) => {
+                return ToolOutcome::Err(
+                    ToolErrorCode::InvalidArgument,
+                    format!("target_parent_id must be u64, got {raw_target:?}"),
+                );
+            }
+        };
+        if node_id == target_parent_id {
+            return ToolOutcome::Err(
+                ToolErrorCode::InvalidArgument,
+                "node_id and target_parent_id must differ".into(),
+            );
+        }
+        let mut out = BTreeMap::new();
+        out.insert("wrote".into(), "true".into());
+        ToolOutcome::OkWithCommand(
+            out,
+            McpCommand::MoveNode {
+                node_id,
+                target_parent_id,
+            },
+        )
+    }
+}
+
+pub fn move_node_snapshot() -> MoveNode {
+    MoveNode
+}
+
 pub fn set_active_axis_value_snapshot(
     doc: &crate::document::Document,
 ) -> SetActiveAxisValue {
