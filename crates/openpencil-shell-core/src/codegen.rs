@@ -614,6 +614,7 @@ mod tests {
             themes: Vec::new(),
             active_theme: BTreeMap::new(),
             fill_refs: BTreeMap::new(),
+            stroke_refs: BTreeMap::new(),
         };
         let css = CssVariables.generate(&doc);
         assert!(css.contains(":root {"));
@@ -642,6 +643,7 @@ mod tests {
             themes: Vec::new(),
             active_theme: BTreeMap::new(),
             fill_refs: BTreeMap::new(),
+            stroke_refs: BTreeMap::new(),
         };
         let css = CssVariables.generate(&doc);
         assert!(css.contains(":root[data-mode=\"light\"]"));
@@ -740,6 +742,7 @@ mod tests {
             themes: Vec::new(),
             active_theme: std::collections::BTreeMap::new(),
             fill_refs: std::collections::BTreeMap::new(),
+            stroke_refs: std::collections::BTreeMap::new(),
         };
         let s = Vue.generate(&doc);
         assert!(s.contains("--primary: #abc;"));
