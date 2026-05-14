@@ -63,6 +63,41 @@ impl Document {
         false
     }
 
+    /// Move a single anchor on an existing Path node to `pos`
+    /// (document coords). Used by the anchor-drag interaction on the
+    /// canvas — picks a specific anchor index to translate while the
+    /// rest of the path stays put. Returns true when the anchor was
+    /// found + updated. No-op (false) when the node isn't a Path,
+    /// the index is out of range, or the path isn't on the active
+    /// page. History is the caller's responsibility (anchor drag
+    /// commits one snapshot per drag start, not per cursor move).
+    pub fn set_path_anchor_position(
+        &mut self,
+        node_id: NodeId,
+        index: usize,
+        pos: Point2D,
+    ) -> bool {
+        if !self.is_editable(node_id) {
+            return false;
+        }
+        let active = self.active_page_index;
+        let Some(page) = self.pages.get_mut(active) else {
+            return false;
+        };
+        for child in &mut page.children {
+            if let Some(points) = path_points_mut_walk(child, node_id) {
+                if index >= points.len() {
+                    return false;
+                }
+                points[index] = pos;
+                let mut found = false;
+                set_path_bounds_walk(child, node_id, &mut found);
+                return true;
+            }
+        }
+        false
+    }
+
     /// Commit the in-progress Pen path. Returns true when one was
     /// active (UI changed → repaint). Pushes the pre-pen snapshot
     /// onto the undo stack only when the path has ≥ 2 anchors —
@@ -141,5 +176,60 @@ fn set_path_bounds_walk(node: &mut Node, target: NodeId, found: &mut bool) {
         if !*found {
             set_path_bounds_walk(child, target, found);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::*;
+
+    fn path_doc(points: &[(f32, f32)]) -> Document {
+        let mut doc = Document::empty();
+        let page = doc.pages.get_mut(0).unwrap();
+        page.children.clear();
+        let mut n = Node::leaf(10, NodeKind::Path, "p");
+        for (x, y) in points {
+            n.points.push(Point2D::new(*x, *y));
+        }
+        let (origin, size) = bbox_of(&n.points);
+        n.bounds = crate::Rect { origin, size };
+        page.children.push(n);
+        doc.selected_set = vec![NodeId::new(10)];
+        doc.selected = NodeId::new(10);
+        doc
+    }
+
+    #[test]
+    fn set_path_anchor_position_moves_one_anchor_and_recomputes_bounds() {
+        let mut doc = path_doc(&[(0.0, 0.0), (50.0, 30.0), (100.0, 0.0)]);
+        let ok = doc.set_path_anchor_position(NodeId::new(10), 1, Point2D::new(50.0, 90.0));
+        assert!(ok);
+        let page = doc.active_page().unwrap();
+        let node = page.find(NodeId::new(10)).unwrap();
+        assert_eq!(node.points[1], Point2D::new(50.0, 90.0));
+        // Bounds should re-fit: y now goes 0..90.
+        assert_eq!(node.bounds.origin.y, 0.0);
+        assert_eq!(node.bounds.size.y, 90.0);
+    }
+
+    #[test]
+    fn set_path_anchor_position_out_of_range_returns_false() {
+        let mut doc = path_doc(&[(0.0, 0.0), (10.0, 10.0)]);
+        let ok = doc.set_path_anchor_position(NodeId::new(10), 99, Point2D::new(0.0, 0.0));
+        assert!(!ok);
+    }
+
+    #[test]
+    fn set_path_anchor_position_rejects_non_path_node() {
+        let mut doc = Document::empty();
+        let page = doc.pages.get_mut(0).unwrap();
+        page.children.clear();
+        let mut n = Node::leaf(10, NodeKind::Rect, "r");
+        n.bounds = crate::Rect::xywh(0.0, 0.0, 50.0, 50.0);
+        page.children.push(n);
+        let ok = doc.set_path_anchor_position(NodeId::new(10), 0, Point2D::new(0.0, 0.0));
+        // Non-Path: path_points_mut_walk returns None → false.
+        assert!(!ok);
     }
 }
