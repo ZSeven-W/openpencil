@@ -185,7 +185,19 @@ impl WidgetHostNative {
             self.document.ui.layer_context_menu = None;
             return true;
         }
-        // 0aa. Commit-on-blur for property-panel inputs.
+        // 0aa. Commit-on-blur for property-panel inputs +
+        // variable-row inline editor. Property focus only commits
+        // when the click landed left of the property panel; the
+        // variable-row editor lives in the RIGHT rail too (above
+        // the property panel) so a click on a non-variables
+        // target (canvas / toolbar / topbar / chat / layer rail
+        // / file menu) is "outside" the editor regardless of x.
+        // Commit unconditionally here; the per-target hit-test
+        // cascade below decides what the click does. Codex stop-
+        // gate: without this, typing into a Number variable +
+        // clicking on the canvas (or chat) kept routing
+        // keystrokes into the variable draft.
+        self.commit_variable_row_focus_if_any();
         if self.document.ui.property_focus.is_some() {
             let property_left = if self.document.property_panel_visible() {
                 viewport_width - self.document.ui.property_panel_width
