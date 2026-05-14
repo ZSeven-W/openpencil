@@ -216,7 +216,7 @@ fn replace_node_rejects_malformed_drop_children() {
     args.insert("y".into(), "0".into());
     args.insert("width".into(), "10".into());
     args.insert("height".into(), "10".into());
-    for bad in ["yes", "", "TRUE", "1", "0", "{...}", "[...]"] {
+    for bad in ["yes", "", "TRUE", "1", "0"] {
         args.insert("drop_children".into(), bad.into());
         match tool.call(&args) {
             ToolOutcome::Err(code, msg) => {
@@ -229,26 +229,23 @@ fn replace_node_rejects_malformed_drop_children() {
 }
 
 #[test]
-fn parser_to_tool_chain_rejects_structured_drop_children() {
+fn parser_refuses_structured_drop_children_at_wire_layer() {
     // End-to-end coverage for codex's parser-layer concern:
-    // a structured `drop_children` value (object / array) must
-    // not slip through and let the applier proceed as if the
-    // confirmation were missing. The parser surfaces `{...}` /
-    // `[...]` sentinels; the tool sees them as present-but-bad
-    // values and returns InvalidArgument.
-    use crate::mcp::{parse_tool_call, McpTool};
+    // a structured `drop_children` (or any other arg) MUST NOT
+    // reach the tool layer at all. The parser refuses to build
+    // a ToolCall so neither ReplaceNode::call nor the applier
+    // gets a chance to misinterpret it. Without the wire-level
+    // reject, a sentinel approach would collide with legitimate
+    // scalars (e.g. a variable literally named "{...}").
+    use crate::mcp::parse_tool_call;
     for bad_json in [
         r#"{"id":1,"method":"replace_node","params":{"node_id":"10","kind":"rect","name":"X","x":"0","y":"0","width":"5","height":"5","drop_children":{}}}"#,
         r#"{"id":1,"method":"replace_node","params":{"node_id":"10","kind":"rect","name":"X","x":"0","y":"0","width":"5","height":"5","drop_children":[true]}}"#,
+        r#"{"id":1,"method":"replace_node","params":{"node_id":"10","kind":"rect","name":{},"x":"0","y":"0","width":"5","height":"5"}}"#,
     ] {
-        let call = parse_tool_call(bad_json).expect("parse");
-        let tool = replace_node_snapshot();
-        match tool.call(&call.arguments) {
-            ToolOutcome::Err(code, msg) => {
-                assert_eq!(code, ToolErrorCode::InvalidArgument, "{bad_json}");
-                assert!(msg.contains("drop_children"), "{msg}");
-            }
-            other => panic!("structured drop_children must reject, got {other:?}"),
-        }
+        assert!(
+            parse_tool_call(bad_json).is_none(),
+            "structured arg must refuse parse: {bad_json}"
+        );
     }
 }

@@ -476,19 +476,24 @@ fn parse_tool_call_handles_missing_params() {
 }
 
 #[test]
-fn parse_tool_call_surfaces_nested_values_as_sentinels() {
-    // Nested objects/arrays don't appear in tool args today,
-    // but they MUST surface as a present (and clearly malformed)
-    // value so the tool's own validation rejects them — the
-    // previous behavior of silently dropping the key let bad
-    // callers bypass guards that treat "missing" as a safe
-    // default (e.g. ReplaceNode::drop_children = false).
-    let line = r#"{"id":1,"method":"x","params":{"keep":"yes","nested":{"a":1},"arr":[1,2],"also":"ok"}}"#;
-    let call = parse_tool_call(line).expect("must parse");
+fn parse_tool_call_rejects_structured_arg_values() {
+    // Nested objects/arrays don't appear in tool args today.
+    // The parser refuses to build a ToolCall when ANY value is
+    // structured — surfacing a sentinel string instead would
+    // either collide with a legitimate user-supplied scalar
+    // (codex flagged "{...}" as plausibly matching a variable
+    // name) or leave string-accepting tools unable to tell wire
+    // malformed input from real data. Reject at the wire layer
+    // so no tool sees a structured value as a scalar.
+    let with_obj = r#"{"id":1,"method":"x","params":{"keep":"yes","nested":{"a":1}}}"#;
+    assert!(parse_tool_call(with_obj).is_none(), "object value must reject the parse");
+    let with_arr = r#"{"id":1,"method":"x","params":{"keep":"yes","arr":[1,2]}}"#;
+    assert!(parse_tool_call(with_arr).is_none(), "array value must reject the parse");
+    // All-scalar still parses.
+    let ok = r#"{"id":1,"method":"x","params":{"keep":"yes","also":"ok"}}"#;
+    let call = parse_tool_call(ok).expect("scalar-only must parse");
     assert_eq!(call.arguments.get("keep"), Some(&"yes".to_string()));
     assert_eq!(call.arguments.get("also"), Some(&"ok".to_string()));
-    assert_eq!(call.arguments.get("nested"), Some(&"{...}".to_string()));
-    assert_eq!(call.arguments.get("arr"), Some(&"[...]".to_string()));
 }
 
 #[test]
