@@ -183,24 +183,160 @@ pub fn run_stdio<R: std::io::BufRead, W: std::io::Write>(
 /// but the stub is enough to round-trip the test fixtures.
 pub fn parse_tool_call(line: &str) -> Option<ToolCall> {
     // Hand-rolled JSON-RPC parser — shell-core stays serde-free so
-    // the wasm32 bundle doesn't pay the serde cost. Extracts `id`,
-    // `method`, and `params`-object keys/values via string scans.
-    // The params parser handles flat objects of scalar values
-    // (strings, numbers, bools); deeply nested params aren't a
-    // tool-call use case (MCP tools take primitive args).
+    // the wasm32 bundle doesn't pay the serde cost. Supports two
+    // call shapes:
+    //
+    // 1. **Real MCP** (`method == "tools/call"`):
+    //    `{"id":1,"method":"tools/call","params":{"name":"get_node",
+    //      "arguments":{"node_id":"42"}}}`
+    //    Tool name comes from `params.name`; arguments from
+    //    `params.arguments`. This is what real MCP clients
+    //    (Claude Code, Codex, etc.) send.
+    //
+    // 2. **Legacy / direct** (`method != "tools/call"`):
+    //    `{"id":1,"method":"get_node","params":{"node_id":"42"}}`
+    //    Tool name comes straight from `method`; arguments from
+    //    top-level `params`. Kept for tests + tools/list style
+    //    introspection calls.
     let id = extract_field(line, "id")?;
     let id = if let Ok(n) = id.parse::<i64>() {
         RequestId::Num(n)
     } else {
         RequestId::Str(id.trim_matches('"').to_string())
     };
-    let tool = extract_field(line, "method")?.trim_matches('"').to_string();
-    let arguments = extract_params_object(line).unwrap_or_default();
+    let method = extract_field(line, "method")?.trim_matches('"').to_string();
+    let (tool, arguments) = if method == "tools/call" {
+        // Real MCP: tool name + arguments live inside params.
+        let params_body = extract_params_body(line)?;
+        let name = extract_string_field(&params_body, "name")?;
+        // `arguments` is nested object inside params.
+        let arguments = extract_object_body(&params_body, "arguments")
+            .and_then(|body| parse_flat_object_body(&body))
+            .unwrap_or_default();
+        (name, arguments)
+    } else {
+        // Legacy: method is the tool name; params is the args.
+        let arguments = extract_params_object(line).unwrap_or_default();
+        (method, arguments)
+    };
     Some(ToolCall {
         id,
         tool,
         arguments,
     })
+}
+
+/// Return the body string of the top-level `"params":{...}` object
+/// without the surrounding braces. `None` when params is missing or
+/// not an object. Mirrors the brace-walking logic in
+/// `extract_params_object` but returns the raw body so the MCP path
+/// can re-walk it for `name` / `arguments` fields.
+fn extract_params_body(line: &str) -> Option<String> {
+    let needle = "\"params\"";
+    let start = line.find(needle)? + needle.len();
+    let after_colon = &line[start..];
+    let colon = after_colon.find(':')? + 1;
+    let rest = after_colon[colon..].trim_start();
+    if !rest.starts_with('{') {
+        return None;
+    }
+    let bytes = rest.as_bytes();
+    let mut depth = 0i32;
+    let mut in_str = false;
+    let mut escape = false;
+    for (i, &b) in bytes.iter().enumerate() {
+        if in_str {
+            if escape {
+                escape = false;
+            } else if b == b'\\' {
+                escape = true;
+            } else if b == b'"' {
+                in_str = false;
+            }
+            continue;
+        }
+        match b {
+            b'"' => in_str = true,
+            b'{' => depth += 1,
+            b'}' => {
+                depth -= 1;
+                if depth == 0 {
+                    return Some(rest[1..i].to_string());
+                }
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
+/// Extract a string field's unquoted body from a JSON object body.
+/// Used to fetch `name` out of an MCP `params` block. Returns the
+/// raw string contents (escapes passed through; no unicode decode).
+fn extract_string_field(body: &str, key: &str) -> Option<String> {
+    let needle = format!("\"{key}\"");
+    let start = body.find(&needle)? + needle.len();
+    let after = &body[start..];
+    let colon = after.find(':')? + 1;
+    let rest = after[colon..].trim_start();
+    if !rest.starts_with('"') {
+        return None;
+    }
+    let bytes = rest.as_bytes();
+    let mut i = 1;
+    let val_start = i;
+    while i < bytes.len() && bytes[i] != b'"' {
+        if bytes[i] == b'\\' {
+            i += 2;
+        } else {
+            i += 1;
+        }
+    }
+    if i >= bytes.len() {
+        return None;
+    }
+    Some(rest[val_start..i].to_string())
+}
+
+/// Extract a nested object field's body (without the surrounding
+/// braces). Used to find the `arguments` map inside MCP `params`.
+fn extract_object_body(body: &str, key: &str) -> Option<String> {
+    let needle = format!("\"{key}\"");
+    let start = body.find(&needle)? + needle.len();
+    let after = &body[start..];
+    let colon = after.find(':')? + 1;
+    let rest = after[colon..].trim_start();
+    if !rest.starts_with('{') {
+        return None;
+    }
+    let bytes = rest.as_bytes();
+    let mut depth = 0i32;
+    let mut in_str = false;
+    let mut escape = false;
+    for (i, &b) in bytes.iter().enumerate() {
+        if in_str {
+            if escape {
+                escape = false;
+            } else if b == b'\\' {
+                escape = true;
+            } else if b == b'"' {
+                in_str = false;
+            }
+            continue;
+        }
+        match b {
+            b'"' => in_str = true,
+            b'{' => depth += 1,
+            b'}' => {
+                depth -= 1;
+                if depth == 0 {
+                    return Some(rest[1..i].to_string());
+                }
+            }
+            _ => {}
+        }
+    }
+    None
 }
 
 /// Find the `"params":{...}` object in `line` and parse it into a
@@ -1058,6 +1194,57 @@ mod tests {
         let call = parse_tool_call(line).expect("parse");
         match r.dispatch(call) {
             ToolResponse::Ok { result, .. } => {
+                assert_eq!(result.get("kind"), Some(&"frame".to_string()));
+            }
+            ToolResponse::Err { code, message, .. } => {
+                panic!("expected Ok, got Err({code:?}, {message})")
+            }
+        }
+    }
+
+    #[test]
+    fn parse_tool_call_real_mcp_tools_call_shape() {
+        // Real MCP wire shape — `method:"tools/call"`, tool name +
+        // arguments nested under params. This is what Claude Code /
+        // Codex / Gemini etc. send when invoking a tool. The codex
+        // stop-gate flagged that the parser previously only
+        // recognized the flat `method == toolname` shape.
+        let line = r#"{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"get_node","arguments":{"node_id":"42"}}}"#;
+        let call = parse_tool_call(line).expect("parse");
+        assert_eq!(call.tool, "get_node");
+        assert_eq!(call.arguments.get("node_id"), Some(&"42".to_string()));
+    }
+
+    #[test]
+    fn parse_tool_call_mcp_shape_with_no_arguments() {
+        // Tools that take no args still use the `tools/call` envelope.
+        let line = r#"{"id":2,"method":"tools/call","params":{"name":"list_pages","arguments":{}}}"#;
+        let call = parse_tool_call(line).expect("parse");
+        assert_eq!(call.tool, "list_pages");
+        assert!(call.arguments.is_empty());
+    }
+
+    #[test]
+    fn parse_tool_call_mcp_shape_with_numeric_arg() {
+        let line = r#"{"id":3,"method":"tools/call","params":{"name":"x","arguments":{"limit":5,"enabled":true}}}"#;
+        let call = parse_tool_call(line).expect("parse");
+        assert_eq!(call.arguments.get("limit"), Some(&"5".to_string()));
+        assert_eq!(call.arguments.get("enabled"), Some(&"true".to_string()));
+    }
+
+    #[test]
+    fn get_node_reachable_through_real_mcp_envelope() {
+        // The regression test that closes codex BLOCK #2 ("parser
+        // still doesn't handle the real MCP tool-call shape"):
+        // a real MCP-style request must route to the tool.
+        let doc = crate::document::Document::sample();
+        let mut r = ToolRegistry::default();
+        r.register(Box::new(get_node_snapshot(&doc)));
+        let line = r#"{"jsonrpc":"2.0","id":7,"method":"tools/call","params":{"name":"get_node","arguments":{"node_id":"10"}}}"#;
+        let call = parse_tool_call(line).expect("parse");
+        match r.dispatch(call) {
+            ToolResponse::Ok { result, id } => {
+                assert!(matches!(id, RequestId::Num(7)));
                 assert_eq!(result.get("kind"), Some(&"frame".to_string()));
             }
             ToolResponse::Err { code, message, .. } => {
