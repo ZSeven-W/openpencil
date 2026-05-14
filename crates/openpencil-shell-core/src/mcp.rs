@@ -33,10 +33,11 @@ pub use tools::{
 pub use write_tools::{
     copy_node_snapshot, create_component_snapshot, delete_component_snapshot,
     delete_node_snapshot, insert_node_snapshot, instantiate_component_snapshot,
-    move_node_snapshot, replace_node_snapshot, set_active_axis_value_snapshot,
-    set_variable_color_snapshot, update_node_snapshot, CopyNode, CreateComponent,
-    DeleteComponent, DeleteNode, InsertNode, InstantiateComponent, MoveNode, ReplaceNode,
-    SetActiveAxisValue, SetVariableColor, UpdateNode,
+    move_node_snapshot, rename_component_snapshot, replace_node_snapshot,
+    set_active_axis_value_snapshot, set_variable_color_snapshot, update_node_snapshot,
+    CopyNode, CreateComponent, DeleteComponent, DeleteNode, InsertNode,
+    InstantiateComponent, MoveNode, RenameComponent, ReplaceNode, SetActiveAxisValue,
+    SetVariableColor, UpdateNode,
 };
 pub use batch_design::{
     batch_design_snapshot, design_content_snapshot, design_refine_snapshot,
@@ -276,6 +277,12 @@ pub enum McpCommand {
     /// independent clones at apply time.
     DeleteComponent {
         component_id: u64,
+    },
+    /// Rename a registered component. The applier rejects unknown
+    /// ids and empty / whitespace-only names.
+    RenameComponent {
+        component_id: u64,
+        name: String,
     },
 }
 

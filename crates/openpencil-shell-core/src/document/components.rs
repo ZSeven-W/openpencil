@@ -40,6 +40,22 @@ impl ComponentLibrary {
             self.components.push(c);
         }
     }
+    /// Rename a registered component by id. Returns true when the
+    /// component was found + renamed. The empty-string rename is
+    /// rejected (components without a name are useless in the UI
+    /// + would mislead LLM clients that browse via list_components).
+    pub fn rename(&mut self, id: NodeId, new_name: impl Into<String>) -> bool {
+        let name: String = new_name.into();
+        if name.trim().is_empty() {
+            return false;
+        }
+        if let Some(c) = self.components.iter_mut().find(|c| c.id == id) {
+            c.name = name;
+            true
+        } else {
+            false
+        }
+    }
     /// Remove a component by id. Returns true when a component was
     /// removed, false when the id didn't resolve. Live instances
     /// (clones already on the page) are unaffected — they carry
