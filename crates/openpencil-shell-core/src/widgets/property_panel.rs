@@ -582,4 +582,3 @@ impl Widget for PropertyPanel {
         node
     }
 }
-
