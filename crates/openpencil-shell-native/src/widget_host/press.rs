@@ -283,14 +283,11 @@ impl WidgetHostNative {
             return rename_committed || text_edit_committed;
         }
 
-        // 0b1. VariablesPanel — tested before PropertyPanel so the
-        //      bottom-anchored Variables rect wins clicks (paint
-        //      stack: PropertyPanel under, Variables over).
-        if self.dispatch_variables_panel_press(x, y, viewport_width, viewport_height) {
-            return true;
-        }
-
-        // 0c0. Fill-type picker — outside-click dismiss.
+        // 0c0. Fill-type picker — outside-click dismiss. Must run
+        //      BEFORE the VariablesPanel dispatch so an open picker
+        //      gets dismissed by every click, even ones landing on
+        //      a Variables row (codex stop-gate: the previous order
+        //      left fill_type_picker_open=true after a vars click).
         if self.document.ui.fill_type_picker_open {
             if let Some(panel) = PropertyPanel::for_selection(&self.document) {
                 let property_rect = Rect {
@@ -316,6 +313,13 @@ impl WidgetHostNative {
             }
             // Anywhere else — close + swallow.
             self.document.ui.fill_type_picker_open = false;
+            return true;
+        }
+
+        // 0b1. VariablesPanel — tested before PropertyPanel so the
+        //      bottom-anchored Variables rect wins (paint stack:
+        //      PropertyPanel under, Variables over).
+        if self.dispatch_variables_panel_press(x, y, viewport_width, viewport_height) {
             return true;
         }
 
