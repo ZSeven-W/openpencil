@@ -26,16 +26,12 @@ impl Document {
         }
     }
 
-    /// Translate `key` via the active locale; falls through to `key`.
-    /// `key` is `&'static str` so the result is also `'static`,
-    /// letting callers store the string slice instead of cloning
-    /// it into an owned `String` per paint frame.
+    /// Translate `key` via active locale; falls through to `key`. `'static` to skip per-frame clones.
     pub fn t(&self, key: &'static str) -> &'static str {
         crate::i18n::translate(self.ui.locale, key)
     }
 
-    /// Empty document with one empty default page named "Page 1".
-    /// Used by host smoke fixtures.
+    /// Empty document with one default page; used by host smoke fixtures.
     pub fn empty() -> Self {
         Self {
             pages: vec![Page::new(1, "Page 1", Vec::new())],
@@ -49,6 +45,7 @@ impl Document {
             ui: UiState::default(),
             history: History::default(),
             var_table: VariableTable::default(),
+            components: ComponentLibrary::default(),
         }
     }
 
@@ -97,6 +94,7 @@ impl Document {
             ui: UiState::default(),
             history: History::default(),
             var_table: VariableTable::default(),
+            components: ComponentLibrary::default(),
         };
         debug_assert!(
             doc.validate().is_ok(),

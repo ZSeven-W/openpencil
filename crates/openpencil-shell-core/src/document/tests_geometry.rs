@@ -473,6 +473,7 @@ fn document_validate_catches_duplicate_node_id() {
         ui: UiState::default(),
         history: crate::document::History::default(),
             var_table: crate::document::VariableTable::default(),
+            components: crate::document::ComponentLibrary::default(),
     };
     let result = doc.validate();
     assert!(result.is_err());
@@ -508,6 +509,7 @@ fn document_validate_catches_empty_pages() {
         ui: UiState::default(),
         history: crate::document::History::default(),
             var_table: crate::document::VariableTable::default(),
+            components: crate::document::ComponentLibrary::default(),
     };
     let result = doc.validate();
     assert!(result.is_err());
@@ -533,6 +535,7 @@ fn document_validate_catches_empty_pages() {
         ui: UiState::default(),
         history: crate::document::History::default(),
             var_table: crate::document::VariableTable::default(),
+            components: crate::document::ComponentLibrary::default(),
     };
     let err2 = doc2.validate().unwrap_err();
     assert!(
@@ -563,6 +566,7 @@ fn document_selected_node_scopes_to_active_page() {
         ui: UiState::default(),
         history: crate::document::History::default(),
             var_table: crate::document::VariableTable::default(),
+            components: crate::document::ComponentLibrary::default(),
     };
     // Selection is on a non-active page → returns None.
     assert!(doc.selected_node().is_none());
@@ -593,6 +597,7 @@ fn document_active_page_returns_indexed_page() {
         ui: UiState::default(),
         history: crate::document::History::default(),
             var_table: crate::document::VariableTable::default(),
+            components: crate::document::ComponentLibrary::default(),
     };
     assert_eq!(doc.active_page().unwrap().name, "second");
 }
@@ -611,6 +616,7 @@ fn document_active_page_returns_none_when_index_out_of_range() {
         ui: UiState::default(),
         history: crate::document::History::default(),
             var_table: crate::document::VariableTable::default(),
+            components: crate::document::ComponentLibrary::default(),
     };
     assert!(doc.active_page().is_none());
 }
@@ -664,6 +670,7 @@ fn add_page_returns_none_on_id_overflow() {
         ui: UiState::default(),
         history: crate::document::History::default(),
             var_table: crate::document::VariableTable::default(),
+            components: crate::document::ComponentLibrary::default(),
     };
     let mut doc = doc;
     assert_eq!(doc.add_page(), None);
