@@ -5,11 +5,7 @@ use super::helpers::{
     TOOLBAR_INSET_Y,
 };
 use super::{PanelResizeKind, WidgetHostNative};
-use openpencil_shell_core::document::{ChatAnchor, PropertyFocus};
-use openpencil_shell_core::widgets::{
-    AIChatHit, AIChatPlaceholder, LayerPanel, LayoutCx, Toolbar, Widget, TOOLBAR_WIDTH,
-    TOP_BAR_HEIGHT,
-};
+use openpencil_shell_core::document::ChatAnchor;
 use openpencil_shell_core::{Point2D, Rect};
 
 impl WidgetHostNative {
