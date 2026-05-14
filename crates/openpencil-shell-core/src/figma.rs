@@ -58,14 +58,112 @@ pub fn parse_fig(bytes: &[u8]) -> Result<ParsedFigStub, FigParseError> {
         FigFileKind::ClipboardJson => {
             let s =
                 std::str::from_utf8(bytes).map_err(|_| FigParseError::UnknownFormat)?;
-            let children = count_top_level_children(s).unwrap_or(0);
+            let nodes = extract_clipboard_nodes(s);
             Ok(ParsedFigStub {
                 kind: FigFileKind::ClipboardJson,
-                top_level_children: children,
+                top_level_children: nodes.len(),
+                clipboard_nodes: nodes,
             })
         }
         FigFileKind::Unknown => Err(FigParseError::UnknownFormat),
     }
+}
+
+/// Walk the clipboard-JSON children array and pull the `type` +
+/// `name` fields off each top-level entry into a
+/// `FigmaClipboardNode`. Returns an empty Vec when the children
+/// key is absent or the brace tracker can't find a matching
+/// close. Hand-rolled parser (no serde) — finds each top-level
+/// `{` at depth 1, scans the matching `}` block for `"type"` +
+/// `"name"`, returns the pair.
+fn extract_clipboard_nodes(s: &str) -> Vec<FigmaClipboardNode> {
+    let mut out = Vec::new();
+    let Some(top_blocks) = collect_top_level_blocks(s) else {
+        return out;
+    };
+    for block in top_blocks {
+        let kind = extract_string_field(block, "type").unwrap_or_default();
+        let name = extract_string_field(block, "name").unwrap_or_default();
+        out.push(FigmaClipboardNode { kind, name });
+    }
+    out
+}
+
+fn extract_string_field(block: &str, key: &str) -> Option<String> {
+    let needle = format!("\"{}\"", key);
+    let key_at = block.find(&needle)?;
+    let after = &block[key_at + needle.len()..];
+    let colon = after.find(':')? + 1;
+    let val = after[colon..].trim_start();
+    let val = val.strip_prefix('"')?;
+    // Find closing quote, honouring `\"` escapes.
+    let mut end = 0;
+    let mut escape = false;
+    for (i, c) in val.char_indices() {
+        if escape {
+            escape = false;
+            continue;
+        }
+        if c == '\\' {
+            escape = true;
+            continue;
+        }
+        if c == '"' {
+            end = i;
+            break;
+        }
+    }
+    Some(val[..end].to_string())
+}
+
+fn collect_top_level_blocks(s: &str) -> Option<Vec<&str>> {
+    let needle = "\"children\"";
+    let key_at = s.find(needle)?;
+    let after = &s[key_at + needle.len()..];
+    let bracket_rel = after.find('[')?;
+    let arr_start = key_at + needle.len() + bracket_rel + 1;
+    let body = &s[arr_start..];
+    let mut depth = 0i32;
+    let mut in_string = false;
+    let mut escape = false;
+    let mut current_start: Option<usize> = None;
+    let mut blocks: Vec<&str> = Vec::new();
+    for (i, c) in body.char_indices() {
+        if escape {
+            escape = false;
+            continue;
+        }
+        if c == '\\' {
+            escape = true;
+            continue;
+        }
+        if c == '"' {
+            in_string = !in_string;
+            continue;
+        }
+        if in_string {
+            continue;
+        }
+        match c {
+            '{' => {
+                if depth == 0 {
+                    current_start = Some(i);
+                }
+                depth += 1;
+            }
+            '}' => {
+                depth -= 1;
+                if depth == 0 {
+                    if let Some(start) = current_start.take() {
+                        blocks.push(&body[start..=i]);
+                    }
+                }
+            }
+            ']' if depth == 0 => return Some(blocks),
+            _ => {}
+        }
+    }
+    None
 }
 
 /// Walk a clipboard-JSON payload and count the top-level entries in
@@ -113,13 +211,26 @@ fn count_top_level_children(s: &str) -> Option<usize> {
     None
 }
 
-/// Successful parse result. Carries the kind + (for clipboard JSON)
-/// the top-level children count. Placeholder until the full Figma →
-/// PenNode mapping ports.
+/// One node extracted from a clipboard-JSON `children` array.
+/// `type` is the Figma node kind string (`RECTANGLE`, `ELLIPSE`,
+/// `TEXT`, `FRAME`, ...); future `pen-figma`-style converters map
+/// it to a `PenNode` variant. Empty arrays / missing fields yield
+/// empty defaults so the caller can `unwrap_or` without panics.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct FigmaClipboardNode {
+    pub kind: String,
+    pub name: String,
+}
+
+/// Successful parse result. Carries the file kind, top-level
+/// children count, and (for clipboard JSON) a minimal-fields
+/// extraction of each top-level child. Placeholder until the full
+/// Figma → PenNode mapping ports.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ParsedFigStub {
     pub kind: FigFileKind,
     pub top_level_children: usize,
+    pub clipboard_nodes: Vec<FigmaClipboardNode>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -185,6 +296,35 @@ mod tests {
         let parsed = parse_fig(json).unwrap();
         // Quoted `{` must NOT bump the count.
         assert_eq!(parsed.top_level_children, 2);
+    }
+
+    #[test]
+    fn parse_fig_clipboard_extracts_type_and_name_per_top_level() {
+        let json = br#"{"type":"FIGMA_DOCUMENT","children":[
+            {"type":"RECTANGLE","name":"Hero Bg"},
+            {"type":"TEXT","name":"Title"},
+            {"type":"FRAME","name":"Card","children":[{"type":"ELLIPSE","name":"Avatar"}]}
+        ]}"#;
+        let parsed = parse_fig(json).unwrap();
+        assert_eq!(parsed.top_level_children, 3);
+        assert_eq!(parsed.clipboard_nodes.len(), 3);
+        assert_eq!(parsed.clipboard_nodes[0].kind, "RECTANGLE");
+        assert_eq!(parsed.clipboard_nodes[0].name, "Hero Bg");
+        assert_eq!(parsed.clipboard_nodes[1].kind, "TEXT");
+        assert_eq!(parsed.clipboard_nodes[1].name, "Title");
+        // Nested child not in top-level (only Card is, not its Avatar).
+        assert_eq!(parsed.clipboard_nodes[2].kind, "FRAME");
+        assert_eq!(parsed.clipboard_nodes[2].name, "Card");
+    }
+
+    #[test]
+    fn parse_fig_clipboard_handles_missing_fields_gracefully() {
+        let json = br#"{"type":"FIGMA_DOCUMENT","children":[{"name":"only-name"},{"type":"TEXT"}]}"#;
+        let parsed = parse_fig(json).unwrap();
+        assert_eq!(parsed.clipboard_nodes[0].kind, "");
+        assert_eq!(parsed.clipboard_nodes[0].name, "only-name");
+        assert_eq!(parsed.clipboard_nodes[1].kind, "TEXT");
+        assert_eq!(parsed.clipboard_nodes[1].name, "");
     }
 
     #[test]
