@@ -46,6 +46,8 @@ pub mod property_panel_fill;
 pub mod property_panel_inputs;
 pub mod property_panel_layout;
 pub mod property_panel_sections;
+#[cfg(test)]
+mod property_panel_tests;
 pub mod toolbar;
 
 // Step 3 — center canvas that renders document nodes as actual
