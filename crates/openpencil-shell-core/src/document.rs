@@ -793,7 +793,7 @@ mod pen;
 mod variables;
 mod walkers;
 pub use align::AlignAction;
-pub use variables::{ThemeAxis, ThemedValue, Variable, VariableKind, VariableScalar, VariableValue};
+pub use variables::{ThemeAxis, ThemedValue, Variable, VariableKind, VariableScalar, VariableTable, VariableValue};
 pub use walkers::ReorderDirection;
 
 #[cfg(test)] mod tests_geometry;

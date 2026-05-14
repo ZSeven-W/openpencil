@@ -96,6 +96,33 @@ pub struct ThemeAxis {
     pub values: Vec<String>,
 }
 
+/// Per-document variable + theme registry. Populated by the
+/// canonical `.op` loader from `PenDocument.variables` /
+/// `PenDocument.themes`. v1 preserves the data + supports lookup +
+/// active-theme selection; paint-time `$ref` substitution is a
+/// follow-up.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct VariableTable {
+    pub variables: Vec<Variable>,
+    pub themes: Vec<ThemeAxis>,
+    /// Current selection per axis. e.g. {"mode": "dark"}. Empty map
+    /// means "use the default (theme = None) entry of every Themed
+    /// variable".
+    pub active_theme: BTreeMap<String, String>,
+}
+
+impl VariableTable {
+    /// Look up a variable by name. None if unknown.
+    pub fn find(&self, name: &str) -> Option<&Variable> {
+        self.variables.iter().find(|v| v.name == name)
+    }
+    /// Resolve `$ref` against the table under the active theme. Returns
+    /// the scalar leaf or None on unknown name / empty Themed.
+    pub fn resolve(&self, name: &str) -> Option<&VariableScalar> {
+        self.find(name)?.resolve(&self.active_theme)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
