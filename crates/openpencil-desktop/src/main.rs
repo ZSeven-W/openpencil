@@ -3,7 +3,11 @@
 
 #![cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]
 
+mod export;
+mod pen_doc_adapter;
+mod pen_doc_path_bounds;
 mod persistence;
+mod settings_io;
 
 use openpencil_shell_core::{Color, Point2D, Rect, RenderBackend};
 use openpencil_shell_native::{
@@ -131,30 +135,18 @@ struct DesktopApp {
     /// Last cursor position (logical, top-left origin).
     cursor_x: f32,
     cursor_y: f32,
-    /// Cached scale factor — refreshed on Resumed +
-    /// `ScaleFactorChanged`. Drives the DPI scale on the canvas
-    /// and the physical→logical cursor conversion.
+    /// Cached scale factor (refreshed on Resumed + ScaleFactorChanged).
     dpi: f32,
-    /// Cmd / Ctrl held — promotes 2-finger swipe from pan to zoom
-    /// AND gates editor shortcuts (Cmd+D duplicate, etc.).
+    /// Cmd / Ctrl held — promotes scroll to zoom + gates editor shortcuts.
     zoom_modifier: bool,
-    /// Shift held — promotes arrow-key nudge from 1 px to 10 px.
+    /// Shift held — arrow-key nudge 1→10 px.
     shift_modifier: bool,
-    /// Latest cursor position deferred for the next paint pass.
-    /// `CursorMoved` fires at mouse-input rate (up to 1000 Hz on
-    /// high-poll-rate trackpads); apply_cursor_move runs through
-    /// per-drag mutators that allocate and rebuild widgets, so we
-    /// coalesce all events between paints into a single apply call
-    /// driven from `RedrawRequested`.
+    /// Cursor moves coalesced between paints; drained on RedrawRequested
+    /// and right before apply_press/release so drag-end frames aren't lost.
     pending_cursor_move: Option<(f32, f32)>,
-    /// True iff a `request_redraw` is already in flight. Suppresses
-    /// duplicate redraw requests when many input events fire
-    /// between paints.
+    /// True iff a `request_redraw` is already in flight.
     redraw_pending: bool,
-    /// True when the pending redraw is known to need a paint even if
-    /// a coalesced cursor move drains to a no-op. Cursor moves queue
-    /// redraws speculatively; presses / keys / wheel / timers mark
-    /// the frame dirty because visible state already changed.
+    /// True when the pending redraw needs a paint even if cursor coalescing drained to no-op.
     redraw_dirty: bool,
     /// Monotonic clock anchor — `Instant.elapsed().as_millis()`
     /// from this is fed into `WidgetHostNative::set_now_ms` so
@@ -172,11 +164,13 @@ struct DesktopApp {
 
 impl DesktopApp {
     fn new() -> Self {
+        let mut host = WidgetHostNative::new();
+        settings_io::load(host.document_mut()); // best-effort prefs restore
         Self {
             window: None,
             ctx: None,
             backend: None,
-            host: WidgetHostNative::new(),
+            host,
             viewport_width: INITIAL_VIEWPORT_W,
             viewport_height: INITIAL_VIEWPORT_H,
             cursor_x: 0.0,
@@ -193,6 +187,7 @@ impl DesktopApp {
             error: None,
         }
     }
+
 
     fn request_redraw(&mut self, dirty: bool) -> bool {
         if dirty {
@@ -350,8 +345,16 @@ impl ApplicationHandler for DesktopApp {
         // RedrawRequested.
         let now_ms = self.clock_start.elapsed().as_millis() as u64;
         self.host.set_now_ms(now_ms);
+        // CursorMoved never changes persisted prefs — skip snapshot
+        // on the trackpad hot path.
+        let settings_before = match &event {
+            WindowEvent::CursorMoved { .. } => None,
+            _ => Some(settings_io::fingerprint(self.host.document())),
+        };
         match event {
             WindowEvent::CloseRequested => {
+                self.host.flush_settings_input();
+                settings_io::save(self.host.document());
                 event_loop.exit();
             }
             WindowEvent::Resized(size) => {
@@ -371,13 +374,7 @@ impl ApplicationHandler for DesktopApp {
                 if let Some(backend) = self.backend.as_mut() {
                     backend.set_dpi(scale_factor as f32);
                 }
-                // Refresh the cached logical viewport from the
-                // window's current physical size — the physical
-                // size doesn't change when DPI flips on the same
-                // monitor move, but the logical (physical/dpi)
-                // conversion does, so input + paint coordinate
-                // spaces would otherwise diverge until the user
-                // resized the window.
+                // Logical = physical / dpi; refresh to keep input + paint coords in sync after a DPI flip.
                 if let Some(window) = self.window.as_ref() {
                     let size = window.inner_size();
                     self.viewport_width = size.width as f32 / self.dpi;
@@ -454,21 +451,13 @@ impl ApplicationHandler for DesktopApp {
                 button: MouseButton::Left,
                 ..
             } => {
-                // Drain any queued cursor move first so the host's
-                // hover / cursor-tracking state is current when the
-                // press lands.
-                if self.drain_pending_cursor_move() {
-                    self.redraw_dirty = true;
+                // Drain queued cursor move so hover state is current before press lands.
+                if self.drain_pending_cursor_move() { self.redraw_dirty = true; }
+                let consumed = self.host.apply_press(self.cursor_x, self.cursor_y, self.viewport_width, self.viewport_height);
+                if let Some(action) = self.host.document_mut().ui.pending_file_action.take() {
+                    persistence::run_action(action, &mut self.host, &mut self.current_path, self.window.as_ref());
                 }
-                let consumed = self.host.apply_press(
-                    self.cursor_x,
-                    self.cursor_y,
-                    self.viewport_width,
-                    self.viewport_height,
-                );
-                if consumed {
-                    self.request_redraw(true);
-                }
+                if consumed { self.request_redraw(true); }
             }
             WindowEvent::MouseInput {
                 state: ElementState::Pressed,
@@ -671,6 +660,10 @@ impl ApplicationHandler for DesktopApp {
                         match ch.to_lowercase().as_str() {
                             // Cmd+Shift+S = Save As; always allowed.
                             "s" => consumed = persistence::handle_save_as(&mut self.host, &mut self.current_path, self.window.as_ref()),
+                            "p" => {
+                                persistence::run_action(openpencil_shell_core::document::FileAction::ExportImage, &mut self.host, &mut self.current_path, self.window.as_ref());
+                                consumed = true;
+                            }
                             _ if settings_focused => {}
                             "z" => consumed = self.host.apply_redo(),
                             "g" => consumed = self.host.apply_ungroup(),
@@ -763,9 +756,18 @@ impl ApplicationHandler for DesktopApp {
             }
             _ => {}
         }
+        if let Some(before) = settings_before {
+            settings_io::save_if_changed(self.host.document(), before);
+        }
     }
 
     fn exiting(&mut self, _event_loop: &ActiveEventLoop) {
+        // Belt-and-suspenders: macOS Cmd+Q / Alt+F4 / window-manager
+        // close can deliver `exiting` without `CloseRequested`. Flush
+        // any in-progress MCP port draft before snapshotting so a
+        // focused-but-uncommitted edit isn't silently dropped.
+        self.host.flush_settings_input();
+        settings_io::save(self.host.document());
         if let Some(mut ctx) = self.ctx.take() {
             if let Err(err) = ctx.teardown() {
                 eprintln!("openpencil-desktop: teardown failed: {err}");

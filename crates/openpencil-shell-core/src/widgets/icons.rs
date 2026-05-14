@@ -142,6 +142,73 @@ pub enum Icon {
     Image,
     /// Lucide `settings.svg` — used for the System settings tab.
     Settings,
+    /// Lucide `save.svg` — file save / save-as menu rows.
+    Save,
+    /// Lucide `download.svg` — export image menu row.
+    Download,
+    /// Lucide glyphs surfaced via `Icon::from_name` for canonical
+    /// `icon_font` nodes. Covers the names that real `.op` files +
+    /// the TS element-builders authored against — extend as new
+    /// fixtures surface unknown lucide names.
+    Mail,
+    Smartphone,
+    Chrome,
+    Apple,
+    User,
+    Clock,
+    Calendar,
+    Star,
+    Heart,
+    Home,
+    Bell,
+    Play,
+    MapPin,
+    Phone,
+    Camera,
+    Video,
+    Music,
+    Share,
+    Info,
+    AlertCircle,
+    HelpCircle,
+    ChevronLeft,
+    MoreVertical,
+    MoreHorizontal,
+    TrendingUp,
+    TrendingDown,
+    Compass,
+    RefreshCw,
+    LayoutDashboard,
+    Users,
+    Package,
+    Zap,
+    SlidersHorizontal,
+    Activity,
+    Loader,
+    Focus,
+    ChartLine,
+    Settings2,
+    ArrowRight,
+    ArrowLeft,
+    CheckCircle,
+    AlertTriangle,
+    AlertOctagon,
+    StickyNote,
+    BarChart2,
+    Bold,
+    Italic,
+    Underline,
+    Strikethrough,
+    ShoppingCart,
+    ShoppingBag,
+    Send,
+    MessageCircle,
+    Rocket,
+    Menu,
+    CreditCard,
+    XCircle,
+    /// Lucide `file-text.svg` — recent file rows.
+    FileText,
 }
 
 impl Icon {
@@ -202,287 +269,181 @@ impl Icon {
             Icon::Terminal => TERMINAL,
             Icon::Image => IMAGE,
             Icon::Settings => SETTINGS,
+            Icon::Save => SAVE,
+            Icon::Download => DOWNLOAD,
+            Icon::FileText => FILE_TEXT,
+            Icon::Mail => MAIL,
+            Icon::Smartphone => SMARTPHONE,
+            Icon::Chrome => CHROME,
+            Icon::Apple => APPLE,
+            Icon::User => USER,
+            Icon::Clock => CLOCK,
+            Icon::Calendar => CALENDAR,
+            Icon::Star => STAR,
+            Icon::Heart => HEART,
+            Icon::Home => HOME,
+            Icon::Bell => BELL,
+            Icon::Play => PLAY,
+            Icon::MapPin => MAP_PIN,
+            Icon::Phone => PHONE,
+            Icon::Camera => CAMERA,
+            Icon::Video => VIDEO,
+            Icon::Music => MUSIC,
+            Icon::Share => SHARE,
+            Icon::Info => INFO,
+            Icon::AlertCircle => ALERT_CIRCLE,
+            Icon::HelpCircle => HELP_CIRCLE,
+            Icon::ChevronLeft => CHEVRON_LEFT,
+            Icon::MoreVertical => MORE_VERTICAL,
+            Icon::MoreHorizontal => MORE_HORIZONTAL,
+            Icon::TrendingUp => TRENDING_UP,
+            Icon::TrendingDown => TRENDING_DOWN,
+            Icon::Compass => COMPASS,
+            Icon::RefreshCw => REFRESH_CW,
+            Icon::LayoutDashboard => LAYOUT_DASHBOARD,
+            Icon::Users => USERS,
+            Icon::Package => PACKAGE,
+            Icon::Zap => ZAP,
+            Icon::SlidersHorizontal => SLIDERS_HORIZONTAL,
+            Icon::Activity => ACTIVITY,
+            Icon::Loader => LOADER,
+            Icon::Focus => FOCUS,
+            Icon::ChartLine => CHART_LINE,
+            Icon::Settings2 => SETTINGS2,
+            Icon::ArrowRight => ARROW_RIGHT,
+            Icon::ArrowLeft => ARROW_LEFT,
+            Icon::CheckCircle => CHECK_CIRCLE,
+            Icon::AlertTriangle => ALERT_TRIANGLE,
+            Icon::AlertOctagon => ALERT_OCTAGON,
+            Icon::StickyNote => STICKY_NOTE,
+            Icon::BarChart2 => BAR_CHART_2,
+            Icon::Bold => BOLD,
+            Icon::Italic => ITALIC,
+            Icon::Underline => UNDERLINE,
+            Icon::Strikethrough => STRIKETHROUGH,
+            Icon::ShoppingCart => SHOPPING_CART,
+            Icon::ShoppingBag => SHOPPING_BAG,
+            Icon::Send => SEND,
+            Icon::MessageCircle => MESSAGE_CIRCLE,
+            Icon::Rocket => ROCKET,
+            Icon::Menu => MENU,
+            Icon::CreditCard => CREDIT_CARD,
+            Icon::XCircle => X_CIRCLE,
         }
     }
+
+    /// Resolve a lucide kebab-case glyph name to an [`Icon`]. Used by
+    /// the canonical `.op` loader: `IconFontNode.iconFontName` carries
+    /// strings like `pen-tool` / `mail` / `eye-off`; the renderer
+    /// looks them up here so authored icons paint as lucide glyphs.
+    /// Returns `None` for names the chrome doesn't carry — the
+    /// renderer falls back to an honest placeholder rather than
+    /// silently dropping the node.
+    pub fn from_name(name: &str) -> Option<Icon> {
+        Some(match name {
+            "pen-tool" => Icon::PenTool,
+            "mail" => Icon::Mail,
+            "lock" => Icon::Lock,
+            "lock-open" | "unlock" => Icon::LockOpen,
+            "eye" => Icon::Eye,
+            "eye-off" => Icon::EyeOff,
+            "smartphone" | "mobile" => Icon::Smartphone,
+            "chrome" => Icon::Chrome,
+            "apple" => Icon::Apple,
+            "user" | "person" => Icon::User,
+            "search" => Icon::Search,
+            "settings" => Icon::Settings,
+            "image" | "image-icon" => Icon::Image,
+            "github" => Icon::Github,
+            "globe" => Icon::Globe,
+            "terminal" => Icon::Terminal,
+            "trash" | "trash-2" => Icon::Trash,
+            "plus" => Icon::Plus,
+            "minus" => Icon::Minus,
+            "check" => Icon::Check,
+            "x" | "close" => Icon::Close,
+            "chevron-down" => Icon::ChevronDown,
+            "chevron-right" => Icon::ChevronRight,
+            "chevron-up" => Icon::ChevronUp,
+            "arrow-up" => Icon::ArrowUp,
+            "arrow-down" => Icon::ArrowDown,
+            "arrow-up-right" => Icon::ArrowUpRight,
+            "rotate-cw" => Icon::RotateCw,
+            "pencil" | "edit" => Icon::Pencil,
+            "copy" => Icon::Copy, "save" => Icon::Save, "download" => Icon::Download,
+            "file-text" => Icon::FileText,
+            "folder-open" | "folder" => Icon::FolderOpen,
+            "sparkles" => Icon::Sparkles, "diamond" => Icon::Diamond,
+            "component" => Icon::Component,
+            "circle" => Icon::Circle, "triangle" => Icon::Triangle,
+            "square" | "rectangle" => Icon::Square,
+            "hash" => Icon::Hash, "type" | "text" => Icon::Type,
+            "frame" => Icon::Frame, "hand" => Icon::Hand,
+            "cursor" | "mouse-pointer" => Icon::Cursor,
+            "maximize" | "fullscreen" => Icon::Maximize, "sun" => Icon::Sun,
+            "panel-left" => Icon::PanelLeft,
+            "braces" | "code" => Icon::Braces, "book-open" => Icon::BookOpen,
+            "message-square" | "chat" => Icon::MessageSquare,
+            "layout-grid" => Icon::LayoutGrid,
+            "rows-3" | "rows" => Icon::Rows3, "columns-3" | "columns" => Icon::Columns3,
+            "bot" => Icon::Bot,
+            "undo" | "undo-2" => Icon::Undo, "redo" | "redo-2" => Icon::Redo,
+            "clock" | "timer" => Icon::Clock,
+            "calendar" | "calendar-days" => Icon::Calendar,
+            "star" | "favorite" => Icon::Star,
+            "heart" | "like" => Icon::Heart,
+            "home" | "house" => Icon::Home,
+            "bell" | "notifications" => Icon::Bell,
+            "play" | "play-circle" => Icon::Play,
+            "map-pin" | "pin" | "location" | "map-marker" => Icon::MapPin,
+            "phone" | "telephone" => Icon::Phone,
+            "camera" => Icon::Camera,
+            "video" | "play-video" => Icon::Video,
+            "music" | "music-2" => Icon::Music,
+            "share" | "share-2" => Icon::Share,
+            "info" | "information" => Icon::Info,
+            "alert-circle" | "alert" | "warning" => Icon::AlertCircle,
+            "help-circle" | "help" | "question" => Icon::HelpCircle,
+            "chevron-left" | "back" => Icon::ChevronLeft,
+            "more-vertical" | "more" | "ellipsis-vertical" | "dots-vertical" => Icon::MoreVertical,
+            "more-horizontal" | "ellipsis" | "ellipsis-horizontal" | "dots-horizontal" => Icon::MoreHorizontal,
+            "trending-up" | "trend-up" => Icon::TrendingUp,
+            "trending-down" | "trend-down" => Icon::TrendingDown,
+            "compass" | "navigation" => Icon::Compass,
+            "refresh-cw" | "refresh" | "rotate" | "reload" => Icon::RefreshCw,
+            "layout-dashboard" | "dashboard" => Icon::LayoutDashboard,
+            "users" | "team" | "group" => Icon::Users,
+            "package" | "box" => Icon::Package,
+            "zap" | "lightning" | "bolt" => Icon::Zap,
+            "sliders-horizontal" | "sliders" | "filter" => Icon::SlidersHorizontal,
+            "activity" | "pulse" => Icon::Activity,
+            "loader" | "spinner" => Icon::Loader,
+            "focus" | "target" => Icon::Focus,
+            "chart-line" | "line-chart" => Icon::ChartLine,
+            "settings-2" | "tune" => Icon::Settings2,
+            "arrow-right" | "forward" => Icon::ArrowRight,
+            "arrow-left" => Icon::ArrowLeft,
+            "check-circle" | "check-circle-2" => Icon::CheckCircle,
+            "alert-triangle" | "warning-triangle" => Icon::AlertTriangle,
+            "alert-octagon" | "octagon-alert" => Icon::AlertOctagon,
+            "sticky-note" | "note" => Icon::StickyNote,
+            "bar-chart" | "bar-chart-2" | "chart-bar" => Icon::BarChart2,
+            "bold" => Icon::Bold,
+            "italic" => Icon::Italic,
+            "underline" => Icon::Underline,
+            "strikethrough" => Icon::Strikethrough,
+            "shopping-cart" | "cart" => Icon::ShoppingCart,
+            "shopping-bag" | "bag" => Icon::ShoppingBag,
+            "send" | "arrow-send" => Icon::Send,
+            "message-circle" | "comment" => Icon::MessageCircle,
+            "rocket" => Icon::Rocket,
+            "menu" | "hamburger" => Icon::Menu,
+            "credit-card" | "card" => Icon::CreditCard,
+            "x-circle" | "cancel" => Icon::XCircle,
+            _ => return None,
+        })
+    }
 }
-
-// ── Lucide path data ──────────────────────────────────────────────
-// Source: https://github.com/lucide-icons/lucide/tree/main/icons
-// License: ISC.
-
-const CURSOR: &[&str] = &[
-    "M4.037 4.688a.495.495 0 0 1 .651-.651l16 6.5a.5.5 0 0 1-.063.947l-6.124 1.58a2 2 0 0 0-1.438 1.435l-1.579 6.126a.5.5 0 0 1-.947.063z",
-];
-
-const SQUARE: &[&str] = &[
-    // Lucide ships <rect x=3 y=3 w=18 h=18 rx=2/>; expanded to a
-    // round-rect path so stroke_svg_path can render it uniformly.
-    "M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z",
-];
-
-const CHEVRON_DOWN: &[&str] = &["m6 9 6 6 6-6"];
-
-const CHEVRON_RIGHT: &[&str] = &["m9 18 6-6-6-6"];
-
-const TYPE: &[&str] = &[
-    "M12 4v16",
-    "M4 7V5a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v2",
-    "M9 20h6",
-];
-
-const FRAME: &[&str] = &[
-    // Four <line> elements expanded to "M…L…" path strings.
-    "M22 6L2 6",
-    "M22 18L2 18",
-    "M6 2L6 22",
-    "M18 2L18 22",
-];
-
-const HAND: &[&str] = &[
-    "M18 11V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2",
-    "M14 10V4a2 2 0 0 0-2-2a2 2 0 0 0-2 2v2",
-    "M10 10.5V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2v8",
-    "M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15",
-];
-
-const UNDO: &[&str] = &[
-    "M9 14 4 9l5-5",
-    "M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5a5.5 5.5 0 0 1-5.5 5.5H11",
-];
-
-const REDO: &[&str] = &[
-    "m15 14 5-5-5-5",
-    "M20 9H9.5A5.5 5.5 0 0 0 4 14.5A5.5 5.5 0 0 0 9.5 20H13",
-];
-
-const BRACES: &[&str] = &[
-    "M8 3H7a2 2 0 0 0-2 2v5a2 2 0 0 1-2 2 2 2 0 0 1 2 2v5c0 1.1.9 2 2 2h1",
-    "M16 21h1a2 2 0 0 0 2-2v-5c0-1.1.9-2 2-2a2 2 0 0 1-2-2V5a2 2 0 0 0-2-2h-1",
-];
-
-const BOOK_OPEN: &[&str] = &[
-    "M12 7v14",
-    "M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z",
-];
-
-const PLUS: &[&str] = &["M5 12h14", "M12 5v14"];
-
-const MINUS: &[&str] = &["M5 12h14"];
-
-const SEARCH: &[&str] = &[
-    "m21 21-4.34-4.34",
-    // <circle cx=11 cy=11 r=8/> expanded to a two-arc path.
-    "M3 11A8 8 0 1 0 19 11A8 8 0 1 0 3 11Z",
-];
-
-const SUN: &[&str] = &[
-    // <circle cx=12 cy=12 r=4/>
-    "M8 12A4 4 0 1 0 16 12A4 4 0 1 0 8 12Z",
-    "M12 2v2",
-    "M12 20v2",
-    "m4.93 4.93 1.41 1.41",
-    "m17.66 17.66 1.41 1.41",
-    "M2 12h2",
-    "M20 12h2",
-    "m6.34 17.66-1.41 1.41",
-    "m19.07 4.93-1.41 1.41",
-];
-
-const GLOBE: &[&str] = &[
-    // <circle cx=12 cy=12 r=10/>
-    "M2 12A10 10 0 1 0 22 12A10 10 0 1 0 2 12Z",
-    "M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20",
-    "M2 12h20",
-];
-
-const MAXIMIZE: &[&str] = &[
-    "M8 3H5a2 2 0 0 0-2 2v3",
-    "M21 8V5a2 2 0 0 0-2-2h-3",
-    "M3 16v3a2 2 0 0 0 2 2h3",
-    "M16 21h3a2 2 0 0 0 2-2v-3",
-];
-
-const HASH: &[&str] = &[
-    // 4 <line> elements.
-    "M4 9L20 9",
-    "M4 15L20 15",
-    "M10 3L8 21",
-    "M16 3L14 21",
-];
-
-const PANEL_LEFT: &[&str] = &[
-    // <rect x=3 y=3 w=18 h=18 rx=2/> + <path d="M9 3v18"/>
-    "M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z",
-    "M9 3v18",
-];
-
-const FOLDER_OPEN: &[&str] = &[
-    "m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2",
-];
-
-const SPARKLES: &[&str] = &[
-    "M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z",
-    "M20 2v4",
-    "M22 4h-4",
-    // <circle cx=4 cy=20 r=2/>
-    "M2 20A2 2 0 1 0 6 20A2 2 0 1 0 2 20Z",
-];
-
-const CLOSE: &[&str] = &["M18 6 6 18", "m6 6 12 12"];
-
-// Mirror of CHEVRON_DOWN flipped vertically — Lucide
-// `chevron-up.svg` `d="m18 15-6-6-6 6"`.
-const CHEVRON_UP: &[&str] = &["m18 15-6-6-6 6"];
-
-// Lucide `message-square.svg` — speech-bubble outline used by the
-// collapsed AI chat pill.
-const MESSAGE_SQUARE: &[&str] = &["M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"];
-
-// Lucide `layout-grid.svg` — 4 rounded-rect cells.
-const LAYOUT_GRID: &[&str] = &[
-    "M4 3h5a1 1 0 0 1 1 1v5a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z",
-    "M15 3h5a1 1 0 0 1 1 1v5a1 1 0 0 1-1 1h-5a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z",
-    "M15 14h5a1 1 0 0 1 1 1v5a1 1 0 0 1-1 1h-5a1 1 0 0 1-1-1v-5a1 1 0 0 1 1-1z",
-    "M4 14h5a1 1 0 0 1 1 1v5a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-5a1 1 0 0 1 1-1z",
-];
-
-// Lucide `rows-3.svg` — round-rect with 2 horizontal dividers.
-const ROWS_3: &[&str] = &[
-    "M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z",
-    "M21 9H3",
-    "M21 15H3",
-];
-
-// Lucide `columns-3.svg` — round-rect with 2 vertical dividers.
-const COLUMNS_3: &[&str] = &[
-    "M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z",
-    "M9 3v18",
-    "M15 3v18",
-];
-
-// Lucide `rotate-cw.svg`.
-const ROTATE_CW: &[&str] = &[
-    "M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8",
-    "M21 3v5h-5",
-];
-
-// Lucide `diamond.svg`.
-const DIAMOND: &[&str] = &[
-    "M2.7 10.3a2.41 2.41 0 0 0 0 3.41l7.59 7.59a2.41 2.41 0 0 0 3.41 0l7.59-7.59a2.41 2.41 0 0 0 0-3.41l-7.59-7.59a2.41 2.41 0 0 0-3.41 0Z",
-];
-
-// Lucide `component.svg`.
-const COMPONENT: &[&str] = &[
-    "M15.536 11.293a1 1 0 0 0 0 1.414l2.376 2.377a1 1 0 0 0 1.414 0l2.377-2.377a1 1 0 0 0 0-1.414l-2.377-2.377a1 1 0 0 0-1.414 0z",
-    "M2.297 11.293a1 1 0 0 0 0 1.414l2.377 2.377a1 1 0 0 0 1.414 0l2.377-2.377a1 1 0 0 0 0-1.414L6.088 8.916a1 1 0 0 0-1.414 0z",
-    "M8.916 17.912a1 1 0 0 0 0 1.415l2.377 2.376a1 1 0 0 0 1.414 0l2.377-2.376a1 1 0 0 0 0-1.415l-2.377-2.376a1 1 0 0 0-1.414 0z",
-    "M8.916 4.674a1 1 0 0 0 0 1.414l2.377 2.376a1 1 0 0 0 1.414 0l2.377-2.376a1 1 0 0 0 0-1.414l-2.377-2.377a1 1 0 0 0-1.414 0z",
-];
-
-// Lucide `unlink.svg`.
-const UNLINK: &[&str] = &[
-    "m18.84 12.25 1.72-1.71h-.02a5.004 5.004 0 0 0-.12-7.07 5.006 5.006 0 0 0-6.95 0l-1.72 1.71",
-    "m5.17 11.75-1.71 1.71a5.004 5.004 0 0 0 .12 7.07 5.006 5.006 0 0 0 6.95 0l1.71-1.71",
-    "M8 2L8 5",
-    "M2 8L5 8",
-    "M16 19L16 22",
-    "M19 16L22 16",
-];
-
-// Lucide `check.svg`.
-const CHECK: &[&str] = &["M20 6 9 17l-5-5"];
-
-// Lucide `github.svg`.
-const GITHUB: &[&str] = &[
-    "M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.403 5.403 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4",
-    "M9 18c-4.51 2-5-2-7-2",
-];
-
-// Lucide `bot.svg` — friendly robot, used for code-CLI providers.
-const BOT: &[&str] = &[
-    "M12 8V4H8",
-    "M2 14h2",
-    "M20 14h2",
-    "M15 13v2",
-    "M9 13v2",
-    "M12 8H8a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2h-4",
-];
-
-// Lucide `square-terminal.svg` — chevron + underline inside a
-// rounded square. Three separate <path>/<rect> elements lifted
-// straight from the source SVG.
-const TERMINAL: &[&str] = &[
-    "m7 11 2-2-2-2",
-    "M11 13h4",
-    "M3 5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z",
-];
-
-// Lucide `image.svg`.
-const IMAGE: &[&str] = &[
-    "M21 15V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-4",
-    "M9 9a2 2 0 1 0 0 .01",
-    "m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21",
-];
-
-// Lucide `settings.svg`.
-const SETTINGS: &[&str] = &[
-    "M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z",
-    "M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z",
-];
-
-// Lucide `arrow-up-right.svg`.
-const ARROW_UP_RIGHT: &[&str] = &["M7 7h10v10", "M7 17 17 7"];
-
-// Lucide `circle.svg`.
-const CIRCLE: &[&str] = &["M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Z"];
-
-// Lucide `triangle.svg`.
-const TRIANGLE: &[&str] =
-    &["M13.73 4a2 2 0 0 0-3.46 0l-8.15 14a2 2 0 0 0 1.73 3h16.34a2 2 0 0 0 1.73-3Z"];
-
-// Lucide `pen-tool.svg`.
-const PEN_TOOL: &[&str] = &[
-    "M15.707 21.293a1 1 0 0 1-1.414 0l-1.586-1.586a1 1 0 0 1 0-1.414l5.586-5.586a1 1 0 0 1 1.414 0l1.586 1.586a1 1 0 0 1 0 1.414z",
-    "m18 13-1.375-6.874a1 1 0 0 0-.746-.776L3.235 2.028a1 1 0 0 0-1.207 1.207L5.35 15.879a1 1 0 0 0 .776.746L13 18",
-    "m2.3 2.3 7.286 7.286",
-    "M11 11a2 2 0 1 1-4 0 2 2 0 0 1 4 0Z",
-];
-
-// Lucide `image-plus.svg`.
-const IMAGE_PLUS: &[&str] = &[
-    "M16 5h6",
-    "M19 2v6",
-    "M21 11.5V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7.5",
-    "m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21",
-    "M9 9a2 2 0 1 1-4 0 2 2 0 0 1 4 0Z",
-];
-
-// Lucide `eye.svg`.
-const EYE: &[&str] = &[
-    "M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0Z",
-    "M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z",
-];
-
-// Lucide `lock.svg` — rect body + closed shackle.
-const LOCK: &[&str] = &[
-    "M5 11h14a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2z",
-    "M7 11V7a5 5 0 0 1 10 0v4",
-];
-
-// Lucide `lock-open.svg` — rect body + half-open shackle
-// (right side of the arc is cut so the lock reads as "open").
-const LOCK_OPEN: &[&str] = &[
-    "M5 11h14a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2z",
-    "M7 11V7a5 5 0 0 1 9.9-1",
-];
-
-// Lucide `eye-off.svg` — eye with diagonal strike.
-const EYE_OFF: &[&str] = &[
-    "M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49",
-    "M14.084 14.158a3 3 0 0 1-4.242-4.242",
-    "M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143",
-    "m2 2 20 20",
-];
 
 /// Paint `icon` at `top_left`, scaled to `size × size` pixels, in
 /// `color` strokes of width `stroke_width`. The icon's lucide
@@ -501,33 +462,40 @@ pub fn draw_icon(
     }
 }
 
-// Lucide `trash-2` — line-art trash can.
-const TRASH: &[&str] = &[
-    "M3 6h18",
-    "M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6",
-    "M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2",
-    "M10 11v6",
-    "M14 11v6",
-];
+/// Paint a canonical `icon_font` node — lucide glyph by name,
+/// scaled into `rect` with aspect preserved. Mirrors TS
+/// `drawIconFont` (packages/pen-renderer/src/node-renderer.ts).
+/// Unknown names stroke a small dot at the centre — same shape
+/// as the TS `FALLBACK_ICON_D` (`M12 12m-3 0a3 3 0 1 0 6 0a3 3 0 1 0 -6 0`)
+/// so the user sees an honest "unknown glyph" mark instead of
+/// a solid block.
+pub fn paint_icon_font_node(
+    backend: &mut dyn RenderBackend,
+    name: &str,
+    rect: crate::Rect,
+    fill: Option<Color>,
+) {
+    let size = rect.size.x.min(rect.size.y).max(0.0);
+    if size <= 0.0 { return; }
+    let color = fill.unwrap_or(Color { r: 0.39, g: 0.45, b: 0.55, a: 1.0 });
+    let top_left = Point2D::new(
+        rect.origin.x + (rect.size.x - size) / 2.0,
+        rect.origin.y + (rect.size.y - size) / 2.0,
+    );
+    let stroke_width = (size / 24.0 * 2.0).max(1.0);
+    if let Some(icon) = Icon::from_name(name) {
+        draw_icon(backend, icon, top_left, size, color, stroke_width);
+    } else {
+        backend.stroke_svg_path(FALLBACK_ICON_D, top_left, size, color, stroke_width);
+    }
+}
 
-// Lucide `copy` — two stacked rectangles.
-const COPY: &[&str] = &[
-    "M20 9h-9a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h9a2 2 0 0 0 2-2v-9a2 2 0 0 0-2-2z",
-    "M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1",
-];
+/// Lucide-style dot glyph — small filled circle at viewBox centre.
+/// Used as the unknown-icon fallback (TS parity with
+/// `FALLBACK_ICON_D` in `node-renderer.ts`).
+const FALLBACK_ICON_D: &str = "M12 12m-3 0a3 3 0 1 0 6 0a3 3 0 1 0 -6 0";
 
-// Lucide `pencil`.
-const PENCIL: &[&str] = &[
-    "M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z",
-    "M15 5l4 4",
-];
-
-// Lucide `arrow-up`.
-const ARROW_UP: &[&str] = &["M12 19V5", "M5 12l7-7 7 7"];
-
-// Lucide `arrow-down`.
-const ARROW_DOWN: &[&str] = &["M12 5v14", "M5 12l7 7 7-7"];
-
+use super::icons_data::*;
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -629,6 +597,39 @@ mod tests {
         ] {
             let b = paint_one(icon);
             assert!(b.paths > 0, "{:?} drew nothing", icon);
+        }
+    }
+
+    #[test]
+    fn first_party_icon_font_names_all_resolve() {
+        // Every `iconFontName` value emitted by the TS element-builders
+        // — both literal `iconFontName: '...'` AND values fed through
+        // builder defaults / param indirection (e.g. callout severity
+        // maps, input-with-action's `action_icon` default, toolbar-v1
+        // formatting glyphs) — must resolve via `Icon::from_name`.
+        // Scanned across `packages/pen-core/src/element-builders/` on
+        // 2026-05-13; extend this list when new names land.
+        for name in [
+            // Direct iconFontName literals
+            "calendar", "check", "chevron-down", "chevron-left", "chevron-right",
+            "clock", "map-pin", "more-vertical", "play", "search", "star", "x",
+            // Builder defaults / indirection
+            "arrow-right", "check-circle", "alert-triangle", "alert-octagon",
+            "sticky-note", "bar-chart-2", "bold", "italic", "underline",
+            "shopping-cart", "shopping-bag", "message-circle", "rocket",
+            "menu", "credit-card",
+            // pencil-demo.op fixture sweep (2026-05-13) — covers
+            // 56 occurrences that previously fell through.
+            "trending-up", "trending-down", "compass", "refresh-cw",
+            "layout-dashboard", "users", "package", "zap",
+            "sliders-horizontal", "activity", "loader", "focus",
+            "chart-line", "settings-2",
+        ] {
+            assert!(
+                Icon::from_name(name).is_some(),
+                "first-party iconFontName {:?} fell through to placeholder",
+                name
+            );
         }
     }
 }

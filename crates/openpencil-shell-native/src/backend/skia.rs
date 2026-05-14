@@ -42,6 +42,19 @@ fn to_sk_rect(r: Rect) -> skia_safe::Rect {
     skia_safe::Rect::from_xywh(r.origin.x, r.origin.y, r.size.x, r.size.y)
 }
 
+/// Build a skia `FontStyle` whose weight matches the canonical
+/// schema's CSS-style numeric weight (100-900). Width + slant stay
+/// at the system defaults (Normal / Upright); italic / stretched
+/// variants are a follow-up if `.op` files start authoring them.
+fn font_style_for_weight(weight: u16) -> skia_safe::FontStyle {
+    let w = weight as i32;
+    skia_safe::FontStyle::new(
+        skia_safe::font_style::Weight::from(w),
+        skia_safe::font_style::Width::NORMAL,
+        skia_safe::font_style::Slant::Upright,
+    )
+}
+
 /// OP `Color` → `skia_safe::Color4f` — used by the direct-canvas
 /// helpers (stroke_line / fill_round_rect / stroke_round_rect)
 /// that skip the jian DrawOp pipeline.
@@ -87,7 +100,14 @@ pub struct NativeBackend {
     /// `Tiếng Việt` …) renders against the right system font
     /// instead of falling through to the single `cjk_typeface`
     /// (which only covers Han / Hiragana / Katakana on most OSes).
-    char_typeface_cache: std::collections::HashMap<i32, Option<skia_safe::Typeface>>,
+    /// Cache key is `(codepoint, weight)` so weight 400 chrome glyphs
+    /// and weight 700 canvas headlines don't share an entry. Bold
+    /// text from `.op` files (`fontWeight: 700`) re-resolves the
+    /// typeface against `FontStyle::new(Weight, Width::NORMAL, …)`
+    /// so the system FontMgr returns the bold-variant TTF when one
+    /// is installed (TS app parity).
+    char_typeface_cache:
+        std::collections::HashMap<(i32, u16), Option<skia_safe::Typeface>>,
 }
 
 const ROBOTO_TTF: &[u8] = include_bytes!("../../../openpencil-shell-web/assets/Roboto-Regular.ttf");
@@ -147,7 +167,7 @@ impl NativeBackend {
         // `FontMgr::match_family_style_character` call — visible to
         // the user as a stutter the first time a tab is opened.
         for c in PREWARM_CJK_CODEPOINTS.chars() {
-            let _ = this.typeface_for_char(c);
+            let _ = this.typeface_for_char(c, 400);
         }
         this
     }
@@ -158,18 +178,29 @@ impl NativeBackend {
     /// Falls back to the cached CJK typeface, then the cached
     /// Roboto, so a worst-case missing-font system still renders
     /// something rather than dropping the glyph.
-    fn typeface_for_char(&mut self, c: char) -> Option<skia_safe::Typeface> {
-        if c.is_ascii() {
+    fn typeface_for_char(&mut self, c: char, weight: u16) -> Option<skia_safe::Typeface> {
+        // ASCII at weight 400 stays on the bundled Roboto-Regular for
+        // hot chrome paint; non-default weight or non-ASCII falls
+        // through to the system FontMgr, which honours weight.
+        if c.is_ascii() && weight == 400 {
             return self.ensure_typeface().cloned();
         }
         let cp = c as i32;
-        if let Some(cached) = self.char_typeface_cache.get(&cp) {
+        let key = (cp, weight);
+        if let Some(cached) = self.char_typeface_cache.get(&key) {
             return cached.clone();
         }
+        let style = font_style_for_weight(weight);
         let mgr = skia_safe::FontMgr::new();
-        let tf = mgr.match_family_style_character("", skia_safe::FontStyle::default(), &[], cp);
-        let resolved = tf.or_else(|| self.ensure_cjk_typeface().cloned());
-        self.char_typeface_cache.insert(cp, resolved.clone());
+        let tf = mgr.match_family_style_character("", style, &[], cp);
+        let resolved = tf.or_else(|| {
+            // CJK fallback path doesn't yet vary by weight — TS app
+            // synthesises bold via paint stroke when the family is
+            // weight-locked. Mirror that downstream of `draw_text`
+            // with `Paint::set_stroke_width` when needed.
+            self.ensure_cjk_typeface().cloned()
+        });
+        self.char_typeface_cache.insert(key, resolved.clone());
         resolved
     }
 
@@ -177,10 +208,14 @@ impl NativeBackend {
     /// preserving char order. Glyphs without any covering typeface
     /// are bucketed with the previous segment so they at least
     /// occupy space (rather than disappearing).
-    fn segment_text(&mut self, text: &str) -> Vec<(skia_safe::Typeface, String)> {
+    fn segment_text(
+        &mut self,
+        text: &str,
+        weight: u16,
+    ) -> Vec<(skia_safe::Typeface, String)> {
         let mut segments: Vec<(skia_safe::Typeface, String)> = Vec::new();
         for c in text.chars() {
-            let tf = self.typeface_for_char(c);
+            let tf = self.typeface_for_char(c, weight);
             let Some(tf) = tf else {
                 if let Some(last) = segments.last_mut() {
                     last.1.push(c);
@@ -306,7 +341,17 @@ impl NativeBackend {
     /// Falls back to a conservative heuristic when typefaces
     /// aren't available.
     pub fn measure_text(&mut self, text: &str, font_size: f32) -> f32 {
-        let segments = self.segment_text(text);
+        self.measure_text_weighted(text, font_size, 400)
+    }
+
+    /// Weight-aware text measurement. Resolves the per-codepoint
+    /// typeface against `FontStyle::new(Weight, ...)` so wrap-pass
+    /// line breaks decided at, say, weight 700 use the same glyph
+    /// advances `draw_text` will paint with at weight 700. Without
+    /// this the wrap pass measured at 400 and paint at 700 — the
+    /// rendered string could then overflow the wrap budget.
+    pub fn measure_text_weighted(&mut self, text: &str, font_size: f32, weight: u16) -> f32 {
+        let segments = self.segment_text(text, weight);
         if segments.is_empty() {
             return 0.0;
         }
@@ -336,12 +381,12 @@ impl NativeBackend {
     pub fn draw_text(&mut self, canvas: &skia_safe::Canvas, layout: &TextLayout, origin: Point2D) {
         let runs: Vec<_> = layout.runs().to_vec();
         for run in runs {
-            let segments = self.segment_text(run.content.as_str());
+            let segments = self.segment_text(run.content.as_str(), run.font_weight);
             if segments.is_empty() {
                 continue;
             }
             let jc = run.color;
-            let paint = skia_safe::Paint::new(
+            let mut paint = skia_safe::Paint::new(
                 skia_safe::Color4f::new(
                     f32::from(jc.r()) / 255.0,
                     f32::from(jc.g()) / 255.0,
@@ -350,6 +395,17 @@ impl NativeBackend {
                 ),
                 None,
             );
+            paint.set_anti_alias(true);
+            // Synthetic bold for typefaces the system serves at one
+            // weight only (notably the bundled Roboto-Regular for
+            // ASCII at weight ≥600). Stroke width scales with size
+            // so 28pt headline gets the same visual weight relative
+            // to its glyph as 13pt body text.
+            let synth_bold = run.font_weight >= 600;
+            if synth_bold {
+                paint.set_style(skia_safe::PaintStyle::StrokeAndFill);
+                paint.set_stroke_width(run.font_size * 0.06);
+            }
             let mut x = origin.x + run.origin.x;
             let y = origin.y + run.origin.y;
             for (typeface, segment) in segments {

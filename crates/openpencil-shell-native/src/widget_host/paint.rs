@@ -229,6 +229,42 @@ impl WidgetHostNative {
             picker.paint(&mut cx, picker_rect);
         }
 
+        // 10b. File-menu dropdown — anchored under TopBar's
+        //      folder+chevron button.
+        if self.document.ui.file_menu_open {
+            use openpencil_shell_core::widgets::file_menu::FileMenu;
+            use openpencil_shell_core::widgets::top_bar::TopBar;
+            let top_bar_rect = Rect {
+                origin: Point2D::new(0.0, 0.0),
+                size: Point2D::new(viewport_width, openpencil_shell_core::widgets::TOP_BAR_HEIGHT),
+            };
+            let anchor = TopBar::file_menu_rect(top_bar_rect);
+            let now_secs = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_secs())
+                .unwrap_or(0);
+            let menu = FileMenu::from_document(&self.document, now_secs);
+            let menu_rect = menu.rect_at(anchor);
+            let mut cx = PaintCx { backend: &mut *frame };
+            menu.paint(&mut cx, menu_rect);
+        }
+
+        // 10c. Figma import modal — full-viewport scrim + centred card.
+        if self.document.ui.figma_import_open {
+            use openpencil_shell_core::widgets::figma_import::FigmaImportModal;
+            frame.fill_rect(
+                Rect {
+                    origin: Point2D::new(0.0, 0.0),
+                    size: Point2D::new(viewport_width, viewport_height),
+                },
+                openpencil_shell_core::Color { r: 0.0, g: 0.0, b: 0.0, a: 0.45 },
+            );
+            let modal = FigmaImportModal::for_document(&self.document);
+            let modal_rect = modal.rect(viewport_width, viewport_height);
+            let mut cx = PaintCx { backend: &mut *frame };
+            modal.paint(&mut cx, modal_rect);
+        }
+
         // 10a. Agent-settings modal — top-most overlay when open.
         if self.document.ui.agent_settings_open {
             use openpencil_shell_core::widgets::agent_settings_panel::AgentSettingsPanel;

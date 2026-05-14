@@ -77,6 +77,9 @@ pub struct ShapePicker {
     pub id: WidgetId,
     pub theme: Theme,
     pub current_shape: Tool,
+    /// Choice currently under the cursor — mirrors
+    /// `Document.ui.shape_picker_hover` so paint can tint the row.
+    pub hovered: Option<ShapeChoice>,
     rows: Vec<PickerRow>,
 }
 
@@ -124,6 +127,7 @@ impl ShapePicker {
             id: WidgetId::new(5200),
             theme: doc.theme(),
             current_shape: doc.ui.shape_tool,
+            hovered: doc.ui.shape_picker_hover,
             rows,
         }
     }
@@ -181,9 +185,12 @@ impl Widget for ShapePicker {
                 size: Point2D::new(rect.size.x - 8.0, ROW_HEIGHT),
             };
             let active = matches!(row.choice, ShapeChoice::Tool(t) if t == self.current_shape);
+            let hovered = !active && self.hovered == Some(row.choice);
             if active {
                 cx.backend
                     .fill_round_rect(row_rect, 6.0, self.theme.row_selected_primary);
+            } else if hovered {
+                cx.backend.fill_round_rect(row_rect, 6.0, self.theme.muted);
             }
             let icon_color = if active {
                 self.theme.primary

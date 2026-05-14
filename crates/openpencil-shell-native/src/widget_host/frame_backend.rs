@@ -106,4 +106,8 @@ impl<'a> RenderBackend for NativeFrameBackend<'a> {
     fn measure_text(&mut self, text: &str, font_size: f32) -> f32 {
         self.inner.measure_text(text, font_size)
     }
+
+    fn measure_text_weighted(&mut self, text: &str, font_size: f32, weight: u16) -> f32 {
+        self.inner.measure_text_weighted(text, font_size, weight)
+    }
 }

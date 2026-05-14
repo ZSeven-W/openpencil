@@ -165,6 +165,16 @@ impl TextLayout {
         &self.runs
     }
 
+    /// Overwrite every run's CSS-style numeric weight. The convenience
+    /// constructor hardcodes 400; canvas-side text from `.op` files
+    /// honours `Node.font_weight` via this builder.
+    pub fn with_font_weight(mut self, weight: u16) -> Self {
+        for r in &mut self.runs {
+            r.font_weight = weight;
+        }
+        self
+    }
+
     /// Translates every run's origin (NativeBackend::draw_text adds this on top
     /// of the widget origin). Returns a new layout; the original is unchanged.
     pub fn translated(&self, offset: Point2D) -> Self {
@@ -302,6 +312,17 @@ pub trait RenderBackend {
     /// that own a real typeface (Web + Native) override with
     /// `Font::measure_str` for pixel-accurate positioning.
     fn measure_text(&mut self, text: &str, font_size: f32) -> f32 {
+        self.measure_text_weighted(text, font_size, 400)
+    }
+
+    /// Like `measure_text` but resolves the typeface using `weight`
+    /// (CSS-style 100-900). Backends that serve a weighted variant
+    /// can return wider/narrower advances; the wrap pass uses this
+    /// so line breaks decided pre-paint match what `draw_text` lays
+    /// down post-paint. Default impl forwards to the heuristic
+    /// `measure_text` so wasm builds without a real typeface stay
+    /// roughly correct.
+    fn measure_text_weighted(&mut self, text: &str, font_size: f32, _weight: u16) -> f32 {
         let mut w = 0.0;
         for c in text.chars() {
             w += if c.is_ascii() {

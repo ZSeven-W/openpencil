@@ -55,6 +55,9 @@ pub mod canvas_viewport_overlay;
 
 // Step 4 — icon glyph drawer for editor chrome (lucide-flavored line art).
 pub mod icons;
+// Lucide d-string data — extracted as a sibling so `icons.rs` stays
+// under the 800-line cap as more first-party glyphs are added.
+mod icons_data;
 
 // Step 5 — brand logos for agent provider cards (filled SVG paths,
 // not lucide stroke art). Sourced verbatim from `apps/web/src/
@@ -69,6 +72,8 @@ pub mod agent_settings_panel;
 pub mod agent_settings_system;
 pub mod ai_chat_panel;
 pub mod color_picker;
+pub mod figma_import;
+pub mod file_menu;
 pub mod locale_picker;
 pub mod shape_picker;
 pub mod status_bar;

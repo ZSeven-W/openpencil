@@ -45,6 +45,75 @@ impl WidgetHostNative {
         }
     }
 
+    /// Figma-import-modal press dispatcher. Routes Outside / Close
+    /// to dismissal; DropZone hit pushes `FileAction::ImportFigma`
+    /// so the desktop binary opens the rfd .fig picker.
+    pub(in crate::widget_host) fn dispatch_figma_import_press(
+        &mut self,
+        x: f32,
+        y: f32,
+        viewport_w: f32,
+        viewport_h: f32,
+    ) {
+        use openpencil_shell_core::document::FileAction;
+        use openpencil_shell_core::widgets::figma_import::{FigmaImportHit, FigmaImportModal};
+        let modal = FigmaImportModal::for_document(&self.document);
+        let panel_rect = modal.rect(viewport_w, viewport_h);
+        match modal.hit_test(panel_rect, openpencil_shell_core::Point2D::new(x, y)) {
+            FigmaImportHit::Close | FigmaImportHit::Outside => {
+                self.document.ui.figma_import_open = false;
+            }
+            FigmaImportHit::DropZone => {
+                self.document.ui.pending_file_action = Some(FileAction::ImportFigma);
+                self.document.ui.figma_import_open = false;
+            }
+            FigmaImportHit::Inside => {}
+        }
+    }
+
+    /// File-menu press dispatcher — extracted from press.rs to keep
+    /// the spine under the 800-line cap. Maps a `FileMenuChoice` to
+    /// `Document.ui.pending_file_action` so the desktop binary can
+    /// run the rfd dialogs + persistence calls.
+    pub(in crate::widget_host) fn dispatch_file_menu_press(
+        &mut self,
+        x: f32,
+        y: f32,
+        viewport_width: f32,
+    ) {
+        use openpencil_shell_core::document::FileAction;
+        use openpencil_shell_core::widgets::file_menu::{FileMenu, FileMenuChoice};
+        use openpencil_shell_core::widgets::top_bar::TopBar;
+        let top_bar_rect = openpencil_shell_core::Rect {
+            origin: openpencil_shell_core::Point2D::new(0.0, 0.0),
+            size: openpencil_shell_core::Point2D::new(viewport_width, openpencil_shell_core::widgets::TOP_BAR_HEIGHT),
+        };
+        let anchor = TopBar::file_menu_rect(top_bar_rect);
+        // Recent rows participate in hit-test — pass real Unix secs
+        // so the age column matches paint (it's only used by paint
+        // but `from_document` builds the same RecentEntry list paint
+        // reads, keeping geometry consistent).
+        let now_secs = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs())
+            .unwrap_or(0);
+        let menu = FileMenu::from_document(&self.document, now_secs);
+        let menu_rect = menu.rect_at(anchor);
+        if let Some(choice) = menu.hit_test(menu_rect, openpencil_shell_core::Point2D::new(x, y)) {
+            self.document.ui.pending_file_action = Some(match choice {
+                FileMenuChoice::NewFile => FileAction::New,
+                FileMenuChoice::OpenFile => FileAction::Open,
+                FileMenuChoice::Save => FileAction::Save,
+                FileMenuChoice::SaveAs => FileAction::SaveAs,
+                FileMenuChoice::ExportImage => FileAction::ExportImage,
+                FileMenuChoice::OpenRecent(i) => FileAction::OpenRecent(i),
+                FileMenuChoice::ClearRecent => FileAction::ClearRecent,
+            });
+        }
+        self.document.ui.file_menu_open = false;
+        self.document.ui.file_menu_hover = None;
+    }
+
     /// Commit any focused settings-modal input (currently only the
     /// MCP port). Parses the draft, clamps to a valid port range,
     /// writes it back, and clears focus + draft. No-op when nothing

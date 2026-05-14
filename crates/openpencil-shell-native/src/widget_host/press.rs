@@ -230,12 +230,15 @@ impl WidgetHostNative {
                         // picker / file dialog widgets ship.
                     }
                 }
-                self.document.ui.shape_picker_open = false;
+                self.document.ui.shape_picker_open = false; self.document.ui.shape_picker_hover = None;
                 return true;
             }
-            self.document.ui.shape_picker_open = false;
+            self.document.ui.shape_picker_open = false; self.document.ui.shape_picker_hover = None;
             return true;
         }
+
+        if self.document.ui.file_menu_open { self.dispatch_file_menu_press(x, y, viewport_width); return true; }
+        if self.document.ui.figma_import_open { self.dispatch_figma_import_press(x, y, viewport_width, viewport_height); return true; }
 
         // 0a. Locale picker overlay — top-most when open; click outside closes.
         if self.document.ui.locale_picker_open {
@@ -243,10 +246,10 @@ impl WidgetHostNative {
             let picker = LocalePicker::for_document(&self.document);
             if let Some(locale) = picker.hit_test(panel_rect, Point2D::new(x, y)) {
                 self.document.ui.locale = locale;
-                self.document.ui.locale_picker_open = false;
+                self.document.ui.locale_picker_open = false; self.document.ui.locale_picker_hover = None;
                 return true;
             }
-            self.document.ui.locale_picker_open = false;
+            self.document.ui.locale_picker_open = false; self.document.ui.locale_picker_hover = None;
             return true;
         }
 
@@ -270,10 +273,9 @@ impl WidgetHostNative {
                     self.document.ui.locale_picker_open = !self.document.ui.locale_picker_open;
                     return true;
                 }
-                TopBarHit::OpenAgentSettings => {
-                    self.document.ui.agent_settings_open = true;
-                    return true;
-                }
+                TopBarHit::OpenAgentSettings => { self.document.ui.agent_settings_open = true; return true; }
+                TopBarHit::ToggleFileMenu => { self.document.ui.file_menu_open ^= true; return true; }
+                TopBarHit::OpenFigmaImport => { self.document.ui.figma_import_open = true; return true; }
             }
         }
         if rect_contains(top_bar_rect, Point2D::new(x, y)) {
@@ -442,12 +444,12 @@ impl WidgetHostNative {
                     openpencil_shell_core::widgets::ToolbarHit::Tool(tool) => {
                         let _ = self.document.finish_pen_path();
                         self.document.tool = tool;
-                        self.document.ui.shape_picker_open = false;
+                        self.document.ui.shape_picker_open = false; self.document.ui.shape_picker_hover = None;
                         return true;
                     }
                     openpencil_shell_core::widgets::ToolbarHit::Action(action) => {
                         use openpencil_shell_core::widgets::ToolbarAction;
-                        self.document.ui.shape_picker_open = false;
+                        self.document.ui.shape_picker_open = false; self.document.ui.shape_picker_hover = None;
                         let acted = match action {
                             ToolbarAction::Undo => self.document.undo(),
                             ToolbarAction::Redo => self.document.redo(),
