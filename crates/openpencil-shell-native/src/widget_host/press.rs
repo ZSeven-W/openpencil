@@ -130,6 +130,42 @@ impl WidgetHostNative {
         {
             return true;
         }
+
+        // 0-fp. Fill-type picker — outside-click dismiss runs FIRST
+        // among overlay dismissers so an open picker can't survive
+        // a click that another later step (TopBar, Toolbar, Variables,
+        // canvas) would otherwise consume. Codex stop-gate: previous
+        // ordering let the picker stay open after a TopBar / shape-
+        // picker / VariablesPanel click. A click inside the picker's
+        // own dropdown rows still routes to SetFillType /
+        // ToggleFillTypePicker; everything else swallows + closes.
+        if self.document.ui.fill_type_picker_open {
+            if let Some(panel) = PropertyPanel::for_selection(&self.document) {
+                let property_rect = Rect {
+                    origin: Point2D::new(
+                        viewport_width - self.document.ui.property_panel_width,
+                        TOP_BAR_HEIGHT,
+                    ),
+                    size: Point2D::new(
+                        self.document.ui.property_panel_width,
+                        (viewport_height - TOP_BAR_HEIGHT).max(0.0),
+                    ),
+                };
+                if let Some(action) = panel.hit_test_action(property_rect, Point2D::new(x, y)) {
+                    if matches!(
+                        action,
+                        openpencil_shell_core::widgets::PropertyPanelAction::SetFillType(_)
+                            | openpencil_shell_core::widgets::PropertyPanelAction::ToggleFillTypePicker
+                    ) {
+                        self.apply_property_action(action);
+                        return true;
+                    }
+                }
+            }
+            self.document.ui.fill_type_picker_open = false;
+            return true;
+        }
+
         // 0-color. Color picker overlay — top-most when open.
         if let Some(state) = self.document.ui.color_picker.clone() {
             use openpencil_shell_core::widgets::color_picker::{
@@ -281,39 +317,6 @@ impl WidgetHostNative {
         if rect_contains(top_bar_rect, Point2D::new(x, y)) {
             // Other top-bar gaps eat clicks but don't act.
             return rename_committed || text_edit_committed;
-        }
-
-        // 0c0. Fill-type picker — outside-click dismiss. Must run
-        //      BEFORE the VariablesPanel dispatch so an open picker
-        //      gets dismissed by every click, even ones landing on
-        //      a Variables row (codex stop-gate: the previous order
-        //      left fill_type_picker_open=true after a vars click).
-        if self.document.ui.fill_type_picker_open {
-            if let Some(panel) = PropertyPanel::for_selection(&self.document) {
-                let property_rect = Rect {
-                    origin: Point2D::new(
-                        viewport_width - self.document.ui.property_panel_width,
-                        TOP_BAR_HEIGHT,
-                    ),
-                    size: Point2D::new(
-                        self.document.ui.property_panel_width,
-                        (viewport_height - TOP_BAR_HEIGHT).max(0.0),
-                    ),
-                };
-                if let Some(action) = panel.hit_test_action(property_rect, Point2D::new(x, y)) {
-                    if matches!(
-                        action,
-                        openpencil_shell_core::widgets::PropertyPanelAction::SetFillType(_)
-                            | openpencil_shell_core::widgets::PropertyPanelAction::ToggleFillTypePicker
-                    ) {
-                        self.apply_property_action(action);
-                        return true;
-                    }
-                }
-            }
-            // Anywhere else — close + swallow.
-            self.document.ui.fill_type_picker_open = false;
-            return true;
         }
 
         // 0b1. VariablesPanel — tested before PropertyPanel so the
