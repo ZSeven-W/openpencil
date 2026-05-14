@@ -102,4 +102,104 @@ impl ChatState {
         self.messages.push(echo);
         self.input.clear();
     }
+
+    /// Push the focused input as a user message and stream the reply
+    /// through `provider`. Accumulates `TextDelta` + `Thinking`
+    /// fragments into a single assistant message; bails on `Error`
+    /// with the error text as the assistant body. Returns the count
+    /// of fragments consumed so callers can report streaming
+    /// progress / errors.
+    ///
+    /// Synchronous wrapper — the provider's iterator yields deltas
+    /// until `Done`; this drains them. A future async-capable widget
+    /// can replace the loop with one delta per render frame.
+    pub fn send_via_provider(
+        &mut self,
+        provider: &dyn crate::chat_provider::ChatProvider,
+        system_prompt: impl Into<String>,
+        max_output_tokens: u32,
+    ) -> usize {
+        use crate::chat_provider::{ChatDelta, ChatRequest};
+        let trimmed = self.input.trim().to_string();
+        if trimmed.is_empty() {
+            return 0;
+        }
+        self.messages.push(ChatMessage {
+            role: ChatRole::User,
+            content: trimmed.clone(),
+        });
+        self.input.clear();
+        let req = ChatRequest {
+            system_prompt: system_prompt.into(),
+            user_message: trimmed,
+            max_output_tokens,
+        };
+        let mut buffer = String::new();
+        let mut count = 0usize;
+        for delta in provider.send(req) {
+            count += 1;
+            match delta {
+                ChatDelta::TextDelta(s) | ChatDelta::Thinking(s) => buffer.push_str(&s),
+                ChatDelta::Error(msg) => {
+                    buffer = format!("error: {msg}");
+                    break;
+                }
+                ChatDelta::Done { .. } => break,
+                ChatDelta::ToolUse { .. } => {} // tool dispatch is the agent runtime's job
+            }
+        }
+        self.messages.push(ChatMessage {
+            role: ChatRole::Assistant,
+            content: buffer,
+        });
+        count
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::chat_provider::{ChatDelta, EchoProvider, StopReason};
+
+    #[test]
+    fn send_via_provider_streams_text_into_assistant_message() {
+        let mut chat = ChatState::default();
+        chat.input = "hi".into();
+        let p = EchoProvider {
+            script: vec![
+                ChatDelta::TextDelta("Hello".into()),
+                ChatDelta::TextDelta(", world!".into()),
+                ChatDelta::Done {
+                    stop_reason: StopReason::EndTurn,
+                },
+            ],
+        };
+        let n = chat.send_via_provider(&p, "be helpful", 1024);
+        assert_eq!(n, 3, "consumed 3 deltas");
+        // User message + assistant message pushed.
+        assert_eq!(chat.messages.len(), 2);
+        assert_eq!(chat.messages[1].role, ChatRole::Assistant);
+        assert_eq!(chat.messages[1].content, "Hello, world!");
+        assert!(chat.input.is_empty());
+    }
+
+    #[test]
+    fn send_via_provider_surfaces_provider_error_in_assistant_body() {
+        let mut chat = ChatState::default();
+        chat.input = "x".into();
+        let p = EchoProvider {
+            script: vec![ChatDelta::Error("rate limited".into())],
+        };
+        chat.send_via_provider(&p, "", 0);
+        assert!(chat.messages[1].content.contains("rate limited"));
+    }
+
+    #[test]
+    fn send_via_provider_empty_input_no_ops() {
+        let mut chat = ChatState::default();
+        let p = EchoProvider { script: Vec::new() };
+        let n = chat.send_via_provider(&p, "", 0);
+        assert_eq!(n, 0);
+        assert!(chat.messages.is_empty());
+    }
 }
