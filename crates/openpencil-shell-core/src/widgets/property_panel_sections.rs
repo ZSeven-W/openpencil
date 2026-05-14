@@ -745,18 +745,10 @@ pub fn paint_export_section(
     y
 }
 
-/// Y-extent of the export section, used by the hit-test layout
-/// walker so a click anywhere inside emits OpenExportDialog.
-pub fn export_section_rect(x: f32, y_top: f32, width: f32) -> Rect {
-    // section_label + 1 row of pills + 12px gap. Mirrors the paint
-    // layout above; if you change one, change both.
-    let label_h = 28.0;
-    let total_h = label_h + INPUT_HEIGHT + 12.0;
-    Rect {
-        origin: Point2D::new(x, y_top),
-        size: Point2D::new(width, total_h),
-    }
-}
+// NOTE: a future `export_section_rect` walker will live here once
+// `hit_test_action` is extended to emit `OpenExportDialog` for
+// clicks inside this section. Until then the section is preview-
+// only — open the dialog via File menu / Cmd+Shift+P.
 
 // All shared paint primitives + layout constants are imported
 // from `property_panel_inputs` via the `pub use` block earlier in

@@ -85,7 +85,12 @@ pub fn apply_boolean_op(doc: &mut Document, op: BooleanOp, next_id: &mut u64) ->
     new_node.bounds = openpencil_shell_core::Rect { origin, size };
     let id_set: std::collections::HashSet<NodeId> = path_ids.iter().copied().collect();
     if let Some(page) = doc.pages.get_mut(active) {
-        page.children.retain(|n| !id_set.contains(&n.id));
+        // Recursive removal — sources may be nested inside groups /
+        // frames (codex CONCERN: `retain` only on top-level left
+        // originals behind + duplicated the result). Walk every
+        // children Vec depth-first and drop any node whose id is in
+        // the source set.
+        remove_nodes_recursively(&mut page.children, &id_set);
         page.children.push(new_node);
     }
     doc.selected_set.clear();
@@ -129,6 +134,16 @@ fn extract_points(path: &SkPath) -> Vec<Point2D> {
         }
     }
     out
+}
+
+fn remove_nodes_recursively(
+    children: &mut Vec<openpencil_shell_core::document::Node>,
+    targets: &std::collections::HashSet<NodeId>,
+) {
+    children.retain(|n| !targets.contains(&n.id));
+    for child in children.iter_mut() {
+        remove_nodes_recursively(&mut child.children, targets);
+    }
 }
 
 fn bbox_of(points: &[Point2D]) -> (Point2D, Point2D) {
@@ -224,6 +239,50 @@ mod tests {
         // Page still has both paths; nothing committed.
         assert_eq!(doc.active_page().unwrap().children.len(), 2);
         assert_eq!(doc.history.past.len(), 0);
+    }
+
+    #[test]
+    fn boolean_op_removes_nested_paths_not_just_top_level() {
+        // Codex BLOCK: when source paths live inside a group/frame,
+        // the previous top-level-only `retain` left them in the
+        // group + appended the result at top level — duplication.
+        // Fix removes from anywhere in the children tree.
+        let mut doc = Document::empty();
+        let page = doc.pages.get_mut(0).unwrap();
+        page.children.clear();
+        let mut a = Node::leaf(10, NodeKind::Path, "a");
+        a.points = vec![
+            Point2D::new(0.0, 0.0),
+            Point2D::new(20.0, 0.0),
+            Point2D::new(20.0, 20.0),
+            Point2D::new(0.0, 20.0),
+        ];
+        a.bounds = Rect::xywh(0.0, 0.0, 20.0, 20.0);
+        let mut b = Node::leaf(11, NodeKind::Path, "b");
+        b.points = vec![
+            Point2D::new(10.0, 10.0),
+            Point2D::new(30.0, 10.0),
+            Point2D::new(30.0, 30.0),
+            Point2D::new(10.0, 30.0),
+        ];
+        b.bounds = Rect::xywh(10.0, 10.0, 20.0, 20.0);
+        // Wrap both paths inside a Group.
+        let group = Node::with_children(99, NodeKind::Group, "g", vec![a, b]);
+        page.children.push(group);
+        doc.selected_set = vec![NodeId::new(10), NodeId::new(11)];
+        doc.selected = NodeId::new(11);
+        let mut next = 100u64;
+        assert!(apply_boolean_op(&mut doc, BooleanOp::Union, &mut next));
+        // Group still exists but is now empty of paths; result Path
+        // lives at top level — total page.children = 2 (empty group + result).
+        let page = doc.active_page().unwrap();
+        assert_eq!(page.children.len(), 2);
+        let group_after = &page.children[0];
+        assert!(matches!(group_after.kind, NodeKind::Group));
+        assert!(
+            group_after.children.is_empty(),
+            "source paths must be removed from their group, not duplicated"
+        );
     }
 
     #[test]
