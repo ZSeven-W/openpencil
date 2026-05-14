@@ -330,6 +330,17 @@ impl WidgetHostNative {
         self.now_ms = now_ms;
     }
 
+    /// Run a path boolean op on the active selection (Union /
+    /// Subtract / Intersect / Exclude). Backed by skia's `Path::op`.
+    /// Returns true when the op committed (≥ 2 Path nodes were
+    /// selected + the result yielded a non-empty polyline).
+    pub fn apply_boolean_op(
+        &mut self,
+        op: openpencil_shell_core::document::BooleanOp,
+    ) -> bool {
+        crate::boolean_ops::apply_boolean_op(&mut self.document, op, &mut self.next_node_id)
+    }
+
     /// Read-only document accessor for file-I/O code in the desktop
     /// binary. Internal mutators go through the existing apply_*
     /// methods, but `persistence::to_payload` needs a borrow to
