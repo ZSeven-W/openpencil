@@ -476,15 +476,19 @@ fn parse_tool_call_handles_missing_params() {
 }
 
 #[test]
-fn parse_tool_call_skips_nested_object_values() {
-    // Nested objects/arrays don't appear in tool args today.
-    // The parser must skip them without poisoning the map.
-    let line = r#"{"id":1,"method":"x","params":{"keep":"yes","nested":{"a":1},"also":"ok"}}"#;
+fn parse_tool_call_surfaces_nested_values_as_sentinels() {
+    // Nested objects/arrays don't appear in tool args today,
+    // but they MUST surface as a present (and clearly malformed)
+    // value so the tool's own validation rejects them — the
+    // previous behavior of silently dropping the key let bad
+    // callers bypass guards that treat "missing" as a safe
+    // default (e.g. ReplaceNode::drop_children = false).
+    let line = r#"{"id":1,"method":"x","params":{"keep":"yes","nested":{"a":1},"arr":[1,2],"also":"ok"}}"#;
     let call = parse_tool_call(line).expect("must parse");
     assert_eq!(call.arguments.get("keep"), Some(&"yes".to_string()));
     assert_eq!(call.arguments.get("also"), Some(&"ok".to_string()));
-    // `nested` is intentionally skipped.
-    assert!(call.arguments.get("nested").is_none());
+    assert_eq!(call.arguments.get("nested"), Some(&"{...}".to_string()));
+    assert_eq!(call.arguments.get("arr"), Some(&"[...]".to_string()));
 }
 
 #[test]
