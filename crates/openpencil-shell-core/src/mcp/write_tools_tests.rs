@@ -530,3 +530,68 @@ fn apply_mcp_command_delete_node_rejects_unknown_id() {
     let cmd = McpCommand::DeleteNode { node_id: 99999 };
     assert!(!doc.apply_mcp_command(&cmd));
 }
+
+#[test]
+fn apply_mcp_command_update_node_is_atomic_on_invalid_geometry() {
+    // Codex stop-gate: update_node was applying x/y BEFORE
+    // checking width/height for negative values, so a request
+    // like `{x: 100, width: -1}` would move the node AND reject
+    // the resize — leaving the node in a half-updated state.
+    // Now every validation runs before any write, so an
+    // invalid-geometry request fails cleanly with the node
+    // untouched.
+    use crate::document::Document;
+    let mut doc = Document::sample();
+    // Snapshot original bounds of NodeId(11) — sample's Title.
+    let before = {
+        let frame = &doc.pages[0].children[0];
+        let title = frame.children.iter().find(|n| n.id.raw() == 11).unwrap();
+        title.bounds
+    };
+    let cmd = McpCommand::UpdateNode {
+        node_id: 11,
+        x: Some(999),     // valid
+        y: Some(999),     // valid
+        width: Some(-1),  // INVALID
+        height: None,
+        name: Some("should-not-apply".into()),
+        fill_hex: None,
+    };
+    assert!(!doc.apply_mcp_command(&cmd), "negative width must reject");
+    // Title is exactly as it was.
+    let frame = &doc.pages[0].children[0];
+    let title = frame.children.iter().find(|n| n.id.raw() == 11).unwrap();
+    assert_eq!(title.bounds.origin.x, before.origin.x, "x was modified");
+    assert_eq!(title.bounds.origin.y, before.origin.y, "y was modified");
+    assert_eq!(title.bounds.size.x, before.size.x, "w was modified");
+    assert_eq!(title.bounds.size.y, before.size.y, "h was modified");
+    assert_eq!(title.name, "Title", "name was modified");
+}
+
+#[test]
+fn apply_mcp_command_update_node_is_atomic_on_invalid_hex() {
+    // Parallel atomicity test for the fill_hex path: bad hex must
+    // not apply x/y/width/height first.
+    use crate::document::Document;
+    let mut doc = Document::sample();
+    let before = {
+        let frame = &doc.pages[0].children[0];
+        let title = frame.children.iter().find(|n| n.id.raw() == 11).unwrap();
+        title.bounds
+    };
+    let cmd = McpCommand::UpdateNode {
+        node_id: 11,
+        x: Some(999),
+        y: Some(999),
+        width: None,
+        height: None,
+        name: Some("should-not-apply".into()),
+        fill_hex: Some("not-a-hex".into()),
+    };
+    assert!(!doc.apply_mcp_command(&cmd));
+    let frame = &doc.pages[0].children[0];
+    let title = frame.children.iter().find(|n| n.id.raw() == 11).unwrap();
+    assert_eq!(title.bounds.origin.x, before.origin.x);
+    assert_eq!(title.bounds.origin.y, before.origin.y);
+    assert_eq!(title.name, "Title");
+}
