@@ -500,6 +500,12 @@ impl Document {
                 };
                 self.components.remove(target)
             }
+            crate::mcp::McpCommand::RenameComponent { component_id, name } => {
+                let Some(target) = NodeId::new_opt(*component_id) else {
+                    return false;
+                };
+                self.components.rename(target, name.clone())
+            }
             crate::mcp::McpCommand::BatchInsert { items } => {
                 // Validate EVERY descriptor before any mutation.
                 // A single bad entry rejects the entire batch so

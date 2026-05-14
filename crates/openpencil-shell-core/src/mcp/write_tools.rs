@@ -799,6 +799,59 @@ pub fn delete_component_snapshot() -> DeleteComponent {
     DeleteComponent
 }
 
+/// First-party `rename_component` tool — change a registered
+/// component's display name. The applier rejects unknown ids
+/// and empty / whitespace-only names.
+pub struct RenameComponent;
+
+impl McpTool for RenameComponent {
+    fn name(&self) -> &str {
+        "rename_component"
+    }
+    fn call(&self, args: &BTreeMap<String, String>) -> ToolOutcome {
+        let Some(raw) = args.get("component_id") else {
+            return ToolOutcome::Err(
+                ToolErrorCode::MissingArgument,
+                "component_id is required".into(),
+            );
+        };
+        let component_id: u64 = match raw.parse() {
+            Ok(n) if n > 0 => n,
+            _ => {
+                return ToolOutcome::Err(
+                    ToolErrorCode::InvalidArgument,
+                    format!("component_id must be a positive u64, got {raw:?}"),
+                );
+            }
+        };
+        let Some(name) = args.get("name") else {
+            return ToolOutcome::Err(
+                ToolErrorCode::MissingArgument,
+                "name is required".into(),
+            );
+        };
+        if name.trim().is_empty() {
+            return ToolOutcome::Err(
+                ToolErrorCode::InvalidArgument,
+                "name must not be empty / whitespace-only".into(),
+            );
+        }
+        let mut out = BTreeMap::new();
+        out.insert("wrote".into(), "true".into());
+        ToolOutcome::OkWithCommand(
+            out,
+            McpCommand::RenameComponent {
+                component_id,
+                name: name.clone(),
+            },
+        )
+    }
+}
+
+pub fn rename_component_snapshot() -> RenameComponent {
+    RenameComponent
+}
+
 /// `#rgb`, `#rrggbb`, `#rrggbbaa` — matches the format
 /// `VariableTable::parse_hex_color` accepts. Lenient on case;
 /// requires the leading `#`.
