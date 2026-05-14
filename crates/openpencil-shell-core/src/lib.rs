@@ -20,6 +20,7 @@ pub mod agent_settings_state;
 pub mod document;
 pub mod i18n;
 pub mod jian;
+pub mod mcp;
 pub mod render_backend;
 pub mod theme;
 pub mod widgets;
