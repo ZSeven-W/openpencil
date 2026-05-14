@@ -95,6 +95,12 @@ pub fn t(doc: &Document, key: &'static str) -> &'static str {
             "Not yet wired in this build — please install updates manually.",
             "当前版本尚未接入自动更新，请手动安装更新。",
         ),
+        "settings.system.upToDate" => ("Up to date", "已是最新"),
+        "settings.system.upToDateDescription" => (
+            "Running the latest installed build. No update channel is wired in this build — the next release ships through your package manager / .dmg / .exe.",
+            "当前已是最新已安装版本。本版本未接入自动更新通道，下一次更新请通过你的包管理器或安装包获取。",
+        ),
+        "settings.system.checkForUpdates" => ("Check for updates", "检查更新"),
         _ => return key,
     };
     match doc.ui.locale {
