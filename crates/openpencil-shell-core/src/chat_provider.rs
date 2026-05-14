@@ -1,4 +1,4 @@
-//! Chat / agent provider abstraction. Three backend categories
+//! Chat / agent provider abstraction. Four backend categories
 //! mirror the architecture decision in
 //! [[project_agent_runtime]]:
 //!

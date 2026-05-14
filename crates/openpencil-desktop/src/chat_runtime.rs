@@ -20,7 +20,7 @@
 //! that pumps `Event`s into a `std::sync::mpsc::channel`; the returned
 //! iterator drains the receiver until it goes idle.
 
-use std::sync::{mpsc, Arc, OnceLock};
+use std::sync::{Arc, OnceLock};
 
 use agent::abort::AbortController;
 use agent::provider::Provider;
@@ -31,6 +31,7 @@ use openpencil_shell_core::chat_provider::{
     ChatDelta, ChatProvider, ChatRequest, StopReason,
 };
 use tokio::runtime::{Builder, Runtime};
+use tokio::sync::mpsc;
 
 /// Process-wide tokio runtime used for every BuiltIn chat turn. We
 /// own a single multi-thread runtime instead of spinning one up per
@@ -50,12 +51,18 @@ pub(crate) fn shared_runtime() -> &'static Runtime {
 
 /// `ChatProvider` impl that drives `agent::QueryEngine` directly. The
 /// engine carries its own message store, so repeated `send` calls
-/// retain conversation history across turns (multi-turn chat). The
-/// `system_prompt` field on `ChatRequest` is applied once at construct
-/// time via `with_system`; subsequent requests override it per turn by
-/// rebuilding the engine — cheap because the `Provider` is `Arc`'d.
+/// retain conversation history across turns (multi-turn chat).
+///
+/// Per-`ChatRequest` `system_prompt` + `max_output_tokens` are honored
+/// by rebuilding a turn-local engine that shares the provider +
+/// message-store handle. `with_system` clones cheaply (provider is
+/// `Arc<dyn Provider>`), so each `send` pays at most a few small
+/// allocations.
 pub struct BuiltInProvider {
-    engine: Arc<QueryEngine>,
+    provider: Arc<dyn Provider>,
+    model: String,
+    default_system: Option<String>,
+    default_max_output_tokens: u32,
     label: String,
 }
 
@@ -71,12 +78,11 @@ impl BuiltInProvider {
         max_output_tokens: u32,
         label: impl Into<String>,
     ) -> Self {
-        let mut engine = QueryEngine::new(provider, model).with_max_output_tokens(max_output_tokens);
-        if let Some(sys) = system_prompt {
-            engine = engine.with_system(sys);
-        }
         Self {
-            engine: Arc::new(engine),
+            provider,
+            model: model.into(),
+            default_system: system_prompt,
+            default_max_output_tokens: max_output_tokens.max(1),
             label: label.into(),
         }
     }
@@ -91,65 +97,133 @@ impl ChatProvider for BuiltInProvider {
         &self,
         request: ChatRequest,
     ) -> Box<dyn Iterator<Item = ChatDelta> + Send> {
-        let engine = self.engine.clone();
+        // Build a per-turn engine so the request's `system_prompt`
+        // and `max_output_tokens` actually take effect (codex CONCERN
+        // 1). Provider is `Arc`'d so this is cheap.
+        let system = if request.system_prompt.is_empty() {
+            self.default_system.clone()
+        } else {
+            Some(request.system_prompt.clone())
+        };
+        let max_tokens = if request.max_output_tokens == 0 {
+            self.default_max_output_tokens
+        } else {
+            request.max_output_tokens
+        };
+        let mut engine =
+            QueryEngine::new(self.provider.clone(), self.model.clone())
+                .with_max_output_tokens(max_tokens);
+        if let Some(sys) = system {
+            engine = engine.with_system(sys);
+        }
+        let engine = Arc::new(engine);
         let abort = AbortController::new();
-        let (tx, rx) = mpsc::channel::<ChatDelta>();
+        let (tx, rx) = mpsc::channel::<ChatDelta>(64);
         shared_runtime().spawn(async move {
-            // Per-turn engine settings would land via a per-turn
-            // builder; for now we honor `max_output_tokens` set at
-            // construct time and pass the user message straight in.
-            // `system_prompt` on the request is ignored because the
-            // engine's system prompt is fixed at construct time —
-            // changing it per-turn would need a fresh `QueryEngine`.
-            let _ = request.system_prompt; // see note above
-            let _ = request.max_output_tokens; // honored at construct
             let stream = match engine.run(request.user_message, abort).await {
                 Ok(s) => s,
                 Err(e) => {
-                    let _ = tx.send(ChatDelta::Error(e.to_string()));
-                    let _ = tx.send(ChatDelta::Done {
-                        stop_reason: StopReason::Aborted,
-                    });
+                    let _ = tx.send(ChatDelta::Error(e.to_string())).await;
+                    let _ = tx
+                        .send(ChatDelta::Done {
+                            stop_reason: StopReason::Aborted,
+                        })
+                        .await;
                     return;
                 }
             };
             let mut stream = stream;
+            let mut emitted_done = false;
             while let Some(item) = stream.next().await {
                 match item {
                     Ok(Event::TextDelta { delta }) => {
-                        if tx.send(ChatDelta::TextDelta(delta)).is_err() {
-                            break;
+                        if tx.send(ChatDelta::TextDelta(delta)).await.is_err() {
+                            return;
                         }
                     }
                     Ok(Event::Thinking { delta }) => {
-                        if tx.send(ChatDelta::Thinking(delta)).is_err() {
-                            break;
+                        if tx.send(ChatDelta::Thinking(delta)).await.is_err() {
+                            return;
                         }
                     }
                     Ok(Event::ToolUse { name, input, .. }) => {
                         let args = input.to_string();
-                        if tx.send(ChatDelta::ToolUse { name, args }).is_err() {
-                            break;
+                        if tx
+                            .send(ChatDelta::ToolUse { name, args })
+                            .await
+                            .is_err()
+                        {
+                            return;
                         }
                     }
                     Ok(Event::Result { data }) => {
                         let reason = map_stop_reason(data.stop_reason.as_deref());
-                        let _ = tx.send(ChatDelta::Done { stop_reason: reason });
+                        let _ = tx.send(ChatDelta::Done { stop_reason: reason }).await;
+                        emitted_done = true;
                         break;
                     }
                     Ok(Event::Error { code, message }) => {
-                        let _ = tx.send(ChatDelta::Error(format!("{code}: {message}")));
+                        let _ = tx
+                            .send(ChatDelta::Error(format!("{code}: {message}")))
+                            .await;
+                        // Always send a terminal `Done` after `Error`
+                        // so consumers can distinguish a completed
+                        // error path from a silently-dropped channel
+                        // (codex CONCERN 2).
+                        let _ = tx
+                            .send(ChatDelta::Done {
+                                stop_reason: StopReason::Aborted,
+                            })
+                            .await;
+                        emitted_done = true;
                         break;
                     }
                     Ok(_) => {} // ToolResult / Usage / Notice / Unknown — silent
                     Err(e) => {
-                        let _ = tx.send(ChatDelta::Error(e.to_string()));
+                        let _ = tx.send(ChatDelta::Error(e.to_string())).await;
+                        let _ = tx
+                            .send(ChatDelta::Done {
+                                stop_reason: StopReason::Aborted,
+                            })
+                            .await;
+                        emitted_done = true;
                         break;
                     }
                 }
             }
+            if !emitted_done {
+                let _ = tx
+                    .send(ChatDelta::Done {
+                        stop_reason: StopReason::EndTurn,
+                    })
+                    .await;
+            }
         });
-        Box::new(rx.into_iter())
+        Box::new(BlockingRecvIter::new(rx))
+    }
+}
+
+/// Adapter that turns a `tokio::sync::mpsc::Receiver<ChatDelta>` into
+/// a sync `Iterator<Item = ChatDelta>`. The receiver's
+/// `blocking_recv` blocks the calling thread until a value arrives or
+/// the channel closes — exactly the contract `ChatProvider::send`'s
+/// iterator return needs. Sharing this helper across both BuiltIn +
+/// Subprocess (and the future HttpServer / Acp) keeps the async ↔
+/// sync bridge in one place.
+pub(crate) struct BlockingRecvIter<T> {
+    rx: mpsc::Receiver<T>,
+}
+
+impl<T> BlockingRecvIter<T> {
+    pub(crate) fn new(rx: mpsc::Receiver<T>) -> Self {
+        Self { rx }
+    }
+}
+
+impl<T> Iterator for BlockingRecvIter<T> {
+    type Item = T;
+    fn next(&mut self) -> Option<T> {
+        self.rx.blocking_recv()
     }
 }
 
