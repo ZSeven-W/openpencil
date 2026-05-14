@@ -567,3 +567,90 @@ pub fn list_components_snapshot(doc: &crate::document::Document) -> ListComponen
         .collect();
     ListComponents { items }
 }
+
+/// First-party `get_component` tool — fetches one component by id
+/// with deeper detail than `list_components` (which only returns
+/// names + ids). Returns the component's name, root node kind,
+/// and the subtree's leaf count so LLM clients can size before
+/// instantiating.
+///
+/// Wire shape:
+///   args   — { "component_id": "<positive u64>" }
+///   result — { name, kind, leaf_count } or ToolFailed when the
+///            id doesn't resolve.
+pub struct GetComponent {
+    pub snapshot: Vec<(u64, String, String, usize)>,
+}
+
+impl McpTool for GetComponent {
+    fn name(&self) -> &str {
+        "get_component"
+    }
+    fn call(&self, args: &BTreeMap<String, String>) -> ToolOutcome {
+        let Some(raw) = args.get("component_id") else {
+            return ToolOutcome::Err(
+                ToolErrorCode::MissingArgument,
+                "component_id is required".into(),
+            );
+        };
+        let component_id: u64 = match raw.parse() {
+            Ok(n) if n > 0 => n,
+            _ => {
+                return ToolOutcome::Err(
+                    ToolErrorCode::InvalidArgument,
+                    format!("component_id must be a positive u64, got {raw:?}"),
+                );
+            }
+        };
+        let Some((_, name, kind, leaf_count)) = self
+            .snapshot
+            .iter()
+            .find(|(id, _, _, _)| *id == component_id)
+        else {
+            return ToolOutcome::Err(
+                ToolErrorCode::ToolFailed,
+                format!("component {component_id} not found"),
+            );
+        };
+        let mut out = BTreeMap::new();
+        out.insert("name".into(), name.clone());
+        out.insert("kind".into(), kind.clone());
+        out.insert("leaf_count".into(), leaf_count.to_string());
+        ToolOutcome::Ok(out)
+    }
+}
+
+pub fn get_component_snapshot(doc: &crate::document::Document) -> GetComponent {
+    fn count_leaves(n: &crate::document::Node) -> usize {
+        if n.children.is_empty() {
+            1
+        } else {
+            n.children.iter().map(count_leaves).sum()
+        }
+    }
+    let snapshot = doc
+        .components
+        .components
+        .iter()
+        .map(|c| {
+            let kind = match c.root.kind {
+                crate::document::NodeKind::Frame => "frame",
+                crate::document::NodeKind::Group => "group",
+                crate::document::NodeKind::Rect => "rect",
+                crate::document::NodeKind::Ellipse => "ellipse",
+                crate::document::NodeKind::Polygon => "polygon",
+                crate::document::NodeKind::Line => "line",
+                crate::document::NodeKind::Text => "text",
+                crate::document::NodeKind::Path => "path",
+                _ => "other",
+            };
+            (
+                c.id.raw(),
+                c.name.clone(),
+                kind.to_string(),
+                count_leaves(&c.root),
+            )
+        })
+        .collect();
+    GetComponent { snapshot }
+}
