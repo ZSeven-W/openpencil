@@ -232,13 +232,23 @@ impl WidgetHostNative {
             return false;
         }
         // Path-anchor drag — snap the picked anchor to the cursor's
-        // document-space position. History was captured at drag-start.
-        if let Some(drag) = self.path_anchor_drag.as_ref().cloned() {
+        // document-space position. History was captured at drag-start;
+        // we just flip `moved` true on the first real-delta frame so
+        // release knows whether to push the snapshot.
+        if self.path_anchor_drag.is_some() {
             let (cx0, cy0) = self.canvas_origin();
             let canvas_local = Point2D::new(x - cx0, y - cy0);
             let doc_point = self.document.viewport.to_document(canvas_local);
-            self.document
-                .set_path_anchor_position(drag.node_id, drag.anchor_index, doc_point);
+            let (id, idx, start) = {
+                let d = self.path_anchor_drag.as_ref().unwrap();
+                (d.node_id, d.anchor_index, d.start_doc)
+            };
+            if (doc_point.x - start.x).abs() > 0.001 || (doc_point.y - start.y).abs() > 0.001 {
+                self.document.set_path_anchor_position(id, idx, doc_point);
+                if let Some(d) = self.path_anchor_drag.as_mut() {
+                    d.moved = true;
+                }
+            }
             return true;
         }
         if let Some(m) = self.marquee_drag.as_mut() {
@@ -338,10 +348,14 @@ impl WidgetHostNative {
             return true;
         }
         if let Some(drag) = self.path_anchor_drag.take() {
-            // Commit the pre-drag snapshot only on real motion —
-            // a press-without-move is a no-op (no anchor moved).
-            self.document.history_push_past(drag.pre_drag_snapshot);
-            return true;
+            // Push history snapshot only when the anchor actually
+            // moved (codex CONCERN — a press-release without motion
+            // was polluting the undo stack with no-op entries).
+            if drag.moved {
+                self.document.history_push_past(drag.pre_drag_snapshot);
+                return true;
+            }
+            return false;
         }
         if let Some(m) = self.marquee_drag.take() {
             self.commit_marquee_selection(m, viewport_w, viewport_h);

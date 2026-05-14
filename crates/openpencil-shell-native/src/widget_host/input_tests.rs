@@ -297,6 +297,72 @@ fn layer_drag_below_activation_threshold_is_a_click_not_a_reorder() {
 }
 
 #[test]
+fn anchor_press_release_without_motion_does_not_push_history() {
+    // Codex CONCERN: a press-release on an anchor without any
+    // cursor motion in between must NOT pollute the undo stack.
+    // Direct test of release semantics — seed the drag state by
+    // hand (the press hit-test geometry is exercised elsewhere).
+    use openpencil_shell_core::document::{Node, NodeKind};
+    use openpencil_shell_core::{Point2D, Rect};
+    let mut host = WidgetHostNative::new();
+    let page_idx = host.document.active_page_index;
+    let mut path = Node::leaf(60, NodeKind::Path, "p");
+    path.bounds = Rect::xywh(0.0, 0.0, 100.0, 50.0);
+    path.points = vec![Point2D::new(0.0, 0.0), Point2D::new(50.0, 25.0)];
+    host.document.pages[page_idx].children = vec![path];
+    host.document.set_single_selection(NodeId::new(60));
+    let snap = host.document.snapshot_for_history();
+    host.path_anchor_drag = Some(crate::widget_host::PathAnchorDragState {
+        node_id: NodeId::new(60),
+        anchor_index: 1,
+        start_doc: Point2D::new(50.0, 25.0),
+        moved: false, // no cursor_move happened between press + release
+        pre_drag_snapshot: snap,
+    });
+    let history_before = host.document.history.past.len();
+    let consumed = host.apply_release_with_viewport(1440.0, 900.0);
+    assert!(host.path_anchor_drag.is_none(), "drag state cleared");
+    assert!(!consumed, "release with no motion is not a UI change");
+    assert_eq!(
+        host.document.history.past.len(),
+        history_before,
+        "no-motion press-release must not push a history entry"
+    );
+}
+
+#[test]
+fn anchor_drag_with_motion_pushes_one_history_entry() {
+    // Inverse of the above — when the user actually moved the
+    // anchor, exactly one entry lands on the undo stack so Cmd-Z
+    // reverts the whole drag.
+    use openpencil_shell_core::document::{Node, NodeKind};
+    use openpencil_shell_core::{Point2D, Rect};
+    let mut host = WidgetHostNative::new();
+    let page_idx = host.document.active_page_index;
+    let mut path = Node::leaf(60, NodeKind::Path, "p");
+    path.bounds = Rect::xywh(0.0, 0.0, 100.0, 50.0);
+    path.points = vec![Point2D::new(0.0, 0.0), Point2D::new(50.0, 25.0)];
+    host.document.pages[page_idx].children = vec![path];
+    host.document.set_single_selection(NodeId::new(60));
+    let snap = host.document.snapshot_for_history();
+    host.path_anchor_drag = Some(crate::widget_host::PathAnchorDragState {
+        node_id: NodeId::new(60),
+        anchor_index: 1,
+        start_doc: Point2D::new(50.0, 25.0),
+        moved: true, // simulating real cursor_move during drag
+        pre_drag_snapshot: snap,
+    });
+    let history_before = host.document.history.past.len();
+    let consumed = host.apply_release_with_viewport(1440.0, 900.0);
+    assert!(consumed, "release after motion is a UI change");
+    assert_eq!(
+        host.document.history.past.len(),
+        history_before + 1,
+        "exactly one history entry per drag"
+    );
+}
+
+#[test]
 fn node_drag_not_intercepted_by_align_toolbar_hover() {
     // Codex CONCERN: with 2+ selected, an active node-drag must
     // continue moving the nodes when the cursor sweeps over the

@@ -661,10 +661,22 @@ impl WidgetHostNative {
                     if let Some((node_id, anchor_index)) =
                         self.path_anchor_hit(x, y, viewport_width, viewport_height)
                     {
+                        // Capture starting position so release knows
+                        // whether the anchor actually moved (codex
+                        // CONCERN — a no-motion click was polluting
+                        // the undo stack).
+                        let start_doc = self
+                            .document
+                            .active_page()
+                            .and_then(|p| p.find(node_id))
+                            .and_then(|n| n.points.get(anchor_index).copied())
+                            .unwrap_or(doc_point);
                         let pre = self.document.snapshot_for_history();
                         self.path_anchor_drag = Some(super::PathAnchorDragState {
                             node_id,
                             anchor_index,
+                            start_doc,
+                            moved: false,
                             pre_drag_snapshot: pre,
                         });
                         return true;

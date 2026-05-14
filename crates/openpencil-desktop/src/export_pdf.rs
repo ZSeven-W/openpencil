@@ -11,37 +11,46 @@ use std::path::Path as StdPath;
 
 const PDF_MARGIN: f32 = 16.0;
 
-/// Emit every page in `doc` as one PDF page each. Pages are sized
-/// to their content bounding box (`page_bounds` + 16-pt margin).
-/// Empty pages are skipped. Returns Err when no page has paintable
-/// content — same convention as `export_raster`.
+/// Emit every page in `doc` as one PDF page each. Every page emits
+/// at the SAME size — the union of all page bounds plus a 16-pt
+/// margin — so PDF viewers don't jump between heterogeneous page
+/// sizes on scroll/zoom (codex CONCERN: mixed page sizes were a
+/// papercut). Each page's content is positioned within that frame
+/// at its own (origin.x, origin.y); empty pages are skipped.
+/// Returns Err when no page has paintable content.
 pub fn export_pdf(doc: &Document, target: &StdPath) -> Result<(), String> {
+    let bounds_per_page: Vec<_> = doc
+        .pages
+        .iter()
+        .map(crate::export::page_bounds)
+        .collect();
+    let any_some = bounds_per_page.iter().any(Option::is_some);
+    if !any_some {
+        return Err("nothing to export".into());
+    }
+    let (page_w, page_h) = {
+        let mut max_w = 0.0_f32;
+        let mut max_h = 0.0_f32;
+        for b in bounds_per_page.iter().flatten() {
+            max_w = max_w.max(b.size.x);
+            max_h = max_h.max(b.size.y);
+        }
+        (max_w + PDF_MARGIN * 2.0, max_h + PDF_MARGIN * 2.0)
+    };
     let mut buf: Vec<u8> = Vec::new();
     {
         let mut pdf = skia_safe::pdf::new_document(&mut buf, None);
-        let mut emitted = 0usize;
-        for page in &doc.pages {
-            let Some(bounds) = crate::export::page_bounds(page) else {
-                continue;
-            };
-            let w = bounds.size.x + PDF_MARGIN * 2.0;
-            let h = bounds.size.y + PDF_MARGIN * 2.0;
-            if w <= 0.0 || h <= 0.0 {
-                continue;
-            }
-            let mut on_page = pdf.begin_page(skia_safe::Size::new(w, h), None);
+        for (page, bounds_opt) in doc.pages.iter().zip(bounds_per_page.iter()) {
+            let Some(bounds) = bounds_opt else { continue };
+            let mut on_page = pdf.begin_page(skia_safe::Size::new(page_w, page_h), None);
             let canvas = on_page.canvas();
             canvas.translate((PDF_MARGIN - bounds.origin.x, PDF_MARGIN - bounds.origin.y));
             for node in &page.children {
                 crate::export::paint_node(canvas, node);
             }
             pdf = on_page.end_page();
-            emitted += 1;
         }
         pdf.close();
-        if emitted == 0 {
-            return Err("nothing to export".into());
-        }
     }
     std::fs::write(target, &buf).map_err(|e| e.to_string())
 }
