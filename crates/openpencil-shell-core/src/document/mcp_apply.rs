@@ -47,7 +47,15 @@ impl Document {
                 // Compute the fresh id BEFORE taking a mutable
                 // borrow on `pages` — `max_node_id()` reads pages
                 // immutably and would conflict otherwise.
-                let next_id = self.next_node_id_seed();
+                let Some(next_id) = self.next_node_id_seed() else {
+                    // Id space exhausted (existing node at
+                    // u64::MAX). Codex stop-gate: the previous
+                    // saturating_add wrapped to u64::MAX,
+                    // colliding with the live node. Refuse the
+                    // insert + force the LLM client to handle the
+                    // error rather than silently overwriting.
+                    return false;
+                };
                 let active_idx = self.active_page_index;
                 let Some(page) = self.pages.get_mut(active_idx) else {
                     return false;
@@ -74,8 +82,12 @@ impl Document {
     }
 
     /// Compute a fresh node id that won't collide with any existing
-    /// node across pages. Mirrors the duplicate allocator's guard.
-    fn next_node_id_seed(&self) -> u64 {
-        self.max_node_id().saturating_add(1).max(1)
+    /// node across pages. Returns `None` when `max_node_id()` is
+    /// `u64::MAX` — a saturating add would wrap back to the live
+    /// id and silently overwrite it (codex stop-gate). Callers
+    /// surface the None as an apply-time failure.
+    fn next_node_id_seed(&self) -> Option<u64> {
+        let max = self.max_node_id();
+        max.checked_add(1).map(|n| n.max(1))
     }
 }
