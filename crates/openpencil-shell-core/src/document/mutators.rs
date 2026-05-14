@@ -1,16 +1,10 @@
-//! `impl Document` mutators + queries.
-//!
-//! Lives in `document/mutators.rs` so the `document` module file
-//! itself stays under the 800-line cap. The impl block is split
-//! from `document.rs` purely for file-size hygiene — semantically
-//! these methods belong to `Document` and are accessed via the
-//! usual `doc.method(...)` paths.
+//! `impl Document` mutators + queries. Split from `document.rs`
+//! for file-size hygiene — methods are reached via `doc.method()`.
 
 use super::walkers::*;
 use super::*;
 
-/// Whether `reorder_relative` drops the source before or after the
-/// anchor. Internal helper for `reorder_before` / `reorder_after`.
+/// Whether `reorder_relative` drops the source before or after.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum RelativePosition {
     Before,
@@ -49,20 +43,10 @@ impl Document {
         }
     }
 
-    /// Sample document for the editor-UI demo.
+    /// Sample document for the editor-UI demo. Stable ids: page=1,
+    /// frame=10, title=11, button=12, button_rect=13, button_text=14.
     pub fn sample() -> Self {
         use crate::{Color, Rect};
-
-        // Id allocations: page=1, frame=10, title=11, button=12,
-        // button_rect=13, button_text=14. Stable across runs so
-        // tests can assert specific ids.
-        //
-        // Layout (document coordinates, top-left origin):
-        //   Frame    (40, 40)–(360, 240)   white fill, black 1px stroke
-        //     Title  (60, 60)–(*, *)       text "Hello OpenPencil", no bg
-        //     Button group at (60, 130)
-        //       Rect   (60, 130)–(180, 36) blue fill, no stroke
-        //       Text   (76, 152)–(*, *)    text "Click me", no bg
         let title = Node::leaf(11, NodeKind::Text, "Title")
             .with_bounds(Rect::xywh(60.0, 60.0, 240.0, 28.0))
             .with_text("Hello OpenPencil");

@@ -177,6 +177,14 @@ impl VariableTable {
                 self.active_theme.insert(axis.clone(), value.clone());
                 true
             }
+            crate::mcp::McpCommand::InsertNode { .. } => {
+                // Not a VariableTable mutation — InsertNode lives on
+                // the wider `Document::apply_mcp_command` since it
+                // needs Pages + the id allocator. Return false here
+                // so callers that only have a VariableTable handle
+                // know this variant wasn't theirs to apply.
+                false
+            }
         }
     }
 
@@ -341,7 +349,7 @@ impl VariableTable {
 
 /// Parse `#rgb` / `#rrggbb` / `#rrggbbaa` into a `Color`. Mirrors the
 /// TS paint helpers — lenient on case, requires the leading `#`.
-fn parse_hex_color(s: &str) -> Option<crate::Color> {
+pub(super) fn parse_hex_color(s: &str) -> Option<crate::Color> {
     let s = s.trim().strip_prefix('#')?;
     let (r, g, b, a) = match s.len() {
         3 => {

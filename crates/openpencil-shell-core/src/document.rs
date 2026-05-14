@@ -800,6 +800,7 @@ mod align;
 mod color_picker;
 mod components;
 mod grouping;
+mod mcp_apply;
 mod mutators;
 mod page_mutators;
 mod pen;
