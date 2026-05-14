@@ -609,12 +609,14 @@ impl McpTool for ReplaceNode {
         };
         // Optional opt-in for destructive swaps. The applier
         // refuses to drop a container's children unless this is
-        // `"true"`. Any other value (including "false" / "1" /
-        // missing) leaves the guard active.
+        // `"true"`. Missing → safe default false. Any other
+        // value (including the empty string) is malformed and
+        // rejected — silently treating "" as false would hide a
+        // mis-serialized confirmation from the caller.
         let drop_children = match args.get("drop_children") {
-            Some(s) if s == "true" => true,
-            Some(s) if s == "false" || s.is_empty() => false,
             None => false,
+            Some(s) if s == "true" => true,
+            Some(s) if s == "false" => false,
             Some(s) => {
                 return ToolOutcome::Err(
                     ToolErrorCode::InvalidArgument,

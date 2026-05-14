@@ -216,12 +216,14 @@ fn replace_node_rejects_malformed_drop_children() {
     args.insert("y".into(), "0".into());
     args.insert("width".into(), "10".into());
     args.insert("height".into(), "10".into());
-    args.insert("drop_children".into(), "yes".into()); // not "true"/"false"
-    match tool.call(&args) {
-        ToolOutcome::Err(code, msg) => {
-            assert_eq!(code, ToolErrorCode::InvalidArgument);
-            assert!(msg.contains("drop_children"));
+    for bad in ["yes", "", "TRUE", "1", "0"] {
+        args.insert("drop_children".into(), bad.into());
+        match tool.call(&args) {
+            ToolOutcome::Err(code, msg) => {
+                assert_eq!(code, ToolErrorCode::InvalidArgument, "input {bad:?}");
+                assert!(msg.contains("drop_children"), "input {bad:?} msg = {msg}");
+            }
+            _ => panic!("expected InvalidArgument on malformed drop_children {bad:?}"),
         }
-        _ => panic!("expected InvalidArgument on malformed drop_children"),
     }
 }
