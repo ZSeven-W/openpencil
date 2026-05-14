@@ -17,6 +17,10 @@ const ICON_BUTTON: f32 = 28.0;
 /// Globe locale-picker button — wider than a normal icon button so a
 /// chevron-down sits next to the globe glyph (signals the dropdown).
 const GLOBE_BUTTON_WIDTH: f32 = 44.0;
+/// File-menu compound button — folder + a smaller chevron-down sit
+/// inside a single round-rect background. Tighter gap than two
+/// separate icon buttons (4 px between glyphs vs ICON_BUTTON + 4).
+const FILE_MENU_BUTTON_WIDTH: f32 = 46.0;
 const CHEVRON_SIZE: f32 = 12.0;
 const PAD: f32 = 12.0;
 
@@ -25,6 +29,10 @@ const PAD: f32 = 12.0;
 pub enum TopBarHit {
     /// PanelLeft icon — toggle sidebar (LayerPanel) visibility.
     ToggleSidebar,
+    /// Folder + chevron compound — toggle the file menu dropdown.
+    ToggleFileMenu,
+    /// Figma logo — open the .fig import modal.
+    OpenFigmaImport,
     /// Sun icon — flip theme dark↔light.
     ToggleTheme,
     /// Globe icon — cycle through UI locales.
@@ -35,7 +43,10 @@ pub enum TopBarHit {
 
 pub struct TopBar {
     pub id: WidgetId,
-    pub file_name: &'static str,
+    /// Centred file name. `String` rather than `&'static str` so an
+    /// opened doc can show its basename without leaking a static
+    /// slice on every Open.
+    pub file_name: String,
     pub agent_count: u32,
     pub theme: Theme,
     pub label_agents_and_mcp: &'static str,
@@ -43,10 +54,10 @@ pub struct TopBar {
 }
 
 impl TopBar {
-    pub fn new(file_name: &'static str) -> Self {
+    pub fn new(file_name: impl Into<String>) -> Self {
         Self {
             id: WidgetId::new(5000),
-            file_name,
+            file_name: file_name.into(),
             agent_count: 1,
             theme: Theme::dark(),
             label_agents_and_mcp: "Agents & MCP",
@@ -59,9 +70,14 @@ impl TopBar {
     }
 
     pub fn for_document(doc: &Document) -> Self {
+        let file_name = doc
+            .ui
+            .file_name_display
+            .clone()
+            .unwrap_or_else(|| doc.t("common.untitled").to_string());
         Self {
             id: WidgetId::new(5000),
-            file_name: doc.t("common.untitled"),
+            file_name,
             agent_count: 0,
             theme: doc.theme(),
             label_agents_and_mcp: doc.t("topbar.agentsAndMcp"),
@@ -74,6 +90,17 @@ impl TopBar {
     /// directly underneath when `Document.ui.locale_picker_open ==
     /// true`. The button itself is wider than a normal icon button
     /// so the chevron-down has room to render.
+    /// Anchor rect for the file-menu dropdown overlay (folder +
+    /// chevron compound). Host anchors the dropdown directly under
+    /// this rect when `Document.ui.file_menu_open == true`.
+    pub fn file_menu_rect(top_bar_rect: Rect) -> Rect {
+        let file_menu_x = top_bar_rect.origin.x + PAD + ICON_BUTTON + 4.0;
+        Rect {
+            origin: Point2D::new(file_menu_x, top_bar_rect.origin.y + 8.0),
+            size: Point2D::new(FILE_MENU_BUTTON_WIDTH, ICON_BUTTON),
+        }
+    }
+
     pub fn globe_rect(top_bar_rect: Rect) -> Rect {
         let right = top_bar_rect.origin.x + top_bar_rect.size.x;
         // Right-cluster layout (right → left): Maximize | Sun | Globe.
@@ -94,12 +121,29 @@ impl TopBar {
         if !rect_contains(rect, point) {
             return None;
         }
+        let icon_y = rect.origin.y + 8.0;
         let panel_left_rect = Rect {
-            origin: Point2D::new(rect.origin.x + PAD, rect.origin.y + 8.0),
+            origin: Point2D::new(rect.origin.x + PAD, icon_y),
             size: Point2D::new(ICON_BUTTON, ICON_BUTTON),
         };
         if rect_contains(panel_left_rect, point) {
             return Some(TopBarHit::ToggleSidebar);
+        }
+        let file_menu_x = rect.origin.x + PAD + ICON_BUTTON + 4.0;
+        let file_menu_rect = Rect {
+            origin: Point2D::new(file_menu_x, icon_y),
+            size: Point2D::new(FILE_MENU_BUTTON_WIDTH, ICON_BUTTON),
+        };
+        if rect_contains(file_menu_rect, point) {
+            return Some(TopBarHit::ToggleFileMenu);
+        }
+        let figma_x = file_menu_x + FILE_MENU_BUTTON_WIDTH + 13.0;
+        let figma_rect = Rect {
+            origin: Point2D::new(figma_x, icon_y),
+            size: Point2D::new(ICON_BUTTON, ICON_BUTTON),
+        };
+        if rect_contains(figma_rect, point) {
+            return Some(TopBarHit::OpenFigmaImport);
         }
         // Right cluster: Maximize / Sun / Globe-with-chevron (right→left).
         // Maximize + Sun are normal ICON_BUTTON wide; Globe is
@@ -184,12 +228,24 @@ impl Widget for TopBar {
         );
 
         // ── Left cluster ───────────────────────────────────────
-        let mut x = rect.origin.x + PAD;
         let center_y = rect.origin.y + rect.size.y / 2.0;
-        for icon in [Icon::PanelLeft, Icon::FolderOpen, Icon::ChevronDown] {
-            paint_icon_button(cx, &self.theme, x, center_y, icon);
-            x += ICON_BUTTON + 4.0;
-        }
+        let panel_left_x = rect.origin.x + PAD;
+        paint_icon_button(cx, &self.theme, panel_left_x, center_y, Icon::PanelLeft);
+        // File-menu compound: folder + tight chevron in one button.
+        let file_menu_x = panel_left_x + ICON_BUTTON + 4.0;
+        paint_file_menu_button(cx, &self.theme, file_menu_x, center_y);
+        // Vertical divider before the Figma import affordance.
+        let divider_x = file_menu_x + FILE_MENU_BUTTON_WIDTH + 6.0;
+        cx.backend.fill_rect(
+            Rect {
+                origin: Point2D::new(divider_x, center_y - 8.0),
+                size: Point2D::new(1.0, 16.0),
+            },
+            self.theme.border,
+        );
+        // Figma import button.
+        let figma_x = divider_x + 6.0;
+        paint_figma_button(cx, &self.theme, figma_x, center_y);
 
         // ── Centered file name ─────────────────────────────────
         let name = TextLayout::single_run(
@@ -328,6 +384,37 @@ fn paint_icon_button(cx: &mut PaintCx<'_>, theme: &Theme, x: f32, center_y: f32,
         ICON_SIZE,
         theme.muted_foreground,
         1.4,
+    );
+}
+
+/// File-menu compound: folder glyph + tighter chevron, both inside
+/// a single 46×28 hit-target. The chevron gap is ~4 px instead of
+/// ICON_BUTTON-wide as it used to render.
+fn paint_file_menu_button(cx: &mut PaintCx<'_>, theme: &Theme, x: f32, center_y: f32) {
+    draw_icon(
+        cx.backend,
+        Icon::FolderOpen,
+        Point2D::new(x + 6.0, center_y - ICON_SIZE / 2.0),
+        ICON_SIZE,
+        theme.muted_foreground,
+        1.4,
+    );
+    draw_icon(
+        cx.backend,
+        Icon::ChevronDown,
+        Point2D::new(x + 6.0 + ICON_SIZE + 4.0, center_y - CHEVRON_SIZE / 2.0),
+        CHEVRON_SIZE,
+        theme.muted_foreground,
+        1.4,
+    );
+}
+
+fn paint_figma_button(cx: &mut PaintCx<'_>, theme: &Theme, x: f32, center_y: f32) {
+    crate::widgets::brand_icons::paint_figma_logo(
+        cx.backend,
+        Point2D::new(x + (ICON_BUTTON - ICON_SIZE) / 2.0, center_y - ICON_SIZE / 2.0),
+        ICON_SIZE,
+        theme.muted_foreground,
     );
 }
 

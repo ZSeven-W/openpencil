@@ -396,7 +396,7 @@ impl RenderBackend for WebBackend {
             };
             let font = skia_safe::Font::new(typeface, run.font_size);
             let jc = run.color;
-            let paint = skia_safe::Paint::new(
+            let mut paint = skia_safe::Paint::new(
                 skia_safe::Color4f::new(
                     f32::from(jc.r()) / 255.0,
                     f32::from(jc.g()) / 255.0,
@@ -405,6 +405,16 @@ impl RenderBackend for WebBackend {
                 ),
                 None,
             );
+            paint.set_anti_alias(true);
+            // The wasm32 build ships a single weight per typeface
+            // (Roboto-Regular + Noto CJK subset). Synthesise bold
+            // for `fontWeight: 700`+ via stroke-and-fill so login.op
+            // headlines paint heavy in the browser too — mirrors
+            // the native backend's behaviour (skia.rs::draw_text).
+            if run.font_weight >= 600 {
+                paint.set_style(skia_safe::PaintStyle::StrokeAndFill);
+                paint.set_stroke_width(run.font_size * 0.06);
+            }
             let run_origin = run.origin;
             self.surface.canvas().draw_str(
                 run.content.as_str(),
@@ -485,5 +495,18 @@ impl RenderBackend for WebBackend {
         let font = skia_safe::Font::new(typeface, font_size);
         let (advance, _bounds) = font.measure_str(text, None);
         advance
+    }
+
+    /// Weight-aware measure for the wasm32 backend. The bundle ships
+    /// a single-weight Roboto-Regular + Noto CJK subset and emulates
+    /// bold via the stroke-and-fill paint trick in `draw_text` (see
+    /// the `run.font_weight >= 600` branch above). That means weight
+    /// does NOT change glyph advance widths here — wrap decisions
+    /// stay aligned with paint as long as we route through the
+    /// same `Font::measure_str` path. Without this override the
+    /// trait's default forwards to the heuristic in `render_backend.rs`,
+    /// diverging from `draw_text` (codex BLOCK).
+    fn measure_text_weighted(&mut self, text: &str, font_size: f32, _weight: u16) -> f32 {
+        self.measure_text(text, font_size)
     }
 }

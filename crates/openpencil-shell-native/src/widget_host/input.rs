@@ -143,6 +143,49 @@ impl WidgetHostNative {
                 return true;
             }
         }
+        if self.document.ui.file_menu_open {
+            use openpencil_shell_core::widgets::file_menu::FileMenu;
+            use openpencil_shell_core::widgets::top_bar::TopBar;
+            let top_bar_rect = openpencil_shell_core::Rect {
+                origin: Point2D::new(0.0, 0.0),
+                size: Point2D::new(
+                    self.last_viewport_w,
+                    openpencil_shell_core::widgets::TOP_BAR_HEIGHT,
+                ),
+            };
+            let anchor = TopBar::file_menu_rect(top_bar_rect);
+            let now_secs = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_secs())
+                .unwrap_or(0);
+            let menu = FileMenu::from_document(&self.document, now_secs);
+            let panel = menu.rect_at(anchor);
+            let new_hover = menu.hovered_at(panel, Point2D::new(x, y));
+            if new_hover != self.document.ui.file_menu_hover {
+                self.document.ui.file_menu_hover = new_hover;
+                return true;
+            }
+        }
+        if self.document.ui.locale_picker_open {
+            use openpencil_shell_core::widgets::locale_picker::LocalePicker;
+            let panel = self.locale_picker_rect(self.last_viewport_w);
+            let picker = LocalePicker::for_document(&self.document);
+            let new_hover = picker.hit_test(panel, Point2D::new(x, y));
+            if new_hover != self.document.ui.locale_picker_hover {
+                self.document.ui.locale_picker_hover = new_hover;
+                return true;
+            }
+        }
+        if self.document.ui.shape_picker_open {
+            use openpencil_shell_core::widgets::shape_picker::ShapePicker;
+            let panel = self.shape_picker_rect(self.last_viewport_w, self.last_viewport_h);
+            let picker = ShapePicker::for_document(&self.document);
+            let new_hover = picker.hit_test(panel, Point2D::new(x, y));
+            if new_hover != self.document.ui.shape_picker_hover {
+                self.document.ui.shape_picker_hover = new_hover;
+                return true;
+            }
+        }
         if let Some(drag) = self.rotate_drag {
             let cursor_angle = (y - drag.center_screen_y).atan2(x - drag.center_screen_x);
             let new_rotation = drag.start_rotation + (cursor_angle - drag.start_cursor_angle);
@@ -627,11 +670,11 @@ impl WidgetHostNative {
             return true;
         }
         if self.document.ui.locale_picker_open {
-            self.document.ui.locale_picker_open = false;
+            self.document.ui.locale_picker_open = false; self.document.ui.locale_picker_hover = None;
             return true;
         }
         if self.document.ui.shape_picker_open {
-            self.document.ui.shape_picker_open = false;
+            self.document.ui.shape_picker_open = false; self.document.ui.shape_picker_hover = None;
             return true;
         }
         if self.document.ui.fill_type_picker_open {

@@ -339,3 +339,56 @@ The shell-native `widget_host/` directory now houses 8 sibling submodules under 
 | `widget_host/paint.rs`             | `WidgetHostNative::paint` — full editor-UI composition pass                                                                                                           |
 | `widget_host/property_dispatch.rs` | Property-panel action dispatch + `commit_property_focus_if_any` + `commit_settings_focus_if_any`                                                                      |
 | `widget_host/shortcuts.rs`         | Keyboard shortcut helpers (Cmd-Shift-C color picker, Cmd-Shift-G ungroup, etc.)                                                                                       |
+
+## Canonical `.op` / `.pen` loader (v0.8.0+)
+
+`openpencil-desktop/src/pen_doc_adapter.rs` bridges the canonical `jian_ops_schema::PenDocument` into the desktop's private `DocPayload` so files saved by the TS editor, Jian apps, or any other tool emitting the canonical schema load through the shared parser. Adapter responsibilities:
+
+1. **Variant routing** — all 12 `PenNode` variants (frame / group / rectangle / ellipse / line / polygon / path / text / text_input / image / icon_font / ref) become `NodePayload`. Image / TextInput / IconFont degrade where their renderer isn't wired yet (image → grey placeholder rect; text_input → text node with seeded value / placeholder; icon_font → `NodeKind::Other("icon_font")` with `iconFontName` stashed in `text`).
+2. **Layout via `jian_core::layout::LayoutEngine`** — taffy-backed flex solver, with the canonical `clipContent` / `justifyContent` / `alignItems` semantics. Each page-root gets its own engine pass; harvested rects are offset by `(base.x, base.y)` so multi-design files (e.g. `pencil-demo.op`'s 14 side-by-side mock-ups) spread across the infinite canvas instead of overlapping at origin.
+3. **Text measurement via `jian_skia::SkiaMeasure`** — real skia paragraph shaper plugged in with `LayoutEngine::with_backend(Rc::new(SkiaMeasure::new()))`. Replaces the default `EstimateBackend` (~10% character-count heuristic) so `fit_content` text frames size against the same glyph advances `draw_text` paints with.
+4. **Version tolerance** — `persistence::load_canonical` retries with `version` rewritten to `"1.0"` when the canonical schema rejects on a legacy major (e.g. pencil-demo.op's `version: "2.8"`), so older TS files still load best-effort.
+
+`pen_doc_path_bounds.rs` ports `pen-core/src/path-anchors.ts::getPathBoundsFromAnchors` — cubic Bezier derivative roots + extrema sweep — so authored paths with handles/curves scale into their `width` / `height` box the same way the canonical renderer paints.
+
+## Font weight + text wrapping
+
+- **Numeric-string `fontWeight`** — `.op` files emit weights as JSON strings (`"700"`, `"600"`, `"normal"`). Both `vendor/jian/.../layout/mod.rs::resolve_weight` and `pen_doc_adapter::resolve_font_weight` parse numeric strings first, then fall back to lucide-style named weights (`bold`/`semibold`/`medium`/`light`/`thin`/`normal`/`regular`/`extralight`/`extrabold`/`black`/`heavy`/`demibold`/`ultralight`/`ultrabold`/`hairline`).
+- **`Node.text_wrap: bool`** — set only when the schema authored `textGrowth: fixed-width` (or `fixed-width-and-height`). Canvas paint wraps text only when this flag is true; otherwise paints single-line at the authored width so font-fallback overshoot doesn't break lines the TS app shows on one line. `\n` characters split into multiple lines either way.
+- **`wrap_text` (canvas_viewport_overlay.rs)** — greedy CJK-aware line breaker mirroring `pen-renderer/paint-utils.ts::wrapLine`. Per-character breaks for CJK codepoints (CJK Unified + Extension A, Hiragana/Katakana, Hangul, CJK symbols, full-width), word breaks for Latin runs, blank-line preservation on empty `\n` segments. Takes `weight: u16` so measurement matches the weighted typeface paint will use.
+- **`RenderBackend::measure_text_weighted(text, font_size, weight)`** — every backend (`NativeBackend`, `WebBackend`, `NativeFrameBackend`) overrides this. Native keys its per-codepoint typeface cache on `(codepoint, weight)` and queries FontMgr with `FontStyle::new(Weight, Width::Normal, Slant::Upright)`. Web ships a single-weight bundle so `measure_text_weighted` forwards to `measure_text`. The trait default forwards to `measure_text` for the heuristic fallback.
+- **Synthetic bold** — both native and web `draw_text` set `PaintStyle::StrokeAndFill` + `stroke_width = font_size * 0.06` for weights ≥ 600 so the bundled single-weight Roboto-Regular paints heavy when the file asks for bold.
+
+## Icon coverage
+
+`icons.rs` + `icons_data.rs` (sibling — keeps `icons.rs` under cap as the catalogue grows) cover ~75 lucide variants spanning chrome glyphs (Plus / Minus / Search / Settings / etc.) plus first-party `iconFontName` strings from `packages/pen-core/src/element-builders/` (`calendar`, `clock`, `map-pin`, `more-vertical`, `chevron-left`, `trending-up`/`-down`, `compass`, `refresh-cw`, `layout-dashboard`, `users`, `package`, `zap`, `sliders-horizontal`, `activity`, `loader`, `focus`, `chart-line`, `settings-2`, `arrow-right`, `check-circle`, `alert-triangle`, `alert-octagon`, `sticky-note`, `bar-chart-2`, `bold`/`italic`/`underline`/`strikethrough`, `shopping-cart`/`-bag`, `send`, `message-circle`, `rocket`, `menu`, `credit-card`, `x-circle`, `mail`, `smartphone`, `chrome`, `apple`, `user`). All d-strings copied verbatim from `node_modules/.bun/lucide-react@0.545.0/dist/esm/icons/*.js`.
+
+`Icon::from_name(&str) -> Option<Icon>` resolves kebab-case glyph names plus common aliases (`back` / `forward` / `cart` / `bag` / `hamburger` / `card` / `cancel` / `house` / `chart-bar` / `like` / `team` / etc.). The unknown-name fallback strokes the canonical `FALLBACK_ICON_D` (`M12 12m-3 0a3 3 0 1 0 6 0a3 3 0 1 0 -6 0`) — a small centred dot, matching `pen-renderer/node-renderer.ts::FALLBACK_ICON_D` — so unsupported icons read as "unknown glyph" instead of a solid block.
+
+`paint_icon_font_node(backend, name, rect, fill)` in `icons.rs` is the canvas entry point: scales the 24×24 viewBox to `min(w, h)`, centres it, strokes at `(size / 24) * 2` widths to match lucide's 2 px reference stroke.
+
+## Hover state across menus + panels
+
+Every dropdown / sidebar / row list paints a per-row tint when the cursor is over it. State lives on `Document.ui` (or the appropriate sub-struct) and is updated by the host's `apply_cursor_move`:
+
+| Surface                            | State                                                 | Tint                     |
+| ---------------------------------- | ----------------------------------------------------- | ------------------------ |
+| File menu (`file_menu.rs`)         | `Document.ui.file_menu_hover: Option<FileMenuChoice>` | `theme.muted` row wash   |
+| Locale picker (`locale_picker.rs`) | `Document.ui.locale_picker_hover: Option<Locale>`     | `theme.muted`            |
+| Shape picker (`shape_picker.rs`)   | `Document.ui.shape_picker_hover: Option<ShapeChoice>` | `theme.muted`            |
+| Layer panel rows                   | `Document.ui.hovered_layer_id` / `hovered_page_index` | `theme.muted` row wash   |
+| AgentSettings nav (sidebar tabs)   | `agent_settings.hover_nav: Option<AgentSettingsTab>`  | `theme.accent`           |
+| AgentSettings provider cards       | `agent_settings.hover_provider: usize`                | `theme.accent` card wash |
+| Layer context menu                 | `layer_context_menu.hovered_row: Option<u8>`          | row highlight            |
+
+Every host close path clears its respective hover state so reopening starts un-hovered.
+
+## File-menu polish
+
+- Action labels strip the trailing `…` (Open file / Save As / Export image — pure label, no Mac-convention ellipsis).
+- Recent file rows truncate long file names with a CJK-aware `truncate_to_width` helper that reserves space for the age column on the right.
+- Compact row metrics (`ROW_HEIGHT = 30`, `HEADER_HEIGHT = 22`, `PAD_Y = 6`, `MENU_WIDTH = 300`) — the menu reads tighter than the default 36/28/8/320.
+
+## Open / Save / Export error dialogs
+
+`persistence.rs::show_error_dialog` pops a native `rfd::MessageDialog` on every failed load / save / export with a bilingual (EN / ZH per `Document.ui.locale`) title + path + detail body. `OpenRecent` failures additionally prune the stale entry from `Document.ui.recent_files`.

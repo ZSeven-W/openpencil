@@ -84,6 +84,45 @@ pub fn paint_brand_logo(
     }
 }
 
+/// Figma logo — five overlapping rounded shapes with different
+/// alpha layers, sourced from `apps/web/src/components/icons/
+/// figma-logo.tsx`. viewBox 0 0 38 57. Drawn as 5 separate
+/// `fill_svg_path` calls so each path keeps its own opacity layer.
+pub fn paint_figma_logo(
+    backend: &mut dyn RenderBackend,
+    top_left: Point2D,
+    size: f32,
+    color: Color,
+) {
+    const PATHS: [(&str, f32); 5] = [
+        // Center circle (opacity 0.8).
+        ("M19 28.5C19 23.2533 23.2533 19 28.5 19C33.7467 19 38 23.2533 38 28.5C38 33.7467 33.7467 38 28.5 38C23.2533 38 19 33.7467 19 28.5Z", 0.8),
+        // Bottom-left rounded rect (0.5).
+        ("M0 47.5C0 42.2533 4.25329 38 9.5 38H19V47.5C19 52.7467 14.7467 57 9.5 57C4.25329 57 0 52.7467 0 47.5Z", 0.5),
+        // Top-right rounded rect (0.7).
+        ("M19 0V19H28.5C33.7467 19 38 14.7467 38 9.5C38 4.25329 33.7467 0 28.5 0H19Z", 0.7),
+        // Top-left rounded rect (0.9).
+        ("M0 9.5C0 14.7467 4.25329 19 9.5 19H19V0H9.5C4.25329 0 0 4.25329 0 9.5Z", 0.9),
+        // Middle-left rect (0.6).
+        ("M0 28.5C0 33.7467 4.25329 38 9.5 38H19V19H9.5C4.25329 19 0 23.2533 0 28.5Z", 0.6),
+    ];
+    // Figma's source viewBox is 38 × 57; scale to fit the longest axis
+    // so a `size × size` slot keeps the glyph centred.
+    let scale = size / 57.0;
+    let glyph_w = 38.0 * scale;
+    let offset_x = (size - glyph_w) / 2.0;
+    let origin = Point2D::new(top_left.x + offset_x, top_left.y);
+    for (d, opacity) in PATHS.iter() {
+        let c = Color {
+            r: color.r,
+            g: color.g,
+            b: color.b,
+            a: color.a * opacity,
+        };
+        backend.fill_svg_path(d, origin, glyph_w, 38.0, c);
+    }
+}
+
 /// OpenCode terminal logo — multi-primitive (round-rect frame +
 /// title-bar line + 3 dots + chevron + cursor line). Renders as
 /// stroke art in `color`. `size` is the side length; the source

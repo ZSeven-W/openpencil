@@ -24,10 +24,7 @@ impl NodeId {
 
     /// Inner numeric id.
     #[inline]
-    pub const fn raw(self) -> u64 {
-        self.0
-    }
-
+    pub const fn raw(self) -> u64 { self.0 }
     /// Convert to a `WidgetId` (identity mapping).
     #[inline]
     pub const fn to_widget_id(self) -> crate::widgets::WidgetId {
@@ -90,20 +87,20 @@ pub struct Node {
     pub text: Option<String>,
     /// Rotation radians, cw positive about the bounds center.
     pub rotation: f32,
-    /// Skips paint + hit-test. Layer panel row still paints, dimmed.
     pub hidden: bool,
-    /// Skips hit-test only; paint still happens.
     pub locked: bool,
-    /// LayerPanel collapse toggle; canvas ignores.
     pub collapsed: bool,
-    /// Per-node fill type. Default `Solid`.
     pub fill_type: FillType,
-    /// Uniform corner radius in doc-px. `0.0` is a square corner;
-    /// rect / frame nodes interpret it as the round-rect radius,
-    /// other kinds ignore it.
+    /// Round-rect radius (doc-px); 0 = square. Rect/Frame only.
     pub corner_radius: f32,
     /// Path anchors (doc coords). Empty for non-Path kinds.
     pub points: Vec<crate::Point2D>,
+    /// Text size in doc-px; 0 = renderer default (13 px). Text-only.
+    pub font_size: f32,
+    /// CSS-style font weight (100-900); 0 = default (400). Text-only.
+    pub font_weight: u16,
+    /// `textGrowth: fixed-width` ⇒ wrap to bounds width; default off.
+    pub text_wrap: bool,
     pub children: Vec<Node>,
 }
 
@@ -124,6 +121,9 @@ impl Node {
             fill_type: FillType::Solid,
             corner_radius: 0.0,
             points: Vec::new(),
+            font_size: 0.0,
+            font_weight: 0,
+            text_wrap: false,
             children: Vec::new(),
         }
     }
@@ -149,6 +149,9 @@ impl Node {
             fill_type: FillType::Solid,
             corner_radius: 0.0,
             points: Vec::new(),
+            font_size: 0.0,
+            font_weight: 0,
+            text_wrap: false,
             children,
         }
     }
@@ -310,22 +313,31 @@ pub struct UiState {
     /// Caret-blink anchor for the focused property-panel input —
     /// reset on focus + every keystroke (mirrors `chat.caret_anchor_ms`).
     pub property_caret_anchor_ms: u64,
-    /// Select-all-on-focus flag — true right after a click into
-    /// an input, false after the first edit. While true, the next
-    /// keystroke / backspace clears the seeded draft so the user
-    /// can type a fresh value without backspacing first.
+    /// Select-all-on-focus flag — next keystroke clears the seeded draft.
     pub property_draft_select_all: bool,
-    /// Active theme — swapped by the TopBar Sun icon. Drives
-    /// every widget's `Theme` lookup so the entire chrome flips
-    /// together.
+    /// Active theme — TopBar Sun icon flips it.
     pub theme_mode: ThemeMode,
-    /// UI locale — cycled via the TopBar Globe icon. Drives the
-    /// `t(key)` lookup widgets use for chrome strings.
+    /// UI locale — TopBar Globe cycles.
     pub locale: Locale,
-    /// Whether the TopBar Globe-icon dropdown is open. Click the
-    /// Globe to toggle; click a row to set + close; click outside
-    /// to close.
+    /// TopBar Globe dropdown open.
     pub locale_picker_open: bool,
+    /// File-menu dropdown anchored under folder+chevron.
+    pub file_menu_open: bool,
+    /// Row currently hovered while the file menu is open — drives
+    /// the per-row tint so the user can see which action will fire.
+    pub file_menu_hover: Option<crate::widgets::file_menu::FileMenuChoice>,
+    /// Locale picker hover — same shape as `file_menu_hover`.
+    pub locale_picker_hover: Option<Locale>,
+    /// Shape picker hover — same shape, keyed by `ShapeChoice`.
+    pub shape_picker_hover: Option<crate::widgets::shape_picker::ShapeChoice>,
+    /// Pending file-menu action.
+    pub pending_file_action: Option<FileAction>,
+    /// Recent files (head = newest, cap 10).
+    pub recent_files: Vec<RecentFile>,
+    /// TopBar display name; None = "Untitled".
+    pub file_name_display: Option<String>,
+    /// Modal "从 Figma 导入" — opens on Figma logo click in TopBar.
+    pub figma_import_open: bool,
     /// Whether the Toolbar shape-tool dropdown is open. The shape
     /// slot in the toolbar shows the icon for `shape_tool`; click
     /// it to toggle this picker. Picker rows: Rectangle / Ellipse /
@@ -427,6 +439,28 @@ pub use crate::agent_settings_state::{
     SettingsFocus,
 };
 
+/// File-menu "Recent files" entry — runner persists via `settings_io`.
+#[derive(Debug, Clone)]
+pub struct RecentFile {
+    pub path: String,
+    /// Unix seconds when last touched.
+    pub modified_at: u64,
+}
+
+/// File-menu choices the desktop runner has to handle (rfd dialogs
+/// + serde live there, not in shell-core).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FileAction {
+    New,
+    Open,
+    Save,
+    SaveAs,
+    ExportImage,
+    ImportFigma,
+    OpenRecent(usize),
+    ClearRecent,
+}
+
 /// Floating colour-picker state. HSV stays anchored across the
 /// committed-RGB rounding cycle.
 #[derive(Debug, Clone)]
@@ -515,6 +549,14 @@ impl Default for UiState {
             theme_mode: ThemeMode::Dark,
             locale: Locale::ZhCn,
             locale_picker_open: false,
+            file_menu_open: false,
+            file_menu_hover: None,
+            locale_picker_hover: None,
+            shape_picker_hover: None,
+            pending_file_action: None,
+            recent_files: Vec::new(),
+            file_name_display: None,
+            figma_import_open: false,
             shape_picker_open: false,
             shape_tool: Tool::Rect,
             flex_layout: FlexLayout::Free,
@@ -723,41 +765,23 @@ impl Tool {
     /// All tools, in toolbar display order. Single source of truth
     /// for the toolbar build path.
     pub const ALL: [Tool; 9] = [
-        Tool::Select,
-        Tool::Rect,
-        Tool::Ellipse,
-        Tool::Polygon,
-        Tool::Line,
-        Tool::Pen,
-        Tool::Text,
-        Tool::Frame,
-        Tool::Hand,
+        Tool::Select, Tool::Rect, Tool::Ellipse, Tool::Polygon, Tool::Line,
+        Tool::Pen, Tool::Text, Tool::Frame, Tool::Hand,
     ];
 
     /// Stable accesskit / DOM id token (lowercase ASCII).
     pub fn ident(self) -> &'static str {
         match self {
-            Tool::Select => "select",
-            Tool::Rect => "rect",
-            Tool::Ellipse => "ellipse",
-            Tool::Polygon => "polygon",
-            Tool::Line => "line",
-            Tool::Pen => "pen",
-            Tool::Text => "text",
-            Tool::Frame => "frame",
-            Tool::Hand => "hand",
+            Tool::Select => "select", Tool::Rect => "rect", Tool::Ellipse => "ellipse",
+            Tool::Polygon => "polygon", Tool::Line => "line", Tool::Pen => "pen",
+            Tool::Text => "text", Tool::Frame => "frame", Tool::Hand => "hand",
         }
     }
 
-    /// Whether this tool sits inside the Toolbar's shape-tool
-    /// dropdown (Rect / Ellipse / Polygon / Line / Pen). The
-    /// shape slot in the toolbar paints whichever of these is
-    /// currently active.
+    /// True when this tool sits inside the Toolbar's shape-slot
+    /// dropdown — paints whichever variant is currently active.
     pub fn is_shape(self) -> bool {
-        matches!(
-            self,
-            Tool::Rect | Tool::Ellipse | Tool::Polygon | Tool::Line | Tool::Pen
-        )
+        matches!(self, Tool::Rect | Tool::Ellipse | Tool::Polygon | Tool::Line | Tool::Pen)
     }
 }
 

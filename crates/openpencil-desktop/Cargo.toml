@@ -17,6 +17,23 @@ path = "src/main.rs"
 [target.'cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))'.dependencies]
 openpencil-shell-core = { path = "../openpencil-shell-core", version = "0.1.0" }
 openpencil-shell-native = { path = "../openpencil-shell-native", version = "0.1.0" }
+# Canonical `.op` / `.pen` schema — all persistence + interop goes
+# through `PenDocument` rather than the desktop's private DocPayload.
+# Falling back to the schema's `load_str` lets us open files saved by
+# the TS editor, Jian apps, or any tool that emits the canonical form.
+jian-ops-schema = { path = "../../vendor/jian/crates/jian-ops-schema" }
+# jian-core ships the taffy-backed `LayoutEngine` that is the
+# canonical flex solver for `.op` files. We reuse it (instead of
+# rolling our own) so layout stays bit-identical with what the TS
+# editor + future jian native runtime produce.
+jian-core = { path = "../../vendor/jian/crates/jian-core" }
+# jian-skia ships `SkiaMeasure` — a `MeasureBackend` impl that
+# defers to skia's paragraph shaper. Wiring it into the layout
+# engine replaces the ~10% character-count heuristic with real
+# glyph advances so text frames sized to `fit_content` agree
+# with what the canvas painter draws (TS parity for line-wrap +
+# fixed-width text growth).
+jian-skia = { path = "../../vendor/jian/crates/jian-skia", features = ["textlayout"] }
 skia-safe = { version = "0.97.0", default-features = false, features = [
   "binary-cache",
   "textlayout",
@@ -36,3 +53,13 @@ winit = { version = "0.30.13", default-features = false, features = [
 serde = { workspace = true }
 serde_json = { workspace = true }
 rfd = "0.14"
+# 2D affine transforms used by PNG export's bounds walker so nested
+# rotated containers don't clip their children. Pinned to the same
+# version shell-core uses for `Point2D = glam::Vec2`.
+glam = { version = "0.29", default-features = false, features = ["std"] }
+# Resolves the platform-specific user-config dir for the auto-saved
+# settings file (TS parity with `agent-settings-store` localStorage):
+# macOS  → ~/Library/Application Support/openpencil/settings.json
+# Linux  → ~/.config/openpencil/settings.json
+# Windows → %APPDATA%/openpencil/settings.json
+dirs = "5"

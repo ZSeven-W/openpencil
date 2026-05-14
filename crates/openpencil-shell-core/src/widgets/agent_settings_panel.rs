@@ -134,6 +134,19 @@ impl<'a> AgentSettingsPanel<'a> {
         AgentSettingsHit::Inside
     }
 
+    /// Return the sidebar tab under `point`, or `None` if the cursor
+    /// is not on a nav row. Geometry mirrors `paint_sidebar`'s
+    /// `nav_item_rect` walk so the hover tint aligns with the click
+    /// target.
+    pub fn nav_at(&self, panel: Rect, point: Point2D) -> Option<AgentSettingsTab> {
+        for (i, tab) in AgentSettingsTab::ALL.iter().enumerate() {
+            if rect_contains(nav_item_rect(panel, i), point) {
+                return Some(*tab);
+            }
+        }
+        None
+    }
+
     /// Return the index of the provider card under `point` (in
     /// screen-space, NOT scrolled), or `None` when the cursor sits
     /// outside every card. Used for hover state.
@@ -254,8 +267,11 @@ fn paint_sidebar(
     for (i, tab) in AgentSettingsTab::ALL.iter().enumerate() {
         let r = nav_item_rect(panel, i);
         let selected = *tab == settings.tab;
+        let hovered = !selected && settings.hover_nav == Some(*tab);
         if selected {
             cx.backend.fill_round_rect(r, 8.0, theme.muted);
+        } else if hovered {
+            cx.backend.fill_round_rect(r, 8.0, theme.accent);
         }
         let icon = match tab {
             AgentSettingsTab::Agents => Icon::Pencil,
@@ -483,8 +499,14 @@ fn paint_agent_card(
     index: usize,
 ) {
     let outlined = matches!(provider, AgentProvider::ClaudeCode);
+    let card_hovered = settings.hover_provider == index;
     if outlined {
         cx.backend.fill_round_rect(card, 10.0, theme.muted);
+    } else if card_hovered {
+        // Subtle wash on hover so the whole row reads as "I'm
+        // pointing at this card" rather than leaving the hover
+        // signal entirely on the trailing button.
+        cx.backend.fill_round_rect(card, 10.0, theme.accent);
     }
     cx.backend.stroke_round_rect(card, 10.0, theme.border, 1.0);
     let avatar = Rect {

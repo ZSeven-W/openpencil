@@ -151,6 +151,10 @@ pub struct AgentSettings {
     /// red 断开连接 affordance on already-connected cards. `usize::MAX`
     /// means no card is hovered.
     pub hover_provider: usize,
+    /// Sidebar nav item under the cursor (Agents / MCP / Images /
+    /// System). `None` = no hover. Drives a `muted`-tinted background
+    /// on the row so the user sees which tab the next click hits.
+    pub hover_nav: Option<AgentSettingsTab>,
 }
 
 impl Default for AgentSettings {
@@ -167,6 +171,7 @@ impl Default for AgentSettings {
             images_search_ready: true,
             focus: None,
             hover_provider: usize::MAX,
+            hover_nav: None,
         }
     }
 }

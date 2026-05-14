@@ -142,20 +142,33 @@ impl WidgetHostNative {
     pub fn update_agent_settings_hover(&mut self, x: f32, y: f32) -> bool {
         use openpencil_shell_core::document::AgentSettingsTab;
         use openpencil_shell_core::widgets::agent_settings_panel::AgentSettingsPanel;
-        if !matches!(self.document.ui.agent_settings.tab, AgentSettingsTab::Agents) {
-            return false;
+        let point = Point2D::new(x, y);
+        // Compute both hover values from an immutable borrow before
+        // any mutation — `panel` keeps the borrow alive through the
+        // hit-tests, so we materialise both into locals first.
+        let (new_nav, new_card) = {
+            let panel = AgentSettingsPanel::for_document(&self.document);
+            let panel_rect = panel.rect(self.last_viewport_w, self.last_viewport_h);
+            let nav = panel.nav_at(panel_rect, point);
+            let card = if matches!(self.document.ui.agent_settings.tab, AgentSettingsTab::Agents) {
+                Some(panel.card_at(panel_rect, point).unwrap_or(usize::MAX))
+            } else {
+                None
+            };
+            (nav, card)
+        };
+        let mut changed = false;
+        if new_nav != self.document.ui.agent_settings.hover_nav {
+            self.document.ui.agent_settings.hover_nav = new_nav;
+            changed = true;
         }
-        let panel = AgentSettingsPanel::for_document(&self.document);
-        let panel_rect = panel.rect(self.last_viewport_w, self.last_viewport_h);
-        let new_val = panel
-            .card_at(panel_rect, Point2D::new(x, y))
-            .unwrap_or(usize::MAX);
-        let prev = self.document.ui.agent_settings.hover_provider;
-        if new_val != prev {
-            self.document.ui.agent_settings.hover_provider = new_val;
-            return true;
+        if let Some(v) = new_card {
+            if v != self.document.ui.agent_settings.hover_provider {
+                self.document.ui.agent_settings.hover_provider = v;
+                changed = true;
+            }
         }
-        false
+        changed
     }
 
     pub fn cursor_hint(&self, x: f32, y: f32, viewport_w: f32, viewport_h: f32) -> CursorHint {

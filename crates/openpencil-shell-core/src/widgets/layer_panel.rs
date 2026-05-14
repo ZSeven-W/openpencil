@@ -514,6 +514,8 @@ impl Widget for LayerPanel {
             if page.active {
                 cx.backend
                     .fill_round_rect(row, 6.0, self.theme.row_selected);
+            } else if page.hovered {
+                cx.backend.fill_round_rect(row, 6.0, self.theme.muted);
             }
             let label_x = row.origin.x + 12.0;
             let label_max_x = rect.origin.x + rect.size.x - ROW_PAD_X - 18.0;
@@ -597,6 +599,8 @@ impl Widget for LayerPanel {
                 // icon for the selected layer row.
                 cx.backend
                     .fill_round_rect(row, 6.0, self.theme.row_selected_primary);
+            } else if item.hovered {
+                cx.backend.fill_round_rect(row, 6.0, self.theme.muted);
             }
 
             let indent = ROW_PAD_X + f32::from(item.depth) * 12.0;

@@ -169,6 +169,14 @@ impl WidgetHost {
                     self.document.ui.agent_settings_open = true;
                     return true;
                 }
+                TopBarHit::ToggleFileMenu => {
+                    self.document.ui.file_menu_open ^= true;
+                    return true;
+                }
+                TopBarHit::OpenFigmaImport => {
+                    self.document.ui.figma_import_open = true;
+                    return true;
+                }
             }
         }
         if rect_contains(top_bar_rect, Point2D::new(x, y)) {

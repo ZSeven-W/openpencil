@@ -380,6 +380,9 @@ fn paint_node(
                 paint_node(cx, child, viewport_origin, zoom, selected, edit_caret, cull);
             }
         }
+        NodeKind::Other(tag) if tag == "icon_font" => crate::widgets::icons::paint_icon_font_node(
+            cx.backend, node.text.as_deref().unwrap_or(""), world_rect, node.fill,
+        ),
         NodeKind::Group | NodeKind::Other(_) => {
             for child in &node.children {
                 paint_node(cx, child, viewport_origin, zoom, selected, edit_caret, cull);
@@ -455,30 +458,28 @@ fn paint_node(
         }
         NodeKind::Text => {
             let text = node.text.as_deref().unwrap_or("");
-            // Ink colour follows `Node.fill` (defaults to near
-            // black if unset) so editing the Fill hex repaints
-            // the rendered text.
-            let ink = node.fill.unwrap_or(crate::Color {
-                r: 0.08,
-                g: 0.08,
-                b: 0.08,
-                a: 1.0,
-            });
+            // Ink colour follows `Node.fill` (defaults to near black if unset).
+            let ink = node.fill.unwrap_or(crate::Color { r: 0.08, g: 0.08, b: 0.08, a: 1.0 });
             fn ch(v: f32) -> u8 {
                 (v.clamp(0.0, 1.0) * 255.0).round() as u8
             }
-            let font_size = 13.0 * zoom;
-            let baseline_y = world_rect.origin.y + 14.0 * zoom;
+            // Honour authored font size from the canonical schema; default to
+            // 13 px so editor-created text stays uniform. Baseline ≈ 1.08 × size.
+            let base_size = if node.font_size > 0.0 { node.font_size } else { 13.0 };
+            let font_size = base_size * zoom;
+            let baseline_y = world_rect.origin.y + (base_size + 1.0) * zoom;
             if !text.is_empty() {
-                let layout = TextLayout::single_run(
-                    text,
-                    "system-ui",
-                    font_size,
-                    jian_core::scene::Color::rgba(ch(ink.r), ch(ink.g), ch(ink.b), ch(ink.a)),
-                    Point2D::new(0.0, 0.0),
-                );
-                cx.backend
-                    .draw_text(&layout, Point2D::new(world_rect.origin.x, baseline_y));
+                let weight = if node.font_weight > 0 { node.font_weight } else { 400 };
+                let jc = jian_core::scene::Color::rgba(ch(ink.r), ch(ink.g), ch(ink.b), ch(ink.a));
+                let line_h = base_size * 1.35 * zoom;
+                let mut ly = baseline_y;
+                let lines: Vec<String> = if node.text_wrap {
+                    crate::widgets::canvas_viewport_overlay::wrap_text(cx.backend, text, font_size, world_rect.size.x, weight)
+                } else { text.split('\n').map(str::to_string).collect() };
+                for line in lines {
+                    cx.backend.draw_text(&TextLayout::single_run(&line, "system-ui", font_size, jc, Point2D::new(0.0, 0.0)).with_font_weight(weight), Point2D::new(world_rect.origin.x, ly));
+                    ly += line_h;
+                }
             }
             // Caret while editing — sits at the end of the text.
             if let Some(c) = edit_caret {

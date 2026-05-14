@@ -317,6 +317,14 @@ impl WidgetHostNative {
         &mut self.document
     }
 
+    /// Commit any in-progress settings-modal input draft (currently
+    /// the MCP port). Used by the desktop runner before persisting
+    /// settings on quick-quit so a focused-but-uncommitted port edit
+    /// isn't silently dropped.
+    pub fn flush_settings_input(&mut self) {
+        self.commit_settings_focus_if_any();
+    }
+
     /// Whether the chat input is focused — runner uses this to
     /// decide whether to schedule a periodic wake-up for caret
     /// blink.

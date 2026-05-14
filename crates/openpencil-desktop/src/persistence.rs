@@ -34,6 +34,13 @@ pub struct PagePayload {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct NodePayload {
     pub id: u64,
+    /// Original schema id (the string `id` in the `.op` file). Only
+    /// populated when the payload was built from a canonical-schema
+    /// load — used to look up layout rects after jian-core's
+    /// LayoutEngine computes them. Empty for `DocPayload` that was
+    /// round-tripped from a previous Save.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub schema_id: String,
     pub kind: String,
     pub name: String,
     pub x: f32,
@@ -60,6 +67,15 @@ pub struct NodePayload {
     pub fill_type: String,
     #[serde(default)]
     pub points: Vec<[f32; 2]>,
+    /// Text size in doc-px (matches `Node.font_size`). 0 = use the
+    /// renderer's default 13 px. Text-only.
+    #[serde(default)]
+    pub font_size: f32,
+    /// CSS-style font weight (100-900). 0 = default 400. Text-only.
+    #[serde(default)]
+    pub font_weight: u16,
+    #[serde(default)]
+    pub text_wrap: bool,
     #[serde(default)]
     pub children: Vec<NodePayload>,
 }
@@ -90,6 +106,7 @@ pub fn to_payload(doc: &Document) -> DocPayload {
 fn node_to_payload(n: &Node) -> NodePayload {
     NodePayload {
         id: n.id.raw(),
+        schema_id: String::new(),
         kind: kind_to_string(&n.kind),
         name: n.name.clone(),
         x: n.bounds.origin.x,
@@ -109,6 +126,9 @@ fn node_to_payload(n: &Node) -> NodePayload {
         collapsed: n.collapsed,
         fill_type: fill_type_to_str(n.fill_type).to_string(),
         points: n.points.iter().map(|p| [p.x, p.y]).collect(),
+        font_size: n.font_size,
+        font_weight: n.font_weight,
+        text_wrap: n.text_wrap,
         children: n.children.iter().map(node_to_payload).collect(),
     }
 }
@@ -172,7 +192,72 @@ pub fn apply_payload(doc: &mut Document, payload: DocPayload) -> Result<(), Stri
     // ids the new allocator doesn't know about (or collide with
     // freshly-loaded rows). Empty the clipboard on Open.
     doc.clipboard.clear();
+    // Reset viewport so loaded content is visible — without this
+    // the previous session's pan/zoom can leave the new document
+    // entirely off-screen, which surfaces as "Open did nothing".
+    fit_viewport_to_active_page(doc);
     Ok(())
+}
+
+/// Pan + zoom so the active page's content fits the default
+/// viewport area. Falls back to identity when the page is empty.
+/// Uses a conservative AABB walk (same shape as `export::page_bounds`)
+/// to find content extents.
+fn fit_viewport_to_active_page(doc: &mut Document) {
+    use openpencil_shell_core::Point2D;
+    let Some(page) = doc.pages.get(doc.active_page_index) else {
+        doc.viewport.pan_x = 0.0;
+        doc.viewport.pan_y = 0.0;
+        doc.viewport.zoom = 1.0;
+        return;
+    };
+    let mut min_x = f32::INFINITY;
+    let mut min_y = f32::INFINITY;
+    let mut max_x = f32::NEG_INFINITY;
+    let mut max_y = f32::NEG_INFINITY;
+    fn visit(
+        n: &openpencil_shell_core::document::Node,
+        min_x: &mut f32,
+        min_y: &mut f32,
+        max_x: &mut f32,
+        max_y: &mut f32,
+    ) {
+        let r = n.aggregate_bounds();
+        if r.size.x.abs() > 0.0 || r.size.y.abs() > 0.0 {
+            let x0 = r.origin.x.min(r.origin.x + r.size.x);
+            let y0 = r.origin.y.min(r.origin.y + r.size.y);
+            let x1 = x0 + r.size.x.abs();
+            let y1 = y0 + r.size.y.abs();
+            *min_x = min_x.min(x0);
+            *min_y = min_y.min(y0);
+            *max_x = max_x.max(x1);
+            *max_y = max_y.max(y1);
+        }
+        for c in &n.children {
+            visit(c, min_x, min_y, max_x, max_y);
+        }
+    }
+    for n in &page.children {
+        visit(n, &mut min_x, &mut min_y, &mut max_x, &mut max_y);
+    }
+    if !min_x.is_finite() {
+        // Empty page — leave the viewport at identity so a fresh
+        // doc opens at world (0, 0).
+        doc.viewport.pan_x = 0.0;
+        doc.viewport.pan_y = 0.0;
+        doc.viewport.zoom = 1.0;
+        return;
+    }
+    // Centre the content's bounding box at world (0, 0) effectively
+    // by panning so `min` lands at a small inset, and keep zoom=1.
+    // This matches "open file = see the content" without trying to
+    // be too clever about screen size (we don't have viewport_w/h
+    // at this call site; main.rs's first paint applies DPI).
+    let inset = 80.0;
+    doc.viewport.pan_x = inset - min_x;
+    doc.viewport.pan_y = inset - min_y;
+    doc.viewport.zoom = 1.0;
+    let _ = (max_x, max_y, Point2D::new(0.0, 0.0));
 }
 
 fn payload_to_node(n: NodePayload) -> Node {
@@ -203,6 +288,9 @@ fn payload_to_node(n: NodePayload) -> Node {
     node.collapsed = n.collapsed;
     node.fill_type = str_to_fill_type(&n.fill_type);
     node.points = n.points.iter().map(|p| Point2D::new(p[0], p[1])).collect();
+    node.font_size = n.font_size;
+    node.font_weight = n.font_weight;
+    node.text_wrap = n.text_wrap;
     node
 }
 
@@ -281,21 +369,6 @@ pub fn save_as_dialog(doc: &Document) -> Result<Option<PathBuf>, String> {
     Ok(Some(path))
 }
 
-/// Pop an Open dialog (rfd native) and load the chosen file into
-/// `doc`. Returns `Ok(Some(path))` on success, `Ok(None)` on
-/// cancel.
-pub fn open_dialog(doc: &mut Document) -> Result<Option<PathBuf>, String> {
-    let path = rfd::FileDialog::new()
-        .set_title("Open document")
-        .add_filter("OpenPencil", &["pen", "op"])
-        .pick_file();
-    let Some(path) = path else {
-        return Ok(None);
-    };
-    load_from_path(doc, &path)?;
-    Ok(Some(path))
-}
-
 /// Write the document to `path` without prompting. Used by Cmd+S
 /// once the document already has a known path.
 pub fn save_to_path(doc: &Document, path: &std::path::Path) -> Result<(), String> {
@@ -315,8 +388,118 @@ pub fn save_to_path(doc: &Document, path: &std::path::Path) -> Result<(), String
 
 fn load_from_path(doc: &mut Document, path: &std::path::Path) -> Result<(), String> {
     let bytes = std::fs::read(path).map_err(|e| e.to_string())?;
-    let payload: DocPayload = serde_json::from_slice(&bytes).map_err(|e| e.to_string())?;
-    apply_payload(doc, payload)
+    // Try the desktop's private `DocPayload` first (round-trip with
+    // its own Save), then fall back to the canonical `.op` /
+    // `.pen` schema so files from the TS editor, Jian apps, or
+    // anything else emitting the format load through the shared
+    // parser instead of a private adapter.
+    let payload = match serde_json::from_slice::<DocPayload>(&bytes) {
+        Ok(p) => p,
+        Err(_) => {
+            let src = std::str::from_utf8(&bytes)
+                .map_err(|e| format!("file is not valid UTF-8: {e}"))?;
+            let loaded = load_canonical(src).map_err(|e| e.to_string())?;
+            for w in &loaded.warnings {
+                eprintln!("[open] schema warning: {:?}", w);
+            }
+            // jian-core's `LayoutEngine` runs inside the adapter,
+            // so the returned payload already carries absolute
+            // scene-coord rects on every node.
+            let adapted = crate::pen_doc_adapter::pen_document_to_payload(&loaded.value);
+            adapted.payload
+        }
+    };
+    let page_count = payload.pages.len();
+    let node_count: usize = payload.pages.iter().map(|p| count_nodes(&p.children)).sum();
+    apply_payload(doc, payload)?;
+    let bb = active_page_bbox(doc);
+    eprintln!(
+        "[open] {} pages, {} nodes; content bbox {:?}; viewport pan=({:.1},{:.1}) zoom={:.2}",
+        page_count, node_count, bb, doc.viewport.pan_x, doc.viewport.pan_y, doc.viewport.zoom
+    );
+    Ok(())
+}
+
+/// Wrapper around `jian_ops_schema::load_str` that retries with the
+/// document's `version` field rewritten to "1.0" when the canonical
+/// loader rejects on an unrecognised major (e.g. the TS app's
+/// `version: "2.8"` for the legacy pre-Jian format). The schema is
+/// intentionally strict on rejection so callers can opt in to
+/// "best-effort parse"; the desktop's Open dialog is one of those
+/// callers — better to surface partial geometry than refuse the
+/// file outright.
+pub(crate) fn load_canonical(
+    src: &str,
+) -> Result<
+    jian_ops_schema::LoadResult<jian_ops_schema::PenDocument>,
+    jian_ops_schema::OpsSchemaError,
+> {
+    match jian_ops_schema::load_str(src) {
+        Ok(loaded) => Ok(loaded),
+        Err(jian_ops_schema::OpsSchemaError::UnsupportedFormatVersion { found, .. }) => {
+            eprintln!(
+                "[open] file version {} is outside the canonical schema's supported range; \
+                 retrying as v1.0 (best-effort)",
+                found
+            );
+            let mut value: serde_json::Value = serde_json::from_str(src)?;
+            if let Some(obj) = value.as_object_mut() {
+                obj.insert(
+                    "version".to_string(),
+                    serde_json::Value::String("1.0".to_string()),
+                );
+                obj.remove("formatVersion");
+            }
+            let patched = serde_json::to_string(&value)?;
+            jian_ops_schema::load_str(&patched)
+        }
+        Err(other) => Err(other),
+    }
+}
+
+fn count_nodes(nodes: &[NodePayload]) -> usize {
+    nodes
+        .iter()
+        .map(|n| 1 + count_nodes(&n.children))
+        .sum()
+}
+
+fn active_page_bbox(doc: &Document) -> Option<(f32, f32, f32, f32)> {
+    let page = doc.pages.get(doc.active_page_index)?;
+    let mut min_x = f32::INFINITY;
+    let mut min_y = f32::INFINITY;
+    let mut max_x = f32::NEG_INFINITY;
+    let mut max_y = f32::NEG_INFINITY;
+    fn visit(
+        n: &openpencil_shell_core::document::Node,
+        mn_x: &mut f32,
+        mn_y: &mut f32,
+        mx_x: &mut f32,
+        mx_y: &mut f32,
+    ) {
+        let r = n.bounds;
+        let x0 = r.origin.x.min(r.origin.x + r.size.x);
+        let y0 = r.origin.y.min(r.origin.y + r.size.y);
+        let x1 = x0 + r.size.x.abs();
+        let y1 = y0 + r.size.y.abs();
+        if r.size.x.abs() > 0.0 || r.size.y.abs() > 0.0 {
+            *mn_x = mn_x.min(x0);
+            *mn_y = mn_y.min(y0);
+            *mx_x = mx_x.max(x1);
+            *mx_y = mx_y.max(y1);
+        }
+        for c in &n.children {
+            visit(c, mn_x, mn_y, mx_x, mx_y);
+        }
+    }
+    for n in &page.children {
+        visit(n, &mut min_x, &mut min_y, &mut max_x, &mut max_y);
+    }
+    if !min_x.is_finite() {
+        None
+    } else {
+        Some((min_x, min_y, max_x, max_y))
+    }
 }
 
 /// Cmd+S — save to `current_path` if known, else fall through to
@@ -329,10 +512,20 @@ pub fn handle_save(
     if let Some(path) = current_path.clone() {
         if let Err(e) = save_to_path(host.document(), &path) {
             eprintln!("[save] {e}");
+            show_error_dialog(host.document(), ErrorKind::Save, Some(&path), &e);
+        } else {
+            crate::settings_io::touch_recent(host.document_mut(), &path);
+            set_display_name(host.document_mut(), Some(&path));
         }
         return false;
     }
     handle_save_as(host, current_path, window)
+}
+
+fn set_display_name(doc: &mut openpencil_shell_core::document::Document, path: Option<&std::path::Path>) {
+    doc.ui.file_name_display = path
+        .and_then(|p| p.file_name())
+        .map(|n| n.to_string_lossy().into_owned());
 }
 
 /// Cmd+Shift+S — always pop the Save dialog.
@@ -343,6 +536,7 @@ pub fn handle_save_as(
 ) -> bool {
     match save_as_dialog(host.document()) {
         Ok(Some(path)) => {
+            crate::settings_io::touch_recent(host.document_mut(), &path);
             *current_path = Some(path);
             refresh_title(current_path, window);
             true
@@ -350,6 +544,7 @@ pub fn handle_save_as(
         Ok(None) => false,
         Err(e) => {
             eprintln!("[save as] {e}");
+            show_error_dialog(host.document(), ErrorKind::Save, None, &e);
             false
         }
     }
@@ -361,16 +556,123 @@ pub fn handle_open(
     current_path: &mut Option<PathBuf>,
     window: Option<&winit::window::Window>,
 ) -> bool {
-    match open_dialog(host.document_mut()) {
-        Ok(Some(path)) => {
+    // `open_dialog` borrows the document mutably to call
+    // `load_from_path`; the user picks a path inside, so we can't
+    // know it until after the call. Failed-parse dialogs include
+    // the path the user just chose, which `open_dialog` doesn't
+    // hand back — open the file dialog directly here so the path
+    // is available for the error dialog.
+    let path = match rfd::FileDialog::new()
+        .set_title("Open document")
+        .add_filter("OpenPencil", &["pen", "op"])
+        .pick_file()
+    {
+        Some(p) => p,
+        None => return false,
+    };
+    match load_from_path(host.document_mut(), &path) {
+        Ok(()) => {
+            crate::settings_io::touch_recent(host.document_mut(), &path);
             *current_path = Some(path);
             refresh_title(current_path, window);
             true
         }
-        Ok(None) => false,
         Err(e) => {
             eprintln!("[open] {e}");
+            show_error_dialog(host.document(), ErrorKind::Open, Some(&path), &e);
             false
+        }
+    }
+}
+
+/// Route a `FileAction` raised by the file-menu dispatcher to the
+/// matching dialog flow. Ignores `OpenRecent` / `ClearRecent` for
+/// now — recents land in the next pass.
+pub fn run_action(
+    action: openpencil_shell_core::document::FileAction,
+    host: &mut openpencil_shell_native::WidgetHostNative,
+    current_path: &mut Option<PathBuf>,
+    window: Option<&winit::window::Window>,
+) {
+    use openpencil_shell_core::document::FileAction;
+    match action {
+        FileAction::New => {
+            // Reset the document tree to a fresh untitled page.
+            let payload = DocPayload {
+                version: 1,
+                active_page_index: 0,
+                pages: vec![PagePayload {
+                    id: 1,
+                    name: "Page 1".into(),
+                    children: Vec::new(),
+                }],
+            };
+            let _ = apply_payload(host.document_mut(), payload);
+            *current_path = None;
+            refresh_title(current_path, window);
+        }
+        FileAction::Open => {
+            handle_open(host, current_path, window);
+        }
+        FileAction::Save => {
+            handle_save(host, current_path, window);
+        }
+        FileAction::SaveAs => {
+            handle_save_as(host, current_path, window);
+        }
+        FileAction::ExportImage => {
+            if let Some(path) = rfd::FileDialog::new()
+                .set_title("Export image")
+                .add_filter("PNG", &["png"])
+                .add_filter("SVG", &["svg"])
+                .set_file_name("openpencil-export.png")
+                .save_file()
+            {
+                let ext = path
+                    .extension()
+                    .and_then(|s| s.to_str())
+                    .map(|s| s.to_ascii_lowercase())
+                    .unwrap_or_default();
+                let result = if ext == "svg" {
+                    crate::export::export_svg(host.document(), &path)
+                } else {
+                    crate::export::export_png(host.document(), &path)
+                };
+                if let Err(e) = result {
+                    eprintln!("[export-image] {e}");
+                    show_error_dialog(host.document(), ErrorKind::Export, Some(&path), &e);
+                }
+            }
+        }
+        FileAction::OpenRecent(i) => {
+            let Some(entry) = host.document().ui.recent_files.get(i).cloned() else {
+                return;
+            };
+            let path = std::path::PathBuf::from(&entry.path);
+            match load_from_path(host.document_mut(), &path) {
+                Ok(()) => {
+                    crate::settings_io::touch_recent(host.document_mut(), &path);
+                    *current_path = Some(path);
+                    refresh_title(current_path, window);
+                }
+                Err(e) => {
+                    // File missing / parse failure → tell the user and
+                    // drop the entry from recents so a stale path
+                    // doesn't keep haunting the menu.
+                    eprintln!("[open-recent] {e}; pruning {}", entry.path);
+                    show_error_dialog(host.document(), ErrorKind::Open, Some(&path), &e);
+                    host.document_mut()
+                        .ui
+                        .recent_files
+                        .retain(|r| r.path != entry.path);
+                }
+            }
+        }
+        FileAction::ClearRecent => {
+            host.document_mut().ui.recent_files.clear();
+        }
+        FileAction::ImportFigma => {
+            eprintln!("[file-action] {action:?} — not yet wired (UI only)");
         }
     }
 }
@@ -382,4 +684,47 @@ fn refresh_title(current_path: &Option<PathBuf>, window: Option<&winit::window::
         None => "OpenPencil".to_string(),
     };
     window.set_title(&title);
+}
+
+/// Pop a native error dialog. Used by Open / Save / Export when the
+/// underlying IO or parse step fails so the user gets feedback
+/// instead of a silent no-op + stderr line they'll never see.
+fn show_error_dialog(
+    doc: &openpencil_shell_core::document::Document,
+    kind: ErrorKind,
+    path: Option<&std::path::Path>,
+    detail: &str,
+) {
+    use openpencil_shell_core::document::Locale;
+    let zh = matches!(doc.ui.locale, Locale::ZhCn | Locale::ZhTw);
+    let (title, lead) = match (kind, zh) {
+        (ErrorKind::Open, true) => ("无法打开文件", "OpenPencil 无法解析该文件。"),
+        (ErrorKind::Open, false) => ("Couldn't open file", "OpenPencil could not parse the file."),
+        (ErrorKind::Save, true) => ("保存失败", "写入文件时出错。"),
+        (ErrorKind::Save, false) => ("Save failed", "An error occurred while writing the file."),
+        (ErrorKind::Export, true) => ("导出失败", "渲染图像时出错。"),
+        (ErrorKind::Export, false) => {
+            ("Export failed", "An error occurred while rendering the image.")
+        }
+    };
+    let mut body = lead.to_string();
+    if let Some(p) = path {
+        body.push_str("\n\n");
+        body.push_str(&p.display().to_string());
+    }
+    body.push_str("\n\n");
+    body.push_str(detail);
+    rfd::MessageDialog::new()
+        .set_title(title)
+        .set_description(&body)
+        .set_level(rfd::MessageLevel::Error)
+        .set_buttons(rfd::MessageButtons::Ok)
+        .show();
+}
+
+#[derive(Debug, Clone, Copy)]
+enum ErrorKind {
+    Open,
+    Save,
+    Export,
 }

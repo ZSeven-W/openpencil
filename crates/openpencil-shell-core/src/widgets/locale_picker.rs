@@ -23,6 +23,10 @@ pub struct LocalePicker {
     pub id: WidgetId,
     pub theme: Theme,
     pub selected: Locale,
+    /// Row currently under the cursor — drives the per-row tint.
+    /// Mirrors `Document.ui.locale_picker_hover`, populated by the
+    /// host on cursor-move while `locale_picker_open == true`.
+    pub hovered: Option<Locale>,
 }
 
 impl LocalePicker {
@@ -31,6 +35,7 @@ impl LocalePicker {
             id: WidgetId::new(5100),
             theme: doc.theme(),
             selected: doc.ui.locale,
+            hovered: doc.ui.locale_picker_hover,
         }
     }
 
@@ -91,9 +96,12 @@ impl Widget for LocalePicker {
                 size: Point2D::new(rect.size.x - 8.0, ROW_HEIGHT),
             };
             let is_selected = locale == self.selected;
+            let is_hovered = !is_selected && self.hovered == Some(locale);
             if is_selected {
                 cx.backend
                     .fill_round_rect(row_rect, 6.0, self.theme.row_selected_primary);
+            } else if is_hovered {
+                cx.backend.fill_round_rect(row_rect, 6.0, self.theme.muted);
             }
             let label_color = if is_selected {
                 self.theme.primary

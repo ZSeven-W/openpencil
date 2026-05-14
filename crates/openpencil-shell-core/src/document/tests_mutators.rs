@@ -535,6 +535,9 @@ fn hit_test_rotated_negative_size_line_uses_segment_midpoint_pivot() {
         fill_type: FillType::Solid,
         corner_radius: 0.0,
         points: Vec::new(),
+        font_size: 0.0,
+        font_weight: 0,
+        text_wrap: false,
         children: Vec::new(),
     }];
     // Click at (50, 50) — midpoint (invariant under rotation).
