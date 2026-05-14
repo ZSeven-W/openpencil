@@ -1,0 +1,147 @@
+[package]
+name = "copilot-sdk"
+version = "0.1.17"
+edition = "2021"
+rust-version = "1.85"
+license = "MIT"
+description = "Rust SDK for GitHub Copilot CLI"
+repository = "https://github.com/github-community/copilot-sdk-rust"
+documentation = "https://docs.rs/copilot-sdk"
+readme = "README.md"
+keywords = ["copilot", "github", "ai", "sdk"]
+categories = ["api-bindings", "asynchronous"]
+
+[dependencies]
+# Async runtime
+tokio = { version = "1", features = [
+    "rt-multi-thread",
+    "net",
+    "process",
+    "sync",
+    "io-util",
+    "macros",
+    "time",
+] }
+
+# JSON serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Error handling
+thiserror = "2"
+
+# DateTime handling
+chrono = { version = "0.4", features = ["serde"] }
+
+# Logging
+tracing = "0.1"
+
+# Executable finding
+which = "7"
+
+schemars = { version = "0.8", optional = true, features = ["derive"] }
+
+[dev-dependencies]
+tokio-test = "0.4"
+pretty_assertions = "1"
+tempfile = "3"
+futures = "0.3"
+rand = "0.8"
+serde_yaml = "0.9"
+
+[features]
+default = []
+e2e = []  # Enable E2E tests that require real Copilot CLI
+snapshots = [] # Enable snapshot-based conformance tests
+schemars = ["dep:schemars"] # Derive tool JSON schemas from Rust types
+
+[package.metadata.docs.rs]
+rustdoc-args = ["--cfg", "docsrs"]
+
+[[example]]
+name = "basic_chat"
+path = "examples/basic_chat.rs"
+
+[[example]]
+name = "tool_usage"
+path = "examples/tool_usage.rs"
+
+[[example]]
+name = "streaming"
+path = "examples/streaming.rs"
+
+[[example]]
+name = "multi_turn"
+path = "examples/multi_turn.rs"
+
+[[example]]
+name = "byok"
+path = "examples/byok.rs"
+
+[[example]]
+name = "system_prompt"
+path = "examples/system_prompt.rs"
+
+[[example]]
+name = "custom_agents"
+path = "examples/custom_agents.rs"
+
+[[example]]
+name = "mcp_servers"
+path = "examples/mcp_servers.rs"
+
+[[example]]
+name = "attachments"
+path = "examples/attachments.rs"
+
+[[example]]
+name = "permission_callback"
+path = "examples/permission_callback.rs"
+
+[[example]]
+name = "resume_with_tools"
+path = "examples/resume_with_tools.rs"
+
+[[example]]
+name = "multi_tools"
+path = "examples/multi_tools.rs"
+
+[[example]]
+name = "yolo"
+path = "examples/yolo.rs"
+
+[[example]]
+name = "debug_pipe"
+path = "examples/debug_pipe.rs"
+
+[[example]]
+name = "escape_room"
+path = "examples/escape_room.rs"
+
+[[example]]
+name = "rscopilot-cli"
+path = "examples/rscopilot_cli.rs"
+
+[[example]]
+name = "set_model"
+path = "examples/set_model.rs"
+
+[[example]]
+name = "mode_switching"
+path = "examples/mode_switching.rs"
+
+[[example]]
+name = "plan_ops"
+path = "examples/plan_ops.rs"
+
+[[example]]
+name = "agent_management"
+path = "examples/agent_management.rs"
+
+[[example]]
+name = "telemetry"
+path = "examples/telemetry.rs"
+
+[[example]]
+name = "shell_exec"
+path = "examples/shell_exec.rs"
