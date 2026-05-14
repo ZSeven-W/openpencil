@@ -111,6 +111,10 @@ pub struct VariableTable {
     /// `$ref:name`. Paint reads this first, falls back to `node.fill`.
     /// Side-table avoids touching every `Node { ... }` literal.
     pub fill_refs: BTreeMap<super::NodeId, String>,
+    /// Map of `node_id → variable name` for nodes whose stroke colour
+    /// follows a `$ref`. Parallel to `fill_refs`; paint pre-resolves
+    /// via `stroke_color_for(node_id)`.
+    pub stroke_refs: BTreeMap<super::NodeId, String>,
 }
 
 impl VariableTable {
@@ -127,6 +131,29 @@ impl VariableTable {
     pub fn fill_for(&self, node_id: super::NodeId) -> Option<crate::Color> {
         let name = self.fill_refs.get(&node_id)?;
         self.resolve_color(name)
+    }
+    /// Stroke parallel to `set_fill_ref` — registers the variable
+    /// driving a node's stroke colour at paint time.
+    pub fn set_stroke_ref(&mut self, node_id: super::NodeId, ref_name: impl Into<String>) {
+        self.stroke_refs.insert(node_id, ref_name.into());
+    }
+    /// Resolve the paint-time stroke color for `node_id`. Same shape
+    /// as `fill_for`; paint falls back to `node.stroke.color` when
+    /// None.
+    pub fn stroke_color_for(&self, node_id: super::NodeId) -> Option<crate::Color> {
+        let name = self.stroke_refs.get(&node_id)?;
+        self.resolve_color(name)
+    }
+    /// Set the active value of a theme axis (e.g. `("mode", "dark")`).
+    /// Mirrors the TS theme picker — flips colours across every
+    /// themed variable in one call. Paint reflows on the next frame.
+    pub fn set_active_theme(&mut self, axis: impl Into<String>, value: impl Into<String>) {
+        self.active_theme.insert(axis.into(), value.into());
+    }
+    /// Remove an axis from the active theme map; subsequent
+    /// resolutions fall back to the variable's `theme: None` default.
+    pub fn clear_active_axis(&mut self, axis: &str) {
+        self.active_theme.remove(axis);
     }
     /// Look up a variable by name. None if unknown.
     pub fn find(&self, name: &str) -> Option<&Variable> {
@@ -338,6 +365,32 @@ mod tests {
         tbl.active_theme = axis("mode", "light");
         let c2 = tbl.fill_for(node).unwrap();
         assert!((c2.r - 1.0).abs() < 0.01, "light mode → red; got {c2:?}");
+    }
+
+    #[test]
+    fn stroke_color_for_resolves_registered_ref() {
+        let mut tbl = super::VariableTable::default();
+        tbl.variables.push(Variable {
+            name: "border".into(),
+            kind: VariableKind::Color,
+            value: VariableValue::Scalar(VariableScalar::Str("#0000ff".into())),
+        });
+        let node = crate::document::NodeId::new(7);
+        tbl.set_stroke_ref(node, "border");
+        let c = tbl.stroke_color_for(node).unwrap();
+        assert!((c.b - 1.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn set_active_theme_round_trips_through_axis_picker() {
+        let mut tbl = super::VariableTable::default();
+        tbl.set_active_theme("mode", "dark");
+        assert_eq!(tbl.active_theme.get("mode"), Some(&"dark".to_string()));
+        tbl.set_active_theme("density", "comfortable");
+        assert_eq!(tbl.active_theme.len(), 2);
+        tbl.clear_active_axis("mode");
+        assert!(!tbl.active_theme.contains_key("mode"));
+        assert_eq!(tbl.active_theme.len(), 1);
     }
 
     #[test]
