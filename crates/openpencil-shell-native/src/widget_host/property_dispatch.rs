@@ -272,7 +272,26 @@ impl WidgetHostNative {
                 }
                 true
             }
-            VariablesPanelHit::AxisChip(_) => true,
+            VariablesPanelHit::AxisChip(idx) => {
+                // Look up the axis name from the table's
+                // active_theme map (BTreeMap iteration is stable,
+                // matches the chip walk order in VariablesPanel).
+                let axis = self
+                    .document
+                    .var_table
+                    .active_theme
+                    .keys()
+                    .nth(idx)
+                    .cloned();
+                if let Some(name) = axis {
+                    self.commit_property_focus_if_any();
+                    let snap = self.document.snapshot_for_history();
+                    if self.document.var_table.cycle_active_axis_value(&name) {
+                        self.document.history_push_past(snap);
+                    }
+                }
+                true
+            }
         }
     }
 }

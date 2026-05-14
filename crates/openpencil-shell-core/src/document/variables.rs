@@ -155,6 +155,38 @@ impl VariableTable {
     pub fn clear_active_axis(&mut self, axis: &str) {
         self.active_theme.remove(axis);
     }
+
+    /// Cycle the active value of `axis` to the next entry in the
+    /// `ThemeAxis::values` list. Returns `false` (no-op) when the
+    /// axis isn't in `themes` or has no values. When the axis
+    /// isn't currently in `active_theme`, the first value seeds
+    /// it. When the current value matches the last entry, wraps
+    /// back to the first. Used by the VariablesPanel axis-chip
+    /// click to give users a one-click flip — light↔dark,
+    /// compact↔comfortable, etc.
+    pub fn cycle_active_axis_value(&mut self, axis: &str) -> bool {
+        let Some(theme_axis) = self.themes.iter().find(|t| t.name == axis) else {
+            return false;
+        };
+        if theme_axis.values.is_empty() {
+            return false;
+        }
+        let next = match self.active_theme.get(axis) {
+            None => theme_axis.values[0].clone(),
+            Some(current) => {
+                let idx = theme_axis
+                    .values
+                    .iter()
+                    .position(|v| v == current)
+                    .map(|i| (i + 1) % theme_axis.values.len())
+                    .unwrap_or(0);
+                theme_axis.values[idx].clone()
+            }
+        };
+        self.active_theme.insert(axis.to_string(), next);
+        true
+    }
+
     /// Look up a variable by name. None if unknown.
     pub fn find(&self, name: &str) -> Option<&Variable> {
         self.variables.iter().find(|v| v.name == name)

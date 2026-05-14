@@ -1,7 +1,9 @@
 //! Tests for `document::variables`. Moved to a sibling file so the
 //! types + impl stay under the 800-line cap.
 
-use super::{ThemedValue, Variable, VariableKind, VariableScalar, VariableTable, VariableValue};
+use super::{
+    ThemeAxis, ThemedValue, Variable, VariableKind, VariableScalar, VariableTable, VariableValue,
+};
 use std::collections::BTreeMap;
 
 
@@ -546,4 +548,67 @@ fn set_color_hex_writes_themed_entry_matching_active_axis() {
             a: 1.0,
         })
     );
+}
+
+#[test]
+fn cycle_active_axis_seeds_first_value_when_absent() {
+    // Axis defined in `themes` but not yet in active_theme →
+    // cycle plants the first value.
+    let mut tbl = VariableTable::default();
+    tbl.themes.push(ThemeAxis {
+        name: "mode".into(),
+        values: vec!["light".into(), "dark".into()],
+    });
+    assert!(tbl.cycle_active_axis_value("mode"));
+    assert_eq!(tbl.active_theme.get("mode"), Some(&"light".to_string()));
+}
+
+#[test]
+fn cycle_active_axis_advances_to_next_value() {
+    let mut tbl = VariableTable::default();
+    tbl.themes.push(ThemeAxis {
+        name: "mode".into(),
+        values: vec!["light".into(), "dark".into(), "sepia".into()],
+    });
+    tbl.set_active_theme("mode", "light");
+    // light → dark → sepia → light (wrap)
+    assert!(tbl.cycle_active_axis_value("mode"));
+    assert_eq!(tbl.active_theme.get("mode"), Some(&"dark".to_string()));
+    assert!(tbl.cycle_active_axis_value("mode"));
+    assert_eq!(tbl.active_theme.get("mode"), Some(&"sepia".to_string()));
+    assert!(tbl.cycle_active_axis_value("mode"));
+    assert_eq!(tbl.active_theme.get("mode"), Some(&"light".to_string()));
+}
+
+#[test]
+fn cycle_active_axis_returns_false_for_unknown_axis() {
+    let mut tbl = VariableTable::default();
+    assert!(!tbl.cycle_active_axis_value("does-not-exist"));
+    assert!(tbl.active_theme.is_empty());
+}
+
+#[test]
+fn cycle_active_axis_returns_false_for_empty_values() {
+    let mut tbl = VariableTable::default();
+    tbl.themes.push(ThemeAxis {
+        name: "empty".into(),
+        values: Vec::new(),
+    });
+    assert!(!tbl.cycle_active_axis_value("empty"));
+    assert!(tbl.active_theme.get("empty").is_none());
+}
+
+#[test]
+fn cycle_active_axis_falls_back_to_first_when_current_unknown() {
+    // active_theme carries a value that isn't in themes.values
+    // (e.g. an axis whose options changed since the file loaded).
+    // Cycle wraps to the first known value.
+    let mut tbl = VariableTable::default();
+    tbl.themes.push(ThemeAxis {
+        name: "mode".into(),
+        values: vec!["light".into(), "dark".into()],
+    });
+    tbl.set_active_theme("mode", "ghost"); // not in values
+    assert!(tbl.cycle_active_axis_value("mode"));
+    assert_eq!(tbl.active_theme.get("mode"), Some(&"light".to_string()));
 }
