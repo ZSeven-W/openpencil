@@ -189,6 +189,13 @@ pub struct NodeRecord {
     pub width: i32,
     pub height: i32,
     pub parent_id: u64,
+    /// Name of the variable driving this node's fill colour at
+    /// paint time, if any. Empty when the node's fill is a literal
+    /// colour. LLM clients use this to decide whether to bump the
+    /// variable (theme-wide change) or write a per-node override.
+    pub fill_ref: String,
+    /// Stroke parallel to `fill_ref`.
+    pub stroke_ref: String,
 }
 
 impl McpTool for GetNode {
@@ -228,6 +235,8 @@ impl McpTool for GetNode {
         out.insert("width".into(), rec.width.to_string());
         out.insert("height".into(), rec.height.to_string());
         out.insert("parent_id".into(), rec.parent_id.to_string());
+        out.insert("fill_ref".into(), rec.fill_ref.clone());
+        out.insert("stroke_ref".into(), rec.stroke_ref.clone());
         ToolOutcome::Ok(out)
     }
 }
@@ -236,7 +245,7 @@ pub fn get_node_snapshot(doc: &crate::document::Document) -> GetNode {
     let mut nodes: BTreeMap<u64, NodeRecord> = BTreeMap::new();
     for page in &doc.pages {
         for node in &page.children {
-            walk_node(node, 0, &mut nodes);
+            walk_node(node, 0, &doc.var_table, &mut nodes);
         }
     }
     GetNode { nodes }
@@ -245,6 +254,7 @@ pub fn get_node_snapshot(doc: &crate::document::Document) -> GetNode {
 fn walk_node(
     node: &crate::document::Node,
     parent_id: u64,
+    var_table: &crate::document::VariableTable,
     out: &mut BTreeMap<u64, NodeRecord>,
 ) {
     let bounds = node.aggregate_bounds();
@@ -259,6 +269,16 @@ fn walk_node(
         crate::document::NodeKind::Path => "path",
         crate::document::NodeKind::Other(_) => "other",
     };
+    let fill_ref = var_table
+        .fill_refs
+        .get(&node.id)
+        .cloned()
+        .unwrap_or_default();
+    let stroke_ref = var_table
+        .stroke_refs
+        .get(&node.id)
+        .cloned()
+        .unwrap_or_default();
     out.insert(
         node.id.raw(),
         NodeRecord {
@@ -269,10 +289,12 @@ fn walk_node(
             width: bounds.size.x as i32,
             height: bounds.size.y as i32,
             parent_id,
+            fill_ref,
+            stroke_ref,
         },
     );
     for child in &node.children {
-        walk_node(child, node.id.raw(), out);
+        walk_node(child, node.id.raw(), var_table, out);
     }
 }
 
