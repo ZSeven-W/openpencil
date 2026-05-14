@@ -57,6 +57,83 @@ pub fn batch_design_snapshot() -> BatchDesign {
     BatchDesign
 }
 
+/// Shared core for `design_skeleton` / `design_content` /
+/// `design_refine`. Each phase tool dispatches here with a label
+/// stamped into the response so the LLM client can correlate the
+/// call back to its layered-workflow phase. Today every phase
+/// emits the same `BatchInsert` command — the phasing is purely
+/// metadata. A future patch may grow per-phase apply semantics
+/// (e.g. `design_refine` patching existing nodes via UpdateNode
+/// batches) once a richer command exists.
+fn dispatch_phase(args: &BTreeMap<String, String>, phase: &'static str) -> ToolOutcome {
+    let Some(raw) = args.get("nodes_json") else {
+        return ToolOutcome::Err(
+            ToolErrorCode::MissingArgument,
+            "nodes_json is required (JSON array of node descriptors)".into(),
+        );
+    };
+    match parse_batch_items(raw) {
+        Ok(items) if items.is_empty() => ToolOutcome::Err(
+            ToolErrorCode::InvalidArgument,
+            "nodes_json must contain at least one descriptor".into(),
+        ),
+        Ok(items) => {
+            let mut out = BTreeMap::new();
+            out.insert("wrote".into(), "true".into());
+            out.insert("count".into(), items.len().to_string());
+            out.insert("phase".into(), phase.into());
+            ToolOutcome::OkWithCommand(out, McpCommand::BatchInsert { items })
+        }
+        Err(e) => ToolOutcome::Err(ToolErrorCode::InvalidArgument, e),
+    }
+}
+
+/// `design_skeleton` — phase 1 of TS's layered design workflow.
+/// Same wire shape as `batch_design`; the result payload carries
+/// `phase=skeleton` so clients can phase their prompting.
+pub struct DesignSkeleton;
+impl McpTool for DesignSkeleton {
+    fn name(&self) -> &str {
+        "design_skeleton"
+    }
+    fn call(&self, args: &BTreeMap<String, String>) -> ToolOutcome {
+        dispatch_phase(args, "skeleton")
+    }
+}
+pub fn design_skeleton_snapshot() -> DesignSkeleton {
+    DesignSkeleton
+}
+
+/// `design_content` — phase 2 of the layered design workflow.
+/// Mirrors `batch_design` apply semantics; tagged `phase=content`.
+pub struct DesignContent;
+impl McpTool for DesignContent {
+    fn name(&self) -> &str {
+        "design_content"
+    }
+    fn call(&self, args: &BTreeMap<String, String>) -> ToolOutcome {
+        dispatch_phase(args, "content")
+    }
+}
+pub fn design_content_snapshot() -> DesignContent {
+    DesignContent
+}
+
+/// `design_refine` — phase 3 of the layered design workflow.
+/// Mirrors `batch_design` apply semantics; tagged `phase=refine`.
+pub struct DesignRefine;
+impl McpTool for DesignRefine {
+    fn name(&self) -> &str {
+        "design_refine"
+    }
+    fn call(&self, args: &BTreeMap<String, String>) -> ToolOutcome {
+        dispatch_phase(args, "refine")
+    }
+}
+pub fn design_refine_snapshot() -> DesignRefine {
+    DesignRefine
+}
+
 /// Hand-rolled parser for the `nodes_json` payload. Shell-core
 /// stays serde-free so the wasm32 bundle doesn't grow. Returns a
 /// Vec<BatchInsertItem> on success, an English error string on

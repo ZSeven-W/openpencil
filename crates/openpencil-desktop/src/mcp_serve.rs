@@ -24,7 +24,9 @@ use std::path::PathBuf;
 
 use openpencil_shell_core::document::Document;
 use openpencil_shell_core::mcp::{
-    batch_design_snapshot, copy_node_snapshot, delete_node_snapshot, document_info_snapshot,
+    batch_design_snapshot, copy_node_snapshot, delete_node_snapshot,
+    design_content_snapshot, design_refine_snapshot, design_skeleton_snapshot,
+    document_info_snapshot,
     get_active_theme_snapshot, get_node_snapshot, insert_node_snapshot,
     list_pages_snapshot, list_variables_snapshot, move_node_snapshot,
     replace_node_snapshot, run_stdio_with_applier, selection_snapshot,
@@ -146,6 +148,9 @@ fn rebuild_registry(doc: &Document) -> ToolRegistry {
     r.register(Box::new(copy_node_snapshot()));
     r.register(Box::new(replace_node_snapshot()));
     r.register(Box::new(batch_design_snapshot()));
+    r.register(Box::new(design_skeleton_snapshot()));
+    r.register(Box::new(design_content_snapshot()));
+    r.register(Box::new(design_refine_snapshot()));
     r.register(Box::new(set_variable_number_snapshot(doc)));
     r.register(Box::new(set_variable_string_snapshot(doc)));
     r.register(Box::new(set_variable_boolean_snapshot(doc)));
@@ -364,6 +369,9 @@ const TOOL_SCHEMAS: &[&str] = &[
     // --- write tools ---
     r##"{"name":"set_variable_color","description":"Set a Color-kind variable's value.","inputSchema":{"type":"object","properties":{"name":{"type":"string"},"hex":{"type":"string","description":"#rgb / #rrggbb / #rrggbbaa"}},"required":["name","hex"]}}"##,
     r#"{"name":"batch_design","description":"Insert N leaf nodes on the active page in one atomic shot. nodes_json must be a JSON array string of {kind,name,x,y,width,height,fill_hex?} descriptors.","inputSchema":{"type":"object","properties":{"nodes_json":{"type":"string","description":"JSON array of node descriptors"}},"required":["nodes_json"]}}"#,
+    r#"{"name":"design_skeleton","description":"Layered design workflow phase 1: insert structural scaffolding. Same wire shape as batch_design; response carries phase=skeleton so the client can phase its prompting.","inputSchema":{"type":"object","properties":{"nodes_json":{"type":"string","description":"JSON array of node descriptors"}},"required":["nodes_json"]}}"#,
+    r#"{"name":"design_content","description":"Layered design workflow phase 2: fill content into the scaffold. Same wire shape as batch_design; response carries phase=content.","inputSchema":{"type":"object","properties":{"nodes_json":{"type":"string","description":"JSON array of node descriptors"}},"required":["nodes_json"]}}"#,
+    r#"{"name":"design_refine","description":"Layered design workflow phase 3: polish details. Same wire shape as batch_design; response carries phase=refine.","inputSchema":{"type":"object","properties":{"nodes_json":{"type":"string","description":"JSON array of node descriptors"}},"required":["nodes_json"]}}"#,
     r#"{"name":"set_variable_number","description":"Set a Number-kind variable's value (decimal, may be negative or fractional).","inputSchema":{"type":"object","properties":{"name":{"type":"string"},"value":{"type":"string"}},"required":["name","value"]}}"#,
     r#"{"name":"set_variable_string","description":"Set a String-kind variable's value (free-form text).","inputSchema":{"type":"object","properties":{"name":{"type":"string"},"value":{"type":"string"}},"required":["name","value"]}}"#,
     r#"{"name":"set_variable_boolean","description":"Set a Boolean-kind variable's value (\"true\" or \"false\").","inputSchema":{"type":"object","properties":{"name":{"type":"string"},"value":{"type":"string","enum":["true","false"]}},"required":["name","value"]}}"#,
@@ -420,7 +428,7 @@ mod tests {
     }
 
     #[test]
-    fn tools_list_response_includes_all_eighteen_tools() {
+    fn tools_list_response_includes_all_twenty_one_tools() {
         let r = tools_list_response("3");
         for name in [
             "get_document_info",
@@ -441,6 +449,9 @@ mod tests {
             "set_variable_number",
             "set_variable_string",
             "set_variable_boolean",
+            "design_skeleton",
+            "design_content",
+            "design_refine",
         ] {
             assert!(r.contains(name), "tools/list must include {name}: {r}");
         }
