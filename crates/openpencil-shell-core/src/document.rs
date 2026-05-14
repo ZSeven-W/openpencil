@@ -469,6 +469,19 @@ pub struct ColorPickerState {
     pub drag: Option<ColorPickerDrag>,
     /// Viewport-y of the click that opened the picker.
     pub anchor_y: f32,
+    /// When `Some`, the picker edits the named Color variable
+    /// instead of the selected node's `target` channel. The
+    /// commit path routes through `VariableTable::set_color_hex`.
+    /// `target` is still set (to a sensible default like Fill)
+    /// because callers + paint code currently key off it; keeping
+    /// the new field parallel avoids touching every ColorTarget
+    /// pattern match.
+    pub variable: Option<String>,
+    /// In variable mode, the resolved colour captured at open
+    /// time so `close_color_picker` can detect "did the variable
+    /// actually change?" without requiring the document snapshot
+    /// to carry var_table. Unused in node-target mode.
+    pub variable_pre_color: Option<crate::Color>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
