@@ -304,18 +304,68 @@ impl McpTool for ListVariables {
         let mut out = BTreeMap::new();
         out.insert("count".into(), self.variables.len().to_string());
         // Encode the list as `name|kind|value` triplets joined by
-        // `;`. Keeps shell-core serde-free; clients split on the
-        // delimiters. Names + values cannot contain `;` or `|` in
-        // valid `.op` schemas (the canonical loader rejects those
-        // chars during variable-name validation).
+        // `;`. The canonical `.op` schema doesn't actually forbid
+        // `;` / `|` / `\` in variable names or string values
+        // (codex stop-gate flagged my earlier claim), so escape
+        // them: `\` → `\\`, `;` → `\;`, `|` → `\|`. Clients can
+        // decode unambiguously by walking the bytes and treating
+        // a `\` as the escape introducer. Empty list → empty
+        // `variables` field (clients should consult `count`).
         let encoded: Vec<String> = self
             .variables
             .iter()
-            .map(|v| format!("{}|{}|{}", v.name, v.kind, v.value))
+            .map(|v| {
+                format!(
+                    "{}|{}|{}",
+                    escape_record_field(&v.name),
+                    escape_record_field(&v.kind),
+                    escape_record_field(&v.value),
+                )
+            })
             .collect();
         out.insert("variables".into(), encoded.join(";"));
         ToolOutcome::Ok(out)
     }
+}
+
+/// Escape `\` / `;` / `|` so the encoded `name|kind|value` triplets
+/// stay unambiguous regardless of variable content. Backslash-prefix
+/// is the standard pattern — clients invert it by walking bytes and
+/// promoting `\X` → `X` whenever they see an escape introducer.
+fn escape_record_field(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for c in s.chars() {
+        match c {
+            '\\' => out.push_str("\\\\"),
+            ';' => out.push_str("\\;"),
+            '|' => out.push_str("\\|"),
+            c => out.push(c),
+        }
+    }
+    out
+}
+
+/// Inverse of `escape_record_field`. Exposed for clients written in
+/// Rust (the TS / Python MCP client side rolls its own decoder; this
+/// is the canonical reference impl + the test fixture).
+pub fn unescape_record_field(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    let mut chars = s.chars();
+    while let Some(c) = chars.next() {
+        if c == '\\' {
+            match chars.next() {
+                Some(esc @ ('\\' | ';' | '|')) => out.push(esc),
+                Some(other) => {
+                    out.push('\\');
+                    out.push(other);
+                }
+                None => out.push('\\'),
+            }
+        } else {
+            out.push(c);
+        }
+    }
+    out
 }
 
 pub fn list_variables_snapshot(doc: &crate::document::Document) -> ListVariables {
@@ -415,5 +465,75 @@ mod tests {
             }
             _ => panic!("expected Ok"),
         }
+    }
+
+    #[test]
+    fn escape_record_field_round_trips_pipe_semicolon_backslash() {
+        // Codex stop-gate caught: the canonical `.op` schema does
+        // NOT forbid `;`, `|`, or `\` in variable names or string
+        // values. The encoding must round-trip every such payload.
+        for raw in &[
+            "plain",
+            "a|b",
+            "a;b",
+            "a\\b",
+            "a|b;c\\d",
+            "\\",
+            ";;|||",
+            "",
+            "color/primary",
+            "label with space",
+        ] {
+            let escaped = escape_record_field(raw);
+            let back = unescape_record_field(&escaped);
+            assert_eq!(&back, raw, "round-trip failed for {raw:?}");
+        }
+    }
+
+    #[test]
+    fn list_variables_encodes_string_value_with_special_chars() {
+        // String variable whose value contains every delimiter.
+        // The wire format must keep the record boundary clear AND
+        // recover the original payload on decode.
+        use crate::document::{Document, Variable, VariableKind, VariableScalar, VariableValue};
+        let mut doc = Document::empty();
+        doc.var_table.variables.push(Variable {
+            name: "msg".into(),
+            kind: VariableKind::String,
+            value: VariableValue::Scalar(VariableScalar::Str("a|b;c\\d".into())),
+        });
+        let tool = list_variables_snapshot(&doc);
+        let out = match tool.call(&BTreeMap::new()) {
+            ToolOutcome::Ok(o) => o,
+            other => panic!("expected Ok, got {other:?}"),
+        };
+        assert_eq!(out.get("count"), Some(&"1".to_string()));
+        let encoded = out.get("variables").expect("variables field");
+        // Pipe inside the value is escaped, so splitting on `|`
+        // still yields exactly 3 fields (name | kind | value).
+        // Decode each field + verify the original payload.
+        let mut fields: Vec<String> = Vec::new();
+        let mut cur = String::new();
+        let mut chars = encoded.chars().peekable();
+        while let Some(c) = chars.next() {
+            if c == '\\' {
+                if let Some(&n) = chars.peek() {
+                    if matches!(n, '\\' | ';' | '|') {
+                        cur.push(chars.next().unwrap());
+                        continue;
+                    }
+                }
+                cur.push(c);
+            } else if c == '|' {
+                fields.push(std::mem::take(&mut cur));
+            } else {
+                cur.push(c);
+            }
+        }
+        fields.push(cur);
+        assert_eq!(fields.len(), 3, "expected name|kind|value, got {fields:?}");
+        assert_eq!(fields[0], "msg");
+        assert_eq!(fields[1], "string");
+        assert_eq!(fields[2], "a|b;c\\d");
     }
 }
