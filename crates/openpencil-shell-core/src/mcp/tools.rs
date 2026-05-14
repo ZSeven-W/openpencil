@@ -350,17 +350,16 @@ impl McpTool for ListVariables {
     }
 }
 
-/// Escape every delimiter the MCP wire format uses, so encoded
-/// fields stay unambiguous regardless of payload content.
-/// Escaped chars: `\`, `;`, `|`, `,`. Backslash-prefix is the
-/// standard pattern — clients invert it by walking bytes and
+/// Escape `\` / `;` / `|` so two-level wire formats stay
+/// unambiguous. Used by `list_variables` (`;`-separated records of
+/// `|`-separated fields). Clients invert by walking bytes and
 /// promoting `\X` → `X` whenever they see an escape introducer.
 ///
-/// Comma is in the set because `get_active_theme.options` joins
-/// per-axis value lists with `,` (codex stop-gate: a theme value
-/// like `"red, white, and blue"` would otherwise mis-split into 3
-/// fake values on decode). `list_variables` doesn't use `,` as a
-/// delimiter so the escaped form is harmless there.
+/// Comma is **not** in the set so the wire output stays
+/// backward-compatible with clients that have been decoding
+/// `list_variables` since the v1 schema. `get_active_theme` uses
+/// a deeper escape set ([`escape_layered_field`]) because its
+/// `options` field needs three-level separation (`;|,`).
 fn escape_record_field(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
     for c in s.chars() {
@@ -368,7 +367,6 @@ fn escape_record_field(s: &str) -> String {
             '\\' => out.push_str("\\\\"),
             ';' => out.push_str("\\;"),
             '|' => out.push_str("\\|"),
-            ',' => out.push_str("\\,"),
             c => out.push(c),
         }
     }
@@ -384,7 +382,7 @@ pub fn unescape_record_field(s: &str) -> String {
     while let Some(c) = chars.next() {
         if c == '\\' {
             match chars.next() {
-                Some(esc @ ('\\' | ';' | '|' | ',')) => out.push(esc),
+                Some(esc @ ('\\' | ';' | '|')) => out.push(esc),
                 Some(other) => {
                     out.push('\\');
                     out.push(other);
@@ -393,6 +391,25 @@ pub fn unescape_record_field(s: &str) -> String {
             }
         } else {
             out.push(c);
+        }
+    }
+    out
+}
+
+/// Three-level escape set: `\`, `;`, `|`, `,`. Used only by
+/// `get_active_theme.options` which is `axis|v1,v2,v3;axis2|...`.
+/// Decoding is layered: outer `;` split → middle `|` split →
+/// inner `,` split, where each level unescapes only its own
+/// delimiter (see the `layered_split` test helper).
+fn escape_layered_field(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for c in s.chars() {
+        match c {
+            '\\' => out.push_str("\\\\"),
+            ';' => out.push_str("\\;"),
+            '|' => out.push_str("\\|"),
+            ',' => out.push_str("\\,"),
+            c => out.push(c),
         }
     }
     out
@@ -455,8 +472,8 @@ impl McpTool for GetActiveTheme {
             .map(|(axis, value)| {
                 format!(
                     "{}|{}",
-                    escape_record_field(axis),
-                    escape_record_field(value)
+                    escape_layered_field(axis),
+                    escape_layered_field(value)
                 )
             })
             .collect();
@@ -465,8 +482,12 @@ impl McpTool for GetActiveTheme {
             .iter()
             .map(|(axis, values)| {
                 let escaped_values: Vec<String> =
-                    values.iter().map(|v| escape_record_field(v)).collect();
-                format!("{}|{}", escape_record_field(axis), escaped_values.join(","))
+                    values.iter().map(|v| escape_layered_field(v)).collect();
+                format!(
+                    "{}|{}",
+                    escape_layered_field(axis),
+                    escaped_values.join(",")
+                )
             })
             .collect();
         let mut out = BTreeMap::new();
@@ -594,6 +615,40 @@ mod tests {
             }
             _ => panic!("expected Ok"),
         }
+    }
+
+    #[test]
+    fn list_variables_does_not_escape_commas_backward_compat() {
+        // Codex stop-gate (second pass): an earlier fix added `,`
+        // to the shared escape set, which changed the wire output
+        // of `list_variables` for values containing commas. That's
+        // a backward-incompatible change for anyone decoding the
+        // schema with the original two-delimiter unescape rules.
+        // The split now keeps `list_variables` on the legacy
+        // 3-char escape set (`\;|`); only `get_active_theme` uses
+        // the extended set that includes `,`.
+        use crate::document::{Document, Variable, VariableKind, VariableScalar, VariableValue};
+        let mut doc = Document::empty();
+        doc.var_table.variables.push(Variable {
+            name: "msg".into(),
+            kind: VariableKind::String,
+            value: VariableValue::Scalar(VariableScalar::Str("red, white, blue".into())),
+        });
+        let tool = list_variables_snapshot(&doc);
+        let encoded = match tool.call(&BTreeMap::new()) {
+            ToolOutcome::Ok(o) => o.get("variables").unwrap().clone(),
+            _ => panic!(),
+        };
+        // The literal commas must pass through unescaped — pre-
+        // this-commit clients depend on that.
+        assert!(
+            encoded.contains("red, white, blue"),
+            "commas must NOT be escaped in list_variables output; got {encoded}"
+        );
+        assert!(
+            !encoded.contains("\\,"),
+            "no backslash-comma should appear in list_variables: {encoded}"
+        );
     }
 
     #[test]
