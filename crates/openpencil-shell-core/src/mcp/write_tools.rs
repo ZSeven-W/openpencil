@@ -447,6 +447,66 @@ pub fn move_node_snapshot() -> MoveNode {
     MoveNode
 }
 
+/// First-party `copy_node` tool — deep-clone a node + every
+/// descendant under a new parent. Required args: node_id,
+/// target_parent_id. `target_parent_id == "0"` puts the copy at
+/// the active page root. Fresh ids are allocated by the applier
+/// past `max_node_id()` so the clone never collides with any
+/// live node. Allows `node_id == target_parent_id` (duplicating
+/// a container's contents under itself is a valid LLM op).
+pub struct CopyNode;
+
+impl McpTool for CopyNode {
+    fn name(&self) -> &str {
+        "copy_node"
+    }
+    fn call(&self, args: &BTreeMap<String, String>) -> ToolOutcome {
+        let Some(raw_id) = args.get("node_id") else {
+            return ToolOutcome::Err(
+                ToolErrorCode::MissingArgument,
+                "node_id is required".into(),
+            );
+        };
+        let node_id: u64 = match raw_id.parse() {
+            Ok(n) if n > 0 => n,
+            _ => {
+                return ToolOutcome::Err(
+                    ToolErrorCode::InvalidArgument,
+                    format!("node_id must be a positive u64, got {raw_id:?}"),
+                );
+            }
+        };
+        let Some(raw_target) = args.get("target_parent_id") else {
+            return ToolOutcome::Err(
+                ToolErrorCode::MissingArgument,
+                "target_parent_id is required (0 = page root)".into(),
+            );
+        };
+        let target_parent_id: u64 = match raw_target.parse() {
+            Ok(n) => n,
+            Err(_) => {
+                return ToolOutcome::Err(
+                    ToolErrorCode::InvalidArgument,
+                    format!("target_parent_id must be u64, got {raw_target:?}"),
+                );
+            }
+        };
+        let mut out = BTreeMap::new();
+        out.insert("wrote".into(), "true".into());
+        ToolOutcome::OkWithCommand(
+            out,
+            McpCommand::CopyNode {
+                node_id,
+                target_parent_id,
+            },
+        )
+    }
+}
+
+pub fn copy_node_snapshot() -> CopyNode {
+    CopyNode
+}
+
 pub fn set_active_axis_value_snapshot(
     doc: &crate::document::Document,
 ) -> SetActiveAxisValue {

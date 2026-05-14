@@ -110,6 +110,26 @@ fn detach_from_subtree(children: &mut Vec<Node>, target: NodeId) -> Option<Node>
     None
 }
 
+/// Deep-clone a node + its descendants, allocating fresh ids
+/// from the supplied counter so the resulting subtree has no id
+/// collision with the live document. `next_id` is bumped past
+/// every emitted id. Returns None when the id space is exhausted
+/// mid-walk (callers surface that as an apply-time failure).
+fn clone_subtree(node: &Node, next_id: &mut u64) -> Option<Node> {
+    // Reuse Node's #[derive(Clone)] for the bulk copy (preserves
+    // every field including new ones added later), then rewrite
+    // the id + recurse into children with fresh ids.
+    let mut clone = node.clone();
+    clone.id = NodeId::new_opt(*next_id)?;
+    *next_id = next_id.checked_add(1)?;
+    let mut fresh_children = Vec::with_capacity(node.children.len());
+    for child in &node.children {
+        fresh_children.push(clone_subtree(child, next_id)?);
+    }
+    clone.children = fresh_children;
+    Some(clone)
+}
+
 /// Resolve an MCP `kind` arg into a NodeKind. Accepts the same
 /// lowercase strings the read-side tools emit (`frame`, `group`,
 /// `rect`, `ellipse`, `polygon`, `line`, `text`, `path`).
@@ -252,6 +272,56 @@ impl Document {
                     }
                 }
                 removed
+            }
+            crate::mcp::McpCommand::CopyNode {
+                node_id,
+                target_parent_id,
+            } => {
+                let Some(source) = NodeId::new_opt(*node_id) else {
+                    return false;
+                };
+                let target_parent = NodeId::new_opt(*target_parent_id);
+                // Validate source + target up front; clone the
+                // owned subtree before mutating pages so the clone
+                // has stable ids regardless of where the live source
+                // lives.
+                let Some(src_node) = find_node_in_doc(self, source) else {
+                    return false;
+                };
+                // Allow target == source: copying a node into
+                // itself is a no-op semantically (clone lands as a
+                // descendant of source). LLM use case: duplicate a
+                // group's contents under the group itself.
+                if let Some(target_id) = target_parent {
+                    if find_node_in_doc(self, target_id).is_none() {
+                        return false;
+                    }
+                } else if self.pages.get(self.active_page_index).is_none() {
+                    return false;
+                }
+                // Allocate a fresh id base past max_node_id() so the
+                // clone subtree's every node has a unique id.
+                let Some(mut next_id) = self.next_node_id_seed() else {
+                    return false;
+                };
+                let clone = match clone_subtree(src_node, &mut next_id) {
+                    Some(c) => c,
+                    None => return false,
+                };
+                // All validation + allocation done — attach the clone.
+                match target_parent {
+                    None => {
+                        let active_idx = self.active_page_index;
+                        self.pages[active_idx].children.push(clone);
+                    }
+                    Some(pid) => {
+                        find_node_mut_in_doc(self, pid)
+                            .expect("target validated")
+                            .children
+                            .push(clone);
+                    }
+                }
+                true
             }
             crate::mcp::McpCommand::MoveNode {
                 node_id,

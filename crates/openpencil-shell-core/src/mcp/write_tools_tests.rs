@@ -753,3 +753,7 @@ fn apply_mcp_command_move_node_preserves_source_when_target_unknown() {
         .sum();
     assert_eq!(title_count, 1, "title appears exactly once in the doc");
 }
+
+// copy_node tests live in `mcp/copy_node_tests.rs` (carved out to
+// keep this file under the 800-line cap once the copy_node surface
+// landed).
