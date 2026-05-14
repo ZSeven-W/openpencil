@@ -79,27 +79,22 @@ pub struct Node {
     pub id: NodeId,
     pub kind: NodeKind,
     pub name: String,
-    /// Doc-space rect; ZERO = container, use children's bounds.
+    /// Doc-space rect; ZERO = container (use children's bounds).
     pub bounds: crate::Rect,
     pub fill: Option<crate::Color>,
     pub stroke: Option<Stroke>,
-    /// Rendered text — only meaningful for `NodeKind::Text`.
     pub text: Option<String>,
-    /// Rotation radians, cw positive about the bounds center.
+    /// Rotation radians, clockwise about bounds center.
     pub rotation: f32,
     pub hidden: bool,
     pub locked: bool,
     pub collapsed: bool,
     pub fill_type: FillType,
-    /// Round-rect radius (doc-px); 0 = square. Rect/Frame only.
     pub corner_radius: f32,
-    /// Path anchors (doc coords). Empty for non-Path kinds.
     pub points: Vec<crate::Point2D>,
-    /// Text size in doc-px; 0 = renderer default (13 px). Text-only.
+    /// Text font size in doc-px (0 = default 13). Text-only.
     pub font_size: f32,
-    /// CSS-style font weight (100-900); 0 = default (400). Text-only.
     pub font_weight: u16,
-    /// `textGrowth: fixed-width` ⇒ wrap to bounds width; default off.
     pub text_wrap: bool,
     pub children: Vec<Node>,
 }
@@ -156,7 +151,7 @@ impl Node {
         }
     }
 
-    /// Builder: set bounds (consume self, return new Node).
+    /// Builder: set bounds.
     pub fn with_bounds(mut self, bounds: crate::Rect) -> Self {
         self.bounds = bounds;
         self
@@ -789,6 +784,7 @@ impl Tool {
 
 mod align;
 mod color_picker;
+mod components;
 mod grouping;
 mod mutators;
 mod page_mutators;
@@ -796,6 +792,7 @@ mod pen;
 mod variables;
 mod walkers;
 pub use align::AlignAction;
+pub use components::{Component, ComponentLibrary};
 pub use variables::{ThemeAxis, ThemedValue, Variable, VariableKind, VariableScalar, VariableTable, VariableValue};
 pub use walkers::ReorderDirection;
 
