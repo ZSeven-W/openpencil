@@ -341,4 +341,3 @@ fn extract_field<'a>(line: &'a str, key: &str) -> Option<&'a str> {
         .unwrap_or(val.len());
     Some(line[val_start..val_start + end_rel].trim())
 }
-

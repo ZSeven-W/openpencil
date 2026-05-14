@@ -275,4 +275,3 @@ fn walk_node(
         walk_node(child, node.id.raw(), out);
     }
 }
-
