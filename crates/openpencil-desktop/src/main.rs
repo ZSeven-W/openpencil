@@ -11,6 +11,7 @@ mod chat_subprocess;
 mod cursor_icon;
 mod export;
 mod export_pdf;
+mod mcp_serve;
 mod pen_doc_adapter;
 mod pen_doc_path_bounds;
 mod persistence;
@@ -715,6 +716,29 @@ impl ApplicationHandler for DesktopApp {
 }
 
 fn main() {
+    // `--mcp <path>` swaps the GUI for a JSON-RPC stdio MCP
+    // server backed by that .op file. External CLIs (Claude
+    // Code / Codex / Gemini / Copilot) spawn the binary in this
+    // mode to drive the Rust editor the same way they drive TS
+    // pen-mcp.
+    let mut args = std::env::args().skip(1);
+    if let Some(first) = args.next() {
+        if first == "--mcp" {
+            let Some(path) = args.next() else {
+                eprintln!("openpencil-desktop --mcp: missing <path> arg");
+                std::process::exit(2);
+            };
+            match mcp_serve::run(PathBuf::from(path)) {
+                Ok(()) => return,
+                Err(e) => {
+                    eprintln!("openpencil-desktop --mcp: {e}");
+                    std::process::exit(1);
+                }
+            }
+        }
+        // Unknown leading arg → fall through to GUI mode for now
+        // (a future patch may add `--help` etc).
+    }
     let event_loop = match EventLoop::new() {
         Ok(el) => el,
         Err(err) => {
