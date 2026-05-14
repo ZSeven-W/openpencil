@@ -4,7 +4,7 @@
 //! arrive in later steps. wasm32-clean (no platform imports).
 
 /// Stable id; `NodeId::NONE` (0) = "no node". `new(0)` panics.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct NodeId(u64);
 
 impl NodeId {

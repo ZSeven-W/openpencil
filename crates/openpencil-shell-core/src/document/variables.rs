@@ -105,13 +105,29 @@ pub struct ThemeAxis {
 pub struct VariableTable {
     pub variables: Vec<Variable>,
     pub themes: Vec<ThemeAxis>,
-    /// Current selection per axis. e.g. {"mode": "dark"}. Empty map
-    /// means "use the default (theme = None) entry of every Themed
-    /// variable".
+    /// Current selection per axis. e.g. {"mode": "dark"}.
     pub active_theme: BTreeMap<String, String>,
+    /// Map of `node_id → variable name` for nodes whose fill is
+    /// `$ref:name`. Paint reads this first, falls back to `node.fill`.
+    /// Side-table avoids touching every `Node { ... }` literal.
+    pub fill_refs: BTreeMap<super::NodeId, String>,
 }
 
 impl VariableTable {
+    /// Register that `node_id`'s fill follows variable `ref_name`.
+    /// Subsequent `fill_for(node_id)` looks the variable up under
+    /// the current `active_theme`.
+    pub fn set_fill_ref(&mut self, node_id: super::NodeId, ref_name: impl Into<String>) {
+        self.fill_refs.insert(node_id, ref_name.into());
+    }
+    /// Resolve the paint-time fill color for `node_id`. Returns
+    /// None when no `fill_ref` is registered or the referenced
+    /// variable doesn't resolve (paint then falls back to
+    /// `node.fill`).
+    pub fn fill_for(&self, node_id: super::NodeId) -> Option<crate::Color> {
+        let name = self.fill_refs.get(&node_id)?;
+        self.resolve_color(name)
+    }
     /// Look up a variable by name. None if unknown.
     pub fn find(&self, name: &str) -> Option<&Variable> {
         self.variables.iter().find(|v| v.name == name)
@@ -294,6 +310,40 @@ mod tests {
             value: VariableValue::Scalar(VariableScalar::Num(12.0)),
         });
         assert!(tbl.resolve_color("spacing").is_none());
+    }
+
+    #[test]
+    fn fill_for_resolves_registered_node_ref_to_themed_color() {
+        let mut tbl = super::VariableTable::default();
+        tbl.variables.push(Variable {
+            name: "accent".into(),
+            kind: VariableKind::Color,
+            value: VariableValue::Themed(vec![
+                ThemedValue {
+                    value: VariableScalar::Str("#ff0000".into()),
+                    theme: Some(axis("mode", "light")),
+                },
+                ThemedValue {
+                    value: VariableScalar::Str("#00ff00".into()),
+                    theme: Some(axis("mode", "dark")),
+                },
+            ]),
+        });
+        let node = crate::document::NodeId::new(42);
+        tbl.set_fill_ref(node, "accent");
+        tbl.active_theme = axis("mode", "dark");
+        let c = tbl.fill_for(node).unwrap();
+        assert!((c.g - 1.0).abs() < 0.01, "dark mode → green; got {c:?}");
+        // Switch theme; same ref resolves differently.
+        tbl.active_theme = axis("mode", "light");
+        let c2 = tbl.fill_for(node).unwrap();
+        assert!((c2.r - 1.0).abs() < 0.01, "light mode → red; got {c2:?}");
+    }
+
+    #[test]
+    fn fill_for_returns_none_when_no_ref_registered() {
+        let tbl = super::VariableTable::default();
+        assert!(tbl.fill_for(crate::document::NodeId::new(99)).is_none());
     }
 
     #[test]
