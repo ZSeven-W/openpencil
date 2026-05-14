@@ -231,7 +231,11 @@ impl WidgetHostNative {
             }
             return false;
         }
-        // Path-anchor drag — snap to cursor; flip `moved` only on real delta so release knows.
+        // Path-anchor drag — always write the current cursor position
+        // (codex BLOCK: drag-back-to-start was being silently dropped,
+        // leaving the anchor at the last off-start frame). The
+        // `start_doc` comparison only flips `moved` so release knows
+        // whether to push history.
         if self.path_anchor_drag.is_some() {
             let (cx0, cy0) = self.canvas_origin();
             let canvas_local = Point2D::new(x - cx0, y - cy0);
@@ -240,8 +244,8 @@ impl WidgetHostNative {
                 let d = self.path_anchor_drag.as_ref().unwrap();
                 (d.node_id, d.anchor_index, d.start_doc)
             };
+            self.document.set_path_anchor_position(id, idx, doc_point);
             if (doc_point.x - start.x).abs() > 0.001 || (doc_point.y - start.y).abs() > 0.001 {
-                self.document.set_path_anchor_position(id, idx, doc_point);
                 if let Some(d) = self.path_anchor_drag.as_mut() {
                     d.moved = true;
                 }

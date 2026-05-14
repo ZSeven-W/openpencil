@@ -55,10 +55,13 @@ pub enum ToolErrorCode {
 
 /// Trait every MCP tool implements. The MCP server walks its
 /// `ToolRegistry`, looks up the requested tool, and forwards the
-/// arguments. Tools own the document mutation side-effect.
+/// full `ToolCall` (id + args) so the tool can mint a response
+/// carrying the originating request id — JSON-RPC requires every
+/// response to echo it back (codex BLOCK: prior signature dropped
+/// the id, forcing tools to invent fakes).
 pub trait McpTool: Send + Sync {
     fn name(&self) -> &str;
-    fn call(&self, args: &BTreeMap<String, String>) -> ToolResponse;
+    fn call(&self, request: &ToolCall) -> ToolResponse;
 }
 
 /// Registry — owned by the MCP server. v1 is a plain HashMap; a
@@ -75,7 +78,7 @@ impl ToolRegistry {
     }
     pub fn dispatch(&self, call: ToolCall) -> ToolResponse {
         if let Some(tool) = self.tools.get(&call.tool) {
-            tool.call(&call.arguments)
+            tool.call(&call)
         } else {
             ToolResponse::Err {
                 id: call.id,
@@ -104,10 +107,10 @@ mod tests {
         fn name(&self) -> &str {
             "echo"
         }
-        fn call(&self, args: &BTreeMap<String, String>) -> ToolResponse {
+        fn call(&self, request: &ToolCall) -> ToolResponse {
             ToolResponse::Ok {
-                id: RequestId::Num(0),
-                result: args.clone(),
+                id: request.id.clone(),
+                result: request.arguments.clone(),
             }
         }
     }
@@ -132,7 +135,10 @@ mod tests {
             arguments: args.clone(),
         };
         match r.dispatch(call) {
-            ToolResponse::Ok { result, .. } => {
+            ToolResponse::Ok { id, result } => {
+                // Codex BLOCK: the request id MUST round-trip via the
+                // tool — JSON-RPC matches responses by id.
+                assert_eq!(id, RequestId::Str("req-1".into()));
                 assert_eq!(result.get("k"), Some(&"v".to_string()));
             }
             _ => panic!("expected Ok"),

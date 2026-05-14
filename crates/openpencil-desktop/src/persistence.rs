@@ -164,14 +164,16 @@ pub fn apply_payload(doc: &mut Document, payload: DocPayload) -> Result<(), Stri
     } else {
         doc.active_page_index = payload.active_page_index.min(doc.pages.len() - 1);
     }
-    // Open replaces the document tree — every reference to a NodeId
-    // from the previous doc would point at a dead row. Wipe the
-    // undo stack + any in-progress UI state so a stale `pen_in_progress
-    // = Some(NodeId(42))` left over from the old doc doesn't trigger
-    // a phantom pen render or a panic on the next press.
+    // Open replaces the document tree — wipe per-document state so
+    // nothing from the previous doc leaks into the new one. Codex
+    // BLOCK: var_table + components weren't being reset, so opening
+    // a native saved file after a variable-bearing canonical file
+    // surfaced stale variables in subsequent codegen.
     doc.clear_selection();
     doc.history.past.clear();
     doc.history.future.clear();
+    doc.var_table = openpencil_shell_core::document::VariableTable::default();
+    doc.components = openpencil_shell_core::document::ComponentLibrary::default();
     doc.ui.pen_in_progress = None;
     doc.ui.pen_cursor_doc = None;
     doc.ui.pending_pen_history = None;
