@@ -80,6 +80,7 @@ pub mod locale_picker;
 pub mod shape_picker;
 pub mod status_bar;
 pub mod top_bar;
+pub mod variables_panel;
 
 pub use dropdown::{Dropdown, DropdownState};
 pub use prop_row::PropertyRow;
