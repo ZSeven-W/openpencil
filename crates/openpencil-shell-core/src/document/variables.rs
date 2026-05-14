@@ -198,7 +198,8 @@ impl VariableTable {
             | crate::mcp::McpCommand::CreateComponent { .. }
             | crate::mcp::McpCommand::DeleteComponent { .. }
             | crate::mcp::McpCommand::RenameComponent { .. }
-            | crate::mcp::McpCommand::SetActivePage { .. } => {
+            | crate::mcp::McpCommand::SetActivePage { .. }
+            | crate::mcp::McpCommand::AddPage => {
                 // Not VariableTable mutations — Pages-level commands
                 // live on `Document::apply_mcp_command`. Return false
                 // so callers with only a VariableTable handle know

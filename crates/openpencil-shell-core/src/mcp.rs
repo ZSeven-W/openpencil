@@ -39,9 +39,10 @@ pub use write_tools::{
     SetActiveAxisValue, SetVariableColor, UpdateNode,
 };
 pub use component_tools::{
-    create_component_snapshot, delete_component_snapshot, instantiate_component_snapshot,
-    rename_component_snapshot, set_active_page_snapshot, CreateComponent, DeleteComponent,
-    InstantiateComponent, RenameComponent, SetActivePage,
+    add_page_snapshot, create_component_snapshot, delete_component_snapshot,
+    instantiate_component_snapshot, rename_component_snapshot, set_active_page_snapshot,
+    AddPage, CreateComponent, DeleteComponent, InstantiateComponent, RenameComponent,
+    SetActivePage,
 };
 pub use batch_design::{
     batch_design_snapshot, design_content_snapshot, design_refine_snapshot,
@@ -293,6 +294,11 @@ pub enum McpCommand {
     SetActivePage {
         index: u32,
     },
+    /// Append a fresh empty page to the document + switch active
+    /// to it. Mirrors TS `addPage()`. Applier returns false on
+    /// id-space exhaustion (same guard as the rest of the write
+    /// tools).
+    AddPage,
 }
 
 /// Wire-friendly value payload for `McpCommand::SetVariableScalar`.

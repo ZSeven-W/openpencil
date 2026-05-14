@@ -219,3 +219,23 @@ pub fn set_active_page_snapshot() -> SetActivePage {
     SetActivePage
 }
 
+/// First-party `add_page` tool — append a fresh empty page +
+/// switch the active page to it. No args. The applier returns
+/// false on id-space exhaustion at `max_node_id() + 1`.
+pub struct AddPage;
+
+impl McpTool for AddPage {
+    fn name(&self) -> &str {
+        "add_page"
+    }
+    fn call(&self, _args: &BTreeMap<String, String>) -> ToolOutcome {
+        let mut out = BTreeMap::new();
+        out.insert("wrote".into(), "true".into());
+        ToolOutcome::OkWithCommand(out, McpCommand::AddPage)
+    }
+}
+
+pub fn add_page_snapshot() -> AddPage {
+    AddPage
+}
+
