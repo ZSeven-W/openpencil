@@ -381,6 +381,8 @@ impl PropertyPanel {
             opacity: caps.opacity,
             fill: caps.fill,
             stroke: caps.stroke,
+            effects: caps.effects,
+            export: caps.export,
             fill_type: self.fill_type,
         };
         let rects = sections::action_button_rects_with_fill_picker(
@@ -416,6 +418,8 @@ impl PropertyPanel {
             opacity: caps.opacity,
             fill: caps.fill,
             stroke: caps.stroke,
+            effects: caps.effects,
+            export: caps.export,
             fill_type: self.fill_type,
         };
         for (focus, rect) in sections::editable_input_rects(panel_rect, visible) {
@@ -563,6 +567,8 @@ impl Widget for PropertyPanel {
                 opacity: caps.opacity,
                 fill: caps.fill,
                 stroke: caps.stroke,
+                effects: caps.effects,
+                export: caps.export,
                 fill_type: self.fill_type,
             };
             sections::paint_fill_type_picker(cx, &self.theme, rect, visible, self.fill_type);
@@ -635,6 +641,58 @@ mod tests {
         assert_eq!(panel.snapshot.y, 130);
         assert!(panel.snapshot.width > 0);
         assert!(panel.snapshot.height > 0);
+    }
+
+    #[test]
+    fn hit_test_action_export_section_returns_open_dialog() {
+        // Single-frame selection paints every section + Export.
+        // The walker now extends through Stroke + Effects so the
+        // Export row's hit-test rect resolves to OpenExportDialog.
+        let mut doc = Document::sample();
+        // NodeId 10 is the Frame at the root of the sample document
+        // (mutators.rs::sample). Frame paints every section including
+        // Stroke + Effects + Export so the walker has to advance past
+        // all of them to reach the Export row.
+        doc.set_single_selection(NodeId::new(10));
+        let panel = PropertyPanel::for_selection(&doc).expect("frame panel");
+        // Tall panel rect so every section fits without clipping.
+        let rect = Rect {
+            origin: Point2D::new(0.0, 0.0),
+            size: Point2D::new(280.0, 1600.0),
+        };
+        // The Export section is the last section painted. Walk
+        // the action-button rects looking for the OpenExportDialog
+        // rect, then click its center and assert we get back the
+        // OpenExportDialog action.
+        let caps = SectionCapabilities::for_kind(&panel.snapshot.kind_variant);
+        let visible = sections::VisibleSections {
+            flex_layout: caps.flex_layout,
+            size_options: caps.size_options,
+            opacity: caps.opacity,
+            fill: caps.fill,
+            stroke: caps.stroke,
+            effects: caps.effects,
+            export: caps.export,
+            fill_type: panel.fill_type,
+        };
+        let rects = sections::action_button_rects_with_fill_picker(rect, visible, false);
+        let export_rect = rects
+            .iter()
+            .find(|(action, _)| {
+                matches!(action, PropertyPanelAction::OpenExportDialog)
+            })
+            .map(|(_, r)| *r)
+            .expect("export section must emit an OpenExportDialog rect");
+        let center = Point2D::new(
+            export_rect.origin.x + export_rect.size.x / 2.0,
+            export_rect.origin.y + export_rect.size.y / 2.0,
+        );
+        let hit = panel.hit_test_action(rect, center);
+        assert!(
+            matches!(hit, Some(PropertyPanelAction::OpenExportDialog)),
+            "click in Export section should resolve to OpenExportDialog, got {:?}",
+            hit
+        );
     }
 
     #[test]
