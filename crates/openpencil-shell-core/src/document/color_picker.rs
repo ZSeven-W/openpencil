@@ -29,7 +29,6 @@ impl Document {
             drag: None,
             anchor_y,
             variable: None,
-            variable_pre_color: None,
         });
         true
     }
@@ -63,8 +62,10 @@ impl Document {
             drag: None,
             anchor_y,
             variable: Some(name),
-            variable_pre_color: Some(current),
         });
+        let _ = current; // resolved colour was just used to seed HSV
+                          // above; close-time comparison now reads
+                          // from the snapshot's var_table.
         true
     }
 
@@ -112,14 +113,13 @@ impl Document {
             return false;
         };
         if let Some(snap) = state.pre_snap {
-            // Variable-mode close: did the resolved colour
-            // actually change? `variable_pre_color` was captured
-            // when the picker opened; compare against the
-            // post-HSV-drag resolution. snapshot.var_table doesn't
-            // exist in the DocumentSnapshot shape, so we can't go
-            // through `snap`.
+            // Variable-mode close: compare the resolved colour
+            // BEFORE the picker opened (snap.var_table) against
+            // the post-drag resolution. DocumentSnapshot now
+            // carries `var_table` so undo can actually restore
+            // the variable (codex stop-gate fix).
             let changed = if let Some(name) = &state.variable {
-                let before = state.variable_pre_color;
+                let before = snap.var_table.resolve_color(name);
                 let after = self.var_table.resolve_color(name);
                 before != after
             } else {
@@ -184,7 +184,7 @@ mod tests {
         assert!(doc.open_color_picker_for_variable("brand", 100.0));
         let state = doc.ui.color_picker.as_ref().expect("picker open");
         assert!(state.variable.as_deref() == Some("brand"));
-        assert!(state.variable_pre_color.is_some());
+        assert!(state.pre_snap.is_some(), "undo snapshot must be captured");
         // HSV anchor: hue near 32° for #ff8800 (orange).
         assert!(state.hue > 20.0 && state.hue < 45.0, "hue {}", state.hue);
         assert!(state.sat > 0.95, "sat {}", state.sat);
@@ -219,6 +219,33 @@ mod tests {
         assert!((resolved.r - 1.0).abs() < 0.01);
         assert!(resolved.g < 0.01);
         assert!(resolved.b < 0.01);
+    }
+
+    #[test]
+    fn undo_after_variable_edit_restores_pre_edit_color() {
+        // Codex stop-gate: variable edits push undo entries that
+        // must actually restore the variable. Pre-fix the
+        // DocumentSnapshot didn't carry var_table, so the undo
+        // entry would restore pages + selection but leave the
+        // variable change in place. Now var_table is snapshotted +
+        // restored — undo round-trips the variable colour.
+        let mut doc = doc_with_color_var("brand", "#ff8800"); // orange
+        assert!(doc.open_color_picker_for_variable("brand", 0.0));
+        // Drag HSV to pure red.
+        assert!(doc.color_picker_set_hsv(0.0, 1.0, 1.0));
+        assert!(doc.close_color_picker());
+        // Mid-state: variable resolves to red.
+        let after_edit = doc.var_table.resolve_color("brand").unwrap();
+        assert!((after_edit.r - 1.0).abs() < 0.01 && after_edit.g < 0.01);
+        // Undo must restore the original orange.
+        assert!(doc.undo());
+        let restored = doc.var_table.resolve_color("brand").unwrap();
+        assert!(
+            (restored.r - 1.0).abs() < 0.01
+                && (restored.g - 0x88 as f32 / 255.0).abs() < 0.01
+                && restored.b < 0.01,
+            "undo must restore original #ff8800, got {restored:?}"
+        );
     }
 
     #[test]

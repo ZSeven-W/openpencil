@@ -114,6 +114,7 @@ impl Document {
             active_page_index: self.active_page_index,
             selected: self.selected,
             selected_set: self.selected_set.clone(),
+            var_table: self.var_table.clone(),
         }
     }
 
@@ -122,6 +123,7 @@ impl Document {
         self.active_page_index = snap.active_page_index;
         self.selected = snap.selected;
         self.selected_set = snap.selected_set;
+        self.var_table = snap.var_table;
     }
 
     /// Capture without pushing; use with `history_push_past`.

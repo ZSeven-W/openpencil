@@ -286,6 +286,13 @@ pub struct DocumentSnapshot {
     pub active_page_index: usize,
     pub selected: NodeId,
     pub selected_set: Vec<NodeId>,
+    /// Variable table at snapshot time. Covers Variable definitions
+    /// + themed entries + active_theme + fill_refs / stroke_refs.
+    /// Without this, ColorPicker variable-mode edits would push an
+    /// undo entry that couldn't restore the variable (codex stop-
+    /// gate: "variable edits push undo entries that cannot restore
+    /// the variable").
+    pub var_table: VariableTable,
 }
 
 /// Chrome-level UI state — toggles for collapsible chrome surfaces.
@@ -477,11 +484,6 @@ pub struct ColorPickerState {
     /// the new field parallel avoids touching every ColorTarget
     /// pattern match.
     pub variable: Option<String>,
-    /// In variable mode, the resolved colour captured at open
-    /// time so `close_color_picker` can detect "did the variable
-    /// actually change?" without requiring the document snapshot
-    /// to carry var_table. Unused in node-target mode.
-    pub variable_pre_color: Option<crate::Color>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
