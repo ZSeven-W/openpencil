@@ -474,6 +474,19 @@ impl Document {
                 }
                 true
             }
+            crate::mcp::McpCommand::InstantiateComponent { component_id } => {
+                let Some(target) = NodeId::new_opt(*component_id) else {
+                    return false;
+                };
+                // Reuse the existing mutator. It handles fresh-id
+                // allocation, history snapshot, + selection. We
+                // need a mutable next_id seed; thread one based on
+                // `max_node_id()`. The mutator advances it.
+                let Some(mut next) = self.next_node_id_seed() else {
+                    return false;
+                };
+                self.instantiate_component(target, &mut next).is_some()
+            }
             crate::mcp::McpCommand::BatchInsert { items } => {
                 // Validate EVERY descriptor before any mutation.
                 // A single bad entry rejects the entire batch so

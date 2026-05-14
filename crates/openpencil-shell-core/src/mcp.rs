@@ -31,9 +31,10 @@ pub use tools::{
     ListVariables, NodeRecord, VariableRecord,
 };
 pub use write_tools::{
-    copy_node_snapshot, delete_node_snapshot, insert_node_snapshot, move_node_snapshot,
-    replace_node_snapshot, set_active_axis_value_snapshot, set_variable_color_snapshot,
-    update_node_snapshot, CopyNode, DeleteNode, InsertNode, MoveNode, ReplaceNode,
+    copy_node_snapshot, delete_node_snapshot, insert_node_snapshot,
+    instantiate_component_snapshot, move_node_snapshot, replace_node_snapshot,
+    set_active_axis_value_snapshot, set_variable_color_snapshot, update_node_snapshot,
+    CopyNode, DeleteNode, InsertNode, InstantiateComponent, MoveNode, ReplaceNode,
     SetActiveAxisValue, SetVariableColor, UpdateNode,
 };
 pub use batch_design::{
@@ -250,6 +251,15 @@ pub enum McpCommand {
     SetVariableScalar {
         name: String,
         scalar: VariableScalarPayload,
+    },
+    /// Instantiate a registered component on the active page. The
+    /// applier deep-clones the component's root subtree with fresh
+    /// ids past `max_node_id()` and appends it to the active page's
+    /// top-level children. Mirrors TS's drag-from-Components-panel
+    /// insertion. Returns false at apply time when the component
+    /// id is unknown.
+    InstantiateComponent {
+        component_id: u64,
     },
 }
 
