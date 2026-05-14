@@ -222,6 +222,36 @@ pub struct FigmaClipboardNode {
     pub name: String,
 }
 
+impl FigmaClipboardNode {
+    /// Map this clipboard node's Figma kind string onto the
+    /// closest `NodeKind` in the shell-core document model.
+    /// Unknown kinds round-trip as `NodeKind::Other(kind)` so the
+    /// shell still has a layer-panel entry to display.
+    /// Covers the 8 most-common Figma kinds — the remaining
+    /// specialised types (BOOLEAN_OPERATION, SLICE, COMPONENT,
+    /// INSTANCE, STAR, ...) ship in follow-up commits as the
+    /// converters need them.
+    pub fn to_node_kind(&self) -> crate::document::NodeKind {
+        use crate::document::NodeKind;
+        match self.kind.as_str() {
+            "RECTANGLE" => NodeKind::Rect,
+            "ELLIPSE" => NodeKind::Ellipse,
+            "LINE" => NodeKind::Line,
+            "POLYGON" | "REGULAR_POLYGON" => NodeKind::Polygon,
+            "VECTOR" => NodeKind::Path,
+            "TEXT" => NodeKind::Text,
+            "FRAME" | "GROUP" | "SECTION" => {
+                if self.kind == "GROUP" {
+                    NodeKind::Group
+                } else {
+                    NodeKind::Frame
+                }
+            }
+            _ => NodeKind::Other(self.kind.clone()),
+        }
+    }
+}
+
 /// Successful parse result. Carries the file kind, top-level
 /// children count, and (for clipboard JSON) a minimal-fields
 /// extraction of each top-level child. Placeholder until the full
@@ -325,6 +355,43 @@ mod tests {
         assert_eq!(parsed.clipboard_nodes[0].name, "only-name");
         assert_eq!(parsed.clipboard_nodes[1].kind, "TEXT");
         assert_eq!(parsed.clipboard_nodes[1].name, "");
+    }
+
+    #[test]
+    fn figma_kind_maps_to_node_kind_for_common_types() {
+        use crate::document::NodeKind;
+        let cases = [
+            ("RECTANGLE", NodeKind::Rect),
+            ("ELLIPSE", NodeKind::Ellipse),
+            ("LINE", NodeKind::Line),
+            ("POLYGON", NodeKind::Polygon),
+            ("REGULAR_POLYGON", NodeKind::Polygon),
+            ("VECTOR", NodeKind::Path),
+            ("TEXT", NodeKind::Text),
+            ("FRAME", NodeKind::Frame),
+            ("GROUP", NodeKind::Group),
+            ("SECTION", NodeKind::Frame),
+        ];
+        for (input, expected) in cases {
+            let n = FigmaClipboardNode {
+                kind: input.into(),
+                name: String::new(),
+            };
+            assert_eq!(n.to_node_kind(), expected, "{input}");
+        }
+    }
+
+    #[test]
+    fn figma_kind_unknown_round_trips_via_other() {
+        use crate::document::NodeKind;
+        let n = FigmaClipboardNode {
+            kind: "BOOLEAN_OPERATION".into(),
+            name: String::new(),
+        };
+        assert_eq!(
+            n.to_node_kind(),
+            NodeKind::Other("BOOLEAN_OPERATION".into())
+        );
     }
 
     #[test]
