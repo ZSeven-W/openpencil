@@ -88,6 +88,23 @@ impl Document {
         true
     }
 
+    /// Set a page's name directly (MCP-friendly entry point —
+    /// the UI rename flow uses `start_rename_page` +
+    /// `rename_append`). Rejects out-of-range indices and empty
+    /// / whitespace-only names so list_pages never returns a
+    /// page label a user can't recognize.
+    pub fn rename_page(&mut self, idx: usize, name: impl Into<String>) -> bool {
+        let name: String = name.into();
+        if name.trim().is_empty() {
+            return false;
+        }
+        let Some(page) = self.pages.get_mut(idx) else {
+            return false;
+        };
+        page.name = name;
+        true
+    }
+
     /// Start inline rename on a page row.
     pub fn start_rename_page(&mut self, idx: usize) -> bool {
         let Some(page) = self.pages.get(idx) else {

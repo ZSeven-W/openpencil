@@ -40,9 +40,10 @@ pub use write_tools::{
 };
 pub use component_tools::{
     add_page_snapshot, create_component_snapshot, delete_component_snapshot,
-    instantiate_component_snapshot, rename_component_snapshot, set_active_page_snapshot,
-    AddPage, CreateComponent, DeleteComponent, InstantiateComponent, RenameComponent,
-    SetActivePage,
+    delete_page_snapshot, duplicate_page_snapshot, instantiate_component_snapshot,
+    rename_component_snapshot, rename_page_snapshot, set_active_page_snapshot, AddPage,
+    CreateComponent, DeleteComponent, DeletePage, DuplicatePage, InstantiateComponent,
+    RenameComponent, RenamePage, SetActivePage,
 };
 pub use batch_design::{
     batch_design_snapshot, design_content_snapshot, design_refine_snapshot,
@@ -299,6 +300,23 @@ pub enum McpCommand {
     /// id-space exhaustion (same guard as the rest of the write
     /// tools).
     AddPage,
+    /// Set a page's display name. Rejects out-of-range indices
+    /// and empty / whitespace-only names.
+    RenamePage {
+        index: u32,
+        name: String,
+    },
+    /// Remove a page by index. The applier reuses the existing
+    /// `Document::remove_page` which keeps the active page valid.
+    DeletePage {
+        index: u32,
+    },
+    /// Duplicate the page at `index` (clone + insert right after).
+    /// Switches active page to the clone. Mirrors TS
+    /// `duplicatePage(idx)`.
+    DuplicatePage {
+        index: u32,
+    },
 }
 
 /// Wire-friendly value payload for `McpCommand::SetVariableScalar`.

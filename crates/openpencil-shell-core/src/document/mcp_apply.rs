@@ -510,6 +510,15 @@ impl Document {
                 self.set_active_page(*index as usize)
             }
             crate::mcp::McpCommand::AddPage => self.add_page().is_some(),
+            crate::mcp::McpCommand::RenamePage { index, name } => {
+                self.rename_page(*index as usize, name.clone())
+            }
+            crate::mcp::McpCommand::DeletePage { index } => {
+                self.remove_page(*index as usize)
+            }
+            crate::mcp::McpCommand::DuplicatePage { index } => {
+                self.duplicate_page(*index as usize).is_some()
+            }
             crate::mcp::McpCommand::BatchInsert { items } => {
                 // Validate EVERY descriptor before any mutation.
                 // A single bad entry rejects the entire batch so
