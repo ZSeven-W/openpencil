@@ -275,3 +275,145 @@ fn walk_node(
         walk_node(child, node.id.raw(), out);
     }
 }
+
+/// First-party `list_variables` tool — reports every variable in the
+/// document's `var_table` along with its kind and resolved value
+/// under the active theme. LLM clients use this after `get_document_
+/// info` / `list_pages` to discover design tokens before issuing
+/// `$ref`-bearing node mutations.
+pub struct ListVariables {
+    pub variables: Vec<VariableRecord>,
+}
+
+#[derive(Debug, Clone)]
+pub struct VariableRecord {
+    pub name: String,
+    pub kind: String,
+    /// Resolved scalar under the active theme. For Color kind this is
+    /// the parsed hex; for Number / Boolean / String it's the literal
+    /// stringified scalar. Empty when the variable doesn't resolve
+    /// (themed entries with no matching active-theme axis).
+    pub value: String,
+}
+
+impl McpTool for ListVariables {
+    fn name(&self) -> &str {
+        "list_variables"
+    }
+    fn call(&self, _args: &BTreeMap<String, String>) -> ToolOutcome {
+        let mut out = BTreeMap::new();
+        out.insert("count".into(), self.variables.len().to_string());
+        // Encode the list as `name|kind|value` triplets joined by
+        // `;`. Keeps shell-core serde-free; clients split on the
+        // delimiters. Names + values cannot contain `;` or `|` in
+        // valid `.op` schemas (the canonical loader rejects those
+        // chars during variable-name validation).
+        let encoded: Vec<String> = self
+            .variables
+            .iter()
+            .map(|v| format!("{}|{}|{}", v.name, v.kind, v.value))
+            .collect();
+        out.insert("variables".into(), encoded.join(";"));
+        ToolOutcome::Ok(out)
+    }
+}
+
+pub fn list_variables_snapshot(doc: &crate::document::Document) -> ListVariables {
+    use crate::document::{VariableKind, VariableScalar};
+    let variables = doc
+        .var_table
+        .variables
+        .iter()
+        .map(|var| {
+            let kind = match var.kind {
+                VariableKind::Color => "color",
+                VariableKind::Number => "number",
+                VariableKind::Boolean => "boolean",
+                VariableKind::String => "string",
+            };
+            let value = match var.resolve(&doc.var_table.active_theme) {
+                Some(VariableScalar::Str(s)) => s.clone(),
+                Some(VariableScalar::Num(n)) => format!("{n}"),
+                Some(VariableScalar::Bool(b)) => if *b { "true" } else { "false" }.into(),
+                None => String::new(),
+            };
+            VariableRecord {
+                name: var.name.clone(),
+                kind: kind.into(),
+                value,
+            }
+        })
+        .collect();
+    ListVariables { variables }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn doc_with_variables() -> crate::document::Document {
+        use crate::document::{Document, Variable, VariableKind, VariableScalar, VariableValue};
+        let mut doc = Document::empty();
+        doc.var_table.variables.push(Variable {
+            name: "color-1".into(),
+            kind: VariableKind::Color,
+            value: VariableValue::Scalar(VariableScalar::Str("#ff0000".into())),
+        });
+        doc.var_table.variables.push(Variable {
+            name: "spacing".into(),
+            kind: VariableKind::Number,
+            value: VariableValue::Scalar(VariableScalar::Num(16.0)),
+        });
+        doc.var_table.variables.push(Variable {
+            name: "compact".into(),
+            kind: VariableKind::Boolean,
+            value: VariableValue::Scalar(VariableScalar::Bool(true)),
+        });
+        doc
+    }
+
+    #[test]
+    fn list_variables_reports_count_and_records() {
+        let doc = doc_with_variables();
+        let tool = list_variables_snapshot(&doc);
+        assert_eq!(tool.variables.len(), 3);
+        assert_eq!(tool.variables[0].name, "color-1");
+        assert_eq!(tool.variables[0].kind, "color");
+        assert_eq!(tool.variables[0].value, "#ff0000");
+        assert_eq!(tool.variables[1].kind, "number");
+        assert_eq!(tool.variables[1].value, "16");
+        assert_eq!(tool.variables[2].kind, "boolean");
+        assert_eq!(tool.variables[2].value, "true");
+    }
+
+    #[test]
+    fn list_variables_encodes_for_wire() {
+        let doc = doc_with_variables();
+        let tool = list_variables_snapshot(&doc);
+        match tool.call(&BTreeMap::new()) {
+            ToolOutcome::Ok(out) => {
+                assert_eq!(out.get("count"), Some(&"3".to_string()));
+                let encoded = out.get("variables").expect("variables field");
+                assert!(encoded.contains("color-1|color|#ff0000"));
+                assert!(encoded.contains("spacing|number|16"));
+                assert!(encoded.contains("compact|boolean|true"));
+                // Three records separated by `;`.
+                assert_eq!(encoded.matches(';').count(), 2);
+            }
+            other => panic!("expected Ok, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn list_variables_empty_document_returns_zero_count() {
+        let doc = crate::document::Document::empty();
+        let tool = list_variables_snapshot(&doc);
+        match tool.call(&BTreeMap::new()) {
+            ToolOutcome::Ok(out) => {
+                assert_eq!(out.get("count"), Some(&"0".to_string()));
+                assert_eq!(out.get("variables"), Some(&String::new()));
+            }
+            _ => panic!("expected Ok"),
+        }
+    }
+}
