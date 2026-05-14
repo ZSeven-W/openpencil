@@ -6,7 +6,7 @@
 
 use super::helpers::{TOOLBAR_INSET_X, TOOLBAR_INSET_Y};
 use super::WidgetHostNative;
-use openpencil_shell_core::document::PropertyFocus;
+use openpencil_shell_core::document::{PropertyFocus, VariableRowFocus};
 use openpencil_shell_core::widgets::{
     AIChatHit, AIChatPlaceholder, LayerPanel, LayoutCx, Toolbar, Widget, TOOLBAR_WIDTH,
     TOP_BAR_HEIGHT,
@@ -40,6 +40,23 @@ impl WidgetHostNative {
                 return true;
             }
             return false;
+        }
+        if let Some(focus) = self.document.ui.variable_row_focus {
+            self.document.ui.property_draft_select_all = false;
+            let allowed = match focus {
+                VariableRowFocus::Number(_) => {
+                    c.is_ascii_digit()
+                        || (c == '-' && self.document.ui.property_input_draft.is_empty())
+                        || (c == '.' && !self.document.ui.property_input_draft.contains('.'))
+                }
+                VariableRowFocus::String(_) => !c.is_control(),
+            };
+            if !allowed {
+                return false;
+            }
+            self.document.ui.property_input_draft.push(c);
+            self.document.ui.property_caret_anchor_ms = self.now_ms;
+            return true;
         }
         if let Some(focus) = self.document.ui.property_focus {
             self.document.ui.property_draft_select_all = false;
@@ -92,6 +109,14 @@ impl WidgetHostNative {
                 self.document.ui.text_edit_caret_anchor_ms = self.now_ms;
             }
             return ok;
+        }
+        if self.document.ui.variable_row_focus.is_some() {
+            self.document.ui.property_draft_select_all = false;
+            if self.document.ui.property_input_draft.pop().is_some() {
+                self.document.ui.property_caret_anchor_ms = self.now_ms;
+                return true;
+            }
+            return false;
         }
         if self.document.ui.property_focus.is_some() {
             self.document.ui.property_draft_select_all = false;
@@ -286,6 +311,7 @@ impl WidgetHostNative {
         if self.document.ui.pen_in_progress.is_some() {
             return self.document.finish_pen_path();
         }
+        if self.document.ui.variable_row_focus.is_some() { self.commit_variable_row_focus_if_any(); return true; }
         if self.document.ui.property_focus.is_some() { self.commit_property_focus_if_any(); return true; }
         if self.document.chat.input.trim().is_empty() { return false; }
         self.document.chat.send();
@@ -304,6 +330,11 @@ impl WidgetHostNative {
         if self.document.rename_cancel() { return true; }
         if self.document.text_edit_commit() { return true; }
         if self.document.finish_pen_path() { return true; }
+        if self.document.ui.variable_row_focus.take().is_some() {
+            self.document.ui.property_input_draft.clear();
+            self.document.ui.property_draft_select_all = false;
+            return true;
+        }
         if self.document.ui.property_focus.take().is_some() {
             self.document.ui.property_input_draft.clear();
             self.document.ui.property_draft_select_all = false;

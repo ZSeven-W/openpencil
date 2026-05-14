@@ -365,6 +365,10 @@ pub struct UiState {
     /// row sets `var_table.active_theme[axis] = value` + closes;
     /// click outside the panel closes silently.
     pub axis_dropdown_open: Option<String>,
+    /// Editor focus for a non-color variable row (Number / String).
+    /// Reuses `property_input_draft` as the buffer so a single
+    /// caret-blink anchor + input handler tier serves both.
+    pub variable_row_focus: Option<VariableRowFocus>,
     /// Last-selected shape tool — drives the toolbar shape slot's
     /// icon. Defaults to Rect. Always one of Rect / Ellipse /
     /// Polygon / Line / Pen (Icon + Import are one-shot actions
@@ -588,6 +592,7 @@ impl Default for UiState {
             figma_import_open: false,
             shape_picker_open: false,
             axis_dropdown_open: None,
+            variable_row_focus: None,
             shape_tool: Tool::Rect,
             flex_layout: FlexLayout::Free,
             size_fill_width: false,
@@ -720,6 +725,17 @@ pub enum PropertyFocus {
     FillHex,
     StrokeHex,
     StrokeWidth,
+}
+
+/// Editor focus for a non-color variable row in the VariablesPanel.
+/// `Number(idx)` allows digits + leading minus + one `.`; `String`
+/// allows any non-control character (free-form text). Boolean
+/// variables don't need a focus — their row click toggles the
+/// value directly.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum VariableRowFocus {
+    Number(usize),
+    String(usize),
 }
 
 mod chat;

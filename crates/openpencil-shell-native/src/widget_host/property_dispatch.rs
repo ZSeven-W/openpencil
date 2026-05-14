@@ -182,6 +182,44 @@ impl WidgetHostNative {
         }
     }
 
+    /// Commit any pending VariablesPanel row edit (Number / String).
+    /// Pushes a history snapshot when the commit changes the stored
+    /// scalar so undo restores the prior value. Called from
+    /// `apply_send`, `apply_escape` (via take), and click-outside.
+    pub(in crate::widget_host) fn commit_variable_row_focus_if_any(&mut self) {
+        use openpencil_shell_core::document::{VariableRowFocus, VariableScalar};
+        let Some(focus) = self.document.ui.variable_row_focus.take() else {
+            return;
+        };
+        self.document.ui.property_draft_select_all = false;
+        let draft = std::mem::take(&mut self.document.ui.property_input_draft);
+        let (name, scalar) = match focus {
+            VariableRowFocus::Number(idx) => {
+                let Some(var) = self.document.var_table.variables.get(idx) else {
+                    return;
+                };
+                let name = var.name.clone();
+                let Ok(n) = draft.trim().parse::<f64>() else {
+                    return;
+                };
+                if !n.is_finite() {
+                    return;
+                }
+                (name, VariableScalar::Num(n))
+            }
+            VariableRowFocus::String(idx) => {
+                let Some(var) = self.document.var_table.variables.get(idx) else {
+                    return;
+                };
+                (var.name.clone(), VariableScalar::Str(draft))
+            }
+        };
+        let snap = self.document.snapshot_for_history();
+        if self.document.var_table.set_scalar(&name, scalar) {
+            self.document.history_push_past(snap);
+        }
+    }
+
     pub(in crate::widget_host) fn commit_property_focus_if_any(&mut self) {
         let Some(focus) = self.document.ui.property_focus.take() else {
             return;
@@ -302,12 +340,55 @@ impl WidgetHostNative {
                             }
                         }
                         VariableKind::Number | VariableKind::String => {
-                            // Inline editor for numeric / string
-                            // values not built yet — the MCP path
-                            // (set_variable_number / _string) is
-                            // the available write surface today.
-                            // Clicking the row is a no-op rather
-                            // than a misleading focus.
+                            // Inline editor — set the focus + seed
+                            // the draft buffer from the current
+                            // resolved scalar. Existing
+                            // apply_text / apply_backspace / apply_send
+                            // / apply_escape know to route through
+                            // variable_row_focus before property_focus.
+                            use openpencil_shell_core::document::VariableRowFocus;
+                            let name = var.name.clone();
+                            let kind = var.kind;
+                            self.commit_property_focus_if_any();
+                            self.commit_variable_row_focus_if_any();
+                            let resolved = self
+                                .document
+                                .var_table
+                                .resolve(&name)
+                                .cloned()
+                                .unwrap_or(match kind {
+                                    VariableKind::Number => {
+                                        openpencil_shell_core::document::VariableScalar::Num(0.0)
+                                    }
+                                    VariableKind::String => {
+                                        openpencil_shell_core::document::VariableScalar::Str(
+                                            String::new(),
+                                        )
+                                    }
+                                    _ => {
+                                        openpencil_shell_core::document::VariableScalar::Str(
+                                            String::new(),
+                                        )
+                                    }
+                                });
+                            self.document.ui.property_input_draft =
+                                match (&kind, &resolved) {
+                                    (
+                                        VariableKind::Number,
+                                        openpencil_shell_core::document::VariableScalar::Num(n),
+                                    ) => format!("{n}"),
+                                    (
+                                        VariableKind::String,
+                                        openpencil_shell_core::document::VariableScalar::Str(s),
+                                    ) => s.clone(),
+                                    _ => String::new(),
+                                };
+                            self.document.ui.variable_row_focus = Some(match kind {
+                                VariableKind::Number => VariableRowFocus::Number(idx),
+                                VariableKind::String => VariableRowFocus::String(idx),
+                                _ => return true,
+                            });
+                            self.document.ui.property_caret_anchor_ms = self.now_ms;
                         }
                     }
                 }

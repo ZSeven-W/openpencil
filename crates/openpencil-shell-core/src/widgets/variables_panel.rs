@@ -64,6 +64,13 @@ pub struct VariablesPanel<'a> {
     /// paint a dropdown overlay anchored to that chip. The list
     /// is sourced from `VariableTable::themes`.
     dropdown_open: Option<String>,
+    /// Row index currently in inline-edit focus (Number / String
+    /// variable). `None` = no row editing.
+    editing_row: Option<usize>,
+    /// Draft buffer for the row in edit focus. Shared with
+    /// `Document.ui.property_input_draft` (reuses the caret +
+    /// blink machinery).
+    editing_draft: String,
 }
 
 #[derive(Debug, Clone)]
@@ -76,6 +83,11 @@ impl<'a> VariablesPanel<'a> {
     pub fn for_document(doc: &'a Document) -> Self {
         let mut panel = Self::for_table(&doc.var_table);
         panel.dropdown_open = doc.ui.axis_dropdown_open.clone();
+        panel.editing_row = doc.ui.variable_row_focus.map(|f| match f {
+            crate::document::VariableRowFocus::Number(i) => i,
+            crate::document::VariableRowFocus::String(i) => i,
+        });
+        panel.editing_draft = doc.ui.property_input_draft.clone();
         panel
     }
 
@@ -92,6 +104,8 @@ impl<'a> VariablesPanel<'a> {
             table,
             chips,
             dropdown_open: None,
+            editing_row: None,
+            editing_draft: String::new(),
         }
     }
 
@@ -297,7 +311,7 @@ impl<'a> Widget for VariablesPanel<'a> {
             y += CHIP_HEIGHT + 8.0;
         }
         // Variable rows.
-        for var in &self.table.variables {
+        for (idx, var) in self.table.variables.iter().enumerate() {
             let row = Rect {
                 origin: Point2D::new(rect.origin.x, y),
                 size: Point2D::new(rect.size.x, ROW_HEIGHT),
@@ -316,7 +330,30 @@ impl<'a> Widget for VariablesPanel<'a> {
             );
             // Preview on the right.
             let preview_x = row.origin.x + row.size.x - PAD_X - SWATCH_SIZE;
-            paint_preview(cx, &theme, var, self.table, preview_x, row.origin.y + 7.0);
+            if self.editing_row == Some(idx) {
+                // Inline edit mode — paint the draft + a thin
+                // underline to signal active focus. Aligned with
+                // the same baseline the preview label would have
+                // used. No caret blink today (the property panel's
+                // caret machinery isn't yet shared); the underline
+                // is enough affordance.
+                let draft_layout = crate::TextLayout::single_run(
+                    &self.editing_draft,
+                    "system-ui",
+                    11.0,
+                    to_jian_color(theme.foreground),
+                    Point2D::new(0.0, 0.0),
+                );
+                cx.backend
+                    .draw_text(&draft_layout, Point2D::new(preview_x - 64.0, row.origin.y + 21.0));
+                let underline = Rect {
+                    origin: Point2D::new(preview_x - 70.0, row.origin.y + 23.0),
+                    size: Point2D::new(80.0, 1.0),
+                };
+                cx.backend.fill_rect(underline, theme.foreground);
+            } else {
+                paint_preview(cx, &theme, var, self.table, preview_x, row.origin.y + 7.0);
+            }
             y += ROW_HEIGHT;
         }
         // Axis dropdown overlay — paints LAST so it covers the
