@@ -711,3 +711,45 @@ fn apply_mcp_command_move_node_rejects_unknown_id() {
         target_parent_id: 99999,
     }));
 }
+
+#[test]
+fn apply_mcp_command_move_node_preserves_source_when_target_unknown() {
+    // Codex stop-gate: move_node was detaching the source FIRST,
+    // then trying to find the target parent. If the target was
+    // unknown the source got dropped. Now target_parent is fully
+    // validated before detach, so a bad target leaves both nodes
+    // in place.
+    use crate::document::Document;
+    let mut doc = Document::sample();
+    // Snapshot of Title (id 11) location: under Frame (id 10).
+    let frame_before = doc.pages[0].children[0].children.len();
+    let cmd = McpCommand::MoveNode {
+        node_id: 11,
+        target_parent_id: 99999, // doesn't exist
+    };
+    assert!(!doc.apply_mcp_command(&cmd), "unknown target must reject");
+    // Title still under Frame.
+    let frame_after = doc.pages[0].children[0].children.len();
+    assert_eq!(frame_after, frame_before, "title count unchanged");
+    assert!(doc.pages[0]
+        .children[0]
+        .children
+        .iter()
+        .any(|n| n.id.raw() == 11), "title must still be under Frame");
+    // Title is NOT elsewhere in the doc.
+    let title_count: usize = doc
+        .pages
+        .iter()
+        .map(|p| {
+            fn count(node: &crate::document::Node, target: u64) -> usize {
+                let mut c = if node.id.raw() == target { 1 } else { 0 };
+                for child in &node.children {
+                    c += count(child, target);
+                }
+                c
+            }
+            p.children.iter().map(|n| count(n, 11)).sum::<usize>()
+        })
+        .sum();
+    assert_eq!(title_count, 1, "title appears exactly once in the doc");
+}
