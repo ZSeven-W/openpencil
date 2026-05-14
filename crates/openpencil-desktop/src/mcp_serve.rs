@@ -26,7 +26,7 @@ use openpencil_shell_core::document::Document;
 use openpencil_shell_core::mcp::{
     batch_design_snapshot, copy_node_snapshot, delete_node_snapshot,
     design_content_snapshot, design_refine_snapshot, design_skeleton_snapshot,
-    document_info_snapshot,
+    document_info_snapshot, list_components_snapshot,
     get_active_theme_snapshot, get_node_snapshot, insert_node_snapshot,
     list_pages_snapshot, list_variables_snapshot, move_node_snapshot,
     replace_node_snapshot, run_stdio_with_applier, selection_snapshot,
@@ -139,6 +139,7 @@ fn rebuild_registry(doc: &Document) -> ToolRegistry {
     r.register(Box::new(list_pages_snapshot(doc)));
     r.register(Box::new(list_variables_snapshot(doc)));
     r.register(Box::new(get_active_theme_snapshot(doc)));
+    r.register(Box::new(list_components_snapshot(doc)));
     r.register(Box::new(set_variable_color_snapshot(doc)));
     r.register(Box::new(set_active_axis_value_snapshot(doc)));
     r.register(Box::new(insert_node_snapshot()));
@@ -366,6 +367,7 @@ const TOOL_SCHEMAS: &[&str] = &[
     r#"{"name":"list_pages","description":"List page ids + names.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}}"#,
     r#"{"name":"list_variables","description":"List design variables with kinds.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}}"#,
     r#"{"name":"get_active_theme","description":"Return the active theme axis pinning per axis.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}}"#,
+    r#"{"name":"list_components","description":"List registered components (saved Frames / Groups promoted via Save as Component). Returns count + a `;`-separated record of `name|id` pairs.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}}"#,
     // --- write tools ---
     r##"{"name":"set_variable_color","description":"Set a Color-kind variable's value.","inputSchema":{"type":"object","properties":{"name":{"type":"string"},"hex":{"type":"string","description":"#rgb / #rrggbb / #rrggbbaa"}},"required":["name","hex"]}}"##,
     r#"{"name":"batch_design","description":"Insert N leaf nodes on the active page in one atomic shot. nodes_json must be a JSON array string of {kind,name,x,y,width,height,fill_hex?} descriptors.","inputSchema":{"type":"object","properties":{"nodes_json":{"type":"string","description":"JSON array of node descriptors"}},"required":["nodes_json"]}}"#,
@@ -428,7 +430,7 @@ mod tests {
     }
 
     #[test]
-    fn tools_list_response_includes_all_twenty_one_tools() {
+    fn tools_list_response_includes_all_twenty_two_tools() {
         let r = tools_list_response("3");
         // Exact-count assertion: any tool added without
         // updating this test will trip the count first. Codex
@@ -437,7 +439,7 @@ mod tests {
         // without being added to the list below.
         assert_eq!(
             TOOL_SCHEMAS.len(),
-            21,
+            22,
             "tools/list catalog count must match the registered tools — add the new tool to this test"
         );
         for name in [
@@ -447,6 +449,7 @@ mod tests {
             "list_pages",
             "list_variables",
             "get_active_theme",
+            "list_components",
             "set_variable_color",
             "set_active_axis_value",
             "insert_node",

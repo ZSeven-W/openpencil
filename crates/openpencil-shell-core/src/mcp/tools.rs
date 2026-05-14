@@ -523,3 +523,47 @@ pub fn get_active_theme_snapshot(doc: &crate::document::Document) -> GetActiveTh
         .collect();
     GetActiveTheme { active, options }
 }
+
+/// First-party `list_components` tool — reports the document's
+/// registered components (saved Frames / Groups promoted via
+/// "Save as Component"). LLM clients use this to discover what
+/// reusable subtrees they can instantiate (instance insertion is
+/// still UI-only in the Rust shell; an MCP write tool to spawn
+/// instances is a future patch).
+///
+/// Wire shape:
+///   count — total number of components in the library.
+///   components — `;`-records of `name|id` pairs, with the legacy
+///     2-level escape (\;|) on each side. Matches the
+///     list_variables / list_pages wire convention so clients
+///     can reuse their existing decoder.
+pub struct ListComponents {
+    pub items: Vec<(String, u64)>,
+}
+
+impl McpTool for ListComponents {
+    fn name(&self) -> &str {
+        "list_components"
+    }
+    fn call(&self, _args: &BTreeMap<String, String>) -> ToolOutcome {
+        let encoded: Vec<String> = self
+            .items
+            .iter()
+            .map(|(name, id)| format!("{}|{}", escape_record_field(name), id))
+            .collect();
+        let mut out = BTreeMap::new();
+        out.insert("count".into(), self.items.len().to_string());
+        out.insert("components".into(), encoded.join(";"));
+        ToolOutcome::Ok(out)
+    }
+}
+
+pub fn list_components_snapshot(doc: &crate::document::Document) -> ListComponents {
+    let items = doc
+        .components
+        .components
+        .iter()
+        .map(|c| (c.name.clone(), c.id.raw()))
+        .collect();
+    ListComponents { items }
+}
