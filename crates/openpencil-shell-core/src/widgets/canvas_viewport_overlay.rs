@@ -138,15 +138,19 @@ pub fn paint_selection_overlay(
 
 /// Paint a node's fill rect followed by its stroke rect. Stroke
 /// width is scaled by `zoom` so it stays visually constant under
-/// canvas zoom.
-pub fn paint_fill_then_stroke(cx: &mut PaintCx<'_>, node: &Node, world_rect: Rect, zoom: f32) {
-    // Scale doc-space radius into world-space alongside the rect.
-    // 0.5px is below the visible threshold for most renders; collapse
-    // to a square fill so the round-rect path doesn't accidentally
-    // soften 0-radius corners due to sub-pixel rounding.
+/// canvas zoom. Effective `fill` is passed explicitly so callers
+/// can substitute via `var_table.fill_for(node.id)` before
+/// rendering (paint-time `$ref` resolution — #5).
+pub fn paint_fill_then_stroke(
+    cx: &mut PaintCx<'_>,
+    node: &Node,
+    world_rect: Rect,
+    zoom: f32,
+    fill: Option<crate::Color>,
+) {
     let r = node.corner_radius * zoom;
     let use_round = r > 0.5;
-    if let Some(fill) = node.fill {
+    if let Some(fill) = fill {
         if use_round {
             cx.backend.fill_round_rect(world_rect, r, fill);
         } else {
