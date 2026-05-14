@@ -309,6 +309,34 @@ impl<'a> Widget for CanvasViewport<'a> {
             }
         }
 
+        // 4b. Per-anchor handles for the selected Path node when the
+        //     Pen tool is active — surfaces the drag target that
+        //     `path_anchor_drag` consumes (codex stop-gate concern:
+        //     anchor drag worked but was invisible).
+        if matches!(self.document.tool, crate::document::Tool::Pen)
+            && self.document.selection_count() == 1
+        {
+            if let Some(page) = self.document.active_page() {
+                if let Some(node) = page.find(self.document.selected) {
+                    if matches!(node.kind, NodeKind::Path) {
+                        let r = 4.0; // screen-px radius
+                        for p in &node.points {
+                            let center = Point2D::new(
+                                rect.origin.x + viewport.pan_x + p.x * viewport.zoom,
+                                rect.origin.y + viewport.pan_y + p.y * viewport.zoom,
+                            );
+                            let bounds = Rect {
+                                origin: Point2D::new(center.x - r, center.y - r),
+                                size: Point2D::new(r * 2.0, r * 2.0),
+                            };
+                            cx.backend.fill_oval(bounds, self.theme.background);
+                            cx.backend.stroke_oval(bounds, self.theme.primary, 1.5);
+                        }
+                    }
+                }
+            }
+        }
+
         cx.backend.restore();
     }
 
