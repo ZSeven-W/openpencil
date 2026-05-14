@@ -283,6 +283,13 @@ impl WidgetHostNative {
             return rename_committed || text_edit_committed;
         }
 
+        // 0b1. VariablesPanel — tested before PropertyPanel so the
+        //      bottom-anchored Variables rect wins clicks (paint
+        //      stack: PropertyPanel under, Variables over).
+        if self.dispatch_variables_panel_press(x, y, viewport_width, viewport_height) {
+            return true;
+        }
+
         // 0c0. Fill-type picker — outside-click dismiss.
         if self.document.ui.fill_type_picker_open {
             if let Some(panel) = PropertyPanel::for_selection(&self.document) {
@@ -386,11 +393,6 @@ impl WidgetHostNative {
                 self.document.chat.focused = false;
                 return true;
             }
-        }
-
-        // 0d. VariablesPanel row click — body in property_dispatch.
-        if self.dispatch_variables_panel_press(x, y, viewport_width, viewport_height) {
-            return true;
         }
 
         // 1. AI chat panel — sits on top of the toolbar in paint
