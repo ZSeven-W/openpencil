@@ -26,6 +26,14 @@ pub struct VisibleSections {
     pub fill: bool,
     /// `StrokeHex` + `StrokeWidth` from the Stroke section.
     pub stroke: bool,
+    /// Effects section paints (header + add chip, no inputs yet).
+    /// Tracked because the export-rect walker needs to know
+    /// whether it consumed vertical space ahead of the Export
+    /// section.
+    pub effects: bool,
+    /// Export section paints — `OpenExportDialog` action emits
+    /// only when this is true.
+    pub export: bool,
     /// Active fill type — affects fill-section body height so
     /// the walk past Fill stays aligned with paint when the user
     /// flips Solid / Gradient / Image.
@@ -40,6 +48,8 @@ impl VisibleSections {
         opacity: true,
         fill: true,
         stroke: true,
+        effects: true,
+        export: true,
         fill_type: FillType::Solid,
     };
 }
@@ -216,7 +226,44 @@ pub fn action_button_rects_with_fill_picker(
                 ));
             }
         }
+        // Consume the rest of the Fill section so subsequent
+        // sections' y math stays aligned with paint. Mirrors the
+        // y-walk in `paint_fill_section`: head row + body + divider.
+        y += INPUT_HEIGHT + 6.0; // head row (swatch + dropdown + opacity + X)
+        y += fill_body_height(visible.fill_type) - 6.0 + 12.0; // body + divider gap
+        y += SECTION_GAP;
     }
+    if visible.stroke {
+        // Mirrors paint_stroke_section: header + hex/width row.
+        y += SECTION_HEADER_HEIGHT;
+        y += INPUT_HEIGHT + 12.0;
+        y += SECTION_GAP;
+    }
+    if visible.effects {
+        // Mirrors paint_effects_section: header + 8 px filler.
+        y += SECTION_HEADER_HEIGHT;
+        y += 8.0;
+        y += SECTION_GAP;
+    }
+    if visible.export {
+        // Mirrors paint_export_section: header + a single dropdown
+        // row. We emit one `OpenExportDialog` rect covering both
+        // the scale + format pills + the full label strip so
+        // clicking anywhere in the section opens the dialog. The
+        // ExportDialog modal owns the format/scale picker UI, so
+        // segmenting the row into two separate pills isn't worth
+        // the extra hit-test complexity yet.
+        y += SECTION_HEADER_HEIGHT;
+        let row = Rect {
+            origin: Point2D::new(x0 + PAD_X, y),
+            size: Point2D::new(usable_w, INPUT_HEIGHT),
+        };
+        out.push((PropertyPanelAction::OpenExportDialog, row));
+        // No further sections after Export today, but maintain the
+        // y advance for symmetry / future additions.
+        y += INPUT_HEIGHT + 12.0;
+    }
+    let _ = y; // suppress unused-write lint if export is last
 
     out
 }
