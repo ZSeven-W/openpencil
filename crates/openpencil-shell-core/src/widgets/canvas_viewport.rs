@@ -810,6 +810,7 @@ mod tests {
             chat: crate::document::ChatState::default(),
             ui: crate::document::UiState::default(),
             history: crate::document::History::default(),
+            var_table: crate::document::VariableTable::default(),
         };
         let viewport = CanvasViewport::from_document(&doc);
         let mut backend = RecordingBackend::default();

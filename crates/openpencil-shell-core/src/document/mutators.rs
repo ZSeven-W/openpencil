@@ -48,6 +48,7 @@ impl Document {
             chat: ChatState::default(),
             ui: UiState::default(),
             history: History::default(),
+            var_table: VariableTable::default(),
         }
     }
 
@@ -95,6 +96,7 @@ impl Document {
             chat: ChatState::default(),
             ui: UiState::default(),
             history: History::default(),
+            var_table: VariableTable::default(),
         };
         debug_assert!(
             doc.validate().is_ok(),
