@@ -2375,7 +2375,9 @@ name = "openpencil-desktop"
 version = "0.1.0"
 dependencies = [
  "agent",
+ "anthropic-agent-sdk",
  "async-trait",
+ "copilot-sdk",
  "dirs 5.0.1",
  "futures",
  "glam",
