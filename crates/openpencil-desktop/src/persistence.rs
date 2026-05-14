@@ -621,22 +621,50 @@ pub fn run_action(
             handle_save_as(host, current_path, window);
         }
         FileAction::ExportImage => {
+            // Should not normally hit run_action — main.rs intercepts
+            // ExportImage to open the picker dialog instead. Keep as
+            // a fallback so external callers still work.
+            host.document_mut().ui.export_dialog_open = true;
+        }
+        FileAction::ExportImageConfirm => {
+            use openpencil_shell_core::widgets::export_dialog::ExportFormat as Fmt;
+            let fmt = host.document().ui.export_format;
+            let scale = host.document().ui.export_scale;
+            let (filter_label, filter_exts): (&str, &[&str]) = match fmt {
+                Fmt::Png => ("PNG", &["png"]),
+                Fmt::Jpeg => ("JPEG", &["jpg", "jpeg"]),
+                Fmt::Webp => ("WEBP", &["webp"]),
+                Fmt::Svg => ("SVG", &["svg"]),
+                Fmt::Pdf => ("PDF", &["pdf"]),
+            };
+            let default_name = format!("openpencil-export.{}", fmt.extension());
             if let Some(path) = rfd::FileDialog::new()
                 .set_title("Export image")
-                .add_filter("PNG", &["png"])
-                .add_filter("SVG", &["svg"])
-                .set_file_name("openpencil-export.png")
+                .add_filter(filter_label, filter_exts)
+                .set_file_name(&default_name)
                 .save_file()
             {
-                let ext = path
-                    .extension()
-                    .and_then(|s| s.to_str())
-                    .map(|s| s.to_ascii_lowercase())
-                    .unwrap_or_default();
-                let result = if ext == "svg" {
-                    crate::export::export_svg(host.document(), &path)
-                } else {
-                    crate::export::export_png(host.document(), &path)
+                let result: Result<(), String> = match fmt {
+                    Fmt::Png => crate::export::export_raster(
+                        host.document(),
+                        &path,
+                        crate::export::RasterFormat::Png,
+                        scale,
+                    ),
+                    Fmt::Jpeg => crate::export::export_raster(
+                        host.document(),
+                        &path,
+                        crate::export::RasterFormat::Jpeg,
+                        scale,
+                    ),
+                    Fmt::Webp => crate::export::export_raster(
+                        host.document(),
+                        &path,
+                        crate::export::RasterFormat::Webp,
+                        scale,
+                    ),
+                    Fmt::Svg => crate::export::export_svg(host.document(), &path),
+                    Fmt::Pdf => Err("PDF export not yet implemented".into()),
                 };
                 if let Err(e) = result {
                     eprintln!("[export-image] {e}");

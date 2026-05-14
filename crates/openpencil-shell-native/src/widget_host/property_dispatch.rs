@@ -42,6 +42,52 @@ impl WidgetHostNative {
                 // click y so the picker centers on the swatch.
                 let _ = self.document.open_color_picker(target, 0.0);
             }
+            A::OpenExportDialog => {
+                self.document.ui.pending_file_action =
+                    Some(openpencil_shell_core::document::FileAction::ExportImage);
+            }
+        }
+    }
+
+    /// Export-dialog press dispatcher. Format / Scale pills mutate
+    /// `Document.ui.export_format` / `export_scale`; Cancel + outside
+    /// click close the dialog; Export closes the dialog AND queues
+    /// `FileAction::ExportImage` so the desktop binary's save dialog
+    /// fires with the chosen format + scale.
+    pub(in crate::widget_host) fn dispatch_export_dialog_press(
+        &mut self,
+        x: f32,
+        y: f32,
+        viewport_w: f32,
+        viewport_h: f32,
+    ) {
+        use openpencil_shell_core::document::FileAction;
+        use openpencil_shell_core::widgets::export_dialog::{
+            scale_from_index, ExportDialog, ExportDialogHit,
+        };
+        let dlg = ExportDialog::centered(viewport_w, viewport_h);
+        let point = openpencil_shell_core::Point2D::new(x, y);
+        match dlg.hit_test(point) {
+            Some(ExportDialogHit::Format(f)) => {
+                self.document.ui.export_format = f;
+            }
+            Some(ExportDialogHit::Scale(i)) => {
+                self.document.ui.export_scale = scale_from_index(i);
+            }
+            Some(ExportDialogHit::Cancel) => {
+                self.document.ui.export_dialog_open = false;
+            }
+            Some(ExportDialogHit::Export) => {
+                self.document.ui.export_dialog_open = false;
+                self.document.ui.pending_file_action = Some(FileAction::ExportImageConfirm);
+            }
+            None => {
+                if !dlg.contains(point) {
+                    // Outside click — dismiss like Cancel.
+                    self.document.ui.export_dialog_open = false;
+                }
+                // In-dialog dead-space — swallow without dispatching.
+            }
         }
     }
 

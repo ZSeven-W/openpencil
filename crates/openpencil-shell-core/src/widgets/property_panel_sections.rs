@@ -705,6 +705,8 @@ pub fn paint_export_section(
     cx: &mut PaintCx<'_>,
     theme: &Theme,
     labels: &PropertyLabels,
+    format: crate::widgets::export_dialog::ExportFormat,
+    scale: f32,
     x: f32,
     y: f32,
     width: f32,
@@ -712,6 +714,15 @@ pub fn paint_export_section(
     let mut y = paint_section_label(cx, theme, &labels.export, x, y, width);
     let usable_w = width - PAD_X * 2.0;
     let half_w = (usable_w - 8.0) / 2.0;
+    // Left pill: current scale. Right pill: current format. Click
+    // anywhere in the section opens the ExportDialog so the user
+    // can change either (P3 wiring — full inline popovers will land
+    // when a generic dropdown-popover infra ships).
+    let scale_label = match crate::widgets::export_dialog::scale_index(scale) {
+        1 => "1x",
+        3 => "3x",
+        _ => "2x",
+    };
     paint_dropdown(
         cx,
         theme,
@@ -719,7 +730,7 @@ pub fn paint_export_section(
             origin: Point2D::new(x + PAD_X, y),
             size: Point2D::new(half_w, INPUT_HEIGHT),
         },
-        "1x",
+        scale_label,
     );
     paint_dropdown(
         cx,
@@ -728,10 +739,23 @@ pub fn paint_export_section(
             origin: Point2D::new(x + PAD_X + half_w + 8.0, y),
             size: Point2D::new(half_w, INPUT_HEIGHT),
         },
-        "PNG",
+        format.label(),
     );
     y += INPUT_HEIGHT + 12.0;
     y
+}
+
+/// Y-extent of the export section, used by the hit-test layout
+/// walker so a click anywhere inside emits OpenExportDialog.
+pub fn export_section_rect(x: f32, y_top: f32, width: f32) -> Rect {
+    // section_label + 1 row of pills + 12px gap. Mirrors the paint
+    // layout above; if you change one, change both.
+    let label_h = 28.0;
+    let total_h = label_h + INPUT_HEIGHT + 12.0;
+    Rect {
+        origin: Point2D::new(x, y_top),
+        size: Point2D::new(width, total_h),
+    }
 }
 
 // All shared paint primitives + layout constants are imported

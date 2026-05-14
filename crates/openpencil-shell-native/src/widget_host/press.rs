@@ -174,7 +174,6 @@ impl WidgetHostNative {
             }
         }
 
-        // 0. Layer context menu — top-most when open.
         if let Some(state) = self.document.ui.layer_context_menu {
             use openpencil_shell_core::widgets::layer_context_menu::LayerContextMenu;
             let menu = LayerContextMenu::for_state(&self.document, state);
@@ -238,6 +237,7 @@ impl WidgetHostNative {
         }
 
         if self.document.ui.file_menu_open { self.dispatch_file_menu_press(x, y, viewport_width); return true; }
+        if self.document.ui.export_dialog_open { self.dispatch_export_dialog_press(x, y, viewport_width, viewport_height); return true; }
         if self.document.ui.figma_import_open { self.dispatch_figma_import_press(x, y, viewport_width, viewport_height); return true; }
 
         // 0a. Locale picker overlay — top-most when open; click outside closes.

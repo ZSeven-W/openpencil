@@ -50,6 +50,9 @@ pub enum PropertyPanelAction {
     /// User clicked a colour swatch (Fill or Stroke section). Host
     /// opens the floating colour picker tied to that target.
     OpenColorPicker(crate::document::ColorTarget),
+    /// User clicked anywhere in the Export section — host queues
+    /// `FileAction::ExportImage` so the picker dialog opens.
+    OpenExportDialog,
 }
 
 /// Per-NodeKind toggles for which property-panel sections render.
@@ -259,6 +262,10 @@ pub struct PropertyPanel {
     pub is_multi: bool,
     /// Active header tab — toggled by Cmd+Shift+C.
     pub tab: crate::document::PropertyTab,
+    /// Current export format + scale, surfaced as preview pills in
+    /// the Export section. Clicking the section opens the modal.
+    pub export_format: crate::widgets::export_dialog::ExportFormat,
+    pub export_scale: f32,
 }
 
 impl PropertyPanel {
@@ -353,6 +360,8 @@ impl PropertyPanel {
             fill_type_picker_open: doc.ui.fill_type_picker_open,
             is_multi,
             tab: doc.ui.property_tab,
+            export_format: doc.ui.export_format,
+            export_scale: doc.ui.export_scale,
         }
     }
 
@@ -539,7 +548,11 @@ impl Widget for PropertyPanel {
             y = sections::paint_effects_section(cx, &self.theme, &self.labels, x, y, w);
         }
         if caps.export {
-            let _ = sections::paint_export_section(cx, &self.theme, &self.labels, x, y, w);
+            let _ = sections::paint_export_section(
+                cx, &self.theme, &self.labels,
+                self.export_format, self.export_scale,
+                x, y, w,
+            );
         }
         // Fill-type picker overlay sits on top of everything below
         // the Fill section so it can extend past the section divider.

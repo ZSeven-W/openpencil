@@ -280,6 +280,20 @@ impl WidgetHostNative {
             modal.paint(&mut cx, modal_rect);
         }
 
+        // 10d. Export dialog — full-viewport scrim + centred card.
+        if self.document.ui.export_dialog_open {
+            use openpencil_shell_core::widgets::ExportDialog;
+            frame.fill_rect(
+                Rect {
+                    origin: Point2D::new(0.0, 0.0),
+                    size: Point2D::new(viewport_width, viewport_height),
+                },
+                openpencil_shell_core::Color { r: 0.0, g: 0.0, b: 0.0, a: 0.45 },
+            );
+            let dlg = ExportDialog::centered(viewport_width, viewport_height);
+            dlg.paint(&mut *frame, &self.theme, &self.document);
+        }
+
         // 10a. Agent-settings modal — top-most overlay when open.
         if self.document.ui.agent_settings_open {
             use openpencil_shell_core::widgets::agent_settings_panel::AgentSettingsPanel;

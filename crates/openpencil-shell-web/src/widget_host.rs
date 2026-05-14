@@ -167,6 +167,10 @@ fn apply_property_action_impl(
             document.set_selected_fill_type(t);
             document.ui.fill_type_picker_open = false;
         }
+        A::OpenExportDialog => {
+            document.ui.pending_file_action =
+                Some(openpencil_shell_core::document::FileAction::ExportImage);
+        }
         A::OpenColorPicker(target) => {
             let _ = document.open_color_picker(target, 0.0);
         }

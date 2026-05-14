@@ -1,8 +1,9 @@
-//! PNG export for the active page.
+//! Raster + SVG export for the active page.
 //!
 //! Renders top-level nodes on the active page into an off-screen
-//! `skia_safe::Surface`, encodes as PNG, writes to the user-chosen
-//! path. Closes audit gap #1 (export half). Coverage today:
+//! `skia_safe::Surface`, encodes as one of PNG/JPEG/WEBP, writes to
+//! the user-chosen path. SVG goes through a separate hand-rolled
+//! serializer (`export_svg`). Coverage:
 //!   - Rect / Frame / Group : fill + stroke + corner_radius
 //!   - Ellipse              : fill + stroke
 //!   - Polygon              : default-triangle fill + stroke
@@ -11,9 +12,9 @@
 //!   - Text                 : skipped (font plumbing pending)
 //! Per-node rotation honoured via `Canvas::rotate`.
 //!
-//! Render scale is 2× canvas extent for crisp output on retina
-//! screens; transparent background so PNGs composite cleanly onto
-//! whatever the user drops them into.
+//! Background: PNG / WEBP transparent; JPEG forced white (TS parity
+//! — JPEG has no alpha so a "transparent" JPEG would read as black).
+//! Scale: caller picks @1x / @2x / @3x (TS export dialog parity).
 
 use openpencil_shell_core::document::{Document, Node, NodeKind};
 use openpencil_shell_core::{Color, Point2D, Rect};
@@ -21,16 +22,78 @@ use skia_safe::{Canvas, EncodedImageFormat, Paint, PaintStyle, Path, PathBuilder
 use std::fmt::Write as _;
 use std::path::Path as StdPath;
 
-const SCALE: f32 = 2.0;
 const MARGIN: f32 = 16.0;
 
-pub fn export_png(doc: &Document, target: &StdPath) -> Result<(), String> {
+/// Raster export format. Matches TS ExportDialog's PNG / JPEG / WEBP
+/// options; SVG has its own entry point (`export_svg`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RasterFormat {
+    Png,
+    Jpeg,
+    Webp,
+}
+
+impl RasterFormat {
+    /// Skia encoder format.
+    fn skia(self) -> EncodedImageFormat {
+        match self {
+            RasterFormat::Png => EncodedImageFormat::PNG,
+            RasterFormat::Jpeg => EncodedImageFormat::JPEG,
+            RasterFormat::Webp => EncodedImageFormat::WEBP,
+        }
+    }
+    /// Encoder quality. PNG ignores it (lossless); JPEG/WEBP land on
+    /// 92 to match TS (quality 0.92 in canvas.toDataURL).
+    fn quality(self) -> u32 {
+        match self {
+            RasterFormat::Png => 100,
+            RasterFormat::Jpeg | RasterFormat::Webp => 92,
+        }
+    }
+    /// True when the format supports transparency. JPEG doesn't, so
+    /// the background must be filled before drawing.
+    fn supports_alpha(self) -> bool {
+        !matches!(self, RasterFormat::Jpeg)
+    }
+    /// Lookup by file extension (lowercase). Returns None for unknown
+    /// extensions. Used by future drag-drop / scripted-export paths
+    /// (current UI carries the format via `Document.ui.export_format`).
+    #[allow(dead_code)]
+    pub fn from_extension(ext: &str) -> Option<RasterFormat> {
+        match ext {
+            "png" => Some(RasterFormat::Png),
+            "jpg" | "jpeg" => Some(RasterFormat::Jpeg),
+            "webp" => Some(RasterFormat::Webp),
+            _ => None,
+        }
+    }
+    /// Human-readable label for error messages ("PNG" / "JPEG" / "WEBP").
+    fn user_label(self) -> &'static str {
+        match self {
+            RasterFormat::Png => "PNG",
+            RasterFormat::Jpeg => "JPEG",
+            RasterFormat::Webp => "WEBP",
+        }
+    }
+}
+
+/// Raster export with explicit format + scale. Scale clamped to
+/// [0.5, 8.0] to keep surface allocation sane; NaN / inf fall back
+/// to 2× (codex CONCERN — NaN reaching `canvas.scale` produces a
+/// garbage transform).
+pub fn export_raster(
+    doc: &Document,
+    target: &StdPath,
+    format: RasterFormat,
+    scale: f32,
+) -> Result<(), String> {
+    let scale = if scale.is_finite() { scale.clamp(0.5, 8.0) } else { 2.0 };
     let Some(page) = doc.pages.get(doc.active_page_index) else {
         return Err("no active page".into());
     };
     let bounds = page_bounds(page).ok_or("nothing to export")?;
-    let width_px = ((bounds.size.x + MARGIN * 2.0) * SCALE).round() as i32;
-    let height_px = ((bounds.size.y + MARGIN * 2.0) * SCALE).round() as i32;
+    let width_px = ((bounds.size.x + MARGIN * 2.0) * scale).round() as i32;
+    let height_px = ((bounds.size.y + MARGIN * 2.0) * scale).round() as i32;
     let info = skia_safe::ImageInfo::new(
         (width_px.max(1), height_px.max(1)),
         skia_safe::ColorType::N32,
@@ -39,16 +102,20 @@ pub fn export_png(doc: &Document, target: &StdPath) -> Result<(), String> {
     );
     let mut surface = skia_safe::surfaces::raster(&info, None, None).ok_or("alloc surface")?;
     let canvas = surface.canvas();
-    canvas.clear(skia_safe::Color::TRANSPARENT);
-    canvas.scale((SCALE, SCALE));
+    if format.supports_alpha() {
+        canvas.clear(skia_safe::Color::TRANSPARENT);
+    } else {
+        canvas.clear(skia_safe::Color::WHITE);
+    }
+    canvas.scale((scale, scale));
     canvas.translate((MARGIN - bounds.origin.x, MARGIN - bounds.origin.y));
     for node in &page.children {
         paint_node(canvas, node);
     }
     let image = surface.image_snapshot();
     let data = image
-        .encode(None, EncodedImageFormat::PNG, 100)
-        .ok_or("encode png")?;
+        .encode(None, format.skia(), format.quality())
+        .ok_or_else(|| format!("encode {} failed", format.user_label()))?;
     std::fs::write(target, data.as_bytes()).map_err(|e| e.to_string())?;
     Ok(())
 }
@@ -625,4 +692,92 @@ fn color_to_rgb(c: Color) -> String {
         (c.g.clamp(0.0, 1.0) * 255.0).round() as u8,
         (c.b.clamp(0.0, 1.0) * 255.0).round() as u8,
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn raster_format_extension_lookup() {
+        assert_eq!(RasterFormat::from_extension("png"), Some(RasterFormat::Png));
+        assert_eq!(RasterFormat::from_extension("jpg"), Some(RasterFormat::Jpeg));
+        assert_eq!(RasterFormat::from_extension("jpeg"), Some(RasterFormat::Jpeg));
+        assert_eq!(RasterFormat::from_extension("webp"), Some(RasterFormat::Webp));
+        assert_eq!(RasterFormat::from_extension("svg"), None);
+        assert_eq!(RasterFormat::from_extension("gif"), None);
+        assert_eq!(RasterFormat::from_extension(""), None);
+    }
+
+    #[test]
+    fn raster_format_jpeg_does_not_support_alpha() {
+        assert!(RasterFormat::Png.supports_alpha());
+        assert!(RasterFormat::Webp.supports_alpha());
+        assert!(!RasterFormat::Jpeg.supports_alpha());
+    }
+
+    #[test]
+    fn raster_format_quality_matches_ts() {
+        // TS export-section.tsx: quality = 100 for PNG, 92 for JPEG/WEBP.
+        assert_eq!(RasterFormat::Png.quality(), 100);
+        assert_eq!(RasterFormat::Jpeg.quality(), 92);
+        assert_eq!(RasterFormat::Webp.quality(), 92);
+    }
+
+    #[test]
+    fn export_raster_writes_png_for_minimal_doc() {
+        use openpencil_shell_core::document::{Node, NodeId, NodeKind};
+        let mut doc = openpencil_shell_core::document::Document::empty();
+        let page = doc.pages.get_mut(0).unwrap();
+        page.children.clear();
+        let mut n = Node::leaf(10, NodeKind::Rect, "r");
+        n.bounds = Rect::xywh(0.0, 0.0, 100.0, 50.0);
+        n.fill = Some(Color { r: 0.5, g: 0.5, b: 0.5, a: 1.0 });
+        page.children.push(n);
+        let tmp = std::env::temp_dir().join(format!("op-export-test-{}.png", std::process::id()));
+        let res = export_raster(&doc, &tmp, RasterFormat::Png, 2.0);
+        assert!(res.is_ok(), "export_raster PNG failed: {res:?}");
+        let bytes = std::fs::read(&tmp).unwrap();
+        // PNG signature: 89 50 4E 47 0D 0A 1A 0A
+        assert_eq!(&bytes[..8], &[0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A]);
+        let _ = std::fs::remove_file(&tmp);
+        let _ = NodeId::new(10); // silence import-used warning
+    }
+
+    #[test]
+    fn export_raster_writes_jpeg_with_white_background() {
+        use openpencil_shell_core::document::{Node, NodeKind};
+        let mut doc = openpencil_shell_core::document::Document::empty();
+        let page = doc.pages.get_mut(0).unwrap();
+        page.children.clear();
+        let mut n = Node::leaf(10, NodeKind::Rect, "r");
+        n.bounds = Rect::xywh(0.0, 0.0, 80.0, 40.0);
+        n.fill = Some(Color { r: 1.0, g: 0.0, b: 0.0, a: 1.0 });
+        page.children.push(n);
+        let tmp = std::env::temp_dir().join(format!("op-export-test-{}.jpg", std::process::id()));
+        let res = export_raster(&doc, &tmp, RasterFormat::Jpeg, 1.0);
+        assert!(res.is_ok(), "export_raster JPEG failed: {res:?}");
+        let bytes = std::fs::read(&tmp).unwrap();
+        // JPEG SOI marker: FF D8 FF
+        assert_eq!(&bytes[..3], &[0xFF, 0xD8, 0xFF]);
+        let _ = std::fs::remove_file(&tmp);
+    }
+
+    #[test]
+    fn export_raster_scale_clamps_extreme_values() {
+        use openpencil_shell_core::document::{Node, NodeKind};
+        let mut doc = openpencil_shell_core::document::Document::empty();
+        let page = doc.pages.get_mut(0).unwrap();
+        page.children.clear();
+        let mut n = Node::leaf(10, NodeKind::Rect, "r");
+        n.bounds = Rect::xywh(0.0, 0.0, 10.0, 10.0);
+        n.fill = Some(Color { r: 0.0, g: 0.0, b: 0.0, a: 1.0 });
+        page.children.push(n);
+        // Both extremes should succeed (clamped silently) rather than
+        // allocating a gigapixel surface or zero-sized output.
+        let tmp = std::env::temp_dir().join(format!("op-export-clamp-{}.png", std::process::id()));
+        assert!(export_raster(&doc, &tmp, RasterFormat::Png, 0.001).is_ok());
+        assert!(export_raster(&doc, &tmp, RasterFormat::Png, 1000.0).is_ok());
+        let _ = std::fs::remove_file(&tmp);
+    }
 }

@@ -673,6 +673,9 @@ impl WidgetHostNative {
         // Settings input focus: clear draft first, second press closes modal.
         if self.document.ui.agent_settings.focus.take().is_some() { self.document.ui.settings_input_draft.clear(); return true; }
         if self.document.ui.agent_settings_open { self.document.ui.agent_settings_open = false; self.document.ui.agent_settings_drag = None; return true; }
+        if self.document.ui.export_dialog_open { self.document.ui.export_dialog_open = false; return true; }
+        if self.document.ui.figma_import_open { self.document.ui.figma_import_open = false; return true; }
+        if self.document.ui.file_menu_open { self.document.ui.file_menu_open = false; self.document.ui.file_menu_hover = None; return true; }
         if self.document.rename_cancel() { return true; }
         if self.document.text_edit_commit() { return true; }
         if self.document.finish_pen_path() { return true; }
