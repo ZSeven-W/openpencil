@@ -388,7 +388,7 @@ pub fn save_to_path(doc: &Document, path: &std::path::Path) -> Result<(), String
     Ok(())
 }
 
-fn load_from_path(doc: &mut Document, path: &std::path::Path) -> Result<(), String> {
+pub fn load_from_path(doc: &mut Document, path: &std::path::Path) -> Result<(), String> {
     let bytes = std::fs::read(path).map_err(|e| e.to_string())?;
     // Try the desktop's private `DocPayload` first (round-trip with
     // its own Save), then fall back to the canonical `.op` /
