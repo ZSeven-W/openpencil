@@ -28,7 +28,7 @@ use openpencil_shell_core::mcp::{
     design_content_snapshot, design_refine_snapshot, design_skeleton_snapshot,
     create_component_snapshot, delete_component_snapshot, document_info_snapshot,
     get_component_snapshot, instantiate_component_snapshot, list_components_snapshot,
-    rename_component_snapshot,
+    rename_component_snapshot, set_active_page_snapshot,
     get_active_theme_snapshot, get_node_snapshot, insert_node_snapshot,
     list_pages_snapshot, list_variables_snapshot, move_node_snapshot,
     replace_node_snapshot, run_stdio_with_applier, selection_snapshot,
@@ -162,6 +162,7 @@ fn rebuild_registry(doc: &Document) -> ToolRegistry {
     r.register(Box::new(create_component_snapshot()));
     r.register(Box::new(delete_component_snapshot()));
     r.register(Box::new(rename_component_snapshot()));
+    r.register(Box::new(set_active_page_snapshot()));
     r
 }
 
@@ -389,6 +390,7 @@ const TOOL_SCHEMAS: &[&str] = &[
     r#"{"name":"create_component","description":"Promote an existing Frame or Group on the active page to a registered component. Use list_components afterwards to see it, instantiate_component to drop a clone.","inputSchema":{"type":"object","properties":{"node_id":{"type":"string","description":"positive u64 node id"},"name":{"type":"string"}},"required":["node_id","name"]}}"#,
     r#"{"name":"delete_component","description":"Remove a component from the registry by id. Live instances already on the page are NOT affected — they're independent clones.","inputSchema":{"type":"object","properties":{"component_id":{"type":"string","description":"positive u64 component id"}},"required":["component_id"]}}"#,
     r#"{"name":"rename_component","description":"Rename a registered component. Name must be non-empty / non-whitespace.","inputSchema":{"type":"object","properties":{"component_id":{"type":"string","description":"positive u64 component id"},"name":{"type":"string"}},"required":["component_id","name"]}}"#,
+    r#"{"name":"set_active_page","description":"Switch which page is the active target for subsequent inserts / batch_design / design_* commands. index is 0-based.","inputSchema":{"type":"object","properties":{"index":{"type":"string","description":"0-based page index"}},"required":["index"]}}"#,
     r#"{"name":"set_active_axis_value","description":"Pin a theme axis to one of its allowed values.","inputSchema":{"type":"object","properties":{"axis":{"type":"string"},"value":{"type":"string"}},"required":["axis","value"]}}"#,
     r#"{"name":"insert_node","description":"Create a new leaf node on the active page.","inputSchema":{"type":"object","properties":{"kind":{"type":"string","enum":["frame","group","rect","ellipse","polygon","line","text","path"]},"name":{"type":"string"},"x":{"type":"string"},"y":{"type":"string"},"width":{"type":"string"},"height":{"type":"string"},"fill_hex":{"type":"string"}},"required":["kind","name","x","y","width","height"]}}"#,
     r#"{"name":"update_node","description":"Patch fields on an existing node. Pass any subset of x/y/width/height/name/fill_hex.","inputSchema":{"type":"object","properties":{"node_id":{"type":"string"},"x":{"type":"string"},"y":{"type":"string"},"width":{"type":"string"},"height":{"type":"string"},"name":{"type":"string"},"fill_hex":{"type":"string"}},"required":["node_id"]}}"#,
@@ -442,7 +444,7 @@ mod tests {
     }
 
     #[test]
-    fn tools_list_response_includes_all_twenty_seven_tools() {
+    fn tools_list_response_includes_all_twenty_eight_tools() {
         let r = tools_list_response("3");
         // Exact-count assertion: any tool added without
         // updating this test will trip the count first. Codex
@@ -451,7 +453,7 @@ mod tests {
         // without being added to the list below.
         assert_eq!(
             TOOL_SCHEMAS.len(),
-            27,
+            28,
             "tools/list catalog count must match the registered tools — add the new tool to this test"
         );
         for name in [
@@ -467,6 +469,7 @@ mod tests {
             "create_component",
             "delete_component",
             "rename_component",
+            "set_active_page",
             "set_variable_color",
             "set_active_axis_value",
             "insert_node",

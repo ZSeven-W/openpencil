@@ -506,6 +506,9 @@ impl Document {
                 };
                 self.components.rename(target, name.clone())
             }
+            crate::mcp::McpCommand::SetActivePage { index } => {
+                self.set_active_page(*index as usize)
+            }
             crate::mcp::McpCommand::BatchInsert { items } => {
                 // Validate EVERY descriptor before any mutation.
                 // A single bad entry rejects the entire batch so
