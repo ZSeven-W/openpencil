@@ -260,57 +260,55 @@ impl Document {
                 let Some(source) = NodeId::new_opt(*node_id) else {
                     return false;
                 };
-                // Same-id reparent is a no-op (also: target ==
-                // source would cycle).
                 if source.raw() == *target_parent_id {
                     return false;
                 }
                 let target_parent = NodeId::new_opt(*target_parent_id);
-                // Cycle guard: if target_parent is a descendant of
-                // source, the move would orphan + cycle the
-                // subtree. Walk source's subtree before detaching.
+
+                // Pre-validate EVERYTHING before detaching the node
+                // (codex stop-gate: a bad target_parent_id would
+                // cause detach → reattach-fail → silent drop of
+                // the source node).
+                //
+                // 1. Source must exist.
+                let Some(src_node) = find_node_in_doc(self, source) else {
+                    return false;
+                };
+                // 2. If target is Some, it must resolve AND must
+                //    not be a descendant of source (cycle).
                 if let Some(target_id) = target_parent {
-                    if let Some(src_node) = find_node_in_doc(self, source) {
-                        if subtree_contains(src_node, target_id) {
-                            return false;
-                        }
-                    } else {
-                        return false; // source missing
+                    if subtree_contains(src_node, target_id) {
+                        return false;
+                    }
+                    if find_node_in_doc(self, target_id).is_none() {
+                        return false;
+                    }
+                } else {
+                    // target_parent_id == 0 → page root. Active
+                    // page must exist.
+                    if self.pages.get(self.active_page_index).is_none() {
+                        return false;
                     }
                 }
-                // Detach the source from its current parent.
+                // All validation passed — detach + reattach is
+                // now infallible.
                 let Some(detached) = detach_node(self, source) else {
                     return false;
                 };
-                // Reattach. None target_parent → active page root.
-                let attached = match target_parent {
+                match target_parent {
                     None => {
                         let active_idx = self.active_page_index;
-                        match self.pages.get_mut(active_idx) {
-                            Some(page) => {
-                                page.children.push(detached);
-                                true
-                            }
-                            None => false,
-                        }
+                        self.pages[active_idx].children.push(detached);
                     }
-                    Some(pid) => match find_node_mut_in_doc(self, pid) {
-                        Some(parent) => {
-                            parent.children.push(detached);
-                            true
-                        }
-                        None => false,
-                    },
-                };
-                if !attached {
-                    // Reattachment failed — silently dropped the
-                    // node. Return false so the caller knows the
-                    // op didn't land; but the document state has
-                    // already changed (detached). Realistically
-                    // this only fires under corrupted target
-                    // states; the cycle check + new_opt + sourceness
-                    // checks above cover the validation paths.
-                    return false;
+                    Some(pid) => {
+                        // unwrap-OK: validated above; find_node_in_doc
+                        // returned Some + nothing else mutates pages
+                        // between the validation and here.
+                        find_node_mut_in_doc(self, pid)
+                            .expect("target validated")
+                            .children
+                            .push(detached);
+                    }
                 }
                 true
             }
