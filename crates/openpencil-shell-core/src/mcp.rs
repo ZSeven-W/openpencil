@@ -196,6 +196,12 @@ pub enum McpCommand {
     /// carry children / a full subtree once a JSON Node parser
     /// lives on the host. The current contract matches what TS
     /// `replace_node` accepts for primitives, minus children.
+    ///
+    /// **Destructive on containers**: replacing a Frame / Group
+    /// / node-with-children drops every descendant of the old
+    /// node without warning. Use `update_node` to patch a
+    /// container in place; reserve `replace_node` for primitive
+    /// → primitive swaps where the loss is intended.
     ReplaceNode {
         node_id: u64,
         kind: String,
