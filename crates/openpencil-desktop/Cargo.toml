@@ -96,7 +96,11 @@ async-trait = "0.1"
 # Default-features-off + rustls-tls keeps the TLS choice consistent
 # with the SDK's. We still talk to 127.0.0.1, but rustls is a
 # small price for not having two parallel TLS stacks.
-reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json", "stream"] }
+reqwest = { version = "0.12", default-features = false, features = [
+  "rustls-tls",
+  "json",
+  "stream",
+] }
 # Async runtime — agent-rs is async; the BuiltIn ChatProvider impl
 # bridges its `EventStream` into the sync `Iterator<ChatDelta>`
 # shape via a tokio task + std::sync::mpsc channel.
