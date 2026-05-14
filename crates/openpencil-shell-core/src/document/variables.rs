@@ -217,16 +217,30 @@ impl VariableTable {
                 true
             }
             VariableValue::Themed(entries) => {
-                // Find the entry whose `theme` matches every k/v in
-                // the active map (or the default `theme: None`
-                // entry when no themed match exists). Write through
-                // — or push a new entry keyed to the active theme
-                // when no exact match.
-                let exact_idx = entries.iter().position(|e| match &e.theme {
-                    Some(t) => t == &active,
-                    None => active.is_empty(),
+                // Codex stop-gate: the write path MUST match the
+                // resolve path's subset-matching semantics, otherwise
+                // a successful write can fail to change the resolved
+                // value (an earlier-in-vec themed entry whose `theme`
+                // is a subset of active_theme would still win the
+                // resolve walk, shadowing the new entry we pushed at
+                // the end). Mirror `Variable::resolve` exactly:
+                //
+                //   1. First themed entry whose `theme` is a subset
+                //      of active_theme → write there.
+                //   2. Else, the `theme: None` default entry → write
+                //      there.
+                //   3. Else, push a fresh entry keyed to the active
+                //      theme (or None when active is empty).
+                let subset_idx = entries.iter().position(|e| match &e.theme {
+                    Some(t) => t.iter().all(|(k, v)| active.get(k) == Some(v)),
+                    None => false,
                 });
-                if let Some(i) = exact_idx {
+                if let Some(i) = subset_idx {
+                    entries[i].value = VariableScalar::Str(normalized);
+                    return true;
+                }
+                let default_idx = entries.iter().position(|e| e.theme.is_none());
+                if let Some(i) = default_idx {
                     entries[i].value = VariableScalar::Str(normalized);
                     return true;
                 }
@@ -538,6 +552,107 @@ mod tests {
         });
         // Number-kind variable: write rejected.
         assert!(!tbl.set_color_hex("spacing", "#ffffff"));
+    }
+
+    #[test]
+    fn set_color_hex_changes_resolved_value_under_subset_active_theme() {
+        // Codex stop-gate regression: when the themed entry's theme
+        // is a SUBSET of the active theme (e.g. entry only specifies
+        // `mode: dark`; active is `mode: dark, density: compact`),
+        // `resolve` still picks that entry — so a write must update
+        // that entry in place, NOT push a new entry at the end that
+        // `resolve` will never reach.
+        let mut tbl = super::VariableTable::default();
+        tbl.variables.push(Variable {
+            name: "bg".into(),
+            kind: VariableKind::Color,
+            value: VariableValue::Themed(vec![ThemedValue {
+                value: VariableScalar::Str("#111111".into()),
+                theme: Some({
+                    let mut m = BTreeMap::new();
+                    m.insert("mode".into(), "dark".into());
+                    m
+                }),
+            }]),
+        });
+        tbl.set_active_theme("mode", "dark");
+        tbl.set_active_theme("density", "compact");
+        // Sanity: resolves through the subset-matching entry.
+        assert_eq!(
+            tbl.resolve_color("bg"),
+            Some(crate::Color {
+                r: 0x11 as f32 / 255.0,
+                g: 0x11 as f32 / 255.0,
+                b: 0x11 as f32 / 255.0,
+                a: 1.0,
+            })
+        );
+        // Write under the wider active theme. The original entry
+        // (only mode=dark) is the resolved one — the write MUST go
+        // through it, not append a new entry that resolve never
+        // reaches.
+        assert!(tbl.set_color_hex("bg", "#22ff44"));
+        assert_eq!(
+            tbl.resolve_color("bg"),
+            Some(crate::Color {
+                r: 0x22 as f32 / 255.0,
+                g: 1.0,
+                b: 0x44 as f32 / 255.0,
+                a: 1.0,
+            }),
+            "themed write must update the entry resolve picks"
+        );
+    }
+
+    #[test]
+    fn set_color_hex_falls_back_to_default_entry_when_no_subset_match() {
+        // Themed entry that doesn't match + a `theme: None` default.
+        // Active theme matches NEITHER themed entry → write must
+        // update the default entry (which is what resolve falls
+        // back to) and not append a new themed entry.
+        let mut tbl = super::VariableTable::default();
+        tbl.variables.push(Variable {
+            name: "bg".into(),
+            kind: VariableKind::Color,
+            value: VariableValue::Themed(vec![
+                ThemedValue {
+                    value: VariableScalar::Str("#ffffff".into()),
+                    theme: Some({
+                        let mut m = BTreeMap::new();
+                        m.insert("mode".into(), "light".into());
+                        m
+                    }),
+                },
+                ThemedValue {
+                    value: VariableScalar::Str("#888888".into()),
+                    theme: None,
+                },
+            ]),
+        });
+        tbl.set_active_theme("mode", "dark"); // matches neither
+        // Pre-write: resolves to the default.
+        assert_eq!(
+            tbl.resolve_color("bg"),
+            Some(crate::Color {
+                r: 0x88 as f32 / 255.0,
+                g: 0x88 as f32 / 255.0,
+                b: 0x88 as f32 / 255.0,
+                a: 1.0,
+            })
+        );
+        // Write should update the default entry, not push a new dark
+        // entry (which would still leave resolve walking the default
+        // for the SAME active=dark theme).
+        assert!(tbl.set_color_hex("bg", "#aabbcc"));
+        assert_eq!(
+            tbl.resolve_color("bg"),
+            Some(crate::Color {
+                r: 0xaa as f32 / 255.0,
+                g: 0xbb as f32 / 255.0,
+                b: 0xcc as f32 / 255.0,
+                a: 1.0,
+            })
+        );
     }
 
     #[test]
