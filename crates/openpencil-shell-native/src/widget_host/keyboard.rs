@@ -147,6 +147,17 @@ impl WidgetHostNative {
     /// Delete — pops a char from rename / text-edit when active;
     /// otherwise deletes the selected node.
     pub fn apply_delete(&mut self) -> bool {
+        // Variable-row inline editor: Delete should clear a
+        // dirty draft via the same path as apply_backspace
+        // (pop one char). Once empty, fall through.
+        if self.document.ui.variable_row_focus.is_some() {
+            self.document.ui.property_draft_select_all = false;
+            if self.document.ui.property_input_draft.pop().is_some() {
+                self.document.ui.property_caret_anchor_ms = self.now_ms;
+                return true;
+            }
+            return false;
+        }
         if self.document.ui.layer_rename.is_some() {
             let ok = self.document.rename_backspace();
             if ok {

@@ -14,6 +14,7 @@ impl WidgetHostNative {
         self.document.ui.layer_rename.is_some()
             || self.document.ui.text_editing.is_some()
             || self.document.ui.property_focus.is_some()
+            || self.document.ui.variable_row_focus.is_some()
             || self.document.ui.agent_settings.focus.is_some()
             || self.document.chat.focused
     }
