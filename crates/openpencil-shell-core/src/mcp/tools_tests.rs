@@ -579,3 +579,142 @@ fn apply_mcp_command_routes_set_active_axis_value() {
     };
     assert!(!doc.var_table.apply_mcp_command(&bad));
 }
+
+#[test]
+fn insert_node_validates_required_args() {
+    let tool = insert_node_snapshot();
+    // Missing kind.
+    let mut args = BTreeMap::new();
+    args.insert("name".into(), "X".into());
+    args.insert("x".into(), "0".into());
+    args.insert("y".into(), "0".into());
+    args.insert("width".into(), "10".into());
+    args.insert("height".into(), "10".into());
+    match tool.call(&args) {
+        ToolOutcome::Err(code, msg) => {
+            assert_eq!(code, ToolErrorCode::MissingArgument);
+            assert!(msg.contains("kind"));
+        }
+        _ => panic!(),
+    }
+    // Invalid kind.
+    args.insert("kind".into(), "frobnicate".into());
+    match tool.call(&args) {
+        ToolOutcome::Err(code, _) => {
+            assert_eq!(code, ToolErrorCode::InvalidArgument);
+        }
+        _ => panic!(),
+    }
+}
+
+#[test]
+fn insert_node_validates_numeric_args() {
+    let tool = insert_node_snapshot();
+    let mut args = BTreeMap::new();
+    args.insert("kind".into(), "rect".into());
+    args.insert("name".into(), "X".into());
+    args.insert("x".into(), "not-a-number".into());
+    args.insert("y".into(), "0".into());
+    args.insert("width".into(), "10".into());
+    args.insert("height".into(), "10".into());
+    match tool.call(&args) {
+        ToolOutcome::Err(code, _) => assert_eq!(code, ToolErrorCode::InvalidArgument),
+        _ => panic!(),
+    }
+    args.insert("x".into(), "0".into());
+    args.insert("width".into(), "-5".into());
+    match tool.call(&args) {
+        ToolOutcome::Err(code, msg) => {
+            assert_eq!(code, ToolErrorCode::InvalidArgument);
+            assert!(msg.contains("non-negative"));
+        }
+        _ => panic!(),
+    }
+}
+
+#[test]
+fn insert_node_validates_optional_fill_hex() {
+    let tool = insert_node_snapshot();
+    let mut args = BTreeMap::new();
+    args.insert("kind".into(), "rect".into());
+    args.insert("name".into(), "X".into());
+    args.insert("x".into(), "0".into());
+    args.insert("y".into(), "0".into());
+    args.insert("width".into(), "10".into());
+    args.insert("height".into(), "10".into());
+    args.insert("fill_hex".into(), "not-hex".into());
+    match tool.call(&args) {
+        ToolOutcome::Err(code, _) => assert_eq!(code, ToolErrorCode::InvalidArgument),
+        _ => panic!(),
+    }
+}
+
+#[test]
+fn insert_node_returns_command_with_parsed_args() {
+    let tool = insert_node_snapshot();
+    let mut args = BTreeMap::new();
+    args.insert("kind".into(), "rect".into());
+    args.insert("name".into(), "My Rect".into());
+    args.insert("x".into(), "10".into());
+    args.insert("y".into(), "20".into());
+    args.insert("width".into(), "100".into());
+    args.insert("height".into(), "50".into());
+    args.insert("fill_hex".into(), "#ff0000".into());
+    match tool.call(&args) {
+        ToolOutcome::OkWithCommand(_, McpCommand::InsertNode { kind, name, x, y, width, height, fill_hex }) => {
+            assert_eq!(kind, "rect");
+            assert_eq!(name, "My Rect");
+            assert_eq!(x, 10);
+            assert_eq!(y, 20);
+            assert_eq!(width, 100);
+            assert_eq!(height, 50);
+            assert_eq!(fill_hex.as_deref(), Some("#ff0000"));
+        }
+        other => panic!("expected InsertNode command, got {other:?}"),
+    }
+}
+
+#[test]
+fn apply_mcp_command_routes_insert_node() {
+    use crate::document::Document;
+    let mut doc = Document::empty();
+    let initial_root_count = doc.pages[0].children.len();
+    let cmd = McpCommand::InsertNode {
+        kind: "rect".into(),
+        name: "Created".into(),
+        x: 50,
+        y: 60,
+        width: 200,
+        height: 150,
+        fill_hex: Some("#00ff00".into()),
+    };
+    assert!(doc.apply_mcp_command(&cmd));
+    // New node lives on the active page; bounds + fill flow through.
+    assert_eq!(
+        doc.pages[0].children.len(),
+        initial_root_count + 1,
+        "node must be added"
+    );
+    let last = doc.pages[0].children.last().unwrap();
+    assert_eq!(last.name, "Created");
+    assert_eq!(last.bounds.size.x, 200.0);
+    assert_eq!(last.bounds.size.y, 150.0);
+    let fill = last.fill.expect("fill set");
+    assert!((fill.g - 1.0).abs() < 0.01);
+}
+
+#[test]
+fn apply_mcp_command_rejects_invalid_node_kind() {
+    use crate::document::Document;
+    let mut doc = Document::empty();
+    let cmd = McpCommand::InsertNode {
+        kind: "frobnicate".into(),
+        name: "X".into(),
+        x: 0,
+        y: 0,
+        width: 10,
+        height: 10,
+        fill_hex: None,
+    };
+    assert!(!doc.apply_mcp_command(&cmd));
+}

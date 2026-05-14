@@ -17,10 +17,11 @@ pub mod tools;
 // split. Mirrors the `widgets::*` re-export pattern.
 pub use parser::parse_tool_call;
 pub use tools::{
-    document_info_snapshot, get_active_theme_snapshot, get_node_snapshot, list_pages_snapshot,
-    list_variables_snapshot, selection_snapshot, set_active_axis_value_snapshot,
-    set_variable_color_snapshot, GetActiveTheme, GetDocumentInfo, GetNode, GetSelection,
-    ListPages, ListVariables, NodeRecord, SetActiveAxisValue, SetVariableColor, VariableRecord,
+    document_info_snapshot, get_active_theme_snapshot, get_node_snapshot, insert_node_snapshot,
+    list_pages_snapshot, list_variables_snapshot, selection_snapshot,
+    set_active_axis_value_snapshot, set_variable_color_snapshot, GetActiveTheme,
+    GetDocumentInfo, GetNode, GetSelection, InsertNode, ListPages, ListVariables, NodeRecord,
+    SetActiveAxisValue, SetVariableColor, VariableRecord,
 };
 
 /// JSON-RPC-style request id. Strings + integers both supported by
@@ -107,10 +108,29 @@ pub enum ToolOutcome {
 ///   shadow / history snapshot).
 /// - `SetActiveAxisValue { axis, value }` — pins a theme axis
 ///   directly (vs. `cycle_active_axis_value` which advances).
+/// - `InsertNode { ... }` — creates a fresh node on the active
+///   page with the supplied bounds + fill. The applier
+///   allocates an id past `max_node_id()` so it can't collide
+///   with existing nodes even after deletes.
 #[derive(Debug, Clone, PartialEq)]
 pub enum McpCommand {
-    SetVariableColor { name: String, hex: String },
-    SetActiveAxisValue { axis: String, value: String },
+    SetVariableColor {
+        name: String,
+        hex: String,
+    },
+    SetActiveAxisValue {
+        axis: String,
+        value: String,
+    },
+    InsertNode {
+        kind: String,
+        name: String,
+        x: i32,
+        y: i32,
+        width: i32,
+        height: i32,
+        fill_hex: Option<String>,
+    },
 }
 
 /// Trait every MCP tool implements. The MCP server walks its

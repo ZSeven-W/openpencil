@@ -568,19 +568,10 @@ impl McpTool for SetVariableColor {
     }
 }
 
-/// First-party `set_active_axis_value` tool — programmatic
-/// counterpart to the VariablesPanel chip-cycle interaction. LLM
-/// clients use this when they want to pin an axis to a specific
-/// value rather than advance through the cycle (e.g. "set mode to
-/// dark" instead of "cycle mode"). Validates that the axis exists
-/// AND the value is in `themes[axis].values`; the host's applier
-/// (`VariableTable::apply_mcp_command`) re-validates against live
-/// state and rejects on drift.
-///
-/// Wire shape:
-///   args   — { "axis": "<axis>", "value": "<value>" }
-///   result — { "wrote": "true" } when queued
-///   command — `McpCommand::SetActiveAxisValue { axis, value }`
+/// First-party `set_active_axis_value` tool — pins an axis to a
+/// value (vs `cycle_active_axis_value` which advances). Validates
+/// axis exists + value is in `themes[axis].values`; the host
+/// applier re-validates against live state.
 pub struct SetActiveAxisValue {
     /// Snapshot of axis → allowed-values, mirroring
     /// `VariableTable::themes`. Validation only — the host re-runs
@@ -631,6 +622,123 @@ impl McpTool for SetActiveAxisValue {
             },
         )
     }
+}
+
+/// First-party `insert_node` tool — creates a fresh node on the
+/// active page. Args: kind / name / x / y / width / height +
+/// optional fill_hex. The applier allocates a non-colliding id
+/// past `max_node_id()` so the LLM never has to reason about id
+/// space. Stateless — no document snapshot needed.
+pub struct InsertNode;
+
+impl McpTool for InsertNode {
+    fn name(&self) -> &str {
+        "insert_node"
+    }
+    fn call(&self, args: &BTreeMap<String, String>) -> ToolOutcome {
+        // Required args: kind, name, x, y, width, height.
+        let kind = match args.get("kind") {
+            Some(s) => s.clone(),
+            None => {
+                return ToolOutcome::Err(
+                    ToolErrorCode::MissingArgument,
+                    "kind is required".into(),
+                );
+            }
+        };
+        if !ALLOWED_KINDS.iter().any(|k| *k == kind) {
+            return ToolOutcome::Err(
+                ToolErrorCode::InvalidArgument,
+                format!(
+                    "kind {kind:?} not supported; allowed: {}",
+                    ALLOWED_KINDS.join(", ")
+                ),
+            );
+        }
+        let name = match args.get("name") {
+            Some(s) => s.clone(),
+            None => {
+                return ToolOutcome::Err(
+                    ToolErrorCode::MissingArgument,
+                    "name is required".into(),
+                );
+            }
+        };
+        let x = match parse_i32_arg(args, "x") {
+            Ok(v) => v,
+            Err(e) => return e,
+        };
+        let y = match parse_i32_arg(args, "y") {
+            Ok(v) => v,
+            Err(e) => return e,
+        };
+        let width = match parse_i32_arg(args, "width") {
+            Ok(v) => v,
+            Err(e) => return e,
+        };
+        let height = match parse_i32_arg(args, "height") {
+            Ok(v) => v,
+            Err(e) => return e,
+        };
+        if width < 0 || height < 0 {
+            return ToolOutcome::Err(
+                ToolErrorCode::InvalidArgument,
+                "width / height must be non-negative".into(),
+            );
+        }
+        // fill_hex is optional, but if present it must parse.
+        let fill_hex = match args.get("fill_hex") {
+            None => None,
+            Some(s) if !validate_hex(s) => {
+                return ToolOutcome::Err(
+                    ToolErrorCode::InvalidArgument,
+                    format!("fill_hex must be #rgb/#rrggbb/#rrggbbaa, got {s:?}"),
+                );
+            }
+            Some(s) => Some(s.clone()),
+        };
+        let mut out = BTreeMap::new();
+        out.insert("wrote".into(), "true".into());
+        ToolOutcome::OkWithCommand(
+            out,
+            McpCommand::InsertNode {
+                kind,
+                name,
+                x,
+                y,
+                width,
+                height,
+                fill_hex,
+            },
+        )
+    }
+}
+
+const ALLOWED_KINDS: &[&str] = &[
+    "frame", "group", "rect", "ellipse", "polygon", "line", "text", "path",
+];
+
+fn parse_i32_arg(
+    args: &BTreeMap<String, String>,
+    key: &str,
+) -> Result<i32, ToolOutcome> {
+    let Some(raw) = args.get(key) else {
+        return Err(ToolOutcome::Err(
+            ToolErrorCode::MissingArgument,
+            format!("{key} is required"),
+        ));
+    };
+    raw.parse::<i32>().map_err(|_| {
+        ToolOutcome::Err(
+            ToolErrorCode::InvalidArgument,
+            format!("{key} must be a decimal i32, got {raw:?}"),
+        )
+    })
+}
+
+pub fn insert_node_snapshot() -> InsertNode {
+    // Stateless — no document snapshot needed.
+    InsertNode
 }
 
 pub fn set_active_axis_value_snapshot(
