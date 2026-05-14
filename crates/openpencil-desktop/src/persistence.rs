@@ -664,7 +664,7 @@ pub fn run_action(
                         scale,
                     ),
                     Fmt::Svg => crate::export::export_svg(host.document(), &path),
-                    Fmt::Pdf => Err("PDF export not yet implemented".into()),
+                    Fmt::Pdf => crate::export_pdf::export_pdf(host.document(), &path),
                 };
                 if let Err(e) = result {
                     eprintln!("[export-image] {e}");

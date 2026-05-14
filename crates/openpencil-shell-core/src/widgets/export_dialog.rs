@@ -60,13 +60,12 @@ impl ExportFormat {
         ExportFormat::Svg,
         ExportFormat::Pdf,
     ];
-    /// Whether the format has a working export backend. PDF reads
-    /// `false` until Phase 4 lands real multi-page emit; the dialog
-    /// paints the pill greyed out + skips hit-test so the user
-    /// can't pick an option that always errors. Mirrors the TS app
-    /// (which has PDF) once Phase 4 implements it.
+    /// Whether the format has a working export backend. All five
+    /// formats are now implemented (PDF landed via skia's built-in
+    /// `pdf::new_document` backend in Phase 4); kept as a hook so a
+    /// future format can be added in a disabled state.
     pub fn is_implemented(self) -> bool {
-        !matches!(self, ExportFormat::Pdf)
+        true
     }
 }
 
@@ -341,17 +340,10 @@ mod tests {
     }
 
     #[test]
-    fn pdf_format_is_not_implemented() {
-        // Codex stop-gate concern: PDF was selectable but always
-        // errored. Until Phase 4 wires real PDF emit, the pill must
-        // be inert.
-        assert!(!ExportFormat::Pdf.is_implemented());
-        for fmt in [
-            ExportFormat::Png,
-            ExportFormat::Jpeg,
-            ExportFormat::Webp,
-            ExportFormat::Svg,
-        ] {
+    fn every_format_is_implemented() {
+        // Phase 4 enabled PDF via skia's built-in backend. All five
+        // formats are now selectable + dispatched to a real encoder.
+        for fmt in ExportFormat::ALL {
             assert!(fmt.is_implemented(), "{fmt:?} should be implemented");
         }
     }
