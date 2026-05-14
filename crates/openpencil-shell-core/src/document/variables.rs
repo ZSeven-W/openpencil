@@ -156,6 +156,30 @@ impl VariableTable {
         self.active_theme.remove(axis);
     }
 
+    /// Apply an MCP write command against this table. Returns true
+    /// when the command actually changed something (caller pushes
+    /// an undo snapshot). False on validation failure — the command
+    /// is already validated by the tool's `call`, so a `false`
+    /// here means the underlying mutator rejected (unknown name /
+    /// wrong kind / malformed hex / unknown axis).
+    pub fn apply_mcp_command(&mut self, cmd: &crate::mcp::McpCommand) -> bool {
+        match cmd {
+            crate::mcp::McpCommand::SetVariableColor { name, hex } => {
+                self.set_color_hex(name, hex)
+            }
+            crate::mcp::McpCommand::SetActiveAxisValue { axis, value } => {
+                let Some(theme_axis) = self.themes.iter().find(|t| t.name == *axis) else {
+                    return false;
+                };
+                if !theme_axis.values.iter().any(|v| v == value) {
+                    return false;
+                }
+                self.active_theme.insert(axis.clone(), value.clone());
+                true
+            }
+        }
+    }
+
     /// Cycle the active value of `axis` to the next entry in the
     /// `ThemeAxis::values` list. Returns `false` (no-op) when the
     /// axis isn't in `themes` or has no values. When the axis

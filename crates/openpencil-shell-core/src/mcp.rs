@@ -17,8 +17,9 @@ pub mod tools;
 pub use parser::parse_tool_call;
 pub use tools::{
     document_info_snapshot, get_active_theme_snapshot, get_node_snapshot, list_pages_snapshot,
-    list_variables_snapshot, selection_snapshot, GetActiveTheme, GetDocumentInfo, GetNode,
-    GetSelection, ListPages, ListVariables, NodeRecord, VariableRecord,
+    list_variables_snapshot, selection_snapshot, set_variable_color_snapshot, GetActiveTheme,
+    GetDocumentInfo, GetNode, GetSelection, ListPages, ListVariables, NodeRecord,
+    SetVariableColor, VariableRecord,
 };
 
 /// JSON-RPC-style request id. Strings + integers both supported by
@@ -47,6 +48,12 @@ pub enum ToolResponse {
     Ok {
         id: RequestId,
         result: BTreeMap<String, String>,
+        /// Optional mutation the host should apply to the live
+        /// document. Write tools return one of these via
+        /// `ToolOutcome::OkWithCommand`; read tools return None.
+        /// The registry surfaces it so callers don't need to
+        /// re-walk the tool list.
+        command: Option<McpCommand>,
     },
     Err {
         id: RequestId,
@@ -72,10 +79,37 @@ pub enum ToolErrorCode {
 /// wrong id (codex BLOCK: passing `&ToolCall` to tools left id
 /// preservation as a convention only; this shape enforces it
 /// structurally).
+///
+/// `OkWithCommand` carries a `McpCommand` the host applies AFTER
+/// dispatch: the tool stays `&self` (so the registry doesn't
+/// need `Arc<Mutex<Document>>`), but write tools can still
+/// describe their intent + the host serializes the mutation
+/// against the live document.
 #[derive(Debug, Clone, PartialEq)]
 pub enum ToolOutcome {
     Ok(BTreeMap<String, String>),
+    OkWithCommand(BTreeMap<String, String>, McpCommand),
     Err(ToolErrorCode, String),
+}
+
+/// Document mutation a tool wants the host to apply. The tool
+/// validates its arguments (`call(&self, ...)`) and returns
+/// `OkWithCommand(result, command)`; the host then calls
+/// `Document::apply_mcp_command(command)`. This pattern keeps
+/// the `McpTool` trait `&self` (so trait objects + the registry
+/// stay simple) while still admitting write tools.
+///
+/// Variants extend as write tools land. Today:
+/// - `SetVariableColor { name, hex }` — routes through
+///   `VariableTable::set_color_hex` with its full correctness
+///   chain (subset match / no default clobber / no other-axis
+///   shadow / history snapshot).
+/// - `SetActiveAxisValue { axis, value }` — pins a theme axis
+///   directly (vs. `cycle_active_axis_value` which advances).
+#[derive(Debug, Clone, PartialEq)]
+pub enum McpCommand {
+    SetVariableColor { name: String, hex: String },
+    SetActiveAxisValue { axis: String, value: String },
 }
 
 /// Trait every MCP tool implements. The MCP server walks its
@@ -115,6 +149,12 @@ impl ToolRegistry {
             ToolOutcome::Ok(result) => ToolResponse::Ok {
                 id: call.id,
                 result,
+                command: None,
+            },
+            ToolOutcome::OkWithCommand(result, command) => ToolResponse::Ok {
+                id: call.id,
+                result,
+                command: Some(command),
             },
             ToolOutcome::Err(code, message) => ToolResponse::Err {
                 id: call.id,
@@ -141,7 +181,7 @@ impl ToolRegistry {
 /// ...}}` shape any MCP client expects.
 pub fn response_to_json(r: &ToolResponse) -> String {
     let (id_repr, body) = match r {
-        ToolResponse::Ok { id, result } => (
+        ToolResponse::Ok { id, result, .. } => (
             id_to_json(id),
             format!(r#""result":{}"#, btree_to_json(result)),
         ),
@@ -291,7 +331,7 @@ mod tests {
             arguments: args.clone(),
         };
         match r.dispatch(call) {
-            ToolResponse::Ok { id, result } => {
+            ToolResponse::Ok { id, result, .. } => {
                 // Codex BLOCK: the request id MUST round-trip via the
                 // tool — JSON-RPC matches responses by id.
                 assert_eq!(id, RequestId::Str("req-1".into()));
@@ -330,6 +370,7 @@ mod tests {
         let r = ToolResponse::Ok {
             id: RequestId::Num(7),
             result,
+            command: None,
         };
         let j = response_to_json(&r);
         assert!(j.contains(r#""jsonrpc":"2.0""#));
@@ -692,7 +733,7 @@ mod tests {
         let line = r#"{"jsonrpc":"2.0","id":7,"method":"tools/call","params":{"name":"get_node","arguments":{"node_id":"10"}}}"#;
         let call = parse_tool_call(line).expect("parse");
         match r.dispatch(call) {
-            ToolResponse::Ok { result, id } => {
+            ToolResponse::Ok { result, id, .. } => {
                 assert!(matches!(id, RequestId::Num(7)));
                 assert_eq!(result.get("kind"), Some(&"frame".to_string()));
             }

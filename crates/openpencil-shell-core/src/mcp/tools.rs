@@ -8,7 +8,7 @@
 
 use std::collections::BTreeMap;
 
-use super::{McpTool, ToolErrorCode, ToolOutcome};
+use super::{McpCommand, McpTool, ToolErrorCode, ToolOutcome};
 
 pub struct GetDocumentInfo {
     pub page_count: usize,
@@ -508,6 +508,91 @@ impl McpTool for GetActiveTheme {
     }
 }
 
+/// First-party `set_variable_color` tool — the first write tool.
+/// Validates that the variable exists + is Color-kind + the hex
+/// parses, then returns `OkWithCommand(SetVariableColor)` so the
+/// host applies the change against the live document. Reads the
+/// snapshot lazily — tool validation is O(n) over the variables
+/// vec; the apply path routes through `VariableTable::set_color_hex`
+/// with the full correctness chain (subset / no-clobber / no-shadow).
+///
+/// Wire shape:
+///   args   — { "name": "<variable>", "hex": "#rrggbb" }
+///   result — { "wrote": "true" } when the command was queued
+///   command — `McpCommand::SetVariableColor { name, hex }`
+pub struct SetVariableColor {
+    /// Snapshot of which variables exist + their kinds. Used for
+    /// validation only — the host applies the write so this
+    /// snapshot can lag a frame behind without breaking anything.
+    pub known_colors: BTreeMap<String, ()>,
+}
+
+impl McpTool for SetVariableColor {
+    fn name(&self) -> &str {
+        "set_variable_color"
+    }
+    fn call(&self, args: &BTreeMap<String, String>) -> ToolOutcome {
+        let Some(name) = args.get("name") else {
+            return ToolOutcome::Err(
+                ToolErrorCode::MissingArgument,
+                "name is required".into(),
+            );
+        };
+        let Some(hex) = args.get("hex") else {
+            return ToolOutcome::Err(
+                ToolErrorCode::MissingArgument,
+                "hex is required".into(),
+            );
+        };
+        if !self.known_colors.contains_key(name) {
+            return ToolOutcome::Err(
+                ToolErrorCode::ToolFailed,
+                format!("variable {name:?} not found or not Color-kind"),
+            );
+        }
+        if !validate_hex(hex) {
+            return ToolOutcome::Err(
+                ToolErrorCode::InvalidArgument,
+                format!("hex must be #rgb/#rrggbb/#rrggbbaa, got {hex:?}"),
+            );
+        }
+        let mut out = BTreeMap::new();
+        out.insert("wrote".into(), "true".into());
+        ToolOutcome::OkWithCommand(
+            out,
+            McpCommand::SetVariableColor {
+                name: name.clone(),
+                hex: hex.clone(),
+            },
+        )
+    }
+}
+
+pub fn set_variable_color_snapshot(
+    doc: &crate::document::Document,
+) -> SetVariableColor {
+    use crate::document::VariableKind;
+    let known_colors = doc
+        .var_table
+        .variables
+        .iter()
+        .filter(|v| matches!(v.kind, VariableKind::Color))
+        .map(|v| (v.name.clone(), ()))
+        .collect();
+    SetVariableColor { known_colors }
+}
+
+/// `#rgb`, `#rrggbb`, `#rrggbbaa` — matches the format
+/// `VariableTable::parse_hex_color` accepts. Lenient on case;
+/// requires the leading `#`.
+fn validate_hex(s: &str) -> bool {
+    let Some(rest) = s.trim().strip_prefix('#') else {
+        return false;
+    };
+    matches!(rest.len(), 3 | 6 | 8)
+        && rest.chars().all(|c| c.is_ascii_hexdigit())
+}
+
 pub fn get_active_theme_snapshot(doc: &crate::document::Document) -> GetActiveTheme {
     let active: Vec<(String, String)> = doc
         .var_table
@@ -893,5 +978,111 @@ mod tests {
         assert_eq!(fields[0], "msg");
         assert_eq!(fields[1], "string");
         assert_eq!(fields[2], "a|b;c\\d");
+    }
+
+    fn doc_with_color_var(name: &str, hex: &str) -> crate::document::Document {
+        use crate::document::{Document, Variable, VariableKind, VariableScalar, VariableValue};
+        let mut doc = Document::empty();
+        doc.var_table.variables.push(Variable {
+            name: name.into(),
+            kind: VariableKind::Color,
+            value: VariableValue::Scalar(VariableScalar::Str(hex.into())),
+        });
+        doc
+    }
+
+    #[test]
+    fn set_variable_color_validates_args_and_returns_command() {
+        let doc = doc_with_color_var("brand", "#ff8800");
+        let tool = set_variable_color_snapshot(&doc);
+        let mut args = BTreeMap::new();
+        args.insert("name".into(), "brand".into());
+        args.insert("hex".into(), "#00ff00".into());
+        match tool.call(&args) {
+            ToolOutcome::OkWithCommand(out, cmd) => {
+                assert_eq!(out.get("wrote"), Some(&"true".to_string()));
+                match cmd {
+                    crate::mcp::McpCommand::SetVariableColor { name, hex } => {
+                        assert_eq!(name, "brand");
+                        assert_eq!(hex, "#00ff00");
+                    }
+                    other => panic!("expected SetVariableColor, got {other:?}"),
+                }
+            }
+            other => panic!("expected OkWithCommand, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn set_variable_color_errors_on_missing_args() {
+        let doc = doc_with_color_var("brand", "#ff8800");
+        let tool = set_variable_color_snapshot(&doc);
+        match tool.call(&BTreeMap::new()) {
+            ToolOutcome::Err(code, _) => {
+                assert_eq!(code, ToolErrorCode::MissingArgument);
+            }
+            _ => panic!("expected MissingArgument"),
+        }
+        let mut args = BTreeMap::new();
+        args.insert("name".into(), "brand".into());
+        match tool.call(&args) {
+            ToolOutcome::Err(code, msg) => {
+                assert_eq!(code, ToolErrorCode::MissingArgument);
+                assert!(msg.contains("hex"));
+            }
+            _ => panic!("expected MissingArgument"),
+        }
+    }
+
+    #[test]
+    fn set_variable_color_errors_on_unknown_variable() {
+        let doc = doc_with_color_var("brand", "#ff8800");
+        let tool = set_variable_color_snapshot(&doc);
+        let mut args = BTreeMap::new();
+        args.insert("name".into(), "no-such-var".into());
+        args.insert("hex".into(), "#000000".into());
+        match tool.call(&args) {
+            ToolOutcome::Err(code, msg) => {
+                assert_eq!(code, ToolErrorCode::ToolFailed);
+                assert!(msg.contains("no-such-var"));
+            }
+            _ => panic!("expected ToolFailed"),
+        }
+    }
+
+    #[test]
+    fn set_variable_color_errors_on_invalid_hex() {
+        let doc = doc_with_color_var("brand", "#ff8800");
+        let tool = set_variable_color_snapshot(&doc);
+        let mut args = BTreeMap::new();
+        args.insert("name".into(), "brand".into());
+        for bad in &["not-hex", "ff00ff", "#12", "#fffffg"] {
+            args.insert("hex".into(), (*bad).into());
+            match tool.call(&args) {
+                ToolOutcome::Err(code, _) => {
+                    assert_eq!(code, ToolErrorCode::InvalidArgument, "hex={bad}");
+                }
+                _ => panic!("expected InvalidArgument for {bad}"),
+            }
+        }
+    }
+
+    #[test]
+    fn apply_mcp_command_routes_set_variable_color_to_var_table() {
+        // End-to-end: tool validates → registry returns
+        // OkWithCommand → host's `var_table.apply_mcp_command`
+        // writes through to the storage. resolve_color reads the
+        // new value back.
+        use crate::mcp::McpCommand;
+        let mut doc = doc_with_color_var("brand", "#ff8800");
+        let cmd = McpCommand::SetVariableColor {
+            name: "brand".into(),
+            hex: "#11ccaa".into(),
+        };
+        assert!(doc.var_table.apply_mcp_command(&cmd));
+        let c = doc.var_table.resolve_color("brand").unwrap();
+        assert!((c.r - 0x11 as f32 / 255.0).abs() < 0.01);
+        assert!((c.g - 0xcc as f32 / 255.0).abs() < 0.01);
+        assert!((c.b - 0xaa as f32 / 255.0).abs() < 0.01);
     }
 }
