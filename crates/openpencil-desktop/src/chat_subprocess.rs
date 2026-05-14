@@ -2,30 +2,35 @@
 //! (Claude Code / Gemini / Copilot) and bridges its stdio into the
 //! shell-core `ChatProvider` shape.
 //!
-//! Wire protocol (default, generic — actual per-CLI templates land in
-//! follow-up commits once each CLI's headless flag set is wired into
-//! the settings modal):
+//! Per-CLI wire protocol (single-shot mode — multi-turn via
+//! `--resume <session>` lands in a follow-up):
 //!
-//! 1. Spawn `<binary> <args...>` with stdin / stdout piped.
-//! 2. Write `request.user_message` to stdin, followed by EOF (close).
-//! 3. Read stdout line by line. For each line, attempt to parse as a
-//!    JSON object:
-//!    - `{"type":"text","delta":"..."}` → `ChatDelta::TextDelta`
-//!    - `{"type":"thinking","delta":"..."}` → `ChatDelta::Thinking`
-//!    - `{"type":"tool_use","name":"...","args":...}` → `ChatDelta::ToolUse`
-//!    - `{"type":"done","stop_reason":"..."}` → `ChatDelta::Done`
-//!    - `{"type":"error","message":"..."}` → `ChatDelta::Error`
-//!    Any other shape, or non-JSON line → treated as a plain
-//!    `TextDelta` carrying the raw line + `"\n"`. This keeps CLIs that
-//!    don't speak the structured format from producing a silent chat
-//!    box (they still echo the model's response).
-//! 4. On stdout EOF the bridge emits `Done { EndTurn }` if the CLI
-//!    didn't already, then closes the channel.
+//! - **Claude Code (`claude`)** — invoked as
+//!   `claude --print --verbose --output-format stream-json -- <prompt>`.
+//!   Prompt is a positional argv after `--`. Stdin closes immediately.
+//!   Stdout is line-delimited JSON; we recognize Claude's
+//!   `system` / `assistant` / `result` shapes alongside the generic
+//!   `text` / `thinking` / `tool_use` / `done` / `error` envelope.
+//!   Flag set follows bartolli/anthropic-agent-sdk + Claude Code's
+//!   own documented headless mode (CLAUDE_CODE_ENTRYPOINT env var,
+//!   `--verbose` for full stream-json detail).
+//! - **Gemini CLI (`gemini`)** — `gemini --quiet`; prompt via stdin
+//!   (gemini reads piped stdin as the message).
+//! - **GitHub Copilot CLI (`gh-copilot`)** — `gh-copilot suggest`;
+//!   prompt via stdin.
 //!
-//! The `tokio::process::Child` is held by the spawned task so it lives
-//! for the duration of stdout pumping; killed by drop on early channel
-//! close (user navigated away mid-stream).
+//! Stdout is read line-by-line; recognized structured shapes mapped
+//! to `ChatDelta`; unrecognized lines surface as raw `TextDelta` so
+//! plain-stdout CLIs still produce visible output. On stdout EOF the
+//! bridge reaps the child + interprets exit status — non-zero exit
+//! surfaces as `Error + Done { Aborted }` (codex BLOCK 4 / 5). On
+//! receiver drop the bridge `child.start_kill()` so the user can
+//! navigate away without leaking processes.
+//!
+//! Binary lookup falls back through PATH then per-platform default
+//! install paths (npm / yarn / bun globals) — see `find_binary`.
 
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use openpencil_shell_core::chat_provider::{
@@ -36,6 +41,102 @@ use tokio::process::Command;
 use tokio::sync::mpsc;
 
 use crate::chat_runtime::{shared_runtime, BlockingRecvIter};
+
+/// How the user's prompt reaches the CLI. Claude Code's `--print`
+/// mode requires the prompt as a positional argv after `--` and
+/// closes stdin immediately. Gemini / Copilot read the message off
+/// piped stdin. Generic `with_binary` callers can pick either via
+/// [`SubprocessProvider::with_binary_mode`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PromptMode {
+    /// Append `-- <prompt>` to argv; stdin gets closed (no input).
+    PositionalArg,
+    /// Argv is passed verbatim; user_message is written to stdin
+    /// followed by EOF.
+    Stdin,
+}
+
+/// Search for `name` on PATH, then in well-known per-platform install
+/// locations for Node-based CLIs (npm / pnpm / yarn / bun globals,
+/// nvm, volta). Returns the resolved absolute path, or `name` itself
+/// as a fallback so `build_command` can still attempt a bare-name
+/// spawn (errors surface as a normal spawn-failure `ChatDelta::Error`).
+///
+/// Cross-platform: each branch only probes paths that exist on that
+/// OS so we don't pay for filesystem-stat misses on the wrong OS.
+fn find_binary(name: &str) -> String {
+    // PATH-relative entries first (cross-platform).
+    if let Ok(path_env) = std::env::var("PATH") {
+        let sep = if cfg!(windows) { ';' } else { ':' };
+        for dir in path_env.split(sep).filter(|s| !s.is_empty()) {
+            let candidate = std::path::Path::new(dir).join(name);
+            if candidate.is_file() {
+                return candidate.to_string_lossy().into();
+            }
+            // Windows: PATHEXT-style suffix probe so we find
+            // `claude.cmd` / `claude.exe` / `claude.bat` even when the
+            // user typed the bare name.
+            #[cfg(windows)]
+            {
+                for ext in &[".exe", ".cmd", ".bat", ".ps1"] {
+                    let mut with_ext = candidate.clone();
+                    with_ext.set_extension(&ext[1..]);
+                    if with_ext.is_file() {
+                        return with_ext.to_string_lossy().into();
+                    }
+                }
+            }
+        }
+    }
+    // Fall back through well-known install locations. Mirrors
+    // bartolli/anthropic-agent-sdk's `find_cli` for parity with the
+    // reference implementation.
+    let candidates = well_known_install_paths(name);
+    for path in candidates {
+        if path.is_file() {
+            return path.to_string_lossy().into();
+        }
+    }
+    name.into()
+}
+
+fn well_known_install_paths(name: &str) -> Vec<PathBuf> {
+    let home = dirs::home_dir();
+    let mut out: Vec<PathBuf> = Vec::new();
+    #[cfg(unix)]
+    {
+        if let Some(h) = home.clone() {
+            out.push(h.join(".npm-global/bin").join(name));
+            out.push(h.join(".local/bin").join(name));
+            out.push(h.join(".bun/bin").join(name));
+            out.push(h.join(".volta/bin").join(name));
+            out.push(h.join("node_modules/.bin").join(name));
+            out.push(h.join(".yarn/bin").join(name));
+        }
+        out.push(PathBuf::from("/usr/local/bin").join(name));
+        out.push(PathBuf::from("/opt/homebrew/bin").join(name));
+    }
+    #[cfg(windows)]
+    {
+        let _ = home; // not used directly on Windows
+        if let Ok(appdata) = std::env::var("APPDATA") {
+            for ext in &["cmd", "exe", "bat", "ps1"] {
+                out.push(PathBuf::from(&appdata).join("npm").join(format!("{name}.{ext}")));
+            }
+        }
+        if let Ok(localapp) = std::env::var("LOCALAPPDATA") {
+            for ext in &["cmd", "exe", "bat", "ps1"] {
+                out.push(
+                    PathBuf::from(&localapp)
+                        .join("Programs")
+                        .join(name)
+                        .join(format!("{name}.{ext}")),
+                );
+            }
+        }
+    }
+    out
+}
 
 /// Build a `tokio::process::Command` that spawns `binary` with `args`.
 /// Handles the three desktop platforms identically wherever possible,
@@ -131,54 +232,103 @@ pub struct SubprocessProvider {
     binary: String,
     args: Vec<String>,
     label: String,
+    prompt_mode: PromptMode,
 }
 
 impl SubprocessProvider {
-    /// Build a subprocess provider for a known [`CliName`]. Uses
-    /// `cli.default_binary()` as the executable name + the canonical
-    /// `--print` / `--stream-json` flags (best-effort defaults — each
-    /// CLI's real flag set lands as user-tunable in the settings
-    /// modal). The returned provider's label is `cli.label()`.
+    /// Build a subprocess provider for a known [`CliName`]. Each CLI
+    /// has its own argv template + prompt-routing mode:
+    ///
+    /// - **Claude Code**: `--print --verbose --output-format
+    ///   stream-json`; prompt as positional argv after `--`. Stdin
+    ///   stays closed. Matches `bartolli/anthropic-agent-sdk`
+    ///   reference and Claude Code's own documented headless mode.
+    /// - **Gemini**: `--quiet`; prompt via stdin.
+    /// - **Copilot**: `suggest`; prompt via stdin.
     ///
     /// Returns `None` when `cli` is in the HttpServer category
     /// (Codex / OpenCode) — those go through the dedicated
-    /// HttpServerProvider, not this subprocess bridge. Callers who
-    /// truly want a generic stdio pipe to a `codex` / `opencode`
-    /// binary can use [`SubprocessProvider::with_binary`] instead
-    /// (codex CONCERN 5: don't silently accept the wrong backend).
+    /// HttpServerProvider, not this subprocess bridge.
     pub fn for_cli(cli: CliName) -> Option<Self> {
-        let args: Vec<String> = match cli {
-            CliName::ClaudeCode => vec![
-                "--print".into(),
-                "--output-format".into(),
-                "stream-json".into(),
-            ],
-            CliName::Gemini => vec!["--quiet".into()],
-            CliName::Copilot => vec!["suggest".into()],
+        let (args, prompt_mode): (Vec<String>, PromptMode) = match cli {
+            CliName::ClaudeCode => (
+                vec![
+                    "--print".into(),
+                    "--verbose".into(),
+                    "--output-format".into(),
+                    "stream-json".into(),
+                ],
+                PromptMode::PositionalArg,
+            ),
+            CliName::Gemini => (vec!["--quiet".into()], PromptMode::Stdin),
+            CliName::Copilot => (vec!["suggest".into()], PromptMode::Stdin),
             CliName::Codex | CliName::OpenCode => return None,
         };
+        let binary = find_binary(cli.default_binary());
         Some(Self {
-            binary: cli.default_binary().into(),
+            binary,
             args,
             label: cli.label().into(),
+            prompt_mode,
         })
     }
 
     /// Build a subprocess provider with a user-supplied binary path
-    /// and argv. Used when the settings modal needs to point at a
-    /// non-PATH install (e.g., a beta build at `~/bin/claude-beta`).
+    /// and argv (defaults to stdin prompt). Used when the settings
+    /// modal needs to point at a non-PATH install.
     #[allow(dead_code)]
     pub fn with_binary(
         binary: impl Into<String>,
         args: Vec<String>,
         label: impl Into<String>,
     ) -> Self {
+        Self::with_binary_mode(binary, args, label, PromptMode::Stdin)
+    }
+
+    /// Build a subprocess provider with an explicit prompt-routing
+    /// mode. Required for CLIs like Claude Code that want the prompt
+    /// as a positional argv rather than via stdin.
+    #[allow(dead_code)]
+    pub fn with_binary_mode(
+        binary: impl Into<String>,
+        args: Vec<String>,
+        label: impl Into<String>,
+        prompt_mode: PromptMode,
+    ) -> Self {
         Self {
             binary: binary.into(),
             args,
             label: label.into(),
+            prompt_mode,
         }
     }
+}
+
+/// Dangerous environment variables that should never be propagated to
+/// the spawned CLI: linker preload paths can hijack execution; PATH
+/// can substitute a malicious binary; runtime-library paths
+/// (NODE_OPTIONS, PYTHONPATH, etc.) can inject code into Node-based
+/// CLIs. Mirrors bartolli/anthropic-agent-sdk's `DANGEROUS_ENV_VARS`.
+/// Today we don't accept user-supplied env vars from the settings
+/// modal; the constant + scrub is here so the moment we do, the
+/// dangerous-var check is already in place. Returns the env-var
+/// pairs the child will receive (parent env minus the dangerous
+/// names — preserving every safe var so node version managers like
+/// nvm / volta still pick the right Node).
+fn scrubbed_child_env() -> Vec<(String, String)> {
+    const DANGEROUS: &[&str] = &[
+        "LD_PRELOAD",
+        "LD_LIBRARY_PATH",
+        "DYLD_INSERT_LIBRARIES",
+        "DYLD_LIBRARY_PATH",
+        "NODE_OPTIONS",
+        "PYTHONPATH",
+        "PERL5LIB",
+        "RUBYLIB",
+    ];
+    std::env::vars()
+        .filter(|(k, _)| !DANGEROUS.iter().any(|d| k.eq_ignore_ascii_case(d)))
+        .collect()
 }
 
 impl ChatProvider for SubprocessProvider {
@@ -191,13 +341,31 @@ impl ChatProvider for SubprocessProvider {
         request: ChatRequest,
     ) -> Box<dyn Iterator<Item = ChatDelta> + Send> {
         let binary = self.binary.clone();
-        let args = Arc::new(self.args.clone());
+        let mut args_with_prompt = self.args.clone();
+        // PromptMode::PositionalArg: append `-- <prompt>` so the CLI
+        // picks up the message as a CLI argument (Claude Code mode).
+        // PromptMode::Stdin (default): leave argv untouched; the
+        // prompt is written to stdin after spawn.
+        if self.prompt_mode == PromptMode::PositionalArg {
+            args_with_prompt.push("--".into());
+            args_with_prompt.push(request.user_message.clone());
+        }
+        let args = Arc::new(args_with_prompt);
+        let prompt_mode = self.prompt_mode;
+        let env_pairs = scrubbed_child_env();
         let (tx, rx) = mpsc::channel::<ChatDelta>(64);
         shared_runtime().spawn(async move {
             let mut cmd = build_command(&binary, &args);
             cmd.stdin(std::process::Stdio::piped())
                 .stdout(std::process::Stdio::piped())
                 .stderr(std::process::Stdio::piped());
+            // Set the child's env from the scrubbed parent env so
+            // dangerous interposition vars (LD_PRELOAD / NODE_OPTIONS
+            // / DYLD_INSERT_LIBRARIES / ...) never propagate. We
+            // env_clear first because tokio::process Command
+            // otherwise inherits the parent env verbatim.
+            cmd.env_clear();
+            cmd.envs(env_pairs);
             let mut child = match cmd.spawn() {
                 Ok(c) => c,
                 Err(e) => {
@@ -225,23 +393,33 @@ impl ChatProvider for SubprocessProvider {
             }
 
             if let Some(mut stdin) = child.stdin.take() {
-                // Feed the user message + close stdin so the CLI
-                // sees EOF and starts responding instead of waiting
-                // for more input. Stdin write errors surface as a
-                // chat error so the user sees the broken-pipe instead
-                // of silent normal completion (codex CONCERN 3).
-                if let Err(e) = stdin.write_all(request.user_message.as_bytes()).await {
-                    let _ = tx
-                        .send(ChatDelta::Error(format!("stdin write: {e}")))
-                        .await;
-                    let _ = tx
-                        .send(ChatDelta::Done {
-                            stop_reason: StopReason::Aborted,
-                        })
-                        .await;
-                    let _ = child.start_kill();
-                    let _ = child.wait().await;
-                    return;
+                match prompt_mode {
+                    PromptMode::Stdin => {
+                        // Feed the user message + close stdin so the
+                        // CLI sees EOF and starts responding. Stdin
+                        // write errors surface as a chat error.
+                        if let Err(e) =
+                            stdin.write_all(request.user_message.as_bytes()).await
+                        {
+                            let _ = tx
+                                .send(ChatDelta::Error(format!("stdin write: {e}")))
+                                .await;
+                            let _ = tx
+                                .send(ChatDelta::Done {
+                                    stop_reason: StopReason::Aborted,
+                                })
+                                .await;
+                            let _ = child.start_kill();
+                            let _ = child.wait().await;
+                            return;
+                        }
+                    }
+                    PromptMode::PositionalArg => {
+                        // No stdin write — prompt is in argv. Close
+                        // stdin immediately so the CLI doesn't sit
+                        // waiting on it (Claude Code's `--print` mode
+                        // exits if stdin stays open with no input).
+                    }
                 }
                 let _ = stdin.shutdown().await; // EOF; ignore close error
             }
@@ -493,22 +671,28 @@ mod tests {
     #[test]
     fn for_cli_claude_code_seeds_print_stream_json_flags() {
         let p = SubprocessProvider::for_cli(CliName::ClaudeCode).unwrap();
-        assert_eq!(p.binary, "claude");
+        // `binary` is the resolved absolute path when claude is on
+        // PATH (or one of the npm-global / nvm fallback locations);
+        // otherwise it falls back to the bare name. Either way the
+        // file name component must match.
+        assert!(p.binary.ends_with("claude"), "binary={}", p.binary);
         assert!(p.args.iter().any(|a| a == "--print"));
+        assert!(p.args.iter().any(|a| a == "--verbose"));
         assert!(p.args.iter().any(|a| a == "stream-json"));
         assert_eq!(p.label, "Claude Code");
+        assert_eq!(p.prompt_mode, PromptMode::PositionalArg);
     }
 
     #[test]
     fn for_cli_uses_default_binary_per_cli_name() {
-        assert_eq!(
-            SubprocessProvider::for_cli(CliName::Gemini).unwrap().binary,
-            "gemini"
-        );
-        assert_eq!(
-            SubprocessProvider::for_cli(CliName::Copilot).unwrap().binary,
-            "gh-copilot"
-        );
+        // Resolved path may be bare or absolute depending on what's
+        // installed on the test host; check the basename only.
+        let gemini = SubprocessProvider::for_cli(CliName::Gemini).unwrap();
+        assert!(gemini.binary.ends_with("gemini"), "binary={}", gemini.binary);
+        assert_eq!(gemini.prompt_mode, PromptMode::Stdin);
+        let copilot = SubprocessProvider::for_cli(CliName::Copilot).unwrap();
+        assert!(copilot.binary.ends_with("gh-copilot"), "binary={}", copilot.binary);
+        assert_eq!(copilot.prompt_mode, PromptMode::Stdin);
     }
 
     #[test]
