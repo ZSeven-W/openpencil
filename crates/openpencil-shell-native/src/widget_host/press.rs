@@ -388,6 +388,11 @@ impl WidgetHostNative {
             }
         }
 
+        // 0d. VariablesPanel row click — body in property_dispatch.
+        if self.dispatch_variables_panel_press(x, y, viewport_width, viewport_height) {
+            return true;
+        }
+
         // 1. AI chat panel — sits on top of the toolbar in paint
         //    order, so any click inside its rect is consumed
         //    here. DragHandle starts a chat drag; other AI hits

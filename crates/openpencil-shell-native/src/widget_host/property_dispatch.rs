@@ -212,4 +212,67 @@ impl WidgetHostNative {
             }
         }
     }
+
+    /// VariablesPanel press dispatcher — peer of
+    /// `dispatch_export_dialog_press`. Returns `true` when the
+    /// click hit the variables panel and was consumed; `false`
+    /// otherwise so the caller continues its hit-test cascade.
+    ///
+    /// Row clicks on Color-kind variables open the ColorPicker in
+    /// variable mode (`Document::open_color_picker_for_variable`);
+    /// the picker's commit path writes through
+    /// `VariableTable::set_color_hex` so the variable is editable
+    /// end-to-end. Non-color rows + AxisChip clicks swallow today
+    /// (specific editors land later — string/number row inputs +
+    /// the theme-axis picker).
+    pub(in crate::widget_host) fn dispatch_variables_panel_press(
+        &mut self,
+        x: f32,
+        y: f32,
+        viewport_width: f32,
+        viewport_height: f32,
+    ) -> bool {
+        if self.document.var_table.variables.is_empty() {
+            return false;
+        }
+        use openpencil_shell_core::widgets::variables_panel::{
+            VariablesPanel, VariablesPanelHit,
+        };
+        use openpencil_shell_core::widgets::{STATUS_BAR_HEIGHT, TOP_BAR_HEIGHT};
+        use openpencil_shell_core::{Point2D, Rect};
+        let vars = VariablesPanel::for_document(&self.document);
+        let intrinsic = vars.intrinsic_height();
+        let top_y = if self.document.property_panel_visible() {
+            let bottom_pad = STATUS_BAR_HEIGHT + 16.0;
+            (viewport_height - bottom_pad - intrinsic).max(TOP_BAR_HEIGHT + 8.0)
+        } else {
+            TOP_BAR_HEIGHT + 8.0
+        };
+        let vars_rect = Rect {
+            origin: Point2D::new(
+                viewport_width - self.document.ui.property_panel_width,
+                top_y,
+            ),
+            size: Point2D::new(self.document.ui.property_panel_width, intrinsic),
+        };
+        let Some(hit) = vars.hit_test(vars_rect, Point2D::new(x, y)) else {
+            return false;
+        };
+        match hit {
+            VariablesPanelHit::Row(idx) => {
+                if let Some(var) = self.document.var_table.variables.get(idx) {
+                    if matches!(
+                        var.kind,
+                        openpencil_shell_core::document::VariableKind::Color
+                    ) {
+                        let name = var.name.clone();
+                        self.commit_property_focus_if_any();
+                        let _ = self.document.open_color_picker_for_variable(name, y);
+                    }
+                }
+                true
+            }
+            VariablesPanelHit::AxisChip(_) => true,
+        }
+    }
 }
