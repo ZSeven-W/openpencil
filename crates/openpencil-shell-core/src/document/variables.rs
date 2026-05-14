@@ -167,6 +167,16 @@ impl VariableTable {
             crate::mcp::McpCommand::SetVariableColor { name, hex } => {
                 self.set_color_hex(name, hex)
             }
+            crate::mcp::McpCommand::SetVariableScalar { name, scalar } => {
+                let s = match scalar {
+                    crate::mcp::VariableScalarPayload::Number(n) => VariableScalar::Num(*n),
+                    crate::mcp::VariableScalarPayload::String(s) => {
+                        VariableScalar::Str(s.clone())
+                    }
+                    crate::mcp::VariableScalarPayload::Boolean(b) => VariableScalar::Bool(*b),
+                };
+                self.set_scalar(name, s)
+            }
             crate::mcp::McpCommand::SetActiveAxisValue { axis, value } => {
                 let Some(theme_axis) = self.themes.iter().find(|t| t.name == *axis) else {
                     return false;
@@ -344,6 +354,69 @@ impl VariableTable {
                 // entry retains its original resolve precedence.
                 entries.push(ThemedValue {
                     value: VariableScalar::Str(normalized),
+                    theme: Some(active),
+                });
+                true
+            }
+        }
+    }
+
+    /// Set a scalar variable's value with the same theme-routing
+    /// discipline as `set_color_hex`, but generic over any
+    /// `VariableScalar` (Number / Str / Bool). Used by the MCP
+    /// write tools `set_variable_number` / `set_variable_string`
+    /// / `set_variable_boolean`. Caller is responsible for
+    /// matching the scalar's variant to the variable's kind
+    /// (e.g. don't pass a Str to a Number-kind variable) —
+    /// kind-mismatch returns `false`.
+    pub fn set_scalar(&mut self, name: &str, scalar: VariableScalar) -> bool {
+        let active = self.active_theme.clone();
+        let var = match self.find_mut(name) {
+            Some(v) => v,
+            None => return false,
+        };
+        // Reject kind/scalar mismatch — a Number variable must
+        // receive a Num scalar, etc. Color variables go through
+        // `set_color_hex` (Color stores its value as a hex string,
+        // not a separate variant).
+        let kind_matches = match (&var.kind, &scalar) {
+            (VariableKind::Number, VariableScalar::Num(_)) => true,
+            (VariableKind::String, VariableScalar::Str(_)) => true,
+            (VariableKind::Boolean, VariableScalar::Bool(_)) => true,
+            (VariableKind::Color, VariableScalar::Str(_)) => true,
+            _ => false,
+        };
+        if !kind_matches {
+            return false;
+        }
+        match &mut var.value {
+            VariableValue::Scalar(s) => {
+                *s = scalar;
+                true
+            }
+            VariableValue::Themed(entries) => {
+                let subset_idx = entries.iter().position(|e| match &e.theme {
+                    Some(t) => t.iter().all(|(k, v)| active.get(k) == Some(v)),
+                    None => false,
+                });
+                if let Some(i) = subset_idx {
+                    entries[i].value = scalar;
+                    return true;
+                }
+                if active.is_empty() {
+                    let default_idx = entries.iter().position(|e| e.theme.is_none());
+                    if let Some(i) = default_idx {
+                        entries[i].value = scalar;
+                    } else {
+                        entries.push(ThemedValue {
+                            value: scalar,
+                            theme: None,
+                        });
+                    }
+                    return true;
+                }
+                entries.push(ThemedValue {
+                    value: scalar,
                     theme: Some(active),
                 });
                 true

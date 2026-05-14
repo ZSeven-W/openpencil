@@ -13,10 +13,12 @@ pub mod tools;
 #[cfg(test)] mod tools_tests;
 pub mod write_tools;
 pub mod batch_design;
+pub mod scalar_vars;
 #[cfg(test)] mod write_tools_tests;
 #[cfg(test)] mod copy_node_tests;
 #[cfg(test)] mod replace_node_tests;
 #[cfg(test)] mod batch_design_tests;
+#[cfg(test)] mod scalar_vars_tests;
 
 // Re-export the public surface of submodules so callers can keep
 // using `mcp::parse_tool_call` / `mcp::GetDocumentInfo` after the
@@ -34,6 +36,10 @@ pub use write_tools::{
     SetActiveAxisValue, SetVariableColor, UpdateNode,
 };
 pub use batch_design::{batch_design_snapshot, BatchDesign};
+pub use scalar_vars::{
+    set_variable_boolean_snapshot, set_variable_number_snapshot,
+    set_variable_string_snapshot, SetVariableBoolean, SetVariableNumber, SetVariableString,
+};
 
 /// JSON-RPC-style request id. Strings + integers both supported by
 /// the spec; we accept either over the wire.
@@ -232,6 +238,25 @@ pub enum McpCommand {
     BatchInsert {
         items: Vec<BatchInsertItem>,
     },
+    /// Set a non-color scalar variable's value (Number / String /
+    /// Boolean). Mirrors `SetVariableColor` for the other three
+    /// `VariableKind`s. The applier routes through
+    /// `VariableTable::set_scalar` which honors active-theme
+    /// routing identically to set_color_hex.
+    SetVariableScalar {
+        name: String,
+        scalar: VariableScalarPayload,
+    },
+}
+
+/// Wire-friendly value payload for `McpCommand::SetVariableScalar`.
+/// Mirrors `document::VariableScalar` but stays a plain enum so
+/// the wire layer doesn't reach into shell-core's document API.
+#[derive(Debug, Clone, PartialEq)]
+pub enum VariableScalarPayload {
+    Number(f64),
+    String(String),
+    Boolean(bool),
 }
 
 /// Per-item descriptor for `McpCommand::BatchInsert`. Same shape
