@@ -263,13 +263,20 @@ pub(in crate::widget_host) struct LayerDragState {
 
 /// Path-anchor drag — tracks which anchor of which Path node is
 /// being dragged by the pen tool. Move dispatches snap the anchor
-/// to the cursor; release commits a history snapshot.
+/// to the cursor; release commits a history snapshot ONLY when the
+/// anchor actually moved (codex CONCERN: a press-release without
+/// motion pushed a no-op snapshot that polluted the undo stack).
 #[derive(Debug, Clone)]
 pub(in crate::widget_host) struct PathAnchorDragState {
     pub(in crate::widget_host) node_id: openpencil_shell_core::document::NodeId,
     pub(in crate::widget_host) anchor_index: usize,
-    /// Snapshot captured at drag-start so release can push history
-    /// regardless of how many cursor-move frames fire.
+    /// Anchor position at drag-start (doc coords) — compared against
+    /// the final position on release to decide whether to push the
+    /// snapshot.
+    pub(in crate::widget_host) start_doc: openpencil_shell_core::Point2D,
+    /// Set to true on the first cursor-move that mutates the anchor.
+    pub(in crate::widget_host) moved: bool,
+    /// Snapshot captured at drag-start; pushed only if `moved`.
     pub(in crate::widget_host) pre_drag_snapshot:
         openpencil_shell_core::document::DocumentSnapshot,
 }
