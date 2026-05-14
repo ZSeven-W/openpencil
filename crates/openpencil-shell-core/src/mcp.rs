@@ -121,6 +121,120 @@ impl ToolRegistry {
     }
 }
 
+/// JSON-RPC wire serialiser for `ToolResponse`. Manual emitter so
+/// shell-core stays serde-free (no dep adds for wasm32). Produces
+/// the standard `{"jsonrpc": "2.0", "id": ..., "result": ...}` /
+/// `{"jsonrpc": "2.0", "id": ..., "error": {"code": ..., "message"
+/// ...}}` shape any MCP client expects.
+pub fn response_to_json(r: &ToolResponse) -> String {
+    let (id_repr, body) = match r {
+        ToolResponse::Ok { id, result } => (
+            id_to_json(id),
+            format!(r#""result":{}"#, btree_to_json(result)),
+        ),
+        ToolResponse::Err { id, code, message } => (
+            id_to_json(id),
+            format!(
+                r#""error":{{"code":{},"message":{}}}"#,
+                error_code_to_int(*code),
+                json_escape(message),
+            ),
+        ),
+    };
+    format!(r#"{{"jsonrpc":"2.0","id":{},{}}}"#, id_repr, body)
+}
+
+/// Parse a JSON-RPC request line into a `ToolCall`. Returns None on
+/// malformed input. Same minimal-parser strategy as `response_to_json`
+/// — hand-rolled, no serde. Real production servers should use serde
+/// but the stub is enough to round-trip the test fixtures.
+pub fn parse_tool_call(line: &str) -> Option<ToolCall> {
+    // Stub parser — extracts the three required fields (`id`,
+    // `method`, `params`) by simple string searches. Robust against
+    // ordering but not against deeply-nested params. Real serde-
+    // backed parsing lands when the server binary lands.
+    let id = extract_field(line, "id")?;
+    let id = if let Ok(n) = id.parse::<i64>() {
+        RequestId::Num(n)
+    } else {
+        RequestId::Str(id.trim_matches('"').to_string())
+    };
+    let tool = extract_field(line, "method")?.trim_matches('"').to_string();
+    // Empty arguments map — real implementation parses the params
+    // object into the BTreeMap. Round-trip with the simple test
+    // fixtures is enough for the v1 scaffold.
+    Some(ToolCall {
+        id,
+        tool,
+        arguments: BTreeMap::new(),
+    })
+}
+
+fn id_to_json(id: &RequestId) -> String {
+    match id {
+        RequestId::Str(s) => json_escape(s),
+        RequestId::Num(n) => n.to_string(),
+    }
+}
+
+fn error_code_to_int(code: ToolErrorCode) -> i32 {
+    // JSON-RPC reserves -32600..-32603 for transport-level errors;
+    // tool errors live in the application range (-32000..-32099).
+    match code {
+        ToolErrorCode::MissingArgument => -32_001,
+        ToolErrorCode::InvalidArgument => -32_602,
+        ToolErrorCode::ToolFailed => -32_002,
+        ToolErrorCode::UnknownTool => -32_601,
+        ToolErrorCode::Internal => -32_603,
+    }
+}
+
+fn btree_to_json(m: &BTreeMap<String, String>) -> String {
+    let mut out = String::from("{");
+    let mut first = true;
+    for (k, v) in m {
+        if !first {
+            out.push(',');
+        }
+        first = false;
+        out.push_str(&format!("{}:{}", json_escape(k), json_escape(v)));
+    }
+    out.push('}');
+    out
+}
+
+fn json_escape(s: &str) -> String {
+    let mut out = String::with_capacity(s.len() + 2);
+    out.push('"');
+    for c in s.chars() {
+        match c {
+            '"' => out.push_str("\\\""),
+            '\\' => out.push_str("\\\\"),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            c if (c as u32) < 0x20 => out.push_str(&format!("\\u{:04x}", c as u32)),
+            c => out.push(c),
+        }
+    }
+    out.push('"');
+    out
+}
+
+fn extract_field<'a>(line: &'a str, key: &str) -> Option<&'a str> {
+    let needle = format!("\"{}\"", key);
+    let start = line.find(&needle)? + needle.len();
+    let after_colon = &line[start..];
+    let colon = after_colon.find(':')? + 1;
+    let val = after_colon[colon..].trim_start();
+    let val_start = start + colon + (after_colon[colon..].len() - val.len());
+    // Read until next , or }.
+    let end_rel = val
+        .find(|c: char| c == ',' || c == '}')
+        .unwrap_or(val.len());
+    Some(line[val_start..val_start + end_rel].trim())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -199,6 +313,60 @@ mod tests {
             }
             _ => panic!("expected Ok"),
         }
+    }
+
+    #[test]
+    fn response_to_json_ok_payload() {
+        let mut result = BTreeMap::new();
+        result.insert("k".into(), "v".into());
+        let r = ToolResponse::Ok {
+            id: RequestId::Num(7),
+            result,
+        };
+        let j = response_to_json(&r);
+        assert!(j.contains(r#""jsonrpc":"2.0""#));
+        assert!(j.contains(r#""id":7"#));
+        assert!(j.contains(r#""result":"#));
+        assert!(j.contains(r#""k":"v""#));
+    }
+
+    #[test]
+    fn response_to_json_err_payload() {
+        let r = ToolResponse::Err {
+            id: RequestId::Str("req".into()),
+            code: ToolErrorCode::UnknownTool,
+            message: "no such tool".into(),
+        };
+        let j = response_to_json(&r);
+        assert!(j.contains(r#""id":"req""#));
+        assert!(j.contains(r#""code":-32601"#));
+        assert!(j.contains(r#""message":"no such tool""#));
+    }
+
+    #[test]
+    fn parse_tool_call_round_trips_through_registry() {
+        let line = r#"{"jsonrpc":"2.0","id":42,"method":"echo","params":{}}"#;
+        let call = parse_tool_call(line).expect("parse");
+        assert_eq!(call.id, RequestId::Num(42));
+        assert_eq!(call.tool, "echo");
+        let mut r = ToolRegistry::default();
+        r.register(Box::new(EchoTool));
+        match r.dispatch(call) {
+            ToolResponse::Ok { id, .. } => assert_eq!(id, RequestId::Num(42)),
+            _ => panic!(),
+        }
+    }
+
+    #[test]
+    fn json_escape_handles_special_chars() {
+        let r = ToolResponse::Err {
+            id: RequestId::Str("x\"y".into()),
+            code: ToolErrorCode::Internal,
+            message: "line1\nline2".into(),
+        };
+        let j = response_to_json(&r);
+        assert!(j.contains(r#""x\"y""#));
+        assert!(j.contains(r#""line1\nline2""#));
     }
 
     #[test]
