@@ -9,6 +9,74 @@
 //! runtime port (`packages/agent-native` → Rust subprocess /
 //! NAPI / direct).
 
+/// Provider backend kinds the editor can talk to. Mirrors the
+/// settings modal's Agents tab (Claude / Codex / OpenCode / Copilot
+/// / Gemini) plus the OpenAI-compat backend that covers Anthropic,
+/// OpenAI, Ollama, and most local servers.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ChatProviderKind {
+    Anthropic,
+    OpenAiCompat,
+    Gemini,
+    Copilot,
+    OpenCode,
+    Ollama,
+}
+
+impl ChatProviderKind {
+    pub fn label(self) -> &'static str {
+        match self {
+            ChatProviderKind::Anthropic => "Claude",
+            ChatProviderKind::OpenAiCompat => "OpenAI Compatible",
+            ChatProviderKind::Gemini => "Gemini",
+            ChatProviderKind::Copilot => "GitHub Copilot",
+            ChatProviderKind::OpenCode => "OpenCode",
+            ChatProviderKind::Ollama => "Ollama",
+        }
+    }
+}
+
+/// Per-provider config the chat panel persists. `api_key` is
+/// opaque + provider-specific (Bearer for Anthropic; sk-... for
+/// OpenAI; etc.). `endpoint` overrides the default base URL — used
+/// for OpenAI-compat backends pointing at local servers.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ChatProviderConfig {
+    pub kind: ChatProviderKind,
+    pub api_key: String,
+    pub endpoint: String,
+    pub model: String,
+}
+
+impl ChatProviderConfig {
+    /// Default endpoint URL for `kind`. The chat panel's "endpoint"
+    /// input pre-fills with this; user overrides flow back via the
+    /// `endpoint` field.
+    pub fn default_endpoint(kind: ChatProviderKind) -> &'static str {
+        match kind {
+            ChatProviderKind::Anthropic => "https://api.anthropic.com",
+            ChatProviderKind::OpenAiCompat => "https://api.openai.com",
+            ChatProviderKind::Gemini => "https://generativelanguage.googleapis.com",
+            ChatProviderKind::Copilot => "https://api.githubcopilot.com",
+            ChatProviderKind::OpenCode => "https://opencode.local",
+            ChatProviderKind::Ollama => "http://localhost:11434",
+        }
+    }
+    /// Sensible model default for `kind` — the chat panel's "model"
+    /// input pre-fills with this. Mirrors TS app's default-model
+    /// table.
+    pub fn default_model(kind: ChatProviderKind) -> &'static str {
+        match kind {
+            ChatProviderKind::Anthropic => "claude-sonnet-4-6",
+            ChatProviderKind::OpenAiCompat => "gpt-4o-mini",
+            ChatProviderKind::Gemini => "gemini-1.5-flash",
+            ChatProviderKind::Copilot => "gpt-4o-copilot",
+            ChatProviderKind::OpenCode => "opencode-default",
+            ChatProviderKind::Ollama => "llama3.2",
+        }
+    }
+}
+
 /// Streaming delta from a provider — text fragments, tool calls,
 /// status events. Mirrors `streaming/events.zig::Event` in
 /// agent-native.
@@ -114,6 +182,26 @@ mod tests {
     fn echo_provider_label_is_echo() {
         let p = EchoProvider { script: Vec::new() };
         assert_eq!(p.provider_label(), "echo");
+    }
+
+    #[test]
+    fn provider_kind_defaults_match_ts_table() {
+        // Pick three to sanity-check rather than full coverage —
+        // the table is mechanical mirror of TS defaults.
+        assert!(ChatProviderConfig::default_endpoint(ChatProviderKind::Anthropic)
+            .starts_with("https://api.anthropic.com"));
+        assert!(ChatProviderConfig::default_endpoint(ChatProviderKind::Ollama)
+            .starts_with("http://localhost"));
+        assert_eq!(
+            ChatProviderConfig::default_model(ChatProviderKind::Anthropic),
+            "claude-sonnet-4-6"
+        );
+    }
+
+    #[test]
+    fn provider_kind_label_is_human_readable() {
+        assert_eq!(ChatProviderKind::Anthropic.label(), "Claude");
+        assert_eq!(ChatProviderKind::Copilot.label(), "GitHub Copilot");
     }
 
     #[test]
