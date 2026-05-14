@@ -281,10 +281,22 @@ impl WidgetHostNative {
             drag.last_x = x;
             drag.last_y = y;
             self.document.viewport.pan(dx, dy);
-            true
-        } else {
-            false
+            return true;
         }
+        // No drag active — sync align toolbar hover. Lives AFTER
+        // drag detection (codex CONCERN: an active drag's cursor
+        // sweeping over the toolbar must not be intercepted by a
+        // hover update).
+        let new_hover = if self.document.selection_count() >= 2 {
+            self.align_toolbar_hit(x, y, self.last_viewport_w, self.last_viewport_h)
+        } else {
+            None
+        };
+        if new_hover != self.document.ui.align_toolbar_hover {
+            self.document.ui.align_toolbar_hover = new_hover;
+            return true;
+        }
+        false
     }
 
     /// Mouse-release — ends active drag; chat-panel snaps corner.

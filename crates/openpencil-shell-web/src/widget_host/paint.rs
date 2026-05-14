@@ -165,6 +165,24 @@ impl WidgetHost {
             status.paint(&mut cx, status_rect);
         }
 
+        // Floating align/distribute toolbar — visible whenever 2+
+        // nodes are selected. Sits above the canvas but below
+        // marquee / pickers / modals.
+        {
+            use openpencil_shell_core::widgets::AlignToolbar;
+            let canvas_region = Rect {
+                origin: Point2D::new(canvas_left, TOP_BAR_HEIGHT),
+                size: Point2D::new(canvas_w, canvas_h),
+            };
+            if let Some(tb) = AlignToolbar::for_canvas_region(canvas_region, &self.document) {
+                tb.paint(
+                    &mut *backend,
+                    &self.theme,
+                    self.document.ui.align_toolbar_hover,
+                );
+            }
+        }
+
         // Marquee selection rect — between StatusBar and the
         // floating pickers in z-order, only while a marquee
         // drag is active.

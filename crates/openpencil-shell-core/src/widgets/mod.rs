@@ -71,6 +71,7 @@ pub mod agent_settings_mcp;
 pub mod agent_settings_panel;
 pub mod agent_settings_system;
 pub mod ai_chat_panel;
+pub mod align_toolbar;
 pub mod color_picker;
 pub mod figma_import;
 pub mod file_menu;
@@ -98,6 +99,7 @@ pub use ai_chat_panel::{
     AIChatHit, AIChatPlaceholder, AI_CHAT_COLLAPSED_HEIGHT, AI_CHAT_COLLAPSED_WIDTH,
     AI_CHAT_HEIGHT, AI_CHAT_WIDTH,
 };
+pub use align_toolbar::{AlignToolbar, ALIGN_TOOLBAR_HEIGHT, ALIGN_TOOLBAR_WIDTH};
 pub use locale_picker::{LocalePicker, LOCALE_PICKER_WIDTH};
 pub use shape_picker::{ShapeChoice, ShapePicker, SHAPE_PICKER_WIDTH};
 pub use status_bar::{StatusBar, STATUS_BAR_HEIGHT, STATUS_BAR_WIDTH};

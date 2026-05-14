@@ -104,6 +104,12 @@ impl WidgetHost {
         viewport_width: f32,
         viewport_height: f32,
     ) -> bool {
+        // Cache the viewport dims so `apply_cursor_move(x, y)` (no
+        // viewport params in signature) can rebuild the canvas region
+        // for the floating align toolbar's hover sync. Mirrors the
+        // native host's `last_viewport_w` / `_h` cache.
+        self.last_viewport_w = viewport_width;
+        self.last_viewport_h = viewport_height;
         // 0-pre. Commit any in-flight rename + canvas text-edit on
         // first press anywhere. Tracked so the final return reports
         // the visible change.
@@ -279,6 +285,25 @@ impl WidgetHost {
                 });
             }
         }
+        // 2.5. Floating align/distribute toolbar — visible when
+        //      2+ nodes are selected. Hit-tested before apply_click
+        //      so the visible button always wins over a layer row
+        //      that happens to share screen y (matches native order).
+        {
+            use openpencil_shell_core::widgets::AlignToolbar;
+            let (acx, _, acw, ach) = self.canvas_region(viewport_width, viewport_height);
+            let canvas_region = openpencil_shell_core::Rect {
+                origin: Point2D::new(acx, openpencil_shell_core::widgets::TOP_BAR_HEIGHT),
+                size: Point2D::new(acw, ach),
+            };
+            if let Some(tb) = AlignToolbar::for_canvas_region(canvas_region, &self.document) {
+                if let Some(action) = tb.hit_test(Point2D::new(x, y)) {
+                    self.document.align_selected(action);
+                    return true;
+                }
+            }
+        }
+
         if self.apply_click(x, y, viewport_width, viewport_height) {
             return true;
         }

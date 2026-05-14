@@ -209,6 +209,22 @@ pub enum Icon {
     XCircle,
     /// Lucide `file-text.svg` — recent file rows.
     FileText,
+    /// Lucide `align-start-vertical` — align selection's left edges.
+    AlignLeft,
+    /// Lucide `align-center-vertical` — align selection horizontal centers.
+    AlignCenterH,
+    /// Lucide `align-end-vertical` — align selection's right edges.
+    AlignRight,
+    /// Lucide `align-start-horizontal` — align selection's top edges.
+    AlignTop,
+    /// Lucide `align-center-horizontal` — align selection vertical centers.
+    AlignCenterV,
+    /// Lucide `align-end-horizontal` — align selection's bottom edges.
+    AlignBottom,
+    /// Lucide `align-horizontal-distribute-center` — equal center spacing on X.
+    DistributeH,
+    /// Lucide `align-vertical-distribute-center` — equal center spacing on Y.
+    DistributeV,
 }
 
 impl Icon {
@@ -329,6 +345,14 @@ impl Icon {
             Icon::Menu => MENU,
             Icon::CreditCard => CREDIT_CARD,
             Icon::XCircle => X_CIRCLE,
+            Icon::AlignLeft => ALIGN_LEFT,
+            Icon::AlignCenterH => ALIGN_CENTER_H,
+            Icon::AlignRight => ALIGN_RIGHT,
+            Icon::AlignTop => ALIGN_TOP,
+            Icon::AlignCenterV => ALIGN_CENTER_V,
+            Icon::AlignBottom => ALIGN_BOTTOM,
+            Icon::DistributeH => DISTRIBUTE_H,
+            Icon::DistributeV => DISTRIBUTE_V,
         }
     }
 
@@ -440,6 +464,14 @@ impl Icon {
             "menu" | "hamburger" => Icon::Menu,
             "credit-card" | "card" => Icon::CreditCard,
             "x-circle" | "cancel" => Icon::XCircle,
+            "align-left" | "align-start-vertical" => Icon::AlignLeft,
+            "align-center-h" | "align-center-vertical" | "align-horizontal-center" => Icon::AlignCenterH,
+            "align-right" | "align-end-vertical" => Icon::AlignRight,
+            "align-top" | "align-start-horizontal" => Icon::AlignTop,
+            "align-center-v" | "align-center-horizontal" | "align-vertical-center" => Icon::AlignCenterV,
+            "align-bottom" | "align-end-horizontal" => Icon::AlignBottom,
+            "distribute-h" | "align-horizontal-distribute-center" | "distribute-horizontal" => Icon::DistributeH,
+            "distribute-v" | "align-vertical-distribute-center" | "distribute-vertical" => Icon::DistributeV,
             _ => return None,
         })
     }

@@ -77,6 +77,11 @@ pub struct WidgetHost {
     /// Host clock in ms — set by `lib.rs` on each event from
     /// `performance.now()`. Used for double-click detection.
     pub(in crate::widget_host) now_ms: u64,
+    /// Most recent viewport size seen via `apply_press` etc. — cached
+    /// so `apply_cursor_move(x, y)` can rebuild the canvas region
+    /// when its signature can't carry viewport dims (mirrors native).
+    pub(in crate::widget_host) last_viewport_w: f32,
+    pub(in crate::widget_host) last_viewport_h: f32,
 }
 
 impl WidgetHost {
@@ -189,6 +194,8 @@ impl WidgetHost {
             next_node_id: 100,
             shift_held: false,
             now_ms: 0,
+            last_viewport_w: 0.0,
+            last_viewport_h: 0.0,
         }
     }
 
@@ -245,6 +252,8 @@ impl WidgetHost {
         viewport_width: f32,
         viewport_height: f32,
     ) -> bool {
+        self.last_viewport_w = viewport_width;
+        self.last_viewport_h = viewport_height;
         if !self.over_canvas(x, y, viewport_width, viewport_height) {
             return false;
         }
@@ -384,10 +393,29 @@ impl WidgetHost {
             drag.last_x = x;
             drag.last_y = y;
             self.document.viewport.pan(dx, dy);
-            true
-        } else {
-            false
+            return true;
         }
+        // No drag active — sync align toolbar hover. AFTER all drag
+        // branches so an active drag isn't intercepted (codex CONCERN
+        // — mirrors native widget_host/input.rs ordering).
+        let new_hover = if self.document.selection_count() >= 2 {
+            use openpencil_shell_core::widgets::{AlignToolbar, TOP_BAR_HEIGHT};
+            let (cx, _, cw, ch) =
+                self.canvas_region(self.last_viewport_w, self.last_viewport_h);
+            let canvas_region = openpencil_shell_core::Rect {
+                origin: Point2D::new(cx, TOP_BAR_HEIGHT),
+                size: Point2D::new(cw, ch),
+            };
+            AlignToolbar::for_canvas_region(canvas_region, &self.document)
+                .and_then(|tb| tb.hit_test(Point2D::new(x, y)))
+        } else {
+            None
+        };
+        if new_hover != self.document.ui.align_toolbar_hover {
+            self.document.ui.align_toolbar_hover = new_hover;
+            return true;
+        }
+        false
     }
 
     /// Convert a marquee drag (screen-space) into a doc-space
@@ -440,6 +468,8 @@ impl WidgetHost {
     /// chat-panel drag to the nearest corner, or ends the canvas
     /// pan-drag.
     pub fn apply_release_with_viewport(&mut self, viewport_w: f32, viewport_h: f32) -> bool {
+        self.last_viewport_w = viewport_w;
+        self.last_viewport_h = viewport_h;
         if let Some(m) = self.marquee_drag.take() {
             self.commit_marquee_selection(m, viewport_w, viewport_h);
             return true;

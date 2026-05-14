@@ -283,11 +283,7 @@ impl WidgetHostNative {
             return rename_committed || text_edit_committed;
         }
 
-        // 0c0. Fill-type picker: any click that isn't a row /
-        //      dropdown toggle dismisses the picker. Same pattern
-        //      as locale / shape pickers — overlay swallows ANY
-        //      click and closes; row hits also dispatch SetFillType
-        //      via the action branch below.
+        // 0c0. Fill-type picker — outside-click dismiss.
         if self.document.ui.fill_type_picker_open {
             if let Some(panel) = PropertyPanel::for_selection(&self.document) {
                 let property_rect = Rect {
@@ -466,6 +462,10 @@ impl WidgetHostNative {
             return rename_committed || text_edit_committed;
         }
 
+        if let Some(a) = self.align_toolbar_hit(x, y, viewport_width, viewport_height) {
+            self.document.align_selected(a);
+            return true;
+        }
         // 3. apply_click — LayerPanel + chat-defocus.
         //    Before forwarding to apply_click, peek at the LayerPanel
         //    hit-test ourselves: if the press lands on a Layer row
