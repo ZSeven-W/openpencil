@@ -139,56 +139,171 @@ fn extract_string_field(body: &str, key: &str) -> Option<String> {
     Some(rest[val_start..i].to_string())
 }
 
-/// Tri-state lookup for MCP `arguments` inside a `params` block:
-///   - Missing: `arguments` key absent (legit empty args).
+/// Tri-state lookup for MCP `arguments` inside a `params` block.
+/// Walks `body` at depth 0 so we ignore nested keys (e.g. a sibling
+/// `meta.arguments` can't shadow the real top-level field) and
+/// string values that happen to read `"arguments"`. Returns:
+///   - Missing: `arguments` key absent at top level (legit empty
+///     args).
 ///   - Body(s): `arguments` is an object; returns its body without
 ///     the braces.
 ///   - Malformed: `arguments` is present but not an object
-///     (e.g. `"arguments":"oops"` or `"arguments":42`). Caller
-///     rejects the call rather than downgrading to empty args
-///     (codex stop-gate: previously downgraded silently).
+///     (e.g. `"arguments":"oops"` / `:42` / `:[]`), or the body
+///     itself doesn't tokenize as a JSON object body.
+///
+/// Codex stop-gate, twice: first the present-but-non-object
+/// downgrade to empty args; then the substring-find that
+/// matched nested keys / string values containing the literal
+/// `"arguments"`. Both addressed by walking top-level keys
+/// explicitly.
 fn arguments_field(body: &str) -> ParamsResult {
-    let needle = "\"arguments\"";
-    let Some(found) = body.find(needle) else {
-        return ParamsResult::Missing;
-    };
-    let start = found + needle.len();
-    let after = &body[start..];
-    let Some(colon_off) = after.find(':') else {
-        return ParamsResult::Malformed;
-    };
-    let rest = after[colon_off + 1..].trim_start();
-    if !rest.starts_with('{') {
-        return ParamsResult::Malformed;
-    }
-    let bytes = rest.as_bytes();
-    let mut depth = 0i32;
-    let mut in_str = false;
-    let mut escape = false;
-    for (i, &b) in bytes.iter().enumerate() {
-        if in_str {
-            if escape {
-                escape = false;
-            } else if b == b'\\' {
-                escape = true;
-            } else if b == b'"' {
-                in_str = false;
-            }
-            continue;
+    let bytes = body.as_bytes();
+    let mut i = 0usize;
+    while i < bytes.len() {
+        // Skip whitespace + commas between keys.
+        while i < bytes.len() && (bytes[i].is_ascii_whitespace() || bytes[i] == b',') {
+            i += 1;
         }
-        match b {
-            b'"' => in_str = true,
-            b'{' => depth += 1,
-            b'}' => {
-                depth -= 1;
-                if depth == 0 {
-                    return ParamsResult::Body(rest[1..i].to_string());
+        if i >= bytes.len() {
+            break;
+        }
+        if bytes[i] != b'"' {
+            return ParamsResult::Malformed;
+        }
+        // Read the quoted key.
+        i += 1;
+        let key_start = i;
+        while i < bytes.len() && bytes[i] != b'"' {
+            if bytes[i] == b'\\' {
+                i = i.saturating_add(2);
+            } else {
+                i += 1;
+            }
+        }
+        if i >= bytes.len() {
+            return ParamsResult::Malformed;
+        }
+        let key = &body[key_start..i];
+        i += 1; // past closing quote
+        // Whitespace, colon, whitespace.
+        while i < bytes.len() && bytes[i].is_ascii_whitespace() {
+            i += 1;
+        }
+        if i >= bytes.len() || bytes[i] != b':' {
+            return ParamsResult::Malformed;
+        }
+        i += 1;
+        while i < bytes.len() && bytes[i].is_ascii_whitespace() {
+            i += 1;
+        }
+        if i >= bytes.len() {
+            return ParamsResult::Malformed;
+        }
+        let is_args = key == "arguments";
+        match bytes[i] {
+            b'"' => {
+                // String value — read it to the matching quote.
+                i += 1;
+                while i < bytes.len() && bytes[i] != b'"' {
+                    if bytes[i] == b'\\' {
+                        i = i.saturating_add(2);
+                    } else {
+                        i += 1;
+                    }
+                }
+                if i >= bytes.len() {
+                    return ParamsResult::Malformed;
+                }
+                i += 1;
+                if is_args {
+                    return ParamsResult::Malformed;
                 }
             }
-            _ => {}
+            b'{' => {
+                let val_start = i + 1;
+                let mut depth = 1i32;
+                let mut j = i + 1;
+                let mut in_str = false;
+                let mut escape = false;
+                while j < bytes.len() && depth > 0 {
+                    let c = bytes[j];
+                    if in_str {
+                        if escape {
+                            escape = false;
+                        } else if c == b'\\' {
+                            escape = true;
+                        } else if c == b'"' {
+                            in_str = false;
+                        }
+                    } else if c == b'"' {
+                        in_str = true;
+                    } else if c == b'{' {
+                        depth += 1;
+                    } else if c == b'}' {
+                        depth -= 1;
+                        if depth == 0 {
+                            break;
+                        }
+                    }
+                    j += 1;
+                }
+                if depth != 0 || j >= bytes.len() {
+                    return ParamsResult::Malformed;
+                }
+                if is_args {
+                    return ParamsResult::Body(body[val_start..j].to_string());
+                }
+                i = j + 1;
+            }
+            b'[' => {
+                let mut depth = 1i32;
+                let mut j = i + 1;
+                let mut in_str = false;
+                let mut escape = false;
+                while j < bytes.len() && depth > 0 {
+                    let c = bytes[j];
+                    if in_str {
+                        if escape {
+                            escape = false;
+                        } else if c == b'\\' {
+                            escape = true;
+                        } else if c == b'"' {
+                            in_str = false;
+                        }
+                    } else if c == b'"' {
+                        in_str = true;
+                    } else if c == b'[' {
+                        depth += 1;
+                    } else if c == b']' {
+                        depth -= 1;
+                        if depth == 0 {
+                            break;
+                        }
+                    }
+                    j += 1;
+                }
+                if depth != 0 || j >= bytes.len() {
+                    return ParamsResult::Malformed;
+                }
+                if is_args {
+                    return ParamsResult::Malformed;
+                }
+                i = j + 1;
+            }
+            _ => {
+                // Number / bool / null — read until comma / close.
+                while i < bytes.len()
+                    && !matches!(bytes[i], b',' | b'}' | b' ' | b'\t' | b'\n' | b'\r')
+                {
+                    i += 1;
+                }
+                if is_args {
+                    return ParamsResult::Malformed;
+                }
+            }
         }
     }
-    ParamsResult::Malformed
+    ParamsResult::Missing
 }
 
 /// Extract a nested object field's body (without the surrounding

@@ -533,6 +533,37 @@ fn parse_tool_call_rejects_non_object_arguments_field() {
 }
 
 #[test]
+fn parse_tool_call_arguments_lookup_is_top_level_only() {
+    // Codex stop-gate (twice): `body.find("\"arguments\"")` was a
+    // substring scan that matched nested keys OR string values
+    // containing the literal `"arguments"`. Fixed with a real
+    // top-level walker. Three repros below — all valid JSON,
+    // none containing a real top-level `arguments` object:
+    //
+    // 1. Nested `meta.arguments` object — the substring scan
+    //    would have hit it and downgraded a sibling
+    //    `"arguments":"oops"` to Body silently. Now the walker
+    //    sees the top-level `arguments` is a string → Malformed.
+    let shadow = r#"{"id":1,"method":"tools/call","params":{"name":"get_node","meta":{"arguments":{}},"arguments":"oops"}}"#;
+    assert!(
+        parse_tool_call(shadow).is_none(),
+        "nested meta.arguments must not shadow the real top-level arguments"
+    );
+    // 2. A sibling whose STRING value is literally "arguments".
+    //    Real `arguments` is missing → Missing → empty args, parse OK.
+    let str_collide = r#"{"id":1,"method":"tools/call","params":{"name":"arguments"}}"#;
+    let call = parse_tool_call(str_collide).expect("name=\"arguments\" must not false-positive");
+    assert_eq!(call.tool, "arguments");
+    assert!(call.arguments.is_empty());
+    // 3. A nested `arguments` deep inside something else, with no
+    //    top-level `arguments` at all. Still empty args, parse OK.
+    let deep = r#"{"id":1,"method":"tools/call","params":{"name":"get_node","other":{"x":{"arguments":42}}}}"#;
+    let call = parse_tool_call(deep).expect("deeply nested arguments key must not surface");
+    assert_eq!(call.tool, "get_node");
+    assert!(call.arguments.is_empty());
+}
+
+#[test]
 fn get_node_reachable_through_stdio_path() {
     // End-to-end: the wire `params` parser feeds the tool's
     // required `node_id`, dispatch returns Ok with kind=frame.
