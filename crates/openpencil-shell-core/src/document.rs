@@ -458,6 +458,11 @@ pub enum FileAction {
     ImportFigma, OpenRecent(usize), ClearRecent,
 }
 
+/// Path boolean operations. Mirrors the four ops the TS app exposes
+/// via Paper.js (Ctrl+Alt+U / S / I / X).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BooleanOp { Union, Subtract, Intersect, Exclude }
+
 /// Floating colour-picker state. HSV stays anchored across the
 /// committed-RGB rounding cycle.
 #[derive(Debug, Clone)]
