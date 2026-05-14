@@ -25,9 +25,10 @@ pub mod scalar_vars;
 // split. Mirrors the `widgets::*` re-export pattern.
 pub use parser::parse_tool_call;
 pub use tools::{
-    document_info_snapshot, get_active_theme_snapshot, get_node_snapshot, list_pages_snapshot,
-    list_variables_snapshot, selection_snapshot, GetActiveTheme, GetDocumentInfo, GetNode,
-    GetSelection, ListPages, ListVariables, NodeRecord, VariableRecord,
+    document_info_snapshot, get_active_theme_snapshot, get_node_snapshot,
+    list_components_snapshot, list_pages_snapshot, list_variables_snapshot, selection_snapshot,
+    GetActiveTheme, GetDocumentInfo, GetNode, GetSelection, ListComponents, ListPages,
+    ListVariables, NodeRecord, VariableRecord,
 };
 pub use write_tools::{
     copy_node_snapshot, delete_node_snapshot, insert_node_snapshot, move_node_snapshot,
