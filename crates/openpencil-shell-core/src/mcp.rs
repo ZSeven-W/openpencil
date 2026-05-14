@@ -199,9 +199,11 @@ pub enum McpCommand {
     ///
     /// **Destructive on containers**: replacing a Frame / Group
     /// / node-with-children drops every descendant of the old
-    /// node without warning. Use `update_node` to patch a
-    /// container in place; reserve `replace_node` for primitive
-    /// → primitive swaps where the loss is intended.
+    /// node. To prevent silent data loss the applier REFUSES the
+    /// swap when the target has children unless `drop_children`
+    /// is set to `true`. Callers that genuinely want to discard
+    /// the subtree must opt in; otherwise use `update_node` to
+    /// patch a container in place.
     ReplaceNode {
         node_id: u64,
         kind: String,
@@ -211,6 +213,10 @@ pub enum McpCommand {
         width: i32,
         height: i32,
         fill_hex: Option<String>,
+        /// Required confirmation when the target has children.
+        /// `false` (the default) makes the applier refuse a
+        /// destructive swap; `true` is explicit consent.
+        drop_children: bool,
     },
 }
 

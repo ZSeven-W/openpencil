@@ -369,6 +369,7 @@ impl Document {
                 width,
                 height,
                 fill_hex,
+                drop_children,
             } => {
                 let Some(target) = NodeId::new_opt(*node_id) else {
                     return false;
@@ -389,7 +390,16 @@ impl Document {
                         None => return false,
                     },
                 };
-                if find_node_in_doc(self, target).is_none() {
+                // Resolve target + check the destructive-swap
+                // guard BEFORE allocating an id. If the target
+                // has children the caller MUST have set
+                // `drop_children=true`; otherwise refuse the
+                // swap so a Frame / Group can't silently lose
+                // its subtree.
+                let Some(target_node) = find_node_in_doc(self, target) else {
+                    return false;
+                };
+                if !target_node.children.is_empty() && !*drop_children {
                     return false;
                 }
                 let Some(next_id) = self.next_node_id_seed() else {

@@ -31,7 +31,7 @@ fn replace_node_validates_required_args() {
     args.insert("width".into(), "100".into());
     args.insert("height".into(), "30".into());
     match tool.call(&args) {
-        ToolOutcome::OkWithCommand(_, McpCommand::ReplaceNode { node_id, kind, name, x, y, width, height, fill_hex }) => {
+        ToolOutcome::OkWithCommand(_, McpCommand::ReplaceNode { node_id, kind, name, x, y, width, height, fill_hex, drop_children }) => {
             assert_eq!(node_id, 11);
             assert_eq!(kind, "rect");
             assert_eq!(name, "Replacement");
@@ -40,6 +40,7 @@ fn replace_node_validates_required_args() {
             assert_eq!(width, 100);
             assert_eq!(height, 30);
             assert!(fill_hex.is_none());
+            assert!(!drop_children, "default opt-out keeps container subtrees safe");
         }
         other => panic!("expected ReplaceNode, got {other:?}"),
     }
@@ -89,6 +90,9 @@ fn apply_mcp_command_replace_node_swaps_at_same_slot() {
         width: 50,
         height: 50,
         fill_hex: Some("#ff0000".into()),
+        // Title is a leaf — drop_children doesn't matter, but
+        // exercise the safe default to prove leaves still swap.
+        drop_children: false,
     };
     assert!(doc.apply_mcp_command(&cmd));
     let frame = doc.pages[0].children.iter().find(|n| n.id.raw() == 10).unwrap();
@@ -115,6 +119,7 @@ fn apply_mcp_command_replace_node_rejects_unknown_id() {
         width: 10,
         height: 10,
         fill_hex: None,
+        drop_children: false,
     };
     assert!(!doc.apply_mcp_command(&cmd));
     // Doc unchanged.
@@ -138,6 +143,7 @@ fn apply_mcp_command_replace_node_atomic_on_invalid_fill_hex() {
         width: 10,
         height: 10,
         fill_hex: Some("not-hex".into()),
+        drop_children: false,
     };
     assert!(!doc.apply_mcp_command(&cmd));
     // Title still in place under Frame.
@@ -145,4 +151,77 @@ fn apply_mcp_command_replace_node_atomic_on_invalid_fill_hex() {
     assert!(frame.children.iter().any(|n| n.id.raw() == 11));
     // No id was allocated.
     assert_eq!(doc.max_node_id(), pre_max);
+}
+
+#[test]
+fn apply_mcp_command_replace_node_refuses_to_drop_container_children() {
+    // Frame (id 10) carries Title + Button under it. Replacing
+    // it without explicit `drop_children=true` MUST refuse — the
+    // tool would otherwise silently delete the subtree.
+    use crate::document::Document;
+    let mut doc = Document::sample();
+    let pre_max = doc.max_node_id();
+    let pre_frame_children = doc.pages[0].children[0].children.len();
+    let cmd = McpCommand::ReplaceNode {
+        node_id: 10, // Frame container
+        kind: "rect".into(),
+        name: "WouldNuke".into(),
+        x: 0,
+        y: 0,
+        width: 50,
+        height: 50,
+        fill_hex: None,
+        drop_children: false,
+    };
+    assert!(!doc.apply_mcp_command(&cmd), "container swap must refuse without consent");
+    // Frame intact with both children.
+    let frame = doc.pages[0].children.iter().find(|n| n.id.raw() == 10).unwrap();
+    assert_eq!(frame.children.len(), pre_frame_children);
+    // No fresh id allocated.
+    assert_eq!(doc.max_node_id(), pre_max);
+}
+
+#[test]
+fn apply_mcp_command_replace_node_drops_container_children_when_opted_in() {
+    use crate::document::Document;
+    let mut doc = Document::sample();
+    let cmd = McpCommand::ReplaceNode {
+        node_id: 10, // Frame container — has children
+        kind: "rect".into(),
+        name: "ExplicitNuke".into(),
+        x: 0,
+        y: 0,
+        width: 50,
+        height: 50,
+        fill_hex: None,
+        drop_children: true,
+    };
+    assert!(doc.apply_mcp_command(&cmd), "container swap with consent must succeed");
+    // Frame id is gone; a fresh leaf sits at page root with no children.
+    let root = &doc.pages[0].children;
+    assert!(root.iter().all(|n| n.id.raw() != 10), "old frame replaced");
+    assert_eq!(root.len(), 1, "replacement landed at the same slot");
+    assert_eq!(root[0].name, "ExplicitNuke");
+    assert!(root[0].children.is_empty(), "replacement is a leaf");
+}
+
+#[test]
+fn replace_node_rejects_malformed_drop_children() {
+    let tool = replace_node_snapshot();
+    let mut args = BTreeMap::new();
+    args.insert("node_id".into(), "11".into());
+    args.insert("kind".into(), "rect".into());
+    args.insert("name".into(), "X".into());
+    args.insert("x".into(), "0".into());
+    args.insert("y".into(), "0".into());
+    args.insert("width".into(), "10".into());
+    args.insert("height".into(), "10".into());
+    args.insert("drop_children".into(), "yes".into()); // not "true"/"false"
+    match tool.call(&args) {
+        ToolOutcome::Err(code, msg) => {
+            assert_eq!(code, ToolErrorCode::InvalidArgument);
+            assert!(msg.contains("drop_children"));
+        }
+        _ => panic!("expected InvalidArgument on malformed drop_children"),
+    }
 }
