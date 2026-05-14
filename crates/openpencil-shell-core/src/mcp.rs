@@ -170,9 +170,12 @@ pub enum McpCommand {
     /// `target_parent_id == 0` puts the copy at the active page
     /// root. Fresh ids are allocated by the applier starting past
     /// `max_node_id()` so the clone can't collide with any live
-    /// node. Returns the new root id in the result payload
-    /// (`new_root_id` field) so callers can chain follow-up
-    /// commands against the clone without re-querying.
+    /// node. The wire result is `{"wrote": "true"}` only — clone
+    /// ids aren't surfaced today because `ToolOutcome` is built
+    /// before apply runs; callers that need the new ids must
+    /// re-query (e.g. `list_pages` + walk). A future patch may
+    /// thread the allocator back to the tool to surface
+    /// `new_root_id`, but the current contract is fire-and-forget.
     CopyNode {
         node_id: u64,
         target_parent_id: u64,
