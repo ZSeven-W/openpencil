@@ -281,6 +281,33 @@ impl Document {
         self.ui.text_editing.take().is_some()
     }
 
+    /// Move page from `from` to `to`. `to` is clamped into
+    /// `[0, pages.len())`. No-op when from == to or from is
+    /// out of range. Keeps `active_page_index` pointing at the
+    /// same logical page (follows the move). Mirrors TS
+    /// `reorderPage(from, to)`.
+    pub fn reorder_page(&mut self, from: usize, to: usize) -> bool {
+        if from >= self.pages.len() {
+            return false;
+        }
+        let to = to.min(self.pages.len().saturating_sub(1));
+        if from == to {
+            return false;
+        }
+        let page = self.pages.remove(from);
+        self.pages.insert(to, page);
+        // Adjust the active index so it tracks the moved page or
+        // the shift caused by the move.
+        if self.active_page_index == from {
+            self.active_page_index = to;
+        } else if from < self.active_page_index && to >= self.active_page_index {
+            self.active_page_index -= 1;
+        } else if from > self.active_page_index && to <= self.active_page_index {
+            self.active_page_index += 1;
+        }
+        true
+    }
+
     /// Swap page at `idx` with next. No-op at end.
     pub fn move_page_down(&mut self, idx: usize) -> bool {
         if idx + 1 >= self.pages.len() {

@@ -29,7 +29,8 @@ use openpencil_shell_core::mcp::{
     add_page_snapshot, create_component_snapshot, delete_component_snapshot,
     delete_page_snapshot, document_info_snapshot, duplicate_page_snapshot,
     get_component_snapshot, instantiate_component_snapshot, list_components_snapshot,
-    rename_component_snapshot, rename_page_snapshot, set_active_page_snapshot,
+    rename_component_snapshot, rename_page_snapshot, reorder_page_snapshot,
+    set_active_page_snapshot,
     get_active_theme_snapshot, get_node_snapshot, insert_node_snapshot,
     list_pages_snapshot, list_variables_snapshot, move_node_snapshot,
     replace_node_snapshot, run_stdio_with_applier, selection_snapshot,
@@ -168,6 +169,7 @@ fn rebuild_registry(doc: &Document) -> ToolRegistry {
     r.register(Box::new(rename_page_snapshot()));
     r.register(Box::new(delete_page_snapshot()));
     r.register(Box::new(duplicate_page_snapshot()));
+    r.register(Box::new(reorder_page_snapshot()));
     r
 }
 
@@ -400,6 +402,7 @@ const TOOL_SCHEMAS: &[&str] = &[
     r#"{"name":"rename_page","description":"Set a page's display name. Name must be non-empty / non-whitespace.","inputSchema":{"type":"object","properties":{"index":{"type":"string","description":"0-based page index"},"name":{"type":"string"}},"required":["index","name"]}}"#,
     r#"{"name":"delete_page","description":"Remove a page by index. The applier keeps the active page valid (clamps if needed).","inputSchema":{"type":"object","properties":{"index":{"type":"string","description":"0-based page index"}},"required":["index"]}}"#,
     r#"{"name":"duplicate_page","description":"Clone the page at index and switch the active page to the clone.","inputSchema":{"type":"object","properties":{"index":{"type":"string","description":"0-based page index"}},"required":["index"]}}"#,
+    r#"{"name":"reorder_page","description":"Move a page from one index to another. `to` is clamped to [0, page_count). The active page tracking follows the move.","inputSchema":{"type":"object","properties":{"from":{"type":"string","description":"0-based source page index"},"to":{"type":"string","description":"0-based target page index"}},"required":["from","to"]}}"#,
     r#"{"name":"set_active_axis_value","description":"Pin a theme axis to one of its allowed values.","inputSchema":{"type":"object","properties":{"axis":{"type":"string"},"value":{"type":"string"}},"required":["axis","value"]}}"#,
     r#"{"name":"insert_node","description":"Create a new leaf node on the active page.","inputSchema":{"type":"object","properties":{"kind":{"type":"string","enum":["frame","group","rect","ellipse","polygon","line","text","path"]},"name":{"type":"string"},"x":{"type":"string"},"y":{"type":"string"},"width":{"type":"string"},"height":{"type":"string"},"fill_hex":{"type":"string"}},"required":["kind","name","x","y","width","height"]}}"#,
     r#"{"name":"update_node","description":"Patch fields on an existing node. Pass any subset of x/y/width/height/name/fill_hex.","inputSchema":{"type":"object","properties":{"node_id":{"type":"string"},"x":{"type":"string"},"y":{"type":"string"},"width":{"type":"string"},"height":{"type":"string"},"name":{"type":"string"},"fill_hex":{"type":"string"}},"required":["node_id"]}}"#,
@@ -453,7 +456,7 @@ mod tests {
     }
 
     #[test]
-    fn tools_list_response_includes_all_thirty_two_tools() {
+    fn tools_list_response_includes_all_thirty_three_tools() {
         let r = tools_list_response("3");
         // Exact-count assertion: any tool added without
         // updating this test will trip the count first. Codex
@@ -462,7 +465,7 @@ mod tests {
         // without being added to the list below.
         assert_eq!(
             TOOL_SCHEMAS.len(),
-            32,
+            33,
             "tools/list catalog count must match the registered tools — add the new tool to this test"
         );
         for name in [
@@ -483,6 +486,7 @@ mod tests {
             "rename_page",
             "delete_page",
             "duplicate_page",
+            "reorder_page",
             "set_variable_color",
             "set_active_axis_value",
             "insert_node",
