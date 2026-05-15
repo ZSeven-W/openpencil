@@ -83,6 +83,10 @@ pub struct NodePayload {
     pub font_weight: u16,
     #[serde(default)]
     pub text_wrap: bool,
+    /// Drop-shadow effects. `#[serde(default)]` so a legacy `.op`
+    /// saved before effects round-tripped still loads (empty vec).
+    #[serde(default)]
+    pub effects: Vec<crate::persistence_effects::ShadowPayload>,
     #[serde(default)]
     pub children: Vec<NodePayload>,
 }
@@ -137,6 +141,7 @@ fn node_to_payload(n: &Node) -> NodePayload {
         font_size: n.font_size,
         font_weight: n.font_weight,
         text_wrap: n.text_wrap,
+        effects: crate::persistence_effects::effects_to_payload(&n.effects),
         children: n.children.iter().map(node_to_payload).collect(),
     }
 }
@@ -306,6 +311,7 @@ fn payload_to_node(n: NodePayload) -> Node {
     node.font_size = n.font_size;
     node.font_weight = n.font_weight;
     node.text_wrap = n.text_wrap;
+    node.effects = crate::persistence_effects::effects_from_payload(n.effects);
     node
 }
 

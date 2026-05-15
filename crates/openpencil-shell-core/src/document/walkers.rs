@@ -549,6 +549,7 @@ pub(in crate::document) fn deep_clone_with_new_ids(node: &Node, next_id: &mut u6
         font_size: node.font_size,
         font_weight: node.font_weight,
         text_wrap: node.text_wrap,
+        effects: node.effects.clone(),
         children,
     }
 }

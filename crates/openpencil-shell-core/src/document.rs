@@ -85,6 +85,26 @@ pub struct Stroke {
     pub width: f32,
 }
 
+/// Drop-shadow effect — offset + blur + colour, doc-px units.
+/// Painted behind the node's fill. Mirrors the TS `PenEffect`
+/// shadow variant (`offsetX` / `offsetY` / `blur` / `color`);
+/// `spread` is omitted until the renderer honors it.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct DropShadow {
+    pub offset_x: f32,
+    pub offset_y: f32,
+    pub blur: f32,
+    pub color: crate::Color,
+}
+
+/// A visual effect on a node. v1 ships drop shadow (the common
+/// case + what the property panel's 效果 section needs); layer
+/// blur lands once its render path does.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Effect {
+    DropShadow(DropShadow),
+}
+
 /// Document tree node. `bounds = Rect::ZERO` for containers that
 /// derive size from children. `text` is populated for Text kind.
 #[derive(Debug, Clone)]
@@ -109,6 +129,9 @@ pub struct Node {
     pub font_size: f32,
     pub font_weight: u16,
     pub text_wrap: bool,
+    /// Visual effects (drop shadows) painted with the node. Empty
+    /// for most nodes; the property panel's 效果 section edits it.
+    pub effects: Vec<Effect>,
     pub children: Vec<Node>,
 }
 
@@ -132,6 +155,7 @@ impl Node {
             font_size: 0.0,
             font_weight: 0,
             text_wrap: false,
+            effects: Vec::new(),
             children: Vec::new(),
         }
     }
@@ -160,6 +184,7 @@ impl Node {
             font_size: 0.0,
             font_weight: 0,
             text_wrap: false,
+            effects: Vec::new(),
             children,
         }
     }
