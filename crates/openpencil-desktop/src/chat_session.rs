@@ -95,7 +95,9 @@ impl ChatSession {
         }
     }
 
-    /// True once the turn has fully completed.
+    /// True once the turn has fully completed. Test-only accessor —
+    /// the event-loop glue keys off `ChatPoll::finished` instead.
+    #[cfg(test)]
     pub fn finished(&self) -> bool {
         self.finished
     }

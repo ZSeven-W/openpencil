@@ -399,31 +399,43 @@ Every host close path clears its respective hover state so reopening starts un-h
 
 ### Tool catalog
 
-Twenty-one first-party tools registered today (v0.8.0+):
+**77 first-party tools** registered today (v0.8.0+). The
+authoritative list is `openpencil-desktop/src/mcp_serve.rs` —
+`TOOL_SCHEMAS` (JSON inputSchemas) plus the `rebuild_registry`
+`r.register(...)` calls, guarded by an exact-count assertion test
+(`tools_list_response_includes_all_seventy_seven_tools`).
 
-| Tool                    | Kind  | Args                                                                                               | Command emitted                | File                  |
-| ----------------------- | ----- | -------------------------------------------------------------------------------------------------- | ------------------------------ | --------------------- |
-| `get_document_info`     | read  | —                                                                                                  | —                              | `mcp/tools.rs`        |
-| `get_selection`         | read  | —                                                                                                  | —                              | `mcp/tools.rs`        |
-| `get_node`              | read  | `node_id`                                                                                          | —                              | `mcp/tools.rs`        |
-| `list_pages`            | read  | —                                                                                                  | —                              | `mcp/tools.rs`        |
-| `list_variables`        | read  | —                                                                                                  | —                              | `mcp/tools.rs`        |
-| `get_active_theme`      | read  | —                                                                                                  | —                              | `mcp/tools.rs`        |
-| `set_variable_color`    | write | `name`, `hex`                                                                                      | `SetVariableColor`             | `mcp/write_tools.rs`  |
-| `set_active_axis_value` | write | `axis`, `value`                                                                                    | `SetActiveAxisValue`           | `mcp/write_tools.rs`  |
-| `insert_node`           | write | `kind`, `name`, `x`/`y`/`width`/`height`, optional `fill_hex`                                      | `InsertNode`                   | `mcp/write_tools.rs`  |
-| `update_node`           | write | `node_id` + any of `x`/`y`/`width`/`height`/`name`/`fill_hex`                                      | `UpdateNode`                   | `mcp/write_tools.rs`  |
-| `delete_node`           | write | `node_id`                                                                                          | `DeleteNode`                   | `mcp/write_tools.rs`  |
-| `move_node`             | write | `node_id`, `target_parent_id` (0 = page root)                                                      | `MoveNode`                     | `mcp/write_tools.rs`  |
-| `copy_node`             | write | `node_id`, `target_parent_id` (0 = page root)                                                      | `CopyNode`                     | `mcp/write_tools.rs`  |
-| `replace_node`          | write | `node_id`, `kind`, `name`, `x`/`y`/`width`/`height`, optional `fill_hex`, optional `drop_children` | `ReplaceNode`                  | `mcp/write_tools.rs`  |
-| `batch_design`          | write | `nodes_json` (JSON array of `{kind,name,x,y,width,height,fill_hex?}`)                              | `BatchInsert`                  | `mcp/batch_design.rs` |
-| `set_variable_number`   | write | `name`, `value` (finite f64)                                                                       | `SetVariableScalar`            | `mcp/scalar_vars.rs`  |
-| `set_variable_string`   | write | `name`, `value` (free-form text)                                                                   | `SetVariableScalar`            | `mcp/scalar_vars.rs`  |
-| `set_variable_boolean`  | write | `name`, `value` (`"true"`/`"false"`)                                                               | `SetVariableScalar`            | `mcp/scalar_vars.rs`  |
-| `design_skeleton`       | write | `nodes_json` (same as batch_design)                                                                | `BatchInsert` (phase=skeleton) | `mcp/batch_design.rs` |
-| `design_content`        | write | `nodes_json` (same as batch_design)                                                                | `BatchInsert` (phase=content)  | `mcp/batch_design.rs` |
-| `design_refine`         | write | `nodes_json` (same as batch_design)                                                                | `BatchInsert` (phase=refine)   | `mcp/batch_design.rs` |
+By category:
+
+- **Read (17)** — `get_document_info` / `get_selection` / `get_node`
+  / `get_node_children` / `get_node_parent` / `list_pages` /
+  `list_variables` / `get_active_theme` / `list_components` /
+  `get_component` / `snapshot_layout` / `get_canvas_bounds` /
+  `find_node_by_name` / `count_nodes` / `list_node_kinds` /
+  `get_history_depth` / `get_viewport` / `get_selection_set`.
+  Each snapshots `Document` state at registration.
+- **Node write (insert/update/delete/move/copy/replace)** —
+  `mcp/write_tools.rs`.
+- **Per-node attribute writers** — `set_node_rotation` / `_text` /
+  `_corner_radius` / `_font_size` / `_font_weight` / `_stroke_hex` /
+  `_stroke_width` / `_fill_hex` / `_name` (`mcp/node_attr_tools.rs`).
+- **Selection / clipboard / canvas ops** — `set_selection` /
+  `set_selection_set` / `toggle_node_selection` / `clear_selection`
+  / `duplicate` / `delete` / `nudge` / `group` / `ungroup` /
+  `reorder` / `align_selected` / `copy_selected` / `cut_selected`
+  / `paste_clipboard` / `set_active_tool` / `set_viewport` /
+  `set_node_hidden|locked|collapsed` / `undo` / `redo`
+  (`mcp/selected_ops_tools.rs` + `mcp/component_tools.rs`).
+- **Pages + components** — `add_page` / `rename_page` /
+  `delete_page` / `duplicate_page` / `reorder_page` /
+  `set_active_page` / `instantiate_component` / `create_component`
+  / `delete_component` / `rename_component` (`mcp/component_tools.rs`).
+- **Variables + themes** — `set_variable_color|number|string|boolean`
+  / `create_variable` / `delete_variable` / `rename_variable` /
+  `set_active_axis_value` / `cycle_active_axis_value`
+  (`mcp/scalar_vars.rs` + `mcp/component_tools.rs`).
+- **Batch design** — `batch_design` / `design_skeleton` /
+  `design_content` / `design_refine` (`mcp/batch_design.rs`).
 
 Read tools snapshot `Document` state at registration time. Write tools stay `&self`: they validate args and return `ToolOutcome::OkWithCommand(result, command)` for the host to apply via `Document::apply_mcp_command(command)`. The apply path follows pre-validate-then-mutate discipline (id space, target existence, geometry, hex, container-children consent) so a bad arg never leaves the document half-mutated.
 
@@ -441,19 +453,19 @@ Read tools snapshot `Document` state at registration time. Write tools stay `&se
 ### File layout
 
 ```
-mcp.rs                       Spine: types + ToolRegistry + run_stdio* + JSON serializer
+mcp.rs                       Spine: types + ToolRegistry + run_stdio*
+mcp/json_serializer.rs       JSON-RPC wire serializer (response_to_json + helpers)
 mcp/parser.rs                Wire parse — tri-state arguments_field, top-level walker
-mcp/tools.rs                 Read tools (6)
-mcp/tools_tests.rs           Read-tool tests
-mcp/write_tools.rs           Core write tools (insert/update/delete/move/copy/replace + 2 var tools)
-mcp/write_tools_tests.rs     Write-tool tests (SetVariableColor / SetActiveAxisValue / Insert / Update / Delete / Move)
+mcp/tools.rs                 Core read tools
+mcp/extra_read_tools.rs      get_node_children (carved off tools.rs at the 800-cap)
+mcp/write_tools.rs           Core node write tools (insert/update/delete/move/copy/replace)
+mcp/node_attr_tools.rs       Per-node attribute writers (rotation/text/font/stroke/fill/name)
+mcp/selected_ops_tools.rs    Selection ops (dup/delete/nudge/group/align/clipboard) + tests
+mcp/component_tools.rs       Components + pages + selection/viewport/flag/tool/undo tools
 mcp/batch_design.rs          BatchDesign tool + hand-rolled nodes_json parser
-mcp/batch_design_tests.rs    BatchDesign + BatchInsert apply tests
-mcp/scalar_vars.rs           SetVariableNumber / SetVariableString / SetVariableBoolean
-mcp/scalar_vars_tests.rs     Scalar tools + Color-rejection regression
-mcp/copy_node_tests.rs       Sibling — CopyNode tests
-mcp/replace_node_tests.rs    Sibling — ReplaceNode tests (incl. destructive-swap guard)
-mcp_tests.rs (in crate root) Cross-cutting: stdio dispatch, parser invariants, wire-shape regression
+mcp/scalar_vars.rs           Scalar + Color variables + create/delete/rename_variable
+mcp/*_tests.rs               Per-module sibling test files (800-line cap convention)
+mcp_tests.rs (in crate root) Cross-cutting: stdio dispatch, parser invariants
 ```
 
 ### Host wiring
@@ -469,3 +481,32 @@ mcp_tests.rs (in crate root) Cross-cutting: stdio dispatch, parser invariants, w
 - A real JSON Node parser would unlock `replace_node`'s subtree path + grow batch_design / design_skeleton beyond leaf-only.
 - Per-phase apply semantics for the design\_\* workflow (e.g. design_refine emitting UpdateNode batches against existing nodes instead of fresh inserts).
 - HttpServer / streamable-http MCP transport (lifecycle scaffold exists in `chat_http_server.rs`; wire protocol unverified).
+
+## AI chat (real provider integration)
+
+The floating chat panel (`widgets/ai_chat_panel.rs`) is wired to
+real CLI agents, not a stub:
+
+- `ChatState::begin_send` (shell-core `document/chat.rs`) — the
+  native send path: pushes the user message + an empty assistant
+  bubble, raises `chat.pending_send`. The web shell keeps the
+  offline `send()` echo stub.
+- `ChatProvider` (shell-core `chat_provider.rs`) is the
+  transport-free trait; real impls live desktop-side:
+  `chat_runtime.rs` (`BuiltInProvider`, agent-rs), `chat_claude.rs`
+  (`ClaudeCodeProvider`, `anthropic-agent-sdk`), `chat_subprocess.rs`
+  (`SubprocessProvider` for Claude/Gemini/Copilot), `chat_copilot.rs`,
+  `chat_http_server.rs` (Codex/OpenCode — `for_cli` returns `None`,
+  protocol unverified upstream).
+- `chat_session.rs` — `ChatSession` runs a turn on a worker thread
+  (`ChatProvider::send` is a blocking iterator). `launch_if_pending`
+  drains `pending_send` → `provider_for_agent(chat_selected_agent)`;
+  `pump` streams deltas into the transcript each frame. The winit
+  loop wakes ~30 fps while a turn runs.
+- Model chip — the chat panel's bottom-left chip shows the selected
+  agent (`AgentProvider::name`); clicking it cycles
+  `ui.chat_selected_agent` through `agent_settings.connected` via
+  `Document::cycle_chat_agent` (`AIChatHit::CycleModel`).
+- Codex / OpenCode have no `ChatProvider` bridge yet — selecting
+  them writes an explicit `error: … not wired yet` into the
+  transcript rather than silently rerouting to another agent.
