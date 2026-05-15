@@ -335,6 +335,15 @@ pub struct UiState {
     pub locale: Locale,
     /// TopBar Globe dropdown open.
     pub locale_picker_open: bool,
+    /// AI chat model-picker dropdown open (the "Default ▴" chip in
+    /// the chat panel's bottom toolbar). Lists CLI agents that are
+    /// connected per `agent_settings.connected`.
+    pub chat_model_picker_open: bool,
+    /// Index into `AgentProvider::ALL` of the agent driving the AI
+    /// chat. Default 0 = Claude Code. The picker only *selects*
+    /// among connected agents, but the stored index is absolute so
+    /// it survives connect/disconnect churn.
+    pub chat_selected_agent: usize,
     /// File-menu dropdown anchored under folder+chevron.
     pub file_menu_open: bool,
     /// Row currently hovered while the file menu is open — drives
@@ -578,6 +587,8 @@ impl Default for UiState {
             theme_mode: ThemeMode::Dark,
             locale: Locale::ZhCn,
             locale_picker_open: false,
+            chat_model_picker_open: false,
+            chat_selected_agent: 0,
             file_menu_open: false,
             file_menu_hover: None,
             locale_picker_hover: None,

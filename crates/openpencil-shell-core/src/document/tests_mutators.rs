@@ -788,3 +788,28 @@ fn cut_selected_rolls_back_clipboard_when_delete_rejects() {
         "sentinel survives failed cut"
     );
 }
+
+#[test]
+fn cycle_chat_agent_walks_connected_then_wraps() {
+    let mut doc = Document::sample();
+    // Connect Claude Code (0) + GitHub Copilot (3) only.
+    doc.ui.agent_settings.connected = [true, false, false, true, false];
+    doc.ui.chat_selected_agent = 0;
+    // 0 → next connected is 3.
+    doc.cycle_chat_agent();
+    assert_eq!(doc.ui.chat_selected_agent, 3);
+    // 3 → wraps back to 0.
+    doc.cycle_chat_agent();
+    assert_eq!(doc.ui.chat_selected_agent, 0);
+}
+
+#[test]
+fn cycle_chat_agent_with_nothing_connected_walks_all_five() {
+    let mut doc = Document::sample();
+    doc.ui.agent_settings.connected = [false; 5];
+    doc.ui.chat_selected_agent = 0;
+    for expected in [1usize, 2, 3, 4, 0] {
+        doc.cycle_chat_agent();
+        assert_eq!(doc.ui.chat_selected_agent, expected);
+    }
+}

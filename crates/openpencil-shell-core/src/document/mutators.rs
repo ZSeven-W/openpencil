@@ -206,6 +206,24 @@ impl Document {
         self.ui.align_toolbar_hover = None;
     }
 
+    /// Advance the AI-chat agent selection to the next *connected*
+    /// CLI (`agent_settings.connected`, indexed like
+    /// `AgentProvider::ALL`). When no agent is connected the cycle
+    /// still walks all 5 entries so the user can pre-pick one and
+    /// connect it afterward in the settings modal. Wraps.
+    pub fn cycle_chat_agent(&mut self) {
+        let connected = self.ui.agent_settings.connected;
+        let any_connected = connected.iter().any(|&c| c);
+        let start = self.ui.chat_selected_agent;
+        for step in 1..=connected.len() {
+            let idx = (start + step) % connected.len();
+            if !any_connected || connected[idx] {
+                self.ui.chat_selected_agent = idx;
+                return;
+            }
+        }
+    }
+
     /// Whether `id` resolves to a node that can be mutated via
     /// selection-aware helpers (`translate_selected`,
     /// `set_selected_bounds`, etc.). Hidden + locked nodes are
