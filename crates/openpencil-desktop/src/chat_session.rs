@@ -121,6 +121,12 @@ pub fn launch_if_pending(
         // the assistant bubble instead of silently running a
         // different agent (codex stop-gate: silent reroute to
         // Claude misled the user about which CLI answered).
+        //
+        // Drop any in-flight session FIRST — otherwise the next
+        // `pump` keeps streaming the previous agent's deltas into
+        // this fresh error bubble (codex stop-gate: stale session
+        // overwrote the unwired-agent error text).
+        *current = None;
         let name = openpencil_shell_core::agent_settings_state::AgentProvider::ALL
             .get(agent_idx)
             .map(|a| a.name())
