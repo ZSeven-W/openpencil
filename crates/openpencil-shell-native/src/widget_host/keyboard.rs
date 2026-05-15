@@ -413,6 +413,10 @@ impl WidgetHostNative {
                         self.document.chat.collapsed = !self.document.chat.collapsed;
                         return true;
                     }
+                    AIChatHit::CycleModel => {
+                        self.document.cycle_chat_agent();
+                        return true;
+                    }
                 }
             }
         }

@@ -10,10 +10,14 @@
 use std::sync::mpsc::{self, Receiver, TryRecvError};
 use std::thread;
 
-use openpencil_shell_core::chat_provider::{ChatDelta, ChatProvider, ChatRequest};
+use openpencil_shell_core::chat_provider::{
+    ChatDelta, ChatProvider, ChatRequest, CliName,
+};
 use openpencil_shell_native::WidgetHostNative;
 
 use crate::chat_claude::ClaudeCodeProvider;
+use crate::chat_copilot::CopilotProvider;
+use crate::chat_subprocess::SubprocessProvider;
 
 /// One in-flight chat turn. The worker thread owns the provider and
 /// drains `provider.send()` into the channel; [`poll`] consumes
@@ -110,7 +114,7 @@ pub fn launch_if_pending(
     let Some(user_text) = host.document_mut().chat.pending_send.take() else {
         return false;
     };
-    let provider: Box<dyn ChatProvider> = Box::new(ClaudeCodeProvider::new());
+    let provider = provider_for_agent(host.document().ui.chat_selected_agent);
     let req = ChatRequest {
         system_prompt: String::new(),
         user_message: user_text,
@@ -118,6 +122,23 @@ pub fn launch_if_pending(
     };
     *current = Some(ChatSession::start(provider, req));
     true
+}
+
+/// Build the `ChatProvider` for an agent index (into
+/// `AgentProvider::ALL`: 0 ClaudeCode, 1 CodexCli, 2 OpenCode,
+/// 3 GithubCopilot, 4 GeminiCli). Claude Code uses its dedicated
+/// SDK adapter; Copilot / Gemini use the subprocess transport.
+/// Codex + OpenCode are HTTP-server CLIs whose `ChatProvider`
+/// bridge isn't wired yet — they fall back to Claude Code so the
+/// chat still functions rather than dead-ending.
+fn provider_for_agent(agent_idx: usize) -> Box<dyn ChatProvider> {
+    match agent_idx {
+        3 => Box::new(CopilotProvider::new()),
+        4 => SubprocessProvider::for_cli(CliName::Gemini)
+            .map(|p| Box::new(p) as Box<dyn ChatProvider>)
+            .unwrap_or_else(|| Box::new(ClaudeCodeProvider::new())),
+        _ => Box::new(ClaudeCodeProvider::new()),
+    }
 }
 
 /// Pump the in-flight turn's deltas into the trailing (assistant)

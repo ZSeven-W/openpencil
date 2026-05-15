@@ -34,6 +34,9 @@ const INPUT_AREA_HEIGHT: f32 = 56.0;
 /// Toolbar below the textarea — model picker on left, attach +
 /// send on right. Mirrors the TS panel's bottom row.
 const INPUT_TOOLBAR_HEIGHT: f32 = 40.0;
+/// Click-width of the bottom-toolbar model chip (sparkles + agent
+/// name + chevron). Fixed so hit-test needs no text measurement.
+const MODEL_CHIP_W: f32 = 150.0;
 /// Total reserved space for the input + toolbar block.
 const INPUT_HEIGHT: f32 = INPUT_AREA_HEIGHT + INPUT_TOOLBAR_HEIGHT;
 
@@ -83,6 +86,10 @@ pub enum AIChatHit {
     /// Click on the chevron at the top-left of the header — host
     /// flips the `ChatState::collapsed` flag.
     ToggleCollapse,
+    /// Click on the model chip (bottom-left of the input toolbar) —
+    /// host advances `chat_selected_agent` to the next connected
+    /// CLI agent (`Document::cycle_chat_agent`).
+    CycleModel,
 }
 
 pub struct AIChatPlaceholder<'a> {
@@ -104,9 +111,11 @@ pub struct AIChatPlaceholder<'a> {
     /// the empty-state body, between the example cards and the
     /// separator above the input.
     pub label_tip_select_elements: String,
-    /// Localised "Default" model label — appears in the bottom
-    /// toolbar's model picker.
-    pub label_default_model: String,
+    /// Name of the AI-chat agent shown in the bottom toolbar's
+    /// model chip — the connected CLI selected via `chat_selected_agent`
+    /// (`AgentProvider::label`). Falls back to "Default" only when
+    /// the stored index is somehow out of range.
+    pub model_label: String,
 }
 
 impl<'a> AIChatPlaceholder<'a> {
@@ -126,7 +135,10 @@ impl<'a> AIChatPlaceholder<'a> {
             label_start_with_ai: doc.t("ai.tryExample").to_string(),
             label_input_placeholder: doc.t("ai.designWithAgent").to_string(),
             label_tip_select_elements: doc.t("ai.tipSelectElements").to_string(),
-            label_default_model: "Default".to_string(),
+            model_label: crate::agent_settings_state::AgentProvider::ALL
+                .get(doc.ui.chat_selected_agent)
+                .map(|a| a.name().to_string())
+                .unwrap_or_else(|| "Default".to_string()),
         }
     }
 
@@ -158,6 +170,15 @@ impl<'a> AIChatPlaceholder<'a> {
             size: Point2D::new(rect.size.x - PAD * 2.0, INPUT_HEIGHT),
         };
         if rect_contains(input_rect, point) {
+            // Bottom toolbar strip = the lower `INPUT_TOOLBAR_HEIGHT`
+            // of the input box; its left `MODEL_CHIP_W` is the model
+            // chip (advances the connected-CLI selection on click).
+            let toolbar_top = input_rect.origin.y + INPUT_AREA_HEIGHT;
+            if point.y >= toolbar_top
+                && point.x <= input_rect.origin.x + MODEL_CHIP_W
+            {
+                return Some(AIChatHit::CycleModel);
+            }
             // Send chip is the rightmost ~40px of the input area.
             let send_x = input_rect.origin.x + input_rect.size.x - 40.0;
             if point.x >= send_x {
@@ -381,7 +402,7 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
         );
         model_x += 20.0;
         let model_label = TextLayout::single_run(
-            &self.label_default_model,
+            &self.model_label,
             "system-ui",
             12.0,
             to_jian_color(self.theme.muted_foreground),
@@ -389,7 +410,7 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
         );
         cx.backend
             .draw_text(&model_label, Point2D::new(model_x, toolbar_center_y + 4.0));
-        let model_w = cx.backend.measure_text(&self.label_default_model, 12.0);
+        let model_w = cx.backend.measure_text(&self.model_label, 12.0);
         model_x += model_w + 4.0;
         draw_icon(
             cx.backend,
