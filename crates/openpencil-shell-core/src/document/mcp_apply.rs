@@ -10,7 +10,10 @@ use super::{Document, Node, NodeId, NodeKind};
 /// when the id doesn't resolve. The walk uses raw recursion rather
 /// than the existing `Document::find` because that returns `&Node`,
 /// not `&mut Node`.
-fn find_node_mut_in_doc(doc: &mut Document, target: NodeId) -> Option<&mut Node> {
+pub(super) fn find_node_mut_in_doc(
+    doc: &mut Document,
+    target: NodeId,
+) -> Option<&mut Node> {
     for page in doc.pages.iter_mut() {
         if let Some(node) = find_in_subtree(&mut page.children, target) {
             return Some(node);
@@ -53,7 +56,7 @@ fn remove_in_subtree(children: &mut Vec<Node>, target: NodeId) -> bool {
 /// Immutable lookup for a node anywhere in the document. Used by
 /// the move cycle-check (which needs to walk a subtree without
 /// holding a mutable borrow on it).
-fn find_node_in_doc(doc: &Document, target: NodeId) -> Option<&Node> {
+pub(super) fn find_node_in_doc(doc: &Document, target: NodeId) -> Option<&Node> {
     for page in doc.pages.iter() {
         if let Some(node) = find_in_subtree_ref(&page.children, target) {
             return Some(node);
@@ -522,6 +525,111 @@ impl Document {
             crate::mcp::McpCommand::ReorderPage { from, to } => {
                 self.reorder_page(*from as usize, *to as usize)
             }
+            crate::mcp::McpCommand::ClearSelection => {
+                self.clear_selection();
+                true
+            }
+            crate::mcp::McpCommand::SetSelection { node_id } => {
+                super::mcp_apply_selected::apply_set_selection(self, *node_id)
+            }
+            crate::mcp::McpCommand::SetSelectionSet { node_ids } => {
+                super::mcp_apply_selected::apply_set_selection_set(self, node_ids)
+            }
+            crate::mcp::McpCommand::ToggleNodeSelection { node_id } => {
+                super::mcp_apply_selected::apply_toggle_node_selection(self, *node_id)
+            }
+            crate::mcp::McpCommand::CopySelected => {
+                super::mcp_apply_selected::apply_copy_selected(self)
+            }
+            crate::mcp::McpCommand::CutSelected => {
+                super::mcp_apply_selected::apply_cut_selected(self)
+            }
+            crate::mcp::McpCommand::PasteClipboard { offset_px } => {
+                super::mcp_apply_selected::apply_paste_clipboard(self, *offset_px)
+            }
+            crate::mcp::McpCommand::Undo => self.undo(),
+            crate::mcp::McpCommand::Redo => self.redo(),
+            crate::mcp::McpCommand::DuplicateSelected { offset_px } => {
+                super::mcp_apply_selected::apply_duplicate_selected(self, *offset_px)
+            }
+            crate::mcp::McpCommand::DeleteSelected => {
+                super::mcp_apply_selected::apply_delete_selected(self)
+            }
+            crate::mcp::McpCommand::NudgeSelected { dx, dy } => {
+                super::mcp_apply_selected::apply_nudge_selected(self, *dx, *dy)
+            }
+            crate::mcp::McpCommand::GroupSelected => {
+                super::mcp_apply_selected::apply_group_selected(self)
+            }
+            crate::mcp::McpCommand::UngroupSelected => {
+                super::mcp_apply_selected::apply_ungroup_selected(self)
+            }
+            crate::mcp::McpCommand::SetNodeFontSize { node_id, font_size } => {
+                super::mcp_apply_node_attrs::apply_set_node_font_size(
+                    self, *node_id, *font_size,
+                )
+            }
+            crate::mcp::McpCommand::SetNodeFontWeight {
+                node_id,
+                font_weight,
+            } => super::mcp_apply_node_attrs::apply_set_node_font_weight(
+                self,
+                *node_id,
+                *font_weight,
+            ),
+            crate::mcp::McpCommand::SetNodeStrokeHex { node_id, hex } => {
+                super::mcp_apply_node_attrs::apply_set_node_stroke_hex(self, *node_id, hex)
+            }
+            crate::mcp::McpCommand::SetNodeFillHex { node_id, hex } => {
+                super::mcp_apply_node_attrs::apply_set_node_fill_hex(self, *node_id, hex)
+            }
+            crate::mcp::McpCommand::SetNodeName { node_id, name } => {
+                super::mcp_apply_node_attrs::apply_set_node_name(self, *node_id, name)
+            }
+            crate::mcp::McpCommand::AlignSelected { action } => {
+                super::mcp_apply_node_attrs::apply_align_selected(self, action)
+            }
+            crate::mcp::McpCommand::SetNodeStrokeWidth { node_id, width } => {
+                super::mcp_apply_node_attrs::apply_set_node_stroke_width(
+                    self, *node_id, *width,
+                )
+            }
+            crate::mcp::McpCommand::SetNodeCornerRadius { node_id, radius } => {
+                super::mcp_apply_node_attrs::apply_set_node_corner_radius(
+                    self, *node_id, *radius,
+                )
+            }
+            crate::mcp::McpCommand::SetNodeText { node_id, text } => {
+                super::mcp_apply_node_attrs::apply_set_node_text(self, *node_id, text)
+            }
+            crate::mcp::McpCommand::SetNodeRotation { node_id, degrees } => {
+                super::mcp_apply_node_attrs::apply_set_node_rotation(
+                    self, *node_id, *degrees,
+                )
+            }
+            crate::mcp::McpCommand::ReorderSelected { direction } => {
+                super::mcp_apply_selected::apply_reorder_selected(self, direction)
+            }
+            crate::mcp::McpCommand::SetActiveTool { tool } => {
+                super::mcp_apply_selected::apply_set_active_tool(self, tool)
+            }
+            crate::mcp::McpCommand::SetNodeFlag {
+                node_id,
+                flag,
+                value,
+            } => super::mcp_apply_selected::apply_set_node_flag(
+                self, *node_id, *flag, *value,
+            ),
+            crate::mcp::McpCommand::SetViewport {
+                pan_x,
+                pan_y,
+                zoom_percent,
+            } => super::mcp_apply_selected::apply_set_viewport(
+                self,
+                *pan_x,
+                *pan_y,
+                *zoom_percent,
+            ),
             crate::mcp::McpCommand::BatchInsert { items } => {
                 // Validate EVERY descriptor before any mutation.
                 // A single bad entry rejects the entire batch so
@@ -608,7 +716,7 @@ impl Document {
     /// `u64::MAX` — a saturating add would wrap back to the live
     /// id and silently overwrite it (codex stop-gate). Callers
     /// surface the None as an apply-time failure.
-    fn next_node_id_seed(&self) -> Option<u64> {
+    pub(super) fn next_node_id_seed(&self) -> Option<u64> {
         let max = self.max_node_id();
         max.checked_add(1).map(|n| n.max(1))
     }

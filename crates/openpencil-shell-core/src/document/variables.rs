@@ -187,6 +187,27 @@ impl VariableTable {
                 self.active_theme.insert(axis.clone(), value.clone());
                 true
             }
+            crate::mcp::McpCommand::CycleActiveAxisValue { axis } => {
+                self.cycle_active_axis_value(axis)
+            }
+            crate::mcp::McpCommand::CreateVariable {
+                name,
+                kind,
+                default_value,
+            } => {
+                let Some((parsed_kind, default)) =
+                    parse_variable_kind_and_default(kind, default_value)
+                else {
+                    return false;
+                };
+                self.create_variable(name, parsed_kind, default)
+            }
+            crate::mcp::McpCommand::DeleteVariable { name } => {
+                self.delete_variable(name)
+            }
+            crate::mcp::McpCommand::RenameVariable { old_name, new_name } => {
+                self.rename_variable(old_name, new_name)
+            }
             crate::mcp::McpCommand::InsertNode { .. }
             | crate::mcp::McpCommand::UpdateNode { .. }
             | crate::mcp::McpCommand::DeleteNode { .. }
@@ -203,7 +224,35 @@ impl VariableTable {
             | crate::mcp::McpCommand::RenamePage { .. }
             | crate::mcp::McpCommand::DeletePage { .. }
             | crate::mcp::McpCommand::DuplicatePage { .. }
-            | crate::mcp::McpCommand::ReorderPage { .. } => {
+            | crate::mcp::McpCommand::ReorderPage { .. }
+            | crate::mcp::McpCommand::ClearSelection
+            | crate::mcp::McpCommand::SetSelection { .. }
+            | crate::mcp::McpCommand::SetViewport { .. }
+            | crate::mcp::McpCommand::SetNodeFlag { .. }
+            | crate::mcp::McpCommand::SetActiveTool { .. }
+            | crate::mcp::McpCommand::Undo
+            | crate::mcp::McpCommand::Redo
+            | crate::mcp::McpCommand::DuplicateSelected { .. }
+            | crate::mcp::McpCommand::DeleteSelected
+            | crate::mcp::McpCommand::NudgeSelected { .. }
+            | crate::mcp::McpCommand::GroupSelected
+            | crate::mcp::McpCommand::UngroupSelected
+            | crate::mcp::McpCommand::ReorderSelected { .. }
+            | crate::mcp::McpCommand::SetNodeRotation { .. }
+            | crate::mcp::McpCommand::SetNodeText { .. }
+            | crate::mcp::McpCommand::SetNodeCornerRadius { .. }
+            | crate::mcp::McpCommand::SetNodeFontSize { .. }
+            | crate::mcp::McpCommand::SetNodeFontWeight { .. }
+            | crate::mcp::McpCommand::SetNodeStrokeHex { .. }
+            | crate::mcp::McpCommand::SetNodeStrokeWidth { .. }
+            | crate::mcp::McpCommand::SetNodeFillHex { .. }
+            | crate::mcp::McpCommand::SetNodeName { .. }
+            | crate::mcp::McpCommand::AlignSelected { .. }
+            | crate::mcp::McpCommand::SetSelectionSet { .. }
+            | crate::mcp::McpCommand::ToggleNodeSelection { .. }
+            | crate::mcp::McpCommand::CopySelected
+            | crate::mcp::McpCommand::CutSelected
+            | crate::mcp::McpCommand::PasteClipboard { .. } => {
                 // Not VariableTable mutations — Pages-level commands
                 // live on `Document::apply_mcp_command`. Return false
                 // so callers with only a VariableTable handle know
@@ -437,6 +486,135 @@ impl VariableTable {
                 true
             }
         }
+    }
+
+    /// Create a new theme-agnostic scalar variable. Rejects an
+    /// empty (post-trim) name or a name that collides with an
+    /// existing variable. `default` must match `kind`: a Color
+    /// variable takes a `Str` holding a parseable hex; Number /
+    /// String / Boolean take the matching scalar variant.
+    /// Mirrors the TS Variables panel "+ Add" action.
+    pub fn create_variable(
+        &mut self,
+        name: &str,
+        kind: VariableKind,
+        default: VariableScalar,
+    ) -> bool {
+        let trimmed = name.trim();
+        if trimmed.is_empty() {
+            return false;
+        }
+        if self.variables.iter().any(|v| v.name == trimmed) {
+            return false;
+        }
+        let kind_ok = match (&kind, &default) {
+            // Color variables persist as a hex string; validate it
+            // up front so a freshly-created token always resolves.
+            (VariableKind::Color, VariableScalar::Str(s)) => {
+                parse_hex_color(s).is_some()
+            }
+            (VariableKind::Number, VariableScalar::Num(_)) => true,
+            (VariableKind::String, VariableScalar::Str(_)) => true,
+            (VariableKind::Boolean, VariableScalar::Bool(_)) => true,
+            _ => false,
+        };
+        if !kind_ok {
+            return false;
+        }
+        self.variables.push(Variable {
+            name: trimmed.to_string(),
+            kind,
+            value: VariableValue::Scalar(default),
+        });
+        true
+    }
+
+    /// Delete a variable by name. Also drops any `fill_refs` /
+    /// `stroke_refs` pointing at it so paint doesn't keep
+    /// resolving a now-dangling `$ref`. Returns false when the
+    /// name doesn't resolve.
+    pub fn delete_variable(&mut self, name: &str) -> bool {
+        let Some(idx) = self.variables.iter().position(|v| v.name == name) else {
+            return false;
+        };
+        self.variables.remove(idx);
+        self.fill_refs.retain(|_, v| v != name);
+        self.stroke_refs.retain(|_, v| v != name);
+        true
+    }
+
+    /// Rename a variable. Rejects an unknown `old` name, an empty
+    /// (post-trim) `new` name, or a `new` name that collides with
+    /// a different existing variable. Rewrites every `fill_refs` /
+    /// `stroke_refs` entry so node `$ref`s follow the rename.
+    /// `old == new` (after trim) is a no-op success.
+    pub fn rename_variable(&mut self, old: &str, new: &str) -> bool {
+        let new_trimmed = new.trim();
+        if new_trimmed.is_empty() {
+            return false;
+        }
+        if old == new_trimmed {
+            return self.variables.iter().any(|v| v.name == old);
+        }
+        if self.variables.iter().any(|v| v.name == new_trimmed) {
+            return false;
+        }
+        let Some(var) = self.variables.iter_mut().find(|v| v.name == old) else {
+            return false;
+        };
+        var.name = new_trimmed.to_string();
+        for v in self.fill_refs.values_mut() {
+            if v == old {
+                *v = new_trimmed.to_string();
+            }
+        }
+        for v in self.stroke_refs.values_mut() {
+            if v == old {
+                *v = new_trimmed.to_string();
+            }
+        }
+        true
+    }
+}
+
+/// Parse an MCP `create_variable` `kind` string + raw default
+/// value into a `(VariableKind, VariableScalar)` pair. Returns
+/// None on an unknown kind or a default that doesn't parse for
+/// that kind. Color defaults are kept as the raw hex `Str` (the
+/// `create_variable` mutator re-validates the hex).
+pub(super) fn parse_variable_kind_and_default(
+    kind: &str,
+    default_value: &str,
+) -> Option<(VariableKind, VariableScalar)> {
+    match kind {
+        "color" => {
+            // Validate here so a bad hex fails the whole parse.
+            parse_hex_color(default_value)?;
+            Some((
+                VariableKind::Color,
+                VariableScalar::Str(default_value.to_string()),
+            ))
+        }
+        "number" => {
+            let n: f64 = default_value.parse().ok()?;
+            if !n.is_finite() {
+                return None;
+            }
+            Some((VariableKind::Number, VariableScalar::Num(n)))
+        }
+        "boolean" => {
+            let b = match default_value {
+                "true" => true,
+                "false" => false,
+                _ => return None,
+            };
+            Some((VariableKind::Boolean, VariableScalar::Bool(b)))
+        }
+        "string" => Some((
+            VariableKind::String,
+            VariableScalar::Str(default_value.to_string()),
+        )),
+        _ => None,
     }
 }
 

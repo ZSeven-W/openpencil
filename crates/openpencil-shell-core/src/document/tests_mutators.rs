@@ -762,3 +762,29 @@ fn set_selected_fill_type_respects_locked_and_hidden() {
         FillType::Solid
     );
 }
+
+#[test]
+fn cut_selected_rolls_back_clipboard_when_delete_rejects() {
+    // Codex stop-gate: cut atomicity belongs at the mutator
+    // layer, not just at the MCP applier. Direct
+    // `Document::cut_selected` callers must observe the same
+    // clipboard-untouched-on-failure contract.
+    let mut doc = Document::sample();
+    let target = NodeId::new(10); // Frame
+    // Lock the whole subtree so delete_selected rejects.
+    if let Some(page) = doc.pages.get_mut(0) {
+        for child in page.children.iter_mut() {
+            child.locked = true;
+        }
+    }
+    doc.set_single_selection(target);
+    // Pre-stash a sentinel in the clipboard.
+    let sentinel = Node::leaf(900, NodeKind::Rect, "sentinel");
+    doc.clipboard = vec![sentinel.clone()];
+    assert!(!doc.cut_selected(), "cut must reject locked subtree");
+    assert_eq!(doc.clipboard.len(), 1, "clipboard size preserved");
+    assert_eq!(
+        doc.clipboard[0].id, sentinel.id,
+        "sentinel survives failed cut"
+    );
+}

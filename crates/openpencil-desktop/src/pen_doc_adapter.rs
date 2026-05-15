@@ -77,6 +77,10 @@ pub fn pen_document_to_payload(doc: &PenDocument) -> LoadedDoc {
             version: 1,
             active_page_index: 0,
             pages,
+            // Canonical-schema variables are harvested separately
+            // by `build_var_table` and assigned after apply_payload;
+            // this private-payload field stays empty for that path.
+            var_table: crate::persistence_variables::VarTablePayload::default(),
         },
     }
 }

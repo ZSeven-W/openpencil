@@ -255,75 +255,10 @@ impl Document {
         toggle_locked_walk(&mut page.children, id)
     }
 
-    /// Cmd+C: deep-clone selected nodes (ids preserved) into the
-    /// clipboard. True iff anything was copied.
-    pub fn copy_selected(&mut self) -> bool {
-        if self.selected_set.is_empty() {
-            return false;
-        }
-        let Some(page) = self.active_page() else {
-            return false;
-        };
-        let mut buf: Vec<Node> = Vec::with_capacity(self.selected_set.len());
-        for id in &self.selected_set {
-            if let Some(node) = page.find(*id) {
-                buf.push(node.clone());
-            }
-        }
-        if buf.is_empty() {
-            return false;
-        }
-        self.clipboard = buf;
-        true
-    }
-
-    /// Copy the selection into the clipboard then delete it.
-    /// Returns true when both steps succeeded. Mirrors TS `Cmd+X`.
-    pub fn cut_selected(&mut self) -> bool {
-        if !self.copy_selected() {
-            return false;
-        }
-        self.delete_selected()
-    }
-
-    /// Paste clipboard nodes into the active page as top-level
-    /// siblings offset by `offset_doc_px`. Mints fresh ids from
-    /// `next_id`; replaces selection with the new ids. Returns
-    /// the new ids in paste order, or empty on no-op (empty
-    /// clipboard or id-allocator overflow). Mirrors TS `Cmd+V`.
-    pub fn paste_clipboard(&mut self, next_id: &mut u64, offset_doc_px: f32) -> Vec<NodeId> {
-        if self.clipboard.is_empty() {
-            return Vec::new();
-        }
-        let Some(safe) = self.max_node_id().checked_add(1) else {
-            return Vec::new();
-        };
-        *next_id = (*next_id).max(safe);
-        // Verify total subtree headroom before any mint so a
-        // partially-pasted document is impossible on overflow.
-        let total: u64 = self.clipboard.iter().map(subtree_size).sum();
-        if next_id.checked_add(total).is_none() {
-            return Vec::new();
-        }
-        // Clone clipboard out so `pages.get_mut` doesn't alias
-        // `self.clipboard`.
-        let originals = self.clipboard.clone();
-        let Some(page) = self.pages.get_mut(self.active_page_index) else {
-            return Vec::new();
-        };
-        let mut new_ids: Vec<NodeId> = Vec::with_capacity(originals.len());
-        for original in &originals {
-            let mut clone = deep_clone_with_new_ids(original, next_id);
-            shift_subtree(&mut clone, offset_doc_px, offset_doc_px);
-            new_ids.push(clone.id);
-            page.children.push(clone);
-        }
-        if !new_ids.is_empty() {
-            self.selected = *new_ids.last().unwrap();
-            self.selected_set = new_ids.clone();
-        }
-        new_ids
-    }
+    // Cmd+C / Cmd+X / Cmd+V mutators (`copy_selected`,
+    // `cut_selected`, `paste_clipboard`) live in
+    // `document/clipboard.rs` — carved out to keep this file under
+    // the 800-line cap as the cut atomicity guard grew.
 
     /// Top-level node ids on the active page whose aggregate
     /// bounds intersect `rect` (doc space). Used by the marquee
