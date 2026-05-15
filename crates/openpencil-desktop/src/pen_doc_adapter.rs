@@ -341,12 +341,18 @@ fn shadows_from_canonical(
     effects
         .iter()
         .filter_map(|e| match e {
+            // Drop the shadow when its colour doesn't parse rather
+            // than fabricating opaque black — an `rgba()` / named /
+            // short-hex colour would otherwise import as a wrong
+            // solid-black shadow (codex stop-gate).
             PenEffect::Shadow(s) => {
-                Some(crate::persistence_effects::ShadowPayload {
-                    offset_x: s.offset_x,
-                    offset_y: s.offset_y,
-                    blur: s.blur,
-                    color: parse_hex(&s.color).unwrap_or([0.0, 0.0, 0.0, 1.0]),
+                parse_hex(&s.color).map(|color| {
+                    crate::persistence_effects::ShadowPayload {
+                        offset_x: s.offset_x,
+                        offset_y: s.offset_y,
+                        blur: s.blur,
+                        color,
+                    }
                 })
             }
             PenEffect::Blur(_) | PenEffect::BackgroundBlur(_) => None,
