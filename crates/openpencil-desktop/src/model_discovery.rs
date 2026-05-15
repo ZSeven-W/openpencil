@@ -17,9 +17,11 @@
 //! with the platform's executable extensions, and cache paths go
 //! through `dirs::home_dir`.
 
+use std::io::{BufRead, BufReader, Write};
 use std::path::PathBuf;
-use std::process::Command;
+use std::process::{Command, Stdio};
 use std::sync::mpsc::{self, Receiver, TryRecvError};
+use std::time::{Duration, Instant};
 
 use openpencil_shell_core::agent_settings_state::AgentProvider;
 use openpencil_shell_core::chat_models::ModelEntry;
@@ -119,24 +121,112 @@ fn discover_claude() -> Vec<ModelEntry> {
     .collect()
 }
 
-/// Codex CLI — reads the real model list from
-/// `<home>/.codex/models_cache.json`, which the Codex CLI refreshes
-/// itself. The cache may be absent on a fresh install (Codex writes
-/// it on first use); in that case we fall back to the single known
-/// default so the provider still appears once `codex` is on `PATH`.
+/// How long to wait for `codex app-server` to answer `model/list`.
+/// The server refreshes its model list on demand (a few seconds),
+/// so the budget is generous; discovery runs off the UI thread.
+const CODEX_APP_SERVER_TIMEOUT: Duration = Duration::from_secs(12);
+
+/// Codex CLI — query models via the official App Server protocol
+/// first (most accurate + stable), then the on-disk cache, then a
+/// minimal placeholder so the provider is still selectable when
+/// `codex` is installed but neither source answered.
 fn discover_codex() -> Vec<ModelEntry> {
+    if let Some(models) = codex_models_from_app_server() {
+        if !models.is_empty() {
+            return models;
+        }
+    }
     if let Some(models) = codex_models_from_cache() {
         if !models.is_empty() {
             return models;
         }
     }
     if resolve_cli("codex").is_some() {
-        // Cache not yet populated — minimal placeholder so the
-        // provider is selectable; replaced once Codex writes its
-        // cache after first use.
         return vec![ModelEntry::new(AgentProvider::CodexCli, "gpt-5.5", "GPT-5.5")];
     }
     Vec::new()
+}
+
+/// Query Codex models through the official App Server protocol —
+/// spawn `codex app-server` and drive JSON-RPC over stdio:
+/// `initialize` → `initialized` → `model/list`. Returns `None` on
+/// any failure (CLI missing, spawn error, timeout) so the caller
+/// falls back to the on-disk cache.
+fn codex_models_from_app_server() -> Option<Vec<ModelEntry>> {
+    let exe = resolve_cli("codex")?;
+    let mut child = Command::new(exe)
+        .arg("app-server")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .ok()?;
+    let mut stdin = child.stdin.take()?;
+    let stdout = child.stdout.take()?;
+
+    // Child has no timed read — a reader thread funnels stdout
+    // lines through a channel so the main path can apply a
+    // deadline and walk away from a hung server.
+    let (tx, rx) = mpsc::channel();
+    std::thread::spawn(move || {
+        for line in BufReader::new(stdout).lines().map_while(Result::ok) {
+            if tx.send(line).is_err() {
+                break;
+            }
+        }
+    });
+
+    // `initialize` (id 1) → `initialized` notification →
+    // `model/list` (id 2). stdin is held open until the response
+    // lands so the server doesn't shut down mid-refresh.
+    let init = r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"clientInfo":{"name":"openpencil","version":"0.8.0"},"capabilities":{"experimentalApi":true}}}"#;
+    let initialized = r#"{"jsonrpc":"2.0","method":"initialized"}"#;
+    let list = r#"{"jsonrpc":"2.0","id":2,"method":"model/list","params":{}}"#;
+    writeln!(stdin, "{init}").ok()?;
+    writeln!(stdin, "{initialized}").ok()?;
+    writeln!(stdin, "{list}").ok()?;
+    stdin.flush().ok();
+
+    let deadline = Instant::now() + CODEX_APP_SERVER_TIMEOUT;
+    let mut models = None;
+    while let Some(remaining) = deadline.checked_duration_since(Instant::now()) {
+        match rx.recv_timeout(remaining) {
+            Ok(line) => {
+                if let Some(parsed) = parse_codex_model_list(&line) {
+                    models = Some(parsed);
+                    break;
+                }
+            }
+            // Timeout or the reader thread closed — give up.
+            Err(_) => break,
+        }
+    }
+    let _ = child.kill();
+    let _ = child.wait();
+    models
+}
+
+/// Parse one JSON-RPC line from `codex app-server`; yields the
+/// model list only for the `id:2` (`model/list`) response, `None`
+/// for the `initialize` reply / interleaved notifications.
+fn parse_codex_model_list(line: &str) -> Option<Vec<ModelEntry>> {
+    let json: serde_json::Value = serde_json::from_str(line).ok()?;
+    if json.get("id")?.as_i64()? != 2 {
+        return None;
+    }
+    let data = json.get("result")?.get("data")?.as_array()?;
+    Some(
+        data.iter()
+            .filter_map(|m| {
+                let value = m.get("model").or_else(|| m.get("id"))?.as_str()?;
+                let name = m
+                    .get("displayName")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or(value);
+                Some(ModelEntry::new(AgentProvider::CodexCli, value, name))
+            })
+            .collect(),
+    )
 }
 
 fn codex_models_from_cache() -> Option<Vec<ModelEntry>> {
@@ -243,6 +333,28 @@ mod tests {
         // Missing display_name falls back to the slug.
         assert_eq!(parsed[1].value, "gpt-5.5-codex");
         assert_eq!(parsed[1].display_name, "gpt-5.5-codex");
+    }
+
+    #[test]
+    fn app_server_response_parser_picks_id2_and_skips_others() {
+        // initialize reply (id 1) — not the model list.
+        assert!(parse_codex_model_list(r#"{"id":1,"result":{"codexHome":"x"}}"#).is_none());
+        // interleaved notification — no id.
+        assert!(
+            parse_codex_model_list(r#"{"method":"remoteControl/status/changed"}"#).is_none()
+        );
+        // the model/list response (id 2).
+        let models = parse_codex_model_list(
+            r#"{"id":2,"result":{"data":[
+                {"id":"gpt-5.5","model":"gpt-5.5","displayName":"GPT-5.5"},
+                {"id":"gpt-5.4","model":"gpt-5.4"}
+            ]}}"#,
+        )
+        .expect("id:2 parses");
+        assert_eq!(models.len(), 2);
+        assert_eq!(models[0].display_name, "GPT-5.5");
+        // Missing displayName falls back to the model value.
+        assert_eq!(models[1].display_name, "gpt-5.4");
     }
 
     #[test]
