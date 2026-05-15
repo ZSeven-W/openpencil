@@ -315,11 +315,13 @@ fn copilot_models_from_stdio() -> Option<Vec<ModelEntry>> {
 
     // `connect` (id 1) establishes the session; `models.list`
     // (id 2) needs no params when the server runs without a
-    // connection token (we spawned it ourselves).
+    // connection token (we spawned it ourselves). Both go out as
+    // `Content-Length`-framed frames — the wire framing the
+    // official copilot-sdk writes on `copilot --stdio`.
     let connect = r#"{"jsonrpc":"2.0","id":1,"method":"connect","params":{}}"#;
     let list = r#"{"jsonrpc":"2.0","id":2,"method":"models.list","params":{}}"#;
-    writeln!(stdin, "{connect}").ok()?;
-    writeln!(stdin, "{list}").ok()?;
+    write_lsp_frame(&mut stdin, connect).ok()?;
+    write_lsp_frame(&mut stdin, list).ok()?;
     stdin.flush().ok();
 
     let deadline = Instant::now() + COPILOT_STDIO_TIMEOUT;
@@ -338,6 +340,15 @@ fn copilot_models_from_stdio() -> Option<Vec<ModelEntry>> {
     let _ = child.kill();
     let _ = child.wait();
     models
+}
+
+/// Write one `Content-Length`-framed JSON-RPC message — the wire
+/// framing the official copilot-sdk writes on `copilot --stdio`
+/// (`Content-Length: <byte len>\r\n\r\n<body>`, no trailing
+/// newline). `body` is ASCII JSON, so `str::len` is the byte
+/// count the header must report.
+fn write_lsp_frame(w: &mut impl Write, body: &str) -> std::io::Result<()> {
+    write!(w, "Content-Length: {}\r\n\r\n{}", body.len(), body)
 }
 
 /// Parse one JSON-RPC line from `copilot --stdio`; yields the
