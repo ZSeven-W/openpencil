@@ -210,7 +210,7 @@ fn codex_models_from_app_server() -> Option<Vec<ModelEntry>> {
 /// model list only for the `id:2` (`model/list`) response, `None`
 /// for the `initialize` reply / interleaved notifications.
 fn parse_codex_model_list(line: &str) -> Option<Vec<ModelEntry>> {
-    let json: serde_json::Value = serde_json::from_str(line).ok()?;
+    let json: serde_json::Value = serde_json::from_str(extract_json_object(line)?).ok()?;
     if json.get("id")?.as_i64()? != 2 {
         return None;
     }
@@ -351,10 +351,49 @@ fn write_lsp_frame(w: &mut impl Write, body: &str) -> std::io::Result<()> {
     write!(w, "Content-Length: {}\r\n\r\n{}", body.len(), body)
 }
 
+/// Extract the first complete top-level JSON object from `s` —
+/// the slice from the first `{` to its matching `}`, brace-counted
+/// with string/escape awareness. This lets the response parsers
+/// cope with a `Content-Length:` header prefix or a glued
+/// next-frame header suffix on the same line, so discovery is
+/// robust whether the CLI replies newline-delimited or
+/// Content-Length-framed.
+fn extract_json_object(s: &str) -> Option<&str> {
+    let start = s.find('{')?;
+    let bytes = s.as_bytes();
+    let mut depth = 0i32;
+    let mut in_str = false;
+    let mut escaped = false;
+    for i in start..bytes.len() {
+        let c = bytes[i];
+        if in_str {
+            match c {
+                _ if escaped => escaped = false,
+                b'\\' => escaped = true,
+                b'"' => in_str = false,
+                _ => {}
+            }
+        } else {
+            match c {
+                b'"' => in_str = true,
+                b'{' => depth += 1,
+                b'}' => {
+                    depth -= 1;
+                    if depth == 0 {
+                        return Some(&s[start..=i]);
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+    None
+}
+
 /// Parse one JSON-RPC line from `copilot --stdio`; yields the
 /// model list only for the `id:2` (`models.list`) response.
 fn parse_copilot_model_list(line: &str) -> Option<Vec<ModelEntry>> {
-    let json: serde_json::Value = serde_json::from_str(line).ok()?;
+    let json: serde_json::Value = serde_json::from_str(extract_json_object(line)?).ok()?;
     if json.get("id")?.as_i64()? != 2 {
         return None;
     }
@@ -467,6 +506,30 @@ mod tests {
         assert_eq!(models[0].display_name, "GPT-5 mini");
         // Missing name falls back to the id.
         assert_eq!(models[1].display_name, "claude-haiku-4.5");
+    }
+
+    #[test]
+    fn extract_json_object_handles_framing_prefix_and_suffix() {
+        // Plain object.
+        assert_eq!(extract_json_object(r#"{"a":1}"#), Some(r#"{"a":1}"#));
+        // Content-Length header prefix + glued next-frame header suffix.
+        let framed = "Content-Length: 7\r\n\r\n{\"a\":1}Content-Length: 9\r\n\r\n";
+        assert_eq!(extract_json_object(framed), Some(r#"{"a":1}"#));
+        // Nested braces + a brace inside a string must not end early.
+        let nested = r#"prefix {"x":{"y":2},"s":"a}b{c"} trailing"#;
+        assert_eq!(extract_json_object(nested), Some(r#"{"x":{"y":2},"s":"a}b{c"}"#));
+        // No object at all.
+        assert_eq!(extract_json_object("Content-Length: 0\r\n"), None);
+    }
+
+    #[test]
+    fn copilot_parser_tolerates_content_length_framed_line() {
+        // A line carrying the CL header prefix + a glued next header
+        // still yields the model list.
+        let line = "Content-Length: 80\r\n\r\n{\"id\":2,\"result\":{\"models\":[{\"id\":\"gpt-5\",\"name\":\"GPT-5\"}]}}Content-Length: 5\r\n";
+        let models = parse_copilot_model_list(line).expect("framed line parses");
+        assert_eq!(models.len(), 1);
+        assert_eq!(models[0].display_name, "GPT-5");
     }
 
     #[test]
