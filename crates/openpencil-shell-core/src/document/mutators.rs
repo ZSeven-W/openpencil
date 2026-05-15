@@ -531,6 +531,35 @@ impl Document {
         false
     }
 
+    /// Append a default drop-shadow effect to the selected node.
+    /// The default mirrors a common CSS card shadow
+    /// (`0 4px 8px rgba(0,0,0,0.25)`). No-op when nothing editable
+    /// is selected. Returns true when a shadow was added — the
+    /// building block for the property panel's 效果 "+" action.
+    pub fn add_drop_shadow_to_selected(&mut self) -> bool {
+        if !self.selected.is_real() || !self.is_editable(self.selected) {
+            return false;
+        }
+        let sel = self.selected;
+        let Some(node) = super::mcp_apply::find_node_mut_in_doc(self, sel) else {
+            return false;
+        };
+        node.effects.push(crate::document::Effect::DropShadow(
+            crate::document::DropShadow {
+                offset_x: 0.0,
+                offset_y: 4.0,
+                blur: 8.0,
+                color: crate::Color {
+                    r: 0.0,
+                    g: 0.0,
+                    b: 0.0,
+                    a: 0.25,
+                },
+            },
+        ));
+        true
+    }
+
     /// Remove every node in the selection set from its parent's
     /// children. Returns true on success (selection cleared
     /// after). No-op when nothing is selected.
