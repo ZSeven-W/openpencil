@@ -24,7 +24,7 @@
 //! - Image / vector path nodes
 //! - Variable resolution ($color-1 → real color)
 
-use crate::document::{Document, Node, NodeId, NodeKind, Viewport};
+use crate::document::{Document, Effect, Node, NodeId, NodeKind, Viewport};
 use crate::theme::Theme;
 use crate::widgets::{LayoutBox, LayoutCx, PaintCx, Widget, WidgetId};
 use crate::{Color, Point2D, Rect, TextLayout};
@@ -362,6 +362,31 @@ fn node_fill(node: &Node, var_table: &crate::document::VariableTable) -> Option<
     var_table.fill_for(node.id).or(node.fill)
 }
 
+/// Paint every `Effect::DropShadow` on `node` as a blurred shape
+/// behind its fill. The shadow corner radius matches the node
+/// kind — `corner_radius` for Frame / Rect, min-half for an
+/// ellipse silhouette. Offset + blur scale by `zoom` so the
+/// shadow tracks the node across viewport zoom.
+fn paint_drop_shadows(cx: &mut PaintCx<'_>, node: &Node, world_rect: Rect, zoom: f32) {
+    let radius = if node.kind == NodeKind::Ellipse {
+        world_rect.size.x.min(world_rect.size.y) / 2.0
+    } else {
+        node.corner_radius * zoom
+    };
+    for effect in &node.effects {
+        let Effect::DropShadow(s) = effect;
+        let shadow_rect = Rect {
+            origin: Point2D::new(
+                world_rect.origin.x + s.offset_x * zoom,
+                world_rect.origin.y + s.offset_y * zoom,
+            ),
+            size: world_rect.size,
+        };
+        cx.backend
+            .fill_drop_shadow(shadow_rect, radius, s.blur * zoom, s.color);
+    }
+}
+
 fn paint_node(
     cx: &mut PaintCx<'_>,
     node: &Node,
@@ -408,6 +433,18 @@ fn paint_node(
         );
         cx.backend.save();
         cx.backend.rotate(node.rotation, pivot);
+    }
+
+    // Drop shadows paint behind the node's own fill. Only kinds
+    // whose silhouette a rounded rect / ellipse can represent
+    // faithfully (Frame / Rect / Ellipse) cast one; Polygon / Line
+    // / Path shadows are deferred until a shape-mask path exists.
+    if !node.effects.is_empty()
+        && world_rect.size.x > 0.0
+        && world_rect.size.y > 0.0
+        && matches!(node.kind, NodeKind::Frame | NodeKind::Rect | NodeKind::Ellipse)
+    {
+        paint_drop_shadows(cx, node, world_rect, zoom);
     }
 
     match &node.kind {

@@ -250,6 +250,19 @@ pub trait RenderBackend {
     ) {
     }
 
+    /// Paint a drop shadow: a gaussian-blurred filled rounded
+    /// rectangle. `rect` is the already-offset shadow bounds,
+    /// `radius` the corner radius (0 for sharp corners, min-half
+    /// for an ellipse-shaped shadow), `blur` the gaussian sigma in
+    /// device px (caller applies zoom). Painted BEHIND the node's
+    /// own fill. Default impl approximates with an un-blurred
+    /// translucent fill so non-blur backends still hint at depth;
+    /// native + web override with skia's `MaskFilter::blur`.
+    fn fill_drop_shadow(&mut self, rect: Rect, radius: f32, blur: f32, color: Color) {
+        let _ = blur;
+        self.fill_round_rect(rect, radius, color);
+    }
+
     /// Filled ellipse inscribed in `bounds`. Used by Ellipse-kind
     /// document nodes. Default impl falls back to a rounded
     /// rectangle (visually wrong but compiles); native + web
