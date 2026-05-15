@@ -27,6 +27,13 @@ pub struct ChatState {
     /// shell-core stays transport-free — it only raises the flag;
     /// `openpencil-desktop` owns the actual `ChatProvider` plumbing.
     pub pending_send: Option<String>,
+    /// Models the user can pick in the chat panel's model dropdown.
+    /// Empty until the desktop host discovers them from the
+    /// connected CLIs (`openpencil-desktop::model_discovery`) and
+    /// writes the result in. shell-core never queries a CLI.
+    pub available_models: Vec<crate::chat_models::ModelEntry>,
+    /// Index into `available_models` of the active model.
+    pub selected_model: usize,
 }
 
 impl Default for ChatState {
@@ -39,7 +46,17 @@ impl Default for ChatState {
             collapsed: false,
             caret_anchor_ms: 0,
             pending_send: None,
+            available_models: Vec::new(),
+            selected_model: 0,
         }
+    }
+}
+
+impl ChatState {
+    /// The currently selected model, or `None` when the catalog is
+    /// empty (no CLI connected and the fallback list cleared).
+    pub fn selected_model_entry(&self) -> Option<&crate::chat_models::ModelEntry> {
+        self.available_models.get(self.selected_model)
     }
 }
 

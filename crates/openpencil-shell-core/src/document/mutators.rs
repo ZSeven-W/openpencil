@@ -224,6 +224,25 @@ impl Document {
         }
     }
 
+    /// Select the chat model at `idx` in `chat.available_models`
+    /// and close the picker. Also re-syncs `ui.chat_selected_agent`
+    /// to the model's provider so the desktop chat transport
+    /// (`chat_session::provider_for_agent`) targets the matching
+    /// CLI. A bad index is ignored (picker still closes).
+    pub fn select_chat_model(&mut self, idx: usize) {
+        if let Some(entry) = self.chat.available_models.get(idx) {
+            let provider = entry.provider;
+            self.chat.selected_model = idx;
+            if let Some(pidx) = crate::agent_settings_state::AgentProvider::ALL
+                .iter()
+                .position(|p| *p == provider)
+            {
+                self.ui.chat_selected_agent = pidx;
+            }
+        }
+        self.ui.chat_model_picker_open = false;
+    }
+
     /// Whether `id` resolves to a node that can be mutated via
     /// selection-aware helpers (`translate_selected`,
     /// `set_selected_bounds`, etc.). Hidden + locked nodes are
