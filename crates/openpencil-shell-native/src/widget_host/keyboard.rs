@@ -413,15 +413,25 @@ impl WidgetHostNative {
                         self.document.chat.collapsed = !self.document.chat.collapsed;
                         return true;
                     }
-                    AIChatHit::CycleModel => {
-                        self.document.cycle_chat_agent();
+                    AIChatHit::ToggleModelPicker => {
+                        let ui = &mut self.document.ui;
+                        ui.chat_model_picker_open = !ui.chat_model_picker_open;
+                        return true;
+                    }
+                    AIChatHit::SelectModel(idx) => {
+                        self.document.select_chat_model(idx);
                         return true;
                     }
                 }
             }
         }
-        // Click outside chat panel — defocus the input.
-        let was_focused = self.document.chat.focused;
+        // Click outside chat panel — defocus the input and close
+        // the model picker if it was open. Either counts as a
+        // visible change so the fall-through returns request a
+        // redraw.
+        let picker_was_open = self.document.ui.chat_model_picker_open;
+        self.document.ui.chat_model_picker_open = false;
+        let was_focused = self.document.chat.focused || picker_was_open;
         self.document.chat.focused = false;
         let (cx0, _cy0, _cw, _ch) = self.canvas_region(viewport_width, viewport_height);
         let toolbar = Toolbar::for_document(&self.document);

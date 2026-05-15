@@ -87,9 +87,13 @@ pub enum AIChatHit {
     /// flips the `ChatState::collapsed` flag.
     ToggleCollapse,
     /// Click on the model chip (bottom-left of the input toolbar) —
-    /// host advances `chat_selected_agent` to the next connected
-    /// CLI agent (`Document::cycle_chat_agent`).
-    CycleModel,
+    /// host toggles `ui.chat_model_picker_open` to open / close the
+    /// model dropdown.
+    ToggleModelPicker,
+    /// Click on a model row in the open picker dropdown — payload
+    /// is the index into `chat.available_models`
+    /// (`Document::select_chat_model`).
+    SelectModel(usize),
 }
 
 pub struct AIChatPlaceholder<'a> {
@@ -111,11 +115,14 @@ pub struct AIChatPlaceholder<'a> {
     /// the empty-state body, between the example cards and the
     /// separator above the input.
     pub label_tip_select_elements: String,
-    /// Name of the AI-chat agent shown in the bottom toolbar's
-    /// model chip — the connected CLI selected via `chat_selected_agent`
-    /// (`AgentProvider::label`). Falls back to "Default" only when
-    /// the stored index is somehow out of range.
-    pub model_label: String,
+    /// Chip label shown when no model is selected / discovered yet
+    /// (`ai.noModelsConnected`).
+    pub label_no_models: String,
+    /// Whether the model-picker dropdown is open
+    /// (`Document.ui.chat_model_picker_open`). The picker lists
+    /// `state.available_models`; the active row is
+    /// `state.selected_model`.
+    pub model_picker_open: bool,
 }
 
 impl<'a> AIChatPlaceholder<'a> {
@@ -135,10 +142,23 @@ impl<'a> AIChatPlaceholder<'a> {
             label_start_with_ai: doc.t("ai.tryExample").to_string(),
             label_input_placeholder: doc.t("ai.designWithAgent").to_string(),
             label_tip_select_elements: doc.t("ai.tipSelectElements").to_string(),
-            model_label: crate::agent_settings_state::AgentProvider::ALL
-                .get(doc.ui.chat_selected_agent)
-                .map(|a| a.name().to_string())
-                .unwrap_or_else(|| "Default".to_string()),
+            label_no_models: doc.t("ai.noModelsConnected").to_string(),
+            model_picker_open: doc.ui.chat_model_picker_open,
+        }
+    }
+
+    /// Bounds of the model-picker dropdown — anchored just above
+    /// the bottom toolbar (the chip), growing upward over the
+    /// message list. `input_rect` is the panel's input box.
+    fn model_picker_rect(&self, rect: Rect, input_rect: Rect) -> Rect {
+        let height = crate::widgets::ai_chat_model_picker::picker_content_height(
+            &self.state.available_models,
+        );
+        let toolbar_top = input_rect.origin.y + INPUT_AREA_HEIGHT;
+        let bottom = toolbar_top - 4.0;
+        Rect {
+            origin: Point2D::new(rect.origin.x + PAD, bottom - height),
+            size: Point2D::new(rect.size.x - PAD * 2.0, height),
         }
     }
 
@@ -169,15 +189,30 @@ impl<'a> AIChatPlaceholder<'a> {
             ),
             size: Point2D::new(rect.size.x - PAD * 2.0, INPUT_HEIGHT),
         };
+        // Model-picker dropdown — an overlay above the chip. When
+        // open it behaves modally: a row click selects, any other
+        // click dismisses it. Hit-tested before the input so a row
+        // click isn't eaten by the message list beneath.
+        if self.model_picker_open {
+            let picker = self.model_picker_rect(rect, input_rect);
+            if let Some(idx) = crate::widgets::ai_chat_model_picker::model_at(
+                picker,
+                point,
+                &self.state.available_models,
+            ) {
+                return Some(AIChatHit::SelectModel(idx));
+            }
+            return Some(AIChatHit::ToggleModelPicker);
+        }
         if rect_contains(input_rect, point) {
             // Bottom toolbar strip = the lower `INPUT_TOOLBAR_HEIGHT`
             // of the input box; its left `MODEL_CHIP_W` is the model
-            // chip (advances the connected-CLI selection on click).
+            // chip (opens / closes the model-picker dropdown).
             let toolbar_top = input_rect.origin.y + INPUT_AREA_HEIGHT;
             if point.y >= toolbar_top
                 && point.x <= input_rect.origin.x + MODEL_CHIP_W
             {
-                return Some(AIChatHit::CycleModel);
+                return Some(AIChatHit::ToggleModelPicker);
             }
             // Send chip is the rightmost ~40px of the input area.
             let send_x = input_rect.origin.x + input_rect.size.x - 40.0;
@@ -390,27 +425,43 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
         // on the right (mirrors the TS panel's bottom row).
         let toolbar_y = input_rect.origin.y + INPUT_AREA_HEIGHT;
         let toolbar_center_y = toolbar_y + INPUT_TOOLBAR_HEIGHT / 2.0;
-        // Sparkles glyph + "Default" + chevron — model picker.
+        // Model chip — brand logo of the selected model's provider
+        // + its display name + a chevron. Click toggles the picker.
         let mut model_x = rect.origin.x + PAD;
-        draw_icon(
-            cx.backend,
-            Icon::Sparkles,
-            Point2D::new(model_x, toolbar_center_y - 7.0),
-            14.0,
-            self.theme.muted_foreground,
-            1.4,
-        );
+        let selected = self.state.selected_model_entry();
+        let chip_color = self.theme.muted_foreground;
+        match selected {
+            Some(entry) => crate::widgets::ai_chat_model_picker::paint_provider_logo(
+                cx,
+                entry.provider,
+                Point2D::new(model_x, toolbar_center_y - 7.0),
+                14.0,
+                chip_color,
+            ),
+            // No model discovered yet — generic sparkles glyph.
+            None => draw_icon(
+                cx.backend,
+                Icon::Sparkles,
+                Point2D::new(model_x, toolbar_center_y - 7.0),
+                14.0,
+                chip_color,
+                1.4,
+            ),
+        }
         model_x += 20.0;
+        let model_name: &str = selected
+            .map(|m| m.display_name.as_str())
+            .unwrap_or(self.label_no_models.as_str());
         let model_label = TextLayout::single_run(
-            &self.model_label,
+            model_name,
             "system-ui",
             12.0,
-            to_jian_color(self.theme.muted_foreground),
+            to_jian_color(chip_color),
             Point2D::new(0.0, 0.0),
         );
         cx.backend
             .draw_text(&model_label, Point2D::new(model_x, toolbar_center_y + 4.0));
-        let model_w = cx.backend.measure_text(&self.model_label, 12.0);
+        let model_w = cx.backend.measure_text(model_name, 12.0);
         model_x += model_w + 4.0;
         draw_icon(
             cx.backend,
@@ -465,6 +516,19 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
             self.theme.muted_foreground,
             1.4,
         );
+
+        // Model-picker dropdown paints last so it sits above the
+        // message list / examples / input.
+        if self.model_picker_open {
+            let picker = self.model_picker_rect(rect, input_rect);
+            crate::widgets::ai_chat_model_picker::paint_model_picker(
+                cx,
+                &self.theme,
+                picker,
+                &self.state.available_models,
+                self.state.selected_model,
+            );
+        }
     }
 
     fn access_node(&self) -> accesskit::Node {
