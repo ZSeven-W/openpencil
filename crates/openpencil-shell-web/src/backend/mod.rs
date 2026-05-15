@@ -240,6 +240,29 @@ impl RenderBackend for WebBackend {
             .draw_round_rect(sk_rect, radius, radius, &paint);
     }
 
+    fn fill_drop_shadow(&mut self, rect: Rect, radius: f32, blur: f32, color: Color) {
+        let mut paint = skia_safe::Paint::new(
+            skia_safe::Color4f::new(color.r, color.g, color.b, color.a),
+            None,
+        );
+        paint.set_anti_alias(true);
+        // CSS blur-radius → gaussian sigma is `radius / 2`; a zero
+        // blur degrades to a crisp filled round rect.
+        let sigma = blur * 0.5;
+        if sigma > 0.0 {
+            if let Some(mask) =
+                skia_safe::MaskFilter::blur(skia_safe::BlurStyle::Normal, sigma, false)
+            {
+                paint.set_mask_filter(mask);
+            }
+        }
+        let sk_rect =
+            skia_safe::Rect::from_xywh(rect.origin.x, rect.origin.y, rect.size.x, rect.size.y);
+        self.surface
+            .canvas()
+            .draw_round_rect(sk_rect, radius, radius, &paint);
+    }
+
     fn stroke_round_rect(&mut self, rect: Rect, radius: f32, color: Color, width: f32) {
         let mut paint = skia_safe::Paint::new(
             skia_safe::Color4f::new(color.r, color.g, color.b, color.a),
