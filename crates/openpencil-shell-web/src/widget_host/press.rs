@@ -407,10 +407,22 @@ impl WidgetHost {
                         self.document.chat.collapsed = !self.document.chat.collapsed;
                         return true;
                     }
+                    AIChatHit::ToggleModelPicker => {
+                        let ui = &mut self.document.ui;
+                        ui.chat_model_picker_open = !ui.chat_model_picker_open;
+                        return true;
+                    }
+                    AIChatHit::SelectModel(idx) => {
+                        self.document.select_chat_model(idx);
+                        return true;
+                    }
                 }
             }
         }
-        let was_focused = self.document.chat.focused;
+        // Click outside the chat panel closes the model picker.
+        let picker_was_open = self.document.ui.chat_model_picker_open;
+        self.document.ui.chat_model_picker_open = false;
+        let was_focused = self.document.chat.focused || picker_was_open;
         self.document.chat.focused = false;
 
         let toolbar_rect = self.toolbar_rect(viewport_w);

@@ -72,6 +72,7 @@ pub mod agent_settings_images;
 pub mod agent_settings_mcp;
 pub mod agent_settings_panel;
 pub mod agent_settings_system;
+pub mod ai_chat_model_picker;
 pub mod ai_chat_panel;
 pub mod align_toolbar;
 pub mod color_picker;
