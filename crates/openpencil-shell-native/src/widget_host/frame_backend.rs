@@ -63,6 +63,11 @@ impl<'a> RenderBackend for NativeFrameBackend<'a> {
         self.inner.fill_round_rect(self.canvas, rect, radius, color);
     }
 
+    fn fill_drop_shadow(&mut self, rect: Rect, radius: f32, blur: f32, color: Color) {
+        self.inner
+            .fill_drop_shadow(self.canvas, rect, radius, blur, color);
+    }
+
     fn stroke_round_rect(&mut self, rect: Rect, radius: f32, color: Color, width: f32) {
         self.inner
             .stroke_round_rect(self.canvas, rect, radius, color, width);
