@@ -462,6 +462,32 @@ impl NativeBackend {
         canvas.draw_round_rect(to_sk_rect(rect), radius, radius, &paint);
     }
 
+    /// Drop shadow — a gaussian-blurred filled rounded rectangle.
+    /// `blur` is the CSS-style blur radius (doc-px × zoom, applied
+    /// by the caller); skia's mask-filter takes a sigma, and the
+    /// CSS blur-radius → sigma conversion is `radius / 2`. A zero
+    /// blur degrades to a crisp filled round rect.
+    pub fn fill_drop_shadow(
+        &self,
+        canvas: &skia_safe::Canvas,
+        rect: Rect,
+        radius: f32,
+        blur: f32,
+        color: Color,
+    ) {
+        let mut paint = skia_safe::Paint::new(jian_color_to_color4f(color), None);
+        paint.set_anti_alias(true);
+        let sigma = blur * 0.5;
+        if sigma > 0.0 {
+            if let Some(mask) =
+                skia_safe::MaskFilter::blur(skia_safe::BlurStyle::Normal, sigma, false)
+            {
+                paint.set_mask_filter(mask);
+            }
+        }
+        canvas.draw_round_rect(to_sk_rect(rect), radius, radius, &paint);
+    }
+
     /// Stroked rounded rectangle. Pairs with `fill_round_rect` for
     /// outlined chips / buttons.
     pub fn stroke_round_rect(
