@@ -114,7 +114,28 @@ pub fn launch_if_pending(
     let Some(user_text) = host.document_mut().chat.pending_send.take() else {
         return false;
     };
-    let provider = provider_for_agent(host.document().ui.chat_selected_agent);
+    let agent_idx = host.document().ui.chat_selected_agent;
+    let Some(provider) = provider_for_agent(agent_idx) else {
+        // Selected agent has no `ChatProvider` bridge yet (Codex /
+        // OpenCode HTTP-server transport). Surface that honestly in
+        // the assistant bubble instead of silently running a
+        // different agent (codex stop-gate: silent reroute to
+        // Claude misled the user about which CLI answered).
+        let name = openpencil_shell_core::agent_settings_state::AgentProvider::ALL
+            .get(agent_idx)
+            .map(|a| a.name())
+            .unwrap_or("This agent");
+        if let Some(msg) = host.document_mut().chat.messages.last_mut() {
+            msg.content = format!(
+                "error: {name} chat is not wired yet — its HTTP-server \
+                 transport is still pending. Pick Claude Code, GitHub \
+                 Copilot, or Gemini CLI via the model chip."
+            );
+        }
+        // No session started; report the transcript change so the
+        // caller repaints the error.
+        return true;
+    };
     let req = ChatRequest {
         system_prompt: String::new(),
         user_message: user_text,
@@ -128,16 +149,17 @@ pub fn launch_if_pending(
 /// `AgentProvider::ALL`: 0 ClaudeCode, 1 CodexCli, 2 OpenCode,
 /// 3 GithubCopilot, 4 GeminiCli). Claude Code uses its dedicated
 /// SDK adapter; Copilot / Gemini use the subprocess transport.
-/// Codex + OpenCode are HTTP-server CLIs whose `ChatProvider`
-/// bridge isn't wired yet — they fall back to Claude Code so the
-/// chat still functions rather than dead-ending.
-fn provider_for_agent(agent_idx: usize) -> Box<dyn ChatProvider> {
+/// Returns `None` for Codex + OpenCode — HTTP-server CLIs whose
+/// `ChatProvider` bridge isn't wired yet; the caller surfaces an
+/// explicit error rather than rerouting to a different agent.
+fn provider_for_agent(agent_idx: usize) -> Option<Box<dyn ChatProvider>> {
     match agent_idx {
-        3 => Box::new(CopilotProvider::new()),
+        0 => Some(Box::new(ClaudeCodeProvider::new())),
+        3 => Some(Box::new(CopilotProvider::new())),
         4 => SubprocessProvider::for_cli(CliName::Gemini)
-            .map(|p| Box::new(p) as Box<dyn ChatProvider>)
-            .unwrap_or_else(|| Box::new(ClaudeCodeProvider::new())),
-        _ => Box::new(ClaudeCodeProvider::new()),
+            .map(|p| Box::new(p) as Box<dyn ChatProvider>),
+        // 1 CodexCli, 2 OpenCode — no bridge yet.
+        _ => None,
     }
 }
 
