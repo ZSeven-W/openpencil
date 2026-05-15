@@ -30,7 +30,7 @@ use jian_ops_schema::{
     node::container::CornerRadius,
     node::text::TextContent,
     sizing::SizingBehavior,
-    style::{PenEffect, PenFill, PenStroke, StrokeThickness},
+    style::{PenFill, PenStroke, StrokeThickness},
     PenDocument,
 };
 
@@ -305,59 +305,8 @@ fn node_to_payload(node: &PenNode, rects: &BTreeMap<String, [f32; 4]>) -> NodePa
     // `.op` authored with shadows lost them on import (codex
     // stop-gate). Blur / background-blur are skipped: the shell's
     // `Effect` model is drop-shadow-only today.
-    p.effects = shadows_from_canonical(node);
+    p.effects = crate::persistence_effects::shadows_from_canonical(node);
     p
-}
-
-/// Per-variant accessor for a canonical node's `effects` list.
-/// Frame / Group / Rectangle carry effects on their `container`
-/// style; the leaf shapes carry it directly. IconFont / Ref have
-/// none.
-fn canonical_node_effects(node: &PenNode) -> Option<&[PenEffect]> {
-    match node {
-        PenNode::Frame(n) => n.container.effects.as_deref(),
-        PenNode::Group(n) => n.container.effects.as_deref(),
-        PenNode::Rectangle(n) => n.container.effects.as_deref(),
-        PenNode::Ellipse(n) => n.effects.as_deref(),
-        PenNode::Line(n) => n.effects.as_deref(),
-        PenNode::Polygon(n) => n.effects.as_deref(),
-        PenNode::Path(n) => n.effects.as_deref(),
-        PenNode::Text(n) => n.effects.as_deref(),
-        PenNode::TextInput(n) => n.effects.as_deref(),
-        PenNode::Image(n) => n.effects.as_deref(),
-        PenNode::IconFont(_) | PenNode::Ref(_) => None,
-    }
-}
-
-/// Convert a canonical node's `PenEffect` list into the desktop
-/// payload's `ShadowPayload` vec. Only `PenEffect::Shadow` maps —
-/// blur variants are dropped (no renderer path yet).
-fn shadows_from_canonical(
-    node: &PenNode,
-) -> Vec<crate::persistence_effects::ShadowPayload> {
-    let Some(effects) = canonical_node_effects(node) else {
-        return Vec::new();
-    };
-    effects
-        .iter()
-        .filter_map(|e| match e {
-            // Drop the shadow when its colour doesn't parse rather
-            // than fabricating opaque black — an `rgba()` / named /
-            // short-hex colour would otherwise import as a wrong
-            // solid-black shadow (codex stop-gate).
-            PenEffect::Shadow(s) => {
-                parse_hex(&s.color).map(|color| {
-                    crate::persistence_effects::ShadowPayload {
-                        offset_x: s.offset_x,
-                        offset_y: s.offset_y,
-                        blur: s.blur,
-                        color,
-                    }
-                })
-            }
-            PenEffect::Blur(_) | PenEffect::BackgroundBlur(_) => None,
-        })
-        .collect()
 }
 
 /// Translate `p.points` from local-to-`base.x/base.y` into the
