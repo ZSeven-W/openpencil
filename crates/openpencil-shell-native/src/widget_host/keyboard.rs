@@ -325,8 +325,9 @@ impl WidgetHostNative {
         if self.document.ui.variable_row_focus.is_some() { self.commit_variable_row_focus_if_any(); return true; }
         if self.document.ui.property_focus.is_some() { self.commit_property_focus_if_any(); return true; }
         if self.document.chat.input.trim().is_empty() { return false; }
-        self.document.chat.send();
-        true
+        // Real provider turn — raises `chat.pending_send`; the
+        // desktop event loop drains it and streams the reply.
+        self.document.chat.begin_send()
     }
 
     /// Escape — priority cascade: rename → property → pickers →
@@ -393,7 +394,7 @@ impl WidgetHostNative {
                         return true;
                     }
                     AIChatHit::Send => {
-                        self.document.chat.send();
+                        self.document.chat.begin_send();
                         return true;
                     }
                     AIChatHit::Example(text) => {
