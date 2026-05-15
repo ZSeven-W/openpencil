@@ -20,6 +20,13 @@ pub struct ChatState {
     /// every key event so the caret reappears immediately when
     /// the user types instead of mid-blink.
     pub caret_anchor_ms: u64,
+    /// Set by [`ChatState::begin_send`] to the just-sent user text.
+    /// The desktop event loop drains this each frame: `Some(text)`
+    /// means "start a real provider turn for this message". The
+    /// host clears it once the turn is launched. `None` = idle.
+    /// shell-core stays transport-free — it only raises the flag;
+    /// `openpencil-desktop` owns the actual `ChatProvider` plumbing.
+    pub pending_send: Option<String>,
 }
 
 impl Default for ChatState {
@@ -31,6 +38,7 @@ impl Default for ChatState {
             anchor: ChatAnchor::BottomLeft,
             collapsed: false,
             caret_anchor_ms: 0,
+            pending_send: None,
         }
     }
 }
@@ -83,8 +91,9 @@ pub struct ChatMessage {
 
 impl ChatState {
     /// Append the focused input as a new user message + a stub
-    /// assistant echo, then clear the buffer. Real AI streaming
-    /// lands in Step 6+ (matches TS app's `aiStore.send` flow).
+    /// assistant echo, then clear the buffer. Offline fallback
+    /// used by hosts with no real `ChatProvider` wired (the web
+    /// shell today); the native desktop uses [`begin_send`].
     pub fn send(&mut self) {
         let trimmed = self.input.trim();
         if trimmed.is_empty() {
@@ -101,6 +110,31 @@ impl ChatState {
         self.messages.push(user_msg);
         self.messages.push(echo);
         self.input.clear();
+    }
+
+    /// Real-send entry point. Pushes the user message + an empty
+    /// assistant message (the host streams provider deltas into
+    /// that last message), clears the input, and raises
+    /// `pending_send` so the desktop event loop launches a real
+    /// `ChatProvider` turn. Returns true when a send was queued
+    /// (non-empty input), false on an empty buffer.
+    pub fn begin_send(&mut self) -> bool {
+        let trimmed = self.input.trim().to_string();
+        if trimmed.is_empty() {
+            return false;
+        }
+        self.messages.push(ChatMessage {
+            role: ChatRole::User,
+            content: trimmed.clone(),
+        });
+        // Empty assistant bubble — provider deltas append here.
+        self.messages.push(ChatMessage {
+            role: ChatRole::Assistant,
+            content: String::new(),
+        });
+        self.input.clear();
+        self.pending_send = Some(trimmed);
+        true
     }
 
     /// Push the focused input as a user message and stream the reply
@@ -201,5 +235,29 @@ mod tests {
         let n = chat.send_via_provider(&p, "", 0);
         assert_eq!(n, 0);
         assert!(chat.messages.is_empty());
+    }
+
+    #[test]
+    fn begin_send_pushes_user_plus_empty_assistant_and_raises_flag() {
+        let mut chat = ChatState::default();
+        chat.input = "  design a login page  ".into();
+        assert!(chat.begin_send());
+        // User message + empty assistant bubble for streaming.
+        assert_eq!(chat.messages.len(), 2);
+        assert_eq!(chat.messages[0].role, ChatRole::User);
+        assert_eq!(chat.messages[0].content, "design a login page");
+        assert_eq!(chat.messages[1].role, ChatRole::Assistant);
+        assert!(chat.messages[1].content.is_empty());
+        assert!(chat.input.is_empty());
+        assert_eq!(chat.pending_send.as_deref(), Some("design a login page"));
+    }
+
+    #[test]
+    fn begin_send_empty_input_no_ops() {
+        let mut chat = ChatState::default();
+        chat.input = "   ".into();
+        assert!(!chat.begin_send());
+        assert!(chat.messages.is_empty());
+        assert!(chat.pending_send.is_none());
     }
 }

@@ -7,6 +7,7 @@ mod chat_claude;
 mod chat_copilot;
 mod chat_http_server;
 mod chat_runtime;
+mod chat_session;
 mod chat_subprocess;
 mod cursor_icon;
 mod export;
@@ -100,6 +101,10 @@ struct DesktopApp {
     /// Path of the currently-open .pen/.op document; None when unsaved.
     current_path: Option<PathBuf>,
     error: Option<SharedSkiaError>,
+    /// In-flight AI chat turn, if any. `chat.begin_send` raises
+    /// `chat.pending_send`; the event loop drains that into a
+    /// `ChatSession` here and pumps deltas into the transcript.
+    current_chat: Option<chat_session::ChatSession>,
 }
 
 impl DesktopApp {
@@ -126,6 +131,7 @@ impl DesktopApp {
             rotate_cursor: None,
             current_path: None,
             error: None,
+            current_chat: None,
         }
     }
 
@@ -324,6 +330,10 @@ impl ApplicationHandler for DesktopApp {
                 self.request_redraw(true);
             }
             WindowEvent::RedrawRequested => {
+                // Pump in-flight AI chat deltas into this frame.
+                if chat_session::pump(&mut self.host, &mut self.current_chat) {
+                    self.redraw_dirty = true;
+                }
                 let should_paint = self.prepare_redraw();
                 if should_paint {
                     if let (Some(ctx), Some(backend)) = (self.ctx.as_mut(), self.backend.as_mut()) {
@@ -337,7 +347,12 @@ impl ApplicationHandler for DesktopApp {
                         );
                     }
                 }
-                if let Some(deadline_ms) = self.host.next_animation_deadline_ms() {
+                // Chat turn streaming → wake ~30 fps to pump deltas.
+                if self.current_chat.is_some() {
+                    event_loop.set_control_flow(ControlFlow::WaitUntil(
+                        Instant::now() + Duration::from_millis(33),
+                    ));
+                } else if let Some(deadline_ms) = self.host.next_animation_deadline_ms() {
                     let deadline = self.clock_start + Duration::from_millis(deadline_ms);
                     event_loop.set_control_flow(ControlFlow::WaitUntil(deadline));
                 } else {
@@ -389,6 +404,11 @@ impl ApplicationHandler for DesktopApp {
                 // Drain queued cursor move so hover state is current before press lands.
                 if self.drain_pending_cursor_move() { self.redraw_dirty = true; }
                 let consumed = self.host.apply_press(self.cursor_x, self.cursor_y, self.viewport_width, self.viewport_height);
+                // A click on the chat Send button raises
+                // `pending_send` — launch the provider turn.
+                if chat_session::launch_if_pending(&mut self.host, &mut self.current_chat) {
+                    self.request_redraw(true);
+                }
                 if let Some(action) = self.host.document_mut().ui.pending_file_action.take() {
                     // ExportImage → close source overlay + open picker dialog.
                     if matches!(action, openpencil_shell_core::document::FileAction::ExportImage) {
@@ -543,6 +563,13 @@ impl ApplicationHandler for DesktopApp {
                     }
                     Key::Named(NamedKey::Enter) if !self.zoom_modifier => {
                         consumed = self.host.apply_send();
+                        // apply_send may raise pending_send (chat send).
+                        if chat_session::launch_if_pending(
+                            &mut self.host,
+                            &mut self.current_chat,
+                        ) {
+                            self.request_redraw(true);
+                        }
                     }
                     Key::Named(NamedKey::Escape) if !self.zoom_modifier => {
                         consumed = self.host.apply_escape();
