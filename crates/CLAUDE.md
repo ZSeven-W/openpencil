@@ -407,7 +407,7 @@ authoritative list is `openpencil-desktop/src/mcp_serve.rs` —
 
 By category:
 
-- **Read (17)** — `get_document_info` / `get_selection` / `get_node`
+- **Read (18)** — `get_document_info` / `get_selection` / `get_node`
   / `get_node_children` / `get_node_parent` / `list_pages` /
   `list_variables` / `get_active_theme` / `list_components` /
   `get_component` / `snapshot_layout` / `get_canvas_bounds` /
