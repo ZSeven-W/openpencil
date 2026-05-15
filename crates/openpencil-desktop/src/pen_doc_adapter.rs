@@ -621,6 +621,7 @@ fn base_payload(base: &PenNodeBase, kind: &str) -> NodePayload {
         font_size: 0.0,
         font_weight: 0,
         text_wrap: false,
+        effects: Vec::new(),
         children: Vec::new(),
     }
 }

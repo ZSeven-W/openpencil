@@ -16,6 +16,7 @@ mod mcp_serve;
 mod pen_doc_adapter;
 mod pen_doc_path_bounds;
 mod persistence;
+mod persistence_effects;
 mod persistence_variables;
 mod settings_io;
 
