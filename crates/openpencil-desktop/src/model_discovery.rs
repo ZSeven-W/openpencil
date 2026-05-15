@@ -264,19 +264,100 @@ fn discover_gemini() -> Vec<ModelEntry> {
     .collect()
 }
 
-/// GitHub Copilot CLI — like Gemini it exposes only `--model`; we
-/// surface its documented model names when installed.
+/// How long to wait for `copilot --stdio` to answer `models.list`.
+const COPILOT_STDIO_TIMEOUT: Duration = Duration::from_secs(8);
+
+/// GitHub Copilot CLI — query models via the official CLI JSON-RPC
+/// protocol (`connect` → `models.list`), then a documented-name
+/// fallback when the CLI is installed but the query didn't answer.
 fn discover_copilot() -> Vec<ModelEntry> {
+    if let Some(models) = copilot_models_from_stdio() {
+        if !models.is_empty() {
+            return models;
+        }
+    }
     if resolve_cli("copilot").is_none() {
         return Vec::new();
     }
-    [
-        ("gpt-5", "GPT-5"),
-        ("claude-sonnet-4.5", "Claude Sonnet 4.5"),
-    ]
-    .iter()
-    .map(|(value, name)| ModelEntry::new(AgentProvider::GithubCopilot, *value, *name))
-    .collect()
+    [("gpt-5", "GPT-5"), ("claude-sonnet-4.5", "Claude Sonnet 4.5")]
+        .iter()
+        .map(|(value, name)| ModelEntry::new(AgentProvider::GithubCopilot, *value, *name))
+        .collect()
+}
+
+/// Query Copilot models through the official CLI JSON-RPC
+/// protocol — the same `connect` → `models.list` wire calls the
+/// `github-copilot-sdk` makes (protocol version 3), spoken
+/// directly over `copilot --stdio`. Talking the wire protocol
+/// rather than linking the SDK crate keeps the dep set + the
+/// workspace's Rust 1.85 toolchain unchanged (the SDK crate needs
+/// Rust 1.94). Returns `None` on any failure.
+fn copilot_models_from_stdio() -> Option<Vec<ModelEntry>> {
+    let exe = resolve_cli("copilot")?;
+    let mut child = Command::new(exe)
+        .arg("--stdio")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .ok()?;
+    let mut stdin = child.stdin.take()?;
+    let stdout = child.stdout.take()?;
+
+    let (tx, rx) = mpsc::channel();
+    std::thread::spawn(move || {
+        for line in BufReader::new(stdout).lines().map_while(Result::ok) {
+            if tx.send(line).is_err() {
+                break;
+            }
+        }
+    });
+
+    // `connect` (id 1) establishes the session; `models.list`
+    // (id 2) needs no params when the server runs without a
+    // connection token (we spawned it ourselves).
+    let connect = r#"{"jsonrpc":"2.0","id":1,"method":"connect","params":{}}"#;
+    let list = r#"{"jsonrpc":"2.0","id":2,"method":"models.list","params":{}}"#;
+    writeln!(stdin, "{connect}").ok()?;
+    writeln!(stdin, "{list}").ok()?;
+    stdin.flush().ok();
+
+    let deadline = Instant::now() + COPILOT_STDIO_TIMEOUT;
+    let mut models = None;
+    while let Some(remaining) = deadline.checked_duration_since(Instant::now()) {
+        match rx.recv_timeout(remaining) {
+            Ok(line) => {
+                if let Some(parsed) = parse_copilot_model_list(&line) {
+                    models = Some(parsed);
+                    break;
+                }
+            }
+            Err(_) => break,
+        }
+    }
+    let _ = child.kill();
+    let _ = child.wait();
+    models
+}
+
+/// Parse one JSON-RPC line from `copilot --stdio`; yields the
+/// model list only for the `id:2` (`models.list`) response.
+fn parse_copilot_model_list(line: &str) -> Option<Vec<ModelEntry>> {
+    let json: serde_json::Value = serde_json::from_str(line).ok()?;
+    if json.get("id")?.as_i64()? != 2 {
+        return None;
+    }
+    let models = json.get("result")?.get("models")?.as_array()?;
+    Some(
+        models
+            .iter()
+            .filter_map(|m| {
+                let id = m.get("id")?.as_str()?;
+                let name = m.get("name").and_then(|v| v.as_str()).unwrap_or(id);
+                Some(ModelEntry::new(AgentProvider::GithubCopilot, id, name))
+            })
+            .collect(),
+    )
 }
 
 /// OpenCode — `opencode models` prints one `provider/model` slug
@@ -355,6 +436,26 @@ mod tests {
         assert_eq!(models[0].display_name, "GPT-5.5");
         // Missing displayName falls back to the model value.
         assert_eq!(models[1].display_name, "gpt-5.4");
+    }
+
+    #[test]
+    fn copilot_response_parser_picks_id2_model_list() {
+        // connect reply (id 1) — not the model list.
+        assert!(
+            parse_copilot_model_list(r#"{"jsonrpc":"2.0","id":1,"result":{"connected":true}}"#)
+                .is_none()
+        );
+        let models = parse_copilot_model_list(
+            r#"{"jsonrpc":"2.0","id":2,"result":{"models":[
+                {"id":"gpt-5-mini","name":"GPT-5 mini"},
+                {"id":"claude-haiku-4.5"}
+            ]}}"#,
+        )
+        .expect("id:2 parses");
+        assert_eq!(models.len(), 2);
+        assert_eq!(models[0].display_name, "GPT-5 mini");
+        // Missing name falls back to the id.
+        assert_eq!(models[1].display_name, "claude-haiku-4.5");
     }
 
     #[test]
