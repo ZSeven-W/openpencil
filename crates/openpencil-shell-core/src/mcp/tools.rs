@@ -620,6 +620,525 @@ impl McpTool for GetComponent {
     }
 }
 
+/// First-party `snapshot_layout` tool — return the bounding box
+/// of every top-level node on the active page. LLM clients use
+/// this to lay out new content without overlapping (combined
+/// with future `find_empty_space`).
+///
+/// Wire shape:
+///   layout — `;`-records of `id|x|y|w|h`, ints in doc px. Each
+///     bbox is the resolved top-level node bounds (post-layout
+///     for free-positioned nodes, post-engine for flex children
+///     of the page root).
+///   count — top-level node count.
+pub struct SnapshotLayout {
+    pub items: Vec<(u64, i32, i32, i32, i32)>,
+}
+
+impl McpTool for SnapshotLayout {
+    fn name(&self) -> &str {
+        "snapshot_layout"
+    }
+    fn call(&self, _args: &BTreeMap<String, String>) -> ToolOutcome {
+        let encoded: Vec<String> = self
+            .items
+            .iter()
+            .map(|(id, x, y, w, h)| format!("{id}|{x}|{y}|{w}|{h}"))
+            .collect();
+        let mut out = BTreeMap::new();
+        out.insert("count".into(), self.items.len().to_string());
+        out.insert("layout".into(), encoded.join(";"));
+        ToolOutcome::Ok(out)
+    }
+}
+
+/// First-party `get_canvas_bounds` tool — returns the union
+/// bounding box of every top-level node on the active page.
+/// LLM clients use this to know "where the design lives" so
+/// they can place new content nearby (or `set_active_page` then
+/// build elsewhere). Empty pages return all-zero.
+///
+/// Wire shape:
+///   x / y / w / h — i32 doc px (zeros when the page is empty).
+///   has_content — `"true"` / `"false"` so clients don't have
+///     to interpret zeros as "empty vs origin-anchored 0x0".
+pub struct GetCanvasBounds {
+    pub bounds: Option<(i32, i32, i32, i32)>,
+}
+
+impl McpTool for GetCanvasBounds {
+    fn name(&self) -> &str {
+        "get_canvas_bounds"
+    }
+    fn call(&self, _args: &BTreeMap<String, String>) -> ToolOutcome {
+        let mut out = BTreeMap::new();
+        match self.bounds {
+            Some((x, y, w, h)) => {
+                out.insert("x".into(), x.to_string());
+                out.insert("y".into(), y.to_string());
+                out.insert("w".into(), w.to_string());
+                out.insert("h".into(), h.to_string());
+                out.insert("has_content".into(), "true".into());
+            }
+            None => {
+                out.insert("x".into(), "0".into());
+                out.insert("y".into(), "0".into());
+                out.insert("w".into(), "0".into());
+                out.insert("h".into(), "0".into());
+                out.insert("has_content".into(), "false".into());
+            }
+        }
+        ToolOutcome::Ok(out)
+    }
+}
+
+/// First-party `find_node_by_name` tool — locate the first
+/// node whose `name` matches the arg, anywhere in the active
+/// page (top-level + descendants). Returns the matched node's
+/// id + kind. LLM clients use this when the prompt references
+/// a node by user-visible name rather than id ("update the
+/// Title text…").
+///
+/// Wire shape:
+///   args   — { "name": "<exact match, case-sensitive>" }
+///   result — { id, kind } on success, ToolFailed when no match.
+pub struct FindNodeByName {
+    pub index: Vec<(String, u64, String)>,
+}
+
+impl McpTool for FindNodeByName {
+    fn name(&self) -> &str {
+        "find_node_by_name"
+    }
+    fn call(&self, args: &BTreeMap<String, String>) -> ToolOutcome {
+        let Some(query) = args.get("name") else {
+            return ToolOutcome::Err(
+                ToolErrorCode::MissingArgument,
+                "name is required".into(),
+            );
+        };
+        let Some((_, id, kind)) = self.index.iter().find(|(n, _, _)| n == query) else {
+            return ToolOutcome::Err(
+                ToolErrorCode::ToolFailed,
+                format!("no node named {query:?} on the active page"),
+            );
+        };
+        let mut out = BTreeMap::new();
+        out.insert("id".into(), id.to_string());
+        out.insert("kind".into(), kind.clone());
+        ToolOutcome::Ok(out)
+    }
+}
+
+/// First-party `get_node_parent` tool — return the parent id
+/// of `node_id` anywhere in the active page. Returns `parent_id`
+/// = 0 when the node is at the page root. ToolFailed when the
+/// id doesn't resolve. LLM clients use this to walk up from a
+/// known leaf id to its container (e.g. find the Frame around
+/// a Text node).
+///
+/// Wire shape:
+///   args   — { "node_id": "<positive u64>" }
+///   result — { parent_id, depth } on success; parent_id = "0"
+///     when the node sits at the page root. depth is the
+///     distance from page root (0 = top-level node).
+pub struct GetNodeParent {
+    pub index: Vec<(u64, u64, u32)>,
+}
+
+impl McpTool for GetNodeParent {
+    fn name(&self) -> &str {
+        "get_node_parent"
+    }
+    fn call(&self, args: &BTreeMap<String, String>) -> ToolOutcome {
+        let Some(raw) = args.get("node_id") else {
+            return ToolOutcome::Err(
+                ToolErrorCode::MissingArgument,
+                "node_id is required".into(),
+            );
+        };
+        let node_id: u64 = match raw.parse() {
+            Ok(n) if n > 0 => n,
+            _ => {
+                return ToolOutcome::Err(
+                    ToolErrorCode::InvalidArgument,
+                    format!("node_id must be a positive u64, got {raw:?}"),
+                );
+            }
+        };
+        let Some((_, parent_id, depth)) = self.index.iter().find(|(id, _, _)| *id == node_id)
+        else {
+            return ToolOutcome::Err(
+                ToolErrorCode::ToolFailed,
+                format!("node {node_id} not found on active page"),
+            );
+        };
+        let mut out = BTreeMap::new();
+        out.insert("parent_id".into(), parent_id.to_string());
+        out.insert("depth".into(), depth.to_string());
+        ToolOutcome::Ok(out)
+    }
+}
+
+/// First-party `count_nodes` tool — return total node count
+/// (top-level + every descendant) across all pages plus a
+/// per-page breakdown. LLM clients use this for size estimation
+/// before bulk operations.
+///
+/// Wire shape:
+///   total — int, every node across every page.
+///   per_page — `;`-records of `index|count` (0-based page idx).
+pub struct CountNodes {
+    pub per_page: Vec<u32>,
+}
+
+impl McpTool for CountNodes {
+    fn name(&self) -> &str {
+        "count_nodes"
+    }
+    fn call(&self, _args: &BTreeMap<String, String>) -> ToolOutcome {
+        let total: u32 = self.per_page.iter().sum();
+        let encoded: Vec<String> = self
+            .per_page
+            .iter()
+            .enumerate()
+            .map(|(i, c)| format!("{i}|{c}"))
+            .collect();
+        let mut out = BTreeMap::new();
+        out.insert("total".into(), total.to_string());
+        out.insert("per_page".into(), encoded.join(";"));
+        ToolOutcome::Ok(out)
+    }
+}
+
+/// First-party `list_node_kinds` tool — return a per-kind
+/// histogram of nodes on the active page (top-level + every
+/// descendant). LLM clients use this to discover whether a
+/// design has e.g. any Text nodes before iterating.
+///
+/// Wire shape:
+///   kinds — `;`-records of `kind|count` (kind in the standard
+///     enum string set: frame / group / rect / ellipse /
+///     polygon / line / text / path / other).
+///   distinct — number of distinct kinds present.
+pub struct ListNodeKinds {
+    pub histogram: Vec<(String, u32)>,
+}
+
+impl McpTool for ListNodeKinds {
+    fn name(&self) -> &str {
+        "list_node_kinds"
+    }
+    fn call(&self, _args: &BTreeMap<String, String>) -> ToolOutcome {
+        let encoded: Vec<String> = self
+            .histogram
+            .iter()
+            .map(|(k, c)| format!("{k}|{c}"))
+            .collect();
+        let mut out = BTreeMap::new();
+        out.insert("distinct".into(), self.histogram.len().to_string());
+        out.insert("kinds".into(), encoded.join(";"));
+        ToolOutcome::Ok(out)
+    }
+}
+
+/// First-party `get_history_depth` tool — return undo + redo
+/// stack sizes. LLM clients use this to decide whether undo is
+/// safe (or how many steps it'd take to roll back a recent
+/// burst of writes).
+///
+/// Wire shape:
+///   past — int undo stack depth (steps available to undo)
+///   future — int redo stack depth (steps available to redo)
+pub struct GetHistoryDepth {
+    pub past: usize,
+    pub future: usize,
+}
+
+impl McpTool for GetHistoryDepth {
+    fn name(&self) -> &str {
+        "get_history_depth"
+    }
+    fn call(&self, _args: &BTreeMap<String, String>) -> ToolOutcome {
+        let mut out = BTreeMap::new();
+        out.insert("past".into(), self.past.to_string());
+        out.insert("future".into(), self.future.to_string());
+        ToolOutcome::Ok(out)
+    }
+}
+
+/// First-party `get_viewport` tool — return current pan + zoom
+/// state. LLM clients use this to know where the user is
+/// looking before suggesting `set_active_page` / inserts at
+/// off-screen coordinates.
+///
+/// Wire shape:
+///   pan_x / pan_y — i32 doc px (truncated from f32 for wire
+///     stability; sub-pixel pan is invisible to LLM intent).
+///   zoom — float * 100, int (so `1.0` → `100`, `1.5` → `150`).
+///     Lossy but enough resolution for "what's the zoom level"
+///     decisions; the actual Document stores f32.
+pub struct GetViewport {
+    pub pan_x: i32,
+    pub pan_y: i32,
+    pub zoom_percent: i32,
+}
+
+impl McpTool for GetViewport {
+    fn name(&self) -> &str {
+        "get_viewport"
+    }
+    fn call(&self, _args: &BTreeMap<String, String>) -> ToolOutcome {
+        let mut out = BTreeMap::new();
+        out.insert("pan_x".into(), self.pan_x.to_string());
+        out.insert("pan_y".into(), self.pan_y.to_string());
+        out.insert("zoom_percent".into(), self.zoom_percent.to_string());
+        ToolOutcome::Ok(out)
+    }
+}
+
+/// First-party `get_selection_set` tool — return every id in
+/// the multi-select set (vs `get_selection` which returns only
+/// the anchor). LLM clients use this when the user pre-selects
+/// a group and asks to "align these" — the prompt needs all
+/// the ids, not just one.
+///
+/// Wire shape:
+///   count — int multi-select size (0 when nothing selected).
+///   ids — `,`-separated u64 ids in the selection order.
+///   anchor — the single anchor id (matches get_selection's
+///     `selected_id`, 0 when nothing selected).
+pub struct GetSelectionSet {
+    pub anchor: u64,
+    pub ids: Vec<u64>,
+}
+
+impl McpTool for GetSelectionSet {
+    fn name(&self) -> &str {
+        "get_selection_set"
+    }
+    fn call(&self, _args: &BTreeMap<String, String>) -> ToolOutcome {
+        let encoded = self
+            .ids
+            .iter()
+            .map(|id| id.to_string())
+            .collect::<Vec<_>>()
+            .join(",");
+        let mut out = BTreeMap::new();
+        out.insert("count".into(), self.ids.len().to_string());
+        out.insert("ids".into(), encoded);
+        out.insert("anchor".into(), self.anchor.to_string());
+        ToolOutcome::Ok(out)
+    }
+}
+
+pub fn get_selection_set_snapshot(doc: &crate::document::Document) -> GetSelectionSet {
+    GetSelectionSet {
+        anchor: doc.selected.raw(),
+        ids: doc.selected_set.iter().map(|id| id.raw()).collect(),
+    }
+}
+
+pub fn get_viewport_snapshot(doc: &crate::document::Document) -> GetViewport {
+    let v = doc.viewport;
+    GetViewport {
+        pan_x: v.pan_x as i32,
+        pan_y: v.pan_y as i32,
+        zoom_percent: (v.zoom * 100.0).round() as i32,
+    }
+}
+
+pub fn get_history_depth_snapshot(doc: &crate::document::Document) -> GetHistoryDepth {
+    GetHistoryDepth {
+        past: doc.history.past.len(),
+        future: doc.history.future.len(),
+    }
+}
+
+pub fn list_node_kinds_snapshot(doc: &crate::document::Document) -> ListNodeKinds {
+    fn walk(nodes: &[crate::document::Node], counts: &mut BTreeMap<&'static str, u32>) {
+        for n in nodes {
+            let key: &'static str = match n.kind {
+                crate::document::NodeKind::Frame => "frame",
+                crate::document::NodeKind::Group => "group",
+                crate::document::NodeKind::Rect => "rect",
+                crate::document::NodeKind::Ellipse => "ellipse",
+                crate::document::NodeKind::Polygon => "polygon",
+                crate::document::NodeKind::Line => "line",
+                crate::document::NodeKind::Text => "text",
+                crate::document::NodeKind::Path => "path",
+                _ => "other",
+            };
+            *counts.entry(key).or_insert(0) += 1;
+            walk(&n.children, counts);
+        }
+    }
+    let mut counts: BTreeMap<&'static str, u32> = BTreeMap::new();
+    if let Some(page) = doc.active_page() {
+        walk(&page.children, &mut counts);
+    }
+    let histogram = counts
+        .into_iter()
+        .map(|(k, v)| (k.to_string(), v))
+        .collect();
+    ListNodeKinds { histogram }
+}
+
+pub fn count_nodes_snapshot(doc: &crate::document::Document) -> CountNodes {
+    fn walk(nodes: &[crate::document::Node]) -> u32 {
+        nodes
+            .iter()
+            .map(|n| 1u32 + walk(&n.children))
+            .sum()
+    }
+    let per_page = doc
+        .pages
+        .iter()
+        .map(|p| walk(&p.children))
+        .collect();
+    CountNodes { per_page }
+}
+
+pub fn get_node_parent_snapshot(doc: &crate::document::Document) -> GetNodeParent {
+    fn walk(
+        nodes: &[crate::document::Node],
+        parent: u64,
+        depth: u32,
+        out: &mut Vec<(u64, u64, u32)>,
+    ) {
+        for n in nodes {
+            out.push((n.id.raw(), parent, depth));
+            walk(&n.children, n.id.raw(), depth + 1, out);
+        }
+    }
+    let mut index = Vec::new();
+    if let Some(page) = doc.active_page() {
+        walk(&page.children, 0, 0, &mut index);
+    }
+    GetNodeParent { index }
+}
+
+pub fn find_node_by_name_snapshot(doc: &crate::document::Document) -> FindNodeByName {
+    fn walk(
+        nodes: &[crate::document::Node],
+        out: &mut Vec<(String, u64, String)>,
+    ) {
+        for n in nodes {
+            let kind = match n.kind {
+                crate::document::NodeKind::Frame => "frame",
+                crate::document::NodeKind::Group => "group",
+                crate::document::NodeKind::Rect => "rect",
+                crate::document::NodeKind::Ellipse => "ellipse",
+                crate::document::NodeKind::Polygon => "polygon",
+                crate::document::NodeKind::Line => "line",
+                crate::document::NodeKind::Text => "text",
+                crate::document::NodeKind::Path => "path",
+                _ => "other",
+            };
+            out.push((n.name.clone(), n.id.raw(), kind.to_string()));
+            walk(&n.children, out);
+        }
+    }
+    let mut index = Vec::new();
+    if let Some(page) = doc.active_page() {
+        walk(&page.children, &mut index);
+    }
+    FindNodeByName { index }
+}
+
+pub fn get_canvas_bounds_snapshot(doc: &crate::document::Document) -> GetCanvasBounds {
+    let Some(page) = doc.active_page() else {
+        return GetCanvasBounds { bounds: None };
+    };
+    if page.children.is_empty() {
+        return GetCanvasBounds { bounds: None };
+    }
+    let mut min_x = f32::INFINITY;
+    let mut min_y = f32::INFINITY;
+    let mut max_x = f32::NEG_INFINITY;
+    let mut max_y = f32::NEG_INFINITY;
+    // Codex stop-gate: containers with ZERO own bounds, OR
+    // containers with non-zero own bounds whose children paint
+    // outside (no clip), both under-reported on the raw `n.bounds`
+    // read. `visible_bounds_for_mcp` unions own + every descendant
+    // so the LLM-visible extent matches what the canvas paints.
+    for n in &page.children {
+        let b = visible_bounds_for_mcp(n);
+        if b.size.x <= 0.0 && b.size.y <= 0.0 {
+            continue; // truly empty container — no descendants either
+        }
+        min_x = min_x.min(b.origin.x);
+        min_y = min_y.min(b.origin.y);
+        max_x = max_x.max(b.origin.x + b.size.x);
+        max_y = max_y.max(b.origin.y + b.size.y);
+    }
+    if !min_x.is_finite() {
+        return GetCanvasBounds { bounds: None };
+    }
+    GetCanvasBounds {
+        bounds: Some((
+            min_x as i32,
+            min_y as i32,
+            (max_x - min_x) as i32,
+            (max_y - min_y) as i32,
+        )),
+    }
+}
+
+/// Compute the LLM-visible extent of a node: union of its own
+/// rect (if non-zero) AND every descendant's `visible_bounds`.
+/// Mirrors what the canvas actually paints — `canvas_viewport`
+/// renders Frame/Group children without clipping, so overflow
+/// is part of the visible extent. Codex stop-gate fix for both
+/// `snapshot_layout` and `get_canvas_bounds` under-reporting
+/// when containers had ZERO own bounds or had overflow children.
+fn visible_bounds_for_mcp(n: &crate::document::Node) -> crate::Rect {
+    let mut union: Option<crate::Rect> = None;
+    if n.bounds.size.x > 0.0 || n.bounds.size.y > 0.0 {
+        union = Some(n.bounds);
+    }
+    for c in &n.children {
+        let cb = visible_bounds_for_mcp(c);
+        if cb.size.x <= 0.0 && cb.size.y <= 0.0 {
+            continue;
+        }
+        union = Some(match union {
+            None => cb,
+            Some(u) => {
+                let min_x = u.origin.x.min(cb.origin.x);
+                let min_y = u.origin.y.min(cb.origin.y);
+                let max_x = (u.origin.x + u.size.x).max(cb.origin.x + cb.size.x);
+                let max_y = (u.origin.y + u.size.y).max(cb.origin.y + cb.size.y);
+                crate::Rect::xywh(min_x, min_y, max_x - min_x, max_y - min_y)
+            }
+        });
+    }
+    union.unwrap_or(crate::Rect::ZERO)
+}
+
+pub fn snapshot_layout_snapshot(doc: &crate::document::Document) -> SnapshotLayout {
+    let effective_bounds = visible_bounds_for_mcp;
+    let items = doc
+        .active_page()
+        .map(|p| {
+            p.children
+                .iter()
+                .map(|n| {
+                    let b = effective_bounds(n);
+                    (
+                        n.id.raw(),
+                        b.origin.x as i32,
+                        b.origin.y as i32,
+                        b.size.x as i32,
+                        b.size.y as i32,
+                    )
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    SnapshotLayout { items }
+}
+
 pub fn get_component_snapshot(doc: &crate::document::Document) -> GetComponent {
     fn count_leaves(n: &crate::document::Node) -> usize {
         if n.children.is_empty() {

@@ -8,13 +8,21 @@
 
 use std::collections::BTreeMap;
 
+pub mod json_serializer;
 pub mod parser;
 pub mod tools;
+pub mod extra_read_tools;
+#[cfg(test)] mod extra_read_tools_tests;
 #[cfg(test)] mod tools_tests;
 pub mod write_tools;
 pub mod batch_design;
 pub mod scalar_vars;
 pub mod component_tools;
+#[cfg(test)] mod component_tools_tests;
+pub mod node_attr_tools;
+#[cfg(test)] mod node_attr_tools_tests;
+pub mod selected_ops_tools;
+#[cfg(test)] mod selected_ops_tools_tests;
 #[cfg(test)] mod write_tools_tests;
 #[cfg(test)] mod copy_node_tests;
 #[cfg(test)] mod replace_node_tests;
@@ -26,11 +34,15 @@ pub mod component_tools;
 // split. Mirrors the `widgets::*` re-export pattern.
 pub use parser::parse_tool_call;
 pub use tools::{
-    document_info_snapshot, get_active_theme_snapshot, get_component_snapshot,
-    get_node_snapshot, list_components_snapshot, list_pages_snapshot,
-    list_variables_snapshot, selection_snapshot, GetActiveTheme, GetComponent,
-    GetDocumentInfo, GetNode, GetSelection, ListComponents, ListPages, ListVariables,
-    NodeRecord, VariableRecord,
+    count_nodes_snapshot, document_info_snapshot, find_node_by_name_snapshot,
+    get_active_theme_snapshot, get_canvas_bounds_snapshot, get_component_snapshot,
+    get_history_depth_snapshot, get_node_parent_snapshot, get_node_snapshot,
+    get_selection_set_snapshot, get_viewport_snapshot, list_components_snapshot,
+    list_node_kinds_snapshot, list_pages_snapshot, list_variables_snapshot,
+    selection_snapshot, snapshot_layout_snapshot, CountNodes, FindNodeByName,
+    GetActiveTheme, GetCanvasBounds, GetComponent, GetDocumentInfo, GetHistoryDepth,
+    GetNode, GetNodeParent, GetSelection, GetSelectionSet, GetViewport, ListComponents,
+    ListNodeKinds, ListPages, ListVariables, NodeRecord, SnapshotLayout, VariableRecord,
 };
 pub use write_tools::{
     copy_node_snapshot, delete_node_snapshot, insert_node_snapshot, move_node_snapshot,
@@ -39,20 +51,49 @@ pub use write_tools::{
     SetActiveAxisValue, SetVariableColor, UpdateNode,
 };
 pub use component_tools::{
-    add_page_snapshot, create_component_snapshot, delete_component_snapshot,
-    delete_page_snapshot, duplicate_page_snapshot, instantiate_component_snapshot,
+    add_page_snapshot, clear_selection_snapshot, create_component_snapshot,
+    cycle_active_axis_value_snapshot, delete_component_snapshot, delete_page_snapshot,
+    duplicate_page_snapshot, instantiate_component_snapshot, redo_snapshot,
     rename_component_snapshot, rename_page_snapshot, reorder_page_snapshot,
-    set_active_page_snapshot, AddPage, CreateComponent, DeleteComponent, DeletePage,
-    DuplicatePage, InstantiateComponent, RenameComponent, RenamePage, ReorderPage,
-    SetActivePage,
+    set_active_page_snapshot, set_active_tool_snapshot, set_node_collapsed_snapshot,
+    set_node_hidden_snapshot, set_node_locked_snapshot, set_selection_set_snapshot,
+    set_selection_snapshot, set_viewport_snapshot, toggle_node_selection_snapshot,
+    undo_snapshot, AddPage, ClearSelection, CreateComponent, CycleActiveAxisValue,
+    DeleteComponent, DeletePage, DuplicatePage, InstantiateComponent,
+    Redo, RenameComponent, RenamePage, ReorderPage, SetActivePage, SetActiveTool,
+    SetNodeCollapsed, SetNodeHidden, SetNodeLocked, SetSelection, SetSelectionSet,
+    SetViewport, ToggleNodeSelection, Undo,
+};
+pub use node_attr_tools::{
+    set_node_corner_radius_snapshot, set_node_fill_hex_snapshot,
+    set_node_font_size_snapshot, set_node_font_weight_snapshot,
+    set_node_name_snapshot, set_node_rotation_snapshot,
+    set_node_stroke_hex_snapshot, set_node_stroke_width_snapshot,
+    set_node_text_snapshot, SetNodeCornerRadius, SetNodeFillHex, SetNodeFontSize,
+    SetNodeFontWeight, SetNodeName, SetNodeRotation, SetNodeStrokeHex,
+    SetNodeStrokeWidth, SetNodeText,
+};
+pub use selected_ops_tools::{
+    align_selected_snapshot, copy_selected_snapshot, cut_selected_snapshot,
+    delete_selected_snapshot, duplicate_selected_snapshot, group_selected_snapshot,
+    nudge_selected_snapshot, paste_clipboard_snapshot, reorder_selected_snapshot,
+    ungroup_selected_snapshot, AlignSelected, CopySelected, CutSelected, DeleteSelected,
+    DuplicateSelected, GroupSelected, NudgeSelected, PasteClipboard, ReorderSelected,
+    UngroupSelected,
 };
 pub use batch_design::{
     batch_design_snapshot, design_content_snapshot, design_refine_snapshot,
     design_skeleton_snapshot, BatchDesign, DesignContent, DesignRefine, DesignSkeleton,
 };
+pub use extra_read_tools::{
+    get_node_children_snapshot, ChildRecord, GetNodeChildren,
+};
+pub use json_serializer::response_to_json;
 pub use scalar_vars::{
+    create_variable_snapshot, delete_variable_snapshot, rename_variable_snapshot,
     set_variable_boolean_snapshot, set_variable_number_snapshot,
-    set_variable_string_snapshot, SetVariableBoolean, SetVariableNumber, SetVariableString,
+    set_variable_string_snapshot, CreateVariable, DeleteVariable, RenameVariable,
+    SetVariableBoolean, SetVariableNumber, SetVariableString,
 };
 
 /// JSON-RPC-style request id. Strings + integers both supported by
@@ -152,6 +193,15 @@ pub enum McpCommand {
     SetActiveAxisValue {
         axis: String,
         value: String,
+    },
+    /// Advance the active value for `axis` to the next entry in
+    /// its `values` list (wrapping back to the first). When the
+    /// axis has no current selection the call seeds it to the
+    /// first value. Rejects unknown axes and axes with an empty
+    /// values list. Mirrors `Document::theme()` axis cycling so
+    /// LLM-driven theme demos don't need to know each value name.
+    CycleActiveAxisValue {
+        axis: String,
     },
     InsertNode {
         kind: String,
@@ -261,6 +311,28 @@ pub enum McpCommand {
         name: String,
         scalar: VariableScalarPayload,
     },
+    /// Create a new theme-agnostic scalar variable. `kind` is one
+    /// of `"color"` / `"number"` / `"boolean"` / `"string"`;
+    /// `default_value` is parsed per kind (hex for color, decimal
+    /// for number, `"true"`/`"false"` for boolean, free text for
+    /// string). Rejects empty / duplicate names + bad defaults.
+    CreateVariable {
+        name: String,
+        kind: String,
+        default_value: String,
+    },
+    /// Delete a variable by name. Also drops any node `$ref`s
+    /// pointing at it. Rejects unknown names.
+    DeleteVariable {
+        name: String,
+    },
+    /// Rename a variable + rewrite every node `$ref` that points
+    /// at it. Rejects unknown `old_name`, empty `new_name`, or a
+    /// `new_name` that collides with a different variable.
+    RenameVariable {
+        old_name: String,
+        new_name: String,
+    },
     /// Instantiate a registered component on the active page. The
     /// applier deep-clones the component's root subtree with fresh
     /// ids past `max_node_id()` and appends it to the active page's
@@ -325,6 +397,199 @@ pub enum McpCommand {
         from: u32,
         to: u32,
     },
+    /// Clear the current multi-select. After this command,
+    /// `get_selection` reports id=0 / kind="none". Cheap reset
+    /// for LLM workflows that need to start clean before a
+    /// targeted selection.
+    ClearSelection,
+    /// Set the selection to a single node by id. Mirrors a click
+    /// on the canvas. Rejects unknown ids; the applier walks
+    /// every page to find the target so this works across
+    /// active-page boundaries.
+    SetSelection { node_id: u64 },
+    /// Set canvas pan + zoom. Any subset of pan_x / pan_y /
+    /// zoom_percent can be `None` to leave that axis untouched.
+    /// Zoom is `int * 100`-scaled (zoom_percent=100 == 1.0×);
+    /// applier clamps to a sane visual range so the canvas
+    /// can't be zoomed to a degenerate size.
+    SetViewport {
+        pan_x: Option<i32>,
+        pan_y: Option<i32>,
+        zoom_percent: Option<i32>,
+    },
+    /// Flip a single boolean flag on a node. The applier walks
+    /// every page to find the target. Rejects unknown ids.
+    SetNodeFlag {
+        node_id: u64,
+        flag: NodeFlag,
+        value: bool,
+    },
+    /// Set the active canvas tool (select / rect / ellipse / etc).
+    /// Mirrors a click on the left toolbar. Unknown tool strings
+    /// reject at apply time.
+    SetActiveTool {
+        tool: String,
+    },
+    /// Pop the last history snapshot off the undo stack.
+    /// Returns false when the past stack is empty.
+    Undo,
+    /// Push the last undone snapshot back. Returns false when
+    /// the redo stack is empty.
+    Redo,
+    /// Duplicate the currently-selected node + select the clone.
+    /// `offset_px` shifts the clone by that many doc-px (defaults
+    /// to 10 if 0 is passed — Document::duplicate_selected uses
+    /// the value literally, so 0 == "same position"). Returns
+    /// false when nothing is selected.
+    DuplicateSelected {
+        offset_px: i32,
+    },
+    /// Delete the currently-selected node. Returns false when
+    /// nothing is selected. The applier pushes a history snapshot
+    /// before the mutation so undo restores the node.
+    DeleteSelected,
+    /// Translate the currently-selected node by (dx, dy) doc-px.
+    /// Mirrors the arrow-key nudge. Returns false when nothing
+    /// is selected.
+    NudgeSelected {
+        dx: i32,
+        dy: i32,
+    },
+    /// Cmd+G equivalent — wrap the multi-selected siblings in a
+    /// new Group node. Returns false at apply time when the
+    /// selection is empty / single-node or spans across parents.
+    GroupSelected,
+    /// Cmd+Shift+G equivalent — replace a selected Group with
+    /// its children (in place). Returns false when the anchor
+    /// is not a Group.
+    UngroupSelected,
+    /// Move the currently-selected node up or down in z-order.
+    /// `direction` is "up" (forward) or "down" (back). Mirrors
+    /// the layer-panel [/] shortcut + the "Bring forward / Send
+    /// backward" right-click action.
+    ReorderSelected {
+        direction: String,
+    },
+    /// Set the rotation (in degrees) on `node_id`. Mirrors the
+    /// PropertyPanel rotation input. The applier walks every
+    /// page to find the target; rejects unknown ids.
+    SetNodeRotation {
+        node_id: u64,
+        degrees: f32,
+    },
+    /// Set the text content on a Text-kind node. Rejects when
+    /// the target's kind isn't Text. Other kinds keep their
+    /// `text` field untouched.
+    SetNodeText {
+        node_id: u64,
+        text: String,
+    },
+    /// Set corner-radius (doc-px) on a node. Honored at paint
+    /// time for Rect / Frame; other kinds accept the write but
+    /// the radius is invisible. Rejects negative values + nan.
+    SetNodeCornerRadius {
+        node_id: u64,
+        radius: f32,
+    },
+    /// Set the font size (doc-px) on a Text-kind node. Rejects
+    /// non-Text kinds and non-positive sizes.
+    SetNodeFontSize {
+        node_id: u64,
+        font_size: f32,
+    },
+    /// Set the font weight (OpenType range 1..=1000) on a Text-kind
+    /// node. Rejects non-Text kinds and out-of-range weights so the
+    /// per-codepoint typeface cache lookup stays well-formed.
+    SetNodeFontWeight {
+        node_id: u64,
+        font_weight: u16,
+    },
+    /// Set the stroke color on a node by id. If the node has an
+    /// existing stroke the color is overwritten in-place; otherwise
+    /// a fresh `Stroke { color, width: 1.0 }` is attached so the
+    /// node paints with a visible 1 doc-px outline.
+    SetNodeStrokeHex {
+        node_id: u64,
+        hex: String,
+    },
+    /// Set the stroke width (doc-px) on a node by id. Width = 0
+    /// clears the stroke (matches the property panel's "remove
+    /// stroke" behavior). Width > 0 on a node with no stroke
+    /// attaches a fresh black-default stroke at that width so the
+    /// caller doesn't have to issue a paired `set_node_stroke_hex`
+    /// first.
+    SetNodeStrokeWidth {
+        node_id: u64,
+        width: f32,
+    },
+    /// Apply alignment / distribution to the current selection.
+    /// `action` is one of `"left"`, `"center_h"`, `"right"`,
+    /// `"top"`, `"center_v"`, `"bottom"`, `"distribute_h"`,
+    /// `"distribute_v"`. Distribute variants silently no-op for
+    /// fewer than 3 selected nodes; align variants on a single
+    /// top-level node also no-op (no useful reference frame).
+    AlignSelected {
+        action: String,
+    },
+    /// Set the fill color on a node by id. Mirrors the existing
+    /// `set_node_stroke_hex` shape (LLM ergonomic: one-call color
+    /// change, no need to pass the other `update_node` fields).
+    /// `update_node` keeps doing piecemeal multi-field writes.
+    SetNodeFillHex {
+        node_id: u64,
+        hex: String,
+    },
+    /// Rename a node by id. Mirrors `update_node` but takes only
+    /// the name so the LLM doesn't have to thread the other
+    /// optional fields.
+    SetNodeName {
+        node_id: u64,
+        name: String,
+    },
+    /// Cmd+C parity — deep-clone the current selection into the
+    /// document's internal clipboard. False at apply time when
+    /// nothing is selected.
+    CopySelected,
+    /// Cmd+X parity — copy the selection, then delete it.
+    /// History snapshot follows the existing `delete_selected`
+    /// path so undo restores both clipboard and tree.
+    CutSelected,
+    /// Cmd+V parity — paste the document clipboard as top-level
+    /// siblings on the active page, offset by `offset_px` doc-px.
+    /// Mints fresh ids past `max_node_id()`. Replaces selection
+    /// with the new ids. Apply-time false when the clipboard is
+    /// empty or id-space is exhausted.
+    PasteClipboard {
+        offset_px: i32,
+    },
+    /// Shift-click semantics — toggle a single node's membership
+    /// in the multi-selection set. Mirrors `Document::toggle_selection`:
+    /// if `node_id` is already selected it's removed (and the
+    /// anchor reassigned to the last surviving id); otherwise it's
+    /// added as the new anchor. Rejects unknown ids.
+    ToggleNodeSelection {
+        node_id: u64,
+    },
+    /// Replace the multi-selection (`Document.selected_set`) with
+    /// the supplied list of node ids. The applier walks every
+    /// page to resolve each id; unknown ids are dropped silently
+    /// (per Electron parity — a stale id from a panel click that
+    /// raced a delete should not cause the whole call to fail).
+    /// Empty list clears the selection.
+    SetSelectionSet {
+        node_ids: Vec<u64>,
+    },
+}
+
+/// Which boolean property `SetNodeFlag` should write. Three
+/// LLM-visible flags map 1:1 to the existing `Node` fields:
+/// `hidden` (layer panel eye toggle), `locked` (layer panel
+/// padlock toggle), `collapsed` (layer panel disclosure toggle).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NodeFlag {
+    Hidden,
+    Locked,
+    Collapsed,
 }
 
 /// Wire-friendly value payload for `McpCommand::SetVariableScalar`.
@@ -411,29 +676,6 @@ impl ToolRegistry {
     pub fn is_empty(&self) -> bool {
         self.tools.is_empty()
     }
-}
-
-/// JSON-RPC wire serialiser for `ToolResponse`. Manual emitter so
-/// shell-core stays serde-free (no dep adds for wasm32). Produces
-/// the standard `{"jsonrpc": "2.0", "id": ..., "result": ...}` /
-/// `{"jsonrpc": "2.0", "id": ..., "error": {"code": ..., "message"
-/// ...}}` shape any MCP client expects.
-pub fn response_to_json(r: &ToolResponse) -> String {
-    let (id_repr, body) = match r {
-        ToolResponse::Ok { id, result, .. } => (
-            id_to_json(id),
-            format!(r#""result":{}"#, btree_to_json(result)),
-        ),
-        ToolResponse::Err { id, code, message } => (
-            id_to_json(id),
-            format!(
-                r#""error":{{"code":{},"message":{}}}"#,
-                error_code_to_int(*code),
-                json_escape(message),
-            ),
-        ),
-    };
-    format!(r#"{{"jsonrpc":"2.0","id":{},{}}}"#, id_repr, body)
 }
 
 /// Read line-delimited JSON-RPC from `reader`, dispatch each request
@@ -548,56 +790,3 @@ where
     }
 }
 
-// Internal JSON serialisation helpers used by `response_to_json`.
-// Kept private to this module — the wire parser sits in
-// `mcp/parser.rs`; the first-party tools sit in `mcp/tools.rs`.
-fn id_to_json(id: &RequestId) -> String {
-    match id {
-        RequestId::Str(s) => json_escape(s),
-        RequestId::Num(n) => n.to_string(),
-    }
-}
-
-fn error_code_to_int(code: ToolErrorCode) -> i32 {
-    // JSON-RPC reserves -32600..-32603 for transport-level errors;
-    // tool errors live in the application range (-32000..-32099).
-    match code {
-        ToolErrorCode::MissingArgument => -32_001,
-        ToolErrorCode::InvalidArgument => -32_602,
-        ToolErrorCode::ToolFailed => -32_002,
-        ToolErrorCode::UnknownTool => -32_601,
-        ToolErrorCode::Internal => -32_603,
-    }
-}
-
-fn btree_to_json(m: &BTreeMap<String, String>) -> String {
-    let mut out = String::from("{");
-    let mut first = true;
-    for (k, v) in m {
-        if !first {
-            out.push(',');
-        }
-        first = false;
-        out.push_str(&format!("{}:{}", json_escape(k), json_escape(v)));
-    }
-    out.push('}');
-    out
-}
-
-fn json_escape(s: &str) -> String {
-    let mut out = String::with_capacity(s.len() + 2);
-    out.push('"');
-    for c in s.chars() {
-        match c {
-            '"' => out.push_str("\\\""),
-            '\\' => out.push_str("\\\\"),
-            '\n' => out.push_str("\\n"),
-            '\r' => out.push_str("\\r"),
-            '\t' => out.push_str("\\t"),
-            c if (c as u32) < 0x20 => out.push_str(&format!("\\u{:04x}", c as u32)),
-            c => out.push(c),
-        }
-    }
-    out.push('"');
-    out
-}

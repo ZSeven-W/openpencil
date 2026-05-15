@@ -26,17 +26,35 @@ use openpencil_shell_core::document::Document;
 use openpencil_shell_core::mcp::{
     batch_design_snapshot, copy_node_snapshot, delete_node_snapshot,
     design_content_snapshot, design_refine_snapshot, design_skeleton_snapshot,
-    add_page_snapshot, create_component_snapshot, delete_component_snapshot,
-    delete_page_snapshot, document_info_snapshot, duplicate_page_snapshot,
-    get_component_snapshot, instantiate_component_snapshot, list_components_snapshot,
+    add_page_snapshot, clear_selection_snapshot, create_component_snapshot,
+    delete_component_snapshot, delete_page_snapshot, document_info_snapshot,
+    duplicate_page_snapshot, count_nodes_snapshot, find_node_by_name_snapshot,
+    get_canvas_bounds_snapshot, get_component_snapshot, get_history_depth_snapshot,
+    get_node_children_snapshot, get_node_parent_snapshot, get_selection_set_snapshot,
+    get_viewport_snapshot,
+    instantiate_component_snapshot, list_components_snapshot, list_node_kinds_snapshot,
     rename_component_snapshot, rename_page_snapshot, reorder_page_snapshot,
-    set_active_page_snapshot,
+    align_selected_snapshot, copy_selected_snapshot, cut_selected_snapshot,
+    cycle_active_axis_value_snapshot, delete_selected_snapshot, duplicate_selected_snapshot,
+    group_selected_snapshot, nudge_selected_snapshot, paste_clipboard_snapshot,
+    redo_snapshot, reorder_selected_snapshot,
+    set_active_page_snapshot, set_node_corner_radius_snapshot,
+    set_node_fill_hex_snapshot, set_node_font_size_snapshot,
+    set_node_font_weight_snapshot, set_node_name_snapshot,
+    set_node_rotation_snapshot, set_node_stroke_hex_snapshot,
+    set_node_stroke_width_snapshot, set_node_text_snapshot,
+    set_selection_set_snapshot, toggle_node_selection_snapshot, ungroup_selected_snapshot,
+    set_active_tool_snapshot,
+    set_node_collapsed_snapshot, set_node_hidden_snapshot, set_node_locked_snapshot,
+    set_selection_snapshot, set_viewport_snapshot, snapshot_layout_snapshot,
+    undo_snapshot,
     get_active_theme_snapshot, get_node_snapshot, insert_node_snapshot,
     list_pages_snapshot, list_variables_snapshot, move_node_snapshot,
     replace_node_snapshot, run_stdio_with_applier, selection_snapshot,
     set_active_axis_value_snapshot, set_variable_boolean_snapshot,
     set_variable_color_snapshot, set_variable_number_snapshot,
-    set_variable_string_snapshot, update_node_snapshot, ToolRegistry,
+    set_variable_string_snapshot, create_variable_snapshot, delete_variable_snapshot,
+    rename_variable_snapshot, update_node_snapshot, ToolRegistry,
 };
 
 use crate::persistence::{load_from_path, save_to_path};
@@ -145,6 +163,47 @@ fn rebuild_registry(doc: &Document) -> ToolRegistry {
     r.register(Box::new(get_active_theme_snapshot(doc)));
     r.register(Box::new(list_components_snapshot(doc)));
     r.register(Box::new(get_component_snapshot(doc)));
+    r.register(Box::new(snapshot_layout_snapshot(doc)));
+    r.register(Box::new(get_canvas_bounds_snapshot(doc)));
+    r.register(Box::new(find_node_by_name_snapshot(doc)));
+    r.register(Box::new(get_node_parent_snapshot(doc)));
+    r.register(Box::new(get_node_children_snapshot(doc)));
+    r.register(Box::new(count_nodes_snapshot(doc)));
+    r.register(Box::new(list_node_kinds_snapshot(doc)));
+    r.register(Box::new(get_history_depth_snapshot(doc)));
+    r.register(Box::new(get_viewport_snapshot(doc)));
+    r.register(Box::new(get_selection_set_snapshot(doc)));
+    r.register(Box::new(clear_selection_snapshot()));
+    r.register(Box::new(set_selection_snapshot()));
+    r.register(Box::new(set_viewport_snapshot()));
+    r.register(Box::new(set_node_hidden_snapshot()));
+    r.register(Box::new(set_node_locked_snapshot()));
+    r.register(Box::new(set_node_collapsed_snapshot()));
+    r.register(Box::new(set_active_tool_snapshot()));
+    r.register(Box::new(undo_snapshot()));
+    r.register(Box::new(redo_snapshot()));
+    r.register(Box::new(duplicate_selected_snapshot()));
+    r.register(Box::new(delete_selected_snapshot()));
+    r.register(Box::new(nudge_selected_snapshot()));
+    r.register(Box::new(group_selected_snapshot()));
+    r.register(Box::new(ungroup_selected_snapshot()));
+    r.register(Box::new(reorder_selected_snapshot()));
+    r.register(Box::new(set_node_rotation_snapshot()));
+    r.register(Box::new(set_node_text_snapshot()));
+    r.register(Box::new(set_node_corner_radius_snapshot()));
+    r.register(Box::new(set_node_font_size_snapshot()));
+    r.register(Box::new(set_node_font_weight_snapshot()));
+    r.register(Box::new(set_node_stroke_hex_snapshot()));
+    r.register(Box::new(set_node_stroke_width_snapshot()));
+    r.register(Box::new(align_selected_snapshot()));
+    r.register(Box::new(set_node_fill_hex_snapshot()));
+    r.register(Box::new(set_node_name_snapshot()));
+    r.register(Box::new(set_selection_set_snapshot()));
+    r.register(Box::new(toggle_node_selection_snapshot()));
+    r.register(Box::new(cycle_active_axis_value_snapshot(doc)));
+    r.register(Box::new(copy_selected_snapshot()));
+    r.register(Box::new(cut_selected_snapshot()));
+    r.register(Box::new(paste_clipboard_snapshot()));
     r.register(Box::new(set_variable_color_snapshot(doc)));
     r.register(Box::new(set_active_axis_value_snapshot(doc)));
     r.register(Box::new(insert_node_snapshot()));
@@ -160,6 +219,9 @@ fn rebuild_registry(doc: &Document) -> ToolRegistry {
     r.register(Box::new(set_variable_number_snapshot(doc)));
     r.register(Box::new(set_variable_string_snapshot(doc)));
     r.register(Box::new(set_variable_boolean_snapshot(doc)));
+    r.register(Box::new(create_variable_snapshot(doc)));
+    r.register(Box::new(delete_variable_snapshot(doc)));
+    r.register(Box::new(rename_variable_snapshot(doc)));
     r.register(Box::new(instantiate_component_snapshot()));
     r.register(Box::new(create_component_snapshot()));
     r.register(Box::new(delete_component_snapshot()));
@@ -384,6 +446,47 @@ const TOOL_SCHEMAS: &[&str] = &[
     r#"{"name":"get_active_theme","description":"Return the active theme axis pinning per axis.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}}"#,
     r#"{"name":"list_components","description":"List registered components (saved Frames / Groups promoted via Save as Component). Returns count + a `;`-separated record of `name|id` pairs.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}}"#,
     r#"{"name":"get_component","description":"Fetch one component by id with detail: name, root node kind, and the subtree's leaf count.","inputSchema":{"type":"object","properties":{"component_id":{"type":"string","description":"positive u64 component id"}},"required":["component_id"]}}"#,
+    r#"{"name":"snapshot_layout","description":"Return the bounding box of every top-level node on the active page. Result `layout` is a `;`-separated record of `id|x|y|w|h` (ints, doc-px).","inputSchema":{"type":"object","properties":{},"additionalProperties":false}}"#,
+    r#"{"name":"get_canvas_bounds","description":"Return the union bounding box of every top-level node on the active page (x/y/w/h ints + has_content true/false).","inputSchema":{"type":"object","properties":{},"additionalProperties":false}}"#,
+    r#"{"name":"find_node_by_name","description":"Locate the first node whose name matches (case-sensitive, exact) anywhere on the active page. Returns id + kind. ToolFailed when no match.","inputSchema":{"type":"object","properties":{"name":{"type":"string"}},"required":["name"]}}"#,
+    r#"{"name":"get_node_parent","description":"Return the parent id of node_id on the active page. parent_id=0 means the node is at the page root. depth is distance from root.","inputSchema":{"type":"object","properties":{"node_id":{"type":"string","description":"positive u64 node id"}},"required":["node_id"]}}"#,
+    r#"{"name":"get_node_children","description":"List the immediate children of a node. Returns count + comma-separated ids + per-child (child_<i>_id/kind/name/x/y/width/height). Known leaves and empty containers return count=0 (NOT an error). Only an unknown node_id returns ToolFailed.","inputSchema":{"type":"object","properties":{"node_id":{"type":"string","description":"positive u64 node id"}},"required":["node_id"]}}"#,
+    r#"{"name":"count_nodes","description":"Return total node count across all pages + a per-page breakdown. Result `per_page` is `;`-separated `index|count` records.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}}"#,
+    r#"{"name":"list_node_kinds","description":"Return a per-kind histogram of nodes on the active page (frame/group/rect/ellipse/polygon/line/text/path/other). Result `kinds` is `;`-separated `kind|count` records.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}}"#,
+    r#"{"name":"get_history_depth","description":"Return undo + redo stack sizes. Useful before bulk rollback to know how many steps are available.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}}"#,
+    r#"{"name":"get_viewport","description":"Return current canvas pan + zoom. pan_x/pan_y are i32 doc-px; zoom_percent is the zoom * 100 as int.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}}"#,
+    r#"{"name":"get_selection_set","description":"Return every id in the multi-select set (vs get_selection which returns only the anchor). Result: count + comma-separated ids + anchor.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}}"#,
+    r#"{"name":"clear_selection","description":"Drop the current multi-select. No args.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}}"#,
+    r#"{"name":"set_selection","description":"Set selection to a single node by id (scoped to the ACTIVE page only). Rejects unknown ids and ids that live on a non-active page — switch the active page first with set_active_page.","inputSchema":{"type":"object","properties":{"node_id":{"type":"string","description":"positive u64 node id on the active page"}},"required":["node_id"]}}"#,
+    r#"{"name":"set_viewport","description":"Set canvas pan + zoom. Pass any subset of pan_x / pan_y / zoom_percent — omitted axes are left unchanged. zoom_percent clamps to [10, 2000].","inputSchema":{"type":"object","properties":{"pan_x":{"type":"string","description":"i32 doc-px"},"pan_y":{"type":"string","description":"i32 doc-px"},"zoom_percent":{"type":"string","description":"int * 100 (100 == 1.0×)"}}}}"#,
+    r#"{"name":"set_node_hidden","description":"Toggle a node's visibility (layer-panel eye icon). value is \"true\" to hide.","inputSchema":{"type":"object","properties":{"node_id":{"type":"string"},"value":{"type":"string","enum":["true","false"]}},"required":["node_id","value"]}}"#,
+    r#"{"name":"set_node_locked","description":"Toggle a node's lock (layer-panel padlock icon). value is \"true\" to lock.","inputSchema":{"type":"object","properties":{"node_id":{"type":"string"},"value":{"type":"string","enum":["true","false"]}},"required":["node_id","value"]}}"#,
+    r#"{"name":"set_node_collapsed","description":"Toggle a node's layer-panel disclosure state. value is \"true\" to collapse.","inputSchema":{"type":"object","properties":{"node_id":{"type":"string"},"value":{"type":"string","enum":["true","false"]}},"required":["node_id","value"]}}"#,
+    r#"{"name":"set_active_tool","description":"Change the active canvas tool (left toolbar). Accepts select / rect / ellipse / polygon / line / pen / text / frame / hand.","inputSchema":{"type":"object","properties":{"tool":{"type":"string","enum":["select","rect","ellipse","polygon","line","pen","text","frame","hand"]}},"required":["tool"]}}"#,
+    r#"{"name":"undo","description":"Pop the last history snapshot. Returns false when the past stack is empty.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}}"#,
+    r#"{"name":"redo","description":"Push the last undone snapshot back. Returns false when the redo stack is empty.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}}"#,
+    r#"{"name":"duplicate_selected","description":"Duplicate the currently-selected node and select the clone. Optional offset_px shifts the clone (default 10).","inputSchema":{"type":"object","properties":{"offset_px":{"type":"string","description":"i32 doc-px shift (default 10)"}}}}"#,
+    r#"{"name":"delete_selected","description":"Delete the currently-selected node. Returns false when nothing is selected. Undoable.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}}"#,
+    r#"{"name":"nudge_selected","description":"Translate the currently-selected node by (dx, dy) doc-px. Both 0 rejects.","inputSchema":{"type":"object","properties":{"dx":{"type":"string","description":"i32 doc-px"},"dy":{"type":"string","description":"i32 doc-px"}},"required":["dx","dy"]}}"#,
+    r#"{"name":"group_selected","description":"Wrap the multi-selected siblings in a new Group. Cmd+G equivalent. Rejects when selection is empty / single / spans parents.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}}"#,
+    r#"{"name":"ungroup_selected","description":"Replace the selected Group with its children. Cmd+Shift+G equivalent. Rejects when anchor is not a Group.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}}"#,
+    r#"{"name":"reorder_selected","description":"Move the currently-selected node forward (\"up\") or back (\"down\") in z-order. Mirrors layer-panel [ / ].","inputSchema":{"type":"object","properties":{"direction":{"type":"string","enum":["up","down"]}},"required":["direction"]}}"#,
+    r#"{"name":"set_node_rotation","description":"Set node rotation in degrees on a node by id.","inputSchema":{"type":"object","properties":{"node_id":{"type":"string"},"degrees":{"type":"string","description":"finite f32 rotation in degrees"}},"required":["node_id","degrees"]}}"#,
+    r#"{"name":"set_node_text","description":"Set text content on a Text-kind node by id. Rejects non-Text kinds.","inputSchema":{"type":"object","properties":{"node_id":{"type":"string"},"text":{"type":"string"}},"required":["node_id","text"]}}"#,
+    r#"{"name":"set_node_corner_radius","description":"Set corner-radius (non-negative doc-px) on a node by id. Honored at paint time for Rect / Frame; other kinds accept the write but the radius is invisible.","inputSchema":{"type":"object","properties":{"node_id":{"type":"string"},"radius":{"type":"string","description":"non-negative finite f32"}},"required":["node_id","radius"]}}"#,
+    r#"{"name":"set_node_font_size","description":"Set font size (positive finite doc-px) on a Text-kind node by id. Rejects non-Text kinds.","inputSchema":{"type":"object","properties":{"node_id":{"type":"string"},"font_size":{"type":"string","description":"positive finite f32 doc-px"}},"required":["node_id","font_size"]}}"#,
+    r#"{"name":"set_node_font_weight","description":"Set OpenType font weight (1..=1000) on a Text-kind node by id. Rejects non-Text kinds and out-of-range weights.","inputSchema":{"type":"object","properties":{"node_id":{"type":"string"},"font_weight":{"type":"string","description":"u16 in 1..=1000 (e.g. 400=Regular, 700=Bold)"}},"required":["node_id","font_weight"]}}"#,
+    r##"{"name":"set_node_stroke_hex","description":"Set the stroke color on a node. Existing stroke gets its color overwritten; missing stroke gets a fresh 1 doc-px stroke attached at the parsed color so the change is visible immediately.","inputSchema":{"type":"object","properties":{"node_id":{"type":"string"},"hex":{"type":"string","description":"#rgb / #rrggbb / #rrggbbaa"}},"required":["node_id","hex"]}}"##,
+    r#"{"name":"set_node_stroke_width","description":"Set the stroke width (doc-px) on a node. width=0 clears the stroke; width>0 on a node without an existing stroke attaches a fresh black-default stroke at that width.","inputSchema":{"type":"object","properties":{"node_id":{"type":"string"},"width":{"type":"string","description":"non-negative finite f32 doc-px"}},"required":["node_id","width"]}}"#,
+    r#"{"name":"align_selected","description":"Align or distribute the current multi-selection. Mirrors the PropertyPanel Align section. Distribute variants silently no-op for fewer than 3 selected nodes.","inputSchema":{"type":"object","properties":{"action":{"type":"string","description":"one of left, center_h, right, top, center_v, bottom, distribute_h, distribute_v"}},"required":["action"]}}"#,
+    r##"{"name":"set_node_fill_hex","description":"Set the fill color on a node by id. Sister tool to set_node_stroke_hex; one-call color change without the other update_node fields.","inputSchema":{"type":"object","properties":{"node_id":{"type":"string"},"hex":{"type":"string","description":"#rgb / #rrggbb / #rrggbbaa"}},"required":["node_id","hex"]}}"##,
+    r#"{"name":"set_node_name","description":"Rename a node by id. Empty names (after trim) are rejected so the LayerPanel never shows blank rows.","inputSchema":{"type":"object","properties":{"node_id":{"type":"string"},"name":{"type":"string"}},"required":["node_id","name"]}}"#,
+    r#"{"name":"set_selection_set","description":"Replace the multi-selection (active page only) with the supplied comma-separated node_ids. Empty list clears the selection. Unknown ids AND ids that live on a non-active page drop silently.","inputSchema":{"type":"object","properties":{"node_ids":{"type":"string","description":"comma-separated positive u64 active-page node ids; empty string clears"}},"required":["node_ids"]}}"#,
+    r#"{"name":"toggle_node_selection","description":"Shift-click parity: toggle node_id in the multi-selection (scoped to the ACTIVE page only). Already-selected ⇒ remove (anchor reassigns to last surviving id); otherwise add as new anchor. Rejects unknown ids and ids that live on a non-active page.","inputSchema":{"type":"object","properties":{"node_id":{"type":"string","description":"positive u64 node id on the active page"}},"required":["node_id"]}}"#,
+    r#"{"name":"cycle_active_axis_value","description":"Advance the active value for a theme axis to its next entry (wrapping back to the first). Seeds the axis to its first value when nothing is set. Rejects unknown axes and axes whose values list is empty.","inputSchema":{"type":"object","properties":{"axis":{"type":"string","description":"theme axis name (e.g. \"mode\", \"density\")"}},"required":["axis"]}}"#,
+    r#"{"name":"copy_selected","description":"Cmd+C parity. Deep-clones the active-page selection into the document's internal clipboard. Apply-time false when nothing is selected.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}}"#,
+    r#"{"name":"cut_selected","description":"Cmd+X parity. Copies the selection then deletes it. History snapshot pushed so undo restores both clipboard and tree.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}}"#,
+    r#"{"name":"paste_clipboard","description":"Cmd+V parity. Pastes the document clipboard as top-level siblings on the active page, offset by offset_px doc-px (defaults to 10). Mints fresh ids past max_node_id(). Replaces selection with the new ids. Apply-time false when the clipboard is empty or id-space is exhausted.","inputSchema":{"type":"object","properties":{"offset_px":{"type":"string","description":"i32 doc-px offset; defaults to 10 when omitted"}},"required":[]}}"#,
     // --- write tools ---
     r##"{"name":"set_variable_color","description":"Set a Color-kind variable's value.","inputSchema":{"type":"object","properties":{"name":{"type":"string"},"hex":{"type":"string","description":"#rgb / #rrggbb / #rrggbbaa"}},"required":["name","hex"]}}"##,
     r#"{"name":"batch_design","description":"Insert N leaf nodes on the active page in one atomic shot. nodes_json must be a JSON array string of {kind,name,x,y,width,height,fill_hex?} descriptors.","inputSchema":{"type":"object","properties":{"nodes_json":{"type":"string","description":"JSON array of node descriptors"}},"required":["nodes_json"]}}"#,
@@ -393,6 +496,9 @@ const TOOL_SCHEMAS: &[&str] = &[
     r#"{"name":"set_variable_number","description":"Set a Number-kind variable's value (decimal, may be negative or fractional).","inputSchema":{"type":"object","properties":{"name":{"type":"string"},"value":{"type":"string"}},"required":["name","value"]}}"#,
     r#"{"name":"set_variable_string","description":"Set a String-kind variable's value (free-form text).","inputSchema":{"type":"object","properties":{"name":{"type":"string"},"value":{"type":"string"}},"required":["name","value"]}}"#,
     r#"{"name":"set_variable_boolean","description":"Set a Boolean-kind variable's value (\"true\" or \"false\").","inputSchema":{"type":"object","properties":{"name":{"type":"string"},"value":{"type":"string","enum":["true","false"]}},"required":["name","value"]}}"#,
+    r##"{"name":"create_variable","description":"Create a new design-token variable. kind is color/number/boolean/string; default_value is parsed per kind (hex for color, decimal for number, true/false for boolean, free text for string). Rejects empty/duplicate names and bad defaults.","inputSchema":{"type":"object","properties":{"name":{"type":"string"},"kind":{"type":"string","enum":["color","number","boolean","string"]},"default_value":{"type":"string","description":"hex / decimal / true|false / text per kind"}},"required":["name","kind","default_value"]}}"##,
+    r#"{"name":"delete_variable","description":"Delete a design-token variable by name. Also drops any node $ref pointing at it. Rejects unknown names.","inputSchema":{"type":"object","properties":{"name":{"type":"string"}},"required":["name"]}}"#,
+    r#"{"name":"rename_variable","description":"Rename a design-token variable and rewrite every node $ref pointing at it. Rejects unknown old_name, empty new_name, or a new_name colliding with a different variable.","inputSchema":{"type":"object","properties":{"old_name":{"type":"string"},"new_name":{"type":"string"}},"required":["old_name","new_name"]}}"#,
     r#"{"name":"instantiate_component","description":"Drop a clone of a registered component's root subtree onto the active page. component_id is the id returned by list_components.","inputSchema":{"type":"object","properties":{"component_id":{"type":"string","description":"positive u64 component id"}},"required":["component_id"]}}"#,
     r#"{"name":"create_component","description":"Promote an existing Frame or Group on the active page to a registered component. Use list_components afterwards to see it, instantiate_component to drop a clone.","inputSchema":{"type":"object","properties":{"node_id":{"type":"string","description":"positive u64 node id"},"name":{"type":"string"}},"required":["node_id","name"]}}"#,
     r#"{"name":"delete_component","description":"Remove a component from the registry by id. Live instances already on the page are NOT affected — they're independent clones.","inputSchema":{"type":"object","properties":{"component_id":{"type":"string","description":"positive u64 component id"}},"required":["component_id"]}}"#,
@@ -456,7 +562,7 @@ mod tests {
     }
 
     #[test]
-    fn tools_list_response_includes_all_thirty_three_tools() {
+    fn tools_list_response_includes_all_seventy_seven_tools() {
         let r = tools_list_response("3");
         // Exact-count assertion: any tool added without
         // updating this test will trip the count first. Codex
@@ -465,7 +571,7 @@ mod tests {
         // without being added to the list below.
         assert_eq!(
             TOOL_SCHEMAS.len(),
-            33,
+            77,
             "tools/list catalog count must match the registered tools — add the new tool to this test"
         );
         for name in [
@@ -477,6 +583,47 @@ mod tests {
             "get_active_theme",
             "list_components",
             "get_component",
+            "snapshot_layout",
+            "get_canvas_bounds",
+            "find_node_by_name",
+            "get_node_parent",
+            "get_node_children",
+            "count_nodes",
+            "list_node_kinds",
+            "get_history_depth",
+            "get_viewport",
+            "get_selection_set",
+            "clear_selection",
+            "set_selection",
+            "set_viewport",
+            "set_node_hidden",
+            "set_node_locked",
+            "set_node_collapsed",
+            "set_active_tool",
+            "undo",
+            "redo",
+            "duplicate_selected",
+            "delete_selected",
+            "nudge_selected",
+            "group_selected",
+            "ungroup_selected",
+            "reorder_selected",
+            "set_node_rotation",
+            "set_node_text",
+            "set_node_corner_radius",
+            "set_node_font_size",
+            "set_node_font_weight",
+            "set_node_stroke_hex",
+            "set_node_stroke_width",
+            "align_selected",
+            "set_node_fill_hex",
+            "set_node_name",
+            "set_selection_set",
+            "toggle_node_selection",
+            "cycle_active_axis_value",
+            "copy_selected",
+            "cut_selected",
+            "paste_clipboard",
             "instantiate_component",
             "create_component",
             "delete_component",
@@ -499,6 +646,9 @@ mod tests {
             "set_variable_number",
             "set_variable_string",
             "set_variable_boolean",
+            "create_variable",
+            "delete_variable",
+            "rename_variable",
             "design_skeleton",
             "design_content",
             "design_refine",

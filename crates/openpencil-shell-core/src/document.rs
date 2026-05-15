@@ -831,11 +831,14 @@ impl Tool {
     }
 }
 
-mod align;
+pub mod align;
+mod clipboard;
 mod color_picker;
 mod components;
 mod grouping;
 mod mcp_apply;
+mod mcp_apply_node_attrs;
+mod mcp_apply_selected;
 mod mutators;
 mod page_mutators;
 mod pen;

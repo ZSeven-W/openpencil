@@ -22,6 +22,13 @@ pub struct DocPayload {
     pub version: u32,
     pub active_page_index: usize,
     pub pages: Vec<PagePayload>,
+    /// Design-token table. `#[serde(default)]` so a legacy `.op`
+    /// saved before variables round-tripped still loads (empty
+    /// table). Codex stop-gate: without this field every
+    /// `set_variable_*` / `create|delete|rename_variable` change
+    /// was dropped on save.
+    #[serde(default)]
+    pub var_table: crate::persistence_variables::VarTablePayload,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -100,6 +107,7 @@ pub fn to_payload(doc: &Document) -> DocPayload {
                 children: p.children.iter().map(node_to_payload).collect(),
             })
             .collect(),
+        var_table: crate::persistence_variables::var_table_to_payload(&doc.var_table),
     }
 }
 
@@ -172,7 +180,12 @@ pub fn apply_payload(doc: &mut Document, payload: DocPayload) -> Result<(), Stri
     doc.clear_selection();
     doc.history.past.clear();
     doc.history.future.clear();
-    doc.var_table = openpencil_shell_core::document::VariableTable::default();
+    // Restore the design-token table from the payload. A legacy
+    // `.op` saved before variables round-tripped carries an empty
+    // `var_table` (serde default), which correctly resets to a
+    // blank table — same effect as the old unconditional wipe.
+    doc.var_table =
+        crate::persistence_variables::var_table_from_payload(&payload.var_table);
     doc.components = openpencil_shell_core::document::ComponentLibrary::default();
     doc.ui.pen_in_progress = None;
     doc.ui.pen_cursor_doc = None;
@@ -613,6 +626,8 @@ pub fn run_action(
                     name: "Page 1".into(),
                     children: Vec::new(),
                 }],
+                // Fresh document — no design tokens.
+                var_table: crate::persistence_variables::VarTablePayload::default(),
             };
             let _ = apply_payload(host.document_mut(), payload);
             *current_path = None;

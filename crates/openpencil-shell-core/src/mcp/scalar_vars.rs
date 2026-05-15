@@ -193,3 +193,219 @@ pub fn set_variable_boolean_snapshot(doc: &crate::document::Document) -> SetVari
         .collect();
     SetVariableBoolean { known }
 }
+
+/// The four MCP `create_variable` kind strings.
+const VARIABLE_KINDS: &[&str] = &["color", "number", "boolean", "string"];
+
+/// Light call-time validation of a `default_value` against its
+/// declared `kind`. Mirrors `document::variables::
+/// parse_variable_kind_and_default` (which re-runs at apply time);
+/// duplicated here so a bad default fails as `InvalidArgument`
+/// up front instead of an `Internal` applier demotion.
+fn default_value_ok(kind: &str, default_value: &str) -> bool {
+    match kind {
+        "color" => {
+            // #rgb / #rrggbb / #rrggbbaa, leading '#'.
+            let Some(hex) = default_value.trim().strip_prefix('#') else {
+                return false;
+            };
+            matches!(hex.len(), 3 | 6 | 8)
+                && hex.chars().all(|c| c.is_ascii_hexdigit())
+        }
+        "number" => default_value
+            .parse::<f64>()
+            .map(|n| n.is_finite())
+            .unwrap_or(false),
+        "boolean" => matches!(default_value, "true" | "false"),
+        "string" => true,
+        _ => false,
+    }
+}
+
+/// First-party `create_variable` tool — author a new design
+/// token. Carries a snapshot of existing variable names so a
+/// duplicate name is rejected at call time.
+pub struct CreateVariable {
+    pub existing: BTreeMap<String, ()>,
+}
+
+impl McpTool for CreateVariable {
+    fn name(&self) -> &str {
+        "create_variable"
+    }
+    fn call(&self, args: &BTreeMap<String, String>) -> ToolOutcome {
+        let Some(name) = args.get("name") else {
+            return ToolOutcome::Err(
+                ToolErrorCode::MissingArgument,
+                "name is required".into(),
+            );
+        };
+        let Some(kind) = args.get("kind") else {
+            return ToolOutcome::Err(
+                ToolErrorCode::MissingArgument,
+                "kind is required (color / number / boolean / string)".into(),
+            );
+        };
+        let Some(default_value) = args.get("default_value") else {
+            return ToolOutcome::Err(
+                ToolErrorCode::MissingArgument,
+                "default_value is required".into(),
+            );
+        };
+        if name.trim().is_empty() {
+            return ToolOutcome::Err(
+                ToolErrorCode::InvalidArgument,
+                "name must not be empty after trimming".into(),
+            );
+        }
+        if !VARIABLE_KINDS.contains(&kind.as_str()) {
+            return ToolOutcome::Err(
+                ToolErrorCode::InvalidArgument,
+                format!("kind must be one of {VARIABLE_KINDS:?}, got {kind:?}"),
+            );
+        }
+        if self.existing.contains_key(name.trim()) {
+            return ToolOutcome::Err(
+                ToolErrorCode::ToolFailed,
+                format!("variable {:?} already exists", name.trim()),
+            );
+        }
+        if !default_value_ok(kind, default_value) {
+            return ToolOutcome::Err(
+                ToolErrorCode::InvalidArgument,
+                format!("default_value {default_value:?} invalid for kind {kind:?}"),
+            );
+        }
+        let mut out = BTreeMap::new();
+        out.insert("wrote".into(), "true".into());
+        ToolOutcome::OkWithCommand(
+            out,
+            McpCommand::CreateVariable {
+                name: name.clone(),
+                kind: kind.clone(),
+                default_value: default_value.clone(),
+            },
+        )
+    }
+}
+
+pub fn create_variable_snapshot(doc: &crate::document::Document) -> CreateVariable {
+    let existing = doc
+        .var_table
+        .variables
+        .iter()
+        .map(|v| (v.name.clone(), ()))
+        .collect();
+    CreateVariable { existing }
+}
+
+/// First-party `delete_variable` tool — remove a design token by
+/// name. Snapshots existing names so an unknown name is rejected
+/// at call time.
+pub struct DeleteVariable {
+    pub existing: BTreeMap<String, ()>,
+}
+
+impl McpTool for DeleteVariable {
+    fn name(&self) -> &str {
+        "delete_variable"
+    }
+    fn call(&self, args: &BTreeMap<String, String>) -> ToolOutcome {
+        let Some(name) = args.get("name") else {
+            return ToolOutcome::Err(
+                ToolErrorCode::MissingArgument,
+                "name is required".into(),
+            );
+        };
+        if !self.existing.contains_key(name) {
+            return ToolOutcome::Err(
+                ToolErrorCode::ToolFailed,
+                format!("variable {name:?} not found"),
+            );
+        }
+        let mut out = BTreeMap::new();
+        out.insert("wrote".into(), "true".into());
+        ToolOutcome::OkWithCommand(
+            out,
+            McpCommand::DeleteVariable { name: name.clone() },
+        )
+    }
+}
+
+pub fn delete_variable_snapshot(doc: &crate::document::Document) -> DeleteVariable {
+    let existing = doc
+        .var_table
+        .variables
+        .iter()
+        .map(|v| (v.name.clone(), ()))
+        .collect();
+    DeleteVariable { existing }
+}
+
+/// First-party `rename_variable` tool — rename a design token and
+/// rewrite every node `$ref` pointing at it. Snapshots existing
+/// names so unknown-old / colliding-new are rejected at call time.
+pub struct RenameVariable {
+    pub existing: BTreeMap<String, ()>,
+}
+
+impl McpTool for RenameVariable {
+    fn name(&self) -> &str {
+        "rename_variable"
+    }
+    fn call(&self, args: &BTreeMap<String, String>) -> ToolOutcome {
+        let Some(old_name) = args.get("old_name") else {
+            return ToolOutcome::Err(
+                ToolErrorCode::MissingArgument,
+                "old_name is required".into(),
+            );
+        };
+        let Some(new_name) = args.get("new_name") else {
+            return ToolOutcome::Err(
+                ToolErrorCode::MissingArgument,
+                "new_name is required".into(),
+            );
+        };
+        if new_name.trim().is_empty() {
+            return ToolOutcome::Err(
+                ToolErrorCode::InvalidArgument,
+                "new_name must not be empty after trimming".into(),
+            );
+        }
+        if !self.existing.contains_key(old_name) {
+            return ToolOutcome::Err(
+                ToolErrorCode::ToolFailed,
+                format!("variable {old_name:?} not found"),
+            );
+        }
+        // Collision check — but old == new (after trim) is a
+        // legitimate no-op rename, not a collision.
+        if old_name != new_name.trim()
+            && self.existing.contains_key(new_name.trim())
+        {
+            return ToolOutcome::Err(
+                ToolErrorCode::ToolFailed,
+                format!("variable {:?} already exists", new_name.trim()),
+            );
+        }
+        let mut out = BTreeMap::new();
+        out.insert("wrote".into(), "true".into());
+        ToolOutcome::OkWithCommand(
+            out,
+            McpCommand::RenameVariable {
+                old_name: old_name.clone(),
+                new_name: new_name.clone(),
+            },
+        )
+    }
+}
+
+pub fn rename_variable_snapshot(doc: &crate::document::Document) -> RenameVariable {
+    let existing = doc
+        .var_table
+        .variables
+        .iter()
+        .map(|v| (v.name.clone(), ()))
+        .collect();
+    RenameVariable { existing }
+}

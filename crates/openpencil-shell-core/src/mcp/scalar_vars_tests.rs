@@ -136,3 +136,115 @@ fn apply_mcp_command_routes_to_set_scalar() {
     assert!(!doc.var_table.apply_mcp_command(&bad));
     let _ = Document::sample(); // suppress unused-import warning
 }
+
+#[test]
+fn create_variable_appends_and_rejects_duplicate() {
+    use crate::document::{Document, VariableKind, VariableScalar};
+    let mut doc = Document::empty();
+    assert!(doc.var_table.create_variable(
+        "brand",
+        VariableKind::Color,
+        VariableScalar::Str("#ff8800".into()),
+    ));
+    assert_eq!(doc.var_table.variables.len(), 1);
+    // Duplicate name rejected.
+    assert!(!doc.var_table.create_variable(
+        "brand",
+        VariableKind::Color,
+        VariableScalar::Str("#000000".into()),
+    ));
+    // Bad hex rejected.
+    assert!(!doc.var_table.create_variable(
+        "bad",
+        VariableKind::Color,
+        VariableScalar::Str("not-hex".into()),
+    ));
+    // Kind/scalar mismatch rejected.
+    assert!(!doc.var_table.create_variable(
+        "mismatch",
+        VariableKind::Number,
+        VariableScalar::Str("12".into()),
+    ));
+    assert_eq!(doc.var_table.variables.len(), 1, "only the valid create stuck");
+}
+
+#[test]
+fn delete_variable_drops_dangling_refs() {
+    use crate::document::{Document, NodeId, VariableKind, VariableScalar};
+    let mut doc = Document::empty();
+    doc.var_table.create_variable(
+        "accent",
+        VariableKind::Color,
+        VariableScalar::Str("#112233".into()),
+    );
+    doc.var_table.fill_refs.insert(NodeId::new(7), "accent".into());
+    doc.var_table.stroke_refs.insert(NodeId::new(9), "accent".into());
+    assert!(doc.var_table.delete_variable("accent"));
+    assert!(doc.var_table.variables.is_empty());
+    assert!(doc.var_table.fill_refs.is_empty(), "dangling fill_ref dropped");
+    assert!(doc.var_table.stroke_refs.is_empty(), "dangling stroke_ref dropped");
+    // Unknown name rejected.
+    assert!(!doc.var_table.delete_variable("nope"));
+}
+
+#[test]
+fn rename_variable_rewrites_refs_and_guards_collisions() {
+    use crate::document::{Document, NodeId, VariableKind, VariableScalar};
+    let mut doc = Document::empty();
+    doc.var_table.create_variable(
+        "old",
+        VariableKind::Number,
+        VariableScalar::Num(4.0),
+    );
+    doc.var_table.create_variable(
+        "taken",
+        VariableKind::Number,
+        VariableScalar::Num(8.0),
+    );
+    doc.var_table.fill_refs.insert(NodeId::new(3), "old".into());
+    // Collision with an existing different variable rejected.
+    assert!(!doc.var_table.rename_variable("old", "taken"));
+    // Empty new name rejected.
+    assert!(!doc.var_table.rename_variable("old", "   "));
+    // Unknown old name rejected.
+    assert!(!doc.var_table.rename_variable("ghost", "fresh"));
+    // Happy path: rename + ref rewrite.
+    assert!(doc.var_table.rename_variable("old", "renamed"));
+    assert!(doc.var_table.variables.iter().any(|v| v.name == "renamed"));
+    assert!(!doc.var_table.variables.iter().any(|v| v.name == "old"));
+    assert_eq!(
+        doc.var_table.fill_refs.get(&NodeId::new(3)),
+        Some(&"renamed".to_string()),
+        "fill_ref follows the rename"
+    );
+}
+
+#[test]
+fn create_variable_mcp_command_routes_through_var_table() {
+    use crate::document::{Document, VariableKind, VariableValue, VariableScalar};
+    let mut doc = Document::empty();
+    let cmd = McpCommand::CreateVariable {
+        name: "spacing".into(),
+        kind: "number".into(),
+        default_value: "16".into(),
+    };
+    assert!(doc.apply_mcp_command(&cmd));
+    let v = doc
+        .var_table
+        .variables
+        .iter()
+        .find(|v| v.name == "spacing")
+        .expect("variable created");
+    assert!(matches!(v.kind, VariableKind::Number));
+    match &v.value {
+        VariableValue::Scalar(VariableScalar::Num(n)) => assert_eq!(*n, 16.0),
+        other => panic!("expected Num(16), got {other:?}"),
+    }
+    // Bad kind string rejected at apply.
+    let bad = McpCommand::CreateVariable {
+        name: "x".into(),
+        kind: "rainbow".into(),
+        default_value: "1".into(),
+    };
+    assert!(!doc.apply_mcp_command(&bad));
+}
