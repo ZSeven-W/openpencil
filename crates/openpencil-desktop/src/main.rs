@@ -12,7 +12,9 @@ mod chat_subprocess;
 mod cursor_icon;
 mod export;
 mod export_pdf;
+mod frame;
 mod mcp_serve;
+mod model_discovery;
 mod pen_doc_adapter;
 mod pen_doc_path_bounds;
 mod persistence;
@@ -20,9 +22,8 @@ mod persistence_effects;
 mod persistence_variables;
 mod settings_io;
 
-use openpencil_shell_core::{Color, Point2D, Rect, RenderBackend};
 use openpencil_shell_native::{
-    NativeBackend, NativeFrameBackend, SharedSkiaContext, SharedSkiaError, WidgetHostNative,
+    NativeBackend, SharedSkiaContext, SharedSkiaError, WidgetHostNative,
 };
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
@@ -36,34 +37,6 @@ use winit::window::{Window, WindowId};
 
 const INITIAL_VIEWPORT_W: f32 = 1440.0;
 const INITIAL_VIEWPORT_H: f32 = 900.0;
-
-/// Paint pass — clear, scale by DPI, dispatch to the widget host.
-fn paint(
-    ctx: &mut SharedSkiaContext,
-    backend: &mut NativeBackend,
-    host: &WidgetHostNative,
-    viewport_width: f32,
-    viewport_height: f32,
-    dpi: f32,
-) {
-    ctx.begin_frame();
-    ctx.with_frame(|canvas, _glow| {
-        canvas.clear(skia_safe::Color::BLACK);
-        canvas.reset_matrix();
-        canvas.scale((dpi, dpi));
-        let mut frame = NativeFrameBackend::new(backend, canvas);
-        frame.fill_rect(
-            Rect {
-                origin: Point2D::new(0.0, 0.0),
-                size: Point2D::new(viewport_width, viewport_height),
-            },
-            Color::BLACK,
-        );
-        host.paint(&mut frame, viewport_width, viewport_height);
-    });
-    ctx.present();
-}
-
 
 struct DesktopApp {
     window: Option<Window>,
@@ -106,6 +79,10 @@ struct DesktopApp {
     /// `chat.pending_send`; the event loop drains that into a
     /// `ChatSession` here and pumps deltas into the transcript.
     current_chat: Option<chat_session::ChatSession>,
+    /// Background AI-model discovery — probes the installed CLIs
+    /// on a worker thread; its result is drained into
+    /// `chat.available_models` on a later frame.
+    model_probe: model_discovery::ModelProbe,
 }
 
 impl DesktopApp {
@@ -133,6 +110,7 @@ impl DesktopApp {
             current_path: None,
             error: None,
             current_chat: None,
+            model_probe: model_discovery::ModelProbe::spawn(),
         }
     }
 
@@ -269,7 +247,7 @@ impl ApplicationHandler for DesktopApp {
         self.window = Some(window);
 
         if let (Some(ctx), Some(backend)) = (self.ctx.as_mut(), self.backend.as_mut()) {
-            paint(
+            frame::paint(
                 ctx,
                 backend,
                 &self.host,
@@ -335,10 +313,14 @@ impl ApplicationHandler for DesktopApp {
                 if chat_session::pump(&mut self.host, &mut self.current_chat) {
                     self.redraw_dirty = true;
                 }
+                // Drain background model discovery once it lands.
+                if self.model_probe.poll_into(self.host.document_mut()) {
+                    self.redraw_dirty = true;
+                }
                 let should_paint = self.prepare_redraw();
                 if should_paint {
                     if let (Some(ctx), Some(backend)) = (self.ctx.as_mut(), self.backend.as_mut()) {
-                        paint(
+                        frame::paint(
                             ctx,
                             backend,
                             &self.host,

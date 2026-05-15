@@ -17,6 +17,7 @@
 //!   (single-page + infinite canvas recommended, multi-page also supported).
 
 pub mod agent_settings_state;
+pub mod chat_models;
 pub mod chat_provider;
 pub mod codegen;
 pub mod document;
