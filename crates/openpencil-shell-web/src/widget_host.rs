@@ -174,6 +174,9 @@ fn apply_property_action_impl(
         A::OpenColorPicker(target) => {
             let _ = document.open_color_picker(target, 0.0);
         }
+        A::AddEffect => {
+            document.add_drop_shadow_to_selected();
+        }
     }
 }
 
