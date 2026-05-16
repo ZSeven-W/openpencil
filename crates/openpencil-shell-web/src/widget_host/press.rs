@@ -201,10 +201,7 @@ impl WidgetHost {
         // 0. Layer context menu — top-most overlay when open.
         if let Some(state) = self.editor_state.editor_ui.layer_context_menu.clone() {
             use openpencil_shell_core::widgets::layer_context_menu::LayerContextMenu;
-            let menu = LayerContextMenu::for_state(
-                &self.paint_doc,
-                self.paint_doc.ui.layer_context_menu.clone().unwrap(),
-            );
+            let menu = LayerContextMenu::for_state(&self.editor_state, state.clone());
             if let Some(action) = menu.hit_test(Point2D::new(x, y)) {
                 self.dispatch_layer_context_action(action, state.target);
                 self.editor_state.editor_ui.layer_context_menu = None;

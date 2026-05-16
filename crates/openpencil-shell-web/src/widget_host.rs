@@ -355,10 +355,7 @@ impl WidgetHost {
         self.refresh_paint_doc();
         if let Some(state) = self.editor_state.editor_ui.layer_context_menu.clone() {
             use openpencil_shell_core::widgets::layer_context_menu::LayerContextMenu;
-            let menu = LayerContextMenu::for_state(
-                &self.paint_doc,
-                self.paint_doc.ui.layer_context_menu.clone().unwrap(),
-            );
+            let menu = LayerContextMenu::for_state(&self.editor_state, state.clone());
             let new_hover = menu.hovered_row_at(Point2D::new(x, y)).map(|i| i as u8);
             if new_hover != state.hovered_row {
                 self.editor_state.editor_ui.layer_context_menu =

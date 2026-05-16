@@ -126,11 +126,7 @@ impl WidgetHostNative {
             if let Some(kind) = state.drag {
                 use op_editor_core::ui_draft::ColorPickerDrag;
                 use openpencil_shell_core::widgets::color_picker::ColorPicker;
-                self.refresh_paint_doc();
-                let picker = ColorPicker::for_state(
-                    &self.paint_doc,
-                    self.paint_doc.ui.color_picker.clone().unwrap(),
-                );
+                let picker = ColorPicker::for_state(&self.editor_state, state.clone());
                 let panel = picker.rect(self.last_viewport_w, self.last_viewport_h);
                 let point = Point2D::new(x, y);
                 match kind {
@@ -160,11 +156,7 @@ impl WidgetHostNative {
         }
         if let Some(state) = self.editor_state.editor_ui.layer_context_menu.clone() {
             use openpencil_shell_core::widgets::layer_context_menu::LayerContextMenu;
-            self.refresh_paint_doc();
-            let menu = LayerContextMenu::for_state(
-                &self.paint_doc,
-                self.paint_doc.ui.layer_context_menu.clone().unwrap(),
-            );
+            let menu = LayerContextMenu::for_state(&self.editor_state, state.clone());
             let new_hover = menu.hovered_row_at(Point2D::new(x, y)).map(|i| i as u8);
             if new_hover != state.hovered_row {
                 self.editor_state.editor_ui.layer_context_menu =

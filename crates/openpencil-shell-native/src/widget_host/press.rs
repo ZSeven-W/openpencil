@@ -161,11 +161,7 @@ impl WidgetHostNative {
             use openpencil_shell_core::widgets::color_picker::{
                 drag_for_hit, ColorPicker, ColorPickerHit,
             };
-            self.refresh_paint_doc();
-            let picker = ColorPicker::for_state(
-                &self.paint_doc,
-                self.paint_doc.ui.color_picker.clone().unwrap(),
-            );
+            let picker = ColorPicker::for_state(&self.editor_state, state.clone());
             let panel = picker.rect(viewport_width, viewport_height);
             let point = Point2D::new(x, y);
             match picker.hit_test(panel, point) {
@@ -195,10 +191,9 @@ impl WidgetHostNative {
                             }
                             _ => {}
                         }
-                        // `drag_for_hit` returns a shell-core
-                        // `ColorPickerDrag`; translate to op-editor-core.
-                        self.editor_state
-                            .color_picker_set_drag(Some(color_picker_drag(kind)));
+                        // `drag_for_hit` returns op-editor-core's
+                        // `ColorPickerDrag` — no translation needed.
+                        self.editor_state.color_picker_set_drag(Some(kind));
                     }
                     self.mark_dirty();
                     return true;
@@ -214,11 +209,7 @@ impl WidgetHostNative {
 
         if let Some(state) = self.editor_state.editor_ui.layer_context_menu.clone() {
             use openpencil_shell_core::widgets::layer_context_menu::LayerContextMenu;
-            self.refresh_paint_doc();
-            let menu = LayerContextMenu::for_state(
-                &self.paint_doc,
-                self.paint_doc.ui.layer_context_menu.clone().unwrap(),
-            );
+            let menu = LayerContextMenu::for_state(&self.editor_state, state.clone());
             if let Some(action) = menu.hit_test(Point2D::new(x, y)) {
                 self.dispatch_layer_context_action(action, state.target.clone());
                 self.editor_state.editor_ui.layer_context_menu = None;
@@ -755,20 +746,6 @@ impl WidgetHostNative {
             return rename_committed || text_edit_committed;
         }
         rename_committed || text_edit_committed
-    }
-}
-
-/// Translate a shell-core `ColorPickerDrag` into op-editor-core's.
-fn color_picker_drag(
-    d: openpencil_shell_core::document::ColorPickerDrag,
-) -> op_editor_core::ui_draft::ColorPickerDrag {
-    match d {
-        openpencil_shell_core::document::ColorPickerDrag::SvBox => {
-            op_editor_core::ui_draft::ColorPickerDrag::SvBox
-        }
-        openpencil_shell_core::document::ColorPickerDrag::HueSlider => {
-            op_editor_core::ui_draft::ColorPickerDrag::HueSlider
-        }
     }
 }
 
