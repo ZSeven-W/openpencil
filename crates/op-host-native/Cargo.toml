@@ -1,0 +1,150 @@
+[package]
+name = "op-host-native"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "OpenPencil native host — winit + skia-safe + accesskit backend, integrating jian-skia + jian-host-desktop sub-pieces (spec v19 §3 / §5.2.1)"
+
+[lib]
+name = "op_host_native"
+path = "src/lib.rs"
+
+[dependencies]
+# Phase 7.3 reorg: openpencil-shell-core dissolved — widget facade /
+# theme / layout scene / scene vars / render-backend / gesture types
+# all resolve through the op-editor-ui crate.
+op-editor-ui = { path = "../op-editor-ui" }
+
+# `WidgetHostNative`'s single source of truth — the canonical-model
+# `op_editor_core::EditorState`. The host derives a read-only paint
+# `Document` from it each frame (see `widget_host.rs`).
+op-editor-core = { path = "../op-editor-core" }
+
+# Native-only deps cfg-gated outside wasm32. This is critical (resolves codex round 2 B1 BLOCK):
+# without cfg-gate, cargo would fetch + run skia-safe's build.rs (which fails on wasm32),
+# and the Step 5 grep `must NOT be compiled for wasm32` would never match — masked by
+# the skia build error.
+#
+# v19 pivot (Task 1): add P0-pinned GL stack + jian-skia + jian-host-desktop.
+#   - P0 dep-stack pin comes from the P0 probe (plan v7 §Task P0; skia-safe 0.97 + glow 0.17 +
+#     glutin 0.32.3 + glutin-winit 0.5.0 + winit 0.30.13 + raw-window-handle 0.6.2 +
+#     scopeguard 1.2 all GO on macOS/Windows/Linux).
+#   - jian-skia (textlayout feature) provides SkiaBackend impl + skia textlayout (replaces parley).
+#   - jian-host-desktop (target-gated desktop only, without the `run` feature) reuses
+#     PointerTranslator / scene::collect_draws_with_state / DesktopHost config helpers;
+#     OP runs its own GPU event loop and does not call jian_host_desktop::run (softbuffer
+#     raster present is not needed).
+#
+# Desktop GL stack — target-gated to macOS / Linux / Windows. iOS / Android
+# pull EaglProvider / AndroidEglProvider stubs (Step 1f) which don't need
+# glutin / winit / desktop skia-safe gl bindings; spec §11 invariant 1 says
+# shell-native must compile on mobile cargo check (verified by CI mobile-check
+# job in rust-multiplatform.yml). winit features note: on Linux you MUST
+# explicitly enable `x11` and/or `wayland`, otherwise `platform_impl/mod.rs`
+# triggers `compile_error!`. macOS / Windows backends are auto-enabled via
+# cfg(target_os) and need no feature flag.
+# Cross-platform abstraction deps — pulled for ALL non-wasm targets including
+# iOS / Android. The `GlContextProvider` trait (spec §3.1) references
+# `glow::Context` in its method signatures and Step 1f Eagl / AndroidEgl
+# stubs reference `raw_window_handle` for `on_resume`; both must be importable
+# on mobile per spec §11 invariant 2. `glow` and `raw-window-handle` are
+# pure-Rust thin bindings — no native build steps on iOS / Android.
+# `jian-core` is wasm32-clean per P0.5 and platform-neutral on mobile.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+jian-core = { path = "../../vendor/jian/crates/jian-core", version = "0.0.1" }
+glow = "0.17.0"
+raw-window-handle = "0.6.2"
+
+# The canonical loader / `EditorState` → paint-`Document` bridge.
+# Desktop-side (depends on skia via jian-skia's SkiaMeasure), so it
+# is gated outside wasm32 alongside the rest of the native stack.
+op-pen-loader = { path = "../op-pen-loader" }
+
+# The canonical `.op` schema — `WidgetHostNative` names
+# `VariableScalar` when committing variable-row edits onto
+# `EditorState`. Already a transitive dep via op-editor-core.
+jian-ops-schema = { path = "../../vendor/jian/crates/jian-ops-schema" }
+
+# Cross-platform widget render stack (desktop + mobile, NOT wasm).
+#
+# 2026-05-10 mobile extension (per user "extend, jian 最后也会需要 ios
+# 和 android"): skia-safe + jian-skia move out of the desktop-only
+# block so `NativeBackend` + `widget_host` compile on iOS / Android
+# too. skia-safe's `gl` feature is desktop-only (iOS deprecated GL —
+# Metal goes in Step 1f; Android uses GL/Vulkan via the platform
+# provider, not via skia-safe's bundled GL bindings here).
+# Mobile cargo check pulls skia-safe with no GL feature, exercising
+# only the raster + textlayout paths that the inspector slice needs.
+# Spec §12.3 jian boundary invariants 2 & 3 — REVISED 2026-05-10:
+# Invariant 2 now allows `jian-skia` on mobile (the widget render
+# stack uses it); `jian-host-desktop` remains forbidden on mobile
+# because it carries winit / glutin / desktop-only host glue.
+# Invariant 3 (wasm32 forbids both) is unchanged. The
+# `tools/check-jian-boundaries.sh` script enforces the revised set
+# alongside the script header rationale.
+[target.'cfg(any(target_os = "macos", target_os = "linux", target_os = "windows", target_os = "ios", target_os = "android"))'.dependencies]
+skia-safe = { version = "0.97.0", default-features = false, features = [
+  "binary-cache",
+  "textlayout",
+] }
+jian-skia = { path = "../../vendor/jian/crates/jian-skia", version = "0.0.1", features = [
+  "textlayout",
+] }
+
+# Desktop-only GL stack — `gl` feature on skia-safe, plus glutin /
+# glutin-winit / winit / jian-host-desktop (all GUI-host glue that
+# does not apply to iOS / Android, where the host is a UIKit /
+# Activity wrapper — Step 1f scope). Cargo deduplicates: skia-safe
+# resolves to one crate version with the union of features (binary-
+# cache + textlayout from above + gl from here on desktop only).
+# winit features note: on Linux you MUST explicitly enable `x11`
+# and/or `wayland`, otherwise `platform_impl/mod.rs` triggers
+# `compile_error!`. macOS / Windows backends auto-enable via
+# cfg(target_os) and need no feature flag.
+[target.'cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))'.dependencies]
+skia-safe = { version = "0.97.0", default-features = false, features = [
+  "binary-cache",
+  "textlayout",
+  "gl",
+] }
+glutin = "0.32.3"
+glutin-winit = "0.5.0"
+winit = { version = "0.30.13", default-features = false, features = [
+  "x11",
+  "wayland",
+  "wayland-csd-adwaita",
+  "rwh_06",
+] }
+scopeguard = "1.2"
+jian-host-desktop = { path = "../../vendor/jian/crates/jian-host-desktop", version = "0.0.1", default-features = false, features = [
+  "textlayout",
+] }
+
+# tracing for span instrumentation across SharedSkiaContext / NativeBackend
+# (spec §3.3 / §5.2.1; Task 2 Step 15 dictates per-method spans).
+[dependencies.tracing]
+workspace = true
+
+# thiserror for ProviderError / SharedSkiaError enums (context module).
+[dependencies.thiserror]
+workspace = true
+
+# Task 2 dev-dependencies (spec §9 + plan v7 Steps 16a-16f):
+# - sysinfo: 100-loop RSS sanity (memory_loop.rs)
+# - tracing-test: capture span emission (tracing_spans.rs)
+# - khronos-egl: Linux EGL pbuffer GPU smoke (gpu_smoke.rs / gpu_chrome_stub_composition.rs)
+[dev-dependencies]
+sysinfo = "0.30"
+# `no-env-filter` is required for integration tests — the default filter
+# only captures logs from the test crate itself, but our `#[tracing::instrument]`
+# spans live inside `op_host_native::*`. (Per upstream README §136.)
+tracing-test = { version = "0.2", features = ["no-env-filter"] }
+
+# EGL pbuffer dev-dep is Linux-only — macOS/Windows GPU smoke takes other
+# paths (invisible winit window / manual). Gating with `target.'cfg(...)'`
+# keeps `cargo check` on non-Linux quiet about the un-fetchable pkg-config
+# requirement. khronos-egl 6.x covers Mesa softpipe pbuffer creation.
+[target.'cfg(target_os = "linux")'.dev-dependencies]
+khronos-egl = { version = "6", features = ["dynamic"] }
+libloading = "0.8"

@@ -2318,6 +2318,61 @@ dependencies = [
 ]
 
 [[package]]
+name = "op-host-desktop"
+version = "0.1.0"
+dependencies = [
+ "agent",
+ "anthropic-agent-sdk",
+ "async-trait",
+ "dirs 5.0.1",
+ "futures",
+ "github-copilot-sdk",
+ "glam",
+ "jian-core",
+ "jian-ops-schema",
+ "jian-skia",
+ "op-ai",
+ "op-editor-core",
+ "op-editor-ui",
+ "op-host-native",
+ "op-mcp",
+ "op-pen-loader",
+ "reqwest",
+ "rfd",
+ "serde",
+ "serde_json",
+ "skia-safe",
+ "tokio",
+ "winit",
+]
+
+[[package]]
+name = "op-host-native"
+version = "0.1.0"
+dependencies = [
+ "glow",
+ "glutin",
+ "glutin-winit",
+ "jian-core",
+ "jian-host-desktop",
+ "jian-ops-schema",
+ "jian-skia",
+ "khronos-egl",
+ "libloading",
+ "op-editor-core",
+ "op-editor-ui",
+ "op-pen-loader",
+ "raw-window-handle",
+ "scopeguard",
+ "skia-safe",
+ "sysinfo",
+ "thiserror 1.0.69",
+ "tracing",
+ "tracing-test",
+ "winit",
+]
+
+[[package]]
 name = "op-host-web"
 version = "0.1.0"
 dependencies = [
@@ -2360,35 +2415,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "openpencil-desktop"
-version = "0.1.0"
-dependencies = [
- "agent",
- "anthropic-agent-sdk",
- "async-trait",
- "dirs 5.0.1",
- "futures",
- "github-copilot-sdk",
- "glam",
- "jian-core",
- "jian-ops-schema",
- "jian-skia",
- "op-ai",
- "op-editor-core",
- "op-mcp",
- "op-pen-loader",
- "openpencil-shell-core",
- "openpencil-shell-native",
- "reqwest",
- "rfd",
- "serde",
- "serde_json",
- "skia-safe",
- "tokio",
- "winit",
-]
-
-[[package]]
 name = "openpencil-shell-core"
 version = "0.1.0"
 dependencies = [
@@ -2396,32 +2422,6 @@ dependencies = [
  "op-editor-core",
  "op-editor-ui",
  "op-i18n",
-]
-
-[[package]]
-name = "openpencil-shell-native"
-version = "0.1.0"
-dependencies = [
- "glow",
- "glutin",
- "glutin-winit",
- "jian-core",
- "jian-host-desktop",
- "jian-ops-schema",
- "jian-skia",
- "khronos-egl",
- "libloading",
- "op-editor-core",
- "op-pen-loader",
- "openpencil-shell-core",
- "raw-window-handle",
- "scopeguard",
- "skia-safe",
- "sysinfo",
- "thiserror 1.0.69",
- "tracing",
- "tracing-test",
- "winit",
 ]
 
 [[package]]
