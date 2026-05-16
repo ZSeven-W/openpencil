@@ -33,14 +33,14 @@ pub struct DocPayload {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PagePayload {
-    pub id: u64,
+    pub id: String,
     pub name: String,
     pub children: Vec<NodePayload>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct NodePayload {
-    pub id: u64,
+    pub id: String,
     /// Original schema id (the string `id` in the `.op` file). Only
     /// populated when the payload was built from a canonical-schema
     /// load — used to look up layout rects after jian-core's
@@ -106,7 +106,7 @@ pub fn to_payload(doc: &Document) -> DocPayload {
             .pages
             .iter()
             .map(|p| PagePayload {
-                id: p.id.raw(),
+                id: p.id.raw().to_string(),
                 name: p.name.clone(),
                 children: p.children.iter().map(node_to_payload).collect(),
             })
@@ -117,7 +117,7 @@ pub fn to_payload(doc: &Document) -> DocPayload {
 
 fn node_to_payload(n: &Node) -> NodePayload {
     NodePayload {
-        id: n.id.raw(),
+        id: n.id.raw().to_string(),
         schema_id: String::new(),
         kind: kind_to_string(&n.kind),
         name: n.name.clone(),
@@ -169,7 +169,7 @@ pub fn apply_payload(doc: &mut Document, payload: DocPayload) -> Result<(), Stri
     if doc.pages.is_empty() {
         // Defensive — never leave the document with zero pages.
         doc.pages.push(Page {
-            id: NodeId::new(1),
+            id: NodeId::new("n1"),
             name: "Page 1".into(),
             children: Vec::new(),
         });
@@ -628,7 +628,7 @@ pub fn run_action(
                 version: 1,
                 active_page_index: 0,
                 pages: vec![PagePayload {
-                    id: 1,
+                    id: "n1".to_string(),
                     name: "Page 1".into(),
                     children: Vec::new(),
                 }],

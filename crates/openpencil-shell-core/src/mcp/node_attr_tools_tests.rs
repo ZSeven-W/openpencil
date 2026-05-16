@@ -20,7 +20,7 @@ fn rect(x: f32, y: f32, w: f32, h: f32) -> Rect {
 
 fn doc_with_text_node() -> Document {
     let mut doc = Document::empty();
-    let mut node = Node::leaf(TEXT_ID, NodeKind::Text, "label")
+    let mut node = Node::leaf(format!("n{TEXT_ID}"), NodeKind::Text, "label")
         .with_bounds(rect(0.0, 0.0, 100.0, 24.0))
         .with_fill(Color::BLACK)
         .with_text("Hello");
@@ -31,16 +31,16 @@ fn doc_with_text_node() -> Document {
     // Document::empty() ships with a "Page 1" already; replace its
     // children rather than pushing a second page (otherwise the
     // fixture node lands at pages[1] and the assertions miss it).
-    doc.pages[0] = Page::new(1, "P", vec![node]);
+    doc.pages[0] = Page::new("n1", "P", vec![node]);
     doc
 }
 
 fn doc_with_rect_node() -> Document {
     let mut doc = Document::empty();
-    let node = Node::leaf(RECT_ID, NodeKind::Rect, "box")
+    let node = Node::leaf(format!("n{RECT_ID}"), NodeKind::Rect, "box")
         .with_bounds(rect(0.0, 0.0, 50.0, 50.0))
         .with_fill(Color::RED);
-    doc.pages[0] = Page::new(1, "P", vec![node]);
+    doc.pages[0] = Page::new("n1", "P", vec![node]);
     doc
 }
 

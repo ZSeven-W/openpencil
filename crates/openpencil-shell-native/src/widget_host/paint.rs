@@ -60,24 +60,24 @@ impl WidgetHostNative {
             // mirrors the post-commit layout — both the visible rows
             // and the drop-indicator y the user sees are then exactly
             // what `reorder_before/after` produces on release.
-            let active_drag = self.layer_drag.filter(|d| {
+            let active_drag = self.layer_drag.clone().filter(|d| {
                 d.active
                     && self
                         .document
                         .active_page()
-                        .map(|p| p.find(d.source).is_some())
+                        .map(|p| p.find(&d.source).is_some())
                         .unwrap_or(false)
             });
-            let mut layer_panel = if let Some(d) = active_drag {
-                LayerPanel::from_document_with_drag_source(&self.document, d.source)
+            let mut layer_panel = if let Some(d) = &active_drag {
+                LayerPanel::from_document_with_drag_source(&self.document, d.source.clone())
             } else {
                 LayerPanel::from_document(&self.document)
             };
-            if let Some(d) = active_drag {
+            if let Some(d) = &active_drag {
                 layer_panel.drop_target = layer_panel
                     .drop_target_at(layer_panel_rect, Point2D::new(d.current_x, d.current_y));
                 // Floating ghost — keeps the source visible mid-drag.
-                if let Some(item) = LayerPanel::ghost_item_for(&self.document, d.source) {
+                if let Some(item) = LayerPanel::ghost_item_for(&self.document, d.source.clone()) {
                     layer_panel.drag_ghost = Some((item, d.current_y));
                 }
             }
@@ -363,7 +363,7 @@ impl WidgetHostNative {
 
         // 11. Layer context menu — right-click overlay above
         //     everything else.
-        if let Some(state) = self.document.ui.layer_context_menu {
+        if let Some(state) = self.document.ui.layer_context_menu.clone() {
             use openpencil_shell_core::widgets::layer_context_menu::LayerContextMenu;
             let menu = LayerContextMenu::for_state(&self.document, state);
             let menu_rect = menu.rect();

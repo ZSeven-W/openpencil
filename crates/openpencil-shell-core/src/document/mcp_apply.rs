@@ -10,10 +10,10 @@ use super::{Document, Node, NodeId, NodeKind};
 /// when the id doesn't resolve. The walk uses raw recursion rather
 /// than the existing `Document::find` because that returns `&Node`,
 /// not `&mut Node`.
-pub(super) fn find_node_mut_in_doc(
-    doc: &mut Document,
-    target: NodeId,
-) -> Option<&mut Node> {
+pub(super) fn find_node_mut_in_doc<'d>(
+    doc: &'d mut Document,
+    target: &NodeId,
+) -> Option<&'d mut Node> {
     for page in doc.pages.iter_mut() {
         if let Some(node) = find_in_subtree(&mut page.children, target) {
             return Some(node);
@@ -22,12 +22,12 @@ pub(super) fn find_node_mut_in_doc(
     None
 }
 
-fn find_in_subtree(children: &mut [Node], target: NodeId) -> Option<&mut Node> {
+fn find_in_subtree<'c>(children: &'c mut [Node], target: &NodeId) -> Option<&'c mut Node> {
     // Locate by id first using a fresh iter (immutable position
     // scan); separate the recursive walk so the borrow checker
     // doesn't see two overlapping `iter_mut` ranges on the same
     // slice.
-    if let Some(idx) = children.iter().position(|n| n.id == target) {
+    if let Some(idx) = children.iter().position(|n| n.id == *target) {
         return Some(&mut children[idx]);
     }
     for node in children.iter_mut() {
@@ -40,8 +40,8 @@ fn find_in_subtree(children: &mut [Node], target: NodeId) -> Option<&mut Node> {
 
 /// Remove the node with `target` id from `children` or any nested
 /// descendant. Returns true when removed.
-fn remove_in_subtree(children: &mut Vec<Node>, target: NodeId) -> bool {
-    if let Some(idx) = children.iter().position(|n| n.id == target) {
+fn remove_in_subtree(children: &mut Vec<Node>, target: &NodeId) -> bool {
+    if let Some(idx) = children.iter().position(|n| n.id == *target) {
         children.remove(idx);
         return true;
     }
@@ -56,7 +56,7 @@ fn remove_in_subtree(children: &mut Vec<Node>, target: NodeId) -> bool {
 /// Immutable lookup for a node anywhere in the document. Used by
 /// the move cycle-check (which needs to walk a subtree without
 /// holding a mutable borrow on it).
-pub(super) fn find_node_in_doc(doc: &Document, target: NodeId) -> Option<&Node> {
+pub(super) fn find_node_in_doc<'d>(doc: &'d Document, target: &NodeId) -> Option<&'d Node> {
     for page in doc.pages.iter() {
         if let Some(node) = find_in_subtree_ref(&page.children, target) {
             return Some(node);
@@ -65,9 +65,9 @@ pub(super) fn find_node_in_doc(doc: &Document, target: NodeId) -> Option<&Node> 
     None
 }
 
-fn find_in_subtree_ref(children: &[Node], target: NodeId) -> Option<&Node> {
+fn find_in_subtree_ref<'c>(children: &'c [Node], target: &NodeId) -> Option<&'c Node> {
     for node in children.iter() {
-        if node.id == target {
+        if node.id == *target {
             return Some(node);
         }
     }
@@ -82,8 +82,8 @@ fn find_in_subtree_ref(children: &[Node], target: NodeId) -> Option<&Node> {
 /// True when `node` or any descendant has id == `target`. Used by
 /// move's cycle guard: reparenting source under a descendant of
 /// itself would orphan + cycle the subtree.
-fn subtree_contains(node: &Node, target: NodeId) -> bool {
-    if node.id == target {
+fn subtree_contains(node: &Node, target: &NodeId) -> bool {
+    if node.id == *target {
         return true;
     }
     node.children.iter().any(|c| subtree_contains(c, target))
@@ -92,7 +92,7 @@ fn subtree_contains(node: &Node, target: NodeId) -> bool {
 /// Find + detach the node with `target` id from its parent's
 /// children vec, returning the owned Node. None when not found.
 /// Walks every page recursively.
-fn detach_node(doc: &mut Document, target: NodeId) -> Option<Node> {
+fn detach_node(doc: &mut Document, target: &NodeId) -> Option<Node> {
     for page in doc.pages.iter_mut() {
         if let Some(node) = detach_from_subtree(&mut page.children, target) {
             return Some(node);
@@ -101,8 +101,8 @@ fn detach_node(doc: &mut Document, target: NodeId) -> Option<Node> {
     None
 }
 
-fn detach_from_subtree(children: &mut Vec<Node>, target: NodeId) -> Option<Node> {
-    if let Some(idx) = children.iter().position(|n| n.id == target) {
+fn detach_from_subtree(children: &mut Vec<Node>, target: &NodeId) -> Option<Node> {
+    if let Some(idx) = children.iter().position(|n| n.id == *target) {
         return Some(children.remove(idx));
     }
     for node in children.iter_mut() {
@@ -118,16 +118,19 @@ fn detach_from_subtree(children: &mut Vec<Node>, target: NodeId) -> Option<Node>
 /// collision with the live document. `next_id` is bumped past
 /// every emitted id. Returns None when the id space is exhausted
 /// mid-walk (callers surface that as an apply-time failure).
-fn clone_subtree(node: &Node, next_id: &mut u64) -> Option<Node> {
+fn clone_subtree(
+    node: &Node,
+    next_id: &mut u64,
+    taken: &mut std::collections::HashSet<NodeId>,
+) -> Option<Node> {
     // Reuse Node's #[derive(Clone)] for the bulk copy (preserves
     // every field including new ones added later), then rewrite
     // the id + recurse into children with fresh ids.
     let mut clone = node.clone();
-    clone.id = NodeId::new_opt(*next_id)?;
-    *next_id = next_id.checked_add(1)?;
+    clone.id = super::walkers::alloc_n_id(next_id, taken)?;
     let mut fresh_children = Vec::with_capacity(node.children.len());
     for child in &node.children {
-        fresh_children.push(clone_subtree(child, next_id)?);
+        fresh_children.push(clone_subtree(child, next_id, taken)?);
     }
     clone.children = fresh_children;
     Some(clone)
@@ -137,7 +140,7 @@ fn clone_subtree(node: &Node, next_id: &mut u64) -> Option<Node> {
 /// current slot. Walks every page; on the first match,
 /// swaps in place (`children[idx] = replacement`) so the
 /// sibling order is preserved. Returns true on success.
-fn replace_node_in_doc(doc: &mut Document, target: NodeId, replacement: Node) -> bool {
+fn replace_node_in_doc(doc: &mut Document, target: &NodeId, replacement: Node) -> bool {
     // Wrap the replacement in an Option so we can take() it inside
     // the recursive walk without giving up the Some-on-failure
     // contract (replacement returned untouched is irrelevant here
@@ -153,10 +156,10 @@ fn replace_node_in_doc(doc: &mut Document, target: NodeId, replacement: Node) ->
 
 fn replace_in_subtree(
     children: &mut [Node],
-    target: NodeId,
+    target: &NodeId,
     slot: &mut Option<Node>,
 ) -> bool {
-    if let Some(idx) = children.iter().position(|n| n.id == target) {
+    if let Some(idx) = children.iter().position(|n| n.id == *target) {
         if let Some(replacement) = slot.take() {
             children[idx] = replacement;
             return true;
@@ -210,22 +213,20 @@ impl Document {
                     return false;
                 };
                 // Compute the fresh id BEFORE taking a mutable
-                // borrow on `pages` — `max_node_id()` reads pages
+                // borrow on `pages` — `next_node_id()` reads pages
                 // immutably and would conflict otherwise.
-                let Some(next_id) = self.next_node_id_seed() else {
-                    // Id space exhausted (existing node at
-                    // u64::MAX). Codex stop-gate: the previous
-                    // saturating_add wrapped to u64::MAX,
-                    // colliding with the live node. Refuse the
-                    // insert + force the LLM client to handle the
-                    // error rather than silently overwriting.
+                let Some(new_id) = self.next_node_id() else {
+                    // Id space exhausted (counter at u64::MAX).
+                    // Codex stop-gate: refuse the insert + force
+                    // the LLM client to handle the error rather
+                    // than silently overwriting a live node.
                     return false;
                 };
                 let active_idx = self.active_page_index;
                 let Some(page) = self.pages.get_mut(active_idx) else {
                     return false;
                 };
-                let mut node = Node::leaf(next_id, node_kind, name.clone());
+                let mut node = Node::leaf(new_id, node_kind, name.clone());
                 node.bounds = crate::Rect::xywh(
                     *x as f32,
                     *y as f32,
@@ -251,7 +252,7 @@ impl Document {
                 name,
                 fill_hex,
             } => {
-                let Some(target) = NodeId::new_opt(*node_id) else {
+                let Some(target) = NodeId::from_mcp_u64(*node_id) else {
                     return false;
                 };
                 // Pre-validate EVERY field BEFORE the mutable
@@ -275,7 +276,7 @@ impl Document {
                         return false;
                     }
                 }
-                let Some(node) = find_node_mut_in_doc(self, target) else {
+                let Some(node) = find_node_mut_in_doc(self, &target) else {
                     return false;
                 };
                 // All validation passed — every field now applies
@@ -301,12 +302,12 @@ impl Document {
                 true
             }
             crate::mcp::McpCommand::DeleteNode { node_id } => {
-                let Some(target) = NodeId::new_opt(*node_id) else {
+                let Some(target) = NodeId::from_mcp_u64(*node_id) else {
                     return false;
                 };
                 let mut removed = false;
                 for page in self.pages.iter_mut() {
-                    if remove_in_subtree(&mut page.children, target) {
+                    if remove_in_subtree(&mut page.children, &target) {
                         removed = true;
                         break;
                     }
@@ -317,39 +318,40 @@ impl Document {
                 node_id,
                 target_parent_id,
             } => {
-                let Some(source) = NodeId::new_opt(*node_id) else {
+                let Some(source) = NodeId::from_mcp_u64(*node_id) else {
                     return false;
                 };
-                let target_parent = NodeId::new_opt(*target_parent_id);
+                let target_parent = NodeId::from_mcp_u64(*target_parent_id);
                 // Validate source + target up front; clone the
                 // owned subtree before mutating pages so the clone
                 // has stable ids regardless of where the live source
                 // lives.
-                let Some(src_node) = find_node_in_doc(self, source) else {
+                let Some(src_node) = find_node_in_doc(self, &source) else {
                     return false;
                 };
                 // Allow target == source: copying a node into
                 // itself is a no-op semantically (clone lands as a
                 // descendant of source). LLM use case: duplicate a
                 // group's contents under the group itself.
-                if let Some(target_id) = target_parent {
+                if let Some(target_id) = &target_parent {
                     if find_node_in_doc(self, target_id).is_none() {
                         return false;
                     }
                 } else if self.pages.get(self.active_page_index).is_none() {
                     return false;
                 }
-                // Allocate a fresh id base past max_node_id() so the
+                // Allocate fresh ids past max_node_id() so the
                 // clone subtree's every node has a unique id.
                 let Some(mut next_id) = self.next_node_id_seed() else {
                     return false;
                 };
-                let clone = match clone_subtree(src_node, &mut next_id) {
+                let mut taken = self.collect_node_ids();
+                let clone = match clone_subtree(src_node, &mut next_id, &mut taken) {
                     Some(c) => c,
                     None => return false,
                 };
                 // All validation + allocation done — attach the clone.
-                match target_parent {
+                match &target_parent {
                     None => {
                         let active_idx = self.active_page_index;
                         self.pages[active_idx].children.push(clone);
@@ -374,7 +376,7 @@ impl Document {
                 fill_hex,
                 drop_children,
             } => {
-                let Some(target) = NodeId::new_opt(*node_id) else {
+                let Some(target) = NodeId::from_mcp_u64(*node_id) else {
                     return false;
                 };
                 let Some(node_kind) = parse_node_kind(kind) else {
@@ -399,16 +401,16 @@ impl Document {
                 // `drop_children=true`; otherwise refuse the
                 // swap so a Frame / Group can't silently lose
                 // its subtree.
-                let Some(target_node) = find_node_in_doc(self, target) else {
+                let Some(target_node) = find_node_in_doc(self, &target) else {
                     return false;
                 };
                 if !target_node.children.is_empty() && !*drop_children {
                     return false;
                 }
-                let Some(next_id) = self.next_node_id_seed() else {
+                let Some(new_id) = self.next_node_id() else {
                     return false;
                 };
-                let mut replacement = Node::leaf(next_id, node_kind, name.clone());
+                let mut replacement = Node::leaf(new_id, node_kind, name.clone());
                 replacement.bounds = crate::Rect::xywh(
                     *x as f32,
                     *y as f32,
@@ -416,19 +418,19 @@ impl Document {
                     *height as f32,
                 );
                 replacement.fill = fill;
-                replace_node_in_doc(self, target, replacement)
+                replace_node_in_doc(self, &target, replacement)
             }
             crate::mcp::McpCommand::MoveNode {
                 node_id,
                 target_parent_id,
             } => {
-                let Some(source) = NodeId::new_opt(*node_id) else {
+                let Some(source) = NodeId::from_mcp_u64(*node_id) else {
                     return false;
                 };
-                if source.raw() == *target_parent_id {
+                let target_parent = NodeId::from_mcp_u64(*target_parent_id);
+                if target_parent.as_ref() == Some(&source) {
                     return false;
                 }
-                let target_parent = NodeId::new_opt(*target_parent_id);
 
                 // Pre-validate EVERYTHING before detaching the node
                 // (codex stop-gate: a bad target_parent_id would
@@ -436,12 +438,12 @@ impl Document {
                 // the source node).
                 //
                 // 1. Source must exist.
-                let Some(src_node) = find_node_in_doc(self, source) else {
+                let Some(src_node) = find_node_in_doc(self, &source) else {
                     return false;
                 };
                 // 2. If target is Some, it must resolve AND must
                 //    not be a descendant of source (cycle).
-                if let Some(target_id) = target_parent {
+                if let Some(target_id) = &target_parent {
                     if subtree_contains(src_node, target_id) {
                         return false;
                     }
@@ -457,10 +459,10 @@ impl Document {
                 }
                 // All validation passed — detach + reattach is
                 // now infallible.
-                let Some(detached) = detach_node(self, source) else {
+                let Some(detached) = detach_node(self, &source) else {
                     return false;
                 };
-                match target_parent {
+                match &target_parent {
                     None => {
                         let active_idx = self.active_page_index;
                         self.pages[active_idx].children.push(detached);
@@ -478,7 +480,7 @@ impl Document {
                 true
             }
             crate::mcp::McpCommand::InstantiateComponent { component_id } => {
-                let Some(target) = NodeId::new_opt(*component_id) else {
+                let Some(target) = NodeId::from_mcp_u64(*component_id) else {
                     return false;
                 };
                 // Reuse the existing mutator. It handles fresh-id
@@ -491,20 +493,20 @@ impl Document {
                 self.instantiate_component(target, &mut next).is_some()
             }
             crate::mcp::McpCommand::CreateComponent { node_id, name } => {
-                let Some(target) = NodeId::new_opt(*node_id) else {
+                let Some(target) = NodeId::from_mcp_u64(*node_id) else {
                     return false;
                 };
                 self.create_component_from_node(target, name.clone())
                     .is_some()
             }
             crate::mcp::McpCommand::DeleteComponent { component_id } => {
-                let Some(target) = NodeId::new_opt(*component_id) else {
+                let Some(target) = NodeId::from_mcp_u64(*component_id) else {
                     return false;
                 };
                 self.components.remove(target)
             }
             crate::mcp::McpCommand::RenameComponent { component_id, name } => {
-                let Some(target) = NodeId::new_opt(*component_id) else {
+                let Some(target) = NodeId::from_mcp_u64(*component_id) else {
                     return false;
                 };
                 self.components.rename(target, name.clone())
@@ -682,13 +684,13 @@ impl Document {
                     Some(n) => n,
                     None => return false,
                 };
-                let mut allocated_ids: Vec<u64> = Vec::with_capacity(resolved.len());
+                let mut live = self.collect_node_ids();
+                let mut allocated_ids: Vec<NodeId> = Vec::with_capacity(resolved.len());
                 for _ in 0..resolved.len() {
-                    allocated_ids.push(next_id);
-                    next_id = match next_id.checked_add(1) {
-                        Some(n) => n,
+                    match super::walkers::alloc_n_id(&mut next_id, &mut live) {
+                        Some(id) => allocated_ids.push(id),
                         None => return false,
-                    };
+                    }
                 }
                 // All validation + allocation passed — now mutate.
                 let page = &mut self.pages[active_idx];
@@ -711,13 +713,24 @@ impl Document {
         }
     }
 
-    /// Compute a fresh node id that won't collide with any existing
-    /// node across pages. Returns `None` when `max_node_id()` is
-    /// `u64::MAX` — a saturating add would wrap back to the live
-    /// id and silently overwrite it (codex stop-gate). Callers
-    /// surface the None as an apply-time failure.
+    /// Compute the numeric seed for the next editor-minted `n{N}`
+    /// id — `max_node_id() + 1`. Returns `None` when the counter is
+    /// `u64::MAX` (codex stop-gate: a wrapping add would collide
+    /// with a live id). Callers format `n{seed}`; for a single mint
+    /// that is collision-free against `n{N}` ids by construction,
+    /// and the rare overlap with an arbitrary string id is caught
+    /// by `next_node_id` which threads the live id set.
     pub(super) fn next_node_id_seed(&self) -> Option<u64> {
         let max = self.max_node_id();
         max.checked_add(1).map(|n| n.max(1))
+    }
+
+    /// Allocate one fresh `n{N}` id, skipping any candidate that
+    /// collides with a pre-existing arbitrary string id. Returns
+    /// `None` on `u64` counter exhaustion.
+    pub(super) fn next_node_id(&self) -> Option<NodeId> {
+        let mut seed = self.next_node_id_seed()?;
+        let mut live = self.collect_node_ids();
+        super::walkers::alloc_n_id(&mut seed, &mut live)
     }
 }

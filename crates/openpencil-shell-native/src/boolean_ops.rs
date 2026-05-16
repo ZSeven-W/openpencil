@@ -22,10 +22,10 @@ pub fn apply_boolean_op(doc: &mut Document, op: BooleanOp, next_id: &mut u64) ->
     let path_ids: Vec<NodeId> = doc
         .selected_set
         .iter()
-        .copied()
+        .cloned()
         .filter(|id| {
             doc.active_page()
-                .and_then(|p| p.find(*id))
+                .and_then(|p| p.find(id))
                 .map(|n| matches!(n.kind, NodeKind::Path))
                 .unwrap_or(false)
         })
@@ -37,7 +37,7 @@ pub fn apply_boolean_op(doc: &mut Document, op: BooleanOp, next_id: &mut u64) ->
         .iter()
         .filter_map(|id| {
             doc.active_page()
-                .and_then(|p| p.find(*id))
+                .and_then(|p| p.find(id))
                 .map(|n| build_skia_path(&n.points))
         })
         .collect();
@@ -72,18 +72,18 @@ pub fn apply_boolean_op(doc: &mut Document, op: BooleanOp, next_id: &mut u64) ->
         Some(v) => v,
         None => return false,
     };
-    let id = NodeId::new(raw);
-    let mut new_node = Node::leaf(raw, NodeKind::Path, "Boolean");
+    let id = NodeId::new(format!("n{raw}"));
+    let mut new_node = Node::leaf(id.as_str(), NodeKind::Path, "Boolean");
     // Seed stroke from the first source so the result has visible ink
     // (the editor's default Path has no stroke until one is assigned).
-    if let Some(src) = doc.active_page().and_then(|p| p.find(path_ids[0])) {
+    if let Some(src) = doc.active_page().and_then(|p| p.find(&path_ids[0])) {
         new_node.fill = src.fill;
         new_node.stroke = src.stroke;
     }
     new_node.points = result_points;
     let (origin, size) = bbox_of(&new_node.points);
     new_node.bounds = openpencil_shell_core::Rect { origin, size };
-    let id_set: std::collections::HashSet<NodeId> = path_ids.iter().copied().collect();
+    let id_set: std::collections::HashSet<NodeId> = path_ids.iter().cloned().collect();
     if let Some(page) = doc.pages.get_mut(active) {
         // Recursive removal — sources may be nested inside groups /
         // frames (codex CONCERN: `retain` only on top-level left
@@ -94,7 +94,7 @@ pub fn apply_boolean_op(doc: &mut Document, op: BooleanOp, next_id: &mut u64) ->
         page.children.push(new_node);
     }
     doc.selected_set.clear();
-    doc.selected_set.push(id);
+    doc.selected_set.push(id.clone());
     doc.selected = id;
     doc.history_push_past(pre);
     true
@@ -177,7 +177,7 @@ mod tests {
         let mut doc = Document::empty();
         let page = doc.pages.get_mut(0).unwrap();
         page.children.clear();
-        let mut a = Node::leaf(10, NodeKind::Path, "a");
+        let mut a = Node::leaf("n10", NodeKind::Path, "a");
         a.points = vec![
             Point2D::new(0.0, 0.0),
             Point2D::new(20.0, 0.0),
@@ -185,7 +185,7 @@ mod tests {
             Point2D::new(0.0, 20.0),
         ];
         a.bounds = Rect::xywh(0.0, 0.0, 20.0, 20.0);
-        let mut b = Node::leaf(11, NodeKind::Path, "b");
+        let mut b = Node::leaf("n11", NodeKind::Path, "b");
         b.points = vec![
             Point2D::new(10.0, 10.0),
             Point2D::new(30.0, 10.0),
@@ -195,8 +195,8 @@ mod tests {
         b.bounds = Rect::xywh(10.0, 10.0, 20.0, 20.0);
         page.children.push(a);
         page.children.push(b);
-        doc.selected_set = vec![NodeId::new(10), NodeId::new(11)];
-        doc.selected = NodeId::new(11);
+        doc.selected_set = vec![NodeId::new("n10"), NodeId::new("n11")];
+        doc.selected = NodeId::new("n11");
         doc
     }
 
@@ -232,8 +232,8 @@ mod tests {
     fn boolean_op_requires_two_path_nodes() {
         let mut doc = doc_with_two_squares();
         // Drop selection to one.
-        doc.selected_set = vec![NodeId::new(10)];
-        doc.selected = NodeId::new(10);
+        doc.selected_set = vec![NodeId::new("n10")];
+        doc.selected = NodeId::new("n10");
         let mut next = 100u64;
         assert!(!apply_boolean_op(&mut doc, BooleanOp::Union, &mut next));
         // Page still has both paths; nothing committed.
@@ -250,7 +250,7 @@ mod tests {
         let mut doc = Document::empty();
         let page = doc.pages.get_mut(0).unwrap();
         page.children.clear();
-        let mut a = Node::leaf(10, NodeKind::Path, "a");
+        let mut a = Node::leaf("n10", NodeKind::Path, "a");
         a.points = vec![
             Point2D::new(0.0, 0.0),
             Point2D::new(20.0, 0.0),
@@ -258,7 +258,7 @@ mod tests {
             Point2D::new(0.0, 20.0),
         ];
         a.bounds = Rect::xywh(0.0, 0.0, 20.0, 20.0);
-        let mut b = Node::leaf(11, NodeKind::Path, "b");
+        let mut b = Node::leaf("n11", NodeKind::Path, "b");
         b.points = vec![
             Point2D::new(10.0, 10.0),
             Point2D::new(30.0, 10.0),
@@ -267,10 +267,10 @@ mod tests {
         ];
         b.bounds = Rect::xywh(10.0, 10.0, 20.0, 20.0);
         // Wrap both paths inside a Group.
-        let group = Node::with_children(99, NodeKind::Group, "g", vec![a, b]);
+        let group = Node::with_children("n99", NodeKind::Group, "g", vec![a, b]);
         page.children.push(group);
-        doc.selected_set = vec![NodeId::new(10), NodeId::new(11)];
-        doc.selected = NodeId::new(11);
+        doc.selected_set = vec![NodeId::new("n10"), NodeId::new("n11")];
+        doc.selected = NodeId::new("n11");
         let mut next = 100u64;
         assert!(apply_boolean_op(&mut doc, BooleanOp::Union, &mut next));
         // Group still exists but is now empty of paths; result Path
@@ -290,10 +290,10 @@ mod tests {
         let mut doc = doc_with_two_squares();
         // Add a Rect (non-Path) to the selection mix.
         let page = doc.pages.get_mut(0).unwrap();
-        let mut r = Node::leaf(12, NodeKind::Rect, "r");
+        let mut r = Node::leaf("n12", NodeKind::Rect, "r");
         r.bounds = Rect::xywh(0.0, 0.0, 10.0, 10.0);
         page.children.push(r);
-        doc.selected_set.push(NodeId::new(12));
+        doc.selected_set.push(NodeId::new("n12"));
         let mut next = 100u64;
         // Still has 2 Path nodes — should succeed; Rect is ignored.
         assert!(apply_boolean_op(&mut doc, BooleanOp::Union, &mut next));

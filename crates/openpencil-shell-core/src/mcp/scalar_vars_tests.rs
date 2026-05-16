@@ -177,8 +177,8 @@ fn delete_variable_drops_dangling_refs() {
         VariableKind::Color,
         VariableScalar::Str("#112233".into()),
     );
-    doc.var_table.fill_refs.insert(NodeId::new(7), "accent".into());
-    doc.var_table.stroke_refs.insert(NodeId::new(9), "accent".into());
+    doc.var_table.fill_refs.insert(NodeId::new("n7"), "accent".into());
+    doc.var_table.stroke_refs.insert(NodeId::new("n9"), "accent".into());
     assert!(doc.var_table.delete_variable("accent"));
     assert!(doc.var_table.variables.is_empty());
     assert!(doc.var_table.fill_refs.is_empty(), "dangling fill_ref dropped");
@@ -201,7 +201,7 @@ fn rename_variable_rewrites_refs_and_guards_collisions() {
         VariableKind::Number,
         VariableScalar::Num(8.0),
     );
-    doc.var_table.fill_refs.insert(NodeId::new(3), "old".into());
+    doc.var_table.fill_refs.insert(NodeId::new("n3"), "old".into());
     // Collision with an existing different variable rejected.
     assert!(!doc.var_table.rename_variable("old", "taken"));
     // Empty new name rejected.
@@ -213,7 +213,7 @@ fn rename_variable_rewrites_refs_and_guards_collisions() {
     assert!(doc.var_table.variables.iter().any(|v| v.name == "renamed"));
     assert!(!doc.var_table.variables.iter().any(|v| v.name == "old"));
     assert_eq!(
-        doc.var_table.fill_refs.get(&NodeId::new(3)),
+        doc.var_table.fill_refs.get(&NodeId::new("n3")),
         Some(&"renamed".to_string()),
         "fill_ref follows the rename"
     );

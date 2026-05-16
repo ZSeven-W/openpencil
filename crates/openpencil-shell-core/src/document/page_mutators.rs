@@ -30,7 +30,7 @@ impl Document {
     pub fn add_page(&mut self) -> Option<usize> {
         let next_id = self.max_node_id().checked_add(1)?;
         let n = self.pages.len() + 1;
-        let page = Page::new(next_id, format!("Page {}", n), Vec::new());
+        let page = Page::new(format!("n{next_id}"), format!("Page {}", n), Vec::new());
         self.pages.push(page);
         let new_index = self.pages.len() - 1;
         self.active_page_index = new_index;
@@ -41,14 +41,14 @@ impl Document {
     /// Duplicate page at `idx`, inserting clone after. New ids
     /// minted past max_node_id. Switches active page to clone.
     pub fn duplicate_page(&mut self, idx: usize) -> Option<usize> {
-        let source = self.pages.get(idx)?;
         let mut next_id = self.max_node_id().checked_add(1)?;
-        let new_page_id = next_id;
-        next_id = next_id.checked_add(1)?;
+        let mut taken = self.collect_node_ids();
+        let new_page_id = super::walkers::alloc_n_id(&mut next_id, &mut taken)?;
+        let source = self.pages.get(idx)?;
         let new_children: Vec<Node> = source
             .children
             .iter()
-            .map(|c| deep_clone_with_new_ids(c, &mut next_id))
+            .map(|c| deep_clone_with_new_ids(c, &mut next_id, &mut taken))
             .collect();
         let clone = Page::new(new_page_id, format!("{} copy", source.name), new_children);
         let new_index = idx + 1;
@@ -77,7 +77,7 @@ impl Document {
         let Some(page) = self.active_page() else {
             return false;
         };
-        let Some(node) = page.find(id) else {
+        let Some(node) = page.find(&id) else {
             return false;
         };
         let name = node.name.clone();
@@ -165,7 +165,7 @@ impl Document {
             LayerContextTarget::Layer(id) => {
                 if let Some(page) = self.pages.get_mut(self.active_page_index) {
                     for child in &mut page.children {
-                        if set_name_walk(child, id, &state.draft) {
+                        if set_name_walk(child, &id, &state.draft) {
                             changed = true;
                             break;
                         }
@@ -190,7 +190,7 @@ impl Document {
         let Some(page) = self.active_page() else {
             return false;
         };
-        let Some(node) = page.find(id) else {
+        let Some(node) = page.find(&id) else {
             return false;
         };
         if !matches!(node.kind, NodeKind::Text) {
@@ -210,7 +210,7 @@ impl Document {
     /// a pause > 500 ms opens a fresh history entry, otherwise the
     /// new char piggy-backs on the in-flight snapshot.
     pub fn text_edit_append(&mut self, text: &str, now_ms: u64) -> bool {
-        let Some(id) = self.ui.text_editing else {
+        let Some(id) = self.ui.text_editing.clone() else {
             return false;
         };
         self.maybe_open_text_edit_history(now_ms);
@@ -219,7 +219,7 @@ impl Document {
             return false;
         };
         for child in &mut page.children {
-            if let Some(s) = text_mut_walk(child, id) {
+            if let Some(s) = text_mut_walk(child, &id) {
                 s.push_str(text);
                 self.ui.text_edit_last_ms = now_ms;
                 return true;
@@ -230,7 +230,7 @@ impl Document {
 
     /// Pop the last char from the actively-edited Text node.
     pub fn text_edit_backspace(&mut self, now_ms: u64) -> bool {
-        let Some(id) = self.ui.text_editing else {
+        let Some(id) = self.ui.text_editing.clone() else {
             return false;
         };
         self.maybe_open_text_edit_history(now_ms);
@@ -239,7 +239,7 @@ impl Document {
             return false;
         };
         for child in &mut page.children {
-            if let Some(s) = text_mut_walk(child, id) {
+            if let Some(s) = text_mut_walk(child, &id) {
                 let ok = s.pop().is_some();
                 if ok {
                     self.ui.text_edit_last_ms = now_ms;

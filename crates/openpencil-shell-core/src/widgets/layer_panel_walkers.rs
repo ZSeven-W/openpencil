@@ -9,23 +9,23 @@ use super::layer_panel::LayerItem;
 
 pub(super) fn walk(
     node: &Node,
-    selected: NodeId,
-    hovered: Option<NodeId>,
+    selected: &NodeId,
+    hovered: Option<&NodeId>,
     depth: u8,
     out: &mut Vec<LayerItem>,
 ) {
     out.push(LayerItem {
-        node_id: node.id,
+        node_id: node.id.clone(),
         label: node.name.clone(),
         kind_label: node.kind.label().to_string(),
         icon: icon_for_kind(&node.kind),
         depth,
-        selected: node.id == selected,
+        selected: &node.id == selected,
         has_children: !node.children.is_empty(),
         hidden: node.hidden,
         locked: node.locked,
         collapsed: node.collapsed,
-        hovered: hovered == Some(node.id),
+        hovered: hovered == Some(&node.id),
         is_container: matches!(
             node.kind,
             crate::document::NodeKind::Frame | crate::document::NodeKind::Group
@@ -47,27 +47,27 @@ pub(super) fn walk(
 /// row layout while a drag-to-reorder is in flight.
 pub(super) fn walk_excluding(
     node: &Node,
-    selected: NodeId,
-    hovered: Option<NodeId>,
-    excluded: NodeId,
+    selected: &NodeId,
+    hovered: Option<&NodeId>,
+    excluded: &NodeId,
     depth: u8,
     out: &mut Vec<LayerItem>,
 ) {
-    if node.id == excluded {
+    if &node.id == excluded {
         return;
     }
     out.push(LayerItem {
-        node_id: node.id,
+        node_id: node.id.clone(),
         label: node.name.clone(),
         kind_label: node.kind.label().to_string(),
         icon: icon_for_kind(&node.kind),
         depth,
-        selected: node.id == selected,
+        selected: &node.id == selected,
         has_children: !node.children.is_empty(),
         hidden: node.hidden,
         locked: node.locked,
         collapsed: node.collapsed,
-        hovered: hovered == Some(node.id),
+        hovered: hovered == Some(&node.id),
         is_container: matches!(
             node.kind,
             crate::document::NodeKind::Frame | crate::document::NodeKind::Group

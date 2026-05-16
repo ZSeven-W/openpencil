@@ -95,14 +95,15 @@ fn apply_mcp_command_replace_node_swaps_at_same_slot() {
         drop_children: false,
     };
     assert!(doc.apply_mcp_command(&cmd));
-    let frame = doc.pages[0].children.iter().find(|n| n.id.raw() == 10).unwrap();
+    let frame = doc.pages[0].children.iter().find(|n| n.id.raw() == "n10").unwrap();
     // Slot 0 now holds the replacement; old id is gone.
-    assert!(frame.children.iter().all(|n| n.id.raw() != 11));
+    assert!(frame.children.iter().all(|n| n.id.raw() != "n11"));
     let swapped = &frame.children[0];
     assert_eq!(swapped.name, "Swapped");
-    assert!(swapped.id.raw() > pre_max, "fresh id past pre_max");
+    let swapped_n = swapped.id.raw()[1..].parse::<u64>().unwrap();
+    assert!(swapped_n > pre_max, "fresh id past pre_max");
     // Sibling (Button group, id 12) still at slot 1.
-    assert_eq!(frame.children[1].id.raw(), 12);
+    assert_eq!(frame.children[1].id.raw(), "n12");
 }
 
 #[test]
@@ -147,8 +148,8 @@ fn apply_mcp_command_replace_node_atomic_on_invalid_fill_hex() {
     };
     assert!(!doc.apply_mcp_command(&cmd));
     // Title still in place under Frame.
-    let frame = doc.pages[0].children.iter().find(|n| n.id.raw() == 10).unwrap();
-    assert!(frame.children.iter().any(|n| n.id.raw() == 11));
+    let frame = doc.pages[0].children.iter().find(|n| n.id.raw() == "n10").unwrap();
+    assert!(frame.children.iter().any(|n| n.id.raw() == "n11"));
     // No id was allocated.
     assert_eq!(doc.max_node_id(), pre_max);
 }
@@ -175,7 +176,7 @@ fn apply_mcp_command_replace_node_refuses_to_drop_container_children() {
     };
     assert!(!doc.apply_mcp_command(&cmd), "container swap must refuse without consent");
     // Frame intact with both children.
-    let frame = doc.pages[0].children.iter().find(|n| n.id.raw() == 10).unwrap();
+    let frame = doc.pages[0].children.iter().find(|n| n.id.raw() == "n10").unwrap();
     assert_eq!(frame.children.len(), pre_frame_children);
     // No fresh id allocated.
     assert_eq!(doc.max_node_id(), pre_max);
@@ -199,7 +200,7 @@ fn apply_mcp_command_replace_node_drops_container_children_when_opted_in() {
     assert!(doc.apply_mcp_command(&cmd), "container swap with consent must succeed");
     // Frame id is gone; a fresh leaf sits at page root with no children.
     let root = &doc.pages[0].children;
-    assert!(root.iter().all(|n| n.id.raw() != 10), "old frame replaced");
+    assert!(root.iter().all(|n| n.id.raw() != "n10"), "old frame replaced");
     assert_eq!(root.len(), 1, "replacement landed at the same slot");
     assert_eq!(root[0].name, "ExplicitNuke");
     assert!(root[0].children.is_empty(), "replacement is a leaf");

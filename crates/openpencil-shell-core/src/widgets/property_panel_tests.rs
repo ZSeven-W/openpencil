@@ -30,7 +30,7 @@ fn for_selection_without_selection_returns_none() {
 #[test]
 fn for_selection_with_stale_selection_returns_none() {
     let mut doc = Document::sample();
-    doc.set_single_selection(NodeId::new(9999));
+    doc.set_single_selection(NodeId::new("n9999"));
     assert!(PropertyPanel::for_selection(&doc).is_none());
 }
 
@@ -54,7 +54,7 @@ fn group_snapshot_aggregates_child_bounds() {
     //   - Click me text       (76, 152, 160, 16)
     // Aggregate bounds: (60, 130, 240-60=180, 168-130=38).
     let mut doc = doc;
-    doc.set_single_selection(NodeId::new(12));
+    doc.set_single_selection(NodeId::new("n12"));
     let panel = PropertyPanel::for_selection(&doc).unwrap();
     assert_eq!(panel.snapshot.kind, "Group");
     assert_eq!(panel.snapshot.x, 60);
@@ -73,7 +73,7 @@ fn hit_test_action_export_section_returns_open_dialog() {
     // (mutators.rs::sample). Frame paints every section including
     // Stroke + Effects + Export so the walker has to advance past
     // all of them to reach the Export row.
-    doc.set_single_selection(NodeId::new(10));
+    doc.set_single_selection(NodeId::new("n10"));
     let panel = PropertyPanel::for_selection(&doc).expect("frame panel");
     // Tall panel rect so every section fits without clipping.
     let rect = Rect {
@@ -130,8 +130,8 @@ fn multi_selection_panel_shows_union_bounds_and_is_inert() {
     // aggregate bounds 60,130,180,38). Union: x=60, y=60,
     // w=240-60+? = 60+240→300; the button right edge is 60+180=240
     // → max_x = 300 (from title). Union: x=60, y=60, w=240, h=108.
-    doc.set_single_selection(NodeId::new(11));
-    doc.toggle_selection(NodeId::new(12));
+    doc.set_single_selection(NodeId::new("n11"));
+    doc.toggle_selection(NodeId::new("n12"));
     assert_eq!(doc.selection_count(), 2);
 
     let panel = PropertyPanel::for_selection(&doc).expect("multi-select must paint");
@@ -196,10 +196,10 @@ fn multi_select_paint_diverges_from_full_section_paint() {
     // `capabilities()` for the multi panel, the two would emit
     // identical ops.
     let mut doc = Document::sample();
-    doc.set_single_selection(NodeId::new(11));
-    doc.toggle_selection(NodeId::new(12));
+    doc.set_single_selection(NodeId::new("n11"));
+    doc.toggle_selection(NodeId::new("n12"));
     let panel_multi = PropertyPanel::for_selection(&doc).expect("multi");
-    doc.set_single_selection(NodeId::new(10));
+    doc.set_single_selection(NodeId::new("n10"));
     let panel_frame = PropertyPanel::for_selection(&doc).expect("frame");
     assert!(!panel_frame.is_multi);
 
@@ -232,8 +232,8 @@ fn multi_select_caps_keep_size_hide_fill_and_stroke() {
     // Instead drive through `panel.capabilities()`, which is the
     // single source of truth that `paint` calls.
     let mut doc = Document::sample();
-    doc.set_single_selection(NodeId::new(11));
-    doc.toggle_selection(NodeId::new(12));
+    doc.set_single_selection(NodeId::new("n11"));
+    doc.toggle_selection(NodeId::new("n12"));
     let panel = PropertyPanel::for_selection(&doc).expect("multi-select panel");
     assert!(panel.is_multi);
     let caps = panel.capabilities();
@@ -243,7 +243,7 @@ fn multi_select_caps_keep_size_hide_fill_and_stroke() {
     assert!(!caps.flex_layout, "multi-select hides flex");
     // Cross-check the single-select fallback: a Rect selection
     // routes through `for_kind`, which exposes fill/stroke.
-    doc.set_single_selection(NodeId::new(13)); // Button background (Rect)
+    doc.set_single_selection(NodeId::new("n13")); // Button background (Rect)
     let single = PropertyPanel::for_selection(&doc).expect("single-select panel");
     let caps_single = single.capabilities();
     assert!(caps_single.fill, "single Rect must paint fill");
@@ -260,11 +260,11 @@ fn multi_select_panel_shows_even_when_all_zero_size() {
     // (no bounds, no children). `Node::leaf` defaults to
     // zero-sized bounds.
     doc.pages[p].children = vec![
-        Node::leaf(50, NodeKind::Rect, "A"),
-        Node::leaf(51, NodeKind::Rect, "B"),
+        Node::leaf("n50", NodeKind::Rect, "A"),
+        Node::leaf("n51", NodeKind::Rect, "B"),
     ];
-    doc.set_single_selection(NodeId::new(50));
-    doc.toggle_selection(NodeId::new(51));
+    doc.set_single_selection(NodeId::new("n50"));
+    doc.toggle_selection(NodeId::new("n51"));
     assert_eq!(doc.selection_count(), 2);
     // Visible despite the union being None.
     assert!(doc.property_panel_visible());
@@ -281,9 +281,9 @@ fn property_panel_visible_handles_multi() {
     doc.clear_selection();
     assert!(!doc.property_panel_visible());
     // Single → visible (existing behavior).
-    doc.set_single_selection(NodeId::new(11));
+    doc.set_single_selection(NodeId::new("n11"));
     assert!(doc.property_panel_visible());
     // Multi with valid union bounds → visible.
-    doc.toggle_selection(NodeId::new(12));
+    doc.toggle_selection(NodeId::new("n12"));
     assert!(doc.property_panel_visible());
 }

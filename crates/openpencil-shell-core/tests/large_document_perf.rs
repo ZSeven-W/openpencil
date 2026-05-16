@@ -22,7 +22,7 @@ fn build_doc_with_n_leaves(n: u64) -> Document {
     for i in 1..=n {
         let row = (i - 1) / cols;
         let col = (i - 1) % cols;
-        let mut node = Node::leaf(i, NodeKind::Rect, format!("rect{i}"));
+        let mut node = Node::leaf(format!("n{i}"), NodeKind::Rect, format!("rect{i}"));
         node.bounds = Rect::xywh(col as f32 * 24.0, row as f32 * 24.0, 20.0, 20.0);
         page.children.push(node);
     }

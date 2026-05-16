@@ -13,16 +13,16 @@ pub const LAYER_PANEL_WIDTH: f32 = 240.0;
 /// Rename draft for the given page index, when one is active.
 fn rename_override_page(doc: &Document, idx: usize) -> Option<String> {
     use crate::document::LayerContextTarget;
-    doc.ui.layer_rename.as_ref().and_then(|s| match s.target {
-        LayerContextTarget::Page(i) if i == idx => Some(s.draft.clone()),
+    doc.ui.layer_rename.as_ref().and_then(|s| match &s.target {
+        LayerContextTarget::Page(i) if *i == idx => Some(s.draft.clone()),
         _ => None,
     })
 }
 
 /// Rename draft for the given layer id, when one is active.
-fn rename_override_layer(doc: &Document, id: NodeId) -> Option<String> {
+fn rename_override_layer(doc: &Document, id: &NodeId) -> Option<String> {
     use crate::document::LayerContextTarget;
-    doc.ui.layer_rename.as_ref().and_then(|s| match s.target {
+    doc.ui.layer_rename.as_ref().and_then(|s| match &s.target {
         LayerContextTarget::Layer(i) if i == id => Some(s.draft.clone()),
         _ => None,
     })
@@ -31,8 +31,8 @@ fn rename_override_layer(doc: &Document, id: NodeId) -> Option<String> {
 fn rename_is_page(doc: &Document, idx: usize) -> bool {
     use crate::document::LayerContextTarget;
     matches!(
-        doc.ui.layer_rename.as_ref().map(|s| s.target),
-        Some(LayerContextTarget::Page(i)) if i == idx
+        doc.ui.layer_rename.as_ref().map(|s| &s.target),
+        Some(LayerContextTarget::Page(i)) if *i == idx
     )
 }
 
@@ -107,11 +107,11 @@ impl LayerPanel {
         let mut items = Vec::new();
         if let Some(page) = doc.active_page() {
             for child in &page.children {
-                walk(child, doc.selected, doc.ui.hovered_layer_id, 0, &mut items);
+                walk(child, &doc.selected, doc.ui.hovered_layer_id.as_ref(), 0, &mut items);
             }
         }
         for item in &mut items {
-            if let Some(draft) = rename_override_layer(doc, item.node_id) {
+            if let Some(draft) = rename_override_layer(doc, &item.node_id) {
                 item.label = draft;
                 item.renaming = true;
             }
@@ -134,9 +134,9 @@ impl LayerPanel {
     /// at the cursor's y. None when the source isn't on the
     /// active page.
     pub fn ghost_item_for(doc: &Document, source: NodeId) -> Option<LayerItem> {
-        let node = doc.active_page()?.find(source)?;
+        let node = doc.active_page()?.find(&source)?;
         Some(LayerItem {
-            node_id: node.id,
+            node_id: node.id.clone(),
             label: node.name.clone(),
             kind_label: node.kind.label().to_string(),
             icon: icon_for_kind(&node.kind),
@@ -175,11 +175,10 @@ impl LayerPanel {
         let mut items = Vec::new();
         if let Some(page) = doc.active_page() {
             for child in &page.children {
-                walk_excluding(
-                    child,
-                    doc.selected,
-                    doc.ui.hovered_layer_id,
-                    drag_source,
+                walk_excluding(                    child,
+                    &doc.selected,
+                    doc.ui.hovered_layer_id.as_ref(),
+                    &drag_source,
                     0,
                     &mut items,
                 );
@@ -267,7 +266,7 @@ impl LayerPanel {
                     DropPosition::Into => row_top,
                 };
                 return Some(DropTarget {
-                    anchor: item.node_id,
+                    anchor: item.node_id.clone(),
                     position,
                     indicator_y,
                 });
@@ -281,7 +280,7 @@ impl LayerPanel {
         if point.y > layers_top {
             if let Some(last) = self.items.last() {
                 return Some(DropTarget {
-                    anchor: last.node_id,
+                    anchor: last.node_id.clone(),
                     position: DropPosition::After,
                     indicator_y: y,
                 });
@@ -367,14 +366,14 @@ impl LayerPanel {
                     && point.y >= icon_y - slop
                     && point.y <= icon_y + 14.0 + slop
                 {
-                    return Some(LayerPanelHit::ToggleLocked(item.node_id));
+                    return Some(LayerPanelHit::ToggleLocked(item.node_id.clone()));
                 }
                 if point.x >= eye_x - slop
                     && point.x <= eye_x + 14.0 + slop
                     && point.y >= icon_y - slop
                     && point.y <= icon_y + 14.0 + slop
                 {
-                    return Some(LayerPanelHit::ToggleHidden(item.node_id));
+                    return Some(LayerPanelHit::ToggleHidden(item.node_id.clone()));
                 }
                 // Leading chevron — only present on container
                 // rows. Painted at `inner.origin.x + indent`
@@ -387,10 +386,10 @@ impl LayerPanel {
                         && point.y >= icon_y - slop
                         && point.y <= icon_y + 14.0 + slop
                     {
-                        return Some(LayerPanelHit::ToggleCollapsed(item.node_id));
+                        return Some(LayerPanelHit::ToggleCollapsed(item.node_id.clone()));
                     }
                 }
-                return Some(LayerPanelHit::Layer(item.node_id));
+                return Some(LayerPanelHit::Layer(item.node_id.clone()));
             }
             y += LAYER_ROW_HEIGHT;
         }
@@ -398,7 +397,7 @@ impl LayerPanel {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum LayerPanelHit {
     Page(usize),
     Layer(NodeId),
@@ -439,7 +438,7 @@ pub enum DropPosition {
 
 /// Drop-target result: anchor node, drop position, and the
 /// panel-local y where the indicator paints.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct DropTarget {
     pub anchor: NodeId,
     pub position: DropPosition,
@@ -754,7 +753,7 @@ impl Widget for LayerPanel {
         // Before/After: a 2 px horizontal line between rows.
         // Into: a 1.5 px outline around the target row (signals
         // "drop becomes child of this container").
-        if let Some(drop) = self.drop_target {
+        if let Some(drop) = &self.drop_target {
             match drop.position {
                 DropPosition::Before | DropPosition::After => {
                     let indicator_rect = Rect {

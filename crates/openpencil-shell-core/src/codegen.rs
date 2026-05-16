@@ -587,7 +587,7 @@ fn css_ident(name: &str) -> String {
 mod tests {
     use super::*;
     use crate::document::{ThemedValue, Variable, VariableKind, VariableTable};
-    use std::collections::BTreeMap;
+    use std::collections::{BTreeMap, HashMap};
 
     fn axis(name: &str, value: &str) -> BTreeMap<String, String> {
         let mut m = BTreeMap::new();
@@ -613,8 +613,8 @@ mod tests {
             ],
             themes: Vec::new(),
             active_theme: BTreeMap::new(),
-            fill_refs: BTreeMap::new(),
-            stroke_refs: BTreeMap::new(),
+            fill_refs: HashMap::new(),
+            stroke_refs: HashMap::new(),
         };
         let css = CssVariables.generate(&doc);
         assert!(css.contains(":root {"));
@@ -642,8 +642,8 @@ mod tests {
             }],
             themes: Vec::new(),
             active_theme: BTreeMap::new(),
-            fill_refs: BTreeMap::new(),
-            stroke_refs: BTreeMap::new(),
+            fill_refs: HashMap::new(),
+            stroke_refs: HashMap::new(),
         };
         let css = CssVariables.generate(&doc);
         assert!(css.contains(":root[data-mode=\"light\"]"));
@@ -682,7 +682,7 @@ mod tests {
         let mut doc = Document::empty();
         let page = doc.pages.get_mut(0).unwrap();
         page.children.clear();
-        let mut n = Node::leaf(10, NodeKind::Rect, "r");
+        let mut n = Node::leaf("n10", NodeKind::Rect, "r");
         n.bounds = Rect::xywh(20.0, 30.0, 100.0, 50.0);
         n.fill = Some(Color { r: 1.0, g: 0.0, b: 0.0, a: 1.0 });
         page.children.push(n);
@@ -700,7 +700,7 @@ mod tests {
         let mut doc = Document::empty();
         let page = doc.pages.get_mut(0).unwrap();
         page.children.clear();
-        let mut t = Node::leaf(10, NodeKind::Text, "t");
+        let mut t = Node::leaf("n10", NodeKind::Text, "t");
         t.bounds = Rect::xywh(0.0, 0.0, 100.0, 24.0);
         t.text = Some("Hello & <world>".into());
         page.children.push(t);
@@ -741,8 +741,8 @@ mod tests {
             }],
             themes: Vec::new(),
             active_theme: std::collections::BTreeMap::new(),
-            fill_refs: std::collections::BTreeMap::new(),
-            stroke_refs: std::collections::BTreeMap::new(),
+            fill_refs: HashMap::new(),
+            stroke_refs: HashMap::new(),
         };
         let s = Vue.generate(&doc);
         assert!(s.contains("--primary: #abc;"));
@@ -765,7 +765,7 @@ mod tests {
         let mut doc = Document::empty();
         let page = doc.pages.get_mut(0).unwrap();
         page.children.clear();
-        let mut n = Node::leaf(10, NodeKind::Rect, "r");
+        let mut n = Node::leaf("n10", NodeKind::Rect, "r");
         n.bounds = Rect::xywh(5.0, 10.0, 100.0, 50.0);
         n.fill = Some(Color { r: 1.0, g: 0.0, b: 0.0, a: 1.0 });
         page.children.push(n);
@@ -784,7 +784,7 @@ mod tests {
         let mut doc = Document::empty();
         let page = doc.pages.get_mut(0).unwrap();
         page.children.clear();
-        let mut n = Node::leaf(10, NodeKind::Rect, "r");
+        let mut n = Node::leaf("n10", NodeKind::Rect, "r");
         n.bounds = Rect::xywh(0.0, 0.0, 100.0, 50.0);
         page.children.push(n);
         let s = SwiftUi.generate(&doc);
@@ -801,7 +801,7 @@ mod tests {
         let mut doc = Document::empty();
         let page = doc.pages.get_mut(0).unwrap();
         page.children.clear();
-        let mut n = Node::leaf(10, NodeKind::Ellipse, "e");
+        let mut n = Node::leaf("n10", NodeKind::Ellipse, "e");
         n.bounds = Rect::xywh(0.0, 0.0, 20.0, 20.0);
         page.children.push(n);
         let s = SwiftUi.generate(&doc);
@@ -815,7 +815,7 @@ mod tests {
         let mut doc = Document::empty();
         let page = doc.pages.get_mut(0).unwrap();
         page.children.clear();
-        let mut n = Node::leaf(10, NodeKind::Rect, "r");
+        let mut n = Node::leaf("n10", NodeKind::Rect, "r");
         n.bounds = Rect::xywh(5.0, 10.0, 100.0, 50.0);
         n.fill = Some(Color { r: 1.0, g: 0.0, b: 0.0, a: 1.0 });
         page.children.push(n);
@@ -833,7 +833,7 @@ mod tests {
         let mut doc = Document::empty();
         let page = doc.pages.get_mut(0).unwrap();
         page.children.clear();
-        let mut n = Node::leaf(10, NodeKind::Rect, "r");
+        let mut n = Node::leaf("n10", NodeKind::Rect, "r");
         n.bounds = Rect::xywh(0.0, 0.0, 80.0, 40.0);
         page.children.push(n);
         let s = ReactNative.generate(&doc);
@@ -850,7 +850,7 @@ mod tests {
         let mut doc = Document::empty();
         let page = doc.pages.get_mut(0).unwrap();
         page.children.clear();
-        let mut n = Node::leaf(10, NodeKind::Rect, "hidden");
+        let mut n = Node::leaf("n10", NodeKind::Rect, "hidden");
         n.hidden = true;
         page.children.push(n);
         let html = Html.generate(&doc);

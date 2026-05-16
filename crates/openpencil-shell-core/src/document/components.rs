@@ -89,12 +89,12 @@ impl Document {
         name: impl Into<String>,
     ) -> Option<NodeId> {
         let page = self.active_page()?;
-        let node = page.find(node_id)?;
+        let node = page.find(&node_id)?;
         if !matches!(node.kind, super::NodeKind::Frame | super::NodeKind::Group) {
             return None;
         }
         let comp = Component {
-            id: node_id,
+            id: node_id.clone(),
             name: name.into(),
             root: node.clone(),
         };
@@ -106,15 +106,15 @@ impl Document {
         if !self.selected.is_real() {
             return None;
         }
-        let target = self.selected;
+        let target = self.selected.clone();
         let page = self.active_page()?;
-        let node = page.find(target)?;
+        let node = page.find(&target)?;
         if !matches!(node.kind, super::NodeKind::Frame | super::NodeKind::Group) {
             return None;
         }
         let root = node.clone();
         let comp = Component {
-            id: target,
+            id: target.clone(),
             name: name.into(),
             root,
         };
@@ -135,36 +135,38 @@ impl Document {
     ) -> Option<NodeId> {
         let comp = self.components.find_by_id(component_id)?.clone();
         let pre = self.snapshot_for_history();
-        // Mint a fresh id past the high-water mark (same guard as
+        // Mint fresh ids past the high-water mark (same guard as
         // duplicate_selected / group_selected).
         let safe = self.max_node_id().checked_add(1)?;
-        let raw = (*next_id).max(safe);
-        *next_id = raw.checked_add(1)?;
-        let new_root = clone_node_with_new_ids(&comp.root, raw, next_id);
-        let new_id = new_root.id;
+        *next_id = (*next_id).max(safe);
+        let mut taken = self.collect_node_ids();
+        let new_root = clone_node_with_new_ids(&comp.root, next_id, &mut taken)?;
+        let new_id = new_root.id.clone();
         let active = self.active_page_index;
         self.pages.get_mut(active)?.children.push(new_root);
         self.selected_set.clear();
-        self.selected_set.push(new_id);
-        self.selected = new_id;
+        self.selected_set.push(new_id.clone());
+        self.selected = new_id.clone();
         self.history_push_past(pre);
         Some(new_id)
     }
 }
 
-fn clone_node_with_new_ids(src: &Node, new_id: u64, next_id: &mut u64) -> Node {
+/// Deep-clone `src` with a fresh `n{N}` id per node. Returns `None`
+/// on `u64` counter exhaustion.
+fn clone_node_with_new_ids(
+    src: &Node,
+    next_id: &mut u64,
+    taken: &mut std::collections::HashSet<NodeId>,
+) -> Option<Node> {
     let mut out = src.clone();
-    out.id = NodeId::new(new_id);
-    out.children = src
-        .children
-        .iter()
-        .map(|c| {
-            let raw = *next_id;
-            *next_id = next_id.checked_add(1).unwrap_or(raw);
-            clone_node_with_new_ids(c, raw, next_id)
-        })
-        .collect();
-    out
+    out.id = super::walkers::alloc_n_id(next_id, taken)?;
+    let mut children = Vec::with_capacity(src.children.len());
+    for c in &src.children {
+        children.push(clone_node_with_new_ids(c, next_id, taken)?);
+    }
+    out.children = children;
+    Some(out)
 }
 
 #[cfg(test)]
@@ -172,7 +174,7 @@ mod tests {
     use super::*;
     use crate::document::NodeKind;
 
-    fn comp(id: u64, name: &str) -> Component {
+    fn comp(id: &str, name: &str) -> Component {
         Component {
             id: NodeId::new(id),
             name: name.into(),
@@ -183,19 +185,19 @@ mod tests {
     #[test]
     fn find_by_id_returns_match() {
         let mut lib = ComponentLibrary::default();
-        lib.insert(comp(10, "Button"));
-        lib.insert(comp(11, "Card"));
-        assert_eq!(lib.find_by_id(NodeId::new(10)).unwrap().name, "Button");
-        assert_eq!(lib.find_by_id(NodeId::new(11)).unwrap().name, "Card");
-        assert!(lib.find_by_id(NodeId::new(99)).is_none());
+        lib.insert(comp("n10", "Button"));
+        lib.insert(comp("n11", "Card"));
+        assert_eq!(lib.find_by_id(NodeId::new("n10")).unwrap().name, "Button");
+        assert_eq!(lib.find_by_id(NodeId::new("n11")).unwrap().name, "Card");
+        assert!(lib.find_by_id(NodeId::new("n99")).is_none());
     }
 
     #[test]
     fn find_by_name_returns_first_match() {
         let mut lib = ComponentLibrary::default();
-        lib.insert(comp(10, "Button"));
-        lib.insert(comp(11, "Card"));
-        assert_eq!(lib.find_by_name("Card").unwrap().id, NodeId::new(11));
+        lib.insert(comp("n10", "Button"));
+        lib.insert(comp("n11", "Card"));
+        assert_eq!(lib.find_by_name("Card").unwrap().id, NodeId::new("n11"));
         assert!(lib.find_by_name("Unknown").is_none());
     }
 
@@ -205,17 +207,17 @@ mod tests {
         let mut doc = Document::empty();
         let page = doc.pages.get_mut(0).unwrap();
         page.children.clear();
-        page.children.push(Node::leaf(10, NodeKind::Frame, "Frame"));
-        doc.set_single_selection(NodeId::new(10));
+        page.children.push(Node::leaf("n10", NodeKind::Frame, "Frame"));
+        doc.set_single_selection(NodeId::new("n10"));
         let id = doc.create_component_from_selected("Button");
-        assert_eq!(id, Some(NodeId::new(10)));
-        let lib_entry = doc.components.find_by_id(NodeId::new(10)).unwrap();
+        assert_eq!(id, Some(NodeId::new("n10")));
+        let lib_entry = doc.components.find_by_id(NodeId::new("n10")).unwrap();
         assert_eq!(lib_entry.name, "Button");
         // Original node still exists on the page.
         assert!(doc
             .active_page()
             .unwrap()
-            .find(NodeId::new(10))
+            .find(&NodeId::new("n10"))
             .is_some());
     }
 
@@ -225,8 +227,8 @@ mod tests {
         let mut doc = Document::empty();
         let page = doc.pages.get_mut(0).unwrap();
         page.children.clear();
-        page.children.push(Node::leaf(10, NodeKind::Rect, "r"));
-        doc.set_single_selection(NodeId::new(10));
+        page.children.push(Node::leaf("n10", NodeKind::Rect, "r"));
+        doc.set_single_selection(NodeId::new("n10"));
         assert!(doc.create_component_from_selected("Card").is_none());
         assert!(doc.components.components.is_empty());
     }
@@ -238,31 +240,32 @@ mod tests {
         let page = doc.pages.get_mut(0).unwrap();
         page.children.clear();
         let mut frame = Node::with_children(
-            10,
+            "n10",
             NodeKind::Frame,
             "F",
             vec![
-                Node::leaf(11, NodeKind::Rect, "r1"),
-                Node::leaf(12, NodeKind::Rect, "r2"),
+                Node::leaf("n11", NodeKind::Rect, "r1"),
+                Node::leaf("n12", NodeKind::Rect, "r2"),
             ],
         );
         // Bound the frame so the resulting clone is meaningful.
         frame.bounds = crate::Rect::xywh(0.0, 0.0, 100.0, 100.0);
         page.children.push(frame);
-        doc.set_single_selection(NodeId::new(10));
+        doc.set_single_selection(NodeId::new("n10"));
         doc.create_component_from_selected("Card");
         // Now instantiate.
         let mut next = 100u64;
-        let inst_id = doc.instantiate_component(NodeId::new(10), &mut next).unwrap();
-        // Fresh root id is past the source id.
-        assert!(inst_id.raw() >= 100);
-        let inst = doc.active_page().unwrap().find(inst_id).unwrap();
+        let inst_id = doc.instantiate_component(NodeId::new("n10"), &mut next).unwrap();
+        // Fresh root id is a freshly-minted `n{N}` id, distinct
+        // from the source frame's `n10`.
+        assert_ne!(inst_id, NodeId::new("n10"));
+        let inst = doc.active_page().unwrap().find(&inst_id).unwrap();
         // Same shape: 2 children.
         assert_eq!(inst.children.len(), 2);
         // Child ids fresh (not 11/12).
         for c in &inst.children {
-            assert_ne!(c.id, NodeId::new(11));
-            assert_ne!(c.id, NodeId::new(12));
+            assert_ne!(c.id, NodeId::new("n11"));
+            assert_ne!(c.id, NodeId::new("n12"));
         }
         // Selection landed on the new instance root.
         assert_eq!(doc.selected, inst_id);
@@ -275,7 +278,7 @@ mod tests {
         let mut doc = Document::empty();
         let mut next = 100u64;
         assert!(doc
-            .instantiate_component(NodeId::new(99), &mut next)
+            .instantiate_component(NodeId::new("n99"), &mut next)
             .is_none());
     }
 
@@ -289,9 +292,9 @@ mod tests {
     #[test]
     fn insert_replaces_duplicate_id() {
         let mut lib = ComponentLibrary::default();
-        lib.insert(comp(10, "Button"));
-        lib.insert(comp(10, "ButtonV2"));
+        lib.insert(comp("n10", "Button"));
+        lib.insert(comp("n10", "ButtonV2"));
         assert_eq!(lib.components.len(), 1);
-        assert_eq!(lib.find_by_id(NodeId::new(10)).unwrap().name, "ButtonV2");
+        assert_eq!(lib.find_by_id(NodeId::new("n10")).unwrap().name, "ButtonV2");
     }
 }

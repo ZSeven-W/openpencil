@@ -167,13 +167,13 @@ mod tests {
         let page = doc.pages.get_mut(0).unwrap();
         page.children.clear();
         for i in 0..n {
-            let mut node = Node::leaf(100 + i as u64, NodeKind::Rect, "r");
+            let mut node = Node::leaf(format!("n{}", 100 + i), NodeKind::Rect, "r");
             node.bounds = Rect::xywh(i as f32 * 50.0, 0.0, 40.0, 20.0);
             page.children.push(node);
         }
-        let ids: Vec<NodeId> = (0..n).map(|i| NodeId::new(100 + i as u64)).collect();
+        let ids: Vec<NodeId> = (0..n).map(|i| NodeId::new(format!("n{}", 100 + i))).collect();
         doc.selected_set = ids.clone();
-        doc.selected = ids.last().copied().unwrap_or(NodeId::NONE);
+        doc.selected = ids.last().cloned().unwrap_or(NodeId::NONE);
         doc
     }
 

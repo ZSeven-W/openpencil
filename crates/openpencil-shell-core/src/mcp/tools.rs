@@ -59,7 +59,9 @@ fn count_subtree(n: &crate::document::Node) -> usize {
 /// `GetDocumentInfo` so the host can re-register on selection
 /// change.
 pub struct GetSelection {
-    pub selected_id: u64,
+    /// The selected node's string id (the canonical `.op` schema
+    /// id). Empty string when nothing is selected.
+    pub selected_id: String,
     pub kind: String,
     pub x: i32,
     pub y: i32,
@@ -73,7 +75,7 @@ impl McpTool for GetSelection {
     }
     fn call(&self, _args: &BTreeMap<String, String>) -> ToolOutcome {
         let mut out = BTreeMap::new();
-        out.insert("selected_id".into(), self.selected_id.to_string());
+        out.insert("selected_id".into(), self.selected_id.clone());
         out.insert("kind".into(), self.kind.clone());
         out.insert("x".into(), self.x.to_string());
         out.insert("y".into(), self.y.to_string());
@@ -87,10 +89,10 @@ impl McpTool for GetSelection {
 /// nothing's selected returns an `id=0, kind="none"` placeholder so
 /// LLM clients can distinguish "no selection" from a parse error.
 pub fn selection_snapshot(doc: &crate::document::Document) -> GetSelection {
-    let selected_id = doc.selected.raw();
-    if selected_id == 0 {
+    let selected_id = doc.selected.as_str().to_string();
+    if !doc.selected.is_real() {
         return GetSelection {
-            selected_id: 0,
+            selected_id,
             kind: "none".into(),
             x: 0,
             y: 0,
@@ -177,7 +179,7 @@ pub fn list_pages_snapshot(doc: &crate::document::Document) -> ListPages {
 /// pre-computes a map of every node id → its details so calls are
 /// O(1) lookup; the host re-registers on document mutations.
 pub struct GetNode {
-    pub nodes: BTreeMap<u64, NodeRecord>,
+    pub nodes: BTreeMap<String, NodeRecord>,
 }
 
 #[derive(Debug, Clone)]
@@ -188,7 +190,9 @@ pub struct NodeRecord {
     pub y: i32,
     pub width: i32,
     pub height: i32,
-    pub parent_id: u64,
+    /// String id of this node's parent (the canonical `.op` schema
+    /// id). Empty string when the node is a top-level page child.
+    pub parent_id: String,
     /// Name of the variable driving this node's fill colour at
     /// paint time, if any. Empty when the node's fill is a literal
     /// colour. LLM clients use this to decide whether to bump the
@@ -212,19 +216,13 @@ impl McpTool for GetNode {
                 );
             }
         };
-        let id: u64 = match raw.parse() {
-            Ok(n) => n,
-            Err(_) => {
-                return ToolOutcome::Err(
-                    ToolErrorCode::InvalidArgument,
-                    format!("node_id must be a decimal u64, got {raw:?}"),
-                );
-            }
-        };
-        let Some(rec) = self.nodes.get(&id) else {
+        // `node_id` is the canonical `.op` schema string id —
+        // editor-minted ids look like `n12`, canonical loads keep
+        // whatever the file authored. No numeric parse step.
+        let Some(rec) = self.nodes.get(raw) else {
             return ToolOutcome::Err(
                 ToolErrorCode::ToolFailed,
-                format!("node {id} not found"),
+                format!("node {raw} not found"),
             );
         };
         let mut out = BTreeMap::new();
@@ -234,7 +232,7 @@ impl McpTool for GetNode {
         out.insert("y".into(), rec.y.to_string());
         out.insert("width".into(), rec.width.to_string());
         out.insert("height".into(), rec.height.to_string());
-        out.insert("parent_id".into(), rec.parent_id.to_string());
+        out.insert("parent_id".into(), rec.parent_id.clone());
         out.insert("fill_ref".into(), rec.fill_ref.clone());
         out.insert("stroke_ref".into(), rec.stroke_ref.clone());
         ToolOutcome::Ok(out)
@@ -242,10 +240,10 @@ impl McpTool for GetNode {
 }
 
 pub fn get_node_snapshot(doc: &crate::document::Document) -> GetNode {
-    let mut nodes: BTreeMap<u64, NodeRecord> = BTreeMap::new();
+    let mut nodes: BTreeMap<String, NodeRecord> = BTreeMap::new();
     for page in &doc.pages {
         for node in &page.children {
-            walk_node(node, 0, &doc.var_table, &mut nodes);
+            walk_node(node, "", &doc.var_table, &mut nodes);
         }
     }
     GetNode { nodes }
@@ -253,9 +251,9 @@ pub fn get_node_snapshot(doc: &crate::document::Document) -> GetNode {
 
 fn walk_node(
     node: &crate::document::Node,
-    parent_id: u64,
+    parent_id: &str,
     var_table: &crate::document::VariableTable,
-    out: &mut BTreeMap<u64, NodeRecord>,
+    out: &mut BTreeMap<String, NodeRecord>,
 ) {
     let bounds = node.aggregate_bounds();
     let kind_label = match &node.kind {
@@ -280,7 +278,7 @@ fn walk_node(
         .cloned()
         .unwrap_or_default();
     out.insert(
-        node.id.raw(),
+        node.id.as_str().to_string(),
         NodeRecord {
             kind: kind_label.into(),
             name: node.name.clone(),
@@ -288,13 +286,13 @@ fn walk_node(
             y: bounds.origin.y as i32,
             width: bounds.size.x as i32,
             height: bounds.size.y as i32,
-            parent_id,
+            parent_id: parent_id.to_string(),
             fill_ref,
             stroke_ref,
         },
     );
     for child in &node.children {
-        walk_node(child, node.id.raw(), var_table, out);
+        walk_node(child, node.id.as_str(), var_table, out);
     }
 }
 
@@ -538,7 +536,7 @@ pub fn get_active_theme_snapshot(doc: &crate::document::Document) -> GetActiveTh
 ///     list_variables / list_pages wire convention so clients
 ///     can reuse their existing decoder.
 pub struct ListComponents {
-    pub items: Vec<(String, u64)>,
+    pub items: Vec<(String, String)>,
 }
 
 impl McpTool for ListComponents {
@@ -563,7 +561,7 @@ pub fn list_components_snapshot(doc: &crate::document::Document) -> ListComponen
         .components
         .components
         .iter()
-        .map(|c| (c.name.clone(), c.id.raw()))
+        .map(|c| (c.name.clone(), c.id.as_str().to_string()))
         .collect();
     ListComponents { items }
 }
@@ -579,7 +577,7 @@ pub fn list_components_snapshot(doc: &crate::document::Document) -> ListComponen
 ///   result — { name, kind, leaf_count } or ToolFailed when the
 ///            id doesn't resolve.
 pub struct GetComponent {
-    pub snapshot: Vec<(u64, String, String, usize)>,
+    pub snapshot: Vec<(String, String, String, usize)>,
 }
 
 impl McpTool for GetComponent {
@@ -593,19 +591,12 @@ impl McpTool for GetComponent {
                 "component_id is required".into(),
             );
         };
-        let component_id: u64 = match raw.parse() {
-            Ok(n) if n > 0 => n,
-            _ => {
-                return ToolOutcome::Err(
-                    ToolErrorCode::InvalidArgument,
-                    format!("component_id must be a positive u64, got {raw:?}"),
-                );
-            }
-        };
+        // `component_id` is the canonical `.op` schema string id.
+        let component_id: &str = raw.as_str();
         let Some((_, name, kind, leaf_count)) = self
             .snapshot
             .iter()
-            .find(|(id, _, _, _)| *id == component_id)
+            .find(|(id, _, _, _)| id == component_id)
         else {
             return ToolOutcome::Err(
                 ToolErrorCode::ToolFailed,
@@ -632,7 +623,7 @@ impl McpTool for GetComponent {
 ///     of the page root).
 ///   count — top-level node count.
 pub struct SnapshotLayout {
-    pub items: Vec<(u64, i32, i32, i32, i32)>,
+    pub items: Vec<(String, i32, i32, i32, i32)>,
 }
 
 impl McpTool for SnapshotLayout {
@@ -703,7 +694,7 @@ impl McpTool for GetCanvasBounds {
 ///   args   — { "name": "<exact match, case-sensitive>" }
 ///   result — { id, kind } on success, ToolFailed when no match.
 pub struct FindNodeByName {
-    pub index: Vec<(String, u64, String)>,
+    pub index: Vec<(String, String, String)>,
 }
 
 impl McpTool for FindNodeByName {
@@ -743,7 +734,7 @@ impl McpTool for FindNodeByName {
 ///     when the node sits at the page root. depth is the
 ///     distance from page root (0 = top-level node).
 pub struct GetNodeParent {
-    pub index: Vec<(u64, u64, u32)>,
+    pub index: Vec<(String, String, u32)>,
 }
 
 impl McpTool for GetNodeParent {
@@ -757,16 +748,9 @@ impl McpTool for GetNodeParent {
                 "node_id is required".into(),
             );
         };
-        let node_id: u64 = match raw.parse() {
-            Ok(n) if n > 0 => n,
-            _ => {
-                return ToolOutcome::Err(
-                    ToolErrorCode::InvalidArgument,
-                    format!("node_id must be a positive u64, got {raw:?}"),
-                );
-            }
-        };
-        let Some((_, parent_id, depth)) = self.index.iter().find(|(id, _, _)| *id == node_id)
+        // `node_id` is the canonical `.op` schema string id.
+        let node_id: &str = raw.as_str();
+        let Some((_, parent_id, depth)) = self.index.iter().find(|(id, _, _)| id == node_id)
         else {
             return ToolOutcome::Err(
                 ToolErrorCode::ToolFailed,
@@ -909,8 +893,8 @@ impl McpTool for GetViewport {
 ///   anchor — the single anchor id (matches get_selection's
 ///     `selected_id`, 0 when nothing selected).
 pub struct GetSelectionSet {
-    pub anchor: u64,
-    pub ids: Vec<u64>,
+    pub anchor: String,
+    pub ids: Vec<String>,
 }
 
 impl McpTool for GetSelectionSet {
@@ -934,8 +918,8 @@ impl McpTool for GetSelectionSet {
 
 pub fn get_selection_set_snapshot(doc: &crate::document::Document) -> GetSelectionSet {
     GetSelectionSet {
-        anchor: doc.selected.raw(),
-        ids: doc.selected_set.iter().map(|id| id.raw()).collect(),
+        anchor: doc.selected.as_str().to_string(),
+        ids: doc.selected_set.iter().map(|id| id.as_str().to_string()).collect(),
     }
 }
 
@@ -1002,18 +986,18 @@ pub fn count_nodes_snapshot(doc: &crate::document::Document) -> CountNodes {
 pub fn get_node_parent_snapshot(doc: &crate::document::Document) -> GetNodeParent {
     fn walk(
         nodes: &[crate::document::Node],
-        parent: u64,
+        parent: &str,
         depth: u32,
-        out: &mut Vec<(u64, u64, u32)>,
+        out: &mut Vec<(String, String, u32)>,
     ) {
         for n in nodes {
-            out.push((n.id.raw(), parent, depth));
-            walk(&n.children, n.id.raw(), depth + 1, out);
+            out.push((n.id.as_str().to_string(), parent.to_string(), depth));
+            walk(&n.children, n.id.as_str(), depth + 1, out);
         }
     }
     let mut index = Vec::new();
     if let Some(page) = doc.active_page() {
-        walk(&page.children, 0, 0, &mut index);
+        walk(&page.children, "", 0, &mut index);
     }
     GetNodeParent { index }
 }
@@ -1021,7 +1005,7 @@ pub fn get_node_parent_snapshot(doc: &crate::document::Document) -> GetNodeParen
 pub fn find_node_by_name_snapshot(doc: &crate::document::Document) -> FindNodeByName {
     fn walk(
         nodes: &[crate::document::Node],
-        out: &mut Vec<(String, u64, String)>,
+        out: &mut Vec<(String, String, String)>,
     ) {
         for n in nodes {
             let kind = match n.kind {
@@ -1035,7 +1019,7 @@ pub fn find_node_by_name_snapshot(doc: &crate::document::Document) -> FindNodeBy
                 crate::document::NodeKind::Path => "path",
                 _ => "other",
             };
-            out.push((n.name.clone(), n.id.raw(), kind.to_string()));
+            out.push((n.name.clone(), n.id.as_str().to_string(), kind.to_string()));
             walk(&n.children, out);
         }
     }
@@ -1126,7 +1110,7 @@ pub fn snapshot_layout_snapshot(doc: &crate::document::Document) -> SnapshotLayo
                 .map(|n| {
                     let b = effective_bounds(n);
                     (
-                        n.id.raw(),
+                        n.id.as_str().to_string(),
                         b.origin.x as i32,
                         b.origin.y as i32,
                         b.size.x as i32,
@@ -1164,7 +1148,7 @@ pub fn get_component_snapshot(doc: &crate::document::Document) -> GetComponent {
                 _ => "other",
             };
             (
-                c.id.raw(),
+                c.id.as_str().to_string(),
                 c.name.clone(),
                 kind.to_string(),
                 count_leaves(&c.root),

@@ -67,7 +67,7 @@ pub fn pen_document_to_payload(doc: &PenDocument) -> LoadedDoc {
         )]
     } else {
         vec![PagePayload {
-            id: 1,
+            id: "n1".to_string(),
             name: "Page 1".into(),
             children: Vec::new(),
         }]
@@ -152,8 +152,9 @@ fn build_page(id: &str, name: &str, roots: &[PenNode], page_idx: usize) -> PageP
     for root in roots {
         compute_layout(root, &mut layout_rects);
     }
+    let _ = page_idx;
     PagePayload {
-        id: hash_id(id, (page_idx as u64) + 1),
+        id: id.to_string(),
         name: name.to_string(),
         children: roots
             .iter()
@@ -605,7 +606,7 @@ fn empty_group(base: &PenNodeBase, kind: &str) -> NodePayload {
 
 fn base_payload(base: &PenNodeBase, kind: &str) -> NodePayload {
     NodePayload {
-        id: hash_id(&base.id, 0),
+        id: base.id.clone(),
         schema_id: base.id.clone(),
         kind: kind.to_string(),
         name: base.name.clone().unwrap_or_else(|| base.id.clone()),
@@ -736,21 +737,6 @@ fn parse_hex(s: &str) -> Option<[f32; 4]> {
         b as f32 / 255.0,
         a as f32 / 255.0,
     ])
-}
-
-fn hash_id(s: &str, fallback: u64) -> u64 {
-    use std::hash::{Hash, Hasher};
-    if s.is_empty() {
-        return fallback.max(1);
-    }
-    let mut h = std::collections::hash_map::DefaultHasher::new();
-    s.hash(&mut h);
-    let v = h.finish();
-    if v == 0 {
-        1
-    } else {
-        v
-    }
 }
 
 fn short_src(src: &str) -> String {

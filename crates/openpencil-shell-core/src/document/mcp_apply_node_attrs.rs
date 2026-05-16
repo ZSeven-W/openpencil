@@ -15,13 +15,13 @@ pub(super) fn apply_set_node_font_size(
     node_id: u64,
     font_size: f32,
 ) -> bool {
-    let Some(target) = NodeId::new_opt(node_id) else {
+    let Some(target) = NodeId::from_mcp_u64(node_id) else {
         return false;
     };
     if !font_size.is_finite() || font_size <= 0.0 {
         return false;
     }
-    let Some(node) = find_node_mut_in_doc(doc, target) else {
+    let Some(node) = find_node_mut_in_doc(doc, &target) else {
         return false;
     };
     if !matches!(node.kind, NodeKind::Text) {
@@ -36,13 +36,13 @@ pub(super) fn apply_set_node_font_weight(
     node_id: u64,
     font_weight: u16,
 ) -> bool {
-    let Some(target) = NodeId::new_opt(node_id) else {
+    let Some(target) = NodeId::from_mcp_u64(node_id) else {
         return false;
     };
     if font_weight == 0 || font_weight > 1000 {
         return false;
     }
-    let Some(node) = find_node_mut_in_doc(doc, target) else {
+    let Some(node) = find_node_mut_in_doc(doc, &target) else {
         return false;
     };
     if !matches!(node.kind, NodeKind::Text) {
@@ -57,13 +57,13 @@ pub(super) fn apply_set_node_stroke_hex(
     node_id: u64,
     hex: &str,
 ) -> bool {
-    let Some(target) = NodeId::new_opt(node_id) else {
+    let Some(target) = NodeId::from_mcp_u64(node_id) else {
         return false;
     };
     let Some(color) = parse_hex_color(hex) else {
         return false;
     };
-    let Some(node) = find_node_mut_in_doc(doc, target) else {
+    let Some(node) = find_node_mut_in_doc(doc, &target) else {
         return false;
     };
     match &mut node.stroke {
@@ -80,13 +80,13 @@ pub(super) fn apply_set_node_stroke_width(
     node_id: u64,
     width: f32,
 ) -> bool {
-    let Some(target) = NodeId::new_opt(node_id) else {
+    let Some(target) = NodeId::from_mcp_u64(node_id) else {
         return false;
     };
     if !width.is_finite() || width < 0.0 {
         return false;
     }
-    let Some(node) = find_node_mut_in_doc(doc, target) else {
+    let Some(node) = find_node_mut_in_doc(doc, &target) else {
         return false;
     };
     if width == 0.0 {
@@ -110,13 +110,13 @@ pub(super) fn apply_set_node_fill_hex(
     node_id: u64,
     hex: &str,
 ) -> bool {
-    let Some(target) = NodeId::new_opt(node_id) else {
+    let Some(target) = NodeId::from_mcp_u64(node_id) else {
         return false;
     };
     let Some(color) = parse_hex_color(hex) else {
         return false;
     };
-    let Some(node) = find_node_mut_in_doc(doc, target) else {
+    let Some(node) = find_node_mut_in_doc(doc, &target) else {
         return false;
     };
     node.fill = Some(color);
@@ -128,14 +128,14 @@ pub(super) fn apply_set_node_name(
     node_id: u64,
     name: &str,
 ) -> bool {
-    let Some(target) = NodeId::new_opt(node_id) else {
+    let Some(target) = NodeId::from_mcp_u64(node_id) else {
         return false;
     };
     let trimmed = name.trim();
     if trimmed.is_empty() {
         return false;
     }
-    let Some(node) = find_node_mut_in_doc(doc, target) else {
+    let Some(node) = find_node_mut_in_doc(doc, &target) else {
         return false;
     };
     node.name = trimmed.to_string();
@@ -147,13 +147,13 @@ pub(super) fn apply_set_node_corner_radius(
     node_id: u64,
     radius: f32,
 ) -> bool {
-    let Some(target) = NodeId::new_opt(node_id) else {
+    let Some(target) = NodeId::from_mcp_u64(node_id) else {
         return false;
     };
     if !radius.is_finite() || radius < 0.0 {
         return false;
     }
-    let Some(node) = find_node_mut_in_doc(doc, target) else {
+    let Some(node) = find_node_mut_in_doc(doc, &target) else {
         return false;
     };
     node.corner_radius = radius;
@@ -165,10 +165,10 @@ pub(super) fn apply_set_node_text(
     node_id: u64,
     text: &str,
 ) -> bool {
-    let Some(target) = NodeId::new_opt(node_id) else {
+    let Some(target) = NodeId::from_mcp_u64(node_id) else {
         return false;
     };
-    let Some(node) = find_node_mut_in_doc(doc, target) else {
+    let Some(node) = find_node_mut_in_doc(doc, &target) else {
         return false;
     };
     if !matches!(node.kind, NodeKind::Text) {
@@ -183,13 +183,13 @@ pub(super) fn apply_set_node_rotation(
     node_id: u64,
     degrees: f32,
 ) -> bool {
-    let Some(target) = NodeId::new_opt(node_id) else {
+    let Some(target) = NodeId::from_mcp_u64(node_id) else {
         return false;
     };
     if !degrees.is_finite() {
         return false;
     }
-    let Some(node) = find_node_mut_in_doc(doc, target) else {
+    let Some(node) = find_node_mut_in_doc(doc, &target) else {
         return false;
     };
     node.rotation = degrees.to_radians();

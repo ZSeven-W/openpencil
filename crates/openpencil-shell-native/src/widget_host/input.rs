@@ -127,9 +127,9 @@ impl WidgetHostNative {
             self.document.ui.pen_cursor_doc = Some(doc);
             return true;
         }
-        if let Some(state) = self.document.ui.layer_context_menu {
+        if let Some(state) = self.document.ui.layer_context_menu.clone() {
             use openpencil_shell_core::widgets::layer_context_menu::LayerContextMenu;
-            let menu = LayerContextMenu::for_state(&self.document, state);
+            let menu = LayerContextMenu::for_state(&self.document, state.clone());
             let new_hover = menu.hovered_row_at(Point2D::new(x, y)).map(|i| i as u8);
             if new_hover != state.hovered_row {
                 self.document.ui.layer_context_menu =
@@ -239,7 +239,7 @@ impl WidgetHostNative {
             let doc_point = self.document.viewport.to_document(canvas_local);
             let (id, idx, start) = {
                 let d = self.path_anchor_drag.as_ref().unwrap();
-                (d.node_id, d.anchor_index, d.start_doc)
+                (d.node_id.clone(), d.anchor_index, d.start_doc)
             };
             self.document.set_path_anchor_position(id, idx, doc_point);
             if (doc_point.x - start.x).abs() > 0.001 || (doc_point.y - start.y).abs() > 0.001 {
@@ -255,11 +255,11 @@ impl WidgetHostNative {
             return true;
         }
         if let Some(d) = self.layer_drag.as_mut() {
-            let source_id = d.source;
+            let source_id = d.source.clone();
             let still_present = self
                 .document
                 .active_page()
-                .map(|p| p.find(source_id).is_some())
+                .map(|p| p.find(&source_id).is_some())
                 .unwrap_or(false);
             if !still_present {
                 self.layer_drag = None;

@@ -244,7 +244,7 @@ pub(in crate::widget_host) struct MarqueeDragState {
 }
 
 /// Active LayerPanel drag-to-reorder gesture.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub(in crate::widget_host) struct LayerDragState {
     /// NodeId of the row the user pressed on — what gets moved on
     /// release.

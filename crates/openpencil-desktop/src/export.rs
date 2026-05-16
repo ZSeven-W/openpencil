@@ -730,7 +730,7 @@ mod tests {
         let mut doc = openpencil_shell_core::document::Document::empty();
         let page = doc.pages.get_mut(0).unwrap();
         page.children.clear();
-        let mut n = Node::leaf(10, NodeKind::Rect, "r");
+        let mut n = Node::leaf("n10", NodeKind::Rect, "r");
         n.bounds = Rect::xywh(0.0, 0.0, 100.0, 50.0);
         n.fill = Some(Color { r: 0.5, g: 0.5, b: 0.5, a: 1.0 });
         page.children.push(n);
@@ -741,7 +741,7 @@ mod tests {
         // PNG signature: 89 50 4E 47 0D 0A 1A 0A
         assert_eq!(&bytes[..8], &[0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A]);
         let _ = std::fs::remove_file(&tmp);
-        let _ = NodeId::new(10); // silence import-used warning
+        let _ = NodeId::new("n10"); // silence import-used warning
     }
 
     #[test]
@@ -750,7 +750,7 @@ mod tests {
         let mut doc = openpencil_shell_core::document::Document::empty();
         let page = doc.pages.get_mut(0).unwrap();
         page.children.clear();
-        let mut n = Node::leaf(10, NodeKind::Rect, "r");
+        let mut n = Node::leaf("n10", NodeKind::Rect, "r");
         n.bounds = Rect::xywh(0.0, 0.0, 80.0, 40.0);
         n.fill = Some(Color { r: 1.0, g: 0.0, b: 0.0, a: 1.0 });
         page.children.push(n);
@@ -769,7 +769,7 @@ mod tests {
         let mut doc = openpencil_shell_core::document::Document::empty();
         let page = doc.pages.get_mut(0).unwrap();
         page.children.clear();
-        let mut n = Node::leaf(10, NodeKind::Rect, "r");
+        let mut n = Node::leaf("n10", NodeKind::Rect, "r");
         n.bounds = Rect::xywh(0.0, 0.0, 10.0, 10.0);
         n.fill = Some(Color { r: 0.0, g: 0.0, b: 0.0, a: 1.0 });
         page.children.push(n);

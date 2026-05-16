@@ -233,8 +233,8 @@ impl<'a> Widget for CanvasViewport<'a> {
                 rect.origin.x + viewport.pan_x,
                 rect.origin.y + viewport.pan_y,
             );
-            let edit_caret = self.document.ui.text_editing.map(|id| EditCaret {
-                editing: id,
+            let edit_caret = self.document.ui.text_editing.as_ref().map(|id| EditCaret {
+                editing: id.clone(),
                 anchor_ms: self.document.ui.text_edit_caret_anchor_ms,
                 now_ms: self.now_ms,
             });
@@ -255,8 +255,8 @@ impl<'a> Widget for CanvasViewport<'a> {
                     child,
                     viewport_origin,
                     viewport.zoom,
-                    self.document.selected,
-                    edit_caret,
+                    &self.document.selected,
+                    edit_caret.clone(),
                     cull,
                     &self.document.var_table,
                 );
@@ -270,7 +270,7 @@ impl<'a> Widget for CanvasViewport<'a> {
         let show_handles = self.document.selection_count() == 1;
         if let Some(page) = self.document.active_page() {
             for id in &self.document.selected_set {
-                let Some(node) = page.find(*id) else {
+                let Some(node) = page.find(id) else {
                     continue;
                 };
                 if node.hidden {
@@ -318,7 +318,7 @@ impl<'a> Widget for CanvasViewport<'a> {
             && self.document.selection_count() == 1
         {
             if let Some(page) = self.document.active_page() {
-                if let Some(node) = page.find(self.document.selected) {
+                if let Some(node) = page.find(&self.document.selected) {
                     if matches!(node.kind, NodeKind::Path) {
                         let r = 4.0; // screen-px radius
                         for p in &node.points {
@@ -348,7 +348,7 @@ impl<'a> Widget for CanvasViewport<'a> {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 struct EditCaret {
     editing: NodeId,
     anchor_ms: u64,
@@ -359,7 +359,7 @@ struct EditCaret {
 /// registered `$ref`) wins over `node.fill`. Mirrors TS
 /// `resolveNodeForCanvas` (`pen-core/variables/resolve.ts`).
 fn node_fill(node: &Node, var_table: &crate::document::VariableTable) -> Option<crate::Color> {
-    var_table.fill_for(node.id).or(node.fill)
+    var_table.fill_for(&node.id).or(node.fill)
 }
 
 /// Paint every `Effect::DropShadow` on `node` as a blurred shape
@@ -392,7 +392,7 @@ fn paint_node(
     node: &Node,
     viewport_origin: Point2D,
     zoom: f32,
-    selected: NodeId,
+    selected: &NodeId,
     edit_caret: Option<EditCaret>,
     cull: Rect,
     var_table: &crate::document::VariableTable,
@@ -451,7 +451,7 @@ fn paint_node(
         NodeKind::Frame => {
             paint_fill_then_stroke(cx, node, world_rect, zoom, node_fill(node, var_table));
             for child in &node.children {
-                paint_node(cx, child, viewport_origin, zoom, selected, edit_caret, cull, var_table);
+                paint_node(cx, child, viewport_origin, zoom, selected, edit_caret.clone(), cull, var_table);
             }
         }
         NodeKind::Other(tag) if tag == "icon_font" => crate::widgets::icons::paint_icon_font_node(
@@ -459,7 +459,7 @@ fn paint_node(
         ),
         NodeKind::Group | NodeKind::Other(_) => {
             for child in &node.children {
-                paint_node(cx, child, viewport_origin, zoom, selected, edit_caret, cull, var_table);
+                paint_node(cx, child, viewport_origin, zoom, selected, edit_caret.clone(), cull, var_table);
             }
         }
         NodeKind::Rect => {
@@ -839,14 +839,14 @@ mod tests {
 
     #[test]
     fn group_kind_recurses_without_own_paint() {
-        let inner = Node::leaf(2, NodeKind::Rect, "leaf")
+        let inner = Node::leaf("n2", NodeKind::Rect, "leaf")
             .with_bounds(Rect::xywh(0.0, 0.0, 50.0, 50.0))
             .with_fill(Color::RED);
-        let group = Node::with_children(3, NodeKind::Group, "group", vec![inner])
+        let group = Node::with_children("n3", NodeKind::Group, "group", vec![inner])
             .with_bounds(Rect::xywh(10.0, 10.0, 80.0, 80.0))
             .with_fill(Color::BLUE); // fill on group should be ignored
         let doc = Document {
-            pages: vec![crate::document::Page::new(1, "p", vec![group])],
+            pages: vec![crate::document::Page::new("n1", "p", vec![group])],
             active_page_index: 0,
             selected: NodeId::NONE,
             selected_set: Vec::new(),

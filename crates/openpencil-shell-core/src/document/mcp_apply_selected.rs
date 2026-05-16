@@ -15,17 +15,17 @@ use super::{Document, NodeId, ReorderDirection, Tool};
 /// `is_editable`, etc.) would then return None for that id and
 /// the doc would behave as if nothing was selected — silent
 /// breakage instead of an upfront reject.
-fn active_page_has(doc: &Document, target: NodeId) -> bool {
+fn active_page_has(doc: &Document, target: &NodeId) -> bool {
     doc.active_page()
-        .map(|p| p.find(target).is_some())
+        .map(|p| p.find(&target).is_some())
         .unwrap_or(false)
 }
 
 pub(super) fn apply_set_selection(doc: &mut Document, node_id: u64) -> bool {
-    let Some(target) = NodeId::new_opt(node_id) else {
+    let Some(target) = NodeId::from_mcp_u64(node_id) else {
         return false;
     };
-    if !active_page_has(doc, target) {
+    if !active_page_has(doc, &target) {
         return false;
     }
     doc.set_single_selection(target);
@@ -33,10 +33,10 @@ pub(super) fn apply_set_selection(doc: &mut Document, node_id: u64) -> bool {
 }
 
 pub(super) fn apply_toggle_node_selection(doc: &mut Document, node_id: u64) -> bool {
-    let Some(target) = NodeId::new_opt(node_id) else {
+    let Some(target) = NodeId::from_mcp_u64(node_id) else {
         return false;
     };
-    if !active_page_has(doc, target) {
+    if !active_page_has(doc, &target) {
         return false;
     }
     doc.toggle_selection(target);
@@ -54,8 +54,8 @@ pub(super) fn apply_set_selection_set(doc: &mut Document, node_ids: &[u64]) -> b
         if !seen.insert(*raw) {
             continue;
         }
-        if let Some(id) = NodeId::new_opt(*raw) {
-            if active_page_has(doc, id) {
+        if let Some(id) = NodeId::from_mcp_u64(*raw) {
+            if active_page_has(doc, &id) {
                 resolved.push(id);
             }
         }
@@ -64,7 +64,7 @@ pub(super) fn apply_set_selection_set(doc: &mut Document, node_ids: &[u64]) -> b
         doc.clear_selection();
     } else {
         doc.selected_set = resolved.clone();
-        doc.selected = *resolved.last().expect("resolved non-empty");
+        doc.selected = resolved.last().cloned().expect("resolved non-empty");
         doc.ui.align_toolbar_hover = None;
     }
     true
@@ -167,10 +167,10 @@ pub(super) fn apply_set_node_flag(
     flag: crate::mcp::NodeFlag,
     value: bool,
 ) -> bool {
-    let Some(target) = NodeId::new_opt(node_id) else {
+    let Some(target) = NodeId::from_mcp_u64(node_id) else {
         return false;
     };
-    let Some(node) = find_node_mut_in_doc(doc, target) else {
+    let Some(node) = find_node_mut_in_doc(doc, &target) else {
         return false;
     };
     match flag {
