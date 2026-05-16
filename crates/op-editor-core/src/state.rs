@@ -62,6 +62,10 @@ pub struct EditorState {
     pub viewport: Viewport,
     /// Undo / redo stacks.
     pub history: History,
+    /// Cross-action clipboard buffer. Copy / cut fill it; paste
+    /// drains it (clones, so repeated paste works). Not part of the
+    /// `.op` file — transient editor state.
+    pub clipboard: Vec<jian_ops_schema::node::PenNode>,
     /// Transient UI state — draft buffers, focus, active page index,
     /// rebuilt-on-load variable/theme caches.
     pub ui: UiDraftState,
@@ -80,6 +84,7 @@ impl EditorState {
             tool: Tool::default(),
             viewport: Viewport::IDENTITY,
             history: History::new(),
+            clipboard: Vec::new(),
             ui: UiDraftState::new(),
         }
     }
