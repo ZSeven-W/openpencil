@@ -11,8 +11,10 @@
 //! `ImportImageOrSvg` opens a file dialog. Both are reported
 //! verbatim by the host so it can dispatch to the right place.
 
-use crate::document::{Document, Tool};
+use crate::document::Tool;
 use crate::theme::Theme;
+use crate::widgets::editor_state_ext::{doc_shape_choice, doc_tool, theme_for, translate};
+use op_editor_core::editor_ui_state::EditorUiState;
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::{LayoutBox, LayoutCx, PaintCx, Widget, WidgetId};
 use crate::{Color, Point2D, Rect, TextLayout};
@@ -46,9 +48,9 @@ struct PickerLabels {
 }
 
 impl PickerLabels {
-    fn for_document(doc: &Document) -> Self {
+    fn for_editor_ui(ui: &EditorUiState) -> Self {
         let pick = |key: &'static str, fallback: &'static str| -> String {
-            let translated = doc.t(key);
+            let translated = translate(ui, key);
             if translated == key {
                 fallback.to_string()
             } else {
@@ -84,8 +86,8 @@ pub struct ShapePicker {
 }
 
 impl ShapePicker {
-    pub fn for_document(doc: &Document) -> Self {
-        let labels = PickerLabels::for_document(doc);
+    pub fn for_editor_ui(ui: &EditorUiState) -> Self {
+        let labels = PickerLabels::for_editor_ui(ui);
         let rows = vec![
             PickerRow {
                 icon: Icon::Square,
@@ -125,9 +127,9 @@ impl ShapePicker {
         ];
         Self {
             id: WidgetId::new(5200),
-            theme: doc.theme(),
-            current_shape: doc.ui.shape_tool,
-            hovered: doc.ui.shape_picker_hover,
+            theme: theme_for(ui),
+            current_shape: doc_tool(ui.shape_tool),
+            hovered: ui.shape_picker_hover.map(doc_shape_choice),
             rows,
         }
     }
@@ -254,8 +256,8 @@ mod tests {
 
     #[test]
     fn first_row_resolves_to_rectangle() {
-        let doc = Document::empty();
-        let picker = ShapePicker::for_document(&doc);
+        let ui = op_editor_core::editor_ui_state::EditorUiState::new();
+        let picker = ShapePicker::for_editor_ui(&ui);
         let panel_rect = Rect {
             origin: Point2D::new(100.0, 50.0),
             size: Point2D::new(SHAPE_PICKER_WIDTH, ShapePicker::panel_height()),
@@ -266,8 +268,8 @@ mod tests {
 
     #[test]
     fn last_row_resolves_to_pen() {
-        let doc = Document::empty();
-        let picker = ShapePicker::for_document(&doc);
+        let ui = op_editor_core::editor_ui_state::EditorUiState::new();
+        let picker = ShapePicker::for_editor_ui(&ui);
         let panel_rect = Rect {
             origin: Point2D::new(0.0, 0.0),
             size: Point2D::new(SHAPE_PICKER_WIDTH, ShapePicker::panel_height()),

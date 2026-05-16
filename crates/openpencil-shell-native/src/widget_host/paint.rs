@@ -38,7 +38,7 @@ impl WidgetHostNative {
         let doc = &self.paint_doc;
 
         // 2. TopBar.
-        let top_bar = TopBar::for_document(doc);
+        let top_bar = TopBar::for_editor_ui(&self.editor_state.editor_ui);
         let top_bar_rect = Rect {
             origin: Point2D::new(0.0, 0.0),
             size: Point2D::new(viewport_width, TOP_BAR_HEIGHT),
@@ -164,7 +164,7 @@ impl WidgetHostNative {
         }
 
         // 6. Toolbar — floating column.
-        let toolbar = Toolbar::for_document(doc);
+        let toolbar = Toolbar::for_editor(&self.editor_state);
         let toolbar_h = toolbar
             .layout(&LayoutCx {
                 available_width: TOOLBAR_WIDTH,
@@ -201,7 +201,7 @@ impl WidgetHostNative {
         // 8. StatusBar — floating bottom-right.
         let canvas_right = canvas_left + canvas_w;
         if canvas_w > STATUS_BAR_WIDTH + STATUS_INSET * 2.0 {
-            let status = StatusBar::for_document(doc);
+            let status = StatusBar::for_editor(&self.editor_state);
             let status_rect = Rect {
                 origin: Point2D::new(
                     canvas_right - STATUS_BAR_WIDTH - STATUS_INSET,
@@ -222,12 +222,13 @@ impl WidgetHostNative {
             origin: Point2D::new(canvas_left, TOP_BAR_HEIGHT),
             size: Point2D::new(canvas_w, canvas_h),
         };
-        if let Some(toolbar) = AlignToolbar::for_canvas_region(canvas_region, doc) {
-            toolbar.paint(
-                &mut *frame,
-                &self.theme,
-                doc.ui.align_toolbar_hover,
-            );
+        if let Some(toolbar) = AlignToolbar::for_canvas_region(canvas_region, &self.editor_state) {
+            let hover = self
+                .editor_state
+                .editor_ui
+                .align_toolbar_hover
+                .map(openpencil_shell_core::widgets::editor_state_ext::doc_align_action);
+            toolbar.paint(&mut *frame, &self.theme, hover);
         }
 
         // 8.5. Marquee selection rect — painted above canvas but
@@ -262,7 +263,7 @@ impl WidgetHostNative {
         //    shape slot; same z-priority as the locale picker.
         if doc.ui.shape_picker_open {
             let picker_rect = self.shape_picker_rect(viewport_width, viewport_height);
-            let picker = ShapePicker::for_document(doc);
+            let picker = ShapePicker::for_editor_ui(&self.editor_state.editor_ui);
             let mut cx = PaintCx {
                 backend: &mut *frame,
             };
@@ -273,7 +274,7 @@ impl WidgetHostNative {
         //     toolbar / status when open.
         if doc.ui.locale_picker_open {
             let picker_rect = self.locale_picker_rect(viewport_width);
-            let picker = LocalePicker::for_document(doc);
+            let picker = LocalePicker::for_editor_ui(&self.editor_state.editor_ui);
             let mut cx = PaintCx {
                 backend: &mut *frame,
             };
@@ -294,7 +295,7 @@ impl WidgetHostNative {
                 .duration_since(std::time::UNIX_EPOCH)
                 .map(|d| d.as_secs())
                 .unwrap_or(0);
-            let menu = FileMenu::from_document(doc, now_secs);
+            let menu = FileMenu::from_editor_ui(&self.editor_state.editor_ui, now_secs);
             let menu_rect = menu.rect_at(anchor);
             let mut cx = PaintCx { backend: &mut *frame };
             menu.paint(&mut cx, menu_rect);

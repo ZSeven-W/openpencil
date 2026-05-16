@@ -155,7 +155,7 @@ impl WidgetHostNative {
             .duration_since(std::time::UNIX_EPOCH)
             .map(|d| d.as_secs())
             .unwrap_or(0);
-        let menu = FileMenu::from_document(&self.paint_doc, now_secs);
+        let menu = FileMenu::from_editor_ui(&self.editor_state.editor_ui, now_secs);
         let menu_rect = menu.rect_at(anchor);
         if let Some(choice) =
             menu.hit_test(menu_rect, openpencil_shell_core::Point2D::new(x, y))

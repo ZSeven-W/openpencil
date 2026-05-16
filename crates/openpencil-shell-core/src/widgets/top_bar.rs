@@ -5,8 +5,9 @@
 //! agent-status + i18n + fullscreen on the right. Click handling is
 //! a P6 follow-up; Step 4 paints only.
 
-use crate::document::Document;
 use crate::theme::Theme;
+use crate::widgets::editor_state_ext::{theme_for, translate};
+use op_editor_core::editor_ui_state::EditorUiState;
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::{LayoutBox, LayoutCx, PaintCx, Widget, WidgetId};
 use crate::{Color, Point2D, Rect, TextLayout};
@@ -69,19 +70,18 @@ impl TopBar {
         Self::new("未命名")
     }
 
-    pub fn for_document(doc: &Document) -> Self {
-        let file_name = doc
-            .ui
+    pub fn for_editor_ui(ui: &EditorUiState) -> Self {
+        let file_name = ui
             .file_name_display
             .clone()
-            .unwrap_or_else(|| doc.t("common.untitled").to_string());
+            .unwrap_or_else(|| translate(ui, "common.untitled").to_string());
         Self {
             id: WidgetId::new(5000),
             file_name,
             agent_count: 0,
-            theme: doc.theme(),
-            label_agents_and_mcp: doc.t("topbar.agentsAndMcp"),
-            label_agent_singular: doc.t("topbar.agentSingular"),
+            theme: theme_for(ui),
+            label_agents_and_mcp: translate(ui, "topbar.agentsAndMcp"),
+            label_agent_singular: translate(ui, "topbar.agentSingular"),
         }
     }
 

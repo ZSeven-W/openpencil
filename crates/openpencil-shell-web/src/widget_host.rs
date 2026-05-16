@@ -424,7 +424,7 @@ impl WidgetHost {
                 origin: Point2D::new(cx, TOP_BAR_HEIGHT),
                 size: Point2D::new(cw, ch),
             };
-            AlignToolbar::for_canvas_region(canvas_region, &self.paint_doc)
+            AlignToolbar::for_canvas_region(canvas_region, &self.editor_state)
                 .and_then(|tb| tb.hit_test(Point2D::new(x, y)))
         } else {
             None
@@ -697,7 +697,7 @@ impl WidgetHost {
         // hit-test matches paint regardless of sidebar state.
         let (cx0, _cy0, _cw, _ch) = self.canvas_region(viewport_w, f32::INFINITY);
         self.refresh_paint_doc();
-        let toolbar = Toolbar::for_document(&self.paint_doc);
+        let toolbar = Toolbar::for_editor(&self.editor_state);
         let h = toolbar
             .layout(&LayoutCx {
                 available_width: TOOLBAR_WIDTH,

@@ -50,7 +50,7 @@ impl WidgetHost {
         self.refresh_paint_doc();
         let doc = &self.paint_doc;
 
-        let top_bar = TopBar::for_document(doc);
+        let top_bar = TopBar::for_editor_ui(&self.editor_state.editor_ui);
         let top_bar_rect = Rect {
             origin: Point2D::new(0.0, 0.0),
             size: Point2D::new(viewport_width, TOP_BAR_HEIGHT),
@@ -134,7 +134,7 @@ impl WidgetHost {
             canvas.paint(&mut cx, canvas_rect);
         }
 
-        let toolbar = Toolbar::for_document(doc);
+        let toolbar = Toolbar::for_editor(&self.editor_state);
         let toolbar_h = toolbar
             .layout(&LayoutCx {
                 available_width: TOOLBAR_WIDTH,
@@ -167,7 +167,7 @@ impl WidgetHost {
 
         let canvas_right = canvas_left + canvas_w;
         if canvas_w > STATUS_BAR_WIDTH + STATUS_INSET * 2.0 {
-            let status = StatusBar::for_document(doc);
+            let status = StatusBar::for_editor(&self.editor_state);
             let status_rect = Rect {
                 origin: Point2D::new(
                     canvas_right - STATUS_BAR_WIDTH - STATUS_INSET,
@@ -190,8 +190,13 @@ impl WidgetHost {
                 origin: Point2D::new(canvas_left, TOP_BAR_HEIGHT),
                 size: Point2D::new(canvas_w, canvas_h),
             };
-            if let Some(tb) = AlignToolbar::for_canvas_region(canvas_region, doc) {
-                tb.paint(&mut *backend, &self.theme, doc.ui.align_toolbar_hover);
+            if let Some(tb) = AlignToolbar::for_canvas_region(canvas_region, &self.editor_state) {
+                let hover = self
+                    .editor_state
+                    .editor_ui
+                    .align_toolbar_hover
+                    .map(openpencil_shell_core::widgets::editor_state_ext::doc_align_action);
+                tb.paint(&mut *backend, &self.theme, hover);
             }
         }
 
@@ -222,8 +227,7 @@ impl WidgetHost {
 
         if doc.ui.locale_picker_open {
             let picker_rect = self.locale_picker_rect(viewport_width);
-            let doc = &self.paint_doc;
-            let picker = LocalePicker::for_document(doc);
+            let picker = LocalePicker::for_editor_ui(&self.editor_state.editor_ui);
             let mut cx = PaintCx {
                 backend: &mut *backend,
             };

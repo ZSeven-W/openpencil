@@ -6,8 +6,10 @@
 //! names, currently-selected row marked with a check icon and
 //! primary tint.
 
-use crate::document::{Document, Locale};
 use crate::theme::Theme;
+use crate::widgets::editor_state_ext::theme_for;
+use op_editor_core::editor_ui_state::EditorUiState;
+use op_i18n::Locale;
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::{LayoutBox, LayoutCx, PaintCx, Widget, WidgetId};
 use crate::{Color, Point2D, Rect, TextLayout};
@@ -30,12 +32,12 @@ pub struct LocalePicker {
 }
 
 impl LocalePicker {
-    pub fn for_document(doc: &Document) -> Self {
+    pub fn for_editor_ui(ui: &EditorUiState) -> Self {
         Self {
             id: WidgetId::new(5100),
-            theme: doc.theme(),
-            selected: doc.ui.locale,
-            hovered: doc.ui.locale_picker_hover,
+            theme: theme_for(ui),
+            selected: ui.locale,
+            hovered: ui.locale_picker_hover,
         }
     }
 
@@ -161,8 +163,8 @@ mod tests {
 
     #[test]
     fn hit_test_resolves_first_row_to_first_locale() {
-        let doc = Document::empty();
-        let picker = LocalePicker::for_document(&doc);
+        let ui = op_editor_core::editor_ui_state::EditorUiState::new();
+        let picker = LocalePicker::for_editor_ui(&ui);
         let panel_rect = Rect {
             origin: Point2D::new(100.0, 50.0),
             size: Point2D::new(LOCALE_PICKER_WIDTH, LocalePicker::panel_height()),
@@ -173,8 +175,8 @@ mod tests {
 
     #[test]
     fn hit_test_resolves_last_row() {
-        let doc = Document::empty();
-        let picker = LocalePicker::for_document(&doc);
+        let ui = op_editor_core::editor_ui_state::EditorUiState::new();
+        let picker = LocalePicker::for_editor_ui(&ui);
         let panel_rect = Rect {
             origin: Point2D::new(0.0, 0.0),
             size: Point2D::new(LOCALE_PICKER_WIDTH, LocalePicker::panel_height()),
@@ -186,8 +188,8 @@ mod tests {
 
     #[test]
     fn hit_test_outside_returns_none() {
-        let doc = Document::empty();
-        let picker = LocalePicker::for_document(&doc);
+        let ui = op_editor_core::editor_ui_state::EditorUiState::new();
+        let picker = LocalePicker::for_editor_ui(&ui);
         let panel_rect = Rect {
             origin: Point2D::new(0.0, 0.0),
             size: Point2D::new(LOCALE_PICKER_WIDTH, LocalePicker::panel_height()),

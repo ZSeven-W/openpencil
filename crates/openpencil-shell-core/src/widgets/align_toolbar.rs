@@ -10,8 +10,9 @@
 //! Anchored to the horizontal center of the canvas region, ~16 px
 //! below the canvas top edge.
 
-use crate::document::{AlignAction, Document};
+use crate::document::AlignAction;
 use crate::theme::Theme;
+use op_editor_core::EditorState;
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::{Point2D, Rect, RenderBackend};
 
@@ -57,10 +58,10 @@ pub struct AlignToolbar {
 
 impl AlignToolbar {
     /// Build a toolbar centered horizontally inside `canvas_region`
-    /// when `doc.selection_count() >= 2`. Returns `None` otherwise
-    /// so the host can skip paint + hit-test entirely.
-    pub fn for_canvas_region(canvas_region: Rect, doc: &Document) -> Option<Self> {
-        if doc.selection_count() < 2 {
+    /// when the editor selection has 2+ nodes. Returns `None`
+    /// otherwise so the host can skip paint + hit-test entirely.
+    pub fn for_canvas_region(canvas_region: Rect, state: &EditorState) -> Option<Self> {
+        if state.selection.len() < 2 {
             return None;
         }
         // Center horizontally, then clamp into
@@ -160,21 +161,15 @@ fn rect_contains(r: Rect, p: Point2D) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::document::{Node, NodeId, NodeKind};
+    use op_editor_core::node_id::NodeId as OpNodeId;
 
-    fn doc_with_n_selected(n: usize) -> Document {
-        let mut doc = Document::empty();
-        let page = doc.pages.get_mut(0).unwrap();
-        page.children.clear();
-        for i in 0..n {
-            let mut node = Node::leaf(format!("n{}", 100 + i), NodeKind::Rect, "r");
-            node.bounds = Rect::xywh(i as f32 * 50.0, 0.0, 40.0, 20.0);
-            page.children.push(node);
-        }
-        let ids: Vec<NodeId> = (0..n).map(|i| NodeId::new(format!("n{}", 100 + i))).collect();
-        doc.selected_set = ids.clone();
-        doc.selected = ids.last().cloned().unwrap_or(NodeId::NONE);
-        doc
+    fn doc_with_n_selected(n: usize) -> EditorState {
+        let mut state = EditorState::new();
+        let ids: Vec<OpNodeId> =
+            (0..n).map(|i| OpNodeId::new(format!("n{}", 100 + i))).collect();
+        state.selection.anchor = ids.last().cloned().unwrap_or_default();
+        state.selection.set = ids;
+        state
     }
 
     fn canvas() -> Rect {
@@ -190,8 +185,8 @@ mod tests {
     #[test]
     fn empty_selection_hides_toolbar() {
         let mut doc = doc_with_n_selected(2);
-        doc.selected_set.clear();
-        doc.selected = NodeId::NONE;
+        doc.selection.set.clear();
+        doc.selection.anchor = OpNodeId::default();
         assert!(AlignToolbar::for_canvas_region(canvas(), &doc).is_none());
     }
 

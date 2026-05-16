@@ -260,7 +260,7 @@ impl WidgetHostNative {
         viewport_h: f32,
     ) -> Rect {
         let (cx0, _cy, cw, _ch) = self.canvas_region(viewport_w, viewport_h);
-        let toolbar = Toolbar::for_document(&self.paint_doc);
+        let toolbar = Toolbar::for_editor(&self.editor_state);
         let toolbar_h = toolbar
             .layout(&LayoutCx {
                 available_width: TOOLBAR_WIDTH,
@@ -407,7 +407,7 @@ impl WidgetHostNative {
             origin: Point2D::new(cx, TOP_BAR_HEIGHT),
             size: Point2D::new(cw, ch),
         };
-        AlignToolbar::for_canvas_region(canvas_region, &self.paint_doc)?
+        AlignToolbar::for_canvas_region(canvas_region, &self.editor_state)?
             .hit_test(Point2D::new(x, y))
     }
 }

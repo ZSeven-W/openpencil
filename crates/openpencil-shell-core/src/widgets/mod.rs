@@ -55,6 +55,10 @@ pub mod toolbar;
 pub mod canvas_viewport;
 pub mod canvas_viewport_overlay;
 
+// Phase 6 — shell-core-side `theme()` / `t()` derivations over
+// `op_editor_core::EditorUiState` for widgets ported off `Document`.
+pub mod editor_state_ext;
+
 // Step 4 — icon glyph drawer for editor chrome (lucide-flavored line art).
 pub mod icons;
 // Lucide d-string data — extracted as a sibling so `icons.rs` stays
