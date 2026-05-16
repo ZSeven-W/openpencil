@@ -95,7 +95,7 @@ Mutators on `Document`:
 | LayerContextMenu  | Right-click overlay on layer rows + page tabs (Rename / Duplicate / Delete / Group / Ungroup / Lock / Hide; subset on page tabs)     | `layer_context_menu.rs`                                                                                                                 |
 | AgentSettings     | Cmd+, modal — 880×640 with sidebar nav (Agents / MCP / Images / System) + scrollable right pane                                      | `agent_settings_panel.rs` + `agent_settings_{i18n,images,mcp,system}.rs`                                                                |
 | theme             | shadcn-dark palette tokens (incl. `canvas_surface`)                                                                                  | `theme.rs`                                                                                                                              |
-| i18n              | 15 locale tables (706 keys each, TS-mirrored)                                                                                        | `i18n/{en,zh_cn,zh_tw,ja,ko,fr,es,de,pt,ru,hi,tr,th,vi,id}.rs`                                                                          |
+| i18n              | 15 locale tables (706 keys each, TS-mirrored) — extracted into the `op-i18n` crate                                                   | `op-i18n/src/i18n/{en,zh_cn,zh_tw,ja,ko,fr,es,de,pt,ru,hi,tr,th,vi,id}.rs`                                                              |
 
 ## Theme + i18n
 
@@ -275,7 +275,7 @@ Every input path that reasons about the canvas region MUST derive its rects from
 - **Images** — Image Search Ready/Not-configured indicator + collapsible Advanced section (Openverse OAuth Client ID / Secret + Register link + Test button), then Image Generation section with `+ Add` empty state.
 - **System** — read-only Auto-update status card (no updater backend wired yet — a togglable switch would lie to the user; the row paints as informational text).
 
-`agent_settings_i18n.rs` carries a hand-maintained EN/ZH key table (~50 keys, `settings.tab.*` / `settings.agents.*` / `settings.mcp.*` / `settings.images.*` / `settings.system.*` / `settings.provider.*`). The repo's main `i18n/{en,zh_cn,…}.rs` tables stay untouched (they're auto-generated from `apps/web/src/i18n/locales/*.ts`); when those TS tables grow `settings.*` keys, this hand-table collapses into per-locale `lookup` calls.
+`agent_settings_i18n.rs` carries a hand-maintained EN/ZH key table (~50 keys, `settings.tab.*` / `settings.agents.*` / `settings.mcp.*` / `settings.images.*` / `settings.system.*` / `settings.provider.*`). The repo's main `op-i18n/src/i18n/{en,zh_cn,…}.rs` tables stay untouched (they're auto-generated from `apps/web/src/i18n/locales/*.ts`); when those TS tables grow `settings.*` keys, this hand-table collapses into per-locale `lookup` calls.
 
 ### Settings input editing
 

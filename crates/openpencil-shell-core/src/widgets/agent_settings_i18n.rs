@@ -1,6 +1,6 @@
 //! Hand-maintained EN/ZH lookup for the settings modal.
 //!
-//! The repo's main locale tables (`crates/.../i18n/{en,zh_cn,…}.rs`)
+//! The repo's main locale tables (`crates/op-i18n/src/i18n/{en,zh_cn,…}.rs`)
 //! are auto-generated from `apps/web/src/i18n/locales/*.ts` via
 //! `tools/convert-locales.py` and carry a "do NOT hand-edit"
 //! header. The settings modal strings haven't been added to the
