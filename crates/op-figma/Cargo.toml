@@ -1,0 +1,17 @@
+[package]
+name = "op-figma"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "OpenPencil Figma import — .fig file detection + clipboard-node parsing onto PenNode"
+
+[lib]
+name = "op_figma"
+path = "src/lib.rs"
+
+[dependencies]
+jian-ops-schema = { path = "../../vendor/jian/crates/jian-ops-schema" }
+
+[dev-dependencies]
+op-editor-core = { path = "../op-editor-core" }
