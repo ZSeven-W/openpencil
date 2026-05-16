@@ -179,7 +179,7 @@ fn replace_node_rejects_malformed_drop_children() {
 
 #[test]
 fn parser_refuses_structured_drop_children_at_wire_layer() {
-    use crate::mcp::parse_tool_call;
+    use crate::parse_tool_call;
     for bad_json in [
         r#"{"id":1,"method":"replace_node","params":{"node_id":"n10","kind":"rect","name":"X","x":"0","y":"0","width":"5","height":"5","drop_children":{}}}"#,
         r#"{"id":1,"method":"replace_node","params":{"node_id":"n10","kind":"rect","name":"X","x":"0","y":"0","width":"5","height":"5","drop_children":[true]}}"#,

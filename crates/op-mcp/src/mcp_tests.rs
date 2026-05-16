@@ -4,8 +4,8 @@
 //! Ported off the old shell-core `Document` onto `op_editor_core::
 //! EditorState`.
 
-use super::mcp::test_fixtures::{add_variable, sample, state_with};
-use super::mcp::*;
+use crate::test_fixtures::{add_variable, sample, state_with};
+use crate::*;
 use jian_ops_schema::variable::{VariableKind, VariableScalar};
 use std::collections::BTreeMap;
 
@@ -280,10 +280,10 @@ fn json_escape_handles_special_chars() {
 
 #[test]
 fn get_document_info_reports_snapshot_via_registry() {
-    use super::mcp::test_fixtures::frame;
+    use crate::test_fixtures::frame;
     let f = frame("n10", "F", 0.0, 0.0, 200.0, 100.0, vec![
-        super::mcp::test_fixtures::rect("n11", "a", 0.0, 0.0, 10.0, 10.0),
-        super::mcp::test_fixtures::rect("n12", "b", 20.0, 0.0, 10.0, 10.0),
+        crate::test_fixtures::rect("n11", "a", 0.0, 0.0, 10.0, 10.0),
+        crate::test_fixtures::rect("n12", "b", 20.0, 0.0, 10.0, 10.0),
     ]);
     let s = state_with(vec![f]);
     let info = document_info_snapshot(&s);

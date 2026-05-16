@@ -30,11 +30,9 @@ pub mod layout_scene;
 // Canvas hit-test (input path) over `LayoutScene` — replaces the
 // `&Document`-bound `node_at_doc_point` / `nodes_intersecting_doc_rect`.
 pub mod layout_scene_hit;
-pub mod mcp;
 // Paint-time design-variable aggregation consumed by the
 // `LayoutScene` scene builder (`$ref` fill / stroke resolution).
 pub mod scene_vars;
-#[cfg(test)] mod mcp_tests;
 // Phase 4 strangler reorg: the wasm-clean RenderBackend trait moved into the
 // op-editor-core crate. Re-exported as `render_backend` so `crate::render_backend::*`
 // paths still resolve.
