@@ -65,9 +65,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "git.conflict.description" => "使用下方卡片逐一解决每个冲突，然后应用合并。",
         "git.conflict.abort" => "中止合并",
         "git.conflict.nonOp.title" => "合并因非 .op 文件暂停",
-        "git.conflict.nonOp.description" => {
-            ".op 文件合并已完成,但仓库中仍有其他文件未解决。请在 OpenPencil 之外解决它们,然后继续。"
-        }
+        "git.conflict.nonOp.description" => ".op 文件合并已完成,但仓库中仍有其他文件未解决。请在 OpenPencil 之外解决它们,然后继续。",
         "git.conflict.nonOp.unresolvedHeading_one" => "1 个文件需要处理",
         "git.conflict.nonOp.unresolvedHeading_other" => "{{count}} 个文件需要处理",
         "git.conflict.nonOp.continue" => "继续合并",
@@ -250,9 +248,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "git.remote.clearConfirmAction" => "确认",
         "git.remote.aheadBehind" => "领先 {{ahead}} · 落后 {{behind}}",
         "git.remote.fetchButton" => "获取",
-        "git.remote.sshIsoUnsupported" => {
-            "内置引擎不支持 SSH 传输。请安装系统 git,或改用 HTTPS 远端地址。"
-        }
+        "git.remote.sshIsoUnsupported" => "内置引擎不支持 SSH 传输。请安装系统 git,或改用 HTTPS 远端地址。",
         "git.remote.storedAuthLabel" => "已保存的凭据",
         "git.remote.storedAuth.token" => "令牌",
         "git.remote.storedAuth.ssh" => "SSH 密钥",
@@ -264,9 +260,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "git.ssh.heading" => "SSH 密钥",
         "git.ssh.back" => "返回",
         "git.ssh.cancel" => "取消",
-        "git.ssh.isoUnsupported" => {
-            "当前远端使用 SSH,但内置引擎无法执行 SSH 传输。请安装系统 git,或将远端地址改为 HTTPS。"
-        }
+        "git.ssh.isoUnsupported" => "当前远端使用 SSH,但内置引擎无法执行 SSH 传输。请安装系统 git,或将远端地址改为 HTTPS。",
         "git.ssh.emptyList" => "暂无 SSH 密钥。",
         "git.ssh.generateAction" => "生成新密钥",
         "git.ssh.importAction" => "导入现有密钥",
@@ -517,15 +511,11 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "ai.searchModels" => "搜索模型...",
         "ai.noModelsFound" => "未找到匹配的模型",
         "ai.quickAction.loginScreen" => "设计一个移动端登录页面",
-        "ai.quickAction.loginScreenPrompt" => {
-            "设计一个现代的移动端登录页面，包含邮箱输入框、密码输入框、登录按钮和社交登录选项"
-        }
+        "ai.quickAction.loginScreenPrompt" => "设计一个现代的移动端登录页面，包含邮箱输入框、密码输入框、登录按钮和社交登录选项",
         "ai.quickAction.foodApp" => "美食App首页",
         "ai.quickAction.foodAppPrompt" => "Generate a well-designed food mobile app homepage",
         "ai.quickAction.bottomNav" => "设计一个底部导航栏",
-        "ai.quickAction.bottomNavPrompt" => {
-            "设计一个包含 5 个标签的移动应用底部导航栏：首页、搜索、添加、消息、个人"
-        }
+        "ai.quickAction.bottomNavPrompt" => "设计一个包含 5 个标签的移动应用底部导航栏：首页、搜索、添加、消息、个人",
         "ai.quickAction.colorPalette" => "为我的应用推荐配色方案",
         "ai.quickAction.colorPalettePrompt" => "为一个宠物护理应用推荐一套现代配色方案",
         "ai.startDesigning" => "用 AI 开始设计",
@@ -646,9 +636,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "builtin.errorApiKeyEmpty" => "API 密钥为空，请在设置中添加您的 API 密钥。",
         "builtin.parallelAgents" => "并行子代理：{{count}}x（点击切换）",
         "builtin.baseUrlPlaceholder" => "https://api.example.com/v1",
-        "builtin.teamDescription" => {
-            "选择用于设计生成的模型。设置后，设计任务将自动委派给使用此模型的专业 Agent。"
-        }
+        "builtin.teamDescription" => "选择用于设计生成的模型。设置后，设计任务将自动委派给使用此模型的专业 Agent。",
         "builtin.teamDesignModel" => "设计模型",
         "builtin.teamSelectModel" => "无（单 Agent）",
         "acp.title" => "ACP Agent",
