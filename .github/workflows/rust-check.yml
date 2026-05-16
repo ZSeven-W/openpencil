@@ -13,7 +13,7 @@ on:
       - 'tools/check-widget-boundary.sh'
       - '.github/workflows/rust-check.yml'
   push:
-    branches: [main, 'feat/rust-ification']
+    branches: ['**']
     paths:
       - 'Cargo.toml'
       - 'Cargo.lock'
