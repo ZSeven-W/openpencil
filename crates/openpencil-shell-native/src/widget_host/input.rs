@@ -2,9 +2,9 @@
 //!
 //! `EditorState` is the host's source of truth. Scalar / chrome
 //! reads go straight to `editor_state`; node-tree hit-tests run
-//! against the derived paint `Document` (`paint_doc`), refreshed at
-//! the top of each handler. Every mutation flags `editor_state` so
-//! the next paint re-derives.
+//! against the layout-resolved `LayoutScene`, refreshed at the top
+//! of each handler. Every mutation flags `editor_state` so the next
+//! refresh re-derives.
 
 use super::helpers::{
     resize_bounds, PANEL_MAX_WIDTH, PANEL_MIN_WIDTH,
@@ -40,7 +40,7 @@ impl WidgetHostNative {
         // Agent-settings modal owns wheel.
         if self.editor_state.editor_ui.agent_settings_open {
             use openpencil_shell_core::widgets::agent_settings_panel::AgentSettingsPanel;
-            self.refresh_paint_doc();
+            self.refresh_layout_scene();
             let panel = AgentSettingsPanel::for_editor(&self.editor_state);
             let panel_rect = panel.rect(viewport_width, viewport_height);
             if panel_rect.origin.x <= x
@@ -82,7 +82,7 @@ impl WidgetHostNative {
         // Agent-settings modal owns trackpad scroll same as wheel.
         if self.editor_state.editor_ui.agent_settings_open {
             use openpencil_shell_core::widgets::agent_settings_panel::AgentSettingsPanel;
-            self.refresh_paint_doc();
+            self.refresh_layout_scene();
             let panel = AgentSettingsPanel::for_editor(&self.editor_state);
             let panel_rect = panel.rect(viewport_width, viewport_height);
             if panel_rect.origin.x <= x
@@ -113,10 +113,10 @@ impl WidgetHostNative {
 
     pub fn apply_cursor_move(&mut self, x: f32, y: f32) -> bool {
         // Every hit-test below (color picker, layer context menu, align
-        // toolbar, panel resize, …) reasons about the derived paint
-        // `Document`. Refresh it once up front so a mutation since the
+        // toolbar, panel resize, …) reasons about the layout-resolved
+        // render scene. Refresh it once up front so a mutation since the
         // last paint can't leave any of them hit-testing stale geometry.
-        self.refresh_paint_doc();
+        self.refresh_layout_scene();
         if self.editor_state.editor_ui.agent_settings_open
             && self.update_agent_settings_hover(x, y)
         {
@@ -171,7 +171,7 @@ impl WidgetHostNative {
         if self.editor_state.editor_ui.file_menu_open {
             use openpencil_shell_core::widgets::file_menu::FileMenu;
             use openpencil_shell_core::widgets::top_bar::TopBar;
-            self.refresh_paint_doc();
+            self.refresh_layout_scene();
             let top_bar_rect = Rect {
                 origin: Point2D::new(0.0, 0.0),
                 size: Point2D::new(
@@ -197,7 +197,7 @@ impl WidgetHostNative {
         }
         if self.editor_state.editor_ui.locale_picker_open {
             use openpencil_shell_core::widgets::locale_picker::LocalePicker;
-            self.refresh_paint_doc();
+            self.refresh_layout_scene();
             let panel = self.locale_picker_rect(self.last_viewport_w);
             let picker = LocalePicker::for_editor_ui(&self.editor_state.editor_ui);
             let new_hover = picker.hit_test(panel, Point2D::new(x, y));
@@ -210,7 +210,7 @@ impl WidgetHostNative {
         }
         if self.editor_state.editor_ui.shape_picker_open {
             use openpencil_shell_core::widgets::shape_picker::ShapePicker;
-            self.refresh_paint_doc();
+            self.refresh_layout_scene();
             let panel = self.shape_picker_rect(self.last_viewport_w, self.last_viewport_h);
             let picker = ShapePicker::for_editor_ui(&self.editor_state.editor_ui);
             let new_hover = picker.hit_test(panel, Point2D::new(x, y));
@@ -299,12 +299,12 @@ impl WidgetHostNative {
             return true;
         }
         if self.layer_drag.is_some() {
-            self.refresh_paint_doc();
+            self.refresh_layout_scene();
             let source_id = self.layer_drag.as_ref().unwrap().source.clone();
             let still_present = self
-                .paint_doc
+                .layout_scene
                 .active_page()
-                .map(|p| p.find(&source_id).is_some())
+                .map(|p| p.find(source_id.as_str()).is_some())
                 .unwrap_or(false);
             if !still_present {
                 self.layer_drag = None;

@@ -3,8 +3,8 @@
 //! the rects + cursor hints the host serves.
 //!
 //! Scalar / chrome reads go straight to `editor_state`; node-tree
-//! hit-tests run against the derived paint `Document` (`paint_doc`).
-//! The input-dispatch contract keeps `paint_doc` fresh before any
+//! hit-tests run against the layout-resolved `LayoutScene`. The
+//! input-dispatch contract keeps `layout_scene` fresh before any
 //! hit-testing input event (see `widget_host.rs`).
 
 use super::helpers::{PANEL_RESIZE_GUTTER, TOOLBAR_INSET_X, TOOLBAR_INSET_Y};
@@ -65,7 +65,7 @@ impl WidgetHostNative {
     /// position. Returns `true` if the hover state changed.
     pub fn update_layer_hover(&mut self, x: f32, y: f32, viewport_h: f32) -> bool {
         use openpencil_shell_core::widgets::{LayerPanel, LayerPanelHit};
-        self.refresh_paint_doc();
+        self.refresh_layout_scene();
         let sidebar_open = self.editor_state.editor_ui.sidebar_open;
         let panel_w = self.editor_state.editor_ui.layer_panel_width;
         let (new_layer, new_page) = if sidebar_open
@@ -118,7 +118,10 @@ impl WidgetHostNative {
         let (cx0, cy0, _cw, _ch) = self.canvas_region(viewport_w, viewport_h);
         let canvas_local = Point2D::new(x - cx0, y - cy0);
         let doc_point = self.editor_state.viewport.to_document(canvas_local);
-        self.paint_doc.node_at_doc_point(doc_point).is_some()
+        let zoom = self.editor_state.viewport.zoom;
+        self.layout_scene
+            .node_at_doc_point(doc_point, zoom)
+            .is_some()
     }
 
     /// True while a node-drag is in flight.
@@ -131,7 +134,7 @@ impl WidgetHostNative {
     pub fn update_agent_settings_hover(&mut self, x: f32, y: f32) -> bool {
         use op_editor_core::AgentSettingsTab;
         use openpencil_shell_core::widgets::agent_settings_panel::AgentSettingsPanel;
-        self.refresh_paint_doc();
+        self.refresh_layout_scene();
         let point = Point2D::new(x, y);
         let (new_nav, new_card) = {
             let panel = AgentSettingsPanel::for_editor(&self.editor_state);
@@ -202,17 +205,32 @@ impl WidgetHostNative {
                     size: Point2D::new(cw, ch),
                 };
                 let point = Point2D::new(x, y);
-                if let Some(handle) =
-                    selection_handle_at_point(canvas_rect, &self.paint_doc, point)
-                {
+                if let Some(handle) = selection_handle_at_point(
+                    canvas_rect,
+                    &self.layout_scene,
+                    &self.editor_state,
+                    point,
+                ) {
                     return CursorHint::for_handle(handle);
                 }
-                if rotation_corner_at_point(canvas_rect, &self.paint_doc, point).is_some() {
+                if rotation_corner_at_point(
+                    canvas_rect,
+                    &self.layout_scene,
+                    &self.editor_state,
+                    point,
+                )
+                .is_some()
+                {
                     return CursorHint::Rotate;
                 }
                 let canvas_local = Point2D::new(x - cx0, y - cy0);
                 let doc_point = self.editor_state.viewport.to_document(canvas_local);
-                if self.paint_doc.node_at_doc_point(doc_point).is_some() {
+                let zoom = self.editor_state.viewport.zoom;
+                if self
+                    .layout_scene
+                    .node_at_doc_point(doc_point, zoom)
+                    .is_some()
+                {
                     return CursorHint::Move;
                 }
                 CursorHint::Default
@@ -362,7 +380,7 @@ impl WidgetHostNative {
         y: f32,
         viewport_w: f32,
         viewport_h: f32,
-    ) -> Option<(openpencil_shell_core::document::NodeId, usize)> {
+    ) -> Option<(String, usize)> {
         use openpencil_shell_core::document::NodeKind;
         if !matches!(self.editor_state.tool, op_editor_core::Tool::Pen) {
             return None;
@@ -370,8 +388,8 @@ impl WidgetHostNative {
         if self.editor_state.selection_count() != 1 {
             return None;
         }
-        let sel = self.paint_doc.selected.clone();
-        let node = self.paint_doc.active_page()?.find(&sel)?;
+        let sel = self.editor_state.selection.anchor.as_str().to_string();
+        let node = self.layout_scene.active_page()?.find(&sel)?;
         if !matches!(node.kind, NodeKind::Path) {
             return None;
         }

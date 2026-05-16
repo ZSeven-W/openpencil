@@ -1,10 +1,10 @@
 //! Mouse-press dispatcher.
 //!
-//! `EditorState` is the host's source of truth. Every hit-test runs
-//! against the derived paint `Document` (`paint_doc`, refreshed at
-//! the top of `apply_press`); the shell-core hit results are
-//! translated into op-editor-core types before feeding mutators.
-//! Press-helper methods (`create_node_for_active_tool`,
+//! `EditorState` is the host's source of truth. Canvas hit-tests run
+//! against the layout-resolved `LayoutScene` (refreshed at the top
+//! of `apply_press`); the resolved-scene node ids are wrapped into
+//! op-editor-core `NodeId`s before feeding mutators. Press-helper
+//! methods (`create_node_for_active_tool`,
 //! `dispatch_agent_settings_press`) live in `press_helpers.rs`.
 
 use super::helpers::{rect_contains, TOOLBAR_INSET_X, TOOLBAR_INSET_Y};
@@ -86,7 +86,7 @@ impl WidgetHostNative {
         use op_editor_core::editor_ui_state::LayerContextMenuState;
         use op_editor_core::ui_draft::LayerContextTarget;
         use openpencil_shell_core::widgets::{LayerPanel, LayerPanelHit};
-        self.refresh_paint_doc();
+        self.refresh_layout_scene();
         let layer_rect = Rect {
             origin: Point2D::new(0.0, TOP_BAR_HEIGHT),
             size: Point2D::new(
@@ -256,7 +256,7 @@ impl WidgetHostNative {
 
         // 0ab. Shape picker overlay.
         if self.editor_state.editor_ui.shape_picker_open {
-            self.refresh_paint_doc();
+            self.refresh_layout_scene();
             let panel_rect = self.shape_picker_rect(viewport_width, viewport_height);
             let picker = ShapePicker::for_editor_ui(&self.editor_state.editor_ui);
             if let Some(choice) = picker.hit_test(panel_rect, Point2D::new(x, y)) {
@@ -298,7 +298,7 @@ impl WidgetHostNative {
 
         // 0a. Locale picker overlay — top-most when open.
         if self.editor_state.editor_ui.locale_picker_open {
-            self.refresh_paint_doc();
+            self.refresh_layout_scene();
             let panel_rect = self.locale_picker_rect(viewport_width);
             let picker = LocalePicker::for_editor_ui(&self.editor_state.editor_ui);
             if let Some(locale) = picker.hit_test(panel_rect, Point2D::new(x, y)) {
@@ -315,7 +315,7 @@ impl WidgetHostNative {
         }
 
         // 0b. TopBar — sidebar toggle button + theme + locale picker.
-        self.refresh_paint_doc();
+        self.refresh_layout_scene();
         let top_bar_rect = Rect {
             origin: Point2D::new(0.0, 0.0),
             size: Point2D::new(viewport_width, TOP_BAR_HEIGHT),
@@ -365,7 +365,7 @@ impl WidgetHostNative {
 
         // 0c0. Fill-type picker — outside-click dismiss.
         if self.editor_state.editor_ui.fill_type_picker_open {
-            self.refresh_paint_doc();
+            self.refresh_layout_scene();
             if let Some(panel) = PropertyPanel::for_selection(&self.editor_state) {
                 let property_rect = Rect {
                     origin: Point2D::new(
@@ -401,7 +401,7 @@ impl WidgetHostNative {
         }
 
         // 0c. PropertyPanel input row.
-        self.refresh_paint_doc();
+        self.refresh_layout_scene();
         if let Some(panel) = PropertyPanel::for_selection(&self.editor_state) {
             let property_rect = Rect {
                 origin: Point2D::new(
@@ -554,7 +554,7 @@ impl WidgetHostNative {
         // 4. Canvas click — branch on the active tool.
         if self.over_canvas(x, y, viewport_width, viewport_height) {
             use op_editor_core::Tool;
-            self.refresh_paint_doc();
+            self.refresh_layout_scene();
             if matches!(self.editor_state.tool, Tool::Hand) {
                 self.drag = Some(DragState {
                     last_x: x,
@@ -571,10 +571,21 @@ impl WidgetHostNative {
             let doc_point = self.editor_state.viewport.to_document(canvas_local);
 
             if matches!(self.editor_state.tool, Tool::Select) {
-                if let Some(handle) =
-                    selection_handle_at_point(canvas_rect, &self.paint_doc, Point2D::new(x, y))
-                {
-                    if let Some(node) = self.paint_doc.selected_node() {
+                // The selected anchor's resolved scene node — shared
+                // by the handle-drag + rotation-drag branches below.
+                let selected_anchor =
+                    self.editor_state.selection.anchor.as_str().to_string();
+                if let Some(handle) = selection_handle_at_point(
+                    canvas_rect,
+                    &self.layout_scene,
+                    &self.editor_state,
+                    Point2D::new(x, y),
+                ) {
+                    if let Some(node) = self
+                        .layout_scene
+                        .active_page()
+                        .and_then(|p| p.find(&selected_anchor))
+                    {
                         // Only handle-drag on nodes with real bounds.
                         let raw = node.bounds;
                         if raw.size.x > 0.0 || raw.size.y > 0.0 {
@@ -591,12 +602,17 @@ impl WidgetHostNative {
                 }
                 if rotation_corner_at_point(
                     canvas_rect,
-                    &self.paint_doc,
+                    &self.layout_scene,
+                    &self.editor_state,
                     Point2D::new(x, y),
                 )
                 .is_some()
                 {
-                    if let Some(node) = self.paint_doc.selected_node() {
+                    if let Some(node) = self
+                        .layout_scene
+                        .active_page()
+                        .and_then(|p| p.find(&selected_anchor))
+                    {
                         let bounds = node.aggregate_bounds();
                         let cx_doc = bounds.origin.x + bounds.size.x / 2.0;
                         let cy_doc = bounds.origin.y + bounds.size.y / 2.0;
@@ -619,8 +635,11 @@ impl WidgetHostNative {
                         return true;
                     }
                 }
-                if let Some(node_id) = self.paint_doc.node_at_doc_point(doc_point) {
-                    let ec_id = op_pen_loader::rev::node_id(&node_id);
+                if let Some(node_id) = self
+                    .layout_scene
+                    .node_at_doc_point(doc_point, self.editor_state.viewport.zoom)
+                {
+                    let ec_id = op_editor_core::NodeId::new(&node_id);
                     // Canvas double-click: 400 ms same-node → enter
                     // text-edit on Text nodes.
                     let is_double = matches!(
@@ -692,11 +711,11 @@ impl WidgetHostNative {
                     if let Some((node_id, anchor_index)) =
                         self.path_anchor_hit(x, y, viewport_width, viewport_height)
                     {
-                        let ec_id = op_pen_loader::rev::node_id(&node_id);
+                        let ec_id = op_editor_core::NodeId::new(&node_id);
                         // Capture starting position for the
                         // history-pollution guard.
                         let start_doc = self
-                            .paint_doc
+                            .layout_scene
                             .active_page()
                             .and_then(|p| p.find(&node_id))
                             .and_then(|n| n.points.get(anchor_index).copied())

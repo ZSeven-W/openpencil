@@ -8,12 +8,12 @@
 //!
 //! Like the native host (`openpencil-shell-native/src/widget_host.rs`),
 //! the web `WidgetHost` holds an `op_editor_core::EditorState` as its
-//! single source of truth. shell-core's ~30 widgets + hit-test helpers
-//! are `&Document`-bound and read-only; they are fed a derived
-//! read-only `Document` snapshot (`paint_doc`), rebuilt lazily by
-//! `paint_document()` whenever `editor_state_dirty` is set. Every
-//! mutation routes through an `op-editor-core` mutator on
-//! `editor_state` and flags the snapshot dirty.
+//! single source of truth. shell-core's ~30 widgets read `EditorState`
+//! directly; the canvas paint + the input hit-test read a derived
+//! layout-resolved `LayoutScene`, rebuilt lazily by
+//! `refresh_layout_scene()` whenever `editor_state_dirty` is set.
+//! Every mutation routes through an `op-editor-core` mutator on
+//! `editor_state` and flags the scene dirty.
 //!
 //! Layout (matches `apps/web/src/components/editor/editor-layout.tsx`):
 //!
@@ -35,7 +35,7 @@
 //! Functions that pull in `openpencil_shell_core::widgets::*` MUST live
 //! in this file (per spec §1.4). Phase B4 boundary check enforces.
 
-use openpencil_shell_core::document::{ChatAnchor, Document};
+use openpencil_shell_core::document::ChatAnchor;
 use openpencil_shell_core::widgets::{
     LocalePicker, Toolbar, TopBar, Widget, LayoutCx, AI_CHAT_COLLAPSED_HEIGHT,
     AI_CHAT_COLLAPSED_WIDTH, AI_CHAT_HEIGHT, AI_CHAT_WIDTH, LOCALE_PICKER_WIDTH,
@@ -62,23 +62,17 @@ fn rect_contains(r: Rect, p: Point2D) -> bool {
 
 pub struct WidgetHost {
     /// **The host's single source of truth.** All input handlers
-    /// mutate this; the paint pass derives a read-only `Document`
-    /// snapshot from it (see `paint_doc` / `paint_document`).
+    /// mutate this; paint + the input hit-test read the derived
+    /// `layout_scene` rebuilt from it (see `refresh_layout_scene`).
     pub(in crate::widget_host) editor_state: op_editor_core::EditorState,
-    /// Derived paint-only `Document` snapshot of `editor_state`.
-    /// shell-core's widgets + hit-test helpers are `&Document`-bound
-    /// and read-only; they are fed this snapshot, never `editor_state`.
-    /// Rebuilt lazily by `paint_document()` whenever
-    /// `editor_state_dirty` is set.
-    pub(in crate::widget_host) paint_doc: Document,
     /// Derived paint-only `LayoutScene` of `editor_state` — the
-    /// layout-resolved render tree the migrated `CanvasViewport`
-    /// paints from. Rebuilt alongside `paint_doc` whenever
-    /// `editor_state_dirty` is set.
+    /// layout-resolved render tree the `CanvasViewport` paints AND
+    /// the host's canvas hit-test queries. Rebuilt lazily by
+    /// `refresh_layout_scene()` whenever `editor_state_dirty` is set.
     pub(in crate::widget_host) layout_scene: openpencil_shell_core::layout_scene::LayoutScene,
     /// Set whenever `editor_state` is mutated. Drives the lazy rebuild
-    /// of `paint_doc` — `paint_document()` rebuilds + clears the flag,
-    /// so a sequence of mutations only re-derives once.
+    /// of `layout_scene` — `refresh_layout_scene()` rebuilds + clears
+    /// the flag, so a sequence of mutations re-derives once.
     pub(in crate::widget_host) editor_state_dirty: bool,
     pub(in crate::widget_host) theme: Theme,
     drag: Option<DragState>,
@@ -164,13 +158,11 @@ pub(in crate::widget_host) struct LayerDragState {
 impl WidgetHost {
     pub fn new() -> Self {
         let editor_state = op_editor_core::EditorState::sample();
-        // Seed the paint snapshot once up front; subsequent frames
+        // Seed the render scene once up front; subsequent frames
         // re-derive only when `editor_state_dirty` is set.
-        let paint_doc = derive_paint_doc(&editor_state);
         let layout_scene = op_pen_loader::editor_state_to_layout_scene(&editor_state);
         Self {
             editor_state,
-            paint_doc,
             layout_scene,
             editor_state_dirty: false,
             theme: Theme::dark(),
@@ -194,32 +186,21 @@ impl WidgetHost {
         self.shift_held = held;
     }
 
-    /// Derive a fresh paint-only `Document` snapshot from
-    /// `editor_state` if `editor_state_dirty` is set; clear the flag.
-    /// Cheap no-op when the snapshot is already current.
-    pub(in crate::widget_host) fn refresh_paint_doc(&mut self) {
+    /// Rebuild the layout-resolved `LayoutScene` from `editor_state`
+    /// if `editor_state_dirty` is set; clear the flag. Cheap no-op
+    /// when the scene is already current. The input hit-test + the
+    /// paint pass both call this before reading `layout_scene`.
+    pub(in crate::widget_host) fn refresh_layout_scene(&mut self) {
         if self.editor_state_dirty {
-            self.paint_doc = derive_paint_doc(&self.editor_state);
             self.layout_scene =
                 op_pen_loader::editor_state_to_layout_scene(&self.editor_state);
             self.editor_state_dirty = false;
         }
     }
 
-    /// The read-only paint `Document` snapshot of the live
-    /// `EditorState`. Rebuilt on demand when the state changed since
-    /// the last derive. Every widget paint + `&Document`-bound
-    /// hit-test reads through this. Public so a future web runner
-    /// (file I/O / export) can read the derived document.
-    #[allow(dead_code)]
-    pub fn paint_document(&mut self) -> &Document {
-        self.refresh_paint_doc();
-        &self.paint_doc
-    }
-
-    /// Mark `editor_state` as mutated so the next `paint_document()`
-    /// re-derives the paint snapshot. Call after any direct mutation
-    /// of `self.editor_state`.
+    /// Mark `editor_state` as mutated so the next `refresh_layout_scene()`
+    /// re-derives the render scene. Call after any direct mutation of
+    /// `self.editor_state`.
     pub(in crate::widget_host) fn mark_dirty(&mut self) {
         self.editor_state_dirty = true;
     }
@@ -323,7 +304,7 @@ impl WidgetHost {
             && x >= 0.0
             && x <= panel_w
         {
-            self.refresh_paint_doc();
+            self.refresh_layout_scene();
             let layer_rect = Rect {
                 origin: Point2D::new(0.0, TOP_BAR_HEIGHT),
                 size: Point2D::new(panel_w, (viewport_h - TOP_BAR_HEIGHT).max(0.0)),
@@ -361,7 +342,7 @@ impl WidgetHost {
         // Refresh the derived paint doc once up front so every hit-test
         // below (layer context menu, layer drag, align toolbar) reads
         // current geometry, never a stale snapshot.
-        self.refresh_paint_doc();
+        self.refresh_layout_scene();
         if let Some(state) = self.editor_state.editor_ui.layer_context_menu.clone() {
             use openpencil_shell_core::widgets::layer_context_menu::LayerContextMenu;
             let menu = LayerContextMenu::for_state(&self.editor_state, state.clone());
@@ -386,9 +367,9 @@ impl WidgetHost {
             // see the native host for the rationale.
             let source_id = self.layer_drag.as_ref().unwrap().source.clone();
             let still_present = self
-                .paint_doc
+                .layout_scene
                 .active_page()
-                .map(|p| p.find(&source_id).is_some())
+                .map(|p| p.find(source_id.as_str()).is_some())
                 .unwrap_or(false);
             if !still_present {
                 self.layer_drag = None;
@@ -476,10 +457,10 @@ impl WidgetHost {
         let w = (p1.x - p0.x).abs();
         let h = (p1.y - p0.y).abs();
         let rect = Rect::xywh(x, y, w, h);
-        // `nodes_intersecting_doc_rect` is a `&Document`-bound helper —
-        // it returns shell-core `NodeId`s.
-        self.refresh_paint_doc();
-        let ids = self.paint_doc.nodes_intersecting_doc_rect(rect);
+        // `nodes_intersecting_doc_rect` queries the `LayoutScene` —
+        // it returns the resolved-scene node id strings.
+        self.refresh_layout_scene();
+        let ids = self.layout_scene.nodes_intersecting_doc_rect(rect);
         if m.additive {
             // ADD-only: every hit joins the set; already-selected
             // hits stay selected. Shift-marquee never removes.
@@ -564,13 +545,13 @@ impl WidgetHost {
         if !d.active {
             return false;
         }
-        self.refresh_paint_doc();
+        self.refresh_layout_scene();
         // Defensive source-validity check (mirrors native) — bail
         // if the dragged node disappeared between move and release.
         if self
-            .paint_doc
+            .layout_scene
             .active_page()
-            .map(|p| p.find(&d.source).is_none())
+            .map(|p| p.find(d.source.as_str()).is_none())
             .unwrap_or(true)
         {
             return false;
@@ -702,7 +683,7 @@ impl WidgetHost {
         // Anchor follows canvas_region (sidebar-collapse aware) so
         // hit-test matches paint regardless of sidebar state.
         let (cx0, _cy0, _cw, _ch) = self.canvas_region(viewport_w, f32::INFINITY);
-        self.refresh_paint_doc();
+        self.refresh_layout_scene();
         let toolbar = Toolbar::for_editor(&self.editor_state);
         let h = toolbar
             .layout(&LayoutCx {
@@ -720,17 +701,6 @@ impl WidgetHost {
 
     // `paint` lives in `widget_host/paint.rs` — split out to keep
     // this file under the 800-line ceiling.
-}
-
-/// Derive a faithful paint-only `Document` from an `EditorState`:
-/// node tree + geometry from the canonical doc, then the chrome /
-/// chat / components / variable / scalar state layered on.
-pub(in crate::widget_host) fn derive_paint_doc(
-    state: &op_editor_core::EditorState,
-) -> Document {
-    let mut d = op_pen_loader::pen_document_to_document(&state.doc);
-    op_pen_loader::apply_editor_state_ui(&mut d, state);
-    d
 }
 
 impl Default for WidgetHost {

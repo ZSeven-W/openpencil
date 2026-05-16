@@ -29,7 +29,6 @@
 //! - [`press`] — `apply_press` + new-node spawn (largest method)
 //! - [`paint`] — full editor-UI composition paint pass
 
-use openpencil_shell_core::document::Document;
 use openpencil_shell_core::widgets::SelectionHandle;
 use openpencil_shell_core::{Rect, Theme};
 
@@ -88,23 +87,17 @@ impl CursorHint {
 /// composes the editor UI per frame in the TS-equivalent layout.
 pub struct WidgetHostNative {
     /// **The host's single source of truth.** All input handlers
-    /// mutate this; the paint pass derives a read-only `Document`
-    /// snapshot from it (see `paint_doc` / `paint_document`).
+    /// mutate this; paint + the input hit-test read the derived
+    /// `layout_scene` rebuilt from it (see `refresh_layout_scene`).
     pub(in crate::widget_host) editor_state: op_editor_core::EditorState,
-    /// Derived paint-only `Document` snapshot of `editor_state`.
-    /// shell-core's ~30 widgets + hit-test helpers are `&Document`-
-    /// bound and read-only; they are fed this snapshot, never
-    /// `editor_state`. Rebuilt lazily by `paint_document()` whenever
-    /// `editor_state_dirty` is set.
-    pub(in crate::widget_host) paint_doc: Document,
     /// Derived paint-only `LayoutScene` of `editor_state` — the
-    /// layout-resolved render tree the migrated `CanvasViewport`
-    /// paints from. Rebuilt alongside `paint_doc` whenever
-    /// `editor_state_dirty` is set.
+    /// layout-resolved render tree the `CanvasViewport` paints AND
+    /// the host's canvas hit-test queries. Rebuilt lazily by
+    /// `refresh_layout_scene()` whenever `editor_state_dirty` is set.
     pub(in crate::widget_host) layout_scene: openpencil_shell_core::layout_scene::LayoutScene,
     /// Set whenever `editor_state` is mutated. Drives the lazy
-    /// rebuild of `paint_doc` — `paint_document()` rebuilds + clears
-    /// the flag, so a sequence of mutations only re-derives once.
+    /// rebuild of `layout_scene` — `refresh_layout_scene()` rebuilds
+    /// + clears the flag, so a sequence of mutations re-derives once.
     pub(in crate::widget_host) editor_state_dirty: bool,
     pub(in crate::widget_host) theme: Theme,
     /// Active canvas pan-drag state — left-button press → motion
@@ -316,13 +309,11 @@ pub(in crate::widget_host) struct ChatDragState {
 impl WidgetHostNative {
     pub fn new() -> Self {
         let editor_state = op_editor_core::EditorState::sample();
-        // Seed the paint snapshot once up front; subsequent frames
+        // Seed the render scene once up front; subsequent frames
         // re-derive only when `editor_state_dirty` is set.
-        let paint_doc = derive_paint_doc(&editor_state);
         let layout_scene = op_pen_loader::editor_state_to_layout_scene(&editor_state);
         Self {
             editor_state,
-            paint_doc,
             layout_scene,
             editor_state_dirty: false,
             theme: Theme::dark(),
@@ -370,20 +361,32 @@ impl WidgetHostNative {
         // mutate the document — commit any pending variable-row
         // edit first so the dirty draft lands before this op runs.
         self.commit_variable_row_focus_if_any();
-        // The skia `Path::op` math runs against the derived paint
-        // `Document`; the result polyline is committed back through
-        // an `EditorState` mutator so the host never edits the
-        // canonical tree directly.
-        self.refresh_paint_doc();
-        let outcome =
-            crate::boolean_ops::compute_boolean_op(&self.paint_doc, op);
+        // The skia `Path::op` math runs against the layout-resolved
+        // `LayoutScene` + the editor selection; the result polyline
+        // is committed back through an `EditorState` mutator so the
+        // host never edits the canonical tree directly.
+        self.refresh_layout_scene();
+        let selected: Vec<String> = self
+            .editor_state
+            .selection
+            .set
+            .iter()
+            .map(|id| id.as_str().to_string())
+            .collect();
+        let outcome = crate::boolean_ops::compute_boolean_op(
+            &self.layout_scene,
+            &selected,
+            op,
+        );
         let Some(result) = outcome else {
             return false;
         };
+        // Scene ids are the canonical `.op` ids — wrap straight into
+        // `op_editor_core::NodeId`.
         let source_ids: Vec<op_editor_core::NodeId> = result
             .source_ids
             .iter()
-            .map(op_pen_loader::rev::node_id)
+            .map(op_editor_core::NodeId::new)
             .collect();
         let pre = self.editor_state.snapshot_for_history();
         let new_id = self.editor_state.replace_paths_with_polyline(
@@ -402,45 +405,47 @@ impl WidgetHostNative {
         }
     }
 
-    /// Derive a fresh paint-only `Document` snapshot from
-    /// `editor_state` if `editor_state_dirty` is set; clear the flag.
-    /// Cheap no-op when the snapshot is already current.
-    pub(in crate::widget_host) fn refresh_paint_doc(&mut self) {
+    /// Rebuild the layout-resolved `LayoutScene` from `editor_state`
+    /// if `editor_state_dirty` is set; clear the flag. Cheap no-op
+    /// when the scene is already current. The input hit-test + the
+    /// paint pass both call this before reading `layout_scene`.
+    pub(in crate::widget_host) fn refresh_layout_scene(&mut self) {
         if self.editor_state_dirty {
-            self.paint_doc = derive_paint_doc(&self.editor_state);
             self.layout_scene =
                 op_pen_loader::editor_state_to_layout_scene(&self.editor_state);
             self.editor_state_dirty = false;
         }
     }
 
-    /// The read-only paint `Document` snapshot of the live
-    /// `EditorState`. Rebuilt on demand when the state changed since
-    /// the last derive. Every widget paint + `&Document`-bound
-    /// hit-test reads through this.
-    pub fn paint_document(&mut self) -> &Document {
-        self.refresh_paint_doc();
-        &self.paint_doc
+    /// The layout-resolved render scene for the live `EditorState`.
+    /// Rebuilt on demand when the state changed since the last
+    /// derive. The `CanvasViewport` paint + the host's canvas
+    /// hit-test both read through this.
+    pub fn layout_scene(&mut self) -> &openpencil_shell_core::layout_scene::LayoutScene {
+        self.refresh_layout_scene();
+        &self.layout_scene
     }
 
-    /// Mark `editor_state` as mutated so the next `paint_document()`
-    /// re-derives the paint snapshot. Call after any direct mutation
-    /// of `self.editor_state`.
+    /// Mark `editor_state` as mutated so the next `refresh_layout_scene()`
+    /// re-derives the render scene. Call after any direct mutation of
+    /// `self.editor_state`.
     pub(in crate::widget_host) fn mark_dirty(&mut self) {
         self.editor_state_dirty = true;
     }
 
-    /// Test-only: flag the paint snapshot stale after a test mutated
+    /// Test-only: flag the render scene stale after a test mutated
     /// `editor_state` directly through `editor_state_mut()`.
     #[cfg(test)]
     pub(in crate::widget_host) fn mark_paint_dirty_for_test(&mut self) {
         self.editor_state_dirty = true;
     }
 
-    /// Read-only paint `Document` accessor for file-I/O / export
-    /// code in the desktop binary. Forces a fresh derive.
-    pub fn document(&mut self) -> &Document {
-        self.paint_document()
+    /// Derive an owned, paint-only `Document` from the live editor
+    /// state. Used by the desktop binary's file-I/O / export code,
+    /// whose raster / PDF renderers still read a `&Document`. Not on
+    /// the input path — built fresh per call.
+    pub fn document(&self) -> openpencil_shell_core::document::Document {
+        derive_paint_doc(&self.editor_state)
     }
 
     /// Borrow the canonical-model editor state — the host's single
@@ -520,7 +525,7 @@ impl WidgetHostNative {
 /// chat / components / variable / scalar state layered on.
 pub(in crate::widget_host) fn derive_paint_doc(
     state: &op_editor_core::EditorState,
-) -> Document {
+) -> openpencil_shell_core::document::Document {
     let mut d = op_pen_loader::pen_document_to_document(&state.doc);
     op_pen_loader::apply_editor_state_ui(&mut d, state);
     d

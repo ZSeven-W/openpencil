@@ -1,54 +1,56 @@
 //! Path boolean ops (Union / Subtract / Intersect / Exclude) for
 //! the selection. Backed by skia's built-in `Path::op` so the
-//! implementation is short + correct for the polyline `Node.points`
+//! implementation is short + correct for the polyline path-points
 //! model the editor uses today. Mirrors the four shortcuts TS
 //! exposes via Paper.js (`use-edit-shortcuts.ts` Ctrl+Alt+U/S/I).
 //!
 //! Lives in `shell-native` (not shell-core) so shell-core stays
-//! skia-free. This module is a pure *computation*: given the derived
-//! paint `Document` it returns the source path ids + the result
-//! polyline. The host commits that result back through an
-//! `EditorState` mutator (`replace_paths_with_polyline`) so the
-//! canonical tree is never edited directly.
+//! skia-free. This module is a pure *computation*: given the
+//! layout-resolved `LayoutScene` + the editor's selection set it
+//! returns the source path ids + the result polyline. The host
+//! commits that result back through an `EditorState` mutator
+//! (`replace_paths_with_polyline`) so the canonical tree is never
+//! edited directly.
 
-use openpencil_shell_core::document::{BooleanOp, Document, NodeId, NodeKind};
+use openpencil_shell_core::document::{BooleanOp, NodeKind};
+use openpencil_shell_core::layout_scene::LayoutScene;
 use openpencil_shell_core::Point2D;
 use skia_safe::{Path as SkPath, PathBuilder, PathOp};
 
 /// Result of a boolean-op computation — the source path ids to
 /// remove + the new polyline (doc-space `(x, y)` pairs) to commit.
 pub struct BooleanResult {
-    pub source_ids: Vec<NodeId>,
+    pub source_ids: Vec<String>,
     pub points: Vec<(f64, f64)>,
 }
 
-/// Compute `op` over the active selection's Path nodes. Requires 2+
-/// Path nodes in the active selection set; returns `None` when fewer
-/// than two paths are selected or the result polyline is empty. The
+/// Compute `op` over the selected Path nodes. `selected` is the
+/// editor's selection set (scene-space string ids). Requires 2+
+/// Path nodes among the selection; returns `None` when fewer than
+/// two paths are selected or the result polyline is empty. The
 /// returned `BooleanResult` is the input the host feeds to
 /// `EditorState::replace_paths_with_polyline`.
-pub fn compute_boolean_op(doc: &Document, op: BooleanOp) -> Option<BooleanResult> {
-    let path_ids: Vec<NodeId> = doc
-        .selected_set
+pub fn compute_boolean_op(
+    scene: &LayoutScene,
+    selected: &[String],
+    op: BooleanOp,
+) -> Option<BooleanResult> {
+    let page = scene.active_page()?;
+    let path_ids: Vec<String> = selected
         .iter()
-        .cloned()
         .filter(|id| {
-            doc.active_page()
-                .and_then(|p| p.find(id))
+            page.find(id)
                 .map(|n| matches!(n.kind, NodeKind::Path))
                 .unwrap_or(false)
         })
+        .cloned()
         .collect();
     if path_ids.len() < 2 {
         return None;
     }
     let sk_paths: Vec<SkPath> = path_ids
         .iter()
-        .filter_map(|id| {
-            doc.active_page()
-                .and_then(|p| p.find(id))
-                .map(|n| build_skia_path(&n.points))
-        })
+        .filter_map(|id| page.find(id).map(|n| build_skia_path(&n.points)))
         .collect();
     if sk_paths.len() < 2 {
         return None;
@@ -115,14 +117,13 @@ fn extract_points(path: &SkPath) -> Vec<Point2D> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use openpencil_shell_core::document::{Node, NodeId, NodeKind};
+    use openpencil_shell_core::layout_scene::{LayoutScene, SceneNode, ScenePage};
     use openpencil_shell_core::Rect;
 
-    fn doc_with_two_squares() -> Document {
-        let mut doc = Document::empty();
-        let page = doc.pages.get_mut(0).unwrap();
-        page.children.clear();
-        let mut a = Node::leaf("n10", NodeKind::Path, "a");
+    /// A two-overlapping-square `LayoutScene` — both top-level Path
+    /// nodes plus an optional extra node for the non-path test.
+    fn scene_with_two_squares() -> LayoutScene {
+        let mut a = SceneNode::leaf("n10", NodeKind::Path);
         a.points = vec![
             Point2D::new(0.0, 0.0),
             Point2D::new(20.0, 0.0),
@@ -130,7 +131,7 @@ mod tests {
             Point2D::new(0.0, 20.0),
         ];
         a.bounds = Rect::xywh(0.0, 0.0, 20.0, 20.0);
-        let mut b = Node::leaf("n11", NodeKind::Path, "b");
+        let mut b = SceneNode::leaf("n11", NodeKind::Path);
         b.points = vec![
             Point2D::new(10.0, 10.0),
             Point2D::new(30.0, 10.0),
@@ -138,26 +139,32 @@ mod tests {
             Point2D::new(10.0, 30.0),
         ];
         b.bounds = Rect::xywh(10.0, 10.0, 20.0, 20.0);
-        page.children.push(a);
-        page.children.push(b);
-        doc.selected_set = vec![NodeId::new("n10"), NodeId::new("n11")];
-        doc.selected = NodeId::new("n11");
-        doc
+        LayoutScene {
+            pages: vec![ScenePage {
+                id: "p".into(),
+                name: "P".into(),
+                children: vec![a, b],
+            }],
+            active_page_index: 0,
+        }
     }
 
     #[test]
     fn union_of_two_overlapping_squares_yields_a_polyline() {
-        let doc = doc_with_two_squares();
-        let r = compute_boolean_op(&doc, BooleanOp::Union).expect("union computes");
+        let scene = scene_with_two_squares();
+        let sel = vec!["n10".to_string(), "n11".to_string()];
+        let r = compute_boolean_op(&scene, &sel, BooleanOp::Union)
+            .expect("union computes");
         assert_eq!(r.source_ids.len(), 2);
         assert!(!r.points.is_empty(), "union must yield points");
     }
 
     #[test]
     fn intersect_keeps_overlap_region() {
-        let doc = doc_with_two_squares();
-        let r =
-            compute_boolean_op(&doc, BooleanOp::Intersect).expect("intersect computes");
+        let scene = scene_with_two_squares();
+        let sel = vec!["n10".to_string(), "n11".to_string()];
+        let r = compute_boolean_op(&scene, &sel, BooleanOp::Intersect)
+            .expect("intersect computes");
         // Intersection covers the 10..20 × 10..20 square.
         let min_x = r.points.iter().map(|p| p.0).fold(f64::INFINITY, f64::min);
         let max_x = r
@@ -170,23 +177,21 @@ mod tests {
 
     #[test]
     fn boolean_op_requires_two_path_nodes() {
-        let mut doc = doc_with_two_squares();
-        doc.selected_set = vec![NodeId::new("n10")];
-        doc.selected = NodeId::new("n10");
-        assert!(compute_boolean_op(&doc, BooleanOp::Union).is_none());
+        let scene = scene_with_two_squares();
+        let sel = vec!["n10".to_string()];
+        assert!(compute_boolean_op(&scene, &sel, BooleanOp::Union).is_none());
     }
 
     #[test]
     fn boolean_op_skips_non_path_nodes_in_selection() {
-        let mut doc = doc_with_two_squares();
-        let page = doc.pages.get_mut(0).unwrap();
-        let mut r = Node::leaf("n12", NodeKind::Rect, "r");
+        let mut scene = scene_with_two_squares();
+        let mut r = SceneNode::leaf("n12", NodeKind::Rect);
         r.bounds = Rect::xywh(0.0, 0.0, 10.0, 10.0);
-        page.children.push(r);
-        doc.selected_set.push(NodeId::new("n12"));
+        scene.pages[0].children.push(r);
+        let sel = vec!["n10".to_string(), "n11".to_string(), "n12".to_string()];
         // Still has 2 Path nodes — should succeed; Rect is ignored.
-        let res =
-            compute_boolean_op(&doc, BooleanOp::Union).expect("union computes");
+        let res = compute_boolean_op(&scene, &sel, BooleanOp::Union)
+            .expect("union computes");
         assert_eq!(res.source_ids.len(), 2);
     }
 }

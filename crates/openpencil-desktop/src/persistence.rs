@@ -341,9 +341,10 @@ pub fn run_action(
                 .set_file_name(&default_name)
                 .save_file()
             {
-                // The export renderers read a `&Document` — derive the
-                // paint snapshot once and hand it over.
-                let doc: &Document = host.document();
+                // The export renderers read a `&Document` — derive an
+                // owned paint snapshot once and hand them a borrow.
+                let doc: Document = host.document();
+                let doc = &doc;
                 let result: Result<(), String> = match fmt {
                     Fmt::Png => crate::export::export_raster(
                         doc,

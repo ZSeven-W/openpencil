@@ -1,8 +1,9 @@
 //! PropertyPanel action + commit dispatch, split out of `input.rs`
 //! to stay under the 800-line cap.
 //!
-//! All hit-tests run against the derived paint `Document`; their
-//! results feed `EditorState` mutators (the host's source of truth).
+//! Hit-tests run against `EditorState` (chrome / panels) + the
+//! layout-resolved `LayoutScene` (canvas); results feed `EditorState`
+//! mutators (the host's source of truth).
 
 use super::helpers::parse_hex_color;
 use super::WidgetHostNative;
@@ -141,7 +142,7 @@ impl WidgetHostNative {
         use op_editor_core::editor_ui_state::FileAction;
         use openpencil_shell_core::widgets::file_menu::{FileMenu, FileMenuChoice};
         use openpencil_shell_core::widgets::top_bar::TopBar;
-        self.refresh_paint_doc();
+        self.refresh_layout_scene();
         let top_bar_rect = openpencil_shell_core::Rect {
             origin: openpencil_shell_core::Point2D::new(0.0, 0.0),
             size: openpencil_shell_core::Point2D::new(
@@ -202,24 +203,20 @@ impl WidgetHostNative {
         };
         self.editor_state.ui.property_draft_select_all = false;
         let draft = std::mem::take(&mut self.editor_state.ui.property_input_draft);
-        // Resolve the row index → variable name off the derived paint
-        // `Document`'s var-table (the same Vec the panel walks).
-        self.refresh_paint_doc();
+        // Resolve the row index → variable name off the editor-state
+        // var-table (the same Vec the VariablesPanel widget walks).
+        let var_table = op_pen_loader::editor_state_var_table(&self.editor_state);
         let snap = self.editor_state.snapshot_for_history();
         // Every path below has already cleared focus + drained the
         // draft, so each exit must finalize through `mark_dirty` or the
-        // derived-doc cache stays stale after an invalid edit. An inner
-        // closure makes the "did the value commit" branches return into
-        // one place that always marks dirty.
+        // derived render scene stays stale after an invalid edit. An
+        // inner closure makes the "did the value commit" branches
+        // return into one place that always marks dirty.
         let committed = (|| -> bool {
             match focus {
                 VariableRowFocus::Number(idx) => {
-                    let Some(name) = self
-                        .paint_doc
-                        .var_table
-                        .variables
-                        .get(idx)
-                        .map(|v| v.name.clone())
+                    let Some(name) =
+                        var_table.variables.get(idx).map(|v| v.name.clone())
                     else {
                         return false;
                     };
@@ -232,12 +229,8 @@ impl WidgetHostNative {
                     self.editor_state.set_variable_number(&name, n)
                 }
                 VariableRowFocus::String(idx) => {
-                    let Some(name) = self
-                        .paint_doc
-                        .var_table
-                        .variables
-                        .get(idx)
-                        .map(|v| v.name.clone())
+                    let Some(name) =
+                        var_table.variables.get(idx).map(|v| v.name.clone())
                     else {
                         return false;
                     };
@@ -336,11 +329,11 @@ impl WidgetHostNative {
         };
         match hit {
             VariablesPanelHit::Row(idx) => {
-                // Resolve (name, kind) off the derived var-table.
+                // Resolve (name, kind) off the editor-state var-table.
                 use openpencil_shell_core::document::VariableKind;
-                let Some((name, kind)) = self
-                    .paint_doc
-                    .var_table
+                let var_table =
+                    op_pen_loader::editor_state_var_table(&self.editor_state);
+                let Some((name, kind)) = var_table
                     .variables
                     .get(idx)
                     .map(|v| (v.name.clone(), v.kind))
@@ -408,13 +401,9 @@ impl WidgetHostNative {
                 // Look up the axis name from the active-theme map
                 // (BTreeMap iteration order is stable, matching the
                 // chip walk order in VariablesPanel).
-                let axis = self
-                    .paint_doc
-                    .var_table
-                    .active_theme
-                    .keys()
-                    .nth(idx)
-                    .cloned();
+                let var_table =
+                    op_pen_loader::editor_state_var_table(&self.editor_state);
+                let axis = var_table.active_theme.keys().nth(idx).cloned();
                 if let Some(name) = axis {
                     self.commit_property_focus_if_any();
                     if self.editor_state.editor_ui.axis_dropdown_open.as_deref()

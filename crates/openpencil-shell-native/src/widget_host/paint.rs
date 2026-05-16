@@ -31,11 +31,11 @@ impl WidgetHostNative {
 
         let dpi = frame.dpi_scale();
 
-        // Derive the read-only paint `Document` snapshot ONCE for the
-        // whole paint pass. Every widget builder below reads `doc`;
-        // the host's `EditorState` is never touched during paint.
-        self.refresh_paint_doc();
-        let doc = &self.paint_doc;
+        // Rebuild the layout-resolved render scene ONCE for the whole
+        // paint pass. Every widget builder below reads `editor_state`
+        // directly; the canvas reads `self.layout_scene`.
+        self.refresh_layout_scene();
+        let ui = &self.editor_state.editor_ui;
 
         // 2. TopBar.
         let top_bar = TopBar::for_editor_ui(&self.editor_state.editor_ui);
@@ -51,13 +51,13 @@ impl WidgetHostNative {
         }
 
         // 3. LayerPanel — skipped when the sidebar is collapsed.
-        if doc.ui.sidebar_open {
+        if ui.sidebar_open {
             // Compute the active drop target so the panel can paint
             // the drop-indicator line during a drag-to-reorder.
             let layer_panel_rect = Rect {
                 origin: Point2D::new(0.0, TOP_BAR_HEIGHT),
                 size: Point2D::new(
-                    doc.ui.layer_panel_width,
+                    ui.layer_panel_width,
                     (viewport_height - TOP_BAR_HEIGHT).max(0.0),
                 ),
             };
@@ -71,9 +71,10 @@ impl WidgetHostNative {
             // `NodeId` (from the input path), losslessly accepted.
             let active_drag = self.layer_drag.clone().filter(|d| {
                 d.active
-                    && self.paint_doc
+                    && self
+                        .layout_scene
                         .active_page()
-                        .map(|p| p.find(&d.source).is_some())
+                        .map(|p| p.find(d.source.as_str()).is_some())
                         .unwrap_or(false)
             });
             let mut layer_panel = if let Some(d) = &active_drag {
@@ -100,7 +101,7 @@ impl WidgetHostNative {
         // 4. PropertyPanel — only when selection.
         let property_panel = PropertyPanel::for_selection_at(&self.editor_state, self.now_ms);
         let has_property = property_panel.is_some();
-        let property_panel_width = doc.ui.property_panel_width;
+        let property_panel_width = ui.property_panel_width;
         let right_rail_x = viewport_width - property_panel_width;
         if let Some(panel) = property_panel.as_ref() {
             let property_rect = Rect {
@@ -166,8 +167,7 @@ impl WidgetHostNative {
         };
         if canvas_w > 0.0 && canvas_h > 0.0 {
             // PAINT path — the canvas reads editor state + the
-            // layout-resolved render scene, not the derived
-            // `Document`. Both are rebuilt by `refresh_paint_doc`.
+            // layout-resolved render scene (`refresh_layout_scene`).
             let mut canvas =
                 CanvasViewport::from_editor(&self.editor_state, &self.layout_scene);
             canvas.now_ms = self.now_ms;
@@ -275,7 +275,7 @@ impl WidgetHostNative {
 
         // 9. ShapePicker — anchored to the right of the toolbar
         //    shape slot; same z-priority as the locale picker.
-        if doc.ui.shape_picker_open {
+        if ui.shape_picker_open {
             let picker_rect = self.shape_picker_rect(viewport_width, viewport_height);
             let picker = ShapePicker::for_editor_ui(&self.editor_state.editor_ui);
             let mut cx = PaintCx {
@@ -286,7 +286,7 @@ impl WidgetHostNative {
 
         // 10. LocalePicker — top-most overlay so it covers chat /
         //     toolbar / status when open.
-        if doc.ui.locale_picker_open {
+        if ui.locale_picker_open {
             let picker_rect = self.locale_picker_rect(viewport_width);
             let picker = LocalePicker::for_editor_ui(&self.editor_state.editor_ui);
             let mut cx = PaintCx {
@@ -297,7 +297,7 @@ impl WidgetHostNative {
 
         // 10b. File-menu dropdown — anchored under TopBar's
         //      folder+chevron button.
-        if doc.ui.file_menu_open {
+        if ui.file_menu_open {
             use openpencil_shell_core::widgets::file_menu::FileMenu;
             use openpencil_shell_core::widgets::top_bar::TopBar;
             let top_bar_rect = Rect {
@@ -316,7 +316,7 @@ impl WidgetHostNative {
         }
 
         // 10c. Figma import modal — full-viewport scrim + centred card.
-        if doc.ui.figma_import_open {
+        if ui.figma_import_open {
             use openpencil_shell_core::widgets::figma_import::FigmaImportModal;
             frame.fill_rect(
                 Rect {
@@ -332,7 +332,7 @@ impl WidgetHostNative {
         }
 
         // 10d. Export dialog — full-viewport scrim + centred card.
-        if doc.ui.export_dialog_open {
+        if ui.export_dialog_open {
             use openpencil_shell_core::widgets::ExportDialog;
             frame.fill_rect(
                 Rect {
@@ -346,7 +346,7 @@ impl WidgetHostNative {
         }
 
         // 10a. Agent-settings modal — top-most overlay when open.
-        if doc.ui.agent_settings_open {
+        if ui.agent_settings_open {
             use openpencil_shell_core::widgets::agent_settings_panel::AgentSettingsPanel;
             // Dim scrim across the full viewport.
             let scrim_color = openpencil_shell_core::Color {
