@@ -4,49 +4,26 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
-description = "OpenPencil shell — platform-agnostic widget facade + RenderBackend trait, Jian re-export wrapper (spec v19 §1.2 / §5.2)"
+description = "OpenPencil shell — re-export shim over op-editor-ui / op-editor-core / op-i18n (Phase 7 strangler reorg; dissolved in Task 7.3)"
 
 [lib]
 name = "openpencil_shell_core"
 path = "src/lib.rs"
 
 [dependencies]
-serde = { workspace = true, optional = true }
-thiserror = { workspace = true }
-tracing = { workspace = true }
-
-# v19 pivot: glam Vec2 used as Point2D; bitflags used for widget facade internal flags.
-glam = { version = "0.29", default-features = false, features = ["std"] }
-bitflags = "2"
-# Step 1b §3.6 widget facade: every Widget exposes an `accesskit::Node`
-# representation so the host (native + shell-web DOM mirror) can build a
-# unified accessibility tree. Pinned to 0.24 to match shell-web (the
-# version compatible with the upstream accesskit_winit Step 1a uses on
-# shell-native).
-accesskit = "0.24"
-
-# v19 pivot: re-export Jian render/geometry/scene types (spec §5.2 widget-facing facade
-# wraps jian-core; native-only deps live in shell-native, jian-core itself is wasm32-clean).
-# Both path + version per spec §12.2 ("path dep with explicit version") — guards against
-# cargo silently picking a wrong version under a different workspace context.
+# v19 pivot: re-export Jian render/geometry/scene types (spec §5.2). The
+# `jian` module wraps jian-core; the crate root also re-exports
+# `jian_core::gesture` event types.
 jian-core = { path = "../../vendor/jian/crates/jian-core", version = "0.0.1" }
 
-# Phase 3 strangler reorg: i18n (Locale + 15-locale string tables) extracted
-# into op-i18n; shell-core re-exports it as `i18n` so downstream callers keep
-# resolving `crate::i18n::*` / `crate::document::Locale` unchanged.
+# Phase 3 strangler reorg: i18n extracted into op-i18n; re-exported as `i18n`.
 op-i18n = { path = "../op-i18n" }
 
-# Phase 4 strangler reorg: the wasm-clean RenderBackend trait moved into
-# op-editor-core; shell-core re-exports it as `render_backend` so downstream
-# callers keep resolving `crate::render_backend::*` / `crate::RenderBackend`.
+# Phase 4 strangler reorg: the wasm-clean RenderBackend trait + facade
+# types live in op-editor-core; re-exported as `render_backend`.
 op-editor-core = { path = "../op-editor-core" }
 
-# Phase 5 strangler reorg: the MCP server (`mcp.rs` + `mcp/*`) was ported
-# onto op-editor-core's EditorState / EditorCommand, which build directly on
-# the canonical `.op` document model — so the MCP read/write tools touch
-# `jian_ops_schema` types directly.
-jian-ops-schema = { path = "../../vendor/jian/crates/jian-ops-schema" }
-
-[features]
-default = []
-serde = ["dep:serde"]
+# Phase 7 strangler reorg: the widget facade + theme + layout scene +
+# scene-var aggregation live in op-editor-ui; re-exported so the hosts
+# keep resolving `openpencil_shell_core::widgets` / `::theme` / etc.
+op-editor-ui = { path = "../op-editor-ui" }
