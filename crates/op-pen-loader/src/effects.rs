@@ -34,22 +34,29 @@ pub fn effects_to_payload(effects: &[Effect]) -> Vec<ShadowPayload> {
 
 /// Rebuild a node's `effects` from payload form.
 pub fn effects_from_payload(payload: Vec<ShadowPayload>) -> Vec<Effect> {
-    payload
-        .into_iter()
-        .map(|s| {
-            Effect::DropShadow(DropShadow {
-                offset_x: s.offset_x,
-                offset_y: s.offset_y,
-                blur: s.blur,
-                color: openpencil_shell_core::Color {
-                    r: s.color[0],
-                    g: s.color[1],
-                    b: s.color[2],
-                    a: s.color[3],
-                },
-            })
-        })
-        .collect()
+    payload.iter().map(shadow_payload_to_effect).collect()
+}
+
+/// Borrowing variant of [`effects_from_payload`] — rebuilds `effects`
+/// from a payload slice without consuming it. Used by the
+/// `LayoutScene` builder, which reads `NodePayload.effects` by
+/// reference.
+pub fn effects_from_payload_ref(payload: &[ShadowPayload]) -> Vec<Effect> {
+    payload.iter().map(shadow_payload_to_effect).collect()
+}
+
+fn shadow_payload_to_effect(s: &ShadowPayload) -> Effect {
+    Effect::DropShadow(DropShadow {
+        offset_x: s.offset_x,
+        offset_y: s.offset_y,
+        blur: s.blur,
+        color: openpencil_shell_core::Color {
+            r: s.color[0],
+            g: s.color[1],
+            b: s.color[2],
+            a: s.color[3],
+        },
+    })
 }
 
 /// Per-variant accessor for a canonical node's `effects` list.
