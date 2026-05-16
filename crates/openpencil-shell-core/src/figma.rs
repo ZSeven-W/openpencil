@@ -4,6 +4,11 @@
 //! `packages/pen-figma`; the Rust port is a 17-file effort that
 //! lands incrementally behind this module's trait.
 
+use jian_ops_schema::node::{
+    ContainerProps, EllipseNode, FrameNode, GroupNode, LineNode, PathNode,
+    PenNode, PenNodeBase, PolygonNode, RectangleNode, TextContent, TextNode,
+};
+
 /// Recognised file kinds. The TS app also accepts `.fig.json`
 /// (Figma's clipboard export) — that path lands once a real
 /// parser is wired.
@@ -211,11 +216,30 @@ fn count_top_level_children(s: &str) -> Option<usize> {
     None
 }
 
+/// The canonical `PenNode` variant a Figma clipboard kind maps onto.
+/// `PenNode` is a closed 12-variant enum with no `Other` escape
+/// hatch, so unrecognised Figma kinds round-trip as `Frame` (the
+/// neutral container) with the original kind string preserved in
+/// `base.role` — that keeps a layer-panel entry to display and lets
+/// a follow-up converter recover the source kind.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FigmaNodeVariant {
+    Frame,
+    Group,
+    Rectangle,
+    Ellipse,
+    Line,
+    Polygon,
+    Path,
+    Text,
+}
+
 /// One node extracted from a clipboard-JSON `children` array.
 /// `type` is the Figma node kind string (`RECTANGLE`, `ELLIPSE`,
-/// `TEXT`, `FRAME`, ...); future `pen-figma`-style converters map
-/// it to a `PenNode` variant. Empty arrays / missing fields yield
-/// empty defaults so the caller can `unwrap_or` without panics.
+/// `TEXT`, `FRAME`, ...); `to_node` maps it to a canonical
+/// `jian_ops_schema::PenNode` variant. Empty arrays / missing
+/// fields yield empty defaults so the caller can `unwrap_or`
+/// without panics.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct FigmaClipboardNode {
     pub kind: String,
@@ -223,14 +247,15 @@ pub struct FigmaClipboardNode {
 }
 
 impl FigmaClipboardNode {
-    /// Build a Document `Node` from this clipboard entry. Mints a
-    /// fresh id from `next_id`, picks the closest `NodeKind` via
-    /// `to_node_kind`, copies the name. Geometry / fill / stroke
-    /// all stay at defaults — that's what the per-kind specialised
-    /// mappers (`figma-fill-mapper` etc) port over in follow-ups.
-    /// Returns the constructed node so the caller can append to
-    /// `Document.active_page().children`.
-    pub fn to_node(&self, next_id: &mut u64) -> crate::document::Node {
+    /// Build a canonical `PenNode` from this clipboard entry. Mints a
+    /// fresh id from `next_id`, picks the closest `PenNode` variant
+    /// via `to_variant`, copies the name into `base.name`. Geometry /
+    /// fill / stroke all stay at schema defaults (`None`) — that's
+    /// what the per-kind specialised mappers (`figma-fill-mapper`
+    /// etc) port over in follow-ups. Returns the constructed node so
+    /// the caller can append it to a `PenPage.children` /
+    /// `PenDocument.children` list.
+    pub fn to_node(&self, next_id: &mut u64) -> PenNode {
         let raw = *next_id;
         *next_id = next_id.checked_add(1).unwrap_or(raw);
         let name = if self.name.is_empty() {
@@ -238,35 +263,205 @@ impl FigmaClipboardNode {
         } else {
             self.name.clone()
         };
-        crate::document::Node::leaf(format!("n{raw}"), self.to_node_kind(), name)
+        let variant = self.to_variant();
+        let mut base = PenNodeBase {
+            id: format!("n{raw}"),
+            name: Some(name),
+            ..Default::default()
+        };
+        // `PenNode` has no `Other` variant: stash the original Figma
+        // kind in `base.role` for unmapped types so a follow-up
+        // converter can still recover what Figma authored.
+        if !self.is_known_kind() && !self.kind.is_empty() {
+            base.role = Some(self.kind.clone());
+        }
+        build_node(variant, base)
     }
 
-    /// Map this clipboard node's Figma kind string onto the
-    /// closest `NodeKind` in the shell-core document model.
-    /// Unknown kinds round-trip as `NodeKind::Other(kind)` so the
-    /// shell still has a layer-panel entry to display.
-    /// Covers the 8 most-common Figma kinds — the remaining
-    /// specialised types (BOOLEAN_OPERATION, SLICE, COMPONENT,
-    /// INSTANCE, STAR, ...) ship in follow-up commits as the
+    /// Map this clipboard node's Figma kind string onto the closest
+    /// canonical `PenNode` variant. Covers the 8 most-common Figma
+    /// kinds — the remaining specialised types (BOOLEAN_OPERATION,
+    /// SLICE, COMPONENT, INSTANCE, STAR, ...) fall back to `Frame`
+    /// and ship dedicated mappings in follow-up commits as the
     /// converters need them.
-    pub fn to_node_kind(&self) -> crate::document::NodeKind {
-        use crate::document::NodeKind;
+    pub fn to_variant(&self) -> FigmaNodeVariant {
         match self.kind.as_str() {
-            "RECTANGLE" => NodeKind::Rect,
-            "ELLIPSE" => NodeKind::Ellipse,
-            "LINE" => NodeKind::Line,
-            "POLYGON" | "REGULAR_POLYGON" => NodeKind::Polygon,
-            "VECTOR" => NodeKind::Path,
-            "TEXT" => NodeKind::Text,
-            "FRAME" | "GROUP" | "SECTION" => {
-                if self.kind == "GROUP" {
-                    NodeKind::Group
-                } else {
-                    NodeKind::Frame
-                }
-            }
-            _ => NodeKind::Other(self.kind.clone()),
+            "RECTANGLE" => FigmaNodeVariant::Rectangle,
+            "ELLIPSE" => FigmaNodeVariant::Ellipse,
+            "LINE" => FigmaNodeVariant::Line,
+            "POLYGON" | "REGULAR_POLYGON" => FigmaNodeVariant::Polygon,
+            "VECTOR" => FigmaNodeVariant::Path,
+            "TEXT" => FigmaNodeVariant::Text,
+            "GROUP" => FigmaNodeVariant::Group,
+            "FRAME" | "SECTION" => FigmaNodeVariant::Frame,
+            // Unknown / not-yet-mapped kinds become a neutral Frame;
+            // the original kind is preserved in `base.role`.
+            _ => FigmaNodeVariant::Frame,
         }
+    }
+
+    /// True when this kind has an explicit `to_variant` mapping (not
+    /// the catch-all `Frame` fallback).
+    fn is_known_kind(&self) -> bool {
+        matches!(
+            self.kind.as_str(),
+            "RECTANGLE"
+                | "ELLIPSE"
+                | "LINE"
+                | "POLYGON"
+                | "REGULAR_POLYGON"
+                | "VECTOR"
+                | "TEXT"
+                | "GROUP"
+                | "FRAME"
+                | "SECTION"
+        )
+    }
+}
+
+/// Construct a bare `PenNode` of the given variant with `base`
+/// already filled in. Geometry / fill / stroke stay `None` so the
+/// canonical schema serializes them away — the specialised Figma
+/// mappers fill them in follow-up commits.
+fn build_node(variant: FigmaNodeVariant, base: PenNodeBase) -> PenNode {
+    match variant {
+        FigmaNodeVariant::Frame => PenNode::Frame(FrameNode {
+            base,
+            container: ContainerProps::default(),
+            children: None,
+            reusable: None,
+            slot: None,
+            state: None,
+            bindings: None,
+            events: None,
+            lifecycle: None,
+            semantics: None,
+            gestures: None,
+            route: None,
+        }),
+        FigmaNodeVariant::Group => PenNode::Group(GroupNode {
+            base,
+            container: ContainerProps::default(),
+            children: None,
+            state: None,
+            bindings: None,
+            events: None,
+            lifecycle: None,
+            semantics: None,
+            gestures: None,
+            route: None,
+        }),
+        FigmaNodeVariant::Rectangle => PenNode::Rectangle(RectangleNode {
+            base,
+            container: ContainerProps::default(),
+            children: None,
+            state: None,
+            bindings: None,
+            events: None,
+            lifecycle: None,
+            semantics: None,
+            gestures: None,
+            route: None,
+        }),
+        FigmaNodeVariant::Ellipse => PenNode::Ellipse(EllipseNode {
+            base,
+            width: None,
+            height: None,
+            corner_radius: None,
+            inner_radius: None,
+            start_angle: None,
+            sweep_angle: None,
+            fill: None,
+            stroke: None,
+            effects: None,
+            state: None,
+            bindings: None,
+            events: None,
+            lifecycle: None,
+            semantics: None,
+            gestures: None,
+            route: None,
+        }),
+        FigmaNodeVariant::Line => PenNode::Line(LineNode {
+            base,
+            x2: None,
+            y2: None,
+            stroke: None,
+            effects: None,
+            state: None,
+            bindings: None,
+            events: None,
+            lifecycle: None,
+            semantics: None,
+            gestures: None,
+            route: None,
+        }),
+        FigmaNodeVariant::Polygon => PenNode::Polygon(PolygonNode {
+            base,
+            // Figma `POLYGON` / `REGULAR_POLYGON` default to a
+            // triangle; the real point count ports with the
+            // geometry mapper.
+            polygon_count: 3,
+            width: None,
+            height: None,
+            corner_radius: None,
+            fill: None,
+            stroke: None,
+            effects: None,
+            state: None,
+            bindings: None,
+            events: None,
+            lifecycle: None,
+            semantics: None,
+            gestures: None,
+            route: None,
+        }),
+        FigmaNodeVariant::Path => PenNode::Path(PathNode {
+            base,
+            icon_id: None,
+            d: None,
+            anchors: None,
+            closed: None,
+            width: None,
+            height: None,
+            fill: None,
+            stroke: None,
+            effects: None,
+            state: None,
+            bindings: None,
+            events: None,
+            lifecycle: None,
+            semantics: None,
+            gestures: None,
+            route: None,
+        }),
+        FigmaNodeVariant::Text => PenNode::Text(TextNode {
+            base,
+            width: None,
+            height: None,
+            // Empty body until the text mapper ports real runs.
+            content: TextContent::Plain(String::new()),
+            font_family: None,
+            font_size: None,
+            font_weight: None,
+            font_style: None,
+            letter_spacing: None,
+            line_height: None,
+            text_align: None,
+            text_align_vertical: None,
+            text_growth: None,
+            underline: None,
+            strikethrough: None,
+            fill: None,
+            effects: None,
+            state: None,
+            bindings: None,
+            events: None,
+            lifecycle: None,
+            semantics: None,
+            gestures: None,
+            route: None,
+        }),
     }
 }
 
@@ -290,6 +485,7 @@ pub enum FigParseError {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use op_editor_core::pen_node_ext::PenNodeExt;
 
     #[test]
     fn detect_kind_recognises_binary_magic() {
@@ -376,26 +572,48 @@ mod tests {
     }
 
     #[test]
-    fn figma_kind_maps_to_node_kind_for_common_types() {
-        use crate::document::NodeKind;
+    fn figma_kind_maps_to_pen_node_variant_for_common_types() {
         let cases = [
-            ("RECTANGLE", NodeKind::Rect),
-            ("ELLIPSE", NodeKind::Ellipse),
-            ("LINE", NodeKind::Line),
-            ("POLYGON", NodeKind::Polygon),
-            ("REGULAR_POLYGON", NodeKind::Polygon),
-            ("VECTOR", NodeKind::Path),
-            ("TEXT", NodeKind::Text),
-            ("FRAME", NodeKind::Frame),
-            ("GROUP", NodeKind::Group),
-            ("SECTION", NodeKind::Frame),
+            ("RECTANGLE", FigmaNodeVariant::Rectangle),
+            ("ELLIPSE", FigmaNodeVariant::Ellipse),
+            ("LINE", FigmaNodeVariant::Line),
+            ("POLYGON", FigmaNodeVariant::Polygon),
+            ("REGULAR_POLYGON", FigmaNodeVariant::Polygon),
+            ("VECTOR", FigmaNodeVariant::Path),
+            ("TEXT", FigmaNodeVariant::Text),
+            ("FRAME", FigmaNodeVariant::Frame),
+            ("GROUP", FigmaNodeVariant::Group),
+            ("SECTION", FigmaNodeVariant::Frame),
         ];
         for (input, expected) in cases {
             let n = FigmaClipboardNode {
                 kind: input.into(),
                 name: String::new(),
             };
-            assert_eq!(n.to_node_kind(), expected, "{input}");
+            assert_eq!(n.to_variant(), expected, "{input}");
+        }
+    }
+
+    #[test]
+    fn figma_clipboard_node_to_node_builds_matching_pen_node_variant() {
+        let cases: [(&str, fn(&PenNode) -> bool); 8] = [
+            ("RECTANGLE", |n| matches!(n, PenNode::Rectangle(_))),
+            ("ELLIPSE", |n| matches!(n, PenNode::Ellipse(_))),
+            ("LINE", |n| matches!(n, PenNode::Line(_))),
+            ("POLYGON", |n| matches!(n, PenNode::Polygon(_))),
+            ("VECTOR", |n| matches!(n, PenNode::Path(_))),
+            ("TEXT", |n| matches!(n, PenNode::Text(_))),
+            ("FRAME", |n| matches!(n, PenNode::Frame(_))),
+            ("GROUP", |n| matches!(n, PenNode::Group(_))),
+        ];
+        for (kind, check) in cases {
+            let entry = FigmaClipboardNode {
+                kind: kind.into(),
+                name: String::new(),
+            };
+            let mut next = 1u64;
+            let node = entry.to_node(&mut next);
+            assert!(check(&node), "{kind}");
         }
     }
 
@@ -408,10 +626,10 @@ mod tests {
         let mut next = 100u64;
         let n1 = entry.to_node(&mut next);
         let n2 = entry.to_node(&mut next);
-        assert_eq!(n1.id.raw(), "n100");
-        assert_eq!(n2.id.raw(), "n101");
+        assert_eq!(n1.id_str(), "n100");
+        assert_eq!(n2.id_str(), "n101");
         assert_eq!(next, 102);
-        assert_eq!(n1.name, "Hero");
+        assert_eq!(n1.base().name.as_deref(), Some("Hero"));
     }
 
     #[test]
@@ -424,20 +642,33 @@ mod tests {
         let n = entry.to_node(&mut next);
         // Empty name → lowercased kind so the layer panel has
         // something to render.
-        assert_eq!(n.name, "ellipse");
+        assert_eq!(n.base().name.as_deref(), Some("ellipse"));
     }
 
     #[test]
-    fn figma_kind_unknown_round_trips_via_other() {
-        use crate::document::NodeKind;
-        let n = FigmaClipboardNode {
+    fn figma_kind_unknown_falls_back_to_frame_with_role() {
+        let entry = FigmaClipboardNode {
             kind: "BOOLEAN_OPERATION".into(),
             name: String::new(),
         };
-        assert_eq!(
-            n.to_node_kind(),
-            NodeKind::Other("BOOLEAN_OPERATION".into())
-        );
+        assert_eq!(entry.to_variant(), FigmaNodeVariant::Frame);
+        let mut next = 1u64;
+        let n = entry.to_node(&mut next);
+        assert!(matches!(n, PenNode::Frame(_)));
+        // Original Figma kind preserved in `base.role` so a later
+        // converter can recover it.
+        assert_eq!(n.base().role.as_deref(), Some("BOOLEAN_OPERATION"));
+    }
+
+    #[test]
+    fn figma_known_kind_leaves_role_unset() {
+        let entry = FigmaClipboardNode {
+            kind: "RECTANGLE".into(),
+            name: "Hero".into(),
+        };
+        let mut next = 1u64;
+        let n = entry.to_node(&mut next);
+        assert_eq!(n.base().role, None);
     }
 
     #[test]
