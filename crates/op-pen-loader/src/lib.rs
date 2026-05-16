@@ -18,6 +18,9 @@
 //! dialogs stay in `openpencil-desktop/src/persistence.rs`.
 
 mod adapter;
+mod bridge_enums;
+mod bridge_ui;
+mod editor_state_bridge;
 mod effects;
 mod path_bounds;
 
@@ -27,6 +30,27 @@ pub mod variables;
 /// Canonical entry point — convert a parsed `PenDocument` straight
 /// into a shell-core `Document`.
 pub use payload::pen_document_to_document;
+
+// The `EditorState` → paint-`Document` type bridge. `op-editor-core`
+// stores chrome / chat / components state as a different set of types
+// than a shell-core `Document` carries; these functions translate
+// them so a host can derive a faithful paint snapshot per frame.
+pub use editor_state_bridge::{
+    apply_editor_state_ui, editor_chat_to_chat_state,
+    editor_components_to_component_library,
+};
+pub use bridge_ui::editor_ui_to_ui_state;
+// The ~16 enum translators — also part of the bridge surface. Some
+// (e.g. `fill_type`) have no field on `UiState` today because the
+// value moved onto `Node`, but the pair still needs an exhaustive
+// translator so future drift is caught; re-exporting keeps them
+// reachable for callers + suppresses dead-code noise.
+pub use bridge_enums::{
+    agent_provider, agent_settings, agent_settings_tab, align_action,
+    export_format, file_menu_choice, fill_type, flex_layout, locale, mcp_server,
+    property_focus, property_tab, settings_focus, shape_choice, theme_mode, tool,
+    variable_row_focus,
+};
 
 // Re-exports so `openpencil-desktop`'s existing call sites change
 // minimally.
