@@ -2,6 +2,11 @@
 //! Pulled out of `widget_host.rs` to keep that file under the
 //! 800-line ceiling. Mirrors the structure used by
 //! `openpencil-shell-native/src/widget_host/paint.rs`.
+//!
+//! `paint` takes `&mut self`: it drains the derived paint
+//! `Document` cache (`refresh_paint_doc`) at the top of the pass,
+//! then every widget builder reads through the read-only snapshot.
+//! The host's `EditorState` is never touched during paint.
 
 use super::WidgetHost;
 use crate::backend::WebBackend;
@@ -28,7 +33,7 @@ impl WidgetHost {
     ///   8. StatusBar (floating bottom-right)
     ///   9. LocalePicker (top-most overlay)
     // glue:
-    pub fn paint(&self, backend: &mut WebBackend, viewport_width: f32, viewport_height: f32) {
+    pub fn paint(&mut self, backend: &mut WebBackend, viewport_width: f32, viewport_height: f32) {
         backend.fill_rect(
             Rect {
                 origin: Point2D::new(0.0, 0.0),
@@ -39,7 +44,13 @@ impl WidgetHost {
 
         let dpi = backend.dpi_scale();
 
-        let top_bar = TopBar::for_document(&self.document);
+        // Derive the read-only paint `Document` snapshot ONCE for the
+        // whole paint pass. Every widget builder below reads `doc`;
+        // the host's `EditorState` is never touched during paint.
+        self.refresh_paint_doc();
+        let doc = &self.paint_doc;
+
+        let top_bar = TopBar::for_document(doc);
         let top_bar_rect = Rect {
             origin: Point2D::new(0.0, 0.0),
             size: Point2D::new(viewport_width, TOP_BAR_HEIGHT),
@@ -51,27 +62,32 @@ impl WidgetHost {
             top_bar.paint(&mut cx, top_bar_rect);
         }
 
-        if self.document.ui.sidebar_open {
-            let layer_panel_rect = self.layer_panel_rect(viewport_height);
+        if doc.ui.sidebar_open {
+            let layer_panel_rect = Rect {
+                origin: Point2D::new(0.0, TOP_BAR_HEIGHT),
+                size: Point2D::new(
+                    doc.ui.layer_panel_width,
+                    (viewport_height - TOP_BAR_HEIGHT).max(0.0),
+                ),
+            };
             // While a drag is active, paint against a panel with the
             // source's subtree excluded — see native paint.rs.
-            let active_drag = self.layer_drag.filter(|d| {
+            let active_drag = self.layer_drag.clone().filter(|d| {
                 d.active
-                    && self
-                        .document
+                    && doc
                         .active_page()
-                        .map(|p| p.find(d.source).is_some())
+                        .map(|p| p.find(&d.source).is_some())
                         .unwrap_or(false)
             });
-            let mut layer_panel = if let Some(d) = active_drag {
-                LayerPanel::from_document_with_drag_source(&self.document, d.source)
+            let mut layer_panel = if let Some(d) = &active_drag {
+                LayerPanel::from_document_with_drag_source(doc, d.source.clone())
             } else {
-                LayerPanel::from_document(&self.document)
+                LayerPanel::from_document(doc)
             };
-            if let Some(d) = active_drag {
+            if let Some(d) = &active_drag {
                 layer_panel.drop_target = layer_panel
                     .drop_target_at(layer_panel_rect, Point2D::new(d.current_x, d.current_y));
-                if let Some(item) = LayerPanel::ghost_item_for(&self.document, d.source) {
+                if let Some(item) = LayerPanel::ghost_item_for(doc, d.source.clone()) {
                     layer_panel.drag_ghost = Some((item, d.current_y));
                 }
             }
@@ -85,15 +101,15 @@ impl WidgetHost {
             layer_panel.paint(&mut cx, layer_panel_rect);
         }
 
-        let property_panel = PropertyPanel::for_selection(&self.document);
+        let property_panel = PropertyPanel::for_selection(doc);
         if let Some(panel) = property_panel.as_ref() {
             let property_rect = Rect {
                 origin: Point2D::new(
-                    viewport_width - self.document.ui.property_panel_width,
+                    viewport_width - doc.ui.property_panel_width,
                     TOP_BAR_HEIGHT,
                 ),
                 size: Point2D::new(
-                    self.document.ui.property_panel_width,
+                    doc.ui.property_panel_width,
                     (viewport_height - TOP_BAR_HEIGHT).max(0.0),
                 ),
             };
@@ -110,7 +126,7 @@ impl WidgetHost {
             size: Point2D::new(canvas_w, canvas_h),
         };
         if canvas_w > 0.0 && canvas_h > 0.0 {
-            let canvas = CanvasViewport::from_document(&self.document);
+            let canvas = CanvasViewport::from_document(doc);
             // Web has no per-frame clock; caret stays solid.
             let mut cx = PaintCx {
                 backend: &mut *backend,
@@ -118,7 +134,7 @@ impl WidgetHost {
             canvas.paint(&mut cx, canvas_rect);
         }
 
-        let toolbar = Toolbar::for_document(&self.document);
+        let toolbar = Toolbar::for_document(doc);
         let toolbar_h = toolbar
             .layout(&LayoutCx {
                 available_width: TOOLBAR_WIDTH,
@@ -142,7 +158,7 @@ impl WidgetHost {
         }
 
         if let Some(chat_rect) = self.ai_chat_rect(viewport_width, viewport_height) {
-            let chat = AIChatPlaceholder::from_document(&self.document);
+            let chat = AIChatPlaceholder::from_document(doc);
             let mut cx = PaintCx {
                 backend: &mut *backend,
             };
@@ -151,7 +167,7 @@ impl WidgetHost {
 
         let canvas_right = canvas_left + canvas_w;
         if canvas_w > STATUS_BAR_WIDTH + STATUS_INSET * 2.0 {
-            let status = StatusBar::for_document(&self.document);
+            let status = StatusBar::for_document(doc);
             let status_rect = Rect {
                 origin: Point2D::new(
                     canvas_right - STATUS_BAR_WIDTH - STATUS_INSET,
@@ -174,12 +190,8 @@ impl WidgetHost {
                 origin: Point2D::new(canvas_left, TOP_BAR_HEIGHT),
                 size: Point2D::new(canvas_w, canvas_h),
             };
-            if let Some(tb) = AlignToolbar::for_canvas_region(canvas_region, &self.document) {
-                tb.paint(
-                    &mut *backend,
-                    &self.theme,
-                    self.document.ui.align_toolbar_hover,
-                );
+            if let Some(tb) = AlignToolbar::for_canvas_region(canvas_region, doc) {
+                tb.paint(&mut *backend, &self.theme, doc.ui.align_toolbar_hover);
             }
         }
 
@@ -208,9 +220,10 @@ impl WidgetHost {
             }
         }
 
-        if self.document.ui.locale_picker_open {
+        if doc.ui.locale_picker_open {
             let picker_rect = self.locale_picker_rect(viewport_width);
-            let picker = LocalePicker::for_document(&self.document);
+            let doc = &self.paint_doc;
+            let picker = LocalePicker::for_document(doc);
             let mut cx = PaintCx {
                 backend: &mut *backend,
             };
@@ -218,9 +231,9 @@ impl WidgetHost {
         }
 
         // Layer context menu — right-click overlay, top of stack.
-        if let Some(state) = self.document.ui.layer_context_menu {
+        if let Some(state) = self.paint_doc.ui.layer_context_menu.clone() {
             use openpencil_shell_core::widgets::layer_context_menu::LayerContextMenu;
-            let menu = LayerContextMenu::for_state(&self.document, state);
+            let menu = LayerContextMenu::for_state(&self.paint_doc, state);
             let menu_rect = menu.rect();
             let mut cx = PaintCx {
                 backend: &mut *backend,
@@ -229,9 +242,9 @@ impl WidgetHost {
         }
 
         // Settings modal — Cmd+, overlay, top-most.
-        if self.document.ui.agent_settings_open {
+        if self.paint_doc.ui.agent_settings_open {
             use openpencil_shell_core::widgets::agent_settings_panel::AgentSettingsPanel;
-            let panel = AgentSettingsPanel::for_document(&self.document);
+            let panel = AgentSettingsPanel::for_document(&self.paint_doc);
             let panel_rect = panel.rect(viewport_width, viewport_height);
             // Dim scrim behind the modal so the underlying canvas
             // reads as "blocked." Matches the native shell's chrome.
@@ -240,7 +253,12 @@ impl WidgetHost {
                     origin: Point2D::new(0.0, 0.0),
                     size: Point2D::new(viewport_width, viewport_height),
                 },
-                openpencil_shell_core::Color { r: 0.0, g: 0.0, b: 0.0, a: 0.5 },
+                openpencil_shell_core::Color {
+                    r: 0.0,
+                    g: 0.0,
+                    b: 0.0,
+                    a: 0.5,
+                },
             );
             let mut cx = PaintCx {
                 backend: &mut *backend,

@@ -13,6 +13,19 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 openpencil-shell-core = { path = "../openpencil-shell-core", version = "0.1.0" }
+# Reorg: the web host owns an `op_editor_core::EditorState` as its
+# single source of truth; `op-pen-loader` bridges it into the
+# read-only paint `Document` the shared widgets consume.
+#
+# Both are `optional` + behind the `skia` feature for the SAME reason
+# `skia-safe` is: the host (`widget_host`) is `#[cfg(feature="skia")]`-
+# gated, so the skia-free CI stub baseline
+# (`--no-default-features --features web`) never needs them. This
+# matters because `op-pen-loader` pulls `jian-skia` transitively
+# (`pen_document_to_document` runs `SkiaMeasure` for text layout);
+# keeping it optional preserves the wasm32-clean stub baseline.
+op-editor-core = { path = "../op-editor-core", optional = true }
+op-pen-loader = { path = "../op-pen-loader", optional = true }
 # Step 1b §3.6: handwritten DOM mirror consumes accesskit::TreeUpdate (0.24).
 accesskit = "0.24"
 console_error_panic_hook = "0.1"
@@ -70,6 +83,8 @@ features = [
   "HtmlElement",
   "ImageData",
   "KeyboardEvent",
+  "MouseEvent",
+  "Performance",
   "PointerEvent",
   "WheelEvent",
   "Window",
@@ -84,6 +99,6 @@ web = []
 # When the cargo target is wasm32-unknown-unknown the build also links
 # the libc/libcxx/libm shim crate so the bundle is runtime-loadable.
 # Native targets resolve the target-conditional shim dep to nothing.
-skia = ["dep:skia-safe", "wasm-libc-shim"]
+skia = ["dep:skia-safe", "dep:op-editor-core", "dep:op-pen-loader", "wasm-libc-shim"]
 # Internal feature toggled on by `skia` to flip the cfg-target dep.
 wasm-libc-shim = ["dep:wasm-libc-shim"]

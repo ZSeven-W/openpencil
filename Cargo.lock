@@ -2378,6 +2378,8 @@ dependencies = [
  "console_error_panic_hook",
  "jian-core",
  "js-sys",
+ "op-editor-core",
+ "op-pen-loader",
  "openpencil-shell-core",
  "skia-safe",
  "wasm-bindgen",

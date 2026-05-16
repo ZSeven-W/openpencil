@@ -1,100 +1,151 @@
 //! Keyboard / clipboard handlers on the web `WidgetHost`.
 //! Pulled out of `widget_host.rs` so the spine file stays
 //! under the 800-line ceiling. Mirrors the native shell's
-//! `widget_host/input.rs` shape.
+//! `widget_host/input.rs` + `keyboard.rs` shape.
+//!
+//! `EditorState` is the host's source of truth: every focus / draft
+//! / chat field is read + written on `editor_state`; mutations flag
+//! the paint snapshot dirty.
 
 use super::WidgetHost;
 
 impl WidgetHost {
-    /// Step 5 P2: push a typed character into the focused chat
-    /// input. Returns true if anything changed.
+    /// Push a typed character into the focused chat / settings input.
+    /// Returns true if anything changed.
     pub fn apply_text(&mut self, c: char) -> bool {
-        if self.document.ui.agent_settings.focus.is_some() {
-            if c.is_ascii_digit() && self.document.ui.settings_input_draft.len() < 5 {
-                self.document.ui.settings_input_draft.push(c);
+        if self.editor_state.editor_ui.agent_settings.focus.is_some() {
+            if c.is_ascii_digit()
+                && self.editor_state.editor_ui.settings_input_draft.len() < 5
+            {
+                self.editor_state.editor_ui.settings_input_draft.push(c);
+                self.mark_dirty();
                 return true;
             }
             return false;
         }
-        if self.document.ui.layer_rename.is_some() && !c.is_control() {
+        if self.editor_state.ui.layer_rename.is_some() && !c.is_control() {
             let mut s = [0u8; 4];
-            return self.document.rename_append(c.encode_utf8(&mut s));
-        }
-        if self.document.ui.text_editing.is_some() && !c.is_control() {
-            let mut s = [0u8; 4];
-            return self
-                .document
-                .text_edit_append(c.encode_utf8(&mut s), self.now_ms);
-        }
-        if !self.document.chat.focused {
+            if self.editor_state.rename_append(c.encode_utf8(&mut s)) {
+                self.mark_dirty();
+                return true;
+            }
             return false;
         }
-        self.document.chat.input.push(c);
+        if self.editor_state.ui.text_editing.is_some() && !c.is_control() {
+            let mut s = [0u8; 4];
+            if self
+                .editor_state
+                .text_edit_append(c.encode_utf8(&mut s), self.now_ms)
+            {
+                self.mark_dirty();
+                return true;
+            }
+            return false;
+        }
+        if !self.editor_state.chat.focused {
+            return false;
+        }
+        self.editor_state.chat.input.push(c);
+        self.mark_dirty();
         true
     }
 
     pub fn apply_backspace(&mut self) -> bool {
-        if self.document.ui.agent_settings.focus.is_some() {
-            self.document.ui.settings_input_draft.pop();
+        if self.editor_state.editor_ui.agent_settings.focus.is_some() {
+            self.editor_state.editor_ui.settings_input_draft.pop();
+            self.mark_dirty();
             return true;
         }
-        if self.document.ui.layer_rename.is_some() {
-            return self.document.rename_backspace();
+        if self.editor_state.ui.layer_rename.is_some() {
+            let ok = self.editor_state.rename_backspace();
+            if ok {
+                self.mark_dirty();
+            }
+            return ok;
         }
-        if self.document.ui.text_editing.is_some() {
-            return self.document.text_edit_backspace(self.now_ms);
+        if self.editor_state.ui.text_editing.is_some() {
+            let ok = self.editor_state.text_edit_backspace(self.now_ms);
+            if ok {
+                self.mark_dirty();
+            }
+            return ok;
         }
-        if self.document.chat.focused {
-            return self.document.chat.input.pop().is_some();
-        }
-        if !self.document.selected.is_real() {
+        if self.editor_state.chat.focused {
+            if self.editor_state.chat.input.pop().is_some() {
+                self.mark_dirty();
+                return true;
+            }
             return false;
         }
-        let snap = self.document.snapshot_for_history();
-        if self.document.delete_selected() {
-            self.document.history_push_past(snap);
+        if self.editor_state.selection.is_empty() {
+            return false;
+        }
+        let snap = self.editor_state.snapshot_for_history();
+        if self.editor_state.delete_selected() {
+            self.editor_state.history_push_past(snap);
+            self.mark_dirty();
             return true;
         }
         false
     }
 
     pub fn apply_send(&mut self) -> bool {
-        if self.document.ui.agent_settings.focus.is_some() {
+        if self.editor_state.editor_ui.agent_settings.focus.is_some() {
             self.commit_settings_focus();
             return true;
         }
-        if self.document.ui.layer_rename.is_some() {
-            return self.document.rename_commit();
+        if self.editor_state.ui.layer_rename.is_some() {
+            let ok = self.editor_state.rename_commit();
+            if ok {
+                self.mark_dirty();
+            }
+            return ok;
         }
-        if self.document.ui.text_editing.is_some() {
-            return self.document.text_edit_commit();
+        if self.editor_state.ui.text_editing.is_some() {
+            let ok = self.editor_state.text_edit_commit();
+            if ok {
+                self.mark_dirty();
+            }
+            return ok;
         }
-        if self.document.chat.input.trim().is_empty() {
+        if self.editor_state.chat.input.trim().is_empty() {
             return false;
         }
-        self.document.chat.send();
+        // Web keeps the offline echo stub (`ChatState::send`) — no real
+        // provider transport is wired into the browser bundle.
+        self.editor_state.chat.send();
+        self.mark_dirty();
         true
     }
 
     /// Delete key — selected-node delete; never touches text
-    /// drafts. Use this when the host wants Delete strictly
-    /// destructive regardless of focus.
+    /// drafts unless rename / text-edit owns the keyboard. Mirrors
+    /// the native shell's `apply_delete`.
     pub fn apply_delete(&mut self) -> bool {
-        if self.document.ui.layer_rename.is_some() {
-            return self.document.rename_backspace();
+        if self.editor_state.ui.layer_rename.is_some() {
+            let ok = self.editor_state.rename_backspace();
+            if ok {
+                self.mark_dirty();
+            }
+            return ok;
         }
-        if self.document.ui.text_editing.is_some() {
-            return self.document.text_edit_backspace(self.now_ms);
+        if self.editor_state.ui.text_editing.is_some() {
+            let ok = self.editor_state.text_edit_backspace(self.now_ms);
+            if ok {
+                self.mark_dirty();
+            }
+            return ok;
         }
-        if self.document.chat.focused {
+        if self.editor_state.chat.focused {
             return false;
         }
-        if !self.document.selected.is_real() {
+        if self.editor_state.selection.is_empty() {
             return false;
         }
-        let snap = self.document.snapshot_for_history();
-        if self.document.delete_selected() {
-            self.document.history_push_past(snap);
+        let snap = self.editor_state.snapshot_for_history();
+        if self.editor_state.delete_selected() {
+            self.editor_state.history_push_past(snap);
+            self.mark_dirty();
             return true;
         }
         false
@@ -103,109 +154,121 @@ impl WidgetHost {
     /// Cmd/Ctrl+D — duplicate the selected node as a sibling
     /// offset by ~10 doc px. Selection follows the clone.
     pub fn apply_duplicate(&mut self) -> bool {
-        if self.document.ui.layer_rename.is_some()
-            || self.document.ui.text_editing.is_some()
-            || self.document.chat.focused
-        {
+        if self.input_active() {
             return false;
         }
-        if !self.document.selected.is_real() {
+        if self.editor_state.selection.is_empty() {
             return false;
         }
-        self.document.commit_history();
-        self.document
+        self.editor_state.commit_history();
+        let dup = self
+            .editor_state
             .duplicate_selected(&mut self.next_node_id, 10.0)
-            .is_some()
+            .is_some();
+        if dup {
+            self.mark_dirty();
+        }
+        dup
     }
 
     /// Arrow-key nudge — translate the selected node by
     /// `(dx, dy)` document px. Shift-arrow callers pass 10 px;
     /// plain arrows pass 1 px.
     pub fn apply_nudge(&mut self, dx: f32, dy: f32) -> bool {
-        if self.document.ui.layer_rename.is_some()
-            || self.document.ui.text_editing.is_some()
-            || self.document.chat.focused
-        {
+        if self.input_active() {
             return false;
         }
-        if !self.document.selected.is_real() {
+        if self.editor_state.selection.is_empty() {
             return false;
         }
-        self.document.commit_history();
-        self.document.translate_selected(dx, dy);
+        self.editor_state.commit_history();
+        self.editor_state.translate_selected(dx as f64, dy as f64);
+        self.mark_dirty();
         true
     }
 
     /// Cmd/Ctrl+A — replace selection with every top-level node
     /// on the active page (TS `setSelection(topLevelIds, …)`).
     pub fn apply_select_all(&mut self) -> bool {
-        if self.document.ui.layer_rename.is_some()
-            || self.document.ui.text_editing.is_some()
-            || self.document.chat.focused
-        {
+        if self.input_active() {
             return false;
         }
-        self.document.select_all_top_level()
+        if self.editor_state.select_all_top_level() {
+            self.mark_dirty();
+            return true;
+        }
+        false
     }
 
     /// Cmd/Ctrl+C — copy the selection into the clipboard.
     pub fn apply_copy(&mut self) -> bool {
-        if self.document.ui.layer_rename.is_some()
-            || self.document.ui.text_editing.is_some()
-            || self.document.chat.focused
-        {
+        if self.input_active() {
             return false;
         }
-        self.document.copy_selected()
+        if self.editor_state.copy_selected() {
+            self.mark_dirty();
+            return true;
+        }
+        false
     }
 
     /// Cmd/Ctrl+X — copy then delete the selection.
     pub fn apply_cut(&mut self) -> bool {
-        if self.document.ui.layer_rename.is_some()
-            || self.document.ui.text_editing.is_some()
-            || self.document.chat.focused
-        {
+        if self.input_active() {
             return false;
         }
-        if !self.document.selected.is_real() {
+        if self.editor_state.selection.is_empty() {
             return false;
         }
-        self.document.commit_history();
-        self.document.cut_selected()
+        self.editor_state.commit_history();
+        if self.editor_state.cut_selected() {
+            self.mark_dirty();
+            return true;
+        }
+        false
     }
 
     /// Cmd/Ctrl+V — paste the clipboard at the active page,
     /// offset by 10 doc px from the originals. Selection follows
     /// the new clones.
     pub fn apply_paste(&mut self) -> bool {
-        if self.document.ui.layer_rename.is_some()
-            || self.document.ui.text_editing.is_some()
-            || self.document.chat.focused
-        {
+        if self.input_active() {
             return false;
         }
-        if self.document.clipboard.is_empty() {
+        if self.editor_state.clipboard.is_empty() {
             return false;
         }
-        self.document.commit_history();
-        !self
-            .document
+        self.editor_state.commit_history();
+        let pasted = !self
+            .editor_state
             .paste_clipboard(&mut self.next_node_id, 10.0)
-            .is_empty()
+            .is_empty();
+        if pasted {
+            self.mark_dirty();
+        }
+        pasted
     }
 
     pub fn apply_undo(&mut self) -> bool {
-        if self.document.ui.layer_rename.is_some() || self.document.chat.focused {
+        if self.editor_state.ui.layer_rename.is_some() || self.editor_state.chat.focused {
             return false;
         }
-        self.document.undo()
+        if self.editor_state.undo() {
+            self.mark_dirty();
+            return true;
+        }
+        false
     }
 
     pub fn apply_redo(&mut self) -> bool {
-        if self.document.ui.layer_rename.is_some() || self.document.chat.focused {
+        if self.editor_state.ui.layer_rename.is_some() || self.editor_state.chat.focused {
             return false;
         }
-        self.document.redo()
+        if self.editor_state.redo() {
+            self.mark_dirty();
+            return true;
+        }
+        false
     }
 
     /// `[` / `]` — bump the selected node down / up by one
@@ -215,60 +278,95 @@ impl WidgetHost {
         &mut self,
         direction: openpencil_shell_core::document::ReorderDirection,
     ) -> bool {
-        if self.document.ui.layer_rename.is_some()
-            || self.document.ui.text_editing.is_some()
-            || self.document.chat.focused
-        {
+        if self.input_active() {
             return false;
         }
-        if !self.document.selected.is_real() {
+        if self.editor_state.selection.is_empty() {
             return false;
         }
-        self.document.commit_history();
-        self.document.reorder_selected(direction)
-    }
-
-    /// Escape — handles one layer per press, matching the
-    /// native host's priority order. The property-focus tier is
-    /// listed first for parity even though web hasn't wired
-    /// property input editing yet — so when web grows that path,
-    /// no Escape-priority reordering is needed.
-    pub fn apply_escape(&mut self) -> bool {
-        if self.document.ui.agent_settings.focus.take().is_some() {
-            self.document.ui.settings_input_draft.clear();
-            return true;
-        }
-        if self.document.rename_cancel() {
-            return true;
-        }
-        if self.document.text_edit_commit() {
-            return true;
-        }
-        if self.document.ui.property_focus.take().is_some() {
-            self.document.ui.property_input_draft.clear();
-            return true;
-        }
-        if self.document.ui.locale_picker_open {
-            self.document.ui.locale_picker_open = false;
-            return true;
-        }
-        if self.document.ui.shape_picker_open {
-            self.document.ui.shape_picker_open = false;
-            return true;
-        }
-        if self.document.ui.fill_type_picker_open {
-            self.document.ui.fill_type_picker_open = false;
-            return true;
-        }
-        if self.document.chat.focused {
-            self.document.chat.focused = false;
-            return true;
-        }
-        if self.document.selected.is_real() {
-            self.document.deselect_all();
+        self.editor_state.commit_history();
+        // shell-core `ReorderDirection` → op-editor-core's.
+        let dir = match direction {
+            openpencil_shell_core::document::ReorderDirection::Up => {
+                op_editor_core::ReorderDirection::Up
+            }
+            openpencil_shell_core::document::ReorderDirection::Down => {
+                op_editor_core::ReorderDirection::Down
+            }
+        };
+        if self.editor_state.reorder_selected(dir) {
+            self.mark_dirty();
             return true;
         }
         false
+    }
+
+    /// Escape — handles one layer per press, matching the native
+    /// host's priority order.
+    pub fn apply_escape(&mut self) -> bool {
+        if self
+            .editor_state
+            .editor_ui
+            .agent_settings
+            .focus
+            .take()
+            .is_some()
+        {
+            self.editor_state.editor_ui.settings_input_draft.clear();
+            self.mark_dirty();
+            return true;
+        }
+        if self.editor_state.rename_cancel() {
+            self.mark_dirty();
+            return true;
+        }
+        if self.editor_state.text_edit_commit() {
+            self.mark_dirty();
+            return true;
+        }
+        if self.editor_state.ui.property_focus.take().is_some() {
+            self.editor_state.ui.property_input_draft.clear();
+            self.mark_dirty();
+            return true;
+        }
+        if self.editor_state.editor_ui.locale_picker_open {
+            self.editor_state.editor_ui.locale_picker_open = false;
+            self.mark_dirty();
+            return true;
+        }
+        if self.editor_state.editor_ui.shape_picker_open {
+            self.editor_state.editor_ui.shape_picker_open = false;
+            self.mark_dirty();
+            return true;
+        }
+        if self.editor_state.editor_ui.fill_type_picker_open {
+            self.editor_state.editor_ui.fill_type_picker_open = false;
+            self.mark_dirty();
+            return true;
+        }
+        if self.editor_state.chat.focused {
+            self.editor_state.chat.focused = false;
+            self.mark_dirty();
+            return true;
+        }
+        if !self.editor_state.selection.is_empty() {
+            self.editor_state.deselect_all();
+            self.mark_dirty();
+            return true;
+        }
+        false
+    }
+
+    /// True iff a text-input surface owns the keyboard. Gates the
+    /// editor shortcuts so typing into a focused input never
+    /// duplicates / nudges / reorders nodes.
+    pub(in crate::widget_host) fn input_active(&self) -> bool {
+        let ui = &self.editor_state.ui;
+        ui.layer_rename.is_some()
+            || ui.text_editing.is_some()
+            || ui.property_focus.is_some()
+            || self.editor_state.editor_ui.agent_settings.focus.is_some()
+            || self.editor_state.chat.focused
     }
 
     /// Phase C2 IME forwarding stub — Step 5+ wires per-widget focus.
@@ -283,17 +381,20 @@ impl WidgetHost {
     /// just the MCP server port). Parses u16, clamps ≥1024, writes
     /// back, clears focus + draft. Mirrors the native helper.
     pub(super) fn commit_settings_focus(&mut self) {
-        use openpencil_shell_core::document::SettingsFocus;
-        let Some(focus) = self.document.ui.agent_settings.focus.take() else {
+        use op_editor_core::agent_settings::SettingsFocus;
+        let Some(focus) = self.editor_state.editor_ui.agent_settings.focus.take() else {
             return;
         };
-        let draft = std::mem::take(&mut self.document.ui.settings_input_draft);
+        let draft =
+            std::mem::take(&mut self.editor_state.editor_ui.settings_input_draft);
         match focus {
             SettingsFocus::McpPort => {
                 if let Ok(port) = draft.trim().parse::<u16>() {
-                    self.document.ui.agent_settings.mcp_server.port = port.max(1024);
+                    self.editor_state.editor_ui.agent_settings.mcp_server.port =
+                        port.max(1024);
                 }
             }
         }
+        self.mark_dirty();
     }
 }
