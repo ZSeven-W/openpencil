@@ -92,13 +92,65 @@ impl EditorState {
             val: v,
             drag: None,
             anchor_y,
+            variable: None,
         });
         true
     }
 
-    /// Update the picker HSV and live-apply the resulting RGB to the
-    /// anchor node's target colour. Tolerates `color_picker = None`
-    /// so hosts can pipe move events unconditionally.
+    /// Open the picker rooted at a Color **variable** instead of the
+    /// selected node. Seeds HSV from the variable's currently-resolved
+    /// scalar under the active theme. Returns false when no variable
+    /// of that name exists, it isn't Color-kind, or its scalar isn't a
+    /// parseable hex. The picker's commit path (live HSV → RGB) then
+    /// routes through `set_variable_color` instead of
+    /// `set_selected_color`. Ported from shell-core's
+    /// `Document::open_color_picker_for_variable`.
+    pub fn open_color_picker_for_variable(
+        &mut self,
+        variable: impl Into<String>,
+        anchor_y: f32,
+    ) -> bool {
+        let name = variable.into();
+        // Resolve the variable's current colour to seed HSV. Reject
+        // unknown names, non-Color kinds, and non-hex scalars.
+        let is_color = matches!(
+            self.find_variable(&name).map(|d| &d.kind),
+            Some(jian_ops_schema::variable::VariableKind::Color)
+        );
+        if !is_color {
+            return false;
+        }
+        let scalar = match self.resolve_variable(&name) {
+            Some(jian_ops_schema::variable::VariableScalar::Str(s)) => s.clone(),
+            _ => return false,
+        };
+        let Some(rgb) = parse_hex_rgb(&scalar) else {
+            return false;
+        };
+        let (h, s, v) = rgb_to_hsv(rgb);
+        self.ui.pending_color_history = Some(self.snapshot_for_history());
+        self.ui.color_picker = Some(ColorPickerState {
+            // `target` is unused on the variable path but must carry a
+            // sane default for any code that pattern-matches on it
+            // without checking `variable` first.
+            target: ColorTarget::Fill,
+            hue: h,
+            sat: s,
+            val: v,
+            drag: None,
+            anchor_y,
+            variable: Some(name),
+        });
+        true
+    }
+
+    /// Update the picker HSV and live-apply the resulting RGB. In
+    /// node mode this writes the anchor node's target colour; in
+    /// variable mode (`ColorPickerState::variable` is `Some`) it
+    /// writes through to the named Color variable so paint reflects
+    /// the change everywhere the variable resolves. Tolerates
+    /// `color_picker = None` so hosts can pipe move events
+    /// unconditionally.
     pub fn color_picker_set_hsv(&mut self, hue: f32, sat: f32, val: f32) -> bool {
         let Some(state) = self.ui.color_picker.as_mut() else {
             return false;
@@ -107,8 +159,17 @@ impl EditorState {
         state.sat = sat.clamp(0.0, 1.0);
         state.val = val.clamp(0.0, 1.0);
         let target = state.target;
+        let variable = state.variable.clone();
         let (r, g, b) = hsv_to_rgb(state.hue, state.sat, state.val);
         let hex = rgb_to_hex(r, g, b);
+        if let Some(name) = variable {
+            // Variable-mode commit — write through the variable so
+            // every node referencing it repaints. `set_variable_color`
+            // applies the same theme-routing discipline variable edits
+            // land through.
+            self.set_variable_color(&name, &hex);
+            return true;
+        }
         self.set_selected_color(matches!(target, ColorTarget::Fill), &hex);
         true
     }
@@ -132,21 +193,89 @@ impl EditorState {
         let Some(snap) = snap else {
             return true;
         };
-        let sel = self.selection.anchor.clone();
-        let snap_children = snapshot_active_children(&snap);
-        let before =
-            crate::walkers::find_node(snap_children, &sel).and_then(|n| match state.target {
+        // Variable-mode close: compare the variable's resolved scalar
+        // in the pre-edit snapshot's `doc` against the live one. The
+        // snapshot carries a full `PenDocument` (variables included),
+        // so undo restores the variable for free — see `history.rs`.
+        let changed = if let Some(name) = &state.variable {
+            // The active-theme selection is rebuilt-on-load transient
+            // state, stable across the (short-lived) picker session, so
+            // resolve the pre-edit snapshot's variable under the SAME
+            // active theme as the live `resolve_variable` uses.
+            let before = snapshot_variable_hex(&snap, name, &self.ui.variables.active_theme);
+            let after = self.resolve_variable(name).and_then(scalar_as_hex);
+            before != after
+        } else {
+            let sel = self.selection.anchor.clone();
+            let snap_children = snapshot_active_children(&snap);
+            let before = crate::walkers::find_node(snap_children, &sel).and_then(|n| {
+                match state.target {
+                    ColorTarget::Fill => first_solid_fill_hex(n).map(str::to_string),
+                    ColorTarget::Stroke => first_solid_stroke_hex(n).map(str::to_string),
+                }
+            });
+            let after = self.selected_node().and_then(|n| match state.target {
                 ColorTarget::Fill => first_solid_fill_hex(n).map(str::to_string),
                 ColorTarget::Stroke => first_solid_stroke_hex(n).map(str::to_string),
             });
-        let after = self.selected_node().and_then(|n| match state.target {
-            ColorTarget::Fill => first_solid_fill_hex(n).map(str::to_string),
-            ColorTarget::Stroke => first_solid_stroke_hex(n).map(str::to_string),
-        });
-        if before != after {
+            before != after
+        };
+        if changed {
             self.history_push_past(snap);
         }
         true
+    }
+}
+
+/// Reduce a resolved variable scalar to a `#rrggbb` hex string, if it
+/// is a `Str` scalar. Used by the variable-mode `close_color_picker`
+/// change check.
+fn scalar_as_hex(s: &jian_ops_schema::variable::VariableScalar) -> Option<String> {
+    match s {
+        jian_ops_schema::variable::VariableScalar::Str(hex) => Some(hex.clone()),
+        _ => None,
+    }
+}
+
+/// Resolve a Color variable's hex scalar from a history snapshot's
+/// `doc` under the supplied active-theme selection. The snapshot's
+/// `EditorSnapshot` carries the full `PenDocument` (variables
+/// included) but not the transient `ui.variables.active_theme`, so the
+/// caller threads the live active theme in — it is stable across the
+/// short-lived picker session.
+fn snapshot_variable_hex(
+    snap: &crate::history::EditorSnapshot,
+    name: &str,
+    active_theme: &std::collections::BTreeMap<String, String>,
+) -> Option<String> {
+    let def = snap.doc.variables.as_ref()?.get(name)?;
+    if !matches!(def.kind, jian_ops_schema::variable::VariableKind::Color) {
+        return None;
+    }
+    let scalar = resolve_snapshot_value(&def.value, active_theme)?;
+    scalar_as_hex(scalar)
+}
+
+/// Resolve a `VariableValue` under `active_theme` — picks a `Scalar`
+/// directly, or a `Themed` list's subset-matching entry, falling back
+/// to the `theme: None` default. Mirrors `variables.rs::resolve_value`.
+fn resolve_snapshot_value<'a>(
+    value: &'a jian_ops_schema::variable::VariableValue,
+    active_theme: &std::collections::BTreeMap<String, String>,
+) -> Option<&'a jian_ops_schema::variable::VariableScalar> {
+    use jian_ops_schema::variable::VariableValue;
+    match value {
+        VariableValue::Scalar(s) => Some(s),
+        VariableValue::Themed(entries) => {
+            for e in entries {
+                if let Some(t) = &e.theme {
+                    if t.iter().all(|(k, v)| active_theme.get(k) == Some(v)) {
+                        return Some(&e.value);
+                    }
+                }
+            }
+            entries.iter().find(|e| e.theme.is_none()).map(|e| &e.value)
+        }
     }
 }
 
@@ -340,6 +469,89 @@ mod tests {
             let (h, s, v) = rgb_to_hsv(rgb);
             let (r, g, b) = hsv_to_rgb(h, s, v);
             assert_eq!(rgb_to_hex(r, g, b), hex, "roundtrip {hex}");
+        }
+    }
+
+    // --- Variable-mode picker (Gap 1) -------------------------------
+
+    use jian_ops_schema::variable::{VariableKind, VariableScalar};
+
+    /// A state holding one Color variable and no nodes.
+    fn state_with_color_var(name: &str, hex: &str) -> EditorState {
+        let mut s = state_with(vec![]);
+        s.create_variable(name, VariableKind::Color, VariableScalar::Str(hex.into()));
+        s
+    }
+
+    #[test]
+    fn open_picker_for_variable_seeds_hsv_from_resolved_color() {
+        let mut s = state_with_color_var("brand", "#ff8800");
+        assert!(s.open_color_picker_for_variable("brand", 100.0));
+        let state = s.ui.color_picker.as_ref().expect("picker open");
+        assert_eq!(state.variable.as_deref(), Some("brand"));
+        assert!(s.ui.pending_color_history.is_some(), "undo snapshot captured");
+        // #ff8800 (orange) → hue near 32°.
+        assert!(state.hue > 20.0 && state.hue < 45.0, "hue {}", state.hue);
+        assert!(state.sat > 0.95, "sat {}", state.sat);
+        assert!(state.val > 0.95, "val {}", state.val);
+    }
+
+    #[test]
+    fn open_picker_for_variable_fails_on_missing_or_wrong_kind() {
+        let mut s = state_with(vec![]);
+        // Unknown name → false, no picker.
+        assert!(!s.open_color_picker_for_variable("nope", 0.0));
+        assert!(s.ui.color_picker.is_none());
+        // Number-kind variable → not a colour → false.
+        s.create_variable("spacing", VariableKind::Number, VariableScalar::Num(16.0));
+        assert!(!s.open_color_picker_for_variable("spacing", 0.0));
+        assert!(s.ui.color_picker.is_none());
+    }
+
+    #[test]
+    fn picker_set_hsv_writes_through_variable_path() {
+        // Open on a variable, push pure-red HSV, confirm the variable
+        // flips and no node fill is touched (there are no nodes).
+        let mut s = state_with_color_var("brand", "#ff8800");
+        assert!(s.open_color_picker_for_variable("brand", 0.0));
+        assert!(s.color_picker_set_hsv(0.0, 1.0, 1.0));
+        match s.resolve_variable("brand") {
+            Some(VariableScalar::Str(hex)) => assert_eq!(hex, "#ff0000"),
+            other => panic!("expected red, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn close_picker_after_variable_edit_pushes_history_only_on_change() {
+        let mut s = state_with_color_var("brand", "#ff8800");
+        let depth = s.history.past.len();
+        // No HSV change → close does not push history.
+        assert!(s.open_color_picker_for_variable("brand", 0.0));
+        assert!(s.close_color_picker());
+        assert_eq!(s.history.past.len(), depth);
+        // Re-open + drag + close → history grows by one.
+        assert!(s.open_color_picker_for_variable("brand", 0.0));
+        assert!(s.color_picker_set_hsv(180.0, 1.0, 1.0));
+        assert!(s.close_color_picker());
+        assert_eq!(s.history.past.len(), depth + 1);
+    }
+
+    #[test]
+    fn undo_after_variable_picker_edit_restores_color() {
+        // The picker's pre-edit snapshot carries the whole PenDocument
+        // (variables included), so undo round-trips the variable.
+        let mut s = state_with_color_var("brand", "#ff8800");
+        assert!(s.open_color_picker_for_variable("brand", 0.0));
+        assert!(s.color_picker_set_hsv(0.0, 1.0, 1.0)); // → red
+        assert!(s.close_color_picker());
+        match s.resolve_variable("brand") {
+            Some(VariableScalar::Str(hex)) => assert_eq!(hex, "#ff0000"),
+            other => panic!("expected red post-edit, got {other:?}"),
+        }
+        assert!(s.undo());
+        match s.resolve_variable("brand") {
+            Some(VariableScalar::Str(hex)) => assert_eq!(hex, "#ff8800"),
+            other => panic!("undo must restore #ff8800, got {other:?}"),
         }
     }
 }
