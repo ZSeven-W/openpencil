@@ -1,13 +1,13 @@
 //! Per-framework markup generators — the React / Vue / Svelte / HTML
 //! / Flutter / SwiftUI / Compose / React Native targets carved off
-//! `codegen.rs` to keep both files under the 800-line cap.
+//! `lib.rs` to keep both files under the 800-line cap.
 //!
 //! All generators consume the canonical `jian_ops_schema::PenDocument`
-//! and walk `PenNode` through the flat-view accessors in the parent
-//! `codegen` module (`node_origin` / `node_size` / `node_fill_css` /
+//! and walk `PenNode` through the flat-view accessors in the crate
+//! root (`node_origin` / `node_size` / `node_fill_css` /
 //! …) so the per-target emit logic stays variant-agnostic.
 
-use crate::codegen::{
+use crate::{
     color_to_css, fmt_num, html_escape, node_children, node_corner_radius, node_fill_css,
     node_hidden, node_is_ellipse, node_is_text, node_origin, node_rotation_deg, node_size,
     node_stroke_css, node_text, parse_color, root_nodes, Codegen, CssVariables,
