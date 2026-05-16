@@ -31,6 +31,11 @@ accesskit = "0.24"
 # cargo silently picking a wrong version under a different workspace context.
 jian-core = { path = "../../vendor/jian/crates/jian-core", version = "0.0.1" }
 
+# Phase 3 strangler reorg: i18n (Locale + 15-locale string tables) extracted
+# into op-i18n; shell-core re-exports it as `i18n` so downstream callers keep
+# resolving `crate::i18n::*` / `crate::document::Locale` unchanged.
+op-i18n = { path = "../op-i18n" }
+
 [features]
 default = []
 serde = ["dep:serde"]

@@ -2275,6 +2275,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9f7c3e4beb33f85d45ae3e3a1792185706c8e16d043238c593331cc7cd313b50"
 
 [[package]]
+name = "op-i18n"
+version = "0.1.0"
+
+[[package]]
 name = "openpencil-desktop"
 version = "0.1.0"
 dependencies = [
@@ -2307,6 +2311,7 @@ dependencies = [
  "bitflags 2.11.1",
  "glam",
  "jian-core",
+ "op-i18n",
  "serde",
  "thiserror 1.0.69",
  "tracing",

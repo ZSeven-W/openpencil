@@ -22,7 +22,9 @@ pub mod chat_provider;
 pub mod codegen;
 pub mod document;
 pub mod figma;
-pub mod i18n;
+// Phase 3 strangler reorg: i18n extracted into the op-i18n crate. Re-exported
+// as `i18n` so `crate::i18n::translate` / `crate::i18n::Locale` paths still resolve.
+pub use op_i18n as i18n;
 pub mod jian;
 pub mod mcp;
 #[cfg(test)] mod mcp_tests;
