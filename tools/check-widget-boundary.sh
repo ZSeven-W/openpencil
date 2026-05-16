@@ -2,7 +2,8 @@
 # tools/check-widget-boundary.sh — Step 1b §1.4 widget boundary invariant.
 #
 # Per spec §1.4: widget logic (Widget impls, layout/paint/access_node)
-# lives in `crates/openpencil-shell-core/src/widgets/`. shell-web's
+# lives in `crates/op-editor-ui/src/widgets/` (Phase 7 reorg moved it
+# out of openpencil-shell-core). shell-web's
 # widget glue is scoped to a single module — `widget_host.rs` plus
 # its sibling submodules under `widget_host/` (spec amendment
 # 2026-05-11: the original "one file" constraint conflicted with
@@ -15,10 +16,13 @@
 # `openpencil_shell_core::widgets::*` must live in the widget_host
 # module (the spec's "any function pulling shell-core widgets" clause).
 #
-# Reverse direction: shell-core/src/widgets/ MUST contain four impl
+# Reverse direction: op-editor-ui/src/widgets/ MUST contain four impl
 # files (tree, prop_row, dropdown, text_input) AND each file must
 # carry a real `impl Widget for X` — a stale file with the impl
-# removed must not silently pass.
+# removed must not silently pass. (Phase 7 reorg: the widget facade
+# moved out of openpencil-shell-core into the op-editor-ui crate;
+# shell-web still pulls `openpencil_shell_core::widgets` via the
+# shell-core re-export shim, so the forward F4 path is unchanged.)
 #
 # Exit semantics:
 #   0   PASS — both invariants hold.
@@ -28,7 +32,7 @@
 set -euo pipefail
 
 WEB_SRC="crates/openpencil-shell-web/src"
-CORE_WIDGETS="crates/openpencil-shell-core/src/widgets"
+CORE_WIDGETS="crates/op-editor-ui/src/widgets"
 
 fail_lines=()
 

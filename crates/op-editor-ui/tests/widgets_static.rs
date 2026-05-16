@@ -6,11 +6,11 @@
 //! PropertyRow / Dropdown / TextInput) paint and emit accesskit nodes
 //! with the expected semantic roles.
 
-use openpencil_shell_core::widgets::{
+use op_editor_ui::widgets::{
     rect, Dropdown, DropdownState, LayoutBox, LayoutCx, PaintCx, PropertyRow, TextInput,
     TextInputState, TreeWidget, Widget, WidgetId, ROOT_WIDGET_ID,
 };
-use openpencil_shell_core::{
+use op_editor_ui::{
     Color, ImeEvent, ImeKind, KeyCode, KeyEvent, KeyLocation, KeyState, KeyValue, Modifiers,
     NamedKey, Point2D, Rect, RenderBackend, TextLayout,
 };

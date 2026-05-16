@@ -1,0 +1,27 @@
+[package]
+name = "op-editor-ui"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "OpenPencil editor UI — platform-agnostic widget facade + theme + layout-resolved render scene"
+
+[lib]
+name = "op_editor_ui"
+path = "src/lib.rs"
+
+[dependencies]
+# Widget facade internals: glam Vec2 as Point2D, bitflags for flags.
+glam = { version = "0.29", default-features = false, features = ["std"] }
+bitflags = "2"
+# Every Widget exposes an `accesskit::Node` so the host can build a
+# unified accessibility tree. Pinned to 0.24 to match the hosts.
+accesskit = "0.24"
+
+# Canonical jian render/gesture types + the .op document schema.
+jian-core = { path = "../../vendor/jian/crates/jian-core", version = "0.0.1" }
+jian-ops-schema = { path = "../../vendor/jian/crates/jian-ops-schema" }
+
+# i18n string tables + the canonical editor state model.
+op-i18n = { path = "../op-i18n" }
+op-editor-core = { path = "../op-editor-core" }
