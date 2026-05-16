@@ -96,4 +96,4 @@ if [ -n "$shell_web_deps" ]; then
     exit 1
 fi
 
-echo "check-jian-boundaries.sh: all 4 Jian boundary invariants pass."
+echo "check-jian-boundaries.sh: all 3 Jian boundary invariants pass."

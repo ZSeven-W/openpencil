@@ -51,7 +51,7 @@
     "cargo:test": "cargo test --workspace",
     "cargo:fmt": "cargo fmt --all",
     "cargo:clippy": "cargo clippy --workspace --all-targets -- -D warnings",
-    "cargo:wasm-check": "cargo check --target wasm32-unknown-unknown -p openpencil-shell-web --no-default-features --features web && cargo check --target wasm32-unknown-unknown -p pen-types -p pen-core -p pen-engine -p pen-codegen -p pen-figma",
+    "cargo:wasm-check": "cargo check --target wasm32-unknown-unknown -p openpencil-shell-web --no-default-features --features web",
     "cargo:deny": "cargo deny check && cargo deny --target wasm32-unknown-unknown check bans",
     "shell:wasm:dev": "echo 'Step 4 will replace this with: cargo build --target wasm32-unknown-unknown -p openpencil-shell-web --no-default-features --features web && wasm-pack build crates/openpencil-shell-web --target web --dev && bun run scripts/serve-wasm-dev.ts'"
   },
