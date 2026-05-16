@@ -2,11 +2,11 @@
 //! of `canvas_viewport.rs` to keep that file under the 800-line
 //! ceiling.
 
-use op_editor_core::Viewport;
 use crate::layout_scene::{LayoutScene, SceneNode};
 use crate::theme::Theme;
 use crate::widgets::PaintCx;
 use crate::{Color, Point2D, Rect};
+use op_editor_core::Viewport;
 
 /// Pen-tool rubber-band — from the last committed anchor of the
 /// in-progress path to the cursor (when both are known). Painted
@@ -219,7 +219,9 @@ fn wrap_segment(
         if is_cjk(ch) {
             let mut probe = current.clone();
             probe.push(ch);
-            if backend.measure_text_weighted(&probe, font_size, weight) > max_w && !current.is_empty() {
+            if backend.measure_text_weighted(&probe, font_size, weight) > max_w
+                && !current.is_empty()
+            {
                 out.push(std::mem::take(&mut current));
                 current.push(ch);
             } else {
@@ -229,7 +231,9 @@ fn wrap_segment(
         } else if ch == ' ' {
             let mut probe = current.clone();
             probe.push(' ');
-            if backend.measure_text_weighted(&probe, font_size, weight) > max_w && !current.is_empty() {
+            if backend.measure_text_weighted(&probe, font_size, weight) > max_w
+                && !current.is_empty()
+            {
                 out.push(std::mem::take(&mut current));
             } else {
                 current = probe;
@@ -243,7 +247,9 @@ fn wrap_segment(
             }
             let mut probe = current.clone();
             probe.push_str(&word);
-            if backend.measure_text_weighted(&probe, font_size, weight) > max_w && !current.is_empty() {
+            if backend.measure_text_weighted(&probe, font_size, weight) > max_w
+                && !current.is_empty()
+            {
                 out.push(std::mem::take(&mut current));
                 current.push_str(&word);
             } else {
@@ -303,7 +309,9 @@ mod wrap_tests {
         fn measure_text_weighted(&mut self, text: &str, _: f32, _: u16) -> f32 {
             text.chars().count() as f32 * 10.0
         }
-        fn dpi_scale(&self) -> f32 { 1.0 }
+        fn dpi_scale(&self) -> f32 {
+            1.0
+        }
     }
 
     #[test]
@@ -402,7 +410,9 @@ mod wrap_tests {
             let per_char = if weight >= 600 { 14.0 } else { 10.0 };
             text.chars().count() as f32 * per_char
         }
-        fn dpi_scale(&self) -> f32 { 1.0 }
+        fn dpi_scale(&self) -> f32 {
+            1.0
+        }
     }
 
     #[test]

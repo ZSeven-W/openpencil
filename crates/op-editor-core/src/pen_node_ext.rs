@@ -12,11 +12,9 @@
 //! accessors (`id`, `children`, `children_mut`, geometry getters /
 //! setters) without each mutator having to `match` all 12 variants.
 
-use jian_ops_schema::node::{
-    AlignItems, JustifyContent, LayoutMode, PenNodeBase,
-};
-use jian_ops_schema::sizing::SizingBehavior;
 use jian_ops_schema::node::PenNode;
+use jian_ops_schema::node::{AlignItems, JustifyContent, LayoutMode, PenNodeBase};
+use jian_ops_schema::sizing::SizingBehavior;
 
 /// Read a `SizingBehavior` as a concrete pixel number. Keyword /
 /// expression sizing is child-derived (`fit_content`) or variable —

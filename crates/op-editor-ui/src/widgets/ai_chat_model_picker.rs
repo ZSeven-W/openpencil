@@ -7,12 +7,12 @@
 //! catalogs are short; a search row lands with live CLI re-query.
 
 use crate::theme::Theme;
-use op_editor_core::chat::{AgentProvider, ModelEntry};
 use crate::widgets::brand_icons::{paint_brand_logo, paint_opencode_logo, BrandLogo};
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::property_panel_inputs::to_jian_color;
 use crate::widgets::PaintCx;
 use crate::{Color, Point2D, Rect, TextLayout};
+use op_editor_core::chat::{AgentProvider, ModelEntry};
 
 /// Height of a provider group-header row.
 pub const MODEL_GROUP_H: f32 = 22.0;
@@ -57,9 +57,7 @@ pub fn picker_content_height(models: &[ModelEntry]) -> f32 {
             last = Some(entry.provider);
         }
     }
-    groups as f32 * MODEL_GROUP_H
-        + models.len() as f32 * MODEL_ROW_H
-        + MODEL_PICKER_PAD_Y * 2.0
+    groups as f32 * MODEL_GROUP_H + models.len() as f32 * MODEL_ROW_H + MODEL_PICKER_PAD_Y * 2.0
 }
 
 /// Map a click inside the dropdown `rect` to the index of the
@@ -154,10 +152,8 @@ pub fn paint_model_picker(
                 to_jian_color(color),
                 Point2D::new(0.0, 0.0),
             );
-            cx.backend.draw_text(
-                &label,
-                Point2D::new(row_left + 22.0, y + h / 2.0 + 4.0),
-            );
+            cx.backend
+                .draw_text(&label, Point2D::new(row_left + 22.0, y + h / 2.0 + 4.0));
         }
     });
     let _ = row_w;

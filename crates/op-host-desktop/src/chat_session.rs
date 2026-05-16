@@ -10,9 +10,7 @@
 use std::sync::mpsc::{self, Receiver, TryRecvError};
 use std::thread;
 
-use op_ai::chat_provider::{
-    ChatDelta, ChatProvider, ChatRequest, CliName,
-};
+use op_ai::chat_provider::{ChatDelta, ChatProvider, ChatRequest, CliName};
 use op_host_native::WidgetHostNative;
 
 use crate::chat_claude::ClaudeCodeProvider;
@@ -109,10 +107,7 @@ impl ChatSession {
 /// fired mid-turn replaces the in-flight session — the old worker
 /// thread drains harmlessly once its channel receiver drops.
 /// Returns true when a turn was launched (caller redraws).
-pub fn launch_if_pending(
-    host: &mut WidgetHostNative,
-    current: &mut Option<ChatSession>,
-) -> bool {
+pub fn launch_if_pending(host: &mut WidgetHostNative, current: &mut Option<ChatSession>) -> bool {
     let Some(user_text) = host.editor_state_mut().chat.pending_send.take() else {
         return false;
     };
@@ -176,10 +171,7 @@ fn provider_for_agent(agent_idx: usize) -> Option<Box<dyn ChatProvider>> {
 /// Pump the in-flight turn's deltas into the trailing (assistant)
 /// message. Clears `current` once the turn finishes. Returns true
 /// when the transcript changed so the caller can dirty the redraw.
-pub fn pump(
-    host: &mut WidgetHostNative,
-    current: &mut Option<ChatSession>,
-) -> bool {
+pub fn pump(host: &mut WidgetHostNative, current: &mut Option<ChatSession>) -> bool {
     let Some(session) = current.as_mut() else {
         return false;
     };

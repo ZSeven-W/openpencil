@@ -12,8 +12,8 @@
 //! tighter Ellipse / Polygon / Line geometry, the locked-node
 //! body-opts-out-children-stay rule, and the hidden-subtree skip.
 
-use crate::layout_scene::{LayoutScene, SceneNode};
 use crate::layout_scene::NodeKind;
+use crate::layout_scene::{LayoutScene, SceneNode};
 use crate::{Point2D, Rect};
 
 impl LayoutScene {
@@ -252,16 +252,22 @@ mod tests {
         ]);
         // Overlap region → the later-painted "over" wins.
         assert_eq!(
-            scene.node_at_doc_point(Point2D::new(20.0, 20.0), 1.0).as_deref(),
+            scene
+                .node_at_doc_point(Point2D::new(20.0, 20.0), 1.0)
+                .as_deref(),
             Some("over")
         );
         // Only "under" covers (5, 5).
         assert_eq!(
-            scene.node_at_doc_point(Point2D::new(5.0, 5.0), 1.0).as_deref(),
+            scene
+                .node_at_doc_point(Point2D::new(5.0, 5.0), 1.0)
+                .as_deref(),
             Some("under")
         );
         // Dead space.
-        assert!(scene.node_at_doc_point(Point2D::new(200.0, 200.0), 1.0).is_none());
+        assert!(scene
+            .node_at_doc_point(Point2D::new(200.0, 200.0), 1.0)
+            .is_none());
     }
 
     #[test]
@@ -269,7 +275,9 @@ mod tests {
         let mut n = leaf("h", NodeKind::Rect, Rect::xywh(0.0, 0.0, 50.0, 50.0));
         n.hidden = true;
         let scene = one_page(vec![n]);
-        assert!(scene.node_at_doc_point(Point2D::new(25.0, 25.0), 1.0).is_none());
+        assert!(scene
+            .node_at_doc_point(Point2D::new(25.0, 25.0), 1.0)
+            .is_none());
     }
 
     #[test]
@@ -281,11 +289,15 @@ mod tests {
         let scene = one_page(vec![frame]);
         // Click on the child → child id even though parent is locked.
         assert_eq!(
-            scene.node_at_doc_point(Point2D::new(15.0, 15.0), 1.0).as_deref(),
+            scene
+                .node_at_doc_point(Point2D::new(15.0, 15.0), 1.0)
+                .as_deref(),
             Some("c")
         );
         // Click on the locked frame's bare body → no hit.
-        assert!(scene.node_at_doc_point(Point2D::new(80.0, 80.0), 1.0).is_none());
+        assert!(scene
+            .node_at_doc_point(Point2D::new(80.0, 80.0), 1.0)
+            .is_none());
     }
 
     #[test]
@@ -297,11 +309,15 @@ mod tests {
         )]);
         // Center → inside the oval.
         assert_eq!(
-            scene.node_at_doc_point(Point2D::new(50.0, 50.0), 1.0).as_deref(),
+            scene
+                .node_at_doc_point(Point2D::new(50.0, 50.0), 1.0)
+                .as_deref(),
             Some("e")
         );
         // Corner of the bounds → outside the oval.
-        assert!(scene.node_at_doc_point(Point2D::new(2.0, 2.0), 1.0).is_none());
+        assert!(scene
+            .node_at_doc_point(Point2D::new(2.0, 2.0), 1.0)
+            .is_none());
     }
 
     #[test]
@@ -314,11 +330,15 @@ mod tests {
         let scene = one_page(vec![line]);
         // Right on the horizontal segment.
         assert_eq!(
-            scene.node_at_doc_point(Point2D::new(50.0, 0.0), 1.0).as_deref(),
+            scene
+                .node_at_doc_point(Point2D::new(50.0, 0.0), 1.0)
+                .as_deref(),
             Some("l")
         );
         // Far from the segment → miss.
-        assert!(scene.node_at_doc_point(Point2D::new(50.0, 40.0), 1.0).is_none());
+        assert!(scene
+            .node_at_doc_point(Point2D::new(50.0, 40.0), 1.0)
+            .is_none());
     }
 
     #[test]
@@ -330,7 +350,9 @@ mod tests {
         // roughly x 40..60, y -40..60 — a point at (50, 50) lands
         // inside the rotated body though it's outside authored bounds.
         assert_eq!(
-            scene.node_at_doc_point(Point2D::new(50.0, 50.0), 1.0).as_deref(),
+            scene
+                .node_at_doc_point(Point2D::new(50.0, 50.0), 1.0)
+                .as_deref(),
             Some("r")
         );
     }

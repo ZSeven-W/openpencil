@@ -52,10 +52,7 @@ fn copy_node_maps_zero_target_to_page_root() {
     args.insert("node_id".into(), "n12".into());
     args.insert("target_parent_id".into(), "0".into());
     match tool.call(&args) {
-        ToolOutcome::OkWithCommand(
-            _,
-            EditorCommand::CopyNode { target_parent, .. },
-        ) => {
+        ToolOutcome::OkWithCommand(_, EditorCommand::CopyNode { target_parent, .. }) => {
             assert!(!target_parent.is_real(), "0 maps to page-root NONE");
         }
         other => panic!("expected CopyNode, got {other:?}"),

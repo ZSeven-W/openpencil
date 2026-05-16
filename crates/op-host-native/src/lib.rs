@@ -57,6 +57,14 @@ pub mod context;
     target_os = "android"
 ))]
 pub mod backend;
+#[cfg(any(
+    target_os = "macos",
+    target_os = "linux",
+    target_os = "windows",
+    target_os = "ios",
+    target_os = "android"
+))]
+pub mod boolean_ops;
 #[cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]
 pub mod canvas_view_stub;
 #[cfg(any(
@@ -67,14 +75,6 @@ pub mod canvas_view_stub;
     target_os = "android"
 ))]
 pub mod widget_host;
-#[cfg(any(
-    target_os = "macos",
-    target_os = "linux",
-    target_os = "windows",
-    target_os = "ios",
-    target_os = "android"
-))]
-pub mod boolean_ops;
 
 #[cfg(any(
     target_os = "macos",

@@ -111,9 +111,7 @@ pub fn file_menu_choice(
 /// canonical `op_editor_core::ShapeChoice`. Reverse of
 /// [`doc_shape_choice`]; the `Tool` variant carries the same
 /// `op_editor_core::Tool` either way.
-pub fn shape_choice(
-    c: crate::widgets::shape_picker::ShapeChoice,
-) -> op_editor_core::ShapeChoice {
+pub fn shape_choice(c: crate::widgets::shape_picker::ShapeChoice) -> op_editor_core::ShapeChoice {
     use crate::widgets::shape_picker::ShapeChoice as W;
     use op_editor_core::ShapeChoice as O;
     match c {
@@ -139,4 +137,3 @@ pub fn export_format(
         W::Pdf => O::Pdf,
     }
 }
-

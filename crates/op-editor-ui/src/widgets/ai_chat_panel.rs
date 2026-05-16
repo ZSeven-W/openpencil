@@ -212,9 +212,7 @@ impl<'a> AIChatPlaceholder<'a> {
             // of the input box; its left `MODEL_CHIP_W` is the model
             // chip (opens / closes the model-picker dropdown).
             let toolbar_top = input_rect.origin.y + INPUT_AREA_HEIGHT;
-            if point.y >= toolbar_top
-                && point.x <= input_rect.origin.x + MODEL_CHIP_W
-            {
+            if point.y >= toolbar_top && point.x <= input_rect.origin.x + MODEL_CHIP_W {
                 return Some(AIChatHit::ToggleModelPicker);
             }
             // Send chip is the rightmost ~40px of the input area.

@@ -48,7 +48,11 @@ impl McpTool for InstantiateComponent {
     }
     fn call(&self, args: &BTreeMap<String, String>) -> ToolOutcome {
         // Still validate the argument shape so the contract is honest.
-        if args.get("component_id").map(String::is_empty).unwrap_or(true) {
+        if args
+            .get("component_id")
+            .map(String::is_empty)
+            .unwrap_or(true)
+        {
             return ToolOutcome::Err(
                 ToolErrorCode::MissingArgument,
                 "component_id is required".into(),
@@ -71,16 +75,10 @@ impl McpTool for CreateComponent {
     }
     fn call(&self, args: &BTreeMap<String, String>) -> ToolOutcome {
         if args.get("node_id").map(String::is_empty).unwrap_or(true) {
-            return ToolOutcome::Err(
-                ToolErrorCode::MissingArgument,
-                "node_id is required".into(),
-            );
+            return ToolOutcome::Err(ToolErrorCode::MissingArgument, "node_id is required".into());
         }
         if args.get("name").is_none() {
-            return ToolOutcome::Err(
-                ToolErrorCode::MissingArgument,
-                "name is required".into(),
-            );
+            return ToolOutcome::Err(ToolErrorCode::MissingArgument, "name is required".into());
         }
         component_gap_error("create_component")
     }
@@ -98,7 +96,11 @@ impl McpTool for DeleteComponent {
         "delete_component"
     }
     fn call(&self, args: &BTreeMap<String, String>) -> ToolOutcome {
-        if args.get("component_id").map(String::is_empty).unwrap_or(true) {
+        if args
+            .get("component_id")
+            .map(String::is_empty)
+            .unwrap_or(true)
+        {
             return ToolOutcome::Err(
                 ToolErrorCode::MissingArgument,
                 "component_id is required".into(),
@@ -120,7 +122,11 @@ impl McpTool for RenameComponent {
         "rename_component"
     }
     fn call(&self, args: &BTreeMap<String, String>) -> ToolOutcome {
-        if args.get("component_id").map(String::is_empty).unwrap_or(true) {
+        if args
+            .get("component_id")
+            .map(String::is_empty)
+            .unwrap_or(true)
+        {
             return ToolOutcome::Err(
                 ToolErrorCode::MissingArgument,
                 "component_id is required".into(),
@@ -128,10 +134,7 @@ impl McpTool for RenameComponent {
         }
         match args.get("name") {
             None => {
-                return ToolOutcome::Err(
-                    ToolErrorCode::MissingArgument,
-                    "name is required".into(),
-                );
+                return ToolOutcome::Err(ToolErrorCode::MissingArgument, "name is required".into());
             }
             Some(name) if name.trim().is_empty() => {
                 return ToolOutcome::Err(
@@ -164,10 +167,7 @@ impl McpTool for SetNodeCollapsed {
     }
     fn call(&self, args: &BTreeMap<String, String>) -> ToolOutcome {
         if args.get("node_id").map(String::is_empty).unwrap_or(true) {
-            return ToolOutcome::Err(
-                ToolErrorCode::MissingArgument,
-                "node_id is required".into(),
-            );
+            return ToolOutcome::Err(ToolErrorCode::MissingArgument, "node_id is required".into());
         }
         match args.get("value").map(String::as_str) {
             Some("true") | Some("false") => {}

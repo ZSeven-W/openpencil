@@ -147,11 +147,10 @@ impl WidgetHostNative {
     pub fn apply_toggle_code_panel(&mut self) -> bool {
         self.commit_variable_row_focus_if_any();
         use op_editor_core::PropertyTab;
-        self.editor_state.editor_ui.property_tab =
-            match self.editor_state.editor_ui.property_tab {
-                PropertyTab::Design => PropertyTab::Code,
-                PropertyTab::Code => PropertyTab::Design,
-            };
+        self.editor_state.editor_ui.property_tab = match self.editor_state.editor_ui.property_tab {
+            PropertyTab::Design => PropertyTab::Code,
+            PropertyTab::Code => PropertyTab::Design,
+        };
         self.mark_dirty();
         true
     }

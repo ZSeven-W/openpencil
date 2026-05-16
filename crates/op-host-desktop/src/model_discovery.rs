@@ -48,10 +48,7 @@ impl ModelProbe {
     /// `EditorState.chat` and return `true`. Idempotent — the
     /// receiver is dropped after the first drain so later calls are
     /// cheap no-ops.
-    pub fn poll_into(
-        &mut self,
-        host: &mut op_host_native::WidgetHostNative,
-    ) -> bool {
+    pub fn poll_into(&mut self, host: &mut op_host_native::WidgetHostNative) -> bool {
         let Some(rx) = self.rx.as_ref() else {
             return false;
         };
@@ -61,8 +58,7 @@ impl ModelProbe {
                 // translate each into the op-editor-core type the
                 // host's `EditorState.chat` carries.
                 let chat = &mut host.editor_state_mut().chat;
-                chat.available_models =
-                    models.into_iter().map(model_entry_to_ec).collect();
+                chat.available_models = models.into_iter().map(model_entry_to_ec).collect();
                 chat.selected_model = 0;
                 host.mark_editor_state_dirty();
                 self.rx = None;
@@ -164,7 +160,11 @@ fn discover_codex() -> Vec<ModelEntry> {
         }
     }
     if resolve_cli("codex").is_some() {
-        return vec![ModelEntry::new(AgentProvider::CodexCli, "gpt-5.5", "GPT-5.5")];
+        return vec![ModelEntry::new(
+            AgentProvider::CodexCli,
+            "gpt-5.5",
+            "GPT-5.5",
+        )];
     }
     Vec::new()
 }
@@ -301,10 +301,13 @@ fn discover_copilot() -> Vec<ModelEntry> {
     if resolve_cli("copilot").is_none() {
         return Vec::new();
     }
-    [("gpt-5", "GPT-5"), ("claude-sonnet-4.5", "Claude Sonnet 4.5")]
-        .iter()
-        .map(|(value, name)| ModelEntry::new(AgentProvider::GithubCopilot, *value, *name))
-        .collect()
+    [
+        ("gpt-5", "GPT-5"),
+        ("claude-sonnet-4.5", "Claude Sonnet 4.5"),
+    ]
+    .iter()
+    .map(|(value, name)| ModelEntry::new(AgentProvider::GithubCopilot, *value, *name))
+    .collect()
 }
 
 /// Query Copilot models through the official CLI JSON-RPC
@@ -493,9 +496,7 @@ mod tests {
         // initialize reply (id 1) — not the model list.
         assert!(parse_codex_model_list(r#"{"id":1,"result":{"codexHome":"x"}}"#).is_none());
         // interleaved notification — no id.
-        assert!(
-            parse_codex_model_list(r#"{"method":"remoteControl/status/changed"}"#).is_none()
-        );
+        assert!(parse_codex_model_list(r#"{"method":"remoteControl/status/changed"}"#).is_none());
         // the model/list response (id 2).
         let models = parse_codex_model_list(
             r#"{"id":2,"result":{"data":[
@@ -513,10 +514,10 @@ mod tests {
     #[test]
     fn copilot_response_parser_picks_id2_model_list() {
         // connect reply (id 1) — not the model list.
-        assert!(
-            parse_copilot_model_list(r#"{"jsonrpc":"2.0","id":1,"result":{"connected":true}}"#)
-                .is_none()
-        );
+        assert!(parse_copilot_model_list(
+            r#"{"jsonrpc":"2.0","id":1,"result":{"connected":true}}"#
+        )
+        .is_none());
         let models = parse_copilot_model_list(
             r#"{"jsonrpc":"2.0","id":2,"result":{"models":[
                 {"id":"gpt-5-mini","name":"GPT-5 mini"},
@@ -539,7 +540,10 @@ mod tests {
         assert_eq!(extract_json_object(framed), Some(r#"{"a":1}"#));
         // Nested braces + a brace inside a string must not end early.
         let nested = r#"prefix {"x":{"y":2},"s":"a}b{c"} trailing"#;
-        assert_eq!(extract_json_object(nested), Some(r#"{"x":{"y":2},"s":"a}b{c"}"#));
+        assert_eq!(
+            extract_json_object(nested),
+            Some(r#"{"x":{"y":2},"s":"a}b{c"}"#)
+        );
         // No object at all.
         assert_eq!(extract_json_object("Content-Length: 0\r\n"), None);
     }

@@ -23,11 +23,7 @@ const PDF_MARGIN: f32 = 16.0;
 /// that frame at its own `(origin.x, origin.y)`; empty pages are
 /// skipped. Returns Err when no page has paintable content.
 pub fn export_pdf(scene: &LayoutScene, target: &StdPath) -> Result<(), String> {
-    let bounds_per_page: Vec<_> = scene
-        .pages
-        .iter()
-        .map(crate::export::page_bounds)
-        .collect();
+    let bounds_per_page: Vec<_> = scene.pages.iter().map(crate::export::page_bounds).collect();
     let any_some = bounds_per_page.iter().any(Option::is_some);
     if !any_some {
         return Err("nothing to export".into());
@@ -64,14 +60,19 @@ mod tests {
     use super::*;
     use crate::export::test_support::filled_rect;
     use op_editor_ui::layout_scene::NodeKind;
-    use op_editor_ui::layout_scene::{ScenePage, SceneNode};
+    use op_editor_ui::layout_scene::{SceneNode, ScenePage};
     use op_editor_ui::{Color, Rect};
 
     #[test]
     fn pdf_export_emits_one_page_per_scene_page() {
         let mut ellipse = SceneNode::leaf("n20", NodeKind::Ellipse);
         ellipse.bounds = Rect::xywh(0.0, 0.0, 40.0, 40.0);
-        ellipse.fill = Some(Color { r: 0.8, g: 0.2, b: 0.4, a: 1.0 });
+        ellipse.fill = Some(Color {
+            r: 0.8,
+            g: 0.2,
+            b: 0.4,
+            a: 1.0,
+        });
         let scene = LayoutScene {
             pages: vec![
                 ScenePage {
@@ -83,7 +84,12 @@ mod tests {
                         0.0,
                         60.0,
                         40.0,
-                        Color { r: 0.5, g: 0.5, b: 0.5, a: 1.0 },
+                        Color {
+                            r: 0.5,
+                            g: 0.5,
+                            b: 0.5,
+                            a: 1.0,
+                        },
                     )],
                 },
                 ScenePage {
@@ -113,8 +119,16 @@ mod tests {
     fn pdf_export_skips_empty_pages_but_fails_when_all_empty() {
         let scene = LayoutScene {
             pages: vec![
-                ScenePage { id: "p1".into(), name: "P1".into(), children: Vec::new() },
-                ScenePage { id: "p2".into(), name: "P2".into(), children: Vec::new() },
+                ScenePage {
+                    id: "p1".into(),
+                    name: "P1".into(),
+                    children: Vec::new(),
+                },
+                ScenePage {
+                    id: "p2".into(),
+                    name: "P2".into(),
+                    children: Vec::new(),
+                },
             ],
             active_page_index: 0,
         };

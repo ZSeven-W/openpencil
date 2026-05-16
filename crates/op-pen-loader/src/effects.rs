@@ -95,14 +95,12 @@ pub fn shadows_from_canonical(node: &PenNode) -> Vec<ShadowPayload> {
             // were first imported as opaque black, then dropped).
             // Genuinely unparseable colours still drop the shadow
             // rather than fabricate a wrong one.
-            PenEffect::Shadow(s) => {
-                parse_css_color(&s.color).map(|color| ShadowPayload {
-                    offset_x: s.offset_x,
-                    offset_y: s.offset_y,
-                    blur: s.blur,
-                    color,
-                })
-            }
+            PenEffect::Shadow(s) => parse_css_color(&s.color).map(|color| ShadowPayload {
+                offset_x: s.offset_x,
+                offset_y: s.offset_y,
+                blur: s.blur,
+                color,
+            }),
             PenEffect::Blur(_) | PenEffect::BackgroundBlur(_) => None,
         })
         .collect()
@@ -201,20 +199,29 @@ mod tests {
                 offset_x: 4.0,
                 offset_y: 6.0,
                 blur: 12.0,
-                color: Color { r: 0.0, g: 0.0, b: 0.0, a: 0.5 },
+                color: Color {
+                    r: 0.0,
+                    g: 0.0,
+                    b: 0.0,
+                    a: 0.5,
+                },
             }),
             Effect::DropShadow(DropShadow {
                 offset_x: -2.0,
                 offset_y: 0.0,
                 blur: 3.0,
-                color: Color { r: 1.0, g: 0.0, b: 0.0, a: 1.0 },
+                color: Color {
+                    r: 1.0,
+                    g: 0.0,
+                    b: 0.0,
+                    a: 1.0,
+                },
             }),
         ];
         // Through the actual serde JSON path the `.op` file uses.
         let payload = effects_to_payload(&original);
         let json = serde_json::to_string(&payload).expect("serialize");
-        let back: Vec<ShadowPayload> =
-            serde_json::from_str(&json).expect("deserialize");
+        let back: Vec<ShadowPayload> = serde_json::from_str(&json).expect("deserialize");
         let restored = effects_from_payload(back);
         assert_eq!(restored, original);
     }

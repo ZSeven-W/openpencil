@@ -27,9 +27,7 @@ use github_copilot_sdk::handler::{
 };
 use github_copilot_sdk::types::{MessageOptions, SessionConfig, SessionEvent};
 use github_copilot_sdk::{Client, ClientOptions};
-use op_ai::chat_provider::{
-    ChatDelta, ChatProvider, ChatRequest, StopReason,
-};
+use op_ai::chat_provider::{ChatDelta, ChatProvider, ChatRequest, StopReason};
 use tokio::sync::mpsc;
 
 use crate::chat_runtime::{shared_runtime, BlockingRecvIter};
@@ -66,10 +64,7 @@ impl ChatProvider for CopilotProvider {
         &self.label
     }
 
-    fn send(
-        &self,
-        request: ChatRequest,
-    ) -> Box<dyn Iterator<Item = ChatDelta> + Send> {
+    fn send(&self, request: ChatRequest) -> Box<dyn Iterator<Item = ChatDelta> + Send> {
         let prompt = request.user_message;
         let (tx, rx) = mpsc::channel::<ChatDelta>(64);
         shared_runtime().spawn(async move {
@@ -108,9 +103,7 @@ async fn run_turn(
     let config = config.with_handler(Arc::new(StreamHandler { tx }));
     let session = client.create_session(config).await?;
     session
-        .send_and_wait(
-            MessageOptions::new(prompt).with_wait_timeout(COPILOT_TURN_TIMEOUT),
-        )
+        .send_and_wait(MessageOptions::new(prompt).with_wait_timeout(COPILOT_TURN_TIMEOUT))
         .await?;
     // Best-effort teardown — a failed cleanup must not mask a
     // successful turn.
@@ -148,8 +141,7 @@ impl SessionHandler for StreamHandler {
 async fn forward_session_event(event: &SessionEvent, tx: &mpsc::Sender<ChatDelta>) {
     match event.event_type.as_str() {
         "assistant.message_delta" => {
-            if let Some(text) = event.data.get("deltaContent").and_then(|c| c.as_str())
-            {
+            if let Some(text) = event.data.get("deltaContent").and_then(|c| c.as_str()) {
                 let _ = tx.send(ChatDelta::TextDelta(text.to_string())).await;
             }
         }

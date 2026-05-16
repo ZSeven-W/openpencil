@@ -144,8 +144,8 @@ impl WidgetHostNative {
         self.last_viewport_w = viewport_width;
         self.last_viewport_h = viewport_height;
         // Blur-commit rename + text-edit; track to repaint on click.
-        let rename_committed = self.editor_state.ui.layer_rename.is_some()
-            && self.editor_state.rename_commit();
+        let rename_committed =
+            self.editor_state.ui.layer_rename.is_some() && self.editor_state.rename_commit();
         let text_edit_was_active = self.editor_state.ui.text_editing.is_some();
         let text_edit_committed = self.editor_state.text_edit_commit();
         if rename_committed || text_edit_committed {
@@ -158,9 +158,7 @@ impl WidgetHostNative {
         }
         // 0-color. Color picker overlay — top-most when open.
         if let Some(state) = self.editor_state.ui.color_picker.clone() {
-            use op_editor_ui::widgets::color_picker::{
-                drag_for_hit, ColorPicker, ColorPickerHit,
-            };
+            use op_editor_ui::widgets::color_picker::{drag_for_hit, ColorPicker, ColorPickerHit};
             let picker = ColorPicker::for_state(&self.editor_state, state.clone());
             let panel = picker.rect(viewport_width, viewport_height);
             let point = Point2D::new(x, y);
@@ -179,9 +177,7 @@ impl WidgetHostNative {
                         match hit {
                             ColorPickerHit::SvBox => {
                                 let (s, v) = picker.sv_at(panel, point);
-                                let _ = self
-                                    .editor_state
-                                    .color_picker_set_hsv(state.hue, s, v);
+                                let _ = self.editor_state.color_picker_set_hsv(state.hue, s, v);
                             }
                             ColorPickerHit::HueSlider => {
                                 let h = picker.hue_at(panel, point);
@@ -238,9 +234,7 @@ impl WidgetHostNative {
         if y >= TOP_BAR_HEIGHT {
             if let Some(kind) = self.panel_resize_hover(x, y, viewport_width) {
                 let start_width = match kind {
-                    PanelResizeKind::LayerRight => {
-                        self.editor_state.editor_ui.layer_panel_width
-                    }
+                    PanelResizeKind::LayerRight => self.editor_state.editor_ui.layer_panel_width,
                     PanelResizeKind::PropertyLeft => {
                         self.editor_state.editor_ui.property_panel_width
                     }
@@ -377,9 +371,7 @@ impl WidgetHostNative {
                         (viewport_height - TOP_BAR_HEIGHT).max(0.0),
                     ),
                 };
-                if let Some(action) =
-                    panel.hit_test_action(property_rect, Point2D::new(x, y))
-                {
+                if let Some(action) = panel.hit_test_action(property_rect, Point2D::new(x, y)) {
                     if matches!(
                         action,
                         op_editor_ui::widgets::PropertyPanelAction::SetFillType(_)
@@ -416,14 +408,11 @@ impl WidgetHostNative {
             // Button / checkbox click first (flex modes + size flags).
             if let Some(action) = panel.hit_test_action(property_rect, Point2D::new(x, y)) {
                 self.commit_property_focus_if_any();
-                if let op_editor_ui::widgets::PropertyPanelAction::OpenColorPicker(
-                    target,
-                ) = action
+                if let op_editor_ui::widgets::PropertyPanelAction::OpenColorPicker(target) = action
                 {
-                    let _ = self.editor_state.open_color_picker(
-                        super::press_helpers::color_target(target),
-                        y,
-                    );
+                    let _ = self
+                        .editor_state
+                        .open_color_picker(super::press_helpers::color_target(target), y);
                     self.mark_dirty();
                 } else {
                     self.apply_property_action(action);
@@ -432,11 +421,9 @@ impl WidgetHostNative {
             }
             if let Some(focus) = panel.hit_test(property_rect, Point2D::new(x, y)) {
                 self.commit_property_focus_if_any();
-                let initial =
-                    super::press_helpers::property_focus_initial(focus, &panel);
+                let initial = super::press_helpers::property_focus_initial(focus, &panel);
                 // shell-core `PropertyFocus` → op-editor-core.
-                self.editor_state.ui.property_focus =
-                    Some(focus);
+                self.editor_state.ui.property_focus = Some(focus);
                 self.editor_state.ui.property_input_draft = initial;
                 self.editor_state.ui.property_caret_anchor_ms = self.now_ms;
                 self.editor_state.ui.property_draft_select_all = false;
@@ -573,8 +560,7 @@ impl WidgetHostNative {
             if matches!(self.editor_state.tool, Tool::Select) {
                 // The selected anchor's resolved scene node — shared
                 // by the handle-drag + rotation-drag branches below.
-                let selected_anchor =
-                    self.editor_state.selection.anchor.as_str().to_string();
+                let selected_anchor = self.editor_state.selection.anchor.as_str().to_string();
                 if let Some(handle) = selection_handle_at_point(
                     canvas_rect,
                     &self.layout_scene,
@@ -622,8 +608,7 @@ impl WidgetHostNative {
                         let center_screen_y = canvas_rect.origin.y
                             + self.editor_state.viewport.pan_y
                             + cy_doc * self.editor_state.viewport.zoom;
-                        let start_cursor_angle =
-                            (y - center_screen_y).atan2(x - center_screen_x);
+                        let start_cursor_angle = (y - center_screen_y).atan2(x - center_screen_x);
                         let start_rotation = node.rotation;
                         self.editor_state.commit_history();
                         self.rotate_drag = Some(RotateDragState {
@@ -767,4 +752,3 @@ impl WidgetHostNative {
         rename_committed || text_edit_committed
     }
 }
-

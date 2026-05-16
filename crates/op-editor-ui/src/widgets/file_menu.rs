@@ -227,38 +227,114 @@ impl<'a> Widget for FileMenu<'a> {
 
     fn paint(&self, cx: &mut PaintCx<'_>, rect: Rect) {
         cx.backend.fill_round_rect(rect, 10.0, self.theme.card);
-        cx.backend.stroke_round_rect(rect, 10.0, self.theme.border, 1.0);
+        cx.backend
+            .stroke_round_rect(rect, 10.0, self.theme.border, 1.0);
         let h = |c: FileMenuChoice| self.hovered == Some(c);
         let mut y = rect.origin.y + PAD_Y;
-        paint_row(cx, &self.theme, rect.origin.x, y, Icon::Plus, t(self.ui, "new"), "⌘N", h(FileMenuChoice::NewFile));
+        paint_row(
+            cx,
+            &self.theme,
+            rect.origin.x,
+            y,
+            Icon::Plus,
+            t(self.ui, "new"),
+            "⌘N",
+            h(FileMenuChoice::NewFile),
+        );
         y += ROW_HEIGHT;
-        paint_row(cx, &self.theme, rect.origin.x, y, Icon::FolderOpen, t(self.ui, "open"), "⌘O", h(FileMenuChoice::OpenFile));
+        paint_row(
+            cx,
+            &self.theme,
+            rect.origin.x,
+            y,
+            Icon::FolderOpen,
+            t(self.ui, "open"),
+            "⌘O",
+            h(FileMenuChoice::OpenFile),
+        );
         y += ROW_HEIGHT;
         y = paint_divider(cx, &self.theme, rect, y);
-        paint_row(cx, &self.theme, rect.origin.x, y, Icon::Save, t(self.ui, "save"), "⌘S", h(FileMenuChoice::Save));
+        paint_row(
+            cx,
+            &self.theme,
+            rect.origin.x,
+            y,
+            Icon::Save,
+            t(self.ui, "save"),
+            "⌘S",
+            h(FileMenuChoice::Save),
+        );
         y += ROW_HEIGHT;
-        paint_row(cx, &self.theme, rect.origin.x, y, Icon::Save, t(self.ui, "saveAs"), "⌘⇧S", h(FileMenuChoice::SaveAs));
+        paint_row(
+            cx,
+            &self.theme,
+            rect.origin.x,
+            y,
+            Icon::Save,
+            t(self.ui, "saveAs"),
+            "⌘⇧S",
+            h(FileMenuChoice::SaveAs),
+        );
         y += ROW_HEIGHT;
         y = paint_divider(cx, &self.theme, rect, y);
-        paint_row(cx, &self.theme, rect.origin.x, y, Icon::Download, t(self.ui, "exportImage"), "⌘⇧P", h(FileMenuChoice::ExportImage));
+        paint_row(
+            cx,
+            &self.theme,
+            rect.origin.x,
+            y,
+            Icon::Download,
+            t(self.ui, "exportImage"),
+            "⌘⇧P",
+            h(FileMenuChoice::ExportImage),
+        );
         y += ROW_HEIGHT;
         y = paint_divider(cx, &self.theme, rect, y);
         paint_header(cx, &self.theme, rect.origin.x, y, t(self.ui, "recentFiles"));
         y += HEADER_HEIGHT;
         if self.recent.is_empty() {
-            paint_empty(cx, &self.theme, rect.origin.x, y, t(self.ui, "noRecentFiles"));
+            paint_empty(
+                cx,
+                &self.theme,
+                rect.origin.x,
+                y,
+                t(self.ui, "noRecentFiles"),
+            );
             y += ROW_HEIGHT;
         } else {
             for (i, entry) in self.recent.iter().enumerate() {
-                paint_recent_row(cx, &self.theme, rect.origin.x, y, entry, h(FileMenuChoice::OpenRecent(i)));
+                paint_recent_row(
+                    cx,
+                    &self.theme,
+                    rect.origin.x,
+                    y,
+                    entry,
+                    h(FileMenuChoice::OpenRecent(i)),
+                );
                 y += ROW_HEIGHT;
             }
         }
         y = paint_divider(cx, &self.theme, rect, y);
         if self.recent.is_empty() {
-            paint_row_disabled(cx, &self.theme, rect.origin.x, y, Icon::Trash, t(self.ui, "clearHistory"), "");
+            paint_row_disabled(
+                cx,
+                &self.theme,
+                rect.origin.x,
+                y,
+                Icon::Trash,
+                t(self.ui, "clearHistory"),
+                "",
+            );
         } else {
-            paint_row(cx, &self.theme, rect.origin.x, y, Icon::Trash, t(self.ui, "clearHistory"), "", h(FileMenuChoice::ClearRecent));
+            paint_row(
+                cx,
+                &self.theme,
+                rect.origin.x,
+                y,
+                Icon::Trash,
+                t(self.ui, "clearHistory"),
+                "",
+                h(FileMenuChoice::ClearRecent),
+            );
         }
     }
 
@@ -371,7 +447,14 @@ fn paint_row_disabled(
     }
 }
 
-fn paint_recent_row(cx: &mut PaintCx<'_>, theme: &Theme, x: f32, y: f32, entry: &RecentEntry, hovered: bool) {
+fn paint_recent_row(
+    cx: &mut PaintCx<'_>,
+    theme: &Theme,
+    x: f32,
+    y: f32,
+    entry: &RecentEntry,
+    hovered: bool,
+) {
     if hovered {
         paint_row_tint(cx, theme, x, y);
     }
@@ -468,8 +551,10 @@ fn paint_header(cx: &mut PaintCx<'_>, theme: &Theme, x: f32, y: f32, label: &str
         to_jian(theme.muted_foreground),
         Point2D::new(0.0, 0.0),
     );
-    cx.backend
-        .draw_text(&layout, Point2D::new(x + PAD_X, y + HEADER_HEIGHT / 2.0 + 4.0));
+    cx.backend.draw_text(
+        &layout,
+        Point2D::new(x + PAD_X, y + HEADER_HEIGHT / 2.0 + 4.0),
+    );
 }
 
 fn paint_divider(cx: &mut PaintCx<'_>, theme: &Theme, rect: Rect, y: f32) -> f32 {
@@ -494,16 +579,32 @@ fn file_name(path: &str) -> String {
 fn format_age(ui: &EditorUiState, elapsed_secs: u64) -> String {
     let zh = matches!(ui.locale, Locale::ZhCn | Locale::ZhTw);
     if elapsed_secs < 60 {
-        if zh { "刚刚".into() } else { "just now".into() }
+        if zh {
+            "刚刚".into()
+        } else {
+            "just now".into()
+        }
     } else if elapsed_secs < 3600 {
         let m = elapsed_secs / 60;
-        if zh { format!("{m} 分钟前") } else { format!("{m}m ago") }
+        if zh {
+            format!("{m} 分钟前")
+        } else {
+            format!("{m}m ago")
+        }
     } else if elapsed_secs < 86400 {
         let h = elapsed_secs / 3600;
-        if zh { format!("{h} 小时前") } else { format!("{h}h ago") }
+        if zh {
+            format!("{h} 小时前")
+        } else {
+            format!("{h}h ago")
+        }
     } else {
         let d = elapsed_secs / 86400;
-        if zh { format!("{d} 天前") } else { format!("{d}d ago") }
+        if zh {
+            format!("{d} 天前")
+        } else {
+            format!("{d}d ago")
+        }
     }
 }
 

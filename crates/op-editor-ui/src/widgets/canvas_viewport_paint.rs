@@ -13,8 +13,8 @@
 //! only the viewport transform — no second layout pass, no variable
 //! lookup.
 
-use crate::layout_scene::{Effect, NodeKind};
 use crate::layout_scene::SceneNode;
+use crate::layout_scene::{Effect, NodeKind};
 use crate::widgets::canvas_viewport::EditCaret;
 use crate::widgets::canvas_viewport_overlay::{paint_fill_then_stroke, wrap_text};
 use crate::widgets::PaintCx;
@@ -104,7 +104,10 @@ pub fn paint_node(
     if !node.effects.is_empty()
         && world_rect.size.x > 0.0
         && world_rect.size.y > 0.0
-        && matches!(node.kind, NodeKind::Frame | NodeKind::Rect | NodeKind::Ellipse)
+        && matches!(
+            node.kind,
+            NodeKind::Frame | NodeKind::Rect | NodeKind::Ellipse
+        )
     {
         paint_drop_shadows(cx, node, world_rect, zoom);
     }
@@ -185,7 +188,10 @@ pub fn paint_node(
                 ),
             };
             let to_world = |p: Point2D| -> Point2D {
-                Point2D::new(viewport_origin.x + p.x * zoom, viewport_origin.y + p.y * zoom)
+                Point2D::new(
+                    viewport_origin.x + p.x * zoom,
+                    viewport_origin.y + p.y * zoom,
+                )
             };
             for pair in node.points.windows(2) {
                 cx.backend
@@ -213,19 +219,30 @@ fn paint_text_node(
 ) {
     let text = node.text.as_deref().unwrap_or("");
     // Ink colour follows the resolved fill (defaults to near black).
-    let ink = node
-        .fill
-        .unwrap_or(crate::Color { r: 0.08, g: 0.08, b: 0.08, a: 1.0 });
+    let ink = node.fill.unwrap_or(crate::Color {
+        r: 0.08,
+        g: 0.08,
+        b: 0.08,
+        a: 1.0,
+    });
     fn ch(v: f32) -> u8 {
         (v.clamp(0.0, 1.0) * 255.0).round() as u8
     }
     // Honour authored font size from the canonical schema; default to
     // 13 px so editor-created text stays uniform. Baseline ≈ 1.08 × size.
-    let base_size = if node.font_size > 0.0 { node.font_size } else { 13.0 };
+    let base_size = if node.font_size > 0.0 {
+        node.font_size
+    } else {
+        13.0
+    };
     let font_size = base_size * zoom;
     let baseline_y = world_rect.origin.y + (base_size + 1.0) * zoom;
     if !text.is_empty() {
-        let weight = if node.font_weight > 0 { node.font_weight } else { 400 };
+        let weight = if node.font_weight > 0 {
+            node.font_weight
+        } else {
+            400
+        };
         let jc = jian_core::scene::Color::rgba(ch(ink.r), ch(ink.g), ch(ink.b), ch(ink.a));
         let line_h = base_size * 1.35 * zoom;
         let mut ly = baseline_y;
@@ -236,14 +253,8 @@ fn paint_text_node(
         };
         for line in lines {
             cx.backend.draw_text(
-                &TextLayout::single_run(
-                    &line,
-                    "system-ui",
-                    font_size,
-                    jc,
-                    Point2D::new(0.0, 0.0),
-                )
-                .with_font_weight(weight),
+                &TextLayout::single_run(&line, "system-ui", font_size, jc, Point2D::new(0.0, 0.0))
+                    .with_font_weight(weight),
                 Point2D::new(world_rect.origin.x, ly),
             );
             ly += line_h;

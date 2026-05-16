@@ -28,9 +28,9 @@
 use crate::theme::Theme;
 use crate::widgets::{LayoutBox, LayoutCx, PaintCx, Widget, WidgetId};
 use crate::{Color, Point2D, Rect};
+use jian_ops_schema::variable::{VariableKind, VariableScalar};
 use op_editor_core::editor_ui_state::VariableRowFocus;
 use op_editor_core::EditorState;
-use jian_ops_schema::variable::{VariableKind, VariableScalar};
 
 const ROW_HEIGHT: f32 = 32.0;
 const HEADER_HEIGHT: f32 = 28.0;
@@ -378,8 +378,10 @@ impl Widget for VariablesPanel {
                     to_jian_color(theme.foreground),
                     Point2D::new(0.0, 0.0),
                 );
-                cx.backend
-                    .draw_text(&draft_layout, Point2D::new(preview_x - 64.0, row.origin.y + 21.0));
+                cx.backend.draw_text(
+                    &draft_layout,
+                    Point2D::new(preview_x - 64.0, row.origin.y + 21.0),
+                );
                 let underline = Rect {
                     origin: Point2D::new(preview_x - 70.0, row.origin.y + 23.0),
                     size: Point2D::new(80.0, 1.0),
@@ -460,8 +462,7 @@ fn paint_preview(cx: &mut PaintCx<'_>, theme: &Theme, var: &VarRow, x: f32, y: f
                 size: Point2D::new(SWATCH_SIZE, SWATCH_SIZE),
             };
             cx.backend.fill_round_rect(swatch, 3.0, rgba);
-            cx.backend
-                .stroke_round_rect(swatch, 3.0, theme.border, 1.0);
+            cx.backend.stroke_round_rect(swatch, 3.0, theme.border, 1.0);
         }
         _ => {
             // Non-color: render the resolved scalar as a short text
@@ -537,13 +538,8 @@ mod tests {
             VariableKind::Number,
             VariableScalar::Num(16.0),
         );
-        s.create_variable(
-            "is-dark",
-            VariableKind::Boolean,
-            VariableScalar::Bool(true),
-        );
-        s.ui
-            .variables
+        s.create_variable("is-dark", VariableKind::Boolean, VariableScalar::Bool(true));
+        s.ui.variables
             .active_theme
             .insert("mode".into(), "dark".into());
         s
@@ -653,12 +649,10 @@ mod tests {
     #[test]
     fn axis_chip_table_mirrors_active_theme_btree_order() {
         let mut s = EditorState::new();
-        s.ui
-            .variables
+        s.ui.variables
             .active_theme
             .insert("z-axis".into(), "alpha".into());
-        s.ui
-            .variables
+        s.ui.variables
             .active_theme
             .insert("a-axis".into(), "omega".into());
         let p = VariablesPanel::for_editor(&s);

@@ -133,7 +133,8 @@ pub(super) const CHEVRON_UP: &[&str] = &["m18 15-6-6-6 6"];
 
 // Lucide `message-square.svg` — speech-bubble outline used by the
 // collapsed AI chat pill.
-pub(super) const MESSAGE_SQUARE: &[&str] = &["M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"];
+pub(super) const MESSAGE_SQUARE: &[&str] =
+    &["M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"];
 
 // Lucide `layout-grid.svg` — 4 rounded-rect cells.
 pub(super) const LAYOUT_GRID: &[&str] = &[
@@ -304,7 +305,6 @@ pub(super) const EYE_OFF: &[&str] = &[
     "m2 2 20 20",
 ];
 
-
 // Lucide `trash-2` — line-art trash can.
 pub(super) const TRASH: &[&str] = &[
     "M3 6h18",
@@ -371,12 +371,8 @@ pub(super) const USER: &[&str] = &[
     "M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z",
 ];
 
-
 // ── Additional first-party glyphs surfaced via `Icon::from_name` ──
-pub(super) const CLOCK: &[&str] = &[
-    "M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20z",
-    "M12 6v6l4 2",
-];
+pub(super) const CLOCK: &[&str] = &["M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20z", "M12 6v6l4 2"];
 pub(super) const CALENDAR: &[&str] = &[
     "M8 2v4",
     "M16 2v4",
@@ -397,9 +393,8 @@ pub(super) const BELL: &[&str] = &[
     "M10.268 21a2 2 0 0 0 3.464 0",
     "M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326",
 ];
-pub(super) const PLAY: &[&str] = &[
-    "M6 3a1 1 0 0 1 1.539-.843l13 8a1 1 0 0 1 0 1.686l-13 8A1 1 0 0 1 6 19z",
-];
+pub(super) const PLAY: &[&str] =
+    &["M6 3a1 1 0 0 1 1.539-.843l13 8a1 1 0 0 1 0 1.686l-13 8A1 1 0 0 1 6 19z"];
 pub(super) const MAP_PIN: &[&str] = &[
     "M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0",
     "M12 12a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z",
@@ -455,10 +450,8 @@ pub(super) const MORE_HORIZONTAL: &[&str] = &[
 
 pub(super) const ARROW_RIGHT: &[&str] = &["M5 12h14", "M13 5l7 7-7 7"];
 pub(super) const ARROW_LEFT: &[&str] = &["M19 12H5", "M11 5l-7 7 7 7"];
-pub(super) const CHECK_CIRCLE: &[&str] = &[
-    "M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20z",
-    "m9 12 2 2 4-4",
-];
+pub(super) const CHECK_CIRCLE: &[&str] =
+    &["M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20z", "m9 12 2 2 4-4"];
 pub(super) const ALERT_TRIANGLE: &[&str] = &[
     "M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z",
     "M12 9v4",
@@ -473,24 +466,10 @@ pub(super) const STICKY_NOTE: &[&str] = &[
     "M15.5 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V8.5z",
     "M15 3v6h6",
 ];
-pub(super) const BAR_CHART_2: &[&str] = &[
-    "M18 20V10",
-    "M12 20V4",
-    "M6 20v-6",
-];
-pub(super) const BOLD: &[&str] = &[
-    "M6 12h9a4 4 0 0 1 0 8H6z",
-    "M6 4h8a4 4 0 0 1 0 8H6z",
-];
-pub(super) const ITALIC: &[&str] = &[
-    "M19 4h-9",
-    "M14 20H5",
-    "M15 4 9 20",
-];
-pub(super) const UNDERLINE: &[&str] = &[
-    "M6 4v6a6 6 0 0 0 12 0V4",
-    "M4 20h16",
-];
+pub(super) const BAR_CHART_2: &[&str] = &["M18 20V10", "M12 20V4", "M6 20v-6"];
+pub(super) const BOLD: &[&str] = &["M6 12h9a4 4 0 0 1 0 8H6z", "M6 4h8a4 4 0 0 1 0 8H6z"];
+pub(super) const ITALIC: &[&str] = &["M19 4h-9", "M14 20H5", "M15 4 9 20"];
+pub(super) const UNDERLINE: &[&str] = &["M6 4v6a6 6 0 0 0 12 0V4", "M4 20h16"];
 pub(super) const STRIKETHROUGH: &[&str] = &[
     "M16 4H9a3 3 0 0 0-2.83 4",
     "M14 12a4 4 0 0 1 0 8H6",
@@ -506,24 +485,15 @@ pub(super) const SHOPPING_BAG: &[&str] = &[
     "M3 6h18",
     "M16 10a4 4 0 0 1-8 0",
 ];
-pub(super) const SEND: &[&str] = &[
-    "m22 2-7 20-4-9-9-4z",
-    "M22 2 11 13",
-];
-pub(super) const MESSAGE_CIRCLE: &[&str] = &[
-    "M7.9 20A9 9 0 1 0 4 16.1L2 22z",
-];
+pub(super) const SEND: &[&str] = &["m22 2-7 20-4-9-9-4z", "M22 2 11 13"];
+pub(super) const MESSAGE_CIRCLE: &[&str] = &["M7.9 20A9 9 0 1 0 4 16.1L2 22z"];
 pub(super) const ROCKET: &[&str] = &[
     "M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z",
     "M12 15l-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z",
     "M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0",
     "M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5",
 ];
-pub(super) const MENU: &[&str] = &[
-    "M4 12h16",
-    "M4 6h16",
-    "M4 18h16",
-];
+pub(super) const MENU: &[&str] = &["M4 12h16", "M4 6h16", "M4 18h16"];
 pub(super) const CREDIT_CARD: &[&str] = &[
     "M3 5h18a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z",
     "M2 10h20",
@@ -534,14 +504,8 @@ pub(super) const X_CIRCLE: &[&str] = &[
     "m9 9 6 6",
 ];
 
-pub(super) const TRENDING_UP: &[&str] = &[
-    "M16 7h6v6",
-    "m22 7-8.5 8.5-5-5L2 17",
-];
-pub(super) const TRENDING_DOWN: &[&str] = &[
-    "M16 17h6v-6",
-    "m22 17-8.5-8.5-5 5L2 7",
-];
+pub(super) const TRENDING_UP: &[&str] = &["M16 7h6v6", "m22 7-8.5 8.5-5-5L2 17"];
+pub(super) const TRENDING_DOWN: &[&str] = &["M16 17h6v-6", "m22 17-8.5-8.5-5 5L2 7"];
 pub(super) const COMPASS: &[&str] = &[
     "m16.24 7.76-1.804 5.411a2 2 0 0 1-1.265 1.265L7.76 16.24l1.804-5.411a2 2 0 0 1 1.265-1.265z",
     "M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20z",
@@ -607,10 +571,7 @@ pub(super) const FOCUS: &[&str] = &[
     "M21 17v2a2 2 0 0 1-2 2h-2",
     "M7 21H5a2 2 0 0 1-2-2v-2",
 ];
-pub(super) const CHART_LINE: &[&str] = &[
-    "M3 3v16a2 2 0 0 0 2 2h16",
-    "m19 9-5 5-4-4-3 3",
-];
+pub(super) const CHART_LINE: &[&str] = &["M3 3v16a2 2 0 0 0 2 2h16", "m19 9-5 5-4-4-3 3"];
 pub(super) const SETTINGS2: &[&str] = &[
     "M14 17H5",
     // Top track starts at x=19 (not 20) per lucide@0.545.0.

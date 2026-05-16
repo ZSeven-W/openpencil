@@ -7,7 +7,6 @@
 //! `document::NodeId` in its hit-test surface; the hosts' input
 //! path wraps it into an `op-editor-core` id at the call boundary.
 
-use op_editor_core::NodeId;
 use crate::theme::Theme;
 use crate::widgets::editor_state_ext::theme_for;
 use crate::widgets::icons::{draw_icon, Icon};
@@ -17,6 +16,7 @@ use crate::widgets::layer_panel_walkers::{
 };
 use crate::widgets::{LayoutBox, LayoutCx, PaintCx, Widget, WidgetId};
 use crate::{Color, Point2D, Rect, TextLayout};
+use op_editor_core::NodeId;
 
 use jian_ops_schema::node::PenNode;
 use op_editor_core::editor_ui_state::EditorUiState;

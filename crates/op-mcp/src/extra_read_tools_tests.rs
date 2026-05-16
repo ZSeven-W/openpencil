@@ -12,7 +12,15 @@ use std::collections::BTreeMap;
 fn state_with_frame_and_two_children() -> EditorState {
     let child_a = rect("n20", "a", 10.0, 10.0, 30.0, 30.0);
     let child_b = text("n21", "b", 50.0, 10.0, 30.0, 20.0, "b");
-    let f = frame("n10", "frame", 0.0, 0.0, 200.0, 100.0, vec![child_a, child_b]);
+    let f = frame(
+        "n10",
+        "frame",
+        0.0,
+        0.0,
+        200.0,
+        100.0,
+        vec![child_a, child_b],
+    );
     state_with(vec![f])
 }
 

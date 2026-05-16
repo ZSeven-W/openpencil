@@ -126,13 +126,11 @@ fn locked_selection_blocks_translate_bounds_rotation_and_property_edit() {
     });
     assert_eq!(node_x(&s, "n40"), 10.0);
     s.set_selected_rotation(1.5);
-    assert!(
-        find_node(s.active_children(), &NodeId::new("n40"))
-            .unwrap()
-            .base()
-            .rotation
-            .is_none()
-    );
+    assert!(find_node(s.active_children(), &NodeId::new("n40"))
+        .unwrap()
+        .base()
+        .rotation
+        .is_none());
     assert!(!s.commit_property_edit(PropertyFocus::PositionX, 999.0));
     assert_eq!(node_x(&s, "n40"), 10.0);
 }
@@ -154,7 +152,15 @@ fn hidden_selection_blocks_translate_and_property_edit() {
 fn aggregate_bounds_of_leaf_is_its_own_rect() {
     let n = rect("n1", "A", 5.0, 6.0, 30.0, 40.0);
     let b = aggregate_bounds(&n);
-    assert_eq!(b, DocRect { x: 5.0, y: 6.0, w: 30.0, h: 40.0 });
+    assert_eq!(
+        b,
+        DocRect {
+            x: 5.0,
+            y: 6.0,
+            w: 30.0,
+            h: 40.0
+        }
+    );
 }
 
 #[test]
@@ -184,5 +190,13 @@ fn selection_bounds_unions_multiple_nodes() {
     s.toggle_selection(NodeId::new("n1"));
     s.toggle_selection(NodeId::new("n2"));
     let b = s.selection_bounds().expect("union");
-    assert_eq!(b, DocRect { x: 0.0, y: 0.0, w: 100.0, h: 100.0 });
+    assert_eq!(
+        b,
+        DocRect {
+            x: 0.0,
+            y: 0.0,
+            w: 100.0,
+            h: 100.0
+        }
+    );
 }

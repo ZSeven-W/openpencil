@@ -86,8 +86,16 @@ fn leaf(id: &str, kind: NodeKind, bounds: Rect, fill: Option<Color>) -> SceneNod
 fn sample_scene() -> LayoutScene {
     let mut frame = SceneNode::leaf("n1", NodeKind::Frame);
     frame.bounds = Rect::xywh(40.0, 40.0, 320.0, 200.0);
-    frame.fill = Some(Color { r: 0.16, g: 0.16, b: 0.2, a: 1.0 });
-    frame.stroke = Some(SceneStroke { color: Color::WHITE, width: 1.0 });
+    frame.fill = Some(Color {
+        r: 0.16,
+        g: 0.16,
+        b: 0.2,
+        a: 1.0,
+    });
+    frame.stroke = Some(SceneStroke {
+        color: Color::WHITE,
+        width: 1.0,
+    });
     frame.fill_type = SceneFillType::Solid;
     let mut button = leaf(
         "n2",
@@ -134,7 +142,11 @@ fn from_sample_scene_paints_expected_primitives() {
     }
     // ≥3 fills (canvas bg, frame fill, button rect), ≥2 strokes
     // (frame outline + selection overlay), 2 text draws.
-    assert!(backend.rects >= 3, "expected ≥3 fills, got {}", backend.rects);
+    assert!(
+        backend.rects >= 3,
+        "expected ≥3 fills, got {}",
+        backend.rects
+    );
     assert!(
         backend.strokes >= 2,
         "expected ≥2 strokes (frame + selection overlay), got {}",
@@ -279,8 +291,10 @@ fn selection_overlay_hit_tests_gate_to_single_select() {
 
     // Multi-select → both hit-tests return None.
     let mut multi = sample_state();
-    multi.selection.set =
-        vec![op_editor_core::NodeId::new("n1"), op_editor_core::NodeId::new("n2")];
+    multi.selection.set = vec![
+        op_editor_core::NodeId::new("n1"),
+        op_editor_core::NodeId::new("n2"),
+    ];
     multi.selection.anchor = op_editor_core::NodeId::new("n1");
     assert!(
         selection_handle_at_point(canvas_rect, &scene, &multi, handle_point).is_none(),

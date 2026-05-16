@@ -349,14 +349,7 @@ impl RenderBackend for WebBackend {
         self.surface.canvas().draw_path(&path, &paint);
     }
 
-    fn fill_svg_path(
-        &mut self,
-        d: &str,
-        top_left: Point2D,
-        size: f32,
-        viewbox: f32,
-        color: Color,
-    ) {
+    fn fill_svg_path(&mut self, d: &str, top_left: Point2D, size: f32, viewbox: f32, color: Color) {
         let Some(path) = skia_safe::utils::parse_path::from_svg(d) else {
             return;
         };

@@ -10,15 +10,13 @@
 
 use std::collections::BTreeMap;
 
-use op_editor_core::EditorState;
 use jian_ops_schema::node::{
-    ContainerProps, FrameNode, GroupNode, PenNode, PenNodeBase, RectangleNode,
-    TextContent, TextNode,
+    ContainerProps, FrameNode, GroupNode, PenNode, PenNodeBase, RectangleNode, TextContent,
+    TextNode,
 };
 use jian_ops_schema::sizing::SizingBehavior;
-use jian_ops_schema::variable::{
-    VariableDefinition, VariableKind, VariableScalar, VariableValue,
-};
+use jian_ops_schema::variable::{VariableDefinition, VariableKind, VariableScalar, VariableValue};
+use op_editor_core::EditorState;
 
 /// A rectangle leaf at `(x, y)` sized `w × h`.
 pub fn rect(id: &str, name: &str, x: f64, y: f64, w: f64, h: f64) -> PenNode {
@@ -47,15 +45,7 @@ pub fn rect(id: &str, name: &str, x: f64, y: f64, w: f64, h: f64) -> PenNode {
 }
 
 /// A text leaf at `(x, y)` sized `w × h`.
-pub fn text(
-    id: &str,
-    name: &str,
-    x: f64,
-    y: f64,
-    w: f64,
-    h: f64,
-    content: &str,
-) -> PenNode {
+pub fn text(id: &str, name: &str, x: f64, y: f64, w: f64, h: f64, content: &str) -> PenNode {
     PenNode::Text(TextNode {
         base: PenNodeBase {
             id: id.to_string(),
@@ -162,7 +152,15 @@ pub fn sample() -> EditorState {
     let button_rect = rect("n13", "Button background", 60.0, 130.0, 180.0, 36.0);
     let button_text = text("n14", "Click me", 76.0, 152.0, 160.0, 16.0, "Click me");
     let button = group("n12", "Button", vec![button_rect, button_text]);
-    let f = frame("n10", "Frame", 40.0, 40.0, 360.0, 240.0, vec![title, button]);
+    let f = frame(
+        "n10",
+        "Frame",
+        40.0,
+        40.0,
+        360.0,
+        240.0,
+        vec![title, button],
+    );
     let mut s = state_with(vec![f]);
     s.set_single_selection(op_editor_core::NodeId::new("n11"));
     s

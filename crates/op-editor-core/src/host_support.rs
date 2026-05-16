@@ -252,8 +252,6 @@ mod tests {
     fn replace_paths_with_polyline_rejects_empty_points() {
         let mut s = EditorState::new();
         let mut next = 100u64;
-        assert!(s
-            .replace_paths_with_polyline(&[], &[], &mut next)
-            .is_none());
+        assert!(s.replace_paths_with_polyline(&[], &[], &mut next).is_none());
     }
 }

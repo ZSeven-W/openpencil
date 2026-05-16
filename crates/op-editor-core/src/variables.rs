@@ -66,7 +66,11 @@ impl EditorState {
         if !matches!(def.kind, VariableKind::Color) {
             return false;
         }
-        write_scalar(&mut def.value, VariableScalar::Str(hex.trim().to_string()), &active);
+        write_scalar(
+            &mut def.value,
+            VariableScalar::Str(hex.trim().to_string()),
+            &active,
+        );
         true
     }
 
@@ -325,7 +329,11 @@ mod tests {
 
     fn doc_with_color_var(name: &str, hex: &str) -> EditorState {
         let mut s = state_with(vec![]);
-        s.create_variable(name, VariableKind::Color, VariableScalar::Str(hex.to_string()));
+        s.create_variable(
+            name,
+            VariableKind::Color,
+            VariableScalar::Str(hex.to_string()),
+        );
         s
     }
 
@@ -341,7 +349,11 @@ mod tests {
     #[test]
     fn create_variable_rejects_duplicate_and_empty() {
         let mut s = doc_with_color_var("brand", "#ff0000");
-        assert!(!s.create_variable("brand", VariableKind::Color, VariableScalar::Str("#fff".into())));
+        assert!(!s.create_variable(
+            "brand",
+            VariableKind::Color,
+            VariableScalar::Str("#fff".into())
+        ));
         assert!(!s.create_variable("  ", VariableKind::Number, VariableScalar::Num(1.0)));
     }
 
@@ -349,7 +361,11 @@ mod tests {
     fn create_variable_rejects_kind_mismatch() {
         let mut s = state_with(vec![]);
         // Number kind with a string default → rejected.
-        assert!(!s.create_variable("x", VariableKind::Number, VariableScalar::Str("nope".into())));
+        assert!(!s.create_variable(
+            "x",
+            VariableKind::Number,
+            VariableScalar::Str("nope".into())
+        ));
         // Color kind with a bad hex → rejected.
         assert!(!s.create_variable("c", VariableKind::Color, VariableScalar::Str("zzz".into())));
     }
@@ -404,7 +420,11 @@ mod tests {
     #[test]
     fn rename_variable_collision_rejected() {
         let mut s = doc_with_color_var("a", "#000000");
-        s.create_variable("b", VariableKind::Color, VariableScalar::Str("#ffffff".into()));
+        s.create_variable(
+            "b",
+            VariableKind::Color,
+            VariableScalar::Str("#ffffff".into()),
+        );
         assert!(!s.rename_variable("a", "b"));
     }
 
@@ -414,10 +434,16 @@ mod tests {
         // No themes declared → false.
         assert!(!s.set_active_axis_value("mode", "dark"));
         let mut themes = BTreeMap::new();
-        themes.insert("mode".to_string(), vec!["light".to_string(), "dark".to_string()]);
+        themes.insert(
+            "mode".to_string(),
+            vec!["light".to_string(), "dark".to_string()],
+        );
         s.doc.themes = Some(themes);
         assert!(s.set_active_axis_value("mode", "dark"));
-        assert_eq!(s.ui.variables.active_theme.get("mode").map(|v| v.as_str()), Some("dark"));
+        assert_eq!(
+            s.ui.variables.active_theme.get("mode").map(|v| v.as_str()),
+            Some("dark")
+        );
         // Undeclared value → false.
         assert!(!s.set_active_axis_value("mode", "sepia"));
     }
@@ -426,7 +452,10 @@ mod tests {
     fn cycle_active_axis_wraps() {
         let mut s = state_with(vec![]);
         let mut themes = BTreeMap::new();
-        themes.insert("mode".to_string(), vec!["light".to_string(), "dark".to_string()]);
+        themes.insert(
+            "mode".to_string(),
+            vec!["light".to_string(), "dark".to_string()],
+        );
         s.doc.themes = Some(themes);
         // First cycle seeds the first value.
         assert!(s.cycle_active_axis_value("mode"));
@@ -447,10 +476,17 @@ mod tests {
         // undoes for free — no separate `var_table` snapshot needed.
         let mut s = state_with(vec![]);
         s.commit_history(); // capture the pre-create state
-        assert!(s.create_variable("brand", VariableKind::Color, VariableScalar::Str("#ff0000".into())));
+        assert!(s.create_variable(
+            "brand",
+            VariableKind::Color,
+            VariableScalar::Str("#ff0000".into())
+        ));
         assert!(s.find_variable("brand").is_some());
         assert!(s.undo(), "undo must pop the pre-create snapshot");
-        assert!(s.find_variable("brand").is_none(), "undo removes the variable");
+        assert!(
+            s.find_variable("brand").is_none(),
+            "undo removes the variable"
+        );
         // Redo brings it back.
         assert!(s.redo());
         assert!(s.find_variable("brand").is_some());
@@ -464,7 +500,10 @@ mod tests {
         assert!(s.delete_variable("brand"));
         assert!(s.find_variable("brand").is_none());
         assert!(s.undo());
-        assert!(s.find_variable("brand").is_some(), "undo restores deleted var");
+        assert!(
+            s.find_variable("brand").is_some(),
+            "undo restores deleted var"
+        );
         // Rename under history.
         s.commit_history();
         assert!(s.rename_variable("brand", "primary"));
@@ -477,7 +516,10 @@ mod tests {
     fn themed_write_targets_active_theme_entry() {
         let mut s = state_with(vec![]);
         let mut themes = BTreeMap::new();
-        themes.insert("mode".to_string(), vec!["light".to_string(), "dark".to_string()]);
+        themes.insert(
+            "mode".to_string(),
+            vec!["light".to_string(), "dark".to_string()],
+        );
         s.doc.themes = Some(themes);
         // Seed a themed color variable directly.
         let mut vars = BTreeMap::new();

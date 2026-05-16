@@ -38,7 +38,10 @@ fn flex_layout_resolves_child_bounds_not_authored_coords() {
     let child = &root.children[0];
     assert_eq!(child.id, "r1");
     // Flex stretched the child to the root width.
-    assert_eq!(child.bounds.size.x, 375.0, "fill_container stretched via taffy");
+    assert_eq!(
+        child.bounds.size.x, 375.0,
+        "fill_container stretched via taffy"
+    );
     assert_eq!(child.bounds.size.y, 40.0);
 }
 
@@ -57,8 +60,14 @@ fn multi_root_designs_keep_authored_canvas_offset() {
     }"##;
     let scene = editor_state_to_layout_scene(&state_from(src));
     let kids = &scene.pages[0].children;
-    assert_eq!((kids[0].bounds.origin.x, kids[0].bounds.origin.y), (100.0, 50.0));
-    assert_eq!((kids[1].bounds.origin.x, kids[1].bounds.origin.y), (-500.0, 2000.0));
+    assert_eq!(
+        (kids[0].bounds.origin.x, kids[0].bounds.origin.y),
+        (100.0, 50.0)
+    );
+    assert_eq!(
+        (kids[1].bounds.origin.x, kids[1].bounds.origin.y),
+        (-500.0, 2000.0)
+    );
 }
 
 #[test]

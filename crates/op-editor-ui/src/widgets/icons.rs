@@ -394,24 +394,34 @@ impl Icon {
             "arrow-up-right" => Icon::ArrowUpRight,
             "rotate-cw" => Icon::RotateCw,
             "pencil" | "edit" => Icon::Pencil,
-            "copy" => Icon::Copy, "save" => Icon::Save, "download" => Icon::Download,
+            "copy" => Icon::Copy,
+            "save" => Icon::Save,
+            "download" => Icon::Download,
             "file-text" => Icon::FileText,
             "folder-open" | "folder" => Icon::FolderOpen,
-            "sparkles" => Icon::Sparkles, "diamond" => Icon::Diamond,
+            "sparkles" => Icon::Sparkles,
+            "diamond" => Icon::Diamond,
             "component" => Icon::Component,
-            "circle" => Icon::Circle, "triangle" => Icon::Triangle,
+            "circle" => Icon::Circle,
+            "triangle" => Icon::Triangle,
             "square" | "rectangle" => Icon::Square,
-            "hash" => Icon::Hash, "type" | "text" => Icon::Type,
-            "frame" => Icon::Frame, "hand" => Icon::Hand,
+            "hash" => Icon::Hash,
+            "type" | "text" => Icon::Type,
+            "frame" => Icon::Frame,
+            "hand" => Icon::Hand,
             "cursor" | "mouse-pointer" => Icon::Cursor,
-            "maximize" | "fullscreen" => Icon::Maximize, "sun" => Icon::Sun,
+            "maximize" | "fullscreen" => Icon::Maximize,
+            "sun" => Icon::Sun,
             "panel-left" => Icon::PanelLeft,
-            "braces" | "code" => Icon::Braces, "book-open" => Icon::BookOpen,
+            "braces" | "code" => Icon::Braces,
+            "book-open" => Icon::BookOpen,
             "message-square" | "chat" => Icon::MessageSquare,
             "layout-grid" => Icon::LayoutGrid,
-            "rows-3" | "rows" => Icon::Rows3, "columns-3" | "columns" => Icon::Columns3,
+            "rows-3" | "rows" => Icon::Rows3,
+            "columns-3" | "columns" => Icon::Columns3,
             "bot" => Icon::Bot,
-            "undo" | "undo-2" => Icon::Undo, "redo" | "redo-2" => Icon::Redo,
+            "undo" | "undo-2" => Icon::Undo,
+            "redo" | "redo-2" => Icon::Redo,
             "clock" | "timer" => Icon::Clock,
             "calendar" | "calendar-days" => Icon::Calendar,
             "star" | "favorite" => Icon::Star,
@@ -430,7 +440,9 @@ impl Icon {
             "help-circle" | "help" | "question" => Icon::HelpCircle,
             "chevron-left" | "back" => Icon::ChevronLeft,
             "more-vertical" | "more" | "ellipsis-vertical" | "dots-vertical" => Icon::MoreVertical,
-            "more-horizontal" | "ellipsis" | "ellipsis-horizontal" | "dots-horizontal" => Icon::MoreHorizontal,
+            "more-horizontal" | "ellipsis" | "ellipsis-horizontal" | "dots-horizontal" => {
+                Icon::MoreHorizontal
+            }
             "trending-up" | "trend-up" => Icon::TrendingUp,
             "trending-down" | "trend-down" => Icon::TrendingDown,
             "compass" | "navigation" => Icon::Compass,
@@ -465,13 +477,21 @@ impl Icon {
             "credit-card" | "card" => Icon::CreditCard,
             "x-circle" | "cancel" => Icon::XCircle,
             "align-left" | "align-start-vertical" => Icon::AlignLeft,
-            "align-center-h" | "align-center-vertical" | "align-horizontal-center" => Icon::AlignCenterH,
+            "align-center-h" | "align-center-vertical" | "align-horizontal-center" => {
+                Icon::AlignCenterH
+            }
             "align-right" | "align-end-vertical" => Icon::AlignRight,
             "align-top" | "align-start-horizontal" => Icon::AlignTop,
-            "align-center-v" | "align-center-horizontal" | "align-vertical-center" => Icon::AlignCenterV,
+            "align-center-v" | "align-center-horizontal" | "align-vertical-center" => {
+                Icon::AlignCenterV
+            }
             "align-bottom" | "align-end-horizontal" => Icon::AlignBottom,
-            "distribute-h" | "align-horizontal-distribute-center" | "distribute-horizontal" => Icon::DistributeH,
-            "distribute-v" | "align-vertical-distribute-center" | "distribute-vertical" => Icon::DistributeV,
+            "distribute-h" | "align-horizontal-distribute-center" | "distribute-horizontal" => {
+                Icon::DistributeH
+            }
+            "distribute-v" | "align-vertical-distribute-center" | "distribute-vertical" => {
+                Icon::DistributeV
+            }
             _ => return None,
         })
     }
@@ -508,8 +528,15 @@ pub fn paint_icon_font_node(
     fill: Option<Color>,
 ) {
     let size = rect.size.x.min(rect.size.y).max(0.0);
-    if size <= 0.0 { return; }
-    let color = fill.unwrap_or(Color { r: 0.39, g: 0.45, b: 0.55, a: 1.0 });
+    if size <= 0.0 {
+        return;
+    }
+    let color = fill.unwrap_or(Color {
+        r: 0.39,
+        g: 0.45,
+        b: 0.55,
+        a: 1.0,
+    });
     let top_left = Point2D::new(
         rect.origin.x + (rect.size.x - size) / 2.0,
         rect.origin.y + (rect.size.y - size) / 2.0,
@@ -643,19 +670,50 @@ mod tests {
         // 2026-05-13; extend this list when new names land.
         for name in [
             // Direct iconFontName literals
-            "calendar", "check", "chevron-down", "chevron-left", "chevron-right",
-            "clock", "map-pin", "more-vertical", "play", "search", "star", "x",
+            "calendar",
+            "check",
+            "chevron-down",
+            "chevron-left",
+            "chevron-right",
+            "clock",
+            "map-pin",
+            "more-vertical",
+            "play",
+            "search",
+            "star",
+            "x",
             // Builder defaults / indirection
-            "arrow-right", "check-circle", "alert-triangle", "alert-octagon",
-            "sticky-note", "bar-chart-2", "bold", "italic", "underline",
-            "shopping-cart", "shopping-bag", "message-circle", "rocket",
-            "menu", "credit-card",
+            "arrow-right",
+            "check-circle",
+            "alert-triangle",
+            "alert-octagon",
+            "sticky-note",
+            "bar-chart-2",
+            "bold",
+            "italic",
+            "underline",
+            "shopping-cart",
+            "shopping-bag",
+            "message-circle",
+            "rocket",
+            "menu",
+            "credit-card",
             // pencil-demo.op fixture sweep (2026-05-13) — covers
             // 56 occurrences that previously fell through.
-            "trending-up", "trending-down", "compass", "refresh-cw",
-            "layout-dashboard", "users", "package", "zap",
-            "sliders-horizontal", "activity", "loader", "focus",
-            "chart-line", "settings-2",
+            "trending-up",
+            "trending-down",
+            "compass",
+            "refresh-cw",
+            "layout-dashboard",
+            "users",
+            "package",
+            "zap",
+            "sliders-horizontal",
+            "activity",
+            "loader",
+            "focus",
+            "chart-line",
+            "settings-2",
         ] {
             assert!(
                 Icon::from_name(name).is_some(),

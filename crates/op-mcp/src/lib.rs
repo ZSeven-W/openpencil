@@ -21,87 +21,91 @@
 
 use std::collections::BTreeMap;
 
-pub mod json_serializer;
-pub mod parser;
-pub mod tools;
-pub mod read_tools;
-pub mod extra_read_tools;
-#[cfg(test)] pub mod test_fixtures;
-#[cfg(test)] mod extra_read_tools_tests;
-#[cfg(test)] mod tools_tests;
-pub mod write_tools;
 pub mod batch_design;
-pub mod scalar_vars;
+#[cfg(test)]
+mod batch_design_tests;
 pub mod component_tools;
-pub mod page_tools;
-#[cfg(test)] mod component_tools_tests;
+#[cfg(test)]
+mod component_tools_tests;
+#[cfg(test)]
+mod copy_node_tests;
+pub mod extra_read_tools;
+#[cfg(test)]
+mod extra_read_tools_tests;
+pub mod json_serializer;
 pub mod node_attr_tools;
-#[cfg(test)] mod node_attr_tools_tests;
+#[cfg(test)]
+mod node_attr_tools_tests;
+pub mod page_tools;
+pub mod parser;
+pub mod read_tools;
+#[cfg(test)]
+mod replace_node_tests;
+pub mod scalar_vars;
+#[cfg(test)]
+mod scalar_vars_tests;
 pub mod selected_ops_tools;
-#[cfg(test)] mod selected_ops_tools_tests;
-#[cfg(test)] mod write_tools_tests;
-#[cfg(test)] mod copy_node_tests;
-#[cfg(test)] mod replace_node_tests;
-#[cfg(test)] mod batch_design_tests;
-#[cfg(test)] mod scalar_vars_tests;
+#[cfg(test)]
+mod selected_ops_tools_tests;
+#[cfg(test)]
+pub mod test_fixtures;
+pub mod tools;
+#[cfg(test)]
+mod tools_tests;
+pub mod write_tools;
+#[cfg(test)]
+mod write_tools_tests;
 // Cross-cutting tests for the crate spine — stdio dispatch + parser
 // invariants + a few read-tool registry round-trips.
-#[cfg(test)] mod mcp_tests;
+#[cfg(test)]
+mod mcp_tests;
 
 // The MCP command DTO is now `op_editor_core::EditorCommand` — the
 // faithful port of the old shell-core `McpCommand`. Re-exported here
 // under both names so existing `mcp::McpCommand` / `mcp::NodeFlag`
 // call sites keep resolving while the wire layer speaks the new type.
 pub use op_editor_core::{
-    BatchInsertItem, EditorCommand, EditorCommand as McpCommand, NodeFlag,
-    VariableScalarPayload,
+    BatchInsertItem, EditorCommand, EditorCommand as McpCommand, NodeFlag, VariableScalarPayload,
 };
 
 // Re-export the public surface of submodules so callers can keep
 // using `mcp::parse_tool_call` / `mcp::GetDocumentInfo` after the
 // split. Mirrors the `widgets::*` re-export pattern.
-pub use parser::parse_tool_call;
-pub use tools::{
-    count_nodes_snapshot, document_info_snapshot, find_node_by_name_snapshot,
-    get_active_theme_snapshot, get_canvas_bounds_snapshot, get_component_snapshot,
-    get_history_depth_snapshot, get_node_parent_snapshot, get_node_snapshot,
-    get_selection_set_snapshot, get_viewport_snapshot, list_components_snapshot,
-    list_node_kinds_snapshot, list_pages_snapshot, list_variables_snapshot,
-    selection_snapshot, snapshot_layout_snapshot, CountNodes, FindNodeByName,
-    GetActiveTheme, GetCanvasBounds, GetComponent, GetDocumentInfo, GetHistoryDepth,
-    GetNode, GetNodeParent, GetSelection, GetSelectionSet, GetViewport, ListComponents,
-    ListNodeKinds, ListPages, ListVariables, NodeRecord, SnapshotLayout, VariableRecord,
-};
-pub use write_tools::{
-    copy_node_snapshot, delete_node_snapshot, insert_node_snapshot, move_node_snapshot,
-    replace_node_snapshot, set_active_axis_value_snapshot, set_variable_color_snapshot,
-    update_node_snapshot, CopyNode, DeleteNode, InsertNode, MoveNode, ReplaceNode,
-    SetActiveAxisValue, SetVariableColor, UpdateNode,
+pub use batch_design::{
+    batch_design_snapshot, design_content_snapshot, design_refine_snapshot,
+    design_skeleton_snapshot, BatchDesign, DesignContent, DesignRefine, DesignSkeleton,
 };
 pub use component_tools::{
     create_component_snapshot, delete_component_snapshot, instantiate_component_snapshot,
-    rename_component_snapshot, set_node_collapsed_snapshot, CreateComponent,
-    DeleteComponent, InstantiateComponent, RenameComponent, SetNodeCollapsed,
+    rename_component_snapshot, set_node_collapsed_snapshot, CreateComponent, DeleteComponent,
+    InstantiateComponent, RenameComponent, SetNodeCollapsed,
+};
+pub use extra_read_tools::{get_node_children_snapshot, ChildRecord, GetNodeChildren};
+pub use json_serializer::response_to_json;
+pub use node_attr_tools::{
+    set_ellipse_arc_snapshot, set_node_corner_radius_snapshot, set_node_fill_hex_snapshot,
+    set_node_flip_snapshot, set_node_font_size_snapshot, set_node_font_weight_snapshot,
+    set_node_name_snapshot, set_node_rotation_snapshot, set_node_stroke_hex_snapshot,
+    set_node_stroke_width_snapshot, set_node_text_snapshot, SetEllipseArc, SetNodeCornerRadius,
+    SetNodeFillHex, SetNodeFlip, SetNodeFontSize, SetNodeFontWeight, SetNodeName, SetNodeRotation,
+    SetNodeStrokeHex, SetNodeStrokeWidth, SetNodeText,
 };
 pub use page_tools::{
     add_page_snapshot, clear_selection_snapshot, cycle_active_axis_value_snapshot,
     delete_page_snapshot, duplicate_page_snapshot, redo_snapshot, rename_page_snapshot,
     reorder_page_snapshot, set_active_page_snapshot, set_active_tool_snapshot,
     set_node_hidden_snapshot, set_node_locked_snapshot, set_selection_set_snapshot,
-    set_selection_snapshot, set_viewport_snapshot, toggle_node_selection_snapshot,
-    undo_snapshot, AddPage, ClearSelection, CycleActiveAxisValue, DeletePage,
-    DuplicatePage, Redo, RenamePage, ReorderPage, SetActivePage, SetActiveTool,
-    SetNodeHidden, SetNodeLocked, SetSelection, SetSelectionSet, SetViewport,
-    ToggleNodeSelection, Undo,
+    set_selection_snapshot, set_viewport_snapshot, toggle_node_selection_snapshot, undo_snapshot,
+    AddPage, ClearSelection, CycleActiveAxisValue, DeletePage, DuplicatePage, Redo, RenamePage,
+    ReorderPage, SetActivePage, SetActiveTool, SetNodeHidden, SetNodeLocked, SetSelection,
+    SetSelectionSet, SetViewport, ToggleNodeSelection, Undo,
 };
-pub use node_attr_tools::{
-    set_node_corner_radius_snapshot, set_node_fill_hex_snapshot,
-    set_node_font_size_snapshot, set_node_font_weight_snapshot,
-    set_node_name_snapshot, set_node_rotation_snapshot,
-    set_node_stroke_hex_snapshot, set_node_stroke_width_snapshot,
-    set_node_text_snapshot, SetNodeCornerRadius, SetNodeFillHex, SetNodeFontSize,
-    SetNodeFontWeight, SetNodeName, SetNodeRotation, SetNodeStrokeHex,
-    SetNodeStrokeWidth, SetNodeText,
+pub use parser::parse_tool_call;
+pub use scalar_vars::{
+    create_variable_snapshot, delete_variable_snapshot, rename_variable_snapshot,
+    set_variable_boolean_snapshot, set_variable_number_snapshot, set_variable_string_snapshot,
+    CreateVariable, DeleteVariable, RenameVariable, SetVariableBoolean, SetVariableNumber,
+    SetVariableString,
 };
 pub use selected_ops_tools::{
     align_selected_snapshot, copy_selected_snapshot, cut_selected_snapshot,
@@ -111,19 +115,22 @@ pub use selected_ops_tools::{
     DuplicateSelected, GroupSelected, NudgeSelected, PasteClipboard, ReorderSelected,
     UngroupSelected,
 };
-pub use batch_design::{
-    batch_design_snapshot, design_content_snapshot, design_refine_snapshot,
-    design_skeleton_snapshot, BatchDesign, DesignContent, DesignRefine, DesignSkeleton,
+pub use tools::{
+    count_nodes_snapshot, document_info_snapshot, find_node_by_name_snapshot,
+    get_active_theme_snapshot, get_canvas_bounds_snapshot, get_component_snapshot,
+    get_history_depth_snapshot, get_node_parent_snapshot, get_node_snapshot,
+    get_selection_set_snapshot, get_viewport_snapshot, list_components_snapshot,
+    list_node_kinds_snapshot, list_pages_snapshot, list_variables_snapshot, selection_snapshot,
+    snapshot_layout_snapshot, CountNodes, FindNodeByName, GetActiveTheme, GetCanvasBounds,
+    GetComponent, GetDocumentInfo, GetHistoryDepth, GetNode, GetNodeParent, GetSelection,
+    GetSelectionSet, GetViewport, ListComponents, ListNodeKinds, ListPages, ListVariables,
+    NodeRecord, SnapshotLayout, VariableRecord,
 };
-pub use extra_read_tools::{
-    get_node_children_snapshot, ChildRecord, GetNodeChildren,
-};
-pub use json_serializer::response_to_json;
-pub use scalar_vars::{
-    create_variable_snapshot, delete_variable_snapshot, rename_variable_snapshot,
-    set_variable_boolean_snapshot, set_variable_number_snapshot,
-    set_variable_string_snapshot, CreateVariable, DeleteVariable, RenameVariable,
-    SetVariableBoolean, SetVariableNumber, SetVariableString,
+pub use write_tools::{
+    copy_node_snapshot, delete_node_snapshot, insert_node_snapshot, move_node_snapshot,
+    replace_node_snapshot, set_active_axis_value_snapshot, set_variable_color_snapshot,
+    update_node_snapshot, CopyNode, DeleteNode, InsertNode, MoveNode, ReplaceNode,
+    SetActiveAxisValue, SetVariableColor, UpdateNode,
 };
 
 /// JSON-RPC-style request id. Strings + integers both supported by

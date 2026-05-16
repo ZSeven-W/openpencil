@@ -137,9 +137,7 @@ impl EditorState {
             EditorCommand::SetNodeRotation { node_id, degrees } => {
                 self.cmd_set_node_rotation(&node_id, degrees)
             }
-            EditorCommand::SetNodeText { node_id, text } => {
-                self.cmd_set_node_text(&node_id, &text)
-            }
+            EditorCommand::SetNodeText { node_id, text } => self.cmd_set_node_text(&node_id, &text),
             EditorCommand::SetNodeCornerRadius { node_id, radius } => {
                 self.cmd_set_node_corner_radius(&node_id, radius)
             }
@@ -159,19 +157,26 @@ impl EditorState {
             EditorCommand::SetNodeFillHex { node_id, hex } => {
                 self.cmd_set_node_fill_hex(&node_id, &hex)
             }
-            EditorCommand::SetNodeName { node_id, name } => {
-                self.cmd_set_node_name(&node_id, &name)
-            }
+            EditorCommand::SetNodeName { node_id, name } => self.cmd_set_node_name(&node_id, &name),
             EditorCommand::SetNodeFlag {
                 node_id,
                 flag,
                 value,
             } => self.cmd_set_node_flag(&node_id, flag, value),
+            EditorCommand::SetNodeFlip {
+                node_id,
+                flip_x,
+                flip_y,
+            } => self.cmd_set_node_flip(&node_id, flip_x, flip_y),
+            EditorCommand::SetEllipseArc {
+                node_id,
+                start_angle,
+                sweep_angle,
+                inner_radius,
+            } => self.cmd_set_ellipse_arc(&node_id, start_angle, sweep_angle, inner_radius),
 
             // --- Variables + themes --------------------------------
-            EditorCommand::SetVariableColor { name, hex } => {
-                self.set_variable_color(&name, &hex)
-            }
+            EditorCommand::SetVariableColor { name, hex } => self.set_variable_color(&name, &hex),
             EditorCommand::SetVariableScalar { name, scalar } => match scalar {
                 VariableScalarPayload::Number(n) => self.set_variable_number(&name, n),
                 VariableScalarPayload::String(s) => self.set_variable_string(&name, s),
@@ -210,22 +215,14 @@ impl EditorState {
             EditorCommand::SetActiveAxisValue { axis, value } => {
                 self.set_active_axis_value(&axis, &value)
             }
-            EditorCommand::CycleActiveAxisValue { axis } => {
-                self.cycle_active_axis_value(&axis)
-            }
+            EditorCommand::CycleActiveAxisValue { axis } => self.cycle_active_axis_value(&axis),
 
             // --- Pages ---------------------------------------------
-            EditorCommand::SetActivePage { index } => {
-                self.set_active_page(index as usize)
-            }
+            EditorCommand::SetActivePage { index } => self.set_active_page(index as usize),
             EditorCommand::AddPage => self.add_page().is_some(),
-            EditorCommand::RenamePage { index, name } => {
-                self.rename_page(index as usize, name)
-            }
+            EditorCommand::RenamePage { index, name } => self.rename_page(index as usize, name),
             EditorCommand::DeletePage { index } => self.remove_page(index as usize),
-            EditorCommand::DuplicatePage { index } => {
-                self.duplicate_page(index as usize).is_some()
-            }
+            EditorCommand::DuplicatePage { index } => self.duplicate_page(index as usize).is_some(),
             EditorCommand::ReorderPage { from, to } => {
                 self.reorder_page(from as usize, to as usize)
             }
@@ -239,9 +236,7 @@ impl EditorState {
                 // Scoped to the active page — parity with shell-core,
                 // which rejected off-page ids so later reads stay
                 // consistent.
-                if !node_id.is_real()
-                    || find_node(self.active_children(), &node_id).is_none()
-                {
+                if !node_id.is_real() || find_node(self.active_children(), &node_id).is_none() {
                     return false;
                 }
                 self.set_single_selection(node_id);
@@ -252,10 +247,7 @@ impl EditorState {
                 // off-page ids are dropped silently.
                 let resolved: Vec<NodeId> = node_ids
                     .into_iter()
-                    .filter(|id| {
-                        id.is_real()
-                            && find_node(self.active_children(), id).is_some()
-                    })
+                    .filter(|id| id.is_real() && find_node(self.active_children(), id).is_some())
                     .collect();
                 if resolved.is_empty() {
                     self.clear_selection();
@@ -266,9 +258,7 @@ impl EditorState {
                 true
             }
             EditorCommand::ToggleNodeSelection { node_id } => {
-                if !node_id.is_real()
-                    || find_node(self.active_children(), &node_id).is_none()
-                {
+                if !node_id.is_real() || find_node(self.active_children(), &node_id).is_none() {
                     return false;
                 }
                 self.toggle_selection(node_id);
@@ -393,8 +383,7 @@ impl EditorState {
                     changed = true;
                 }
                 if let Some(z) = zoom_percent {
-                    let zoom = (z as f32 / 100.0)
-                        .clamp(Viewport::MIN_ZOOM, Viewport::MAX_ZOOM);
+                    let zoom = (z as f32 / 100.0).clamp(Viewport::MIN_ZOOM, Viewport::MAX_ZOOM);
                     self.viewport.zoom = zoom;
                     changed = true;
                 }

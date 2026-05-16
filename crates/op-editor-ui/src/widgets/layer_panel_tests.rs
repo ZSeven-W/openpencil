@@ -7,9 +7,9 @@
 
 use super::layer_panel::*;
 use super::Widget;
-use op_editor_core::NodeId;
 use crate::{Point2D, Rect};
 use op_editor_core::EditorState;
+use op_editor_core::NodeId;
 
 /// Build an `EditorState` from a canonical `.op` JSON string.
 fn state_from(src: &str) -> EditorState {

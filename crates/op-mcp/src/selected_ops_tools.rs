@@ -170,10 +170,7 @@ impl McpTool for ReorderSelected {
         };
         let mut out = BTreeMap::new();
         out.insert("wrote".into(), "true".into());
-        ToolOutcome::OkWithCommand(
-            out,
-            EditorCommand::ReorderSelected { direction: dir },
-        )
+        ToolOutcome::OkWithCommand(out, EditorCommand::ReorderSelected { direction: dir })
     }
 }
 

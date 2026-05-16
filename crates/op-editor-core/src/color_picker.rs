@@ -208,12 +208,11 @@ impl EditorState {
         } else {
             let sel = self.selection.anchor.clone();
             let snap_children = snapshot_active_children(&snap);
-            let before = crate::walkers::find_node(snap_children, &sel).and_then(|n| {
-                match state.target {
+            let before =
+                crate::walkers::find_node(snap_children, &sel).and_then(|n| match state.target {
                     ColorTarget::Fill => first_solid_fill_hex(n).map(str::to_string),
                     ColorTarget::Stroke => first_solid_stroke_hex(n).map(str::to_string),
-                }
-            });
+                });
             let after = self.selected_node().and_then(|n| match state.target {
                 ColorTarget::Fill => first_solid_fill_hex(n).map(str::to_string),
                 ColorTarget::Stroke => first_solid_stroke_hex(n).map(str::to_string),
@@ -281,7 +280,9 @@ fn resolve_snapshot_value<'a>(
 
 /// The active page's children inside a history snapshot — mirrors
 /// [`EditorState::active_children`] but reads from a snapshot.
-fn snapshot_active_children(snap: &crate::history::EditorSnapshot) -> &[jian_ops_schema::node::PenNode] {
+fn snapshot_active_children(
+    snap: &crate::history::EditorSnapshot,
+) -> &[jian_ops_schema::node::PenNode] {
     match snap.doc.pages.as_ref() {
         Some(pages) => match pages.get(snap.active_page_index) {
             Some(page) => &page.children,
@@ -489,7 +490,10 @@ mod tests {
         assert!(s.open_color_picker_for_variable("brand", 100.0));
         let state = s.ui.color_picker.as_ref().expect("picker open");
         assert_eq!(state.variable.as_deref(), Some("brand"));
-        assert!(s.ui.pending_color_history.is_some(), "undo snapshot captured");
+        assert!(
+            s.ui.pending_color_history.is_some(),
+            "undo snapshot captured"
+        );
         // #ff8800 (orange) → hue near 32°.
         assert!(state.hue > 20.0 && state.hue < 45.0, "hue {}", state.hue);
         assert!(state.sat > 0.95, "sat {}", state.sat);

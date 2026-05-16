@@ -22,13 +22,13 @@ use std::collections::BTreeMap;
 use jian_core::document::NodeTree;
 use jian_core::layout::LayoutEngine;
 use jian_ops_schema::{
-    node::{
-        EllipseNode, FrameNode, FontWeight, GroupNode, IconFontNode, ImageNode, LineNode,
-        PathNode, PenNode, PolygonNode, RectangleNode, TextNode, TextInputNode,
-    },
     node::base::PenNodeBase,
     node::container::CornerRadius,
     node::text::TextContent,
+    node::{
+        EllipseNode, FontWeight, FrameNode, GroupNode, IconFontNode, ImageNode, LineNode, PathNode,
+        PenNode, PolygonNode, RectangleNode, TextInputNode, TextNode,
+    },
     sizing::SizingBehavior,
     style::{PenFill, PenStroke, StrokeThickness},
     PenDocument,
@@ -228,10 +228,7 @@ fn root_authored_origin(n: &PenNode) -> (f32, f32) {
         PenNode::IconFont(i) => &i.base,
         PenNode::Ref(r) => &r.base,
     };
-    (
-        base.x.unwrap_or(0.0) as f32,
-        base.y.unwrap_or(0.0) as f32,
-    )
+    (base.x.unwrap_or(0.0) as f32, base.y.unwrap_or(0.0) as f32)
 }
 
 /// Choose the (available_width, available_height) the layout engine
@@ -322,8 +319,16 @@ fn absolutize_path_anchors(p: &mut NodePayload, path: &PathNode) {
     let closed = path.closed.unwrap_or(false);
     let bounds = path_bounds_from_anchors(path.anchors.as_deref().unwrap_or(&[]), closed);
     let (min_x, min_y, native_w, native_h) = bounds;
-    let sx = if native_w > 0.01 && p.w > 0.0 { p.w / native_w } else { 1.0 };
-    let sy = if native_h > 0.01 && p.h > 0.0 { p.h / native_h } else { 1.0 };
+    let sx = if native_w > 0.01 && p.w > 0.0 {
+        p.w / native_w
+    } else {
+        1.0
+    };
+    let sy = if native_h > 0.01 && p.h > 0.0 {
+        p.h / native_h
+    } else {
+        1.0
+    };
     let (ox, oy) = (p.x, p.y);
     for pt in &mut p.points {
         pt[0] = ox + (pt[0] - min_x) * sx;
@@ -366,7 +371,12 @@ fn sizing_to_f32(s: &Option<SizingBehavior>) -> f32 {
 
 fn frame_to_payload(n: &FrameNode, _rects: &BTreeMap<String, [f32; 4]>) -> NodePayload {
     let mut p = base_payload(&n.base, "frame");
-    apply_container_style(&mut p, n.container.fill.as_deref(), n.container.stroke.as_ref(), n.container.corner_radius.as_ref());
+    apply_container_style(
+        &mut p,
+        n.container.fill.as_deref(),
+        n.container.stroke.as_ref(),
+        n.container.corner_radius.as_ref(),
+    );
     p.children = n
         .children
         .as_deref()
@@ -379,7 +389,12 @@ fn frame_to_payload(n: &FrameNode, _rects: &BTreeMap<String, [f32; 4]>) -> NodeP
 
 fn group_to_payload(n: &GroupNode, _rects: &BTreeMap<String, [f32; 4]>) -> NodePayload {
     let mut p = base_payload(&n.base, "group");
-    apply_container_style(&mut p, n.container.fill.as_deref(), n.container.stroke.as_ref(), n.container.corner_radius.as_ref());
+    apply_container_style(
+        &mut p,
+        n.container.fill.as_deref(),
+        n.container.stroke.as_ref(),
+        n.container.corner_radius.as_ref(),
+    );
     p.children = n
         .children
         .as_deref()
@@ -392,7 +407,12 @@ fn group_to_payload(n: &GroupNode, _rects: &BTreeMap<String, [f32; 4]>) -> NodeP
 
 fn rect_to_payload(n: &RectangleNode, _rects: &BTreeMap<String, [f32; 4]>) -> NodePayload {
     let mut p = base_payload(&n.base, "rect");
-    apply_container_style(&mut p, n.container.fill.as_deref(), n.container.stroke.as_ref(), n.container.corner_radius.as_ref());
+    apply_container_style(
+        &mut p,
+        n.container.fill.as_deref(),
+        n.container.stroke.as_ref(),
+        n.container.corner_radius.as_ref(),
+    );
     p.children = n
         .children
         .as_deref()
@@ -474,10 +494,7 @@ fn path_to_payload(n: &PathNode) -> NodePayload {
     p.fill_type = first_fill_type(n.fill.as_deref());
     p.stroke = stroke_to_payload(n.stroke.as_ref());
     if let Some(anchors) = &n.anchors {
-        p.points = anchors
-            .iter()
-            .map(|a| [a.x as f32, a.y as f32])
-            .collect();
+        p.points = anchors.iter().map(|a| [a.x as f32, a.y as f32]).collect();
         // Anchor-bounded path: when width/height weren't authored,
         // derive size from the anchor bbox span (max - min) — using
         // raw `max` assumed min=0, which is wrong for paths whose
@@ -679,7 +696,9 @@ fn first_solid_color(fills: Option<&[PenFill]>) -> Option<[f32; 4]> {
 }
 
 fn first_fill_type(fills: Option<&[PenFill]>) -> String {
-    let Some(fills) = fills else { return "solid".into() };
+    let Some(fills) = fills else {
+        return "solid".into();
+    };
     match fills.first() {
         Some(PenFill::LinearGradient(_)) => "linear".into(),
         Some(PenFill::RadialGradient(_)) => "radial".into(),

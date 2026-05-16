@@ -114,25 +114,28 @@ impl<'a> AgentSettingsPanel<'a> {
                     }
                 }
             }
-            AgentSettingsTab::Mcp => match agent_settings_mcp::hit_test(content_rect(panel), scrolled) {
-                McpHit::ToggleServer => return AgentSettingsHit::ToggleMcpServer,
-                McpHit::ToggleCli(cli) => return AgentSettingsHit::ToggleMcpCli(cli),
-                McpHit::FocusPort => return AgentSettingsHit::FocusMcpPort,
-                McpHit::None => {}
-            },
-            AgentSettingsTab::Images => match agent_settings_images::hit_test(
-                content_rect(panel),
-                &self.settings,
-                scrolled,
-            ) {
-                ImagesHit::ToggleAdvanced => return AgentSettingsHit::ToggleImagesAdvanced,
-                ImagesHit::TestSearch => return AgentSettingsHit::TestImageSearch,
-                ImagesHit::AddGenConfig => return AgentSettingsHit::AddGenConfig,
-                ImagesHit::None => {}
-            },
-            AgentSettingsTab::System => match agent_settings_system::hit_test(content_rect(panel), scrolled) {
-                SystemHit::None => {}
-            },
+            AgentSettingsTab::Mcp => {
+                match agent_settings_mcp::hit_test(content_rect(panel), scrolled) {
+                    McpHit::ToggleServer => return AgentSettingsHit::ToggleMcpServer,
+                    McpHit::ToggleCli(cli) => return AgentSettingsHit::ToggleMcpCli(cli),
+                    McpHit::FocusPort => return AgentSettingsHit::FocusMcpPort,
+                    McpHit::None => {}
+                }
+            }
+            AgentSettingsTab::Images => {
+                match agent_settings_images::hit_test(content_rect(panel), &self.settings, scrolled)
+                {
+                    ImagesHit::ToggleAdvanced => return AgentSettingsHit::ToggleImagesAdvanced,
+                    ImagesHit::TestSearch => return AgentSettingsHit::TestImageSearch,
+                    ImagesHit::AddGenConfig => return AgentSettingsHit::AddGenConfig,
+                    ImagesHit::None => {}
+                }
+            }
+            AgentSettingsTab::System => {
+                match agent_settings_system::hit_test(content_rect(panel), scrolled) {
+                    SystemHit::None => {}
+                }
+            }
         }
         AgentSettingsHit::Inside
     }
@@ -231,9 +234,15 @@ fn paint_panel(
     cx.backend.translate(Point2D::new(0.0, -settings.scroll_y));
     match settings.tab {
         AgentSettingsTab::Agents => paint_agents_tab(cx, theme, settings, _ui, content_rect),
-        AgentSettingsTab::Mcp => agent_settings_mcp::paint_mcp_tab(cx, theme, settings, _ui, content_rect),
-        AgentSettingsTab::Images => agent_settings_images::paint_images_tab(cx, theme, settings, _ui, content_rect),
-        AgentSettingsTab::System => agent_settings_system::paint_system_tab(cx, theme, settings, _ui, content_rect),
+        AgentSettingsTab::Mcp => {
+            agent_settings_mcp::paint_mcp_tab(cx, theme, settings, _ui, content_rect)
+        }
+        AgentSettingsTab::Images => {
+            agent_settings_images::paint_images_tab(cx, theme, settings, _ui, content_rect)
+        }
+        AgentSettingsTab::System => {
+            agent_settings_system::paint_system_tab(cx, theme, settings, _ui, content_rect)
+        }
     }
     cx.backend.restore();
 }
@@ -451,10 +460,8 @@ fn paint_section_header_inset(
             to_jian(theme.primary),
             Point2D::new(0.0, 0.0),
         );
-        cx.backend.draw_text(
-            &act,
-            Point2D::new(x + w - right_inset - action_w, y + 18.0),
-        );
+        cx.backend
+            .draw_text(&act, Point2D::new(x + w - right_inset - action_w, y + 18.0));
     }
     y + 28.0
 }
@@ -595,7 +602,12 @@ fn paint_agent_card(
     if connected {
         if hovered {
             let btn = disconnect_btn_rect_at(card);
-            let red = Color { r: 0.93, g: 0.30, b: 0.30, a: 1.0 };
+            let red = Color {
+                r: 0.93,
+                g: 0.30,
+                b: 0.30,
+                a: 1.0,
+            };
             cx.backend.fill_round_rect(btn, 6.0, theme.muted);
             cx.backend.stroke_round_rect(btn, 6.0, red, 1.0);
             let label = t_settings(ui, "settings.agents.disconnect");
@@ -755,6 +767,8 @@ fn to_jian(c: Color) -> jian_core::scene::Color {
     jian_core::scene::Color::rgba(ch(c.r), ch(c.g), ch(c.b), ch(c.a))
 }
 
-pub fn drag_for_hit(_hit: AgentSettingsHit) -> Option<op_editor_core::agent_settings::AgentSettingsDrag> {
+pub fn drag_for_hit(
+    _hit: AgentSettingsHit,
+) -> Option<op_editor_core::agent_settings::AgentSettingsDrag> {
     None
 }

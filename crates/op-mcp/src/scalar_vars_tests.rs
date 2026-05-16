@@ -174,7 +174,12 @@ fn delete_variable_command_drops_it() {
 #[test]
 fn rename_variable_command_guards_collisions() {
     let mut s = state_with_var(VariableKind::Number, "old");
-    add_variable(&mut s, "taken", VariableKind::Number, VariableScalar::Num(8.0));
+    add_variable(
+        &mut s,
+        "taken",
+        VariableKind::Number,
+        VariableScalar::Num(8.0),
+    );
     // Collision with an existing different variable rejects.
     assert!(!s.apply(EditorCommand::RenameVariable {
         old_name: "old".into(),

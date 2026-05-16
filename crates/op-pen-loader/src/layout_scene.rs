@@ -22,10 +22,8 @@
 //! struct, kind / fill-type string → enum).
 
 use op_editor_ui::layout_scene::NodeKind;
+use op_editor_ui::layout_scene::{LayoutScene, SceneFillType, SceneNode, ScenePage, SceneStroke};
 use op_editor_ui::scene_vars::VariableTable;
-use op_editor_ui::layout_scene::{
-    LayoutScene, SceneFillType, SceneNode, SceneStroke, ScenePage,
-};
 use op_editor_ui::Color;
 
 use crate::editor_state_var_table;
@@ -100,7 +98,10 @@ fn node_payload_to_scene(node: &NodePayload, var_table: &VariableTable) -> Scene
             .fill_for(&node_id)
             .or_else(|| node.fill.map(array_to_color)),
         fill_type: str_to_scene_fill_type(&node.fill_type),
-        stroke: node.stroke.as_ref().map(|s| scene_stroke(s, &node_id, var_table)),
+        stroke: node
+            .stroke
+            .as_ref()
+            .map(|s| scene_stroke(s, &node_id, var_table)),
         text: node.text.clone(),
         font_size: node.font_size,
         font_weight: node.font_weight,

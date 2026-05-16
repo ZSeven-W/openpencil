@@ -6,9 +6,7 @@
 //! of each handler. Every mutation flags `editor_state` so the next
 //! refresh re-derives.
 
-use super::helpers::{
-    resize_bounds, PANEL_MAX_WIDTH, PANEL_MIN_WIDTH,
-};
+use super::helpers::{resize_bounds, PANEL_MAX_WIDTH, PANEL_MIN_WIDTH};
 use super::{PanelResizeKind, WidgetHostNative};
 use op_editor_ui::{Point2D, Rect};
 
@@ -117,8 +115,7 @@ impl WidgetHostNative {
         // render scene. Refresh it once up front so a mutation since the
         // last paint can't leave any of them hit-testing stale geometry.
         self.refresh_layout_scene();
-        if self.editor_state.editor_ui.agent_settings_open
-            && self.update_agent_settings_hover(x, y)
+        if self.editor_state.editor_ui.agent_settings_open && self.update_agent_settings_hover(x, y)
         {
             return true;
         }
@@ -174,10 +171,7 @@ impl WidgetHostNative {
             self.refresh_layout_scene();
             let top_bar_rect = Rect {
                 origin: Point2D::new(0.0, 0.0),
-                size: Point2D::new(
-                    self.last_viewport_w,
-                    op_editor_ui::widgets::TOP_BAR_HEIGHT,
-                ),
+                size: Point2D::new(self.last_viewport_w, op_editor_ui::widgets::TOP_BAR_HEIGHT),
             };
             let anchor = TopBar::file_menu_rect(top_bar_rect);
             let now_secs = std::time::SystemTime::now()
@@ -188,7 +182,8 @@ impl WidgetHostNative {
             let panel = menu.rect_at(anchor);
             let new_hover = menu.hovered_at(panel, Point2D::new(x, y));
             // shell-core `FileMenuChoice` option → op-editor-core.
-            let new_hover_ec = new_hover.map(op_editor_ui::widgets::editor_state_ext::file_menu_choice);
+            let new_hover_ec =
+                new_hover.map(op_editor_ui::widgets::editor_state_ext::file_menu_choice);
             if new_hover_ec != self.editor_state.editor_ui.file_menu_hover {
                 self.editor_state.editor_ui.file_menu_hover = new_hover_ec;
                 self.mark_dirty();
@@ -233,7 +228,8 @@ impl WidgetHostNative {
             let dx = (x - drag.start_screen_x) / zoom;
             let dy = (y - drag.start_screen_y) / zoom;
             let new_bounds = resize_bounds(drag.start_bounds, drag.handle, dx, dy);
-            self.editor_state.set_selected_bounds(rect_to_doc_rect(new_bounds));
+            self.editor_state
+                .set_selected_bounds(rect_to_doc_rect(new_bounds));
             self.mark_dirty();
             return true;
         }
@@ -253,7 +249,8 @@ impl WidgetHostNative {
             let w = (drag.start_doc_x - cur.x).abs().max(min_w);
             let h = (drag.start_doc_y - cur.y).abs().max(min_h);
             let new_bounds = Rect::xywh(min_x, min_y, w, h);
-            self.editor_state.set_selected_bounds(rect_to_doc_rect(new_bounds));
+            self.editor_state
+                .set_selected_bounds(rect_to_doc_rect(new_bounds));
             self.mark_dirty();
             return true;
         }
@@ -324,13 +321,11 @@ impl WidgetHostNative {
             let dx = x - resize.start_x;
             match resize.kind {
                 PanelResizeKind::LayerRight => {
-                    let new_w =
-                        (resize.start_width + dx).clamp(PANEL_MIN_WIDTH, PANEL_MAX_WIDTH);
+                    let new_w = (resize.start_width + dx).clamp(PANEL_MIN_WIDTH, PANEL_MAX_WIDTH);
                     self.editor_state.editor_ui.layer_panel_width = new_w;
                 }
                 PanelResizeKind::PropertyLeft => {
-                    let new_w =
-                        (resize.start_width - dx).clamp(PANEL_MIN_WIDTH, PANEL_MAX_WIDTH);
+                    let new_w = (resize.start_width - dx).clamp(PANEL_MIN_WIDTH, PANEL_MAX_WIDTH);
                     self.editor_state.editor_ui.property_panel_width = new_w;
                 }
             }

@@ -1,6 +1,5 @@
 use super::*;
 
-
 fn load(src: &str) -> LoadedDoc {
     let r = jian_ops_schema::load_str(src).unwrap();
     pen_document_to_payload(&r.value)
@@ -197,7 +196,10 @@ fn space_between_preserves_authored_positions() {
     let top = &sidebar.children[0];
     let bot = &sidebar.children[1];
     assert_eq!(top.y, 0.0, "top authored at y=0");
-    assert_eq!(bot.y, 700.0, "bottom authored at y=700 must NOT be restacked");
+    assert_eq!(
+        bot.y, 700.0,
+        "bottom authored at y=700 must NOT be restacked"
+    );
 }
 
 #[test]
@@ -305,7 +307,11 @@ fn shape_nodes_keep_authored_size() {
     let poly = &kids[1];
     let pa = &kids[2];
     assert_eq!((e.w, e.h), (80.0, 40.0), "ellipse keeps authored size");
-    assert_eq!((poly.w, poly.h), (60.0, 60.0), "polygon keeps authored size");
+    assert_eq!(
+        (poly.w, poly.h),
+        (60.0, 60.0),
+        "polygon keeps authored size"
+    );
     assert_eq!((pa.w, pa.h), (120.0, 50.0), "path keeps authored size");
 }
 
@@ -381,11 +387,7 @@ fn pencil_demo_op_fixture_loads() {
     // authored width/height on shapes.
     let mut ellipse_zero = 0usize;
     let mut ellipse_total = 0usize;
-    fn walk_ellipses(
-        nodes: &[crate::payload::NodePayload],
-        total: &mut usize,
-        zero: &mut usize,
-    ) {
+    fn walk_ellipses(nodes: &[crate::payload::NodePayload], total: &mut usize, zero: &mut usize) {
         for n in nodes {
             if n.kind == "ellipse" {
                 *total += 1;

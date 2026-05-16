@@ -12,9 +12,9 @@
 //! (`replace_paths_with_polyline`) so the canonical tree is never
 //! edited directly.
 
-use op_editor_ui::layout_scene::NodeKind;
 use op_editor_core::BooleanOp;
 use op_editor_ui::layout_scene::LayoutScene;
+use op_editor_ui::layout_scene::NodeKind;
 use op_editor_ui::Point2D;
 use skia_safe::{Path as SkPath, PathBuilder, PathOp};
 
@@ -154,8 +154,7 @@ mod tests {
     fn union_of_two_overlapping_squares_yields_a_polyline() {
         let scene = scene_with_two_squares();
         let sel = vec!["n10".to_string(), "n11".to_string()];
-        let r = compute_boolean_op(&scene, &sel, BooleanOp::Union)
-            .expect("union computes");
+        let r = compute_boolean_op(&scene, &sel, BooleanOp::Union).expect("union computes");
         assert_eq!(r.source_ids.len(), 2);
         assert!(!r.points.is_empty(), "union must yield points");
     }
@@ -164,8 +163,7 @@ mod tests {
     fn intersect_keeps_overlap_region() {
         let scene = scene_with_two_squares();
         let sel = vec!["n10".to_string(), "n11".to_string()];
-        let r = compute_boolean_op(&scene, &sel, BooleanOp::Intersect)
-            .expect("intersect computes");
+        let r = compute_boolean_op(&scene, &sel, BooleanOp::Intersect).expect("intersect computes");
         // Intersection covers the 10..20 × 10..20 square.
         let min_x = r.points.iter().map(|p| p.0).fold(f64::INFINITY, f64::min);
         let max_x = r
@@ -191,8 +189,7 @@ mod tests {
         scene.pages[0].children.push(r);
         let sel = vec!["n10".to_string(), "n11".to_string(), "n12".to_string()];
         // Still has 2 Path nodes — should succeed; Rect is ignored.
-        let res = compute_boolean_op(&scene, &sel, BooleanOp::Union)
-            .expect("union computes");
+        let res = compute_boolean_op(&scene, &sel, BooleanOp::Union).expect("union computes");
         assert_eq!(res.source_ids.len(), 2);
     }
 }

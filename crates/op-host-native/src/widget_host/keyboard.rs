@@ -7,8 +7,8 @@
 //! the paint snapshot dirty.
 
 use super::WidgetHostNative;
-use op_editor_core::ui_draft::PropertyFocus;
 use op_editor_core::editor_ui_state::VariableRowFocus;
+use op_editor_core::ui_draft::PropertyFocus;
 
 impl WidgetHostNative {
     /// Typed-char router: settings → rename → text-edit → variable
@@ -16,9 +16,7 @@ impl WidgetHostNative {
     pub fn apply_text(&mut self, c: char) -> bool {
         // Settings input owns the keyboard while focused.
         if self.editor_state.editor_ui.agent_settings.focus.is_some() {
-            if c.is_ascii_digit()
-                && self.editor_state.editor_ui.settings_input_draft.len() < 5
-            {
+            if c.is_ascii_digit() && self.editor_state.editor_ui.settings_input_draft.len() < 5 {
                 self.editor_state.editor_ui.settings_input_draft.push(c);
                 self.mark_dirty();
                 return true;
@@ -49,14 +47,8 @@ impl WidgetHostNative {
             let allowed = match focus {
                 VariableRowFocus::Number(_) => {
                     c.is_ascii_digit()
-                        || (c == '-'
-                            && self.editor_state.ui.property_input_draft.is_empty())
-                        || (c == '.'
-                            && !self
-                                .editor_state
-                                .ui
-                                .property_input_draft
-                                .contains('.'))
+                        || (c == '-' && self.editor_state.ui.property_input_draft.is_empty())
+                        || (c == '.' && !self.editor_state.ui.property_input_draft.contains('.'))
                 }
                 VariableRowFocus::String(_) => !c.is_control(),
             };
@@ -70,17 +62,11 @@ impl WidgetHostNative {
         }
         if let Some(focus) = self.editor_state.ui.property_focus {
             self.editor_state.ui.property_draft_select_all = false;
-            let is_hex_focus =
-                matches!(focus, PropertyFocus::FillHex | PropertyFocus::StrokeHex);
+            let is_hex_focus = matches!(focus, PropertyFocus::FillHex | PropertyFocus::StrokeHex);
             let allowed = if is_hex_focus {
                 self.editor_state.ui.property_input_draft.len() < 7
                     && (c.is_ascii_hexdigit()
-                        || (c == '#'
-                            && self
-                                .editor_state
-                                .ui
-                                .property_input_draft
-                                .is_empty()))
+                        || (c == '#' && self.editor_state.ui.property_input_draft.is_empty()))
             } else {
                 c.is_ascii_digit()
                     || (c == '-' && self.editor_state.ui.property_input_draft.is_empty())
@@ -92,11 +78,7 @@ impl WidgetHostNative {
                                 | PropertyFocus::PositionR
                                 | PropertyFocus::StrokeWidth
                         )
-                        && !self
-                            .editor_state
-                            .ui
-                            .property_input_draft
-                            .contains('.'))
+                        && !self.editor_state.ui.property_input_draft.contains('.'))
             };
             if !allowed {
                 return false;

@@ -271,11 +271,20 @@ fn paint_centered_label(
     rect: Rect,
 ) {
     let w = backend.measure_text(text, size);
-    let layout = TextLayout::single_run(text, FONT_FAMILY, size, to_jian(color), Point2D::new(0.0, 0.0));
+    let layout = TextLayout::single_run(
+        text,
+        FONT_FAMILY,
+        size,
+        to_jian(color),
+        Point2D::new(0.0, 0.0),
+    );
     let y_offset = (rect.size.y - size) / 2.0 + size * 0.75;
     backend.draw_text(
         &layout,
-        Point2D::new(rect.origin.x + (rect.size.x - w) / 2.0, rect.origin.y + y_offset),
+        Point2D::new(
+            rect.origin.x + (rect.size.x - w) / 2.0,
+            rect.origin.y + y_offset,
+        ),
     );
 }
 

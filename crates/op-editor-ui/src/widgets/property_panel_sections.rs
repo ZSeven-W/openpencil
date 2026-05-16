@@ -3,7 +3,6 @@
 //! ceiling. Each `paint_*_section` returns the y-coordinate just
 //! below itself so the parent can chain them.
 
-use op_editor_core::PropertyFocus;
 use crate::theme::Theme;
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::property_panel::NodeSnapshot;
@@ -15,6 +14,7 @@ use crate::widgets::property_panel_inputs::{
 };
 use crate::widgets::PaintCx;
 use crate::{Color, Point2D, Rect, TextLayout};
+use op_editor_core::PropertyFocus;
 
 // Re-exports — fill paint moved to `property_panel_fill.rs`,
 // layout walkers + visibility flags to `property_panel_layout.rs`.

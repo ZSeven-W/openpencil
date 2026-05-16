@@ -167,9 +167,18 @@ fn run_stdio_emits_error_when_parse_fails_so_clients_dont_hang() {
     let mut writer: Vec<u8> = Vec::new();
     run_stdio(&r, &mut reader, &mut writer).unwrap();
     let out = String::from_utf8(writer).unwrap();
-    assert!(out.contains(r#""id":42"#), "response must echo the request id: {out}");
-    assert!(out.contains(r#""error""#), "response must be a typed error: {out}");
-    assert!(out.contains("malformed tool call"), "error message names the cause: {out}");
+    assert!(
+        out.contains(r#""id":42"#),
+        "response must echo the request id: {out}"
+    );
+    assert!(
+        out.contains(r#""error""#),
+        "response must be a typed error: {out}"
+    );
+    assert!(
+        out.contains("malformed tool call"),
+        "error message names the cause: {out}"
+    );
 }
 
 #[test]
@@ -182,7 +191,10 @@ fn run_stdio_skips_lines_without_an_id() {
     let mut writer: Vec<u8> = Vec::new();
     run_stdio(&r, &mut reader, &mut writer).unwrap();
     let out = String::from_utf8(writer).unwrap();
-    assert!(out.is_empty(), "id-less lines must be dropped silently: {out:?}");
+    assert!(
+        out.is_empty(),
+        "id-less lines must be dropped silently: {out:?}"
+    );
 }
 
 #[test]
@@ -281,10 +293,18 @@ fn json_escape_handles_special_chars() {
 #[test]
 fn get_document_info_reports_snapshot_via_registry() {
     use crate::test_fixtures::frame;
-    let f = frame("n10", "F", 0.0, 0.0, 200.0, 100.0, vec![
-        crate::test_fixtures::rect("n11", "a", 0.0, 0.0, 10.0, 10.0),
-        crate::test_fixtures::rect("n12", "b", 20.0, 0.0, 10.0, 10.0),
-    ]);
+    let f = frame(
+        "n10",
+        "F",
+        0.0,
+        0.0,
+        200.0,
+        100.0,
+        vec![
+            crate::test_fixtures::rect("n11", "a", 0.0, 0.0, 10.0, 10.0),
+            crate::test_fixtures::rect("n12", "b", 20.0, 0.0, 10.0, 10.0),
+        ],
+    );
     let s = state_with(vec![f]);
     let info = document_info_snapshot(&s);
     // Frame + 2 children = 3 nodes total.
@@ -432,9 +452,15 @@ fn parse_tool_call_handles_missing_params() {
 #[test]
 fn parse_tool_call_rejects_structured_arg_values() {
     let with_obj = r#"{"id":1,"method":"x","params":{"keep":"yes","nested":{"a":1}}}"#;
-    assert!(parse_tool_call(with_obj).is_none(), "object value must reject the parse");
+    assert!(
+        parse_tool_call(with_obj).is_none(),
+        "object value must reject the parse"
+    );
     let with_arr = r#"{"id":1,"method":"x","params":{"keep":"yes","arr":[1,2]}}"#;
-    assert!(parse_tool_call(with_arr).is_none(), "array value must reject the parse");
+    assert!(
+        parse_tool_call(with_arr).is_none(),
+        "array value must reject the parse"
+    );
     let ok = r#"{"id":1,"method":"x","params":{"keep":"yes","also":"ok"}}"#;
     let call = parse_tool_call(ok).expect("scalar-only must parse");
     assert_eq!(call.arguments.get("keep"), Some(&"yes".to_string()));
@@ -444,9 +470,15 @@ fn parse_tool_call_rejects_structured_arg_values() {
 #[test]
 fn parse_tool_call_rejects_structured_values_in_mcp_tools_call_shape() {
     let with_obj = r#"{"id":1,"method":"tools/call","params":{"name":"get_node","arguments":{"node_id":"42","nested":{"a":1}}}}"#;
-    assert!(parse_tool_call(with_obj).is_none(), "object value inside arguments must reject");
+    assert!(
+        parse_tool_call(with_obj).is_none(),
+        "object value inside arguments must reject"
+    );
     let with_arr = r#"{"id":1,"method":"tools/call","params":{"name":"get_node","arguments":{"node_id":"42","arr":[1]}}}"#;
-    assert!(parse_tool_call(with_arr).is_none(), "array value inside arguments must reject");
+    assert!(
+        parse_tool_call(with_arr).is_none(),
+        "array value inside arguments must reject"
+    );
     let ok = r#"{"id":1,"method":"tools/call","params":{"name":"get_node","arguments":{"node_id":"42"}}}"#;
     let call = parse_tool_call(ok).expect("scalar-only must parse");
     assert_eq!(call.tool, "get_node");
@@ -455,12 +487,22 @@ fn parse_tool_call_rejects_structured_values_in_mcp_tools_call_shape() {
 
 #[test]
 fn parse_tool_call_rejects_non_object_arguments_field() {
-    let str_args = r#"{"id":1,"method":"tools/call","params":{"name":"get_node","arguments":"oops"}}"#;
-    assert!(parse_tool_call(str_args).is_none(), "string `arguments` must reject");
+    let str_args =
+        r#"{"id":1,"method":"tools/call","params":{"name":"get_node","arguments":"oops"}}"#;
+    assert!(
+        parse_tool_call(str_args).is_none(),
+        "string `arguments` must reject"
+    );
     let num_args = r#"{"id":1,"method":"tools/call","params":{"name":"get_node","arguments":42}}"#;
-    assert!(parse_tool_call(num_args).is_none(), "number `arguments` must reject");
+    assert!(
+        parse_tool_call(num_args).is_none(),
+        "number `arguments` must reject"
+    );
     let arr_args = r#"{"id":1,"method":"tools/call","params":{"name":"get_node","arguments":[]}}"#;
-    assert!(parse_tool_call(arr_args).is_none(), "array `arguments` must reject");
+    assert!(
+        parse_tool_call(arr_args).is_none(),
+        "array `arguments` must reject"
+    );
     let no_args = r#"{"id":1,"method":"tools/call","params":{"name":"list_pages"}}"#;
     let call = parse_tool_call(no_args).expect("missing `arguments` is legit");
     assert_eq!(call.tool, "list_pages");
@@ -475,8 +517,7 @@ fn parse_tool_call_arguments_lookup_is_top_level_only() {
         "nested meta.arguments must not shadow the real top-level arguments"
     );
     let str_collide = r#"{"id":1,"method":"tools/call","params":{"name":"arguments"}}"#;
-    let call =
-        parse_tool_call(str_collide).expect("name=\"arguments\" must not false-positive");
+    let call = parse_tool_call(str_collide).expect("name=\"arguments\" must not false-positive");
     assert_eq!(call.tool, "arguments");
     assert!(call.arguments.is_empty());
     let deep = r#"{"id":1,"method":"tools/call","params":{"name":"get_node","other":{"x":{"arguments":42}}}}"#;

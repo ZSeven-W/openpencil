@@ -38,10 +38,7 @@ impl McpTool for SetNodeRotation {
         };
         let mut out = BTreeMap::new();
         out.insert("wrote".into(), "true".into());
-        ToolOutcome::OkWithCommand(
-            out,
-            EditorCommand::SetNodeRotation { node_id, degrees },
-        )
+        ToolOutcome::OkWithCommand(out, EditorCommand::SetNodeRotation { node_id, degrees })
     }
 }
 
@@ -63,10 +60,7 @@ impl McpTool for SetNodeText {
             Err(e) => return e,
         };
         let Some(text) = args.get("text") else {
-            return ToolOutcome::Err(
-                ToolErrorCode::MissingArgument,
-                "text is required".into(),
-            );
+            return ToolOutcome::Err(ToolErrorCode::MissingArgument, "text is required".into());
         };
         let mut out = BTreeMap::new();
         out.insert("wrote".into(), "true".into());
@@ -114,10 +108,7 @@ impl McpTool for SetNodeCornerRadius {
         };
         let mut out = BTreeMap::new();
         out.insert("wrote".into(), "true".into());
-        ToolOutcome::OkWithCommand(
-            out,
-            EditorCommand::SetNodeCornerRadius { node_id, radius },
-        )
+        ToolOutcome::OkWithCommand(out, EditorCommand::SetNodeCornerRadius { node_id, radius })
     }
 }
 
@@ -155,10 +146,7 @@ impl McpTool for SetNodeFontSize {
         };
         let mut out = BTreeMap::new();
         out.insert("wrote".into(), "true".into());
-        ToolOutcome::OkWithCommand(
-            out,
-            EditorCommand::SetNodeFontSize { node_id, font_size },
-        )
+        ToolOutcome::OkWithCommand(out, EditorCommand::SetNodeFontSize { node_id, font_size })
     }
 }
 
@@ -273,10 +261,7 @@ impl McpTool for SetNodeStrokeWidth {
         };
         let mut out = BTreeMap::new();
         out.insert("wrote".into(), "true".into());
-        ToolOutcome::OkWithCommand(
-            out,
-            EditorCommand::SetNodeStrokeWidth { node_id, width },
-        )
+        ToolOutcome::OkWithCommand(out, EditorCommand::SetNodeStrokeWidth { node_id, width })
     }
 }
 
@@ -356,4 +341,138 @@ impl McpTool for SetNodeName {
 
 pub fn set_node_name_snapshot() -> SetNodeName {
     SetNodeName
+}
+
+/// Parse an optional `"true"` / `"false"` argument. `Ok(None)` when
+/// the key is absent; `Err` on a non-boolean value.
+fn parse_opt_bool(args: &BTreeMap<String, String>, key: &str) -> Result<Option<bool>, ToolOutcome> {
+    match args.get(key) {
+        None => Ok(None),
+        Some(v) => match v.as_str() {
+            "true" => Ok(Some(true)),
+            "false" => Ok(Some(false)),
+            _ => Err(ToolOutcome::Err(
+                ToolErrorCode::InvalidArgument,
+                format!("{key} must be \"true\" or \"false\", got {v:?}"),
+            )),
+        },
+    }
+}
+
+/// Parse an optional finite-`f64` argument. `Ok(None)` when the key is
+/// absent; `Err` on a non-numeric / non-finite value.
+fn parse_opt_f64(args: &BTreeMap<String, String>, key: &str) -> Result<Option<f64>, ToolOutcome> {
+    match args.get(key) {
+        None => Ok(None),
+        Some(v) => match v.parse::<f64>() {
+            Ok(n) if n.is_finite() => Ok(Some(n)),
+            _ => Err(ToolOutcome::Err(
+                ToolErrorCode::InvalidArgument,
+                format!("{key} must be a finite number, got {v:?}"),
+            )),
+        },
+    }
+}
+
+/// First-party `set_node_flip` tool — write the horizontal / vertical
+/// mirror flags on a node. At least one axis must be supplied.
+pub struct SetNodeFlip;
+
+impl McpTool for SetNodeFlip {
+    fn name(&self) -> &str {
+        "set_node_flip"
+    }
+    fn call(&self, args: &BTreeMap<String, String>) -> ToolOutcome {
+        let node_id = match parse_node_id(args, "node_id") {
+            Ok(v) => v,
+            Err(e) => return e,
+        };
+        let flip_x = match parse_opt_bool(args, "flip_x") {
+            Ok(v) => v,
+            Err(e) => return e,
+        };
+        let flip_y = match parse_opt_bool(args, "flip_y") {
+            Ok(v) => v,
+            Err(e) => return e,
+        };
+        if flip_x.is_none() && flip_y.is_none() {
+            return ToolOutcome::Err(
+                ToolErrorCode::MissingArgument,
+                "at least one of flip_x / flip_y is required".into(),
+            );
+        }
+        let mut out = BTreeMap::new();
+        out.insert("wrote".into(), "true".into());
+        ToolOutcome::OkWithCommand(
+            out,
+            EditorCommand::SetNodeFlip {
+                node_id,
+                flip_x,
+                flip_y,
+            },
+        )
+    }
+}
+
+pub fn set_node_flip_snapshot() -> SetNodeFlip {
+    SetNodeFlip
+}
+
+/// First-party `set_ellipse_arc` tool — write arc geometry on an
+/// Ellipse node. At least one of start_angle / sweep_angle /
+/// inner_radius must be supplied; non-Ellipse kinds reject at apply
+/// time.
+pub struct SetEllipseArc;
+
+impl McpTool for SetEllipseArc {
+    fn name(&self) -> &str {
+        "set_ellipse_arc"
+    }
+    fn call(&self, args: &BTreeMap<String, String>) -> ToolOutcome {
+        let node_id = match parse_node_id(args, "node_id") {
+            Ok(v) => v,
+            Err(e) => return e,
+        };
+        let start_angle = match parse_opt_f64(args, "start_angle") {
+            Ok(v) => v,
+            Err(e) => return e,
+        };
+        let sweep_angle = match parse_opt_f64(args, "sweep_angle") {
+            Ok(v) => v,
+            Err(e) => return e,
+        };
+        let inner_radius = match parse_opt_f64(args, "inner_radius") {
+            Ok(v) => v,
+            Err(e) => return e,
+        };
+        if start_angle.is_none() && sweep_angle.is_none() && inner_radius.is_none() {
+            return ToolOutcome::Err(
+                ToolErrorCode::MissingArgument,
+                "at least one of start_angle / sweep_angle / inner_radius is required".into(),
+            );
+        }
+        if let Some(r) = inner_radius {
+            if !(0.0..=1.0).contains(&r) {
+                return ToolOutcome::Err(
+                    ToolErrorCode::InvalidArgument,
+                    format!("inner_radius must be a 0.0..=1.0 fraction, got {r}"),
+                );
+            }
+        }
+        let mut out = BTreeMap::new();
+        out.insert("wrote".into(), "true".into());
+        ToolOutcome::OkWithCommand(
+            out,
+            EditorCommand::SetEllipseArc {
+                node_id,
+                start_angle,
+                sweep_angle,
+                inner_radius,
+            },
+        )
+    }
+}
+
+pub fn set_ellipse_arc_snapshot() -> SetEllipseArc {
+    SetEllipseArc
 }

@@ -45,10 +45,16 @@ pub(super) fn path_bounds_from_anchors(
             to.y as f32 + hin.map(|h| h.y as f32).unwrap_or(0.0),
         );
         for t in cubic_derivative_roots(p0.0, p1.0, p2.0, p3.0) {
-            include(eval_cubic(p0.0, p1.0, p2.0, p3.0, t), eval_cubic(p0.1, p1.1, p2.1, p3.1, t));
+            include(
+                eval_cubic(p0.0, p1.0, p2.0, p3.0, t),
+                eval_cubic(p0.1, p1.1, p2.1, p3.1, t),
+            );
         }
         for t in cubic_derivative_roots(p0.1, p1.1, p2.1, p3.1) {
-            include(eval_cubic(p0.0, p1.0, p2.0, p3.0, t), eval_cubic(p0.1, p1.1, p2.1, p3.1, t));
+            include(
+                eval_cubic(p0.0, p1.0, p2.0, p3.0, t),
+                eval_cubic(p0.1, p1.1, p2.1, p3.1, t),
+            );
         }
     };
     for i in 1..anchors.len() {
@@ -60,7 +66,12 @@ pub(super) fn path_bounds_from_anchors(
     if !min_x.is_finite() {
         return (0.0, 0.0, 0.0, 0.0);
     }
-    (min_x, min_y, (max_x - min_x).max(0.0), (max_y - min_y).max(0.0))
+    (
+        min_x,
+        min_y,
+        (max_x - min_x).max(0.0),
+        (max_y - min_y).max(0.0),
+    )
 }
 
 /// Real roots of the derivative of a cubic Bezier on (0, 1).
@@ -86,16 +97,16 @@ pub(super) fn cubic_derivative_roots(p0: f32, p1: f32, p2: f32, p3: f32) -> Vec<
     let t1 = (-b + s) / (2.0 * a);
     let t2 = (-b - s) / (2.0 * a);
     let mut out = Vec::with_capacity(2);
-    if in_unit(t1) { out.push(t1); }
-    if in_unit(t2) { out.push(t2); }
+    if in_unit(t1) {
+        out.push(t1);
+    }
+    if in_unit(t2) {
+        out.push(t2);
+    }
     out
 }
 
 pub(super) fn eval_cubic(p0: f32, p1: f32, p2: f32, p3: f32, t: f32) -> f32 {
     let mt = 1.0 - t;
-    mt * mt * mt * p0
-        + 3.0 * mt * mt * t * p1
-        + 3.0 * mt * t * t * p2
-        + t * t * t * p3
+    mt * mt * mt * p0 + 3.0 * mt * mt * t * p1 + 3.0 * mt * t * t * p2 + t * t * t * p3
 }
-

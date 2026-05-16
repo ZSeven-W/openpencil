@@ -115,8 +115,9 @@ impl ChatProviderConfig {
             endpoint: String::new(),
             model: String::new(),
             binary: match kind {
-                ChatProviderKind::Subprocess(cli)
-                | ChatProviderKind::HttpServer(cli) => cli.default_binary().into(),
+                ChatProviderKind::Subprocess(cli) | ChatProviderKind::HttpServer(cli) => {
+                    cli.default_binary().into()
+                }
                 _ => String::new(),
             },
         }

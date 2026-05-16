@@ -5,8 +5,8 @@
 //! lands incrementally behind this module's trait.
 
 use jian_ops_schema::node::{
-    ContainerProps, EllipseNode, FrameNode, GroupNode, LineNode, PathNode,
-    PenNode, PenNodeBase, PolygonNode, RectangleNode, TextContent, TextNode,
+    ContainerProps, EllipseNode, FrameNode, GroupNode, LineNode, PathNode, PenNode, PenNodeBase,
+    PolygonNode, RectangleNode, TextContent, TextNode,
 };
 
 /// Recognised file kinds. The TS app also accepts `.fig.json`
@@ -61,8 +61,7 @@ pub fn parse_fig(bytes: &[u8]) -> Result<ParsedFigStub, FigParseError> {
             Err(FigParseError::NotYetImplemented(FigFileKind::Binary))
         }
         FigFileKind::ClipboardJson => {
-            let s =
-                std::str::from_utf8(bytes).map_err(|_| FigParseError::UnknownFormat)?;
+            let s = std::str::from_utf8(bytes).map_err(|_| FigParseError::UnknownFormat)?;
             let nodes = extract_clipboard_nodes(s);
             Ok(ParsedFigStub {
                 kind: FigFileKind::ClipboardJson,
@@ -536,7 +535,8 @@ mod tests {
 
     #[test]
     fn parse_fig_clipboard_handles_quoted_braces() {
-        let json = br#"{"type":"FIGMA_DOCUMENT","children":[{"name":"has \"{\" in name"},{"id":"b"}]}"#;
+        let json =
+            br#"{"type":"FIGMA_DOCUMENT","children":[{"name":"has \"{\" in name"},{"id":"b"}]}"#;
         let parsed = parse_fig(json).unwrap();
         // Quoted `{` must NOT bump the count.
         assert_eq!(parsed.top_level_children, 2);
@@ -563,7 +563,8 @@ mod tests {
 
     #[test]
     fn parse_fig_clipboard_handles_missing_fields_gracefully() {
-        let json = br#"{"type":"FIGMA_DOCUMENT","children":[{"name":"only-name"},{"type":"TEXT"}]}"#;
+        let json =
+            br#"{"type":"FIGMA_DOCUMENT","children":[{"name":"only-name"},{"type":"TEXT"}]}"#;
         let parsed = parse_fig(json).unwrap();
         assert_eq!(parsed.clipboard_nodes[0].kind, "");
         assert_eq!(parsed.clipboard_nodes[0].name, "only-name");

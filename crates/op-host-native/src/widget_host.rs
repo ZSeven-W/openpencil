@@ -353,10 +353,7 @@ impl WidgetHostNative {
     /// Subtract / Intersect / Exclude). Backed by skia's `Path::op`.
     /// Returns true when the op committed (≥ 2 Path nodes were
     /// selected + the result yielded a non-empty polyline).
-    pub fn apply_boolean_op(
-        &mut self,
-        op: op_editor_core::BooleanOp,
-    ) -> bool {
+    pub fn apply_boolean_op(&mut self, op: op_editor_core::BooleanOp) -> bool {
         // Codex stop-gate: boolean op shortcuts (Cmd+Alt+U/S/I/X)
         // mutate the document — commit any pending variable-row
         // edit first so the dirty draft lands before this op runs.
@@ -373,11 +370,7 @@ impl WidgetHostNative {
             .iter()
             .map(|id| id.as_str().to_string())
             .collect();
-        let outcome = crate::boolean_ops::compute_boolean_op(
-            &self.layout_scene,
-            &selected,
-            op,
-        );
+        let outcome = crate::boolean_ops::compute_boolean_op(&self.layout_scene, &selected, op);
         let Some(result) = outcome else {
             return false;
         };
@@ -411,8 +404,7 @@ impl WidgetHostNative {
     /// paint pass both call this before reading `layout_scene`.
     pub(in crate::widget_host) fn refresh_layout_scene(&mut self) {
         if self.editor_state_dirty {
-            self.layout_scene =
-                op_pen_loader::editor_state_to_layout_scene(&self.editor_state);
+            self.layout_scene = op_pen_loader::editor_state_to_layout_scene(&self.editor_state);
             self.editor_state_dirty = false;
         }
     }

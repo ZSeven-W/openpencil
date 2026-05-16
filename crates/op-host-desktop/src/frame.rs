@@ -2,9 +2,7 @@
 //! `main.rs` to keep that file under the 800-line cap.
 
 use op_editor_ui::{Color, Point2D, Rect, RenderBackend};
-use op_host_native::{
-    NativeBackend, NativeFrameBackend, SharedSkiaContext, WidgetHostNative,
-};
+use op_host_native::{NativeBackend, NativeFrameBackend, SharedSkiaContext, WidgetHostNative};
 
 /// Paint pass — clear, scale by DPI, dispatch to the widget host,
 /// present the GL surface.
