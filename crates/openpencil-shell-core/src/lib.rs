@@ -28,12 +28,15 @@ pub use op_i18n as i18n;
 pub mod jian;
 pub mod mcp;
 #[cfg(test)] mod mcp_tests;
-pub mod render_backend;
+// Phase 4 strangler reorg: the wasm-clean RenderBackend trait moved into the
+// op-editor-core crate. Re-exported as `render_backend` so `crate::render_backend::*`
+// paths still resolve.
+pub use op_editor_core::render_backend;
 pub mod theme;
 pub mod widgets;
 
 // Re-export the primary API for upstream crates / widgets / tests.
-pub use render_backend::{Color, Point2D, Rect, RenderBackend, TextLayout};
+pub use op_editor_core::render_backend::{Color, Point2D, Rect, RenderBackend, TextLayout};
 pub use theme::Theme;
 
 /// Re-exports of Jian gesture / event types so shell consumers can use the
