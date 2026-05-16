@@ -5,11 +5,13 @@
 //! yet; clicking inside the drop zone routes through a file dialog
 //! to pick a .fig path.
 
-use crate::document::{Document, Locale};
 use crate::theme::Theme;
+use crate::widgets::editor_state_ext::theme_for;
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::{LayoutBox, LayoutCx, PaintCx, Widget, WidgetId};
 use crate::{Color, Point2D, Rect, TextLayout};
+use op_editor_core::editor_ui_state::Locale;
+use op_editor_core::EditorState;
 
 pub const MODAL_WIDTH: f32 = 460.0;
 pub const MODAL_HEIGHT: f32 = 260.0;
@@ -23,18 +25,19 @@ pub enum FigmaImportHit {
     Inside,
 }
 
-pub struct FigmaImportModal<'a> {
+pub struct FigmaImportModal {
     pub id: WidgetId,
     pub theme: Theme,
-    doc: &'a Document,
+    /// Active UI locale — drives the modal's `t` copy lookup.
+    locale: Locale,
 }
 
-impl<'a> FigmaImportModal<'a> {
-    pub fn for_document(doc: &'a Document) -> Self {
+impl FigmaImportModal {
+    pub fn for_editor(state: &EditorState) -> Self {
         Self {
             id: WidgetId::new(5400),
-            theme: doc.theme(),
-            doc,
+            theme: theme_for(&state.editor_ui),
+            locale: state.editor_ui.locale,
         }
     }
 
@@ -85,8 +88,8 @@ fn rect_contains(r: Rect, p: Point2D) -> bool {
         && p.y <= r.origin.y + r.size.y
 }
 
-fn t(doc: &Document, key: &str) -> &'static str {
-    let zh = matches!(doc.ui.locale, Locale::ZhCn | Locale::ZhTw);
+fn t(locale: Locale, key: &str) -> &'static str {
+    let zh = matches!(locale, Locale::ZhCn | Locale::ZhTw);
     match (key, zh) {
         ("title", true) => "从 Figma 导入",
         ("title", _) => "Import from Figma",
@@ -104,7 +107,7 @@ fn t(doc: &Document, key: &str) -> &'static str {
     }
 }
 
-impl<'a> Widget for FigmaImportModal<'a> {
+impl Widget for FigmaImportModal {
     fn id(&self) -> WidgetId {
         self.id
     }
@@ -123,7 +126,7 @@ impl<'a> Widget for FigmaImportModal<'a> {
         cx.backend.stroke_round_rect(rect, 12.0, self.theme.border, 1.0);
 
         let title = TextLayout::single_run(
-            t(self.doc, "title"),
+            t(self.locale, "title"),
             "system-ui",
             14.0,
             to_jian(self.theme.foreground),
@@ -160,7 +163,7 @@ impl<'a> Widget for FigmaImportModal<'a> {
             self.theme.muted_foreground,
         );
 
-        let headline = t(self.doc, "drop");
+        let headline = t(self.locale, "drop");
         let head_w = cx.backend.measure_text(headline, 13.0);
         let head_layout = TextLayout::single_run(
             headline,
@@ -177,7 +180,7 @@ impl<'a> Widget for FigmaImportModal<'a> {
             ),
         );
 
-        let sub = t(self.doc, "browse");
+        let sub = t(self.locale, "browse");
         let sub_w = cx.backend.measure_text(sub, 11.0);
         let sub_layout = TextLayout::single_run(
             sub,
@@ -195,7 +198,7 @@ impl<'a> Widget for FigmaImportModal<'a> {
         );
 
         let footer = TextLayout::single_run(
-            t(self.doc, "footer"),
+            t(self.locale, "footer"),
             "system-ui",
             11.0,
             to_jian(self.theme.muted_foreground),

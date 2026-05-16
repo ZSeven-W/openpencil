@@ -2,11 +2,13 @@
 //! layer rows (复制 / 删除 / 创建组件 / 切换锁定 / 切换可见性) and
 //! page rows (重命名 / 复制 / 上移 / 下移 / 删除).
 
-use crate::document::{Document, LayerContextMenuState, LayerContextTarget};
 use crate::theme::Theme;
+use crate::widgets::editor_state_ext::theme_for;
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::{LayoutBox, LayoutCx, PaintCx, Widget, WidgetId};
 use crate::{Color, Point2D, Rect, TextLayout};
+use op_editor_core::editor_ui_state::{LayerContextMenuState, LayerContextTarget};
+use op_editor_core::EditorState;
 
 pub const LAYER_CONTEXT_MENU_WIDTH: f32 = 168.0;
 const ROW_HEIGHT: f32 = 32.0;
@@ -128,16 +130,16 @@ pub struct LayerContextMenu {
 }
 
 impl LayerContextMenu {
-    pub fn for_state(doc: &Document, state: LayerContextMenuState) -> Self {
-        let rows = match &state.target {
+    pub fn for_state(state: &EditorState, menu: LayerContextMenuState) -> Self {
+        let rows = match &menu.target {
             LayerContextTarget::Layer(_) => LAYER_ROWS,
             LayerContextTarget::Page(_) => PAGE_ROWS,
         };
-        let hovered_row = state.hovered_row.map(|i| i as usize);
+        let hovered_row = menu.hovered_row.map(|i| i as usize);
         Self {
             id: WidgetId::new(3000),
-            theme: doc.theme(),
-            state,
+            theme: theme_for(&state.editor_ui),
+            state: menu,
             rows,
             hovered_row,
         }

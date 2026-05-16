@@ -2,11 +2,13 @@
 //! click in the PropertyPanel. SV box + hue strip + R/G/B readout
 //! + hex; mirrors the layout of common design-tool pickers.
 
-use crate::document::{ColorPickerDrag, ColorPickerState, ColorTarget, Document};
 use crate::theme::Theme;
+use crate::widgets::editor_state_ext::theme_for;
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::{PaintCx, Widget, WidgetId};
 use crate::{Color, Point2D, Rect, TextLayout};
+use op_editor_core::ui_draft::{ColorPickerDrag, ColorPickerState, ColorTarget};
+use op_editor_core::EditorState;
 
 pub const PICKER_WIDTH: f32 = 240.0;
 pub const PICKER_HEIGHT: f32 = 336.0;
@@ -36,20 +38,21 @@ pub enum ColorPickerHit {
     Inside,
 }
 
-pub struct ColorPicker<'a> {
+pub struct ColorPicker {
     pub id: WidgetId,
     pub state: ColorPickerState,
     pub theme: Theme,
-    document: &'a Document,
+    /// Right-rail width — drives the picker's horizontal anchor.
+    property_panel_width: f32,
 }
 
-impl<'a> ColorPicker<'a> {
-    pub fn for_state(doc: &'a Document, state: ColorPickerState) -> Self {
+impl ColorPicker {
+    pub fn for_state(state: &EditorState, picker: ColorPickerState) -> Self {
         Self {
             id: WidgetId::new(5100),
-            state,
-            theme: doc.theme(),
-            document: doc,
+            state: picker,
+            theme: theme_for(&state.editor_ui),
+            property_panel_width: state.editor_ui.property_panel_width,
         }
     }
 
@@ -57,7 +60,7 @@ impl<'a> ColorPicker<'a> {
     /// pinned to the right rail near the Fill section. Hosts use
     /// this for paint AND hit-test so they stay in sync.
     pub fn rect(&self, viewport_w: f32, viewport_h: f32) -> Rect {
-        let right_rail_left = viewport_w - self.document.ui.property_panel_width;
+        let right_rail_left = viewport_w - self.property_panel_width;
         let x = (right_rail_left - PICKER_WIDTH - 8.0).max(8.0);
         // Center vertically around the swatch the user clicked, then
         // clamp so the panel stays fully on-screen.
@@ -120,7 +123,7 @@ impl<'a> ColorPicker<'a> {
     }
 }
 
-impl<'a> Widget for ColorPicker<'a> {
+impl Widget for ColorPicker {
     fn id(&self) -> WidgetId {
         self.id
     }

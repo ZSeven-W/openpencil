@@ -1,27 +1,36 @@
-//! Variables panel — lists every variable in `Document.var_table`
-//! plus the currently active theme axes. Mirrors the TS app's
-//! Variables panel in the right rail (under the Themes header).
+//! Variables panel — lists every variable in the document plus the
+//! currently active theme axes. Mirrors the TS app's Variables panel
+//! in the right rail (under the Themes header).
 //!
-//! v1 scope (this commit):
+//! v1 scope:
 //!   - Header row showing each active theme axis as a small chip
 //!     (`mode: dark`, `density: compact`, etc).
 //!   - One row per variable: name on the left, a small preview on
 //!     the right (resolved color swatch for `VariableKind::Color`;
 //!     stringified scalar for other kinds).
-//!   - Click hit-test stub returning `VariablesPanelHit::Row(idx)`
-//!     so the host can wire row clicks to the color picker / edit
-//!     modal in a follow-up.
+//!   - Click hit-test returning `VariablesPanelHit::Row(idx)` /
+//!     `AxisChip(idx)` / `AxisDropdownItem` so the host can wire
+//!     row clicks to the color picker / theme switch.
 //!
-//! Editing inputs (add / rename / delete a variable, toggle a theme
-//! axis value) are deferred to a second commit once the active-theme
-//! flow is exercised via a real `.op` file with themes.
+//! ## State source
+//!
+//! The panel reads the canonical document model on `EditorState`:
+//!   - persisted variables — `doc.variables`
+//!     (`Option<BTreeMap<String, VariableDefinition>>`)
+//!   - persisted theme axes — `doc.themes`
+//!     (`Option<BTreeMap<String, Vec<String>>>`, axis → value list)
+//!   - transient active-theme selection —
+//!     `ui.variables.active_theme` (`BTreeMap<String, String>`)
+//!
+//! Construction snapshots that state into owned value rows / chips so
+//! paint + hit-test never re-walk the document.
 
-use crate::document::{
-    Document, ThemeAxis, Variable, VariableKind, VariableScalar, VariableTable, VariableValue,
-};
 use crate::theme::Theme;
 use crate::widgets::{LayoutBox, LayoutCx, PaintCx, Widget, WidgetId};
 use crate::{Color, Point2D, Rect};
+use op_editor_core::editor_ui_state::VariableRowFocus;
+use op_editor_core::EditorState;
+use jian_ops_schema::variable::{VariableKind, VariableScalar};
 
 const ROW_HEIGHT: f32 = 32.0;
 const HEADER_HEIGHT: f32 = 28.0;
@@ -37,40 +46,31 @@ const DROPDOWN_ROW_HEIGHT: f32 = 24.0;
 pub const VARIABLES_PANEL_WIDTH: f32 = 240.0;
 
 /// Hit kinds for `VariablesPanel::hit_test`. Row index is into the
-/// `variables` slice the panel was built from, so callers can map
-/// straight back to the source [`Variable`].
+/// `rows` slice the panel was built from, so callers can map straight
+/// back to the source variable name.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum VariablesPanelHit {
     /// Click on a variable row.
     Row(usize),
     /// Click on a theme-axis chip in the header. Host toggles
-    /// `Document.ui.axis_dropdown_open` for that axis name.
+    /// `EditorUiState.axis_dropdown_open` for that axis name.
     AxisChip(usize),
     /// Click on a value row inside an open axis dropdown.
-    /// Carries the axis name + the picked value so the host
-    /// can pin `var_table.active_theme[axis] = value`. The host
-    /// is also responsible for clearing `axis_dropdown_open`.
+    /// Carries the axis name + the picked value so the host can pin
+    /// `ui.variables.active_theme[axis] = value`. The host is also
+    /// responsible for clearing `axis_dropdown_open`.
     AxisDropdownItem { axis: String, value: String },
 }
 
-/// View model for the Variables panel. Borrows from the document
-/// (cheap; immutable across paint).
-pub struct VariablesPanel<'a> {
-    pub table: &'a VariableTable,
-    /// Cached snapshot of axis chips painted in the header row.
-    /// Stored so `hit_test` doesn't need to re-walk the table.
-    chips: Vec<AxisChip>,
-    /// If `Some(axis_name)` AND the axis matches one of `chips`,
-    /// paint a dropdown overlay anchored to that chip. The list
-    /// is sourced from `VariableTable::themes`.
-    dropdown_open: Option<String>,
-    /// Row index currently in inline-edit focus (Number / String
-    /// variable). `None` = no row editing.
-    editing_row: Option<usize>,
-    /// Draft buffer for the row in edit focus. Shared with
-    /// `Document.ui.property_input_draft` (reuses the caret +
-    /// blink machinery).
-    editing_draft: String,
+/// One variable row snapshot — owned so paint + hit-test never touch
+/// the document after construction.
+#[derive(Debug, Clone)]
+struct VarRow {
+    name: String,
+    kind: VariableKind,
+    /// Resolved scalar under the active theme; `None` when the
+    /// variable has an empty themed list.
+    resolved: Option<VariableScalar>,
 }
 
 #[derive(Debug, Clone)]
@@ -79,20 +79,45 @@ struct AxisChip {
     value: String,
 }
 
-impl<'a> VariablesPanel<'a> {
-    pub fn for_document(doc: &'a Document) -> Self {
-        let mut panel = Self::for_table(&doc.var_table);
-        panel.dropdown_open = doc.ui.axis_dropdown_open.clone();
-        panel.editing_row = doc.ui.variable_row_focus.map(|f| match f {
-            crate::document::VariableRowFocus::Number(i) => i,
-            crate::document::VariableRowFocus::String(i) => i,
-        });
-        panel.editing_draft = doc.ui.property_input_draft.clone();
-        panel
-    }
+/// View model for the Variables panel. Holds owned snapshots derived
+/// from `EditorState` at construction time.
+pub struct VariablesPanel {
+    rows: Vec<VarRow>,
+    /// Axis chips painted in the header row.
+    chips: Vec<AxisChip>,
+    /// Axis → ordered value list, sourced from `doc.themes`.
+    themes: Vec<(String, Vec<String>)>,
+    /// If `Some(axis_name)` AND the axis matches one of `chips`,
+    /// paint a dropdown overlay anchored to that chip.
+    dropdown_open: Option<String>,
+    /// Row index currently in inline-edit focus (Number / String
+    /// variable). `None` = no row editing.
+    editing_row: Option<usize>,
+    /// Draft buffer for the row in edit focus.
+    editing_draft: String,
+}
 
-    pub fn for_table(table: &'a VariableTable) -> Self {
-        let chips: Vec<AxisChip> = table
+impl VariablesPanel {
+    pub fn for_editor(state: &EditorState) -> Self {
+        // Variable rows — keyed by BTreeMap order so paint is stable.
+        let rows: Vec<VarRow> = state
+            .doc
+            .variables
+            .as_ref()
+            .map(|vars| {
+                vars.iter()
+                    .map(|(name, def)| VarRow {
+                        name: name.clone(),
+                        kind: def.kind.clone(),
+                        resolved: state.resolve_variable(name).cloned(),
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        // Active-theme chips.
+        let chips: Vec<AxisChip> = state
+            .ui
+            .variables
             .active_theme
             .iter()
             .map(|(axis, value)| AxisChip {
@@ -100,18 +125,29 @@ impl<'a> VariablesPanel<'a> {
                 value: value.clone(),
             })
             .collect();
+        // Theme axes + their value lists.
+        let themes: Vec<(String, Vec<String>)> = state
+            .doc
+            .themes
+            .as_ref()
+            .map(|t| t.iter().map(|(k, v)| (k.clone(), v.clone())).collect())
+            .unwrap_or_default();
         Self {
-            table,
+            rows,
             chips,
-            dropdown_open: None,
-            editing_row: None,
-            editing_draft: String::new(),
+            themes,
+            dropdown_open: state.editor_ui.axis_dropdown_open.clone(),
+            editing_row: state.editor_ui.variable_row_focus.map(|f| match f {
+                VariableRowFocus::Number(i) => i,
+                VariableRowFocus::String(i) => i,
+            }),
+            editing_draft: state.ui.property_input_draft.clone(),
         }
     }
 
     /// Number of variable rows the panel paints.
     pub fn row_count(&self) -> usize {
-        self.table.variables.len()
+        self.rows.len()
     }
 
     /// Number of axis chips in the header. May be zero — a document
@@ -129,6 +165,14 @@ impl<'a> VariablesPanel<'a> {
             CHIP_HEIGHT + 8.0
         };
         HEADER_HEIGHT + chip_row + (self.row_count() as f32) * ROW_HEIGHT
+    }
+
+    /// Value list for an axis name, sourced from `doc.themes`.
+    fn axis_values(&self, axis: &str) -> Option<&[String]> {
+        self.themes
+            .iter()
+            .find(|(name, _)| name == axis)
+            .map(|(_, values)| values.as_slice())
     }
 
     /// Anchor rect of the chip at index `i` within `rect`. Mirrors
@@ -170,13 +214,7 @@ impl<'a> VariablesPanel<'a> {
                 .enumerate()
                 .find(|(_, c)| c.axis == open_axis)
             {
-                if let Some(values) = self
-                    .table
-                    .themes
-                    .iter()
-                    .find(|t| t.name == open_axis)
-                    .map(|t| t.values.as_slice())
-                {
+                if let Some(values) = self.axis_values(open_axis) {
                     let chip_rect = self.chip_rect(rect, chip_idx);
                     let menu_y_start = chip_rect.origin.y + CHIP_HEIGHT + 4.0;
                     let menu_rect = Rect {
@@ -243,7 +281,7 @@ fn rect_contains(r: Rect, p: Point2D) -> bool {
         && p.y < r.origin.y + r.size.y
 }
 
-impl<'a> Widget for VariablesPanel<'a> {
+impl Widget for VariablesPanel {
     fn id(&self) -> WidgetId {
         // Stable id reserved at the host level; the table itself
         // has no id so we pick a constant in the chrome-widget
@@ -311,7 +349,7 @@ impl<'a> Widget for VariablesPanel<'a> {
             y += CHIP_HEIGHT + 8.0;
         }
         // Variable rows.
-        for (idx, var) in self.table.variables.iter().enumerate() {
+        for (idx, var) in self.rows.iter().enumerate() {
             let row = Rect {
                 origin: Point2D::new(rect.origin.x, y),
                 size: Point2D::new(rect.size.x, ROW_HEIGHT),
@@ -332,11 +370,7 @@ impl<'a> Widget for VariablesPanel<'a> {
             let preview_x = row.origin.x + row.size.x - PAD_X - SWATCH_SIZE;
             if self.editing_row == Some(idx) {
                 // Inline edit mode — paint the draft + a thin
-                // underline to signal active focus. Aligned with
-                // the same baseline the preview label would have
-                // used. No caret blink today (the property panel's
-                // caret machinery isn't yet shared); the underline
-                // is enough affordance.
+                // underline to signal active focus.
                 let draft_layout = crate::TextLayout::single_run(
                     &self.editing_draft,
                     "system-ui",
@@ -352,7 +386,7 @@ impl<'a> Widget for VariablesPanel<'a> {
                 };
                 cx.backend.fill_rect(underline, theme.foreground);
             } else {
-                paint_preview(cx, &theme, var, self.table, preview_x, row.origin.y + 7.0);
+                paint_preview(cx, &theme, var, preview_x, row.origin.y + 7.0);
             }
             y += ROW_HEIGHT;
         }
@@ -366,13 +400,7 @@ impl<'a> Widget for VariablesPanel<'a> {
                 .enumerate()
                 .find(|(_, c)| c.axis == open_axis)
             {
-                if let Some(values) = self
-                    .table
-                    .themes
-                    .iter()
-                    .find(|t| t.name == open_axis)
-                    .map(|t| t.values.as_slice())
-                {
+                if let Some(values) = self.axis_values(open_axis) {
                     let chip_rect = self.chip_rect(rect, chip_idx);
                     let menu_y = chip_rect.origin.y + CHIP_HEIGHT + 4.0;
                     let menu_rect = Rect {
@@ -386,10 +414,10 @@ impl<'a> Widget for VariablesPanel<'a> {
                     cx.backend
                         .stroke_round_rect(menu_rect, 6.0, theme.border, 1.0);
                     let active_value = self
-                        .table
-                        .active_theme
-                        .get(open_axis)
-                        .cloned()
+                        .chips
+                        .iter()
+                        .find(|c| c.axis == open_axis)
+                        .map(|c| c.value.clone())
                         .unwrap_or_default();
                     for (i, v) in values.iter().enumerate() {
                         let row_y = menu_y + (i as f32) * DROPDOWN_ROW_HEIGHT;
@@ -419,18 +447,13 @@ impl<'a> Widget for VariablesPanel<'a> {
     }
 }
 
-fn paint_preview(
-    cx: &mut PaintCx<'_>,
-    theme: &Theme,
-    var: &Variable,
-    table: &VariableTable,
-    x: f32,
-    y: f32,
-) {
+fn paint_preview(cx: &mut PaintCx<'_>, theme: &Theme, var: &VarRow, x: f32, y: f32) {
     match var.kind {
         VariableKind::Color => {
-            let rgba = table
-                .resolve_color(&var.name)
+            let rgba = var
+                .resolved
+                .as_ref()
+                .and_then(scalar_as_color)
                 .unwrap_or(Color::WHITE);
             let swatch = Rect {
                 origin: Point2D::new(x, y),
@@ -444,7 +467,7 @@ fn paint_preview(
             // Non-color: render the resolved scalar as a short text
             // label. Falls back to "—" when the variable doesn't
             // resolve under the active theme.
-            let text = match table.resolve(&var.name) {
+            let text = match var.resolved.as_ref() {
                 Some(s) => scalar_to_label(s),
                 None => "—".into(),
             };
@@ -461,6 +484,16 @@ fn paint_preview(
                 .draw_text(&layout, Point2D::new(x - 24.0, y + 14.0));
         }
     }
+}
+
+/// Parse a `Str` scalar as an `#rrggbb` colour swatch.
+fn scalar_as_color(s: &VariableScalar) -> Option<Color> {
+    let hex = match s {
+        VariableScalar::Str(hex) => hex,
+        _ => return None,
+    };
+    let (r, g, b) = op_editor_core::color_picker::parse_hex_rgb(hex)?;
+    Some(Color { r, g, b, a: 1.0 })
 }
 
 fn scalar_to_label(s: &VariableScalar) -> String {
@@ -490,78 +523,73 @@ fn to_jian_color(c: Color) -> jian_core::scene::Color {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::document::{VariableKind, VariableScalar, VariableValue};
-    use std::collections::BTreeMap;
+    use jian_ops_schema::variable::VariableScalar;
 
-    fn table_with_three_vars() -> VariableTable {
-        let mut t = VariableTable::default();
-        t.variables.push(Variable {
-            name: "color-1".into(),
-            kind: VariableKind::Color,
-            value: VariableValue::Scalar(VariableScalar::Str("#ff8800".into())),
-        });
-        t.variables.push(Variable {
-            name: "spacing-md".into(),
-            kind: VariableKind::Number,
-            value: VariableValue::Scalar(VariableScalar::Num(16.0)),
-        });
-        t.variables.push(Variable {
-            name: "is-dark".into(),
-            kind: VariableKind::Boolean,
-            value: VariableValue::Scalar(VariableScalar::Bool(true)),
-        });
-        t.active_theme.insert("mode".into(), "dark".into());
-        t
+    fn state_with_three_vars() -> EditorState {
+        let mut s = EditorState::new();
+        s.create_variable(
+            "color-1",
+            VariableKind::Color,
+            VariableScalar::Str("#ff8800".into()),
+        );
+        s.create_variable(
+            "spacing-md",
+            VariableKind::Number,
+            VariableScalar::Num(16.0),
+        );
+        s.create_variable(
+            "is-dark",
+            VariableKind::Boolean,
+            VariableScalar::Bool(true),
+        );
+        s.ui
+            .variables
+            .active_theme
+            .insert("mode".into(), "dark".into());
+        s
     }
 
     #[test]
     fn row_count_matches_variable_count() {
-        let t = table_with_three_vars();
-        let p = VariablesPanel::for_table(&t);
+        let s = state_with_three_vars();
+        let p = VariablesPanel::for_editor(&s);
         assert_eq!(p.row_count(), 3);
     }
 
     #[test]
     fn axis_count_reflects_active_theme() {
-        let t = table_with_three_vars();
-        let p = VariablesPanel::for_table(&t);
+        let s = state_with_three_vars();
+        let p = VariablesPanel::for_editor(&s);
         assert_eq!(p.axis_count(), 1);
     }
 
     #[test]
     fn intrinsic_height_grows_with_rows_and_chips() {
-        let mut t = VariableTable::default();
-        let p = VariablesPanel::for_table(&t);
+        let s_empty = EditorState::new();
+        let p = VariablesPanel::for_editor(&s_empty);
         let empty_h = p.intrinsic_height();
         assert!((empty_h - HEADER_HEIGHT).abs() < f32::EPSILON);
-        t.variables.push(Variable {
-            name: "x".into(),
-            kind: VariableKind::Number,
-            value: VariableValue::Scalar(VariableScalar::Num(1.0)),
-        });
-        let p2 = VariablesPanel::for_table(&t);
+        let s = state_with_three_vars();
+        let p2 = VariablesPanel::for_editor(&s);
         assert!(p2.intrinsic_height() > empty_h);
     }
 
     #[test]
     fn axis_dropdown_hit_routes_to_named_value() {
-        let mut t = table_with_three_vars();
-        t.themes.push(crate::document::ThemeAxis {
-            name: "mode".into(),
-            values: vec!["light".into(), "dark".into(), "system".into()],
-        });
-        let mut p = VariablesPanel::for_table(&t);
+        let mut s = state_with_three_vars();
+        s.doc.themes.get_or_insert_with(Default::default).insert(
+            "mode".into(),
+            vec!["light".into(), "dark".into(), "system".into()],
+        );
+        let mut p = VariablesPanel::for_editor(&s);
         p.dropdown_open = Some("mode".into());
         let rect = Rect {
             origin: Point2D::new(0.0, 0.0),
             size: Point2D::new(VARIABLES_PANEL_WIDTH, p.intrinsic_height()),
         };
-        // Hit row 0 of the dropdown (== "light"). Chip anchor is
-        // (PAD_X, HEADER_HEIGHT); dropdown starts CHIP_HEIGHT+4
-        // below it.
         let menu_y = HEADER_HEIGHT + CHIP_HEIGHT + 4.0;
         let click_y = menu_y + DROPDOWN_ROW_HEIGHT * 0.5;
-        let click_x = PAD_X + 10.0; // inside DROPDOWN_WIDTH
+        let click_x = PAD_X + 10.0;
         match p.hit_test(rect, Point2D::new(click_x, click_y)) {
             Some(VariablesPanelHit::AxisDropdownItem { axis, value }) => {
                 assert_eq!(axis, "mode");
@@ -569,7 +597,6 @@ mod tests {
             }
             other => panic!("expected AxisDropdownItem for row 0, got {other:?}"),
         }
-        // Row 2 = "system".
         let click_y_sys = menu_y + DROPDOWN_ROW_HEIGHT * 2.5;
         match p.hit_test(rect, Point2D::new(click_x, click_y_sys)) {
             Some(VariablesPanelHit::AxisDropdownItem { axis, value }) => {
@@ -582,13 +609,12 @@ mod tests {
 
     #[test]
     fn hit_test_returns_row_index_for_in_row_click() {
-        let t = table_with_three_vars();
-        let p = VariablesPanel::for_table(&t);
+        let s = state_with_three_vars();
+        let p = VariablesPanel::for_editor(&s);
         let rect = Rect {
             origin: Point2D::new(0.0, 0.0),
             size: Point2D::new(VARIABLES_PANEL_WIDTH, p.intrinsic_height()),
         };
-        // y for row 1 = HEADER + chip row + row_height * 1 + half.
         let chip_block = CHIP_HEIGHT + 8.0;
         let y = HEADER_HEIGHT + chip_block + ROW_HEIGHT * 1.0 + ROW_HEIGHT / 2.0;
         match p.hit_test(rect, Point2D::new(100.0, y)) {
@@ -599,13 +625,12 @@ mod tests {
 
     #[test]
     fn hit_test_returns_axis_chip_for_chip_click() {
-        let t = table_with_three_vars();
-        let p = VariablesPanel::for_table(&t);
+        let s = state_with_three_vars();
+        let p = VariablesPanel::for_editor(&s);
         let rect = Rect {
             origin: Point2D::new(0.0, 0.0),
             size: Point2D::new(VARIABLES_PANEL_WIDTH, p.intrinsic_height()),
         };
-        // First chip starts at (PAD_X, HEADER_HEIGHT).
         let y = HEADER_HEIGHT + CHIP_HEIGHT / 2.0;
         match p.hit_test(rect, Point2D::new(PAD_X + 4.0, y)) {
             Some(VariablesPanelHit::AxisChip(0)) => {}
@@ -615,8 +640,8 @@ mod tests {
 
     #[test]
     fn hit_test_returns_none_outside_rect() {
-        let t = table_with_three_vars();
-        let p = VariablesPanel::for_table(&t);
+        let s = state_with_three_vars();
+        let p = VariablesPanel::for_editor(&s);
         let rect = Rect {
             origin: Point2D::new(0.0, 0.0),
             size: Point2D::new(VARIABLES_PANEL_WIDTH, 200.0),
@@ -627,24 +652,19 @@ mod tests {
 
     #[test]
     fn axis_chip_table_mirrors_active_theme_btree_order() {
-        let mut t = VariableTable::default();
-        t.active_theme.insert("z-axis".into(), "alpha".into());
-        t.active_theme.insert("a-axis".into(), "omega".into());
-        let p = VariablesPanel::for_table(&t);
+        let mut s = EditorState::new();
+        s.ui
+            .variables
+            .active_theme
+            .insert("z-axis".into(), "alpha".into());
+        s.ui
+            .variables
+            .active_theme
+            .insert("a-axis".into(), "omega".into());
+        let p = VariablesPanel::for_editor(&s);
         // BTreeMap iterates in key order — a-axis first.
         assert_eq!(p.chips.len(), 2);
         assert_eq!(p.chips[0].axis, "a-axis");
         assert_eq!(p.chips[1].axis, "z-axis");
     }
-}
-
-// Suppress unused-import warning until tests are split into a
-// sibling file. Test mod uses `BTreeMap` indirectly via the
-// VariableTable default; keeping the import keeps that obvious.
-#[allow(dead_code)]
-fn _ensure_themed_value_path_compiles() {
-    // Reference these types so `cargo check --lib` warns when they
-    // move (the panel will need them once edit inputs land).
-    let _t: Option<ThemeAxis> = None;
-    let _v: Option<VariableValue> = None;
 }

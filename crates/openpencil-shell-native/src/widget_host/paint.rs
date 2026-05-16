@@ -120,8 +120,15 @@ impl WidgetHostNative {
         //     selection is active, PropertyPanel owns the rail and
         //     VariablesPanel paints below it; when no selection, the
         //     Variables panel anchors at the top so it's not hidden.
-        if !doc.var_table.variables.is_empty() {
-            let vars = VariablesPanel::for_document(doc);
+        let has_variables = self
+            .editor_state
+            .doc
+            .variables
+            .as_ref()
+            .map(|v| !v.is_empty())
+            .unwrap_or(false);
+        if has_variables {
+            let vars = VariablesPanel::for_editor(&self.editor_state);
             let intrinsic = vars.intrinsic_height();
             let top_y = if has_property {
                 // Below PropertyPanel — naive offset uses the
@@ -311,7 +318,7 @@ impl WidgetHostNative {
                 },
                 openpencil_shell_core::Color { r: 0.0, g: 0.0, b: 0.0, a: 0.45 },
             );
-            let modal = FigmaImportModal::for_document(doc);
+            let modal = FigmaImportModal::for_editor(&self.editor_state);
             let modal_rect = modal.rect(viewport_width, viewport_height);
             let mut cx = PaintCx { backend: &mut *frame };
             modal.paint(&mut cx, modal_rect);
@@ -357,9 +364,9 @@ impl WidgetHostNative {
         }
 
         // 10b. Color picker — floating overlay near the right rail.
-        if let Some(state) = doc.ui.color_picker.clone() {
+        if let Some(state) = self.editor_state.ui.color_picker.clone() {
             use openpencil_shell_core::widgets::color_picker::ColorPicker;
-            let picker = ColorPicker::for_state(doc, state);
+            let picker = ColorPicker::for_state(&self.editor_state, state);
             let picker_rect = picker.rect(viewport_width, viewport_height);
             let mut cx = PaintCx {
                 backend: &mut *frame,
@@ -369,9 +376,9 @@ impl WidgetHostNative {
 
         // 11. Layer context menu — right-click overlay above
         //     everything else.
-        if let Some(state) = doc.ui.layer_context_menu.clone() {
+        if let Some(state) = self.editor_state.editor_ui.layer_context_menu.clone() {
             use openpencil_shell_core::widgets::layer_context_menu::LayerContextMenu;
-            let menu = LayerContextMenu::for_state(doc, state);
+            let menu = LayerContextMenu::for_state(&self.editor_state, state);
             let menu_rect = menu.rect();
             let mut cx = PaintCx {
                 backend: &mut *frame,

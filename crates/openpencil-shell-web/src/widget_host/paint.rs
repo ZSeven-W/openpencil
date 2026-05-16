@@ -235,9 +235,9 @@ impl WidgetHost {
         }
 
         // Layer context menu — right-click overlay, top of stack.
-        if let Some(state) = self.paint_doc.ui.layer_context_menu.clone() {
+        if let Some(state) = self.editor_state.editor_ui.layer_context_menu.clone() {
             use openpencil_shell_core::widgets::layer_context_menu::LayerContextMenu;
-            let menu = LayerContextMenu::for_state(&self.paint_doc, state);
+            let menu = LayerContextMenu::for_state(&self.editor_state, state);
             let menu_rect = menu.rect();
             let mut cx = PaintCx {
                 backend: &mut *backend,

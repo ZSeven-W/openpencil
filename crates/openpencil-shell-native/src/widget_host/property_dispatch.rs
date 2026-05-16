@@ -115,8 +115,7 @@ impl WidgetHostNative {
     ) {
         use op_editor_core::editor_ui_state::FileAction;
         use openpencil_shell_core::widgets::figma_import::{FigmaImportHit, FigmaImportModal};
-        self.refresh_paint_doc();
-        let modal = FigmaImportModal::for_document(&self.paint_doc);
+        let modal = FigmaImportModal::for_editor(&self.editor_state);
         let panel_rect = modal.rect(viewport_w, viewport_h);
         match modal.hit_test(panel_rect, openpencil_shell_core::Point2D::new(x, y)) {
             FigmaImportHit::Close | FigmaImportHit::Outside => {
@@ -299,8 +298,14 @@ impl WidgetHostNative {
         viewport_width: f32,
         viewport_height: f32,
     ) -> bool {
-        self.refresh_paint_doc();
-        if self.paint_doc.var_table.variables.is_empty() {
+        let has_variables = self
+            .editor_state
+            .doc
+            .variables
+            .as_ref()
+            .map(|v| !v.is_empty())
+            .unwrap_or(false);
+        if !has_variables {
             return false;
         }
         use openpencil_shell_core::widgets::variables_panel::{
@@ -308,7 +313,7 @@ impl WidgetHostNative {
         };
         use openpencil_shell_core::widgets::{STATUS_BAR_HEIGHT, TOP_BAR_HEIGHT};
         use openpencil_shell_core::{Point2D, Rect};
-        let vars = VariablesPanel::for_document(&self.paint_doc);
+        let vars = VariablesPanel::for_editor(&self.editor_state);
         let intrinsic = vars.intrinsic_height();
         let top_y = if self.editor_state.property_panel_visible() {
             let bottom_pad = STATUS_BAR_HEIGHT + 16.0;
