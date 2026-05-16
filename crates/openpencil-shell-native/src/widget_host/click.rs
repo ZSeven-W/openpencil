@@ -131,7 +131,7 @@ impl WidgetHostNative {
         self.refresh_paint_doc();
         // AI chat panel sits above canvas — check first.
         if let Some(chat_rect) = self.ai_chat_rect(viewport_width, viewport_height) {
-            let panel = AIChatPlaceholder::from_document(&self.paint_doc);
+            let panel = AIChatPlaceholder::from_editor(&self.editor_state);
             if let Some(hit) = panel.hit_test(chat_rect, Point2D::new(x, y)) {
                 match hit {
                     AIChatHit::FocusInput => {

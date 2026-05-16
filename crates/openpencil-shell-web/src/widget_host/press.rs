@@ -292,7 +292,7 @@ impl WidgetHost {
         //    click inside its rect is consumed here, even when
         //    that point lies inside the toolbar rect underneath.
         if let Some(chat_rect) = self.ai_chat_rect(viewport_width, viewport_height) {
-            let panel = AIChatPlaceholder::from_document(&self.paint_doc);
+            let panel = AIChatPlaceholder::from_editor(&self.editor_state);
             if let Some(hit) = panel.hit_test(chat_rect, Point2D::new(x, y)) {
                 if matches!(hit, AIChatHit::DragHandle) {
                     self.chat_drag = Some(ChatDragState {
@@ -481,7 +481,7 @@ impl WidgetHost {
         // clicks don't fall through to the canvas.
         self.refresh_paint_doc();
         if let Some(chat_rect) = self.ai_chat_rect(viewport_w, viewport_h) {
-            let panel = AIChatPlaceholder::from_document(&self.paint_doc);
+            let panel = AIChatPlaceholder::from_editor(&self.editor_state);
             if let Some(hit) = panel.hit_test(chat_rect, Point2D::new(x, y)) {
                 match hit {
                     AIChatHit::FocusInput => {

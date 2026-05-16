@@ -6,9 +6,8 @@
 //! Search is intentionally omitted in this slice — the discovered
 //! catalogs are short; a search row lands with live CLI re-query.
 
-use crate::agent_settings_state::AgentProvider;
-use crate::chat_models::ModelEntry;
 use crate::theme::Theme;
+use op_editor_core::chat::{AgentProvider, ModelEntry};
 use crate::widgets::brand_icons::{paint_brand_logo, paint_opencode_logo, BrandLogo};
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::property_panel_inputs::to_jian_color;

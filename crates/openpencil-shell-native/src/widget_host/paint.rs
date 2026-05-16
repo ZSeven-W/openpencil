@@ -198,7 +198,7 @@ impl WidgetHostNative {
         //    of the toolbar in any overlap region (matches the
         //    user's requested z-order: chat above toolbar).
         if let Some(chat_rect) = self.ai_chat_rect(viewport_width, viewport_height) {
-            let chat = AIChatPlaceholder::from_document_at(doc, self.now_ms);
+            let chat = AIChatPlaceholder::from_editor_at(&self.editor_state, self.now_ms);
             let mut cx = PaintCx {
                 backend: &mut *frame,
             };
