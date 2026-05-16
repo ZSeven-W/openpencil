@@ -108,6 +108,10 @@ pub struct UiDraftState {
     pub pen_in_progress: Option<NodeId>,
     /// Cursor position in document coords for the Pen-tool rubber band.
     pub pen_cursor_doc: Option<Point2D>,
+    /// Pre-pen history snapshot — captured BEFORE `start_pen_path`
+    /// mutates the tree, pushed onto the undo stack only when the
+    /// finished path has ≥ 2 anchors. Dropped on a 1-anchor cancel.
+    pub pending_pen_history: Option<crate::history::EditorSnapshot>,
     /// Transient variable/theme state (active theme + ref caches).
     pub variables: VariableUiState,
 }
