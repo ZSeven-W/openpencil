@@ -31,6 +31,10 @@ jobs:
       matrix:
         os: [macos-latest, ubuntu-latest, windows-latest]
     steps:
+      # Keep LF line endings on the Windows runner so `cargo fmt --check`
+      # does not trip over CRLF-converted vendored sources.
+      - name: Disable autocrlf
+        run: git config --global core.autocrlf false
       - uses: actions/checkout@v4
         with:
           submodules: recursive
