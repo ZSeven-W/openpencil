@@ -345,6 +345,8 @@ impl<'a> Widget for FileMenu<'a> {
     }
 }
 
+// Paint-context + geometry args threaded through; a struct adds no gain.
+#[allow(clippy::too_many_arguments)]
 fn paint_row(
     cx: &mut PaintCx<'_>,
     theme: &Theme,

@@ -204,6 +204,8 @@ pub fn paint_input_with_icon(
     paint_input_with_icon_focused(cx, theme, rect, icon, value, unit, false, false);
 }
 
+// Paint-context + geometry args threaded through; a struct adds no gain.
+#[allow(clippy::too_many_arguments)]
 pub fn paint_input_with_icon_focused(
     cx: &mut PaintCx<'_>,
     theme: &Theme,

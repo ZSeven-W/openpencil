@@ -18,6 +18,9 @@ use super::{EditorCommand, McpTool, ToolErrorCode, ToolOutcome};
 /// Parse a `node_id`-style argument into a `NodeId`. Node ids are
 /// canonical `.op` schema strings — any non-empty string is valid; an
 /// empty string (the NONE sentinel) is rejected.
+// `ToolOutcome` is the shared MCP outcome type — boxing it broadly to
+// shrink the `Err` variant would destabilize every tool signature.
+#[allow(clippy::result_large_err)]
 pub(super) fn parse_node_id(
     args: &BTreeMap<String, String>,
     key: &str,
@@ -206,6 +209,8 @@ pub(super) const ALLOWED_KINDS: &[&str] = &[
     "frame", "group", "rect", "ellipse", "polygon", "line", "text", "path",
 ];
 
+// `ToolOutcome` is the shared MCP outcome type — see `parse_node_id`.
+#[allow(clippy::result_large_err)]
 fn parse_i32_arg(args: &BTreeMap<String, String>, key: &str) -> Result<i32, ToolOutcome> {
     let Some(raw) = args.get(key) else {
         return Err(ToolOutcome::Err(

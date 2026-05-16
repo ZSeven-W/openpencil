@@ -78,6 +78,8 @@ pub(super) fn paint_drag_ghost(
 /// background) with a subtle primary underline + blinking caret.
 /// Tightened caret-to-text gap and uses `blink_visible` so the
 /// caret pulses at the same cadence as the chat / property input.
+// Paint-context + geometry args threaded through; a struct adds no gain.
+#[allow(clippy::too_many_arguments)]
 pub(super) fn paint_rename_input(
     cx: &mut PaintCx<'_>,
     theme: &Theme,

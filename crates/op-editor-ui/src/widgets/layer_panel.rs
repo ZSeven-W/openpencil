@@ -452,7 +452,7 @@ impl Widget for LayerPanel {
             rect.origin.x,
             y,
             rect.size.x,
-            &self.pages_label,
+            self.pages_label,
         );
         // "+" add-page affordance, top-right of header row.
         let plus_x = rect.origin.x + rect.size.x - ROW_PAD_X - 12.0;
@@ -546,7 +546,7 @@ impl Widget for LayerPanel {
             rect.origin.x,
             y,
             rect.size.x,
-            &self.layers_label,
+            self.layers_label,
         );
         y += SECTION_HEADER_HEIGHT;
 

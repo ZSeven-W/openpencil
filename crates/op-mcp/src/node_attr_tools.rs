@@ -345,6 +345,9 @@ pub fn set_node_name_snapshot() -> SetNodeName {
 
 /// Parse an optional `"true"` / `"false"` argument. `Ok(None)` when
 /// the key is absent; `Err` on a non-boolean value.
+// `ToolOutcome` is the shared MCP outcome type — boxing it broadly to
+// shrink the `Err` variant would destabilize every tool signature.
+#[allow(clippy::result_large_err)]
 fn parse_opt_bool(args: &BTreeMap<String, String>, key: &str) -> Result<Option<bool>, ToolOutcome> {
     match args.get(key) {
         None => Ok(None),
@@ -361,6 +364,8 @@ fn parse_opt_bool(args: &BTreeMap<String, String>, key: &str) -> Result<Option<b
 
 /// Parse an optional finite-`f64` argument. `Ok(None)` when the key is
 /// absent; `Err` on a non-numeric / non-finite value.
+// `ToolOutcome` is the shared MCP outcome type — see `parse_opt_bool`.
+#[allow(clippy::result_large_err)]
 fn parse_opt_f64(args: &BTreeMap<String, String>, key: &str) -> Result<Option<f64>, ToolOutcome> {
     match args.get(key) {
         None => Ok(None),

@@ -18,7 +18,7 @@ use crate::theme::Theme;
 use crate::widgets::editor_state_ext::theme_for;
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::{LayoutBox, LayoutCx, PaintCx, Widget, WidgetId};
-use crate::{Color, Point2D, Rect};
+use crate::{Point2D, Rect};
 use op_editor_core::EditorState;
 use op_editor_core::Tool;
 
@@ -380,14 +380,13 @@ fn paint_button(cx: &mut PaintCx<'_>, theme: &Theme, x: f32, y: f32, icon: Icon,
         origin: Point2D::new(x, y),
         size: Point2D::new(BUTTON_SIZE, BUTTON_SIZE),
     };
-    let icon_color: Color;
-    if active {
+    let icon_color = if active {
         cx.backend
             .fill_round_rect(button_rect, BUTTON_RADIUS, theme.primary);
-        icon_color = theme.primary_foreground;
+        theme.primary_foreground
     } else {
-        icon_color = theme.muted_foreground;
-    }
+        theme.muted_foreground
+    };
     let icon_origin = Point2D::new(
         x + (BUTTON_SIZE - ICON_SIZE) / 2.0,
         y + (BUTTON_SIZE - ICON_SIZE) / 2.0,

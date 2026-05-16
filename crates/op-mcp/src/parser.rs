@@ -483,8 +483,6 @@ fn extract_field<'a>(line: &'a str, key: &str) -> Option<&'a str> {
     let val = after_colon[colon..].trim_start();
     let val_start = start + colon + (after_colon[colon..].len() - val.len());
     // Read until next , or }.
-    let end_rel = val
-        .find(|c: char| c == ',' || c == '}')
-        .unwrap_or(val.len());
+    let end_rel = val.find([',', '}']).unwrap_or(val.len());
     Some(line[val_start..val_start + end_rel].trim())
 }

@@ -251,6 +251,9 @@ impl EditorState {
     }
 
     /// `InsertNode` — build + append a fresh leaf on the active page.
+    // Args mirror the `InsertNode` command fields one-for-one; bundling
+    // them into a struct would just shadow the DTO with no real gain.
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn cmd_insert_node(
         &mut self,
         kind: &str,
@@ -285,6 +288,8 @@ impl EditorState {
     }
 
     /// `UpdateNode` — patch optional fields on an existing node.
+    // Args mirror the `UpdateNode` command fields one-for-one.
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn cmd_update_node(
         &mut self,
         node_id: &NodeId,

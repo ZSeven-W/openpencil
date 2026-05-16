@@ -206,7 +206,6 @@ fn build_command(binary: &str, args: &[String]) -> Command {
         // we never depend on signal propagation for cleanup.
         #[cfg(unix)]
         {
-            use std::os::unix::process::CommandExt;
             cmd.process_group(0);
         }
         cmd

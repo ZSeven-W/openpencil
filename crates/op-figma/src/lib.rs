@@ -170,51 +170,6 @@ fn collect_top_level_blocks(s: &str) -> Option<Vec<&str>> {
     None
 }
 
-/// Walk a clipboard-JSON payload and count the top-level entries in
-/// the `"children": [ ... ]` array. Hand-rolled parser (no serde,
-/// shell-core stays wasm32-light) — counts `{` openings at depth 1
-/// inside the children array. Returns `None` when the children key
-/// is absent or the brace tracker can't find a matching close.
-fn count_top_level_children(s: &str) -> Option<usize> {
-    let needle = "\"children\"";
-    let key_at = s.find(needle)?;
-    let after = &s[key_at + needle.len()..];
-    let bracket = after.find('[')?;
-    let mut depth = 0i32;
-    let mut count = 0usize;
-    let mut in_string = false;
-    let mut escape = false;
-    for c in after[bracket..].chars().skip(1) {
-        if escape {
-            escape = false;
-            continue;
-        }
-        if c == '\\' {
-            escape = true;
-            continue;
-        }
-        if c == '"' {
-            in_string = !in_string;
-            continue;
-        }
-        if in_string {
-            continue;
-        }
-        match c {
-            '{' => {
-                if depth == 0 {
-                    count += 1;
-                }
-                depth += 1;
-            }
-            '}' => depth -= 1,
-            ']' if depth == 0 => return Some(count),
-            _ => {}
-        }
-    }
-    None
-}
-
 /// The canonical `PenNode` variant a Figma clipboard kind maps onto.
 /// `PenNode` is a closed 12-variant enum with no `Other` escape
 /// hatch, so unrecognised Figma kinds round-trip as `Frame` (the
@@ -597,7 +552,9 @@ mod tests {
 
     #[test]
     fn figma_clipboard_node_to_node_builds_matching_pen_node_variant() {
-        let cases: [(&str, fn(&PenNode) -> bool); 8] = [
+        // (figma clipboard kind, predicate asserting the mapped variant).
+        type VariantCase = (&'static str, fn(&PenNode) -> bool);
+        let cases: [VariantCase; 8] = [
             ("RECTANGLE", |n| matches!(n, PenNode::Rectangle(_))),
             ("ELLIPSE", |n| matches!(n, PenNode::Ellipse(_))),
             ("LINE", |n| matches!(n, PenNode::Line(_))),

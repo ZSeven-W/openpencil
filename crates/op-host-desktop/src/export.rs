@@ -10,6 +10,7 @@
 //!   - Line                 : diagonal stroke across `bounds`
 //!   - Path                 : polyline through `node.points`
 //!   - Text                 : authored content at the resolved bounds
+//!
 //! Per-node rotation honoured via `Canvas::rotate`.
 //!
 //! The scene is layout-resolved: every `SceneNode::bounds` is the
@@ -107,15 +108,68 @@ pub fn export_raster(
     format: RasterFormat,
     scale: f32,
 ) -> Result<(), String> {
-    let scale = if scale.is_finite() {
-        scale.clamp(0.5, 8.0)
-    } else {
-        2.0
-    };
+    let scale = clamp_scale(scale);
     let Some(page) = scene.active_page() else {
         return Err("no active page".into());
     };
     let bounds = page_bounds(page).ok_or("nothing to export")?;
+    render_raster(bounds, target, format, scale, |canvas| {
+        for node in &page.children {
+            paint_node(canvas, node);
+        }
+    })
+}
+
+/// Raster-export a single node + its subtree by id — the "export this
+/// layer" path (TS parity: `exportLayerToRaster`). The surface is
+/// cropped to the node's painted bounds via the same `collect_bounds`
+/// traversal `export_raster` uses for the whole page. Errors when the
+/// id is unknown on the active page or the node paints nothing.
+pub fn export_node_raster(
+    scene: &LayoutScene,
+    node_id: &str,
+    target: &StdPath,
+    format: RasterFormat,
+    scale: f32,
+) -> Result<(), String> {
+    let scale = clamp_scale(scale);
+    let Some(page) = scene.active_page() else {
+        return Err("no active page".into());
+    };
+    let node = page
+        .find(node_id)
+        .ok_or_else(|| format!("node {node_id} not found on the active page"))?;
+    let mut acc = BoundsAcc::new();
+    collect_bounds(node, glam::Affine2::IDENTITY, &mut acc);
+    let bounds = acc
+        .into_rect()
+        .ok_or_else(|| format!("node {node_id} paints nothing"))?;
+    render_raster(bounds, target, format, scale, |canvas| {
+        paint_node(canvas, node);
+    })
+}
+
+/// Clamp a caller-supplied export scale to the @0.5x..@8x range,
+/// defaulting a non-finite value to @2x (TS export-dialog parity).
+fn clamp_scale(scale: f32) -> f32 {
+    if scale.is_finite() {
+        scale.clamp(0.5, 8.0)
+    } else {
+        2.0
+    }
+}
+
+/// Shared surface-alloc + background-clear + encode + write path for
+/// the whole-page and single-node raster exporters. `bounds` is the
+/// painted-content rect (doc-space); `paint` draws into the canvas
+/// after it has been scaled + translated so `bounds` sits at `MARGIN`.
+fn render_raster(
+    bounds: Rect,
+    target: &StdPath,
+    format: RasterFormat,
+    scale: f32,
+    paint: impl FnOnce(&Canvas),
+) -> Result<(), String> {
     let width_px = ((bounds.size.x + MARGIN * 2.0) * scale).round() as i32;
     let height_px = ((bounds.size.y + MARGIN * 2.0) * scale).round() as i32;
     let info = skia_safe::ImageInfo::new(
@@ -133,9 +187,7 @@ pub fn export_raster(
     }
     canvas.scale((scale, scale));
     canvas.translate((MARGIN - bounds.origin.x, MARGIN - bounds.origin.y));
-    for node in &page.children {
-        paint_node(canvas, node);
-    }
+    paint(canvas);
     let image = surface.image_snapshot();
     let data = image
         .encode(None, format.skia(), format.quality())
@@ -814,5 +866,62 @@ mod tests {
         assert_eq!(b.origin.y, 10.0);
         assert_eq!(b.size.x, 200.0);
         assert_eq!(b.size.y, 100.0);
+    }
+
+    #[test]
+    fn export_node_raster_crops_to_the_named_node() {
+        // Two side-by-side rects: a 100×50 at origin and a 40×40 far
+        // away. Exporting only the small node must produce a surface
+        // cropped to ITS bounds, not the page union.
+        let grey = Color {
+            r: 0.5,
+            g: 0.5,
+            b: 0.5,
+            a: 1.0,
+        };
+        let scene = scene_with(vec![
+            filled_rect("big", 0.0, 0.0, 100.0, 50.0, grey),
+            filled_rect("small", 400.0, 400.0, 40.0, 40.0, grey),
+        ]);
+        let tmp = std::env::temp_dir().join(format!("op-export-node-{}.png", std::process::id()));
+        let res = export_node_raster(&scene, "small", &tmp, RasterFormat::Png, 1.0);
+        assert!(res.is_ok(), "export_node_raster failed: {res:?}");
+        let bytes = std::fs::read(&tmp).unwrap();
+        assert_eq!(
+            &bytes[..8],
+            &[0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A]
+        );
+        // The cropped surface is the 40×40 node + 2×MARGIN, far
+        // smaller than the ~440 px page union the whole-page export
+        // would have produced. PNG IHDR carries the dimensions as
+        // big-endian u32s at byte offsets 16 (width) and 20 (height).
+        let png_width = u32::from_be_bytes([bytes[16], bytes[17], bytes[18], bytes[19]]);
+        let png_height = u32::from_be_bytes([bytes[20], bytes[21], bytes[22], bytes[23]]);
+        let expected = (40.0 + MARGIN * 2.0) as u32;
+        assert_eq!(png_width, expected);
+        assert_eq!(png_height, expected);
+        let _ = std::fs::remove_file(&tmp);
+    }
+
+    #[test]
+    fn export_node_raster_errors_on_unknown_id() {
+        let scene = scene_with(vec![filled_rect(
+            "n10",
+            0.0,
+            0.0,
+            10.0,
+            10.0,
+            Color {
+                r: 0.0,
+                g: 0.0,
+                b: 0.0,
+                a: 1.0,
+            },
+        )]);
+        let tmp =
+            std::env::temp_dir().join(format!("op-export-node-miss-{}.png", std::process::id()));
+        let res = export_node_raster(&scene, "ghost", &tmp, RasterFormat::Png, 1.0);
+        assert!(res.is_err(), "expected Err on unknown id, got {res:?}");
+        assert!(res.unwrap_err().contains("not found"));
     }
 }

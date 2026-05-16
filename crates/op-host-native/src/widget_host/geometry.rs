@@ -91,7 +91,7 @@ impl WidgetHostNative {
             };
         // shell-core hit-test returns shell-core `NodeId`s; translate
         // to op-editor-core ids for storage on `editor_ui`.
-        let new_layer_ec = new_layer.as_ref().map(|id| id.clone());
+        let new_layer_ec = new_layer.clone();
         let changed = new_layer_ec != self.editor_state.editor_ui.hovered_layer_id
             || new_page != self.editor_state.editor_ui.hovered_page_index;
         if changed {

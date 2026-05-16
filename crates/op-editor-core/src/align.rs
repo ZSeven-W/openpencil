@@ -6,6 +6,7 @@
 //!   - 2+ selected → union of the selection's aggregate bounds.
 //!   - 1 selected → parent container's aggregate bounds (a top-level
 //!     node has no useful reference and silently no-ops).
+//!
 //! Distribute requires 3+ nodes; fewer silently no-ops.
 //!
 //! All deltas go through [`crate::walkers::translate_subtree`], so
@@ -146,8 +147,8 @@ fn apply_distribute(children: &mut [PenNode], editable: &[NodeId], action: Align
     // descendant must not contribute two anchors.
     let filtered: Vec<NodeId> = editable
         .iter()
-        .cloned()
         .filter(|id| !is_ancestor_in_set(children, id, editable))
+        .cloned()
         .collect();
     let mut sorted: Vec<(NodeId, DocRect)> = filtered
         .iter()
@@ -173,8 +174,8 @@ fn apply_distribute(children: &mut [PenNode], editable: &[NodeId], action: Align
     let last_c = center(&sorted[n - 1].1);
     let step = (last_c - first_c) / (n - 1) as f64;
     let mut moved = false;
-    for i in 1..n - 1 {
-        let (id, cur) = (sorted[i].0.clone(), sorted[i].1);
+    for (i, entry) in sorted.iter().enumerate().take(n - 1).skip(1) {
+        let (id, cur) = (entry.0.clone(), entry.1);
         let cur_c = center(&cur);
         let target_c = first_c + step * i as f64;
         let delta = target_c - cur_c;

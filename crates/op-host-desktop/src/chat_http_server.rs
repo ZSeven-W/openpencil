@@ -357,18 +357,10 @@ async fn discover_port(
 /// after any of those tokens.
 pub(crate) fn parse_listening_line(line: &str) -> Option<u16> {
     let lower = line.to_ascii_lowercase();
-    let mut idx = 0;
-    while idx < lower.len() {
-        if let Some(pos) = lower[idx..].find("listening") {
-            idx += pos + "listening".len();
-            // Scan for the first digit run after this token.
-            let rest = &line[idx..];
-            return extract_port(rest);
-        } else {
-            break;
-        }
-    }
-    None
+    let pos = lower.find("listening")?;
+    let idx = pos + "listening".len();
+    // Scan for the first digit run after this token.
+    extract_port(&line[idx..])
 }
 
 /// Pull the actual port (not an IP octet) out of `rest`. Strategy:

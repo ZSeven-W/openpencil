@@ -235,6 +235,9 @@ fn composition_update_no_selection_passthrough() {
 }
 
 #[test]
+// The reversed `3..1` range is the deliberate test input — the mapper
+// must reject a misordered selection and return `None`.
+#[allow(clippy::reversed_empty_ranges)]
 fn composition_update_misordered_selection_returns_none() {
     let update = composition_update("hello".to_string(), Some(3..1));
     match update.kind {

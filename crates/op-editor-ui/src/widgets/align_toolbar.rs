@@ -7,6 +7,7 @@
 //!   - Align L / Center-H / Right
 //!   - Align Top / Center-V / Bottom
 //!   - Distribute H / Distribute V
+//!
 //! Anchored to the horizontal center of the canvas region, ~16 px
 //! below the canvas top edge.
 
@@ -32,6 +33,7 @@ pub const ALIGN_TOOLBAR_WIDTH: f32 =
 /// column. Mirrors paint-side geometry: `TOOLBAR_INSET_X` (12 in
 /// shell-native `widget_host/helpers.rs` and shell-web `widget_host.rs`)
 /// + `TOOLBAR_WIDTH` (44) = 56 — leaves the tool column unobscured.
+///
 /// Has to be a shell-core local because shell-core can't depend on
 /// either host crate's helpers. Keep in sync if either constant moves.
 const VERTICAL_TOOLBAR_RESERVE: f32 = 56.0;

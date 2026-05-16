@@ -144,43 +144,6 @@ impl DesktopApp {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn cursor_only_redraw_without_visible_state_change_skips_present() {
-        let mut app = DesktopApp::new();
-        app.redraw_pending = true;
-        app.pending_cursor_move = Some((1200.0, 20.0));
-
-        assert!(!app.prepare_redraw());
-        assert!(!app.redraw_pending);
-        assert!(app.pending_cursor_move.is_none());
-    }
-
-    #[test]
-    fn consumed_press_dirties_existing_cursor_redraw_without_second_request() {
-        let mut app = DesktopApp::new();
-        app.redraw_pending = true;
-
-        assert!(!app.request_redraw(true));
-        assert!(app.prepare_redraw());
-    }
-
-    #[test]
-    fn cursor_redraw_still_paints_when_layer_hover_changes() {
-        let mut app = DesktopApp::new();
-        app.redraw_pending = true;
-        app.pending_cursor_move = Some((
-            20.0,
-            op_editor_ui::widgets::TOP_BAR_HEIGHT + 8.0 + 28.0 + 16.0,
-        ));
-
-        assert!(app.prepare_redraw());
-    }
-}
-
 impl ApplicationHandler for DesktopApp {
     fn new_events(&mut self, _event_loop: &ActiveEventLoop, cause: StartCause) {
         // When the WaitUntil deadline fires, the next redraw paints
@@ -515,21 +478,18 @@ impl ApplicationHandler for DesktopApp {
                     self.request_redraw(true);
                 }
             }
-            WindowEvent::Ime(ime) => {
-                // CJK composition: macOS / X11 / Wayland route the
-                // committed candidate string through here. We don't
-                // paint the preedit yet; only the final commit is
-                // pushed into the focused input.
-                if let winit::event::Ime::Commit(text) = ime {
-                    let mut consumed = false;
-                    for ch in text.chars() {
-                        if self.host.apply_text(ch) {
-                            consumed = true;
-                        }
+            // CJK composition: macOS / X11 / Wayland route the committed
+            // candidate string through here. We don't paint the preedit
+            // yet; only the final commit is pushed into the focused input.
+            WindowEvent::Ime(winit::event::Ime::Commit(text)) => {
+                let mut consumed = false;
+                for ch in text.chars() {
+                    if self.host.apply_text(ch) {
+                        consumed = true;
                     }
-                    if consumed {
-                        self.request_redraw(true);
-                    }
+                }
+                if consumed {
+                    self.request_redraw(true);
                 }
             }
             WindowEvent::ModifiersChanged(mods) => {
@@ -809,5 +769,42 @@ fn main() {
     if let Some(err) = app.error {
         eprintln!("openpencil-desktop: fatal error during run: {err}");
         std::process::exit(1);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn cursor_only_redraw_without_visible_state_change_skips_present() {
+        let mut app = DesktopApp::new();
+        app.redraw_pending = true;
+        app.pending_cursor_move = Some((1200.0, 20.0));
+
+        assert!(!app.prepare_redraw());
+        assert!(!app.redraw_pending);
+        assert!(app.pending_cursor_move.is_none());
+    }
+
+    #[test]
+    fn consumed_press_dirties_existing_cursor_redraw_without_second_request() {
+        let mut app = DesktopApp::new();
+        app.redraw_pending = true;
+
+        assert!(!app.request_redraw(true));
+        assert!(app.prepare_redraw());
+    }
+
+    #[test]
+    fn cursor_redraw_still_paints_when_layer_hover_changes() {
+        let mut app = DesktopApp::new();
+        app.redraw_pending = true;
+        app.pending_cursor_move = Some((
+            20.0,
+            op_editor_ui::widgets::TOP_BAR_HEIGHT + 8.0 + 28.0 + 16.0,
+        ));
+
+        assert!(app.prepare_redraw());
     }
 }

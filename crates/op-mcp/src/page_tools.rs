@@ -36,6 +36,9 @@ pub fn set_active_page_snapshot() -> SetActivePage {
     SetActivePage
 }
 
+// `ToolOutcome` is the shared MCP outcome type — boxing it broadly to
+// shrink the `Err` variant would destabilize every tool signature.
+#[allow(clippy::result_large_err)]
 fn parse_u32_arg(args: &BTreeMap<String, String>, key: &str) -> Result<u32, ToolOutcome> {
     let Some(raw) = args.get(key) else {
         return Err(ToolOutcome::Err(
@@ -327,6 +330,8 @@ impl McpTool for SetViewport {
         "set_viewport"
     }
     fn call(&self, args: &BTreeMap<String, String>) -> ToolOutcome {
+        // `ToolOutcome` is the shared MCP outcome type — see `parse_u32_arg`.
+        #[allow(clippy::result_large_err)]
         fn parse_opt_i32(
             args: &BTreeMap<String, String>,
             key: &str,
@@ -457,7 +462,7 @@ impl McpTool for SetActiveTool {
         const ALLOWED_TOOLS: &[&str] = &[
             "select", "rect", "ellipse", "polygon", "line", "pen", "text", "frame", "hand",
         ];
-        if !ALLOWED_TOOLS.iter().any(|t| *t == tool.as_str()) {
+        if !ALLOWED_TOOLS.contains(&tool.as_str()) {
             return ToolOutcome::Err(
                 ToolErrorCode::InvalidArgument,
                 format!(

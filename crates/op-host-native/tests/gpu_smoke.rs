@@ -3,9 +3,9 @@
 //! Per-OS dispatch:
 //! - Linux  : EGL pbuffer + `SharedSkiaContext` GL surface (non-ignored).
 //! - macOS  : invisible winit window + `SharedSkiaContext::new_desktop`
-//!            (non-ignored — runs on developer machine + macOS CI).
+//!   (non-ignored — runs on developer machine + macOS CI).
 //! - Windows: `#[ignore]` per spec §8.1 (no GPU on standard Actions runner;
-//!            covered by manual smoke notes).
+//!   covered by manual smoke notes).
 //!
 //! All paths drive a single chrome `fill_rect`(red) through the live
 //! pipeline and read pixels back via the FBO chain (spec §7.2 #3).

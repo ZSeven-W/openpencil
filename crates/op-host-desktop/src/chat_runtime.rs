@@ -71,7 +71,7 @@ impl BuiltInProvider {
     /// Build a BuiltIn provider from a hand-rolled `Provider` impl.
     /// Used by tests + future settings tabs that need a custom backend
     /// (e.g., a local proxy or a mocked HTTP server). `system_prompt`
-    /// + `max_output_tokens` apply to every turn for the lifetime of
+    /// and `max_output_tokens` apply to every turn for the lifetime of
     /// the provider; rebuild a new `BuiltInProvider` to change them.
     #[allow(dead_code)]
     pub fn from_provider(

@@ -6,7 +6,7 @@
 
 use crate::node_id::NodeId;
 use crate::pen_node_ext::PenNodeExt;
-use crate::test_support::{frame, group, rect, sample, state_with, text};
+use crate::test_support::{frame, group, rect, sample, state_with};
 use crate::walkers::{find_node, ReorderDirection};
 
 // --- Selection -------------------------------------------------------
