@@ -328,7 +328,7 @@ impl WidgetHostNative {
                 openpencil_shell_core::Color { r: 0.0, g: 0.0, b: 0.0, a: 0.45 },
             );
             let dlg = ExportDialog::centered(viewport_width, viewport_height);
-            dlg.paint(&mut *frame, &self.theme, doc);
+            dlg.paint(&mut *frame, &self.theme, &self.editor_state.editor_ui);
         }
 
         // 10a. Agent-settings modal — top-most overlay when open.

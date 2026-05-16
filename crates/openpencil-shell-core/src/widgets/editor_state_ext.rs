@@ -101,3 +101,19 @@ pub fn doc_file_menu_choice(
         O::ClearRecent => D::ClearRecent,
     }
 }
+
+/// Map an `op_editor_core::ExportFormat` onto the widget-layer
+/// `widgets::export_dialog::ExportFormat`. Variant-identical.
+pub fn doc_export_format(
+    f: op_editor_core::ExportFormat,
+) -> crate::widgets::export_dialog::ExportFormat {
+    use crate::widgets::export_dialog::ExportFormat as D;
+    use op_editor_core::ExportFormat as O;
+    match f {
+        O::Png => D::Png,
+        O::Jpeg => D::Jpeg,
+        O::Webp => D::Webp,
+        O::Svg => D::Svg,
+        O::Pdf => D::Pdf,
+    }
+}
