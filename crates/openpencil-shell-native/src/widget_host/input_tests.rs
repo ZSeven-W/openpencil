@@ -453,3 +453,28 @@ fn node_drag_not_intercepted_by_align_toolbar_hover() {
         bounds_b
     );
 }
+
+
+// --- Phase 6 bridge scaffolding ----------------------------------
+// Verifies the scoped `EditorState` field exists on the host and is
+// reachable for the per-group widget migration. Deleted in Phase 7.
+
+#[test]
+fn host_carries_a_scoped_editor_state_bridge() {
+    let host = WidgetHostNative::new();
+    // A fresh host starts with an empty canonical document — the
+    // bridge state is not yet seeded from `document` (no converter
+    // exists; each later 6.x task seeds its own widget group).
+    assert!(host.editor_state().doc.children.is_empty());
+    assert!(host.editor_state().selection.is_empty());
+}
+
+#[test]
+fn editor_state_bridge_is_independently_mutable() {
+    // The bridge accessor hands out a real `&mut EditorState` so the
+    // per-group input migration in later 6.x tasks can drive it
+    // without touching the legacy `document`.
+    let mut host = WidgetHostNative::new();
+    host.editor_state_mut().tool = op_editor_core::Tool::Rect;
+    assert_eq!(host.editor_state().tool, op_editor_core::Tool::Rect);
+}

@@ -13,6 +13,14 @@ path = "src/lib.rs"
 [dependencies]
 openpencil-shell-core = { path = "../openpencil-shell-core", version = "0.1.0" }
 
+# TEMPORARY (Phase 6 scaffolding — deleted in Phase 7 with `Document`).
+# `WidgetHostNative` holds an `op_editor_core::EditorState` alongside its
+# legacy `Document` so the ~30 shell-core widgets can migrate onto the
+# canonical model one group at a time while the workspace stays
+# build-green. Not wired into paint / input yet — see `widget_host.rs`
+# `editor_state` field doc.
+op-editor-core = { path = "../op-editor-core" }
+
 # Native-only deps cfg-gated outside wasm32. This is critical (resolves codex round 2 B1 BLOCK):
 # without cfg-gate, cargo would fetch + run skia-safe's build.rs (which fails on wasm32),
 # and the Step 5 grep `must NOT be compiled for wasm32` would never match — masked by

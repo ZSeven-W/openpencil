@@ -2341,6 +2341,7 @@ dependencies = [
  "jian-skia",
  "khronos-egl",
  "libloading",
+ "op-editor-core",
  "openpencil-shell-core",
  "raw-window-handle",
  "scopeguard",
