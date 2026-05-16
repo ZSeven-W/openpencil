@@ -39,7 +39,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use openpencil_shell_core::chat_provider::{
+use op_ai::chat_provider::{
     ChatDelta, ChatProvider, ChatRequest, CliName, StopReason,
 };
 use serde::Serialize;

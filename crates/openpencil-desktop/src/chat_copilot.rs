@@ -27,7 +27,7 @@ use github_copilot_sdk::handler::{
 };
 use github_copilot_sdk::types::{MessageOptions, SessionConfig, SessionEvent};
 use github_copilot_sdk::{Client, ClientOptions};
-use openpencil_shell_core::chat_provider::{
+use op_ai::chat_provider::{
     ChatDelta, ChatProvider, ChatRequest, StopReason,
 };
 use tokio::sync::mpsc;

@@ -23,8 +23,8 @@ use std::process::{Command, Stdio};
 use std::sync::mpsc::{self, Receiver, TryRecvError};
 use std::time::{Duration, Instant};
 
-use openpencil_shell_core::agent_settings_state::AgentProvider;
-use openpencil_shell_core::chat_models::ModelEntry;
+use op_ai::agent_settings_state::AgentProvider;
+use op_ai::chat_models::ModelEntry;
 
 /// Background model-discovery probe. [`discover_models`] reads a
 /// cache file and spawns a subprocess (`opencode models`, ~1 s),
@@ -79,7 +79,7 @@ impl ModelProbe {
 
 /// Translate a shell-core `ModelEntry` into op-editor-core's.
 fn model_entry_to_ec(m: ModelEntry) -> op_editor_core::ModelEntry {
-    use openpencil_shell_core::agent_settings_state::AgentProvider as ScP;
+    use op_ai::agent_settings_state::AgentProvider as ScP;
     let provider = match m.provider {
         ScP::ClaudeCode => op_editor_core::AgentProvider::ClaudeCode,
         ScP::CodexCli => op_editor_core::AgentProvider::CodexCli,

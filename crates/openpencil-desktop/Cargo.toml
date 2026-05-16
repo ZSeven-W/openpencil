@@ -25,6 +25,11 @@ op-editor-core = { path = "../op-editor-core" }
 # (`mcp.rs` + `mcp/*`) was extracted out of openpencil-shell-core into the
 # op-mcp crate; `mcp_serve.rs` registers tools through `op_mcp::*`.
 op-mcp = { path = "../op-mcp" }
+# Phase 7 strangler reorg: the transport-free AI chat data shapes
+# (`ChatProvider` trait + model catalog + agent-settings state) were
+# extracted into op-ai; the `src/chat_*.rs` real transports + the
+# model-discovery path import them through `op_ai::*`.
+op-ai = { path = "../op-ai" }
 # Canonical `.op` (PenDocument) → shell `Document` loader / adapter.
 # Extracted out of this binary into a shared library crate so library
 # crates (openpencil-shell-native) can reuse the conversion;
