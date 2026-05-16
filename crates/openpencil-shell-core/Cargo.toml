@@ -36,6 +36,11 @@ jian-core = { path = "../../vendor/jian/crates/jian-core", version = "0.0.1" }
 # resolving `crate::i18n::*` / `crate::document::Locale` unchanged.
 op-i18n = { path = "../op-i18n" }
 
+# Phase 4 strangler reorg: the wasm-clean RenderBackend trait moved into
+# op-editor-core; shell-core re-exports it as `render_backend` so downstream
+# callers keep resolving `crate::render_backend::*` / `crate::RenderBackend`.
+op-editor-core = { path = "../op-editor-core" }
+
 [features]
 default = []
 serde = ["dep:serde"]

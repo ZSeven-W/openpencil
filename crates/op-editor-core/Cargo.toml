@@ -9,3 +9,7 @@ description = "OpenPencil editor state — selection/tool/history/viewport on ji
 [dependencies]
 jian-ops-schema = { path = "../../vendor/jian/crates/jian-ops-schema" }
 jian-core = { path = "../../vendor/jian/crates/jian-core" }
+
+# render_backend.rs uses glam::Vec2 as Point2D (spec §5.2). Pinned to the
+# same version openpencil-shell-core uses so both crates resolve one glam.
+glam = { version = "0.29", default-features = false, features = ["std"] }
