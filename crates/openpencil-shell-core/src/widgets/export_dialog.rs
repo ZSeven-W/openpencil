@@ -8,9 +8,10 @@
 //! `export_scale`; Export dispatches `FileAction::ExportImage` so
 //! the host's save dialog uses the chosen format + scale.
 
-use crate::document::Document;
 use crate::theme::Theme;
+use crate::widgets::editor_state_ext::doc_export_format;
 use crate::{Color, Point2D, Rect, RenderBackend, TextLayout};
+use op_editor_core::editor_ui_state::EditorUiState;
 
 pub const DIALOG_WIDTH: f32 = 420.0;
 pub const DIALOG_HEIGHT: f32 = 220.0;
@@ -94,7 +95,7 @@ impl ExportDialog {
         self.rect
     }
 
-    pub fn paint(&self, backend: &mut dyn RenderBackend, theme: &Theme, doc: &Document) {
+    pub fn paint(&self, backend: &mut dyn RenderBackend, theme: &Theme, ui: &EditorUiState) {
         backend.fill_round_rect(self.rect, CORNER, theme.popover);
         backend.stroke_round_rect(self.rect, CORNER, theme.border, 1.0);
 
@@ -124,7 +125,7 @@ impl ExportDialog {
         backend.draw_text(&fmt_label, Point2D::new(self.rect.origin.x + PAD, body_y));
         for (i, &fmt) in ExportFormat::ALL.iter().enumerate() {
             let rect = self.format_pill_rect(i);
-            let selected = fmt == doc.ui.export_format;
+            let selected = fmt == doc_export_format(ui.export_format);
             if !fmt.is_implemented() {
                 self.paint_disabled_pill(backend, theme, rect, fmt.label());
             } else {
@@ -147,7 +148,7 @@ impl ExportDialog {
         );
         for (i, lbl) in ["1x", "2x", "3x"].iter().enumerate() {
             let s = (i as u8) + 1;
-            let selected = scale_index(doc.ui.export_scale) == s;
+            let selected = scale_index(ui.export_scale) == s;
             self.paint_pill(backend, theme, self.scale_pill_rect(i), lbl, selected);
         }
 
