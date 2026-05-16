@@ -1,13 +1,15 @@
 //! Per-node attribute MCP write tools (rotation / text / corner
-//! radius / font size / font weight). Carved off `component_tools.rs`
-//! to stay under the 800-line cap.
+//! radius / font size / font weight / stroke / fill / name).
+//!
+//! Ported off shell-core's `McpCommand` onto `op_editor_core::
+//! EditorCommand`. Node ids are now canonical `.op` schema strings.
 
 use std::collections::BTreeMap;
 
-use super::{McpCommand, McpTool, ToolErrorCode, ToolOutcome};
+use super::write_tools::parse_node_id;
+use super::{EditorCommand, McpTool, ToolErrorCode, ToolOutcome};
 
-/// First-party `set_node_rotation` tool — set rotation in
-/// degrees on a node by id.
+/// First-party `set_node_rotation` tool — set rotation in degrees.
 pub struct SetNodeRotation;
 
 impl McpTool for SetNodeRotation {
@@ -15,20 +17,9 @@ impl McpTool for SetNodeRotation {
         "set_node_rotation"
     }
     fn call(&self, args: &BTreeMap<String, String>) -> ToolOutcome {
-        let Some(raw_id) = args.get("node_id") else {
-            return ToolOutcome::Err(
-                ToolErrorCode::MissingArgument,
-                "node_id is required".into(),
-            );
-        };
-        let node_id: u64 = match raw_id.parse() {
-            Ok(n) if n > 0 => n,
-            _ => {
-                return ToolOutcome::Err(
-                    ToolErrorCode::InvalidArgument,
-                    format!("node_id must be a positive u64, got {raw_id:?}"),
-                );
-            }
+        let node_id = match parse_node_id(args, "node_id") {
+            Ok(v) => v,
+            Err(e) => return e,
         };
         let Some(raw_deg) = args.get("degrees") else {
             return ToolOutcome::Err(
@@ -49,7 +40,7 @@ impl McpTool for SetNodeRotation {
         out.insert("wrote".into(), "true".into());
         ToolOutcome::OkWithCommand(
             out,
-            McpCommand::SetNodeRotation { node_id, degrees },
+            EditorCommand::SetNodeRotation { node_id, degrees },
         )
     }
 }
@@ -58,8 +49,8 @@ pub fn set_node_rotation_snapshot() -> SetNodeRotation {
     SetNodeRotation
 }
 
-/// First-party `set_node_text` tool — set text content on a
-/// Text-kind node by id. Other kinds reject at apply time.
+/// First-party `set_node_text` tool — set text content on a Text-kind
+/// node. Other kinds reject at apply time.
 pub struct SetNodeText;
 
 impl McpTool for SetNodeText {
@@ -67,20 +58,9 @@ impl McpTool for SetNodeText {
         "set_node_text"
     }
     fn call(&self, args: &BTreeMap<String, String>) -> ToolOutcome {
-        let Some(raw_id) = args.get("node_id") else {
-            return ToolOutcome::Err(
-                ToolErrorCode::MissingArgument,
-                "node_id is required".into(),
-            );
-        };
-        let node_id: u64 = match raw_id.parse() {
-            Ok(n) if n > 0 => n,
-            _ => {
-                return ToolOutcome::Err(
-                    ToolErrorCode::InvalidArgument,
-                    format!("node_id must be a positive u64, got {raw_id:?}"),
-                );
-            }
+        let node_id = match parse_node_id(args, "node_id") {
+            Ok(v) => v,
+            Err(e) => return e,
         };
         let Some(text) = args.get("text") else {
             return ToolOutcome::Err(
@@ -92,7 +72,7 @@ impl McpTool for SetNodeText {
         out.insert("wrote".into(), "true".into());
         ToolOutcome::OkWithCommand(
             out,
-            McpCommand::SetNodeText {
+            EditorCommand::SetNodeText {
                 node_id,
                 text: text.clone(),
             },
@@ -104,9 +84,8 @@ pub fn set_node_text_snapshot() -> SetNodeText {
     SetNodeText
 }
 
-/// First-party `set_node_corner_radius` tool — write the
-/// `corner_radius` (doc-px) field on a node. Rejects negative
-/// values + nan/inf.
+/// First-party `set_node_corner_radius` tool — write the corner radius
+/// (doc-px). Rejects negative values + nan/inf.
 pub struct SetNodeCornerRadius;
 
 impl McpTool for SetNodeCornerRadius {
@@ -114,20 +93,9 @@ impl McpTool for SetNodeCornerRadius {
         "set_node_corner_radius"
     }
     fn call(&self, args: &BTreeMap<String, String>) -> ToolOutcome {
-        let Some(raw_id) = args.get("node_id") else {
-            return ToolOutcome::Err(
-                ToolErrorCode::MissingArgument,
-                "node_id is required".into(),
-            );
-        };
-        let node_id: u64 = match raw_id.parse() {
-            Ok(n) if n > 0 => n,
-            _ => {
-                return ToolOutcome::Err(
-                    ToolErrorCode::InvalidArgument,
-                    format!("node_id must be a positive u64, got {raw_id:?}"),
-                );
-            }
+        let node_id = match parse_node_id(args, "node_id") {
+            Ok(v) => v,
+            Err(e) => return e,
         };
         let Some(raw_r) = args.get("radius") else {
             return ToolOutcome::Err(
@@ -148,7 +116,7 @@ impl McpTool for SetNodeCornerRadius {
         out.insert("wrote".into(), "true".into());
         ToolOutcome::OkWithCommand(
             out,
-            McpCommand::SetNodeCornerRadius { node_id, radius },
+            EditorCommand::SetNodeCornerRadius { node_id, radius },
         )
     }
 }
@@ -157,9 +125,8 @@ pub fn set_node_corner_radius_snapshot() -> SetNodeCornerRadius {
     SetNodeCornerRadius
 }
 
-/// First-party `set_node_font_size` tool — write `font_size`
-/// (doc-px) on a Text-kind node. Rejects non-Text kinds, non-
-/// positive sizes, NaN/Inf.
+/// First-party `set_node_font_size` tool — write `font_size` (doc-px)
+/// on a Text-kind node.
 pub struct SetNodeFontSize;
 
 impl McpTool for SetNodeFontSize {
@@ -167,20 +134,9 @@ impl McpTool for SetNodeFontSize {
         "set_node_font_size"
     }
     fn call(&self, args: &BTreeMap<String, String>) -> ToolOutcome {
-        let Some(raw_id) = args.get("node_id") else {
-            return ToolOutcome::Err(
-                ToolErrorCode::MissingArgument,
-                "node_id is required".into(),
-            );
-        };
-        let node_id: u64 = match raw_id.parse() {
-            Ok(n) if n > 0 => n,
-            _ => {
-                return ToolOutcome::Err(
-                    ToolErrorCode::InvalidArgument,
-                    format!("node_id must be a positive u64, got {raw_id:?}"),
-                );
-            }
+        let node_id = match parse_node_id(args, "node_id") {
+            Ok(v) => v,
+            Err(e) => return e,
         };
         let Some(raw_size) = args.get("font_size") else {
             return ToolOutcome::Err(
@@ -201,7 +157,7 @@ impl McpTool for SetNodeFontSize {
         out.insert("wrote".into(), "true".into());
         ToolOutcome::OkWithCommand(
             out,
-            McpCommand::SetNodeFontSize { node_id, font_size },
+            EditorCommand::SetNodeFontSize { node_id, font_size },
         )
     }
 }
@@ -211,9 +167,7 @@ pub fn set_node_font_size_snapshot() -> SetNodeFontSize {
 }
 
 /// First-party `set_node_font_weight` tool — write `font_weight`
-/// (OpenType range 1..=1000) on a Text-kind node. Rejects
-/// out-of-range weights so the per-codepoint typeface cache lookup
-/// stays well-formed, and non-Text kinds at apply time.
+/// (OpenType range 1..=1000) on a Text-kind node.
 pub struct SetNodeFontWeight;
 
 impl McpTool for SetNodeFontWeight {
@@ -221,20 +175,9 @@ impl McpTool for SetNodeFontWeight {
         "set_node_font_weight"
     }
     fn call(&self, args: &BTreeMap<String, String>) -> ToolOutcome {
-        let Some(raw_id) = args.get("node_id") else {
-            return ToolOutcome::Err(
-                ToolErrorCode::MissingArgument,
-                "node_id is required".into(),
-            );
-        };
-        let node_id: u64 = match raw_id.parse() {
-            Ok(n) if n > 0 => n,
-            _ => {
-                return ToolOutcome::Err(
-                    ToolErrorCode::InvalidArgument,
-                    format!("node_id must be a positive u64, got {raw_id:?}"),
-                );
-            }
+        let node_id = match parse_node_id(args, "node_id") {
+            Ok(v) => v,
+            Err(e) => return e,
         };
         let Some(raw_w) = args.get("font_weight") else {
             return ToolOutcome::Err(
@@ -255,7 +198,7 @@ impl McpTool for SetNodeFontWeight {
         out.insert("wrote".into(), "true".into());
         ToolOutcome::OkWithCommand(
             out,
-            McpCommand::SetNodeFontWeight {
+            EditorCommand::SetNodeFontWeight {
                 node_id,
                 font_weight,
             },
@@ -267,10 +210,7 @@ pub fn set_node_font_weight_snapshot() -> SetNodeFontWeight {
     SetNodeFontWeight
 }
 
-/// First-party `set_node_stroke_hex` tool — set the stroke color
-/// on a node. Existing stroke gets its color overwritten; missing
-/// stroke gets a fresh 1 doc-px stroke attached at the parsed
-/// color so the change is immediately visible.
+/// First-party `set_node_stroke_hex` tool — set the stroke color.
 pub struct SetNodeStrokeHex;
 
 impl McpTool for SetNodeStrokeHex {
@@ -278,20 +218,9 @@ impl McpTool for SetNodeStrokeHex {
         "set_node_stroke_hex"
     }
     fn call(&self, args: &BTreeMap<String, String>) -> ToolOutcome {
-        let Some(raw_id) = args.get("node_id") else {
-            return ToolOutcome::Err(
-                ToolErrorCode::MissingArgument,
-                "node_id is required".into(),
-            );
-        };
-        let node_id: u64 = match raw_id.parse() {
-            Ok(n) if n > 0 => n,
-            _ => {
-                return ToolOutcome::Err(
-                    ToolErrorCode::InvalidArgument,
-                    format!("node_id must be a positive u64, got {raw_id:?}"),
-                );
-            }
+        let node_id = match parse_node_id(args, "node_id") {
+            Ok(v) => v,
+            Err(e) => return e,
         };
         let Some(hex) = args.get("hex") else {
             return ToolOutcome::Err(
@@ -303,7 +232,7 @@ impl McpTool for SetNodeStrokeHex {
         out.insert("wrote".into(), "true".into());
         ToolOutcome::OkWithCommand(
             out,
-            McpCommand::SetNodeStrokeHex {
+            EditorCommand::SetNodeStrokeHex {
                 node_id,
                 hex: hex.clone(),
             },
@@ -315,10 +244,7 @@ pub fn set_node_stroke_hex_snapshot() -> SetNodeStrokeHex {
     SetNodeStrokeHex
 }
 
-/// First-party `set_node_stroke_width` tool — set the stroke
-/// width (doc-px) on a node. width == 0 clears the stroke; width
-/// > 0 on a node without an existing stroke attaches a fresh
-/// black-default stroke at that width.
+/// First-party `set_node_stroke_width` tool — set the stroke width.
 pub struct SetNodeStrokeWidth;
 
 impl McpTool for SetNodeStrokeWidth {
@@ -326,20 +252,9 @@ impl McpTool for SetNodeStrokeWidth {
         "set_node_stroke_width"
     }
     fn call(&self, args: &BTreeMap<String, String>) -> ToolOutcome {
-        let Some(raw_id) = args.get("node_id") else {
-            return ToolOutcome::Err(
-                ToolErrorCode::MissingArgument,
-                "node_id is required".into(),
-            );
-        };
-        let node_id: u64 = match raw_id.parse() {
-            Ok(n) if n > 0 => n,
-            _ => {
-                return ToolOutcome::Err(
-                    ToolErrorCode::InvalidArgument,
-                    format!("node_id must be a positive u64, got {raw_id:?}"),
-                );
-            }
+        let node_id = match parse_node_id(args, "node_id") {
+            Ok(v) => v,
+            Err(e) => return e,
         };
         let Some(raw_w) = args.get("width") else {
             return ToolOutcome::Err(
@@ -360,7 +275,7 @@ impl McpTool for SetNodeStrokeWidth {
         out.insert("wrote".into(), "true".into());
         ToolOutcome::OkWithCommand(
             out,
-            McpCommand::SetNodeStrokeWidth { node_id, width },
+            EditorCommand::SetNodeStrokeWidth { node_id, width },
         )
     }
 }
@@ -369,9 +284,7 @@ pub fn set_node_stroke_width_snapshot() -> SetNodeStrokeWidth {
     SetNodeStrokeWidth
 }
 
-/// First-party `set_node_fill_hex` tool — set the fill color on a
-/// node by id. Sister tool to `set_node_stroke_hex`; the existing
-/// `update_node` continues to handle multi-field updates.
+/// First-party `set_node_fill_hex` tool — set the fill color.
 pub struct SetNodeFillHex;
 
 impl McpTool for SetNodeFillHex {
@@ -379,20 +292,9 @@ impl McpTool for SetNodeFillHex {
         "set_node_fill_hex"
     }
     fn call(&self, args: &BTreeMap<String, String>) -> ToolOutcome {
-        let Some(raw_id) = args.get("node_id") else {
-            return ToolOutcome::Err(
-                ToolErrorCode::MissingArgument,
-                "node_id is required".into(),
-            );
-        };
-        let node_id: u64 = match raw_id.parse() {
-            Ok(n) if n > 0 => n,
-            _ => {
-                return ToolOutcome::Err(
-                    ToolErrorCode::InvalidArgument,
-                    format!("node_id must be a positive u64, got {raw_id:?}"),
-                );
-            }
+        let node_id = match parse_node_id(args, "node_id") {
+            Ok(v) => v,
+            Err(e) => return e,
         };
         let Some(hex) = args.get("hex") else {
             return ToolOutcome::Err(
@@ -404,7 +306,7 @@ impl McpTool for SetNodeFillHex {
         out.insert("wrote".into(), "true".into());
         ToolOutcome::OkWithCommand(
             out,
-            McpCommand::SetNodeFillHex {
+            EditorCommand::SetNodeFillHex {
                 node_id,
                 hex: hex.clone(),
             },
@@ -416,9 +318,7 @@ pub fn set_node_fill_hex_snapshot() -> SetNodeFillHex {
     SetNodeFillHex
 }
 
-/// First-party `set_node_name` tool — rename a node by id. Empty
-/// names (after trimming) are rejected at apply time so the
-/// LayerPanel never shows a blank row.
+/// First-party `set_node_name` tool — rename a node by id.
 pub struct SetNodeName;
 
 impl McpTool for SetNodeName {
@@ -426,20 +326,9 @@ impl McpTool for SetNodeName {
         "set_node_name"
     }
     fn call(&self, args: &BTreeMap<String, String>) -> ToolOutcome {
-        let Some(raw_id) = args.get("node_id") else {
-            return ToolOutcome::Err(
-                ToolErrorCode::MissingArgument,
-                "node_id is required".into(),
-            );
-        };
-        let node_id: u64 = match raw_id.parse() {
-            Ok(n) if n > 0 => n,
-            _ => {
-                return ToolOutcome::Err(
-                    ToolErrorCode::InvalidArgument,
-                    format!("node_id must be a positive u64, got {raw_id:?}"),
-                );
-            }
+        let node_id = match parse_node_id(args, "node_id") {
+            Ok(v) => v,
+            Err(e) => return e,
         };
         let Some(name) = args.get("name") else {
             return ToolOutcome::Err(
@@ -457,7 +346,7 @@ impl McpTool for SetNodeName {
         out.insert("wrote".into(), "true".into());
         ToolOutcome::OkWithCommand(
             out,
-            McpCommand::SetNodeName {
+            EditorCommand::SetNodeName {
                 node_id,
                 name: name.clone(),
             },

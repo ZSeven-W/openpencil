@@ -6,23 +6,29 @@
 //! Gemini / Copilot) can spawn the binary in this mode to drive
 //! the Rust editor exactly the way they drive TS pen-mcp today.
 //!
+//! ## op-editor-core port (Phase 5 Task 5.1)
+//!
+//! The server backs the `.op` file with an `op_editor_core::
+//! EditorState` (the canonical `jian_ops_schema::PenDocument`), not
+//! the old shell-core `Document`. Loading a `.op` into a `PenDocument`
+//! is plain `jian-ops-schema` deserialization — no `pen_doc_adapter`
+//! needed for this path. Write tools apply through
+//! `EditorState::apply(EditorCommand)`; on every successful write the
+//! `PenDocument` is serialized straight back to disk.
+//!
 //! Per-line dispatch:
 //!   - `initialize` → respond with protocol version + server
 //!     capabilities so the client completes its handshake.
-//!   - `tools/list` → respond with the 14-tool catalog + JSON
-//!     schemas for each input.
-//!   - `notifications/initialized` / `ping` → handled inline
-//!     (no body / pong).
+//!   - `tools/list` → respond with the tool catalog + JSON schemas.
+//!   - `notifications/initialized` / `ping` → handled inline.
 //!   - `tools/call` / legacy direct dispatch → routed through
-//!     shell-core's `run_stdio_with_applier` so the parser-level
-//!     hardening (structured-arg rejection / top-level walker /
-//!     no-hang error) protects this binary too. The applier
-//!     mutates the live document + saves on success.
+//!     shell-core's `run_stdio_with_applier`. The applier mutates the
+//!     live `EditorState` + saves on success.
 
 use std::io::{BufRead, BufReader, BufWriter, Write};
 use std::path::PathBuf;
 
-use openpencil_shell_core::document::Document;
+use op_editor_core::EditorState;
 use openpencil_shell_core::mcp::{
     batch_design_snapshot, copy_node_snapshot, delete_node_snapshot,
     design_content_snapshot, design_refine_snapshot, design_skeleton_snapshot,
@@ -57,14 +63,30 @@ use openpencil_shell_core::mcp::{
     rename_variable_snapshot, update_node_snapshot, ToolRegistry,
 };
 
-use crate::persistence::{load_from_path, save_to_path};
+/// Load a `.op` file into an `EditorState`. The `.op` format is plain
+/// `jian_ops_schema::PenDocument` JSON, so the loader is a serde parse
+/// via the schema's compat layer (which tolerates legacy major
+/// versions + collects non-fatal warnings).
+fn load_editor_state(path: &std::path::Path) -> Result<EditorState, String> {
+    let src = std::fs::read_to_string(path)
+        .map_err(|e| format!("read {}: {e}", path.display()))?;
+    let loaded = jian_ops_schema::load_str(&src)
+        .map_err(|e| format!("parse {}: {e}", path.display()))?;
+    Ok(EditorState::from_document(loaded.value))
+}
+
+/// Serialize the editor state's canonical document back to `path`.
+fn save_editor_state(state: &EditorState, path: &std::path::Path) -> Result<(), String> {
+    let json = serde_json::to_string_pretty(&state.doc)
+        .map_err(|e| format!("serialize {}: {e}", path.display()))?;
+    std::fs::write(path, json).map_err(|e| format!("write {}: {e}", path.display()))
+}
 
 /// Run the stdio MCP server against `path`. Returns Ok(()) on EOF,
 /// Err on unrecoverable IO. Blocks the calling thread for the
 /// lifetime of the stdio connection.
 pub fn run(path: PathBuf) -> Result<(), String> {
-    let mut doc = Document::empty();
-    load_from_path(&mut doc, &path).map_err(|e| format!("load {}: {e}", path.display()))?;
+    let mut state = load_editor_state(&path)?;
 
     let stdin = std::io::stdin();
     let stdout = std::io::stdout();
@@ -124,19 +146,22 @@ pub fn run(path: PathBuf) -> Result<(), String> {
         }
 
         // Fall through: tools/call or legacy direct dispatch.
-        let registry = rebuild_registry(&doc);
+        let registry = rebuild_registry(&state);
         let mut applier_failed: Option<String> = None;
         let path_for_save = path.clone();
         {
-            let doc_ref = &mut doc;
+            let state_ref = &mut state;
             let path_ref = &path_for_save;
             let applier_failed_ref = &mut applier_failed;
             let mut input = std::io::Cursor::new(line.as_bytes());
             run_stdio_with_applier(&registry, &mut input, &mut writer, |cmd| {
-                if !doc_ref.apply_mcp_command(cmd) {
+                // `EditorState::apply` runs the pre-validate-then-mutate
+                // discipline; `false` means the command rejected and
+                // the document was NOT changed.
+                if !state_ref.apply(cmd.clone()) {
                     return false;
                 }
-                if let Err(e) = save_to_path(doc_ref, path_ref) {
+                if let Err(e) = save_editor_state(state_ref, path_ref) {
                     *applier_failed_ref = Some(format!("save failed: {e}"));
                     return false;
                 }
@@ -151,9 +176,9 @@ pub fn run(path: PathBuf) -> Result<(), String> {
     }
 }
 
-/// Re-build the registry against the latest document so read-tool
+/// Re-build the registry against the latest editor state so read-tool
 /// snapshots reflect every prior write command's mutations.
-fn rebuild_registry(doc: &Document) -> ToolRegistry {
+fn rebuild_registry(doc: &EditorState) -> ToolRegistry {
     let mut r = ToolRegistry::default();
     r.register(Box::new(document_info_snapshot(doc)));
     r.register(Box::new(selection_snapshot(doc)));

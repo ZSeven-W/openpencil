@@ -41,6 +41,12 @@ op-i18n = { path = "../op-i18n" }
 # callers keep resolving `crate::render_backend::*` / `crate::RenderBackend`.
 op-editor-core = { path = "../op-editor-core" }
 
+# Phase 5 strangler reorg: the MCP server (`mcp.rs` + `mcp/*`) was ported
+# onto op-editor-core's EditorState / EditorCommand, which build directly on
+# the canonical `.op` document model — so the MCP read/write tools touch
+# `jian_ops_schema` types directly.
+jian-ops-schema = { path = "../../vendor/jian/crates/jian-ops-schema" }
+
 [features]
 default = []
 serde = ["dep:serde"]

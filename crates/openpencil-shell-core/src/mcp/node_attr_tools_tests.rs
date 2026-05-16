@@ -1,54 +1,33 @@
-//! Tests for `mcp::node_attr_tools` — covers tool-call validation
-//! AND apply-side semantics for every node attribute writer.
+//! Tests for `mcp::node_attr_tools`.
+//!
+//! Ported off the old shell-core `Document` onto `op_editor_core::
+//! EditorState`. These cover the tool layer — argument validation +
+//! `EditorCommand` emission — plus a handful of end-to-end checks
+//! through `EditorState::apply`. The apply-path semantics themselves
+//! are exhaustively covered by `op-editor-core`'s `command_tests.rs`.
 
 use super::node_attr_tools::*;
-use super::{McpCommand, McpTool, ToolErrorCode, ToolOutcome};
+use super::test_fixtures::{rect, state_with, text};
+use super::{EditorCommand, McpTool, ToolErrorCode, ToolOutcome};
+use op_editor_core::{EditorState, NodeId};
 use std::collections::BTreeMap;
 
-use crate::document::{Document, Node, NodeKind, Page};
-use crate::{Color, Point2D, Rect};
+const TEXT_ID: &str = "n101";
+const RECT_ID: &str = "n202";
 
-const TEXT_ID: u64 = 101;
-const RECT_ID: u64 = 202;
-
-fn rect(x: f32, y: f32, w: f32, h: f32) -> Rect {
-    Rect {
-        origin: Point2D { x, y },
-        size: Point2D { x: w, y: h },
-    }
+fn state_with_text_node() -> EditorState {
+    state_with(vec![text(TEXT_ID, "label", 0.0, 0.0, 100.0, 24.0, "Hello")])
 }
 
-fn doc_with_text_node() -> Document {
-    let mut doc = Document::empty();
-    let mut node = Node::leaf(format!("n{TEXT_ID}"), NodeKind::Text, "label")
-        .with_bounds(rect(0.0, 0.0, 100.0, 24.0))
-        .with_fill(Color::BLACK)
-        .with_text("Hello");
-    // Set font_size + font_weight explicitly so the test can detect
-    // mutations vs `Node::leaf` defaults (0 / 0).
-    node.font_size = 16.0;
-    node.font_weight = 400;
-    // Document::empty() ships with a "Page 1" already; replace its
-    // children rather than pushing a second page (otherwise the
-    // fixture node lands at pages[1] and the assertions miss it).
-    doc.pages[0] = Page::new("n1", "P", vec![node]);
-    doc
-}
-
-fn doc_with_rect_node() -> Document {
-    let mut doc = Document::empty();
-    let node = Node::leaf(format!("n{RECT_ID}"), NodeKind::Rect, "box")
-        .with_bounds(rect(0.0, 0.0, 50.0, 50.0))
-        .with_fill(Color::RED);
-    doc.pages[0] = Page::new("n1", "P", vec![node]);
-    doc
+fn state_with_rect_node() -> EditorState {
+    state_with(vec![rect(RECT_ID, "box", 0.0, 0.0, 50.0, 50.0)])
 }
 
 #[test]
 fn set_node_font_size_rejects_non_positive() {
     let tool = set_node_font_size_snapshot();
     let mut args = BTreeMap::new();
-    args.insert("node_id".into(), TEXT_ID.to_string());
+    args.insert("node_id".into(), TEXT_ID.into());
     args.insert("font_size".into(), "-1".into());
     match tool.call(&args) {
         ToolOutcome::Err(code, _) => assert_eq!(code, ToolErrorCode::InvalidArgument),
@@ -57,197 +36,124 @@ fn set_node_font_size_rejects_non_positive() {
 }
 
 #[test]
-fn set_node_font_size_apply_rejects_non_text_kind() {
-    let mut doc = doc_with_rect_node();
-    let cmd = McpCommand::SetNodeFontSize {
-        node_id: RECT_ID,
-        font_size: 24.0,
-    };
-    assert!(!doc.apply_mcp_command(&cmd));
-    assert_eq!(
-        doc.pages[0].children[0].font_size, 0.0,
-        "rect's font_size (default 0) must be unchanged"
-    );
-}
-
-#[test]
-fn set_node_font_size_apply_writes_on_text_kind() {
-    let mut doc = doc_with_text_node();
-    let cmd = McpCommand::SetNodeFontSize {
-        node_id: TEXT_ID,
-        font_size: 32.0,
-    };
-    assert!(doc.apply_mcp_command(&cmd));
-    assert_eq!(doc.pages[0].children[0].font_size, 32.0);
-}
-
-#[test]
-fn set_node_font_weight_apply_rejects_out_of_range() {
-    let mut doc = doc_with_text_node();
-    for bad in [0u16, 1001, 5000] {
-        let cmd = McpCommand::SetNodeFontWeight {
-            node_id: TEXT_ID,
-            font_weight: bad,
-        };
-        assert!(
-            !doc.apply_mcp_command(&cmd),
-            "weight {bad} should reject"
-        );
+fn set_node_font_size_returns_command() {
+    let tool = set_node_font_size_snapshot();
+    let mut args = BTreeMap::new();
+    args.insert("node_id".into(), TEXT_ID.into());
+    args.insert("font_size".into(), "32".into());
+    match tool.call(&args) {
+        ToolOutcome::OkWithCommand(_, EditorCommand::SetNodeFontSize { node_id, font_size }) => {
+            assert_eq!(node_id.as_str(), TEXT_ID);
+            assert_eq!(font_size, 32.0);
+        }
+        other => panic!("expected SetNodeFontSize, got {other:?}"),
     }
-    assert_eq!(doc.pages[0].children[0].font_weight, 400);
 }
 
 #[test]
-fn set_node_font_weight_apply_writes_on_text_kind() {
-    let mut doc = doc_with_text_node();
-    let cmd = McpCommand::SetNodeFontWeight {
-        node_id: TEXT_ID,
+fn set_node_font_size_command_applies_on_text_kind() {
+    let mut s = state_with_text_node();
+    assert!(s.apply(EditorCommand::SetNodeFontSize {
+        node_id: NodeId::new(TEXT_ID),
+        font_size: 32.0,
+    }));
+    // Non-text kind rejects.
+    let mut r = state_with_rect_node();
+    assert!(!r.apply(EditorCommand::SetNodeFontSize {
+        node_id: NodeId::new(RECT_ID),
+        font_size: 24.0,
+    }));
+}
+
+#[test]
+fn set_node_font_weight_tool_rejects_out_of_range() {
+    let tool = set_node_font_weight_snapshot();
+    for bad in ["0", "1001", "5000"] {
+        let mut args = BTreeMap::new();
+        args.insert("node_id".into(), TEXT_ID.into());
+        args.insert("font_weight".into(), bad.into());
+        match tool.call(&args) {
+            ToolOutcome::Err(code, _) => {
+                assert_eq!(code, ToolErrorCode::InvalidArgument, "weight {bad}")
+            }
+            other => panic!("expected InvalidArgument for {bad}, got {other:?}"),
+        }
+    }
+}
+
+#[test]
+fn set_node_font_weight_command_applies_on_text_kind() {
+    let mut s = state_with_text_node();
+    assert!(s.apply(EditorCommand::SetNodeFontWeight {
+        node_id: NodeId::new(TEXT_ID),
         font_weight: 700,
-    };
-    assert!(doc.apply_mcp_command(&cmd));
-    assert_eq!(doc.pages[0].children[0].font_weight, 700);
-}
-
-#[test]
-fn set_node_font_weight_apply_rejects_non_text_kind() {
-    let mut doc = doc_with_rect_node();
-    let cmd = McpCommand::SetNodeFontWeight {
-        node_id: RECT_ID,
+    }));
+    let mut r = state_with_rect_node();
+    assert!(!r.apply(EditorCommand::SetNodeFontWeight {
+        node_id: NodeId::new(RECT_ID),
         font_weight: 700,
-    };
-    assert!(!doc.apply_mcp_command(&cmd));
+    }));
 }
 
 #[test]
-fn set_node_stroke_hex_creates_default_stroke_when_none() {
-    let mut doc = doc_with_rect_node();
-    assert!(doc.pages[0].children[0].stroke.is_none());
-    let cmd = McpCommand::SetNodeStrokeHex {
-        node_id: RECT_ID,
+fn set_node_stroke_hex_command_applies() {
+    let mut s = state_with_rect_node();
+    assert!(s.apply(EditorCommand::SetNodeStrokeHex {
+        node_id: NodeId::new(RECT_ID),
         hex: "#00ff00".into(),
-    };
-    assert!(doc.apply_mcp_command(&cmd));
-    let stroke = doc.pages[0].children[0]
-        .stroke
-        .as_ref()
-        .expect("stroke attached");
-    assert_eq!(stroke.width, 1.0, "default width must be 1 doc-px");
-    assert!((stroke.color.g - 1.0).abs() < 1e-3);
-    assert!(stroke.color.r < 1e-3);
+    }));
 }
 
 #[test]
-fn set_node_stroke_hex_overwrites_existing_color_preserves_width() {
-    let mut doc = doc_with_rect_node();
-    doc.pages[0].children[0].stroke = Some(crate::document::Stroke {
-        color: Color::RED,
-        width: 3.5,
-    });
-    let cmd = McpCommand::SetNodeStrokeHex {
-        node_id: RECT_ID,
-        hex: "#0000ff".into(),
-    };
-    assert!(doc.apply_mcp_command(&cmd));
-    let stroke = doc.pages[0].children[0].stroke.as_ref().unwrap();
-    assert!((stroke.color.b - 1.0).abs() < 1e-3);
-    assert_eq!(stroke.width, 3.5, "existing width must be preserved");
-}
-
-#[test]
-fn set_node_stroke_width_zero_clears_stroke() {
-    let mut doc = doc_with_rect_node();
-    doc.pages[0].children[0].stroke = Some(crate::document::Stroke {
-        color: Color::BLACK,
-        width: 2.0,
-    });
-    let cmd = McpCommand::SetNodeStrokeWidth {
-        node_id: RECT_ID,
-        width: 0.0,
-    };
-    assert!(doc.apply_mcp_command(&cmd));
-    assert!(doc.pages[0].children[0].stroke.is_none());
-}
-
-#[test]
-fn set_node_stroke_width_attaches_default_black_when_none() {
-    let mut doc = doc_with_rect_node();
-    let cmd = McpCommand::SetNodeStrokeWidth {
-        node_id: RECT_ID,
+fn set_node_stroke_width_command_applies() {
+    let mut s = state_with_rect_node();
+    assert!(s.apply(EditorCommand::SetNodeStrokeWidth {
+        node_id: NodeId::new(RECT_ID),
         width: 4.0,
-    };
-    assert!(doc.apply_mcp_command(&cmd));
-    let stroke = doc.pages[0].children[0].stroke.as_ref().unwrap();
-    assert_eq!(stroke.width, 4.0);
-    assert!(stroke.color.r < 1e-3);
-    assert!(stroke.color.g < 1e-3);
-    assert!(stroke.color.b < 1e-3);
+    }));
 }
 
 #[test]
-fn set_node_stroke_width_rejects_negative() {
-    let mut doc = doc_with_rect_node();
-    let cmd = McpCommand::SetNodeStrokeWidth {
-        node_id: RECT_ID,
-        width: -1.0,
-    };
-    assert!(!doc.apply_mcp_command(&cmd));
+fn set_node_stroke_width_tool_rejects_negative() {
+    let tool = set_node_stroke_width_snapshot();
+    let mut args = BTreeMap::new();
+    args.insert("node_id".into(), RECT_ID.into());
+    args.insert("width".into(), "-1".into());
+    match tool.call(&args) {
+        ToolOutcome::Err(code, _) => assert_eq!(code, ToolErrorCode::InvalidArgument),
+        other => panic!("expected InvalidArgument, got {other:?}"),
+    }
 }
 
 #[test]
-fn set_node_fill_hex_writes_to_node_fill() {
-    let mut doc = doc_with_rect_node();
-    let cmd = McpCommand::SetNodeFillHex {
-        node_id: RECT_ID,
+fn set_node_fill_hex_command_applies() {
+    let mut s = state_with_rect_node();
+    assert!(s.apply(EditorCommand::SetNodeFillHex {
+        node_id: NodeId::new(RECT_ID),
         hex: "#0080ff".into(),
-    };
-    assert!(doc.apply_mcp_command(&cmd));
-    let fill = doc.pages[0].children[0]
-        .fill
-        .as_ref()
-        .expect("fill present");
-    assert!(fill.r < 1e-3);
-    assert!((fill.b - 1.0).abs() < 1e-3);
+    }));
 }
 
 #[test]
-fn set_node_fill_hex_rejects_bad_hex() {
-    let mut doc = doc_with_rect_node();
-    let cmd = McpCommand::SetNodeFillHex {
-        node_id: RECT_ID,
-        hex: "not-a-hex".into(),
-    };
-    assert!(!doc.apply_mcp_command(&cmd));
-    let fill = doc.pages[0].children[0].fill.as_ref().unwrap();
-    assert!((fill.r - 1.0).abs() < 1e-3, "original red fill preserved");
-}
-
-#[test]
-fn set_node_name_writes_trimmed_value() {
-    let mut doc = doc_with_rect_node();
-    let cmd = McpCommand::SetNodeName {
-        node_id: RECT_ID,
-        name: "  new name  ".into(),
-    };
-    assert!(doc.apply_mcp_command(&cmd));
-    assert_eq!(doc.pages[0].children[0].name, "new name");
-}
-
-#[test]
-fn set_node_name_rejects_empty_after_trim() {
-    let mut doc = doc_with_rect_node();
-    let cmd = McpCommand::SetNodeName {
-        node_id: RECT_ID,
-        name: "    ".into(),
-    };
-    assert!(!doc.apply_mcp_command(&cmd));
-    assert_eq!(doc.pages[0].children[0].name, "box");
+fn set_node_name_returns_command() {
+    let tool = set_node_name_snapshot();
+    let mut args = BTreeMap::new();
+    args.insert("node_id".into(), RECT_ID.into());
+    args.insert("name".into(), "new name".into());
+    match tool.call(&args) {
+        ToolOutcome::OkWithCommand(_, EditorCommand::SetNodeName { node_id, name }) => {
+            assert_eq!(node_id.as_str(), RECT_ID);
+            assert_eq!(name, "new name");
+        }
+        other => panic!("expected SetNodeName, got {other:?}"),
+    }
 }
 
 #[test]
 fn set_node_name_tool_rejects_empty_at_call_time() {
     let tool = set_node_name_snapshot();
     let mut args = BTreeMap::new();
-    args.insert("node_id".into(), RECT_ID.to_string());
+    args.insert("node_id".into(), RECT_ID.into());
     args.insert("name".into(), "   ".into());
     match tool.call(&args) {
         ToolOutcome::Err(code, _) => assert_eq!(code, ToolErrorCode::InvalidArgument),
@@ -256,35 +162,32 @@ fn set_node_name_tool_rejects_empty_at_call_time() {
 }
 
 #[test]
-fn unknown_node_id_rejects_at_apply_time() {
-    let mut doc = doc_with_rect_node();
-    let cmds = [
-        McpCommand::SetNodeFillHex {
-            node_id: 9999,
-            hex: "#ffffff".into(),
-        },
-        McpCommand::SetNodeName {
-            node_id: 9999,
-            name: "x".into(),
-        },
-        McpCommand::SetNodeStrokeHex {
-            node_id: 9999,
-            hex: "#000000".into(),
-        },
-        McpCommand::SetNodeStrokeWidth {
-            node_id: 9999,
-            width: 2.0,
-        },
-        McpCommand::SetNodeFontSize {
-            node_id: 9999,
-            font_size: 12.0,
-        },
-        McpCommand::SetNodeFontWeight {
-            node_id: 9999,
-            font_weight: 700,
-        },
-    ];
-    for cmd in cmds {
-        assert!(!doc.apply_mcp_command(&cmd), "unknown id must reject: {cmd:?}");
+fn node_attr_tools_reject_empty_node_id() {
+    // The canonical schema uses string ids; the empty string (NONE
+    // sentinel) is rejected at the wire layer.
+    let mut args = BTreeMap::new();
+    args.insert("node_id".into(), "".into());
+    args.insert("hex".into(), "#ffffff".into());
+    match set_node_fill_hex_snapshot().call(&args) {
+        ToolOutcome::Err(code, _) => assert_eq!(code, ToolErrorCode::InvalidArgument),
+        other => panic!("expected InvalidArgument, got {other:?}"),
     }
+}
+
+#[test]
+fn unknown_node_id_rejects_at_apply_time() {
+    let mut s = state_with_rect_node();
+    let unknown = NodeId::new("n9999");
+    assert!(!s.apply(EditorCommand::SetNodeFillHex {
+        node_id: unknown.clone(),
+        hex: "#ffffff".into(),
+    }));
+    assert!(!s.apply(EditorCommand::SetNodeName {
+        node_id: unknown.clone(),
+        name: "x".into(),
+    }));
+    assert!(!s.apply(EditorCommand::SetNodeStrokeWidth {
+        node_id: unknown,
+        width: 2.0,
+    }));
 }

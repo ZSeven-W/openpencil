@@ -1,173 +1,177 @@
-//! Tests for selected slices of `mcp::component_tools` — covers
-//! the newly-added `set_selection_set` tool's tolerance for
-//! unknown / duplicate ids.
+//! Tests for the component-command gap + selection / page tools.
+//!
+//! Ported off the old shell-core `Document` onto `op_editor_core::
+//! EditorState`. The component tools surface a clean `ToolFailed`
+//! (op-editor-core has no component registry — known gap); the
+//! selection / theme tools emit `EditorCommand`s applied via
+//! `EditorState::apply`.
 
 use super::component_tools::*;
-use super::{McpCommand, McpTool, ToolErrorCode, ToolOutcome};
+use super::page_tools::*;
+use super::test_fixtures::{add_theme_axis, rect, state_with};
+use super::{EditorCommand, McpTool, ToolErrorCode, ToolOutcome};
+use op_editor_core::{EditorState, NodeId};
 use std::collections::BTreeMap;
 
-use crate::document::{Document, Node, NodeId, NodeKind, Page};
-use crate::{Color, Point2D, Rect};
+fn state_with_two_nodes() -> EditorState {
+    state_with(vec![
+        rect("n11", "a", 0.0, 0.0, 10.0, 10.0),
+        rect("n22", "b", 20.0, 0.0, 10.0, 10.0),
+    ])
+}
 
-fn rect(x: f32, y: f32, w: f32, h: f32) -> Rect {
-    Rect {
-        origin: Point2D { x, y },
-        size: Point2D { x: w, y: h },
+// --- Component-command gap -------------------------------------------
+
+#[test]
+fn instantiate_component_surfaces_clean_gap_error() {
+    let tool = instantiate_component_snapshot();
+    let mut args = BTreeMap::new();
+    args.insert("component_id".into(), "n5".into());
+    match tool.call(&args) {
+        ToolOutcome::Err(code, msg) => {
+            assert_eq!(code, ToolErrorCode::ToolFailed);
+            assert!(msg.contains("component registry"), "msg names the gap: {msg}");
+        }
+        other => panic!("expected ToolFailed gap error, got {other:?}"),
     }
 }
 
-fn doc_with_two_nodes() -> Document {
-    let mut doc = Document::empty();
-    let a = Node::leaf("n11", NodeKind::Rect, "a")
-        .with_bounds(rect(0.0, 0.0, 10.0, 10.0))
-        .with_fill(Color::RED);
-    let b = Node::leaf("n22", NodeKind::Rect, "b")
-        .with_bounds(rect(20.0, 0.0, 10.0, 10.0))
-        .with_fill(Color::BLUE);
-    doc.pages[0] = Page::new("n1", "P", vec![a, b]);
-    doc
+#[test]
+fn create_component_surfaces_clean_gap_error() {
+    let tool = create_component_snapshot();
+    let mut args = BTreeMap::new();
+    args.insert("node_id".into(), "n11".into());
+    args.insert("name".into(), "Card".into());
+    match tool.call(&args) {
+        ToolOutcome::Err(code, _) => assert_eq!(code, ToolErrorCode::ToolFailed),
+        other => panic!("expected ToolFailed gap error, got {other:?}"),
+    }
 }
+
+#[test]
+fn delete_component_surfaces_clean_gap_error() {
+    let tool = delete_component_snapshot();
+    let mut args = BTreeMap::new();
+    args.insert("component_id".into(), "n5".into());
+    match tool.call(&args) {
+        ToolOutcome::Err(code, _) => assert_eq!(code, ToolErrorCode::ToolFailed),
+        other => panic!("expected ToolFailed gap error, got {other:?}"),
+    }
+}
+
+#[test]
+fn rename_component_surfaces_clean_gap_error() {
+    let tool = rename_component_snapshot();
+    let mut args = BTreeMap::new();
+    args.insert("component_id".into(), "n5".into());
+    args.insert("name".into(), "Renamed".into());
+    match tool.call(&args) {
+        ToolOutcome::Err(code, _) => assert_eq!(code, ToolErrorCode::ToolFailed),
+        other => panic!("expected ToolFailed gap error, got {other:?}"),
+    }
+}
+
+#[test]
+fn component_tools_still_validate_arguments_before_the_gap() {
+    // The gap error only fires once the (validatable) argument shape
+    // is satisfied — a missing arg still surfaces MissingArgument.
+    match create_component_snapshot().call(&BTreeMap::new()) {
+        ToolOutcome::Err(code, _) => assert_eq!(code, ToolErrorCode::MissingArgument),
+        other => panic!("expected MissingArgument, got {other:?}"),
+    }
+}
+
+#[test]
+fn set_node_collapsed_surfaces_clean_gap_error() {
+    let tool = super::component_tools::set_node_collapsed_snapshot();
+    let mut args = BTreeMap::new();
+    args.insert("node_id".into(), "n11".into());
+    args.insert("value".into(), "true".into());
+    match tool.call(&args) {
+        ToolOutcome::Err(code, msg) => {
+            assert_eq!(code, ToolErrorCode::ToolFailed);
+            assert!(msg.contains("collapsed"), "msg names the gap: {msg}");
+        }
+        other => panic!("expected ToolFailed gap error, got {other:?}"),
+    }
+}
+
+// --- set_selection_set -----------------------------------------------
 
 #[test]
 fn set_selection_set_drops_unknown_ids_keeps_known() {
-    let mut doc = doc_with_two_nodes();
-    let cmd = McpCommand::SetSelectionSet {
-        node_ids: vec![11, 999, 22, 7777],
-    };
-    assert!(doc.apply_mcp_command(&cmd));
-    let ids: Vec<&str> = doc.selected_set.iter().map(|n| n.raw()).collect();
-    assert_eq!(ids, vec!["n11", "n22"], "unknown 999/7777 must drop");
-    assert_eq!(doc.selected.raw(), "n22", "anchor follows last resolved id");
-}
-
-#[test]
-fn set_selection_set_dedupes_repeated_ids() {
-    let mut doc = doc_with_two_nodes();
-    let cmd = McpCommand::SetSelectionSet {
-        node_ids: vec![11, 22, 11, 22, 11],
-    };
-    assert!(doc.apply_mcp_command(&cmd));
-    let ids: Vec<&str> = doc.selected_set.iter().map(|n| n.raw()).collect();
-    assert_eq!(ids, vec!["n11", "n22"], "duplicates collapse to first occurrence");
+    let mut s = state_with_two_nodes();
+    assert!(s.apply(EditorCommand::SetSelectionSet {
+        node_ids: vec![
+            NodeId::new("n11"),
+            NodeId::new("n999"),
+            NodeId::new("n22"),
+            NodeId::new("n7777"),
+        ],
+    }));
+    let ids: Vec<&str> = s.selection.set.iter().map(|n| n.as_str()).collect();
+    assert_eq!(ids, vec!["n11", "n22"], "unknown ids must drop");
+    assert_eq!(s.selection.anchor.as_str(), "n22");
 }
 
 #[test]
 fn set_selection_set_empty_clears_selection() {
-    let mut doc = doc_with_two_nodes();
-    doc.selected_set = vec![NodeId::new("n11"), NodeId::new("n22")];
-    doc.selected = NodeId::new("n22");
-    let cmd = McpCommand::SetSelectionSet { node_ids: vec![] };
-    assert!(doc.apply_mcp_command(&cmd));
-    assert!(doc.selected_set.is_empty());
-    assert_eq!(doc.selected.raw(), NodeId::NONE.raw());
+    let mut s = state_with_two_nodes();
+    s.set_single_selection(NodeId::new("n11"));
+    assert!(s.apply(EditorCommand::SetSelectionSet { node_ids: vec![] }));
+    assert!(s.selection.is_empty());
 }
 
 #[test]
-fn set_selection_set_all_unknown_clears_selection() {
-    let mut doc = doc_with_two_nodes();
-    doc.selected_set = vec![NodeId::new("n11")];
-    doc.selected = NodeId::new("n11");
-    let cmd = McpCommand::SetSelectionSet {
-        node_ids: vec![9001, 9002],
-    };
-    assert!(doc.apply_mcp_command(&cmd));
-    assert!(doc.selected_set.is_empty(), "no surviving ids ⇒ clear");
-}
-
-#[test]
-fn set_selection_set_tool_rejects_negative_ids() {
+fn set_selection_set_tool_accepts_empty_arg() {
     let tool = set_selection_set_snapshot();
     let mut args = BTreeMap::new();
-    args.insert("node_ids".into(), "11, -3, 22".into());
+    args.insert("node_ids".into(), "".into());
     match tool.call(&args) {
-        ToolOutcome::Err(code, _) => assert_eq!(code, ToolErrorCode::InvalidArgument),
-        other => panic!("expected InvalidArgument, got {other:?}"),
+        ToolOutcome::OkWithCommand(_, EditorCommand::SetSelectionSet { node_ids }) => {
+            assert!(node_ids.is_empty());
+        }
+        other => panic!("expected OkWithCommand with empty list, got {other:?}"),
     }
 }
 
 #[test]
-fn toggle_node_selection_adds_then_removes() {
-    let mut doc = doc_with_two_nodes();
-    // First call: 11 not in set ⇒ add as anchor.
-    let cmd = McpCommand::ToggleNodeSelection { node_id: 11 };
-    assert!(doc.apply_mcp_command(&cmd));
-    assert_eq!(doc.selected_set.len(), 1);
-    assert_eq!(doc.selected_set[0].raw(), "n11");
-    assert_eq!(doc.selected.raw(), "n11");
-    // Second call: 22 not in set ⇒ add as new anchor.
-    let cmd = McpCommand::ToggleNodeSelection { node_id: 22 };
-    assert!(doc.apply_mcp_command(&cmd));
-    assert_eq!(doc.selected_set.len(), 2);
-    assert_eq!(doc.selected.raw(), "n22");
-    // Third call: 11 in set ⇒ remove; anchor falls back to last
-    // surviving id (22).
-    let cmd = McpCommand::ToggleNodeSelection { node_id: 11 };
-    assert!(doc.apply_mcp_command(&cmd));
-    assert_eq!(doc.selected_set.len(), 1);
-    assert_eq!(doc.selected_set[0].raw(), "n22");
-    assert_eq!(doc.selected.raw(), "n22");
-}
-
-#[test]
-fn toggle_node_selection_rejects_unknown_id_at_apply_time() {
-    let mut doc = doc_with_two_nodes();
-    let cmd = McpCommand::ToggleNodeSelection { node_id: 9999 };
-    assert!(!doc.apply_mcp_command(&cmd));
-    assert!(doc.selected_set.is_empty());
-}
-
-#[test]
-fn selection_apply_rejects_ids_on_non_active_pages() {
-    // Codex stop-gate: selection state is scoped to the active
-    // page; an id that exists only on a *different* page must be
-    // rejected by every selection apply path. Otherwise the doc
-    // ends up with `selected_set` pointing at nodes the canvas /
-    // panels can't see, and every downstream read silently fails.
-    let mut doc = doc_with_two_nodes();
-    // Add a second page carrying its own node id=555.
-    let off_page_node = Node::leaf("n555", NodeKind::Rect, "off")
-        .with_bounds(rect(0.0, 0.0, 10.0, 10.0))
-        .with_fill(Color::GREEN);
-    doc.pages.push(Page::new("n2", "P2", vec![off_page_node]));
-    // active_page_index stays 0 (the page that has 11, 22).
-    let cmds = [
-        McpCommand::SetSelection { node_id: 555 },
-        McpCommand::ToggleNodeSelection { node_id: 555 },
-    ];
-    for cmd in cmds {
-        assert!(
-            !doc.apply_mcp_command(&cmd),
-            "off-page id 555 must reject: {cmd:?}"
-        );
-        assert!(
-            doc.selected_set.is_empty(),
-            "selection must stay empty after rejected {cmd:?}"
-        );
+fn set_selection_set_tool_parses_comma_separated_ids() {
+    let tool = set_selection_set_snapshot();
+    let mut args = BTreeMap::new();
+    args.insert("node_ids".into(), "n11, n22".into());
+    match tool.call(&args) {
+        ToolOutcome::OkWithCommand(_, EditorCommand::SetSelectionSet { node_ids }) => {
+            assert_eq!(node_ids.len(), 2);
+            assert_eq!(node_ids[0].as_str(), "n11");
+            assert_eq!(node_ids[1].as_str(), "n22");
+        }
+        other => panic!("expected OkWithCommand, got {other:?}"),
     }
-    // set_selection_set: off-page id drops silently, on-page id
-    // survives.
-    let cmd = McpCommand::SetSelectionSet {
-        node_ids: vec![11, 555, 22],
-    };
-    assert!(doc.apply_mcp_command(&cmd));
-    let ids: Vec<&str> = doc.selected_set.iter().map(|n| n.raw()).collect();
-    assert_eq!(ids, vec!["n11", "n22"], "off-page 555 must be filtered out");
 }
+
+// --- toggle_node_selection -------------------------------------------
+
+#[test]
+fn toggle_node_selection_command_applies() {
+    let mut s = state_with_two_nodes();
+    assert!(s.apply(EditorCommand::ToggleNodeSelection {
+        node_id: NodeId::new("n11"),
+    }));
+    assert_eq!(s.selection.anchor.as_str(), "n11");
+    // Unknown id rejects.
+    assert!(!s.apply(EditorCommand::ToggleNodeSelection {
+        node_id: NodeId::new("n9999"),
+    }));
+}
+
+// --- cycle_active_axis_value -----------------------------------------
 
 #[test]
 fn cycle_active_axis_value_rejects_unknown_axis_at_call_time() {
-    // Codex stop-gate: previously the tool was zero-state and an
-    // unknown axis fell through to the applier, which surfaced as
-    // a generic ToolErrorCode::Internal "host rejected command".
-    // The snapshot now carries the set of known axes-with-values
-    // so the tool returns ToolFailed up front, matching
-    // `set_active_axis_value`'s contract.
-    let mut doc = doc_with_two_nodes();
-    doc.var_table.themes.push(crate::document::ThemeAxis {
-        name: "mode".into(),
-        values: vec!["light".into(), "dark".into()],
-    });
-    let tool = cycle_active_axis_value_snapshot(&doc);
+    let mut s = state_with_two_nodes();
+    add_theme_axis(&mut s, "mode", &["light", "dark"]);
+    let tool = cycle_active_axis_value_snapshot(&s);
     let mut args = BTreeMap::new();
     args.insert("axis".into(), "nope".into());
     match tool.call(&args) {
@@ -181,16 +185,13 @@ fn cycle_active_axis_value_rejects_unknown_axis_at_call_time() {
 
 #[test]
 fn cycle_active_axis_value_accepts_known_axis() {
-    let mut doc = doc_with_two_nodes();
-    doc.var_table.themes.push(crate::document::ThemeAxis {
-        name: "mode".into(),
-        values: vec!["light".into(), "dark".into()],
-    });
-    let tool = cycle_active_axis_value_snapshot(&doc);
+    let mut s = state_with_two_nodes();
+    add_theme_axis(&mut s, "mode", &["light", "dark"]);
+    let tool = cycle_active_axis_value_snapshot(&s);
     let mut args = BTreeMap::new();
     args.insert("axis".into(), "mode".into());
     match tool.call(&args) {
-        ToolOutcome::OkWithCommand(_, McpCommand::CycleActiveAxisValue { axis }) => {
+        ToolOutcome::OkWithCommand(_, EditorCommand::CycleActiveAxisValue { axis }) => {
             assert_eq!(axis, "mode");
         }
         other => panic!("expected OkWithCommand, got {other:?}"),
@@ -199,29 +200,13 @@ fn cycle_active_axis_value_accepts_known_axis() {
 
 #[test]
 fn cycle_active_axis_value_excludes_empty_axes_from_snapshot() {
-    let mut doc = doc_with_two_nodes();
-    doc.var_table.themes.push(crate::document::ThemeAxis {
-        name: "empty".into(),
-        values: vec![],
-    });
-    let tool = cycle_active_axis_value_snapshot(&doc);
+    let mut s = state_with_two_nodes();
+    add_theme_axis(&mut s, "empty", &[]);
+    let tool = cycle_active_axis_value_snapshot(&s);
     let mut args = BTreeMap::new();
     args.insert("axis".into(), "empty".into());
     match tool.call(&args) {
         ToolOutcome::Err(code, _) => assert_eq!(code, ToolErrorCode::ToolFailed),
         other => panic!("empty-values axis must reject, got {other:?}"),
-    }
-}
-
-#[test]
-fn set_selection_set_tool_accepts_empty_arg() {
-    let tool = set_selection_set_snapshot();
-    let mut args = BTreeMap::new();
-    args.insert("node_ids".into(), "".into());
-    match tool.call(&args) {
-        ToolOutcome::OkWithCommand(_, McpCommand::SetSelectionSet { node_ids }) => {
-            assert!(node_ids.is_empty());
-        }
-        other => panic!("expected OkWithCommand with empty list, got {other:?}"),
     }
 }

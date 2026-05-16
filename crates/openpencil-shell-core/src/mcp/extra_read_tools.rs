@@ -1,20 +1,25 @@
-//! Read-tool additions that didn't fit in `tools.rs` (already over
-//! the 800-line cap). Each tool is a Document snapshot taken at
-//! registration time, mirroring the spine in `tools.rs`.
+//! Read-tool additions that didn't fit in `tools.rs`. Each tool is an
+//! `EditorState` snapshot taken at registration time, mirroring the
+//! spine in `tools.rs`.
 
 use std::collections::BTreeMap;
 
+use op_editor_core::geometry::aggregate_bounds;
+use op_editor_core::pen_node_ext::PenNodeExt;
+use op_editor_core::EditorState;
+use jian_ops_schema::node::PenNode;
+
+use super::tools::kind_label;
 use super::{McpTool, ToolErrorCode, ToolOutcome};
 
-/// Immediate-children listing for a single container node, keyed
-/// by parent id. Built at snapshot time so the registered tool
-/// stays `&self`-only (same discipline as `GetNode`).
+/// Immediate-children listing for a single container node, keyed by
+/// parent id. Built at snapshot time so the registered tool stays
+/// `&self`-only (same discipline as `GetNode`).
 ///
-/// `known_ids` tracks every node id that exists in the document
-/// (including leaves and empty containers) so callers can tell an
-/// unknown id apart from a known node that just has no children —
-/// the wire response is `count=0` for the latter, `ToolFailed` for
-/// the former (codex stop-gate: previous impl conflated the two).
+/// `known_ids` tracks every node id that exists in the document so
+/// callers can tell an unknown id apart from a known node that just
+/// has no children — `count=0` for the latter, `ToolFailed` for the
+/// former.
 pub struct GetNodeChildren {
     pub children: BTreeMap<String, Vec<ChildRecord>>,
     pub known_ids: std::collections::BTreeSet<String>,
@@ -45,7 +50,6 @@ impl McpTool for GetNodeChildren {
                 );
             }
         };
-        // `node_id` is the canonical `.op` schema string id.
         let id: &str = raw.as_str();
         if !self.known_ids.contains(id) {
             return ToolOutcome::Err(
@@ -54,17 +58,10 @@ impl McpTool for GetNodeChildren {
             );
         }
         // Empty children + known id ⇒ count=0 (NOT an error).
-        // Codex stop-gate: previously this branch returned ToolFailed
-        // for any node without children, conflating "leaf / empty
-        // container" with "unknown id". LLM callers couldn't tell
-        // the two apart and were forced into defensive double-checks.
         let empty: Vec<ChildRecord> = Vec::new();
         let records: &Vec<ChildRecord> = self.children.get(id).unwrap_or(&empty);
         let mut out = BTreeMap::new();
         out.insert("count".into(), records.len().to_string());
-        // Comma-separated id list keeps the response wire-compatible
-        // with the rest of the read tools (flat BTreeMap<String,
-        // String> shape). LLMs can split + parse downstream.
         let ids: Vec<String> = records.iter().map(|r| r.id.to_string()).collect();
         out.insert("ids".into(), ids.join(","));
         for (i, rec) in records.iter().enumerate() {
@@ -81,12 +78,22 @@ impl McpTool for GetNodeChildren {
     }
 }
 
-pub fn get_node_children_snapshot(doc: &crate::document::Document) -> GetNodeChildren {
+pub fn get_node_children_snapshot(state: &EditorState) -> GetNodeChildren {
     let mut children: BTreeMap<String, Vec<ChildRecord>> = BTreeMap::new();
-    let mut known_ids: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
-    for page in &doc.pages {
-        for node in &page.children {
-            walk(node, &mut children, &mut known_ids);
+    let mut known_ids: std::collections::BTreeSet<String> =
+        std::collections::BTreeSet::new();
+    match state.doc.pages.as_ref() {
+        Some(pages) => {
+            for page in pages {
+                for node in &page.children {
+                    walk(node, &mut children, &mut known_ids);
+                }
+            }
+        }
+        None => {
+            for node in &state.doc.children {
+                walk(node, &mut children, &mut known_ids);
+            }
         }
     }
     GetNodeChildren {
@@ -96,42 +103,31 @@ pub fn get_node_children_snapshot(doc: &crate::document::Document) -> GetNodeChi
 }
 
 fn walk(
-    node: &crate::document::Node,
+    node: &PenNode,
     out: &mut BTreeMap<String, Vec<ChildRecord>>,
     known: &mut std::collections::BTreeSet<String>,
 ) {
-    known.insert(node.id.as_str().to_string());
-    if node.children.is_empty() {
+    known.insert(node.id_str().to_string());
+    let Some(node_children) = node.children() else {
+        return;
+    };
+    if node_children.is_empty() {
         return;
     }
-    let parent_id = node.id.as_str().to_string();
-    let mut records = Vec::with_capacity(node.children.len());
-    for child in &node.children {
-        let bounds = child.aggregate_bounds();
+    let parent_id = node.id_str().to_string();
+    let mut records = Vec::with_capacity(node_children.len());
+    for child in node_children {
+        let b = aggregate_bounds(child);
         records.push(ChildRecord {
-            id: child.id.as_str().to_string(),
-            kind: kind_label(&child.kind).into(),
-            name: child.name.clone(),
-            x: bounds.origin.x as i32,
-            y: bounds.origin.y as i32,
-            width: bounds.size.x as i32,
-            height: bounds.size.y as i32,
+            id: child.id_str().to_string(),
+            kind: kind_label(child).into(),
+            name: child.base().name.clone().unwrap_or_default(),
+            x: b.x as i32,
+            y: b.y as i32,
+            width: b.w as i32,
+            height: b.h as i32,
         });
         walk(child, out, known);
     }
     out.insert(parent_id, records);
-}
-
-fn kind_label(kind: &crate::document::NodeKind) -> &'static str {
-    match kind {
-        crate::document::NodeKind::Frame => "frame",
-        crate::document::NodeKind::Group => "group",
-        crate::document::NodeKind::Rect => "rect",
-        crate::document::NodeKind::Ellipse => "ellipse",
-        crate::document::NodeKind::Polygon => "polygon",
-        crate::document::NodeKind::Line => "line",
-        crate::document::NodeKind::Text => "text",
-        crate::document::NodeKind::Path => "path",
-        crate::document::NodeKind::Other(_) => "other",
-    }
 }

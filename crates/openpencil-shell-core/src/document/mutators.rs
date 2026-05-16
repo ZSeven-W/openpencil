@@ -541,7 +541,7 @@ impl Document {
             return false;
         }
         let sel = self.selected.clone();
-        let Some(node) = super::mcp_apply::find_node_mut_in_doc(self, &sel) else {
+        let Some(node) = find_node_mut_in_doc(self, &sel) else {
             return false;
         };
         node.effects.push(crate::document::Effect::DropShadow(
@@ -823,4 +823,34 @@ impl Document {
         }
         Ok(())
     }
+}
+
+/// Find a mutable reference to the node with `target` id anywhere in
+/// the document, walking every page + descendant. `None` when the id
+/// doesn't resolve.
+///
+/// Previously lived in the now-removed `document/mcp_apply.rs` (the
+/// legacy MCP apply path replaced by `op_editor_core::EditorState::
+/// apply` in Phase 5). Kept here because `add_drop_shadow_to_selected`
+/// still needs a `&mut Node` lookup the `&Node`-returning `Document::
+/// find` can't give.
+fn find_node_mut_in_doc<'d>(doc: &'d mut Document, target: &NodeId) -> Option<&'d mut Node> {
+    for page in doc.pages.iter_mut() {
+        if let Some(node) = find_in_subtree(&mut page.children, target) {
+            return Some(node);
+        }
+    }
+    None
+}
+
+fn find_in_subtree<'c>(children: &'c mut [Node], target: &NodeId) -> Option<&'c mut Node> {
+    if let Some(idx) = children.iter().position(|n| n.id == *target) {
+        return Some(&mut children[idx]);
+    }
+    for node in children.iter_mut() {
+        if let Some(found) = find_in_subtree(&mut node.children, target) {
+            return Some(found);
+        }
+    }
+    None
 }
