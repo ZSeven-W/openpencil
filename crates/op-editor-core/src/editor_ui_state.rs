@@ -306,7 +306,12 @@ pub struct EditorUiState {
     /// Node ids whose children are collapsed in the LayerPanel.
     /// Editor-only UI state — the canonical `PenNodeBase` has no
     /// `collapsed` field, so the collapse flag lives here rather than
-    /// on the node. Transient: rebuilt on load, never serialized.
+    /// on the node.
+    ///
+    /// Layer-collapse is view-only UI state: deliberately excluded from
+    /// the undo snapshot and from file persistence. It is transient —
+    /// rebuilt on load, never serialized, and toggling it never pushes
+    /// a history entry.
     pub collapsed_layers: HashSet<NodeId>,
     /// Caret-blink anchor (ms) for an inline layer / page rename.
     pub rename_caret_anchor_ms: u64,
