@@ -12,11 +12,13 @@
 //! Send / focus input / pick example. Full keyboard plumbing lives
 //! on the host (`apply_text` / `apply_send`).
 
-use crate::document::{ChatRole, ChatState, Document};
 use crate::theme::Theme;
+use crate::widgets::editor_state_ext::{theme_for, translate};
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::{LayoutBox, LayoutCx, PaintCx, Widget, WidgetId};
 use crate::{Color, Point2D, Rect, TextLayout};
+use op_editor_core::chat::{ChatRole, ChatState};
+use op_editor_core::EditorState;
 
 pub const AI_CHAT_WIDTH: f32 = 380.0;
 pub const AI_CHAT_HEIGHT: f32 = 460.0;
@@ -126,24 +128,25 @@ pub struct AIChatPlaceholder<'a> {
 }
 
 impl<'a> AIChatPlaceholder<'a> {
-    pub fn from_document(doc: &'a Document) -> Self {
-        Self::from_document_at(doc, 0)
+    pub fn from_editor(state: &'a EditorState) -> Self {
+        Self::from_editor_at(state, 0)
     }
 
-    /// Same as `from_document` but threads through the host's
+    /// Same as `from_editor` but threads through the host's
     /// current millisecond timestamp so the caret can blink.
-    pub fn from_document_at(doc: &'a Document, now_ms: u64) -> Self {
+    pub fn from_editor_at(state: &'a EditorState, now_ms: u64) -> Self {
+        let ui = &state.editor_ui;
         Self {
             id: WidgetId::new(7000),
-            theme: doc.theme(),
-            state: &doc.chat,
+            theme: theme_for(ui),
+            state: &state.chat,
             now_ms,
-            label_new_chat: doc.t("ai.newChat").to_string(),
-            label_start_with_ai: doc.t("ai.tryExample").to_string(),
-            label_input_placeholder: doc.t("ai.designWithAgent").to_string(),
-            label_tip_select_elements: doc.t("ai.tipSelectElements").to_string(),
-            label_no_models: doc.t("ai.noModelsConnected").to_string(),
-            model_picker_open: doc.ui.chat_model_picker_open,
+            label_new_chat: translate(ui, "ai.newChat").to_string(),
+            label_start_with_ai: translate(ui, "ai.tryExample").to_string(),
+            label_input_placeholder: translate(ui, "ai.designWithAgent").to_string(),
+            label_tip_select_elements: translate(ui, "ai.tipSelectElements").to_string(),
+            label_no_models: translate(ui, "ai.noModelsConnected").to_string(),
+            model_picker_open: ui.chat_model_picker_open,
         }
     }
 
@@ -607,7 +610,7 @@ fn paint_messages(
     cx: &mut PaintCx<'_>,
     theme: &Theme,
     body_rect: Rect,
-    messages: &[crate::document::ChatMessage],
+    messages: &[op_editor_core::chat::ChatMessage],
 ) {
     cx.backend.save();
     cx.backend.clip_rect(body_rect);
@@ -664,8 +667,8 @@ mod tests {
 
     #[test]
     fn layout_reports_fixed_size() {
-        let doc = Document::sample();
-        let p = AIChatPlaceholder::from_document(&doc);
+        let s = EditorState::new();
+        let p = AIChatPlaceholder::from_editor(&s);
         let cx = LayoutCx {
             available_width: 9999.0,
             dpi: 1.0,
@@ -682,8 +685,8 @@ mod tests {
 
     #[test]
     fn hit_test_resolves_input_focus() {
-        let doc = Document::sample();
-        let panel = AIChatPlaceholder::from_document(&doc);
+        let s = EditorState::new();
+        let panel = AIChatPlaceholder::from_editor(&s);
         let rect = Rect::xywh(0.0, 0.0, AI_CHAT_WIDTH, AI_CHAT_HEIGHT);
         // Click near the input center → FocusInput.
         let p = Point2D::new(60.0, AI_CHAT_HEIGHT - PAD - INPUT_HEIGHT / 2.0);
@@ -692,8 +695,8 @@ mod tests {
 
     #[test]
     fn hit_test_resolves_send_at_right() {
-        let doc = Document::sample();
-        let panel = AIChatPlaceholder::from_document(&doc);
+        let s = EditorState::new();
+        let panel = AIChatPlaceholder::from_editor(&s);
         let rect = Rect::xywh(0.0, 0.0, AI_CHAT_WIDTH, AI_CHAT_HEIGHT);
         let send_x = AI_CHAT_WIDTH - PAD - 20.0;
         let p = Point2D::new(send_x, AI_CHAT_HEIGHT - PAD - INPUT_HEIGHT / 2.0);
@@ -702,8 +705,8 @@ mod tests {
 
     #[test]
     fn hit_test_resolves_first_example_when_empty() {
-        let doc = Document::sample(); // chat empty by default
-        let panel = AIChatPlaceholder::from_document(&doc);
+        let s = EditorState::new(); // chat empty by default
+        let panel = AIChatPlaceholder::from_editor(&s);
         let rect = Rect::xywh(0.0, 0.0, AI_CHAT_WIDTH, AI_CHAT_HEIGHT);
         // First example card: top-left of grid.
         let card_w = (AI_CHAT_WIDTH - PAD * 2.0 - 8.0) / 2.0;
@@ -718,8 +721,8 @@ mod tests {
 
     #[test]
     fn hit_test_header_returns_drag_handle() {
-        let doc = Document::sample();
-        let panel = AIChatPlaceholder::from_document(&doc);
+        let s = EditorState::new();
+        let panel = AIChatPlaceholder::from_editor(&s);
         let rect = Rect::xywh(0.0, 0.0, AI_CHAT_WIDTH, AI_CHAT_HEIGHT);
         // Click in the empty header band (between title and icons).
         let p = Point2D::new(AI_CHAT_WIDTH / 2.0, 16.0);

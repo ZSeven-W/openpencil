@@ -158,7 +158,7 @@ impl WidgetHost {
         }
 
         if let Some(chat_rect) = self.ai_chat_rect(viewport_width, viewport_height) {
-            let chat = AIChatPlaceholder::from_document(doc);
+            let chat = AIChatPlaceholder::from_editor(&self.editor_state);
             let mut cx = PaintCx {
                 backend: &mut *backend,
             };
