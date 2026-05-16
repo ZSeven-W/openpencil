@@ -249,7 +249,7 @@ impl EditorState {
     }
 
     /// `SetNodeFlag` — flip a boolean flag on a node. `Collapsed` has
-    /// no canonical-schema field (it is editor-chrome-only state), so
+    /// no canonical-schema field (it is editor-UI-only state), so
     /// the applier rejects it; `Hidden` writes `visible`, `Locked`
     /// writes `locked`.
     pub(crate) fn cmd_set_node_flag(
@@ -263,7 +263,7 @@ impl EditorState {
         }
         if matches!(flag, NodeFlag::Collapsed) {
             // No `collapsed` field on `PenNodeBase` — collapse is a
-            // layer-panel chrome flag, not part of the `.op` document.
+            // layer-panel UI flag, not part of the `.op` document.
             return false;
         }
         let Some(node) = find_node_mut(self.active_children_mut(), node_id) else {

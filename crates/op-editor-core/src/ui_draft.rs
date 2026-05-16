@@ -5,7 +5,7 @@
 //! `openpencil-shell-core::document::UiState`. shell-core's `UiState`
 //! also carries a large amount of *widget-layer* state (hover targets
 //! typed as `crate::widgets::*`, export-dialog format enums, the
-//! agent-settings modal struct, etc.). Those are chrome concerns that
+//! agent-settings modal struct, etc.). Those are UI concerns that
 //! belong to a later widget-layer crate, not the editor-state layer —
 //! `op-editor-core` deliberately has no widget dependency. So this
 //! struct ports the parts that are genuinely editor state:
