@@ -50,7 +50,7 @@ impl WidgetHostNative {
         use openpencil_shell_core::widgets::agent_settings_panel::{
             AgentSettingsHit, AgentSettingsPanel,
         };
-        self.refresh_paint_doc();
+        self.refresh_layout_scene();
         let panel = AgentSettingsPanel::for_editor(&self.editor_state);
         let panel_rect = panel.rect(vw, vh);
         let point = Point2D::new(x, y);

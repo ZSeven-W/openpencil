@@ -8,9 +8,10 @@
 //! module to keep this file under the 800-line ceiling.
 //!
 //! INPUT path: the host-input hit-test helpers
-//! [`rotation_corner_at_point`] / [`selection_handle_at_point`] still
-//! consume the shell-core `Document` — they serve the hosts' input
-//! dispatch, not widget paint, and a later task migrates them.
+//! [`rotation_corner_at_point`] / [`selection_handle_at_point`] read
+//! the layout-resolved [`LayoutScene`] + the editor's selection /
+//! viewport state — they serve the hosts' input dispatch, not widget
+//! paint.
 //!
 //! Per-kind paint:
 //! - Frame: fill (if any) at `bounds`, optional stroke, then recurse.
@@ -21,7 +22,7 @@
 //! Selection overlay (outlines + handles), grid, pen rubber-band and
 //! per-anchor Path handles are layered on top of the resolved scene.
 
-use crate::document::{Document, NodeKind, Viewport as DocViewport};
+use crate::document::{NodeKind, Viewport as DocViewport};
 use crate::layout_scene::LayoutScene;
 use crate::theme::Theme;
 use crate::widgets::editor_state_ext::theme_for;
@@ -50,6 +51,21 @@ pub enum SelectionHandle {
 /// 4 selection corners. Matches the TS `ROTATE_OUTER_RADIUS`.
 const ROTATE_OUTER_RADIUS: f32 = 16.0;
 
+/// The single resolved scene node the editor's selection anchor
+/// points at, or `None` when the selection isn't a single node that
+/// resolves on the active page. Shared by the two selection-overlay
+/// hit-tests below — they only fire on single-select.
+fn selected_scene_node<'a>(
+    scene: &'a LayoutScene,
+    state: &EditorState,
+) -> Option<&'a crate::layout_scene::SceneNode> {
+    if state.selection_count() != 1 {
+        return None;
+    }
+    let anchor = state.selection.anchor.as_str();
+    scene.active_page()?.find(anchor)
+}
+
 /// Hit-test the rotation ring that sits just outside the four
 /// corner handles. Returns the nearest corner (so the runner can
 /// hint which way the rotation drag is anchored) or `None` if the
@@ -59,26 +75,28 @@ const ROTATE_OUTER_RADIUS: f32 = 16.0;
 /// the 6 px handle slop and inside the 16 px outer radius. Matches
 /// the TS `hitTestRotation` logic.
 ///
-/// INPUT path — stays on `&Document` (the host input dispatch still
-/// reasons in `Document` space; a later task migrates it).
+/// INPUT path — reads the layout-resolved [`LayoutScene`] (selected
+/// node geometry) + the editor's selection / viewport state.
 pub fn rotation_corner_at_point(
     canvas_rect: Rect,
-    doc: &Document,
+    scene: &LayoutScene,
+    state: &EditorState,
     point: Point2D,
 ) -> Option<SelectionHandle> {
     // Rotation rings are only painted on single-select (the
     // multi-select overlay is outline-only), so gate the hit-test
     // to match — otherwise non-anchor "rotation zones" would
     // intercept clicks on dead air.
-    if doc.selection_count() != 1 {
-        return None;
-    }
-    let node = doc.selected_node()?;
+    let node = selected_scene_node(scene, state)?;
     let bounds = node.aggregate_bounds();
     if bounds.size.x <= 0.0 || bounds.size.y <= 0.0 {
         return None;
     }
-    let viewport = &doc.viewport;
+    let viewport = DocViewport {
+        pan_x: state.viewport.pan_x,
+        pan_y: state.viewport.pan_y,
+        zoom: state.viewport.zoom,
+    };
     let left = canvas_rect.origin.x + viewport.pan_x + bounds.origin.x * viewport.zoom;
     let top = canvas_rect.origin.y + viewport.pan_y + bounds.origin.y * viewport.zoom;
     let right = left + bounds.size.x * viewport.zoom;
@@ -133,25 +151,28 @@ fn inverse_rotate(point: Point2D, pivot: Point2D, radians: f32) -> Point2D {
 /// transform from document → screen is identical to paint so a
 /// handle the user clicks is the handle they see.
 ///
-/// INPUT path — stays on `&Document` (see [`rotation_corner_at_point`]).
+/// INPUT path — reads the layout-resolved [`LayoutScene`] + the
+/// editor's selection / viewport state (see [`rotation_corner_at_point`]).
 pub fn selection_handle_at_point(
     canvas_rect: Rect,
-    doc: &Document,
+    scene: &LayoutScene,
+    state: &EditorState,
     point: Point2D,
 ) -> Option<SelectionHandle> {
     // Handles are only painted on single-select (the multi-select
     // overlay is outline-only — Figma parity), so gate the hit-
     // test to match. Otherwise the "anchor's handles" would hit-
     // test even though no handles are visible anywhere.
-    if doc.selection_count() != 1 {
-        return None;
-    }
-    let node = doc.selected_node()?;
+    let node = selected_scene_node(scene, state)?;
     let bounds = node.aggregate_bounds();
     if bounds.size.x <= 0.0 || bounds.size.y <= 0.0 {
         return None;
     }
-    let viewport = &doc.viewport;
+    let viewport = DocViewport {
+        pan_x: state.viewport.pan_x,
+        pan_y: state.viewport.pan_y,
+        zoom: state.viewport.zoom,
+    };
     let left = canvas_rect.origin.x + viewport.pan_x + bounds.origin.x * viewport.zoom;
     let top = canvas_rect.origin.y + viewport.pan_y + bounds.origin.y * viewport.zoom;
     let right = left + bounds.size.x * viewport.zoom;
@@ -228,8 +249,8 @@ impl<'a> CanvasViewport<'a> {
     /// Editor state — `viewport` / selection / `tool` / pen-draft /
     /// text-edit — is read from `state`; the resolved render-node tree
     /// is read from `scene`. The host builds `scene` via
-    /// `op_pen_loader::editor_state_to_layout_scene` and caches it the
-    /// same way `paint_doc` is cached.
+    /// `op_pen_loader::editor_state_to_layout_scene` and caches it,
+    /// refreshing on `editor_state_dirty`.
     pub fn from_editor(state: &EditorState, scene: &'a LayoutScene) -> Self {
         let theme = theme_for(&state.editor_ui);
         let viewport = DocViewport {
@@ -472,268 +493,7 @@ fn paint_grid(cx: &mut PaintCx<'_>, rect: Rect, viewport: &DocViewport, theme: &
     }
 }
 
+
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::layout_scene::{LayoutScene, SceneFillType, SceneNode, ScenePage, SceneStroke};
-    use crate::{Color, Point2D, Rect, TextLayout};
-
-    /// Records op order; clip-isolated paint = `Save, Clip, Fill, …, Restore`.
-    #[derive(Debug, PartialEq, Eq)]
-    enum Op {
-        Save,
-        Restore,
-        Clip,
-        Fill,
-        Stroke,
-        Text,
-    }
-
-    #[derive(Default)]
-    struct RecordingBackend {
-        ops: Vec<Op>,
-        rects: usize,
-        strokes: usize,
-        text: usize,
-    }
-
-    impl crate::RenderBackend for RecordingBackend {
-        fn begin_frame(&mut self) {}
-        fn end_frame(&mut self) {}
-        fn fill_rect(&mut self, _: Rect, _: Color) {
-            self.rects += 1;
-            self.ops.push(Op::Fill);
-        }
-        fn stroke_rect(&mut self, _: Rect, _: Color, _: f32) {
-            self.strokes += 1;
-            self.ops.push(Op::Stroke);
-        }
-        fn draw_text(&mut self, _: &TextLayout, _: Point2D) {
-            self.text += 1;
-            self.ops.push(Op::Text);
-        }
-        fn clip_rect(&mut self, _: Rect) {
-            self.ops.push(Op::Clip);
-        }
-        fn save(&mut self) {
-            self.ops.push(Op::Save);
-        }
-        fn restore(&mut self) {
-            self.ops.push(Op::Restore);
-        }
-        fn translate(&mut self, _: Point2D) {}
-        fn stroke_line(&mut self, _: Point2D, _: Point2D, _: Color, _: f32) {
-            self.strokes += 1;
-            self.ops.push(Op::Stroke);
-        }
-        fn fill_round_rect(&mut self, _: Rect, _: f32, _: Color) {
-            self.rects += 1;
-            self.ops.push(Op::Fill);
-        }
-        fn stroke_round_rect(&mut self, _: Rect, _: f32, _: Color, _: f32) {
-            self.strokes += 1;
-            self.ops.push(Op::Stroke);
-        }
-        fn stroke_svg_path(&mut self, _: &str, _: Point2D, _: f32, _: Color, _: f32) {
-            self.strokes += 1;
-            self.ops.push(Op::Stroke);
-        }
-        fn resize(&mut self, _: u32, _: u32) {}
-        fn dpi_scale(&self) -> f32 {
-            1.0
-        }
-    }
-
-    /// A leaf scene node with bounds + optional fill.
-    fn leaf(id: &str, kind: NodeKind, bounds: Rect, fill: Option<Color>) -> SceneNode {
-        let mut n = SceneNode::leaf(id, kind);
-        n.bounds = bounds;
-        n.fill = fill;
-        n
-    }
-
-    /// A one-page scene mirroring `Document::sample`: a Frame with a
-    /// stroke, a filled Rect child, and two Text nodes.
-    fn sample_scene() -> LayoutScene {
-        let mut frame = SceneNode::leaf("n1", NodeKind::Frame);
-        frame.bounds = Rect::xywh(40.0, 40.0, 320.0, 200.0);
-        frame.fill = Some(Color { r: 0.16, g: 0.16, b: 0.2, a: 1.0 });
-        frame.stroke = Some(SceneStroke { color: Color::WHITE, width: 1.0 });
-        frame.fill_type = SceneFillType::Solid;
-        let mut button = leaf(
-            "n2",
-            NodeKind::Rect,
-            Rect::xywh(60.0, 80.0, 120.0, 40.0),
-            Some(Color::BLUE),
-        );
-        button.stroke = None;
-        let mut title = SceneNode::leaf("n3", NodeKind::Text);
-        title.bounds = Rect::xywh(60.0, 60.0, 200.0, 20.0);
-        title.text = Some("Title".to_string());
-        let mut label = SceneNode::leaf("n4", NodeKind::Text);
-        label.bounds = Rect::xywh(70.0, 90.0, 100.0, 16.0);
-        label.text = Some("Button".to_string());
-        frame.children = vec![button, title, label];
-        LayoutScene {
-            pages: vec![ScenePage {
-                id: "p1".into(),
-                name: "Page 1".into(),
-                children: vec![frame],
-            }],
-            active_page_index: 0,
-        }
-    }
-
-    fn sample_state() -> EditorState {
-        EditorState::sample()
-    }
-
-    #[test]
-    fn from_sample_scene_paints_expected_primitives() {
-        let state = sample_state();
-        let scene = sample_scene();
-        let mut viewport = CanvasViewport::from_editor(&state, &scene);
-        // Select the Frame so the overlay stroke paints.
-        viewport.selected = "n1".into();
-        viewport.selected_set = vec!["n1".into()];
-        let mut backend = RecordingBackend::default();
-        {
-            let mut cx = PaintCx {
-                backend: &mut backend,
-            };
-            viewport.paint(&mut cx, Rect::xywh(0.0, 0.0, 800.0, 600.0));
-        }
-        // ≥3 fills (canvas bg, frame fill, button rect), ≥2 strokes
-        // (frame outline + selection overlay), 2 text draws.
-        assert!(backend.rects >= 3, "expected ≥3 fills, got {}", backend.rects);
-        assert!(
-            backend.strokes >= 2,
-            "expected ≥2 strokes (frame + selection overlay), got {}",
-            backend.strokes
-        );
-        assert_eq!(backend.text, 2, "two text nodes draw two text runs");
-    }
-
-    #[test]
-    fn empty_scene_paints_canvas_background_and_grid_only() {
-        let state = sample_state();
-        let scene = LayoutScene::default();
-        let viewport = CanvasViewport::from_editor(&state, &scene);
-        let mut backend = RecordingBackend::default();
-        {
-            let mut cx = PaintCx {
-                backend: &mut backend,
-            };
-            viewport.paint(&mut cx, Rect::xywh(0.0, 0.0, 100.0, 100.0));
-        }
-        // Infinite-canvas: bg + grid dots, no document-side strokes
-        // / text.
-        assert!(backend.rects >= 1, "canvas bg + grid dots");
-        assert_eq!(backend.strokes, 0);
-        assert_eq!(backend.text, 0);
-    }
-
-    #[test]
-    fn unselected_scene_skips_overlay_stroke() {
-        let state = sample_state();
-        let scene = sample_scene();
-        // No selection — only the frame's own stroke paints.
-        let viewport = CanvasViewport::from_editor(&state, &scene);
-        let mut backend = RecordingBackend::default();
-        {
-            let mut cx = PaintCx {
-                backend: &mut backend,
-            };
-            viewport.paint(&mut cx, Rect::xywh(0.0, 0.0, 800.0, 600.0));
-        }
-        assert_eq!(backend.strokes, 1, "no selection => only the frame stroke");
-    }
-
-    #[test]
-    fn access_node_advertises_canvas_role() {
-        let state = sample_state();
-        let scene = sample_scene();
-        let viewport = CanvasViewport::from_editor(&state, &scene);
-        let node = viewport.access_node();
-        assert_eq!(node.role(), accesskit::Role::Canvas);
-        assert_eq!(node.label(), Some("Canvas"));
-    }
-
-    #[test]
-    fn paint_is_clip_isolated_save_clip_then_restore() {
-        let state = sample_state();
-        let scene = sample_scene();
-        let viewport = CanvasViewport::from_editor(&state, &scene);
-        let mut backend = RecordingBackend::default();
-        {
-            let mut cx = PaintCx {
-                backend: &mut backend,
-            };
-            viewport.paint(&mut cx, Rect::xywh(0.0, 0.0, 800.0, 600.0));
-        }
-        // First three ops: Save, Clip, Fill (the canvas bg).
-        assert_eq!(
-            &backend.ops[..3],
-            &[Op::Save, Op::Clip, Op::Fill],
-            "canvas paint must open with Save → Clip → bg Fill"
-        );
-        assert_eq!(
-            backend.ops.last(),
-            Some(&Op::Restore),
-            "canvas paint must close with Restore"
-        );
-        let saves = backend.ops.iter().filter(|o| **o == Op::Save).count();
-        let restores = backend.ops.iter().filter(|o| **o == Op::Restore).count();
-        assert_eq!(saves, restores, "balanced save/restore");
-        assert_eq!(saves, 1);
-    }
-
-    #[test]
-    fn paint_with_zero_size_rect_skips_entirely() {
-        let state = sample_state();
-        let scene = sample_scene();
-        let viewport = CanvasViewport::from_editor(&state, &scene);
-        let mut backend = RecordingBackend::default();
-        {
-            let mut cx = PaintCx {
-                backend: &mut backend,
-            };
-            viewport.paint(&mut cx, Rect::xywh(0.0, 0.0, 0.0, 0.0));
-        }
-        assert!(backend.ops.is_empty(), "zero-size rect must paint nothing");
-    }
-
-    #[test]
-    fn group_kind_recurses_without_own_paint() {
-        let state = sample_state();
-        let inner = leaf(
-            "n2",
-            NodeKind::Rect,
-            Rect::xywh(0.0, 0.0, 50.0, 50.0),
-            Some(Color::RED),
-        );
-        let mut group = SceneNode::leaf("n3", NodeKind::Group);
-        group.bounds = Rect::xywh(10.0, 10.0, 80.0, 80.0);
-        group.fill = Some(Color::BLUE); // fill on group should be ignored
-        group.children = vec![inner];
-        let scene = LayoutScene {
-            pages: vec![ScenePage {
-                id: "n1".into(),
-                name: "p".into(),
-                children: vec![group],
-            }],
-            active_page_index: 0,
-        };
-        let viewport = CanvasViewport::from_editor(&state, &scene);
-        let mut backend = RecordingBackend::default();
-        {
-            let mut cx = PaintCx {
-                backend: &mut backend,
-            };
-            viewport.paint(&mut cx, Rect::xywh(0.0, 0.0, 200.0, 200.0));
-        }
-        // canvas bg (1) + grid dots (variable) + leaf rect fill (1)
-        // — group fill skipped.
-        assert!(backend.rects >= 2, "canvas bg + at least the leaf");
-    }
-}
+#[path = "canvas_viewport_tests.rs"]
+mod tests;

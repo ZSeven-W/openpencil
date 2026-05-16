@@ -139,6 +139,11 @@ pub struct SceneNode {
     /// Whether the node (and its subtree) is hidden — the painter
     /// skips hidden nodes entirely.
     pub hidden: bool,
+    /// Whether the node is locked. Paint ignores this; the host's
+    /// canvas hit-test reads it so a locked node's body opts out of
+    /// selection while its children stay hittable (parity with the
+    /// `Document`-bound `hit_test_walk`).
+    pub locked: bool,
     /// Child render nodes, in paint order.
     pub children: Vec<SceneNode>,
 }
@@ -207,6 +212,7 @@ impl SceneNode {
             points: Vec::new(),
             effects: Vec::new(),
             hidden: false,
+            locked: false,
             children: Vec::new(),
         }
     }

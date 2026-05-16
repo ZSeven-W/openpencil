@@ -3,10 +3,10 @@
 //! 800-line ceiling. Mirrors the structure used by
 //! `openpencil-shell-native/src/widget_host/paint.rs`.
 //!
-//! `paint` takes `&mut self`: it drains the derived paint
-//! `Document` cache (`refresh_paint_doc`) at the top of the pass,
-//! then every widget builder reads through the read-only snapshot.
-//! The host's `EditorState` is never touched during paint.
+//! `paint` takes `&mut self`: it rebuilds the layout-resolved
+//! `LayoutScene` (`refresh_layout_scene`) at the top of the pass,
+//! then every widget builder reads `editor_state` directly and the
+//! canvas reads the render scene.
 
 use super::WidgetHost;
 use crate::backend::WebBackend;
@@ -44,11 +44,11 @@ impl WidgetHost {
 
         let dpi = backend.dpi_scale();
 
-        // Derive the read-only paint `Document` snapshot ONCE for the
-        // whole paint pass. Every widget builder below reads `doc`;
-        // the host's `EditorState` is never touched during paint.
-        self.refresh_paint_doc();
-        let doc = &self.paint_doc;
+        // Rebuild the layout-resolved render scene ONCE for the whole
+        // paint pass. Every widget builder below reads `editor_state`
+        // directly; the canvas reads `self.layout_scene`.
+        self.refresh_layout_scene();
+        let ui = &self.editor_state.editor_ui;
 
         let top_bar = TopBar::for_editor_ui(&self.editor_state.editor_ui);
         let top_bar_rect = Rect {
@@ -62,11 +62,11 @@ impl WidgetHost {
             top_bar.paint(&mut cx, top_bar_rect);
         }
 
-        if doc.ui.sidebar_open {
+        if ui.sidebar_open {
             let layer_panel_rect = Rect {
                 origin: Point2D::new(0.0, TOP_BAR_HEIGHT),
                 size: Point2D::new(
-                    doc.ui.layer_panel_width,
+                    ui.layer_panel_width,
                     (viewport_height - TOP_BAR_HEIGHT).max(0.0),
                 ),
             };
@@ -77,9 +77,10 @@ impl WidgetHost {
             // `NodeId` from the input path, losslessly accepted.
             let active_drag = self.layer_drag.clone().filter(|d| {
                 d.active
-                    && doc
+                    && self
+                        .layout_scene
                         .active_page()
-                        .map(|p| p.find(&d.source).is_some())
+                        .map(|p| p.find(d.source.as_str()).is_some())
                         .unwrap_or(false)
             });
             let mut layer_panel = if let Some(d) = &active_drag {
@@ -108,11 +109,11 @@ impl WidgetHost {
         if let Some(panel) = property_panel.as_ref() {
             let property_rect = Rect {
                 origin: Point2D::new(
-                    viewport_width - doc.ui.property_panel_width,
+                    viewport_width - ui.property_panel_width,
                     TOP_BAR_HEIGHT,
                 ),
                 size: Point2D::new(
-                    doc.ui.property_panel_width,
+                    ui.property_panel_width,
                     (viewport_height - TOP_BAR_HEIGHT).max(0.0),
                 ),
             };
@@ -130,8 +131,7 @@ impl WidgetHost {
         };
         if canvas_w > 0.0 && canvas_h > 0.0 {
             // PAINT path — the canvas reads editor state + the
-            // layout-resolved render scene, not the derived
-            // `Document`. Both are rebuilt by `refresh_paint_doc`.
+            // layout-resolved render scene (`refresh_layout_scene`).
             // Web has no per-frame clock; caret stays solid.
             let canvas =
                 CanvasViewport::from_editor(&self.editor_state, &self.layout_scene);
@@ -232,7 +232,7 @@ impl WidgetHost {
             }
         }
 
-        if doc.ui.locale_picker_open {
+        if ui.locale_picker_open {
             let picker_rect = self.locale_picker_rect(viewport_width);
             let picker = LocalePicker::for_editor_ui(&self.editor_state.editor_ui);
             let mut cx = PaintCx {
@@ -253,7 +253,7 @@ impl WidgetHost {
         }
 
         // Settings modal — Cmd+, overlay, top-most.
-        if self.paint_doc.ui.agent_settings_open {
+        if ui.agent_settings_open {
             use openpencil_shell_core::widgets::agent_settings_panel::AgentSettingsPanel;
             let panel = AgentSettingsPanel::for_editor(&self.editor_state);
             let panel_rect = panel.rect(viewport_width, viewport_height);

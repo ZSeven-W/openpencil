@@ -2,9 +2,10 @@
 //! `WidgetHostNative`. Split out of `keyboard.rs` to honor the
 //! 800-line cap.
 //!
-//! Widget hit-tests run against the derived paint `Document`; their
-//! shell-core results (`NodeId` / hit enums) are translated into
-//! op-editor-core types before feeding `EditorState` mutators.
+//! Widget hit-tests run against `EditorState`; canvas marquee
+//! hit-tests query the layout-resolved `LayoutScene`. Resolved-scene
+//! node ids are wrapped into op-editor-core `NodeId`s before feeding
+//! `EditorState` mutators.
 
 use super::helpers::{TOOLBAR_INSET_X, TOOLBAR_INSET_Y};
 use super::WidgetHostNative;
@@ -26,11 +27,11 @@ impl WidgetHostNative {
             // only effect, nothing more to do.
             return false;
         }
-        self.refresh_paint_doc();
+        self.refresh_layout_scene();
         if self
-            .paint_doc
+            .layout_scene
             .active_page()
-            .map(|p| p.find(&d.source).is_none())
+            .map(|p| p.find(d.source.as_str()).is_none())
             .unwrap_or(true)
         {
             return false;
@@ -82,7 +83,7 @@ impl WidgetHostNative {
         if screen_dx < 2.0 && screen_dy < 2.0 {
             return;
         }
-        self.refresh_paint_doc();
+        self.refresh_layout_scene();
         let (cx0, cy0, _cw, _ch) = self.canvas_region(viewport_w, viewport_h);
         let to_doc = |sx: f32, sy: f32| -> Point2D {
             let local = Point2D::new(sx - cx0, sy - cy0);
@@ -95,14 +96,14 @@ impl WidgetHostNative {
         let w = (p1.x - p0.x).abs();
         let h = (p1.y - p0.y).abs();
         let rect = Rect::xywh(x, y, w, h);
-        // `nodes_intersecting_doc_rect` is a `&Document`-bound helper —
-        // it returns shell-core `NodeId`s.
-        let ids = self.paint_doc.nodes_intersecting_doc_rect(rect);
+        // `nodes_intersecting_doc_rect` queries the `LayoutScene` —
+        // it returns the resolved-scene node id strings.
+        let ids = self.layout_scene.nodes_intersecting_doc_rect(rect);
         if m.additive {
             // ADD-only: every hit joins the set; already-selected
             // hits stay selected (TS shift-marquee parity).
             for id in ids {
-                let ec_id = op_pen_loader::rev::node_id(&id);
+                let ec_id = op_editor_core::NodeId::new(&id);
                 if !self.editor_state.is_selected(&ec_id) {
                     self.editor_state.toggle_selection(ec_id);
                 }
@@ -111,7 +112,7 @@ impl WidgetHostNative {
         } else if !ids.is_empty() {
             // Replace with the hit set; anchor = last hit.
             let ec_ids: Vec<op_editor_core::NodeId> =
-                ids.iter().map(op_pen_loader::rev::node_id).collect();
+                ids.iter().map(op_editor_core::NodeId::new).collect();
             let anchor = ec_ids.last().unwrap().clone();
             self.editor_state.selection.set = ec_ids;
             self.editor_state.selection.anchor = anchor;
@@ -128,7 +129,7 @@ impl WidgetHostNative {
         viewport_width: f32,
         viewport_height: f32,
     ) -> bool {
-        self.refresh_paint_doc();
+        self.refresh_layout_scene();
         // AI chat panel sits above canvas — check first.
         if let Some(chat_rect) = self.ai_chat_rect(viewport_width, viewport_height) {
             let panel = AIChatPlaceholder::from_editor(&self.editor_state);

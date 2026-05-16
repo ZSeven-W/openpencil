@@ -295,36 +295,11 @@ fn property_panel_visible_hides_stale_single_anchor() {
     assert!(!doc2.property_panel_visible());
 }
 
-#[test]
-fn multi_select_handle_hit_test_is_disabled() {
-    // Codex CONCERN guard: handles aren't painted on multi-
-    // select, so the hit-test must not return them either.
-    use crate::widgets::{rotation_corner_at_point, selection_handle_at_point};
-    let mut doc = Document::sample();
-    // 2 selected → handles hidden, hit-test returns None.
-    doc.selected_set = vec![NodeId::new("n11"), NodeId::new("n13")];
-    doc.selected = NodeId::new("n13");
-    let canvas_rect = crate::Rect::xywh(0.0, 0.0, 800.0, 600.0);
-    // A point that would hit the anchor's top-left handle if
-    // hit-test ran — at zoom 1, pan 0, anchor 13 bounds origin.
-    let node = doc.selected_node().unwrap();
-    let bounds = node.aggregate_bounds();
-    let handle_point = crate::Point2D::new(
-        canvas_rect.origin.x + bounds.origin.x,
-        canvas_rect.origin.y + bounds.origin.y,
-    );
-    assert!(
-        selection_handle_at_point(canvas_rect, &doc, handle_point).is_none(),
-        "multi-select must not expose handle hit-tests"
-    );
-    assert!(
-        rotation_corner_at_point(canvas_rect, &doc, handle_point).is_none(),
-        "multi-select must not expose rotation hit-tests"
-    );
-    // Collapse to single-select → handles are interactive again.
-    doc.set_single_selection(NodeId::new("n13"));
-    assert!(selection_handle_at_point(canvas_rect, &doc, handle_point).is_some());
-}
+// The selection-overlay hit-tests (`selection_handle_at_point` /
+// `rotation_corner_at_point`) were migrated off `&Document` onto the
+// layout-resolved `LayoutScene` + `EditorState`. Their multi-select
+// gating is covered by the tests beside the functions in
+// `widgets/canvas_viewport.rs`.
 
 #[test]
 fn translate_selected_dedups_ancestor_descendant_pairs() {

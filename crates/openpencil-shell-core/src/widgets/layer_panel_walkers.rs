@@ -5,9 +5,9 @@
 //! Phase 6 migration: these walk the canonical `PenNode` tree owned
 //! by `op_editor_core::EditorState` instead of shell-core's old flat
 //! `Node`. The widget-facing `LayerItem` still carries a shell-core
-//! `document::NodeId` so the hosts' `&Document`-bound layer hit-test
-//! path stays untouched (the two id types are both string newtypes,
-//! so the conversion at the walk boundary is lossless).
+//! `document::NodeId` so the hosts' layer hit-test path stays
+//! untouched (the two id types are both string newtypes, so the
+//! conversion at the walk boundary is lossless).
 
 use crate::document::NodeId;
 use crate::widgets::icons::Icon;

@@ -3,7 +3,7 @@
 //!
 //! `EditorState` is the host's source of truth, so the fixtures seed
 //! `host.editor_state` from canonical-schema JSON and assert against
-//! `editor_state` + the derived `paint_document()` snapshot.
+//! `editor_state` + the derived `LayoutScene` render scene.
 
 use super::WidgetHostNative;
 use op_editor_core::ui_draft::PropertyFocus;

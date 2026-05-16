@@ -96,6 +96,7 @@ fn node_to_scene(node: &Node, var_table: &VariableTable) -> SceneNode {
         points: node.points.clone(),
         effects: node.effects.clone(),
         hidden: node.hidden,
+        locked: node.locked,
         children: node
             .children
             .iter()

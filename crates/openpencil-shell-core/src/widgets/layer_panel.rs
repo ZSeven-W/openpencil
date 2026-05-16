@@ -4,8 +4,8 @@
 //! depth-flattened layer rows) is built directly from
 //! `op_editor_core::EditorState` — it walks the canonical `PenNode`
 //! tree on `EditorState.doc`. The widget keeps a shell-core
-//! `document::NodeId` in its hit-test surface so the hosts'
-//! `&Document`-bound input path is untouched.
+//! `document::NodeId` in its hit-test surface; the hosts' input
+//! path wraps it into an `op-editor-core` id at the call boundary.
 
 use crate::document::NodeId;
 use crate::theme::Theme;

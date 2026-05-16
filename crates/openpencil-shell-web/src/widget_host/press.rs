@@ -4,7 +4,7 @@
 //! `click.rs` split.
 //!
 //! `EditorState` is the host's source of truth. Every widget
-//! hit-test runs against the derived paint `Document` (`paint_doc`,
+//! the canvas hit-test runs against the layout-resolved `LayoutScene`,
 //! refreshed at the top of each input handler); the shell-core hit
 //! results (`NodeId` / hit enums) are translated into op-editor-core
 //! types via `op_pen_loader::rev::*` before feeding `EditorState`
@@ -82,7 +82,7 @@ impl WidgetHost {
         }
         use op_editor_core::editor_ui_state::LayerContextMenuState;
         use op_editor_core::ui_draft::LayerContextTarget;
-        self.refresh_paint_doc();
+        self.refresh_layout_scene();
         let layer_rect = self.layer_panel_rect(viewport_h);
         let panel = LayerPanel::from_editor(&self.editor_state);
         match panel.hit_test(layer_rect, Point2D::new(x, y)) {
@@ -181,8 +181,8 @@ impl WidgetHost {
         self.last_viewport_w = viewport_width;
         self.last_viewport_h = viewport_height;
         // Refresh the derived paint doc once up front — every hit-test
-        // below reads `&self.paint_doc`, so it must be current.
-        self.refresh_paint_doc();
+        // below reads `&self.layout_scene`, so it must be current.
+        self.refresh_layout_scene();
         // 0-pre. Commit any in-flight rename + canvas text-edit on
         // first press anywhere. Tracked so the final return reports
         // the visible change.
@@ -408,14 +408,16 @@ impl WidgetHost {
             }
             if matches!(self.editor_state.tool, op_editor_core::Tool::Select) {
                 // Convert screen → doc to ask which node (if any)
-                // is under the cursor. `node_at_doc_point` is a
-                // `&Document`-bound hit-test — run it on `paint_doc`.
+                // is under the cursor — `node_at_doc_point` queries
+                // the layout-resolved render scene.
                 let (cx0, cy0, _cw, _ch) = self.canvas_region(viewport_width, viewport_height);
                 let canvas_local = Point2D::new(x - cx0, y - cy0);
                 let doc_point = self.editor_state.viewport.to_document(canvas_local);
-                let hit = self.paint_doc.node_at_doc_point(doc_point);
+                let hit = self
+                    .layout_scene
+                    .node_at_doc_point(doc_point, self.editor_state.viewport.zoom);
                 if let Some(sc_node_id) = hit {
-                    let node_id = op_pen_loader::rev::node_id(&sc_node_id);
+                    let node_id = op_editor_core::NodeId::new(&sc_node_id);
                     // Canvas double-click: 400 ms same-node → enter
                     // text-edit on Text nodes.
                     let is_double = matches!(
@@ -479,7 +481,7 @@ impl WidgetHost {
         // glue:
         // Floating chat panel sits on top — check first so its
         // clicks don't fall through to the canvas.
-        self.refresh_paint_doc();
+        self.refresh_layout_scene();
         if let Some(chat_rect) = self.ai_chat_rect(viewport_w, viewport_h) {
             let panel = AIChatPlaceholder::from_editor(&self.editor_state);
             if let Some(hit) = panel.hit_test(chat_rect, Point2D::new(x, y)) {
@@ -624,7 +626,7 @@ impl WidgetHost {
         use openpencil_shell_core::widgets::agent_settings_panel::{
             AgentSettingsHit, AgentSettingsPanel,
         };
-        self.refresh_paint_doc();
+        self.refresh_layout_scene();
         let panel = AgentSettingsPanel::for_editor(&self.editor_state);
         let panel_rect = panel.rect(vw, vh);
         match panel.hit_test(panel_rect, Point2D::new(x, y)) {
