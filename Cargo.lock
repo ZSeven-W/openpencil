@@ -2289,6 +2289,18 @@ name = "op-i18n"
 version = "0.1.0"
 
 [[package]]
+name = "op-pen-loader"
+version = "0.1.0"
+dependencies = [
+ "jian-core",
+ "jian-ops-schema",
+ "jian-skia",
+ "openpencil-shell-core",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "openpencil-desktop"
 version = "0.1.0"
 dependencies = [
@@ -2303,6 +2315,7 @@ dependencies = [
  "jian-ops-schema",
  "jian-skia",
  "op-editor-core",
+ "op-pen-loader",
  "openpencil-shell-core",
  "openpencil-shell-native",
  "reqwest",
