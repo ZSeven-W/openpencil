@@ -169,6 +169,32 @@ pub fn apply_editor_state_ui(doc: &mut sc::document::Document, state: &ec::Edito
         .iter()
         .map(crate::bridge_ui::node_id)
         .collect();
+    // Layer-collapse state. `pen_document_to_document` hardcodes
+    // `Node.collapsed = false` for every derived node (the canonical
+    // `PenNodeBase` has no `collapsed` field — collapse is editor-only
+    // UI state). Re-derive it here from the authoritative
+    // `EditorState.editor_ui.collapsed_layers` set so the LayerPanel
+    // paints the right expand / collapse chevrons.
+    apply_collapsed_layers(doc, state);
+}
+
+/// Stamp `Node.collapsed` across the derived paint `Document` from
+/// `EditorState.editor_ui.collapsed_layers`. A node id present in the
+/// set paints `collapsed = true`; everything else stays `false`.
+fn apply_collapsed_layers(doc: &mut sc::document::Document, state: &ec::EditorState) {
+    fn walk(nodes: &mut [sc::document::Node], collapsed: &ec::EditorState) {
+        for node in nodes {
+            node.collapsed = collapsed
+                .editor_ui
+                .collapsed_layers
+                .iter()
+                .any(|id| id.as_str() == node.id.raw());
+            walk(&mut node.children, collapsed);
+        }
+    }
+    for page in &mut doc.pages {
+        walk(&mut page.children, state);
+    }
 }
 
 #[cfg(test)]
@@ -314,6 +340,39 @@ mod tests {
         apply_editor_state_ui(&mut doc, &state);
         assert_eq!(doc.var_table.variables.len(), 1);
         assert_eq!(doc.var_table.variables[0].name, "brand");
+    }
+
+    #[test]
+    fn apply_editor_state_ui_stamps_collapsed_layers_onto_nodes() {
+        let mut state = ec::EditorState::new();
+        // A single Frame node in the document tree.
+        state.doc.children = vec![make_frame("n10", "Frame")];
+        // Mark it collapsed in the editor-only UI state.
+        state
+            .editor_ui
+            .collapsed_layers
+            .insert(ec::NodeId::new("n10"));
+
+        let mut doc = crate::pen_document_to_document(&state.doc);
+        // Before the bridge runs, the loader hardcodes collapsed=false.
+        let before = &doc.pages[0].children[0];
+        assert!(!before.collapsed);
+
+        apply_editor_state_ui(&mut doc, &state);
+        // The collapsed entry now shows up on the derived Document.
+        let after = &doc.pages[0].children[0];
+        assert_eq!(after.id.raw(), "n10");
+        assert!(after.collapsed);
+    }
+
+    #[test]
+    fn apply_editor_state_ui_leaves_uncollapsed_nodes_false() {
+        let mut state = ec::EditorState::new();
+        state.doc.children = vec![make_frame("n10", "Frame")];
+        // No collapsed_layers entry — node stays expanded.
+        let mut doc = crate::pen_document_to_document(&state.doc);
+        apply_editor_state_ui(&mut doc, &state);
+        assert!(!doc.pages[0].children[0].collapsed);
     }
 
     /// A minimal canonical Frame `PenNode` fixture, parsed from a

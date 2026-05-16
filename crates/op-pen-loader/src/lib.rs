@@ -19,6 +19,7 @@
 
 mod adapter;
 mod bridge_enums;
+mod bridge_enums_rev;
 mod bridge_ui;
 mod editor_state_bridge;
 mod effects;
@@ -51,6 +52,20 @@ pub use bridge_enums::{
     property_focus, property_tab, settings_focus, shape_choice, theme_mode, tool,
     variable_row_focus,
 };
+
+// The reverse (SC→EC) enum translators — the host-migration flip
+// (Task 6.1c-2) feeds shell-core widget hit-test results into
+// `op-editor-core` mutators. Exposed under the `rev` namespace so the
+// forward / reverse `fn`s (same names, opposite direction) don't
+// collide at the crate root.
+pub mod rev {
+    pub use crate::bridge_enums_rev::{
+        agent_provider, agent_settings_tab, align_action, export_format,
+        file_menu_choice, fill_type, flex_layout, locale, node_id, property_focus,
+        property_tab, settings_focus, shape_choice, theme_mode, tool,
+        variable_row_focus,
+    };
+}
 
 // Re-exports so `openpencil-desktop`'s existing call sites change
 // minimally.

@@ -27,6 +27,7 @@
 
 use crate::node_id::NodeId;
 use crate::tool::Tool;
+use std::collections::HashSet;
 
 // `Locale` is the i18n locale enum — dependency-free + wasm-clean, so
 // it lives in `op-i18n` and re-exports cleanly into the state layer.
@@ -302,6 +303,11 @@ pub struct EditorUiState {
     pub hovered_page_index: Option<usize>,
     /// Open layer-row context menu, or `None`.
     pub layer_context_menu: Option<LayerContextMenuState>,
+    /// Node ids whose children are collapsed in the LayerPanel.
+    /// Editor-only UI state — the canonical `PenNodeBase` has no
+    /// `collapsed` field, so the collapse flag lives here rather than
+    /// on the node. Transient: rebuilt on load, never serialized.
+    pub collapsed_layers: HashSet<NodeId>,
     /// Caret-blink anchor (ms) for an inline layer / page rename.
     pub rename_caret_anchor_ms: u64,
     /// Last LayerPanel click target + ms; 400 ms re-press → rename.
@@ -353,6 +359,7 @@ impl Default for EditorUiState {
             hovered_layer_id: None,
             hovered_page_index: None,
             layer_context_menu: None,
+            collapsed_layers: HashSet::new(),
             rename_caret_anchor_ms: 0,
             last_layer_click: None,
             last_canvas_click: None,
@@ -384,6 +391,7 @@ mod tests {
         assert_eq!(c.property_tab, PropertyTab::Design);
         assert_eq!(c.flex_layout, FlexLayout::Free);
         assert!(c.recent_files.is_empty());
+        assert!(c.collapsed_layers.is_empty());
     }
 
     #[test]

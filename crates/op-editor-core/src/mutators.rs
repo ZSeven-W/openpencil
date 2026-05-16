@@ -140,6 +140,35 @@ impl EditorState {
         out
     }
 
+    /// Right-rail PropertyPanel visibility gate. Visible when at least
+    /// one id in the selection set resolves on the active page.
+    /// Faithful port of shell-core's `Document::property_panel_visible`.
+    pub fn property_panel_visible(&self) -> bool {
+        if self.selection.set.is_empty() {
+            return false;
+        }
+        let children = self.active_children();
+        self.selection
+            .set
+            .iter()
+            .any(|id| find_node(children, id).is_some())
+    }
+
+    /// True when ANY widget occupies the right rail — PropertyPanel
+    /// (gated on selection) OR VariablesPanel (gated on a non-empty
+    /// persisted variable table). Faithful port of shell-core's
+    /// `Document::right_rail_visible`; the persisted variables that
+    /// shell-core read from `var_table.variables` live on
+    /// `EditorState.doc.variables` in the canonical model.
+    pub fn right_rail_visible(&self) -> bool {
+        self.property_panel_visible()
+            || self
+                .doc
+                .variables
+                .as_ref()
+                .is_some_and(|v| !v.is_empty())
+    }
+
     /// Union of `aggregate_bounds` across the selected nodes.
     pub fn selection_bounds(&self) -> Option<DocRect> {
         union_aggregate_bounds(self.active_children(), &self.selection.set)
@@ -300,6 +329,33 @@ impl EditorState {
         true
     }
 
+    /// Toggle the LayerPanel collapse flag for `id`. Collapse is
+    /// editor-only UI state — the canonical `PenNodeBase` has no
+    /// `collapsed` field, so it lives in
+    /// `EditorState.editor_ui.collapsed_layers` rather than on the
+    /// node. `true` is returned when `id` is collapsed AFTER the call
+    /// (it was just collapsed); `false` when it is now expanded. A
+    /// `NONE` id is a no-op returning `false`.
+    pub fn toggle_node_collapsed(&mut self, id: &NodeId) -> bool {
+        if !id.is_real() {
+            return false;
+        }
+        if self.editor_ui.collapsed_layers.contains(id) {
+            self.editor_ui.collapsed_layers.remove(id);
+            false
+        } else {
+            self.editor_ui.collapsed_layers.insert(id.clone());
+            true
+        }
+    }
+
+    /// Whether `id`'s children are collapsed in the LayerPanel. Reads
+    /// the editor-only `collapsed_layers` set — see
+    /// [`EditorState::toggle_node_collapsed`].
+    pub fn is_node_collapsed(&self, id: &NodeId) -> bool {
+        self.editor_ui.collapsed_layers.contains(id)
+    }
+
     // --- Geometry ----------------------------------------------------
 
     /// Overwrite the anchor node's rotation (radians, clockwise).
@@ -395,6 +451,26 @@ impl EditorState {
             | PropertyFocus::StrokeHex => {}
         }
         true
+    }
+
+    /// Write the picker's fill-type choice to the anchor node. The
+    /// canonical model has no scalar `fill_type` field — the kind is
+    /// encoded by the first `PenFill`'s variant, so this replaces the
+    /// node's first fill with a fresh body of the chosen type
+    /// (preserving its colour). Editable-gated so locked / hidden
+    /// nodes can't be mutated. `true` when the edit lands; `false`
+    /// when nothing editable is selected or the variant carries no
+    /// `fill` field. Faithful port of shell-core's
+    /// `Document::set_selected_fill_type`.
+    pub fn set_selected_fill_type(&mut self, fill_type: crate::FillType) -> bool {
+        let sel = self.selection.anchor.clone();
+        if !sel.is_real() || !self.is_editable(&sel) {
+            return false;
+        }
+        let Some(node) = find_node_mut(self.active_children_mut(), &sel) else {
+            return false;
+        };
+        crate::fills::set_primary_fill_type(node, fill_type)
     }
 
     // --- Tree ops ----------------------------------------------------
@@ -541,6 +617,26 @@ impl EditorState {
             walkers::insert_after_in_children(children, &anchor, node)
         };
         r.is_ok()
+    }
+
+    /// Select the chat model at `idx` in `chat.available_models` and
+    /// close the picker. Also re-syncs `editor_ui.chat_selected_agent`
+    /// to the model's provider so the desktop chat transport targets
+    /// the matching CLI. A bad index is ignored (the picker still
+    /// closes). Faithful port of shell-core's
+    /// `Document::select_chat_model`.
+    pub fn select_chat_model(&mut self, idx: usize) {
+        if let Some(entry) = self.chat.available_models.get(idx) {
+            let provider = entry.provider;
+            self.chat.selected_model = idx;
+            if let Some(pidx) = crate::AgentProvider::ALL
+                .iter()
+                .position(|p| *p == provider)
+            {
+                self.editor_ui.chat_selected_agent = pidx;
+            }
+        }
+        self.editor_ui.chat_model_picker_open = false;
     }
 
     /// Light invariant check — Err on first violation: out-of-range
