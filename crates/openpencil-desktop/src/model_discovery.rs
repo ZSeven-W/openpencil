@@ -79,7 +79,7 @@ impl ModelProbe {
 
 /// Translate a shell-core `ModelEntry` into op-editor-core's.
 fn model_entry_to_ec(m: ModelEntry) -> op_editor_core::ModelEntry {
-    use openpencil_shell_core::document::AgentProvider as ScP;
+    use openpencil_shell_core::agent_settings_state::AgentProvider as ScP;
     let provider = match m.provider {
         ScP::ClaudeCode => op_editor_core::AgentProvider::ClaudeCode,
         ScP::CodexCli => op_editor_core::AgentProvider::CodexCli,

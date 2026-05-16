@@ -7,7 +7,7 @@
 //! `document::NodeId` in its hit-test surface; the hosts' input
 //! path wraps it into an `op-editor-core` id at the call boundary.
 
-use crate::document::NodeId;
+use op_editor_core::NodeId;
 use crate::theme::Theme;
 use crate::widgets::editor_state_ext::theme_for;
 use crate::widgets::icons::{draw_icon, Icon};
@@ -115,8 +115,7 @@ impl LayerPanel {
     /// at the cursor's y. None when the source isn't on the
     /// active page.
     pub fn ghost_item_for(state: &EditorState, source: &NodeId) -> Option<LayerItem> {
-        let canon = op_editor_core::NodeId::new(source.raw().to_string());
-        let node = op_editor_core::walkers::find_node(state.active_children(), &canon)?;
+        let node = op_editor_core::walkers::find_node(state.active_children(), source)?;
         let base = node.base();
         Some(LayerItem {
             node_id: source.clone(),
@@ -128,7 +127,7 @@ impl LayerPanel {
             has_children: node.children().map(|c| !c.is_empty()).unwrap_or(false),
             hidden: base.visible == Some(false),
             locked: base.locked.unwrap_or(false),
-            collapsed: state.editor_ui.collapsed_layers.contains(&canon),
+            collapsed: state.editor_ui.collapsed_layers.contains(source),
             hovered: false,
             is_container: matches!(node, PenNode::Frame(_) | PenNode::Group(_)),
             renaming: false,

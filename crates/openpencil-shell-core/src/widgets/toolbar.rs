@@ -14,9 +14,9 @@
 //! [`Toolbar::hit_test`] so a `(x, y)` mouse position resolves to
 //! either a `Tool` change or an `Action` (Undo / Redo / TogglePanel).
 
-use crate::document::Tool;
+use op_editor_core::Tool;
 use crate::theme::Theme;
-use crate::widgets::editor_state_ext::{doc_tool, theme_for};
+use crate::widgets::editor_state_ext::theme_for;
 use op_editor_core::EditorState;
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::{LayoutBox, LayoutCx, PaintCx, Widget, WidgetId};
@@ -109,9 +109,9 @@ impl Toolbar {
                 ToolbarItem::Action(ToolbarAction::ToggleCodePanel, Icon::Braces),
                 ToolbarItem::Action(ToolbarAction::ToggleDesignPanel, Icon::BookOpen),
             ],
-            active: doc_tool(state.tool),
+            active: state.tool,
             theme: theme_for(&state.editor_ui),
-            shape_tool: doc_tool(state.editor_ui.shape_tool),
+            shape_tool: state.editor_ui.shape_tool,
         }
     }
 

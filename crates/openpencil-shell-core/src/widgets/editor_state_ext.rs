@@ -27,59 +27,19 @@ pub fn translate(ui: &EditorUiState, key: &'static str) -> &'static str {
     crate::i18n::translate(ui.locale, key)
 }
 
-/// Map an `op_editor_core::Tool` onto shell-core's `document::Tool`.
-///
-/// The two enums are variant-identical (the editor-state layer owns
-/// its own `Tool`; widgets still speak `document::Tool` in their
-/// hit-test API). This is the single conversion point so widgets
-/// ported onto `EditorState` don't each re-implement the 9-arm match.
-pub fn doc_tool(t: op_editor_core::Tool) -> crate::document::Tool {
-    use crate::document::Tool as D;
-    use op_editor_core::Tool as O;
-    match t {
-        O::Select => D::Select,
-        O::Rect => D::Rect,
-        O::Ellipse => D::Ellipse,
-        O::Polygon => D::Polygon,
-        O::Line => D::Line,
-        O::Pen => D::Pen,
-        O::Text => D::Text,
-        O::Frame => D::Frame,
-        O::Hand => D::Hand,
-    }
-}
-
 /// Map an `op_editor_core::ShapeChoice` onto the widget-layer
 /// `widgets::shape_picker::ShapeChoice`. The state-layer enum carries
 /// `op_editor_core::Tool` in its `Tool` variant; the widget enum
-/// carries `document::Tool` — [`doc_tool`] bridges that.
+/// carries the same `op_editor_core::Tool` — pass-through.
 pub fn doc_shape_choice(
     c: op_editor_core::ShapeChoice,
 ) -> crate::widgets::shape_picker::ShapeChoice {
     use crate::widgets::shape_picker::ShapeChoice as D;
     use op_editor_core::ShapeChoice as O;
     match c {
-        O::Tool(t) => D::Tool(doc_tool(t)),
+        O::Tool(t) => D::Tool(t),
         O::OpenIconPicker => D::OpenIconPicker,
         O::ImportImageOrSvg => D::ImportImageOrSvg,
-    }
-}
-
-/// Map an `op_editor_core::AlignAction` onto shell-core's
-/// `document::align::AlignAction`. Variant-identical; this is the
-/// single bridge point for the align-toolbar hover state.
-pub fn doc_align_action(a: op_editor_core::AlignAction) -> crate::document::AlignAction {
-    use crate::document::AlignAction as D;
-    use op_editor_core::AlignAction as O;
-    match a {
-        O::Left => D::Left,
-        O::CenterH => D::CenterH,
-        O::Right => D::Right,
-        O::Top => D::Top,
-        O::CenterV => D::CenterV,
-        O::Bottom => D::Bottom,
-        O::DistributeH => D::DistributeH,
-        O::DistributeV => D::DistributeV,
     }
 }
 
@@ -118,62 +78,65 @@ pub fn doc_export_format(
     }
 }
 
-/// Map an `op_editor_core::FillType` onto shell-core's
-/// `document::FillType`. Variant-identical — single bridge point
-/// for the PropertyPanel fill-type dropdown.
-pub fn doc_fill_type(f: op_editor_core::FillType) -> crate::document::FillType {
-    use crate::document::FillType as D;
-    use op_editor_core::FillType as O;
-    match f {
-        O::Solid => D::Solid,
-        O::LinearGradient => D::LinearGradient,
-        O::RadialGradient => D::RadialGradient,
-        O::Image => D::Image,
+// ── Widget-layer → canonical reverse converters ───────────────────
+//
+// The host feeds widget hit-test results back into `EditorState`'s
+// `editor_ui_state`. Most widget hit-tests already emit canonical
+// `op_editor_core` types (`Tool`, `AlignAction`, `PropertyFocus`, …)
+// so no conversion is needed. The three enums below stay widget-local
+// (`file_menu` / `shape_picker` / `export_dialog` own them) and so
+// still need a one-arm-per-variant bridge into the canonical
+// `editor_ui_state` enums the hover / format state fields hold.
+
+/// Map the widget-layer `widgets::file_menu::FileMenuChoice` onto the
+/// canonical `op_editor_core::FileMenuChoice`. Reverse of
+/// [`doc_file_menu_choice`].
+pub fn file_menu_choice(
+    c: crate::widgets::file_menu::FileMenuChoice,
+) -> op_editor_core::FileMenuChoice {
+    use crate::widgets::file_menu::FileMenuChoice as W;
+    use op_editor_core::FileMenuChoice as O;
+    match c {
+        W::NewFile => O::NewFile,
+        W::OpenFile => O::OpenFile,
+        W::Save => O::Save,
+        W::SaveAs => O::SaveAs,
+        W::ExportImage => O::ExportImage,
+        W::OpenRecent(i) => O::OpenRecent(i),
+        W::ClearRecent => O::ClearRecent,
     }
 }
 
-/// Map an `op_editor_core::FlexLayout` onto shell-core's
-/// `document::FlexLayout`. Variant-identical.
-pub fn doc_flex_layout(f: op_editor_core::FlexLayout) -> crate::document::FlexLayout {
-    use crate::document::FlexLayout as D;
-    use op_editor_core::FlexLayout as O;
-    match f {
-        O::Free => D::Free,
-        O::Vertical => D::Vertical,
-        O::Horizontal => D::Horizontal,
+/// Map the widget-layer `widgets::shape_picker::ShapeChoice` onto the
+/// canonical `op_editor_core::ShapeChoice`. Reverse of
+/// [`doc_shape_choice`]; the `Tool` variant carries the same
+/// `op_editor_core::Tool` either way.
+pub fn shape_choice(
+    c: crate::widgets::shape_picker::ShapeChoice,
+) -> op_editor_core::ShapeChoice {
+    use crate::widgets::shape_picker::ShapeChoice as W;
+    use op_editor_core::ShapeChoice as O;
+    match c {
+        W::Tool(t) => O::Tool(t),
+        W::OpenIconPicker => O::OpenIconPicker,
+        W::ImportImageOrSvg => O::ImportImageOrSvg,
     }
 }
 
-/// Map an `op_editor_core::PropertyTab` onto shell-core's
-/// `document::PropertyTab`. Variant-identical.
-pub fn doc_property_tab(t: op_editor_core::PropertyTab) -> crate::document::PropertyTab {
-    use crate::document::PropertyTab as D;
-    use op_editor_core::PropertyTab as O;
-    match t {
-        O::Design => D::Design,
-        O::Code => D::Code,
+/// Map the widget-layer `widgets::export_dialog::ExportFormat` onto
+/// the canonical `op_editor_core::ExportFormat`. Reverse of
+/// [`doc_export_format`].
+pub fn export_format(
+    f: crate::widgets::export_dialog::ExportFormat,
+) -> op_editor_core::ExportFormat {
+    use crate::widgets::export_dialog::ExportFormat as W;
+    use op_editor_core::ExportFormat as O;
+    match f {
+        W::Png => O::Png,
+        W::Jpeg => O::Jpeg,
+        W::Webp => O::Webp,
+        W::Svg => O::Svg,
+        W::Pdf => O::Pdf,
     }
 }
 
-/// Map an `op_editor_core::ui_draft::PropertyFocus` onto shell-core's
-/// `document::PropertyFocus`. Variant-identical — the editor-state
-/// layer owns its own focus enum; the widget hit-test API still
-/// speaks `document::PropertyFocus`.
-pub fn doc_property_focus(
-    f: op_editor_core::ui_draft::PropertyFocus,
-) -> crate::document::PropertyFocus {
-    use crate::document::PropertyFocus as D;
-    use op_editor_core::ui_draft::PropertyFocus as O;
-    match f {
-        O::PositionX => D::PositionX,
-        O::PositionY => D::PositionY,
-        O::Rotation => D::Rotation,
-        O::PositionR => D::PositionR,
-        O::SizeW => D::SizeW,
-        O::SizeH => D::SizeH,
-        O::Opacity => D::Opacity,
-        O::FillHex => D::FillHex,
-        O::StrokeHex => D::StrokeHex,
-        O::StrokeWidth => D::StrokeWidth,
-    }
-}

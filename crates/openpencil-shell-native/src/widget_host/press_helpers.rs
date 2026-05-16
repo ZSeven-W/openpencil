@@ -128,11 +128,11 @@ impl WidgetHostNative {
 /// freshly-focused `PropertyFocus` row. Lives here (not `press.rs`)
 /// to keep that file under the 800-line cap.
 pub(in crate::widget_host) fn property_focus_initial(
-    focus: openpencil_shell_core::document::PropertyFocus,
+    focus: op_editor_core::PropertyFocus,
     panel: &openpencil_shell_core::widgets::PropertyPanel,
 ) -> String {
     use super::helpers::color_to_hex;
-    use openpencil_shell_core::document::PropertyFocus as F;
+    use op_editor_core::PropertyFocus as F;
     match focus {
         F::PositionX => panel.snapshot.x.to_string(),
         F::PositionY => panel.snapshot.y.to_string(),
@@ -162,13 +162,13 @@ pub(in crate::widget_host) fn property_focus_initial(
 /// Translate a shell-core `ColorTarget` into op-editor-core's — used
 /// by `press.rs`'s `OpenColorPicker` branch.
 pub(in crate::widget_host) fn color_target(
-    t: openpencil_shell_core::document::ColorTarget,
+    t: op_editor_core::ColorTarget,
 ) -> op_editor_core::ui_draft::ColorTarget {
     match t {
-        openpencil_shell_core::document::ColorTarget::Fill => {
+        op_editor_core::ColorTarget::Fill => {
             op_editor_core::ui_draft::ColorTarget::Fill
         }
-        openpencil_shell_core::document::ColorTarget::Stroke => {
+        op_editor_core::ColorTarget::Stroke => {
             op_editor_core::ui_draft::ColorTarget::Stroke
         }
     }

@@ -12,7 +12,8 @@
 //! (`replace_paths_with_polyline`) so the canonical tree is never
 //! edited directly.
 
-use openpencil_shell_core::document::{BooleanOp, NodeKind};
+use openpencil_shell_core::layout_scene::NodeKind;
+use op_editor_core::BooleanOp;
 use openpencil_shell_core::layout_scene::LayoutScene;
 use openpencil_shell_core::Point2D;
 use skia_safe::{Path as SkPath, PathBuilder, PathOp};

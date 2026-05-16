@@ -2,7 +2,7 @@
 //! `input.rs` to stay under the 800-line cap.
 
 use super::WidgetHostNative;
-use openpencil_shell_core::document::ReorderDirection;
+use op_editor_core::ReorderDirection;
 
 impl WidgetHostNative {
     /// Cmd-C — copy selection to clipboard.
@@ -171,16 +171,16 @@ impl WidgetHostNative {
     /// Single-key tool switch (V / R / O / L / T / F / P / H). Also
     /// commits any in-flight pen path so switching away from Pen
     /// doesn't leave a dangling rubber-band.
-    pub fn apply_set_tool(&mut self, tool: openpencil_shell_core::document::Tool) {
+    pub fn apply_set_tool(&mut self, tool: op_editor_core::Tool) {
         self.commit_variable_row_focus_if_any();
         let _ = self.editor_state.finish_pen_path();
-        let ec_tool = op_pen_loader::rev::tool(tool);
+        let ec_tool = tool;
         self.editor_state.tool = ec_tool;
-        if let openpencil_shell_core::document::Tool::Rect
-        | openpencil_shell_core::document::Tool::Ellipse
-        | openpencil_shell_core::document::Tool::Polygon
-        | openpencil_shell_core::document::Tool::Line
-        | openpencil_shell_core::document::Tool::Pen = tool
+        if let op_editor_core::Tool::Rect
+        | op_editor_core::Tool::Ellipse
+        | op_editor_core::Tool::Polygon
+        | op_editor_core::Tool::Line
+        | op_editor_core::Tool::Pen = tool
         {
             self.editor_state.editor_ui.shape_tool = ec_tool;
         }

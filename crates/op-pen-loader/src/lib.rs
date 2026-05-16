@@ -20,7 +20,6 @@
 //! dialogs stay in `openpencil-desktop/src/persistence.rs`.
 
 mod adapter;
-mod bridge_enums_rev;
 mod effects;
 mod layout_scene;
 mod path_bounds;
@@ -36,18 +35,6 @@ pub mod variables;
 /// directly from the layout-resolved `DocPayload` — no intermediate
 /// shell-core `Document`.
 pub use layout_scene::editor_state_to_layout_scene;
-
-// The reverse (SC→EC) enum translators — the host-migration flip
-// (Task 6.1c-2) feeds shell-core widget hit-test results into
-// `op-editor-core` mutators. Exposed under the `rev` namespace.
-pub mod rev {
-    pub use crate::bridge_enums_rev::{
-        agent_provider, agent_settings_tab, align_action, export_format,
-        file_menu_choice, fill_type, flex_layout, locale, node_id, property_focus,
-        property_tab, settings_focus, shape_choice, theme_mode, tool,
-        variable_row_focus,
-    };
-}
 
 // Re-exports so `openpencil-desktop`'s existing call sites change
 // minimally.
@@ -76,11 +63,11 @@ pub use variables::{var_table_from_payload, var_table_to_payload, VarTablePayloa
 /// any shell-core dependency to keep its `wasm32-unknown-unknown`
 /// invariant.
 ///
-/// [`VariableTable`]: openpencil_shell_core::document::VariableTable
+/// [`VariableTable`]: openpencil_shell_core::scene_vars::VariableTable
 pub fn editor_state_var_table(
     state: &op_editor_core::EditorState,
-) -> openpencil_shell_core::document::VariableTable {
-    use openpencil_shell_core::document::NodeId;
+) -> openpencil_shell_core::scene_vars::VariableTable {
+    use op_editor_core::NodeId;
     // Persisted definitions + theme axes — `EditorState.doc` is a
     // `PenDocument`, so `build_var_table` harvests them directly.
     let mut table = build_var_table(&state.doc);
@@ -105,7 +92,7 @@ mod editor_state_var_table_tests {
     use super::editor_state_var_table;
     use jian_ops_schema::variable::{VariableKind, VariableScalar};
     use op_editor_core::EditorState;
-    use openpencil_shell_core::document::NodeId;
+    use op_editor_core::NodeId;
     use std::collections::BTreeMap;
 
     #[test]

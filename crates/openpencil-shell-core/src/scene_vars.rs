@@ -1,14 +1,15 @@
-//! Design variables + themes (color tokens, themed values).
-//! Mirrors the canonical `jian_ops_schema::variable` model:
-//!   - `Document.variables` — name → typed value (color/number/bool/string)
-//!   - `Document.themes` — axis name → ordered list of values
-//!   - `Document.active_theme` — current value per axis ("mode" → "dark")
-//! Used by the canonical `.op` loader to round-trip designs that
-//! depend on `$ref` color tokens + multi-axis themes (TS pen-core
-//! `variables/resolve.ts` is the algorithmic equivalent).
+//! Paint-time design-variable aggregation — `VariableTable`.
 //!
-//! v1 scope: data preservation + lookup. Paint-time `$ref` resolution
-//! lands in a follow-up alongside a Variables panel in the Right rail.
+//! Mirrors the canonical `jian_ops_schema::variable` model (name →
+//! typed value, theme axes, active-theme selection) but is a
+//! shell-core-local *paint-time* aggregate: it folds the persisted
+//! definitions together with the editor's `fill_refs` / `stroke_refs`
+//! resolution caches so the `LayoutScene` builder can resolve every
+//! `$ref` fill / stroke to a concrete `Color` at scene-build time.
+//!
+//! It deliberately stays separate from `op_editor_core` (which owns
+//! the canonical editor model on `PenDocument`) so this crate's
+//! scene-resolution path keeps its own narrow aggregate type.
 
 use std::collections::BTreeMap;
 
@@ -112,37 +113,37 @@ pub struct VariableTable {
     /// Side-table avoids touching every `Node { ... }` literal.
     /// `HashMap` (not `BTreeMap`): `NodeId` is a string with no
     /// meaningful order, and lookups are point queries.
-    pub fill_refs: std::collections::HashMap<super::NodeId, String>,
+    pub fill_refs: std::collections::HashMap<op_editor_core::NodeId, String>,
     /// Map of `node_id → variable name` for nodes whose stroke colour
     /// follows a `$ref`. Parallel to `fill_refs`; paint pre-resolves
     /// via `stroke_color_for(node_id)`.
-    pub stroke_refs: std::collections::HashMap<super::NodeId, String>,
+    pub stroke_refs: std::collections::HashMap<op_editor_core::NodeId, String>,
 }
 
 impl VariableTable {
     /// Register that `node_id`'s fill follows variable `ref_name`.
     /// Subsequent `fill_for(node_id)` looks the variable up under
     /// the current `active_theme`.
-    pub fn set_fill_ref(&mut self, node_id: super::NodeId, ref_name: impl Into<String>) {
+    pub fn set_fill_ref(&mut self, node_id: op_editor_core::NodeId, ref_name: impl Into<String>) {
         self.fill_refs.insert(node_id, ref_name.into());
     }
     /// Resolve the paint-time fill color for `node_id`. Returns
     /// None when no `fill_ref` is registered or the referenced
     /// variable doesn't resolve (paint then falls back to
     /// `node.fill`).
-    pub fn fill_for(&self, node_id: &super::NodeId) -> Option<crate::Color> {
+    pub fn fill_for(&self, node_id: &op_editor_core::NodeId) -> Option<crate::Color> {
         let name = self.fill_refs.get(node_id)?;
         self.resolve_color(name)
     }
     /// Stroke parallel to `set_fill_ref` — registers the variable
     /// driving a node's stroke colour at paint time.
-    pub fn set_stroke_ref(&mut self, node_id: super::NodeId, ref_name: impl Into<String>) {
+    pub fn set_stroke_ref(&mut self, node_id: op_editor_core::NodeId, ref_name: impl Into<String>) {
         self.stroke_refs.insert(node_id, ref_name.into());
     }
     /// Resolve the paint-time stroke color for `node_id`. Same shape
     /// as `fill_for`; paint falls back to `node.stroke.color` when
     /// None.
-    pub fn stroke_color_for(&self, node_id: &super::NodeId) -> Option<crate::Color> {
+    pub fn stroke_color_for(&self, node_id: &op_editor_core::NodeId) -> Option<crate::Color> {
         let name = self.stroke_refs.get(node_id)?;
         self.resolve_color(name)
     }
@@ -473,56 +474,9 @@ impl VariableTable {
     }
 }
 
-/// Parse an MCP `create_variable` `kind` string + raw default
-/// value into a `(VariableKind, VariableScalar)` pair. Returns
-/// None on an unknown kind or a default that doesn't parse for
-/// that kind. Color defaults are kept as the raw hex `Str` (the
-/// `create_variable` mutator re-validates the hex).
-///
-/// Retained after the legacy `VariableTable::apply_mcp_command` was
-/// removed (Phase 5 — the MCP server now applies through
-/// `op_editor_core::EditorState`). Kept as a documented `kind`+default
-/// parser for any future shell-core caller.
-#[allow(dead_code)]
-pub(super) fn parse_variable_kind_and_default(
-    kind: &str,
-    default_value: &str,
-) -> Option<(VariableKind, VariableScalar)> {
-    match kind {
-        "color" => {
-            // Validate here so a bad hex fails the whole parse.
-            parse_hex_color(default_value)?;
-            Some((
-                VariableKind::Color,
-                VariableScalar::Str(default_value.to_string()),
-            ))
-        }
-        "number" => {
-            let n: f64 = default_value.parse().ok()?;
-            if !n.is_finite() {
-                return None;
-            }
-            Some((VariableKind::Number, VariableScalar::Num(n)))
-        }
-        "boolean" => {
-            let b = match default_value {
-                "true" => true,
-                "false" => false,
-                _ => return None,
-            };
-            Some((VariableKind::Boolean, VariableScalar::Bool(b)))
-        }
-        "string" => Some((
-            VariableKind::String,
-            VariableScalar::Str(default_value.to_string()),
-        )),
-        _ => None,
-    }
-}
-
 /// Parse `#rgb` / `#rrggbb` / `#rrggbbaa` into a `Color`. Mirrors the
 /// TS paint helpers — lenient on case, requires the leading `#`.
-pub(super) fn parse_hex_color(s: &str) -> Option<crate::Color> {
+fn parse_hex_color(s: &str) -> Option<crate::Color> {
     let s = s.trim().strip_prefix('#')?;
     let (r, g, b, a) = match s.len() {
         3 => {
@@ -552,3 +506,7 @@ pub(super) fn parse_hex_color(s: &str) -> Option<crate::Color> {
         a: a as f32 / 255.0,
     })
 }
+
+#[cfg(test)]
+#[path = "scene_vars_tests.rs"]
+mod scene_vars_tests;

@@ -14,7 +14,8 @@ use openpencil_shell_core::widgets::{
     Toolbar, TopBar, Widget, AI_CHAT_COLLAPSED_HEIGHT, AI_CHAT_COLLAPSED_WIDTH, AI_CHAT_HEIGHT,
     AI_CHAT_WIDTH, LOCALE_PICKER_WIDTH, SHAPE_PICKER_WIDTH, TOOLBAR_WIDTH, TOP_BAR_HEIGHT,
 };
-use openpencil_shell_core::{document::ChatAnchor, Point2D, Rect};
+use op_editor_core::ChatAnchor;
+use openpencil_shell_core::{Point2D, Rect};
 
 use super::helpers::{AICHAT_INSET_BOTTOM, AICHAT_INSET_LEFT};
 
@@ -95,7 +96,7 @@ impl WidgetHostNative {
         // to op-editor-core ids for storage on `editor_ui`.
         let new_layer_ec = new_layer
             .as_ref()
-            .map(op_pen_loader::rev::node_id);
+            .map(|id| id.clone());
         let changed = new_layer_ec != self.editor_state.editor_ui.hovered_layer_id
             || new_page != self.editor_state.editor_ui.hovered_page_index;
         if changed {
@@ -381,7 +382,7 @@ impl WidgetHostNative {
         viewport_w: f32,
         viewport_h: f32,
     ) -> Option<(String, usize)> {
-        use openpencil_shell_core::document::NodeKind;
+        use openpencil_shell_core::layout_scene::NodeKind;
         if !matches!(self.editor_state.tool, op_editor_core::Tool::Pen) {
             return None;
         }
@@ -416,7 +417,7 @@ impl WidgetHostNative {
         y: f32,
         viewport_w: f32,
         viewport_h: f32,
-    ) -> Option<openpencil_shell_core::document::AlignAction> {
+    ) -> Option<op_editor_core::AlignAction> {
         use openpencil_shell_core::widgets::AlignToolbar;
         let (cx, _, cw, ch) = self.canvas_region(viewport_w, viewport_h);
         let canvas_region = Rect {

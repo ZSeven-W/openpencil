@@ -5,7 +5,7 @@
 //! current canvas pixel-for-pixel, WITHOUT depending on the editor's
 //! `Document` (which mixes in selection / chat / history / UI state).
 //!
-//! Distinctions from [`crate::document::Document`]:
+//! Distinctions from [`op_editor_core::EditorState`]:
 //!
 //! - **No editor state.** `LayoutScene` carries no `selected`,
 //!   `tool`, `viewport`, `chat`, `history`, `components`, `ui`. The
@@ -23,11 +23,67 @@
 //! (`editor_state_to_layout_scene`); nothing consumes `LayoutScene`
 //! yet — `CanvasViewport` is flipped onto it in a later step.
 //!
-//! wasm32-clean: only `crate::{Color, Point2D, Rect}` + `document`
-//! enum re-exports. The web host will build scenes too.
+//! wasm32-clean: only `crate::{Color, Point2D, Rect}` + the scene's
+//! own paint enums (`NodeKind` / `Effect`). The web host builds
+//! scenes too.
 
-use crate::document::{Effect, NodeKind};
 use crate::{Color, Point2D, Rect};
+
+/// Node kinds the canvas painter draws. `Other` round-trips unknown
+/// kinds so an unfamiliar serialized node never errors the painter.
+///
+/// This is a paint-time scene enum — it lives with [`LayoutScene`]
+/// because the resolved render tree is its only consumer. It is
+/// deliberately NOT the canonical `jian_ops_schema` node model; the
+/// scene builder maps `PenNode` variants onto it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum NodeKind {
+    Frame,
+    Group,
+    Rect,
+    Ellipse,
+    Polygon,
+    Line,
+    /// Pen-tool polyline. Geometry in `SceneNode.points`.
+    Path,
+    Text,
+    Other(String),
+}
+
+impl NodeKind {
+    /// Human-facing label for LayerPanel + PropertyPanel.
+    pub fn label(&self) -> &str {
+        match self {
+            NodeKind::Frame => "Frame",
+            NodeKind::Group => "Group",
+            NodeKind::Rect => "Rect",
+            NodeKind::Ellipse => "Ellipse",
+            NodeKind::Polygon => "Polygon",
+            NodeKind::Line => "Line",
+            NodeKind::Path => "Path",
+            NodeKind::Text => "Text",
+            NodeKind::Other(s) => s.as_str(),
+        }
+    }
+}
+
+/// Drop-shadow effect — offset + blur + colour, doc-px units.
+/// Painted behind the node's fill. Mirrors the TS `PenEffect`
+/// shadow variant (`offsetX` / `offsetY` / `blur` / `color`).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct DropShadow {
+    pub offset_x: f32,
+    pub offset_y: f32,
+    pub blur: f32,
+    pub color: Color,
+}
+
+/// A visual effect painted with a [`SceneNode`]. v1 ships drop
+/// shadow (what the property panel's effects section needs).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Effect {
+    DropShadow(DropShadow),
+}
 
 /// A paint-only, layout-resolved render scene.
 ///
@@ -56,7 +112,7 @@ impl LayoutScene {
 
 impl ScenePage {
     /// Depth-first search for the node with `id` anywhere in this
-    /// page's render tree. Mirrors `document::Page::find` so the
+    /// page's render tree. Mirrors `ScenePage::find` so the
     /// selection-overlay + pen-rubber-band painters can map an editor
     /// selection id onto the resolved scene node.
     pub fn find(&self, id: &str) -> Option<&SceneNode> {
@@ -87,7 +143,7 @@ pub struct ScenePage {
 /// fills already resolved to concrete colours.
 ///
 /// Mirrors the fields `CanvasViewport`'s painter reads off
-/// `document::Node` today (`kind`, `bounds`, `fill`, `stroke`,
+/// `SceneNode` today (`kind`, `bounds`, `fill`, `stroke`,
 /// `rotation`, `corner_radius`, `text`, `font_size`, `font_weight`,
 /// `text_wrap`, `points`, `effects`, `children`, `hidden`) so a
 /// painter over `LayoutScene` can reproduce the current canvas
@@ -150,7 +206,7 @@ pub struct SceneNode {
 
 impl SceneNode {
     /// Depth-first search for the node with `id` in this subtree
-    /// (self included). Mirrors `document::Node::find`.
+    /// (self included). Mirrors `SceneNode::find`.
     pub fn find(&self, id: &str) -> Option<&SceneNode> {
         if self.id == id {
             return Some(self);
@@ -165,8 +221,7 @@ impl SceneNode {
 
     /// Resolved bounds for selection / rotation-pivot math: the node's
     /// own `bounds` when it is bounded, otherwise the union of its
-    /// children's aggregate bounds. Mirrors `document::Node::
-    /// aggregate_bounds` so the overlay painter reads the same rect a
+    /// children's aggregate bounds. Mirrors `SceneNode::aggregate_bounds` so the overlay painter reads the same rect a
     /// `Document`-bound painter did. Pure geometry over `bounds` +
     /// `children` — no extra scene state needed.
     pub fn aggregate_bounds(&self) -> Rect {
@@ -226,7 +281,7 @@ pub struct SceneStroke {
 }
 
 /// Fill paint mode for a [`SceneNode`]. Mirrors
-/// [`crate::document::FillType`]; kept as its own enum so the scene
+/// `op_editor_core::FillType`; kept as its own enum so the scene
 /// type does not re-export an editor-model enum that may diverge.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum SceneFillType {

@@ -261,7 +261,7 @@ pub(in crate::widget_host) struct MarqueeDragState {
 pub(in crate::widget_host) struct LayerDragState {
     /// NodeId of the row the user pressed on — what gets moved on
     /// release.
-    pub(in crate::widget_host) source: openpencil_shell_core::document::NodeId,
+    pub(in crate::widget_host) source: op_editor_core::NodeId,
     /// Cursor y at press time, panel-local. Used to suppress drag
     /// activation until the cursor has moved a few pixels (avoids
     /// promoting a regular click into a drag).
@@ -355,7 +355,7 @@ impl WidgetHostNative {
     /// selected + the result yielded a non-empty polyline).
     pub fn apply_boolean_op(
         &mut self,
-        op: openpencil_shell_core::document::BooleanOp,
+        op: op_editor_core::BooleanOp,
     ) -> bool {
         // Codex stop-gate: boolean op shortcuts (Cmd+Alt+U/S/I/X)
         // mutate the document — commit any pending variable-row

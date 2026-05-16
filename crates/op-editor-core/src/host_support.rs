@@ -21,7 +21,7 @@ impl EditorState {
     /// containing a Text `n11` and a Group `n12` (`n13` blue rect +
     /// `n14` text). Selection anchors on `n11`.
     ///
-    /// Mirrors `openpencil_shell_core::document::Document::sample()`
+    /// Mirrors the historical shell-core `Document::sample()` fixture
     /// so the native host opens with identical content after the
     /// migration onto `EditorState`.
     pub fn sample() -> Self {

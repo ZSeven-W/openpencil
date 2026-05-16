@@ -6,7 +6,7 @@
 //! Pulled out of `property_panel_sections.rs` to keep that file
 //! under the 800-line ceiling.
 
-use crate::document::{FillType, FlexLayout, PropertyFocus};
+use op_editor_core::{FillType, FlexLayout, PropertyFocus};
 use crate::widgets::property_panel::PropertyPanelAction;
 use crate::widgets::property_panel_inputs::{
     HEADER_HEIGHT, INPUT_HEIGHT, PAD_X, SECTION_GAP, SECTION_HEADER_HEIGHT, TAB_HEIGHT,
@@ -197,7 +197,7 @@ pub fn action_button_rects_with_fill_picker(
             size: Point2D::new(22.0, 22.0),
         };
         out.push((
-            PropertyPanelAction::OpenColorPicker(crate::document::ColorTarget::Fill),
+            PropertyPanelAction::OpenColorPicker(op_editor_core::ColorTarget::Fill),
             swatch_rect,
         ));
         let dropdown_rect = Rect {

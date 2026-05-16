@@ -1,5 +1,5 @@
-//! Tests for `document::variables`. Moved to a sibling file so the
-//! types + impl stay under the 800-line cap.
+//! Tests for `scene_vars`. Kept in a sibling file so the types +
+//! impl stay under the 800-line cap.
 
 use super::{
     ThemeAxis, ThemedValue, Variable, VariableKind, VariableScalar, VariableTable, VariableValue,
@@ -145,7 +145,7 @@ fn fill_for_resolves_registered_node_ref_to_themed_color() {
             },
         ]),
     });
-    let node = crate::document::NodeId::new("n42");
+    let node = op_editor_core::NodeId::new("n42");
     tbl.set_fill_ref(node.clone(), "accent");
     tbl.active_theme = axis("mode", "dark");
     let c = tbl.fill_for(&node).unwrap();
@@ -164,7 +164,7 @@ fn stroke_color_for_resolves_registered_ref() {
         kind: VariableKind::Color,
         value: VariableValue::Scalar(VariableScalar::Str("#0000ff".into())),
     });
-    let node = crate::document::NodeId::new("n7");
+    let node = op_editor_core::NodeId::new("n7");
     tbl.set_stroke_ref(node.clone(), "border");
     let c = tbl.stroke_color_for(&node).unwrap();
     assert!((c.b - 1.0).abs() < 0.01);
@@ -185,7 +185,7 @@ fn set_active_theme_round_trips_through_axis_picker() {
 #[test]
 fn fill_for_returns_none_when_no_ref_registered() {
     let tbl = super::VariableTable::default();
-    assert!(tbl.fill_for(&crate::document::NodeId::new("n99")).is_none());
+    assert!(tbl.fill_for(&op_editor_core::NodeId::new("n99")).is_none());
 }
 
 #[test]

@@ -7,7 +7,7 @@
 //! the canvas hit-test runs against the layout-resolved `LayoutScene`,
 //! refreshed at the top of each input handler); the shell-core hit
 //! results (`NodeId` / hit enums) are translated into op-editor-core
-//! types via `op_pen_loader::rev::*` before feeding `EditorState`
+//! widget hit-test results before feeding `EditorState`
 //! mutators.
 
 use openpencil_shell_core::widgets::{
@@ -27,7 +27,7 @@ impl WidgetHost {
         match action {
             A::SetFlexLayout(mode) => {
                 self.editor_state.editor_ui.flex_layout =
-                    op_pen_loader::rev::flex_layout(mode);
+                    mode;
             }
             A::ToggleSizeFillWidth => {
                 let v = &mut self.editor_state.editor_ui.size_fill_width;
@@ -55,7 +55,7 @@ impl WidgetHost {
             }
             A::SetFillType(t) => {
                 self.editor_state
-                    .set_selected_fill_type(op_pen_loader::rev::fill_type(t));
+                    .set_selected_fill_type(t);
                 self.editor_state.editor_ui.fill_type_picker_open = false;
             }
             A::OpenExportDialog => {
@@ -87,7 +87,7 @@ impl WidgetHost {
         let panel = LayerPanel::from_editor(&self.editor_state);
         match panel.hit_test(layer_rect, Point2D::new(x, y)) {
             Some(LayerPanelHit::Layer(id)) => {
-                let ec_id = op_pen_loader::rev::node_id(&id);
+                let ec_id = id.clone();
                 self.editor_state.set_single_selection(ec_id.clone());
                 self.editor_state.editor_ui.layer_context_menu = Some(LayerContextMenuState {
                     target: LayerContextTarget::Layer(ec_id),
@@ -220,7 +220,7 @@ impl WidgetHost {
             let panel_rect = self.locale_picker_rect(viewport_width);
             let picker = LocalePicker::for_editor_ui(&self.editor_state.editor_ui);
             if let Some(locale) = picker.hit_test(panel_rect, Point2D::new(x, y)) {
-                self.editor_state.editor_ui.locale = op_pen_loader::rev::locale(locale);
+                self.editor_state.editor_ui.locale = locale;
                 self.editor_state.editor_ui.locale_picker_open = false;
                 self.mark_dirty();
                 return true;
@@ -320,7 +320,7 @@ impl WidgetHost {
             if let Some(hit) = toolbar.hit_test(toolbar_rect, Point2D::new(x, y)) {
                 match hit {
                     openpencil_shell_core::widgets::ToolbarHit::Tool(tool) => {
-                        self.editor_state.tool = op_pen_loader::rev::tool(tool);
+                        self.editor_state.tool = tool;
                         self.editor_state.editor_ui.shape_picker_open = false;
                         self.mark_dirty();
                         return true;
@@ -383,7 +383,7 @@ impl WidgetHost {
                 AlignToolbar::for_canvas_region(canvas_region, &self.editor_state)
                     .and_then(|tb| tb.hit_test(Point2D::new(x, y)))
             {
-                let ec_action = op_pen_loader::rev::align_action(action);
+                let ec_action = action;
                 self.editor_state.align_selected(ec_action);
                 self.mark_dirty();
                 return true;
@@ -538,7 +538,7 @@ impl WidgetHost {
         if let Some(hit) = toolbar.hit_test(toolbar_rect, Point2D::new(x, y)) {
             match hit {
                 openpencil_shell_core::widgets::ToolbarHit::Tool(tool) => {
-                    self.editor_state.tool = op_pen_loader::rev::tool(tool);
+                    self.editor_state.tool = tool;
                     self.mark_dirty();
                     return true;
                 }
@@ -576,7 +576,7 @@ impl WidgetHost {
                     return true;
                 }
                 LayerPanelHit::Layer(node_id) => {
-                    let ec_id = op_pen_loader::rev::node_id(&node_id);
+                    let ec_id = node_id.clone();
                     if self.shift_held {
                         self.editor_state.toggle_selection(ec_id);
                     } else {
@@ -587,19 +587,19 @@ impl WidgetHost {
                 }
                 LayerPanelHit::ToggleHidden(node_id) => {
                     self.editor_state
-                        .toggle_node_hidden(&op_pen_loader::rev::node_id(&node_id));
+                        .toggle_node_hidden(&node_id.clone());
                     self.mark_dirty();
                     return true;
                 }
                 LayerPanelHit::ToggleLocked(node_id) => {
                     self.editor_state
-                        .toggle_node_locked(&op_pen_loader::rev::node_id(&node_id));
+                        .toggle_node_locked(&node_id.clone());
                     self.mark_dirty();
                     return true;
                 }
                 LayerPanelHit::ToggleCollapsed(node_id) => {
                     self.editor_state
-                        .toggle_node_collapsed(&op_pen_loader::rev::node_id(&node_id));
+                        .toggle_node_collapsed(&node_id.clone());
                     self.mark_dirty();
                     return true;
                 }
@@ -693,13 +693,13 @@ impl WidgetHost {
 
 /// Translate a shell-core `ColorTarget` into op-editor-core's.
 fn color_target(
-    t: openpencil_shell_core::document::ColorTarget,
+    t: op_editor_core::ColorTarget,
 ) -> op_editor_core::ui_draft::ColorTarget {
     match t {
-        openpencil_shell_core::document::ColorTarget::Fill => {
+        op_editor_core::ColorTarget::Fill => {
             op_editor_core::ui_draft::ColorTarget::Fill
         }
-        openpencil_shell_core::document::ColorTarget::Stroke => {
+        op_editor_core::ColorTarget::Stroke => {
             op_editor_core::ui_draft::ColorTarget::Stroke
         }
     }

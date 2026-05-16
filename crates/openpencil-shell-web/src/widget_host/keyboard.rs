@@ -276,7 +276,7 @@ impl WidgetHost {
     /// order).
     pub fn apply_reorder(
         &mut self,
-        direction: openpencil_shell_core::document::ReorderDirection,
+        direction: op_editor_core::ReorderDirection,
     ) -> bool {
         if self.input_active() {
             return false;
@@ -287,10 +287,10 @@ impl WidgetHost {
         self.editor_state.commit_history();
         // shell-core `ReorderDirection` → op-editor-core's.
         let dir = match direction {
-            openpencil_shell_core::document::ReorderDirection::Up => {
+            op_editor_core::ReorderDirection::Up => {
                 op_editor_core::ReorderDirection::Up
             }
-            openpencil_shell_core::document::ReorderDirection::Down => {
+            op_editor_core::ReorderDirection::Down => {
                 op_editor_core::ReorderDirection::Down
             }
         };

@@ -97,7 +97,7 @@ impl WidgetHostNative {
         let panel = LayerPanel::from_editor(&self.editor_state);
         match panel.hit_test(layer_rect, Point2D::new(x, y)) {
             Some(LayerPanelHit::Layer(id)) => {
-                let ec_id = op_pen_loader::rev::node_id(&id);
+                let ec_id = id.clone();
                 self.editor_state.set_single_selection(ec_id.clone());
                 self.editor_state.editor_ui.layer_context_menu = Some(LayerContextMenuState {
                     target: LayerContextTarget::Layer(ec_id),
@@ -263,7 +263,7 @@ impl WidgetHostNative {
                 match choice {
                     ShapeChoice::Tool(tool) => {
                         let _ = self.editor_state.finish_pen_path();
-                        let ec_tool = op_pen_loader::rev::tool(tool);
+                        let ec_tool = tool;
                         self.editor_state.editor_ui.shape_tool = ec_tool;
                         self.editor_state.tool = ec_tool;
                     }
@@ -302,7 +302,7 @@ impl WidgetHostNative {
             let panel_rect = self.locale_picker_rect(viewport_width);
             let picker = LocalePicker::for_editor_ui(&self.editor_state.editor_ui);
             if let Some(locale) = picker.hit_test(panel_rect, Point2D::new(x, y)) {
-                self.editor_state.editor_ui.locale = op_pen_loader::rev::locale(locale);
+                self.editor_state.editor_ui.locale = locale;
                 self.editor_state.editor_ui.locale_picker_open = false;
                 self.editor_state.editor_ui.locale_picker_hover = None;
                 self.mark_dirty();
@@ -436,7 +436,7 @@ impl WidgetHostNative {
                     super::press_helpers::property_focus_initial(focus, &panel);
                 // shell-core `PropertyFocus` → op-editor-core.
                 self.editor_state.ui.property_focus =
-                    Some(op_pen_loader::rev::property_focus(focus));
+                    Some(focus);
                 self.editor_state.ui.property_input_draft = initial;
                 self.editor_state.ui.property_caret_anchor_ms = self.now_ms;
                 self.editor_state.ui.property_draft_select_all = false;
@@ -488,7 +488,7 @@ impl WidgetHostNative {
                 match hit {
                     openpencil_shell_core::widgets::ToolbarHit::Tool(tool) => {
                         let _ = self.editor_state.finish_pen_path();
-                        self.editor_state.tool = op_pen_loader::rev::tool(tool);
+                        self.editor_state.tool = tool;
                         self.editor_state.editor_ui.shape_picker_open = false;
                         self.editor_state.editor_ui.shape_picker_hover = None;
                         self.mark_dirty();
@@ -518,7 +518,7 @@ impl WidgetHostNative {
         }
 
         if let Some(a) = self.align_toolbar_hit(x, y, viewport_width, viewport_height) {
-            self.editor_state.align_selected(op_pen_loader::rev::align_action(a));
+            self.editor_state.align_selected(a);
             self.mark_dirty();
             return true;
         }

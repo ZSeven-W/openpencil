@@ -13,7 +13,7 @@
 //! body-opts-out-children-stay rule, and the hidden-subtree skip.
 
 use crate::layout_scene::{LayoutScene, SceneNode};
-use crate::document::NodeKind;
+use crate::layout_scene::NodeKind;
 use crate::{Point2D, Rect};
 
 impl LayoutScene {

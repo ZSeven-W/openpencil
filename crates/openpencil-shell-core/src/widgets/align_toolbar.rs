@@ -10,7 +10,7 @@
 //! Anchored to the horizontal center of the canvas region, ~16 px
 //! below the canvas top edge.
 
-use crate::document::AlignAction;
+use op_editor_core::AlignAction;
 use crate::theme::Theme;
 use op_editor_core::EditorState;
 use crate::widgets::icons::{draw_icon, Icon};

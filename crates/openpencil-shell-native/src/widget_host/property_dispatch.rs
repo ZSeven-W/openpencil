@@ -18,7 +18,7 @@ impl WidgetHostNative {
         match action {
             A::SetFlexLayout(mode) => {
                 self.editor_state.editor_ui.flex_layout =
-                    op_pen_loader::rev::flex_layout(mode);
+                    mode;
             }
             A::ToggleSizeFillWidth => {
                 let v = &mut self.editor_state.editor_ui.size_fill_width;
@@ -46,7 +46,7 @@ impl WidgetHostNative {
             }
             A::SetFillType(t) => {
                 self.editor_state
-                    .set_selected_fill_type(op_pen_loader::rev::fill_type(t));
+                    .set_selected_fill_type(t);
                 self.editor_state.editor_ui.fill_type_picker_open = false;
             }
             A::OpenColorPicker(target) => {
@@ -83,7 +83,7 @@ impl WidgetHostNative {
         match dlg.hit_test(point) {
             Some(ExportDialogHit::Format(f)) => {
                 self.editor_state.editor_ui.export_format =
-                    op_pen_loader::rev::export_format(f);
+                    openpencil_shell_core::widgets::editor_state_ext::export_format(f);
             }
             Some(ExportDialogHit::Scale(i)) => {
                 self.editor_state.editor_ui.export_scale = scale_from_index(i);
@@ -330,7 +330,7 @@ impl WidgetHostNative {
         match hit {
             VariablesPanelHit::Row(idx) => {
                 // Resolve (name, kind) off the editor-state var-table.
-                use openpencil_shell_core::document::VariableKind;
+                use openpencil_shell_core::scene_vars::VariableKind;
                 let var_table =
                     op_pen_loader::editor_state_var_table(&self.editor_state);
                 let Some((name, kind)) = var_table
@@ -433,13 +433,13 @@ impl WidgetHostNative {
 
 /// Translate a shell-core `ColorTarget` into op-editor-core's.
 fn color_target(
-    t: openpencil_shell_core::document::ColorTarget,
+    t: op_editor_core::ColorTarget,
 ) -> op_editor_core::ui_draft::ColorTarget {
     match t {
-        openpencil_shell_core::document::ColorTarget::Fill => {
+        op_editor_core::ColorTarget::Fill => {
             op_editor_core::ui_draft::ColorTarget::Fill
         }
-        openpencil_shell_core::document::ColorTarget::Stroke => {
+        op_editor_core::ColorTarget::Stroke => {
             op_editor_core::ui_draft::ColorTarget::Stroke
         }
     }

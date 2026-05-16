@@ -54,8 +54,8 @@ impl WidgetHostNative {
         if drop.anchor == d.source {
             return true; // self-drop no-op
         }
-        let source = op_pen_loader::rev::node_id(&d.source);
-        let anchor = op_pen_loader::rev::node_id(&drop.anchor);
+        let source = d.source.clone();
+        let anchor = drop.anchor.clone();
         match drop.position {
             DropPosition::Before => {
                 self.editor_state.reorder_before(source, anchor);
@@ -202,7 +202,7 @@ impl WidgetHostNative {
         if let Some(hit) = toolbar.hit_test(toolbar_rect, Point2D::new(x, y)) {
             match hit {
                 openpencil_shell_core::widgets::ToolbarHit::Tool(tool) => {
-                    self.editor_state.tool = op_pen_loader::rev::tool(tool);
+                    self.editor_state.tool = tool;
                     self.mark_dirty();
                     return true;
                 }
@@ -234,7 +234,7 @@ impl WidgetHostNative {
             // double-click rename detection.
             let target_for_dbl = match &hit {
                 H::Layer(id) => Some(LayerContextTarget::Layer(
-                    op_pen_loader::rev::node_id(id),
+                    id.clone(),
                 )),
                 H::Page(idx) => Some(LayerContextTarget::Page(*idx)),
                 _ => None,
@@ -272,7 +272,7 @@ impl WidgetHostNative {
                     return true;
                 }
                 H::Layer(node_id) => {
-                    let ec_id = op_pen_loader::rev::node_id(&node_id);
+                    let ec_id = node_id.clone();
                     if self.shift_held {
                         self.editor_state.toggle_selection(ec_id);
                     } else {
@@ -283,19 +283,19 @@ impl WidgetHostNative {
                 }
                 H::ToggleHidden(node_id) => {
                     self.editor_state
-                        .toggle_node_hidden(&op_pen_loader::rev::node_id(&node_id));
+                        .toggle_node_hidden(&node_id.clone());
                     self.mark_dirty();
                     return true;
                 }
                 H::ToggleLocked(node_id) => {
                     self.editor_state
-                        .toggle_node_locked(&op_pen_loader::rev::node_id(&node_id));
+                        .toggle_node_locked(&node_id.clone());
                     self.mark_dirty();
                     return true;
                 }
                 H::ToggleCollapsed(node_id) => {
                     self.editor_state
-                        .toggle_node_collapsed(&op_pen_loader::rev::node_id(&node_id));
+                        .toggle_node_collapsed(&node_id.clone());
                     self.mark_dirty();
                     return true;
                 }
