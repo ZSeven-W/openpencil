@@ -1,37 +1,32 @@
-//! Canonical `.op` (`PenDocument`) → shell `Document` loader / adapter.
+//! Canonical `.op` (`PenDocument`) → `LayoutScene` loader / adapter.
 //!
 //! Extracted from `openpencil-desktop` so library crates (notably
 //! `openpencil-shell-native`) can reuse the conversion without
 //! depending on a binary crate.
 //!
-//! Two layers:
+//! Three layers:
 //!
-//! - [`adapter`] bridges `jian_ops_schema::PenDocument` → the private
-//!   [`payload::DocPayload`], running `jian-core::LayoutEngine` +
-//!   `jian_skia::SkiaMeasure` to bake flex layout into AABB rects.
-//! - [`payload`] holds the serde DTOs + `apply_payload` (payload →
-//!   `Document` builder) + [`pen_document_to_document`] — the clean
-//!   public entry point.
+//! - [`adapter`] bridges `jian_ops_schema::PenDocument` → the
+//!   layout-resolved [`payload::DocPayload`], running
+//!   `jian-core::LayoutEngine` + `jian_skia::SkiaMeasure` to bake
+//!   flex layout into AABB rects.
+//! - [`payload`] holds the `DocPayload` serde DTOs + the strict /
+//!   best-effort `load_canonical` parser.
+//! - [`layout_scene`] re-shapes a resolved `DocPayload` into the
+//!   paint-only `openpencil_shell_core::layout_scene::LayoutScene`.
 //!
 //! This crate is desktop-side and may depend on skia; it does NOT
 //! need to be wasm-clean. The `rfd` Save/Open dialogs + error
 //! dialogs stay in `openpencil-desktop/src/persistence.rs`.
 
 mod adapter;
-mod bridge_enums;
 mod bridge_enums_rev;
-mod bridge_ui;
-mod editor_state_bridge;
 mod effects;
 mod layout_scene;
 mod path_bounds;
 
 pub mod payload;
 pub mod variables;
-
-/// Canonical entry point — convert a parsed `PenDocument` straight
-/// into a shell-core `Document`.
-pub use payload::pen_document_to_document;
 
 /// Build a paint-only, layout-resolved `LayoutScene` from an
 /// `EditorState`. Reuses the same jian `LayoutEngine` + `SkiaMeasure`
@@ -42,32 +37,9 @@ pub use payload::pen_document_to_document;
 /// shell-core `Document`.
 pub use layout_scene::editor_state_to_layout_scene;
 
-// The `EditorState` → paint-`Document` type bridge. `op-editor-core`
-// stores chrome / chat / components state as a different set of types
-// than a shell-core `Document` carries; these functions translate
-// them so a host can derive a faithful paint snapshot per frame.
-pub use editor_state_bridge::{
-    apply_editor_state_ui, editor_chat_to_chat_state,
-    editor_components_to_component_library,
-};
-pub use bridge_ui::editor_ui_to_ui_state;
-// The ~16 enum translators — also part of the bridge surface. Some
-// (e.g. `fill_type`) have no field on `UiState` today because the
-// value moved onto `Node`, but the pair still needs an exhaustive
-// translator so future drift is caught; re-exporting keeps them
-// reachable for callers + suppresses dead-code noise.
-pub use bridge_enums::{
-    agent_provider, agent_settings, agent_settings_tab, align_action,
-    export_format, file_menu_choice, fill_type, flex_layout, locale, mcp_server,
-    property_focus, property_tab, settings_focus, shape_choice, theme_mode, tool,
-    variable_row_focus,
-};
-
 // The reverse (SC→EC) enum translators — the host-migration flip
 // (Task 6.1c-2) feeds shell-core widget hit-test results into
-// `op-editor-core` mutators. Exposed under the `rev` namespace so the
-// forward / reverse `fn`s (same names, opposite direction) don't
-// collide at the crate root.
+// `op-editor-core` mutators. Exposed under the `rev` namespace.
 pub mod rev {
     pub use crate::bridge_enums_rev::{
         agent_provider, agent_settings_tab, align_action, export_format,
@@ -80,10 +52,11 @@ pub mod rev {
 // Re-exports so `openpencil-desktop`'s existing call sites change
 // minimally.
 pub use adapter::{build_var_table, pen_document_to_payload, LoadedDoc};
-pub use effects::{effects_from_payload, effects_to_payload, shadows_from_canonical, ShadowPayload};
-pub use payload::{
-    apply_payload, load_canonical, to_payload, DocPayload, NodePayload, PagePayload, StrokePayload,
+pub use effects::{
+    effects_from_payload, effects_from_payload_ref, effects_to_payload, shadows_from_canonical,
+    ShadowPayload,
 };
+pub use payload::{load_canonical, DocPayload, NodePayload, PagePayload, StrokePayload};
 pub use variables::{var_table_from_payload, var_table_to_payload, VarTablePayload};
 
 /// Build a shell-core [`VariableTable`] that reflects an
@@ -93,13 +66,10 @@ pub use variables::{var_table_from_payload, var_table_to_payload, VarTablePayloa
 /// active-theme map + the `fill_refs` / `stroke_refs` resolution
 /// caches).
 ///
-/// This is the variable-aware companion to [`pen_document_to_document`]:
-/// a host's `paint_document()` derives a paint-only `Document` from
-/// `EditorState`, then assigns this `var_table` so `VariablesPanel`
-/// and variable-aware fill resolution see the same variables + active
-/// theme the editor holds. Without it the derived `Document` would
-/// carry an empty table (`apply_payload` resets `var_table` to
-/// `Default`).
+/// This is the variable-aware companion to
+/// [`editor_state_to_layout_scene`]: the scene builder resolves each
+/// node's `$ref` fills / strokes against this table so the produced
+/// `LayoutScene` carries only concrete, paintable colours.
 ///
 /// Lives here, not in `op-editor-core`: it materializes a
 /// `shell-core::VariableTable`, and `op-editor-core` must stay free of
