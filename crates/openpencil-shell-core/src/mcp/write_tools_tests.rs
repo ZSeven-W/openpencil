@@ -1,25 +1,34 @@
-//! Tests for `mcp::write_tools`. Sibling file so write-tool tests
-//! stay separate from the read-tool tests + every file under cap.
+//! Tests for `mcp::write_tools`.
+//!
+//! Ported off the old shell-core `Document` / `McpCommand` onto
+//! `op_editor_core::EditorState` / `EditorCommand`. These cover the
+//! tool layer — argument validation + `EditorCommand` emission, plus a
+//! handful of end-to-end checks through `EditorState::apply`. The
+//! apply-path correctness itself is exhaustively covered by
+//! `op-editor-core`'s own `command_tests.rs`.
 
+use super::test_fixtures::{add_theme_axis, add_variable, sample, state_with};
 use super::write_tools::*;
-use super::{McpCommand, McpTool, ToolErrorCode, ToolOutcome};
+use super::{EditorCommand, McpTool, ToolErrorCode, ToolOutcome};
+use jian_ops_schema::variable::{VariableKind, VariableScalar};
+use op_editor_core::EditorState;
 use std::collections::BTreeMap;
 
-fn doc_with_color_var(name: &str, hex: &str) -> crate::document::Document {
-    use crate::document::{Document, Variable, VariableKind, VariableScalar, VariableValue};
-    let mut doc = Document::empty();
-    doc.var_table.variables.push(Variable {
-        name: name.into(),
-        kind: VariableKind::Color,
-        value: VariableValue::Scalar(VariableScalar::Str(hex.into())),
-    });
-    doc
+fn state_with_color_var(name: &str, hex: &str) -> EditorState {
+    let mut s = state_with(vec![]);
+    add_variable(
+        &mut s,
+        name,
+        VariableKind::Color,
+        VariableScalar::Str(hex.to_string()),
+    );
+    s
 }
 
 #[test]
 fn set_variable_color_validates_args_and_returns_command() {
-    let doc = doc_with_color_var("brand", "#ff8800");
-    let tool = set_variable_color_snapshot(&doc);
+    let s = state_with_color_var("brand", "#ff8800");
+    let tool = set_variable_color_snapshot(&s);
     let mut args = BTreeMap::new();
     args.insert("name".into(), "brand".into());
     args.insert("hex".into(), "#00ff00".into());
@@ -27,7 +36,7 @@ fn set_variable_color_validates_args_and_returns_command() {
         ToolOutcome::OkWithCommand(out, cmd) => {
             assert_eq!(out.get("wrote"), Some(&"true".to_string()));
             match cmd {
-                crate::mcp::McpCommand::SetVariableColor { name, hex } => {
+                EditorCommand::SetVariableColor { name, hex } => {
                     assert_eq!(name, "brand");
                     assert_eq!(hex, "#00ff00");
                 }
@@ -40,12 +49,10 @@ fn set_variable_color_validates_args_and_returns_command() {
 
 #[test]
 fn set_variable_color_errors_on_missing_args() {
-    let doc = doc_with_color_var("brand", "#ff8800");
-    let tool = set_variable_color_snapshot(&doc);
+    let s = state_with_color_var("brand", "#ff8800");
+    let tool = set_variable_color_snapshot(&s);
     match tool.call(&BTreeMap::new()) {
-        ToolOutcome::Err(code, _) => {
-            assert_eq!(code, ToolErrorCode::MissingArgument);
-        }
+        ToolOutcome::Err(code, _) => assert_eq!(code, ToolErrorCode::MissingArgument),
         _ => panic!("expected MissingArgument"),
     }
     let mut args = BTreeMap::new();
@@ -61,8 +68,8 @@ fn set_variable_color_errors_on_missing_args() {
 
 #[test]
 fn set_variable_color_errors_on_unknown_variable() {
-    let doc = doc_with_color_var("brand", "#ff8800");
-    let tool = set_variable_color_snapshot(&doc);
+    let s = state_with_color_var("brand", "#ff8800");
+    let tool = set_variable_color_snapshot(&s);
     let mut args = BTreeMap::new();
     args.insert("name".into(), "no-such-var".into());
     args.insert("hex".into(), "#000000".into());
@@ -77,15 +84,15 @@ fn set_variable_color_errors_on_unknown_variable() {
 
 #[test]
 fn set_variable_color_errors_on_invalid_hex() {
-    let doc = doc_with_color_var("brand", "#ff8800");
-    let tool = set_variable_color_snapshot(&doc);
+    let s = state_with_color_var("brand", "#ff8800");
+    let tool = set_variable_color_snapshot(&s);
     let mut args = BTreeMap::new();
     args.insert("name".into(), "brand".into());
     for bad in &["not-hex", "ff00ff", "#12", "#fffffg"] {
         args.insert("hex".into(), (*bad).into());
         match tool.call(&args) {
             ToolOutcome::Err(code, _) => {
-                assert_eq!(code, ToolErrorCode::InvalidArgument, "hex={bad}");
+                assert_eq!(code, ToolErrorCode::InvalidArgument, "hex={bad}")
             }
             _ => panic!("expected InvalidArgument for {bad}"),
         }
@@ -93,38 +100,29 @@ fn set_variable_color_errors_on_invalid_hex() {
 }
 
 #[test]
-fn apply_mcp_command_routes_set_variable_color_to_var_table() {
-    // End-to-end: tool validates → registry returns
-    // OkWithCommand → host's `var_table.apply_mcp_command`
-    // writes through to the storage. resolve_color reads the
-    // new value back.
-    use crate::mcp::McpCommand;
-    let mut doc = doc_with_color_var("brand", "#ff8800");
-    let cmd = McpCommand::SetVariableColor {
+fn set_variable_color_command_applies_through_editor_state() {
+    let mut s = state_with_color_var("brand", "#ff8800");
+    let cmd = EditorCommand::SetVariableColor {
         name: "brand".into(),
         hex: "#11ccaa".into(),
     };
-    assert!(doc.var_table.apply_mcp_command(&cmd));
-    let c = doc.var_table.resolve_color("brand").unwrap();
-    assert!((c.r - 0x11 as f32 / 255.0).abs() < 0.01);
-    assert!((c.g - 0xcc as f32 / 255.0).abs() < 0.01);
-    assert!((c.b - 0xaa as f32 / 255.0).abs() < 0.01);
+    assert!(s.apply(cmd));
+    match s.resolve_variable("brand") {
+        Some(VariableScalar::Str(hex)) => assert_eq!(hex, "#11ccaa"),
+        other => panic!("unexpected {other:?}"),
+    }
 }
 
-fn doc_with_theme_axis(name: &str, values: &[&str]) -> crate::document::Document {
-    use crate::document::{Document, ThemeAxis};
-    let mut doc = Document::empty();
-    doc.var_table.themes.push(ThemeAxis {
-        name: name.into(),
-        values: values.iter().map(|s| s.to_string()).collect(),
-    });
-    doc
+fn state_with_theme_axis(name: &str, values: &[&str]) -> EditorState {
+    let mut s = state_with(vec![]);
+    add_theme_axis(&mut s, name, values);
+    s
 }
 
 #[test]
 fn set_active_axis_value_validates_args_and_returns_command() {
-    let doc = doc_with_theme_axis("mode", &["light", "dark"]);
-    let tool = set_active_axis_value_snapshot(&doc);
+    let s = state_with_theme_axis("mode", &["light", "dark"]);
+    let tool = set_active_axis_value_snapshot(&s);
     let mut args = BTreeMap::new();
     args.insert("axis".into(), "mode".into());
     args.insert("value".into(), "dark".into());
@@ -132,7 +130,7 @@ fn set_active_axis_value_validates_args_and_returns_command() {
         ToolOutcome::OkWithCommand(out, cmd) => {
             assert_eq!(out.get("wrote"), Some(&"true".to_string()));
             match cmd {
-                McpCommand::SetActiveAxisValue { axis, value } => {
+                EditorCommand::SetActiveAxisValue { axis, value } => {
                     assert_eq!(axis, "mode");
                     assert_eq!(value, "dark");
                 }
@@ -145,8 +143,8 @@ fn set_active_axis_value_validates_args_and_returns_command() {
 
 #[test]
 fn set_active_axis_value_errors_on_missing_args() {
-    let doc = doc_with_theme_axis("mode", &["light", "dark"]);
-    let tool = set_active_axis_value_snapshot(&doc);
+    let s = state_with_theme_axis("mode", &["light", "dark"]);
+    let tool = set_active_axis_value_snapshot(&s);
     match tool.call(&BTreeMap::new()) {
         ToolOutcome::Err(code, _) => assert_eq!(code, ToolErrorCode::MissingArgument),
         _ => panic!(),
@@ -164,8 +162,8 @@ fn set_active_axis_value_errors_on_missing_args() {
 
 #[test]
 fn set_active_axis_value_errors_on_unknown_axis() {
-    let doc = doc_with_theme_axis("mode", &["light", "dark"]);
-    let tool = set_active_axis_value_snapshot(&doc);
+    let s = state_with_theme_axis("mode", &["light", "dark"]);
+    let tool = set_active_axis_value_snapshot(&s);
     let mut args = BTreeMap::new();
     args.insert("axis".into(), "density".into());
     args.insert("value".into(), "compact".into());
@@ -180,8 +178,8 @@ fn set_active_axis_value_errors_on_unknown_axis() {
 
 #[test]
 fn set_active_axis_value_errors_on_value_not_in_axis() {
-    let doc = doc_with_theme_axis("mode", &["light", "dark"]);
-    let tool = set_active_axis_value_snapshot(&doc);
+    let s = state_with_theme_axis("mode", &["light", "dark"]);
+    let tool = set_active_axis_value_snapshot(&s);
     let mut args = BTreeMap::new();
     args.insert("axis".into(), "mode".into());
     args.insert("value".into(), "sepia".into());
@@ -196,27 +194,25 @@ fn set_active_axis_value_errors_on_value_not_in_axis() {
 }
 
 #[test]
-fn apply_mcp_command_routes_set_active_axis_value() {
-    let mut doc = doc_with_theme_axis("mode", &["light", "dark"]);
-    let cmd = McpCommand::SetActiveAxisValue {
+fn set_active_axis_value_command_applies_through_editor_state() {
+    let mut s = state_with_theme_axis("mode", &["light", "dark"]);
+    assert!(s.apply(EditorCommand::SetActiveAxisValue {
         axis: "mode".into(),
         value: "dark".into(),
-    };
-    assert!(doc.var_table.apply_mcp_command(&cmd));
-    assert_eq!(doc.var_table.active_theme.get("mode"), Some(&"dark".to_string()));
-
-    // Invalid value rejected at apply time too (host re-validates).
-    let bad = McpCommand::SetActiveAxisValue {
+    }));
+    assert_eq!(
+        s.ui.variables.active_theme.get("mode").map(String::as_str),
+        Some("dark")
+    );
+    assert!(!s.apply(EditorCommand::SetActiveAxisValue {
         axis: "mode".into(),
         value: "sepia".into(),
-    };
-    assert!(!doc.var_table.apply_mcp_command(&bad));
+    }));
 }
 
 #[test]
 fn insert_node_validates_required_args() {
     let tool = insert_node_snapshot();
-    // Missing kind.
     let mut args = BTreeMap::new();
     args.insert("name".into(), "X".into());
     args.insert("x".into(), "0".into());
@@ -230,12 +226,9 @@ fn insert_node_validates_required_args() {
         }
         _ => panic!(),
     }
-    // Invalid kind.
     args.insert("kind".into(), "frobnicate".into());
     match tool.call(&args) {
-        ToolOutcome::Err(code, _) => {
-            assert_eq!(code, ToolErrorCode::InvalidArgument);
-        }
+        ToolOutcome::Err(code, _) => assert_eq!(code, ToolErrorCode::InvalidArgument),
         _ => panic!(),
     }
 }
@@ -294,7 +287,18 @@ fn insert_node_returns_command_with_parsed_args() {
     args.insert("height".into(), "50".into());
     args.insert("fill_hex".into(), "#ff0000".into());
     match tool.call(&args) {
-        ToolOutcome::OkWithCommand(_, McpCommand::InsertNode { kind, name, x, y, width, height, fill_hex }) => {
+        ToolOutcome::OkWithCommand(
+            _,
+            EditorCommand::InsertNode {
+                kind,
+                name,
+                x,
+                y,
+                width,
+                height,
+                fill_hex,
+            },
+        ) => {
             assert_eq!(kind, "rect");
             assert_eq!(name, "My Rect");
             assert_eq!(x, 10);
@@ -308,11 +312,10 @@ fn insert_node_returns_command_with_parsed_args() {
 }
 
 #[test]
-fn apply_mcp_command_routes_insert_node() {
-    use crate::document::Document;
-    let mut doc = Document::empty();
-    let initial_root_count = doc.pages[0].children.len();
-    let cmd = McpCommand::InsertNode {
+fn insert_node_command_applies_through_editor_state() {
+    let mut s = state_with(vec![]);
+    let before = s.active_children().len();
+    assert!(s.apply(EditorCommand::InsertNode {
         kind: "rect".into(),
         name: "Created".into(),
         x: 50,
@@ -320,85 +323,19 @@ fn apply_mcp_command_routes_insert_node() {
         width: 200,
         height: 150,
         fill_hex: Some("#00ff00".into()),
-    };
-    assert!(doc.apply_mcp_command(&cmd));
-    // New node lives on the active page; bounds + fill flow through.
-    assert_eq!(
-        doc.pages[0].children.len(),
-        initial_root_count + 1,
-        "node must be added"
-    );
-    let last = doc.pages[0].children.last().unwrap();
-    assert_eq!(last.name, "Created");
-    assert_eq!(last.bounds.size.x, 200.0);
-    assert_eq!(last.bounds.size.y, 150.0);
-    let fill = last.fill.expect("fill set");
-    assert!((fill.g - 1.0).abs() < 0.01);
-}
-
-#[test]
-fn apply_mcp_command_insert_rejects_when_id_space_exhausted() {
-    // Codex stop-gate: when an existing node sits at u64::MAX
-    // the previous saturating_add(1) wrapped back to u64::MAX and
-    // silently overwrote the live node. Now `next_node_id_seed`
-    // returns None on overflow + apply_mcp_command fails cleanly.
-    use crate::document::{Document, Node, NodeKind};
-    let mut doc = Document::empty();
-    // Plant a node at the maximum id directly in active page.
-    let mut max_node = Node::leaf(format!("n{}", u64::MAX), NodeKind::Rect, "max-id-node");
-    max_node.bounds = crate::Rect::xywh(0.0, 0.0, 10.0, 10.0);
-    doc.pages[0].children.push(max_node);
-    let before_len = doc.pages[0].children.len();
-
-    let cmd = McpCommand::InsertNode {
-        kind: "rect".into(),
-        name: "should-fail".into(),
-        x: 0,
-        y: 0,
-        width: 10,
-        height: 10,
-        fill_hex: None,
-    };
-    assert!(!doc.apply_mcp_command(&cmd), "id-space-exhausted must reject");
-    assert_eq!(
-        doc.pages[0].children.len(),
-        before_len,
-        "no node should have been appended"
-    );
-    // Live u64::MAX node still has its original name.
-    assert_eq!(
-        doc.pages[0].children.last().unwrap().name,
-        "max-id-node"
-    );
-}
-
-#[test]
-fn apply_mcp_command_rejects_invalid_node_kind() {
-    use crate::document::Document;
-    let mut doc = Document::empty();
-    let cmd = McpCommand::InsertNode {
-        kind: "frobnicate".into(),
-        name: "X".into(),
-        x: 0,
-        y: 0,
-        width: 10,
-        height: 10,
-        fill_hex: None,
-    };
-    assert!(!doc.apply_mcp_command(&cmd));
+    }));
+    assert_eq!(s.active_children().len(), before + 1);
 }
 
 #[test]
 fn update_node_requires_node_id_and_one_field() {
     let tool = update_node_snapshot();
-    // No node_id.
     match tool.call(&BTreeMap::new()) {
         ToolOutcome::Err(code, _) => assert_eq!(code, ToolErrorCode::MissingArgument),
         _ => panic!(),
     }
-    // node_id alone (no patch) → MissingArgument.
     let mut args = BTreeMap::new();
-    args.insert("node_id".into(), "10".into());
+    args.insert("node_id".into(), "n10".into());
     match tool.call(&args) {
         ToolOutcome::Err(code, msg) => {
             assert_eq!(code, ToolErrorCode::MissingArgument);
@@ -409,16 +346,14 @@ fn update_node_requires_node_id_and_one_field() {
 }
 
 #[test]
-fn update_node_validates_node_id_format() {
+fn update_node_rejects_empty_node_id() {
+    // The canonical schema uses string ids — any non-empty string is
+    // syntactically valid; only the empty string (NONE sentinel) is
+    // rejected at the wire layer.
     let tool = update_node_snapshot();
     let mut args = BTreeMap::new();
-    args.insert("node_id".into(), "0".into());
+    args.insert("node_id".into(), "".into());
     args.insert("name".into(), "ok".into());
-    match tool.call(&args) {
-        ToolOutcome::Err(code, _) => assert_eq!(code, ToolErrorCode::InvalidArgument),
-        _ => panic!(),
-    }
-    args.insert("node_id".into(), "abc".into());
     match tool.call(&args) {
         ToolOutcome::Err(code, _) => assert_eq!(code, ToolErrorCode::InvalidArgument),
         _ => panic!(),
@@ -429,12 +364,23 @@ fn update_node_validates_node_id_format() {
 fn update_node_returns_command_with_partial_patch() {
     let tool = update_node_snapshot();
     let mut args = BTreeMap::new();
-    args.insert("node_id".into(), "10".into());
+    args.insert("node_id".into(), "n10".into());
     args.insert("x".into(), "50".into());
     args.insert("width".into(), "200".into());
     match tool.call(&args) {
-        ToolOutcome::OkWithCommand(_, McpCommand::UpdateNode { node_id, x, y, width, height, name, fill_hex }) => {
-            assert_eq!(node_id, 10);
+        ToolOutcome::OkWithCommand(
+            _,
+            EditorCommand::UpdateNode {
+                node_id,
+                x,
+                y,
+                width,
+                height,
+                name,
+                fill_hex,
+            },
+        ) => {
+            assert_eq!(node_id.as_str(), "n10");
             assert_eq!(x, Some(50));
             assert_eq!(y, None);
             assert_eq!(width, Some(200));
@@ -447,48 +393,27 @@ fn update_node_returns_command_with_partial_patch() {
 }
 
 #[test]
-fn apply_mcp_command_routes_update_node() {
-    use crate::document::Document;
-    let doc_base = Document::sample();
-    let mut doc = doc_base;
-    // Sample document's NodeId(11) is "Title" text at (60, 60, 240, 28).
-    let cmd = McpCommand::UpdateNode {
-        node_id: 11,
+fn update_node_command_applies_through_editor_state() {
+    let mut s = sample();
+    assert!(s.apply(EditorCommand::UpdateNode {
+        node_id: op_editor_core::NodeId::new("n11"),
         x: Some(100),
         y: None,
         width: None,
         height: Some(50),
         name: Some("Renamed".into()),
         fill_hex: None,
-    };
-    assert!(doc.apply_mcp_command(&cmd));
-    // Walk the frame to find Title node.
-    let frame = &doc.pages[0].children[0]; // Frame is first child
-    let title = frame
-        .children
-        .iter()
-        .find(|n| n.id.raw() == "n11")
-        .expect("Title node");
-    assert_eq!(title.bounds.origin.x, 100.0);
-    assert_eq!(title.bounds.origin.y, 60.0); // unchanged
-    assert_eq!(title.bounds.size.y, 50.0);
-    assert_eq!(title.name, "Renamed");
-}
-
-#[test]
-fn apply_mcp_command_update_node_rejects_unknown_id() {
-    use crate::document::Document;
-    let mut doc = Document::sample();
-    let cmd = McpCommand::UpdateNode {
-        node_id: 99999,
+    }));
+    // Unknown id rejects.
+    assert!(!s.apply(EditorCommand::UpdateNode {
+        node_id: op_editor_core::NodeId::new("n99999"),
         x: Some(0),
         y: None,
         width: None,
         height: None,
         name: None,
         fill_hex: None,
-    };
-    assert!(!doc.apply_mcp_command(&cmd));
+    }));
 }
 
 #[test]
@@ -499,7 +424,7 @@ fn delete_node_validates_arg() {
         _ => panic!(),
     }
     let mut args = BTreeMap::new();
-    args.insert("node_id".into(), "0".into());
+    args.insert("node_id".into(), "".into());
     match tool.call(&args) {
         ToolOutcome::Err(code, _) => assert_eq!(code, ToolErrorCode::InvalidArgument),
         _ => panic!(),
@@ -507,106 +432,25 @@ fn delete_node_validates_arg() {
 }
 
 #[test]
-fn apply_mcp_command_routes_delete_node() {
-    use crate::document::Document;
-    let mut doc = Document::sample();
-    // Delete the Title (id 11). The Frame at id 10 has 2 children;
-    // after delete it has 1.
-    let before_frame_children = doc.pages[0].children[0].children.len();
-    let cmd = McpCommand::DeleteNode { node_id: 11 };
-    assert!(doc.apply_mcp_command(&cmd));
-    let after_frame_children = doc.pages[0].children[0].children.len();
-    assert_eq!(after_frame_children, before_frame_children - 1);
-    assert!(doc.pages[0].children[0]
-        .children
-        .iter()
-        .all(|n| n.id.raw() != "n11"));
-}
-
-#[test]
-fn apply_mcp_command_delete_node_rejects_unknown_id() {
-    use crate::document::Document;
-    let mut doc = Document::sample();
-    let cmd = McpCommand::DeleteNode { node_id: 99999 };
-    assert!(!doc.apply_mcp_command(&cmd));
-}
-
-#[test]
-fn apply_mcp_command_update_node_is_atomic_on_invalid_geometry() {
-    // Codex stop-gate: update_node was applying x/y BEFORE
-    // checking width/height for negative values, so a request
-    // like `{x: 100, width: -1}` would move the node AND reject
-    // the resize — leaving the node in a half-updated state.
-    // Now every validation runs before any write, so an
-    // invalid-geometry request fails cleanly with the node
-    // untouched.
-    use crate::document::Document;
-    let mut doc = Document::sample();
-    // Snapshot original bounds of NodeId(11) — sample's Title.
-    let before = {
-        let frame = &doc.pages[0].children[0];
-        let title = frame.children.iter().find(|n| n.id.raw() == "n11").unwrap();
-        title.bounds
-    };
-    let cmd = McpCommand::UpdateNode {
-        node_id: 11,
-        x: Some(999),     // valid
-        y: Some(999),     // valid
-        width: Some(-1),  // INVALID
-        height: None,
-        name: Some("should-not-apply".into()),
-        fill_hex: None,
-    };
-    assert!(!doc.apply_mcp_command(&cmd), "negative width must reject");
-    // Title is exactly as it was.
-    let frame = &doc.pages[0].children[0];
-    let title = frame.children.iter().find(|n| n.id.raw() == "n11").unwrap();
-    assert_eq!(title.bounds.origin.x, before.origin.x, "x was modified");
-    assert_eq!(title.bounds.origin.y, before.origin.y, "y was modified");
-    assert_eq!(title.bounds.size.x, before.size.x, "w was modified");
-    assert_eq!(title.bounds.size.y, before.size.y, "h was modified");
-    assert_eq!(title.name, "Title", "name was modified");
-}
-
-#[test]
-fn apply_mcp_command_update_node_is_atomic_on_invalid_hex() {
-    // Parallel atomicity test for the fill_hex path: bad hex must
-    // not apply x/y/width/height first.
-    use crate::document::Document;
-    let mut doc = Document::sample();
-    let before = {
-        let frame = &doc.pages[0].children[0];
-        let title = frame.children.iter().find(|n| n.id.raw() == "n11").unwrap();
-        title.bounds
-    };
-    let cmd = McpCommand::UpdateNode {
-        node_id: 11,
-        x: Some(999),
-        y: Some(999),
-        width: None,
-        height: None,
-        name: Some("should-not-apply".into()),
-        fill_hex: Some("not-a-hex".into()),
-    };
-    assert!(!doc.apply_mcp_command(&cmd));
-    let frame = &doc.pages[0].children[0];
-    let title = frame.children.iter().find(|n| n.id.raw() == "n11").unwrap();
-    assert_eq!(title.bounds.origin.x, before.origin.x);
-    assert_eq!(title.bounds.origin.y, before.origin.y);
-    assert_eq!(title.name, "Title");
+fn delete_node_command_applies_through_editor_state() {
+    let mut s = sample();
+    assert!(s.apply(EditorCommand::DeleteNode {
+        node_id: op_editor_core::NodeId::new("n11"),
+    }));
+    assert!(!s.apply(EditorCommand::DeleteNode {
+        node_id: op_editor_core::NodeId::new("n99999"),
+    }));
 }
 
 #[test]
 fn move_node_validates_args() {
     let tool = move_node_snapshot();
-    // Missing both.
     match tool.call(&BTreeMap::new()) {
         ToolOutcome::Err(code, _) => assert_eq!(code, ToolErrorCode::MissingArgument),
         _ => panic!(),
     }
-    // node_id only.
     let mut args = BTreeMap::new();
-    args.insert("node_id".into(), "10".into());
+    args.insert("node_id".into(), "n10".into());
     match tool.call(&args) {
         ToolOutcome::Err(code, msg) => {
             assert_eq!(code, ToolErrorCode::MissingArgument);
@@ -614,16 +458,9 @@ fn move_node_validates_args() {
         }
         _ => panic!(),
     }
-    // node_id == 0 invalid.
-    args.insert("node_id".into(), "0".into());
-    args.insert("target_parent_id".into(), "5".into());
-    match tool.call(&args) {
-        ToolOutcome::Err(code, _) => assert_eq!(code, ToolErrorCode::InvalidArgument),
-        _ => panic!(),
-    }
-    // node_id == target_parent_id.
-    args.insert("node_id".into(), "10".into());
-    args.insert("target_parent_id".into(), "10".into());
+    // node_id == target_parent_id rejects.
+    args.insert("node_id".into(), "n10".into());
+    args.insert("target_parent_id".into(), "n10".into());
     match tool.call(&args) {
         ToolOutcome::Err(code, _) => assert_eq!(code, ToolErrorCode::InvalidArgument),
         _ => panic!(),
@@ -631,129 +468,37 @@ fn move_node_validates_args() {
 }
 
 #[test]
-fn move_node_returns_command_with_zero_target_for_page_root() {
+fn move_node_returns_command_with_empty_target_for_page_root() {
     let tool = move_node_snapshot();
     let mut args = BTreeMap::new();
-    args.insert("node_id".into(), "11".into());
+    args.insert("node_id".into(), "n11".into());
+    // Legacy "0" + the empty string both map to the page-root sentinel.
     args.insert("target_parent_id".into(), "0".into());
     match tool.call(&args) {
-        ToolOutcome::OkWithCommand(_, McpCommand::MoveNode { node_id, target_parent_id }) => {
-            assert_eq!(node_id, 11);
-            assert_eq!(target_parent_id, 0);
+        ToolOutcome::OkWithCommand(
+            _,
+            EditorCommand::MoveNode {
+                node_id,
+                target_parent,
+            },
+        ) => {
+            assert_eq!(node_id.as_str(), "n11");
+            assert!(!target_parent.is_real(), "0 maps to the page-root NONE");
         }
         other => panic!("expected MoveNode, got {other:?}"),
     }
 }
 
 #[test]
-fn apply_mcp_command_move_node_reparents_to_page_root() {
-    use crate::document::Document;
-    // Sample doc layout: page → frame(10) → [title(11), button(12) → [rect(13), text(14)]]
-    let mut doc = Document::sample();
-    let cmd = McpCommand::MoveNode {
-        node_id: 11,
-        target_parent_id: 0, // page root
-    };
-    assert!(doc.apply_mcp_command(&cmd));
-    // Title is now a sibling of Frame at the page root.
-    let root = &doc.pages[0].children;
-    assert!(root.iter().any(|n| n.id.raw() == "n11"), "title at page root");
-    // Frame no longer carries Title.
-    let frame = root.iter().find(|n| n.id.raw() == "n10").unwrap();
-    assert!(frame.children.iter().all(|n| n.id.raw() != "n11"));
-}
-
-#[test]
-fn apply_mcp_command_move_node_reparents_to_another_node() {
-    use crate::document::Document;
-    let mut doc = Document::sample();
-    // Move Title (id 11) under the Button group (id 12).
-    let cmd = McpCommand::MoveNode {
-        node_id: 11,
-        target_parent_id: 12,
-    };
-    assert!(doc.apply_mcp_command(&cmd));
-    let frame = doc.pages[0].children.iter().find(|n| n.id.raw() == "n10").unwrap();
-    let button = frame.children.iter().find(|n| n.id.raw() == "n12").unwrap();
-    assert!(button.children.iter().any(|n| n.id.raw() == "n11"), "title under button");
-    assert!(frame.children.iter().all(|n| n.id.raw() != "n11"), "title detached from frame");
-}
-
-#[test]
-fn apply_mcp_command_move_node_rejects_cycle() {
-    use crate::document::Document;
-    let mut doc = Document::sample();
-    // Frame (id 10) contains Button (id 12). Move Frame UNDER Button
-    // — that would cycle. Apply must reject.
-    let cmd = McpCommand::MoveNode {
-        node_id: 10,
-        target_parent_id: 12,
-    };
-    assert!(!doc.apply_mcp_command(&cmd), "cycle move must reject");
-    // Frame is still at the page root with Button as child.
-    let root = &doc.pages[0].children;
-    let frame = root.iter().find(|n| n.id.raw() == "n10").unwrap();
-    assert!(frame.children.iter().any(|n| n.id.raw() == "n12"));
-}
-
-#[test]
-fn apply_mcp_command_move_node_rejects_unknown_id() {
-    use crate::document::Document;
-    let mut doc = Document::sample();
-    // Unknown source.
-    assert!(!doc.apply_mcp_command(&McpCommand::MoveNode {
-        node_id: 99999,
-        target_parent_id: 10,
+fn move_node_command_applies_through_editor_state() {
+    let mut s = sample();
+    // Move Title (n11) to the page root.
+    assert!(s.apply(EditorCommand::MoveNode {
+        node_id: op_editor_core::NodeId::new("n11"),
+        target_parent: op_editor_core::NodeId::NONE,
     }));
-    // Unknown target.
-    assert!(!doc.apply_mcp_command(&McpCommand::MoveNode {
-        node_id: 11,
-        target_parent_id: 99999,
-    }));
-}
-
-#[test]
-fn apply_mcp_command_move_node_preserves_source_when_target_unknown() {
-    // Codex stop-gate: move_node was detaching the source FIRST,
-    // then trying to find the target parent. If the target was
-    // unknown the source got dropped. Now target_parent is fully
-    // validated before detach, so a bad target leaves both nodes
-    // in place.
-    use crate::document::Document;
-    let mut doc = Document::sample();
-    // Snapshot of Title (id 11) location: under Frame (id 10).
-    let frame_before = doc.pages[0].children[0].children.len();
-    let cmd = McpCommand::MoveNode {
-        node_id: 11,
-        target_parent_id: 99999, // doesn't exist
-    };
-    assert!(!doc.apply_mcp_command(&cmd), "unknown target must reject");
-    // Title still under Frame.
-    let frame_after = doc.pages[0].children[0].children.len();
-    assert_eq!(frame_after, frame_before, "title count unchanged");
-    assert!(doc.pages[0]
-        .children[0]
-        .children
+    assert!(s
+        .active_children()
         .iter()
-        .any(|n| n.id.raw() == "n11"), "title must still be under Frame");
-    // Title is NOT elsewhere in the doc.
-    let title_count: usize = doc
-        .pages
-        .iter()
-        .map(|p| {
-            fn count(node: &crate::document::Node, target: &str) -> usize {
-                let mut c = if node.id.raw() == target { 1 } else { 0 };
-                for child in &node.children {
-                    c += count(child, target);
-                }
-                c
-            }
-            p.children.iter().map(|n| count(n, "n11")).sum::<usize>()
-        })
-        .sum();
-    assert_eq!(title_count, 1, "title appears exactly once in the doc");
+        .any(|n| op_editor_core::pen_node_ext::PenNodeExt::id_str(n) == "n11"));
 }
-
-// copy_node tests live in `mcp/copy_node_tests.rs` (carved out to
-// keep this file under the 800-line cap once the copy_node surface
-// landed).

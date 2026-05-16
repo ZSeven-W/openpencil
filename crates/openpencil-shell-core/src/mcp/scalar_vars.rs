@@ -9,7 +9,10 @@
 
 use std::collections::BTreeMap;
 
-use super::{McpCommand, McpTool, ToolErrorCode, ToolOutcome};
+use op_editor_core::EditorState;
+use jian_ops_schema::variable::VariableKind;
+
+use super::{EditorCommand, McpTool, ToolErrorCode, ToolOutcome, VariableScalarPayload};
 
 /// First-party `set_variable_number` tool — set a Number-kind
 /// variable's value. Mirrors `set_variable_color` for non-color
@@ -56,24 +59,33 @@ impl McpTool for SetVariableNumber {
         out.insert("wrote".into(), "true".into());
         ToolOutcome::OkWithCommand(
             out,
-            McpCommand::SetVariableScalar {
+            EditorCommand::SetVariableScalar {
                 name: name.clone(),
-                scalar: crate::mcp::VariableScalarPayload::Number(n),
+                scalar: VariableScalarPayload::Number(n),
             },
         )
     }
 }
 
-pub fn set_variable_number_snapshot(doc: &crate::document::Document) -> SetVariableNumber {
-    use crate::document::VariableKind;
-    let known = doc
-        .var_table
+/// Snapshot the variables of `kind` into a `name → ()` map.
+fn known_of_kind(state: &EditorState, kind: VariableKind) -> BTreeMap<String, ()> {
+    state
+        .doc
         .variables
-        .iter()
-        .filter(|v| matches!(v.kind, VariableKind::Number))
-        .map(|v| (v.name.clone(), ()))
-        .collect();
-    SetVariableNumber { known }
+        .as_ref()
+        .map(|vars| {
+            vars.iter()
+                .filter(|(_, def)| def.kind == kind)
+                .map(|(name, _)| (name.clone(), ()))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+pub fn set_variable_number_snapshot(state: &EditorState) -> SetVariableNumber {
+    SetVariableNumber {
+        known: known_of_kind(state, VariableKind::Number),
+    }
 }
 
 /// First-party `set_variable_string` tool — set a String-kind
@@ -110,24 +122,18 @@ impl McpTool for SetVariableString {
         out.insert("wrote".into(), "true".into());
         ToolOutcome::OkWithCommand(
             out,
-            McpCommand::SetVariableScalar {
+            EditorCommand::SetVariableScalar {
                 name: name.clone(),
-                scalar: crate::mcp::VariableScalarPayload::String(value.clone()),
+                scalar: VariableScalarPayload::String(value.clone()),
             },
         )
     }
 }
 
-pub fn set_variable_string_snapshot(doc: &crate::document::Document) -> SetVariableString {
-    use crate::document::VariableKind;
-    let known = doc
-        .var_table
-        .variables
-        .iter()
-        .filter(|v| matches!(v.kind, VariableKind::String))
-        .map(|v| (v.name.clone(), ()))
-        .collect();
-    SetVariableString { known }
+pub fn set_variable_string_snapshot(state: &EditorState) -> SetVariableString {
+    SetVariableString {
+        known: known_of_kind(state, VariableKind::String),
+    }
 }
 
 /// First-party `set_variable_boolean` tool — set a Boolean-kind
@@ -174,24 +180,18 @@ impl McpTool for SetVariableBoolean {
         out.insert("wrote".into(), "true".into());
         ToolOutcome::OkWithCommand(
             out,
-            McpCommand::SetVariableScalar {
+            EditorCommand::SetVariableScalar {
                 name: name.clone(),
-                scalar: crate::mcp::VariableScalarPayload::Boolean(b),
+                scalar: VariableScalarPayload::Boolean(b),
             },
         )
     }
 }
 
-pub fn set_variable_boolean_snapshot(doc: &crate::document::Document) -> SetVariableBoolean {
-    use crate::document::VariableKind;
-    let known = doc
-        .var_table
-        .variables
-        .iter()
-        .filter(|v| matches!(v.kind, VariableKind::Boolean))
-        .map(|v| (v.name.clone(), ()))
-        .collect();
-    SetVariableBoolean { known }
+pub fn set_variable_boolean_snapshot(state: &EditorState) -> SetVariableBoolean {
+    SetVariableBoolean {
+        known: known_of_kind(state, VariableKind::Boolean),
+    }
 }
 
 /// The four MCP `create_variable` kind strings.
@@ -280,7 +280,7 @@ impl McpTool for CreateVariable {
         out.insert("wrote".into(), "true".into());
         ToolOutcome::OkWithCommand(
             out,
-            McpCommand::CreateVariable {
+            EditorCommand::CreateVariable {
                 name: name.clone(),
                 kind: kind.clone(),
                 default_value: default_value.clone(),
@@ -289,14 +289,20 @@ impl McpTool for CreateVariable {
     }
 }
 
-pub fn create_variable_snapshot(doc: &crate::document::Document) -> CreateVariable {
-    let existing = doc
-        .var_table
+/// Snapshot every variable name into a `name → ()` map.
+fn all_variable_names(state: &EditorState) -> BTreeMap<String, ()> {
+    state
+        .doc
         .variables
-        .iter()
-        .map(|v| (v.name.clone(), ()))
-        .collect();
-    CreateVariable { existing }
+        .as_ref()
+        .map(|vars| vars.keys().map(|name| (name.clone(), ())).collect())
+        .unwrap_or_default()
+}
+
+pub fn create_variable_snapshot(state: &EditorState) -> CreateVariable {
+    CreateVariable {
+        existing: all_variable_names(state),
+    }
 }
 
 /// First-party `delete_variable` tool — remove a design token by
@@ -327,19 +333,15 @@ impl McpTool for DeleteVariable {
         out.insert("wrote".into(), "true".into());
         ToolOutcome::OkWithCommand(
             out,
-            McpCommand::DeleteVariable { name: name.clone() },
+            EditorCommand::DeleteVariable { name: name.clone() },
         )
     }
 }
 
-pub fn delete_variable_snapshot(doc: &crate::document::Document) -> DeleteVariable {
-    let existing = doc
-        .var_table
-        .variables
-        .iter()
-        .map(|v| (v.name.clone(), ()))
-        .collect();
-    DeleteVariable { existing }
+pub fn delete_variable_snapshot(state: &EditorState) -> DeleteVariable {
+    DeleteVariable {
+        existing: all_variable_names(state),
+    }
 }
 
 /// First-party `rename_variable` tool — rename a design token and
@@ -392,7 +394,7 @@ impl McpTool for RenameVariable {
         out.insert("wrote".into(), "true".into());
         ToolOutcome::OkWithCommand(
             out,
-            McpCommand::RenameVariable {
+            EditorCommand::RenameVariable {
                 old_name: old_name.clone(),
                 new_name: new_name.clone(),
             },
@@ -400,12 +402,8 @@ impl McpTool for RenameVariable {
     }
 }
 
-pub fn rename_variable_snapshot(doc: &crate::document::Document) -> RenameVariable {
-    let existing = doc
-        .var_table
-        .variables
-        .iter()
-        .map(|v| (v.name.clone(), ()))
-        .collect();
-    RenameVariable { existing }
+pub fn rename_variable_snapshot(state: &EditorState) -> RenameVariable {
+    RenameVariable {
+        existing: all_variable_names(state),
+    }
 }

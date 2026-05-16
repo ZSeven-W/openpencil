@@ -17,6 +17,10 @@ path = "src/main.rs"
 [target.'cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))'.dependencies]
 openpencil-shell-core = { path = "../openpencil-shell-core", version = "0.1.0" }
 openpencil-shell-native = { path = "../openpencil-shell-native", version = "0.1.0" }
+# Phase 5 strangler reorg: the stdio MCP server (`mcp_serve.rs`) drives an
+# `op_editor_core::EditorState` (canonical `.op` document) instead of the
+# old shell-core `Document`.
+op-editor-core = { path = "../op-editor-core" }
 # Canonical `.op` / `.pen` schema — all persistence + interop goes
 # through `PenDocument` rather than the desktop's private DocPayload.
 # Falling back to the schema's `load_str` lets us open files saved by

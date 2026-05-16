@@ -1,14 +1,16 @@
-//! Selection-targeting MCP write tools (duplicate / delete /
-//! nudge / group / ungroup / reorder). Carved off `component_tools.rs`
-//! to stay under the 800-line cap.
+//! Selection-targeting MCP write tools (duplicate / delete / nudge /
+//! group / ungroup / reorder / clipboard / align).
+//!
+//! Ported off shell-core's `McpCommand` onto `op_editor_core::
+//! EditorCommand`.
 
 use std::collections::BTreeMap;
 
-use super::{McpCommand, McpTool, ToolErrorCode, ToolOutcome};
+use op_editor_core::ReorderDirection;
+
+use super::{EditorCommand, McpTool, ToolErrorCode, ToolOutcome};
 
 /// First-party `duplicate_selected` tool — Cmd+D equivalent.
-/// Optional `offset_px` arg (defaults to 10 doc-px) shifts the
-/// clone. Returns false at apply time when nothing is selected.
 pub struct DuplicateSelected;
 
 impl McpTool for DuplicateSelected {
@@ -30,7 +32,7 @@ impl McpTool for DuplicateSelected {
         };
         let mut out = BTreeMap::new();
         out.insert("wrote".into(), "true".into());
-        ToolOutcome::OkWithCommand(out, McpCommand::DuplicateSelected { offset_px })
+        ToolOutcome::OkWithCommand(out, EditorCommand::DuplicateSelected { offset_px })
     }
 }
 
@@ -39,7 +41,6 @@ pub fn duplicate_selected_snapshot() -> DuplicateSelected {
 }
 
 /// First-party `delete_selected` tool — Delete-key equivalent.
-/// Returns false at apply time when nothing is selected.
 pub struct DeleteSelected;
 
 impl McpTool for DeleteSelected {
@@ -49,7 +50,7 @@ impl McpTool for DeleteSelected {
     fn call(&self, _args: &BTreeMap<String, String>) -> ToolOutcome {
         let mut out = BTreeMap::new();
         out.insert("wrote".into(), "true".into());
-        ToolOutcome::OkWithCommand(out, McpCommand::DeleteSelected)
+        ToolOutcome::OkWithCommand(out, EditorCommand::DeleteSelected)
     }
 }
 
@@ -58,9 +59,6 @@ pub fn delete_selected_snapshot() -> DeleteSelected {
 }
 
 /// First-party `nudge_selected` tool — arrow-key nudge equivalent.
-/// Translates the selection by (dx, dy) doc-px. Returns false at
-/// apply time when nothing is selected, or when both deltas are
-/// zero. Pushes a history snapshot so undo restores the position.
 pub struct NudgeSelected;
 
 impl McpTool for NudgeSelected {
@@ -101,7 +99,7 @@ impl McpTool for NudgeSelected {
         }
         let mut out = BTreeMap::new();
         out.insert("wrote".into(), "true".into());
-        ToolOutcome::OkWithCommand(out, McpCommand::NudgeSelected { dx, dy })
+        ToolOutcome::OkWithCommand(out, EditorCommand::NudgeSelected { dx, dy })
     }
 }
 
@@ -119,7 +117,7 @@ impl McpTool for GroupSelected {
     fn call(&self, _args: &BTreeMap<String, String>) -> ToolOutcome {
         let mut out = BTreeMap::new();
         out.insert("wrote".into(), "true".into());
-        ToolOutcome::OkWithCommand(out, McpCommand::GroupSelected)
+        ToolOutcome::OkWithCommand(out, EditorCommand::GroupSelected)
     }
 }
 
@@ -137,7 +135,7 @@ impl McpTool for UngroupSelected {
     fn call(&self, _args: &BTreeMap<String, String>) -> ToolOutcome {
         let mut out = BTreeMap::new();
         out.insert("wrote".into(), "true".into());
-        ToolOutcome::OkWithCommand(out, McpCommand::UngroupSelected)
+        ToolOutcome::OkWithCommand(out, EditorCommand::UngroupSelected)
     }
 }
 
@@ -146,7 +144,7 @@ pub fn ungroup_selected_snapshot() -> UngroupSelected {
 }
 
 /// First-party `reorder_selected` tool — bring forward / send
-/// backward. direction is "up" or "down".
+/// backward. `direction` is "up" or "down".
 pub struct ReorderSelected;
 
 impl McpTool for ReorderSelected {
@@ -160,19 +158,21 @@ impl McpTool for ReorderSelected {
                 "direction is required (\"up\" or \"down\")".into(),
             );
         };
-        if direction != "up" && direction != "down" {
-            return ToolOutcome::Err(
-                ToolErrorCode::InvalidArgument,
-                format!("direction must be \"up\" or \"down\", got {direction:?}"),
-            );
-        }
+        let dir = match direction.as_str() {
+            "up" => ReorderDirection::Up,
+            "down" => ReorderDirection::Down,
+            _ => {
+                return ToolOutcome::Err(
+                    ToolErrorCode::InvalidArgument,
+                    format!("direction must be \"up\" or \"down\", got {direction:?}"),
+                );
+            }
+        };
         let mut out = BTreeMap::new();
         out.insert("wrote".into(), "true".into());
         ToolOutcome::OkWithCommand(
             out,
-            McpCommand::ReorderSelected {
-                direction: direction.clone(),
-            },
+            EditorCommand::ReorderSelected { direction: dir },
         )
     }
 }
@@ -181,10 +181,8 @@ pub fn reorder_selected_snapshot() -> ReorderSelected {
     ReorderSelected
 }
 
-/// First-party `align_selected` tool — Align / distribute the
-/// current multi-selection. Mirrors the PropertyPanel Align
-/// section. Valid actions: `left`, `center_h`, `right`, `top`,
-/// `center_v`, `bottom`, `distribute_h`, `distribute_v`.
+/// First-party `align_selected` tool — align / distribute the current
+/// multi-selection.
 pub struct AlignSelected;
 
 const ALIGN_ACTIONS: &[&str] = &[
@@ -214,17 +212,14 @@ impl McpTool for AlignSelected {
         if !ALIGN_ACTIONS.contains(&action.as_str()) {
             return ToolOutcome::Err(
                 ToolErrorCode::InvalidArgument,
-                format!(
-                    "action must be one of {:?}, got {action:?}",
-                    ALIGN_ACTIONS
-                ),
+                format!("action must be one of {ALIGN_ACTIONS:?}, got {action:?}"),
             );
         }
         let mut out = BTreeMap::new();
         out.insert("wrote".into(), "true".into());
         ToolOutcome::OkWithCommand(
             out,
-            McpCommand::AlignSelected {
+            EditorCommand::AlignSelected {
                 action: action.clone(),
             },
         )
@@ -235,9 +230,7 @@ pub fn align_selected_snapshot() -> AlignSelected {
     AlignSelected
 }
 
-/// First-party `copy_selected` tool — Cmd+C parity. Deep-clones
-/// the selection into the document's internal clipboard. Returns
-/// false at apply time when nothing is selected.
+/// First-party `copy_selected` tool — Cmd+C parity.
 pub struct CopySelected;
 
 impl McpTool for CopySelected {
@@ -247,7 +240,7 @@ impl McpTool for CopySelected {
     fn call(&self, _args: &BTreeMap<String, String>) -> ToolOutcome {
         let mut out = BTreeMap::new();
         out.insert("wrote".into(), "true".into());
-        ToolOutcome::OkWithCommand(out, McpCommand::CopySelected)
+        ToolOutcome::OkWithCommand(out, EditorCommand::CopySelected)
     }
 }
 
@@ -255,9 +248,7 @@ pub fn copy_selected_snapshot() -> CopySelected {
     CopySelected
 }
 
-/// First-party `cut_selected` tool — Cmd+X parity. Copies the
-/// selection into the clipboard then deletes it. History snapshot
-/// pushed so undo restores both clipboard and tree.
+/// First-party `cut_selected` tool — Cmd+X parity.
 pub struct CutSelected;
 
 impl McpTool for CutSelected {
@@ -267,7 +258,7 @@ impl McpTool for CutSelected {
     fn call(&self, _args: &BTreeMap<String, String>) -> ToolOutcome {
         let mut out = BTreeMap::new();
         out.insert("wrote".into(), "true".into());
-        ToolOutcome::OkWithCommand(out, McpCommand::CutSelected)
+        ToolOutcome::OkWithCommand(out, EditorCommand::CutSelected)
     }
 }
 
@@ -275,12 +266,7 @@ pub fn cut_selected_snapshot() -> CutSelected {
     CutSelected
 }
 
-/// First-party `paste_clipboard` tool — Cmd+V parity. Pastes the
-/// document clipboard as top-level siblings on the active page,
-/// offset by `offset_px` doc-px (defaults to 10). Mints fresh ids
-/// past `max_node_id()` and replaces the selection with the new
-/// ids. Apply-time false when the clipboard is empty or id-space
-/// is exhausted.
+/// First-party `paste_clipboard` tool — Cmd+V parity.
 pub struct PasteClipboard;
 
 impl McpTool for PasteClipboard {
@@ -302,7 +288,7 @@ impl McpTool for PasteClipboard {
         };
         let mut out = BTreeMap::new();
         out.insert("wrote".into(), "true".into());
-        ToolOutcome::OkWithCommand(out, McpCommand::PasteClipboard { offset_px })
+        ToolOutcome::OkWithCommand(out, EditorCommand::PasteClipboard { offset_px })
     }
 }
 

@@ -1,10 +1,14 @@
-//! Tests for `mcp::write_tools::CopyNode` + the matching
-//! `Document::apply_mcp_command(CopyNode)` branch. Carved off
-//! `write_tools_tests.rs` to keep that file under the 800-line cap
-//! once the copy_node surface landed.
+//! Tests for `mcp::write_tools::CopyNode`.
+//!
+//! Ported off the old shell-core `Document` onto `op_editor_core::
+//! EditorState`. Tool-layer validation + `EditorCommand` emission,
+//! plus end-to-end `EditorState::apply` checks; the apply-path
+//! correctness is covered by `op-editor-core`'s `command_tests.rs`.
 
+use super::test_fixtures::sample;
 use super::write_tools::*;
-use super::{McpCommand, McpTool, ToolErrorCode, ToolOutcome};
+use super::{EditorCommand, McpTool, ToolErrorCode, ToolOutcome};
+use op_editor_core::NodeId;
 use std::collections::BTreeMap;
 
 #[test]
@@ -15,7 +19,7 @@ fn copy_node_validates_args() {
         _ => panic!(),
     }
     let mut args = BTreeMap::new();
-    args.insert("node_id".into(), "10".into());
+    args.insert("node_id".into(), "n10".into());
     match tool.call(&args) {
         ToolOutcome::Err(code, msg) => {
             assert_eq!(code, ToolErrorCode::MissingArgument);
@@ -23,92 +27,61 @@ fn copy_node_validates_args() {
         }
         _ => panic!(),
     }
-    args.insert("node_id".into(), "0".into());
-    args.insert("target_parent_id".into(), "5".into());
+    // node_id == target_parent_id IS allowed.
+    args.insert("node_id".into(), "n10".into());
+    args.insert("target_parent_id".into(), "n10".into());
     match tool.call(&args) {
-        ToolOutcome::Err(code, _) => assert_eq!(code, ToolErrorCode::InvalidArgument),
-        _ => panic!(),
-    }
-    // node_id == target_parent_id IS allowed (copying a container's
-    // contents under itself is a valid LLM op).
-    args.insert("node_id".into(), "10".into());
-    args.insert("target_parent_id".into(), "10".into());
-    match tool.call(&args) {
-        ToolOutcome::OkWithCommand(_, McpCommand::CopyNode { node_id, target_parent_id }) => {
-            assert_eq!(node_id, 10);
-            assert_eq!(target_parent_id, 10);
+        ToolOutcome::OkWithCommand(
+            _,
+            EditorCommand::CopyNode {
+                node_id,
+                target_parent,
+            },
+        ) => {
+            assert_eq!(node_id.as_str(), "n10");
+            assert_eq!(target_parent.as_str(), "n10");
         }
         other => panic!("expected CopyNode, got {other:?}"),
     }
 }
 
 #[test]
-fn apply_mcp_command_copy_node_clones_to_page_root_with_fresh_ids() {
-    use crate::document::Document;
-    let mut doc = Document::sample();
-    let pre_max = doc.max_node_id();
-    let pre_root_len = doc.pages[0].children.len();
-    let cmd = McpCommand::CopyNode {
-        node_id: 12, // Button group with rect(13) + text(14)
-        target_parent_id: 0,
-    };
-    assert!(doc.apply_mcp_command(&cmd));
-    // Original Button still under Frame.
-    let frame = doc.pages[0].children.iter().find(|n| n.id.raw() == "n10").unwrap();
-    assert!(frame.children.iter().any(|n| n.id.raw() == "n12"));
-    // Page root grew by 1.
-    assert_eq!(doc.pages[0].children.len(), pre_root_len + 1);
-    // The newest root child has a fresh id past pre_max and the
-    // same shape (2 children) as the source.
-    let clone = doc.pages[0].children.last().unwrap();
-    let clone_n = clone.id.raw()[1..].parse::<u64>().unwrap();
-    assert!(
-        clone_n > pre_max,
-        "clone id {} must exceed pre_max {pre_max}",
-        clone.id.raw()
-    );
-    assert_eq!(clone.children.len(), 2);
-    for child in &clone.children {
-        let child_n = child.id.raw()[1..].parse::<u64>().unwrap();
-        assert!(child_n > pre_max, "child clone id must be fresh");
+fn copy_node_maps_zero_target_to_page_root() {
+    let tool = copy_node_snapshot();
+    let mut args = BTreeMap::new();
+    args.insert("node_id".into(), "n12".into());
+    args.insert("target_parent_id".into(), "0".into());
+    match tool.call(&args) {
+        ToolOutcome::OkWithCommand(
+            _,
+            EditorCommand::CopyNode { target_parent, .. },
+        ) => {
+            assert!(!target_parent.is_real(), "0 maps to page-root NONE");
+        }
+        other => panic!("expected CopyNode, got {other:?}"),
     }
 }
 
 #[test]
-fn apply_mcp_command_copy_node_clones_into_container() {
-    use crate::document::Document;
-    let mut doc = Document::sample();
-    let pre_button_children = {
-        let frame = doc.pages[0].children.iter().find(|n| n.id.raw() == "n10").unwrap();
-        let button = frame.children.iter().find(|n| n.id.raw() == "n12").unwrap();
-        button.children.len()
-    };
-    // Clone Title (id 11) under Button group (id 12).
-    let cmd = McpCommand::CopyNode {
-        node_id: 11,
-        target_parent_id: 12,
-    };
-    assert!(doc.apply_mcp_command(&cmd));
-    let frame = doc.pages[0].children.iter().find(|n| n.id.raw() == "n10").unwrap();
-    let button = frame.children.iter().find(|n| n.id.raw() == "n12").unwrap();
-    assert_eq!(button.children.len(), pre_button_children + 1);
-    // Original Title still at its old spot under Frame.
-    assert!(frame.children.iter().any(|n| n.id.raw() == "n11"));
+fn copy_node_command_clones_to_page_root() {
+    let mut s = sample();
+    let pre_root_len = s.active_children().len();
+    assert!(s.apply(EditorCommand::CopyNode {
+        node_id: NodeId::new("n12"),
+        target_parent: NodeId::NONE,
+    }));
+    assert_eq!(s.active_children().len(), pre_root_len + 1);
 }
 
 #[test]
-fn apply_mcp_command_copy_node_rejects_unknown_source_or_target() {
-    use crate::document::Document;
-    let mut doc = Document::sample();
-    let pre_root_len = doc.pages[0].children.len();
-    assert!(!doc.apply_mcp_command(&McpCommand::CopyNode {
-        node_id: 99999,
-        target_parent_id: 0,
+fn copy_node_command_rejects_unknown_source_or_target() {
+    let mut s = sample();
+    assert!(!s.apply(EditorCommand::CopyNode {
+        node_id: NodeId::new("n99999"),
+        target_parent: NodeId::NONE,
     }));
-    assert!(!doc.apply_mcp_command(&McpCommand::CopyNode {
-        node_id: 11,
-        target_parent_id: 99999,
+    assert!(!s.apply(EditorCommand::CopyNode {
+        node_id: NodeId::new("n11"),
+        target_parent: NodeId::new("n99999"),
     }));
-    // Doc unchanged either way.
-    assert_eq!(doc.pages[0].children.len(), pre_root_len);
 }

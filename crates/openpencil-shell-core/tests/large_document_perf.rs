@@ -79,8 +79,11 @@ fn node_at_doc_point_on_1000_leaves_under_25ms_per_hit_batch() {
 
 #[test]
 fn apply_batch_insert_of_1000_descriptors_under_100ms() {
-    use openpencil_shell_core::mcp::{BatchInsertItem, McpCommand};
-    let mut doc = Document::empty();
+    // Phase 5: the MCP write path now applies `EditorCommand` through
+    // `op_editor_core::EditorState::apply`, not the old shell-core
+    // `Document::apply_mcp_command`.
+    use op_editor_core::{BatchInsertItem, EditorCommand, EditorState};
+    let mut state = EditorState::new();
     let mut items = Vec::with_capacity(1000);
     for i in 0..1000 {
         let row = i / 32;
@@ -95,14 +98,14 @@ fn apply_batch_insert_of_1000_descriptors_under_100ms() {
             fill_hex: None,
         });
     }
-    let cmd = McpCommand::BatchInsert { items };
+    let cmd = EditorCommand::BatchInsert { items };
     let t = Instant::now();
-    assert!(doc.apply_mcp_command(&cmd));
+    assert!(state.apply(cmd));
     let elapsed_ms = t.elapsed().as_secs_f64() * 1000.0;
     assert!(
         elapsed_ms < 100.0,
         "BatchInsert of 1000 leaves took {elapsed_ms:.1} ms; expected < 100 ms \
-         (debug build). Investigate id allocation + Vec growth in mcp_apply."
+         (debug build). Investigate id allocation + Vec growth in command_node."
     );
-    assert_eq!(doc.pages[0].children.len(), 1000);
+    assert_eq!(state.active_children().len(), 1000);
 }

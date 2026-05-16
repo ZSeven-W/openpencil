@@ -158,112 +158,6 @@ impl VariableTable {
         self.active_theme.remove(axis);
     }
 
-    /// Apply an MCP write command against this table. Returns true
-    /// when the command actually changed something (caller pushes
-    /// an undo snapshot). False on validation failure — the command
-    /// is already validated by the tool's `call`, so a `false`
-    /// here means the underlying mutator rejected (unknown name /
-    /// wrong kind / malformed hex / unknown axis).
-    pub fn apply_mcp_command(&mut self, cmd: &crate::mcp::McpCommand) -> bool {
-        match cmd {
-            crate::mcp::McpCommand::SetVariableColor { name, hex } => {
-                self.set_color_hex(name, hex)
-            }
-            crate::mcp::McpCommand::SetVariableScalar { name, scalar } => {
-                let s = match scalar {
-                    crate::mcp::VariableScalarPayload::Number(n) => VariableScalar::Num(*n),
-                    crate::mcp::VariableScalarPayload::String(s) => {
-                        VariableScalar::Str(s.clone())
-                    }
-                    crate::mcp::VariableScalarPayload::Boolean(b) => VariableScalar::Bool(*b),
-                };
-                self.set_scalar(name, s)
-            }
-            crate::mcp::McpCommand::SetActiveAxisValue { axis, value } => {
-                let Some(theme_axis) = self.themes.iter().find(|t| t.name == *axis) else {
-                    return false;
-                };
-                if !theme_axis.values.iter().any(|v| v == value) {
-                    return false;
-                }
-                self.active_theme.insert(axis.clone(), value.clone());
-                true
-            }
-            crate::mcp::McpCommand::CycleActiveAxisValue { axis } => {
-                self.cycle_active_axis_value(axis)
-            }
-            crate::mcp::McpCommand::CreateVariable {
-                name,
-                kind,
-                default_value,
-            } => {
-                let Some((parsed_kind, default)) =
-                    parse_variable_kind_and_default(kind, default_value)
-                else {
-                    return false;
-                };
-                self.create_variable(name, parsed_kind, default)
-            }
-            crate::mcp::McpCommand::DeleteVariable { name } => {
-                self.delete_variable(name)
-            }
-            crate::mcp::McpCommand::RenameVariable { old_name, new_name } => {
-                self.rename_variable(old_name, new_name)
-            }
-            crate::mcp::McpCommand::InsertNode { .. }
-            | crate::mcp::McpCommand::UpdateNode { .. }
-            | crate::mcp::McpCommand::DeleteNode { .. }
-            | crate::mcp::McpCommand::MoveNode { .. }
-            | crate::mcp::McpCommand::CopyNode { .. }
-            | crate::mcp::McpCommand::ReplaceNode { .. }
-            | crate::mcp::McpCommand::BatchInsert { .. }
-            | crate::mcp::McpCommand::InstantiateComponent { .. }
-            | crate::mcp::McpCommand::CreateComponent { .. }
-            | crate::mcp::McpCommand::DeleteComponent { .. }
-            | crate::mcp::McpCommand::RenameComponent { .. }
-            | crate::mcp::McpCommand::SetActivePage { .. }
-            | crate::mcp::McpCommand::AddPage
-            | crate::mcp::McpCommand::RenamePage { .. }
-            | crate::mcp::McpCommand::DeletePage { .. }
-            | crate::mcp::McpCommand::DuplicatePage { .. }
-            | crate::mcp::McpCommand::ReorderPage { .. }
-            | crate::mcp::McpCommand::ClearSelection
-            | crate::mcp::McpCommand::SetSelection { .. }
-            | crate::mcp::McpCommand::SetViewport { .. }
-            | crate::mcp::McpCommand::SetNodeFlag { .. }
-            | crate::mcp::McpCommand::SetActiveTool { .. }
-            | crate::mcp::McpCommand::Undo
-            | crate::mcp::McpCommand::Redo
-            | crate::mcp::McpCommand::DuplicateSelected { .. }
-            | crate::mcp::McpCommand::DeleteSelected
-            | crate::mcp::McpCommand::NudgeSelected { .. }
-            | crate::mcp::McpCommand::GroupSelected
-            | crate::mcp::McpCommand::UngroupSelected
-            | crate::mcp::McpCommand::ReorderSelected { .. }
-            | crate::mcp::McpCommand::SetNodeRotation { .. }
-            | crate::mcp::McpCommand::SetNodeText { .. }
-            | crate::mcp::McpCommand::SetNodeCornerRadius { .. }
-            | crate::mcp::McpCommand::SetNodeFontSize { .. }
-            | crate::mcp::McpCommand::SetNodeFontWeight { .. }
-            | crate::mcp::McpCommand::SetNodeStrokeHex { .. }
-            | crate::mcp::McpCommand::SetNodeStrokeWidth { .. }
-            | crate::mcp::McpCommand::SetNodeFillHex { .. }
-            | crate::mcp::McpCommand::SetNodeName { .. }
-            | crate::mcp::McpCommand::AlignSelected { .. }
-            | crate::mcp::McpCommand::SetSelectionSet { .. }
-            | crate::mcp::McpCommand::ToggleNodeSelection { .. }
-            | crate::mcp::McpCommand::CopySelected
-            | crate::mcp::McpCommand::CutSelected
-            | crate::mcp::McpCommand::PasteClipboard { .. } => {
-                // Not VariableTable mutations — Pages-level commands
-                // live on `Document::apply_mcp_command`. Return false
-                // so callers with only a VariableTable handle know
-                // these variants aren't theirs.
-                false
-            }
-        }
-    }
-
     /// Cycle the active value of `axis` to the next entry in the
     /// `ThemeAxis::values` list. Returns `false` (no-op) when the
     /// axis isn't in `themes` or has no values. When the axis
@@ -584,6 +478,12 @@ impl VariableTable {
 /// None on an unknown kind or a default that doesn't parse for
 /// that kind. Color defaults are kept as the raw hex `Str` (the
 /// `create_variable` mutator re-validates the hex).
+///
+/// Retained after the legacy `VariableTable::apply_mcp_command` was
+/// removed (Phase 5 — the MCP server now applies through
+/// `op_editor_core::EditorState`). Kept as a documented `kind`+default
+/// parser for any future shell-core caller.
+#[allow(dead_code)]
 pub(super) fn parse_variable_kind_and_default(
     kind: &str,
     default_value: &str,

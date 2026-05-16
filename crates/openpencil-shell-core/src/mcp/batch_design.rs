@@ -5,7 +5,7 @@
 use std::collections::BTreeMap;
 
 use super::write_tools::{validate_hex, ALLOWED_KINDS};
-use super::{BatchInsertItem, McpCommand, McpTool, ToolErrorCode, ToolOutcome};
+use super::{BatchInsertItem, EditorCommand, McpTool, ToolErrorCode, ToolOutcome};
 
 /// First-party `batch_design` tool — insert N leaf nodes on the
 /// active page in one atomic shot. Mirrors TS `batch_design` for
@@ -46,7 +46,7 @@ impl McpTool for BatchDesign {
                 let mut out = BTreeMap::new();
                 out.insert("wrote".into(), "true".into());
                 out.insert("count".into(), items.len().to_string());
-                ToolOutcome::OkWithCommand(out, McpCommand::BatchInsert { items })
+                ToolOutcome::OkWithCommand(out, EditorCommand::BatchInsert { items })
             }
             Err(e) => ToolOutcome::Err(ToolErrorCode::InvalidArgument, e),
         }
@@ -82,7 +82,7 @@ fn dispatch_phase(args: &BTreeMap<String, String>, phase: &'static str) -> ToolO
             out.insert("wrote".into(), "true".into());
             out.insert("count".into(), items.len().to_string());
             out.insert("phase".into(), phase.into());
-            ToolOutcome::OkWithCommand(out, McpCommand::BatchInsert { items })
+            ToolOutcome::OkWithCommand(out, EditorCommand::BatchInsert { items })
         }
         Err(e) => ToolOutcome::Err(ToolErrorCode::InvalidArgument, e),
     }

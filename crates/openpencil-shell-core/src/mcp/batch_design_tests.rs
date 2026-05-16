@@ -1,9 +1,13 @@
-//! Tests for `mcp::batch_design::BatchDesign` + the
-//! `Document::apply_mcp_command(BatchInsert)` branch. Sibling
-//! file mirroring `copy_node_tests.rs` / `replace_node_tests.rs`.
+//! Tests for `mcp::batch_design::BatchDesign`.
+//!
+//! Ported off the old shell-core `Document` onto `op_editor_core::
+//! EditorState`. Tool-layer parsing / validation + a few end-to-end
+//! `EditorState::apply` checks; the apply-path correctness is covered
+//! by `op-editor-core`'s `command_tests.rs`.
 
 use super::batch_design::*;
-use super::{McpCommand, McpTool, ToolErrorCode, ToolOutcome};
+use super::test_fixtures::sample;
+use super::{BatchInsertItem, EditorCommand, McpTool, ToolErrorCode, ToolOutcome};
 use std::collections::BTreeMap;
 
 #[test]
@@ -39,7 +43,7 @@ fn batch_design_parses_minimal_two_node_array() {
             .into(),
     );
     match tool.call(&args) {
-        ToolOutcome::OkWithCommand(result, McpCommand::BatchInsert { items }) => {
+        ToolOutcome::OkWithCommand(result, EditorCommand::BatchInsert { items }) => {
             assert_eq!(result.get("count"), Some(&"2".to_string()));
             assert_eq!(items.len(), 2);
             assert_eq!(items[0].kind, "rect");
@@ -90,28 +94,28 @@ fn batch_design_rejects_malformed_json() {
         "not json",
         "{}",
         "[{}]",
-        r#"[{"kind":"rect"}]"#, // missing required keys
-        r#"[{"kind":"rect","name":"A","x":0,"y":0,"width":10,"height":10"#, // unterminated
-        r#"[{"kind":"rect","name":"A","x":0,"y":0,"width":10,"height":10},]"#, // trailing comma
+        r#"[{"kind":"rect"}]"#,
+        r#"[{"kind":"rect","name":"A","x":0,"y":0,"width":10,"height":10"#,
+        r#"[{"kind":"rect","name":"A","x":0,"y":0,"width":10,"height":10},]"#,
     ] {
         let mut args = BTreeMap::new();
         args.insert("nodes_json".into(), bad.into());
         match tool.call(&args) {
-            ToolOutcome::Err(code, _) => assert_eq!(code, ToolErrorCode::InvalidArgument, "{bad}"),
+            ToolOutcome::Err(code, _) => {
+                assert_eq!(code, ToolErrorCode::InvalidArgument, "{bad}")
+            }
             _ => panic!("expected reject on {bad}"),
         }
     }
 }
 
 #[test]
-fn apply_mcp_command_batch_insert_adds_all_nodes_with_fresh_ids() {
-    use crate::document::Document;
-    let mut doc = Document::sample();
-    let pre_max = doc.max_node_id();
-    let pre_root_len = doc.pages[0].children.len();
-    let cmd = McpCommand::BatchInsert {
+fn batch_insert_command_adds_all_nodes() {
+    let mut s = sample();
+    let pre_root_len = s.active_children().len();
+    assert!(s.apply(EditorCommand::BatchInsert {
         items: vec![
-            crate::mcp::BatchInsertItem {
+            BatchInsertItem {
                 kind: "rect".into(),
                 name: "A".into(),
                 x: 0,
@@ -120,7 +124,7 @@ fn apply_mcp_command_batch_insert_adds_all_nodes_with_fresh_ids() {
                 height: 20,
                 fill_hex: None,
             },
-            crate::mcp::BatchInsertItem {
+            BatchInsertItem {
                 kind: "ellipse".into(),
                 name: "B".into(),
                 x: 40,
@@ -130,31 +134,17 @@ fn apply_mcp_command_batch_insert_adds_all_nodes_with_fresh_ids() {
                 fill_hex: Some("#00ff00".into()),
             },
         ],
-    };
-    assert!(doc.apply_mcp_command(&cmd));
-    assert_eq!(doc.pages[0].children.len(), pre_root_len + 2);
-    // Every new node has a fresh id past pre_max, no duplicates.
-    let new_ids: Vec<u64> = doc.pages[0].children.iter()
-        .skip(pre_root_len)
-        .map(|n| n.id.raw()[1..].parse::<u64>().unwrap())
-        .collect();
-    assert_eq!(new_ids.len(), 2);
-    assert!(new_ids[0] > pre_max);
-    assert!(new_ids[1] > pre_max);
-    assert_ne!(new_ids[0], new_ids[1]);
+    }));
+    assert_eq!(s.active_children().len(), pre_root_len + 2);
 }
 
 #[test]
-fn apply_mcp_command_batch_insert_atomic_on_bad_descriptor() {
-    // Bad descriptor (unknown kind) must reject the whole batch.
-    // The command would only land here if the tool somehow let it
-    // through — defense in depth at the applier.
-    use crate::document::Document;
-    let mut doc = Document::sample();
-    let pre_root_len = doc.pages[0].children.len();
-    let cmd = McpCommand::BatchInsert {
+fn batch_insert_command_atomic_on_bad_descriptor() {
+    let mut s = sample();
+    let pre_root_len = s.active_children().len();
+    assert!(!s.apply(EditorCommand::BatchInsert {
         items: vec![
-            crate::mcp::BatchInsertItem {
+            BatchInsertItem {
                 kind: "rect".into(),
                 name: "A".into(),
                 x: 0,
@@ -163,7 +153,7 @@ fn apply_mcp_command_batch_insert_atomic_on_bad_descriptor() {
                 height: 10,
                 fill_hex: None,
             },
-            crate::mcp::BatchInsertItem {
+            BatchInsertItem {
                 kind: "blob".into(),
                 name: "B".into(),
                 x: 0,
@@ -173,19 +163,12 @@ fn apply_mcp_command_batch_insert_atomic_on_bad_descriptor() {
                 fill_hex: None,
             },
         ],
-    };
-    assert!(!doc.apply_mcp_command(&cmd));
-    assert_eq!(
-        doc.pages[0].children.len(),
-        pre_root_len,
-        "no partial insertion on bad descriptor"
-    );
+    }));
+    assert_eq!(s.active_children().len(), pre_root_len, "no partial insertion");
 }
 
 #[test]
-fn apply_mcp_command_batch_insert_rejects_empty_items() {
-    use crate::document::Document;
-    let mut doc = Document::sample();
-    let cmd = McpCommand::BatchInsert { items: vec![] };
-    assert!(!doc.apply_mcp_command(&cmd));
+fn batch_insert_command_rejects_empty_items() {
+    let mut s = sample();
+    assert!(!s.apply(EditorCommand::BatchInsert { items: vec![] }));
 }

@@ -1,29 +1,46 @@
-//! MCP write tools. Each returns `ToolOutcome::OkWithCommand(...)`
-//! so the host applies the mutation against the live document via
-//! `Document::apply_mcp_command`. Pulled out of the read-tool
-//! `tools.rs` for file-size hygiene (800-line cap) as the write
-//! surface grew past insert_node + update_node + delete_node.
+//! MCP write tools. Each returns `ToolOutcome::OkWithCommand(...)` so
+//! the host applies the mutation against the live editor state via
+//! `EditorState::apply`.
+//!
+//! Ported off shell-core's `McpCommand` onto `op_editor_core::
+//! EditorCommand`. The biggest model change: node ids are now the
+//! canonical `.op` schema's string ids (`NodeId`), not the old `u64`.
+//! `parse_node_id` accepts any non-empty string.
 
 use std::collections::BTreeMap;
 
-use super::{McpCommand, McpTool, ToolErrorCode, ToolOutcome};
+use op_editor_core::EditorState;
+use op_editor_core::NodeId;
+use jian_ops_schema::variable::VariableKind;
 
-/// First-party `set_variable_color` tool — the first write tool.
-/// Validates that the variable exists + is Color-kind + the hex
-/// parses, then returns `OkWithCommand(SetVariableColor)` so the
-/// host applies the change against the live document. Reads the
-/// snapshot lazily — tool validation is O(n) over the variables
-/// vec; the apply path routes through `VariableTable::set_color_hex`
-/// with the full correctness chain (subset / no-clobber / no-shadow).
-///
-/// Wire shape:
-///   args   — { "name": "<variable>", "hex": "#rrggbb" }
-///   result — { "wrote": "true" } when the command was queued
-///   command — `McpCommand::SetVariableColor { name, hex }`
+use super::{EditorCommand, McpTool, ToolErrorCode, ToolOutcome};
+
+/// Parse a `node_id`-style argument into a `NodeId`. Node ids are
+/// canonical `.op` schema strings — any non-empty string is valid; an
+/// empty string (the NONE sentinel) is rejected.
+pub(super) fn parse_node_id(
+    args: &BTreeMap<String, String>,
+    key: &str,
+) -> Result<NodeId, ToolOutcome> {
+    let Some(raw) = args.get(key) else {
+        return Err(ToolOutcome::Err(
+            ToolErrorCode::MissingArgument,
+            format!("{key} is required"),
+        ));
+    };
+    NodeId::new_opt(raw.as_str()).ok_or_else(|| {
+        ToolOutcome::Err(
+            ToolErrorCode::InvalidArgument,
+            format!("{key} must be a non-empty node id"),
+        )
+    })
+}
+
+/// First-party `set_variable_color` tool — validates that the variable
+/// exists + is Color-kind + the hex parses, then returns
+/// `OkWithCommand(SetVariableColor)`.
 pub struct SetVariableColor {
-    /// Snapshot of which variables exist + their kinds. Used for
-    /// validation only — the host applies the write so this
-    /// snapshot can lag a frame behind without breaking anything.
+    /// Snapshot of which Color variables exist. Validation only.
     pub known_colors: BTreeMap<String, ()>,
 }
 
@@ -60,7 +77,7 @@ impl McpTool for SetVariableColor {
         out.insert("wrote".into(), "true".into());
         ToolOutcome::OkWithCommand(
             out,
-            McpCommand::SetVariableColor {
+            EditorCommand::SetVariableColor {
                 name: name.clone(),
                 hex: hex.clone(),
             },
@@ -68,15 +85,9 @@ impl McpTool for SetVariableColor {
     }
 }
 
-/// First-party `set_active_axis_value` tool — pins an axis to a
-/// value (vs `cycle_active_axis_value` which advances). Validates
-/// axis exists + value is in `themes[axis].values`; the host
-/// applier re-validates against live state.
+/// First-party `set_active_axis_value` tool — pins an axis to a value.
 pub struct SetActiveAxisValue {
-    /// Snapshot of axis → allowed-values, mirroring
-    /// `VariableTable::themes`. Validation only — the host re-runs
-    /// the same check at apply time so a stale snapshot can't slip
-    /// an unauthorized value through.
+    /// Snapshot of axis → allowed-values. Validation only.
     pub axes: BTreeMap<String, Vec<String>>,
 }
 
@@ -116,7 +127,7 @@ impl McpTool for SetActiveAxisValue {
         out.insert("wrote".into(), "true".into());
         ToolOutcome::OkWithCommand(
             out,
-            McpCommand::SetActiveAxisValue {
+            EditorCommand::SetActiveAxisValue {
                 axis: axis.clone(),
                 value: value.clone(),
             },
@@ -124,11 +135,8 @@ impl McpTool for SetActiveAxisValue {
     }
 }
 
-/// First-party `insert_node` tool — creates a fresh node on the
-/// active page. Args: kind / name / x / y / width / height +
-/// optional fill_hex. The applier allocates a non-colliding id
-/// past `max_node_id()` so the LLM never has to reason about id
-/// space. Stateless — no document snapshot needed.
+/// First-party `insert_node` tool — creates a fresh node on the active
+/// page. The applier allocates a non-colliding id.
 pub struct InsertNode;
 
 impl McpTool for InsertNode {
@@ -136,7 +144,6 @@ impl McpTool for InsertNode {
         "insert_node"
     }
     fn call(&self, args: &BTreeMap<String, String>) -> ToolOutcome {
-        // Required args: kind, name, x, y, width, height.
         let kind = match args.get("kind") {
             Some(s) => s.clone(),
             None => {
@@ -186,7 +193,6 @@ impl McpTool for InsertNode {
                 "width / height must be non-negative".into(),
             );
         }
-        // fill_hex is optional, but if present it must parse.
         let fill_hex = match args.get("fill_hex") {
             None => None,
             Some(s) if !validate_hex(s) => {
@@ -201,7 +207,7 @@ impl McpTool for InsertNode {
         out.insert("wrote".into(), "true".into());
         ToolOutcome::OkWithCommand(
             out,
-            McpCommand::InsertNode {
+            EditorCommand::InsertNode {
                 kind,
                 name,
                 x,
@@ -237,14 +243,10 @@ fn parse_i32_arg(
 }
 
 pub fn insert_node_snapshot() -> InsertNode {
-    // Stateless — no document snapshot needed.
     InsertNode
 }
 
-/// First-party `update_node` tool — patch fields on an existing
-/// node. Required arg: node_id. Optional: x, y, width, height,
-/// name, fill_hex. At least one optional arg must be present; the
-/// applier no-ops on an empty patch (returns false).
+/// First-party `update_node` tool — patch fields on an existing node.
 pub struct UpdateNode;
 
 impl McpTool for UpdateNode {
@@ -252,23 +254,9 @@ impl McpTool for UpdateNode {
         "update_node"
     }
     fn call(&self, args: &BTreeMap<String, String>) -> ToolOutcome {
-        let raw = match args.get("node_id") {
-            Some(s) => s,
-            None => {
-                return ToolOutcome::Err(
-                    ToolErrorCode::MissingArgument,
-                    "node_id is required".into(),
-                );
-            }
-        };
-        let node_id: u64 = match raw.parse() {
-            Ok(n) if n > 0 => n,
-            _ => {
-                return ToolOutcome::Err(
-                    ToolErrorCode::InvalidArgument,
-                    format!("node_id must be a positive u64, got {raw:?}"),
-                );
-            }
+        let node_id = match parse_node_id(args, "node_id") {
+            Ok(v) => v,
+            Err(e) => return e,
         };
         let x = parse_opt_i32(args, "x");
         let y = parse_opt_i32(args, "y");
@@ -306,14 +294,15 @@ impl McpTool for UpdateNode {
         {
             return ToolOutcome::Err(
                 ToolErrorCode::MissingArgument,
-                "at least one of x / y / width / height / name / fill_hex must be set".into(),
+                "at least one of x / y / width / height / name / fill_hex must be set"
+                    .into(),
             );
         }
         let mut out = BTreeMap::new();
         out.insert("wrote".into(), "true".into());
         ToolOutcome::OkWithCommand(
             out,
-            McpCommand::UpdateNode {
+            EditorCommand::UpdateNode {
                 node_id,
                 x,
                 y,
@@ -330,8 +319,8 @@ pub fn update_node_snapshot() -> UpdateNode {
     UpdateNode
 }
 
-/// Parse an optional i32 arg. Returns Ok(None) when absent, Ok(Some)
-/// on a successful parse, Err on present-but-malformed input.
+/// Parse an optional i32 arg. `Ok(None)` when absent, `Ok(Some)` on a
+/// successful parse, `Err` on present-but-malformed input.
 fn parse_opt_i32(
     args: &BTreeMap<String, String>,
     key: &str,
@@ -345,9 +334,7 @@ fn parse_opt_i32(
     }
 }
 
-/// First-party `delete_node` tool — removes a node + its descendants
-/// from its parent. Required arg: node_id. The applier walks every
-/// page recursively to find the right parent vec.
+/// First-party `delete_node` tool — removes a node + descendants.
 pub struct DeleteNode;
 
 impl McpTool for DeleteNode {
@@ -355,27 +342,13 @@ impl McpTool for DeleteNode {
         "delete_node"
     }
     fn call(&self, args: &BTreeMap<String, String>) -> ToolOutcome {
-        let raw = match args.get("node_id") {
-            Some(s) => s,
-            None => {
-                return ToolOutcome::Err(
-                    ToolErrorCode::MissingArgument,
-                    "node_id is required".into(),
-                );
-            }
-        };
-        let node_id: u64 = match raw.parse() {
-            Ok(n) if n > 0 => n,
-            _ => {
-                return ToolOutcome::Err(
-                    ToolErrorCode::InvalidArgument,
-                    format!("node_id must be a positive u64, got {raw:?}"),
-                );
-            }
+        let node_id = match parse_node_id(args, "node_id") {
+            Ok(v) => v,
+            Err(e) => return e,
         };
         let mut out = BTreeMap::new();
         out.insert("wrote".into(), "true".into());
-        ToolOutcome::OkWithCommand(out, McpCommand::DeleteNode { node_id })
+        ToolOutcome::OkWithCommand(out, EditorCommand::DeleteNode { node_id })
     }
 }
 
@@ -383,11 +356,8 @@ pub fn delete_node_snapshot() -> DeleteNode {
     DeleteNode
 }
 
-/// First-party `move_node` tool — reparent a node. Required args:
-/// node_id, target_parent_id. `target_parent_id == "0"` reparents
-/// to the active page root. Non-zero ids must resolve to an
-/// existing node; the applier rejects cycles (target descendant
-/// of source) at apply time.
+/// First-party `move_node` tool — reparent a node. An empty
+/// `target_parent_id` reparents to the active page root.
 pub struct MoveNode;
 
 impl McpTool for MoveNode {
@@ -395,37 +365,20 @@ impl McpTool for MoveNode {
         "move_node"
     }
     fn call(&self, args: &BTreeMap<String, String>) -> ToolOutcome {
-        let Some(raw_id) = args.get("node_id") else {
-            return ToolOutcome::Err(
-                ToolErrorCode::MissingArgument,
-                "node_id is required".into(),
-            );
+        let node_id = match parse_node_id(args, "node_id") {
+            Ok(v) => v,
+            Err(e) => return e,
         };
-        let node_id: u64 = match raw_id.parse() {
-            Ok(n) if n > 0 => n,
-            _ => {
-                return ToolOutcome::Err(
-                    ToolErrorCode::InvalidArgument,
-                    format!("node_id must be a positive u64, got {raw_id:?}"),
-                );
-            }
-        };
+        // `target_parent_id` is required; an empty string ("" or "0")
+        // means "the active page root" (the NONE sentinel).
         let Some(raw_target) = args.get("target_parent_id") else {
             return ToolOutcome::Err(
                 ToolErrorCode::MissingArgument,
-                "target_parent_id is required (0 = page root)".into(),
+                "target_parent_id is required (\"\" or \"0\" = page root)".into(),
             );
         };
-        let target_parent_id: u64 = match raw_target.parse() {
-            Ok(n) => n,
-            Err(_) => {
-                return ToolOutcome::Err(
-                    ToolErrorCode::InvalidArgument,
-                    format!("target_parent_id must be u64, got {raw_target:?}"),
-                );
-            }
-        };
-        if node_id == target_parent_id {
+        let target_parent = root_or_node_id(raw_target);
+        if target_parent.is_real() && target_parent == node_id {
             return ToolOutcome::Err(
                 ToolErrorCode::InvalidArgument,
                 "node_id and target_parent_id must differ".into(),
@@ -435,9 +388,9 @@ impl McpTool for MoveNode {
         out.insert("wrote".into(), "true".into());
         ToolOutcome::OkWithCommand(
             out,
-            McpCommand::MoveNode {
+            EditorCommand::MoveNode {
                 node_id,
-                target_parent_id,
+                target_parent,
             },
         )
     }
@@ -447,13 +400,21 @@ pub fn move_node_snapshot() -> MoveNode {
     MoveNode
 }
 
-/// First-party `copy_node` tool — deep-clone a node + every
-/// descendant under a new parent. Required args: node_id,
-/// target_parent_id. `target_parent_id == "0"` puts the copy at
-/// the active page root. Fresh ids are allocated by the applier
-/// past `max_node_id()` so the clone never collides with any
-/// live node. Allows `node_id == target_parent_id` (duplicating
-/// a container's contents under itself is a valid LLM op).
+/// Resolve a `target_parent_id`-style arg. The legacy wire used `"0"`
+/// for "page root"; the canonical model uses the empty `NodeId::NONE`
+/// sentinel. Both `""` and `"0"` map to `NONE` so older clients keep
+/// working.
+fn root_or_node_id(raw: &str) -> NodeId {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() || trimmed == "0" {
+        NodeId::NONE
+    } else {
+        NodeId::new(trimmed)
+    }
+}
+
+/// First-party `copy_node` tool — deep-clone a node + subtree under a
+/// new parent.
 pub struct CopyNode;
 
 impl McpTool for CopyNode {
@@ -461,43 +422,24 @@ impl McpTool for CopyNode {
         "copy_node"
     }
     fn call(&self, args: &BTreeMap<String, String>) -> ToolOutcome {
-        let Some(raw_id) = args.get("node_id") else {
-            return ToolOutcome::Err(
-                ToolErrorCode::MissingArgument,
-                "node_id is required".into(),
-            );
-        };
-        let node_id: u64 = match raw_id.parse() {
-            Ok(n) if n > 0 => n,
-            _ => {
-                return ToolOutcome::Err(
-                    ToolErrorCode::InvalidArgument,
-                    format!("node_id must be a positive u64, got {raw_id:?}"),
-                );
-            }
+        let node_id = match parse_node_id(args, "node_id") {
+            Ok(v) => v,
+            Err(e) => return e,
         };
         let Some(raw_target) = args.get("target_parent_id") else {
             return ToolOutcome::Err(
                 ToolErrorCode::MissingArgument,
-                "target_parent_id is required (0 = page root)".into(),
+                "target_parent_id is required (\"\" or \"0\" = page root)".into(),
             );
         };
-        let target_parent_id: u64 = match raw_target.parse() {
-            Ok(n) => n,
-            Err(_) => {
-                return ToolOutcome::Err(
-                    ToolErrorCode::InvalidArgument,
-                    format!("target_parent_id must be u64, got {raw_target:?}"),
-                );
-            }
-        };
+        let target_parent = root_or_node_id(raw_target);
         let mut out = BTreeMap::new();
         out.insert("wrote".into(), "true".into());
         ToolOutcome::OkWithCommand(
             out,
-            McpCommand::CopyNode {
+            EditorCommand::CopyNode {
                 node_id,
-                target_parent_id,
+                target_parent,
             },
         )
     }
@@ -507,22 +449,8 @@ pub fn copy_node_snapshot() -> CopyNode {
     CopyNode
 }
 
-/// First-party `replace_node` tool — swap an existing node with a
-/// freshly-built one at the same parent slot. Required args:
-/// node_id, kind, name, x, y, width, height. Optional: fill_hex.
-/// Bounded scope: only leaf-style fields are accepted today (the
-/// children of the replacement default to empty). TS-equivalent
-/// behavior for primitives; subtree-replacement requires a JSON
-/// Node parser that doesn't live on this side yet.
-///
-/// **Destructive on containers**: replacing a Frame / Group / node
-/// with children drops every descendant of the old node. The
-/// applier refuses the swap when the target has children unless
-/// the optional `drop_children` arg is the string `"true"` —
-/// callers that genuinely want to discard the subtree must opt
-/// in. Reserve `replace_node` for primitive → primitive swaps
-/// where the loss is intended; use `update_node` to patch a
-/// container in place.
+/// First-party `replace_node` tool — swap an existing node for a
+/// freshly-built one at the same parent slot.
 pub struct ReplaceNode;
 
 impl McpTool for ReplaceNode {
@@ -530,23 +458,9 @@ impl McpTool for ReplaceNode {
         "replace_node"
     }
     fn call(&self, args: &BTreeMap<String, String>) -> ToolOutcome {
-        let raw = match args.get("node_id") {
-            Some(s) => s,
-            None => {
-                return ToolOutcome::Err(
-                    ToolErrorCode::MissingArgument,
-                    "node_id is required".into(),
-                );
-            }
-        };
-        let node_id: u64 = match raw.parse() {
-            Ok(n) if n > 0 => n,
-            _ => {
-                return ToolOutcome::Err(
-                    ToolErrorCode::InvalidArgument,
-                    format!("node_id must be a positive u64, got {raw:?}"),
-                );
-            }
+        let node_id = match parse_node_id(args, "node_id") {
+            Ok(v) => v,
+            Err(e) => return e,
         };
         let kind = match args.get("kind") {
             Some(s) => s.clone(),
@@ -607,12 +521,6 @@ impl McpTool for ReplaceNode {
             }
             Some(s) => Some(s.clone()),
         };
-        // Optional opt-in for destructive swaps. The applier
-        // refuses to drop a container's children unless this is
-        // `"true"`. Missing → safe default false. Any other
-        // value (including the empty string) is malformed and
-        // rejected — silently treating "" as false would hide a
-        // mis-serialized confirmation from the caller.
         let drop_children = match args.get("drop_children") {
             None => false,
             Some(s) if s == "true" => true,
@@ -628,7 +536,7 @@ impl McpTool for ReplaceNode {
         out.insert("wrote".into(), "true".into());
         ToolOutcome::OkWithCommand(
             out,
-            McpCommand::ReplaceNode {
+            EditorCommand::ReplaceNode {
                 node_id,
                 kind,
                 name,
@@ -647,40 +555,40 @@ pub fn replace_node_snapshot() -> ReplaceNode {
     ReplaceNode
 }
 
-pub fn set_active_axis_value_snapshot(
-    doc: &crate::document::Document,
-) -> SetActiveAxisValue {
-    let axes = doc
-        .var_table
+pub fn set_active_axis_value_snapshot(state: &EditorState) -> SetActiveAxisValue {
+    let axes = state
+        .doc
         .themes
-        .iter()
-        .map(|t| (t.name.clone(), t.values.clone()))
-        .collect();
+        .as_ref()
+        .map(|themes| {
+            themes
+                .iter()
+                .map(|(name, values)| (name.clone(), values.clone()))
+                .collect()
+        })
+        .unwrap_or_default();
     SetActiveAxisValue { axes }
 }
 
-pub fn set_variable_color_snapshot(
-    doc: &crate::document::Document,
-) -> SetVariableColor {
-    use crate::document::VariableKind;
-    let known_colors = doc
-        .var_table
+pub fn set_variable_color_snapshot(state: &EditorState) -> SetVariableColor {
+    let known_colors = state
+        .doc
         .variables
-        .iter()
-        .filter(|v| matches!(v.kind, VariableKind::Color))
-        .map(|v| (v.name.clone(), ()))
-        .collect();
+        .as_ref()
+        .map(|vars| {
+            vars.iter()
+                .filter(|(_, def)| matches!(def.kind, VariableKind::Color))
+                .map(|(name, _)| (name.clone(), ()))
+                .collect()
+        })
+        .unwrap_or_default();
     SetVariableColor { known_colors }
 }
 
-/// `#rgb`, `#rrggbb`, `#rrggbbaa` — matches the format
-/// `VariableTable::parse_hex_color` accepts. Lenient on case;
-/// requires the leading `#`.
+/// `#rgb`, `#rrggbb`, `#rrggbbaa` — requires the leading `#`.
 pub(super) fn validate_hex(s: &str) -> bool {
     let Some(rest) = s.trim().strip_prefix('#') else {
         return false;
     };
-    matches!(rest.len(), 3 | 6 | 8)
-        && rest.chars().all(|c| c.is_ascii_hexdigit())
+    matches!(rest.len(), 3 | 6 | 8) && rest.chars().all(|c| c.is_ascii_hexdigit())
 }
-

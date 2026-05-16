@@ -1,31 +1,34 @@
-//! Tests for `mcp::scalar_vars::{SetVariableNumber, ...}` + the
-//! `VariableTable::set_scalar` apply branch.
+//! Tests for `mcp::scalar_vars`.
+//!
+//! Ported off the old shell-core `Document` onto `op_editor_core::
+//! EditorState`. Tool-layer validation + `EditorCommand` emission,
+//! plus a few end-to-end `EditorState::apply` checks; the apply-path
+//! correctness is covered by `op-editor-core`'s `variables` /
+//! `command_tests`.
 
 use super::scalar_vars::*;
-use super::{McpCommand, McpTool, ToolErrorCode, ToolOutcome, VariableScalarPayload};
+use super::test_fixtures::{add_variable, state_with};
+use super::{EditorCommand, McpTool, ToolErrorCode, ToolOutcome, VariableScalarPayload};
+use jian_ops_schema::variable::{VariableKind, VariableScalar};
+use op_editor_core::EditorState;
 use std::collections::BTreeMap;
 
-fn doc_with(kind: crate::document::VariableKind, name: &str) -> crate::document::Document {
-    use crate::document::{Document, Variable, VariableScalar, VariableValue};
-    let mut doc = Document::empty();
-    let default_scalar = match kind {
-        crate::document::VariableKind::Number => VariableScalar::Num(0.0),
-        crate::document::VariableKind::String => VariableScalar::Str(String::new()),
-        crate::document::VariableKind::Boolean => VariableScalar::Bool(false),
-        crate::document::VariableKind::Color => VariableScalar::Str("#000000".into()),
+fn state_with_var(kind: VariableKind, name: &str) -> EditorState {
+    let mut s = state_with(vec![]);
+    let default = match kind {
+        VariableKind::Number => VariableScalar::Num(0.0),
+        VariableKind::String => VariableScalar::Str(String::new()),
+        VariableKind::Boolean => VariableScalar::Bool(false),
+        VariableKind::Color => VariableScalar::Str("#000000".into()),
     };
-    doc.var_table.variables.push(Variable {
-        name: name.into(),
-        kind,
-        value: VariableValue::Scalar(default_scalar),
-    });
-    doc
+    add_variable(&mut s, name, kind, default);
+    s
 }
 
 #[test]
 fn set_variable_number_rejects_non_numeric() {
-    let doc = doc_with(crate::document::VariableKind::Number, "size");
-    let tool = set_variable_number_snapshot(&doc);
+    let s = state_with_var(VariableKind::Number, "size");
+    let tool = set_variable_number_snapshot(&s);
     let mut args = BTreeMap::new();
     args.insert("name".into(), "size".into());
     args.insert("value".into(), "abc".into());
@@ -37,13 +40,13 @@ fn set_variable_number_rejects_non_numeric() {
 
 #[test]
 fn set_variable_number_emits_command() {
-    let doc = doc_with(crate::document::VariableKind::Number, "size");
-    let tool = set_variable_number_snapshot(&doc);
+    let s = state_with_var(VariableKind::Number, "size");
+    let tool = set_variable_number_snapshot(&s);
     let mut args = BTreeMap::new();
     args.insert("name".into(), "size".into());
     args.insert("value".into(), "12.5".into());
     match tool.call(&args) {
-        ToolOutcome::OkWithCommand(_, McpCommand::SetVariableScalar { name, scalar }) => {
+        ToolOutcome::OkWithCommand(_, EditorCommand::SetVariableScalar { name, scalar }) => {
             assert_eq!(name, "size");
             assert_eq!(scalar, VariableScalarPayload::Number(12.5));
         }
@@ -53,13 +56,13 @@ fn set_variable_number_emits_command() {
 
 #[test]
 fn set_variable_string_emits_command() {
-    let doc = doc_with(crate::document::VariableKind::String, "title");
-    let tool = set_variable_string_snapshot(&doc);
+    let s = state_with_var(VariableKind::String, "title");
+    let tool = set_variable_string_snapshot(&s);
     let mut args = BTreeMap::new();
     args.insert("name".into(), "title".into());
     args.insert("value".into(), "Hello".into());
     match tool.call(&args) {
-        ToolOutcome::OkWithCommand(_, McpCommand::SetVariableScalar { name, scalar }) => {
+        ToolOutcome::OkWithCommand(_, EditorCommand::SetVariableScalar { name, scalar }) => {
             assert_eq!(name, "title");
             assert_eq!(scalar, VariableScalarPayload::String("Hello".into()));
         }
@@ -69,13 +72,13 @@ fn set_variable_string_emits_command() {
 
 #[test]
 fn set_variable_boolean_emits_command_and_rejects_bad_strings() {
-    let doc = doc_with(crate::document::VariableKind::Boolean, "show");
-    let tool = set_variable_boolean_snapshot(&doc);
+    let s = state_with_var(VariableKind::Boolean, "show");
+    let tool = set_variable_boolean_snapshot(&s);
     let mut args = BTreeMap::new();
     args.insert("name".into(), "show".into());
     args.insert("value".into(), "true".into());
     match tool.call(&args) {
-        ToolOutcome::OkWithCommand(_, McpCommand::SetVariableScalar { name, scalar }) => {
+        ToolOutcome::OkWithCommand(_, EditorCommand::SetVariableScalar { name, scalar }) => {
             assert_eq!(name, "show");
             assert_eq!(scalar, VariableScalarPayload::Boolean(true));
         }
@@ -89,162 +92,99 @@ fn set_variable_boolean_emits_command_and_rejects_bad_strings() {
 }
 
 #[test]
-fn apply_mcp_command_rejects_color_through_scalar_path() {
-    // Codex stop-gate: set_variable_string snapshot wouldn't
-    // include a Color variable name, but a misrouted call (or a
-    // forged McpCommand) MUST be rejected at apply time too.
-    // The Color variable must keep its original value.
-    use crate::document::{VariableKind, VariableScalar, VariableValue};
-    let mut doc = doc_with(VariableKind::Color, "primary");
-    // Stamp a known-good hex so we can detect mutation.
-    if let Some(v) = doc.var_table.variables.iter_mut().find(|v| v.name == "primary") {
-        v.value = VariableValue::Scalar(VariableScalar::Str("#abcdef".into()));
-    }
-    let cmd = McpCommand::SetVariableScalar {
-        name: "primary".into(),
-        scalar: VariableScalarPayload::String("garbage".into()),
-    };
-    assert!(!doc.var_table.apply_mcp_command(&cmd), "Color must reject scalar path");
-    let v = doc.var_table.variables.iter().find(|v| v.name == "primary").unwrap();
-    match &v.value {
-        VariableValue::Scalar(VariableScalar::Str(s)) => {
-            assert_eq!(s, "#abcdef", "Color value must be unchanged");
-        }
-        other => panic!("expected unchanged hex, got {other:?}"),
-    }
-}
-
-#[test]
-fn apply_mcp_command_routes_to_set_scalar() {
-    use crate::document::{Document, VariableKind, VariableScalar, VariableValue};
-    let mut doc = doc_with(VariableKind::Number, "size");
-    let cmd = McpCommand::SetVariableScalar {
+fn set_variable_scalar_command_routes_to_correct_kind() {
+    let mut s = state_with_var(VariableKind::Number, "size");
+    assert!(s.apply(EditorCommand::SetVariableScalar {
         name: "size".into(),
         scalar: VariableScalarPayload::Number(42.0),
-    };
-    assert!(doc.var_table.apply_mcp_command(&cmd));
-    let v = doc.var_table.variables.iter().find(|v| v.name == "size").unwrap();
-    match &v.value {
-        VariableValue::Scalar(VariableScalar::Num(n)) => assert_eq!(*n, 42.0),
-        other => panic!("expected Num scalar, got {other:?}"),
+    }));
+    match s.resolve_variable("size") {
+        Some(VariableScalar::Num(n)) => assert_eq!(*n, 42.0),
+        other => panic!("expected Num(42), got {other:?}"),
     }
-    // Wrong-kind scalar rejected.
-    let bad = McpCommand::SetVariableScalar {
+    // Wrong-kind scalar rejected at apply time.
+    assert!(!s.apply(EditorCommand::SetVariableScalar {
         name: "size".into(),
         scalar: VariableScalarPayload::String("oops".into()),
-    };
-    assert!(!doc.var_table.apply_mcp_command(&bad));
-    let _ = Document::sample(); // suppress unused-import warning
+    }));
 }
 
 #[test]
-fn create_variable_appends_and_rejects_duplicate() {
-    use crate::document::{Document, VariableKind, VariableScalar};
-    let mut doc = Document::empty();
-    assert!(doc.var_table.create_variable(
-        "brand",
-        VariableKind::Color,
-        VariableScalar::Str("#ff8800".into()),
-    ));
-    assert_eq!(doc.var_table.variables.len(), 1);
-    // Duplicate name rejected.
-    assert!(!doc.var_table.create_variable(
-        "brand",
-        VariableKind::Color,
-        VariableScalar::Str("#000000".into()),
-    ));
-    // Bad hex rejected.
-    assert!(!doc.var_table.create_variable(
-        "bad",
-        VariableKind::Color,
-        VariableScalar::Str("not-hex".into()),
-    ));
-    // Kind/scalar mismatch rejected.
-    assert!(!doc.var_table.create_variable(
-        "mismatch",
-        VariableKind::Number,
-        VariableScalar::Str("12".into()),
-    ));
-    assert_eq!(doc.var_table.variables.len(), 1, "only the valid create stuck");
+fn set_variable_scalar_rejects_color_through_scalar_path() {
+    let mut s = state_with_var(VariableKind::Color, "primary");
+    assert!(!s.apply(EditorCommand::SetVariableScalar {
+        name: "primary".into(),
+        scalar: VariableScalarPayload::String("garbage".into()),
+    }));
 }
 
 #[test]
-fn delete_variable_drops_dangling_refs() {
-    use crate::document::{Document, NodeId, VariableKind, VariableScalar};
-    let mut doc = Document::empty();
-    doc.var_table.create_variable(
-        "accent",
-        VariableKind::Color,
-        VariableScalar::Str("#112233".into()),
-    );
-    doc.var_table.fill_refs.insert(NodeId::new("n7"), "accent".into());
-    doc.var_table.stroke_refs.insert(NodeId::new("n9"), "accent".into());
-    assert!(doc.var_table.delete_variable("accent"));
-    assert!(doc.var_table.variables.is_empty());
-    assert!(doc.var_table.fill_refs.is_empty(), "dangling fill_ref dropped");
-    assert!(doc.var_table.stroke_refs.is_empty(), "dangling stroke_ref dropped");
-    // Unknown name rejected.
-    assert!(!doc.var_table.delete_variable("nope"));
+fn create_variable_tool_rejects_duplicate() {
+    let mut s = state_with_var(VariableKind::Color, "brand");
+    let tool = create_variable_snapshot(&s);
+    let mut args = BTreeMap::new();
+    args.insert("name".into(), "brand".into());
+    args.insert("kind".into(), "color".into());
+    args.insert("default_value".into(), "#000000".into());
+    match tool.call(&args) {
+        ToolOutcome::Err(code, _) => assert_eq!(code, ToolErrorCode::ToolFailed),
+        other => panic!("expected ToolFailed for duplicate, got {other:?}"),
+    }
+    // Apply also validates: duplicate rejects.
+    assert!(!s.apply(EditorCommand::CreateVariable {
+        name: "brand".into(),
+        kind: "color".into(),
+        default_value: "#ffffff".into(),
+    }));
 }
 
 #[test]
-fn rename_variable_rewrites_refs_and_guards_collisions() {
-    use crate::document::{Document, NodeId, VariableKind, VariableScalar};
-    let mut doc = Document::empty();
-    doc.var_table.create_variable(
-        "old",
-        VariableKind::Number,
-        VariableScalar::Num(4.0),
-    );
-    doc.var_table.create_variable(
-        "taken",
-        VariableKind::Number,
-        VariableScalar::Num(8.0),
-    );
-    doc.var_table.fill_refs.insert(NodeId::new("n3"), "old".into());
-    // Collision with an existing different variable rejected.
-    assert!(!doc.var_table.rename_variable("old", "taken"));
-    // Empty new name rejected.
-    assert!(!doc.var_table.rename_variable("old", "   "));
-    // Unknown old name rejected.
-    assert!(!doc.var_table.rename_variable("ghost", "fresh"));
-    // Happy path: rename + ref rewrite.
-    assert!(doc.var_table.rename_variable("old", "renamed"));
-    assert!(doc.var_table.variables.iter().any(|v| v.name == "renamed"));
-    assert!(!doc.var_table.variables.iter().any(|v| v.name == "old"));
-    assert_eq!(
-        doc.var_table.fill_refs.get(&NodeId::new("n3")),
-        Some(&"renamed".to_string()),
-        "fill_ref follows the rename"
-    );
-}
-
-#[test]
-fn create_variable_mcp_command_routes_through_var_table() {
-    use crate::document::{Document, VariableKind, VariableValue, VariableScalar};
-    let mut doc = Document::empty();
-    let cmd = McpCommand::CreateVariable {
+fn create_variable_command_routes_through_editor_state() {
+    let mut s = state_with(vec![]);
+    assert!(s.apply(EditorCommand::CreateVariable {
         name: "spacing".into(),
         kind: "number".into(),
         default_value: "16".into(),
-    };
-    assert!(doc.apply_mcp_command(&cmd));
-    let v = doc
-        .var_table
-        .variables
-        .iter()
-        .find(|v| v.name == "spacing")
-        .expect("variable created");
-    assert!(matches!(v.kind, VariableKind::Number));
-    match &v.value {
-        VariableValue::Scalar(VariableScalar::Num(n)) => assert_eq!(*n, 16.0),
+    }));
+    match s.resolve_variable("spacing") {
+        Some(VariableScalar::Num(n)) => assert_eq!(*n, 16.0),
         other => panic!("expected Num(16), got {other:?}"),
     }
-    // Bad kind string rejected at apply.
-    let bad = McpCommand::CreateVariable {
+    // Bad kind string rejects at apply.
+    assert!(!s.apply(EditorCommand::CreateVariable {
         name: "x".into(),
         kind: "rainbow".into(),
         default_value: "1".into(),
-    };
-    assert!(!doc.apply_mcp_command(&bad));
+    }));
+}
+
+#[test]
+fn delete_variable_command_drops_it() {
+    let mut s = state_with_var(VariableKind::Color, "accent");
+    assert!(s.apply(EditorCommand::DeleteVariable {
+        name: "accent".into(),
+    }));
+    assert!(s.find_variable("accent").is_none());
+    // Unknown name rejects.
+    assert!(!s.apply(EditorCommand::DeleteVariable {
+        name: "nope".into(),
+    }));
+}
+
+#[test]
+fn rename_variable_command_guards_collisions() {
+    let mut s = state_with_var(VariableKind::Number, "old");
+    add_variable(&mut s, "taken", VariableKind::Number, VariableScalar::Num(8.0));
+    // Collision with an existing different variable rejects.
+    assert!(!s.apply(EditorCommand::RenameVariable {
+        old_name: "old".into(),
+        new_name: "taken".into(),
+    }));
+    // Happy path.
+    assert!(s.apply(EditorCommand::RenameVariable {
+        old_name: "old".into(),
+        new_name: "renamed".into(),
+    }));
+    assert!(s.find_variable("renamed").is_some());
+    assert!(s.find_variable("old").is_none());
 }
