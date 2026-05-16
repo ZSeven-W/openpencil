@@ -89,10 +89,10 @@ glam = { version = "0.29", default-features = false, features = ["std"] }
 # Windows → %APPDATA%/openpencil/settings.json
 dirs = "5"
 # Cross-product Rust agent runtime — provides `QueryEngine` + the
-# generic `Provider` trait + streaming `Event`s. Lives outside the
-# openpencil workspace at /Users/kayshen/Workspace/ZSeven-W/agent-rs,
-# referenced by relative path so the BuiltIn ChatProvider in
-# `src/chat_runtime.rs` can drive a real LLM turn.
+# generic `Provider` trait + streaming `Event`s. Vendored as the
+# `vendor/agent` git submodule (the agent-rs repo) and referenced by
+# relative path so the BuiltIn ChatProvider in `src/chat_runtime.rs`
+# can drive a real LLM turn. The submodule keeps CI self-contained.
 #
 # Compiled with NO default features today — the `anthropic` feature
 # would drag in reqwest's TLS stack (rustls / icu / idna) which needs
@@ -100,7 +100,7 @@ dirs = "5"
 # the trait + the engine wiring + `from_provider`; concrete
 # Provider impls (Anthropic / OpenAI-compat / Ollama) flip on once the
 # workspace rust-toolchain bumps.
-agent = { path = "../../../agent-rs/crates/agent", default-features = false }
+agent = { path = "../../vendor/agent/crates/agent", default-features = false }
 # Forked from bartolli/anthropic-agent-sdk — lives under
 # `vendor/anthropic-agent-sdk/` so OP owns the source and can diverge
 # from upstream. Provides the Claude Code CLI subprocess transport +
