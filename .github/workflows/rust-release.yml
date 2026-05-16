@@ -1,13 +1,12 @@
 name: Rust release artifacts
 
-# Triggered on tag push (v*) — builds release binaries across desktop targets
-# and uploads them to a GitHub Release draft. The wasm web bundle is currently
-# DEFERRED (see comment block above the removed `wasm` job below); when the
-# CI-side C-hard pipeline (emscripten install + EMSDK + symlink hack +
-# wasm-bindgen + wasm-opt) lands it will re-enter the matrix. Step 1a
-# kill-spike only ships `openpencil-app` (a placeholder binary entry); real
-# desktop apps (DMG / AppImage / EXE installer) come in Step 1f and replace
-# this scaffolding.
+# Triggered on tag push (v*) — assembles a GitHub Release draft. The desktop
+# binary build job has been removed: the `openpencil-app` placeholder crate
+# was deleted in Phase 1 Task 1.2, and real desktop apps (DMG / AppImage / EXE
+# installer) arrive in Step 1f as new `op-*` crates that will reintroduce a
+# build matrix here. The wasm web bundle is currently DEFERRED (see comment
+# block below); when the CI-side C-hard pipeline (emscripten install + EMSDK +
+# symlink hack + wasm-bindgen + wasm-opt) lands it will re-enter the matrix.
 
 on:
   push:
@@ -15,95 +14,6 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
-    name: ${{ matrix.label }}
-    runs-on: ${{ matrix.runner }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - label: macos-aarch64
-            runner: macos-latest
-            target: aarch64-apple-darwin
-            archive: tar.gz
-          # macos-13 (Intel) deprecated; cross-compile x86_64-apple-darwin
-          # from Apple Silicon (cargo supports cross-compile to host's other
-          # arch out of the box, no `cross` needed).
-          - label: macos-x86_64
-            runner: macos-latest
-            target: x86_64-apple-darwin
-            archive: tar.gz
-          - label: linux-x86_64
-            runner: ubuntu-latest
-            target: x86_64-unknown-linux-gnu
-            archive: tar.gz
-          - label: linux-aarch64
-            runner: ubuntu-latest
-            target: aarch64-unknown-linux-gnu
-            archive: tar.gz
-            cross: true
-          - label: windows-x86_64
-            runner: windows-latest
-            target: x86_64-pc-windows-msvc
-            archive: zip
-          # Windows ARM64 — cargo cross-compile from x86_64 windows runner.
-          - label: windows-aarch64
-            runner: windows-latest
-            target: aarch64-pc-windows-msvc
-            archive: zip
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: recursive
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: '1.85'
-          targets: ${{ matrix.target }}
-      - uses: Swatinem/rust-cache@v2
-        with:
-          key: release-${{ matrix.target }}
-      - name: Install Linux GL/EGL prereqs
-        if: runner.os == 'Linux' && matrix.cross != true
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libxkbcommon-dev libxkbcommon-x11-dev \
-            libwayland-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev \
-            libegl1-mesa-dev libgles2-mesa-dev libgbm-dev \
-            libfreetype-dev libfontconfig1-dev
-      - name: Install cross
-        if: matrix.cross == true
-        run: cargo install cross --locked --version 0.2.5
-      - name: Build (host)
-        if: matrix.cross != true
-        run: cargo build -p openpencil-app --target ${{ matrix.target }} --release
-      - name: Build (cross)
-        if: matrix.cross == true
-        run: cross build -p openpencil-app --target ${{ matrix.target }} --release
-      - name: Package archive (unix)
-        if: matrix.archive == 'tar.gz'
-        shell: bash
-        run: |
-          cd target/${{ matrix.target }}/release
-          tar czf ../../../openpencil-app-${{ matrix.label }}.tar.gz openpencil-app 2>/dev/null || \
-            tar czf ../../../openpencil-app-${{ matrix.label }}.tar.gz openpencil-app.placeholder
-      - name: Package archive (windows)
-        if: matrix.archive == 'zip'
-        shell: pwsh
-        run: |
-          Compress-Archive `
-            -Path target\${{ matrix.target }}\release\openpencil-app.exe `
-            -DestinationPath openpencil-app-${{ matrix.label }}.zip `
-            -ErrorAction SilentlyContinue
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: openpencil-app-${{ matrix.label }}
-          path: |
-            openpencil-app-${{ matrix.label }}.tar.gz
-            openpencil-app-${{ matrix.label }}.zip
-          if-no-files-found: ignore
-
   # Phase 1b release wasm artifact: explicitly DEFERRED (not silently
   # dropped). The local C-hard pipeline (vendor/skia-safe-op fork +
   # crates/wasm-libc-shim) does produce a runtime-loadable
@@ -125,10 +35,11 @@ jobs:
 
   release-draft:
     name: Create / update GitHub Release draft
-    # `wasm` job deferred (see comment block above); when the
-    # CI-side C-hard pipeline lands, re-add the job and append its
-    # name to this `needs:` list.
-    needs: [build]
+    # Desktop `build` job removed with the `openpencil-app` placeholder
+    # crate (Phase 1 Task 1.2); the `wasm` job is deferred (see comment
+    # block above). When the Step 1f `op-*` desktop crates and the
+    # CI-side C-hard pipeline land, re-add those jobs and list their
+    # names in this `needs:` field.
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
     steps:

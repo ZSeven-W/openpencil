@@ -30,8 +30,6 @@ jobs:
         run: |
           cargo check --target wasm32-unknown-unknown \
             -p openpencil-shell-web --no-default-features --features web
-          cargo check --target wasm32-unknown-unknown \
-            -p pen-types -p pen-core -p pen-engine -p pen-codegen -p pen-figma
 
   wasm32-deny:
     name: cargo-deny --target wasm32-unknown-unknown check bans

@@ -114,16 +114,9 @@ jobs:
       - name: Test (host, macOS / Windows)
         if: matrix.cross == false && matrix.check_only != true && runner.os != 'Linux'
         run: cargo test --workspace --target ${{ matrix.target }}
-      - name: Upload openpencil-app binary
-        if: matrix.cross == false && matrix.check_only != true
-        uses: actions/upload-artifact@v4
-        with:
-          name: openpencil-app-${{ matrix.label }}
-          path: |
-            target/${{ matrix.target }}/release/openpencil-app
-            target/${{ matrix.target }}/release/openpencil-app.exe
-          if-no-files-found: ignore
-          retention-days: 14
+      # Desktop binary artifact upload removed with the `openpencil-app`
+      # placeholder crate (Phase 1 Task 1.2). Step 1f reintroduces a
+      # real desktop binary (new `op-*` crate) and its upload step here.
 
   wasm-web:
     name: wasm32-unknown-unknown / openpencil-shell-web (compile guard)
