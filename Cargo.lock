@@ -2275,6 +2275,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9f7c3e4beb33f85d45ae3e3a1792185706c8e16d043238c593331cc7cd313b50"
 
 [[package]]
+name = "op-ai"
+version = "0.1.0"
+
+[[package]]
+name = "op-codegen"
+version = "0.1.0"
+dependencies = [
+ "jian-ops-schema",
+ "op-editor-core",
+]
+
+[[package]]
 name = "op-editor-core"
 version = "0.1.0"
 dependencies = [
@@ -2285,8 +2297,37 @@ dependencies = [
 ]
 
 [[package]]
+name = "op-editor-ui"
+version = "0.1.0"
+dependencies = [
+ "accesskit",
+ "bitflags 2.11.1",
+ "glam",
+ "jian-core",
+ "jian-ops-schema",
+ "op-editor-core",
+ "op-i18n",
+]
+
+[[package]]
+name = "op-figma"
+version = "0.1.0"
+dependencies = [
+ "jian-ops-schema",
+ "op-editor-core",
+]
+
+[[package]]
 name = "op-i18n"
 version = "0.1.0"
+
+[[package]]
+name = "op-mcp"
+version = "0.1.0"
+dependencies = [
+ "jian-ops-schema",
+ "op-editor-core",
+]
 
 [[package]]
 name = "op-pen-loader"
@@ -2315,7 +2356,9 @@ dependencies = [
  "jian-core",
  "jian-ops-schema",
  "jian-skia",
+ "op-ai",
  "op-editor-core",
+ "op-mcp",
  "op-pen-loader",
  "openpencil-shell-core",
  "openpencil-shell-native",
@@ -2332,16 +2375,10 @@ dependencies = [
 name = "openpencil-shell-core"
 version = "0.1.0"
 dependencies = [
- "accesskit",
- "bitflags 2.11.1",
- "glam",
  "jian-core",
- "jian-ops-schema",
  "op-editor-core",
+ "op-editor-ui",
  "op-i18n",
- "serde",
- "thiserror 1.0.69",
- "tracing",
 ]
 
 [[package]]
