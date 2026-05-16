@@ -1,5 +1,5 @@
 //! Real `ChatProvider` impls — the desktop-side companion to the
-//! abstraction in `openpencil_shell_core::chat_provider`. Shell-core
+//! abstraction in `op_ai::chat_provider`. Shell-core
 //! intentionally stays wasm32-clean (no tokio / reqwest / process), so
 //! transports live here on the native binary.
 //!
@@ -27,7 +27,7 @@ use agent::provider::Provider;
 use agent::query::QueryEngine;
 use agent::stream::Event;
 use futures::StreamExt;
-use openpencil_shell_core::chat_provider::{
+use op_ai::chat_provider::{
     ChatDelta, ChatProvider, ChatRequest, StopReason,
 };
 use tokio::runtime::{Builder, Runtime};

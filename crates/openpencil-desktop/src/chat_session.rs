@@ -10,7 +10,7 @@
 use std::sync::mpsc::{self, Receiver, TryRecvError};
 use std::thread;
 
-use openpencil_shell_core::chat_provider::{
+use op_ai::chat_provider::{
     ChatDelta, ChatProvider, ChatRequest, CliName,
 };
 use openpencil_shell_native::WidgetHostNative;
@@ -207,7 +207,7 @@ pub fn pump(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use openpencil_shell_core::chat_provider::{EchoProvider, StopReason};
+    use op_ai::chat_provider::{EchoProvider, StopReason};
 
     #[test]
     fn session_streams_echo_provider_deltas_to_completion() {

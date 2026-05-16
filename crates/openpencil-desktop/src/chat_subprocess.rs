@@ -33,7 +33,7 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use openpencil_shell_core::chat_provider::{
+use op_ai::chat_provider::{
     ChatDelta, ChatProvider, ChatRequest, CliName, StopReason,
 };
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};

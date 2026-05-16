@@ -21,7 +21,7 @@ use anthropic_agent_sdk::{
     types::{ContentBlock, Message},
     ClaudeAgentOptions, StreamExt,
 };
-use openpencil_shell_core::chat_provider::{
+use op_ai::chat_provider::{
     ChatDelta, ChatProvider, ChatRequest, StopReason,
 };
 use tokio::sync::mpsc;
