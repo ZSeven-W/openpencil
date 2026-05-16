@@ -2381,10 +2381,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9f7c3e4beb33f85d45ae3e3a1792185706c8e16d043238c593331cc7cd313b50"
 
 [[package]]
-name = "openpencil-app"
-version = "0.1.0"
-
-[[package]]
 name = "openpencil-desktop"
 version = "0.1.0"
 dependencies = [
@@ -2529,48 +2525,6 @@ name = "pastey"
 version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c5a797f0e07bdf071d15742978fc3128ec6c22891c31a3a931513263904c982a"
-
-[[package]]
-name = "pen-codegen"
-version = "0.1.0"
-dependencies = [
- "pen-types",
-]
-
-[[package]]
-name = "pen-core"
-version = "0.1.0"
-dependencies = [
- "pen-types",
- "serde",
- "thiserror 1.0.69",
-]
-
-[[package]]
-name = "pen-engine"
-version = "0.1.0"
-dependencies = [
- "pen-core",
- "pen-types",
-]
-
-[[package]]
-name = "pen-figma"
-version = "0.1.0"
-dependencies = [
- "pen-types",
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "pen-types"
-version = "0.1.0"
-dependencies = [
- "serde",
- "serde_json",
- "thiserror 1.0.69",
-]
 
 [[package]]
 name = "percent-encoding"

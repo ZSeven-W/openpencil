@@ -4,9 +4,10 @@
 # Verifies the following Jian crate boundary invariants from outside the
 # Rust build system. Run from the repo root.
 #
-# Invariant 1 (§12.3): openpencil-app must NOT depend directly on any
-#   `jian-*` crate — Jian is a shell-native implementation detail; the
-#   app only sees OP's `RenderBackend` / `ShellEvent` facade.
+# (The former Invariant 1 — "openpencil-app must not depend directly on
+#  any jian-* crate" — was dropped in Phase 1 Task 1.2 along with the
+#  `openpencil-app` placeholder crate. Step 1f reintroduces a real app
+#  crate; reinstate an equivalent facade check against it then.)
 #
 # Invariant 2 (§11.1, §12.3 — REVISED 2026-05-10): mobile targets
 #   (`aarch64-linux-android`, `aarch64-apple-ios`) must NOT pull
@@ -41,24 +42,6 @@ if ! command -v jq >/dev/null 2>&1; then
     echo "  apt: sudo apt-get install -y jq" >&2
     echo "  brew: brew install jq" >&2
     exit 2
-fi
-
-# ── Invariant 1: openpencil-app has no direct jian-* dependency. ──────
-# `cargo metadata` returns a workspace-wide resolve graph; we filter
-# the `resolve.nodes[]` entry whose name matches `openpencil-app` and
-# inspect its direct `deps[]`. A direct dep on any `jian-*` crate
-# fails the invariant.
-metadata_full="$(cargo metadata --format-version 1)"
-forbidden_app="$(echo "$metadata_full" | jq -r '
-    [.packages[] | select(.name == "openpencil-app") | .id] as $app_ids
-    | .resolve.nodes[]
-    | select(.id as $id | $app_ids | index($id))
-    | .deps[].name
-' | grep -E '^jian-' || true)"
-if [ -n "$forbidden_app" ]; then
-    echo "INVARIANT 1 FAILED: openpencil-app directly depends on jian-* crate(s):" >&2
-    echo "$forbidden_app" >&2
-    exit 1
 fi
 
 # ── Invariant 2: mobile targets don't pull jian-host-desktop. ─────────
