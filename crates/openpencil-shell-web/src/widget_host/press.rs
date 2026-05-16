@@ -221,7 +221,7 @@ impl WidgetHost {
         //     the click so the same press doesn't re-toggle open.
         if self.editor_state.editor_ui.locale_picker_open {
             let panel_rect = self.locale_picker_rect(viewport_width);
-            let picker = LocalePicker::for_document(&self.paint_doc);
+            let picker = LocalePicker::for_editor_ui(&self.editor_state.editor_ui);
             if let Some(locale) = picker.hit_test(panel_rect, Point2D::new(x, y)) {
                 self.editor_state.editor_ui.locale = op_pen_loader::rev::locale(locale);
                 self.editor_state.editor_ui.locale_picker_open = false;
@@ -239,7 +239,7 @@ impl WidgetHost {
             origin: Point2D::new(0.0, 0.0),
             size: Point2D::new(viewport_width, TOP_BAR_HEIGHT),
         };
-        let top_bar = TopBar::for_document(&self.paint_doc);
+        let top_bar = TopBar::for_editor_ui(&self.editor_state.editor_ui);
         if let Some(hit) = top_bar.hit_test(top_bar_rect, Point2D::new(x, y)) {
             match hit {
                 TopBarHit::ToggleSidebar => {
@@ -318,7 +318,7 @@ impl WidgetHost {
         //    never falls through to the canvas for tool gaps
         //    that lie outside the chat panel.
         let toolbar_rect = self.toolbar_rect(viewport_width);
-        let toolbar = Toolbar::for_document(&self.paint_doc);
+        let toolbar = Toolbar::for_editor(&self.editor_state);
         if rect_contains(toolbar_rect, Point2D::new(x, y)) {
             if let Some(hit) = toolbar.hit_test(toolbar_rect, Point2D::new(x, y)) {
                 match hit {
@@ -383,7 +383,7 @@ impl WidgetHost {
                 size: Point2D::new(acw, ach),
             };
             if let Some(action) =
-                AlignToolbar::for_canvas_region(canvas_region, &self.paint_doc)
+                AlignToolbar::for_canvas_region(canvas_region, &self.editor_state)
                     .and_then(|tb| tb.hit_test(Point2D::new(x, y)))
             {
                 let ec_action = op_pen_loader::rev::align_action(action);
@@ -535,7 +535,7 @@ impl WidgetHost {
         self.mark_dirty();
 
         let toolbar_rect = self.toolbar_rect(viewport_w);
-        let toolbar = Toolbar::for_document(&self.paint_doc);
+        let toolbar = Toolbar::for_editor(&self.editor_state);
         if let Some(hit) = toolbar.hit_test(toolbar_rect, Point2D::new(x, y)) {
             match hit {
                 openpencil_shell_core::widgets::ToolbarHit::Tool(tool) => {

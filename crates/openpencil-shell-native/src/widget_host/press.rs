@@ -267,7 +267,7 @@ impl WidgetHostNative {
         if self.editor_state.editor_ui.shape_picker_open {
             self.refresh_paint_doc();
             let panel_rect = self.shape_picker_rect(viewport_width, viewport_height);
-            let picker = ShapePicker::for_document(&self.paint_doc);
+            let picker = ShapePicker::for_editor_ui(&self.editor_state.editor_ui);
             if let Some(choice) = picker.hit_test(panel_rect, Point2D::new(x, y)) {
                 match choice {
                     ShapeChoice::Tool(tool) => {
@@ -309,7 +309,7 @@ impl WidgetHostNative {
         if self.editor_state.editor_ui.locale_picker_open {
             self.refresh_paint_doc();
             let panel_rect = self.locale_picker_rect(viewport_width);
-            let picker = LocalePicker::for_document(&self.paint_doc);
+            let picker = LocalePicker::for_editor_ui(&self.editor_state.editor_ui);
             if let Some(locale) = picker.hit_test(panel_rect, Point2D::new(x, y)) {
                 self.editor_state.editor_ui.locale = op_pen_loader::rev::locale(locale);
                 self.editor_state.editor_ui.locale_picker_open = false;
@@ -329,7 +329,7 @@ impl WidgetHostNative {
             origin: Point2D::new(0.0, 0.0),
             size: Point2D::new(viewport_width, TOP_BAR_HEIGHT),
         };
-        let top_bar = TopBar::for_document(&self.paint_doc);
+        let top_bar = TopBar::for_editor_ui(&self.editor_state.editor_ui);
         if let Some(hit) = top_bar.hit_test(top_bar_rect, Point2D::new(x, y)) {
             match hit {
                 TopBarHit::ToggleSidebar => {
@@ -479,7 +479,7 @@ impl WidgetHostNative {
 
         // 2. Toolbar — second-highest overlay.
         let (cx0, _cy0, _cw, _ch) = self.canvas_region(viewport_width, viewport_height);
-        let toolbar = Toolbar::for_document(&self.paint_doc);
+        let toolbar = Toolbar::for_editor(&self.editor_state);
         let toolbar_h = toolbar
             .layout(&LayoutCx {
                 available_width: TOOLBAR_WIDTH,

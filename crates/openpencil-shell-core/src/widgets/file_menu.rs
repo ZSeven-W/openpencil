@@ -4,16 +4,18 @@
 //! verbatim: New / Open / Save / Save As / Export image, then a
 //! "Recent files" header + entries, finally Clear history.
 
-use crate::document::{Document, Locale};
 use crate::theme::Theme;
+use crate::widgets::editor_state_ext::{doc_file_menu_choice, theme_for};
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::{LayoutBox, LayoutCx, PaintCx, Widget, WidgetId};
 use crate::{Color, Point2D, Rect, TextLayout};
+use op_editor_core::editor_ui_state::EditorUiState;
+use op_i18n::Locale;
 
 /// EN/ZH labels for menu rows that aren't in the auto-generated
 /// `topbar.*` table yet. Falls through to EN for every other locale.
-fn t(doc: &Document, key: &str) -> &'static str {
-    let zh = matches!(doc.ui.locale, Locale::ZhCn | Locale::ZhTw);
+fn t(ui: &EditorUiState, key: &str) -> &'static str {
+    let zh = matches!(ui.locale, Locale::ZhCn | Locale::ZhTw);
     match (key, zh) {
         ("new", true) => "新建文件",
         ("new", _) => "New file",
@@ -58,7 +60,7 @@ pub enum FileMenuChoice {
 pub struct FileMenu<'a> {
     pub id: WidgetId,
     pub theme: Theme,
-    document: &'a Document,
+    ui: &'a EditorUiState,
     pub recent: Vec<RecentEntry>,
     /// Mirrors `Document.ui.file_menu_hover` — populated by the
     /// host on cursor-move so paint can tint the row under the
@@ -74,30 +76,29 @@ pub struct RecentEntry {
 }
 
 impl<'a> FileMenu<'a> {
-    pub fn for_document(doc: &'a Document, recent: Vec<RecentEntry>) -> Self {
+    pub fn for_editor_ui(ui: &'a EditorUiState, recent: Vec<RecentEntry>) -> Self {
         Self {
             id: WidgetId::new(5300),
-            theme: doc.theme(),
-            document: doc,
+            theme: theme_for(ui),
+            ui,
             recent,
-            hovered: doc.ui.file_menu_hover,
+            hovered: ui.file_menu_hover.map(doc_file_menu_choice),
         }
     }
 
     /// Convenience: build a `FileMenu` whose recents are derived
-    /// from `doc.ui.recent_files` formatted at `now_secs`. Paint +
-    /// host dispatch both reach this entry point.
-    pub fn from_document(doc: &'a Document, now_secs: u64) -> Self {
-        let recent = doc
-            .ui
+    /// from `ui.recent_files` formatted at `now_secs`. Paint + host
+    /// dispatch both reach this entry point.
+    pub fn from_editor_ui(ui: &'a EditorUiState, now_secs: u64) -> Self {
+        let recent = ui
             .recent_files
             .iter()
             .map(|r| RecentEntry {
                 name: file_name(&r.path),
-                age: format_age(doc, now_secs.saturating_sub(r.modified_at)),
+                age: format_age(ui, now_secs.saturating_sub(r.modified_at)),
             })
             .collect();
-        Self::for_document(doc, recent)
+        Self::for_editor_ui(ui, recent)
     }
 
     /// Total height = action rows + recent header + recent rows (or
@@ -229,23 +230,23 @@ impl<'a> Widget for FileMenu<'a> {
         cx.backend.stroke_round_rect(rect, 10.0, self.theme.border, 1.0);
         let h = |c: FileMenuChoice| self.hovered == Some(c);
         let mut y = rect.origin.y + PAD_Y;
-        paint_row(cx, &self.theme, rect.origin.x, y, Icon::Plus, t(self.document, "new"), "⌘N", h(FileMenuChoice::NewFile));
+        paint_row(cx, &self.theme, rect.origin.x, y, Icon::Plus, t(self.ui, "new"), "⌘N", h(FileMenuChoice::NewFile));
         y += ROW_HEIGHT;
-        paint_row(cx, &self.theme, rect.origin.x, y, Icon::FolderOpen, t(self.document, "open"), "⌘O", h(FileMenuChoice::OpenFile));
-        y += ROW_HEIGHT;
-        y = paint_divider(cx, &self.theme, rect, y);
-        paint_row(cx, &self.theme, rect.origin.x, y, Icon::Save, t(self.document, "save"), "⌘S", h(FileMenuChoice::Save));
-        y += ROW_HEIGHT;
-        paint_row(cx, &self.theme, rect.origin.x, y, Icon::Save, t(self.document, "saveAs"), "⌘⇧S", h(FileMenuChoice::SaveAs));
+        paint_row(cx, &self.theme, rect.origin.x, y, Icon::FolderOpen, t(self.ui, "open"), "⌘O", h(FileMenuChoice::OpenFile));
         y += ROW_HEIGHT;
         y = paint_divider(cx, &self.theme, rect, y);
-        paint_row(cx, &self.theme, rect.origin.x, y, Icon::Download, t(self.document, "exportImage"), "⌘⇧P", h(FileMenuChoice::ExportImage));
+        paint_row(cx, &self.theme, rect.origin.x, y, Icon::Save, t(self.ui, "save"), "⌘S", h(FileMenuChoice::Save));
+        y += ROW_HEIGHT;
+        paint_row(cx, &self.theme, rect.origin.x, y, Icon::Save, t(self.ui, "saveAs"), "⌘⇧S", h(FileMenuChoice::SaveAs));
         y += ROW_HEIGHT;
         y = paint_divider(cx, &self.theme, rect, y);
-        paint_header(cx, &self.theme, rect.origin.x, y, t(self.document, "recentFiles"));
+        paint_row(cx, &self.theme, rect.origin.x, y, Icon::Download, t(self.ui, "exportImage"), "⌘⇧P", h(FileMenuChoice::ExportImage));
+        y += ROW_HEIGHT;
+        y = paint_divider(cx, &self.theme, rect, y);
+        paint_header(cx, &self.theme, rect.origin.x, y, t(self.ui, "recentFiles"));
         y += HEADER_HEIGHT;
         if self.recent.is_empty() {
-            paint_empty(cx, &self.theme, rect.origin.x, y, t(self.document, "noRecentFiles"));
+            paint_empty(cx, &self.theme, rect.origin.x, y, t(self.ui, "noRecentFiles"));
             y += ROW_HEIGHT;
         } else {
             for (i, entry) in self.recent.iter().enumerate() {
@@ -255,9 +256,9 @@ impl<'a> Widget for FileMenu<'a> {
         }
         y = paint_divider(cx, &self.theme, rect, y);
         if self.recent.is_empty() {
-            paint_row_disabled(cx, &self.theme, rect.origin.x, y, Icon::Trash, t(self.document, "clearHistory"), "");
+            paint_row_disabled(cx, &self.theme, rect.origin.x, y, Icon::Trash, t(self.ui, "clearHistory"), "");
         } else {
-            paint_row(cx, &self.theme, rect.origin.x, y, Icon::Trash, t(self.document, "clearHistory"), "", h(FileMenuChoice::ClearRecent));
+            paint_row(cx, &self.theme, rect.origin.x, y, Icon::Trash, t(self.ui, "clearHistory"), "", h(FileMenuChoice::ClearRecent));
         }
     }
 
@@ -490,8 +491,8 @@ fn file_name(path: &str) -> String {
         .unwrap_or_else(|| path.to_string())
 }
 
-fn format_age(doc: &Document, elapsed_secs: u64) -> String {
-    let zh = matches!(doc.ui.locale, Locale::ZhCn | Locale::ZhTw);
+fn format_age(ui: &EditorUiState, elapsed_secs: u64) -> String {
+    let zh = matches!(ui.locale, Locale::ZhCn | Locale::ZhTw);
     if elapsed_secs < 60 {
         if zh { "刚刚".into() } else { "just now".into() }
     } else if elapsed_secs < 3600 {

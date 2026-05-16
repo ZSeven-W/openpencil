@@ -14,8 +14,10 @@
 //! [`Toolbar::hit_test`] so a `(x, y)` mouse position resolves to
 //! either a `Tool` change or an `Action` (Undo / Redo / TogglePanel).
 
-use crate::document::{Document, Tool};
+use crate::document::Tool;
 use crate::theme::Theme;
+use crate::widgets::editor_state_ext::{doc_tool, theme_for};
+use op_editor_core::EditorState;
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::{LayoutBox, LayoutCx, PaintCx, Widget, WidgetId};
 use crate::{Color, Point2D, Rect};
@@ -84,13 +86,14 @@ impl Toolbar {
     /// Default Step 4 set — TS app order:
     /// Select / Rect / Text / Frame / Hand · Undo / Redo · Code / Design.
     pub fn default_set() -> Self {
-        Self::for_document(&Document::empty())
+        Self::for_editor(&EditorState::new())
     }
 
-    /// Build the toolbar bound to the document's active tool +
-    /// theme. The active highlight reads `doc.tool`; theme reads
-    /// `doc.theme()` so the toolbar flips with TopBar Sun click.
-    pub fn for_document(doc: &Document) -> Self {
+    /// Build the toolbar bound to the editor's active tool + theme.
+    /// The active highlight reads `state.tool`; theme reads
+    /// `state.editor_ui.theme_mode` so the toolbar flips with the
+    /// TopBar Sun click.
+    pub fn for_editor(state: &EditorState) -> Self {
         Self {
             id: WidgetId::new(3000),
             items: vec![
@@ -106,9 +109,9 @@ impl Toolbar {
                 ToolbarItem::Action(ToolbarAction::ToggleCodePanel, Icon::Braces),
                 ToolbarItem::Action(ToolbarAction::ToggleDesignPanel, Icon::BookOpen),
             ],
-            active: doc.tool,
-            theme: doc.theme(),
-            shape_tool: doc.ui.shape_tool,
+            active: doc_tool(state.tool),
+            theme: theme_for(&state.editor_ui),
+            shape_tool: doc_tool(state.editor_ui.shape_tool),
         }
     }
 
@@ -443,10 +446,10 @@ mod tests {
     }
 
     #[test]
-    fn for_document_picks_up_active_tool() {
-        let mut doc = Document::sample();
-        doc.tool = Tool::Frame;
-        let toolbar = Toolbar::for_document(&doc);
+    fn for_editor_picks_up_active_tool() {
+        let mut state = EditorState::new();
+        state.tool = op_editor_core::Tool::Frame;
+        let toolbar = Toolbar::for_editor(&state);
         assert_eq!(toolbar.active, Tool::Frame);
     }
 

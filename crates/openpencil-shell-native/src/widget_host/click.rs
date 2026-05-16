@@ -185,7 +185,7 @@ impl WidgetHostNative {
         self.editor_state.chat.focused = false;
         self.mark_dirty();
         let (cx0, _cy0, _cw, _ch) = self.canvas_region(viewport_width, viewport_height);
-        let toolbar = Toolbar::for_document(&self.paint_doc);
+        let toolbar = Toolbar::for_editor(&self.editor_state);
         let toolbar_h = toolbar
             .layout(&LayoutCx {
                 available_width: TOOLBAR_WIDTH,

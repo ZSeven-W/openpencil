@@ -192,7 +192,7 @@ impl WidgetHostNative {
                 .duration_since(std::time::UNIX_EPOCH)
                 .map(|d| d.as_secs())
                 .unwrap_or(0);
-            let menu = FileMenu::from_document(&self.paint_doc, now_secs);
+            let menu = FileMenu::from_editor_ui(&self.editor_state.editor_ui, now_secs);
             let panel = menu.rect_at(anchor);
             let new_hover = menu.hovered_at(panel, Point2D::new(x, y));
             // shell-core `FileMenuChoice` option → op-editor-core.
@@ -207,7 +207,7 @@ impl WidgetHostNative {
             use openpencil_shell_core::widgets::locale_picker::LocalePicker;
             self.refresh_paint_doc();
             let panel = self.locale_picker_rect(self.last_viewport_w);
-            let picker = LocalePicker::for_document(&self.paint_doc);
+            let picker = LocalePicker::for_editor_ui(&self.editor_state.editor_ui);
             let new_hover = picker.hit_test(panel, Point2D::new(x, y));
             let new_hover_ec = new_hover.map(op_pen_loader::rev::locale);
             if new_hover_ec != self.editor_state.editor_ui.locale_picker_hover {
@@ -220,7 +220,7 @@ impl WidgetHostNative {
             use openpencil_shell_core::widgets::shape_picker::ShapePicker;
             self.refresh_paint_doc();
             let panel = self.shape_picker_rect(self.last_viewport_w, self.last_viewport_h);
-            let picker = ShapePicker::for_document(&self.paint_doc);
+            let picker = ShapePicker::for_editor_ui(&self.editor_state.editor_ui);
             let new_hover = picker.hit_test(panel, Point2D::new(x, y));
             let new_hover_ec = new_hover.map(op_pen_loader::rev::shape_choice);
             if new_hover_ec != self.editor_state.editor_ui.shape_picker_hover {
