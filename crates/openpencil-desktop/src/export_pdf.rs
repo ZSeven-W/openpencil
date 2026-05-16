@@ -1,25 +1,29 @@
 //! PDF multi-page export. Skia ships a built-in PDF backend
-//! (`skia_safe::pdf::new_document`) — each `PenPage` becomes one
+//! (`skia_safe::pdf::new_document`) — each [`ScenePage`] becomes one
 //! PDF page laid out at its bounding rect. Mirrors the TS app's
 //! global-export → exportDocumentPdf flow, except the TS app
 //! hand-rolls a PDF stream (Catalog + Pages + Image XObjects with
-//! DCTDecode JPEG blobs); skia's backend emits real vector PDF
-//! ops, which keeps glyphs + shapes selectable + zoom-clean.
+//! DCTDecode JPEG blobs); skia's backend emits real vector PDF ops,
+//! which keeps glyphs + shapes selectable + zoom-clean.
+//!
+//! The export consumes a layout-resolved [`LayoutScene`] — every node
+//! kind paints through the shared `crate::export::paint_node`, the
+//! same painter the raster path uses, so PDF / PNG / SVG stay in
+//! lockstep.
 
-use openpencil_shell_core::document::Document;
+use openpencil_shell_core::layout_scene::LayoutScene;
 use std::path::Path as StdPath;
 
 const PDF_MARGIN: f32 = 16.0;
 
-/// Emit every page in `doc` as one PDF page each. Every page emits
+/// Emit every page in `scene` as one PDF page each. Every page emits
 /// at the SAME size — the union of all page bounds plus a 16-pt
 /// margin — so PDF viewers don't jump between heterogeneous page
-/// sizes on scroll/zoom (codex CONCERN: mixed page sizes were a
-/// papercut). Each page's content is positioned within that frame
-/// at its own (origin.x, origin.y); empty pages are skipped.
-/// Returns Err when no page has paintable content.
-pub fn export_pdf(doc: &Document, target: &StdPath) -> Result<(), String> {
-    let bounds_per_page: Vec<_> = doc
+/// sizes on scroll/zoom. Each page's content is positioned within
+/// that frame at its own `(origin.x, origin.y)`; empty pages are
+/// skipped. Returns Err when no page has paintable content.
+pub fn export_pdf(scene: &LayoutScene, target: &StdPath) -> Result<(), String> {
+    let bounds_per_page: Vec<_> = scene
         .pages
         .iter()
         .map(crate::export::page_bounds)
@@ -40,7 +44,7 @@ pub fn export_pdf(doc: &Document, target: &StdPath) -> Result<(), String> {
     let mut buf: Vec<u8> = Vec::new();
     {
         let mut pdf = skia_safe::pdf::new_document(&mut buf, None);
-        for (page, bounds_opt) in doc.pages.iter().zip(bounds_per_page.iter()) {
+        for (page, bounds_opt) in scene.pages.iter().zip(bounds_per_page.iter()) {
             let Some(bounds) = bounds_opt else { continue };
             let mut on_page = pdf.begin_page(skia_safe::Size::new(page_w, page_h), None);
             let canvas = on_page.canvas();
@@ -58,37 +62,40 @@ pub fn export_pdf(doc: &Document, target: &StdPath) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use openpencil_shell_core::document::{Node, NodeKind};
+    use crate::export::test_support::filled_rect;
+    use openpencil_shell_core::document::NodeKind;
+    use openpencil_shell_core::layout_scene::{ScenePage, SceneNode};
     use openpencil_shell_core::{Color, Rect};
 
     #[test]
-    fn pdf_export_emits_one_page_per_pen_page() {
-        let mut doc = Document::empty();
-        let p0 = doc.pages.get_mut(0).unwrap();
-        p0.children.clear();
-        let mut n0 = Node::leaf("n10", NodeKind::Rect, "r");
-        n0.bounds = Rect::xywh(0.0, 0.0, 60.0, 40.0);
-        n0.fill = Some(Color {
-            r: 0.5,
-            g: 0.5,
-            b: 0.5,
-            a: 1.0,
-        });
-        p0.children.push(n0);
-        let p1 = openpencil_shell_core::document::Page::new("n2", "Page 2", Vec::new());
-        let mut n1 = Node::leaf("n20", NodeKind::Ellipse, "e");
-        n1.bounds = Rect::xywh(0.0, 0.0, 40.0, 40.0);
-        n1.fill = Some(Color {
-            r: 0.8,
-            g: 0.2,
-            b: 0.4,
-            a: 1.0,
-        });
-        let mut p1 = p1;
-        p1.children.push(n1);
-        doc.pages.push(p1);
+    fn pdf_export_emits_one_page_per_scene_page() {
+        let mut ellipse = SceneNode::leaf("n20", NodeKind::Ellipse);
+        ellipse.bounds = Rect::xywh(0.0, 0.0, 40.0, 40.0);
+        ellipse.fill = Some(Color { r: 0.8, g: 0.2, b: 0.4, a: 1.0 });
+        let scene = LayoutScene {
+            pages: vec![
+                ScenePage {
+                    id: "p1".into(),
+                    name: "Page 1".into(),
+                    children: vec![filled_rect(
+                        "n10",
+                        0.0,
+                        0.0,
+                        60.0,
+                        40.0,
+                        Color { r: 0.5, g: 0.5, b: 0.5, a: 1.0 },
+                    )],
+                },
+                ScenePage {
+                    id: "p2".into(),
+                    name: "Page 2".into(),
+                    children: vec![ellipse],
+                },
+            ],
+            active_page_index: 0,
+        };
         let tmp = std::env::temp_dir().join(format!("op-export-pdf-{}.pdf", std::process::id()));
-        let res = export_pdf(&doc, &tmp);
+        let res = export_pdf(&scene, &tmp);
         assert!(res.is_ok(), "export_pdf failed: {res:?}");
         let bytes = std::fs::read(&tmp).unwrap();
         // PDF header magic: %PDF-
@@ -104,13 +111,15 @@ mod tests {
 
     #[test]
     fn pdf_export_skips_empty_pages_but_fails_when_all_empty() {
-        let mut doc = Document::empty();
-        // All pages empty.
-        for p in &mut doc.pages {
-            p.children.clear();
-        }
+        let scene = LayoutScene {
+            pages: vec![
+                ScenePage { id: "p1".into(), name: "P1".into(), children: Vec::new() },
+                ScenePage { id: "p2".into(), name: "P2".into(), children: Vec::new() },
+            ],
+            active_page_index: 0,
+        };
         let tmp = std::env::temp_dir().join(format!("op-pdf-empty-{}.pdf", std::process::id()));
-        let res = export_pdf(&doc, &tmp);
+        let res = export_pdf(&scene, &tmp);
         assert!(res.is_err(), "expected Err on all-empty, got {res:?}");
         assert_eq!(res.unwrap_err(), "nothing to export");
     }

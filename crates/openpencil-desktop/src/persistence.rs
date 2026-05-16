@@ -36,7 +36,6 @@
 use std::path::PathBuf;
 
 use op_editor_core::EditorState;
-use openpencil_shell_core::document::Document;
 use openpencil_shell_native::WidgetHostNative;
 
 /// Editor view-state persisted alongside the canonical `.op` file.
@@ -341,31 +340,33 @@ pub fn run_action(
                 .set_file_name(&default_name)
                 .save_file()
             {
-                // The export renderers read a `&Document` — derive an
-                // owned paint snapshot once and hand them a borrow.
-                let doc: Document = host.document();
-                let doc = &doc;
+                // The export renderers consume a layout-resolved
+                // `LayoutScene` — build one from the live editor state
+                // (runs jian's flex pass + `$ref` fill resolution).
+                let scene =
+                    op_pen_loader::editor_state_to_layout_scene(host.editor_state());
+                let scene = &scene;
                 let result: Result<(), String> = match fmt {
                     Fmt::Png => crate::export::export_raster(
-                        doc,
+                        scene,
                         &path,
                         crate::export::RasterFormat::Png,
                         scale,
                     ),
                     Fmt::Jpeg => crate::export::export_raster(
-                        doc,
+                        scene,
                         &path,
                         crate::export::RasterFormat::Jpeg,
                         scale,
                     ),
                     Fmt::Webp => crate::export::export_raster(
-                        doc,
+                        scene,
                         &path,
                         crate::export::RasterFormat::Webp,
                         scale,
                     ),
-                    Fmt::Svg => crate::export::export_svg(doc, &path),
-                    Fmt::Pdf => crate::export_pdf::export_pdf(doc, &path),
+                    Fmt::Svg => crate::export::export_svg(scene, &path),
+                    Fmt::Pdf => crate::export_pdf::export_pdf(scene, &path),
                 };
                 if let Err(e) = result {
                     eprintln!("[export-image] {e}");

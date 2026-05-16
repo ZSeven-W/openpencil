@@ -1,28 +1,50 @@
 //! Raster + SVG export for the active page.
 //!
-//! Renders top-level nodes on the active page into an off-screen
-//! `skia_safe::Surface`, encodes as one of PNG/JPEG/WEBP, writes to
-//! the user-chosen path. SVG goes through a separate hand-rolled
-//! serializer (`export_svg`). Coverage:
+//! Renders top-level nodes on the active page of a [`LayoutScene`]
+//! into an off-screen `skia_safe::Surface`, encodes as one of
+//! PNG/JPEG/WEBP, writes to the user-chosen path. SVG goes through a
+//! separate hand-rolled serializer (`export_svg`). Coverage:
 //!   - Rect / Frame / Group : fill + stroke + corner_radius
 //!   - Ellipse              : fill + stroke
 //!   - Polygon              : default-triangle fill + stroke
-//!   - Line                 : stroke from `bounds.origin` to `+size`
+//!   - Line                 : diagonal stroke across `bounds`
 //!   - Path                 : polyline through `node.points`
-//!   - Text                 : skipped (font plumbing pending)
+//!   - Text                 : authored content at the resolved bounds
 //! Per-node rotation honoured via `Canvas::rotate`.
+//!
+//! The scene is layout-resolved: every `SceneNode::bounds` is the
+//! absolute doc-space AABB jian's flex pass produced, and fills are
+//! already `$ref`-resolved. Export draws straight from `bounds` with
+//! no second layout pass — same input the on-screen canvas paints
+//! (`canvas_viewport_paint.rs`).
 //!
 //! Background: PNG / WEBP transparent; JPEG forced white (TS parity
 //! — JPEG has no alpha so a "transparent" JPEG would read as black).
 //! Scale: caller picks @1x / @2x / @3x (TS export dialog parity).
 
-use openpencil_shell_core::document::{Document, Node, NodeKind};
+use openpencil_shell_core::document::{Effect, NodeKind};
+use openpencil_shell_core::layout_scene::{LayoutScene, ScenePage, SceneNode};
 use openpencil_shell_core::{Color, Point2D, Rect};
 use skia_safe::{Canvas, EncodedImageFormat, Paint, PaintStyle, Path, PathBuilder};
-use std::fmt::Write as _;
 use std::path::Path as StdPath;
 
+mod export_svg;
+
+pub use export_svg::export_svg;
+
 const MARGIN: f32 = 16.0;
+
+/// Mirrors `canvas_viewport_paint.rs` text paint constants so PNG
+/// export matches what the user sees on the editor canvas at zoom 1.
+/// `canvas_viewport_paint.rs` uses a 13 px default and a baseline at
+/// `(size + 1) * zoom`, with `1.35 × size` line height.
+const TEXT_DEFAULT_FONT_SIZE: f32 = 13.0;
+const TEXT_DEFAULT_FILL: Color = Color {
+    r: 0.08,
+    g: 0.08,
+    b: 0.08,
+    a: 1.0,
+};
 
 /// Raster export format. Matches TS ExportDialog's PNG / JPEG / WEBP
 /// options; SVG has its own entry point (`export_svg`).
@@ -56,8 +78,7 @@ impl RasterFormat {
         !matches!(self, RasterFormat::Jpeg)
     }
     /// Lookup by file extension (lowercase). Returns None for unknown
-    /// extensions. Used by future drag-drop / scripted-export paths
-    /// (current UI carries the format via `Document.ui.export_format`).
+    /// extensions. Used by future drag-drop / scripted-export paths.
     #[allow(dead_code)]
     pub fn from_extension(ext: &str) -> Option<RasterFormat> {
         match ext {
@@ -79,16 +100,15 @@ impl RasterFormat {
 
 /// Raster export with explicit format + scale. Scale clamped to
 /// [0.5, 8.0] to keep surface allocation sane; NaN / inf fall back
-/// to 2× (codex CONCERN — NaN reaching `canvas.scale` produces a
-/// garbage transform).
+/// to 2× (NaN reaching `canvas.scale` produces a garbage transform).
 pub fn export_raster(
-    doc: &Document,
+    scene: &LayoutScene,
     target: &StdPath,
     format: RasterFormat,
     scale: f32,
 ) -> Result<(), String> {
     let scale = if scale.is_finite() { scale.clamp(0.5, 8.0) } else { 2.0 };
-    let Some(page) = doc.pages.get(doc.active_page_index) else {
+    let Some(page) = scene.active_page() else {
         return Err("no active page".into());
     };
     let bounds = page_bounds(page).ok_or("nothing to export")?;
@@ -120,7 +140,12 @@ pub fn export_raster(
     Ok(())
 }
 
-pub(crate) fn page_bounds(page: &openpencil_shell_core::document::Page) -> Option<Rect> {
+/// Bounding rect over every paintable node on `page`. The scene is
+/// already layout-resolved, so each node's `bounds` is its absolute
+/// doc-space AABB — but rotation, strokes and `node.points` can push
+/// painted pixels outside `bounds`, so traversal mirrors `paint_node`
+/// exactly and threads the cumulative transform.
+pub(crate) fn page_bounds(page: &ScenePage) -> Option<Rect> {
     let mut acc = BoundsAcc::new();
     for n in &page.children {
         collect_bounds(n, glam::Affine2::IDENTITY, &mut acc);
@@ -163,28 +188,22 @@ impl BoundsAcc {
 
 /// Mirror of `paint_node`'s traversal — visits the SAME nodes paint
 /// visits, in the SAME order, threading the cumulative parent
-/// transform so a child painted under a rotated container ends up
-/// in the same world coords paint will emit. Bounds stay in
-/// lockstep with paint, so the surface never clips a row a
-/// downstream draw would touch (including children inside rotated
-/// frames / groups).
-fn collect_bounds(n: &Node, parent_xform: glam::Affine2, acc: &mut BoundsAcc) {
+/// transform so a child painted under a rotated container ends up in
+/// the same world coords paint will emit. `canvas_viewport_paint.rs`
+/// pivots rotation around the node's `aggregate_bounds()` (own bounds
+/// when bounded, child union otherwise); this mirrors that exactly so
+/// the surface never clips a row a downstream draw would touch.
+fn collect_bounds(n: &SceneNode, parent_xform: glam::Affine2, acc: &mut BoundsAcc) {
     if n.hidden {
         return;
     }
-    // Compose this node's rotation around its own centre into the
-    // cumulative parent transform. Mirrors `paint_node`'s guard
-    // EXACTLY — paint checks the RAW (unnormalized) size, so a
-    // negative-size rect (drag-from-right-to-left) skips rotation
-    // even though `normalize_rect` would report a positive extent.
-    // Using the normalized size here would rotate the AABB while
-    // paint stayed unrotated → mismatch.
-    let raw = n.bounds;
-    let rotate_self = n.rotation != 0.0 && raw.size.x > 0.0 && raw.size.y > 0.0;
+    let pivot_rect = n.aggregate_bounds();
+    let rotate_self = n.rotation.abs() > f32::EPSILON
+        && (pivot_rect.size.x != 0.0 || pivot_rect.size.y != 0.0);
     let local_xform = if rotate_self {
         let pivot = glam::Vec2::new(
-            raw.origin.x + raw.size.x * 0.5,
-            raw.origin.y + raw.size.y * 0.5,
+            pivot_rect.origin.x + pivot_rect.size.x * 0.5,
+            pivot_rect.origin.y + pivot_rect.size.y * 0.5,
         );
         parent_xform
             * glam::Affine2::from_translation(pivot)
@@ -206,13 +225,13 @@ fn collect_bounds(n: &Node, parent_xform: glam::Affine2, acc: &mut BoundsAcc) {
 
 /// Local-space corner points that bound `n`'s own paint (NOT its
 /// children — those visit through `collect_bounds`). The caller
-/// applies the cumulative parent+self transform; each returned
-/// point gets pushed into the BoundsAcc as a world-space coord.
+/// applies the cumulative parent+self transform; each returned point
+/// gets pushed into the BoundsAcc as a world-space coord.
 ///
-/// Returns `None` for invisible kinds: Group/Text never paint own
+/// Returns `None` for invisible kinds: Group never paints own
 /// content; Frame/Other contribute only when fill or stroke is set;
 /// Path with empty `points` is invisible.
-fn own_paint_corners(n: &Node) -> Option<Vec<glam::Vec2>> {
+fn own_paint_corners(n: &SceneNode) -> Option<Vec<glam::Vec2>> {
     let stroke_pad = n.stroke.map(|s| s.width * 0.5).unwrap_or(0.0);
     let (x0, y0, x1, y1) = match &n.kind {
         NodeKind::Rect | NodeKind::Ellipse | NodeKind::Polygon | NodeKind::Line => {
@@ -224,7 +243,22 @@ fn own_paint_corners(n: &Node) -> Option<Vec<glam::Vec2>> {
                 nr.origin.y + nr.size.y,
             )
         }
-        NodeKind::Frame | NodeKind::Other(_) => {
+        NodeKind::Frame => {
+            if n.fill.is_none() && n.stroke.is_none() {
+                return None;
+            }
+            let nr = normalize_rect(n.bounds);
+            (
+                nr.origin.x,
+                nr.origin.y,
+                nr.origin.x + nr.size.x,
+                nr.origin.y + nr.size.y,
+            )
+        }
+        NodeKind::Other(_) => {
+            // `icon_font` and any other tagged kind paint no fill rect
+            // in export; their bounds still bound the glyph for the
+            // surface size when a fill is present.
             if n.fill.is_none() && n.stroke.is_none() {
                 return None;
             }
@@ -237,8 +271,8 @@ fn own_paint_corners(n: &Node) -> Option<Vec<glam::Vec2>> {
             )
         }
         NodeKind::Text => {
-            // Text bounds are the user-set "where the glyphs sit"
-            // rect. Real glyph extents can overshoot for tails /
+            // Text bounds are the layout-resolved "where the glyphs
+            // sit" rect. Real glyph extents can overshoot for tails /
             // accents, but `bounds` is the right approximation
             // without doing a per-glyph metric pass.
             let has_text = n.text.as_ref().is_some_and(|s| !s.is_empty());
@@ -281,21 +315,43 @@ fn own_paint_corners(n: &Node) -> Option<Vec<glam::Vec2>> {
     ])
 }
 
-
-pub(crate) fn paint_node(canvas: &Canvas, node: &Node) {
+/// Recursively paint one resolved [`SceneNode`] and its subtree onto
+/// `canvas`. Mirrors `canvas_viewport_paint.rs::paint_node` at zoom 1
+/// so the exported pixels match the on-screen canvas.
+pub(crate) fn paint_node(canvas: &Canvas, node: &SceneNode) {
     if node.hidden {
         return;
     }
     let world_rect = node.bounds;
     let pre_rotate = canvas.save();
-    if node.rotation != 0.0 && world_rect.size.x > 0.0 && world_rect.size.y > 0.0 {
-        let cx = world_rect.origin.x + world_rect.size.x / 2.0;
-        let cy = world_rect.origin.y + world_rect.size.y / 2.0;
-        canvas.rotate(node.rotation.to_degrees(), Some((cx, cy).into()));
+    // Rotation pivots around `aggregate_bounds` — own bounds when the
+    // node is bounded, child union for unbounded containers — exactly
+    // like the editor canvas painter.
+    if node.rotation.abs() > f32::EPSILON {
+        let pivot = node.aggregate_bounds();
+        if pivot.size.x != 0.0 || pivot.size.y != 0.0 {
+            let cx = pivot.origin.x + pivot.size.x / 2.0;
+            let cy = pivot.origin.y + pivot.size.y / 2.0;
+            canvas.rotate(node.rotation.to_degrees(), Some((cx, cy).into()));
+        }
+    }
+    // Drop shadows paint behind the node's own fill — only for kinds
+    // a rounded rect / ellipse silhouette can represent (parity with
+    // canvas_viewport_paint.rs).
+    if !node.effects.is_empty()
+        && world_rect.size.x.abs() > 0.0
+        && world_rect.size.y.abs() > 0.0
+        && matches!(node.kind, NodeKind::Frame | NodeKind::Rect | NodeKind::Ellipse)
+    {
+        paint_drop_shadows(canvas, node, world_rect);
     }
     match &node.kind {
-        NodeKind::Rect | NodeKind::Frame | NodeKind::Other(_) => {
+        NodeKind::Rect | NodeKind::Frame => {
             paint_rect(canvas, world_rect, node);
+        }
+        NodeKind::Other(_) => {
+            // Tagged kinds (e.g. `icon_font`) have no rect silhouette
+            // in export; skip own paint, still recurse children.
         }
         NodeKind::Ellipse => {
             paint_oval(canvas, world_rect, node);
@@ -304,18 +360,19 @@ pub(crate) fn paint_node(canvas: &Canvas, node: &Node) {
             paint_triangle(canvas, world_rect, node);
         }
         NodeKind::Line => {
-            if let Some(stroke) = node.stroke {
-                let mut paint = make_stroke(stroke.color, stroke.width);
-                canvas.draw_line(
-                    (world_rect.origin.x, world_rect.origin.y),
-                    (
-                        world_rect.origin.x + world_rect.size.x,
-                        world_rect.origin.y + world_rect.size.y,
-                    ),
-                    &paint,
-                );
-                paint.set_anti_alias(true);
-            }
+            let (color, width) = match node.stroke {
+                Some(s) => (s.color, s.width),
+                None => (node.fill.unwrap_or(Color::BLACK), 1.5),
+            };
+            let paint = make_stroke(color, width);
+            canvas.draw_line(
+                (world_rect.origin.x, world_rect.origin.y),
+                (
+                    world_rect.origin.x + world_rect.size.x,
+                    world_rect.origin.y + world_rect.size.y,
+                ),
+                &paint,
+            );
         }
         NodeKind::Path => {
             paint_polyline(canvas, node);
@@ -330,7 +387,45 @@ pub(crate) fn paint_node(canvas: &Canvas, node: &Node) {
     canvas.restore_to_count(pre_rotate);
 }
 
-fn paint_rect(canvas: &Canvas, rect: Rect, node: &Node) {
+/// Paint every `Effect::DropShadow` as a blurred shape behind the
+/// node's fill. Mirrors `canvas_viewport_paint.rs::paint_drop_shadows`
+/// at zoom 1.
+fn paint_drop_shadows(canvas: &Canvas, node: &SceneNode, world_rect: Rect) {
+    let nrect = normalize_rect(world_rect);
+    let radius = if node.kind == NodeKind::Ellipse {
+        nrect.size.x.min(nrect.size.y) / 2.0
+    } else {
+        node.corner_radius
+    };
+    for effect in &node.effects {
+        let Effect::DropShadow(s) = effect;
+        let shadow_rect = Rect {
+            origin: Point2D::new(
+                nrect.origin.x + s.offset_x,
+                nrect.origin.y + s.offset_y,
+            ),
+            size: nrect.size,
+        };
+        let mut paint = make_fill(s.color);
+        if s.blur > 0.0 {
+            paint.set_mask_filter(skia_safe::MaskFilter::blur(
+                skia_safe::BlurStyle::Normal,
+                s.blur * 0.5,
+                false,
+            ));
+        }
+        let sk_rect = to_sk_rect(shadow_rect);
+        if node.kind == NodeKind::Ellipse {
+            canvas.draw_oval(sk_rect, &paint);
+        } else if radius > 0.5 {
+            canvas.draw_round_rect(sk_rect, radius, radius, &paint);
+        } else {
+            canvas.draw_rect(sk_rect, &paint);
+        }
+    }
+}
+
+fn paint_rect(canvas: &Canvas, rect: Rect, node: &SceneNode) {
     let nrect = normalize_rect(rect);
     if nrect.size.x == 0.0 && nrect.size.y == 0.0 {
         return;
@@ -355,7 +450,7 @@ fn paint_rect(canvas: &Canvas, rect: Rect, node: &Node) {
     }
 }
 
-fn paint_oval(canvas: &Canvas, rect: Rect, node: &Node) {
+fn paint_oval(canvas: &Canvas, rect: Rect, node: &SceneNode) {
     let nrect = normalize_rect(rect);
     if nrect.size.x == 0.0 && nrect.size.y == 0.0 {
         return;
@@ -369,7 +464,7 @@ fn paint_oval(canvas: &Canvas, rect: Rect, node: &Node) {
     }
 }
 
-fn paint_triangle(canvas: &Canvas, rect: Rect, node: &Node) {
+fn paint_triangle(canvas: &Canvas, rect: Rect, node: &SceneNode) {
     let rect = normalize_rect(rect);
     if rect.size.x == 0.0 || rect.size.y == 0.0 {
         return;
@@ -393,7 +488,7 @@ fn paint_triangle(canvas: &Canvas, rect: Rect, node: &Node) {
     }
 }
 
-fn paint_text(canvas: &Canvas, rect: Rect, node: &Node) {
+fn paint_text(canvas: &Canvas, rect: Rect, node: &SceneNode) {
     let Some(text) = node.text.as_deref() else { return };
     if text.is_empty() {
         return;
@@ -404,43 +499,41 @@ fn paint_text(canvas: &Canvas, rect: Rect, node: &Node) {
     else {
         return;
     };
-    // Match editor exactly (canvas_viewport.rs §NodeKind::Text):
-    // 13pt font, baseline at origin.y + 14, fill defaults to the
-    // near-black `(0.08, 0.08, 0.08)` ink colour — NOT pure black.
-    let font = skia_safe::Font::from_typeface(typeface, TEXT_FONT_SIZE);
+    // Match the editor canvas (canvas_viewport_paint.rs): authored
+    // font size with a 13 px default, baseline at origin.y + (size+1),
+    // fill defaults to the near-black ink colour. Multi-line text
+    // splits on `\n` with a 1.35 × size line height.
+    let base_size = if node.font_size > 0.0 {
+        node.font_size
+    } else {
+        TEXT_DEFAULT_FONT_SIZE
+    };
+    let font = skia_safe::Font::from_typeface(typeface, base_size);
     let color = node.fill.unwrap_or(TEXT_DEFAULT_FILL);
     let paint = make_fill(color);
-    canvas.draw_str(
-        text,
-        (r.origin.x, r.origin.y + TEXT_BASELINE_OFFSET),
-        &font,
-        &paint,
-    );
+    let line_h = base_size * 1.35;
+    let mut baseline_y = r.origin.y + base_size + 1.0;
+    for line in text.split('\n') {
+        canvas.draw_str(line, (r.origin.x, baseline_y), &font, &paint);
+        baseline_y += line_h;
+    }
 }
 
-/// Mirrors `canvas_viewport.rs` text paint constants so PNG export
-/// matches what the user sees on the editor canvas at zoom 1.
-const TEXT_FONT_SIZE: f32 = 13.0;
-const TEXT_BASELINE_OFFSET: f32 = 14.0;
-const TEXT_DEFAULT_FILL: Color = Color {
-    r: 0.08,
-    g: 0.08,
-    b: 0.08,
-    a: 1.0,
-};
-
-fn paint_polyline(canvas: &Canvas, node: &Node) {
+fn paint_polyline(canvas: &Canvas, node: &SceneNode) {
     if node.points.len() < 2 {
         return;
     }
-    let Some(stroke) = node.stroke else { return };
+    let (color, width) = match node.stroke {
+        Some(s) => (s.color, s.width),
+        None => (node.fill.unwrap_or(Color::BLACK), 1.5),
+    };
     let mut builder = PathBuilder::new();
     builder.move_to((node.points[0].x, node.points[0].y));
     for p in &node.points[1..] {
         builder.line_to((p.x, p.y));
     }
     let path: Path = builder.detach();
-    canvas.draw_path(&path, &make_stroke(stroke.color, stroke.width));
+    canvas.draw_path(&path, &make_stroke(color, width));
 }
 
 fn make_fill(c: Color) -> Paint {
@@ -465,8 +558,8 @@ fn to_sk_rect(r: Rect) -> skia_safe::Rect {
     skia_safe::Rect::from_xywh(r.origin.x, r.origin.y, r.size.x, r.size.y)
 }
 
-/// Negative-size bounds come from drag-from-right-to-left creates;
-/// normalise so paint always has top-left origin + positive extent.
+/// Defensive normalisation — the layout pass yields positive-extent
+/// rects, but a negative size would otherwise paint nothing.
 fn normalize_rect(r: Rect) -> Rect {
     let x0 = r.origin.x.min(r.origin.x + r.size.x);
     let y0 = r.origin.y.min(r.origin.y + r.size.y);
@@ -476,227 +569,41 @@ fn normalize_rect(r: Rect) -> Rect {
     }
 }
 
-// ── SVG ───────────────────────────────────────────────────────────
+#[cfg(test)]
+pub(crate) mod test_support {
+    //! Shared helpers for the export test modules — build a
+    //! `LayoutScene` directly without going through `op-pen-loader`.
 
-pub fn export_svg(doc: &Document, target: &StdPath) -> Result<(), String> {
-    let Some(page) = doc.pages.get(doc.active_page_index) else {
-        return Err("no active page".into());
-    };
-    let bounds = page_bounds(page).ok_or("nothing to export")?;
-    let view_x = bounds.origin.x - MARGIN;
-    let view_y = bounds.origin.y - MARGIN;
-    let view_w = bounds.size.x + MARGIN * 2.0;
-    let view_h = bounds.size.y + MARGIN * 2.0;
-    let mut svg = String::with_capacity(4096);
-    let _ = write!(
-        svg,
-        r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="{view_x} {view_y} {view_w} {view_h}" width="{view_w}" height="{view_h}">"#
-    );
-    for node in &page.children {
-        emit_node(&mut svg, node);
-    }
-    svg.push_str("</svg>");
-    std::fs::write(target, svg).map_err(|e| e.to_string())?;
-    Ok(())
-}
+    use openpencil_shell_core::document::NodeKind;
+    use openpencil_shell_core::layout_scene::{LayoutScene, ScenePage, SceneNode};
+    use openpencil_shell_core::{Color, Rect};
 
-fn emit_node(out: &mut String, n: &Node) {
-    if n.hidden {
-        return;
-    }
-    let raw = n.bounds;
-    // SVG groups inherit transform onto children — same composition
-    // model as `paint_node` + `collect_bounds`. Match paint's guard.
-    let needs_g = n.rotation != 0.0 && raw.size.x > 0.0 && raw.size.y > 0.0;
-    if needs_g {
-        let cx = raw.origin.x + raw.size.x * 0.5;
-        let cy = raw.origin.y + raw.size.y * 0.5;
-        let deg = n.rotation.to_degrees();
-        let _ = write!(out, r#"<g transform="rotate({deg} {cx} {cy})">"#);
-    }
-    match &n.kind {
-        NodeKind::Rect | NodeKind::Frame | NodeKind::Other(_) => emit_rect(out, n),
-        NodeKind::Ellipse => emit_ellipse(out, n),
-        NodeKind::Polygon => emit_polygon(out, n),
-        NodeKind::Line => emit_line(out, n),
-        NodeKind::Path => emit_path(out, n),
-        NodeKind::Text => emit_text(out, n),
-        NodeKind::Group => {}
-    }
-    for child in &n.children {
-        emit_node(out, child);
-    }
-    if needs_g {
-        out.push_str("</g>");
-    }
-}
-
-fn emit_rect(out: &mut String, n: &Node) {
-    if n.fill.is_none() && n.stroke.is_none() && !matches!(n.kind, NodeKind::Rect) {
-        return;
-    }
-    let r = normalize_rect(n.bounds);
-    if r.size.x == 0.0 && r.size.y == 0.0 {
-        return;
-    }
-    let rx = if n.corner_radius > 0.0 {
-        format!(r#" rx="{}""#, n.corner_radius)
-    } else {
-        String::new()
-    };
-    let _ = write!(
-        out,
-        r#"<rect x="{}" y="{}" width="{}" height="{}"{rx}{}/>"#,
-        r.origin.x,
-        r.origin.y,
-        r.size.x,
-        r.size.y,
-        fill_stroke_attrs(n),
-    );
-}
-
-fn emit_ellipse(out: &mut String, n: &Node) {
-    let r = normalize_rect(n.bounds);
-    if r.size.x == 0.0 || r.size.y == 0.0 {
-        return;
-    }
-    let cx = r.origin.x + r.size.x * 0.5;
-    let cy = r.origin.y + r.size.y * 0.5;
-    let _ = write!(
-        out,
-        r#"<ellipse cx="{cx}" cy="{cy}" rx="{}" ry="{}"{}/>"#,
-        r.size.x * 0.5,
-        r.size.y * 0.5,
-        fill_stroke_attrs(n),
-    );
-}
-
-fn emit_polygon(out: &mut String, n: &Node) {
-    let r = normalize_rect(n.bounds);
-    if r.size.x == 0.0 || r.size.y == 0.0 {
-        return;
-    }
-    let cx = r.origin.x + r.size.x * 0.5;
-    let top = r.origin.y;
-    let left = r.origin.x;
-    let right = r.origin.x + r.size.x;
-    let bottom = r.origin.y + r.size.y;
-    let _ = write!(
-        out,
-        r#"<polygon points="{cx},{top} {left},{bottom} {right},{bottom}"{}/>"#,
-        fill_stroke_attrs(n),
-    );
-}
-
-fn emit_line(out: &mut String, n: &Node) {
-    let Some(stroke) = n.stroke else { return };
-    let r = n.bounds;
-    let x2 = r.origin.x + r.size.x;
-    let y2 = r.origin.y + r.size.y;
-    let _ = write!(
-        out,
-        r#"<line x1="{}" y1="{}" x2="{x2}" y2="{y2}"{}/>"#,
-        r.origin.x,
-        r.origin.y,
-        stroke_attrs(stroke.color, stroke.width),
-    );
-}
-
-fn emit_text(out: &mut String, n: &Node) {
-    let Some(text) = n.text.as_deref() else { return };
-    if text.is_empty() {
-        return;
-    }
-    let r = normalize_rect(n.bounds);
-    // Same 13/14 constants as `paint_text` + editor canvas so the
-    // SVG renders identically to what the user sees on screen.
-    let color = n.fill.unwrap_or(TEXT_DEFAULT_FILL);
-    let baseline_y = r.origin.y + TEXT_BASELINE_OFFSET;
-    let fill_attr = if color.a < 0.999 {
-        format!(r#" fill="{}" fill-opacity="{}""#, color_to_rgb(color), color.a)
-    } else {
-        format!(r#" fill="{}""#, color_to_rgb(color))
-    };
-    let _ = write!(
-        out,
-        r#"<text x="{}" y="{baseline_y}" font-family="system-ui, sans-serif" font-size="{TEXT_FONT_SIZE}"{fill_attr}>{}</text>"#,
-        r.origin.x,
-        xml_escape(text),
-    );
-}
-
-fn xml_escape(text: &str) -> String {
-    let mut out = String::with_capacity(text.len());
-    for c in text.chars() {
-        match c {
-            '&' => out.push_str("&amp;"),
-            '<' => out.push_str("&lt;"),
-            '>' => out.push_str("&gt;"),
-            '"' => out.push_str("&quot;"),
-            '\'' => out.push_str("&apos;"),
-            other => out.push(other),
+    /// A single-page scene holding `children` as top-level nodes.
+    pub fn scene_with(children: Vec<SceneNode>) -> LayoutScene {
+        LayoutScene {
+            pages: vec![ScenePage {
+                id: "p1".into(),
+                name: "Page 1".into(),
+                children,
+            }],
+            active_page_index: 0,
         }
     }
-    out
-}
 
-fn emit_path(out: &mut String, n: &Node) {
-    if n.points.len() < 2 {
-        return;
+    /// A filled rectangle scene node at `(x, y, w, h)`.
+    pub fn filled_rect(id: &str, x: f32, y: f32, w: f32, h: f32, fill: Color) -> SceneNode {
+        let mut n = SceneNode::leaf(id, NodeKind::Rect);
+        n.bounds = Rect::xywh(x, y, w, h);
+        n.fill = Some(fill);
+        n
     }
-    let Some(stroke) = n.stroke else { return };
-    let mut d = String::with_capacity(n.points.len() * 16);
-    let _ = write!(d, "M{} {}", n.points[0].x, n.points[0].y);
-    for p in &n.points[1..] {
-        let _ = write!(d, " L{} {}", p.x, p.y);
-    }
-    let _ = write!(
-        out,
-        r#"<path d="{d}" fill="none"{}/>"#,
-        stroke_attrs(stroke.color, stroke.width),
-    );
-}
-
-fn fill_stroke_attrs(n: &Node) -> String {
-    let mut s = String::new();
-    if let Some(fill) = n.fill {
-        let _ = write!(s, r#" fill="{}""#, color_to_rgb(fill));
-        if fill.a < 0.999 {
-            let _ = write!(s, r#" fill-opacity="{}""#, fill.a);
-        }
-    } else {
-        s.push_str(r#" fill="none""#);
-    }
-    if let Some(stroke) = n.stroke {
-        s.push_str(&stroke_attrs(stroke.color, stroke.width));
-    }
-    s
-}
-
-/// Stroke `color` + `width` attributes for any element that paints
-/// a stroke (rect/ellipse/polygon/line/path). Emits `stroke-opacity`
-/// when the colour's alpha < 1 so semi-transparent strokes round-
-/// trip through SVG instead of collapsing to opaque.
-fn stroke_attrs(color: Color, width: f32) -> String {
-    let mut s = format!(r#" stroke="{}" stroke-width="{}""#, color_to_rgb(color), width);
-    if color.a < 0.999 {
-        let _ = write!(s, r#" stroke-opacity="{}""#, color.a);
-    }
-    s
-}
-
-fn color_to_rgb(c: Color) -> String {
-    format!(
-        "rgb({},{},{})",
-        (c.r.clamp(0.0, 1.0) * 255.0).round() as u8,
-        (c.g.clamp(0.0, 1.0) * 255.0).round() as u8,
-        (c.b.clamp(0.0, 1.0) * 255.0).round() as u8,
-    )
 }
 
 #[cfg(test)]
 mod tests {
+    use super::test_support::{filled_rect, scene_with};
     use super::*;
+    use openpencil_shell_core::layout_scene::SceneNode;
 
     #[test]
     fn raster_format_extension_lookup() {
@@ -725,37 +632,36 @@ mod tests {
     }
 
     #[test]
-    fn export_raster_writes_png_for_minimal_doc() {
-        use openpencil_shell_core::document::{Node, NodeId, NodeKind};
-        let mut doc = openpencil_shell_core::document::Document::empty();
-        let page = doc.pages.get_mut(0).unwrap();
-        page.children.clear();
-        let mut n = Node::leaf("n10", NodeKind::Rect, "r");
-        n.bounds = Rect::xywh(0.0, 0.0, 100.0, 50.0);
-        n.fill = Some(Color { r: 0.5, g: 0.5, b: 0.5, a: 1.0 });
-        page.children.push(n);
+    fn export_raster_writes_png_for_minimal_scene() {
+        let scene = scene_with(vec![filled_rect(
+            "n10",
+            0.0,
+            0.0,
+            100.0,
+            50.0,
+            Color { r: 0.5, g: 0.5, b: 0.5, a: 1.0 },
+        )]);
         let tmp = std::env::temp_dir().join(format!("op-export-test-{}.png", std::process::id()));
-        let res = export_raster(&doc, &tmp, RasterFormat::Png, 2.0);
+        let res = export_raster(&scene, &tmp, RasterFormat::Png, 2.0);
         assert!(res.is_ok(), "export_raster PNG failed: {res:?}");
         let bytes = std::fs::read(&tmp).unwrap();
         // PNG signature: 89 50 4E 47 0D 0A 1A 0A
         assert_eq!(&bytes[..8], &[0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A]);
         let _ = std::fs::remove_file(&tmp);
-        let _ = NodeId::new("n10"); // silence import-used warning
     }
 
     #[test]
     fn export_raster_writes_jpeg_with_white_background() {
-        use openpencil_shell_core::document::{Node, NodeKind};
-        let mut doc = openpencil_shell_core::document::Document::empty();
-        let page = doc.pages.get_mut(0).unwrap();
-        page.children.clear();
-        let mut n = Node::leaf("n10", NodeKind::Rect, "r");
-        n.bounds = Rect::xywh(0.0, 0.0, 80.0, 40.0);
-        n.fill = Some(Color { r: 1.0, g: 0.0, b: 0.0, a: 1.0 });
-        page.children.push(n);
+        let scene = scene_with(vec![filled_rect(
+            "n10",
+            0.0,
+            0.0,
+            80.0,
+            40.0,
+            Color { r: 1.0, g: 0.0, b: 0.0, a: 1.0 },
+        )]);
         let tmp = std::env::temp_dir().join(format!("op-export-test-{}.jpg", std::process::id()));
-        let res = export_raster(&doc, &tmp, RasterFormat::Jpeg, 1.0);
+        let res = export_raster(&scene, &tmp, RasterFormat::Jpeg, 1.0);
         assert!(res.is_ok(), "export_raster JPEG failed: {res:?}");
         let bytes = std::fs::read(&tmp).unwrap();
         // JPEG SOI marker: FF D8 FF
@@ -765,19 +671,99 @@ mod tests {
 
     #[test]
     fn export_raster_scale_clamps_extreme_values() {
-        use openpencil_shell_core::document::{Node, NodeKind};
-        let mut doc = openpencil_shell_core::document::Document::empty();
-        let page = doc.pages.get_mut(0).unwrap();
-        page.children.clear();
-        let mut n = Node::leaf("n10", NodeKind::Rect, "r");
-        n.bounds = Rect::xywh(0.0, 0.0, 10.0, 10.0);
-        n.fill = Some(Color { r: 0.0, g: 0.0, b: 0.0, a: 1.0 });
-        page.children.push(n);
+        let scene = scene_with(vec![filled_rect(
+            "n10",
+            0.0,
+            0.0,
+            10.0,
+            10.0,
+            Color { r: 0.0, g: 0.0, b: 0.0, a: 1.0 },
+        )]);
         // Both extremes should succeed (clamped silently) rather than
         // allocating a gigapixel surface or zero-sized output.
         let tmp = std::env::temp_dir().join(format!("op-export-clamp-{}.png", std::process::id()));
-        assert!(export_raster(&doc, &tmp, RasterFormat::Png, 0.001).is_ok());
-        assert!(export_raster(&doc, &tmp, RasterFormat::Png, 1000.0).is_ok());
+        assert!(export_raster(&scene, &tmp, RasterFormat::Png, 0.001).is_ok());
+        assert!(export_raster(&scene, &tmp, RasterFormat::Png, 1000.0).is_ok());
         let _ = std::fs::remove_file(&tmp);
+    }
+
+    #[test]
+    fn export_raster_fails_on_empty_scene() {
+        let scene = scene_with(Vec::new());
+        let tmp = std::env::temp_dir().join(format!("op-export-empty-{}.png", std::process::id()));
+        let res = export_raster(&scene, &tmp, RasterFormat::Png, 1.0);
+        assert!(res.is_err(), "expected Err on empty scene, got {res:?}");
+        assert_eq!(res.unwrap_err(), "nothing to export");
+    }
+
+    #[test]
+    fn export_raster_applies_flex_layout_from_editor_state() {
+        // A vertical flex frame with a `fill_container`-width child:
+        // the child's authored width is the collapsed flex token, so
+        // the resolved width (375 px = the root frame width) only
+        // appears after jian's flex pass. Export must render the
+        // RESOLVED geometry — proven here by `page_bounds` over the
+        // built `LayoutScene` covering the full 375 px root width.
+        let src = r##"{
+          "version":"1.0.0",
+          "pages":[{
+            "id":"p1","name":"Page 1",
+            "children":[{
+              "type":"frame","id":"root","width":375,"height":200,
+              "layout":"vertical","gap":16,
+              "children":[
+                {"type":"rectangle","id":"r1","width":"fill_container","height":40,
+                 "fill":[{"type":"solid","color":"#3366FF"}]}
+              ]
+            }]
+          }],
+          "children":[]
+        }"##;
+        let parsed = jian_ops_schema::load_str(src).expect("parse .op fixture");
+        let state = op_editor_core::EditorState::from_document(parsed.value);
+        let scene = op_pen_loader::editor_state_to_layout_scene(&state);
+        // Flex stretched the child to the 375 px root width.
+        let child = &scene.pages[0].children[0].children[0];
+        assert_eq!(child.id, "r1");
+        assert_eq!(child.bounds.size.x, 375.0, "fill_container stretched via taffy");
+        // page_bounds covers the resolved 375 px-wide root.
+        let b = page_bounds(scene.active_page().unwrap()).expect("paintable bounds");
+        assert_eq!(b.size.x, 375.0, "page bounds reflect resolved layout width");
+        // And the export succeeds against the layout-resolved scene.
+        let tmp = std::env::temp_dir().join(format!("op-export-flex-{}.png", std::process::id()));
+        let res = export_raster(&scene, &tmp, RasterFormat::Png, 1.0);
+        assert!(res.is_ok(), "flex export failed: {res:?}");
+        let bytes = std::fs::read(&tmp).unwrap();
+        assert_eq!(&bytes[..8], &[0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A]);
+        let _ = std::fs::remove_file(&tmp);
+    }
+
+    #[test]
+    fn page_bounds_covers_layout_resolved_child_geometry() {
+        use openpencil_shell_core::document::NodeKind;
+        use openpencil_shell_core::Rect;
+        // A frame at (10,10) 200x100 with a child the layout pass
+        // resolved to the frame's full width — page_bounds must cover
+        // the resolved child bounds, not authored coords.
+        let mut frame = SceneNode::leaf("frame", NodeKind::Frame);
+        frame.bounds = Rect::xywh(10.0, 10.0, 200.0, 100.0);
+        frame.fill = Some(Color { r: 0.9, g: 0.9, b: 0.9, a: 1.0 });
+        let mut child = filled_rect(
+            "child",
+            10.0,
+            10.0,
+            200.0,
+            40.0,
+            Color { r: 0.1, g: 0.2, b: 0.3, a: 1.0 },
+        );
+        child.bounds = Rect::xywh(10.0, 10.0, 200.0, 40.0);
+        frame.children = vec![child];
+        let scene = scene_with(vec![frame]);
+        let page = scene.active_page().unwrap();
+        let b = page_bounds(page).expect("page has paintable bounds");
+        assert_eq!(b.origin.x, 10.0);
+        assert_eq!(b.origin.y, 10.0);
+        assert_eq!(b.size.x, 200.0);
+        assert_eq!(b.size.y, 100.0);
     }
 }
