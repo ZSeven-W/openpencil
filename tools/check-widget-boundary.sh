@@ -3,7 +3,7 @@
 #
 # Per spec §1.4: widget logic (Widget impls, layout/paint/access_node)
 # lives in `crates/op-editor-ui/src/widgets/` (Phase 7 reorg moved it
-# out of openpencil-shell-core). shell-web's
+# out of the old openpencil-shell-core). The op-host-web crate's
 # widget glue is scoped to a single module — `widget_host.rs` plus
 # its sibling submodules under `widget_host/` (spec amendment
 # 2026-05-11: the original "one file" constraint conflicted with
@@ -12,35 +12,35 @@
 # span multiple sibling files inside the `widget_host/` directory).
 # The `// glue:` marker on the paint signature is still the only
 # `fn paint(` allowed to drive widgets from this crate.
-# Any function or file in shell-web that pulls
-# `openpencil_shell_core::widgets::*` must live in the widget_host
-# module (the spec's "any function pulling shell-core widgets" clause).
+# Any function or file in op-host-web that pulls
+# `op_editor_ui::widgets::*` must live in the widget_host
+# module (the spec's "any function pulling the widget facade" clause).
 #
 # Reverse direction: op-editor-ui/src/widgets/ MUST contain four impl
 # files (tree, prop_row, dropdown, text_input) AND each file must
 # carry a real `impl Widget for X` — a stale file with the impl
-# removed must not silently pass. (Phase 7 reorg: the widget facade
-# moved out of openpencil-shell-core into the op-editor-ui crate;
-# shell-web still pulls `openpencil_shell_core::widgets` via the
-# shell-core re-export shim, so the forward F4 path is unchanged.)
+# removed must not silently pass. (Phase 7.3 reorg: the
+# openpencil-shell-core re-export shim was dissolved; op-host-web
+# now pulls `op_editor_ui::widgets` directly from the real source
+# crate, so the forward F4 path is unchanged.)
 #
 # Exit semantics:
 #   0   PASS — both invariants hold.
-#   1   FAIL — widget logic leaked into shell-web OR shell-core
-#       widget impl files are missing / empty.
+#   1   FAIL — widget logic leaked into op-host-web OR the
+#       op-editor-ui widget impl files are missing / empty.
 
 set -euo pipefail
 
-WEB_SRC="crates/openpencil-shell-web/src"
+WEB_SRC="crates/op-host-web/src"
 CORE_WIDGETS="crates/op-editor-ui/src/widgets"
 
 fail_lines=()
 
 # ---------------------------------------------------------------------
 # Forward F1: no `impl Widget for X` (with optional generic params and
-# arbitrary namespace segments) anywhere under shell-web/src/.
+# arbitrary namespace segments) anywhere under op-host-web/src/.
 # Even widget_host.rs is not allowed to host a Widget impl — all real
-# impls live in shell-core. The `// glue:` exemption is for the paint
+# impls live in op-editor-ui. The `// glue:` exemption is for the paint
 # signature only, not for Widget trait impls (codex B4 R2 CONCERN-2).
 # ---------------------------------------------------------------------
 # `impl(<...>)?[[:space:]]+(ns::)*Widget[[:space:]]+for[[:space:]]`:
@@ -54,12 +54,12 @@ impl_hits="$(grep -RInE \
     'impl(<[^>]+>)?[[:space:]]+([[:alnum:]_]+::)*Widget[[:space:]]+for[[:space:]]' \
     "${WEB_SRC}" 2>/dev/null || true)"
 if [ -n "${impl_hits}" ]; then
-  fail_lines+=("Forward F1: Widget trait impl in shell-web (must live in shell-core):" "${impl_hits}")
+  fail_lines+=("Forward F1: Widget trait impl in op-host-web (must live in op-editor-ui):" "${impl_hits}")
 fi
 
 # ---------------------------------------------------------------------
 # Forward F2: no `fn layout(` / `fn access_node(` anywhere under
-# shell-web/src/. These are widget-trait method signatures and have
+# op-host-web/src/. These are widget-trait method signatures and have
 # no business in the platform crate. (Note: `fn paint(` is allowed
 # only on the `// glue:` marked line in widget_host.rs — handled by
 # F3 below to keep the exemption tight.)
@@ -73,11 +73,11 @@ trait_method_hits="$(grep -RInE \
     'fn[[:space:]]+(layout|access_node)\(' \
     "${WEB_SRC}" 2>/dev/null || true)"
 if [ -n "${trait_method_hits}" ]; then
-  fail_lines+=("Forward F2: Widget trait method (layout / access_node) in shell-web:" "${trait_method_hits}")
+  fail_lines+=("Forward F2: Widget trait method (layout / access_node) in op-host-web:" "${trait_method_hits}")
 fi
 
 # ---------------------------------------------------------------------
-# Forward F3: `fn paint(` under shell-web is allowed ONLY when the
+# Forward F3: `fn paint(` under op-host-web is allowed ONLY when the
 # line ALSO carries the `// glue:` marker AND the file is
 # widget_host.rs. Tight exemption (codex B4 R2 CONCERN-2 — broad
 # `// glue:` exemption could hide leaked impl/method lines if anyone
@@ -118,13 +118,13 @@ if [ -n "${paint_hits}" ]; then
     }
     { prev_was_glue = 0 }
   ' "${WEB_SRC}/widget_host.rs" "${WEB_SRC}/widget_host"/*.rs 2>/dev/null || true)"
-  # `outside_module_files` — files in shell-web/src/ that
+  # `outside_module_files` — files in op-host-web/src/ that
   # define `fn paint(` but are NOT in the widget_host module
   # at all. These violate F3 unconditionally.
   outside_module_files="$(grep -RIlE \
     'fn[[:space:]]+paint[[:space:]]*[<(]' \
     "${WEB_SRC}" 2>/dev/null \
-    | grep -vE '^crates/openpencil-shell-web/src/widget_host(\.rs|/[^/]+\.rs)$' \
+    | grep -vE '^crates/op-host-web/src/widget_host(\.rs|/[^/]+\.rs)$' \
     | LC_ALL=C sort -u || true)"
   outside_module_hits=""
   if [ -n "${outside_module_files}" ]; then
@@ -142,29 +142,29 @@ if [ -n "${paint_hits}" ]; then
     fi
   fi
   if [ -n "${combined_paint}" ]; then
-    fail_lines+=("Forward F3: fn paint( in shell-web without a '// glue:' marker on the immediately preceding line, OR outside the widget_host module (allowed locations: widget_host.rs and widget_host/* sibling files):" "${combined_paint}")
+    fail_lines+=("Forward F3: fn paint( in op-host-web without a '// glue:' marker on the immediately preceding line, OR outside the widget_host module (allowed locations: widget_host.rs and widget_host/* sibling files):" "${combined_paint}")
   fi
 fi
 
 # ---------------------------------------------------------------------
-# Forward F4: only widget_host.rs may import `openpencil_shell_core::
+# Forward F4: only widget_host.rs may import `op_editor_ui::
 # widgets` in any form. Catches:
-#   - `use openpencil_shell_core::widgets;`                 (direct)
-#   - `use openpencil_shell_core::widgets::Foo;`            (direct)
-#   - `use openpencil_shell_core::{widgets};`               (grouped)
-#   - `use openpencil_shell_core::{widgets::Foo};`          (grouped)
-#   - `openpencil_shell_core::widgets::call()`              (path expr)
+#   - `use op_editor_ui::widgets;`                 (direct)
+#   - `use op_editor_ui::widgets::Foo;`            (direct)
+#   - `use op_editor_ui::{widgets};`               (grouped)
+#   - `use op_editor_ui::{widgets::Foo};`          (grouped)
+#   - `op_editor_ui::widgets::call()`              (path expr)
 #   - Multi-line grouped imports are NOT caught (single-line
 #     scope only — code review enforces single-line use stmts in this
 #     crate; the cost-benefit doesn't justify a multi-line parser).
 #
 # Codex B4 R2 BLOCK-fix introduced F4; R3 BLOCK refined for grouped
 # import forms — the previous regex required a literal `::widgets`
-# right after `openpencil_shell_core`, missing the brace form.
-# Solution: any line mentioning `openpencil_shell_core` AND `widgets`
+# right after `op_editor_ui`, missing the brace form.
+# Solution: any line mentioning `op_editor_ui` AND `widgets`
 # is a hit (single grep pass picks both patterns up).
 # ---------------------------------------------------------------------
-core_ref_hits="$(grep -RIn 'openpencil_shell_core' "${WEB_SRC}" 2>/dev/null || true)"
+core_ref_hits="$(grep -RIn 'op_editor_ui' "${WEB_SRC}" 2>/dev/null || true)"
 if [ -n "${core_ref_hits}" ]; then
   # Filter to lines that ALSO mention `widgets`, then drop the
   # widget_host.rs allowance.
@@ -172,10 +172,10 @@ if [ -n "${core_ref_hits}" ]; then
   # `widget_host/` (spec amendment 2026-05-11).
   illegal_imports="$(printf '%s\n' "${core_ref_hits}" \
     | grep 'widgets' \
-    | grep -vE '^crates/openpencil-shell-web/src/widget_host(\.rs|/[^/]+\.rs):' \
+    | grep -vE '^crates/op-host-web/src/widget_host(\.rs|/[^/]+\.rs):' \
     || true)"
   if [ -n "${illegal_imports}" ]; then
-    fail_lines+=("Forward F4: openpencil_shell_core::widgets reference outside widget_host.rs (covers direct + grouped use forms):" "${illegal_imports}")
+    fail_lines+=("Forward F4: op_editor_ui::widgets reference outside widget_host.rs (covers direct + grouped use forms):" "${illegal_imports}")
   fi
 fi
 
@@ -189,7 +189,7 @@ fi
 # not silently satisfy the check. The stripping uses sed to drop
 # `//`-prefixed content (after optional leading whitespace) before
 # grepping; block comments (`/* … */`) are not handled because the
-# Rust style in shell-core/src/widgets/ uses line comments only.
+# Rust style in op-editor-ui/src/widgets/ uses line comments only.
 # ---------------------------------------------------------------------
 required_widgets=("tree" "prop_row" "dropdown" "text_input")
 for w in "${required_widgets[@]}"; do

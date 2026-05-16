@@ -115,11 +115,11 @@ jobs:
         if: matrix.cross == false && matrix.check_only != true && runner.os != 'Linux'
         run: cargo test --workspace --target ${{ matrix.target }}
       # Desktop binary artifact upload is intentionally not wired here yet.
-      # The real desktop binary lives in the `openpencil-desktop` crate; a
+      # The real desktop binary lives in the `op-host-desktop` crate; a
       # build + upload step can be added once release packaging is finalized.
 
   wasm-web:
-    name: wasm32-unknown-unknown / openpencil-shell-web (compile guard)
+    name: wasm32-unknown-unknown / op-host-web (compile guard)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -140,7 +140,7 @@ jobs:
       # (brew emscripten install + EMSDK + .wasm.a symlink hack +
       # wasm-bindgen + wasm-opt) lands. Until then this job only proves
       # the public surface compiles wasm32-clean.
-      - run: cargo build -p openpencil-shell-web --target wasm32-unknown-unknown --release --no-default-features --features web
+      - run: cargo build -p op-host-web --target wasm32-unknown-unknown --release --no-default-features --features web
       # Artifact upload deliberately removed: the stub `.wasm` from this
       # path would mislead downstream consumers into thinking the shell can
       # render. Restore the upload step once the skia-enabled build runs on
@@ -179,11 +179,12 @@ jobs:
         with:
           key: mobile-${{ matrix.target }}
       # Step 1a spec §11 mobile invariants verify on iOS / Android cargo check:
-      # - shell-core wasm32/ios/android-clean (no platform deps).
-      # - shell-native compiles on mobile targets with EaglProvider /
+      # - op-editor-ui wasm32/ios/android-clean (no platform deps) — the
+      #   widget facade / editor-UI composition crate.
+      # - op-host-native compiles on mobile targets with EaglProvider /
       #   AndroidEglProvider stubs (`unimplemented!("Step 1f")`); desktop GL
       #   stack (glutin / winit) is target-gated to desktop in Cargo.toml +
       #   GlutinProvider source is cfg-gated to desktop OS only. Real SDK
       #   linking and iOS/Android runtime is Step 1f.
-      - run: cargo check -p openpencil-shell-core --target ${{ matrix.target }}
-      - run: cargo check -p openpencil-shell-native --target ${{ matrix.target }}
+      - run: cargo check -p op-editor-ui --target ${{ matrix.target }}
+      - run: cargo check -p op-host-native --target ${{ matrix.target }}

@@ -7,9 +7,9 @@
 #      + wasm-aware clang (build-time only; emscripten runtime is NOT
 #      linked into the bundle — see spec §2.2).
 #   2. cargo build → wasm-bindgen → wasm-opt -Oz pipeline produces
-#      crates/openpencil-shell-web/pkg/openpencil_shell_web_bg.wasm.
+#      crates/op-host-web/pkg/op_host_web_bg.wasm.
 #   3. Post-bindgen bundle has 0 env.* imports
-#      (i.e. all imports come from `./openpencil_shell_web_bg.js`,
+#      (i.e. all imports come from `./op_host_web_bg.js`,
 #      the wasm-bindgen JS shim). Any env.* import = LinkError at
 #      load time → regression → fail.
 #   4. Post wasm-opt -Oz gzip size ≤ STEP1B_SHELL_WASM_GZIP_LIMIT_BYTES
@@ -31,11 +31,11 @@
 
 set -euo pipefail
 
-CRATE_DIR="crates/openpencil-shell-web"
+CRATE_DIR="crates/op-host-web"
 PKG_DIR="${CRATE_DIR}/pkg"
-WASM_RAW="${PKG_DIR}/openpencil_shell_web_bg.wasm"
-WASM_OPT="${PKG_DIR}/openpencil_shell_web_bg.opt.wasm"
-TARGET_WASM="target/wasm32-unknown-unknown/release/openpencil_shell_web.wasm"
+WASM_RAW="${PKG_DIR}/op_host_web_bg.wasm"
+WASM_OPT="${PKG_DIR}/op_host_web_bg.opt.wasm"
+TARGET_WASM="target/wasm32-unknown-unknown/release/op_host_web.wasm"
 
 # Spec §6 row "Per-component ceiling — shell-web wasm (cdylib) gzip"
 # = 1 MiB. Override via env for experiments only.
@@ -54,7 +54,7 @@ need gzip
 [ -n "${EMSDK:-}" ] || { printf 'EMSDK env var unset (needed for emsdk libcxx headers + wasm-aware clang)\n' >&2; exit 2; }
 
 step 2 5 "Build shell-web wasm32-unknown-unknown with --features skia"
-cargo build -p openpencil-shell-web \
+cargo build -p op-host-web \
   --target wasm32-unknown-unknown --features skia --release >/dev/null
 
 step 3 5 "wasm-bindgen --target web → ${PKG_DIR}/"
