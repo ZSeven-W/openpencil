@@ -97,6 +97,11 @@ pub struct WidgetHostNative {
     /// `editor_state`. Rebuilt lazily by `paint_document()` whenever
     /// `editor_state_dirty` is set.
     pub(in crate::widget_host) paint_doc: Document,
+    /// Derived paint-only `LayoutScene` of `editor_state` — the
+    /// layout-resolved render tree the migrated `CanvasViewport`
+    /// paints from. Rebuilt alongside `paint_doc` whenever
+    /// `editor_state_dirty` is set.
+    pub(in crate::widget_host) layout_scene: openpencil_shell_core::layout_scene::LayoutScene,
     /// Set whenever `editor_state` is mutated. Drives the lazy
     /// rebuild of `paint_doc` — `paint_document()` rebuilds + clears
     /// the flag, so a sequence of mutations only re-derives once.
@@ -314,9 +319,11 @@ impl WidgetHostNative {
         // Seed the paint snapshot once up front; subsequent frames
         // re-derive only when `editor_state_dirty` is set.
         let paint_doc = derive_paint_doc(&editor_state);
+        let layout_scene = op_pen_loader::editor_state_to_layout_scene(&editor_state);
         Self {
             editor_state,
             paint_doc,
+            layout_scene,
             editor_state_dirty: false,
             theme: Theme::dark(),
             drag: None,
@@ -401,6 +408,8 @@ impl WidgetHostNative {
     pub(in crate::widget_host) fn refresh_paint_doc(&mut self) {
         if self.editor_state_dirty {
             self.paint_doc = derive_paint_doc(&self.editor_state);
+            self.layout_scene =
+                op_pen_loader::editor_state_to_layout_scene(&self.editor_state);
             self.editor_state_dirty = false;
         }
     }

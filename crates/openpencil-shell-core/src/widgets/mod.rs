@@ -54,6 +54,7 @@ pub mod toolbar;
 // visual primitives (frame fills, rect strokes, text strings).
 pub mod canvas_viewport;
 pub mod canvas_viewport_overlay;
+pub mod canvas_viewport_paint;
 
 // Phase 6 — shell-core-side `theme()` / `t()` derivations over
 // `op_editor_core::EditorUiState` for widgets ported off `Document`.

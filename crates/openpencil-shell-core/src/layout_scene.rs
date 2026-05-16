@@ -54,6 +54,21 @@ impl LayoutScene {
     }
 }
 
+impl ScenePage {
+    /// Depth-first search for the node with `id` anywhere in this
+    /// page's render tree. Mirrors `document::Page::find` so the
+    /// selection-overlay + pen-rubber-band painters can map an editor
+    /// selection id onto the resolved scene node.
+    pub fn find(&self, id: &str) -> Option<&SceneNode> {
+        for child in &self.children {
+            if let Some(found) = child.find(id) {
+                return Some(found);
+            }
+        }
+        None
+    }
+}
+
 /// One resolved page — an artboard / page id + name + the top-level
 /// resolved render nodes.
 #[derive(Debug, Clone, PartialEq)]
@@ -129,6 +144,50 @@ pub struct SceneNode {
 }
 
 impl SceneNode {
+    /// Depth-first search for the node with `id` in this subtree
+    /// (self included). Mirrors `document::Node::find`.
+    pub fn find(&self, id: &str) -> Option<&SceneNode> {
+        if self.id == id {
+            return Some(self);
+        }
+        for child in &self.children {
+            if let Some(found) = child.find(id) {
+                return Some(found);
+            }
+        }
+        None
+    }
+
+    /// Resolved bounds for selection / rotation-pivot math: the node's
+    /// own `bounds` when it is bounded, otherwise the union of its
+    /// children's aggregate bounds. Mirrors `document::Node::
+    /// aggregate_bounds` so the overlay painter reads the same rect a
+    /// `Document`-bound painter did. Pure geometry over `bounds` +
+    /// `children` — no extra scene state needed.
+    pub fn aggregate_bounds(&self) -> Rect {
+        if self.bounds.size.x > 0.0 || self.bounds.size.y > 0.0 {
+            return self.bounds;
+        }
+        let mut iter = self
+            .children
+            .iter()
+            .map(SceneNode::aggregate_bounds)
+            .filter(|r| r.size.x > 0.0 || r.size.y > 0.0);
+        let Some(first) = iter.next() else {
+            return Rect::ZERO;
+        };
+        let (mut min_x, mut min_y) = (first.origin.x, first.origin.y);
+        let (mut max_x, mut max_y) =
+            (first.origin.x + first.size.x, first.origin.y + first.size.y);
+        for r in iter {
+            min_x = min_x.min(r.origin.x);
+            min_y = min_y.min(r.origin.y);
+            max_x = max_x.max(r.origin.x + r.size.x);
+            max_y = max_y.max(r.origin.y + r.size.y);
+        }
+        Rect::xywh(min_x, min_y, max_x - min_x, max_y - min_y)
+    }
+
     /// Construct a leaf render node with all paint fields cleared.
     /// Builders set `bounds` / `fill` / `text` / … after.
     pub fn leaf(id: impl Into<String>, kind: NodeKind) -> Self {
@@ -193,6 +252,43 @@ mod tests {
             active_page_index: 1,
         };
         assert_eq!(scene.active_page().map(|p| p.id.as_str()), Some("b"));
+    }
+
+    #[test]
+    fn find_locates_a_nested_node() {
+        let mut leaf = SceneNode::leaf("deep", NodeKind::Rect);
+        leaf.bounds = Rect::xywh(0.0, 0.0, 10.0, 10.0);
+        let mut group = SceneNode::leaf("g", NodeKind::Group);
+        group.children = vec![leaf];
+        let page = ScenePage {
+            id: "p".into(),
+            name: "P".into(),
+            children: vec![group],
+        };
+        assert_eq!(page.find("deep").map(|n| n.id.as_str()), Some("deep"));
+        assert!(page.find("missing").is_none());
+    }
+
+    #[test]
+    fn aggregate_bounds_unions_children_for_unbounded_container() {
+        let mut a = SceneNode::leaf("a", NodeKind::Rect);
+        a.bounds = Rect::xywh(10.0, 10.0, 20.0, 20.0);
+        let mut b = SceneNode::leaf("b", NodeKind::Rect);
+        b.bounds = Rect::xywh(50.0, 5.0, 10.0, 40.0);
+        let mut group = SceneNode::leaf("g", NodeKind::Group);
+        group.children = vec![a, b];
+        // Unbounded group → union of children: x 10..60, y 5..45.
+        assert_eq!(group.aggregate_bounds(), Rect::xywh(10.0, 5.0, 50.0, 40.0));
+    }
+
+    #[test]
+    fn aggregate_bounds_keeps_own_bounds_when_bounded() {
+        let mut frame = SceneNode::leaf("f", NodeKind::Frame);
+        frame.bounds = Rect::xywh(0.0, 0.0, 100.0, 200.0);
+        let mut child = SceneNode::leaf("c", NodeKind::Rect);
+        child.bounds = Rect::xywh(0.0, 0.0, 999.0, 999.0);
+        frame.children = vec![child];
+        assert_eq!(frame.aggregate_bounds(), Rect::xywh(0.0, 0.0, 100.0, 200.0));
     }
 
     #[test]

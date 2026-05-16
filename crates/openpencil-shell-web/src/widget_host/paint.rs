@@ -129,8 +129,12 @@ impl WidgetHost {
             size: Point2D::new(canvas_w, canvas_h),
         };
         if canvas_w > 0.0 && canvas_h > 0.0 {
-            let canvas = CanvasViewport::from_document(doc);
+            // PAINT path — the canvas reads editor state + the
+            // layout-resolved render scene, not the derived
+            // `Document`. Both are rebuilt by `refresh_paint_doc`.
             // Web has no per-frame clock; caret stays solid.
+            let canvas =
+                CanvasViewport::from_editor(&self.editor_state, &self.layout_scene);
             let mut cx = PaintCx {
                 backend: &mut *backend,
             };
