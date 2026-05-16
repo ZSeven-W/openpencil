@@ -440,14 +440,6 @@ impl WidgetHostNative {
         self.editor_state_dirty = true;
     }
 
-    /// Derive an owned, paint-only `Document` from the live editor
-    /// state. Used by the desktop binary's file-I/O / export code,
-    /// whose raster / PDF renderers still read a `&Document`. Not on
-    /// the input path — built fresh per call.
-    pub fn document(&self) -> openpencil_shell_core::document::Document {
-        derive_paint_doc(&self.editor_state)
-    }
-
     /// Borrow the canonical-model editor state — the host's single
     /// source of truth.
     pub fn editor_state(&self) -> &op_editor_core::EditorState {
@@ -518,17 +510,6 @@ impl WidgetHostNative {
         }
         None
     }
-}
-
-/// Derive a faithful paint-only `Document` from an `EditorState`:
-/// node tree + geometry from the canonical doc, then the chrome /
-/// chat / components / variable / scalar state layered on.
-pub(in crate::widget_host) fn derive_paint_doc(
-    state: &op_editor_core::EditorState,
-) -> openpencil_shell_core::document::Document {
-    let mut d = op_pen_loader::pen_document_to_document(&state.doc);
-    op_pen_loader::apply_editor_state_ui(&mut d, state);
-    d
 }
 
 impl Default for WidgetHostNative {
