@@ -84,7 +84,9 @@ struct DesktopApp {
 impl DesktopApp {
     fn new() -> Self {
         let mut host = WidgetHostNative::new();
-        settings_io::load(host.document_mut()); // best-effort prefs restore
+        // Best-effort prefs restore onto the host's `EditorState`.
+        settings_io::load(host.editor_state_mut());
+        host.mark_editor_state_dirty();
         Self {
             window: None,
             ctx: None,
@@ -246,7 +248,7 @@ impl ApplicationHandler for DesktopApp {
             frame::paint(
                 ctx,
                 backend,
-                &self.host,
+                &mut self.host,
                 self.viewport_width,
                 self.viewport_height,
                 self.dpi,
@@ -271,12 +273,12 @@ impl ApplicationHandler for DesktopApp {
         // on the trackpad hot path.
         let settings_before = match &event {
             WindowEvent::CursorMoved { .. } => None,
-            _ => Some(settings_io::fingerprint(self.host.document())),
+            _ => Some(settings_io::fingerprint(self.host.editor_state())),
         };
         match event {
             WindowEvent::CloseRequested => {
                 self.host.flush_settings_input();
-                settings_io::save(self.host.document());
+                settings_io::save(self.host.editor_state());
                 event_loop.exit();
             }
             WindowEvent::Resized(size) => {
@@ -310,7 +312,7 @@ impl ApplicationHandler for DesktopApp {
                     self.redraw_dirty = true;
                 }
                 // Drain background model discovery once it lands.
-                if self.model_probe.poll_into(self.host.document_mut()) {
+                if self.model_probe.poll_into(&mut self.host) {
                     self.redraw_dirty = true;
                 }
                 let should_paint = self.prepare_redraw();
@@ -319,7 +321,7 @@ impl ApplicationHandler for DesktopApp {
                         frame::paint(
                             ctx,
                             backend,
-                            &self.host,
+                            &mut self.host,
                             self.viewport_width,
                             self.viewport_height,
                             self.dpi,
@@ -388,15 +390,25 @@ impl ApplicationHandler for DesktopApp {
                 if chat_session::launch_if_pending(&mut self.host, &mut self.current_chat) {
                     self.request_redraw(true);
                 }
-                if let Some(action) = self.host.document_mut().ui.pending_file_action.take() {
+                if let Some(action) =
+                    self.host.editor_state_mut().editor_ui.pending_file_action.take()
+                {
                     // ExportImage → close source overlay + open picker dialog.
-                    if matches!(action, openpencil_shell_core::document::FileAction::ExportImage) {
-                        let ui = &mut self.host.document_mut().ui;
-                        ui.file_menu_open = false; ui.file_menu_hover = None;
-                        ui.export_dialog_open = true;
+                    if matches!(action, op_editor_core::editor_ui_state::FileAction::ExportImage)
+                    {
+                        let eui = &mut self.host.editor_state_mut().editor_ui;
+                        eui.file_menu_open = false;
+                        eui.file_menu_hover = None;
+                        eui.export_dialog_open = true;
+                        self.host.mark_editor_state_dirty();
                         self.request_redraw(true);
                     } else {
-                        persistence::run_action(action, &mut self.host, &mut self.current_path, self.window.as_ref());
+                        persistence::run_action(
+                            action,
+                            &mut self.host,
+                            &mut self.current_path,
+                            self.window.as_ref(),
+                        );
                     }
                 }
                 if consumed { self.request_redraw(true); }
@@ -618,7 +630,7 @@ impl ApplicationHandler for DesktopApp {
                             }
                             "p" => {
                                 self.host.commit_variable_row_focus_if_any_pub();
-                                persistence::run_action(openpencil_shell_core::document::FileAction::ExportImage, &mut self.host, &mut self.current_path, self.window.as_ref());
+                                persistence::run_action(op_editor_core::editor_ui_state::FileAction::ExportImage, &mut self.host, &mut self.current_path, self.window.as_ref());
                                 consumed = true;
                             }
                             _ if settings_focused => {}
@@ -714,7 +726,7 @@ impl ApplicationHandler for DesktopApp {
             _ => {}
         }
         if let Some(before) = settings_before {
-            settings_io::save_if_changed(self.host.document(), before);
+            settings_io::save_if_changed(self.host.editor_state(), before);
         }
     }
 
@@ -724,7 +736,7 @@ impl ApplicationHandler for DesktopApp {
         // any in-progress MCP port draft before snapshotting so a
         // focused-but-uncommitted edit isn't silently dropped.
         self.host.flush_settings_input();
-        settings_io::save(self.host.document());
+        settings_io::save(self.host.editor_state());
         if let Some(mut ctx) = self.ctx.take() {
             if let Err(err) = ctx.teardown() {
                 eprintln!("openpencil-desktop: teardown failed: {err}");

@@ -21,6 +21,7 @@ pub mod fills;
 pub mod geometry;
 pub mod grouping;
 pub mod history;
+pub mod host_support;
 pub mod mutators;
 pub mod node_id;
 pub mod page_mutators;

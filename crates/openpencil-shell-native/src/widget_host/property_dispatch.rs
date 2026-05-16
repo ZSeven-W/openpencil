@@ -1,9 +1,12 @@
 //! PropertyPanel action + commit dispatch, split out of `input.rs`
 //! to stay under the 800-line cap.
+//!
+//! All hit-tests run against the derived paint `Document`; their
+//! results feed `EditorState` mutators (the host's source of truth).
 
 use super::helpers::parse_hex_color;
 use super::WidgetHostNative;
-use openpencil_shell_core::document::PropertyFocus;
+use op_editor_core::ui_draft::PropertyFocus;
 
 impl WidgetHostNative {
     pub(in crate::widget_host) fn apply_property_action(
@@ -12,51 +15,57 @@ impl WidgetHostNative {
     ) {
         use openpencil_shell_core::widgets::PropertyPanelAction as A;
         match action {
-            A::SetFlexLayout(mode) => self.document.ui.flex_layout = mode,
+            A::SetFlexLayout(mode) => {
+                self.editor_state.editor_ui.flex_layout =
+                    op_pen_loader::rev::flex_layout(mode);
+            }
             A::ToggleSizeFillWidth => {
-                self.document.ui.size_fill_width = !self.document.ui.size_fill_width;
+                let v = &mut self.editor_state.editor_ui.size_fill_width;
+                *v = !*v;
             }
             A::ToggleSizeFillHeight => {
-                self.document.ui.size_fill_height = !self.document.ui.size_fill_height;
+                let v = &mut self.editor_state.editor_ui.size_fill_height;
+                *v = !*v;
             }
             A::ToggleSizeHugWidth => {
-                self.document.ui.size_hug_width = !self.document.ui.size_hug_width;
+                let v = &mut self.editor_state.editor_ui.size_hug_width;
+                *v = !*v;
             }
             A::ToggleSizeHugHeight => {
-                self.document.ui.size_hug_height = !self.document.ui.size_hug_height;
+                let v = &mut self.editor_state.editor_ui.size_hug_height;
+                *v = !*v;
             }
             A::ToggleSizeClipContent => {
-                self.document.ui.size_clip_content = !self.document.ui.size_clip_content;
+                let v = &mut self.editor_state.editor_ui.size_clip_content;
+                *v = !*v;
             }
             A::ToggleFillTypePicker => {
-                self.document.ui.fill_type_picker_open = !self.document.ui.fill_type_picker_open;
+                let v = &mut self.editor_state.editor_ui.fill_type_picker_open;
+                *v = !*v;
             }
             A::SetFillType(t) => {
-                self.document.set_selected_fill_type(t);
-                self.document.ui.fill_type_picker_open = false;
+                self.editor_state
+                    .set_selected_fill_type(op_pen_loader::rev::fill_type(t));
+                self.editor_state.editor_ui.fill_type_picker_open = false;
             }
             A::OpenColorPicker(target) => {
-                // Fallback anchor when called outside the press
-                // path (no click y available); the press handler
-                // calls `open_color_picker` directly with the real
-                // click y so the picker centers on the swatch.
-                let _ = self.document.open_color_picker(target, 0.0);
+                // Fallback anchor when called outside the press path.
+                let _ = self
+                    .editor_state
+                    .open_color_picker(color_target(target), 0.0);
             }
             A::OpenExportDialog => {
-                self.document.ui.pending_file_action =
-                    Some(openpencil_shell_core::document::FileAction::ExportImage);
+                self.editor_state.editor_ui.pending_file_action =
+                    Some(op_editor_core::editor_ui_state::FileAction::ExportImage);
             }
             A::AddEffect => {
-                self.document.add_drop_shadow_to_selected();
+                self.editor_state.add_drop_shadow_to_selected();
             }
         }
+        self.mark_dirty();
     }
 
-    /// Export-dialog press dispatcher. Format / Scale pills mutate
-    /// `Document.ui.export_format` / `export_scale`; Cancel + outside
-    /// click close the dialog; Export closes the dialog AND queues
-    /// `FileAction::ExportImage` so the desktop binary's save dialog
-    /// fires with the chosen format + scale.
+    /// Export-dialog press dispatcher.
     pub(in crate::widget_host) fn dispatch_export_dialog_press(
         &mut self,
         x: f32,
@@ -64,7 +73,7 @@ impl WidgetHostNative {
         viewport_w: f32,
         viewport_h: f32,
     ) {
-        use openpencil_shell_core::document::FileAction;
+        use op_editor_core::editor_ui_state::FileAction;
         use openpencil_shell_core::widgets::export_dialog::{
             scale_from_index, ExportDialog, ExportDialogHit,
         };
@@ -72,31 +81,31 @@ impl WidgetHostNative {
         let point = openpencil_shell_core::Point2D::new(x, y);
         match dlg.hit_test(point) {
             Some(ExportDialogHit::Format(f)) => {
-                self.document.ui.export_format = f;
+                self.editor_state.editor_ui.export_format =
+                    op_pen_loader::rev::export_format(f);
             }
             Some(ExportDialogHit::Scale(i)) => {
-                self.document.ui.export_scale = scale_from_index(i);
+                self.editor_state.editor_ui.export_scale = scale_from_index(i);
             }
             Some(ExportDialogHit::Cancel) => {
-                self.document.ui.export_dialog_open = false;
+                self.editor_state.editor_ui.export_dialog_open = false;
             }
             Some(ExportDialogHit::Export) => {
-                self.document.ui.export_dialog_open = false;
-                self.document.ui.pending_file_action = Some(FileAction::ExportImageConfirm);
+                self.editor_state.editor_ui.export_dialog_open = false;
+                self.editor_state.editor_ui.pending_file_action =
+                    Some(FileAction::ExportImageConfirm);
             }
             None => {
                 if !dlg.contains(point) {
                     // Outside click — dismiss like Cancel.
-                    self.document.ui.export_dialog_open = false;
+                    self.editor_state.editor_ui.export_dialog_open = false;
                 }
-                // In-dialog dead-space — swallow without dispatching.
             }
         }
+        self.mark_dirty();
     }
 
-    /// Figma-import-modal press dispatcher. Routes Outside / Close
-    /// to dismissal; DropZone hit pushes `FileAction::ImportFigma`
-    /// so the desktop binary opens the rfd .fig picker.
+    /// Figma-import-modal press dispatcher.
     pub(in crate::widget_host) fn dispatch_figma_import_press(
         &mut self,
         x: f32,
@@ -104,52 +113,54 @@ impl WidgetHostNative {
         viewport_w: f32,
         viewport_h: f32,
     ) {
-        use openpencil_shell_core::document::FileAction;
+        use op_editor_core::editor_ui_state::FileAction;
         use openpencil_shell_core::widgets::figma_import::{FigmaImportHit, FigmaImportModal};
-        let modal = FigmaImportModal::for_document(&self.document);
+        self.refresh_paint_doc();
+        let modal = FigmaImportModal::for_document(&self.paint_doc);
         let panel_rect = modal.rect(viewport_w, viewport_h);
         match modal.hit_test(panel_rect, openpencil_shell_core::Point2D::new(x, y)) {
             FigmaImportHit::Close | FigmaImportHit::Outside => {
-                self.document.ui.figma_import_open = false;
+                self.editor_state.editor_ui.figma_import_open = false;
             }
             FigmaImportHit::DropZone => {
-                self.document.ui.pending_file_action = Some(FileAction::ImportFigma);
-                self.document.ui.figma_import_open = false;
+                self.editor_state.editor_ui.pending_file_action =
+                    Some(FileAction::ImportFigma);
+                self.editor_state.editor_ui.figma_import_open = false;
             }
             FigmaImportHit::Inside => {}
         }
+        self.mark_dirty();
     }
 
-    /// File-menu press dispatcher — extracted from press.rs to keep
-    /// the spine under the 800-line cap. Maps a `FileMenuChoice` to
-    /// `Document.ui.pending_file_action` so the desktop binary can
-    /// run the rfd dialogs + persistence calls.
+    /// File-menu press dispatcher.
     pub(in crate::widget_host) fn dispatch_file_menu_press(
         &mut self,
         x: f32,
         y: f32,
         viewport_width: f32,
     ) {
-        use openpencil_shell_core::document::FileAction;
+        use op_editor_core::editor_ui_state::FileAction;
         use openpencil_shell_core::widgets::file_menu::{FileMenu, FileMenuChoice};
         use openpencil_shell_core::widgets::top_bar::TopBar;
+        self.refresh_paint_doc();
         let top_bar_rect = openpencil_shell_core::Rect {
             origin: openpencil_shell_core::Point2D::new(0.0, 0.0),
-            size: openpencil_shell_core::Point2D::new(viewport_width, openpencil_shell_core::widgets::TOP_BAR_HEIGHT),
+            size: openpencil_shell_core::Point2D::new(
+                viewport_width,
+                openpencil_shell_core::widgets::TOP_BAR_HEIGHT,
+            ),
         };
         let anchor = TopBar::file_menu_rect(top_bar_rect);
-        // Recent rows participate in hit-test — pass real Unix secs
-        // so the age column matches paint (it's only used by paint
-        // but `from_document` builds the same RecentEntry list paint
-        // reads, keeping geometry consistent).
         let now_secs = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .map(|d| d.as_secs())
             .unwrap_or(0);
-        let menu = FileMenu::from_document(&self.document, now_secs);
+        let menu = FileMenu::from_document(&self.paint_doc, now_secs);
         let menu_rect = menu.rect_at(anchor);
-        if let Some(choice) = menu.hit_test(menu_rect, openpencil_shell_core::Point2D::new(x, y)) {
-            self.document.ui.pending_file_action = Some(match choice {
+        if let Some(choice) =
+            menu.hit_test(menu_rect, openpencil_shell_core::Point2D::new(x, y))
+        {
+            self.editor_state.editor_ui.pending_file_action = Some(match choice {
                 FileMenuChoice::NewFile => FileAction::New,
                 FileMenuChoice::OpenFile => FileAction::Open,
                 FileMenuChoice::Save => FileAction::Save,
@@ -159,92 +170,97 @@ impl WidgetHostNative {
                 FileMenuChoice::ClearRecent => FileAction::ClearRecent,
             });
         }
-        self.document.ui.file_menu_open = false;
-        self.document.ui.file_menu_hover = None;
+        self.editor_state.editor_ui.file_menu_open = false;
+        self.editor_state.editor_ui.file_menu_hover = None;
+        self.mark_dirty();
     }
 
     /// Commit any focused settings-modal input (currently only the
-    /// MCP port). Parses the draft, clamps to a valid port range,
-    /// writes it back, and clears focus + draft. No-op when nothing
-    /// is focused.
+    /// MCP port).
     pub(in crate::widget_host) fn commit_settings_focus_if_any(&mut self) {
-        use openpencil_shell_core::document::SettingsFocus;
-        let Some(focus) = self.document.ui.agent_settings.focus.take() else {
+        use op_editor_core::agent_settings::SettingsFocus;
+        let Some(focus) = self.editor_state.editor_ui.agent_settings.focus.take() else {
             return;
         };
-        let draft = std::mem::take(&mut self.document.ui.settings_input_draft);
+        let draft =
+            std::mem::take(&mut self.editor_state.editor_ui.settings_input_draft);
         match focus {
             SettingsFocus::McpPort => {
                 if let Ok(port) = draft.trim().parse::<u16>() {
-                    // Keep ports above 1024 to avoid root-only ranges;
-                    // anything below silently falls back to 1024 so
-                    // the user still gets a usable value.
-                    self.document.ui.agent_settings.mcp_server.port = port.max(1024);
+                    self.editor_state.editor_ui.agent_settings.mcp_server.port =
+                        port.max(1024);
                 }
             }
         }
+        self.mark_dirty();
     }
 
     /// Commit any pending VariablesPanel row edit (Number / String).
-    /// Pushes a history snapshot when the commit changes the stored
-    /// scalar so undo restores the prior value. Called from
-    /// `apply_send`, `apply_escape` (via take), and click-outside.
     pub(in crate::widget_host) fn commit_variable_row_focus_if_any(&mut self) {
-        use openpencil_shell_core::document::{VariableRowFocus, VariableScalar};
-        let Some(focus) = self.document.ui.variable_row_focus.take() else {
+        use op_editor_core::editor_ui_state::VariableRowFocus;
+        let Some(focus) = self.editor_state.editor_ui.variable_row_focus.take() else {
             return;
         };
-        self.document.ui.property_draft_select_all = false;
-        let draft = std::mem::take(&mut self.document.ui.property_input_draft);
-        let (name, scalar) = match focus {
+        self.editor_state.ui.property_draft_select_all = false;
+        let draft = std::mem::take(&mut self.editor_state.ui.property_input_draft);
+        // Resolve the row index → variable name off the derived paint
+        // `Document`'s var-table (the same Vec the panel walks).
+        self.refresh_paint_doc();
+        let snap = self.editor_state.snapshot_for_history();
+        let committed = match focus {
             VariableRowFocus::Number(idx) => {
-                let Some(var) = self.document.var_table.variables.get(idx) else {
+                let Some(name) = self
+                    .paint_doc
+                    .var_table
+                    .variables
+                    .get(idx)
+                    .map(|v| v.name.clone())
+                else {
                     return;
                 };
-                let name = var.name.clone();
                 let Ok(n) = draft.trim().parse::<f64>() else {
                     return;
                 };
                 if !n.is_finite() {
                     return;
                 }
-                (name, VariableScalar::Num(n))
+                self.editor_state.set_variable_number(&name, n)
             }
             VariableRowFocus::String(idx) => {
-                let Some(var) = self.document.var_table.variables.get(idx) else {
+                let Some(name) = self
+                    .paint_doc
+                    .var_table
+                    .variables
+                    .get(idx)
+                    .map(|v| v.name.clone())
+                else {
                     return;
                 };
-                (var.name.clone(), VariableScalar::Str(draft))
+                self.editor_state.set_variable_string(&name, draft)
             }
         };
-        let snap = self.document.snapshot_for_history();
-        if self.document.var_table.set_scalar(&name, scalar) {
-            self.document.history_push_past(snap);
+        if committed {
+            self.editor_state.history_push_past(snap);
         }
+        self.mark_dirty();
     }
 
     pub(in crate::widget_host) fn commit_property_focus_if_any(&mut self) {
-        // Commit any pending variable-row edit first so all
-        // existing "outside-click commits the focused input"
-        // call sites cover both editor surfaces. Without this,
-        // typing into a Number row + clicking on the canvas
-        // (or any other outside-the-variables-panel target)
-        // would leave the variable_row_focus set and continue
-        // routing keystrokes into the variable draft instead
-        // of, e.g., the canvas (codex stop-gate: "variable row
-        // focus leaks outside the inline editor").
+        // Commit any pending variable-row edit first.
         self.commit_variable_row_focus_if_any();
-        let Some(focus) = self.document.ui.property_focus.take() else {
+        let Some(focus) = self.editor_state.ui.property_focus.take() else {
             return;
         };
-        self.document.ui.property_draft_select_all = false;
-        let draft = std::mem::take(&mut self.document.ui.property_input_draft);
+        self.editor_state.ui.property_draft_select_all = false;
+        let draft = std::mem::take(&mut self.editor_state.ui.property_input_draft);
         match focus {
             PropertyFocus::FillHex => {
                 let stripped = draft.trim().trim_start_matches('#');
                 if !stripped.is_empty() {
                     if let Some(color) = parse_hex_color(draft.trim()) {
-                        let _ = self.document.set_selected_color(true, color);
+                        let _ = self
+                            .editor_state
+                            .set_selected_color(true, &super::helpers::color_to_hex(color));
                     }
                 }
             }
@@ -252,30 +268,23 @@ impl WidgetHostNative {
                 let stripped = draft.trim().trim_start_matches('#');
                 if !stripped.is_empty() {
                     if let Some(color) = parse_hex_color(draft.trim()) {
-                        let _ = self.document.set_selected_color(false, color);
+                        let _ = self.editor_state.set_selected_color(
+                            false,
+                            &super::helpers::color_to_hex(color),
+                        );
                     }
                 }
             }
             _ => {
                 if let Ok(value) = draft.trim().parse::<f32>() {
-                    let _ = self.document.commit_property_edit(focus, value);
+                    let _ = self.editor_state.commit_property_edit(focus, value);
                 }
             }
         }
+        self.mark_dirty();
     }
 
-    /// VariablesPanel press dispatcher — peer of
-    /// `dispatch_export_dialog_press`. Returns `true` when the
-    /// click hit the variables panel and was consumed; `false`
-    /// otherwise so the caller continues its hit-test cascade.
-    ///
-    /// Row clicks on Color-kind variables open the ColorPicker in
-    /// variable mode (`Document::open_color_picker_for_variable`);
-    /// the picker's commit path writes through
-    /// `VariableTable::set_color_hex` so the variable is editable
-    /// end-to-end. Non-color rows + AxisChip clicks swallow today
-    /// (specific editors land later — string/number row inputs +
-    /// the theme-axis picker).
+    /// VariablesPanel press dispatcher.
     pub(in crate::widget_host) fn dispatch_variables_panel_press(
         &mut self,
         x: f32,
@@ -283,7 +292,8 @@ impl WidgetHostNative {
         viewport_width: f32,
         viewport_height: f32,
     ) -> bool {
-        if self.document.var_table.variables.is_empty() {
+        self.refresh_paint_doc();
+        if self.paint_doc.var_table.variables.is_empty() {
             return false;
         }
         use openpencil_shell_core::widgets::variables_panel::{
@@ -291,9 +301,9 @@ impl WidgetHostNative {
         };
         use openpencil_shell_core::widgets::{STATUS_BAR_HEIGHT, TOP_BAR_HEIGHT};
         use openpencil_shell_core::{Point2D, Rect};
-        let vars = VariablesPanel::for_document(&self.document);
+        let vars = VariablesPanel::for_document(&self.paint_doc);
         let intrinsic = vars.intrinsic_height();
-        let top_y = if self.document.property_panel_visible() {
+        let top_y = if self.editor_state.property_panel_visible() {
             let bottom_pad = STATUS_BAR_HEIGHT + 16.0;
             (viewport_height - bottom_pad - intrinsic).max(TOP_BAR_HEIGHT + 8.0)
         } else {
@@ -301,118 +311,93 @@ impl WidgetHostNative {
         };
         let vars_rect = Rect {
             origin: Point2D::new(
-                viewport_width - self.document.ui.property_panel_width,
+                viewport_width - self.editor_state.editor_ui.property_panel_width,
                 top_y,
             ),
-            size: Point2D::new(self.document.ui.property_panel_width, intrinsic),
+            size: Point2D::new(
+                self.editor_state.editor_ui.property_panel_width,
+                intrinsic,
+            ),
         };
         let Some(hit) = vars.hit_test(vars_rect, Point2D::new(x, y)) else {
             return false;
         };
         match hit {
             VariablesPanelHit::Row(idx) => {
-                if let Some(var) = self.document.var_table.variables.get(idx) {
-                    use openpencil_shell_core::document::{
-                        VariableKind, VariableScalar,
-                    };
-                    match var.kind {
-                        VariableKind::Color => {
-                            let name = var.name.clone();
-                            self.commit_property_focus_if_any();
-                            let _ = self.document.open_color_picker_for_variable(name, y);
+                // Resolve (name, kind) off the derived var-table.
+                use openpencil_shell_core::document::VariableKind;
+                let Some((name, kind)) = self
+                    .paint_doc
+                    .var_table
+                    .variables
+                    .get(idx)
+                    .map(|v| (v.name.clone(), v.kind))
+                else {
+                    return true;
+                };
+                match kind {
+                    VariableKind::Color => {
+                        self.commit_property_focus_if_any();
+                        let _ = self
+                            .editor_state
+                            .open_color_picker_for_variable(name, y);
+                    }
+                    VariableKind::Boolean => {
+                        // Toggle the boolean value through the
+                        // active-theme-aware setter.
+                        let current = self
+                            .editor_state
+                            .resolve_variable(&name)
+                            .and_then(|s| match s {
+                                jian_ops_schema::variable::VariableScalar::Bool(b) => {
+                                    Some(*b)
+                                }
+                                _ => None,
+                            })
+                            .unwrap_or(false);
+                        self.commit_property_focus_if_any();
+                        let snap = self.editor_state.snapshot_for_history();
+                        if self.editor_state.set_variable_boolean(&name, !current) {
+                            self.editor_state.history_push_past(snap);
                         }
-                        VariableKind::Boolean => {
-                            // Click toggles the boolean value. The
-                            // resolve walk through set_scalar honors
-                            // the active-theme routing (subset match
-                            // / no default clobber / no other-axis
-                            // shadow), so a toggle under
-                            // theme=dark only writes the dark
-                            // entry, leaving light untouched.
-                            let name = var.name.clone();
-                            let current = self
-                                .document
-                                .var_table
-                                .resolve(&name)
-                                .and_then(|s| {
-                                    if let VariableScalar::Bool(b) = s {
-                                        Some(*b)
-                                    } else {
-                                        None
-                                    }
-                                })
-                                .unwrap_or(false);
-                            self.commit_property_focus_if_any();
-                            let snap = self.document.snapshot_for_history();
-                            if self
-                                .document
-                                .var_table
-                                .set_scalar(&name, VariableScalar::Bool(!current))
-                            {
-                                self.document.history_push_past(snap);
+                    }
+                    VariableKind::Number | VariableKind::String => {
+                        use op_editor_core::editor_ui_state::VariableRowFocus;
+                        self.commit_property_focus_if_any();
+                        self.commit_variable_row_focus_if_any();
+                        // Seed the draft from the resolved scalar.
+                        use jian_ops_schema::variable::VariableScalar;
+                        let resolved = self.editor_state.resolve_variable(&name).cloned();
+                        self.editor_state.ui.property_input_draft = match (
+                            &kind,
+                            &resolved,
+                        ) {
+                            (VariableKind::Number, Some(VariableScalar::Num(n))) => {
+                                format!("{n}")
                             }
-                        }
-                        VariableKind::Number | VariableKind::String => {
-                            // Inline editor — set the focus + seed
-                            // the draft buffer from the current
-                            // resolved scalar. Existing
-                            // apply_text / apply_backspace / apply_send
-                            // / apply_escape know to route through
-                            // variable_row_focus before property_focus.
-                            use openpencil_shell_core::document::VariableRowFocus;
-                            let name = var.name.clone();
-                            let kind = var.kind;
-                            self.commit_property_focus_if_any();
-                            self.commit_variable_row_focus_if_any();
-                            let resolved = self
-                                .document
-                                .var_table
-                                .resolve(&name)
-                                .cloned()
-                                .unwrap_or(match kind {
-                                    VariableKind::Number => {
-                                        openpencil_shell_core::document::VariableScalar::Num(0.0)
-                                    }
-                                    VariableKind::String => {
-                                        openpencil_shell_core::document::VariableScalar::Str(
-                                            String::new(),
-                                        )
-                                    }
-                                    _ => {
-                                        openpencil_shell_core::document::VariableScalar::Str(
-                                            String::new(),
-                                        )
-                                    }
-                                });
-                            self.document.ui.property_input_draft =
-                                match (&kind, &resolved) {
-                                    (
-                                        VariableKind::Number,
-                                        openpencil_shell_core::document::VariableScalar::Num(n),
-                                    ) => format!("{n}"),
-                                    (
-                                        VariableKind::String,
-                                        openpencil_shell_core::document::VariableScalar::Str(s),
-                                    ) => s.clone(),
-                                    _ => String::new(),
-                                };
-                            self.document.ui.variable_row_focus = Some(match kind {
+                            (VariableKind::String, Some(VariableScalar::Str(s))) => {
+                                s.clone()
+                            }
+                            _ => String::new(),
+                        };
+                        self.editor_state.editor_ui.variable_row_focus =
+                            Some(match kind {
                                 VariableKind::Number => VariableRowFocus::Number(idx),
                                 VariableKind::String => VariableRowFocus::String(idx),
                                 _ => return true,
                             });
-                            self.document.ui.property_caret_anchor_ms = self.now_ms;
-                        }
+                        self.editor_state.ui.property_caret_anchor_ms = self.now_ms;
                     }
                 }
+                self.mark_dirty();
                 true
             }
             VariablesPanelHit::AxisChip(idx) => {
-                // Look up the axis name from the table's
-                // active_theme map (BTreeMap iteration is stable,
-                // matches the chip walk order in VariablesPanel).
+                // Look up the axis name from the active-theme map
+                // (BTreeMap iteration order is stable, matching the
+                // chip walk order in VariablesPanel).
                 let axis = self
-                    .document
+                    .paint_doc
                     .var_table
                     .active_theme
                     .keys()
@@ -420,27 +405,41 @@ impl WidgetHostNative {
                     .cloned();
                 if let Some(name) = axis {
                     self.commit_property_focus_if_any();
-                    // Toggle the dropdown for this axis. Click on
-                    // the same chip again closes; click on a
-                    // different chip switches.
-                    if self.document.ui.axis_dropdown_open.as_deref() == Some(name.as_str()) {
-                        self.document.ui.axis_dropdown_open = None;
+                    if self.editor_state.editor_ui.axis_dropdown_open.as_deref()
+                        == Some(name.as_str())
+                    {
+                        self.editor_state.editor_ui.axis_dropdown_open = None;
                     } else {
-                        self.document.ui.axis_dropdown_open = Some(name);
+                        self.editor_state.editor_ui.axis_dropdown_open = Some(name);
                     }
                 }
+                self.mark_dirty();
                 true
             }
             VariablesPanelHit::AxisDropdownItem { axis, value } => {
                 self.commit_property_focus_if_any();
-                let snap = self.document.snapshot_for_history();
-                self.document
-                    .var_table
-                    .set_active_theme(axis.clone(), value.clone());
-                self.document.history_push_past(snap);
-                self.document.ui.axis_dropdown_open = None;
+                let snap = self.editor_state.snapshot_for_history();
+                if self.editor_state.set_active_axis_value(&axis, &value) {
+                    self.editor_state.history_push_past(snap);
+                }
+                self.editor_state.editor_ui.axis_dropdown_open = None;
+                self.mark_dirty();
                 true
             }
+        }
+    }
+}
+
+/// Translate a shell-core `ColorTarget` into op-editor-core's.
+fn color_target(
+    t: openpencil_shell_core::document::ColorTarget,
+) -> op_editor_core::ui_draft::ColorTarget {
+    match t {
+        openpencil_shell_core::document::ColorTarget::Fill => {
+            op_editor_core::ui_draft::ColorTarget::Fill
+        }
+        openpencil_shell_core::document::ColorTarget::Stroke => {
+            op_editor_core::ui_draft::ColorTarget::Stroke
         }
     }
 }

@@ -1,8 +1,11 @@
 //! Geometry + cursor-affordance methods on `WidgetHostNative`.
 //! Pure-math helpers that map (viewport_w, viewport_h, x, y) into
-//! the rects + cursor hints the host serves. Pulled out of
-//! `widget_host.rs` to keep the spine file under the 800-line
-//! ceiling.
+//! the rects + cursor hints the host serves.
+//!
+//! Scalar / chrome reads go straight to `editor_state`; node-tree
+//! hit-tests run against the derived paint `Document` (`paint_doc`).
+//! The input-dispatch contract keeps `paint_doc` fresh before any
+//! hit-testing input event (see `widget_host.rs`).
 
 use super::helpers::{PANEL_RESIZE_GUTTER, TOOLBAR_INSET_X, TOOLBAR_INSET_Y};
 use super::{CursorHint, PanelResizeKind, WidgetHostNative};
@@ -19,10 +22,6 @@ impl WidgetHostNative {
     /// Hit-test which screen region the cursor is over. Used by
     /// the wheel + drag handlers so wheel-zoom + Hand-pan only
     /// fire when the cursor is over the canvas (not over a panel).
-    /// Uses `canvas_region` so it stays in sync with paint when
-    /// the sidebar is collapsed (codex Step 6 stop-hook fix:
-    /// "native collapsed-sidebar canvas input still uses the old
-    /// left offset").
     pub(in crate::widget_host) fn over_canvas(
         &self,
         x: f32,
@@ -40,14 +39,14 @@ impl WidgetHostNative {
         if y < TOP_BAR_HEIGHT {
             return None;
         }
-        if self.document.ui.sidebar_open {
-            let edge = self.document.ui.layer_panel_width;
+        if self.editor_state.editor_ui.sidebar_open {
+            let edge = self.editor_state.editor_ui.layer_panel_width;
             if (x - edge).abs() <= PANEL_RESIZE_GUTTER {
                 return Some(PanelResizeKind::LayerRight);
             }
         }
-        if self.document.property_panel_visible() {
-            let edge = viewport_w - self.document.ui.property_panel_width;
+        if self.editor_state.property_panel_visible() {
+            let edge = viewport_w - self.editor_state.editor_ui.property_panel_width;
             if (x - edge).abs() <= PANEL_RESIZE_GUTTER {
                 return Some(PanelResizeKind::PropertyLeft);
             }
@@ -62,29 +61,24 @@ impl WidgetHostNative {
         self.panel_resize.is_some()
     }
 
-    /// Update `Document.ui.hovered_layer_id` from the current
-    /// cursor position. Returns `true` if the hover state
-    /// changed (host should request a redraw so the layer
-    /// panel re-paints the eye/lock affordances).
+    /// Update the layer-panel hover id from the current cursor
+    /// position. Returns `true` if the hover state changed.
     pub fn update_layer_hover(&mut self, x: f32, y: f32, viewport_h: f32) -> bool {
         use openpencil_shell_core::widgets::{LayerPanel, LayerPanelHit};
-        let (new_layer, new_page) = if self.document.ui.sidebar_open
-            && y >= openpencil_shell_core::widgets::TOP_BAR_HEIGHT
+        self.refresh_paint_doc();
+        let sidebar_open = self.editor_state.editor_ui.sidebar_open;
+        let panel_w = self.editor_state.editor_ui.layer_panel_width;
+        let (new_layer, new_page) = if sidebar_open
+            && y >= TOP_BAR_HEIGHT
             && x >= 0.0
-            && x <= self.document.ui.layer_panel_width
+            && x <= panel_w
         {
-            let layer_rect = openpencil_shell_core::Rect {
-                origin: openpencil_shell_core::Point2D::new(
-                    0.0,
-                    openpencil_shell_core::widgets::TOP_BAR_HEIGHT,
-                ),
-                size: openpencil_shell_core::Point2D::new(
-                    self.document.ui.layer_panel_width,
-                    (viewport_h - openpencil_shell_core::widgets::TOP_BAR_HEIGHT).max(0.0),
-                ),
+            let layer_rect = Rect {
+                origin: Point2D::new(0.0, TOP_BAR_HEIGHT),
+                size: Point2D::new(panel_w, (viewport_h - TOP_BAR_HEIGHT).max(0.0)),
             };
-            let panel = LayerPanel::from_document(&self.document);
-            match panel.hit_test(layer_rect, openpencil_shell_core::Point2D::new(x, y)) {
+            let panel = LayerPanel::from_document(&self.paint_doc);
+            match panel.hit_test(layer_rect, Point2D::new(x, y)) {
                 Some(LayerPanelHit::Layer(id))
                 | Some(LayerPanelHit::ToggleHidden(id))
                 | Some(LayerPanelHit::ToggleLocked(id))
@@ -97,22 +91,25 @@ impl WidgetHostNative {
         } else {
             (None, None)
         };
-        let changed = new_layer != self.document.ui.hovered_layer_id
-            || new_page != self.document.ui.hovered_page_index;
-        self.document.ui.hovered_layer_id = new_layer;
-        self.document.ui.hovered_page_index = new_page;
+        // shell-core hit-test returns shell-core `NodeId`s; translate
+        // to op-editor-core ids for storage on `editor_ui`.
+        let new_layer_ec = new_layer
+            .as_ref()
+            .map(op_pen_loader::rev::node_id);
+        let changed = new_layer_ec != self.editor_state.editor_ui.hovered_layer_id
+            || new_page != self.editor_state.editor_ui.hovered_page_index;
+        if changed {
+            self.editor_state.editor_ui.hovered_layer_id = new_layer_ec;
+            self.editor_state.editor_ui.hovered_page_index = new_page;
+            self.mark_dirty();
+        }
         changed
     }
 
     /// True when the cursor is over a draggable node inside the
     /// canvas region (used by the runner to flip cursor → Move).
-    /// Returns false when the cursor is in chrome, over empty
-    /// canvas, or while the Hand tool is active.
     pub fn cursor_over_node(&self, x: f32, y: f32, viewport_w: f32, viewport_h: f32) -> bool {
-        if matches!(
-            self.document.tool,
-            openpencil_shell_core::document::Tool::Hand
-        ) {
+        if matches!(self.editor_state.tool, op_editor_core::Tool::Hand) {
             return false;
         }
         if !self.over_canvas(x, y, viewport_w, viewport_h) {
@@ -120,66 +117,65 @@ impl WidgetHostNative {
         }
         let (cx0, cy0, _cw, _ch) = self.canvas_region(viewport_w, viewport_h);
         let canvas_local = Point2D::new(x - cx0, y - cy0);
-        let doc_point = self.document.viewport.to_document(canvas_local);
-        self.document.node_at_doc_point(doc_point).is_some()
+        let doc_point = self.editor_state.viewport.to_document(canvas_local);
+        self.paint_doc.node_at_doc_point(doc_point).is_some()
     }
 
-    /// True while a node-drag is in flight — runner keeps the move
-    /// cursor pinned even when the cursor briefly slips outside the
-    /// node's bounds during a fast drag.
+    /// True while a node-drag is in flight.
     pub fn is_dragging_node(&self) -> bool {
         self.node_drag.is_some()
     }
 
-    /// Aggregate cursor recommendation — covers everything the
-    /// runner used to compute piecemeal (resize gutter, in-flight
-    /// drag, handle / rotation ring, node hover). The runner just
-    /// maps the `CursorHint` to its platform cursor.
     /// Recompute the hovered provider-card index on the agent
-    /// settings modal. Returns true iff the cached value changed
-    /// and a repaint is needed (drives the hover red-disconnect
-    /// affordance on connected cards).
+    /// settings modal. Returns true iff the cached value changed.
     pub fn update_agent_settings_hover(&mut self, x: f32, y: f32) -> bool {
-        use openpencil_shell_core::document::AgentSettingsTab;
+        use op_editor_core::AgentSettingsTab;
         use openpencil_shell_core::widgets::agent_settings_panel::AgentSettingsPanel;
+        self.refresh_paint_doc();
         let point = Point2D::new(x, y);
-        // Compute both hover values from an immutable borrow before
-        // any mutation — `panel` keeps the borrow alive through the
-        // hit-tests, so we materialise both into locals first.
         let (new_nav, new_card) = {
-            let panel = AgentSettingsPanel::for_document(&self.document);
+            let panel = AgentSettingsPanel::for_document(&self.paint_doc);
             let panel_rect = panel.rect(self.last_viewport_w, self.last_viewport_h);
             let nav = panel.nav_at(panel_rect, point);
-            let card = if matches!(self.document.ui.agent_settings.tab, AgentSettingsTab::Agents) {
+            // `tab` is op-editor-core's `AgentSettingsTab`.
+            let card = if matches!(
+                self.editor_state.editor_ui.agent_settings.tab,
+                AgentSettingsTab::Agents
+            ) {
                 Some(panel.card_at(panel_rect, point).unwrap_or(usize::MAX))
             } else {
                 None
             };
             (nav, card)
         };
+        // `nav_at` returns a shell-core `AgentSettingsTab` option;
+        // translate to op-editor-core before comparing / storing.
+        let new_nav_ec = new_nav.map(op_pen_loader::rev::agent_settings_tab);
         let mut changed = false;
-        if new_nav != self.document.ui.agent_settings.hover_nav {
-            self.document.ui.agent_settings.hover_nav = new_nav;
+        if new_nav_ec != self.editor_state.editor_ui.agent_settings.hover_nav {
+            self.editor_state.editor_ui.agent_settings.hover_nav = new_nav_ec;
             changed = true;
         }
         if let Some(v) = new_card {
-            if v != self.document.ui.agent_settings.hover_provider {
-                self.document.ui.agent_settings.hover_provider = v;
+            if v != self.editor_state.editor_ui.agent_settings.hover_provider {
+                self.editor_state.editor_ui.agent_settings.hover_provider = v;
                 changed = true;
             }
+        }
+        if changed {
+            self.mark_dirty();
         }
         changed
     }
 
     pub fn cursor_hint(&self, x: f32, y: f32, viewport_w: f32, viewport_h: f32) -> CursorHint {
-        use openpencil_shell_core::document::Tool;
-        // Modal overlays — keep the pointer the OS default so the
-        // sidebar nav and toggle rows don't show a Move cursor as
-        // if the user could drag the underlying canvas.
-        if self.document.ui.agent_settings_open || self.document.ui.color_picker.is_some() {
+        use op_editor_core::Tool;
+        // Modal overlays — keep the pointer the OS default.
+        if self.editor_state.editor_ui.agent_settings_open
+            || self.editor_state.ui.color_picker.is_some()
+        {
             return CursorHint::Default;
         }
-        // Chrome / drag-in-flight wins regardless of tool.
         if self.panel_resize_hover(x, y, viewport_w).is_some() || self.is_resizing_panel() {
             return CursorHint::ResizeEw;
         }
@@ -195,12 +191,7 @@ impl WidgetHostNative {
         if !self.over_canvas(x, y, viewport_w, viewport_h) {
             return CursorHint::Default;
         }
-        // Off-canvas was handled above; now branch on tool because
-        // selection / resize / rotate affordances only make sense
-        // for the Select tool. With a shape tool active the cursor
-        // shouldn't pretend you can drag handles — you can only
-        // draw.
-        match self.document.tool {
+        match self.editor_state.tool {
             Tool::Hand => CursorHint::Grab,
             Tool::Rect | Tool::Ellipse | Tool::Polygon | Tool::Line | Tool::Pen | Tool::Frame => {
                 CursorHint::Crosshair
@@ -213,16 +204,17 @@ impl WidgetHostNative {
                     size: Point2D::new(cw, ch),
                 };
                 let point = Point2D::new(x, y);
-                if let Some(handle) = selection_handle_at_point(canvas_rect, &self.document, point)
+                if let Some(handle) =
+                    selection_handle_at_point(canvas_rect, &self.paint_doc, point)
                 {
                     return CursorHint::for_handle(handle);
                 }
-                if rotation_corner_at_point(canvas_rect, &self.document, point).is_some() {
+                if rotation_corner_at_point(canvas_rect, &self.paint_doc, point).is_some() {
                     return CursorHint::Rotate;
                 }
                 let canvas_local = Point2D::new(x - cx0, y - cy0);
-                let doc_point = self.document.viewport.to_document(canvas_local);
-                if self.document.node_at_doc_point(doc_point).is_some() {
+                let doc_point = self.editor_state.viewport.to_document(canvas_local);
+                if self.paint_doc.node_at_doc_point(doc_point).is_some() {
                     return CursorHint::Move;
                 }
                 CursorHint::Default
@@ -230,40 +222,30 @@ impl WidgetHostNative {
         }
     }
 
-    /// Canvas origin (logical px) — independent of viewport size,
-    /// so cursor-move handlers (which don't carry vw/vh) can
-    /// compute screen→doc conversions without re-passing the
-    /// viewport. The full `canvas_region` is still required when
-    /// the width/height of the canvas matters.
+    /// Canvas origin (logical px).
     pub(in crate::widget_host) fn canvas_origin(&self) -> (f32, f32) {
-        let cx0 = if self.document.ui.sidebar_open {
-            self.document.ui.layer_panel_width
+        let cx0 = if self.editor_state.editor_ui.sidebar_open {
+            self.editor_state.editor_ui.layer_panel_width
         } else {
             0.0
         };
         (cx0, TOP_BAR_HEIGHT)
     }
 
-    /// Canvas region (logical px, viewport-relative). Reflects
-    /// the LayerPanel sidebar collapse state — when sidebar is
-    /// hidden the canvas stretches to the left edge.
+    /// Canvas region (logical px, viewport-relative).
     pub(in crate::widget_host) fn canvas_region(
         &self,
         viewport_w: f32,
         viewport_h: f32,
     ) -> (f32, f32, f32, f32) {
-        let canvas_left = if self.document.ui.sidebar_open {
-            self.document.ui.layer_panel_width
+        let canvas_left = if self.editor_state.editor_ui.sidebar_open {
+            self.editor_state.editor_ui.layer_panel_width
         } else {
             0.0
         };
-        // Any right-rail widget (PropertyPanel OR VariablesPanel)
-        // claims the rail width. Using `right_rail_visible` keeps
-        // canvas + rail mutually exclusive so the canvas never paints
-        // over an open Variables panel (codex BLOCK fix).
-        let rail_occupied = self.document.right_rail_visible();
+        let rail_occupied = self.editor_state.right_rail_visible();
         let canvas_right = if rail_occupied {
-            viewport_w - self.document.ui.property_panel_width
+            viewport_w - self.editor_state.editor_ui.property_panel_width
         } else {
             viewport_w
         };
@@ -278,7 +260,7 @@ impl WidgetHostNative {
         viewport_h: f32,
     ) -> Rect {
         let (cx0, _cy, cw, _ch) = self.canvas_region(viewport_w, viewport_h);
-        let toolbar = Toolbar::for_document(&self.document);
+        let toolbar = Toolbar::for_document(&self.paint_doc);
         let toolbar_h = toolbar
             .layout(&LayoutCx {
                 available_width: TOOLBAR_WIDTH,
@@ -295,9 +277,6 @@ impl WidgetHostNative {
             .shape_slot_rect(toolbar_rect)
             .unwrap_or(toolbar_rect);
         let panel_h = ShapePicker::panel_height();
-        // Anchor to the right of the toolbar PANEL (not just the
-        // button) plus a small breathing-room gap, so the dropdown
-        // doesn't visually touch the toolbar edge.
         let max_x = cx0 + cw - SHAPE_PICKER_WIDTH - 4.0;
         let toolbar_right = toolbar_rect.origin.x + toolbar_rect.size.x;
         let x = (toolbar_right + 8.0).min(max_x);
@@ -315,8 +294,6 @@ impl WidgetHostNative {
         };
         let globe = TopBar::globe_rect(top_bar_rect);
         let panel_h = LocalePicker::panel_height();
-        // Anchor under the globe icon, right-aligned to its center
-        // so the panel doesn't run off the right edge.
         let x = (globe.origin.x + globe.size.x / 2.0 - LOCALE_PICKER_WIDTH / 2.0)
             .max(8.0)
             .min(viewport_w - LOCALE_PICKER_WIDTH - 8.0);
@@ -328,7 +305,7 @@ impl WidgetHostNative {
     }
 
     pub(in crate::widget_host) fn ai_chat_size(&self) -> (f32, f32) {
-        if self.document.chat.collapsed {
+        if self.editor_state.chat.collapsed {
             (AI_CHAT_COLLAPSED_WIDTH, AI_CHAT_COLLAPSED_HEIGHT)
         } else {
             (AI_CHAT_WIDTH, AI_CHAT_HEIGHT)
@@ -351,21 +328,27 @@ impl WidgetHostNative {
                 size: Point2D::new(panel_w, panel_h),
             });
         }
-        let (x, y) = match self.document.chat.anchor {
-            ChatAnchor::TopLeft => (cx0 + AICHAT_INSET_LEFT, cy0 + AICHAT_INSET_BOTTOM),
-            ChatAnchor::TopRight => (
+        // `editor_state.chat.anchor` is op-editor-core's `ChatAnchor`;
+        // shell-core's is a structurally identical four-variant enum.
+        let (x, y) = match self.editor_state.chat.anchor {
+            op_editor_core::ChatAnchor::TopLeft => {
+                (cx0 + AICHAT_INSET_LEFT, cy0 + AICHAT_INSET_BOTTOM)
+            }
+            op_editor_core::ChatAnchor::TopRight => (
                 cx0 + cw - panel_w - AICHAT_INSET_BOTTOM,
                 cy0 + AICHAT_INSET_BOTTOM,
             ),
-            ChatAnchor::BottomLeft => (
+            op_editor_core::ChatAnchor::BottomLeft => (
                 cx0 + AICHAT_INSET_LEFT,
                 cy0 + ch - panel_h - AICHAT_INSET_BOTTOM,
             ),
-            ChatAnchor::BottomRight => (
+            op_editor_core::ChatAnchor::BottomRight => (
                 cx0 + cw - panel_w - AICHAT_INSET_BOTTOM,
                 cy0 + ch - panel_h - AICHAT_INSET_BOTTOM,
             ),
         };
+        // `ChatAnchor` import kept for the `nearest` call in input.rs.
+        let _ = ChatAnchor::TopLeft;
         Some(Rect {
             origin: Point2D::new(x, y),
             size: Point2D::new(panel_w, panel_h),
@@ -375,8 +358,6 @@ impl WidgetHostNative {
     /// When the active selection is a single Path node + the Pen
     /// tool is selected, hit-test whether `(screen_x, screen_y)`
     /// lands on any anchor handle. Returns Some(index) on hit.
-    /// Handle radius is 4 doc-px scaled by viewport zoom so the hit
-    /// box stays a constant ~8 screen-px regardless of zoom.
     pub(in crate::widget_host) fn path_anchor_hit(
         &self,
         x: f32,
@@ -384,23 +365,22 @@ impl WidgetHostNative {
         viewport_w: f32,
         viewport_h: f32,
     ) -> Option<(openpencil_shell_core::document::NodeId, usize)> {
-        use openpencil_shell_core::document::{NodeKind, Tool};
-        if !matches!(self.document.tool, Tool::Pen) {
+        use openpencil_shell_core::document::NodeKind;
+        if !matches!(self.editor_state.tool, op_editor_core::Tool::Pen) {
             return None;
         }
-        if self.document.selection_count() != 1 {
+        if self.editor_state.selection_count() != 1 {
             return None;
         }
-        let sel = self.document.selected.clone();
-        let node = self.document.active_page()?.find(&sel)?;
+        let sel = self.paint_doc.selected.clone();
+        let node = self.paint_doc.active_page()?.find(&sel)?;
         if !matches!(node.kind, NodeKind::Path) {
             return None;
         }
         let (cx0, cy0, _cw, _ch) = self.canvas_region(viewport_w, viewport_h);
-        let zoom = self.document.viewport.zoom.max(0.0001);
+        let zoom = self.editor_state.viewport.zoom.max(0.0001);
         let canvas_local = Point2D::new(x - cx0, y - cy0);
-        let doc_point = self.document.viewport.to_document(canvas_local);
-        // 4 doc-px hit radius at 1× zoom (8 screen-px diameter).
+        let doc_point = self.editor_state.viewport.to_document(canvas_local);
         let r2 = 16.0 / (zoom * zoom);
         for (i, p) in node.points.iter().enumerate() {
             let dx = doc_point.x - p.x;
@@ -413,10 +393,7 @@ impl WidgetHostNative {
     }
 
     /// Resolve a screen point to an `AlignAction` if it lands on the
-    /// floating align toolbar (visible when 2+ selected). Returns
-    /// None when the toolbar isn't shown or the cursor misses every
-    /// button. Used by press dispatch + cursor-move hover sync so
-    /// the geometry stays in one place.
+    /// floating align toolbar (visible when 2+ selected).
     pub(in crate::widget_host) fn align_toolbar_hit(
         &self,
         x: f32,
@@ -425,13 +402,12 @@ impl WidgetHostNative {
         viewport_h: f32,
     ) -> Option<openpencil_shell_core::document::AlignAction> {
         use openpencil_shell_core::widgets::AlignToolbar;
-        use openpencil_shell_core::widgets::TOP_BAR_HEIGHT;
         let (cx, _, cw, ch) = self.canvas_region(viewport_w, viewport_h);
         let canvas_region = Rect {
             origin: Point2D::new(cx, TOP_BAR_HEIGHT),
             size: Point2D::new(cw, ch),
         };
-        AlignToolbar::for_canvas_region(canvas_region, &self.document)?
+        AlignToolbar::for_canvas_region(canvas_region, &self.paint_doc)?
             .hit_test(Point2D::new(x, y))
     }
 }
