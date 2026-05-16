@@ -2409,19 +2409,9 @@ dependencies = [
  "jian-ops-schema",
  "jian-skia",
  "op-editor-core",
- "openpencil-shell-core",
+ "op-editor-ui",
  "serde",
  "serde_json",
-]
-
-[[package]]
-name = "openpencil-shell-core"
-version = "0.1.0"
-dependencies = [
- "jian-core",
- "op-editor-core",
- "op-editor-ui",
- "op-i18n",
 ]
 
 [[package]]

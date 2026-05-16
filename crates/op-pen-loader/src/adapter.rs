@@ -91,8 +91,8 @@ pub fn pen_document_to_payload(doc: &PenDocument) -> LoadedDoc {
 /// the supported `VariableDefinition` variants; unknown future
 /// `VariableKind`s round-trip via their `Color/Number/Boolean/String`
 /// label since the enums are isomorphic.
-pub fn build_var_table(doc: &PenDocument) -> openpencil_shell_core::scene_vars::VariableTable {
-    use openpencil_shell_core::scene_vars::{
+pub fn build_var_table(doc: &PenDocument) -> op_editor_ui::scene_vars::VariableTable {
+    use op_editor_ui::scene_vars::{
         ThemeAxis, ThemedValue, Variable, VariableKind, VariableTable, VariableValue,
     };
     let mut out = VariableTable::default();
@@ -137,8 +137,8 @@ pub fn build_var_table(doc: &PenDocument) -> openpencil_shell_core::scene_vars::
 
 fn map_scalar(
     s: &jian_ops_schema::variable::VariableScalar,
-) -> openpencil_shell_core::scene_vars::VariableScalar {
-    use openpencil_shell_core::scene_vars::VariableScalar;
+) -> op_editor_ui::scene_vars::VariableScalar {
+    use op_editor_ui::scene_vars::VariableScalar;
     match s {
         jian_ops_schema::variable::VariableScalar::Bool(b) => VariableScalar::Bool(*b),
         jian_ops_schema::variable::VariableScalar::Num(n) => VariableScalar::Num(*n),

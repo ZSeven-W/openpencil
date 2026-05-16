@@ -17,9 +17,10 @@ jian-core = { path = "../../vendor/jian/crates/jian-core" }
 # `MeasureBackend` plugged into the layout engine. Desktop-side, so
 # depending on skia is fine; this crate does NOT need to be wasm-clean.
 jian-skia = { path = "../../vendor/jian/crates/jian-skia", features = ["textlayout"] }
-# `Document` / `Node` / `VariableTable` etc. — the shell-core model
-# this crate converts INTO.
-openpencil-shell-core = { path = "../openpencil-shell-core", version = "0.1.0" }
+# Phase 7.3 reorg: openpencil-shell-core dissolved. The layout scene /
+# scene-var / render-backend facade this crate converts INTO now
+# resolves through the op-editor-ui crate.
+op-editor-ui = { path = "../op-editor-ui" }
 # `EditorState` — the canonical editor-state superset this crate
 # derives a paint-only `Document` (incl. its `var_table`) FROM. Lives
 # in op-pen-loader, NOT op-editor-core, so op-editor-core stays free of
