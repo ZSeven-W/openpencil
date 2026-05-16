@@ -31,7 +31,7 @@ pub mod rename;
 pub mod selection;
 pub mod state;
 pub mod tool;
-pub mod ui_chrome;
+pub mod editor_ui_state;
 pub mod ui_draft;
 pub mod variables;
 pub mod viewport;
@@ -65,10 +65,10 @@ pub use render_backend::*;
 pub use selection::SelectionState;
 pub use state::EditorState;
 pub use tool::Tool;
-pub use ui_chrome::{
+pub use editor_ui_state::{
     BooleanOp, ExportFormat, FileAction, FileMenuChoice, FillType, FlexLayout,
     LayerContextMenuState, Locale, PageRenameState, PropertyTab, RecentFile, ShapeChoice,
-    ThemeMode, UiChrome, VariableRowFocus,
+    ThemeMode, EditorUiState, VariableRowFocus,
 };
 pub use ui_draft::{
     ColorPickerDrag, ColorPickerState, ColorTarget, LayerContextTarget, LayerRenameState,

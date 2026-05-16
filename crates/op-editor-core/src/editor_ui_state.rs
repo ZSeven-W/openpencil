@@ -1,6 +1,6 @@
-//! Chrome / overlay UI state for `EditorState`.
+//! Editor-UI overlay + panel state for `EditorState`.
 //!
-//! This module ports the ~30 widget-layer chrome fields that
+//! This module ports the ~30 widget-layer UI fields that
 //! `openpencil-shell-core::document::UiState` carries beyond the
 //! editor-state subset already modelled by [`crate::ui_draft`]:
 //!
@@ -32,7 +32,7 @@ use crate::tool::Tool;
 // it lives in `op-i18n` and re-exports cleanly into the state layer.
 pub use op_i18n::Locale;
 
-/// Light / dark chrome theme switch.
+/// Light / dark UI theme switch.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ThemeMode {
     Dark,
@@ -179,7 +179,7 @@ pub enum ShapeChoice {
 
 // What the LayerPanel right-click context menu is acting on — the
 // canonical definition is `ui_draft::LayerContextTarget` (it backs
-// the inline-rename draft too). Re-exported so chrome code that
+// the inline-rename draft too). Re-exported so UI code that
 // references a context target has one import path.
 pub use crate::ui_draft::LayerContextTarget;
 
@@ -207,9 +207,9 @@ pub enum VariableRowFocus {
     String(usize),
 }
 
-/// Chrome / overlay UI state — the widget-layer toggles, hover
+/// Editor-UI overlay + panel state — the widget-layer toggles, hover
 /// targets, menu / modal open flags and panel metrics that the ~30
-/// editor widgets paint from. Faithful superset of the chrome subset
+/// editor widgets paint from. Faithful superset of the UI subset
 /// of shell-core's `UiState`.
 ///
 /// The *editor-state* subset of `UiState` (focused property field +
@@ -217,14 +217,14 @@ pub enum VariableRowFocus {
 /// caches, active page index) lives on [`crate::ui_draft::UiDraftState`]
 /// and is not duplicated here.
 #[derive(Debug, Clone)]
-pub struct UiChrome {
+pub struct EditorUiState {
     // --- Sidebar + panel metrics -----------------------------------
     pub sidebar_open: bool,
     pub layer_panel_width: f32,
     pub property_panel_width: f32,
 
     // --- Theme + locale --------------------------------------------
-    /// Active chrome theme — TopBar Sun icon flips it.
+    /// Active UI theme — TopBar Sun icon flips it.
     pub theme_mode: ThemeMode,
     /// UI locale — TopBar Globe cycles.
     pub locale: Locale,
@@ -311,7 +311,7 @@ pub struct UiChrome {
     pub last_canvas_click: Option<(NodeId, u64)>,
 }
 
-impl Default for UiChrome {
+impl Default for EditorUiState {
     fn default() -> Self {
         Self {
             sidebar_open: true,
@@ -360,8 +360,8 @@ impl Default for UiChrome {
     }
 }
 
-impl UiChrome {
-    /// A fresh chrome state — sidebar open, dark theme, no menus open.
+impl EditorUiState {
+    /// A fresh UI state — sidebar open, dark theme, no menus open.
     pub fn new() -> Self {
         Self::default()
     }
@@ -372,8 +372,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn default_chrome_is_quiescent() {
-        let c = UiChrome::new();
+    fn default_editor_ui_is_quiescent() {
+        let c = EditorUiState::new();
         assert!(c.sidebar_open);
         assert_eq!(c.theme_mode, ThemeMode::Dark);
         assert_eq!(c.locale, Locale::ZhCn);

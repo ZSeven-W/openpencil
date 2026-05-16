@@ -31,7 +31,7 @@ use crate::walkers::ReorderDirection;
 
 /// Which boolean property [`EditorCommand::SetNodeFlag`] writes. The
 /// canonical `PenNodeBase` carries `visible` + `locked`; `Collapsed` is
-/// an editor-chrome-only flag with no schema field, so the applier
+/// an editor-UI-only flag with no schema field, so the applier
 /// rejects it (documented in the apply module).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NodeFlag {
