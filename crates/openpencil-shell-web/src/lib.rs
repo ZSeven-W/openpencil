@@ -269,7 +269,7 @@ pub fn mount(canvas_id: &str) -> Result<WebShell, JsValue> {
         .dyn_into::<HtmlCanvasElement>()
         .map_err(|_| JsValue::from_str("mount: target element is not <canvas>"))?;
 
-    let backend = backend::WebBackend::new(canvas)?;
+    let backend = backend::WebBackend::new(canvas.clone())?;
     let host = widget_host::WidgetHost::new();
     let inner = Rc::new(RefCell::new(Inner { backend, host }));
 

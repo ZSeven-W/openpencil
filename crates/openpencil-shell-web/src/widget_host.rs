@@ -1,8 +1,19 @@
 //! Step 4 widget glue — the only file in shell-web allowed to call
-//! into `openpencil_shell_core::widgets` / `::document`. All widget
-//! logic (state, paint, layout, accesskit) lives in shell-core; this
-//! host is a thin paint-loop adapter that takes a `&mut WebBackend`
-//! and dispatches to the editor-UI composition.
+//! into `openpencil_shell_core::widgets`. All widget logic (state,
+//! paint, layout, accesskit) lives in shell-core; this host is a
+//! thin paint-loop adapter that takes a `&mut WebBackend` and
+//! dispatches to the editor-UI composition.
+//!
+//! ### State model — `EditorState` is the source of truth
+//!
+//! Like the native host (`openpencil-shell-native/src/widget_host.rs`),
+//! the web `WidgetHost` holds an `op_editor_core::EditorState` as its
+//! single source of truth. shell-core's ~30 widgets + hit-test helpers
+//! are `&Document`-bound and read-only; they are fed a derived
+//! read-only `Document` snapshot (`paint_doc`), rebuilt lazily by
+//! `paint_document()` whenever `editor_state_dirty` is set. Every
+//! mutation routes through an `op-editor-core` mutator on
+//! `editor_state` and flags the snapshot dirty.
 //!
 //! Layout (matches `apps/web/src/components/editor/editor-layout.tsx`):
 //!
@@ -26,10 +37,9 @@
 
 use openpencil_shell_core::document::{ChatAnchor, Document};
 use openpencil_shell_core::widgets::{
-    AIChatHit, AIChatPlaceholder, LayerPanel, LayoutCx, LocalePicker, PropertyPanel, Toolbar,
-    TopBar, TopBarHit, Widget, AI_CHAT_COLLAPSED_HEIGHT, AI_CHAT_COLLAPSED_WIDTH, AI_CHAT_HEIGHT,
-    AI_CHAT_WIDTH, LAYER_PANEL_WIDTH, LOCALE_PICKER_WIDTH, PROPERTY_PANEL_WIDTH, TOOLBAR_WIDTH,
-    TOP_BAR_HEIGHT,
+    LocalePicker, Toolbar, TopBar, Widget, LayoutCx, AI_CHAT_COLLAPSED_HEIGHT,
+    AI_CHAT_COLLAPSED_WIDTH, AI_CHAT_HEIGHT, AI_CHAT_WIDTH, LOCALE_PICKER_WIDTH,
+    TOOLBAR_WIDTH, TOP_BAR_HEIGHT,
 };
 use openpencil_shell_core::{Point2D, Rect, Theme};
 
@@ -51,7 +61,20 @@ fn rect_contains(r: Rect, p: Point2D) -> bool {
 }
 
 pub struct WidgetHost {
-    pub(in crate::widget_host) document: Document,
+    /// **The host's single source of truth.** All input handlers
+    /// mutate this; the paint pass derives a read-only `Document`
+    /// snapshot from it (see `paint_doc` / `paint_document`).
+    pub(in crate::widget_host) editor_state: op_editor_core::EditorState,
+    /// Derived paint-only `Document` snapshot of `editor_state`.
+    /// shell-core's widgets + hit-test helpers are `&Document`-bound
+    /// and read-only; they are fed this snapshot, never `editor_state`.
+    /// Rebuilt lazily by `paint_document()` whenever
+    /// `editor_state_dirty` is set.
+    pub(in crate::widget_host) paint_doc: Document,
+    /// Set whenever `editor_state` is mutated. Drives the lazy rebuild
+    /// of `paint_doc` — `paint_document()` rebuilds + clears the flag,
+    /// so a sequence of mutations only re-derives once.
+    pub(in crate::widget_host) editor_state_dirty: bool,
     pub(in crate::widget_host) theme: Theme,
     drag: Option<DragState>,
     chat_drag: Option<ChatDragState>,
@@ -121,8 +144,10 @@ pub(in crate::widget_host) struct MarqueeDragState {
 }
 
 /// Active LayerPanel drag-to-reorder gesture. Mirrors the native
-/// host's `LayerDragState`.
-#[derive(Debug, Clone, Copy)]
+/// host's `LayerDragState` — `source` is a shell-core `NodeId`
+/// (the LayerPanel hit-test mints it) and is translated to an
+/// op-editor-core id only at the commit site.
+#[derive(Debug, Clone)]
 pub(in crate::widget_host) struct LayerDragState {
     pub(in crate::widget_host) source: openpencil_shell_core::document::NodeId,
     pub(in crate::widget_host) start_y: f32,
@@ -131,68 +156,16 @@ pub(in crate::widget_host) struct LayerDragState {
     pub(in crate::widget_host) active: bool,
 }
 
-/// Mirrors the native `apply_property_action` — wired off the
-/// shared `PropertyPanelAction` enum so the web shell dispatches
-/// flex-layout / size-checkbox clicks the same way the desktop
-/// shell does.
-fn apply_property_action_impl(
-    document: &mut Document,
-    action: openpencil_shell_core::widgets::PropertyPanelAction,
-) {
-    use openpencil_shell_core::widgets::PropertyPanelAction as A;
-    match action {
-        A::SetFlexLayout(mode) => document.ui.flex_layout = mode,
-        A::ToggleSizeFillWidth => {
-            document.ui.size_fill_width = !document.ui.size_fill_width;
-        }
-        A::ToggleSizeFillHeight => {
-            document.ui.size_fill_height = !document.ui.size_fill_height;
-        }
-        A::ToggleSizeHugWidth => {
-            document.ui.size_hug_width = !document.ui.size_hug_width;
-        }
-        A::ToggleSizeHugHeight => {
-            document.ui.size_hug_height = !document.ui.size_hug_height;
-        }
-        A::ToggleSizeClipContent => {
-            document.ui.size_clip_content = !document.ui.size_clip_content;
-        }
-        A::ToggleFillTypePicker => {
-            document.ui.fill_type_picker_open = !document.ui.fill_type_picker_open;
-        }
-        A::SetFillType(t) => {
-            // Per-node now (was `document.ui.fill_type` until
-            // 2026-05-11). Mirrors native — gated by `is_editable`
-            // inside the mutator.
-            document.set_selected_fill_type(t);
-            document.ui.fill_type_picker_open = false;
-        }
-        A::OpenExportDialog => {
-            document.ui.pending_file_action =
-                Some(openpencil_shell_core::document::FileAction::ExportImage);
-        }
-        A::OpenColorPicker(target) => {
-            let _ = document.open_color_picker(target, 0.0);
-        }
-        A::AddEffect => {
-            document.add_drop_shadow_to_selected();
-        }
-    }
-}
-
-impl WidgetHost {
-    fn apply_property_action(
-        &mut self,
-        action: openpencil_shell_core::widgets::PropertyPanelAction,
-    ) {
-        apply_property_action_impl(&mut self.document, action);
-    }
-}
-
 impl WidgetHost {
     pub fn new() -> Self {
+        let editor_state = op_editor_core::EditorState::sample();
+        // Seed the paint snapshot once up front; subsequent frames
+        // re-derive only when `editor_state_dirty` is set.
+        let paint_doc = derive_paint_doc(&editor_state);
         Self {
-            document: Document::sample(),
+            editor_state,
+            paint_doc,
+            editor_state_dirty: false,
             theme: Theme::dark(),
             drag: None,
             chat_drag: None,
@@ -214,19 +187,47 @@ impl WidgetHost {
         self.shift_held = held;
     }
 
+    /// Derive a fresh paint-only `Document` snapshot from
+    /// `editor_state` if `editor_state_dirty` is set; clear the flag.
+    /// Cheap no-op when the snapshot is already current.
+    pub(in crate::widget_host) fn refresh_paint_doc(&mut self) {
+        if self.editor_state_dirty {
+            self.paint_doc = derive_paint_doc(&self.editor_state);
+            self.editor_state_dirty = false;
+        }
+    }
+
+    /// The read-only paint `Document` snapshot of the live
+    /// `EditorState`. Rebuilt on demand when the state changed since
+    /// the last derive. Every widget paint + `&Document`-bound
+    /// hit-test reads through this. Public so a future web runner
+    /// (file I/O / export) can read the derived document.
+    #[allow(dead_code)]
+    pub fn paint_document(&mut self) -> &Document {
+        self.refresh_paint_doc();
+        &self.paint_doc
+    }
+
+    /// Mark `editor_state` as mutated so the next `paint_document()`
+    /// re-derives the paint snapshot. Call after any direct mutation
+    /// of `self.editor_state`.
+    pub(in crate::widget_host) fn mark_dirty(&mut self) {
+        self.editor_state_dirty = true;
+    }
+
     pub(in crate::widget_host) fn canvas_region(
         &self,
         viewport_w: f32,
         viewport_h: f32,
     ) -> (f32, f32, f32, f32) {
-        let canvas_left = if self.document.ui.sidebar_open {
-            self.document.ui.layer_panel_width
+        let canvas_left = if self.editor_state.editor_ui.sidebar_open {
+            self.editor_state.editor_ui.layer_panel_width
         } else {
             0.0
         };
-        let has_property = self.document.property_panel_visible();
+        let has_property = self.editor_state.property_panel_visible();
         let canvas_right = if has_property {
-            viewport_w - self.document.ui.property_panel_width
+            viewport_w - self.editor_state.editor_ui.property_panel_width
         } else {
             viewport_w
         };
@@ -236,18 +237,8 @@ impl WidgetHost {
     }
 
     fn over_canvas(&self, x: f32, y: f32, viewport_w: f32, viewport_h: f32) -> bool {
-        let canvas_left = if self.document.ui.sidebar_open {
-            self.document.ui.layer_panel_width
-        } else {
-            0.0
-        };
-        let has_property = self.document.property_panel_visible();
-        let canvas_right = if has_property {
-            viewport_w - self.document.ui.property_panel_width
-        } else {
-            viewport_w
-        };
-        x >= canvas_left && x <= canvas_right && y >= TOP_BAR_HEIGHT && y <= viewport_h
+        let (cx0, cy0, cw, ch) = self.canvas_region(viewport_w, viewport_h);
+        x >= cx0 && x <= cx0 + cw && y >= cy0 && y <= cy0 + ch
     }
 
     /// Wheel zoom centered on the cursor when over the canvas.
@@ -268,13 +259,16 @@ impl WidgetHost {
         // canvas-region offset (sidebar collapse aware).
         let (cx0, cy0, _cw, _ch) = self.canvas_region(viewport_width, viewport_height);
         let cursor = Point2D::new(x - cx0, y - cy0);
-        self.document.viewport.zoom_at(cursor, delta_y);
+        self.editor_state.viewport.zoom_at(cursor, delta_y);
+        self.mark_dirty();
         true
     }
 
     /// 2-finger trackpad pan — translate viewport by `(dx, dy)`.
     /// Same Figma-style separation as the native host: trackpad
-    /// swipe pans, pinch / Cmd+wheel / mouse-wheel zooms.
+    /// swipe pans, pinch / Cmd+wheel / mouse-wheel zooms. Public
+    /// host API — a future trackpad-gesture runner wires this.
+    #[allow(dead_code)]
     pub fn apply_pan_gesture(
         &mut self,
         x: f32,
@@ -290,7 +284,8 @@ impl WidgetHost {
         if dx == 0.0 && dy == 0.0 {
             return false;
         }
-        self.document.viewport.pan(dx, dy);
+        self.editor_state.viewport.pan(dx, dy);
+        self.mark_dirty();
         true
     }
 
@@ -307,24 +302,24 @@ impl WidgetHost {
     ///      LayerPanel hit + chat-defocus side effect
     ///   4. Otherwise: start canvas pan-drag.
 
-    /// Update `Document.ui.hovered_layer_id` from the cursor.
+    /// Update `editor_ui.hovered_layer_id` from the cursor.
     /// Returns true if hover state changed (caller should
     /// repaint). Mirrors the native host.
     pub fn update_layer_hover(&mut self, x: f32, y: f32, viewport_h: f32) -> bool {
         use openpencil_shell_core::widgets::{LayerPanel, LayerPanelHit, TOP_BAR_HEIGHT};
-        let (new_layer, new_page) = if self.document.ui.sidebar_open
+        let sidebar_open = self.editor_state.editor_ui.sidebar_open;
+        let panel_w = self.editor_state.editor_ui.layer_panel_width;
+        let (new_layer, new_page) = if sidebar_open
             && y >= TOP_BAR_HEIGHT
             && x >= 0.0
-            && x <= self.document.ui.layer_panel_width
+            && x <= panel_w
         {
+            self.refresh_paint_doc();
             let layer_rect = Rect {
                 origin: Point2D::new(0.0, TOP_BAR_HEIGHT),
-                size: Point2D::new(
-                    self.document.ui.layer_panel_width,
-                    (viewport_h - TOP_BAR_HEIGHT).max(0.0),
-                ),
+                size: Point2D::new(panel_w, (viewport_h - TOP_BAR_HEIGHT).max(0.0)),
             };
-            let panel = LayerPanel::from_document(&self.document);
+            let panel = LayerPanel::from_document(&self.paint_doc);
             match panel.hit_test(layer_rect, Point2D::new(x, y)) {
                 Some(LayerPanelHit::Layer(id))
                 | Some(LayerPanelHit::ToggleHidden(id))
@@ -338,26 +333,40 @@ impl WidgetHost {
         } else {
             (None, None)
         };
-        let changed = new_layer != self.document.ui.hovered_layer_id
-            || new_page != self.document.ui.hovered_page_index;
-        self.document.ui.hovered_layer_id = new_layer;
-        self.document.ui.hovered_page_index = new_page;
+        // shell-core hit-test returns shell-core `NodeId`s; translate
+        // to op-editor-core ids for storage on `editor_ui`.
+        let new_layer_ec = new_layer.as_ref().map(op_pen_loader::rev::node_id);
+        let changed = new_layer_ec != self.editor_state.editor_ui.hovered_layer_id
+            || new_page != self.editor_state.editor_ui.hovered_page_index;
+        if changed {
+            self.editor_state.editor_ui.hovered_layer_id = new_layer_ec;
+            self.editor_state.editor_ui.hovered_page_index = new_page;
+            self.mark_dirty();
+        }
         changed
     }
 
     /// Cursor-move handler — drives canvas pan-drag, marquee
     /// drag, chat drag, or no-op.
     pub fn apply_cursor_move(&mut self, x: f32, y: f32) -> bool {
-        if let Some(state) = self.document.ui.layer_context_menu {
+        // Refresh the derived paint doc once up front so every hit-test
+        // below (layer context menu, layer drag, align toolbar) reads
+        // current geometry, never a stale snapshot.
+        self.refresh_paint_doc();
+        if let Some(state) = self.editor_state.editor_ui.layer_context_menu.clone() {
             use openpencil_shell_core::widgets::layer_context_menu::LayerContextMenu;
-            let menu = LayerContextMenu::for_state(&self.document, state);
+            let menu = LayerContextMenu::for_state(
+                &self.paint_doc,
+                self.paint_doc.ui.layer_context_menu.clone().unwrap(),
+            );
             let new_hover = menu.hovered_row_at(Point2D::new(x, y)).map(|i| i as u8);
             if new_hover != state.hovered_row {
-                self.document.ui.layer_context_menu =
-                    Some(openpencil_shell_core::document::LayerContextMenuState {
+                self.editor_state.editor_ui.layer_context_menu =
+                    Some(op_editor_core::editor_ui_state::LayerContextMenuState {
                         hovered_row: new_hover,
                         ..state
                     });
+                self.mark_dirty();
                 return true;
             }
         }
@@ -366,19 +375,20 @@ impl WidgetHost {
             m.current_screen_y = y;
             return true;
         }
-        if let Some(d) = self.layer_drag.as_mut() {
+        if self.layer_drag.is_some() {
             // Drop the gesture if the source disappeared mid-drag —
             // see the native host for the rationale.
-            let source_id = d.source;
+            let source_id = self.layer_drag.as_ref().unwrap().source.clone();
             let still_present = self
-                .document
+                .paint_doc
                 .active_page()
-                .map(|p| p.find(source_id).is_some())
+                .map(|p| p.find(&source_id).is_some())
                 .unwrap_or(false);
             if !still_present {
                 self.layer_drag = None;
                 return true;
             }
+            let d = self.layer_drag.as_mut().unwrap();
             d.current_x = x;
             d.current_y = y;
             // VERTICAL-ONLY activation (4 px). See the native host
@@ -399,13 +409,14 @@ impl WidgetHost {
             let dy = y - drag.last_y;
             drag.last_x = x;
             drag.last_y = y;
-            self.document.viewport.pan(dx, dy);
+            self.editor_state.viewport.pan(dx, dy);
+            self.mark_dirty();
             return true;
         }
         // No drag active — sync align toolbar hover. AFTER all drag
         // branches so an active drag isn't intercepted (codex CONCERN
         // — mirrors native widget_host/input.rs ordering).
-        let new_hover = if self.document.selection_count() >= 2 {
+        let new_hover = if self.editor_state.selection_count() >= 2 {
             use openpencil_shell_core::widgets::{AlignToolbar, TOP_BAR_HEIGHT};
             let (cx, _, cw, ch) =
                 self.canvas_region(self.last_viewport_w, self.last_viewport_h);
@@ -413,13 +424,15 @@ impl WidgetHost {
                 origin: Point2D::new(cx, TOP_BAR_HEIGHT),
                 size: Point2D::new(cw, ch),
             };
-            AlignToolbar::for_canvas_region(canvas_region, &self.document)
+            AlignToolbar::for_canvas_region(canvas_region, &self.paint_doc)
                 .and_then(|tb| tb.hit_test(Point2D::new(x, y)))
         } else {
             None
         };
-        if new_hover != self.document.ui.align_toolbar_hover {
-            self.document.ui.align_toolbar_hover = new_hover;
+        let new_hover_ec = new_hover.map(op_pen_loader::rev::align_action);
+        if new_hover_ec != self.editor_state.editor_ui.align_toolbar_hover {
+            self.editor_state.editor_ui.align_toolbar_hover = new_hover_ec;
+            self.mark_dirty();
             return true;
         }
         false
@@ -444,30 +457,40 @@ impl WidgetHost {
             return;
         }
         let (cx0, cy0, _cw, _ch) = self.canvas_region(viewport_w, viewport_h);
-        let to_doc = |sx: f32, sy: f32| -> Point2D {
-            let local = Point2D::new(sx - cx0, sy - cy0);
-            self.document.viewport.to_document(local)
+        let p0 = {
+            let local = Point2D::new(m.start_screen_x - cx0, m.start_screen_y - cy0);
+            self.editor_state.viewport.to_document(local)
         };
-        let p0 = to_doc(m.start_screen_x, m.start_screen_y);
-        let p1 = to_doc(m.current_screen_x, m.current_screen_y);
+        let p1 = {
+            let local = Point2D::new(m.current_screen_x - cx0, m.current_screen_y - cy0);
+            self.editor_state.viewport.to_document(local)
+        };
         let x = p0.x.min(p1.x);
         let y = p0.y.min(p1.y);
         let w = (p1.x - p0.x).abs();
         let h = (p1.y - p0.y).abs();
         let rect = Rect::xywh(x, y, w, h);
-        let ids = self.document.nodes_intersecting_doc_rect(rect);
+        // `nodes_intersecting_doc_rect` is a `&Document`-bound helper —
+        // it returns shell-core `NodeId`s.
+        self.refresh_paint_doc();
+        let ids = self.paint_doc.nodes_intersecting_doc_rect(rect);
         if m.additive {
             // ADD-only: every hit joins the set; already-selected
             // hits stay selected. Shift-marquee never removes.
             for id in ids {
-                if !self.document.is_selected(id) {
-                    self.document.toggle_selection(id);
+                let ec_id = op_pen_loader::rev::node_id(&id);
+                if !self.editor_state.is_selected(&ec_id) {
+                    self.editor_state.toggle_selection(ec_id);
                 }
             }
+            self.mark_dirty();
         } else if !ids.is_empty() {
-            let anchor = *ids.last().unwrap();
-            self.document.selected_set = ids;
-            self.document.selected = anchor;
+            let ec_ids: Vec<op_editor_core::NodeId> =
+                ids.iter().map(op_pen_loader::rev::node_id).collect();
+            let anchor = ec_ids.last().unwrap().clone();
+            self.editor_state.selection.set = ec_ids;
+            self.editor_state.selection.anchor = anchor;
+            self.mark_dirty();
         }
     }
 
@@ -491,7 +514,9 @@ impl WidgetHost {
             let (panel_w, panel_h) = self.ai_chat_size();
             let center = Point2D::new(d.pos_x + panel_w / 2.0, d.pos_y + panel_h / 2.0);
             let (cx0, cy0, cw, ch) = self.canvas_region(viewport_w, viewport_h);
-            self.document.chat.anchor = ChatAnchor::nearest(center, cx0, cy0, cw, ch);
+            self.editor_state.chat.anchor =
+                op_editor_core::ChatAnchor::nearest(center, cx0, cy0, cw, ch);
+            self.mark_dirty();
             return true;
         }
         let was_dragging = self.drag.is_some();
@@ -499,7 +524,10 @@ impl WidgetHost {
         was_dragging
     }
 
-    /// Mouse-release handler — viewport-less variant.
+    /// Mouse-release handler — viewport-less variant. Public host
+    /// API parity with the native shell; the browser runner wires
+    /// the viewport-aware `apply_release_with_viewport` instead.
+    #[allow(dead_code)]
     pub fn apply_release(&mut self) -> bool {
         if self.marquee_drag.take().is_some() {
             // Can't compute the doc-space marquee rect without a
@@ -530,12 +558,13 @@ impl WidgetHost {
         if !d.active {
             return false;
         }
+        self.refresh_paint_doc();
         // Defensive source-validity check (mirrors native) — bail
         // if the dragged node disappeared between move and release.
         if self
-            .document
+            .paint_doc
             .active_page()
-            .map(|p| p.find(d.source).is_none())
+            .map(|p| p.find(&d.source).is_none())
             .unwrap_or(true)
         {
             return false;
@@ -545,29 +574,29 @@ impl WidgetHost {
         // Source-excluded panel so the indicator y the user saw and
         // the row landed on match the post-commit layout — see the
         // native `commit_layer_drag` for the rationale.
-        let panel = LayerPanel::from_document_with_drag_source(&self.document, d.source);
+        let panel =
+            LayerPanel::from_document_with_drag_source(&self.paint_doc, d.source.clone());
         let cursor = Point2D::new(d.current_x, d.current_y);
         let Some(drop) = panel.drop_target_at(layer_rect, cursor) else {
             return true;
         };
-        // With the source excluded from `panel.items`, `drop.anchor`
-        // can never equal `d.source` — the self-drop case is gone,
-        // but keep a defensive equality check in case the walker
-        // contract changes.
         if drop.anchor == d.source {
             return true;
         }
+        let source = op_pen_loader::rev::node_id(&d.source);
+        let anchor = op_pen_loader::rev::node_id(&drop.anchor);
         match drop.position {
             DropPosition::Before => {
-                self.document.reorder_before(d.source, drop.anchor);
+                self.editor_state.reorder_before(source, anchor);
             }
             DropPosition::After => {
-                self.document.reorder_after(d.source, drop.anchor);
+                self.editor_state.reorder_after(source, anchor);
             }
             DropPosition::Into => {
-                self.document.reorder_into(d.source, drop.anchor);
+                self.editor_state.reorder_into(source, anchor);
             }
         }
+        self.mark_dirty();
         true
     }
 
@@ -580,7 +609,7 @@ impl WidgetHost {
     // file under the 800-line ceiling.
 
     fn ai_chat_size(&self) -> (f32, f32) {
-        if self.document.chat.collapsed {
+        if self.editor_state.chat.collapsed {
             (AI_CHAT_COLLAPSED_WIDTH, AI_CHAT_COLLAPSED_HEIGHT)
         } else {
             (AI_CHAT_WIDTH, AI_CHAT_HEIGHT)
@@ -620,21 +649,27 @@ impl WidgetHost {
                 size: Point2D::new(panel_w, panel_h),
             });
         }
-        let (x, y) = match self.document.chat.anchor {
-            ChatAnchor::TopLeft => (cx0 + AICHAT_INSET_LEFT, cy0 + AICHAT_INSET_BOTTOM),
-            ChatAnchor::TopRight => (
+        // `editor_state.chat.anchor` is op-editor-core's `ChatAnchor`;
+        // shell-core's is a structurally identical four-variant enum.
+        let (x, y) = match self.editor_state.chat.anchor {
+            op_editor_core::ChatAnchor::TopLeft => {
+                (cx0 + AICHAT_INSET_LEFT, cy0 + AICHAT_INSET_BOTTOM)
+            }
+            op_editor_core::ChatAnchor::TopRight => (
                 cx0 + cw - panel_w - AICHAT_INSET_BOTTOM,
                 cy0 + AICHAT_INSET_BOTTOM,
             ),
-            ChatAnchor::BottomLeft => (
+            op_editor_core::ChatAnchor::BottomLeft => (
                 cx0 + AICHAT_INSET_LEFT,
                 cy0 + ch - panel_h - AICHAT_INSET_BOTTOM,
             ),
-            ChatAnchor::BottomRight => (
+            op_editor_core::ChatAnchor::BottomRight => (
                 cx0 + cw - panel_w - AICHAT_INSET_BOTTOM,
                 cy0 + ch - panel_h - AICHAT_INSET_BOTTOM,
             ),
         };
+        // `ChatAnchor` import kept for the `nearest` call in release.
+        let _ = ChatAnchor::TopLeft;
         Some(Rect {
             origin: Point2D::new(x, y),
             size: Point2D::new(panel_w, panel_h),
@@ -651,17 +686,18 @@ impl WidgetHost {
         Rect {
             origin: Point2D::new(0.0, TOP_BAR_HEIGHT),
             size: Point2D::new(
-                self.document.ui.layer_panel_width,
+                self.editor_state.editor_ui.layer_panel_width,
                 (viewport_h - TOP_BAR_HEIGHT).max(0.0),
             ),
         }
     }
 
-    fn toolbar_rect(&self, viewport_w: f32) -> Rect {
+    fn toolbar_rect(&mut self, viewport_w: f32) -> Rect {
         // Anchor follows canvas_region (sidebar-collapse aware) so
         // hit-test matches paint regardless of sidebar state.
         let (cx0, _cy0, _cw, _ch) = self.canvas_region(viewport_w, f32::INFINITY);
-        let toolbar = Toolbar::for_document(&self.document);
+        self.refresh_paint_doc();
+        let toolbar = Toolbar::for_document(&self.paint_doc);
         let h = toolbar
             .layout(&LayoutCx {
                 available_width: TOOLBAR_WIDTH,
@@ -678,6 +714,17 @@ impl WidgetHost {
 
     // `paint` lives in `widget_host/paint.rs` — split out to keep
     // this file under the 800-line ceiling.
+}
+
+/// Derive a faithful paint-only `Document` from an `EditorState`:
+/// node tree + geometry from the canonical doc, then the chrome /
+/// chat / components / variable / scalar state layered on.
+pub(in crate::widget_host) fn derive_paint_doc(
+    state: &op_editor_core::EditorState,
+) -> Document {
+    let mut d = op_pen_loader::pen_document_to_document(&state.doc);
+    op_pen_loader::apply_editor_state_ui(&mut d, state);
+    d
 }
 
 impl Default for WidgetHost {
