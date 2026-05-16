@@ -108,10 +108,7 @@ impl WidgetHost {
         let property_panel = PropertyPanel::for_selection(&self.editor_state);
         if let Some(panel) = property_panel.as_ref() {
             let property_rect = Rect {
-                origin: Point2D::new(
-                    viewport_width - ui.property_panel_width,
-                    TOP_BAR_HEIGHT,
-                ),
+                origin: Point2D::new(viewport_width - ui.property_panel_width, TOP_BAR_HEIGHT),
                 size: Point2D::new(
                     ui.property_panel_width,
                     (viewport_height - TOP_BAR_HEIGHT).max(0.0),
@@ -133,8 +130,7 @@ impl WidgetHost {
             // PAINT path — the canvas reads editor state + the
             // layout-resolved render scene (`refresh_layout_scene`).
             // Web has no per-frame clock; caret stays solid.
-            let canvas =
-                CanvasViewport::from_editor(&self.editor_state, &self.layout_scene);
+            let canvas = CanvasViewport::from_editor(&self.editor_state, &self.layout_scene);
             let mut cx = PaintCx {
                 backend: &mut *backend,
             };
@@ -198,10 +194,7 @@ impl WidgetHost {
                 size: Point2D::new(canvas_w, canvas_h),
             };
             if let Some(tb) = AlignToolbar::for_canvas_region(canvas_region, &self.editor_state) {
-                let hover = self
-                    .editor_state
-                    .editor_ui
-                    .align_toolbar_hover;
+                let hover = self.editor_state.editor_ui.align_toolbar_hover;
                 tb.paint(&mut *backend, &self.theme, hover);
             }
         }

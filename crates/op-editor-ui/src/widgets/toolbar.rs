@@ -14,13 +14,13 @@
 //! [`Toolbar::hit_test`] so a `(x, y)` mouse position resolves to
 //! either a `Tool` change or an `Action` (Undo / Redo / TogglePanel).
 
-use op_editor_core::Tool;
 use crate::theme::Theme;
 use crate::widgets::editor_state_ext::theme_for;
-use op_editor_core::EditorState;
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::{LayoutBox, LayoutCx, PaintCx, Widget, WidgetId};
 use crate::{Color, Point2D, Rect};
+use op_editor_core::EditorState;
+use op_editor_core::Tool;
 
 /// Outer column width (matches the TS app's `w-12` toolbar).
 pub const TOOLBAR_WIDTH: f32 = 44.0;

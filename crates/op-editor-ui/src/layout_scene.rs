@@ -237,8 +237,7 @@ impl SceneNode {
             return Rect::ZERO;
         };
         let (mut min_x, mut min_y) = (first.origin.x, first.origin.y);
-        let (mut max_x, mut max_y) =
-            (first.origin.x + first.size.x, first.origin.y + first.size.y);
+        let (mut max_x, mut max_y) = (first.origin.x + first.size.x, first.origin.y + first.size.y);
         for r in iter {
             min_x = min_x.min(r.origin.x);
             min_y = min_y.min(r.origin.y);
@@ -307,8 +306,16 @@ mod tests {
     fn active_page_indexes_into_pages() {
         let scene = LayoutScene {
             pages: vec![
-                ScenePage { id: "a".into(), name: "A".into(), children: Vec::new() },
-                ScenePage { id: "b".into(), name: "B".into(), children: Vec::new() },
+                ScenePage {
+                    id: "a".into(),
+                    name: "A".into(),
+                    children: Vec::new(),
+                },
+                ScenePage {
+                    id: "b".into(),
+                    name: "B".into(),
+                    children: Vec::new(),
+                },
             ],
             active_page_index: 1,
         };

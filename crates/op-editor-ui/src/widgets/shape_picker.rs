@@ -11,13 +11,13 @@
 //! `ImportImageOrSvg` opens a file dialog. Both are reported
 //! verbatim by the host so it can dispatch to the right place.
 
-use op_editor_core::Tool;
 use crate::theme::Theme;
 use crate::widgets::editor_state_ext::{doc_shape_choice, theme_for, translate};
-use op_editor_core::editor_ui_state::EditorUiState;
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::{LayoutBox, LayoutCx, PaintCx, Widget, WidgetId};
 use crate::{Color, Point2D, Rect, TextLayout};
+use op_editor_core::editor_ui_state::EditorUiState;
+use op_editor_core::Tool;
 
 pub const SHAPE_PICKER_WIDTH: f32 = 220.0;
 const ROW_HEIGHT: f32 = 32.0;

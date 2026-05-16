@@ -23,7 +23,7 @@
 //! Scale: caller picks @1x / @2x / @3x (TS export dialog parity).
 
 use op_editor_ui::layout_scene::{Effect, NodeKind};
-use op_editor_ui::layout_scene::{LayoutScene, ScenePage, SceneNode};
+use op_editor_ui::layout_scene::{LayoutScene, SceneNode, ScenePage};
 use op_editor_ui::{Color, Point2D, Rect};
 use skia_safe::{Canvas, EncodedImageFormat, Paint, PaintStyle, Path, PathBuilder};
 use std::path::Path as StdPath;
@@ -107,7 +107,11 @@ pub fn export_raster(
     format: RasterFormat,
     scale: f32,
 ) -> Result<(), String> {
-    let scale = if scale.is_finite() { scale.clamp(0.5, 8.0) } else { 2.0 };
+    let scale = if scale.is_finite() {
+        scale.clamp(0.5, 8.0)
+    } else {
+        2.0
+    };
     let Some(page) = scene.active_page() else {
         return Err("no active page".into());
     };
@@ -198,8 +202,8 @@ fn collect_bounds(n: &SceneNode, parent_xform: glam::Affine2, acc: &mut BoundsAc
         return;
     }
     let pivot_rect = n.aggregate_bounds();
-    let rotate_self = n.rotation.abs() > f32::EPSILON
-        && (pivot_rect.size.x != 0.0 || pivot_rect.size.y != 0.0);
+    let rotate_self =
+        n.rotation.abs() > f32::EPSILON && (pivot_rect.size.x != 0.0 || pivot_rect.size.y != 0.0);
     let local_xform = if rotate_self {
         let pivot = glam::Vec2::new(
             pivot_rect.origin.x + pivot_rect.size.x * 0.5,
@@ -341,7 +345,10 @@ pub(crate) fn paint_node(canvas: &Canvas, node: &SceneNode) {
     if !node.effects.is_empty()
         && world_rect.size.x.abs() > 0.0
         && world_rect.size.y.abs() > 0.0
-        && matches!(node.kind, NodeKind::Frame | NodeKind::Rect | NodeKind::Ellipse)
+        && matches!(
+            node.kind,
+            NodeKind::Frame | NodeKind::Rect | NodeKind::Ellipse
+        )
     {
         paint_drop_shadows(canvas, node, world_rect);
     }
@@ -400,10 +407,7 @@ fn paint_drop_shadows(canvas: &Canvas, node: &SceneNode, world_rect: Rect) {
     for effect in &node.effects {
         let Effect::DropShadow(s) = effect;
         let shadow_rect = Rect {
-            origin: Point2D::new(
-                nrect.origin.x + s.offset_x,
-                nrect.origin.y + s.offset_y,
-            ),
+            origin: Point2D::new(nrect.origin.x + s.offset_x, nrect.origin.y + s.offset_y),
             size: nrect.size,
         };
         let mut paint = make_fill(s.color);
@@ -489,13 +493,15 @@ fn paint_triangle(canvas: &Canvas, rect: Rect, node: &SceneNode) {
 }
 
 fn paint_text(canvas: &Canvas, rect: Rect, node: &SceneNode) {
-    let Some(text) = node.text.as_deref() else { return };
+    let Some(text) = node.text.as_deref() else {
+        return;
+    };
     if text.is_empty() {
         return;
     }
     let r = normalize_rect(rect);
-    let Some(typeface) = skia_safe::FontMgr::new()
-        .legacy_make_typeface(None, skia_safe::FontStyle::default())
+    let Some(typeface) =
+        skia_safe::FontMgr::new().legacy_make_typeface(None, skia_safe::FontStyle::default())
     else {
         return;
     };
@@ -575,7 +581,7 @@ pub(crate) mod test_support {
     //! `LayoutScene` directly without going through `op-pen-loader`.
 
     use op_editor_ui::layout_scene::NodeKind;
-    use op_editor_ui::layout_scene::{LayoutScene, ScenePage, SceneNode};
+    use op_editor_ui::layout_scene::{LayoutScene, SceneNode, ScenePage};
     use op_editor_ui::{Color, Rect};
 
     /// A single-page scene holding `children` as top-level nodes.
@@ -608,9 +614,18 @@ mod tests {
     #[test]
     fn raster_format_extension_lookup() {
         assert_eq!(RasterFormat::from_extension("png"), Some(RasterFormat::Png));
-        assert_eq!(RasterFormat::from_extension("jpg"), Some(RasterFormat::Jpeg));
-        assert_eq!(RasterFormat::from_extension("jpeg"), Some(RasterFormat::Jpeg));
-        assert_eq!(RasterFormat::from_extension("webp"), Some(RasterFormat::Webp));
+        assert_eq!(
+            RasterFormat::from_extension("jpg"),
+            Some(RasterFormat::Jpeg)
+        );
+        assert_eq!(
+            RasterFormat::from_extension("jpeg"),
+            Some(RasterFormat::Jpeg)
+        );
+        assert_eq!(
+            RasterFormat::from_extension("webp"),
+            Some(RasterFormat::Webp)
+        );
         assert_eq!(RasterFormat::from_extension("svg"), None);
         assert_eq!(RasterFormat::from_extension("gif"), None);
         assert_eq!(RasterFormat::from_extension(""), None);
@@ -639,14 +654,22 @@ mod tests {
             0.0,
             100.0,
             50.0,
-            Color { r: 0.5, g: 0.5, b: 0.5, a: 1.0 },
+            Color {
+                r: 0.5,
+                g: 0.5,
+                b: 0.5,
+                a: 1.0,
+            },
         )]);
         let tmp = std::env::temp_dir().join(format!("op-export-test-{}.png", std::process::id()));
         let res = export_raster(&scene, &tmp, RasterFormat::Png, 2.0);
         assert!(res.is_ok(), "export_raster PNG failed: {res:?}");
         let bytes = std::fs::read(&tmp).unwrap();
         // PNG signature: 89 50 4E 47 0D 0A 1A 0A
-        assert_eq!(&bytes[..8], &[0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A]);
+        assert_eq!(
+            &bytes[..8],
+            &[0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A]
+        );
         let _ = std::fs::remove_file(&tmp);
     }
 
@@ -658,7 +681,12 @@ mod tests {
             0.0,
             80.0,
             40.0,
-            Color { r: 1.0, g: 0.0, b: 0.0, a: 1.0 },
+            Color {
+                r: 1.0,
+                g: 0.0,
+                b: 0.0,
+                a: 1.0,
+            },
         )]);
         let tmp = std::env::temp_dir().join(format!("op-export-test-{}.jpg", std::process::id()));
         let res = export_raster(&scene, &tmp, RasterFormat::Jpeg, 1.0);
@@ -677,7 +705,12 @@ mod tests {
             0.0,
             10.0,
             10.0,
-            Color { r: 0.0, g: 0.0, b: 0.0, a: 1.0 },
+            Color {
+                r: 0.0,
+                g: 0.0,
+                b: 0.0,
+                a: 1.0,
+            },
         )]);
         // Both extremes should succeed (clamped silently) rather than
         // allocating a gigapixel surface or zero-sized output.
@@ -725,7 +758,10 @@ mod tests {
         // Flex stretched the child to the 375 px root width.
         let child = &scene.pages[0].children[0].children[0];
         assert_eq!(child.id, "r1");
-        assert_eq!(child.bounds.size.x, 375.0, "fill_container stretched via taffy");
+        assert_eq!(
+            child.bounds.size.x, 375.0,
+            "fill_container stretched via taffy"
+        );
         // page_bounds covers the resolved 375 px-wide root.
         let b = page_bounds(scene.active_page().unwrap()).expect("paintable bounds");
         assert_eq!(b.size.x, 375.0, "page bounds reflect resolved layout width");
@@ -734,7 +770,10 @@ mod tests {
         let res = export_raster(&scene, &tmp, RasterFormat::Png, 1.0);
         assert!(res.is_ok(), "flex export failed: {res:?}");
         let bytes = std::fs::read(&tmp).unwrap();
-        assert_eq!(&bytes[..8], &[0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A]);
+        assert_eq!(
+            &bytes[..8],
+            &[0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A]
+        );
         let _ = std::fs::remove_file(&tmp);
     }
 
@@ -747,14 +786,24 @@ mod tests {
         // the resolved child bounds, not authored coords.
         let mut frame = SceneNode::leaf("frame", NodeKind::Frame);
         frame.bounds = Rect::xywh(10.0, 10.0, 200.0, 100.0);
-        frame.fill = Some(Color { r: 0.9, g: 0.9, b: 0.9, a: 1.0 });
+        frame.fill = Some(Color {
+            r: 0.9,
+            g: 0.9,
+            b: 0.9,
+            a: 1.0,
+        });
         let mut child = filled_rect(
             "child",
             10.0,
             10.0,
             200.0,
             40.0,
-            Color { r: 0.1, g: 0.2, b: 0.3, a: 1.0 },
+            Color {
+                r: 0.1,
+                g: 0.2,
+                b: 0.3,
+                a: 1.0,
+            },
         );
         child.bounds = Rect::xywh(10.0, 10.0, 200.0, 40.0);
         frame.children = vec![child];

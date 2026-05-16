@@ -195,7 +195,7 @@ fn arguments_field(body: &str) -> ParamsResult {
         }
         let key = &body[key_start..i];
         i += 1; // past closing quote
-        // Whitespace, colon, whitespace.
+                // Whitespace, colon, whitespace.
         while i < bytes.len() && bytes[i].is_ascii_whitespace() {
             i += 1;
         }
@@ -418,7 +418,7 @@ fn parse_flat_object_body(body: &str) -> Option<BTreeMap<String, String>> {
         }
         let key = body[key_start..i].to_string();
         i += 1; // consume closing quote
-        // Skip whitespace + colon.
+                // Skip whitespace + colon.
         while i < bytes.len() && (bytes[i].is_ascii_whitespace() || bytes[i] == b':') {
             i += 1;
         }
@@ -463,7 +463,9 @@ fn parse_flat_object_body(body: &str) -> Option<BTreeMap<String, String>> {
                 // Number / true / false / null — read until comma /
                 // close-brace / whitespace.
                 let val_start = i;
-                while i < bytes.len() && !matches!(bytes[i], b',' | b'}' | b' ' | b'\t' | b'\n' | b'\r') {
+                while i < bytes.len()
+                    && !matches!(bytes[i], b',' | b'}' | b' ' | b'\t' | b'\n' | b'\r')
+                {
                     i += 1;
                 }
                 out.insert(key, body[val_start..i].to_string());

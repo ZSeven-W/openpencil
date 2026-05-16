@@ -18,9 +18,7 @@ mod model_discovery;
 mod persistence;
 mod settings_io;
 
-use op_host_native::{
-    NativeBackend, SharedSkiaContext, SharedSkiaError, WidgetHostNative,
-};
+use op_host_native::{NativeBackend, SharedSkiaContext, SharedSkiaError, WidgetHostNative};
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 use winit::application::ApplicationHandler;
@@ -111,7 +109,6 @@ impl DesktopApp {
             model_probe: model_discovery::ModelProbe::spawn(),
         }
     }
-
 
     fn request_redraw(&mut self, dirty: bool) -> bool {
         if dirty {
@@ -389,19 +386,32 @@ impl ApplicationHandler for DesktopApp {
                 ..
             } => {
                 // Drain queued cursor move so hover state is current before press lands.
-                if self.drain_pending_cursor_move() { self.redraw_dirty = true; }
-                let consumed = self.host.apply_press(self.cursor_x, self.cursor_y, self.viewport_width, self.viewport_height);
+                if self.drain_pending_cursor_move() {
+                    self.redraw_dirty = true;
+                }
+                let consumed = self.host.apply_press(
+                    self.cursor_x,
+                    self.cursor_y,
+                    self.viewport_width,
+                    self.viewport_height,
+                );
                 // A click on the chat Send button raises
                 // `pending_send` — launch the provider turn.
                 if chat_session::launch_if_pending(&mut self.host, &mut self.current_chat) {
                     self.request_redraw(true);
                 }
-                if let Some(action) =
-                    self.host.editor_state_mut().editor_ui.pending_file_action.take()
+                if let Some(action) = self
+                    .host
+                    .editor_state_mut()
+                    .editor_ui
+                    .pending_file_action
+                    .take()
                 {
                     // ExportImage → close source overlay + open picker dialog.
-                    if matches!(action, op_editor_core::editor_ui_state::FileAction::ExportImage)
-                    {
+                    if matches!(
+                        action,
+                        op_editor_core::editor_ui_state::FileAction::ExportImage
+                    ) {
                         let eui = &mut self.host.editor_state_mut().editor_ui;
                         eui.file_menu_open = false;
                         eui.file_menu_hover = None;
@@ -417,7 +427,9 @@ impl ApplicationHandler for DesktopApp {
                         );
                     }
                 }
-                if consumed { self.request_redraw(true); }
+                if consumed {
+                    self.request_redraw(true);
+                }
             }
             WindowEvent::MouseInput {
                 state: ElementState::Pressed,
@@ -561,10 +573,7 @@ impl ApplicationHandler for DesktopApp {
                     Key::Named(NamedKey::Enter) if !self.zoom_modifier => {
                         consumed = self.host.apply_send();
                         // apply_send may raise pending_send (chat send).
-                        if chat_session::launch_if_pending(
-                            &mut self.host,
-                            &mut self.current_chat,
-                        ) {
+                        if chat_session::launch_if_pending(&mut self.host, &mut self.current_chat) {
                             self.request_redraw(true);
                         }
                     }
@@ -580,7 +589,9 @@ impl ApplicationHandler for DesktopApp {
                     Key::Named(NamedKey::ArrowLeft) if !self.zoom_modifier && !settings_focused => {
                         consumed = self.host.apply_nudge(-nudge, 0.0);
                     }
-                    Key::Named(NamedKey::ArrowRight) if !self.zoom_modifier && !settings_focused => {
+                    Key::Named(NamedKey::ArrowRight)
+                        if !self.zoom_modifier && !settings_focused =>
+                    {
                         consumed = self.host.apply_nudge(nudge, 0.0);
                     }
                     // Cmd/Ctrl+Alt+U/S/I/X — path boolean ops (Paper.js parity).
@@ -608,11 +619,19 @@ impl ApplicationHandler for DesktopApp {
                                 // variable-row inline edit before save
                                 // so the typed value lands on disk.
                                 self.host.commit_variable_row_focus_if_any_pub();
-                                consumed = persistence::handle_save(&mut self.host, &mut self.current_path, self.window.as_ref());
+                                consumed = persistence::handle_save(
+                                    &mut self.host,
+                                    &mut self.current_path,
+                                    self.window.as_ref(),
+                                );
                             }
                             "o" => {
                                 self.host.commit_variable_row_focus_if_any_pub();
-                                consumed = persistence::handle_open(&mut self.host, &mut self.current_path, self.window.as_ref());
+                                consumed = persistence::handle_open(
+                                    &mut self.host,
+                                    &mut self.current_path,
+                                    self.window.as_ref(),
+                                );
                             }
                             _ if settings_focused => {}
                             "d" => consumed = self.host.apply_duplicate(),
@@ -632,11 +651,20 @@ impl ApplicationHandler for DesktopApp {
                             // Cmd+Shift+S = Save As; always allowed.
                             "s" => {
                                 self.host.commit_variable_row_focus_if_any_pub();
-                                consumed = persistence::handle_save_as(&mut self.host, &mut self.current_path, self.window.as_ref());
+                                consumed = persistence::handle_save_as(
+                                    &mut self.host,
+                                    &mut self.current_path,
+                                    self.window.as_ref(),
+                                );
                             }
                             "p" => {
                                 self.host.commit_variable_row_focus_if_any_pub();
-                                persistence::run_action(op_editor_core::editor_ui_state::FileAction::ExportImage, &mut self.host, &mut self.current_path, self.window.as_ref());
+                                persistence::run_action(
+                                    op_editor_core::editor_ui_state::FileAction::ExportImage,
+                                    &mut self.host,
+                                    &mut self.current_path,
+                                    self.window.as_ref(),
+                                );
                                 consumed = true;
                             }
                             _ if settings_focused => {}
@@ -655,30 +683,14 @@ impl ApplicationHandler for DesktopApp {
                         let lower = ch.to_lowercase();
                         let mut handled = true;
                         match lower.as_str() {
-                            "v" => self
-                                .host
-                                .apply_set_tool(op_editor_core::Tool::Select),
-                            "r" => self
-                                .host
-                                .apply_set_tool(op_editor_core::Tool::Rect),
-                            "o" => self
-                                .host
-                                .apply_set_tool(op_editor_core::Tool::Ellipse),
-                            "l" => self
-                                .host
-                                .apply_set_tool(op_editor_core::Tool::Line),
-                            "t" => self
-                                .host
-                                .apply_set_tool(op_editor_core::Tool::Text),
-                            "f" => self
-                                .host
-                                .apply_set_tool(op_editor_core::Tool::Frame),
-                            "p" => self
-                                .host
-                                .apply_set_tool(op_editor_core::Tool::Pen),
-                            "h" => self
-                                .host
-                                .apply_set_tool(op_editor_core::Tool::Hand),
+                            "v" => self.host.apply_set_tool(op_editor_core::Tool::Select),
+                            "r" => self.host.apply_set_tool(op_editor_core::Tool::Rect),
+                            "o" => self.host.apply_set_tool(op_editor_core::Tool::Ellipse),
+                            "l" => self.host.apply_set_tool(op_editor_core::Tool::Line),
+                            "t" => self.host.apply_set_tool(op_editor_core::Tool::Text),
+                            "f" => self.host.apply_set_tool(op_editor_core::Tool::Frame),
+                            "p" => self.host.apply_set_tool(op_editor_core::Tool::Pen),
+                            "h" => self.host.apply_set_tool(op_editor_core::Tool::Hand),
                             "[" => {
                                 consumed = self.host.apply_reorder(ReorderDirection::Down);
                                 handled = false;
@@ -695,8 +707,12 @@ impl ApplicationHandler for DesktopApp {
                     }
                     // `[` / `]` — z-order reorder when an input is focused (still gated by apply_reorder internally).
                     Key::Character(ref ch) if !self.zoom_modifier => match ch.as_str() {
-                        "[" if !settings_focused => consumed = self.host.apply_reorder(ReorderDirection::Down),
-                        "]" if !settings_focused => consumed = self.host.apply_reorder(ReorderDirection::Up),
+                        "[" if !settings_focused => {
+                            consumed = self.host.apply_reorder(ReorderDirection::Down)
+                        }
+                        "]" if !settings_focused => {
+                            consumed = self.host.apply_reorder(ReorderDirection::Up)
+                        }
                         _ => {
                             if let Some(s) = text.as_deref() {
                                 for c in s.chars() {

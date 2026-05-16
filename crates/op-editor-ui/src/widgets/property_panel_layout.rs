@@ -6,12 +6,12 @@
 //! Pulled out of `property_panel_sections.rs` to keep that file
 //! under the 800-line ceiling.
 
-use op_editor_core::{FillType, FlexLayout, PropertyFocus};
 use crate::widgets::property_panel::PropertyPanelAction;
 use crate::widgets::property_panel_inputs::{
     HEADER_HEIGHT, INPUT_HEIGHT, PAD_X, SECTION_GAP, SECTION_HEADER_HEIGHT, TAB_HEIGHT,
 };
 use crate::{Point2D, Rect};
+use op_editor_core::{FillType, FlexLayout, PropertyFocus};
 
 /// Whether each section currently paints — drives the layout
 /// walk so when per-kind filtering hides a section, the rects

@@ -11,11 +11,11 @@
 
 use std::collections::BTreeMap;
 
+use jian_ops_schema::node::PenNode;
+use jian_ops_schema::variable::{VariableKind, VariableScalar};
 use op_editor_core::geometry::{aggregate_bounds, DocRect};
 use op_editor_core::pen_node_ext::PenNodeExt;
 use op_editor_core::{EditorState, NodeId};
-use jian_ops_schema::node::PenNode;
-use jian_ops_schema::variable::{VariableKind, VariableScalar};
 
 use super::{McpTool, ToolErrorCode, ToolOutcome};
 
@@ -246,10 +246,7 @@ impl McpTool for GetNode {
             }
         };
         let Some(rec) = self.nodes.get(raw) else {
-            return ToolOutcome::Err(
-                ToolErrorCode::ToolFailed,
-                format!("node {raw} not found"),
-            );
+            return ToolOutcome::Err(ToolErrorCode::ToolFailed, format!("node {raw} not found"));
         };
         let mut out = BTreeMap::new();
         out.insert("kind".into(), rec.kind.clone());
@@ -431,9 +428,7 @@ pub fn list_variables_snapshot(state: &EditorState) -> ListVariables {
                     let value = match state.resolve_variable(name) {
                         Some(VariableScalar::Str(s)) => s.clone(),
                         Some(VariableScalar::Num(n)) => format!("{n}"),
-                        Some(VariableScalar::Bool(b)) => {
-                            if *b { "true" } else { "false" }.into()
-                        }
+                        Some(VariableScalar::Bool(b)) => if *b { "true" } else { "false" }.into(),
                         None => String::new(),
                     };
                     VariableRecord {
@@ -597,6 +592,6 @@ pub use super::read_tools::{
     count_nodes_snapshot, find_node_by_name_snapshot, get_canvas_bounds_snapshot,
     get_history_depth_snapshot, get_node_parent_snapshot, get_selection_set_snapshot,
     get_viewport_snapshot, list_node_kinds_snapshot, snapshot_layout_snapshot, CountNodes,
-    FindNodeByName, GetCanvasBounds, GetHistoryDepth, GetNodeParent, GetSelectionSet,
-    GetViewport, ListNodeKinds, SnapshotLayout,
+    FindNodeByName, GetCanvasBounds, GetHistoryDepth, GetNodeParent, GetSelectionSet, GetViewport,
+    ListNodeKinds, SnapshotLayout,
 };

@@ -8,11 +8,11 @@
 
 use crate::theme::Theme;
 use crate::widgets::editor_state_ext::theme_for;
-use op_editor_core::editor_ui_state::EditorUiState;
-use op_i18n::Locale;
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::{LayoutBox, LayoutCx, PaintCx, Widget, WidgetId};
 use crate::{Color, Point2D, Rect, TextLayout};
+use op_editor_core::editor_ui_state::EditorUiState;
+use op_i18n::Locale;
 
 pub const LOCALE_PICKER_WIDTH: f32 = 200.0;
 const ROW_HEIGHT: f32 = 32.0;

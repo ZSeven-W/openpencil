@@ -65,7 +65,10 @@ impl Variable {
     /// Themed values pick the entry whose `theme` map is a subset of
     /// `active_theme`; falls back to the entry with `theme = None`
     /// if no match. Returns None for empty `Themed([])`.
-    pub fn resolve<'a>(&'a self, active_theme: &BTreeMap<String, String>) -> Option<&'a VariableScalar> {
+    pub fn resolve<'a>(
+        &'a self,
+        active_theme: &BTreeMap<String, String>,
+    ) -> Option<&'a VariableScalar> {
         match &self.value {
             VariableValue::Scalar(s) => Some(s),
             VariableValue::Themed(entries) => {
@@ -407,9 +410,7 @@ impl VariableTable {
         let kind_ok = match (&kind, &default) {
             // Color variables persist as a hex string; validate it
             // up front so a freshly-created token always resolves.
-            (VariableKind::Color, VariableScalar::Str(s)) => {
-                parse_hex_color(s).is_some()
-            }
+            (VariableKind::Color, VariableScalar::Str(s)) => parse_hex_color(s).is_some(),
             (VariableKind::Number, VariableScalar::Num(_)) => true,
             (VariableKind::String, VariableScalar::Str(_)) => true,
             (VariableKind::Boolean, VariableScalar::Bool(_)) => true,

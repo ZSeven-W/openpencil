@@ -27,9 +27,7 @@ use agent::provider::Provider;
 use agent::query::QueryEngine;
 use agent::stream::Event;
 use futures::StreamExt;
-use op_ai::chat_provider::{
-    ChatDelta, ChatProvider, ChatRequest, StopReason,
-};
+use op_ai::chat_provider::{ChatDelta, ChatProvider, ChatRequest, StopReason};
 use tokio::runtime::{Builder, Runtime};
 use tokio::sync::mpsc;
 
@@ -83,8 +81,8 @@ impl BuiltInProvider {
         max_output_tokens: u32,
         label: impl Into<String>,
     ) -> Self {
-        let mut engine = QueryEngine::new(provider, model)
-            .with_max_output_tokens(max_output_tokens.max(1));
+        let mut engine =
+            QueryEngine::new(provider, model).with_max_output_tokens(max_output_tokens.max(1));
         if let Some(sys) = system_prompt {
             engine = engine.with_system(sys);
         }
@@ -100,10 +98,7 @@ impl ChatProvider for BuiltInProvider {
         &self.label
     }
 
-    fn send(
-        &self,
-        request: ChatRequest,
-    ) -> Box<dyn Iterator<Item = ChatDelta> + Send> {
+    fn send(&self, request: ChatRequest) -> Box<dyn Iterator<Item = ChatDelta> + Send> {
         // Engine handle is shared across turns so the MessageStore
         // accumulates history; `Arc` clone is cheap. Per-turn
         // overrides on `request.system_prompt` / `max_output_tokens`
@@ -142,17 +137,17 @@ impl ChatProvider for BuiltInProvider {
                     }
                     Ok(Event::ToolUse { name, input, .. }) => {
                         let args = input.to_string();
-                        if tx
-                            .send(ChatDelta::ToolUse { name, args })
-                            .await
-                            .is_err()
-                        {
+                        if tx.send(ChatDelta::ToolUse { name, args }).await.is_err() {
                             return;
                         }
                     }
                     Ok(Event::Result { data }) => {
                         let reason = map_stop_reason(data.stop_reason.as_deref());
-                        let _ = tx.send(ChatDelta::Done { stop_reason: reason }).await;
+                        let _ = tx
+                            .send(ChatDelta::Done {
+                                stop_reason: reason,
+                            })
+                            .await;
                         emitted_done = true;
                         break;
                     }
@@ -283,13 +278,7 @@ mod tests {
                 },
             ],
         });
-        let bridge = BuiltInProvider::from_provider(
-            provider,
-            "test-model",
-            None,
-            1024,
-            "scripted",
-        );
+        let bridge = BuiltInProvider::from_provider(provider, "test-model", None, 1024, "scripted");
         let req = ChatRequest {
             system_prompt: String::new(),
             user_message: "hi".into(),
@@ -303,7 +292,12 @@ mod tests {
         );
         let done = deltas.last().unwrap();
         assert!(
-            matches!(done, ChatDelta::Done { stop_reason: StopReason::EndTurn }),
+            matches!(
+                done,
+                ChatDelta::Done {
+                    stop_reason: StopReason::EndTurn
+                }
+            ),
             "last delta should be Done EndTurn, got {:?}",
             done
         );
@@ -317,13 +311,7 @@ mod tests {
                 message: "slow down".into(),
             }],
         });
-        let bridge = BuiltInProvider::from_provider(
-            provider,
-            "m",
-            None,
-            64,
-            "err",
-        );
+        let bridge = BuiltInProvider::from_provider(provider, "m", None, 64, "err");
         let deltas: Vec<ChatDelta> = bridge
             .send(ChatRequest {
                 system_prompt: String::new(),

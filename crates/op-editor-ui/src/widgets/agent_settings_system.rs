@@ -10,12 +10,12 @@
 //! lands, this can grow back into a real toggle + check-now
 //! button + `ToggleAutoUpdate` hit.
 
-use op_editor_core::agent_settings::AgentSettings;
-use op_editor_core::editor_ui_state::EditorUiState;
 use crate::theme::Theme;
 use crate::widgets::agent_settings_i18n::t as t_settings;
 use crate::widgets::PaintCx;
 use crate::{Color, Point2D, Rect, TextLayout};
+use op_editor_core::agent_settings::AgentSettings;
+use op_editor_core::editor_ui_state::EditorUiState;
 
 const TITLE_H: f32 = 36.0;
 const CARD_H: f32 = 88.0;
@@ -23,7 +23,12 @@ const STATUS_DOT_RADIUS: f32 = 5.0;
 /// Green used by the "Up to date" status dot. Distinct from
 /// `theme.success` since the theme doesn't expose a status-success
 /// token today; mirrors the TS app's green-500 hue.
-const UP_TO_DATE_GREEN: Color = Color { r: 0.22, g: 0.78, b: 0.42, a: 1.0 };
+const UP_TO_DATE_GREEN: Color = Color {
+    r: 0.22,
+    g: 0.78,
+    b: 0.42,
+    a: 1.0,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SystemHit {
@@ -73,8 +78,7 @@ pub(super) fn paint_system_tab(
         origin: Point2D::new(dot_x - STATUS_DOT_RADIUS, dot_y - STATUS_DOT_RADIUS),
         size: Point2D::new(STATUS_DOT_RADIUS * 2.0, STATUS_DOT_RADIUS * 2.0),
     };
-    cx.backend
-        .fill_oval(dot_rect, UP_TO_DATE_GREEN);
+    cx.backend.fill_oval(dot_rect, UP_TO_DATE_GREEN);
     // "Auto-update" header + "Up to date" status, side-by-side.
     let label_layout = TextLayout::single_run(
         t_settings(ui, "settings.system.autoUpdate"),

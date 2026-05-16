@@ -9,9 +9,9 @@
 
 use std::collections::BTreeMap;
 
+use jian_ops_schema::variable::VariableKind;
 use op_editor_core::EditorState;
 use op_editor_core::NodeId;
-use jian_ops_schema::variable::VariableKind;
 
 use super::{EditorCommand, McpTool, ToolErrorCode, ToolOutcome};
 
@@ -50,16 +50,10 @@ impl McpTool for SetVariableColor {
     }
     fn call(&self, args: &BTreeMap<String, String>) -> ToolOutcome {
         let Some(name) = args.get("name") else {
-            return ToolOutcome::Err(
-                ToolErrorCode::MissingArgument,
-                "name is required".into(),
-            );
+            return ToolOutcome::Err(ToolErrorCode::MissingArgument, "name is required".into());
         };
         let Some(hex) = args.get("hex") else {
-            return ToolOutcome::Err(
-                ToolErrorCode::MissingArgument,
-                "hex is required".into(),
-            );
+            return ToolOutcome::Err(ToolErrorCode::MissingArgument, "hex is required".into());
         };
         if !self.known_colors.contains_key(name) {
             return ToolOutcome::Err(
@@ -97,16 +91,10 @@ impl McpTool for SetActiveAxisValue {
     }
     fn call(&self, args: &BTreeMap<String, String>) -> ToolOutcome {
         let Some(axis) = args.get("axis") else {
-            return ToolOutcome::Err(
-                ToolErrorCode::MissingArgument,
-                "axis is required".into(),
-            );
+            return ToolOutcome::Err(ToolErrorCode::MissingArgument, "axis is required".into());
         };
         let Some(value) = args.get("value") else {
-            return ToolOutcome::Err(
-                ToolErrorCode::MissingArgument,
-                "value is required".into(),
-            );
+            return ToolOutcome::Err(ToolErrorCode::MissingArgument, "value is required".into());
         };
         let Some(allowed) = self.axes.get(axis) else {
             return ToolOutcome::Err(
@@ -147,10 +135,7 @@ impl McpTool for InsertNode {
         let kind = match args.get("kind") {
             Some(s) => s.clone(),
             None => {
-                return ToolOutcome::Err(
-                    ToolErrorCode::MissingArgument,
-                    "kind is required".into(),
-                );
+                return ToolOutcome::Err(ToolErrorCode::MissingArgument, "kind is required".into());
             }
         };
         if !ALLOWED_KINDS.iter().any(|k| *k == kind) {
@@ -165,10 +150,7 @@ impl McpTool for InsertNode {
         let name = match args.get("name") {
             Some(s) => s.clone(),
             None => {
-                return ToolOutcome::Err(
-                    ToolErrorCode::MissingArgument,
-                    "name is required".into(),
-                );
+                return ToolOutcome::Err(ToolErrorCode::MissingArgument, "name is required".into());
             }
         };
         let x = match parse_i32_arg(args, "x") {
@@ -224,10 +206,7 @@ pub(super) const ALLOWED_KINDS: &[&str] = &[
     "frame", "group", "rect", "ellipse", "polygon", "line", "text", "path",
 ];
 
-fn parse_i32_arg(
-    args: &BTreeMap<String, String>,
-    key: &str,
-) -> Result<i32, ToolOutcome> {
+fn parse_i32_arg(args: &BTreeMap<String, String>, key: &str) -> Result<i32, ToolOutcome> {
     let Some(raw) = args.get(key) else {
         return Err(ToolOutcome::Err(
             ToolErrorCode::MissingArgument,
@@ -264,10 +243,7 @@ impl McpTool for UpdateNode {
         let height = parse_opt_i32(args, "height");
         for (lab, v) in [("x", &x), ("y", &y), ("width", &width), ("height", &height)] {
             if let Err(e) = v {
-                return ToolOutcome::Err(
-                    ToolErrorCode::InvalidArgument,
-                    format!("{lab}: {e}"),
-                );
+                return ToolOutcome::Err(ToolErrorCode::InvalidArgument, format!("{lab}: {e}"));
             }
         }
         let name = args.get("name").cloned();
@@ -294,8 +270,7 @@ impl McpTool for UpdateNode {
         {
             return ToolOutcome::Err(
                 ToolErrorCode::MissingArgument,
-                "at least one of x / y / width / height / name / fill_hex must be set"
-                    .into(),
+                "at least one of x / y / width / height / name / fill_hex must be set".into(),
             );
         }
         let mut out = BTreeMap::new();
@@ -321,10 +296,7 @@ pub fn update_node_snapshot() -> UpdateNode {
 
 /// Parse an optional i32 arg. `Ok(None)` when absent, `Ok(Some)` on a
 /// successful parse, `Err` on present-but-malformed input.
-fn parse_opt_i32(
-    args: &BTreeMap<String, String>,
-    key: &str,
-) -> Result<Option<i32>, String> {
+fn parse_opt_i32(args: &BTreeMap<String, String>, key: &str) -> Result<Option<i32>, String> {
     match args.get(key) {
         None => Ok(None),
         Some(s) => s
@@ -465,10 +437,7 @@ impl McpTool for ReplaceNode {
         let kind = match args.get("kind") {
             Some(s) => s.clone(),
             None => {
-                return ToolOutcome::Err(
-                    ToolErrorCode::MissingArgument,
-                    "kind is required".into(),
-                );
+                return ToolOutcome::Err(ToolErrorCode::MissingArgument, "kind is required".into());
             }
         };
         if !ALLOWED_KINDS.iter().any(|k| *k == kind) {
@@ -483,10 +452,7 @@ impl McpTool for ReplaceNode {
         let name = match args.get("name") {
             Some(s) => s.clone(),
             None => {
-                return ToolOutcome::Err(
-                    ToolErrorCode::MissingArgument,
-                    "name is required".into(),
-                );
+                return ToolOutcome::Err(ToolErrorCode::MissingArgument, "name is required".into());
             }
         };
         let x = match parse_i32_arg(args, "x") {

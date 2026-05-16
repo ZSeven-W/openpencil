@@ -21,9 +21,7 @@ use anthropic_agent_sdk::{
     types::{ContentBlock, Message},
     ClaudeAgentOptions, StreamExt,
 };
-use op_ai::chat_provider::{
-    ChatDelta, ChatProvider, ChatRequest, StopReason,
-};
+use op_ai::chat_provider::{ChatDelta, ChatProvider, ChatRequest, StopReason};
 use tokio::sync::mpsc;
 
 use crate::chat_runtime::{shared_runtime, BlockingRecvIter};
@@ -78,10 +76,7 @@ impl ChatProvider for ClaudeCodeProvider {
         &self.label
     }
 
-    fn send(
-        &self,
-        request: ChatRequest,
-    ) -> Box<dyn Iterator<Item = ChatDelta> + Send> {
+    fn send(&self, request: ChatRequest) -> Box<dyn Iterator<Item = ChatDelta> + Send> {
         let prompt = request.user_message;
         let options = self.options.clone();
         let (tx, rx) = mpsc::channel::<ChatDelta>(64);
@@ -148,10 +143,7 @@ impl ChatProvider for ClaudeCodeProvider {
 /// break), `Some((false, _))` when emitted-but-not-terminal,
 /// `None` when the message was ignored. Marking these explicitly
 /// keeps the caller's loop centralized.
-async fn handle_message(
-    msg: Message,
-    tx: &mpsc::Sender<ChatDelta>,
-) -> Option<(bool, StopReason)> {
+async fn handle_message(msg: Message, tx: &mpsc::Sender<ChatDelta>) -> Option<(bool, StopReason)> {
     match msg {
         Message::Assistant { message, .. } => {
             // Stream each ContentBlock as the right ChatDelta variant.

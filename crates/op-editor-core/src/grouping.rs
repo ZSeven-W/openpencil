@@ -55,8 +55,7 @@ impl EditorState {
         }
         let target = self.selection.anchor.clone();
         let children = self.active_children_mut();
-        let Some(idx) = children.iter().position(|c| c.id_str() == target.as_str())
-        else {
+        let Some(idx) = children.iter().position(|c| c.id_str() == target.as_str()) else {
             return false;
         };
         if !children[idx].is_group() {
@@ -64,8 +63,10 @@ impl EditorState {
         }
         let group = children.remove(idx);
         let inner = group.children().cloned().unwrap_or_default();
-        let new_ids: Vec<NodeId> =
-            inner.iter().filter_map(|c| NodeId::new_opt(c.id_str())).collect();
+        let new_ids: Vec<NodeId> = inner
+            .iter()
+            .filter_map(|c| NodeId::new_opt(c.id_str()))
+            .collect();
         for (k, child) in inner.into_iter().enumerate() {
             children.insert(idx + k, child);
         }

@@ -19,8 +19,8 @@ use crate::pen_node_ext::PenNodeExt;
 use crate::state::EditorState;
 use crate::walkers;
 use jian_ops_schema::node::{
-    ContainerProps, EllipseNode, FrameNode, GroupNode, LineNode, PathNode, PenNode,
-    PenNodeBase, PolygonNode, RectangleNode, TextContent, TextNode,
+    ContainerProps, EllipseNode, FrameNode, GroupNode, LineNode, PathNode, PenNode, PenNodeBase,
+    PolygonNode, RectangleNode, TextContent, TextNode,
 };
 use jian_ops_schema::sizing::SizingBehavior;
 use std::collections::HashSet;
@@ -273,8 +273,7 @@ impl EditorState {
         let Some(new_id) = self.next_node_id() else {
             return false;
         };
-        let Some(mut node) =
-            build_leaf_node(kind, new_id.as_str(), name, x, y, width, height)
+        let Some(mut node) = build_leaf_node(kind, new_id.as_str(), name, x, y, width, height)
         else {
             return false;
         };
@@ -315,8 +314,7 @@ impl EditorState {
                 return false;
             }
         }
-        let Some(node) = walkers::find_node_mut(self.active_children_mut(), node_id)
-        else {
+        let Some(node) = walkers::find_node_mut(self.active_children_mut(), node_id) else {
             return false;
         };
         // All validation passed — every field applies atomically.
@@ -352,11 +350,7 @@ impl EditorState {
     /// `MoveNode` — reparent a node. A `NONE` target reparents to the
     /// active page root; a real target must resolve + must not create
     /// a cycle (target is a descendant of the moved node).
-    pub(crate) fn cmd_move_node(
-        &mut self,
-        node_id: &NodeId,
-        target_parent: &NodeId,
-    ) -> bool {
+    pub(crate) fn cmd_move_node(&mut self, node_id: &NodeId, target_parent: &NodeId) -> bool {
         if !node_id.is_real() || target_parent == node_id {
             return false;
         }
@@ -390,11 +384,7 @@ impl EditorState {
 
     /// `CopyNode` — deep-clone a node + subtree under a new parent
     /// (`NONE` = active page root). Fresh ids minted past the id space.
-    pub(crate) fn cmd_copy_node(
-        &mut self,
-        node_id: &NodeId,
-        target_parent: &NodeId,
-    ) -> bool {
+    pub(crate) fn cmd_copy_node(&mut self, node_id: &NodeId, target_parent: &NodeId) -> bool {
         if !node_id.is_real() {
             return false;
         }
@@ -404,9 +394,7 @@ impl EditorState {
             if walkers::find_node(children, node_id).is_none() {
                 return false;
             }
-            if target_parent.is_real()
-                && walkers::find_node(children, target_parent).is_none()
-            {
+            if target_parent.is_real() && walkers::find_node(children, target_parent).is_none() {
                 return false;
             }
         }
@@ -461,8 +449,7 @@ impl EditorState {
             let Some(target) = walkers::find_node(children, node_id) else {
                 return false;
             };
-            let has_children =
-                target.children().map(|c| !c.is_empty()).unwrap_or(false);
+            let has_children = target.children().map(|c| !c.is_empty()).unwrap_or(false);
             if has_children && !drop_children {
                 return false;
             }

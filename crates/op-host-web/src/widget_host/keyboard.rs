@@ -14,9 +14,7 @@ impl WidgetHost {
     /// Returns true if anything changed.
     pub fn apply_text(&mut self, c: char) -> bool {
         if self.editor_state.editor_ui.agent_settings.focus.is_some() {
-            if c.is_ascii_digit()
-                && self.editor_state.editor_ui.settings_input_draft.len() < 5
-            {
+            if c.is_ascii_digit() && self.editor_state.editor_ui.settings_input_draft.len() < 5 {
                 self.editor_state.editor_ui.settings_input_draft.push(c);
                 self.mark_dirty();
                 return true;
@@ -274,10 +272,7 @@ impl WidgetHost {
     /// `[` / `]` — bump the selected node down / up by one
     /// position in its parent's children vec (changing paint
     /// order).
-    pub fn apply_reorder(
-        &mut self,
-        direction: op_editor_core::ReorderDirection,
-    ) -> bool {
+    pub fn apply_reorder(&mut self, direction: op_editor_core::ReorderDirection) -> bool {
         if self.input_active() {
             return false;
         }
@@ -287,12 +282,8 @@ impl WidgetHost {
         self.editor_state.commit_history();
         // shell-core `ReorderDirection` → op-editor-core's.
         let dir = match direction {
-            op_editor_core::ReorderDirection::Up => {
-                op_editor_core::ReorderDirection::Up
-            }
-            op_editor_core::ReorderDirection::Down => {
-                op_editor_core::ReorderDirection::Down
-            }
+            op_editor_core::ReorderDirection::Up => op_editor_core::ReorderDirection::Up,
+            op_editor_core::ReorderDirection::Down => op_editor_core::ReorderDirection::Down,
         };
         if self.editor_state.reorder_selected(dir) {
             self.mark_dirty();
@@ -385,13 +376,11 @@ impl WidgetHost {
         let Some(focus) = self.editor_state.editor_ui.agent_settings.focus.take() else {
             return;
         };
-        let draft =
-            std::mem::take(&mut self.editor_state.editor_ui.settings_input_draft);
+        let draft = std::mem::take(&mut self.editor_state.editor_ui.settings_input_draft);
         match focus {
             SettingsFocus::McpPort => {
                 if let Ok(port) = draft.trim().parse::<u16>() {
-                    self.editor_state.editor_ui.agent_settings.mcp_server.port =
-                        port.max(1024);
+                    self.editor_state.editor_ui.agent_settings.mcp_server.port = port.max(1024);
                 }
             }
         }

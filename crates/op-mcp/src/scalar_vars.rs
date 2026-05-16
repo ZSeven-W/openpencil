@@ -9,8 +9,8 @@
 
 use std::collections::BTreeMap;
 
-use op_editor_core::EditorState;
 use jian_ops_schema::variable::VariableKind;
+use op_editor_core::EditorState;
 
 use super::{EditorCommand, McpTool, ToolErrorCode, ToolOutcome, VariableScalarPayload};
 
@@ -29,10 +29,7 @@ impl McpTool for SetVariableNumber {
     }
     fn call(&self, args: &BTreeMap<String, String>) -> ToolOutcome {
         let Some(name) = args.get("name") else {
-            return ToolOutcome::Err(
-                ToolErrorCode::MissingArgument,
-                "name is required".into(),
-            );
+            return ToolOutcome::Err(ToolErrorCode::MissingArgument, "name is required".into());
         };
         let Some(value) = args.get("value") else {
             return ToolOutcome::Err(
@@ -101,16 +98,10 @@ impl McpTool for SetVariableString {
     }
     fn call(&self, args: &BTreeMap<String, String>) -> ToolOutcome {
         let Some(name) = args.get("name") else {
-            return ToolOutcome::Err(
-                ToolErrorCode::MissingArgument,
-                "name is required".into(),
-            );
+            return ToolOutcome::Err(ToolErrorCode::MissingArgument, "name is required".into());
         };
         let Some(value) = args.get("value") else {
-            return ToolOutcome::Err(
-                ToolErrorCode::MissingArgument,
-                "value is required".into(),
-            );
+            return ToolOutcome::Err(ToolErrorCode::MissingArgument, "value is required".into());
         };
         if !self.known.contains_key(name) {
             return ToolOutcome::Err(
@@ -149,10 +140,7 @@ impl McpTool for SetVariableBoolean {
     }
     fn call(&self, args: &BTreeMap<String, String>) -> ToolOutcome {
         let Some(name) = args.get("name") else {
-            return ToolOutcome::Err(
-                ToolErrorCode::MissingArgument,
-                "name is required".into(),
-            );
+            return ToolOutcome::Err(ToolErrorCode::MissingArgument, "name is required".into());
         };
         let Some(value) = args.get("value") else {
             return ToolOutcome::Err(
@@ -209,8 +197,7 @@ fn default_value_ok(kind: &str, default_value: &str) -> bool {
             let Some(hex) = default_value.trim().strip_prefix('#') else {
                 return false;
             };
-            matches!(hex.len(), 3 | 6 | 8)
-                && hex.chars().all(|c| c.is_ascii_hexdigit())
+            matches!(hex.len(), 3 | 6 | 8) && hex.chars().all(|c| c.is_ascii_hexdigit())
         }
         "number" => default_value
             .parse::<f64>()
@@ -235,10 +222,7 @@ impl McpTool for CreateVariable {
     }
     fn call(&self, args: &BTreeMap<String, String>) -> ToolOutcome {
         let Some(name) = args.get("name") else {
-            return ToolOutcome::Err(
-                ToolErrorCode::MissingArgument,
-                "name is required".into(),
-            );
+            return ToolOutcome::Err(ToolErrorCode::MissingArgument, "name is required".into());
         };
         let Some(kind) = args.get("kind") else {
             return ToolOutcome::Err(
@@ -318,10 +302,7 @@ impl McpTool for DeleteVariable {
     }
     fn call(&self, args: &BTreeMap<String, String>) -> ToolOutcome {
         let Some(name) = args.get("name") else {
-            return ToolOutcome::Err(
-                ToolErrorCode::MissingArgument,
-                "name is required".into(),
-            );
+            return ToolOutcome::Err(ToolErrorCode::MissingArgument, "name is required".into());
         };
         if !self.existing.contains_key(name) {
             return ToolOutcome::Err(
@@ -331,10 +312,7 @@ impl McpTool for DeleteVariable {
         }
         let mut out = BTreeMap::new();
         out.insert("wrote".into(), "true".into());
-        ToolOutcome::OkWithCommand(
-            out,
-            EditorCommand::DeleteVariable { name: name.clone() },
-        )
+        ToolOutcome::OkWithCommand(out, EditorCommand::DeleteVariable { name: name.clone() })
     }
 }
 
@@ -382,9 +360,7 @@ impl McpTool for RenameVariable {
         }
         // Collision check — but old == new (after trim) is a
         // legitimate no-op rename, not a collision.
-        if old_name != new_name.trim()
-            && self.existing.contains_key(new_name.trim())
-        {
+        if old_name != new_name.trim() && self.existing.contains_key(new_name.trim()) {
             return ToolOutcome::Err(
                 ToolErrorCode::ToolFailed,
                 format!("variable {:?} already exists", new_name.trim()),

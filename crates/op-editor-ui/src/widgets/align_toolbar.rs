@@ -10,11 +10,11 @@
 //! Anchored to the horizontal center of the canvas region, ~16 px
 //! below the canvas top edge.
 
-use op_editor_core::AlignAction;
 use crate::theme::Theme;
-use op_editor_core::EditorState;
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::{Point2D, Rect, RenderBackend};
+use op_editor_core::AlignAction;
+use op_editor_core::EditorState;
 
 pub const ALIGN_TOOLBAR_HEIGHT: f32 = 36.0;
 const BUTTON_SIZE: f32 = 28.0;
@@ -165,8 +165,9 @@ mod tests {
 
     fn doc_with_n_selected(n: usize) -> EditorState {
         let mut state = EditorState::new();
-        let ids: Vec<OpNodeId> =
-            (0..n).map(|i| OpNodeId::new(format!("n{}", 100 + i))).collect();
+        let ids: Vec<OpNodeId> = (0..n)
+            .map(|i| OpNodeId::new(format!("n{}", 100 + i)))
+            .collect();
         state.selection.anchor = ids.last().cloned().unwrap_or_default();
         state.selection.set = ids;
         state
@@ -209,10 +210,7 @@ mod tests {
         let tb = AlignToolbar::for_canvas_region(canvas(), &doc).unwrap();
         for (i, (action, _)) in ITEMS.iter().enumerate() {
             let r = tb.button_rect(i);
-            let center = Point2D::new(
-                r.origin.x + r.size.x / 2.0,
-                r.origin.y + r.size.y / 2.0,
-            );
+            let center = Point2D::new(r.origin.x + r.size.x / 2.0, r.origin.y + r.size.y / 2.0);
             assert_eq!(tb.hit_test(center), Some(*action), "button {i}");
         }
     }

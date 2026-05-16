@@ -36,10 +36,7 @@ pub fn set_active_page_snapshot() -> SetActivePage {
     SetActivePage
 }
 
-fn parse_u32_arg(
-    args: &BTreeMap<String, String>,
-    key: &str,
-) -> Result<u32, ToolOutcome> {
+fn parse_u32_arg(args: &BTreeMap<String, String>, key: &str) -> Result<u32, ToolOutcome> {
     let Some(raw) = args.get(key) else {
         return Err(ToolOutcome::Err(
             ToolErrorCode::MissingArgument,
@@ -85,10 +82,7 @@ impl McpTool for RenamePage {
             Err(e) => return e,
         };
         let Some(name) = args.get("name") else {
-            return ToolOutcome::Err(
-                ToolErrorCode::MissingArgument,
-                "name is required".into(),
-            );
+            return ToolOutcome::Err(ToolErrorCode::MissingArgument, "name is required".into());
         };
         if name.trim().is_empty() {
             return ToolOutcome::Err(
@@ -286,10 +280,7 @@ impl McpTool for CycleActiveAxisValue {
     }
     fn call(&self, args: &BTreeMap<String, String>) -> ToolOutcome {
         let Some(axis) = args.get("axis") else {
-            return ToolOutcome::Err(
-                ToolErrorCode::MissingArgument,
-                "axis is required".into(),
-            );
+            return ToolOutcome::Err(ToolErrorCode::MissingArgument, "axis is required".into());
         };
         if axis.trim().is_empty() {
             return ToolOutcome::Err(
@@ -300,9 +291,7 @@ impl McpTool for CycleActiveAxisValue {
         if !self.axes_with_values.contains(axis) {
             return ToolOutcome::Err(
                 ToolErrorCode::ToolFailed,
-                format!(
-                    "axis {axis:?} not defined in themes (or has no values to cycle)"
-                ),
+                format!("axis {axis:?} not defined in themes (or has no values to cycle)"),
             );
         }
         let mut out = BTreeMap::new();
@@ -390,10 +379,7 @@ pub fn set_viewport_snapshot() -> SetViewport {
 
 /// Build a `SetNodeFlag` command. Single point for arg parse + flag
 /// validation.
-fn build_set_node_flag(
-    args: &BTreeMap<String, String>,
-    flag: NodeFlag,
-) -> ToolOutcome {
+fn build_set_node_flag(args: &BTreeMap<String, String>, flag: NodeFlag) -> ToolOutcome {
     let node_id = match parse_node_id(args, "node_id") {
         Ok(v) => v,
         Err(e) => return e,
@@ -469,8 +455,7 @@ impl McpTool for SetActiveTool {
             );
         };
         const ALLOWED_TOOLS: &[&str] = &[
-            "select", "rect", "ellipse", "polygon", "line", "pen", "text", "frame",
-            "hand",
+            "select", "rect", "ellipse", "polygon", "line", "pen", "text", "frame", "hand",
         ];
         if !ALLOWED_TOOLS.iter().any(|t| *t == tool.as_str()) {
             return ToolOutcome::Err(
@@ -483,10 +468,7 @@ impl McpTool for SetActiveTool {
         }
         let mut out = BTreeMap::new();
         out.insert("wrote".into(), "true".into());
-        ToolOutcome::OkWithCommand(
-            out,
-            EditorCommand::SetActiveTool { tool: tool.clone() },
-        )
+        ToolOutcome::OkWithCommand(out, EditorCommand::SetActiveTool { tool: tool.clone() })
     }
 }
 

@@ -17,8 +17,7 @@ impl WidgetHostNative {
         use op_editor_ui::widgets::PropertyPanelAction as A;
         match action {
             A::SetFlexLayout(mode) => {
-                self.editor_state.editor_ui.flex_layout =
-                    mode;
+                self.editor_state.editor_ui.flex_layout = mode;
             }
             A::ToggleSizeFillWidth => {
                 let v = &mut self.editor_state.editor_ui.size_fill_width;
@@ -45,8 +44,7 @@ impl WidgetHostNative {
                 *v = !*v;
             }
             A::SetFillType(t) => {
-                self.editor_state
-                    .set_selected_fill_type(t);
+                self.editor_state.set_selected_fill_type(t);
                 self.editor_state.editor_ui.fill_type_picker_open = false;
             }
             A::OpenColorPicker(target) => {
@@ -123,8 +121,7 @@ impl WidgetHostNative {
                 self.editor_state.editor_ui.figma_import_open = false;
             }
             FigmaImportHit::DropZone => {
-                self.editor_state.editor_ui.pending_file_action =
-                    Some(FileAction::ImportFigma);
+                self.editor_state.editor_ui.pending_file_action = Some(FileAction::ImportFigma);
                 self.editor_state.editor_ui.figma_import_open = false;
             }
             FigmaImportHit::Inside => {}
@@ -145,10 +142,7 @@ impl WidgetHostNative {
         self.refresh_layout_scene();
         let top_bar_rect = op_editor_ui::Rect {
             origin: op_editor_ui::Point2D::new(0.0, 0.0),
-            size: op_editor_ui::Point2D::new(
-                viewport_width,
-                op_editor_ui::widgets::TOP_BAR_HEIGHT,
-            ),
+            size: op_editor_ui::Point2D::new(viewport_width, op_editor_ui::widgets::TOP_BAR_HEIGHT),
         };
         let anchor = TopBar::file_menu_rect(top_bar_rect);
         let now_secs = std::time::SystemTime::now()
@@ -157,9 +151,7 @@ impl WidgetHostNative {
             .unwrap_or(0);
         let menu = FileMenu::from_editor_ui(&self.editor_state.editor_ui, now_secs);
         let menu_rect = menu.rect_at(anchor);
-        if let Some(choice) =
-            menu.hit_test(menu_rect, op_editor_ui::Point2D::new(x, y))
-        {
+        if let Some(choice) = menu.hit_test(menu_rect, op_editor_ui::Point2D::new(x, y)) {
             self.editor_state.editor_ui.pending_file_action = Some(match choice {
                 FileMenuChoice::NewFile => FileAction::New,
                 FileMenuChoice::OpenFile => FileAction::Open,
@@ -182,13 +174,11 @@ impl WidgetHostNative {
         let Some(focus) = self.editor_state.editor_ui.agent_settings.focus.take() else {
             return;
         };
-        let draft =
-            std::mem::take(&mut self.editor_state.editor_ui.settings_input_draft);
+        let draft = std::mem::take(&mut self.editor_state.editor_ui.settings_input_draft);
         match focus {
             SettingsFocus::McpPort => {
                 if let Ok(port) = draft.trim().parse::<u16>() {
-                    self.editor_state.editor_ui.agent_settings.mcp_server.port =
-                        port.max(1024);
+                    self.editor_state.editor_ui.agent_settings.mcp_server.port = port.max(1024);
                 }
             }
         }
@@ -215,9 +205,7 @@ impl WidgetHostNative {
         let committed = (|| -> bool {
             match focus {
                 VariableRowFocus::Number(idx) => {
-                    let Some(name) =
-                        var_table.variables.get(idx).map(|v| v.name.clone())
-                    else {
+                    let Some(name) = var_table.variables.get(idx).map(|v| v.name.clone()) else {
                         return false;
                     };
                     let Ok(n) = draft.trim().parse::<f64>() else {
@@ -229,9 +217,7 @@ impl WidgetHostNative {
                     self.editor_state.set_variable_number(&name, n)
                 }
                 VariableRowFocus::String(idx) => {
-                    let Some(name) =
-                        var_table.variables.get(idx).map(|v| v.name.clone())
-                    else {
+                    let Some(name) = var_table.variables.get(idx).map(|v| v.name.clone()) else {
                         return false;
                     };
                     self.editor_state.set_variable_string(&name, draft)
@@ -267,10 +253,9 @@ impl WidgetHostNative {
                 let stripped = draft.trim().trim_start_matches('#');
                 if !stripped.is_empty() {
                     if let Some(color) = parse_hex_color(draft.trim()) {
-                        let _ = self.editor_state.set_selected_color(
-                            false,
-                            &super::helpers::color_to_hex(color),
-                        );
+                        let _ = self
+                            .editor_state
+                            .set_selected_color(false, &super::helpers::color_to_hex(color));
                     }
                 }
             }
@@ -301,9 +286,7 @@ impl WidgetHostNative {
         if !has_variables {
             return false;
         }
-        use op_editor_ui::widgets::variables_panel::{
-            VariablesPanel, VariablesPanelHit,
-        };
+        use op_editor_ui::widgets::variables_panel::{VariablesPanel, VariablesPanelHit};
         use op_editor_ui::widgets::{STATUS_BAR_HEIGHT, TOP_BAR_HEIGHT};
         use op_editor_ui::{Point2D, Rect};
         let vars = VariablesPanel::for_editor(&self.editor_state);
@@ -319,10 +302,7 @@ impl WidgetHostNative {
                 viewport_width - self.editor_state.editor_ui.property_panel_width,
                 top_y,
             ),
-            size: Point2D::new(
-                self.editor_state.editor_ui.property_panel_width,
-                intrinsic,
-            ),
+            size: Point2D::new(self.editor_state.editor_ui.property_panel_width, intrinsic),
         };
         let Some(hit) = vars.hit_test(vars_rect, Point2D::new(x, y)) else {
             return false;
@@ -331,8 +311,7 @@ impl WidgetHostNative {
             VariablesPanelHit::Row(idx) => {
                 // Resolve (name, kind) off the editor-state var-table.
                 use op_editor_ui::scene_vars::VariableKind;
-                let var_table =
-                    op_pen_loader::editor_state_var_table(&self.editor_state);
+                let var_table = op_pen_loader::editor_state_var_table(&self.editor_state);
                 let Some((name, kind)) = var_table
                     .variables
                     .get(idx)
@@ -343,9 +322,7 @@ impl WidgetHostNative {
                 match kind {
                     VariableKind::Color => {
                         self.commit_property_focus_if_any();
-                        let _ = self
-                            .editor_state
-                            .open_color_picker_for_variable(name, y);
+                        let _ = self.editor_state.open_color_picker_for_variable(name, y);
                     }
                     VariableKind::Boolean => {
                         // Toggle the boolean value through the
@@ -354,9 +331,7 @@ impl WidgetHostNative {
                             .editor_state
                             .resolve_variable(&name)
                             .and_then(|s| match s {
-                                jian_ops_schema::variable::VariableScalar::Bool(b) => {
-                                    Some(*b)
-                                }
+                                jian_ops_schema::variable::VariableScalar::Bool(b) => Some(*b),
                                 _ => None,
                             })
                             .unwrap_or(false);
@@ -373,24 +348,18 @@ impl WidgetHostNative {
                         // Seed the draft from the resolved scalar.
                         use jian_ops_schema::variable::VariableScalar;
                         let resolved = self.editor_state.resolve_variable(&name).cloned();
-                        self.editor_state.ui.property_input_draft = match (
-                            &kind,
-                            &resolved,
-                        ) {
+                        self.editor_state.ui.property_input_draft = match (&kind, &resolved) {
                             (VariableKind::Number, Some(VariableScalar::Num(n))) => {
                                 format!("{n}")
                             }
-                            (VariableKind::String, Some(VariableScalar::Str(s))) => {
-                                s.clone()
-                            }
+                            (VariableKind::String, Some(VariableScalar::Str(s))) => s.clone(),
                             _ => String::new(),
                         };
-                        self.editor_state.editor_ui.variable_row_focus =
-                            Some(match kind {
-                                VariableKind::Number => VariableRowFocus::Number(idx),
-                                VariableKind::String => VariableRowFocus::String(idx),
-                                _ => return true,
-                            });
+                        self.editor_state.editor_ui.variable_row_focus = Some(match kind {
+                            VariableKind::Number => VariableRowFocus::Number(idx),
+                            VariableKind::String => VariableRowFocus::String(idx),
+                            _ => return true,
+                        });
                         self.editor_state.ui.property_caret_anchor_ms = self.now_ms;
                     }
                 }
@@ -401,8 +370,7 @@ impl WidgetHostNative {
                 // Look up the axis name from the active-theme map
                 // (BTreeMap iteration order is stable, matching the
                 // chip walk order in VariablesPanel).
-                let var_table =
-                    op_pen_loader::editor_state_var_table(&self.editor_state);
+                let var_table = op_pen_loader::editor_state_var_table(&self.editor_state);
                 let axis = var_table.active_theme.keys().nth(idx).cloned();
                 if let Some(name) = axis {
                     self.commit_property_focus_if_any();
@@ -432,15 +400,9 @@ impl WidgetHostNative {
 }
 
 /// Translate a shell-core `ColorTarget` into op-editor-core's.
-fn color_target(
-    t: op_editor_core::ColorTarget,
-) -> op_editor_core::ui_draft::ColorTarget {
+fn color_target(t: op_editor_core::ColorTarget) -> op_editor_core::ui_draft::ColorTarget {
     match t {
-        op_editor_core::ColorTarget::Fill => {
-            op_editor_core::ui_draft::ColorTarget::Fill
-        }
-        op_editor_core::ColorTarget::Stroke => {
-            op_editor_core::ui_draft::ColorTarget::Stroke
-        }
+        op_editor_core::ColorTarget::Fill => op_editor_core::ui_draft::ColorTarget::Fill,
+        op_editor_core::ColorTarget::Stroke => op_editor_core::ui_draft::ColorTarget::Stroke,
     }
 }

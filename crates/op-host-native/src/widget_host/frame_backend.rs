@@ -78,14 +78,7 @@ impl<'a> RenderBackend for NativeFrameBackend<'a> {
             .stroke_svg_path(self.canvas, d, top_left, size, color, width);
     }
 
-    fn fill_svg_path(
-        &mut self,
-        d: &str,
-        top_left: Point2D,
-        size: f32,
-        viewbox: f32,
-        color: Color,
-    ) {
+    fn fill_svg_path(&mut self, d: &str, top_left: Point2D, size: f32, viewbox: f32, color: Color) {
         self.inner
             .fill_svg_path(self.canvas, d, top_left, size, viewbox, color);
     }

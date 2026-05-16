@@ -39,9 +39,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use op_ai::chat_provider::{
-    ChatDelta, ChatProvider, ChatRequest, CliName, StopReason,
-};
+use op_ai::chat_provider::{ChatDelta, ChatProvider, ChatRequest, CliName, StopReason};
 use serde::Serialize;
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command;
@@ -111,10 +109,7 @@ impl ChatProvider for HttpServerProvider {
         &self.label
     }
 
-    fn send(
-        &self,
-        request: ChatRequest,
-    ) -> Box<dyn Iterator<Item = ChatDelta> + Send> {
+    fn send(&self, request: ChatRequest) -> Box<dyn Iterator<Item = ChatDelta> + Send> {
         let binary = self.binary.clone();
         let serve_args = Arc::new(self.serve_args.clone());
         let chat_path = self.chat_path.clone();
@@ -156,9 +151,7 @@ impl ChatProvider for HttpServerProvider {
             let stdout = match child.stdout.take() {
                 Some(s) => s,
                 None => {
-                    let _ = tx
-                        .send(ChatDelta::Error("server: no stdout".into()))
-                        .await;
+                    let _ = tx.send(ChatDelta::Error("server: no stdout".into())).await;
                     let _ = tx
                         .send(ChatDelta::Done {
                             stop_reason: StopReason::Aborted,
@@ -171,45 +164,42 @@ impl ChatProvider for HttpServerProvider {
             // Read stdout lines until we find one announcing the
             // bind address. Codex + OpenCode use slightly different
             // wording so we try a few patterns.
-            let (port, mut stdout_lines) =
-                match timeout(timeout_dur, discover_port(stdout)).await {
-                    Ok(Ok(pair)) => pair,
-                    Ok(Err(e)) => {
-                        let _ = tx
-                            .send(ChatDelta::Error(format!("server: port discovery: {e}")))
-                            .await;
-                        let _ = tx
-                            .send(ChatDelta::Done {
-                                stop_reason: StopReason::Aborted,
-                            })
-                            .await;
-                        let _ = child.start_kill();
-                        let _ = child.wait().await;
-                        return;
-                    }
-                    Err(_) => {
-                        let _ = tx
-                            .send(ChatDelta::Error(format!(
-                                "server: didn't announce listen port within {}s",
-                                timeout_dur.as_secs()
-                            )))
-                            .await;
-                        let _ = tx
-                            .send(ChatDelta::Done {
-                                stop_reason: StopReason::Aborted,
-                            })
-                            .await;
-                        let _ = child.start_kill();
-                        let _ = child.wait().await;
-                        return;
-                    }
-                };
+            let (port, mut stdout_lines) = match timeout(timeout_dur, discover_port(stdout)).await {
+                Ok(Ok(pair)) => pair,
+                Ok(Err(e)) => {
+                    let _ = tx
+                        .send(ChatDelta::Error(format!("server: port discovery: {e}")))
+                        .await;
+                    let _ = tx
+                        .send(ChatDelta::Done {
+                            stop_reason: StopReason::Aborted,
+                        })
+                        .await;
+                    let _ = child.start_kill();
+                    let _ = child.wait().await;
+                    return;
+                }
+                Err(_) => {
+                    let _ = tx
+                        .send(ChatDelta::Error(format!(
+                            "server: didn't announce listen port within {}s",
+                            timeout_dur.as_secs()
+                        )))
+                        .await;
+                    let _ = tx
+                        .send(ChatDelta::Done {
+                            stop_reason: StopReason::Aborted,
+                        })
+                        .await;
+                    let _ = child.start_kill();
+                    let _ = child.wait().await;
+                    return;
+                }
+            };
             // Continue draining stdout for the rest of the server's
             // lifetime — keeps the pipe drained even if the chat
             // response comes via HTTP rather than stdout.
-            tokio::spawn(async move {
-                while let Ok(Some(_)) = stdout_lines.next_line().await {}
-            });
+            tokio::spawn(async move { while let Ok(Some(_)) = stdout_lines.next_line().await {} });
 
             // POST the chat request and stream the response.
             let base = format!("http://127.0.0.1:{port}");
@@ -221,9 +211,7 @@ impl ChatProvider for HttpServerProvider {
             {
                 Ok(c) => c,
                 Err(e) => {
-                    let _ = tx
-                        .send(ChatDelta::Error(format!("http client: {e}")))
-                        .await;
+                    let _ = tx.send(ChatDelta::Error(format!("http client: {e}"))).await;
                     let _ = tx
                         .send(ChatDelta::Done {
                             stop_reason: StopReason::Aborted,
@@ -285,9 +273,7 @@ impl ChatProvider for HttpServerProvider {
                 let bytes = match chunk {
                     Ok(b) => b,
                     Err(e) => {
-                        let _ = tx
-                            .send(ChatDelta::Error(format!("http stream: {e}")))
-                            .await;
+                        let _ = tx.send(ChatDelta::Error(format!("http stream: {e}"))).await;
                         let _ = tx
                             .send(ChatDelta::Done {
                                 stop_reason: StopReason::Aborted,
@@ -348,7 +334,10 @@ impl ChatProvider for HttpServerProvider {
 /// before the listening line appears.
 async fn discover_port(
     stdout: tokio::process::ChildStdout,
-) -> std::io::Result<(u16, tokio::io::Lines<BufReader<tokio::process::ChildStdout>>)> {
+) -> std::io::Result<(
+    u16,
+    tokio::io::Lines<BufReader<tokio::process::ChildStdout>>,
+)> {
     let mut lines = BufReader::new(stdout).lines();
     while let Some(line) = lines.next_line().await? {
         if let Some(port) = parse_listening_line(&line) {

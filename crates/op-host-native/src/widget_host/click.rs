@@ -45,8 +45,7 @@ impl WidgetHostNative {
             ),
         };
         // Build with source excluded so indicator y matches post-commit.
-        let panel =
-            LayerPanel::from_editor_with_drag_source(&self.editor_state, &d.source);
+        let panel = LayerPanel::from_editor_with_drag_source(&self.editor_state, &d.source);
         let cursor = Point2D::new(d.current_x, d.current_y);
         let Some(drop) = panel.drop_target_at(layer_rect, cursor) else {
             return true;
@@ -159,8 +158,7 @@ impl WidgetHostNative {
                         return false;
                     }
                     AIChatHit::ToggleCollapse => {
-                        self.editor_state.chat.collapsed =
-                            !self.editor_state.chat.collapsed;
+                        self.editor_state.chat.collapsed = !self.editor_state.chat.collapsed;
                         self.mark_dirty();
                         return true;
                     }
@@ -233,15 +231,12 @@ impl WidgetHostNative {
             // Build the op-editor-core context target for the
             // double-click rename detection.
             let target_for_dbl = match &hit {
-                H::Layer(id) => Some(LayerContextTarget::Layer(
-                    id.clone(),
-                )),
+                H::Layer(id) => Some(LayerContextTarget::Layer(id.clone())),
                 H::Page(idx) => Some(LayerContextTarget::Page(*idx)),
                 _ => None,
             };
             if let Some(target) = target_for_dbl {
-                if let Some((prev, prev_ms)) =
-                    self.editor_state.editor_ui.last_layer_click.clone()
+                if let Some((prev, prev_ms)) = self.editor_state.editor_ui.last_layer_click.clone()
                 {
                     if prev == target && self.now_ms.saturating_sub(prev_ms) < 400 {
                         let started = match &target {
@@ -253,16 +248,14 @@ impl WidgetHostNative {
                             }
                         };
                         if started {
-                            self.editor_state.editor_ui.rename_caret_anchor_ms =
-                                self.now_ms;
+                            self.editor_state.editor_ui.rename_caret_anchor_ms = self.now_ms;
                         }
                         self.editor_state.editor_ui.last_layer_click = None;
                         self.mark_dirty();
                         return true;
                     }
                 }
-                self.editor_state.editor_ui.last_layer_click =
-                    Some((target, self.now_ms));
+                self.editor_state.editor_ui.last_layer_click = Some((target, self.now_ms));
             }
             match hit {
                 H::Page(idx) => {
@@ -282,20 +275,17 @@ impl WidgetHostNative {
                     return true;
                 }
                 H::ToggleHidden(node_id) => {
-                    self.editor_state
-                        .toggle_node_hidden(&node_id.clone());
+                    self.editor_state.toggle_node_hidden(&node_id.clone());
                     self.mark_dirty();
                     return true;
                 }
                 H::ToggleLocked(node_id) => {
-                    self.editor_state
-                        .toggle_node_locked(&node_id.clone());
+                    self.editor_state.toggle_node_locked(&node_id.clone());
                     self.mark_dirty();
                     return true;
                 }
                 H::ToggleCollapsed(node_id) => {
-                    self.editor_state
-                        .toggle_node_collapsed(&node_id.clone());
+                    self.editor_state.toggle_node_collapsed(&node_id.clone());
                     self.mark_dirty();
                     return true;
                 }

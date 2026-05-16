@@ -46,8 +46,7 @@ fn emit_node(out: &mut String, n: &SceneNode) {
     // model as the raster `paint_node`. Rotation pivots around the
     // node's `aggregate_bounds` centre, matching the raster path.
     let pivot = n.aggregate_bounds();
-    let needs_g = n.rotation.abs() > f32::EPSILON
-        && (pivot.size.x != 0.0 || pivot.size.y != 0.0);
+    let needs_g = n.rotation.abs() > f32::EPSILON && (pivot.size.x != 0.0 || pivot.size.y != 0.0);
     if needs_g {
         let cx = pivot.origin.x + pivot.size.x * 0.5;
         let cy = pivot.origin.y + pivot.size.y * 0.5;
@@ -147,7 +146,9 @@ fn emit_line(out: &mut String, n: &SceneNode) {
 }
 
 fn emit_text(out: &mut String, n: &SceneNode) {
-    let Some(text) = n.text.as_deref() else { return };
+    let Some(text) = n.text.as_deref() else {
+        return;
+    };
     if text.is_empty() {
         return;
     }
@@ -162,7 +163,11 @@ fn emit_text(out: &mut String, n: &SceneNode) {
     };
     let line_h = base_size * 1.35;
     let fill_attr = if color.a < 0.999 {
-        format!(r#" fill="{}" fill-opacity="{}""#, color_to_rgb(color), color.a)
+        format!(
+            r#" fill="{}" fill-opacity="{}""#,
+            color_to_rgb(color),
+            color.a
+        )
     } else {
         format!(r#" fill="{}""#, color_to_rgb(color))
     };
@@ -250,7 +255,11 @@ fn fill_stroke_attrs(n: &SceneNode) -> String {
 /// stroke. Emits `stroke-opacity` when alpha < 1 so semi-transparent
 /// strokes round-trip through SVG instead of collapsing to opaque.
 fn stroke_attrs(color: Color, width: f32) -> String {
-    let mut s = format!(r#" stroke="{}" stroke-width="{}""#, color_to_rgb(color), width);
+    let mut s = format!(
+        r#" stroke="{}" stroke-width="{}""#,
+        color_to_rgb(color),
+        width
+    );
     if color.a < 0.999 {
         let _ = write!(s, r#" stroke-opacity="{}""#, color.a);
     }
@@ -279,7 +288,12 @@ mod tests {
             5.0,
             120.0,
             60.0,
-            Color { r: 0.2, g: 0.4, b: 0.6, a: 1.0 },
+            Color {
+                r: 0.2,
+                g: 0.4,
+                b: 0.6,
+                a: 1.0,
+            },
         )]);
         let tmp = std::env::temp_dir().join(format!("op-export-svg-{}.svg", std::process::id()));
         let res = export_svg(&scene, &tmp);

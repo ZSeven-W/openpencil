@@ -6,10 +6,10 @@
 
 use std::collections::BTreeMap;
 
+use jian_ops_schema::node::PenNode;
 use op_editor_core::geometry::aggregate_bounds;
 use op_editor_core::pen_node_ext::PenNodeExt;
 use op_editor_core::EditorState;
-use jian_ops_schema::node::PenNode;
 
 use super::tools::{active_children, kind_label};
 use super::{McpTool, ToolErrorCode, ToolOutcome};
@@ -136,10 +136,7 @@ impl McpTool for FindNodeByName {
     }
     fn call(&self, args: &BTreeMap<String, String>) -> ToolOutcome {
         let Some(query) = args.get("name") else {
-            return ToolOutcome::Err(
-                ToolErrorCode::MissingArgument,
-                "name is required".into(),
-            );
+            return ToolOutcome::Err(ToolErrorCode::MissingArgument, "name is required".into());
         };
         let Some((_, id, kind)) = self.index.iter().find(|(n, _, _)| n == query) else {
             return ToolOutcome::Err(
@@ -186,15 +183,10 @@ impl McpTool for GetNodeParent {
     }
     fn call(&self, args: &BTreeMap<String, String>) -> ToolOutcome {
         let Some(raw) = args.get("node_id") else {
-            return ToolOutcome::Err(
-                ToolErrorCode::MissingArgument,
-                "node_id is required".into(),
-            );
+            return ToolOutcome::Err(ToolErrorCode::MissingArgument, "node_id is required".into());
         };
         let node_id: &str = raw.as_str();
-        let Some((_, parent_id, depth)) =
-            self.index.iter().find(|(id, _, _)| id == node_id)
-        else {
+        let Some((_, parent_id, depth)) = self.index.iter().find(|(id, _, _)| id == node_id) else {
             return ToolOutcome::Err(
                 ToolErrorCode::ToolFailed,
                 format!("node {node_id} not found on active page"),
@@ -208,12 +200,7 @@ impl McpTool for GetNodeParent {
 }
 
 pub fn get_node_parent_snapshot(state: &EditorState) -> GetNodeParent {
-    fn walk(
-        nodes: &[PenNode],
-        parent: &str,
-        depth: u32,
-        out: &mut Vec<(String, String, u32)>,
-    ) {
+    fn walk(nodes: &[PenNode], parent: &str, depth: u32, out: &mut Vec<(String, String, u32)>) {
         for n in nodes {
             out.push((n.id_str().to_string(), parent.to_string(), depth));
             if let Some(children) = n.children() {

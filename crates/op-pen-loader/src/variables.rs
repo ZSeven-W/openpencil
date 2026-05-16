@@ -11,11 +11,10 @@
 
 use std::collections::BTreeMap;
 
-use op_editor_ui::scene_vars::{
-    ThemeAxis, ThemedValue, Variable, VariableKind, VariableScalar, VariableTable,
-    VariableValue,
-};
 use op_editor_core::NodeId;
+use op_editor_ui::scene_vars::{
+    ThemeAxis, ThemedValue, Variable, VariableKind, VariableScalar, VariableTable, VariableValue,
+};
 use serde::{Deserialize, Serialize};
 
 /// Tagged scalar — mirrors `VariableScalar`.
@@ -210,8 +209,7 @@ pub fn var_table_from_payload(p: &VarTablePayload) -> VariableTable {
         t.fill_refs.insert(NodeId::new(id.as_str()), name.clone());
     }
     for (id, name) in &p.stroke_refs {
-        t.stroke_refs
-            .insert(NodeId::new(id.as_str()), name.clone());
+        t.stroke_refs.insert(NodeId::new(id.as_str()), name.clone());
     }
     t
 }
@@ -250,8 +248,7 @@ mod tests {
         let payload = var_table_to_payload(&original);
         // Through the actual serde JSON path the `.op` file uses.
         let json = serde_json::to_string(&payload).expect("serialize");
-        let back: VarTablePayload =
-            serde_json::from_str(&json).expect("deserialize");
+        let back: VarTablePayload = serde_json::from_str(&json).expect("deserialize");
         let restored = var_table_from_payload(&back);
 
         assert_eq!(restored.variables.len(), 3);
@@ -284,8 +281,7 @@ mod tests {
         // simply omits `var_table`. serde(default) must yield an
         // empty table, not a parse error.
         let legacy = r#"{"variables":[],"themes":[],"active_theme":{}}"#;
-        let payload: VarTablePayload =
-            serde_json::from_str(legacy).expect("legacy parse");
+        let payload: VarTablePayload = serde_json::from_str(legacy).expect("legacy parse");
         let table = var_table_from_payload(&payload);
         assert!(table.variables.is_empty());
         assert!(table.themes.is_empty());
@@ -299,8 +295,7 @@ mod tests {
             {"name":"future","kind":"gradient","value":{"mode":"scalar","value":{"t":"str","v":"x"}}},
             {"name":"ok","kind":"number","value":{"mode":"scalar","value":{"t":"num","v":3.0}}}
         ],"themes":[],"active_theme":{}}"#;
-        let payload: VarTablePayload =
-            serde_json::from_str(json).expect("parse");
+        let payload: VarTablePayload = serde_json::from_str(json).expect("parse");
         let table = var_table_from_payload(&payload);
         assert_eq!(table.variables.len(), 1, "unknown kind skipped");
         assert_eq!(table.variables[0].name, "ok");

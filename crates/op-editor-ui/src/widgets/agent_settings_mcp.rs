@@ -1,11 +1,11 @@
 //! MCP tab of the settings modal.
 
-use op_editor_core::agent_settings::{AgentSettings, McpCli, SettingsFocus};
-use op_editor_core::editor_ui_state::EditorUiState;
 use crate::theme::Theme;
 use crate::widgets::agent_settings_i18n::t as t_settings;
 use crate::widgets::PaintCx;
 use crate::{Color, Point2D, Rect, TextLayout};
+use op_editor_core::agent_settings::{AgentSettings, McpCli, SettingsFocus};
+use op_editor_core::editor_ui_state::EditorUiState;
 
 const TITLE_H: f32 = 36.0;
 const SERVER_CARD_H: f32 = 52.0;
@@ -29,7 +29,12 @@ fn server_card_top(content: Rect) -> f32 {
 }
 
 fn grid_top(content: Rect) -> f32 {
-    server_card_top(content) + SERVER_CARD_H + SECTION_GAP + SECTION_TITLE_H + SUBTITLE_H * 2.0 + ROW_GAP_BEFORE_GRID
+    server_card_top(content)
+        + SERVER_CARD_H
+        + SECTION_GAP
+        + SECTION_TITLE_H
+        + SUBTITLE_H * 2.0
+        + ROW_GAP_BEFORE_GRID
 }
 
 pub(super) fn content_height() -> f32 {
@@ -147,7 +152,8 @@ pub(super) fn paint_mcp_tab(
         to_jian(theme.muted_foreground),
         Point2D::new(0.0, 0.0),
     );
-    cx.backend.draw_text(&s1, Point2D::new(content.origin.x, y + 13.0));
+    cx.backend
+        .draw_text(&s1, Point2D::new(content.origin.x, y + 13.0));
     y += SUBTITLE_H;
     let s2 = TextLayout::single_run(
         t_settings(ui, "settings.mcp.terminalSubtitle2"),
@@ -156,7 +162,8 @@ pub(super) fn paint_mcp_tab(
         to_jian(theme.muted_foreground),
         Point2D::new(0.0, 0.0),
     );
-    cx.backend.draw_text(&s2, Point2D::new(content.origin.x, y + 13.0));
+    cx.backend
+        .draw_text(&s2, Point2D::new(content.origin.x, y + 13.0));
 
     for (i, cli) in McpCli::ALL.iter().enumerate() {
         let cell = cli_cell_rect(content, i);
@@ -181,7 +188,12 @@ fn paint_server_card(
         size: Point2D::new(8.0, 8.0),
     };
     let dot_color = if running {
-        Color { r: 0.34, g: 0.78, b: 0.45, a: 1.0 }
+        Color {
+            r: 0.34,
+            g: 0.78,
+            b: 0.45,
+            a: 1.0,
+        }
     } else {
         theme.muted_foreground
     };
@@ -228,7 +240,8 @@ fn paint_server_card(
     } else {
         (theme.border, 1.0)
     };
-    cx.backend.stroke_round_rect(port_field, 6.0, border_color, border_w);
+    cx.backend
+        .stroke_round_rect(port_field, 6.0, border_color, border_w);
     let port_w = cx.backend.measure_text(&port_str, 12.0);
     let port_layout = TextLayout::single_run(
         &port_str,
@@ -253,7 +266,11 @@ fn paint_server_card(
     }
 
     let btn_bg = if running { theme.muted } else { theme.primary };
-    let btn_fg = if running { theme.foreground } else { theme.primary_foreground };
+    let btn_fg = if running {
+        theme.foreground
+    } else {
+        theme.primary_foreground
+    };
     cx.backend.fill_round_rect(btn, 6.0, btn_bg);
     if running {
         cx.backend.stroke_round_rect(btn, 6.0, theme.border, 1.0);
@@ -285,9 +302,14 @@ fn paint_cli_cell(cx: &mut PaintCx<'_>, theme: &Theme, cli: McpCli, enabled: boo
     cx.backend.fill_round_rect(cell, 10.0, bg);
     let border_color = if enabled { theme.primary } else { theme.border };
     let border_w = if enabled { 1.5 } else { 1.0 };
-    cx.backend.stroke_round_rect(cell, 10.0, border_color, border_w);
+    cx.backend
+        .stroke_round_rect(cell, 10.0, border_color, border_w);
 
-    let label_fg = if enabled { theme.foreground } else { theme.muted_foreground };
+    let label_fg = if enabled {
+        theme.foreground
+    } else {
+        theme.muted_foreground
+    };
     let label = TextLayout::single_run(
         cli.label(),
         "system-ui",
@@ -307,10 +329,16 @@ fn paint_cli_cell(cx: &mut PaintCx<'_>, theme: &Theme, cli: McpCli, enabled: boo
         ),
         size: Point2D::new(TOGGLE_W, TOGGLE_H),
     };
-    let track_color = if enabled { theme.primary } else { theme.background };
-    cx.backend.fill_round_rect(toggle, TOGGLE_H / 2.0, track_color);
+    let track_color = if enabled {
+        theme.primary
+    } else {
+        theme.background
+    };
+    cx.backend
+        .fill_round_rect(toggle, TOGGLE_H / 2.0, track_color);
     if !enabled {
-        cx.backend.stroke_round_rect(toggle, TOGGLE_H / 2.0, theme.border, 1.0);
+        cx.backend
+            .stroke_round_rect(toggle, TOGGLE_H / 2.0, theme.border, 1.0);
     }
     let knob_x = if enabled {
         toggle.origin.x + TOGGLE_W - TOGGLE_KNOB - 3.0

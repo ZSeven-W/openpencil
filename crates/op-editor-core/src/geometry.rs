@@ -96,5 +96,9 @@ pub fn union_aggregate_bounds(children: &[PenNode], ids: &[NodeId]) -> Option<Do
             .filter_map(|id| find_node(children, id))
             .map(aggregate_bounds),
     );
-    if rect.is_empty() { None } else { Some(rect) }
+    if rect.is_empty() {
+        None
+    } else {
+        Some(rect)
+    }
 }

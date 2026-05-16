@@ -184,6 +184,24 @@ pub enum EditorCommand {
         flag: NodeFlag,
         value: bool,
     },
+    /// Set the horizontal / vertical mirror flags on a node. Either
+    /// axis `None` is left untouched. Writes `PenNodeBase::flip_x` /
+    /// `flip_y`.
+    SetNodeFlip {
+        node_id: NodeId,
+        flip_x: Option<bool>,
+        flip_y: Option<bool>,
+    },
+    /// Set the arc geometry on an Ellipse node — `start_angle` /
+    /// `sweep_angle` (degrees) carve a pie / arc, `inner_radius`
+    /// (0.0..=1.0 fraction of the radius) carves a donut hole. Any
+    /// field `None` is left untouched; rejects non-Ellipse kinds.
+    SetEllipseArc {
+        node_id: NodeId,
+        start_angle: Option<f64>,
+        sweep_angle: Option<f64>,
+        inner_radius: Option<f64>,
+    },
     /// Set the active canvas tool.
     SetActiveTool { tool: String },
     /// Undo the last change.

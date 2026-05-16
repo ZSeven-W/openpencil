@@ -7,10 +7,10 @@
 
 use crate::theme::Theme;
 use crate::widgets::editor_state_ext::{theme_for, translate};
-use op_editor_core::editor_ui_state::EditorUiState;
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::{LayoutBox, LayoutCx, PaintCx, Widget, WidgetId};
 use crate::{Color, Point2D, Rect, TextLayout};
+use op_editor_core::editor_ui_state::EditorUiState;
 
 pub const TOP_BAR_HEIGHT: f32 = 40.0;
 const ICON_SIZE: f32 = 16.0;
@@ -412,7 +412,10 @@ fn paint_file_menu_button(cx: &mut PaintCx<'_>, theme: &Theme, x: f32, center_y:
 fn paint_figma_button(cx: &mut PaintCx<'_>, theme: &Theme, x: f32, center_y: f32) {
     crate::widgets::brand_icons::paint_figma_logo(
         cx.backend,
-        Point2D::new(x + (ICON_BUTTON - ICON_SIZE) / 2.0, center_y - ICON_SIZE / 2.0),
+        Point2D::new(
+            x + (ICON_BUTTON - ICON_SIZE) / 2.0,
+            center_y - ICON_SIZE / 2.0,
+        ),
         ICON_SIZE,
         theme.muted_foreground,
     );

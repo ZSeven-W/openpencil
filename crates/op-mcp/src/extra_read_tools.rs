@@ -4,10 +4,10 @@
 
 use std::collections::BTreeMap;
 
+use jian_ops_schema::node::PenNode;
 use op_editor_core::geometry::aggregate_bounds;
 use op_editor_core::pen_node_ext::PenNodeExt;
 use op_editor_core::EditorState;
-use jian_ops_schema::node::PenNode;
 
 use super::tools::kind_label;
 use super::{McpTool, ToolErrorCode, ToolOutcome};
@@ -52,10 +52,7 @@ impl McpTool for GetNodeChildren {
         };
         let id: &str = raw.as_str();
         if !self.known_ids.contains(id) {
-            return ToolOutcome::Err(
-                ToolErrorCode::ToolFailed,
-                format!("node {id} not found"),
-            );
+            return ToolOutcome::Err(ToolErrorCode::ToolFailed, format!("node {id} not found"));
         }
         // Empty children + known id ⇒ count=0 (NOT an error).
         let empty: Vec<ChildRecord> = Vec::new();
@@ -80,8 +77,7 @@ impl McpTool for GetNodeChildren {
 
 pub fn get_node_children_snapshot(state: &EditorState) -> GetNodeChildren {
     let mut children: BTreeMap<String, Vec<ChildRecord>> = BTreeMap::new();
-    let mut known_ids: std::collections::BTreeSet<String> =
-        std::collections::BTreeSet::new();
+    let mut known_ids: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
     match state.doc.pages.as_ref() {
         Some(pages) => {
             for page in pages {

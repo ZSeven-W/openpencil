@@ -37,9 +37,9 @@
 
 use op_editor_core::ChatAnchor;
 use op_editor_ui::widgets::{
-    LocalePicker, Toolbar, TopBar, Widget, LayoutCx, AI_CHAT_COLLAPSED_HEIGHT,
-    AI_CHAT_COLLAPSED_WIDTH, AI_CHAT_HEIGHT, AI_CHAT_WIDTH, LOCALE_PICKER_WIDTH,
-    TOOLBAR_WIDTH, TOP_BAR_HEIGHT,
+    LayoutCx, LocalePicker, Toolbar, TopBar, Widget, AI_CHAT_COLLAPSED_HEIGHT,
+    AI_CHAT_COLLAPSED_WIDTH, AI_CHAT_HEIGHT, AI_CHAT_WIDTH, LOCALE_PICKER_WIDTH, TOOLBAR_WIDTH,
+    TOP_BAR_HEIGHT,
 };
 use op_editor_ui::{Point2D, Rect, Theme};
 
@@ -192,8 +192,7 @@ impl WidgetHost {
     /// paint pass both call this before reading `layout_scene`.
     pub(in crate::widget_host) fn refresh_layout_scene(&mut self) {
         if self.editor_state_dirty {
-            self.layout_scene =
-                op_pen_loader::editor_state_to_layout_scene(&self.editor_state);
+            self.layout_scene = op_pen_loader::editor_state_to_layout_scene(&self.editor_state);
             self.editor_state_dirty = false;
         }
     }
@@ -299,30 +298,27 @@ impl WidgetHost {
         use op_editor_ui::widgets::{LayerPanel, LayerPanelHit, TOP_BAR_HEIGHT};
         let sidebar_open = self.editor_state.editor_ui.sidebar_open;
         let panel_w = self.editor_state.editor_ui.layer_panel_width;
-        let (new_layer, new_page) = if sidebar_open
-            && y >= TOP_BAR_HEIGHT
-            && x >= 0.0
-            && x <= panel_w
-        {
-            self.refresh_layout_scene();
-            let layer_rect = Rect {
-                origin: Point2D::new(0.0, TOP_BAR_HEIGHT),
-                size: Point2D::new(panel_w, (viewport_h - TOP_BAR_HEIGHT).max(0.0)),
-            };
-            let panel = LayerPanel::from_editor(&self.editor_state);
-            match panel.hit_test(layer_rect, Point2D::new(x, y)) {
-                Some(LayerPanelHit::Layer(id))
-                | Some(LayerPanelHit::ToggleHidden(id))
-                | Some(LayerPanelHit::ToggleLocked(id))
-                | Some(LayerPanelHit::ToggleCollapsed(id)) => (Some(id), None),
-                Some(LayerPanelHit::Page(idx)) | Some(LayerPanelHit::DeletePage(idx)) => {
-                    (None, Some(idx))
+        let (new_layer, new_page) =
+            if sidebar_open && y >= TOP_BAR_HEIGHT && x >= 0.0 && x <= panel_w {
+                self.refresh_layout_scene();
+                let layer_rect = Rect {
+                    origin: Point2D::new(0.0, TOP_BAR_HEIGHT),
+                    size: Point2D::new(panel_w, (viewport_h - TOP_BAR_HEIGHT).max(0.0)),
+                };
+                let panel = LayerPanel::from_editor(&self.editor_state);
+                match panel.hit_test(layer_rect, Point2D::new(x, y)) {
+                    Some(LayerPanelHit::Layer(id))
+                    | Some(LayerPanelHit::ToggleHidden(id))
+                    | Some(LayerPanelHit::ToggleLocked(id))
+                    | Some(LayerPanelHit::ToggleCollapsed(id)) => (Some(id), None),
+                    Some(LayerPanelHit::Page(idx)) | Some(LayerPanelHit::DeletePage(idx)) => {
+                        (None, Some(idx))
+                    }
+                    _ => (None, None),
                 }
-                _ => (None, None),
-            }
-        } else {
-            (None, None)
-        };
+            } else {
+                (None, None)
+            };
         // shell-core hit-test returns shell-core `NodeId`s; translate
         // to op-editor-core ids for storage on `editor_ui`.
         let new_layer_ec = new_layer.as_ref().map(|id| id.clone());
@@ -405,8 +401,7 @@ impl WidgetHost {
         // — mirrors native widget_host/input.rs ordering).
         let new_hover = if self.editor_state.selection_count() >= 2 {
             use op_editor_ui::widgets::{AlignToolbar, TOP_BAR_HEIGHT};
-            let (cx, _, cw, ch) =
-                self.canvas_region(self.last_viewport_w, self.last_viewport_h);
+            let (cx, _, cw, ch) = self.canvas_region(self.last_viewport_w, self.last_viewport_h);
             let canvas_region = op_editor_ui::Rect {
                 origin: Point2D::new(cx, TOP_BAR_HEIGHT),
                 size: Point2D::new(cw, ch),
@@ -472,8 +467,7 @@ impl WidgetHost {
             }
             self.mark_dirty();
         } else if !ids.is_empty() {
-            let ec_ids: Vec<op_editor_core::NodeId> =
-                ids.iter().map(|id| id.clone()).collect();
+            let ec_ids: Vec<op_editor_core::NodeId> = ids.iter().map(|id| id.clone()).collect();
             let anchor = ec_ids.last().unwrap().clone();
             self.editor_state.selection.set = ec_ids;
             self.editor_state.selection.anchor = anchor;
@@ -561,8 +555,7 @@ impl WidgetHost {
         // Source-excluded panel so the indicator y the user saw and
         // the row landed on match the post-commit layout — see the
         // native `commit_layer_drag` for the rationale.
-        let panel =
-            LayerPanel::from_editor_with_drag_source(&self.editor_state, &d.source);
+        let panel = LayerPanel::from_editor_with_drag_source(&self.editor_state, &d.source);
         let cursor = Point2D::new(d.current_x, d.current_y);
         let Some(drop) = panel.drop_target_at(layer_rect, cursor) else {
             return true;

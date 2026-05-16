@@ -11,7 +11,7 @@
 use crate::command::{BatchInsertItem, EditorCommand, NodeFlag, VariableScalarPayload};
 use crate::node_id::NodeId;
 use crate::pen_node_ext::PenNodeExt;
-use crate::test_support::{rect, sample, state_with};
+use crate::test_support::{ellipse, rect, sample, state_with};
 use crate::walkers::find_node;
 use jian_ops_schema::node::PenNode;
 use jian_ops_schema::variable::VariableScalar;
@@ -157,7 +157,11 @@ fn move_node_reparents_into_container() {
         target_parent: id("n12"),
     }));
     let group = find_node(s.active_children(), &id("n12")).unwrap();
-    assert!(group.children().unwrap().iter().any(|c| c.id_str() == "n11"));
+    assert!(group
+        .children()
+        .unwrap()
+        .iter()
+        .any(|c| c.id_str() == "n11"));
 }
 
 #[test]
@@ -292,7 +296,11 @@ fn replace_node_atomic_on_bad_fill_hex() {
     }));
     // n11 still present, no id minted.
     let frame = find_node(s.active_children(), &id("n10")).unwrap();
-    assert!(frame.children().unwrap().iter().any(|c| c.id_str() == "n11"));
+    assert!(frame
+        .children()
+        .unwrap()
+        .iter()
+        .any(|c| c.id_str() == "n11"));
     assert_eq!(s.max_node_id(), pre_max);
 }
 
@@ -501,6 +509,102 @@ fn set_node_flag_collapsed_is_unsupported() {
         flag: NodeFlag::Collapsed,
         value: true,
     }));
+}
+
+// --- SetNodeFlip -----------------------------------------------------
+
+#[test]
+fn set_node_flip_writes_both_axes() {
+    let mut s = state_with(vec![rect("n1", "r", 0.0, 0.0, 10.0, 10.0)]);
+    assert!(s.apply(EditorCommand::SetNodeFlip {
+        node_id: id("n1"),
+        flip_x: Some(true),
+        flip_y: Some(true),
+    }));
+    let n = find_node(s.active_children(), &id("n1")).unwrap();
+    assert_eq!(n.base().flip_x, Some(true));
+    assert_eq!(n.base().flip_y, Some(true));
+}
+
+#[test]
+fn set_node_flip_leaves_omitted_axis_untouched() {
+    let mut s = state_with(vec![rect("n1", "r", 0.0, 0.0, 10.0, 10.0)]);
+    assert!(s.apply(EditorCommand::SetNodeFlip {
+        node_id: id("n1"),
+        flip_x: Some(true),
+        flip_y: None,
+    }));
+    let n = find_node(s.active_children(), &id("n1")).unwrap();
+    assert_eq!(n.base().flip_x, Some(true));
+    assert_eq!(n.base().flip_y, None);
+}
+
+#[test]
+fn set_node_flip_rejects_empty_and_missing() {
+    let mut s = state_with(vec![rect("n1", "r", 0.0, 0.0, 10.0, 10.0)]);
+    // Nothing supplied → no-op rejection.
+    assert!(!s.apply(EditorCommand::SetNodeFlip {
+        node_id: id("n1"),
+        flip_x: None,
+        flip_y: None,
+    }));
+    // Unknown node → rejection.
+    assert!(!s.apply(EditorCommand::SetNodeFlip {
+        node_id: id("ghost"),
+        flip_x: Some(true),
+        flip_y: None,
+    }));
+}
+
+// --- SetEllipseArc ---------------------------------------------------
+
+#[test]
+fn set_ellipse_arc_writes_pie_geometry() {
+    let mut s = state_with(vec![ellipse("e1", "e", 0.0, 0.0, 40.0, 40.0)]);
+    assert!(s.apply(EditorCommand::SetEllipseArc {
+        node_id: id("e1"),
+        start_angle: Some(0.0),
+        sweep_angle: Some(270.0),
+        inner_radius: Some(0.5),
+    }));
+    let n = find_node(s.active_children(), &id("e1")).unwrap();
+    match n {
+        PenNode::Ellipse(e) => {
+            assert_eq!(e.start_angle, Some(0.0));
+            assert_eq!(e.sweep_angle, Some(270.0));
+            assert_eq!(e.inner_radius, Some(0.5));
+        }
+        _ => panic!("expected ellipse"),
+    }
+}
+
+#[test]
+fn set_ellipse_arc_rejects_non_ellipse() {
+    let mut s = state_with(vec![rect("n1", "r", 0.0, 0.0, 10.0, 10.0)]);
+    assert!(!s.apply(EditorCommand::SetEllipseArc {
+        node_id: id("n1"),
+        start_angle: Some(0.0),
+        sweep_angle: Some(90.0),
+        inner_radius: None,
+    }));
+}
+
+#[test]
+fn set_ellipse_arc_rejects_out_of_range_inner_radius() {
+    let mut s = state_with(vec![ellipse("e1", "e", 0.0, 0.0, 40.0, 40.0)]);
+    // `inner_radius` is a 0.0..=1.0 fraction — 1.5 is rejected and the
+    // node is left byte-for-byte unchanged.
+    assert!(!s.apply(EditorCommand::SetEllipseArc {
+        node_id: id("e1"),
+        start_angle: None,
+        sweep_angle: None,
+        inner_radius: Some(1.5),
+    }));
+    let n = find_node(s.active_children(), &id("e1")).unwrap();
+    match n {
+        PenNode::Ellipse(e) => assert_eq!(e.inner_radius, None),
+        _ => panic!("expected ellipse"),
+    }
 }
 
 // --- Selection -------------------------------------------------------

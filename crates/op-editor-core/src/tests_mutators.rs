@@ -356,24 +356,18 @@ fn set_selected_fill_type_writes_first_fill_variant() {
     s.set_single_selection(NodeId::new("n1"));
     // Default rect has no fills → reports Solid.
     assert_eq!(
-        crate::first_fill_type(
-            find_node(s.active_children(), &NodeId::new("n1")).unwrap()
-        ),
+        crate::first_fill_type(find_node(s.active_children(), &NodeId::new("n1")).unwrap()),
         crate::FillType::Solid
     );
     assert!(s.set_selected_fill_type(crate::FillType::LinearGradient));
     assert_eq!(
-        crate::first_fill_type(
-            find_node(s.active_children(), &NodeId::new("n1")).unwrap()
-        ),
+        crate::first_fill_type(find_node(s.active_children(), &NodeId::new("n1")).unwrap()),
         crate::FillType::LinearGradient
     );
     // Flipping again to Image lands too.
     assert!(s.set_selected_fill_type(crate::FillType::Image));
     assert_eq!(
-        crate::first_fill_type(
-            find_node(s.active_children(), &NodeId::new("n1")).unwrap()
-        ),
+        crate::first_fill_type(find_node(s.active_children(), &NodeId::new("n1")).unwrap()),
         crate::FillType::Image
     );
 }
@@ -414,8 +408,11 @@ fn select_chat_model_picks_model_and_syncs_agent() {
 #[test]
 fn select_chat_model_bad_index_still_closes_picker() {
     let mut s = sample();
-    s.chat.available_models =
-        vec![crate::ModelEntry::new(crate::AgentProvider::ClaudeCode, "c", "C")];
+    s.chat.available_models = vec![crate::ModelEntry::new(
+        crate::AgentProvider::ClaudeCode,
+        "c",
+        "C",
+    )];
     s.editor_ui.chat_model_picker_open = true;
     s.select_chat_model(9);
     // Out-of-range index ignored — selected_model unchanged.

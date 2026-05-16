@@ -57,7 +57,10 @@ fn replace_node_validates_required_args() {
             assert_eq!(width, 100);
             assert_eq!(height, 30);
             assert!(fill_hex.is_none());
-            assert!(!drop_children, "default opt-out keeps container subtrees safe");
+            assert!(
+                !drop_children,
+                "default opt-out keeps container subtrees safe"
+            );
         }
         other => panic!("expected ReplaceNode, got {other:?}"),
     }

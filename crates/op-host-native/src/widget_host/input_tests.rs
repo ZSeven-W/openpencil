@@ -453,8 +453,7 @@ fn node_drag_not_intercepted_by_align_toolbar_hover() {
         ),
     );
     // Two-node selection so the align toolbar is shown.
-    host.editor_state_mut().selection.set =
-        vec![NodeId::new("n90"), NodeId::new("n91")];
+    host.editor_state_mut().selection.set = vec![NodeId::new("n90"), NodeId::new("n91")];
     host.editor_state_mut().selection.anchor = NodeId::new("n91");
     host.mark_paint_dirty_for_test();
     let viewport_w = 1440.0;

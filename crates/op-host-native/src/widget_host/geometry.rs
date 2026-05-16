@@ -9,12 +9,12 @@
 
 use super::helpers::{PANEL_RESIZE_GUTTER, TOOLBAR_INSET_X, TOOLBAR_INSET_Y};
 use super::{CursorHint, PanelResizeKind, WidgetHostNative};
+use op_editor_core::ChatAnchor;
 use op_editor_ui::widgets::{
     rotation_corner_at_point, selection_handle_at_point, LayoutCx, LocalePicker, ShapePicker,
     Toolbar, TopBar, Widget, AI_CHAT_COLLAPSED_HEIGHT, AI_CHAT_COLLAPSED_WIDTH, AI_CHAT_HEIGHT,
     AI_CHAT_WIDTH, LOCALE_PICKER_WIDTH, SHAPE_PICKER_WIDTH, TOOLBAR_WIDTH, TOP_BAR_HEIGHT,
 };
-use op_editor_core::ChatAnchor;
 use op_editor_ui::{Point2D, Rect};
 
 use super::helpers::{AICHAT_INSET_BOTTOM, AICHAT_INSET_LEFT};
@@ -69,34 +69,29 @@ impl WidgetHostNative {
         self.refresh_layout_scene();
         let sidebar_open = self.editor_state.editor_ui.sidebar_open;
         let panel_w = self.editor_state.editor_ui.layer_panel_width;
-        let (new_layer, new_page) = if sidebar_open
-            && y >= TOP_BAR_HEIGHT
-            && x >= 0.0
-            && x <= panel_w
-        {
-            let layer_rect = Rect {
-                origin: Point2D::new(0.0, TOP_BAR_HEIGHT),
-                size: Point2D::new(panel_w, (viewport_h - TOP_BAR_HEIGHT).max(0.0)),
-            };
-            let panel = LayerPanel::from_editor(&self.editor_state);
-            match panel.hit_test(layer_rect, Point2D::new(x, y)) {
-                Some(LayerPanelHit::Layer(id))
-                | Some(LayerPanelHit::ToggleHidden(id))
-                | Some(LayerPanelHit::ToggleLocked(id))
-                | Some(LayerPanelHit::ToggleCollapsed(id)) => (Some(id), None),
-                Some(LayerPanelHit::Page(idx)) | Some(LayerPanelHit::DeletePage(idx)) => {
-                    (None, Some(idx))
+        let (new_layer, new_page) =
+            if sidebar_open && y >= TOP_BAR_HEIGHT && x >= 0.0 && x <= panel_w {
+                let layer_rect = Rect {
+                    origin: Point2D::new(0.0, TOP_BAR_HEIGHT),
+                    size: Point2D::new(panel_w, (viewport_h - TOP_BAR_HEIGHT).max(0.0)),
+                };
+                let panel = LayerPanel::from_editor(&self.editor_state);
+                match panel.hit_test(layer_rect, Point2D::new(x, y)) {
+                    Some(LayerPanelHit::Layer(id))
+                    | Some(LayerPanelHit::ToggleHidden(id))
+                    | Some(LayerPanelHit::ToggleLocked(id))
+                    | Some(LayerPanelHit::ToggleCollapsed(id)) => (Some(id), None),
+                    Some(LayerPanelHit::Page(idx)) | Some(LayerPanelHit::DeletePage(idx)) => {
+                        (None, Some(idx))
+                    }
+                    _ => (None, None),
                 }
-                _ => (None, None),
-            }
-        } else {
-            (None, None)
-        };
+            } else {
+                (None, None)
+            };
         // shell-core hit-test returns shell-core `NodeId`s; translate
         // to op-editor-core ids for storage on `editor_ui`.
-        let new_layer_ec = new_layer
-            .as_ref()
-            .map(|id| id.clone());
+        let new_layer_ec = new_layer.as_ref().map(|id| id.clone());
         let changed = new_layer_ec != self.editor_state.editor_ui.hovered_layer_id
             || new_page != self.editor_state.editor_ui.hovered_page_index;
         if changed {

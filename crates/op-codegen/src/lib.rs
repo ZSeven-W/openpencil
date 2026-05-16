@@ -206,9 +206,7 @@ pub(crate) fn node_text(node: &PenNode) -> Option<String> {
     match node {
         PenNode::Text(n) => Some(match &n.content {
             TextContent::Plain(s) => s.clone(),
-            TextContent::Styled(segs) => {
-                segs.iter().map(|s| s.text.as_str()).collect::<String>()
-            }
+            TextContent::Styled(segs) => segs.iter().map(|s| s.text.as_str()).collect::<String>(),
         }),
         PenNode::TextInput(n) => n.value.clone().or_else(|| n.placeholder.clone()),
         _ => None,
@@ -296,22 +294,11 @@ pub(crate) fn parse_color(s: &str) -> Option<(f32, f32, f32, f32)> {
                 _ => None,
             }
         };
-        let pair = |hi: u8, lo: u8| -> Option<f32> {
-            Some((nyb(hi)? * 16 + nyb(lo)?) as f32 / 255.0)
-        };
+        let pair =
+            |hi: u8, lo: u8| -> Option<f32> { Some((nyb(hi)? * 16 + nyb(lo)?) as f32 / 255.0) };
         return match h.len() {
-            3 => Some((
-                pair(h[0], h[0])?,
-                pair(h[1], h[1])?,
-                pair(h[2], h[2])?,
-                1.0,
-            )),
-            6 => Some((
-                pair(h[0], h[1])?,
-                pair(h[2], h[3])?,
-                pair(h[4], h[5])?,
-                1.0,
-            )),
+            3 => Some((pair(h[0], h[0])?, pair(h[1], h[1])?, pair(h[2], h[2])?, 1.0)),
+            6 => Some((pair(h[0], h[1])?, pair(h[2], h[3])?, pair(h[4], h[5])?, 1.0)),
             8 => Some((
                 pair(h[0], h[1])?,
                 pair(h[2], h[3])?,
@@ -368,16 +355,20 @@ pub(crate) fn fmt_num(n: f64) -> String {
 
 fn css_ident(name: &str) -> String {
     name.chars()
-        .map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '-' })
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '-' {
+                c
+            } else {
+                '-'
+            }
+        })
         .collect()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use jian_ops_schema::node::{
-        EllipseNode, PenNodeBase, RectangleNode, TextContent, TextNode,
-    };
+    use jian_ops_schema::node::{EllipseNode, PenNodeBase, RectangleNode, TextContent, TextNode};
     use jian_ops_schema::page::PenPage;
     use jian_ops_schema::sizing::SizingBehavior;
     use jian_ops_schema::style::{PenFill, SolidFillBody};

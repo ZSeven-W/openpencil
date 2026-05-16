@@ -33,9 +33,7 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use op_ai::chat_provider::{
-    ChatDelta, ChatProvider, ChatRequest, CliName, StopReason,
-};
+use op_ai::chat_provider::{ChatDelta, ChatProvider, ChatRequest, CliName, StopReason};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::Command;
 use tokio::sync::mpsc;
@@ -121,7 +119,11 @@ fn well_known_install_paths(name: &str) -> Vec<PathBuf> {
         let _ = home; // not used directly on Windows
         if let Ok(appdata) = std::env::var("APPDATA") {
             for ext in &["cmd", "exe", "bat", "ps1"] {
-                out.push(PathBuf::from(&appdata).join("npm").join(format!("{name}.{ext}")));
+                out.push(
+                    PathBuf::from(&appdata)
+                        .join("npm")
+                        .join(format!("{name}.{ext}")),
+                );
             }
         }
         if let Ok(localapp) = std::env::var("LOCALAPPDATA") {
@@ -168,7 +170,10 @@ fn build_command(binary: &str, args: &[String]) -> Command {
         // double-click on the .exe from Explorer).
         const CREATE_NO_WINDOW: u32 = 0x0800_0000;
         let bare = std::path::Path::new(binary);
-        let has_path_sep = bare.parent().map(|p| !p.as_os_str().is_empty()).unwrap_or(false);
+        let has_path_sep = bare
+            .parent()
+            .map(|p| !p.as_os_str().is_empty())
+            .unwrap_or(false);
         let looks_like_exe = bare
             .extension()
             .and_then(|e| e.to_str())
@@ -336,10 +341,7 @@ impl ChatProvider for SubprocessProvider {
         &self.label
     }
 
-    fn send(
-        &self,
-        request: ChatRequest,
-    ) -> Box<dyn Iterator<Item = ChatDelta> + Send> {
+    fn send(&self, request: ChatRequest) -> Box<dyn Iterator<Item = ChatDelta> + Send> {
         let binary = self.binary.clone();
         let mut args_with_prompt = self.args.clone();
         // PromptMode::PositionalArg: append `-- <prompt>` so the CLI
@@ -398,12 +400,8 @@ impl ChatProvider for SubprocessProvider {
                         // Feed the user message + close stdin so the
                         // CLI sees EOF and starts responding. Stdin
                         // write errors surface as a chat error.
-                        if let Err(e) =
-                            stdin.write_all(request.user_message.as_bytes()).await
-                        {
-                            let _ = tx
-                                .send(ChatDelta::Error(format!("stdin write: {e}")))
-                                .await;
+                        if let Err(e) = stdin.write_all(request.user_message.as_bytes()).await {
+                            let _ = tx.send(ChatDelta::Error(format!("stdin write: {e}"))).await;
                             let _ = tx
                                 .send(ChatDelta::Done {
                                     stop_reason: StopReason::Aborted,
@@ -427,9 +425,7 @@ impl ChatProvider for SubprocessProvider {
             let stdout = match child.stdout.take() {
                 Some(s) => s,
                 None => {
-                    let _ = tx
-                        .send(ChatDelta::Error("no stdout from CLI".into()))
-                        .await;
+                    let _ = tx.send(ChatDelta::Error("no stdout from CLI".into())).await;
                     let _ = tx
                         .send(ChatDelta::Done {
                             stop_reason: StopReason::Aborted,
@@ -555,10 +551,7 @@ pub(crate) fn parse_line(line: &str) -> ChatDelta {
             Some(s) => ChatDelta::Thinking(s.to_string()),
             None => ChatDelta::Error(format!("malformed thinking event: {trimmed}")),
         },
-        "tool_use" => match (
-            val.get("name").and_then(|v| v.as_str()),
-            val.get("args"),
-        ) {
+        "tool_use" => match (val.get("name").and_then(|v| v.as_str()), val.get("args")) {
             (Some(name), Some(args)) => ChatDelta::ToolUse {
                 name: name.to_string(),
                 args: args.to_string(),
@@ -688,10 +681,18 @@ mod tests {
         // Resolved path may be bare or absolute depending on what's
         // installed on the test host; check the basename only.
         let gemini = SubprocessProvider::for_cli(CliName::Gemini).unwrap();
-        assert!(gemini.binary.ends_with("gemini"), "binary={}", gemini.binary);
+        assert!(
+            gemini.binary.ends_with("gemini"),
+            "binary={}",
+            gemini.binary
+        );
         assert_eq!(gemini.prompt_mode, PromptMode::Stdin);
         let copilot = SubprocessProvider::for_cli(CliName::Copilot).unwrap();
-        assert!(copilot.binary.ends_with("gh-copilot"), "binary={}", copilot.binary);
+        assert!(
+            copilot.binary.ends_with("gh-copilot"),
+            "binary={}",
+            copilot.binary
+        );
         assert_eq!(copilot.prompt_mode, PromptMode::Stdin);
     }
 

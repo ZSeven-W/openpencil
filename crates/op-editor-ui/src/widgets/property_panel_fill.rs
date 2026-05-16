@@ -5,7 +5,6 @@
 //! (`paint_fill_solid_body`, `paint_fill_gradient_body`,
 //! `paint_fill_image_body`).
 
-use op_editor_core::PropertyFocus;
 use crate::theme::Theme;
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::property_panel::NodeSnapshot;
@@ -18,6 +17,7 @@ use crate::widgets::property_panel_layout::{fill_body_height, VisibleSections};
 use crate::widgets::property_panel_sections::{EditContext, PropertyLabels};
 use crate::widgets::PaintCx;
 use crate::{Color, Point2D, Rect, TextLayout};
+use op_editor_core::PropertyFocus;
 
 /// Display label for a fill-type variant (Solid / Gradient /
 /// Image). Currently zh-only string literals; gets wrapped in

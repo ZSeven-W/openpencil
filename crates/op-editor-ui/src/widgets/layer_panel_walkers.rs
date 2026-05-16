@@ -9,8 +9,8 @@
 //! untouched (the two id types are both string newtypes, so the
 //! conversion at the walk boundary is lossless).
 
-use op_editor_core::NodeId;
 use crate::widgets::icons::Icon;
+use op_editor_core::NodeId;
 
 use jian_ops_schema::node::PenNode;
 use op_editor_core::editor_ui_state::EditorUiState;

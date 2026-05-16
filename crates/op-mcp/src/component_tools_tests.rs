@@ -30,7 +30,10 @@ fn instantiate_component_surfaces_clean_gap_error() {
     match tool.call(&args) {
         ToolOutcome::Err(code, msg) => {
             assert_eq!(code, ToolErrorCode::ToolFailed);
-            assert!(msg.contains("component registry"), "msg names the gap: {msg}");
+            assert!(
+                msg.contains("component registry"),
+                "msg names the gap: {msg}"
+            );
         }
         other => panic!("expected ToolFailed gap error, got {other:?}"),
     }

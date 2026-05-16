@@ -37,14 +37,17 @@ ignore = []
 
 [bans]
 multiple-versions = "warn"
-wildcards = "deny"
-# 允许 workspace 内部 path 依赖不写 version（标准实践，避免每次 bump 都改两处）。
+# workspace 内部 path 依赖不写 version（标准实践，避免每次 bump 都改两处）。
+# 没有 crate 发布到 crates.io，wildcard path deps 是预期的，故 allow。
+wildcards = "allow"
 allow-wildcard-paths = true
 deny = [
-  # WASM bundle 黑名单（kickoff spec §1.2 invariant）
+  # WASM bundle 黑名单（kickoff spec §1.2 invariant）。
+  # `agent` 不在此列：它是 op-host-desktop（桌面二进制，永不编译到 wasm）的
+  # native-only 依赖；wasm 隔离是结构性的（op-host-web 不依赖它）并由
+  # tools/check-wasm-bundle.sh 验证。
   "pen-agent-cli",
   "pen-server",
-  "agent",
   "native-tls",
 ]
 
@@ -55,4 +58,5 @@ deny = ["process", "rt-multi-thread"]
 [sources]
 unknown-registry = "deny"
 unknown-git = "deny"
-allow-git = ["https://github.com/ZSeven-W/agent-rs"]
+# agent-rs 现在通过 vendor/agent submodule 以 path 依赖引入，不再是 git 依赖。
+allow-git = []

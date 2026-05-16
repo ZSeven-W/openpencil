@@ -50,7 +50,11 @@ impl NodeId {
     #[inline]
     pub fn new_opt(id: impl Into<String>) -> Option<Self> {
         let id = id.into();
-        if id.is_empty() { None } else { Some(Self(id)) }
+        if id.is_empty() {
+            None
+        } else {
+            Some(Self(id))
+        }
     }
 
     /// Inner string id.

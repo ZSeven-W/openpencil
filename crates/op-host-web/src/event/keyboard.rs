@@ -13,9 +13,7 @@
 //! the `is_composing` bool from `KeyboardEvent.isComposing`, then
 //! calls into here.
 
-use op_editor_ui::{
-    KeyCode, KeyEvent, KeyLocation, KeyState, KeyValue, Modifiers, NamedKey,
-};
+use op_editor_ui::{KeyCode, KeyEvent, KeyLocation, KeyState, KeyValue, Modifiers, NamedKey};
 
 /// Build a `KeyEvent` from the raw W3C primitives the C2 listener
 /// extracts off `KeyboardEvent`. `pressed=true` for `keydown`,

@@ -16,18 +16,16 @@ use op_editor_ui::widgets::{
 };
 use op_editor_ui::{Point2D, Rect};
 
-use super::{rect_contains, ChatDragState, DragState, LayerDragState, MarqueeDragState, WidgetHost};
+use super::{
+    rect_contains, ChatDragState, DragState, LayerDragState, MarqueeDragState, WidgetHost,
+};
 
 impl WidgetHost {
-    fn apply_property_action(
-        &mut self,
-        action: op_editor_ui::widgets::PropertyPanelAction,
-    ) {
+    fn apply_property_action(&mut self, action: op_editor_ui::widgets::PropertyPanelAction) {
         use op_editor_ui::widgets::PropertyPanelAction as A;
         match action {
             A::SetFlexLayout(mode) => {
-                self.editor_state.editor_ui.flex_layout =
-                    mode;
+                self.editor_state.editor_ui.flex_layout = mode;
             }
             A::ToggleSizeFillWidth => {
                 let v = &mut self.editor_state.editor_ui.size_fill_width;
@@ -54,8 +52,7 @@ impl WidgetHost {
                 *v = !*v;
             }
             A::SetFillType(t) => {
-                self.editor_state
-                    .set_selected_fill_type(t);
+                self.editor_state.set_selected_fill_type(t);
                 self.editor_state.editor_ui.fill_type_picker_open = false;
             }
             A::OpenExportDialog => {
@@ -110,7 +107,13 @@ impl WidgetHost {
             }
             _ => {}
         }
-        if self.editor_state.editor_ui.layer_context_menu.take().is_some() {
+        if self
+            .editor_state
+            .editor_ui
+            .layer_context_menu
+            .take()
+            .is_some()
+        {
             self.mark_dirty();
             return true;
         }
@@ -186,8 +189,8 @@ impl WidgetHost {
         // 0-pre. Commit any in-flight rename + canvas text-edit on
         // first press anywhere. Tracked so the final return reports
         // the visible change.
-        let rename_committed = self.editor_state.ui.layer_rename.is_some()
-            && self.editor_state.rename_commit();
+        let rename_committed =
+            self.editor_state.ui.layer_rename.is_some() && self.editor_state.rename_commit();
         let text_edit_was_active = self.editor_state.ui.text_editing.is_some();
         let text_edit_committed = self.editor_state.text_edit_commit();
         if rename_committed || text_edit_committed {
@@ -379,9 +382,8 @@ impl WidgetHost {
                 origin: Point2D::new(acx, TOP_BAR_HEIGHT),
                 size: Point2D::new(acw, ach),
             };
-            if let Some(action) =
-                AlignToolbar::for_canvas_region(canvas_region, &self.editor_state)
-                    .and_then(|tb| tb.hit_test(Point2D::new(x, y)))
+            if let Some(action) = AlignToolbar::for_canvas_region(canvas_region, &self.editor_state)
+                .and_then(|tb| tb.hit_test(Point2D::new(x, y)))
             {
                 let ec_action = action;
                 self.editor_state.align_selected(ec_action);
@@ -586,20 +588,17 @@ impl WidgetHost {
                     return true;
                 }
                 LayerPanelHit::ToggleHidden(node_id) => {
-                    self.editor_state
-                        .toggle_node_hidden(&node_id.clone());
+                    self.editor_state.toggle_node_hidden(&node_id.clone());
                     self.mark_dirty();
                     return true;
                 }
                 LayerPanelHit::ToggleLocked(node_id) => {
-                    self.editor_state
-                        .toggle_node_locked(&node_id.clone());
+                    self.editor_state.toggle_node_locked(&node_id.clone());
                     self.mark_dirty();
                     return true;
                 }
                 LayerPanelHit::ToggleCollapsed(node_id) => {
-                    self.editor_state
-                        .toggle_node_collapsed(&node_id.clone());
+                    self.editor_state.toggle_node_collapsed(&node_id.clone());
                     self.mark_dirty();
                     return true;
                 }
@@ -623,9 +622,7 @@ impl WidgetHost {
     /// Cmd+, settings modal — dispatch hit-tests on the modal.
     /// Returns true once the modal swallowed the press.
     fn dispatch_agent_settings_press(&mut self, x: f32, y: f32, vw: f32, vh: f32) -> bool {
-        use op_editor_ui::widgets::agent_settings_panel::{
-            AgentSettingsHit, AgentSettingsPanel,
-        };
+        use op_editor_ui::widgets::agent_settings_panel::{AgentSettingsHit, AgentSettingsPanel};
         self.refresh_layout_scene();
         let panel = AgentSettingsPanel::for_editor(&self.editor_state);
         let panel_rect = panel.rect(vw, vh);
@@ -692,15 +689,9 @@ impl WidgetHost {
 }
 
 /// Translate a shell-core `ColorTarget` into op-editor-core's.
-fn color_target(
-    t: op_editor_core::ColorTarget,
-) -> op_editor_core::ui_draft::ColorTarget {
+fn color_target(t: op_editor_core::ColorTarget) -> op_editor_core::ui_draft::ColorTarget {
     match t {
-        op_editor_core::ColorTarget::Fill => {
-            op_editor_core::ui_draft::ColorTarget::Fill
-        }
-        op_editor_core::ColorTarget::Stroke => {
-            op_editor_core::ui_draft::ColorTarget::Stroke
-        }
+        op_editor_core::ColorTarget::Fill => op_editor_core::ui_draft::ColorTarget::Fill,
+        op_editor_core::ColorTarget::Stroke => op_editor_core::ui_draft::ColorTarget::Stroke,
     }
 }

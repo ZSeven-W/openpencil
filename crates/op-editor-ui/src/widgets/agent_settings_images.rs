@@ -1,12 +1,12 @@
 //! Images tab of the settings modal.
 
-use op_editor_core::agent_settings::AgentSettings;
-use op_editor_core::editor_ui_state::EditorUiState;
 use crate::theme::Theme;
 use crate::widgets::agent_settings_i18n::t as t_settings;
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::PaintCx;
 use crate::{Color, Point2D, Rect, TextLayout};
+use op_editor_core::agent_settings::AgentSettings;
+use op_editor_core::editor_ui_state::EditorUiState;
 
 const TITLE_H: f32 = 36.0;
 const ADVANCED_ROW_H: f32 = 24.0;
@@ -63,7 +63,10 @@ fn register_link_y(content: Rect) -> f32 {
 
 fn test_btn_rect(content: Rect, settings: &AgentSettings) -> Rect {
     if !settings.images_advanced_open {
-        return Rect { origin: Point2D::new(0.0, 0.0), size: Point2D::new(0.0, 0.0) };
+        return Rect {
+            origin: Point2D::new(0.0, 0.0),
+            size: Point2D::new(0.0, 0.0),
+        };
     }
     let y = register_link_y(content) + (REGISTER_ROW_H - BTN_H) / 2.0;
     Rect {
@@ -118,7 +121,12 @@ pub(super) fn paint_images_tab(
     let title_w = cx.backend.measure_text(title_str, 15.0);
     let ready = settings.images_search_ready;
     let dot_color = if ready {
-        Color { r: 0.34, g: 0.78, b: 0.45, a: 1.0 }
+        Color {
+            r: 0.34,
+            g: 0.78,
+            b: 0.45,
+            a: 1.0,
+        }
     } else {
         theme.muted_foreground
     };
@@ -157,7 +165,10 @@ pub(super) fn paint_images_tab(
     draw_icon(
         cx.backend,
         chev_icon,
-        Point2D::new(toggle.origin.x, toggle.origin.y + (ADVANCED_ROW_H - 14.0) / 2.0),
+        Point2D::new(
+            toggle.origin.x,
+            toggle.origin.y + (ADVANCED_ROW_H - 14.0) / 2.0,
+        ),
         14.0,
         theme.muted_foreground,
         1.8,
@@ -183,7 +194,8 @@ pub(super) fn paint_images_tab(
             to_jian(theme.muted_foreground),
             Point2D::new(0.0, 0.0),
         );
-        cx.backend.draw_text(&sub, Point2D::new(content.origin.x, y + 14.0));
+        cx.backend
+            .draw_text(&sub, Point2D::new(content.origin.x, y + 14.0));
         y += SUBTITLE_H;
         paint_input_row(
             cx,
@@ -213,7 +225,8 @@ pub(super) fn paint_images_tab(
             to_jian(theme.primary),
             Point2D::new(0.0, 0.0),
         );
-        cx.backend.draw_text(&link, Point2D::new(content.origin.x, y + 22.0));
+        cx.backend
+            .draw_text(&link, Point2D::new(content.origin.x, y + 22.0));
         let link_w = cx.backend.measure_text(link_text, 12.0);
         draw_icon(
             cx.backend,
@@ -225,7 +238,8 @@ pub(super) fn paint_images_tab(
         );
         let test_btn = test_btn_rect(content, settings);
         cx.backend.fill_round_rect(test_btn, 6.0, theme.muted);
-        cx.backend.stroke_round_rect(test_btn, 6.0, theme.border, 1.0);
+        cx.backend
+            .stroke_round_rect(test_btn, 6.0, theme.border, 1.0);
         let test_label = t_settings(ui, "settings.images.test");
         let test_w = cx.backend.measure_text(test_label, 13.0);
         let test_lay = TextLayout::single_run(
@@ -257,7 +271,8 @@ pub(super) fn paint_images_tab(
         .draw_text(&gen_title, Point2D::new(content.origin.x, gen_top + 20.0));
     let add_btn = add_btn_rect(content, settings);
     cx.backend.fill_round_rect(add_btn, 6.0, theme.muted);
-    cx.backend.stroke_round_rect(add_btn, 6.0, theme.border, 1.0);
+    cx.backend
+        .stroke_round_rect(add_btn, 6.0, theme.border, 1.0);
     let add_label = t_settings(ui, "settings.images.add");
     let add_w = cx.backend.measure_text(add_label, 13.0);
     let add_lay = TextLayout::single_run(

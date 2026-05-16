@@ -30,37 +30,31 @@ use std::path::PathBuf;
 
 use op_editor_core::EditorState;
 use op_mcp::{
-    batch_design_snapshot, copy_node_snapshot, delete_node_snapshot,
-    design_content_snapshot, design_refine_snapshot, design_skeleton_snapshot,
-    add_page_snapshot, clear_selection_snapshot, create_component_snapshot,
-    delete_component_snapshot, delete_page_snapshot, document_info_snapshot,
-    duplicate_page_snapshot, count_nodes_snapshot, find_node_by_name_snapshot,
-    get_canvas_bounds_snapshot, get_component_snapshot, get_history_depth_snapshot,
-    get_node_children_snapshot, get_node_parent_snapshot, get_selection_set_snapshot,
-    get_viewport_snapshot,
-    instantiate_component_snapshot, list_components_snapshot, list_node_kinds_snapshot,
-    rename_component_snapshot, rename_page_snapshot, reorder_page_snapshot,
-    align_selected_snapshot, copy_selected_snapshot, cut_selected_snapshot,
-    cycle_active_axis_value_snapshot, delete_selected_snapshot, duplicate_selected_snapshot,
-    group_selected_snapshot, nudge_selected_snapshot, paste_clipboard_snapshot,
-    redo_snapshot, reorder_selected_snapshot,
-    set_active_page_snapshot, set_node_corner_radius_snapshot,
-    set_node_fill_hex_snapshot, set_node_font_size_snapshot,
-    set_node_font_weight_snapshot, set_node_name_snapshot,
-    set_node_rotation_snapshot, set_node_stroke_hex_snapshot,
-    set_node_stroke_width_snapshot, set_node_text_snapshot,
-    set_selection_set_snapshot, toggle_node_selection_snapshot, ungroup_selected_snapshot,
-    set_active_tool_snapshot,
-    set_node_collapsed_snapshot, set_node_hidden_snapshot, set_node_locked_snapshot,
-    set_selection_snapshot, set_viewport_snapshot, snapshot_layout_snapshot,
-    undo_snapshot,
-    get_active_theme_snapshot, get_node_snapshot, insert_node_snapshot,
-    list_pages_snapshot, list_variables_snapshot, move_node_snapshot,
-    replace_node_snapshot, run_stdio_with_applier, selection_snapshot,
-    set_active_axis_value_snapshot, set_variable_boolean_snapshot,
-    set_variable_color_snapshot, set_variable_number_snapshot,
-    set_variable_string_snapshot, create_variable_snapshot, delete_variable_snapshot,
-    rename_variable_snapshot, update_node_snapshot, ToolRegistry,
+    add_page_snapshot, align_selected_snapshot, batch_design_snapshot, clear_selection_snapshot,
+    copy_node_snapshot, copy_selected_snapshot, count_nodes_snapshot, create_component_snapshot,
+    create_variable_snapshot, cut_selected_snapshot, cycle_active_axis_value_snapshot,
+    delete_component_snapshot, delete_node_snapshot, delete_page_snapshot,
+    delete_selected_snapshot, delete_variable_snapshot, design_content_snapshot,
+    design_refine_snapshot, design_skeleton_snapshot, document_info_snapshot,
+    duplicate_page_snapshot, duplicate_selected_snapshot, find_node_by_name_snapshot,
+    get_active_theme_snapshot, get_canvas_bounds_snapshot, get_component_snapshot,
+    get_history_depth_snapshot, get_node_children_snapshot, get_node_parent_snapshot,
+    get_node_snapshot, get_selection_set_snapshot, get_viewport_snapshot, group_selected_snapshot,
+    insert_node_snapshot, instantiate_component_snapshot, list_components_snapshot,
+    list_node_kinds_snapshot, list_pages_snapshot, list_variables_snapshot, move_node_snapshot,
+    nudge_selected_snapshot, paste_clipboard_snapshot, redo_snapshot, rename_component_snapshot,
+    rename_page_snapshot, rename_variable_snapshot, reorder_page_snapshot,
+    reorder_selected_snapshot, replace_node_snapshot, run_stdio_with_applier, selection_snapshot,
+    set_active_axis_value_snapshot, set_active_page_snapshot, set_active_tool_snapshot,
+    set_ellipse_arc_snapshot, set_node_collapsed_snapshot, set_node_corner_radius_snapshot,
+    set_node_fill_hex_snapshot, set_node_flip_snapshot, set_node_font_size_snapshot,
+    set_node_font_weight_snapshot, set_node_hidden_snapshot, set_node_locked_snapshot,
+    set_node_name_snapshot, set_node_rotation_snapshot, set_node_stroke_hex_snapshot,
+    set_node_stroke_width_snapshot, set_node_text_snapshot, set_selection_set_snapshot,
+    set_selection_snapshot, set_variable_boolean_snapshot, set_variable_color_snapshot,
+    set_variable_number_snapshot, set_variable_string_snapshot, set_viewport_snapshot,
+    snapshot_layout_snapshot, toggle_node_selection_snapshot, undo_snapshot,
+    ungroup_selected_snapshot, update_node_snapshot, ToolRegistry,
 };
 
 /// Load a `.op` file into an `EditorState`. The `.op` format is plain
@@ -68,10 +62,9 @@ use op_mcp::{
 /// via the schema's compat layer (which tolerates legacy major
 /// versions + collects non-fatal warnings).
 fn load_editor_state(path: &std::path::Path) -> Result<EditorState, String> {
-    let src = std::fs::read_to_string(path)
-        .map_err(|e| format!("read {}: {e}", path.display()))?;
-    let loaded = jian_ops_schema::load_str(&src)
-        .map_err(|e| format!("parse {}: {e}", path.display()))?;
+    let src = std::fs::read_to_string(path).map_err(|e| format!("read {}: {e}", path.display()))?;
+    let loaded =
+        jian_ops_schema::load_str(&src).map_err(|e| format!("parse {}: {e}", path.display()))?;
     Ok(EditorState::from_document(loaded.value))
 }
 
@@ -222,6 +215,8 @@ fn rebuild_registry(doc: &EditorState) -> ToolRegistry {
     r.register(Box::new(set_node_stroke_width_snapshot()));
     r.register(Box::new(align_selected_snapshot()));
     r.register(Box::new(set_node_fill_hex_snapshot()));
+    r.register(Box::new(set_node_flip_snapshot()));
+    r.register(Box::new(set_ellipse_arc_snapshot()));
     r.register(Box::new(set_node_name_snapshot()));
     r.register(Box::new(set_selection_set_snapshot()));
     r.register(Box::new(toggle_node_selection_snapshot()));
@@ -300,11 +295,7 @@ fn sniff_id_raw(line: &str) -> Option<String> {
 /// when seen at depth 0 of the object body starting at `*i`.
 /// `string_only` extracts the inner contents (without quotes);
 /// the verbatim variant returns the full literal.
-fn walk_top_level_for_string_value(
-    bytes: &[u8],
-    i: &mut usize,
-    target: &str,
-) -> Option<String> {
+fn walk_top_level_for_string_value(bytes: &[u8], i: &mut usize, target: &str) -> Option<String> {
     walk_top_level(bytes, i, target, /*string_only=*/ true)
 }
 
@@ -312,12 +303,7 @@ fn walk_top_level_for_raw_value(bytes: &[u8], i: &mut usize, target: &str) -> Op
     walk_top_level(bytes, i, target, /*string_only=*/ false)
 }
 
-fn walk_top_level(
-    bytes: &[u8],
-    i: &mut usize,
-    target: &str,
-    string_only: bool,
-) -> Option<String> {
+fn walk_top_level(bytes: &[u8], i: &mut usize, target: &str, string_only: bool) -> Option<String> {
     loop {
         // Skip whitespace + commas.
         while *i < bytes.len() && (bytes[*i].is_ascii_whitespace() || bytes[*i] == b',') {
@@ -505,6 +491,8 @@ const TOOL_SCHEMAS: &[&str] = &[
     r#"{"name":"set_node_stroke_width","description":"Set the stroke width (doc-px) on a node. width=0 clears the stroke; width>0 on a node without an existing stroke attaches a fresh black-default stroke at that width.","inputSchema":{"type":"object","properties":{"node_id":{"type":"string"},"width":{"type":"string","description":"non-negative finite f32 doc-px"}},"required":["node_id","width"]}}"#,
     r#"{"name":"align_selected","description":"Align or distribute the current multi-selection. Mirrors the PropertyPanel Align section. Distribute variants silently no-op for fewer than 3 selected nodes.","inputSchema":{"type":"object","properties":{"action":{"type":"string","description":"one of left, center_h, right, top, center_v, bottom, distribute_h, distribute_v"}},"required":["action"]}}"#,
     r##"{"name":"set_node_fill_hex","description":"Set the fill color on a node by id. Sister tool to set_node_stroke_hex; one-call color change without the other update_node fields.","inputSchema":{"type":"object","properties":{"node_id":{"type":"string"},"hex":{"type":"string","description":"#rgb / #rrggbb / #rrggbbaa"}},"required":["node_id","hex"]}}"##,
+    r#"{"name":"set_node_flip","description":"Mirror a node horizontally / vertically. Pass any subset of flip_x / flip_y as \"true\"/\"false\"; omitted axes are left unchanged. At least one axis is required.","inputSchema":{"type":"object","properties":{"node_id":{"type":"string"},"flip_x":{"type":"string","enum":["true","false"]},"flip_y":{"type":"string","enum":["true","false"]}},"required":["node_id"]}}"#,
+    r#"{"name":"set_ellipse_arc","description":"Set arc geometry on an Ellipse node: start_angle / sweep_angle (degrees) carve a pie/arc, inner_radius (0.0..=1.0 fraction) carves a donut hole. Pass any subset; omitted fields are left unchanged. Rejects non-Ellipse kinds.","inputSchema":{"type":"object","properties":{"node_id":{"type":"string"},"start_angle":{"type":"string","description":"finite degrees"},"sweep_angle":{"type":"string","description":"finite degrees"},"inner_radius":{"type":"string","description":"0.0..=1.0 fraction"}},"required":["node_id"]}}"#,
     r#"{"name":"set_node_name","description":"Rename a node by id. Empty names (after trim) are rejected so the LayerPanel never shows blank rows.","inputSchema":{"type":"object","properties":{"node_id":{"type":"string"},"name":{"type":"string"}},"required":["node_id","name"]}}"#,
     r#"{"name":"set_selection_set","description":"Replace the multi-selection (active page only) with the supplied comma-separated node_ids. Empty list clears the selection. Unknown ids AND ids that live on a non-active page drop silently.","inputSchema":{"type":"object","properties":{"node_ids":{"type":"string","description":"comma-separated positive u64 active-page node ids; empty string clears"}},"required":["node_ids"]}}"#,
     r#"{"name":"toggle_node_selection","description":"Shift-click parity: toggle node_id in the multi-selection (scoped to the ACTIVE page only). Already-selected ⇒ remove (anchor reassigns to last surviving id); otherwise add as new anchor. Rejects unknown ids and ids that live on a non-active page.","inputSchema":{"type":"object","properties":{"node_id":{"type":"string","description":"positive u64 node id on the active page"}},"required":["node_id"]}}"#,
@@ -567,10 +555,7 @@ mod tests {
 
     #[test]
     fn sniff_id_raw_preserves_type() {
-        assert_eq!(
-            sniff_id_raw(r#"{"id":42,"method":"x"}"#),
-            Some("42".into())
-        );
+        assert_eq!(sniff_id_raw(r#"{"id":42,"method":"x"}"#), Some("42".into()));
         assert_eq!(
             sniff_id_raw(r#"{"id":"abc","method":"x"}"#),
             Some(r#""abc""#.into())
@@ -587,7 +572,7 @@ mod tests {
     }
 
     #[test]
-    fn tools_list_response_includes_all_seventy_seven_tools() {
+    fn tools_list_response_includes_all_registered_tools() {
         let r = tools_list_response("3");
         // Exact-count assertion: any tool added without
         // updating this test will trip the count first. Codex
@@ -596,7 +581,7 @@ mod tests {
         // without being added to the list below.
         assert_eq!(
             TOOL_SCHEMAS.len(),
-            77,
+            79,
             "tools/list catalog count must match the registered tools — add the new tool to this test"
         );
         for name in [
@@ -642,6 +627,8 @@ mod tests {
             "set_node_stroke_width",
             "align_selected",
             "set_node_fill_hex",
+            "set_node_flip",
+            "set_ellipse_arc",
             "set_node_name",
             "set_selection_set",
             "toggle_node_selection",

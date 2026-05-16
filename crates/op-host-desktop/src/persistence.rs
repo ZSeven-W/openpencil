@@ -138,8 +138,7 @@ fn looks_like_legacy_doc_payload(src: &str) -> bool {
 /// confusing schema parse failure.
 pub fn load_editor_state(path: &std::path::Path) -> Result<EditorState, String> {
     let bytes = std::fs::read(path).map_err(|e| e.to_string())?;
-    let src =
-        std::str::from_utf8(&bytes).map_err(|e| format!("file is not valid UTF-8: {e}"))?;
+    let src = std::str::from_utf8(&bytes).map_err(|e| format!("file is not valid UTF-8: {e}"))?;
     let loaded = match op_pen_loader::load_canonical(src) {
         Ok(loaded) => loaded,
         Err(e) => {
@@ -147,13 +146,11 @@ pub fn load_editor_state(path: &std::path::Path) -> Result<EditorState, String> 
             // the user gets actionable guidance instead of a raw parse
             // error.
             if looks_like_legacy_doc_payload(src) {
-                return Err(
-                    "This file was saved by an older version of OpenPencil and \
+                return Err("This file was saved by an older version of OpenPencil and \
                      uses a format this build can no longer read. Open it in the \
                      version that created it and re-save it in the current \
                      format."
-                        .to_string(),
-                );
+                    .to_string());
             }
             return Err(e.to_string());
         }
@@ -170,7 +167,13 @@ pub fn load_editor_state(path: &std::path::Path) -> Result<EditorState, String> 
             // `pages == None` is the single-page fallback — one logical
             // page, so the only valid index is 0. Otherwise clamp the
             // saved index against the real page count.
-            let page_count = state.doc.pages.as_ref().map(|p| p.len()).unwrap_or(1).max(1);
+            let page_count = state
+                .doc
+                .pages
+                .as_ref()
+                .map(|p| p.len())
+                .unwrap_or(1)
+                .max(1);
             state.ui.active_page_index = meta.active_page_index.min(page_count - 1);
         }
     }
@@ -343,8 +346,7 @@ pub fn run_action(
                 // The export renderers consume a layout-resolved
                 // `LayoutScene` — build one from the live editor state
                 // (runs jian's flex pass + `$ref` fill resolution).
-                let scene =
-                    op_pen_loader::editor_state_to_layout_scene(host.editor_state());
+                let scene = op_pen_loader::editor_state_to_layout_scene(host.editor_state());
                 let scene = &scene;
                 let result: Result<(), String> = match fmt {
                     Fmt::Png => crate::export::export_raster(
@@ -375,8 +377,7 @@ pub fn run_action(
             }
         }
         FileAction::OpenRecent(i) => {
-            let Some(entry) = host.editor_state().editor_ui.recent_files.get(i).cloned()
-            else {
+            let Some(entry) = host.editor_state().editor_ui.recent_files.get(i).cloned() else {
                 return;
             };
             let path = std::path::PathBuf::from(&entry.path);
@@ -433,17 +434,14 @@ fn show_error_dialog(
     );
     let (title, lead) = match (kind, zh) {
         (ErrorKind::Open, true) => ("无法打开文件", "OpenPencil 无法解析该文件。"),
-        (ErrorKind::Open, false) => {
-            ("Couldn't open file", "OpenPencil could not parse the file.")
-        }
+        (ErrorKind::Open, false) => ("Couldn't open file", "OpenPencil could not parse the file."),
         (ErrorKind::Save, true) => ("保存失败", "写入文件时出错。"),
-        (ErrorKind::Save, false) => {
-            ("Save failed", "An error occurred while writing the file.")
-        }
+        (ErrorKind::Save, false) => ("Save failed", "An error occurred while writing the file."),
         (ErrorKind::Export, true) => ("导出失败", "渲染图像时出错。"),
-        (ErrorKind::Export, false) => {
-            ("Export failed", "An error occurred while rendering the image.")
-        }
+        (ErrorKind::Export, false) => (
+            "Export failed",
+            "An error occurred while rendering the image.",
+        ),
     };
     let mut body = lead.to_string();
     if let Some(p) = path {

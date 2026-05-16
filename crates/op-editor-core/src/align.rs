@@ -181,7 +181,11 @@ fn apply_distribute(children: &mut [PenNode], editable: &[NodeId], action: Align
         if delta == 0.0 {
             continue;
         }
-        let (dx, dy) = if horizontal { (delta, 0.0) } else { (0.0, delta) };
+        let (dx, dy) = if horizontal {
+            (delta, 0.0)
+        } else {
+            (0.0, delta)
+        };
         if let Some(node) = crate::walkers::find_node_mut(children, &id) {
             translate_subtree(node, dx, dy);
             moved = true;
@@ -357,11 +361,7 @@ mod tests {
         let f = frame("n10", "f", 0.0, 0.0, 200.0, 200.0, vec![child]);
         let sibling = rect("n30", "s", 400.0, 0.0, 100.0, 100.0);
         let mut s = state_with(vec![f, sibling]);
-        s.selection.set = vec![
-            NodeId::new("n10"),
-            NodeId::new("n20"),
-            NodeId::new("n30"),
-        ];
+        s.selection.set = vec![NodeId::new("n10"), NodeId::new("n20"), NodeId::new("n30")];
         s.selection.anchor = NodeId::new("n30");
         assert!(s.align_selected(AlignAction::Left));
         // Frame already at x=0; child cascades, so it keeps x=150.

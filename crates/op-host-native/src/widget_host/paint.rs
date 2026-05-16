@@ -168,8 +168,7 @@ impl WidgetHostNative {
         if canvas_w > 0.0 && canvas_h > 0.0 {
             // PAINT path — the canvas reads editor state + the
             // layout-resolved render scene (`refresh_layout_scene`).
-            let mut canvas =
-                CanvasViewport::from_editor(&self.editor_state, &self.layout_scene);
+            let mut canvas = CanvasViewport::from_editor(&self.editor_state, &self.layout_scene);
             canvas.now_ms = self.now_ms;
             let mut cx = PaintCx {
                 backend: &mut *frame,
@@ -237,10 +236,7 @@ impl WidgetHostNative {
             size: Point2D::new(canvas_w, canvas_h),
         };
         if let Some(toolbar) = AlignToolbar::for_canvas_region(canvas_region, &self.editor_state) {
-            let hover = self
-                .editor_state
-                .editor_ui
-                .align_toolbar_hover;
+            let hover = self.editor_state.editor_ui.align_toolbar_hover;
             toolbar.paint(&mut *frame, &self.theme, hover);
         }
 
@@ -310,7 +306,9 @@ impl WidgetHostNative {
                 .unwrap_or(0);
             let menu = FileMenu::from_editor_ui(&self.editor_state.editor_ui, now_secs);
             let menu_rect = menu.rect_at(anchor);
-            let mut cx = PaintCx { backend: &mut *frame };
+            let mut cx = PaintCx {
+                backend: &mut *frame,
+            };
             menu.paint(&mut cx, menu_rect);
         }
 
@@ -322,11 +320,18 @@ impl WidgetHostNative {
                     origin: Point2D::new(0.0, 0.0),
                     size: Point2D::new(viewport_width, viewport_height),
                 },
-                op_editor_ui::Color { r: 0.0, g: 0.0, b: 0.0, a: 0.45 },
+                op_editor_ui::Color {
+                    r: 0.0,
+                    g: 0.0,
+                    b: 0.0,
+                    a: 0.45,
+                },
             );
             let modal = FigmaImportModal::for_editor(&self.editor_state);
             let modal_rect = modal.rect(viewport_width, viewport_height);
-            let mut cx = PaintCx { backend: &mut *frame };
+            let mut cx = PaintCx {
+                backend: &mut *frame,
+            };
             modal.paint(&mut cx, modal_rect);
         }
 
@@ -338,7 +343,12 @@ impl WidgetHostNative {
                     origin: Point2D::new(0.0, 0.0),
                     size: Point2D::new(viewport_width, viewport_height),
                 },
-                op_editor_ui::Color { r: 0.0, g: 0.0, b: 0.0, a: 0.45 },
+                op_editor_ui::Color {
+                    r: 0.0,
+                    g: 0.0,
+                    b: 0.0,
+                    a: 0.45,
+                },
             );
             let dlg = ExportDialog::centered(viewport_width, viewport_height);
             dlg.paint(&mut *frame, &self.theme, &self.editor_state.editor_ui);

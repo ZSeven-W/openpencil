@@ -19,9 +19,7 @@ use crate::pen_node_ext::PenNodeExt;
 use crate::selection::SelectionState;
 use crate::state::EditorState;
 use crate::ui_draft::PropertyFocus;
-use crate::walkers::{
-    self, find_node, find_node_mut, reorder_in_children, ReorderDirection,
-};
+use crate::walkers::{self, find_node, find_node_mut, reorder_in_children, ReorderDirection};
 use jian_ops_schema::node::PenNode;
 use std::collections::HashSet;
 
@@ -161,12 +159,7 @@ impl EditorState {
     /// shell-core read from `var_table.variables` live on
     /// `EditorState.doc.variables` in the canonical model.
     pub fn right_rail_visible(&self) -> bool {
-        self.property_panel_visible()
-            || self
-                .doc
-                .variables
-                .as_ref()
-                .is_some_and(|v| !v.is_empty())
+        self.property_panel_visible() || self.doc.variables.as_ref().is_some_and(|v| !v.is_empty())
     }
 
     /// Union of `aggregate_bounds` across the selected nodes.
@@ -213,8 +206,7 @@ impl EditorState {
         }
         if let Some(pos) = self.selection.set.iter().position(|n| *n == id) {
             self.selection.set.remove(pos);
-            self.selection.anchor =
-                self.selection.set.last().cloned().unwrap_or(NodeId::NONE);
+            self.selection.anchor = self.selection.set.last().cloned().unwrap_or(NodeId::NONE);
         } else {
             self.selection.anchor = id.clone();
             self.selection.set.push(id);
@@ -507,8 +499,7 @@ impl EditorState {
         }
         if removed_any {
             self.selection.set = kept;
-            self.selection.anchor =
-                self.selection.set.last().cloned().unwrap_or(NodeId::NONE);
+            self.selection.anchor = self.selection.set.last().cloned().unwrap_or(NodeId::NONE);
             true
         } else {
             false
@@ -518,11 +509,7 @@ impl EditorState {
     /// Deep-clone every selected node with fresh ids, inserting each
     /// clone as the next sibling offset by `offset_doc_px`. Returns
     /// the new anchor id (last clone) on success.
-    pub fn duplicate_selected(
-        &mut self,
-        next_id: &mut u64,
-        offset_doc_px: f64,
-    ) -> Option<NodeId> {
+    pub fn duplicate_selected(&mut self, next_id: &mut u64, offset_doc_px: f64) -> Option<NodeId> {
         if self.selection.set.is_empty() {
             return None;
         }
@@ -533,13 +520,9 @@ impl EditorState {
         let children = self.active_children_mut();
         let mut new_ids: Vec<NodeId> = Vec::with_capacity(targets.len());
         for target in &targets {
-            if let Some(new_id) = duplicate_in_children(
-                children,
-                target,
-                next_id,
-                &mut taken,
-                offset_doc_px,
-            ) {
+            if let Some(new_id) =
+                duplicate_in_children(children, target, next_id, &mut taken, offset_doc_px)
+            {
                 new_ids.push(new_id);
             }
         }
@@ -703,9 +686,7 @@ fn duplicate_in_children(
     }
     for child in children.iter_mut() {
         if let Some(grand) = child.children_mut() {
-            if let Some(new_id) =
-                duplicate_in_children(grand, target, next_id, taken, offset)
-            {
+            if let Some(new_id) = duplicate_in_children(grand, target, next_id, taken, offset) {
                 return Some(new_id);
             }
         }

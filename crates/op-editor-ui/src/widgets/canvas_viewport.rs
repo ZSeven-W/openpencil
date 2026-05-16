@@ -22,13 +22,13 @@
 //! Selection overlay (outlines + handles), grid, pen rubber-band and
 //! per-anchor Path handles are layered on top of the resolved scene.
 
-use crate::layout_scene::NodeKind;
-use op_editor_core::Viewport as DocViewport;
 use crate::layout_scene::LayoutScene;
+use crate::layout_scene::NodeKind;
 use crate::theme::Theme;
 use crate::widgets::editor_state_ext::theme_for;
 use crate::widgets::{LayoutBox, LayoutCx, PaintCx, Widget, WidgetId};
 use crate::{Color, Point2D, Rect};
+use op_editor_core::Viewport as DocViewport;
 
 use op_editor_core::EditorState;
 
@@ -276,10 +276,7 @@ impl<'a> CanvasViewport<'a> {
                 .pen_in_progress
                 .as_ref()
                 .map(|id| id.as_str().to_string()),
-            pen_cursor_doc: state
-                .ui
-                .pen_cursor_doc
-                .map(|p| Point2D::new(p.x, p.y)),
+            pen_cursor_doc: state.ui.pen_cursor_doc.map(|p| Point2D::new(p.x, p.y)),
             text_editing: state
                 .ui
                 .text_editing
@@ -493,7 +490,6 @@ fn paint_grid(cx: &mut PaintCx<'_>, rect: Rect, viewport: &DocViewport, theme: &
         y += step;
     }
 }
-
 
 #[cfg(test)]
 #[path = "canvas_viewport_tests.rs"]

@@ -499,7 +499,10 @@ mod tests {
         assert!(set_primary_fill_type(&mut node, FillType::LinearGradient));
         match node_fills(&node).unwrap().first().unwrap() {
             PenFill::LinearGradient(body) => {
-                assert_eq!(body.stops.first().map(|s| s.color.as_str()), Some("#abcdef"));
+                assert_eq!(
+                    body.stops.first().map(|s| s.color.as_str()),
+                    Some("#abcdef")
+                );
             }
             other => panic!("expected LinearGradient, got {other:?}"),
         }

@@ -67,7 +67,10 @@ impl FigmaImportModal {
 fn close_rect(panel: Rect) -> Rect {
     let s = 14.0;
     Rect {
-        origin: Point2D::new(panel.origin.x + panel.size.x - 14.0 - s, panel.origin.y + 14.0),
+        origin: Point2D::new(
+            panel.origin.x + panel.size.x - 14.0 - s,
+            panel.origin.y + 14.0,
+        ),
         size: Point2D::new(s, s),
     }
 }
@@ -123,7 +126,8 @@ impl Widget for FigmaImportModal {
 
     fn paint(&self, cx: &mut PaintCx<'_>, rect: Rect) {
         cx.backend.fill_round_rect(rect, 12.0, self.theme.card);
-        cx.backend.stroke_round_rect(rect, 12.0, self.theme.border, 1.0);
+        cx.backend
+            .stroke_round_rect(rect, 12.0, self.theme.border, 1.0);
 
         let title = TextLayout::single_run(
             t(self.locale, "title"),
@@ -132,8 +136,10 @@ impl Widget for FigmaImportModal {
             to_jian(self.theme.foreground),
             Point2D::new(0.0, 0.0),
         );
-        cx.backend
-            .draw_text(&title, Point2D::new(rect.origin.x + PAD, rect.origin.y + 26.0));
+        cx.backend.draw_text(
+            &title,
+            Point2D::new(rect.origin.x + PAD, rect.origin.y + 26.0),
+        );
 
         // Close X — smaller stroke, tighter.
         let close = close_rect(rect);
@@ -149,7 +155,8 @@ impl Widget for FigmaImportModal {
         // Compact info panel with a small Figma glyph for character.
         let drop = drop_zone_rect(rect);
         cx.backend.fill_round_rect(drop, 10.0, self.theme.muted);
-        cx.backend.stroke_round_rect(drop, 10.0, self.theme.border, 1.0);
+        cx.backend
+            .stroke_round_rect(drop, 10.0, self.theme.border, 1.0);
 
         // Small Figma brand glyph centred above the headline.
         let glyph_size = 24.0;

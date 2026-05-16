@@ -164,7 +164,11 @@ fn batch_insert_command_atomic_on_bad_descriptor() {
             },
         ],
     }));
-    assert_eq!(s.active_children().len(), pre_root_len, "no partial insertion");
+    assert_eq!(
+        s.active_children().len(),
+        pre_root_len,
+        "no partial insertion"
+    );
 }
 
 #[test]

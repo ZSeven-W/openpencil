@@ -10,8 +10,8 @@
 use crate::node_id::NodeId;
 use crate::state::EditorState;
 use crate::walkers;
-use jian_ops_schema::page::PenPage;
 use jian_ops_schema::node::PenNode;
+use jian_ops_schema::page::PenPage;
 
 /// Build a bare page with id / name / children. State + lifecycle
 /// default to `None`.

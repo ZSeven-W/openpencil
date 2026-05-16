@@ -73,11 +73,7 @@ fn node_stroke_slot(node: &mut PenNode) -> Option<&mut Option<PenStroke>> {
 
 impl EditorState {
     /// `SetNodeRotation` — write rotation (degrees) on a node.
-    pub(crate) fn cmd_set_node_rotation(
-        &mut self,
-        node_id: &NodeId,
-        degrees: f32,
-    ) -> bool {
+    pub(crate) fn cmd_set_node_rotation(&mut self, node_id: &NodeId, degrees: f32) -> bool {
         if !node_id.is_real() || !degrees.is_finite() {
             return false;
         }
@@ -108,11 +104,7 @@ impl EditorState {
 
     /// `SetNodeCornerRadius` — write corner radius on a node. Rejects
     /// negative / non-finite values.
-    pub(crate) fn cmd_set_node_corner_radius(
-        &mut self,
-        node_id: &NodeId,
-        radius: f32,
-    ) -> bool {
+    pub(crate) fn cmd_set_node_corner_radius(&mut self, node_id: &NodeId, radius: f32) -> bool {
         if !node_id.is_real() || !radius.is_finite() || radius < 0.0 {
             return false;
         }
@@ -124,11 +116,7 @@ impl EditorState {
 
     /// `SetNodeFontSize` — set the font size on a Text node. Rejects
     /// non-Text kinds + non-positive sizes.
-    pub(crate) fn cmd_set_node_font_size(
-        &mut self,
-        node_id: &NodeId,
-        font_size: f32,
-    ) -> bool {
+    pub(crate) fn cmd_set_node_font_size(&mut self, node_id: &NodeId, font_size: f32) -> bool {
         if !node_id.is_real() || !font_size.is_finite() || font_size <= 0.0 {
             return false;
         }
@@ -146,11 +134,7 @@ impl EditorState {
 
     /// `SetNodeFontWeight` — set the font weight (1..=1000) on a Text
     /// node. Rejects non-Text kinds + out-of-range weights.
-    pub(crate) fn cmd_set_node_font_weight(
-        &mut self,
-        node_id: &NodeId,
-        font_weight: u16,
-    ) -> bool {
+    pub(crate) fn cmd_set_node_font_weight(&mut self, node_id: &NodeId, font_weight: u16) -> bool {
         if !node_id.is_real() || font_weight == 0 || font_weight > 1000 {
             return false;
         }
@@ -168,11 +152,7 @@ impl EditorState {
 
     /// `SetNodeStrokeHex` — set the stroke color on a node. A node with
     /// no stroke gets a fresh 1-px stroke so the color always lands.
-    pub(crate) fn cmd_set_node_stroke_hex(
-        &mut self,
-        node_id: &NodeId,
-        hex: &str,
-    ) -> bool {
+    pub(crate) fn cmd_set_node_stroke_hex(&mut self, node_id: &NodeId, hex: &str) -> bool {
         if !node_id.is_real() || crate::color_picker::parse_hex_rgb(hex).is_none() {
             return false;
         }
@@ -185,11 +165,7 @@ impl EditorState {
     /// `SetNodeStrokeWidth` — set the stroke width (doc-px) on a node.
     /// Width 0 clears the stroke; width > 0 on a node with no stroke
     /// attaches a fresh stroke at that width.
-    pub(crate) fn cmd_set_node_stroke_width(
-        &mut self,
-        node_id: &NodeId,
-        width: f32,
-    ) -> bool {
+    pub(crate) fn cmd_set_node_stroke_width(&mut self, node_id: &NodeId, width: f32) -> bool {
         if !node_id.is_real() || !width.is_finite() || width < 0.0 {
             return false;
         }
@@ -277,5 +253,82 @@ impl EditorState {
             NodeFlag::Collapsed => unreachable!("rejected above"),
         }
         true
+    }
+
+    /// `SetNodeFlip` — write the horizontal / vertical mirror flags on
+    /// a node. Either axis `None` leaves that flag untouched. Returns
+    /// `false` only on a missing node or when nothing was supplied.
+    pub(crate) fn cmd_set_node_flip(
+        &mut self,
+        node_id: &NodeId,
+        flip_x: Option<bool>,
+        flip_y: Option<bool>,
+    ) -> bool {
+        if !node_id.is_real() || (flip_x.is_none() && flip_y.is_none()) {
+            return false;
+        }
+        let Some(node) = find_node_mut(self.active_children_mut(), node_id) else {
+            return false;
+        };
+        if let Some(fx) = flip_x {
+            node.base_mut().flip_x = Some(fx);
+        }
+        if let Some(fy) = flip_y {
+            node.base_mut().flip_y = Some(fy);
+        }
+        true
+    }
+
+    /// `SetEllipseArc` — write arc geometry on an Ellipse node.
+    /// `start_angle` / `sweep_angle` are degrees; `inner_radius` is a
+    /// 0.0..=1.0 fraction. Rejects non-Ellipse kinds, non-finite
+    /// values, an out-of-range `inner_radius`, and a call that
+    /// supplies nothing.
+    pub(crate) fn cmd_set_ellipse_arc(
+        &mut self,
+        node_id: &NodeId,
+        start_angle: Option<f64>,
+        sweep_angle: Option<f64>,
+        inner_radius: Option<f64>,
+    ) -> bool {
+        if !node_id.is_real() {
+            return false;
+        }
+        if start_angle.is_none() && sweep_angle.is_none() && inner_radius.is_none() {
+            return false;
+        }
+        if let Some(a) = start_angle {
+            if !a.is_finite() {
+                return false;
+            }
+        }
+        if let Some(a) = sweep_angle {
+            if !a.is_finite() {
+                return false;
+            }
+        }
+        if let Some(r) = inner_radius {
+            if !r.is_finite() || !(0.0..=1.0).contains(&r) {
+                return false;
+            }
+        }
+        let Some(node) = find_node_mut(self.active_children_mut(), node_id) else {
+            return false;
+        };
+        match node {
+            PenNode::Ellipse(e) => {
+                if let Some(a) = start_angle {
+                    e.start_angle = Some(a);
+                }
+                if let Some(a) = sweep_angle {
+                    e.sweep_angle = Some(a);
+                }
+                if let Some(r) = inner_radius {
+                    e.inner_radius = Some(r);
+                }
+                true
+            }
+            _ => false,
+        }
     }
 }

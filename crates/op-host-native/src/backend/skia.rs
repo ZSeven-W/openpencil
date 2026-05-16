@@ -106,8 +106,7 @@ pub struct NativeBackend {
     /// typeface against `FontStyle::new(Weight, Width::NORMAL, …)`
     /// so the system FontMgr returns the bold-variant TTF when one
     /// is installed (TS app parity).
-    char_typeface_cache:
-        std::collections::HashMap<(i32, u16), Option<skia_safe::Typeface>>,
+    char_typeface_cache: std::collections::HashMap<(i32, u16), Option<skia_safe::Typeface>>,
 }
 
 const ROBOTO_TTF: &[u8] = include_bytes!("../../../op-host-web/assets/Roboto-Regular.ttf");
@@ -208,11 +207,7 @@ impl NativeBackend {
     /// preserving char order. Glyphs without any covering typeface
     /// are bucketed with the previous segment so they at least
     /// occupy space (rather than disappearing).
-    fn segment_text(
-        &mut self,
-        text: &str,
-        weight: u16,
-    ) -> Vec<(skia_safe::Typeface, String)> {
+    fn segment_text(&mut self, text: &str, weight: u16) -> Vec<(skia_safe::Typeface, String)> {
         let mut segments: Vec<(skia_safe::Typeface, String)> = Vec::new();
         for c in text.chars() {
             let tf = self.typeface_for_char(c, weight);

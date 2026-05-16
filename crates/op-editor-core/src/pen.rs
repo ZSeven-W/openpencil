@@ -8,8 +8,8 @@ use crate::node_id::NodeId;
 use crate::pen_node_ext::{make_path, PenNodeExt};
 use crate::state::EditorState;
 use crate::walkers::{self, find_node, find_node_mut};
-use jian_ops_schema::node::PenPathAnchor;
 use jian_ops_schema::node::PenNode;
+use jian_ops_schema::node::PenPathAnchor;
 
 /// Bounding box of a set of anchors: `(x, y, w, h)`.
 fn anchor_bbox(anchors: &[PenPathAnchor]) -> (f64, f64, f64, f64) {
@@ -74,13 +74,15 @@ impl EditorState {
             return false;
         };
         if let PenNode::Path(path) = node {
-            path.anchors.get_or_insert_with(Vec::new).push(PenPathAnchor {
-                x: p.0,
-                y: p.1,
-                handle_in: None,
-                handle_out: None,
-                point_type: None,
-            });
+            path.anchors
+                .get_or_insert_with(Vec::new)
+                .push(PenPathAnchor {
+                    x: p.0,
+                    y: p.1,
+                    handle_in: None,
+                    handle_out: None,
+                    point_type: None,
+                });
         } else {
             return false;
         }
@@ -142,7 +144,8 @@ impl EditorState {
             }
         } else {
             // 1-anchor path is invisible — strip it, skip history.
-            self.active_children_mut().retain(|n| n.id_str() != id.as_str());
+            self.active_children_mut()
+                .retain(|n| n.id_str() != id.as_str());
             if self.selection.anchor == id {
                 self.clear_selection();
             }

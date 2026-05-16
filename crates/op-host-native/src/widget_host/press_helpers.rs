@@ -47,9 +47,7 @@ impl WidgetHostNative {
         vw: f32,
         vh: f32,
     ) -> bool {
-        use op_editor_ui::widgets::agent_settings_panel::{
-            AgentSettingsHit, AgentSettingsPanel,
-        };
+        use op_editor_ui::widgets::agent_settings_panel::{AgentSettingsHit, AgentSettingsPanel};
         self.refresh_layout_scene();
         let panel = AgentSettingsPanel::for_editor(&self.editor_state);
         let panel_rect = panel.rect(vw, vh);
@@ -89,8 +87,7 @@ impl WidgetHostNative {
                     .iter()
                     .position(|x| *x == cli)
                     .unwrap_or(0);
-                let v =
-                    &mut self.editor_state.editor_ui.agent_settings.mcp_cli_enabled[idx];
+                let v = &mut self.editor_state.editor_ui.agent_settings.mcp_cli_enabled[idx];
                 *v = !*v;
             }
             AgentSettingsHit::ToggleImagesAdvanced => {
@@ -165,11 +162,7 @@ pub(in crate::widget_host) fn color_target(
     t: op_editor_core::ColorTarget,
 ) -> op_editor_core::ui_draft::ColorTarget {
     match t {
-        op_editor_core::ColorTarget::Fill => {
-            op_editor_core::ui_draft::ColorTarget::Fill
-        }
-        op_editor_core::ColorTarget::Stroke => {
-            op_editor_core::ui_draft::ColorTarget::Stroke
-        }
+        op_editor_core::ColorTarget::Fill => op_editor_core::ui_draft::ColorTarget::Fill,
+        op_editor_core::ColorTarget::Stroke => op_editor_core::ui_draft::ColorTarget::Stroke,
     }
 }

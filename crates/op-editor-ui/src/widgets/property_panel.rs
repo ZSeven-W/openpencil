@@ -24,12 +24,12 @@
 //! `Option<Self>`; `None` = panel hidden entirely.
 
 use crate::layout_scene::{NodeKind, SceneStroke};
-use op_editor_core::PropertyFocus;
 use crate::theme::Theme;
 use crate::widgets::editor_state_ext::{doc_export_format, theme_for};
 use crate::widgets::property_panel_sections as sections;
 use crate::widgets::{LayoutBox, LayoutCx, PaintCx, Widget, WidgetId};
 use crate::{Color, Point2D, Rect};
+use op_editor_core::PropertyFocus;
 
 use jian_ops_schema::node::PenNode;
 use op_editor_core::pen_node_ext::PenNodeExt;
@@ -629,9 +629,14 @@ impl Widget for PropertyPanel {
         }
         if caps.export {
             let _ = sections::paint_export_section(
-                cx, &self.theme, &self.labels,
-                self.export_format, self.export_scale,
-                x, y, w,
+                cx,
+                &self.theme,
+                &self.labels,
+                self.export_format,
+                self.export_scale,
+                x,
+                y,
+                w,
             );
         }
         // Fill-type picker overlay sits on top of everything below

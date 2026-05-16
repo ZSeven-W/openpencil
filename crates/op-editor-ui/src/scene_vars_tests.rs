@@ -6,7 +6,6 @@ use super::{
 };
 use std::collections::BTreeMap;
 
-
 fn axis(name: &str, value: &str) -> BTreeMap<String, String> {
     let mut m = BTreeMap::new();
     m.insert(name.to_string(), value.to_string());
@@ -349,7 +348,7 @@ fn set_color_hex_under_active_theme_does_not_clobber_default() {
         ]),
     });
     tbl.set_active_theme("mode", "dark"); // matches neither
-    // Pre-write: resolves to the default (#888) under dark.
+                                          // Pre-write: resolves to the default (#888) under dark.
     assert_eq!(
         tbl.resolve_color("bg"),
         Some(crate::Color {
