@@ -46,6 +46,9 @@ impl WidgetHostNative {
                 self.document.ui.pending_file_action =
                     Some(openpencil_shell_core::document::FileAction::ExportImage);
             }
+            A::AddEffect => {
+                self.document.add_drop_shadow_to_selected();
+            }
         }
     }
 

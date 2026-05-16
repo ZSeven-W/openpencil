@@ -53,6 +53,9 @@ pub enum PropertyPanelAction {
     /// User clicked anywhere in the Export section — host queues
     /// `FileAction::ExportImage` so the picker dialog opens.
     OpenExportDialog,
+    /// User clicked the Effects section's "+" — host appends a
+    /// default drop shadow to the selected node.
+    AddEffect,
 }
 
 /// Per-NodeKind toggles for which property-panel sections render.

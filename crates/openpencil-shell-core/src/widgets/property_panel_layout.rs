@@ -241,6 +241,14 @@ pub fn action_button_rects_with_fill_picker(
     }
     if visible.effects {
         // Mirrors paint_effects_section: header + 8 px filler.
+        // The header's "+" button (drawn by
+        // `paint_section_label_with_add` at the right edge) maps to
+        // an `AddEffect` action.
+        let plus = Rect {
+            origin: Point2D::new(x0 + w - PAD_X - 22.0, y),
+            size: Point2D::new(28.0, SECTION_HEADER_HEIGHT),
+        };
+        out.push((PropertyPanelAction::AddEffect, plus));
         y += SECTION_HEADER_HEIGHT;
         y += 8.0;
         y += SECTION_GAP;
