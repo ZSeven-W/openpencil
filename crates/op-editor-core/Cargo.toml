@@ -1,0 +1,11 @@
+[package]
+name = "op-editor-core"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "OpenPencil editor state — selection/tool/history/viewport on jian PenDocument"
+
+[dependencies]
+jian-ops-schema = { path = "../../vendor/jian/crates/jian-ops-schema" }
+jian-core = { path = "../../vendor/jian/crates/jian-core" }

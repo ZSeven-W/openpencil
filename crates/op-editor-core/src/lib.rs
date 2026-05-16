@@ -1,0 +1,1 @@
+//! OpenPencil editor core.
