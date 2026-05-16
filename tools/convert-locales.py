@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Convert openpencil/apps/web/src/i18n/locales/*.ts files into
-Rust match-arm tables under crates/openpencil-shell-core/src/i18n/<locale>.rs.
+Rust match-arm tables under crates/op-i18n/src/i18n/<locale>.rs.
 
 Each TS file exports a single object literal of the form:
     'key.name': 'value',
@@ -19,7 +19,7 @@ import sys
 from pathlib import Path
 
 TS_DIR = Path("apps/web/src/i18n/locales")
-RS_DIR = Path("crates/openpencil-shell-core/src/i18n")
+RS_DIR = Path("crates/op-i18n/src/i18n")
 
 # Map TS file basename → Rust file basename (sanitised).
 LOCALES = {
