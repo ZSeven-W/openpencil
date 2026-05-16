@@ -150,12 +150,12 @@ pub fn paint_tab_strip(
     use op_editor_core::PropertyTab;
     let pad = 14.0;
     let tab_y = y + 6.0;
-    let design_w = (cx.backend.measure_text(&labels.tab_design, 13.0) + 24.0).max(48.0);
+    let design_w = (cx.backend.measure_text(labels.tab_design, 13.0) + 24.0).max(48.0);
     let design_rect = Rect {
         origin: Point2D::new(x + pad, tab_y),
         size: Point2D::new(design_w, 26.0),
     };
-    let code_w = (cx.backend.measure_text(&labels.tab_code, 13.0) + 24.0).max(48.0);
+    let code_w = (cx.backend.measure_text(labels.tab_code, 13.0) + 24.0).max(48.0);
     let code_rect = Rect {
         origin: Point2D::new(design_rect.origin.x + design_rect.size.x + 6.0, tab_y),
         size: Point2D::new(code_w, 26.0),
@@ -176,7 +176,7 @@ pub fn paint_tab_strip(
         theme.muted_foreground
     };
     let design_label = TextLayout::single_run(
-        &labels.tab_design,
+        labels.tab_design,
         "system-ui",
         13.0,
         to_jian_color(design_color),
@@ -187,7 +187,7 @@ pub fn paint_tab_strip(
         Point2D::new(design_rect.origin.x + 12.0, design_rect.origin.y + 18.0),
     );
     let code_label = TextLayout::single_run(
-        &labels.tab_code,
+        labels.tab_code,
         "system-ui",
         13.0,
         to_jian_color(code_color),
@@ -260,13 +260,13 @@ pub fn paint_create_component(
         1.4,
     );
     let label = TextLayout::single_run(
-        &labels.create_component,
+        labels.create_component,
         "system-ui",
         13.0,
         to_jian_color(theme.foreground),
         Point2D::new(0.0, 0.0),
     );
-    let label_w = cx.backend.measure_text(&labels.create_component, 13.0);
+    let label_w = cx.backend.measure_text(labels.create_component, 13.0);
     cx.backend.draw_text(
         &label,
         Point2D::new(
@@ -279,6 +279,8 @@ pub fn paint_create_component(
 
 // ── Position section ──────────────────────────────────────────────
 
+// Paint-context + geometry args threaded through; a struct adds no gain.
+#[allow(clippy::too_many_arguments)]
 pub fn paint_position_section(
     cx: &mut PaintCx<'_>,
     theme: &Theme,
@@ -289,7 +291,7 @@ pub fn paint_position_section(
     y: f32,
     width: f32,
 ) -> f32 {
-    let mut y = paint_section_label(cx, theme, &labels.position, x, y, width);
+    let mut y = paint_section_label(cx, theme, labels.position, x, y, width);
     let usable_w = width - PAD_X * 2.0;
     let half_w = (usable_w - 8.0) / 2.0;
     let x_rect = Rect {
@@ -370,7 +372,7 @@ pub fn paint_flex_section(
     y: f32,
     width: f32,
 ) -> f32 {
-    let mut y = paint_section_label(cx, theme, &labels.flex_layout, x, y, width);
+    let mut y = paint_section_label(cx, theme, labels.flex_layout, x, y, width);
     // TS layout-section.tsx uses Columns3 / Rows3 / LayoutGrid for
     // the three flex modes; LayoutGrid is the default-active mode
     // (Free / 自由布局).
@@ -418,6 +420,8 @@ pub fn paint_flex_section(
 
 // ── Size section ──────────────────────────────────────────────────
 
+// Paint-context + geometry args threaded through; a struct adds no gain.
+#[allow(clippy::too_many_arguments)]
 pub fn paint_size_section(
     cx: &mut PaintCx<'_>,
     theme: &Theme,
@@ -429,7 +433,7 @@ pub fn paint_size_section(
     y: f32,
     width: f32,
 ) -> f32 {
-    let mut y = paint_section_label(cx, theme, &labels.size, x, y, width);
+    let mut y = paint_section_label(cx, theme, labels.size, x, y, width);
     let usable_w = width - PAD_X * 2.0;
     let half_w = (usable_w - 8.0) / 2.0;
     let w_rect = Rect {
@@ -468,7 +472,7 @@ pub fn paint_size_section(
         x + PAD_X,
         y,
         half_w,
-        &labels.fill_width,
+        labels.fill_width,
         flags.fill_width,
     );
     paint_check_row(
@@ -477,7 +481,7 @@ pub fn paint_size_section(
         x + PAD_X + half_w + 8.0,
         y,
         half_w,
-        &labels.fill_height,
+        labels.fill_height,
         flags.fill_height,
     );
     y += row_h;
@@ -487,7 +491,7 @@ pub fn paint_size_section(
         x + PAD_X,
         y,
         half_w,
-        &labels.hug_width,
+        labels.hug_width,
         flags.hug_width,
     );
     paint_check_row(
@@ -496,7 +500,7 @@ pub fn paint_size_section(
         x + PAD_X + half_w + 8.0,
         y,
         half_w,
-        &labels.hug_height,
+        labels.hug_height,
         flags.hug_height,
     );
     y += row_h;
@@ -506,7 +510,7 @@ pub fn paint_size_section(
         x + PAD_X,
         y,
         usable_w,
-        &labels.clip_content,
+        labels.clip_content,
         flags.clip_content,
     );
     y += row_h + 12.0;
@@ -562,7 +566,7 @@ pub fn paint_layer_section(
     y: f32,
     width: f32,
 ) -> f32 {
-    let mut y = paint_section_label(cx, theme, &labels.layer, x, y, width);
+    let mut y = paint_section_label(cx, theme, labels.layer, x, y, width);
     let usable_w = width - PAD_X * 2.0;
     let row = Rect {
         origin: Point2D::new(x + PAD_X, y),
@@ -586,6 +590,8 @@ pub fn paint_layer_section(
 
 // ── Stroke section ────────────────────────────────────────────────
 
+// Paint-context + geometry args threaded through; a struct adds no gain.
+#[allow(clippy::too_many_arguments)]
 pub fn paint_stroke_section(
     cx: &mut PaintCx<'_>,
     theme: &Theme,
@@ -596,7 +602,7 @@ pub fn paint_stroke_section(
     y: f32,
     width: f32,
 ) -> f32 {
-    let mut y = paint_section_label(cx, theme, &labels.stroke, x, y, width);
+    let mut y = paint_section_label(cx, theme, labels.stroke, x, y, width);
     let usable_w = width - PAD_X * 2.0;
     let stroke_color = snapshot.stroke.map(|s| s.color).unwrap_or(Color {
         r: 0x37 as f32 / 255.0,
@@ -695,7 +701,7 @@ pub fn paint_effects_section(
     y: f32,
     width: f32,
 ) -> f32 {
-    let y = paint_section_label_with_add(cx, theme, &labels.effects, x, y, width);
+    let y = paint_section_label_with_add(cx, theme, labels.effects, x, y, width);
     let after = y + 8.0;
     paint_section_divider(cx, theme, x, after, width);
     after + SECTION_GAP
@@ -703,6 +709,8 @@ pub fn paint_effects_section(
 
 // ── Export section ────────────────────────────────────────────────
 
+// Paint-context + geometry args threaded through; a struct adds no gain.
+#[allow(clippy::too_many_arguments)]
 pub fn paint_export_section(
     cx: &mut PaintCx<'_>,
     theme: &Theme,
@@ -713,7 +721,7 @@ pub fn paint_export_section(
     y: f32,
     width: f32,
 ) -> f32 {
-    let mut y = paint_section_label(cx, theme, &labels.export, x, y, width);
+    let mut y = paint_section_label(cx, theme, labels.export, x, y, width);
     let usable_w = width - PAD_X * 2.0;
     let half_w = (usable_w - 8.0) / 2.0;
     // Left pill: current scale. Right pill: current format. Click

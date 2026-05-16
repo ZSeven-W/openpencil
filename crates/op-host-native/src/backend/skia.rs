@@ -112,7 +112,7 @@ pub struct NativeBackend {
 const ROBOTO_TTF: &[u8] = include_bytes!("../../../op-host-web/assets/Roboto-Regular.ttf");
 
 /// Union of every CJK codepoint that appears in the editor chrome
-/// + settings modal. Pre-warmed at `NativeBackend::new` so the
+/// and the settings modal. Pre-warmed at `NativeBackend::new` so the
 /// first cross-tab paint doesn't synchronously call
 /// `FontMgr::match_family_style_character` for ~50 fresh glyphs.
 const PREWARM_CJK_CODEPOINTS: &str = "\

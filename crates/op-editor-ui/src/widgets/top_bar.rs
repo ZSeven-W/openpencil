@@ -2,8 +2,8 @@
 //!
 //! Mirrors `apps/web/src/components/editor/top-bar.tsx`: panel-toggle
 //! + folder + brand on the left, file name centered, theme +
-//! agent-status + i18n + fullscreen on the right. Click handling is
-//! a P6 follow-up; Step 4 paints only.
+//!   agent-status + i18n + fullscreen on the right. Click handling is
+//!   a P6 follow-up; Step 4 paints only.
 
 use crate::theme::Theme;
 use crate::widgets::editor_state_ext::{theme_for, translate};

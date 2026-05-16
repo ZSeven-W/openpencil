@@ -6,8 +6,9 @@
 //! (Task 4.7) is a re-export with no behaviour change.
 
 /// Editor tool — what primary mouse drag does on the canvas.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Tool {
+    #[default]
     Select,
     Rect,
     Ellipse,
@@ -56,11 +57,5 @@ impl Tool {
             self,
             Tool::Rect | Tool::Ellipse | Tool::Polygon | Tool::Line | Tool::Pen
         )
-    }
-}
-
-impl Default for Tool {
-    fn default() -> Self {
-        Tool::Select
     }
 }

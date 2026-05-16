@@ -222,8 +222,10 @@ mod tests {
 
     #[test]
     fn begin_send_pushes_user_plus_empty_assistant_and_raises_flag() {
-        let mut chat = ChatState::default();
-        chat.input = "  design a login page  ".into();
+        let mut chat = ChatState {
+            input: "  design a login page  ".into(),
+            ..Default::default()
+        };
         assert!(chat.begin_send());
         assert_eq!(chat.messages.len(), 2);
         assert_eq!(chat.messages[0].role, ChatRole::User);
@@ -236,8 +238,10 @@ mod tests {
 
     #[test]
     fn begin_send_empty_input_no_ops() {
-        let mut chat = ChatState::default();
-        chat.input = "   ".into();
+        let mut chat = ChatState {
+            input: "   ".into(),
+            ..Default::default()
+        };
         assert!(!chat.begin_send());
         assert!(chat.messages.is_empty());
         assert!(chat.pending_send.is_none());
@@ -245,8 +249,10 @@ mod tests {
 
     #[test]
     fn send_echo_appends_user_and_assistant() {
-        let mut chat = ChatState::default();
-        chat.input = "hi".into();
+        let mut chat = ChatState {
+            input: "hi".into(),
+            ..Default::default()
+        };
         chat.send();
         assert_eq!(chat.messages.len(), 2);
         assert_eq!(chat.messages[1].role, ChatRole::Assistant);

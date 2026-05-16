@@ -107,6 +107,8 @@ pub fn extract_node(children: &mut Vec<PenNode>, target: &NodeId) -> Option<PenN
 
 /// Insert `node` immediately before `anchor`. `Ok(())` on success;
 /// `Err(node)` bounces the payload back on miss.
+// `Err(PenNode)` is the bounced-back payload, not an error type.
+#[allow(clippy::result_large_err)]
 pub fn insert_before_in_children(
     children: &mut Vec<PenNode>,
     anchor: &NodeId,
@@ -129,6 +131,8 @@ pub fn insert_before_in_children(
 }
 
 /// Insert `node` immediately after `anchor`. `Ok(())` / `Err(node)`.
+// `Err(PenNode)` is the bounced-back payload, not an error type.
+#[allow(clippy::result_large_err)]
 pub fn insert_after_in_children(
     children: &mut Vec<PenNode>,
     anchor: &NodeId,
@@ -152,8 +156,11 @@ pub fn insert_after_in_children(
 
 /// Append `node` as the LAST child of `parent`. `Ok(())` / `Err(node)`.
 /// Fails (bounces the payload) when `parent` is not a container.
+// `Err(PenNode)` is the bounced-back payload, not an error type — boxing
+// it would be a needless allocation on the hot insert path.
+#[allow(clippy::result_large_err)]
 pub fn append_into(
-    children: &mut Vec<PenNode>,
+    children: &mut [PenNode],
     parent: &NodeId,
     node: PenNode,
 ) -> Result<(), PenNode> {
@@ -180,7 +187,7 @@ pub fn append_into(
 
 /// Swap the node matching `target` with its next / prev sibling.
 pub fn reorder_in_children(
-    children: &mut Vec<PenNode>,
+    children: &mut [PenNode],
     target: &NodeId,
     direction: ReorderDirection,
 ) -> bool {

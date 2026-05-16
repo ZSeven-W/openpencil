@@ -348,25 +348,28 @@ pub fn run_action(
                 // (runs jian's flex pass + `$ref` fill resolution).
                 let scene = op_pen_loader::editor_state_to_layout_scene(host.editor_state());
                 let scene = &scene;
+                // When exactly one node is selected, raster export
+                // crops to that layer (TS parity: exportLayerToRaster);
+                // otherwise the whole active page is exported. SVG /
+                // PDF always stay page-level.
+                let single_node: Option<String> = {
+                    let st = host.editor_state();
+                    if st.selection_count() == 1 && st.selection.anchor.is_real() {
+                        Some(st.selection.anchor.as_str().to_string())
+                    } else {
+                        None
+                    }
+                };
+                let raster = |rf: crate::export::RasterFormat| -> Result<(), String> {
+                    match &single_node {
+                        Some(id) => crate::export::export_node_raster(scene, id, &path, rf, scale),
+                        None => crate::export::export_raster(scene, &path, rf, scale),
+                    }
+                };
                 let result: Result<(), String> = match fmt {
-                    Fmt::Png => crate::export::export_raster(
-                        scene,
-                        &path,
-                        crate::export::RasterFormat::Png,
-                        scale,
-                    ),
-                    Fmt::Jpeg => crate::export::export_raster(
-                        scene,
-                        &path,
-                        crate::export::RasterFormat::Jpeg,
-                        scale,
-                    ),
-                    Fmt::Webp => crate::export::export_raster(
-                        scene,
-                        &path,
-                        crate::export::RasterFormat::Webp,
-                        scale,
-                    ),
+                    Fmt::Png => raster(crate::export::RasterFormat::Png),
+                    Fmt::Jpeg => raster(crate::export::RasterFormat::Jpeg),
+                    Fmt::Webp => raster(crate::export::RasterFormat::Webp),
                     Fmt::Svg => crate::export::export_svg(scene, &path),
                     Fmt::Pdf => crate::export_pdf::export_pdf(scene, &path),
                 };

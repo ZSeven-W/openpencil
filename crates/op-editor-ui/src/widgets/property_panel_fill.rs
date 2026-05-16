@@ -132,6 +132,8 @@ pub fn paint_fill_type_picker(
 }
 // ── Fill section ──────────────────────────────────────────────────
 
+// Paint-context + geometry args threaded through; a struct adds no gain.
+#[allow(clippy::too_many_arguments)]
 pub fn paint_fill_section(
     cx: &mut PaintCx<'_>,
     theme: &Theme,
@@ -144,7 +146,7 @@ pub fn paint_fill_section(
     y: f32,
     width: f32,
 ) -> f32 {
-    let mut y = paint_section_label_with_add(cx, theme, &labels.fill, x, y, width);
+    let mut y = paint_section_label_with_add(cx, theme, labels.fill, x, y, width);
     let usable_w = width - PAD_X * 2.0;
     let fill = snapshot.fill.unwrap_or(Color::WHITE);
     let swatch_rect = Rect {

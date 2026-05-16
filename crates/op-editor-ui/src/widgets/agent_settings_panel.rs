@@ -161,12 +161,8 @@ impl<'a> AgentSettingsPanel<'a> {
             return None;
         }
         let scrolled = Point2D::new(point.x, point.y + self.settings.scroll_y);
-        for i in 0..AgentProvider::ALL.len() {
-            if rect_contains(agent_card_rect_in(panel, i, &self.settings), scrolled) {
-                return Some(i);
-            }
-        }
-        None
+        (0..AgentProvider::ALL.len())
+            .find(|&i| rect_contains(agent_card_rect_in(panel, i, &self.settings), scrolled))
     }
 
     /// Total content height for the active tab. Host uses this to
@@ -433,6 +429,8 @@ fn paint_section_header(
 /// `right_inset` reserves space on the right edge for an
 /// overlapping chrome element — currently the panel's close X
 /// which sits over the top-of-content row.
+// Paint-context + geometry args threaded through; a struct adds no gain.
+#[allow(clippy::too_many_arguments)]
 fn paint_section_header_inset(
     cx: &mut PaintCx<'_>,
     theme: &Theme,

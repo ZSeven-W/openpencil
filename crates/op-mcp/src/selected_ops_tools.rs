@@ -66,6 +66,9 @@ impl McpTool for NudgeSelected {
         "nudge_selected"
     }
     fn call(&self, args: &BTreeMap<String, String>) -> ToolOutcome {
+        // `ToolOutcome` is the shared MCP outcome type — boxing it broadly
+        // to shrink the `Err` variant would destabilize every tool signature.
+        #[allow(clippy::result_large_err)]
         fn parse_required_i32(
             args: &BTreeMap<String, String>,
             key: &str,

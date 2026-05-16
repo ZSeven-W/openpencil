@@ -68,7 +68,11 @@ impl Codegen for CssVariables {
         // Group entries by their theme map signature so a "mode=dark"
         // entry from variable A and another from B share one block.
         use std::collections::BTreeMap;
-        let mut themed: BTreeMap<Vec<(String, String)>, Vec<(String, String)>> = BTreeMap::new();
+        // Maps a theme-map signature (sorted axis/value pairs) to the
+        // (variable-name, css-value) entries that share that signature.
+        type ThemeSignature = Vec<(String, String)>;
+        type ThemedBlock = Vec<(String, String)>;
+        let mut themed: BTreeMap<ThemeSignature, ThemedBlock> = BTreeMap::new();
         for (name, def) in variables {
             if let VariableValue::Themed(entries) = &def.value {
                 for e in entries {
@@ -427,10 +431,12 @@ mod tests {
 
     /// A rectangle at `(x,y)` sized `w×h` with an optional fill.
     fn rect(id: &str, x: f64, y: f64, w: f64, h: f64, fill: Option<&str>) -> PenNode {
-        let mut container = jian_ops_schema::node::ContainerProps::default();
-        container.width = Some(SizingBehavior::Number(w));
-        container.height = Some(SizingBehavior::Number(h));
-        container.fill = fill.map(solid);
+        let container = jian_ops_schema::node::ContainerProps {
+            width: Some(SizingBehavior::Number(w)),
+            height: Some(SizingBehavior::Number(h)),
+            fill: fill.map(solid),
+            ..Default::default()
+        };
         PenNode::Rectangle(RectangleNode {
             base: PenNodeBase {
                 id: id.into(),

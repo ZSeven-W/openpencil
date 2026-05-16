@@ -594,7 +594,7 @@ fn cycle_active_axis_returns_false_for_empty_values() {
         values: Vec::new(),
     });
     assert!(!tbl.cycle_active_axis_value("empty"));
-    assert!(tbl.active_theme.get("empty").is_none());
+    assert!(!tbl.active_theme.contains_key("empty"));
 }
 
 #[test]

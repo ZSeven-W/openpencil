@@ -4,6 +4,7 @@
 //!   - Format radio group: PNG / JPEG / WEBP / SVG / PDF
 //!   - Scale radio group: 1× / 2× / 3×
 //!   - Cancel / Export buttons
+//!
 //! Selection writes back to `Document.ui.export_format` /
 //! `export_scale`; Export dispatches `FileAction::ExportImage` so
 //! the host's save dialog uses the chosen format + scale.

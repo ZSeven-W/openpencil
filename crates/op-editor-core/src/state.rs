@@ -75,7 +75,7 @@ pub struct EditorState {
     /// Editor-UI overlay + panel state — the widget-layer toggles, hover
     /// targets, menu / modal open flags and panel metrics. With this
     /// + `chat` + `components`, `EditorState` is a complete state
-    /// superset of shell-core's `Document` (Phase 6 Task 6.1a).
+    ///   superset of shell-core's `Document` (Phase 6 Task 6.1a).
     pub editor_ui: EditorUiState,
     /// AI chat sub-state — message transcript, input draft, panel
     /// anchor, model catalog. Mirrors shell-core's `Document.chat`.

@@ -8,34 +8,31 @@
 //! inside the bundle and the wasm becomes loadable in browsers.
 //!
 //! Categories (counts after dedup against the actual import list):
-//! - allocator:    malloc / free / calloc / realloc / malloc_usable_size
-//!                 → dlmalloc-rs
-//! - libm:         asinh / acosh / atanh / nextafterf / remainder
-//!                 → libm crate
-//! - libc string:  memchr / wmemchr / strcmp / strcpy / strtoull
-//!                 → hand-rolled byte-wise impls
-//! - libc stdio:   snprintf / vsnprintf / vfprintf
-//!                 → C-side stubs (in `src/stdio_stub.c`) that route
-//!                   into Rust extern `wasm_libc_shim_stdio_panic` and
-//!                   panic with the symbol name. Skia's font printf
-//!                   paths are NOT exercised on the raster +
-//!                   custom_empty fontmgr pipeline (verified: 0 env.*
-//!                   imports in the post-link bundle); a runtime panic
-//!                   here would mean a new Skia call site landed and
-//!                   needs a real impl, not a silent empty success.
-//! - libc misc:    abort / __errno_location
-//! - C++ ABI:      __cxa_atexit / __cxa_guard_acquire / __cxa_guard_release
-//!                 / __cxa_pure_virtual
+//! - allocator: malloc / free / calloc / realloc / malloc_usable_size
+//!   → dlmalloc-rs
+//! - libm: asinh / acosh / atanh / nextafterf / remainder
+//!   → libm crate
+//! - libc string: memchr / wmemchr / strcmp / strcpy / strtoull
+//!   → hand-rolled byte-wise impls
+//! - libc stdio: snprintf / vsnprintf / vfprintf
+//!   → C-side stubs (in `src/stdio_stub.c`) that route into Rust extern
+//!   `wasm_libc_shim_stdio_panic` and panic with the symbol name. Skia's
+//!   font printf paths are NOT exercised on the raster + custom_empty
+//!   fontmgr pipeline (verified: 0 env.* imports in the post-link
+//!   bundle); a runtime panic here would mean a new Skia call site
+//!   landed and needs a real impl, not a silent empty success.
+//! - libc misc: abort / __errno_location
+//! - C++ ABI: __cxa_atexit / __cxa_guard_acquire / __cxa_guard_release
+//!   / __cxa_pure_virtual
 //! - operator new/delete (`_Znwm`/`_Znam`/`_ZdlPv*`/`_ZdaPv*`)
-//!                 → forward to malloc/free
-//! - threads:      sem_init / sem_destroy / sem_post / sem_wait
-//!                 → no-op (single-threaded wasm)
+//!   → forward to malloc/free
+//! - threads: sem_init / sem_destroy / sem_post / sem_wait
+//!   → no-op (single-threaded wasm)
 //! - libcxx string / locale / iostream / shared_weak_count / to_string
-//!                 → panic stubs; these symbols are linker-pulled by
-//!                   templated code that the skia raster + empty
-//!                   fontmgr pipeline does not exercise at runtime.
-//!                   If any IS hit, the panic becomes a JS exception
-//!                   via console_error_panic_hook.
+//!   → panic stubs; these symbols are linker-pulled by templated code
+//!   that the skia raster + empty fontmgr pipeline does not exercise at
+//!   runtime. If any IS hit, the panic becomes a JS exception via
+//!   console_error_panic_hook.
 //!
 //! IMPORTANT: this crate must NOT be a Cargo workspace member of any
 //! native (non-wasm) build — its symbols intentionally collide with
