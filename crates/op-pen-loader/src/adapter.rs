@@ -34,7 +34,7 @@ use jian_ops_schema::{
     PenDocument,
 };
 
-use crate::persistence::{DocPayload, NodePayload, PagePayload, StrokePayload};
+use crate::payload::{DocPayload, NodePayload, PagePayload, StrokePayload};
 
 /// Default canvas allotment for a page-root sized with flex tokens
 /// (`fill_container` / `fit_content`) and no authored bounds — large
@@ -80,7 +80,7 @@ pub fn pen_document_to_payload(doc: &PenDocument) -> LoadedDoc {
             // Canonical-schema variables are harvested separately
             // by `build_var_table` and assigned after apply_payload;
             // this private-payload field stays empty for that path.
-            var_table: crate::persistence_variables::VarTablePayload::default(),
+            var_table: crate::variables::VarTablePayload::default(),
         },
     }
 }
@@ -93,8 +93,7 @@ pub fn pen_document_to_payload(doc: &PenDocument) -> LoadedDoc {
 /// label since the enums are isomorphic.
 pub fn build_var_table(doc: &PenDocument) -> openpencil_shell_core::document::VariableTable {
     use openpencil_shell_core::document::{
-        ThemeAxis, ThemedValue, Variable, VariableKind, VariableScalar, VariableTable,
-        VariableValue,
+        ThemeAxis, ThemedValue, Variable, VariableKind, VariableTable, VariableValue,
     };
     let mut out = VariableTable::default();
     if let Some(themes) = &doc.themes {
@@ -306,7 +305,7 @@ fn node_to_payload(node: &PenNode, rects: &BTreeMap<String, [f32; 4]>) -> NodePa
     // `.op` authored with shadows lost them on import (codex
     // stop-gate). Blur / background-blur are skipped: the shell's
     // `Effect` model is drop-shadow-only today.
-    p.effects = crate::persistence_effects::shadows_from_canonical(node);
+    p.effects = crate::effects::shadows_from_canonical(node);
     p
 }
 
@@ -748,8 +747,8 @@ fn short_src(src: &str) -> String {
     }
 }
 
-use crate::pen_doc_path_bounds::path_bounds_from_anchors;
+use crate::path_bounds::path_bounds_from_anchors;
 
 #[cfg(test)]
-#[path = "pen_doc_adapter_tests.rs"]
+#[path = "adapter_tests.rs"]
 mod tests;

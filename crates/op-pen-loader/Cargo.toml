@@ -1,0 +1,25 @@
+[package]
+name = "op-pen-loader"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Canonical .op (PenDocument) → shell Document loader / adapter"
+
+[dependencies]
+# Canonical `.op` / `.pen` schema — the `PenDocument` this crate
+# converts from.
+jian-ops-schema = { path = "../../vendor/jian/crates/jian-ops-schema" }
+# jian-core ships the taffy-backed `LayoutEngine` — the canonical
+# flex solver for `.op` files.
+jian-core = { path = "../../vendor/jian/crates/jian-core" }
+# jian-skia ships `SkiaMeasure` — a real skia paragraph-shaper
+# `MeasureBackend` plugged into the layout engine. Desktop-side, so
+# depending on skia is fine; this crate does NOT need to be wasm-clean.
+jian-skia = { path = "../../vendor/jian/crates/jian-skia", features = ["textlayout"] }
+# `Document` / `Node` / `VariableTable` etc. — the shell-core model
+# this crate converts INTO.
+openpencil-shell-core = { path = "../openpencil-shell-core", version = "0.1.0" }
+# Payload DTOs round-trip through serde JSON.
+serde = { workspace = true }
+serde_json = { workspace = true }

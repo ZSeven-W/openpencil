@@ -359,7 +359,7 @@ fn pencil_demo_op_fixture_loads() {
         return;
     };
     let src = std::str::from_utf8(&bytes).unwrap();
-    let parsed = crate::persistence::load_canonical(src).expect("canonical load");
+    let parsed = crate::payload::load_canonical(src).expect("canonical load");
     let adapted = pen_document_to_payload(&parsed.value);
     assert!(
         !adapted.payload.pages.is_empty(),
@@ -382,7 +382,7 @@ fn pencil_demo_op_fixture_loads() {
     let mut ellipse_zero = 0usize;
     let mut ellipse_total = 0usize;
     fn walk_ellipses(
-        nodes: &[crate::persistence::NodePayload],
+        nodes: &[crate::payload::NodePayload],
         total: &mut usize,
         zero: &mut usize,
     ) {
@@ -406,7 +406,7 @@ fn pencil_demo_op_fixture_loads() {
             ellipse_zero, ellipse_total
         );
     }
-    fn count_nodes(nodes: &[crate::persistence::NodePayload]) -> usize {
+    fn count_nodes(nodes: &[crate::payload::NodePayload]) -> usize {
         nodes.iter().map(|n| 1 + count_nodes(&n.children)).sum()
     }
 }

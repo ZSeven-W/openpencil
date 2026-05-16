@@ -15,11 +15,7 @@ mod export_pdf;
 mod frame;
 mod mcp_serve;
 mod model_discovery;
-mod pen_doc_adapter;
-mod pen_doc_path_bounds;
 mod persistence;
-mod persistence_effects;
-mod persistence_variables;
 mod settings_io;
 
 use openpencil_shell_native::{
