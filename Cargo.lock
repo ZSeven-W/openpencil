@@ -2281,6 +2281,7 @@ dependencies = [
  "glam",
  "jian-core",
  "jian-ops-schema",
+ "op-i18n",
 ]
 
 [[package]]

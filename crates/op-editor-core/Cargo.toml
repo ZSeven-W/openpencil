@@ -10,6 +10,11 @@ description = "OpenPencil editor state — selection/tool/history/viewport on ji
 jian-ops-schema = { path = "../../vendor/jian/crates/jian-ops-schema" }
 jian-core = { path = "../../vendor/jian/crates/jian-core" }
 
+# Locale enum for the chrome UI state (ui_chrome.rs). op-i18n is
+# dependency-free + wasm32-clean, so it doesn't compromise the
+# wasm-clean invariant of op-editor-core.
+op-i18n = { path = "../op-i18n" }
+
 # render_backend.rs uses glam::Vec2 as Point2D (spec §5.2). Pinned to the
 # same version openpencil-shell-core uses so both crates resolve one glam.
 glam = { version = "0.29", default-features = false, features = ["std"] }
