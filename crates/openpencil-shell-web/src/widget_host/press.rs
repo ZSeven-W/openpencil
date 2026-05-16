@@ -271,7 +271,7 @@ impl WidgetHost {
         // 0c. PropertyPanel button / checkbox — flex modes + size
         //     flags. Runs AFTER locale picker + TopBar so the
         //     dropdown overlays still win.
-        if let Some(panel) = PropertyPanel::for_selection(&self.paint_doc) {
+        if let Some(panel) = PropertyPanel::for_selection(&self.editor_state) {
             let property_rect = Rect {
                 origin: Point2D::new(
                     viewport_width - self.editor_state.editor_ui.property_panel_width,

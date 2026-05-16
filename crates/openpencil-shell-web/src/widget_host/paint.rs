@@ -104,7 +104,7 @@ impl WidgetHost {
             layer_panel.paint(&mut cx, layer_panel_rect);
         }
 
-        let property_panel = PropertyPanel::for_selection(doc);
+        let property_panel = PropertyPanel::for_selection(&self.editor_state);
         if let Some(panel) = property_panel.as_ref() {
             let property_rect = Rect {
                 origin: Point2D::new(

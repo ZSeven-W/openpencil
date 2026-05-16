@@ -366,7 +366,7 @@ impl WidgetHostNative {
         // 0c0. Fill-type picker — outside-click dismiss.
         if self.editor_state.editor_ui.fill_type_picker_open {
             self.refresh_paint_doc();
-            if let Some(panel) = PropertyPanel::for_selection(&self.paint_doc) {
+            if let Some(panel) = PropertyPanel::for_selection(&self.editor_state) {
                 let property_rect = Rect {
                     origin: Point2D::new(
                         viewport_width - self.editor_state.editor_ui.property_panel_width,
@@ -402,7 +402,7 @@ impl WidgetHostNative {
 
         // 0c. PropertyPanel input row.
         self.refresh_paint_doc();
-        if let Some(panel) = PropertyPanel::for_selection(&self.paint_doc) {
+        if let Some(panel) = PropertyPanel::for_selection(&self.editor_state) {
             let property_rect = Rect {
                 origin: Point2D::new(
                     viewport_width - self.editor_state.editor_ui.property_panel_width,

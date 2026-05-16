@@ -98,7 +98,7 @@ impl WidgetHostNative {
         }
 
         // 4. PropertyPanel — only when selection.
-        let property_panel = PropertyPanel::for_selection_at(doc, self.now_ms);
+        let property_panel = PropertyPanel::for_selection_at(&self.editor_state, self.now_ms);
         let has_property = property_panel.is_some();
         let property_panel_width = doc.ui.property_panel_width;
         let right_rail_x = viewport_width - property_panel_width;
