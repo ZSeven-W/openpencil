@@ -467,7 +467,6 @@ bun run cargo:deny        # cargo-deny (native + wasm32 bans; CI uses cargo-deny
 | openpencil-shell-web    | Browser runner (wasm32 + skia-safe-op fork)      | ✅                       |
 | openpencil-shell-native | Native lib (WidgetHostNative + NativeBackend)    | ❌ (compile_error guard) |
 | openpencil-desktop      | Desktop binary (winit + skia-safe GL surface)    | ❌ (native only)         |
-| anthropic-agent-sdk     | Vendored Claude Code CLI SDK (streaming, MCP)    | ❌ (native only)         |
 | wasm-libc-shim          | libc / libm / libcxx shim for wasm32 skia bundle | ✅                       |
 
 **Submodule:** `vendor/agent` → `github.com/ZSeven-W/agent-rs` (cross-product Rust agent runtime).

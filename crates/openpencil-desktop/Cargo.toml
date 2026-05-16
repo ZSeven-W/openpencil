@@ -78,11 +78,11 @@ dirs = "5"
 # workspace rust-toolchain bumps.
 agent = { path = "../../../agent-rs/crates/agent", default-features = false }
 # Forked from bartolli/anthropic-agent-sdk — lives under
-# `crates/anthropic-agent-sdk/` so OP owns the source and can diverge
+# `vendor/anthropic-agent-sdk/` so OP owns the source and can diverge
 # from upstream. Provides the Claude Code CLI subprocess transport +
 # stream-json message parser that `src/chat_claude.rs` wraps as a
 # `ChatProvider`. Default features (no rmcp) keep the dep set tight.
-anthropic-agent-sdk = { path = "../anthropic-agent-sdk" }
+anthropic-agent-sdk = { path = "../../vendor/anthropic-agent-sdk" }
 # Official GitHub Copilot CLI SDK (github/copilot-sdk). Replaces
 # the former in-workspace fork. Drives the Copilot chat bridge in
 # `src/chat_copilot.rs` over the CLI's `--server --stdio` JSON-RPC
