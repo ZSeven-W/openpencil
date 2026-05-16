@@ -182,7 +182,6 @@ fn build_command(binary: &str, args: &[String]) -> Command {
         if has_path_sep || looks_like_exe {
             let mut cmd = Command::new(binary);
             cmd.args(args);
-            use std::os::windows::process::CommandExt;
             cmd.creation_flags(CREATE_NO_WINDOW);
             cmd
         } else {
@@ -190,7 +189,6 @@ fn build_command(binary: &str, args: &[String]) -> Command {
             // expansion kicks in. /c runs the command and exits.
             let mut cmd = Command::new("cmd");
             cmd.arg("/c").arg(binary).args(args);
-            use std::os::windows::process::CommandExt;
             cmd.creation_flags(CREATE_NO_WINDOW);
             cmd
         }

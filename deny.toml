@@ -51,9 +51,10 @@ deny = [
   "native-tls",
 ]
 
-[[bans.features]]
-crate = "tokio"
-deny = ["process", "rt-multi-thread"]
+# 不再禁用 tokio 的 process / rt-multi-thread feature：op-host-desktop
+# 的原生 agent runtime（async）合法地需要它们。wasm 侧结构性安全——
+# 这两个 feature 依赖 OS 线程/进程，无法编译到 wasm32——并由
+# tools/check-wasm-bundle.sh 验证。
 
 [sources]
 unknown-registry = "deny"
