@@ -1,0 +1,35 @@
+[package]
+name = "op-app"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "OpenPencil composition root — re-exports the platform host entry points (op-host-native / op-host-web) and documents the editor app composition"
+
+[lib]
+name = "op_app"
+path = "src/lib.rs"
+
+# Phase 7.3 reorg: op-app is the thin composition root. The editor-UI
+# composition itself (which widgets, the layout) already lives in the
+# op-editor-ui crate, so there is no shared host bootstrap to host
+# here today — op-app only re-exports the per-platform host entry
+# points behind their target cfg. It deliberately stays thin (YAGNI):
+# if real cross-host wiring later emerges, it lands here.
+
+# The platform-agnostic editor-UI composition. Wasm-clean and already
+# a transitive dep of both hosts, so this direct edge costs nothing.
+[dependencies]
+op-editor-ui = { path = "../op-editor-ui" }
+
+# Native host (winit + skia-safe + accesskit) — desktop + mobile, NOT
+# wasm. Mirrors op-host-native's own target gate so op-app stays
+# wasm32-clean and mobile-checkable.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+op-host-native = { path = "../op-host-native", version = "0.1.0" }
+
+# Web host (wasm32-unknown-unknown bundle entry). Only resolved on
+# the wasm32 target where op-host-web's cdylib / wasm-bindgen setup
+# applies.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+op-host-web = { path = "../op-host-web", version = "0.1.0" }

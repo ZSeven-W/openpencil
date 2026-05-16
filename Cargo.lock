@@ -2279,6 +2279,15 @@ name = "op-ai"
 version = "0.1.0"
 
 [[package]]
+name = "op-app"
+version = "0.1.0"
+dependencies = [
+ "op-editor-ui",
+ "op-host-native",
+ "op-host-web",
+]
+
+[[package]]
 name = "op-codegen"
 version = "0.1.0"
 dependencies = [
