@@ -20,6 +20,11 @@ jian-skia = { path = "../../vendor/jian/crates/jian-skia", features = ["textlayo
 # `Document` / `Node` / `VariableTable` etc. — the shell-core model
 # this crate converts INTO.
 openpencil-shell-core = { path = "../openpencil-shell-core", version = "0.1.0" }
+# `EditorState` — the canonical editor-state superset this crate
+# derives a paint-only `Document` (incl. its `var_table`) FROM. Lives
+# in op-pen-loader, NOT op-editor-core, so op-editor-core stays free of
+# any shell-core (`VariableTable`) dependency and wasm-clean.
+op-editor-core = { path = "../op-editor-core" }
 # Payload DTOs round-trip through serde JSON.
 serde = { workspace = true }
 serde_json = { workspace = true }

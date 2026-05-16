@@ -2295,6 +2295,7 @@ dependencies = [
  "jian-core",
  "jian-ops-schema",
  "jian-skia",
+ "op-editor-core",
  "openpencil-shell-core",
  "serde",
  "serde_json",

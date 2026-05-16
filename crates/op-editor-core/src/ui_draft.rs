@@ -96,6 +96,14 @@ pub struct ColorPickerState {
     /// Viewport-y of the click that opened the picker — anchors the
     /// floating panel.
     pub anchor_y: f32,
+    /// When `Some(name)`, the picker edits the named Color **variable**
+    /// instead of the selected node's fill / stroke. The commit path
+    /// (`color_picker_set_hsv`) then routes through
+    /// [`crate::state::EditorState::set_variable_color`]. `target` is
+    /// unused on the variable path but still carries a sane default for
+    /// any code that pattern-matches on it without checking `variable`.
+    /// Ported from shell-core's `ColorPickerState::variable`.
+    pub variable: Option<String>,
 }
 
 /// Transient variable/theme editor state (spec §5.2).

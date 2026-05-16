@@ -441,6 +441,39 @@ mod tests {
     }
 
     #[test]
+    fn undo_of_variable_create_removes_it() {
+        // Gap 3: `EditorSnapshot` clones the whole `PenDocument`
+        // (variables included), so a variable create/delete/rename
+        // undoes for free — no separate `var_table` snapshot needed.
+        let mut s = state_with(vec![]);
+        s.commit_history(); // capture the pre-create state
+        assert!(s.create_variable("brand", VariableKind::Color, VariableScalar::Str("#ff0000".into())));
+        assert!(s.find_variable("brand").is_some());
+        assert!(s.undo(), "undo must pop the pre-create snapshot");
+        assert!(s.find_variable("brand").is_none(), "undo removes the variable");
+        // Redo brings it back.
+        assert!(s.redo());
+        assert!(s.find_variable("brand").is_some());
+    }
+
+    #[test]
+    fn undo_of_variable_delete_and_rename_round_trips() {
+        let mut s = doc_with_color_var("brand", "#ff8800");
+        // Delete under history.
+        s.commit_history();
+        assert!(s.delete_variable("brand"));
+        assert!(s.find_variable("brand").is_none());
+        assert!(s.undo());
+        assert!(s.find_variable("brand").is_some(), "undo restores deleted var");
+        // Rename under history.
+        s.commit_history();
+        assert!(s.rename_variable("brand", "primary"));
+        assert!(s.undo());
+        assert!(s.find_variable("brand").is_some(), "undo restores old name");
+        assert!(s.find_variable("primary").is_none());
+    }
+
+    #[test]
     fn themed_write_targets_active_theme_entry() {
         let mut s = state_with(vec![]);
         let mut themes = BTreeMap::new();
