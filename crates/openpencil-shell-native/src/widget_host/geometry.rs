@@ -77,7 +77,7 @@ impl WidgetHostNative {
                 origin: Point2D::new(0.0, TOP_BAR_HEIGHT),
                 size: Point2D::new(panel_w, (viewport_h - TOP_BAR_HEIGHT).max(0.0)),
             };
-            let panel = LayerPanel::from_document(&self.paint_doc);
+            let panel = LayerPanel::from_editor(&self.editor_state);
             match panel.hit_test(layer_rect, Point2D::new(x, y)) {
                 Some(LayerPanelHit::Layer(id))
                 | Some(LayerPanelHit::ToggleHidden(id))

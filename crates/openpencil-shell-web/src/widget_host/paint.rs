@@ -71,7 +71,10 @@ impl WidgetHost {
                 ),
             };
             // While a drag is active, paint against a panel with the
-            // source's subtree excluded — see native paint.rs.
+            // source's subtree excluded — see native paint.rs. The
+            // panel walks the canonical `PenNode` tree off
+            // `EditorState`; the drag source id is shell-core's
+            // `NodeId` from the input path, losslessly accepted.
             let active_drag = self.layer_drag.clone().filter(|d| {
                 d.active
                     && doc
@@ -80,14 +83,14 @@ impl WidgetHost {
                         .unwrap_or(false)
             });
             let mut layer_panel = if let Some(d) = &active_drag {
-                LayerPanel::from_document_with_drag_source(doc, d.source.clone())
+                LayerPanel::from_editor_with_drag_source(&self.editor_state, &d.source)
             } else {
-                LayerPanel::from_document(doc)
+                LayerPanel::from_editor(&self.editor_state)
             };
             if let Some(d) = &active_drag {
                 layer_panel.drop_target = layer_panel
                     .drop_target_at(layer_panel_rect, Point2D::new(d.current_x, d.current_y));
-                if let Some(item) = LayerPanel::ghost_item_for(doc, d.source.clone()) {
+                if let Some(item) = LayerPanel::ghost_item_for(&self.editor_state, &d.source) {
                     layer_panel.drag_ghost = Some((item, d.current_y));
                 }
             }

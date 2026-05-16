@@ -1,39 +1,34 @@
 //! `LayerPanel` — left-rail document tree (Pages + Layers sections).
+//!
+//! Phase 6 migration: the panel's display model (page rows + the
+//! depth-flattened layer rows) is built directly from
+//! `op_editor_core::EditorState` — it walks the canonical `PenNode`
+//! tree on `EditorState.doc`. The widget keeps a shell-core
+//! `document::NodeId` in its hit-test surface so the hosts'
+//! `&Document`-bound input path is untouched.
 
-use crate::document::{Document, NodeId};
+use crate::document::NodeId;
 use crate::theme::Theme;
+use crate::widgets::editor_state_ext::theme_for;
 use crate::widgets::icons::{draw_icon, Icon};
-use crate::widgets::layer_panel_walkers::{icon_for_kind, walk, walk_excluding};
+use crate::widgets::layer_panel_walkers::{
+    apply_layer_rename, icon_for_node, kind_label, pages_from_state, walk, walk_excluding,
+    RenameView, WalkCx,
+};
 use crate::widgets::{LayoutBox, LayoutCx, PaintCx, Widget, WidgetId};
 use crate::{Color, Point2D, Rect, TextLayout};
+
+use jian_ops_schema::node::PenNode;
+use op_editor_core::editor_ui_state::EditorUiState;
+use op_editor_core::pen_node_ext::PenNodeExt;
+use op_editor_core::EditorState;
 
 /// Outer panel width; host layout uses this.
 pub const LAYER_PANEL_WIDTH: f32 = 240.0;
 
-/// Rename draft for the given page index, when one is active.
-fn rename_override_page(doc: &Document, idx: usize) -> Option<String> {
-    use crate::document::LayerContextTarget;
-    doc.ui.layer_rename.as_ref().and_then(|s| match &s.target {
-        LayerContextTarget::Page(i) if *i == idx => Some(s.draft.clone()),
-        _ => None,
-    })
-}
-
-/// Rename draft for the given layer id, when one is active.
-fn rename_override_layer(doc: &Document, id: &NodeId) -> Option<String> {
-    use crate::document::LayerContextTarget;
-    doc.ui.layer_rename.as_ref().and_then(|s| match &s.target {
-        LayerContextTarget::Layer(i) if i == id => Some(s.draft.clone()),
-        _ => None,
-    })
-}
-
-fn rename_is_page(doc: &Document, idx: usize) -> bool {
-    use crate::document::LayerContextTarget;
-    matches!(
-        doc.ui.layer_rename.as_ref().map(|s| &s.target),
-        Some(LayerContextTarget::Page(i)) if *i == idx
-    )
+/// Translate a chrome string key against the active editor locale.
+fn t(ui: &EditorUiState, key: &'static str) -> &'static str {
+    crate::widgets::editor_state_ext::translate(ui, key)
 }
 
 pub(crate) const SECTION_HEADER_HEIGHT: f32 = 28.0;
@@ -91,38 +86,24 @@ pub struct LayerPanel {
 }
 
 impl LayerPanel {
-    pub fn from_document(doc: &Document) -> Self {
-        let pages = doc
-            .pages
-            .iter()
-            .enumerate()
-            .map(|(i, p)| PageItem {
-                page_index: i,
-                label: rename_override_page(doc, i).unwrap_or_else(|| p.name.clone()),
-                active: i == doc.active_page_index,
-                hovered: doc.ui.hovered_page_index == Some(i),
-                renaming: rename_is_page(doc, i),
-            })
-            .collect();
+    /// Build the panel from the editor state — walks the canonical
+    /// `PenNode` tree on the active page.
+    pub fn from_editor(state: &EditorState) -> Self {
+        let rename = RenameView::from_state(state);
+        let pages = pages_from_state(state, &rename);
+        let cx = WalkCx::from_state(state);
         let mut items = Vec::new();
-        if let Some(page) = doc.active_page() {
-            for child in &page.children {
-                walk(child, &doc.selected, doc.ui.hovered_layer_id.as_ref(), 0, &mut items);
-            }
+        for child in state.active_children() {
+            walk(child, &cx, 0, &mut items);
         }
-        for item in &mut items {
-            if let Some(draft) = rename_override_layer(doc, &item.node_id) {
-                item.label = draft;
-                item.renaming = true;
-            }
-        }
+        apply_layer_rename(&mut items, &rename);
         Self {
             id: WidgetId::new(1000),
             pages,
             items,
-            theme: doc.theme(),
-            pages_label: doc.t("pages.title"),
-            layers_label: doc.t("layers.title"),
+            theme: theme_for(&state.editor_ui),
+            pages_label: t(&state.editor_ui, "pages.title"),
+            layers_label: t(&state.editor_ui, "layers.title"),
             drop_target: None,
             drag_ghost: None,
             now_ms: 0,
@@ -133,24 +114,23 @@ impl LayerPanel {
     /// Floating ghost row for the dragged source — host paints it
     /// at the cursor's y. None when the source isn't on the
     /// active page.
-    pub fn ghost_item_for(doc: &Document, source: NodeId) -> Option<LayerItem> {
-        let node = doc.active_page()?.find(&source)?;
+    pub fn ghost_item_for(state: &EditorState, source: &NodeId) -> Option<LayerItem> {
+        let canon = op_editor_core::NodeId::new(source.raw().to_string());
+        let node = op_editor_core::walkers::find_node(state.active_children(), &canon)?;
+        let base = node.base();
         Some(LayerItem {
-            node_id: node.id.clone(),
-            label: node.name.clone(),
-            kind_label: node.kind.label().to_string(),
-            icon: icon_for_kind(&node.kind),
+            node_id: source.clone(),
+            label: base.name.clone().unwrap_or_default(),
+            kind_label: kind_label(node).to_string(),
+            icon: icon_for_node(node),
             depth: 0,
             selected: false,
-            has_children: !node.children.is_empty(),
-            hidden: node.hidden,
-            locked: node.locked,
-            collapsed: node.collapsed,
+            has_children: node.children().map(|c| !c.is_empty()).unwrap_or(false),
+            hidden: base.visible == Some(false),
+            locked: base.locked.unwrap_or(false),
+            collapsed: state.editor_ui.collapsed_layers.contains(&canon),
             hovered: false,
-            is_container: matches!(
-                node.kind,
-                crate::document::NodeKind::Frame | crate::document::NodeKind::Group
-            ),
+            is_container: matches!(node, PenNode::Frame(_) | PenNode::Group(_)),
             renaming: false,
         })
     }
@@ -159,38 +139,22 @@ impl LayerPanel {
     /// dragged source's subtree, mirroring the post-commit layout
     /// so `drop_target_at` returns y values that match where the
     /// source lands after reorder.
-    pub fn from_document_with_drag_source(doc: &Document, drag_source: NodeId) -> Self {
-        let pages = doc
-            .pages
-            .iter()
-            .enumerate()
-            .map(|(i, p)| PageItem {
-                page_index: i,
-                label: rename_override_page(doc, i).unwrap_or_else(|| p.name.clone()),
-                active: i == doc.active_page_index,
-                hovered: doc.ui.hovered_page_index == Some(i),
-                renaming: rename_is_page(doc, i),
-            })
-            .collect();
+    pub fn from_editor_with_drag_source(state: &EditorState, drag_source: &NodeId) -> Self {
+        let rename = RenameView::from_state(state);
+        let pages = pages_from_state(state, &rename);
+        let cx = WalkCx::from_state(state);
         let mut items = Vec::new();
-        if let Some(page) = doc.active_page() {
-            for child in &page.children {
-                walk_excluding(                    child,
-                    &doc.selected,
-                    doc.ui.hovered_layer_id.as_ref(),
-                    &drag_source,
-                    0,
-                    &mut items,
-                );
-            }
+        for child in state.active_children() {
+            walk_excluding(child, &cx, drag_source, 0, &mut items);
         }
+        apply_layer_rename(&mut items, &rename);
         Self {
             id: WidgetId::new(1000),
             pages,
             items,
-            theme: doc.theme(),
-            pages_label: doc.t("pages.title"),
-            layers_label: doc.t("layers.title"),
+            theme: theme_for(&state.editor_ui),
+            pages_label: t(&state.editor_ui, "pages.title"),
+            layers_label: t(&state.editor_ui, "layers.title"),
             drop_target: None,
             drag_ghost: None,
             now_ms: 0,

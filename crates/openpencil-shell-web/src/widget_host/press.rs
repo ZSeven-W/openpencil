@@ -84,7 +84,7 @@ impl WidgetHost {
         use op_editor_core::ui_draft::LayerContextTarget;
         self.refresh_paint_doc();
         let layer_rect = self.layer_panel_rect(viewport_h);
-        let panel = LayerPanel::from_document(&self.paint_doc);
+        let panel = LayerPanel::from_editor(&self.editor_state);
         match panel.hit_test(layer_rect, Point2D::new(x, y)) {
             Some(LayerPanelHit::Layer(id)) => {
                 let ec_id = op_pen_loader::rev::node_id(&id);
@@ -355,7 +355,7 @@ impl WidgetHost {
         //    promotes the gesture to a drag-to-reorder.
         if self.editor_state.editor_ui.sidebar_open {
             let layer_rect = self.layer_panel_rect(viewport_height);
-            let panel = LayerPanel::from_document(&self.paint_doc);
+            let panel = LayerPanel::from_editor(&self.editor_state);
             if let Some(LayerPanelHit::Layer(node_id)) =
                 panel.hit_test(layer_rect, Point2D::new(x, y))
             {
@@ -564,7 +564,7 @@ impl WidgetHost {
             return was_focused;
         }
         let layer_rect = self.layer_panel_rect(viewport_h);
-        let panel = LayerPanel::from_document(&self.paint_doc);
+        let panel = LayerPanel::from_editor(&self.editor_state);
         if let Some(hit) = panel.hit_test(layer_rect, Point2D::new(x, y)) {
             match hit {
                 LayerPanelHit::Page(idx) => {

@@ -94,7 +94,7 @@ impl WidgetHostNative {
                 (viewport_h - TOP_BAR_HEIGHT).max(0.0),
             ),
         };
-        let panel = LayerPanel::from_document(&self.paint_doc);
+        let panel = LayerPanel::from_editor(&self.editor_state);
         match panel.hit_test(layer_rect, Point2D::new(x, y)) {
             Some(LayerPanelHit::Layer(id)) => {
                 let ec_id = op_pen_loader::rev::node_id(&id);
@@ -533,7 +533,7 @@ impl WidgetHostNative {
                     (viewport_height - TOP_BAR_HEIGHT).max(0.0),
                 ),
             };
-            let panel = LayerPanel::from_document(&self.paint_doc);
+            let panel = LayerPanel::from_editor(&self.editor_state);
             if let Some(LayerPanelHit::Layer(node_id)) =
                 panel.hit_test(layer_rect, Point2D::new(x, y))
             {
