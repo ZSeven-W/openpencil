@@ -29,7 +29,7 @@ use std::io::{BufRead, BufReader, BufWriter, Write};
 use std::path::PathBuf;
 
 use op_editor_core::EditorState;
-use openpencil_shell_core::mcp::{
+use op_mcp::{
     batch_design_snapshot, copy_node_snapshot, delete_node_snapshot,
     design_content_snapshot, design_refine_snapshot, design_skeleton_snapshot,
     add_page_snapshot, clear_selection_snapshot, create_component_snapshot,

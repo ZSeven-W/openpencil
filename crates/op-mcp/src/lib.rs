@@ -8,10 +8,7 @@
 //! `op_editor_core::EditorState` / `op_editor_core::EditorCommand`.
 //! Read tools now snapshot an `EditorState` (canonical `PenDocument`);
 //! write tools emit an `op_editor_core::EditorCommand` the host applies
-//! via `EditorState::apply`. The module physically still lives inside
-//! `openpencil-shell-core` — an `op-mcp` crate extraction is a later
-//! Phase-7 task. shell-core's own `Document` (used by the widgets) is
-//! untouched.
+//! via `EditorState::apply`.
 //!
 //! ## Component-command gap
 //!
@@ -47,6 +44,9 @@ pub mod selected_ops_tools;
 #[cfg(test)] mod replace_node_tests;
 #[cfg(test)] mod batch_design_tests;
 #[cfg(test)] mod scalar_vars_tests;
+// Cross-cutting tests for the crate spine — stdio dispatch + parser
+// invariants + a few read-tool registry round-trips.
+#[cfg(test)] mod mcp_tests;
 
 // The MCP command DTO is now `op_editor_core::EditorCommand` — the
 // faithful port of the old shell-core `McpCommand`. Re-exported here

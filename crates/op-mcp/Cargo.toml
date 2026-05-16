@@ -1,0 +1,15 @@
+[package]
+name = "op-mcp"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "OpenPencil MCP server — JSON-RPC tool registry over op-editor-core EditorState / EditorCommand"
+
+[lib]
+name = "op_mcp"
+path = "src/lib.rs"
+
+[dependencies]
+jian-ops-schema = { path = "../../vendor/jian/crates/jian-ops-schema" }
+op-editor-core = { path = "../op-editor-core" }
