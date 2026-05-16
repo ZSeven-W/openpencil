@@ -10,20 +10,20 @@
 //! widget hit-test results before feeding `EditorState`
 //! mutators.
 
-use openpencil_shell_core::widgets::{
+use op_editor_ui::widgets::{
     AIChatHit, AIChatPlaceholder, LayerPanel, LayerPanelHit, LocalePicker, PropertyPanel, Toolbar,
     TopBar, TopBarHit, TOP_BAR_HEIGHT,
 };
-use openpencil_shell_core::{Point2D, Rect};
+use op_editor_ui::{Point2D, Rect};
 
 use super::{rect_contains, ChatDragState, DragState, LayerDragState, MarqueeDragState, WidgetHost};
 
 impl WidgetHost {
     fn apply_property_action(
         &mut self,
-        action: openpencil_shell_core::widgets::PropertyPanelAction,
+        action: op_editor_ui::widgets::PropertyPanelAction,
     ) {
-        use openpencil_shell_core::widgets::PropertyPanelAction as A;
+        use op_editor_ui::widgets::PropertyPanelAction as A;
         match action {
             A::SetFlexLayout(mode) => {
                 self.editor_state.editor_ui.flex_layout =
@@ -119,11 +119,11 @@ impl WidgetHost {
 
     fn dispatch_layer_context_action(
         &mut self,
-        action: openpencil_shell_core::widgets::layer_context_menu::LayerContextAction,
+        action: op_editor_ui::widgets::layer_context_menu::LayerContextAction,
         target: op_editor_core::ui_draft::LayerContextTarget,
     ) {
         use op_editor_core::ui_draft::LayerContextTarget as T;
-        use openpencil_shell_core::widgets::layer_context_menu::LayerContextAction as A;
+        use op_editor_ui::widgets::layer_context_menu::LayerContextAction as A;
         match (action, target) {
             (A::Duplicate, T::Layer(id)) => {
                 self.editor_state.set_single_selection(id);
@@ -200,7 +200,7 @@ impl WidgetHost {
         }
         // 0. Layer context menu — top-most overlay when open.
         if let Some(state) = self.editor_state.editor_ui.layer_context_menu.clone() {
-            use openpencil_shell_core::widgets::layer_context_menu::LayerContextMenu;
+            use op_editor_ui::widgets::layer_context_menu::LayerContextMenu;
             let menu = LayerContextMenu::for_state(&self.editor_state, state.clone());
             if let Some(action) = menu.hit_test(Point2D::new(x, y)) {
                 self.dispatch_layer_context_action(action, state.target);
@@ -319,14 +319,14 @@ impl WidgetHost {
         if rect_contains(toolbar_rect, Point2D::new(x, y)) {
             if let Some(hit) = toolbar.hit_test(toolbar_rect, Point2D::new(x, y)) {
                 match hit {
-                    openpencil_shell_core::widgets::ToolbarHit::Tool(tool) => {
+                    op_editor_ui::widgets::ToolbarHit::Tool(tool) => {
                         self.editor_state.tool = tool;
                         self.editor_state.editor_ui.shape_picker_open = false;
                         self.mark_dirty();
                         return true;
                     }
-                    openpencil_shell_core::widgets::ToolbarHit::Action(action) => {
-                        use openpencil_shell_core::widgets::ToolbarAction;
+                    op_editor_ui::widgets::ToolbarHit::Action(action) => {
+                        use op_editor_ui::widgets::ToolbarAction;
                         self.editor_state.editor_ui.shape_picker_open = false;
                         let acted = match action {
                             ToolbarAction::Undo => self.editor_state.undo(),
@@ -338,7 +338,7 @@ impl WidgetHost {
                         }
                         return acted || rename_committed;
                     }
-                    openpencil_shell_core::widgets::ToolbarHit::ToggleShapePicker => {
+                    op_editor_ui::widgets::ToolbarHit::ToggleShapePicker => {
                         let v = &mut self.editor_state.editor_ui.shape_picker_open;
                         *v = !*v;
                         self.mark_dirty();
@@ -373,9 +373,9 @@ impl WidgetHost {
         //      so the visible button always wins over a layer row
         //      that happens to share screen y (matches native order).
         {
-            use openpencil_shell_core::widgets::AlignToolbar;
+            use op_editor_ui::widgets::AlignToolbar;
             let (acx, _, acw, ach) = self.canvas_region(viewport_width, viewport_height);
-            let canvas_region = openpencil_shell_core::Rect {
+            let canvas_region = op_editor_ui::Rect {
                 origin: Point2D::new(acx, TOP_BAR_HEIGHT),
                 size: Point2D::new(acw, ach),
             };
@@ -537,13 +537,13 @@ impl WidgetHost {
         let toolbar = Toolbar::for_editor(&self.editor_state);
         if let Some(hit) = toolbar.hit_test(toolbar_rect, Point2D::new(x, y)) {
             match hit {
-                openpencil_shell_core::widgets::ToolbarHit::Tool(tool) => {
+                op_editor_ui::widgets::ToolbarHit::Tool(tool) => {
                     self.editor_state.tool = tool;
                     self.mark_dirty();
                     return true;
                 }
-                openpencil_shell_core::widgets::ToolbarHit::Action(action) => {
-                    use openpencil_shell_core::widgets::ToolbarAction;
+                op_editor_ui::widgets::ToolbarHit::Action(action) => {
+                    use op_editor_ui::widgets::ToolbarAction;
                     let acted = match action {
                         ToolbarAction::Undo => self.editor_state.undo(),
                         ToolbarAction::Redo => self.editor_state.redo(),
@@ -554,7 +554,7 @@ impl WidgetHost {
                     }
                     return acted;
                 }
-                openpencil_shell_core::widgets::ToolbarHit::ToggleShapePicker => {
+                op_editor_ui::widgets::ToolbarHit::ToggleShapePicker => {
                     let v = &mut self.editor_state.editor_ui.shape_picker_open;
                     *v = !*v;
                     self.mark_dirty();
@@ -623,7 +623,7 @@ impl WidgetHost {
     /// Cmd+, settings modal — dispatch hit-tests on the modal.
     /// Returns true once the modal swallowed the press.
     fn dispatch_agent_settings_press(&mut self, x: f32, y: f32, vw: f32, vh: f32) -> bool {
-        use openpencil_shell_core::widgets::agent_settings_panel::{
+        use op_editor_ui::widgets::agent_settings_panel::{
             AgentSettingsHit, AgentSettingsPanel,
         };
         self.refresh_layout_scene();

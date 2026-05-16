@@ -2318,6 +2318,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "op-host-web"
+version = "0.1.0"
+dependencies = [
+ "accesskit",
+ "console_error_panic_hook",
+ "jian-core",
+ "js-sys",
+ "op-editor-core",
+ "op-editor-ui",
+ "op-pen-loader",
+ "skia-safe",
+ "wasm-bindgen",
+ "wasm-libc-shim",
+ "web-sys",
+]
+
+[[package]]
 name = "op-i18n"
 version = "0.1.0"
 
@@ -2405,23 +2422,6 @@ dependencies = [
  "tracing",
  "tracing-test",
  "winit",
-]
-
-[[package]]
-name = "openpencil-shell-web"
-version = "0.1.0"
-dependencies = [
- "accesskit",
- "console_error_panic_hook",
- "jian-core",
- "js-sys",
- "op-editor-core",
- "op-pen-loader",
- "openpencil-shell-core",
- "skia-safe",
- "wasm-bindgen",
- "wasm-libc-shim",
- "web-sys",
 ]
 
 [[package]]

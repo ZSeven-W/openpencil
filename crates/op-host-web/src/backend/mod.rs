@@ -14,7 +14,7 @@
 
 pub mod skia_wasm;
 
-use openpencil_shell_core::{Color, Point2D, Rect, RenderBackend, TextLayout};
+use op_editor_ui::{Color, Point2D, Rect, RenderBackend, TextLayout};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::Clamped;
 use wasm_bindgen::JsCast;

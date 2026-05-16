@@ -7,10 +7,10 @@
 //! panics, which is exactly why the mapper itself takes `timestamp`
 //! as a parameter (the C2 listener supplies a polyfill).
 
-use openpencil_shell_core::{
+use op_editor_ui::{
     ImeKind, KeyCode, KeyLocation, KeyState, KeyValue, Modifiers, NamedKey, ScrollMode,
 };
-use openpencil_shell_web::event::{
+use op_host_web::event::{
     focus::map_focus,
     ime::{composition_end, composition_start, composition_update, utf16_selection_to_utf8},
     keyboard::map_keyboard_parts,
@@ -128,7 +128,7 @@ fn keyboard_navigation_keys_mapped() {
 
 #[test]
 fn keyboard_function_keys_mapped() {
-    use openpencil_shell_core::NamedKey::*;
+    use op_editor_ui::NamedKey::*;
     for (k, expected) in [
         ("F1", F1),
         ("F2", F2),

@@ -10,12 +10,12 @@
 
 use super::WidgetHost;
 use crate::backend::WebBackend;
-use openpencil_shell_core::widgets::{
+use op_editor_ui::widgets::{
     AIChatPlaceholder, CanvasViewport, LayerPanel, LayoutCx, LocalePicker, PaintCx, PropertyPanel,
     StatusBar, Toolbar, TopBar, Widget, STATUS_BAR_HEIGHT, STATUS_BAR_WIDTH, TOOLBAR_WIDTH,
     TOP_BAR_HEIGHT,
 };
-use openpencil_shell_core::{Point2D, Rect, RenderBackend};
+use op_editor_ui::{Point2D, Rect, RenderBackend};
 
 use super::{STATUS_INSET, TOOLBAR_INSET_X, TOOLBAR_INSET_Y};
 
@@ -192,7 +192,7 @@ impl WidgetHost {
         // nodes are selected. Sits above the canvas but below
         // marquee / pickers / modals.
         {
-            use openpencil_shell_core::widgets::AlignToolbar;
+            use op_editor_ui::widgets::AlignToolbar;
             let canvas_region = Rect {
                 origin: Point2D::new(canvas_left, TOP_BAR_HEIGHT),
                 size: Point2D::new(canvas_w, canvas_h),
@@ -220,7 +220,7 @@ impl WidgetHost {
                     size: Point2D::new(w, h),
                 };
                 let primary = self.theme.primary;
-                let fill = openpencil_shell_core::Color {
+                let fill = op_editor_ui::Color {
                     r: primary.r,
                     g: primary.g,
                     b: primary.b,
@@ -242,7 +242,7 @@ impl WidgetHost {
 
         // Layer context menu — right-click overlay, top of stack.
         if let Some(state) = self.editor_state.editor_ui.layer_context_menu.clone() {
-            use openpencil_shell_core::widgets::layer_context_menu::LayerContextMenu;
+            use op_editor_ui::widgets::layer_context_menu::LayerContextMenu;
             let menu = LayerContextMenu::for_state(&self.editor_state, state);
             let menu_rect = menu.rect();
             let mut cx = PaintCx {
@@ -253,7 +253,7 @@ impl WidgetHost {
 
         // Settings modal — Cmd+, overlay, top-most.
         if ui.agent_settings_open {
-            use openpencil_shell_core::widgets::agent_settings_panel::AgentSettingsPanel;
+            use op_editor_ui::widgets::agent_settings_panel::AgentSettingsPanel;
             let panel = AgentSettingsPanel::for_editor(&self.editor_state);
             let panel_rect = panel.rect(viewport_width, viewport_height);
             // Dim scrim behind the modal so the underlying canvas
@@ -263,7 +263,7 @@ impl WidgetHost {
                     origin: Point2D::new(0.0, 0.0),
                     size: Point2D::new(viewport_width, viewport_height),
                 },
-                openpencil_shell_core::Color {
+                op_editor_ui::Color {
                     r: 0.0,
                     g: 0.0,
                     b: 0.0,

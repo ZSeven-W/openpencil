@@ -18,7 +18,7 @@
 //! only the wheel mapper because that's the cross-axis-translation
 //! piece that benefits from being a pure helper.
 
-use openpencil_shell_core::{Modifiers, ScrollMode, WheelEvent};
+use op_editor_ui::{Modifiers, ScrollMode, WheelEvent};
 use std::time::Instant;
 
 /// Build a Jian `WheelEvent` from the W3C primitives.

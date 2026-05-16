@@ -1,18 +1,21 @@
 [package]
-name = "openpencil-shell-web"
+name = "op-host-web"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
-description = "OpenPencil shell — wasm32-unknown-unknown web bundle entry (Step 1b §1.2, C-hard pipeline)"
+description = "OpenPencil web host — wasm32-unknown-unknown web bundle entry (Step 1b §1.2, C-hard pipeline)"
 
 [lib]
-name = "openpencil_shell_web"
+name = "op_host_web"
 path = "src/lib.rs"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-openpencil-shell-core = { path = "../openpencil-shell-core", version = "0.1.0" }
+# Phase 7.3 reorg: openpencil-shell-core dissolved — widget facade /
+# theme / layout scene / scene vars / render-backend / gesture types
+# all resolve through the op-editor-ui crate.
+op-editor-ui = { path = "../op-editor-ui" }
 # Reorg: the web host owns an `op_editor_core::EditorState` as its
 # single source of truth; `op-pen-loader` bridges it into the
 # read-only paint `Document` the shared widgets consume.

@@ -11,7 +11,7 @@
 //! relatedTarget, looks them up in the host's WidgetId registry,
 //! and calls into here.
 
-use openpencil_shell_core::FocusEvent;
+use op_editor_ui::FocusEvent;
 
 pub fn map_focus(
     gained: bool,
