@@ -1,0 +1,15 @@
+[package]
+name = "op-codegen"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "OpenPencil code generators — emit HTML/Vue/Svelte/React/Flutter/SwiftUI/Compose/RN from a PenDocument"
+
+[lib]
+name = "op_codegen"
+path = "src/lib.rs"
+
+[dependencies]
+jian-ops-schema = { path = "../../vendor/jian/crates/jian-ops-schema" }
+op-editor-core = { path = "../op-editor-core" }

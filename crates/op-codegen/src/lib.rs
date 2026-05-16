@@ -12,6 +12,8 @@
 //! node-accessor helpers, and the test suite; per-framework markup
 //! generators live in the sibling `codegen_targets` module.
 
+mod codegen_targets;
+
 pub use crate::codegen_targets::{
     Compose, Flutter, Html, React, ReactNative, Svelte, SwiftUi, Vue,
 };
