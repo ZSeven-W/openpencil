@@ -370,11 +370,11 @@ impl WidgetHost {
     }
 
     /// Phase C2 IME forwarding stub — Step 5+ wires per-widget focus.
-    pub fn apply_ime(&mut self, _event: &openpencil_shell_core::ImeEvent) { // glue:
+    pub fn apply_ime(&mut self, _event: &op_editor_ui::ImeEvent) { // glue:
     }
 
     /// Phase C2 keyboard forwarding stub.
-    pub fn apply_key(&mut self, _event: &openpencil_shell_core::KeyEvent) { // glue:
+    pub fn apply_key(&mut self, _event: &op_editor_ui::KeyEvent) { // glue:
     }
 
     /// Commit the in-progress settings-modal input draft (currently

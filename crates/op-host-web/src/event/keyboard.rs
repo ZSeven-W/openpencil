@@ -13,7 +13,7 @@
 //! the `is_composing` bool from `KeyboardEvent.isComposing`, then
 //! calls into here.
 
-use openpencil_shell_core::{
+use op_editor_ui::{
     KeyCode, KeyEvent, KeyLocation, KeyState, KeyValue, Modifiers, NamedKey,
 };
 

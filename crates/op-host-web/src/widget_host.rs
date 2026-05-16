@@ -1,5 +1,5 @@
 //! Step 4 widget glue — the only file in shell-web allowed to call
-//! into `openpencil_shell_core::widgets`. All widget logic (state,
+//! into `op_editor_ui::widgets`. All widget logic (state,
 //! paint, layout, accesskit) lives in shell-core; this host is a
 //! thin paint-loop adapter that takes a `&mut WebBackend` and
 //! dispatches to the editor-UI composition.
@@ -32,16 +32,16 @@
 //!                              ↑ RightPanel (only if selection)
 //! ```
 //!
-//! Functions that pull in `openpencil_shell_core::widgets::*` MUST live
+//! Functions that pull in `op_editor_ui::widgets::*` MUST live
 //! in this file (per spec §1.4). Phase B4 boundary check enforces.
 
 use op_editor_core::ChatAnchor;
-use openpencil_shell_core::widgets::{
+use op_editor_ui::widgets::{
     LocalePicker, Toolbar, TopBar, Widget, LayoutCx, AI_CHAT_COLLAPSED_HEIGHT,
     AI_CHAT_COLLAPSED_WIDTH, AI_CHAT_HEIGHT, AI_CHAT_WIDTH, LOCALE_PICKER_WIDTH,
     TOOLBAR_WIDTH, TOP_BAR_HEIGHT,
 };
-use openpencil_shell_core::{Point2D, Rect, Theme};
+use op_editor_ui::{Point2D, Rect, Theme};
 
 mod keyboard;
 mod paint;
@@ -69,7 +69,7 @@ pub struct WidgetHost {
     /// layout-resolved render tree the `CanvasViewport` paints AND
     /// the host's canvas hit-test queries. Rebuilt lazily by
     /// `refresh_layout_scene()` whenever `editor_state_dirty` is set.
-    pub(in crate::widget_host) layout_scene: openpencil_shell_core::layout_scene::LayoutScene,
+    pub(in crate::widget_host) layout_scene: op_editor_ui::layout_scene::LayoutScene,
     /// Set whenever `editor_state` is mutated. Drives the lazy rebuild
     /// of `layout_scene` — `refresh_layout_scene()` rebuilds + clears
     /// the flag, so a sequence of mutations re-derives once.
@@ -296,7 +296,7 @@ impl WidgetHost {
     /// Returns true if hover state changed (caller should
     /// repaint). Mirrors the native host.
     pub fn update_layer_hover(&mut self, x: f32, y: f32, viewport_h: f32) -> bool {
-        use openpencil_shell_core::widgets::{LayerPanel, LayerPanelHit, TOP_BAR_HEIGHT};
+        use op_editor_ui::widgets::{LayerPanel, LayerPanelHit, TOP_BAR_HEIGHT};
         let sidebar_open = self.editor_state.editor_ui.sidebar_open;
         let panel_w = self.editor_state.editor_ui.layer_panel_width;
         let (new_layer, new_page) = if sidebar_open
@@ -344,7 +344,7 @@ impl WidgetHost {
         // current geometry, never a stale snapshot.
         self.refresh_layout_scene();
         if let Some(state) = self.editor_state.editor_ui.layer_context_menu.clone() {
-            use openpencil_shell_core::widgets::layer_context_menu::LayerContextMenu;
+            use op_editor_ui::widgets::layer_context_menu::LayerContextMenu;
             let menu = LayerContextMenu::for_state(&self.editor_state, state.clone());
             let new_hover = menu.hovered_row_at(Point2D::new(x, y)).map(|i| i as u8);
             if new_hover != state.hovered_row {
@@ -404,10 +404,10 @@ impl WidgetHost {
         // branches so an active drag isn't intercepted (codex CONCERN
         // — mirrors native widget_host/input.rs ordering).
         let new_hover = if self.editor_state.selection_count() >= 2 {
-            use openpencil_shell_core::widgets::{AlignToolbar, TOP_BAR_HEIGHT};
+            use op_editor_ui::widgets::{AlignToolbar, TOP_BAR_HEIGHT};
             let (cx, _, cw, ch) =
                 self.canvas_region(self.last_viewport_w, self.last_viewport_h);
-            let canvas_region = openpencil_shell_core::Rect {
+            let canvas_region = op_editor_ui::Rect {
                 origin: Point2D::new(cx, TOP_BAR_HEIGHT),
                 size: Point2D::new(cw, ch),
             };
@@ -556,7 +556,7 @@ impl WidgetHost {
         {
             return false;
         }
-        use openpencil_shell_core::widgets::{DropPosition, LayerPanel};
+        use op_editor_ui::widgets::{DropPosition, LayerPanel};
         let layer_rect = self.layer_panel_rect(viewport_h);
         // Source-excluded panel so the indicator y the user saw and
         // the row landed on match the post-commit layout — see the

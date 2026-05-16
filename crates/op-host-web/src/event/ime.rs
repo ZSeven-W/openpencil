@@ -12,7 +12,7 @@
 //! `getTargetRanges()` and calls into here with already-converted
 //! Rust strings + UTF-16 code-unit ranges.
 
-use openpencil_shell_core::{ImeEvent, ImeKind};
+use op_editor_ui::{ImeEvent, ImeKind};
 use std::ops::Range;
 
 /// Convert a UTF-16 code-unit selection range to UTF-8 byte offsets

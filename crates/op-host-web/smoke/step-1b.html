@@ -45,7 +45,7 @@
       //   - The libc / libcxx / libm shim crate (crates/wasm-libc-shim)
       //     resolves the previously-missing env.* imports. Verified via
       //     `WebAssembly.Module.imports()`: 22 imports, all from
-      //     `./openpencil_shell_web_bg.js`; 0 env.* imports.
+      //     `./op_host_web_bg.js`; 0 env.* imports.
       //   - The bundle is structurally LinkError-free; a LinkError here
       //     is now a REGRESSION signal, not the expected state.
       //
@@ -70,7 +70,7 @@
         status.appendChild(block);
       };
       try {
-        const mod = await import('../pkg/openpencil_shell_web.js');
+        const mod = await import('../pkg/op_host_web.js');
         await mod.default();
         window.__opShell = mod.mount('op');
         log('ok', 'WebShell mounted; canvas should show centered red rect.');
@@ -87,22 +87,22 @@
           [
             header,
             '',
-            'Expected file: ../pkg/openpencil_shell_web.js',
+            'Expected file: ../pkg/op_host_web.js',
             '',
             'How to rebuild the bundle (when the file is missing or stale):',
             '  1. brew install emscripten   # 5.0.7 + EMSDK shim',
             '  2. mkdir -p ~/.emsdk/upstream && \\',
             '       ln -sfn /opt/homebrew/opt/emscripten/libexec ~/.emsdk/upstream/emscripten',
-            '  3. EMSDK="$HOME/.emsdk" cargo build -p openpencil-shell-web \\',
+            '  3. EMSDK="$HOME/.emsdk" cargo build -p op-host-web \\',
             '       --target wasm32-unknown-unknown --features skia --release',
             '  4. (one-time) ln -sf libfoo.wasm.a libfoo.a in target/.../skia-bindings-*/out/skia/',
             '  5. wasm-bindgen --target web \\',
-            '       --out-dir crates/openpencil-shell-web/pkg \\',
-            '       target/wasm32-unknown-unknown/release/openpencil_shell_web.wasm',
+            '       --out-dir crates/op-host-web/pkg \\',
+            '       target/wasm32-unknown-unknown/release/op_host_web.wasm',
             '',
             'A LinkError after a clean rebuild means a new env.* import',
             'snuck back in (skia upgrade, new shim gap, etc). Inspect via',
-            '  wasm-objdump --details --section=Import ../pkg/openpencil_shell_web_bg.wasm',
+            '  wasm-objdump --details --section=Import ../pkg/op_host_web_bg.wasm',
             'and add the missing symbol to crates/wasm-libc-shim/src/imp.rs.',
             '',
             'Underlying error: ' + (e && e.message ? e.message : String(e)),

@@ -1,8 +1,8 @@
-//! OpenPencil shell — web bundle entry.
+//! OpenPencil web host — web bundle entry.
 //!
 //! Per spec v19 §1.2 (FROZEN 2026-05-04): this crate is the web bundle
 //! entry. CI invariant requires `cargo check --target wasm32-unknown-
-//! unknown -p openpencil-shell-web --no-default-features --features web`
+//! unknown -p op-host-web --no-default-features --features web`
 //! to pass on every PR — that path uses the **stub** mount entry below
 //! and is purely a wasm32-clean compile guard (no skia, no real render).
 //!
@@ -36,7 +36,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 #[cfg(feature = "skia")]
-use openpencil_shell_core::Modifiers;
+use op_editor_ui::Modifiers;
 
 /// Long-lived shell handle. The smoke HTML must keep this alive (e.g.
 /// `window.__opShell = mount("op")`) so closures stored on the shell
@@ -107,7 +107,7 @@ impl Inner {
     /// frame and from every closure body after a state mutation.
     /// Returns the present error if the ImageData round-trip failed.
     fn repaint(&mut self) -> Result<(), JsValue> {
-        use openpencil_shell_core::{Color, Point2D, Rect, RenderBackend};
+        use op_editor_ui::{Color, Point2D, Rect, RenderBackend};
 
         // Pull the actual canvas dimensions from the backend
         // every frame so a host that swaps the `<canvas>` width

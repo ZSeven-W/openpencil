@@ -110,7 +110,7 @@ pub struct NativeBackend {
         std::collections::HashMap<(i32, u16), Option<skia_safe::Typeface>>,
 }
 
-const ROBOTO_TTF: &[u8] = include_bytes!("../../../openpencil-shell-web/assets/Roboto-Regular.ttf");
+const ROBOTO_TTF: &[u8] = include_bytes!("../../../op-host-web/assets/Roboto-Regular.ttf");
 
 /// Union of every CJK codepoint that appears in the editor chrome
 /// + settings modal. Pre-warmed at `NativeBackend::new` so the
