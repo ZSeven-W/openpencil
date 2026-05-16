@@ -86,6 +86,28 @@ impl CursorHint {
 /// TS-equivalent layout (Step 4 visual lift).
 pub struct WidgetHostNative {
     pub(in crate::widget_host) document: Document,
+    /// **TEMPORARY — Phase 6 strangler scaffolding. Deleted in Phase 7.**
+    ///
+    /// The canonical-model editor state, held alongside the legacy
+    /// `document` so shell-core's ~30 widgets can migrate off
+    /// `Document` onto `op_editor_core::EditorState` one group at a
+    /// time while the workspace stays build-green.
+    ///
+    /// Source-of-truth split during the migration window:
+    /// - `document` (shell-core `Document`) is the source of truth.
+    ///   Every un-migrated widget paints from it and every `apply_*`
+    ///   input handler mutates it.
+    /// - `editor_state` is *not yet wired into paint or input*. There
+    ///   is no `Document` → `PenDocument` converter (the desktop
+    ///   `pen_doc_adapter` only goes the other way, and that path
+    ///   bakes flex layout into AABB rects, so it is irreversible).
+    ///   A per-group sync point is added by each later 6.x task as
+    ///   that widget group's paint/input is switched onto
+    ///   `editor_state`.
+    ///
+    /// When the last widget group migrates, `document` is deleted and
+    /// this field is renamed to the host's only state (Phase 7).
+    pub(in crate::widget_host) editor_state: op_editor_core::EditorState,
     pub(in crate::widget_host) theme: Theme,
     /// Active canvas pan-drag state — left-button press → motion
     /// → release.
@@ -298,6 +320,10 @@ impl WidgetHostNative {
     pub fn new() -> Self {
         Self {
             document: Document::sample(),
+            // Phase 6 scaffolding — see the `editor_state` field doc.
+            // Starts as a fresh empty canonical document; later 6.x
+            // tasks seed/sync it per migrated widget group.
+            editor_state: op_editor_core::EditorState::new(),
             theme: Theme::dark(),
             drag: None,
             chat_drag: None,
@@ -357,6 +383,23 @@ impl WidgetHostNative {
 
     pub fn document_mut(&mut self) -> &mut Document {
         &mut self.document
+    }
+
+    /// **TEMPORARY — Phase 6 scaffolding.** Borrow the canonical-model
+    /// editor state. Later 6.x tasks use this as each widget group's
+    /// paint path is switched off `Document` onto `EditorState`; the
+    /// accessor is deleted in Phase 7 when `editor_state` becomes the
+    /// host's only state. See the `editor_state` field doc.
+    pub fn editor_state(&self) -> &op_editor_core::EditorState {
+        &self.editor_state
+    }
+
+    /// **TEMPORARY — Phase 6 scaffolding.** Mutable borrow of the
+    /// canonical-model editor state, for the per-group input migration
+    /// in later 6.x tasks. Deleted in Phase 7. See the `editor_state`
+    /// field doc.
+    pub fn editor_state_mut(&mut self) -> &mut op_editor_core::EditorState {
+        &mut self.editor_state
     }
 
     /// Commit any in-progress settings-modal input draft (currently
