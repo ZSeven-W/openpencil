@@ -1,6 +1,7 @@
 //! Images tab of the settings modal.
 
-use crate::document::{AgentSettings, Document};
+use op_editor_core::agent_settings::AgentSettings;
+use op_editor_core::editor_ui_state::EditorUiState;
 use crate::theme::Theme;
 use crate::widgets::agent_settings_i18n::t as t_settings;
 use crate::widgets::icons::{draw_icon, Icon};
@@ -99,10 +100,10 @@ pub(super) fn paint_images_tab(
     cx: &mut PaintCx<'_>,
     theme: &Theme,
     settings: &AgentSettings,
-    doc: &Document,
+    ui: &EditorUiState,
     content: Rect,
 ) {
-    let title_str = t_settings(doc, "settings.images.search");
+    let title_str = t_settings(ui, "settings.images.search");
     let title = TextLayout::single_run(
         title_str,
         "system-ui",
@@ -130,9 +131,9 @@ pub(super) fn paint_images_tab(
     };
     cx.backend.fill_oval(dot, dot_color);
     let status_text = if ready {
-        t_settings(doc, "settings.images.ready")
+        t_settings(ui, "settings.images.ready")
     } else {
-        t_settings(doc, "settings.images.notConfigured")
+        t_settings(ui, "settings.images.notConfigured")
     };
     let status = TextLayout::single_run(
         status_text,
@@ -162,7 +163,7 @@ pub(super) fn paint_images_tab(
         1.8,
     );
     let advanced_label = TextLayout::single_run(
-        t_settings(doc, "settings.images.advanced"),
+        t_settings(ui, "settings.images.advanced"),
         "system-ui",
         13.0,
         to_jian(theme.foreground),
@@ -176,7 +177,7 @@ pub(super) fn paint_images_tab(
     if settings.images_advanced_open {
         let mut y = toggle.origin.y + ADVANCED_ROW_H;
         let sub = TextLayout::single_run(
-            t_settings(doc, "settings.images.oauthLabel"),
+            t_settings(ui, "settings.images.oauthLabel"),
             "system-ui",
             12.0,
             to_jian(theme.muted_foreground),
@@ -187,8 +188,8 @@ pub(super) fn paint_images_tab(
         paint_input_row(
             cx,
             theme,
-            t_settings(doc, "settings.images.clientId"),
-            t_settings(doc, "settings.images.clientIdPlaceholder"),
+            t_settings(ui, "settings.images.clientId"),
+            t_settings(ui, "settings.images.clientIdPlaceholder"),
             content.origin.x,
             y,
             content.size.x,
@@ -197,14 +198,14 @@ pub(super) fn paint_images_tab(
         paint_input_row(
             cx,
             theme,
-            t_settings(doc, "settings.images.clientSecret"),
-            t_settings(doc, "settings.images.clientSecretPlaceholder"),
+            t_settings(ui, "settings.images.clientSecret"),
+            t_settings(ui, "settings.images.clientSecretPlaceholder"),
             content.origin.x,
             y,
             content.size.x,
         );
         y += ROW_H + BODY_GAP;
-        let link_text = t_settings(doc, "settings.images.registerLink");
+        let link_text = t_settings(ui, "settings.images.registerLink");
         let link = TextLayout::single_run(
             link_text,
             "system-ui",
@@ -225,7 +226,7 @@ pub(super) fn paint_images_tab(
         let test_btn = test_btn_rect(content, settings);
         cx.backend.fill_round_rect(test_btn, 6.0, theme.muted);
         cx.backend.stroke_round_rect(test_btn, 6.0, theme.border, 1.0);
-        let test_label = t_settings(doc, "settings.images.test");
+        let test_label = t_settings(ui, "settings.images.test");
         let test_w = cx.backend.measure_text(test_label, 13.0);
         let test_lay = TextLayout::single_run(
             test_label,
@@ -246,7 +247,7 @@ pub(super) fn paint_images_tab(
     // Image Generation section.
     let gen_top = image_gen_section_top(content, settings);
     let gen_title = TextLayout::single_run(
-        t_settings(doc, "settings.images.generation"),
+        t_settings(ui, "settings.images.generation"),
         "system-ui",
         15.0,
         to_jian(theme.foreground),
@@ -257,7 +258,7 @@ pub(super) fn paint_images_tab(
     let add_btn = add_btn_rect(content, settings);
     cx.backend.fill_round_rect(add_btn, 6.0, theme.muted);
     cx.backend.stroke_round_rect(add_btn, 6.0, theme.border, 1.0);
-    let add_label = t_settings(doc, "settings.images.add");
+    let add_label = t_settings(ui, "settings.images.add");
     let add_w = cx.backend.measure_text(add_label, 13.0);
     let add_lay = TextLayout::single_run(
         add_label,
@@ -274,7 +275,7 @@ pub(super) fn paint_images_tab(
         ),
     );
 
-    let hint = t_settings(doc, "settings.images.empty");
+    let hint = t_settings(ui, "settings.images.empty");
     let hint_w = cx.backend.measure_text(hint, 13.0);
     let hint_lay = TextLayout::single_run(
         hint,

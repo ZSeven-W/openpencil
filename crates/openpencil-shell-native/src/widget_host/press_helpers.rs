@@ -51,7 +51,7 @@ impl WidgetHostNative {
             AgentSettingsHit, AgentSettingsPanel,
         };
         self.refresh_paint_doc();
-        let panel = AgentSettingsPanel::for_document(&self.paint_doc);
+        let panel = AgentSettingsPanel::for_editor(&self.editor_state);
         let panel_rect = panel.rect(vw, vh);
         let point = Point2D::new(x, y);
         match panel.hit_test(panel_rect, point) {
@@ -62,16 +62,12 @@ impl WidgetHostNative {
             }
             AgentSettingsHit::SelectTab(t) => {
                 self.commit_settings_focus_if_any();
-                // shell-core `AgentSettingsTab` → op-editor-core.
-                self.editor_state.editor_ui.agent_settings.tab =
-                    op_pen_loader::rev::agent_settings_tab(t);
+                self.editor_state.editor_ui.agent_settings.tab = t;
                 self.editor_state.editor_ui.agent_settings.scroll_y = 0.0;
             }
             AgentSettingsHit::Connect(p) => {
-                // The hit carries a shell-core `AgentProvider`; the
-                // `connected` bool array index follows `ALL` order,
-                // which is identical across the two crates.
-                let idx = openpencil_shell_core::document::AgentProvider::ALL
+                // `connected` is indexed by `AgentProvider::ALL` order.
+                let idx = op_editor_core::agent_settings::AgentProvider::ALL
                     .iter()
                     .position(|x| *x == p)
                     .unwrap_or(0);
@@ -88,9 +84,8 @@ impl WidgetHostNative {
                 *v = !*v;
             }
             AgentSettingsHit::ToggleMcpCli(cli) => {
-                // `McpCli::ALL` index order is identical across both
-                // crates — index the op-editor-core bool array.
-                let idx = openpencil_shell_core::document::McpCli::ALL
+                // `mcp_cli_enabled` is indexed by `McpCli::ALL` order.
+                let idx = op_editor_core::agent_settings::McpCli::ALL
                     .iter()
                     .position(|x| *x == cli)
                     .unwrap_or(0);
