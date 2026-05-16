@@ -1,0 +1,231 @@
+//! `EditorCommand` — the editor-mutation DTO.
+//!
+//! A serde-free description of one editor mutation. The MCP server is
+//! one producer (a tool validates its arguments, then emits an
+//! `EditorCommand` for the host to apply); a keyboard handler, a CLI,
+//! or a test is another. The DTO + [`EditorState::apply`] live here so
+//! every producer goes through the same pre-validate-then-mutate apply
+//! path, and so a future `op-mcp` crate can depend on `op-editor-core`
+//! one-way (no dependency cycle).
+//!
+//! Ported from `openpencil-shell-core::mcp::McpCommand`. Two adaptations
+//! to the `op-editor-core` model:
+//!
+//!   - Node targets are [`NodeId`] (the string newtype) rather than the
+//!     `u64` the shell-core wire layer carried. There is no
+//!     `from_mcp_u64` round-trip: the canonical `.op` schema's ids are
+//!     strings, so commands carry them directly.
+//!   - Node payloads describe leaf geometry with plain scalars; the
+//!     applier builds the canonical `jian_ops_schema::PenNode` variant.
+//!
+//! ## Component commands
+//!
+//! `op-editor-core` has no component registry yet (it was a shell-core
+//! `Document` concern; the canonical-schema component model is a later
+//! task). The four `*Component` variants are kept on the enum so the
+//! DTO surface stays a faithful port, but [`EditorState::apply`] rejects
+//! them (`false`) — see the apply module for the documented gap.
+
+use crate::node_id::NodeId;
+use crate::walkers::ReorderDirection;
+
+/// Which boolean property [`EditorCommand::SetNodeFlag`] writes. The
+/// canonical `PenNodeBase` carries `visible` + `locked`; `Collapsed` is
+/// an editor-chrome-only flag with no schema field, so the applier
+/// rejects it (documented in the apply module).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NodeFlag {
+    Hidden,
+    Locked,
+    Collapsed,
+}
+
+/// Wire-friendly value payload for [`EditorCommand::SetVariableScalar`]
+/// — a non-color scalar variable's new value.
+#[derive(Debug, Clone, PartialEq)]
+pub enum VariableScalarPayload {
+    Number(f64),
+    String(String),
+    Boolean(bool),
+}
+
+/// Per-item descriptor for [`EditorCommand::BatchInsert`]. Same shape as
+/// `InsertNode`'s args; carried in a Vec so the applier can
+/// validate-then-mutate the whole set atomically.
+#[derive(Debug, Clone, PartialEq)]
+pub struct BatchInsertItem {
+    pub kind: String,
+    pub name: String,
+    pub x: i32,
+    pub y: i32,
+    pub width: i32,
+    pub height: i32,
+    pub fill_hex: Option<String>,
+}
+
+/// One editor mutation. The applier validates every argument BEFORE
+/// touching the document so a bad arg never half-mutates it.
+#[derive(Debug, Clone, PartialEq)]
+pub enum EditorCommand {
+    /// Set a color variable's value by name. Routes through the active-
+    /// theme discipline (`set_variable_color`).
+    SetVariableColor { name: String, hex: String },
+    /// Pin a theme axis to a specific value.
+    SetActiveAxisValue { axis: String, value: String },
+    /// Advance a theme axis to its next declared value (wrapping).
+    CycleActiveAxisValue { axis: String },
+    /// Create a fresh leaf node on the active page.
+    InsertNode {
+        kind: String,
+        name: String,
+        x: i32,
+        y: i32,
+        width: i32,
+        height: i32,
+        fill_hex: Option<String>,
+    },
+    /// Patch fields on an existing node — every field optional.
+    UpdateNode {
+        node_id: NodeId,
+        x: Option<i32>,
+        y: Option<i32>,
+        width: Option<i32>,
+        height: Option<i32>,
+        name: Option<String>,
+        fill_hex: Option<String>,
+    },
+    /// Remove a node + all its descendants.
+    DeleteNode { node_id: NodeId },
+    /// Reparent a node. A `NONE` target reparents to the active page
+    /// root; a real id must resolve + must not create a cycle.
+    MoveNode {
+        node_id: NodeId,
+        target_parent: NodeId,
+    },
+    /// Deep-clone a node + subtree under a new parent (`NONE` = active
+    /// page root). Fresh ids minted past the id space.
+    CopyNode {
+        node_id: NodeId,
+        target_parent: NodeId,
+    },
+    /// Replace an existing node with a freshly-built leaf at the same
+    /// slot. `drop_children` is the destructive-swap guard: replacing a
+    /// node WITH children requires `drop_children == true`, else the
+    /// applier refuses so a container can't silently lose its subtree.
+    ReplaceNode {
+        node_id: NodeId,
+        kind: String,
+        name: String,
+        x: i32,
+        y: i32,
+        width: i32,
+        height: i32,
+        fill_hex: Option<String>,
+        drop_children: bool,
+    },
+    /// Insert N leaf nodes on the active page atomically — one bad
+    /// descriptor rejects the whole batch.
+    BatchInsert { items: Vec<BatchInsertItem> },
+    /// Set a non-color scalar variable's value.
+    SetVariableScalar {
+        name: String,
+        scalar: VariableScalarPayload,
+    },
+    /// Create a new theme-agnostic scalar variable. `kind` is one of
+    /// `"color"` / `"number"` / `"boolean"` / `"string"`.
+    CreateVariable {
+        name: String,
+        kind: String,
+        default_value: String,
+    },
+    /// Delete a variable by name.
+    DeleteVariable { name: String },
+    /// Rename a variable.
+    RenameVariable { old_name: String, new_name: String },
+    /// Instantiate a registered component. **Gap**: no component
+    /// registry in `op-editor-core` — rejected at apply time.
+    InstantiateComponent { component_id: NodeId },
+    /// Promote a node to a component. **Gap** — rejected.
+    CreateComponent { node_id: NodeId, name: String },
+    /// Remove a component. **Gap** — rejected.
+    DeleteComponent { component_id: NodeId },
+    /// Rename a component. **Gap** — rejected.
+    RenameComponent { component_id: NodeId, name: String },
+    /// Switch the active page.
+    SetActivePage { index: u32 },
+    /// Append a fresh empty page + switch to it.
+    AddPage,
+    /// Set a page's display name.
+    RenamePage { index: u32, name: String },
+    /// Remove a page by index.
+    DeletePage { index: u32 },
+    /// Duplicate the page at `index` (clone + insert after).
+    DuplicatePage { index: u32 },
+    /// Move the page at `from` to `to`.
+    ReorderPage { from: u32, to: u32 },
+    /// Clear the multi-selection.
+    ClearSelection,
+    /// Select a single node by id.
+    SetSelection { node_id: NodeId },
+    /// Replace the multi-selection with the supplied ids; unknown ids
+    /// are dropped silently.
+    SetSelectionSet { node_ids: Vec<NodeId> },
+    /// Toggle one node's membership in the multi-selection.
+    ToggleNodeSelection { node_id: NodeId },
+    /// Set canvas pan + zoom. Any axis `None` is left untouched.
+    SetViewport {
+        pan_x: Option<i32>,
+        pan_y: Option<i32>,
+        zoom_percent: Option<i32>,
+    },
+    /// Flip a single boolean flag on a node.
+    SetNodeFlag {
+        node_id: NodeId,
+        flag: NodeFlag,
+        value: bool,
+    },
+    /// Set the active canvas tool.
+    SetActiveTool { tool: String },
+    /// Undo the last change.
+    Undo,
+    /// Redo the last undone change.
+    Redo,
+    /// Duplicate the selection + select the clone.
+    DuplicateSelected { offset_px: i32 },
+    /// Delete the selection.
+    DeleteSelected,
+    /// Translate the selection by `(dx, dy)` doc-px.
+    NudgeSelected { dx: i32, dy: i32 },
+    /// `Cmd+G` — wrap the multi-selected siblings in a new Group.
+    GroupSelected,
+    /// `Cmd+Shift+G` — replace a selected Group with its children.
+    UngroupSelected,
+    /// Move the selection up / down in z-order.
+    ReorderSelected { direction: ReorderDirection },
+    /// Set rotation (degrees) on a node.
+    SetNodeRotation { node_id: NodeId, degrees: f32 },
+    /// Set the text content on a Text-kind node.
+    SetNodeText { node_id: NodeId, text: String },
+    /// Set corner-radius (doc-px) on a node.
+    SetNodeCornerRadius { node_id: NodeId, radius: f32 },
+    /// Set the font size (doc-px) on a Text-kind node.
+    SetNodeFontSize { node_id: NodeId, font_size: f32 },
+    /// Set the font weight (1..=1000) on a Text-kind node.
+    SetNodeFontWeight { node_id: NodeId, font_weight: u16 },
+    /// Set the stroke color on a node by id.
+    SetNodeStrokeHex { node_id: NodeId, hex: String },
+    /// Set the stroke width (doc-px) on a node by id.
+    SetNodeStrokeWidth { node_id: NodeId, width: f32 },
+    /// Apply alignment / distribution to the selection.
+    AlignSelected { action: String },
+    /// Set the fill color on a node by id.
+    SetNodeFillHex { node_id: NodeId, hex: String },
+    /// Rename a node by id.
+    SetNodeName { node_id: NodeId, name: String },
+    /// `Cmd+C` — deep-clone the selection into the clipboard.
+    CopySelected,
+    /// `Cmd+X` — copy the selection, then delete it.
+    CutSelected,
+    /// `Cmd+V` — paste the clipboard as top-level siblings.
+    PasteClipboard { offset_px: i32 },
+}
