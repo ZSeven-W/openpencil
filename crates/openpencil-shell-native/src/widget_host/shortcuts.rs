@@ -10,7 +10,8 @@ impl WidgetHostNative {
         if self.input_active() {
             return false;
         }
-        self.document.copy_selected()
+        // Clipboard is transient editor state — no paint change.
+        self.editor_state.copy_selected()
     }
 
     /// Cmd/Ctrl+X — copy then delete the selection.
@@ -18,11 +19,15 @@ impl WidgetHostNative {
         if self.input_active() {
             return false;
         }
-        if !self.document.selected.is_real() {
+        if self.editor_state.selection.is_empty() {
             return false;
         }
-        self.document.commit_history();
-        self.document.cut_selected()
+        self.editor_state.commit_history();
+        let ok = self.editor_state.cut_selected();
+        if ok {
+            self.mark_dirty();
+        }
+        ok
     }
 
     /// Cmd-V — paste clipboard at +10 doc px; select clones.
@@ -30,14 +35,18 @@ impl WidgetHostNative {
         if self.input_active() {
             return false;
         }
-        if self.document.clipboard.is_empty() {
+        if self.editor_state.clipboard.is_empty() {
             return false;
         }
-        self.document.commit_history();
-        !self
-            .document
+        self.editor_state.commit_history();
+        let pasted = !self
+            .editor_state
             .paste_clipboard(&mut self.next_node_id, 10.0)
-            .is_empty()
+            .is_empty();
+        if pasted {
+            self.mark_dirty();
+        }
+        pasted
     }
 
     /// Cmd-A — select every top-level node on the active page.
@@ -45,7 +54,11 @@ impl WidgetHostNative {
         if self.input_active() {
             return false;
         }
-        self.document.select_all_top_level()
+        let ok = self.editor_state.select_all_top_level();
+        if ok {
+            self.mark_dirty();
+        }
+        ok
     }
 
     /// Cmd-Z — undo the last transactional change. Allowed during
@@ -54,36 +67,45 @@ impl WidgetHostNative {
     /// history entry).
     pub fn apply_undo(&mut self) -> bool {
         self.commit_variable_row_focus_if_any();
-        if self.document.ui.layer_rename.is_some() || self.document.chat.focused {
+        if self.editor_state.ui.layer_rename.is_some() || self.editor_state.chat.focused {
             return false;
         }
-        self.document.undo()
+        let ok = self.editor_state.undo();
+        if ok {
+            self.mark_dirty();
+        }
+        ok
     }
 
     pub fn apply_redo(&mut self) -> bool {
         self.commit_variable_row_focus_if_any();
-        if self.document.ui.layer_rename.is_some() || self.document.chat.focused {
+        if self.editor_state.ui.layer_rename.is_some() || self.editor_state.chat.focused {
             return false;
         }
-        self.document.redo()
+        let ok = self.editor_state.redo();
+        if ok {
+            self.mark_dirty();
+        }
+        ok
     }
 
     /// Cmd+G — wrap the current selection in a new Group node.
     pub fn apply_group(&mut self) -> bool {
         self.commit_variable_row_focus_if_any();
-        if self.document.ui.layer_rename.is_some() || self.document.chat.focused {
+        if self.editor_state.ui.layer_rename.is_some() || self.editor_state.chat.focused {
             return false;
         }
-        if !self.document.selected.is_real() {
+        if self.editor_state.selection.is_empty() {
             return false;
         }
-        let snap = self.document.snapshot_for_history();
+        let snap = self.editor_state.snapshot_for_history();
         if self
-            .document
+            .editor_state
             .group_selected(&mut self.next_node_id)
             .is_some()
         {
-            self.document.history_push_past(snap);
+            self.editor_state.history_push_past(snap);
+            self.mark_dirty();
             return true;
         }
         false
@@ -92,15 +114,16 @@ impl WidgetHostNative {
     /// Cmd+Shift+G — unwrap a Group selection (children replace it).
     pub fn apply_ungroup(&mut self) -> bool {
         self.commit_variable_row_focus_if_any();
-        if self.document.ui.layer_rename.is_some() || self.document.chat.focused {
+        if self.editor_state.ui.layer_rename.is_some() || self.editor_state.chat.focused {
             return false;
         }
-        if !self.document.selected.is_real() {
+        if self.editor_state.selection.is_empty() {
             return false;
         }
-        let snap = self.document.snapshot_for_history();
-        if self.document.ungroup_selected() {
-            self.document.history_push_past(snap);
+        let snap = self.editor_state.snapshot_for_history();
+        if self.editor_state.ungroup_selected() {
+            self.editor_state.history_push_past(snap);
+            self.mark_dirty();
             return true;
         }
         false
@@ -112,31 +135,36 @@ impl WidgetHostNative {
         // any pending variable-row edit first so subsequent
         // keystrokes don't keep routing into the variable draft.
         self.commit_variable_row_focus_if_any();
-        self.document.chat.focused = !self.document.chat.focused;
-        if self.document.chat.focused {
-            self.document.chat.caret_anchor_ms = self.now_ms;
+        self.editor_state.chat.focused = !self.editor_state.chat.focused;
+        if self.editor_state.chat.focused {
+            self.editor_state.chat.caret_anchor_ms = self.now_ms;
         }
+        self.mark_dirty();
         true
     }
 
     /// Cmd+Shift+C — toggle the PropertyPanel between Design / Code.
     pub fn apply_toggle_code_panel(&mut self) -> bool {
         self.commit_variable_row_focus_if_any();
-        use openpencil_shell_core::document::PropertyTab;
-        self.document.ui.property_tab = match self.document.ui.property_tab {
-            PropertyTab::Design => PropertyTab::Code,
-            PropertyTab::Code => PropertyTab::Design,
-        };
+        use op_editor_core::PropertyTab;
+        self.editor_state.editor_ui.property_tab =
+            match self.editor_state.editor_ui.property_tab {
+                PropertyTab::Design => PropertyTab::Code,
+                PropertyTab::Code => PropertyTab::Design,
+            };
+        self.mark_dirty();
         true
     }
 
     /// Cmd+, — open / close the floating agent-settings modal.
     pub fn apply_toggle_agent_settings(&mut self) -> bool {
         self.commit_variable_row_focus_if_any();
-        self.document.ui.agent_settings_open = !self.document.ui.agent_settings_open;
-        if !self.document.ui.agent_settings_open {
-            self.document.ui.agent_settings_drag = None;
+        self.editor_state.editor_ui.agent_settings_open =
+            !self.editor_state.editor_ui.agent_settings_open;
+        if !self.editor_state.editor_ui.agent_settings_open {
+            self.editor_state.editor_ui.agent_settings_drag = None;
         }
+        self.mark_dirty();
         true
     }
 
@@ -145,16 +173,18 @@ impl WidgetHostNative {
     /// doesn't leave a dangling rubber-band.
     pub fn apply_set_tool(&mut self, tool: openpencil_shell_core::document::Tool) {
         self.commit_variable_row_focus_if_any();
-        let _ = self.document.finish_pen_path();
-        self.document.tool = tool;
+        let _ = self.editor_state.finish_pen_path();
+        let ec_tool = op_pen_loader::rev::tool(tool);
+        self.editor_state.tool = ec_tool;
         if let openpencil_shell_core::document::Tool::Rect
         | openpencil_shell_core::document::Tool::Ellipse
         | openpencil_shell_core::document::Tool::Polygon
         | openpencil_shell_core::document::Tool::Line
         | openpencil_shell_core::document::Tool::Pen = tool
         {
-            self.document.ui.shape_tool = tool;
+            self.editor_state.editor_ui.shape_tool = ec_tool;
         }
+        self.mark_dirty();
     }
 
     /// Public proxy for the keyboard router so it can gate single-
@@ -178,10 +208,20 @@ impl WidgetHostNative {
         if self.input_active() {
             return false;
         }
-        if !self.document.selected.is_real() {
+        if self.editor_state.selection.is_empty() {
             return false;
         }
-        self.document.commit_history();
-        self.document.reorder_selected(direction)
+        self.editor_state.commit_history();
+        // Translate the shell-core reorder direction (kept as the
+        // public API type) into the op-editor-core equivalent.
+        let ec_dir = match direction {
+            ReorderDirection::Up => op_editor_core::walkers::ReorderDirection::Up,
+            ReorderDirection::Down => op_editor_core::walkers::ReorderDirection::Down,
+        };
+        let ok = self.editor_state.reorder_selected(ec_dir);
+        if ok {
+            self.mark_dirty();
+        }
+        ok
     }
 }

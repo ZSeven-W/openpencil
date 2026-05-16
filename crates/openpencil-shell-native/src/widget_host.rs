@@ -33,6 +33,7 @@ use openpencil_shell_core::document::Document;
 use openpencil_shell_core::widgets::SelectionHandle;
 use openpencil_shell_core::{Rect, Theme};
 
+mod click;
 mod frame_backend;
 mod geometry;
 mod helpers;
@@ -42,6 +43,7 @@ mod input_tests;
 mod keyboard;
 mod paint;
 mod press;
+mod press_helpers;
 mod property_dispatch;
 mod shortcuts;
 
@@ -81,33 +83,24 @@ impl CursorHint {
     }
 }
 
-/// Native counterpart of shell-web's `WidgetHost`. Owns a
-/// `Document` + composes the editor UI per frame in the
-/// TS-equivalent layout (Step 4 visual lift).
+/// Native counterpart of shell-web's `WidgetHost`. Owns the
+/// canonical-model `EditorState` as its single source of truth +
+/// composes the editor UI per frame in the TS-equivalent layout.
 pub struct WidgetHostNative {
-    pub(in crate::widget_host) document: Document,
-    /// **TEMPORARY — Phase 6 strangler scaffolding. Deleted in Phase 7.**
-    ///
-    /// The canonical-model editor state, held alongside the legacy
-    /// `document` so shell-core's ~30 widgets can migrate off
-    /// `Document` onto `op_editor_core::EditorState` one group at a
-    /// time while the workspace stays build-green.
-    ///
-    /// Source-of-truth split during the migration window:
-    /// - `document` (shell-core `Document`) is the source of truth.
-    ///   Every un-migrated widget paints from it and every `apply_*`
-    ///   input handler mutates it.
-    /// - `editor_state` is *not yet wired into paint or input*. There
-    ///   is no `Document` → `PenDocument` converter (the desktop
-    ///   `pen_doc_adapter` only goes the other way, and that path
-    ///   bakes flex layout into AABB rects, so it is irreversible).
-    ///   A per-group sync point is added by each later 6.x task as
-    ///   that widget group's paint/input is switched onto
-    ///   `editor_state`.
-    ///
-    /// When the last widget group migrates, `document` is deleted and
-    /// this field is renamed to the host's only state (Phase 7).
+    /// **The host's single source of truth.** All input handlers
+    /// mutate this; the paint pass derives a read-only `Document`
+    /// snapshot from it (see `paint_doc` / `paint_document`).
     pub(in crate::widget_host) editor_state: op_editor_core::EditorState,
+    /// Derived paint-only `Document` snapshot of `editor_state`.
+    /// shell-core's ~30 widgets + hit-test helpers are `&Document`-
+    /// bound and read-only; they are fed this snapshot, never
+    /// `editor_state`. Rebuilt lazily by `paint_document()` whenever
+    /// `editor_state_dirty` is set.
+    pub(in crate::widget_host) paint_doc: Document,
+    /// Set whenever `editor_state` is mutated. Drives the lazy
+    /// rebuild of `paint_doc` — `paint_document()` rebuilds + clears
+    /// the flag, so a sequence of mutations only re-derives once.
+    pub(in crate::widget_host) editor_state_dirty: bool,
     pub(in crate::widget_host) theme: Theme,
     /// Active canvas pan-drag state — left-button press → motion
     /// → release.
@@ -291,7 +284,7 @@ pub(in crate::widget_host) struct LayerDragState {
 /// motion pushed a no-op snapshot that polluted the undo stack).
 #[derive(Debug, Clone)]
 pub(in crate::widget_host) struct PathAnchorDragState {
-    pub(in crate::widget_host) node_id: openpencil_shell_core::document::NodeId,
+    pub(in crate::widget_host) node_id: op_editor_core::NodeId,
     pub(in crate::widget_host) anchor_index: usize,
     /// Anchor position at drag-start (doc coords) — compared against
     /// the final position on release to decide whether to push the
@@ -300,8 +293,7 @@ pub(in crate::widget_host) struct PathAnchorDragState {
     /// Set to true on the first cursor-move that mutates the anchor.
     pub(in crate::widget_host) moved: bool,
     /// Snapshot captured at drag-start; pushed only if `moved`.
-    pub(in crate::widget_host) pre_drag_snapshot:
-        openpencil_shell_core::document::DocumentSnapshot,
+    pub(in crate::widget_host) pre_drag_snapshot: op_editor_core::EditorSnapshot,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -318,12 +310,14 @@ pub(in crate::widget_host) struct ChatDragState {
 
 impl WidgetHostNative {
     pub fn new() -> Self {
+        let editor_state = op_editor_core::EditorState::sample();
+        // Seed the paint snapshot once up front; subsequent frames
+        // re-derive only when `editor_state_dirty` is set.
+        let paint_doc = derive_paint_doc(&editor_state);
         Self {
-            document: Document::sample(),
-            // Phase 6 scaffolding — see the `editor_state` field doc.
-            // Starts as a fresh empty canonical document; later 6.x
-            // tasks seed/sync it per migrated widget group.
-            editor_state: op_editor_core::EditorState::new(),
+            editor_state,
+            paint_doc,
+            editor_state_dirty: false,
             theme: Theme::dark(),
             drag: None,
             chat_drag: None,
@@ -369,37 +363,96 @@ impl WidgetHostNative {
         // mutate the document — commit any pending variable-row
         // edit first so the dirty draft lands before this op runs.
         self.commit_variable_row_focus_if_any();
-        crate::boolean_ops::apply_boolean_op(&mut self.document, op, &mut self.next_node_id)
+        // The skia `Path::op` math runs against the derived paint
+        // `Document`; the result polyline is committed back through
+        // an `EditorState` mutator so the host never edits the
+        // canonical tree directly.
+        self.refresh_paint_doc();
+        let outcome =
+            crate::boolean_ops::compute_boolean_op(&self.paint_doc, op);
+        let Some(result) = outcome else {
+            return false;
+        };
+        let source_ids: Vec<op_editor_core::NodeId> = result
+            .source_ids
+            .iter()
+            .map(op_pen_loader::rev::node_id)
+            .collect();
+        let pre = self.editor_state.snapshot_for_history();
+        let new_id = self.editor_state.replace_paths_with_polyline(
+            &source_ids,
+            &result.points,
+            &mut self.next_node_id,
+        );
+        match new_id {
+            Some(id) => {
+                self.editor_state.history_push_past(pre);
+                self.editor_state.set_single_selection(id);
+                self.mark_dirty();
+                true
+            }
+            None => false,
+        }
     }
 
-    /// Read-only document accessor for file-I/O code in the desktop
-    /// binary. Internal mutators go through the existing apply_*
-    /// methods, but `persistence::to_payload` needs a borrow to
-    /// snapshot the tree and `persistence::apply_payload` swaps the
-    /// page list in place. Public for desktop-side use.
-    pub fn document(&self) -> &Document {
-        &self.document
+    /// Derive a fresh paint-only `Document` snapshot from
+    /// `editor_state` if `editor_state_dirty` is set; clear the flag.
+    /// Cheap no-op when the snapshot is already current.
+    pub(in crate::widget_host) fn refresh_paint_doc(&mut self) {
+        if self.editor_state_dirty {
+            self.paint_doc = derive_paint_doc(&self.editor_state);
+            self.editor_state_dirty = false;
+        }
     }
 
-    pub fn document_mut(&mut self) -> &mut Document {
-        &mut self.document
+    /// The read-only paint `Document` snapshot of the live
+    /// `EditorState`. Rebuilt on demand when the state changed since
+    /// the last derive. Every widget paint + `&Document`-bound
+    /// hit-test reads through this.
+    pub fn paint_document(&mut self) -> &Document {
+        self.refresh_paint_doc();
+        &self.paint_doc
     }
 
-    /// **TEMPORARY — Phase 6 scaffolding.** Borrow the canonical-model
-    /// editor state. Later 6.x tasks use this as each widget group's
-    /// paint path is switched off `Document` onto `EditorState`; the
-    /// accessor is deleted in Phase 7 when `editor_state` becomes the
-    /// host's only state. See the `editor_state` field doc.
+    /// Mark `editor_state` as mutated so the next `paint_document()`
+    /// re-derives the paint snapshot. Call after any direct mutation
+    /// of `self.editor_state`.
+    pub(in crate::widget_host) fn mark_dirty(&mut self) {
+        self.editor_state_dirty = true;
+    }
+
+    /// Test-only: flag the paint snapshot stale after a test mutated
+    /// `editor_state` directly through `editor_state_mut()`.
+    #[cfg(test)]
+    pub(in crate::widget_host) fn mark_paint_dirty_for_test(&mut self) {
+        self.editor_state_dirty = true;
+    }
+
+    /// Read-only paint `Document` accessor for file-I/O / export
+    /// code in the desktop binary. Forces a fresh derive.
+    pub fn document(&mut self) -> &Document {
+        self.paint_document()
+    }
+
+    /// Borrow the canonical-model editor state — the host's single
+    /// source of truth.
     pub fn editor_state(&self) -> &op_editor_core::EditorState {
         &self.editor_state
     }
 
-    /// **TEMPORARY — Phase 6 scaffolding.** Mutable borrow of the
-    /// canonical-model editor state, for the per-group input migration
-    /// in later 6.x tasks. Deleted in Phase 7. See the `editor_state`
-    /// field doc.
+    /// Mutable borrow of the canonical-model editor state. Callers
+    /// that mutate through this MUST call `mark_editor_state_dirty()`
+    /// afterwards, else the paint snapshot goes stale.
     pub fn editor_state_mut(&mut self) -> &mut op_editor_core::EditorState {
         &mut self.editor_state
+    }
+
+    /// Public dirty-flag — desktop-side code that mutates
+    /// `editor_state` through `editor_state_mut()` (settings I/O,
+    /// `.op` load, chat streaming, model discovery) calls this so the
+    /// next paint re-derives the snapshot.
+    pub fn mark_editor_state_dirty(&mut self) {
+        self.editor_state_dirty = true;
     }
 
     /// Commit any in-progress settings-modal input draft (currently
@@ -414,49 +467,54 @@ impl WidgetHostNative {
     /// decide whether to schedule a periodic wake-up for caret
     /// blink.
     pub fn chat_focused(&self) -> bool {
-        self.document.chat.focused
+        self.editor_state.chat.focused
     }
 
     /// Next millisecond at which the host should wake to repaint
     /// the caret blink phase. `None` = no animation pending.
     pub fn next_animation_deadline_ms(&self) -> Option<u64> {
-        if self.document.ui.text_editing.is_some() {
+        let ui = &self.editor_state.ui;
+        if ui.text_editing.is_some() {
             return Some(jian_core::anim::next_blink_flip_ms(
                 self.now_ms,
-                self.document.ui.text_edit_caret_anchor_ms,
+                ui.text_edit_caret_anchor_ms,
                 500,
             ));
         }
-        if self.document.ui.layer_rename.is_some() {
+        if ui.layer_rename.is_some() {
             return Some(jian_core::anim::next_blink_flip_ms(
                 self.now_ms,
-                self.document.ui.rename_caret_anchor_ms,
+                self.editor_state.editor_ui.rename_caret_anchor_ms,
                 500,
             ));
         }
-        if self.document.ui.text_editing.is_some() {
+        if ui.property_focus.is_some() {
             return Some(jian_core::anim::next_blink_flip_ms(
                 self.now_ms,
-                self.document.ui.text_edit_caret_anchor_ms,
+                ui.property_caret_anchor_ms,
                 500,
             ));
         }
-        if self.document.ui.property_focus.is_some() {
+        if self.editor_state.chat.focused {
             return Some(jian_core::anim::next_blink_flip_ms(
                 self.now_ms,
-                self.document.ui.property_caret_anchor_ms,
-                500,
-            ));
-        }
-        if self.document.chat.focused {
-            return Some(jian_core::anim::next_blink_flip_ms(
-                self.now_ms,
-                self.document.chat.caret_anchor_ms,
+                self.editor_state.chat.caret_anchor_ms,
                 500,
             ));
         }
         None
     }
+}
+
+/// Derive a faithful paint-only `Document` from an `EditorState`:
+/// node tree + geometry from the canonical doc, then the chrome /
+/// chat / components / variable / scalar state layered on.
+pub(in crate::widget_host) fn derive_paint_doc(
+    state: &op_editor_core::EditorState,
+) -> Document {
+    let mut d = op_pen_loader::pen_document_to_document(&state.doc);
+    op_pen_loader::apply_editor_state_ui(&mut d, state);
+    d
 }
 
 impl Default for WidgetHostNative {

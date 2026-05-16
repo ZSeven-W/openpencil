@@ -13,12 +13,9 @@ path = "src/lib.rs"
 [dependencies]
 openpencil-shell-core = { path = "../openpencil-shell-core", version = "0.1.0" }
 
-# TEMPORARY (Phase 6 scaffolding — deleted in Phase 7 with `Document`).
-# `WidgetHostNative` holds an `op_editor_core::EditorState` alongside its
-# legacy `Document` so the ~30 shell-core widgets can migrate onto the
-# canonical model one group at a time while the workspace stays
-# build-green. Not wired into paint / input yet — see `widget_host.rs`
-# `editor_state` field doc.
+# `WidgetHostNative`'s single source of truth — the canonical-model
+# `op_editor_core::EditorState`. The host derives a read-only paint
+# `Document` from it each frame (see `widget_host.rs`).
 op-editor-core = { path = "../op-editor-core" }
 
 # Native-only deps cfg-gated outside wasm32. This is critical (resolves codex round 2 B1 BLOCK):
@@ -55,6 +52,16 @@ op-editor-core = { path = "../op-editor-core" }
 jian-core = { path = "../../vendor/jian/crates/jian-core", version = "0.0.1" }
 glow = "0.17.0"
 raw-window-handle = "0.6.2"
+
+# The canonical loader / `EditorState` → paint-`Document` bridge.
+# Desktop-side (depends on skia via jian-skia's SkiaMeasure), so it
+# is gated outside wasm32 alongside the rest of the native stack.
+op-pen-loader = { path = "../op-pen-loader" }
+
+# The canonical `.op` schema — `WidgetHostNative` names
+# `VariableScalar` when committing variable-row edits onto
+# `EditorState`. Already a transitive dep via op-editor-core.
+jian-ops-schema = { path = "../../vendor/jian/crates/jian-ops-schema" }
 
 # Cross-platform widget render stack (desktop + mobile, NOT wasm).
 #

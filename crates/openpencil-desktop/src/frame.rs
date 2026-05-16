@@ -11,7 +11,7 @@ use openpencil_shell_native::{
 pub fn paint(
     ctx: &mut SharedSkiaContext,
     backend: &mut NativeBackend,
-    host: &WidgetHostNative,
+    host: &mut WidgetHostNative,
     viewport_width: f32,
     viewport_height: f32,
     dpi: f32,

@@ -25,7 +25,6 @@ use std::time::{Duration, Instant};
 
 use openpencil_shell_core::agent_settings_state::AgentProvider;
 use openpencil_shell_core::chat_models::ModelEntry;
-use openpencil_shell_core::document::Document;
 
 /// Background model-discovery probe. [`discover_models`] reads a
 /// cache file and spawns a subprocess (`opencode models`, ~1 s),
@@ -45,17 +44,27 @@ impl ModelProbe {
         Self { rx: Some(rx) }
     }
 
-    /// If discovery has finished, move its models into `doc.chat`
-    /// and return `true`. Idempotent — the receiver is dropped
-    /// after the first drain so later calls are cheap no-ops.
-    pub fn poll_into(&mut self, doc: &mut Document) -> bool {
+    /// If discovery has finished, move its models into the host's
+    /// `EditorState.chat` and return `true`. Idempotent — the
+    /// receiver is dropped after the first drain so later calls are
+    /// cheap no-ops.
+    pub fn poll_into(
+        &mut self,
+        host: &mut openpencil_shell_native::WidgetHostNative,
+    ) -> bool {
         let Some(rx) = self.rx.as_ref() else {
             return false;
         };
         match rx.try_recv() {
             Ok(models) => {
-                doc.chat.available_models = models;
-                doc.chat.selected_model = 0;
+                // The discovery worker emits shell-core `ModelEntry`s;
+                // translate each into the op-editor-core type the
+                // host's `EditorState.chat` carries.
+                let chat = &mut host.editor_state_mut().chat;
+                chat.available_models =
+                    models.into_iter().map(model_entry_to_ec).collect();
+                chat.selected_model = 0;
+                host.mark_editor_state_dirty();
                 self.rx = None;
                 true
             }
@@ -66,6 +75,19 @@ impl ModelProbe {
             }
         }
     }
+}
+
+/// Translate a shell-core `ModelEntry` into op-editor-core's.
+fn model_entry_to_ec(m: ModelEntry) -> op_editor_core::ModelEntry {
+    use openpencil_shell_core::document::AgentProvider as ScP;
+    let provider = match m.provider {
+        ScP::ClaudeCode => op_editor_core::AgentProvider::ClaudeCode,
+        ScP::CodexCli => op_editor_core::AgentProvider::CodexCli,
+        ScP::OpenCode => op_editor_core::AgentProvider::OpenCode,
+        ScP::GithubCopilot => op_editor_core::AgentProvider::GithubCopilot,
+        ScP::GeminiCli => op_editor_core::AgentProvider::GeminiCli,
+    };
+    op_editor_core::ModelEntry::new(provider, m.value, m.display_name)
 }
 
 /// Probe every CLI we know how to query and return a flat,

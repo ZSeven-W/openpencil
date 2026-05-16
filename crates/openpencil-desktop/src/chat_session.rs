@@ -113,10 +113,11 @@ pub fn launch_if_pending(
     host: &mut WidgetHostNative,
     current: &mut Option<ChatSession>,
 ) -> bool {
-    let Some(user_text) = host.document_mut().chat.pending_send.take() else {
+    let Some(user_text) = host.editor_state_mut().chat.pending_send.take() else {
         return false;
     };
-    let agent_idx = host.document().ui.chat_selected_agent;
+    host.mark_editor_state_dirty();
+    let agent_idx = host.editor_state().editor_ui.chat_selected_agent;
     let Some(provider) = provider_for_agent(agent_idx) else {
         // Selected agent has no `ChatProvider` bridge yet (Codex /
         // OpenCode HTTP-server transport). Surface that honestly in
@@ -129,17 +130,18 @@ pub fn launch_if_pending(
         // this fresh error bubble (codex stop-gate: stale session
         // overwrote the unwired-agent error text).
         *current = None;
-        let name = openpencil_shell_core::agent_settings_state::AgentProvider::ALL
+        let name = op_editor_core::AgentProvider::ALL
             .get(agent_idx)
             .map(|a| a.name())
             .unwrap_or("This agent");
-        if let Some(msg) = host.document_mut().chat.messages.last_mut() {
+        if let Some(msg) = host.editor_state_mut().chat.messages.last_mut() {
             msg.content = format!(
                 "error: {name} chat is not wired yet — its HTTP-server \
                  transport is still pending. Pick Claude Code, GitHub \
                  Copilot, or Gemini CLI via the model chip."
             );
         }
+        host.mark_editor_state_dirty();
         // No session started; report the transcript change so the
         // caller repaints the error.
         return true;
@@ -184,13 +186,16 @@ pub fn pump(
     let poll = session.poll();
     let mut changed = false;
     if poll.error.is_some() || !poll.text.is_empty() {
-        if let Some(msg) = host.document_mut().chat.messages.last_mut() {
+        if let Some(msg) = host.editor_state_mut().chat.messages.last_mut() {
             if let Some(err) = poll.error {
                 msg.content = format!("error: {err}");
             } else {
                 msg.content.push_str(&poll.text);
             }
             changed = true;
+        }
+        if changed {
+            host.mark_editor_state_dirty();
         }
     }
     if poll.finished {

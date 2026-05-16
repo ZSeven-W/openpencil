@@ -15,7 +15,7 @@ use openpencil_shell_core::{Point2D, Rect, RenderBackend};
 impl WidgetHostNative {
     /// Paint the editor-UI composition.
     pub fn paint(
-        &self,
+        &mut self,
         frame: &mut NativeFrameBackend<'_>,
         viewport_width: f32,
         viewport_height: f32,
@@ -31,8 +31,14 @@ impl WidgetHostNative {
 
         let dpi = frame.dpi_scale();
 
+        // Derive the read-only paint `Document` snapshot ONCE for the
+        // whole paint pass. Every widget builder below reads `doc`;
+        // the host's `EditorState` is never touched during paint.
+        self.refresh_paint_doc();
+        let doc = &self.paint_doc;
+
         // 2. TopBar.
-        let top_bar = TopBar::for_document(&self.document);
+        let top_bar = TopBar::for_document(doc);
         let top_bar_rect = Rect {
             origin: Point2D::new(0.0, 0.0),
             size: Point2D::new(viewport_width, TOP_BAR_HEIGHT),
@@ -45,13 +51,13 @@ impl WidgetHostNative {
         }
 
         // 3. LayerPanel — skipped when the sidebar is collapsed.
-        if self.document.ui.sidebar_open {
+        if doc.ui.sidebar_open {
             // Compute the active drop target so the panel can paint
             // the drop-indicator line during a drag-to-reorder.
             let layer_panel_rect = Rect {
                 origin: Point2D::new(0.0, TOP_BAR_HEIGHT),
                 size: Point2D::new(
-                    self.document.ui.layer_panel_width,
+                    doc.ui.layer_panel_width,
                     (viewport_height - TOP_BAR_HEIGHT).max(0.0),
                 ),
             };
@@ -62,27 +68,26 @@ impl WidgetHostNative {
             // what `reorder_before/after` produces on release.
             let active_drag = self.layer_drag.clone().filter(|d| {
                 d.active
-                    && self
-                        .document
+                    && self.paint_doc
                         .active_page()
                         .map(|p| p.find(&d.source).is_some())
                         .unwrap_or(false)
             });
             let mut layer_panel = if let Some(d) = &active_drag {
-                LayerPanel::from_document_with_drag_source(&self.document, d.source.clone())
+                LayerPanel::from_document_with_drag_source(doc, d.source.clone())
             } else {
-                LayerPanel::from_document(&self.document)
+                LayerPanel::from_document(doc)
             };
             if let Some(d) = &active_drag {
                 layer_panel.drop_target = layer_panel
                     .drop_target_at(layer_panel_rect, Point2D::new(d.current_x, d.current_y));
                 // Floating ghost — keeps the source visible mid-drag.
-                if let Some(item) = LayerPanel::ghost_item_for(&self.document, d.source.clone()) {
+                if let Some(item) = LayerPanel::ghost_item_for(doc, d.source.clone()) {
                     layer_panel.drag_ghost = Some((item, d.current_y));
                 }
             }
             layer_panel.now_ms = self.now_ms;
-            layer_panel.caret_anchor_ms = self.document.ui.rename_caret_anchor_ms;
+            layer_panel.caret_anchor_ms = doc.ui.rename_caret_anchor_ms;
             let mut cx = PaintCx {
                 backend: &mut *frame,
             };
@@ -90,9 +95,9 @@ impl WidgetHostNative {
         }
 
         // 4. PropertyPanel — only when selection.
-        let property_panel = PropertyPanel::for_selection_at(&self.document, self.now_ms);
+        let property_panel = PropertyPanel::for_selection_at(doc, self.now_ms);
         let has_property = property_panel.is_some();
-        let property_panel_width = self.document.ui.property_panel_width;
+        let property_panel_width = doc.ui.property_panel_width;
         let right_rail_x = viewport_width - property_panel_width;
         if let Some(panel) = property_panel.as_ref() {
             let property_rect = Rect {
@@ -115,8 +120,8 @@ impl WidgetHostNative {
         //     selection is active, PropertyPanel owns the rail and
         //     VariablesPanel paints below it; when no selection, the
         //     Variables panel anchors at the top so it's not hidden.
-        if !self.document.var_table.variables.is_empty() {
-            let vars = VariablesPanel::for_document(&self.document);
+        if !doc.var_table.variables.is_empty() {
+            let vars = VariablesPanel::for_document(doc);
             let intrinsic = vars.intrinsic_height();
             let top_y = if has_property {
                 // Below PropertyPanel — naive offset uses the
@@ -150,7 +155,7 @@ impl WidgetHostNative {
             size: Point2D::new(canvas_w, canvas_h),
         };
         if canvas_w > 0.0 && canvas_h > 0.0 {
-            let mut canvas = CanvasViewport::from_document(&self.document);
+            let mut canvas = CanvasViewport::from_document(doc);
             canvas.now_ms = self.now_ms;
             let mut cx = PaintCx {
                 backend: &mut *frame,
@@ -159,7 +164,7 @@ impl WidgetHostNative {
         }
 
         // 6. Toolbar — floating column.
-        let toolbar = Toolbar::for_document(&self.document);
+        let toolbar = Toolbar::for_document(doc);
         let toolbar_h = toolbar
             .layout(&LayoutCx {
                 available_width: TOOLBAR_WIDTH,
@@ -186,7 +191,7 @@ impl WidgetHostNative {
         //    of the toolbar in any overlap region (matches the
         //    user's requested z-order: chat above toolbar).
         if let Some(chat_rect) = self.ai_chat_rect(viewport_width, viewport_height) {
-            let chat = AIChatPlaceholder::from_document_at(&self.document, self.now_ms);
+            let chat = AIChatPlaceholder::from_document_at(doc, self.now_ms);
             let mut cx = PaintCx {
                 backend: &mut *frame,
             };
@@ -196,7 +201,7 @@ impl WidgetHostNative {
         // 8. StatusBar — floating bottom-right.
         let canvas_right = canvas_left + canvas_w;
         if canvas_w > STATUS_BAR_WIDTH + STATUS_INSET * 2.0 {
-            let status = StatusBar::for_document(&self.document);
+            let status = StatusBar::for_document(doc);
             let status_rect = Rect {
                 origin: Point2D::new(
                     canvas_right - STATUS_BAR_WIDTH - STATUS_INSET,
@@ -217,11 +222,11 @@ impl WidgetHostNative {
             origin: Point2D::new(canvas_left, TOP_BAR_HEIGHT),
             size: Point2D::new(canvas_w, canvas_h),
         };
-        if let Some(toolbar) = AlignToolbar::for_canvas_region(canvas_region, &self.document) {
+        if let Some(toolbar) = AlignToolbar::for_canvas_region(canvas_region, doc) {
             toolbar.paint(
                 &mut *frame,
                 &self.theme,
-                self.document.ui.align_toolbar_hover,
+                doc.ui.align_toolbar_hover,
             );
         }
 
@@ -255,9 +260,9 @@ impl WidgetHostNative {
 
         // 9. ShapePicker — anchored to the right of the toolbar
         //    shape slot; same z-priority as the locale picker.
-        if self.document.ui.shape_picker_open {
+        if doc.ui.shape_picker_open {
             let picker_rect = self.shape_picker_rect(viewport_width, viewport_height);
-            let picker = ShapePicker::for_document(&self.document);
+            let picker = ShapePicker::for_document(doc);
             let mut cx = PaintCx {
                 backend: &mut *frame,
             };
@@ -266,9 +271,9 @@ impl WidgetHostNative {
 
         // 10. LocalePicker — top-most overlay so it covers chat /
         //     toolbar / status when open.
-        if self.document.ui.locale_picker_open {
+        if doc.ui.locale_picker_open {
             let picker_rect = self.locale_picker_rect(viewport_width);
-            let picker = LocalePicker::for_document(&self.document);
+            let picker = LocalePicker::for_document(doc);
             let mut cx = PaintCx {
                 backend: &mut *frame,
             };
@@ -277,7 +282,7 @@ impl WidgetHostNative {
 
         // 10b. File-menu dropdown — anchored under TopBar's
         //      folder+chevron button.
-        if self.document.ui.file_menu_open {
+        if doc.ui.file_menu_open {
             use openpencil_shell_core::widgets::file_menu::FileMenu;
             use openpencil_shell_core::widgets::top_bar::TopBar;
             let top_bar_rect = Rect {
@@ -289,14 +294,14 @@ impl WidgetHostNative {
                 .duration_since(std::time::UNIX_EPOCH)
                 .map(|d| d.as_secs())
                 .unwrap_or(0);
-            let menu = FileMenu::from_document(&self.document, now_secs);
+            let menu = FileMenu::from_document(doc, now_secs);
             let menu_rect = menu.rect_at(anchor);
             let mut cx = PaintCx { backend: &mut *frame };
             menu.paint(&mut cx, menu_rect);
         }
 
         // 10c. Figma import modal — full-viewport scrim + centred card.
-        if self.document.ui.figma_import_open {
+        if doc.ui.figma_import_open {
             use openpencil_shell_core::widgets::figma_import::FigmaImportModal;
             frame.fill_rect(
                 Rect {
@@ -305,14 +310,14 @@ impl WidgetHostNative {
                 },
                 openpencil_shell_core::Color { r: 0.0, g: 0.0, b: 0.0, a: 0.45 },
             );
-            let modal = FigmaImportModal::for_document(&self.document);
+            let modal = FigmaImportModal::for_document(doc);
             let modal_rect = modal.rect(viewport_width, viewport_height);
             let mut cx = PaintCx { backend: &mut *frame };
             modal.paint(&mut cx, modal_rect);
         }
 
         // 10d. Export dialog — full-viewport scrim + centred card.
-        if self.document.ui.export_dialog_open {
+        if doc.ui.export_dialog_open {
             use openpencil_shell_core::widgets::ExportDialog;
             frame.fill_rect(
                 Rect {
@@ -322,11 +327,11 @@ impl WidgetHostNative {
                 openpencil_shell_core::Color { r: 0.0, g: 0.0, b: 0.0, a: 0.45 },
             );
             let dlg = ExportDialog::centered(viewport_width, viewport_height);
-            dlg.paint(&mut *frame, &self.theme, &self.document);
+            dlg.paint(&mut *frame, &self.theme, doc);
         }
 
         // 10a. Agent-settings modal — top-most overlay when open.
-        if self.document.ui.agent_settings_open {
+        if doc.ui.agent_settings_open {
             use openpencil_shell_core::widgets::agent_settings_panel::AgentSettingsPanel;
             // Dim scrim across the full viewport.
             let scrim_color = openpencil_shell_core::Color {
@@ -342,7 +347,7 @@ impl WidgetHostNative {
                 },
                 scrim_color,
             );
-            let panel = AgentSettingsPanel::for_document(&self.document);
+            let panel = AgentSettingsPanel::for_document(doc);
             let panel_rect = panel.rect(viewport_width, viewport_height);
             let mut cx = PaintCx {
                 backend: &mut *frame,
@@ -351,9 +356,9 @@ impl WidgetHostNative {
         }
 
         // 10b. Color picker — floating overlay near the right rail.
-        if let Some(state) = self.document.ui.color_picker.clone() {
+        if let Some(state) = doc.ui.color_picker.clone() {
             use openpencil_shell_core::widgets::color_picker::ColorPicker;
-            let picker = ColorPicker::for_state(&self.document, state);
+            let picker = ColorPicker::for_state(doc, state);
             let picker_rect = picker.rect(viewport_width, viewport_height);
             let mut cx = PaintCx {
                 backend: &mut *frame,
@@ -363,9 +368,9 @@ impl WidgetHostNative {
 
         // 11. Layer context menu — right-click overlay above
         //     everything else.
-        if let Some(state) = self.document.ui.layer_context_menu.clone() {
+        if let Some(state) = doc.ui.layer_context_menu.clone() {
             use openpencil_shell_core::widgets::layer_context_menu::LayerContextMenu;
-            let menu = LayerContextMenu::for_state(&self.document, state);
+            let menu = LayerContextMenu::for_state(doc, state);
             let menu_rect = menu.rect();
             let mut cx = PaintCx {
                 backend: &mut *frame,

@@ -1,8 +1,40 @@
-//! `#[cfg(test)]` companion to `input.rs` — extracted here so the
-//! input module stays under the 800-line ceiling.
+//! `#[cfg(test)]` companion to the input modules — extracted here so
+//! the input module stays under the 800-line ceiling.
+//!
+//! `EditorState` is the host's source of truth, so the fixtures seed
+//! `host.editor_state` from canonical-schema JSON and assert against
+//! `editor_state` + the derived `paint_document()` snapshot.
 
 use super::WidgetHostNative;
-use openpencil_shell_core::document::{NodeId, PropertyFocus};
+use op_editor_core::ui_draft::PropertyFocus;
+use op_editor_core::NodeId;
+use op_editor_core::PenNodeExt;
+
+/// Seed a host's `editor_state` from a canonical `.op` JSON snippet.
+fn seed(host: &mut WidgetHostNative, json: &str) {
+    let doc = jian_ops_schema::load_str(json)
+        .expect("fixture JSON parses")
+        .value;
+    *host.editor_state_mut() = op_editor_core::EditorState::from_document(doc);
+    host.mark_paint_dirty_for_test();
+}
+
+/// Three top-level rect nodes at the given `(x, y, w, h)` boxes.
+fn three_rects(boxes: [(f64, f64, f64, f64); 3], ids: [&str; 3]) -> String {
+    let node = |id: &str, b: (f64, f64, f64, f64)| {
+        format!(
+            r#"{{"type":"rectangle","id":"{id}","name":"{id}",
+               "x":{},"y":{},"width":{},"height":{}}}"#,
+            b.0, b.1, b.2, b.3
+        )
+    };
+    format!(
+        r#"{{"version":"0.8.0","children":[{},{},{}]}}"#,
+        node(ids[0], boxes[0]),
+        node(ids[1], boxes[1]),
+        node(ids[2], boxes[2]),
+    )
+}
 
 #[test]
 fn escape_closes_one_overlay_per_press_in_priority_order() {
@@ -11,43 +43,44 @@ fn escape_closes_one_overlay_per_press_in_priority_order() {
     // time, in the order property-focus → locale → shape →
     // fill-type → chat → selection.
     let mut host = WidgetHostNative::new();
-    host.document.ui.property_focus = Some(PropertyFocus::PositionX);
-    host.document.ui.property_input_draft = "12".to_string();
-    host.document.ui.locale_picker_open = true;
-    host.document.ui.shape_picker_open = true;
-    host.document.ui.fill_type_picker_open = true;
-    host.document.chat.focused = true;
-    host.document.set_single_selection(NodeId::new("n10"));
+    host.editor_state_mut().ui.property_focus = Some(PropertyFocus::PositionX);
+    host.editor_state_mut().ui.property_input_draft = "12".to_string();
+    host.editor_state_mut().editor_ui.locale_picker_open = true;
+    host.editor_state_mut().editor_ui.shape_picker_open = true;
+    host.editor_state_mut().editor_ui.fill_type_picker_open = true;
+    host.editor_state_mut().chat.focused = true;
+    host.editor_state_mut()
+        .set_single_selection(NodeId::new("n11"));
 
     // 1. Property focus clears first.
     assert!(host.apply_escape());
-    assert!(host.document.ui.property_focus.is_none());
-    assert!(host.document.ui.property_input_draft.is_empty());
-    assert!(host.document.ui.locale_picker_open);
+    assert!(host.editor_state().ui.property_focus.is_none());
+    assert!(host.editor_state().ui.property_input_draft.is_empty());
+    assert!(host.editor_state().editor_ui.locale_picker_open);
 
     // 2. Locale picker next.
     assert!(host.apply_escape());
-    assert!(!host.document.ui.locale_picker_open);
-    assert!(host.document.ui.shape_picker_open);
+    assert!(!host.editor_state().editor_ui.locale_picker_open);
+    assert!(host.editor_state().editor_ui.shape_picker_open);
 
     // 3. Shape picker.
     assert!(host.apply_escape());
-    assert!(!host.document.ui.shape_picker_open);
-    assert!(host.document.ui.fill_type_picker_open);
+    assert!(!host.editor_state().editor_ui.shape_picker_open);
+    assert!(host.editor_state().editor_ui.fill_type_picker_open);
 
     // 4. Fill-type picker.
     assert!(host.apply_escape());
-    assert!(!host.document.ui.fill_type_picker_open);
-    assert!(host.document.chat.focused);
+    assert!(!host.editor_state().editor_ui.fill_type_picker_open);
+    assert!(host.editor_state().chat.focused);
 
     // 5. Chat focus.
     assert!(host.apply_escape());
-    assert!(!host.document.chat.focused);
-    assert!(host.document.selected.is_real());
+    assert!(!host.editor_state().chat.focused);
+    assert!(!host.editor_state().selection.is_empty());
 
     // 6. Selection.
     assert!(host.apply_escape());
-    assert_eq!(host.document.selected, NodeId::NONE);
+    assert!(host.editor_state().selection.is_empty());
 
     // 7. Nothing left — returns false.
     assert!(!host.apply_escape());
@@ -55,50 +88,51 @@ fn escape_closes_one_overlay_per_press_in_priority_order() {
 
 #[test]
 fn backspace_with_property_draft_does_not_delete_selected() {
-    // Codex confirmed-OK regression guard: with a non-empty
-    // property draft buffer, Backspace must pop a char from
-    // the draft, not delete the selected node.
+    // With a non-empty property draft buffer, Backspace must pop a
+    // char from the draft, not delete the selected node.
     let mut host = WidgetHostNative::new();
-    host.document.set_single_selection(NodeId::new("n10"));
-    host.document.ui.property_focus = Some(PropertyFocus::PositionX);
-    host.document.ui.property_input_draft = "123".to_string();
+    host.editor_state_mut()
+        .set_single_selection(NodeId::new("n11"));
+    host.editor_state_mut().ui.property_focus = Some(PropertyFocus::PositionX);
+    host.editor_state_mut().ui.property_input_draft = "123".to_string();
 
     assert!(host.apply_backspace());
-    assert_eq!(host.document.ui.property_input_draft, "12");
+    assert_eq!(host.editor_state().ui.property_input_draft, "12");
     // Selection must be untouched.
-    assert_eq!(host.document.selected, NodeId::new("n10"));
+    assert_eq!(host.editor_state().selection.anchor, NodeId::new("n11"));
 }
 
 #[test]
 fn backspace_without_focus_deletes_selected() {
     let mut host = WidgetHostNative::new();
-    host.document.set_single_selection(NodeId::new("n10"));
-    host.document.ui.property_focus = None;
-    host.document.chat.focused = false;
+    host.editor_state_mut()
+        .set_single_selection(NodeId::new("n11"));
+    host.editor_state_mut().ui.property_focus = None;
+    host.editor_state_mut().chat.focused = false;
 
     assert!(host.apply_backspace());
-    assert_eq!(host.document.selected, NodeId::NONE);
+    assert!(host.editor_state().selection.is_empty());
 }
 
 #[test]
 fn marquee_drag_replaces_selection_with_intersecting_nodes() {
-    use openpencil_shell_core::document::{Node, NodeKind};
-    use openpencil_shell_core::Rect;
     let mut host = WidgetHostNative::new();
-    let page_idx = host.document.active_page_index;
     // 3 rects: two close together near origin, one far away.
-    host.document.pages[page_idx].children = vec![
-        Node::leaf("n50", NodeKind::Rect, "a").with_bounds(Rect::xywh(50.0, 10.0, 20.0, 20.0)),
-        Node::leaf("n51", NodeKind::Rect, "b").with_bounds(Rect::xywh(90.0, 10.0, 20.0, 20.0)),
-        Node::leaf("n52", NodeKind::Rect, "c").with_bounds(Rect::xywh(200.0, 200.0, 20.0, 20.0)),
-    ];
-    host.document.clear_selection();
+    seed(
+        &mut host,
+        &three_rects(
+            [
+                (50.0, 10.0, 20.0, 20.0),
+                (90.0, 10.0, 20.0, 20.0),
+                (200.0, 200.0, 20.0, 20.0),
+            ],
+            ["n50", "n51", "n52"],
+        ),
+    );
+    host.editor_state_mut().clear_selection();
     let viewport_w = 1440.0;
     let viewport_h = 900.0;
     let (cx0, cy0, _cw, _ch) = host.canvas_region(viewport_w, viewport_h);
-    // Press at doc (5, 5) — INSIDE canvas, OUTSIDE every
-    // node. Drag to doc (130, 50) — marquee covers "a" + "b",
-    // misses "c".
     let press_x = cx0 + 5.0;
     let press_y = cy0 + 5.0;
     host.apply_press(press_x, press_y, viewport_w, viewport_h);
@@ -109,129 +143,126 @@ fn marquee_drag_replaces_selection_with_intersecting_nodes() {
     host.apply_cursor_move(cx0 + 130.0, cy0 + 50.0);
     assert!(host.apply_release_with_viewport(viewport_w, viewport_h));
     assert!(host.marquee_drag.is_none(), "marquee consumed on release");
-    let mut hits: Vec<&str> = host.document.selected_set.iter().map(|i| i.raw()).collect();
+    let mut hits: Vec<String> = host
+        .editor_state()
+        .selection
+        .set
+        .iter()
+        .map(|i| i.as_str().to_string())
+        .collect();
     hits.sort();
     assert_eq!(hits, vec!["n50", "n51"]);
 }
 
 #[test]
 fn marquee_drag_with_shift_preserves_already_selected_hit() {
-    // Codex CONCERN-Q2 regression: shift-marquee must be
-    // ADD-only — a hit that's already in the set stays in,
-    // doesn't get removed.
-    use openpencil_shell_core::document::{Node, NodeKind};
-    use openpencil_shell_core::Rect;
+    // Codex CONCERN-Q2 regression: shift-marquee must be ADD-only.
     let mut host = WidgetHostNative::new();
-    let page_idx = host.document.active_page_index;
-    host.document.pages[page_idx].children = vec![
-        Node::leaf("n70", NodeKind::Rect, "a").with_bounds(Rect::xywh(50.0, 50.0, 20.0, 20.0)),
-        Node::leaf("n71", NodeKind::Rect, "b").with_bounds(Rect::xywh(300.0, 300.0, 20.0, 20.0)),
-    ];
-    // Pre-select "a" — and the marquee will cover it too.
-    host.document.set_single_selection(NodeId::new("n70"));
+    seed(
+        &mut host,
+        &three_rects(
+            [
+                (50.0, 50.0, 20.0, 20.0),
+                (300.0, 300.0, 20.0, 20.0),
+                (900.0, 900.0, 20.0, 20.0),
+            ],
+            ["n70", "n71", "n72"],
+        ),
+    );
+    host.editor_state_mut()
+        .set_single_selection(NodeId::new("n70"));
     host.set_modifier_shift(true);
     let viewport_w = 1440.0;
     let viewport_h = 900.0;
     let (cx0, cy0, _cw, _ch) = host.canvas_region(viewport_w, viewport_h);
-    // Press at doc (5, 5) — empty + far from "a"'s handles.
-    // Drag to doc (90, 90) — covers "a" only.
     host.apply_press(cx0 + 5.0, cy0 + 5.0, viewport_w, viewport_h);
     host.apply_cursor_move(cx0 + 90.0, cy0 + 90.0);
     host.apply_release_with_viewport(viewport_w, viewport_h);
-    // "a" stays in the set (shift-marquee is ADD-only).
-    assert!(host.document.is_selected(&NodeId::new("n70")));
-    assert_eq!(host.document.selected_set.len(), 1);
+    // "n70" stays in the set (shift-marquee is ADD-only).
+    assert!(host.editor_state().is_selected(&NodeId::new("n70")));
+    assert_eq!(host.editor_state().selection.set.len(), 1);
 }
 
 #[test]
 fn marquee_drag_below_screen_threshold_is_a_no_op() {
-    // Codex CONCERN-Q5 regression: threshold is screen-px,
-    // not doc-px — a tiny drag (under 2 screen px) at any
-    // zoom is treated as a click, not a marquee.
-    use openpencil_shell_core::document::{Node, NodeKind};
-    use openpencil_shell_core::Rect;
+    // Codex CONCERN-Q5 regression: threshold is screen-px.
     let mut host = WidgetHostNative::new();
-    let page_idx = host.document.active_page_index;
-    host.document.pages[page_idx].children =
-        vec![Node::leaf("n80", NodeKind::Rect, "a").with_bounds(Rect::xywh(0.0, 0.0, 100.0, 100.0))];
-    // Zoom out to 0.1 — so 1 doc-px ≈ 0.1 screen-px. A drag
-    // of 1 screen-px = 10 doc-px, well above the OLD doc-
-    // space threshold of 0.5 doc-px.
-    host.document.viewport.zoom = 0.1;
-    host.document.clear_selection();
+    seed(
+        &mut host,
+        &three_rects(
+            [
+                (0.0, 0.0, 100.0, 100.0),
+                (5000.0, 5000.0, 10.0, 10.0),
+                (6000.0, 6000.0, 10.0, 10.0),
+            ],
+            ["n80", "n81", "n82"],
+        ),
+    );
+    host.editor_state_mut().viewport.zoom = 0.1;
+    host.editor_state_mut().clear_selection();
     let viewport_w = 1440.0;
     let viewport_h = 900.0;
     let (cx0, cy0, _cw, _ch) = host.canvas_region(viewport_w, viewport_h);
-    // Press far enough from the rect AND from the toolbar
-    // (which lives at canvas-left+12, so we go further
-    // right). At zoom 0.1, rect (0, 0, 100, 100) renders as
-    // 10x10 screen px starting at (cx0, cy0); the toolbar is
-    // a ~44-px column starting at (cx0 + 12). Press at
-    // (cx0 + 100, cy0 + 50) is doc (1000, 500), outside both.
     host.apply_press(cx0 + 100.0, cy0 + 50.0, viewport_w, viewport_h);
     assert!(host.marquee_drag.is_some());
-    // Tiny drag: 1 screen-px. Old doc-space threshold (0.5)
-    // would say "10 doc-px > 0.5 → real marquee" and select
-    // the rect. New screen-space threshold (2) says "1 < 2
-    // → no-op".
+    // Tiny drag: 1 screen-px — below the 2-px threshold.
     host.apply_cursor_move(cx0 + 101.0, cy0 + 50.0);
     host.apply_release_with_viewport(viewport_w, viewport_h);
-    // Selection unchanged — sub-threshold marquee is no-op.
-    assert!(host.document.selected_set.is_empty());
+    assert!(host.editor_state().selection.set.is_empty());
 }
 
 #[test]
 fn marquee_drag_with_shift_extends_existing_selection() {
-    use openpencil_shell_core::document::{Node, NodeKind};
-    use openpencil_shell_core::Rect;
     let mut host = WidgetHostNative::new();
-    let page_idx = host.document.active_page_index;
-    host.document.pages[page_idx].children = vec![
-        Node::leaf("n60", NodeKind::Rect, "a").with_bounds(Rect::xywh(10.0, 10.0, 20.0, 20.0)),
-        Node::leaf("n61", NodeKind::Rect, "b").with_bounds(Rect::xywh(50.0, 10.0, 20.0, 20.0)),
-        // "c" is far away so its handles can't interfere
-        // with the press point used to start the marquee.
-        Node::leaf("n62", NodeKind::Rect, "c").with_bounds(Rect::xywh(300.0, 300.0, 20.0, 20.0)),
-    ];
-    // Pre-select "c" (far from press point so handle hit-test
-    // misses), then shift-marquee over "a" + "b".
-    host.document.set_single_selection(NodeId::new("n62"));
+    seed(
+        &mut host,
+        &three_rects(
+            [
+                (10.0, 10.0, 20.0, 20.0),
+                (50.0, 10.0, 20.0, 20.0),
+                (300.0, 300.0, 20.0, 20.0),
+            ],
+            ["n60", "n61", "n62"],
+        ),
+    );
+    host.editor_state_mut()
+        .set_single_selection(NodeId::new("n62"));
     host.set_modifier_shift(true);
     let viewport_w = 1440.0;
     let viewport_h = 900.0;
     let (cx0, cy0, _cw, _ch) = host.canvas_region(viewport_w, viewport_h);
-    // Press at doc (5, 5) — empty + far from "c"'s handles.
-    // Drag to doc (130, 50) covers "a" (10-30 x) and "b"
-    // (50-70 x), misses "c" (300+ x).
     host.apply_press(cx0 + 5.0, cy0 + 5.0, viewport_w, viewport_h);
     assert!(host.marquee_drag.is_some());
     host.apply_cursor_move(cx0 + 130.0, cy0 + 50.0);
     host.apply_release_with_viewport(viewport_w, viewport_h);
-    // "c" still in set (additive marquee did not clear);
-    // "a" + "b" toggled in.
-    let mut ids: Vec<&str> = host.document.selected_set.iter().map(|i| i.raw()).collect();
+    let mut ids: Vec<String> = host
+        .editor_state()
+        .selection
+        .set
+        .iter()
+        .map(|i| i.as_str().to_string())
+        .collect();
     ids.sort();
     assert_eq!(ids, vec!["n60", "n61", "n62"]);
 }
 
 #[test]
 fn layer_drag_to_reorder_commits_on_release_with_threshold_move() {
-    use openpencil_shell_core::document::{Node, NodeKind};
     use openpencil_shell_core::widgets::TOP_BAR_HEIGHT;
     let mut host = WidgetHostNative::new();
-    let page_idx = host.document.active_page_index;
-    // Three top-level nodes, ids 70 / 71 / 72 — children
-    // already painted as flat layer rows.
-    host.document.pages[page_idx].children = vec![
-        Node::leaf("n70", NodeKind::Rect, "A"),
-        Node::leaf("n71", NodeKind::Rect, "B"),
-        Node::leaf("n72", NodeKind::Rect, "C"),
-    ];
-    host.document.clear_selection();
-    // LayerPanel row geometry — has to match the panel paint
-    // (8 px top inset + Pages section header + 1 page row +
-    // section gap + Layers section header, all walked from
-    // TOP_BAR_HEIGHT).
+    // Three top-level nodes painted as flat layer rows.
+    seed(
+        &mut host,
+        &three_rects(
+            [
+                (0.0, 0.0, 10.0, 10.0),
+                (0.0, 0.0, 10.0, 10.0),
+                (0.0, 0.0, 10.0, 10.0),
+            ],
+            ["n70", "n71", "n72"],
+        ),
+    );
+    host.editor_state_mut().clear_selection();
     let row_h = 28.0; // LAYER_ROW_HEIGHT
     let page_row_h = 32.0; // PAGE_ROW_HEIGHT
     let section_header_h = 28.0;
@@ -241,90 +272,92 @@ fn layer_drag_to_reorder_commits_on_release_with_threshold_move() {
     let layers_top =
         TOP_BAR_HEIGHT + 8.0 + section_header_h + page_row_h + section_gap + section_header_h;
     let row_y = |i: usize| layers_top + (i as f32) * row_h + row_h / 2.0;
-    let row_x = host.document.ui.layer_panel_width / 2.0;
-    // Press on row "A" (index 0) — seeds layer_drag.
+    let row_x = host.editor_state().editor_ui.layer_panel_width / 2.0;
     host.apply_press(row_x, row_y(0), viewport_w, viewport_h);
     assert!(host.layer_drag.is_some());
     assert!(!host.layer_drag.as_ref().unwrap().active);
-    // Move past threshold to row "C" (index 2) — activates drag,
-    // updates current_y so drop_target_at picks "C" After on
-    // release.
     host.apply_cursor_move(row_x, row_y(2) + row_h / 2.0 - 4.0);
     assert!(host.layer_drag.as_ref().unwrap().active);
     host.apply_release_with_viewport(viewport_w, viewport_h);
     assert!(host.layer_drag.is_none(), "drag must be cleared on release");
     // A moved after C → final order [B, C, A].
-    let order: Vec<&str> = host.document.pages[page_idx]
+    let order: Vec<String> = host
+        .editor_state()
+        .doc
         .children
         .iter()
-        .map(|n| n.id.raw())
+        .map(|n| n.base().id.clone())
         .collect();
     assert_eq!(order, vec!["n71", "n72", "n70"]);
 }
 
 #[test]
 fn layer_drag_below_activation_threshold_is_a_click_not_a_reorder() {
-    use openpencil_shell_core::document::{Node, NodeKind};
     use openpencil_shell_core::widgets::TOP_BAR_HEIGHT;
     let mut host = WidgetHostNative::new();
-    let page_idx = host.document.active_page_index;
-    host.document.pages[page_idx].children = vec![
-        Node::leaf("n80", NodeKind::Rect, "X"),
-        Node::leaf("n81", NodeKind::Rect, "Y"),
-    ];
-    host.document.clear_selection();
+    seed(
+        &mut host,
+        &three_rects(
+            [
+                (0.0, 0.0, 10.0, 10.0),
+                (0.0, 0.0, 10.0, 10.0),
+                (5000.0, 5000.0, 10.0, 10.0),
+            ],
+            ["n80", "n81", "n82"],
+        ),
+    );
+    host.editor_state_mut().clear_selection();
     let row_y_first = TOP_BAR_HEIGHT + 8.0 + 28.0 + 32.0 + 8.0 + 28.0 + 14.0;
-    let row_x = host.document.ui.layer_panel_width / 2.0;
+    let row_x = host.editor_state().editor_ui.layer_panel_width / 2.0;
     let viewport_w = 1440.0;
     let viewport_h = 900.0;
     host.apply_press(row_x, row_y_first, viewport_w, viewport_h);
-    // Sub-threshold move (2 px, less than 4 px activation).
     host.apply_cursor_move(row_x, row_y_first + 2.0);
     assert!(
         host.layer_drag.is_some() && !host.layer_drag.as_ref().unwrap().active,
         "sub-threshold move must not activate"
     );
     host.apply_release_with_viewport(viewport_w, viewport_h);
-    // Click semantics: selection is on the first row, tree is
-    // unchanged.
-    let order: Vec<&str> = host.document.pages[page_idx]
+    let order: Vec<String> = host
+        .editor_state()
+        .doc
         .children
         .iter()
-        .map(|n| n.id.raw())
+        .map(|n| n.base().id.clone())
         .collect();
-    assert_eq!(order, vec!["n80", "n81"]);
-    assert_eq!(host.document.selected, NodeId::new("n80"));
+    assert_eq!(order, vec!["n80", "n81", "n82"]);
+    assert_eq!(host.editor_state().selection.anchor, NodeId::new("n80"));
 }
 
 #[test]
 fn anchor_press_release_without_motion_does_not_push_history() {
     // Codex CONCERN: a press-release on an anchor without any
-    // cursor motion in between must NOT pollute the undo stack.
-    // Direct test of release semantics — seed the drag state by
-    // hand (the press hit-test geometry is exercised elsewhere).
-    use openpencil_shell_core::document::{Node, NodeKind};
-    use openpencil_shell_core::{Point2D, Rect};
+    // cursor motion must NOT pollute the undo stack.
+    use openpencil_shell_core::Point2D;
     let mut host = WidgetHostNative::new();
-    let page_idx = host.document.active_page_index;
-    let mut path = Node::leaf("n60", NodeKind::Path, "p");
-    path.bounds = Rect::xywh(0.0, 0.0, 100.0, 50.0);
-    path.points = vec![Point2D::new(0.0, 0.0), Point2D::new(50.0, 25.0)];
-    host.document.pages[page_idx].children = vec![path];
-    host.document.set_single_selection(NodeId::new("n60"));
-    let snap = host.document.snapshot_for_history();
+    seed(
+        &mut host,
+        r#"{"version":"0.8.0","children":[
+          {"type":"path","id":"n60","name":"p","x":0,"y":0,
+           "anchors":[{"x":0,"y":0},{"x":50,"y":25}]}
+        ]}"#,
+    );
+    host.editor_state_mut()
+        .set_single_selection(NodeId::new("n60"));
+    let snap = host.editor_state().snapshot_for_history();
     host.path_anchor_drag = Some(crate::widget_host::PathAnchorDragState {
         node_id: NodeId::new("n60"),
         anchor_index: 1,
         start_doc: Point2D::new(50.0, 25.0),
-        moved: false, // no cursor_move happened between press + release
+        moved: false,
         pre_drag_snapshot: snap,
     });
-    let history_before = host.document.history.past.len();
+    let history_before = host.editor_state().history.past.len();
     let consumed = host.apply_release_with_viewport(1440.0, 900.0);
     assert!(host.path_anchor_drag.is_none(), "drag state cleared");
     assert!(!consumed, "release with no motion is not a UI change");
     assert_eq!(
-        host.document.history.past.len(),
+        host.editor_state().history.past.len(),
         history_before,
         "no-motion press-release must not push a history entry"
     );
@@ -332,22 +365,21 @@ fn anchor_press_release_without_motion_does_not_push_history() {
 
 #[test]
 fn anchor_drag_back_to_start_lands_at_start() {
-    // Codex BLOCK: previous code only wrote the anchor when the
-    // cursor differed from start_doc, so dragging away and back
-    // skipped the final write — the anchor stuck at the last
-    // off-start frame.
-    use openpencil_shell_core::document::{Node, NodeKind, Tool};
-    use openpencil_shell_core::{Point2D, Rect};
+    // Codex BLOCK: dragging away and back must write the final
+    // position — the anchor must follow the cursor home.
+    use openpencil_shell_core::Point2D;
     let mut host = WidgetHostNative::new();
-    let page_idx = host.document.active_page_index;
-    let mut path = Node::leaf("n60", NodeKind::Path, "p");
-    path.bounds = Rect::xywh(0.0, 0.0, 100.0, 50.0);
-    path.points = vec![Point2D::new(0.0, 0.0), Point2D::new(50.0, 25.0)];
-    host.document.pages[page_idx].children = vec![path];
-    host.document.set_single_selection(NodeId::new("n60"));
-    host.document.tool = Tool::Pen;
-    let snap = host.document.snapshot_for_history();
-    // Seed drag state at the anchor (50, 25).
+    seed(
+        &mut host,
+        r#"{"version":"0.8.0","children":[
+          {"type":"path","id":"n60","name":"p","x":0,"y":0,
+           "anchors":[{"x":0,"y":0},{"x":50,"y":25}]}
+        ]}"#,
+    );
+    host.editor_state_mut()
+        .set_single_selection(NodeId::new("n60"));
+    host.editor_state_mut().tool = op_editor_core::Tool::Pen;
+    let snap = host.editor_state().snapshot_for_history();
     host.path_anchor_drag = Some(crate::widget_host::PathAnchorDragState {
         node_id: NodeId::new("n60"),
         anchor_index: 1,
@@ -358,46 +390,45 @@ fn anchor_drag_back_to_start_lands_at_start() {
     let viewport_w = 1440.0;
     let viewport_h = 900.0;
     let (cx0, cy0, _cw, _ch) = host.canvas_region(viewport_w, viewport_h);
-    // Drag away to doc (80, 25) — first move sets `moved = true`.
+    // Drag away to doc (80, 25).
     host.apply_cursor_move(cx0 + 80.0, cy0 + 25.0);
-    let after_first = host.document.pages[page_idx].children[0].points[1];
-    assert!((after_first.x - 80.0).abs() < 0.5);
-    // Drag BACK to start (50, 25) — must write the new position.
+    let after_first = anchor_at(&host, "n60", 1);
+    assert!((after_first.0 - 80.0).abs() < 0.5);
+    // Drag BACK to start (50, 25).
     host.apply_cursor_move(cx0 + 50.0, cy0 + 25.0);
-    let after_return = host.document.pages[page_idx].children[0].points[1];
+    let after_return = anchor_at(&host, "n60", 1);
     assert!(
-        (after_return.x - 50.0).abs() < 0.5,
+        (after_return.0 - 50.0).abs() < 0.5,
         "anchor must follow cursor back to start; got {after_return:?}"
     );
 }
 
 #[test]
 fn anchor_drag_with_motion_pushes_one_history_entry() {
-    // Inverse of the above — when the user actually moved the
-    // anchor, exactly one entry lands on the undo stack so Cmd-Z
-    // reverts the whole drag.
-    use openpencil_shell_core::document::{Node, NodeKind};
-    use openpencil_shell_core::{Point2D, Rect};
+    use openpencil_shell_core::Point2D;
     let mut host = WidgetHostNative::new();
-    let page_idx = host.document.active_page_index;
-    let mut path = Node::leaf("n60", NodeKind::Path, "p");
-    path.bounds = Rect::xywh(0.0, 0.0, 100.0, 50.0);
-    path.points = vec![Point2D::new(0.0, 0.0), Point2D::new(50.0, 25.0)];
-    host.document.pages[page_idx].children = vec![path];
-    host.document.set_single_selection(NodeId::new("n60"));
-    let snap = host.document.snapshot_for_history();
+    seed(
+        &mut host,
+        r#"{"version":"0.8.0","children":[
+          {"type":"path","id":"n60","name":"p","x":0,"y":0,
+           "anchors":[{"x":0,"y":0},{"x":50,"y":25}]}
+        ]}"#,
+    );
+    host.editor_state_mut()
+        .set_single_selection(NodeId::new("n60"));
+    let snap = host.editor_state().snapshot_for_history();
     host.path_anchor_drag = Some(crate::widget_host::PathAnchorDragState {
         node_id: NodeId::new("n60"),
         anchor_index: 1,
         start_doc: Point2D::new(50.0, 25.0),
-        moved: true, // simulating real cursor_move during drag
+        moved: true,
         pre_drag_snapshot: snap,
     });
-    let history_before = host.document.history.past.len();
+    let history_before = host.editor_state().history.past.len();
     let consumed = host.apply_release_with_viewport(1440.0, 900.0);
     assert!(consumed, "release after motion is a UI change");
     assert_eq!(
-        host.document.history.past.len(),
+        host.editor_state().history.past.len(),
         history_before + 1,
         "exactly one history entry per drag"
     );
@@ -406,75 +437,95 @@ fn anchor_drag_with_motion_pushes_one_history_entry() {
 #[test]
 fn node_drag_not_intercepted_by_align_toolbar_hover() {
     // Codex CONCERN: with 2+ selected, an active node-drag must
-    // continue moving the nodes when the cursor sweeps over the
-    // floating align toolbar's hit region. Earlier code's early
-    // return on hover-state change would have stolen the drag's
-    // delta for that frame.
-    use openpencil_shell_core::document::{Node, NodeKind};
+    // keep moving the nodes when the cursor sweeps the align
+    // toolbar's hit region.
     use openpencil_shell_core::widgets::TOP_BAR_HEIGHT;
-    use openpencil_shell_core::Rect;
     let mut host = WidgetHostNative::new();
-    let page_idx = host.document.active_page_index;
-    host.document.pages[page_idx].children = vec![
-        Node::leaf("n90", NodeKind::Rect, "a").with_bounds(Rect::xywh(50.0, 200.0, 20.0, 20.0)),
-        Node::leaf("n91", NodeKind::Rect, "b").with_bounds(Rect::xywh(120.0, 200.0, 20.0, 20.0)),
-    ];
+    seed(
+        &mut host,
+        &three_rects(
+            [
+                (50.0, 200.0, 20.0, 20.0),
+                (120.0, 200.0, 20.0, 20.0),
+                (9000.0, 9000.0, 10.0, 10.0),
+            ],
+            ["n90", "n91", "n92"],
+        ),
+    );
     // Two-node selection so the align toolbar is shown.
-    host.document.selected_set = vec![NodeId::new("n90"), NodeId::new("n91")];
-    host.document.selected = NodeId::new("n91");
+    host.editor_state_mut().selection.set =
+        vec![NodeId::new("n90"), NodeId::new("n91")];
+    host.editor_state_mut().selection.anchor = NodeId::new("n91");
+    host.mark_paint_dirty_for_test();
     let viewport_w = 1440.0;
     let viewport_h = 900.0;
     let (cx0, cy0, _cw, _ch) = host.canvas_region(viewport_w, viewport_h);
-    // Press on node "a" — promotes to a node-drag.
     let press_x = cx0 + 60.0;
     let press_y = cy0 + 210.0;
     host.apply_press(press_x, press_y, viewport_w, viewport_h);
     assert!(host.node_drag.is_some(), "node_drag must seed on press");
-    // Move the cursor toward the canvas-top center — the align
-    // toolbar's hit region sits there (y = TOP_BAR_HEIGHT + 16).
-    let zoom = host.document.viewport.zoom.max(0.0001);
-    let target_x = host.document.ui.layer_panel_width + 400.0;
-    let target_y = TOP_BAR_HEIGHT + 24.0; // inside align toolbar y-band
+    let zoom = host.editor_state().viewport.zoom.max(0.0001);
+    let target_x = host.editor_state().editor_ui.layer_panel_width + 400.0;
+    let target_y = TOP_BAR_HEIGHT + 24.0;
     let expected_dx = (target_x - press_x) / zoom;
     let expected_dy = (target_y - press_y) / zoom;
     host.apply_cursor_move(target_x, target_y);
     // Nodes must have translated by (expected_dx, expected_dy).
-    let bounds_a = host.document.pages[page_idx].children[0].bounds;
-    let bounds_b = host.document.pages[page_idx].children[1].bounds;
+    let a = node_xy(&host, "n90");
+    let b = node_xy(&host, "n91");
     assert!(
-        (bounds_a.origin.x - (50.0 + expected_dx)).abs() < 0.5
-            && (bounds_a.origin.y - (200.0 + expected_dy)).abs() < 0.5,
-        "node-drag delta lost on a; got {:?}, expected start+delta",
-        bounds_a
+        (a.0 - (50.0 + expected_dx as f64)).abs() < 0.5
+            && (a.1 - (200.0 + expected_dy as f64)).abs() < 0.5,
+        "node-drag delta lost on a; got {a:?}",
     );
     assert!(
-        (bounds_b.origin.x - (120.0 + expected_dx)).abs() < 0.5,
-        "node-drag delta lost on b; got {:?}",
-        bounds_b
+        (b.0 - (120.0 + expected_dx as f64)).abs() < 0.5,
+        "node-drag delta lost on b; got {b:?}",
     );
 }
 
-
-// --- Phase 6 bridge scaffolding ----------------------------------
-// Verifies the scoped `EditorState` field exists on the host and is
-// reachable for the per-group widget migration. Deleted in Phase 7.
-
 #[test]
-fn host_carries_a_scoped_editor_state_bridge() {
+fn host_carries_editor_state_as_source_of_truth() {
+    // A fresh host opens with the demo sample seeded onto
+    // `EditorState` — the host's single source of truth.
     let host = WidgetHostNative::new();
-    // A fresh host starts with an empty canonical document — the
-    // bridge state is not yet seeded from `document` (no converter
-    // exists; each later 6.x task seeds its own widget group).
-    assert!(host.editor_state().doc.children.is_empty());
-    assert!(host.editor_state().selection.is_empty());
+    assert!(!host.editor_state().doc.children.is_empty());
+    assert!(!host.editor_state().selection.is_empty());
 }
 
 #[test]
-fn editor_state_bridge_is_independently_mutable() {
-    // The bridge accessor hands out a real `&mut EditorState` so the
-    // per-group input migration in later 6.x tasks can drive it
-    // without touching the legacy `document`.
+fn editor_state_is_mutable_through_the_accessor() {
     let mut host = WidgetHostNative::new();
     host.editor_state_mut().tool = op_editor_core::Tool::Rect;
     assert_eq!(host.editor_state().tool, op_editor_core::Tool::Rect);
+}
+
+/// Read a node's `(x, y)` from the host's `editor_state.doc`.
+fn node_xy(host: &WidgetHostNative, id: &str) -> (f64, f64) {
+    let n = host
+        .editor_state()
+        .doc
+        .children
+        .iter()
+        .find(|n| n.base().id == id)
+        .expect("node present");
+    (n.base().x.unwrap_or(0.0), n.base().y.unwrap_or(0.0))
+}
+
+/// Read a path anchor's `(x, y)` from the host's `editor_state.doc`.
+fn anchor_at(host: &WidgetHostNative, id: &str, idx: usize) -> (f64, f64) {
+    let n = host
+        .editor_state()
+        .doc
+        .children
+        .iter()
+        .find(|n| n.base().id == id)
+        .expect("node present");
+    match n {
+        jian_ops_schema::node::PenNode::Path(p) => {
+            let a = &p.anchors.as_ref().expect("anchors")[idx];
+            (a.x, a.y)
+        }
+        _ => panic!("not a path node"),
+    }
 }
