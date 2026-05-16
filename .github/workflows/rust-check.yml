@@ -18,9 +18,13 @@ on:
       - 'Cargo.toml'
       - 'Cargo.lock'
       - 'crates/**'
+      - 'vendor/**'
+      - 'deny.toml'
       - 'rust-toolchain.toml'
+      - 'rustfmt.toml'
       - 'tools/check-jian-boundaries.sh'
       - 'tools/check-widget-boundary.sh'
+      - '.github/workflows/rust-check.yml'
 
 jobs:
   check:
