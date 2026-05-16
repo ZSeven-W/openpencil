@@ -39,9 +39,12 @@
 //! `delete_selected`, undo/redo push, …) are Task 4.5. A minimal
 //! constructor is provided so the type is usable + testable.
 
+use crate::chat::ChatState;
+use crate::components::ComponentLibrary;
 use crate::history::History;
 use crate::selection::SelectionState;
 use crate::tool::Tool;
+use crate::ui_chrome::UiChrome;
 use crate::ui_draft::UiDraftState;
 use crate::viewport::Viewport;
 
@@ -69,6 +72,17 @@ pub struct EditorState {
     /// Transient UI state — draft buffers, focus, active page index,
     /// rebuilt-on-load variable/theme caches.
     pub ui: UiDraftState,
+    /// Chrome / overlay UI state — the widget-layer toggles, hover
+    /// targets, menu / modal open flags and panel metrics. With this
+    /// + `chat` + `components`, `EditorState` is a complete state
+    /// superset of shell-core's `Document` (Phase 6 Task 6.1a).
+    pub chrome: UiChrome,
+    /// AI chat sub-state — message transcript, input draft, panel
+    /// anchor, model catalog. Mirrors shell-core's `Document.chat`.
+    pub chat: ChatState,
+    /// Component library — reusable design-system subtrees. Mirrors
+    /// shell-core's `Document.components`.
+    pub components: ComponentLibrary,
 }
 
 impl EditorState {
@@ -86,6 +100,9 @@ impl EditorState {
             history: History::new(),
             clipboard: Vec::new(),
             ui: UiDraftState::new(),
+            chrome: UiChrome::new(),
+            chat: ChatState::default(),
+            components: ComponentLibrary::default(),
         }
     }
 
@@ -151,6 +168,20 @@ mod tests {
         // Transient editor state always starts fresh.
         assert!(s.selection.is_empty());
         assert_eq!(s.tool, Tool::Select);
+    }
+
+    #[test]
+    fn new_state_carries_chrome_chat_and_components() {
+        let s = EditorState::new();
+        // Chrome defaults: sidebar open, dark theme, no menus open.
+        assert!(s.chrome.sidebar_open);
+        assert!(!s.chrome.file_menu_open);
+        assert!(!s.chrome.agent_settings_open);
+        // Chat starts empty + idle.
+        assert!(s.chat.messages.is_empty());
+        assert!(s.chat.pending_send.is_none());
+        // Component library starts empty.
+        assert!(s.components.is_empty());
     }
 
     #[test]
