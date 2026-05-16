@@ -9,7 +9,7 @@ on:
       - 'deny.toml'
       - '.github/workflows/wasm-bundle-check.yml'
   push:
-    branches: [main, 'feat/rust-ification']
+    branches: ['**']
 
 jobs:
   wasm32-check:
