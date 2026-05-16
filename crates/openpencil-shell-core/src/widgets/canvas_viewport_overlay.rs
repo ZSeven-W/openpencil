@@ -16,13 +16,13 @@ pub fn paint_pen_rubber_band(
     canvas_rect: Rect,
     viewport: &Viewport,
 ) {
-    let (Some(pen_id), Some(cursor_doc)) = (doc.ui.pen_in_progress, doc.ui.pen_cursor_doc) else {
+    let (Some(pen_id), Some(cursor_doc)) = (doc.ui.pen_in_progress.clone(), doc.ui.pen_cursor_doc) else {
         return;
     };
     let Some(page) = doc.active_page() else {
         return;
     };
-    let Some(node) = page.find(pen_id) else {
+    let Some(node) = page.find(&pen_id) else {
         return;
     };
     let Some(last) = node.points.last().copied() else {

@@ -16,13 +16,13 @@ use super::{McpTool, ToolErrorCode, ToolOutcome};
 /// the wire response is `count=0` for the latter, `ToolFailed` for
 /// the former (codex stop-gate: previous impl conflated the two).
 pub struct GetNodeChildren {
-    pub children: BTreeMap<u64, Vec<ChildRecord>>,
-    pub known_ids: std::collections::BTreeSet<u64>,
+    pub children: BTreeMap<String, Vec<ChildRecord>>,
+    pub known_ids: std::collections::BTreeSet<String>,
 }
 
 #[derive(Debug, Clone)]
 pub struct ChildRecord {
-    pub id: u64,
+    pub id: String,
     pub kind: String,
     pub name: String,
     pub x: i32,
@@ -45,16 +45,9 @@ impl McpTool for GetNodeChildren {
                 );
             }
         };
-        let id: u64 = match raw.parse() {
-            Ok(n) => n,
-            Err(_) => {
-                return ToolOutcome::Err(
-                    ToolErrorCode::InvalidArgument,
-                    format!("node_id must be a decimal u64, got {raw:?}"),
-                );
-            }
-        };
-        if !self.known_ids.contains(&id) {
+        // `node_id` is the canonical `.op` schema string id.
+        let id: &str = raw.as_str();
+        if !self.known_ids.contains(id) {
             return ToolOutcome::Err(
                 ToolErrorCode::ToolFailed,
                 format!("node {id} not found"),
@@ -66,7 +59,7 @@ impl McpTool for GetNodeChildren {
         // container" with "unknown id". LLM callers couldn't tell
         // the two apart and were forced into defensive double-checks.
         let empty: Vec<ChildRecord> = Vec::new();
-        let records: &Vec<ChildRecord> = self.children.get(&id).unwrap_or(&empty);
+        let records: &Vec<ChildRecord> = self.children.get(id).unwrap_or(&empty);
         let mut out = BTreeMap::new();
         out.insert("count".into(), records.len().to_string());
         // Comma-separated id list keeps the response wire-compatible
@@ -89,8 +82,8 @@ impl McpTool for GetNodeChildren {
 }
 
 pub fn get_node_children_snapshot(doc: &crate::document::Document) -> GetNodeChildren {
-    let mut children: BTreeMap<u64, Vec<ChildRecord>> = BTreeMap::new();
-    let mut known_ids: std::collections::BTreeSet<u64> = std::collections::BTreeSet::new();
+    let mut children: BTreeMap<String, Vec<ChildRecord>> = BTreeMap::new();
+    let mut known_ids: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
     for page in &doc.pages {
         for node in &page.children {
             walk(node, &mut children, &mut known_ids);
@@ -104,19 +97,19 @@ pub fn get_node_children_snapshot(doc: &crate::document::Document) -> GetNodeChi
 
 fn walk(
     node: &crate::document::Node,
-    out: &mut BTreeMap<u64, Vec<ChildRecord>>,
-    known: &mut std::collections::BTreeSet<u64>,
+    out: &mut BTreeMap<String, Vec<ChildRecord>>,
+    known: &mut std::collections::BTreeSet<String>,
 ) {
-    known.insert(node.id.raw());
+    known.insert(node.id.as_str().to_string());
     if node.children.is_empty() {
         return;
     }
-    let parent_id = node.id.raw();
+    let parent_id = node.id.as_str().to_string();
     let mut records = Vec::with_capacity(node.children.len());
     for child in &node.children {
         let bounds = child.aggregate_bounds();
         records.push(ChildRecord {
-            id: child.id.raw(),
+            id: child.id.as_str().to_string(),
             kind: kind_label(&child.kind).into(),
             name: child.name.clone(),
             x: bounds.origin.x as i32,

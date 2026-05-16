@@ -66,7 +66,7 @@ mod tests {
         let mut doc = Document::empty();
         let p0 = doc.pages.get_mut(0).unwrap();
         p0.children.clear();
-        let mut n0 = Node::leaf(10, NodeKind::Rect, "r");
+        let mut n0 = Node::leaf("n10", NodeKind::Rect, "r");
         n0.bounds = Rect::xywh(0.0, 0.0, 60.0, 40.0);
         n0.fill = Some(Color {
             r: 0.5,
@@ -75,8 +75,8 @@ mod tests {
             a: 1.0,
         });
         p0.children.push(n0);
-        let p1 = openpencil_shell_core::document::Page::new(2, "Page 2", Vec::new());
-        let mut n1 = Node::leaf(20, NodeKind::Ellipse, "e");
+        let p1 = openpencil_shell_core::document::Page::new("n2", "Page 2", Vec::new());
+        let mut n1 = Node::leaf("n20", NodeKind::Ellipse, "e");
         n1.bounds = Rect::xywh(0.0, 0.0, 40.0, 40.0);
         n1.fill = Some(Color {
             r: 0.8,

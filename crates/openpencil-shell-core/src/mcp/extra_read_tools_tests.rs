@@ -16,15 +16,15 @@ fn rect(x: f32, y: f32, w: f32, h: f32) -> Rect {
 
 fn doc_with_frame_and_two_children() -> Document {
     let mut doc = Document::empty();
-    let child_a = Node::leaf(20, NodeKind::Rect, "a")
+    let child_a = Node::leaf("n20", NodeKind::Rect, "a")
         .with_bounds(rect(10.0, 10.0, 30.0, 30.0))
         .with_fill(Color::RED);
-    let child_b = Node::leaf(21, NodeKind::Text, "b")
+    let child_b = Node::leaf("n21", NodeKind::Text, "b")
         .with_bounds(rect(50.0, 10.0, 30.0, 20.0))
         .with_fill(Color::BLACK);
-    let frame = Node::with_children(10, NodeKind::Frame, "frame", vec![child_a, child_b])
+    let frame = Node::with_children("n10", NodeKind::Frame, "frame", vec![child_a, child_b])
         .with_bounds(rect(0.0, 0.0, 200.0, 100.0));
-    doc.pages[0] = Page::new(1, "P", vec![frame]);
+    doc.pages[0] = Page::new("n1", "P", vec![frame]);
     doc
 }
 
@@ -33,12 +33,12 @@ fn get_node_children_returns_count_and_ids_for_known_parent() {
     let doc = doc_with_frame_and_two_children();
     let tool = get_node_children_snapshot(&doc);
     let mut args = BTreeMap::new();
-    args.insert("node_id".into(), "10".into());
+    args.insert("node_id".into(), "n10".into());
     match tool.call(&args) {
         ToolOutcome::Ok(out) => {
             assert_eq!(out.get("count"), Some(&"2".to_string()));
-            assert_eq!(out.get("ids"), Some(&"20,21".to_string()));
-            assert_eq!(out.get("child_0_id"), Some(&"20".to_string()));
+            assert_eq!(out.get("ids"), Some(&"n20,n21".to_string()));
+            assert_eq!(out.get("child_0_id"), Some(&"n20".to_string()));
             assert_eq!(out.get("child_0_kind"), Some(&"rect".to_string()));
             assert_eq!(out.get("child_1_kind"), Some(&"text".to_string()));
         }
@@ -51,7 +51,7 @@ fn get_node_children_errors_on_unknown_id() {
     let doc = doc_with_frame_and_two_children();
     let tool = get_node_children_snapshot(&doc);
     let mut args = BTreeMap::new();
-    args.insert("node_id".into(), "9999".into());
+    args.insert("node_id".into(), "n9999".into());
     match tool.call(&args) {
         ToolOutcome::Err(code, msg) => {
             assert_eq!(code, ToolErrorCode::ToolFailed);
@@ -69,7 +69,7 @@ fn get_node_children_returns_empty_for_leaf_id() {
     let doc = doc_with_frame_and_two_children();
     let tool = get_node_children_snapshot(&doc);
     let mut args = BTreeMap::new();
-    args.insert("node_id".into(), "20".into());
+    args.insert("node_id".into(), "n20".into());
     match tool.call(&args) {
         ToolOutcome::Ok(out) => {
             assert_eq!(out.get("count"), Some(&"0".to_string()));
@@ -83,12 +83,12 @@ fn get_node_children_returns_empty_for_leaf_id() {
 fn get_node_children_returns_empty_for_known_container_without_children() {
     let mut doc = Document::empty();
     // An empty Frame at the page root — known id, no children.
-    let frame = Node::with_children(42, NodeKind::Frame, "empty", vec![])
+    let frame = Node::with_children("n42", NodeKind::Frame, "empty", vec![])
         .with_bounds(rect(0.0, 0.0, 100.0, 100.0));
-    doc.pages[0] = Page::new(1, "P", vec![frame]);
+    doc.pages[0] = Page::new("n1", "P", vec![frame]);
     let tool = get_node_children_snapshot(&doc);
     let mut args = BTreeMap::new();
-    args.insert("node_id".into(), "42".into());
+    args.insert("node_id".into(), "n42".into());
     match tool.call(&args) {
         ToolOutcome::Ok(out) => {
             assert_eq!(out.get("count"), Some(&"0".to_string()));
@@ -108,13 +108,17 @@ fn get_node_children_rejects_missing_arg() {
 }
 
 #[test]
-fn get_node_children_rejects_non_numeric_arg() {
+fn get_node_children_rejects_unknown_string_id() {
+    // `node_id` is now the canonical `.op` schema string id —
+    // any arbitrary string is a syntactically-valid id, so an
+    // id that isn't in the document is a not-found ToolFailed
+    // (no numeric-parse InvalidArgument path remains).
     let doc = doc_with_frame_and_two_children();
     let tool = get_node_children_snapshot(&doc);
     let mut args = BTreeMap::new();
-    args.insert("node_id".into(), "not-a-number".into());
+    args.insert("node_id".into(), "not-a-known-id".into());
     match tool.call(&args) {
-        ToolOutcome::Err(code, _) => assert_eq!(code, ToolErrorCode::InvalidArgument),
-        other => panic!("expected InvalidArgument, got {other:?}"),
+        ToolOutcome::Err(code, _) => assert_eq!(code, ToolErrorCode::ToolFailed),
+        other => panic!("expected ToolFailed, got {other:?}"),
     }
 }

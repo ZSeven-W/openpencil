@@ -4,8 +4,8 @@ use super::*;
 
 /// Walks `node` and descendants until it finds `target`, then
 /// overwrites its `name`. Backs `Document::rename_commit`.
-pub(in crate::document) fn set_name_walk(node: &mut Node, target: NodeId, new_name: &str) -> bool {
-    if node.id == target {
+pub(in crate::document) fn set_name_walk(node: &mut Node, target: &NodeId, new_name: &str) -> bool {
+    if node.id == *target {
         node.name = new_name.to_string();
         return true;
     }
@@ -20,9 +20,9 @@ pub(in crate::document) fn set_name_walk(node: &mut Node, target: NodeId, new_na
 /// Mut ref to a Path node's `points`. None if missing or not Path.
 pub(in crate::document) fn path_points_mut_walk<'a>(
     node: &'a mut Node,
-    target: NodeId,
+    target: &NodeId,
 ) -> Option<&'a mut Vec<crate::Point2D>> {
-    if node.id == target {
+    if node.id == *target {
         if matches!(node.kind, NodeKind::Path) {
             return Some(&mut node.points);
         }
@@ -39,9 +39,9 @@ pub(in crate::document) fn path_points_mut_walk<'a>(
 /// Mut ref to node's `text`; auto-inserts `Some("")` when missing.
 pub(in crate::document) fn text_mut_walk<'a>(
     node: &'a mut Node,
-    target: NodeId,
+    target: &NodeId,
 ) -> Option<&'a mut String> {
-    if node.id == target {
+    if node.id == *target {
         return Some(node.text.get_or_insert_with(String::new));
     }
     for child in &mut node.children {
@@ -55,11 +55,11 @@ pub(in crate::document) fn text_mut_walk<'a>(
 /// Recursive helper for `Document::set_selected_color`.
 pub(in crate::document) fn set_color_walk(
     node: &mut Node,
-    target: NodeId,
+    target: &NodeId,
     is_fill: bool,
     color: crate::Color,
 ) -> bool {
-    if node.id == target {
+    if node.id == *target {
         if is_fill {
             node.fill = Some(color);
         } else {
@@ -84,10 +84,10 @@ pub(in crate::document) fn set_color_walk(
 /// node's aggregate-bounds center.
 pub(in crate::document) fn set_rotation_walk(
     node: &mut Node,
-    target: NodeId,
+    target: &NodeId,
     radians: f32,
 ) -> bool {
-    if node.id == target {
+    if node.id == *target {
         node.rotation = radians;
         return true;
     }
@@ -104,10 +104,10 @@ pub(in crate::document) fn set_rotation_walk(
 /// bounds. Containers (bounds=ZERO) are no-ops.
 pub(in crate::document) fn set_bounds_walk(
     node: &mut Node,
-    target: NodeId,
+    target: &NodeId,
     new_bounds: crate::Rect,
 ) -> bool {
-    if node.id == target {
+    if node.id == *target {
         if node.bounds.size.x > 0.0 || node.bounds.size.y > 0.0 {
             node.bounds = new_bounds;
         }
@@ -171,7 +171,7 @@ pub(in crate::document) fn hit_test_walk(
         return None;
     }
     if point_in_node(node, local, bounds, zoom) {
-        return Some(node.id);
+        return Some(node.id.clone());
     }
     None
 }
@@ -330,11 +330,11 @@ pub(in crate::document) fn distance_point_to_segment(
 /// bounded Frame must shift the children too or they'd detach.
 pub(in crate::document) fn translate_walk(
     node: &mut Node,
-    target: NodeId,
+    target: &NodeId,
     dx: f32,
     dy: f32,
 ) -> bool {
-    if node.id == target {
+    if node.id == *target {
         translate_subtree(node, dx, dy);
         return true;
     }
@@ -352,11 +352,11 @@ pub(in crate::document) fn translate_walk(
 /// and one of its descendants are in the selection set.
 pub(in crate::document) fn is_ancestor_in_set(
     children: &[Node],
-    target: NodeId,
+    target: &NodeId,
     set: &[NodeId],
 ) -> bool {
     for child in children {
-        if descendant_contains(child, target) && child.id != target && set.contains(&child.id) {
+        if descendant_contains(child, target) && child.id != *target && set.contains(&child.id) {
             return true;
         }
         if is_ancestor_in_set(&child.children, target, set) {
@@ -367,8 +367,8 @@ pub(in crate::document) fn is_ancestor_in_set(
 }
 
 /// True iff `target` equals `node` or appears in its subtree.
-pub(in crate::document) fn descendant_contains(node: &Node, target: NodeId) -> bool {
-    if node.id == target {
+pub(in crate::document) fn descendant_contains(node: &Node, target: &NodeId) -> bool {
+    if node.id == *target {
         return true;
     }
     node.children.iter().any(|c| descendant_contains(c, target))
@@ -388,11 +388,11 @@ pub(in crate::document) fn translate_subtree(node: &mut Node, dx: f32, dy: f32) 
 /// `true` once the edit lands on the matching node.
 pub(in crate::document) fn commit_property_walk(
     node: &mut Node,
-    sel: NodeId,
+    sel: &NodeId,
     focus: PropertyFocus,
     value: f32,
 ) -> bool {
-    if node.id == sel {
+    if node.id == *sel {
         match focus {
             PropertyFocus::PositionX => node.bounds.origin.x = value,
             PropertyFocus::PositionY => node.bounds.origin.y = value,
@@ -441,8 +441,8 @@ pub enum ReorderDirection {
 /// Recursive helper for `Document::delete_selected`. Returns true
 /// when the target was found + removed from `children` or any of
 /// its descendants' children.
-pub(in crate::document) fn remove_from_children(children: &mut Vec<Node>, target: NodeId) -> bool {
-    if let Some(idx) = children.iter().position(|n| n.id == target) {
+pub(in crate::document) fn remove_from_children(children: &mut Vec<Node>, target: &NodeId) -> bool {
+    if let Some(idx) = children.iter().position(|n| n.id == *target) {
         children.remove(idx);
         return true;
     }
@@ -467,9 +467,9 @@ pub(in crate::document) fn subtree_all_editable(node: &Node) -> bool {
     node.children.iter().all(subtree_all_editable)
 }
 
-pub(in crate::document) fn toggle_hidden_walk(children: &mut Vec<Node>, target: NodeId) -> bool {
+pub(in crate::document) fn toggle_hidden_walk(children: &mut Vec<Node>, target: &NodeId) -> bool {
     for child in children.iter_mut() {
-        if child.id == target {
+        if child.id == *target {
             child.hidden = !child.hidden;
             return true;
         }
@@ -482,10 +482,10 @@ pub(in crate::document) fn toggle_hidden_walk(children: &mut Vec<Node>, target: 
 
 pub(in crate::document) fn set_fill_type_walk(
     node: &mut Node,
-    target: NodeId,
+    target: &NodeId,
     fill_type: FillType,
 ) -> bool {
-    if node.id == target {
+    if node.id == *target {
         node.fill_type = fill_type;
         return true;
     }
@@ -497,9 +497,9 @@ pub(in crate::document) fn set_fill_type_walk(
     false
 }
 
-pub(in crate::document) fn toggle_collapsed_walk(children: &mut Vec<Node>, target: NodeId) -> bool {
+pub(in crate::document) fn toggle_collapsed_walk(children: &mut Vec<Node>, target: &NodeId) -> bool {
     for child in children.iter_mut() {
-        if child.id == target {
+        if child.id == *target {
             child.collapsed = !child.collapsed;
             return true;
         }
@@ -510,9 +510,9 @@ pub(in crate::document) fn toggle_collapsed_walk(children: &mut Vec<Node>, targe
     false
 }
 
-pub(in crate::document) fn toggle_locked_walk(children: &mut Vec<Node>, target: NodeId) -> bool {
+pub(in crate::document) fn toggle_locked_walk(children: &mut Vec<Node>, target: &NodeId) -> bool {
     for child in children.iter_mut() {
-        if child.id == target {
+        if child.id == *target {
             child.locked = !child.locked;
             return true;
         }
@@ -523,13 +523,39 @@ pub(in crate::document) fn toggle_locked_walk(children: &mut Vec<Node>, target: 
     false
 }
 
-pub(in crate::document) fn deep_clone_with_new_ids(node: &Node, next_id: &mut u64) -> Node {
-    let id = NodeId::new(*next_id);
-    *next_id += 1;
+/// Allocate the next free editor-minted id. Formats `n{*next_id}`,
+/// advancing `*next_id` past any candidate that already exists in
+/// `taken` (the rare overlap with a pre-existing arbitrary string
+/// id from a canonical `.op` load). The chosen id is recorded in
+/// `taken` so a subsequent call in the same clone walk can't pick
+/// it again. Returns `None` only on `u64` counter exhaustion.
+pub(in crate::document) fn alloc_n_id(
+    next_id: &mut u64,
+    taken: &mut std::collections::HashSet<NodeId>,
+) -> Option<NodeId> {
+    loop {
+        let candidate = NodeId::new(format!("n{}", *next_id));
+        *next_id = next_id.checked_add(1)?;
+        if taken.insert(candidate.clone()) {
+            return Some(candidate);
+        }
+    }
+}
+
+pub(in crate::document) fn deep_clone_with_new_ids(
+    node: &Node,
+    next_id: &mut u64,
+    taken: &mut std::collections::HashSet<NodeId>,
+) -> Node {
+    // Counter exhaustion is guarded by the caller's headroom check
+    // (`subtree_size`); fall back to a non-colliding format only if
+    // that contract is somehow violated, never panicking mid-clone.
+    let id = alloc_n_id(next_id, taken)
+        .unwrap_or_else(|| NodeId::new(format!("n{}-{}", u64::MAX, taken.len())));
     let children: Vec<Node> = node
         .children
         .iter()
-        .map(|c| deep_clone_with_new_ids(c, next_id))
+        .map(|c| deep_clone_with_new_ids(c, next_id, taken))
         .collect();
     Node {
         id,
@@ -565,27 +591,28 @@ pub(in crate::document) fn deep_clone_with_new_ids(node: &Node, next_id: &mut u6
 /// half-cloned state on overflow.
 pub(in crate::document) fn duplicate_in_children(
     children: &mut Vec<Node>,
-    target: NodeId,
+    target: &NodeId,
     next_id: &mut u64,
+    taken: &mut std::collections::HashSet<NodeId>,
     offset: f32,
 ) -> Option<NodeId> {
-    if let Some(idx) = children.iter().position(|n| n.id == target) {
+    if let Some(idx) = children.iter().position(|n| n.id == *target) {
         let size = subtree_size(&children[idx]);
-        // The clone walk mints `size` ids and runs one final
-        // `*next_id += 1` past the last mint. Both must stay
-        // representable, so the required headroom is `size`.
+        // The clone walk mints `size` ids; the counter must stay
+        // representable across all of them, so the required
+        // headroom is `size`.
         next_id.checked_add(size)?;
-        let mut clone = deep_clone_with_new_ids(&children[idx], next_id);
+        let mut clone = deep_clone_with_new_ids(&children[idx], next_id, taken);
         // Offset the clone so the user sees it next to the
         // original instead of pixel-perfectly stacked on top.
         // Matches TS `cloneNodesWithNewIds({ offset: 10 })`.
         shift_subtree(&mut clone, offset, offset);
-        let new_id = clone.id;
+        let new_id = clone.id.clone();
         children.insert(idx + 1, clone);
         return Some(new_id);
     }
     for child in children.iter_mut() {
-        if let Some(new_id) = duplicate_in_children(&mut child.children, target, next_id, offset) {
+        if let Some(new_id) = duplicate_in_children(&mut child.children, target, next_id, taken, offset) {
             return Some(new_id);
         }
     }
@@ -616,10 +643,10 @@ pub(in crate::document) fn shift_subtree(node: &mut Node, dx: f32, dy: f32) {
 /// Recursive helper for `Document::reorder_selected`.
 pub(in crate::document) fn reorder_in_children(
     children: &mut Vec<Node>,
-    target: NodeId,
+    target: &NodeId,
     direction: ReorderDirection,
 ) -> bool {
-    if let Some(idx) = children.iter().position(|n| n.id == target) {
+    if let Some(idx) = children.iter().position(|n| n.id == *target) {
         match direction {
             ReorderDirection::Up if idx + 1 < children.len() => {
                 children.swap(idx, idx + 1);
@@ -640,13 +667,39 @@ pub(in crate::document) fn reorder_in_children(
     false
 }
 
-/// Recursive helper for `Document::max_node_id`.
+/// Parse the numeric suffix of an editor-minted `n{N}` id. Returns
+/// `None` for any id that doesn't match the `^n\d+$` shape (the
+/// `NONE` sentinel, or an arbitrary string id from a canonical
+/// `.op` load) — those don't participate in the `n{N}` counter.
+pub(in crate::document) fn parse_n_id(id: &NodeId) -> Option<u64> {
+    let s = id.as_str();
+    let digits = s.strip_prefix('n')?;
+    if digits.is_empty() || !digits.bytes().all(|b| b.is_ascii_digit()) {
+        return None;
+    }
+    digits.parse::<u64>().ok()
+}
+
+/// Recursive helper for `Document::max_node_id` — largest `n{N}`
+/// suffix in `node`'s subtree (0 when the subtree has no `n{N}` id).
 pub(in crate::document) fn max_id_walk(node: &Node) -> u64 {
-    let mut max = node.id.raw();
+    let mut max = parse_n_id(&node.id).unwrap_or(0);
     for child in &node.children {
         max = max.max(max_id_walk(child));
     }
     max
+}
+
+/// Recursive helper for `Document::collect_node_ids` — inserts
+/// `node` and every descendant id into `out`.
+pub(in crate::document) fn collect_ids_walk(
+    node: &Node,
+    out: &mut std::collections::HashSet<NodeId>,
+) {
+    out.insert(node.id.clone());
+    for child in &node.children {
+        collect_ids_walk(child, out);
+    }
 }
 
 /// Union of `aggregate_bounds` across `ids` (only those that
@@ -658,7 +711,7 @@ pub(in crate::document) fn union_aggregate_bounds(
 ) -> Option<crate::Rect> {
     let mut iter = ids
         .iter()
-        .filter_map(|id| page.find(*id))
+        .filter_map(|id| page.find(id))
         .map(Node::aggregate_bounds)
         .filter(|r| r.size.x > 0.0 || r.size.y > 0.0);
     let first = iter.next()?;
@@ -682,8 +735,8 @@ pub(in crate::document) fn find_duplicate_walk(
     node: &Node,
     seen: &mut std::collections::HashSet<NodeId>,
 ) -> Option<NodeId> {
-    if !seen.insert(node.id) {
-        return Some(node.id);
+    if !seen.insert(node.id.clone()) {
+        return Some(node.id.clone());
     }
     for child in &node.children {
         if let Some(dup) = find_duplicate_walk(child, seen) {
@@ -699,8 +752,8 @@ pub(in crate::document) fn find_duplicate_walk(
 /// extraction phase — the caller holds the extracted node on the
 /// stack and then re-inserts it via `insert_before_in_children` /
 /// `insert_after_in_children`.
-pub(in crate::document) fn extract_node(children: &mut Vec<Node>, target: NodeId) -> Option<Node> {
-    if let Some(idx) = children.iter().position(|n| n.id == target) {
+pub(in crate::document) fn extract_node(children: &mut Vec<Node>, target: &NodeId) -> Option<Node> {
+    if let Some(idx) = children.iter().position(|n| n.id == *target) {
         return Some(children.remove(idx));
     }
     for child in children.iter_mut() {
@@ -717,10 +770,10 @@ pub(in crate::document) fn extract_node(children: &mut Vec<Node>, target: NodeId
 /// `insert_before/after_in_children`).
 pub(in crate::document) fn append_into(
     children: &mut Vec<Node>,
-    parent: NodeId,
+    parent: &NodeId,
     node: Node,
 ) -> Result<(), Node> {
-    if let Some(idx) = children.iter().position(|n| n.id == parent) {
+    if let Some(idx) = children.iter().position(|n| n.id == *parent) {
         children[idx].children.push(node);
         return Ok(());
     }
@@ -741,10 +794,10 @@ pub(in crate::document) fn append_into(
 /// if you want to avoid the Err arm entirely.
 pub(in crate::document) fn insert_before_in_children(
     children: &mut Vec<Node>,
-    anchor: NodeId,
+    anchor: &NodeId,
     node: Node,
 ) -> Result<(), Node> {
-    if let Some(idx) = children.iter().position(|n| n.id == anchor) {
+    if let Some(idx) = children.iter().position(|n| n.id == *anchor) {
         children.insert(idx, node);
         return Ok(());
     }
@@ -763,10 +816,10 @@ pub(in crate::document) fn insert_before_in_children(
 /// returns `Err(node)`.
 pub(in crate::document) fn insert_after_in_children(
     children: &mut Vec<Node>,
-    anchor: NodeId,
+    anchor: &NodeId,
     node: Node,
 ) -> Result<(), Node> {
-    if let Some(idx) = children.iter().position(|n| n.id == anchor) {
+    if let Some(idx) = children.iter().position(|n| n.id == *anchor) {
         children.insert(idx + 1, node);
         return Ok(());
     }
@@ -785,10 +838,10 @@ pub(in crate::document) fn insert_after_in_children(
 /// `extract_node` so callers don't have to handle the lost-node case.
 pub(in crate::document) fn children_contain_descendant(
     children: &[Node],
-    anchor_id: NodeId,
+    anchor_id: &NodeId,
 ) -> bool {
     for child in children {
-        if child.id == anchor_id {
+        if child.id == *anchor_id {
             return true;
         }
         if children_contain_descendant(&child.children, anchor_id) {

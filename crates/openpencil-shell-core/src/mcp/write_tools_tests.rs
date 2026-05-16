@@ -345,7 +345,7 @@ fn apply_mcp_command_insert_rejects_when_id_space_exhausted() {
     use crate::document::{Document, Node, NodeKind};
     let mut doc = Document::empty();
     // Plant a node at the maximum id directly in active page.
-    let mut max_node = Node::leaf(u64::MAX, NodeKind::Rect, "max-id-node");
+    let mut max_node = Node::leaf(format!("n{}", u64::MAX), NodeKind::Rect, "max-id-node");
     max_node.bounds = crate::Rect::xywh(0.0, 0.0, 10.0, 10.0);
     doc.pages[0].children.push(max_node);
     let before_len = doc.pages[0].children.len();
@@ -467,7 +467,7 @@ fn apply_mcp_command_routes_update_node() {
     let title = frame
         .children
         .iter()
-        .find(|n| n.id.raw() == 11)
+        .find(|n| n.id.raw() == "n11")
         .expect("Title node");
     assert_eq!(title.bounds.origin.x, 100.0);
     assert_eq!(title.bounds.origin.y, 60.0); // unchanged
@@ -520,7 +520,7 @@ fn apply_mcp_command_routes_delete_node() {
     assert!(doc.pages[0].children[0]
         .children
         .iter()
-        .all(|n| n.id.raw() != 11));
+        .all(|n| n.id.raw() != "n11"));
 }
 
 #[test]
@@ -545,7 +545,7 @@ fn apply_mcp_command_update_node_is_atomic_on_invalid_geometry() {
     // Snapshot original bounds of NodeId(11) — sample's Title.
     let before = {
         let frame = &doc.pages[0].children[0];
-        let title = frame.children.iter().find(|n| n.id.raw() == 11).unwrap();
+        let title = frame.children.iter().find(|n| n.id.raw() == "n11").unwrap();
         title.bounds
     };
     let cmd = McpCommand::UpdateNode {
@@ -560,7 +560,7 @@ fn apply_mcp_command_update_node_is_atomic_on_invalid_geometry() {
     assert!(!doc.apply_mcp_command(&cmd), "negative width must reject");
     // Title is exactly as it was.
     let frame = &doc.pages[0].children[0];
-    let title = frame.children.iter().find(|n| n.id.raw() == 11).unwrap();
+    let title = frame.children.iter().find(|n| n.id.raw() == "n11").unwrap();
     assert_eq!(title.bounds.origin.x, before.origin.x, "x was modified");
     assert_eq!(title.bounds.origin.y, before.origin.y, "y was modified");
     assert_eq!(title.bounds.size.x, before.size.x, "w was modified");
@@ -576,7 +576,7 @@ fn apply_mcp_command_update_node_is_atomic_on_invalid_hex() {
     let mut doc = Document::sample();
     let before = {
         let frame = &doc.pages[0].children[0];
-        let title = frame.children.iter().find(|n| n.id.raw() == 11).unwrap();
+        let title = frame.children.iter().find(|n| n.id.raw() == "n11").unwrap();
         title.bounds
     };
     let cmd = McpCommand::UpdateNode {
@@ -590,7 +590,7 @@ fn apply_mcp_command_update_node_is_atomic_on_invalid_hex() {
     };
     assert!(!doc.apply_mcp_command(&cmd));
     let frame = &doc.pages[0].children[0];
-    let title = frame.children.iter().find(|n| n.id.raw() == 11).unwrap();
+    let title = frame.children.iter().find(|n| n.id.raw() == "n11").unwrap();
     assert_eq!(title.bounds.origin.x, before.origin.x);
     assert_eq!(title.bounds.origin.y, before.origin.y);
     assert_eq!(title.name, "Title");
@@ -657,10 +657,10 @@ fn apply_mcp_command_move_node_reparents_to_page_root() {
     assert!(doc.apply_mcp_command(&cmd));
     // Title is now a sibling of Frame at the page root.
     let root = &doc.pages[0].children;
-    assert!(root.iter().any(|n| n.id.raw() == 11), "title at page root");
+    assert!(root.iter().any(|n| n.id.raw() == "n11"), "title at page root");
     // Frame no longer carries Title.
-    let frame = root.iter().find(|n| n.id.raw() == 10).unwrap();
-    assert!(frame.children.iter().all(|n| n.id.raw() != 11));
+    let frame = root.iter().find(|n| n.id.raw() == "n10").unwrap();
+    assert!(frame.children.iter().all(|n| n.id.raw() != "n11"));
 }
 
 #[test]
@@ -673,10 +673,10 @@ fn apply_mcp_command_move_node_reparents_to_another_node() {
         target_parent_id: 12,
     };
     assert!(doc.apply_mcp_command(&cmd));
-    let frame = doc.pages[0].children.iter().find(|n| n.id.raw() == 10).unwrap();
-    let button = frame.children.iter().find(|n| n.id.raw() == 12).unwrap();
-    assert!(button.children.iter().any(|n| n.id.raw() == 11), "title under button");
-    assert!(frame.children.iter().all(|n| n.id.raw() != 11), "title detached from frame");
+    let frame = doc.pages[0].children.iter().find(|n| n.id.raw() == "n10").unwrap();
+    let button = frame.children.iter().find(|n| n.id.raw() == "n12").unwrap();
+    assert!(button.children.iter().any(|n| n.id.raw() == "n11"), "title under button");
+    assert!(frame.children.iter().all(|n| n.id.raw() != "n11"), "title detached from frame");
 }
 
 #[test]
@@ -692,8 +692,8 @@ fn apply_mcp_command_move_node_rejects_cycle() {
     assert!(!doc.apply_mcp_command(&cmd), "cycle move must reject");
     // Frame is still at the page root with Button as child.
     let root = &doc.pages[0].children;
-    let frame = root.iter().find(|n| n.id.raw() == 10).unwrap();
-    assert!(frame.children.iter().any(|n| n.id.raw() == 12));
+    let frame = root.iter().find(|n| n.id.raw() == "n10").unwrap();
+    assert!(frame.children.iter().any(|n| n.id.raw() == "n12"));
 }
 
 #[test]
@@ -735,20 +735,20 @@ fn apply_mcp_command_move_node_preserves_source_when_target_unknown() {
         .children[0]
         .children
         .iter()
-        .any(|n| n.id.raw() == 11), "title must still be under Frame");
+        .any(|n| n.id.raw() == "n11"), "title must still be under Frame");
     // Title is NOT elsewhere in the doc.
     let title_count: usize = doc
         .pages
         .iter()
         .map(|p| {
-            fn count(node: &crate::document::Node, target: u64) -> usize {
+            fn count(node: &crate::document::Node, target: &str) -> usize {
                 let mut c = if node.id.raw() == target { 1 } else { 0 };
                 for child in &node.children {
                     c += count(child, target);
                 }
                 c
             }
-            p.children.iter().map(|n| count(n, 11)).sum::<usize>()
+            p.children.iter().map(|n| count(n, "n11")).sum::<usize>()
         })
         .sum();
     assert_eq!(title_count, 1, "title appears exactly once in the doc");

@@ -136,7 +136,7 @@ fn apply_mcp_command_batch_insert_adds_all_nodes_with_fresh_ids() {
     // Every new node has a fresh id past pre_max, no duplicates.
     let new_ids: Vec<u64> = doc.pages[0].children.iter()
         .skip(pre_root_len)
-        .map(|n| n.id.raw())
+        .map(|n| n.id.raw()[1..].parse::<u64>().unwrap())
         .collect();
     assert_eq!(new_ids.len(), 2);
     assert!(new_ids[0] > pre_max);

@@ -322,12 +322,12 @@ fn get_document_info_reports_snapshot_via_registry() {
     let page = doc.pages.get_mut(0).unwrap();
     page.children.clear();
     page.children.push(Node::with_children(
-        10,
+        "n10",
         NodeKind::Frame,
         "F",
         vec![
-            Node::leaf(11, NodeKind::Rect, "a"),
-            Node::leaf(12, NodeKind::Rect, "b"),
+            Node::leaf("n11", NodeKind::Rect, "a"),
+            Node::leaf("n12", NodeKind::Rect, "b"),
         ],
     ));
     let info = document_info_snapshot(&doc);
@@ -372,7 +372,7 @@ fn get_selection_reports_no_selection_when_none() {
     let mut doc = crate::document::Document::sample();
     doc.set_single_selection(crate::document::NodeId::NONE);
     let snap = selection_snapshot(&doc);
-    assert_eq!(snap.selected_id, 0);
+    assert_eq!(snap.selected_id, "");
     assert_eq!(snap.kind, "none");
 }
 
@@ -380,9 +380,9 @@ fn get_selection_reports_no_selection_when_none() {
 fn get_selection_reports_selected_node_bounds_and_kind() {
     let mut doc = crate::document::Document::sample();
     // Sample doc's Frame is id 10 with NodeKind::Frame.
-    doc.set_single_selection(crate::document::NodeId::new(10));
+    doc.set_single_selection(crate::document::NodeId::new("n10"));
     let snap = selection_snapshot(&doc);
-    assert_eq!(snap.selected_id, 10);
+    assert_eq!(snap.selected_id, "n10");
     assert_eq!(snap.kind, "frame");
     // Sample frame bounds are positive (mutators.rs::sample).
     assert!(snap.width > 0);
@@ -404,7 +404,7 @@ fn get_node_returns_record_for_known_id() {
     let doc = crate::document::Document::sample();
     let tool = get_node_snapshot(&doc);
     let mut args = BTreeMap::new();
-    args.insert("node_id".into(), "10".into());
+    args.insert("node_id".into(), "n10".into());
     match tool.call(&args) {
         ToolOutcome::Ok(out) => {
             assert_eq!(out.get("kind"), Some(&"frame".to_string()));
@@ -419,7 +419,7 @@ fn get_node_errors_on_unknown_id() {
     let doc = crate::document::Document::sample();
     let tool = get_node_snapshot(&doc);
     let mut args = BTreeMap::new();
-    args.insert("node_id".into(), "99999".into());
+    args.insert("node_id".into(), "n99999".into());
     match tool.call(&args) {
         ToolOutcome::Err(code, msg) => {
             assert_eq!(code, ToolErrorCode::ToolFailed);
@@ -450,13 +450,13 @@ fn get_node_surfaces_fill_and_stroke_refs() {
     let mut doc = Document::sample();
     doc.var_table
         .fill_refs
-        .insert(NodeId::new(11), "color-primary".into());
+        .insert(NodeId::new("n11"), "color-primary".into());
     doc.var_table
         .stroke_refs
-        .insert(NodeId::new(11), "color-accent".into());
+        .insert(NodeId::new("n11"), "color-accent".into());
     let tool = get_node_snapshot(&doc);
     let mut args = BTreeMap::new();
-    args.insert("node_id".into(), "11".into());
+    args.insert("node_id".into(), "n11".into());
     match tool.call(&args) {
         ToolOutcome::Ok(out) => {
             assert_eq!(out.get("fill_ref"), Some(&"color-primary".to_string()));
@@ -469,7 +469,7 @@ fn get_node_surfaces_fill_and_stroke_refs() {
     // `out.get("fill_ref") == Some("")` instead of branching
     // on Option<String> AND Option<&str>.
     let mut args2 = BTreeMap::new();
-    args2.insert("node_id".into(), "12".into());
+    args2.insert("node_id".into(), "n12".into());
     match tool.call(&args2) {
         ToolOutcome::Ok(out) => {
             assert_eq!(out.get("fill_ref"), Some(&String::new()));
@@ -480,14 +480,18 @@ fn get_node_surfaces_fill_and_stroke_refs() {
 }
 
 #[test]
-fn get_node_errors_on_non_numeric_arg() {
+fn get_node_errors_on_unknown_string_id() {
+    // `node_id` is now the canonical `.op` schema string id, so
+    // any arbitrary string is syntactically valid — an id absent
+    // from the document is a not-found ToolFailed (the old
+    // numeric-parse InvalidArgument path is gone).
     let doc = crate::document::Document::sample();
     let tool = get_node_snapshot(&doc);
     let mut args = BTreeMap::new();
-    args.insert("node_id".into(), "not-a-number".into());
+    args.insert("node_id".into(), "not-a-known-id".into());
     match tool.call(&args) {
-        ToolOutcome::Err(code, _) => assert_eq!(code, ToolErrorCode::InvalidArgument),
-        _ => panic!("expected InvalidArgument"),
+        ToolOutcome::Err(code, _) => assert_eq!(code, ToolErrorCode::ToolFailed),
+        _ => panic!("expected ToolFailed"),
     }
 }
 
@@ -616,7 +620,7 @@ fn get_node_reachable_through_stdio_path() {
     let doc = crate::document::Document::sample();
     let mut r = ToolRegistry::default();
     r.register(Box::new(get_node_snapshot(&doc)));
-    let line = r#"{"id":1,"method":"get_node","params":{"node_id":"10"}}"#;
+    let line = r#"{"id":1,"method":"get_node","params":{"node_id":"n10"}}"#;
     let call = parse_tool_call(line).expect("parse");
     match r.dispatch(call) {
         ToolResponse::Ok { result, .. } => {
@@ -666,7 +670,7 @@ fn get_node_reachable_through_real_mcp_envelope() {
     let doc = crate::document::Document::sample();
     let mut r = ToolRegistry::default();
     r.register(Box::new(get_node_snapshot(&doc)));
-    let line = r#"{"jsonrpc":"2.0","id":7,"method":"tools/call","params":{"name":"get_node","arguments":{"node_id":"10"}}}"#;
+    let line = r#"{"jsonrpc":"2.0","id":7,"method":"tools/call","params":{"name":"get_node","arguments":{"node_id":"n10"}}}"#;
     let call = parse_tool_call(line).expect("parse");
     match r.dispatch(call) {
         ToolResponse::Ok { result, id, .. } => {

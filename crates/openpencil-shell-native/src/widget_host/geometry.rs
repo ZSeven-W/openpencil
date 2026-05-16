@@ -391,8 +391,8 @@ impl WidgetHostNative {
         if self.document.selection_count() != 1 {
             return None;
         }
-        let sel = self.document.selected;
-        let node = self.document.active_page()?.find(sel)?;
+        let sel = self.document.selected.clone();
+        let node = self.document.active_page()?.find(&sel)?;
         if !matches!(node.kind, NodeKind::Path) {
             return None;
         }

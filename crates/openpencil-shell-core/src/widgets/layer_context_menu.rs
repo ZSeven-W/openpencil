@@ -129,16 +129,17 @@ pub struct LayerContextMenu {
 
 impl LayerContextMenu {
     pub fn for_state(doc: &Document, state: LayerContextMenuState) -> Self {
-        let rows = match state.target {
+        let rows = match &state.target {
             LayerContextTarget::Layer(_) => LAYER_ROWS,
             LayerContextTarget::Page(_) => PAGE_ROWS,
         };
+        let hovered_row = state.hovered_row.map(|i| i as usize);
         Self {
             id: WidgetId::new(3000),
             theme: doc.theme(),
             state,
             rows,
-            hovered_row: state.hovered_row.map(|i| i as usize),
+            hovered_row,
         }
     }
 

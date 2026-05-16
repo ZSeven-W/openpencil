@@ -115,14 +115,14 @@ fn access_node_advertises_tree_role_and_layers_label() {
 #[test]
 fn from_document_scopes_to_active_page_only() {
     let page1 = crate::document::Page::new(
-        1,
+        "n1",
         "Page 1",
-        vec![Node::leaf(2, crate::document::NodeKind::Frame, "P1-Node")],
+        vec![Node::leaf("n2", crate::document::NodeKind::Frame, "P1-Node")],
     );
     let page2 = crate::document::Page::new(
-        3,
+        "n3",
         "Page 2",
-        vec![Node::leaf(4, crate::document::NodeKind::Frame, "P2-Node")],
+        vec![Node::leaf("n4", crate::document::NodeKind::Frame, "P2-Node")],
     );
     let doc = Document {
         pages: vec![page1, page2],
@@ -156,12 +156,12 @@ fn drop_indicator_matches_post_commit_layout_when_dragging_down() {
     let mut doc = Document::empty();
     let p = doc.active_page_index;
     doc.pages[p].children = vec![
-        Node::leaf(1, NodeKind::Rect, "A"),
-        Node::leaf(2, NodeKind::Rect, "B"),
-        Node::leaf(3, NodeKind::Rect, "C"),
-        Node::leaf(4, NodeKind::Rect, "D"),
+        Node::leaf("n1", NodeKind::Rect, "A"),
+        Node::leaf("n2", NodeKind::Rect, "B"),
+        Node::leaf("n3", NodeKind::Rect, "C"),
+        Node::leaf("n4", NodeKind::Rect, "D"),
     ];
-    let panel = LayerPanel::from_document_with_drag_source(&doc, NodeId::new(1));
+    let panel = LayerPanel::from_document_with_drag_source(&doc, NodeId::new("n1"));
     assert_eq!(panel.items.len(), 3); // A excluded → [B, C, D]
     let rect = Rect {
         origin: Point2D::new(0.0, 0.0),
@@ -179,12 +179,12 @@ fn drop_indicator_matches_post_commit_layout_when_dragging_down() {
     assert_eq!(drop.position, DropPosition::Before);
     assert!((drop.indicator_y - row_top_of_d).abs() < 0.5);
     // Commit and check A's new row top matches indicator_y.
-    assert!(doc.reorder_before(NodeId::new(1), drop.anchor));
+    assert!(doc.reorder_before(NodeId::new("n1"), drop.anchor));
     let post = LayerPanel::from_document(&doc);
     let a_idx = post
         .items
         .iter()
-        .position(|i| i.node_id == NodeId::new(1))
+        .position(|i| i.node_id == NodeId::new("n1"))
         .unwrap();
     let a_row_top = layers_top + a_idx as f32 * LAYER_ROW_HEIGHT;
     assert!(

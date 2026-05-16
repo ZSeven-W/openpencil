@@ -3,45 +3,109 @@
 //! sample fixture for Step 2; multi-page + variables + components
 //! arrive in later steps. wasm32-clean (no platform imports).
 
-/// Stable id; `NodeId::NONE` (0) = "no node". `new(0)` panics.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct NodeId(u64);
+/// Stable node identity — a string id matching the canonical `.op`
+/// schema's `PenNodeBase.id`. The empty string is the `NONE`
+/// sentinel meaning "no node"; `NodeId::new` rejects it.
+///
+/// Editor-minted ids follow the `n{N}` convention (`n1`, `n2`, …);
+/// canonical-schema loads keep whatever arbitrary string the file
+/// authored. Ordering is intentionally NOT derived — a node tree
+/// has no meaningful id order, only insertion order in `children`.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]
+pub struct NodeId(String);
 
 impl NodeId {
-    pub const NONE: NodeId = NodeId(0);
-    pub const fn is_real(self) -> bool {
-        self.0 != 0
+    /// The "no node" sentinel — an empty-string id. A `const` over
+    /// an owned `String` is feasible because `String::new()` is a
+    /// const fn, so call sites keep using `NodeId::NONE` unchanged.
+    pub const NONE: NodeId = NodeId(String::new());
+
+    /// True when this id is not the `NONE` sentinel.
+    #[inline]
+    pub fn is_real(&self) -> bool {
+        !self.0.is_empty()
     }
 
-    /// Construct a real (non-sentinel) id. Panics if `id == 0`.
+    /// Construct a real (non-sentinel) id. Panics on an empty
+    /// string (reserved for `NodeId::NONE`).
     #[inline]
-    pub const fn new(id: u64) -> Self {
-        if id == 0 {
-            panic!("NodeId::new(0) — id 0 is reserved for NodeId::NONE");
+    pub fn new(id: impl Into<String>) -> Self {
+        let id = id.into();
+        if id.is_empty() {
+            panic!("NodeId::new(\"\") — the empty id is reserved for NodeId::NONE");
         }
         Self(id)
     }
 
-    /// Non-panicking construction. Returns `None` when `id == 0`
-    /// (the NONE sentinel). Used by code that accepts an arbitrary
-    /// id from the wire (MCP write tools) and needs to reject 0
-    /// without panicking.
+    /// Non-panicking construction. Returns `None` for an empty
+    /// string (the NONE sentinel). Used by code that accepts an
+    /// arbitrary id from the wire (MCP write tools) and needs to
+    /// reject the sentinel without panicking.
     #[inline]
-    pub const fn new_opt(id: u64) -> Option<Self> {
-        if id == 0 {
+    pub fn new_opt(id: impl Into<String>) -> Option<Self> {
+        let id = id.into();
+        if id.is_empty() {
             None
         } else {
             Some(Self(id))
         }
     }
 
-    /// Inner numeric id.
+    /// Bridge an MCP-wire numeric id to a model `NodeId`. The MCP
+    /// protocol still carries node ids as `u64`; `0` is the wire's
+    /// "no node" value and maps to `None`, any other `N` maps to
+    /// the editor-minted `n{N}` string. Confines the numeric ⇄
+    /// string conversion to the one MCP-apply seam.
     #[inline]
-    pub const fn raw(self) -> u64 { self.0 }
-    /// Convert to a `WidgetId` (identity mapping).
+    pub fn from_mcp_u64(id: u64) -> Option<Self> {
+        if id == 0 {
+            None
+        } else {
+            Some(Self(format!("n{id}")))
+        }
+    }
+
+    /// Inner string id.
     #[inline]
-    pub const fn to_widget_id(self) -> crate::widgets::WidgetId {
-        crate::widgets::WidgetId(self.0)
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+
+    /// Inner string id (alias of [`NodeId::as_str`], kept for the
+    /// pre-string-rewrite call sites that named it `raw`).
+    #[inline]
+    pub fn raw(&self) -> &str {
+        &self.0
+    }
+
+    /// Convert to a `WidgetId`. The string id is hashed into the
+    /// `u64` `WidgetId` space — accesskit / DOM-mirror routing only
+    /// needs a stable per-node integer, not the id text.
+    #[inline]
+    pub fn to_widget_id(&self) -> crate::widgets::WidgetId {
+        use std::hash::{Hash, Hasher};
+        let mut h = std::collections::hash_map::DefaultHasher::new();
+        self.0.hash(&mut h);
+        let v = h.finish();
+        crate::widgets::WidgetId(if v == 0 { 1 } else { v })
+    }
+}
+
+impl From<NodeId> for String {
+    fn from(id: NodeId) -> String {
+        id.0
+    }
+}
+
+impl From<&NodeId> for String {
+    fn from(id: &NodeId) -> String {
+        id.0.clone()
+    }
+}
+
+impl std::fmt::Display for NodeId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.0)
     }
 }
 
@@ -136,7 +200,7 @@ pub struct Node {
 }
 
 impl Node {
-    pub fn leaf(id: u64, kind: NodeKind, name: impl Into<String>) -> Self {
+    pub fn leaf(id: impl Into<String>, kind: NodeKind, name: impl Into<String>) -> Self {
         Self {
             id: NodeId::new(id),
             kind,
@@ -161,7 +225,7 @@ impl Node {
     }
 
     pub fn with_children(
-        id: u64,
+        id: impl Into<String>,
         kind: NodeKind,
         name: impl Into<String>,
         children: Vec<Node>,
@@ -214,8 +278,8 @@ impl Node {
     }
 
     /// Find a descendant by id, including self.
-    pub fn find(&self, id: NodeId) -> Option<&Node> {
-        if self.id == id {
+    pub fn find(&self, id: &NodeId) -> Option<&Node> {
+        if &self.id == id {
             return Some(self);
         }
         for child in &self.children {
@@ -260,7 +324,7 @@ pub struct Page {
 }
 
 impl Page {
-    pub fn new(id: u64, name: impl Into<String>, children: Vec<Node>) -> Self {
+    pub fn new(id: impl Into<String>, name: impl Into<String>, children: Vec<Node>) -> Self {
         Self {
             id: NodeId::new(id),
             name: name.into(),
@@ -269,7 +333,7 @@ impl Page {
     }
 
     /// Find a descendant by id (does not match page id itself).
-    pub fn find(&self, id: NodeId) -> Option<&Node> {
+    pub fn find(&self, id: &NodeId) -> Option<&Node> {
         for child in &self.children {
             if let Some(hit) = child.find(id) {
                 return Some(hit);
@@ -556,14 +620,14 @@ pub struct LayerRenameState {
 }
 
 /// What the LayerPanel right-click context menu is acting on.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum LayerContextTarget {
     Layer(NodeId),
     Page(usize),
 }
 
 /// Right-click context-menu state.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct LayerContextMenuState {
     pub target: LayerContextTarget,
     pub anchor_x: f32,

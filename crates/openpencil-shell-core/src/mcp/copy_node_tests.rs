@@ -54,21 +54,23 @@ fn apply_mcp_command_copy_node_clones_to_page_root_with_fresh_ids() {
     };
     assert!(doc.apply_mcp_command(&cmd));
     // Original Button still under Frame.
-    let frame = doc.pages[0].children.iter().find(|n| n.id.raw() == 10).unwrap();
-    assert!(frame.children.iter().any(|n| n.id.raw() == 12));
+    let frame = doc.pages[0].children.iter().find(|n| n.id.raw() == "n10").unwrap();
+    assert!(frame.children.iter().any(|n| n.id.raw() == "n12"));
     // Page root grew by 1.
     assert_eq!(doc.pages[0].children.len(), pre_root_len + 1);
     // The newest root child has a fresh id past pre_max and the
     // same shape (2 children) as the source.
     let clone = doc.pages[0].children.last().unwrap();
+    let clone_n = clone.id.raw()[1..].parse::<u64>().unwrap();
     assert!(
-        clone.id.raw() > pre_max,
+        clone_n > pre_max,
         "clone id {} must exceed pre_max {pre_max}",
         clone.id.raw()
     );
     assert_eq!(clone.children.len(), 2);
     for child in &clone.children {
-        assert!(child.id.raw() > pre_max, "child clone id must be fresh");
+        let child_n = child.id.raw()[1..].parse::<u64>().unwrap();
+        assert!(child_n > pre_max, "child clone id must be fresh");
     }
 }
 
@@ -77,8 +79,8 @@ fn apply_mcp_command_copy_node_clones_into_container() {
     use crate::document::Document;
     let mut doc = Document::sample();
     let pre_button_children = {
-        let frame = doc.pages[0].children.iter().find(|n| n.id.raw() == 10).unwrap();
-        let button = frame.children.iter().find(|n| n.id.raw() == 12).unwrap();
+        let frame = doc.pages[0].children.iter().find(|n| n.id.raw() == "n10").unwrap();
+        let button = frame.children.iter().find(|n| n.id.raw() == "n12").unwrap();
         button.children.len()
     };
     // Clone Title (id 11) under Button group (id 12).
@@ -87,11 +89,11 @@ fn apply_mcp_command_copy_node_clones_into_container() {
         target_parent_id: 12,
     };
     assert!(doc.apply_mcp_command(&cmd));
-    let frame = doc.pages[0].children.iter().find(|n| n.id.raw() == 10).unwrap();
-    let button = frame.children.iter().find(|n| n.id.raw() == 12).unwrap();
+    let frame = doc.pages[0].children.iter().find(|n| n.id.raw() == "n10").unwrap();
+    let button = frame.children.iter().find(|n| n.id.raw() == "n12").unwrap();
     assert_eq!(button.children.len(), pre_button_children + 1);
     // Original Title still at its old spot under Frame.
-    assert!(frame.children.iter().any(|n| n.id.raw() == 11));
+    assert!(frame.children.iter().any(|n| n.id.raw() == "n11"));
 }
 
 #[test]

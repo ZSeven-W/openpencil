@@ -145,14 +145,14 @@ fn fill_for_resolves_registered_node_ref_to_themed_color() {
             },
         ]),
     });
-    let node = crate::document::NodeId::new(42);
-    tbl.set_fill_ref(node, "accent");
+    let node = crate::document::NodeId::new("n42");
+    tbl.set_fill_ref(node.clone(), "accent");
     tbl.active_theme = axis("mode", "dark");
-    let c = tbl.fill_for(node).unwrap();
+    let c = tbl.fill_for(&node).unwrap();
     assert!((c.g - 1.0).abs() < 0.01, "dark mode → green; got {c:?}");
     // Switch theme; same ref resolves differently.
     tbl.active_theme = axis("mode", "light");
-    let c2 = tbl.fill_for(node).unwrap();
+    let c2 = tbl.fill_for(&node).unwrap();
     assert!((c2.r - 1.0).abs() < 0.01, "light mode → red; got {c2:?}");
 }
 
@@ -164,9 +164,9 @@ fn stroke_color_for_resolves_registered_ref() {
         kind: VariableKind::Color,
         value: VariableValue::Scalar(VariableScalar::Str("#0000ff".into())),
     });
-    let node = crate::document::NodeId::new(7);
-    tbl.set_stroke_ref(node, "border");
-    let c = tbl.stroke_color_for(node).unwrap();
+    let node = crate::document::NodeId::new("n7");
+    tbl.set_stroke_ref(node.clone(), "border");
+    let c = tbl.stroke_color_for(&node).unwrap();
     assert!((c.b - 1.0).abs() < 0.01);
 }
 
@@ -185,7 +185,7 @@ fn set_active_theme_round_trips_through_axis_picker() {
 #[test]
 fn fill_for_returns_none_when_no_ref_registered() {
     let tbl = super::VariableTable::default();
-    assert!(tbl.fill_for(crate::document::NodeId::new(99)).is_none());
+    assert!(tbl.fill_for(&crate::document::NodeId::new("n99")).is_none());
 }
 
 #[test]

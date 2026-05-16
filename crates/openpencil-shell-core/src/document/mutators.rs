@@ -28,7 +28,7 @@ impl Document {
     /// Empty document with one default page; used by host smoke fixtures.
     pub fn empty() -> Self {
         Self {
-            pages: vec![Page::new(1, "Page 1", Vec::new())],
+            pages: vec![Page::new("n1", "Page 1", Vec::new())],
             active_page_index: 0,
             selected: NodeId::NONE,
             selected_set: Vec::new(),
@@ -47,30 +47,30 @@ impl Document {
     /// frame=10, title=11, button=12, button_rect=13, button_text=14.
     pub fn sample() -> Self {
         use crate::{Color, Rect};
-        let title = Node::leaf(11, NodeKind::Text, "Title")
+        let title = Node::leaf("n11", NodeKind::Text, "Title")
             .with_bounds(Rect::xywh(60.0, 60.0, 240.0, 28.0))
             .with_text("Hello OpenPencil");
-        let button_rect = Node::leaf(13, NodeKind::Rect, "Button background")
+        let button_rect = Node::leaf("n13", NodeKind::Rect, "Button background")
             .with_bounds(Rect::xywh(60.0, 130.0, 180.0, 36.0))
             .with_fill(Color::BLUE);
-        let button_text = Node::leaf(14, NodeKind::Text, "Click me")
+        let button_text = Node::leaf("n14", NodeKind::Text, "Click me")
             .with_bounds(Rect::xywh(76.0, 152.0, 160.0, 16.0))
             .with_text("Click me");
         let button = Node::with_children(
-            12,
+            "n12",
             NodeKind::Group,
             "Button",
             vec![button_rect, button_text],
         );
-        let frame = Node::with_children(10, NodeKind::Frame, "Frame", vec![title, button])
+        let frame = Node::with_children("n10", NodeKind::Frame, "Frame", vec![title, button])
             .with_bounds(Rect::xywh(40.0, 40.0, 360.0, 240.0))
             .with_fill(Color::WHITE)
             .with_stroke(Color::BLACK, 1.0);
         let doc = Self {
-            pages: vec![Page::new(1, "Page 1", vec![frame])],
+            pages: vec![Page::new("n1", "Page 1", vec![frame])],
             active_page_index: 0,
-            selected: NodeId::new(11), // "Title"
-            selected_set: vec![NodeId::new(11)],
+            selected: NodeId::new("n11"), // "Title"
+            selected_set: vec![NodeId::new("n11")],
             clipboard: Vec::new(),
             tool: Tool::Select,
             viewport: Viewport::IDENTITY,
@@ -96,7 +96,7 @@ impl Document {
         DocumentSnapshot {
             pages: self.pages.clone(),
             active_page_index: self.active_page_index,
-            selected: self.selected,
+            selected: self.selected.clone(),
             selected_set: self.selected_set.clone(),
             var_table: self.var_table.clone(),
         }
@@ -157,12 +157,12 @@ impl Document {
         if !self.selected.is_real() {
             return None;
         }
-        self.active_page()?.find(self.selected)
+        self.active_page()?.find(&self.selected)
     }
 
     /// True iff `id` is in the active selection set.
-    pub fn is_selected(&self, id: NodeId) -> bool {
-        self.selected_set.contains(&id)
+    pub fn is_selected(&self, id: &NodeId) -> bool {
+        self.selected_set.contains(id)
     }
 
     /// Number of nodes in the active selection set.
@@ -174,8 +174,8 @@ impl Document {
     pub fn set_single_selection(&mut self, id: NodeId) {
         if id.is_real() {
             self.selected_set.clear();
+            self.selected = id.clone();
             self.selected_set.push(id);
-            self.selected = id;
         } else {
             self.clear_selection();
         }
@@ -191,10 +191,10 @@ impl Document {
         }
         if let Some(pos) = self.selected_set.iter().position(|n| *n == id) {
             self.selected_set.remove(pos);
-            self.selected = self.selected_set.last().copied().unwrap_or(NodeId::NONE);
+            self.selected = self.selected_set.last().cloned().unwrap_or(NodeId::NONE);
         } else {
+            self.selected = id.clone();
             self.selected_set.push(id);
-            self.selected = id;
         }
         if self.selected_set.len() < 2 { self.ui.align_toolbar_hover = None; }
     }
@@ -248,7 +248,7 @@ impl Document {
     /// `set_selected_bounds`, etc.). Hidden + locked nodes are
     /// non-editable; everything else is. Mirrors TS
     /// `isNodeEditable(id)` from `document-store`.
-    pub fn is_editable(&self, id: NodeId) -> bool {
+    pub fn is_editable(&self, id: &NodeId) -> bool {
         let Some(node) = self.active_page().and_then(|p| p.find(id)) else {
             return false;
         };
@@ -258,7 +258,7 @@ impl Document {
     /// Stricter form of `is_editable` — every descendant must also
     /// be editable. Gates destructive ops so a locked/hidden child
     /// protects its ancestor from deletion.
-    pub fn is_subtree_editable(&self, id: NodeId) -> bool {
+    pub fn is_subtree_editable(&self, id: &NodeId) -> bool {
         let Some(node) = self.active_page().and_then(|p| p.find(id)) else {
             return false;
         };
@@ -267,7 +267,7 @@ impl Document {
 
     /// Toggle the `hidden` flag on the node with this id. Returns
     /// true on success. Mirrors TS `useDocumentStore.toggleVisible`.
-    pub fn toggle_node_hidden(&mut self, id: NodeId) -> bool {
+    pub fn toggle_node_hidden(&mut self, id: &NodeId) -> bool {
         let Some(page) = self.pages.get_mut(self.active_page_index) else {
             return false;
         };
@@ -277,7 +277,7 @@ impl Document {
     /// Toggle the `collapsed` flag on the node with this id —
     /// LayerPanel-only state, doesn't affect canvas paint or
     /// hit-test.
-    pub fn toggle_node_collapsed(&mut self, id: NodeId) -> bool {
+    pub fn toggle_node_collapsed(&mut self, id: &NodeId) -> bool {
         let Some(page) = self.pages.get_mut(self.active_page_index) else {
             return false;
         };
@@ -285,7 +285,7 @@ impl Document {
     }
 
     /// Toggle the `locked` flag on the node with this id.
-    pub fn toggle_node_locked(&mut self, id: NodeId) -> bool {
+    pub fn toggle_node_locked(&mut self, id: &NodeId) -> bool {
         let Some(page) = self.pages.get_mut(self.active_page_index) else {
             return false;
         };
@@ -325,7 +325,7 @@ impl Document {
             if bx + bw < nx || nx + nw < bx || by + bh < ny || ny + nh < by {
                 continue;
             }
-            out.push(child.id);
+            out.push(child.id.clone());
         }
         out
     }
@@ -341,7 +341,7 @@ impl Document {
             0 => false,
             _ => self
                 .active_page()
-                .is_some_and(|p| self.selected_set.iter().any(|id| p.find(*id).is_some())),
+                .is_some_and(|p| self.selected_set.iter().any(|id| p.find(id).is_some())),
         }
     }
 
@@ -374,8 +374,8 @@ impl Document {
         if page.children.is_empty() {
             return false;
         }
-        self.selected_set = page.children.iter().map(|n| n.id).collect();
-        self.selected = self.selected_set.last().copied().unwrap_or(NodeId::NONE);
+        self.selected_set = page.children.iter().map(|n| n.id.clone()).collect();
+        self.selected = self.selected_set.last().cloned().unwrap_or(NodeId::NONE);
         true
     }
 
@@ -404,15 +404,15 @@ impl Document {
 
     /// Overwrite the selected node's rotation (radians, clockwise).
     pub fn set_selected_rotation(&mut self, radians: f32) {
-        if !self.selected.is_real() || !self.is_editable(self.selected) {
+        if !self.selected.is_real() || !self.is_editable(&self.selected) {
             return;
         }
-        let sel = self.selected;
+        let sel = self.selected.clone();
         let Some(page) = self.pages.get_mut(self.active_page_index) else {
             return;
         };
         for child in &mut page.children {
-            if set_rotation_walk(child, sel, radians) {
+            if set_rotation_walk(child, &sel, radians) {
                 return;
             }
         }
@@ -422,15 +422,15 @@ impl Document {
     /// (Group / unbounded Frame) no-op — child-derived bounds need
     /// per-child scaling (later milestone).
     pub fn set_selected_bounds(&mut self, bounds: crate::Rect) {
-        if !self.selected.is_real() || !self.is_editable(self.selected) {
+        if !self.selected.is_real() || !self.is_editable(&self.selected) {
             return;
         }
-        let sel = self.selected;
+        let sel = self.selected.clone();
         let Some(page) = self.pages.get_mut(self.active_page_index) else {
             return;
         };
         for child in &mut page.children {
-            if set_bounds_walk(child, sel, bounds) {
+            if set_bounds_walk(child, &sel, bounds) {
                 return;
             }
         }
@@ -449,8 +449,8 @@ impl Document {
         let editable: Vec<NodeId> = self
             .selected_set
             .iter()
-            .copied()
-            .filter(|id| self.is_editable(*id))
+            .cloned()
+            .filter(|id| self.is_editable(id))
             .collect();
         if editable.is_empty() {
             return;
@@ -462,9 +462,9 @@ impl Document {
             // Skip if any ancestor (within the active page tree)
             // is also in the selection — that ancestor's cascade
             // already shifted this descendant.
-            if !is_ancestor_in_set(&page.children, *target, &editable) {
+            if !is_ancestor_in_set(&page.children, target, &editable) {
                 for child in page.children.iter_mut() {
-                    if translate_walk(child, *target, dx, dy) {
+                    if translate_walk(child, target, dx, dy) {
                         break;
                     }
                 }
@@ -477,15 +477,15 @@ impl Document {
     /// focus on `true`); container nodes silently no-op since
     /// their bounds are child-derived.
     pub fn commit_property_edit(&mut self, focus: PropertyFocus, value: f32) -> bool {
-        if !self.selected.is_real() || !self.is_editable(self.selected) {
+        if !self.selected.is_real() || !self.is_editable(&self.selected) {
             return false;
         }
-        let sel = self.selected;
+        let sel = self.selected.clone();
         let Some(page) = self.pages.get_mut(self.active_page_index) else {
             return false;
         };
         for child in &mut page.children {
-            if commit_property_walk(child, sel, focus, value) {
+            if commit_property_walk(child, &sel, focus, value) {
                 return true;
             }
         }
@@ -500,15 +500,15 @@ impl Document {
     /// nodes can't be mutated. Returns true when the edit
     /// lands. No-op when nothing is selected.
     pub fn set_selected_fill_type(&mut self, fill_type: FillType) -> bool {
-        if !self.selected.is_real() || !self.is_editable(self.selected) {
+        if !self.selected.is_real() || !self.is_editable(&self.selected) {
             return false;
         }
-        let sel = self.selected;
+        let sel = self.selected.clone();
         let Some(page) = self.pages.get_mut(self.active_page_index) else {
             return false;
         };
         for child in &mut page.children {
-            if set_fill_type_walk(child, sel, fill_type) {
+            if set_fill_type_walk(child, &sel, fill_type) {
                 return true;
             }
         }
@@ -516,15 +516,15 @@ impl Document {
     }
 
     pub fn set_selected_color(&mut self, is_fill: bool, color: crate::Color) -> bool {
-        if !self.selected.is_real() || !self.is_editable(self.selected) {
+        if !self.selected.is_real() || !self.is_editable(&self.selected) {
             return false;
         }
-        let sel = self.selected;
+        let sel = self.selected.clone();
         let Some(page) = self.pages.get_mut(self.active_page_index) else {
             return false;
         };
         for child in &mut page.children {
-            if set_color_walk(child, sel, is_fill, color) {
+            if set_color_walk(child, &sel, is_fill, color) {
                 return true;
             }
         }
@@ -537,11 +537,11 @@ impl Document {
     /// is selected. Returns true when a shadow was added — the
     /// building block for the property panel's 效果 "+" action.
     pub fn add_drop_shadow_to_selected(&mut self) -> bool {
-        if !self.selected.is_real() || !self.is_editable(self.selected) {
+        if !self.selected.is_real() || !self.is_editable(&self.selected) {
             return false;
         }
-        let sel = self.selected;
-        let Some(node) = super::mcp_apply::find_node_mut_in_doc(self, sel) else {
+        let sel = self.selected.clone();
+        let Some(node) = super::mcp_apply::find_node_mut_in_doc(self, &sel) else {
             return false;
         };
         node.effects.push(crate::document::Effect::DropShadow(
@@ -580,8 +580,8 @@ impl Document {
         let (deletable, kept): (Vec<NodeId>, Vec<NodeId>) = self
             .selected_set
             .iter()
-            .copied()
-            .partition(|id| self.is_subtree_editable(*id));
+            .cloned()
+            .partition(|id| self.is_subtree_editable(id));
         if deletable.is_empty() {
             return false;
         }
@@ -590,7 +590,7 @@ impl Document {
         };
         let mut removed_any = false;
         for id in &deletable {
-            if remove_from_children(&mut page.children, *id) {
+            if remove_from_children(&mut page.children, id) {
                 removed_any = true;
             }
         }
@@ -599,7 +599,7 @@ impl Document {
             // hidden nodes). If everything got deleted the set
             // collapses to empty.
             self.selected_set = kept;
-            self.selected = self.selected_set.last().copied().unwrap_or(NodeId::NONE);
+            self.selected = self.selected_set.last().cloned().unwrap_or(NodeId::NONE);
             true
         } else {
             false
@@ -618,40 +618,67 @@ impl Document {
         if self.selected_set.is_empty() {
             return None;
         }
-        // Lift allocator past every existing id. checked_add so
-        // u64::MAX returns None cleanly (no overflow → collision).
+        // Lift allocator past every existing `n{N}` id. checked_add
+        // so u64::MAX returns None cleanly (no overflow → collision).
         let safe = self.max_node_id().checked_add(1)?;
         *next_id = (*next_id).max(safe);
+        // Snapshot the live id set so the clone walk's `alloc_n_id`
+        // can skip any candidate that collides with a pre-existing
+        // arbitrary string id.
+        let mut taken = self.collect_node_ids();
         let targets: Vec<NodeId> = self.selected_set.clone();
         let page = self.pages.get_mut(self.active_page_index)?;
         let mut new_ids: Vec<NodeId> = Vec::with_capacity(targets.len());
         for target in targets {
-            if let Some(new_id) =
-                duplicate_in_children(&mut page.children, target, next_id, offset_doc_px)
-            {
+            if let Some(new_id) = duplicate_in_children(
+                &mut page.children,
+                &target,
+                next_id,
+                &mut taken,
+                offset_doc_px,
+            ) {
                 new_ids.push(new_id);
             }
         }
         if new_ids.is_empty() {
             return None;
         }
-        self.selected = *new_ids.last().unwrap();
+        self.selected = new_ids.last().unwrap().clone();
         self.selected_set = new_ids;
-        Some(self.selected)
+        Some(self.selected.clone())
     }
 
-    /// Largest `NodeId` (by raw value) anywhere in the document,
-    /// across all pages. Used as a one-shot guard so the duplicate
-    /// allocator can never collide with a real id.
+    /// Largest editor-minted `n{N}` id suffix anywhere in the
+    /// document, across all pages (0 when no `n{N}` id exists).
+    /// Used to seed the new-node-id allocator — the next mint is
+    /// `n{max + 1}`. Arbitrary string ids from a canonical `.op`
+    /// load don't match `^n\d+$` and so don't move this counter;
+    /// the seed helper verifies the formatted candidate against
+    /// the live id set to guard the rare overlap.
     pub fn max_node_id(&self) -> u64 {
         let mut max = 0u64;
         for page in &self.pages {
-            max = max.max(page.id.raw());
+            max = max.max(parse_n_id(&page.id).unwrap_or(0));
             for child in &page.children {
                 max = max.max(max_id_walk(child));
             }
         }
         max
+    }
+
+    /// Every node id live in the document — page ids plus the full
+    /// node subtree of every page. Backs the allocator's collision
+    /// check so a freshly-formatted `n{N}` candidate can be
+    /// verified against pre-existing arbitrary string ids.
+    pub fn collect_node_ids(&self) -> std::collections::HashSet<NodeId> {
+        let mut out = std::collections::HashSet::new();
+        for page in &self.pages {
+            out.insert(page.id.clone());
+            for child in &page.children {
+                collect_ids_walk(child, &mut out);
+            }
+        }
+        out
     }
 
     /// Bump the selected node up or down by one position in its
@@ -665,11 +692,11 @@ impl Document {
         if !self.selected.is_real() {
             return false;
         }
-        let target = self.selected;
+        let target = self.selected.clone();
         let Some(page) = self.pages.get_mut(self.active_page_index) else {
             return false;
         };
-        reorder_in_children(&mut page.children, target, direction)
+        reorder_in_children(&mut page.children, &target, direction)
     }
 
     /// Move `source` to be a sibling immediately before/after
@@ -689,23 +716,23 @@ impl Document {
         if source == parent || !source.is_real() || !parent.is_real() {
             return false;
         }
-        if !self.is_subtree_editable(source) {
+        if !self.is_subtree_editable(&source) {
             return false;
         }
         let Some(page) = self.pages.get(self.active_page_index) else {
             return false;
         };
-        let Some(source_ref) = page.find(source) else {
+        let Some(source_ref) = page.find(&source) else {
             return false;
         };
-        if descendant_contains(source_ref, parent) || page.find(parent).is_none() {
+        if descendant_contains(source_ref, &parent) || page.find(&parent).is_none() {
             return false;
         }
         let page = self.pages.get_mut(self.active_page_index).unwrap();
-        let Some(node) = extract_node(&mut page.children, source) else {
+        let Some(node) = extract_node(&mut page.children, &source) else {
             return false;
         };
-        append_into(&mut page.children, parent, node).is_ok()
+        append_into(&mut page.children, &parent, node).is_ok()
     }
 
     fn reorder_relative(
@@ -717,28 +744,28 @@ impl Document {
         if source == anchor || !source.is_real() || !anchor.is_real() {
             return false;
         }
-        if !self.is_subtree_editable(source) {
+        if !self.is_subtree_editable(&source) {
             return false;
         }
         let Some(page) = self.pages.get(self.active_page_index) else {
             return false;
         };
-        let Some(source_ref) = page.find(source) else {
+        let Some(source_ref) = page.find(&source) else {
             return false;
         };
-        if descendant_contains(source_ref, anchor) {
+        if descendant_contains(source_ref, &anchor) {
             return false;
         }
-        if !children_contain_descendant(&page.children, anchor) {
+        if !children_contain_descendant(&page.children, &anchor) {
             return false;
         }
         let page = self.pages.get_mut(self.active_page_index).unwrap();
-        let Some(node) = extract_node(&mut page.children, source) else {
+        let Some(node) = extract_node(&mut page.children, &source) else {
             return false;
         };
         let r = match position {
-            RelativePosition::Before => insert_before_in_children(&mut page.children, anchor, node),
-            RelativePosition::After => insert_after_in_children(&mut page.children, anchor, node),
+            RelativePosition::Before => insert_before_in_children(&mut page.children, &anchor, node),
+            RelativePosition::After => insert_after_in_children(&mut page.children, &anchor, node),
         };
         debug_assert!(r.is_ok(), "anchor pre-check should ensure insert");
         r.is_ok()
@@ -763,8 +790,8 @@ impl Document {
         for page in &self.pages {
             // Pages share the id namespace with nodes, so include
             // page ids in the uniqueness scan.
-            if !seen.insert(page.id) {
-                return Some(page.id);
+            if !seen.insert(page.id.clone()) {
+                return Some(page.id.clone());
             }
             for child in &page.children {
                 if let Some(dup) = find_duplicate_walk(child, &mut seen) {

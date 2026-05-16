@@ -92,12 +92,11 @@ pub struct VarTablePayload {
     #[serde(default)]
     pub active_theme: BTreeMap<String, String>,
     /// `(node_id, variable_name)` pairs — node fills bound to a
-    /// `$ref`. Stored as a list because JSON object keys must be
-    /// strings; a list keeps the `u64` ids exact.
+    /// `$ref`. Stored as a list of `(string id, variable name)`.
     #[serde(default)]
-    pub fill_refs: Vec<(u64, String)>,
+    pub fill_refs: Vec<(String, String)>,
     #[serde(default)]
-    pub stroke_refs: Vec<(u64, String)>,
+    pub stroke_refs: Vec<(String, String)>,
 }
 
 fn kind_to_str(k: &VariableKind) -> &'static str {
@@ -175,12 +174,12 @@ pub fn var_table_to_payload(t: &VariableTable) -> VarTablePayload {
         fill_refs: t
             .fill_refs
             .iter()
-            .map(|(id, name)| (id.raw(), name.clone()))
+            .map(|(id, name)| (id.raw().to_string(), name.clone()))
             .collect(),
         stroke_refs: t
             .stroke_refs
             .iter()
-            .map(|(id, name)| (id.raw(), name.clone()))
+            .map(|(id, name)| (id.raw().to_string(), name.clone()))
             .collect(),
     }
 }
@@ -208,10 +207,11 @@ pub fn var_table_from_payload(p: &VarTablePayload) -> VariableTable {
     }
     t.active_theme = p.active_theme.clone();
     for (id, name) in &p.fill_refs {
-        t.fill_refs.insert(NodeId::new(*id), name.clone());
+        t.fill_refs.insert(NodeId::new(id.as_str()), name.clone());
     }
     for (id, name) in &p.stroke_refs {
-        t.stroke_refs.insert(NodeId::new(*id), name.clone());
+        t.stroke_refs
+            .insert(NodeId::new(id.as_str()), name.clone());
     }
     t
 }
@@ -239,8 +239,8 @@ mod tests {
             values: vec!["light".into(), "dark".into()],
         });
         t.active_theme.insert("mode".into(), "dark".into());
-        t.fill_refs.insert(NodeId::new(7), "brand".into());
-        t.stroke_refs.insert(NodeId::new(9), "brand".into());
+        t.fill_refs.insert(NodeId::new("n7"), "brand".into());
+        t.stroke_refs.insert(NodeId::new("n9"), "brand".into());
         t
     }
 
@@ -259,11 +259,11 @@ mod tests {
         assert_eq!(restored.themes[0].values, vec!["light", "dark"]);
         assert_eq!(restored.active_theme.get("mode"), Some(&"dark".to_string()));
         assert_eq!(
-            restored.fill_refs.get(&NodeId::new(7)),
+            restored.fill_refs.get(&NodeId::new("n7")),
             Some(&"brand".to_string())
         );
         assert_eq!(
-            restored.stroke_refs.get(&NodeId::new(9)),
+            restored.stroke_refs.get(&NodeId::new("n9")),
             Some(&"brand".to_string())
         );
         // Spot-check a scalar value survived intact.

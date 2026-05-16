@@ -38,15 +38,16 @@ impl Document {
         }
         taken.reverse();
         let safe = self.max_node_id().checked_add(1)?;
-        let raw = (*next_id).max(safe);
-        *next_id = raw.checked_add(1)?;
-        let group_id = NodeId::new(raw);
-        let group = Node::with_children(raw, NodeKind::Group, "Group", taken);
+        *next_id = (*next_id).max(safe);
+        let mut live = self.collect_node_ids();
+        let group_id = super::walkers::alloc_n_id(next_id, &mut live)?;
+        let group =
+            Node::with_children(group_id.as_str(), NodeKind::Group, "Group", taken);
         let page = self.pages.get_mut(active)?;
         page.children.insert(insert_at, group);
         self.selected_set.clear();
-        self.selected_set.push(group_id);
-        self.selected = group_id;
+        self.selected_set.push(group_id.clone());
+        self.selected = group_id.clone();
         Some(group_id)
     }
 
@@ -57,7 +58,7 @@ impl Document {
         if self.selected_set.len() != 1 {
             return false;
         }
-        let target = self.selected;
+        let target = self.selected.clone();
         let active = self.active_page_index;
         let Some(page) = self.pages.get_mut(active) else {
             return false;
@@ -69,7 +70,7 @@ impl Document {
             return false;
         }
         let group = page.children.remove(idx);
-        let new_ids: Vec<NodeId> = group.children.iter().map(|c| c.id).collect();
+        let new_ids: Vec<NodeId> = group.children.iter().map(|c| c.id.clone()).collect();
         // Splice the children where the group used to sit.
         for (k, child) in group.children.into_iter().enumerate() {
             page.children.insert(idx + k, child);
@@ -78,7 +79,7 @@ impl Document {
             self.clear_selection();
         } else {
             self.selected_set = new_ids.clone();
-            self.selected = *new_ids.last().unwrap();
+            self.selected = new_ids.last().unwrap().clone();
         }
         true
     }

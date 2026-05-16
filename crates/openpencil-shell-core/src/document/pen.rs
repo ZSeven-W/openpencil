@@ -14,14 +14,14 @@ impl Document {
     /// Mints the id past `max_node_id() + 1` like the dup path.
     pub fn start_pen_path(&mut self, next_id: &mut u64, first: Point2D) -> Option<NodeId> {
         let safe = self.max_node_id().checked_add(1)?;
-        let raw = (*next_id).max(safe);
-        *next_id = raw.checked_add(1)?;
-        let id = NodeId::new(raw);
+        *next_id = (*next_id).max(safe);
+        let mut taken = self.collect_node_ids();
+        let id = super::walkers::alloc_n_id(next_id, &mut taken)?;
         // Snapshot BEFORE any mutation so a later undo restores the
         // pre-pen document state — otherwise the snapshot already
         // contains the new path node and undo is a no-op visually.
         let pre = self.snapshot_for_history();
-        let mut node = Node::leaf(raw, NodeKind::Path, "Path")
+        let mut node = Node::leaf(id.as_str(), NodeKind::Path, "Path")
             .with_stroke(crate::Color::BLACK, 2.0)
             .with_bounds(crate::Rect {
                 origin: first,
@@ -32,8 +32,8 @@ impl Document {
         let page = self.pages.get_mut(active)?;
         page.children.push(node);
         self.ui.pending_pen_history = Some(pre);
-        self.ui.pen_in_progress = Some(id);
-        self.set_single_selection(id);
+        self.ui.pen_in_progress = Some(id.clone());
+        self.set_single_selection(id.clone());
         Some(id)
     }
 
@@ -41,7 +41,7 @@ impl Document {
     /// node's `bounds` so the layer panel + property panel stay
     /// in sync with the visible geometry.
     pub fn add_pen_point(&mut self, p: Point2D) -> bool {
-        let Some(id) = self.ui.pen_in_progress else {
+        let Some(id) = self.ui.pen_in_progress.clone() else {
             return false;
         };
         let active = self.active_page_index;
@@ -49,14 +49,14 @@ impl Document {
             return false;
         };
         for child in &mut page.children {
-            if let Some(points) = path_points_mut_walk(child, id) {
+            if let Some(points) = path_points_mut_walk(child, &id) {
                 points.push(p);
                 let (origin, size) = bbox_of(points);
                 // Have to re-walk to set bounds because we borrow
                 // `points` exclusively above; drop and walk again.
                 let _ = (origin, size);
                 let mut found = false;
-                set_path_bounds_walk(child, id, &mut found);
+                set_path_bounds_walk(child, &id, &mut found);
                 return found || true;
             }
         }
@@ -77,7 +77,7 @@ impl Document {
         index: usize,
         pos: Point2D,
     ) -> bool {
-        if !self.is_editable(node_id) {
+        if !self.is_editable(&node_id) {
             return false;
         }
         let active = self.active_page_index;
@@ -85,13 +85,13 @@ impl Document {
             return false;
         };
         for child in &mut page.children {
-            if let Some(points) = path_points_mut_walk(child, node_id) {
+            if let Some(points) = path_points_mut_walk(child, &node_id) {
                 if index >= points.len() {
                     return false;
                 }
                 points[index] = pos;
                 let mut found = false;
-                set_path_bounds_walk(child, node_id, &mut found);
+                set_path_bounds_walk(child, &node_id, &mut found);
                 return true;
             }
         }
@@ -112,7 +112,7 @@ impl Document {
         let pending = self.ui.pending_pen_history.take();
         let mut anchor_count = 0;
         if let Some(page) = self.pages.get(self.active_page_index) {
-            if let Some(node) = page.find(id) {
+            if let Some(node) = page.find(&id) {
                 anchor_count = node.points.len();
             }
         }
@@ -163,8 +163,8 @@ fn bbox_of(points: &[Point2D]) -> (Point2D, Point2D) {
     }
 }
 
-fn set_path_bounds_walk(node: &mut Node, target: NodeId, found: &mut bool) {
-    if node.id == target {
+fn set_path_bounds_walk(node: &mut Node, target: &NodeId, found: &mut bool) {
+    if node.id == *target {
         if matches!(node.kind, NodeKind::Path) {
             let (origin, size) = bbox_of(&node.points);
             node.bounds = crate::Rect { origin, size };
@@ -188,25 +188,25 @@ mod tests {
         let mut doc = Document::empty();
         let page = doc.pages.get_mut(0).unwrap();
         page.children.clear();
-        let mut n = Node::leaf(10, NodeKind::Path, "p");
+        let mut n = Node::leaf("n10", NodeKind::Path, "p");
         for (x, y) in points {
             n.points.push(Point2D::new(*x, *y));
         }
         let (origin, size) = bbox_of(&n.points);
         n.bounds = crate::Rect { origin, size };
         page.children.push(n);
-        doc.selected_set = vec![NodeId::new(10)];
-        doc.selected = NodeId::new(10);
+        doc.selected_set = vec![NodeId::new("n10")];
+        doc.selected = NodeId::new("n10");
         doc
     }
 
     #[test]
     fn set_path_anchor_position_moves_one_anchor_and_recomputes_bounds() {
         let mut doc = path_doc(&[(0.0, 0.0), (50.0, 30.0), (100.0, 0.0)]);
-        let ok = doc.set_path_anchor_position(NodeId::new(10), 1, Point2D::new(50.0, 90.0));
+        let ok = doc.set_path_anchor_position(NodeId::new("n10"), 1, Point2D::new(50.0, 90.0));
         assert!(ok);
         let page = doc.active_page().unwrap();
-        let node = page.find(NodeId::new(10)).unwrap();
+        let node = page.find(&NodeId::new("n10")).unwrap();
         assert_eq!(node.points[1], Point2D::new(50.0, 90.0));
         // Bounds should re-fit: y now goes 0..90.
         assert_eq!(node.bounds.origin.y, 0.0);
@@ -216,7 +216,7 @@ mod tests {
     #[test]
     fn set_path_anchor_position_out_of_range_returns_false() {
         let mut doc = path_doc(&[(0.0, 0.0), (10.0, 10.0)]);
-        let ok = doc.set_path_anchor_position(NodeId::new(10), 99, Point2D::new(0.0, 0.0));
+        let ok = doc.set_path_anchor_position(NodeId::new("n10"), 99, Point2D::new(0.0, 0.0));
         assert!(!ok);
     }
 
@@ -225,10 +225,10 @@ mod tests {
         let mut doc = Document::empty();
         let page = doc.pages.get_mut(0).unwrap();
         page.children.clear();
-        let mut n = Node::leaf(10, NodeKind::Rect, "r");
+        let mut n = Node::leaf("n10", NodeKind::Rect, "r");
         n.bounds = crate::Rect::xywh(0.0, 0.0, 50.0, 50.0);
         page.children.push(n);
-        let ok = doc.set_path_anchor_position(NodeId::new(10), 0, Point2D::new(0.0, 0.0));
+        let ok = doc.set_path_anchor_position(NodeId::new("n10"), 0, Point2D::new(0.0, 0.0));
         // Non-Path: path_points_mut_walk returns None → false.
         assert!(!ok);
     }

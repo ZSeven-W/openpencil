@@ -17,7 +17,7 @@ impl Document {
         };
         let mut buf: Vec<Node> = Vec::with_capacity(self.selected_set.len());
         for id in &self.selected_set {
-            if let Some(node) = page.find(*id) {
+            if let Some(node) = page.find(id) {
                 buf.push(node.clone());
             }
         }
@@ -68,6 +68,9 @@ impl Document {
         if next_id.checked_add(total).is_none() {
             return Vec::new();
         }
+        // Snapshot live ids so the clone walk skips collisions with
+        // pre-existing arbitrary string ids.
+        let mut taken = self.collect_node_ids();
         // Clone clipboard out so `pages.get_mut` doesn't alias
         // `self.clipboard`.
         let originals = self.clipboard.clone();
@@ -76,13 +79,13 @@ impl Document {
         };
         let mut new_ids: Vec<NodeId> = Vec::with_capacity(originals.len());
         for original in &originals {
-            let mut clone = deep_clone_with_new_ids(original, next_id);
+            let mut clone = deep_clone_with_new_ids(original, next_id, &mut taken);
             shift_subtree(&mut clone, offset_doc_px, offset_doc_px);
-            new_ids.push(clone.id);
+            new_ids.push(clone.id.clone());
             page.children.push(clone);
         }
         if !new_ids.is_empty() {
-            self.selected = *new_ids.last().unwrap();
+            self.selected = new_ids.last().unwrap().clone();
             self.selected_set = new_ids.clone();
         }
         new_ids

@@ -227,7 +227,7 @@ impl WidgetHostNative {
         if self
             .document
             .active_page()
-            .map(|p| p.find(d.source).is_none())
+            .map(|p| p.find(&d.source).is_none())
             .unwrap_or(true)
         {
             return false;
@@ -241,7 +241,7 @@ impl WidgetHostNative {
             ),
         };
         // Build with source excluded so indicator y matches post-commit.
-        let panel = LayerPanel::from_document_with_drag_source(&self.document, d.source);
+        let panel = LayerPanel::from_document_with_drag_source(&self.document, d.source.clone());
         let cursor = openpencil_shell_core::Point2D::new(d.current_x, d.current_y);
         let Some(drop) = panel.drop_target_at(layer_rect, cursor) else {
             return true;
@@ -295,7 +295,7 @@ impl WidgetHostNative {
             // shift-marquee never removes. If you want to remove
             // a single node from the set use shift+click.
             for id in ids {
-                if !self.document.is_selected(id) {
+                if !self.document.is_selected(&id) {
                     // toggle adds it (since it's not in the set).
                     self.document.toggle_selection(id);
                 }
@@ -303,7 +303,7 @@ impl WidgetHostNative {
         } else if !ids.is_empty() {
             // Replace with the hit set. Anchor = last hit
             // (matches TS `setSelection(ids, ids[last])`).
-            let anchor = *ids.last().unwrap();
+            let anchor = ids.last().unwrap().clone();
             self.document.selected_set = ids;
             self.document.selected = anchor;
         }
@@ -475,13 +475,13 @@ impl WidgetHostNative {
         if let Some(hit) = panel.hit_test(layer_rect, Point2D::new(x, y)) {
             use openpencil_shell_core::document::LayerContextTarget;
             use openpencil_shell_core::widgets::LayerPanelHit as H;
-            let target_for_dbl = match hit {
-                H::Layer(id) => Some(LayerContextTarget::Layer(id)),
-                H::Page(idx) => Some(LayerContextTarget::Page(idx)),
+            let target_for_dbl = match &hit {
+                H::Layer(id) => Some(LayerContextTarget::Layer(id.clone())),
+                H::Page(idx) => Some(LayerContextTarget::Page(*idx)),
                 _ => None,
             };
             if let Some(target) = target_for_dbl {
-                if let Some((prev, prev_ms)) = self.document.ui.last_layer_click {
+                if let Some((prev, prev_ms)) = self.document.ui.last_layer_click.clone() {
                     if prev == target && self.now_ms.saturating_sub(prev_ms) < 400 {
                         let started = match target {
                             LayerContextTarget::Layer(id) => self.document.start_rename_layer(id),
@@ -504,22 +504,22 @@ impl WidgetHostNative {
                 }
                 H::Layer(node_id) => {
                     if self.shift_held {
-                        self.document.toggle_selection(node_id);
+                        self.document.toggle_selection(node_id.clone());
                     } else {
                         self.document.set_single_selection(node_id);
                     }
                     return true;
                 }
                 H::ToggleHidden(node_id) => {
-                    self.document.toggle_node_hidden(node_id);
+                    self.document.toggle_node_hidden(&node_id);
                     return true;
                 }
                 H::ToggleLocked(node_id) => {
-                    self.document.toggle_node_locked(node_id);
+                    self.document.toggle_node_locked(&node_id);
                     return true;
                 }
                 H::ToggleCollapsed(node_id) => {
-                    self.document.toggle_node_collapsed(node_id);
+                    self.document.toggle_node_collapsed(&node_id);
                     return true;
                 }
                 H::AddPage => {

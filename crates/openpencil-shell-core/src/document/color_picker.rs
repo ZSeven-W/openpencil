@@ -129,12 +129,12 @@ impl Document {
                             ColorTarget::Fill => snap
                                 .pages
                                 .iter()
-                                .find_map(|p| p.find(n.id))
+                                .find_map(|p| p.find(&n.id))
                                 .and_then(|nn| nn.fill),
                             ColorTarget::Stroke => snap
                                 .pages
                                 .iter()
-                                .find_map(|p| p.find(n.id))
+                                .find_map(|p| p.find(&n.id))
                                 .and_then(|nn| nn.stroke.map(|s| s.color)),
                         };
                         let after = match state.target {

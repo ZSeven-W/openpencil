@@ -110,11 +110,13 @@ pub struct VariableTable {
     /// Map of `node_id → variable name` for nodes whose fill is
     /// `$ref:name`. Paint reads this first, falls back to `node.fill`.
     /// Side-table avoids touching every `Node { ... }` literal.
-    pub fill_refs: BTreeMap<super::NodeId, String>,
+    /// `HashMap` (not `BTreeMap`): `NodeId` is a string with no
+    /// meaningful order, and lookups are point queries.
+    pub fill_refs: std::collections::HashMap<super::NodeId, String>,
     /// Map of `node_id → variable name` for nodes whose stroke colour
     /// follows a `$ref`. Parallel to `fill_refs`; paint pre-resolves
     /// via `stroke_color_for(node_id)`.
-    pub stroke_refs: BTreeMap<super::NodeId, String>,
+    pub stroke_refs: std::collections::HashMap<super::NodeId, String>,
 }
 
 impl VariableTable {
@@ -128,8 +130,8 @@ impl VariableTable {
     /// None when no `fill_ref` is registered or the referenced
     /// variable doesn't resolve (paint then falls back to
     /// `node.fill`).
-    pub fn fill_for(&self, node_id: super::NodeId) -> Option<crate::Color> {
-        let name = self.fill_refs.get(&node_id)?;
+    pub fn fill_for(&self, node_id: &super::NodeId) -> Option<crate::Color> {
+        let name = self.fill_refs.get(node_id)?;
         self.resolve_color(name)
     }
     /// Stroke parallel to `set_fill_ref` — registers the variable
@@ -140,8 +142,8 @@ impl VariableTable {
     /// Resolve the paint-time stroke color for `node_id`. Same shape
     /// as `fill_for`; paint falls back to `node.stroke.color` when
     /// None.
-    pub fn stroke_color_for(&self, node_id: super::NodeId) -> Option<crate::Color> {
-        let name = self.stroke_refs.get(&node_id)?;
+    pub fn stroke_color_for(&self, node_id: &super::NodeId) -> Option<crate::Color> {
+        let name = self.stroke_refs.get(node_id)?;
         self.resolve_color(name)
     }
     /// Set the active value of a theme axis (e.g. `("mode", "dark")`).

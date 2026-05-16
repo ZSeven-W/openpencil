@@ -18,13 +18,13 @@ fn rect(x: f32, y: f32, w: f32, h: f32) -> Rect {
 
 fn doc_with_two_nodes() -> Document {
     let mut doc = Document::empty();
-    let a = Node::leaf(11, NodeKind::Rect, "a")
+    let a = Node::leaf("n11", NodeKind::Rect, "a")
         .with_bounds(rect(0.0, 0.0, 10.0, 10.0))
         .with_fill(Color::RED);
-    let b = Node::leaf(22, NodeKind::Rect, "b")
+    let b = Node::leaf("n22", NodeKind::Rect, "b")
         .with_bounds(rect(20.0, 0.0, 10.0, 10.0))
         .with_fill(Color::BLUE);
-    doc.pages[0] = Page::new(1, "P", vec![a, b]);
+    doc.pages[0] = Page::new("n1", "P", vec![a, b]);
     doc
 }
 
@@ -35,9 +35,9 @@ fn set_selection_set_drops_unknown_ids_keeps_known() {
         node_ids: vec![11, 999, 22, 7777],
     };
     assert!(doc.apply_mcp_command(&cmd));
-    let ids: Vec<u64> = doc.selected_set.iter().map(|n| n.raw()).collect();
-    assert_eq!(ids, vec![11, 22], "unknown 999/7777 must drop");
-    assert_eq!(doc.selected.raw(), 22, "anchor follows last resolved id");
+    let ids: Vec<&str> = doc.selected_set.iter().map(|n| n.raw()).collect();
+    assert_eq!(ids, vec!["n11", "n22"], "unknown 999/7777 must drop");
+    assert_eq!(doc.selected.raw(), "n22", "anchor follows last resolved id");
 }
 
 #[test]
@@ -47,15 +47,15 @@ fn set_selection_set_dedupes_repeated_ids() {
         node_ids: vec![11, 22, 11, 22, 11],
     };
     assert!(doc.apply_mcp_command(&cmd));
-    let ids: Vec<u64> = doc.selected_set.iter().map(|n| n.raw()).collect();
-    assert_eq!(ids, vec![11, 22], "duplicates collapse to first occurrence");
+    let ids: Vec<&str> = doc.selected_set.iter().map(|n| n.raw()).collect();
+    assert_eq!(ids, vec!["n11", "n22"], "duplicates collapse to first occurrence");
 }
 
 #[test]
 fn set_selection_set_empty_clears_selection() {
     let mut doc = doc_with_two_nodes();
-    doc.selected_set = vec![NodeId::new(11), NodeId::new(22)];
-    doc.selected = NodeId::new(22);
+    doc.selected_set = vec![NodeId::new("n11"), NodeId::new("n22")];
+    doc.selected = NodeId::new("n22");
     let cmd = McpCommand::SetSelectionSet { node_ids: vec![] };
     assert!(doc.apply_mcp_command(&cmd));
     assert!(doc.selected_set.is_empty());
@@ -65,8 +65,8 @@ fn set_selection_set_empty_clears_selection() {
 #[test]
 fn set_selection_set_all_unknown_clears_selection() {
     let mut doc = doc_with_two_nodes();
-    doc.selected_set = vec![NodeId::new(11)];
-    doc.selected = NodeId::new(11);
+    doc.selected_set = vec![NodeId::new("n11")];
+    doc.selected = NodeId::new("n11");
     let cmd = McpCommand::SetSelectionSet {
         node_ids: vec![9001, 9002],
     };
@@ -92,20 +92,20 @@ fn toggle_node_selection_adds_then_removes() {
     let cmd = McpCommand::ToggleNodeSelection { node_id: 11 };
     assert!(doc.apply_mcp_command(&cmd));
     assert_eq!(doc.selected_set.len(), 1);
-    assert_eq!(doc.selected_set[0].raw(), 11);
-    assert_eq!(doc.selected.raw(), 11);
+    assert_eq!(doc.selected_set[0].raw(), "n11");
+    assert_eq!(doc.selected.raw(), "n11");
     // Second call: 22 not in set ⇒ add as new anchor.
     let cmd = McpCommand::ToggleNodeSelection { node_id: 22 };
     assert!(doc.apply_mcp_command(&cmd));
     assert_eq!(doc.selected_set.len(), 2);
-    assert_eq!(doc.selected.raw(), 22);
+    assert_eq!(doc.selected.raw(), "n22");
     // Third call: 11 in set ⇒ remove; anchor falls back to last
     // surviving id (22).
     let cmd = McpCommand::ToggleNodeSelection { node_id: 11 };
     assert!(doc.apply_mcp_command(&cmd));
     assert_eq!(doc.selected_set.len(), 1);
-    assert_eq!(doc.selected_set[0].raw(), 22);
-    assert_eq!(doc.selected.raw(), 22);
+    assert_eq!(doc.selected_set[0].raw(), "n22");
+    assert_eq!(doc.selected.raw(), "n22");
 }
 
 #[test]
@@ -125,10 +125,10 @@ fn selection_apply_rejects_ids_on_non_active_pages() {
     // panels can't see, and every downstream read silently fails.
     let mut doc = doc_with_two_nodes();
     // Add a second page carrying its own node id=555.
-    let off_page_node = Node::leaf(555, NodeKind::Rect, "off")
+    let off_page_node = Node::leaf("n555", NodeKind::Rect, "off")
         .with_bounds(rect(0.0, 0.0, 10.0, 10.0))
         .with_fill(Color::GREEN);
-    doc.pages.push(Page::new(2, "P2", vec![off_page_node]));
+    doc.pages.push(Page::new("n2", "P2", vec![off_page_node]));
     // active_page_index stays 0 (the page that has 11, 22).
     let cmds = [
         McpCommand::SetSelection { node_id: 555 },
@@ -150,8 +150,8 @@ fn selection_apply_rejects_ids_on_non_active_pages() {
         node_ids: vec![11, 555, 22],
     };
     assert!(doc.apply_mcp_command(&cmd));
-    let ids: Vec<u64> = doc.selected_set.iter().map(|n| n.raw()).collect();
-    assert_eq!(ids, vec![11, 22], "off-page 555 must be filtered out");
+    let ids: Vec<&str> = doc.selected_set.iter().map(|n| n.raw()).collect();
+    assert_eq!(ids, vec!["n11", "n22"], "off-page 555 must be filtered out");
 }
 
 #[test]

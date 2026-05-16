@@ -7,12 +7,12 @@ fn locked_selection_blocks_translate_set_bounds_rotation_color_and_property_edit
     // rotate / property edits / color setters.
     let mut doc = Document::empty();
     let root_idx = doc.active_page_index;
-    let mut locked = Node::leaf(40, NodeKind::Rect, "locked")
+    let mut locked = Node::leaf("n40", NodeKind::Rect, "locked")
         .with_bounds(crate::Rect::xywh(10.0, 10.0, 50.0, 50.0))
         .with_fill(crate::Color::WHITE);
     locked.locked = true;
     doc.pages[root_idx].children = vec![locked];
-    doc.set_single_selection(NodeId::new(40));
+    doc.set_single_selection(NodeId::new("n40"));
 
     let before = doc.selected_node().unwrap().bounds;
     doc.translate_selected(7.0, 3.0);
@@ -34,11 +34,11 @@ fn locked_selection_blocks_translate_set_bounds_rotation_color_and_property_edit
 fn hidden_selection_blocks_translate_and_property_edit() {
     let mut doc = Document::empty();
     let root_idx = doc.active_page_index;
-    let mut hidden = Node::leaf(41, NodeKind::Rect, "hidden")
+    let mut hidden = Node::leaf("n41", NodeKind::Rect, "hidden")
         .with_bounds(crate::Rect::xywh(10.0, 10.0, 50.0, 50.0));
     hidden.hidden = true;
     doc.pages[root_idx].children = vec![hidden];
-    doc.set_single_selection(NodeId::new(41));
+    doc.set_single_selection(NodeId::new("n41"));
     let before = doc.selected_node().unwrap().bounds;
     doc.translate_selected(7.0, 3.0);
     assert_eq!(doc.selected_node().unwrap().bounds, before);
@@ -56,32 +56,32 @@ fn delete_selected_protects_ancestor_of_locked_descendant() {
     // the child by collapsing the parent.
     let mut doc = Document::empty();
     let root_idx = doc.active_page_index;
-    let mut child = Node::leaf(61, NodeKind::Rect, "child");
+    let mut child = Node::leaf("n61", NodeKind::Rect, "child");
     child.locked = true;
-    let frame = Node::with_children(60, NodeKind::Frame, "frame", vec![child])
+    let frame = Node::with_children("n60", NodeKind::Frame, "frame", vec![child])
         .with_bounds(crate::Rect::xywh(0.0, 0.0, 100.0, 100.0));
     doc.pages[root_idx].children = vec![frame];
     // Select the Frame only.
-    doc.set_single_selection(NodeId::new(60));
+    doc.set_single_selection(NodeId::new("n60"));
     // delete_selected must refuse — the Frame's subtree
     // contains a locked child. is_subtree_editable returns
     // false → nothing deletable.
     assert!(!doc.delete_selected());
     // Frame still in document.
-    assert!(doc.active_page().unwrap().find(NodeId::new(60)).is_some());
-    assert!(doc.active_page().unwrap().find(NodeId::new(61)).is_some());
+    assert!(doc.active_page().unwrap().find(&NodeId::new("n60")).is_some());
+    assert!(doc.active_page().unwrap().find(&NodeId::new("n61")).is_some());
 
     // Same scenario, hidden descendant.
     let mut doc2 = Document::empty();
     let root_idx2 = doc2.active_page_index;
-    let mut child2 = Node::leaf(71, NodeKind::Rect, "child");
+    let mut child2 = Node::leaf("n71", NodeKind::Rect, "child");
     child2.hidden = true;
-    let frame2 = Node::with_children(70, NodeKind::Frame, "frame", vec![child2])
+    let frame2 = Node::with_children("n70", NodeKind::Frame, "frame", vec![child2])
         .with_bounds(crate::Rect::xywh(0.0, 0.0, 100.0, 100.0));
     doc2.pages[root_idx2].children = vec![frame2];
-    doc2.set_single_selection(NodeId::new(70));
+    doc2.set_single_selection(NodeId::new("n70"));
     assert!(!doc2.delete_selected());
-    assert!(doc2.active_page().unwrap().find(NodeId::new(70)).is_some());
+    assert!(doc2.active_page().unwrap().find(&NodeId::new("n70")).is_some());
 }
 
 #[test]
@@ -91,25 +91,25 @@ fn delete_selected_protects_locked_and_hidden() {
     // selected (so the user can unlock/unhide).
     let mut doc = Document::empty();
     let root_idx = doc.active_page_index;
-    let normal = Node::leaf(50, NodeKind::Rect, "normal");
-    let mut locked = Node::leaf(51, NodeKind::Rect, "locked");
+    let normal = Node::leaf("n50", NodeKind::Rect, "normal");
+    let mut locked = Node::leaf("n51", NodeKind::Rect, "locked");
     locked.locked = true;
-    let mut hidden = Node::leaf(52, NodeKind::Rect, "hidden");
+    let mut hidden = Node::leaf("n52", NodeKind::Rect, "hidden");
     hidden.hidden = true;
     doc.pages[root_idx].children = vec![normal, locked, hidden];
-    doc.selected_set = vec![NodeId::new(50), NodeId::new(51), NodeId::new(52)];
-    doc.selected = NodeId::new(52);
+    doc.selected_set = vec![NodeId::new("n50"), NodeId::new("n51"), NodeId::new("n52")];
+    doc.selected = NodeId::new("n52");
     assert!(doc.delete_selected());
     // Normal id removed; locked + hidden survive.
-    let ids: Vec<u64> = doc.pages[root_idx]
+    let ids: Vec<&str> = doc.pages[root_idx]
         .children
         .iter()
         .map(|n| n.id.raw())
         .collect();
-    assert_eq!(ids, vec![51, 52]);
-    let mut surviving: Vec<u64> = doc.selected_set.iter().map(|i| i.raw()).collect();
+    assert_eq!(ids, vec!["n51", "n52"]);
+    let mut surviving: Vec<&str> = doc.selected_set.iter().map(|i| i.raw()).collect();
     surviving.sort();
-    assert_eq!(surviving, vec![51, 52]);
+    assert_eq!(surviving, vec!["n51", "n52"]);
 }
 
 #[test]
@@ -119,9 +119,9 @@ fn locked_frame_children_remain_hittable() {
     // a locked Frame stay clickable. Rust must match.
     let mut doc = Document::empty();
     let root_idx = doc.active_page_index;
-    let child = Node::leaf(21, NodeKind::Rect, "inner")
+    let child = Node::leaf("n21", NodeKind::Rect, "inner")
         .with_bounds(crate::Rect::xywh(20.0, 20.0, 40.0, 40.0));
-    let mut frame = Node::with_children(20, NodeKind::Frame, "outer", vec![child])
+    let mut frame = Node::with_children("n20", NodeKind::Frame, "outer", vec![child])
         .with_bounds(crate::Rect::xywh(0.0, 0.0, 100.0, 100.0));
     frame.locked = true;
     doc.pages[root_idx].children = vec![frame];
@@ -129,7 +129,7 @@ fn locked_frame_children_remain_hittable() {
     // doesn't propagate to children).
     assert_eq!(
         doc.node_at_doc_point(crate::Point2D::new(40.0, 40.0)),
-        Some(NodeId::new(21))
+        Some(NodeId::new("n21"))
     );
     // Click inside the Frame BUT outside the child → no hit
     // (the Frame body is locked).
@@ -143,9 +143,9 @@ fn hidden_frame_children_skip_hit_test() {
     // bounds.
     let mut doc = Document::empty();
     let root_idx = doc.active_page_index;
-    let child = Node::leaf(31, NodeKind::Rect, "inner")
+    let child = Node::leaf("n31", NodeKind::Rect, "inner")
         .with_bounds(crate::Rect::xywh(20.0, 20.0, 40.0, 40.0));
-    let mut frame = Node::with_children(30, NodeKind::Frame, "outer", vec![child])
+    let mut frame = Node::with_children("n30", NodeKind::Frame, "outer", vec![child])
         .with_bounds(crate::Rect::xywh(0.0, 0.0, 100.0, 100.0));
     frame.hidden = true;
     doc.pages[root_idx].children = vec![frame];
@@ -157,9 +157,9 @@ fn toggle_node_locked_skips_canvas_hit_test_but_keeps_paint() {
     let mut doc = Document::empty();
     let root_idx = doc.active_page_index;
     doc.pages[root_idx].children =
-        vec![Node::leaf(8, NodeKind::Rect, "a")
+        vec![Node::leaf("n8", NodeKind::Rect, "a")
             .with_bounds(crate::Rect::xywh(0.0, 0.0, 100.0, 100.0))];
-    assert!(doc.toggle_node_locked(NodeId::new(8)));
+    assert!(doc.toggle_node_locked(&NodeId::new("n8")));
     // Locked → canvas hit-test ignores it (TS parity:
     // locked layers can't be selected via canvas click; the
     // user has to click the layer-panel row to unlock).
@@ -170,7 +170,7 @@ fn toggle_node_locked_skips_canvas_hit_test_but_keeps_paint() {
     let node = doc
         .active_page()
         .unwrap()
-        .find(NodeId::new(8))
+        .find(&NodeId::new("n8"))
         .expect("locked node still in document");
     assert!(node.locked);
     assert!(!node.hidden);
@@ -181,15 +181,15 @@ fn nodes_intersecting_doc_rect_returns_overlapping_top_level_ids() {
     let mut doc = Document::empty();
     let root_idx = doc.active_page_index;
     doc.pages[root_idx].children = vec![
-        Node::leaf(2, NodeKind::Rect, "a").with_bounds(crate::Rect::xywh(0.0, 0.0, 50.0, 50.0)),
-        Node::leaf(3, NodeKind::Rect, "b").with_bounds(crate::Rect::xywh(100.0, 100.0, 50.0, 50.0)),
-        Node::leaf(4, NodeKind::Rect, "c").with_bounds(crate::Rect::xywh(40.0, 40.0, 30.0, 30.0)),
+        Node::leaf("n2", NodeKind::Rect, "a").with_bounds(crate::Rect::xywh(0.0, 0.0, 50.0, 50.0)),
+        Node::leaf("n3", NodeKind::Rect, "b").with_bounds(crate::Rect::xywh(100.0, 100.0, 50.0, 50.0)),
+        Node::leaf("n4", NodeKind::Rect, "c").with_bounds(crate::Rect::xywh(40.0, 40.0, 30.0, 30.0)),
     ];
     // Rect (10, 10, 80, 80) overlaps "a" (touches origin) and
     // "c" (fully contained). Misses "b" at (100, 100).
     let hits = doc.nodes_intersecting_doc_rect(crate::Rect::xywh(10.0, 10.0, 80.0, 80.0));
-    let ids: Vec<u64> = hits.iter().map(|i| i.raw()).collect();
-    assert_eq!(ids, vec![2, 4]);
+    let ids: Vec<&str> = hits.iter().map(|i| i.raw()).collect();
+    assert_eq!(ids, vec!["n2", "n4"]);
 }
 
 #[test]
@@ -200,12 +200,12 @@ fn nodes_intersecting_doc_rect_handles_negative_size() {
     let mut doc = Document::empty();
     let root_idx = doc.active_page_index;
     doc.pages[root_idx].children =
-        vec![Node::leaf(2, NodeKind::Rect, "a")
+        vec![Node::leaf("n2", NodeKind::Rect, "a")
             .with_bounds(crate::Rect::xywh(20.0, 20.0, 10.0, 10.0))];
     // Negative-size rect spanning (10, 10) → (40, 40).
     let hits = doc.nodes_intersecting_doc_rect(crate::Rect::xywh(40.0, 40.0, -30.0, -30.0));
     assert_eq!(hits.len(), 1);
-    assert_eq!(hits[0], NodeId::new(2));
+    assert_eq!(hits[0], NodeId::new("n2"));
 }
 
 #[test]
@@ -213,7 +213,7 @@ fn nodes_intersecting_doc_rect_skips_degenerate_nodes() {
     let mut doc = Document::empty();
     let root_idx = doc.active_page_index;
     doc.pages[root_idx].children =
-        vec![Node::leaf(2, NodeKind::Rect, "zero")
+        vec![Node::leaf("n2", NodeKind::Rect, "zero")
             .with_bounds(crate::Rect::xywh(5.0, 5.0, 0.0, 0.0))];
     let hits = doc.nodes_intersecting_doc_rect(crate::Rect::xywh(0.0, 0.0, 100.0, 100.0));
     assert!(hits.is_empty());
@@ -226,15 +226,15 @@ fn property_panel_visible_for_single_and_multi_selection() {
     doc.clear_selection();
     assert!(!doc.property_panel_visible());
     // Single selection → visible.
-    doc.set_single_selection(NodeId::new(10));
+    doc.set_single_selection(NodeId::new("n10"));
     assert!(doc.property_panel_visible());
     // Multi-select with valid union bounds → visible (aggregate
     // view; was hidden before the multi-select panel landed).
-    doc.toggle_selection(NodeId::new(11));
+    doc.toggle_selection(NodeId::new("n11"));
     assert_eq!(doc.selection_count(), 2);
     assert!(doc.property_panel_visible());
     // Back to single → visible.
-    doc.set_single_selection(NodeId::new(10));
+    doc.set_single_selection(NodeId::new("n10"));
     assert!(doc.property_panel_visible());
 }
 
@@ -275,7 +275,7 @@ fn property_panel_visible_hides_stale_single_anchor() {
     // after a delete) must NOT reserve the right rail.
     let mut doc = Document::sample();
     // Point selection at a non-existent id.
-    doc.set_single_selection(NodeId::new(9999));
+    doc.set_single_selection(NodeId::new("n9999"));
     assert_eq!(doc.selection_count(), 1);
     assert!(doc.selected_node().is_none());
     assert!(!doc.property_panel_visible());
@@ -284,12 +284,12 @@ fn property_panel_visible_hides_stale_single_anchor() {
     // unresolved (selected_node only scopes to active page).
     let mut doc2 = Document::empty();
     doc2.pages.push(Page::new(
-        2,
+        "n2",
         "p2",
-        vec![Node::leaf(99, NodeKind::Rect, "alpha")],
+        vec![Node::leaf("n99", NodeKind::Rect, "alpha")],
     ));
     doc2.active_page_index = 0; // page 1 active
-    doc2.set_single_selection(NodeId::new(99)); // node on page 2
+    doc2.set_single_selection(NodeId::new("n99")); // node on page 2
     assert_eq!(doc2.selection_count(), 1);
     assert!(doc2.selected_node().is_none());
     assert!(!doc2.property_panel_visible());
@@ -302,8 +302,8 @@ fn multi_select_handle_hit_test_is_disabled() {
     use crate::widgets::{rotation_corner_at_point, selection_handle_at_point};
     let mut doc = Document::sample();
     // 2 selected → handles hidden, hit-test returns None.
-    doc.selected_set = vec![NodeId::new(11), NodeId::new(13)];
-    doc.selected = NodeId::new(13);
+    doc.selected_set = vec![NodeId::new("n11"), NodeId::new("n13")];
+    doc.selected = NodeId::new("n13");
     let canvas_rect = crate::Rect::xywh(0.0, 0.0, 800.0, 600.0);
     // A point that would hit the anchor's top-left handle if
     // hit-test ran — at zoom 1, pan 0, anchor 13 bounds origin.
@@ -322,7 +322,7 @@ fn multi_select_handle_hit_test_is_disabled() {
         "multi-select must not expose rotation hit-tests"
     );
     // Collapse to single-select → handles are interactive again.
-    doc.set_single_selection(NodeId::new(13));
+    doc.set_single_selection(NodeId::new("n13"));
     assert!(selection_handle_at_point(canvas_rect, &doc, handle_point).is_some());
 }
 
@@ -332,18 +332,18 @@ fn translate_selected_dedups_ancestor_descendant_pairs() {
     // of its descendants must NOT double-shift the descendant.
     let mut doc = Document::empty();
     let root_idx = doc.active_page_index;
-    let child = Node::leaf(11, NodeKind::Rect, "child")
+    let child = Node::leaf("n11", NodeKind::Rect, "child")
         .with_bounds(crate::Rect::xywh(50.0, 50.0, 20.0, 20.0));
-    let frame = Node::with_children(10, NodeKind::Frame, "frame", vec![child])
+    let frame = Node::with_children("n10", NodeKind::Frame, "frame", vec![child])
         .with_bounds(crate::Rect::xywh(0.0, 0.0, 200.0, 200.0));
     doc.pages[root_idx].children = vec![frame];
-    doc.selected_set = vec![NodeId::new(10), NodeId::new(11)];
-    doc.selected = NodeId::new(11);
+    doc.selected_set = vec![NodeId::new("n10"), NodeId::new("n11")];
+    doc.selected = NodeId::new("n11");
 
     let child_before = doc
         .active_page()
         .unwrap()
-        .find(NodeId::new(11))
+        .find(&NodeId::new("n11"))
         .unwrap()
         .bounds
         .origin;
@@ -351,7 +351,7 @@ fn translate_selected_dedups_ancestor_descendant_pairs() {
     let child_after = doc
         .active_page()
         .unwrap()
-        .find(NodeId::new(11))
+        .find(&NodeId::new("n11"))
         .unwrap()
         .bounds
         .origin;
@@ -365,13 +365,13 @@ fn translate_selected_moves_bounded_frame_with_descendants() {
     // shift its descendants (whose bounds are document-space
     // absolute) — otherwise the children "detach" visually.
     let mut doc = Document::sample();
-    doc.set_single_selection(NodeId::new(10)); // Frame
+    doc.set_single_selection(NodeId::new("n10")); // Frame
     let frame_before = doc.selected_node().unwrap().bounds.origin;
     // Walk a known descendant ahead of time.
     let descendant_before = doc
         .active_page()
         .unwrap()
-        .find(NodeId::new(13)) // Button background rect
+        .find(&NodeId::new("n13")) // Button background rect
         .unwrap()
         .bounds
         .origin;
@@ -380,7 +380,7 @@ fn translate_selected_moves_bounded_frame_with_descendants() {
     let descendant_after = doc
         .active_page()
         .unwrap()
-        .find(NodeId::new(13))
+        .find(&NodeId::new("n13"))
         .unwrap()
         .bounds
         .origin;
@@ -393,28 +393,33 @@ fn translate_selected_moves_bounded_frame_with_descendants() {
 }
 
 #[test]
-fn node_id_sentinel_is_zero() {
-    assert_eq!(NodeId::NONE.raw(), 0);
+fn node_id_sentinel_is_empty() {
+    assert_eq!(NodeId::NONE.raw(), "");
     assert!(!NodeId::NONE.is_real());
-    assert!(NodeId::new(1).is_real());
+    assert!(NodeId::new("n1").is_real());
 }
 
 #[test]
-fn node_id_to_widget_id_round_trips_inner_value() {
-    let nid = NodeId::new(42);
-    let wid = nid.to_widget_id();
-    assert_eq!(wid.0, 42);
+fn node_id_to_widget_id_is_stable_and_distinct() {
+    // The string id is hashed into the WidgetId space; the hash
+    // is stable per id and distinct across ids.
+    let a = NodeId::new("n42");
+    assert_eq!(a.to_widget_id(), a.to_widget_id());
+    assert_ne!(
+        NodeId::new("n42").to_widget_id(),
+        NodeId::new("n43").to_widget_id()
+    );
 }
 
 #[test]
 fn node_find_walks_subtree() {
-    let leaf = Node::leaf(3, NodeKind::Rect, "leaf");
-    let mid = Node::with_children(2, NodeKind::Group, "mid", vec![leaf]);
-    let root = Node::with_children(1, NodeKind::Frame, "root", vec![mid]);
-    assert_eq!(root.find(NodeId::new(1)).unwrap().name, "root");
-    assert_eq!(root.find(NodeId::new(2)).unwrap().name, "mid");
-    assert_eq!(root.find(NodeId::new(3)).unwrap().name, "leaf");
-    assert!(root.find(NodeId::new(99)).is_none());
+    let leaf = Node::leaf("n3", NodeKind::Rect, "leaf");
+    let mid = Node::with_children("n2", NodeKind::Group, "mid", vec![leaf]);
+    let root = Node::with_children("n1", NodeKind::Frame, "root", vec![mid]);
+    assert_eq!(root.find(&NodeId::new("n1")).unwrap().name, "root");
+    assert_eq!(root.find(&NodeId::new("n2")).unwrap().name, "mid");
+    assert_eq!(root.find(&NodeId::new("n3")).unwrap().name, "leaf");
+    assert!(root.find(&NodeId::new("n99")).is_none());
 }
 
 #[test]
@@ -435,7 +440,7 @@ fn document_sample_has_expected_shape() {
 fn document_selected_node_returns_real_hit() {
     let doc = Document::sample();
     let sel = doc.selected_node().unwrap();
-    assert_eq!(sel.id, NodeId::new(11));
+    assert_eq!(sel.id, NodeId::new("n11"));
     assert_eq!(sel.name, "Title");
     assert_eq!(sel.kind, NodeKind::Text);
 }
@@ -450,7 +455,7 @@ fn document_empty_has_no_selection() {
 #[test]
 fn document_find_unknown_id_is_none() {
     let mut doc = Document::sample();
-    doc.set_single_selection(NodeId::new(9999));
+    doc.set_single_selection(NodeId::new("n9999"));
     assert!(doc.selected_node().is_none());
 }
 
@@ -464,12 +469,13 @@ fn node_kind_label_matches_variant() {
 }
 
 #[test]
-#[should_panic(expected = "id 0 is reserved for NodeId::NONE")]
-fn node_id_new_zero_panics_in_release_too() {
+#[should_panic(expected = "the empty id is reserved for NodeId::NONE")]
+fn node_id_new_empty_panics_in_release_too() {
     // Codex Step 2 R1 BLOCK fix: hard panic, not just
     // debug_assert. `#[should_panic]` test runs in both debug
-    // and release configurations.
-    let _ = NodeId::new(0);
+    // and release configurations. The empty string is the
+    // NONE sentinel and rejected by `NodeId::new`.
+    let _ = NodeId::new("");
 }
 
 #[test]
@@ -484,11 +490,11 @@ fn document_sample_passes_validate() {
 fn document_validate_catches_duplicate_node_id() {
     let doc = Document {
         pages: vec![Page::new(
-            1,
+            "n1",
             "p",
             vec![
-                Node::leaf(2, NodeKind::Rect, "a"),
-                Node::leaf(2, NodeKind::Rect, "b"), // dup id 2
+                Node::leaf("n2", NodeKind::Rect, "a"),
+                Node::leaf("n2", NodeKind::Rect, "b"), // dup id n2
             ],
         )],
         active_page_index: 0,
@@ -580,13 +586,13 @@ fn document_validate_catches_empty_pages() {
 fn document_selected_node_scopes_to_active_page() {
     // Codex Step 2 R1 CONCERN-1: a selection on page 1 must
     // NOT show up when page 2 is active.
-    let page1 = Page::new(1, "p1", vec![Node::leaf(10, NodeKind::Rect, "P1-A")]);
-    let page2 = Page::new(2, "p2", vec![Node::leaf(20, NodeKind::Rect, "P2-A")]);
+    let page1 = Page::new("n1", "p1", vec![Node::leaf("n10", NodeKind::Rect, "P1-A")]);
+    let page2 = Page::new("n2", "p2", vec![Node::leaf("n20", NodeKind::Rect, "P2-A")]);
     let doc = Document {
         pages: vec![page1, page2],
         active_page_index: 1,      // page 2 active
-        selected: NodeId::new(10), // selection points at page 1's node
-        selected_set: vec![NodeId::new(10)],
+        selected: NodeId::new("n10"), // selection points at page 1's node
+        selected_set: vec![NodeId::new("n10")],
         clipboard: Vec::new(),
         tool: Tool::Select,
         viewport: Viewport::IDENTITY,
@@ -612,8 +618,8 @@ fn document_selected_node_scopes_to_active_page() {
 fn document_active_page_returns_indexed_page() {
     let doc = Document {
         pages: vec![
-            Page::new(1, "first", vec![]),
-            Page::new(2, "second", vec![]),
+            Page::new("n1", "first", vec![]),
+            Page::new("n2", "second", vec![]),
         ],
         active_page_index: 1,
         selected: NodeId::NONE,
@@ -633,7 +639,7 @@ fn document_active_page_returns_indexed_page() {
 #[test]
 fn document_active_page_returns_none_when_index_out_of_range() {
     let doc = Document {
-        pages: vec![Page::new(1, "only", vec![])],
+        pages: vec![Page::new("n1", "only", vec![])],
         active_page_index: 5,
         selected: NodeId::NONE,
         selected_set: Vec::new(),
@@ -651,8 +657,8 @@ fn document_active_page_returns_none_when_index_out_of_range() {
 
 #[test]
 fn node_id_raw_returns_inner_value() {
-    assert_eq!(NodeId::new(42).raw(), 42);
-    assert_eq!(NodeId::NONE.raw(), 0);
+    assert_eq!(NodeId::new("n42").raw(), "n42");
+    assert_eq!(NodeId::NONE.raw(), "");
 }
 
 #[test]
@@ -666,8 +672,9 @@ fn add_page_appends_named_page_and_switches() {
     assert_eq!(doc.active_page_index, before);
     let new_page = doc.active_page().unwrap();
     assert_eq!(new_page.name, format!("Page {}", before + 1));
-    // Fresh id must NOT collide with any existing node id.
-    assert!(new_page.id.raw() > max_before);
+    // Fresh id must NOT collide with any existing node id —
+    // the allocator mints `n{max_node_id + 1}`.
+    assert_eq!(new_page.id, NodeId::new(format!("n{}", max_before + 1)));
     // Newly-added page is empty; selection clears.
     assert!(new_page.children.is_empty());
     assert_eq!(doc.selected, NodeId::NONE);
@@ -687,7 +694,7 @@ fn add_page_returns_none_on_id_overflow() {
     // Fabricate a document whose largest id is u64::MAX so the
     // next page mint would overflow.
     let doc = Document {
-        pages: vec![Page::new(u64::MAX, "max", vec![])],
+        pages: vec![Page::new(format!("n{}", u64::MAX), "max", vec![])],
         active_page_index: 0,
         selected: NodeId::NONE,
         selected_set: Vec::new(),

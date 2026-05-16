@@ -22,22 +22,22 @@ impl WidgetHostNative {
         use openpencil_shell_core::widgets::layer_context_menu::LayerContextAction as A;
         match (action, target) {
             (A::Duplicate, T::Layer(id)) => {
-                self.document.set_single_selection(id);
+                self.document.set_single_selection(id.clone());
                 self.document.commit_history();
                 let _ = self
                     .document
                     .duplicate_selected(&mut self.next_node_id, 10.0);
             }
             (A::Delete, T::Layer(id)) => {
-                self.document.set_single_selection(id);
+                self.document.set_single_selection(id.clone());
                 self.document.commit_history();
                 let _ = self.document.delete_selected();
             }
             (A::ToggleLock, T::Layer(id)) => {
-                self.document.toggle_node_locked(id);
+                self.document.toggle_node_locked(&id);
             }
             (A::ToggleVisibility, T::Layer(id)) => {
-                self.document.toggle_node_hidden(id);
+                self.document.toggle_node_hidden(&id);
             }
             (A::CreateComponent, T::Layer(_)) => {} // stub
             (A::DuplicatePage, T::Page(idx)) => {
@@ -88,7 +88,7 @@ impl WidgetHostNative {
         let panel = LayerPanel::from_document(&self.document);
         match panel.hit_test(layer_rect, Point2D::new(x, y)) {
             Some(LayerPanelHit::Layer(id)) => {
-                self.document.set_single_selection(id);
+                self.document.set_single_selection(id.clone());
                 self.document.ui.layer_context_menu = Some(LayerContextMenuState {
                     target: LayerContextTarget::Layer(id),
                     anchor_x: x,
@@ -178,11 +178,11 @@ impl WidgetHostNative {
             }
         }
 
-        if let Some(state) = self.document.ui.layer_context_menu {
+        if let Some(state) = self.document.ui.layer_context_menu.clone() {
             use openpencil_shell_core::widgets::layer_context_menu::LayerContextMenu;
-            let menu = LayerContextMenu::for_state(&self.document, state);
+            let menu = LayerContextMenu::for_state(&self.document, state.clone());
             if let Some(action) = menu.hit_test(Point2D::new(x, y)) {
-                self.dispatch_layer_context_action(action, state.target);
+                self.dispatch_layer_context_action(action, state.target.clone());
                 self.document.ui.layer_context_menu = None;
                 return true;
             }
@@ -615,11 +615,11 @@ impl WidgetHostNative {
                     // Canvas double-click: 400 ms same-node → enter
                     // text-edit on Text nodes (no-op on others).
                     let is_double = matches!(
-                        self.document.ui.last_canvas_click,
-                        Some((prev, t)) if prev == node_id && self.now_ms.saturating_sub(t) < 400
+                        &self.document.ui.last_canvas_click,
+                        Some((prev, t)) if *prev == node_id && self.now_ms.saturating_sub(*t) < 400
                     );
-                    self.document.ui.last_canvas_click = Some((node_id, self.now_ms));
-                    if is_double && !text_edit_was_active && self.document.start_text_edit(node_id)
+                    self.document.ui.last_canvas_click = Some((node_id.clone(), self.now_ms));
+                    if is_double && !text_edit_was_active && self.document.start_text_edit(node_id.clone())
                     {
                         self.document.ui.text_edit_caret_anchor_ms = self.now_ms;
                         return true;
@@ -630,8 +630,8 @@ impl WidgetHostNative {
                         // ADDED the node (so the user can
                         // immediately drag the new selection
                         // together with the existing set).
-                        let was_in_set = self.document.is_selected(node_id);
-                        self.document.toggle_selection(node_id);
+                        let was_in_set = self.document.is_selected(&node_id);
+                        self.document.toggle_selection(node_id.clone());
                         if !was_in_set {
                             self.node_drag = Some(NodeDragState {
                                 last_screen_x: x,
@@ -645,7 +645,7 @@ impl WidgetHostNative {
                     // KEEP the set (TS parity — clicking inside
                     // a selection starts a multi-node drag).
                     // Otherwise collapse to single-select.
-                    let already_in_set = self.document.is_selected(node_id);
+                    let already_in_set = self.document.is_selected(&node_id);
                     if !already_in_set || self.document.selection_count() == 1 {
                         self.document.set_single_selection(node_id);
                     }
@@ -699,7 +699,7 @@ impl WidgetHostNative {
                         let start_doc = self
                             .document
                             .active_page()
-                            .and_then(|p| p.find(node_id))
+                            .and_then(|p| p.find(&node_id))
                             .and_then(|n| n.points.get(anchor_index).copied())
                             .unwrap_or(doc_point);
                         let pre = self.document.snapshot_for_history();
@@ -777,7 +777,7 @@ impl WidgetHostNative {
         // u64::MAX) can't silently mint a colliding id.
         let safe = self.document.max_node_id().checked_add(1)?;
         self.next_node_id = self.next_node_id.max(safe);
-        let id = NodeId::new(self.next_node_id);
+        let id = NodeId::new(format!("n{}", self.next_node_id));
         self.next_node_id = self.next_node_id.checked_add(1)?;
         // Sensible default size for click-create (no drag). Text
         // gets enough room to render its placeholder "Text" string;
@@ -789,7 +789,7 @@ impl WidgetHostNative {
         } else {
             (1.0, 1.0)
         };
-        let mut node = Node::leaf(id.raw(), kind, name).with_bounds(Rect::xywh(
+        let mut node = Node::leaf(id.as_str(), kind, name).with_bounds(Rect::xywh(
             doc_point.x,
             doc_point.y,
             init_w,

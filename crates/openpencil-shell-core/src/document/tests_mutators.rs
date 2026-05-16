@@ -3,24 +3,24 @@ use super::*;
 #[test]
 fn delete_selected_removes_top_level_node_and_clears_selection() {
     let mut doc = Document::sample();
-    let target = NodeId::new(10);
-    doc.set_single_selection(target);
-    assert!(doc.active_page().unwrap().find(target).is_some());
+    let target = NodeId::new("n10");
+    doc.set_single_selection(target.clone());
+    assert!(doc.active_page().unwrap().find(&target).is_some());
     assert!(doc.delete_selected());
     assert_eq!(doc.selected, NodeId::NONE);
-    assert!(doc.active_page().unwrap().find(target).is_none());
+    assert!(doc.active_page().unwrap().find(&target).is_none());
 }
 
 #[test]
 fn delete_selected_removes_nested_node() {
     let mut doc = Document::sample();
-    let nested = NodeId::new(13); // Button background — descendant of Frame 10
-    doc.set_single_selection(nested);
-    assert!(doc.active_page().unwrap().find(nested).is_some());
+    let nested = NodeId::new("n13"); // Button background — descendant of Frame 10
+    doc.set_single_selection(nested.clone());
+    assert!(doc.active_page().unwrap().find(&nested).is_some());
     assert!(doc.delete_selected());
-    assert!(doc.active_page().unwrap().find(nested).is_none());
+    assert!(doc.active_page().unwrap().find(&nested).is_none());
     // Parent must remain.
-    assert!(doc.active_page().unwrap().find(NodeId::new(10)).is_some());
+    assert!(doc.active_page().unwrap().find(&NodeId::new("n10")).is_some());
 }
 
 #[test]
@@ -33,9 +33,9 @@ fn delete_selected_returns_false_when_unselected() {
 #[test]
 fn duplicate_selected_clones_subtree_with_fresh_ids_and_selects_it() {
     let mut doc = Document::sample();
-    doc.set_single_selection(NodeId::new(10)); // bounded Frame with children
+    doc.set_single_selection(NodeId::new("n10")); // bounded Frame with children
     let mut next_id = 1_000u64;
-    let before_descendant = doc.active_page().unwrap().find(NodeId::new(13)).cloned();
+    let before_descendant = doc.active_page().unwrap().find(&NodeId::new("n13")).cloned();
     assert!(before_descendant.is_some());
 
     let clone_id = doc
@@ -44,12 +44,12 @@ fn duplicate_selected_clones_subtree_with_fresh_ids_and_selects_it() {
     assert!(clone_id.is_real());
     assert_eq!(doc.selected, clone_id);
     // Original still present.
-    assert!(doc.active_page().unwrap().find(NodeId::new(10)).is_some());
+    assert!(doc.active_page().unwrap().find(&NodeId::new("n10")).is_some());
     // Clone has fresh id (different from any original).
-    assert!(doc.active_page().unwrap().find(clone_id).is_some());
+    assert!(doc.active_page().unwrap().find(&clone_id).is_some());
     // Clone origin shifted by offset.
-    let original = doc.active_page().unwrap().find(NodeId::new(10)).unwrap();
-    let clone = doc.active_page().unwrap().find(clone_id).unwrap();
+    let original = doc.active_page().unwrap().find(&NodeId::new("n10")).unwrap();
+    let clone = doc.active_page().unwrap().find(&clone_id).unwrap();
     assert!((clone.bounds.origin.x - original.bounds.origin.x - 10.0).abs() < 1e-3);
     assert!((clone.bounds.origin.y - original.bounds.origin.y - 10.0).abs() < 1e-3);
     // Clone preserves descendant count.
@@ -63,18 +63,18 @@ fn reorder_selected_up_moves_to_higher_index() {
     let mut doc = Document::empty();
     let root_idx = doc.active_page_index;
     doc.pages[root_idx].children = vec![
-        Node::leaf(1, NodeKind::Rect, "A"),
-        Node::leaf(2, NodeKind::Rect, "B"),
-        Node::leaf(3, NodeKind::Rect, "C"),
+        Node::leaf("n1", NodeKind::Rect, "A"),
+        Node::leaf("n2", NodeKind::Rect, "B"),
+        Node::leaf("n3", NodeKind::Rect, "C"),
     ];
-    doc.set_single_selection(NodeId::new(2)); // middle
+    doc.set_single_selection(NodeId::new("n2")); // middle
     assert!(doc.reorder_selected(ReorderDirection::Up));
-    let ids: Vec<u64> = doc.pages[root_idx]
+    let ids: Vec<&str> = doc.pages[root_idx]
         .children
         .iter()
         .map(|n| n.id.raw())
         .collect();
-    assert_eq!(ids, vec![1, 3, 2]);
+    assert_eq!(ids, vec!["n1", "n3", "n2"]);
 }
 
 #[test]
@@ -82,18 +82,18 @@ fn reorder_selected_down_moves_to_lower_index() {
     let mut doc = Document::empty();
     let root_idx = doc.active_page_index;
     doc.pages[root_idx].children = vec![
-        Node::leaf(1, NodeKind::Rect, "A"),
-        Node::leaf(2, NodeKind::Rect, "B"),
-        Node::leaf(3, NodeKind::Rect, "C"),
+        Node::leaf("n1", NodeKind::Rect, "A"),
+        Node::leaf("n2", NodeKind::Rect, "B"),
+        Node::leaf("n3", NodeKind::Rect, "C"),
     ];
-    doc.set_single_selection(NodeId::new(2));
+    doc.set_single_selection(NodeId::new("n2"));
     assert!(doc.reorder_selected(ReorderDirection::Down));
-    let ids: Vec<u64> = doc.pages[root_idx]
+    let ids: Vec<&str> = doc.pages[root_idx]
         .children
         .iter()
         .map(|n| n.id.raw())
         .collect();
-    assert_eq!(ids, vec![2, 1, 3]);
+    assert_eq!(ids, vec!["n2", "n1", "n3"]);
 }
 
 #[test]
@@ -101,12 +101,12 @@ fn reorder_selected_at_edges_is_noop() {
     let mut doc = Document::empty();
     let root_idx = doc.active_page_index;
     doc.pages[root_idx].children = vec![
-        Node::leaf(1, NodeKind::Rect, "A"),
-        Node::leaf(2, NodeKind::Rect, "B"),
+        Node::leaf("n1", NodeKind::Rect, "A"),
+        Node::leaf("n2", NodeKind::Rect, "B"),
     ];
-    doc.set_single_selection(NodeId::new(1));
+    doc.set_single_selection(NodeId::new("n1"));
     assert!(!doc.reorder_selected(ReorderDirection::Down));
-    doc.set_single_selection(NodeId::new(2));
+    doc.set_single_selection(NodeId::new("n2"));
     assert!(!doc.reorder_selected(ReorderDirection::Up));
 }
 
@@ -115,12 +115,12 @@ fn reorder_before_moves_source_to_anchor_position() {
     let mut doc = Document::empty();
     let root_idx = doc.active_page_index;
     doc.pages[root_idx].children = vec![
-        Node::leaf(1, NodeKind::Rect, "A"),
-        Node::leaf(2, NodeKind::Rect, "B"),
-        Node::leaf(3, NodeKind::Rect, "C"),
+        Node::leaf("n1", NodeKind::Rect, "A"),
+        Node::leaf("n2", NodeKind::Rect, "B"),
+        Node::leaf("n3", NodeKind::Rect, "C"),
     ];
     // Move C before A → [C, A, B]
-    assert!(doc.reorder_before(NodeId::new(3), NodeId::new(1)));
+    assert!(doc.reorder_before(NodeId::new("n3"), NodeId::new("n1")));
     let order: Vec<&str> = doc.pages[root_idx]
         .children
         .iter()
@@ -134,12 +134,12 @@ fn reorder_after_moves_source_to_anchor_position() {
     let mut doc = Document::empty();
     let root_idx = doc.active_page_index;
     doc.pages[root_idx].children = vec![
-        Node::leaf(1, NodeKind::Rect, "A"),
-        Node::leaf(2, NodeKind::Rect, "B"),
-        Node::leaf(3, NodeKind::Rect, "C"),
+        Node::leaf("n1", NodeKind::Rect, "A"),
+        Node::leaf("n2", NodeKind::Rect, "B"),
+        Node::leaf("n3", NodeKind::Rect, "C"),
     ];
     // Move A after C → [B, C, A]
-    assert!(doc.reorder_after(NodeId::new(1), NodeId::new(3)));
+    assert!(doc.reorder_after(NodeId::new("n1"), NodeId::new("n3")));
     let order: Vec<&str> = doc.pages[root_idx]
         .children
         .iter()
@@ -152,14 +152,14 @@ fn reorder_after_moves_source_to_anchor_position() {
 fn reorder_supports_cross_parent_reparenting() {
     let mut doc = Document::empty();
     let root_idx = doc.active_page_index;
-    let target = Node::leaf(20, NodeKind::Rect, "target");
-    let frame_a = Node::with_children(10, NodeKind::Frame, "A", vec![target]);
-    let frame_b = Node::leaf(30, NodeKind::Frame, "B");
+    let target = Node::leaf("n20", NodeKind::Rect, "target");
+    let frame_a = Node::with_children("n10", NodeKind::Frame, "A", vec![target]);
+    let frame_b = Node::leaf("n30", NodeKind::Frame, "B");
     doc.pages[root_idx].children = vec![frame_a, frame_b];
 
     // Move `target` (currently inside A) to be after `B` at top
     // level — re-parents out of A.
-    assert!(doc.reorder_after(NodeId::new(20), NodeId::new(30)));
+    assert!(doc.reorder_after(NodeId::new("n20"), NodeId::new("n30")));
     let kids = &doc.pages[root_idx].children;
     assert_eq!(kids.len(), 3);
     assert_eq!(kids[0].name, "A");
@@ -172,19 +172,19 @@ fn reorder_supports_cross_parent_reparenting() {
 fn reorder_rejects_cycle_creating_move() {
     let mut doc = Document::empty();
     let root_idx = doc.active_page_index;
-    let grandchild = Node::leaf(20, NodeKind::Rect, "g");
-    let frame = Node::with_children(10, NodeKind::Frame, "frame", vec![grandchild]);
+    let grandchild = Node::leaf("n20", NodeKind::Rect, "g");
+    let frame = Node::with_children("n10", NodeKind::Frame, "frame", vec![grandchild]);
     doc.pages[root_idx].children = vec![frame];
 
     // Move `frame` (source) before its own descendant `g` — would
     // create a cycle. Must be rejected.
-    assert!(!doc.reorder_before(NodeId::new(10), NodeId::new(20)));
+    assert!(!doc.reorder_before(NodeId::new("n10"), NodeId::new("n20")));
     // Tree unchanged.
     assert_eq!(doc.pages[root_idx].children.len(), 1);
-    assert_eq!(doc.pages[root_idx].children[0].id, NodeId::new(10));
+    assert_eq!(doc.pages[root_idx].children[0].id, NodeId::new("n10"));
     assert_eq!(
         doc.pages[root_idx].children[0].children[0].id,
-        NodeId::new(20)
+        NodeId::new("n20")
     );
 }
 
@@ -192,18 +192,18 @@ fn reorder_rejects_cycle_creating_move() {
 fn reorder_rejects_locked_or_hidden_source() {
     let mut doc = Document::empty();
     let root_idx = doc.active_page_index;
-    let mut locked = Node::leaf(1, NodeKind::Rect, "locked");
+    let mut locked = Node::leaf("n1", NodeKind::Rect, "locked");
     locked.locked = true;
-    let other = Node::leaf(2, NodeKind::Rect, "other");
+    let other = Node::leaf("n2", NodeKind::Rect, "other");
     doc.pages[root_idx].children = vec![locked, other];
-    assert!(!doc.reorder_before(NodeId::new(1), NodeId::new(2)));
-    assert!(!doc.reorder_after(NodeId::new(1), NodeId::new(2)));
+    assert!(!doc.reorder_before(NodeId::new("n1"), NodeId::new("n2")));
+    assert!(!doc.reorder_after(NodeId::new("n1"), NodeId::new("n2")));
 
-    let mut hidden = Node::leaf(3, NodeKind::Rect, "hidden");
+    let mut hidden = Node::leaf("n3", NodeKind::Rect, "hidden");
     hidden.hidden = true;
-    let other2 = Node::leaf(4, NodeKind::Rect, "other2");
+    let other2 = Node::leaf("n4", NodeKind::Rect, "other2");
     doc.pages[root_idx].children = vec![hidden, other2];
-    assert!(!doc.reorder_before(NodeId::new(3), NodeId::new(4)));
+    assert!(!doc.reorder_before(NodeId::new("n3"), NodeId::new("n4")));
 }
 
 #[test]
@@ -211,14 +211,14 @@ fn reorder_rejects_same_id_or_missing_node() {
     let mut doc = Document::empty();
     let root_idx = doc.active_page_index;
     doc.pages[root_idx].children = vec![
-        Node::leaf(1, NodeKind::Rect, "A"),
-        Node::leaf(2, NodeKind::Rect, "B"),
+        Node::leaf("n1", NodeKind::Rect, "A"),
+        Node::leaf("n2", NodeKind::Rect, "B"),
     ];
-    assert!(!doc.reorder_before(NodeId::new(1), NodeId::new(1)));
+    assert!(!doc.reorder_before(NodeId::new("n1"), NodeId::new("n1")));
     // Anchor missing
-    assert!(!doc.reorder_before(NodeId::new(1), NodeId::new(99)));
+    assert!(!doc.reorder_before(NodeId::new("n1"), NodeId::new("n99")));
     // Source missing
-    assert!(!doc.reorder_before(NodeId::new(99), NodeId::new(1)));
+    assert!(!doc.reorder_before(NodeId::new("n99"), NodeId::new("n1")));
 }
 
 #[test]
@@ -230,16 +230,18 @@ fn duplicate_selected_lifts_allocator_past_existing_max_id() {
     let mut doc = Document::empty();
     let root_idx = doc.active_page_index;
     doc.pages[root_idx].children = vec![
-        Node::leaf(5000, NodeKind::Rect, "A"),
-        Node::leaf(5001, NodeKind::Rect, "B"),
+        Node::leaf("n5000", NodeKind::Rect, "A"),
+        Node::leaf("n5001", NodeKind::Rect, "B"),
     ];
-    doc.set_single_selection(NodeId::new(5000));
+    doc.set_single_selection(NodeId::new("n5000"));
     let mut next_id = 100u64;
     let clone_id = doc
         .duplicate_selected(&mut next_id, 0.0)
         .expect("duplicate should succeed");
+    let clone_n = super::walkers::parse_n_id(&clone_id)
+        .expect("clone id should be a freshly-minted n{N} id");
     assert!(
-        clone_id.raw() > 5001,
+        clone_n > 5001,
         "clone id {} must exceed the document max id",
         clone_id.raw()
     );
@@ -258,10 +260,10 @@ fn duplicate_selected_returns_none_when_max_id_overflows() {
     let mut doc = Document::empty();
     let root_idx = doc.active_page_index;
     doc.pages[root_idx].children = vec![
-        Node::leaf(u64::MAX, NodeKind::Rect, "boundary"),
-        Node::leaf(7, NodeKind::Rect, "small"),
+        Node::leaf(format!("n{}", u64::MAX), NodeKind::Rect, "boundary"),
+        Node::leaf("n7", NodeKind::Rect, "small"),
     ];
-    doc.set_single_selection(NodeId::new(7));
+    doc.set_single_selection(NodeId::new("n7"));
     let mut next_id = 100u64;
     assert!(doc.duplicate_selected(&mut next_id, 0.0).is_none());
     // No id mutation occurred — count is unchanged.
@@ -280,16 +282,16 @@ fn duplicate_selected_rejects_when_subtree_exhausts_id_space() {
     // 3-node subtree: parent + 2 children. Small ids so
     // `max_node_id + 1` doesn't trip the earlier guard.
     let parent = Node::with_children(
-        7,
+        "n7",
         NodeKind::Group,
         "group",
         vec![
-            Node::leaf(8, NodeKind::Rect, "a"),
-            Node::leaf(9, NodeKind::Rect, "b"),
+            Node::leaf("n8", NodeKind::Rect, "a"),
+            Node::leaf("n9", NodeKind::Rect, "b"),
         ],
     );
     doc.pages[root_idx].children = vec![parent];
-    doc.set_single_selection(NodeId::new(7));
+    doc.set_single_selection(NodeId::new("n7"));
 
     // Allocator close enough to `u64::MAX` that minting all 3
     // ids would overflow `*next_id += 1` past the last mint.
@@ -307,12 +309,12 @@ fn build_shape_doc() -> Document {
     let mut doc = Document::empty();
     let page_idx = doc.active_page_index;
     doc.pages[page_idx].children = vec![
-        Node::leaf(101, NodeKind::Rect, "R").with_bounds(crate::Rect::xywh(0.0, 0.0, 100.0, 100.0)),
-        Node::leaf(102, NodeKind::Ellipse, "E")
+        Node::leaf("n101", NodeKind::Rect, "R").with_bounds(crate::Rect::xywh(0.0, 0.0, 100.0, 100.0)),
+        Node::leaf("n102", NodeKind::Ellipse, "E")
             .with_bounds(crate::Rect::xywh(200.0, 0.0, 100.0, 100.0)),
-        Node::leaf(103, NodeKind::Polygon, "P")
+        Node::leaf("n103", NodeKind::Polygon, "P")
             .with_bounds(crate::Rect::xywh(400.0, 0.0, 100.0, 100.0)),
-        Node::leaf(104, NodeKind::Line, "L")
+        Node::leaf("n104", NodeKind::Line, "L")
             .with_bounds(crate::Rect::xywh(600.0, 0.0, 100.0, 100.0))
             .with_stroke(crate::Color::BLACK, 2.0),
     ];
@@ -325,12 +327,12 @@ fn hit_test_rect_uses_bounds() {
     // Rect: anywhere inside the bounds is a hit.
     assert_eq!(
         doc.node_at_doc_point(crate::Point2D::new(50.0, 50.0)),
-        Some(NodeId::new(101))
+        Some(NodeId::new("n101"))
     );
     // Corner edge.
     assert_eq!(
         doc.node_at_doc_point(crate::Point2D::new(0.5, 99.5)),
-        Some(NodeId::new(101))
+        Some(NodeId::new("n101"))
     );
 }
 
@@ -341,7 +343,7 @@ fn hit_test_ellipse_uses_ellipse_geometry() {
     // Inside the inscribed oval → hit.
     assert_eq!(
         doc.node_at_doc_point(crate::Point2D::new(250.0, 50.0)),
-        Some(NodeId::new(102))
+        Some(NodeId::new("n102"))
     );
     // Corner of bounds rect → INSIDE rect-bounds but OUTSIDE
     // the ellipse → no hit (was a hit under the old rect-only
@@ -351,7 +353,7 @@ fn hit_test_ellipse_uses_ellipse_geometry() {
     // midpoint) → hit.
     assert_eq!(
         doc.node_at_doc_point(crate::Point2D::new(200.5, 50.0)),
-        Some(NodeId::new(102))
+        Some(NodeId::new("n102"))
     );
 }
 
@@ -363,7 +365,7 @@ fn hit_test_polygon_uses_triangle_geometry() {
     // Centroid (~450, 66.7) → hit.
     assert_eq!(
         doc.node_at_doc_point(crate::Point2D::new(450.0, 70.0)),
-        Some(NodeId::new(103))
+        Some(NodeId::new("n103"))
     );
     // Top-left corner of bounds (401, 1) → outside the
     // triangle (above the left edge) → no hit.
@@ -373,7 +375,7 @@ fn hit_test_polygon_uses_triangle_geometry() {
     // Bottom-center, on the base → hit.
     assert_eq!(
         doc.node_at_doc_point(crate::Point2D::new(450.0, 99.0)),
-        Some(NodeId::new(103))
+        Some(NodeId::new("n103"))
     );
 }
 
@@ -385,12 +387,12 @@ fn hit_test_line_uses_stroke_proximity() {
     // Midpoint (650, 50) → exactly on the line → hit.
     assert_eq!(
         doc.node_at_doc_point(crate::Point2D::new(650.0, 50.0)),
-        Some(NodeId::new(104))
+        Some(NodeId::new("n104"))
     );
     // Near the diagonal (within slack) → hit.
     assert_eq!(
         doc.node_at_doc_point(crate::Point2D::new(648.0, 51.0)),
-        Some(NodeId::new(104))
+        Some(NodeId::new("n104"))
     );
     // Far from the diagonal (top-right corner of bounds) →
     // no hit (was a hit under rect-only path).
@@ -410,19 +412,19 @@ fn hit_test_horizontal_line_with_zero_height_bounds_is_grabbable() {
     // own path that runs distance-to-segment unconditionally.
     let mut doc = Document::empty();
     let page_idx = doc.active_page_index;
-    doc.pages[page_idx].children = vec![Node::leaf(50, NodeKind::Line, "horiz")
+    doc.pages[page_idx].children = vec![Node::leaf("n50", NodeKind::Line, "horiz")
         .with_bounds(crate::Rect::xywh(0.0, 50.0, 100.0, 0.0))
         .with_stroke(crate::Color::BLACK, 2.0)];
     // Click directly on the segment.
     assert_eq!(
         doc.node_at_doc_point(crate::Point2D::new(50.0, 50.0)),
-        Some(NodeId::new(50))
+        Some(NodeId::new("n50"))
     );
     // Click 3 px above — within stroke (1) + 4 screen px slack
     // at zoom 1 = 5 doc px threshold.
     assert_eq!(
         doc.node_at_doc_point(crate::Point2D::new(50.0, 47.0)),
-        Some(NodeId::new(50))
+        Some(NodeId::new("n50"))
     );
     // Click well above — no hit.
     assert_eq!(doc.node_at_doc_point(crate::Point2D::new(50.0, 40.0)), None);
@@ -432,18 +434,18 @@ fn hit_test_horizontal_line_with_zero_height_bounds_is_grabbable() {
 fn hit_test_vertical_line_with_zero_width_bounds_is_grabbable() {
     let mut doc = Document::empty();
     let page_idx = doc.active_page_index;
-    doc.pages[page_idx].children = vec![Node::leaf(51, NodeKind::Line, "vert")
+    doc.pages[page_idx].children = vec![Node::leaf("n51", NodeKind::Line, "vert")
         .with_bounds(crate::Rect::xywh(50.0, 0.0, 0.0, 100.0))
         .with_stroke(crate::Color::BLACK, 2.0)];
     // Click directly on the segment.
     assert_eq!(
         doc.node_at_doc_point(crate::Point2D::new(50.0, 50.0)),
-        Some(NodeId::new(51))
+        Some(NodeId::new("n51"))
     );
     // Click 3 px to the right — within threshold.
     assert_eq!(
         doc.node_at_doc_point(crate::Point2D::new(53.0, 50.0)),
-        Some(NodeId::new(51))
+        Some(NodeId::new("n51"))
     );
     // Click well to the right — no hit.
     assert_eq!(doc.node_at_doc_point(crate::Point2D::new(60.0, 50.0)), None);
@@ -457,7 +459,7 @@ fn hit_test_line_slack_scales_with_zoom() {
     // the same 7-px-offset click misses.
     let mut doc = Document::empty();
     let page_idx = doc.active_page_index;
-    doc.pages[page_idx].children = vec![Node::leaf(60, NodeKind::Line, "diag")
+    doc.pages[page_idx].children = vec![Node::leaf("n60", NodeKind::Line, "diag")
         .with_bounds(crate::Rect::xywh(0.0, 0.0, 100.0, 0.0))
         .with_stroke(crate::Color::BLACK, 0.0)];
 
@@ -467,7 +469,7 @@ fn hit_test_line_slack_scales_with_zoom() {
     doc.viewport.zoom = 0.5;
     assert_eq!(
         doc.node_at_doc_point(crate::Point2D::new(50.0, -7.0)),
-        Some(NodeId::new(60))
+        Some(NodeId::new("n60"))
     );
     doc.viewport.zoom = 2.0;
     assert_eq!(doc.node_at_doc_point(crate::Point2D::new(50.0, -7.0)), None);
@@ -483,7 +485,7 @@ fn hit_test_line_with_negative_size_bounds_is_grabbable() {
     // sign-independent.
     let mut doc = Document::empty();
     let page_idx = doc.active_page_index;
-    doc.pages[page_idx].children = vec![Node::leaf(70, NodeKind::Line, "rev")
+    doc.pages[page_idx].children = vec![Node::leaf("n70", NodeKind::Line, "rev")
         // Right-to-left: origin (100, 0), size (-100, 50)
         // → segment from (100, 0) to (0, 50).
         .with_bounds(crate::Rect::xywh(100.0, 0.0, -100.0, 50.0))
@@ -491,12 +493,12 @@ fn hit_test_line_with_negative_size_bounds_is_grabbable() {
     // Midpoint of the segment (50, 25) → hit.
     assert_eq!(
         doc.node_at_doc_point(crate::Point2D::new(50.0, 25.0)),
-        Some(NodeId::new(70))
+        Some(NodeId::new("n70"))
     );
     // Endpoint (0, 50) → hit.
     assert_eq!(
         doc.node_at_doc_point(crate::Point2D::new(0.0, 50.0)),
-        Some(NodeId::new(70))
+        Some(NodeId::new("n70"))
     );
     // Far above the segment → no hit.
     assert_eq!(doc.node_at_doc_point(crate::Point2D::new(50.0, 0.0)), None);
@@ -518,7 +520,7 @@ fn hit_test_rotated_negative_size_line_uses_segment_midpoint_pivot() {
     // 90° around (50, 50) gives a horizontal segment from
     // (100, 50) to (0, 50).
     doc.pages[page_idx].children = vec![Node {
-        id: NodeId::new(80),
+        id: NodeId::new("n80"),
         kind: NodeKind::Line,
         name: "rev_vert".into(),
         bounds: crate::Rect::xywh(50.0, 100.0, 0.0, -100.0),
@@ -544,13 +546,13 @@ fn hit_test_rotated_negative_size_line_uses_segment_midpoint_pivot() {
     // Click at (50, 50) — midpoint (invariant under rotation).
     assert_eq!(
         doc.node_at_doc_point(crate::Point2D::new(50.0, 50.0)),
-        Some(NodeId::new(80))
+        Some(NodeId::new("n80"))
     );
     // After 90° rotation, the segment is horizontal from
     // (100, 50) to (0, 50). Click at (25, 50) → hit.
     assert_eq!(
         doc.node_at_doc_point(crate::Point2D::new(25.0, 50.0)),
-        Some(NodeId::new(80))
+        Some(NodeId::new("n80"))
     );
     // Click at (50, 90) — was on the un-rotated segment, but
     // after 90° rotation it would land off the line → no hit.
@@ -562,14 +564,14 @@ fn hit_test_zero_size_node_is_never_hit() {
     let mut doc = Document::empty();
     let page_idx = doc.active_page_index;
     doc.pages[page_idx].children =
-        vec![Node::leaf(7, NodeKind::Rect, "z").with_bounds(crate::Rect::xywh(0.0, 0.0, 0.0, 0.0))];
+        vec![Node::leaf("n7", NodeKind::Rect, "z").with_bounds(crate::Rect::xywh(0.0, 0.0, 0.0, 0.0))];
     assert_eq!(doc.node_at_doc_point(crate::Point2D::new(0.0, 0.0)), None);
 }
 
 #[test]
 fn deselect_all_clears_selection() {
     let mut doc = Document::sample();
-    doc.set_single_selection(NodeId::new(10));
+    doc.set_single_selection(NodeId::new("n10"));
     doc.deselect_all();
     assert_eq!(doc.selected, NodeId::NONE);
     assert!(doc.selected_set.is_empty());
@@ -578,11 +580,11 @@ fn deselect_all_clears_selection() {
 #[test]
 fn set_single_selection_replaces_set_and_anchor() {
     let mut doc = Document::sample();
-    doc.selected_set = vec![NodeId::new(11), NodeId::new(13)];
-    doc.selected = NodeId::new(13);
-    doc.set_single_selection(NodeId::new(14));
-    assert_eq!(doc.selected_set, vec![NodeId::new(14)]);
-    assert_eq!(doc.selected, NodeId::new(14));
+    doc.selected_set = vec![NodeId::new("n11"), NodeId::new("n13")];
+    doc.selected = NodeId::new("n13");
+    doc.set_single_selection(NodeId::new("n14"));
+    assert_eq!(doc.selected_set, vec![NodeId::new("n14")]);
+    assert_eq!(doc.selected, NodeId::new("n14"));
     assert_eq!(doc.selection_count(), 1);
     doc.set_single_selection(NodeId::NONE);
     assert!(doc.selected_set.is_empty());
@@ -593,16 +595,16 @@ fn set_single_selection_replaces_set_and_anchor() {
 fn toggle_selection_adds_then_removes_and_picks_new_anchor() {
     let mut doc = Document::sample();
     doc.clear_selection();
-    doc.toggle_selection(NodeId::new(11));
-    assert_eq!(doc.selected_set, vec![NodeId::new(11)]);
-    assert_eq!(doc.selected, NodeId::new(11));
-    doc.toggle_selection(NodeId::new(13));
-    assert_eq!(doc.selected_set, vec![NodeId::new(11), NodeId::new(13)]);
-    assert_eq!(doc.selected, NodeId::new(13));
-    doc.toggle_selection(NodeId::new(13));
-    assert_eq!(doc.selected_set, vec![NodeId::new(11)]);
-    assert_eq!(doc.selected, NodeId::new(11));
-    doc.toggle_selection(NodeId::new(11));
+    doc.toggle_selection(NodeId::new("n11"));
+    assert_eq!(doc.selected_set, vec![NodeId::new("n11")]);
+    assert_eq!(doc.selected, NodeId::new("n11"));
+    doc.toggle_selection(NodeId::new("n13"));
+    assert_eq!(doc.selected_set, vec![NodeId::new("n11"), NodeId::new("n13")]);
+    assert_eq!(doc.selected, NodeId::new("n13"));
+    doc.toggle_selection(NodeId::new("n13"));
+    assert_eq!(doc.selected_set, vec![NodeId::new("n11")]);
+    assert_eq!(doc.selected, NodeId::new("n11"));
+    doc.toggle_selection(NodeId::new("n11"));
     assert!(doc.selected_set.is_empty());
     assert_eq!(doc.selected, NodeId::NONE);
 }
@@ -612,8 +614,8 @@ fn select_all_top_level_populates_set_with_active_page_children() {
     let mut doc = Document::sample();
     doc.clear_selection();
     assert!(doc.select_all_top_level());
-    assert_eq!(doc.selected_set, vec![NodeId::new(10)]);
-    assert_eq!(doc.selected, NodeId::new(10));
+    assert_eq!(doc.selected_set, vec![NodeId::new("n10")]);
+    assert_eq!(doc.selected, NodeId::new("n10"));
     let mut empty = Document::empty();
     assert!(!empty.select_all_top_level());
     assert!(empty.selected_set.is_empty());
@@ -624,19 +626,19 @@ fn delete_selected_removes_every_node_in_the_set() {
     let mut doc = Document::empty();
     let root_idx = doc.active_page_index;
     doc.pages[root_idx].children = vec![
-        Node::leaf(1, NodeKind::Rect, "a"),
-        Node::leaf(2, NodeKind::Rect, "b"),
-        Node::leaf(3, NodeKind::Rect, "c"),
+        Node::leaf("n1", NodeKind::Rect, "a"),
+        Node::leaf("n2", NodeKind::Rect, "b"),
+        Node::leaf("n3", NodeKind::Rect, "c"),
     ];
-    doc.selected_set = vec![NodeId::new(1), NodeId::new(3)];
-    doc.selected = NodeId::new(3);
+    doc.selected_set = vec![NodeId::new("n1"), NodeId::new("n3")];
+    doc.selected = NodeId::new("n3");
     assert!(doc.delete_selected());
-    let ids: Vec<u64> = doc.pages[root_idx]
+    let ids: Vec<&str> = doc.pages[root_idx]
         .children
         .iter()
         .map(|n| n.id.raw())
         .collect();
-    assert_eq!(ids, vec![2]);
+    assert_eq!(ids, vec!["n2"]);
     assert!(doc.selected_set.is_empty());
     assert_eq!(doc.selected, NodeId::NONE);
 }
@@ -648,11 +650,11 @@ fn duplicate_selected_clones_every_node_in_the_set() {
     // IDs 2 + 3 — page id 1 already occupies the namespace
     // so child id 1 would collide on `validate`.
     doc.pages[root_idx].children = vec![
-        Node::leaf(2, NodeKind::Rect, "a"),
-        Node::leaf(3, NodeKind::Rect, "b"),
+        Node::leaf("n2", NodeKind::Rect, "a"),
+        Node::leaf("n3", NodeKind::Rect, "b"),
     ];
-    doc.selected_set = vec![NodeId::new(2), NodeId::new(3)];
-    doc.selected = NodeId::new(3);
+    doc.selected_set = vec![NodeId::new("n2"), NodeId::new("n3")];
+    doc.selected = NodeId::new("n3");
     let mut next_id = 100u64;
     let anchor = doc
         .duplicate_selected(&mut next_id, 0.0)
@@ -668,16 +670,16 @@ fn toggle_node_hidden_flips_flag_and_skips_canvas_hit_test() {
     let mut doc = Document::empty();
     let root_idx = doc.active_page_index;
     doc.pages[root_idx].children =
-        vec![Node::leaf(7, NodeKind::Rect, "a")
+        vec![Node::leaf("n7", NodeKind::Rect, "a")
             .with_bounds(crate::Rect::xywh(0.0, 0.0, 100.0, 100.0))];
     let p = crate::Point2D::new(50.0, 50.0);
-    assert_eq!(doc.node_at_doc_point(p), Some(NodeId::new(7)));
-    assert!(doc.toggle_node_hidden(NodeId::new(7)));
+    assert_eq!(doc.node_at_doc_point(p), Some(NodeId::new("n7")));
+    assert!(doc.toggle_node_hidden(&NodeId::new("n7")));
     // Hidden → canvas hit-test ignores it.
     assert_eq!(doc.node_at_doc_point(p), None);
     // Toggle again to unhide.
-    assert!(doc.toggle_node_hidden(NodeId::new(7)));
-    assert_eq!(doc.node_at_doc_point(p), Some(NodeId::new(7)));
+    assert!(doc.toggle_node_hidden(&NodeId::new("n7")));
+    assert_eq!(doc.node_at_doc_point(p), Some(NodeId::new("n7")));
 }
 
 #[test]
@@ -689,35 +691,35 @@ fn set_selected_fill_type_writes_per_node_and_does_not_leak() {
     let mut doc = Document::empty();
     let root_idx = doc.active_page_index;
     doc.pages[root_idx].children = vec![
-        Node::leaf(2, NodeKind::Rect, "a"),
-        Node::leaf(3, NodeKind::Rect, "b"),
+        Node::leaf("n2", NodeKind::Rect, "a"),
+        Node::leaf("n3", NodeKind::Rect, "b"),
     ];
     // Both nodes start as Solid (Node::leaf default).
     assert_eq!(
         doc.active_page()
             .unwrap()
-            .find(NodeId::new(2))
+            .find(&NodeId::new("n2"))
             .unwrap()
             .fill_type,
         FillType::Solid
     );
     // Select "a", set to LinearGradient.
-    doc.set_single_selection(NodeId::new(2));
+    doc.set_single_selection(NodeId::new("n2"));
     assert!(doc.set_selected_fill_type(FillType::LinearGradient));
     assert_eq!(
         doc.active_page()
             .unwrap()
-            .find(NodeId::new(2))
+            .find(&NodeId::new("n2"))
             .unwrap()
             .fill_type,
         FillType::LinearGradient
     );
     // Selecting "b" must NOT inherit "a"'s LinearGradient.
-    doc.set_single_selection(NodeId::new(3));
+    doc.set_single_selection(NodeId::new("n3"));
     assert_eq!(
         doc.active_page()
             .unwrap()
-            .find(NodeId::new(3))
+            .find(&NodeId::new("n3"))
             .unwrap()
             .fill_type,
         FillType::Solid
@@ -726,7 +728,7 @@ fn set_selected_fill_type_writes_per_node_and_does_not_leak() {
     assert_eq!(
         doc.active_page()
             .unwrap()
-            .find(NodeId::new(2))
+            .find(&NodeId::new("n2"))
             .unwrap()
             .fill_type,
         FillType::LinearGradient
@@ -737,27 +739,27 @@ fn set_selected_fill_type_writes_per_node_and_does_not_leak() {
 fn set_selected_fill_type_respects_locked_and_hidden() {
     let mut doc = Document::empty();
     let root_idx = doc.active_page_index;
-    let mut locked = Node::leaf(4, NodeKind::Rect, "lock");
+    let mut locked = Node::leaf("n4", NodeKind::Rect, "lock");
     locked.locked = true;
-    let mut hidden = Node::leaf(5, NodeKind::Rect, "hide");
+    let mut hidden = Node::leaf("n5", NodeKind::Rect, "hide");
     hidden.hidden = true;
     doc.pages[root_idx].children = vec![locked, hidden];
-    doc.set_single_selection(NodeId::new(4));
+    doc.set_single_selection(NodeId::new("n4"));
     assert!(!doc.set_selected_fill_type(FillType::Image));
     assert_eq!(
         doc.active_page()
             .unwrap()
-            .find(NodeId::new(4))
+            .find(&NodeId::new("n4"))
             .unwrap()
             .fill_type,
         FillType::Solid
     );
-    doc.set_single_selection(NodeId::new(5));
+    doc.set_single_selection(NodeId::new("n5"));
     assert!(!doc.set_selected_fill_type(FillType::Image));
     assert_eq!(
         doc.active_page()
             .unwrap()
-            .find(NodeId::new(5))
+            .find(&NodeId::new("n5"))
             .unwrap()
             .fill_type,
         FillType::Solid
@@ -771,16 +773,16 @@ fn cut_selected_rolls_back_clipboard_when_delete_rejects() {
     // `Document::cut_selected` callers must observe the same
     // clipboard-untouched-on-failure contract.
     let mut doc = Document::sample();
-    let target = NodeId::new(10); // Frame
+    let target = NodeId::new("n10"); // Frame
     // Lock the whole subtree so delete_selected rejects.
     if let Some(page) = doc.pages.get_mut(0) {
         for child in page.children.iter_mut() {
             child.locked = true;
         }
     }
-    doc.set_single_selection(target);
+    doc.set_single_selection(target.clone());
     // Pre-stash a sentinel in the clipboard.
-    let sentinel = Node::leaf(900, NodeKind::Rect, "sentinel");
+    let sentinel = Node::leaf("n900", NodeKind::Rect, "sentinel");
     doc.clipboard = vec![sentinel.clone()];
     assert!(!doc.cut_selected(), "cut must reject locked subtree");
     assert_eq!(doc.clipboard.len(), 1, "clipboard size preserved");

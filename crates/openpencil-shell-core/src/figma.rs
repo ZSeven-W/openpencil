@@ -238,7 +238,7 @@ impl FigmaClipboardNode {
         } else {
             self.name.clone()
         };
-        crate::document::Node::leaf(raw, self.to_node_kind(), name)
+        crate::document::Node::leaf(format!("n{raw}"), self.to_node_kind(), name)
     }
 
     /// Map this clipboard node's Figma kind string onto the
@@ -408,8 +408,8 @@ mod tests {
         let mut next = 100u64;
         let n1 = entry.to_node(&mut next);
         let n2 = entry.to_node(&mut next);
-        assert_eq!(n1.id.raw(), 100);
-        assert_eq!(n2.id.raw(), 101);
+        assert_eq!(n1.id.raw(), "n100");
+        assert_eq!(n2.id.raw(), "n101");
         assert_eq!(next, 102);
         assert_eq!(n1.name, "Hero");
     }

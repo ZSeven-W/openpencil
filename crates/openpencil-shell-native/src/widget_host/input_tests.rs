@@ -17,7 +17,7 @@ fn escape_closes_one_overlay_per_press_in_priority_order() {
     host.document.ui.shape_picker_open = true;
     host.document.ui.fill_type_picker_open = true;
     host.document.chat.focused = true;
-    host.document.set_single_selection(NodeId::new(10));
+    host.document.set_single_selection(NodeId::new("n10"));
 
     // 1. Property focus clears first.
     assert!(host.apply_escape());
@@ -59,20 +59,20 @@ fn backspace_with_property_draft_does_not_delete_selected() {
     // property draft buffer, Backspace must pop a char from
     // the draft, not delete the selected node.
     let mut host = WidgetHostNative::new();
-    host.document.set_single_selection(NodeId::new(10));
+    host.document.set_single_selection(NodeId::new("n10"));
     host.document.ui.property_focus = Some(PropertyFocus::PositionX);
     host.document.ui.property_input_draft = "123".to_string();
 
     assert!(host.apply_backspace());
     assert_eq!(host.document.ui.property_input_draft, "12");
     // Selection must be untouched.
-    assert_eq!(host.document.selected, NodeId::new(10));
+    assert_eq!(host.document.selected, NodeId::new("n10"));
 }
 
 #[test]
 fn backspace_without_focus_deletes_selected() {
     let mut host = WidgetHostNative::new();
-    host.document.set_single_selection(NodeId::new(10));
+    host.document.set_single_selection(NodeId::new("n10"));
     host.document.ui.property_focus = None;
     host.document.chat.focused = false;
 
@@ -88,9 +88,9 @@ fn marquee_drag_replaces_selection_with_intersecting_nodes() {
     let page_idx = host.document.active_page_index;
     // 3 rects: two close together near origin, one far away.
     host.document.pages[page_idx].children = vec![
-        Node::leaf(50, NodeKind::Rect, "a").with_bounds(Rect::xywh(50.0, 10.0, 20.0, 20.0)),
-        Node::leaf(51, NodeKind::Rect, "b").with_bounds(Rect::xywh(90.0, 10.0, 20.0, 20.0)),
-        Node::leaf(52, NodeKind::Rect, "c").with_bounds(Rect::xywh(200.0, 200.0, 20.0, 20.0)),
+        Node::leaf("n50", NodeKind::Rect, "a").with_bounds(Rect::xywh(50.0, 10.0, 20.0, 20.0)),
+        Node::leaf("n51", NodeKind::Rect, "b").with_bounds(Rect::xywh(90.0, 10.0, 20.0, 20.0)),
+        Node::leaf("n52", NodeKind::Rect, "c").with_bounds(Rect::xywh(200.0, 200.0, 20.0, 20.0)),
     ];
     host.document.clear_selection();
     let viewport_w = 1440.0;
@@ -109,9 +109,9 @@ fn marquee_drag_replaces_selection_with_intersecting_nodes() {
     host.apply_cursor_move(cx0 + 130.0, cy0 + 50.0);
     assert!(host.apply_release_with_viewport(viewport_w, viewport_h));
     assert!(host.marquee_drag.is_none(), "marquee consumed on release");
-    let mut hits: Vec<u64> = host.document.selected_set.iter().map(|i| i.raw()).collect();
+    let mut hits: Vec<&str> = host.document.selected_set.iter().map(|i| i.raw()).collect();
     hits.sort();
-    assert_eq!(hits, vec![50, 51]);
+    assert_eq!(hits, vec!["n50", "n51"]);
 }
 
 #[test]
@@ -124,11 +124,11 @@ fn marquee_drag_with_shift_preserves_already_selected_hit() {
     let mut host = WidgetHostNative::new();
     let page_idx = host.document.active_page_index;
     host.document.pages[page_idx].children = vec![
-        Node::leaf(70, NodeKind::Rect, "a").with_bounds(Rect::xywh(50.0, 50.0, 20.0, 20.0)),
-        Node::leaf(71, NodeKind::Rect, "b").with_bounds(Rect::xywh(300.0, 300.0, 20.0, 20.0)),
+        Node::leaf("n70", NodeKind::Rect, "a").with_bounds(Rect::xywh(50.0, 50.0, 20.0, 20.0)),
+        Node::leaf("n71", NodeKind::Rect, "b").with_bounds(Rect::xywh(300.0, 300.0, 20.0, 20.0)),
     ];
     // Pre-select "a" — and the marquee will cover it too.
-    host.document.set_single_selection(NodeId::new(70));
+    host.document.set_single_selection(NodeId::new("n70"));
     host.set_modifier_shift(true);
     let viewport_w = 1440.0;
     let viewport_h = 900.0;
@@ -139,7 +139,7 @@ fn marquee_drag_with_shift_preserves_already_selected_hit() {
     host.apply_cursor_move(cx0 + 90.0, cy0 + 90.0);
     host.apply_release_with_viewport(viewport_w, viewport_h);
     // "a" stays in the set (shift-marquee is ADD-only).
-    assert!(host.document.is_selected(NodeId::new(70)));
+    assert!(host.document.is_selected(&NodeId::new("n70")));
     assert_eq!(host.document.selected_set.len(), 1);
 }
 
@@ -153,7 +153,7 @@ fn marquee_drag_below_screen_threshold_is_a_no_op() {
     let mut host = WidgetHostNative::new();
     let page_idx = host.document.active_page_index;
     host.document.pages[page_idx].children =
-        vec![Node::leaf(80, NodeKind::Rect, "a").with_bounds(Rect::xywh(0.0, 0.0, 100.0, 100.0))];
+        vec![Node::leaf("n80", NodeKind::Rect, "a").with_bounds(Rect::xywh(0.0, 0.0, 100.0, 100.0))];
     // Zoom out to 0.1 — so 1 doc-px ≈ 0.1 screen-px. A drag
     // of 1 screen-px = 10 doc-px, well above the OLD doc-
     // space threshold of 0.5 doc-px.
@@ -187,15 +187,15 @@ fn marquee_drag_with_shift_extends_existing_selection() {
     let mut host = WidgetHostNative::new();
     let page_idx = host.document.active_page_index;
     host.document.pages[page_idx].children = vec![
-        Node::leaf(60, NodeKind::Rect, "a").with_bounds(Rect::xywh(10.0, 10.0, 20.0, 20.0)),
-        Node::leaf(61, NodeKind::Rect, "b").with_bounds(Rect::xywh(50.0, 10.0, 20.0, 20.0)),
+        Node::leaf("n60", NodeKind::Rect, "a").with_bounds(Rect::xywh(10.0, 10.0, 20.0, 20.0)),
+        Node::leaf("n61", NodeKind::Rect, "b").with_bounds(Rect::xywh(50.0, 10.0, 20.0, 20.0)),
         // "c" is far away so its handles can't interfere
         // with the press point used to start the marquee.
-        Node::leaf(62, NodeKind::Rect, "c").with_bounds(Rect::xywh(300.0, 300.0, 20.0, 20.0)),
+        Node::leaf("n62", NodeKind::Rect, "c").with_bounds(Rect::xywh(300.0, 300.0, 20.0, 20.0)),
     ];
     // Pre-select "c" (far from press point so handle hit-test
     // misses), then shift-marquee over "a" + "b".
-    host.document.set_single_selection(NodeId::new(62));
+    host.document.set_single_selection(NodeId::new("n62"));
     host.set_modifier_shift(true);
     let viewport_w = 1440.0;
     let viewport_h = 900.0;
@@ -209,9 +209,9 @@ fn marquee_drag_with_shift_extends_existing_selection() {
     host.apply_release_with_viewport(viewport_w, viewport_h);
     // "c" still in set (additive marquee did not clear);
     // "a" + "b" toggled in.
-    let mut ids: Vec<u64> = host.document.selected_set.iter().map(|i| i.raw()).collect();
+    let mut ids: Vec<&str> = host.document.selected_set.iter().map(|i| i.raw()).collect();
     ids.sort();
-    assert_eq!(ids, vec![60, 61, 62]);
+    assert_eq!(ids, vec!["n60", "n61", "n62"]);
 }
 
 #[test]
@@ -223,9 +223,9 @@ fn layer_drag_to_reorder_commits_on_release_with_threshold_move() {
     // Three top-level nodes, ids 70 / 71 / 72 — children
     // already painted as flat layer rows.
     host.document.pages[page_idx].children = vec![
-        Node::leaf(70, NodeKind::Rect, "A"),
-        Node::leaf(71, NodeKind::Rect, "B"),
-        Node::leaf(72, NodeKind::Rect, "C"),
+        Node::leaf("n70", NodeKind::Rect, "A"),
+        Node::leaf("n71", NodeKind::Rect, "B"),
+        Node::leaf("n72", NodeKind::Rect, "C"),
     ];
     host.document.clear_selection();
     // LayerPanel row geometry — has to match the panel paint
@@ -245,21 +245,21 @@ fn layer_drag_to_reorder_commits_on_release_with_threshold_move() {
     // Press on row "A" (index 0) — seeds layer_drag.
     host.apply_press(row_x, row_y(0), viewport_w, viewport_h);
     assert!(host.layer_drag.is_some());
-    assert!(!host.layer_drag.unwrap().active);
+    assert!(!host.layer_drag.as_ref().unwrap().active);
     // Move past threshold to row "C" (index 2) — activates drag,
     // updates current_y so drop_target_at picks "C" After on
     // release.
     host.apply_cursor_move(row_x, row_y(2) + row_h / 2.0 - 4.0);
-    assert!(host.layer_drag.unwrap().active);
+    assert!(host.layer_drag.as_ref().unwrap().active);
     host.apply_release_with_viewport(viewport_w, viewport_h);
     assert!(host.layer_drag.is_none(), "drag must be cleared on release");
     // A moved after C → final order [B, C, A].
-    let order: Vec<u64> = host.document.pages[page_idx]
+    let order: Vec<&str> = host.document.pages[page_idx]
         .children
         .iter()
         .map(|n| n.id.raw())
         .collect();
-    assert_eq!(order, vec![71, 72, 70]);
+    assert_eq!(order, vec!["n71", "n72", "n70"]);
 }
 
 #[test]
@@ -269,8 +269,8 @@ fn layer_drag_below_activation_threshold_is_a_click_not_a_reorder() {
     let mut host = WidgetHostNative::new();
     let page_idx = host.document.active_page_index;
     host.document.pages[page_idx].children = vec![
-        Node::leaf(80, NodeKind::Rect, "X"),
-        Node::leaf(81, NodeKind::Rect, "Y"),
+        Node::leaf("n80", NodeKind::Rect, "X"),
+        Node::leaf("n81", NodeKind::Rect, "Y"),
     ];
     host.document.clear_selection();
     let row_y_first = TOP_BAR_HEIGHT + 8.0 + 28.0 + 32.0 + 8.0 + 28.0 + 14.0;
@@ -281,19 +281,19 @@ fn layer_drag_below_activation_threshold_is_a_click_not_a_reorder() {
     // Sub-threshold move (2 px, less than 4 px activation).
     host.apply_cursor_move(row_x, row_y_first + 2.0);
     assert!(
-        host.layer_drag.is_some() && !host.layer_drag.unwrap().active,
+        host.layer_drag.is_some() && !host.layer_drag.as_ref().unwrap().active,
         "sub-threshold move must not activate"
     );
     host.apply_release_with_viewport(viewport_w, viewport_h);
     // Click semantics: selection is on the first row, tree is
     // unchanged.
-    let order: Vec<u64> = host.document.pages[page_idx]
+    let order: Vec<&str> = host.document.pages[page_idx]
         .children
         .iter()
         .map(|n| n.id.raw())
         .collect();
-    assert_eq!(order, vec![80, 81]);
-    assert_eq!(host.document.selected, NodeId::new(80));
+    assert_eq!(order, vec!["n80", "n81"]);
+    assert_eq!(host.document.selected, NodeId::new("n80"));
 }
 
 #[test]
@@ -306,14 +306,14 @@ fn anchor_press_release_without_motion_does_not_push_history() {
     use openpencil_shell_core::{Point2D, Rect};
     let mut host = WidgetHostNative::new();
     let page_idx = host.document.active_page_index;
-    let mut path = Node::leaf(60, NodeKind::Path, "p");
+    let mut path = Node::leaf("n60", NodeKind::Path, "p");
     path.bounds = Rect::xywh(0.0, 0.0, 100.0, 50.0);
     path.points = vec![Point2D::new(0.0, 0.0), Point2D::new(50.0, 25.0)];
     host.document.pages[page_idx].children = vec![path];
-    host.document.set_single_selection(NodeId::new(60));
+    host.document.set_single_selection(NodeId::new("n60"));
     let snap = host.document.snapshot_for_history();
     host.path_anchor_drag = Some(crate::widget_host::PathAnchorDragState {
-        node_id: NodeId::new(60),
+        node_id: NodeId::new("n60"),
         anchor_index: 1,
         start_doc: Point2D::new(50.0, 25.0),
         moved: false, // no cursor_move happened between press + release
@@ -340,16 +340,16 @@ fn anchor_drag_back_to_start_lands_at_start() {
     use openpencil_shell_core::{Point2D, Rect};
     let mut host = WidgetHostNative::new();
     let page_idx = host.document.active_page_index;
-    let mut path = Node::leaf(60, NodeKind::Path, "p");
+    let mut path = Node::leaf("n60", NodeKind::Path, "p");
     path.bounds = Rect::xywh(0.0, 0.0, 100.0, 50.0);
     path.points = vec![Point2D::new(0.0, 0.0), Point2D::new(50.0, 25.0)];
     host.document.pages[page_idx].children = vec![path];
-    host.document.set_single_selection(NodeId::new(60));
+    host.document.set_single_selection(NodeId::new("n60"));
     host.document.tool = Tool::Pen;
     let snap = host.document.snapshot_for_history();
     // Seed drag state at the anchor (50, 25).
     host.path_anchor_drag = Some(crate::widget_host::PathAnchorDragState {
-        node_id: NodeId::new(60),
+        node_id: NodeId::new("n60"),
         anchor_index: 1,
         start_doc: Point2D::new(50.0, 25.0),
         moved: false,
@@ -380,14 +380,14 @@ fn anchor_drag_with_motion_pushes_one_history_entry() {
     use openpencil_shell_core::{Point2D, Rect};
     let mut host = WidgetHostNative::new();
     let page_idx = host.document.active_page_index;
-    let mut path = Node::leaf(60, NodeKind::Path, "p");
+    let mut path = Node::leaf("n60", NodeKind::Path, "p");
     path.bounds = Rect::xywh(0.0, 0.0, 100.0, 50.0);
     path.points = vec![Point2D::new(0.0, 0.0), Point2D::new(50.0, 25.0)];
     host.document.pages[page_idx].children = vec![path];
-    host.document.set_single_selection(NodeId::new(60));
+    host.document.set_single_selection(NodeId::new("n60"));
     let snap = host.document.snapshot_for_history();
     host.path_anchor_drag = Some(crate::widget_host::PathAnchorDragState {
-        node_id: NodeId::new(60),
+        node_id: NodeId::new("n60"),
         anchor_index: 1,
         start_doc: Point2D::new(50.0, 25.0),
         moved: true, // simulating real cursor_move during drag
@@ -416,12 +416,12 @@ fn node_drag_not_intercepted_by_align_toolbar_hover() {
     let mut host = WidgetHostNative::new();
     let page_idx = host.document.active_page_index;
     host.document.pages[page_idx].children = vec![
-        Node::leaf(90, NodeKind::Rect, "a").with_bounds(Rect::xywh(50.0, 200.0, 20.0, 20.0)),
-        Node::leaf(91, NodeKind::Rect, "b").with_bounds(Rect::xywh(120.0, 200.0, 20.0, 20.0)),
+        Node::leaf("n90", NodeKind::Rect, "a").with_bounds(Rect::xywh(50.0, 200.0, 20.0, 20.0)),
+        Node::leaf("n91", NodeKind::Rect, "b").with_bounds(Rect::xywh(120.0, 200.0, 20.0, 20.0)),
     ];
     // Two-node selection so the align toolbar is shown.
-    host.document.selected_set = vec![NodeId::new(90), NodeId::new(91)];
-    host.document.selected = NodeId::new(91);
+    host.document.selected_set = vec![NodeId::new("n90"), NodeId::new("n91")];
+    host.document.selected = NodeId::new("n91");
     let viewport_w = 1440.0;
     let viewport_h = 900.0;
     let (cx0, cy0, _cw, _ch) = host.canvas_region(viewport_w, viewport_h);

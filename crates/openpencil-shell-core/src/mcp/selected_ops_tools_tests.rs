@@ -17,18 +17,18 @@ fn rect(x: f32, y: f32, w: f32, h: f32) -> Rect {
 
 fn doc_with_three_rects() -> Document {
     let mut doc = Document::empty();
-    let a = Node::leaf(101, NodeKind::Rect, "a")
+    let a = Node::leaf("n101", NodeKind::Rect, "a")
         .with_bounds(rect(0.0, 0.0, 50.0, 50.0))
         .with_fill(Color::RED);
-    let b = Node::leaf(102, NodeKind::Rect, "b")
+    let b = Node::leaf("n102", NodeKind::Rect, "b")
         .with_bounds(rect(100.0, 30.0, 50.0, 50.0))
         .with_fill(Color::GREEN);
-    let c = Node::leaf(103, NodeKind::Rect, "c")
+    let c = Node::leaf("n103", NodeKind::Rect, "c")
         .with_bounds(rect(200.0, 70.0, 50.0, 50.0))
         .with_fill(Color::BLUE);
-    doc.pages[0] = Page::new(1, "P", vec![a, b, c]);
-    doc.selected_set = vec![NodeId::new(101), NodeId::new(102), NodeId::new(103)];
-    doc.selected = NodeId::new(103);
+    doc.pages[0] = Page::new("n1", "P", vec![a, b, c]);
+    doc.selected_set = vec![NodeId::new("n101"), NodeId::new("n102"), NodeId::new("n103")];
+    doc.selected = NodeId::new("n103");
     doc
 }
 
@@ -87,8 +87,8 @@ fn align_selected_left_snaps_to_min_x() {
 #[test]
 fn align_selected_distribute_under_three_no_ops() {
     let mut doc = doc_with_three_rects();
-    doc.selected_set = vec![NodeId::new(101), NodeId::new(102)];
-    doc.selected = NodeId::new(102);
+    doc.selected_set = vec![NodeId::new("n101"), NodeId::new("n102")];
+    doc.selected = NodeId::new("n102");
     let pre_x = doc.pages[0].children[0].bounds.origin.x;
     let cmd = McpCommand::AlignSelected {
         action: "distribute_h".into(),
@@ -119,7 +119,7 @@ fn cut_selected_rolls_back_clipboard_on_failed_delete() {
     }
     // Seed clipboard with a sentinel so we can assert it stayed
     // intact through the failed cut.
-    let sentinel = Node::leaf(900, NodeKind::Rect, "sentinel")
+    let sentinel = Node::leaf("n900", NodeKind::Rect, "sentinel")
         .with_bounds(rect(0.0, 0.0, 1.0, 1.0));
     doc.clipboard = vec![sentinel.clone()];
 
@@ -144,7 +144,7 @@ fn cut_selected_clears_clipboard_when_no_selection() {
     doc.selected_set.clear();
     doc.selected = crate::document::NodeId::NONE;
     // Pre-stash with a sentinel so we can assert it's preserved.
-    let sentinel = Node::leaf(800, NodeKind::Rect, "sentinel")
+    let sentinel = Node::leaf("n800", NodeKind::Rect, "sentinel")
         .with_bounds(rect(0.0, 0.0, 1.0, 1.0));
     doc.clipboard = vec![sentinel.clone()];
     let cmd = McpCommand::CutSelected;
