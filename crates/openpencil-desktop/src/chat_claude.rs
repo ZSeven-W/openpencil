@@ -1,7 +1,7 @@
 //! Claude Code IPC bridge — adapts `anthropic_agent_sdk::query` to
 //! the shell-core [`ChatProvider`] trait.
 //!
-//! The vendored-then-promoted `crates/anthropic-agent-sdk` carries
+//! The vendored `vendor/anthropic-agent-sdk` crate carries
 //! the full Claude Code CLI subprocess transport: spawn the `claude`
 //! binary with `--print --verbose --output-format stream-json --`,
 //! parse the line-delimited stream-JSON envelope, surface
