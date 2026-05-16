@@ -61,6 +61,43 @@ pub struct LayerRenameState {
     pub draft: String,
 }
 
+/// Which control of the HSV colour picker a drag is currently
+/// driving. Ported from shell-core's `ColorPickerDrag`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ColorPickerDrag {
+    /// The 2-D saturation / value box.
+    SvBox,
+    /// The 1-D hue strip.
+    HueSlider,
+}
+
+/// Floating HSV colour-picker state. The picker keeps `(hue, sat,
+/// val)` as the source of truth so dragging a control doesn't
+/// visibly snap when round-trip RGB rounding pulls a slightly
+/// different hex out of the same HSV.
+///
+/// shell-core's `ColorPickerState` carried a `pre_snap:
+/// Option<DocumentSnapshot>`; here the pre-edit `EditorSnapshot` is
+/// held in [`UiDraftState::pending_color_history`] instead — parallel
+/// to how the pen tool stashes `pending_pen_history` — so the picker
+/// state stays a plain value type.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ColorPickerState {
+    /// Whether the picker edits the node's fill or stroke colour.
+    pub target: ColorTarget,
+    /// Hue in degrees, 0..360.
+    pub hue: f32,
+    /// Saturation, 0..1.
+    pub sat: f32,
+    /// Value (brightness), 0..1.
+    pub val: f32,
+    /// The control currently being dragged; `None` while idle.
+    pub drag: Option<ColorPickerDrag>,
+    /// Viewport-y of the click that opened the picker — anchors the
+    /// floating panel.
+    pub anchor_y: f32,
+}
+
 /// Transient variable/theme editor state (spec §5.2).
 ///
 /// shell-core's `VariableTable` mixed *persisted* data (`variables`,
@@ -112,6 +149,18 @@ pub struct UiDraftState {
     /// mutates the tree, pushed onto the undo stack only when the
     /// finished path has ≥ 2 anchors. Dropped on a 1-anchor cancel.
     pub pending_pen_history: Option<crate::history::EditorSnapshot>,
+    /// Active HSV colour picker overlay; `None` when closed.
+    pub color_picker: Option<ColorPickerState>,
+    /// Pre-edit snapshot captured when the colour picker opens;
+    /// pushed onto undo on close only when the colour changed.
+    pub pending_color_history: Option<crate::history::EditorSnapshot>,
+    /// Pre-edit snapshot for the inline text-edit session; opened
+    /// lazily on the first keystroke, dropped if the text is
+    /// unchanged at commit. See `rename.rs`.
+    pub pending_text_edit_history: Option<crate::history::EditorSnapshot>,
+    /// Timestamp (ms) of the last text-edit keystroke — drives the
+    /// 500 ms history-coalescing window.
+    pub text_edit_last_ms: u64,
     /// Transient variable/theme state (active theme + ref caches).
     pub variables: VariableUiState,
 }

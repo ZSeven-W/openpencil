@@ -1,0 +1,345 @@
+//! Colour / fill mutators + the HSV colour-picker state machine —
+//! ported from shell-core's `document/color_picker.rs` plus the
+//! fill-related parts of `document/mutators.rs`
+//! (`set_selected_color` / `set_selected_fill_type` /
+//! `add_drop_shadow_to_selected`).
+//!
+//! ## Fill model
+//!
+//! shell-core's flat `Node` had `fill: Option<Color>` — a single
+//! literal colour. The canonical `PenNode` carries
+//! `fill: Option<Vec<PenFill>>` (Solid / gradient / Image variants,
+//! hex `String` colours). These mutators only ever touch "the first
+//! solid fill's hex" — the [`crate::fills`] helpers do that read /
+//! write while preserving any gradient / image fills verbatim.
+//!
+//! ## Colour-picker history
+//!
+//! shell-core stored the pre-edit snapshot inside `ColorPickerState`.
+//! Here the snapshot lives in `ui.pending_color_history` (parallel to
+//! the pen tool's `pending_pen_history`) so `ColorPickerState` stays
+//! a plain value type. `close_color_picker` pushes that snapshot onto
+//! undo only when the colour actually changed.
+
+use crate::fills::{
+    first_solid_fill_hex, first_solid_stroke_hex, push_drop_shadow, set_primary_fill_hex,
+    set_primary_stroke_hex,
+};
+use crate::state::EditorState;
+use crate::ui_draft::{ColorPickerDrag, ColorPickerState, ColorTarget};
+use crate::walkers::find_node_mut;
+
+impl EditorState {
+    // --- Fill / stroke colour ---------------------------------------
+
+    /// Write a `#rrggbb` hex to the anchor node's fill (`is_fill`) or
+    /// stroke colour. Editable-gated. Returns true when the write
+    /// landed. Mirrors shell-core's `set_selected_color`.
+    pub fn set_selected_color(&mut self, is_fill: bool, hex: &str) -> bool {
+        let sel = self.selection.anchor.clone();
+        if !sel.is_real() || !self.is_editable(&sel) {
+            return false;
+        }
+        let Some(node) = find_node_mut(self.active_children_mut(), &sel) else {
+            return false;
+        };
+        if is_fill {
+            set_primary_fill_hex(node, hex)
+        } else {
+            set_primary_stroke_hex(node, hex)
+        }
+    }
+
+    /// Append a default drop-shadow effect to the anchor node.
+    /// Editable-gated. Mirrors shell-core's
+    /// `add_drop_shadow_to_selected`.
+    pub fn add_drop_shadow_to_selected(&mut self) -> bool {
+        let sel = self.selection.anchor.clone();
+        if !sel.is_real() || !self.is_editable(&sel) {
+            return false;
+        }
+        let Some(node) = find_node_mut(self.active_children_mut(), &sel) else {
+            return false;
+        };
+        push_drop_shadow(node)
+    }
+
+    // --- HSV colour picker ------------------------------------------
+
+    /// Open the floating colour picker on the given target. Seeds HSV
+    /// from the anchor node's current fill / stroke colour. Captures
+    /// a pre-edit history snapshot. Returns false when there is no
+    /// editable selection to edit.
+    pub fn open_color_picker(&mut self, target: ColorTarget, anchor_y: f32) -> bool {
+        let sel = self.selection.anchor.clone();
+        if !sel.is_real() || !self.is_editable(&sel) {
+            return false;
+        }
+        let Some(node) = self.selected_node() else {
+            return false;
+        };
+        let current_hex = match target {
+            ColorTarget::Fill => first_solid_fill_hex(node),
+            ColorTarget::Stroke => first_solid_stroke_hex(node),
+        }
+        .unwrap_or("#000000");
+        let (h, s, v) = rgb_to_hsv(parse_hex_rgb(current_hex).unwrap_or((0.0, 0.0, 0.0)));
+        self.ui.pending_color_history = Some(self.snapshot_for_history());
+        self.ui.color_picker = Some(ColorPickerState {
+            target,
+            hue: h,
+            sat: s,
+            val: v,
+            drag: None,
+            anchor_y,
+        });
+        true
+    }
+
+    /// Update the picker HSV and live-apply the resulting RGB to the
+    /// anchor node's target colour. Tolerates `color_picker = None`
+    /// so hosts can pipe move events unconditionally.
+    pub fn color_picker_set_hsv(&mut self, hue: f32, sat: f32, val: f32) -> bool {
+        let Some(state) = self.ui.color_picker.as_mut() else {
+            return false;
+        };
+        state.hue = hue.rem_euclid(360.0);
+        state.sat = sat.clamp(0.0, 1.0);
+        state.val = val.clamp(0.0, 1.0);
+        let target = state.target;
+        let (r, g, b) = hsv_to_rgb(state.hue, state.sat, state.val);
+        let hex = rgb_to_hex(r, g, b);
+        self.set_selected_color(matches!(target, ColorTarget::Fill), &hex);
+        true
+    }
+
+    /// Set the active drag kind so `apply_cursor_move` can route a
+    /// move event to the right control.
+    pub fn color_picker_set_drag(&mut self, drag: Option<ColorPickerDrag>) {
+        if let Some(state) = self.ui.color_picker.as_mut() {
+            state.drag = drag;
+        }
+    }
+
+    /// Close the picker. Pushes the pre-edit snapshot onto the undo
+    /// stack when the colour actually changed; drops it otherwise.
+    /// Returns true when a picker was open.
+    pub fn close_color_picker(&mut self) -> bool {
+        let Some(state) = self.ui.color_picker.take() else {
+            return false;
+        };
+        let snap = self.ui.pending_color_history.take();
+        let Some(snap) = snap else {
+            return true;
+        };
+        let sel = self.selection.anchor.clone();
+        let snap_children = snapshot_active_children(&snap);
+        let before =
+            crate::walkers::find_node(snap_children, &sel).and_then(|n| match state.target {
+                ColorTarget::Fill => first_solid_fill_hex(n).map(str::to_string),
+                ColorTarget::Stroke => first_solid_stroke_hex(n).map(str::to_string),
+            });
+        let after = self.selected_node().and_then(|n| match state.target {
+            ColorTarget::Fill => first_solid_fill_hex(n).map(str::to_string),
+            ColorTarget::Stroke => first_solid_stroke_hex(n).map(str::to_string),
+        });
+        if before != after {
+            self.history_push_past(snap);
+        }
+        true
+    }
+}
+
+/// The active page's children inside a history snapshot — mirrors
+/// [`EditorState::active_children`] but reads from a snapshot.
+fn snapshot_active_children(snap: &crate::history::EditorSnapshot) -> &[jian_ops_schema::node::PenNode] {
+    match snap.doc.pages.as_ref() {
+        Some(pages) => match pages.get(snap.active_page_index) {
+            Some(page) => &page.children,
+            None => &[],
+        },
+        None => &snap.doc.children,
+    }
+}
+
+// --- HSV / hex helpers -----------------------------------------------
+
+/// HSV → RGB, h 0..360, s/v 0..1. Each channel 0..1.
+/// Ported verbatim from shell-core's `hsv_to_rgb`.
+pub fn hsv_to_rgb(h: f32, s: f32, v: f32) -> (f32, f32, f32) {
+    let h = h.rem_euclid(360.0);
+    let c = v * s;
+    let hh = h / 60.0;
+    let x = c * (1.0 - (hh.rem_euclid(2.0) - 1.0).abs());
+    let (r1, g1, b1) = match hh as u32 {
+        0 => (c, x, 0.0),
+        1 => (x, c, 0.0),
+        2 => (0.0, c, x),
+        3 => (0.0, x, c),
+        4 => (x, 0.0, c),
+        _ => (c, 0.0, x),
+    };
+    let m = v - c;
+    (r1 + m, g1 + m, b1 + m)
+}
+
+/// RGB (0..1) → HSV (h 0..360, s 0..1, v 0..1).
+/// Ported verbatim from shell-core's `rgb_to_hsv`.
+pub fn rgb_to_hsv(rgb: (f32, f32, f32)) -> (f32, f32, f32) {
+    let (r, g, b) = rgb;
+    let max = r.max(g).max(b);
+    let min = r.min(g).min(b);
+    let v = max;
+    let delta = max - min;
+    let s = if max <= 0.0 { 0.0 } else { delta / max };
+    let h = if delta == 0.0 {
+        0.0
+    } else if max == r {
+        60.0 * (((g - b) / delta) % 6.0)
+    } else if max == g {
+        60.0 * (((b - r) / delta) + 2.0)
+    } else {
+        60.0 * (((r - g) / delta) + 4.0)
+    };
+    let h = if h < 0.0 { h + 360.0 } else { h };
+    (h, s, v)
+}
+
+/// Parse `#rgb` / `#rrggbb` / `#rrggbbaa` into RGB floats (0..1).
+/// Lenient on case; requires the leading `#`.
+pub fn parse_hex_rgb(s: &str) -> Option<(f32, f32, f32)> {
+    let s = s.trim().strip_prefix('#')?;
+    let (r, g, b) = match s.len() {
+        3 => (
+            u8::from_str_radix(&s[0..1].repeat(2), 16).ok()?,
+            u8::from_str_radix(&s[1..2].repeat(2), 16).ok()?,
+            u8::from_str_radix(&s[2..3].repeat(2), 16).ok()?,
+        ),
+        6 | 8 => (
+            u8::from_str_radix(&s[0..2], 16).ok()?,
+            u8::from_str_radix(&s[2..4], 16).ok()?,
+            u8::from_str_radix(&s[4..6], 16).ok()?,
+        ),
+        _ => return None,
+    };
+    Some((r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0))
+}
+
+/// Format RGB floats (0..1) as a `#rrggbb` hex string.
+pub fn rgb_to_hex(r: f32, g: f32, b: f32) -> String {
+    fn ch(v: f32) -> u8 {
+        (v.clamp(0.0, 1.0) * 255.0).round() as u8
+    }
+    format!("#{:02x}{:02x}{:02x}", ch(r), ch(g), ch(b))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::node_id::NodeId;
+    use crate::test_support::{rect, state_with};
+    use crate::ui_draft::ColorTarget;
+
+    fn doc_with_rect() -> EditorState {
+        let mut s = state_with(vec![rect("n1", "r", 0.0, 0.0, 40.0, 30.0)]);
+        s.set_single_selection(NodeId::new("n1"));
+        s
+    }
+
+    #[test]
+    fn set_selected_color_writes_first_solid_fill() {
+        let mut s = doc_with_rect();
+        assert!(s.set_selected_color(true, "#ff0000"));
+        let node = s.selected_node().unwrap();
+        assert_eq!(crate::fills::first_solid_fill_hex(node), Some("#ff0000"));
+    }
+
+    #[test]
+    fn set_selected_color_writes_stroke() {
+        let mut s = doc_with_rect();
+        assert!(s.set_selected_color(false, "#00ff00"));
+        let node = s.selected_node().unwrap();
+        assert_eq!(crate::fills::first_solid_stroke_hex(node), Some("#00ff00"));
+    }
+
+    #[test]
+    fn set_selected_color_no_op_without_selection() {
+        let mut s = state_with(vec![rect("n1", "r", 0.0, 0.0, 10.0, 10.0)]);
+        assert!(!s.set_selected_color(true, "#ffffff"));
+    }
+
+    #[test]
+    fn add_drop_shadow_appends_effect() {
+        let mut s = doc_with_rect();
+        assert!(s.add_drop_shadow_to_selected());
+        // A second call appends a second shadow.
+        assert!(s.add_drop_shadow_to_selected());
+    }
+
+    #[test]
+    fn open_picker_seeds_hsv_from_fill() {
+        let mut s = doc_with_rect();
+        s.set_selected_color(true, "#ff8800");
+        assert!(s.open_color_picker(ColorTarget::Fill, 120.0));
+        let state = s.ui.color_picker.as_ref().unwrap();
+        // Orange #ff8800 → hue near 32°.
+        assert!(state.hue > 20.0 && state.hue < 45.0, "hue {}", state.hue);
+        assert!(state.sat > 0.95);
+        assert!(state.val > 0.95);
+        assert!(s.ui.pending_color_history.is_some());
+    }
+
+    #[test]
+    fn picker_set_hsv_writes_through_to_node() {
+        let mut s = doc_with_rect();
+        assert!(s.open_color_picker(ColorTarget::Fill, 0.0));
+        // Pure red: H=0 S=1 V=1.
+        assert!(s.color_picker_set_hsv(0.0, 1.0, 1.0));
+        let node = s.selected_node().unwrap();
+        assert_eq!(crate::fills::first_solid_fill_hex(node), Some("#ff0000"));
+    }
+
+    #[test]
+    fn close_picker_pushes_history_only_on_change() {
+        let mut s = doc_with_rect();
+        let depth = s.history.past.len();
+        assert!(s.open_color_picker(ColorTarget::Fill, 0.0));
+        // No HSV change → close does not push history.
+        assert!(s.close_color_picker());
+        assert_eq!(s.history.past.len(), depth);
+
+        // Re-open + drag + close → history grows by one.
+        assert!(s.open_color_picker(ColorTarget::Fill, 0.0));
+        assert!(s.color_picker_set_hsv(180.0, 1.0, 1.0));
+        assert!(s.close_color_picker());
+        assert_eq!(s.history.past.len(), depth + 1);
+    }
+
+    #[test]
+    fn undo_after_picker_edit_restores_color() {
+        let mut s = doc_with_rect();
+        s.set_selected_color(true, "#ff8800");
+        assert!(s.open_color_picker(ColorTarget::Fill, 0.0));
+        assert!(s.color_picker_set_hsv(0.0, 1.0, 1.0));
+        assert!(s.close_color_picker());
+        assert_eq!(
+            crate::fills::first_solid_fill_hex(s.selected_node().unwrap()),
+            Some("#ff0000")
+        );
+        assert!(s.undo());
+        assert_eq!(
+            crate::fills::first_solid_fill_hex(s.selected_node().unwrap()),
+            Some("#ff8800")
+        );
+    }
+
+    #[test]
+    fn hsv_roundtrip_is_stable() {
+        for &hex in &["#ff0000", "#00ff00", "#0000ff", "#808080", "#ff8800"] {
+            let rgb = parse_hex_rgb(hex).unwrap();
+            let (h, s, v) = rgb_to_hsv(rgb);
+            let (r, g, b) = hsv_to_rgb(h, s, v);
+            assert_eq!(rgb_to_hex(r, g, b), hex, "roundtrip {hex}");
+        }
+    }
+}
