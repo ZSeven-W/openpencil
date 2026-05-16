@@ -2,7 +2,8 @@
 //! of `canvas_viewport.rs` to keep that file under the 800-line
 //! ceiling.
 
-use crate::document::{Document, Node, Viewport};
+use crate::document::Viewport;
+use crate::layout_scene::{LayoutScene, SceneNode};
 use crate::theme::Theme;
 use crate::widgets::PaintCx;
 use crate::{Color, Point2D, Rect};
@@ -10,19 +11,25 @@ use crate::{Color, Point2D, Rect};
 /// Pen-tool rubber-band — from the last committed anchor of the
 /// in-progress path to the cursor (when both are known). Painted
 /// half-alpha so it reads as a draft segment.
+///
+/// The in-progress path id + cursor doc coord come from the editor's
+/// pen-draft state; the path geometry is read from the resolved
+/// [`LayoutScene`].
 pub fn paint_pen_rubber_band(
     cx: &mut PaintCx<'_>,
-    doc: &Document,
+    scene: &LayoutScene,
+    pen_in_progress: Option<&str>,
+    pen_cursor_doc: Option<Point2D>,
     canvas_rect: Rect,
     viewport: &Viewport,
 ) {
-    let (Some(pen_id), Some(cursor_doc)) = (doc.ui.pen_in_progress.clone(), doc.ui.pen_cursor_doc) else {
+    let (Some(pen_id), Some(cursor_doc)) = (pen_in_progress, pen_cursor_doc) else {
         return;
     };
-    let Some(page) = doc.active_page() else {
+    let Some(page) = scene.active_page() else {
         return;
     };
-    let Some(node) = page.find(&pen_id) else {
+    let Some(node) = page.find(pen_id) else {
         return;
     };
     let Some(last) = node.points.last().copied() else {
@@ -138,12 +145,12 @@ pub fn paint_selection_overlay(
 
 /// Paint a node's fill rect followed by its stroke rect. Stroke
 /// width is scaled by `zoom` so it stays visually constant under
-/// canvas zoom. Effective `fill` is passed explicitly so callers
-/// can substitute via `var_table.fill_for(node.id)` before
-/// rendering (paint-time `$ref` resolution — #5).
+/// canvas zoom. Effective `fill` is passed explicitly — the scene's
+/// `SceneNode.fill` is already `$ref`-resolved by the layout-scene
+/// builder, so the caller forwards it straight through.
 pub fn paint_fill_then_stroke(
     cx: &mut PaintCx<'_>,
-    node: &Node,
+    node: &SceneNode,
     world_rect: Rect,
     zoom: f32,
     fill: Option<crate::Color>,

@@ -165,7 +165,11 @@ impl WidgetHostNative {
             size: Point2D::new(canvas_w, canvas_h),
         };
         if canvas_w > 0.0 && canvas_h > 0.0 {
-            let mut canvas = CanvasViewport::from_document(doc);
+            // PAINT path — the canvas reads editor state + the
+            // layout-resolved render scene, not the derived
+            // `Document`. Both are rebuilt by `refresh_paint_doc`.
+            let mut canvas =
+                CanvasViewport::from_editor(&self.editor_state, &self.layout_scene);
             canvas.now_ms = self.now_ms;
             let mut cx = PaintCx {
                 backend: &mut *frame,

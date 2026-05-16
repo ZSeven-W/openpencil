@@ -1,33 +1,34 @@
-//! `CanvasViewport` — center-canvas widget that renders the actual
-//! document tree as visual primitives.
+//! `CanvasViewport` — center-canvas widget that renders the editor's
+//! resolved render scene as visual primitives.
 //!
-//! Step 3 scope:
-//! - Frame: paints fill (if any) at `bounds`, then optional stroke,
-//!   then recurses into children.
-//! - Group: no own paint, just recurses into children. Groups exist
-//!   for logical/selection grouping; the canvas doesn't draw them.
-//! - Rect: paints fill (if any) + stroke (if any) at `bounds`.
-//! - Text: paints `text` (if Some) at `bounds.origin`. No bounding
-//!   rect background — Step 4+ may add text-frame backgrounds via
-//!   the parent Rect/Frame composition.
-//! - Other(_): treated as Group (no own paint, recurses into
-//!   children) — unknown kinds shouldn't crash the canvas.
+//! PAINT path: the widget reads editor state (`viewport` / selection /
+//! `tool` / pen-draft) from `op_editor_core::EditorState` and the
+//! resolved render-node tree from a [`LayoutScene`]. The per-kind node
+//! painter lives in the sibling [`super::canvas_viewport_paint`]
+//! module to keep this file under the 800-line ceiling.
 //!
-//! Selection highlight: the currently-selected node is drawn with
-//! a 2px blue stroke OVER its normal paint, so the user can see
-//! what's picked across all node kinds.
+//! INPUT path: the host-input hit-test helpers
+//! [`rotation_corner_at_point`] / [`selection_handle_at_point`] still
+//! consume the shell-core `Document` — they serve the hosts' input
+//! dispatch, not widget paint, and a later task migrates them.
 //!
-//! Step 4+ extends:
-//! - Transform stack (translate / rotate / scale) — needs Node
-//!   to grow a `transform` field
-//! - Layer-list visibility / opacity
-//! - Image / vector path nodes
-//! - Variable resolution ($color-1 → real color)
+//! Per-kind paint:
+//! - Frame: fill (if any) at `bounds`, optional stroke, then recurse.
+//! - Group / Other(_): no own paint, just recurse into children.
+//! - Rect / Ellipse / Polygon / Line / Path / Text: per-kind paint.
+//! - `Other("icon_font")`: lucide glyph from `text`.
+//!
+//! Selection overlay (outlines + handles), grid, pen rubber-band and
+//! per-anchor Path handles are layered on top of the resolved scene.
 
-use crate::document::{Document, Effect, Node, NodeId, NodeKind, Viewport};
+use crate::document::{Document, NodeKind, Viewport as DocViewport};
+use crate::layout_scene::LayoutScene;
 use crate::theme::Theme;
+use crate::widgets::editor_state_ext::theme_for;
 use crate::widgets::{LayoutBox, LayoutCx, PaintCx, Widget, WidgetId};
-use crate::{Color, Point2D, Rect, TextLayout};
+use crate::{Color, Point2D, Rect};
+
+use op_editor_core::EditorState;
 
 /// One of the 8 selection handles (corners + edge midpoints) the
 /// selection overlay paints. Used by the host to dispatch resize
@@ -57,6 +58,9 @@ const ROTATE_OUTER_RADIUS: f32 = 16.0;
 /// The rotation zone is an annulus around each corner — beyond
 /// the 6 px handle slop and inside the 16 px outer radius. Matches
 /// the TS `hitTestRotation` logic.
+///
+/// INPUT path — stays on `&Document` (the host input dispatch still
+/// reasons in `Document` space; a later task migrates it).
 pub fn rotation_corner_at_point(
     canvas_rect: Rect,
     doc: &Document,
@@ -128,6 +132,8 @@ fn inverse_rotate(point: Point2D, pivot: Point2D, radians: f32) -> Point2D {
 /// into (same value passed to `CanvasViewport::paint`). The
 /// transform from document → screen is identical to paint so a
 /// handle the user clicks is the handle they see.
+///
+/// INPUT path — stays on `&Document` (see [`rotation_corner_at_point`]).
 pub fn selection_handle_at_point(
     canvas_rect: Rect,
     doc: &Document,
@@ -174,9 +180,37 @@ pub fn selection_handle_at_point(
     None
 }
 
+/// Caret-blink descriptor for the text node currently being edited.
+/// `pub` so the sibling `canvas_viewport_paint` module can name it in
+/// the public `paint_node` signature.
+#[derive(Clone)]
+pub struct EditCaret {
+    /// The node id (scene-space string) being edited.
+    pub editing: String,
+    pub anchor_ms: u64,
+    pub now_ms: u64,
+}
+
 pub struct CanvasViewport<'a> {
     pub id: WidgetId,
-    pub document: &'a Document,
+    /// Pan / zoom of the infinite canvas — read from `EditorState`.
+    pub(super) viewport: DocViewport,
+    /// The resolved render scene — the node tree the painter walks.
+    pub(super) scene: &'a LayoutScene,
+    /// Anchor-selected node id (scene-space string). Empty = none.
+    pub(super) selected: String,
+    /// Full selection set (scene-space string ids).
+    pub(super) selected_set: Vec<String>,
+    /// Active canvas tool — gates the per-anchor Path handles.
+    pub(super) tool: op_editor_core::Tool,
+    /// Pen-tool draft: the in-progress path id + last cursor doc
+    /// coord, used to paint the rubber-band preview.
+    pub(super) pen_in_progress: Option<String>,
+    pub(super) pen_cursor_doc: Option<Point2D>,
+    /// Text node being edited (scene-space string id) + its caret
+    /// blink anchor.
+    pub(super) text_editing: Option<String>,
+    pub(super) text_edit_caret_anchor_ms: u64,
     /// Background fill outside any Frame.
     pub canvas_background: Color,
     pub theme: Theme,
@@ -185,15 +219,51 @@ pub struct CanvasViewport<'a> {
 }
 
 /// Spacing (document px) between major grid dots at 100% zoom.
-/// Step 5 infinite canvas — adapted from `apps/web` canvas grid.
+/// Infinite canvas — adapted from `apps/web` canvas grid.
 const GRID_SPACING: f32 = 32.0;
 
 impl<'a> CanvasViewport<'a> {
-    pub fn from_document(document: &'a Document) -> Self {
-        let theme = document.theme();
+    /// Build the canvas widget for a paint pass.
+    ///
+    /// Editor state — `viewport` / selection / `tool` / pen-draft /
+    /// text-edit — is read from `state`; the resolved render-node tree
+    /// is read from `scene`. The host builds `scene` via
+    /// `op_pen_loader::editor_state_to_layout_scene` and caches it the
+    /// same way `paint_doc` is cached.
+    pub fn from_editor(state: &EditorState, scene: &'a LayoutScene) -> Self {
+        let theme = theme_for(&state.editor_ui);
+        let viewport = DocViewport {
+            pan_x: state.viewport.pan_x,
+            pan_y: state.viewport.pan_y,
+            zoom: state.viewport.zoom,
+        };
         Self {
             id: WidgetId::new(4000),
-            document,
+            viewport,
+            scene,
+            selected: state.selection.anchor.as_str().to_string(),
+            selected_set: state
+                .selection
+                .set
+                .iter()
+                .map(|id| id.as_str().to_string())
+                .collect(),
+            tool: state.tool,
+            pen_in_progress: state
+                .ui
+                .pen_in_progress
+                .as_ref()
+                .map(|id| id.as_str().to_string()),
+            pen_cursor_doc: state
+                .ui
+                .pen_cursor_doc
+                .map(|p| Point2D::new(p.x, p.y)),
+            text_editing: state
+                .ui
+                .text_editing
+                .as_ref()
+                .map(|id| id.as_str().to_string()),
+            text_edit_caret_anchor_ms: state.ui.text_edit_caret_anchor_ms,
             canvas_background: theme.canvas_surface,
             theme,
             now_ms: 0,
@@ -224,18 +294,18 @@ impl<'a> Widget for CanvasViewport<'a> {
         cx.backend.fill_rect(rect, self.canvas_background);
 
         // 2. Dotted grid — canvas-local, scales with pan/zoom.
-        let viewport = &self.document.viewport;
+        let viewport = &self.viewport;
         paint_grid(cx, rect, viewport, &self.theme);
 
         // 3. Walk the active page; clip enforces widget bounds.
-        if let Some(page) = self.document.active_page() {
+        if let Some(page) = self.scene.active_page() {
             let viewport_origin = Point2D::new(
                 rect.origin.x + viewport.pan_x,
                 rect.origin.y + viewport.pan_y,
             );
-            let edit_caret = self.document.ui.text_editing.as_ref().map(|id| EditCaret {
+            let edit_caret = self.text_editing.as_ref().map(|id| EditCaret {
                 editing: id.clone(),
-                anchor_ms: self.document.ui.text_edit_caret_anchor_ms,
+                anchor_ms: self.text_edit_caret_anchor_ms,
                 now_ms: self.now_ms,
             });
             // Cull rect — anything fully outside this rect (with a
@@ -250,26 +320,31 @@ impl<'a> Widget for CanvasViewport<'a> {
                 ),
             };
             for child in &page.children {
-                paint_node(
+                super::canvas_viewport_paint::paint_node(
                     cx,
                     child,
                     viewport_origin,
                     viewport.zoom,
-                    &self.document.selected,
                     edit_caret.clone(),
                     cull,
-                    &self.document.var_table,
                 );
             }
         }
 
         // 3b. Pen tool rubber-band from last anchor to cursor.
-        paint_pen_rubber_band(cx, self.document, rect, &viewport);
+        super::canvas_viewport_overlay::paint_pen_rubber_band(
+            cx,
+            self.scene,
+            self.pen_in_progress.as_deref(),
+            self.pen_cursor_doc,
+            rect,
+            viewport,
+        );
 
         // 4. Selection overlay — outlines + handles (single-select only).
-        let show_handles = self.document.selection_count() == 1;
-        if let Some(page) = self.document.active_page() {
-            for id in &self.document.selected_set {
+        let show_handles = self.selected_set.len() == 1;
+        if let Some(page) = self.scene.active_page() {
+            for id in &self.selected_set {
                 let Some(node) = page.find(id) else {
                     continue;
                 };
@@ -303,7 +378,13 @@ impl<'a> Widget for CanvasViewport<'a> {
                     cx.backend.save();
                     cx.backend.rotate(node.rotation, pivot);
                 }
-                paint_selection_overlay(cx, world_rect, &self.theme, is_container, show_handles);
+                super::canvas_viewport_overlay::paint_selection_overlay(
+                    cx,
+                    world_rect,
+                    &self.theme,
+                    is_container,
+                    show_handles,
+                );
                 if rotated {
                     cx.backend.restore();
                 }
@@ -312,13 +393,10 @@ impl<'a> Widget for CanvasViewport<'a> {
 
         // 4b. Per-anchor handles for the selected Path node when the
         //     Pen tool is active — surfaces the drag target that
-        //     `path_anchor_drag` consumes (codex stop-gate concern:
-        //     anchor drag worked but was invisible).
-        if matches!(self.document.tool, crate::document::Tool::Pen)
-            && self.document.selection_count() == 1
-        {
-            if let Some(page) = self.document.active_page() {
-                if let Some(node) = page.find(&self.document.selected) {
+        //     `path_anchor_drag` consumes.
+        if matches!(self.tool, op_editor_core::Tool::Pen) && self.selected_set.len() == 1 {
+            if let Some(page) = self.scene.active_page() {
+                if let Some(node) = page.find(&self.selected) {
                     if matches!(node.kind, NodeKind::Path) {
                         let r = 4.0; // screen-px radius
                         for p in &node.points {
@@ -348,258 +426,12 @@ impl<'a> Widget for CanvasViewport<'a> {
     }
 }
 
-#[derive(Clone)]
-struct EditCaret {
-    editing: NodeId,
-    anchor_ms: u64,
-    now_ms: u64,
-}
-
-/// Resolve a node's paint-time fill — `var_table.fill_for` (a
-/// registered `$ref`) wins over `node.fill`. Mirrors TS
-/// `resolveNodeForCanvas` (`pen-core/variables/resolve.ts`).
-fn node_fill(node: &Node, var_table: &crate::document::VariableTable) -> Option<crate::Color> {
-    var_table.fill_for(&node.id).or(node.fill)
-}
-
-/// Paint every `Effect::DropShadow` on `node` as a blurred shape
-/// behind its fill. The shadow corner radius matches the node
-/// kind — `corner_radius` for Frame / Rect, min-half for an
-/// ellipse silhouette. Offset + blur scale by `zoom` so the
-/// shadow tracks the node across viewport zoom.
-fn paint_drop_shadows(cx: &mut PaintCx<'_>, node: &Node, world_rect: Rect, zoom: f32) {
-    let radius = if node.kind == NodeKind::Ellipse {
-        world_rect.size.x.min(world_rect.size.y) / 2.0
-    } else {
-        node.corner_radius * zoom
-    };
-    for effect in &node.effects {
-        let Effect::DropShadow(s) = effect;
-        let shadow_rect = Rect {
-            origin: Point2D::new(
-                world_rect.origin.x + s.offset_x * zoom,
-                world_rect.origin.y + s.offset_y * zoom,
-            ),
-            size: world_rect.size,
-        };
-        cx.backend
-            .fill_drop_shadow(shadow_rect, radius, s.blur * zoom, s.color);
-    }
-}
-
-fn paint_node(
-    cx: &mut PaintCx<'_>,
-    node: &Node,
-    viewport_origin: Point2D,
-    zoom: f32,
-    selected: &NodeId,
-    edit_caret: Option<EditCaret>,
-    cull: Rect,
-    var_table: &crate::document::VariableTable,
-) {
-    // Hidden nodes (and their subtree) skip canvas paint entirely.
-    // Layer panel still shows them, dimmed, so the user can unhide.
-    if node.hidden {
-        return;
-    }
-    let world_rect = Rect {
-        origin: Point2D::new(
-            viewport_origin.x + node.bounds.origin.x * zoom,
-            viewport_origin.y + node.bounds.origin.y * zoom,
-        ),
-        size: Point2D::new(node.bounds.size.x * zoom, node.bounds.size.y * zoom),
-    };
-    // Viewport culling — bounded leaves skip paint entirely when
-    // off-screen. Containers (bounds = ZERO) always recurse.
-    if world_rect.size.x > 0.0 && world_rect.size.y > 0.0 && node.children.is_empty() {
-        let off = world_rect.origin.x + world_rect.size.x < cull.origin.x
-            || world_rect.origin.x > cull.origin.x + cull.size.x
-            || world_rect.origin.y + world_rect.size.y < cull.origin.y
-            || world_rect.origin.y > cull.origin.y + cull.size.y;
-        if off {
-            return;
-        }
-    }
-
-    // Wrap the paint in save/rotate/restore if the node carries a
-    // non-zero rotation. Rotation pivots around the node's own
-    // bounds centre — for containers, this is the aggregate centre.
-    let rotated = node.rotation.abs() > f32::EPSILON;
-    if rotated {
-        let pivot_doc = node.aggregate_bounds();
-        let pivot = Point2D::new(
-            viewport_origin.x + (pivot_doc.origin.x + pivot_doc.size.x / 2.0) * zoom,
-            viewport_origin.y + (pivot_doc.origin.y + pivot_doc.size.y / 2.0) * zoom,
-        );
-        cx.backend.save();
-        cx.backend.rotate(node.rotation, pivot);
-    }
-
-    // Drop shadows paint behind the node's own fill. Only kinds
-    // whose silhouette a rounded rect / ellipse can represent
-    // faithfully (Frame / Rect / Ellipse) cast one; Polygon / Line
-    // / Path shadows are deferred until a shape-mask path exists.
-    if !node.effects.is_empty()
-        && world_rect.size.x > 0.0
-        && world_rect.size.y > 0.0
-        && matches!(node.kind, NodeKind::Frame | NodeKind::Rect | NodeKind::Ellipse)
-    {
-        paint_drop_shadows(cx, node, world_rect, zoom);
-    }
-
-    match &node.kind {
-        NodeKind::Frame => {
-            paint_fill_then_stroke(cx, node, world_rect, zoom, node_fill(node, var_table));
-            for child in &node.children {
-                paint_node(cx, child, viewport_origin, zoom, selected, edit_caret.clone(), cull, var_table);
-            }
-        }
-        NodeKind::Other(tag) if tag == "icon_font" => crate::widgets::icons::paint_icon_font_node(
-            cx.backend, node.text.as_deref().unwrap_or(""), world_rect, node.fill,
-        ),
-        NodeKind::Group | NodeKind::Other(_) => {
-            for child in &node.children {
-                paint_node(cx, child, viewport_origin, zoom, selected, edit_caret.clone(), cull, var_table);
-            }
-        }
-        NodeKind::Rect => {
-            paint_fill_then_stroke(cx, node, world_rect, zoom, node_fill(node, var_table));
-        }
-        NodeKind::Ellipse => {
-            if let Some(fill) = node.fill {
-                cx.backend.fill_oval(world_rect, fill);
-            }
-            if let Some(stroke) = node.stroke {
-                cx.backend
-                    .stroke_oval(world_rect, stroke.color, stroke.width * zoom);
-            }
-        }
-        NodeKind::Polygon => {
-            // Default triangle: top-centre, bottom-left, bottom-right.
-            let cx_pt = world_rect.origin.x + world_rect.size.x / 2.0;
-            let top_y = world_rect.origin.y;
-            let bottom_y = world_rect.origin.y + world_rect.size.y;
-            let left_x = world_rect.origin.x;
-            let right_x = world_rect.origin.x + world_rect.size.x;
-            let pts = [
-                Point2D::new(cx_pt, top_y),
-                Point2D::new(left_x, bottom_y),
-                Point2D::new(right_x, bottom_y),
-            ];
-            if let Some(fill) = node.fill {
-                cx.backend.fill_polygon(&pts, fill);
-            }
-            if let Some(stroke) = node.stroke {
-                cx.backend
-                    .stroke_polygon(&pts, stroke.color, stroke.width * zoom);
-            }
-        }
-        NodeKind::Line => {
-            // Top-left → bottom-right diagonal across the bounds,
-            // stroked at the stroke width (or 1.5 if no stroke).
-            let from = Point2D::new(world_rect.origin.x, world_rect.origin.y);
-            let to = Point2D::new(
-                world_rect.origin.x + world_rect.size.x,
-                world_rect.origin.y + world_rect.size.y,
-            );
-            let (color, width) = match node.stroke {
-                Some(s) => (s.color, s.width * zoom),
-                None => (
-                    node.fill.unwrap_or(crate::Color::BLACK),
-                    (1.5_f32).max(zoom),
-                ),
-            };
-            cx.backend.stroke_line(from, to, color, width);
-        }
-        NodeKind::Path => {
-            let (color, width) = match node.stroke {
-                Some(s) => (s.color, s.width * zoom),
-                None => (
-                    node.fill.unwrap_or(crate::Color::BLACK),
-                    (1.5_f32).max(zoom),
-                ),
-            };
-            let to_world = |p: Point2D| -> Point2D {
-                Point2D::new(
-                    viewport_origin.x + p.x * zoom,
-                    viewport_origin.y + p.y * zoom,
-                )
-            };
-            for pair in node.points.windows(2) {
-                cx.backend
-                    .stroke_line(to_world(pair[0]), to_world(pair[1]), color, width);
-            }
-        }
-        NodeKind::Text => {
-            let text = node.text.as_deref().unwrap_or("");
-            // Ink colour follows `Node.fill` (defaults to near black if unset).
-            let ink = node.fill.unwrap_or(crate::Color { r: 0.08, g: 0.08, b: 0.08, a: 1.0 });
-            fn ch(v: f32) -> u8 {
-                (v.clamp(0.0, 1.0) * 255.0).round() as u8
-            }
-            // Honour authored font size from the canonical schema; default to
-            // 13 px so editor-created text stays uniform. Baseline ≈ 1.08 × size.
-            let base_size = if node.font_size > 0.0 { node.font_size } else { 13.0 };
-            let font_size = base_size * zoom;
-            let baseline_y = world_rect.origin.y + (base_size + 1.0) * zoom;
-            if !text.is_empty() {
-                let weight = if node.font_weight > 0 { node.font_weight } else { 400 };
-                let jc = jian_core::scene::Color::rgba(ch(ink.r), ch(ink.g), ch(ink.b), ch(ink.a));
-                let line_h = base_size * 1.35 * zoom;
-                let mut ly = baseline_y;
-                let lines: Vec<String> = if node.text_wrap {
-                    crate::widgets::canvas_viewport_overlay::wrap_text(cx.backend, text, font_size, world_rect.size.x, weight)
-                } else { text.split('\n').map(str::to_string).collect() };
-                for line in lines {
-                    cx.backend.draw_text(&TextLayout::single_run(&line, "system-ui", font_size, jc, Point2D::new(0.0, 0.0)).with_font_weight(weight), Point2D::new(world_rect.origin.x, ly));
-                    ly += line_h;
-                }
-            }
-            // Caret while editing — sits at the end of the text.
-            if let Some(c) = edit_caret {
-                if c.editing == node.id
-                    && jian_core::anim::blink_visible(c.now_ms, c.anchor_ms, 500)
-                {
-                    let text_w = cx.backend.measure_text(text, font_size);
-                    let caret = crate::Rect {
-                        origin: Point2D::new(
-                            world_rect.origin.x + text_w,
-                            world_rect.origin.y + 2.0 * zoom,
-                        ),
-                        size: Point2D::new(1.0_f32.max(zoom), font_size * 1.15),
-                    };
-                    cx.backend.fill_rect(caret, ink);
-                }
-            }
-        }
-    }
-
-    if rotated {
-        cx.backend.restore();
-    }
-
-    // Selection outline + 8 handles are painted as a top-of-stack
-    // overlay in `CanvasViewport::paint`; nothing per-node here.
-    let _ = selected;
-}
-
-/// Paints the selection outline + 8 resize handles around the
-/// world-space rect of the selected node. Matches the TS app's
-/// Figma-style affordance: 1 px primary outline (4 AA stroke
-/// lines), small white-filled handles with a 1 px primary stroke
-/// at the four corners + four edge midpoints. Container nodes
-/// (Frame / Group / Other) get a slightly more translucent
-/// outline so the visual reads "wrapper" instead of "leaf".
-use crate::widgets::canvas_viewport_overlay::{
-    paint_fill_then_stroke, paint_pen_rubber_band, paint_selection_overlay,
-};
-
 /// Paint a dotted grid across the canvas widget rect. The grid is
 /// drawn in canvas-local coordinates and offset by `viewport.pan`
 /// so it scrolls with the document content. Dots get sparser as
 /// zoom decreases (skipping every other dot at low zoom) so they
 /// stay visually airy.
-fn paint_grid(cx: &mut PaintCx<'_>, rect: Rect, viewport: &Viewport, theme: &Theme) {
+fn paint_grid(cx: &mut PaintCx<'_>, rect: Rect, viewport: &DocViewport, theme: &Theme) {
     let zoom = viewport.zoom.max(0.0001);
     let mut step = GRID_SPACING * zoom;
     // Skip rendering when dots would be packed tighter than 8 px
@@ -643,6 +475,8 @@ fn paint_grid(cx: &mut PaintCx<'_>, rect: Rect, viewport: &Viewport, theme: &The
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::layout_scene::{LayoutScene, SceneFillType, SceneNode, ScenePage, SceneStroke};
+    use crate::{Color, Point2D, Rect, TextLayout};
 
     /// Records op order; clip-isolated paint = `Save, Clip, Fill, …, Restore`.
     #[derive(Debug, PartialEq, Eq)]
@@ -710,10 +544,58 @@ mod tests {
         }
     }
 
+    /// A leaf scene node with bounds + optional fill.
+    fn leaf(id: &str, kind: NodeKind, bounds: Rect, fill: Option<Color>) -> SceneNode {
+        let mut n = SceneNode::leaf(id, kind);
+        n.bounds = bounds;
+        n.fill = fill;
+        n
+    }
+
+    /// A one-page scene mirroring `Document::sample`: a Frame with a
+    /// stroke, a filled Rect child, and two Text nodes.
+    fn sample_scene() -> LayoutScene {
+        let mut frame = SceneNode::leaf("n1", NodeKind::Frame);
+        frame.bounds = Rect::xywh(40.0, 40.0, 320.0, 200.0);
+        frame.fill = Some(Color { r: 0.16, g: 0.16, b: 0.2, a: 1.0 });
+        frame.stroke = Some(SceneStroke { color: Color::WHITE, width: 1.0 });
+        frame.fill_type = SceneFillType::Solid;
+        let mut button = leaf(
+            "n2",
+            NodeKind::Rect,
+            Rect::xywh(60.0, 80.0, 120.0, 40.0),
+            Some(Color::BLUE),
+        );
+        button.stroke = None;
+        let mut title = SceneNode::leaf("n3", NodeKind::Text);
+        title.bounds = Rect::xywh(60.0, 60.0, 200.0, 20.0);
+        title.text = Some("Title".to_string());
+        let mut label = SceneNode::leaf("n4", NodeKind::Text);
+        label.bounds = Rect::xywh(70.0, 90.0, 100.0, 16.0);
+        label.text = Some("Button".to_string());
+        frame.children = vec![button, title, label];
+        LayoutScene {
+            pages: vec![ScenePage {
+                id: "p1".into(),
+                name: "Page 1".into(),
+                children: vec![frame],
+            }],
+            active_page_index: 0,
+        }
+    }
+
+    fn sample_state() -> EditorState {
+        EditorState::sample()
+    }
+
     #[test]
-    fn from_sample_document_paints_expected_primitives() {
-        let doc = Document::sample();
-        let viewport = CanvasViewport::from_document(&doc);
+    fn from_sample_scene_paints_expected_primitives() {
+        let state = sample_state();
+        let scene = sample_scene();
+        let mut viewport = CanvasViewport::from_editor(&state, &scene);
+        // Select the Frame so the overlay stroke paints.
+        viewport.selected = "n1".into();
+        viewport.selected_set = vec!["n1".into()];
         let mut backend = RecordingBackend::default();
         {
             let mut cx = PaintCx {
@@ -722,24 +604,21 @@ mod tests {
             viewport.paint(&mut cx, Rect::xywh(0.0, 0.0, 800.0, 600.0));
         }
         // ≥3 fills (canvas bg, frame fill, button rect), ≥2 strokes
-        // (frame outline + selection highlight), 2 text draws.
-        assert!(
-            backend.rects >= 3,
-            "expected ≥3 fills, got {}",
-            backend.rects
-        );
+        // (frame outline + selection overlay), 2 text draws.
+        assert!(backend.rects >= 3, "expected ≥3 fills, got {}", backend.rects);
         assert!(
             backend.strokes >= 2,
-            "expected ≥2 strokes (frame + selection highlight), got {}",
+            "expected ≥2 strokes (frame + selection overlay), got {}",
             backend.strokes
         );
         assert_eq!(backend.text, 2, "two text nodes draw two text runs");
     }
 
     #[test]
-    fn empty_document_paints_canvas_background_and_grid_only() {
-        let doc = Document::empty();
-        let viewport = CanvasViewport::from_document(&doc);
+    fn empty_scene_paints_canvas_background_and_grid_only() {
+        let state = sample_state();
+        let scene = LayoutScene::default();
+        let viewport = CanvasViewport::from_editor(&state, &scene);
         let mut backend = RecordingBackend::default();
         {
             let mut cx = PaintCx {
@@ -747,20 +626,19 @@ mod tests {
             };
             viewport.paint(&mut cx, Rect::xywh(0.0, 0.0, 100.0, 100.0));
         }
-        // Step 5 infinite-canvas: bg + grid dots, no document-side
-        // strokes / text. Exact dot count varies with widget size /
-        // zoom so we just bound the surface to "non-empty grid + no
-        // doc paints".
+        // Infinite-canvas: bg + grid dots, no document-side strokes
+        // / text.
         assert!(backend.rects >= 1, "canvas bg + grid dots");
         assert_eq!(backend.strokes, 0);
         assert_eq!(backend.text, 0);
     }
 
     #[test]
-    fn unselected_document_skips_highlight_stroke() {
-        let mut doc = Document::sample();
-        doc.clear_selection(); // deselect
-        let viewport = CanvasViewport::from_document(&doc);
+    fn unselected_scene_skips_overlay_stroke() {
+        let state = sample_state();
+        let scene = sample_scene();
+        // No selection — only the frame's own stroke paints.
+        let viewport = CanvasViewport::from_editor(&state, &scene);
         let mut backend = RecordingBackend::default();
         {
             let mut cx = PaintCx {
@@ -768,15 +646,14 @@ mod tests {
             };
             viewport.paint(&mut cx, Rect::xywh(0.0, 0.0, 800.0, 600.0));
         }
-        // Same paints as `from_sample_document_paints_expected_primitives`
-        // MINUS the selection highlight = 1 fewer stroke.
         assert_eq!(backend.strokes, 1, "no selection => only the frame stroke");
     }
 
     #[test]
     fn access_node_advertises_canvas_role() {
-        let doc = Document::sample();
-        let viewport = CanvasViewport::from_document(&doc);
+        let state = sample_state();
+        let scene = sample_scene();
+        let viewport = CanvasViewport::from_editor(&state, &scene);
         let node = viewport.access_node();
         assert_eq!(node.role(), accesskit::Role::Canvas);
         assert_eq!(node.label(), Some("Canvas"));
@@ -784,14 +661,9 @@ mod tests {
 
     #[test]
     fn paint_is_clip_isolated_save_clip_then_restore() {
-        // Codex Step 3 stop-hook: nodes whose document coords
-        // extend past the canvas-widget rect must NOT spill onto
-        // neighbouring widgets. Verify the canvas paint wraps in
-        // Save → Clip(rect) → … → Restore so the host's clip
-        // stack is balanced and the recursive paint stays
-        // confined.
-        let doc = Document::sample();
-        let viewport = CanvasViewport::from_document(&doc);
+        let state = sample_state();
+        let scene = sample_scene();
+        let viewport = CanvasViewport::from_editor(&state, &scene);
         let mut backend = RecordingBackend::default();
         {
             let mut cx = PaintCx {
@@ -805,14 +677,11 @@ mod tests {
             &[Op::Save, Op::Clip, Op::Fill],
             "canvas paint must open with Save → Clip → bg Fill"
         );
-        // Last op: Restore (closes the save).
         assert_eq!(
             backend.ops.last(),
             Some(&Op::Restore),
             "canvas paint must close with Restore"
         );
-        // Save / Restore counts balance (one of each from
-        // CanvasViewport — node paint helpers don't push more).
         let saves = backend.ops.iter().filter(|o| **o == Op::Save).count();
         let restores = backend.ops.iter().filter(|o| **o == Op::Restore).count();
         assert_eq!(saves, restores, "balanced save/restore");
@@ -821,12 +690,9 @@ mod tests {
 
     #[test]
     fn paint_with_zero_size_rect_skips_entirely() {
-        // Defensive guard: hosts may pass an empty rect when the
-        // canvas band has zero usable space. We must NOT call
-        // save/clip/restore in that case (would still be balanced
-        // but unnecessary), and we must NOT walk the document.
-        let doc = Document::sample();
-        let viewport = CanvasViewport::from_document(&doc);
+        let state = sample_state();
+        let scene = sample_scene();
+        let viewport = CanvasViewport::from_editor(&state, &scene);
         let mut backend = RecordingBackend::default();
         {
             let mut cx = PaintCx {
@@ -839,27 +705,26 @@ mod tests {
 
     #[test]
     fn group_kind_recurses_without_own_paint() {
-        let inner = Node::leaf("n2", NodeKind::Rect, "leaf")
-            .with_bounds(Rect::xywh(0.0, 0.0, 50.0, 50.0))
-            .with_fill(Color::RED);
-        let group = Node::with_children("n3", NodeKind::Group, "group", vec![inner])
-            .with_bounds(Rect::xywh(10.0, 10.0, 80.0, 80.0))
-            .with_fill(Color::BLUE); // fill on group should be ignored
-        let doc = Document {
-            pages: vec![crate::document::Page::new("n1", "p", vec![group])],
+        let state = sample_state();
+        let inner = leaf(
+            "n2",
+            NodeKind::Rect,
+            Rect::xywh(0.0, 0.0, 50.0, 50.0),
+            Some(Color::RED),
+        );
+        let mut group = SceneNode::leaf("n3", NodeKind::Group);
+        group.bounds = Rect::xywh(10.0, 10.0, 80.0, 80.0);
+        group.fill = Some(Color::BLUE); // fill on group should be ignored
+        group.children = vec![inner];
+        let scene = LayoutScene {
+            pages: vec![ScenePage {
+                id: "n1".into(),
+                name: "p".into(),
+                children: vec![group],
+            }],
             active_page_index: 0,
-            selected: NodeId::NONE,
-            selected_set: Vec::new(),
-            clipboard: Vec::new(),
-            tool: crate::document::Tool::Select,
-            viewport: crate::document::Viewport::IDENTITY,
-            chat: crate::document::ChatState::default(),
-            ui: crate::document::UiState::default(),
-            history: crate::document::History::default(),
-            var_table: crate::document::VariableTable::default(),
-            components: crate::document::ComponentLibrary::default(),
         };
-        let viewport = CanvasViewport::from_document(&doc);
+        let viewport = CanvasViewport::from_editor(&state, &scene);
         let mut backend = RecordingBackend::default();
         {
             let mut cx = PaintCx {
@@ -868,9 +733,7 @@ mod tests {
             viewport.paint(&mut cx, Rect::xywh(0.0, 0.0, 200.0, 200.0));
         }
         // canvas bg (1) + grid dots (variable) + leaf rect fill (1)
-        // — group fill skipped. Just verify the leaf was painted by
-        // checking the stroke count (leaf has no stroke, so 0) and
-        // that fills are bounded above the dot baseline.
+        // — group fill skipped.
         assert!(backend.rects >= 2, "canvas bg + at least the leaf");
     }
 }
