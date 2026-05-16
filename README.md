@@ -447,8 +447,8 @@ bun run mcp:dev            # Run MCP server from source
 OpenPencil 正在进行全量 Rust 化。当前状态见 `openpencil-docs/superpowers/specs/2026-05-02-rust-ification-kickoff.md`（v7 FROZEN）。
 
 ```bash
-# Install Rust toolchain (rust-toolchain.toml auto-pins 1.85)
-rustup toolchain install 1.85
+# Install Rust toolchain (rust-toolchain.toml auto-pins 1.94)
+rustup toolchain install 1.94
 rustup target add wasm32-unknown-unknown
 
 # build / test / lint
@@ -461,9 +461,14 @@ bun run cargo:deny        # cargo-deny (native + wasm32 bans; CI uses cargo-deny
 
 **Crate list (`crates/`):**
 
-| Crate                              | Category                       | wasm32                                        |
-| ---------------------------------- | ------------------------------ | --------------------------------------------- |
-| openpencil-shell-{core,web,native} | UI shell（spec §1.2 三 crate） | core/web ✅ / native ❌ (compile_error guard) |
+| Crate                   | Category                                         | wasm32                   |
+| ----------------------- | ------------------------------------------------ | ------------------------ |
+| openpencil-shell-core   | Platform-free widgets + Document model           | ✅                       |
+| openpencil-shell-web    | Browser runner (wasm32 + skia-safe-op fork)      | ✅                       |
+| openpencil-shell-native | Native lib (WidgetHostNative + NativeBackend)    | ❌ (compile_error guard) |
+| openpencil-desktop      | Desktop binary (winit + skia-safe GL surface)    | ❌ (native only)         |
+| anthropic-agent-sdk     | Vendored Claude Code CLI SDK (streaming, MCP)    | ❌ (native only)         |
+| wasm-libc-shim          | libc / libm / libcxx shim for wasm32 skia bundle | ✅                       |
 
 **Submodule:** `vendor/agent` → `github.com/ZSeven-W/agent-rs` (cross-product Rust agent runtime).
 

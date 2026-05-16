@@ -57,7 +57,7 @@ jobs:
           submodules: recursive
       - uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: '1.85'
+          toolchain: '1.94'
           targets: ${{ matrix.target }}
       - uses: Swatinem/rust-cache@v2
         with:

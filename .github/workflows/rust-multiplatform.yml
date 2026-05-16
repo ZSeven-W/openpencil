@@ -72,7 +72,7 @@ jobs:
           submodules: recursive
       - uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: '1.85'
+          toolchain: '1.94'
           targets: ${{ matrix.target }}
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
@@ -114,9 +114,9 @@ jobs:
       - name: Test (host, macOS / Windows)
         if: matrix.cross == false && matrix.check_only != true && runner.os != 'Linux'
         run: cargo test --workspace --target ${{ matrix.target }}
-      # Desktop binary artifact upload removed with the `openpencil-app`
-      # placeholder crate (Phase 1 Task 1.2). Step 1f reintroduces a
-      # real desktop binary (new `op-*` crate) and its upload step here.
+      # Desktop binary artifact upload is intentionally not wired here yet.
+      # The real desktop binary lives in the `openpencil-desktop` crate; a
+      # build + upload step can be added once release packaging is finalized.
 
   wasm-web:
     name: wasm32-unknown-unknown / openpencil-shell-web (compile guard)
@@ -127,7 +127,7 @@ jobs:
           submodules: recursive
       - uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: '1.85'
+          toolchain: '1.94'
           targets: wasm32-unknown-unknown
       - uses: Swatinem/rust-cache@v2
         with:
@@ -173,7 +173,7 @@ jobs:
           submodules: recursive
       - uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: '1.85'
+          toolchain: '1.94'
           targets: ${{ matrix.target }}
       - uses: Swatinem/rust-cache@v2
         with:

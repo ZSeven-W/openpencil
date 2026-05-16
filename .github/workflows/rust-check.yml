@@ -24,7 +24,7 @@ on:
 
 jobs:
   check:
-    name: ${{ matrix.os }} / 1.85
+    name: ${{ matrix.os }} / 1.94
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -36,7 +36,7 @@ jobs:
           submodules: recursive
       - uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: '1.85'
+          toolchain: '1.94'
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
       # Linux GL prerequisites for winit's x11+wayland feature link.
