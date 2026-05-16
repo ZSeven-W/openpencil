@@ -207,38 +207,45 @@ impl WidgetHostNative {
         // `Document`'s var-table (the same Vec the panel walks).
         self.refresh_paint_doc();
         let snap = self.editor_state.snapshot_for_history();
-        let committed = match focus {
-            VariableRowFocus::Number(idx) => {
-                let Some(name) = self
-                    .paint_doc
-                    .var_table
-                    .variables
-                    .get(idx)
-                    .map(|v| v.name.clone())
-                else {
-                    return;
-                };
-                let Ok(n) = draft.trim().parse::<f64>() else {
-                    return;
-                };
-                if !n.is_finite() {
-                    return;
+        // Every path below has already cleared focus + drained the
+        // draft, so each exit must finalize through `mark_dirty` or the
+        // derived-doc cache stays stale after an invalid edit. An inner
+        // closure makes the "did the value commit" branches return into
+        // one place that always marks dirty.
+        let committed = (|| -> bool {
+            match focus {
+                VariableRowFocus::Number(idx) => {
+                    let Some(name) = self
+                        .paint_doc
+                        .var_table
+                        .variables
+                        .get(idx)
+                        .map(|v| v.name.clone())
+                    else {
+                        return false;
+                    };
+                    let Ok(n) = draft.trim().parse::<f64>() else {
+                        return false;
+                    };
+                    if !n.is_finite() {
+                        return false;
+                    }
+                    self.editor_state.set_variable_number(&name, n)
                 }
-                self.editor_state.set_variable_number(&name, n)
+                VariableRowFocus::String(idx) => {
+                    let Some(name) = self
+                        .paint_doc
+                        .var_table
+                        .variables
+                        .get(idx)
+                        .map(|v| v.name.clone())
+                    else {
+                        return false;
+                    };
+                    self.editor_state.set_variable_string(&name, draft)
+                }
             }
-            VariableRowFocus::String(idx) => {
-                let Some(name) = self
-                    .paint_doc
-                    .var_table
-                    .variables
-                    .get(idx)
-                    .map(|v| v.name.clone())
-                else {
-                    return;
-                };
-                self.editor_state.set_variable_string(&name, draft)
-            }
-        };
+        })();
         if committed {
             self.editor_state.history_push_past(snap);
         }

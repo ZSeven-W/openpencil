@@ -9,6 +9,29 @@
 //! reverse path, so the desktop's old private `DocPayload` format is
 //! no longer written — every save is canonical, round-tripping
 //! through the same parser the TS editor / Jian apps use.
+//!
+//! ## Editor view-state sidecar (`.opmeta`)
+//!
+//! The canonical `PenDocument` schema has no field for editor
+//! view-state — most of it (selection / viewport / tool) is
+//! deliberately transient, but `active_page_index` is a small piece of
+//! view-state the user expects to survive a save / load round-trip.
+//! `jian_ops_schema` is a shared crate and must not grow editor-only
+//! fields, so Save writes a tiny JSON companion file next to the `.op`
+//! (`<path>.opmeta`) carrying `active_page_index`; Open reads it
+//! best-effort (a missing / unreadable sidecar falls back to page 0).
+//! The `.op` file itself stays strictly canonical so TS editor / Jian
+//! apps load it unchanged.
+//!
+//! ## Legacy `DocPayload` files
+//!
+//! Pre-canonical desktop builds saved a private `DocPayload` JSON
+//! (`{"version": 1, "active_page_index": …, "pages": […]}` — note the
+//! integer `version`). There is no `DocPayload → PenDocument`
+//! converter (that needs a full node-tree converter, out of scope for
+//! this fix), so rather than fail silently with an opaque schema
+//! error, [`load_editor_state`] detects the legacy shape and surfaces
+//! an explicit "saved by an older version, must be re-saved" message.
 
 use std::path::PathBuf;
 
@@ -16,8 +39,32 @@ use op_editor_core::EditorState;
 use openpencil_shell_core::document::Document;
 use openpencil_shell_native::WidgetHostNative;
 
+/// Editor view-state persisted alongside the canonical `.op` file.
+/// Kept intentionally minimal — `active_page_index` is the only piece
+/// of view-state the user expects to survive a round-trip. Selection /
+/// viewport / tool stay transient and are NOT persisted.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+struct EditorMeta {
+    /// 0-based active page index at save time.
+    #[serde(default)]
+    active_page_index: usize,
+}
+
+/// Sidecar path for a given `.op` / `.pen` file — `<path>.opmeta`.
+fn sidecar_path(path: &std::path::Path) -> PathBuf {
+    let mut p = path.to_path_buf();
+    let ext = match path.extension().and_then(|s| s.to_str()) {
+        Some(ext) => format!("{}.opmeta", ext),
+        None => "opmeta".to_string(),
+    };
+    p.set_extension(ext);
+    p
+}
+
 /// Serialize an `EditorState`'s canonical document to `path` without
 /// prompting. Used by Cmd+S once the document already has a path.
+/// Also writes the `.opmeta` view-state sidecar so `active_page_index`
+/// survives the round-trip.
 pub fn save_to_path(state: &EditorState, path: &std::path::Path) -> Result<(), String> {
     let json = serde_json::to_string_pretty(&state.doc).map_err(|e| e.to_string())?;
     // Write through a sibling temp file so a crash mid-write doesn't
@@ -29,6 +76,16 @@ pub fn save_to_path(state: &EditorState, path: &std::path::Path) -> Result<(), S
     });
     std::fs::write(&tmp, json).map_err(|e| e.to_string())?;
     std::fs::rename(&tmp, path).map_err(|e| e.to_string())?;
+    // View-state sidecar — best-effort. A failed sidecar write must
+    // not fail the (already-committed) document save, so it only logs.
+    let meta = EditorMeta {
+        active_page_index: state.ui.active_page_index,
+    };
+    if let Ok(meta_json) = serde_json::to_string(&meta) {
+        if let Err(e) = std::fs::write(sidecar_path(path), meta_json) {
+            eprintln!("[save] view-state sidecar write failed: {e}");
+        }
+    }
     Ok(())
 }
 
@@ -48,19 +105,77 @@ pub fn save_as_dialog(state: &EditorState) -> Result<Option<PathBuf>, String> {
     Ok(Some(path))
 }
 
+/// Detect the legacy private `DocPayload` JSON shape. A pre-canonical
+/// desktop save has a top-level object with an *integer* `version`
+/// (the canonical schema's `version` is always a string) and a
+/// `pages` array. The canonical schema never emits an integer
+/// `version`, so this check has no false positives against current
+/// files.
+fn looks_like_legacy_doc_payload(src: &str) -> bool {
+    let Ok(value) = serde_json::from_str::<serde_json::Value>(src) else {
+        return false;
+    };
+    let Some(obj) = value.as_object() else {
+        return false;
+    };
+    let version_is_integer = obj
+        .get("version")
+        .map(|v| v.is_u64() || v.is_i64())
+        .unwrap_or(false);
+    version_is_integer && obj.get("pages").map(|p| p.is_array()).unwrap_or(false)
+}
+
 /// Load a canonical `.pen` / `.op` file at `path` into a fresh
 /// `EditorState`. Files from the TS editor, Jian apps, or anything
 /// else emitting the canonical schema all load through the shared
-/// parser.
+/// parser. The `.opmeta` view-state sidecar (if present) restores
+/// `active_page_index`.
+///
+/// A file in the legacy private `DocPayload` format is detected and
+/// rejected with an explicit message: there is no
+/// `DocPayload → PenDocument` converter (a full node-tree converter is
+/// out of scope for this bounded fix), so the choice here is the
+/// explicit-error variant — the alternative would be a silent,
+/// confusing schema parse failure.
 pub fn load_editor_state(path: &std::path::Path) -> Result<EditorState, String> {
     let bytes = std::fs::read(path).map_err(|e| e.to_string())?;
     let src =
         std::str::from_utf8(&bytes).map_err(|e| format!("file is not valid UTF-8: {e}"))?;
-    let loaded = op_pen_loader::load_canonical(src).map_err(|e| e.to_string())?;
+    let loaded = match op_pen_loader::load_canonical(src) {
+        Ok(loaded) => loaded,
+        Err(e) => {
+            // Distinguish "old format" from a genuinely corrupt file so
+            // the user gets actionable guidance instead of a raw parse
+            // error.
+            if looks_like_legacy_doc_payload(src) {
+                return Err(
+                    "This file was saved by an older version of OpenPencil and \
+                     uses a format this build can no longer read. Open it in the \
+                     version that created it and re-save it in the current \
+                     format."
+                        .to_string(),
+                );
+            }
+            return Err(e.to_string());
+        }
+    };
     for w in &loaded.warnings {
         eprintln!("[open] schema warning: {:?}", w);
     }
-    Ok(EditorState::from_document(loaded.value))
+    let mut state = EditorState::from_document(loaded.value);
+    // Restore editor view-state from the `.opmeta` sidecar — best
+    // effort: a missing / unreadable / out-of-range sidecar leaves the
+    // freshly loaded state on page 0.
+    if let Ok(meta_src) = std::fs::read_to_string(sidecar_path(path)) {
+        if let Ok(meta) = serde_json::from_str::<EditorMeta>(&meta_src) {
+            // `pages == None` is the single-page fallback — one logical
+            // page, so the only valid index is 0. Otherwise clamp the
+            // saved index against the real page count.
+            let page_count = state.doc.pages.as_ref().map(|p| p.len()).unwrap_or(1).max(1);
+            state.ui.active_page_index = meta.active_page_index.min(page_count - 1);
+        }
+    }
+    Ok(state)
 }
 
 /// Cmd+S — save to `current_path` if known, else fall through to
@@ -348,4 +463,103 @@ enum ErrorKind {
     Open,
     Save,
     Export,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A unique temp path under the OS temp dir for a round-trip test.
+    fn temp_op_path(tag: &str) -> PathBuf {
+        let mut p = std::env::temp_dir();
+        let pid = std::process::id();
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0);
+        p.push(format!("openpencil-test-{tag}-{pid}-{nanos}.op"));
+        p
+    }
+
+    #[test]
+    fn active_page_index_survives_a_save_load_round_trip() {
+        // Fix 5: editor view-state (`active_page_index`) is persisted in
+        // the `.opmeta` sidecar so a save / load round-trip restores it
+        // instead of reinitializing to page 0.
+        let mut state = EditorState::new();
+        // Two extra pages → three total; page index 2 is valid.
+        state.add_page();
+        state.add_page();
+        state.ui.active_page_index = 2;
+
+        let path = temp_op_path("page-roundtrip");
+        save_to_path(&state, &path).expect("save succeeds");
+
+        let reloaded = load_editor_state(&path).expect("load succeeds");
+        assert_eq!(reloaded.ui.active_page_index, 2);
+
+        // Cleanup.
+        let _ = std::fs::remove_file(&path);
+        let _ = std::fs::remove_file(sidecar_path(&path));
+    }
+
+    #[test]
+    fn active_page_index_is_clamped_against_the_real_page_count() {
+        // A sidecar that names a page that no longer exists must not
+        // leave the editor on an out-of-range index.
+        let state = EditorState::new();
+        let path = temp_op_path("page-clamp");
+        save_to_path(&state, &path).expect("save succeeds");
+        // Overwrite the sidecar with an absurd index.
+        std::fs::write(sidecar_path(&path), r#"{"active_page_index":99}"#)
+            .expect("sidecar overwrite");
+
+        let reloaded = load_editor_state(&path).expect("load succeeds");
+        // Single-page document → only index 0 is valid.
+        assert_eq!(reloaded.ui.active_page_index, 0);
+
+        let _ = std::fs::remove_file(&path);
+        let _ = std::fs::remove_file(sidecar_path(&path));
+    }
+
+    #[test]
+    fn legacy_doc_payload_is_detected() {
+        // Fix 4: a pre-canonical private `DocPayload` JSON (integer
+        // `version` + `pages` array) is recognised as the legacy
+        // format.
+        let legacy = r#"{"version":1,"active_page_index":0,"pages":[
+            {"id":"n1","name":"Page 1","children":[]}
+        ]}"#;
+        assert!(looks_like_legacy_doc_payload(legacy));
+    }
+
+    #[test]
+    fn canonical_document_is_not_mistaken_for_legacy() {
+        // A canonical `.op` file has a *string* `version` — it must not
+        // trip the legacy detector.
+        let canonical = r#"{"version":"0.8.0","children":[]}"#;
+        assert!(!looks_like_legacy_doc_payload(canonical));
+    }
+
+    #[test]
+    fn loading_a_legacy_file_surfaces_an_explicit_error() {
+        // The load path turns the legacy format into an actionable
+        // user-facing message rather than an opaque schema error.
+        let path = temp_op_path("legacy-load");
+        std::fs::write(
+            &path,
+            r#"{"version":1,"active_page_index":0,"pages":[
+                {"id":"n1","name":"Page 1","children":[]}
+            ]}"#,
+        )
+        .expect("write legacy fixture");
+
+        let err = load_editor_state(&path).expect_err("legacy file is rejected");
+        assert!(
+            err.contains("older version"),
+            "error should mention the old version: {err}"
+        );
+
+        let _ = std::fs::remove_file(&path);
+    }
 }

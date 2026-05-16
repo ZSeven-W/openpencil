@@ -343,6 +343,12 @@ impl ApplicationHandler for DesktopApp {
             WindowEvent::CursorMoved { position, .. } => {
                 self.cursor_x = position.x as f32 / self.dpi;
                 self.cursor_y = position.y as f32 / self.dpi;
+                // `cursor_hint` hit-tests the derived paint `Document`.
+                // A mutation since the last paint may have left the
+                // cache stale (`editor_state_dirty`), so refresh it
+                // first — otherwise a post-mutation / pre-paint cursor
+                // move reads stale geometry and picks the wrong hint.
+                let _ = self.host.paint_document();
                 if let Some(window) = self.window.as_ref() {
                     let viewport_w = window.inner_size().width as f32 / self.dpi;
                     let viewport_h = window.inner_size().height as f32 / self.dpi;

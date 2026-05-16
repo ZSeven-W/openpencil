@@ -251,6 +251,13 @@ impl EditorState {
     // --- History -----------------------------------------------------
 
     /// Snapshot the editor's undoable state without pushing it.
+    ///
+    /// The snapshot covers `doc` / `selection` / `active_page_index`
+    /// only. View-only UI state — notably `editor_ui.collapsed_layers`
+    /// — is intentionally NOT captured: layer-collapse is a view-only
+    /// toggle, deliberately excluded from the undo snapshot and from
+    /// file persistence. Expanding / collapsing a layer is not an
+    /// undoable edit.
     pub fn snapshot_for_history(&self) -> EditorSnapshot {
         EditorSnapshot {
             doc: self.doc.clone(),

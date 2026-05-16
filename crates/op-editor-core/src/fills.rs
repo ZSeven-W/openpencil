@@ -244,26 +244,76 @@ fn fill_hex(fill: &PenFill) -> Option<&str> {
     }
 }
 
+/// Convert an existing first `PenFill` to fill-type `kind`, preserving
+/// as much of the existing body as the target variant structurally
+/// allows. This mirrors shell-core's `set_selected_fill_type`, which
+/// only flipped a scalar `Node.fill_type` discriminant and never
+/// discarded the fill body: shell-core kept the gradient stops / image
+/// payload while the discriminant moved. The canonical model has no
+/// scalar discriminant — type IS the `PenFill` variant — so a faithful
+/// port carries the body across the variant flip by hand:
+///
+///   - already the target variant → returned unchanged (no-op).
+///   - LinearGradient ⇄ RadialGradient → carry `stops`, `opacity`,
+///     `blend_mode`, `explain`; only the angle / centre fields that
+///     have no counterpart are dropped.
+///   - Solid → gradient → seed stops from the solid colour.
+///   - gradient → Solid → carry the first stop's colour.
+///   - anything → Image → fresh image body (no shared structure to
+///     carry; the previous body cannot become a URL).
+fn convert_fill(existing: PenFill, kind: FillType) -> PenFill {
+    match (kind, existing) {
+        // Already the requested variant — keep the body verbatim.
+        (FillType::Solid, f @ PenFill::Solid(_)) => f,
+        (FillType::LinearGradient, f @ PenFill::LinearGradient(_)) => f,
+        (FillType::RadialGradient, f @ PenFill::RadialGradient(_)) => f,
+        (FillType::Image, f @ PenFill::Image(_)) => f,
+        // Linear → Radial — carry every shared field.
+        (FillType::RadialGradient, PenFill::LinearGradient(body)) => {
+            PenFill::RadialGradient(RadialGradientBody {
+                cx: None,
+                cy: None,
+                radius: None,
+                stops: body.stops,
+                explain: body.explain,
+                opacity: body.opacity,
+                blend_mode: body.blend_mode,
+            })
+        }
+        // Radial → Linear — carry every shared field.
+        (FillType::LinearGradient, PenFill::RadialGradient(body)) => {
+            PenFill::LinearGradient(LinearGradientBody {
+                angle: None,
+                stops: body.stops,
+                explain: body.explain,
+                opacity: body.opacity,
+                blend_mode: body.blend_mode,
+            })
+        }
+        // Cross-family flips — carry the representative colour only.
+        (kind, other) => {
+            let hex = fill_hex(&other).unwrap_or("#000000").to_string();
+            default_fill_of_type(kind, &hex)
+        }
+    }
+}
+
 /// Set the node's primary fill kind to `kind`. The canonical model
-/// encodes fill type as the first `PenFill` variant, so this replaces
-/// the first fill with a fresh body of the requested variant
-/// (preserving the old fill's representative colour), or prepends one
-/// when the node has no fills. Non-first fills are left untouched.
+/// encodes fill type as the first `PenFill` variant, so this converts
+/// the first fill to the requested variant via [`convert_fill`] —
+/// preserving as much of the existing body (gradient stops, opacity,
+/// blend mode) as the target variant allows — or prepends a default
+/// body when the node has no fills. Non-first fills are left untouched.
 /// `false` for variants that carry no `fill` field at all.
 pub fn set_primary_fill_type(node: &mut PenNode, kind: FillType) -> bool {
     let Some(fills) = node_fills_mut(node) else {
         return false;
     };
-    let hex = fills
-        .first()
-        .and_then(fill_hex)
-        .map(|s| s.to_string())
-        .unwrap_or_else(|| "#000000".to_string());
-    let fresh = default_fill_of_type(kind, &hex);
     if fills.is_empty() {
-        fills.push(fresh);
+        fills.push(default_fill_of_type(kind, "#000000"));
     } else {
-        fills[0] = fresh;
+        let existing = fills.remove(0);
+        fills.insert(0, convert_fill(existing, kind));
     }
     true
 }
@@ -312,4 +362,133 @@ pub fn push_drop_shadow(node: &mut PenNode) -> bool {
         color: "#00000040".to_string(),
     }));
     true
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A bare rectangle node fixture, parsed from `.op` JSON so it
+    /// stays robust to schema growth.
+    fn rect_node() -> PenNode {
+        let src = r#"{"version":"0.8.0","children":[
+            {"type":"rectangle","id":"r1","name":"R",
+             "x":0,"y":0,"width":10,"height":10}
+        ]}"#;
+        jian_ops_schema::load_str(src)
+            .expect("fixture parses")
+            .value
+            .children
+            .into_iter()
+            .next()
+            .expect("one node")
+    }
+
+    /// Seed a node with a custom 3-stop linear gradient as its first
+    /// fill so the conversion has a non-default body to preserve.
+    fn seed_linear_gradient(node: &mut PenNode) {
+        let fills = node_fills_mut(node).expect("rect carries fills");
+        fills.clear();
+        fills.push(PenFill::LinearGradient(LinearGradientBody {
+            angle: Some(45.0),
+            stops: vec![
+                GradientStop {
+                    offset: 0.0,
+                    color: "#ff0000".into(),
+                },
+                GradientStop {
+                    offset: 0.5,
+                    color: "#00ff00".into(),
+                },
+                GradientStop {
+                    offset: 1.0,
+                    color: "#0000ff".into(),
+                },
+            ],
+            explain: None,
+            opacity: Some(0.75),
+            blend_mode: None,
+        }));
+    }
+
+    #[test]
+    fn linear_to_radial_preserves_the_gradient_body() {
+        // Fix 6: a fill-type discriminant change must not discard the
+        // existing gradient payload — shell-core's `set_selected_fill_type`
+        // only flipped a scalar `Node.fill_type` and kept the body, so
+        // the canonical port carries the stops / opacity across.
+        let mut node = rect_node();
+        seed_linear_gradient(&mut node);
+
+        assert!(set_primary_fill_type(&mut node, FillType::RadialGradient));
+
+        let fills = node_fills(&node).expect("rect carries fills");
+        match fills.first().expect("a first fill") {
+            PenFill::RadialGradient(body) => {
+                // The full 3-stop list survived the variant flip.
+                assert_eq!(body.stops.len(), 3);
+                assert_eq!(body.stops[0].color, "#ff0000");
+                assert_eq!(body.stops[1].color, "#00ff00");
+                assert_eq!(body.stops[2].color, "#0000ff");
+                // Opacity carried across too — not reset to default.
+                assert_eq!(body.opacity, Some(0.75));
+            }
+            other => panic!("expected RadialGradient, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn flipping_back_and_forth_keeps_the_stops() {
+        // Linear → Radial → Linear round-trip must still carry the
+        // custom stops (angle has no radial counterpart, so it is the
+        // one field allowed to drop).
+        let mut node = rect_node();
+        seed_linear_gradient(&mut node);
+
+        assert!(set_primary_fill_type(&mut node, FillType::RadialGradient));
+        assert!(set_primary_fill_type(&mut node, FillType::LinearGradient));
+
+        let fills = node_fills(&node).expect("rect carries fills");
+        match fills.first().expect("a first fill") {
+            PenFill::LinearGradient(body) => {
+                assert_eq!(body.stops.len(), 3);
+                assert_eq!(body.stops[0].color, "#ff0000");
+                assert_eq!(body.opacity, Some(0.75));
+            }
+            other => panic!("expected LinearGradient, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn same_type_is_a_no_op_keeping_the_exact_body() {
+        // Setting the type the node already has must leave the body
+        // byte-for-byte identical (no default-body overwrite).
+        let mut node = rect_node();
+        seed_linear_gradient(&mut node);
+        let before = node_fills(&node).unwrap().first().cloned();
+
+        assert!(set_primary_fill_type(&mut node, FillType::LinearGradient));
+
+        let after = node_fills(&node).unwrap().first().cloned();
+        assert_eq!(before, after);
+    }
+
+    #[test]
+    fn solid_to_gradient_seeds_stops_from_the_solid_colour() {
+        // Cross-family flip: there is no gradient body to carry, so the
+        // representative colour seeds the first stop.
+        let mut node = rect_node();
+        {
+            let fills = node_fills_mut(&mut node).unwrap();
+            fills.clear();
+            fills.push(solid_fill("#abcdef".into()));
+        }
+        assert!(set_primary_fill_type(&mut node, FillType::LinearGradient));
+        match node_fills(&node).unwrap().first().unwrap() {
+            PenFill::LinearGradient(body) => {
+                assert_eq!(body.stops.first().map(|s| s.color.as_str()), Some("#abcdef"));
+            }
+            other => panic!("expected LinearGradient, got {other:?}"),
+        }
+    }
 }

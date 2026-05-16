@@ -112,6 +112,11 @@ impl WidgetHostNative {
     }
 
     pub fn apply_cursor_move(&mut self, x: f32, y: f32) -> bool {
+        // Every hit-test below (color picker, layer context menu, align
+        // toolbar, panel resize, …) reasons about the derived paint
+        // `Document`. Refresh it once up front so a mutation since the
+        // last paint can't leave any of them hit-testing stale geometry.
+        self.refresh_paint_doc();
         if self.editor_state.editor_ui.agent_settings_open
             && self.update_agent_settings_hover(x, y)
         {
