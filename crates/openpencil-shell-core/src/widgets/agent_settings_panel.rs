@@ -2,16 +2,19 @@
 //! nav (Agents / MCP / Images / System) + scrollable right pane.
 //! Visual parity with the TS app's settings panel.
 
-use crate::document::{AgentProvider, AgentSettings, AgentSettingsTab, Document, McpCli};
 use crate::theme::Theme;
 use crate::widgets::agent_settings_i18n::t as t_settings;
 use crate::widgets::agent_settings_images::{self, ImagesHit};
 use crate::widgets::agent_settings_mcp::{self, McpHit};
 use crate::widgets::agent_settings_system::{self, SystemHit};
 use crate::widgets::brand_icons::{paint_brand_logo, paint_opencode_logo, BrandLogo};
+use crate::widgets::editor_state_ext::theme_for;
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::{PaintCx, Widget, WidgetId};
 use crate::{Color, Point2D, Rect, TextLayout};
+use op_editor_core::agent_settings::{AgentProvider, AgentSettings, AgentSettingsTab, McpCli};
+use op_editor_core::editor_ui_state::EditorUiState;
+use op_editor_core::EditorState;
 
 pub const PANEL_WIDTH: f32 = 880.0;
 pub const PANEL_HEIGHT: f32 = 640.0;
@@ -49,16 +52,16 @@ pub struct AgentSettingsPanel<'a> {
     pub id: WidgetId,
     pub theme: Theme,
     pub settings: AgentSettings,
-    document: &'a Document,
+    ui: &'a EditorUiState,
 }
 
 impl<'a> AgentSettingsPanel<'a> {
-    pub fn for_document(doc: &'a Document) -> Self {
+    pub fn for_editor(state: &'a EditorState) -> Self {
         Self {
             id: WidgetId::new(5200),
-            theme: doc.theme(),
-            settings: doc.ui.agent_settings,
-            document: doc,
+            theme: theme_for(&state.editor_ui),
+            settings: state.editor_ui.agent_settings,
+            ui: &state.editor_ui,
         }
     }
 
@@ -201,7 +204,7 @@ impl<'a> Widget for AgentSettingsPanel<'a> {
     }
 
     fn paint(&self, cx: &mut PaintCx<'_>, rect: Rect) {
-        paint_panel(cx, &self.theme, &self.settings, rect, self.document);
+        paint_panel(cx, &self.theme, &self.settings, rect, self.ui);
     }
 
     fn access_node(&self) -> accesskit::Node {
@@ -216,21 +219,21 @@ fn paint_panel(
     theme: &Theme,
     settings: &AgentSettings,
     panel: Rect,
-    _doc: &Document,
+    _ui: &EditorUiState,
 ) {
     cx.backend.fill_round_rect(panel, 14.0, theme.card);
     cx.backend.stroke_round_rect(panel, 14.0, theme.border, 1.0);
-    paint_sidebar(cx, theme, settings, _doc, panel);
+    paint_sidebar(cx, theme, settings, _ui, panel);
     paint_close(cx, theme, panel);
     let content_rect = content_rect(panel);
     cx.backend.save();
     cx.backend.clip_rect(content_rect);
     cx.backend.translate(Point2D::new(0.0, -settings.scroll_y));
     match settings.tab {
-        AgentSettingsTab::Agents => paint_agents_tab(cx, theme, settings, _doc, content_rect),
-        AgentSettingsTab::Mcp => agent_settings_mcp::paint_mcp_tab(cx, theme, settings, _doc, content_rect),
-        AgentSettingsTab::Images => agent_settings_images::paint_images_tab(cx, theme, settings, _doc, content_rect),
-        AgentSettingsTab::System => agent_settings_system::paint_system_tab(cx, theme, settings, _doc, content_rect),
+        AgentSettingsTab::Agents => paint_agents_tab(cx, theme, settings, _ui, content_rect),
+        AgentSettingsTab::Mcp => agent_settings_mcp::paint_mcp_tab(cx, theme, settings, _ui, content_rect),
+        AgentSettingsTab::Images => agent_settings_images::paint_images_tab(cx, theme, settings, _ui, content_rect),
+        AgentSettingsTab::System => agent_settings_system::paint_system_tab(cx, theme, settings, _ui, content_rect),
     }
     cx.backend.restore();
 }
@@ -239,7 +242,7 @@ fn paint_sidebar(
     cx: &mut PaintCx<'_>,
     theme: &Theme,
     settings: &AgentSettings,
-    doc: &Document,
+    ui: &EditorUiState,
     panel: Rect,
 ) {
     let sidebar = Rect {
@@ -254,7 +257,7 @@ fn paint_sidebar(
         theme.border,
     );
     let title = TextLayout::single_run(
-        t_settings(doc, "settings.title"),
+        t_settings(ui, "settings.title"),
         "system-ui",
         18.0,
         to_jian(theme.foreground),
@@ -293,7 +296,7 @@ fn paint_sidebar(
             1.6,
         );
         let label = TextLayout::single_run(
-            tab_i18n_label(doc, *tab),
+            tab_i18n_label(ui, *tab),
             "system-ui",
             14.0,
             to_jian(icon_color),
@@ -320,15 +323,15 @@ fn paint_agents_tab(
     cx: &mut PaintCx<'_>,
     theme: &Theme,
     settings: &AgentSettings,
-    doc: &Document,
+    ui: &EditorUiState,
     content: Rect,
 ) {
     let mut y = content.origin.y + 12.0;
     y = paint_section_header_inset(
         cx,
         theme,
-        t_settings(doc, "settings.agents.builtin"),
-        t_settings(doc, "settings.agents.addProvider"),
+        t_settings(ui, "settings.agents.builtin"),
+        t_settings(ui, "settings.agents.addProvider"),
         content.origin.x,
         y,
         content.size.x,
@@ -337,14 +340,14 @@ fn paint_agents_tab(
     y = paint_section_subtitle(
         cx,
         theme,
-        t_settings(doc, "settings.agents.builtinSubtitle"),
+        t_settings(ui, "settings.agents.builtinSubtitle"),
         content.origin.x,
         y,
     );
     y = paint_empty_hint(
         cx,
         theme,
-        t_settings(doc, "settings.agents.builtinEmpty"),
+        t_settings(ui, "settings.agents.builtinEmpty"),
         content.origin.x,
         y,
         content.size.x,
@@ -354,8 +357,8 @@ fn paint_agents_tab(
     y = paint_section_header_inset(
         cx,
         theme,
-        t_settings(doc, "settings.agents.acp"),
-        t_settings(doc, "settings.agents.addAcp"),
+        t_settings(ui, "settings.agents.acp"),
+        t_settings(ui, "settings.agents.addAcp"),
         content.origin.x,
         y,
         content.size.x,
@@ -364,14 +367,14 @@ fn paint_agents_tab(
     y = paint_section_subtitle(
         cx,
         theme,
-        t_settings(doc, "settings.agents.acpSubtitle"),
+        t_settings(ui, "settings.agents.acpSubtitle"),
         content.origin.x,
         y,
     );
     y = paint_empty_hint(
         cx,
         theme,
-        t_settings(doc, "settings.agents.acpEmpty"),
+        t_settings(ui, "settings.agents.acpEmpty"),
         content.origin.x,
         y,
         content.size.x,
@@ -381,7 +384,7 @@ fn paint_agents_tab(
     y = paint_section_header(
         cx,
         theme,
-        t_settings(doc, "settings.agents.title"),
+        t_settings(ui, "settings.agents.title"),
         "",
         content.origin.x,
         y,
@@ -389,11 +392,11 @@ fn paint_agents_tab(
     );
     for (i, provider) in AgentProvider::ALL.iter().enumerate() {
         let card = agent_card_rect_at(content.origin.x, y, content.size.x);
-        paint_agent_card(cx, theme, settings, doc, *provider, card, i);
+        paint_agent_card(cx, theme, settings, ui, *provider, card, i);
         y += CARD_HEIGHT + CARD_GAP;
         if matches!(provider, AgentProvider::ClaudeCode) && settings.connected[i] {
             let hint = TextLayout::single_run(
-                t_settings(doc, "settings.agents.claudeHint"),
+                t_settings(ui, "settings.agents.claudeHint"),
                 "system-ui",
                 12.0,
                 to_jian(theme.muted_foreground),
@@ -493,7 +496,7 @@ fn paint_agent_card(
     cx: &mut PaintCx<'_>,
     theme: &Theme,
     settings: &AgentSettings,
-    doc: &Document,
+    ui: &EditorUiState,
     provider: AgentProvider,
     card: Rect,
     index: usize,
@@ -565,7 +568,7 @@ fn paint_agent_card(
     cx.backend
         .draw_text(&name, Point2D::new(text_x, card.origin.y + 22.0));
     let connected = settings.connected[index];
-    let sub_localized = t_settings(doc, provider.subtitle_key());
+    let sub_localized = t_settings(ui, provider.subtitle_key());
     let (sub_color, sub_text) = if connected {
         (
             Color {
@@ -595,7 +598,7 @@ fn paint_agent_card(
             let red = Color { r: 0.93, g: 0.30, b: 0.30, a: 1.0 };
             cx.backend.fill_round_rect(btn, 6.0, theme.muted);
             cx.backend.stroke_round_rect(btn, 6.0, red, 1.0);
-            let label = t_settings(doc, "settings.agents.disconnect");
+            let label = t_settings(ui, "settings.agents.disconnect");
             let lw = cx.backend.measure_text(label, 12.0);
             let layout = TextLayout::single_run(
                 label,
@@ -612,7 +615,7 @@ fn paint_agent_card(
     } else {
         let btn = connect_btn_rect_at(card);
         cx.backend.fill_round_rect(btn, 5.0, theme.primary);
-        let label = t_settings(doc, "settings.agents.connect");
+        let label = t_settings(ui, "settings.agents.connect");
         let lw = cx.backend.measure_text(label, 12.0);
         let layout = TextLayout::single_run(
             label,
@@ -631,12 +634,12 @@ fn paint_agent_card(
 const DISCONNECT_BTN_W: f32 = 96.0;
 const TOP_HEADER_RIGHT_INSET: f32 = 12.0;
 
-fn tab_i18n_label(doc: &Document, tab: AgentSettingsTab) -> &'static str {
+fn tab_i18n_label(ui: &EditorUiState, tab: AgentSettingsTab) -> &'static str {
     match tab {
-        AgentSettingsTab::Agents => t_settings(doc, "settings.tab.agents"),
-        AgentSettingsTab::Mcp => t_settings(doc, "settings.tab.mcp"),
-        AgentSettingsTab::Images => t_settings(doc, "settings.tab.images"),
-        AgentSettingsTab::System => t_settings(doc, "settings.tab.system"),
+        AgentSettingsTab::Agents => t_settings(ui, "settings.tab.agents"),
+        AgentSettingsTab::Mcp => t_settings(ui, "settings.tab.mcp"),
+        AgentSettingsTab::Images => t_settings(ui, "settings.tab.images"),
+        AgentSettingsTab::System => t_settings(ui, "settings.tab.system"),
     }
 }
 
@@ -752,6 +755,6 @@ fn to_jian(c: Color) -> jian_core::scene::Color {
     jian_core::scene::Color::rgba(ch(c.r), ch(c.g), ch(c.b), ch(c.a))
 }
 
-pub fn drag_for_hit(_hit: AgentSettingsHit) -> Option<crate::document::AgentSettingsDrag> {
+pub fn drag_for_hit(_hit: AgentSettingsHit) -> Option<op_editor_core::agent_settings::AgentSettingsDrag> {
     None
 }

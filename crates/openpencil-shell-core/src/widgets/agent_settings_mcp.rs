@@ -1,6 +1,7 @@
 //! MCP tab of the settings modal.
 
-use crate::document::{AgentSettings, Document, McpCli, SettingsFocus};
+use op_editor_core::agent_settings::{AgentSettings, McpCli, SettingsFocus};
+use op_editor_core::editor_ui_state::EditorUiState;
 use crate::theme::Theme;
 use crate::widgets::agent_settings_i18n::t as t_settings;
 use crate::widgets::PaintCx;
@@ -112,11 +113,11 @@ pub(super) fn paint_mcp_tab(
     cx: &mut PaintCx<'_>,
     theme: &Theme,
     settings: &AgentSettings,
-    doc: &Document,
+    ui: &EditorUiState,
     content: Rect,
 ) {
     let title = TextLayout::single_run(
-        t_settings(doc, "settings.mcp.server"),
+        t_settings(ui, "settings.mcp.server"),
         "system-ui",
         14.0,
         to_jian(theme.foreground),
@@ -126,11 +127,11 @@ pub(super) fn paint_mcp_tab(
         &title,
         Point2D::new(content.origin.x, content.origin.y + 20.0),
     );
-    paint_server_card(cx, theme, settings, doc, content);
+    paint_server_card(cx, theme, settings, ui, content);
 
     let mut y = server_card_top(content) + SERVER_CARD_H + SECTION_GAP;
     let section_title = TextLayout::single_run(
-        t_settings(doc, "settings.mcp.terminalIntegrations"),
+        t_settings(ui, "settings.mcp.terminalIntegrations"),
         "system-ui",
         13.0,
         to_jian(theme.foreground),
@@ -140,7 +141,7 @@ pub(super) fn paint_mcp_tab(
         .draw_text(&section_title, Point2D::new(content.origin.x, y + 16.0));
     y += SECTION_TITLE_H;
     let s1 = TextLayout::single_run(
-        t_settings(doc, "settings.mcp.terminalSubtitle1"),
+        t_settings(ui, "settings.mcp.terminalSubtitle1"),
         "system-ui",
         11.0,
         to_jian(theme.muted_foreground),
@@ -149,7 +150,7 @@ pub(super) fn paint_mcp_tab(
     cx.backend.draw_text(&s1, Point2D::new(content.origin.x, y + 13.0));
     y += SUBTITLE_H;
     let s2 = TextLayout::single_run(
-        t_settings(doc, "settings.mcp.terminalSubtitle2"),
+        t_settings(ui, "settings.mcp.terminalSubtitle2"),
         "system-ui",
         11.0,
         to_jian(theme.muted_foreground),
@@ -167,7 +168,7 @@ fn paint_server_card(
     cx: &mut PaintCx<'_>,
     theme: &Theme,
     settings: &AgentSettings,
-    doc: &Document,
+    ui: &EditorUiState,
     content: Rect,
 ) {
     let card = server_card_rect(content);
@@ -186,9 +187,9 @@ fn paint_server_card(
     };
     cx.backend.fill_oval(dot, dot_color);
     let status_text = if running {
-        t_settings(doc, "settings.mcp.running")
+        t_settings(ui, "settings.mcp.running")
     } else {
-        t_settings(doc, "settings.mcp.stopped")
+        t_settings(ui, "settings.mcp.stopped")
     };
     let status = TextLayout::single_run(
         status_text,
@@ -201,7 +202,7 @@ fn paint_server_card(
         .draw_text(&status, Point2D::new(card.origin.x + 32.0, mid_y + 5.0));
 
     let btn = server_button_rect(content);
-    let port_label_text = t_settings(doc, "settings.mcp.port");
+    let port_label_text = t_settings(ui, "settings.mcp.port");
     let port_label_w = cx.backend.measure_text(port_label_text, 11.0);
     let port_field_x = btn.origin.x - 8.0 - PORT_FIELD_W;
     let port_label = TextLayout::single_run(
@@ -218,7 +219,7 @@ fn paint_server_card(
     let port_field = port_field_rect(content);
     let focused = matches!(settings.focus, Some(SettingsFocus::McpPort));
     let port_str = if focused {
-        doc.ui.settings_input_draft.clone()
+        ui.settings_input_draft.clone()
     } else {
         format!("{}", settings.mcp_server.port)
     };
@@ -258,9 +259,9 @@ fn paint_server_card(
         cx.backend.stroke_round_rect(btn, 6.0, theme.border, 1.0);
     }
     let btn_label = if running {
-        t_settings(doc, "settings.mcp.stop")
+        t_settings(ui, "settings.mcp.stop")
     } else {
-        t_settings(doc, "settings.mcp.start")
+        t_settings(ui, "settings.mcp.start")
     };
     let btn_label_w = cx.backend.measure_text(btn_label, 12.0);
     let lay = TextLayout::single_run(

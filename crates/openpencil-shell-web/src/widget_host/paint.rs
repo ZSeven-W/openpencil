@@ -248,7 +248,7 @@ impl WidgetHost {
         // Settings modal — Cmd+, overlay, top-most.
         if self.paint_doc.ui.agent_settings_open {
             use openpencil_shell_core::widgets::agent_settings_panel::AgentSettingsPanel;
-            let panel = AgentSettingsPanel::for_document(&self.paint_doc);
+            let panel = AgentSettingsPanel::for_editor(&self.editor_state);
             let panel_rect = panel.rect(viewport_width, viewport_height);
             // Dim scrim behind the modal so the underlying canvas
             // reads as "blocked." Matches the native shell's chrome.

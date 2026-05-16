@@ -134,7 +134,7 @@ impl WidgetHostNative {
         self.refresh_paint_doc();
         let point = Point2D::new(x, y);
         let (new_nav, new_card) = {
-            let panel = AgentSettingsPanel::for_document(&self.paint_doc);
+            let panel = AgentSettingsPanel::for_editor(&self.editor_state);
             let panel_rect = panel.rect(self.last_viewport_w, self.last_viewport_h);
             let nav = panel.nav_at(panel_rect, point);
             // `tab` is op-editor-core's `AgentSettingsTab`.
@@ -148,12 +148,10 @@ impl WidgetHostNative {
             };
             (nav, card)
         };
-        // `nav_at` returns a shell-core `AgentSettingsTab` option;
-        // translate to op-editor-core before comparing / storing.
-        let new_nav_ec = new_nav.map(op_pen_loader::rev::agent_settings_tab);
+        // `nav_at` returns op-editor-core's `AgentSettingsTab`.
         let mut changed = false;
-        if new_nav_ec != self.editor_state.editor_ui.agent_settings.hover_nav {
-            self.editor_state.editor_ui.agent_settings.hover_nav = new_nav_ec;
+        if new_nav != self.editor_state.editor_ui.agent_settings.hover_nav {
+            self.editor_state.editor_ui.agent_settings.hover_nav = new_nav;
             changed = true;
         }
         if let Some(v) = new_card {

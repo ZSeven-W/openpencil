@@ -41,7 +41,7 @@ impl WidgetHostNative {
         if self.editor_state.editor_ui.agent_settings_open {
             use openpencil_shell_core::widgets::agent_settings_panel::AgentSettingsPanel;
             self.refresh_paint_doc();
-            let panel = AgentSettingsPanel::for_document(&self.paint_doc);
+            let panel = AgentSettingsPanel::for_editor(&self.editor_state);
             let panel_rect = panel.rect(viewport_width, viewport_height);
             if panel_rect.origin.x <= x
                 && x <= panel_rect.origin.x + panel_rect.size.x
@@ -83,7 +83,7 @@ impl WidgetHostNative {
         if self.editor_state.editor_ui.agent_settings_open {
             use openpencil_shell_core::widgets::agent_settings_panel::AgentSettingsPanel;
             self.refresh_paint_doc();
-            let panel = AgentSettingsPanel::for_document(&self.paint_doc);
+            let panel = AgentSettingsPanel::for_editor(&self.editor_state);
             let panel_rect = panel.rect(viewport_width, viewport_height);
             if panel_rect.origin.x <= x
                 && x <= panel_rect.origin.x + panel_rect.size.x

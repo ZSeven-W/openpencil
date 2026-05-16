@@ -10,7 +10,8 @@
 //! lands, this can grow back into a real toggle + check-now
 //! button + `ToggleAutoUpdate` hit.
 
-use crate::document::{AgentSettings, Document};
+use op_editor_core::agent_settings::AgentSettings;
+use op_editor_core::editor_ui_state::EditorUiState;
 use crate::theme::Theme;
 use crate::widgets::agent_settings_i18n::t as t_settings;
 use crate::widgets::PaintCx;
@@ -41,11 +42,11 @@ pub(super) fn paint_system_tab(
     cx: &mut PaintCx<'_>,
     theme: &Theme,
     _settings: &AgentSettings,
-    doc: &Document,
+    ui: &EditorUiState,
     content: Rect,
 ) {
     let title = TextLayout::single_run(
-        t_settings(doc, "settings.system.title"),
+        t_settings(ui, "settings.system.title"),
         "system-ui",
         15.0,
         to_jian(theme.foreground),
@@ -76,7 +77,7 @@ pub(super) fn paint_system_tab(
         .fill_oval(dot_rect, UP_TO_DATE_GREEN);
     // "Auto-update" header + "Up to date" status, side-by-side.
     let label_layout = TextLayout::single_run(
-        t_settings(doc, "settings.system.autoUpdate"),
+        t_settings(ui, "settings.system.autoUpdate"),
         "system-ui",
         13.0,
         to_jian(theme.foreground),
@@ -87,7 +88,7 @@ pub(super) fn paint_system_tab(
         Point2D::new(card.origin.x + 38.0, card.origin.y + 24.0),
     );
     let status_layout = TextLayout::single_run(
-        t_settings(doc, "settings.system.upToDate"),
+        t_settings(ui, "settings.system.upToDate"),
         "system-ui",
         12.0,
         to_jian(UP_TO_DATE_GREEN),
@@ -101,7 +102,7 @@ pub(super) fn paint_system_tab(
         Point2D::new(card.origin.x + card.size.x - 96.0, card.origin.y + 24.0),
     );
     let desc_layout = TextLayout::single_run(
-        t_settings(doc, "settings.system.upToDateDescription"),
+        t_settings(ui, "settings.system.upToDateDescription"),
         "system-ui",
         11.0,
         to_jian(theme.muted_foreground),
@@ -115,7 +116,7 @@ pub(super) fn paint_system_tab(
     // stays as the explanatory subtitle so anyone wondering "why
     // no Check button?" sees the answer in-place.
     let sub_layout = TextLayout::single_run(
-        t_settings(doc, "settings.system.autoUpdateUnavailable"),
+        t_settings(ui, "settings.system.autoUpdateUnavailable"),
         "system-ui",
         10.0,
         to_jian(theme.muted_foreground),

@@ -9,13 +9,13 @@
 //! locale tables grow `settings.*` keys, this file can collapse
 //! into per-locale `lookup` calls.
 
-use crate::document::{Document, Locale};
+use op_editor_core::editor_ui_state::{EditorUiState, Locale};
 
 /// Pick the English or simplified-Chinese variant of `key` for the
-/// document's active locale; locales other than zh_cn/zh_tw fall
+/// editor's active locale; locales other than zh_cn/zh_tw fall
 /// back to English. Unknown keys return `key` itself so missing
 /// strings stay visible in dev builds.
-pub fn t(doc: &Document, key: &'static str) -> &'static str {
+pub fn t(ui: &EditorUiState, key: &'static str) -> &'static str {
     let (en, zh) = match key {
         "settings.title" => ("Settings", "设置"),
         "settings.tab.agents" => ("Agents", "Agents"),
@@ -103,7 +103,7 @@ pub fn t(doc: &Document, key: &'static str) -> &'static str {
         "settings.system.checkForUpdates" => ("Check for updates", "检查更新"),
         _ => return key,
     };
-    match doc.ui.locale {
+    match ui.locale {
         Locale::ZhCn | Locale::ZhTw => zh,
         _ => en,
     }
