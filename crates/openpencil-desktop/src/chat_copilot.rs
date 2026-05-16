@@ -1,61 +1,55 @@
-//! GitHub Copilot CLI IPC bridge — adapts `copilot_sdk` (the
-//! in-workspace fork of copilot-community-sdk/copilot-sdk-rust) to
-//! the shell-core [`ChatProvider`] trait.
+//! GitHub Copilot CLI bridge — adapts the official
+//! `github-copilot-sdk` to the shell-core [`ChatProvider`] trait.
 //!
-//! Wire: the Copilot CLI speaks LSP-style Content-Length-framed
-//! JSON-RPC over stdio. `copilot_sdk::Client` owns the long-lived
-//! subprocess; `Session` lives inside the client and is reused
-//! across turns (multi-turn conversation history is the client's
-//! responsibility, not ours). Our bridge keeps one `Client` + one
-//! `Session` per-`CopilotProvider`, starts them lazily on first
-//! `send`, and translates SDK events → `ChatDelta`:
+//! The SDK manages the `copilot --server --stdio` process and
+//! speaks `Content-Length`-framed JSON-RPC. Events reach us
+//! through a [`SessionHandler`] callback rather than a broadcast
+//! subscription: `on_event` forwards each `SessionEvent` into the
+//! turn's `ChatDelta` channel.
 //!
-//! - `AssistantMessageDelta { delta_content }` → `TextDelta`
-//! - `AssistantReasoningDelta { ... }` → `Thinking`
-//! - `ToolExecutionStart { tool_name, ... }` → `ToolUse`
-//! - `SessionError` / `Abort` → `Error` + `Done { Aborted }`
-//! - `AssistantTurnEnd` or `SessionIdle` → `Done { EndTurn }`
+//! One client + session is started per `send` (the handler binds
+//! the turn's channel at session-creation time, so it can't be
+//! reused across turns). The ~1 s CLI spawn per turn is the cost
+//! of that simplicity; session reuse with a swappable sink is a
+//! possible later optimisation.
 //!
-//! `AssistantMessage` (the final batched message) is intentionally
-//! ignored when deltas are streaming — emitting both would duplicate
-//! the text in the chat panel. Future work: dedup heuristics that
-//! degrade gracefully when delta events were missed.
+//! Event mapping:
+//! - `assistant.message_delta` (`deltaContent`) → `TextDelta`
+//! - `session.error` (`message`) → `Error`
+//! - turn completion (`send_and_wait` returns) → `Done { EndTurn }`
 
 use std::sync::Arc;
+use std::time::Duration;
 
-use copilot_sdk::{Client, Session, SessionConfig, SessionEventData};
+use async_trait::async_trait;
+use github_copilot_sdk::handler::{
+    HandlerEvent, HandlerResponse, PermissionResult, SessionHandler,
+};
+use github_copilot_sdk::types::{MessageOptions, SessionConfig, SessionEvent};
+use github_copilot_sdk::{Client, ClientOptions};
 use openpencil_shell_core::chat_provider::{
     ChatDelta, ChatProvider, ChatRequest, StopReason,
 };
-use tokio::sync::{mpsc, Mutex};
+use tokio::sync::mpsc;
 
 use crate::chat_runtime::{shared_runtime, BlockingRecvIter};
 
-/// `ChatProvider` impl backed by the GitHub Copilot CLI via
-/// `copilot-sdk`. The Client + Session are constructed once on first
-/// `send` and reused across subsequent calls (so the model sees
-/// multi-turn history through the SDK's session abstraction).
+/// How long to let a single Copilot turn run before the SDK times
+/// the wait out.
+const COPILOT_TURN_TIMEOUT: Duration = Duration::from_secs(180);
+
+/// `ChatProvider` impl backed by the GitHub Copilot CLI through the
+/// official `github-copilot-sdk`.
 pub struct CopilotProvider {
-    /// Lazy-init: `None` until the first `send` constructs the
-    /// client. Boxed `Mutex` so multiple concurrent `send` calls
-    /// race onto the init path safely (only one wins).
-    client_session: Arc<Mutex<Option<Arc<ClientSession>>>>,
     label: String,
 }
 
-struct ClientSession {
-    _client: Arc<Client>, // kept alive for the duration of the session
-    session: Arc<Session>,
-}
-
 impl CopilotProvider {
-    /// Build a Copilot provider that picks up the `gh copilot` CLI
-    /// from PATH (or the SDK's fallback search paths). The Client +
-    /// Session don't actually spin up until the first `send`.
+    /// Build a Copilot provider. The CLI process is not spawned
+    /// until the first `send`.
     #[allow(dead_code)]
     pub fn new() -> Self {
         Self {
-            client_session: Arc::new(Mutex::new(None)),
             label: "GitHub Copilot".into(),
         }
     }
@@ -77,135 +71,98 @@ impl ChatProvider for CopilotProvider {
         request: ChatRequest,
     ) -> Box<dyn Iterator<Item = ChatDelta> + Send> {
         let prompt = request.user_message;
-        let slot = self.client_session.clone();
         let (tx, rx) = mpsc::channel::<ChatDelta>(64);
         shared_runtime().spawn(async move {
-            // Resolve (or create) the long-lived Client + Session.
-            let cs = match ensure_session(&slot).await {
-                Ok(cs) => cs,
+            match run_turn(prompt, tx.clone()).await {
+                Ok(()) => {
+                    let _ = tx
+                        .send(ChatDelta::Done {
+                            stop_reason: StopReason::EndTurn,
+                        })
+                        .await;
+                }
                 Err(e) => {
-                    let _ = tx.send(ChatDelta::Error(format!("copilot init: {e}"))).await;
+                    let _ = tx.send(ChatDelta::Error(format!("copilot: {e}"))).await;
                     let _ = tx
                         .send(ChatDelta::Done {
                             stop_reason: StopReason::Aborted,
                         })
                         .await;
-                    return;
                 }
-            };
-
-            let session = cs.session.clone();
-            // Subscribe BEFORE sending so we don't miss the first
-            // delta (the SDK fires events on a broadcast channel).
-            let mut events = session.subscribe();
-
-            if let Err(e) = session.send(prompt).await {
-                let _ = tx.send(ChatDelta::Error(format!("copilot send: {e}"))).await;
-                let _ = tx
-                    .send(ChatDelta::Done {
-                        stop_reason: StopReason::Aborted,
-                    })
-                    .await;
-                return;
-            }
-
-            let mut emitted_done = false;
-            loop {
-                if tx.is_closed() {
-                    break;
-                }
-                let event = match events.recv().await {
-                    Ok(e) => e,
-                    Err(_) => break, // subscription closed
-                };
-                let outcome = dispatch_event(event.data, &tx).await;
-                match outcome {
-                    DispatchOutcome::Continue => {}
-                    DispatchOutcome::Done(reason) => {
-                        let _ = tx.send(ChatDelta::Done { stop_reason: reason }).await;
-                        emitted_done = true;
-                        break;
-                    }
-                    DispatchOutcome::Errored(message) => {
-                        let _ = tx.send(ChatDelta::Error(message)).await;
-                        let _ = tx
-                            .send(ChatDelta::Done {
-                                stop_reason: StopReason::Aborted,
-                            })
-                            .await;
-                        emitted_done = true;
-                        break;
-                    }
-                }
-            }
-            if !emitted_done {
-                let _ = tx
-                    .send(ChatDelta::Done {
-                        stop_reason: StopReason::EndTurn,
-                    })
-                    .await;
             }
         });
         Box::new(BlockingRecvIter::new(rx))
     }
 }
 
-async fn ensure_session(
-    slot: &Arc<Mutex<Option<Arc<ClientSession>>>>,
-) -> copilot_sdk::Result<Arc<ClientSession>> {
-    let mut guard = slot.lock().await;
-    if let Some(cs) = guard.as_ref() {
-        return Ok(cs.clone());
+/// Run one Copilot turn: start the CLI, create a streaming session
+/// whose handler funnels events into `tx`, send the prompt, wait
+/// for completion, then tear the session + client down.
+async fn run_turn(
+    prompt: String,
+    tx: mpsc::Sender<ChatDelta>,
+) -> Result<(), github_copilot_sdk::Error> {
+    let client = Client::start(ClientOptions::default()).await?;
+    let mut config = SessionConfig::default();
+    config.streaming = Some(true);
+    let config = config.with_handler(Arc::new(StreamHandler { tx }));
+    let session = client.create_session(config).await?;
+    session
+        .send_and_wait(
+            MessageOptions::new(prompt).with_wait_timeout(COPILOT_TURN_TIMEOUT),
+        )
+        .await?;
+    // Best-effort teardown — a failed cleanup must not mask a
+    // successful turn.
+    session.destroy().await.ok();
+    client.stop().await.ok();
+    Ok(())
+}
+
+/// `SessionHandler` that forwards one turn's session events into a
+/// `ChatDelta` channel and auto-approves permission prompts so an
+/// unattended chat turn isn't blocked waiting for a click.
+struct StreamHandler {
+    tx: mpsc::Sender<ChatDelta>,
+}
+
+#[async_trait]
+impl SessionHandler for StreamHandler {
+    async fn on_event(&self, event: HandlerEvent) -> HandlerResponse {
+        match event {
+            HandlerEvent::SessionEvent { event, .. } => {
+                forward_session_event(&event, &self.tx).await;
+                HandlerResponse::Ok
+            }
+            HandlerEvent::PermissionRequest { .. } => {
+                HandlerResponse::Permission(PermissionResult::Approved)
+            }
+            _ => HandlerResponse::Ok,
+        }
     }
-    let client = Arc::new(Client::builder().build()?);
-    client.start().await?;
-    let session = client.create_session(SessionConfig::default()).await?;
-    let cs = Arc::new(ClientSession {
-        _client: client,
-        session,
-    });
-    *guard = Some(cs.clone());
-    Ok(cs)
 }
 
-enum DispatchOutcome {
-    Continue,
-    Done(StopReason),
-    Errored(String),
-}
-
-async fn dispatch_event(data: SessionEventData, tx: &mpsc::Sender<ChatDelta>) -> DispatchOutcome {
-    match data {
-        SessionEventData::AssistantMessageDelta(d) => {
-            let _ = tx.send(ChatDelta::TextDelta(d.delta_content)).await;
-            DispatchOutcome::Continue
+/// Translate one `SessionEvent` into a `ChatDelta`. Unhandled
+/// event types are dropped — only streamed text + errors surface
+/// to the chat widget today.
+async fn forward_session_event(event: &SessionEvent, tx: &mpsc::Sender<ChatDelta>) {
+    match event.event_type.as_str() {
+        "assistant.message_delta" => {
+            if let Some(text) = event.data.get("deltaContent").and_then(|c| c.as_str())
+            {
+                let _ = tx.send(ChatDelta::TextDelta(text.to_string())).await;
+            }
         }
-        SessionEventData::AssistantReasoningDelta(d) => {
-            let _ = tx.send(ChatDelta::Thinking(d.delta_content)).await;
-            DispatchOutcome::Continue
+        "session.error" => {
+            let msg = event
+                .data
+                .get("message")
+                .and_then(|m| m.as_str())
+                .unwrap_or("unknown error")
+                .to_string();
+            let _ = tx.send(ChatDelta::Error(msg)).await;
         }
-        SessionEventData::ToolExecutionStart(t) => {
-            let args = serde_json::to_string(&t.arguments)
-                .unwrap_or_else(|_| "{}".into());
-            let _ = tx
-                .send(ChatDelta::ToolUse {
-                    name: t.tool_name,
-                    args,
-                })
-                .await;
-            DispatchOutcome::Continue
-        }
-        SessionEventData::AssistantTurnEnd(_) | SessionEventData::SessionIdle(_) => {
-            DispatchOutcome::Done(StopReason::EndTurn)
-        }
-        SessionEventData::SessionError(e) => DispatchOutcome::Errored(e.message),
-        SessionEventData::Abort(_) => DispatchOutcome::Done(StopReason::Aborted),
-        // Other event types (turn start, intent, usage, hooks,
-        // tool progress / complete, custom agents, etc.) aren't
-        // surfaced to the chat widget today. Adding them is a
-        // matter of taste — the SDK keeps the original payload so
-        // we can promote any of them later.
-        _ => DispatchOutcome::Continue,
+        _ => {}
     }
 }
 

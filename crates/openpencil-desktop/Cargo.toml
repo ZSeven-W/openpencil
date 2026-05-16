@@ -83,11 +83,12 @@ agent = { path = "../../../agent-rs/crates/agent", default-features = false }
 # stream-json message parser that `src/chat_claude.rs` wraps as a
 # `ChatProvider`. Default features (no rmcp) keep the dep set tight.
 anthropic-agent-sdk = { path = "../anthropic-agent-sdk" }
-# Forked from copilot-community-sdk/copilot-sdk-rust — same story:
-# in-workspace fork, OP-owned, evolves separately from upstream.
-# Powers the GitHub Copilot CLI bridge via Content-Length-framed
-# JSON-RPC.
-copilot-sdk = { path = "../copilot-sdk" }
+# Official GitHub Copilot CLI SDK (github/copilot-sdk). Replaces
+# the former in-workspace fork. Drives the Copilot chat bridge in
+# `src/chat_copilot.rs` over the CLI's `--server --stdio` JSON-RPC
+# transport. Requires Rust 1.94 / edition 2024 (the workspace
+# toolchain was bumped for it).
+github-copilot-sdk = "0.1"
 async-trait = "0.1"
 # HTTP client for the Codex / OpenCode bridges. They run as local
 # HTTP servers (spawned via `<bin> serve`) and we POST JSON requests
