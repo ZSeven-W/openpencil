@@ -7,7 +7,10 @@
 //! editor-only state (selection, tool, viewport, history, transient
 //! UI drafts).
 
+pub mod align;
 pub mod clipboard;
+pub mod color_picker;
+pub mod fills;
 pub mod geometry;
 pub mod grouping;
 pub mod history;
@@ -17,10 +20,12 @@ pub mod page_mutators;
 pub mod pen;
 pub mod pen_node_ext;
 pub mod render_backend;
+pub mod rename;
 pub mod selection;
 pub mod state;
 pub mod tool;
 pub mod ui_draft;
+pub mod variables;
 pub mod viewport;
 pub mod walkers;
 
@@ -33,6 +38,9 @@ mod tests_mutators;
 #[cfg(test)]
 mod tests_pages;
 
+pub use align::AlignAction;
+pub use color_picker::{hsv_to_rgb, parse_hex_rgb, rgb_to_hex, rgb_to_hsv};
+pub use fills::{first_solid_fill_hex, first_solid_stroke_hex};
 pub use geometry::{aggregate_bounds, own_bounds, union_aggregate_bounds, DocRect};
 pub use history::{EditorSnapshot, History, HISTORY_CAP};
 pub use node_id::NodeId;
@@ -42,7 +50,8 @@ pub use selection::SelectionState;
 pub use state::EditorState;
 pub use tool::Tool;
 pub use ui_draft::{
-    ColorTarget, LayerContextTarget, LayerRenameState, PropertyFocus, UiDraftState, VariableUiState,
+    ColorPickerDrag, ColorPickerState, ColorTarget, LayerContextTarget, LayerRenameState,
+    PropertyFocus, UiDraftState, VariableUiState,
 };
 pub use viewport::Viewport;
 pub use walkers::ReorderDirection;
