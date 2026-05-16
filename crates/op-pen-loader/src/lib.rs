@@ -33,11 +33,13 @@ pub mod variables;
 /// into a shell-core `Document`.
 pub use payload::pen_document_to_document;
 
-/// Rust-reorg step 1: build a paint-only, layout-resolved
-/// `LayoutScene` from an `EditorState`. Reuses the same jian
-/// `LayoutEngine` + `SkiaMeasure` flex pass as `pen_document_to_document`
-/// and resolves variable `$ref` fills against the editor's
-/// variables + active theme.
+/// Build a paint-only, layout-resolved `LayoutScene` from an
+/// `EditorState`. Reuses the same jian `LayoutEngine` + `SkiaMeasure`
+/// flex pass as the canonical `.op` loader (via
+/// [`pen_document_to_payload`]) and resolves variable `$ref` fills
+/// against the editor's variables + active theme. Builds the scene
+/// directly from the layout-resolved `DocPayload` — no intermediate
+/// shell-core `Document`.
 pub use layout_scene::editor_state_to_layout_scene;
 
 // The `EditorState` → paint-`Document` type bridge. `op-editor-core`
