@@ -23,11 +23,47 @@
 //! Host calls [`PropertyPanel::for_selection`] which returns
 //! `Option<Self>`; `None` = panel hidden entirely.
 
-use crate::document::{Document, Node, PropertyFocus, Stroke};
+use crate::document::{NodeKind, PropertyFocus, Stroke};
 use crate::theme::Theme;
+use crate::widgets::editor_state_ext::{
+    doc_export_format, doc_fill_type, doc_flex_layout, doc_property_focus, doc_property_tab,
+    theme_for,
+};
 use crate::widgets::property_panel_sections as sections;
 use crate::widgets::{LayoutBox, LayoutCx, PaintCx, Widget, WidgetId};
 use crate::{Color, Point2D, Rect, TextLayout};
+
+use jian_ops_schema::node::PenNode;
+use op_editor_core::pen_node_ext::PenNodeExt;
+use op_editor_core::EditorState;
+
+/// Map a `PenNode` variant onto shell-core's `document::NodeKind`,
+/// which drives the per-kind section-capability filtering. The
+/// canonical schema's extra variants degrade onto the closest
+/// shell-core kind (TextInput → Text; Image / IconFont / Ref →
+/// `Other(tag)` so the section mask treats them structurally).
+fn node_kind_of(node: &PenNode) -> NodeKind {
+    match node {
+        PenNode::Frame(_) => NodeKind::Frame,
+        PenNode::Group(_) => NodeKind::Group,
+        PenNode::Rectangle(_) => NodeKind::Rect,
+        PenNode::Ellipse(_) => NodeKind::Ellipse,
+        PenNode::Polygon(_) => NodeKind::Polygon,
+        PenNode::Line(_) => NodeKind::Line,
+        PenNode::Path(_) => NodeKind::Path,
+        PenNode::Text(_) | PenNode::TextInput(_) => NodeKind::Text,
+        PenNode::Image(_) => NodeKind::Other("image".to_string()),
+        PenNode::IconFont(_) => NodeKind::Other("icon_font".to_string()),
+        PenNode::Ref(_) => NodeKind::Other("ref".to_string()),
+    }
+}
+
+/// Parse a `#RRGGBB` / `#RGB` hex string into a `Color`. Reuses the
+/// editor-state colour parser (RGB only — opacity stays 1.0).
+fn color_from_hex(hex: &str) -> Option<Color> {
+    let (r, g, b) = op_editor_core::parse_hex_rgb(hex)?;
+    Some(Color { r, g, b, a: 1.0 })
+}
 
 pub const PROPERTY_PANEL_WIDTH: f32 = 280.0;
 
@@ -180,24 +216,30 @@ impl NodeSnapshot {
     /// "Mixed" or per-axis aggregation is a follow-up; the panel
     /// hides those inputs anyway since `is_multi` flips them
     /// inert.
-    fn from_multi_selection(doc: &Document) -> Option<Self> {
-        // Confirm at least one selected id resolves on the active
-        // page — bails on cross-page selections (where nothing
-        // resolves) but NOT on all-zero-size selections (matches
-        // single-select semantics, which paint the panel even
-        // for a 0x0 node).
-        if !doc.property_panel_visible() || doc.selection_count() < 2 {
+    fn from_multi_selection(state: &EditorState) -> Option<Self> {
+        // Confirm at least 2 selected ids resolve on the active
+        // page — bails on cross-page selections but NOT on
+        // all-zero-size selections (matches single-select
+        // semantics, which paint the panel even for a 0x0 node).
+        if state.selection_count() < 2 {
             return None;
         }
-        let bounds = doc.selection_bounds().unwrap_or(crate::Rect::ZERO);
-        let n = doc.selection_count();
+        // `selection_bounds` returns `None` when nothing resolves;
+        // an empty union still paints (zeroed) like single-select.
+        if state.selected_node().is_none() && state.selection_bounds().is_none() {
+            return None;
+        }
+        let bounds = state
+            .selection_bounds()
+            .unwrap_or(op_editor_core::DocRect::ZERO);
+        let n = state.selection_count();
         Some(Self {
             kind: format!("{} items", n),
             name: format!("{} selected", n),
-            x: bounds.origin.x.round() as i32,
-            y: bounds.origin.y.round() as i32,
-            width: bounds.size.x.round() as i32,
-            height: bounds.size.y.round() as i32,
+            x: bounds.x.round() as i32,
+            y: bounds.y.round() as i32,
+            width: bounds.w.round() as i32,
+            height: bounds.h.round() as i32,
             rotation_deg: 0.0,
             corner_radius: 0.0,
             fill: None,
@@ -207,29 +249,60 @@ impl NodeSnapshot {
             // driven by `SectionCapabilities::for_multi()` instead
             // of `for_kind`, see `paint`. Frame chosen so any
             // future kind-specific lookups paint a neutral default.
-            kind_variant: crate::document::NodeKind::Frame,
+            kind_variant: NodeKind::Frame,
         })
     }
 
-    fn from_node(node: &Node) -> Self {
-        // Use `aggregate_bounds` so Group / unbounded container
-        // nodes (Frame without explicit bounds, Other(_)) report
-        // the visual extent of their subtree instead of "0 × 0"
-        // (codex Step 6 stop-hook fix).
-        let bounds = node.aggregate_bounds();
+    /// Build the snapshot from a canonical `PenNode`. Geometry uses
+    /// `aggregate_bounds` so Group / unbounded container nodes report
+    /// the visual extent of their subtree instead of "0 × 0".
+    fn from_node(node: &PenNode) -> Self {
+        let base = node.base();
+        let kind = node_kind_of(node);
+        let bounds = op_editor_core::aggregate_bounds(node);
+        // Corner radius — only the container variants carry one;
+        // a `PerCorner` radius reports its top-left corner.
+        let corner_radius = container_corner_radius(node);
+        let fill = op_editor_core::first_solid_fill_hex(node).and_then(color_from_hex);
+        let stroke = op_editor_core::first_solid_stroke_hex(node)
+            .and_then(color_from_hex)
+            .map(|color| Stroke {
+                color,
+                width: op_editor_core::fills::node_stroke_width(node).unwrap_or(1.0) as f32,
+            });
         Self {
-            kind: node.kind.label().to_string(),
-            name: node.name.clone(),
-            x: bounds.origin.x.round() as i32,
-            y: bounds.origin.y.round() as i32,
-            width: bounds.size.x.round() as i32,
-            height: bounds.size.y.round() as i32,
-            rotation_deg: node.rotation.to_degrees(),
-            corner_radius: node.corner_radius,
-            fill: node.fill,
-            stroke: node.stroke,
-            kind_variant: node.kind.clone(),
+            kind: kind.label().to_string(),
+            name: base.name.clone().unwrap_or_default(),
+            x: bounds.x.round() as i32,
+            y: bounds.y.round() as i32,
+            width: bounds.w.round() as i32,
+            height: bounds.h.round() as i32,
+            // `base.rotation` is stored in degrees by the canonical
+            // schema; the snapshot's `rotation_deg` wants degrees.
+            rotation_deg: base.rotation.unwrap_or(0.0) as f32,
+            corner_radius,
+            fill,
+            stroke,
+            kind_variant: kind,
         }
+    }
+}
+
+/// Uniform corner radius (doc-px) for a container variant — Frame /
+/// Group / Rectangle carry a `CornerRadius`. A `PerCorner` radius
+/// reports its top-left value. Non-container variants read 0.
+fn container_corner_radius(node: &PenNode) -> f32 {
+    use jian_ops_schema::node::container::CornerRadius;
+    let cr = match node {
+        PenNode::Frame(n) => n.container.corner_radius.as_ref(),
+        PenNode::Group(n) => n.container.corner_radius.as_ref(),
+        PenNode::Rectangle(n) => n.container.corner_radius.as_ref(),
+        _ => None,
+    };
+    match cr {
+        Some(CornerRadius::Uniform(r)) => *r as f32,
+        Some(CornerRadius::PerCorner(c)) => c[0] as f32,
+        None => 0.0,
     }
 }
 
@@ -290,30 +363,31 @@ impl PropertyPanel {
 }
 
 impl PropertyPanel {
-    /// Conditional builder — returns `Some` only when the document
+    /// Conditional builder — returns `Some` only when the editor
     /// has an active selection. Mirrors TS `{hasSelection && ...}`.
-    pub fn for_selection(doc: &Document) -> Option<Self> {
-        Self::for_selection_at(doc, 0)
+    pub fn for_selection(state: &EditorState) -> Option<Self> {
+        Self::for_selection_at(state, 0)
     }
 
     /// Same as [`for_selection`] but threads the host's monotonic
     /// millisecond clock through so the focused-input caret can
     /// blink off the same animation timer as the chat input.
-    pub fn for_selection_at(doc: &Document, now_ms: u64) -> Option<Self> {
-        if doc.selection_count() == 1 {
-            let node = doc.selected_node()?;
+    pub fn for_selection_at(state: &EditorState, now_ms: u64) -> Option<Self> {
+        if state.selection_count() == 1 {
+            let node = state.selected_node()?;
+            let fill_type = doc_fill_type(op_editor_core::first_fill_type(node));
             return Some(Self::build_from_snapshot(
-                doc,
+                state,
                 NodeSnapshot::from_node(node),
-                node.fill_type,
+                fill_type,
                 now_ms,
                 false,
             ));
         }
-        if doc.selection_count() >= 2 {
-            let snapshot = NodeSnapshot::from_multi_selection(doc)?;
+        if state.selection_count() >= 2 {
+            let snapshot = NodeSnapshot::from_multi_selection(state)?;
             return Some(Self::build_from_snapshot(
-                doc,
+                state,
                 snapshot,
                 crate::document::FillType::Solid,
                 now_ms,
@@ -324,17 +398,18 @@ impl PropertyPanel {
     }
 
     fn build_from_snapshot(
-        doc: &Document,
+        state: &EditorState,
         snapshot: NodeSnapshot,
         fill_type: crate::document::FillType,
         now_ms: u64,
         is_multi: bool,
     ) -> Self {
+        let ui = &state.editor_ui;
         Self {
             id: WidgetId::new(2000),
             snapshot,
-            theme: doc.theme(),
-            labels: sections::PropertyLabels::for_document(doc),
+            theme: theme_for(ui),
+            labels: sections::PropertyLabels::for_editor_ui(ui),
             // Multi-select inputs are inert in v1 — broadcast edits
             // to all selected nodes lands later. Force focus to None
             // so the panel paints all values muted and hit_test
@@ -342,29 +417,29 @@ impl PropertyPanel {
             focus: if is_multi {
                 None
             } else {
-                doc.ui.property_focus
+                state.ui.property_focus.map(doc_property_focus)
             },
             draft: if is_multi {
                 String::new()
             } else {
-                doc.ui.property_input_draft.clone()
+                state.ui.property_input_draft.clone()
             },
-            caret_anchor_ms: doc.ui.property_caret_anchor_ms,
+            caret_anchor_ms: state.ui.property_caret_anchor_ms,
             now_ms,
-            flex_layout: doc.ui.flex_layout,
+            flex_layout: doc_flex_layout(ui.flex_layout),
             size_flags: sections::SizeFlags {
-                fill_width: doc.ui.size_fill_width,
-                fill_height: doc.ui.size_fill_height,
-                hug_width: doc.ui.size_hug_width,
-                hug_height: doc.ui.size_hug_height,
-                clip_content: doc.ui.size_clip_content,
+                fill_width: ui.size_fill_width,
+                fill_height: ui.size_fill_height,
+                hug_width: ui.size_hug_width,
+                hug_height: ui.size_hug_height,
+                clip_content: ui.size_clip_content,
             },
             fill_type,
-            fill_type_picker_open: doc.ui.fill_type_picker_open,
+            fill_type_picker_open: ui.fill_type_picker_open,
             is_multi,
-            tab: doc.ui.property_tab,
-            export_format: doc.ui.export_format,
-            export_scale: doc.ui.export_scale,
+            tab: doc_property_tab(ui.property_tab),
+            export_format: doc_export_format(ui.export_format),
+            export_scale: ui.export_scale,
         }
     }
 

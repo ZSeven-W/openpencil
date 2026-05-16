@@ -135,6 +135,19 @@ pub fn first_solid_stroke_hex(node: &PenNode) -> Option<&str> {
     })
 }
 
+/// Uniform stroke width (doc-px) for the node, when it carries a
+/// stroke. A `PerSide` thickness reads as its first (top) edge — the
+/// editor's property panel exposes a single scalar width. `None`
+/// when the variant carries no stroke or the node has none set.
+pub fn node_stroke_width(node: &PenNode) -> Option<f64> {
+    use jian_ops_schema::style::StrokeThickness;
+    match &node_stroke(node)?.thickness {
+        StrokeThickness::Uniform(w) => Some(*w as f64),
+        StrokeThickness::PerSide(sides) => Some(sides[0] as f64),
+        StrokeThickness::Sided(s) => Some(s.top.unwrap_or(0.0) as f64),
+    }
+}
+
 /// Build a bare `Solid` fill from a hex string.
 fn solid_fill(hex: String) -> PenFill {
     PenFill::Solid(SolidFillBody {

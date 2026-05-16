@@ -117,3 +117,63 @@ pub fn doc_export_format(
         O::Pdf => D::Pdf,
     }
 }
+
+/// Map an `op_editor_core::FillType` onto shell-core's
+/// `document::FillType`. Variant-identical — single bridge point
+/// for the PropertyPanel fill-type dropdown.
+pub fn doc_fill_type(f: op_editor_core::FillType) -> crate::document::FillType {
+    use crate::document::FillType as D;
+    use op_editor_core::FillType as O;
+    match f {
+        O::Solid => D::Solid,
+        O::LinearGradient => D::LinearGradient,
+        O::RadialGradient => D::RadialGradient,
+        O::Image => D::Image,
+    }
+}
+
+/// Map an `op_editor_core::FlexLayout` onto shell-core's
+/// `document::FlexLayout`. Variant-identical.
+pub fn doc_flex_layout(f: op_editor_core::FlexLayout) -> crate::document::FlexLayout {
+    use crate::document::FlexLayout as D;
+    use op_editor_core::FlexLayout as O;
+    match f {
+        O::Free => D::Free,
+        O::Vertical => D::Vertical,
+        O::Horizontal => D::Horizontal,
+    }
+}
+
+/// Map an `op_editor_core::PropertyTab` onto shell-core's
+/// `document::PropertyTab`. Variant-identical.
+pub fn doc_property_tab(t: op_editor_core::PropertyTab) -> crate::document::PropertyTab {
+    use crate::document::PropertyTab as D;
+    use op_editor_core::PropertyTab as O;
+    match t {
+        O::Design => D::Design,
+        O::Code => D::Code,
+    }
+}
+
+/// Map an `op_editor_core::ui_draft::PropertyFocus` onto shell-core's
+/// `document::PropertyFocus`. Variant-identical — the editor-state
+/// layer owns its own focus enum; the widget hit-test API still
+/// speaks `document::PropertyFocus`.
+pub fn doc_property_focus(
+    f: op_editor_core::ui_draft::PropertyFocus,
+) -> crate::document::PropertyFocus {
+    use crate::document::PropertyFocus as D;
+    use op_editor_core::ui_draft::PropertyFocus as O;
+    match f {
+        O::PositionX => D::PositionX,
+        O::PositionY => D::PositionY,
+        O::Rotation => D::Rotation,
+        O::PositionR => D::PositionR,
+        O::SizeW => D::SizeW,
+        O::SizeH => D::SizeH,
+        O::Opacity => D::Opacity,
+        O::FillHex => D::FillHex,
+        O::StrokeHex => D::StrokeHex,
+        O::StrokeWidth => D::StrokeWidth,
+    }
+}

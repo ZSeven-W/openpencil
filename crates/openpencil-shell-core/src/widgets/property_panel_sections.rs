@@ -68,13 +68,15 @@ pub struct PropertyLabels {
 }
 
 impl PropertyLabels {
-    pub fn for_document(doc: &crate::document::Document) -> Self {
+    /// Resolve every PropertyPanel chrome string against the editor's
+    /// active locale (`EditorUiState.locale`).
+    pub fn for_editor_ui(ui: &op_editor_core::editor_ui_state::EditorUiState) -> Self {
         // `pick` returns either the localised value or the English
         // fallback when the key isn't in the table. Both branches
         // are `&'static str` so the whole struct is `Copy` and
         // zero-allocation per build.
         let pick = |key: &'static str, fallback: &'static str| -> &'static str {
-            let translated = doc.t(key);
+            let translated = crate::widgets::editor_state_ext::translate(ui, key);
             if translated == key {
                 fallback
             } else {
