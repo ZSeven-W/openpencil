@@ -27,6 +27,10 @@ pub mod figma;
 // as `i18n` so `crate::i18n::translate` / `crate::i18n::Locale` paths still resolve.
 pub use op_i18n as i18n;
 pub mod jian;
+// Rust-reorg step 1: a paint-only, layout-resolved render scene type.
+// `CanvasViewport` is flipped onto it in a later step so the canvas
+// widget can stop depending on the editor-state `Document`.
+pub mod layout_scene;
 pub mod mcp;
 #[cfg(test)] mod mcp_tests;
 // Phase 4 strangler reorg: the wasm-clean RenderBackend trait moved into the

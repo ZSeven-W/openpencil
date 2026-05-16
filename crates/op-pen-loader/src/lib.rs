@@ -23,6 +23,7 @@ mod bridge_enums_rev;
 mod bridge_ui;
 mod editor_state_bridge;
 mod effects;
+mod layout_scene;
 mod path_bounds;
 
 pub mod payload;
@@ -31,6 +32,13 @@ pub mod variables;
 /// Canonical entry point — convert a parsed `PenDocument` straight
 /// into a shell-core `Document`.
 pub use payload::pen_document_to_document;
+
+/// Rust-reorg step 1: build a paint-only, layout-resolved
+/// `LayoutScene` from an `EditorState`. Reuses the same jian
+/// `LayoutEngine` + `SkiaMeasure` flex pass as `pen_document_to_document`
+/// and resolves variable `$ref` fills against the editor's
+/// variables + active theme.
+pub use layout_scene::editor_state_to_layout_scene;
 
 // The `EditorState` → paint-`Document` type bridge. `op-editor-core`
 // stores chrome / chat / components state as a different set of types
