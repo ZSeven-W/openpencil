@@ -2,9 +2,9 @@ name: Rust release artifacts
 
 # Triggered on tag push (v*) — builds release binaries across desktop targets
 # and assembles a GitHub Release draft. The `build` job builds the real
-# `openpencil-desktop` crate (winit + skia-safe runner that drives the Rust
-# shell); the deleted `openpencil-app` placeholder crate is gone (Phase 1
-# Task 1.2). Full DMG / AppImage / EXE installer packaging lands in Step 1f.
+# `op-host-desktop` crate (winit + skia-safe runner that drives the Rust
+# editor); its shipped executable keeps the stable `openpencil-desktop`
+# name. Full DMG / AppImage / EXE installer packaging lands in Step 1f.
 # The wasm web bundle is currently DEFERRED (see comment block below); when
 # the CI-side C-hard pipeline (emscripten install + EMSDK + symlink hack +
 # wasm-bindgen + wasm-opt) lands it will re-enter the matrix.
@@ -76,10 +76,10 @@ jobs:
         run: cargo install cross --locked --version 0.2.5
       - name: Build (host)
         if: matrix.cross != true
-        run: cargo build -p openpencil-desktop --target ${{ matrix.target }} --release
+        run: cargo build -p op-host-desktop --target ${{ matrix.target }} --release
       - name: Build (cross)
         if: matrix.cross == true
-        run: cross build -p openpencil-desktop --target ${{ matrix.target }} --release
+        run: cross build -p op-host-desktop --target ${{ matrix.target }} --release
       - name: Package archive (unix)
         if: matrix.archive == 'tar.gz'
         shell: bash

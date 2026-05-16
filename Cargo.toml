@@ -38,7 +38,7 @@ tracing = "0.1"
 #
 # IMPORTANT: `[patch.crates-io]` is workspace-global, NOT target-scoped.
 # Every `skia-safe` / `skia-bindings` consumer in this workspace —
-# including `openpencil-shell-native` (macOS / Linux / Windows desktop,
+# including `op-host-native` (macOS / Linux / Windows desktop,
 # `gl` feature) — now resolves through this fork on every target.
 # Cargo does not natively support per-target patches, so this is the
 # accepted blast radius.

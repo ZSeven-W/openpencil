@@ -29,7 +29,7 @@ jobs:
       - name: Forward — bucket A crates compile on wasm32
         run: |
           cargo check --target wasm32-unknown-unknown \
-            -p openpencil-shell-web --no-default-features --features web
+            -p op-host-web --no-default-features --features web
 
   wasm32-deny:
     name: cargo-deny --target wasm32-unknown-unknown check bans
