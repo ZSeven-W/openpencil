@@ -21,12 +21,12 @@
 //! transforms on them are lossless format conversions (colour array →
 //! struct, kind / fill-type string → enum).
 
-use openpencil_shell_core::layout_scene::NodeKind;
-use openpencil_shell_core::scene_vars::VariableTable;
-use openpencil_shell_core::layout_scene::{
+use op_editor_ui::layout_scene::NodeKind;
+use op_editor_ui::scene_vars::VariableTable;
+use op_editor_ui::layout_scene::{
     LayoutScene, SceneFillType, SceneNode, SceneStroke, ScenePage,
 };
-use openpencil_shell_core::Color;
+use op_editor_ui::Color;
 
 use crate::editor_state_var_table;
 use crate::payload::{DocPayload, NodePayload, StrokePayload};
@@ -82,7 +82,7 @@ pub fn editor_state_to_layout_scene(state: &op_editor_core::EditorState) -> Layo
 /// wins over the node's authored colour, mirroring the canvas
 /// painter's `var_table.fill_for(id).or(node.fill)`.
 fn node_payload_to_scene(node: &NodePayload, var_table: &VariableTable) -> SceneNode {
-    use openpencil_shell_core::{Point2D, Rect};
+    use op_editor_ui::{Point2D, Rect};
     let node_id = op_editor_core::NodeId::new(node.id.clone());
     SceneNode {
         id: node.id.clone(),

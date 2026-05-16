@@ -11,7 +11,7 @@
 
 use std::collections::BTreeMap;
 
-use openpencil_shell_core::scene_vars::{
+use op_editor_ui::scene_vars::{
     ThemeAxis, ThemedValue, Variable, VariableKind, VariableScalar, VariableTable,
     VariableValue,
 };
@@ -219,7 +219,7 @@ pub fn var_table_from_payload(p: &VarTablePayload) -> VariableTable {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use openpencil_shell_core::scene_vars::VariableValue;
+    use op_editor_ui::scene_vars::VariableValue;
 
     fn sample_table() -> VariableTable {
         let mut t = VariableTable::default();

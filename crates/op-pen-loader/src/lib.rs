@@ -1,7 +1,7 @@
 //! Canonical `.op` (`PenDocument`) → `LayoutScene` loader / adapter.
 //!
-//! Extracted from `openpencil-desktop` so library crates (notably
-//! `openpencil-shell-native`) can reuse the conversion without
+//! Extracted from `op-host-desktop` so library crates (notably
+//! `op-host-native`) can reuse the conversion without
 //! depending on a binary crate.
 //!
 //! Three layers:
@@ -13,7 +13,7 @@
 //! - [`payload`] holds the `DocPayload` serde DTOs + the strict /
 //!   best-effort `load_canonical` parser.
 //! - [`layout_scene`] re-shapes a resolved `DocPayload` into the
-//!   paint-only `openpencil_shell_core::layout_scene::LayoutScene`.
+//!   paint-only `op_editor_ui::layout_scene::LayoutScene`.
 //!
 //! This crate is desktop-side and may depend on skia; it does NOT
 //! need to be wasm-clean. The `rfd` Save/Open dialogs + error
@@ -63,10 +63,10 @@ pub use variables::{var_table_from_payload, var_table_to_payload, VarTablePayloa
 /// any shell-core dependency to keep its `wasm32-unknown-unknown`
 /// invariant.
 ///
-/// [`VariableTable`]: openpencil_shell_core::scene_vars::VariableTable
+/// [`VariableTable`]: op_editor_ui::scene_vars::VariableTable
 pub fn editor_state_var_table(
     state: &op_editor_core::EditorState,
-) -> openpencil_shell_core::scene_vars::VariableTable {
+) -> op_editor_ui::scene_vars::VariableTable {
     use op_editor_core::NodeId;
     // Persisted definitions + theme axes — `EditorState.doc` is a
     // `PenDocument`, so `build_var_table` harvests them directly.
