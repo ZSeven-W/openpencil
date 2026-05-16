@@ -11,7 +11,7 @@
 //! (`common.untitled`, `rightPanel.design`, `layout.flexLayout`,
 //! …) so cross-walking strings between TS and Rust is mechanical.
 
-use crate::document::Locale;
+use crate::Locale;
 
 mod de;
 mod en;
