@@ -5,7 +5,7 @@
 //! (`paint_fill_solid_body`, `paint_fill_gradient_body`,
 //! `paint_fill_image_body`).
 
-use crate::document::PropertyFocus;
+use op_editor_core::PropertyFocus;
 use crate::theme::Theme;
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::property_panel::NodeSnapshot;
@@ -22,8 +22,8 @@ use crate::{Color, Point2D, Rect, TextLayout};
 /// Display label for a fill-type variant (Solid / Gradient /
 /// Image). Currently zh-only string literals; gets wrapped in
 /// the `fill.*` locale keys later.
-pub fn fill_type_label(t: crate::document::FillType) -> &'static str {
-    use crate::document::FillType;
+pub fn fill_type_label(t: op_editor_core::FillType) -> &'static str {
+    use op_editor_core::FillType;
     match t {
         FillType::Solid => "纯色",
         FillType::LinearGradient => "线性渐变",
@@ -40,9 +40,9 @@ pub fn paint_fill_type_picker(
     theme: &Theme,
     panel_rect: Rect,
     visible: VisibleSections,
-    active: crate::document::FillType,
+    active: op_editor_core::FillType,
 ) {
-    use crate::document::FillType;
+    use op_editor_core::FillType;
     let x0 = panel_rect.origin.x;
     let w = panel_rect.size.x;
     let usable_w = w - PAD_X * 2.0;
@@ -138,7 +138,7 @@ pub fn paint_fill_section(
     snapshot: &NodeSnapshot,
     edit: &EditContext<'_>,
     labels: &PropertyLabels,
-    fill_type: crate::document::FillType,
+    fill_type: op_editor_core::FillType,
     _fill_picker_open: bool,
     x: f32,
     y: f32,
@@ -153,7 +153,7 @@ pub fn paint_fill_section(
     };
     // Swatch icon depends on the fill type so the head row reads
     // as a small preview of what's rendered below.
-    use crate::document::FillType;
+    use op_editor_core::FillType;
     match fill_type {
         FillType::Solid => {
             cx.backend.fill_round_rect(swatch_rect, 4.0, fill);

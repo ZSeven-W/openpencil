@@ -7,7 +7,7 @@
 
 use super::layer_panel::*;
 use super::Widget;
-use crate::document::NodeId;
+use op_editor_core::NodeId;
 use crate::{Point2D, Rect};
 use op_editor_core::EditorState;
 
@@ -190,8 +190,7 @@ fn drop_indicator_matches_post_commit_layout_when_dragging_down() {
     assert_eq!(drop.position, DropPosition::Before);
     assert!((drop.indicator_y - row_top_of_d).abs() < 0.5);
     // Commit and check A's new row top matches indicator_y.
-    let anchor = op_editor_core::NodeId::new(drop.anchor.raw().to_string());
-    assert!(state.reorder_before(op_editor_core::NodeId::new("n1"), anchor));
+    assert!(state.reorder_before(op_editor_core::NodeId::new("n1"), drop.anchor.clone()));
     let post = LayerPanel::from_editor(&state);
     let a_idx = post
         .items

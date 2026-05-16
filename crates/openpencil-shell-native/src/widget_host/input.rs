@@ -188,7 +188,7 @@ impl WidgetHostNative {
             let panel = menu.rect_at(anchor);
             let new_hover = menu.hovered_at(panel, Point2D::new(x, y));
             // shell-core `FileMenuChoice` option → op-editor-core.
-            let new_hover_ec = new_hover.map(op_pen_loader::rev::file_menu_choice);
+            let new_hover_ec = new_hover.map(openpencil_shell_core::widgets::editor_state_ext::file_menu_choice);
             if new_hover_ec != self.editor_state.editor_ui.file_menu_hover {
                 self.editor_state.editor_ui.file_menu_hover = new_hover_ec;
                 self.mark_dirty();
@@ -201,7 +201,7 @@ impl WidgetHostNative {
             let panel = self.locale_picker_rect(self.last_viewport_w);
             let picker = LocalePicker::for_editor_ui(&self.editor_state.editor_ui);
             let new_hover = picker.hit_test(panel, Point2D::new(x, y));
-            let new_hover_ec = new_hover.map(op_pen_loader::rev::locale);
+            let new_hover_ec = new_hover;
             if new_hover_ec != self.editor_state.editor_ui.locale_picker_hover {
                 self.editor_state.editor_ui.locale_picker_hover = new_hover_ec;
                 self.mark_dirty();
@@ -214,7 +214,7 @@ impl WidgetHostNative {
             let panel = self.shape_picker_rect(self.last_viewport_w, self.last_viewport_h);
             let picker = ShapePicker::for_editor_ui(&self.editor_state.editor_ui);
             let new_hover = picker.hit_test(panel, Point2D::new(x, y));
-            let new_hover_ec = new_hover.map(op_pen_loader::rev::shape_choice);
+            let new_hover_ec = new_hover.map(openpencil_shell_core::widgets::editor_state_ext::shape_choice);
             if new_hover_ec != self.editor_state.editor_ui.shape_picker_hover {
                 self.editor_state.editor_ui.shape_picker_hover = new_hover_ec;
                 self.mark_dirty();
@@ -357,7 +357,7 @@ impl WidgetHostNative {
         } else {
             None
         };
-        let new_hover_ec = new_hover.map(op_pen_loader::rev::align_action);
+        let new_hover_ec = new_hover;
         if new_hover_ec != self.editor_state.editor_ui.align_toolbar_hover {
             self.editor_state.editor_ui.align_toolbar_hover = new_hover_ec;
             self.mark_dirty();

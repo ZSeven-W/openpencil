@@ -7,7 +7,7 @@
 //! - **Primitives** (Phase B1+B2): the four reusable building blocks
 //!   `TreeWidget` / `PropertyRow` / `Dropdown` / `TextInput`.
 //! - **Compositions** (Step 2): `LayerPanel` / `PropertyPanel` /
-//!   `Toolbar` — view models built from a `crate::document::Document`
+//!   `Toolbar` — view models built from an `op_editor_core::EditorState`
 //!   that compose the primitives into the actual editor UI surface.
 //!   These were briefly housed in a `chrome/` submodule; the name
 //!   collided with the higher-level "OP chrome = openpencil-shell"
@@ -33,7 +33,7 @@ pub mod text_input;
 pub mod tree;
 
 // Step 2 compositions (built on top of the primitives, driven by
-// `crate::document::Document`).
+// `op_editor_core::EditorState`).
 pub mod layer_context_menu;
 pub mod layer_panel;
 mod layer_panel_paint;

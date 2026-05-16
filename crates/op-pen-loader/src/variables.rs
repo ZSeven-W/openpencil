@@ -11,11 +11,11 @@
 
 use std::collections::BTreeMap;
 
-use openpencil_shell_core::document::{
+use openpencil_shell_core::scene_vars::{
     ThemeAxis, ThemedValue, Variable, VariableKind, VariableScalar, VariableTable,
     VariableValue,
 };
-use openpencil_shell_core::document::NodeId;
+use op_editor_core::NodeId;
 use serde::{Deserialize, Serialize};
 
 /// Tagged scalar — mirrors `VariableScalar`.
@@ -174,12 +174,12 @@ pub fn var_table_to_payload(t: &VariableTable) -> VarTablePayload {
         fill_refs: t
             .fill_refs
             .iter()
-            .map(|(id, name)| (id.raw().to_string(), name.clone()))
+            .map(|(id, name)| (id.as_str().to_string(), name.clone()))
             .collect(),
         stroke_refs: t
             .stroke_refs
             .iter()
-            .map(|(id, name)| (id.raw().to_string(), name.clone()))
+            .map(|(id, name)| (id.as_str().to_string(), name.clone()))
             .collect(),
     }
 }
@@ -219,7 +219,7 @@ pub fn var_table_from_payload(p: &VarTablePayload) -> VariableTable {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use openpencil_shell_core::document::VariableValue;
+    use openpencil_shell_core::scene_vars::VariableValue;
 
     fn sample_table() -> VariableTable {
         let mut t = VariableTable::default();

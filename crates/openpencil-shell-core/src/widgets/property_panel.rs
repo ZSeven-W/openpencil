@@ -23,15 +23,13 @@
 //! Host calls [`PropertyPanel::for_selection`] which returns
 //! `Option<Self>`; `None` = panel hidden entirely.
 
-use crate::document::{NodeKind, PropertyFocus, Stroke};
+use crate::layout_scene::{NodeKind, SceneStroke};
+use op_editor_core::PropertyFocus;
 use crate::theme::Theme;
-use crate::widgets::editor_state_ext::{
-    doc_export_format, doc_fill_type, doc_flex_layout, doc_property_focus, doc_property_tab,
-    theme_for,
-};
+use crate::widgets::editor_state_ext::{doc_export_format, theme_for};
 use crate::widgets::property_panel_sections as sections;
 use crate::widgets::{LayoutBox, LayoutCx, PaintCx, Widget, WidgetId};
-use crate::{Color, Point2D, Rect, TextLayout};
+use crate::{Color, Point2D, Rect};
 
 use jian_ops_schema::node::PenNode;
 use op_editor_core::pen_node_ext::PenNodeExt;
@@ -72,7 +70,7 @@ pub const PROPERTY_PANEL_WIDTH: f32 = 280.0;
 /// after the text-input hit-test misses.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PropertyPanelAction {
-    SetFlexLayout(crate::document::FlexLayout),
+    SetFlexLayout(op_editor_core::FlexLayout),
     ToggleSizeFillWidth,
     ToggleSizeFillHeight,
     ToggleSizeHugWidth,
@@ -82,10 +80,10 @@ pub enum PropertyPanelAction {
     /// toggles `Document.ui.fill_type_picker_open`.
     ToggleFillTypePicker,
     /// User picked a fill type from the dropdown.
-    SetFillType(crate::document::FillType),
+    SetFillType(op_editor_core::FillType),
     /// User clicked a colour swatch (Fill or Stroke section). Host
     /// opens the floating colour picker tied to that target.
-    OpenColorPicker(crate::document::ColorTarget),
+    OpenColorPicker(op_editor_core::ColorTarget),
     /// User clicked anywhere in the Export section — host queues
     /// `FileAction::ExportImage` so the picker dialog opens.
     OpenExportDialog,
@@ -126,8 +124,8 @@ impl SectionCapabilities {
         }
     }
 
-    pub(crate) fn for_kind(kind: &crate::document::NodeKind) -> Self {
-        use crate::document::NodeKind as K;
+    pub(crate) fn for_kind(kind: &crate::layout_scene::NodeKind) -> Self {
+        use crate::layout_scene::NodeKind as K;
         match kind {
             // Frame: full chrome — it can host children, take auto-
             // layout, fill / stroke / effects / export.
@@ -202,9 +200,9 @@ pub struct NodeSnapshot {
     /// Uniform corner radius in doc-px.
     pub corner_radius: f32,
     pub fill: Option<Color>,
-    pub stroke: Option<Stroke>,
+    pub stroke: Option<SceneStroke>,
     /// Drives per-kind section filtering (Line hides fill, etc.).
-    pub kind_variant: crate::document::NodeKind,
+    pub kind_variant: crate::layout_scene::NodeKind,
 }
 
 impl NodeSnapshot {
@@ -266,7 +264,7 @@ impl NodeSnapshot {
         let fill = op_editor_core::first_solid_fill_hex(node).and_then(color_from_hex);
         let stroke = op_editor_core::first_solid_stroke_hex(node)
             .and_then(color_from_hex)
-            .map(|color| Stroke {
+            .map(|color| SceneStroke {
                 color,
                 width: op_editor_core::fills::node_stroke_width(node).unwrap_or(1.0) as f32,
             });
@@ -328,16 +326,16 @@ pub struct PropertyPanel {
     /// Host clock ms; paired with `caret_anchor_ms` for caret blink.
     pub now_ms: u64,
     /// Active flex-layout button.
-    pub flex_layout: crate::document::FlexLayout,
+    pub flex_layout: op_editor_core::FlexLayout,
     /// 5 size checkboxes — fill / hug / clip.
     pub size_flags: sections::SizeFlags,
     /// Active fill type — drives the dropdown label + picker.
-    pub fill_type: crate::document::FillType,
+    pub fill_type: op_editor_core::FillType,
     pub fill_type_picker_open: bool,
     /// True for multi-select aggregate (inputs inert, "N items").
     pub is_multi: bool,
     /// Active header tab — toggled by Cmd+Shift+C.
-    pub tab: crate::document::PropertyTab,
+    pub tab: op_editor_core::PropertyTab,
     /// Current export format + scale, surfaced as preview pills in
     /// the Export section. Clicking the section opens the modal.
     pub export_format: crate::widgets::export_dialog::ExportFormat,
@@ -375,7 +373,7 @@ impl PropertyPanel {
     pub fn for_selection_at(state: &EditorState, now_ms: u64) -> Option<Self> {
         if state.selection_count() == 1 {
             let node = state.selected_node()?;
-            let fill_type = doc_fill_type(op_editor_core::first_fill_type(node));
+            let fill_type = op_editor_core::first_fill_type(node);
             return Some(Self::build_from_snapshot(
                 state,
                 NodeSnapshot::from_node(node),
@@ -389,7 +387,7 @@ impl PropertyPanel {
             return Some(Self::build_from_snapshot(
                 state,
                 snapshot,
-                crate::document::FillType::Solid,
+                op_editor_core::FillType::Solid,
                 now_ms,
                 true,
             ));
@@ -400,7 +398,7 @@ impl PropertyPanel {
     fn build_from_snapshot(
         state: &EditorState,
         snapshot: NodeSnapshot,
-        fill_type: crate::document::FillType,
+        fill_type: op_editor_core::FillType,
         now_ms: u64,
         is_multi: bool,
     ) -> Self {
@@ -417,7 +415,7 @@ impl PropertyPanel {
             focus: if is_multi {
                 None
             } else {
-                state.ui.property_focus.map(doc_property_focus)
+                state.ui.property_focus
             },
             draft: if is_multi {
                 String::new()
@@ -426,7 +424,7 @@ impl PropertyPanel {
             },
             caret_anchor_ms: state.ui.property_caret_anchor_ms,
             now_ms,
-            flex_layout: doc_flex_layout(ui.flex_layout),
+            flex_layout: ui.flex_layout,
             size_flags: sections::SizeFlags {
                 fill_width: ui.size_fill_width,
                 fill_height: ui.size_fill_height,
@@ -437,7 +435,7 @@ impl PropertyPanel {
             fill_type,
             fill_type_picker_open: ui.fill_type_picker_open,
             is_multi,
-            tab: doc_property_tab(ui.property_tab),
+            tab: ui.property_tab,
             export_format: doc_export_format(ui.export_format),
             export_scale: ui.export_scale,
         }
@@ -554,10 +552,10 @@ impl Widget for PropertyPanel {
             caret_anchor_ms: self.caret_anchor_ms,
             now_ms: self.now_ms,
         };
-        use crate::document::NodeKind;
+        use crate::layout_scene::NodeKind;
         let caps = self.capabilities();
         y = sections::paint_tab_strip(cx, &self.theme, &self.labels, self.tab, x, y, w);
-        if matches!(self.tab, crate::document::PropertyTab::Code) {
+        if matches!(self.tab, op_editor_core::PropertyTab::Code) {
             paint_code_placeholder(cx, &self.theme, &self.snapshot, x, y, w);
             return;
         }

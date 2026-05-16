@@ -21,7 +21,8 @@
 //! transforms on them are lossless format conversions (colour array →
 //! struct, kind / fill-type string → enum).
 
-use openpencil_shell_core::document::{NodeKind, VariableTable};
+use openpencil_shell_core::layout_scene::NodeKind;
+use openpencil_shell_core::scene_vars::VariableTable;
 use openpencil_shell_core::layout_scene::{
     LayoutScene, SceneFillType, SceneNode, SceneStroke, ScenePage,
 };
@@ -82,7 +83,7 @@ pub fn editor_state_to_layout_scene(state: &op_editor_core::EditorState) -> Layo
 /// painter's `var_table.fill_for(id).or(node.fill)`.
 fn node_payload_to_scene(node: &NodePayload, var_table: &VariableTable) -> SceneNode {
     use openpencil_shell_core::{Point2D, Rect};
-    let node_id = openpencil_shell_core::document::NodeId::new(node.id.clone());
+    let node_id = op_editor_core::NodeId::new(node.id.clone());
     SceneNode {
         id: node.id.clone(),
         kind: str_to_kind(&node.kind),
@@ -124,7 +125,7 @@ fn node_payload_to_scene(node: &NodePayload, var_table: &VariableTable) -> Scene
 /// resolution parallels the fill path.
 fn scene_stroke(
     s: &StrokePayload,
-    node_id: &openpencil_shell_core::document::NodeId,
+    node_id: &op_editor_core::NodeId,
     var_table: &VariableTable,
 ) -> SceneStroke {
     SceneStroke {

@@ -565,7 +565,7 @@ pub fn mount(canvas_id: &str) -> Result<WebShell, JsValue> {
                 "keydown",
                 listeners,
                 move |evt: KeyboardEvent| {
-                    use openpencil_shell_core::document::ReorderDirection;
+                    use op_editor_core::ReorderDirection;
                     let mut inner = inner_kt.borrow_mut();
                     let key = evt.key();
                     let is_mod = evt.meta_key() || evt.ctrl_key();

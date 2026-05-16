@@ -13,7 +13,7 @@
 //! only the viewport transform — no second layout pass, no variable
 //! lookup.
 
-use crate::document::{Effect, NodeKind};
+use crate::layout_scene::{Effect, NodeKind};
 use crate::layout_scene::SceneNode;
 use crate::widgets::canvas_viewport::EditCaret;
 use crate::widgets::canvas_viewport_overlay::{paint_fill_then_stroke, wrap_text};

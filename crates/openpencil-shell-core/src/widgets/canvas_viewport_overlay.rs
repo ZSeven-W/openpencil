@@ -2,7 +2,7 @@
 //! of `canvas_viewport.rs` to keep that file under the 800-line
 //! ceiling.
 
-use crate::document::Viewport;
+use op_editor_core::Viewport;
 use crate::layout_scene::{LayoutScene, SceneNode};
 use crate::theme::Theme;
 use crate::widgets::PaintCx;

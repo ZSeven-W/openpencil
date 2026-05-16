@@ -35,7 +35,7 @@
 //! Functions that pull in `openpencil_shell_core::widgets::*` MUST live
 //! in this file (per spec §1.4). Phase B4 boundary check enforces.
 
-use openpencil_shell_core::document::ChatAnchor;
+use op_editor_core::ChatAnchor;
 use openpencil_shell_core::widgets::{
     LocalePicker, Toolbar, TopBar, Widget, LayoutCx, AI_CHAT_COLLAPSED_HEIGHT,
     AI_CHAT_COLLAPSED_WIDTH, AI_CHAT_HEIGHT, AI_CHAT_WIDTH, LOCALE_PICKER_WIDTH,
@@ -148,7 +148,7 @@ pub(in crate::widget_host) struct MarqueeDragState {
 /// op-editor-core id only at the commit site.
 #[derive(Debug, Clone)]
 pub(in crate::widget_host) struct LayerDragState {
-    pub(in crate::widget_host) source: openpencil_shell_core::document::NodeId,
+    pub(in crate::widget_host) source: op_editor_core::NodeId,
     pub(in crate::widget_host) start_y: f32,
     pub(in crate::widget_host) current_x: f32,
     pub(in crate::widget_host) current_y: f32,
@@ -325,7 +325,7 @@ impl WidgetHost {
         };
         // shell-core hit-test returns shell-core `NodeId`s; translate
         // to op-editor-core ids for storage on `editor_ui`.
-        let new_layer_ec = new_layer.as_ref().map(op_pen_loader::rev::node_id);
+        let new_layer_ec = new_layer.as_ref().map(|id| id.clone());
         let changed = new_layer_ec != self.editor_state.editor_ui.hovered_layer_id
             || new_page != self.editor_state.editor_ui.hovered_page_index;
         if changed {
@@ -416,7 +416,7 @@ impl WidgetHost {
         } else {
             None
         };
-        let new_hover_ec = new_hover.map(op_pen_loader::rev::align_action);
+        let new_hover_ec = new_hover;
         if new_hover_ec != self.editor_state.editor_ui.align_toolbar_hover {
             self.editor_state.editor_ui.align_toolbar_hover = new_hover_ec;
             self.mark_dirty();
@@ -465,7 +465,7 @@ impl WidgetHost {
             // ADD-only: every hit joins the set; already-selected
             // hits stay selected. Shift-marquee never removes.
             for id in ids {
-                let ec_id = op_pen_loader::rev::node_id(&id);
+                let ec_id = id.clone();
                 if !self.editor_state.is_selected(&ec_id) {
                     self.editor_state.toggle_selection(ec_id);
                 }
@@ -473,7 +473,7 @@ impl WidgetHost {
             self.mark_dirty();
         } else if !ids.is_empty() {
             let ec_ids: Vec<op_editor_core::NodeId> =
-                ids.iter().map(op_pen_loader::rev::node_id).collect();
+                ids.iter().map(|id| id.clone()).collect();
             let anchor = ec_ids.last().unwrap().clone();
             self.editor_state.selection.set = ec_ids;
             self.editor_state.selection.anchor = anchor;
@@ -570,8 +570,8 @@ impl WidgetHost {
         if drop.anchor == d.source {
             return true;
         }
-        let source = op_pen_loader::rev::node_id(&d.source);
-        let anchor = op_pen_loader::rev::node_id(&drop.anchor);
+        let source = d.source.clone();
+        let anchor = drop.anchor.clone();
         match drop.position {
             DropPosition::Before => {
                 self.editor_state.reorder_before(source, anchor);

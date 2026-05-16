@@ -7,7 +7,7 @@
 //! its children) in a `<g transform="rotate(...)">`, matching how the
 //! raster path composes `Canvas::rotate`.
 
-use openpencil_shell_core::document::NodeKind;
+use openpencil_shell_core::layout_scene::NodeKind;
 use openpencil_shell_core::layout_scene::{LayoutScene, SceneNode};
 use openpencil_shell_core::Color;
 use std::fmt::Write as _;

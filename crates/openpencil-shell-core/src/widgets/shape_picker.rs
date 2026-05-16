@@ -11,9 +11,9 @@
 //! `ImportImageOrSvg` opens a file dialog. Both are reported
 //! verbatim by the host so it can dispatch to the right place.
 
-use crate::document::Tool;
+use op_editor_core::Tool;
 use crate::theme::Theme;
-use crate::widgets::editor_state_ext::{doc_shape_choice, doc_tool, theme_for, translate};
+use crate::widgets::editor_state_ext::{doc_shape_choice, theme_for, translate};
 use op_editor_core::editor_ui_state::EditorUiState;
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::{LayoutBox, LayoutCx, PaintCx, Widget, WidgetId};
@@ -128,7 +128,7 @@ impl ShapePicker {
         Self {
             id: WidgetId::new(5200),
             theme: theme_for(ui),
-            current_shape: doc_tool(ui.shape_tool),
+            current_shape: ui.shape_tool,
             hovered: ui.shape_picker_hover.map(doc_shape_choice),
             rows,
         }

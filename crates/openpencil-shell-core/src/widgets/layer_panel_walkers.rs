@@ -9,7 +9,7 @@
 //! untouched (the two id types are both string newtypes, so the
 //! conversion at the walk boundary is lossless).
 
-use crate::document::NodeId;
+use op_editor_core::NodeId;
 use crate::widgets::icons::Icon;
 
 use jian_ops_schema::node::PenNode;
@@ -82,7 +82,7 @@ pub(super) fn pages_from_state(state: &EditorState, rename: &RenameView<'_>) -> 
 pub(super) fn apply_layer_rename(items: &mut [LayerItem], rename: &RenameView<'_>) {
     if let Some((id, draft)) = rename.layer {
         for item in items.iter_mut() {
-            if item.node_id.raw() == id {
+            if item.node_id.as_str() == id {
                 item.label = draft.to_string();
                 item.renaming = true;
             }
@@ -165,7 +165,7 @@ pub(super) fn walk_excluding(
     depth: u8,
     out: &mut Vec<LayerItem>,
 ) {
-    if node.base().id == excluded.raw() {
+    if node.base().id == excluded.as_str() {
         return;
     }
     let item = item_for(node, cx, depth);

@@ -63,7 +63,7 @@ pub fn export_pdf(scene: &LayoutScene, target: &StdPath) -> Result<(), String> {
 mod tests {
     use super::*;
     use crate::export::test_support::filled_rect;
-    use openpencil_shell_core::document::NodeKind;
+    use openpencil_shell_core::layout_scene::NodeKind;
     use openpencil_shell_core::layout_scene::{ScenePage, SceneNode};
     use openpencil_shell_core::{Color, Rect};
 

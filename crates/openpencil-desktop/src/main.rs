@@ -540,7 +540,7 @@ impl ApplicationHandler for DesktopApp {
                     },
                 ..
             } => {
-                use openpencil_shell_core::document::ReorderDirection;
+                use op_editor_core::ReorderDirection;
                 let mut consumed = false;
                 let nudge = if self.shift_modifier { 10.0 } else { 1.0 };
                 // While a settings-modal input owns the keyboard, the
@@ -587,7 +587,7 @@ impl ApplicationHandler for DesktopApp {
                     Key::Character(ref ch)
                         if self.zoom_modifier && self.alt_modifier && !self.shift_modifier =>
                     {
-                        use openpencil_shell_core::document::BooleanOp;
+                        use op_editor_core::BooleanOp;
                         match ch.to_lowercase().as_str() {
                             "u" => consumed = self.host.apply_boolean_op(BooleanOp::Union),
                             "s" => consumed = self.host.apply_boolean_op(BooleanOp::Subtract),
@@ -657,28 +657,28 @@ impl ApplicationHandler for DesktopApp {
                         match lower.as_str() {
                             "v" => self
                                 .host
-                                .apply_set_tool(openpencil_shell_core::document::Tool::Select),
+                                .apply_set_tool(op_editor_core::Tool::Select),
                             "r" => self
                                 .host
-                                .apply_set_tool(openpencil_shell_core::document::Tool::Rect),
+                                .apply_set_tool(op_editor_core::Tool::Rect),
                             "o" => self
                                 .host
-                                .apply_set_tool(openpencil_shell_core::document::Tool::Ellipse),
+                                .apply_set_tool(op_editor_core::Tool::Ellipse),
                             "l" => self
                                 .host
-                                .apply_set_tool(openpencil_shell_core::document::Tool::Line),
+                                .apply_set_tool(op_editor_core::Tool::Line),
                             "t" => self
                                 .host
-                                .apply_set_tool(openpencil_shell_core::document::Tool::Text),
+                                .apply_set_tool(op_editor_core::Tool::Text),
                             "f" => self
                                 .host
-                                .apply_set_tool(openpencil_shell_core::document::Tool::Frame),
+                                .apply_set_tool(op_editor_core::Tool::Frame),
                             "p" => self
                                 .host
-                                .apply_set_tool(openpencil_shell_core::document::Tool::Pen),
+                                .apply_set_tool(op_editor_core::Tool::Pen),
                             "h" => self
                                 .host
-                                .apply_set_tool(openpencil_shell_core::document::Tool::Hand),
+                                .apply_set_tool(op_editor_core::Tool::Hand),
                             "[" => {
                                 consumed = self.host.apply_reorder(ReorderDirection::Down);
                                 handled = false;

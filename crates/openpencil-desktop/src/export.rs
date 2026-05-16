@@ -22,7 +22,7 @@
 //! — JPEG has no alpha so a "transparent" JPEG would read as black).
 //! Scale: caller picks @1x / @2x / @3x (TS export dialog parity).
 
-use openpencil_shell_core::document::{Effect, NodeKind};
+use openpencil_shell_core::layout_scene::{Effect, NodeKind};
 use openpencil_shell_core::layout_scene::{LayoutScene, ScenePage, SceneNode};
 use openpencil_shell_core::{Color, Point2D, Rect};
 use skia_safe::{Canvas, EncodedImageFormat, Paint, PaintStyle, Path, PathBuilder};
@@ -574,7 +574,7 @@ pub(crate) mod test_support {
     //! Shared helpers for the export test modules — build a
     //! `LayoutScene` directly without going through `op-pen-loader`.
 
-    use openpencil_shell_core::document::NodeKind;
+    use openpencil_shell_core::layout_scene::NodeKind;
     use openpencil_shell_core::layout_scene::{LayoutScene, ScenePage, SceneNode};
     use openpencil_shell_core::{Color, Rect};
 
@@ -740,7 +740,7 @@ mod tests {
 
     #[test]
     fn page_bounds_covers_layout_resolved_child_geometry() {
-        use openpencil_shell_core::document::NodeKind;
+        use openpencil_shell_core::layout_scene::NodeKind;
         use openpencil_shell_core::Rect;
         // A frame at (10,10) 200x100 with a child the layout pass
         // resolved to the frame's full width — page_bounds must cover

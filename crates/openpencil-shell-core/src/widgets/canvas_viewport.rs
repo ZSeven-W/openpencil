@@ -22,7 +22,8 @@
 //! Selection overlay (outlines + handles), grid, pen rubber-band and
 //! per-anchor Path handles are layered on top of the resolved scene.
 
-use crate::document::{NodeKind, Viewport as DocViewport};
+use crate::layout_scene::NodeKind;
+use op_editor_core::Viewport as DocViewport;
 use crate::layout_scene::LayoutScene;
 use crate::theme::Theme;
 use crate::widgets::editor_state_ext::theme_for;

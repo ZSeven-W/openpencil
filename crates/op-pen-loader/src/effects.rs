@@ -4,7 +4,7 @@
 
 use jian_ops_schema::node::PenNode;
 use jian_ops_schema::style::PenEffect;
-use openpencil_shell_core::document::{DropShadow, Effect};
+use openpencil_shell_core::layout_scene::{DropShadow, Effect};
 use serde::{Deserialize, Serialize};
 
 /// Serializable mirror of `document::DropShadow`.

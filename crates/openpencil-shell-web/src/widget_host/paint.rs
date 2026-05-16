@@ -201,8 +201,7 @@ impl WidgetHost {
                 let hover = self
                     .editor_state
                     .editor_ui
-                    .align_toolbar_hover
-                    .map(openpencil_shell_core::widgets::editor_state_ext::doc_align_action);
+                    .align_toolbar_hover;
                 tb.paint(&mut *backend, &self.theme, hover);
             }
         }

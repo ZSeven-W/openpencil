@@ -3,7 +3,7 @@
 //! ceiling. Each `paint_*_section` returns the y-coordinate just
 //! below itself so the parent can chain them.
 
-use crate::document::PropertyFocus;
+use op_editor_core::PropertyFocus;
 use crate::theme::Theme;
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::property_panel::NodeSnapshot;
@@ -142,12 +142,12 @@ pub fn paint_tab_strip(
     cx: &mut PaintCx<'_>,
     theme: &Theme,
     labels: &PropertyLabels,
-    active: crate::document::PropertyTab,
+    active: op_editor_core::PropertyTab,
     x: f32,
     y: f32,
     width: f32,
 ) -> f32 {
-    use crate::document::PropertyTab;
+    use op_editor_core::PropertyTab;
     let pad = 14.0;
     let tab_y = y + 6.0;
     let design_w = (cx.backend.measure_text(&labels.tab_design, 13.0) + 24.0).max(48.0);
@@ -365,7 +365,7 @@ pub fn paint_flex_section(
     cx: &mut PaintCx<'_>,
     theme: &Theme,
     labels: &PropertyLabels,
-    active: crate::document::FlexLayout,
+    active: op_editor_core::FlexLayout,
     x: f32,
     y: f32,
     width: f32,
@@ -377,7 +377,7 @@ pub fn paint_flex_section(
     let btn_w = 56.0;
     let gap = 8.0;
     let row_x = x + PAD_X;
-    use crate::document::FlexLayout;
+    use op_editor_core::FlexLayout;
     let modes = [
         (FlexLayout::Free, Icon::LayoutGrid),
         (FlexLayout::Vertical, Icon::Rows3),
