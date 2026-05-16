@@ -56,7 +56,7 @@ pub use chat::{AgentProvider, ChatAnchor, ChatMessage, ChatRole, ChatState, Mode
 pub use color_picker::{hsv_to_rgb, parse_hex_rgb, rgb_to_hex, rgb_to_hsv};
 pub use components::{Component, ComponentLibrary};
 pub use command::{BatchInsertItem, EditorCommand, NodeFlag, VariableScalarPayload};
-pub use fills::{first_solid_fill_hex, first_solid_stroke_hex};
+pub use fills::{first_fill_type, first_solid_fill_hex, first_solid_stroke_hex};
 pub use geometry::{aggregate_bounds, own_bounds, union_aggregate_bounds, DocRect};
 pub use history::{EditorSnapshot, History, HISTORY_CAP};
 pub use node_id::NodeId;

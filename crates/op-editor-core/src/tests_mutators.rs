@@ -348,6 +348,137 @@ fn toggle_node_locked_flips_locked() {
     assert_eq!(n.base().locked, Some(true));
 }
 
+// --- Fill type (Gap 1) ----------------------------------------------
+
+#[test]
+fn set_selected_fill_type_writes_first_fill_variant() {
+    let mut s = three_rects();
+    s.set_single_selection(NodeId::new("n1"));
+    // Default rect has no fills → reports Solid.
+    assert_eq!(
+        crate::first_fill_type(
+            find_node(s.active_children(), &NodeId::new("n1")).unwrap()
+        ),
+        crate::FillType::Solid
+    );
+    assert!(s.set_selected_fill_type(crate::FillType::LinearGradient));
+    assert_eq!(
+        crate::first_fill_type(
+            find_node(s.active_children(), &NodeId::new("n1")).unwrap()
+        ),
+        crate::FillType::LinearGradient
+    );
+    // Flipping again to Image lands too.
+    assert!(s.set_selected_fill_type(crate::FillType::Image));
+    assert_eq!(
+        crate::first_fill_type(
+            find_node(s.active_children(), &NodeId::new("n1")).unwrap()
+        ),
+        crate::FillType::Image
+    );
+}
+
+#[test]
+fn set_selected_fill_type_no_selection_is_noop() {
+    let mut s = three_rects();
+    s.clear_selection();
+    assert!(!s.set_selected_fill_type(crate::FillType::RadialGradient));
+}
+
+#[test]
+fn set_selected_fill_type_rejects_locked_node() {
+    let mut s = three_rects();
+    s.toggle_node_locked(&NodeId::new("n1"));
+    s.set_single_selection(NodeId::new("n1"));
+    assert!(!s.set_selected_fill_type(crate::FillType::LinearGradient));
+}
+
+// --- Chat model (Gap 2) ---------------------------------------------
+
+#[test]
+fn select_chat_model_picks_model_and_syncs_agent() {
+    let mut s = sample();
+    s.chat.available_models = vec![
+        crate::ModelEntry::new(crate::AgentProvider::ClaudeCode, "claude", "Claude"),
+        crate::ModelEntry::new(crate::AgentProvider::GeminiCli, "gemini", "Gemini"),
+    ];
+    s.editor_ui.chat_model_picker_open = true;
+    s.select_chat_model(1);
+    assert_eq!(s.chat.selected_model, 1);
+    // GeminiCli is index 4 in AgentProvider::ALL.
+    assert_eq!(s.editor_ui.chat_selected_agent, 4);
+    // Picker closes on selection.
+    assert!(!s.editor_ui.chat_model_picker_open);
+}
+
+#[test]
+fn select_chat_model_bad_index_still_closes_picker() {
+    let mut s = sample();
+    s.chat.available_models =
+        vec![crate::ModelEntry::new(crate::AgentProvider::ClaudeCode, "c", "C")];
+    s.editor_ui.chat_model_picker_open = true;
+    s.select_chat_model(9);
+    // Out-of-range index ignored — selected_model unchanged.
+    assert_eq!(s.chat.selected_model, 0);
+    assert!(!s.editor_ui.chat_model_picker_open);
+}
+
+// --- Layer collapse (Gap 3) -----------------------------------------
+
+#[test]
+fn toggle_node_collapsed_inserts_then_removes() {
+    let mut s = three_rects();
+    let id = NodeId::new("n1");
+    assert!(!s.is_node_collapsed(&id));
+    // First toggle collapses (returns true = now collapsed).
+    assert!(s.toggle_node_collapsed(&id));
+    assert!(s.is_node_collapsed(&id));
+    // Second toggle expands (returns false = now expanded).
+    assert!(!s.toggle_node_collapsed(&id));
+    assert!(!s.is_node_collapsed(&id));
+}
+
+#[test]
+fn toggle_node_collapsed_none_id_is_noop() {
+    let mut s = three_rects();
+    assert!(!s.toggle_node_collapsed(&NodeId::NONE));
+    assert!(s.editor_ui.collapsed_layers.is_empty());
+}
+
+// --- Panel visibility predicates (Gap 4) ----------------------------
+
+#[test]
+fn property_panel_visible_tracks_selection() {
+    let mut s = three_rects();
+    s.clear_selection();
+    assert!(!s.property_panel_visible());
+    s.set_single_selection(NodeId::new("n1"));
+    assert!(s.property_panel_visible());
+    // A selection of an id that does not resolve is not visible.
+    s.set_single_selection(NodeId::new("nope"));
+    assert!(!s.property_panel_visible());
+}
+
+#[test]
+fn right_rail_visible_true_on_selection_or_variables() {
+    use jian_ops_schema::variable::{VariableKind, VariableScalar};
+    let mut s = three_rects();
+    s.clear_selection();
+    // No selection + no variables → hidden.
+    assert!(!s.right_rail_visible());
+    // A persisted variable alone makes the rail visible.
+    s.create_variable(
+        "brand",
+        VariableKind::Color,
+        VariableScalar::Str("#ff0000".into()),
+    );
+    assert!(s.right_rail_visible());
+    // Selection alone also makes it visible.
+    s.delete_variable("brand");
+    s.set_single_selection(NodeId::new("n1"));
+    assert!(s.right_rail_visible());
+}
+
 #[test]
 fn validate_catches_duplicate_ids() {
     let s = state_with(vec![

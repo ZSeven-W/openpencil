@@ -23,9 +23,11 @@
 //! ever touches the *first solid* entry, mirroring shell-core's
 //! single-colour behaviour without flattening the canonical model.
 
+use crate::editor_ui_state::FillType;
 use jian_ops_schema::node::PenNode;
 use jian_ops_schema::style::{
-    PenEffect, PenFill, PenStroke, ShadowBody, SolidFillBody, StrokeThickness,
+    GradientStop, ImageFillBody, LinearGradientBody, PenEffect, PenFill, PenStroke,
+    RadialGradientBody, ShadowBody, SolidFillBody, StrokeThickness,
 };
 
 /// Borrow a node's `fill` list, if the variant carries one. Frame /
@@ -158,6 +160,110 @@ pub fn set_primary_fill_hex(node: &mut PenNode, hex: &str) -> bool {
         slot.color = hex.to_string();
     } else {
         fills.insert(0, solid_fill(hex.to_string()));
+    }
+    true
+}
+
+/// Read the node's primary fill kind as a [`FillType`]. The canonical
+/// model has no scalar `fill_type` field — the kind is the variant of
+/// the first `PenFill`. A node with no fills reports `Solid` (the
+/// neutral default the property panel paints).
+pub fn first_fill_type(node: &PenNode) -> FillType {
+    match node_fills(node).and_then(|f| f.first()) {
+        Some(PenFill::Solid(_)) | None => FillType::Solid,
+        Some(PenFill::LinearGradient(_)) => FillType::LinearGradient,
+        Some(PenFill::RadialGradient(_)) => FillType::RadialGradient,
+        Some(PenFill::Image(_)) => FillType::Image,
+    }
+}
+
+/// Build a default `PenFill` of the given `FillType`, seeding it with
+/// `hex` where the variant carries a single colour (Solid) or a stop
+/// list (gradients). `Image` has no colour, so it gets an empty `url`.
+fn default_fill_of_type(kind: FillType, hex: &str) -> PenFill {
+    match kind {
+        FillType::Solid => solid_fill(hex.to_string()),
+        FillType::LinearGradient => PenFill::LinearGradient(LinearGradientBody {
+            angle: None,
+            stops: default_stops(hex),
+            explain: None,
+            opacity: None,
+            blend_mode: None,
+        }),
+        FillType::RadialGradient => PenFill::RadialGradient(RadialGradientBody {
+            cx: None,
+            cy: None,
+            radius: None,
+            stops: default_stops(hex),
+            explain: None,
+            opacity: None,
+            blend_mode: None,
+        }),
+        FillType::Image => PenFill::Image(ImageFillBody {
+            url: String::new(),
+            mode: None,
+            original_size: None,
+            transform: None,
+            explain: None,
+            opacity: None,
+            exposure: None,
+            contrast: None,
+            saturation: None,
+            temperature: None,
+            tint: None,
+            highlights: None,
+            shadows: None,
+        }),
+    }
+}
+
+/// Two-stop gradient default — the picked colour at 0.0, transparent
+/// black at 1.0, mirroring the property panel's 2-stop gradient body.
+fn default_stops(hex: &str) -> Vec<GradientStop> {
+    vec![
+        GradientStop {
+            offset: 0.0,
+            color: hex.to_string(),
+        },
+        GradientStop {
+            offset: 1.0,
+            color: "#00000000".to_string(),
+        },
+    ]
+}
+
+/// Carry a representative hex colour out of a `PenFill` so flipping
+/// fill types keeps the node's colour where one exists. Solid → its
+/// colour; gradient → the first stop's colour; image → none.
+fn fill_hex(fill: &PenFill) -> Option<&str> {
+    match fill {
+        PenFill::Solid(body) => Some(body.color.as_str()),
+        PenFill::LinearGradient(body) => body.stops.first().map(|s| s.color.as_str()),
+        PenFill::RadialGradient(body) => body.stops.first().map(|s| s.color.as_str()),
+        PenFill::Image(_) => None,
+    }
+}
+
+/// Set the node's primary fill kind to `kind`. The canonical model
+/// encodes fill type as the first `PenFill` variant, so this replaces
+/// the first fill with a fresh body of the requested variant
+/// (preserving the old fill's representative colour), or prepends one
+/// when the node has no fills. Non-first fills are left untouched.
+/// `false` for variants that carry no `fill` field at all.
+pub fn set_primary_fill_type(node: &mut PenNode, kind: FillType) -> bool {
+    let Some(fills) = node_fills_mut(node) else {
+        return false;
+    };
+    let hex = fills
+        .first()
+        .and_then(fill_hex)
+        .map(|s| s.to_string())
+        .unwrap_or_else(|| "#000000".to_string());
+    let fresh = default_fill_of_type(kind, &hex);
+    if fills.is_empty() {
+        fills.push(fresh);
+    } else {
+        fills[0] = fresh;
     }
     true
 }
