@@ -10,6 +10,10 @@
 pub mod align;
 pub mod clipboard;
 pub mod color_picker;
+pub mod command;
+pub mod command_apply;
+pub mod command_node;
+pub mod command_node_attrs;
 pub mod fills;
 pub mod geometry;
 pub mod grouping;
@@ -30,6 +34,8 @@ pub mod viewport;
 pub mod walkers;
 
 #[cfg(test)]
+mod command_tests;
+#[cfg(test)]
 mod test_support;
 #[cfg(test)]
 mod tests_geometry;
@@ -40,6 +46,7 @@ mod tests_pages;
 
 pub use align::AlignAction;
 pub use color_picker::{hsv_to_rgb, parse_hex_rgb, rgb_to_hex, rgb_to_hsv};
+pub use command::{BatchInsertItem, EditorCommand, NodeFlag, VariableScalarPayload};
 pub use fills::{first_solid_fill_hex, first_solid_stroke_hex};
 pub use geometry::{aggregate_bounds, own_bounds, union_aggregate_bounds, DocRect};
 pub use history::{EditorSnapshot, History, HISTORY_CAP};

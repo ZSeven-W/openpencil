@@ -1,0 +1,281 @@
+//! Per-node attribute command application — `SetNodeRotation` /
+//! `SetNodeText` / `SetNodeCornerRadius` / `SetNodeFontSize` /
+//! `SetNodeFontWeight` / `SetNodeStrokeHex` / `SetNodeStrokeWidth` /
+//! `SetNodeFillHex` / `SetNodeName` / `SetNodeFlag`.
+//!
+//! Ported from shell-core's `mcp_apply_node_attrs.rs`, retargeted onto
+//! the canonical `jian_ops_schema::PenNode`. shell-core's flat `Node`
+//! carried a single `fill` / `stroke` / `corner_radius`; `PenNode`
+//! spreads those across per-variant fields, so these helpers route
+//! through [`crate::fills`] + per-variant matches.
+//!
+//! Each helper keeps the validate-then-mutate discipline: kind / range
+//! / hex checks happen BEFORE the mutable borrow + write.
+
+use crate::command::NodeFlag;
+use crate::fills::{set_primary_fill_hex, set_primary_stroke_hex};
+use crate::node_id::NodeId;
+use crate::pen_node_ext::PenNodeExt;
+use crate::state::EditorState;
+use crate::walkers::find_node_mut;
+use jian_ops_schema::node::{CornerRadius, FontWeight, PenNode, TextContent};
+use jian_ops_schema::style::{PenStroke, StrokeThickness};
+
+/// Write a literal corner radius onto whatever variant carries one.
+/// Frame / Group / Rectangle store `CornerRadius` on `container`;
+/// Ellipse / Polygon carry an `f64`. Other kinds accept the call as a
+/// silent no-op (parity with shell-core, where the radius was simply
+/// invisible on non-rounded kinds). True when a field was written.
+fn write_corner_radius(node: &mut PenNode, radius: f64) -> bool {
+    match node {
+        PenNode::Frame(n) => {
+            n.container.corner_radius = Some(CornerRadius::Uniform(radius));
+            true
+        }
+        PenNode::Group(n) => {
+            n.container.corner_radius = Some(CornerRadius::Uniform(radius));
+            true
+        }
+        PenNode::Rectangle(n) => {
+            n.container.corner_radius = Some(CornerRadius::Uniform(radius));
+            true
+        }
+        PenNode::Ellipse(n) => {
+            n.corner_radius = Some(radius);
+            true
+        }
+        PenNode::Polygon(n) => {
+            n.corner_radius = Some(radius);
+            true
+        }
+        // Other kinds have no corner-radius field; the write is a
+        // silent no-op so the command still reports success.
+        _ => true,
+    }
+}
+
+/// Mutably borrow whatever variant's `stroke` field. Mirrors the
+/// `fills::node_stroke_mut` arm set. `None` for Text / Image / Ref.
+fn node_stroke_slot(node: &mut PenNode) -> Option<&mut Option<PenStroke>> {
+    match node {
+        PenNode::Frame(n) => Some(&mut n.container.stroke),
+        PenNode::Group(n) => Some(&mut n.container.stroke),
+        PenNode::Rectangle(n) => Some(&mut n.container.stroke),
+        PenNode::Ellipse(n) => Some(&mut n.stroke),
+        PenNode::Polygon(n) => Some(&mut n.stroke),
+        PenNode::Path(n) => Some(&mut n.stroke),
+        PenNode::Line(n) => Some(&mut n.stroke),
+        PenNode::TextInput(n) => Some(&mut n.stroke),
+        PenNode::IconFont(n) => Some(&mut n.stroke),
+        PenNode::Text(_) | PenNode::Image(_) | PenNode::Ref(_) => None,
+    }
+}
+
+impl EditorState {
+    /// `SetNodeRotation` — write rotation (degrees) on a node.
+    pub(crate) fn cmd_set_node_rotation(
+        &mut self,
+        node_id: &NodeId,
+        degrees: f32,
+    ) -> bool {
+        if !node_id.is_real() || !degrees.is_finite() {
+            return false;
+        }
+        let Some(node) = find_node_mut(self.active_children_mut(), node_id) else {
+            return false;
+        };
+        node.base_mut().rotation = Some(degrees as f64);
+        true
+    }
+
+    /// `SetNodeText` — set the plain-text content of a Text node.
+    /// Rejects non-Text kinds (parity with shell-core).
+    pub(crate) fn cmd_set_node_text(&mut self, node_id: &NodeId, text: &str) -> bool {
+        if !node_id.is_real() {
+            return false;
+        }
+        let Some(node) = find_node_mut(self.active_children_mut(), node_id) else {
+            return false;
+        };
+        match node {
+            PenNode::Text(t) => {
+                t.content = TextContent::Plain(text.to_string());
+                true
+            }
+            _ => false,
+        }
+    }
+
+    /// `SetNodeCornerRadius` — write corner radius on a node. Rejects
+    /// negative / non-finite values.
+    pub(crate) fn cmd_set_node_corner_radius(
+        &mut self,
+        node_id: &NodeId,
+        radius: f32,
+    ) -> bool {
+        if !node_id.is_real() || !radius.is_finite() || radius < 0.0 {
+            return false;
+        }
+        let Some(node) = find_node_mut(self.active_children_mut(), node_id) else {
+            return false;
+        };
+        write_corner_radius(node, radius as f64)
+    }
+
+    /// `SetNodeFontSize` — set the font size on a Text node. Rejects
+    /// non-Text kinds + non-positive sizes.
+    pub(crate) fn cmd_set_node_font_size(
+        &mut self,
+        node_id: &NodeId,
+        font_size: f32,
+    ) -> bool {
+        if !node_id.is_real() || !font_size.is_finite() || font_size <= 0.0 {
+            return false;
+        }
+        let Some(node) = find_node_mut(self.active_children_mut(), node_id) else {
+            return false;
+        };
+        match node {
+            PenNode::Text(t) => {
+                t.font_size = Some(font_size as f64);
+                true
+            }
+            _ => false,
+        }
+    }
+
+    /// `SetNodeFontWeight` — set the font weight (1..=1000) on a Text
+    /// node. Rejects non-Text kinds + out-of-range weights.
+    pub(crate) fn cmd_set_node_font_weight(
+        &mut self,
+        node_id: &NodeId,
+        font_weight: u16,
+    ) -> bool {
+        if !node_id.is_real() || font_weight == 0 || font_weight > 1000 {
+            return false;
+        }
+        let Some(node) = find_node_mut(self.active_children_mut(), node_id) else {
+            return false;
+        };
+        match node {
+            PenNode::Text(t) => {
+                t.font_weight = Some(FontWeight::Number(font_weight as u32));
+                true
+            }
+            _ => false,
+        }
+    }
+
+    /// `SetNodeStrokeHex` — set the stroke color on a node. A node with
+    /// no stroke gets a fresh 1-px stroke so the color always lands.
+    pub(crate) fn cmd_set_node_stroke_hex(
+        &mut self,
+        node_id: &NodeId,
+        hex: &str,
+    ) -> bool {
+        if !node_id.is_real() || crate::color_picker::parse_hex_rgb(hex).is_none() {
+            return false;
+        }
+        let Some(node) = find_node_mut(self.active_children_mut(), node_id) else {
+            return false;
+        };
+        set_primary_stroke_hex(node, hex)
+    }
+
+    /// `SetNodeStrokeWidth` — set the stroke width (doc-px) on a node.
+    /// Width 0 clears the stroke; width > 0 on a node with no stroke
+    /// attaches a fresh stroke at that width.
+    pub(crate) fn cmd_set_node_stroke_width(
+        &mut self,
+        node_id: &NodeId,
+        width: f32,
+    ) -> bool {
+        if !node_id.is_real() || !width.is_finite() || width < 0.0 {
+            return false;
+        }
+        let Some(node) = find_node_mut(self.active_children_mut(), node_id) else {
+            return false;
+        };
+        let Some(slot) = node_stroke_slot(node) else {
+            return false;
+        };
+        if width == 0.0 {
+            *slot = None;
+        } else {
+            match slot {
+                Some(stroke) => stroke.thickness = StrokeThickness::Uniform(width),
+                none @ None => {
+                    *none = Some(PenStroke {
+                        thickness: StrokeThickness::Uniform(width),
+                        align: None,
+                        join: None,
+                        cap: None,
+                        dash_pattern: None,
+                        dash_offset: None,
+                        fill: None,
+                    });
+                }
+            }
+        }
+        true
+    }
+
+    /// `SetNodeFillHex` — set the fill color on a node by id.
+    pub(crate) fn cmd_set_node_fill_hex(&mut self, node_id: &NodeId, hex: &str) -> bool {
+        if !node_id.is_real() || crate::color_picker::parse_hex_rgb(hex).is_none() {
+            return false;
+        }
+        let Some(node) = find_node_mut(self.active_children_mut(), node_id) else {
+            return false;
+        };
+        set_primary_fill_hex(node, hex)
+    }
+
+    /// `SetNodeName` — rename a node by id. Rejects whitespace-only
+    /// names.
+    pub(crate) fn cmd_set_node_name(&mut self, node_id: &NodeId, name: &str) -> bool {
+        if !node_id.is_real() {
+            return false;
+        }
+        let trimmed = name.trim();
+        if trimmed.is_empty() {
+            return false;
+        }
+        let Some(node) = find_node_mut(self.active_children_mut(), node_id) else {
+            return false;
+        };
+        node.base_mut().name = Some(trimmed.to_string());
+        true
+    }
+
+    /// `SetNodeFlag` — flip a boolean flag on a node. `Collapsed` has
+    /// no canonical-schema field (it is editor-chrome-only state), so
+    /// the applier rejects it; `Hidden` writes `visible`, `Locked`
+    /// writes `locked`.
+    pub(crate) fn cmd_set_node_flag(
+        &mut self,
+        node_id: &NodeId,
+        flag: NodeFlag,
+        value: bool,
+    ) -> bool {
+        if !node_id.is_real() {
+            return false;
+        }
+        if matches!(flag, NodeFlag::Collapsed) {
+            // No `collapsed` field on `PenNodeBase` — collapse is a
+            // layer-panel chrome flag, not part of the `.op` document.
+            return false;
+        }
+        let Some(node) = find_node_mut(self.active_children_mut(), node_id) else {
+            return false;
+        };
+        match flag {
+            // `visible == false` is the hidden state, so a `Hidden`
+            // write inverts the sense.
+            NodeFlag::Hidden => node.base_mut().visible = Some(!value),
+            NodeFlag::Locked => node.base_mut().locked = Some(value),
+            NodeFlag::Collapsed => unreachable!("rejected above"),
+        }
+        true
+    }
+}
