@@ -319,7 +319,7 @@ impl WidgetHost {
                 origin: Point2D::new(0.0, TOP_BAR_HEIGHT),
                 size: Point2D::new(panel_w, (viewport_h - TOP_BAR_HEIGHT).max(0.0)),
             };
-            let panel = LayerPanel::from_document(&self.paint_doc);
+            let panel = LayerPanel::from_editor(&self.editor_state);
             match panel.hit_test(layer_rect, Point2D::new(x, y)) {
                 Some(LayerPanelHit::Layer(id))
                 | Some(LayerPanelHit::ToggleHidden(id))
@@ -572,7 +572,7 @@ impl WidgetHost {
         // the row landed on match the post-commit layout — see the
         // native `commit_layer_drag` for the rationale.
         let panel =
-            LayerPanel::from_document_with_drag_source(&self.paint_doc, d.source.clone());
+            LayerPanel::from_editor_with_drag_source(&self.editor_state, &d.source);
         let cursor = Point2D::new(d.current_x, d.current_y);
         let Some(drop) = panel.drop_target_at(layer_rect, cursor) else {
             return true;

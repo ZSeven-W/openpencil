@@ -1,15 +1,40 @@
 //! Tests for `widgets::layer_panel` — moved to a sibling file to
 //! keep `layer_panel.rs` under the 800-line cap.
+//!
+//! Phase 6: the panel now builds from `op_editor_core::EditorState`,
+//! so the fixtures construct `EditorState` values instead of the old
+//! shell-core `Document`.
 
 use super::layer_panel::*;
 use super::Widget;
-use crate::document::{Document, Node, NodeId, NodeKind, Page};
+use crate::document::NodeId;
 use crate::{Point2D, Rect};
+use op_editor_core::EditorState;
+
+/// Build an `EditorState` from a canonical `.op` JSON string.
+fn state_from(src: &str) -> EditorState {
+    let doc = jian_ops_schema::load_str(src)
+        .expect("layer-panel fixture parses")
+        .value;
+    EditorState::from_document(doc)
+}
+
+/// Four sibling rectangles `n1..n4` in a single-page document.
+fn four_rects() -> EditorState {
+    state_from(
+        r##"{ "version": "0.8.0", "children": [
+              {"type":"rectangle","id":"n1","name":"A","width":10,"height":10},
+              {"type":"rectangle","id":"n2","name":"B","width":10,"height":10},
+              {"type":"rectangle","id":"n3","name":"C","width":10,"height":10},
+              {"type":"rectangle","id":"n4","name":"D","width":10,"height":10}
+        ]}"##,
+    )
+}
 
 #[test]
 fn from_sample_doc_flattens_to_5_layer_rows() {
-    let doc = Document::sample();
-    let panel = LayerPanel::from_document(&doc);
+    let state = EditorState::sample();
+    let panel = LayerPanel::from_editor(&state);
     assert_eq!(panel.items.len(), 5);
     assert_eq!(panel.items[0].label, "Frame");
     assert_eq!(panel.items[0].depth, 0);
@@ -18,8 +43,8 @@ fn from_sample_doc_flattens_to_5_layer_rows() {
 
 #[test]
 fn from_sample_doc_has_one_active_page() {
-    let doc = Document::sample();
-    let panel = LayerPanel::from_document(&doc);
+    let state = EditorState::sample();
+    let panel = LayerPanel::from_editor(&state);
     assert_eq!(panel.pages.len(), 1);
     assert!(panel.pages[0].active);
     assert_eq!(panel.pages[0].label, "Page 1");
@@ -27,30 +52,49 @@ fn from_sample_doc_has_one_active_page() {
 
 #[test]
 fn selection_flag_marks_only_selected_row() {
-    let doc = Document::sample(); // selected = Title
-    let panel = LayerPanel::from_document(&doc);
+    let state = EditorState::sample(); // selection anchors on n11
+    let panel = LayerPanel::from_editor(&state);
     let selected = panel.items.iter().filter(|i| i.selected).count();
     assert_eq!(selected, 1);
 }
 
 #[test]
 fn empty_document_yields_one_default_page_no_layers() {
-    let doc = Document::empty();
-    let panel = LayerPanel::from_document(&doc);
+    let state = EditorState::new();
+    let panel = LayerPanel::from_editor(&state);
     assert_eq!(panel.pages.len(), 1);
     assert!(panel.items.is_empty());
 }
 
 #[test]
+fn collapsed_node_hides_its_children() {
+    let state = state_from(
+        r##"{ "version": "0.8.0", "children": [
+              {"type":"frame","id":"n1","name":"Frame","width":100,"height":100,
+               "children":[
+                 {"type":"rectangle","id":"n2","name":"Child","width":10,"height":10}
+               ]}
+        ]}"##,
+    );
+    let mut collapsed = state;
+    collapsed
+        .editor_ui
+        .collapsed_layers
+        .insert(op_editor_core::NodeId::new("n1"));
+    let panel = LayerPanel::from_editor(&collapsed);
+    // Only the frame row paints; the collapsed child is hidden.
+    assert_eq!(panel.items.len(), 1);
+    assert!(panel.items[0].collapsed);
+}
+
+#[test]
 fn hit_test_resolves_first_layer_row() {
-    let doc = Document::sample();
-    let panel = LayerPanel::from_document(&doc);
+    let state = EditorState::sample();
+    let panel = LayerPanel::from_editor(&state);
     let rect = Rect {
         origin: Point2D::new(0.0, 0.0),
         size: Point2D::new(LAYER_PANEL_WIDTH, panel.intrinsic_height()),
     };
-    // Skip pages section (header + 1 page row + section gap +
-    // layers header) → land on the first layer row.
     let layer_y = 8.0
         + SECTION_HEADER_HEIGHT
         + PAGE_ROW_HEIGHT
@@ -66,24 +110,18 @@ fn hit_test_resolves_first_layer_row() {
 
 #[test]
 fn hit_test_resolves_add_page_plus_icon() {
-    let doc = Document::sample();
-    let panel = LayerPanel::from_document(&doc);
+    let state = EditorState::sample();
+    let panel = LayerPanel::from_editor(&state);
     let rect = Rect {
         origin: Point2D::new(0.0, 0.0),
         size: Point2D::new(LAYER_PANEL_WIDTH, panel.intrinsic_height()),
     };
-    // Mirror the paint geometry: plus_x = right edge - ROW_PAD_X
-    // - 12, plus_y = 8 + (SECTION_HEADER_HEIGHT - 14) / 2.
     let plus_x = rect.size.x - ROW_PAD_X - 12.0;
     let plus_y = 8.0 + (SECTION_HEADER_HEIGHT - 14.0) / 2.0;
-    // Centre of the 14 px icon.
     assert_eq!(
         panel.hit_test(rect, Point2D::new(plus_x + 7.0, plus_y + 7.0)),
         Some(LayerPanelHit::AddPage)
     );
-    // Edge-of-slop sample — 3 px LEFT of the icon's left edge,
-    // inside the 4 px slop band. Locks the slop contract: a
-    // regression that shrank slop below 3 px would fail here.
     assert_eq!(
         panel.hit_test(rect, Point2D::new(plus_x - 3.0, plus_y + 7.0)),
         Some(LayerPanelHit::AddPage)
@@ -92,8 +130,8 @@ fn hit_test_resolves_add_page_plus_icon() {
 
 #[test]
 fn hit_test_resolves_first_page_row() {
-    let doc = Document::sample();
-    let panel = LayerPanel::from_document(&doc);
+    let state = EditorState::sample();
+    let panel = LayerPanel::from_editor(&state);
     let rect = Rect {
         origin: Point2D::new(0.0, 0.0),
         size: Point2D::new(LAYER_PANEL_WIDTH, panel.intrinsic_height()),
@@ -105,8 +143,8 @@ fn hit_test_resolves_first_page_row() {
 
 #[test]
 fn access_node_advertises_tree_role_and_layers_label() {
-    let doc = Document::sample();
-    let panel = LayerPanel::from_document(&doc);
+    let state = EditorState::sample();
+    let panel = LayerPanel::from_editor(&state);
     let node = panel.access_node();
     assert_eq!(node.role(), accesskit::Role::Tree);
     assert_eq!(node.label(), Some("Layers"));
@@ -114,31 +152,16 @@ fn access_node_advertises_tree_role_and_layers_label() {
 
 #[test]
 fn from_document_scopes_to_active_page_only() {
-    let page1 = crate::document::Page::new(
-        "n1",
-        "Page 1",
-        vec![Node::leaf("n2", crate::document::NodeKind::Frame, "P1-Node")],
+    let mut state = state_from(
+        r##"{ "version": "0.8.0", "children": [], "pages": [
+              {"id":"n1","name":"Page 1","children":[
+                {"type":"frame","id":"n2","name":"P1-Node","width":10,"height":10}]},
+              {"id":"n3","name":"Page 2","children":[
+                {"type":"frame","id":"n4","name":"P2-Node","width":10,"height":10}]}
+        ]}"##,
     );
-    let page2 = crate::document::Page::new(
-        "n3",
-        "Page 2",
-        vec![Node::leaf("n4", crate::document::NodeKind::Frame, "P2-Node")],
-    );
-    let doc = Document {
-        pages: vec![page1, page2],
-        active_page_index: 1,
-        selected: NodeId::NONE,
-        selected_set: Vec::new(),
-        clipboard: Vec::new(),
-        tool: crate::document::Tool::Select,
-        viewport: crate::document::Viewport::IDENTITY,
-        chat: crate::document::ChatState::default(),
-        ui: crate::document::UiState::default(),
-        history: crate::document::History::default(),
-            var_table: crate::document::VariableTable::default(),
-            components: crate::document::ComponentLibrary::default(),
-    };
-    let panel = LayerPanel::from_document(&doc);
+    state.ui.active_page_index = 1;
+    let panel = LayerPanel::from_editor(&state);
     assert_eq!(panel.items.len(), 1);
     assert_eq!(panel.items[0].label, "P2-Node");
     assert_eq!(panel.pages.len(), 2);
@@ -148,20 +171,8 @@ fn from_document_scopes_to_active_page_only() {
 
 #[test]
 fn drop_indicator_matches_post_commit_layout_when_dragging_down() {
-    // Regression: the drop indicator could paint at one row, but
-    // commit would land the source at a different row (preview lied
-    // when dragging downward past other rows). With the source
-    // excluded from the panel's item list, indicator_y == the source's
-    // top edge in the post-commit panel.
-    let mut doc = Document::empty();
-    let p = doc.active_page_index;
-    doc.pages[p].children = vec![
-        Node::leaf("n1", NodeKind::Rect, "A"),
-        Node::leaf("n2", NodeKind::Rect, "B"),
-        Node::leaf("n3", NodeKind::Rect, "C"),
-        Node::leaf("n4", NodeKind::Rect, "D"),
-    ];
-    let panel = LayerPanel::from_document_with_drag_source(&doc, NodeId::new("n1"));
+    let mut state = four_rects();
+    let panel = LayerPanel::from_editor_with_drag_source(&state, &NodeId::new("n1"));
     assert_eq!(panel.items.len(), 3); // A excluded → [B, C, D]
     let rect = Rect {
         origin: Point2D::new(0.0, 0.0),
@@ -179,8 +190,9 @@ fn drop_indicator_matches_post_commit_layout_when_dragging_down() {
     assert_eq!(drop.position, DropPosition::Before);
     assert!((drop.indicator_y - row_top_of_d).abs() < 0.5);
     // Commit and check A's new row top matches indicator_y.
-    assert!(doc.reorder_before(NodeId::new("n1"), drop.anchor));
-    let post = LayerPanel::from_document(&doc);
+    let anchor = op_editor_core::NodeId::new(drop.anchor.raw().to_string());
+    assert!(state.reorder_before(op_editor_core::NodeId::new("n1"), anchor));
+    let post = LayerPanel::from_editor(&state);
     let a_idx = post
         .items
         .iter()
@@ -197,8 +209,8 @@ fn drop_indicator_matches_post_commit_layout_when_dragging_down() {
 
 #[test]
 fn drop_target_at_resolves_before_and_after_halves() {
-    let doc = Document::sample();
-    let panel = LayerPanel::from_document(&doc);
+    let state = EditorState::sample();
+    let panel = LayerPanel::from_editor(&state);
     let rect = Rect {
         origin: Point2D::new(0.0, 0.0),
         size: Point2D::new(LAYER_PANEL_WIDTH, panel.intrinsic_height()),
@@ -224,10 +236,8 @@ fn drop_target_at_resolves_before_and_after_halves() {
 
 #[test]
 fn drop_target_at_in_empty_area_below_rows_drops_at_end() {
-    let doc = Document::sample();
-    let panel = LayerPanel::from_document(&doc);
-    // Make the panel rect tall enough that there's real empty
-    // space below the last layer row.
+    let state = EditorState::sample();
+    let panel = LayerPanel::from_editor(&state);
     let rect = Rect {
         origin: Point2D::new(0.0, 0.0),
         size: Point2D::new(LAYER_PANEL_WIDTH, panel.intrinsic_height() + 200.0),
@@ -238,7 +248,6 @@ fn drop_target_at_in_empty_area_below_rows_drops_at_end() {
         + SECTION_GAP
         + SECTION_HEADER_HEIGHT;
     let rows_bottom = layers_top + panel.items.len() as f32 * LAYER_ROW_HEIGHT;
-    // Cursor 50 px below the last row — still inside panel rect.
     let drop = panel
         .drop_target_at(rect, Point2D::new(rect.size.x / 2.0, rows_bottom + 50.0))
         .expect("below-rows hit should drop at end");

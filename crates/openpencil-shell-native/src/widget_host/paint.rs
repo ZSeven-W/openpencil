@@ -66,6 +66,9 @@ impl WidgetHostNative {
             // mirrors the post-commit layout — both the visible rows
             // and the drop-indicator y the user sees are then exactly
             // what `reorder_before/after` produces on release.
+            // The panel walks the canonical `PenNode` tree directly
+            // off `EditorState`; the drag source id is shell-core's
+            // `NodeId` (from the input path), losslessly accepted.
             let active_drag = self.layer_drag.clone().filter(|d| {
                 d.active
                     && self.paint_doc
@@ -74,20 +77,20 @@ impl WidgetHostNative {
                         .unwrap_or(false)
             });
             let mut layer_panel = if let Some(d) = &active_drag {
-                LayerPanel::from_document_with_drag_source(doc, d.source.clone())
+                LayerPanel::from_editor_with_drag_source(&self.editor_state, &d.source)
             } else {
-                LayerPanel::from_document(doc)
+                LayerPanel::from_editor(&self.editor_state)
             };
             if let Some(d) = &active_drag {
                 layer_panel.drop_target = layer_panel
                     .drop_target_at(layer_panel_rect, Point2D::new(d.current_x, d.current_y));
                 // Floating ghost — keeps the source visible mid-drag.
-                if let Some(item) = LayerPanel::ghost_item_for(doc, d.source.clone()) {
+                if let Some(item) = LayerPanel::ghost_item_for(&self.editor_state, &d.source) {
                     layer_panel.drag_ghost = Some((item, d.current_y));
                 }
             }
             layer_panel.now_ms = self.now_ms;
-            layer_panel.caret_anchor_ms = doc.ui.rename_caret_anchor_ms;
+            layer_panel.caret_anchor_ms = self.editor_state.editor_ui.rename_caret_anchor_ms;
             let mut cx = PaintCx {
                 backend: &mut *frame,
             };

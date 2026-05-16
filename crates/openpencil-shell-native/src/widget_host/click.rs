@@ -45,7 +45,7 @@ impl WidgetHostNative {
         };
         // Build with source excluded so indicator y matches post-commit.
         let panel =
-            LayerPanel::from_document_with_drag_source(&self.paint_doc, d.source.clone());
+            LayerPanel::from_editor_with_drag_source(&self.editor_state, &d.source);
         let cursor = Point2D::new(d.current_x, d.current_y);
         let Some(drop) = panel.drop_target_at(layer_rect, cursor) else {
             return true;
@@ -225,7 +225,7 @@ impl WidgetHostNative {
                 (viewport_height - TOP_BAR_HEIGHT).max(0.0),
             ),
         };
-        let panel = LayerPanel::from_document(&self.paint_doc);
+        let panel = LayerPanel::from_editor(&self.editor_state);
         if let Some(hit) = panel.hit_test(layer_rect, Point2D::new(x, y)) {
             use op_editor_core::ui_draft::LayerContextTarget;
             use openpencil_shell_core::widgets::LayerPanelHit as H;
