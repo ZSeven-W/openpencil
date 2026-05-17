@@ -334,6 +334,26 @@ impl FigValue {
     pub fn is_object(&self) -> bool {
         matches!(self, FigValue::Object(_))
     }
+
+    /// Numeric field read (`obj.key` coerced to f64).
+    pub fn get_f64(&self, key: &str) -> Option<f64> {
+        self.get(key).and_then(|v| v.as_f64())
+    }
+
+    /// String field read.
+    pub fn get_str(&self, key: &str) -> Option<&str> {
+        self.get(key).and_then(|v| v.as_str())
+    }
+
+    /// Boolean field read.
+    pub fn get_bool(&self, key: &str) -> Option<bool> {
+        self.get(key).and_then(|v| v.as_bool())
+    }
+
+    /// Array field read.
+    pub fn get_array(&self, key: &str) -> Option<&[FigValue]> {
+        self.get(key).and_then(|v| v.as_array())
+    }
 }
 
 // ── Dynamic decoder ───────────────────────────────────────────────
