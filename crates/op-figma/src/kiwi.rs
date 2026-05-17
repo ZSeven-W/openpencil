@@ -90,15 +90,22 @@ impl<'a> ByteBuffer<'a> {
         Ok(((v >> 1) as i32) ^ -((v & 1) as i32))
     }
 
-    /// LEB128 unsigned 64-bit varint (max 10 bytes).
+    /// Kiwi 64-bit unsigned varint: eight 7-bit groups (56 bits) then a
+    /// final byte contributing all 8 bits — matching `kiwi-schema`.
     pub fn read_var_uint64(&mut self) -> Result<u64, KiwiError> {
         let mut value: u64 = 0;
         let mut shift: u32 = 0;
         loop {
             let byte = self.read_byte()?;
-            value |= ((byte & 127) as u64).wrapping_shl(shift);
-            shift += 7;
-            if byte & 128 == 0 || shift >= 70 {
+            if shift < 56 {
+                value |= ((byte & 127) as u64).wrapping_shl(shift);
+                shift += 7;
+                if byte & 128 == 0 {
+                    break;
+                }
+            } else {
+                // Final byte — all 8 bits, no continuation.
+                value |= (byte as u64).wrapping_shl(shift);
                 break;
             }
         }
@@ -208,7 +215,8 @@ pub fn decode_binary_schema(bytes: &[u8]) -> Result<Schema, KiwiError> {
         let kind = match bb.read_byte()? {
             0 => DefKind::Enum,
             1 => DefKind::Struct,
-            _ => DefKind::Message,
+            2 => DefKind::Message,
+            other => return Err(KiwiError::BadType(format!("definition kind {other}"))),
         };
         let field_count = bb.read_var_uint()?;
         let mut fields = Vec::with_capacity(field_count as usize);
@@ -227,7 +235,12 @@ pub fn decode_binary_schema(bytes: &[u8]) -> Result<Schema, KiwiError> {
     for (name, kind, fields) in raw {
         let mut resolved = Vec::with_capacity(fields.len());
         for (field_name, type_code, is_array, value) in fields {
-            let type_name = if type_code < 0 {
+            // Enum fields carry only a name + ordinal; their encoded
+            // type code is unused (kiwi writes 0). Skip resolution so
+            // a stray code never rejects an otherwise-valid schema.
+            let type_name = if kind == DefKind::Enum {
+                String::new()
+            } else if type_code < 0 {
                 let idx = !type_code;
                 NATIVE_TYPES
                     .get(idx as usize)
@@ -413,6 +426,13 @@ impl<'a, 'b> Decoder<'a, 'b> {
                 return Ok(FigValue::Bytes(self.bb.read_byte_array()?));
             }
             let n = self.bb.read_var_uint()?;
+            // A real array cannot have more elements than the buffer
+            // has bytes — rejects a hostile length that would spin the
+            // decode loop billions of times (e.g. an array of a
+            // zero-byte struct type).
+            if n as usize > self.bb.data.len() {
+                return Err(KiwiError::OutOfBounds);
+            }
             let mut items = Vec::with_capacity(n.min(1 << 20) as usize);
             for _ in 0..n {
                 items.push(self.decode_type(&field.type_name, depth + 1)?);

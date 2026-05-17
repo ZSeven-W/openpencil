@@ -253,6 +253,53 @@ fn parses_a_full_binary_fig_into_a_document() {
     }
 }
 
+/// Wrap a payload as `canvas.fig` in a minimal stored (uncompressed)
+/// ZIP archive — the common Figma export form.
+fn wrap_in_zip(canvas: &[u8]) -> Vec<u8> {
+    const LFH: u32 = 0x0403_4b50;
+    const CDFH: u32 = 0x0201_4b50;
+    const EOCD: u32 = 0x0605_4b50;
+    let name = b"canvas.fig";
+    let mut z = Vec::new();
+    let local_off = 0u32;
+    z.extend_from_slice(&LFH.to_le_bytes());
+    z.extend_from_slice(&[20, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+    z.extend_from_slice(&(canvas.len() as u32).to_le_bytes());
+    z.extend_from_slice(&(canvas.len() as u32).to_le_bytes());
+    z.extend_from_slice(&(name.len() as u16).to_le_bytes());
+    z.extend_from_slice(&[0, 0]);
+    z.extend_from_slice(name);
+    z.extend_from_slice(canvas);
+    let cd_off = z.len() as u32;
+    z.extend_from_slice(&CDFH.to_le_bytes());
+    z.extend_from_slice(&[20, 0, 20, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+    z.extend_from_slice(&(canvas.len() as u32).to_le_bytes());
+    z.extend_from_slice(&(canvas.len() as u32).to_le_bytes());
+    z.extend_from_slice(&(name.len() as u16).to_le_bytes());
+    z.extend_from_slice(&[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+    z.extend_from_slice(&local_off.to_le_bytes());
+    z.extend_from_slice(name);
+    let cd_size = z.len() as u32 - cd_off;
+    z.extend_from_slice(&EOCD.to_le_bytes());
+    z.extend_from_slice(&[0, 0, 0, 0, 1, 0, 1, 0]);
+    z.extend_from_slice(&cd_size.to_le_bytes());
+    z.extend_from_slice(&cd_off.to_le_bytes());
+    z.extend_from_slice(&[0, 0]);
+    z
+}
+
+#[test]
+fn parses_a_zip_wrapped_fig() {
+    let bare = build_fig(&build_schema(), &build_data());
+    let zipped = wrap_in_zip(&bare);
+    // The ZIP form must be recognised + routed through the parser.
+    let import = parse_fig_binary(&zipped, "Zipped", FigLayoutMode::OpenPencil)
+        .expect("zip-wrapped .fig parses");
+    let pages = import.document.pages.expect("has pages");
+    assert_eq!(pages[0].name, "Page 1");
+    assert_eq!(pages[0].children.len(), 1);
+}
+
 #[test]
 fn document_serializes_to_canonical_json() {
     let fig = build_fig(&build_schema(), &build_data());

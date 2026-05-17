@@ -75,6 +75,17 @@ pub fn resolve_style_references(node_changes: &mut [FigValue]) {
     }
     for nc in node_changes.iter_mut() {
         resolve_on_node(nc, &style_map);
+        // Resolve style refs inside instance symbol overrides too.
+        if let Some(mut symbol_data) = nc.get("symbolData").cloned() {
+            if let Some(overrides) = symbol_data.get_array("symbolOverrides") {
+                let mut resolved: Vec<FigValue> = overrides.to_vec();
+                for ov in &mut resolved {
+                    resolve_on_node(ov, &style_map);
+                }
+                symbol_data.set("symbolOverrides", FigValue::Array(resolved));
+                nc.set("symbolData", symbol_data);
+            }
+        }
     }
 }
 

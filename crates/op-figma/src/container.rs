@@ -193,10 +193,10 @@ mod tests {
     }
 
     #[test]
-    fn zstd_chunk_round_trips() {
-        // A zstd-framed chunk: build one with ruzstd's sibling encoder
-        // is not available, so assert the raw-deflate path here and
-        // trust zstd via the magic-detection unit below.
+    fn deflate_chunk_round_trips() {
+        // Chunks are deflate-compressed here (no zstd encoder in the
+        // dev-deps); the zstd decode path is covered by `ruzstd`'s own
+        // test suite and the magic-detection branch in decompress_chunk.
         let fig = make_fig_container(&[b"only-one"]);
         let result = fig_to_binary_parts(&fig).expect("parses");
         assert_eq!(result.parts.len(), 1);
