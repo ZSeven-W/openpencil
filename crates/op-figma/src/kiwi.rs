@@ -63,6 +63,11 @@ impl<'a> ByteBuffer<'a> {
         self.index >= self.data.len()
     }
 
+    /// Bytes left to read from the current cursor.
+    fn remaining(&self) -> usize {
+        self.data.len().saturating_sub(self.index)
+    }
+
     pub fn read_byte(&mut self) -> Result<u8, KiwiError> {
         let b = *self.data.get(self.index).ok_or(KiwiError::OutOfBounds)?;
         self.index += 1;
@@ -219,7 +224,10 @@ pub fn decode_binary_schema(bytes: &[u8]) -> Result<Schema, KiwiError> {
             other => return Err(KiwiError::BadType(format!("definition kind {other}"))),
         };
         let field_count = bb.read_var_uint()?;
-        let mut fields = Vec::with_capacity(field_count as usize);
+        // Each field encodes at least a few bytes — cap the pre-alloc
+        // at the remaining buffer size so a hostile count can't force
+        // a huge allocation before the read loop fails naturally.
+        let mut fields = Vec::with_capacity((field_count as usize).min(bb.remaining()));
         for _ in 0..field_count {
             let field_name = bb.read_string()?;
             let type_code = bb.read_var_int()?;
@@ -426,14 +434,14 @@ impl<'a, 'b> Decoder<'a, 'b> {
                 return Ok(FigValue::Bytes(self.bb.read_byte_array()?));
             }
             let n = self.bb.read_var_uint()?;
-            // A real array cannot have more elements than the buffer
-            // has bytes — rejects a hostile length that would spin the
-            // decode loop billions of times (e.g. an array of a
-            // zero-byte struct type).
-            if n as usize > self.bb.data.len() {
+            // A real array cannot have more elements than there are
+            // bytes left to read — rejects a hostile length that would
+            // spin the decode loop billions of times (e.g. an array of
+            // a zero-byte struct type).
+            if n as usize > self.bb.remaining() {
                 return Err(KiwiError::OutOfBounds);
             }
-            let mut items = Vec::with_capacity(n.min(1 << 20) as usize);
+            let mut items = Vec::with_capacity((n as usize).min(self.bb.remaining()));
             for _ in 0..n {
                 items.push(self.decode_type(&field.type_name, depth + 1)?);
             }
