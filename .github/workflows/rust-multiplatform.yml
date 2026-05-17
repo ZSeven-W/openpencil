@@ -15,6 +15,7 @@ on:
       - 'vendor/skia-safe-op/**'
       - 'rust-toolchain.toml'
       - 'deny.toml'
+      - 'Cross.toml'
       - '.github/workflows/rust-multiplatform.yml'
   pull_request:
     paths:
@@ -23,6 +24,7 @@ on:
       - 'crates/**'
       - 'vendor/jian/**'
       - 'vendor/skia-safe-op/**'
+      - 'Cross.toml'
       - '.github/workflows/rust-multiplatform.yml'
   workflow_dispatch:
 
