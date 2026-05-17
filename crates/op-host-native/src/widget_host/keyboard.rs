@@ -267,9 +267,9 @@ impl WidgetHostNative {
             self.commit_property_focus_if_any();
             return true;
         }
-        if self.editor_state.chat.input.trim().is_empty() {
-            return false;
-        }
+        // `begin_send` itself gates on (text OR staged attachments) —
+        // an attachment-only turn is valid, so don't short-circuit on
+        // empty text here.
         // Real provider turn — raises `chat.pending_send`.
         let sent = self.editor_state.chat.begin_send();
         if sent {

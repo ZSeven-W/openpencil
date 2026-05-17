@@ -27,7 +27,7 @@ use agent::provider::Provider;
 use agent::query::QueryEngine;
 use agent::stream::Event;
 use futures::StreamExt;
-use op_ai::chat_provider::{ChatDelta, ChatProvider, ChatRequest, StopReason};
+use op_ai::chat_provider::{ChatDelta, ChatProvider, ChatRequest, EffortLevel, StopReason};
 use tokio::runtime::{Builder, Runtime};
 use tokio::sync::mpsc;
 
@@ -105,11 +105,46 @@ impl ChatProvider for BuiltInProvider {
         // are documented as no-ops (see struct comment).
         let _ = request.system_prompt;
         let _ = request.max_output_tokens;
+        // The engine is built once, so per-turn thinking / effort
+        // can't reconfigure it — convey them in-band as a leading
+        // directive. Attachments append their temp-file paths; the
+        // guard removes the files once the worker task ends.
+        let (mut prompt, guard) = match crate::chat_attachment::prompt_with_attachments(
+            &request.user_message,
+            &request.attachments,
+        ) {
+            Ok(pair) => pair,
+            Err(e) => return crate::chat_attachment::attachment_error_turn(e),
+        };
+        let mut directive = String::new();
+        if let Some(d) = crate::chat_attachment::thinking_directive(request.thinking) {
+            directive.push_str(d);
+        }
+        if request.effort != EffortLevel::Low {
+            if !directive.is_empty() {
+                directive.push(' ');
+            }
+            directive.push_str(&format!(
+                "Apply {} reasoning effort.",
+                request.effort.as_str()
+            ));
+        }
+        if !directive.is_empty() {
+            prompt = format!("{directive}\n\n{prompt}");
+        }
+        // Prepend the resolved generation-phase skill guidance. The
+        // BuiltIn engine exposes no separate system-prompt channel, so
+        // the skills ride in front of the user message.
+        let preamble = resolved_skill_preamble(&request.user_message);
+        if !preamble.is_empty() {
+            prompt = format!("{preamble}\n\n---\n\n{prompt}");
+        }
         let engine = self.engine.clone();
         let abort = AbortController::new();
         let (tx, rx) = mpsc::channel::<ChatDelta>(64);
         shared_runtime().spawn(async move {
-            let stream = match engine.run(request.user_message, abort).await {
+            let _guard = guard;
+            let stream = match engine.run(prompt, abort).await {
                 Ok(s) => s,
                 Err(e) => {
                     let _ = tx.send(ChatDelta::Error(e.to_string())).await;
@@ -224,6 +259,23 @@ fn map_stop_reason(s: Option<&str>) -> StopReason {
         "aborted" | "user_abort" => StopReason::Aborted,
         _ => StopReason::EndTurn,
     }
+}
+
+/// Resolve the generation-phase skill set for `user_message` and join
+/// the skill bodies into one guidance preamble. Empty when nothing
+/// resolves. Used by [`BuiltInProvider::send`] to front-load skill
+/// context onto each turn.
+pub fn resolved_skill_preamble(user_message: &str) -> String {
+    let ctx = op_ai_skills::resolve_skills(
+        op_ai_skills::Phase::Generation,
+        user_message,
+        &op_ai_skills::ResolveOptions::default(),
+    );
+    ctx.skills
+        .iter()
+        .map(|s| s.content.as_str())
+        .collect::<Vec<_>>()
+        .join("\n\n")
 }
 
 #[cfg(test)]
@@ -358,5 +410,13 @@ mod tests {
             StopReason::EndTurn
         ));
         assert!(matches!(map_stop_reason(None), StopReason::EndTurn));
+    }
+
+    #[test]
+    fn skill_preamble_resolves_generation_guidance() {
+        // The BuiltIn provider fronts each turn with resolved skills;
+        // a design prompt must yield a non-empty preamble.
+        let preamble = resolved_skill_preamble("design a login form");
+        assert!(!preamble.is_empty());
     }
 }

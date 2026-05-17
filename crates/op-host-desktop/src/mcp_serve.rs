@@ -141,6 +141,57 @@ fn process_message(
 /// Run the stdio MCP server against `path`. Returns Ok(()) on EOF,
 /// Err on unrecoverable IO. Blocks the calling thread for the
 /// lifetime of the stdio connection.
+/// If argv requests an MCP server mode, run it and return `true` —
+/// the caller (`main`) should then exit. Returns `false` for normal
+/// GUI mode. Exits the process on a malformed invocation.
+///
+/// - `--mcp <path>` — JSON-RPC stdio MCP server backed by `<path>`.
+/// - `--mcp-http <port> <path>` — Streamable-HTTP MCP server.
+///
+/// External CLIs (Claude Code / Codex / Gemini / Copilot) spawn the
+/// binary in these modes to drive the Rust editor the same way they
+/// drive TS pen-mcp.
+pub fn run_cli_if_requested() -> bool {
+    let mut args = std::env::args().skip(1);
+    let Some(first) = args.next() else {
+        return false;
+    };
+    if first == "--mcp" {
+        let Some(path) = args.next() else {
+            eprintln!("openpencil-desktop --mcp: missing <path> arg");
+            std::process::exit(2);
+        };
+        if let Err(e) = run(PathBuf::from(path)) {
+            eprintln!("openpencil-desktop --mcp: {e}");
+            std::process::exit(1);
+        }
+        return true;
+    }
+    if first == "--mcp-http" {
+        let Some(port_arg) = args.next() else {
+            eprintln!("openpencil-desktop --mcp-http: missing <port> arg");
+            std::process::exit(2);
+        };
+        let Ok(port) = port_arg.parse::<u16>() else {
+            eprintln!(
+                "openpencil-desktop --mcp-http: <port> must be a u16, got {port_arg:?}"
+            );
+            std::process::exit(2);
+        };
+        let Some(path) = args.next() else {
+            eprintln!("openpencil-desktop --mcp-http: missing <path> arg");
+            std::process::exit(2);
+        };
+        if let Err(e) = run_http(PathBuf::from(path), port) {
+            eprintln!("openpencil-desktop --mcp-http: {e}");
+            std::process::exit(1);
+        }
+        return true;
+    }
+    // Unknown leading arg → fall through to GUI mode for now.
+    false
+}
+
 pub fn run(path: PathBuf) -> Result<(), String> {
     let mut state = load_editor_state(&path)?;
     let stdin = std::io::stdin();

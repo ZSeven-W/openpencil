@@ -21,7 +21,7 @@ use anthropic_agent_sdk::{
     types::{ContentBlock, Message},
     ClaudeAgentOptions, StreamExt,
 };
-use op_ai::chat_provider::{ChatDelta, ChatProvider, ChatRequest, StopReason};
+use op_ai::chat_provider::{ChatDelta, ChatProvider, ChatRequest, StopReason, ThinkingMode};
 use tokio::sync::mpsc;
 
 use crate::chat_runtime::{shared_runtime, BlockingRecvIter};
@@ -77,10 +77,37 @@ impl ChatProvider for ClaudeCodeProvider {
     }
 
     fn send(&self, request: ChatRequest) -> Box<dyn Iterator<Item = ChatDelta> + Send> {
-        let prompt = request.user_message;
-        let options = self.options.clone();
+        // Map the per-turn thinking knob onto the SDK's numeric
+        // thinking-token budget. `Adaptive` leaves whatever the
+        // options bundle already carried (SDK default).
+        let mut options = self.options.clone().unwrap_or_default();
+        match request.thinking {
+            ThinkingMode::Enabled => {
+                options.max_thinking_tokens = Some(request.effort.budget_tokens());
+            }
+            ThinkingMode::Disabled => {
+                options.max_thinking_tokens = Some(0);
+            }
+            ThinkingMode::Adaptive => {}
+        }
+        let options = Some(options);
+        // Claude Code's `query` String API can't carry image content
+        // blocks, so attachments spill to temp files whose paths are
+        // referenced in the prompt — the `claude` CLI reads local
+        // image files. The guard keeps the temp files alive for the
+        // turn and removes them when the worker task ends. A staging
+        // failure aborts the turn with an error rather than silently
+        // dropping the attachments.
+        let (prompt, guard) = match crate::chat_attachment::prompt_with_attachments(
+            &request.user_message,
+            &request.attachments,
+        ) {
+            Ok(pair) => pair,
+            Err(e) => return crate::chat_attachment::attachment_error_turn(e),
+        };
         let (tx, rx) = mpsc::channel::<ChatDelta>(64);
         shared_runtime().spawn(async move {
+            let _guard = guard;
             let stream = match anthropic_agent_sdk::query(prompt, options).await {
                 Ok(s) => s,
                 Err(e) => {

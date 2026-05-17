@@ -173,6 +173,29 @@ impl WidgetHostNative {
                         self.mark_dirty();
                         return true;
                     }
+                    AIChatHit::CycleThinking => {
+                        self.editor_state.chat.cycle_thinking_mode();
+                        self.mark_dirty();
+                        return true;
+                    }
+                    AIChatHit::CycleEffort => {
+                        self.editor_state.chat.cycle_effort_level();
+                        self.mark_dirty();
+                        return true;
+                    }
+                    AIChatHit::AddAttachment => {
+                        // The desktop event loop drains this flag,
+                        // opens a native file picker, and stages the
+                        // chosen file via `ChatState::add_attachment`.
+                        self.editor_state.chat.pending_attachment_pick = true;
+                        self.mark_dirty();
+                        return true;
+                    }
+                    AIChatHit::RemoveAttachment(idx) => {
+                        self.editor_state.chat.remove_attachment(idx);
+                        self.mark_dirty();
+                        return true;
+                    }
                 }
             }
         }

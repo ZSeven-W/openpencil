@@ -25,9 +25,9 @@ use async_trait::async_trait;
 use github_copilot_sdk::handler::{
     HandlerEvent, HandlerResponse, PermissionResult, SessionHandler,
 };
-use github_copilot_sdk::types::{MessageOptions, SessionConfig, SessionEvent};
+use github_copilot_sdk::types::{Attachment, MessageOptions, SessionConfig, SessionEvent};
 use github_copilot_sdk::{Client, ClientOptions};
-use op_ai::chat_provider::{ChatDelta, ChatProvider, ChatRequest, StopReason};
+use op_ai::chat_provider::{ChatDelta, ChatProvider, ChatRequest, EffortLevel, StopReason};
 use tokio::sync::mpsc;
 
 use crate::chat_runtime::{shared_runtime, BlockingRecvIter};
@@ -65,10 +65,19 @@ impl ChatProvider for CopilotProvider {
     }
 
     fn send(&self, request: ChatRequest) -> Box<dyn Iterator<Item = ChatDelta> + Send> {
-        let prompt = request.user_message;
+        // Stage attachments up front so a write failure aborts the
+        // turn with an error instead of silently dropping them.
+        let guard = if request.attachments.is_empty() {
+            None
+        } else {
+            match crate::chat_attachment::write_temp_attachments(&request.attachments) {
+                Ok(g) => Some(g),
+                Err(e) => return crate::chat_attachment::attachment_error_turn(e),
+            }
+        };
         let (tx, rx) = mpsc::channel::<ChatDelta>(64);
         shared_runtime().spawn(async move {
-            match run_turn(prompt, tx.clone()).await {
+            match run_turn(request, guard, tx.clone()).await {
                 Ok(()) => {
                     let _ = tx
                         .send(ChatDelta::Done {
@@ -90,21 +99,59 @@ impl ChatProvider for CopilotProvider {
     }
 }
 
+/// Map the chat panel's effort level onto Copilot's `reasoningEffort`
+/// string. Copilot's CLI names its top tier `xhigh` (TS parity:
+/// `chat.ts` maps `'max'` → `'xhigh'`).
+fn reasoning_effort_str(level: EffortLevel) -> &'static str {
+    match level {
+        EffortLevel::Low => "low",
+        EffortLevel::Medium => "medium",
+        EffortLevel::High => "high",
+        EffortLevel::Max => "xhigh",
+    }
+}
+
 /// Run one Copilot turn: start the CLI, create a streaming session
 /// whose handler funnels events into `tx`, send the prompt, wait
 /// for completion, then tear the session + client down.
+///
+/// The per-turn effort drives the session's `reasoning_effort`;
+/// staged attachments spill to temp files passed as `File`
+/// attachments. (Copilot has no separate thinking-mode knob — effort
+/// is its single reasoning dial.)
 async fn run_turn(
-    prompt: String,
+    request: ChatRequest,
+    guard: Option<crate::chat_attachment::TempGuard>,
     tx: mpsc::Sender<ChatDelta>,
 ) -> Result<(), github_copilot_sdk::Error> {
     let client = Client::start(ClientOptions::default()).await?;
     let mut config = SessionConfig::default();
     config.streaming = Some(true);
+    config.reasoning_effort = Some(reasoning_effort_str(request.effort).to_string());
     let config = config.with_handler(Arc::new(StreamHandler { tx }));
     let session = client.create_session(config).await?;
-    session
-        .send_and_wait(MessageOptions::new(prompt).with_wait_timeout(COPILOT_TURN_TIMEOUT))
-        .await?;
+    // `guard` holds the staged attachment temp files (written before
+    // the turn was spawned); Copilot reads them as `File` attachments.
+    let mut opts =
+        MessageOptions::new(request.user_message).with_wait_timeout(COPILOT_TURN_TIMEOUT);
+    if let Some(g) = &guard {
+        let files: Vec<Attachment> = g
+            .paths()
+            .iter()
+            .zip(request.attachments.iter())
+            .map(|(path, att)| Attachment::File {
+                path: path.clone(),
+                display_name: Some(att.name.clone()),
+                line_range: None,
+            })
+            .collect();
+        if !files.is_empty() {
+            opts = opts.with_attachments(files);
+        }
+    }
+    session.send_and_wait(opts).await?;
+    // Temp files are no longer needed once the turn is done.
+    drop(guard);
     // Best-effort teardown — a failed cleanup must not mask a
     // successful turn.
     session.destroy().await.ok();
@@ -170,5 +217,14 @@ mod tests {
     #[test]
     fn provider_constructs_as_chat_provider_trait_object() {
         let _: Arc<dyn ChatProvider> = Arc::new(CopilotProvider::new());
+    }
+
+    #[test]
+    fn reasoning_effort_maps_max_to_xhigh() {
+        assert_eq!(reasoning_effort_str(EffortLevel::Low), "low");
+        assert_eq!(reasoning_effort_str(EffortLevel::Medium), "medium");
+        assert_eq!(reasoning_effort_str(EffortLevel::High), "high");
+        // Copilot's top tier is "xhigh", not "max" (TS parity).
+        assert_eq!(reasoning_effort_str(EffortLevel::Max), "xhigh");
     }
 }

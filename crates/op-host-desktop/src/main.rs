@@ -3,6 +3,8 @@
 
 #![cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]
 
+mod chat_acp;
+mod chat_attachment;
 mod chat_claude;
 mod chat_copilot;
 mod chat_http_server;
@@ -361,6 +363,11 @@ impl ApplicationHandler for DesktopApp {
                 // A click on the chat Send button raises
                 // `pending_send` — launch the provider turn.
                 if chat_session::launch_if_pending(&mut self.host, &mut self.current_chat) {
+                    self.request_redraw(true);
+                }
+                // A click on the attach button raises
+                // `pending_attachment_pick` — open the file picker.
+                if chat_attachment::drain_attachment_pick(&mut self.host) {
                     self.request_redraw(true);
                 }
                 if let Some(action) = self
@@ -730,52 +737,10 @@ impl ApplicationHandler for DesktopApp {
 }
 
 fn main() {
-    // `--mcp <path>` swaps the GUI for a JSON-RPC stdio MCP
-    // server backed by that .op file. External CLIs (Claude
-    // Code / Codex / Gemini / Copilot) spawn the binary in this
-    // mode to drive the Rust editor the same way they drive TS
-    // pen-mcp.
-    let mut args = std::env::args().skip(1);
-    if let Some(first) = args.next() {
-        if first == "--mcp" {
-            let Some(path) = args.next() else {
-                eprintln!("openpencil-desktop --mcp: missing <path> arg");
-                std::process::exit(2);
-            };
-            match mcp_serve::run(PathBuf::from(path)) {
-                Ok(()) => return,
-                Err(e) => {
-                    eprintln!("openpencil-desktop --mcp: {e}");
-                    std::process::exit(1);
-                }
-            }
-        }
-        if first == "--mcp-http" {
-            // `--mcp-http <port> <path>` serves MCP over HTTP instead
-            // of stdio — for HTTP MCP clients (TS pen-mcp ships a
-            // Streamable-HTTP transport alongside stdio).
-            let Some(port_arg) = args.next() else {
-                eprintln!("openpencil-desktop --mcp-http: missing <port> arg");
-                std::process::exit(2);
-            };
-            let Ok(port) = port_arg.parse::<u16>() else {
-                eprintln!("openpencil-desktop --mcp-http: <port> must be a u16, got {port_arg:?}");
-                std::process::exit(2);
-            };
-            let Some(path) = args.next() else {
-                eprintln!("openpencil-desktop --mcp-http: missing <path> arg");
-                std::process::exit(2);
-            };
-            match mcp_serve::run_http(PathBuf::from(path), port) {
-                Ok(()) => return,
-                Err(e) => {
-                    eprintln!("openpencil-desktop --mcp-http: {e}");
-                    std::process::exit(1);
-                }
-            }
-        }
-        // Unknown leading arg → fall through to GUI mode for now
-        // (a future patch may add `--help` etc).
+    // `--mcp` / `--mcp-http` swap the GUI for an MCP server mode;
+    // when one of those ran, exit instead of opening a window.
+    if mcp_serve::run_cli_if_requested() {
+        return;
     }
     let event_loop = match EventLoop::new() {
         Ok(el) => el,
@@ -797,38 +762,4 @@ fn main() {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn cursor_only_redraw_without_visible_state_change_skips_present() {
-        let mut app = DesktopApp::new();
-        app.redraw_pending = true;
-        app.pending_cursor_move = Some((1200.0, 20.0));
-
-        assert!(!app.prepare_redraw());
-        assert!(!app.redraw_pending);
-        assert!(app.pending_cursor_move.is_none());
-    }
-
-    #[test]
-    fn consumed_press_dirties_existing_cursor_redraw_without_second_request() {
-        let mut app = DesktopApp::new();
-        app.redraw_pending = true;
-
-        assert!(!app.request_redraw(true));
-        assert!(app.prepare_redraw());
-    }
-
-    #[test]
-    fn cursor_redraw_still_paints_when_layer_hover_changes() {
-        let mut app = DesktopApp::new();
-        app.redraw_pending = true;
-        app.pending_cursor_move = Some((
-            20.0,
-            op_editor_ui::widgets::TOP_BAR_HEIGHT + 8.0 + 28.0 + 16.0,
-        ));
-
-        assert!(app.prepare_redraw());
-    }
-}
+mod main_tests;
