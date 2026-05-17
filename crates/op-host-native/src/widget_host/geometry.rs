@@ -468,7 +468,10 @@ impl WidgetHostNative {
         }
         // ~7 screen-px grab radius, expressed in doc space.
         let r2 = 49.0 / (zoom * zoom);
-        for (handle, p) in handles {
+        // Reverse paint order so the topmost-painted handle wins —
+        // on a full-sweep ellipse the Start + Sweep handles coincide,
+        // and Sweep is painted last, so it must hit-test first.
+        for (handle, p) in handles.into_iter().rev() {
             let dx = doc_point.x - p.x;
             let dy = doc_point.y - p.y;
             if dx * dx + dy * dy <= r2 {

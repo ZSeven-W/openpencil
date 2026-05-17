@@ -66,8 +66,7 @@ impl JsonRpcEngine {
         self.pending.lock().unwrap().insert(id, tx);
 
         let req = JsonRpcRequest::new(id, method, params);
-        let frame =
-            serde_json::to_value(&req).map_err(|e| AcpError::Protocol(e.to_string()))?;
+        let frame = serde_json::to_value(&req).map_err(|e| AcpError::Protocol(e.to_string()))?;
         if self.out_tx.send(frame).is_err() {
             self.pending.lock().unwrap().remove(&id);
             return Err(AcpError::Closed);
@@ -79,9 +78,7 @@ impl JsonRpcEngine {
             Ok(Err(_)) => Err(AcpError::Closed),
             Err(_) => {
                 self.pending.lock().unwrap().remove(&id);
-                Err(AcpError::Transport(format!(
-                    "request '{method}' timed out"
-                )))
+                Err(AcpError::Transport(format!("request '{method}' timed out")))
             }
         }
     }
@@ -91,8 +88,8 @@ impl JsonRpcEngine {
 /// request and build the JSON-RPC result that selects it. Mirrors the
 /// TS `requestPermission` handler.
 pub fn auto_approve_permission(params: &Value) -> Value {
-    let parsed: RequestPermissionParams =
-        serde_json::from_value(params.clone()).unwrap_or(RequestPermissionParams { options: vec![] });
+    let parsed: RequestPermissionParams = serde_json::from_value(params.clone())
+        .unwrap_or(RequestPermissionParams { options: vec![] });
     let chosen = parsed
         .options
         .iter()

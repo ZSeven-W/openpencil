@@ -48,22 +48,58 @@ pub fn build_style_mapping(from: &StyleGuideValues, to: &StyleGuideValues) -> Pr
     let mut out = PropertyReplacement::default();
 
     // Fill colours — backgrounds, surfaces, accents.
-    push_color(&mut out.fill_color, &from.colors.background, &to.colors.background);
-    push_color(&mut out.fill_color, &from.colors.surface, &to.colors.surface);
+    push_color(
+        &mut out.fill_color,
+        &from.colors.background,
+        &to.colors.background,
+    );
+    push_color(
+        &mut out.fill_color,
+        &from.colors.surface,
+        &to.colors.surface,
+    );
     push_color(&mut out.fill_color, &from.colors.accent, &to.colors.accent);
 
     // Text colours.
-    push_color(&mut out.text_color, &from.colors.text_primary, &to.colors.text_primary);
-    push_color(&mut out.text_color, &from.colors.text_secondary, &to.colors.text_secondary);
-    push_color(&mut out.text_color, &from.colors.text_muted, &to.colors.text_muted);
+    push_color(
+        &mut out.text_color,
+        &from.colors.text_primary,
+        &to.colors.text_primary,
+    );
+    push_color(
+        &mut out.text_color,
+        &from.colors.text_secondary,
+        &to.colors.text_secondary,
+    );
+    push_color(
+        &mut out.text_color,
+        &from.colors.text_muted,
+        &to.colors.text_muted,
+    );
 
     // Border / stroke colour.
-    push_color(&mut out.stroke_color, &from.colors.border, &to.colors.border);
+    push_color(
+        &mut out.stroke_color,
+        &from.colors.border,
+        &to.colors.border,
+    );
 
     // Font families.
-    push_color(&mut out.font_family, &from.typography.display_font, &to.typography.display_font);
-    push_color(&mut out.font_family, &from.typography.body_font, &to.typography.body_font);
-    push_color(&mut out.font_family, &from.typography.data_font, &to.typography.data_font);
+    push_color(
+        &mut out.font_family,
+        &from.typography.display_font,
+        &to.typography.display_font,
+    );
+    push_color(
+        &mut out.font_family,
+        &from.typography.body_font,
+        &to.typography.body_font,
+    );
+    push_color(
+        &mut out.font_family,
+        &from.typography.data_font,
+        &to.typography.data_font,
+    );
 
     // Corner radii (scalar px).
     for (f, t) in [

@@ -119,7 +119,10 @@ fn ordered(norm: &str, a: &str, b: &str) -> bool {
 
 fn extract_colors(sections: &HashMap<String, String>) -> StyleColors {
     let empty = String::new();
-    let color_section = sections.get("color system").unwrap_or(&empty).to_lowercase();
+    let color_section = sections
+        .get("color system")
+        .unwrap_or(&empty)
+        .to_lowercase();
 
     let background = hex_near(&color_section, |l| {
         l.contains("page background") || ordered(l, "root", "background")
@@ -352,7 +355,10 @@ Button / Input: 8px
     #[test]
     fn extracts_typography_by_role() {
         let v = extract_style_guide_values(SAMPLE);
-        assert_eq!(v.typography.display_font.as_deref(), Some("Playfair Display"));
+        assert_eq!(
+            v.typography.display_font.as_deref(),
+            Some("Playfair Display")
+        );
         assert_eq!(v.typography.body_font.as_deref(), Some("Inter"));
         assert_eq!(v.typography.data_font.as_deref(), Some("JetBrains Mono"));
     }

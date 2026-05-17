@@ -123,9 +123,7 @@ pub fn write_temp_attachments(attachments: &[ChatAttachment]) -> io::Result<Temp
 /// default behaviour.
 pub fn thinking_directive(mode: ThinkingMode) -> Option<&'static str> {
     match mode {
-        ThinkingMode::Enabled => {
-            Some("Think step by step and reason carefully before answering.")
-        }
+        ThinkingMode::Enabled => Some("Think step by step and reason carefully before answering."),
         ThinkingMode::Disabled => {
             Some("Answer directly and concisely, without extended reasoning.")
         }

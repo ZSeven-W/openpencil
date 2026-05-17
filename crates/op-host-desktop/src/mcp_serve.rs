@@ -173,9 +173,7 @@ pub fn run_cli_if_requested() -> bool {
             std::process::exit(2);
         };
         let Ok(port) = port_arg.parse::<u16>() else {
-            eprintln!(
-                "openpencil-desktop --mcp-http: <port> must be a u16, got {port_arg:?}"
-            );
+            eprintln!("openpencil-desktop --mcp-http: <port> must be a u16, got {port_arg:?}");
             std::process::exit(2);
         };
         let Some(path) = args.next() else {

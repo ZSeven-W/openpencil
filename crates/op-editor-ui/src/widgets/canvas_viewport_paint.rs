@@ -335,9 +335,10 @@ pub fn paint_node(
             // outline.
             let stroke = match node.stroke {
                 Some(s) => Some((s.color, s.width * zoom)),
-                None if !filled => {
-                    Some((node.fill.unwrap_or(crate::Color::BLACK), (1.5_f32).max(zoom)))
-                }
+                None if !filled => Some((
+                    node.fill.unwrap_or(crate::Color::BLACK),
+                    (1.5_f32).max(zoom),
+                )),
                 None => None,
             };
             if let Some((color, width)) = stroke {

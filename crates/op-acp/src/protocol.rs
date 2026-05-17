@@ -249,7 +249,10 @@ mod tests {
             classify_inbound(&note),
             Inbound::Notification { .. }
         ));
-        assert!(matches!(classify_inbound(&serde_json::json!(5)), Inbound::Unknown));
+        assert!(matches!(
+            classify_inbound(&serde_json::json!(5)),
+            Inbound::Unknown
+        ));
     }
 
     #[test]

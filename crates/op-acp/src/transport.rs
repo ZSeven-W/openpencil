@@ -48,8 +48,7 @@ pub async fn write_frame(
     writer: &mut (impl AsyncWrite + Unpin),
     value: &Value,
 ) -> Result<(), AcpError> {
-    let mut bytes =
-        serde_json::to_vec(value).map_err(|e| AcpError::Protocol(e.to_string()))?;
+    let mut bytes = serde_json::to_vec(value).map_err(|e| AcpError::Protocol(e.to_string()))?;
     bytes.push(b'\n');
     writer
         .write_all(&bytes)

@@ -132,7 +132,9 @@ mod tests {
                 aesthetic: Some("minimal".into()),
             }),
             subtasks: Some(vec![
-                PlanSubtask { label: "hero".into() },
+                PlanSubtask {
+                    label: "hero".into(),
+                },
                 PlanSubtask {
                     label: "pricing".into(),
                 },
@@ -141,7 +143,10 @@ mod tests {
         let out = extract_design_context(&base, &plan, "t1");
         assert_eq!(out.updated_at, "t1");
         assert_eq!(out.design_system.palette, vec!["#000", "#fff"]);
-        assert_eq!(out.design_system.typography.as_deref(), Some("Inter, Playfair"));
+        assert_eq!(
+            out.design_system.typography.as_deref(),
+            Some("Inter, Playfair")
+        );
         assert_eq!(out.design_system.aesthetic.as_deref(), Some("minimal"));
         assert_eq!(out.structure.sections, vec!["hero", "pricing"]);
     }

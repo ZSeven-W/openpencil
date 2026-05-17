@@ -800,8 +800,11 @@ fn parse_hex(s: &str) -> Option<[f32; 4]> {
 
 fn short_src(src: &str) -> String {
     let s = src.rsplit('/').next().unwrap_or(src);
-    if s.len() > 24 {
-        format!("{}…", &s[..24])
+    // Truncate by characters, not bytes — a `&s[..24]` byte slice
+    // panics when byte 24 lands inside a multi-byte UTF-8 char.
+    if s.chars().count() > 24 {
+        let head: String = s.chars().take(24).collect();
+        format!("{head}…")
     } else {
         s.to_string()
     }
