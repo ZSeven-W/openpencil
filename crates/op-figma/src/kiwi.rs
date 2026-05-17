@@ -354,6 +354,18 @@ impl FigValue {
     pub fn get_array(&self, key: &str) -> Option<&[FigValue]> {
         self.get(key).and_then(|v| v.as_array())
     }
+
+    /// Insert or overwrite a field on an object value (no-op for
+    /// non-objects).
+    pub fn set(&mut self, key: &str, value: FigValue) {
+        if let FigValue::Object(pairs) = self {
+            if let Some(slot) = pairs.iter_mut().find(|(k, _)| k == key) {
+                slot.1 = value;
+            } else {
+                pairs.push((key.to_string(), value));
+            }
+        }
+    }
 }
 
 // ── Dynamic decoder ───────────────────────────────────────────────

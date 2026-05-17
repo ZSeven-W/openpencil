@@ -10,13 +10,23 @@
 #[allow(dead_code)]
 mod color;
 #[allow(dead_code)]
+mod common;
+#[allow(dead_code)]
 mod container;
 #[allow(dead_code)]
+mod converters;
+#[allow(dead_code)]
 mod figma_types;
+#[allow(dead_code)]
+mod instance;
 #[allow(dead_code)]
 mod kiwi;
 #[allow(dead_code)]
 mod mappers;
+#[allow(dead_code)]
+mod node_build;
+#[allow(dead_code)]
+mod node_mapper;
 #[allow(dead_code)]
 mod text_mapper;
 #[allow(dead_code)]
