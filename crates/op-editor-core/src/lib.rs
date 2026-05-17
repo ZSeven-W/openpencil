@@ -42,6 +42,8 @@ pub mod viewport;
 pub mod walkers;
 
 #[cfg(test)]
+mod command_attr_tests;
+#[cfg(test)]
 mod command_tests;
 #[cfg(test)]
 mod svg_import_tests;
