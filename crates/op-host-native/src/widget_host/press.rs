@@ -707,23 +707,31 @@ impl WidgetHostNative {
             // Pen tool: anchor edit / author.
             if matches!(self.editor_state.tool, Tool::Pen) {
                 if self.editor_state.ui.pen_in_progress.is_none() {
-                    if let Some((node_id, anchor_index)) =
+                    if let Some((node_id, anchor_index, target)) =
                         self.path_anchor_hit(x, y, viewport_width, viewport_height)
                     {
                         let ec_id = op_editor_core::NodeId::new(&node_id);
-                        // Capture starting position for the
-                        // history-pollution guard.
-                        let start_doc = self
+                        // The anchor's fixed absolute position — handle
+                        // drags offset their delta against it.
+                        let anchor_doc = self
                             .layout_scene
                             .active_page()
                             .and_then(|p| p.find(&node_id))
-                            .and_then(|n| n.points.get(anchor_index).copied())
+                            .and_then(|n| {
+                                n.path_anchors
+                                    .get(anchor_index)
+                                    .map(|a| a.pos)
+                                    .or_else(|| n.points.get(anchor_index).copied())
+                            })
                             .unwrap_or(doc_point);
                         let pre = self.editor_state.snapshot_for_history();
                         self.path_anchor_drag = Some(super::PathAnchorDragState {
                             node_id: ec_id,
                             anchor_index,
-                            start_doc,
+                            target,
+                            anchor_doc,
+                            start_doc: doc_point,
+                            shift: self.shift_held,
                             moved: false,
                             pre_drag_snapshot: pre,
                         });

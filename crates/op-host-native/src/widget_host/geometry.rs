@@ -368,16 +368,20 @@ impl WidgetHostNative {
     }
 
     /// When the active selection is a single Path node + the Pen
-    /// tool is selected, hit-test whether `(screen_x, screen_y)`
-    /// lands on any anchor handle. Returns Some(index) on hit.
+    /// tool is selected, hit-test whether `(x, y)` lands on an anchor
+    /// or one of its bezier handles. Anchors are checked before
+    /// handles; returns the node id, anchor index, and which target.
     pub(in crate::widget_host) fn path_anchor_hit(
         &self,
         x: f32,
         y: f32,
         viewport_w: f32,
         viewport_h: f32,
-    ) -> Option<(String, usize)> {
+    ) -> Option<(String, usize, super::AnchorDragTarget)> {
+        use super::AnchorDragTarget;
+        use op_editor_core::pen::PathHandleSide;
         use op_editor_ui::layout_scene::NodeKind;
+        use op_editor_ui::widgets::path_handle_positions;
         if !matches!(self.editor_state.tool, op_editor_core::Tool::Pen) {
             return None;
         }
@@ -392,13 +396,35 @@ impl WidgetHostNative {
         let (cx0, cy0, _cw, _ch) = self.canvas_region(viewport_w, viewport_h);
         let zoom = self.editor_state.viewport.zoom.max(0.0001);
         let canvas_local = Point2D::new(x - cx0, y - cy0);
-        let doc_point = self.editor_state.viewport.to_document(canvas_local);
-        let r2 = 16.0 / (zoom * zoom);
-        for (i, p) in node.points.iter().enumerate() {
-            let dx = doc_point.x - p.x;
-            let dy = doc_point.y - p.y;
-            if dx * dx + dy * dy <= r2 {
-                return Some((sel, i));
+        let doc = self.editor_state.viewport.to_document(canvas_local);
+        // ~7 screen-px grab radius, expressed in doc space.
+        let r2 = 49.0 / (zoom * zoom);
+        let hit = |p: Point2D| (doc.x - p.x).powi(2) + (doc.y - p.y).powi(2) <= r2;
+        // Anchors take priority over handles within their tight body.
+        for (i, a) in node.path_anchors.iter().enumerate() {
+            if hit(a.pos) {
+                return Some((sel.clone(), i, AnchorDragTarget::Anchor));
+            }
+        }
+        for (i, a) in node.path_anchors.iter().enumerate() {
+            let (hin, hout) = path_handle_positions(a, zoom);
+            if hit(hout) {
+                return Some((
+                    sel.clone(),
+                    i,
+                    AnchorDragTarget::Handle(PathHandleSide::Out),
+                ));
+            }
+            if hit(hin) {
+                return Some((sel.clone(), i, AnchorDragTarget::Handle(PathHandleSide::In)));
+            }
+        }
+        // Paths without resolved anchor data fall back to `points`.
+        if node.path_anchors.is_empty() {
+            for (i, p) in node.points.iter().enumerate() {
+                if hit(*p) {
+                    return Some((sel.clone(), i, AnchorDragTarget::Anchor));
+                }
             }
         }
         None
