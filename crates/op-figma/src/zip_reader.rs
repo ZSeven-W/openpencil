@@ -100,11 +100,13 @@ pub fn read_zip(buf: &[u8]) -> Result<Vec<ZipEntry>, ZipError> {
             .ok_or(ZipError::Truncated)?;
         let name = String::from_utf8_lossy(name_bytes).into_owned();
 
-        let data = read_entry_data(buf, local_off, method, comp_size, uncomp_size)?;
-        total_size = total_size.saturating_add(data.len());
+        // Aggregate-size guard runs on the central-directory's declared
+        // size *before* the entry is decompressed.
+        total_size = total_size.saturating_add(uncomp_size);
         if total_size > MAX_TOTAL_SIZE {
             return Err(ZipError::TooLarge);
         }
+        let data = read_entry_data(buf, local_off, method, comp_size, uncomp_size)?;
         entries.push(ZipEntry { name, data });
 
         cursor += 46 + name_len + extra_len + comment_len;
@@ -133,7 +135,12 @@ fn read_entry_data(
         .ok_or(ZipError::Truncated)?;
 
     match method {
-        0 => Ok(raw.to_vec()),
+        0 => {
+            if comp_size > MAX_ENTRY_SIZE {
+                return Err(ZipError::TooLarge);
+            }
+            Ok(raw.to_vec())
+        }
         8 => {
             if uncomp_size > MAX_ENTRY_SIZE {
                 return Err(ZipError::TooLarge);
