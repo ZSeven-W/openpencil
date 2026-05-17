@@ -704,11 +704,18 @@ fn norm_sweep(deg: f32) -> f32 {
 
 /// A sweep that keeps the sign of the arc being edited — an
 /// MCP-authored negative (counter-clockwise) sweep stays negative
-/// under a canvas drag instead of flipping to the major arc.
+/// under a canvas drag instead of flipping to the major arc. A
+/// negative sweep that collapses to 0 snaps to a full -360° circle
+/// (mirroring `norm_sweep`'s positive 0 → 360 rule).
 fn signed_sweep(raw: f32, old_sweep: f32) -> f32 {
     let pos = norm_sweep(raw);
     if old_sweep < 0.0 {
-        pos - 360.0
+        let neg = pos - 360.0;
+        if neg == 0.0 {
+            -360.0
+        } else {
+            neg
+        }
     } else {
         pos
     }
