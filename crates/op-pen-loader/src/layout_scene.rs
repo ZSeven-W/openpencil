@@ -111,6 +111,7 @@ fn node_payload_to_scene(node: &NodePayload, var_table: &VariableTable) -> Scene
             .iter()
             .map(|p| Point2D::new(p[0], p[1]))
             .collect(),
+        path_anchors: node.path_anchors.iter().map(anchor_to_scene).collect(),
         arc_start_angle: node.arc_start_angle,
         arc_sweep_angle: node.arc_sweep_angle,
         arc_inner_radius: node.arc_inner_radius,
@@ -122,6 +123,22 @@ fn node_payload_to_scene(node: &NodePayload, var_table: &VariableTable) -> Scene
             .iter()
             .map(|c| node_payload_to_scene(c, var_table))
             .collect(),
+    }
+}
+
+/// Convert a payload path anchor into a scene anchor.
+fn anchor_to_scene(a: &crate::payload::AnchorPayload) -> op_editor_ui::layout_scene::SceneAnchor {
+    use op_editor_ui::layout_scene::{SceneAnchor, ScenePointType};
+    use op_editor_ui::Point2D;
+    SceneAnchor {
+        pos: Point2D::new(a.x, a.y),
+        handle_in: a.handle_in.map(|h| Point2D::new(h[0], h[1])),
+        handle_out: a.handle_out.map(|h| Point2D::new(h[0], h[1])),
+        point_type: match a.point_type {
+            1 => ScenePointType::Mirrored,
+            2 => ScenePointType::Independent,
+            _ => ScenePointType::Corner,
+        },
     }
 }
 

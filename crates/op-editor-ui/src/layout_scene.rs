@@ -148,6 +148,28 @@ pub struct ScenePage {
 /// `text_wrap`, `points`, `effects`, `children`, `hidden`) so a
 /// painter over `LayoutScene` can reproduce the current canvas
 /// pixel-for-pixel.
+/// How a path anchor's two control handles relate.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ScenePointType {
+    /// Handles independent; no smoothing across the anchor.
+    Corner,
+    /// Handles collinear + equal length.
+    Mirrored,
+    /// Handles move freely + independently.
+    Independent,
+}
+
+/// A path bezier anchor resolved into absolute doc coords — the
+/// anchor point plus its (optional) incoming / outgoing control
+/// handles. Handle positions are absolute, not anchor-relative.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct SceneAnchor {
+    pub pos: Point2D,
+    pub handle_in: Option<Point2D>,
+    pub handle_out: Option<Point2D>,
+    pub point_type: ScenePointType,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct SceneNode {
     /// Stable node id (the `.op` schema id). Identity for hit-test /
@@ -190,6 +212,10 @@ pub struct SceneNode {
     /// populated for `Path` (and any kind the painter walks as
     /// points). Empty otherwise.
     pub points: Vec<Point2D>,
+    /// Bezier anchors for `Path` nodes — parallel to `points` but
+    /// carrying the editable control handles + point type. Empty for
+    /// non-Path kinds.
+    pub path_anchors: Vec<SceneAnchor>,
     /// Ellipse arc start angle in degrees. `None` = full ellipse.
     pub arc_start_angle: Option<f32>,
     /// Ellipse arc sweep angle in degrees. `None` = full ellipse.
@@ -271,6 +297,7 @@ impl SceneNode {
             font_weight: 0,
             text_wrap: false,
             points: Vec::new(),
+            path_anchors: Vec::new(),
             arc_start_angle: None,
             arc_sweep_angle: None,
             arc_inner_radius: None,

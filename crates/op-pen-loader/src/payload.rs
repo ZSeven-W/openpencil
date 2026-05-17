@@ -74,6 +74,10 @@ pub struct NodePayload {
     pub fill_type: String,
     #[serde(default)]
     pub points: Vec<[f32; 2]>,
+    /// Path bezier anchors (absolute doc coords, handles resolved).
+    /// Parallel to `points` for `Path` nodes; empty otherwise.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub path_anchors: Vec<AnchorPayload>,
     /// Text size in doc-px. 0 = use the renderer's default 13 px.
     /// Text-only.
     #[serde(default)]
@@ -94,6 +98,22 @@ pub struct NodePayload {
 pub struct StrokePayload {
     pub color: [f32; 4],
     pub width: f32,
+}
+
+/// One path bezier anchor in absolute doc coords. `handle_in` /
+/// `handle_out` are absolute control-point positions (already
+/// resolved from the schema's anchor-relative deltas); `point_type`
+/// is `0` corner / `1` mirrored / `2` independent.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct AnchorPayload {
+    pub x: f32,
+    pub y: f32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub handle_in: Option<[f32; 2]>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub handle_out: Option<[f32; 2]>,
+    #[serde(default)]
+    pub point_type: u8,
 }
 
 /// Wrapper around `jian_ops_schema::load_str` that retries with the

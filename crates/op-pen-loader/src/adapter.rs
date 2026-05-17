@@ -334,6 +334,38 @@ fn absolutize_path_anchors(p: &mut NodePayload, path: &PathNode) {
         pt[0] = ox + (pt[0] - min_x) * sx;
         pt[1] = oy + (pt[1] - min_y) * sy;
     }
+    // Resolve bezier anchors into the same absolute frame — anchor
+    // positions track `points`, handle deltas scale by `(sx, sy)`.
+    if let Some(anchors) = &path.anchors {
+        p.path_anchors = anchors
+            .iter()
+            .map(|a| {
+                let ax = ox + (a.x as f32 - min_x) * sx;
+                let ay = oy + (a.y as f32 - min_y) * sy;
+                let resolve = |h: &jian_ops_schema::node::PenPathHandle| {
+                    [ax + h.x as f32 * sx, ay + h.y as f32 * sy]
+                };
+                crate::payload::AnchorPayload {
+                    x: ax,
+                    y: ay,
+                    handle_in: a.handle_in.as_ref().map(resolve),
+                    handle_out: a.handle_out.as_ref().map(resolve),
+                    point_type: point_type_code(a.point_type.as_ref()),
+                }
+            })
+            .collect();
+    }
+}
+
+/// Schema point-type → payload code (0 corner / 1 mirrored / 2
+/// independent).
+fn point_type_code(pt: Option<&jian_ops_schema::node::PenPathPointType>) -> u8 {
+    use jian_ops_schema::node::PenPathPointType;
+    match pt {
+        Some(PenPathPointType::Mirrored) => 1,
+        Some(PenPathPointType::Independent) => 2,
+        _ => 0,
+    }
 }
 
 /// Replace `(x, y, w, h)` on `p` with the absolute scene-coord rect
@@ -653,6 +685,7 @@ fn base_payload(base: &PenNodeBase, kind: &str) -> NodePayload {
         collapsed: false,
         fill_type: "solid".into(),
         points: Vec::new(),
+        path_anchors: Vec::new(),
         font_size: 0.0,
         font_weight: 0,
         text_wrap: false,
