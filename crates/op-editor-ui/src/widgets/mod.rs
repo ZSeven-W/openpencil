@@ -42,6 +42,7 @@ mod layer_panel_tests;
 mod layer_panel_walkers;
 pub mod property_panel;
 pub mod property_panel_code;
+pub mod property_panel_effects;
 pub mod property_panel_fill;
 pub mod property_panel_inputs;
 pub mod property_panel_layout;
