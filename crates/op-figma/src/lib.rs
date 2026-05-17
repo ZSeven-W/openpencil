@@ -8,11 +8,15 @@
 // stage; `allow(dead_code)` covers the intermediate build where later
 // stages have not landed yet.
 #[allow(dead_code)]
+mod color;
+#[allow(dead_code)]
 mod container;
 #[allow(dead_code)]
 mod figma_types;
 #[allow(dead_code)]
 mod kiwi;
+#[allow(dead_code)]
+mod mappers;
 #[allow(dead_code)]
 mod zip_reader;
 
