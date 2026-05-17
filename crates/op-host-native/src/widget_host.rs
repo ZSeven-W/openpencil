@@ -14,7 +14,7 @@
 //! `widget_host` modules cfg-gated to `macos | linux | windows`).
 //! Mobile widget rendering lands in Step 1f via `context::EaglProvider`
 //! / `context::AndroidEglProvider`. Per the 2026-05-10 directive
-//! ("安卓和ios 不需要 ipc / 本地 cli — 只需要 custom provider"):
+//! (Android and iOS need no IPC / local CLI — only a custom provider):
 //! mobile rendering is a custom-provider plugin point on the
 //! `GlContextProvider` trait, not a separate IPC / CLI pipeline.
 //!

@@ -14,8 +14,8 @@
 #   (`aarch64-linux-android`, `aarch64-apple-ios`) must NOT pull
 #   `jian-host-desktop` (desktop GUI host glue — winit / glutin /
 #   GLContextProvider impl that has no mobile equivalent). Per the
-#   2026-05-10 user directive ("extend, jian 最后也会需要 ios 和
-#   android"), `jian-skia` is now ALLOWED on mobile targets — the
+#   2026-05-10 user directive (jian will eventually need iOS and
+#   Android), `jian-skia` is now ALLOWED on mobile targets — the
 #   widget render stack (skia-safe + jian-skia + NativeBackend +
 #   widget_host) compiles for iOS / Android cargo check, leaving
 #   only the host-specific (Metal / Vulkan / event) integration to

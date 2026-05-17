@@ -148,7 +148,7 @@ pub struct AgentSettings {
     pub focus: Option<SettingsFocus>,
     /// Index into `AgentProvider::ALL` of the card the cursor is
     /// currently hovering, used to flip the connect button into a
-    /// red 断开连接 affordance on already-connected cards. `usize::MAX`
+    /// red disconnect affordance on already-connected cards. `usize::MAX`
     /// means no card is hovered.
     pub hover_provider: usize,
     /// Sidebar nav item under the cursor (Agents / MCP / Images /

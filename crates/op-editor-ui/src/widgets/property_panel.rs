@@ -8,16 +8,16 @@
 //! pieces under the openpencil 800-line ceiling.
 //!
 //! Sections (top → bottom, mirroring TS order):
-//!   1. Tab strip (设计 / 代码)
-//!   2. Header (kind label) + 创建组件 button
-//!   3. 位置 — X / Y / rotation / R
-//!   4. 弹性布局 — 3 layout-mode buttons
-//!   5. 尺寸 — W / H + 5 sizing checkboxes
-//!   6. 图层 — opacity row
-//!   7. 填充 — solid color rows + add affordance
-//!   8. 描边 — color + width row
-//!   9. 效果 — empty list + add affordance
-//!  10. 导出 — scale + format dropdowns
+//!   1. Tab strip (Design / Code)
+//!   2. Header (kind label) + Create component button
+//!   3. Position — X / Y / rotation / R
+//!   4. Flex layout — 3 layout-mode buttons
+//!   5. Size — W / H + 5 sizing checkboxes
+//!   6. Layer — opacity row
+//!   7. Fill — solid color rows + add affordance
+//!   8. Stroke — color + width row
+//!   9. Effects — empty list + add affordance
+//!  10. Export — scale + format dropdowns
 //!
 //! Conditional rendering: TS app does `{hasSelection && <RightPanel/>}`.
 //! Host calls [`PropertyPanel::for_selection`] which returns
@@ -76,7 +76,7 @@ pub enum PropertyPanelAction {
     ToggleSizeHugWidth,
     ToggleSizeHugHeight,
     ToggleSizeClipContent,
-    /// User clicked the Fill section's "纯色" dropdown — host
+    /// User clicked the Fill section's fill-type dropdown — host
     /// toggles `Document.ui.fill_type_picker_open`.
     ToggleFillTypePicker,
     /// User picked a fill type from the dropdown.

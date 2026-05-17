@@ -251,7 +251,7 @@ pub struct EditorUiState {
     pub export_scale: f32,
     pub export_dialog_open: bool,
     pub export_format: ExportFormat,
-    /// Modal "从 Figma 导入".
+    /// "Import from Figma" modal.
     pub figma_import_open: bool,
     /// Floating `Cmd+,` agent-settings modal open.
     pub agent_settings_open: bool,

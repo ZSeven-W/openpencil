@@ -90,13 +90,13 @@ pub enum Icon {
     ChevronUp,
     /// MessageSquare — chat bubble icon (collapsed AI chat pill).
     MessageSquare,
-    /// LayoutGrid — 2×2 grid layout-mode (弹性布局 / RightPanel).
+    /// LayoutGrid — 2×2 grid layout-mode (flex layout / RightPanel).
     LayoutGrid,
     /// Rows3 — horizontal rows layout-mode.
     Rows3,
     /// Columns3 — vertical columns layout-mode.
     Columns3,
-    /// RotateCw — rotation handle for 位置 section.
+    /// RotateCw — rotation handle for the Position section.
     RotateCw,
     /// Diamond — "create component" button glyph.
     Diamond,

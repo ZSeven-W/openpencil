@@ -1,6 +1,7 @@
 //! Right-click context menu for LayerPanel rows. Two row sets:
-//! layer rows (复制 / 删除 / 创建组件 / 切换锁定 / 切换可见性) and
-//! page rows (重命名 / 复制 / 上移 / 下移 / 删除).
+//! layer rows (Duplicate / Delete / Create component / Toggle lock /
+//! Toggle visibility) and page rows (Rename / Duplicate / Move up /
+//! Move down / Delete).
 
 use crate::theme::Theme;
 use crate::widgets::editor_state_ext::theme_for;

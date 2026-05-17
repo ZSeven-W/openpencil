@@ -8,7 +8,7 @@ use op_editor_ui::{Color, Point2D, Rect};
 
 /// Small breathing room from the canvas corner so the chat pill
 /// doesn't visually touch the canvas edge (per 2026-05-10 user
-/// note "稍微加一点上下偶有的间距，一点点").
+/// note to add just a little vertical spacing).
 pub(in crate::widget_host) const AICHAT_INSET_BOTTOM: f32 = 12.0;
 pub(in crate::widget_host) const AICHAT_INSET_LEFT: f32 = 12.0;
 

@@ -86,8 +86,8 @@ pub struct NativeBackend {
     ///
     /// `typeface` covers ASCII (Roboto). `cjk_typeface` is resolved
     /// lazily via `FontMgr::match_family_style_character` so non-
-    /// ASCII labels (`页面 / 图层 / 未命名 / 用 AI 开始设计 / ...`)
-    /// render through a system CJK font (PingFang on macOS,
+    /// ASCII labels (localized CJK chrome strings) render through a
+    /// system CJK font (PingFang on macOS,
     /// Noto CJK on Linux/Windows) without re-paying jian-skia's
     /// per-call FontCollection cost.
     typeface: Option<skia_safe::Typeface>,
@@ -367,8 +367,7 @@ impl NativeBackend {
     ///   - run is ASCII-only → cached Roboto + draw_str
     ///   - run contains non-ASCII → cached system CJK typeface +
     ///     draw_str (PingFang / Noto CJK / etc.). PingFang covers
-    ///     Latin too, so mixed runs like "美食 App 首页" render
-    ///     correctly.
+    ///     Latin too, so mixed CJK + Latin runs render correctly.
     ///   - the system has no CJK font (rare; Linux without Noto)
     ///     → fall back to jian-skia's textlayout path so glyphs
     ///     don't drop. Still slow on that branch, but functional.

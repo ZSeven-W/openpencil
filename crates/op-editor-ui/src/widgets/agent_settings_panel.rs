@@ -706,7 +706,7 @@ fn add_provider_rect(panel: Rect) -> Rect {
 
 fn add_acp_rect(panel: Rect) -> Rect {
     let content = content_rect(panel);
-    // 内置服务商 block: header 32 + subtitle 28 + empty 64 + SECTION_GAP 28 = 152.
+    // Built-in providers block: header 32 + subtitle 28 + empty 64 + SECTION_GAP 28 = 152.
     let y = content.origin.y + 12.0 + 152.0;
     let text_w = 96.0;
     Rect {

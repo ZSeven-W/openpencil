@@ -38,7 +38,7 @@ pub enum TopBarHit {
     ToggleTheme,
     /// Globe icon — cycle through UI locales.
     ToggleLocale,
-    /// Agents 与 MCP chip — open the agent settings modal.
+    /// Agents and MCP chip — open the agent settings modal.
     OpenAgentSettings,
 }
 
@@ -309,8 +309,8 @@ impl Widget for TopBar {
         // the chip anchors immediately to its left (small gap).
 
         // Agent chip — two states:
-        //   - empty (agent_count == 0): LayoutGrid icon + "Agents
-        //     与 MCP" label. Affordance for "set up agents/MCP".
+        //   - empty (agent_count == 0): LayoutGrid icon + an
+        //     "Agents and MCP" label. Affordance for "set up agents/MCP".
         //   - active (≥ 1): Sparkles + green dot + "N agent" text.
         // Anchored just left of the globe icon button (+small gap).
         let count_label;
