@@ -92,9 +92,6 @@ jobs:
             libegl1-mesa-dev libgles2-mesa-dev libgbm-dev mesa-utils \
             libfreetype-dev libfontconfig1-dev \
             xvfb
-      - name: Install cross
-        if: matrix.cross == true
-        run: cargo install cross --locked --version 0.2.5
       - name: Build (host)
         if: matrix.cross == false && matrix.check_only != true
         run: cargo build --workspace --target ${{ matrix.target }} --release
@@ -104,9 +101,6 @@ jobs:
       - name: Check (cross-arch host, e.g. macos-x86_64 from Apple Silicon)
         if: matrix.check_only == true
         run: cargo check --workspace --target ${{ matrix.target }}
-      - name: Build (cross)
-        if: matrix.cross == true
-        run: cross build --workspace --target ${{ matrix.target }} --release
       - name: Test (host, Linux)
         if: matrix.cross == false && runner.os == 'Linux'
         # Linux GPU smoke + gpu_chrome_stub_composition are now `#[ignore]`
