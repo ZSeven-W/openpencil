@@ -434,6 +434,11 @@ fn ellipse_to_payload(n: &EllipseNode) -> NodePayload {
     p.fill_type = first_fill_type(n.fill.as_deref());
     p.stroke = stroke_to_payload(n.stroke.as_ref());
     p.corner_radius = n.corner_radius.unwrap_or(0.0) as f32;
+    // Arc geometry — only carried when authored, so a plain ellipse
+    // still paints as a full oval.
+    p.arc_start_angle = n.start_angle.map(|a| a as f32);
+    p.arc_sweep_angle = n.sweep_angle.map(|a| a as f32);
+    p.arc_inner_radius = n.inner_radius.map(|r| r as f32);
     p
 }
 
@@ -640,6 +645,9 @@ fn base_payload(base: &PenNodeBase, kind: &str) -> NodePayload {
         text: None,
         rotation: (base.rotation.unwrap_or(0.0) as f32).to_radians(),
         corner_radius: 0.0,
+        arc_start_angle: None,
+        arc_sweep_angle: None,
+        arc_inner_radius: None,
         hidden: !base.visible.unwrap_or(true),
         locked: base.locked.unwrap_or(false),
         collapsed: false,

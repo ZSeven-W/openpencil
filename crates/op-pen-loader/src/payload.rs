@@ -55,6 +55,15 @@ pub struct NodePayload {
     pub rotation: f32,
     #[serde(default)]
     pub corner_radius: f32,
+    /// Ellipse arc start angle in degrees (`None` = full ellipse).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub arc_start_angle: Option<f32>,
+    /// Ellipse arc sweep angle in degrees (`None` = full ellipse).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub arc_sweep_angle: Option<f32>,
+    /// Ellipse donut-hole radius, 0.0..=1.0 fraction of the radius.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub arc_inner_radius: Option<f32>,
     #[serde(default)]
     pub hidden: bool,
     #[serde(default)]

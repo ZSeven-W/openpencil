@@ -45,6 +45,71 @@ fn paint_drop_shadows(cx: &mut PaintCx<'_>, node: &SceneNode, world_rect: Rect, 
     }
 }
 
+/// Tessellate an ellipse arc / pie / donut-sector into a closed
+/// polygon outline. `start_deg` / `sweep_deg` use the screen
+/// convention (0° = +X, positive = clockwise); `inner` is the
+/// donut-hole radius as a 0.0..=1.0 fraction.
+pub(crate) fn arc_polygon(rect: Rect, start_deg: f32, sweep_deg: f32, inner: f32) -> Vec<Point2D> {
+    let cx_pt = rect.origin.x + rect.size.x / 2.0;
+    let cy_pt = rect.origin.y + rect.size.y / 2.0;
+    let rx = rect.size.x / 2.0;
+    let ry = rect.size.y / 2.0;
+    // ~1 segment per 4° of sweep, clamped to a sane range.
+    let segs = ((sweep_deg.abs() / 4.0).ceil() as usize).clamp(2, 512);
+    let point = |frac: f32, scale: f32| -> Point2D {
+        let ang = (start_deg + sweep_deg * frac).to_radians();
+        Point2D::new(
+            cx_pt + rx * scale * ang.cos(),
+            cy_pt + ry * scale * ang.sin(),
+        )
+    };
+    let mut poly = Vec::with_capacity(segs * 2 + 2);
+    if inner > 0.001 {
+        // Annular sector: outer arc start→end, inner arc end→start.
+        for i in 0..=segs {
+            poly.push(point(i as f32 / segs as f32, 1.0));
+        }
+        for i in (0..=segs).rev() {
+            poly.push(point(i as f32 / segs as f32, inner));
+        }
+    } else {
+        // Pie wedge: centre + outer arc.
+        poly.push(Point2D::new(cx_pt, cy_pt));
+        for i in 0..=segs {
+            poly.push(point(i as f32 / segs as f32, 1.0));
+        }
+    }
+    poly
+}
+
+/// Paint an Ellipse node — a full oval when no arc geometry is
+/// authored, otherwise a tessellated pie / arc / donut sector.
+fn paint_ellipse(cx: &mut PaintCx<'_>, node: &SceneNode, world_rect: Rect, zoom: f32) {
+    let inner = node.arc_inner_radius.unwrap_or(0.0).clamp(0.0, 1.0);
+    let has_arc = node.arc_start_angle.is_some() || node.arc_sweep_angle.is_some() || inner > 0.001;
+    let sweep = node.arc_sweep_angle.unwrap_or(360.0);
+    // A full-circle sweep with no donut hole is just a plain oval.
+    if !has_arc || (sweep.abs() >= 359.9 && inner <= 0.001) {
+        if let Some(fill) = node.fill {
+            cx.backend.fill_oval(world_rect, fill);
+        }
+        if let Some(stroke) = node.stroke {
+            cx.backend
+                .stroke_oval(world_rect, stroke.color, stroke.width * zoom);
+        }
+        return;
+    }
+    let start = node.arc_start_angle.unwrap_or(0.0);
+    let poly = arc_polygon(world_rect, start, sweep, inner);
+    if let Some(fill) = node.fill {
+        cx.backend.fill_polygon(&poly, fill);
+    }
+    if let Some(stroke) = node.stroke {
+        cx.backend
+            .stroke_polygon(&poly, stroke.color, stroke.width * zoom);
+    }
+}
+
 /// Recursively paint one resolved [`SceneNode`] and its subtree.
 ///
 /// `viewport_origin` is the canvas-rect origin shifted by the
@@ -134,13 +199,7 @@ pub fn paint_node(
             paint_fill_then_stroke(cx, node, world_rect, zoom, node.fill);
         }
         NodeKind::Ellipse => {
-            if let Some(fill) = node.fill {
-                cx.backend.fill_oval(world_rect, fill);
-            }
-            if let Some(stroke) = node.stroke {
-                cx.backend
-                    .stroke_oval(world_rect, stroke.color, stroke.width * zoom);
-            }
+            paint_ellipse(cx, node, world_rect, zoom);
         }
         NodeKind::Polygon => {
             // Default triangle: top-centre, bottom-left, bottom-right.
@@ -273,5 +332,42 @@ fn paint_text_node(
             };
             cx.backend.fill_rect(caret, ink);
         }
+    }
+}
+
+#[cfg(test)]
+mod arc_tests {
+    use super::arc_polygon;
+    use crate::Rect;
+
+    #[test]
+    fn pie_polygon_starts_at_centre() {
+        // 100×100 rect at origin → centre (50, 50).
+        let poly = arc_polygon(Rect::xywh(0.0, 0.0, 100.0, 100.0), 0.0, 90.0, 0.0);
+        assert_eq!(poly[0].x, 50.0);
+        assert_eq!(poly[0].y, 50.0);
+        // First arc point at 0° = +X edge → (100, 50).
+        assert!((poly[1].x - 100.0).abs() < 0.01);
+        assert!((poly[1].y - 50.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn donut_polygon_has_outer_and_inner_rings() {
+        let poly = arc_polygon(Rect::xywh(0.0, 0.0, 100.0, 100.0), 0.0, 360.0, 0.5);
+        // segs for 360° = 90; outer (segs+1) + inner (segs+1) points.
+        assert_eq!(poly.len(), 2 * (90 + 1));
+        // An inner-ring point sits at half the radius from centre.
+        let last = poly[poly.len() - 1];
+        let dist = ((last.x - 50.0).powi(2) + (last.y - 50.0).powi(2)).sqrt();
+        assert!((dist - 25.0).abs() < 0.5, "inner radius ~25, got {dist}");
+    }
+
+    #[test]
+    fn quarter_sweep_end_point_at_90_degrees() {
+        // start 0°, sweep 90° → last outer point at +Y edge (50, 100).
+        let poly = arc_polygon(Rect::xywh(0.0, 0.0, 100.0, 100.0), 0.0, 90.0, 0.0);
+        let last = poly[poly.len() - 1];
+        assert!((last.x - 50.0).abs() < 0.01);
+        assert!((last.y - 100.0).abs() < 0.01);
     }
 }
