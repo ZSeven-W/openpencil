@@ -3,8 +3,7 @@
 //! mapping, base-prop assembly, the conversion context, and the
 //! SYMBOL-subtree rescaler.
 
-use crate::color::figma_color_to_hex;
-use crate::figma_types::{BlobOrString, FigColor, FigMatrix};
+use crate::figma_types::{BlobOrString, FigMatrix};
 use crate::kiwi::FigValue;
 use crate::mappers::{map_height_sizing, map_width_sizing};
 use crate::tree::TreeNode;
@@ -234,23 +233,6 @@ pub fn resolve_height(
         ),
         FigLayoutMode::OpenPencil => map_height_sizing(figma, parent_stack_mode),
     }
-}
-
-/// First visible solid fill colour as `#RRGGBB` (no alpha) — used as
-/// the icon-stroke fallback in `convert_vector`.
-pub fn figma_fill_color(figma: &FigValue) -> Option<String> {
-    let paint = figma
-        .get_array("fillPaints")?
-        .iter()
-        .find(|f| f.get_bool("visible") != Some(false) && f.get_str("type") == Some("SOLID"))?;
-    let color = paint.get("color").and_then(FigColor::from_value)?;
-    let hex = figma_color_to_hex(&FigColor {
-        r: color.r,
-        g: color.g,
-        b: color.b,
-        a: None, // force 6-digit
-    });
-    Some(hex)
 }
 
 /// Recursively rescale a SYMBOL subtree to fit a differently-sized

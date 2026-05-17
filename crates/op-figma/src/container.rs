@@ -31,8 +31,6 @@ pub enum ContainerError {
     /// ZIP wrapper present but `canvas.fig` is missing.
     NoCanvasFig,
     Zip(ZipError),
-    /// A chunk's size field overran the buffer / decompression failed.
-    Malformed(String),
 }
 
 impl std::fmt::Display for ContainerError {
@@ -45,7 +43,6 @@ impl std::fmt::Display for ContainerError {
                 write!(f, "invalid .fig archive: no canvas.fig inside")
             }
             ContainerError::Zip(e) => write!(f, "{e}"),
-            ContainerError::Malformed(m) => write!(f, "malformed .fig container: {m}"),
         }
     }
 }
