@@ -15,7 +15,6 @@ on:
       - 'vendor/skia-safe-op/**'
       - 'rust-toolchain.toml'
       - 'deny.toml'
-      - 'Cross.toml'
       - '.github/workflows/rust-multiplatform.yml'
   pull_request:
     paths:
@@ -24,7 +23,6 @@ on:
       - 'crates/**'
       - 'vendor/jian/**'
       - 'vendor/skia-safe-op/**'
-      - 'Cross.toml'
       - '.github/workflows/rust-multiplatform.yml'
   workflow_dispatch:
 
@@ -52,10 +50,14 @@ jobs:
             runner: ubuntu-latest
             target: x86_64-unknown-linux-gnu
             cross: false
+          # Native ARM64 hosted runner — no `cross`. The cross 0.2.x aarch64
+          # image (Ubuntu 16.04 / GCC 5 / FreeType 2.6) is too old to link the
+          # modern skia that skia-bindings builds (missing COLR/variable-font
+          # FreeType symbols + libstdc++ ABI mismatch).
           - label: linux-aarch64
-            runner: ubuntu-latest
+            runner: ubuntu-24.04-arm
             target: aarch64-unknown-linux-gnu
-            cross: true
+            cross: false
           - label: windows-x86_64
             runner: windows-latest
             target: x86_64-pc-windows-msvc
