@@ -85,6 +85,7 @@ fn hit_test_action_export_section_returns_open_dialog() {
         fill: caps.fill,
         stroke: caps.stroke,
         effects: caps.effects,
+        effect_count: panel.snapshot.effects.len(),
         export: caps.export,
         fill_type: panel.fill_type,
     };

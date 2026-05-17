@@ -126,6 +126,27 @@ pub fn first_solid_fill_hex(node: &PenNode) -> Option<&str> {
     })
 }
 
+/// Read-only view of a node's visual effects. Frame / Group /
+/// Rectangle carry them on `container`; the leaf shapes carry them
+/// directly. Returns an empty slice for a node with no effects (or a
+/// kind — IconFont / Ref — with no effects field).
+pub fn node_effects(node: &PenNode) -> &[jian_ops_schema::style::PenEffect] {
+    let slot = match node {
+        PenNode::Frame(n) => n.container.effects.as_deref(),
+        PenNode::Group(n) => n.container.effects.as_deref(),
+        PenNode::Rectangle(n) => n.container.effects.as_deref(),
+        PenNode::Ellipse(n) => n.effects.as_deref(),
+        PenNode::Polygon(n) => n.effects.as_deref(),
+        PenNode::Path(n) => n.effects.as_deref(),
+        PenNode::Line(n) => n.effects.as_deref(),
+        PenNode::Text(n) => n.effects.as_deref(),
+        PenNode::TextInput(n) => n.effects.as_deref(),
+        PenNode::Image(n) => n.effects.as_deref(),
+        PenNode::IconFont(_) | PenNode::Ref(_) => None,
+    };
+    slot.unwrap_or(&[])
+}
+
 /// First `Solid` fill's hex string on the node's stroke.
 pub fn first_solid_stroke_hex(node: &PenNode) -> Option<&str> {
     let stroke = node_stroke(node)?;

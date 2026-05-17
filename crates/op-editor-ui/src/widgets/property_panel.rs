@@ -90,6 +90,9 @@ pub enum PropertyPanelAction {
     /// User clicked the Effects section's "+" — host appends a
     /// default drop shadow to the selected node.
     AddEffect,
+    /// User clicked the "✕" on an effect row — host removes the
+    /// effect at this index from the selected node.
+    RemoveEffect(usize),
 }
 
 /// Per-NodeKind toggles for which property-panel sections render.
@@ -201,8 +204,72 @@ pub struct NodeSnapshot {
     pub corner_radius: f32,
     pub fill: Option<Color>,
     pub stroke: Option<SceneStroke>,
+    /// The node's visual effects, in paint order — drives the
+    /// Effects section's rows + param inputs.
+    pub effects: Vec<EffectSummary>,
     /// Drives per-kind section filtering (Line hides fill, etc.).
     pub kind_variant: crate::layout_scene::NodeKind,
+}
+
+/// Which visual-effect variant a row represents.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EffectKind {
+    Shadow,
+    Blur,
+    BackgroundBlur,
+}
+
+impl EffectKind {
+    /// Human-readable row label.
+    pub fn label(self) -> &'static str {
+        match self {
+            EffectKind::Shadow => "Drop Shadow",
+            EffectKind::Blur => "Layer Blur",
+            EffectKind::BackgroundBlur => "Background Blur",
+        }
+    }
+}
+
+/// One effect's editable scalar parameters, formatted for the
+/// Effects section. Shadow uses all four; the blur kinds use `blur`
+/// as the radius and leave offset / spread at 0.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct EffectSummary {
+    pub kind: EffectKind,
+    pub offset_x: f32,
+    pub offset_y: f32,
+    pub blur: f32,
+    pub spread: f32,
+}
+
+impl EffectSummary {
+    /// Summarise a canonical `PenEffect` for the panel.
+    fn from_pen_effect(e: &jian_ops_schema::style::PenEffect) -> Self {
+        use jian_ops_schema::style::PenEffect;
+        match e {
+            PenEffect::Shadow(s) => EffectSummary {
+                kind: EffectKind::Shadow,
+                offset_x: s.offset_x,
+                offset_y: s.offset_y,
+                blur: s.blur,
+                spread: s.spread,
+            },
+            PenEffect::Blur(b) => EffectSummary {
+                kind: EffectKind::Blur,
+                offset_x: 0.0,
+                offset_y: 0.0,
+                blur: b.radius,
+                spread: 0.0,
+            },
+            PenEffect::BackgroundBlur(b) => EffectSummary {
+                kind: EffectKind::BackgroundBlur,
+                offset_x: 0.0,
+                offset_y: 0.0,
+                blur: b.radius,
+                spread: 0.0,
+            },
+        }
+    }
 }
 
 impl NodeSnapshot {
@@ -242,6 +309,9 @@ impl NodeSnapshot {
             corner_radius: 0.0,
             fill: None,
             stroke: None,
+            // Multi-select shows no per-effect rows — the Effects
+            // section paints just its header + the add affordance.
+            effects: Vec::new(),
             // `kind_variant` is informational for the snapshot
             // header label only — the paint capability mask is
             // driven by `SectionCapabilities::for_multi()` instead
@@ -281,6 +351,10 @@ impl NodeSnapshot {
             corner_radius,
             fill,
             stroke,
+            effects: op_editor_core::node_effects(node)
+                .iter()
+                .map(EffectSummary::from_pen_effect)
+                .collect(),
             kind_variant: kind,
         }
     }
@@ -458,6 +532,7 @@ impl PropertyPanel {
             fill: caps.fill,
             stroke: caps.stroke,
             effects: caps.effects,
+            effect_count: self.snapshot.effects.len(),
             export: caps.export,
             fill_type: self.fill_type,
         };
@@ -495,6 +570,7 @@ impl PropertyPanel {
             fill: caps.fill,
             stroke: caps.stroke,
             effects: caps.effects,
+            effect_count: self.snapshot.effects.len(),
             export: caps.export,
             fill_type: self.fill_type,
         };
@@ -625,7 +701,15 @@ impl Widget for PropertyPanel {
             );
         }
         if caps.effects {
-            y = sections::paint_effects_section(cx, &self.theme, &self.labels, x, y, w);
+            y = sections::paint_effects_section(
+                cx,
+                &self.theme,
+                &self.labels,
+                &self.snapshot.effects,
+                x,
+                y,
+                w,
+            );
         }
         if caps.export {
             let _ = sections::paint_export_section(
@@ -649,6 +733,7 @@ impl Widget for PropertyPanel {
                 fill: caps.fill,
                 stroke: caps.stroke,
                 effects: caps.effects,
+                effect_count: self.snapshot.effects.len(),
                 export: caps.export,
                 fill_type: self.fill_type,
             };

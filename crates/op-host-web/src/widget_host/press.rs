@@ -67,6 +67,18 @@ impl WidgetHost {
             A::AddEffect => {
                 self.editor_state.add_drop_shadow_to_selected();
             }
+            A::RemoveEffect(index) => {
+                let id = self.editor_state.selection.anchor.clone();
+                if id.is_real() {
+                    self.editor_state.commit_history();
+                    let _ =
+                        self.editor_state
+                            .apply(op_editor_core::EditorCommand::RemoveNodeEffect {
+                                node_id: id,
+                                index: index as u32,
+                            });
+                }
+            }
         }
         self.mark_dirty();
     }
