@@ -1,0 +1,35 @@
+[package]
+name = "op-acp"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "OpenPencil ACP client — Agent Client Protocol (ndJSON JSON-RPC) transport, ported from the TS pen-acp package"
+
+[features]
+default = ["remote"]
+# Remote ACP agents over a WebSocket endpoint. Local (stdio) agents
+# work without this feature; `remote` adds the `tokio-tungstenite`
+# dependency for the WebSocket transport.
+remote = ["dep:tokio-tungstenite", "dep:futures-util"]
+
+[dependencies]
+# Desktop-only crate: spawns child processes + drives async IO, so it
+# pulls tokio. Never depended on by a wasm crate.
+tokio = { version = "1", features = [
+  "process",
+  "io-util",
+  "rt",
+  "rt-multi-thread",
+  "macros",
+  "sync",
+  "time",
+] }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+# Chat-delta vocabulary the ACP event adapter maps onto.
+op-ai = { path = "../op-ai" }
+
+tokio-tungstenite = { version = "0.24", optional = true }
+futures-util = { version = "0.3", optional = true }
