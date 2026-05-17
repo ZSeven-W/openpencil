@@ -18,6 +18,10 @@ mod kiwi;
 #[allow(dead_code)]
 mod mappers;
 #[allow(dead_code)]
+mod text_mapper;
+#[allow(dead_code)]
+mod vector_decoder;
+#[allow(dead_code)]
 mod zip_reader;
 
 use jian_ops_schema::node::{
