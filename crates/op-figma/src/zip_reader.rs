@@ -38,6 +38,10 @@ const CDFH_SIG: u32 = 0x0201_4b50;
 const LFH_SIG: u32 = 0x0403_4b50;
 /// Per-entry decompressed ceiling — zip-bomb defence (512 MiB).
 const MAX_ENTRY_SIZE: usize = 512 * 1024 * 1024;
+/// Aggregate decompressed ceiling across the whole archive (2 GiB).
+const MAX_TOTAL_SIZE: usize = 2 * 1024 * 1024 * 1024;
+/// Cap on the number of archive entries (many-tiny-files zip bomb).
+const MAX_ENTRIES: usize = 10_000;
 
 fn u16_le(b: &[u8], off: usize) -> Option<u16> {
     b.get(off..off + 2)
@@ -72,8 +76,12 @@ pub fn read_zip(buf: &[u8]) -> Result<Vec<ZipEntry>, ZipError> {
     let eocd = find_eocd(buf).ok_or(ZipError::NotZip)?;
     let total_entries = u16_le(buf, eocd + 10).ok_or(ZipError::Truncated)? as usize;
     let cd_offset = u32_le(buf, eocd + 16).ok_or(ZipError::Truncated)? as usize;
+    if total_entries > MAX_ENTRIES {
+        return Err(ZipError::TooLarge);
+    }
 
     let mut entries = Vec::with_capacity(total_entries);
+    let mut total_size = 0usize;
     let mut cursor = cd_offset;
     for _ in 0..total_entries {
         if u32_le(buf, cursor) != Some(CDFH_SIG) {
@@ -93,6 +101,10 @@ pub fn read_zip(buf: &[u8]) -> Result<Vec<ZipEntry>, ZipError> {
         let name = String::from_utf8_lossy(name_bytes).into_owned();
 
         let data = read_entry_data(buf, local_off, method, comp_size, uncomp_size)?;
+        total_size = total_size.saturating_add(data.len());
+        if total_size > MAX_TOTAL_SIZE {
+            return Err(ZipError::TooLarge);
+        }
         entries.push(ZipEntry { name, data });
 
         cursor += 46 + name_len + extra_len + comment_len;

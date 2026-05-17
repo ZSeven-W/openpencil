@@ -56,8 +56,15 @@ pub enum FigFileKind {
 /// applies. Returns `Unknown` for empty input.
 pub fn detect_kind(bytes: &[u8]) -> FigFileKind {
     // Figma's binary container starts with the literal "fig-kiwi" — a
-    // 8-byte ASCII magic followed by the Zstd-compressed payload.
+    // 8-byte ASCII magic followed by the chunk payload.
     if bytes.len() >= 8 && &bytes[0..8] == b"fig-kiwi" {
+        return FigFileKind::Binary;
+    }
+    // The common export form wraps the container in a ZIP archive
+    // (`canvas.fig` + `images/*`); the ZIP local-file-header magic
+    // `PK\x03\x04` marks it. A non-fig ZIP simply fails later with a
+    // "no canvas.fig" error.
+    if bytes.len() >= 4 && bytes[0..4] == [0x50, 0x4b, 0x03, 0x04] {
         return FigFileKind::Binary;
     }
     // Clipboard JSON starts with `{` and contains the FIGMA_DOCUMENT
