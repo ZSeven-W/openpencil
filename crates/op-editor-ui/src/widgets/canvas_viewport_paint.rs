@@ -313,13 +313,6 @@ pub fn paint_node(
             cx.backend.stroke_line(from, to, color, width);
         }
         NodeKind::Path => {
-            let (color, width) = match node.stroke {
-                Some(s) => (s.color, s.width * zoom),
-                None => (
-                    node.fill.unwrap_or(crate::Color::BLACK),
-                    (1.5_f32).max(zoom),
-                ),
-            };
             let to_world = |p: Point2D| -> Point2D {
                 Point2D::new(
                     viewport_origin.x + p.x * zoom,
@@ -331,15 +324,27 @@ pub fn paint_node(
             // to the straight `points` polyline.
             let polyline = flatten_path(node);
             // A closed path with a fill paints its enclosed area.
-            if node.path_closed {
-                if let Some(fill) = node.fill {
-                    let world: Vec<Point2D> = polyline.iter().map(|p| to_world(*p)).collect();
-                    cx.backend.fill_polygon(&world, fill);
-                }
+            let filled = node.path_closed && node.fill.is_some();
+            if filled {
+                let world: Vec<Point2D> = polyline.iter().map(|p| to_world(*p)).collect();
+                cx.backend.fill_polygon(&world, node.fill.unwrap());
             }
-            for pair in polyline.windows(2) {
-                cx.backend
-                    .stroke_line(to_world(pair[0]), to_world(pair[1]), color, width);
+            // Stroke: an explicit stroke always paints; with no
+            // stroke, only an UNfilled path strokes (so it stays
+            // visible) — a filled path must not draw an implicit
+            // outline.
+            let stroke = match node.stroke {
+                Some(s) => Some((s.color, s.width * zoom)),
+                None if !filled => {
+                    Some((node.fill.unwrap_or(crate::Color::BLACK), (1.5_f32).max(zoom)))
+                }
+                None => None,
+            };
+            if let Some((color, width)) = stroke {
+                for pair in polyline.windows(2) {
+                    cx.backend
+                        .stroke_line(to_world(pair[0]), to_world(pair[1]), color, width);
+                }
             }
         }
         NodeKind::Text => {
