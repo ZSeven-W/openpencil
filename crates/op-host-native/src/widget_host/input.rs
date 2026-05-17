@@ -607,6 +607,21 @@ impl WidgetHostNative {
             // Same story as marquee — no viewport, drop the candidate.
             return true;
         }
+        // Path-anchor / arc-handle drags — commit the history snapshot
+        // when they actually moved (parity with the with-viewport
+        // release; without this a stale drag would leak).
+        if let Some(drag) = self.path_anchor_drag.take() {
+            if drag.moved {
+                self.editor_state.history_push_past(drag.pre_drag_snapshot);
+            }
+            return true;
+        }
+        if let Some(drag) = self.arc_handle_drag.take() {
+            if drag.moved {
+                self.editor_state.history_push_past(drag.pre_drag_snapshot);
+            }
+            return true;
+        }
         // Chat drag without viewport — drop it (best effort).
         if self.chat_drag.take().is_some() {
             return true;

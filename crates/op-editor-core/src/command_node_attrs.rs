@@ -340,7 +340,9 @@ impl EditorState {
                     e.start_angle = Some(a);
                 }
                 if let Some(a) = sweep_angle {
-                    e.sweep_angle = Some(a);
+                    // A sweep beyond a full turn just over-draws —
+                    // clamp to a single revolution either direction.
+                    e.sweep_angle = Some(a.clamp(-360.0, 360.0));
                 }
                 if let Some(r) = inner_radius {
                     e.inner_radius = Some(r);

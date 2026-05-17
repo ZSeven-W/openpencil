@@ -157,6 +157,25 @@ fn point_in_node(node: &SceneNode, local: Point2D, bounds: Rect, zoom: f32) -> b
         let screen_slack = 4.0 / zoom.max(0.0001);
         return distance_point_to_segment(local, from, to) <= stroke_half + screen_slack;
     }
+    // Paths hit-test against their flattened (bezier-aware) outline,
+    // not the bounding box — a curved / thin path otherwise selects
+    // empty bbox space, and a zero-height stroked path (which fails
+    // the positive-area gate below) stays clickable.
+    if matches!(node.kind, NodeKind::Path) {
+        let poly = crate::widgets::canvas_viewport_paint::flatten_path(node);
+        if poly.len() < 2 {
+            return false;
+        }
+        let stroke_half = node.stroke.map(|s| s.width / 2.0).unwrap_or(1.0);
+        let slack = 4.0 / zoom.max(0.0001);
+        for seg in poly.windows(2) {
+            if distance_point_to_segment(local, seg[0], seg[1]) <= stroke_half + slack {
+                return true;
+            }
+        }
+        // A filled closed path is also hittable across its interior.
+        return node.path_closed && node.fill.is_some() && point_in_polygon(local, &poly);
+    }
     // Non-line kinds need real positive area on both axes.
     if bounds.size.x <= 0.0 || bounds.size.y <= 0.0 {
         return false;
@@ -230,6 +249,23 @@ fn point_in_triangle(p: Point2D, a: Point2D, b: Point2D, c: Point2D) -> bool {
     let has_neg = s1 < 0.0 || s2 < 0.0 || s3 < 0.0;
     let has_pos = s1 > 0.0 || s2 > 0.0 || s3 > 0.0;
     !(has_neg && has_pos)
+}
+
+/// Even-odd ray-cast point-in-polygon test over a closed vertex ring.
+fn point_in_polygon(p: Point2D, poly: &[Point2D]) -> bool {
+    if poly.len() < 3 {
+        return false;
+    }
+    let mut inside = false;
+    let mut j = poly.len() - 1;
+    for i in 0..poly.len() {
+        let (a, b) = (poly[i], poly[j]);
+        if (a.y > p.y) != (b.y > p.y) && p.x < (b.x - a.x) * (p.y - a.y) / (b.y - a.y) + a.x {
+            inside = !inside;
+        }
+        j = i;
+    }
+    inside
 }
 
 /// Shortest distance from `p` to the segment `a`–`b`.
