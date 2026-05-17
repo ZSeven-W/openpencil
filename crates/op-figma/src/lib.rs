@@ -10,6 +10,8 @@
 #[allow(dead_code)]
 mod container;
 #[allow(dead_code)]
+mod kiwi;
+#[allow(dead_code)]
 mod zip_reader;
 
 use jian_ops_schema::node::{
