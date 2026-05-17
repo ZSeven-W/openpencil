@@ -190,6 +190,13 @@ pub struct SceneNode {
     /// populated for `Path` (and any kind the painter walks as
     /// points). Empty otherwise.
     pub points: Vec<Point2D>,
+    /// Ellipse arc start angle in degrees. `None` = full ellipse.
+    pub arc_start_angle: Option<f32>,
+    /// Ellipse arc sweep angle in degrees. `None` = full ellipse.
+    pub arc_sweep_angle: Option<f32>,
+    /// Ellipse donut-hole radius (0.0..=1.0 fraction). `None` / 0 =
+    /// solid.
+    pub arc_inner_radius: Option<f32>,
     /// Drop-shadow / effects painted behind the node's fill.
     pub effects: Vec<Effect>,
     /// Whether the node (and its subtree) is hidden — the painter
@@ -264,6 +271,9 @@ impl SceneNode {
             font_weight: 0,
             text_wrap: false,
             points: Vec::new(),
+            arc_start_angle: None,
+            arc_sweep_angle: None,
+            arc_inner_radius: None,
             effects: Vec::new(),
             hidden: false,
             locked: false,

@@ -111,6 +111,9 @@ fn node_payload_to_scene(node: &NodePayload, var_table: &VariableTable) -> Scene
             .iter()
             .map(|p| Point2D::new(p[0], p[1]))
             .collect(),
+        arc_start_angle: node.arc_start_angle,
+        arc_sweep_angle: node.arc_sweep_angle,
+        arc_inner_radius: node.arc_inner_radius,
         effects: crate::effects::effects_from_payload_ref(&node.effects),
         hidden: node.hidden,
         locked: node.locked,
