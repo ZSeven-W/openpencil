@@ -2288,6 +2288,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "op-cli"
+version = "0.1.0"
+
+[[package]]
 name = "op-codegen"
 version = "0.1.0"
 dependencies = [

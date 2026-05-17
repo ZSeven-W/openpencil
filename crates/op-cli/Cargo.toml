@@ -1,0 +1,17 @@
+[package]
+name = "op-cli"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "OpenPencil `op` CLI — drives the editor via the HTTP MCP transport"
+
+# The binary is `op` (the command users type); the crate is `op-cli`.
+[[bin]]
+name = "op"
+path = "src/main.rs"
+
+# Dependency-free: the CLI hand-rolls the HTTP/1.1 request + JSON-RPC
+# body the same way `op-mcp` hand-rolls its wire layer, so `op` builds
+# fast and pulls nothing into the workspace graph.
+[dependencies]

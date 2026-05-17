@@ -246,4 +246,7 @@ pub enum EditorCommand {
     CutSelected,
     /// `Cmd+V` — paste the clipboard as top-level siblings.
     PasteClipboard { offset_px: i32 },
+    /// Parse an SVG document + insert the resulting nodes on the
+    /// active page, offset by `(x, y)` doc-px.
+    ImportSvg { svg: String, x: i32, y: i32 },
 }

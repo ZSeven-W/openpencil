@@ -88,6 +88,8 @@ fn path_bounds_include_bezier_curve_extrema() {
     }"##;
     let r = load(src);
     let n = &r.payload.pages[0].children[0];
+    // `points` stays 1:1 with the two schema anchors; the curve-aware
+    // bounds come from `absolutize_path_anchors`'s native span.
     let p0 = n.points[0];
     let p1 = n.points[1];
     // x span [0, 100] → sx=1. Anchors keep their x.

@@ -742,6 +742,7 @@ mod tests {
                 system_prompt: String::new(),
                 user_message: "hi".into(),
                 max_output_tokens: 64,
+                ..Default::default()
             })
             .collect();
         assert!(

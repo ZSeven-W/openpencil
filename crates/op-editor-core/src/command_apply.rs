@@ -359,6 +359,14 @@ impl EditorState {
                 self.history_push_past(snap);
                 true
             }
+            EditorCommand::ImportSvg { svg, x, y } => {
+                let Some(mut next_id) = self.next_node_id_seed() else {
+                    return false;
+                };
+                // `import_svg` pushes its own history snapshot when it
+                // inserts ≥ 1 node.
+                self.import_svg(&mut next_id, &svg, (x as f64, y as f64)) > 0
+            }
 
             // --- Tool + viewport + history -------------------------
             EditorCommand::SetActiveTool { tool } => {

@@ -145,6 +145,7 @@ pub fn launch_if_pending(host: &mut WidgetHostNative, current: &mut Option<ChatS
         system_prompt: String::new(),
         user_message: user_text,
         max_output_tokens: 4096,
+        ..Default::default()
     };
     *current = Some(ChatSession::start(provider, req));
     true
@@ -218,6 +219,7 @@ mod tests {
                 system_prompt: String::new(),
                 user_message: "hi".into(),
                 max_output_tokens: 256,
+                ..Default::default()
             },
         );
         // Drain to completion — poll in a bounded loop so a stuck
@@ -246,6 +248,7 @@ mod tests {
                 system_prompt: String::new(),
                 user_message: "x".into(),
                 max_output_tokens: 0,
+                ..Default::default()
             },
         );
         let mut err = None;
