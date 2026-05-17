@@ -202,6 +202,12 @@ pub enum EditorCommand {
         sweep_angle: Option<f64>,
         inner_radius: Option<f64>,
     },
+    /// Append a visual effect to a node. `kind` is one of `"shadow"`
+    /// / `"blur"` / `"background_blur"`; the effect lands with sensible
+    /// default parameters.
+    AddNodeEffect { node_id: NodeId, kind: String },
+    /// Remove the effect at `index` from a node's effect list.
+    RemoveNodeEffect { node_id: NodeId, index: u32 },
     /// Set the active canvas tool.
     SetActiveTool { tool: String },
     /// Undo the last change.

@@ -51,7 +51,7 @@ fn tools_list_response_includes_all_registered_tools() {
     // without being added to the list below.
     assert_eq!(
         TOOL_SCHEMAS.len(),
-        80,
+        82,
         "tools/list catalog count must match the registered tools — add the new tool to this test"
     );
     for name in [
@@ -99,6 +99,8 @@ fn tools_list_response_includes_all_registered_tools() {
         "set_node_fill_hex",
         "set_node_flip",
         "set_ellipse_arc",
+        "add_node_effect",
+        "remove_node_effect",
         "set_node_name",
         "set_selection_set",
         "toggle_node_selection",

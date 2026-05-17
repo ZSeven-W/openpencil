@@ -481,3 +481,83 @@ impl McpTool for SetEllipseArc {
 pub fn set_ellipse_arc_snapshot() -> SetEllipseArc {
     SetEllipseArc
 }
+
+/// First-party `add_node_effect` tool — append a visual effect
+/// (`shadow` / `blur` / `background_blur`) to a node with default
+/// parameters.
+pub struct AddNodeEffect;
+
+impl McpTool for AddNodeEffect {
+    fn name(&self) -> &str {
+        "add_node_effect"
+    }
+    fn call(&self, args: &BTreeMap<String, String>) -> ToolOutcome {
+        let node_id = match parse_node_id(args, "node_id") {
+            Ok(v) => v,
+            Err(e) => return e,
+        };
+        let Some(kind) = args.get("kind") else {
+            return ToolOutcome::Err(
+                ToolErrorCode::MissingArgument,
+                "kind is required (shadow / blur / background_blur)".into(),
+            );
+        };
+        if !matches!(kind.as_str(), "shadow" | "blur" | "background_blur") {
+            return ToolOutcome::Err(
+                ToolErrorCode::InvalidArgument,
+                format!("kind must be shadow / blur / background_blur, got {kind:?}"),
+            );
+        }
+        let mut out = BTreeMap::new();
+        out.insert("wrote".into(), "true".into());
+        ToolOutcome::OkWithCommand(
+            out,
+            EditorCommand::AddNodeEffect {
+                node_id,
+                kind: kind.clone(),
+            },
+        )
+    }
+}
+
+pub fn add_node_effect_snapshot() -> AddNodeEffect {
+    AddNodeEffect
+}
+
+/// First-party `remove_node_effect` tool — drop the effect at `index`
+/// from a node's effect list.
+pub struct RemoveNodeEffect;
+
+impl McpTool for RemoveNodeEffect {
+    fn name(&self) -> &str {
+        "remove_node_effect"
+    }
+    fn call(&self, args: &BTreeMap<String, String>) -> ToolOutcome {
+        let node_id = match parse_node_id(args, "node_id") {
+            Ok(v) => v,
+            Err(e) => return e,
+        };
+        let Some(raw) = args.get("index") else {
+            return ToolOutcome::Err(
+                ToolErrorCode::MissingArgument,
+                "index is required (0-based u32 effect index)".into(),
+            );
+        };
+        let index: u32 = match raw.parse::<u32>() {
+            Ok(i) => i,
+            Err(_) => {
+                return ToolOutcome::Err(
+                    ToolErrorCode::InvalidArgument,
+                    format!("index must be a non-negative integer, got {raw:?}"),
+                );
+            }
+        };
+        let mut out = BTreeMap::new();
+        out.insert("wrote".into(), "true".into());
+        ToolOutcome::OkWithCommand(out, EditorCommand::RemoveNodeEffect { node_id, index })
+    }
+}
+
+pub fn remove_node_effect_snapshot() -> RemoveNodeEffect {
+    RemoveNodeEffect
+}

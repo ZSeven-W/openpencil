@@ -83,10 +83,11 @@ pub use component_tools::{
 pub use extra_read_tools::{get_node_children_snapshot, ChildRecord, GetNodeChildren};
 pub use json_serializer::response_to_json;
 pub use node_attr_tools::{
-    set_ellipse_arc_snapshot, set_node_corner_radius_snapshot, set_node_fill_hex_snapshot,
-    set_node_flip_snapshot, set_node_font_size_snapshot, set_node_font_weight_snapshot,
-    set_node_name_snapshot, set_node_rotation_snapshot, set_node_stroke_hex_snapshot,
-    set_node_stroke_width_snapshot, set_node_text_snapshot, SetEllipseArc, SetNodeCornerRadius,
+    add_node_effect_snapshot, remove_node_effect_snapshot, set_ellipse_arc_snapshot,
+    set_node_corner_radius_snapshot, set_node_fill_hex_snapshot, set_node_flip_snapshot,
+    set_node_font_size_snapshot, set_node_font_weight_snapshot, set_node_name_snapshot,
+    set_node_rotation_snapshot, set_node_stroke_hex_snapshot, set_node_stroke_width_snapshot,
+    set_node_text_snapshot, AddNodeEffect, RemoveNodeEffect, SetEllipseArc, SetNodeCornerRadius,
     SetNodeFillHex, SetNodeFlip, SetNodeFontSize, SetNodeFontWeight, SetNodeName, SetNodeRotation,
     SetNodeStrokeHex, SetNodeStrokeWidth, SetNodeText,
 };

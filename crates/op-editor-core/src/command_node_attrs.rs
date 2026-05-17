@@ -19,7 +19,7 @@ use crate::pen_node_ext::PenNodeExt;
 use crate::state::EditorState;
 use crate::walkers::find_node_mut;
 use jian_ops_schema::node::{CornerRadius, FontWeight, PenNode, TextContent};
-use jian_ops_schema::style::{PenStroke, StrokeThickness};
+use jian_ops_schema::style::{BlurBody, PenEffect, PenStroke, ShadowBody, StrokeThickness};
 
 /// Write a literal corner radius onto whatever variant carries one.
 /// Frame / Group / Rectangle store `CornerRadius` on `container`;
@@ -51,6 +51,25 @@ fn write_corner_radius(node: &mut PenNode, radius: f64) -> bool {
         // Other kinds have no corner-radius field; the write is a
         // silent no-op so the command still reports success.
         _ => true,
+    }
+}
+
+/// Mutably borrow whatever variant's `effects` field. Frame / Group /
+/// Rectangle keep it on `container`; the leaf kinds carry it directly.
+/// `None` for IconFont / Ref (no effects field in the schema).
+fn node_effects_slot(node: &mut PenNode) -> Option<&mut Option<Vec<PenEffect>>> {
+    match node {
+        PenNode::Frame(n) => Some(&mut n.container.effects),
+        PenNode::Group(n) => Some(&mut n.container.effects),
+        PenNode::Rectangle(n) => Some(&mut n.container.effects),
+        PenNode::Ellipse(n) => Some(&mut n.effects),
+        PenNode::Polygon(n) => Some(&mut n.effects),
+        PenNode::Path(n) => Some(&mut n.effects),
+        PenNode::Line(n) => Some(&mut n.effects),
+        PenNode::Text(n) => Some(&mut n.effects),
+        PenNode::TextInput(n) => Some(&mut n.effects),
+        PenNode::Image(n) => Some(&mut n.effects),
+        PenNode::IconFont(_) | PenNode::Ref(_) => None,
     }
 }
 
@@ -330,5 +349,63 @@ impl EditorState {
             }
             _ => false,
         }
+    }
+
+    /// `AddNodeEffect` — append a visual effect with default
+    /// parameters. `kind` is `"shadow"` / `"blur"` / `"background_blur"`.
+    /// Rejects an unknown kind or a node variant with no effects field
+    /// (IconFont / Ref).
+    pub(crate) fn cmd_add_node_effect(&mut self, node_id: &NodeId, kind: &str) -> bool {
+        if !node_id.is_real() {
+            return false;
+        }
+        let effect = match kind {
+            "shadow" => PenEffect::Shadow(ShadowBody {
+                inner: None,
+                offset_x: 4.0,
+                offset_y: 4.0,
+                blur: 8.0,
+                spread: 0.0,
+                color: "#00000040".to_string(),
+            }),
+            "blur" => PenEffect::Blur(BlurBody { radius: 4.0 }),
+            "background_blur" => PenEffect::BackgroundBlur(BlurBody { radius: 8.0 }),
+            _ => return false,
+        };
+        let Some(node) = find_node_mut(self.active_children_mut(), node_id) else {
+            return false;
+        };
+        let Some(slot) = node_effects_slot(node) else {
+            return false;
+        };
+        slot.get_or_insert_with(Vec::new).push(effect);
+        true
+    }
+
+    /// `RemoveNodeEffect` — drop the effect at `index`. Rejects an
+    /// out-of-range index; clears the list to `None` once empty so the
+    /// serialized `.op` carries no empty `effects` array.
+    pub(crate) fn cmd_remove_node_effect(&mut self, node_id: &NodeId, index: u32) -> bool {
+        if !node_id.is_real() {
+            return false;
+        }
+        let Some(node) = find_node_mut(self.active_children_mut(), node_id) else {
+            return false;
+        };
+        let Some(slot) = node_effects_slot(node) else {
+            return false;
+        };
+        let Some(effects) = slot.as_mut() else {
+            return false;
+        };
+        let i = index as usize;
+        if i >= effects.len() {
+            return false;
+        }
+        effects.remove(i);
+        if effects.is_empty() {
+            *slot = None;
+        }
+        true
     }
 }

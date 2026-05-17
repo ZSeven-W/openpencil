@@ -30,20 +30,21 @@ use std::path::PathBuf;
 
 use op_editor_core::EditorState;
 use op_mcp::{
-    add_page_snapshot, align_selected_snapshot, batch_design_snapshot, clear_selection_snapshot,
-    copy_node_snapshot, copy_selected_snapshot, count_nodes_snapshot, create_component_snapshot,
-    create_variable_snapshot, cut_selected_snapshot, cycle_active_axis_value_snapshot,
-    delete_component_snapshot, delete_node_snapshot, delete_page_snapshot,
-    delete_selected_snapshot, delete_variable_snapshot, design_content_snapshot,
-    design_refine_snapshot, design_skeleton_snapshot, document_info_snapshot,
-    duplicate_page_snapshot, duplicate_selected_snapshot, find_node_by_name_snapshot,
-    get_active_theme_snapshot, get_canvas_bounds_snapshot, get_component_snapshot,
-    get_history_depth_snapshot, get_node_children_snapshot, get_node_parent_snapshot,
-    get_node_snapshot, get_selection_set_snapshot, get_viewport_snapshot, group_selected_snapshot,
-    import_svg_snapshot, insert_node_snapshot, instantiate_component_snapshot,
-    list_components_snapshot, list_node_kinds_snapshot, list_pages_snapshot,
-    list_variables_snapshot, move_node_snapshot, nudge_selected_snapshot, paste_clipboard_snapshot,
-    redo_snapshot, rename_component_snapshot, rename_page_snapshot, rename_variable_snapshot,
+    add_node_effect_snapshot, add_page_snapshot, align_selected_snapshot, batch_design_snapshot,
+    clear_selection_snapshot, copy_node_snapshot, copy_selected_snapshot, count_nodes_snapshot,
+    create_component_snapshot, create_variable_snapshot, cut_selected_snapshot,
+    cycle_active_axis_value_snapshot, delete_component_snapshot, delete_node_snapshot,
+    delete_page_snapshot, delete_selected_snapshot, delete_variable_snapshot,
+    design_content_snapshot, design_refine_snapshot, design_skeleton_snapshot,
+    document_info_snapshot, duplicate_page_snapshot, duplicate_selected_snapshot,
+    find_node_by_name_snapshot, get_active_theme_snapshot, get_canvas_bounds_snapshot,
+    get_component_snapshot, get_history_depth_snapshot, get_node_children_snapshot,
+    get_node_parent_snapshot, get_node_snapshot, get_selection_set_snapshot, get_viewport_snapshot,
+    group_selected_snapshot, import_svg_snapshot, insert_node_snapshot,
+    instantiate_component_snapshot, list_components_snapshot, list_node_kinds_snapshot,
+    list_pages_snapshot, list_variables_snapshot, move_node_snapshot, nudge_selected_snapshot,
+    paste_clipboard_snapshot, redo_snapshot, remove_node_effect_snapshot,
+    rename_component_snapshot, rename_page_snapshot, rename_variable_snapshot,
     reorder_page_snapshot, reorder_selected_snapshot, replace_node_snapshot,
     run_stdio_with_applier, selection_snapshot, set_active_axis_value_snapshot,
     set_active_page_snapshot, set_active_tool_snapshot, set_ellipse_arc_snapshot,
@@ -300,6 +301,8 @@ fn rebuild_registry(doc: &EditorState) -> ToolRegistry {
     r.register(Box::new(set_node_fill_hex_snapshot()));
     r.register(Box::new(set_node_flip_snapshot()));
     r.register(Box::new(set_ellipse_arc_snapshot()));
+    r.register(Box::new(add_node_effect_snapshot()));
+    r.register(Box::new(remove_node_effect_snapshot()));
     r.register(Box::new(set_node_name_snapshot()));
     r.register(Box::new(set_selection_set_snapshot()));
     r.register(Box::new(toggle_node_selection_snapshot()));
@@ -577,6 +580,8 @@ const TOOL_SCHEMAS: &[&str] = &[
     r##"{"name":"set_node_fill_hex","description":"Set the fill color on a node by id. Sister tool to set_node_stroke_hex; one-call color change without the other update_node fields.","inputSchema":{"type":"object","properties":{"node_id":{"type":"string"},"hex":{"type":"string","description":"#rgb / #rrggbb / #rrggbbaa"}},"required":["node_id","hex"]}}"##,
     r#"{"name":"set_node_flip","description":"Mirror a node horizontally / vertically. Pass any subset of flip_x / flip_y as \"true\"/\"false\"; omitted axes are left unchanged. At least one axis is required.","inputSchema":{"type":"object","properties":{"node_id":{"type":"string"},"flip_x":{"type":"string","enum":["true","false"]},"flip_y":{"type":"string","enum":["true","false"]}},"required":["node_id"]}}"#,
     r#"{"name":"set_ellipse_arc","description":"Set arc geometry on an Ellipse node: start_angle / sweep_angle (degrees) carve a pie/arc, inner_radius (0.0..=1.0 fraction) carves a donut hole. Pass any subset; omitted fields are left unchanged. Rejects non-Ellipse kinds.","inputSchema":{"type":"object","properties":{"node_id":{"type":"string"},"start_angle":{"type":"string","description":"finite degrees"},"sweep_angle":{"type":"string","description":"finite degrees"},"inner_radius":{"type":"string","description":"0.0..=1.0 fraction"}},"required":["node_id"]}}"#,
+    r#"{"name":"add_node_effect","description":"Append a visual effect to a node with default parameters. kind is shadow / blur / background_blur. Frame/Group/Rectangle and the leaf shapes accept effects; IconFont/Ref do not.","inputSchema":{"type":"object","properties":{"node_id":{"type":"string"},"kind":{"type":"string","enum":["shadow","blur","background_blur"]}},"required":["node_id","kind"]}}"#,
+    r#"{"name":"remove_node_effect","description":"Remove the effect at a 0-based index from a node's effect list. The list is cleared once empty.","inputSchema":{"type":"object","properties":{"node_id":{"type":"string"},"index":{"type":"string","description":"0-based u32 effect index"}},"required":["node_id","index"]}}"#,
     r#"{"name":"set_node_name","description":"Rename a node by id. Empty names (after trim) are rejected so the LayerPanel never shows blank rows.","inputSchema":{"type":"object","properties":{"node_id":{"type":"string"},"name":{"type":"string"}},"required":["node_id","name"]}}"#,
     r#"{"name":"set_selection_set","description":"Replace the multi-selection (active page only) with the supplied comma-separated node_ids. Empty list clears the selection. Unknown ids AND ids that live on a non-active page drop silently.","inputSchema":{"type":"object","properties":{"node_ids":{"type":"string","description":"comma-separated positive u64 active-page node ids; empty string clears"}},"required":["node_ids"]}}"#,
     r#"{"name":"toggle_node_selection","description":"Shift-click parity: toggle node_id in the multi-selection (scoped to the ACTIVE page only). Already-selected ⇒ remove (anchor reassigns to last surviving id); otherwise add as new anchor. Rejects unknown ids and ids that live on a non-active page.","inputSchema":{"type":"object","properties":{"node_id":{"type":"string","description":"positive u64 node id on the active page"}},"required":["node_id"]}}"#,

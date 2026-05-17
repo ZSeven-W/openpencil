@@ -174,6 +174,12 @@ impl EditorState {
                 sweep_angle,
                 inner_radius,
             } => self.cmd_set_ellipse_arc(&node_id, start_angle, sweep_angle, inner_radius),
+            EditorCommand::AddNodeEffect { node_id, kind } => {
+                self.cmd_add_node_effect(&node_id, &kind)
+            }
+            EditorCommand::RemoveNodeEffect { node_id, index } => {
+                self.cmd_remove_node_effect(&node_id, index)
+            }
 
             // --- Variables + themes --------------------------------
             EditorCommand::SetVariableColor { name, hex } => self.set_variable_color(&name, &hex),
