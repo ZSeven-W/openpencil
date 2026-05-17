@@ -110,6 +110,45 @@ fn paint_ellipse(cx: &mut PaintCx<'_>, node: &SceneNode, world_rect: Rect, zoom:
     }
 }
 
+/// One point on the cubic Bezier `p0→p3` (control points `p1`,`p2`).
+pub(crate) fn cubic_point(p0: Point2D, p1: Point2D, p2: Point2D, p3: Point2D, t: f32) -> Point2D {
+    let u = 1.0 - t;
+    let (w0, w1, w2, w3) = (u * u * u, 3.0 * u * u * t, 3.0 * u * t * t, t * t * t);
+    Point2D::new(
+        w0 * p0.x + w1 * p1.x + w2 * p2.x + w3 * p3.x,
+        w0 * p0.y + w1 * p1.y + w2 * p2.y + w3 * p3.y,
+    )
+}
+
+/// Flatten a Path scene node into a doc-space polyline — cubic
+/// segments whose endpoints carry handles are tessellated; a
+/// handle-free path falls back to the straight `points` polyline.
+pub(crate) fn flatten_path(node: &SceneNode) -> Vec<Point2D> {
+    let anchors = &node.path_anchors;
+    let has_handle = anchors
+        .iter()
+        .any(|a| a.handle_in.is_some() || a.handle_out.is_some());
+    if anchors.len() < 2 || !has_handle {
+        return node.points.clone();
+    }
+    let mut out = Vec::with_capacity(anchors.len() * 16);
+    out.push(anchors[0].pos);
+    for pair in anchors.windows(2) {
+        let (a, b) = (&pair[0], &pair[1]);
+        let (p0, p3) = (a.pos, b.pos);
+        let p1 = a.handle_out.unwrap_or(p0);
+        let p2 = b.handle_in.unwrap_or(p3);
+        if p1 == p0 && p2 == p3 {
+            out.push(p3); // straight segment
+        } else {
+            for i in 1..=16 {
+                out.push(cubic_point(p0, p1, p2, p3, i as f32 / 16.0));
+            }
+        }
+    }
+    out
+}
+
 /// Recursively paint one resolved [`SceneNode`] and its subtree.
 ///
 /// `viewport_origin` is the canvas-rect origin shifted by the
@@ -252,7 +291,11 @@ pub fn paint_node(
                     viewport_origin.y + p.y * zoom,
                 )
             };
-            for pair in node.points.windows(2) {
+            // Bezier-aware: when the path carries anchors with control
+            // handles, flatten each cubic segment; otherwise fall back
+            // to the straight `points` polyline.
+            let polyline = flatten_path(node);
+            for pair in polyline.windows(2) {
                 cx.backend
                     .stroke_line(to_world(pair[0]), to_world(pair[1]), color, width);
             }
@@ -369,5 +412,56 @@ mod arc_tests {
         let last = poly[poly.len() - 1];
         assert!((last.x - 50.0).abs() < 0.01);
         assert!((last.y - 100.0).abs() < 0.01);
+    }
+}
+
+#[cfg(test)]
+mod path_tests {
+    use super::flatten_path;
+    use crate::layout_scene::{NodeKind, SceneAnchor, SceneNode, ScenePointType};
+    use crate::{Point2D, Rect};
+
+    fn anchor(x: f32, y: f32, hout: Option<Point2D>) -> SceneAnchor {
+        SceneAnchor {
+            pos: Point2D::new(x, y),
+            handle_in: None,
+            handle_out: hout,
+            point_type: ScenePointType::Corner,
+        }
+    }
+
+    #[test]
+    fn handle_free_path_falls_back_to_points() {
+        let mut n = SceneNode::leaf("p", NodeKind::Path);
+        n.points = vec![Point2D::new(0.0, 0.0), Point2D::new(10.0, 0.0)];
+        n.path_anchors = vec![anchor(0.0, 0.0, None), anchor(10.0, 0.0, None)];
+        // No handles → straight polyline == points.
+        assert_eq!(flatten_path(&n), n.points);
+    }
+
+    #[test]
+    fn curved_segment_tessellates_into_many_points() {
+        let mut n = SceneNode::leaf("p", NodeKind::Path);
+        n.points = vec![Point2D::new(0.0, 0.0), Point2D::new(100.0, 0.0)];
+        n.path_anchors = vec![
+            anchor(0.0, 0.0, Some(Point2D::new(0.0, 50.0))),
+            anchor(100.0, 0.0, None),
+        ];
+        let poly = flatten_path(&n);
+        // 1 start point + 16 tessellation steps for the cubic.
+        assert_eq!(poly.len(), 17);
+        assert_eq!(poly[0], Point2D::new(0.0, 0.0));
+        assert_eq!(poly[poly.len() - 1], Point2D::new(100.0, 0.0));
+        // Mid-curve bows toward the +Y handle.
+        assert!(poly[8].y > 1.0, "curve bows toward the handle");
+    }
+
+    #[test]
+    fn bounds_kept_so_helper_is_pure() {
+        // flatten_path must not mutate the node.
+        let mut n = SceneNode::leaf("p", NodeKind::Path);
+        n.bounds = Rect::xywh(1.0, 2.0, 3.0, 4.0);
+        let _ = flatten_path(&n);
+        assert_eq!(n.bounds, Rect::xywh(1.0, 2.0, 3.0, 4.0));
     }
 }

@@ -24,7 +24,7 @@
 
 use crate::layout_scene::LayoutScene;
 use crate::layout_scene::NodeKind;
-use crate::layout_scene::SceneNode;
+use crate::layout_scene::{SceneAnchor, SceneNode};
 use crate::theme::Theme;
 use crate::widgets::editor_state_ext::theme_for;
 use crate::widgets::{LayoutBox, LayoutCx, PaintCx, Widget, WidgetId};
@@ -52,6 +52,26 @@ pub enum SelectionHandle {
 /// Radius (screen px) of the rotation ring that sits OUTSIDE the
 /// 4 selection corners. Matches the TS `ROTATE_OUTER_RADIUS`.
 const ROTATE_OUTER_RADIUS: f32 = 16.0;
+
+/// Screen-px offset of a "ghost" handle dot from its anchor when the
+/// handle is unset — far enough from the anchor body to grab.
+pub const PATH_HANDLE_GHOST_PX: f32 = 26.0;
+
+/// Doc-space positions of a path anchor's incoming + outgoing bezier
+/// control handles. An unset handle is given a "ghost" position
+/// offset from the anchor (scaled to `zoom`) so the user can grab it
+/// to create the handle. Returns `(handle_in, handle_out)`. Shared by
+/// the overlay painter and the host's handle hit-test.
+pub fn path_handle_positions(anchor: &SceneAnchor, zoom: f32) -> (Point2D, Point2D) {
+    let ghost = PATH_HANDLE_GHOST_PX / zoom.max(0.0001);
+    let hin = anchor
+        .handle_in
+        .unwrap_or(Point2D::new(anchor.pos.x - ghost, anchor.pos.y));
+    let hout = anchor
+        .handle_out
+        .unwrap_or(Point2D::new(anchor.pos.x + ghost, anchor.pos.y));
+    (hin, hout)
+}
 
 /// The three arc-edit handles on a selected Ellipse — start angle,
 /// sweep (end) angle, and the donut inner-radius.
@@ -483,24 +503,60 @@ impl<'a> Widget for CanvasViewport<'a> {
         }
 
         // 4b. Per-anchor handles for the selected Path node when the
-        //     Pen tool is active — surfaces the drag target that
-        //     `path_anchor_drag` consumes.
+        //     Pen tool is active — anchor dots plus the two bezier
+        //     control handles (line + dot; a faint "ghost" dot when
+        //     the handle is unset, draggable to create it).
         if matches!(self.tool, op_editor_core::Tool::Pen) && self.selected_set.len() == 1 {
-            if let Some(page) = self.scene.active_page() {
-                if let Some(node) = page.find(&self.selected) {
-                    if matches!(node.kind, NodeKind::Path) {
-                        let r = 4.0; // screen-px radius
+            if let Some(node) = self
+                .scene
+                .active_page()
+                .and_then(|p| p.find(&self.selected))
+            {
+                if matches!(node.kind, NodeKind::Path) {
+                    let zoom = viewport.zoom;
+                    let to_screen = |p: Point2D| {
+                        Point2D::new(
+                            rect.origin.x + viewport.pan_x + p.x * zoom,
+                            rect.origin.y + viewport.pan_y + p.y * zoom,
+                        )
+                    };
+                    let dot = |cx: &mut PaintCx<'_>, c: Point2D, r: f32, fill, line| {
+                        let b = Rect {
+                            origin: Point2D::new(c.x - r, c.y - r),
+                            size: Point2D::new(r * 2.0, r * 2.0),
+                        };
+                        cx.backend.fill_oval(b, fill);
+                        cx.backend.stroke_oval(b, line, 1.5);
+                    };
+                    let ghost = crate::Color {
+                        a: self.theme.primary.a * 0.4,
+                        ..self.theme.primary
+                    };
+                    for anchor in &node.path_anchors {
+                        let center = to_screen(anchor.pos);
+                        let (hin, hout) = path_handle_positions(anchor, zoom);
+                        for (pos, is_set) in [
+                            (hin, anchor.handle_in.is_some()),
+                            (hout, anchor.handle_out.is_some()),
+                        ] {
+                            let hs = to_screen(pos);
+                            let tint = if is_set { self.theme.primary } else { ghost };
+                            cx.backend.stroke_line(center, hs, tint, 1.0);
+                            dot(cx, hs, 3.0, self.theme.background, tint);
+                        }
+                        // Anchor dot painted last so it sits on top.
+                        dot(cx, center, 4.0, self.theme.background, self.theme.primary);
+                    }
+                    // Paths with no anchor data still show plain dots.
+                    if node.path_anchors.is_empty() {
                         for p in &node.points {
-                            let center = Point2D::new(
-                                rect.origin.x + viewport.pan_x + p.x * viewport.zoom,
-                                rect.origin.y + viewport.pan_y + p.y * viewport.zoom,
+                            dot(
+                                cx,
+                                to_screen(*p),
+                                4.0,
+                                self.theme.background,
+                                self.theme.primary,
                             );
-                            let bounds = Rect {
-                                origin: Point2D::new(center.x - r, center.y - r),
-                                size: Point2D::new(r * 2.0, r * 2.0),
-                            };
-                            cx.backend.fill_oval(bounds, self.theme.background);
-                            cx.backend.stroke_oval(bounds, self.theme.primary, 1.5);
                         }
                     }
                 }

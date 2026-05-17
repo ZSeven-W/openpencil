@@ -348,7 +348,10 @@ fn anchor_press_release_without_motion_does_not_push_history() {
     host.path_anchor_drag = Some(crate::widget_host::PathAnchorDragState {
         node_id: NodeId::new("n60"),
         anchor_index: 1,
+        target: crate::widget_host::AnchorDragTarget::Anchor,
+        anchor_doc: Point2D::new(50.0, 25.0),
         start_doc: Point2D::new(50.0, 25.0),
+        shift: false,
         moved: false,
         pre_drag_snapshot: snap,
     });
@@ -383,7 +386,10 @@ fn anchor_drag_back_to_start_lands_at_start() {
     host.path_anchor_drag = Some(crate::widget_host::PathAnchorDragState {
         node_id: NodeId::new("n60"),
         anchor_index: 1,
+        target: crate::widget_host::AnchorDragTarget::Anchor,
+        anchor_doc: Point2D::new(50.0, 25.0),
         start_doc: Point2D::new(50.0, 25.0),
+        shift: false,
         moved: false,
         pre_drag_snapshot: snap,
     });
@@ -420,7 +426,10 @@ fn anchor_drag_with_motion_pushes_one_history_entry() {
     host.path_anchor_drag = Some(crate::widget_host::PathAnchorDragState {
         node_id: NodeId::new("n60"),
         anchor_index: 1,
+        target: crate::widget_host::AnchorDragTarget::Anchor,
+        anchor_doc: Point2D::new(50.0, 25.0),
         start_doc: Point2D::new(50.0, 25.0),
+        shift: false,
         moved: true,
         pre_drag_snapshot: snap,
     });

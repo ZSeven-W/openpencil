@@ -321,23 +321,55 @@ impl WidgetHostNative {
             }
             return false;
         }
-        // Path-anchor drag — always write the current cursor position
-        // (codex BLOCK: drag-back-to-start was being silently dropped).
+        // Path-anchor / handle drag — write the current cursor
+        // position (codex BLOCK: drag-back-to-start was being
+        // silently dropped, so always write).
         if self.path_anchor_drag.is_some() {
+            use super::AnchorDragTarget;
             let (cx0, cy0) = self.canvas_origin();
             let canvas_local = Point2D::new(x - cx0, y - cy0);
-            let doc_point = self.editor_state.viewport.to_document(canvas_local);
-            let (id, idx, start) = {
+            let doc = self.editor_state.viewport.to_document(canvas_local);
+            let (id, idx, target, anchor_doc, start, shift, already_moved) = {
                 let d = self.path_anchor_drag.as_ref().unwrap();
-                (d.node_id.clone(), d.anchor_index, d.start_doc)
+                (
+                    d.node_id.clone(),
+                    d.anchor_index,
+                    d.target,
+                    d.anchor_doc,
+                    d.start_doc,
+                    d.shift,
+                    d.moved,
+                )
             };
-            self.editor_state.set_path_anchor_position(
-                id,
-                idx,
-                (doc_point.x as f64, doc_point.y as f64),
-            );
+            let is_move = (doc.x - start.x).abs() > 0.001 || (doc.y - start.y).abs() > 0.001;
+            match target {
+                AnchorDragTarget::Anchor => {
+                    self.editor_state.set_path_anchor_position(
+                        id,
+                        idx,
+                        (doc.x as f64, doc.y as f64),
+                    );
+                }
+                AnchorDragTarget::Handle(side) => {
+                    // First real move sets the anchor's point type —
+                    // Shift = independent (broken) handles, else
+                    // mirrored (smooth).
+                    if !already_moved && is_move {
+                        let pt = if shift {
+                            jian_ops_schema::node::PenPathPointType::Independent
+                        } else {
+                            jian_ops_schema::node::PenPathPointType::Mirrored
+                        };
+                        self.editor_state
+                            .set_path_anchor_point_type(id.clone(), idx, pt);
+                    }
+                    let delta = ((doc.x - anchor_doc.x) as f64, (doc.y - anchor_doc.y) as f64);
+                    self.editor_state
+                        .set_path_anchor_handle(id, idx, side, Some(delta));
+                }
+            }
             self.mark_dirty();
-            if (doc_point.x - start.x).abs() > 0.001 || (doc_point.y - start.y).abs() > 0.001 {
+            if is_move {
                 if let Some(d) = self.path_anchor_drag.as_mut() {
                     d.moved = true;
                 }

@@ -279,20 +279,38 @@ pub(in crate::widget_host) struct LayerDragState {
     pub(in crate::widget_host) active: bool,
 }
 
-/// Path-anchor drag — tracks which anchor of which Path node is
-/// being dragged by the pen tool. Move dispatches snap the anchor
-/// to the cursor; release commits a history snapshot ONLY when the
-/// anchor actually moved (codex CONCERN: a press-release without
-/// motion pushed a no-op snapshot that polluted the undo stack).
+/// What a path-anchor drag is editing — the anchor body itself, or
+/// one of its two bezier control handles.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(in crate::widget_host) enum AnchorDragTarget {
+    /// The anchor point — drag moves the whole anchor.
+    Anchor,
+    /// A bezier control handle.
+    Handle(op_editor_core::pen::PathHandleSide),
+}
+
+/// Path-anchor drag — tracks which anchor (or which of its bezier
+/// handles) of which Path node is being dragged by the pen tool.
+/// Move dispatches snap the target to the cursor; release commits a
+/// history snapshot ONLY when it actually moved (codex CONCERN: a
+/// press-release without motion pushed a no-op snapshot that
+/// polluted the undo stack).
 #[derive(Debug, Clone)]
 pub(in crate::widget_host) struct PathAnchorDragState {
     pub(in crate::widget_host) node_id: op_editor_core::NodeId,
     pub(in crate::widget_host) anchor_index: usize,
-    /// Anchor position at drag-start (doc coords) — compared against
-    /// the final position on release to decide whether to push the
-    /// snapshot.
+    /// Whether the anchor body or a handle is being dragged.
+    pub(in crate::widget_host) target: AnchorDragTarget,
+    /// The dragged anchor's absolute doc position, fixed at press —
+    /// handle drags compute their offset relative to it.
+    pub(in crate::widget_host) anchor_doc: op_editor_ui::Point2D,
+    /// Press cursor doc point — compared against the live cursor to
+    /// decide whether the drag actually moved.
     pub(in crate::widget_host) start_doc: op_editor_ui::Point2D,
-    /// Set to true on the first cursor-move that mutates the anchor.
+    /// Shift held at press — a handle drag with Shift produces
+    /// independent (broken) handles instead of mirrored ones.
+    pub(in crate::widget_host) shift: bool,
+    /// Set to true on the first cursor-move that mutates the target.
     pub(in crate::widget_host) moved: bool,
     /// Snapshot captured at drag-start; pushed only if `moved`.
     pub(in crate::widget_host) pre_drag_snapshot: op_editor_core::EditorSnapshot,
