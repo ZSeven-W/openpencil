@@ -191,10 +191,16 @@ fn point_in_node(node: &SceneNode, local: Point2D, bounds: Rect, zoom: f32) -> b
             let sweep = node.arc_sweep_angle.unwrap_or(360.0);
             if sweep.abs() < 359.9 {
                 let start = node.arc_start_angle.unwrap_or(0.0);
-                // Angle of the point, normalised into [0, sweep).
+                // Normalise to a forward sweep — a negative sweep
+                // covers the angular range `[start + sweep, start]`.
+                let (sector_start, span) = if sweep < 0.0 {
+                    (start + sweep, -sweep)
+                } else {
+                    (start, sweep)
+                };
                 let ang = dy.atan2(dx).to_degrees();
-                let rel = (ang - start).rem_euclid(360.0);
-                if rel > sweep.abs() {
+                let rel = (ang - sector_start).rem_euclid(360.0);
+                if rel > span {
                     return false;
                 }
             }
