@@ -105,8 +105,24 @@ fn paint_ellipse(cx: &mut PaintCx<'_>, node: &SceneNode, world_rect: Rect, zoom:
         cx.backend.fill_polygon(&poly, fill);
     }
     if let Some(stroke) = node.stroke {
-        cx.backend
-            .stroke_polygon(&poly, stroke.color, stroke.width * zoom);
+        let w = stroke.width * zoom;
+        if sweep.abs() >= 359.9 && inner > 0.001 {
+            // Full ring — stroke the two concentric ovals so the
+            // polygon's radial seam isn't drawn.
+            cx.backend.stroke_oval(world_rect, stroke.color, w);
+            let iw = world_rect.size.x * inner;
+            let ih = world_rect.size.y * inner;
+            let inner_rect = Rect {
+                origin: Point2D::new(
+                    world_rect.origin.x + (world_rect.size.x - iw) / 2.0,
+                    world_rect.origin.y + (world_rect.size.y - ih) / 2.0,
+                ),
+                size: Point2D::new(iw, ih),
+            };
+            cx.backend.stroke_oval(inner_rect, stroke.color, w);
+        } else {
+            cx.backend.stroke_polygon(&poly, stroke.color, w);
+        }
     }
 }
 
