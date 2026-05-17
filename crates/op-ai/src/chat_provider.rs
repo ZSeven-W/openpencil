@@ -145,11 +145,64 @@ pub enum StopReason {
     ToolUse,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// Thinking / reasoning-budget control for a chat turn. `Adaptive`
+/// lets the provider decide; `Disabled` suppresses extended thinking;
+/// `Enabled` forces it. Mirrors the TS chat panel's thinking-mode
+/// selector (`apps/web/.../ai/chat.ts`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ThinkingMode {
+    #[default]
+    Adaptive,
+    Disabled,
+    Enabled,
+}
+
+/// Reasoning-effort hint. Each provider maps it onto its own knob
+/// (Claude's thinking-token budget, Codex's `--effort`, …); a
+/// provider with no such knob ignores it. The default is `Low`, to
+/// match TS `ai-runtime-config.ts::DEFAULT_THINKING_EFFORT`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum EffortLevel {
+    #[default]
+    Low,
+    Medium,
+    High,
+    Max,
+}
+
+impl ThinkingMode {
+    /// Lowercase wire token (TS parity: `"adaptive"` / `"disabled"` /
+    /// `"enabled"`).
+    pub fn as_str(self) -> &'static str {
+        match self {
+            ThinkingMode::Adaptive => "adaptive",
+            ThinkingMode::Disabled => "disabled",
+            ThinkingMode::Enabled => "enabled",
+        }
+    }
+}
+
+impl EffortLevel {
+    /// Lowercase wire token (`"low"` / `"medium"` / `"high"` / `"max"`).
+    pub fn as_str(self) -> &'static str {
+        match self {
+            EffortLevel::Low => "low",
+            EffortLevel::Medium => "medium",
+            EffortLevel::High => "high",
+            EffortLevel::Max => "max",
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct ChatRequest {
     pub system_prompt: String,
     pub user_message: String,
     pub max_output_tokens: u32,
+    /// Thinking-mode control for this turn (default `Adaptive`).
+    pub thinking: ThinkingMode,
+    /// Reasoning-effort hint for this turn (default `Low`, TS parity).
+    pub effort: EffortLevel,
 }
 
 /// Provider abstraction the widget host calls. Implementations live
@@ -244,6 +297,7 @@ mod tests {
             system_prompt: String::new(),
             user_message: "hi".into(),
             max_output_tokens: 1024,
+            ..Default::default()
         };
         let mut iter = p.send(req);
         match iter.next() {
@@ -260,5 +314,22 @@ mod tests {
     fn cli_label_is_human_readable() {
         assert_eq!(CliName::ClaudeCode.label(), "Claude Code");
         assert_eq!(CliName::OpenCode.label(), "OpenCode");
+    }
+
+    #[test]
+    fn chat_request_thinking_effort_defaults_and_wire_tokens() {
+        // A defaulted request reasons adaptively at low effort —
+        // matching TS `DEFAULT_THINKING_MODE` / `DEFAULT_THINKING_EFFORT`.
+        let req = ChatRequest::default();
+        assert_eq!(req.thinking, ThinkingMode::Adaptive);
+        assert_eq!(req.effort, EffortLevel::Low);
+        // Wire tokens match the TS chat-request vocabulary.
+        assert_eq!(ThinkingMode::Adaptive.as_str(), "adaptive");
+        assert_eq!(ThinkingMode::Disabled.as_str(), "disabled");
+        assert_eq!(ThinkingMode::Enabled.as_str(), "enabled");
+        assert_eq!(EffortLevel::Low.as_str(), "low");
+        assert_eq!(EffortLevel::Medium.as_str(), "medium");
+        assert_eq!(EffortLevel::High.as_str(), "high");
+        assert_eq!(EffortLevel::Max.as_str(), "max");
     }
 }

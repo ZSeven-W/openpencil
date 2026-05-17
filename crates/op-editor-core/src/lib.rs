@@ -32,6 +32,8 @@ pub mod rename;
 pub mod render_backend;
 pub mod selection;
 pub mod state;
+pub mod svg_import;
+pub mod svg_path_bounds;
 pub mod tool;
 pub mod ui_draft;
 pub mod variables;
@@ -40,6 +42,8 @@ pub mod walkers;
 
 #[cfg(test)]
 mod command_tests;
+#[cfg(test)]
+mod svg_import_tests;
 #[cfg(test)]
 mod test_support;
 #[cfg(test)]

@@ -494,6 +494,11 @@ fn path_to_payload(n: &PathNode) -> NodePayload {
     p.fill_type = first_fill_type(n.fill.as_deref());
     p.stroke = stroke_to_payload(n.stroke.as_ref());
     if let Some(anchors) = &n.anchors {
+        // `points` is the path's anchor polyline — kept 1:1 with the
+        // schema anchors so the pen-tool anchor hit-test (which maps a
+        // `points` index straight onto an anchor index) stays correct.
+        // SVG-imported curves arrive pre-flattened to dense straight
+        // anchors, so this faithfully traces them without bezier data.
         p.points = anchors.iter().map(|a| [a.x as f32, a.y as f32]).collect();
         // Anchor-bounded path: when width/height weren't authored,
         // derive size from the anchor bbox span (max - min) — using

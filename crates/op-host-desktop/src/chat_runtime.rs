@@ -283,6 +283,7 @@ mod tests {
             system_prompt: String::new(),
             user_message: "hi".into(),
             max_output_tokens: 1024,
+            ..Default::default()
         };
         let deltas: Vec<ChatDelta> = bridge.send(req).collect();
         assert!(
@@ -317,6 +318,7 @@ mod tests {
                 system_prompt: String::new(),
                 user_message: "x".into(),
                 max_output_tokens: 64,
+                ..Default::default()
             })
             .collect();
         assert!(

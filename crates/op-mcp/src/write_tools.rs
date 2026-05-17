@@ -556,6 +556,55 @@ pub fn set_variable_color_snapshot(state: &EditorState) -> SetVariableColor {
     SetVariableColor { known_colors }
 }
 
+/// First-party `import_svg` tool — parse an SVG document + insert the
+/// resulting nodes on the active page. `x` / `y` (optional, default 0)
+/// offset the imported nodes in doc-px.
+pub struct ImportSvg;
+
+impl McpTool for ImportSvg {
+    fn name(&self) -> &str {
+        "import_svg"
+    }
+    fn call(&self, args: &BTreeMap<String, String>) -> ToolOutcome {
+        let Some(svg) = args.get("svg") else {
+            return ToolOutcome::Err(
+                ToolErrorCode::MissingArgument,
+                "svg is required (an SVG document string)".into(),
+            );
+        };
+        if svg.trim().is_empty() {
+            return ToolOutcome::Err(
+                ToolErrorCode::InvalidArgument,
+                "svg must not be empty".into(),
+            );
+        }
+        // `x` / `y` are optional doc-px offsets — absent ⇒ 0, a
+        // malformed value rejects so the LLM sees a typed error.
+        let x = match parse_opt_i32(args, "x") {
+            Ok(v) => v.unwrap_or(0),
+            Err(e) => return ToolOutcome::Err(ToolErrorCode::InvalidArgument, format!("x: {e}")),
+        };
+        let y = match parse_opt_i32(args, "y") {
+            Ok(v) => v.unwrap_or(0),
+            Err(e) => return ToolOutcome::Err(ToolErrorCode::InvalidArgument, format!("y: {e}")),
+        };
+        let mut out = BTreeMap::new();
+        out.insert("wrote".into(), "true".into());
+        ToolOutcome::OkWithCommand(
+            out,
+            EditorCommand::ImportSvg {
+                svg: svg.clone(),
+                x,
+                y,
+            },
+        )
+    }
+}
+
+pub fn import_svg_snapshot() -> ImportSvg {
+    ImportSvg
+}
+
 /// `#rgb`, `#rrggbb`, `#rrggbbaa` — requires the leading `#`.
 pub(super) fn validate_hex(s: &str) -> bool {
     let Some(rest) = s.trim().strip_prefix('#') else {

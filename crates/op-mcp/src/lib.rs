@@ -127,10 +127,10 @@ pub use tools::{
     NodeRecord, SnapshotLayout, VariableRecord,
 };
 pub use write_tools::{
-    copy_node_snapshot, delete_node_snapshot, insert_node_snapshot, move_node_snapshot,
-    replace_node_snapshot, set_active_axis_value_snapshot, set_variable_color_snapshot,
-    update_node_snapshot, CopyNode, DeleteNode, InsertNode, MoveNode, ReplaceNode,
-    SetActiveAxisValue, SetVariableColor, UpdateNode,
+    copy_node_snapshot, delete_node_snapshot, import_svg_snapshot, insert_node_snapshot,
+    move_node_snapshot, replace_node_snapshot, set_active_axis_value_snapshot,
+    set_variable_color_snapshot, update_node_snapshot, CopyNode, DeleteNode, ImportSvg, InsertNode,
+    MoveNode, ReplaceNode, SetActiveAxisValue, SetVariableColor, UpdateNode,
 };
 
 /// JSON-RPC-style request id. Strings + integers both supported by

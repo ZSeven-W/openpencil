@@ -40,21 +40,22 @@ use op_mcp::{
     get_active_theme_snapshot, get_canvas_bounds_snapshot, get_component_snapshot,
     get_history_depth_snapshot, get_node_children_snapshot, get_node_parent_snapshot,
     get_node_snapshot, get_selection_set_snapshot, get_viewport_snapshot, group_selected_snapshot,
-    insert_node_snapshot, instantiate_component_snapshot, list_components_snapshot,
-    list_node_kinds_snapshot, list_pages_snapshot, list_variables_snapshot, move_node_snapshot,
-    nudge_selected_snapshot, paste_clipboard_snapshot, redo_snapshot, rename_component_snapshot,
-    rename_page_snapshot, rename_variable_snapshot, reorder_page_snapshot,
-    reorder_selected_snapshot, replace_node_snapshot, run_stdio_with_applier, selection_snapshot,
-    set_active_axis_value_snapshot, set_active_page_snapshot, set_active_tool_snapshot,
-    set_ellipse_arc_snapshot, set_node_collapsed_snapshot, set_node_corner_radius_snapshot,
-    set_node_fill_hex_snapshot, set_node_flip_snapshot, set_node_font_size_snapshot,
-    set_node_font_weight_snapshot, set_node_hidden_snapshot, set_node_locked_snapshot,
-    set_node_name_snapshot, set_node_rotation_snapshot, set_node_stroke_hex_snapshot,
-    set_node_stroke_width_snapshot, set_node_text_snapshot, set_selection_set_snapshot,
-    set_selection_snapshot, set_variable_boolean_snapshot, set_variable_color_snapshot,
-    set_variable_number_snapshot, set_variable_string_snapshot, set_viewport_snapshot,
-    snapshot_layout_snapshot, toggle_node_selection_snapshot, undo_snapshot,
-    ungroup_selected_snapshot, update_node_snapshot, ToolRegistry,
+    import_svg_snapshot, insert_node_snapshot, instantiate_component_snapshot,
+    list_components_snapshot, list_node_kinds_snapshot, list_pages_snapshot,
+    list_variables_snapshot, move_node_snapshot, nudge_selected_snapshot, paste_clipboard_snapshot,
+    redo_snapshot, rename_component_snapshot, rename_page_snapshot, rename_variable_snapshot,
+    reorder_page_snapshot, reorder_selected_snapshot, replace_node_snapshot,
+    run_stdio_with_applier, selection_snapshot, set_active_axis_value_snapshot,
+    set_active_page_snapshot, set_active_tool_snapshot, set_ellipse_arc_snapshot,
+    set_node_collapsed_snapshot, set_node_corner_radius_snapshot, set_node_fill_hex_snapshot,
+    set_node_flip_snapshot, set_node_font_size_snapshot, set_node_font_weight_snapshot,
+    set_node_hidden_snapshot, set_node_locked_snapshot, set_node_name_snapshot,
+    set_node_rotation_snapshot, set_node_stroke_hex_snapshot, set_node_stroke_width_snapshot,
+    set_node_text_snapshot, set_selection_set_snapshot, set_selection_snapshot,
+    set_variable_boolean_snapshot, set_variable_color_snapshot, set_variable_number_snapshot,
+    set_variable_string_snapshot, set_viewport_snapshot, snapshot_layout_snapshot,
+    toggle_node_selection_snapshot, undo_snapshot, ungroup_selected_snapshot, update_node_snapshot,
+    ToolRegistry,
 };
 
 /// Load a `.op` file into an `EditorState`. The `.op` format is plain
@@ -75,17 +76,76 @@ fn save_editor_state(state: &EditorState, path: &std::path::Path) -> Result<(), 
     std::fs::write(path, json).map_err(|e| format!("write {}: {e}", path.display()))
 }
 
+/// Process one JSON-RPC message line against the editor state,
+/// returning the response line to send back — `None` for a
+/// notification (no response per spec). Shared by the stdio and HTTP
+/// transports so both speak an identical protocol.
+fn process_message(
+    state: &mut EditorState,
+    path: &std::path::Path,
+    line: &str,
+) -> Result<Option<String>, String> {
+    let trimmed = line.trim();
+    if trimmed.is_empty() {
+        return Ok(None);
+    }
+    // MCP handshake / discovery methods short-circuit the tool
+    // dispatcher — detected via a cheap method-field sniff so JSON
+    // parsing stays confined to the wire parser.
+    match sniff_method(trimmed).as_deref() {
+        Some("initialize") => {
+            return Ok(sniff_id_raw(trimmed).map(|id| initialize_response(&id)));
+        }
+        Some("tools/list") => {
+            return Ok(sniff_id_raw(trimmed).map(|id| tools_list_response(&id)));
+        }
+        Some("notifications/initialized") | Some("initialized") => {
+            return Ok(None); // notification — no response required
+        }
+        Some("ping") => {
+            return Ok(sniff_id_raw(trimmed).map(|id| ping_response(&id)));
+        }
+        _ => {}
+    }
+    // Fall through: tools/call or legacy direct dispatch. The
+    // registry snapshots `state` at build time, so it no longer
+    // borrows it once the applier closure mutates it.
+    let registry = rebuild_registry(state);
+    let mut applier_failed: Option<String> = None;
+    let mut out: Vec<u8> = Vec::new();
+    {
+        let mut input = std::io::Cursor::new(line.as_bytes());
+        run_stdio_with_applier(&registry, &mut input, &mut out, |cmd| {
+            // `EditorState::apply` runs the pre-validate-then-mutate
+            // discipline; `false` means the command rejected and the
+            // document was NOT changed.
+            if !state.apply(cmd.clone()) {
+                return false;
+            }
+            if let Err(e) = save_editor_state(state, path) {
+                applier_failed = Some(format!("save failed: {e}"));
+                return false;
+            }
+            true
+        })
+        .map_err(|e| format!("dispatch: {e}"))?;
+    }
+    if let Some(msg) = applier_failed {
+        eprintln!("openpencil-desktop mcp: {msg}");
+    }
+    let resp = String::from_utf8_lossy(&out).trim().to_string();
+    Ok((!resp.is_empty()).then_some(resp))
+}
+
 /// Run the stdio MCP server against `path`. Returns Ok(()) on EOF,
 /// Err on unrecoverable IO. Blocks the calling thread for the
 /// lifetime of the stdio connection.
 pub fn run(path: PathBuf) -> Result<(), String> {
     let mut state = load_editor_state(&path)?;
-
     let stdin = std::io::stdin();
     let stdout = std::io::stdout();
     let mut reader = BufReader::new(stdin.lock());
     let mut writer = BufWriter::new(stdout.lock());
-
     let mut line = String::new();
     loop {
         line.clear();
@@ -95,78 +155,101 @@ pub fn run(path: PathBuf) -> Result<(), String> {
         if n == 0 {
             return Ok(()); // EOF
         }
-        let trimmed = line.trim();
-        if trimmed.is_empty() {
-            continue;
-        }
-
-        // MCP handshake / discovery methods short-circuit the
-        // tool dispatcher. Detect them via a cheap method-field
-        // sniff so we don't need to drag JSON parsing in here —
-        // shell-core's parser stays the single source for the
-        // `tools/call` envelope.
-        let method = sniff_method(trimmed);
-        match method.as_deref() {
-            Some("initialize") => {
-                if let Some(id_raw) = sniff_id_raw(trimmed) {
-                    writeln!(writer, "{}", initialize_response(&id_raw))
-                        .map_err(|e| format!("stdout write: {e}"))?;
-                    writer.flush().map_err(|e| format!("stdout flush: {e}"))?;
-                }
-                continue;
-            }
-            Some("tools/list") => {
-                if let Some(id_raw) = sniff_id_raw(trimmed) {
-                    writeln!(writer, "{}", tools_list_response(&id_raw))
-                        .map_err(|e| format!("stdout write: {e}"))?;
-                    writer.flush().map_err(|e| format!("stdout flush: {e}"))?;
-                }
-                continue;
-            }
-            Some("notifications/initialized") | Some("initialized") => {
-                // Notification — no response required by spec.
-                continue;
-            }
-            Some("ping") => {
-                if let Some(id_raw) = sniff_id_raw(trimmed) {
-                    writeln!(writer, "{}", ping_response(&id_raw))
-                        .map_err(|e| format!("stdout write: {e}"))?;
-                    writer.flush().map_err(|e| format!("stdout flush: {e}"))?;
-                }
-                continue;
-            }
-            _ => {}
-        }
-
-        // Fall through: tools/call or legacy direct dispatch.
-        let registry = rebuild_registry(&state);
-        let mut applier_failed: Option<String> = None;
-        let path_for_save = path.clone();
-        {
-            let state_ref = &mut state;
-            let path_ref = &path_for_save;
-            let applier_failed_ref = &mut applier_failed;
-            let mut input = std::io::Cursor::new(line.as_bytes());
-            run_stdio_with_applier(&registry, &mut input, &mut writer, |cmd| {
-                // `EditorState::apply` runs the pre-validate-then-mutate
-                // discipline; `false` means the command rejected and
-                // the document was NOT changed.
-                if !state_ref.apply(cmd.clone()) {
-                    return false;
-                }
-                if let Err(e) = save_editor_state(state_ref, path_ref) {
-                    *applier_failed_ref = Some(format!("save failed: {e}"));
-                    return false;
-                }
-                true
-            })
-            .map_err(|e| format!("dispatch: {e}"))?;
-        }
-        writer.flush().map_err(|e| format!("stdout flush: {e}"))?;
-        if let Some(msg) = applier_failed {
-            eprintln!("openpencil-desktop --mcp: {msg}");
+        if let Some(resp) = process_message(&mut state, &path, &line)? {
+            writeln!(writer, "{resp}").map_err(|e| format!("stdout write: {e}"))?;
+            writer.flush().map_err(|e| format!("stdout flush: {e}"))?;
         }
     }
+}
+
+/// Run the MCP server over HTTP on `127.0.0.1:port`. Each connection
+/// carries one JSON-RPC message POSTed to any path; the response is
+/// the JSON-RPC reply as `application/json`. A minimal non-streaming
+/// Streamable-HTTP transport — enough for HTTP MCP clients that POST
+/// one request per connection. Blocks for the listener's lifetime.
+pub fn run_http(path: PathBuf, port: u16) -> Result<(), String> {
+    let mut state = load_editor_state(&path)?;
+    let listener = std::net::TcpListener::bind(("127.0.0.1", port))
+        .map_err(|e| format!("bind 127.0.0.1:{port}: {e}"))?;
+    eprintln!("openpencil-desktop --mcp-http: listening on 127.0.0.1:{port}");
+    for stream in listener.incoming() {
+        match stream {
+            Ok(mut s) => {
+                if let Err(e) = serve_http_connection(&mut s, &mut state, &path) {
+                    eprintln!("openpencil-desktop --mcp-http: {e}");
+                }
+            }
+            Err(e) => eprintln!("openpencil-desktop --mcp-http: accept: {e}"),
+        }
+    }
+    Ok(())
+}
+
+/// Handle one HTTP connection: parse the request, run its JSON-RPC
+/// body through [`process_message`], write the JSON-RPC reply back as
+/// an `application/json` response. Generic over the stream so it is
+/// unit-testable without a real socket.
+fn serve_http_connection<S: std::io::Read + std::io::Write>(
+    stream: &mut S,
+    state: &mut EditorState,
+    path: &std::path::Path,
+) -> Result<(), String> {
+    let body = read_http_request_body(stream)?;
+    let response = process_message(state, path, &body)?.unwrap_or_default();
+    let http = format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\
+         Content-Length: {}\r\nConnection: close\r\n\r\n{}",
+        response.len(),
+        response
+    );
+    stream
+        .write_all(http.as_bytes())
+        .map_err(|e| format!("http write: {e}"))?;
+    stream.flush().map_err(|e| format!("http flush: {e}"))
+}
+
+/// Read an HTTP request off `stream` and return its body. Reads to
+/// the `\r\n\r\n` header terminator, parses `Content-Length`, then
+/// reads exactly that many body bytes. The header block is capped so
+/// a malformed peer can't exhaust memory.
+fn read_http_request_body<S: std::io::Read>(stream: &mut S) -> Result<String, String> {
+    const MAX_HEADER: usize = 64 * 1024;
+    const MAX_BODY: usize = 8 * 1024 * 1024;
+    let mut head: Vec<u8> = Vec::new();
+    let mut byte = [0u8; 1];
+    loop {
+        let n = stream
+            .read(&mut byte)
+            .map_err(|e| format!("http read: {e}"))?;
+        if n == 0 {
+            return Err("connection closed before headers completed".into());
+        }
+        head.push(byte[0]);
+        if head.ends_with(b"\r\n\r\n") {
+            break;
+        }
+        if head.len() > MAX_HEADER {
+            return Err("request headers exceed 64 KiB".into());
+        }
+    }
+    let headers = String::from_utf8_lossy(&head);
+    let content_length = headers
+        .lines()
+        .find_map(|l| {
+            let l = l.trim();
+            (l.len() >= 15 && l[..15].eq_ignore_ascii_case("content-length:"))
+                .then(|| l[15..].trim().parse::<usize>().ok())
+                .flatten()
+        })
+        .unwrap_or(0);
+    if content_length > MAX_BODY {
+        return Err("request body exceeds 8 MiB".into());
+    }
+    let mut body = vec![0u8; content_length];
+    stream
+        .read_exact(&mut body)
+        .map_err(|e| format!("http body read: {e}"))?;
+    Ok(String::from_utf8_lossy(&body).into_owned())
 }
 
 /// Re-build the registry against the latest editor state so read-tool
@@ -227,6 +310,7 @@ fn rebuild_registry(doc: &EditorState) -> ToolRegistry {
     r.register(Box::new(set_variable_color_snapshot(doc)));
     r.register(Box::new(set_active_axis_value_snapshot(doc)));
     r.register(Box::new(insert_node_snapshot()));
+    r.register(Box::new(import_svg_snapshot()));
     r.register(Box::new(update_node_snapshot()));
     r.register(Box::new(delete_node_snapshot()));
     r.register(Box::new(move_node_snapshot()));
@@ -525,6 +609,7 @@ const TOOL_SCHEMAS: &[&str] = &[
     r#"{"name":"set_active_axis_value","description":"Pin a theme axis to one of its allowed values.","inputSchema":{"type":"object","properties":{"axis":{"type":"string"},"value":{"type":"string"}},"required":["axis","value"]}}"#,
     r#"{"name":"insert_node","description":"Create a new leaf node on the active page.","inputSchema":{"type":"object","properties":{"kind":{"type":"string","enum":["frame","group","rect","ellipse","polygon","line","text","path"]},"name":{"type":"string"},"x":{"type":"string"},"y":{"type":"string"},"width":{"type":"string"},"height":{"type":"string"},"fill_hex":{"type":"string"}},"required":["kind","name","x","y","width","height"]}}"#,
     r#"{"name":"update_node","description":"Patch fields on an existing node. Pass any subset of x/y/width/height/name/fill_hex.","inputSchema":{"type":"object","properties":{"node_id":{"type":"string"},"x":{"type":"string"},"y":{"type":"string"},"width":{"type":"string"},"height":{"type":"string"},"name":{"type":"string"},"fill_hex":{"type":"string"}},"required":["node_id"]}}"#,
+    r#"{"name":"import_svg","description":"Parse an SVG document and insert the resulting nodes on the active page. Supports rect/circle/ellipse/line/polyline/polygon and path (M/L/H/V/C/S/Q/T/Z); <g>/transforms/CSS are skipped. x/y (optional, default 0) offset the imported nodes in doc-px.","inputSchema":{"type":"object","properties":{"svg":{"type":"string","description":"SVG document text"},"x":{"type":"string","description":"i32 doc-px x offset (default 0)"},"y":{"type":"string","description":"i32 doc-px y offset (default 0)"}},"required":["svg"]}}"#,
     r#"{"name":"delete_node","description":"Remove a node + descendants from its parent.","inputSchema":{"type":"object","properties":{"node_id":{"type":"string"}},"required":["node_id"]}}"#,
     r#"{"name":"move_node","description":"Reparent a node. target_parent_id=0 puts it at the active page root.","inputSchema":{"type":"object","properties":{"node_id":{"type":"string"},"target_parent_id":{"type":"string"}},"required":["node_id","target_parent_id"]}}"#,
     r#"{"name":"copy_node","description":"Deep-clone a subtree with fresh ids under a new parent.","inputSchema":{"type":"object","properties":{"node_id":{"type":"string"},"target_parent_id":{"type":"string"}},"required":["node_id","target_parent_id"]}}"#,
@@ -532,140 +617,4 @@ const TOOL_SCHEMAS: &[&str] = &[
 ];
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn sniff_method_walks_top_level() {
-        assert_eq!(
-            sniff_method(r#"{"id":1,"method":"initialize","params":{}}"#),
-            Some("initialize".into())
-        );
-        assert_eq!(
-            sniff_method(r#"{"id":1,"method":"tools/call","params":{"name":"x"}}"#),
-            Some("tools/call".into())
-        );
-        // Nested `method` keys must not shadow the real one.
-        assert_eq!(
-            sniff_method(r#"{"id":1,"method":"tools/list","params":{"method":"fake"}}"#),
-            Some("tools/list".into())
-        );
-        assert_eq!(sniff_method("not even json"), None);
-    }
-
-    #[test]
-    fn sniff_id_raw_preserves_type() {
-        assert_eq!(sniff_id_raw(r#"{"id":42,"method":"x"}"#), Some("42".into()));
-        assert_eq!(
-            sniff_id_raw(r#"{"id":"abc","method":"x"}"#),
-            Some(r#""abc""#.into())
-        );
-    }
-
-    #[test]
-    fn initialize_response_includes_protocol_and_capabilities() {
-        let r = initialize_response("7");
-        assert!(r.contains(r#""id":7"#));
-        assert!(r.contains(r#""protocolVersion""#));
-        assert!(r.contains(r#""tools""#));
-        assert!(r.contains(r#""serverInfo""#));
-    }
-
-    #[test]
-    fn tools_list_response_includes_all_registered_tools() {
-        let r = tools_list_response("3");
-        // Exact-count assertion: any tool added without
-        // updating this test will trip the count first. Codex
-        // stop-gate: previous `contains`-only checks would have
-        // silently passed if a new tool slipped into TOOL_SCHEMAS
-        // without being added to the list below.
-        assert_eq!(
-            TOOL_SCHEMAS.len(),
-            79,
-            "tools/list catalog count must match the registered tools — add the new tool to this test"
-        );
-        for name in [
-            "get_document_info",
-            "get_selection",
-            "get_node",
-            "list_pages",
-            "list_variables",
-            "get_active_theme",
-            "list_components",
-            "get_component",
-            "snapshot_layout",
-            "get_canvas_bounds",
-            "find_node_by_name",
-            "get_node_parent",
-            "get_node_children",
-            "count_nodes",
-            "list_node_kinds",
-            "get_history_depth",
-            "get_viewport",
-            "get_selection_set",
-            "clear_selection",
-            "set_selection",
-            "set_viewport",
-            "set_node_hidden",
-            "set_node_locked",
-            "set_node_collapsed",
-            "set_active_tool",
-            "undo",
-            "redo",
-            "duplicate_selected",
-            "delete_selected",
-            "nudge_selected",
-            "group_selected",
-            "ungroup_selected",
-            "reorder_selected",
-            "set_node_rotation",
-            "set_node_text",
-            "set_node_corner_radius",
-            "set_node_font_size",
-            "set_node_font_weight",
-            "set_node_stroke_hex",
-            "set_node_stroke_width",
-            "align_selected",
-            "set_node_fill_hex",
-            "set_node_flip",
-            "set_ellipse_arc",
-            "set_node_name",
-            "set_selection_set",
-            "toggle_node_selection",
-            "cycle_active_axis_value",
-            "copy_selected",
-            "cut_selected",
-            "paste_clipboard",
-            "instantiate_component",
-            "create_component",
-            "delete_component",
-            "rename_component",
-            "set_active_page",
-            "add_page",
-            "rename_page",
-            "delete_page",
-            "duplicate_page",
-            "reorder_page",
-            "set_variable_color",
-            "set_active_axis_value",
-            "insert_node",
-            "update_node",
-            "delete_node",
-            "move_node",
-            "copy_node",
-            "replace_node",
-            "batch_design",
-            "set_variable_number",
-            "set_variable_string",
-            "set_variable_boolean",
-            "create_variable",
-            "delete_variable",
-            "rename_variable",
-            "design_skeleton",
-            "design_content",
-            "design_refine",
-        ] {
-            assert!(r.contains(name), "tools/list must include {name}: {r}");
-        }
-    }
-}
+mod tests;

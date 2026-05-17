@@ -750,6 +750,30 @@ fn main() {
                 }
             }
         }
+        if first == "--mcp-http" {
+            // `--mcp-http <port> <path>` serves MCP over HTTP instead
+            // of stdio — for HTTP MCP clients (TS pen-mcp ships a
+            // Streamable-HTTP transport alongside stdio).
+            let Some(port_arg) = args.next() else {
+                eprintln!("openpencil-desktop --mcp-http: missing <port> arg");
+                std::process::exit(2);
+            };
+            let Ok(port) = port_arg.parse::<u16>() else {
+                eprintln!("openpencil-desktop --mcp-http: <port> must be a u16, got {port_arg:?}");
+                std::process::exit(2);
+            };
+            let Some(path) = args.next() else {
+                eprintln!("openpencil-desktop --mcp-http: missing <path> arg");
+                std::process::exit(2);
+            };
+            match mcp_serve::run_http(PathBuf::from(path), port) {
+                Ok(()) => return,
+                Err(e) => {
+                    eprintln!("openpencil-desktop --mcp-http: {e}");
+                    std::process::exit(1);
+                }
+            }
+        }
         // Unknown leading arg → fall through to GUI mode for now
         // (a future patch may add `--help` etc).
     }
