@@ -24,11 +24,6 @@ pub fn figma_color_to_hex(c: &FigColor) -> String {
     s
 }
 
-/// Alpha channel, defaulting to fully opaque.
-pub fn figma_color_opacity(c: &FigColor) -> f64 {
-    c.a.unwrap_or(1.0)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -2331,6 +2331,7 @@ dependencies = [
  "jian-ops-schema",
  "op-editor-core",
  "ruzstd",
+ "serde_json",
 ]
 
 [[package]]

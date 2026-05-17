@@ -1,41 +1,39 @@
-//! Figma `.fig` import — file recognition + outline of the
-//! conversion pipeline. Real binary parsing (Zstd-decompressed
-//! schema-encoded blob → `FigmaNode` tree → `PenNode`) lives in
-//! `packages/pen-figma`; the Rust port is a 17-file effort that
-//! lands incrementally behind this module's trait.
+//! Figma `.fig` import — file recognition + the full binary parsing
+//! pipeline. The Rust port of `packages/pen-figma`: a `.fig`
+//! container is unzipped + chunk-split ([`container`]), decoded
+//! through the Kiwi schema ([`kiwi`]), built into a node tree
+//! ([`tree`]) and converted to a `PenDocument` ([`converters`] /
+//! [`node_mapper`]). Clipboard-JSON (`.fig.json`) keeps the
+//! hand-rolled shallow extractor below.
 
-// Binary `.fig` pipeline modules. Wired into `parse_fig` in the final
-// stage; `allow(dead_code)` covers the intermediate build where later
-// stages have not landed yet.
-#[allow(dead_code)]
 mod color;
-#[allow(dead_code)]
 mod common;
-#[allow(dead_code)]
 mod container;
-#[allow(dead_code)]
 mod converters;
-#[allow(dead_code)]
 mod figma_types;
-#[allow(dead_code)]
+mod image_resolver;
 mod instance;
-#[allow(dead_code)]
 mod kiwi;
-#[allow(dead_code)]
 mod mappers;
-#[allow(dead_code)]
 mod node_build;
-#[allow(dead_code)]
 mod node_mapper;
-#[allow(dead_code)]
 mod text_mapper;
-#[allow(dead_code)]
 mod tree;
-#[allow(dead_code)]
 mod vector_decoder;
-#[allow(dead_code)]
 mod zip_reader;
 
+#[cfg(test)]
+mod binary_e2e_tests;
+
+pub use common::FigLayoutMode;
+pub use node_mapper::{
+    figma_all_pages_to_pen_document, figma_node_changes_to_pen_nodes, figma_to_pen_document,
+    get_figma_pages, FigmaImportResult, FigmaPageInfo,
+};
+
+use common::FigLayoutMode as LayoutMode;
+use image_resolver::resolve_image_blobs;
+use jian_ops_schema::document::PenDocument;
 use jian_ops_schema::node::{
     ContainerProps, EllipseNode, FrameNode, GroupNode, LineNode, PathNode, PenNode, PenNodeBase,
     PolygonNode, RectangleNode, TextContent, TextNode,
@@ -77,20 +75,58 @@ pub fn detect_kind(bytes: &[u8]) -> FigFileKind {
     FigFileKind::Unknown
 }
 
+/// A fully imported `.fig` file — the converted document plus any
+/// non-fatal conversion warnings.
+#[derive(Debug, Clone)]
+pub struct FigImport {
+    pub document: PenDocument,
+    pub warnings: Vec<String>,
+}
+
+/// Parse a binary `.fig` file into a `PenDocument`. Runs the whole
+/// pipeline: container split → Kiwi decode → tree build → node
+/// conversion → image-blob resolution. `file_name` names the
+/// document; `layout_mode` selects auto-layout resolution vs verbatim
+/// Figma geometry.
+pub fn parse_fig_binary(
+    bytes: &[u8],
+    file_name: &str,
+    layout_mode: FigLayoutMode,
+) -> Result<FigImport, FigParseError> {
+    if detect_kind(bytes) != FigFileKind::Binary {
+        return Err(FigParseError::UnknownFormat);
+    }
+    let decoded =
+        figma_types::parse_fig_file(bytes).map_err(|e| FigParseError::Binary(e.to_string()))?;
+    let image_files = decoded.image_files.clone();
+    let result = figma_all_pages_to_pen_document(decoded, file_name, layout_mode);
+    let mut document = result.document;
+    resolve_image_blobs(&mut document, &result.image_blobs, &image_files);
+    Ok(FigImport {
+        document,
+        warnings: result.warnings,
+    })
+}
+
 /// Convert a `.fig` byte stream to a `ParsedFigStub`. For clipboard
 /// JSON, extracts the top-level shape (`type` + children count); for
-/// binary `.fig`, recognises the magic but defers full parsing to
-/// the upcoming Zstd-backed pipeline. Returns `UnknownFormat` on
-/// unrecognised bytes.
+/// binary `.fig`, runs the full parser and reports the top-level node
+/// count. Returns `UnknownFormat` on unrecognised bytes.
 pub fn parse_fig(bytes: &[u8]) -> Result<ParsedFigStub, FigParseError> {
     match detect_kind(bytes) {
         FigFileKind::Binary => {
-            // Binary format requires Zstd decompression before the
-            // schema-encoded body becomes readable. Adding a Zstd
-            // dep to shell-core (wasm32-clean) is the work for the
-            // dedicated server-side parser binary; the stub kind
-            // recognition stays here.
-            Err(FigParseError::NotYetImplemented(FigFileKind::Binary))
+            let import = parse_fig_binary(bytes, "Figma Import", LayoutMode::OpenPencil)?;
+            let top_level_children = import
+                .document
+                .pages
+                .as_ref()
+                .map(|pages| pages.iter().map(|p| p.children.len()).sum())
+                .unwrap_or(0);
+            Ok(ParsedFigStub {
+                kind: FigFileKind::Binary,
+                top_level_children,
+                clipboard_nodes: Vec::new(),
+            })
         }
         FigFileKind::ClipboardJson => {
             let s = std::str::from_utf8(bytes).map_err(|_| FigParseError::UnknownFormat)?;
@@ -464,8 +500,19 @@ pub struct ParsedFigStub {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FigParseError {
+    /// Input is neither a binary `.fig` nor a Figma clipboard JSON.
     UnknownFormat,
-    NotYetImplemented(FigFileKind),
+    /// Binary `.fig` parsing failed — carries the underlying reason.
+    Binary(String),
+}
+
+impl std::fmt::Display for FigParseError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            FigParseError::UnknownFormat => write!(f, "unrecognised .fig format"),
+            FigParseError::Binary(e) => write!(f, "{e}"),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -494,13 +541,12 @@ mod tests {
     }
 
     #[test]
-    fn parse_fig_binary_returns_not_yet() {
+    fn parse_fig_binary_rejects_malformed_container() {
+        // `fig-kiwi` magic but no decodable chunks → a Binary error,
+        // no longer NotYetImplemented.
         let mut bin = b"fig-kiwi".to_vec();
         bin.extend_from_slice(&[0u8; 4]);
-        assert_eq!(
-            parse_fig(&bin),
-            Err(FigParseError::NotYetImplemented(FigFileKind::Binary))
-        );
+        assert!(matches!(parse_fig(&bin), Err(FigParseError::Binary(_))));
     }
 
     #[test]
