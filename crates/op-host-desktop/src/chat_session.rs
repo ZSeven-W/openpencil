@@ -141,11 +141,20 @@ pub fn launch_if_pending(host: &mut WidgetHostNative, current: &mut Option<ChatS
         // caller repaints the error.
         return true;
     };
+    // Thread the per-turn knobs the chat panel carries into the
+    // request, then clear the staged attachments — they belong to
+    // this turn only.
+    let chat = &mut host.editor_state_mut().chat;
+    let thinking = chat.thinking_mode;
+    let effort = chat.effort_level;
+    let attachments = std::mem::take(&mut chat.pending_attachments);
     let req = ChatRequest {
         system_prompt: String::new(),
         user_message: user_text,
         max_output_tokens: 4096,
-        ..Default::default()
+        thinking,
+        effort,
+        attachments,
     };
     *current = Some(ChatSession::start(provider, req));
     true

@@ -555,6 +555,27 @@ impl WidgetHost {
                         self.mark_dirty();
                         return true;
                     }
+                    AIChatHit::CycleThinking => {
+                        self.editor_state.chat.cycle_thinking_mode();
+                        self.mark_dirty();
+                        return true;
+                    }
+                    AIChatHit::CycleEffort => {
+                        self.editor_state.chat.cycle_effort_level();
+                        self.mark_dirty();
+                        return true;
+                    }
+                    AIChatHit::AddAttachment => {
+                        // The web shell has no native file picker wired
+                        // yet — staging an attachment is a desktop-only
+                        // path for now. No-op so the click is consumed.
+                        return true;
+                    }
+                    AIChatHit::RemoveAttachment(idx) => {
+                        self.editor_state.chat.remove_attachment(idx);
+                        self.mark_dirty();
+                        return true;
+                    }
                 }
             }
         }

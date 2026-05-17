@@ -33,7 +33,9 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use op_ai::chat_provider::{ChatDelta, ChatProvider, ChatRequest, CliName, StopReason};
+use op_ai::chat_provider::{
+    ChatDelta, ChatProvider, ChatRequest, CliName, EffortLevel, StopReason,
+};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::Command;
 use tokio::sync::mpsc;
@@ -340,6 +342,35 @@ impl ChatProvider for SubprocessProvider {
 
     fn send(&self, request: ChatRequest) -> Box<dyn Iterator<Item = ChatDelta> + Send> {
         let binary = self.binary.clone();
+        // Build the effective prompt. None of claude `--print` /
+        // gemini / copilot `suggest` expose a portable reasoning
+        // flag, so the thinking + effort knobs travel in-band as a
+        // leading directive line; staged attachments are appended as
+        // `[attached …: <path>]` lines the CLI can read by path. The
+        // guard removes the temp files when the worker task ends.
+        let (mut prompt, guard) = match crate::chat_attachment::prompt_with_attachments(
+            &request.user_message,
+            &request.attachments,
+        ) {
+            Ok(pair) => pair,
+            Err(e) => return crate::chat_attachment::attachment_error_turn(e),
+        };
+        let mut directive = String::new();
+        if let Some(d) = crate::chat_attachment::thinking_directive(request.thinking) {
+            directive.push_str(d);
+        }
+        if request.effort != EffortLevel::Low {
+            if !directive.is_empty() {
+                directive.push(' ');
+            }
+            directive.push_str(&format!(
+                "Apply {} reasoning effort.",
+                request.effort.as_str()
+            ));
+        }
+        if !directive.is_empty() {
+            prompt = format!("{directive}\n\n{prompt}");
+        }
         let mut args_with_prompt = self.args.clone();
         // PromptMode::PositionalArg: append `-- <prompt>` so the CLI
         // picks up the message as a CLI argument (Claude Code mode).
@@ -347,13 +378,15 @@ impl ChatProvider for SubprocessProvider {
         // prompt is written to stdin after spawn.
         if self.prompt_mode == PromptMode::PositionalArg {
             args_with_prompt.push("--".into());
-            args_with_prompt.push(request.user_message.clone());
+            args_with_prompt.push(prompt.clone());
         }
         let args = Arc::new(args_with_prompt);
         let prompt_mode = self.prompt_mode;
         let env_pairs = scrubbed_child_env();
         let (tx, rx) = mpsc::channel::<ChatDelta>(64);
         shared_runtime().spawn(async move {
+            // Keep staged attachment temp files alive for the turn.
+            let _guard = guard;
             let mut cmd = build_command(&binary, &args);
             cmd.stdin(std::process::Stdio::piped())
                 .stdout(std::process::Stdio::piped())
@@ -397,7 +430,7 @@ impl ChatProvider for SubprocessProvider {
                         // Feed the user message + close stdin so the
                         // CLI sees EOF and starts responding. Stdin
                         // write errors surface as a chat error.
-                        if let Err(e) = stdin.write_all(request.user_message.as_bytes()).await {
+                        if let Err(e) = stdin.write_all(prompt.as_bytes()).await {
                             let _ = tx.send(ChatDelta::Error(format!("stdin write: {e}"))).await;
                             let _ = tx
                                 .send(ChatDelta::Done {

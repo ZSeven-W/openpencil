@@ -7,6 +7,20 @@
 //! transport coupling. The actual `ChatProvider` plumbing stays in the
 //! desktop host; this layer only carries state.
 
+/// Re-export of the chat-request knobs from `op-ai` so callers of
+/// `op-editor-core` get one import path. `ThinkingMode` / `EffortLevel`
+/// drive the chat panel's per-turn selectors; `ChatAttachment` is one
+/// pending image / file the user staged for the next turn.
+pub use op_ai::chat_provider::{ChatAttachment, EffortLevel, ThinkingMode};
+
+/// Maximum number of files that can be staged for one chat turn
+/// (TS parity — the web chat input caps at four attachments).
+pub const MAX_ATTACHMENTS: usize = 4;
+
+/// Maximum size of a single staged attachment, in bytes (TS parity —
+/// the web chat input rejects files over 5 MiB).
+pub const MAX_ATTACHMENT_BYTES: usize = 5 * 1024 * 1024;
+
 /// Which CLI agent backs a model / chat turn. Ported verbatim from
 /// shell-core's `agent_settings_state::AgentProvider`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -146,6 +160,19 @@ pub struct ChatState {
     pub available_models: Vec<ModelEntry>,
     /// Index into `available_models` of the active model.
     pub selected_model: usize,
+    /// Per-turn thinking-mode selector — the host copies this into the
+    /// `ChatRequest` it builds for the provider.
+    pub thinking_mode: ThinkingMode,
+    /// Per-turn reasoning-effort selector.
+    pub effort_level: EffortLevel,
+    /// Files staged for the next turn (images the user pasted / picked).
+    /// Drained by the host into `ChatRequest::attachments`, then cleared.
+    pub pending_attachments: Vec<ChatAttachment>,
+    /// Raised when the user clicks the attach button — the desktop
+    /// host drains this each frame, opens a native file picker, and
+    /// stages the chosen file via `add_attachment`. Mirrors the
+    /// `pending_send` host-drain pattern.
+    pub pending_attachment_pick: bool,
 }
 
 impl Default for ChatState {
@@ -160,6 +187,10 @@ impl Default for ChatState {
             pending_send: None,
             available_models: Vec::new(),
             selected_model: 0,
+            thinking_mode: ThinkingMode::Adaptive,
+            effort_level: EffortLevel::Low,
+            pending_attachments: Vec::new(),
+            pending_attachment_pick: false,
         }
     }
 }
@@ -195,10 +226,12 @@ impl ChatState {
     /// Real-send entry point. Pushes the user message + an empty
     /// assistant message, clears the input, and raises `pending_send`
     /// so the desktop event loop launches a real provider turn.
-    /// Returns true when a send was queued (non-empty input).
+    /// Returns true when a send was queued — a turn may be queued with
+    /// text, with staged attachments, or both (TS parity: an
+    /// attachment-only message is sendable).
     pub fn begin_send(&mut self) -> bool {
         let trimmed = self.input.trim().to_string();
-        if trimmed.is_empty() {
+        if trimmed.is_empty() && self.pending_attachments.is_empty() {
             return false;
         }
         self.messages.push(ChatMessage {
@@ -213,6 +246,48 @@ impl ChatState {
         self.input.clear();
         self.pending_send = Some(trimmed);
         true
+    }
+
+    /// Advance the thinking-mode selector one step:
+    /// Adaptive → Disabled → Enabled → Adaptive.
+    pub fn cycle_thinking_mode(&mut self) {
+        self.thinking_mode = match self.thinking_mode {
+            ThinkingMode::Adaptive => ThinkingMode::Disabled,
+            ThinkingMode::Disabled => ThinkingMode::Enabled,
+            ThinkingMode::Enabled => ThinkingMode::Adaptive,
+        };
+    }
+
+    /// Advance the effort selector one step:
+    /// Low → Medium → High → Max → Low.
+    pub fn cycle_effort_level(&mut self) {
+        self.effort_level = match self.effort_level {
+            EffortLevel::Low => EffortLevel::Medium,
+            EffortLevel::Medium => EffortLevel::High,
+            EffortLevel::High => EffortLevel::Max,
+            EffortLevel::Max => EffortLevel::Low,
+        };
+    }
+
+    /// Stage a file for the next turn. Rejected (returns `false`) when
+    /// the per-turn attachment cap is already reached or the file
+    /// exceeds [`MAX_ATTACHMENT_BYTES`].
+    pub fn add_attachment(&mut self, attachment: ChatAttachment) -> bool {
+        if self.pending_attachments.len() >= MAX_ATTACHMENTS {
+            return false;
+        }
+        if attachment.data.len() > MAX_ATTACHMENT_BYTES {
+            return false;
+        }
+        self.pending_attachments.push(attachment);
+        true
+    }
+
+    /// Drop the staged attachment at `index`; out-of-range is a no-op.
+    pub fn remove_attachment(&mut self, index: usize) {
+        if index < self.pending_attachments.len() {
+            self.pending_attachments.remove(index);
+        }
     }
 }
 
@@ -257,6 +332,116 @@ mod tests {
         assert_eq!(chat.messages.len(), 2);
         assert_eq!(chat.messages[1].role, ChatRole::Assistant);
         assert!(chat.input.is_empty());
+    }
+
+    #[test]
+    fn cycle_thinking_mode_wraps() {
+        let mut chat = ChatState::default();
+        assert_eq!(chat.thinking_mode, ThinkingMode::Adaptive);
+        chat.cycle_thinking_mode();
+        assert_eq!(chat.thinking_mode, ThinkingMode::Disabled);
+        chat.cycle_thinking_mode();
+        assert_eq!(chat.thinking_mode, ThinkingMode::Enabled);
+        chat.cycle_thinking_mode();
+        assert_eq!(chat.thinking_mode, ThinkingMode::Adaptive);
+    }
+
+    #[test]
+    fn cycle_effort_level_wraps() {
+        let mut chat = ChatState::default();
+        assert_eq!(chat.effort_level, EffortLevel::Low);
+        chat.cycle_effort_level();
+        assert_eq!(chat.effort_level, EffortLevel::Medium);
+        chat.cycle_effort_level();
+        assert_eq!(chat.effort_level, EffortLevel::High);
+        chat.cycle_effort_level();
+        assert_eq!(chat.effort_level, EffortLevel::Max);
+        chat.cycle_effort_level();
+        assert_eq!(chat.effort_level, EffortLevel::Low);
+    }
+
+    #[test]
+    fn add_and_remove_attachment() {
+        let mut chat = ChatState::default();
+        assert!(chat.pending_attachments.is_empty());
+        chat.add_attachment(ChatAttachment {
+            name: "a.png".into(),
+            media_type: "image/png".into(),
+            data: vec![1],
+        });
+        chat.add_attachment(ChatAttachment {
+            name: "b.png".into(),
+            media_type: "image/png".into(),
+            data: vec![2],
+        });
+        assert_eq!(chat.pending_attachments.len(), 2);
+        chat.remove_attachment(0);
+        assert_eq!(chat.pending_attachments.len(), 1);
+        assert_eq!(chat.pending_attachments[0].name, "b.png");
+        // Out-of-range remove is a no-op.
+        chat.remove_attachment(9);
+        assert_eq!(chat.pending_attachments.len(), 1);
+    }
+
+    #[test]
+    fn begin_send_leaves_pending_attachments_for_host_to_drain() {
+        let mut chat = ChatState {
+            input: "design with this".into(),
+            ..Default::default()
+        };
+        chat.add_attachment(ChatAttachment {
+            name: "ref.png".into(),
+            media_type: "image/png".into(),
+            data: vec![9],
+        });
+        assert!(chat.begin_send());
+        // begin_send clears the input but NOT the attachments — the
+        // host copies them into the ChatRequest, then clears.
+        assert_eq!(chat.pending_attachments.len(), 1);
+    }
+
+    #[test]
+    fn add_attachment_enforces_count_cap() {
+        let mut chat = ChatState::default();
+        for i in 0..MAX_ATTACHMENTS {
+            assert!(chat.add_attachment(ChatAttachment {
+                name: format!("{i}.png"),
+                media_type: "image/png".into(),
+                data: vec![1],
+            }));
+        }
+        // The cap is reached — a further attachment is rejected.
+        assert!(!chat.add_attachment(ChatAttachment {
+            name: "extra.png".into(),
+            media_type: "image/png".into(),
+            data: vec![1],
+        }));
+        assert_eq!(chat.pending_attachments.len(), MAX_ATTACHMENTS);
+    }
+
+    #[test]
+    fn add_attachment_rejects_oversized_file() {
+        let mut chat = ChatState::default();
+        let huge = ChatAttachment {
+            name: "big.png".into(),
+            media_type: "image/png".into(),
+            data: vec![0u8; MAX_ATTACHMENT_BYTES + 1],
+        };
+        assert!(!chat.add_attachment(huge));
+        assert!(chat.pending_attachments.is_empty());
+    }
+
+    #[test]
+    fn begin_send_allows_attachment_only_message() {
+        let mut chat = ChatState::default();
+        chat.add_attachment(ChatAttachment {
+            name: "ref.png".into(),
+            media_type: "image/png".into(),
+            data: vec![9],
+        });
+        // Empty text but a staged attachment — still sendable.
+        assert!(chat.begin_send());
+        assert_eq!(chat.pending_attachments.len(), 1);
     }
 
     #[test]

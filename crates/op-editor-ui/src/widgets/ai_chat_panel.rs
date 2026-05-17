@@ -13,11 +13,16 @@
 //! on the host (`apply_text` / `apply_send`).
 
 use crate::theme::Theme;
+use crate::widgets::ai_chat_panel_controls::{
+    attachment_row_hit, controls_row_hit, paint_attachment_row, paint_controls_row,
+    ATTACHMENT_ROW_HEIGHT, CONTROLS_ROW_HEIGHT,
+};
+use crate::widgets::ai_chat_panel_paint::{paint_examples, paint_messages};
 use crate::widgets::editor_state_ext::{theme_for, translate};
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::{LayoutBox, LayoutCx, PaintCx, Widget, WidgetId};
 use crate::{Color, Point2D, Rect, TextLayout};
-use op_editor_core::chat::{ChatRole, ChatState};
+use op_editor_core::chat::ChatState;
 use op_editor_core::EditorState;
 
 pub const AI_CHAT_WIDTH: f32 = 380.0;
@@ -29,8 +34,8 @@ pub const AI_CHAT_COLLAPSED_WIDTH: f32 = 150.0;
 /// Height of the panel when collapsed — short pill, just enough
 /// for the row to read.
 pub const AI_CHAT_COLLAPSED_HEIGHT: f32 = 36.0;
-const PAD: f32 = 16.0;
-const HEADER_HEIGHT: f32 = 36.0;
+pub(crate) const PAD: f32 = 16.0;
+pub(crate) const HEADER_HEIGHT: f32 = 36.0;
 /// Tall textarea-style input region (placeholder / typed buffer).
 const INPUT_AREA_HEIGHT: f32 = 56.0;
 /// Toolbar below the textarea — model picker on left, attach +
@@ -39,17 +44,20 @@ const INPUT_TOOLBAR_HEIGHT: f32 = 40.0;
 /// Click-width of the bottom-toolbar model chip (sparkles + agent
 /// name + chevron). Fixed so hit-test needs no text measurement.
 const MODEL_CHIP_W: f32 = 150.0;
-/// Total reserved space for the input + toolbar block.
-const INPUT_HEIGHT: f32 = INPUT_AREA_HEIGHT + INPUT_TOOLBAR_HEIGHT;
+/// Reserved height of the input block when no attachment is staged:
+/// textarea + per-turn controls strip + bottom toolbar. The block
+/// grows by [`ATTACHMENT_ROW_HEIGHT`] when attachments are staged —
+/// see [`AIChatPlaceholder::input_height`].
+const INPUT_BASE_HEIGHT: f32 = INPUT_AREA_HEIGHT + CONTROLS_ROW_HEIGHT + INPUT_TOOLBAR_HEIGHT;
 
 #[derive(Debug, Clone)]
-struct ExampleCard {
-    title: &'static str,
-    subtitle: &'static str,
-    emoji: &'static str,
+pub(crate) struct ExampleCard {
+    pub(crate) title: &'static str,
+    pub(crate) subtitle: &'static str,
+    pub(crate) emoji: &'static str,
 }
 
-const EXAMPLES: [ExampleCard; 4] = [
+pub(crate) const EXAMPLES: [ExampleCard; 4] = [
     ExampleCard {
         title: "设计一个移动端登录页面",
         subtitle: "带社交登录的移动端页面",
@@ -96,6 +104,18 @@ pub enum AIChatHit {
     /// is the index into `chat.available_models`
     /// (`Document::select_chat_model`).
     SelectModel(usize),
+    /// Click on the thinking-mode chip — host cycles
+    /// `ChatState::thinking_mode`.
+    CycleThinking,
+    /// Click on the effort chip — host cycles
+    /// `ChatState::effort_level`.
+    CycleEffort,
+    /// Click on the attach button — host opens a file picker and
+    /// stages the chosen file via `ChatState::add_attachment`.
+    AddAttachment,
+    /// Click on a staged-attachment chip — payload is the index
+    /// into `chat.pending_attachments` to drop.
+    RemoveAttachment(usize),
 }
 
 pub struct AIChatPlaceholder<'a> {
@@ -150,6 +170,21 @@ impl<'a> AIChatPlaceholder<'a> {
         }
     }
 
+    /// Height of the staged-attachment row — `0` when none is staged.
+    fn attachment_row_h(&self) -> f32 {
+        if self.state.pending_attachments.is_empty() {
+            0.0
+        } else {
+            ATTACHMENT_ROW_HEIGHT
+        }
+    }
+
+    /// Total input-block height, including the attachment row when
+    /// attachments are staged.
+    fn input_height(&self) -> f32 {
+        INPUT_BASE_HEIGHT + self.attachment_row_h()
+    }
+
     /// Bounds of the model-picker dropdown — anchored just above
     /// the bottom toolbar (the chip), growing upward over the
     /// message list. `input_rect` is the panel's input box.
@@ -157,7 +192,10 @@ impl<'a> AIChatPlaceholder<'a> {
         let height = crate::widgets::ai_chat_model_picker::picker_content_height(
             &self.state.available_models,
         );
-        let toolbar_top = input_rect.origin.y + INPUT_AREA_HEIGHT;
+        let toolbar_top = input_rect.origin.y
+            + INPUT_AREA_HEIGHT
+            + self.attachment_row_h()
+            + CONTROLS_ROW_HEIGHT;
         let bottom = toolbar_top - 4.0;
         Rect {
             origin: Point2D::new(rect.origin.x + PAD, bottom - height),
@@ -185,12 +223,17 @@ impl<'a> AIChatPlaceholder<'a> {
         if rect_contains(chevron_rect, point) {
             return Some(AIChatHit::ToggleCollapse);
         }
+        let input_h = self.input_height();
+        // Must match `paint` exactly: paint draws the separator at
+        // `bottom - input_h` and the input block one pixel below it
+        // (`sep_y + 1`). An earlier `- PAD` here put the hit targets
+        // ~17 px above where they are painted.
         let input_rect = Rect {
             origin: Point2D::new(
                 rect.origin.x + PAD,
-                rect.origin.y + rect.size.y - INPUT_HEIGHT - PAD,
+                rect.origin.y + rect.size.y - input_h + 1.0,
             ),
-            size: Point2D::new(rect.size.x - PAD * 2.0, INPUT_HEIGHT),
+            size: Point2D::new(rect.size.x - PAD * 2.0, input_h),
         };
         // Model-picker dropdown — an overlay above the chip. When
         // open it behaves modally: a row click selects, any other
@@ -208,17 +251,48 @@ impl<'a> AIChatPlaceholder<'a> {
             return Some(AIChatHit::ToggleModelPicker);
         }
         if rect_contains(input_rect, point) {
-            // Bottom toolbar strip = the lower `INPUT_TOOLBAR_HEIGHT`
-            // of the input box; its left `MODEL_CHIP_W` is the model
-            // chip (opens / closes the model-picker dropdown).
-            let toolbar_top = input_rect.origin.y + INPUT_AREA_HEIGHT;
-            if point.y >= toolbar_top && point.x <= input_rect.origin.x + MODEL_CHIP_W {
-                return Some(AIChatHit::ToggleModelPicker);
+            let attach_top = input_rect.origin.y + INPUT_AREA_HEIGHT;
+            let attach_h = self.attachment_row_h();
+            let controls_top = attach_top + attach_h;
+            let toolbar_top = controls_top + CONTROLS_ROW_HEIGHT;
+            // Staged-attachment strip — present only when attachments
+            // are staged; a chip click removes that attachment.
+            if attach_h > 0.0 && point.y >= attach_top && point.y < controls_top {
+                let row = Rect {
+                    origin: Point2D::new(input_rect.origin.x, attach_top),
+                    size: Point2D::new(input_rect.size.x, attach_h),
+                };
+                if let Some(hit) =
+                    attachment_row_hit(row, point, self.state.pending_attachments.len())
+                {
+                    return Some(hit);
+                }
+                return Some(AIChatHit::FocusInput);
             }
-            // Send chip is the rightmost ~40px of the input area.
-            let send_x = input_rect.origin.x + input_rect.size.x - 40.0;
-            if point.x >= send_x {
-                return Some(AIChatHit::Send);
+            // Per-turn controls strip — thinking / effort / attach.
+            // Hit-tested before the toolbar so its chips aren't eaten
+            // by the model-chip / send band.
+            if point.y >= controls_top && point.y < toolbar_top {
+                let controls_rect = Rect {
+                    origin: Point2D::new(input_rect.origin.x, controls_top),
+                    size: Point2D::new(input_rect.size.x, CONTROLS_ROW_HEIGHT),
+                };
+                if let Some(hit) = controls_row_hit(controls_rect, point) {
+                    return Some(hit);
+                }
+                return Some(AIChatHit::FocusInput);
+            }
+            // Bottom toolbar strip — its left `MODEL_CHIP_W` is the
+            // model chip (opens / closes the picker), its rightmost
+            // ~40px is the send chip.
+            if point.y >= toolbar_top {
+                if point.x <= input_rect.origin.x + MODEL_CHIP_W {
+                    return Some(AIChatHit::ToggleModelPicker);
+                }
+                let send_x = input_rect.origin.x + input_rect.size.x - 40.0;
+                if point.x >= send_x {
+                    return Some(AIChatHit::Send);
+                }
             }
             return Some(AIChatHit::FocusInput);
         }
@@ -359,8 +433,9 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
         );
 
         // Body — either messages or examples.
+        let input_h = self.input_height();
         let body_top = rect.origin.y + HEADER_HEIGHT;
-        let body_bottom = rect.origin.y + rect.size.y - INPUT_HEIGHT - PAD - 8.0;
+        let body_bottom = rect.origin.y + rect.size.y - input_h - PAD - 8.0;
         let body_rect = Rect {
             origin: Point2D::new(rect.origin.x + PAD, body_top),
             size: Point2D::new(rect.size.x - PAD * 2.0, (body_bottom - body_top).max(0.0)),
@@ -374,7 +449,7 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
 
         // Separator hairline between body and input area
         // (matches the TS panel's bottom-bordered body region).
-        let sep_y = rect.origin.y + rect.size.y - INPUT_HEIGHT;
+        let sep_y = rect.origin.y + rect.size.y - input_h;
         cx.backend.fill_rect(
             Rect {
                 origin: Point2D::new(rect.origin.x + PAD, sep_y),
@@ -422,9 +497,34 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
             );
         }
 
-        // Bottom toolbar — model picker on the left, send + attach
-        // on the right (mirrors the TS panel's bottom row).
-        let toolbar_y = input_rect.origin.y + INPUT_AREA_HEIGHT;
+        // Staged-attachment strip — between the textarea and the
+        // controls row, present only when attachments are staged.
+        let attach_h = self.attachment_row_h();
+        if attach_h > 0.0 {
+            let attach_rect = Rect {
+                origin: Point2D::new(
+                    input_rect.origin.x,
+                    input_rect.origin.y + INPUT_AREA_HEIGHT,
+                ),
+                size: Point2D::new(input_rect.size.x, attach_h),
+            };
+            paint_attachment_row(cx, &self.theme, attach_rect, self.state);
+        }
+
+        // Per-turn controls strip — thinking / effort / attach.
+        let controls_rect = Rect {
+            origin: Point2D::new(
+                input_rect.origin.x,
+                input_rect.origin.y + INPUT_AREA_HEIGHT + attach_h,
+            ),
+            size: Point2D::new(input_rect.size.x, CONTROLS_ROW_HEIGHT),
+        };
+        paint_controls_row(cx, &self.theme, controls_rect, self.state);
+
+        // Bottom toolbar — model picker on the left, send on the
+        // right (mirrors the TS panel's bottom row).
+        let toolbar_y =
+            input_rect.origin.y + INPUT_AREA_HEIGHT + attach_h + CONTROLS_ROW_HEIGHT;
         let toolbar_center_y = toolbar_y + INPUT_TOOLBAR_HEIGHT / 2.0;
         // Model chip — brand logo of the selected model's provider
         // + its display name + a chevron. Click toggles the picker.
@@ -473,14 +573,18 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
             1.4,
         );
 
-        // Right cluster — send button (and attach plus icon).
-        let mut rx = rect.origin.x + rect.size.x - PAD;
+        // Right cluster — send button. (Attach moved to the
+        // controls strip above.)
+        let rx = rect.origin.x + rect.size.x - PAD;
         let send_size = 24.0;
         let send_rect = Rect {
             origin: Point2D::new(rx - send_size, toolbar_center_y - send_size / 2.0),
             size: Point2D::new(send_size, send_size),
         };
-        let send_active = !self.state.input.trim().is_empty();
+        // A turn is sendable with text, with staged attachments, or
+        // both (TS parity: an attachment-only message is valid).
+        let send_active = !self.state.input.trim().is_empty()
+            || !self.state.pending_attachments.is_empty();
         let (send_bg, icon_color) = if send_active {
             (self.theme.primary, self.theme.primary_foreground)
         } else {
@@ -506,17 +610,6 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
             icon_color,
             1.6,
         );
-        rx -= send_size + 8.0;
-        // Attach (paperclip — not yet wired). Use Plus glyph as a
-        // placeholder; lucide-paperclip would be a follow-up.
-        draw_icon(
-            cx.backend,
-            Icon::Plus,
-            Point2D::new(rx - 16.0, toolbar_center_y - 8.0),
-            16.0,
-            self.theme.muted_foreground,
-            1.4,
-        );
 
         // Model-picker dropdown paints last so it sits above the
         // message list / examples / input.
@@ -539,120 +632,7 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
     }
 }
 
-fn paint_examples(cx: &mut PaintCx<'_>, theme: &Theme, rect: Rect, hint_label: &str) {
-    let hint = TextLayout::single_run(
-        hint_label,
-        "system-ui",
-        12.0,
-        to_jian_color(theme.muted_foreground),
-        Point2D::new(0.0, 0.0),
-    );
-    let hint_y = rect.origin.y + HEADER_HEIGHT + 16.0;
-    cx.backend.draw_text(
-        &hint,
-        Point2D::new(rect.origin.x + rect.size.x / 2.0 - 40.0, hint_y),
-    );
-
-    let grid_origin_y = hint_y + 16.0;
-    let card_w = (rect.size.x - PAD * 2.0 - 8.0) / 2.0;
-    let card_h = 70.0;
-    for (i, ex) in EXAMPLES.iter().enumerate() {
-        let col = (i % 2) as f32;
-        let row = (i / 2) as f32;
-        let card = Rect {
-            origin: Point2D::new(
-                rect.origin.x + PAD + col * (card_w + 8.0),
-                grid_origin_y + row * (card_h + 8.0),
-            ),
-            size: Point2D::new(card_w, card_h),
-        };
-        cx.backend.fill_round_rect(card, 8.0, theme.muted);
-        cx.backend.stroke_round_rect(card, 8.0, theme.border, 1.0);
-        let emoji_layout = TextLayout::single_run(
-            ex.emoji,
-            "system-ui",
-            14.0,
-            to_jian_color(theme.foreground),
-            Point2D::new(0.0, 0.0),
-        );
-        cx.backend.draw_text(
-            &emoji_layout,
-            Point2D::new(card.origin.x + 12.0, card.origin.y + 22.0),
-        );
-        let title_layout = TextLayout::single_run(
-            ex.title,
-            "system-ui",
-            12.0,
-            to_jian_color(theme.foreground),
-            Point2D::new(0.0, 0.0),
-        );
-        cx.backend.draw_text(
-            &title_layout,
-            Point2D::new(card.origin.x + 36.0, card.origin.y + 22.0),
-        );
-        let subtitle_layout = TextLayout::single_run(
-            ex.subtitle,
-            "system-ui",
-            11.0,
-            to_jian_color(theme.muted_foreground),
-            Point2D::new(0.0, 0.0),
-        );
-        cx.backend.draw_text(
-            &subtitle_layout,
-            Point2D::new(card.origin.x + 36.0, card.origin.y + 42.0),
-        );
-    }
-}
-
-fn paint_messages(
-    cx: &mut PaintCx<'_>,
-    theme: &Theme,
-    body_rect: Rect,
-    messages: &[op_editor_core::chat::ChatMessage],
-) {
-    cx.backend.save();
-    cx.backend.clip_rect(body_rect);
-    let row_h = 38.0;
-    let max_visible = (body_rect.size.y / row_h).floor() as usize;
-    let start = messages.len().saturating_sub(max_visible.max(1));
-    let mut y = body_rect.origin.y + 4.0;
-    for msg in &messages[start..] {
-        let bubble_rect = match msg.role {
-            ChatRole::User => Rect {
-                origin: Point2D::new(body_rect.origin.x + body_rect.size.x * 0.25, y),
-                size: Point2D::new(body_rect.size.x * 0.75 - 4.0, row_h - 6.0),
-            },
-            ChatRole::Assistant => Rect {
-                origin: Point2D::new(body_rect.origin.x, y),
-                size: Point2D::new(body_rect.size.x * 0.75, row_h - 6.0),
-            },
-        };
-        let bg = match msg.role {
-            ChatRole::User => theme.primary,
-            ChatRole::Assistant => theme.muted,
-        };
-        let fg = match msg.role {
-            ChatRole::User => theme.primary_foreground,
-            ChatRole::Assistant => theme.foreground,
-        };
-        cx.backend.fill_round_rect(bubble_rect, 8.0, bg);
-        let layout = TextLayout::single_run(
-            &msg.content,
-            "system-ui",
-            12.0,
-            to_jian_color(fg),
-            Point2D::new(0.0, 0.0),
-        );
-        cx.backend.draw_text(
-            &layout,
-            Point2D::new(bubble_rect.origin.x + 10.0, bubble_rect.origin.y + 21.0),
-        );
-        y += row_h;
-    }
-    cx.backend.restore();
-}
-
-fn to_jian_color(c: Color) -> jian_core::scene::Color {
+pub(crate) fn to_jian_color(c: Color) -> jian_core::scene::Color {
     fn ch(v: f32) -> u8 {
         (v.clamp(0.0, 1.0) * 255.0).round() as u8
     }
@@ -681,13 +661,31 @@ mod tests {
         assert_eq!(EXAMPLES.len(), 4);
     }
 
+    /// Y-coordinate of the textarea's vertical center.
+    fn textarea_center_y() -> f32 {
+        AI_CHAT_HEIGHT - INPUT_BASE_HEIGHT + 1.0 + INPUT_AREA_HEIGHT / 2.0
+    }
+
+    /// Y-coordinate of the per-turn controls strip's vertical center.
+    fn controls_center_y() -> f32 {
+        AI_CHAT_HEIGHT - INPUT_BASE_HEIGHT + 1.0 + INPUT_AREA_HEIGHT + CONTROLS_ROW_HEIGHT / 2.0
+    }
+
+    /// Y-coordinate of the bottom toolbar's vertical center.
+    fn toolbar_center_y() -> f32 {
+        AI_CHAT_HEIGHT - INPUT_BASE_HEIGHT + 1.0
+            + INPUT_AREA_HEIGHT
+            + CONTROLS_ROW_HEIGHT
+            + INPUT_TOOLBAR_HEIGHT / 2.0
+    }
+
     #[test]
     fn hit_test_resolves_input_focus() {
         let s = EditorState::new();
         let panel = AIChatPlaceholder::from_editor(&s);
         let rect = Rect::xywh(0.0, 0.0, AI_CHAT_WIDTH, AI_CHAT_HEIGHT);
-        // Click near the input center → FocusInput.
-        let p = Point2D::new(60.0, AI_CHAT_HEIGHT - PAD - INPUT_HEIGHT / 2.0);
+        // Click near the textarea center → FocusInput.
+        let p = Point2D::new(120.0, textarea_center_y());
         assert_eq!(panel.hit_test(rect, p), Some(AIChatHit::FocusInput));
     }
 
@@ -697,8 +695,51 @@ mod tests {
         let panel = AIChatPlaceholder::from_editor(&s);
         let rect = Rect::xywh(0.0, 0.0, AI_CHAT_WIDTH, AI_CHAT_HEIGHT);
         let send_x = AI_CHAT_WIDTH - PAD - 20.0;
-        let p = Point2D::new(send_x, AI_CHAT_HEIGHT - PAD - INPUT_HEIGHT / 2.0);
+        let p = Point2D::new(send_x, toolbar_center_y());
         assert_eq!(panel.hit_test(rect, p), Some(AIChatHit::Send));
+    }
+
+    #[test]
+    fn hit_test_resolves_controls_strip() {
+        let s = EditorState::new();
+        let panel = AIChatPlaceholder::from_editor(&s);
+        let rect = Rect::xywh(0.0, 0.0, AI_CHAT_WIDTH, AI_CHAT_HEIGHT);
+        let y = controls_center_y();
+        // Thinking chip sits at the left edge of the input box (PAD).
+        assert_eq!(
+            panel.hit_test(rect, Point2D::new(PAD + 8.0, y)),
+            Some(AIChatHit::CycleThinking)
+        );
+        // Model chip still resolves in the toolbar below.
+        assert_eq!(
+            panel.hit_test(rect, Point2D::new(PAD + 8.0, toolbar_center_y())),
+            Some(AIChatHit::ToggleModelPicker)
+        );
+    }
+
+    #[test]
+    fn hit_test_resolves_attachment_chip_at_painted_position() {
+        // With an attachment staged, the input block grows by the
+        // attachment row. The click must land where `paint` draws the
+        // chip — a regression guard for hit-test / paint y-alignment.
+        let mut s = EditorState::new();
+        s.chat.add_attachment(op_editor_core::chat::ChatAttachment {
+            name: "ref.png".into(),
+            media_type: "image/png".into(),
+            data: vec![1],
+        });
+        let panel = AIChatPlaceholder::from_editor(&s);
+        let rect = Rect::xywh(0.0, 0.0, AI_CHAT_WIDTH, AI_CHAT_HEIGHT);
+        // paint: input block top = bottom - input_h + 1; the
+        // attachment row sits right below the textarea.
+        let input_h = INPUT_BASE_HEIGHT + ATTACHMENT_ROW_HEIGHT;
+        let input_top = AI_CHAT_HEIGHT - input_h + 1.0;
+        let attach_row_center = input_top + INPUT_AREA_HEIGHT + ATTACHMENT_ROW_HEIGHT / 2.0;
+        let p = Point2D::new(PAD + 30.0, attach_row_center);
+        assert_eq!(
+            panel.hit_test(rect, p),
+            Some(AIChatHit::RemoveAttachment(0))
+        );
     }
 
     #[test]

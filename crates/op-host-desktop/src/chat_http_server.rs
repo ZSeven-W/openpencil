@@ -100,9 +100,27 @@ impl HttpServerProvider {
     }
 }
 
+/// One attachment in the HTTP request body — base64-encoded so the
+/// JSON payload stays text. Field names mirror the TS chat wire
+/// (`ChatAttachmentWire`).
+#[derive(Serialize)]
+struct HttpAttachment {
+    name: String,
+    #[serde(rename = "mediaType")]
+    media_type: String,
+    /// Base64-encoded file bytes (no `data:` URL prefix).
+    data: String,
+}
+
 #[derive(Serialize)]
 struct ChatBody<'a> {
     message: &'a str,
+    /// Thinking-mode wire token (`adaptive` / `disabled` / `enabled`).
+    thinking: &'a str,
+    /// Reasoning-effort wire token (`low` / `medium` / `high` / `max`).
+    effort: &'a str,
+    #[serde(skip_serializing_if = "<[_]>::is_empty")]
+    attachments: &'a [HttpAttachment],
 }
 
 impl ChatProvider for HttpServerProvider {
@@ -116,6 +134,19 @@ impl ChatProvider for HttpServerProvider {
         let chat_path = self.chat_path.clone();
         let timeout_dur = self.listen_timeout;
         let prompt = request.user_message;
+        // Per-turn knobs travel as body fields. Attachments are
+        // base64-encoded so the JSON payload stays text.
+        let thinking_str = request.thinking.as_str();
+        let effort_str = request.effort.as_str();
+        let http_attachments: Vec<HttpAttachment> = request
+            .attachments
+            .iter()
+            .map(|a| HttpAttachment {
+                name: a.name.clone(),
+                media_type: a.media_type.clone(),
+                data: crate::chat_attachment::attachment_to_base64(a),
+            })
+            .collect();
         let (tx, rx) = mpsc::channel::<ChatDelta>(64);
         shared_runtime().spawn(async move {
             // Spawn `<binary> <serve_args...>`. stdin closed, stdout
@@ -205,7 +236,12 @@ impl ChatProvider for HttpServerProvider {
             // POST the chat request and stream the response.
             let base = format!("http://127.0.0.1:{port}");
             let url = format!("{base}{chat_path}");
-            let body = ChatBody { message: &prompt };
+            let body = ChatBody {
+                message: &prompt,
+                thinking: thinking_str,
+                effort: effort_str,
+                attachments: &http_attachments,
+            };
             let client = match reqwest::Client::builder()
                 .timeout(Duration::from_secs(120))
                 .build()

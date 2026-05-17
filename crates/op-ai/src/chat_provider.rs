@@ -192,6 +192,42 @@ impl EffortLevel {
             EffortLevel::Max => "max",
         }
     }
+
+    /// Extended-thinking token budget a provider with a numeric knob
+    /// (Claude's `max_thinking_tokens`, …) should use for this effort.
+    /// The range tracks TS `ai-runtime-config.ts` — Low is a modest
+    /// budget, Max saturates a typical extended-thinking ceiling.
+    pub fn budget_tokens(self) -> u32 {
+        match self {
+            EffortLevel::Low => 4096,
+            EffortLevel::Medium => 10_000,
+            EffortLevel::High => 24_000,
+            EffortLevel::Max => 32_000,
+        }
+    }
+}
+
+/// A file the user attached to a chat turn — typically a pasted or
+/// picked image. Mirrors TS `ChatAttachment` (`apps/web/.../ai`),
+/// minus the UI-only `id` / `size` fields. `data` is the raw decoded
+/// bytes; providers base64-encode (Claude image blocks) or spill to a
+/// temp file (CLI subprocesses) as their wire format demands.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ChatAttachment {
+    /// Original file name, e.g. `screenshot.png`.
+    pub name: String,
+    /// MIME type, e.g. `image/png`.
+    pub media_type: String,
+    /// Raw file bytes (not base64).
+    pub data: Vec<u8>,
+}
+
+impl ChatAttachment {
+    /// True when this attachment is an image — the only kind every
+    /// provider can ingest (as an image content block).
+    pub fn is_image(&self) -> bool {
+        self.media_type.starts_with("image/")
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -203,6 +239,9 @@ pub struct ChatRequest {
     pub thinking: ThinkingMode,
     /// Reasoning-effort hint for this turn (default `Low`, TS parity).
     pub effort: EffortLevel,
+    /// Files attached to this turn (images, …). Empty for a plain
+    /// text turn. Each provider maps these onto its own wire format.
+    pub attachments: Vec<ChatAttachment>,
 }
 
 /// Provider abstraction the widget host calls. Implementations live
@@ -331,5 +370,39 @@ mod tests {
         assert_eq!(EffortLevel::Medium.as_str(), "medium");
         assert_eq!(EffortLevel::High.as_str(), "high");
         assert_eq!(EffortLevel::Max.as_str(), "max");
+    }
+
+    #[test]
+    fn effort_budget_tokens_climbs_with_level() {
+        // A provider with a numeric thinking knob scales its budget
+        // with effort; the table is monotonically increasing.
+        assert_eq!(EffortLevel::Low.budget_tokens(), 4096);
+        assert_eq!(EffortLevel::Medium.budget_tokens(), 10_000);
+        assert_eq!(EffortLevel::High.budget_tokens(), 24_000);
+        assert_eq!(EffortLevel::Max.budget_tokens(), 32_000);
+        assert!(EffortLevel::Low.budget_tokens() < EffortLevel::Medium.budget_tokens());
+        assert!(EffortLevel::High.budget_tokens() < EffortLevel::Max.budget_tokens());
+    }
+
+    #[test]
+    fn chat_request_attachments_default_empty() {
+        let req = ChatRequest::default();
+        assert!(req.attachments.is_empty());
+    }
+
+    #[test]
+    fn chat_attachment_is_image_checks_media_type() {
+        let png = ChatAttachment {
+            name: "shot.png".into(),
+            media_type: "image/png".into(),
+            data: vec![1, 2, 3],
+        };
+        assert!(png.is_image());
+        let txt = ChatAttachment {
+            name: "notes.txt".into(),
+            media_type: "text/plain".into(),
+            data: vec![],
+        };
+        assert!(!txt.is_image());
     }
 }

@@ -80,6 +80,8 @@ pub mod agent_settings_panel;
 pub mod agent_settings_system;
 pub mod ai_chat_model_picker;
 pub mod ai_chat_panel;
+pub mod ai_chat_panel_controls;
+pub mod ai_chat_panel_paint;
 pub mod align_toolbar;
 pub mod color_picker;
 pub mod export_dialog;

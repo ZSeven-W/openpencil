@@ -35,6 +35,12 @@ op-mcp = { path = "../op-mcp" }
 # extracted into op-ai; the `src/chat_*.rs` real transports + the
 # model-discovery path import them through `op_ai::*`.
 op-ai = { path = "../op-ai" }
+# AI skill engine — the BuiltIn agent provider resolves
+# generation-phase prompt skills through it (`chat_runtime.rs`).
+op-ai-skills = { path = "../op-ai-skills" }
+# ACP client — the `AcpProvider` chat backend (`chat_acp.rs`) drives
+# third-party Agent Client Protocol agents through it.
+op-acp = { path = "../op-acp" }
 # Canonical `.op` (PenDocument) → shell `Document` loader / adapter.
 # Extracted out of this binary into a shared library crate so library
 # crates (op-host-native) can reuse the conversion;
@@ -78,6 +84,10 @@ winit = { version = "0.30.13", default-features = false, features = [
 serde = { workspace = true }
 serde_json = { workspace = true }
 rfd = "0.14"
+# Base64-encodes chat image attachments for providers that take
+# inline image content blocks (Claude SDK) or a base64 body field
+# (HTTP-server transport). Same pure-Rust crate op-figma uses.
+base64 = "0.22"
 # 2D affine transforms used by PNG export's bounds walker so nested
 # rotated containers don't clip their children. Pinned to the same
 # version shell-core uses for `Point2D = glam::Vec2`.
