@@ -78,6 +78,10 @@ pub struct NodePayload {
     /// Parallel to `points` for `Path` nodes; empty otherwise.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub path_anchors: Vec<AnchorPayload>,
+    /// Whether a `Path` node's outline is closed (last anchor links
+    /// back to the first).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub path_closed: bool,
     /// Text size in doc-px. 0 = use the renderer's default 13 px.
     /// Text-only.
     #[serde(default)]

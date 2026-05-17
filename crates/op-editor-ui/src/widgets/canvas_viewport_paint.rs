@@ -136,31 +136,50 @@ pub(crate) fn cubic_point(p0: Point2D, p1: Point2D, p2: Point2D, p3: Point2D, t:
     )
 }
 
+/// One flattened segment `a → b` appended onto `out` — a cubic when
+/// either endpoint carries a handle, else a straight line.
+fn flatten_segment(
+    a: &crate::layout_scene::SceneAnchor,
+    b: &crate::layout_scene::SceneAnchor,
+    out: &mut Vec<Point2D>,
+) {
+    let (p0, p3) = (a.pos, b.pos);
+    let p1 = a.handle_out.unwrap_or(p0);
+    let p2 = b.handle_in.unwrap_or(p3);
+    if p1 == p0 && p2 == p3 {
+        out.push(p3); // straight segment
+    } else {
+        for i in 1..=16 {
+            out.push(cubic_point(p0, p1, p2, p3, i as f32 / 16.0));
+        }
+    }
+}
+
 /// Flatten a Path scene node into a doc-space polyline — cubic
 /// segments whose endpoints carry handles are tessellated; a
 /// handle-free path falls back to the straight `points` polyline.
+/// A closed path appends the last-anchor → first-anchor segment.
 pub(crate) fn flatten_path(node: &SceneNode) -> Vec<Point2D> {
     let anchors = &node.path_anchors;
     let has_handle = anchors
         .iter()
         .any(|a| a.handle_in.is_some() || a.handle_out.is_some());
     if anchors.len() < 2 || !has_handle {
-        return node.points.clone();
+        let mut out = node.points.clone();
+        // Closed handle-free path — link the polyline back to its
+        // start so the closing edge is drawn.
+        if node.path_closed && out.len() > 2 {
+            out.push(out[0]);
+        }
+        return out;
     }
-    let mut out = Vec::with_capacity(anchors.len() * 16);
+    let mut out = Vec::with_capacity(anchors.len() * 16 + 16);
     out.push(anchors[0].pos);
     for pair in anchors.windows(2) {
-        let (a, b) = (&pair[0], &pair[1]);
-        let (p0, p3) = (a.pos, b.pos);
-        let p1 = a.handle_out.unwrap_or(p0);
-        let p2 = b.handle_in.unwrap_or(p3);
-        if p1 == p0 && p2 == p3 {
-            out.push(p3); // straight segment
-        } else {
-            for i in 1..=16 {
-                out.push(cubic_point(p0, p1, p2, p3, i as f32 / 16.0));
-            }
-        }
+        flatten_segment(&pair[0], &pair[1], &mut out);
+    }
+    if node.path_closed {
+        flatten_segment(&anchors[anchors.len() - 1], &anchors[0], &mut out);
     }
     out
 }
