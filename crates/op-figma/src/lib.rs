@@ -20,6 +20,8 @@ mod mappers;
 #[allow(dead_code)]
 mod text_mapper;
 #[allow(dead_code)]
+mod tree;
+#[allow(dead_code)]
 mod vector_decoder;
 #[allow(dead_code)]
 mod zip_reader;
