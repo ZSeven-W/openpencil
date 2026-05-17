@@ -199,7 +199,15 @@ fn omitted_message_fields_are_absent() {
 #[test]
 fn var_float_round_trips() {
     let mut w = ByteWriter::default();
-    let cases = [0.0f32, 1.0, -1.0, 3.14159, 1e-6, -42.5, 65536.0];
+    let cases = [
+        0.0f32,
+        1.0,
+        -1.0,
+        std::f32::consts::PI,
+        1e-6,
+        -42.5,
+        65536.0,
+    ];
     for v in cases {
         w.var_float(v);
     }

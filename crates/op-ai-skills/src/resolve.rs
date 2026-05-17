@@ -176,7 +176,6 @@ mod tests {
             memory: crate::types::ResolveMemory {
                 document_context: Some(DesignContext::default()),
                 generation_history: history("/a.op", 3),
-                ..Default::default()
             },
             ..Default::default()
         };

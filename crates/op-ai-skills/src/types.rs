@@ -25,6 +25,9 @@ impl Phase {
     }
 
     /// Parse a phase token (as it appears in skill frontmatter).
+    // Token parser — `Option`-returning, not the `Result`-shaped
+    // `FromStr`, so the trait does not apply.
+    #[allow(clippy::should_implement_trait)]
     pub fn from_str(s: &str) -> Option<Phase> {
         match s.trim() {
             "planning" => Some(Phase::Planning),
@@ -80,6 +83,8 @@ pub enum SkillCategory {
 impl SkillCategory {
     /// Parse a category token from skill frontmatter; defaults to
     /// `Domain` for an unknown / missing value (TS parity).
+    // Infallible token parser, not the `Result`-shaped `FromStr`.
+    #[allow(clippy::should_implement_trait)]
     pub fn from_str(s: &str) -> SkillCategory {
         match s.trim() {
             "base" => SkillCategory::Base,

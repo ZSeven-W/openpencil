@@ -65,7 +65,8 @@ pub(crate) fn path_anchor_bounds(anchors: &[PenPathAnchor], closed: bool) -> (f6
             );
         }
     }
-    drop(acc);
+    // `acc`'s captures (`&mut min_x` …) are released by NLL at its
+    // last call above — the accumulators are free to read here.
     if !min_x.is_finite() {
         return (0.0, 0.0, 0.0, 0.0);
     }

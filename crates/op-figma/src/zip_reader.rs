@@ -62,12 +62,9 @@ fn find_eocd(buf: &[u8]) -> Option<usize> {
     }
     // EOCD is 22 bytes + up to 64 KiB comment.
     let scan_start = buf.len().saturating_sub(22 + 0xffff);
-    for off in (scan_start..=buf.len() - 22).rev() {
-        if u32_le(buf, off) == Some(EOCD_SIG) {
-            return Some(off);
-        }
-    }
-    None
+    (scan_start..=buf.len() - 22)
+        .rev()
+        .find(|&off| u32_le(buf, off) == Some(EOCD_SIG))
 }
 
 /// Parse a ZIP archive into its decompressed entries. Entry order

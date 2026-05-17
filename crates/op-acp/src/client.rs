@@ -58,15 +58,12 @@ impl AcpConnection {
             }
         });
 
-        // Reader task — classify + dispatch every inbound frame.
+        // Reader task — classify + dispatch every inbound frame until
+        // EOF or a transport failure ends the stream.
         let reader = tokio::spawn(async move {
             let mut buf = BufReader::new(read);
-            loop {
-                match read_frame(&mut buf).await {
-                    Ok(Some(value)) => dispatch_inbound(value, &pending, &notif_tx, &reply_tx),
-                    // EOF or transport failure — stop reading.
-                    Ok(None) | Err(_) => break,
-                }
+            while let Ok(Some(value)) = read_frame(&mut buf).await {
+                dispatch_inbound(value, &pending, &notif_tx, &reply_tx);
             }
             // Connection closed: fail every in-flight request now so
             // callers get `Closed` immediately instead of stalling
