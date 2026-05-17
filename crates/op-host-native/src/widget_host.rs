@@ -148,6 +148,10 @@ pub struct WidgetHostNative {
     /// Each `apply_cursor_move` snaps the anchor to the current
     /// document-space cursor; release commits a history snapshot.
     pub(in crate::widget_host) path_anchor_drag: Option<PathAnchorDragState>,
+    /// Active ellipse arc-handle drag — set when the user presses on
+    /// a start / sweep / inner-radius handle of a selected Ellipse.
+    /// Each move re-applies `SetEllipseArc`; release commits history.
+    pub(in crate::widget_host) arc_handle_drag: Option<ArcHandleDragState>,
     /// Counter for minting fresh `NodeId`s for newly-created nodes.
     /// Bumped past the highest sample id so new + sample nodes
     /// never collide on the same key.
@@ -294,6 +298,19 @@ pub(in crate::widget_host) struct PathAnchorDragState {
     pub(in crate::widget_host) pre_drag_snapshot: op_editor_core::EditorSnapshot,
 }
 
+/// Ellipse arc-handle drag — tracks which arc handle of which
+/// Ellipse is being dragged. Move re-applies `SetEllipseArc`;
+/// release commits a history snapshot only when the arc changed.
+#[derive(Debug, Clone)]
+pub(in crate::widget_host) struct ArcHandleDragState {
+    pub(in crate::widget_host) node_id: op_editor_core::NodeId,
+    pub(in crate::widget_host) handle: op_editor_ui::widgets::ArcHandle,
+    /// Set true on the first cursor-move that mutates the arc.
+    pub(in crate::widget_host) moved: bool,
+    /// Snapshot captured at drag-start; pushed only if `moved`.
+    pub(in crate::widget_host) pre_drag_snapshot: op_editor_core::EditorSnapshot,
+}
+
 #[derive(Debug, Clone, Copy)]
 pub(in crate::widget_host) struct ChatDragState {
     /// Pointer offset within the panel rect when the drag began.
@@ -322,6 +339,7 @@ impl WidgetHostNative {
             panel_resize: None,
             node_drag: None,
             path_anchor_drag: None,
+            arc_handle_drag: None,
             handle_drag: None,
             rotate_drag: None,
             create_drag: None,
