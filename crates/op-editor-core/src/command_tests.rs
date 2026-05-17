@@ -847,3 +847,60 @@ fn align_selected_via_command() {
         action: "bogus".into()
     }));
 }
+
+// --- AddNodeEffect / RemoveNodeEffect --------------------------------
+
+#[test]
+fn add_node_effect_appends_to_the_node() {
+    let mut s = state_with(vec![rect("n1", "r", 0.0, 0.0, 40.0, 40.0)]);
+    assert!(s.apply(EditorCommand::AddNodeEffect {
+        node_id: id("n1"),
+        kind: "shadow".into(),
+    }));
+    assert!(s.apply(EditorCommand::AddNodeEffect {
+        node_id: id("n1"),
+        kind: "blur".into(),
+    }));
+    match find_node(s.active_children(), &id("n1")).unwrap() {
+        PenNode::Rectangle(r) => {
+            assert_eq!(r.container.effects.as_ref().map(|e| e.len()), Some(2));
+        }
+        other => panic!("expected rect, got {other:?}"),
+    }
+}
+
+#[test]
+fn add_node_effect_rejects_unknown_kind() {
+    let mut s = state_with(vec![rect("n1", "r", 0.0, 0.0, 10.0, 10.0)]);
+    assert!(!s.apply(EditorCommand::AddNodeEffect {
+        node_id: id("n1"),
+        kind: "glow".into(),
+    }));
+}
+
+#[test]
+fn remove_node_effect_drops_and_clears_when_empty() {
+    let mut s = state_with(vec![rect("n1", "r", 0.0, 0.0, 10.0, 10.0)]);
+    assert!(s.apply(EditorCommand::AddNodeEffect {
+        node_id: id("n1"),
+        kind: "shadow".into(),
+    }));
+    assert!(s.apply(EditorCommand::RemoveNodeEffect {
+        node_id: id("n1"),
+        index: 0,
+    }));
+    match find_node(s.active_children(), &id("n1")).unwrap() {
+        // The list is cleared back to `None` once the last effect goes.
+        PenNode::Rectangle(r) => assert!(r.container.effects.is_none()),
+        other => panic!("expected rect, got {other:?}"),
+    }
+}
+
+#[test]
+fn remove_node_effect_rejects_out_of_range() {
+    let mut s = state_with(vec![rect("n1", "r", 0.0, 0.0, 10.0, 10.0)]);
+    assert!(!s.apply(EditorCommand::RemoveNodeEffect {
+        node_id: id("n1"),
+        index: 0,
+    }));
+}
