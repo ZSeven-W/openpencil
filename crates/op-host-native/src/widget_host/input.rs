@@ -341,13 +341,30 @@ impl WidgetHostNative {
                     d.moved,
                 )
             };
+            // `is_move` uses the raw (rotation-independent) cursor —
+            // motion detection is frame-agnostic.
             let is_move = (doc.x - start.x).abs() > 0.001 || (doc.y - start.y).abs() > 0.001;
+            // Un-rotate the cursor into the path's local frame so
+            // anchor / handle coords are written rotation-free.
+            let local = match self
+                .layout_scene
+                .active_page()
+                .and_then(|p| p.find(id.as_str()))
+                .filter(|n| n.rotation.abs() > f32::EPSILON)
+                .map(|n| (n.rotation, n.aggregate_bounds()))
+            {
+                Some((rot, b)) => {
+                    let c = Point2D::new(b.origin.x + b.size.x / 2.0, b.origin.y + b.size.y / 2.0);
+                    op_editor_ui::widgets::rotate_point(doc, c, -rot)
+                }
+                None => doc,
+            };
             match target {
                 AnchorDragTarget::Anchor => {
                     self.editor_state.set_path_anchor_position(
                         id,
                         idx,
-                        (doc.x as f64, doc.y as f64),
+                        (local.x as f64, local.y as f64),
                     );
                 }
                 AnchorDragTarget::Handle(side) => {
@@ -363,7 +380,10 @@ impl WidgetHostNative {
                         self.editor_state
                             .set_path_anchor_point_type(id.clone(), idx, pt);
                     }
-                    let delta = ((doc.x - anchor_doc.x) as f64, (doc.y - anchor_doc.y) as f64);
+                    let delta = (
+                        (local.x - anchor_doc.x) as f64,
+                        (local.y - anchor_doc.y) as f64,
+                    );
                     self.editor_state
                         .set_path_anchor_handle(id, idx, side, Some(delta));
                 }
@@ -382,15 +402,19 @@ impl WidgetHostNative {
             let (cx0, cy0) = self.canvas_origin();
             let canvas_local = Point2D::new(x - cx0, y - cy0);
             let doc = self.editor_state.viewport.to_document(canvas_local);
-            let (id, handle) = {
+            let (id, handle, start) = {
                 let d = self.arc_handle_drag.as_ref().unwrap();
-                (d.node_id.clone(), d.handle)
+                (d.node_id.clone(), d.handle, d.start_doc)
             };
             if let Some(cmd) = self.arc_drag_command(&id, handle, doc) {
                 if self.editor_state.apply(cmd) {
                     self.mark_dirty();
-                    if let Some(d) = self.arc_handle_drag.as_mut() {
-                        d.moved = true;
+                    // Only count the drag as moved once the cursor has
+                    // travelled — a press-release pushes no undo entry.
+                    if (doc.x - start.x).abs() > 0.001 || (doc.y - start.y).abs() > 0.001 {
+                        if let Some(d) = self.arc_handle_drag.as_mut() {
+                            d.moved = true;
+                        }
                     }
                 }
             }
@@ -597,10 +621,17 @@ impl WidgetHostNative {
         if b.size.x <= 0.0 || b.size.y <= 0.0 {
             return None;
         }
+        let centre = Point2D::new(b.origin.x + b.size.x / 2.0, b.origin.y + b.size.y / 2.0);
+        // Un-rotate the cursor into the ellipse's local frame.
+        let doc = if node.rotation.abs() > f32::EPSILON {
+            op_editor_ui::widgets::rotate_point(doc, centre, -node.rotation)
+        } else {
+            doc
+        };
         // Cursor offset from the ellipse centre, normalised by the
         // radii so the angle is the same convention the painter uses.
-        let nx = (doc.x - (b.origin.x + b.size.x / 2.0)) / (b.size.x / 2.0);
-        let ny = (doc.y - (b.origin.y + b.size.y / 2.0)) / (b.size.y / 2.0);
+        let nx = (doc.x - centre.x) / (b.size.x / 2.0);
+        let ny = (doc.y - centre.y) / (b.size.y / 2.0);
         let old_start = node.arc_start_angle.unwrap_or(0.0);
         let old_sweep = node.arc_sweep_angle.unwrap_or(360.0);
         Some(match handle {

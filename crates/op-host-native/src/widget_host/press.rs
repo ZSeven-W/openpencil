@@ -570,6 +570,7 @@ impl WidgetHostNative {
                     self.arc_handle_drag = Some(super::ArcHandleDragState {
                         node_id: op_editor_core::NodeId::new(&node_id),
                         handle,
+                        start_doc: doc_point,
                         moved: false,
                         pre_drag_snapshot: pre,
                     });

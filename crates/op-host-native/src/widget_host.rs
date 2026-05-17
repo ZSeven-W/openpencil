@@ -323,7 +323,10 @@ pub(in crate::widget_host) struct PathAnchorDragState {
 pub(in crate::widget_host) struct ArcHandleDragState {
     pub(in crate::widget_host) node_id: op_editor_core::NodeId,
     pub(in crate::widget_host) handle: op_editor_ui::widgets::ArcHandle,
-    /// Set true on the first cursor-move that mutates the arc.
+    /// Press cursor doc point — the move handler gates `moved` on
+    /// real motion from here so a press-release pushes no undo entry.
+    pub(in crate::widget_host) start_doc: op_editor_ui::Point2D,
+    /// Set true on the first cursor-move that actually moves the arc.
     pub(in crate::widget_host) moved: bool,
     /// Snapshot captured at drag-start; pushed only if `moved`.
     pub(in crate::widget_host) pre_drag_snapshot: op_editor_core::EditorSnapshot,

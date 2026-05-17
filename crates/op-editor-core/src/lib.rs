@@ -27,6 +27,7 @@ pub mod host_support;
 pub mod mutators;
 pub mod node_id;
 pub mod page_mutators;
+pub mod path_bounds;
 pub mod pen;
 pub mod pen_node_ext;
 pub mod rename;

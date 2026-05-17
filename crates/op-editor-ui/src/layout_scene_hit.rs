@@ -176,7 +176,29 @@ fn point_in_node(node: &SceneNode, local: Point2D, bounds: Rect, zoom: f32) -> b
         NodeKind::Ellipse => {
             let dx = (local.x - cx) / rx;
             let dy = (local.y - cy) / ry;
-            dx * dx + dy * dy <= 1.0
+            let r2 = dx * dx + dy * dy;
+            if r2 > 1.0 {
+                return false;
+            }
+            // Arc ellipse: also require the point inside the pie /
+            // donut sector so a missing wedge is not selectable.
+            let inner = node.arc_inner_radius.unwrap_or(0.0).clamp(0.0, 1.0);
+            let has_arc =
+                node.arc_start_angle.is_some() || node.arc_sweep_angle.is_some() || inner > 0.001;
+            if !has_arc {
+                return true;
+            }
+            let sweep = node.arc_sweep_angle.unwrap_or(360.0);
+            if sweep.abs() < 359.9 {
+                let start = node.arc_start_angle.unwrap_or(0.0);
+                // Angle of the point, normalised into [0, sweep).
+                let ang = dy.atan2(dx).to_degrees();
+                let rel = (ang - start).rem_euclid(360.0);
+                if rel > sweep.abs() {
+                    return false;
+                }
+            }
+            r2 >= inner * inner
         }
         NodeKind::Polygon => {
             // Triangle vertices: top-center, bottom-left,

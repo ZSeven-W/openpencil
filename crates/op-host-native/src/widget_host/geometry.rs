@@ -396,7 +396,14 @@ impl WidgetHostNative {
         let (cx0, cy0, _cw, _ch) = self.canvas_region(viewport_w, viewport_h);
         let zoom = self.editor_state.viewport.zoom.max(0.0001);
         let canvas_local = Point2D::new(x - cx0, y - cy0);
-        let doc = self.editor_state.viewport.to_document(canvas_local);
+        let mut doc = self.editor_state.viewport.to_document(canvas_local);
+        // Un-rotate the cursor into the node's local frame — handle
+        // positions are stored unrotated but the path paints rotated.
+        if node.rotation.abs() > f32::EPSILON {
+            let b = node.aggregate_bounds();
+            let centre = Point2D::new(b.origin.x + b.size.x / 2.0, b.origin.y + b.size.y / 2.0);
+            doc = op_editor_ui::widgets::rotate_point(doc, centre, -node.rotation);
+        }
         // ~7 screen-px grab radius, expressed in doc space.
         let r2 = 49.0 / (zoom * zoom);
         let hit = |p: Point2D| (doc.x - p.x).powi(2) + (doc.y - p.y).powi(2) <= r2;
@@ -452,7 +459,13 @@ impl WidgetHostNative {
         let (cx0, cy0, _cw, _ch) = self.canvas_region(viewport_w, viewport_h);
         let zoom = self.editor_state.viewport.zoom.max(0.0001);
         let canvas_local = Point2D::new(x - cx0, y - cy0);
-        let doc_point = self.editor_state.viewport.to_document(canvas_local);
+        let mut doc_point = self.editor_state.viewport.to_document(canvas_local);
+        // Un-rotate the cursor into the ellipse's local frame.
+        if node.rotation.abs() > f32::EPSILON {
+            let b = node.bounds;
+            let centre = Point2D::new(b.origin.x + b.size.x / 2.0, b.origin.y + b.size.y / 2.0);
+            doc_point = op_editor_ui::widgets::rotate_point(doc_point, centre, -node.rotation);
+        }
         // ~7 screen-px grab radius, expressed in doc space.
         let r2 = 49.0 / (zoom * zoom);
         for (handle, p) in handles {

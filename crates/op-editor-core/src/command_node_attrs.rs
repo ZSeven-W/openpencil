@@ -310,7 +310,7 @@ impl EditorState {
         sweep_angle: Option<f64>,
         inner_radius: Option<f64>,
     ) -> bool {
-        if !node_id.is_real() {
+        if !node_id.is_real() || !self.is_editable(node_id) {
             return false;
         }
         if start_angle.is_none() && sweep_angle.is_none() && inner_radius.is_none() {

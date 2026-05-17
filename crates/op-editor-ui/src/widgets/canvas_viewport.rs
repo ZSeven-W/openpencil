@@ -53,6 +53,16 @@ pub enum SelectionHandle {
 /// 4 selection corners. Matches the TS `ROTATE_OUTER_RADIUS`.
 const ROTATE_OUTER_RADIUS: f32 = 16.0;
 
+/// Rotate `p` by `radians` (clockwise, screen y-down) about `center`.
+/// Used by the host to un-rotate a cursor point into a rotated
+/// node's local frame before hit-testing its handles.
+pub fn rotate_point(p: Point2D, center: Point2D, radians: f32) -> Point2D {
+    let (s, c) = radians.sin_cos();
+    let dx = p.x - center.x;
+    let dy = p.y - center.y;
+    Point2D::new(center.x + dx * c - dy * s, center.y + dx * s + dy * c)
+}
+
 /// Screen-px offset of a "ghost" handle dot from its anchor when the
 /// handle is unset — far enough from the anchor body to grab.
 pub const PATH_HANDLE_GHOST_PX: f32 = 26.0;
@@ -520,6 +530,19 @@ impl<'a> Widget for CanvasViewport<'a> {
                             rect.origin.y + viewport.pan_y + p.y * zoom,
                         )
                     };
+                    // Rotate the overlay to match the rotated node so
+                    // handles sit on the painted path (handle coords
+                    // are in the node's unrotated local frame).
+                    let rotated = node.rotation.abs() > f32::EPSILON;
+                    if rotated {
+                        let b = node.aggregate_bounds();
+                        let pivot = to_screen(Point2D::new(
+                            b.origin.x + b.size.x / 2.0,
+                            b.origin.y + b.size.y / 2.0,
+                        ));
+                        cx.backend.save();
+                        cx.backend.rotate(node.rotation, pivot);
+                    }
                     let dot = |cx: &mut PaintCx<'_>, c: Point2D, r: f32, fill, line| {
                         let b = Rect {
                             origin: Point2D::new(c.x - r, c.y - r),
@@ -559,6 +582,9 @@ impl<'a> Widget for CanvasViewport<'a> {
                             );
                         }
                     }
+                    if rotated {
+                        cx.backend.restore();
+                    }
                 }
             }
         }
@@ -572,12 +598,27 @@ impl<'a> Widget for CanvasViewport<'a> {
                 .and_then(|p| p.find(&self.selected))
             {
                 if let Some(handles) = arc_handle_positions(node) {
+                    let zoom = viewport.zoom;
+                    let to_screen = |p: Point2D| {
+                        Point2D::new(
+                            rect.origin.x + viewport.pan_x + p.x * zoom,
+                            rect.origin.y + viewport.pan_y + p.y * zoom,
+                        )
+                    };
+                    // Rotate the overlay to match a rotated ellipse.
+                    let rotated = node.rotation.abs() > f32::EPSILON;
+                    if rotated {
+                        let b = node.bounds;
+                        let pivot = to_screen(Point2D::new(
+                            b.origin.x + b.size.x / 2.0,
+                            b.origin.y + b.size.y / 2.0,
+                        ));
+                        cx.backend.save();
+                        cx.backend.rotate(node.rotation, pivot);
+                    }
                     let r = 4.5; // screen-px radius
                     for (_, p) in handles {
-                        let center = Point2D::new(
-                            rect.origin.x + viewport.pan_x + p.x * viewport.zoom,
-                            rect.origin.y + viewport.pan_y + p.y * viewport.zoom,
-                        );
+                        let center = to_screen(p);
                         let bounds = Rect {
                             origin: Point2D::new(center.x - r, center.y - r),
                             size: Point2D::new(r * 2.0, r * 2.0),
@@ -586,6 +627,9 @@ impl<'a> Widget for CanvasViewport<'a> {
                         // square resize handles.
                         cx.backend.fill_oval(bounds, self.theme.primary);
                         cx.backend.stroke_oval(bounds, self.theme.background, 1.5);
+                    }
+                    if rotated {
+                        cx.backend.restore();
                     }
                 }
             }

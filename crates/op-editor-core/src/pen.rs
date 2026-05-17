@@ -20,34 +20,16 @@ pub enum PathHandleSide {
     Out,
 }
 
-/// Bounding box of a set of anchors: `(x, y, w, h)`.
-fn anchor_bbox(anchors: &[PenPathAnchor]) -> (f64, f64, f64, f64) {
-    let mut min_x = f64::INFINITY;
-    let mut min_y = f64::INFINITY;
-    let mut max_x = f64::NEG_INFINITY;
-    let mut max_y = f64::NEG_INFINITY;
-    for a in anchors {
-        min_x = min_x.min(a.x);
-        min_y = min_y.min(a.y);
-        max_x = max_x.max(a.x);
-        max_y = max_y.max(a.y);
-    }
-    if min_x.is_finite() {
-        (min_x, min_y, max_x - min_x, max_y - min_y)
-    } else {
-        (0.0, 0.0, 0.0, 0.0)
-    }
-}
-
 /// Re-fit a Path node's `base.x` / `base.y` / `width` / `height` to
-/// its current anchors. No-op on non-Path nodes.
+/// its current anchors — handle-aware, via the canonical
+/// [`crate::path_bounds`] so the loader's absolutize pass reads the
+/// identical native span (scale stays `1.0`). No-op on non-Path
+/// nodes.
 fn refit_path_bounds(node: &mut PenNode) {
-    if let PenNode::Path(_) = node {
-        let anchors = match node {
-            PenNode::Path(p) => p.anchors.clone().unwrap_or_default(),
-            _ => unreachable!(),
-        };
-        let (x, y, w, h) = anchor_bbox(&anchors);
+    if let PenNode::Path(p) = node {
+        let anchors = p.anchors.clone().unwrap_or_default();
+        let closed = p.closed.unwrap_or(false);
+        let (x, y, w, h) = crate::path_bounds::path_bounds_from_anchors(&anchors, closed);
         node.base_mut().x = Some(x);
         node.base_mut().y = Some(y);
         node.set_width_px(w);
@@ -149,30 +131,35 @@ impl EditorState {
         let Some(node) = find_node_mut(self.active_children_mut(), &node_id) else {
             return false;
         };
-        let PenNode::Path(path) = node else {
-            return false;
-        };
-        let Some(anchors) = path.anchors.as_mut() else {
-            return false;
-        };
-        let Some(anchor) = anchors.get_mut(index) else {
-            return false;
-        };
-        let handle = delta.map(|(x, y)| PenPathHandle { x, y });
-        match side {
-            PathHandleSide::In => anchor.handle_in = handle,
-            PathHandleSide::Out => anchor.handle_out = handle,
-        }
-        // Mirrored anchors keep both handles collinear + equal length.
-        if anchor.point_type == Some(PenPathPointType::Mirrored) {
-            if let Some((x, y)) = delta {
-                let mirror = Some(PenPathHandle { x: -x, y: -y });
-                match side {
-                    PathHandleSide::In => anchor.handle_out = mirror,
-                    PathHandleSide::Out => anchor.handle_in = mirror,
+        {
+            let PenNode::Path(path) = &mut *node else {
+                return false;
+            };
+            let Some(anchors) = path.anchors.as_mut() else {
+                return false;
+            };
+            let Some(anchor) = anchors.get_mut(index) else {
+                return false;
+            };
+            let handle = delta.map(|(x, y)| PenPathHandle { x, y });
+            match side {
+                PathHandleSide::In => anchor.handle_in = handle,
+                PathHandleSide::Out => anchor.handle_out = handle,
+            }
+            // Mirrored anchors keep both handles collinear + equal length.
+            if anchor.point_type == Some(PenPathPointType::Mirrored) {
+                if let Some((x, y)) = delta {
+                    let mirror = Some(PenPathHandle { x: -x, y: -y });
+                    match side {
+                        PathHandleSide::In => anchor.handle_out = mirror,
+                        PathHandleSide::Out => anchor.handle_in = mirror,
+                    }
                 }
             }
         }
+        // Handles bow the curve past the endpoints — re-fit the
+        // handle-aware bounds so the loader's absolutize scale stays 1.
+        refit_path_bounds(node);
         true
     }
 
@@ -192,28 +179,31 @@ impl EditorState {
         let Some(node) = find_node_mut(self.active_children_mut(), &node_id) else {
             return false;
         };
-        let PenNode::Path(path) = node else {
-            return false;
-        };
-        let Some(anchors) = path.anchors.as_mut() else {
-            return false;
-        };
-        let Some(anchor) = anchors.get_mut(index) else {
-            return false;
-        };
-        let is_mirrored = point_type == PenPathPointType::Mirrored;
-        anchor.point_type = Some(point_type);
-        if is_mirrored {
-            match (anchor.handle_out.clone(), anchor.handle_in.clone()) {
-                (Some(h), _) => {
-                    anchor.handle_in = Some(PenPathHandle { x: -h.x, y: -h.y });
+        {
+            let PenNode::Path(path) = &mut *node else {
+                return false;
+            };
+            let Some(anchors) = path.anchors.as_mut() else {
+                return false;
+            };
+            let Some(anchor) = anchors.get_mut(index) else {
+                return false;
+            };
+            let is_mirrored = point_type == PenPathPointType::Mirrored;
+            anchor.point_type = Some(point_type);
+            if is_mirrored {
+                match (anchor.handle_out.clone(), anchor.handle_in.clone()) {
+                    (Some(h), _) => {
+                        anchor.handle_in = Some(PenPathHandle { x: -h.x, y: -h.y });
+                    }
+                    (None, Some(h)) => {
+                        anchor.handle_out = Some(PenPathHandle { x: -h.x, y: -h.y });
+                    }
+                    (None, None) => {}
                 }
-                (None, Some(h)) => {
-                    anchor.handle_out = Some(PenPathHandle { x: -h.x, y: -h.y });
-                }
-                (None, None) => {}
             }
         }
+        refit_path_bounds(node);
         true
     }
 

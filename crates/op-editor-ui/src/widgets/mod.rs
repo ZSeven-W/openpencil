@@ -101,7 +101,7 @@ pub use property_panel::{PropertyPanel, PropertyPanelAction};
 pub use toolbar::Toolbar;
 
 pub use canvas_viewport::{
-    arc_handle_positions, path_handle_positions, rotation_corner_at_point,
+    arc_handle_positions, path_handle_positions, rotate_point, rotation_corner_at_point,
     selection_handle_at_point, ArcHandle, CanvasViewport, SelectionHandle,
 };
 
