@@ -1,0 +1,13 @@
+[package]
+name = "op-ai-skills"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "OpenPencil AI skill engine — phase-driven prompt-skill resolution, ported from the TS pen-ai-skills package"
+
+[dependencies]
+# Embeds the skill / style-guide markdown corpus into the crate at
+# compile time so the engine ships self-contained — no runtime file
+# IO, and the crate stays usable on wasm32 targets. Pure Rust.
+include_dir = "0.7"
