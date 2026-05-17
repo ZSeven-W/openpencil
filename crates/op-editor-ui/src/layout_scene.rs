@@ -216,6 +216,8 @@ pub struct SceneNode {
     /// carrying the editable control handles + point type. Empty for
     /// non-Path kinds.
     pub path_anchors: Vec<SceneAnchor>,
+    /// Whether a `Path` node is closed (last anchor links to first).
+    pub path_closed: bool,
     /// Ellipse arc start angle in degrees. `None` = full ellipse.
     pub arc_start_angle: Option<f32>,
     /// Ellipse arc sweep angle in degrees. `None` = full ellipse.
@@ -298,6 +300,7 @@ impl SceneNode {
             text_wrap: false,
             points: Vec::new(),
             path_anchors: Vec::new(),
+            path_closed: false,
             arc_start_angle: None,
             arc_sweep_angle: None,
             arc_inner_radius: None,

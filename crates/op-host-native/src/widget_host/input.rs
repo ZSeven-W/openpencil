@@ -342,54 +342,64 @@ impl WidgetHostNative {
                 )
             };
             // `is_move` uses the raw (rotation-independent) cursor —
-            // motion detection is frame-agnostic.
+            // motion detection is frame-agnostic. The drag mutates
+            // nothing until the cursor first travels, so a
+            // press-release leaves the document (and undo stack)
+            // untouched; once it HAS moved, every event (incl. a
+            // drag back to the start point) keeps writing.
             let is_move = (doc.x - start.x).abs() > 0.001 || (doc.y - start.y).abs() > 0.001;
-            // Un-rotate the cursor into the path's local frame so
-            // anchor / handle coords are written rotation-free.
-            let local = match self
-                .layout_scene
-                .active_page()
-                .and_then(|p| p.find(id.as_str()))
-                .filter(|n| n.rotation.abs() > f32::EPSILON)
-                .map(|n| (n.rotation, n.aggregate_bounds()))
-            {
-                Some((rot, b)) => {
-                    let c = Point2D::new(b.origin.x + b.size.x / 2.0, b.origin.y + b.size.y / 2.0);
-                    op_editor_ui::widgets::rotate_point(doc, c, -rot)
-                }
-                None => doc,
-            };
-            match target {
-                AnchorDragTarget::Anchor => {
-                    self.editor_state.set_path_anchor_position(
-                        id,
-                        idx,
-                        (local.x as f64, local.y as f64),
-                    );
-                }
-                AnchorDragTarget::Handle(side) => {
-                    // First real move sets the anchor's point type —
-                    // Shift = independent (broken) handles, else
-                    // mirrored (smooth).
-                    if !already_moved && is_move {
-                        let pt = if shift {
-                            jian_ops_schema::node::PenPathPointType::Independent
-                        } else {
-                            jian_ops_schema::node::PenPathPointType::Mirrored
-                        };
-                        self.editor_state
-                            .set_path_anchor_point_type(id.clone(), idx, pt);
+            if is_move || already_moved {
+                // Un-rotate the cursor into the path's local frame so
+                // anchor / handle coords are written rotation-free.
+                let local = match self
+                    .layout_scene
+                    .active_page()
+                    .and_then(|p| p.find(id.as_str()))
+                    .filter(|n| n.rotation.abs() > f32::EPSILON)
+                    .map(|n| (n.rotation, n.aggregate_bounds()))
+                {
+                    Some((rot, b)) => {
+                        let c =
+                            Point2D::new(b.origin.x + b.size.x / 2.0, b.origin.y + b.size.y / 2.0);
+                        op_editor_ui::widgets::rotate_point(doc, c, -rot)
                     }
-                    let delta = (
-                        (local.x - anchor_doc.x) as f64,
-                        (local.y - anchor_doc.y) as f64,
-                    );
-                    self.editor_state
-                        .set_path_anchor_handle(id, idx, side, Some(delta));
+                    None => doc,
+                };
+                match target {
+                    AnchorDragTarget::Anchor => {
+                        self.editor_state.set_path_anchor_position(
+                            id,
+                            idx,
+                            (local.x as f64, local.y as f64),
+                        );
+                    }
+                    AnchorDragTarget::Handle(side) => {
+                        // First real move sets the anchor's point type
+                        // — Shift = independent (broken) handles, else
+                        // mirrored (smooth).
+                        if !self
+                            .path_anchor_drag
+                            .as_ref()
+                            .map(|d| d.moved)
+                            .unwrap_or(true)
+                        {
+                            let pt = if shift {
+                                jian_ops_schema::node::PenPathPointType::Independent
+                            } else {
+                                jian_ops_schema::node::PenPathPointType::Mirrored
+                            };
+                            self.editor_state
+                                .set_path_anchor_point_type(id.clone(), idx, pt);
+                        }
+                        let delta = (
+                            (local.x - anchor_doc.x) as f64,
+                            (local.y - anchor_doc.y) as f64,
+                        );
+                        self.editor_state
+                            .set_path_anchor_handle(id, idx, side, Some(delta));
+                    }
                 }
-            }
-            self.mark_dirty();
-            if is_move {
+                self.mark_dirty();
                 if let Some(d) = self.path_anchor_drag.as_mut() {
                     d.moved = true;
                 }
@@ -402,16 +412,18 @@ impl WidgetHostNative {
             let (cx0, cy0) = self.canvas_origin();
             let canvas_local = Point2D::new(x - cx0, y - cy0);
             let doc = self.editor_state.viewport.to_document(canvas_local);
-            let (id, handle, start) = {
+            let (id, handle, start, already_moved) = {
                 let d = self.arc_handle_drag.as_ref().unwrap();
-                (d.node_id.clone(), d.handle, d.start_doc)
+                (d.node_id.clone(), d.handle, d.start_doc, d.moved)
             };
-            if let Some(cmd) = self.arc_drag_command(&id, handle, doc) {
-                if self.editor_state.apply(cmd) {
-                    self.mark_dirty();
-                    // Only count the drag as moved once the cursor has
-                    // travelled — a press-release pushes no undo entry.
-                    if (doc.x - start.x).abs() > 0.001 || (doc.y - start.y).abs() > 0.001 {
+            // Mutate nothing until the cursor first travels — a
+            // press-release must not write the arc or push an undo
+            // entry. Once moved, keep writing every event.
+            let is_move = (doc.x - start.x).abs() > 0.001 || (doc.y - start.y).abs() > 0.001;
+            if is_move || already_moved {
+                if let Some(cmd) = self.arc_drag_command(&id, handle, doc) {
+                    if self.editor_state.apply(cmd) {
+                        self.mark_dirty();
                         if let Some(d) = self.arc_handle_drag.as_mut() {
                             d.moved = true;
                         }
@@ -636,9 +648,10 @@ impl WidgetHostNative {
         let old_sweep = node.arc_sweep_angle.unwrap_or(360.0);
         Some(match handle {
             ArcHandle::Start => {
-                // Dragging the start handle keeps the end fixed.
+                // Dragging the start handle keeps the end fixed; the
+                // sweep keeps the sign of the existing arc.
                 let new_start = norm360(ny.atan2(nx).to_degrees());
-                let new_sweep = norm_sweep(old_start + old_sweep - new_start);
+                let new_sweep = signed_sweep(old_start + old_sweep - new_start, old_sweep);
                 EditorCommand::SetEllipseArc {
                     node_id: id.clone(),
                     start_angle: Some(new_start as f64),
@@ -647,7 +660,7 @@ impl WidgetHostNative {
                 }
             }
             ArcHandle::Sweep => {
-                let new_sweep = norm_sweep(ny.atan2(nx).to_degrees() - old_start);
+                let new_sweep = signed_sweep(ny.atan2(nx).to_degrees() - old_start, old_sweep);
                 EditorCommand::SetEllipseArc {
                     node_id: id.clone(),
                     start_angle: None,
@@ -686,6 +699,18 @@ fn norm_sweep(deg: f32) -> f32 {
         360.0
     } else {
         s
+    }
+}
+
+/// A sweep that keeps the sign of the arc being edited — an
+/// MCP-authored negative (counter-clockwise) sweep stays negative
+/// under a canvas drag instead of flipping to the major arc.
+fn signed_sweep(raw: f32, old_sweep: f32) -> f32 {
+    let pos = norm_sweep(raw);
+    if old_sweep < 0.0 {
+        pos - 360.0
+    } else {
+        pos
     }
 }
 

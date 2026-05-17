@@ -525,6 +525,7 @@ fn polygon_to_payload(n: &PolygonNode) -> NodePayload {
 
 fn path_to_payload(n: &PathNode) -> NodePayload {
     let mut p = base_payload(&n.base, "path");
+    p.path_closed = n.closed.unwrap_or(false);
     p.w = sizing_to_f32(&n.width);
     p.h = sizing_to_f32(&n.height);
     p.fill = first_solid_color(n.fill.as_deref());
@@ -686,6 +687,7 @@ fn base_payload(base: &PenNodeBase, kind: &str) -> NodePayload {
         fill_type: "solid".into(),
         points: Vec::new(),
         path_anchors: Vec::new(),
+        path_closed: false,
         font_size: 0.0,
         font_weight: 0,
         text_wrap: false,
