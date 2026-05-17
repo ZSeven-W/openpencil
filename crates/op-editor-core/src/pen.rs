@@ -9,7 +9,16 @@ use crate::pen_node_ext::{make_path, PenNodeExt};
 use crate::state::EditorState;
 use crate::walkers::{self, find_node, find_node_mut};
 use jian_ops_schema::node::PenNode;
-use jian_ops_schema::node::PenPathAnchor;
+use jian_ops_schema::node::{PenPathAnchor, PenPathHandle, PenPathPointType};
+
+/// Which bezier control handle of a path anchor is being edited.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PathHandleSide {
+    /// The incoming handle (controls the curve arriving at the anchor).
+    In,
+    /// The outgoing handle (controls the curve leaving the anchor).
+    Out,
+}
 
 /// Bounding box of a set of anchors: `(x, y, w, h)`.
 fn anchor_bbox(anchors: &[PenPathAnchor]) -> (f64, f64, f64, f64) {
@@ -118,6 +127,93 @@ impl EditorState {
             return false;
         }
         refit_path_bounds(node);
+        true
+    }
+
+    /// Set (or clear, with `delta = None`) a bezier control handle on
+    /// a path anchor. `delta` is the handle offset relative to the
+    /// anchor. When the anchor's `point_type` is `Mirrored`, the
+    /// opposite handle is set to the negated offset so the two stay
+    /// collinear + equal-length. History is the caller's
+    /// responsibility.
+    pub fn set_path_anchor_handle(
+        &mut self,
+        node_id: NodeId,
+        index: usize,
+        side: PathHandleSide,
+        delta: Option<(f64, f64)>,
+    ) -> bool {
+        if !self.is_editable(&node_id) {
+            return false;
+        }
+        let Some(node) = find_node_mut(self.active_children_mut(), &node_id) else {
+            return false;
+        };
+        let PenNode::Path(path) = node else {
+            return false;
+        };
+        let Some(anchors) = path.anchors.as_mut() else {
+            return false;
+        };
+        let Some(anchor) = anchors.get_mut(index) else {
+            return false;
+        };
+        let handle = delta.map(|(x, y)| PenPathHandle { x, y });
+        match side {
+            PathHandleSide::In => anchor.handle_in = handle,
+            PathHandleSide::Out => anchor.handle_out = handle,
+        }
+        // Mirrored anchors keep both handles collinear + equal length.
+        if anchor.point_type == Some(PenPathPointType::Mirrored) {
+            if let Some((x, y)) = delta {
+                let mirror = Some(PenPathHandle { x: -x, y: -y });
+                match side {
+                    PathHandleSide::In => anchor.handle_out = mirror,
+                    PathHandleSide::Out => anchor.handle_in = mirror,
+                }
+            }
+        }
+        true
+    }
+
+    /// Set a path anchor's point type. Switching to `Mirrored` snaps
+    /// the two handles collinear (the existing handle defines the
+    /// axis; the opposite becomes its negation). History is the
+    /// caller's responsibility.
+    pub fn set_path_anchor_point_type(
+        &mut self,
+        node_id: NodeId,
+        index: usize,
+        point_type: PenPathPointType,
+    ) -> bool {
+        if !self.is_editable(&node_id) {
+            return false;
+        }
+        let Some(node) = find_node_mut(self.active_children_mut(), &node_id) else {
+            return false;
+        };
+        let PenNode::Path(path) = node else {
+            return false;
+        };
+        let Some(anchors) = path.anchors.as_mut() else {
+            return false;
+        };
+        let Some(anchor) = anchors.get_mut(index) else {
+            return false;
+        };
+        let is_mirrored = point_type == PenPathPointType::Mirrored;
+        anchor.point_type = Some(point_type);
+        if is_mirrored {
+            match (anchor.handle_out.clone(), anchor.handle_in.clone()) {
+                (Some(h), _) => {
+                    anchor.handle_in = Some(PenPathHandle { x: -h.x, y: -h.y });
+                }
+                (None, Some(h)) => {
+                    anchor.handle_out = Some(PenPathHandle { x: -h.x, y: -h.y });
+                }
+                (None, None) => {}
+            }
+        }
         true
     }
 

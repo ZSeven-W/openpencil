@@ -194,3 +194,59 @@ fn set_path_anchor_position_rejects_out_of_range() {
     s.finish_pen_path();
     assert!(!s.set_path_anchor_position(id, 99, (0.0, 0.0)));
 }
+
+#[test]
+fn set_path_anchor_handle_writes_and_clears() {
+    use crate::pen::PathHandleSide;
+    use jian_ops_schema::node::PenNode;
+    let mut s = state_with(vec![]);
+    let mut next_id = 1u64;
+    let id = s.start_pen_path(&mut next_id, (0.0, 0.0)).expect("start");
+    s.add_pen_point((100.0, 0.0));
+    s.finish_pen_path();
+    // Set the outgoing handle on anchor 0.
+    assert!(s.set_path_anchor_handle(id.clone(), 0, PathHandleSide::Out, Some((20.0, 10.0))));
+    if let Some(PenNode::Path(p)) = find_node(s.active_children(), &id) {
+        let h = p.anchors.as_ref().unwrap()[0].handle_out.as_ref().unwrap();
+        assert_eq!((h.x, h.y), (20.0, 10.0));
+    } else {
+        panic!("expected path");
+    }
+    // Clearing it sets the handle back to None.
+    assert!(s.set_path_anchor_handle(id.clone(), 0, PathHandleSide::Out, None));
+    if let Some(PenNode::Path(p)) = find_node(s.active_children(), &id) {
+        assert!(p.anchors.as_ref().unwrap()[0].handle_out.is_none());
+    }
+}
+
+#[test]
+fn mirrored_point_type_mirrors_the_opposite_handle() {
+    use crate::pen::PathHandleSide;
+    use jian_ops_schema::node::{PenNode, PenPathPointType};
+    let mut s = state_with(vec![]);
+    let mut next_id = 1u64;
+    let id = s.start_pen_path(&mut next_id, (0.0, 0.0)).expect("start");
+    s.add_pen_point((100.0, 0.0));
+    s.finish_pen_path();
+    s.set_path_anchor_point_type(id.clone(), 0, PenPathPointType::Mirrored);
+    // Dragging the outgoing handle mirrors the incoming one.
+    s.set_path_anchor_handle(id.clone(), 0, PathHandleSide::Out, Some((30.0, 12.0)));
+    if let Some(PenNode::Path(p)) = find_node(s.active_children(), &id) {
+        let a = &p.anchors.as_ref().unwrap()[0];
+        let hin = a.handle_in.as_ref().unwrap();
+        assert_eq!((hin.x, hin.y), (-30.0, -12.0));
+    } else {
+        panic!("expected path");
+    }
+}
+
+#[test]
+fn set_path_anchor_handle_rejects_bad_index() {
+    use crate::pen::PathHandleSide;
+    let mut s = state_with(vec![]);
+    let mut next_id = 1u64;
+    let id = s.start_pen_path(&mut next_id, (0.0, 0.0)).expect("start");
+    s.add_pen_point((10.0, 10.0));
+    s.finish_pen_path();
+    assert!(!s.set_path_anchor_handle(id, 99, PathHandleSide::In, Some((1.0, 1.0))));
+}
