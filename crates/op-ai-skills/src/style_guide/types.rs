@@ -21,6 +21,8 @@ impl Platform {
     }
 
     /// Parse a platform token; unknown / missing → `Webapp` (TS parity).
+    // Infallible token parser, not the `Result`-shaped `FromStr`.
+    #[allow(clippy::should_implement_trait)]
     pub fn from_str(s: &str) -> Platform {
         match s.trim() {
             "mobile" => Platform::Mobile,

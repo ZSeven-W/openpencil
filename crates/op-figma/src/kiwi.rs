@@ -205,6 +205,12 @@ impl Schema {
     }
 }
 
+/// One raw field before type resolution: `(name, type_code, is_array,
+/// value)`. Type codes stay numeric until every definition is known.
+type RawField = (String, i32, bool, u32);
+/// One raw definition before type resolution: `(name, kind, fields)`.
+type RawDef = (String, DefKind, Vec<RawField>);
+
 /// Decode the self-describing binary schema chunk
 /// (`decodeBinarySchema`). Type codes are bound to names: a negative
 /// code is a native type (`!code` indexes [`NATIVE_TYPES`]), a
@@ -214,7 +220,7 @@ pub fn decode_binary_schema(bytes: &[u8]) -> Result<Schema, KiwiError> {
     let definition_count = bb.read_var_uint()?;
     // Raw types are kept as ints until every definition is known, so
     // forward references resolve.
-    let mut raw: Vec<(String, DefKind, Vec<(String, i32, bool, u32)>)> = Vec::new();
+    let mut raw: Vec<RawDef> = Vec::new();
     for _ in 0..definition_count {
         let name = bb.read_string()?;
         let kind = match bb.read_byte()? {

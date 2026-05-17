@@ -613,6 +613,9 @@ const CUBIC_FLATTEN_STEPS: usize = 24;
 /// time, into `CUBIC_FLATTEN_STEPS` straight anchors that trace it.
 /// `c1`/`c2` are the SVG control points, `(x, y)` the endpoint,
 /// `(ox, oy)` the document offset; the previous anchor is the start.
+// Each control point + endpoint + offset is its own scalar — bundling
+// them into a struct would only obscure a flat geometric signature.
+#[allow(clippy::too_many_arguments)]
 fn emit_cubic(
     anchors: &mut Vec<PenPathAnchor>,
     c1x: f64,

@@ -109,16 +109,14 @@ pub fn apply_instance_overrides(
 
     // Fast path — nothing to apply: just rescale to the instance size.
     if derived.is_empty() && overrides.is_empty() {
-        if let (Some(size), Some(sym_size)) = (
+        if let (Some(size), Some(Some(sym_size))) = (
             instance_size,
             symbol_node.figma.get("size").map(FigVec2::from_value),
         ) {
-            if let Some(sym_size) = sym_size {
-                if sym_size.x != 0.0 && sym_size.y != 0.0 {
-                    let sx = size.x / sym_size.x;
-                    let sy = size.y / sym_size.y;
-                    return crate::common::scale_tree_children(&symbol_node.children, sx, sy);
-                }
+            if sym_size.x != 0.0 && sym_size.y != 0.0 {
+                let sx = size.x / sym_size.x;
+                let sy = size.y / sym_size.y;
+                return crate::common::scale_tree_children(&symbol_node.children, sx, sy);
             }
         }
         return symbol_node.children.clone();
@@ -261,12 +259,10 @@ fn apply_to_node(
     }
 
     // Override props — copy every non-blacklisted, present key.
-    if let Some(ov) = ov {
-        if let FigValue::Object(pairs) = ov {
-            for (k, v) in pairs {
-                if !OVERRIDE_SKIP_KEYS.contains(&k.as_str()) && !matches!(v, FigValue::Null) {
-                    figma.set(k, v.clone());
-                }
+    if let Some(FigValue::Object(pairs)) = ov {
+        for (k, v) in pairs {
+            if !OVERRIDE_SKIP_KEYS.contains(&k.as_str()) && !matches!(v, FigValue::Null) {
+                figma.set(k, v.clone());
             }
         }
     }
