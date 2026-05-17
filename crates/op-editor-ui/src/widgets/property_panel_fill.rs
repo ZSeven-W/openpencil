@@ -382,7 +382,7 @@ fn paint_fill_gradient_body(
         };
         cx.backend
             .fill_round_rect(angle_rect, INPUT_RADIUS, theme.muted);
-        // "角度" prefix at left, value in middle, ° at right.
+        // Angle prefix at left, value in middle, ° at right.
         let prefix = TextLayout::single_run(
             "角度",
             "system-ui",
@@ -421,7 +421,7 @@ fn paint_fill_gradient_body(
         );
         yy += INPUT_HEIGHT + 6.0;
     }
-    // 色标 header + plus.
+    // Color stops header + plus.
     let header = TextLayout::single_run(
         "色标",
         "system-ui",

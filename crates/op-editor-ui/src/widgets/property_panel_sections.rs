@@ -375,7 +375,7 @@ pub fn paint_flex_section(
     let mut y = paint_section_label(cx, theme, labels.flex_layout, x, y, width);
     // TS layout-section.tsx uses Columns3 / Rows3 / LayoutGrid for
     // the three flex modes; LayoutGrid is the default-active mode
-    // (Free / 自由布局).
+    // (Free layout).
     let btn_w = 56.0;
     let gap = 8.0;
     let row_x = x + PAD_X;

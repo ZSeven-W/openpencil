@@ -1,4 +1,4 @@
-//! "从 Figma 导入" modal. Mirrors
+//! "Import from Figma" modal. Mirrors
 //! `apps/web/src/components/shared/figma-import-dialog.tsx` —
 //! 720×400 card with a dashed drop-zone, upload icon, headline,
 //! subtitle, and footer hint. Drag-drop of .fig files isn't wired

@@ -1,9 +1,9 @@
-//! `AIChatPlaceholder` — floating "用 AI 开始设计" / chat panel
+//! `AIChatPlaceholder` — floating "start designing with AI" / chat panel
 //! pinned to the bottom-center of the canvas (Step 4 visual lift +
 //! Step 5 P2 dynamic state).
 //!
 //! Two render modes driven by `ChatState`:
-//!  - **Empty** (no messages): the original "用 AI 开始设计" hint
+//!  - **Empty** (no messages): the original "start designing with AI" hint
 //!    + 2×2 example cards — clicking a card fills the input.
 //!  - **Active** (≥1 message): renders the message list above the
 //!    input, hides the example grid.
@@ -113,9 +113,9 @@ pub struct AIChatPlaceholder<'a> {
     pub label_new_chat: String,
     pub label_start_with_ai: String,
     pub label_input_placeholder: String,
-    /// "提示：在对话前选中画布上的元素以提供上下文。" — bottom of
-    /// the empty-state body, between the example cards and the
-    /// separator above the input.
+    /// Tip line ("select canvas elements before chatting to provide
+    /// context") — bottom of the empty-state body, between the example
+    /// cards and the separator above the input.
     pub label_tip_select_elements: String,
     /// Chip label shown when no model is selected / discovered yet
     /// (`ai.noModelsConnected`).

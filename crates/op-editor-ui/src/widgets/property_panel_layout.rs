@@ -54,7 +54,7 @@ impl VisibleSections {
     };
 }
 
-/// State for the 5 "尺寸" checkboxes (fill / hug / clip).
+/// State for the 5 Size checkboxes (fill / hug / clip).
 #[derive(Debug, Clone, Copy)]
 pub struct SizeFlags {
     pub fill_width: bool,

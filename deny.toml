@@ -3,9 +3,10 @@
 
 [graph]
 all-features = false
-# 限定到实际发布目标（macOS/Linux/Windows native + wasm32）。
-# 不限定的话 cargo-deny 默认尝试所有 target（含 Android/iOS），
-# 拉进 jni / android-activity 等 edition-2024 deps，在 rustc 1.82 上 cargo metadata 失败。
+# Scoped to the actual release targets (macOS/Linux/Windows native + wasm32).
+# Without this, cargo-deny defaults to every target (including Android/iOS),
+# pulling in edition-2024 deps like jni / android-activity, which makes
+# `cargo metadata` fail on rustc 1.82.
 targets = [
   { triple = "x86_64-unknown-linux-gnu" },
   { triple = "aarch64-unknown-linux-gnu" },
@@ -37,27 +38,31 @@ ignore = []
 
 [bans]
 multiple-versions = "warn"
-# workspace 内部 path 依赖不写 version（标准实践，避免每次 bump 都改两处）。
-# 没有 crate 发布到 crates.io，wildcard path deps 是预期的，故 allow。
+# Workspace-internal path deps omit the version (standard practice — avoids
+# editing two places on every bump). No crate ships to crates.io, so
+# wildcard path deps are expected; hence allowed.
 wildcards = "allow"
 allow-wildcard-paths = true
 deny = [
-  # WASM bundle 黑名单（kickoff spec §1.2 invariant）。
-  # `agent` 不在此列：它是 op-host-desktop（桌面二进制，永不编译到 wasm）的
-  # native-only 依赖；wasm 隔离是结构性的（op-host-web 不依赖它）并由
-  # tools/check-wasm-bundle.sh 验证。
+  # WASM bundle blacklist (kickoff spec §1.2 invariant).
+  # `agent` is not listed: it is a native-only dependency of op-host-desktop
+  # (the desktop binary, never compiled to wasm); wasm isolation is
+  # structural (op-host-web does not depend on it) and verified by
+  # tools/check-wasm-bundle.sh.
   "pen-agent-cli",
   "pen-server",
   "native-tls",
 ]
 
-# 不再禁用 tokio 的 process / rt-multi-thread feature：op-host-desktop
-# 的原生 agent runtime（async）合法地需要它们。wasm 侧结构性安全——
-# 这两个 feature 依赖 OS 线程/进程，无法编译到 wasm32——并由
-# tools/check-wasm-bundle.sh 验证。
+# tokio's process / rt-multi-thread features are no longer banned:
+# op-host-desktop's native (async) agent runtime legitimately needs them.
+# The wasm side is structurally safe — both features depend on OS
+# threads/processes and cannot compile to wasm32 — and is verified by
+# tools/check-wasm-bundle.sh.
 
 [sources]
 unknown-registry = "deny"
 unknown-git = "deny"
-# agent-rs 现在通过 vendor/agent submodule 以 path 依赖引入，不再是 git 依赖。
+# agent-rs is now pulled in as a path dependency via the vendor/agent
+# submodule, no longer a git dependency.
 allow-git = []

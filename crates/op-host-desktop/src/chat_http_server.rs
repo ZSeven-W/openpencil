@@ -1,7 +1,8 @@
 //! HTTP-server CLI bridge — structural lifecycle for CLIs that
 //! run as a local HTTP server we POST JSON requests to. Per the
-//! user's architecture note ("opencode 和 codex 我们调用 http
-//! server, 通过 ipc 启动本地的 server 模式") the model is: spawn
+//! user's architecture note (opencode and codex are driven via an
+//! HTTP server, started in local server mode through IPC) the model
+//! is: spawn
 //! the binary in server mode, watch stdout for a "Listening on …"
 //! line that announces the bind port, then send chat requests to
 //! that local HTTP endpoint.

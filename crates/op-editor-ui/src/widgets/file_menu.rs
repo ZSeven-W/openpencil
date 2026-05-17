@@ -111,7 +111,7 @@ impl<'a> FileMenu<'a> {
         h += DIVIDER_GAP * 2.0 + 1.0;
         h += ROW_HEIGHT; // Export image
         h += DIVIDER_GAP * 2.0 + 1.0;
-        h += HEADER_HEIGHT; // 最近文件 header
+        h += HEADER_HEIGHT; // Recent files header
         let recent_len = self.recent.len().max(1);
         h += ROW_HEIGHT * recent_len as f32;
         h += DIVIDER_GAP * 2.0 + 1.0;
@@ -469,7 +469,7 @@ fn paint_recent_row(
         1.4,
     );
     // Reserve space for the age column on the right + a small gap
-    // so a long file name never overlaps "21 分钟前". Truncate with
+    // so a long file name never overlaps the age label. Truncate with
     // a trailing `…` when the name exceeds that budget.
     let aw = cx.backend.measure_text(&entry.age, SHORTCUT_FONT);
     let name_x = x + PAD_X + ICON_SIZE + 10.0;

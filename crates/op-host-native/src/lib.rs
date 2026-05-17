@@ -42,7 +42,7 @@ pub mod context;
 // `widget_host` (NativeFrameBackend + WidgetHostNative) compile on
 // every target where `skia-safe` + `jian-skia` compile — desktop
 // trio + iOS + Android. Per the 2026-05-10 user directive
-// ("extend, jian 最后也会需要 ios 和 android") these used to be
+// (jian will eventually need iOS and Android) these used to be
 // desktop-only; lifting the gate is the first half of the mobile
 // extension. The other half (real `EaglProvider` / `AndroidEglProvider`
 // impls + Metal/Vulkan integration) lands in Step 1f.

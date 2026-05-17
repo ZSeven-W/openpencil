@@ -36,7 +36,7 @@ const ROBOTO_TTF: &[u8] = include_bytes!("../../assets/Roboto-Regular.ttf");
 /// the rust-skia test resource at
 /// `vendor/skia-safe-op/.../resources/fonts/NotoSansCJK-VF-subset.otf.ttc`).
 /// Step 4 codex stop-hook fix: shell-core chrome strings include
-/// CJK (`页面 / 图层 / 未命名 / 用 AI 开始设计` etc.) which Roboto
+/// CJK (localized chrome strings) which Roboto
 /// has no glyphs for, so the Roboto-only text path was rendering
 /// `.notdef` boxes. The subset bundles enough Han / Latin coverage
 /// to keep all chrome labels legible at <10 KB cost (bundle is
@@ -389,7 +389,7 @@ impl RenderBackend for WebBackend {
         }
         if !self.cjk_typeface_tried {
             // Step 4 codex stop-hook fix: chrome includes CJK
-            // labels (`页面`, `图层`, `未命名` etc.) so a
+            // labels (localized chrome strings) so a
             // Roboto-only path produces `.notdef` boxes for every
             // non-ASCII run. Build a second typeface from the
             // embedded Noto Sans CJK subset.

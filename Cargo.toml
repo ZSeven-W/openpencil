@@ -1,8 +1,10 @@
 [workspace]
 resolver = "2"
-# 用 glob 而非显式列表：Step 0 增量创建 crate 时不需要每次改 members（per implementer
-# Phase 1 batch 2 的 workspace masking 反馈：列出未存在的 crate 会让 `cargo build -p X`
-# 在 resolve 阶段就挂掉）。glob 自动包含 crates/ 下所有 manifest，自然支持增量创建。
+# Use a glob instead of an explicit list: incremental crate creation in Step 0
+# does not require editing `members` each time (per implementer Phase 1 batch 2
+# workspace-masking feedback: listing a non-existent crate makes `cargo build -p X`
+# fail at the resolve stage). The glob picks up every manifest under crates/,
+# naturally supporting incremental creation.
 members = ["crates/*"]
 exclude = [
   "vendor/agent",
@@ -27,9 +29,10 @@ thiserror = "1"
 anyhow = "1"
 tracing = "0.1"
 
-# WASM 边界相关（per kickoff §1.2 黑名单 = 不出现在这里）
-# 故意不在 workspace.dependencies 暴露 tokio / reqwest / agent / pen-agent-cli /
-# pen-server / native-tls —— 这些只在 native-only crate 内部用 dev-deps 或 target-specific deps。
+# WASM-boundary related (per kickoff §1.2 blacklist = must not appear here).
+# Intentionally NOT exposing tokio / reqwest / agent / pen-agent-cli /
+# pen-server / native-tls in workspace.dependencies — these are used only
+# inside native-only crates via dev-deps or target-specific deps.
 
 # Step 1b §3.2 P0.5B Run path (2026-05-09): wasm32-unknown-unknown skia
 # build via `vendor/skia-safe-op` — fork of rust-skia 0.97.0 with a new

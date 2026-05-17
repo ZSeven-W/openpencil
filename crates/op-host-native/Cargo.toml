@@ -68,8 +68,8 @@ jian-ops-schema = { path = "../../vendor/jian/crates/jian-ops-schema" }
 
 # Cross-platform widget render stack (desktop + mobile, NOT wasm).
 #
-# 2026-05-10 mobile extension (per user "extend, jian 最后也会需要 ios
-# 和 android"): skia-safe + jian-skia move out of the desktop-only
+# 2026-05-10 mobile extension (per user note that jian will eventually
+# need iOS and Android): skia-safe + jian-skia move out of the desktop-only
 # block so `NativeBackend` + `widget_host` compile on iOS / Android
 # too. skia-safe's `gl` feature is desktop-only (iOS deprecated GL —
 # Metal goes in Step 1f; Android uses GL/Vulkan via the platform
