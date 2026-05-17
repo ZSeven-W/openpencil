@@ -112,7 +112,9 @@ async fn run_acp_turn(
         Some(n) => n,
         None => {
             let _ = tx
-                .send(ChatDelta::Error("acp: notification channel unavailable".into()))
+                .send(ChatDelta::Error(
+                    "acp: notification channel unavailable".into(),
+                ))
                 .await;
             let _ = tx
                 .send(ChatDelta::Done {

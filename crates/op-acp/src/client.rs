@@ -13,8 +13,8 @@ use tokio::task::JoinHandle;
 
 use crate::jsonrpc::{dispatch_inbound, JsonRpcEngine};
 use crate::protocol::{
-    InitializeResult, NewSessionResult, SessionNotification, METHOD_INITIALIZE,
-    METHOD_SESSION_NEW, METHOD_SESSION_PROMPT, PROTOCOL_VERSION,
+    InitializeResult, NewSessionResult, SessionNotification, METHOD_INITIALIZE, METHOD_SESSION_NEW,
+    METHOD_SESSION_PROMPT, PROTOCOL_VERSION,
 };
 use crate::transport::{read_frame, write_frame};
 use crate::types::{AcpAgentConfig, AcpAgentInfo, AcpError, ConnectionType};
@@ -63,9 +63,7 @@ impl AcpConnection {
             let mut buf = BufReader::new(read);
             loop {
                 match read_frame(&mut buf).await {
-                    Ok(Some(value)) => {
-                        dispatch_inbound(value, &pending, &notif_tx, &reply_tx)
-                    }
+                    Ok(Some(value)) => dispatch_inbound(value, &pending, &notif_tx, &reply_tx),
                     // EOF or transport failure — stop reading.
                     Ok(None) | Err(_) => break,
                 }
@@ -291,10 +289,7 @@ mod tests {
 
     /// A mock ACP agent: answers `initialize` / `session/new`, then on
     /// `session/prompt` streams one message chunk and returns.
-    async fn mock_agent(
-        read: impl AsyncRead + Unpin,
-        mut write: impl AsyncWrite + Unpin,
-    ) {
+    async fn mock_agent(read: impl AsyncRead + Unpin, mut write: impl AsyncWrite + Unpin) {
         let mut buf = BufReader::new(read);
         while let Ok(Some(frame)) = read_frame(&mut buf).await {
             let id = frame.get("id").cloned().unwrap_or(Value::Null);
@@ -352,7 +347,9 @@ mod tests {
         let session = conn.new_session().await.expect("new_session");
         assert_eq!(session, "sess-1");
 
-        conn.prompt(&session, "design a button").await.expect("prompt");
+        conn.prompt(&session, "design a button")
+            .await
+            .expect("prompt");
         // The streamed chunk reached the notification channel.
         let note = notes.recv().await.expect("a session/update");
         assert_eq!(note.session_id.as_deref(), Some("sess-1"));
@@ -372,7 +369,10 @@ mod tests {
         // The reader drains pending requests on EOF, so the call
         // resolves to `Closed` at once rather than after the 30s
         // handshake timeout.
-        assert!(matches!(err, AcpError::Closed), "expected Closed, got {err:?}");
+        assert!(
+            matches!(err, AcpError::Closed),
+            "expected Closed, got {err:?}"
+        );
         assert!(
             started.elapsed() < Duration::from_secs(5),
             "must fail fast, not wait out the timeout"

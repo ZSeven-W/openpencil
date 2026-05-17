@@ -190,7 +190,12 @@ fn paint_chip(cx: &mut PaintCx<'_>, theme: &Theme, rect: Rect, icon: Icon, label
 }
 
 /// Paint the controls strip — thinking / effort / attach.
-pub fn paint_controls_row(cx: &mut PaintCx<'_>, theme: &Theme, controls_rect: Rect, state: &ChatState) {
+pub fn paint_controls_row(
+    cx: &mut PaintCx<'_>,
+    theme: &Theme,
+    controls_rect: Rect,
+    state: &ChatState,
+) {
     let layout = controls_layout(controls_rect);
     paint_chip(
         cx,
@@ -314,10 +319,7 @@ mod tests {
         let rects = attachment_chip_rects(r, 4);
         // Click the third chip.
         let third = rects[2];
-        let p = Point2D::new(
-            third.origin.x + 10.0,
-            third.origin.y + third.size.y / 2.0,
-        );
+        let p = Point2D::new(third.origin.x + 10.0, third.origin.y + third.size.y / 2.0);
         assert_eq!(
             attachment_row_hit(r, p, 4),
             Some(AIChatHit::RemoveAttachment(2))

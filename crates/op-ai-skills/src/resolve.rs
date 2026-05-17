@@ -45,18 +45,13 @@ fn format_recent_history(history: &[crate::types::HistoryEntry]) -> String {
 }
 
 /// Resolve the skill set for `phase` against `user_message`.
-pub fn resolve_skills(
-    phase: Phase,
-    user_message: &str,
-    options: &ResolveOptions,
-) -> AgentContext {
+pub fn resolve_skills(phase: Phase, user_message: &str, options: &ResolveOptions) -> AgentContext {
     let total_budget = options
         .budget_override
         .unwrap_or_else(|| phase.default_budget());
 
     // Steps 1 + 2 — phase filter, then intent / flag match.
-    let phase_skills: Vec<SkillEntry> =
-        get_skills_by_phase(phase).into_iter().cloned().collect();
+    let phase_skills: Vec<SkillEntry> = get_skills_by_phase(phase).into_iter().cloned().collect();
     let matched = filter_by_intent(&phase_skills, user_message, &options.flags);
 
     // Per-phase memory loading (done before injection so history is
@@ -139,10 +134,17 @@ mod tests {
 
     #[test]
     fn generation_resolve_stays_within_budget() {
-        let ctx = resolve_skills(Phase::Generation, "design a login form", &ResolveOptions::default());
+        let ctx = resolve_skills(
+            Phase::Generation,
+            "design a login form",
+            &ResolveOptions::default(),
+        );
         assert_eq!(ctx.budget_max, 8000);
         assert!(ctx.budget_used <= ctx.budget_max);
-        assert!(!ctx.skills.is_empty(), "generation phase should resolve skills");
+        assert!(
+            !ctx.skills.is_empty(),
+            "generation phase should resolve skills"
+        );
     }
 
     #[test]
@@ -200,7 +202,11 @@ mod tests {
 
     #[test]
     fn budget_override_is_honored() {
-        let high = resolve_skills(Phase::Generation, "design something", &ResolveOptions::default());
+        let high = resolve_skills(
+            Phase::Generation,
+            "design something",
+            &ResolveOptions::default(),
+        );
         let opts = ResolveOptions {
             budget_override: Some(500),
             ..Default::default()

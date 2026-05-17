@@ -55,9 +55,7 @@ pub fn match_trigger(
                 .any(|kw| match_keyword(&msg, &kw.to_lowercase()))
         }
         // Every named flag must be present and `true`.
-        SkillTrigger::Flags(needed) => {
-            needed.iter().all(|f| flags.get(f).copied() == Some(true))
-        }
+        SkillTrigger::Flags(needed) => needed.iter().all(|f| flags.get(f).copied() == Some(true)),
     }
 }
 
@@ -167,11 +165,7 @@ mod tests {
     fn filter_keeps_matches_and_sorts_by_priority() {
         let skills = vec![
             skill("late", SkillTrigger::Always, 90),
-            skill(
-                "kw",
-                SkillTrigger::Keywords(vec!["dashboard".into()]),
-                10,
-            ),
+            skill("kw", SkillTrigger::Keywords(vec!["dashboard".into()]), 10),
             skill("early", SkillTrigger::Always, 5),
         ];
         let out = filter_by_intent(&skills, "build a dashboard", &HashMap::new());

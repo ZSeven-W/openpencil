@@ -37,11 +37,7 @@ fn collect(dir: &Dir, out: &mut Vec<SkillEntry>) {
         collect(sub, out);
     }
     for file in dir.files() {
-        let is_md = file
-            .path()
-            .extension()
-            .map(|e| e == "md")
-            .unwrap_or(false);
+        let is_md = file.path().extension().map(|e| e == "md").unwrap_or(false);
         if !is_md {
             continue;
         }
@@ -122,8 +118,8 @@ mod tests {
         // list. All three must parse to a non-empty keyword trigger
         // (a regression here silently disables the skill).
         for name in ["role-definitions", "copywriting", "cjk-typography"] {
-            let skill = get_skill_by_name(name)
-                .unwrap_or_else(|| panic!("{name} should be registered"));
+            let skill =
+                get_skill_by_name(name).unwrap_or_else(|| panic!("{name} should be registered"));
             match &skill.meta.trigger {
                 crate::types::SkillTrigger::Keywords(kw) => {
                     assert!(!kw.is_empty(), "{name} keyword trigger must not be empty");

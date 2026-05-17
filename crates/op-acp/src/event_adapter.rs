@@ -53,8 +53,7 @@ pub fn session_update_to_delta(note: &SessionNotification) -> Option<ChatDelta> 
             ..
         } => match status.as_deref() {
             Some("failed") => {
-                let msg = extract_tool_error(content)
-                    .unwrap_or_else(|| raw_output.to_string());
+                let msg = extract_tool_error(content).unwrap_or_else(|| raw_output.to_string());
                 Some(ChatDelta::Error(msg))
             }
             // `completed` is not a stream terminator — the turn ends

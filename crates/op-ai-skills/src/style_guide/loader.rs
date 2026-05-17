@@ -61,11 +61,7 @@ pub fn style_guide_registry() -> &'static [ParsedStyleGuide] {
         let mut out = Vec::new();
         if let Some(dir) = SKILLS.get_dir("style-guides") {
             for file in dir.files() {
-                let is_md = file
-                    .path()
-                    .extension()
-                    .map(|e| e == "md")
-                    .unwrap_or(false);
+                let is_md = file.path().extension().map(|e| e == "md").unwrap_or(false);
                 if !is_md {
                     continue;
                 }
@@ -165,7 +161,11 @@ mod tests {
     fn registry_loads_the_style_guides() {
         let reg = style_guide_registry();
         // ~50 style guides ship with the corpus.
-        assert!(reg.len() >= 40, "style-guide registry too small: {}", reg.len());
+        assert!(
+            reg.len() >= 40,
+            "style-guide registry too small: {}",
+            reg.len()
+        );
         assert!(reg.iter().all(|g| !g.name.is_empty()));
     }
 

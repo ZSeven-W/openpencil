@@ -192,10 +192,8 @@ impl<'a> AIChatPlaceholder<'a> {
         let height = crate::widgets::ai_chat_model_picker::picker_content_height(
             &self.state.available_models,
         );
-        let toolbar_top = input_rect.origin.y
-            + INPUT_AREA_HEIGHT
-            + self.attachment_row_h()
-            + CONTROLS_ROW_HEIGHT;
+        let toolbar_top =
+            input_rect.origin.y + INPUT_AREA_HEIGHT + self.attachment_row_h() + CONTROLS_ROW_HEIGHT;
         let bottom = toolbar_top - 4.0;
         Rect {
             origin: Point2D::new(rect.origin.x + PAD, bottom - height),
@@ -502,10 +500,7 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
         let attach_h = self.attachment_row_h();
         if attach_h > 0.0 {
             let attach_rect = Rect {
-                origin: Point2D::new(
-                    input_rect.origin.x,
-                    input_rect.origin.y + INPUT_AREA_HEIGHT,
-                ),
+                origin: Point2D::new(input_rect.origin.x, input_rect.origin.y + INPUT_AREA_HEIGHT),
                 size: Point2D::new(input_rect.size.x, attach_h),
             };
             paint_attachment_row(cx, &self.theme, attach_rect, self.state);
@@ -523,8 +518,7 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
 
         // Bottom toolbar — model picker on the left, send on the
         // right (mirrors the TS panel's bottom row).
-        let toolbar_y =
-            input_rect.origin.y + INPUT_AREA_HEIGHT + attach_h + CONTROLS_ROW_HEIGHT;
+        let toolbar_y = input_rect.origin.y + INPUT_AREA_HEIGHT + attach_h + CONTROLS_ROW_HEIGHT;
         let toolbar_center_y = toolbar_y + INPUT_TOOLBAR_HEIGHT / 2.0;
         // Model chip — brand logo of the selected model's provider
         // + its display name + a chevron. Click toggles the picker.
@@ -583,8 +577,8 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
         };
         // A turn is sendable with text, with staged attachments, or
         // both (TS parity: an attachment-only message is valid).
-        let send_active = !self.state.input.trim().is_empty()
-            || !self.state.pending_attachments.is_empty();
+        let send_active =
+            !self.state.input.trim().is_empty() || !self.state.pending_attachments.is_empty();
         let (send_bg, icon_color) = if send_active {
             (self.theme.primary, self.theme.primary_foreground)
         } else {
@@ -673,7 +667,8 @@ mod tests {
 
     /// Y-coordinate of the bottom toolbar's vertical center.
     fn toolbar_center_y() -> f32 {
-        AI_CHAT_HEIGHT - INPUT_BASE_HEIGHT + 1.0
+        AI_CHAT_HEIGHT - INPUT_BASE_HEIGHT
+            + 1.0
             + INPUT_AREA_HEIGHT
             + CONTROLS_ROW_HEIGHT
             + INPUT_TOOLBAR_HEIGHT / 2.0

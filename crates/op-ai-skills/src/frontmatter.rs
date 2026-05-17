@@ -208,9 +208,7 @@ pub fn parse_skill_frontmatter(raw: &str) -> Option<(SkillMeta, String)> {
                             .filter_map(|s| Phase::from_str(s))
                             .collect()
                     } else {
-                        Phase::from_str(&unquote(&e.value))
-                            .into_iter()
-                            .collect()
+                        Phase::from_str(&unquote(&e.value)).into_iter().collect()
                     };
                 }
                 "priority" => priority = unquote(&e.value).parse().unwrap_or(50),
