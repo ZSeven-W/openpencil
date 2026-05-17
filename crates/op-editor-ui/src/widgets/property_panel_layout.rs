@@ -26,11 +26,15 @@ pub struct VisibleSections {
     pub fill: bool,
     /// `StrokeHex` + `StrokeWidth` from the Stroke section.
     pub stroke: bool,
-    /// Effects section paints (header + add chip, no inputs yet).
-    /// Tracked because the export-rect walker needs to know
+    /// Effects section paints (header + add chip + one row per
+    /// effect). Tracked because the export-rect walker needs to know
     /// whether it consumed vertical space ahead of the Export
     /// section.
     pub effects: bool,
+    /// Number of effect rows the Effects section paints — drives the
+    /// section's variable height + the per-row "✕" hit rects. 0 when
+    /// the section is hidden or the node has no effects.
+    pub effect_count: usize,
     /// Export section paints — `OpenExportDialog` action emits
     /// only when this is true.
     pub export: bool,
@@ -49,9 +53,28 @@ impl VisibleSections {
         fill: true,
         stroke: true,
         effects: true,
+        effect_count: 0,
         export: true,
         fill_type: FillType::Solid,
     };
+}
+
+/// Height (px) of one effect row in the Effects section — the type
+/// label + the "✕" remove button.
+pub const EFFECT_ROW_HEIGHT: f32 = INPUT_HEIGHT + 4.0;
+
+/// Total vertical space the Effects section consumes for
+/// `effect_count` effects: the section header plus one row per
+/// effect, or an 8 px filler when the node has none. Paint
+/// (`paint_effects_section`) and the layout walker both consult this
+/// so their y-math can never drift.
+pub fn effects_section_height(effect_count: usize) -> f32 {
+    SECTION_HEADER_HEIGHT
+        + if effect_count == 0 {
+            8.0
+        } else {
+            effect_count as f32 * EFFECT_ROW_HEIGHT
+        }
 }
 
 /// State for the 5 Size checkboxes (fill / hug / clip).
@@ -240,8 +263,8 @@ pub fn action_button_rects_with_fill_picker(
         y += SECTION_GAP;
     }
     if visible.effects {
-        // Mirrors paint_effects_section: header + 8 px filler.
-        // The header's "+" button (drawn by
+        // Mirrors `paint_effects_section`: header + one row per
+        // effect. The header's "+" button (drawn by
         // `paint_section_label_with_add` at the right edge) maps to
         // an `AddEffect` action.
         let plus = Rect {
@@ -250,7 +273,20 @@ pub fn action_button_rects_with_fill_picker(
         };
         out.push((PropertyPanelAction::AddEffect, plus));
         y += SECTION_HEADER_HEIGHT;
-        y += 8.0;
+        // One right-aligned "✕" per effect row → RemoveEffect(i).
+        for i in 0..visible.effect_count {
+            let row_y = y + i as f32 * EFFECT_ROW_HEIGHT;
+            out.push((
+                PropertyPanelAction::RemoveEffect(i),
+                Rect {
+                    origin: Point2D::new(x0 + w - PAD_X - 20.0, row_y + 2.0),
+                    size: Point2D::new(20.0, INPUT_HEIGHT),
+                },
+            ));
+        }
+        // Advance past the rows — identical to effects_section_height
+        // minus the header already consumed above.
+        y += effects_section_height(visible.effect_count) - SECTION_HEADER_HEIGHT;
         y += SECTION_GAP;
     }
     if visible.export {

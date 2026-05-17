@@ -5,13 +5,14 @@
 
 use crate::theme::Theme;
 use crate::widgets::icons::{draw_icon, Icon};
-use crate::widgets::property_panel::NodeSnapshot;
+use crate::widgets::property_panel::{EffectSummary, NodeSnapshot};
 use crate::widgets::property_panel_inputs::{
     format_color_hex, paint_dropdown, paint_input_with_icon_focused,
     paint_input_with_prefix_focused, paint_input_with_suffix_focused, paint_section_divider,
     paint_section_label, paint_section_label_with_add, to_jian_color, HEADER_HEIGHT, INPUT_HEIGHT,
     INPUT_RADIUS, PAD_X, SECTION_GAP, TAB_HEIGHT,
 };
+use crate::widgets::property_panel_layout::EFFECT_ROW_HEIGHT;
 use crate::widgets::PaintCx;
 use crate::{Color, Point2D, Rect, TextLayout};
 use op_editor_core::PropertyFocus;
@@ -697,14 +698,53 @@ pub fn paint_effects_section(
     cx: &mut PaintCx<'_>,
     theme: &Theme,
     labels: &PropertyLabels,
+    effects: &[EffectSummary],
     x: f32,
     y: f32,
     width: f32,
 ) -> f32 {
-    let y = paint_section_label_with_add(cx, theme, labels.effects, x, y, width);
-    let after = y + 8.0;
-    paint_section_divider(cx, theme, x, after, width);
-    after + SECTION_GAP
+    let mut row_y = paint_section_label_with_add(cx, theme, labels.effects, x, y, width);
+    if effects.is_empty() {
+        row_y += 8.0;
+    } else {
+        for eff in effects {
+            paint_effect_row(cx, theme, eff, x, row_y, width);
+            row_y += EFFECT_ROW_HEIGHT;
+        }
+    }
+    paint_section_divider(cx, theme, x, row_y, width);
+    row_y + SECTION_GAP
+}
+
+/// Paint one effect row — the effect-type label on the left + a
+/// right-aligned "✕" remove glyph. The "✕" hit rect is emitted by
+/// `action_button_rects` as `RemoveEffect(index)`, so the glyph
+/// position here must match that rect.
+fn paint_effect_row(
+    cx: &mut PaintCx<'_>,
+    theme: &Theme,
+    eff: &EffectSummary,
+    x: f32,
+    y: f32,
+    width: f32,
+) {
+    let label = TextLayout::single_run(
+        eff.kind.label(),
+        "system-ui",
+        12.0,
+        to_jian_color(theme.foreground),
+        Point2D::new(0.0, 0.0),
+    );
+    cx.backend
+        .draw_text(&label, Point2D::new(x + PAD_X, y + 15.0));
+    draw_icon(
+        cx.backend,
+        Icon::Close,
+        Point2D::new(x + width - PAD_X - 14.0, y + 3.0),
+        14.0,
+        theme.muted_foreground,
+        1.4,
+    );
 }
 
 // ── Export section ────────────────────────────────────────────────

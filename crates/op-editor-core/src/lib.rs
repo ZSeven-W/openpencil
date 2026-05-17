@@ -69,7 +69,7 @@ pub use editor_ui_state::{
     LayerContextMenuState, Locale, PageRenameState, PropertyTab, RecentFile, ShapeChoice,
     ThemeMode, VariableRowFocus,
 };
-pub use fills::{first_fill_type, first_solid_fill_hex, first_solid_stroke_hex};
+pub use fills::{first_fill_type, first_solid_fill_hex, first_solid_stroke_hex, node_effects};
 pub use geometry::{aggregate_bounds, own_bounds, union_aggregate_bounds, DocRect};
 pub use history::{EditorSnapshot, History, HISTORY_CAP};
 pub use node_id::NodeId;
