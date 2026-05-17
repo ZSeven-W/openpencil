@@ -229,6 +229,9 @@ pub struct CanvasViewport<'a> {
     /// coord, used to paint the rubber-band preview.
     pub(super) pen_in_progress: Option<String>,
     pub(super) pen_cursor_doc: Option<Point2D>,
+    /// Smart-guide alignment lines to paint during a node drag —
+    /// doc-space, computed by the host's `align_guides` pass.
+    pub(super) active_guides: Vec<op_editor_core::align_guides::AlignmentGuide>,
     /// Text node being edited (scene-space string id) + its caret
     /// blink anchor.
     pub(super) text_editing: Option<String>,
@@ -277,6 +280,7 @@ impl<'a> CanvasViewport<'a> {
                 .as_ref()
                 .map(|id| id.as_str().to_string()),
             pen_cursor_doc: state.ui.pen_cursor_doc.map(|p| Point2D::new(p.x, p.y)),
+            active_guides: state.editor_ui.active_guides.clone(),
             text_editing: state
                 .ui
                 .text_editing
@@ -347,6 +351,31 @@ impl<'a> Widget for CanvasViewport<'a> {
                     edit_caret.clone(),
                     cull,
                 );
+            }
+        }
+
+        // 3a. Smart-guide alignment lines (magenta) — painted over the
+        // nodes during a node drag, cleared on release.
+        if !self.active_guides.is_empty() {
+            const GUIDE_COLOR: Color = Color {
+                r: 0.93,
+                g: 0.12,
+                b: 0.55,
+                a: 1.0,
+            };
+            for g in &self.active_guides {
+                let (from, to) = if g.vertical {
+                    let x = rect.origin.x + viewport.pan_x + (g.pos as f32) * viewport.zoom;
+                    let y0 = rect.origin.y + viewport.pan_y + (g.start as f32) * viewport.zoom;
+                    let y1 = rect.origin.y + viewport.pan_y + (g.end as f32) * viewport.zoom;
+                    (Point2D::new(x, y0), Point2D::new(x, y1))
+                } else {
+                    let y = rect.origin.y + viewport.pan_y + (g.pos as f32) * viewport.zoom;
+                    let x0 = rect.origin.x + viewport.pan_x + (g.start as f32) * viewport.zoom;
+                    let x1 = rect.origin.x + viewport.pan_x + (g.end as f32) * viewport.zoom;
+                    (Point2D::new(x0, y), Point2D::new(x1, y))
+                };
+                cx.backend.stroke_line(from, to, GUIDE_COLOR, 1.0);
             }
         }
 
