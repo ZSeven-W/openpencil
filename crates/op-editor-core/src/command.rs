@@ -40,6 +40,18 @@ pub enum NodeFlag {
     Collapsed,
 }
 
+/// Which scalar parameter [`EditorCommand::SetEffectParam`] writes.
+/// `OffsetX` / `OffsetY` / `Blur` / `Spread` target a Shadow effect;
+/// `Radius` targets a Blur / BackgroundBlur effect.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EffectField {
+    OffsetX,
+    OffsetY,
+    Blur,
+    Spread,
+    Radius,
+}
+
 /// Wire-friendly value payload for [`EditorCommand::SetVariableScalar`]
 /// — a non-color scalar variable's new value.
 #[derive(Debug, Clone, PartialEq)]
@@ -208,6 +220,13 @@ pub enum EditorCommand {
     AddNodeEffect { node_id: NodeId, kind: String },
     /// Remove the effect at `index` from a node's effect list.
     RemoveNodeEffect { node_id: NodeId, index: u32 },
+    /// Set one scalar parameter of the effect at `index` on a node.
+    SetEffectParam {
+        node_id: NodeId,
+        index: u32,
+        field: EffectField,
+        value: f32,
+    },
     /// Set the active canvas tool.
     SetActiveTool { tool: String },
     /// Undo the last change.

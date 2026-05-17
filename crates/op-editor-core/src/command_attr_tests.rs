@@ -167,3 +167,63 @@ fn remove_node_effect_rejects_out_of_range() {
         index: 0,
     }));
 }
+
+#[test]
+fn set_effect_param_writes_shadow_offset() {
+    let mut s = state_with(vec![rect("n1", "r", 0.0, 0.0, 10.0, 10.0)]);
+    assert!(s.apply(EditorCommand::AddNodeEffect {
+        node_id: id("n1"),
+        kind: "shadow".into(),
+    }));
+    assert!(s.apply(EditorCommand::SetEffectParam {
+        node_id: id("n1"),
+        index: 0,
+        field: crate::EffectField::OffsetX,
+        value: 12.0,
+    }));
+    match find_node(s.active_children(), &id("n1")).unwrap() {
+        PenNode::Rectangle(r) => match &r.container.effects.as_ref().unwrap()[0] {
+            jian_ops_schema::style::PenEffect::Shadow(sh) => assert_eq!(sh.offset_x, 12.0),
+            other => panic!("expected shadow, got {other:?}"),
+        },
+        other => panic!("expected rect, got {other:?}"),
+    }
+}
+
+#[test]
+fn set_effect_param_clamps_blur_radius_to_non_negative() {
+    let mut s = state_with(vec![rect("n1", "r", 0.0, 0.0, 10.0, 10.0)]);
+    assert!(s.apply(EditorCommand::AddNodeEffect {
+        node_id: id("n1"),
+        kind: "blur".into(),
+    }));
+    assert!(s.apply(EditorCommand::SetEffectParam {
+        node_id: id("n1"),
+        index: 0,
+        field: crate::EffectField::Radius,
+        value: -9.0,
+    }));
+    match find_node(s.active_children(), &id("n1")).unwrap() {
+        PenNode::Rectangle(r) => match &r.container.effects.as_ref().unwrap()[0] {
+            jian_ops_schema::style::PenEffect::Blur(b) => assert_eq!(b.radius, 0.0),
+            other => panic!("expected blur, got {other:?}"),
+        },
+        other => panic!("expected rect, got {other:?}"),
+    }
+}
+
+#[test]
+fn set_effect_param_rejects_field_effect_mismatch() {
+    let mut s = state_with(vec![rect("n1", "r", 0.0, 0.0, 10.0, 10.0)]);
+    assert!(s.apply(EditorCommand::AddNodeEffect {
+        node_id: id("n1"),
+        kind: "blur".into(),
+    }));
+    // OffsetX is a Shadow-only field — rejected on a Blur effect.
+    assert!(!s.apply(EditorCommand::SetEffectParam {
+        node_id: id("n1"),
+        index: 0,
+        field: crate::EffectField::OffsetX,
+        value: 5.0,
+    }));
+}

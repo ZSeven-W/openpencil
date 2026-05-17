@@ -12,7 +12,7 @@
 //! Each helper keeps the validate-then-mutate discipline: kind / range
 //! / hex checks happen BEFORE the mutable borrow + write.
 
-use crate::command::NodeFlag;
+use crate::command::{EffectField, NodeFlag};
 use crate::fills::{set_primary_fill_hex, set_primary_stroke_hex};
 use crate::node_id::NodeId;
 use crate::pen_node_ext::PenNodeExt;
@@ -405,6 +405,44 @@ impl EditorState {
         effects.remove(i);
         if effects.is_empty() {
             *slot = None;
+        }
+        true
+    }
+
+    /// `SetEffectParam` — write one scalar param of the effect at
+    /// `index`. Blur values are clamped to ≥ 0. Rejects a non-finite
+    /// value, an out-of-range index, or a field that doesn't match
+    /// the effect variant (e.g. `Radius` on a Shadow).
+    pub(crate) fn cmd_set_effect_param(
+        &mut self,
+        node_id: &NodeId,
+        index: u32,
+        field: EffectField,
+        value: f32,
+    ) -> bool {
+        if !node_id.is_real() || !value.is_finite() {
+            return false;
+        }
+        let Some(node) = find_node_mut(self.active_children_mut(), node_id) else {
+            return false;
+        };
+        let Some(slot) = node_effects_slot(node) else {
+            return false;
+        };
+        let Some(effects) = slot.as_mut() else {
+            return false;
+        };
+        let Some(effect) = effects.get_mut(index as usize) else {
+            return false;
+        };
+        match (effect, field) {
+            (PenEffect::Shadow(s), EffectField::OffsetX) => s.offset_x = value,
+            (PenEffect::Shadow(s), EffectField::OffsetY) => s.offset_y = value,
+            (PenEffect::Shadow(s), EffectField::Blur) => s.blur = value.max(0.0),
+            (PenEffect::Shadow(s), EffectField::Spread) => s.spread = value,
+            (PenEffect::Blur(b), EffectField::Radius)
+            | (PenEffect::BackgroundBlur(b), EffectField::Radius) => b.radius = value.max(0.0),
+            _ => return false,
         }
         true
     }

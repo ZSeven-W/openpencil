@@ -62,7 +62,7 @@ pub use agent_settings::{
 pub use align::AlignAction;
 pub use chat::{AgentProvider, ChatAnchor, ChatMessage, ChatRole, ChatState, ModelEntry};
 pub use color_picker::{hsv_to_rgb, parse_hex_rgb, rgb_to_hex, rgb_to_hsv};
-pub use command::{BatchInsertItem, EditorCommand, NodeFlag, VariableScalarPayload};
+pub use command::{BatchInsertItem, EditorCommand, EffectField, NodeFlag, VariableScalarPayload};
 pub use components::{Component, ComponentLibrary};
 pub use editor_ui_state::{
     BooleanOp, EditorUiState, ExportFormat, FileAction, FileMenuChoice, FillType, FlexLayout,

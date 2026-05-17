@@ -6,12 +6,12 @@
 //! Pulled out of `property_panel_sections.rs` to keep that file
 //! under the 800-line ceiling.
 
-use crate::widgets::property_panel::PropertyPanelAction;
+use crate::widgets::property_panel::{EffectKind, EffectSummary, PropertyPanelAction};
 use crate::widgets::property_panel_inputs::{
     HEADER_HEIGHT, INPUT_HEIGHT, PAD_X, SECTION_GAP, SECTION_HEADER_HEIGHT, TAB_HEIGHT,
 };
 use crate::{Point2D, Rect};
-use op_editor_core::{FillType, FlexLayout, PropertyFocus};
+use op_editor_core::{EffectField, FillType, FlexLayout, PropertyFocus};
 
 /// Whether each section currently paints — drives the layout
 /// walk so when per-kind filtering hides a section, the rects
@@ -26,15 +26,12 @@ pub struct VisibleSections {
     pub fill: bool,
     /// `StrokeHex` + `StrokeWidth` from the Stroke section.
     pub stroke: bool,
-    /// Effects section paints (header + add chip + one row per
+    /// Effects section paints (header + add chip + one block per
     /// effect). Tracked because the export-rect walker needs to know
     /// whether it consumed vertical space ahead of the Export
-    /// section.
+    /// section. The per-effect geometry is driven by the `effects`
+    /// slice the walker takes alongside this struct.
     pub effects: bool,
-    /// Number of effect rows the Effects section paints — drives the
-    /// section's variable height + the per-row "✕" hit rects. 0 when
-    /// the section is hidden or the node has no effects.
-    pub effect_count: usize,
     /// Export section paints — `OpenExportDialog` action emits
     /// only when this is true.
     pub export: bool,
@@ -53,27 +50,52 @@ impl VisibleSections {
         fill: true,
         stroke: true,
         effects: true,
-        effect_count: 0,
         export: true,
         fill_type: FillType::Solid,
     };
 }
 
-/// Height (px) of one effect row in the Effects section — the type
-/// label + the "✕" remove button.
+/// Height (px) of an effect's header row — the type label + "✕".
 pub const EFFECT_ROW_HEIGHT: f32 = INPUT_HEIGHT + 4.0;
 
-/// Total vertical space the Effects section consumes for
-/// `effect_count` effects: the section header plus one row per
-/// effect, or an 8 px filler when the node has none. Paint
-/// (`paint_effects_section`) and the layout walker both consult this
-/// so their y-math can never drift.
-pub fn effects_section_height(effect_count: usize) -> f32 {
+/// Height (px) of one effect-parameter row — label + value + the
+/// "−" / "+" steppers.
+pub const EFFECT_PARAM_ROW_HEIGHT: f32 = INPUT_HEIGHT + 2.0;
+
+/// Doc-px a single "−" / "+" stepper click moves an effect parameter.
+pub const EFFECT_PARAM_STEP: f32 = 1.0;
+
+/// The editable scalar params an effect kind exposes, in row order,
+/// each paired with its short row label. Shadow exposes four; the
+/// blur kinds expose a single radius.
+pub fn effect_param_fields(kind: EffectKind) -> &'static [(EffectField, &'static str)] {
+    match kind {
+        EffectKind::Shadow => &[
+            (EffectField::OffsetX, "X"),
+            (EffectField::OffsetY, "Y"),
+            (EffectField::Blur, "Blur"),
+            (EffectField::Spread, "Spread"),
+        ],
+        EffectKind::Blur | EffectKind::BackgroundBlur => &[(EffectField::Radius, "Radius")],
+    }
+}
+
+/// Total height one effect block consumes — its header row plus one
+/// row per editable parameter.
+pub fn effect_block_height(kind: EffectKind) -> f32 {
+    EFFECT_ROW_HEIGHT + effect_param_fields(kind).len() as f32 * EFFECT_PARAM_ROW_HEIGHT
+}
+
+/// Total vertical space the Effects section consumes: the section
+/// header plus one block per effect (or an 8 px filler when the node
+/// has none). Paint (`paint_effects_section`) and the action-rect
+/// walker both consult this so their y-math can never drift.
+pub fn effects_section_height(effects: &[EffectSummary]) -> f32 {
     SECTION_HEADER_HEIGHT
-        + if effect_count == 0 {
+        + if effects.is_empty() {
             8.0
         } else {
-            effect_count as f32 * EFFECT_ROW_HEIGHT
+            effects.iter().map(|e| effect_block_height(e.kind)).sum()
         }
 }
 
@@ -109,16 +131,19 @@ pub fn fill_body_height(fill_type: FillType) -> f32 {
 pub fn action_button_rects(
     panel_rect: Rect,
     visible: VisibleSections,
+    effects: &[EffectSummary],
 ) -> Vec<(PropertyPanelAction, Rect)> {
-    action_button_rects_with_fill_picker(panel_rect, visible, false)
+    action_button_rects_with_fill_picker(panel_rect, visible, effects, false)
 }
 
 /// Same as `action_button_rects` but `fill_picker_open == true`
 /// emits hit-rects for the 4 picker rows that overlay the Fill
-/// section.
+/// section. `effects` drives the Effects section's per-effect "✕"
+/// and parameter-stepper rects + that section's variable height.
 pub fn action_button_rects_with_fill_picker(
     panel_rect: Rect,
     visible: VisibleSections,
+    effects: &[EffectSummary],
     fill_picker_open: bool,
 ) -> Vec<(PropertyPanelAction, Rect)> {
     let x0 = panel_rect.origin.x;
@@ -263,30 +288,57 @@ pub fn action_button_rects_with_fill_picker(
         y += SECTION_GAP;
     }
     if visible.effects {
-        // Mirrors `paint_effects_section`: header + one row per
-        // effect. The header's "+" button (drawn by
-        // `paint_section_label_with_add` at the right edge) maps to
-        // an `AddEffect` action.
+        // Mirrors `paint_effects_section`: header + one block per
+        // effect (header row + parameter rows). The header's "+"
+        // button maps to `AddEffect`.
         let plus = Rect {
             origin: Point2D::new(x0 + w - PAD_X - 22.0, y),
             size: Point2D::new(28.0, SECTION_HEADER_HEIGHT),
         };
         out.push((PropertyPanelAction::AddEffect, plus));
         y += SECTION_HEADER_HEIGHT;
-        // One right-aligned "✕" per effect row → RemoveEffect(i).
-        for i in 0..visible.effect_count {
-            let row_y = y + i as f32 * EFFECT_ROW_HEIGHT;
+        for (ei, eff) in effects.iter().enumerate() {
+            // "✕" on the effect's header row → RemoveEffect.
             out.push((
-                PropertyPanelAction::RemoveEffect(i),
+                PropertyPanelAction::RemoveEffect(ei),
                 Rect {
-                    origin: Point2D::new(x0 + w - PAD_X - 20.0, row_y + 2.0),
+                    origin: Point2D::new(x0 + w - PAD_X - 20.0, y + 2.0),
                     size: Point2D::new(20.0, INPUT_HEIGHT),
                 },
             ));
+            // One "−"/"+" stepper pair per editable parameter row.
+            let mut py = y + EFFECT_ROW_HEIGHT;
+            for &(field, _) in effect_param_fields(eff.kind) {
+                let cur = eff.param_value(field);
+                out.push((
+                    PropertyPanelAction::AdjustEffectParam {
+                        effect: ei,
+                        field,
+                        new_value: cur - EFFECT_PARAM_STEP,
+                    },
+                    Rect {
+                        origin: Point2D::new(x0 + w - PAD_X - 48.0, py + 3.0),
+                        size: Point2D::new(22.0, INPUT_HEIGHT - 6.0),
+                    },
+                ));
+                out.push((
+                    PropertyPanelAction::AdjustEffectParam {
+                        effect: ei,
+                        field,
+                        new_value: cur + EFFECT_PARAM_STEP,
+                    },
+                    Rect {
+                        origin: Point2D::new(x0 + w - PAD_X - 22.0, py + 3.0),
+                        size: Point2D::new(22.0, INPUT_HEIGHT - 6.0),
+                    },
+                ));
+                py += EFFECT_PARAM_ROW_HEIGHT;
+            }
+            y += effect_block_height(eff.kind);
         }
-        // Advance past the rows — identical to effects_section_height
-        // minus the header already consumed above.
-        y += effects_section_height(visible.effect_count) - SECTION_HEADER_HEIGHT;
+        if effects.is_empty() {
+            y += 8.0;
+        }
         y += SECTION_GAP;
     }
     if visible.export {
