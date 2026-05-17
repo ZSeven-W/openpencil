@@ -68,7 +68,9 @@ pub const PROPERTY_PANEL_WIDTH: f32 = 280.0;
 /// Button / checkbox actions in the property panel that don't
 /// map to a text input. The host dispatches these in `apply_press`
 /// after the text-input hit-test misses.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+///
+/// `PartialEq` only (not `Eq`) — `AdjustEffectParam` carries an `f32`.
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum PropertyPanelAction {
     SetFlexLayout(op_editor_core::FlexLayout),
     ToggleSizeFillWidth,
@@ -93,6 +95,15 @@ pub enum PropertyPanelAction {
     /// User clicked the "✕" on an effect row — host removes the
     /// effect at this index from the selected node.
     RemoveEffect(usize),
+    /// User clicked a "−" / "+" stepper on an effect parameter row.
+    /// `new_value` is the post-step value (the walker computed it
+    /// from the current value ± the step); the host writes it via
+    /// `EditorCommand::SetEffectParam`.
+    AdjustEffectParam {
+        effect: usize,
+        field: op_editor_core::EffectField,
+        new_value: f32,
+    },
 }
 
 /// Per-NodeKind toggles for which property-panel sections render.
@@ -243,6 +254,19 @@ pub struct EffectSummary {
 }
 
 impl EffectSummary {
+    /// Current value of one editable parameter — Blur / BackgroundBlur
+    /// keep their radius in `blur`, so `Blur` and `Radius` both read
+    /// that field.
+    pub fn param_value(&self, field: op_editor_core::EffectField) -> f32 {
+        use op_editor_core::EffectField as F;
+        match field {
+            F::OffsetX => self.offset_x,
+            F::OffsetY => self.offset_y,
+            F::Blur | F::Radius => self.blur,
+            F::Spread => self.spread,
+        }
+    }
+
     /// Summarise a canonical `PenEffect` for the panel.
     fn from_pen_effect(e: &jian_ops_schema::style::PenEffect) -> Self {
         use jian_ops_schema::style::PenEffect;
@@ -532,13 +556,13 @@ impl PropertyPanel {
             fill: caps.fill,
             stroke: caps.stroke,
             effects: caps.effects,
-            effect_count: self.snapshot.effects.len(),
             export: caps.export,
             fill_type: self.fill_type,
         };
         let rects = sections::action_button_rects_with_fill_picker(
             panel_rect,
             visible,
+            &self.snapshot.effects,
             self.fill_type_picker_open,
         );
         // Picker rows live in `rects` AFTER the dropdown rect, so
@@ -570,7 +594,6 @@ impl PropertyPanel {
             fill: caps.fill,
             stroke: caps.stroke,
             effects: caps.effects,
-            effect_count: self.snapshot.effects.len(),
             export: caps.export,
             fill_type: self.fill_type,
         };
@@ -733,7 +756,6 @@ impl Widget for PropertyPanel {
                 fill: caps.fill,
                 stroke: caps.stroke,
                 effects: caps.effects,
-                effect_count: self.snapshot.effects.len(),
                 export: caps.export,
                 fill_type: self.fill_type,
             };

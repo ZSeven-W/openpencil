@@ -180,6 +180,12 @@ impl EditorState {
             EditorCommand::RemoveNodeEffect { node_id, index } => {
                 self.cmd_remove_node_effect(&node_id, index)
             }
+            EditorCommand::SetEffectParam {
+                node_id,
+                index,
+                field,
+                value,
+            } => self.cmd_set_effect_param(&node_id, index, field, value),
 
             // --- Variables + themes --------------------------------
             EditorCommand::SetVariableColor { name, hex } => self.set_variable_color(&name, &hex),

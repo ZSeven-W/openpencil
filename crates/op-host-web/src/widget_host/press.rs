@@ -79,6 +79,24 @@ impl WidgetHost {
                             });
                 }
             }
+            A::AdjustEffectParam {
+                effect,
+                field,
+                new_value,
+            } => {
+                let id = self.editor_state.selection.anchor.clone();
+                if id.is_real() {
+                    self.editor_state.commit_history();
+                    let _ =
+                        self.editor_state
+                            .apply(op_editor_core::EditorCommand::SetEffectParam {
+                                node_id: id,
+                                index: effect as u32,
+                                field,
+                                value: new_value,
+                            });
+                }
+            }
         }
         self.mark_dirty();
     }
