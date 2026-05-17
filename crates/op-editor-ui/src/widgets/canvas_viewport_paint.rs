@@ -330,6 +330,13 @@ pub fn paint_node(
             // handles, flatten each cubic segment; otherwise fall back
             // to the straight `points` polyline.
             let polyline = flatten_path(node);
+            // A closed path with a fill paints its enclosed area.
+            if node.path_closed {
+                if let Some(fill) = node.fill {
+                    let world: Vec<Point2D> = polyline.iter().map(|p| to_world(*p)).collect();
+                    cx.backend.fill_polygon(&world, fill);
+                }
+            }
             for pair in polyline.windows(2) {
                 cx.backend
                     .stroke_line(to_world(pair[0]), to_world(pair[1]), color, width);

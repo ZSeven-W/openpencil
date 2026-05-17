@@ -539,20 +539,13 @@ fn path_to_payload(n: &PathNode) -> NodePayload {
         // anchors, so this faithfully traces them without bezier data.
         p.points = anchors.iter().map(|a| [a.x as f32, a.y as f32]).collect();
         // Anchor-bounded path: when width/height weren't authored,
-        // derive size from the anchor bbox span (max - min) — using
-        // raw `max` assumed min=0, which is wrong for paths whose
-        // first anchor sits at, e.g., (10, 20).
-        if p.w == 0.0 && p.h == 0.0 && !p.points.is_empty() {
-            let (mut min_x, mut min_y) = (f32::INFINITY, f32::INFINITY);
-            let (mut max_x, mut max_y) = (f32::NEG_INFINITY, f32::NEG_INFINITY);
-            for [x, y] in &p.points {
-                min_x = min_x.min(*x);
-                min_y = min_y.min(*y);
-                max_x = max_x.max(*x);
-                max_y = max_y.max(*y);
-            }
-            p.w = (max_x - min_x).max(0.0);
-            p.h = (max_y - min_y).max(0.0);
+        // derive size from the handle-aware anchor bounds (cubic
+        // extrema included — endpoint-only bbox under-sizes a path
+        // whose handles bow past its anchors).
+        if p.w == 0.0 && p.h == 0.0 && !anchors.is_empty() {
+            let (_, _, w, h) = path_bounds_from_anchors(anchors, p.path_closed);
+            p.w = w;
+            p.h = h;
         }
     }
     p
