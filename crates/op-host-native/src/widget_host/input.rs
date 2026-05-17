@@ -109,6 +109,57 @@ impl WidgetHostNative {
         true
     }
 
+    /// After a node-drag translate, compute smart-guide alignment
+    /// against the other top-level nodes, snap the selection onto the
+    /// nearest edge/centre alignment, and store the guide lines for
+    /// the canvas painter. Cleared on drag release.
+    fn apply_smart_guides(&mut self) {
+        use op_editor_core::align_guides::compute_alignment_guides;
+        /// Snap range in doc-px — an edge/centre this close to another
+        /// node's edge/centre locks on.
+        const GUIDE_THRESHOLD: f64 = 6.0;
+
+        self.refresh_layout_scene();
+        let selected = self.editor_state.selection.anchor.as_str().to_string();
+        // Collect AABBs off the layout scene, then drop the borrow so
+        // the snap translate can mutate `editor_state`.
+        let (moving, others): (Option<[f64; 4]>, Vec<[f64; 4]>) =
+            match self.layout_scene.active_page() {
+                Some(page) => {
+                    let mut moving = None;
+                    let mut others = Vec::new();
+                    for n in &page.children {
+                        let b = n.bounds;
+                        let aabb = [
+                            b.origin.x as f64,
+                            b.origin.y as f64,
+                            b.size.x as f64,
+                            b.size.y as f64,
+                        ];
+                        if n.id == selected {
+                            moving = Some(aabb);
+                        } else {
+                            others.push(aabb);
+                        }
+                    }
+                    (moving, others)
+                }
+                None => (None, Vec::new()),
+            };
+        let Some(m) = moving else {
+            self.editor_state.editor_ui.active_guides.clear();
+            return;
+        };
+        let others: Vec<(f64, f64, f64, f64)> =
+            others.iter().map(|a| (a[0], a[1], a[2], a[3])).collect();
+        let result = compute_alignment_guides((m[0], m[1], m[2], m[3]), &others, GUIDE_THRESHOLD);
+        if result.snap_dx != 0.0 || result.snap_dy != 0.0 {
+            self.editor_state
+                .translate_selected(result.snap_dx, result.snap_dy);
+        }
+        self.editor_state.editor_ui.active_guides = result.guides;
+    }
+
     pub fn apply_cursor_move(&mut self, x: f32, y: f32) -> bool {
         // Every hit-test below (color picker, layer context menu, align
         // toolbar, panel resize, …) reasons about the layout-resolved
@@ -262,6 +313,9 @@ impl WidgetHostNative {
             drag.last_screen_y = y;
             if dx != 0.0 || dy != 0.0 {
                 self.editor_state.translate_selected(dx as f64, dy as f64);
+                // `drag`'s last use was above — `self` is free to
+                // re-borrow for the smart-guide alignment pass.
+                self.apply_smart_guides();
                 self.mark_dirty();
                 return true;
             }
@@ -389,6 +443,8 @@ impl WidgetHostNative {
             return true;
         }
         if self.node_drag.take().is_some() {
+            // Drag ended — drop the transient smart-guide lines.
+            self.editor_state.editor_ui.active_guides.clear();
             return true;
         }
         if let Some(drag) = self.path_anchor_drag.take() {
@@ -442,6 +498,8 @@ impl WidgetHostNative {
             return true;
         }
         if self.node_drag.take().is_some() {
+            // Drag ended — drop the transient smart-guide lines.
+            self.editor_state.editor_ui.active_guides.clear();
             return true;
         }
         if self.marquee_drag.take().is_some() {

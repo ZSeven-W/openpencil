@@ -320,6 +320,11 @@ pub struct EditorUiState {
     /// Last canvas left-click target + ms; 400 ms same-node re-press
     /// on a Text node promotes to inline text edit.
     pub last_canvas_click: Option<(NodeId, u64)>,
+    /// Smart-guide lines to paint during the current node drag —
+    /// computed each `apply_cursor_move` by `align_guides`, cleared on
+    /// drag release. View-only transient state: never serialized,
+    /// never part of the undo snapshot.
+    pub active_guides: Vec<crate::align_guides::AlignmentGuide>,
 }
 
 impl Default for EditorUiState {
@@ -368,6 +373,7 @@ impl Default for EditorUiState {
             rename_caret_anchor_ms: 0,
             last_layer_click: None,
             last_canvas_click: None,
+            active_guides: Vec::new(),
         }
     }
 }
