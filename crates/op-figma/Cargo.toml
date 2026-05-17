@@ -12,6 +12,11 @@ path = "src/lib.rs"
 
 [dependencies]
 jian-ops-schema = { path = "../../vendor/jian/crates/jian-ops-schema" }
+# Binary `.fig` pipeline. flate2's default miniz_oxide backend + ruzstd are
+# pure-Rust (no C toolchain, wasm32-clean); base64 builds the image data URLs.
+flate2 = "1"
+ruzstd = "0.7"
+base64 = "0.22"
 
 [dev-dependencies]
 op-editor-core = { path = "../op-editor-core" }

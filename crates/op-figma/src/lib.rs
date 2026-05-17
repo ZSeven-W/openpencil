@@ -4,6 +4,14 @@
 //! `packages/pen-figma`; the Rust port is a 17-file effort that
 //! lands incrementally behind this module's trait.
 
+// Binary `.fig` pipeline modules. Wired into `parse_fig` in the final
+// stage; `allow(dead_code)` covers the intermediate build where later
+// stages have not landed yet.
+#[allow(dead_code)]
+mod container;
+#[allow(dead_code)]
+mod zip_reader;
+
 use jian_ops_schema::node::{
     ContainerProps, EllipseNode, FrameNode, GroupNode, LineNode, PathNode, PenNode, PenNodeBase,
     PolygonNode, RectangleNode, TextContent, TextNode,
