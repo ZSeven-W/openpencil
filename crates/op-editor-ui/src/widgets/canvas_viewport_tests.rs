@@ -329,3 +329,33 @@ fn rotation_corner_hit_tests_the_outer_annulus() {
         Some(SelectionHandle::TopLeft),
     );
 }
+
+#[test]
+fn arc_handle_positions_places_three_handles() {
+    use super::{arc_handle_positions, ArcHandle};
+    // 100×100 ellipse at origin → centre (50, 50), radii 50.
+    let mut node = SceneNode::leaf("e1", NodeKind::Ellipse);
+    node.bounds = Rect::xywh(0.0, 0.0, 100.0, 100.0);
+    node.arc_start_angle = Some(0.0);
+    node.arc_sweep_angle = Some(90.0);
+    node.arc_inner_radius = Some(0.5);
+    let handles = arc_handle_positions(&node).expect("ellipse yields handles");
+    // Start handle at 0° → +X perimeter (100, 50).
+    assert_eq!(handles[0].0, ArcHandle::Start);
+    assert!((handles[0].1.x - 100.0).abs() < 0.01);
+    assert!((handles[0].1.y - 50.0).abs() < 0.01);
+    // Sweep handle at 90° → +Y perimeter (50, 100).
+    assert_eq!(handles[1].0, ArcHandle::Sweep);
+    assert!((handles[1].1.x - 50.0).abs() < 0.01);
+    assert!((handles[1].1.y - 100.0).abs() < 0.01);
+    // Inner handle at start angle, half radius → (75, 50).
+    assert_eq!(handles[2].0, ArcHandle::Inner);
+    assert!((handles[2].1.x - 75.0).abs() < 0.01);
+}
+
+#[test]
+fn arc_handle_positions_none_for_non_ellipse() {
+    let mut node = SceneNode::leaf("r1", NodeKind::Rect);
+    node.bounds = Rect::xywh(0.0, 0.0, 100.0, 100.0);
+    assert!(super::arc_handle_positions(&node).is_none());
+}

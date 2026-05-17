@@ -404,6 +404,41 @@ impl WidgetHostNative {
         None
     }
 
+    /// When a single Ellipse is selected with the Select tool,
+    /// hit-test whether `(x, y)` lands on one of its three arc
+    /// handles. Returns the node id + which handle on a hit.
+    pub(in crate::widget_host) fn arc_handle_hit(
+        &self,
+        x: f32,
+        y: f32,
+        viewport_w: f32,
+        viewport_h: f32,
+    ) -> Option<(String, op_editor_ui::widgets::ArcHandle)> {
+        if !matches!(self.editor_state.tool, op_editor_core::Tool::Select) {
+            return None;
+        }
+        if self.editor_state.selection_count() != 1 {
+            return None;
+        }
+        let sel = self.editor_state.selection.anchor.as_str().to_string();
+        let node = self.layout_scene.active_page()?.find(&sel)?;
+        let handles = op_editor_ui::widgets::arc_handle_positions(node)?;
+        let (cx0, cy0, _cw, _ch) = self.canvas_region(viewport_w, viewport_h);
+        let zoom = self.editor_state.viewport.zoom.max(0.0001);
+        let canvas_local = Point2D::new(x - cx0, y - cy0);
+        let doc_point = self.editor_state.viewport.to_document(canvas_local);
+        // ~7 screen-px grab radius, expressed in doc space.
+        let r2 = 49.0 / (zoom * zoom);
+        for (handle, p) in handles {
+            let dx = doc_point.x - p.x;
+            let dy = doc_point.y - p.y;
+            if dx * dx + dy * dy <= r2 {
+                return Some((sel, handle));
+            }
+        }
+        None
+    }
+
     /// Resolve a screen point to an `AlignAction` if it lands on the
     /// floating align toolbar (visible when 2+ selected).
     pub(in crate::widget_host) fn align_toolbar_hit(

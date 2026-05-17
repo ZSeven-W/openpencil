@@ -561,6 +561,20 @@ impl WidgetHostNative {
                 // The selected anchor's resolved scene node — shared
                 // by the handle-drag + rotation-drag branches below.
                 let selected_anchor = self.editor_state.selection.anchor.as_str().to_string();
+                // Arc handles take priority over the 8 resize handles —
+                // the sweep handle can overlap the right-mid resize grip.
+                if let Some((node_id, handle)) =
+                    self.arc_handle_hit(x, y, viewport_width, viewport_height)
+                {
+                    let pre = self.editor_state.snapshot_for_history();
+                    self.arc_handle_drag = Some(super::ArcHandleDragState {
+                        node_id: op_editor_core::NodeId::new(&node_id),
+                        handle,
+                        moved: false,
+                        pre_drag_snapshot: pre,
+                    });
+                    return true;
+                }
                 if let Some(handle) = selection_handle_at_point(
                     canvas_rect,
                     &self.layout_scene,

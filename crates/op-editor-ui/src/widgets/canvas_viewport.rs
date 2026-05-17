@@ -24,6 +24,7 @@
 
 use crate::layout_scene::LayoutScene;
 use crate::layout_scene::NodeKind;
+use crate::layout_scene::SceneNode;
 use crate::theme::Theme;
 use crate::widgets::editor_state_ext::theme_for;
 use crate::widgets::{LayoutBox, LayoutCx, PaintCx, Widget, WidgetId};
@@ -51,6 +52,48 @@ pub enum SelectionHandle {
 /// Radius (screen px) of the rotation ring that sits OUTSIDE the
 /// 4 selection corners. Matches the TS `ROTATE_OUTER_RADIUS`.
 const ROTATE_OUTER_RADIUS: f32 = 16.0;
+
+/// The three arc-edit handles on a selected Ellipse — start angle,
+/// sweep (end) angle, and the donut inner-radius.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ArcHandle {
+    /// Perimeter handle at the arc's start angle.
+    Start,
+    /// Perimeter handle at the arc's end angle (start + sweep).
+    Sweep,
+    /// Radial handle controlling the donut inner-radius fraction.
+    Inner,
+}
+
+/// Doc-space positions of the three arc handles for an Ellipse
+/// `SceneNode`. `None` for non-Ellipse kinds or a zero-size node.
+/// Shared by the overlay painter and the host's arc-handle hit-test
+/// so both agree on handle placement.
+pub fn arc_handle_positions(node: &SceneNode) -> Option<[(ArcHandle, Point2D); 3]> {
+    if !matches!(node.kind, NodeKind::Ellipse) {
+        return None;
+    }
+    let b = node.bounds;
+    if b.size.x <= 0.0 || b.size.y <= 0.0 {
+        return None;
+    }
+    let cx = b.origin.x + b.size.x / 2.0;
+    let cy = b.origin.y + b.size.y / 2.0;
+    let rx = b.size.x / 2.0;
+    let ry = b.size.y / 2.0;
+    let start = node.arc_start_angle.unwrap_or(0.0);
+    let sweep = node.arc_sweep_angle.unwrap_or(360.0);
+    let inner = node.arc_inner_radius.unwrap_or(0.0).clamp(0.0, 1.0);
+    let at = |deg: f32, scale: f32| -> Point2D {
+        let a = deg.to_radians();
+        Point2D::new(cx + rx * scale * a.cos(), cy + ry * scale * a.sin())
+    };
+    Some([
+        (ArcHandle::Start, at(start, 1.0)),
+        (ArcHandle::Sweep, at(start + sweep, 1.0)),
+        (ArcHandle::Inner, at(start, inner)),
+    ])
+}
 
 /// The single resolved scene node the editor's selection anchor
 /// points at, or `None` when the selection isn't a single node that
@@ -459,6 +502,34 @@ impl<'a> Widget for CanvasViewport<'a> {
                             cx.backend.fill_oval(bounds, self.theme.background);
                             cx.backend.stroke_oval(bounds, self.theme.primary, 1.5);
                         }
+                    }
+                }
+            }
+        }
+
+        // 4c. Arc-edit handles for a single-selected Ellipse with the
+        //     Select tool — start / sweep / inner-radius grab dots.
+        if matches!(self.tool, op_editor_core::Tool::Select) && self.selected_set.len() == 1 {
+            if let Some(node) = self
+                .scene
+                .active_page()
+                .and_then(|p| p.find(&self.selected))
+            {
+                if let Some(handles) = arc_handle_positions(node) {
+                    let r = 4.5; // screen-px radius
+                    for (_, p) in handles {
+                        let center = Point2D::new(
+                            rect.origin.x + viewport.pan_x + p.x * viewport.zoom,
+                            rect.origin.y + viewport.pan_y + p.y * viewport.zoom,
+                        );
+                        let bounds = Rect {
+                            origin: Point2D::new(center.x - r, center.y - r),
+                            size: Point2D::new(r * 2.0, r * 2.0),
+                        };
+                        // Filled primary dot — distinct from the white
+                        // square resize handles.
+                        cx.backend.fill_oval(bounds, self.theme.primary);
+                        cx.backend.stroke_oval(bounds, self.theme.background, 1.5);
                     }
                 }
             }

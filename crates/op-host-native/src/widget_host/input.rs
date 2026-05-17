@@ -344,6 +344,26 @@ impl WidgetHostNative {
             }
             return true;
         }
+        // Ellipse arc-handle drag — recompute the arc geometry from
+        // the cursor and re-apply `SetEllipseArc` each move.
+        if self.arc_handle_drag.is_some() {
+            let (cx0, cy0) = self.canvas_origin();
+            let canvas_local = Point2D::new(x - cx0, y - cy0);
+            let doc = self.editor_state.viewport.to_document(canvas_local);
+            let (id, handle) = {
+                let d = self.arc_handle_drag.as_ref().unwrap();
+                (d.node_id.clone(), d.handle)
+            };
+            if let Some(cmd) = self.arc_drag_command(&id, handle, doc) {
+                if self.editor_state.apply(cmd) {
+                    self.mark_dirty();
+                    if let Some(d) = self.arc_handle_drag.as_mut() {
+                        d.moved = true;
+                    }
+                }
+            }
+            return true;
+        }
         if let Some(m) = self.marquee_drag.as_mut() {
             m.current_screen_x = x;
             m.current_screen_y = y;
@@ -457,6 +477,14 @@ impl WidgetHostNative {
             }
             return false;
         }
+        if let Some(drag) = self.arc_handle_drag.take() {
+            // Commit history only when the arc actually changed.
+            if drag.moved {
+                self.editor_state.history_push_past(drag.pre_drag_snapshot);
+                return true;
+            }
+            return false;
+        }
         if let Some(m) = self.marquee_drag.take() {
             self.commit_marquee_selection(m, viewport_w, viewport_h);
             return true;
@@ -518,6 +546,83 @@ impl WidgetHostNative {
         let was_dragging = self.drag.is_some();
         self.drag = None;
         was_dragging
+    }
+
+    /// Build the `SetEllipseArc` command for an in-progress arc-handle
+    /// drag — converts the cursor doc point into start / sweep / inner
+    /// geometry for the dragged handle. `None` for a missing or
+    /// zero-size ellipse.
+    fn arc_drag_command(
+        &self,
+        id: &op_editor_core::NodeId,
+        handle: op_editor_ui::widgets::ArcHandle,
+        doc: Point2D,
+    ) -> Option<op_editor_core::EditorCommand> {
+        use op_editor_core::EditorCommand;
+        use op_editor_ui::widgets::ArcHandle;
+        let node = self.layout_scene.active_page()?.find(id.as_str())?;
+        let b = node.bounds;
+        if b.size.x <= 0.0 || b.size.y <= 0.0 {
+            return None;
+        }
+        // Cursor offset from the ellipse centre, normalised by the
+        // radii so the angle is the same convention the painter uses.
+        let nx = (doc.x - (b.origin.x + b.size.x / 2.0)) / (b.size.x / 2.0);
+        let ny = (doc.y - (b.origin.y + b.size.y / 2.0)) / (b.size.y / 2.0);
+        let old_start = node.arc_start_angle.unwrap_or(0.0);
+        let old_sweep = node.arc_sweep_angle.unwrap_or(360.0);
+        Some(match handle {
+            ArcHandle::Start => {
+                // Dragging the start handle keeps the end fixed.
+                let new_start = norm360(ny.atan2(nx).to_degrees());
+                let new_sweep = norm_sweep(old_start + old_sweep - new_start);
+                EditorCommand::SetEllipseArc {
+                    node_id: id.clone(),
+                    start_angle: Some(new_start as f64),
+                    sweep_angle: Some(new_sweep as f64),
+                    inner_radius: None,
+                }
+            }
+            ArcHandle::Sweep => {
+                let new_sweep = norm_sweep(ny.atan2(nx).to_degrees() - old_start);
+                EditorCommand::SetEllipseArc {
+                    node_id: id.clone(),
+                    start_angle: None,
+                    sweep_angle: Some(new_sweep as f64),
+                    inner_radius: None,
+                }
+            }
+            ArcHandle::Inner => {
+                let frac = (nx * nx + ny * ny).sqrt().clamp(0.0, 1.0);
+                EditorCommand::SetEllipseArc {
+                    node_id: id.clone(),
+                    start_angle: None,
+                    sweep_angle: None,
+                    inner_radius: Some(frac as f64),
+                }
+            }
+        })
+    }
+}
+
+/// Normalise an angle into `[0, 360)` degrees.
+fn norm360(deg: f32) -> f32 {
+    let s = deg % 360.0;
+    if s < 0.0 {
+        s + 360.0
+    } else {
+        s
+    }
+}
+
+/// Normalise a sweep into `(0, 360]` — a sweep that collapses to 0
+/// snaps to a full 360° circle.
+fn norm_sweep(deg: f32) -> f32 {
+    let s = norm360(deg);
+    if s <= 0.0001 {
+        360.0
+    } else {
+        s
     }
 }
 
