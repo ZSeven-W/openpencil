@@ -9,6 +9,7 @@
 
 pub mod agent_settings;
 pub mod align;
+pub mod align_guides;
 pub mod chat;
 pub mod clipboard;
 pub mod color_picker;
