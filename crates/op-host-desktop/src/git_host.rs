@@ -127,10 +127,13 @@ impl DesktopApp {
             // Refresh is handled by the shared snapshot below.
             GitPanelAction::Refresh => {}
             GitPanelAction::Pull => {
-                // Run the network-bound pull on a worker thread so
-                // the UI never freezes. A second Pull while one is
-                // already in flight is ignored.
-                if self.git_pull_job.is_none() {
+                // Run the network-bound pull on a worker thread so the
+                // UI never freezes. A pull rewrites the tracked
+                // document on disk and the editor is reloaded when it
+                // lands (`poll_git_pull_job`) — confirm first so
+                // unsaved in-memory edits are not silently lost. A
+                // second Pull while one is in flight is ignored.
+                if self.git_pull_job.is_none() && self.confirm_document_reload() {
                     if let Some(repo) = self.git_session.repo().cloned() {
                         self.git_pull_job = Some(git_jobs::GitPullJob::spawn(repo));
                         self.host.editor_state_mut().editor_ui.git_panel.pulling = true;
@@ -146,7 +149,10 @@ impl DesktopApp {
                     .commit_message
                     .trim()
                     .to_string();
-                if !message.is_empty() {
+                // A commit must capture what the editor shows, not the
+                // stale last-saved file — persist unsaved edits first,
+                // and skip the commit entirely if that write fails.
+                if !message.is_empty() && self.save_tracked_document() {
                     match self.git_session.commit_tracked(&message) {
                         Ok(()) => {
                             let panel = &mut self.host.editor_state_mut().editor_ui.git_panel;
@@ -220,9 +226,39 @@ impl DesktopApp {
         }
     }
 
+    /// Persist the editor's in-memory document to its tracked path
+    /// so a following git op (a commit) acts on current content
+    /// rather than a stale last-saved file.
+    ///
+    /// Returns `true` when the tree is ready to commit — no unsaved
+    /// edits, or the write succeeded — and `false` when there is no
+    /// path to save to or the write failed (the caller then skips
+    /// the git op).
+    fn save_tracked_document(&mut self) -> bool {
+        // Flush any pending inline-input edit into the document so
+        // the dirty check + save capture it.
+        self.host.commit_variable_row_focus_if_any_pub();
+        if !self.document_is_dirty() {
+            return true;
+        }
+        let Some(path) = self.current_path.clone() else {
+            return false;
+        };
+        match persistence::save_to_path(self.host.editor_state(), &path) {
+            Ok(()) => {
+                self.mark_document_saved();
+                true
+            }
+            Err(err) => {
+                eprintln!("openpencil-desktop: save before commit failed: {err}");
+                false
+            }
+        }
+    }
+
     /// Reload the tracked document from disk after a git op rewrote
     /// it, marking the in-memory state as saved.
-    fn reload_tracked_document(&mut self) {
+    pub(crate) fn reload_tracked_document(&mut self) {
         if let Some(path) = self.current_path.clone() {
             if persistence::open_path(
                 &mut self.host,

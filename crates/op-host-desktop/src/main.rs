@@ -448,8 +448,23 @@ impl DesktopApp {
         };
         self.git_pull_job = None;
         self.host.editor_state_mut().editor_ui.git_panel.pulling = false;
-        if let Err(err) = &result {
-            eprintln!("openpencil-desktop: git pull failed: {err}");
+        match &result {
+            Ok(outcome) => {
+                // A fast-forward / merge rewrote the tracked document
+                // on disk — reload it so the editor reflects the
+                // pulled state. A conflict leaves markers that would
+                // not parse (the panel shows merge-in-progress
+                // instead); an up-to-date pull changes nothing.
+                if matches!(
+                    outcome,
+                    op_git::MergeOutcome::FastForward | op_git::MergeOutcome::Merge
+                ) {
+                    self.reload_tracked_document();
+                }
+            }
+            Err(err) => {
+                eprintln!("openpencil-desktop: git pull failed: {err}");
+            }
         }
         self.refresh_git_panel();
         true
