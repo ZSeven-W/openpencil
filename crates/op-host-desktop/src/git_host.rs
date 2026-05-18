@@ -136,6 +136,12 @@ impl DesktopApp {
                 if self.git_pull_job.is_none() && self.confirm_document_reload() {
                     if let Some(repo) = self.git_session.repo().cloned() {
                         self.git_pull_job = Some(git_jobs::GitPullJob::spawn(repo));
+                        // Snapshot the document so the post-pull reload
+                        // can detect edits made *during* the async
+                        // pull — those the confirm above did not cover.
+                        self.git_pull_doc_baseline = Some(persistence::document_fingerprint(
+                            self.host.editor_state(),
+                        ));
                         self.host.editor_state_mut().editor_ui.git_panel.pulling = true;
                     }
                 }
