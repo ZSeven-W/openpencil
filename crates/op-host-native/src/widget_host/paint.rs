@@ -6,9 +6,10 @@ use super::frame_backend::NativeFrameBackend;
 use super::helpers::{STATUS_INSET, TOOLBAR_INSET_X, TOOLBAR_INSET_Y};
 use super::WidgetHostNative;
 use op_editor_ui::widgets::{
-    variables_panel::VariablesPanel, AIChatPlaceholder, AlignToolbar, CanvasViewport, LayerPanel,
-    LayoutCx, LocalePicker, PaintCx, PropertyPanel, ShapePicker, StatusBar, Toolbar, TopBar,
-    Widget, STATUS_BAR_HEIGHT, STATUS_BAR_WIDTH, TOOLBAR_WIDTH, TOP_BAR_HEIGHT,
+    variables_panel::VariablesPanel, AIChatPlaceholder, AlignToolbar, CanvasViewport, GitPanel,
+    LayerPanel, LayoutCx, LocalePicker, PaintCx, PropertyPanel, ShapePicker, StatusBar, Toolbar,
+    TopBar, Widget, GIT_PANEL_INSET, STATUS_BAR_HEIGHT, STATUS_BAR_WIDTH,
+    TOOLBAR_WIDTH, TOP_BAR_HEIGHT,
 };
 use op_editor_ui::{Point2D, Rect, RenderBackend};
 
@@ -226,6 +227,23 @@ impl WidgetHostNative {
                 backend: &mut *frame,
             };
             status.paint(&mut cx, status_rect);
+        }
+
+        // 8.2. Floating Git panel — read-only repository status,
+        //      toggled from the View menu. Floats at the canvas's
+        //      top-left, below the TopBar.
+        if let Some(panel) = GitPanel::for_editor(&self.editor_state) {
+            let panel_rect = Rect {
+                origin: Point2D::new(
+                    canvas_left + GIT_PANEL_INSET,
+                    TOP_BAR_HEIGHT + GIT_PANEL_INSET,
+                ),
+                size: Point2D::new(panel.panel_width(), panel.height()),
+            };
+            let mut cx = PaintCx {
+                backend: &mut *frame,
+            };
+            panel.paint(&mut cx, panel_rect);
         }
 
         // 8.4. Floating align/distribute toolbar — visible whenever

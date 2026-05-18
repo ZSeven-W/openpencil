@@ -35,6 +35,7 @@ use op_editor_ui::{Rect, Theme};
 mod click;
 mod frame_backend;
 mod geometry;
+mod git_press;
 mod helpers;
 mod input;
 #[cfg(test)]

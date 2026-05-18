@@ -180,6 +180,113 @@ pub enum UpdateStatus {
     Error,
 }
 
+/// One commit row shown in the Git panel — plain data snapshotted
+/// by the desktop host from its git session. The platform-free
+/// widget layer only paints it; it never calls git itself.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GitCommitSummary {
+    /// Abbreviated commit hash.
+    pub short_hash: String,
+    /// First line of the commit message.
+    pub summary: String,
+    /// Author display name.
+    pub author: String,
+}
+
+/// What a Git-panel diff request should diff.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum GitDiffTarget {
+    /// The whole working tree's unstaged changes (`git diff`).
+    WorkingTree,
+    /// One repo-relative path's working-tree changes (`git diff -- <path>`).
+    Path(String),
+    /// The full patch a commit introduced (`git show <rev>`).
+    Commit(String),
+}
+
+/// A unified-diff view open inside the Git panel — filled by the
+/// desktop host from a background `git diff` / `git show` job.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct GitDiffView {
+    /// Human label for the diff (a path, or a commit summary).
+    pub title: String,
+    /// The diff text split into lines for per-line colouring.
+    pub lines: Vec<String>,
+    /// Index of the first visible line — paged by the ▲ / ▼ buttons.
+    pub scroll: usize,
+}
+
+/// An interactive action requested from the Git panel. The desktop
+/// host drains it from [`GitPanelState::pending_action`] and runs it
+/// against its `GitSession` (the widget layer never calls git).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum GitPanelAction {
+    /// Re-read repository state into the panel.
+    Refresh,
+    /// Pull the current branch's upstream.
+    Pull,
+    /// Stage + commit the tracked document with the panel's
+    /// `commit_message`.
+    Commit,
+    /// Switch the working tree to the named branch.
+    SwitchBranch(String),
+    /// Merge the named branch into the current one through an
+    /// isolated worktree (the live tree is never marked up).
+    MergeBranch(String),
+    /// Abort an in-progress merge, restoring the pre-merge state.
+    AbortMerge,
+    /// Finalize an in-progress merge once its conflicts are resolved.
+    CompleteMerge,
+    /// Compute a unified diff and open it in the panel's diff view.
+    ShowDiff(GitDiffTarget),
+}
+
+/// Git panel state — a plain-data snapshot the desktop host fills
+/// from its `GitSession`. The widget layer reads it to paint the
+/// floating Git panel; it carries no git handles, so it stays
+/// wasm-clean. Refreshed whenever the panel is opened.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct GitPanelState {
+    /// Whether the floating Git panel is currently shown.
+    pub open: bool,
+    /// Whether the open document lives inside a git repository.
+    pub in_repo: bool,
+    /// Current branch name of that repository.
+    pub branch: Option<String>,
+    /// All local branch names, sorted — the panel lists them for
+    /// one-click switching.
+    pub branches: Vec<String>,
+    /// Number of changed (dirty) files in the working tree.
+    pub dirty_count: usize,
+    /// Number of files with unresolved merge conflicts.
+    pub conflicted_count: usize,
+    /// Whether a merge is in progress — drives the panel's conflict
+    /// mode (conflicted-file list + Abort / Complete actions).
+    pub merging: bool,
+    /// Repo-relative paths with unresolved merge conflicts.
+    pub conflicted_files: Vec<String>,
+    /// Most-recent commits, newest first.
+    pub recent_commits: Vec<GitCommitSummary>,
+    /// Commit-message draft typed into the panel's input box.
+    pub commit_message: String,
+    /// Whether the commit-message input holds keyboard focus.
+    pub commit_focused: bool,
+    /// Interactive action requested by a panel click / Enter —
+    /// drained and executed by the desktop host.
+    pub pending_action: Option<GitPanelAction>,
+    /// Whether a background `git pull` is currently in flight — the
+    /// panel shows a "Pulling…" status and disables the Pull button.
+    pub pulling: bool,
+    /// Whether the panel is awaiting its first repository snapshot
+    /// after opening / a repo switch. While `true` the panel shows a
+    /// "Loading…" state instead of the (possibly stale) prior data.
+    pub loading: bool,
+    /// Open diff view — `Some` puts the panel into diff mode, showing
+    /// a scrollable unified diff instead of the status / action area.
+    /// Closed by the diff view's ✕ button.
+    pub diff: Option<GitDiffView>,
+}
+
 /// File-menu "Recent files" entry — host persists via settings IO.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RecentFile {
@@ -352,6 +459,11 @@ pub struct EditorUiState {
     /// Latest result of the desktop host's background update probe.
     /// Transient: never serialized, rebuilt each launch.
     pub update_status: UpdateStatus,
+
+    // --- In-app Git -------------------------------------------------
+    /// Floating Git panel snapshot — filled by the desktop host from
+    /// its `GitSession`. Transient: never serialized.
+    pub git_panel: GitPanelState,
 }
 
 impl Default for EditorUiState {
@@ -402,6 +514,7 @@ impl Default for EditorUiState {
             last_canvas_click: None,
             active_guides: Vec::new(),
             update_status: UpdateStatus::Idle,
+            git_panel: GitPanelState::default(),
         }
     }
 }
