@@ -321,6 +321,13 @@ impl ChatState {
         if trimmed.is_empty() && self.pending_attachments.is_empty() {
             return false;
         }
+        // A turn still in flight is interrupted by this new send — its
+        // assistant bubble will never reach `Done`. Clear every
+        // `streaming` flag so a stale bubble doesn't animate forever;
+        // only the bubble pushed below should stream.
+        for msg in &mut self.messages {
+            msg.streaming = false;
+        }
         // Copy the staged *image* attachments into the user message so
         // the transcript keeps showing them after the input strip is
         // cleared. Each gets a fresh decode-cache id. Non-image
@@ -423,6 +430,29 @@ mod tests {
         assert!(chat.messages[1].content.is_empty());
         assert!(chat.input.is_empty());
         assert_eq!(chat.pending_send.as_deref(), Some("design a login page"));
+    }
+
+    #[test]
+    fn begin_send_clears_a_prior_interrupted_streaming_bubble() {
+        let mut chat = ChatState {
+            input: "first question".into(),
+            ..Default::default()
+        };
+        assert!(chat.begin_send());
+        // messages[1] is the in-flight assistant bubble.
+        assert!(chat.messages[1].streaming);
+        // The user sends again before the first turn finished — the
+        // first turn is now interrupted and will never reach `Done`.
+        chat.input = "second question".into();
+        assert!(chat.begin_send());
+        assert!(
+            !chat.messages[1].streaming,
+            "the interrupted turn's bubble must stop streaming"
+        );
+        assert!(
+            chat.messages[3].streaming,
+            "only the newest assistant bubble streams"
+        );
     }
 
     #[test]
