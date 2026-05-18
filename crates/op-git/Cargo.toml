@@ -1,0 +1,21 @@
+[package]
+name = "op-git"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "System-git-backed version control for OpenPencil documents"
+
+# Native-only: this crate drives the system `git` executable via
+# `std::process::Command`. It is the Rust counterpart of the TS
+# Electron app's `apps/desktop/git/git-sys.ts` system-git backend.
+# No heavy dependencies — the wire is plain subprocess + text parsing.
+[dependencies]
+thiserror = { workspace = true }
+# Credential store (`auth.rs`) persistence — the host-keyed token /
+# SSH-key table is serialized to a JSON file.
+serde = { workspace = true }
+serde_json = { workspace = true }
+# Resolves the per-user config directory for the default credential
+# store location (`AuthStore::user`).
+dirs = "5"

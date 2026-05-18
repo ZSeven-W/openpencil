@@ -492,6 +492,56 @@ dependencies = [
 ]
 
 [[package]]
+name = "casement"
+version = "0.30.13"
+dependencies = [
+ "ahash",
+ "android-activity",
+ "atomic-waker",
+ "bitflags 2.11.1",
+ "block2",
+ "bytemuck",
+ "calloop",
+ "cfg_aliases",
+ "concurrent-queue",
+ "core-foundation",
+ "core-graphics",
+ "cursor-icon",
+ "dpi 0.1.1",
+ "js-sys",
+ "libc",
+ "memmap2",
+ "ndk",
+ "objc2 0.5.2",
+ "objc2-app-kit 0.2.2",
+ "objc2-foundation 0.2.2",
+ "objc2-ui-kit",
+ "orbclient",
+ "percent-encoding",
+ "pin-project",
+ "raw-window-handle",
+ "redox_syscall 0.4.1",
+ "rustix 0.38.44",
+ "sctk-adwaita",
+ "smithay-client-toolkit",
+ "smol_str",
+ "tracing",
+ "unicode-segmentation",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "wayland-backend",
+ "wayland-client",
+ "wayland-protocols",
+ "wayland-protocols-plasma",
+ "web-sys",
+ "web-time",
+ "windows-sys 0.52.0",
+ "x11-dl",
+ "x11rb",
+ "xkbcommon-dl",
+]
+
+[[package]]
 name = "cc"
 version = "1.2.61"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -808,6 +858,10 @@ name = "downcast-rs"
 version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "75b325c5dbd37f80359721ad39aca5a29fb04c89279657cffdda8736d0c0b9d2"
+
+[[package]]
+name = "dpi"
+version = "0.1.1"
 
 [[package]]
 name = "dpi"
@@ -1235,18 +1289,6 @@ dependencies = [
  "wayland-sys",
  "windows-sys 0.52.0",
  "x11-dl",
-]
-
-[[package]]
-name = "glutin-winit"
-version = "0.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "85edca7075f8fc728f28cb8fbb111a96c3b89e930574369e3e9c27eb75d3788f"
-dependencies = [
- "cfg_aliases",
- "glutin",
- "raw-window-handle",
- "winit",
 ]
 
 [[package]]
@@ -1951,7 +1993,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7c9fec5a4e89860383d778d10563a605838f8f0b2f9303868937e5ff32e86177"
 dependencies = [
  "crossbeam-channel",
- "dpi",
+ "dpi 0.1.2",
  "keyboard-types",
  "objc2 0.6.4",
  "objc2-app-kit 0.3.2",
@@ -2429,6 +2471,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "op-git"
+version = "0.1.0"
+dependencies = [
+ "dirs 5.0.1",
+ "serde",
+ "serde_json",
+ "thiserror 1.0.69",
+]
+
+[[package]]
 name = "op-host-desktop"
 version = "0.1.0"
 dependencies = [
@@ -2436,6 +2488,7 @@ dependencies = [
  "anthropic-agent-sdk",
  "async-trait",
  "base64",
+ "casement",
  "dirs 5.0.1",
  "futures",
  "github-copilot-sdk",
@@ -2449,6 +2502,7 @@ dependencies = [
  "op-ai-skills",
  "op-editor-core",
  "op-editor-ui",
+ "op-git",
  "op-host-native",
  "op-mcp",
  "op-pen-loader",
@@ -2458,16 +2512,15 @@ dependencies = [
  "serde_json",
  "skia-safe",
  "tokio",
- "winit",
 ]
 
 [[package]]
 name = "op-host-native"
 version = "0.1.0"
 dependencies = [
+ "casement",
  "glow",
  "glutin",
- "glutin-winit",
  "jian-core",
  "jian-host-desktop",
  "jian-ops-schema",
@@ -2484,7 +2537,6 @@ dependencies = [
  "thiserror 1.0.69",
  "tracing",
  "tracing-test",
- "winit",
 ]
 
 [[package]]
@@ -4762,7 +4814,7 @@ dependencies = [
  "core-foundation",
  "core-graphics",
  "cursor-icon",
- "dpi",
+ "dpi 0.1.2",
  "js-sys",
  "libc",
  "memmap2",
