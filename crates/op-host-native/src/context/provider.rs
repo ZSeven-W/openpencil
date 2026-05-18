@@ -140,7 +140,6 @@ impl GlutinProvider {
         use glutin::context::ContextAttributesBuilder;
         use glutin::display::{Display, GetGlDisplay};
         use glutin::prelude::*;
-        use glutin_winit::GlWindow;
         use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
         use std::ffi::CString;
 
@@ -190,9 +189,19 @@ impl GlutinProvider {
                 .map_err(ProviderError::from_error)?
         };
 
-        let surface_attrs = window
-            .build_surface_attributes(<_>::default())
-            .map_err(ProviderError::from_error)?;
+        // GL window-surface attributes, built directly off the
+        // window's raw handle + inner size. This is what
+        // `glutin_winit::GlWindow::build_surface_attributes` does
+        // internally; we inline it so the crate stays off
+        // `glutin-winit` (which is pinned to the upstream `winit`
+        // package). Sizes are clamped to ≥ 1 — a zero-area surface
+        // is rejected by every GL backend.
+        let inner = window.inner_size();
+        let surface_width = std::num::NonZeroU32::new(inner.width.max(1)).unwrap();
+        let surface_height = std::num::NonZeroU32::new(inner.height.max(1)).unwrap();
+        let surface_attrs =
+            glutin::surface::SurfaceAttributesBuilder::<glutin::surface::WindowSurface>::new()
+                .build(raw_window_handle, surface_width, surface_height);
         let surface = unsafe {
             gl_config
                 .display()
