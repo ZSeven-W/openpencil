@@ -71,7 +71,7 @@ pub use components::{Component, ComponentLibrary};
 pub use editor_ui_state::{
     BooleanOp, EditorUiState, ExportFormat, FileAction, FileMenuChoice, FillType, FlexLayout,
     LayerContextMenuState, Locale, PageRenameState, PropertyTab, RecentFile, ShapeChoice,
-    ThemeMode, VariableRowFocus,
+    ThemeMode, UpdateStatus, VariableRowFocus,
 };
 pub use fills::{first_fill_type, first_solid_fill_hex, first_solid_stroke_hex, node_effects};
 pub use geometry::{aggregate_bounds, own_bounds, union_aggregate_bounds, DocRect};
