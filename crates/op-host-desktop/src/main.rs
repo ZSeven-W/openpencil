@@ -16,6 +16,10 @@ mod cursor_icon;
 mod export;
 mod export_pdf;
 mod frame;
+mod git_host;
+mod keyboard_input;
+mod git_jobs;
+mod git_session;
 mod mcp_serve;
 mod menu;
 mod model_discovery;
@@ -99,6 +103,27 @@ struct DesktopApp {
     win_size: Option<(u32, u32)>,
     /// Whether the window is currently maximized.
     win_maximized: bool,
+    /// Document fingerprint captured at the last save / open / new.
+    /// `document_is_dirty` compares the live fingerprint against this
+    /// to drive the unsaved-changes prompt on close.
+    saved_doc_fingerprint: u64,
+    /// In-app Git — the repository bound to the open document.
+    /// Rebound whenever the document path changes; read by the
+    /// window title and the Git panel.
+    git_session: git_session::GitSession,
+    /// In-flight background `git pull`, if any — keeps the
+    /// network-bound pull off the UI thread.
+    git_pull_job: Option<git_jobs::GitPullJob>,
+    /// In-flight background Git status query, if any — keeps the
+    /// working-tree scan (`git status` / `log`) off the UI thread.
+    git_status_job: Option<git_jobs::GitStatusJob>,
+    /// In-flight background Git diff (`git diff` / `git show`), if
+    /// any — keeps a potentially large diff off the UI thread.
+    git_diff_job: Option<git_jobs::GitDiffJob>,
+    /// When the Git panel was last re-snapshotted — drives the
+    /// periodic refresh that keeps an open panel current against
+    /// external repository changes.
+    last_git_refresh: Instant,
 }
 
 impl DesktopApp {
@@ -107,6 +132,9 @@ impl DesktopApp {
         // Best-effort prefs restore onto the host's `EditorState`.
         settings_io::load(host.editor_state_mut());
         host.mark_editor_state_dirty();
+        // Baseline for the unsaved-changes prompt — the fresh,
+        // empty document is by definition "saved" (nothing to lose).
+        let saved_doc_fingerprint = persistence::document_fingerprint(host.editor_state());
         Self {
             window: None,
             ctx: None,
@@ -136,6 +164,254 @@ impl DesktopApp {
             win_pos: None,
             win_size: None,
             win_maximized: false,
+            saved_doc_fingerprint,
+            git_session: git_session::GitSession::new(),
+            git_pull_job: None,
+            git_status_job: None,
+            git_diff_job: None,
+            last_git_refresh: Instant::now(),
+        }
+    }
+
+    /// Snapshot the current document as the saved baseline — called
+    /// after every successful load / save / new so `document_is_dirty`
+    /// only reports edits made *since* that point.
+    ///
+    /// The document path may also have changed (New / Open / Save-As),
+    /// so this rebinds the Git session to the document's repository
+    /// and retitles the window with the active branch.
+    fn mark_document_saved(&mut self) {
+        self.saved_doc_fingerprint = persistence::document_fingerprint(self.host.editor_state());
+        let prev_repo = self
+            .git_session
+            .repo()
+            .map(|r| r.workdir().to_path_buf());
+        let prev_tracked = self.git_session.tracked_file().map(|p| p.to_path_buf());
+        self.git_session.rebind(self.current_path.as_deref());
+        let new_repo = self
+            .git_session
+            .repo()
+            .map(|r| r.workdir().to_path_buf());
+        let new_tracked = self.git_session.tracked_file().map(|p| p.to_path_buf());
+        if prev_tracked != new_tracked {
+            // The tracked document changed — a half-typed commit
+            // message was authored for the *previous* document (a
+            // commit acts on whatever document is tracked now), so
+            // drop the draft and its focus. This fires on any
+            // document switch, including between two files in the
+            // same repository.
+            let panel = &mut self.host.editor_state_mut().editor_ui.git_panel;
+            panel.commit_message.clear();
+            panel.commit_focused = false;
+        }
+        if prev_repo != new_repo {
+            // The bound repository changed — any in-flight git job is
+            // for the *previous* repo; drop both (and the transient
+            // `pulling` flag) so a stale result can never land on the
+            // new binding, even with the panel closed during the
+            // switch. The panel goes into a `loading` state so it
+            // shows "Loading…" rather than the old repo's data until
+            // the new snapshot lands.
+            self.git_status_job = None;
+            self.git_pull_job = None;
+            self.git_diff_job = None;
+            let panel = &mut self.host.editor_state_mut().editor_ui.git_panel;
+            panel.pulling = false;
+            // A diff view is for the previous repository — close it.
+            panel.diff = None;
+            if panel.open {
+                panel.loading = true;
+            }
+        }
+        self.refresh_window_title();
+        // Keep an open Git panel current with the (possibly new)
+        // document + repository.
+        if self.host.editor_state().editor_ui.git_panel.open {
+            self.refresh_git_panel();
+        }
+    }
+
+    /// Set the window title to `<file> (<branch>) — OpenPencil`, with
+    /// the branch shown only when the document is in a git repository.
+    fn refresh_window_title(&self) {
+        let Some(window) = self.window.as_ref() else {
+            return;
+        };
+        let name = self
+            .current_path
+            .as_ref()
+            .and_then(|p| p.file_name())
+            .map(|n| n.to_string_lossy().into_owned());
+        let title = match (name, self.git_session.current_branch()) {
+            (Some(name), Some(branch)) => format!("{name} ({branch}) — OpenPencil"),
+            (Some(name), None) => format!("{name} — OpenPencil"),
+            (None, _) => "OpenPencil".to_string(),
+        };
+        window.set_title(&title);
+    }
+
+    /// Whether the document carries edits since the last save / open
+    /// / new.
+    fn document_is_dirty(&self) -> bool {
+        persistence::document_fingerprint(self.host.editor_state()) != self.saved_doc_fingerprint
+    }
+
+    /// Open documents macOS delivered through the open-documents
+    /// Apple event — a Finder double-click, `open file.op`, or a file
+    /// dropped on the Dock icon. macOS routes these out-of-band of
+    /// argv; the `casement` winit fork captures them and this drains
+    /// the buffer. The single-window editor opens the first supported
+    /// document and logs any extras. Returns `true` when a document
+    /// was opened. A no-op on non-macOS (the buffer is always empty).
+    fn drain_opened_files(&mut self) -> bool {
+        #[cfg(target_os = "macos")]
+        {
+            let mut opened = false;
+            for path in winit::platform::macos::drain_opened_file_urls() {
+                if !persistence::is_supported_document(&path) {
+                    continue;
+                }
+                if opened {
+                    eprintln!(
+                        "openpencil-desktop: ignoring extra opened file \
+                         (single-window editor): {}",
+                        path.display()
+                    );
+                    continue;
+                }
+                if persistence::open_path(
+                    &mut self.host,
+                    path,
+                    &mut self.current_path,
+                    self.window.as_ref(),
+                ) {
+                    self.mark_document_saved();
+                    opened = true;
+                }
+            }
+            opened
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            false
+        }
+    }
+
+    /// Show the save-changes prompt when the document has unsaved
+    /// edits. Returns `true` when it is safe to close — no edits, or
+    /// the user chose Save (which succeeded) or Don't Save — and
+    /// `false` to abort the close (Cancel, or a Save that failed or
+    /// was itself cancelled). Called from the cancellable close
+    /// paths: the window close button and the Quit menu item.
+    /// Guard a document-reloading Git action (branch switch, merge
+    /// abort / complete) against unsaved in-memory edits — the reload
+    /// would silently discard them. Returns `true` to proceed (no
+    /// edits, or the user chose Save / Discard), `false` to abort
+    /// (Cancel, or a Save that failed / was itself cancelled).
+    fn confirm_document_reload(&mut self) -> bool {
+        if !self.document_is_dirty() {
+            return true;
+        }
+        use op_editor_core::Locale;
+        let zh = matches!(
+            self.host.editor_state().editor_ui.locale,
+            Locale::ZhCn | Locale::ZhTw
+        );
+        let (title, body) = if zh {
+            (
+                "有未保存的更改",
+                "此 Git 操作会从磁盘重新加载文档,丢弃当前未保存的更改。\n\n\
+                 是 = 先保存 · 否 = 放弃更改 · 取消 = 不继续。",
+            )
+        } else {
+            (
+                "Unsaved changes",
+                "This Git action reloads the document from disk and \
+                 discards your unsaved edits.\n\n\
+                 Yes = Save first · No = Discard · Cancel = stay.",
+            )
+        };
+        let choice = rfd::MessageDialog::new()
+            .set_title(title)
+            .set_description(body)
+            .set_level(rfd::MessageLevel::Warning)
+            .set_buttons(rfd::MessageButtons::YesNoCancel)
+            .show();
+        match choice {
+            rfd::MessageDialogResult::Yes => {
+                self.host.commit_variable_row_focus_if_any_pub();
+                if persistence::handle_save(
+                    &mut self.host,
+                    &mut self.current_path,
+                    self.window.as_ref(),
+                ) {
+                    self.mark_document_saved();
+                    true
+                } else {
+                    false
+                }
+            }
+            rfd::MessageDialogResult::No => true,
+            _ => false,
+        }
+    }
+
+    fn confirm_close(&mut self) -> bool {
+        if !self.document_is_dirty() {
+            return true;
+        }
+        use op_editor_core::Locale;
+        let zh = matches!(
+            self.host.editor_state().editor_ui.locale,
+            Locale::ZhCn | Locale::ZhTw
+        );
+        let name = self
+            .current_path
+            .as_ref()
+            .and_then(|p| p.file_name())
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_else(|| {
+                if zh {
+                    "未命名文档".to_string()
+                } else {
+                    "Untitled document".to_string()
+                }
+            });
+        let (title, body) = if zh {
+            (
+                "有未保存的更改",
+                format!("“{name}”有未保存的更改。\n\n是 = 保存,否 = 不保存,取消 = 返回继续编辑。"),
+            )
+        } else {
+            (
+                "Unsaved changes",
+                format!("“{name}” has unsaved changes.\n\nYes = Save · No = Don't Save · Cancel = keep editing."),
+            )
+        };
+        let choice = rfd::MessageDialog::new()
+            .set_title(title)
+            .set_description(&body)
+            .set_level(rfd::MessageLevel::Warning)
+            .set_buttons(rfd::MessageButtons::YesNoCancel)
+            .show();
+        match choice {
+            rfd::MessageDialogResult::Yes => {
+                // Save, then close only if the document actually
+                // persisted (a cancelled Save-As must abort the close).
+                self.host.commit_variable_row_focus_if_any_pub();
+                if persistence::handle_save(
+                    &mut self.host,
+                    &mut self.current_path,
+                    self.window.as_ref(),
+                ) {
+                    self.mark_document_saved();
+                    true
+                } else {
+                    false
+                }
+            }
+            rfd::MessageDialogResult::No => true,
+            _ => false,
         }
     }
 
@@ -161,34 +437,74 @@ impl DesktopApp {
         true
     }
 
+    /// Drain a finished background `git pull` into the Git panel.
+    /// Returns `true` when a result was just drained.
+    fn poll_git_pull_job(&mut self) -> bool {
+        let Some(job) = self.git_pull_job.as_mut() else {
+            return false;
+        };
+        let Some(result) = job.poll() else {
+            return false;
+        };
+        self.git_pull_job = None;
+        self.host.editor_state_mut().editor_ui.git_panel.pulling = false;
+        if let Err(err) = &result {
+            eprintln!("openpencil-desktop: git pull failed: {err}");
+        }
+        self.refresh_git_panel();
+        true
+    }
+
     /// Dispatch a native-menu selection onto the matching host
     /// action — the same calls the keyboard shortcuts make.
     fn handle_menu_action(&mut self, action: menu::MenuAction, event_loop: &ActiveEventLoop) {
         use menu::MenuAction as A;
         let consumed = match action {
             A::New => {
-                persistence::run_action(
+                if persistence::run_action(
                     op_editor_core::editor_ui_state::FileAction::New,
                     &mut self.host,
                     &mut self.current_path,
                     self.window.as_ref(),
-                );
+                ) {
+                    self.mark_document_saved();
+                }
                 true
             }
             A::Open => {
-                persistence::handle_open(&mut self.host, &mut self.current_path, self.window.as_ref())
-            }
-            A::Save => {
-                self.host.commit_variable_row_focus_if_any_pub();
-                persistence::handle_save(&mut self.host, &mut self.current_path, self.window.as_ref())
-            }
-            A::SaveAs => {
-                self.host.commit_variable_row_focus_if_any_pub();
-                persistence::handle_save_as(
+                let ok = persistence::handle_open(
                     &mut self.host,
                     &mut self.current_path,
                     self.window.as_ref(),
-                )
+                );
+                if ok {
+                    self.mark_document_saved();
+                }
+                ok
+            }
+            A::Save => {
+                self.host.commit_variable_row_focus_if_any_pub();
+                let ok = persistence::handle_save(
+                    &mut self.host,
+                    &mut self.current_path,
+                    self.window.as_ref(),
+                );
+                if ok {
+                    self.mark_document_saved();
+                }
+                ok
+            }
+            A::SaveAs => {
+                self.host.commit_variable_row_focus_if_any_pub();
+                let ok = persistence::handle_save_as(
+                    &mut self.host,
+                    &mut self.current_path,
+                    self.window.as_ref(),
+                );
+                if ok {
+                    self.mark_document_saved();
+                }
+                ok
             }
             A::Export => {
                 self.host.commit_variable_row_focus_if_any_pub();
@@ -219,8 +535,34 @@ impl DesktopApp {
                 }
                 false
             }
+            A::ToggleGitPanel => {
+                let opening = !self.host.editor_state().editor_ui.git_panel.open;
+                if opening {
+                    // Show "Loading…" until the first snapshot lands,
+                    // then request the snapshot from the git session.
+                    self.host.editor_state_mut().editor_ui.git_panel.loading = true;
+                    self.refresh_git_panel();
+                } else {
+                    // Closing — release the commit input's focus and
+                    // discard any open diff view so a later reopen
+                    // starts clean on the status list. Drop the diff
+                    // job too: a result landing post-close must not
+                    // repopulate the now-hidden panel.
+                    self.git_diff_job = None;
+                    let panel = &mut self.host.editor_state_mut().editor_ui.git_panel;
+                    panel.commit_focused = false;
+                    panel.diff = None;
+                }
+                self.host.editor_state_mut().editor_ui.git_panel.open = opening;
+                self.host.mark_editor_state_dirty();
+                true
+            }
             A::Quit => {
-                event_loop.exit();
+                // Route through the unsaved-changes prompt — Cancel
+                // there aborts the quit.
+                if self.confirm_close() {
+                    event_loop.exit();
+                }
                 false
             }
             A::CheckUpdates => {
