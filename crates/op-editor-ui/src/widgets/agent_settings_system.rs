@@ -1,34 +1,31 @@
 //! System tab of the settings modal.
 //!
-//! The TS app's auto-update toggle routes through
-//! `window.electronAPI.updater.{getAutoCheck, setAutoCheck}` but
-//! the Rust shell has no updater backend yet. We render an
-//! honest read-only status card: a green dot + "Up to date"
-//! label + an explanatory line saying no update channel is
-//! wired today. No togglable switch (flipping the boolean would
-//! lie to the user); no real check happens. When the updater
-//! lands, this can grow back into a real toggle + check-now
-//! button + `ToggleAutoUpdate` hit.
+//! Renders the auto-update status card. The desktop host runs a
+//! background probe against the GitHub releases API and writes the
+//! outcome into `EditorUiState::update_status`; this tab paints a
+//! status dot + label + description from it. The card stays
+//! read-only — a manual re-check is offered through the native
+//! "Check for Updates" menu item, so no clickable hit is needed
+//! here (`SystemHit::None`).
 
 use crate::theme::Theme;
 use crate::widgets::agent_settings_i18n::t as t_settings;
 use crate::widgets::PaintCx;
 use crate::{Color, Point2D, Rect, TextLayout};
 use op_editor_core::agent_settings::AgentSettings;
-use op_editor_core::editor_ui_state::EditorUiState;
+use op_editor_core::editor_ui_state::{EditorUiState, UpdateStatus};
 
 const TITLE_H: f32 = 36.0;
-const CARD_H: f32 = 88.0;
+const CARD_H: f32 = 96.0;
 const STATUS_DOT_RADIUS: f32 = 5.0;
-/// Green used by the "Up to date" status dot. Distinct from
-/// `theme.success` since the theme doesn't expose a status-success
-/// token today; mirrors the TS app's green-500 hue.
-const UP_TO_DATE_GREEN: Color = Color {
-    r: 0.22,
-    g: 0.78,
-    b: 0.42,
-    a: 1.0,
-};
+
+/// Status-dot palette. The theme exposes no status tokens, so these
+/// mirror the TS app's Tailwind hues directly.
+const GREEN: Color = Color { r: 0.22, g: 0.78, b: 0.42, a: 1.0 };
+const AMBER: Color = Color { r: 0.96, g: 0.62, b: 0.04, a: 1.0 };
+const BLUE: Color = Color { r: 0.23, g: 0.51, b: 0.96, a: 1.0 };
+const RED: Color = Color { r: 0.94, g: 0.27, b: 0.27, a: 1.0 };
+const GREY: Color = Color { r: 0.55, g: 0.55, b: 0.58, a: 1.0 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SystemHit {
@@ -41,6 +38,39 @@ pub(super) fn content_height() -> f32 {
 
 pub fn hit_test(_content: Rect, _scrolled: Point2D) -> SystemHit {
     SystemHit::None
+}
+
+/// Resolve the per-status presentation: dot colour, the right-side
+/// status label key and the description key. `Available` is handled
+/// by the caller (it needs the version string formatted in).
+fn status_view(status: &UpdateStatus) -> (Color, &'static str, &'static str) {
+    match status {
+        UpdateStatus::Idle => (
+            GREY,
+            "settings.system.idle",
+            "settings.system.idleDescription",
+        ),
+        UpdateStatus::Checking => (
+            BLUE,
+            "settings.system.checking",
+            "settings.system.checkingDescription",
+        ),
+        UpdateStatus::UpToDate => (
+            GREEN,
+            "settings.system.upToDate",
+            "settings.system.upToDateDescription",
+        ),
+        UpdateStatus::Available { .. } => (
+            AMBER,
+            "settings.system.updateAvailable",
+            "settings.system.updateAvailableDescription",
+        ),
+        UpdateStatus::Error => (
+            RED,
+            "settings.system.errorStatus",
+            "settings.system.errorDescription",
+        ),
+    }
 }
 
 pub(super) fn paint_system_tab(
@@ -69,17 +99,18 @@ pub(super) fn paint_system_tab(
     cx.backend.fill_round_rect(card, 10.0, theme.muted);
     cx.backend.stroke_round_rect(card, 10.0, theme.border, 1.0);
 
-    // Status dot — green when up to date. Honest indicator: no
-    // real check happens (see module-level comment), but the
-    // banner is informationally correct.
+    let (dot_color, status_key, desc_key) = status_view(&ui.update_status);
+
+    // Status dot — coloured per the probe outcome.
     let dot_x = card.origin.x + 20.0;
     let dot_y = card.origin.y + 28.0;
     let dot_rect = Rect {
         origin: Point2D::new(dot_x - STATUS_DOT_RADIUS, dot_y - STATUS_DOT_RADIUS),
         size: Point2D::new(STATUS_DOT_RADIUS * 2.0, STATUS_DOT_RADIUS * 2.0),
     };
-    cx.backend.fill_oval(dot_rect, UP_TO_DATE_GREEN);
-    // "Auto-update" header + "Up to date" status, side-by-side.
+    cx.backend.fill_oval(dot_rect, dot_color);
+
+    // "Auto-update" header.
     let label_layout = TextLayout::single_run(
         t_settings(ui, "settings.system.autoUpdate"),
         "system-ui",
@@ -91,22 +122,32 @@ pub(super) fn paint_system_tab(
         &label_layout,
         Point2D::new(card.origin.x + 38.0, card.origin.y + 24.0),
     );
+
+    // Right-side status text. `Available` formats the version in;
+    // every other state uses a static i18n string.
+    let status_text: String = match &ui.update_status {
+        UpdateStatus::Available { version } => {
+            format!("{} v{}", t_settings(ui, status_key), version)
+        }
+        _ => t_settings(ui, status_key).to_string(),
+    };
     let status_layout = TextLayout::single_run(
-        t_settings(ui, "settings.system.upToDate"),
+        &status_text,
         "system-ui",
         12.0,
-        to_jian(UP_TO_DATE_GREEN),
+        to_jian(dot_color),
         Point2D::new(0.0, 0.0),
     );
-    // Right-aligned-ish: float the status to a fixed column past
-    // the label. Keeps the card layout predictable without per-
-    // locale text-measurement.
+    // Float the status to a fixed column past the label so the card
+    // layout stays predictable without per-locale text measurement.
     cx.backend.draw_text(
         &status_layout,
-        Point2D::new(card.origin.x + card.size.x - 96.0, card.origin.y + 24.0),
+        Point2D::new(card.origin.x + card.size.x - 160.0, card.origin.y + 24.0),
     );
+
+    // Description line.
     let desc_layout = TextLayout::single_run(
-        t_settings(ui, "settings.system.upToDateDescription"),
+        t_settings(ui, desc_key),
         "system-ui",
         11.0,
         to_jian(theme.muted_foreground),
@@ -116,19 +157,24 @@ pub(super) fn paint_system_tab(
         &desc_layout,
         Point2D::new(card.origin.x + 38.0, card.origin.y + 46.0),
     );
-    // Secondary descriptor — the original "not yet wired" message
-    // stays as the explanatory subtitle so anyone wondering "why
-    // no Check button?" sees the answer in-place.
-    let sub_layout = TextLayout::single_run(
-        t_settings(ui, "settings.system.autoUpdateUnavailable"),
+
+    // Current build version — same value the probe compares against
+    // the latest release tag.
+    let version_text = format!(
+        "{}: v{}",
+        t_settings(ui, "settings.system.currentVersion"),
+        env!("CARGO_PKG_VERSION"),
+    );
+    let version_layout = TextLayout::single_run(
+        &version_text,
         "system-ui",
         10.0,
         to_jian(theme.muted_foreground),
         Point2D::new(0.0, 0.0),
     );
     cx.backend.draw_text(
-        &sub_layout,
-        Point2D::new(card.origin.x + 38.0, card.origin.y + 66.0),
+        &version_layout,
+        Point2D::new(card.origin.x + 38.0, card.origin.y + 68.0),
     );
 }
 

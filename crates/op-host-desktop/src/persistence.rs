@@ -293,6 +293,44 @@ pub fn handle_open(
     }
 }
 
+/// Whether `path` carries a document extension this build opens
+/// (`.op` / `.pen`). Used to filter drag-and-drop drops + the
+/// file-association argv before attempting a load. The extension
+/// match is case-insensitive so `MyDesign.OP` from a case-folding
+/// filesystem / argv still opens.
+pub fn is_supported_document(path: &std::path::Path) -> bool {
+    path.extension()
+        .and_then(|s| s.to_str())
+        .is_some_and(|ext| ext.eq_ignore_ascii_case("op") || ext.eq_ignore_ascii_case("pen"))
+}
+
+/// Open `path` directly — no dialog. Backs drag-and-drop drops and
+/// the file-association launch path. Replaces the host's document,
+/// records the file in recents and refreshes the window title.
+/// Returns `true` when the document loaded (so the caller can
+/// request a redraw); a load failure pops the error dialog and
+/// leaves the current document untouched.
+pub fn open_path(
+    host: &mut WidgetHostNative,
+    path: PathBuf,
+    current_path: &mut Option<PathBuf>,
+    window: Option<&winit::window::Window>,
+) -> bool {
+    match load_into_host(host, &path) {
+        Ok(()) => {
+            crate::settings_io::touch_recent(host, &path);
+            *current_path = Some(path);
+            refresh_title(current_path, window);
+            true
+        }
+        Err(e) => {
+            eprintln!("[open] {e}");
+            show_error_dialog(host, ErrorKind::Open, Some(&path), &e);
+            false
+        }
+    }
+}
+
 /// Route a `FileAction` raised by the file-menu dispatcher to the
 /// matching dialog flow.
 pub fn run_action(

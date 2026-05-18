@@ -5,7 +5,7 @@ use super::*;
 
 #[test]
 fn cursor_only_redraw_without_visible_state_change_skips_present() {
-    let mut app = DesktopApp::new();
+    let mut app = DesktopApp::new(None);
     app.redraw_pending = true;
     app.pending_cursor_move = Some((1200.0, 20.0));
 
@@ -16,7 +16,7 @@ fn cursor_only_redraw_without_visible_state_change_skips_present() {
 
 #[test]
 fn consumed_press_dirties_existing_cursor_redraw_without_second_request() {
-    let mut app = DesktopApp::new();
+    let mut app = DesktopApp::new(None);
     app.redraw_pending = true;
 
     assert!(!app.request_redraw(true));
@@ -25,7 +25,7 @@ fn consumed_press_dirties_existing_cursor_redraw_without_second_request() {
 
 #[test]
 fn cursor_redraw_still_paints_when_layer_hover_changes() {
-    let mut app = DesktopApp::new();
+    let mut app = DesktopApp::new(None);
     app.redraw_pending = true;
     app.pending_cursor_move = Some((
         20.0,

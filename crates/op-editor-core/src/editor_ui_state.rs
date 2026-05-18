@@ -158,6 +158,28 @@ pub enum FileAction {
     ClearRecent,
 }
 
+/// Auto-update status surfaced in the settings modal's System tab.
+///
+/// The desktop host runs a background probe against the GitHub
+/// releases API and writes the outcome here; the System tab paints
+/// from it. `Idle` is the pre-probe state, `Checking` while the
+/// request is in flight. `Available` carries the newer release tag
+/// so the tab can name the version the user can upgrade to.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub enum UpdateStatus {
+    /// No check has run yet (also the web build's permanent state).
+    #[default]
+    Idle,
+    /// A release-API request is in flight.
+    Checking,
+    /// The running build is the latest published release.
+    UpToDate,
+    /// A newer release exists — carries its version string.
+    Available { version: String },
+    /// The probe failed (offline, rate-limited, parse error).
+    Error,
+}
+
 /// File-menu "Recent files" entry — host persists via settings IO.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RecentFile {
@@ -325,6 +347,11 @@ pub struct EditorUiState {
     /// drag release. View-only transient state: never serialized,
     /// never part of the undo snapshot.
     pub active_guides: Vec<crate::align_guides::AlignmentGuide>,
+
+    // --- Auto-update ------------------------------------------------
+    /// Latest result of the desktop host's background update probe.
+    /// Transient: never serialized, rebuilt each launch.
+    pub update_status: UpdateStatus,
 }
 
 impl Default for EditorUiState {
@@ -374,6 +401,7 @@ impl Default for EditorUiState {
             last_layer_click: None,
             last_canvas_click: None,
             active_guides: Vec::new(),
+            update_status: UpdateStatus::Idle,
         }
     }
 }

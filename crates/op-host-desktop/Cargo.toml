@@ -13,6 +13,27 @@ description = "OpenPencil desktop host — winit + skia-safe binary that drives 
 name = "openpencil-desktop"
 path = "src/main.rs"
 
+# File-association metadata for `cargo-bundle` (`cargo bundle`). This
+# declares OpenPencil as the OS-level handler for `.op` / `.pen`
+# documents: macOS writes `CFBundleDocumentTypes` into the `.app`
+# Info.plist, Windows registers the extensions, Linux emits a
+# `.desktop` MimeType entry. Once the association is registered the
+# OS launches this binary with the document path in argv, which
+# `main.rs` opens at startup (see `src/main.rs` argv handling).
+[package.metadata.bundle]
+name = "OpenPencil"
+identifier = "com.zseven-w.openpencil"
+
+[[package.metadata.bundle.file_associations]]
+ext = "op"
+name = "OpenPencil Document"
+role = "Editor"
+
+[[package.metadata.bundle.file_associations]]
+ext = "pen"
+name = "OpenPencil Document"
+role = "Editor"
+
 # Desktop-only binary. The op-host-native lib is multi-platform (mobile
 # stubs land in Step 1f) but the runner here pulls winit + glutin via
 # op-host-native's desktop dep set, so the whole crate is gated to
@@ -149,3 +170,13 @@ tokio = { version = "1", default-features = false, features = [
   "time",
 ] }
 futures = { version = "0.3", default-features = false, features = ["std"] }
+
+# Native menu bar (`src/menu.rs`). winit owns the window but has no
+# menu primitive, so `muda` builds the NSMenu / Win32 menu and routes
+# selections through its global event channel. Gated to macOS /
+# Windows: `muda`'s Linux backend needs a GTK window, but this
+# binary's winit is built for the x11 / wayland backends (no GTK), so
+# Linux falls back to the in-canvas File menu. `default-features =
+# false` drops the Linux-only `gtk` / `libxdo` feature deps.
+[target.'cfg(any(target_os = "macos", target_os = "windows"))'.dependencies]
+muda = { version = "0.17", default-features = false }

@@ -3,6 +3,7 @@
 
 #![cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]
 
+mod app_handler;
 mod chat_acp;
 mod chat_attachment;
 mod chat_claude;
@@ -16,20 +17,18 @@ mod export;
 mod export_pdf;
 mod frame;
 mod mcp_serve;
+mod menu;
 mod model_discovery;
 mod persistence;
 mod settings_io;
+mod update_check;
+mod window_state;
 
 use op_host_native::{NativeBackend, SharedSkiaContext, SharedSkiaError, WidgetHostNative};
 use std::path::PathBuf;
-use std::time::{Duration, Instant};
-use winit::application::ApplicationHandler;
-use winit::event::{
-    ElementState, KeyEvent, MouseButton, MouseScrollDelta, StartCause, WindowEvent,
-};
+use std::time::Instant;
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
-use winit::keyboard::{Key, NamedKey};
-use winit::window::{Window, WindowId};
+use winit::window::{Fullscreen, Window};
 
 const INITIAL_VIEWPORT_W: f32 = 1440.0;
 const INITIAL_VIEWPORT_H: f32 = 900.0;
@@ -79,10 +78,31 @@ struct DesktopApp {
     /// on a worker thread; its result is drained into
     /// `chat.available_models` on a later frame.
     model_probe: model_discovery::ModelProbe,
+    /// Document to open once the window is ready — set from argv by
+    /// the file-association launch path (`openpencil-desktop X.op`).
+    initial_file: Option<PathBuf>,
+    /// Native menu bar — kept alive for the process lifetime;
+    /// `None` until `resumed` builds it (and always `None` on Linux,
+    /// where there is no native menu).
+    app_menu: Option<menu::AppMenu>,
+    /// Background auto-update probe — checks the GitHub releases API
+    /// on a worker thread; its result is drained into
+    /// `editor_ui.update_status` on a later frame.
+    update_probe: update_check::UpdateProbe,
+    /// Whether the "update available" prompt has already been shown
+    /// for the current probe — gates the dialog to once per check.
+    update_prompt_shown: bool,
+    /// Last *windowed* (non-maximized) outer position, physical px.
+    /// Persisted on exit so a restart restores window placement.
+    win_pos: Option<(i32, i32)>,
+    /// Last *windowed* inner size, physical px.
+    win_size: Option<(u32, u32)>,
+    /// Whether the window is currently maximized.
+    win_maximized: bool,
 }
 
 impl DesktopApp {
-    fn new() -> Self {
+    fn new(initial_file: Option<PathBuf>) -> Self {
         let mut host = WidgetHostNative::new();
         // Best-effort prefs restore onto the host's `EditorState`.
         settings_io::load(host.editor_state_mut());
@@ -109,6 +129,123 @@ impl DesktopApp {
             error: None,
             current_chat: None,
             model_probe: model_discovery::ModelProbe::spawn(),
+            initial_file,
+            app_menu: None,
+            update_probe: update_check::UpdateProbe::spawn(),
+            update_prompt_shown: false,
+            win_pos: None,
+            win_size: None,
+            win_maximized: false,
+        }
+    }
+
+    /// Drain the background auto-update probe into `update_status`.
+    /// When the probe reports a newer release, offer to open the
+    /// download page — once per check.
+    fn poll_update_probe(&mut self) -> bool {
+        let Some(status) = self.update_probe.poll() else {
+            return false;
+        };
+        let available = matches!(
+            status,
+            op_editor_core::UpdateStatus::Available { .. }
+        );
+        self.host.editor_state_mut().editor_ui.update_status = status.clone();
+        self.host.mark_editor_state_dirty();
+        if available && !self.update_prompt_shown {
+            self.update_prompt_shown = true;
+            if let op_editor_core::UpdateStatus::Available { version } = &status {
+                prompt_update_available(version);
+            }
+        }
+        true
+    }
+
+    /// Dispatch a native-menu selection onto the matching host
+    /// action — the same calls the keyboard shortcuts make.
+    fn handle_menu_action(&mut self, action: menu::MenuAction, event_loop: &ActiveEventLoop) {
+        use menu::MenuAction as A;
+        let consumed = match action {
+            A::New => {
+                persistence::run_action(
+                    op_editor_core::editor_ui_state::FileAction::New,
+                    &mut self.host,
+                    &mut self.current_path,
+                    self.window.as_ref(),
+                );
+                true
+            }
+            A::Open => {
+                persistence::handle_open(&mut self.host, &mut self.current_path, self.window.as_ref())
+            }
+            A::Save => {
+                self.host.commit_variable_row_focus_if_any_pub();
+                persistence::handle_save(&mut self.host, &mut self.current_path, self.window.as_ref())
+            }
+            A::SaveAs => {
+                self.host.commit_variable_row_focus_if_any_pub();
+                persistence::handle_save_as(
+                    &mut self.host,
+                    &mut self.current_path,
+                    self.window.as_ref(),
+                )
+            }
+            A::Export => {
+                self.host.commit_variable_row_focus_if_any_pub();
+                persistence::run_action(
+                    op_editor_core::editor_ui_state::FileAction::ExportImage,
+                    &mut self.host,
+                    &mut self.current_path,
+                    self.window.as_ref(),
+                );
+                true
+            }
+            A::Undo => self.host.apply_undo(),
+            A::Redo => self.host.apply_redo(),
+            A::Cut => self.host.apply_cut(),
+            A::Copy => self.host.apply_copy(),
+            A::Paste => self.host.apply_paste(),
+            A::SelectAll => self.host.apply_select_all(),
+            A::Duplicate => self.host.apply_duplicate(),
+            A::Group => self.host.apply_group(),
+            A::Ungroup => self.host.apply_ungroup(),
+            A::ToggleFullscreen => {
+                if let Some(window) = self.window.as_ref() {
+                    let next = match window.fullscreen() {
+                        Some(_) => None,
+                        None => Some(Fullscreen::Borderless(None)),
+                    };
+                    window.set_fullscreen(next);
+                }
+                false
+            }
+            A::Quit => {
+                event_loop.exit();
+                false
+            }
+            A::CheckUpdates => {
+                // Re-run the probe; the System tab reflects `Checking`
+                // immediately and the result lands on a later frame.
+                // Skip when a probe is already in flight so repeated
+                // menu clicks can't stack untracked worker threads.
+                if self.update_probe.is_pending() {
+                    false
+                } else {
+                    self.host.editor_state_mut().editor_ui.update_status =
+                        op_editor_core::UpdateStatus::Checking;
+                    self.host.mark_editor_state_dirty();
+                    self.update_probe = update_check::UpdateProbe::spawn();
+                    self.update_prompt_shown = false;
+                    true
+                }
+            }
+            A::OpenGithub => {
+                update_check::open_url("https://github.com/ZSeven-W/openpencil");
+                false
+            }
+        };
+        if consumed {
+            self.request_redraw(true);
         }
     }
 
@@ -146,593 +283,36 @@ impl DesktopApp {
     }
 }
 
-impl ApplicationHandler for DesktopApp {
-    fn new_events(&mut self, _event_loop: &ActiveEventLoop, cause: StartCause) {
-        // When the WaitUntil deadline fires, the next redraw paints
-        // the next caret-blink phase. winit doesn't auto-redraw on
-        // ResumeTimeReached, so we have to request it here.
-        if matches!(cause, StartCause::ResumeTimeReached { .. }) {
-            self.request_redraw(true);
-        }
-    }
 
-    fn resumed(&mut self, event_loop: &ActiveEventLoop) {
-        if self.window.is_some() {
-            return;
-        }
-        let attrs = Window::default_attributes()
-            .with_title("OpenPencil")
-            .with_inner_size(winit::dpi::LogicalSize::new(
-                INITIAL_VIEWPORT_W as u32,
-                INITIAL_VIEWPORT_H as u32,
-            ));
-        let window = match event_loop.create_window(attrs) {
-            Ok(w) => w,
-            Err(err) => {
-                eprintln!("openpencil-desktop: create_window failed: {err}");
-                event_loop.exit();
-                return;
-            }
-        };
-        // Enable IME so macOS / X11 / Wayland route Chinese / Japanese /
-        // Korean composition through `WindowEvent::Ime` instead of
-        // dropping the keystrokes.
-        window.set_ime_allowed(true);
+/// Scan argv for a document to open on launch. This is the
+/// file-association entry point: once the `.op` / `.pen` association
+/// is registered (see `Cargo.toml`'s `[package.metadata.bundle]`),
+/// the OS launches this binary with the document path in argv —
+/// double-click on Windows / Linux, or `open file.op` from a shell
+/// on any platform. The first existing `.op` / `.pen` argument wins;
+/// flags (`--mcp`, …) never match the extension filter.
+fn initial_file_from_argv() -> Option<PathBuf> {
+    std::env::args_os()
+        .skip(1)
+        .map(PathBuf::from)
+        .find(|p| persistence::is_supported_document(p) && p.is_file())
+}
 
-        let dpi = window.scale_factor() as f32;
-        self.dpi = dpi;
-        match SharedSkiaContext::new_desktop(&window) {
-            Ok(ctx) => {
-                self.ctx = Some(ctx);
-                self.backend = Some(NativeBackend::with_dpi(dpi));
-            }
-            Err(err) => {
-                eprintln!("openpencil-desktop: SharedSkiaContext::new_desktop failed: {err}");
-                self.error = Some(err);
-                event_loop.exit();
-                return;
-            }
-        }
-        // Build the curved-arrow rotate cursor once and cache it.
-        let (rgba, w, h, hx, hy) = cursor_icon::make_rotate_cursor_rgba();
-        match winit::window::CustomCursor::from_rgba(rgba, w, h, hx, hy) {
-            Ok(source) => {
-                self.rotate_cursor = Some(event_loop.create_custom_cursor(source));
-            }
-            Err(err) => {
-                eprintln!("openpencil-desktop: rotate cursor build failed: {err}");
-            }
-        }
-
-        self.window = Some(window);
-
-        if let (Some(ctx), Some(backend)) = (self.ctx.as_mut(), self.backend.as_mut()) {
-            frame::paint(
-                ctx,
-                backend,
-                &mut self.host,
-                self.viewport_width,
-                self.viewport_height,
-                self.dpi,
-            );
-        }
-    }
-
-    fn window_event(
-        &mut self,
-        event_loop: &ActiveEventLoop,
-        _window_id: WindowId,
-        event: WindowEvent,
-    ) {
-        // Refresh the host's monotonic clock at the top of every
-        // WindowEvent so `apply_press` / `apply_text` /
-        // `apply_backspace` etc. stamp `caret_anchor_ms` with the
-        // CURRENT timestamp, not the one captured at the previous
-        // RedrawRequested.
-        let now_ms = self.clock_start.elapsed().as_millis() as u64;
-        self.host.set_now_ms(now_ms);
-        // CursorMoved never changes persisted prefs — skip snapshot
-        // on the trackpad hot path.
-        let settings_before = match &event {
-            WindowEvent::CursorMoved { .. } => None,
-            _ => Some(settings_io::fingerprint(self.host.editor_state())),
-        };
-        match event {
-            WindowEvent::CloseRequested => {
-                self.host.flush_settings_input();
-                settings_io::save(self.host.editor_state());
-                event_loop.exit();
-            }
-            WindowEvent::Resized(size) => {
-                if let Some(ctx) = self.ctx.as_mut() {
-                    if let Err(err) = ctx.resize(size.width, size.height) {
-                        eprintln!("openpencil-desktop: resize failed: {err}");
-                        self.error = Some(err);
-                        event_loop.exit();
-                    }
-                }
-                self.viewport_width = size.width as f32 / self.dpi;
-                self.viewport_height = size.height as f32 / self.dpi;
-                self.request_redraw(true);
-            }
-            WindowEvent::ScaleFactorChanged { scale_factor, .. } => {
-                self.dpi = scale_factor as f32;
-                if let Some(backend) = self.backend.as_mut() {
-                    backend.set_dpi(scale_factor as f32);
-                }
-                // Logical = physical / dpi; refresh to keep input + paint coords in sync after a DPI flip.
-                if let Some(window) = self.window.as_ref() {
-                    let size = window.inner_size();
-                    self.viewport_width = size.width as f32 / self.dpi;
-                    self.viewport_height = size.height as f32 / self.dpi;
-                }
-                self.request_redraw(true);
-            }
-            WindowEvent::RedrawRequested => {
-                // Pump in-flight AI chat deltas into this frame.
-                if chat_session::pump(&mut self.host, &mut self.current_chat) {
-                    self.redraw_dirty = true;
-                }
-                // Drain background model discovery once it lands.
-                if self.model_probe.poll_into(&mut self.host) {
-                    self.redraw_dirty = true;
-                }
-                let should_paint = self.prepare_redraw();
-                if should_paint {
-                    if let (Some(ctx), Some(backend)) = (self.ctx.as_mut(), self.backend.as_mut()) {
-                        frame::paint(
-                            ctx,
-                            backend,
-                            &mut self.host,
-                            self.viewport_width,
-                            self.viewport_height,
-                            self.dpi,
-                        );
-                    }
-                }
-                // Chat turn streaming → wake ~30 fps to pump deltas.
-                if self.current_chat.is_some() {
-                    event_loop.set_control_flow(ControlFlow::WaitUntil(
-                        Instant::now() + Duration::from_millis(33),
-                    ));
-                } else if let Some(deadline_ms) = self.host.next_animation_deadline_ms() {
-                    let deadline = self.clock_start + Duration::from_millis(deadline_ms);
-                    event_loop.set_control_flow(ControlFlow::WaitUntil(deadline));
-                } else {
-                    event_loop.set_control_flow(ControlFlow::Wait);
-                }
-            }
-            WindowEvent::CursorMoved { position, .. } => {
-                self.cursor_x = position.x as f32 / self.dpi;
-                self.cursor_y = position.y as f32 / self.dpi;
-                // `cursor_hint` hit-tests the layout-resolved render
-                // scene. A mutation since the last paint may have left
-                // the scene stale (`editor_state_dirty`), so refresh it
-                // first — otherwise a post-mutation / pre-paint cursor
-                // move reads stale geometry and picks the wrong hint.
-                let _ = self.host.layout_scene();
-                if let Some(window) = self.window.as_ref() {
-                    let viewport_w = window.inner_size().width as f32 / self.dpi;
-                    let viewport_h = window.inner_size().height as f32 / self.dpi;
-                    let hint =
-                        self.host
-                            .cursor_hint(self.cursor_x, self.cursor_y, viewport_w, viewport_h);
-                    use op_host_native::CursorHint;
-                    if matches!(hint, CursorHint::Rotate) {
-                        if let Some(c) = self.rotate_cursor.as_ref() {
-                            window.set_cursor(winit::window::Cursor::Custom(c.clone()));
-                        } else {
-                            window.set_cursor(winit::window::CursorIcon::Grabbing);
-                        }
-                    } else {
-                        let icon = match hint {
-                            CursorHint::Default => winit::window::CursorIcon::Default,
-                            CursorHint::Move => winit::window::CursorIcon::Move,
-                            CursorHint::Grab => winit::window::CursorIcon::Grab,
-                            CursorHint::Grabbing => winit::window::CursorIcon::Grabbing,
-                            CursorHint::Crosshair => winit::window::CursorIcon::Crosshair,
-                            CursorHint::Text => winit::window::CursorIcon::Text,
-                            CursorHint::ResizeEw => winit::window::CursorIcon::EwResize,
-                            CursorHint::ResizeNs => winit::window::CursorIcon::NsResize,
-                            CursorHint::ResizeNwse => winit::window::CursorIcon::NwseResize,
-                            CursorHint::ResizeNesw => winit::window::CursorIcon::NeswResize,
-                            CursorHint::Rotate => unreachable!(),
-                        };
-                        window.set_cursor(icon);
-                    }
-                }
-                // Coalesce cursor moves — apply once per redraw, not per 1000 Hz input event.
-                self.pending_cursor_move = Some((self.cursor_x, self.cursor_y));
-                self.request_redraw(false);
-            }
-            WindowEvent::MouseInput {
-                state: ElementState::Pressed,
-                button: MouseButton::Left,
-                ..
-            } => {
-                // Drain queued cursor move so hover state is current before press lands.
-                if self.drain_pending_cursor_move() {
-                    self.redraw_dirty = true;
-                }
-                let consumed = self.host.apply_press(
-                    self.cursor_x,
-                    self.cursor_y,
-                    self.viewport_width,
-                    self.viewport_height,
-                );
-                // A click on the chat Send button raises
-                // `pending_send` — launch the provider turn.
-                if chat_session::launch_if_pending(&mut self.host, &mut self.current_chat) {
-                    self.request_redraw(true);
-                }
-                // A click on the attach button raises
-                // `pending_attachment_pick` — open the file picker.
-                if chat_attachment::drain_attachment_pick(&mut self.host) {
-                    self.request_redraw(true);
-                }
-                if let Some(action) = self
-                    .host
-                    .editor_state_mut()
-                    .editor_ui
-                    .pending_file_action
-                    .take()
-                {
-                    // ExportImage → close source overlay + open picker dialog.
-                    if matches!(
-                        action,
-                        op_editor_core::editor_ui_state::FileAction::ExportImage
-                    ) {
-                        let eui = &mut self.host.editor_state_mut().editor_ui;
-                        eui.file_menu_open = false;
-                        eui.file_menu_hover = None;
-                        eui.export_dialog_open = true;
-                        self.host.mark_editor_state_dirty();
-                        self.request_redraw(true);
-                    } else {
-                        persistence::run_action(
-                            action,
-                            &mut self.host,
-                            &mut self.current_path,
-                            self.window.as_ref(),
-                        );
-                    }
-                }
-                if consumed {
-                    self.request_redraw(true);
-                }
-            }
-            WindowEvent::MouseInput {
-                state: ElementState::Pressed,
-                button: MouseButton::Right,
-                ..
-            } => {
-                if self.drain_pending_cursor_move() {
-                    self.redraw_dirty = true;
-                }
-                let consumed = self.host.apply_right_press(
-                    self.cursor_x,
-                    self.cursor_y,
-                    self.viewport_width,
-                    self.viewport_height,
-                );
-                if consumed {
-                    self.request_redraw(true);
-                }
-            }
-            WindowEvent::MouseInput {
-                state: ElementState::Released,
-                button: MouseButton::Left,
-                ..
-            } => {
-                // Drain pending cursor moves before release so drag-end commits final position.
-                if self.drain_pending_cursor_move() {
-                    self.redraw_dirty = true;
-                }
-                let consumed = self
-                    .host
-                    .apply_release_with_viewport(self.viewport_width, self.viewport_height);
-                if consumed {
-                    self.request_redraw(true);
-                }
-            }
-            WindowEvent::MouseWheel { delta, .. } => {
-                // Figma-style routing: pixel-delta pans, line-delta zooms; Cmd promotes pixel→zoom for trackpad-only laptops
-                // a pinch sensor.
-                let consumed = match delta {
-                    MouseScrollDelta::LineDelta(_, y) => self.host.apply_wheel(
-                        self.cursor_x,
-                        self.cursor_y,
-                        y * 16.0,
-                        self.viewport_width,
-                        self.viewport_height,
-                    ),
-                    MouseScrollDelta::PixelDelta(p) => {
-                        let dx = p.x as f32 / self.dpi;
-                        let dy = p.y as f32 / self.dpi;
-                        if self.zoom_modifier {
-                            self.host.apply_wheel(
-                                self.cursor_x,
-                                self.cursor_y,
-                                dy,
-                                self.viewport_width,
-                                self.viewport_height,
-                            )
-                        } else {
-                            self.host.apply_pan_gesture(
-                                self.cursor_x,
-                                self.cursor_y,
-                                dx,
-                                dy,
-                                self.viewport_width,
-                                self.viewport_height,
-                            )
-                        }
-                    }
-                };
-                if consumed {
-                    self.request_redraw(true);
-                }
-            }
-            WindowEvent::PinchGesture { delta, .. } => {
-                let consumed = self.host.apply_wheel(
-                    self.cursor_x,
-                    self.cursor_y,
-                    delta as f32 * 400.0,
-                    self.viewport_width,
-                    self.viewport_height,
-                );
-                if consumed {
-                    self.request_redraw(true);
-                }
-            }
-            // CJK composition: macOS / X11 / Wayland route the committed
-            // candidate string through here. We don't paint the preedit
-            // yet; only the final commit is pushed into the focused input.
-            WindowEvent::Ime(winit::event::Ime::Commit(text)) => {
-                let mut consumed = false;
-                for ch in text.chars() {
-                    if self.host.apply_text(ch) {
-                        consumed = true;
-                    }
-                }
-                if consumed {
-                    self.request_redraw(true);
-                }
-            }
-            WindowEvent::ModifiersChanged(mods) => {
-                let state = mods.state();
-                self.zoom_modifier = state.super_key() || state.control_key();
-                self.shift_modifier = state.shift_key();
-                self.alt_modifier = state.alt_key();
-                // Forward shift state into the host so the next
-                // mouse press can branch on shift+click for
-                // multi-select.
-                self.host.set_modifier_shift(self.shift_modifier);
-            }
-            WindowEvent::KeyboardInput {
-                event:
-                    KeyEvent {
-                        state: ElementState::Pressed,
-                        logical_key,
-                        text,
-                        ..
-                    },
-                ..
-            } => {
-                use op_editor_core::ReorderDirection;
-                let mut consumed = false;
-                let nudge = if self.shift_modifier { 10.0 } else { 1.0 };
-                // While a settings-modal input owns the keyboard, the
-                // ONLY allowed paths are text / backspace / send /
-                // escape. Editor shortcuts (Cmd+D, Cmd+G, Cmd+Z,
-                // arrow nudges, Delete, [ / ], single-letter tool
-                // switches, …) would otherwise silently mutate the
-                // document while the user thinks they're typing a port.
-                let settings_focused = self.host.settings_focus_active();
-                match logical_key {
-                    // Named-key shortcuts fire only when no Cmd/Ctrl is held.
-                    Key::Named(NamedKey::Backspace) if !self.zoom_modifier => {
-                        consumed = self.host.apply_backspace();
-                    }
-                    Key::Named(NamedKey::Delete) if !self.zoom_modifier && !settings_focused => {
-                        consumed = self.host.apply_delete();
-                    }
-                    Key::Named(NamedKey::Enter) if !self.zoom_modifier => {
-                        consumed = self.host.apply_send();
-                        // apply_send may raise pending_send (chat send).
-                        if chat_session::launch_if_pending(&mut self.host, &mut self.current_chat) {
-                            self.request_redraw(true);
-                        }
-                    }
-                    Key::Named(NamedKey::Escape) if !self.zoom_modifier => {
-                        consumed = self.host.apply_escape();
-                    }
-                    Key::Named(NamedKey::ArrowUp) if !self.zoom_modifier && !settings_focused => {
-                        consumed = self.host.apply_nudge(0.0, -nudge);
-                    }
-                    Key::Named(NamedKey::ArrowDown) if !self.zoom_modifier && !settings_focused => {
-                        consumed = self.host.apply_nudge(0.0, nudge);
-                    }
-                    Key::Named(NamedKey::ArrowLeft) if !self.zoom_modifier && !settings_focused => {
-                        consumed = self.host.apply_nudge(-nudge, 0.0);
-                    }
-                    Key::Named(NamedKey::ArrowRight)
-                        if !self.zoom_modifier && !settings_focused =>
-                    {
-                        consumed = self.host.apply_nudge(nudge, 0.0);
-                    }
-                    // Cmd/Ctrl+Alt+U/S/I/X — path boolean ops (Paper.js parity).
-                    Key::Character(ref ch)
-                        if self.zoom_modifier && self.alt_modifier && !self.shift_modifier =>
-                    {
-                        use op_editor_core::BooleanOp;
-                        match ch.to_lowercase().as_str() {
-                            "u" => consumed = self.host.apply_boolean_op(BooleanOp::Union),
-                            "s" => consumed = self.host.apply_boolean_op(BooleanOp::Subtract),
-                            "i" => consumed = self.host.apply_boolean_op(BooleanOp::Intersect),
-                            "x" => consumed = self.host.apply_boolean_op(BooleanOp::Exclude),
-                            _ => {}
-                        }
-                    }
-                    Key::Character(ref ch) if self.zoom_modifier && !self.shift_modifier => {
-                        let lower = ch.to_lowercase();
-                        match lower.as_str() {
-                            // Cmd+, always allowed — it toggles the
-                            // modal itself; closing while focused
-                            // also commits via the close path.
-                            "," => consumed = self.host.apply_toggle_agent_settings(),
-                            "s" => {
-                                // Codex stop-gate: commit any pending
-                                // variable-row inline edit before save
-                                // so the typed value lands on disk.
-                                self.host.commit_variable_row_focus_if_any_pub();
-                                consumed = persistence::handle_save(
-                                    &mut self.host,
-                                    &mut self.current_path,
-                                    self.window.as_ref(),
-                                );
-                            }
-                            "o" => {
-                                self.host.commit_variable_row_focus_if_any_pub();
-                                consumed = persistence::handle_open(
-                                    &mut self.host,
-                                    &mut self.current_path,
-                                    self.window.as_ref(),
-                                );
-                            }
-                            _ if settings_focused => {}
-                            "d" => consumed = self.host.apply_duplicate(),
-                            "a" => consumed = self.host.apply_select_all(),
-                            "c" => consumed = self.host.apply_copy(),
-                            "x" => consumed = self.host.apply_cut(),
-                            "v" => consumed = self.host.apply_paste(),
-                            "z" => consumed = self.host.apply_undo(),
-                            "y" => consumed = self.host.apply_redo(),
-                            "g" => consumed = self.host.apply_group(),
-                            "j" => consumed = self.host.apply_toggle_chat(),
-                            _ => {}
-                        }
-                    }
-                    Key::Character(ref ch) if self.zoom_modifier && self.shift_modifier => {
-                        match ch.to_lowercase().as_str() {
-                            // Cmd+Shift+S = Save As; always allowed.
-                            "s" => {
-                                self.host.commit_variable_row_focus_if_any_pub();
-                                consumed = persistence::handle_save_as(
-                                    &mut self.host,
-                                    &mut self.current_path,
-                                    self.window.as_ref(),
-                                );
-                            }
-                            "p" => {
-                                self.host.commit_variable_row_focus_if_any_pub();
-                                persistence::run_action(
-                                    op_editor_core::editor_ui_state::FileAction::ExportImage,
-                                    &mut self.host,
-                                    &mut self.current_path,
-                                    self.window.as_ref(),
-                                );
-                                consumed = true;
-                            }
-                            _ if settings_focused => {}
-                            "z" => consumed = self.host.apply_redo(),
-                            "g" => consumed = self.host.apply_ungroup(),
-                            "c" => consumed = self.host.apply_toggle_code_panel(),
-                            _ => {}
-                        }
-                    }
-                    // Single-letter tool switches (no modifier). Only
-                    // fire when no input is focused so typing in a
-                    // text node / chat / rename doesn't switch tools.
-                    Key::Character(ref ch)
-                        if !self.zoom_modifier && !self.host.input_active_pub() =>
-                    {
-                        let lower = ch.to_lowercase();
-                        let mut handled = true;
-                        match lower.as_str() {
-                            "v" => self.host.apply_set_tool(op_editor_core::Tool::Select),
-                            "r" => self.host.apply_set_tool(op_editor_core::Tool::Rect),
-                            "o" => self.host.apply_set_tool(op_editor_core::Tool::Ellipse),
-                            "l" => self.host.apply_set_tool(op_editor_core::Tool::Line),
-                            "t" => self.host.apply_set_tool(op_editor_core::Tool::Text),
-                            "f" => self.host.apply_set_tool(op_editor_core::Tool::Frame),
-                            "p" => self.host.apply_set_tool(op_editor_core::Tool::Pen),
-                            "h" => self.host.apply_set_tool(op_editor_core::Tool::Hand),
-                            "[" => {
-                                consumed = self.host.apply_reorder(ReorderDirection::Down);
-                                handled = false;
-                            }
-                            "]" => {
-                                consumed = self.host.apply_reorder(ReorderDirection::Up);
-                                handled = false;
-                            }
-                            _ => handled = false,
-                        }
-                        if handled {
-                            consumed = true;
-                        }
-                    }
-                    // `[` / `]` — z-order reorder when an input is focused (still gated by apply_reorder internally).
-                    Key::Character(ref ch) if !self.zoom_modifier => match ch.as_str() {
-                        "[" if !settings_focused => {
-                            consumed = self.host.apply_reorder(ReorderDirection::Down)
-                        }
-                        "]" if !settings_focused => {
-                            consumed = self.host.apply_reorder(ReorderDirection::Up)
-                        }
-                        _ => {
-                            if let Some(s) = text.as_deref() {
-                                for c in s.chars() {
-                                    if !c.is_control() && self.host.apply_text(c) {
-                                        consumed = true;
-                                    }
-                                }
-                            }
-                        }
-                    },
-                    _ => {
-                        // Suppress apply_text whenever Cmd / Ctrl
-                        // is held — Cmd-anything that isn't bound
-                        // above must NOT type into a focused chat
-                        // / property input. Otherwise Cmd+Shift+D
-                        // (and other unbound chords) would inject
-                        // "D" into the focused input.
-                        if !self.zoom_modifier {
-                            if let Some(s) = text.as_deref() {
-                                for c in s.chars() {
-                                    if !c.is_control() && self.host.apply_text(c) {
-                                        consumed = true;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-                if consumed {
-                    self.request_redraw(true);
-                }
-            }
-            _ => {}
-        }
-        if let Some(before) = settings_before {
-            settings_io::save_if_changed(self.host.editor_state(), before);
-        }
-    }
-
-    fn exiting(&mut self, _event_loop: &ActiveEventLoop) {
-        // Belt-and-suspenders: macOS Cmd+Q / Alt+F4 / window-manager
-        // close can deliver `exiting` without `CloseRequested`. Flush
-        // any in-progress MCP port draft before snapshotting so a
-        // focused-but-uncommitted edit isn't silently dropped.
-        self.host.flush_settings_input();
-        settings_io::save(self.host.editor_state());
-        if let Some(mut ctx) = self.ctx.take() {
-            if let Err(err) = ctx.teardown() {
-                eprintln!("openpencil-desktop: teardown failed: {err}");
-            }
-        }
-        self.backend.take();
-        self.window.take();
+/// Pop a native dialog offering to open the download page when a
+/// newer release is found. Yes opens the GitHub releases page.
+fn prompt_update_available(version: &str) {
+    let body = format!(
+        "OpenPencil {version} is available.\n\nYou are running version {}.\n\nOpen the download page?",
+        env!("CARGO_PKG_VERSION"),
+    );
+    let choice = rfd::MessageDialog::new()
+        .set_title("Update available")
+        .set_description(&body)
+        .set_level(rfd::MessageLevel::Info)
+        .set_buttons(rfd::MessageButtons::YesNo)
+        .show();
+    if matches!(choice, rfd::MessageDialogResult::Yes) {
+        update_check::open_url(&update_check::releases_url());
     }
 }
 
@@ -742,6 +322,7 @@ fn main() {
     if mcp_serve::run_cli_if_requested() {
         return;
     }
+    let initial_file = initial_file_from_argv();
     let event_loop = match EventLoop::new() {
         Ok(el) => el,
         Err(err) => {
@@ -750,7 +331,7 @@ fn main() {
         }
     };
     event_loop.set_control_flow(ControlFlow::Wait);
-    let mut app = DesktopApp::new();
+    let mut app = DesktopApp::new(initial_file);
     if let Err(err) = event_loop.run_app(&mut app) {
         eprintln!("openpencil-desktop: run_app exited with error: {err}");
         std::process::exit(1);
