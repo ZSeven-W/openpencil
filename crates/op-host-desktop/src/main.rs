@@ -316,6 +316,10 @@ impl DesktopApp {
     /// edits, or the user chose Save / Discard), `false` to abort
     /// (Cancel, or a Save that failed / was itself cancelled).
     fn confirm_document_reload(&mut self) -> bool {
+        // Flush any in-progress text-input draft into the document
+        // first — otherwise an unflushed draft would not count toward
+        // `document_is_dirty` and the reload would drop it silently.
+        self.host.commit_pending_input_pub();
         if !self.document_is_dirty() {
             return true;
         }
@@ -467,6 +471,10 @@ impl DesktopApp {
                     outcome,
                     op_git::MergeOutcome::FastForward | op_git::MergeOutcome::Merge
                 ) {
+                    // Flush any in-progress input draft into the
+                    // document so an edit made during the pull is seen
+                    // by the comparison below — not silently dropped.
+                    self.host.commit_pending_input_pub();
                     // If the user edited the document *while the pull
                     // ran*, the spawn-time confirm did not cover those
                     // edits — re-confirm before the reload discards

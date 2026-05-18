@@ -202,6 +202,17 @@ impl WidgetHostNative {
         self.commit_variable_row_focus_if_any();
     }
 
+    /// Public proxy: commit every pending text-input draft — a
+    /// half-typed property-panel field or variable-row value — into
+    /// the document. The desktop binary calls this before a
+    /// reload-style git op (pull / branch switch / merge) so an
+    /// in-progress edit is captured by dirty-detection instead of
+    /// being silently dropped by the reload. `commit_property_focus_if_any`
+    /// already chains the variable-row commit.
+    pub fn commit_pending_input_pub(&mut self) {
+        self.commit_property_focus_if_any();
+    }
+
     /// `[` / `]` — bump selection up/down within parent siblings.
     pub fn apply_reorder(&mut self, direction: ReorderDirection) -> bool {
         if self.input_active() {
