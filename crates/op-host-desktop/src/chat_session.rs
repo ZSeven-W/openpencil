@@ -11,6 +11,7 @@ use std::sync::mpsc::{self, Receiver, TryRecvError};
 use std::thread;
 
 use op_ai::chat_provider::{ChatDelta, ChatProvider, ChatRequest, CliName};
+use op_editor_core::{ChatMessage, ChatToolCall};
 use op_host_native::WidgetHostNative;
 
 use crate::chat_claude::ClaudeCodeProvider;
@@ -27,15 +28,50 @@ pub struct ChatSession {
 
 /// Result of a single non-blocking [`ChatSession::poll`].
 pub struct ChatPoll {
-    /// Text fragments (`TextDelta` + `Thinking`) accumulated since
-    /// the last poll. Empty when nothing new arrived.
+    /// Answer-text fragments (`TextDelta`) accumulated since the last
+    /// poll. Empty when nothing new arrived.
     pub text: String,
+    /// Reasoning fragments (`Thinking`) accumulated since the last
+    /// poll — kept separate from `text` so the chat panel can render
+    /// them in their own collapsible block.
+    pub thinking: String,
+    /// Tool invocations (`ToolUse`) seen this poll.
+    pub tool_calls: Vec<ChatToolCall>,
     /// First error seen this poll, if any. When set the caller
     /// should surface it as the assistant message body.
     pub error: Option<String>,
     /// True once the turn's terminal `Done` arrived, or the worker
     /// thread / channel closed.
     pub finished: bool,
+}
+
+impl ChatPoll {
+    /// True when this poll carried no new content and the turn has
+    /// not ended — the caller can skip touching the transcript.
+    fn is_idle(&self) -> bool {
+        self.text.is_empty()
+            && self.thinking.is_empty()
+            && self.tool_calls.is_empty()
+            && self.error.is_none()
+            && !self.finished
+    }
+}
+
+/// Fold one [`ChatPoll`] into the trailing assistant `message`. An
+/// error replaces the visible body; otherwise answer text + thinking
+/// accumulate and tool calls append. A finished poll clears the
+/// `streaming` flag so the panel stops the streaming animation.
+pub fn apply_poll_to_message(message: &mut ChatMessage, poll: &ChatPoll) {
+    if let Some(err) = &poll.error {
+        message.content = format!("error: {err}");
+    } else {
+        message.content.push_str(&poll.text);
+    }
+    message.thinking.push_str(&poll.thinking);
+    message.tool_calls.extend(poll.tool_calls.iter().cloned());
+    if poll.finished {
+        message.streaming = false;
+    }
 }
 
 impl ChatSession {
@@ -64,11 +100,17 @@ impl ChatSession {
     /// Drain every delta ready right now without blocking.
     pub fn poll(&mut self) -> ChatPoll {
         let mut text = String::new();
+        let mut thinking = String::new();
+        let mut tool_calls = Vec::new();
         let mut error = None;
         loop {
             match self.rx.try_recv() {
-                Ok(ChatDelta::TextDelta(s)) | Ok(ChatDelta::Thinking(s)) => {
-                    text.push_str(&s);
+                Ok(ChatDelta::TextDelta(s)) => text.push_str(&s),
+                Ok(ChatDelta::Thinking(s)) => thinking.push_str(&s),
+                // Tool dispatch is the agent runtime's job; the panel
+                // only surfaces the call in its collapsible tool view.
+                Ok(ChatDelta::ToolUse { name, args }) => {
+                    tool_calls.push(ChatToolCall { name, args });
                 }
                 Ok(ChatDelta::Error(msg)) => {
                     if error.is_none() {
@@ -76,9 +118,6 @@ impl ChatSession {
                     }
                 }
                 Ok(ChatDelta::Done { .. }) => self.finished = true,
-                // Tool dispatch is the agent runtime's job, not the
-                // chat panel's — drop it from the transcript view.
-                Ok(ChatDelta::ToolUse { .. }) => {}
                 Err(TryRecvError::Empty) => break,
                 Err(TryRecvError::Disconnected) => {
                     self.finished = true;
@@ -88,6 +127,8 @@ impl ChatSession {
         }
         ChatPoll {
             text,
+            thinking,
+            tool_calls,
             error,
             finished: self.finished,
         }
@@ -129,13 +170,22 @@ pub fn launch_if_pending(host: &mut WidgetHostNative, current: &mut Option<ChatS
             .get(agent_idx)
             .map(|a| a.name())
             .unwrap_or("This agent");
-        if let Some(msg) = host.editor_state_mut().chat.messages.last_mut() {
+        let chat = &mut host.editor_state_mut().chat;
+        if let Some(msg) = chat.messages.last_mut() {
             msg.content = format!(
                 "error: {name} chat is not wired yet — its HTTP-server \
                  transport is still pending. Pick Claude Code, GitHub \
                  Copilot, or Gemini CLI via the model chip."
             );
+            // The turn is aborted — `begin_send` created this bubble
+            // as `streaming`; clear it so the panel doesn't keep
+            // animating a stream that will never arrive.
+            msg.streaming = false;
         }
+        // This turn consumed the staged attachments (they are already
+        // copied into the user message); drop them so they don't leak
+        // into the next send.
+        chat.pending_attachments.clear();
         host.mark_editor_state_dirty();
         // No session started; report the transcript change so the
         // caller repaints the error.
@@ -187,13 +237,9 @@ pub fn pump(host: &mut WidgetHostNative, current: &mut Option<ChatSession>) -> b
     };
     let poll = session.poll();
     let mut changed = false;
-    if poll.error.is_some() || !poll.text.is_empty() {
+    if !poll.is_idle() {
         if let Some(msg) = host.editor_state_mut().chat.messages.last_mut() {
-            if let Some(err) = poll.error {
-                msg.content = format!("error: {err}");
-            } else {
-                msg.content.push_str(&poll.text);
-            }
+            apply_poll_to_message(msg, &poll);
             changed = true;
         }
         if changed {
@@ -244,6 +290,102 @@ mod tests {
         }
         assert!(session.finished(), "session must reach Done");
         assert_eq!(acc, "Hello");
+    }
+
+    #[test]
+    fn poll_splits_thinking_and_tool_calls_from_answer_text() {
+        let provider = Box::new(EchoProvider {
+            script: vec![
+                ChatDelta::Thinking("let me think".into()),
+                ChatDelta::ToolUse {
+                    name: "insert_node".into(),
+                    args: "{\"kind\":\"rect\"}".into(),
+                },
+                ChatDelta::TextDelta("here is the answer".into()),
+                ChatDelta::Done {
+                    stop_reason: StopReason::EndTurn,
+                },
+            ],
+        });
+        let mut session = ChatSession::start(
+            provider,
+            ChatRequest {
+                user_message: "x".into(),
+                max_output_tokens: 64,
+                ..Default::default()
+            },
+        );
+        let mut text = String::new();
+        let mut thinking = String::new();
+        let mut tools = Vec::new();
+        for _ in 0..1000 {
+            let p = session.poll();
+            text.push_str(&p.text);
+            thinking.push_str(&p.thinking);
+            tools.extend(p.tool_calls);
+            if p.finished {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(1));
+        }
+        assert_eq!(text, "here is the answer", "answer text only");
+        assert_eq!(thinking, "let me think", "thinking routed separately");
+        assert_eq!(tools.len(), 1);
+        assert_eq!(tools[0].name, "insert_node");
+        assert_eq!(tools[0].args, "{\"kind\":\"rect\"}");
+    }
+
+    #[test]
+    fn apply_poll_appends_text_thinking_tools_and_clears_streaming_on_finish() {
+        let mut msg = ChatMessage::assistant_streaming();
+        apply_poll_to_message(
+            &mut msg,
+            &ChatPoll {
+                text: "hi".into(),
+                thinking: "reasoning".into(),
+                tool_calls: vec![ChatToolCall {
+                    name: "t".into(),
+                    args: "{}".into(),
+                }],
+                error: None,
+                finished: false,
+            },
+        );
+        assert_eq!(msg.content, "hi");
+        assert_eq!(msg.thinking, "reasoning");
+        assert_eq!(msg.tool_calls.len(), 1);
+        assert!(msg.streaming, "still streaming until the turn finishes");
+
+        apply_poll_to_message(
+            &mut msg,
+            &ChatPoll {
+                text: "!".into(),
+                thinking: String::new(),
+                tool_calls: vec![],
+                error: None,
+                finished: true,
+            },
+        );
+        assert_eq!(msg.content, "hi!", "text accumulates across polls");
+        assert!(!msg.streaming, "finished clears the streaming flag");
+    }
+
+    #[test]
+    fn apply_poll_error_replaces_content_and_ends_stream() {
+        let mut msg = ChatMessage::assistant_streaming();
+        msg.content = "partial answer".into();
+        apply_poll_to_message(
+            &mut msg,
+            &ChatPoll {
+                text: String::new(),
+                thinking: String::new(),
+                tool_calls: vec![],
+                error: Some("rate limited".into()),
+                finished: true,
+            },
+        );
+        assert_eq!(msg.content, "error: rate limited");
+        assert!(!msg.streaming);
     }
 
     #[test]

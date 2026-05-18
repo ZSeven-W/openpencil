@@ -97,11 +97,93 @@ pub enum ChatRole {
     Assistant,
 }
 
-/// One message in the chat transcript.
+/// One tool invocation surfaced inside an assistant message. The chat
+/// panel renders these in a collapsible "tool calls" panel — the
+/// transcript view, not the agent runtime (dispatch stays the
+/// runtime's job). `args` is the raw JSON the model passed.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ChatToolCall {
+    pub name: String,
+    pub args: String,
+}
+
+/// One image carried inside a chat message — a copy of an image
+/// [`ChatAttachment`] the user sent, kept so the transcript can show
+/// it after the input strip is cleared. `id` is a process-unique
+/// handle the render backend keys its decode cache on (decoding the
+/// raw bytes every frame would be far too slow).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ChatImage {
+    /// Process-unique id — stable across frames for the backend cache.
+    pub id: u64,
+    pub name: String,
+    pub media_type: String,
+    /// Raw encoded image bytes (PNG / JPEG / …), not base64.
+    pub data: Vec<u8>,
+}
+
+/// One message in the chat transcript. `content` is the visible
+/// answer text; `thinking` and `tool_calls` are the assistant's
+/// reasoning + tool activity, each shown in a collapsible block;
+/// `images` are pictures the user attached. `streaming` is true on
+/// the trailing assistant bubble while its turn is still in flight.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ChatMessage {
     pub role: ChatRole,
     pub content: String,
+    /// Accumulated reasoning text (`ChatDelta::Thinking`). Empty for
+    /// user messages and for turns that emitted no thinking.
+    pub thinking: String,
+    /// Tool invocations the assistant made this turn.
+    pub tool_calls: Vec<ChatToolCall>,
+    /// Images the user attached to this message.
+    pub images: Vec<ChatImage>,
+    /// Collapsed state of the thinking block (default collapsed).
+    pub thinking_collapsed: bool,
+    /// Collapsed state of the tool-calls panel (default collapsed).
+    pub tools_collapsed: bool,
+    /// True while this (assistant) message's turn streams in.
+    pub streaming: bool,
+}
+
+impl ChatMessage {
+    /// A plain user message — no thinking / tools, not streaming.
+    pub fn user(content: impl Into<String>) -> Self {
+        Self {
+            role: ChatRole::User,
+            content: content.into(),
+            thinking: String::new(),
+            tool_calls: Vec::new(),
+            images: Vec::new(),
+            thinking_collapsed: true,
+            tools_collapsed: true,
+            streaming: false,
+        }
+    }
+
+    /// An assistant message. Pass `streaming = true` via
+    /// [`ChatMessage::assistant_streaming`] for an in-flight turn.
+    pub fn assistant(content: impl Into<String>) -> Self {
+        Self {
+            role: ChatRole::Assistant,
+            content: content.into(),
+            thinking: String::new(),
+            tool_calls: Vec::new(),
+            images: Vec::new(),
+            thinking_collapsed: true,
+            tools_collapsed: true,
+            streaming: false,
+        }
+    }
+
+    /// An empty assistant bubble for a turn that is about to stream —
+    /// provider deltas append into it and `streaming` clears on `Done`.
+    pub fn assistant_streaming() -> Self {
+        Self {
+            streaming: true,
+            ..Self::assistant("")
+        }
+    }
 }
 
 /// Which corner of the canvas region the floating AI chat panel sits
@@ -175,6 +257,18 @@ pub struct ChatState {
     pub pending_attachment_pick: bool,
 }
 
+/// Process-global allocator for [`ChatImage::id`]. A *global* counter
+/// (not a per-`ChatState` field) is required: the backend image
+/// decode cache is keyed on this id, so a fresh `ChatState` — e.g.
+/// after "New Chat" — must never restart the sequence and collide
+/// with a still-cached decode.
+static NEXT_IMAGE_ID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+/// Hand out the next process-unique [`ChatImage::id`].
+fn alloc_image_id() -> u64 {
+    NEXT_IMAGE_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+}
+
 impl Default for ChatState {
     fn default() -> Self {
         Self {
@@ -210,42 +304,62 @@ impl ChatState {
         if trimmed.is_empty() {
             return;
         }
-        let user_msg = ChatMessage {
-            role: ChatRole::User,
-            content: trimmed.to_string(),
-        };
-        let echo = ChatMessage {
-            role: ChatRole::Assistant,
-            content: format!("(stub) Got it — \"{}\"", trimmed),
-        };
-        self.messages.push(user_msg);
-        self.messages.push(echo);
+        let echo = format!("(stub) Got it — \"{}\"", trimmed);
+        self.messages.push(ChatMessage::user(trimmed));
+        self.messages.push(ChatMessage::assistant(echo));
         self.input.clear();
     }
 
     /// Real-send entry point. Pushes the user message + an empty
-    /// assistant message, clears the input, and raises `pending_send`
-    /// so the desktop event loop launches a real provider turn.
-    /// Returns true when a send was queued — a turn may be queued with
-    /// text, with staged attachments, or both (TS parity: an
-    /// attachment-only message is sendable).
+    /// streaming assistant message, clears the input, and raises
+    /// `pending_send` so the desktop event loop launches a real
+    /// provider turn. Returns true when a send was queued — a turn
+    /// may be queued with text, with staged attachments, or both
+    /// (TS parity: an attachment-only message is sendable).
     pub fn begin_send(&mut self) -> bool {
         let trimmed = self.input.trim().to_string();
         if trimmed.is_empty() && self.pending_attachments.is_empty() {
             return false;
         }
-        self.messages.push(ChatMessage {
-            role: ChatRole::User,
-            content: trimmed.clone(),
-        });
-        // Empty assistant bubble — provider deltas append here.
-        self.messages.push(ChatMessage {
-            role: ChatRole::Assistant,
-            content: String::new(),
-        });
+        // Copy the staged *image* attachments into the user message so
+        // the transcript keeps showing them after the input strip is
+        // cleared. Each gets a fresh decode-cache id. Non-image
+        // attachments are dropped here (the backend can't draw them);
+        // the host still drains `pending_attachments` for the request.
+        let mut user_msg = ChatMessage::user(trimmed.clone());
+        for att in &self.pending_attachments {
+            if att.is_image() {
+                let id = alloc_image_id();
+                user_msg.images.push(ChatImage {
+                    id,
+                    name: att.name.clone(),
+                    media_type: att.media_type.clone(),
+                    data: att.data.clone(),
+                });
+            }
+        }
+        self.messages.push(user_msg);
+        // Empty streaming assistant bubble — provider deltas append here.
+        self.messages.push(ChatMessage::assistant_streaming());
         self.input.clear();
         self.pending_send = Some(trimmed);
         true
+    }
+
+    /// Flip the collapsed state of message `idx`'s thinking block.
+    /// Out-of-range index is a no-op.
+    pub fn toggle_message_thinking(&mut self, idx: usize) {
+        if let Some(msg) = self.messages.get_mut(idx) {
+            msg.thinking_collapsed = !msg.thinking_collapsed;
+        }
+    }
+
+    /// Flip the collapsed state of message `idx`'s tool-calls panel.
+    /// Out-of-range index is a no-op.
+    pub fn toggle_message_tool_calls(&mut self, idx: usize) {
+        if let Some(msg) = self.messages.get_mut(idx) {
+            msg.tools_collapsed = !msg.tools_collapsed;
+        }
     }
 
     /// Advance the thinking-mode selector one step:
@@ -442,6 +556,130 @@ mod tests {
         // Empty text but a staged attachment — still sendable.
         assert!(chat.begin_send());
         assert_eq!(chat.pending_attachments.len(), 1);
+    }
+
+    #[test]
+    fn chat_message_user_constructor_has_empty_structured_fields() {
+        let m = ChatMessage::user("hello");
+        assert_eq!(m.role, ChatRole::User);
+        assert_eq!(m.content, "hello");
+        assert!(m.thinking.is_empty());
+        assert!(m.tool_calls.is_empty());
+        assert!(m.images.is_empty());
+        assert!(!m.streaming);
+    }
+
+    #[test]
+    fn begin_send_marks_only_the_assistant_message_streaming() {
+        let mut chat = ChatState {
+            input: "design something".into(),
+            ..Default::default()
+        };
+        assert!(chat.begin_send());
+        assert!(!chat.messages[0].streaming, "user message is not streaming");
+        assert!(
+            chat.messages[1].streaming,
+            "the empty assistant bubble is streaming until the turn ends"
+        );
+    }
+
+    #[test]
+    fn begin_send_copies_image_attachments_into_user_message_with_unique_ids() {
+        let mut chat = ChatState {
+            input: "look at these".into(),
+            ..Default::default()
+        };
+        chat.add_attachment(ChatAttachment {
+            name: "a.png".into(),
+            media_type: "image/png".into(),
+            data: vec![1],
+        });
+        chat.add_attachment(ChatAttachment {
+            name: "b.png".into(),
+            media_type: "image/png".into(),
+            data: vec![2],
+        });
+        assert!(chat.begin_send());
+        let user = &chat.messages[0];
+        assert_eq!(user.images.len(), 2, "both images shown in the bubble");
+        assert_eq!(user.images[0].name, "a.png");
+        assert_eq!(user.images[0].data, vec![1]);
+        assert_ne!(
+            user.images[0].id, user.images[1].id,
+            "each image gets a distinct decode-cache id"
+        );
+        // The host still drains pending_attachments into the request.
+        assert_eq!(chat.pending_attachments.len(), 2);
+    }
+
+    #[test]
+    fn image_ids_never_collide_across_fresh_chat_states() {
+        // A "New Chat" makes a fresh ChatState — its image ids must
+        // not restart at 0 and collide with a still-cached decode.
+        let mut a = ChatState {
+            input: "x".into(),
+            ..Default::default()
+        };
+        a.add_attachment(ChatAttachment {
+            name: "a.png".into(),
+            media_type: "image/png".into(),
+            data: vec![1],
+        });
+        a.begin_send();
+        let first_id = a.messages[0].images[0].id;
+
+        let mut b = ChatState {
+            input: "y".into(),
+            ..Default::default()
+        };
+        b.add_attachment(ChatAttachment {
+            name: "b.png".into(),
+            media_type: "image/png".into(),
+            data: vec![2],
+        });
+        b.begin_send();
+        assert_ne!(
+            first_id, b.messages[0].images[0].id,
+            "a fresh ChatState must not reuse image ids"
+        );
+    }
+
+    #[test]
+    fn begin_send_skips_non_image_attachments_for_the_bubble() {
+        let mut chat = ChatState {
+            input: "and a doc".into(),
+            ..Default::default()
+        };
+        chat.add_attachment(ChatAttachment {
+            name: "notes.txt".into(),
+            media_type: "text/plain".into(),
+            data: vec![7],
+        });
+        assert!(chat.begin_send());
+        // A non-image attachment can't be drawn — keep it out of the
+        // bubble's image strip (the host still sends it).
+        assert!(chat.messages[0].images.is_empty());
+    }
+
+    #[test]
+    fn toggle_message_thinking_flips_collapsed_flag() {
+        let mut chat = ChatState::default();
+        chat.messages.push(ChatMessage::assistant("hi"));
+        let before = chat.messages[0].thinking_collapsed;
+        chat.toggle_message_thinking(0);
+        assert_eq!(chat.messages[0].thinking_collapsed, !before);
+        // Out-of-range index is a no-op (must not panic).
+        chat.toggle_message_thinking(99);
+    }
+
+    #[test]
+    fn toggle_message_tool_calls_flips_collapsed_flag() {
+        let mut chat = ChatState::default();
+        chat.messages.push(ChatMessage::assistant("hi"));
+        let before = chat.messages[0].tools_collapsed;
+        chat.toggle_message_tool_calls(0);
+        assert_eq!(chat.messages[0].tools_collapsed, !before);
+        chat.toggle_message_tool_calls(99);
     }
 
     #[test]

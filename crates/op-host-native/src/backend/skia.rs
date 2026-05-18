@@ -38,6 +38,28 @@ pub fn to_jian_rect(r: Rect) -> jian_core::geometry::Rect {
 }
 
 /// `skia_safe::Rect` from an OP `Rect` — used by `clip_rect`.
+/// Aspect-fit (`contain`) `img_w × img_h` inside `outer`, centered.
+/// The result never exceeds `outer` on either axis; a degenerate
+/// (zero-dimension) image size returns `outer` unchanged so the
+/// caller's frame still paints something. Used by `draw_image` so
+/// the chat transcript can hand a plain box and let the backend
+/// (which knows the decoded dimensions) place the picture.
+fn contain_rect(outer: Rect, img_w: f32, img_h: f32) -> Rect {
+    if img_w <= 0.0 || img_h <= 0.0 || outer.size.x <= 0.0 || outer.size.y <= 0.0 {
+        return outer;
+    }
+    let scale = (outer.size.x / img_w).min(outer.size.y / img_h);
+    let w = img_w * scale;
+    let h = img_h * scale;
+    Rect {
+        origin: Point2D::new(
+            outer.origin.x + (outer.size.x - w) / 2.0,
+            outer.origin.y + (outer.size.y - h) / 2.0,
+        ),
+        size: Point2D::new(w, h),
+    }
+}
+
 fn to_sk_rect(r: Rect) -> skia_safe::Rect {
     skia_safe::Rect::from_xywh(r.origin.x, r.origin.y, r.size.x, r.size.y)
 }
@@ -107,7 +129,22 @@ pub struct NativeBackend {
     /// so the system FontMgr returns the bold-variant TTF when one
     /// is installed (TS app parity).
     char_typeface_cache: std::collections::HashMap<(i32, u16), Option<skia_safe::Typeface>>,
+    /// Decoded-image cache keyed by [`op_editor_core::ChatImage::id`].
+    /// `draw_image` decodes the raw bytes once on first sight; later
+    /// frames reuse the cached `Image`. A decode failure is cached as
+    /// `None` so a corrupt attachment isn't re-decoded every frame.
+    /// Bounded to [`IMAGE_CACHE_CAP`] entries — `image_cache_order`
+    /// tracks insertion order so the oldest decode is evicted once
+    /// the cap is exceeded (a long image-heavy chat can't grow the
+    /// decoded-image set without bound; an evicted image re-decodes
+    /// on its next paint).
+    image_cache: std::collections::HashMap<u64, Option<skia_safe::Image>>,
+    image_cache_order: std::collections::VecDeque<u64>,
 }
+
+/// Maximum number of decoded chat images held at once. Decoded RGBA
+/// is far larger than the encoded source, so the cap is modest.
+const IMAGE_CACHE_CAP: usize = 48;
 
 const ROBOTO_TTF: &[u8] = include_bytes!("../../../op-host-web/assets/Roboto-Regular.ttf");
 
@@ -158,6 +195,8 @@ impl NativeBackend {
             cjk_typeface: None,
             cjk_typeface_tried: false,
             char_typeface_cache: std::collections::HashMap::new(),
+            image_cache: std::collections::HashMap::new(),
+            image_cache_order: std::collections::VecDeque::new(),
         };
         // Pre-warm the per-codepoint typeface cache with every CJK
         // glyph that appears in the chrome (top bar, layer panel,
@@ -626,45 +665,51 @@ impl NativeBackend {
 
     /// No-op; surface resize is owned by `SharedSkiaContext::resize`.
     pub fn resize(&mut self, _width: u32, _height: u32) {}
+
+    /// Decode + cache the image for `id`. The first call decodes
+    /// `encoded`; later calls reuse the cached result (or cached
+    /// `None` on a decode failure) and ignore `encoded`. The cache is
+    /// bounded — once it exceeds [`IMAGE_CACHE_CAP`] the oldest entry
+    /// is evicted (it re-decodes on its next paint).
+    pub(crate) fn cached_image(&mut self, id: u64, encoded: &[u8]) -> Option<skia_safe::Image> {
+        if let Some(hit) = self.image_cache.get(&id) {
+            return hit.clone();
+        }
+        let decoded = skia_safe::Image::from_encoded(skia_safe::Data::new_copy(encoded));
+        self.image_cache.insert(id, decoded.clone());
+        self.image_cache_order.push_back(id);
+        while self.image_cache.len() > IMAGE_CACHE_CAP {
+            match self.image_cache_order.pop_front() {
+                Some(oldest) => {
+                    self.image_cache.remove(&oldest);
+                }
+                None => break,
+            }
+        }
+        decoded
+    }
+
+    /// Number of cached image entries — test accessor.
+    #[cfg(test)]
+    pub(crate) fn image_cache_len(&self) -> usize {
+        self.image_cache.len()
+    }
+
+    /// Draw the image identified by `id`, aspect-fit + centered
+    /// inside `rect`. `encoded` is the raw image bytes, consulted
+    /// only on the first (cache-miss) draw. A decode failure paints
+    /// nothing — callers paint a placeholder frame underneath.
+    pub fn draw_image(&mut self, canvas: &skia_safe::Canvas, rect: Rect, id: u64, encoded: &[u8]) {
+        let Some(image) = self.cached_image(id, encoded) else {
+            return;
+        };
+        let fit = contain_rect(rect, image.width() as f32, image.height() as f32);
+        let mut paint = skia_safe::Paint::default();
+        paint.set_anti_alias(true);
+        canvas.draw_image_rect(&image, None, to_sk_rect(fit), &paint);
+    }
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn color_roundtrip_clamps_and_packs() {
-        let red = to_jian_color(Color::RED);
-        assert_eq!(red.r(), 255);
-        assert_eq!(red.g(), 0);
-        assert_eq!(red.b(), 0);
-        assert_eq!(red.a(), 255);
-
-        let transparent = to_jian_color(Color::TRANSPARENT);
-        assert_eq!(transparent.a(), 0);
-
-        // Out-of-range channels are clamped, not wrapped.
-        let weird = to_jian_color(Color {
-            r: -0.5,
-            g: 2.0,
-            b: 0.5,
-            a: 1.0,
-        });
-        assert_eq!(weird.r(), 0);
-        assert_eq!(weird.g(), 255);
-        assert_eq!(weird.b(), 128);
-    }
-
-    #[test]
-    fn rect_translation_keeps_size() {
-        let r = Rect {
-            origin: Point2D::new(10.0, 20.0),
-            size: Point2D::new(30.0, 40.0),
-        };
-        let jr = to_jian_rect(r);
-        assert!((jr.min_x() - 10.0).abs() < 1e-6);
-        assert!((jr.min_y() - 20.0).abs() < 1e-6);
-        assert!((jr.size.width - 30.0).abs() < 1e-6);
-        assert!((jr.size.height - 40.0).abs() < 1e-6);
-    }
-}
+#[path = "skia/tests.rs"]
+mod tests;
