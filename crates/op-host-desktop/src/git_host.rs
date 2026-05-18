@@ -241,9 +241,9 @@ impl DesktopApp {
     /// path to save to or the write failed (the caller then skips
     /// the git op).
     fn save_tracked_document(&mut self) -> bool {
-        // Flush any pending inline-input edit into the document so
+        // Flush any pending text-input draft into the document so
         // the dirty check + save capture it.
-        self.host.commit_variable_row_focus_if_any_pub();
+        self.host.commit_pending_input_pub();
         if !self.document_is_dirty() {
             return true;
         }
