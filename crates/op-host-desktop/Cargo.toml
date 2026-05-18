@@ -68,6 +68,10 @@ op-acp = { path = "../op-acp" }
 # `persistence.rs` keeps only the desktop-only `rfd` Save/Open + error
 # dialogs.
 op-pen-loader = { path = "../op-pen-loader" }
+# In-app Git — `git_session.rs` binds an `op_git::GitRepo` to the
+# currently-open document so the Git panel can show branch / status
+# / history and drive commits.
+op-git = { path = "../op-git" }
 # Canonical `.op` / `.pen` schema — all persistence + interop goes
 # through `PenDocument` rather than the desktop's private DocPayload.
 # Falling back to the schema's `load_str` lets us open files saved by
@@ -91,7 +95,12 @@ skia-safe = { version = "0.97.0", default-features = false, features = [
   "gl",
   "pdf",
 ] }
-winit = { version = "0.30.13", default-features = false, features = [
+# `casement` — ZSeven-W's winit fork (sibling repo, local path for
+# now). It adds `winit::platform::macos::drain_opened_file_urls`, the
+# macOS open-documents Apple-event hook upstream winit lacks. The
+# `package` key keeps the `winit` import name, so all `use winit::…`
+# stays unchanged.
+winit = { package = "casement", path = "../../../winit", default-features = false, features = [
   "x11",
   "wayland",
   "wayland-csd-adwaita",

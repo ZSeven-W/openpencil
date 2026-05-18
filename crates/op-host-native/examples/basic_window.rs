@@ -2,12 +2,16 @@
 //!
 //! Phase C Task 4 deliverable: a minimal winit + `SharedSkiaContext` +
 //! `NativeBackend` integration that paints chrome (rect / text / box
-//! outline) on every frame and translates pointer events through Jian's
-//! `PointerTranslator` directly into `jian_core::gesture::PointerEvent`
-//! (re-exported from `op_editor_ui`). Per user 2026-05-05
-//! directive there is no OP-specific event translation layer — widget
-//! dispatch in Step 1c+ consumes Jian event types directly. The
-//! macOS / Linux / Windows runtime is exercised by maintainers manually
+//! outline) on every frame.
+//!
+//! NOTE: this demo used to also route pointer events through Jian's
+//! `jian_host_desktop::pointer::PointerTranslator`, but that crate is
+//! pinned to the upstream `winit` package while the desktop host now
+//! builds on the `casement` winit fork — the two `winit::event` types
+//! are not interchangeable. The translator call was discarded smoke-
+//! test code (`let _ = jian_event`), so it has simply been dropped.
+//!
+//! The macOS / Linux / Windows runtime is exercised by maintainers manually
 //! (`notes/step-1a-{macos, linux, windows}-manual-smoke.md`); CI only
 //! verifies that `cargo build --examples --workspace` compiles on every
 //! desktop OS.
@@ -29,7 +33,6 @@
 #![cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]
 
 use jian_core::scene::Color as JianColor;
-use jian_host_desktop::pointer::PointerTranslator;
 use op_editor_ui::{Color, Point2D, Rect, TextLayout};
 use op_host_native::{NativeBackend, SharedSkiaContext, SharedSkiaError};
 use winit::application::ApplicationHandler;
@@ -79,11 +82,6 @@ struct BasicWindowApp {
     window: Option<Window>,
     ctx: Option<SharedSkiaContext>,
     backend: Option<NativeBackend>,
-    /// Pointer wiring: winit `WindowEvent` → Jian `PointerEvent` (the
-    /// canonical event type also re-exported from
-    /// `op_editor_ui`). Widget hit-test + dispatch lands in
-    /// Step 1c+; the demo only proves the pipeline compiles.
-    pointer_translator: PointerTranslator,
     /// Fatal teardown / surface error captured for post-loop diagnosis.
     error: Option<SharedSkiaError>,
 }
@@ -94,7 +92,6 @@ impl BasicWindowApp {
             window: None,
             ctx: None,
             backend: None,
-            pointer_translator: PointerTranslator::new(),
             error: None,
         }
     }
@@ -147,30 +144,6 @@ impl ApplicationHandler for BasicWindowApp {
         _window_id: WindowId,
         event: WindowEvent,
     ) {
-        // Route pointer-flavoured winit events through Jian's
-        // PointerTranslator. Non-pointer events (Resized /
-        // RedrawRequested / CloseRequested / keys) bypass the Jian
-        // path entirely — they're handled by winit directly in the
-        // match arms below.
-        match &event {
-            WindowEvent::ModifiersChanged(m) => {
-                self.pointer_translator.update_modifiers(m.state());
-            }
-            WindowEvent::CursorMoved { .. }
-            | WindowEvent::CursorLeft { .. }
-            | WindowEvent::MouseInput { .. }
-            | WindowEvent::Touch(_) => {
-                if let Some(jian_event) = self.pointer_translator.translate(&event) {
-                    // The demo doesn't act on pointer events — it just
-                    // proves the pipeline compiles + runs without
-                    // panicking. Real widget dispatch (hit-test +
-                    // gesture arena) lands in Step 1c+.
-                    let _ = jian_event;
-                }
-            }
-            _ => {}
-        }
-
         match event {
             WindowEvent::CloseRequested => {
                 event_loop.exit();
