@@ -1,0 +1,25 @@
+{
+  "version": "1.0",
+  "children": [
+    {
+      "type": "frame",
+      "id": "root",
+      "layout": "vertical",
+      "fill": [{ "type": "solid", "color": "#FFFFFF" }],
+      "children": [
+        {
+          "type": "text",
+          "id": "title",
+          "content": "Welcome",
+          "fill": [{ "type": "solid", "color": "#000000" }]
+        },
+        {
+          "type": "text",
+          "id": "body",
+          "content": "A clean document with no detectable issues.",
+          "fill": [{ "type": "solid", "color": "#222222" }]
+        }
+      ]
+    }
+  ]
+}

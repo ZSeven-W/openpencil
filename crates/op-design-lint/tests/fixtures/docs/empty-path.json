@@ -1,0 +1,14 @@
+{
+  "version": "1.0",
+  "children": [
+    {
+      "type": "frame",
+      "id": "root",
+      "layout": "vertical",
+      "children": [
+        { "type": "path", "id": "ghost-path" },
+        { "type": "path", "id": "real-path", "d": "M0 0 L10 10" }
+      ]
+    }
+  ]
+}

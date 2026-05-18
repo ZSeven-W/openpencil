@@ -1,0 +1,19 @@
+[
+  {
+    "nodeId": "shadowed-label",
+    "category": "text-effect",
+    "severity": "warning",
+    "property": "effects",
+    "currentValue": [
+      {
+        "type": "shadow",
+        "offsetX": 0,
+        "offsetY": 2,
+        "blur": 8,
+        "spread": 0,
+        "color": "#000000"
+      }
+    ],
+    "reason": "text node carries shadow / blur effects — almost always an AI hallucination on UI labels"
+  }
+]
