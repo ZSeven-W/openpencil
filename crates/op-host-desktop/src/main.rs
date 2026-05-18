@@ -114,6 +114,11 @@ struct DesktopApp {
     /// In-flight background `git pull`, if any — keeps the
     /// network-bound pull off the UI thread.
     git_pull_job: Option<git_jobs::GitPullJob>,
+    /// Document fingerprint captured when a `git pull` was spawned.
+    /// The post-pull reload compares against it to detect edits made
+    /// *during* the async pull — which the spawn-time confirm did
+    /// not cover — and re-confirm before discarding them.
+    git_pull_doc_baseline: Option<u64>,
     /// In-flight background Git status query, if any — keeps the
     /// working-tree scan (`git status` / `log`) off the UI thread.
     git_status_job: Option<git_jobs::GitStatusJob>,
@@ -167,6 +172,7 @@ impl DesktopApp {
             saved_doc_fingerprint,
             git_session: git_session::GitSession::new(),
             git_pull_job: None,
+            git_pull_doc_baseline: None,
             git_status_job: None,
             git_diff_job: None,
             last_git_refresh: Instant::now(),
@@ -214,6 +220,7 @@ impl DesktopApp {
             // the new snapshot lands.
             self.git_status_job = None;
             self.git_pull_job = None;
+            self.git_pull_doc_baseline = None;
             self.git_diff_job = None;
             let panel = &mut self.host.editor_state_mut().editor_ui.git_panel;
             panel.pulling = false;
@@ -447,6 +454,7 @@ impl DesktopApp {
             return false;
         };
         self.git_pull_job = None;
+        let baseline = self.git_pull_doc_baseline.take();
         self.host.editor_state_mut().editor_ui.git_panel.pulling = false;
         match &result {
             Ok(outcome) => {
@@ -459,7 +467,18 @@ impl DesktopApp {
                     outcome,
                     op_git::MergeOutcome::FastForward | op_git::MergeOutcome::Merge
                 ) {
-                    self.reload_tracked_document();
+                    // If the user edited the document *while the pull
+                    // ran*, the spawn-time confirm did not cover those
+                    // edits — re-confirm before the reload discards
+                    // them. An unchanged document reloads silently.
+                    let edited_during_pull = baseline
+                        .map(|base| {
+                            persistence::document_fingerprint(self.host.editor_state()) != base
+                        })
+                        .unwrap_or(false);
+                    if !edited_during_pull || self.confirm_document_reload() {
+                        self.reload_tracked_document();
+                    }
                 }
             }
             Err(err) => {
