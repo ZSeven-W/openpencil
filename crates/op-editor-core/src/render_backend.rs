@@ -302,6 +302,15 @@ pub trait RenderBackend {
         }
     }
 
+    /// Draw a raster image, aspect-fit + centered inside `rect`.
+    /// `image_id` is a process-stable handle the backend keys its
+    /// decode cache on; `encoded` is the raw image bytes (PNG /
+    /// JPEG / …), consulted only on the first (cache-miss) draw of
+    /// that id. Default impl is a no-op — backends without an image
+    /// pipeline (or codec support) degrade gracefully and the caller
+    /// is expected to have painted a placeholder frame underneath.
+    fn draw_image(&mut self, _rect: Rect, _image_id: u64, _encoded: &[u8]) {}
+
     // Transform stack.
     fn save(&mut self);
     fn restore(&mut self);

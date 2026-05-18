@@ -95,6 +95,10 @@ impl<'a> RenderBackend for NativeFrameBackend<'a> {
         self.inner.fill_polygon(self.canvas, points, color);
     }
 
+    fn draw_image(&mut self, rect: Rect, image_id: u64, encoded: &[u8]) {
+        self.inner.draw_image(self.canvas, rect, image_id, encoded);
+    }
+
     fn resize(&mut self, _width: u32, _height: u32) {}
 
     fn dpi_scale(&self) -> f32 {

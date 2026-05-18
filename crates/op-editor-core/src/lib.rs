@@ -61,7 +61,10 @@ pub use agent_settings::{
     AgentSettings, AgentSettingsDrag, AgentSettingsTab, McpCli, McpServer, SettingsFocus,
 };
 pub use align::AlignAction;
-pub use chat::{AgentProvider, ChatAnchor, ChatMessage, ChatRole, ChatState, ModelEntry};
+pub use chat::{
+    AgentProvider, ChatAnchor, ChatImage, ChatMessage, ChatRole, ChatState, ChatToolCall,
+    ModelEntry,
+};
 pub use color_picker::{hsv_to_rgb, parse_hex_rgb, rgb_to_hex, rgb_to_hsv};
 pub use command::{BatchInsertItem, EditorCommand, EffectField, NodeFlag, VariableScalarPayload};
 pub use components::{Component, ComponentLibrary};

@@ -576,6 +576,16 @@ impl WidgetHost {
                         self.mark_dirty();
                         return true;
                     }
+                    AIChatHit::ToggleThinking(idx) => {
+                        self.editor_state.chat.toggle_message_thinking(idx);
+                        self.mark_dirty();
+                        return true;
+                    }
+                    AIChatHit::ToggleToolCalls(idx) => {
+                        self.editor_state.chat.toggle_message_tool_calls(idx);
+                        self.mark_dirty();
+                        return true;
+                    }
                 }
             }
         }
