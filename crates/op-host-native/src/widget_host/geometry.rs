@@ -7,13 +7,14 @@
 //! input-dispatch contract keeps `layout_scene` fresh before any
 //! hit-testing input event (see `widget_host.rs`).
 
-use super::helpers::{PANEL_RESIZE_GUTTER, TOOLBAR_INSET_X, TOOLBAR_INSET_Y};
+use super::helpers::{rect_contains, PANEL_RESIZE_GUTTER, TOOLBAR_INSET_X, TOOLBAR_INSET_Y};
 use super::{CursorHint, PanelResizeKind, WidgetHostNative};
 use op_editor_core::ChatAnchor;
 use op_editor_ui::widgets::{
-    rotation_corner_at_point, selection_handle_at_point, LayoutCx, LocalePicker, ShapePicker,
-    Toolbar, TopBar, Widget, AI_CHAT_COLLAPSED_HEIGHT, AI_CHAT_COLLAPSED_WIDTH, AI_CHAT_HEIGHT,
-    AI_CHAT_WIDTH, LOCALE_PICKER_WIDTH, SHAPE_PICKER_WIDTH, TOOLBAR_WIDTH, TOP_BAR_HEIGHT,
+    rotation_corner_at_point, selection_handle_at_point, GitPanel, LayoutCx, LocalePicker,
+    ShapePicker, Toolbar, TopBar, Widget, AI_CHAT_COLLAPSED_HEIGHT, AI_CHAT_COLLAPSED_WIDTH,
+    AI_CHAT_HEIGHT, AI_CHAT_WIDTH, GIT_PANEL_INSET, LOCALE_PICKER_WIDTH,
+    SHAPE_PICKER_WIDTH, TOOLBAR_WIDTH, TOP_BAR_HEIGHT,
 };
 use op_editor_ui::{Point2D, Rect};
 
@@ -173,7 +174,15 @@ impl WidgetHostNative {
         {
             return CursorHint::Default;
         }
-        if self.panel_resize_hover(x, y, viewport_w).is_some() || self.is_resizing_panel() {
+        // The floating Git panel paints on top of the right-rail
+        // resize gutter (and in diff mode is wide enough to cover
+        // it), so don't show the resize cursor over the panel.
+        let over_git_panel = self
+            .git_panel_rect(viewport_w, viewport_h)
+            .is_some_and(|r| rect_contains(r, Point2D::new(x, y)));
+        if self.is_resizing_panel()
+            || (!over_git_panel && self.panel_resize_hover(x, y, viewport_w).is_some())
+        {
             return CursorHint::ResizeEw;
         }
         if self.is_dragging_node() {
@@ -264,6 +273,24 @@ impl WidgetHostNative {
         let canvas_w = (canvas_right - canvas_left).max(0.0);
         let canvas_h = (viewport_h - TOP_BAR_HEIGHT).max(0.0);
         (canvas_left, TOP_BAR_HEIGHT, canvas_w, canvas_h)
+    }
+
+    /// Floating Git-panel rect — `None` when the panel is closed.
+    /// Mirrors the placement in `widget_host/paint.rs`.
+    pub(in crate::widget_host) fn git_panel_rect(
+        &self,
+        viewport_w: f32,
+        viewport_h: f32,
+    ) -> Option<Rect> {
+        let panel = GitPanel::for_editor(&self.editor_state)?;
+        let (canvas_left, _cy, _cw, _ch) = self.canvas_region(viewport_w, viewport_h);
+        Some(Rect {
+            origin: Point2D::new(
+                canvas_left + GIT_PANEL_INSET,
+                TOP_BAR_HEIGHT + GIT_PANEL_INSET,
+            ),
+            size: Point2D::new(panel.panel_width(), panel.height()),
+        })
     }
 
     pub(in crate::widget_host) fn shape_picker_rect(

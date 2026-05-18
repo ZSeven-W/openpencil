@@ -20,10 +20,25 @@ impl WidgetHostNative {
             || self.editor_state.editor_ui.variable_row_focus.is_some()
             || self.editor_state.editor_ui.agent_settings.focus.is_some()
             || self.editor_state.chat.focused
+            || self.git_commit_focus_active()
     }
 
     pub fn settings_focus_active(&self) -> bool {
         self.editor_state.editor_ui.agent_settings.focus.is_some()
+    }
+
+    /// Whether the Git panel's commit-message input owns the
+    /// keyboard. Like [`Self::settings_focus_active`], the desktop
+    /// runner gates editor shortcuts on this so typing a commit
+    /// message never mutates the document.
+    ///
+    /// Never active while the panel is `loading`: the commit input
+    /// is hidden then, so a stale `commit_focused` must not let
+    /// keystrokes — or Enter — reach (and commit through) a control
+    /// the user cannot see.
+    pub fn git_commit_focus_active(&self) -> bool {
+        let panel = &self.editor_state.editor_ui.git_panel;
+        panel.open && panel.commit_focused && !panel.loading
     }
 
     /// Wheel event — zoom centered at (x, y) over the canvas.

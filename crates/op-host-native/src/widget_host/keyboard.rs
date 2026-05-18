@@ -23,6 +23,15 @@ impl WidgetHostNative {
             }
             return false;
         }
+        // Git panel's commit-message input owns the keyboard next.
+        if self.git_commit_focus_active() {
+            if !c.is_control() {
+                self.editor_state.editor_ui.git_panel.commit_message.push(c);
+                self.mark_dirty();
+                return true;
+            }
+            return false;
+        }
         if self.editor_state.ui.layer_rename.is_some() && !c.is_control() {
             let mut s = [0u8; 4];
             let _ = self.editor_state.rename_append(c.encode_utf8(&mut s));
@@ -100,6 +109,11 @@ impl WidgetHostNative {
     pub fn apply_backspace(&mut self) -> bool {
         if self.editor_state.editor_ui.agent_settings.focus.is_some() {
             self.editor_state.editor_ui.settings_input_draft.pop();
+            self.mark_dirty();
+            return true;
+        }
+        if self.git_commit_focus_active() {
+            self.editor_state.editor_ui.git_panel.commit_message.pop();
             self.mark_dirty();
             return true;
         }
@@ -238,6 +252,15 @@ impl WidgetHostNative {
             self.commit_settings_focus_if_any();
             return true;
         }
+        // Enter in the Git commit input requests a commit.
+        if self.git_commit_focus_active() {
+            let panel = &mut self.editor_state.editor_ui.git_panel;
+            if !panel.commit_message.trim().is_empty() {
+                panel.pending_action = Some(op_editor_core::GitPanelAction::Commit);
+            }
+            self.mark_dirty();
+            return true;
+        }
         if self.editor_state.ui.layer_rename.is_some() {
             let ok = self.editor_state.rename_commit();
             if ok {
@@ -290,6 +313,12 @@ impl WidgetHostNative {
             .is_some()
         {
             self.editor_state.editor_ui.settings_input_draft.clear();
+            self.mark_dirty();
+            return true;
+        }
+        // Escape defocuses the Git commit input (the panel stays open).
+        if self.git_commit_focus_active() {
+            self.editor_state.editor_ui.git_panel.commit_focused = false;
             self.mark_dirty();
             return true;
         }

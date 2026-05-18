@@ -230,8 +230,19 @@ impl WidgetHostNative {
             }
         }
 
+        // The floating Git panel paints on top of the right-rail
+        // panels (see `paint.rs` §8.2) — and in diff mode it widens
+        // to 620 px, which overlaps the property / variables rail
+        // (and its resize gutter) on a narrow window. Hit-test order
+        // must mirror paint Z-order: a click inside the Git-panel
+        // rect belongs to the Git panel (block 0.9 below), so every
+        // rail block in between skips a click it would otherwise own.
+        let in_git_panel = self
+            .git_panel_rect(viewport_width, viewport_height)
+            .is_some_and(|r| rect_contains(r, Point2D::new(x, y)));
+
         // 0z. Panel-resize gutter — ±4 px from rail edges.
-        if y >= TOP_BAR_HEIGHT {
+        if y >= TOP_BAR_HEIGHT && !in_git_panel {
             if let Some(kind) = self.panel_resize_hover(x, y, viewport_width) {
                 let start_width = match kind {
                     PanelResizeKind::LayerRight => self.editor_state.editor_ui.layer_panel_width,
@@ -358,7 +369,7 @@ impl WidgetHostNative {
         }
 
         // 0c0. Fill-type picker — outside-click dismiss.
-        if self.editor_state.editor_ui.fill_type_picker_open {
+        if self.editor_state.editor_ui.fill_type_picker_open && !in_git_panel {
             self.refresh_layout_scene();
             if let Some(panel) = PropertyPanel::for_selection(&self.editor_state) {
                 let property_rect = Rect {
@@ -388,13 +399,17 @@ impl WidgetHostNative {
         }
 
         // 0b1. VariablesPanel — tested before PropertyPanel.
-        if self.dispatch_variables_panel_press(x, y, viewport_width, viewport_height) {
+        if !in_git_panel
+            && self.dispatch_variables_panel_press(x, y, viewport_width, viewport_height)
+        {
             return true;
         }
 
         // 0c. PropertyPanel input row.
         self.refresh_layout_scene();
-        if let Some(panel) = PropertyPanel::for_selection(&self.editor_state) {
+        if let Some(panel) = PropertyPanel::for_selection(&self.editor_state)
+            .filter(|_| !in_git_panel)
+        {
             let property_rect = Rect {
                 origin: Point2D::new(
                     viewport_width - self.editor_state.editor_ui.property_panel_width,
@@ -431,6 +446,12 @@ impl WidgetHostNative {
                 self.mark_dirty();
                 return true;
             }
+        }
+
+        // 0.9. Floating Git panel — status + interactive actions
+        //      (dispatch in `git_press.rs`).
+        if self.dispatch_git_panel_press(x, y, viewport_width, viewport_height) {
+            return true;
         }
 
         // 1. AI chat panel — sits on top of the toolbar in paint
