@@ -32,6 +32,7 @@ pub enum MenuAction {
     Group,
     Ungroup,
     ToggleFullscreen,
+    ToggleGitPanel,
     Quit,
     CheckUpdates,
     OpenGithub,
@@ -64,6 +65,7 @@ mod backend {
     const ID_GROUP: &str = "group";
     const ID_UNGROUP: &str = "ungroup";
     const ID_FULLSCREEN: &str = "fullscreen";
+    const ID_GIT_PANEL: &str = "git-panel";
     const ID_QUIT: &str = "quit";
     const ID_CHECK_UPDATES: &str = "check-updates";
     const ID_GITHUB: &str = "github";
@@ -86,6 +88,7 @@ mod backend {
             ID_GROUP => MenuAction::Group,
             ID_UNGROUP => MenuAction::Ungroup,
             ID_FULLSCREEN => MenuAction::ToggleFullscreen,
+            ID_GIT_PANEL => MenuAction::ToggleGitPanel,
             ID_QUIT => MenuAction::Quit,
             ID_CHECK_UPDATES => MenuAction::CheckUpdates,
             ID_GITHUB => MenuAction::OpenGithub,
@@ -208,6 +211,8 @@ mod backend {
                 "Toggle Full Screen",
                 Some(fullscreen_accel),
             ));
+            let _ = view.append(&PredefinedMenuItem::separator());
+            let _ = view.append(&item(ID_GIT_PANEL, "Git Panel", None));
             let _ = menu.append(&view);
 
             // Help menu.
@@ -293,6 +298,7 @@ mod backend {
                 ID_GROUP,
                 ID_UNGROUP,
                 ID_FULLSCREEN,
+                ID_GIT_PANEL,
                 ID_QUIT,
                 ID_CHECK_UPDATES,
                 ID_GITHUB,

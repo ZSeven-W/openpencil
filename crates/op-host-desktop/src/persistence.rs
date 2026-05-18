@@ -182,22 +182,47 @@ pub fn load_editor_state(path: &std::path::Path) -> Result<EditorState, String> 
 
 /// Cmd+S — save to `current_path` if known, else fall through to
 /// Save As. Updates `current_path` + window title on success.
+/// Returns `true` when the document was written to disk, `false` on
+/// an IO error or a cancelled Save-As dialog — so the caller can
+/// tell a real save from a no-op (e.g. the unsaved-changes prompt).
 pub fn handle_save(
     host: &mut WidgetHostNative,
     current_path: &mut Option<PathBuf>,
     window: Option<&winit::window::Window>,
 ) -> bool {
     if let Some(path) = current_path.clone() {
-        if let Err(e) = save_to_path(host.editor_state(), &path) {
-            eprintln!("[save] {e}");
-            show_error_dialog(host, ErrorKind::Save, Some(&path), &e);
-        } else {
-            crate::settings_io::touch_recent(host, &path);
-            set_display_name(host, Some(&path));
+        match save_to_path(host.editor_state(), &path) {
+            Err(e) => {
+                eprintln!("[save] {e}");
+                show_error_dialog(host, ErrorKind::Save, Some(&path), &e);
+                return false;
+            }
+            Ok(()) => {
+                crate::settings_io::touch_recent(host, &path);
+                set_display_name(host, Some(&path));
+                return true;
+            }
         }
-        return false;
     }
     handle_save_as(host, current_path, window)
+}
+
+/// A cheap content fingerprint of the document — the hash of its
+/// canonical JSON serialization. The desktop runner compares the
+/// live fingerprint against the one captured at the last save /
+/// open / new to decide whether there are unsaved changes worth a
+/// close-time prompt. A serialization failure (not expected for a
+/// valid document) yields a sentinel that simply reads as "changed".
+pub fn document_fingerprint(state: &EditorState) -> u64 {
+    use std::hash::{Hash, Hasher};
+    match serde_json::to_vec(&state.doc) {
+        Ok(bytes) => {
+            let mut hasher = std::collections::hash_map::DefaultHasher::new();
+            bytes.hash(&mut hasher);
+            hasher.finish()
+        }
+        Err(_) => 0,
+    }
 }
 
 fn set_display_name(host: &mut WidgetHostNative, path: Option<&std::path::Path>) {
@@ -332,13 +357,16 @@ pub fn open_path(
 }
 
 /// Route a `FileAction` raised by the file-menu dispatcher to the
-/// matching dialog flow.
+/// matching dialog flow. Returns `true` when the action left the
+/// document matching disk — a New / successful Open / successful
+/// Save — so the runner can refresh its unsaved-changes baseline;
+/// export / import / recent-list actions return `false`.
 pub fn run_action(
     action: op_editor_core::editor_ui_state::FileAction,
     host: &mut WidgetHostNative,
     current_path: &mut Option<PathBuf>,
     window: Option<&winit::window::Window>,
-) {
+) -> bool {
     use op_editor_core::editor_ui_state::FileAction;
     match action {
         FileAction::New => {
@@ -347,21 +375,17 @@ pub fn run_action(
             host.mark_editor_state_dirty();
             *current_path = None;
             refresh_title(current_path, window);
+            true
         }
-        FileAction::Open => {
-            handle_open(host, current_path, window);
-        }
-        FileAction::Save => {
-            handle_save(host, current_path, window);
-        }
-        FileAction::SaveAs => {
-            handle_save_as(host, current_path, window);
-        }
+        FileAction::Open => handle_open(host, current_path, window),
+        FileAction::Save => handle_save(host, current_path, window),
+        FileAction::SaveAs => handle_save_as(host, current_path, window),
         FileAction::ExportImage => {
             // main.rs intercepts ExportImage to open the picker; this
             // fallback keeps external callers working.
             host.editor_state_mut().editor_ui.export_dialog_open = true;
             host.mark_editor_state_dirty();
+            false
         }
         FileAction::ExportImageConfirm => {
             use op_editor_core::editor_ui_state::ExportFormat as Fmt;
@@ -416,10 +440,11 @@ pub fn run_action(
                     show_error_dialog(host, ErrorKind::Export, Some(&path), &e);
                 }
             }
+            false
         }
         FileAction::OpenRecent(i) => {
             let Some(entry) = host.editor_state().editor_ui.recent_files.get(i).cloned() else {
-                return;
+                return false;
             };
             let path = std::path::PathBuf::from(&entry.path);
             match load_into_host(host, &path) {
@@ -427,6 +452,7 @@ pub fn run_action(
                     crate::settings_io::touch_recent(host, &path);
                     *current_path = Some(path);
                     refresh_title(current_path, window);
+                    true
                 }
                 Err(e) => {
                     // File missing / parse failure → tell the user and
@@ -438,15 +464,18 @@ pub fn run_action(
                         .recent_files
                         .retain(|r| r.path != entry.path);
                     host.mark_editor_state_dirty();
+                    false
                 }
             }
         }
         FileAction::ClearRecent => {
             host.editor_state_mut().editor_ui.recent_files.clear();
             host.mark_editor_state_dirty();
+            false
         }
         FileAction::ImportFigma => {
             eprintln!("[file-action] {action:?} — not yet wired (UI only)");
+            false
         }
     }
 }
@@ -561,6 +590,24 @@ mod tests {
 
         let _ = std::fs::remove_file(&path);
         let _ = std::fs::remove_file(sidecar_path(&path));
+    }
+
+    #[test]
+    fn document_fingerprint_is_stable_and_change_sensitive() {
+        // The unsaved-changes prompt rests on this: an unchanged
+        // document hashes the same, a structural edit hashes
+        // differently.
+        let state = EditorState::new();
+        let fp = document_fingerprint(&state);
+        assert_eq!(fp, document_fingerprint(&state), "stable for the same doc");
+
+        let mut mutated = EditorState::new();
+        mutated.add_page();
+        assert_ne!(
+            fp,
+            document_fingerprint(&mutated),
+            "a structural change moves the fingerprint"
+        );
     }
 
     #[test]
