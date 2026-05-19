@@ -155,7 +155,7 @@ impl Orchestrator {
         }
 
         // -- 阶段 4:清理 --
-        run_cleanup_passes(sink, &plan);
+        run_cleanup_passes(sink, &plan, &[&root_id]);
         on_progress(Progress::CleanupDone);
 
         // -- 阶段 4.5:收尾(spec §6.3 三路径)--
