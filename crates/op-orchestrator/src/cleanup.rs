@@ -14,9 +14,7 @@ use op_editor_core::{EditorState, PenNodeExt};
 /// 递归统计 `node` 下的后代数(不含自身)。
 fn count_descendants(node: &PenNode) -> usize {
     match node.children() {
-        Some(children) => {
-            children.len() + children.iter().map(count_descendants).sum::<usize>()
-        }
+        Some(children) => children.len() + children.iter().map(count_descendants).sum::<usize>(),
         None => 0,
     }
 }
@@ -83,12 +81,19 @@ mod tests {
     fn descendant_count_counts_nested() {
         let mut sink = VecDocSink::new();
         // root 套 child 套 grandchild
-        let tree = frame_json("root", json!([frame_json_value("c", json!([frame_json_value("gc", json!([]))]))]));
+        let tree = frame_json(
+            "root",
+            json!([frame_json_value(
+                "c",
+                json!([frame_json_value("gc", json!([]))])
+            )]),
+        );
         sink.state.apply(EditorCommand::InsertSubtree {
             nodes: vec![tree],
             parent_id: NodeId::NONE,
         });
-        assert_eq!(descendant_count(&sink.state, "root"), 2);
+        let root_id = sink.state.active_children()[0].id_str().to_string();
+        assert_eq!(descendant_count(&sink.state, &root_id), 2);
         assert_eq!(descendant_count(&sink.state, "missing"), 0);
     }
 

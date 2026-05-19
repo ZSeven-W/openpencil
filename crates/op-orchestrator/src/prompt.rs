@@ -18,7 +18,7 @@ const PLANNING_TIMEOUT: Duration = Duration::from_secs(300);
 const SUBAGENT_TIMEOUT: Duration = Duration::from_secs(420);
 
 /// 规划阶段要求模型产出的 JSON 形状说明。
-const PLAN_FORMAT: &str = r#"
+const PLAN_FORMAT: &str = r##"
 Respond with a single JSON object describing the design plan:
 {
   "root_frame": { "id": "root", "name": "<name>", "width": <px>, "height": <px>,
@@ -29,7 +29,7 @@ Respond with a single JSON object describing the design plan:
   ],
   "style_guide": { "palette": { "color-1": "#RRGGBB", "color-2": "#RRGGBB" } }
 }
-Each subtask is one visual section. Use 1-6 subtasks. Output ONLY the JSON object."#;
+Each subtask is one visual section. Use 1-6 subtasks. Output ONLY the JSON object."##;
 
 /// sub-agent 阶段要求模型产出的 JSON 形状说明。
 const NODE_FORMAT: &str = r#"
@@ -38,11 +38,14 @@ Each node is tagged by "type" (frame/group/rectangle/ellipse/line/polygon/path/
 text/text_input/image/icon_font). Frames/groups nest children via "children".
 Example: [ { "type": "frame", "id": "<prefix>-1", "name": "Card", "x": 0, "y": 0,
 "width": 1200, "height": 200, "children": [] } ]
+ALL field names are camelCase: cornerRadius, fontSize, fontWeight, justifyContent,
+alignItems, clipContent. Geometry fields are x, y, width, height. Never snake_case.
 Output ONLY the JSON array."#;
 
 /// 把解析出的 skill 正文 join 成一段。
 fn skill_preamble(phase: op_ai_skills::Phase, message: &str) -> String {
-    let ctx = op_ai_skills::resolve_skills(phase, message, &op_ai_skills::ResolveOptions::default());
+    let ctx =
+        op_ai_skills::resolve_skills(phase, message, &op_ai_skills::ResolveOptions::default());
     ctx.skills
         .iter()
         .map(|s| s.content.as_str())
@@ -91,8 +94,16 @@ pub fn build_subagent_prompt(
     let user_prompt = format!(
         "Overall design: {}\n\nGenerate the section \"{}\" \
          (区块 id 前缀 `{}-`). Target region: {:.0}x{:.0} px.\nPalette: {}",
-        req.prompt, subtask.label, subtask.id_prefix, subtask.region.width, subtask.region.height,
-        if palette.is_empty() { "(default)" } else { &palette },
+        req.prompt,
+        subtask.label,
+        subtask.id_prefix,
+        subtask.region.width,
+        subtask.region.height,
+        if palette.is_empty() {
+            "(default)"
+        } else {
+            &palette
+        },
     );
 
     CallRequest {
