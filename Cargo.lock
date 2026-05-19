@@ -2504,7 +2504,9 @@ dependencies = [
  "op-editor-ui",
  "op-git",
  "op-host-native",
+ "op-i18n",
  "op-mcp",
+ "op-opmerge",
  "op-pen-loader",
  "reqwest",
  "rfd",
@@ -2566,6 +2568,14 @@ version = "0.1.0"
 dependencies = [
  "jian-ops-schema",
  "op-editor-core",
+]
+
+[[package]]
+name = "op-opmerge"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+ "thiserror 1.0.69",
 ]
 
 [[package]]

@@ -6,7 +6,7 @@
 //! of each handler. Every mutation flags `editor_state` so the next
 //! refresh re-derives.
 
-use super::helpers::{resize_bounds, PANEL_MAX_WIDTH, PANEL_MIN_WIDTH};
+use super::helpers::{rect_contains, resize_bounds, PANEL_MAX_WIDTH, PANEL_MIN_WIDTH};
 use super::{PanelResizeKind, WidgetHostNative};
 use op_editor_ui::{Point2D, Rect};
 
@@ -21,6 +21,8 @@ impl WidgetHostNative {
             || self.editor_state.editor_ui.agent_settings.focus.is_some()
             || self.editor_state.chat.focused
             || self.git_commit_focus_active()
+            || self.git_remote_focus_active()
+            || self.git_https_focus_active()
     }
 
     pub fn settings_focus_active(&self) -> bool {
@@ -41,87 +43,19 @@ impl WidgetHostNative {
         panel.open && panel.commit_focused && !panel.loading
     }
 
-    /// Wheel event — zoom centered at (x, y) over the canvas.
-    pub fn apply_wheel(
-        &mut self,
-        x: f32,
-        y: f32,
-        delta_y: f32,
-        viewport_width: f32,
-        viewport_height: f32,
-    ) -> bool {
-        // Agent-settings modal owns wheel.
-        if self.editor_state.editor_ui.agent_settings_open {
-            use op_editor_ui::widgets::agent_settings_panel::AgentSettingsPanel;
-            self.refresh_layout_scene();
-            let panel = AgentSettingsPanel::for_editor(&self.editor_state);
-            let panel_rect = panel.rect(viewport_width, viewport_height);
-            if panel_rect.origin.x <= x
-                && x <= panel_rect.origin.x + panel_rect.size.x
-                && panel_rect.origin.y <= y
-                && y <= panel_rect.origin.y + panel_rect.size.y
-            {
-                let total = panel.content_total_height();
-                let viewport_h_inner = panel_rect.size.y - 48.0;
-                let max_scroll = (total - viewport_h_inner).max(0.0);
-                let next = (self.editor_state.editor_ui.agent_settings.scroll_y - delta_y)
-                    .clamp(0.0, max_scroll);
-                self.editor_state.editor_ui.agent_settings.scroll_y = next;
-                self.mark_dirty();
-                return true;
-            }
-        }
-        if !self.over_canvas(x, y, viewport_width, viewport_height) {
-            return false;
-        }
-        // Canvas-local coords keep the zoom anchor under the cursor.
-        let (cx0, cy0, _cw, _ch) = self.canvas_region(viewport_width, viewport_height);
-        let cursor = Point2D::new(x - cx0, y - cy0);
-        self.editor_state.viewport.zoom_at(cursor, delta_y);
-        self.mark_dirty();
-        true
+    /// Whether the Git panel's remote-URL input owns the keyboard.
+    /// Mirrors [`Self::git_commit_focus_active`] for the Remotes
+    /// section's URL field.
+    pub fn git_remote_focus_active(&self) -> bool {
+        let panel = &self.editor_state.editor_ui.git_panel;
+        panel.open && panel.remote_focused && !panel.loading
     }
 
-    /// 2-finger trackpad pan — translate viewport by (dx, dy).
-    pub fn apply_pan_gesture(
-        &mut self,
-        x: f32,
-        y: f32,
-        dx: f32,
-        dy: f32,
-        viewport_width: f32,
-        viewport_height: f32,
-    ) -> bool {
-        // Agent-settings modal owns trackpad scroll same as wheel.
-        if self.editor_state.editor_ui.agent_settings_open {
-            use op_editor_ui::widgets::agent_settings_panel::AgentSettingsPanel;
-            self.refresh_layout_scene();
-            let panel = AgentSettingsPanel::for_editor(&self.editor_state);
-            let panel_rect = panel.rect(viewport_width, viewport_height);
-            if panel_rect.origin.x <= x
-                && x <= panel_rect.origin.x + panel_rect.size.x
-                && panel_rect.origin.y <= y
-                && y <= panel_rect.origin.y + panel_rect.size.y
-            {
-                let total = panel.content_total_height();
-                let viewport_h_inner = panel_rect.size.y - 48.0;
-                let max_scroll = (total - viewport_h_inner).max(0.0);
-                let next = (self.editor_state.editor_ui.agent_settings.scroll_y - dy)
-                    .clamp(0.0, max_scroll);
-                self.editor_state.editor_ui.agent_settings.scroll_y = next;
-                self.mark_dirty();
-                return true;
-            }
-        }
-        if !self.over_canvas(x, y, viewport_width, viewport_height) {
-            return false;
-        }
-        if dx == 0.0 && dy == 0.0 {
-            return false;
-        }
-        self.editor_state.viewport.pan(dx, dy);
-        self.mark_dirty();
-        true
+    /// Whether the Git panel's HTTPS-credential input owns the
+    /// keyboard — the Remotes section's `username:token` field.
+    pub fn git_https_focus_active(&self) -> bool {
+        let panel = &self.editor_state.editor_ui.git_panel;
+        panel.open && panel.https_focused && !panel.loading
     }
 
     /// After a node-drag translate, compute smart-guide alignment
@@ -217,7 +151,25 @@ impl WidgetHostNative {
             self.mark_dirty();
             return true;
         }
-        if let Some(state) = self.editor_state.editor_ui.layer_context_menu.clone() {
+        // The top-most floating Design-MD panel suppresses every
+        // lower-overlay hover update underneath it — a click already
+        // routes to the panel first, so a hover highlight bleeding
+        // through would be misleading. Moving onto the panel also
+        // clears any highlight set just before, so none lingers.
+        let over_design_md = self
+            .design_md_panel_rect(self.last_viewport_w, self.last_viewport_h)
+            .is_some_and(|r| rect_contains(r, Point2D::new(x, y)));
+        // `cleared` is folded into the final return so the repaint
+        // scheduler (which gates on `apply_cursor_move`'s bool) does
+        // not skip the frame that drops the stale highlight.
+        let cleared = over_design_md && self.clear_lower_overlay_hover();
+        if let Some(state) = self
+            .editor_state
+            .editor_ui
+            .layer_context_menu
+            .clone()
+            .filter(|_| !over_design_md)
+        {
             use op_editor_ui::widgets::layer_context_menu::LayerContextMenu;
             let menu = LayerContextMenu::for_state(&self.editor_state, state.clone());
             let new_hover = menu.hovered_row_at(Point2D::new(x, y)).map(|i| i as u8);
@@ -231,7 +183,7 @@ impl WidgetHostNative {
                 return true;
             }
         }
-        if self.editor_state.editor_ui.file_menu_open {
+        if self.editor_state.editor_ui.file_menu_open && !over_design_md {
             use op_editor_ui::widgets::file_menu::FileMenu;
             use op_editor_ui::widgets::top_bar::TopBar;
             self.refresh_layout_scene();
@@ -256,7 +208,7 @@ impl WidgetHostNative {
                 return true;
             }
         }
-        if self.editor_state.editor_ui.locale_picker_open {
+        if self.editor_state.editor_ui.locale_picker_open && !over_design_md {
             use op_editor_ui::widgets::locale_picker::LocalePicker;
             self.refresh_layout_scene();
             let panel = self.locale_picker_rect(self.last_viewport_w);
@@ -269,7 +221,7 @@ impl WidgetHostNative {
                 return true;
             }
         }
-        if self.editor_state.editor_ui.shape_picker_open {
+        if self.editor_state.editor_ui.shape_picker_open && !over_design_md {
             use op_editor_ui::widgets::shape_picker::ShapePicker;
             self.refresh_layout_scene();
             let panel = self.shape_picker_rect(self.last_viewport_w, self.last_viewport_h);
@@ -494,6 +446,12 @@ impl WidgetHostNative {
             d.pos_y = y - d.grab_dy;
             return true;
         }
+        if let Some(d) = self.design_md_drag {
+            self.editor_state.editor_ui.design_md_panel_pos =
+                Some((x - d.grab_dx, y - d.grab_dy));
+            self.mark_dirty();
+            return true;
+        }
         if let Some(drag) = self.drag.as_mut() {
             let dx = x - drag.last_x;
             let dy = y - drag.last_y;
@@ -503,8 +461,11 @@ impl WidgetHostNative {
             self.mark_dirty();
             return true;
         }
-        // Align toolbar hover sync — AFTER drag detection.
-        let new_hover = if self.editor_state.selection_count() >= 2 {
+        // Align toolbar hover sync — AFTER drag detection. Suppressed
+        // when the cursor is over the top-most Design-MD panel
+        // (`over_design_md`, computed above) so a toolbar button
+        // below it does not light up.
+        let new_hover = if self.editor_state.selection_count() >= 2 && !over_design_md {
             self.align_toolbar_hit(x, y, self.last_viewport_w, self.last_viewport_h)
         } else {
             None
@@ -515,7 +476,9 @@ impl WidgetHostNative {
             self.mark_dirty();
             return true;
         }
-        false
+        // `cleared` carries a stale-hover drop that no earlier branch
+        // reported — fold it in so the repaint is scheduled.
+        cleared
     }
 
     /// Mouse-release — ends active drag; chat-panel snaps corner.
@@ -567,6 +530,11 @@ impl WidgetHostNative {
                 return true;
             }
             return false;
+        }
+        if self.design_md_drag.take().is_some() {
+            // The panel position was updated live during the drag;
+            // release just ends it.
+            return true;
         }
         if let Some(m) = self.marquee_drag.take() {
             self.commit_marquee_selection(m, viewport_w, viewport_h);
@@ -639,6 +607,9 @@ impl WidgetHostNative {
         }
         // Chat drag without viewport — drop it (best effort).
         if self.chat_drag.take().is_some() {
+            return true;
+        }
+        if self.design_md_drag.take().is_some() {
             return true;
         }
         let was_dragging = self.drag.is_some();

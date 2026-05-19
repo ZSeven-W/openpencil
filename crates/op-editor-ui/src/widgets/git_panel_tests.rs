@@ -3,7 +3,10 @@
 
 use crate::widgets::git_panel::*;
 use crate::{Point2D, Rect};
-use op_editor_core::{EditorState, GitCommitSummary, GitDiffView, GitPanelState};
+use op_editor_core::{
+    EditorState, GitCommitSummary, GitDiffView, GitFileEntry, GitPanelState, MergeConflictRow,
+    MergeResolveFile, MergeResolveState,
+};
 
 fn state_with(panel: GitPanelState) -> EditorState {
     let mut s = EditorState::new();
@@ -78,11 +81,14 @@ fn hit_test_maps_each_action_region() {
     let s = state_with(open_repo());
     let panel = GitPanel::for_editor(&s).unwrap();
     let rect = panel_rect(&panel);
-    let rects = GitPanel::action_rects(rect);
+    let rects = GitPanel::action_rects(rect, false);
+    // Normal mode: Commit / Refresh / Pull / Push + the commit input.
+    assert_eq!(rects.buttons.len(), 4);
     assert_eq!(panel.hit_test(rect, centre(rects.input)), Some(GitPanelHit::CommitInput));
-    assert_eq!(panel.hit_test(rect, centre(rects.commit)), Some(GitPanelHit::Commit));
-    assert_eq!(panel.hit_test(rect, centre(rects.refresh)), Some(GitPanelHit::Refresh));
-    assert_eq!(panel.hit_test(rect, centre(rects.pull)), Some(GitPanelHit::Pull));
+    assert_eq!(panel.hit_test(rect, centre(rects.buttons[0])), Some(GitPanelHit::Commit));
+    assert_eq!(panel.hit_test(rect, centre(rects.buttons[1])), Some(GitPanelHit::Refresh));
+    assert_eq!(panel.hit_test(rect, centre(rects.buttons[2])), Some(GitPanelHit::Pull));
+    assert_eq!(panel.hit_test(rect, centre(rects.buttons[3])), Some(GitPanelHit::Push));
     // Header area → swallowed, not an action.
     assert_eq!(
         panel.hit_test(rect, Point2D::new(20.0, 8.0)),
@@ -145,6 +151,52 @@ fn branch_row_merge_button_dispatches_a_merge() {
 }
 
 #[test]
+fn changed_file_rows_toggle_staging() {
+    let s = state_with(GitPanelState {
+        changed_files: vec![
+            GitFileEntry { path: "a.op".into(), staged: false, status: 'M' },
+            GitFileEntry { path: "b.op".into(), staged: true, status: 'A' },
+        ],
+        ..open_repo()
+    });
+    let panel = GitPanel::for_editor(&s).unwrap();
+    let rect = panel_rect(&panel);
+    let rows = panel.list_row_rects(rect);
+    // A dirty tree → the list slot shows the staging list. The
+    // left-edge checkbox toggles staging; the row body opens the
+    // file's diff (where hunks can be staged).
+    assert_eq!(rows.len(), 2);
+    let checkbox = |r: Rect| Point2D::new(r.origin.x + 10.0, centre(r).y);
+    assert_eq!(
+        panel.hit_test(rect, checkbox(rows[0])),
+        Some(GitPanelHit::ToggleStageFile(0))
+    );
+    assert_eq!(
+        panel.hit_test(rect, centre(rows[1])),
+        Some(GitPanelHit::ShowChangedFileDiff(1))
+    );
+}
+
+#[test]
+fn remotes_section_maps_the_input_and_set_button() {
+    let s = state_with(GitPanelState {
+        remotes: vec!["origin → git@host:org/repo.git".into()],
+        ..open_repo()
+    });
+    let panel = GitPanel::for_editor(&s).unwrap();
+    let rect = panel_rect(&panel);
+    let layout = panel.remotes_layout(rect);
+    assert_eq!(
+        panel.hit_test(rect, centre(layout.input)),
+        Some(GitPanelHit::RemoteInput)
+    );
+    assert_eq!(
+        panel.hit_test(rect, centre(layout.set_button)),
+        Some(GitPanelHit::SetRemote)
+    );
+}
+
+#[test]
 fn merge_mode_remaps_the_action_buttons() {
     // Conflicts still present — Complete is disabled, so its slot
     // dispatches nothing (a swallowed `Inside`).
@@ -155,13 +207,14 @@ fn merge_mode_remaps_the_action_buttons() {
     });
     let panel = GitPanel::for_editor(&blocked).unwrap();
     let rect = panel_rect(&panel);
-    let rects = GitPanel::action_rects(rect);
-    // Slot 0 = Abort, slot 1 = Refresh; the commit input is inert.
-    assert_eq!(panel.hit_test(rect, centre(rects.commit)), Some(GitPanelHit::AbortMerge));
-    assert_eq!(panel.hit_test(rect, centre(rects.refresh)), Some(GitPanelHit::Refresh));
+    let rects = GitPanel::action_rects(rect, true);
+    // Merge mode: 3 buttons — Abort / Refresh / Complete.
+    assert_eq!(rects.buttons.len(), 3);
+    assert_eq!(panel.hit_test(rect, centre(rects.buttons[0])), Some(GitPanelHit::AbortMerge));
+    assert_eq!(panel.hit_test(rect, centre(rects.buttons[1])), Some(GitPanelHit::Refresh));
     assert_eq!(panel.hit_test(rect, centre(rects.input)), Some(GitPanelHit::Inside));
     // Complete slot — inert while conflicts remain.
-    assert_eq!(panel.hit_test(rect, centre(rects.pull)), Some(GitPanelHit::Inside));
+    assert_eq!(panel.hit_test(rect, centre(rects.buttons[2])), Some(GitPanelHit::Inside));
 
     // Conflicts resolved — Complete becomes actionable.
     let ready = state_with(GitPanelState {
@@ -171,8 +224,8 @@ fn merge_mode_remaps_the_action_buttons() {
     });
     let panel = GitPanel::for_editor(&ready).unwrap();
     let rect = panel_rect(&panel);
-    let rects = GitPanel::action_rects(rect);
-    assert_eq!(panel.hit_test(rect, centre(rects.pull)), Some(GitPanelHit::CompleteMerge));
+    let rects = GitPanel::action_rects(rect, true);
+    assert_eq!(panel.hit_test(rect, centre(rects.buttons[2])), Some(GitPanelHit::CompleteMerge));
 }
 
 #[test]
@@ -273,6 +326,88 @@ fn conflict_rows_open_a_file_diff_in_merge_mode() {
 }
 
 #[test]
+fn merge_resolution_view_maps_choices_and_actions() {
+    let conflict = |id: &str| MergeConflictRow {
+        id: id.into(),
+        label: format!("Node {id}"),
+        kind: "both modified".into(),
+        theirs_allowed: true,
+        take_theirs: false,
+    };
+    let s = state_with(GitPanelState {
+        merge_resolve: Some(MergeResolveState {
+            branch: "feature".into(),
+            files: vec![MergeResolveFile {
+                path: "doc.op".into(),
+                base: "{}".into(),
+                ours: "{}".into(),
+                theirs: "{}".into(),
+                conflicts: vec![conflict("n1"), conflict("n2")],
+            }],
+        }),
+        ..open_repo()
+    });
+    let panel = GitPanel::for_editor(&s).unwrap();
+    let rect = panel_rect(&panel);
+    let layout = panel.resolve_layout(rect);
+    assert_eq!(layout.rows.len(), 2);
+    let (ours0, theirs0) = layout.rows[0];
+    assert_eq!(panel.hit_test(rect, centre(ours0)), Some(GitPanelHit::MergeChoiceOurs(0)));
+    assert_eq!(
+        panel.hit_test(rect, centre(theirs0)),
+        Some(GitPanelHit::MergeChoiceTheirs(0))
+    );
+    let (_, theirs1) = layout.rows[1];
+    assert_eq!(
+        panel.hit_test(rect, centre(theirs1)),
+        Some(GitPanelHit::MergeChoiceTheirs(1))
+    );
+    assert_eq!(
+        panel.hit_test(rect, centre(layout.apply)),
+        Some(GitPanelHit::ApplyMergeResolution)
+    );
+    assert_eq!(
+        panel.hit_test(rect, centre(layout.cancel)),
+        Some(GitPanelHit::CancelMergeResolution)
+    );
+}
+
+#[test]
+fn merge_resolve_set_choice_clamps_structural_to_ours() {
+    let mut state = MergeResolveState {
+        branch: "feature".into(),
+        files: vec![MergeResolveFile {
+            path: "doc.op".into(),
+            base: "{}".into(),
+            ours: "{}".into(),
+            theirs: "{}".into(),
+            conflicts: vec![
+                MergeConflictRow {
+                    id: "n1".into(),
+                    label: "Node n1".into(),
+                    kind: "both modified".into(),
+                    theirs_allowed: true,
+                    take_theirs: false,
+                },
+                MergeConflictRow {
+                    id: "n2".into(),
+                    label: "Node n2".into(),
+                    kind: "added on remote".into(),
+                    theirs_allowed: false,
+                    take_theirs: false,
+                },
+            ],
+        }],
+    };
+    // A prop conflict honours "theirs".
+    state.set_choice(0, true);
+    assert!(state.rows()[0].take_theirs);
+    // A structural conflict clamps a "theirs" choice back to "ours".
+    state.set_choice(1, true);
+    assert!(!state.rows()[1].take_theirs);
+}
+
+#[test]
 fn diff_mode_widens_the_panel_and_fixes_its_height() {
     let normal = state_with(open_repo());
     let normal_w = GitPanel::for_editor(&normal).unwrap().panel_width();
@@ -283,6 +418,8 @@ fn diff_mode_widens_the_panel_and_fixes_its_height() {
             title: "Working tree".into(),
             lines: vec!["+a".into(), "-b".into()],
             scroll: 0,
+            h_scroll: 0,
+            stage_path: None,
         }),
         ..open_repo()
     });
@@ -299,12 +436,16 @@ fn diff_header_buttons_map_to_scroll_and_close() {
             title: "Working tree".into(),
             lines: (0..200).map(|i| format!("+line {i}")).collect(),
             scroll: 0,
+            h_scroll: 0,
+            stage_path: None,
         }),
         ..open_repo()
     });
     let panel = GitPanel::for_editor(&diffing).unwrap();
     let rect = panel_rect(&panel);
-    let [up, down, close] = GitPanel::diff_header_buttons(rect);
+    let [left, right, up, down, close] = GitPanel::diff_header_buttons(rect);
+    assert_eq!(panel.hit_test(rect, centre(left)), Some(GitPanelHit::DiffScrollLeft));
+    assert_eq!(panel.hit_test(rect, centre(right)), Some(GitPanelHit::DiffScrollRight));
     assert_eq!(panel.hit_test(rect, centre(up)), Some(GitPanelHit::DiffScrollUp));
     assert_eq!(panel.hit_test(rect, centre(down)), Some(GitPanelHit::DiffScrollDown));
     assert_eq!(panel.hit_test(rect, centre(close)), Some(GitPanelHit::CloseDiff));
@@ -323,6 +464,8 @@ fn diff_scroll_metrics_clamp_to_the_line_count() {
             title: "t".into(),
             lines: vec!["+a".into(), "+b".into()],
             scroll: 0,
+            h_scroll: 0,
+            stage_path: None,
         }),
         ..open_repo()
     });
@@ -334,6 +477,8 @@ fn diff_scroll_metrics_clamp_to_the_line_count() {
             title: "t".into(),
             lines: (0..500).map(|i| format!("+{i}")).collect(),
             scroll: 0,
+            h_scroll: 0,
+            stage_path: None,
         }),
         ..open_repo()
     });

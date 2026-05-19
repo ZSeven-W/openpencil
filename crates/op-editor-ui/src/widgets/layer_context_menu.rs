@@ -39,9 +39,9 @@ pub enum LayerContextAction {
 struct Row {
     icon: Icon,
     action: LayerContextAction,
-    /// English fallback label. i18n keys land later — for now the
-    /// menu uses these literals (matches TS layer-menu text).
-    label: &'static str,
+    /// `op-i18n` key for the row label — resolved against the active
+    /// locale at paint time.
+    label_key: &'static str,
     /// True for the destructive `Delete` rows — paints the label
     /// in a red accent so the user sees the irreversible action.
     destructive: bool,
@@ -51,37 +51,37 @@ const LAYER_ROWS: &[Row] = &[
     Row {
         icon: Icon::Pencil,
         action: LayerContextAction::RenameLayer,
-        label: "重命名",
+        label_key: "common.rename",
         destructive: false,
     },
     Row {
         icon: Icon::Copy,
         action: LayerContextAction::Duplicate,
-        label: "复制",
+        label_key: "common.duplicate",
         destructive: false,
     },
     Row {
         icon: Icon::Component,
         action: LayerContextAction::CreateComponent,
-        label: "创建组件",
+        label_key: "layerMenu.createComponent",
         destructive: false,
     },
     Row {
         icon: Icon::Lock,
         action: LayerContextAction::ToggleLock,
-        label: "切换锁定",
+        label_key: "layerMenu.toggleLock",
         destructive: false,
     },
     Row {
         icon: Icon::EyeOff,
         action: LayerContextAction::ToggleVisibility,
-        label: "切换可见性",
+        label_key: "layerMenu.toggleVisibility",
         destructive: false,
     },
     Row {
         icon: Icon::Trash,
         action: LayerContextAction::Delete,
-        label: "删除",
+        label_key: "common.delete",
         destructive: true,
     },
 ];
@@ -90,31 +90,31 @@ const PAGE_ROWS: &[Row] = &[
     Row {
         icon: Icon::Pencil,
         action: LayerContextAction::RenamePage,
-        label: "重命名",
+        label_key: "common.rename",
         destructive: false,
     },
     Row {
         icon: Icon::Copy,
         action: LayerContextAction::DuplicatePage,
-        label: "复制",
+        label_key: "common.duplicate",
         destructive: false,
     },
     Row {
         icon: Icon::ArrowUp,
         action: LayerContextAction::MovePageUp,
-        label: "上移",
+        label_key: "pages.moveUp",
         destructive: false,
     },
     Row {
         icon: Icon::ArrowDown,
         action: LayerContextAction::MovePageDown,
-        label: "下移",
+        label_key: "pages.moveDown",
         destructive: false,
     },
     Row {
         icon: Icon::Trash,
         action: LayerContextAction::DeletePage,
-        label: "删除",
+        label_key: "common.delete",
         destructive: true,
     },
 ];
@@ -124,6 +124,8 @@ pub struct LayerContextMenu {
     pub theme: Theme,
     pub state: LayerContextMenuState,
     rows: &'static [Row],
+    /// Active UI locale — drives row-label translation in `paint`.
+    locale: op_editor_core::Locale,
     /// Index of the currently-hovered row (None when the cursor is
     /// outside the menu). Host updates via `hovered_row_at` on
     /// every cursor-move while the menu is open.
@@ -142,6 +144,7 @@ impl LayerContextMenu {
             theme: theme_for(&state.editor_ui),
             state: menu,
             rows,
+            locale: state.editor_ui.locale,
             hovered_row,
         }
     }
@@ -240,7 +243,7 @@ impl Widget for LayerContextMenu {
                 1.4,
             );
             let label = TextLayout::single_run(
-                row.label,
+                op_i18n::translate(self.locale, row.label_key),
                 "system-ui",
                 ROW_FONT,
                 to_jian_color(fg),
@@ -255,7 +258,7 @@ impl Widget for LayerContextMenu {
     }
     fn access_node(&self) -> accesskit::Node {
         let mut n = accesskit::Node::new(accesskit::Role::Menu);
-        n.set_label("Layer context menu");
+        n.set_label(op_i18n::translate(self.locale, "a11y.layerContextMenu"));
         n
     }
 }

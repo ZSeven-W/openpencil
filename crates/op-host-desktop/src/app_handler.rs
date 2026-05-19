@@ -316,6 +316,10 @@ impl ApplicationHandler for DesktopApp {
                 if self.poll_git_pull_job() {
                     self.redraw_dirty = true;
                 }
+                // Drain a finished background `git push`.
+                if self.poll_git_push_job() {
+                    self.redraw_dirty = true;
+                }
                 // Drain a finished background Git status query.
                 if self.poll_git_status_job() {
                     self.redraw_dirty = true;
@@ -357,6 +361,7 @@ impl ApplicationHandler for DesktopApp {
                     event_loop.set_control_flow(ControlFlow::WaitUntil(deadline));
                 } else if self.update_probe.is_pending()
                     || self.git_pull_job.as_ref().is_some_and(git_jobs::GitPullJob::is_pending)
+                    || self.git_push_job.as_ref().is_some_and(git_jobs::GitPushJob::is_pending)
                     || self
                         .git_status_job
                         .as_ref()
@@ -609,6 +614,8 @@ impl ApplicationHandler for DesktopApp {
         // A Git-panel click or Enter may have queued an action
         // (Commit / Refresh / Pull) — run it after the event.
         self.drain_git_action();
+        // A Design-MD panel click may have queued an import / export.
+        self.drain_design_md_action();
     }
 
     fn exiting(&mut self, _event_loop: &ActiveEventLoop) {

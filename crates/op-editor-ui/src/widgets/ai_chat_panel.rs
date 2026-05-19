@@ -52,33 +52,48 @@ const INPUT_BASE_HEIGHT: f32 = INPUT_AREA_HEIGHT + CONTROLS_ROW_HEIGHT + INPUT_T
 
 #[derive(Debug, Clone)]
 pub(crate) struct ExampleCard {
-    pub(crate) title: &'static str,
-    pub(crate) subtitle: &'static str,
+    /// Localised card title — the headline shown on the card.
+    pub(crate) title: String,
+    /// Localised one-line description below the title.
+    pub(crate) subtitle: String,
+    /// The text inserted into the chat input when the card is
+    /// clicked — a fuller prompt than the short title.
+    pub(crate) prompt: String,
     pub(crate) emoji: &'static str,
 }
 
-pub(crate) const EXAMPLES: [ExampleCard; 4] = [
-    ExampleCard {
-        title: "设计一个移动端登录页面",
-        subtitle: "带社交登录的移动端页面",
-        emoji: "📱",
-    },
-    ExampleCard {
-        title: "美食 App 首页",
-        subtitle: "App 首页设计",
-        emoji: "🍕",
-    },
-    ExampleCard {
-        title: "设计一个底部导航栏",
-        subtitle: "5 个 Tab 导航栏",
-        emoji: "⬇️",
-    },
-    ExampleCard {
-        title: "为我的应用推荐配色方案",
-        subtitle: "应用配色推荐",
-        emoji: "🎨",
-    },
-];
+/// Build the 4 empty-state example cards localised against `locale`.
+/// Titles / subtitles / prompts come from the `ai.quickAction.*`
+/// table; emojis stay literal.
+pub(crate) fn example_cards(locale: op_editor_core::Locale) -> [ExampleCard; 4] {
+    let t = |key: &'static str| op_i18n::translate(locale, key).to_string();
+    [
+        ExampleCard {
+            title: t("ai.quickAction.loginScreen"),
+            subtitle: t("ai.quickAction.loginScreenDesc"),
+            prompt: t("ai.quickAction.loginScreenPrompt"),
+            emoji: "📱",
+        },
+        ExampleCard {
+            title: t("ai.quickAction.foodApp"),
+            subtitle: t("ai.quickAction.foodAppDesc"),
+            prompt: t("ai.quickAction.foodAppPrompt"),
+            emoji: "🍕",
+        },
+        ExampleCard {
+            title: t("ai.quickAction.bottomNav"),
+            subtitle: t("ai.quickAction.bottomNavDesc"),
+            prompt: t("ai.quickAction.bottomNavPrompt"),
+            emoji: "⬇️",
+        },
+        ExampleCard {
+            title: t("ai.quickAction.colorPalette"),
+            subtitle: t("ai.quickAction.colorPaletteDesc"),
+            prompt: t("ai.quickAction.colorPalettePrompt"),
+            emoji: "🎨",
+        },
+    ]
+}
 
 /// What a click inside the panel resolved to.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -151,6 +166,12 @@ pub struct AIChatPlaceholder<'a> {
     /// `state.available_models`; the active row is
     /// `state.selected_model`.
     pub model_picker_open: bool,
+    /// Localised empty-state example cards — resolved at construction
+    /// time so the grid reflows when the user flips the Globe icon.
+    pub(crate) examples: [ExampleCard; 4],
+    /// Active UI locale — threaded into the transcript layout /
+    /// hit-test so the thinking / tool-call headers translate.
+    pub(crate) locale: op_editor_core::Locale,
 }
 
 impl<'a> AIChatPlaceholder<'a> {
@@ -173,6 +194,8 @@ impl<'a> AIChatPlaceholder<'a> {
             label_tip_select_elements: translate(ui, "ai.tipSelectElements").to_string(),
             label_no_models: translate(ui, "ai.noModelsConnected").to_string(),
             model_picker_open: ui.chat_model_picker_open,
+            examples: example_cards(ui.locale),
+            locale: ui.locale,
         }
     }
 
@@ -322,6 +345,7 @@ impl<'a> AIChatPlaceholder<'a> {
                 self.body_rect(rect),
                 point.x,
                 point.y,
+                self.locale,
             ) {
                 return Some(match hit {
                     crate::widgets::ai_chat_transcript::TranscriptHit::ToggleThinking(i) => {
@@ -338,7 +362,7 @@ impl<'a> AIChatPlaceholder<'a> {
             let card_w = (rect.size.x - PAD * 2.0 - 8.0) / 2.0;
             let card_h = 70.0;
             let grid_y = rect.origin.y + HEADER_HEIGHT + 32.0;
-            for (i, ex) in EXAMPLES.iter().enumerate() {
+            for (i, ex) in self.examples.iter().enumerate() {
                 let col = (i % 2) as f32;
                 let row = (i / 2) as f32;
                 let card = Rect {
@@ -349,7 +373,7 @@ impl<'a> AIChatPlaceholder<'a> {
                     size: Point2D::new(card_w, card_h),
                 };
                 if rect_contains(card, point) {
-                    return Some(AIChatHit::Example(ex.title.to_string()));
+                    return Some(AIChatHit::Example(ex.prompt.clone()));
                 }
             }
         }
@@ -472,7 +496,13 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
         // Body — either messages or examples.
         let input_h = self.input_height();
         if self.state.messages.is_empty() {
-            paint_examples(cx, &self.theme, rect, &self.label_start_with_ai);
+            paint_examples(
+                cx,
+                &self.theme,
+                rect,
+                &self.label_start_with_ai,
+                &self.examples,
+            );
         } else {
             crate::widgets::ai_chat_transcript::paint_transcript(
                 cx,
@@ -480,6 +510,7 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
                 self.body_rect(rect),
                 &self.state.messages,
                 self.now_ms,
+                self.locale,
             );
         }
 
@@ -659,7 +690,7 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
 
     fn access_node(&self) -> accesskit::Node {
         let mut node = accesskit::Node::new(accesskit::Role::Group);
-        node.set_label("AI chat");
+        node.set_label(op_i18n::translate(self.locale, "a11y.aiChat"));
         node
     }
 }

@@ -3,11 +3,11 @@
 //! Split out of `git_panel.rs` to keep that file under the repo's
 //! 800-line cap. The diff view replaces the panel's status / action
 //! body while [`op_editor_core::GitPanelState::diff`] is set; the
-//! header carries ▲ / ▼ / ✕ controls and the body paints a
-//! per-line-coloured unified diff.
+//! header carries ◀ / ▶ / ▲ / ▼ / ✕ controls and the body paints a
+//! per-line-coloured unified diff with intra-line change highlight.
 
 use crate::widgets::git_panel::{
-    truncate, GitPanel, DIFF_VIEW_HEIGHT, FOOTER_H, HEADER_BASELINE, PAD,
+    truncate, GitPanel, DIFF_VIEW_HEIGHT, FOOTER_H, GIT_DIFF_PANEL_WIDTH, HEADER_BASELINE, PAD,
 };
 use crate::widgets::PaintCx;
 use crate::{Color, Point2D, Rect};
@@ -20,13 +20,20 @@ const DIFF_BODY_TOP: f32 = 56.0;
 /// Diff-header button side length + gap between buttons.
 const DIFF_BTN: f32 = 22.0;
 const DIFF_BTN_GAP: f32 = 6.0;
+/// Approximate character advance — keep in sync with the `max_chars`
+/// width divisor so hit/paint columns agree.
+const CHAR_W: f32 = 6.0;
+/// Columns a single ◀/▶ press scrolls.
+const DIFF_H_STEP: usize = 16;
+/// Width of a per-hunk "Stage" button.
+const HUNK_BTN_W: f32 = 46.0;
 
 impl GitPanel<'_> {
-    /// The diff header's `[▲, ▼, ✕]` button rects, right-aligned.
-    pub(super) fn diff_header_buttons(panel: Rect) -> [Rect; 3] {
+    /// The diff header's `[◀, ▶, ▲, ▼, ✕]` button rects, right-aligned.
+    pub(super) fn diff_header_buttons(panel: Rect) -> [Rect; 5] {
         let y = panel.origin.y + 12.0;
         let right = panel.origin.x + panel.size.x - PAD;
-        // `from_right` 0 = ✕ (rightmost), 1 = ▼, 2 = ▲.
+        // `from_right` 0 = ✕ (rightmost) … 4 = ◀ (leftmost).
         let slot = |from_right: f32| Rect {
             origin: Point2D::new(
                 right - (from_right + 1.0) * DIFF_BTN - from_right * DIFF_BTN_GAP,
@@ -34,7 +41,7 @@ impl GitPanel<'_> {
             ),
             size: Point2D::new(DIFF_BTN, DIFF_BTN),
         };
-        [slot(2.0), slot(1.0), slot(0.0)]
+        [slot(4.0), slot(3.0), slot(2.0), slot(1.0), slot(0.0)]
     }
 
     /// Number of diff lines visible in the body at once.
@@ -43,13 +50,23 @@ impl GitPanel<'_> {
         ((body_h / DIFF_LINE_H).floor() as usize).max(1)
     }
 
+    /// Number of characters visible across the diff body at once.
+    fn diff_visible_cols() -> usize {
+        (((GIT_DIFF_PANEL_WIDTH - PAD * 2.0) / CHAR_W).floor() as usize).max(1)
+    }
+
     /// Lines a single ▲/▼ press scrolls — one body-page less a small
     /// overlap so context carries across the jump.
     pub fn diff_page_step() -> usize {
         Self::diff_visible_lines().saturating_sub(2).max(1)
     }
 
-    /// Largest valid scroll offset for the open diff (0 when none).
+    /// Columns a single ◀/▶ press scrolls.
+    pub fn diff_h_step() -> usize {
+        DIFF_H_STEP
+    }
+
+    /// Largest valid vertical scroll offset for the open diff.
     pub fn diff_max_scroll(&self) -> usize {
         match &self.state.diff {
             Some(view) => view
@@ -60,59 +77,213 @@ impl GitPanel<'_> {
         }
     }
 
+    /// Largest valid horizontal scroll offset — the longest line's
+    /// length past the visible column count.
+    pub fn diff_max_h_scroll(&self) -> usize {
+        match &self.state.diff {
+            Some(view) => {
+                let longest = view
+                    .lines
+                    .iter()
+                    .map(|l| l.chars().count())
+                    .max()
+                    .unwrap_or(0);
+                longest.saturating_sub(Self::diff_visible_cols())
+            }
+            None => 0,
+        }
+    }
+
+    /// One `(hunk index, button rect)` per `@@` hunk header visible
+    /// in the diff body — only when the diff is a single working-tree
+    /// file (`stage_path` set), which is what per-hunk staging needs.
+    pub(super) fn diff_hunk_buttons(&self, panel: Rect) -> Vec<(usize, Rect)> {
+        let Some(view) = &self.state.diff else {
+            return Vec::new();
+        };
+        if view.stage_path.is_none() {
+            return Vec::new();
+        }
+        let visible = Self::diff_visible_lines();
+        let scroll = view.scroll.min(self.diff_max_scroll());
+        let mut out = Vec::new();
+        for row in 0..visible.min(view.lines.len().saturating_sub(scroll)) {
+            let abs = scroll + row;
+            if !view.lines[abs].starts_with("@@") {
+                continue;
+            }
+            // The hunk index is the count of `@@` headers before it.
+            let hunk = view.lines[..abs]
+                .iter()
+                .filter(|l| l.starts_with("@@"))
+                .count();
+            let baseline = panel.origin.y + DIFF_BODY_TOP + row as f32 * DIFF_LINE_H;
+            out.push((
+                hunk,
+                Rect {
+                    origin: Point2D::new(
+                        panel.origin.x + panel.size.x - PAD - HUNK_BTN_W,
+                        baseline - DIFF_LINE_H + 1.0,
+                    ),
+                    size: Point2D::new(HUNK_BTN_W, DIFF_LINE_H),
+                },
+            ));
+        }
+        out
+    }
+
     /// Paint the scrollable unified-diff view that replaces the
     /// status / action body while `GitPanelState::diff` is set.
     pub(super) fn paint_diff(&self, cx: &mut PaintCx<'_>, rect: Rect, view: &GitDiffView) {
         let left = rect.origin.x + PAD;
         let top = rect.origin.y;
 
-        // Header — title + ▲ / ▼ / ✕ buttons.
-        let title = truncate(&format!("Diff · {}", view.title), 64);
+        // Header — title + ◀ / ▶ / ▲ / ▼ / ✕ buttons.
+        let title = truncate(
+            &self.t("git.panel.diffTitle").replace("{{title}}", &view.title),
+            56,
+        );
         self.text(cx, &title, left, top + HEADER_BASELINE, 13.0, self.theme.foreground);
-        let [up, down, close] = Self::diff_header_buttons(rect);
+        let [bl, br, up, down, close] = Self::diff_header_buttons(rect);
+        self.paint_glyph_button(cx, bl, "◀");
+        self.paint_glyph_button(cx, br, "▶");
         self.paint_glyph_button(cx, up, "▲");
         self.paint_glyph_button(cx, down, "▼");
         self.paint_glyph_button(cx, close, "✕");
         self.divider(cx, left, top + 42.0, rect.size.x);
 
-        // Body — a visible window of diff lines, per-line coloured.
+        // Body — a visible window of diff lines, per-line coloured,
+        // with intra-line highlight on the changed span.
         let visible = Self::diff_visible_lines();
-        let max_scroll = self.diff_max_scroll();
-        let scroll = view.scroll.min(max_scroll);
-        let max_chars = ((rect.size.x - PAD * 2.0) / 6.0) as usize;
+        let scroll = view.scroll.min(self.diff_max_scroll());
+        let h_scroll = view.h_scroll.min(self.diff_max_h_scroll());
+        let max_chars = Self::diff_visible_cols();
         if view.lines.is_empty() {
             self.text(
                 cx,
-                "No changes.",
+                self.t("git.panel.diffNoChanges"),
                 left,
                 top + DIFF_BODY_TOP,
                 12.0,
                 self.theme.muted_foreground,
             );
         }
-        for (row, line) in view.lines.iter().skip(scroll).take(visible).enumerate() {
+        for row in 0..visible.min(view.lines.len().saturating_sub(scroll)) {
+            let abs = scroll + row;
+            let line = &view.lines[abs];
             let baseline = top + DIFF_BODY_TOP + row as f32 * DIFF_LINE_H;
-            self.text(
-                cx,
-                &truncate(line, max_chars),
-                left,
-                baseline,
-                11.0,
-                self.diff_line_color(line),
-            );
+            // Intra-line highlight — tint the changed span of a +/-
+            // line against its adjacent opposite-sign partner.
+            if let Some(span) = self.diff_change_span(&view.lines, abs) {
+                self.paint_diff_change_tint(
+                    cx,
+                    line,
+                    span,
+                    Point2D::new(left, baseline),
+                    h_scroll,
+                    max_chars,
+                );
+            }
+            let shown: String = line.chars().skip(h_scroll).take(max_chars).collect();
+            self.text(cx, &shown, left, baseline, 11.0, self.diff_line_color(line));
+        }
+
+        // Per-hunk "Stage" buttons — only for a single working-tree
+        // file's diff (`@@` headers in view).
+        for (_, btn) in self.diff_hunk_buttons(rect) {
+            self.paint_button(cx, btn, self.t("git.panel.stage"), true, false);
         }
 
         // Footer — scroll position + close hint.
         let total = view.lines.len();
         let shown_end = (scroll + visible).min(total);
         let start = if total == 0 { 0 } else { scroll + 1 };
+        let col = if h_scroll == 0 {
+            String::new()
+        } else {
+            self.t("git.panel.diffCol").replace("{{n}}", &(h_scroll + 1).to_string())
+        };
         self.text(
             cx,
-            &format!("lines {start}–{shown_end} of {total} · ✕ to close"),
+            &self
+                .t("git.panel.diffFooter")
+                .replace("{{start}}", &start.to_string())
+                .replace("{{end}}", &shown_end.to_string())
+                .replace("{{total}}", &total.to_string())
+                .replace("{{col}}", &col),
             left,
             top + self.height() - PAD,
             10.0,
             self.theme.muted_foreground,
+        );
+    }
+
+    /// The changed character span `[start, end)` of the diff line at
+    /// `index` — `None` unless it is an added / removed line paired
+    /// with an adjacent opposite-sign line. The span is in full-line
+    /// char coordinates (the leading +/- marker included).
+    fn diff_change_span(&self, lines: &[String], index: usize) -> Option<(usize, usize)> {
+        let line = lines.get(index)?;
+        // Skip file-header `+++` / `---` lines — only true content.
+        if line.starts_with("+++") || line.starts_with("---") {
+            return None;
+        }
+        let partner = if line.starts_with('+') {
+            lines.get(index.wrapping_sub(1)).filter(|p| p.starts_with('-'))
+        } else if line.starts_with('-') {
+            lines.get(index + 1).filter(|p| p.starts_with('+'))
+        } else {
+            None
+        }?;
+        let a: Vec<char> = line.chars().skip(1).collect();
+        let b: Vec<char> = partner.chars().skip(1).collect();
+        let prefix = a.iter().zip(&b).take_while(|(x, y)| x == y).count();
+        let suffix = a
+            .iter()
+            .rev()
+            .zip(b.iter().rev())
+            .take_while(|(x, y)| x == y)
+            .count()
+            .min(a.len().saturating_sub(prefix));
+        let end = a.len() - suffix;
+        if end <= prefix {
+            return None;
+        }
+        // +1 shifts past the marker into full-line coordinates.
+        Some((prefix + 1, end + 1))
+    }
+
+    /// Tint the visible portion of a changed span behind the text.
+    /// `origin` is the line's `(left, baseline)`.
+    fn paint_diff_change_tint(
+        &self,
+        cx: &mut PaintCx<'_>,
+        line: &str,
+        span: (usize, usize),
+        origin: Point2D,
+        h_scroll: usize,
+        max_chars: usize,
+    ) {
+        let (span_start, span_end) = span;
+        let view_end = h_scroll + max_chars;
+        let vis_start = span_start.max(h_scroll);
+        let vis_end = span_end.min(view_end);
+        if vis_end <= vis_start {
+            return;
+        }
+        let x0 = origin.x + (vis_start - h_scroll) as f32 * CHAR_W;
+        let w = (vis_end - vis_start) as f32 * CHAR_W;
+        let tint = if line.starts_with('+') {
+            Color { r: 0.32, g: 0.73, b: 0.42, a: 0.22 }
+        } else {
+            Color { r: 0.92, g: 0.38, b: 0.38, a: 0.22 }
+        };
+        cx.backend.fill_rect(
+            Rect {
+                origin: Point2D::new(x0, origin.y - DIFF_LINE_H + 3.0),
+                size: Point2D::new(w, DIFF_LINE_H),
+            },
+            tint,
         );
     }
 

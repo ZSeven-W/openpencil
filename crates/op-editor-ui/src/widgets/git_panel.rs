@@ -34,9 +34,9 @@ const BRANCH_BASELINE: f32 = 56.0;
 const STATUS_BASELINE: f32 = 78.0;
 const DIVIDER_1_Y: f32 = 90.0;
 const INPUT_TOP: f32 = 100.0;
-const INPUT_H: f32 = 28.0;
+pub(super) const INPUT_H: f32 = 28.0;
 const BUTTON_TOP: f32 = 138.0;
-const BUTTON_H: f32 = 28.0;
+pub(super) const BUTTON_H: f32 = 28.0;
 const DIVIDER_2_Y: f32 = 180.0;
 const COMMITS_LABEL_BASELINE: f32 = 200.0;
 /// Baseline of the first commit row.
@@ -48,7 +48,7 @@ const BRANCH_LABEL_GAP: f32 = 10.0;
 pub(super) const FOOTER_H: f32 = 22.0;
 const BUTTON_GAP: f32 = 8.0;
 /// Gap between the commit list and the Branches section.
-const SECTION_GAP: f32 = 16.0;
+pub(super) const SECTION_GAP: f32 = 16.0;
 
 /// Most commits the panel shows.
 const MAX_COMMITS: usize = 8;
@@ -73,6 +73,8 @@ pub enum GitPanelHit {
     Refresh,
     /// The Pull button.
     Pull,
+    /// The Push button.
+    Push,
     /// The "Abort Merge" button (shown while a merge is in progress).
     AbortMerge,
     /// The "Complete Merge" button (shown while a merge is in
@@ -83,35 +85,79 @@ pub enum GitPanelHit {
     /// A branch row's merge button — merge `branches[index]` into
     /// the current branch.
     MergeBranch(usize),
+    /// The Remotes-section URL input box — focus it.
+    RemoteInput,
+    /// The Remotes-section "Set origin" button.
+    SetRemote,
+    /// The Remotes-section "SSH" button — set up SSH auth for the
+    /// origin host.
+    SetupSshAuth,
+    /// The Remotes-section HTTPS-credential input box — focus it.
+    HttpsInput,
+    /// The Remotes-section "Login" button — store the HTTPS credential.
+    SetHttpsAuth,
     /// The working-tree status line — open the whole-repo diff.
     ShowWorkingDiff,
     /// A recent-commit row — open that commit's patch.
     ShowCommitDiff(usize),
     /// A conflicted-file row (merge mode) — open that file's diff.
     ShowFileDiff(usize),
+    /// A changed-file row's checkbox — toggle whether it is staged.
+    ToggleStageFile(usize),
+    /// A changed-file row's body — open that file's diff (where its
+    /// hunks can be staged individually).
+    ShowChangedFileDiff(usize),
     /// The diff view's ✕ — close the diff, returning to status mode.
     CloseDiff,
     /// The diff view's ▲ — page the diff up.
     DiffScrollUp,
     /// The diff view's ▼ — page the diff down.
     DiffScrollDown,
+    /// The diff view's ◀ — scroll the diff left.
+    DiffScrollLeft,
+    /// The diff view's ▶ — scroll the diff right.
+    DiffScrollRight,
+    /// A diff-view hunk's "Stage" button — stage that hunk (index).
+    StageHunk(usize),
+    /// A merge-resolution row's "Ours" choice — flat conflict index.
+    MergeChoiceOurs(usize),
+    /// A merge-resolution row's "Theirs" choice — flat conflict index.
+    MergeChoiceTheirs(usize),
+    /// The merge-resolution "Apply" button.
+    ApplyMergeResolution,
+    /// The merge-resolution "Cancel" button.
+    CancelMergeResolution,
     /// Inside the panel but not on an interactive target — the
     /// click is swallowed (and the commit input defocused).
     Inside,
 }
 
-/// Sub-rectangles of the panel's interactive action area.
+/// What the panel's list slot is currently showing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum ListMode {
+    /// Unresolved merge conflicts (a merge is in progress).
+    Merge,
+    /// Working-tree changed files — the per-file staging list.
+    Changes,
+    /// Recent-commit history (the working tree is clean).
+    Commits,
+}
+
+/// Sub-rectangles of the panel's interactive action area — the
+/// commit-message input plus the button row: 4 buttons normally
+/// (Commit / Refresh / Pull / Push), 3 in merge mode (Abort /
+/// Refresh / Complete).
 pub(super) struct ActionRects {
     pub(super) input: Rect,
-    pub(super) commit: Rect,
-    pub(super) refresh: Rect,
-    pub(super) pull: Rect,
+    pub(super) buttons: Vec<Rect>,
 }
 
 /// The floating Git panel, built from a [`GitPanelState`] snapshot.
 pub struct GitPanel<'a> {
     pub(super) state: &'a GitPanelState,
     pub(super) theme: Theme,
+    /// UI locale — every painted string goes through [`GitPanel::t`].
+    pub(super) locale: op_editor_core::Locale,
 }
 
 impl<'a> GitPanel<'a> {
@@ -124,32 +170,56 @@ impl<'a> GitPanel<'a> {
         Some(GitPanel {
             state: panel,
             theme: theme_for(&state.editor_ui),
+            locale: state.editor_ui.locale,
         })
     }
 
-    /// Panel width for the current mode — wider while a diff is open.
+    /// Translate `key` through the locale tables — the panel paints
+    /// no hardcoded UI strings.
+    pub(super) fn t(&self, key: &'static str) -> &'static str {
+        op_i18n::translate(self.locale, key)
+    }
+
+    /// Panel width for the current mode — wider while a diff or the
+    /// merge-resolution view is open.
     pub fn panel_width(&self) -> f32 {
-        if self.state.diff.is_some() {
+        if self.state.diff.is_some() || self.state.merge_resolve.is_some() {
             GIT_DIFF_PANEL_WIDTH
         } else {
             GIT_PANEL_WIDTH
         }
     }
 
-    /// Row count of the list slot — conflicted files while a merge
-    /// is in progress, recent commits otherwise. At least one (the
-    /// placeholder row), capped at `MAX_COMMITS`.
-    fn list_rows(&self) -> usize {
-        let len = if self.state.merging {
-            self.state.conflicted_files.len()
+    /// What the panel's list slot shows — conflicts during a merge,
+    /// the working-tree changes when the tree is dirty, otherwise the
+    /// recent-commit history.
+    pub(super) fn list_mode(&self) -> ListMode {
+        if self.state.merging {
+            ListMode::Merge
+        } else if !self.state.changed_files.is_empty() {
+            ListMode::Changes
         } else {
-            self.state.recent_commits.len()
+            ListMode::Commits
+        }
+    }
+
+    /// Row count of the list slot. At least one (the placeholder
+    /// row), capped at `MAX_COMMITS`.
+    fn list_rows(&self) -> usize {
+        let len = match self.list_mode() {
+            ListMode::Merge => self.state.conflicted_files.len(),
+            ListMode::Changes => self.state.changed_files.len(),
+            ListMode::Commits => self.state.recent_commits.len(),
         };
         len.clamp(1, MAX_COMMITS)
     }
 
     /// The panel's total height for the current content.
     pub fn height(&self) -> f32 {
+        // The merge-resolution view sizes to its conflict count.
+        if self.state.merge_resolve.is_some() {
+            return self.resolve_view_height();
+        }
         // Diff mode is a fixed-height scrollable view.
         if self.state.diff.is_some() {
             return DIFF_VIEW_HEIGHT;
@@ -159,8 +229,13 @@ impl<'a> GitPanel<'a> {
             // + footer — no branch / action area / commit list.
             return HEADER_BASELINE + 24.0 + FOOTER_H + PAD;
         }
-        // At least one commit row — either the commits or the single
-        // "No commits yet." placeholder line — capped at `MAX_COMMITS`.
+        // List + Branches + Remotes sections, then the footer.
+        self.remotes_section_top() + self.remotes_block_height() + FOOTER_H + PAD
+    }
+
+    /// Panel-relative `y` where the Remotes section begins — below
+    /// the list slot and the (optional) Branches section.
+    pub(super) fn remotes_section_top(&self) -> f32 {
         let commit_rows = self.list_rows();
         let branch_count = self.state.branches.len().min(MAX_BRANCHES);
         // The Branches section is omitted entirely when empty.
@@ -169,11 +244,7 @@ impl<'a> GitPanel<'a> {
         } else {
             SECTION_GAP + BRANCH_LABEL_GAP + branch_count as f32 * BRANCH_ROW_H
         };
-        COMMITS_FIRST_BASELINE
-            + commit_rows as f32 * COMMIT_ROW_H
-            + branches_h
-            + FOOTER_H
-            + PAD
+        COMMITS_FIRST_BASELINE + commit_rows as f32 * COMMIT_ROW_H + branches_h
     }
 
     /// The Branches section layout — the "Branches" label baseline
@@ -198,37 +269,41 @@ impl<'a> GitPanel<'a> {
         (label_baseline, rects)
     }
 
-    /// The interactive action-area sub-rects, derived from the
-    /// panel rect. Shared by [`GitPanel::paint`] + [`GitPanel::hit_test`].
-    pub(super) fn action_rects(panel: Rect) -> ActionRects {
+    /// The interactive action-area sub-rects, derived from the panel
+    /// rect. The button row holds 4 equal buttons normally and 3 in
+    /// merge mode. Shared by [`GitPanel::paint`] + [`GitPanel::hit_test`].
+    pub(super) fn action_rects(panel: Rect, merging: bool) -> ActionRects {
         let left = panel.origin.x + PAD;
         let inner_w = panel.size.x - PAD * 2.0;
         let input = Rect {
             origin: Point2D::new(left, panel.origin.y + INPUT_TOP),
             size: Point2D::new(inner_w, INPUT_H),
         };
-        let button_w = (inner_w - 2.0 * BUTTON_GAP) / 3.0;
+        let n = if merging { 3 } else { 4 };
+        let nf = n as f32;
+        let button_w = (inner_w - (nf - 1.0) * BUTTON_GAP) / nf;
         let button_top = panel.origin.y + BUTTON_TOP;
-        let nth = |i: f32| Rect {
-            origin: Point2D::new(left + i * (button_w + BUTTON_GAP), button_top),
-            size: Point2D::new(button_w, BUTTON_H),
-        };
-        ActionRects {
-            input,
-            commit: nth(0.0),
-            refresh: nth(1.0),
-            pull: nth(2.0),
-        }
+        let buttons = (0..n)
+            .map(|i| Rect {
+                origin: Point2D::new(
+                    left + i as f32 * (button_w + BUTTON_GAP),
+                    button_top,
+                ),
+                size: Point2D::new(button_w, BUTTON_H),
+            })
+            .collect();
+        ActionRects { input, buttons }
     }
 
-    /// One clickable rect per displayed list row — recent commits, or
-    /// conflicted files in merge mode. Mirrors the [`GitPanel::paint`]
-    /// list walk so paint + hit-test agree.
+    /// One clickable rect per displayed list row — changed files,
+    /// recent commits, or conflicts depending on [`GitPanel::list_mode`].
+    /// Mirrors the [`GitPanel::paint`] list walk so paint + hit-test
+    /// agree.
     pub(super) fn list_row_rects(&self, panel: Rect) -> Vec<Rect> {
-        let count = if self.state.merging {
-            self.state.conflicted_files.len()
-        } else {
-            self.state.recent_commits.len()
+        let count = match self.list_mode() {
+            ListMode::Merge => self.state.conflicted_files.len(),
+            ListMode::Changes => self.state.changed_files.len(),
+            ListMode::Commits => self.state.recent_commits.len(),
         }
         .min(MAX_COMMITS);
         let left = panel.origin.x + PAD;
@@ -267,110 +342,17 @@ impl<'a> GitPanel<'a> {
         }
     }
 
-    /// Map a click at `point` onto a [`GitPanelHit`]. `None` when the
-    /// click is outside `panel_rect` entirely.
-    pub fn hit_test(&self, panel_rect: Rect, point: Point2D) -> Option<GitPanelHit> {
-        if !contains(panel_rect, point) {
-            return None;
-        }
-        // Diff mode — the only interactive targets are the header's
-        // ▲ / ▼ / ✕; the diff body itself swallows clicks.
-        if self.state.diff.is_some() {
-            let [up, down, close] = Self::diff_header_buttons(panel_rect);
-            return Some(if contains(up, point) {
-                GitPanelHit::DiffScrollUp
-            } else if contains(down, point) {
-                GitPanelHit::DiffScrollDown
-            } else if contains(close, point) {
-                GitPanelHit::CloseDiff
-            } else {
-                GitPanelHit::Inside
-            });
-        }
-        // While loading / outside a repo there are no action targets;
-        // an in-bounds click is just swallowed.
-        if self.state.loading || !self.state.in_repo {
-            return Some(GitPanelHit::Inside);
-        }
-        // During a merge the action area becomes the conflict
-        // controls — slot 0 = Abort, slot 1 = Refresh, slot 2 =
-        // Complete; the commit input is inert.
-        let rects = Self::action_rects(panel_rect);
-        let merging = self.state.merging;
-        if contains(rects.input, point) {
-            return Some(if merging {
-                GitPanelHit::Inside
-            } else {
-                GitPanelHit::CommitInput
-            });
-        }
-        if contains(rects.commit, point) {
-            return Some(if merging {
-                GitPanelHit::AbortMerge
-            } else {
-                GitPanelHit::Commit
-            });
-        }
-        if contains(rects.refresh, point) {
-            return Some(GitPanelHit::Refresh);
-        }
-        if contains(rects.pull, point) {
-            return Some(if merging {
-                // Complete is inert until every conflict is resolved
-                // — mirror the button's disabled paint state so a
-                // click on the disabled button dispatches nothing.
-                if self.state.conflicted_files.is_empty() {
-                    GitPanelHit::CompleteMerge
-                } else {
-                    GitPanelHit::Inside
-                }
-            } else {
-                GitPanelHit::Pull
-            });
-        }
-        // The status line opens the whole-tree diff — but only when
-        // the working tree actually has something to diff.
-        if contains(self.status_rect(panel_rect), point)
-            && (self.state.dirty_count > 0 || self.state.conflicted_count > 0)
-        {
-            return Some(GitPanelHit::ShowWorkingDiff);
-        }
-        // List rows — a commit's patch (normal) or a conflicted
-        // file's diff (merge mode).
-        for (i, row) in self.list_row_rects(panel_rect).iter().enumerate() {
-            if contains(*row, point) {
-                return Some(if merging {
-                    GitPanelHit::ShowFileDiff(i)
-                } else {
-                    GitPanelHit::ShowCommitDiff(i)
-                });
-            }
-        }
-        // Branch rows — the row body switches to a non-current
-        // branch; its right-edge button merges that branch into the
-        // current one. The current branch's own row is a no-op.
-        let (_, branch_rects) = self.branch_layout(panel_rect);
-        for (index, row) in branch_rects.iter().enumerate() {
-            if contains(*row, point) {
-                let is_current = self.state.branches.get(index) == self.state.branch.as_ref();
-                if is_current {
-                    return Some(GitPanelHit::Inside);
-                }
-                if contains(Self::branch_merge_button(*row), point) {
-                    return Some(GitPanelHit::MergeBranch(index));
-                }
-                return Some(GitPanelHit::SwitchBranch(index));
-            }
-        }
-        Some(GitPanelHit::Inside)
-    }
-
     /// Paint the panel into `rect`.
     pub fn paint(&self, cx: &mut PaintCx<'_>, rect: Rect) {
         cx.backend.fill_round_rect(rect, 10.0, self.theme.popover);
         cx.backend
             .stroke_round_rect(rect, 10.0, self.theme.border, 1.0);
 
+        // The merge-resolution view replaces the whole body.
+        if self.state.merge_resolve.is_some() {
+            self.paint_resolve(cx, rect);
+            return;
+        }
         // Diff mode replaces the whole body with the scrollable view.
         if let Some(view) = &self.state.diff {
             self.paint_diff(cx, rect, view);
@@ -380,7 +362,7 @@ impl<'a> GitPanel<'a> {
         let left = rect.origin.x + PAD;
         let top = rect.origin.y;
 
-        self.text(cx, "Git", left, top + HEADER_BASELINE, 15.0, self.theme.foreground);
+        self.text(cx, self.t("git.panel.title"), left, top + HEADER_BASELINE, 15.0, self.theme.foreground);
 
         // Loading: the prior data is for a since-switched repository,
         // so show a neutral "Loading…" rather than stale branch /
@@ -388,7 +370,7 @@ impl<'a> GitPanel<'a> {
         if self.state.loading {
             self.text(
                 cx,
-                "Loading repository…",
+                self.t("git.panel.loading"),
                 left,
                 top + HEADER_BASELINE + 24.0,
                 12.0,
@@ -401,7 +383,7 @@ impl<'a> GitPanel<'a> {
         if !self.state.in_repo {
             self.text(
                 cx,
-                "Not a git repository.",
+                self.t("git.panel.notARepo"),
                 left,
                 top + HEADER_BASELINE + 24.0,
                 12.0,
@@ -412,10 +394,14 @@ impl<'a> GitPanel<'a> {
         }
 
         // Branch + working-tree status.
-        let branch = self.state.branch.as_deref().unwrap_or("(detached HEAD)");
+        let branch = self
+            .state
+            .branch
+            .clone()
+            .unwrap_or_else(|| self.t("git.panel.detachedHead").to_string());
         self.text(
             cx,
-            &format!("Branch: {branch}"),
+            &self.t("git.panel.branch").replace("{{name}}", &branch),
             left,
             top + BRANCH_BASELINE,
             13.0,
@@ -427,83 +413,117 @@ impl<'a> GitPanel<'a> {
         self.divider(cx, left, top + DIVIDER_1_Y, rect.size.x);
 
         // Action area. Normal mode: commit input + Commit / Refresh
-        // / Pull. Merge mode: a warning banner + Abort / Refresh /
-        // Complete (Complete only once conflicts are resolved).
-        let rects = Self::action_rects(rect);
+        // / Pull / Push. Merge mode: a warning banner + Abort /
+        // Refresh / Complete (Complete only once conflicts resolve).
+        let rects = Self::action_rects(rect, self.state.merging);
         if self.state.merging {
             self.paint_merge_banner(cx, rects.input);
-            self.paint_button(cx, rects.commit, "Abort Merge", true, false);
-            self.paint_button(cx, rects.refresh, "Refresh", true, false);
+            self.paint_button(cx, rects.buttons[0], self.t("git.panel.abortMerge"), true, false);
+            self.paint_button(cx, rects.buttons[1], self.t("git.panel.refresh"), true, false);
             let can_complete = self.state.conflicted_files.is_empty();
-            self.paint_button(cx, rects.pull, "Complete", can_complete, true);
+            self.paint_button(cx, rects.buttons[2], self.t("git.panel.complete"), can_complete, true);
         } else {
             self.paint_input(cx, rects.input);
-            let commit_enabled = !self.state.commit_message.trim().is_empty();
-            self.paint_button(cx, rects.commit, "Commit", commit_enabled, true);
-            self.paint_button(cx, rects.refresh, "Refresh", true, false);
-            // The Pull button is disabled while a pull already runs.
-            self.paint_button(cx, rects.pull, "Pull", !self.state.pulling, false);
+            // Commit needs a message *and* a staged file — it commits
+            // exactly the staged set, so nothing staged is a no-op.
+            let commit_enabled = !self.state.commit_message.trim().is_empty()
+                && self.state.changed_files.iter().any(|f| f.staged);
+            self.paint_button(cx, rects.buttons[0], self.t("git.panel.commit"), commit_enabled, true);
+            self.paint_button(cx, rects.buttons[1], self.t("git.panel.refresh"), true, false);
+            // Pull / Push are disabled while their op already runs.
+            self.paint_button(cx, rects.buttons[2], self.t("git.panel.pull"), !self.state.pulling, false);
+            self.paint_button(cx, rects.buttons[3], self.t("git.panel.push"), !self.state.pushing, false);
         }
 
         self.divider(cx, left, top + DIVIDER_2_Y, rect.size.x);
 
-        // List section — conflicted files during a merge, recent
-        // commits otherwise.
+        // List section — conflicts (merge), the per-file staging
+        // list (dirty tree), or recent commits (clean tree).
         let conflict_red = Color { r: 0.94, g: 0.27, b: 0.27, a: 1.0 };
+        let label_y = top + COMMITS_LABEL_BASELINE;
         let mut y = top + COMMITS_FIRST_BASELINE;
-        if self.state.merging {
-            self.text(
-                cx,
-                "Conflicts",
-                left,
-                top + COMMITS_LABEL_BASELINE,
-                12.0,
-                self.theme.muted_foreground,
-            );
-            if self.state.conflicted_files.is_empty() {
+        match self.list_mode() {
+            ListMode::Merge => {
+                self.text(cx, self.t("git.panel.conflicts"), left, label_y, 12.0, self.theme.muted_foreground);
+                if self.state.conflicted_files.is_empty() {
+                    self.text(
+                        cx,
+                        self.t("git.panel.noConflicts"),
+                        left,
+                        y,
+                        12.0,
+                        self.theme.muted_foreground,
+                    );
+                }
+                for path in self.state.conflicted_files.iter().take(MAX_COMMITS) {
+                    self.text(
+                        cx,
+                        &format!("⚠ {}", truncate(path, SUMMARY_MAX)),
+                        left,
+                        y,
+                        12.0,
+                        conflict_red,
+                    );
+                    y += COMMIT_ROW_H;
+                }
+            }
+            ListMode::Changes => {
+                let staged = self.state.changed_files.iter().filter(|f| f.staged).count();
                 self.text(
                     cx,
-                    "No conflicts — ready to complete.",
+                    &self
+                        .t("git.panel.changes")
+                        .replace("{{staged}}", &staged.to_string())
+                        .replace("{{total}}", &self.state.changed_files.len().to_string()),
                     left,
-                    y,
+                    label_y,
                     12.0,
                     self.theme.muted_foreground,
                 );
+                for file in self.state.changed_files.iter().take(MAX_COMMITS) {
+                    // `[✓] M  path` — a click on the row toggles
+                    // whether the file is staged.
+                    let mark = if file.staged { "☑" } else { "☐" };
+                    let color = if file.staged {
+                        self.theme.foreground
+                    } else {
+                        self.theme.muted_foreground
+                    };
+                    self.text(
+                        cx,
+                        &format!("{mark} {}  {}", file.status, truncate(&file.path, SUMMARY_MAX)),
+                        left,
+                        y,
+                        12.0,
+                        color,
+                    );
+                    y += COMMIT_ROW_H;
+                }
             }
-            for path in self.state.conflicted_files.iter().take(MAX_COMMITS) {
+            ListMode::Commits => {
                 self.text(
                     cx,
-                    &format!("⚠ {}", truncate(path, SUMMARY_MAX)),
+                    self.t("git.panel.recentCommits"),
                     left,
-                    y,
+                    label_y,
                     12.0,
-                    conflict_red,
+                    self.theme.muted_foreground,
                 );
-                y += COMMIT_ROW_H;
-            }
-        } else {
-            self.text(
-                cx,
-                "Recent commits",
-                left,
-                top + COMMITS_LABEL_BASELINE,
-                12.0,
-                self.theme.muted_foreground,
-            );
-            if self.state.recent_commits.is_empty() {
-                self.text(cx, "No commits yet.", left, y, 12.0, self.theme.muted_foreground);
-            }
-            for commit in self.state.recent_commits.iter().take(MAX_COMMITS) {
-                let summary = truncate(&commit.summary, SUMMARY_MAX);
-                self.text(
-                    cx,
-                    &format!("{}  {}", commit.short_hash, summary),
-                    left,
-                    y,
-                    12.0,
-                    self.theme.foreground,
-                );
-                y += COMMIT_ROW_H;
+                if self.state.recent_commits.is_empty() {
+                    self.text(cx, self.t("git.panel.noCommits"), left, y, 12.0, self.theme.muted_foreground);
+                }
+                for commit in self.state.recent_commits.iter().take(MAX_COMMITS) {
+                    let summary = truncate(&commit.summary, SUMMARY_MAX);
+                    self.text(
+                        cx,
+                        &format!("{}  {}", commit.short_hash, summary),
+                        left,
+                        y,
+                        12.0,
+                        self.theme.foreground,
+                    );
+                    y += COMMIT_ROW_H;
+                }
             }
         }
 
@@ -513,7 +533,7 @@ impl<'a> GitPanel<'a> {
             let (label_baseline, branch_rects) = self.branch_layout(rect);
             self.text(
                 cx,
-                "Branches",
+                self.t("git.panel.branches"),
                 left,
                 label_baseline,
                 12.0,
@@ -547,34 +567,39 @@ impl<'a> GitPanel<'a> {
             }
         }
 
+        // Remotes section — remote summary + a URL input that adds /
+        // re-points `origin` (see `git_panel_remotes.rs`).
+        self.paint_remotes(cx, rect);
+
         // Footer — always pinned a fixed inset above the panel foot.
         self.footer(cx, left, top + self.height() - PAD);
     }
 
     /// The working-tree status line text + colour.
     fn status_line(&self) -> (String, Color) {
+        let blue = Color { r: 0.23, g: 0.51, b: 0.96, a: 1.0 };
         if self.state.pulling {
-            return (
-                "Pulling…".to_string(),
-                Color { r: 0.23, g: 0.51, b: 0.96, a: 1.0 },
-            );
+            return (self.t("git.panel.pulling").to_string(), blue);
+        }
+        if self.state.pushing {
+            return (self.t("git.panel.pushing").to_string(), blue);
         }
         if self.state.conflicted_count > 0 {
             (
-                format!(
-                    "{} changed · {} conflicted",
-                    self.state.dirty_count, self.state.conflicted_count
-                ),
+                self.t("git.panel.changedConflicted")
+                    .replace("{{changed}}", &self.state.dirty_count.to_string())
+                    .replace("{{conflicted}}", &self.state.conflicted_count.to_string()),
                 Color { r: 0.94, g: 0.27, b: 0.27, a: 1.0 },
             )
         } else if self.state.dirty_count > 0 {
             (
-                format!("{} changed", self.state.dirty_count),
+                self.t("git.panel.changed")
+                    .replace("{{count}}", &self.state.dirty_count.to_string()),
                 Color { r: 0.96, g: 0.62, b: 0.04, a: 1.0 },
             )
         } else {
             (
-                "Working tree clean".to_string(),
+                self.t("git.panel.clean").to_string(),
                 Color { r: 0.22, g: 0.78, b: 0.42, a: 1.0 },
             )
         }
@@ -587,7 +612,7 @@ impl<'a> GitPanel<'a> {
         cx.backend.fill_round_rect(rect, 6.0, self.theme.muted);
         cx.backend.stroke_round_rect(rect, 6.0, amber, 1.0);
         let baseline = rect.origin.y + rect.size.y / 2.0 + 4.0;
-        self.text(cx, "⚠ Merge in progress", rect.origin.x + 8.0, baseline, 12.0, amber);
+        self.text(cx, self.t("git.panel.mergeInProgress"), rect.origin.x + 8.0, baseline, 12.0, amber);
     }
 
     /// Paint the commit-message input box.
@@ -604,7 +629,7 @@ impl<'a> GitPanel<'a> {
         let baseline = rect.origin.y + rect.size.y / 2.0 + 4.0;
         let msg = &self.state.commit_message;
         if msg.is_empty() && !self.state.commit_focused {
-            self.text(cx, "Commit message…", text_x, baseline, 12.0, self.theme.muted_foreground);
+            self.text(cx, self.t("git.panel.commitPlaceholder"), text_x, baseline, 12.0, self.theme.muted_foreground);
         } else {
             let shown = if self.state.commit_focused {
                 format!("{msg}|")
@@ -617,7 +642,7 @@ impl<'a> GitPanel<'a> {
 
     /// Paint one action button. `enabled` dims a disabled button;
     /// `primary` paints the accent (Commit) style.
-    fn paint_button(&self, cx: &mut PaintCx<'_>, rect: Rect, label: &str, enabled: bool, primary: bool) {
+    pub(super) fn paint_button(&self, cx: &mut PaintCx<'_>, rect: Rect, label: &str, enabled: bool, primary: bool) {
         let (fill, text_color) = match (enabled, primary) {
             (true, true) => (self.theme.primary, self.theme.primary_foreground),
             (true, false) => (self.theme.muted, self.theme.foreground),
@@ -628,10 +653,16 @@ impl<'a> GitPanel<'a> {
             cx.backend.stroke_round_rect(rect, 6.0, self.theme.border, 1.0);
         }
         // Roughly centre the label (no per-glyph measurement here).
+        // A long localized label (e.g. German "Birleştirmeyi iptal
+        // et") can be wider than the fixed button — clip the draw to
+        // the button rect so it never bleeds into a neighbour.
         let label_w = label.chars().count() as f32 * 6.5;
         let text_x = rect.origin.x + (rect.size.x - label_w).max(6.0) / 2.0;
         let baseline = rect.origin.y + rect.size.y / 2.0 + 4.0;
+        cx.backend.save();
+        cx.backend.clip_rect(rect);
         self.text(cx, label, text_x, baseline, 12.0, text_color);
+        cx.backend.restore();
     }
 
     /// Paint a 1-px divider line.
@@ -649,7 +680,7 @@ impl<'a> GitPanel<'a> {
     fn footer(&self, cx: &mut PaintCx<'_>, left: f32, y: f32) {
         self.text(
             cx,
-            "View ▸ Git Panel to close",
+            self.t("git.panel.footer"),
             left,
             y,
             10.0,

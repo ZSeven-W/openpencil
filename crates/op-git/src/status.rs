@@ -1,8 +1,10 @@
 //! Working-tree status, staging, commit and restore.
 
+use std::io::Write;
 use std::path::Path;
+use std::process::{Command, Stdio};
 
-use crate::{GitError, GitRepo};
+use crate::{stderr_of, GitError, GitRepo};
 
 /// How a file differs from `HEAD`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -81,6 +83,75 @@ impl GitRepo {
     pub fn stage_all(&self) -> Result<(), GitError> {
         self.run(&["add", "-A"])?;
         Ok(())
+    }
+
+    /// Unstage `paths` — remove them from the index without touching
+    /// the working tree. After the first commit `git restore --staged`
+    /// resets each path's index entry to `HEAD`; before any commit
+    /// there is no `HEAD`, so `git rm --cached` drops the staged
+    /// addition instead (leaving the file untracked).
+    pub fn unstage(&self, paths: &[&Path]) -> Result<(), GitError> {
+        if paths.is_empty() {
+            return Ok(());
+        }
+        let has_head = self
+            .run(&["rev-parse", "--verify", "--quiet", "HEAD"])
+            .is_ok();
+        for path in paths.iter().filter_map(|p| p.to_str()) {
+            if has_head {
+                self.run(&["restore", "--staged", "--", path])?;
+            } else {
+                self.run(&["rm", "--cached", "--quiet", "--", path])?;
+            }
+        }
+        Ok(())
+    }
+
+    /// Stage a unified-diff `patch` into the index — `git apply
+    /// --cached`, the mechanism behind per-hunk staging. `patch`
+    /// must be a self-contained patch (file header + the chosen
+    /// hunks). `--recount` lets git tolerate hunk line-count drift
+    /// when only a subset of a file's hunks is applied.
+    pub fn apply_cached(&self, patch: &str) -> Result<(), GitError> {
+        let mut child = Command::new("git")
+            .current_dir(&self.workdir)
+            .args(["apply", "--cached", "--recount", "-"])
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .map_err(|e| {
+                if e.kind() == std::io::ErrorKind::NotFound {
+                    GitError::GitNotFound
+                } else {
+                    GitError::Io(e.to_string())
+                }
+            })?;
+        child
+            .stdin
+            .take()
+            .ok_or_else(|| GitError::Io("git apply stdin unavailable".to_string()))?
+            .write_all(patch.as_bytes())
+            .map_err(|e| GitError::Io(e.to_string()))?;
+        let output = child
+            .wait_with_output()
+            .map_err(|e| GitError::Io(e.to_string()))?;
+        if !output.status.success() {
+            return Err(GitError::Command {
+                operation: "apply".to_string(),
+                stderr: stderr_of(&output),
+            });
+        }
+        Ok(())
+    }
+
+    /// Whether `path` has a change staged in the index. `git diff
+    /// --cached` lists the path exactly when its index entry differs
+    /// from `HEAD` (or, before the first commit, from the empty
+    /// tree) — the authoritative answer, unlike a UI snapshot.
+    pub fn is_path_staged(&self, path: &str) -> Result<bool, GitError> {
+        let out = self.run(&["diff", "--cached", "--name-only", "--", path])?;
+        Ok(!out.trim().is_empty())
     }
 
     /// Commit the staged changes with `message`. Returns the new

@@ -93,7 +93,10 @@ pub fn save_to_path(state: &EditorState, path: &std::path::Path) -> Result<(), S
 /// cancel, `Err` on IO / encode failure.
 pub fn save_as_dialog(state: &EditorState) -> Result<Option<PathBuf>, String> {
     let path = rfd::FileDialog::new()
-        .set_title("Save document")
+        .set_title(op_i18n::translate(
+            state.editor_ui.locale,
+            "dialog.pickerSaveTitle",
+        ))
         .add_filter("OpenPencil", &["pen", "op"])
         .set_file_name("untitled.op")
         .save_file();
@@ -136,9 +139,18 @@ fn looks_like_legacy_doc_payload(src: &str) -> bool {
 /// out of scope for this bounded fix), so the choice here is the
 /// explicit-error variant — the alternative would be a silent,
 /// confusing schema parse failure.
-pub fn load_editor_state(path: &std::path::Path) -> Result<EditorState, String> {
+pub fn load_editor_state(
+    path: &std::path::Path,
+    locale: op_editor_core::Locale,
+) -> Result<EditorState, String> {
     let bytes = std::fs::read(path).map_err(|e| e.to_string())?;
-    let src = std::str::from_utf8(&bytes).map_err(|e| format!("file is not valid UTF-8: {e}"))?;
+    let src = match std::str::from_utf8(&bytes) {
+        Ok(src) => src,
+        Err(e) => {
+            return Err(op_i18n::translate(locale, "dialog.loadErrorInvalidUtf8")
+                .replace("{{detail}}", &e.to_string()));
+        }
+    };
     let loaded = match op_pen_loader::load_canonical(src) {
         Ok(loaded) => loaded,
         Err(e) => {
@@ -146,11 +158,9 @@ pub fn load_editor_state(path: &std::path::Path) -> Result<EditorState, String> 
             // the user gets actionable guidance instead of a raw parse
             // error.
             if looks_like_legacy_doc_payload(src) {
-                return Err("This file was saved by an older version of OpenPencil and \
-                     uses a format this build can no longer read. Open it in the \
-                     version that created it and re-save it in the current \
-                     format."
-                    .to_string());
+                return Err(
+                    op_i18n::translate(locale, "dialog.loadErrorOldVersion").to_string()
+                );
             }
             return Err(e.to_string());
         }
@@ -255,7 +265,8 @@ pub fn handle_save_as(
 
 /// Replace the host's `EditorState` with one loaded from `path`.
 fn load_into_host(host: &mut WidgetHostNative, path: &std::path::Path) -> Result<(), String> {
-    let state = load_editor_state(path)?;
+    let locale = host.editor_state().editor_ui.locale;
+    let state = load_editor_state(path, locale)?;
     let bb = active_page_bbox(&state);
     eprintln!(
         "[open] {} top-level nodes; content bbox {:?}",
@@ -296,7 +307,10 @@ pub fn handle_open(
     window: Option<&winit::window::Window>,
 ) -> bool {
     let path = match rfd::FileDialog::new()
-        .set_title("Open document")
+        .set_title(op_i18n::translate(
+            host.editor_state().editor_ui.locale,
+            "dialog.pickerOpenTitle",
+        ))
         .add_filter("OpenPencil", &["pen", "op"])
         .pick_file()
     {
@@ -400,7 +414,10 @@ pub fn run_action(
             };
             let default_name = format!("openpencil-export.{}", fmt.extension());
             if let Some(path) = rfd::FileDialog::new()
-                .set_title("Export image")
+                .set_title(op_i18n::translate(
+                    host.editor_state().editor_ui.locale,
+                    "dialog.pickerExportTitle",
+                ))
                 .add_filter(filter_label, filter_exts)
                 .set_file_name(&default_name)
                 .save_file()
@@ -497,23 +514,13 @@ fn show_error_dialog(
     path: Option<&std::path::Path>,
     detail: &str,
 ) {
-    use op_editor_core::Locale;
-    let zh = matches!(
-        host.editor_state().editor_ui.locale,
-        Locale::ZhCn | Locale::ZhTw
-    );
-    let (title, lead) = match (kind, zh) {
-        (ErrorKind::Open, true) => ("无法打开文件", "OpenPencil 无法解析该文件。"),
-        (ErrorKind::Open, false) => ("Couldn't open file", "OpenPencil could not parse the file."),
-        (ErrorKind::Save, true) => ("保存失败", "写入文件时出错。"),
-        (ErrorKind::Save, false) => ("Save failed", "An error occurred while writing the file."),
-        (ErrorKind::Export, true) => ("导出失败", "渲染图像时出错。"),
-        (ErrorKind::Export, false) => (
-            "Export failed",
-            "An error occurred while rendering the image.",
-        ),
+    let locale = host.editor_state().editor_ui.locale;
+    let (title_key, lead_key) = match kind {
+        ErrorKind::Open => ("dialog.openErrorTitle", "dialog.openErrorLead"),
+        ErrorKind::Save => ("dialog.saveErrorTitle", "dialog.saveErrorLead"),
+        ErrorKind::Export => ("dialog.exportErrorTitle", "dialog.exportErrorLead"),
     };
-    let mut body = lead.to_string();
+    let mut body = op_i18n::translate(locale, lead_key).to_string();
     if let Some(p) = path {
         body.push_str("\n\n");
         body.push_str(&p.display().to_string());
@@ -521,7 +528,7 @@ fn show_error_dialog(
     body.push_str("\n\n");
     body.push_str(detail);
     rfd::MessageDialog::new()
-        .set_title(title)
+        .set_title(op_i18n::translate(locale, title_key))
         .set_description(&body)
         .set_level(rfd::MessageLevel::Error)
         .set_buttons(rfd::MessageButtons::Ok)
@@ -565,7 +572,7 @@ mod tests {
         let path = temp_op_path("page-roundtrip");
         save_to_path(&state, &path).expect("save succeeds");
 
-        let reloaded = load_editor_state(&path).expect("load succeeds");
+        let reloaded = load_editor_state(&path, op_editor_core::Locale::EnUs).expect("load succeeds");
         assert_eq!(reloaded.ui.active_page_index, 2);
 
         // Cleanup.
@@ -584,7 +591,7 @@ mod tests {
         std::fs::write(sidecar_path(&path), r#"{"active_page_index":99}"#)
             .expect("sidecar overwrite");
 
-        let reloaded = load_editor_state(&path).expect("load succeeds");
+        let reloaded = load_editor_state(&path, op_editor_core::Locale::EnUs).expect("load succeeds");
         // Single-page document → only index 0 is valid.
         assert_eq!(reloaded.ui.active_page_index, 0);
 
@@ -642,10 +649,16 @@ mod tests {
         )
         .expect("write legacy fixture");
 
-        let err = load_editor_state(&path).expect_err("legacy file is rejected");
-        assert!(
-            err.contains("older version"),
-            "error should mention the old version: {err}"
+        let err = load_editor_state(&path, op_editor_core::Locale::EnUs)
+            .expect_err("legacy file is rejected");
+        // The legacy detector surfaces the `dialog.loadErrorOldVersion`
+        // localised message rather than an opaque schema error.
+        assert_eq!(
+            err,
+            op_i18n::translate(
+                op_editor_core::Locale::EnUs,
+                "dialog.loadErrorOldVersion"
+            )
         );
 
         let _ = std::fs::remove_file(&path);

@@ -92,20 +92,15 @@ fn rect_contains(r: Rect, p: Point2D) -> bool {
 }
 
 fn t(locale: Locale, key: &str) -> &'static str {
-    let zh = matches!(locale, Locale::ZhCn | Locale::ZhTw);
-    match (key, zh) {
-        ("title", true) => "从 Figma 导入",
-        ("title", _) => "Import from Figma",
-        // Drop-zone copy is intentionally non-actionable: the .fig
-        // parser isn't wired yet, so promising "drop a file here /
-        // or click to browse" would lie. Replace with a "coming
-        // soon" line so the affordance reads as informational.
-        ("drop", true) => ".fig 文件导入尚未接入",
-        ("drop", _) => ".fig file import not yet wired",
-        ("browse", true) => "敬请期待",
-        ("browse", _) => "Coming soon",
-        ("footer", true) => "从 Figma 导出：文件 → 保存本地副本 (.fig)",
-        ("footer", _) => "From Figma: File → Save local copy (.fig)",
+    // Drop-zone copy is intentionally non-actionable: the .fig parser
+    // isn't wired yet, so promising "drop a file here / or click to
+    // browse" would lie. The "drop" key resolves to a "not yet wired"
+    // line so the affordance reads as informational.
+    match key {
+        "title" => op_i18n::translate(locale, "figma.title"),
+        "drop" => op_i18n::translate(locale, "figma.importNotWired"),
+        "browse" => op_i18n::translate(locale, "figma.comingSoon"),
+        "footer" => op_i18n::translate(locale, "figma.exportTip"),
         _ => "",
     }
 }
@@ -219,7 +214,7 @@ impl Widget for FigmaImportModal {
 
     fn access_node(&self) -> accesskit::Node {
         let mut node = accesskit::Node::new(accesskit::Role::Dialog);
-        node.set_label("Import from Figma");
+        node.set_label(op_i18n::translate(self.locale, "a11y.figmaImport"));
         node
     }
 }

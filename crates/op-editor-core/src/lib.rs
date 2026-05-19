@@ -14,6 +14,7 @@ pub mod chat;
 pub mod clipboard;
 pub mod color_picker;
 pub mod command;
+pub mod design_md;
 pub mod command_apply;
 pub mod command_node;
 pub mod command_node_attrs;
@@ -68,10 +69,13 @@ pub use chat::{
 pub use color_picker::{hsv_to_rgb, parse_hex_rgb, rgb_to_hex, rgb_to_hsv};
 pub use command::{BatchInsertItem, EditorCommand, EffectField, NodeFlag, VariableScalarPayload};
 pub use components::{Component, ComponentLibrary};
+pub use design_md::parse_design_md;
+pub use jian_ops_schema::{DesignMdColor, DesignMdSpec, DesignMdTypography};
 pub use editor_ui_state::{
-    BooleanOp, EditorUiState, ExportFormat, FileAction, FileMenuChoice, FillType, FlexLayout,
-    GitCommitSummary, GitDiffTarget, GitDiffView, GitPanelAction, GitPanelState,
-    LayerContextMenuState, Locale,
+    BooleanOp, DesignMdRequest, EditorUiState, ExportFormat, FileAction, FileMenuChoice, FillType,
+    FlexLayout,
+    GitCommitSummary, GitDiffTarget, GitDiffView, GitFileEntry, GitPanelAction, GitPanelState,
+    LayerContextMenuState, Locale, MergeConflictRow, MergeResolveFile, MergeResolveState,
     PageRenameState, PropertyTab, RecentFile, ShapeChoice, ThemeMode, UpdateStatus,
     VariableRowFocus,
 };

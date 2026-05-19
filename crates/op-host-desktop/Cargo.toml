@@ -47,6 +47,9 @@ op-host-native = { path = "../op-host-native", version = "0.1.0" }
 # `op_editor_core::EditorState` (canonical `.op` document) instead of the
 # old shell-core `Document`.
 op-editor-core = { path = "../op-editor-core" }
+# Locale tables — git dialog strings go through `op_i18n::translate`
+# so they are localized like the rest of the chrome.
+op-i18n = { path = "../op-i18n" }
 # Phase 7 strangler reorg: the MCP tool registry + JSON-RPC stdio layer
 # (`mcp.rs` + `mcp/*`) was extracted out of the dissolved shell-core into the
 # op-mcp crate; `mcp_serve.rs` registers tools through `op_mcp::*`.
@@ -72,6 +75,10 @@ op-pen-loader = { path = "../op-pen-loader" }
 # currently-open document so the Git panel can show branch / status
 # / history and drive commits.
 op-git = { path = "../op-git" }
+# Structured node-level 3-way merge for `.op` documents — the in-app
+# Git merge orchestrator feeds it the conflicting file's three index
+# stages so a merge conflict resolves per PenNode, not as raw text.
+op-opmerge = { path = "../op-opmerge" }
 # Canonical `.op` / `.pen` schema — all persistence + interop goes
 # through `PenDocument` rather than the desktop's private DocPayload.
 # Falling back to the schema's `load_str` lets us open files saved by

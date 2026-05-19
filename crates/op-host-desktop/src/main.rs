@@ -13,6 +13,7 @@ mod chat_runtime;
 mod chat_session;
 mod chat_subprocess;
 mod cursor_icon;
+mod design_md_host;
 mod export;
 mod export_pdf;
 mod frame;
@@ -114,6 +115,8 @@ struct DesktopApp {
     /// In-flight background `git pull`, if any — keeps the
     /// network-bound pull off the UI thread.
     git_pull_job: Option<git_jobs::GitPullJob>,
+    /// In-flight background `git push`, if any.
+    git_push_job: Option<git_jobs::GitPushJob>,
     /// Document fingerprint captured when a `git pull` was spawned.
     /// The post-pull reload compares against it to detect edits made
     /// *during* the async pull — which the spawn-time confirm did
@@ -172,6 +175,7 @@ impl DesktopApp {
             saved_doc_fingerprint,
             git_session: git_session::GitSession::new(),
             git_pull_job: None,
+            git_push_job: None,
             git_pull_doc_baseline: None,
             git_status_job: None,
             git_diff_job: None,
@@ -220,12 +224,16 @@ impl DesktopApp {
             // the new snapshot lands.
             self.git_status_job = None;
             self.git_pull_job = None;
+            self.git_push_job = None;
             self.git_pull_doc_baseline = None;
             self.git_diff_job = None;
             let panel = &mut self.host.editor_state_mut().editor_ui.git_panel;
             panel.pulling = false;
-            // A diff view is for the previous repository — close it.
+            panel.pushing = false;
+            // A diff / merge-resolution view is for the previous
+            // repository — close it.
             panel.diff = None;
+            panel.merge_resolve = None;
             if panel.open {
                 panel.loading = true;
             }
@@ -323,28 +331,10 @@ impl DesktopApp {
         if !self.document_is_dirty() {
             return true;
         }
-        use op_editor_core::Locale;
-        let zh = matches!(
-            self.host.editor_state().editor_ui.locale,
-            Locale::ZhCn | Locale::ZhTw
-        );
-        let (title, body) = if zh {
-            (
-                "有未保存的更改",
-                "此 Git 操作会从磁盘重新加载文档,丢弃当前未保存的更改。\n\n\
-                 是 = 先保存 · 否 = 放弃更改 · 取消 = 不继续。",
-            )
-        } else {
-            (
-                "Unsaved changes",
-                "This Git action reloads the document from disk and \
-                 discards your unsaved edits.\n\n\
-                 Yes = Save first · No = Discard · Cancel = stay.",
-            )
-        };
+        let locale = self.host.editor_state().editor_ui.locale;
         let choice = rfd::MessageDialog::new()
-            .set_title(title)
-            .set_description(body)
+            .set_title(op_i18n::translate(locale, "git.reload.confirmTitle"))
+            .set_description(op_i18n::translate(locale, "git.reload.confirmBody"))
             .set_level(rfd::MessageLevel::Warning)
             .set_buttons(rfd::MessageButtons::YesNoCancel)
             .show();
@@ -371,36 +361,18 @@ impl DesktopApp {
         if !self.document_is_dirty() {
             return true;
         }
-        use op_editor_core::Locale;
-        let zh = matches!(
-            self.host.editor_state().editor_ui.locale,
-            Locale::ZhCn | Locale::ZhTw
-        );
+        let locale = self.host.editor_state().editor_ui.locale;
         let name = self
             .current_path
             .as_ref()
             .and_then(|p| p.file_name())
             .map(|n| n.to_string_lossy().into_owned())
             .unwrap_or_else(|| {
-                if zh {
-                    "未命名文档".to_string()
-                } else {
-                    "Untitled document".to_string()
-                }
+                op_i18n::translate(locale, "dialog.untitledDocument").to_string()
             });
-        let (title, body) = if zh {
-            (
-                "有未保存的更改",
-                format!("“{name}”有未保存的更改。\n\n是 = 保存,否 = 不保存,取消 = 返回继续编辑。"),
-            )
-        } else {
-            (
-                "Unsaved changes",
-                format!("“{name}” has unsaved changes.\n\nYes = Save · No = Don't Save · Cancel = keep editing."),
-            )
-        };
+        let body = op_i18n::translate(locale, "dialog.closeBody").replace("{{name}}", &name);
         let choice = rfd::MessageDialog::new()
-            .set_title(title)
+            .set_title(op_i18n::translate(locale, "dialog.unsavedTitle"))
             .set_description(&body)
             .set_level(rfd::MessageLevel::Warning)
             .set_buttons(rfd::MessageButtons::YesNoCancel)
@@ -442,7 +414,8 @@ impl DesktopApp {
         if available && !self.update_prompt_shown {
             self.update_prompt_shown = true;
             if let op_editor_core::UpdateStatus::Available { version } = &status {
-                prompt_update_available(version);
+                let locale = self.host.editor_state().editor_ui.locale;
+                prompt_update_available(locale, version);
             }
         }
         true
@@ -490,11 +463,56 @@ impl DesktopApp {
                 }
             }
             Err(err) => {
-                eprintln!("openpencil-desktop: git pull failed: {err}");
+                self.show_git_op_error_dialog("pull", err);
             }
         }
         self.refresh_git_panel();
         true
+    }
+
+    /// Drain a finished background `git push` into the Git panel.
+    /// Returns `true` when a result was just drained.
+    fn poll_git_push_job(&mut self) -> bool {
+        let Some(job) = self.git_push_job.as_mut() else {
+            return false;
+        };
+        let Some(result) = job.poll() else {
+            return false;
+        };
+        self.git_push_job = None;
+        self.host.editor_state_mut().editor_ui.git_panel.pushing = false;
+        if let Err(err) = &result {
+            // A failed push must be visible — stderr is invisible in
+            // a packaged GUI build.
+            self.show_git_op_error_dialog("push", err);
+        }
+        self.refresh_git_panel();
+        true
+    }
+
+    /// Report a failed git op (pull / push / commit) in a dialog —
+    /// the panel otherwise just returns to idle with no signal.
+    fn show_git_op_error_dialog(&self, op: &str, err: &op_git::GitError) {
+        let locale = self.host.editor_state().editor_ui.locale;
+        let (title_key, body_key) = match op {
+            "push" => ("git.error.pushTitle", "git.error.pushBody"),
+            "commit" => ("git.error.commitTitle", "git.error.commitBody"),
+            _ => ("git.error.pullTitle", "git.error.pullBody"),
+        };
+        // The translated variant message keeps the actionable git
+        // output via its `{{detail}}` slot (stderr / path / IO text).
+        let detail = op_i18n::translate(locale, err.i18n_key())
+            .replace("{{detail}}", &err.i18n_detail());
+        rfd::MessageDialog::new()
+            .set_title(op_i18n::translate(locale, title_key))
+            .set_description(format!(
+                "{}\n\n{}",
+                op_i18n::translate(locale, body_key),
+                detail,
+            ))
+            .set_level(rfd::MessageLevel::Error)
+            .set_buttons(rfd::MessageButtons::Ok)
+            .show();
     }
 
     /// Dispatch a native-menu selection onto the matching host
@@ -593,9 +611,30 @@ impl DesktopApp {
                     self.git_diff_job = None;
                     let panel = &mut self.host.editor_state_mut().editor_ui.git_panel;
                     panel.commit_focused = false;
+                    panel.remote_focused = false;
+                    panel.https_focused = false;
                     panel.diff = None;
+                    panel.merge_resolve = None;
                 }
                 self.host.editor_state_mut().editor_ui.git_panel.open = opening;
+                self.host.mark_editor_state_dirty();
+                true
+            }
+            A::ToggleDesignMdPanel => {
+                let ui = &mut self.host.editor_state_mut().editor_ui;
+                let opening = !ui.design_md_panel_open;
+                if opening {
+                    // Centre the floating panel on the viewport the
+                    // first time it opens (and re-centre on reopen so
+                    // it never strands off-screen after a resize).
+                    ui.design_md_panel_pos = Some((
+                        ((self.viewport_width - op_editor_ui::widgets::DESIGN_MD_PANEL_W) / 2.0)
+                            .max(0.0),
+                        ((self.viewport_height - op_editor_ui::widgets::DESIGN_MD_PANEL_H) / 2.0)
+                            .max(0.0),
+                    ));
+                }
+                ui.design_md_panel_open = opening;
                 self.host.mark_editor_state_dirty();
                 true
             }
@@ -649,7 +688,9 @@ impl DesktopApp {
 
     fn drain_pending_cursor_move(&mut self) -> bool {
         if let Some((cx, cy)) = self.pending_cursor_move.take() {
-            let hover_changed = self.host.update_layer_hover(cx, cy, self.viewport_height);
+            let hover_changed =
+                self.host
+                    .update_layer_hover(cx, cy, self.viewport_width, self.viewport_height);
             let cursor_changed = self.host.apply_cursor_move(cx, cy);
             hover_changed || cursor_changed
         } else {
@@ -684,13 +725,12 @@ fn initial_file_from_argv() -> Option<PathBuf> {
 
 /// Pop a native dialog offering to open the download page when a
 /// newer release is found. Yes opens the GitHub releases page.
-fn prompt_update_available(version: &str) {
-    let body = format!(
-        "OpenPencil {version} is available.\n\nYou are running version {}.\n\nOpen the download page?",
-        env!("CARGO_PKG_VERSION"),
-    );
+fn prompt_update_available(locale: op_editor_core::Locale, version: &str) {
+    let body = op_i18n::translate(locale, "dialog.updateBody")
+        .replace("{{version}}", version)
+        .replace("{{current}}", env!("CARGO_PKG_VERSION"));
     let choice = rfd::MessageDialog::new()
-        .set_title("Update available")
+        .set_title(op_i18n::translate(locale, "dialog.updateTitle"))
         .set_description(&body)
         .set_level(rfd::MessageLevel::Info)
         .set_buttons(rfd::MessageButtons::YesNo)

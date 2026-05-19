@@ -76,10 +76,18 @@ impl WidgetHostNative {
 
     /// Right-click handler — opens the LayerPanel context menu on
     /// a layer row OR page row.
-    pub fn apply_right_press(&mut self, x: f32, y: f32, _viewport_w: f32, viewport_h: f32) -> bool {
+    pub fn apply_right_press(&mut self, x: f32, y: f32, viewport_w: f32, viewport_h: f32) -> bool {
         // Codex stop-gate: right-click outside the variables panel
         // must commit any pending row focus first.
         self.commit_variable_row_focus_if_any();
+        // The top-most floating Design-MD panel swallows a right-click
+        // on its rect — no context menu opens under it.
+        if self
+            .design_md_panel_rect(viewport_w, viewport_h)
+            .is_some_and(|r| rect_contains(r, Point2D::new(x, y)))
+        {
+            return true;
+        }
         if !self.editor_state.editor_ui.sidebar_open {
             return false;
         }
@@ -151,56 +159,22 @@ impl WidgetHostNative {
         if rename_committed || text_edit_committed {
             self.mark_dirty();
         }
+        // Floating Design-MD panel — painted top-most (`paint.rs`
+        // §12), so it hit-tests first: a click on its rect is the
+        // panel's before any lower layer can claim it (dispatch in
+        // `design_md_press.rs`).
+        if self.dispatch_design_md_press(x, y, viewport_width, viewport_height) {
+            return true;
+        }
         if self.editor_state.editor_ui.agent_settings_open
             && self.dispatch_agent_settings_press(x, y, viewport_width, viewport_height)
         {
             return true;
         }
-        // 0-color. Color picker overlay — top-most when open.
-        if let Some(state) = self.editor_state.ui.color_picker.clone() {
-            use op_editor_ui::widgets::color_picker::{drag_for_hit, ColorPicker, ColorPickerHit};
-            let picker = ColorPicker::for_state(&self.editor_state, state.clone());
-            let panel = picker.rect(viewport_width, viewport_height);
-            let point = Point2D::new(x, y);
-            match picker.hit_test(panel, point) {
-                Some(ColorPickerHit::Close) => {
-                    let _ = self.editor_state.close_color_picker();
-                    self.mark_dirty();
-                    return true;
-                }
-                Some(ColorPickerHit::Eyedropper) | Some(ColorPickerHit::Inside) => {
-                    return true;
-                }
-                Some(hit @ (ColorPickerHit::SvBox | ColorPickerHit::HueSlider)) => {
-                    if let Some(kind) = drag_for_hit(hit) {
-                        // Live-apply once for the press point.
-                        match hit {
-                            ColorPickerHit::SvBox => {
-                                let (s, v) = picker.sv_at(panel, point);
-                                let _ = self.editor_state.color_picker_set_hsv(state.hue, s, v);
-                            }
-                            ColorPickerHit::HueSlider => {
-                                let h = picker.hue_at(panel, point);
-                                let _ = self
-                                    .editor_state
-                                    .color_picker_set_hsv(h, state.sat, state.val);
-                            }
-                            _ => {}
-                        }
-                        // `drag_for_hit` returns op-editor-core's
-                        // `ColorPickerDrag` — no translation needed.
-                        self.editor_state.color_picker_set_drag(Some(kind));
-                    }
-                    self.mark_dirty();
-                    return true;
-                }
-                None => {
-                    // Press outside the panel — close it; the click
-                    // continues to the next overlay.
-                    let _ = self.editor_state.close_color_picker();
-                    self.mark_dirty();
-                }
-            }
+        // 0-color. Color picker overlay — top-most when open
+        //          (dispatch in `color_picker_press.rs`).
+        if self.dispatch_color_picker_press(x, y, viewport_width, viewport_height) {
+            return true;
         }
 
         if let Some(state) = self.editor_state.editor_ui.layer_context_menu.clone() {

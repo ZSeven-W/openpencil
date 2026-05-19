@@ -10,31 +10,23 @@ use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::{LayoutBox, LayoutCx, PaintCx, Widget, WidgetId};
 use crate::{Color, Point2D, Rect, TextLayout};
 use op_editor_core::editor_ui_state::EditorUiState;
-use op_i18n::Locale;
 
-/// EN/ZH labels for menu rows that aren't in the auto-generated
-/// `topbar.*` table yet. Falls through to EN for every other locale.
+/// Resolve a file-menu row label via `op-i18n`. The Rust file menu
+/// deliberately omits the trailing ellipsis some `fileMenu.*` values
+/// carry (a Mac-convention "..."), so the result is trimmed.
 fn t(ui: &EditorUiState, key: &str) -> &'static str {
-    let zh = matches!(ui.locale, Locale::ZhCn | Locale::ZhTw);
-    match (key, zh) {
-        ("new", true) => "新建文件",
-        ("new", _) => "New file",
-        ("open", true) => "打开文件",
-        ("open", _) => "Open file",
-        ("save", true) => "保存",
-        ("save", _) => "Save",
-        ("saveAs", true) => "另存为",
-        ("saveAs", _) => "Save As",
-        ("exportImage", true) => "导出图片",
-        ("exportImage", _) => "Export image",
-        ("recentFiles", true) => "最近文件",
-        ("recentFiles", _) => "Recent files",
-        ("noRecentFiles", true) => "暂无最近文件",
-        ("noRecentFiles", _) => "No recent files",
-        ("clearHistory", true) => "清除历史",
-        ("clearHistory", _) => "Clear history",
-        _ => "",
-    }
+    let full = match key {
+        "new" => "fileMenu.newFile",
+        "open" => "fileMenu.openFile",
+        "save" => "fileMenu.save",
+        "saveAs" => "fileMenu.saveAs",
+        "exportImage" => "fileMenu.exportImage",
+        "recentFiles" => "fileMenu.recentFiles",
+        "noRecentFiles" => "fileMenu.noRecentFiles",
+        "clearHistory" => "fileMenu.clearHistory",
+        _ => return "",
+    };
+    op_i18n::translate(ui.locale, full).trim_end_matches(['.', '…'])
 }
 
 pub const MENU_WIDTH: f32 = 300.0;
@@ -340,7 +332,7 @@ impl<'a> Widget for FileMenu<'a> {
 
     fn access_node(&self) -> accesskit::Node {
         let mut node = accesskit::Node::new(accesskit::Role::Menu);
-        node.set_label("File menu");
+        node.set_label(op_i18n::translate(self.ui.locale, "a11y.fileMenu"));
         node
     }
 }
@@ -579,34 +571,18 @@ fn file_name(path: &str) -> String {
 }
 
 fn format_age(ui: &EditorUiState, elapsed_secs: u64) -> String {
-    let zh = matches!(ui.locale, Locale::ZhCn | Locale::ZhTw);
+    let locale = ui.locale;
     if elapsed_secs < 60 {
-        if zh {
-            "刚刚".into()
-        } else {
-            "just now".into()
-        }
+        op_i18n::translate(locale, "fileMenu.justNow").to_string()
     } else if elapsed_secs < 3600 {
-        let m = elapsed_secs / 60;
-        if zh {
-            format!("{m} 分钟前")
-        } else {
-            format!("{m}m ago")
-        }
+        op_i18n::translate(locale, "fileMenu.minutesAgo")
+            .replace("{{count}}", &(elapsed_secs / 60).to_string())
     } else if elapsed_secs < 86400 {
-        let h = elapsed_secs / 3600;
-        if zh {
-            format!("{h} 小时前")
-        } else {
-            format!("{h}h ago")
-        }
+        op_i18n::translate(locale, "fileMenu.hoursAgo")
+            .replace("{{count}}", &(elapsed_secs / 3600).to_string())
     } else {
-        let d = elapsed_secs / 86400;
-        if zh {
-            format!("{d} 天前")
-        } else {
-            format!("{d}d ago")
-        }
+        op_i18n::translate(locale, "fileMenu.daysAgo")
+            .replace("{{count}}", &(elapsed_secs / 86400).to_string())
     }
 }
 
