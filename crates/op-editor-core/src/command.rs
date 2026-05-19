@@ -28,6 +28,7 @@
 
 use crate::node_id::NodeId;
 use crate::walkers::ReorderDirection;
+use jian_ops_schema::node::PenNode;
 
 /// Which boolean property [`EditorCommand::SetNodeFlag`] writes. The
 /// canonical `PenNodeBase` carries `visible` + `locked`; `Collapsed` is
@@ -138,6 +139,17 @@ pub enum EditorCommand {
     /// Insert N leaf nodes on the active page atomically — one bad
     /// descriptor rejects the whole batch.
     BatchInsert { items: Vec<BatchInsertItem> },
+
+    /// Insert one or more pre-built canonical `PenNode` subtrees under a
+    /// parent. Unlike `InsertNode` / `BatchInsert` (flat leaves), this
+    /// carries fully-nested nodes — frames with children, layout, text.
+    /// Every incoming node id is remapped to a fresh editor id, so the
+    /// caller's ids are structural placeholders only.
+    InsertSubtree {
+        nodes: Vec<PenNode>,
+        /// `NodeId::NONE` → active page root.
+        parent_id: NodeId,
+    },
     /// Set a non-color scalar variable's value.
     SetVariableScalar {
         name: String,

@@ -48,6 +48,8 @@ mod command_attr_tests;
 #[cfg(test)]
 mod command_tests;
 #[cfg(test)]
+mod command_subtree_tests;
+#[cfg(test)]
 mod svg_import_tests;
 #[cfg(test)]
 mod test_support;
