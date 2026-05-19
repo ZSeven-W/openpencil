@@ -58,7 +58,10 @@ impl DesktopLlmClient {
 }
 
 impl LlmClient for DesktopLlmClient {
-    fn call(&self, req: CallRequest) -> futures::stream::BoxStream<'static, Result<LlmChunk, LlmError>> {
+    fn call(
+        &self,
+        req: CallRequest,
+    ) -> futures::stream::BoxStream<'static, Result<LlmChunk, LlmError>> {
         let (tx, rx) = mpsc::unbounded::<Result<LlmChunk, LlmError>>();
 
         // 调用前已中止 —— 直接给一个 aborted 错误流。
@@ -71,7 +74,10 @@ impl LlmClient for DesktopLlmClient {
         }
 
         let provider = self.provider.clone();
-        let model = req.model.clone().unwrap_or_else(|| self.default_model.clone());
+        let model = req
+            .model
+            .clone()
+            .unwrap_or_else(|| self.default_model.clone());
         let system = req.system_prompt.clone();
         let user = req.user_prompt.clone();
 
