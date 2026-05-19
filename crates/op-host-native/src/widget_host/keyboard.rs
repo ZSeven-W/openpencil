@@ -32,6 +32,24 @@ impl WidgetHostNative {
             }
             return false;
         }
+        // …then the Git panel's remote-URL input.
+        if self.git_remote_focus_active() {
+            if !c.is_control() {
+                self.editor_state.editor_ui.git_panel.remote_draft.push(c);
+                self.mark_dirty();
+                return true;
+            }
+            return false;
+        }
+        // …then the Git panel's HTTPS-credential input.
+        if self.git_https_focus_active() {
+            if !c.is_control() {
+                self.editor_state.editor_ui.git_panel.https_draft.push(c);
+                self.mark_dirty();
+                return true;
+            }
+            return false;
+        }
         if self.editor_state.ui.layer_rename.is_some() && !c.is_control() {
             let mut s = [0u8; 4];
             let _ = self.editor_state.rename_append(c.encode_utf8(&mut s));
@@ -114,6 +132,16 @@ impl WidgetHostNative {
         }
         if self.git_commit_focus_active() {
             self.editor_state.editor_ui.git_panel.commit_message.pop();
+            self.mark_dirty();
+            return true;
+        }
+        if self.git_remote_focus_active() {
+            self.editor_state.editor_ui.git_panel.remote_draft.pop();
+            self.mark_dirty();
+            return true;
+        }
+        if self.git_https_focus_active() {
+            self.editor_state.editor_ui.git_panel.https_draft.pop();
             self.mark_dirty();
             return true;
         }
@@ -252,11 +280,35 @@ impl WidgetHostNative {
             self.commit_settings_focus_if_any();
             return true;
         }
-        // Enter in the Git commit input requests a commit.
+        // Enter in the Git commit input requests a commit — needs a
+        // message and a staged file (the commit is the staged set).
         if self.git_commit_focus_active() {
             let panel = &mut self.editor_state.editor_ui.git_panel;
-            if !panel.commit_message.trim().is_empty() {
+            if !panel.commit_message.trim().is_empty()
+                && panel.changed_files.iter().any(|f| f.staged)
+            {
                 panel.pending_action = Some(op_editor_core::GitPanelAction::Commit);
+            }
+            self.mark_dirty();
+            return true;
+        }
+        // Enter in the Git remote-URL input sets `origin`.
+        if self.git_remote_focus_active() {
+            let panel = &mut self.editor_state.editor_ui.git_panel;
+            if !panel.remote_draft.trim().is_empty() {
+                panel.pending_action =
+                    Some(op_editor_core::GitPanelAction::SetRemote(panel.remote_draft.clone()));
+            }
+            self.mark_dirty();
+            return true;
+        }
+        // Enter in the Git HTTPS-credential input stores it.
+        if self.git_https_focus_active() {
+            let panel = &mut self.editor_state.editor_ui.git_panel;
+            if !panel.https_draft.trim().is_empty() {
+                panel.pending_action = Some(op_editor_core::GitPanelAction::SetHttpsAuth(
+                    panel.https_draft.clone(),
+                ));
             }
             self.mark_dirty();
             return true;
@@ -319,6 +371,18 @@ impl WidgetHostNative {
         // Escape defocuses the Git commit input (the panel stays open).
         if self.git_commit_focus_active() {
             self.editor_state.editor_ui.git_panel.commit_focused = false;
+            self.mark_dirty();
+            return true;
+        }
+        // …and the Git remote-URL input.
+        if self.git_remote_focus_active() {
+            self.editor_state.editor_ui.git_panel.remote_focused = false;
+            self.mark_dirty();
+            return true;
+        }
+        // …and the Git HTTPS-credential input.
+        if self.git_https_focus_active() {
+            self.editor_state.editor_ui.git_panel.https_focused = false;
             self.mark_dirty();
             return true;
         }

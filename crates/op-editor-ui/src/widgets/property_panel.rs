@@ -438,6 +438,9 @@ pub struct PropertyPanel {
     /// the Export section. Clicking the section opens the modal.
     pub export_format: crate::widgets::export_dialog::ExportFormat,
     pub export_scale: f32,
+    /// Active UI locale — threaded into the Fill section so its
+    /// type label / picker / body sub-labels translate.
+    pub locale: op_editor_core::Locale,
 }
 
 impl PropertyPanel {
@@ -536,6 +539,7 @@ impl PropertyPanel {
             tab: ui.property_tab,
             export_format: doc_export_format(ui.export_format),
             export_scale: ui.export_scale,
+            locale: ui.locale,
         }
     }
 
@@ -706,6 +710,7 @@ impl Widget for PropertyPanel {
                 &self.labels,
                 self.fill_type,
                 self.fill_type_picker_open,
+                self.locale,
                 x,
                 y,
                 w,
@@ -759,7 +764,14 @@ impl Widget for PropertyPanel {
                 export: caps.export,
                 fill_type: self.fill_type,
             };
-            sections::paint_fill_type_picker(cx, &self.theme, rect, visible, self.fill_type);
+            sections::paint_fill_type_picker(
+                cx,
+                &self.theme,
+                rect,
+                visible,
+                self.fill_type,
+                self.locale,
+            );
         }
         let _ = NodeKind::Frame; // ensure NodeKind is in scope above for tests
     }

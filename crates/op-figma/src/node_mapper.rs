@@ -38,6 +38,7 @@ fn empty_document(name: &str) -> PenDocument {
         state: None,
         lifecycle: None,
         logic_modules: None,
+        design_md: None,
     }
 }
 

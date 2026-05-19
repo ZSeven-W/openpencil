@@ -6,10 +6,10 @@ use super::frame_backend::NativeFrameBackend;
 use super::helpers::{STATUS_INSET, TOOLBAR_INSET_X, TOOLBAR_INSET_Y};
 use super::WidgetHostNative;
 use op_editor_ui::widgets::{
-    variables_panel::VariablesPanel, AIChatPlaceholder, AlignToolbar, CanvasViewport, GitPanel,
-    LayerPanel, LayoutCx, LocalePicker, PaintCx, PropertyPanel, ShapePicker, StatusBar, Toolbar,
-    TopBar, Widget, GIT_PANEL_INSET, STATUS_BAR_HEIGHT, STATUS_BAR_WIDTH,
-    TOOLBAR_WIDTH, TOP_BAR_HEIGHT,
+    variables_panel::VariablesPanel, AIChatPlaceholder, AlignToolbar, CanvasViewport,
+    DesignMdPanel, GitPanel, LayerPanel, LayoutCx, LocalePicker, PaintCx, PropertyPanel,
+    ShapePicker, StatusBar, Toolbar, TopBar, Widget, GIT_PANEL_INSET, STATUS_BAR_HEIGHT,
+    STATUS_BAR_WIDTH, TOOLBAR_WIDTH, TOP_BAR_HEIGHT,
 };
 use op_editor_ui::{Point2D, Rect, RenderBackend};
 
@@ -418,6 +418,22 @@ impl WidgetHostNative {
                 backend: &mut *frame,
             };
             menu.paint(&mut cx, menu_rect);
+        }
+
+        // 12. Floating Design-MD panel — the document's design.md
+        //     brief, toggled from the View menu. Painted last so it
+        //     is the top-most overlay: a deliberately-opened,
+        //     draggable panel that captures clicks on its rect ahead
+        //     of every lower layer (hit-test mirrors this — see
+        //     `press.rs`, dispatched first).
+        if let (Some(panel), Some(panel_rect)) = (
+            DesignMdPanel::for_editor(&self.editor_state),
+            self.design_md_panel_rect(viewport_width, viewport_height),
+        ) {
+            let mut cx = PaintCx {
+                backend: &mut *frame,
+            };
+            panel.paint(&mut cx, panel_rect);
         }
     }
 }

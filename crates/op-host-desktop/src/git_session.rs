@@ -11,9 +11,14 @@
 //! An unsaved (pathless) document, or a document outside any git
 //! repository, leaves the session simply unbound.
 
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-use op_git::{Commit, GitError, GitRepo, MergeOutcome, RepoStatus, WorktreeMergeReport};
+use op_editor_core::MergeResolveState;
+use op_git::{
+    AuthStore, Commit, GitError, GitRepo, MergeOutcome, RepoStatus, SshKeyStore,
+    WorktreeMergeReport,
+};
 
 /// The git repository bound to the currently-open document.
 #[derive(Default)]
@@ -22,12 +27,23 @@ pub struct GitSession {
     repo: Option<GitRepo>,
     /// Absolute path of the tracked document.
     tracked_file: Option<PathBuf>,
+    /// The user's credential store — used to authenticate network
+    /// ops (pull / push). `None` when its config dir is unavailable.
+    auth: Option<AuthStore>,
+    /// The user's SSH-key store. `None` when `~/.ssh` is unavailable.
+    ssh: Option<SshKeyStore>,
 }
 
 impl GitSession {
-    /// An unbound session.
+    /// An unbound session, with the credential + SSH-key stores
+    /// loaded best-effort (a missing home directory leaves them
+    /// `None` — network ops then use git's ambient auth).
     pub fn new() -> Self {
-        Self::default()
+        Self {
+            auth: AuthStore::user().ok(),
+            ssh: SshKeyStore::user().ok(),
+            ..Self::default()
+        }
     }
 
     /// Re-detect the repository for `path` — the document's path, or
@@ -71,6 +87,24 @@ impl GitSession {
         self.repo.as_ref()
     }
 
+    /// The bound repository with a resolved authentication
+    /// environment applied — network ops (pull / push) run through
+    /// this so a stored credential / SSH key is used. Falls back to
+    /// the plain repo when no credential matches the remote.
+    pub fn authed_repo(&self) -> Option<GitRepo> {
+        let repo = self.repo.as_ref()?;
+        match (&self.auth, &self.ssh) {
+            (Some(auth), Some(ssh)) => Some(repo.with_auth_env(repo.auth_env(auth, ssh))),
+            _ => Some(repo.clone()),
+        }
+    }
+
+    /// The credential + SSH-key stores, when both are available —
+    /// the host uses them to set up SSH auth for a remote.
+    pub fn auth_stores(&self) -> Option<(&AuthStore, &SshKeyStore)> {
+        Some((self.auth.as_ref()?, self.ssh.as_ref()?))
+    }
+
     /// The tracked document's path.
     pub fn tracked_file(&self) -> Option<&Path> {
         self.tracked_file.as_deref()
@@ -90,15 +124,46 @@ impl GitSession {
             .unwrap_or_default()
     }
 
-    /// Stage the tracked document and commit it with `message`.
-    /// A no-op (returns `Ok`) when the session is unbound.
-    pub fn commit_tracked(&self, message: &str) -> Result<(), GitError> {
+    /// Commit the currently-staged set with `message` — the index is
+    /// exactly what the user assembled with the panel's per-file
+    /// staging toggles, so nothing is force-staged here. A no-op
+    /// (returns `Ok`) when the session is unbound.
+    pub fn commit_staged(&self, message: &str) -> Result<(), GitError> {
+        match self.repo.as_ref() {
+            Some(repo) => {
+                repo.commit(message)?;
+                Ok(())
+            }
+            None => Ok(()),
+        }
+    }
+
+    /// Stage the tracked document — used to refresh its index blob
+    /// after the editor saves it, so a commit captures the saved
+    /// content rather than a stale staged blob. A no-op when unbound.
+    pub fn stage_tracked(&self) -> Result<(), GitError> {
         let (Some(repo), Some(file)) = (self.repo.as_ref(), self.tracked_file.as_ref()) else {
             return Ok(());
         };
-        repo.stage(&[file.as_path()])?;
-        repo.commit(message)?;
-        Ok(())
+        repo.stage(&[file.as_path()])
+    }
+
+    /// The tracked document's path relative to the repository root,
+    /// `/`-separated — the key form the Git panel's `changed_files`
+    /// uses. `None` when unbound or the path is outside the repo.
+    ///
+    /// Both paths are canonicalized first: `repo.workdir()` comes
+    /// from `git rev-parse` (symlinks resolved) while the tracked
+    /// path is whatever the user opened, so a raw `strip_prefix`
+    /// would fail whenever a symlinked directory (e.g. `/var` →
+    /// `/private/var` on macOS) is in play.
+    pub fn tracked_relpath(&self) -> Option<String> {
+        let repo = self.repo.as_ref()?;
+        let file = self.tracked_file.as_ref()?;
+        let root = std::fs::canonicalize(repo.workdir()).ok()?;
+        let file = std::fs::canonicalize(file).ok()?;
+        let rel = file.strip_prefix(&root).ok()?;
+        Some(rel.to_string_lossy().replace('\\', "/"))
     }
 
     /// Pull the bound repository's upstream branch.
@@ -110,10 +175,60 @@ impl GitSession {
     }
 
     /// Merge `other` into the current branch through the isolated
-    /// worktree orchestrator. `None` when the session is unbound —
-    /// there is no repository to merge in.
+    /// worktree orchestrator. A conflicting `.op` file is offered to
+    /// the structured node-level merge ([`op_opmerge`]); when that
+    /// resolves cleanly its merged tree is written back so the merge
+    /// can complete without manual conflict resolution. `None` when
+    /// the session is unbound — there is no repository to merge in.
     pub fn merge_branch(&self, other: &str) -> Option<Result<WorktreeMergeReport, GitError>> {
-        self.repo.as_ref().map(|repo| repo.merge_branch_isolated(other))
+        let repo = self.repo.as_ref()?;
+        Some(repo.merge_branch_isolated(other, |path, base, ours, theirs| {
+            if !path.ends_with(".op") {
+                return None;
+            }
+            // A whole-file add / delete (a missing ours or theirs
+            // stage) is not a node-level content conflict — leave it
+            // unresolved. A missing base (add/add) is fine.
+            if ours.is_empty() || theirs.is_empty() {
+                return None;
+            }
+            let base = if base.is_empty() { "{}" } else { base };
+            match op_opmerge::merge_op_documents(base, ours, theirs) {
+                Ok(result) if result.is_clean() => Some(result.merged_json()),
+                _ => None,
+            }
+        }))
+    }
+
+    /// Re-run the branch merge applying the user's per-node ours /
+    /// theirs choices from `state`. The resolver runs each `.op`
+    /// file's conflicts through [`op_opmerge::resolve_op_merge`] with
+    /// those choices — a fully-decided file resolves cleanly so the
+    /// merge can complete. `None` when the session is unbound.
+    pub fn merge_branch_resolved(
+        &self,
+        state: &MergeResolveState,
+    ) -> Option<Result<WorktreeMergeReport, GitError>> {
+        let repo = self.repo.as_ref()?;
+        Some(repo.merge_branch_isolated(&state.branch, |path, base, ours, theirs| {
+            if !path.ends_with(".op") {
+                return None;
+            }
+            if ours.is_empty() || theirs.is_empty() {
+                return None;
+            }
+            let file = state.files.iter().find(|f| f.path == path)?;
+            let choices: HashMap<String, bool> = file
+                .conflicts
+                .iter()
+                .map(|c| (c.id.clone(), c.take_theirs))
+                .collect();
+            let base = if base.is_empty() { "{}" } else { base };
+            match op_opmerge::resolve_op_merge(base, ours, theirs, &choices) {
+                Ok(result) if result.is_clean() => Some(result.merged_json()),
+                _ => None,
+            }
+        }))
     }
 }
 
@@ -146,7 +261,7 @@ mod tests {
         assert!(session.current_branch().is_none());
         assert!(session.recent_commits(10).is_empty());
         // A commit on an unbound session is a tolerated no-op.
-        session.commit_tracked("noop").expect("no-op commit");
+        session.commit_staged("noop").expect("no-op commit");
     }
 
     #[test]
@@ -182,8 +297,15 @@ mod tests {
         let status = session.status().expect("status");
         assert!(!status.is_clean());
 
-        // Commit through the session, then the tree is clean.
-        session.commit_tracked("add design").expect("commit");
+        // Stage the document, then commit the staged set — the
+        // session no longer force-stages, so staging is explicit.
+        session.stage_tracked().expect("stage");
+        assert_eq!(
+            session.tracked_relpath().as_deref(),
+            Some("design.op"),
+            "the tracked path resolves relative to the repo root"
+        );
+        session.commit_staged("add design").expect("commit");
         assert!(session.status().expect("status").is_clean());
         assert_eq!(session.recent_commits(10).len(), 1);
         assert_eq!(session.current_branch().as_deref(), Some("main"));

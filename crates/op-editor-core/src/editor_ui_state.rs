@@ -193,6 +193,18 @@ pub struct GitCommitSummary {
     pub author: String,
 }
 
+/// One changed file in the Git panel's staging list — plain data
+/// snapshotted by the desktop host from `git status`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GitFileEntry {
+    /// Repo-relative path.
+    pub path: String,
+    /// Whether the change is staged in the index.
+    pub staged: bool,
+    /// Single-char status: `M` / `A` / `D` / `R` / `?` / `U`.
+    pub status: char,
+}
+
 /// What a Git-panel diff request should diff.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum GitDiffTarget {
@@ -212,8 +224,85 @@ pub struct GitDiffView {
     pub title: String,
     /// The diff text split into lines for per-line colouring.
     pub lines: Vec<String>,
-    /// Index of the first visible line — paged by the ▲ / ▼ buttons.
+    /// Index of the first visible line — paged by the ▲ / ▼ buttons
+    /// and the mouse wheel.
     pub scroll: usize,
+    /// First visible character column — long lines scroll sideways
+    /// with the ◀ / ▶ buttons.
+    pub h_scroll: usize,
+    /// Repo-relative path when this diff is a single working-tree
+    /// file that supports per-hunk staging — `None` for a commit
+    /// diff or the whole-tree diff.
+    pub stage_path: Option<String>,
+}
+
+/// One node conflict in the interactive merge-resolution view.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MergeConflictRow {
+    /// The conflicting node's `id`.
+    pub id: String,
+    /// Display label — the node's name / type.
+    pub label: String,
+    /// Human label for the conflict kind (e.g. "both modified").
+    pub kind: String,
+    /// Whether "theirs" is a selectable resolution — `false` for a
+    /// structural conflict, which can only be resolved to "ours".
+    pub theirs_allowed: bool,
+    /// The chosen side: `false` = keep ours, `true` = take theirs.
+    pub take_theirs: bool,
+}
+
+/// One conflicted `.op` file in the merge-resolution view.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MergeResolveFile {
+    /// Repo-relative path.
+    pub path: String,
+    /// The three merge-stage blobs — kept so "Apply" can re-run the
+    /// structured merge with the user's per-node choices.
+    pub base: String,
+    pub ours: String,
+    pub theirs: String,
+    /// The file's node conflicts.
+    pub conflicts: Vec<MergeConflictRow>,
+}
+
+/// Interactive merge-conflict-resolution state — set when a branch
+/// merge conflicts entirely in structured `.op` files. The panel
+/// shows each conflicting node with an ours/theirs choice.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct MergeResolveState {
+    /// The branch being merged in.
+    pub branch: String,
+    /// The conflicted `.op` files.
+    pub files: Vec<MergeResolveFile>,
+}
+
+impl MergeResolveState {
+    /// Total conflict count across every file.
+    pub fn total(&self) -> usize {
+        self.files.iter().map(|f| f.conflicts.len()).sum()
+    }
+
+    /// Every conflict row, flattened in file order — the order the
+    /// panel paints and hit-tests.
+    pub fn rows(&self) -> Vec<&MergeConflictRow> {
+        self.files.iter().flat_map(|f| &f.conflicts).collect()
+    }
+
+    /// Set the choice of the flat-indexed conflict row. A `theirs`
+    /// choice on a structural conflict falls back to "ours".
+    pub fn set_choice(&mut self, flat_index: usize, take_theirs: bool) {
+        let mut i = 0;
+        for file in &mut self.files {
+            for row in &mut file.conflicts {
+                if i == flat_index {
+                    row.take_theirs = take_theirs && row.theirs_allowed;
+                    return;
+                }
+                i += 1;
+            }
+        }
+    }
 }
 
 /// An interactive action requested from the Git panel. The desktop
@@ -225,11 +314,21 @@ pub enum GitPanelAction {
     Refresh,
     /// Pull the current branch's upstream.
     Pull,
+    /// Push the current branch to its upstream.
+    Push,
     /// Stage + commit the tracked document with the panel's
     /// `commit_message`.
     Commit,
     /// Switch the working tree to the named branch.
     SwitchBranch(String),
+    /// Add / re-point the `origin` remote to the given URL.
+    SetRemote(String),
+    /// Generate (or reuse) an SSH key for the `origin` host and bind
+    /// it as that host's stored credential.
+    SetupSshAuth,
+    /// Store an HTTPS credential for the `origin` host — the payload
+    /// is the `username:token` text typed into the Remotes section.
+    SetHttpsAuth(String),
     /// Merge the named branch into the current one through an
     /// isolated worktree (the live tree is never marked up).
     MergeBranch(String),
@@ -239,6 +338,13 @@ pub enum GitPanelAction {
     CompleteMerge,
     /// Compute a unified diff and open it in the panel's diff view.
     ShowDiff(GitDiffTarget),
+    /// Toggle whether the named changed file is staged in the index.
+    ToggleStageFile(String),
+    /// Stage a single hunk of the open diff — `(path, hunk_index)`.
+    StageHunk(String, usize),
+    /// Re-run the branch merge applying the per-node ours/theirs
+    /// choices the user picked in the merge-resolution view.
+    ApplyMergeResolution,
 }
 
 /// Git panel state — a plain-data snapshot the desktop host fills
@@ -265,6 +371,18 @@ pub struct GitPanelState {
     pub merging: bool,
     /// Repo-relative paths with unresolved merge conflicts.
     pub conflicted_files: Vec<String>,
+    /// Changed files in the working tree — the per-file staging list.
+    pub changed_files: Vec<GitFileEntry>,
+    /// Configured remotes as display strings — `name → url`.
+    pub remotes: Vec<String>,
+    /// Draft URL typed into the Remotes section's input box.
+    pub remote_draft: String,
+    /// Whether the remote-URL input holds keyboard focus.
+    pub remote_focused: bool,
+    /// Draft `username:token` typed into the HTTPS-credential input.
+    pub https_draft: String,
+    /// Whether the HTTPS-credential input holds keyboard focus.
+    pub https_focused: bool,
     /// Most-recent commits, newest first.
     pub recent_commits: Vec<GitCommitSummary>,
     /// Commit-message draft typed into the panel's input box.
@@ -277,6 +395,9 @@ pub struct GitPanelState {
     /// Whether a background `git pull` is currently in flight — the
     /// panel shows a "Pulling…" status and disables the Pull button.
     pub pulling: bool,
+    /// Whether a background `git push` is currently in flight — the
+    /// panel shows a "Pushing…" status and disables the Push button.
+    pub pushing: bool,
     /// Whether the panel is awaiting its first repository snapshot
     /// after opening / a repo switch. While `true` the panel shows a
     /// "Loading…" state instead of the (possibly stale) prior data.
@@ -285,6 +406,10 @@ pub struct GitPanelState {
     /// a scrollable unified diff instead of the status / action area.
     /// Closed by the diff view's ✕ button.
     pub diff: Option<GitDiffView>,
+    /// Interactive merge-conflict-resolution view — `Some` puts the
+    /// panel into resolution mode, listing each conflicting node with
+    /// an ours/theirs choice. Cleared on Apply / Cancel.
+    pub merge_resolve: Option<MergeResolveState>,
 }
 
 /// File-menu "Recent files" entry — host persists via settings IO.
@@ -464,6 +589,31 @@ pub struct EditorUiState {
     /// Floating Git panel snapshot — filled by the desktop host from
     /// its `GitSession`. Transient: never serialized.
     pub git_panel: GitPanelState,
+
+    // --- Design-MD panel --------------------------------------------
+    /// Whether the floating Design-MD panel is shown.
+    pub design_md_panel_open: bool,
+    /// Top-left corner of the Design-MD panel in logical px. `None`
+    /// until first opened — the host then centres it on the viewport.
+    pub design_md_panel_pos: Option<(f32, f32)>,
+    /// Bitmask of expanded Design-MD sections (bit 0 = theme, 1 =
+    /// colors, 2 = typography, 3 = components, 4 = layout, 5 = notes).
+    /// Defaults to theme + colors + typography expanded.
+    pub design_md_expanded: u8,
+    /// A queued Design-MD import / export request — set by a panel
+    /// click, drained by the desktop host (which owns the native file
+    /// dialog). Transient: never serialized.
+    pub design_md_request: Option<DesignMdRequest>,
+}
+
+/// A Design-MD panel action that needs the desktop host's native
+/// file dialog — set by the widget layer, drained by the host.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DesignMdRequest {
+    /// Pick a `.md` file, parse it, and set `design_md`.
+    Import,
+    /// Write the current `design_md` to a `.md` file.
+    Export,
 }
 
 impl Default for EditorUiState {
@@ -515,6 +665,10 @@ impl Default for EditorUiState {
             active_guides: Vec::new(),
             update_status: UpdateStatus::Idle,
             git_panel: GitPanelState::default(),
+            design_md_panel_open: false,
+            design_md_panel_pos: None,
+            design_md_expanded: 0b0000_0111,
+            design_md_request: None,
         }
     }
 }

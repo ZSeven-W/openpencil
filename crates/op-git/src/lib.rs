@@ -36,7 +36,7 @@ pub use auth::{AuthStore, Credential};
 pub use branch::Branch;
 pub use history::Commit;
 pub use merge::{
-    ConflictBag, ConflictKind, ConflictedFile, MergeOutcome, WorktreeMergeReport,
+    ConflictBag, ConflictKind, ConflictStages, ConflictedFile, MergeOutcome, WorktreeMergeReport,
 };
 pub use remote::Remote;
 pub use ssh::{SshKey, SshKeyStore};
@@ -72,10 +72,53 @@ pub enum GitError {
     Io(String),
 }
 
+impl GitError {
+    /// Stable `op-i18n` key for this error variant. `op-git` stays
+    /// locale-free (no `op-i18n` dependency); the desktop host
+    /// translates this key when surfacing the error in a dialog.
+    /// The `Display` impl remains the English fallback.
+    pub fn i18n_key(&self) -> &'static str {
+        match self {
+            GitError::GitNotFound => "git.gitError.notFound",
+            GitError::NotARepo(_) => "git.gitError.notARepo",
+            GitError::Command { .. } => "git.gitError.commandFailed",
+            GitError::MergeInProgress => "git.gitError.mergeInProgress",
+            GitError::WorkingTreeDirty => "git.gitError.workingTreeDirty",
+            GitError::Io(_) => "git.gitError.io",
+        }
+    }
+
+    /// The variant's technical detail — the repository path, the
+    /// failing command's stderr, or the IO error text. Empty for
+    /// variants that carry no payload. The host substitutes this
+    /// into the `{{detail}}` slot of the translated message so the
+    /// localized dialog still shows the actionable git output.
+    pub fn i18n_detail(&self) -> String {
+        match self {
+            GitError::NotARepo(path) => path.display().to_string(),
+            // Keep the failing subcommand — `commit` / `push` / … —
+            // alongside its stderr so the dialog stays actionable.
+            GitError::Command { operation, stderr } => {
+                format!("git {operation}: {stderr}")
+            }
+            GitError::Io(text) => text.clone(),
+            GitError::GitNotFound
+            | GitError::MergeInProgress
+            | GitError::WorkingTreeDirty => String::new(),
+        }
+    }
+}
+
 /// A handle to a git repository — its working-tree root directory.
 #[derive(Debug, Clone)]
 pub struct GitRepo {
     workdir: PathBuf,
+    /// Extra environment applied to every `git` invocation — set by
+    /// [`GitRepo::with_auth_env`] so a network op (pull / push /
+    /// fetch) authenticates with a stored credential or SSH key.
+    /// Empty for an un-authenticated handle (git then uses its
+    /// ambient credential helpers / ssh-agent).
+    auth_env: Vec<(String, String)>,
 }
 
 /// The committer identity git would stamp on a new commit, read
@@ -87,6 +130,27 @@ pub struct Author {
     pub name: Option<String>,
     /// `user.email`.
     pub email: Option<String>,
+}
+
+/// Run `git <args>` in `dir` with extra environment, mapping a
+/// missing executable to [`GitError::GitNotFound`].
+pub(crate) fn git_output_env(
+    dir: &Path,
+    args: &[&str],
+    env: &[(String, String)],
+) -> Result<Output, GitError> {
+    let mut command = Command::new("git");
+    command.current_dir(dir).args(args);
+    for (key, value) in env {
+        command.env(key, value);
+    }
+    command.output().map_err(|e| {
+        if e.kind() == std::io::ErrorKind::NotFound {
+            GitError::GitNotFound
+        } else {
+            GitError::Io(e.to_string())
+        }
+    })
 }
 
 /// Run `git <args>` in `dir`, mapping a missing executable to
@@ -165,6 +229,7 @@ impl GitRepo {
         }
         Ok(Some(GitRepo {
             workdir: PathBuf::from(top),
+            auth_env: Vec::new(),
         }))
     }
 
@@ -185,6 +250,16 @@ impl GitRepo {
     /// The repository's working-tree root.
     pub fn workdir(&self) -> &Path {
         &self.workdir
+    }
+
+    /// A handle to the same repository whose `git` invocations carry
+    /// `env` — set by [`GitRepo::auth_env`] so a network op runs with
+    /// a stored credential / SSH key. An empty `env` is a no-op.
+    pub fn with_auth_env(&self, env: Vec<(String, String)>) -> GitRepo {
+        GitRepo {
+            workdir: self.workdir.clone(),
+            auth_env: env,
+        }
     }
 
     /// The committer identity git would use here — `user.name` /
@@ -211,7 +286,7 @@ impl GitRepo {
     /// Run `git <args>` in this repo, returning trimmed stdout on a
     /// zero exit. Shared by every operation in the sibling modules.
     pub(crate) fn run(&self, args: &[&str]) -> Result<String, GitError> {
-        let output = git_output(&self.workdir, args)?;
+        let output = git_output_env(&self.workdir, args, &self.auth_env)?;
         if !output.status.success() {
             return Err(GitError::Command {
                 operation: args.first().copied().unwrap_or("git").to_string(),
@@ -222,5 +297,14 @@ impl GitRepo {
     }
 }
 
+// Integration tests — `tests` is the spine (shared fixtures); the
+// per-topic test files are flat sibling modules, each under the
+// 800-line file cap.
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tests_auth;
+#[cfg(test)]
+mod tests_merge;
+#[cfg(test)]
+mod tests_repo;

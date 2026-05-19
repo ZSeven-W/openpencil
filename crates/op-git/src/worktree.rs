@@ -43,6 +43,7 @@ impl MergeWorktree {
         Ok(MergeWorktree {
             repo: GitRepo {
                 workdir: dir.clone(),
+                auth_env: Vec::new(),
             },
             main: main.clone(),
             dir,

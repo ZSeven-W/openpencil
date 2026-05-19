@@ -28,6 +28,21 @@ mod tr;
 mod vi;
 mod zh_cn;
 mod zh_tw;
+mod de_git;
+mod en_git;
+mod es_git;
+mod fr_git;
+mod hi_git;
+mod id_git;
+mod ja_git;
+mod ko_git;
+mod pt_git;
+mod ru_git;
+mod th_git;
+mod tr_git;
+mod vi_git;
+mod zh_cn_git;
+mod zh_tw_git;
 
 /// Translate `key` for `locale`. Returns the key itself when no
 /// entry exists. `'static` because every per-locale table value is

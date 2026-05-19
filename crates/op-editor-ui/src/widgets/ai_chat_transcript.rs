@@ -120,7 +120,13 @@ fn tool_lines(calls: &[ChatToolCall], budget: u32) -> Vec<String> {
 
 /// Place one message starting at `top`. Returns the item and the
 /// `y` immediately below it (before the inter-message gap).
-fn build_item(msg: &ChatMessage, msg_index: usize, top: f32, body: Rect) -> (TranscriptItem, f32) {
+fn build_item(
+    msg: &ChatMessage,
+    msg_index: usize,
+    top: f32,
+    body: Rect,
+    locale: op_editor_core::Locale,
+) -> (TranscriptItem, f32) {
     let is_user = msg.role == ChatRole::User;
     let bubble_w = body.size.x * BUBBLE_FRAC;
     let x = if is_user {
@@ -164,14 +170,15 @@ fn build_item(msg: &ChatMessage, msg_index: usize, top: f32, body: Rect) -> (Tra
     let thinking = build_collapsible(
         !msg.thinking.is_empty(),
         msg.thinking_collapsed,
-        "💭 思考过程".to_string(),
+        op_i18n::translate(locale, "ai.thinkingProcess").to_string(),
         &|| wrap_units(&msg.thinking, budget),
         &mut y,
     );
     let tools = build_collapsible(
         !msg.tool_calls.is_empty(),
         msg.tools_collapsed,
-        format!("🔧 {} 个工具调用", msg.tool_calls.len()),
+        op_i18n::translate(locale, "ai.toolCalls")
+            .replace("{{count}}", &msg.tool_calls.len().to_string()),
         &|| tool_lines(&msg.tool_calls, budget),
         &mut y,
     );
@@ -236,7 +243,11 @@ fn build_item(msg: &ChatMessage, msg_index: usize, top: f32, body: Rect) -> (Tra
 /// Lay out the tail of `messages` that fits inside `body_rect`,
 /// top-aligned. Each item carries absolute rects ready for paint and
 /// hit-test.
-pub(crate) fn build_transcript(messages: &[ChatMessage], body_rect: Rect) -> Vec<TranscriptItem> {
+pub(crate) fn build_transcript(
+    messages: &[ChatMessage],
+    body_rect: Rect,
+    locale: op_editor_core::Locale,
+) -> Vec<TranscriptItem> {
     if messages.is_empty() {
         return Vec::new();
     }
@@ -245,7 +256,7 @@ pub(crate) fn build_transcript(messages: &[ChatMessage], body_rect: Rect) -> Vec
     let mut start = messages.len();
     let mut used = 0.0f32;
     for i in (0..messages.len()).rev() {
-        let (_, bottom) = build_item(&messages[i], i, 0.0, body_rect);
+        let (_, bottom) = build_item(&messages[i], i, 0.0, body_rect, locale);
         let h = bottom
             + if start == messages.len() {
                 0.0
@@ -262,7 +273,7 @@ pub(crate) fn build_transcript(messages: &[ChatMessage], body_rect: Rect) -> Vec
     let mut items = Vec::new();
     let mut top = body_rect.origin.y;
     for i in start..messages.len() {
-        let (item, bottom) = build_item(&messages[i], i, top, body_rect);
+        let (item, bottom) = build_item(&messages[i], i, top, body_rect, locale);
         items.push(item);
         top = bottom + MSG_GAP;
     }
@@ -276,6 +287,7 @@ pub(crate) fn transcript_hit(
     body_rect: Rect,
     x: f32,
     y: f32,
+    locale: op_editor_core::Locale,
 ) -> Option<TranscriptHit> {
     // Paint clips the transcript to `body_rect`; gate hit-test the
     // same way so a click in the body/input gap can't toggle a
@@ -283,7 +295,7 @@ pub(crate) fn transcript_hit(
     if !rect_contains(body_rect, x, y) {
         return None;
     }
-    for item in build_transcript(messages, body_rect) {
+    for item in build_transcript(messages, body_rect, locale) {
         if let Some(t) = &item.thinking {
             if rect_contains(t.header, x, y) {
                 return Some(TranscriptHit::ToggleThinking(item.msg_index));
@@ -470,10 +482,11 @@ pub(crate) fn paint_transcript(
     body_rect: Rect,
     messages: &[ChatMessage],
     now_ms: u64,
+    locale: op_editor_core::Locale,
 ) {
     cx.backend.save();
     cx.backend.clip_rect(body_rect);
-    for item in build_transcript(messages, body_rect) {
+    for item in build_transcript(messages, body_rect, locale) {
         if let Some(block) = &item.thinking {
             paint_collapsible(cx, theme, block);
         }
@@ -588,13 +601,13 @@ mod tests {
 
     #[test]
     fn build_transcript_empty_messages_is_empty() {
-        assert!(build_transcript(&[], body()).is_empty());
+        assert!(build_transcript(&[], body(), op_editor_core::Locale::EnUs).is_empty());
     }
 
     #[test]
     fn streaming_message_with_no_text_yields_a_typing_bubble() {
         let msgs = vec![ChatMessage::assistant_streaming()];
-        let items = build_transcript(&msgs, body());
+        let items = build_transcript(&msgs, body(), op_editor_core::Locale::EnUs);
         assert_eq!(items.len(), 1);
         assert!(items[0].streaming);
         let bubble = items[0].bubble.as_ref().expect("typing bubble present");
@@ -607,7 +620,7 @@ mod tests {
         let mut m = ChatMessage::assistant("the answer");
         m.thinking = "a long private chain of reasoning".into();
         // Default: thinking_collapsed == true.
-        let items = build_transcript(std::slice::from_ref(&m), body());
+        let items = build_transcript(std::slice::from_ref(&m), body(), op_editor_core::Locale::EnUs);
         let t = items[0].thinking.as_ref().expect("thinking block present");
         assert!(t.collapsed);
         assert!(t.lines.is_empty(), "collapsed body carries no lines");
@@ -622,7 +635,7 @@ mod tests {
                       across several lines inside the narrow panel"
             .into();
         m.thinking_collapsed = false;
-        let items = build_transcript(std::slice::from_ref(&m), body());
+        let items = build_transcript(std::slice::from_ref(&m), body(), op_editor_core::Locale::EnUs);
         let t = items[0].thinking.as_ref().unwrap();
         assert!(!t.collapsed);
         assert!(t.lines.len() > 1, "long reasoning wraps to many lines");
@@ -642,9 +655,14 @@ mod tests {
                 args: "{}".into(),
             },
         ];
-        let items = build_transcript(std::slice::from_ref(&m), body());
+        let items =
+            build_transcript(std::slice::from_ref(&m), body(), op_editor_core::Locale::EnUs);
         let t = items[0].tools.as_ref().expect("tools block present");
-        assert!(t.label.contains('2'), "header label counts the calls");
+        // The header label substitutes the call count into the
+        // `ai.toolCalls` template's `{{count}}` placeholder.
+        let expected = op_i18n::translate(op_editor_core::Locale::EnUs, "ai.toolCalls")
+            .replace("{{count}}", "2");
+        assert_eq!(t.label, expected, "header label counts the calls");
     }
 
     #[test]
@@ -658,7 +676,7 @@ mod tests {
                 data: vec![1],
             });
         }
-        let items = build_transcript(std::slice::from_ref(&m), body());
+        let items = build_transcript(std::slice::from_ref(&m), body(), op_editor_core::Locale::EnUs);
         assert_eq!(items[0].images.len(), 3, "one thumbnail rect per image");
         // Thumbnails do not overlap.
         let (a, b) = (items[0].images[0], items[0].images[1]);
@@ -670,7 +688,7 @@ mod tests {
         let mut m = ChatMessage::assistant("answer");
         m.thinking = "reasoning".into();
         let msgs = std::slice::from_ref(&m);
-        let header = build_transcript(msgs, body())[0]
+        let header = build_transcript(msgs, body(), op_editor_core::Locale::EnUs)[0]
             .thinking
             .as_ref()
             .unwrap()
@@ -678,7 +696,7 @@ mod tests {
         let cx = header.origin.x + header.size.x / 2.0;
         let cy = header.origin.y + header.size.y / 2.0;
         assert_eq!(
-            transcript_hit(msgs, body(), cx, cy),
+            transcript_hit(msgs, body(), cx, cy, op_editor_core::Locale::EnUs),
             Some(TranscriptHit::ToggleThinking(0))
         );
     }
@@ -691,7 +709,7 @@ mod tests {
             args: "{}".into(),
         }];
         let msgs = std::slice::from_ref(&m);
-        let header = build_transcript(msgs, body())[0]
+        let header = build_transcript(msgs, body(), op_editor_core::Locale::EnUs)[0]
             .tools
             .as_ref()
             .unwrap()
@@ -699,7 +717,7 @@ mod tests {
         let cx = header.origin.x + header.size.x / 2.0;
         let cy = header.origin.y + header.size.y / 2.0;
         assert_eq!(
-            transcript_hit(msgs, body(), cx, cy),
+            transcript_hit(msgs, body(), cx, cy, op_editor_core::Locale::EnUs),
             Some(TranscriptHit::ToggleToolCalls(0))
         );
     }
@@ -709,6 +727,6 @@ mod tests {
         let m = ChatMessage::assistant("plain answer, no thinking, no tools");
         let msgs = std::slice::from_ref(&m);
         // Click far below the single short message.
-        assert_eq!(transcript_hit(msgs, body(), 20.0, 280.0), None);
+        assert_eq!(transcript_hit(msgs, body(), 20.0, 280.0, op_editor_core::Locale::EnUs), None);
     }
 }

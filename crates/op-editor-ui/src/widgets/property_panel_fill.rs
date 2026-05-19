@@ -20,16 +20,19 @@ use crate::{Color, Point2D, Rect, TextLayout};
 use op_editor_core::PropertyFocus;
 
 /// Display label for a fill-type variant (Solid / Gradient /
-/// Image). Currently zh-only string literals; gets wrapped in
-/// the `fill.*` locale keys later.
-pub fn fill_type_label(t: op_editor_core::FillType) -> &'static str {
+/// Image), localised against `locale` via the `fill.*` keys.
+pub fn fill_type_label(
+    locale: op_editor_core::Locale,
+    t: op_editor_core::FillType,
+) -> &'static str {
     use op_editor_core::FillType;
-    match t {
-        FillType::Solid => "纯色",
-        FillType::LinearGradient => "线性渐变",
-        FillType::RadialGradient => "径向渐变",
-        FillType::Image => "图片",
-    }
+    let key = match t {
+        FillType::Solid => "fill.solid",
+        FillType::LinearGradient => "fill.linear",
+        FillType::RadialGradient => "fill.radial",
+        FillType::Image => "fill.image",
+    };
+    op_i18n::translate(locale, key)
 }
 
 /// Paint the fill-type picker overlay (4 rows). Called by
@@ -41,6 +44,7 @@ pub fn paint_fill_type_picker(
     panel_rect: Rect,
     visible: VisibleSections,
     active: op_editor_core::FillType,
+    locale: op_editor_core::Locale,
 ) {
     use op_editor_core::FillType;
     let x0 = panel_rect.origin.x;
@@ -110,7 +114,7 @@ pub fn paint_fill_type_picker(
             theme.foreground
         };
         let lbl = TextLayout::single_run(
-            fill_type_label(*t),
+            fill_type_label(locale, *t),
             "system-ui",
             13.0,
             to_jian_color(lbl_color),
@@ -142,6 +146,7 @@ pub fn paint_fill_section(
     labels: &PropertyLabels,
     fill_type: op_editor_core::FillType,
     _fill_picker_open: bool,
+    locale: op_editor_core::Locale,
     x: f32,
     y: f32,
     width: f32,
@@ -227,7 +232,7 @@ pub fn paint_fill_section(
     };
     cx.backend
         .fill_round_rect(dropdown_rect, INPUT_RADIUS, theme.muted);
-    let type_label = fill_type_label(fill_type);
+    let type_label = fill_type_label(locale, fill_type);
     let label = TextLayout::single_run(
         type_label,
         "system-ui",
@@ -298,13 +303,13 @@ pub fn paint_fill_section(
             paint_fill_solid_body(cx, theme, edit, fill, x, y, width);
         }
         FillType::LinearGradient => {
-            paint_fill_gradient_body(cx, theme, x, y, width, true);
+            paint_fill_gradient_body(cx, theme, locale, x, y, width, true);
         }
         FillType::RadialGradient => {
-            paint_fill_gradient_body(cx, theme, x, y, width, false);
+            paint_fill_gradient_body(cx, theme, locale, x, y, width, false);
         }
         FillType::Image => {
-            paint_fill_image_body(cx, theme, x, y, width);
+            paint_fill_image_body(cx, theme, locale, x, y, width);
         }
     }
     y += fill_body_height(fill_type) - 6.0 + 12.0;
@@ -368,6 +373,7 @@ fn paint_fill_solid_body(
 fn paint_fill_gradient_body(
     cx: &mut PaintCx<'_>,
     theme: &Theme,
+    locale: op_editor_core::Locale,
     x: f32,
     y: f32,
     width: f32,
@@ -384,7 +390,7 @@ fn paint_fill_gradient_body(
             .fill_round_rect(angle_rect, INPUT_RADIUS, theme.muted);
         // Angle prefix at left, value in middle, ° at right.
         let prefix = TextLayout::single_run(
-            "角度",
+            op_i18n::translate(locale, "fill.angle"),
             "system-ui",
             12.0,
             to_jian_color(theme.muted_foreground),
@@ -423,7 +429,7 @@ fn paint_fill_gradient_body(
     }
     // Color stops header + plus.
     let header = TextLayout::single_run(
-        "色标",
+        op_i18n::translate(locale, "fill.stops"),
         "system-ui",
         12.0,
         to_jian_color(theme.foreground),
@@ -510,7 +516,14 @@ fn paint_fill_gradient_body(
     let _ = yy;
 }
 
-fn paint_fill_image_body(cx: &mut PaintCx<'_>, theme: &Theme, x: f32, y: f32, width: f32) {
+fn paint_fill_image_body(
+    cx: &mut PaintCx<'_>,
+    theme: &Theme,
+    locale: op_editor_core::Locale,
+    x: f32,
+    y: f32,
+    width: f32,
+) {
     let usable_w = width - PAD_X * 2.0;
     let row = Rect {
         origin: Point2D::new(x + PAD_X, y),
@@ -528,7 +541,7 @@ fn paint_fill_image_body(cx: &mut PaintCx<'_>, theme: &Theme, x: f32, y: f32, wi
         1.4,
     );
     let label = TextLayout::single_run(
-        "填充",
+        op_i18n::translate(locale, "fill.title"),
         "system-ui",
         12.0,
         to_jian_color(theme.foreground),

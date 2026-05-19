@@ -33,6 +33,7 @@ pub enum MenuAction {
     Ungroup,
     ToggleFullscreen,
     ToggleGitPanel,
+    ToggleDesignMdPanel,
     Quit,
     CheckUpdates,
     OpenGithub,
@@ -66,6 +67,7 @@ mod backend {
     const ID_UNGROUP: &str = "ungroup";
     const ID_FULLSCREEN: &str = "fullscreen";
     const ID_GIT_PANEL: &str = "git-panel";
+    const ID_DESIGN_MD: &str = "design-md";
     const ID_QUIT: &str = "quit";
     const ID_CHECK_UPDATES: &str = "check-updates";
     const ID_GITHUB: &str = "github";
@@ -89,6 +91,7 @@ mod backend {
             ID_UNGROUP => MenuAction::Ungroup,
             ID_FULLSCREEN => MenuAction::ToggleFullscreen,
             ID_GIT_PANEL => MenuAction::ToggleGitPanel,
+            ID_DESIGN_MD => MenuAction::ToggleDesignMdPanel,
             ID_QUIT => MenuAction::Quit,
             ID_CHECK_UPDATES => MenuAction::CheckUpdates,
             ID_GITHUB => MenuAction::OpenGithub,
@@ -213,6 +216,7 @@ mod backend {
             ));
             let _ = view.append(&PredefinedMenuItem::separator());
             let _ = view.append(&item(ID_GIT_PANEL, "Git Panel", None));
+            let _ = view.append(&item(ID_DESIGN_MD, "Design.md Panel", None));
             let _ = menu.append(&view);
 
             // Help menu.
@@ -299,6 +303,7 @@ mod backend {
                 ID_UNGROUP,
                 ID_FULLSCREEN,
                 ID_GIT_PANEL,
+                ID_DESIGN_MD,
                 ID_QUIT,
                 ID_CHECK_UPDATES,
                 ID_GITHUB,

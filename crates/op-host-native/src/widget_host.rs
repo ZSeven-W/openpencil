@@ -25,14 +25,18 @@
 //! - [`frame_backend`] — `NativeFrameBackend` (`RenderBackend` impl)
 //! - [`helpers`] — hex parsing + resize-bounds math + constants
 //! - [`geometry`] — canvas region / cursor hint / picker rect helpers
-//! - [`input`] — wheel / pan / cursor-move / release / keyboard / click
+//! - [`input`] — cursor-move / release / panel-resize input handlers
+//! - [`scroll`] — wheel + trackpad-pan (zoom / canvas + diff scroll)
 //! - [`press`] — `apply_press` + new-node spawn (largest method)
+//! - [`git_press`] — Git-panel press dispatch
 //! - [`paint`] — full editor-UI composition paint pass
 
 use op_editor_ui::widgets::SelectionHandle;
 use op_editor_ui::{Rect, Theme};
 
 mod click;
+mod color_picker_press;
+mod design_md_press;
 mod frame_backend;
 mod geometry;
 mod git_press;
@@ -44,6 +48,7 @@ mod keyboard;
 mod paint;
 mod press;
 mod press_helpers;
+mod scroll;
 mod property_dispatch;
 mod shortcuts;
 
@@ -111,6 +116,10 @@ pub struct WidgetHostNative {
     /// host computes the nearest corner via `ChatAnchor::nearest`
     /// and snaps.
     pub(in crate::widget_host) chat_drag: Option<ChatDragState>,
+    /// Active Design-MD panel drag — present while the user drags the
+    /// floating panel by its header bar. The live top-left is written
+    /// straight back into `editor_ui.design_md_panel_pos`.
+    pub(in crate::widget_host) design_md_drag: Option<DesignMdDragState>,
     /// Active panel-resize drag — set when the cursor is pressed
     /// within the resize gutter of LayerPanel's right edge or
     /// PropertyPanel's left edge.
@@ -345,6 +354,14 @@ pub(in crate::widget_host) struct ChatDragState {
     pub(in crate::widget_host) pos_y: f32,
 }
 
+#[derive(Debug, Clone, Copy)]
+pub(in crate::widget_host) struct DesignMdDragState {
+    /// Pointer offset within the panel rect when the drag began —
+    /// subtracting from the live cursor gives the panel top-left.
+    pub(in crate::widget_host) grab_dx: f32,
+    pub(in crate::widget_host) grab_dy: f32,
+}
+
 impl WidgetHostNative {
     pub fn new() -> Self {
         let editor_state = op_editor_core::EditorState::sample();
@@ -358,6 +375,7 @@ impl WidgetHostNative {
             theme: Theme::dark(),
             drag: None,
             chat_drag: None,
+            design_md_drag: None,
             panel_resize: None,
             node_drag: None,
             path_anchor_drag: None,

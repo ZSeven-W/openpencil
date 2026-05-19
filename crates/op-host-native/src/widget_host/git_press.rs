@@ -38,13 +38,47 @@ impl WidgetHostNative {
         let diff_max_scroll = GitPanel::for_editor(&self.editor_state)
             .map(|p| p.diff_max_scroll())
             .unwrap_or(0);
+        let diff_max_h_scroll = GitPanel::for_editor(&self.editor_state)
+            .map(|p| p.diff_max_h_scroll())
+            .unwrap_or(0);
         let panel = &mut self.editor_state.editor_ui.git_panel;
         match hit {
             Some(GitPanelHit::CommitInput) => {
                 panel.commit_focused = true;
+                panel.remote_focused = false;
+                panel.https_focused = false;
+            }
+            Some(GitPanelHit::RemoteInput) => {
+                panel.remote_focused = true;
+                panel.commit_focused = false;
+                panel.https_focused = false;
+            }
+            Some(GitPanelHit::HttpsInput) => {
+                panel.https_focused = true;
+                panel.commit_focused = false;
+                panel.remote_focused = false;
+            }
+            Some(GitPanelHit::SetRemote) => {
+                if !panel.remote_draft.trim().is_empty() {
+                    panel.pending_action =
+                        Some(GitPanelAction::SetRemote(panel.remote_draft.clone()));
+                }
+            }
+            Some(GitPanelHit::SetupSshAuth) => {
+                panel.pending_action = Some(GitPanelAction::SetupSshAuth);
+            }
+            Some(GitPanelHit::SetHttpsAuth) => {
+                if !panel.https_draft.trim().is_empty() {
+                    panel.pending_action =
+                        Some(GitPanelAction::SetHttpsAuth(panel.https_draft.clone()));
+                }
             }
             Some(GitPanelHit::Commit) => {
-                if !panel.commit_message.trim().is_empty() {
+                // Commit the staged set — requires a message and at
+                // least one staged file.
+                if !panel.commit_message.trim().is_empty()
+                    && panel.changed_files.iter().any(|f| f.staged)
+                {
                     panel.pending_action = Some(GitPanelAction::Commit);
                 }
             }
@@ -53,6 +87,9 @@ impl WidgetHostNative {
             }
             Some(GitPanelHit::Pull) => {
                 panel.pending_action = Some(GitPanelAction::Pull);
+            }
+            Some(GitPanelHit::Push) => {
+                panel.pending_action = Some(GitPanelAction::Push);
             }
             Some(GitPanelHit::AbortMerge) => {
                 panel.pending_action = Some(GitPanelAction::AbortMerge);
@@ -86,6 +123,17 @@ impl WidgetHostNative {
                         Some(GitPanelAction::ShowDiff(GitDiffTarget::Path(path)));
                 }
             }
+            Some(GitPanelHit::ToggleStageFile(index)) => {
+                if let Some(path) = panel.changed_files.get(index).map(|f| f.path.clone()) {
+                    panel.pending_action = Some(GitPanelAction::ToggleStageFile(path));
+                }
+            }
+            Some(GitPanelHit::ShowChangedFileDiff(index)) => {
+                if let Some(path) = panel.changed_files.get(index).map(|f| f.path.clone()) {
+                    panel.pending_action =
+                        Some(GitPanelAction::ShowDiff(GitDiffTarget::Path(path)));
+                }
+            }
             Some(GitPanelHit::CloseDiff) => {
                 // Pure UI state — no git op needed.
                 panel.diff = None;
@@ -102,15 +150,53 @@ impl WidgetHostNative {
                     diff.scroll = (diff.scroll + step).min(diff_max_scroll);
                 }
             }
+            Some(GitPanelHit::DiffScrollLeft) => {
+                let step = GitPanel::diff_h_step();
+                if let Some(diff) = &mut panel.diff {
+                    diff.h_scroll = diff.h_scroll.saturating_sub(step);
+                }
+            }
+            Some(GitPanelHit::DiffScrollRight) => {
+                let step = GitPanel::diff_h_step();
+                if let Some(diff) = &mut panel.diff {
+                    diff.h_scroll = (diff.h_scroll + step).min(diff_max_h_scroll);
+                }
+            }
+            Some(GitPanelHit::StageHunk(hunk)) => {
+                if let Some(path) = panel.diff.as_ref().and_then(|d| d.stage_path.clone()) {
+                    panel.pending_action = Some(GitPanelAction::StageHunk(path, hunk));
+                }
+            }
+            Some(GitPanelHit::MergeChoiceOurs(index)) => {
+                if let Some(merge) = &mut panel.merge_resolve {
+                    merge.set_choice(index, false);
+                }
+            }
+            Some(GitPanelHit::MergeChoiceTheirs(index)) => {
+                if let Some(merge) = &mut panel.merge_resolve {
+                    merge.set_choice(index, true);
+                }
+            }
+            Some(GitPanelHit::ApplyMergeResolution) => {
+                panel.pending_action = Some(GitPanelAction::ApplyMergeResolution);
+            }
+            Some(GitPanelHit::CancelMergeResolution) => {
+                // Pure UI state — drop the resolution view, no merge.
+                panel.merge_resolve = None;
+            }
             Some(GitPanelHit::Inside) => {
-                // Panel chrome — swallow the click + defocus.
+                // Panel chrome — swallow the click + defocus inputs.
                 panel.commit_focused = false;
+                panel.remote_focused = false;
+                panel.https_focused = false;
             }
             None => {
-                // Outside the panel — release the commit input's
-                // focus, then let the click fall through.
-                if panel.commit_focused {
+                // Outside the panel — release the input focus, then
+                // let the click fall through.
+                if panel.commit_focused || panel.remote_focused || panel.https_focused {
                     panel.commit_focused = false;
+                    panel.remote_focused = false;
+                    panel.https_focused = false;
                     self.mark_dirty();
                 }
                 return false;

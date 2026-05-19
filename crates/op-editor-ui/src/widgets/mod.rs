@@ -85,11 +85,16 @@ pub mod ai_chat_panel_paint;
 pub mod ai_chat_transcript;
 pub mod align_toolbar;
 pub mod color_picker;
+pub mod design_md_markdown;
+pub mod design_md_panel;
 pub mod export_dialog;
 pub mod figma_import;
 pub mod file_menu;
 pub mod git_panel;
 mod git_panel_diff;
+mod git_panel_hit;
+mod git_panel_remotes;
+mod git_panel_resolve;
 #[cfg(test)]
 mod git_panel_tests;
 pub mod locale_picker;
@@ -122,6 +127,9 @@ pub use align_toolbar::{AlignToolbar, ALIGN_TOOLBAR_HEIGHT, ALIGN_TOOLBAR_WIDTH}
 pub use export_dialog::{ExportDialog, ExportDialogHit, ExportFormat};
 pub use locale_picker::{LocalePicker, LOCALE_PICKER_WIDTH};
 pub use shape_picker::{ShapeChoice, ShapePicker, SHAPE_PICKER_WIDTH};
+pub use design_md_panel::{
+    DesignMdHit, DesignMdPanel, DESIGN_MD_PANEL_H, DESIGN_MD_PANEL_W,
+};
 pub use git_panel::{GitPanel, GitPanelHit, GIT_PANEL_INSET, GIT_PANEL_WIDTH};
 pub use status_bar::{StatusBar, STATUS_BAR_HEIGHT, STATUS_BAR_WIDTH};
 pub use top_bar::{TopBar, TopBarHit, TOP_BAR_HEIGHT};

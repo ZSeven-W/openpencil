@@ -19,7 +19,7 @@ fn layout_reports_fixed_size() {
 
 #[test]
 fn examples_grid_has_four_cards() {
-    assert_eq!(EXAMPLES.len(), 4);
+    assert_eq!(example_cards(op_editor_core::Locale::EnUs).len(), 4);
 }
 
 /// Y-coordinate of the textarea's vertical center.
@@ -113,8 +113,10 @@ fn hit_test_resolves_first_example_when_empty() {
     let card_w = (AI_CHAT_WIDTH - PAD * 2.0 - 8.0) / 2.0;
     let p = Point2D::new(PAD + card_w / 2.0, HEADER_HEIGHT + 32.0 + 35.0);
     match panel.hit_test(rect, p) {
-        Some(AIChatHit::Example(s)) => {
-            assert_eq!(s, EXAMPLES[0].title);
+        Some(AIChatHit::Example(prompt)) => {
+            // The click payload is the card's full prompt — what the
+            // host inserts into the chat input.
+            assert_eq!(prompt, panel.examples[0].prompt);
         }
         other => panic!("expected first example hit, got {:?}", other),
     }

@@ -135,6 +135,20 @@ impl GitRepo {
         Ok(())
     }
 
+    /// The three index-stage blobs of a conflicted `path` —
+    /// `(base, ours, theirs)` from merge stages 1 / 2 / 3 of the
+    /// index. A stage is `None` when it does not exist (an add/add
+    /// conflict has no base stage). Valid only while a merge is in
+    /// progress with `path` unresolved.
+    pub fn conflict_stages(&self, path: &str) -> ConflictStages {
+        let stage = |n: u8| self.run(&["show", &format!(":{n}:{path}")]).ok();
+        ConflictStages {
+            base: stage(1),
+            ours: stage(2),
+            theirs: stage(3),
+        }
+    }
+
     /// Merge `other` into the current branch through a throwaway
     /// worktree so the live working tree is never marked up.
     ///
@@ -149,9 +163,19 @@ impl GitRepo {
     /// The live working tree must be clean — the caller commits or
     /// stashes first; otherwise [`GitError::WorkingTreeDirty`] is
     /// returned before any worktree is created.
+    ///
+    /// `resolve` is a structured-merge hook: when the worktree merge
+    /// conflicts, it is called per conflicted file with
+    /// `(path, base, ours, theirs)` blob contents and may return
+    /// `Some(resolved)` to auto-resolve that file. When *every*
+    /// conflict is resolved this way the merge is completed and
+    /// fast-forwarded back like a clean merge; otherwise the
+    /// still-conflicted residue is reported. Pass `|_, _, _, _| None`
+    /// for the plain (no structured resolution) behaviour.
     pub fn merge_branch_isolated(
         &self,
         other: &str,
+        resolve: impl Fn(&str, &str, &str, &str) -> Option<String>,
     ) -> Result<WorktreeMergeReport, GitError> {
         // A live merge already in progress would be misattributed.
         if self.is_merging() {
@@ -199,11 +223,40 @@ impl GitRepo {
                     // history) — surface it rather than swallow it.
                     return Err(err);
                 }
+                // Offer each conflicted file to the structured
+                // resolver; write back + stage whatever it resolves.
+                for file in &bag.files {
+                    let Some(stages) = &file.stages else {
+                        continue;
+                    };
+                    let resolved = resolve(
+                        &file.path,
+                        stages.base.as_deref().unwrap_or(""),
+                        stages.ours.as_deref().unwrap_or(""),
+                        stages.theirs.as_deref().unwrap_or(""),
+                    );
+                    if let Some(content) = resolved {
+                        let abs = wrepo.workdir().join(&file.path);
+                        std::fs::write(&abs, content)
+                            .map_err(|e| GitError::Io(e.to_string()))?;
+                        wrepo.stage(&[abs.as_path()])?;
+                    }
+                }
+                // Anything still unmerged after that?
+                let residue = collect_conflicts(wrepo)?;
+                if residue.is_empty() {
+                    // Every conflict was structurally auto-resolved —
+                    // complete the merge and fast-forward it back.
+                    wrepo.complete_merge()?;
+                    let merged = wrepo.run(&["rev-parse", "HEAD"])?.trim().to_string();
+                    self.run(&["merge", "--ff-only", &merged])?;
+                    return Ok(WorktreeMergeReport::clean(MergeOutcome::Merge, merged));
+                }
                 // Abort the worktree's half-merge; the worktree drop
                 // then removes the directory entirely. The live tree
                 // was never touched.
                 let _ = wrepo.abort_merge();
-                Ok(WorktreeMergeReport::conflicted(bag))
+                Ok(WorktreeMergeReport::conflicted(residue))
             }
             Err(err) => Err(err),
         }
@@ -224,6 +277,19 @@ pub enum ConflictKind {
     Other,
 }
 
+/// The three index-stage blobs of a conflicted file — `base` is
+/// merge-stage 1, `ours` stage 2, `theirs` stage 3. A stage is
+/// `None` when it does not exist (an add/add conflict has no base).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ConflictStages {
+    /// The merge-base revision of the file.
+    pub base: Option<String>,
+    /// The current branch's revision.
+    pub ours: Option<String>,
+    /// The merged-in branch's revision.
+    pub theirs: Option<String>,
+}
+
 /// One conflicted path left by a worktree merge.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ConflictedFile {
@@ -231,6 +297,10 @@ pub struct ConflictedFile {
     pub path: String,
     /// How the path conflicts.
     pub kind: ConflictKind,
+    /// The three merge-stage blobs — populated for `.op` documents
+    /// so the caller can run a structured node-level merge; `None`
+    /// for other files.
+    pub stages: Option<ConflictStages>,
 }
 
 /// The set of unresolved conflicts a worktree merge produced.
@@ -343,10 +413,11 @@ fn collect_conflicts(repo: &GitRepo) -> Result<ConflictBag, GitError> {
             // Not an unmerged entry — skip it.
             _ => continue,
         };
-        files.push(ConflictedFile {
-            path: record[3..].to_string(),
-            kind,
-        });
+        let path = record[3..].to_string();
+        // `.op` documents carry their three merge-stage blobs so the
+        // caller can run a structured node-level merge.
+        let stages = path.ends_with(".op").then(|| repo.conflict_stages(&path));
+        files.push(ConflictedFile { path, kind, stages });
     }
     Ok(ConflictBag { files })
 }

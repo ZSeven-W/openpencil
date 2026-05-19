@@ -63,15 +63,43 @@ impl WidgetHostNative {
         self.panel_resize.is_some()
     }
 
+    /// Clear every lower-overlay hover highlight — file menu, locale
+    /// / shape pickers, align toolbar, layer-context menu. Called
+    /// when the cursor moves over the top-most Design-MD panel so a
+    /// highlight set just before does not linger beneath it. Returns
+    /// `true` if anything changed.
+    pub(in crate::widget_host) fn clear_lower_overlay_hover(&mut self) -> bool {
+        let mut changed = false;
+        {
+            let ui = &mut self.editor_state.editor_ui;
+            changed |= ui.file_menu_hover.take().is_some();
+            changed |= ui.locale_picker_hover.take().is_some();
+            changed |= ui.shape_picker_hover.take().is_some();
+            changed |= ui.align_toolbar_hover.take().is_some();
+            if let Some(menu) = ui.layer_context_menu.as_mut() {
+                changed |= menu.hovered_row.take().is_some();
+            }
+        }
+        if changed {
+            self.mark_dirty();
+        }
+        changed
+    }
+
     /// Update the layer-panel hover id from the current cursor
     /// position. Returns `true` if the hover state changed.
-    pub fn update_layer_hover(&mut self, x: f32, y: f32, viewport_h: f32) -> bool {
+    pub fn update_layer_hover(&mut self, x: f32, y: f32, viewport_w: f32, viewport_h: f32) -> bool {
         use op_editor_ui::widgets::{LayerPanel, LayerPanelHit};
         self.refresh_layout_scene();
         let sidebar_open = self.editor_state.editor_ui.sidebar_open;
         let panel_w = self.editor_state.editor_ui.layer_panel_width;
+        // The top-most floating Design-MD panel covers the layer rail
+        // when dragged over it — no row highlights underneath it.
+        let over_design_md = self
+            .design_md_panel_rect(viewport_w, viewport_h)
+            .is_some_and(|r| rect_contains(r, Point2D::new(x, y)));
         let (new_layer, new_page) =
-            if sidebar_open && y >= TOP_BAR_HEIGHT && x >= 0.0 && x <= panel_w {
+            if sidebar_open && !over_design_md && y >= TOP_BAR_HEIGHT && x >= 0.0 && x <= panel_w {
                 let layer_rect = Rect {
                     origin: Point2D::new(0.0, TOP_BAR_HEIGHT),
                     size: Point2D::new(panel_w, (viewport_h - TOP_BAR_HEIGHT).max(0.0)),
@@ -171,6 +199,14 @@ impl WidgetHostNative {
         // Modal overlays — keep the pointer the OS default.
         if self.editor_state.editor_ui.agent_settings_open
             || self.editor_state.ui.color_picker.is_some()
+        {
+            return CursorHint::Default;
+        }
+        // The top-most floating Design-MD panel — a neutral cursor
+        // over it, never a canvas action cursor bleeding through.
+        if self
+            .design_md_panel_rect(viewport_w, viewport_h)
+            .is_some_and(|r| rect_contains(r, Point2D::new(x, y)))
         {
             return CursorHint::Default;
         }
@@ -290,6 +326,35 @@ impl WidgetHostNative {
                 TOP_BAR_HEIGHT + GIT_PANEL_INSET,
             ),
             size: Point2D::new(panel.panel_width(), panel.height()),
+        })
+    }
+
+    /// Floating Design-MD panel rect — `None` when the panel is
+    /// closed. The top-left comes from `editor_ui.design_md_panel_pos`
+    /// (centred by the host on open), clamped to keep the header bar
+    /// reachable after a viewport resize.
+    pub(in crate::widget_host) fn design_md_panel_rect(
+        &self,
+        viewport_w: f32,
+        viewport_h: f32,
+    ) -> Option<Rect> {
+        use op_editor_ui::widgets::{DESIGN_MD_PANEL_H, DESIGN_MD_PANEL_W};
+        let ui = &self.editor_state.editor_ui;
+        if !ui.design_md_panel_open {
+            return None;
+        }
+        let (px, py) = ui.design_md_panel_pos.unwrap_or_else(|| {
+            (
+                ((viewport_w - DESIGN_MD_PANEL_W) / 2.0).max(0.0),
+                ((viewport_h - DESIGN_MD_PANEL_H) / 2.0).max(0.0),
+            )
+        });
+        // Keep at least the header bar on-screen.
+        let x = px.clamp(0.0, (viewport_w - 80.0).max(0.0));
+        let y = py.clamp(0.0, (viewport_h - 40.0).max(0.0));
+        Some(Rect {
+            origin: Point2D::new(x, y),
+            size: Point2D::new(DESIGN_MD_PANEL_W, DESIGN_MD_PANEL_H),
         })
     }
 
