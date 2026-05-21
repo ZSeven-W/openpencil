@@ -231,9 +231,7 @@ fn merge_core(
                             } else if props_differ && !order_differ {
                                 // A pure property change — auto-merge.
                                 take_theirs.insert(id.clone());
-                            } else if order_differ
-                                && same_child_set(&b.child_ids, &t.child_ids)
-                            {
+                            } else if order_differ && same_child_set(&b.child_ids, &t.child_ids) {
                                 // A pure reorder — not captured by
                                 // any child conflict, so surface it.
                                 candidates.push(conflict(
@@ -259,12 +257,9 @@ fn merge_core(
                         // Only `ours` changed → keep ours (default).
                     }
                     // Added on both branches with differing content.
-                    None => candidates.push(conflict(
-                        id,
-                        Some(o),
-                        Some(t),
-                        NodeConflictKind::BothAdded,
-                    )),
+                    None => {
+                        candidates.push(conflict(id, Some(o), Some(t), NodeConflictKind::BothAdded))
+                    }
                 }
             }
             // Present locally, gone on the remote branch.
@@ -393,11 +388,9 @@ fn same_child_set(a: &[String], b: &[String]) -> bool {
 /// Children whose id is not in `order` keep their relative position
 /// after the known ones (a stable sort).
 fn reorder_children(children: &mut [Value], order: &[String]) {
-    children.sort_by_key(|child| {
-        match child.get("id").and_then(Value::as_str) {
-            Some(id) => order.iter().position(|o| o == id).unwrap_or(order.len()),
-            None => order.len(),
-        }
+    children.sort_by_key(|child| match child.get("id").and_then(Value::as_str) {
+        Some(id) => order.iter().position(|o| o == id).unwrap_or(order.len()),
+        None => order.len(),
     });
 }
 

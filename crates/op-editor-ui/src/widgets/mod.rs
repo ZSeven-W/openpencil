@@ -125,17 +125,15 @@ pub use ai_chat_panel::{
     AI_CHAT_HEIGHT, AI_CHAT_WIDTH,
 };
 pub use align_toolbar::{AlignToolbar, ALIGN_TOOLBAR_HEIGHT, ALIGN_TOOLBAR_WIDTH};
-pub use export_dialog::{ExportDialog, ExportDialogHit, ExportFormat};
-pub use locale_picker::{LocalePicker, LOCALE_PICKER_WIDTH};
-pub use shape_picker::{ShapeChoice, ShapePicker, SHAPE_PICKER_WIDTH};
 pub use component_browser_panel::{
     ComponentBrowserHit, ComponentBrowserPanel, COMPONENT_BROWSER_PANEL_H,
     COMPONENT_BROWSER_PANEL_W,
 };
-pub use design_md_panel::{
-    DesignMdHit, DesignMdPanel, DESIGN_MD_PANEL_H, DESIGN_MD_PANEL_W,
-};
+pub use design_md_panel::{DesignMdHit, DesignMdPanel, DESIGN_MD_PANEL_H, DESIGN_MD_PANEL_W};
+pub use export_dialog::{ExportDialog, ExportDialogHit, ExportFormat};
 pub use git_panel::{GitPanel, GitPanelHit, GIT_PANEL_INSET, GIT_PANEL_WIDTH};
+pub use locale_picker::{LocalePicker, LOCALE_PICKER_WIDTH};
+pub use shape_picker::{ShapeChoice, ShapePicker, SHAPE_PICKER_WIDTH};
 pub use status_bar::{StatusBar, STATUS_BAR_HEIGHT, STATUS_BAR_WIDTH};
 pub use top_bar::{TopBar, TopBarHit, TOP_BAR_HEIGHT};
 // Re-export panel/toolbar width constants + hit enums so the host

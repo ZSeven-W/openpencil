@@ -49,8 +49,8 @@ mod keyboard;
 mod paint;
 mod press;
 mod press_helpers;
-mod scroll;
 mod property_dispatch;
+mod scroll;
 mod shortcuts;
 
 pub use frame_backend::NativeFrameBackend;
@@ -527,11 +527,7 @@ impl WidgetHostNative {
     /// [`EditorState::instantiate_kit_component`]. Returns `true`
     /// when an instantiate landed (the desktop runner schedules a
     /// repaint on `true`).
-    pub fn drain_component_browser_insert(
-        &mut self,
-        viewport_w: f32,
-        viewport_h: f32,
-    ) -> bool {
+    pub fn drain_component_browser_insert(&mut self, viewport_w: f32, viewport_h: f32) -> bool {
         let Some((kit_id, comp_id)) = self
             .editor_state
             .editor_ui

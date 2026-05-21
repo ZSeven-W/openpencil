@@ -383,8 +383,8 @@ impl WidgetHostNative {
 
         // 0c. PropertyPanel input row.
         self.refresh_layout_scene();
-        if let Some(panel) = PropertyPanel::for_selection(&self.editor_state)
-            .filter(|_| !in_git_panel)
+        if let Some(panel) =
+            PropertyPanel::for_selection(&self.editor_state).filter(|_| !in_git_panel)
         {
             let property_rect = Rect {
                 origin: Point2D::new(

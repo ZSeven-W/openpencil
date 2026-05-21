@@ -158,9 +158,7 @@ pub fn load_editor_state(
             // the user gets actionable guidance instead of a raw parse
             // error.
             if looks_like_legacy_doc_payload(src) {
-                return Err(
-                    op_i18n::translate(locale, "dialog.loadErrorOldVersion").to_string()
-                );
+                return Err(op_i18n::translate(locale, "dialog.loadErrorOldVersion").to_string());
             }
             return Err(e.to_string());
         }
@@ -572,7 +570,8 @@ mod tests {
         let path = temp_op_path("page-roundtrip");
         save_to_path(&state, &path).expect("save succeeds");
 
-        let reloaded = load_editor_state(&path, op_editor_core::Locale::EnUs).expect("load succeeds");
+        let reloaded =
+            load_editor_state(&path, op_editor_core::Locale::EnUs).expect("load succeeds");
         assert_eq!(reloaded.ui.active_page_index, 2);
 
         // Cleanup.
@@ -591,7 +590,8 @@ mod tests {
         std::fs::write(sidecar_path(&path), r#"{"active_page_index":99}"#)
             .expect("sidecar overwrite");
 
-        let reloaded = load_editor_state(&path, op_editor_core::Locale::EnUs).expect("load succeeds");
+        let reloaded =
+            load_editor_state(&path, op_editor_core::Locale::EnUs).expect("load succeeds");
         // Single-page document → only index 0 is valid.
         assert_eq!(reloaded.ui.active_page_index, 0);
 
@@ -655,10 +655,7 @@ mod tests {
         // localised message rather than an opaque schema error.
         assert_eq!(
             err,
-            op_i18n::translate(
-                op_editor_core::Locale::EnUs,
-                "dialog.loadErrorOldVersion"
-            )
+            op_i18n::translate(op_editor_core::Locale::EnUs, "dialog.loadErrorOldVersion")
         );
 
         let _ = std::fs::remove_file(&path);

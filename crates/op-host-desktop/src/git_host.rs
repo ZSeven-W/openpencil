@@ -147,9 +147,8 @@ impl DesktopApp {
                         // Snapshot the document so the post-pull reload
                         // can detect edits made *during* the async
                         // pull — those the confirm above did not cover.
-                        self.git_pull_doc_baseline = Some(persistence::document_fingerprint(
-                            self.host.editor_state(),
-                        ));
+                        self.git_pull_doc_baseline =
+                            Some(persistence::document_fingerprint(self.host.editor_state()));
                         self.host.editor_state_mut().editor_ui.git_panel.pulling = true;
                     }
                 }
@@ -266,16 +265,15 @@ impl DesktopApp {
                     let locale = self.host.editor_state().editor_ui.locale;
                     self.host.editor_state_mut().editor_ui.git_panel.diff =
                         Some(op_editor_core::GitDiffView {
-                            title: op_i18n::translate(locale, "git.panel.diffLoading")
-                                .to_string(),
-                            lines: vec![op_i18n::translate(locale, "git.panel.diffComputing")
-                                .to_string()],
+                            title: op_i18n::translate(locale, "git.panel.diffLoading").to_string(),
+                            lines: vec![
+                                op_i18n::translate(locale, "git.panel.diffComputing").to_string()
+                            ],
                             scroll: 0,
                             h_scroll: 0,
                             stage_path: None,
                         });
-                    self.git_diff_job =
-                        Some(git_jobs::GitDiffJob::spawn(repo, target, locale));
+                    self.git_diff_job = Some(git_jobs::GitDiffJob::spawn(repo, target, locale));
                 }
             }
         }
@@ -382,8 +380,11 @@ impl DesktopApp {
                     // Every conflicted file is a structured `.op` —
                     // open the per-node resolution view.
                     Some(state) => {
-                        self.host.editor_state_mut().editor_ui.git_panel.merge_resolve =
-                            Some(state);
+                        self.host
+                            .editor_state_mut()
+                            .editor_ui
+                            .git_panel
+                            .merge_resolve = Some(state);
                     }
                     None => self.show_merge_conflict_dialog(other, &report.conflicts),
                 }
@@ -420,7 +421,11 @@ impl DesktopApp {
         // The completed merge reloads the document — confirm first.
         if !self.confirm_document_reload() {
             // Declined — restore the resolution view untouched.
-            self.host.editor_state_mut().editor_ui.git_panel.merge_resolve = Some(state);
+            self.host
+                .editor_state_mut()
+                .editor_ui
+                .git_panel
+                .merge_resolve = Some(state);
             return;
         }
         match self.git_session.merge_branch_resolved(&state) {
@@ -583,8 +588,7 @@ fn build_merge_resolve(
         // A whole-file add / delete conflict (a missing ours or
         // theirs stage) is not a per-node content conflict — the
         // node-level view cannot resolve it, so bail to the dialog.
-        let (Some(base), Some(ours), Some(theirs)) =
-            (&stages.base, &stages.ours, &stages.theirs)
+        let (Some(base), Some(ours), Some(theirs)) = (&stages.base, &stages.ours, &stages.theirs)
         else {
             return None;
         };
@@ -635,7 +639,10 @@ fn build_hunk_patch(lines: &[String], hunk_index: usize) -> Option<String> {
         .map(|(i, _)| i)
         .collect();
     let &start = hunk_starts.get(hunk_index)?;
-    let end = hunk_starts.get(hunk_index + 1).copied().unwrap_or(lines.len());
+    let end = hunk_starts
+        .get(hunk_index + 1)
+        .copied()
+        .unwrap_or(lines.len());
     let mut patch = String::new();
     for line in &lines[..first] {
         patch.push_str(line);

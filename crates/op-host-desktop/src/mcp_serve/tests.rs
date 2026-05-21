@@ -71,7 +71,10 @@ fn tools_list_response_includes_all_registered_tools() {
         "insert_divider",
         "insert_badge",
     ] {
-        assert!(r.contains(name), "tools/list must include element tool {name}");
+        assert!(
+            r.contains(name),
+            "tools/list must include element tool {name}"
+        );
     }
     for name in [
         "get_document_info",

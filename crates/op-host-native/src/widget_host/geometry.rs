@@ -13,8 +13,8 @@ use op_editor_core::ChatAnchor;
 use op_editor_ui::widgets::{
     rotation_corner_at_point, selection_handle_at_point, GitPanel, LayoutCx, LocalePicker,
     ShapePicker, Toolbar, TopBar, Widget, AI_CHAT_COLLAPSED_HEIGHT, AI_CHAT_COLLAPSED_WIDTH,
-    AI_CHAT_HEIGHT, AI_CHAT_WIDTH, GIT_PANEL_INSET, LOCALE_PICKER_WIDTH,
-    SHAPE_PICKER_WIDTH, TOOLBAR_WIDTH, TOP_BAR_HEIGHT,
+    AI_CHAT_HEIGHT, AI_CHAT_WIDTH, GIT_PANEL_INSET, LOCALE_PICKER_WIDTH, SHAPE_PICKER_WIDTH,
+    TOOLBAR_WIDTH, TOP_BAR_HEIGHT,
 };
 use op_editor_ui::{Point2D, Rect};
 

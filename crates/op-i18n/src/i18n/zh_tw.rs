@@ -265,11 +265,15 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "ai.searchModels" => "搜尋模型...",
         "ai.noModelsFound" => "未找到匹配的模型",
         "ai.quickAction.loginScreen" => "設計行動裝置登入頁面",
-        "ai.quickAction.loginScreenPrompt" => "設計一個現代的行動裝置登入頁面，包含電子郵件輸入框、密碼輸入框、登入按鈕和社群登入選項",
+        "ai.quickAction.loginScreenPrompt" => {
+            "設計一個現代的行動裝置登入頁面，包含電子郵件輸入框、密碼輸入框、登入按鈕和社群登入選項"
+        }
         "ai.quickAction.foodApp" => "美食App首頁",
         "ai.quickAction.foodAppPrompt" => "Generate a well-designed food mobile app homepage",
         "ai.quickAction.bottomNav" => "設計底部導覽列",
-        "ai.quickAction.bottomNavPrompt" => "設計一個包含 5 個標籤的行動應用程式底部導覽列：首頁、搜尋、新增、訊息、個人",
+        "ai.quickAction.bottomNavPrompt" => {
+            "設計一個包含 5 個標籤的行動應用程式底部導覽列：首頁、搜尋、新增、訊息、個人"
+        }
         "ai.quickAction.colorPalette" => "為我的應用程式推薦配色方案",
         "ai.quickAction.colorPalettePrompt" => "為一個寵物照護應用程式推薦一套現代配色方案",
         "ai.startDesigning" => "用 AI 開始設計",
@@ -390,7 +394,9 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "builtin.errorApiKeyEmpty" => "API 金鑰為空，請在設定中新增您的 API 金鑰。",
         "builtin.parallelAgents" => "並行子代理：{{count}}x（點擊切換）",
         "builtin.baseUrlPlaceholder" => "https://api.example.com/v1",
-        "builtin.teamDescription" => "選擇用於設計生成的模型。設定後，設計任務將自動委派給使用此模型的專業 Agent。",
+        "builtin.teamDescription" => {
+            "選擇用於設計生成的模型。設定後，設計任務將自動委派給使用此模型的專業 Agent。"
+        }
         "builtin.teamDesignModel" => "設計模型",
         "builtin.teamSelectModel" => "無（單 Agent）",
         "acp.title" => "ACP Agent",
@@ -487,7 +493,9 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "settings.mcp.stop" => "停止",
         "settings.mcp.terminalIntegrations" => "終端機中的 MCP 整合",
         "settings.mcp.terminalSubtitle1" => "MCP 整合將在重新啟動終端機後生效。",
-        "settings.mcp.terminalSubtitle2" => "升級 OpenPencil 版本後，請重新安裝 MCP 整合以確保相容性。",
+        "settings.mcp.terminalSubtitle2" => {
+            "升級 OpenPencil 版本後，請重新安裝 MCP 整合以確保相容性。"
+        }
         "settings.images.search" => "圖片搜尋",
         "settings.images.ready" => "已就緒",
         "settings.images.notConfigured" => "尚未設定",
@@ -521,7 +529,9 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "settings.system.errorDescription" => "無法連線發行伺服器，請檢查網路連線。",
         "settings.system.currentVersion" => "目前版本",
         "dialog.unsavedTitle" => "有未儲存的變更",
-        "dialog.closeBody" => "“{{name}}”有未儲存的變更。\n\n是 = 儲存,否 = 不儲存,取消 = 返回繼續編輯。",
+        "dialog.closeBody" => {
+            "“{{name}}”有未儲存的變更。\n\n是 = 儲存,否 = 不儲存,取消 = 返回繼續編輯。"
+        }
         "dialog.untitledDocument" => "未命名文件",
         "dialog.openErrorTitle" => "無法開啟檔案",
         "dialog.openErrorLead" => "OpenPencil 無法解析該檔案。",
@@ -538,7 +548,9 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "dialog.pickerSaveTitle" => "儲存文件",
         "dialog.pickerExportTitle" => "匯出圖片",
         "dialog.updateTitle" => "有可用更新",
-        "dialog.updateBody" => "OpenPencil {{version}} 已可用(目前版本 {{current}})。\n\n是否開啟發布頁面下載?",
+        "dialog.updateBody" => {
+            "OpenPencil {{version}} 已可用(目前版本 {{current}})。\n\n是否開啟發布頁面下載?"
+        }
         "a11y.figmaImport" => "從 Figma 匯入",
         "a11y.fileMenu" => "檔案選單",
         "a11y.layerContextMenu" => "圖層右鍵選單",

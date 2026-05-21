@@ -21,8 +21,7 @@ impl WidgetHostNative {
         viewport_width: f32,
         viewport_height: f32,
     ) -> bool {
-        let Some(panel_rect) =
-            self.component_browser_panel_rect(viewport_width, viewport_height)
+        let Some(panel_rect) = self.component_browser_panel_rect(viewport_width, viewport_height)
         else {
             return false;
         };

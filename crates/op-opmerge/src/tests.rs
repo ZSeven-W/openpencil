@@ -179,8 +179,9 @@ fn remote_reparent_is_surfaced_not_dropped() {
     let r = merge_op_documents(&tree(true), &tree(true), &tree(false)).unwrap();
     assert!(!r.is_clean(), "a reparent must not merge silently clean");
     assert!(
-        r.conflicts.iter().any(|c| c.id == "nX"
-            && c.kind == NodeConflictKind::StructuralChange),
+        r.conflicts
+            .iter()
+            .any(|c| c.id == "nX" && c.kind == NodeConflictKind::StructuralChange),
         "the moved node is surfaced as a structural conflict"
     );
 }

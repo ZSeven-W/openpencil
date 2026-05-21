@@ -620,7 +620,11 @@ mod tests {
         let mut m = ChatMessage::assistant("the answer");
         m.thinking = "a long private chain of reasoning".into();
         // Default: thinking_collapsed == true.
-        let items = build_transcript(std::slice::from_ref(&m), body(), op_editor_core::Locale::EnUs);
+        let items = build_transcript(
+            std::slice::from_ref(&m),
+            body(),
+            op_editor_core::Locale::EnUs,
+        );
         let t = items[0].thinking.as_ref().expect("thinking block present");
         assert!(t.collapsed);
         assert!(t.lines.is_empty(), "collapsed body carries no lines");
@@ -635,7 +639,11 @@ mod tests {
                       across several lines inside the narrow panel"
             .into();
         m.thinking_collapsed = false;
-        let items = build_transcript(std::slice::from_ref(&m), body(), op_editor_core::Locale::EnUs);
+        let items = build_transcript(
+            std::slice::from_ref(&m),
+            body(),
+            op_editor_core::Locale::EnUs,
+        );
         let t = items[0].thinking.as_ref().unwrap();
         assert!(!t.collapsed);
         assert!(t.lines.len() > 1, "long reasoning wraps to many lines");
@@ -655,8 +663,11 @@ mod tests {
                 args: "{}".into(),
             },
         ];
-        let items =
-            build_transcript(std::slice::from_ref(&m), body(), op_editor_core::Locale::EnUs);
+        let items = build_transcript(
+            std::slice::from_ref(&m),
+            body(),
+            op_editor_core::Locale::EnUs,
+        );
         let t = items[0].tools.as_ref().expect("tools block present");
         // The header label substitutes the call count into the
         // `ai.toolCalls` template's `{{count}}` placeholder.
@@ -676,7 +687,11 @@ mod tests {
                 data: vec![1],
             });
         }
-        let items = build_transcript(std::slice::from_ref(&m), body(), op_editor_core::Locale::EnUs);
+        let items = build_transcript(
+            std::slice::from_ref(&m),
+            body(),
+            op_editor_core::Locale::EnUs,
+        );
         assert_eq!(items[0].images.len(), 3, "one thumbnail rect per image");
         // Thumbnails do not overlap.
         let (a, b) = (items[0].images[0], items[0].images[1]);
@@ -727,6 +742,9 @@ mod tests {
         let m = ChatMessage::assistant("plain answer, no thinking, no tools");
         let msgs = std::slice::from_ref(&m);
         // Click far below the single short message.
-        assert_eq!(transcript_hit(msgs, body(), 20.0, 280.0, op_editor_core::Locale::EnUs), None);
+        assert_eq!(
+            transcript_hit(msgs, body(), 20.0, 280.0, op_editor_core::Locale::EnUs),
+            None
+        );
     }
 }
