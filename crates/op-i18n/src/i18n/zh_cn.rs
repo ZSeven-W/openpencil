@@ -550,6 +550,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "a11y.layerContextMenu" => "图层右键菜单",
         "a11y.aiChat" => "AI 聊天",
         "designMd.emptyHint" => "导入 .md 文件以附加设计说明",
+        "componentBrowser.empty" => "未找到组件",
         _ => return super::zh_cn_git::lookup(key),
     })
 }

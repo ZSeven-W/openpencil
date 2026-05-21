@@ -544,6 +544,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "a11y.layerContextMenu" => "Menu ngữ cảnh lớp",
         "a11y.aiChat" => "Trò chuyện AI",
         "designMd.emptyHint" => "Nhập tệp .md để đính kèm bản tóm tắt thiết kế",
+        "componentBrowser.empty" => "Không tìm thấy thành phần",
         _ => return super::vi_git::lookup(key),
     })
 }

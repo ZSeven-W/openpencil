@@ -544,6 +544,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "a11y.layerContextMenu" => "Ebenen-Kontextmenü",
         "a11y.aiChat" => "KI-Chat",
         "designMd.emptyHint" => "Importiere eine .md-Datei, um ein Design-Briefing anzuhängen",
+        "componentBrowser.empty" => "Keine Komponenten gefunden",
         _ => return super::de_git::lookup(key),
     })
 }

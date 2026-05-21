@@ -544,6 +544,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "a11y.layerContextMenu" => "Katman bağlam menüsü",
         "a11y.aiChat" => "Yapay zekâ sohbeti",
         "designMd.emptyHint" => "Bir tasarım özeti eklemek için bir .md dosyası içe aktarın",
+        "componentBrowser.empty" => "Bileşen bulunamadı",
         _ => return super::tr_git::lookup(key),
     })
 }

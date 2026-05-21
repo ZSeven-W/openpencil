@@ -39,6 +39,7 @@ pub mod svg_import;
 pub mod svg_path_bounds;
 pub mod tool;
 pub mod ui_draft;
+pub mod uikit;
 pub mod variables;
 pub mod viewport;
 pub mod walkers;
@@ -88,6 +89,7 @@ pub use render_backend::*;
 pub use selection::SelectionState;
 pub use state::EditorState;
 pub use tool::Tool;
+pub use uikit::{builtin_kits, ComponentCategory, KitComponent, UIKit};
 pub use ui_draft::{
     ColorPickerDrag, ColorPickerState, ColorTarget, LayerContextTarget, LayerRenameState,
     PropertyFocus, UiDraftState, VariableUiState,

@@ -544,6 +544,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "a11y.layerContextMenu" => "レイヤーコンテキストメニュー",
         "a11y.aiChat" => "AI チャット",
         "designMd.emptyHint" => ".md ファイルをインポートしてデザイン仕様を添付",
+        "componentBrowser.empty" => "コンポーネントが見つかりません",
         _ => return super::ja_git::lookup(key),
     })
 }

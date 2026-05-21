@@ -638,6 +638,25 @@ impl DesktopApp {
                 self.host.mark_editor_state_dirty();
                 true
             }
+            A::ToggleComponentBrowserPanel => {
+                let ui = &mut self.host.editor_state_mut().editor_ui;
+                let opening = !ui.component_browser_open;
+                if opening {
+                    ui.component_browser_pos = Some((
+                        ((self.viewport_width
+                            - op_editor_ui::widgets::COMPONENT_BROWSER_PANEL_W)
+                            / 2.0)
+                            .max(0.0),
+                        ((self.viewport_height
+                            - op_editor_ui::widgets::COMPONENT_BROWSER_PANEL_H)
+                            / 2.0)
+                            .max(0.0),
+                    ));
+                }
+                ui.component_browser_open = opening;
+                self.host.mark_editor_state_dirty();
+                true
+            }
             A::Quit => {
                 // Route through the unsaved-changes prompt — Cancel
                 // there aborts the quit.

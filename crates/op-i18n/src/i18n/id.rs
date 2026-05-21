@@ -544,6 +544,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "a11y.layerContextMenu" => "Menu konteks lapisan",
         "a11y.aiChat" => "Obrolan AI",
         "designMd.emptyHint" => "Impor berkas .md untuk melampirkan brief desain",
+        "componentBrowser.empty" => "Tidak ditemukan komponen",
         _ => return super::id_git::lookup(key),
     })
 }

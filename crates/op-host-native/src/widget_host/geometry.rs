@@ -93,13 +93,11 @@ impl WidgetHostNative {
         self.refresh_layout_scene();
         let sidebar_open = self.editor_state.editor_ui.sidebar_open;
         let panel_w = self.editor_state.editor_ui.layer_panel_width;
-        // The top-most floating Design-MD panel covers the layer rail
-        // when dragged over it — no row highlights underneath it.
-        let over_design_md = self
-            .design_md_panel_rect(viewport_w, viewport_h)
-            .is_some_and(|r| rect_contains(r, Point2D::new(x, y)));
+        // A top-most floating panel covers the layer rail when dragged
+        // over it — no row highlights underneath it.
+        let over_topmost = self.over_topmost_panel(x, y, viewport_w, viewport_h);
         let (new_layer, new_page) =
-            if sidebar_open && !over_design_md && y >= TOP_BAR_HEIGHT && x >= 0.0 && x <= panel_w {
+            if sidebar_open && !over_topmost && y >= TOP_BAR_HEIGHT && x >= 0.0 && x <= panel_w {
                 let layer_rect = Rect {
                     origin: Point2D::new(0.0, TOP_BAR_HEIGHT),
                     size: Point2D::new(panel_w, (viewport_h - TOP_BAR_HEIGHT).max(0.0)),
@@ -202,12 +200,9 @@ impl WidgetHostNative {
         {
             return CursorHint::Default;
         }
-        // The top-most floating Design-MD panel — a neutral cursor
-        // over it, never a canvas action cursor bleeding through.
-        if self
-            .design_md_panel_rect(viewport_w, viewport_h)
-            .is_some_and(|r| rect_contains(r, Point2D::new(x, y)))
-        {
+        // Any top-most floating panel — a neutral cursor over them,
+        // never a canvas action cursor bleeding through.
+        if self.over_topmost_panel(x, y, viewport_w, viewport_h) {
             return CursorHint::Default;
         }
         // The floating Git panel paints on top of the right-rail
@@ -327,6 +322,51 @@ impl WidgetHostNative {
             ),
             size: Point2D::new(panel.panel_width(), panel.height()),
         })
+    }
+
+    /// Floating Component-Browser panel rect — `None` when closed.
+    /// Same centred-on-open + clamped placement as the Design-MD panel.
+    pub(in crate::widget_host) fn component_browser_panel_rect(
+        &self,
+        viewport_w: f32,
+        viewport_h: f32,
+    ) -> Option<Rect> {
+        use op_editor_ui::widgets::{COMPONENT_BROWSER_PANEL_H, COMPONENT_BROWSER_PANEL_W};
+        let ui = &self.editor_state.editor_ui;
+        if !ui.component_browser_open {
+            return None;
+        }
+        let (px, py) = ui.component_browser_pos.unwrap_or_else(|| {
+            (
+                ((viewport_w - COMPONENT_BROWSER_PANEL_W) / 2.0).max(0.0),
+                ((viewport_h - COMPONENT_BROWSER_PANEL_H) / 2.0).max(0.0),
+            )
+        });
+        let x = px.clamp(0.0, (viewport_w - 80.0).max(0.0));
+        let y = py.clamp(0.0, (viewport_h - 40.0).max(0.0));
+        Some(Rect {
+            origin: Point2D::new(x, y),
+            size: Point2D::new(COMPONENT_BROWSER_PANEL_W, COMPONENT_BROWSER_PANEL_H),
+        })
+    }
+
+    /// Whether `point` is inside ANY top-most floating panel
+    /// (Design-MD or Component-Browser). Used by the input gates so
+    /// wheel / pan / right-press / hover side-effects do not leak to
+    /// the canvas / lower layers beneath the panel.
+    pub(in crate::widget_host) fn over_topmost_panel(
+        &self,
+        x: f32,
+        y: f32,
+        viewport_w: f32,
+        viewport_h: f32,
+    ) -> bool {
+        let p = Point2D::new(x, y);
+        self.design_md_panel_rect(viewport_w, viewport_h)
+            .is_some_and(|r| rect_contains(r, p))
+            || self
+                .component_browser_panel_rect(viewport_w, viewport_h)
+                .is_some_and(|r| rect_contains(r, p))
     }
 
     /// Floating Design-MD panel rect — `None` when the panel is

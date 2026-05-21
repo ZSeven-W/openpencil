@@ -80,12 +80,9 @@ impl WidgetHostNative {
         // Codex stop-gate: right-click outside the variables panel
         // must commit any pending row focus first.
         self.commit_variable_row_focus_if_any();
-        // The top-most floating Design-MD panel swallows a right-click
-        // on its rect — no context menu opens under it.
-        if self
-            .design_md_panel_rect(viewport_w, viewport_h)
-            .is_some_and(|r| rect_contains(r, Point2D::new(x, y)))
-        {
+        // Any top-most floating panel swallows a right-click on its
+        // rect — no context menu opens under them.
+        if self.over_topmost_panel(x, y, viewport_w, viewport_h) {
             return true;
         }
         if !self.editor_state.editor_ui.sidebar_open {
@@ -164,6 +161,11 @@ impl WidgetHostNative {
         // panel's before any lower layer can claim it (dispatch in
         // `design_md_press.rs`).
         if self.dispatch_design_md_press(x, y, viewport_width, viewport_height) {
+            return true;
+        }
+        // Floating Component-Browser panel — painted just under the
+        // Design-MD panel; hit-tests right after it.
+        if self.dispatch_component_browser_press(x, y, viewport_width, viewport_height) {
             return true;
         }
         if self.editor_state.editor_ui.agent_settings_open

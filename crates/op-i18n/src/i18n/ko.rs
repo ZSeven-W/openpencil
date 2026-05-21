@@ -544,6 +544,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "a11y.layerContextMenu" => "레이어 컨텍스트 메뉴",
         "a11y.aiChat" => "AI 채팅",
         "designMd.emptyHint" => ".md 파일을 가져와 디자인 명세를 첨부하세요",
+        "componentBrowser.empty" => "구성 요소를 찾을 수 없음",
         _ => return super::ko_git::lookup(key),
     })
 }
