@@ -102,12 +102,12 @@ skia-safe = { version = "0.97.0", default-features = false, features = [
   "gl",
   "pdf",
 ] }
-# `casement` — ZSeven-W's winit fork (sibling repo, local path for
-# now). It adds `winit::platform::macos::drain_opened_file_urls`, the
-# macOS open-documents Apple-event hook upstream winit lacks. The
+# `casement` — ZSeven-W's winit fork (vendored as a submodule under
+# `vendor/casement`). It adds `winit::platform::macos::drain_opened_file_urls`,
+# the macOS open-documents Apple-event hook upstream winit lacks. The
 # `package` key keeps the `winit` import name, so all `use winit::…`
 # stays unchanged.
-winit = { package = "casement", path = "../../../winit", default-features = false, features = [
+winit = { package = "casement", path = "../../vendor/casement", default-features = false, features = [
   "x11",
   "wayland",
   "wayland-csd-adwaita",
