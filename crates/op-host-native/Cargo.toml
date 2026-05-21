@@ -109,14 +109,15 @@ skia-safe = { version = "0.97.0", default-features = false, features = [
   "gl",
 ] }
 glutin = "0.32.3"
-# `casement` — ZSeven-W's winit fork (sibling repo, local path for
-# now). The `package` key keeps the `winit` import name. `glutin-winit`
+# `casement` — ZSeven-W's winit fork (vendored as a submodule under
+# `vendor/casement` so CI checks out the same source the desktop binary
+# links). The `package` key keeps the `winit` import name. `glutin-winit`
 # is intentionally NOT used: it hard-depends on the upstream `winit`
 # package, which would pull a second, incompatible winit into the
 # tree. Its only use here — `GlWindow::build_surface_attributes` — is
 # replaced by a direct `glutin::surface::SurfaceAttributesBuilder`
 # call in `context/provider.rs`.
-winit = { package = "casement", path = "../../../winit", default-features = false, features = [
+winit = { package = "casement", path = "../../vendor/casement", default-features = false, features = [
   "x11",
   "wayland",
   "wayland-csd-adwaita",
