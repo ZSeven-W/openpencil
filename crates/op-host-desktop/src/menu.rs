@@ -15,6 +15,13 @@
 
 /// A menu selection, decoupled from `muda` so the runner matches on
 /// a plain enum. Each variant maps onto an existing host action.
+///
+/// `muda` only runs on macOS / Windows; the Linux `backend` is a
+/// stub whose `poll()` always returns `None`, so on Linux every
+/// variant is unconstructed by design. Silence `-D dead_code`
+/// there without weakening the lint on the platforms that actually
+/// build the menu.
+#[cfg_attr(not(any(target_os = "macos", target_os = "windows")), allow(dead_code))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MenuAction {
     New,
