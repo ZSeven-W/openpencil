@@ -39,14 +39,38 @@ const CHAR_W: f32 = 6.0;
 /// no matching components in the active kit set.
 const CATEGORIES: [(Option<ComponentCategory>, &str); 9] = [
     (None, "componentBrowser.category.all"),
-    (Some(ComponentCategory::Buttons), "componentBrowser.category.buttons"),
-    (Some(ComponentCategory::Inputs), "componentBrowser.category.inputs"),
-    (Some(ComponentCategory::Cards), "componentBrowser.category.cards"),
-    (Some(ComponentCategory::Navigation), "componentBrowser.category.nav"),
-    (Some(ComponentCategory::Layout), "componentBrowser.category.layout"),
-    (Some(ComponentCategory::Feedback), "componentBrowser.category.feedback"),
-    (Some(ComponentCategory::DataDisplay), "componentBrowser.category.data"),
-    (Some(ComponentCategory::Other), "componentBrowser.category.other"),
+    (
+        Some(ComponentCategory::Buttons),
+        "componentBrowser.category.buttons",
+    ),
+    (
+        Some(ComponentCategory::Inputs),
+        "componentBrowser.category.inputs",
+    ),
+    (
+        Some(ComponentCategory::Cards),
+        "componentBrowser.category.cards",
+    ),
+    (
+        Some(ComponentCategory::Navigation),
+        "componentBrowser.category.nav",
+    ),
+    (
+        Some(ComponentCategory::Layout),
+        "componentBrowser.category.layout",
+    ),
+    (
+        Some(ComponentCategory::Feedback),
+        "componentBrowser.category.feedback",
+    ),
+    (
+        Some(ComponentCategory::DataDisplay),
+        "componentBrowser.category.data",
+    ),
+    (
+        Some(ComponentCategory::Other),
+        "componentBrowser.category.other",
+    ),
 ];
 
 /// What a click landed on inside the Component-Browser panel.
@@ -163,10 +187,7 @@ impl<'a> ComponentBrowserPanel<'a> {
     fn close_rect(panel: Rect) -> Rect {
         let y = panel.origin.y + (HEADER_H - CLOSE_BTN) / 2.0;
         Rect {
-            origin: Point2D::new(
-                panel.origin.x + panel.size.x - PAD - CLOSE_BTN,
-                y,
-            ),
+            origin: Point2D::new(panel.origin.x + panel.size.x - PAD - CLOSE_BTN, y),
             size: Point2D::new(CLOSE_BTN, CLOSE_BTN),
         }
     }
@@ -300,10 +321,7 @@ impl<'a> ComponentBrowserPanel<'a> {
         }
         cx.backend.fill_rect(
             Rect {
-                origin: Point2D::new(
-                    rect.origin.x,
-                    rect.origin.y + HEADER_H + PILL_ROW_H,
-                ),
+                origin: Point2D::new(rect.origin.x, rect.origin.y + HEADER_H + PILL_ROW_H),
                 size: Point2D::new(rect.size.x, 1.0),
             },
             self.theme.border,
@@ -313,14 +331,8 @@ impl<'a> ComponentBrowserPanel<'a> {
         // past the panel foot.
         cx.backend.save();
         cx.backend.clip_rect(Rect {
-            origin: Point2D::new(
-                rect.origin.x,
-                rect.origin.y + HEADER_H + PILL_ROW_H + 1.0,
-            ),
-            size: Point2D::new(
-                rect.size.x,
-                rect.size.y - HEADER_H - PILL_ROW_H - 1.0,
-            ),
+            origin: Point2D::new(rect.origin.x, rect.origin.y + HEADER_H + PILL_ROW_H + 1.0),
+            size: Point2D::new(rect.size.x, rect.size.y - HEADER_H - PILL_ROW_H - 1.0),
         });
         let filtered = self.filtered();
         if filtered.is_empty() {
@@ -385,7 +397,8 @@ impl<'a> ComponentBrowserPanel<'a> {
     }
 
     fn text(&self, cx: &mut PaintCx<'_>, s: &str, x: f32, baseline: f32, size: f32, color: Color) {
-        let layout = TextLayout::single_run(s, "system-ui", size, to_jian(color), Point2D::new(0.0, 0.0));
+        let layout =
+            TextLayout::single_run(s, "system-ui", size, to_jian(color), Point2D::new(0.0, 0.0));
         cx.backend.draw_text(&layout, Point2D::new(x, baseline));
     }
 }

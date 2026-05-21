@@ -10,7 +10,9 @@ use crate::{
 use op_host_native::{NativeBackend, SharedSkiaContext};
 use std::time::{Duration, Instant};
 use winit::application::ApplicationHandler;
-use winit::event::{ElementState, KeyEvent, MouseButton, MouseScrollDelta, StartCause, WindowEvent};
+use winit::event::{
+    ElementState, KeyEvent, MouseButton, MouseScrollDelta, StartCause, WindowEvent,
+};
 use winit::event_loop::{ActiveEventLoop, ControlFlow};
 use winit::window::{Window, WindowId};
 
@@ -360,8 +362,14 @@ impl ApplicationHandler for DesktopApp {
                     let deadline = self.clock_start + Duration::from_millis(deadline_ms);
                     event_loop.set_control_flow(ControlFlow::WaitUntil(deadline));
                 } else if self.update_probe.is_pending()
-                    || self.git_pull_job.as_ref().is_some_and(git_jobs::GitPullJob::is_pending)
-                    || self.git_push_job.as_ref().is_some_and(git_jobs::GitPushJob::is_pending)
+                    || self
+                        .git_pull_job
+                        .as_ref()
+                        .is_some_and(git_jobs::GitPullJob::is_pending)
+                    || self
+                        .git_push_job
+                        .as_ref()
+                        .is_some_and(git_jobs::GitPushJob::is_pending)
                     || self
                         .git_status_job
                         .as_ref()

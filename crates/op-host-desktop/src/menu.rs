@@ -170,7 +170,11 @@ mod backend {
                 &item(ID_SAVE, "Save", Some(accel(Code::KeyS))),
                 &item(ID_SAVE_AS, "Save As\u{2026}", Some(accel_shift(Code::KeyS))),
                 &PredefinedMenuItem::separator(),
-                &item(ID_EXPORT, "Export Image\u{2026}", Some(accel_shift(Code::KeyP))),
+                &item(
+                    ID_EXPORT,
+                    "Export Image\u{2026}",
+                    Some(accel_shift(Code::KeyP)),
+                ),
             ]);
             // Windows has no app menu — Quit lives at the File-menu foot.
             #[cfg(not(target_os = "macos"))]

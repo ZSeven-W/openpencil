@@ -29,7 +29,9 @@ impl GitRepo {
         if !parent.exists() {
             std::fs::create_dir_all(parent).map_err(|e| GitError::Io(e.to_string()))?;
         }
-        let dir_str = dir.to_str().ok_or_else(|| GitError::Io("non-UTF-8 path".into()))?;
+        let dir_str = dir
+            .to_str()
+            .ok_or_else(|| GitError::Io("non-UTF-8 path".into()))?;
         let output = git_output(parent, &["clone", url, dir_str])?;
         if !output.status.success() {
             return Err(GitError::Command {
@@ -270,7 +272,10 @@ fn remote_host(url: &str) -> String {
         // a `/` in the host part means the `:` came from a local
         // path (`/tmp/foo:bar.git`) — neither is an scp host.
         let drive_letter = host_part.len() == 1
-            && host_part.chars().next().is_some_and(|c| c.is_ascii_alphabetic());
+            && host_part
+                .chars()
+                .next()
+                .is_some_and(|c| c.is_ascii_alphabetic());
         if drive_letter || host_part.contains('/') {
             return String::new();
         }
@@ -332,9 +337,18 @@ mod tests {
     #[test]
     fn remote_host_parses_every_url_shape() {
         assert_eq!(remote_host("https://github.com/org/repo.git"), "github.com");
-        assert_eq!(remote_host("https://user@github.com/org/repo"), "github.com");
-        assert_eq!(remote_host("https://gitlab.example.com:8443/x.git"), "gitlab.example.com");
-        assert_eq!(remote_host("ssh://git@github.com/org/repo.git"), "github.com");
+        assert_eq!(
+            remote_host("https://user@github.com/org/repo"),
+            "github.com"
+        );
+        assert_eq!(
+            remote_host("https://gitlab.example.com:8443/x.git"),
+            "gitlab.example.com"
+        );
+        assert_eq!(
+            remote_host("ssh://git@github.com/org/repo.git"),
+            "github.com"
+        );
         // scp-like.
         assert_eq!(remote_host("git@github.com:org/repo.git"), "github.com");
         assert_eq!(remote_host("github.com:org/repo"), "github.com");
@@ -365,8 +379,12 @@ mod tests {
         // `fetch --all` cannot leak this token to another remote.
         assert_eq!(key, "credential.https://github.com.helper");
         // The values travel as env vars, not interpolated.
-        assert!(env.iter().any(|(k, v)| k == "OP_GIT_HTTPS_USER" && v == "alice"));
-        assert!(env.iter().any(|(k, v)| k == "OP_GIT_HTTPS_PASS" && v == "tok"));
+        assert!(env
+            .iter()
+            .any(|(k, v)| k == "OP_GIT_HTTPS_USER" && v == "alice"));
+        assert!(env
+            .iter()
+            .any(|(k, v)| k == "OP_GIT_HTTPS_PASS" && v == "tok"));
     }
 
     #[test]
@@ -380,7 +398,10 @@ mod tests {
 
     #[test]
     fn remote_authority_keeps_the_port() {
-        assert_eq!(remote_authority("https://github.com/org/repo.git"), "github.com");
+        assert_eq!(
+            remote_authority("https://github.com/org/repo.git"),
+            "github.com"
+        );
         assert_eq!(
             remote_authority("https://gitlab.example.com:8443/x.git"),
             "gitlab.example.com:8443"
@@ -390,6 +411,9 @@ mod tests {
             "gitlab.example.com:8443"
         );
         // scp-like carries no URL port — bare host.
-        assert_eq!(remote_authority("git@github.com:org/repo.git"), "github.com");
+        assert_eq!(
+            remote_authority("git@github.com:org/repo.git"),
+            "github.com"
+        );
     }
 }

@@ -147,8 +147,7 @@ impl WidgetHostNative {
         // belongs to the panel, regardless of which tool / overlay is
         // also in play (a pen rubber-band, a node drag, etc.).
         if let Some(d) = self.design_md_drag {
-            self.editor_state.editor_ui.design_md_panel_pos =
-                Some((x - d.grab_dx, y - d.grab_dy));
+            self.editor_state.editor_ui.design_md_panel_pos = Some((x - d.grab_dx, y - d.grab_dy));
             self.mark_dirty();
             return true;
         }

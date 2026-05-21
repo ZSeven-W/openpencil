@@ -296,8 +296,9 @@ impl WidgetHostNative {
         if self.git_remote_focus_active() {
             let panel = &mut self.editor_state.editor_ui.git_panel;
             if !panel.remote_draft.trim().is_empty() {
-                panel.pending_action =
-                    Some(op_editor_core::GitPanelAction::SetRemote(panel.remote_draft.clone()));
+                panel.pending_action = Some(op_editor_core::GitPanelAction::SetRemote(
+                    panel.remote_draft.clone(),
+                ));
             }
             self.mark_dirty();
             return true;

@@ -7,10 +7,10 @@
 //! here as code; imported `.kit` files (TS feature) are out of scope
 //! for v1 — the browser surface this enables is the missing piece.
 
+use jian_ops_schema::node::container::ContainerProps;
 use jian_ops_schema::node::{
     FrameNode, PenNode, PenNodeBase, RectangleNode, TextContent, TextNode,
 };
-use jian_ops_schema::node::container::ContainerProps;
 use jian_ops_schema::sizing::SizingBehavior;
 
 use crate::fills::{set_primary_fill_hex, set_primary_stroke_hex};
@@ -220,7 +220,14 @@ fn text_input() -> PenNode {
         240,
         40,
         "#D0D5DD",
-        vec![text("kit/input-text/placeholder", "Placeholder", 12, 12, 216, 16)],
+        vec![text(
+            "kit/input-text/placeholder",
+            "Placeholder",
+            12,
+            12,
+            216,
+            16,
+        )],
     )
 }
 
@@ -555,10 +562,7 @@ mod tests {
                     PenNode::Rectangle(r) => r.children.as_deref(),
                     _ => None,
                 };
-                children
-                    .into_iter()
-                    .flatten()
-                    .all(|c| walk(c, seen))
+                children.into_iter().flatten().all(|c| walk(c, seen))
             }
             assert!(
                 walk(&comp.template, &mut seen),

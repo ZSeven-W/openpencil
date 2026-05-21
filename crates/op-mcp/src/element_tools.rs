@@ -20,7 +20,13 @@ use super::{McpTool, ToolErrorCode, ToolOutcome};
 /// — MCP tool names are `[a-zA-Z0-9_]+`, so dashes become underscores.
 fn sanitize(s: &str) -> String {
     s.chars()
-        .map(|c| if c.is_ascii_alphanumeric() || c == '_' { c } else { '_' })
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '_' {
+                c
+            } else {
+                '_'
+            }
+        })
         .collect()
 }
 

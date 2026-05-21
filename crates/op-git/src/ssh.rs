@@ -207,4 +207,3 @@ fn append_pub(path: &Path) -> PathBuf {
     s.push(".pub");
     PathBuf::from(s)
 }
-

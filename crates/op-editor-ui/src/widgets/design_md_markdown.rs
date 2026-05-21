@@ -62,18 +62,22 @@ pub(super) fn parse_blocks(content: &str, limit: usize) -> Vec<MdBlock> {
             continue;
         }
         if let Some(rest) = block.strip_prefix("### ") {
-            blocks.push(MdBlock::Heading { level: 3, text: rest.trim().to_string() });
+            blocks.push(MdBlock::Heading {
+                level: 3,
+                text: rest.trim().to_string(),
+            });
             continue;
         }
         if let Some(rest) = block.strip_prefix("#### ") {
-            blocks.push(MdBlock::Heading { level: 4, text: rest.trim().to_string() });
+            blocks.push(MdBlock::Heading {
+                level: 4,
+                text: rest.trim().to_string(),
+            });
             continue;
         }
         // A block whose every non-blank line is a `- ` / `* ` item.
         let lines: Vec<&str> = block.lines().collect();
-        let is_list = lines
-            .iter()
-            .all(|l| l.trim().is_empty() || is_bullet(l));
+        let is_list = lines.iter().all(|l| l.trim().is_empty() || is_bullet(l));
         if is_list && lines.iter().any(|l| is_bullet(l)) {
             for line in lines.iter().filter(|l| is_bullet(l)) {
                 blocks.push(MdBlock::Bullet(strip_bullet(line)));

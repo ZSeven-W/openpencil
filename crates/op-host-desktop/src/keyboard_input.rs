@@ -49,9 +49,7 @@ impl DesktopApp {
             Key::Named(NamedKey::ArrowLeft) if !self.zoom_modifier && !settings_focused => {
                 consumed = self.host.apply_nudge(-nudge, 0.0);
             }
-            Key::Named(NamedKey::ArrowRight)
-                if !self.zoom_modifier && !settings_focused =>
-            {
+            Key::Named(NamedKey::ArrowRight) if !self.zoom_modifier && !settings_focused => {
                 consumed = self.host.apply_nudge(nudge, 0.0);
             }
             // Cmd/Ctrl+Alt+U/S/I/X — path boolean ops (Paper.js
@@ -161,9 +159,7 @@ impl DesktopApp {
             // Single-letter tool switches (no modifier). Only
             // fire when no input is focused so typing in a
             // text node / chat / rename doesn't switch tools.
-            Key::Character(ref ch)
-                if !self.zoom_modifier && !self.host.input_active_pub() =>
-            {
+            Key::Character(ref ch) if !self.zoom_modifier && !self.host.input_active_pub() => {
                 let lower = ch.to_lowercase();
                 let mut handled = true;
                 match lower.as_str() {
