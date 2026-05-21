@@ -35,11 +35,7 @@ impl EditorState {
     /// would be stranded the moment `add_page` minted a fresh Page 1
     /// alongside them.
     fn ensure_pages(&mut self) -> &mut Vec<PenPage> {
-        let needs_init = self
-            .doc
-            .pages
-            .as_ref()
-            .map_or(true, |pages| pages.is_empty());
+        let needs_init = self.doc.pages.as_ref().is_none_or(|pages| pages.is_empty());
         if needs_init {
             // Mint the page id BEFORE moving the root children out —
             // `max_node_id` must see the nodes that are migrating so
