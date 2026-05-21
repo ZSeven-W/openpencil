@@ -18,13 +18,10 @@ impl WidgetHostNative {
         viewport_width: f32,
         viewport_height: f32,
     ) -> bool {
-        // The top-most floating Design-MD panel owns the wheel before
-        // any other layer — it is painted last (`paint.rs` §12), so a
-        // scroll over it never reaches the modal / Git panel / canvas.
-        if self
-            .design_md_panel_rect(viewport_width, viewport_height)
-            .is_some_and(|r| rect_contains(r, Point2D::new(x, y)))
-        {
+        // Any top-most floating panel (Design-MD / Component-Browser)
+        // owns the wheel before lower layers — a scroll over them
+        // never reaches the modal / Git panel / canvas.
+        if self.over_topmost_panel(x, y, viewport_width, viewport_height) {
             return true;
         }
         // Agent-settings modal owns wheel.
@@ -104,13 +101,8 @@ impl WidgetHostNative {
         viewport_width: f32,
         viewport_height: f32,
     ) -> bool {
-        // The top-most floating Design-MD panel owns trackpad scroll
-        // before any other layer — painted last, so a scroll over it
-        // never reaches the modal / Git panel / canvas.
-        if self
-            .design_md_panel_rect(viewport_width, viewport_height)
-            .is_some_and(|r| rect_contains(r, Point2D::new(x, y)))
-        {
+        // Any top-most floating panel owns trackpad scroll first.
+        if self.over_topmost_panel(x, y, viewport_width, viewport_height) {
             return true;
         }
         // Agent-settings modal owns trackpad scroll same as wheel.

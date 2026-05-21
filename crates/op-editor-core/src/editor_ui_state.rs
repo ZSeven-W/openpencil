@@ -604,6 +604,24 @@ pub struct EditorUiState {
     /// click, drained by the desktop host (which owns the native file
     /// dialog). Transient: never serialized.
     pub design_md_request: Option<DesignMdRequest>,
+
+    // --- Component browser ------------------------------------------
+    /// Whether the floating Component-Browser panel is shown.
+    pub component_browser_open: bool,
+    /// Top-left corner of the Component-Browser panel in logical px;
+    /// `None` until first opened — the host then centres it.
+    pub component_browser_pos: Option<(f32, f32)>,
+    /// Live search filter — names + tags substring-match against this.
+    pub component_browser_search: String,
+    /// Active category pill (`None` = all categories).
+    pub component_browser_category: Option<crate::uikit::ComponentCategory>,
+    /// Active kit filter (`None` = every loaded kit). Kept for the
+    /// future imported-kits surface; v1 ships one built-in kit.
+    pub component_browser_kit_id: Option<String>,
+    /// A queued component-instantiate request — `(kit_id, comp_id)`,
+    /// set by a card click, drained by the desktop host so it can
+    /// run the instantiate against the viewport's centre.
+    pub component_browser_pending_insert: Option<(String, String)>,
 }
 
 /// A Design-MD panel action that needs the desktop host's native
@@ -669,6 +687,12 @@ impl Default for EditorUiState {
             design_md_panel_pos: None,
             design_md_expanded: 0b0000_0111,
             design_md_request: None,
+            component_browser_open: false,
+            component_browser_pos: None,
+            component_browser_search: String::new(),
+            component_browser_category: None,
+            component_browser_kit_id: None,
+            component_browser_pending_insert: None,
         }
     }
 }

@@ -83,6 +83,10 @@ pub struct EditorState {
     /// Component library — reusable design-system subtrees. Mirrors
     /// shell-core's `Document.components`.
     pub components: ComponentLibrary,
+    /// UIKit catalogue — the built-in starter kit plus any imported
+    /// kits. Read by the Component-Browser panel and instantiated
+    /// from there. Transient (not part of the `.op` file).
+    pub ui_kits: Vec<crate::uikit::UIKit>,
 }
 
 impl EditorState {
@@ -103,6 +107,7 @@ impl EditorState {
             editor_ui: EditorUiState::new(),
             chat: ChatState::default(),
             components: ComponentLibrary::default(),
+            ui_kits: crate::uikit::builtin_kits(),
         }
     }
 

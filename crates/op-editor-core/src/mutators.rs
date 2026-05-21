@@ -30,30 +30,36 @@ impl EditorState {
     // --- Active-page node access -------------------------------------
 
     /// The active page's children — `doc.pages[active]` when the
-    /// document is multi-page, else the root `doc.children`.
+    /// document is multi-page, else the root `doc.children`. A
+    /// `pages: Some([])` document (empty multi-page list) and an
+    /// out-of-range `active_page_index` both fall back to
+    /// `doc.children`, matching [`active_children_mut`] so an insert
+    /// lands where the read side will find it.
     pub fn active_children(&self) -> &[PenNode] {
+        let idx = self.ui.active_page_index;
         match self.doc.pages.as_ref() {
-            Some(pages) => match pages.get(self.ui.active_page_index) {
-                Some(page) => &page.children,
-                None => &[],
-            },
-            None => &self.doc.children,
+            Some(pages) if !pages.is_empty() => {
+                let i = idx.min(pages.len() - 1);
+                &pages[i].children
+            }
+            _ => &self.doc.children,
         }
     }
 
     /// Mutable form of [`EditorState::active_children`].
+    ///
+    /// A `pages: Some([])` document (empty multi-page list — legal
+    /// on the wire even if the page-mutator layer normally
+    /// normalizes it away) falls back to `doc.children` instead of
+    /// panicking on an out-of-bounds index.
     pub fn active_children_mut(&mut self) -> &mut Vec<PenNode> {
         let idx = self.ui.active_page_index;
         match self.doc.pages.as_mut() {
-            Some(pages) => {
-                let len = pages.len();
-                let i = if idx < len { idx } else { 0 };
-                // A multi-page document always has at least page 0;
-                // an empty `pages` is normalized away by the
-                // page-mutator layer, so this index is safe.
-                &mut pages[i.min(len.saturating_sub(1))].children
+            Some(pages) if !pages.is_empty() => {
+                let i = idx.min(pages.len() - 1);
+                &mut pages[i].children
             }
-            None => &mut self.doc.children,
+            _ => &mut self.doc.children,
         }
     }
 

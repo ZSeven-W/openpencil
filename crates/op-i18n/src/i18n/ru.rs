@@ -544,6 +544,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "a11y.layerContextMenu" => "Контекстное меню слоя",
         "a11y.aiChat" => "ИИ-чат",
         "designMd.emptyHint" => "Импортируйте файл .md, чтобы прикрепить дизайн-бриф",
+        "componentBrowser.empty" => "Компоненты не найдены",
         _ => return super::ru_git::lookup(key),
     })
 }

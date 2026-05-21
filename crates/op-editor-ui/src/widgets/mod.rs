@@ -85,6 +85,7 @@ pub mod ai_chat_panel_paint;
 pub mod ai_chat_transcript;
 pub mod align_toolbar;
 pub mod color_picker;
+pub mod component_browser_panel;
 pub mod design_md_markdown;
 pub mod design_md_panel;
 pub mod export_dialog;
@@ -127,6 +128,10 @@ pub use align_toolbar::{AlignToolbar, ALIGN_TOOLBAR_HEIGHT, ALIGN_TOOLBAR_WIDTH}
 pub use export_dialog::{ExportDialog, ExportDialogHit, ExportFormat};
 pub use locale_picker::{LocalePicker, LOCALE_PICKER_WIDTH};
 pub use shape_picker::{ShapeChoice, ShapePicker, SHAPE_PICKER_WIDTH};
+pub use component_browser_panel::{
+    ComponentBrowserHit, ComponentBrowserPanel, COMPONENT_BROWSER_PANEL_H,
+    COMPONENT_BROWSER_PANEL_W,
+};
 pub use design_md_panel::{
     DesignMdHit, DesignMdPanel, DESIGN_MD_PANEL_H, DESIGN_MD_PANEL_W,
 };

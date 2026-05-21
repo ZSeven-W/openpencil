@@ -616,6 +616,15 @@ impl ApplicationHandler for DesktopApp {
         self.drain_git_action();
         // A Design-MD panel click may have queued an import / export.
         self.drain_design_md_action();
+        // A Component-Browser card click may have queued an insert —
+        // run it against the current viewport centre. Schedule a
+        // repaint on success so the new node lands visibly.
+        if self
+            .host
+            .drain_component_browser_insert(self.viewport_width, self.viewport_height)
+        {
+            self.request_redraw(true);
+        }
     }
 
     fn exiting(&mut self, _event_loop: &ActiveEventLoop) {

@@ -544,6 +544,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "a11y.layerContextMenu" => "Menú contextual de capa",
         "a11y.aiChat" => "Chat de IA",
         "designMd.emptyHint" => "Importa un archivo .md para adjuntar un brief de diseño",
+        "componentBrowser.empty" => "No se encontraron componentes",
         _ => return super::es_git::lookup(key),
     })
 }
