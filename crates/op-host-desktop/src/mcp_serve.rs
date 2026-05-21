@@ -98,7 +98,7 @@ fn process_message(
             return Ok(sniff_id_raw(trimmed).map(|id| initialize_response(&id)));
         }
         Some("tools/list") => {
-            return Ok(sniff_id_raw(trimmed).map(|id| tools_list_response(&id)));
+            return Ok(sniff_id_raw(trimmed).map(|id| tools_list_response(&id, state)));
         }
         Some("notifications/initialized") | Some("initialized") => {
             return Ok(None); // notification — no response required
@@ -306,6 +306,12 @@ fn read_http_request_body<S: std::io::Read>(stream: &mut S) -> Result<String, St
 /// snapshots reflect every prior write command's mutations.
 fn rebuild_registry(doc: &EditorState) -> ToolRegistry {
     let mut r = ToolRegistry::default();
+    // UIKit element tools — one `insert_<comp>` per kit component.
+    // Registered first so a future static-tool name collision fails
+    // loudly at tools/list (the registry de-duplicates by name).
+    for tool in op_mcp::element_tools::insert_kit_component_tools(doc) {
+        r.register(Box::new(tool));
+    }
     r.register(Box::new(document_info_snapshot(doc)));
     r.register(Box::new(selection_snapshot(doc)));
     r.register(Box::new(get_node_snapshot(doc)));
@@ -570,13 +576,18 @@ fn ping_response(id_raw: &str) -> String {
     format!(r#"{{"jsonrpc":"2.0","id":{id_raw},"result":{{}}}}"#)
 }
 
-fn tools_list_response(id_raw: &str) -> String {
+fn tools_list_response(id_raw: &str, state: &EditorState) -> String {
     // The tool catalog must match what `rebuild_registry`
     // installs. Schemas are minimal but sufficient for an MCP
-    // client to render a tool picker + validate calls.
+    // client to render a tool picker + validate calls. Dynamic
+    // UIKit element tools (one per kit component) are appended
+    // alongside the static schemas — the kit set lives on
+    // `EditorState`, so they're computed per call.
+    let mut entries: Vec<String> = TOOL_SCHEMAS.iter().map(|s| (*s).to_string()).collect();
+    entries.extend(op_mcp::element_tools::element_tool_schemas(state));
     format!(
         r#"{{"jsonrpc":"2.0","id":{id_raw},"result":{{"tools":[{}]}}}}"#,
-        TOOL_SCHEMAS.join(",")
+        entries.join(",")
     )
 }
 
