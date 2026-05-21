@@ -272,8 +272,8 @@ pub(crate) fn build_transcript(
     // Pass 2 — place the visible tail from the body top.
     let mut items = Vec::new();
     let mut top = body_rect.origin.y;
-    for i in start..messages.len() {
-        let (item, bottom) = build_item(&messages[i], i, top, body_rect, locale);
+    for (i, msg) in messages.iter().enumerate().skip(start) {
+        let (item, bottom) = build_item(msg, i, top, body_rect, locale);
         items.push(item);
         top = bottom + MSG_GAP;
     }
