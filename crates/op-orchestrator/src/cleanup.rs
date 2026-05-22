@@ -26,7 +26,12 @@ use jian_ops_schema::node::PenNode;
 use op_editor_core::{EditorCommand, EditorState, NodeId, PenNodeExt};
 
 /// 递归统计 `node` 下的后代数(不含自身)。
-fn count_descendants(node: &PenNode) -> usize {
+///
+/// Exposed `pub(crate)` so scaffold builders can pre-compute the same
+/// baseline that [`descendant_count`] returns after applying the scaffold
+/// commands — needed by the dashboard scaffold (Task C2) whose row/slot
+/// frames inflate the live descendant count beyond a fixed baseline.
+pub(crate) fn count_descendants(node: &PenNode) -> usize {
     match node.children() {
         Some(children) => children.len() + children.iter().map(count_descendants).sum::<usize>(),
         None => 0,

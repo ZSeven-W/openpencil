@@ -29,6 +29,7 @@ pub mod concurrent;
 pub mod prompt;
 pub mod run;
 pub mod scaffold;
+pub mod scaffold_dashboard;
 pub mod subagent;
 
 #[cfg(test)]
