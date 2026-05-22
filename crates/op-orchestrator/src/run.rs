@@ -402,6 +402,7 @@ mod tests {
             model: None,
             provider: None,
             design_md: None,
+            concurrency: 1,
         }
     }
 
@@ -413,6 +414,7 @@ mod tests {
             model: Some("gpt-4o".into()),
             provider: None,
             design_md: None,
+            concurrency: 1,
         }
     }
 
@@ -424,6 +426,7 @@ mod tests {
             model: Some("glm-4".into()),
             provider: None,
             design_md: None,
+            concurrency: 1,
         }
     }
 
