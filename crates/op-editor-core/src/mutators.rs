@@ -30,30 +30,36 @@ impl EditorState {
     // --- Active-page node access -------------------------------------
 
     /// The active page's children — `doc.pages[active]` when the
-    /// document is multi-page, else the root `doc.children`.
+    /// document is multi-page, else the root `doc.children`. A
+    /// `pages: Some([])` document (empty multi-page list) and an
+    /// out-of-range `active_page_index` both fall back to
+    /// `doc.children`, matching [`active_children_mut`] so an insert
+    /// lands where the read side will find it.
     pub fn active_children(&self) -> &[PenNode] {
+        let idx = self.ui.active_page_index;
         match self.doc.pages.as_ref() {
-            Some(pages) => match pages.get(self.ui.active_page_index) {
-                Some(page) => &page.children,
-                None => &[],
-            },
-            None => &self.doc.children,
+            Some(pages) if !pages.is_empty() => {
+                let i = idx.min(pages.len() - 1);
+                &pages[i].children
+            }
+            _ => &self.doc.children,
         }
     }
 
     /// Mutable form of [`EditorState::active_children`].
+    ///
+    /// A `pages: Some([])` document (empty multi-page list — legal
+    /// on the wire even if the page-mutator layer normally
+    /// normalizes it away) falls back to `doc.children` instead of
+    /// panicking on an out-of-bounds index.
     pub fn active_children_mut(&mut self) -> &mut Vec<PenNode> {
         let idx = self.ui.active_page_index;
         match self.doc.pages.as_mut() {
-            Some(pages) => {
-                let len = pages.len();
-                let i = if idx < len { idx } else { 0 };
-                // A multi-page document always has at least page 0;
-                // an empty `pages` is normalized away by the
-                // page-mutator layer, so this index is safe.
-                &mut pages[i.min(len.saturating_sub(1))].children
+            Some(pages) if !pages.is_empty() => {
+                let i = idx.min(pages.len() - 1);
+                &mut pages[i].children
             }
-            None => &mut self.doc.children,
+            _ => &mut self.doc.children,
         }
     }
 
@@ -627,6 +633,19 @@ impl EditorState {
             }
         }
         self.editor_ui.chat_model_picker_open = false;
+        self.editor_ui.chat_model_picker_scroll = 0.0;
+        self.editor_ui.chat_model_picker_hover = None;
+    }
+
+    /// Recompute the chat model-picker's `available_models` from the
+    /// discovered catalog filtered by the providers connected in
+    /// Settings → Agents. Thin wrapper over
+    /// [`ChatState::rebuild_available_models`] that reads the
+    /// connected mask off `editor_ui.agent_settings`. Hosts call this
+    /// after discovery finishes and after every connect toggle.
+    pub fn rebuild_chat_models(&mut self) {
+        let connected = self.editor_ui.agent_settings.connected;
+        self.chat.rebuild_available_models(&connected);
     }
 
     /// Light invariant check — Err on first violation: out-of-range

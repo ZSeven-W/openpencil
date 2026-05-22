@@ -124,6 +124,36 @@ impl WidgetHostNative {
         true
     }
 
+    /// Paste `text` into the focused chat input — appended at the
+    /// caret (always the buffer end). Newlines are kept so a
+    /// multi-line clipboard paste survives; the input widget wraps
+    /// and honours `\n`. Returns `false` (no-op) when the chat input
+    /// is not focused or `text` is empty. The desktop host calls
+    /// this with the OS clipboard's contents on Cmd+V.
+    pub fn chat_input_paste(&mut self, text: &str) -> bool {
+        if !self.editor_state.chat.focused || text.is_empty() {
+            return false;
+        }
+        self.editor_state.chat.input.push_str(text);
+        self.editor_state.chat.caret_anchor_ms = self.now_ms;
+        self.mark_dirty();
+        true
+    }
+
+    /// Cut the focused chat input — returns its text and empties the
+    /// buffer. `None` when the chat input is not focused or already
+    /// empty. The desktop host writes the returned text to the OS
+    /// clipboard on Cmd+X.
+    pub fn chat_input_cut(&mut self) -> Option<String> {
+        if !self.editor_state.chat.focused || self.editor_state.chat.input.is_empty() {
+            return None;
+        }
+        let taken = std::mem::take(&mut self.editor_state.chat.input);
+        self.editor_state.chat.caret_anchor_ms = self.now_ms;
+        self.mark_dirty();
+        Some(taken)
+    }
+
     pub fn apply_backspace(&mut self) -> bool {
         if self.editor_state.editor_ui.agent_settings.focus.is_some() {
             self.editor_state.editor_ui.settings_input_draft.pop();
@@ -296,8 +326,9 @@ impl WidgetHostNative {
         if self.git_remote_focus_active() {
             let panel = &mut self.editor_state.editor_ui.git_panel;
             if !panel.remote_draft.trim().is_empty() {
-                panel.pending_action =
-                    Some(op_editor_core::GitPanelAction::SetRemote(panel.remote_draft.clone()));
+                panel.pending_action = Some(op_editor_core::GitPanelAction::SetRemote(
+                    panel.remote_draft.clone(),
+                ));
             }
             self.mark_dirty();
             return true;

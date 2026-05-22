@@ -89,11 +89,7 @@ impl WindowState {
     /// `pos` / `size` are the last *windowed* (non-maximized) values
     /// the runner tracked, so un-maximizing after a restart restores
     /// a sensible size rather than the maximized rectangle.
-    pub fn from_window(
-        pos: Option<(i32, i32)>,
-        size: Option<(u32, u32)>,
-        maximized: bool,
-    ) -> Self {
+    pub fn from_window(pos: Option<(i32, i32)>, size: Option<(u32, u32)>, maximized: bool) -> Self {
         Self {
             version: STATE_VERSION,
             x: pos.map(|p| p.0),
@@ -122,7 +118,10 @@ impl WindowState {
     /// Apply the saved geometry onto a winit `WindowAttributes`. A
     /// missing size falls back to the caller's default attrs; a
     /// too-small size is clamped to the usable minimum.
-    pub fn apply_to(&self, mut attrs: winit::window::WindowAttributes) -> winit::window::WindowAttributes {
+    pub fn apply_to(
+        &self,
+        mut attrs: winit::window::WindowAttributes,
+    ) -> winit::window::WindowAttributes {
         if let (Some(w), Some(h)) = (self.width, self.height) {
             let w = w.max(MIN_W);
             let h = h.max(MIN_H);
@@ -202,7 +201,10 @@ mod tests {
     fn a_future_version_is_rejected_by_the_parser_gate() {
         // `load` drops a state whose version this build doesn't know;
         // simulate that decision directly on a hand-built payload.
-        let raw = format!(r#"{{"version":{},"width":800,"height":600}}"#, STATE_VERSION + 1);
+        let raw = format!(
+            r#"{{"version":{},"width":800,"height":600}}"#,
+            STATE_VERSION + 1
+        );
         let parsed: WindowState = serde_json::from_str(&raw).expect("still parses");
         assert_ne!(parsed.version, STATE_VERSION);
     }
@@ -230,9 +232,17 @@ mod tests {
     fn rect_off_screen_when_no_monitor_overlaps() {
         let monitors = [((0, 0), (1920u32, 1080u32))];
         // Saved on a now-disconnected second monitor far to the right.
-        assert!(!rect_visible_on_monitors((4000, 200), (800, 600), &monitors));
+        assert!(!rect_visible_on_monitors(
+            (4000, 200),
+            (800, 600),
+            &monitors
+        ));
         // Only a 10 px sliver peeks in — below the grab threshold.
-        assert!(!rect_visible_on_monitors((-790, 100), (800, 600), &monitors));
+        assert!(!rect_visible_on_monitors(
+            (-790, 100),
+            (800, 600),
+            &monitors
+        ));
         // No monitors at all.
         assert!(!rect_visible_on_monitors((0, 0), (800, 600), &[]));
     }

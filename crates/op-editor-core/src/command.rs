@@ -175,6 +175,16 @@ pub enum EditorCommand {
     DeleteComponent { component_id: NodeId },
     /// Rename a component. **Gap** — rejected.
     RenameComponent { component_id: NodeId, name: String },
+    /// Instantiate a UIKit component onto the active page. The kit /
+    /// component lookup happens against [`crate::EditorState::ui_kits`]
+    /// at apply time; `(doc_x, doc_y)` default to `(0, 0)` when the
+    /// caller does not specify a drop point.
+    InstantiateKitComponent {
+        kit_id: String,
+        component_id: String,
+        doc_x: Option<f64>,
+        doc_y: Option<f64>,
+    },
     /// Switch the active page.
     SetActivePage { index: u32 },
     /// Append a fresh empty page + switch to it.

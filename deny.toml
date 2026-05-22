@@ -29,6 +29,9 @@ allow = [
   "CDLA-Permissive-2.0",
   "MPL-2.0",
   "Zlib",
+  # Boost Software License — permissive, OSI-approved. Pulled in by
+  # `arboard`'s Windows clipboard path (`clipboard-win`, `error-code`).
+  "BSL-1.0",
 ]
 confidence-threshold = 0.93
 

@@ -55,6 +55,8 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "topbar.closeConfirmDetail" => "如果不保存，您的更改将会丢失。",
         "topbar.dontSave" => "不保存",
         "topbar.agentsAndMcp" => "Agents 与 MCP",
+        "topbar.agentSingular" => "个 Agent",
+        "topbar.agentPlural" => "个 Agent",
         "topbar.setupAgentsMcp" => "设置 Agents 与 MCP",
         "topbar.connected" => "已连接",
         "topbar.agentStatus" => "{{agents}} 个 Agent{{agentSuffix}} · {{mcp}} 个 MCP",
@@ -493,7 +495,9 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "settings.mcp.stop" => "停止",
         "settings.mcp.terminalIntegrations" => "终端中的 MCP 集成",
         "settings.mcp.terminalSubtitle1" => "MCP 集成将在重启终端后生效。",
-        "settings.mcp.terminalSubtitle2" => "升级 OpenPencil 版本后，请重新安装 MCP 集成以确保兼容性。",
+        "settings.mcp.terminalSubtitle2" => {
+            "升级 OpenPencil 版本后，请重新安装 MCP 集成以确保兼容性。"
+        }
         "settings.images.search" => "图片搜索",
         "settings.images.ready" => "已就绪",
         "settings.images.notConfigured" => "尚未配置",
@@ -527,7 +531,9 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "settings.system.errorDescription" => "无法连接发布服务器，请检查网络连接。",
         "settings.system.currentVersion" => "当前版本",
         "dialog.unsavedTitle" => "有未保存的更改",
-        "dialog.closeBody" => "“{{name}}”有未保存的更改。\n\n是 = 保存,否 = 不保存,取消 = 返回继续编辑。",
+        "dialog.closeBody" => {
+            "“{{name}}”有未保存的更改。\n\n是 = 保存,否 = 不保存,取消 = 返回继续编辑。"
+        }
         "dialog.untitledDocument" => "未命名文档",
         "dialog.openErrorTitle" => "无法打开文件",
         "dialog.openErrorLead" => "OpenPencil 无法解析该文件。",
@@ -544,12 +550,15 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "dialog.pickerSaveTitle" => "保存文档",
         "dialog.pickerExportTitle" => "导出图片",
         "dialog.updateTitle" => "有可用更新",
-        "dialog.updateBody" => "OpenPencil {{version}} 已可用(当前版本 {{current}})。\n\n是否打开发布页面下载?",
+        "dialog.updateBody" => {
+            "OpenPencil {{version}} 已可用(当前版本 {{current}})。\n\n是否打开发布页面下载?"
+        }
         "a11y.figmaImport" => "从 Figma 导入",
         "a11y.fileMenu" => "文件菜单",
         "a11y.layerContextMenu" => "图层右键菜单",
         "a11y.aiChat" => "AI 聊天",
         "designMd.emptyHint" => "导入 .md 文件以附加设计说明",
+        "componentBrowser.empty" => "未找到组件",
         _ => return super::zh_cn_git::lookup(key),
     })
 }

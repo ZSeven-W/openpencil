@@ -338,9 +338,15 @@ impl NativeBackend {
     /// a solid `Paint`.
     #[tracing::instrument(skip(self, canvas))]
     pub fn fill_rect(&mut self, canvas: &skia_safe::Canvas, rect: Rect, color: Color) {
+        // `Paint::solid` hardcodes `opacity: 1.0`, so the colour's
+        // alpha was dropped — a translucent fill (e.g. the 12 %
+        // marquee-selection band) painted fully opaque. Carry the
+        // alpha through `Paint.opacity` the way `stroke_rect` does.
+        let mut paint = jian_core::render::Paint::solid(to_jian_color(color));
+        paint.opacity = color.a.clamp(0.0, 1.0);
         let op = jian_core::render::DrawOp::Rect {
             rect: to_jian_rect(rect),
-            paint: jian_core::render::Paint::solid(to_jian_color(color)),
+            paint,
         };
         self.draw_op(canvas, &op);
     }
@@ -630,6 +636,33 @@ impl NativeBackend {
         let mut paint = skia_safe::Paint::new(jian_color_to_color4f(color), None);
         paint.set_anti_alias(true);
         canvas.draw_path(&path, &paint);
+    }
+
+    /// Fill a batch of identical round dots in one draw call.
+    /// `PointMode::Points` with a round stroke cap paints each point
+    /// as a filled circle of diameter `2 * radius` — so the canvas
+    /// grid (~1000+ dots on a full viewport) costs a single batched
+    /// skia op per frame instead of one `draw_round_rect` per dot.
+    pub fn fill_dots(
+        &self,
+        canvas: &skia_safe::Canvas,
+        centers: &[Point2D],
+        radius: f32,
+        color: Color,
+    ) {
+        if centers.is_empty() {
+            return;
+        }
+        let mut paint = skia_safe::Paint::new(jian_color_to_color4f(color), None);
+        paint.set_anti_alias(true);
+        paint.set_stroke(true);
+        paint.set_stroke_cap(skia_safe::PaintCap::Round);
+        paint.set_stroke_width(radius * 2.0);
+        let pts: Vec<skia_safe::Point> = centers
+            .iter()
+            .map(|c| skia_safe::Point::new(c.x, c.y))
+            .collect();
+        canvas.draw_points(skia_safe::canvas::PointMode::Points, &pts, &paint);
     }
 
     /// Save the current canvas state. Returns the save count so

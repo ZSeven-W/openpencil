@@ -55,6 +55,8 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "topbar.closeConfirmDetail" => "การเปลี่ยนแปลงของคุณจะสูญหายหากไม่บันทึก",
         "topbar.dontSave" => "ไม่บันทึก",
         "topbar.agentsAndMcp" => "เอเจนต์และ MCP",
+        "topbar.agentSingular" => "เอเจนต์",
+        "topbar.agentPlural" => "เอเจนต์",
         "topbar.setupAgentsMcp" => "ตั้งค่าเอเจนต์และ MCP",
         "topbar.connected" => "เชื่อมต่อแล้ว",
         "topbar.agentStatus" => "{{agents}} เอเจนต์{{agentSuffix}} · {{mcp}} MCP",
@@ -544,6 +546,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "a11y.layerContextMenu" => "เมนูคลิกขวาเลเยอร์",
         "a11y.aiChat" => "แชต AI",
         "designMd.emptyHint" => "นำเข้าไฟล์ .md เพื่อแนบบรีฟการออกแบบ",
+        "componentBrowser.empty" => "ไม่พบคอมโพเนนต์",
         _ => return super::th_git::lookup(key),
     })
 }

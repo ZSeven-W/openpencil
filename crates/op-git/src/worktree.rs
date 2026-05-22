@@ -62,9 +62,7 @@ impl Drop for MergeWorktree {
         // Deregister the worktree with git first so its admin files
         // under `.git/worktrees/` are cleaned up.
         if let Some(dir_str) = self.dir.to_str() {
-            let _ = self
-                .main
-                .run(&["worktree", "remove", "--force", dir_str]);
+            let _ = self.main.run(&["worktree", "remove", "--force", dir_str]);
         }
         // Belt-and-suspenders: if `git worktree remove` failed (e.g.
         // a half-created worktree), still drop the directory and

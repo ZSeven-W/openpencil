@@ -13,6 +13,99 @@ use crate::widgets::property_panel_inputs::{
 use crate::{Point2D, Rect};
 use op_editor_core::{EffectField, FillType, FlexLayout, PropertyFocus};
 
+/// Per-NodeKind toggles for which property-panel sections render.
+/// Mirrors the TS app's behaviour where a Line node hides the
+/// fill picker, a Frame hides Text properties, etc. Sections that
+/// always apply (Position / Layer / Export) aren't gated here.
+/// Lives here alongside `VisibleSections` — the mask it feeds.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct SectionCapabilities {
+    pub(crate) flex_layout: bool,
+    pub(crate) size_options: bool,
+    pub(crate) opacity: bool,
+    pub(crate) fill: bool,
+    pub(crate) stroke: bool,
+    pub(crate) effects: bool,
+    pub(crate) export: bool,
+}
+
+impl SectionCapabilities {
+    /// Capability mask for the multi-select aggregate snapshot.
+    /// Keeps Size (so the union W/H actually paint), hides
+    /// fill/stroke (no aggregation in v1), keeps Layer/Effects/
+    /// Export (paint safely with the zeroed snapshot fields).
+    pub(crate) fn for_multi() -> Self {
+        Self {
+            flex_layout: false,
+            size_options: true,
+            opacity: true,
+            fill: false,
+            stroke: false,
+            effects: true,
+            export: true,
+        }
+    }
+
+    pub(crate) fn for_kind(kind: &crate::layout_scene::NodeKind) -> Self {
+        use crate::layout_scene::NodeKind as K;
+        match kind {
+            // Frame: full chrome — it can host children, take auto-
+            // layout, fill / stroke / effects / export.
+            K::Frame => Self {
+                flex_layout: true,
+                size_options: true,
+                opacity: true,
+                fill: true,
+                stroke: true,
+                effects: true,
+                export: true,
+            },
+            // Group: structural — no fill / stroke, no flex slot
+            // (children own layout). Opacity + export still apply.
+            K::Group | K::Other(_) => Self {
+                flex_layout: false,
+                size_options: false,
+                opacity: true,
+                fill: false,
+                stroke: false,
+                effects: true,
+                export: true,
+            },
+            // Rect / Ellipse / Polygon: full leaf — every paint
+            // section applies; no flex (no children).
+            K::Rect | K::Ellipse | K::Polygon => Self {
+                flex_layout: false,
+                size_options: true,
+                opacity: true,
+                fill: true,
+                stroke: true,
+                effects: true,
+                export: true,
+            },
+            // Line / Path: only outline — fill doesn't apply.
+            K::Line | K::Path => Self {
+                flex_layout: false,
+                size_options: true,
+                opacity: true,
+                fill: false,
+                stroke: true,
+                effects: true,
+                export: true,
+            },
+            // Text: stroke is rare for text, but fill = ink colour.
+            K::Text => Self {
+                flex_layout: false,
+                size_options: true,
+                opacity: true,
+                fill: true,
+                stroke: false,
+                effects: true,
+                export: true,
+            },
+        }
+    }
+}
+
 /// Whether each section currently paints — drives the layout
 /// walk so when per-kind filtering hides a section, the rects
 /// that follow shift up.
@@ -32,8 +125,8 @@ pub struct VisibleSections {
     /// section. The per-effect geometry is driven by the `effects`
     /// slice the walker takes alongside this struct.
     pub effects: bool,
-    /// Export section paints — `OpenExportDialog` action emits
-    /// only when this is true.
+    /// Export section paints — its scale / format dropdown rects
+    /// emit only when this is true.
     pub export: bool,
     /// Active fill type — affects fill-section body height so
     /// the walk past Fill stays aligned with paint when the user
@@ -133,18 +226,47 @@ pub fn action_button_rects(
     visible: VisibleSections,
     effects: &[EffectSummary],
 ) -> Vec<(PropertyPanelAction, Rect)> {
-    action_button_rects_with_fill_picker(panel_rect, visible, effects, false)
+    action_button_rects_with_fill_picker(panel_rect, visible, effects, false, false, false)
 }
 
-/// Same as `action_button_rects` but `fill_picker_open == true`
-/// emits hit-rects for the 4 picker rows that overlay the Fill
-/// section. `effects` drives the Effects section's per-effect "✕"
-/// and parameter-stepper rects + that section's variable height.
+/// Height of one row in an Export-section inline select popup.
+pub const EXPORT_PICKER_ROW_H: f32 = 30.0;
+
+/// Total height (px) of the PropertyPanel's section content. The
+/// scroll clamp uses it so the inspector cannot scroll past its
+/// end. Computed as the furthest bottom edge across every action
+/// rect + every editable-input rect (so it stays correct whichever
+/// section happens to be last), plus a small trailing margin.
+pub fn property_panel_content_height(
+    panel_rect: Rect,
+    visible: VisibleSections,
+    effects: &[EffectSummary],
+) -> f32 {
+    let actions =
+        action_button_rects_with_fill_picker(panel_rect, visible, effects, false, false, false);
+    let inputs = editable_input_rects(panel_rect, visible);
+    let bottom = actions
+        .iter()
+        .map(|(_, r)| r.origin.y + r.size.y)
+        .chain(inputs.iter().map(|(_, r)| r.origin.y + r.size.y))
+        .fold(panel_rect.origin.y, f32::max);
+    (bottom - panel_rect.origin.y) + 16.0
+}
+
+/// Same as `action_button_rects` but the picker-open flags add
+/// hit-rects for popup rows that overlay later sections:
+/// `fill_picker_open` emits the 4 fill-type rows; the two
+/// `export_*_picker_open` flags emit the Export section's inline
+/// scale (3 rows) / format (5 rows) select popups. `effects` drives
+/// the Effects section's per-effect "✕" and parameter-stepper rects
+/// + that section's variable height.
 pub fn action_button_rects_with_fill_picker(
     panel_rect: Rect,
     visible: VisibleSections,
     effects: &[EffectSummary],
     fill_picker_open: bool,
+    export_scale_picker_open: bool,
+    export_format_picker_open: bool,
 ) -> Vec<(PropertyPanelAction, Rect)> {
     let x0 = panel_rect.origin.x;
     let w = panel_rect.size.x;
@@ -239,15 +361,9 @@ pub fn action_button_rects_with_fill_picker(
     }
     if visible.fill {
         y += SECTION_HEADER_HEIGHT;
-        // Swatch hit-test mirrors the paint rect in property_panel_fill.rs.
-        let swatch_rect = Rect {
-            origin: Point2D::new(x0 + PAD_X, y + 2.0),
-            size: Point2D::new(22.0, 22.0),
-        };
-        out.push((
-            PropertyPanelAction::OpenColorPicker(op_editor_core::ColorTarget::Fill),
-            swatch_rect,
-        ));
+        // The head-row swatch is display-only — the colour picker
+        // opens from the hex-row swatch below (added further down),
+        // not from here.
         let dropdown_rect = Rect {
             origin: Point2D::new(x0 + PAD_X + 22.0 + 6.0, y),
             size: Point2D::new(usable_w - 22.0 - 6.0 - 50.0 - 22.0 - 12.0, INPUT_HEIGHT),
@@ -278,12 +394,33 @@ pub fn action_button_rects_with_fill_picker(
         // sections' y math stays aligned with paint. Mirrors the
         // y-walk in `paint_fill_section`: head row + body + divider.
         y += INPUT_HEIGHT + 6.0; // head row (swatch + dropdown + opacity + X)
+                                 // Solid fill's body is the hex row; its leading 16 px colour
+                                 // swatch opens the picker. `hit_test_action` runs before the
+                                 // hex-input focus hit-test, so a swatch click opens the
+                                 // picker instead of focusing the hex field.
+        if visible.fill_type == FillType::Solid {
+            out.push((
+                PropertyPanelAction::OpenColorPicker(op_editor_core::ColorTarget::Fill),
+                Rect {
+                    origin: Point2D::new(x0 + PAD_X, y),
+                    size: Point2D::new(28.0, INPUT_HEIGHT),
+                },
+            ));
+        }
         y += fill_body_height(visible.fill_type) - 6.0 + 12.0; // body + divider gap
         y += SECTION_GAP;
     }
     if visible.stroke {
         // Mirrors paint_stroke_section: header + hex/width row.
         y += SECTION_HEADER_HEIGHT;
+        // The stroke hex row's leading colour swatch opens the picker.
+        out.push((
+            PropertyPanelAction::OpenColorPicker(op_editor_core::ColorTarget::Stroke),
+            Rect {
+                origin: Point2D::new(x0 + PAD_X, y),
+                size: Point2D::new(28.0, INPUT_HEIGHT),
+            },
+        ));
         y += INPUT_HEIGHT + 12.0;
         y += SECTION_GAP;
     }
@@ -342,22 +479,74 @@ pub fn action_button_rects_with_fill_picker(
         y += SECTION_GAP;
     }
     if visible.export {
-        // Mirrors paint_export_section: header + a single dropdown
-        // row. We emit one `OpenExportDialog` rect covering both
-        // the scale + format pills + the full label strip so
-        // clicking anywhere in the section opens the dialog. The
-        // ExportDialog modal owns the format/scale picker UI, so
-        // segmenting the row into two separate pills isn't worth
-        // the extra hit-test complexity yet.
+        // Export section: header + a row of two dropdowns (scale on
+        // the left, format on the right) mirroring
+        // `paint_export_section`. Each dropdown is its own toggle
+        // rect; when its inline select popup is open the option rows
+        // are emitted too. `hit_test_action` walks the result in
+        // `rev()`, so a popup-row hit is tested before its toggle.
         y += SECTION_HEADER_HEIGHT;
-        let row = Rect {
+        let scale_rect = Rect {
             origin: Point2D::new(x0 + PAD_X, y),
-            size: Point2D::new(usable_w, INPUT_HEIGHT),
+            size: Point2D::new(half_w, INPUT_HEIGHT),
         };
-        out.push((PropertyPanelAction::OpenExportDialog, row));
-        // No further sections after Export today, but maintain the
-        // y advance for symmetry / future additions.
+        let format_rect = Rect {
+            origin: Point2D::new(x0 + PAD_X + half_w + 8.0, y),
+            size: Point2D::new(half_w, INPUT_HEIGHT),
+        };
+        out.push((PropertyPanelAction::ToggleExportScalePicker, scale_rect));
+        out.push((PropertyPanelAction::ToggleExportFormatPicker, format_rect));
         y += INPUT_HEIGHT + 12.0;
+        // Full-width Export action button below the dropdown row.
+        out.push((
+            PropertyPanelAction::ExportImageNow,
+            Rect {
+                origin: Point2D::new(x0 + PAD_X, y),
+                size: Point2D::new(usable_w, INPUT_HEIGHT),
+            },
+        ));
+        y += INPUT_HEIGHT + 12.0;
+        // The Export section is the last section, pinned to the
+        // bottom of the panel — so its select popups open UPWARD,
+        // stacking their option rows directly above the dropdown.
+        // Opening downward would clip the rows at the panel edge.
+        // `paint_select_popup` derives the popup background from the
+        // first / last row rect, so it follows whatever rows emit
+        // here. `first_row_y` is placed so the background's bottom
+        // edge lands `4 px` above the dropdown (matches the `6 px`
+        // top/bottom padding `paint_select_popup` adds).
+        if export_scale_picker_open {
+            let count = 3.0;
+            let first_row_y = scale_rect.origin.y - 4.0 - 6.0 - count * EXPORT_PICKER_ROW_H;
+            for (i, scale) in [1.0_f32, 2.0, 3.0].into_iter().enumerate() {
+                out.push((
+                    PropertyPanelAction::SetExportScale(scale),
+                    Rect {
+                        origin: Point2D::new(
+                            scale_rect.origin.x,
+                            first_row_y + i as f32 * EXPORT_PICKER_ROW_H,
+                        ),
+                        size: Point2D::new(scale_rect.size.x, EXPORT_PICKER_ROW_H),
+                    },
+                ));
+            }
+        }
+        if export_format_picker_open {
+            let count = op_editor_core::ExportFormat::ALL.len() as f32;
+            let first_row_y = format_rect.origin.y - 4.0 - 6.0 - count * EXPORT_PICKER_ROW_H;
+            for (i, fmt) in op_editor_core::ExportFormat::ALL.into_iter().enumerate() {
+                out.push((
+                    PropertyPanelAction::SetExportFormat(fmt),
+                    Rect {
+                        origin: Point2D::new(
+                            format_rect.origin.x,
+                            first_row_y + i as f32 * EXPORT_PICKER_ROW_H,
+                        ),
+                        size: Point2D::new(format_rect.size.x, EXPORT_PICKER_ROW_H),
+                    },
+                ));
+            }
+        }
     }
     let _ = y; // suppress unused-write lint if export is last
 

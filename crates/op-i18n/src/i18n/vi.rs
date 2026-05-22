@@ -55,6 +55,8 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "topbar.closeConfirmDetail" => "Các thay đổi của bạn sẽ bị mất nếu không lưu.",
         "topbar.dontSave" => "Không lưu",
         "topbar.agentsAndMcp" => "Agent & MCP",
+        "topbar.agentSingular" => "agent",
+        "topbar.agentPlural" => "agent",
         "topbar.setupAgentsMcp" => "Thiết lập Agent & MCP",
         "topbar.connected" => "đã kết nối",
         "topbar.agentStatus" => "{{agents}} agent{{agentSuffix}} · {{mcp}} MCP",
@@ -544,6 +546,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "a11y.layerContextMenu" => "Menu ngữ cảnh lớp",
         "a11y.aiChat" => "Trò chuyện AI",
         "designMd.emptyHint" => "Nhập tệp .md để đính kèm bản tóm tắt thiết kế",
+        "componentBrowser.empty" => "Không tìm thấy thành phần",
         _ => return super::vi_git::lookup(key),
     })
 }

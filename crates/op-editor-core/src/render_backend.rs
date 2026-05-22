@@ -280,6 +280,25 @@ pub trait RenderBackend {
         self.stroke_round_rect(bounds, radius, color, width);
     }
 
+    /// Fill a batch of identical round dots — `centers` are the dot
+    /// centres, each painted as a filled circle of `radius`. The
+    /// canvas grid calls this once per frame instead of emitting one
+    /// draw op per dot (~1000+ on a full viewport), which is the
+    /// dominant cost of an empty-canvas pan / drag. The default impl
+    /// loops `fill_oval` so any backend stays correct; native
+    /// overrides with a single batched `Canvas::draw_points`.
+    fn fill_dots(&mut self, centers: &[Point2D], radius: f32, color: Color) {
+        for c in centers {
+            self.fill_oval(
+                Rect {
+                    origin: Point2D::new(c.x - radius, c.y - radius),
+                    size: Point2D::new(radius * 2.0, radius * 2.0),
+                },
+                color,
+            );
+        }
+    }
+
     /// Fill a closed polygon outlined by `points` (≥ 3 vertices).
     /// Default impl emits a `stroke_svg_path` fill — works for
     /// triangles + small polygons; backends with a richer canvas

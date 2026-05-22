@@ -6,7 +6,7 @@
 //! of each handler. Every mutation flags `editor_state` so the next
 //! refresh re-derives.
 
-use super::helpers::{rect_contains, resize_bounds, PANEL_MAX_WIDTH, PANEL_MIN_WIDTH};
+use super::helpers::{resize_bounds, PANEL_MAX_WIDTH, PANEL_MIN_WIDTH};
 use super::{PanelResizeKind, WidgetHostNative};
 use op_editor_ui::{Point2D, Rect};
 
@@ -142,6 +142,21 @@ impl WidgetHostNative {
                 return true;
             }
         }
+        // Top-most floating panel drags supersede every lower
+        // cursor-move branch — once a drag is active the cursor
+        // belongs to the panel, regardless of which tool / overlay is
+        // also in play (a pen rubber-band, a node drag, etc.).
+        if let Some(d) = self.design_md_drag {
+            self.editor_state.editor_ui.design_md_panel_pos = Some((x - d.grab_dx, y - d.grab_dy));
+            self.mark_dirty();
+            return true;
+        }
+        if let Some(d) = self.component_browser_drag {
+            self.editor_state.editor_ui.component_browser_pos =
+                Some((x - d.grab_dx, y - d.grab_dy));
+            self.mark_dirty();
+            return true;
+        }
         // Pen rubber-band — track cursor doc coord for preview.
         if self.editor_state.ui.pen_in_progress.is_some() {
             let (cx0, cy0) = self.canvas_origin();
@@ -151,24 +166,23 @@ impl WidgetHostNative {
             self.mark_dirty();
             return true;
         }
-        // The top-most floating Design-MD panel suppresses every
-        // lower-overlay hover update underneath it — a click already
-        // routes to the panel first, so a hover highlight bleeding
-        // through would be misleading. Moving onto the panel also
-        // clears any highlight set just before, so none lingers.
-        let over_design_md = self
-            .design_md_panel_rect(self.last_viewport_w, self.last_viewport_h)
-            .is_some_and(|r| rect_contains(r, Point2D::new(x, y)));
+        // Any top-most floating panel (Design-MD / Component-Browser)
+        // suppresses every lower-overlay hover update underneath it —
+        // a click already routes to the panel first, so a highlight
+        // bleeding through would be misleading. Moving onto the panel
+        // also clears any highlight set just before, so none lingers.
+        let over_topmost =
+            self.over_topmost_panel(x, y, self.last_viewport_w, self.last_viewport_h);
         // `cleared` is folded into the final return so the repaint
         // scheduler (which gates on `apply_cursor_move`'s bool) does
         // not skip the frame that drops the stale highlight.
-        let cleared = over_design_md && self.clear_lower_overlay_hover();
+        let cleared = over_topmost && self.clear_lower_overlay_hover();
         if let Some(state) = self
             .editor_state
             .editor_ui
             .layer_context_menu
             .clone()
-            .filter(|_| !over_design_md)
+            .filter(|_| !over_topmost)
         {
             use op_editor_ui::widgets::layer_context_menu::LayerContextMenu;
             let menu = LayerContextMenu::for_state(&self.editor_state, state.clone());
@@ -183,55 +197,60 @@ impl WidgetHostNative {
                 return true;
             }
         }
-        if self.editor_state.editor_ui.file_menu_open && !over_design_md {
-            use op_editor_ui::widgets::file_menu::FileMenu;
-            use op_editor_ui::widgets::top_bar::TopBar;
-            self.refresh_layout_scene();
-            let top_bar_rect = Rect {
+        // File-menu / locale / shape dropdown hover (`geometry.rs`).
+        if self.update_dropdown_hover(x, y, over_topmost) {
+            return true;
+        }
+        // Export-section select-popup row hover (no-op when closed).
+        if !over_topmost
+            && self.update_export_picker_hover(x, y, self.last_viewport_w, self.last_viewport_h)
+        {
+            return true;
+        }
+        // TopBar window-control cluster — hovering it reveals the
+        // close / minimise / maximise glyphs on the 3 dots.
+        {
+            use op_editor_ui::widgets::{TopBar, TOP_BAR_HEIGHT};
+            let tb_rect = Rect {
                 origin: Point2D::new(0.0, 0.0),
-                size: Point2D::new(self.last_viewport_w, op_editor_ui::widgets::TOP_BAR_HEIGHT),
+                size: Point2D::new(self.last_viewport_w, TOP_BAR_HEIGHT),
             };
-            let anchor = TopBar::file_menu_rect(top_bar_rect);
-            let now_secs = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .map(|d| d.as_secs())
-                .unwrap_or(0);
-            let menu = FileMenu::from_editor_ui(&self.editor_state.editor_ui, now_secs);
-            let panel = menu.rect_at(anchor);
-            let new_hover = menu.hovered_at(panel, Point2D::new(x, y));
-            // shell-core `FileMenuChoice` option → op-editor-core.
-            let new_hover_ec =
-                new_hover.map(op_editor_ui::widgets::editor_state_ext::file_menu_choice);
-            if new_hover_ec != self.editor_state.editor_ui.file_menu_hover {
-                self.editor_state.editor_ui.file_menu_hover = new_hover_ec;
+            let over = super::helpers::rect_contains(
+                TopBar::traffic_cluster_rect(tb_rect),
+                Point2D::new(x, y),
+            );
+            if over != self.editor_state.editor_ui.topbar_traffic_hover {
+                self.editor_state.editor_ui.topbar_traffic_hover = over;
                 self.mark_dirty();
                 return true;
             }
         }
-        if self.editor_state.editor_ui.locale_picker_open && !over_design_md {
-            use op_editor_ui::widgets::locale_picker::LocalePicker;
-            self.refresh_layout_scene();
-            let panel = self.locale_picker_rect(self.last_viewport_w);
-            let picker = LocalePicker::for_editor_ui(&self.editor_state.editor_ui);
-            let new_hover = picker.hit_test(panel, Point2D::new(x, y));
-            let new_hover_ec = new_hover;
-            if new_hover_ec != self.editor_state.editor_ui.locale_picker_hover {
-                self.editor_state.editor_ui.locale_picker_hover = new_hover_ec;
-                self.mark_dirty();
-                return true;
-            }
-        }
-        if self.editor_state.editor_ui.shape_picker_open && !over_design_md {
-            use op_editor_ui::widgets::shape_picker::ShapePicker;
-            self.refresh_layout_scene();
-            let panel = self.shape_picker_rect(self.last_viewport_w, self.last_viewport_h);
-            let picker = ShapePicker::for_editor_ui(&self.editor_state.editor_ui);
-            let new_hover = picker.hit_test(panel, Point2D::new(x, y));
-            let new_hover_ec = new_hover.map(op_editor_ui::widgets::editor_state_ext::shape_choice);
-            if new_hover_ec != self.editor_state.editor_ui.shape_picker_hover {
-                self.editor_state.editor_ui.shape_picker_hover = new_hover_ec;
-                self.mark_dirty();
-                return true;
+        // Open chat model-picker — track the model row under the
+        // cursor so the dropdown paints a hover wash. `model_at`
+        // returns `None` off the rows (headers / padding / off the
+        // card), which clears any stale highlight.
+        if self.editor_state.editor_ui.chat_model_picker_open && !over_topmost {
+            use op_editor_ui::widgets::ai_chat_model_picker::model_at;
+            use op_editor_ui::widgets::AIChatPlaceholder;
+            let picker = self
+                .ai_chat_rect(self.last_viewport_w, self.last_viewport_h)
+                .and_then(|chat_rect| {
+                    AIChatPlaceholder::from_editor_at(&self.editor_state, self.now_ms)
+                        .model_picker_bounds(chat_rect)
+                });
+            if let Some(picker) = picker {
+                let scroll = self.editor_state.editor_ui.chat_model_picker_scroll;
+                let new_hover = model_at(
+                    picker,
+                    Point2D::new(x, y),
+                    &self.editor_state.chat.available_models,
+                    scroll,
+                );
+                if new_hover != self.editor_state.editor_ui.chat_model_picker_hover {
+                    self.editor_state.editor_ui.chat_model_picker_hover = new_hover;
+                    self.mark_dirty();
+                    return true;
+                }
             }
         }
         if let Some(drag) = self.rotate_drag {
@@ -446,26 +465,24 @@ impl WidgetHostNative {
             d.pos_y = y - d.grab_dy;
             return true;
         }
-        if let Some(d) = self.design_md_drag {
-            self.editor_state.editor_ui.design_md_panel_pos =
-                Some((x - d.grab_dx, y - d.grab_dy));
-            self.mark_dirty();
-            return true;
-        }
         if let Some(drag) = self.drag.as_mut() {
             let dx = x - drag.last_x;
             let dy = y - drag.last_y;
             drag.last_x = x;
             drag.last_y = y;
             self.editor_state.viewport.pan(dx, dy);
-            self.mark_dirty();
+            // No `mark_dirty()`: a canvas pan-drag only translates the
+            // viewport, not the document tree, so the cached
+            // `layout_scene` stays valid (re-solving taffy layout on
+            // every drag frame was the pan jank). `return true` still
+            // drives the repaint that re-applies the viewport.
             return true;
         }
         // Align toolbar hover sync — AFTER drag detection. Suppressed
-        // when the cursor is over the top-most Design-MD panel
-        // (`over_design_md`, computed above) so a toolbar button
-        // below it does not light up.
-        let new_hover = if self.editor_state.selection_count() >= 2 && !over_design_md {
+        // when the cursor is over a top-most floating panel
+        // (`over_topmost`, computed above) so a toolbar button below
+        // it does not light up.
+        let new_hover = if self.editor_state.selection_count() >= 2 && !over_topmost {
             self.align_toolbar_hit(x, y, self.last_viewport_w, self.last_viewport_h)
         } else {
             None
@@ -534,6 +551,9 @@ impl WidgetHostNative {
         if self.design_md_drag.take().is_some() {
             // The panel position was updated live during the drag;
             // release just ends it.
+            return true;
+        }
+        if self.component_browser_drag.take().is_some() {
             return true;
         }
         if let Some(m) = self.marquee_drag.take() {
@@ -610,6 +630,9 @@ impl WidgetHostNative {
             return true;
         }
         if self.design_md_drag.take().is_some() {
+            return true;
+        }
+        if self.component_browser_drag.take().is_some() {
             return true;
         }
         let was_dragging = self.drag.is_some();

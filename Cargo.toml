@@ -9,6 +9,7 @@ members = ["crates/*"]
 exclude = [
   "vendor/agent",
   "vendor/anthropic-agent-sdk",
+  "vendor/casement",
   "vendor/jian",
   "vendor/skia-safe-op",
   "node_modules",

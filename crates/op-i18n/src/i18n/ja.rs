@@ -55,6 +55,8 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "topbar.closeConfirmDetail" => "保存しないと変更内容が失われます。",
         "topbar.dontSave" => "保存しない",
         "topbar.agentsAndMcp" => "Agents & MCP",
+        "topbar.agentSingular" => "エージェント",
+        "topbar.agentPlural" => "エージェント",
         "topbar.setupAgentsMcp" => "Agents & MCP を設定",
         "topbar.connected" => "接続済み",
         "topbar.agentStatus" => "{{agents}} Agent{{agentSuffix}} · {{mcp}} MCP",
@@ -544,6 +546,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "a11y.layerContextMenu" => "レイヤーコンテキストメニュー",
         "a11y.aiChat" => "AI チャット",
         "designMd.emptyHint" => ".md ファイルをインポートしてデザイン仕様を添付",
+        "componentBrowser.empty" => "コンポーネントが見つかりません",
         _ => return super::ja_git::lookup(key),
     })
 }

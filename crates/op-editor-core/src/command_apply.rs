@@ -426,6 +426,21 @@ impl EditorState {
             | EditorCommand::CreateComponent { .. }
             | EditorCommand::DeleteComponent { .. }
             | EditorCommand::RenameComponent { .. } => false,
+
+            // --- UIKit element insert -------------------------------
+            EditorCommand::InstantiateKitComponent {
+                kit_id,
+                component_id,
+                doc_x,
+                doc_y,
+            } => self
+                .instantiate_kit_component(
+                    &kit_id,
+                    &component_id,
+                    doc_x.unwrap_or(0.0),
+                    doc_y.unwrap_or(0.0),
+                )
+                .is_some(),
         }
     }
 }

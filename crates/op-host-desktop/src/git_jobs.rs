@@ -318,5 +318,9 @@ fn compute_diff(repo: &GitRepo, target: &GitDiffTarget, locale: Locale) -> GitDi
         GitDiffTarget::Path(path) => Some(path.clone()),
         _ => None,
     };
-    GitDiffResult { title, lines, stage_path }
+    GitDiffResult {
+        title,
+        lines,
+        stage_path,
+    }
 }

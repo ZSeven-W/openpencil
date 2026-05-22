@@ -182,22 +182,24 @@ impl GitSession {
     /// the session is unbound — there is no repository to merge in.
     pub fn merge_branch(&self, other: &str) -> Option<Result<WorktreeMergeReport, GitError>> {
         let repo = self.repo.as_ref()?;
-        Some(repo.merge_branch_isolated(other, |path, base, ours, theirs| {
-            if !path.ends_with(".op") {
-                return None;
-            }
-            // A whole-file add / delete (a missing ours or theirs
-            // stage) is not a node-level content conflict — leave it
-            // unresolved. A missing base (add/add) is fine.
-            if ours.is_empty() || theirs.is_empty() {
-                return None;
-            }
-            let base = if base.is_empty() { "{}" } else { base };
-            match op_opmerge::merge_op_documents(base, ours, theirs) {
-                Ok(result) if result.is_clean() => Some(result.merged_json()),
-                _ => None,
-            }
-        }))
+        Some(
+            repo.merge_branch_isolated(other, |path, base, ours, theirs| {
+                if !path.ends_with(".op") {
+                    return None;
+                }
+                // A whole-file add / delete (a missing ours or theirs
+                // stage) is not a node-level content conflict — leave it
+                // unresolved. A missing base (add/add) is fine.
+                if ours.is_empty() || theirs.is_empty() {
+                    return None;
+                }
+                let base = if base.is_empty() { "{}" } else { base };
+                match op_opmerge::merge_op_documents(base, ours, theirs) {
+                    Ok(result) if result.is_clean() => Some(result.merged_json()),
+                    _ => None,
+                }
+            }),
+        )
     }
 
     /// Re-run the branch merge applying the user's per-node ours /
@@ -210,25 +212,27 @@ impl GitSession {
         state: &MergeResolveState,
     ) -> Option<Result<WorktreeMergeReport, GitError>> {
         let repo = self.repo.as_ref()?;
-        Some(repo.merge_branch_isolated(&state.branch, |path, base, ours, theirs| {
-            if !path.ends_with(".op") {
-                return None;
-            }
-            if ours.is_empty() || theirs.is_empty() {
-                return None;
-            }
-            let file = state.files.iter().find(|f| f.path == path)?;
-            let choices: HashMap<String, bool> = file
-                .conflicts
-                .iter()
-                .map(|c| (c.id.clone(), c.take_theirs))
-                .collect();
-            let base = if base.is_empty() { "{}" } else { base };
-            match op_opmerge::resolve_op_merge(base, ours, theirs, &choices) {
-                Ok(result) if result.is_clean() => Some(result.merged_json()),
-                _ => None,
-            }
-        }))
+        Some(
+            repo.merge_branch_isolated(&state.branch, |path, base, ours, theirs| {
+                if !path.ends_with(".op") {
+                    return None;
+                }
+                if ours.is_empty() || theirs.is_empty() {
+                    return None;
+                }
+                let file = state.files.iter().find(|f| f.path == path)?;
+                let choices: HashMap<String, bool> = file
+                    .conflicts
+                    .iter()
+                    .map(|c| (c.id.clone(), c.take_theirs))
+                    .collect();
+                let base = if base.is_empty() { "{}" } else { base };
+                match op_opmerge::resolve_op_merge(base, ours, theirs, &choices) {
+                    Ok(result) if result.is_clean() => Some(result.merged_json()),
+                    _ => None,
+                }
+            }),
+        )
     }
 }
 
@@ -250,7 +254,10 @@ mod tests {
             .duration_since(std::time::UNIX_EPOCH)
             .map(|d| d.as_nanos())
             .unwrap_or(0);
-        std::env::temp_dir().join(format!("op-gitsession-{tag}-{}-{nanos}", std::process::id()))
+        std::env::temp_dir().join(format!(
+            "op-gitsession-{tag}-{}-{nanos}",
+            std::process::id()
+        ))
     }
 
     #[test]

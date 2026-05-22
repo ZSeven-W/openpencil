@@ -55,6 +55,8 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "topbar.closeConfirmDetail" => "Perubahan Anda akan hilang jika tidak disimpan.",
         "topbar.dontSave" => "Jangan simpan",
         "topbar.agentsAndMcp" => "Agent & MCP",
+        "topbar.agentSingular" => "agen",
+        "topbar.agentPlural" => "agen",
         "topbar.setupAgentsMcp" => "Pengaturan Agent & MCP",
         "topbar.connected" => "terhubung",
         "topbar.agentStatus" => "{{agents}} agent{{agentSuffix}} · {{mcp}} MCP",
@@ -544,6 +546,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "a11y.layerContextMenu" => "Menu konteks lapisan",
         "a11y.aiChat" => "Obrolan AI",
         "designMd.emptyHint" => "Impor berkas .md untuk melampirkan brief desain",
+        "componentBrowser.empty" => "Tidak ditemukan komponen",
         _ => return super::id_git::lookup(key),
     })
 }

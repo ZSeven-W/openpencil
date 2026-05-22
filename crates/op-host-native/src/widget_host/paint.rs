@@ -7,9 +7,9 @@ use super::helpers::{STATUS_INSET, TOOLBAR_INSET_X, TOOLBAR_INSET_Y};
 use super::WidgetHostNative;
 use op_editor_ui::widgets::{
     variables_panel::VariablesPanel, AIChatPlaceholder, AlignToolbar, CanvasViewport,
-    DesignMdPanel, GitPanel, LayerPanel, LayoutCx, LocalePicker, PaintCx, PropertyPanel,
-    ShapePicker, StatusBar, Toolbar, TopBar, Widget, GIT_PANEL_INSET, STATUS_BAR_HEIGHT,
-    STATUS_BAR_WIDTH, TOOLBAR_WIDTH, TOP_BAR_HEIGHT,
+    ComponentBrowserPanel, DesignMdPanel, GitPanel, LayerPanel, LayoutCx, LocalePicker, PaintCx,
+    PropertyPanel, ShapePicker, StatusBar, Toolbar, TopBar, Widget, GIT_PANEL_INSET,
+    STATUS_BAR_HEIGHT, STATUS_BAR_WIDTH, TOOLBAR_WIDTH, TOP_BAR_HEIGHT,
 };
 use op_editor_ui::{Point2D, Rect, RenderBackend};
 
@@ -317,7 +317,8 @@ impl WidgetHostNative {
                 origin: Point2D::new(0.0, 0.0),
                 size: Point2D::new(viewport_width, op_editor_ui::widgets::TOP_BAR_HEIGHT),
             };
-            let anchor = TopBar::file_menu_rect(top_bar_rect);
+            let anchor =
+                TopBar::file_menu_rect(top_bar_rect, self.editor_state.editor_ui.window_fullscreen);
             let now_secs = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .map(|d| d.as_secs())
@@ -418,6 +419,20 @@ impl WidgetHostNative {
                 backend: &mut *frame,
             };
             menu.paint(&mut cx, menu_rect);
+        }
+
+        // 11.5. Floating Component-Browser panel — the UIKit library
+        //       browser, toggled from the View menu. Painted just
+        //       below the Design-MD panel so when both are open the
+        //       Design-MD panel sits absolute-top.
+        if let (Some(panel), Some(panel_rect)) = (
+            ComponentBrowserPanel::for_editor(&self.editor_state),
+            self.component_browser_panel_rect(viewport_width, viewport_height),
+        ) {
+            let mut cx = PaintCx {
+                backend: &mut *frame,
+            };
+            panel.paint(&mut cx, panel_rect);
         }
 
         // 12. Floating Design-MD panel — the document's design.md

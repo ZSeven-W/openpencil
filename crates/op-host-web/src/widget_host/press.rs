@@ -21,86 +21,6 @@ use super::{
 };
 
 impl WidgetHost {
-    fn apply_property_action(&mut self, action: op_editor_ui::widgets::PropertyPanelAction) {
-        use op_editor_ui::widgets::PropertyPanelAction as A;
-        match action {
-            A::SetFlexLayout(mode) => {
-                self.editor_state.editor_ui.flex_layout = mode;
-            }
-            A::ToggleSizeFillWidth => {
-                let v = &mut self.editor_state.editor_ui.size_fill_width;
-                *v = !*v;
-            }
-            A::ToggleSizeFillHeight => {
-                let v = &mut self.editor_state.editor_ui.size_fill_height;
-                *v = !*v;
-            }
-            A::ToggleSizeHugWidth => {
-                let v = &mut self.editor_state.editor_ui.size_hug_width;
-                *v = !*v;
-            }
-            A::ToggleSizeHugHeight => {
-                let v = &mut self.editor_state.editor_ui.size_hug_height;
-                *v = !*v;
-            }
-            A::ToggleSizeClipContent => {
-                let v = &mut self.editor_state.editor_ui.size_clip_content;
-                *v = !*v;
-            }
-            A::ToggleFillTypePicker => {
-                let v = &mut self.editor_state.editor_ui.fill_type_picker_open;
-                *v = !*v;
-            }
-            A::SetFillType(t) => {
-                self.editor_state.set_selected_fill_type(t);
-                self.editor_state.editor_ui.fill_type_picker_open = false;
-            }
-            A::OpenExportDialog => {
-                self.editor_state.editor_ui.pending_file_action =
-                    Some(op_editor_core::editor_ui_state::FileAction::ExportImage);
-            }
-            A::OpenColorPicker(target) => {
-                let _ = self
-                    .editor_state
-                    .open_color_picker(color_target(target), 0.0);
-            }
-            A::AddEffect => {
-                self.editor_state.add_drop_shadow_to_selected();
-            }
-            A::RemoveEffect(index) => {
-                let id = self.editor_state.selection.anchor.clone();
-                if id.is_real() {
-                    self.editor_state.commit_history();
-                    let _ =
-                        self.editor_state
-                            .apply(op_editor_core::EditorCommand::RemoveNodeEffect {
-                                node_id: id,
-                                index: index as u32,
-                            });
-                }
-            }
-            A::AdjustEffectParam {
-                effect,
-                field,
-                new_value,
-            } => {
-                let id = self.editor_state.selection.anchor.clone();
-                if id.is_real() {
-                    self.editor_state.commit_history();
-                    let _ =
-                        self.editor_state
-                            .apply(op_editor_core::EditorCommand::SetEffectParam {
-                                node_id: id,
-                                index: effect as u32,
-                                field,
-                                value: new_value,
-                            });
-                }
-            }
-        }
-        self.mark_dirty();
-    }
-
     /// Right-click handler — opens the LayerPanel context menu on
     /// a layer or page row.
     pub fn apply_right_press(&mut self, x: f32, y: f32, _viewport_w: f32, viewport_h: f32) -> bool {
@@ -299,6 +219,44 @@ impl WidgetHost {
         }
         if rect_contains(top_bar_rect, Point2D::new(x, y)) {
             return rename_committed || text_edit_committed;
+        }
+
+        // 0c0b. Export scale / format inline select popup —
+        //       outside-click dismiss. A click on a popup row or a
+        //       dropdown toggle is applied; any other click closes
+        //       both pickers and is swallowed. Mirrors the native
+        //       host's `0c0b` block.
+        if self.editor_state.editor_ui.export_scale_picker_open
+            || self.editor_state.editor_ui.export_format_picker_open
+        {
+            if let Some(panel) = PropertyPanel::for_selection(&self.editor_state) {
+                let property_rect = Rect {
+                    origin: Point2D::new(
+                        viewport_width - self.editor_state.editor_ui.property_panel_width,
+                        TOP_BAR_HEIGHT,
+                    ),
+                    size: Point2D::new(
+                        self.editor_state.editor_ui.property_panel_width,
+                        (viewport_height - TOP_BAR_HEIGHT).max(0.0),
+                    ),
+                };
+                if let Some(action) = panel.hit_test_action(property_rect, Point2D::new(x, y)) {
+                    if matches!(
+                        action,
+                        op_editor_ui::widgets::PropertyPanelAction::SetExportScale(_)
+                            | op_editor_ui::widgets::PropertyPanelAction::SetExportFormat(_)
+                            | op_editor_ui::widgets::PropertyPanelAction::ToggleExportScalePicker
+                            | op_editor_ui::widgets::PropertyPanelAction::ToggleExportFormatPicker
+                    ) {
+                        self.apply_property_action(action);
+                        return true;
+                    }
+                }
+            }
+            self.editor_state.editor_ui.export_scale_picker_open = false;
+            self.editor_state.editor_ui.export_format_picker_open = false;
+            self.mark_dirty();
+            return true;
         }
 
         // 0c. PropertyPanel button / checkbox — flex modes + size
@@ -704,6 +662,8 @@ impl WidgetHost {
                     .position(|x| *x == p)
                     .unwrap_or(0);
                 self.editor_state.editor_ui.agent_settings.connected[idx] ^= true;
+                // Re-derive the chat model picker for the new mask.
+                self.editor_state.rebuild_chat_models();
             }
             AgentSettingsHit::ToggleMcpServer => {
                 self.editor_state
@@ -746,13 +706,5 @@ impl WidgetHost {
         }
         self.mark_dirty();
         true
-    }
-}
-
-/// Translate a shell-core `ColorTarget` into op-editor-core's.
-fn color_target(t: op_editor_core::ColorTarget) -> op_editor_core::ui_draft::ColorTarget {
-    match t {
-        op_editor_core::ColorTarget::Fill => op_editor_core::ui_draft::ColorTarget::Fill,
-        op_editor_core::ColorTarget::Stroke => op_editor_core::ui_draft::ColorTarget::Stroke,
     }
 }

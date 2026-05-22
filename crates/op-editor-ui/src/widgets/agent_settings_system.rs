@@ -21,11 +21,36 @@ const STATUS_DOT_RADIUS: f32 = 5.0;
 
 /// Status-dot palette. The theme exposes no status tokens, so these
 /// mirror the TS app's Tailwind hues directly.
-const GREEN: Color = Color { r: 0.22, g: 0.78, b: 0.42, a: 1.0 };
-const AMBER: Color = Color { r: 0.96, g: 0.62, b: 0.04, a: 1.0 };
-const BLUE: Color = Color { r: 0.23, g: 0.51, b: 0.96, a: 1.0 };
-const RED: Color = Color { r: 0.94, g: 0.27, b: 0.27, a: 1.0 };
-const GREY: Color = Color { r: 0.55, g: 0.55, b: 0.58, a: 1.0 };
+const GREEN: Color = Color {
+    r: 0.22,
+    g: 0.78,
+    b: 0.42,
+    a: 1.0,
+};
+const AMBER: Color = Color {
+    r: 0.96,
+    g: 0.62,
+    b: 0.04,
+    a: 1.0,
+};
+const BLUE: Color = Color {
+    r: 0.23,
+    g: 0.51,
+    b: 0.96,
+    a: 1.0,
+};
+const RED: Color = Color {
+    r: 0.94,
+    g: 0.27,
+    b: 0.27,
+    a: 1.0,
+};
+const GREY: Color = Color {
+    r: 0.55,
+    g: 0.55,
+    b: 0.58,
+    a: 1.0,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SystemHit {

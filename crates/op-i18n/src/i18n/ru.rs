@@ -55,6 +55,8 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "topbar.closeConfirmDetail" => "Ваши изменения будут потеряны, если вы их не сохраните.",
         "topbar.dontSave" => "Не сохранять",
         "topbar.agentsAndMcp" => "Агенты и MCP",
+        "topbar.agentSingular" => "агент",
+        "topbar.agentPlural" => "агентов",
         "topbar.setupAgentsMcp" => "Настройка агентов и MCP",
         "topbar.connected" => "подключено",
         "topbar.agentStatus" => "{{agents}} агент{{agentSuffix}} · {{mcp}} MCP",
@@ -544,6 +546,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "a11y.layerContextMenu" => "Контекстное меню слоя",
         "a11y.aiChat" => "ИИ-чат",
         "designMd.emptyHint" => "Импортируйте файл .md, чтобы прикрепить дизайн-бриф",
+        "componentBrowser.empty" => "Компоненты не найдены",
         _ => return super::ru_git::lookup(key),
     })
 }

@@ -11,8 +11,8 @@ use crate::theme::Theme;
 use crate::widgets::editor_state_ext::theme_for;
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::layer_panel_walkers::{
-    apply_layer_rename, icon_for_node, kind_label, pages_from_state, walk, walk_excluding,
-    RenameView, WalkCx,
+    apply_layer_rename, icon_for_node, kind_label, layer_regions, pages_from_state, walk,
+    walk_excluding, LayerRegions, RenameView, WalkCx,
 };
 use crate::widgets::{LayoutBox, LayoutCx, PaintCx, Widget, WidgetId};
 use crate::{Color, Point2D, Rect, TextLayout};
@@ -83,6 +83,9 @@ pub struct LayerPanel {
     pub drag_ghost: Option<(LayerItem, f32)>,
     pub now_ms: u64,
     pub caret_anchor_ms: u64,
+    /// Scroll offsets (px) for the bounded Pages / Layers regions.
+    pub pages_scroll: f32,
+    pub layers_scroll: f32,
 }
 
 impl LayerPanel {
@@ -108,6 +111,8 @@ impl LayerPanel {
             drag_ghost: None,
             now_ms: 0,
             caret_anchor_ms: 0,
+            pages_scroll: state.editor_ui.layer_pages_scroll,
+            layers_scroll: state.editor_ui.layer_layers_scroll,
         }
     }
 
@@ -158,6 +163,8 @@ impl LayerPanel {
             drag_ghost: None,
             now_ms: 0,
             caret_anchor_ms: 0,
+            pages_scroll: state.editor_ui.layer_pages_scroll,
+            layers_scroll: state.editor_ui.layer_layers_scroll,
         }
     }
 
@@ -173,6 +180,8 @@ impl LayerPanel {
             drag_ghost: None,
             now_ms: 0,
             caret_anchor_ms: 0,
+            pages_scroll: 0.0,
+            layers_scroll: 0.0,
         }
     }
 
@@ -180,6 +189,20 @@ impl LayerPanel {
         let pages_h = SECTION_HEADER_HEIGHT + self.pages.len() as f32 * PAGE_ROW_HEIGHT;
         let layers_h = SECTION_HEADER_HEIGHT + self.items.len().max(1) as f32 * LAYER_ROW_HEIGHT;
         pages_h + SECTION_GAP + layers_h + 16.0
+    }
+
+    /// Bounded Pages / Layers scroll-region geometry for `rect` —
+    /// the single source paint + hit-test + drop-target derive from.
+    /// `pub` so the host's wheel handler can route a scroll to the
+    /// region under the cursor.
+    pub fn regions(&self, rect: Rect) -> LayerRegions {
+        layer_regions(
+            rect,
+            self.pages.len(),
+            self.items.len(),
+            self.pages_scroll,
+            self.layers_scroll,
+        )
     }
 
     /// Drop target for a drag-in-progress. Over a row: top-25 %
@@ -190,12 +213,16 @@ impl LayerPanel {
         if !rect_contains(rect, point) {
             return None;
         }
-        let layers_top = rect.origin.y
-            + 8.0
-            + SECTION_HEADER_HEIGHT
-            + self.pages.len() as f32 * PAGE_ROW_HEIGHT
-            + SECTION_GAP
-            + SECTION_HEADER_HEIGHT;
+        let r = self.regions(rect);
+        // A drop is only valid when the cursor is inside the visible
+        // (clipped) Layers viewport — a row scrolled out of view, or
+        // the cursor over the Pages section / headers, is no drop
+        // target. Mirrors the paint clip so the drop-indicator the
+        // user sees and where the node actually lands always agree.
+        if point.y < r.layers_rows_top || point.y > r.layers_rows_top + r.layers_view_h {
+            return None;
+        }
+        let layers_top = r.layers_rows_top - r.layers_scroll;
         let mut y = layers_top;
         for item in &self.items {
             let row_top = y;
@@ -276,13 +303,20 @@ impl LayerPanel {
         {
             return Some(LayerPanelHit::AddPage);
         }
-        let mut y = rect.origin.y + 8.0 + SECTION_HEADER_HEIGHT;
+        // Bounded Pages / Layers viewports — a row only counts as a
+        // hit when the cursor is inside its (clipped) viewport, so a
+        // row scrolled out of view can't be clicked through.
+        let r = self.regions(rect);
+        let in_pages = point.y >= r.pages_rows_top && point.y <= r.pages_rows_top + r.pages_view_h;
+        let in_layers =
+            point.y >= r.layers_rows_top && point.y <= r.layers_rows_top + r.layers_view_h;
+        let mut y = r.pages_rows_top - r.pages_scroll;
         for page in &self.pages {
             let row = Rect {
                 origin: Point2D::new(rect.origin.x, y),
                 size: Point2D::new(rect.size.x, PAGE_ROW_HEIGHT),
             };
-            if rect_contains(row, point) {
+            if in_pages && rect_contains(row, point) {
                 // × delete button — only hit-tested when the row is
                 // hovered (paint shows it under the same gate). 14
                 // px icon, right-aligned with 4 px slop.
@@ -302,13 +336,13 @@ impl LayerPanel {
             }
             y += PAGE_ROW_HEIGHT;
         }
-        y += SECTION_GAP + SECTION_HEADER_HEIGHT;
+        y = r.layers_rows_top - r.layers_scroll;
         for item in &self.items {
             let row = Rect {
                 origin: Point2D::new(rect.origin.x, y),
                 size: Point2D::new(rect.size.x, LAYER_ROW_HEIGHT),
             };
-            if rect_contains(row, point) {
+            if in_layers && rect_contains(row, point) {
                 // Match the paint geometry — same 14 px icon
                 // boxes positioned at `trailing_right` minus 14 /
                 // 32 (lock / eye). Slop of 4 px around each so
@@ -443,7 +477,8 @@ impl Widget for LayerPanel {
             self.theme.border,
         );
 
-        let mut y = rect.origin.y + 8.0;
+        let r = self.regions(rect);
+        let mut y = r.pages_header_y;
 
         // Pages section header.
         paint_section_header(
@@ -465,9 +500,13 @@ impl Widget for LayerPanel {
             self.theme.muted_foreground,
             1.4,
         );
-        y += SECTION_HEADER_HEIGHT;
-
-        // Page rows.
+        // Page rows — clipped + scrolled inside the bounded viewport.
+        cx.backend.save();
+        cx.backend.clip_rect(Rect {
+            origin: Point2D::new(rect.origin.x, r.pages_rows_top),
+            size: Point2D::new(rect.size.x, r.pages_view_h),
+        });
+        y = r.pages_rows_top - r.pages_scroll;
         for page in &self.pages {
             let row = Rect {
                 origin: Point2D::new(rect.origin.x + 6.0, y + 2.0),
@@ -526,9 +565,9 @@ impl Widget for LayerPanel {
             }
             y += PAGE_ROW_HEIGHT;
         }
+        cx.backend.restore();
 
-        y += SECTION_GAP;
-
+        y = r.layers_header_y;
         // Hairline between Pages and Layers sections — mirrors
         // the TS LayerPanel's `border-t border-border`.
         cx.backend.fill_rect(
@@ -548,9 +587,13 @@ impl Widget for LayerPanel {
             rect.size.x,
             self.layers_label,
         );
-        y += SECTION_HEADER_HEIGHT;
-
-        // Layer rows.
+        // Layer rows — clipped + scrolled inside the bounded viewport.
+        cx.backend.save();
+        cx.backend.clip_rect(Rect {
+            origin: Point2D::new(rect.origin.x, r.layers_rows_top),
+            size: Point2D::new(rect.size.x, r.layers_view_h),
+        });
+        y = r.layers_rows_top - r.layers_scroll;
         for item in &self.items {
             let row = Rect {
                 origin: Point2D::new(rect.origin.x + 6.0, y + 2.0),
@@ -736,6 +779,8 @@ impl Widget for LayerPanel {
                 }
             }
         }
+
+        cx.backend.restore();
 
         if let Some((ghost, cursor_y)) = &self.drag_ghost {
             paint_drag_ghost(cx, &self.theme, ghost, *cursor_y, rect);

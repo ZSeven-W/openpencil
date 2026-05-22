@@ -55,6 +55,8 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "topbar.closeConfirmDetail" => "저장하지 않으면 변경 사항이 손실됩니다.",
         "topbar.dontSave" => "저장 안 함",
         "topbar.agentsAndMcp" => "에이전트 & MCP",
+        "topbar.agentSingular" => "에이전트",
+        "topbar.agentPlural" => "에이전트",
         "topbar.setupAgentsMcp" => "에이전트 & MCP 설정",
         "topbar.connected" => "연결됨",
         "topbar.agentStatus" => "에이전트 {{agents}}개{{agentSuffix}} · MCP {{mcp}}개",
@@ -544,6 +546,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "a11y.layerContextMenu" => "레이어 컨텍스트 메뉴",
         "a11y.aiChat" => "AI 채팅",
         "designMd.emptyHint" => ".md 파일을 가져와 디자인 명세를 첨부하세요",
+        "componentBrowser.empty" => "구성 요소를 찾을 수 없음",
         _ => return super::ko_git::lookup(key),
     })
 }
