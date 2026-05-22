@@ -2707,6 +2707,7 @@ dependencies = [
  "op-editor-core",
  "serde",
  "serde_json",
+ "tokio",
  "tracing",
 ]
 
