@@ -156,241 +156,220 @@ fn has_dashboard_keyword(text: &str) -> bool {
 }
 
 // ---------------------------------------------------------------------------
-// Tests
+// §4.2 Section sizing
+// ---------------------------------------------------------------------------
+
+/// Infers the expected height (px) of a dashboard section subtask.
+///
+/// Precedence (first match wins):
+/// - sidebar → 760
+/// - header / top-bar → 96
+/// - metric / kpi → 160
+/// - chart / revenue → 320
+/// - transaction / activity / feed → 320
+/// - table / analytics / customer → 340
+/// - default → 160
+///
+/// Port of TS `inferDashboardSectionHeight` (`orchestrator.ts:213-224`).
+pub(crate) fn infer_dashboard_section_height(st: &Subtask) -> f64 {
+    let text = subtask_text(st);
+    if is_sidebar_subtask(st) {
+        return 760.0;
+    }
+    if has_header_keyword(&text) {
+        return 96.0;
+    }
+    if has_metric_kpi_keyword(&text) {
+        return 160.0;
+    }
+    if has_chart_revenue_keyword(&text) {
+        return 320.0;
+    }
+    if has_transaction_activity_feed_keyword(&text) {
+        return 320.0;
+    }
+    if has_table_analytics_customer_keyword(&text) {
+        return 340.0;
+    }
+    160.0
+}
+
+/// Infers the expected width (px) of a dashboard section subtask.
+///
+/// Uses `root_width` to derive `main_width = max(320, root_width - 260)`.
+/// Returns:
+/// - 260  for sidebar subtasks
+/// - `main_width * 0.62` (rounded) for chart/revenue subtasks
+/// - `main_width * 0.38` (rounded) for transaction/activity/feed subtasks
+/// - `main_width` otherwise
+///
+/// Port of TS `inferDashboardSectionWidth` (`orchestrator.ts:226-237`).
+pub(crate) fn infer_dashboard_section_width(st: &Subtask, root_width: f64) -> f64 {
+    const SIDEBAR_WIDTH: f64 = 260.0;
+    let main_width = f64::max(320.0, root_width - SIDEBAR_WIDTH);
+    let text = subtask_text(st);
+    if is_sidebar_subtask(st) {
+        return SIDEBAR_WIDTH;
+    }
+    if has_chart_revenue_keyword(&text) {
+        return (main_width * 0.62).round();
+    }
+    if has_transaction_activity_feed_keyword(&text) {
+        return (main_width * 0.38).round();
+    }
+    main_width
+}
+
+// ---------------------------------------------------------------------------
+// §4.4 Sidebar surface color
+// ---------------------------------------------------------------------------
+
+/// Picks a fill color for the pre-built dashboard sidebar frame.
+///
+/// Precedence chain (first non-`None` wins):
+/// 1. Style-guide catalog content — table match `"Sidebar Surface | #XXXXXX"`
+///    then inline match `"Sidebar Surface … #XXXXXX"`.
+/// 2. `design_md.colorPalette` role lookup:
+///    `sidebar` → `panel` → `surface|card`.
+/// 3. Returns `None`; the caller falls back to
+///    `root_frame.fill[0].color` or `#0F172A`.
+///
+/// Port of TS `extractSidebarSurfaceColor` (`orchestrator-sidebar-color.ts`).
+pub(crate) fn extract_sidebar_surface_color(
+    style_guide_content: Option<&str>,
+    design_md: Option<&jian_ops_schema::DesignMdSpec>,
+) -> Option<String> {
+    // 1. Catalog style-guide content
+    if let Some(content) = style_guide_content {
+        // Table match: "Sidebar Surface | #RRGGBB"
+        if let Some(hex) = find_hex_after_pattern(content, "Sidebar Surface", true) {
+            return Some(hex);
+        }
+        // Inline match: "Sidebar Surface …anything… #RRGGBB"
+        if let Some(hex) = find_hex_after_pattern(content, "Sidebar Surface", false) {
+            return Some(hex);
+        }
+    }
+
+    // 2. design.md palette role lookup
+    if let Some(spec) = design_md {
+        if let Some(palette) = &spec.color_palette {
+            if let Some(entry) = palette
+                .iter()
+                .find(|c| c.role.to_lowercase().contains("sidebar"))
+            {
+                return Some(entry.hex.to_uppercase());
+            }
+            if let Some(entry) = palette
+                .iter()
+                .find(|c| c.role.to_lowercase().contains("panel"))
+            {
+                return Some(entry.hex.to_uppercase());
+            }
+            if let Some(entry) = palette.iter().find(|c| {
+                let r = c.role.to_lowercase();
+                r.contains("surface") || r.contains("card")
+            }) {
+                return Some(entry.hex.to_uppercase());
+            }
+        }
+    }
+
+    None
+}
+
+/// Search `content` for a hex color that appears after `pattern` (case-insensitive).
+///
+/// When `require_pipe` is `true` the pattern must be followed (with optional
+/// whitespace) by `|` then the hex — this matches the Markdown table form
+/// `"Sidebar Surface | #RRGGBB"`.
+///
+/// When `require_pipe` is `false` it matches any `#RRGGBB` that appears
+/// anywhere after the pattern on the same logical match region.
+fn find_hex_after_pattern(content: &str, pattern: &str, require_pipe: bool) -> Option<String> {
+    // Locate the pattern (case-insensitive)
+    let lower = content.to_lowercase();
+    let pat_lower = pattern.to_lowercase();
+    let idx = lower.find(&pat_lower)?;
+    let after = &content[idx + pattern.len()..];
+
+    if require_pipe {
+        // After the pattern, expect optional whitespace then `|` then optional
+        // whitespace then `#RRGGBB`.
+        let after_trimmed = after.trim_start();
+        let after_pipe = after_trimmed.strip_prefix('|')?.trim_start();
+        extract_leading_hex6(after_pipe)
+    } else {
+        // Find the first `#RRGGBB` anywhere in `after`.
+        find_first_hex6(after)
+    }
+}
+
+/// Extracts a `#RRGGBB` hex literal at the very start of `s` (ignoring leading
+/// whitespace), uppercased.
+fn extract_leading_hex6(s: &str) -> Option<String> {
+    let s = s.trim_start();
+    let s = s.strip_prefix('#')?;
+    if s.len() >= 6 && s[..6].chars().all(|c| c.is_ascii_hexdigit()) {
+        Some(format!("#{}", s[..6].to_uppercase()))
+    } else {
+        None
+    }
+}
+
+/// Finds the first `#RRGGBB` (exactly 6 hex digits after `#`) in `s`,
+/// uppercased.
+fn find_first_hex6(s: &str) -> Option<String> {
+    let bytes = s.as_bytes();
+    let len = bytes.len();
+    for i in 0..len {
+        if bytes[i] == b'#' && i + 7 <= len {
+            let hex_part = &s[i + 1..i + 7];
+            if hex_part.chars().all(|c| c.is_ascii_hexdigit()) {
+                return Some(format!("#{}", hex_part.to_uppercase()));
+            }
+        }
+    }
+    None
+}
+
+// ---------------------------------------------------------------------------
+// Additional keyword helpers for §4.2
+// ---------------------------------------------------------------------------
+
+/// `/(top\s*header|top\s*bar|header)/`
+fn has_header_keyword(text: &str) -> bool {
+    text.contains("top header")
+        || text.contains("top bar")
+        || text.contains("topheader")
+        || text.contains("topbar")
+        || text.contains("header")
+}
+
+/// `/(metric|kpi)/`
+fn has_metric_kpi_keyword(text: &str) -> bool {
+    text.contains("metric") || text.contains("kpi")
+}
+
+/// `/(chart|revenue)/`
+fn has_chart_revenue_keyword(text: &str) -> bool {
+    text.contains("chart") || text.contains("revenue")
+}
+
+/// `/(transaction|activity|feed)/`
+fn has_transaction_activity_feed_keyword(text: &str) -> bool {
+    text.contains("transaction") || text.contains("activity") || text.contains("feed")
+}
+
+/// `/(table|analytics|customer)/`
+fn has_table_analytics_customer_keyword(text: &str) -> bool {
+    text.contains("table") || text.contains("analytics") || text.contains("customer")
+}
+
+// ---------------------------------------------------------------------------
+// Tests — split into sibling file to stay under 800 lines
 // ---------------------------------------------------------------------------
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::plan::{OrchestratorPlan, Region, RootFrameSpec, Subtask};
-
-    // ---- helpers -----------------------------------------------------------
-
-    fn root(width: f64) -> RootFrameSpec {
-        RootFrameSpec {
-            id: "root".into(),
-            name: "Design".into(),
-            width,
-            height: 800.0,
-            layout: Some("vertical".into()),
-            gap: Some(0.0),
-            padding: Some(0.0),
-            fill: None,
-        }
-    }
-
-    fn subtask(id: &str, label: &str, elements: Option<&str>) -> Subtask {
-        Subtask {
-            id: id.into(),
-            label: label.into(),
-            region: Region {
-                width: 1200.0,
-                height: 300.0,
-            },
-            id_prefix: id.into(),
-            parent_frame_id: None,
-            elements: elements.map(String::from),
-            screen: None,
-        }
-    }
-
-    fn plan_with(width: f64, subtasks: Vec<Subtask>) -> OrchestratorPlan {
-        OrchestratorPlan {
-            root_frame: root(width),
-            subtasks,
-            style_guide_name: None,
-        }
-    }
-
-    // ---- is_sidebar_subtask ------------------------------------------------
-
-    #[test]
-    fn sidebar_subtask_true_for_sidebar_navigation() {
-        let st = subtask("sidebar-nav", "Sidebar Navigation", None);
-        assert!(is_sidebar_subtask(&st));
-    }
-
-    #[test]
-    fn sidebar_subtask_true_for_nav_in_elements() {
-        let st = subtask("left-panel", "Left Panel", Some("nav links, menu items"));
-        assert!(is_sidebar_subtask(&st));
-    }
-
-    #[test]
-    fn sidebar_subtask_false_for_top_bar() {
-        // "Top Navigation Bar" does NOT contain "top bar" or "header",
-        // so it IS a sidebar — use a proper "Top Bar" example for the false case.
-        let st = subtask("top-bar", "Top Bar", None);
-        assert!(!is_sidebar_subtask(&st));
-    }
-
-    #[test]
-    fn sidebar_subtask_false_for_header() {
-        let st = subtask("header", "Header", None);
-        assert!(!is_sidebar_subtask(&st));
-    }
-
-    #[test]
-    fn sidebar_subtask_false_for_no_keywords() {
-        let st = subtask("hero", "Hero Section", None);
-        assert!(!is_sidebar_subtask(&st));
-    }
-
-    // ---- is_main_content_container_subtask ---------------------------------
-
-    #[test]
-    fn main_content_container_true_for_main_content() {
-        let st = subtask("main-content", "Main Content", None);
-        assert!(is_main_content_container_subtask(&st));
-    }
-
-    #[test]
-    fn main_content_container_true_for_content_area() {
-        let st = subtask("content-area", "Content Area", None);
-        assert!(is_main_content_container_subtask(&st));
-    }
-
-    #[test]
-    fn main_content_container_false_for_metrics_chart() {
-        // "main content" keyword present, but "chart" disqualifies
-        let st = subtask(
-            "main-chart",
-            "Main Content",
-            Some("metrics chart, revenue data"),
-        );
-        assert!(!is_main_content_container_subtask(&st));
-    }
-
-    #[test]
-    fn main_content_container_false_for_table() {
-        let st = subtask("data-table", "Data Table", None);
-        assert!(!is_main_content_container_subtask(&st));
-    }
-
-    #[test]
-    fn main_content_container_false_for_sidebar_keyword() {
-        let st = subtask("main-sidebar", "Main Content Sidebar", None);
-        assert!(!is_main_content_container_subtask(&st));
-    }
-
-    // ---- is_dashboard_like_prompt ------------------------------------------
-
-    #[test]
-    fn dashboard_like_true_for_analytics_admin_dashboard() {
-        let plan = plan_with(1200.0, vec![subtask("hero", "Hero Section", None)]);
-        assert!(is_dashboard_like_prompt(
-            "an analytics admin dashboard",
-            &plan
-        ));
-    }
-
-    #[test]
-    fn dashboard_like_true_from_subtask_text() {
-        // prompt has no keyword but a subtask label does
-        let plan = plan_with(
-            1200.0,
-            vec![subtask("analytics-panel", "Analytics Panel", None)],
-        );
-        assert!(is_dashboard_like_prompt("design a screen", &plan));
-    }
-
-    #[test]
-    fn dashboard_like_false_for_landing_page() {
-        let plan = plan_with(
-            1200.0,
-            vec![subtask(
-                "hero",
-                "Hero Section",
-                Some("headline, CTA button"),
-            )],
-        );
-        assert!(!is_dashboard_like_prompt(
-            "landing page for a startup",
-            &plan
-        ));
-    }
-
-    // ---- should_use_dashboard_columns --------------------------------------
-
-    fn dashboard_plan() -> OrchestratorPlan {
-        plan_with(
-            1200.0,
-            vec![
-                subtask("sidebar", "Sidebar Navigation", Some("nav links")),
-                subtask("metrics", "Metrics Row", Some("revenue chart, data table")),
-                subtask("transactions", "Transactions", None),
-            ],
-        )
-    }
-
-    #[test]
-    fn should_use_dashboard_columns_true_full_conditions() {
-        assert!(should_use_dashboard_columns(
-            "admin analytics dashboard",
-            &dashboard_plan()
-        ));
-    }
-
-    #[test]
-    fn should_use_dashboard_columns_false_width_too_narrow() {
-        let mut plan = dashboard_plan();
-        plan.root_frame.width = 375.0; // mobile width
-        assert!(!should_use_dashboard_columns(
-            "admin analytics dashboard",
-            &plan
-        ));
-    }
-
-    #[test]
-    fn should_use_dashboard_columns_false_no_dashboard_keyword() {
-        // No dashboard-like keyword anywhere — prompt + subtasks
-        let plan = plan_with(
-            1200.0,
-            vec![
-                subtask("sidebar", "Sidebar Navigation", Some("nav links")),
-                subtask("revenue", "Revenue Chart", None),
-            ],
-        );
-        assert!(!should_use_dashboard_columns(
-            "landing page hero section",
-            &plan
-        ));
-    }
-
-    #[test]
-    fn should_use_dashboard_columns_false_no_sidebar() {
-        // No sidebar subtask
-        let plan = plan_with(
-            1200.0,
-            vec![
-                subtask("header", "Header", None),
-                subtask("metrics", "Metrics Row", Some("revenue chart, table")),
-            ],
-        );
-        assert!(!should_use_dashboard_columns("admin dashboard", &plan));
-    }
-
-    #[test]
-    fn should_use_dashboard_columns_false_no_data_panel() {
-        // Has sidebar but no metric/chart/table subtask
-        let plan = plan_with(
-            1200.0,
-            vec![
-                subtask("sidebar", "Sidebar Navigation", Some("nav links")),
-                subtask("hero", "Hero Section", Some("headline, CTA")),
-            ],
-        );
-        assert!(!should_use_dashboard_columns("admin dashboard", &plan));
-    }
-
-    #[test]
-    fn should_use_dashboard_columns_false_width_exactly_480() {
-        // width must be STRICTLY > 480
-        let mut plan = dashboard_plan();
-        plan.root_frame.width = 480.0;
-        assert!(!should_use_dashboard_columns(
-            "admin analytics dashboard",
-            &plan
-        ));
-    }
-}
+#[path = "dashboard_columns_tests.rs"]
+mod tests;
