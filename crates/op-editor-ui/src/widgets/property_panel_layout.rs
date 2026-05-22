@@ -239,15 +239,9 @@ pub fn action_button_rects_with_fill_picker(
     }
     if visible.fill {
         y += SECTION_HEADER_HEIGHT;
-        // Swatch hit-test mirrors the paint rect in property_panel_fill.rs.
-        let swatch_rect = Rect {
-            origin: Point2D::new(x0 + PAD_X, y + 2.0),
-            size: Point2D::new(22.0, 22.0),
-        };
-        out.push((
-            PropertyPanelAction::OpenColorPicker(op_editor_core::ColorTarget::Fill),
-            swatch_rect,
-        ));
+        // The head-row swatch is display-only — the colour picker
+        // opens from the hex-row swatch below (added further down),
+        // not from here.
         let dropdown_rect = Rect {
             origin: Point2D::new(x0 + PAD_X + 22.0 + 6.0, y),
             size: Point2D::new(usable_w - 22.0 - 6.0 - 50.0 - 22.0 - 12.0, INPUT_HEIGHT),
@@ -278,12 +272,33 @@ pub fn action_button_rects_with_fill_picker(
         // sections' y math stays aligned with paint. Mirrors the
         // y-walk in `paint_fill_section`: head row + body + divider.
         y += INPUT_HEIGHT + 6.0; // head row (swatch + dropdown + opacity + X)
+                                 // Solid fill's body is the hex row; its leading 16 px colour
+                                 // swatch opens the picker. `hit_test_action` runs before the
+                                 // hex-input focus hit-test, so a swatch click opens the
+                                 // picker instead of focusing the hex field.
+        if visible.fill_type == FillType::Solid {
+            out.push((
+                PropertyPanelAction::OpenColorPicker(op_editor_core::ColorTarget::Fill),
+                Rect {
+                    origin: Point2D::new(x0 + PAD_X, y),
+                    size: Point2D::new(28.0, INPUT_HEIGHT),
+                },
+            ));
+        }
         y += fill_body_height(visible.fill_type) - 6.0 + 12.0; // body + divider gap
         y += SECTION_GAP;
     }
     if visible.stroke {
         // Mirrors paint_stroke_section: header + hex/width row.
         y += SECTION_HEADER_HEIGHT;
+        // The stroke hex row's leading colour swatch opens the picker.
+        out.push((
+            PropertyPanelAction::OpenColorPicker(op_editor_core::ColorTarget::Stroke),
+            Rect {
+                origin: Point2D::new(x0 + PAD_X, y),
+                size: Point2D::new(28.0, INPUT_HEIGHT),
+            },
+        ));
         y += INPUT_HEIGHT + 12.0;
         y += SECTION_GAP;
     }
