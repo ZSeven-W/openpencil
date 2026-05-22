@@ -69,6 +69,8 @@ mod tests {
             },
             id_prefix: String::new(),
             parent_frame_id: None,
+            elements: None,
+            screen: None,
         }
     }
 
