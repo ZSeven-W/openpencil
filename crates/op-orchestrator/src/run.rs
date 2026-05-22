@@ -9,17 +9,27 @@
 //! concurrent multi-screen path (N-root scaffold + `run_concurrent`) or
 //! the existing sequential single-screen path.  The sequential path is
 //! completely unchanged.
+//!
+//! ## S3b-3 Task C3: dashboard column layout
+//! In the sequential path, after planning, `should_use_dashboard_columns`
+//! decides whether to use the dashboard scaffold (sidebar + main columns)
+//! or the existing single-root vertical scaffold.  The concurrent path is
+//! NEVER given the dashboard treatment — it is sequential-only (spec §2).
+//! The dashboard path implementation lives in `run_dashboard.rs` (split to
+//! keep this file under the 800-line ceiling).
 
 use crate::cleanup::{
     aggregate_concurrent_verdict, cleanup_concurrent_roots, descendant_count, run_cleanup_passes,
 };
 use crate::concurrent::{effective_concurrency, group_subtasks_by_screen, run_concurrent};
+use crate::dashboard_columns::should_use_dashboard_columns;
 use crate::model_profile::{resolve_model_profile, ModelTier};
 use crate::plan::{build_fallback_plan, OrchestratorPlan};
 use crate::plan_normalize::{normalize, NormInfo};
 use crate::plan_repair::parse_orchestrator_response;
 use crate::prompt::build_orchestrator_prompt;
 use crate::retry::{attempt_modes, is_non_retryable};
+use crate::run_dashboard::run_dashboard_path;
 use crate::scaffold::{build_scaffold, build_scaffold_concurrent_mobile};
 use crate::subagent::run_subtask;
 use crate::types::{
@@ -80,6 +90,9 @@ impl Orchestrator {
 
         let planned_root_id = plan.root_frame.id.clone();
 
+        // -- S3b-3 Task C3: dashboard branch decision --
+        let use_dashboard = should_use_dashboard_columns(&request.prompt, &plan);
+
         // -- 进入"已动文档"区,全程 undo batch 包裹 --
         sink.begin_undo_batch();
         let var_snapshot = snapshot_plan_vars(sink, &plan);
@@ -89,6 +102,23 @@ impl Orchestrator {
             sink.apply(cmd);
         }
         let scaffold_root_index = sink.state().active_children().len();
+
+        if use_dashboard {
+            // ── Dashboard path (extracted to run_dashboard.rs) ────────────
+            return run_dashboard_path(
+                plan,
+                request,
+                scaffold_root_index,
+                sink,
+                llm,
+                &var_snapshot,
+                on_progress,
+                abort,
+            )
+            .await;
+        }
+
+        // ── Non-dashboard sequential path (unchanged from S3a/S3b-1b) ──────
         match build_scaffold(&plan, norm.is_mobile) {
             Ok(cmds) => {
                 for cmd in cmds {
@@ -569,3 +599,8 @@ mod tests;
 #[cfg(test)]
 #[path = "run_tests_c2.rs"]
 mod tests_c2;
+
+// Task C3 tests — dashboard column wiring.
+#[cfg(test)]
+#[path = "run_tests_c3.rs"]
+mod tests_c3;
