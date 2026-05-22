@@ -358,6 +358,7 @@ fn coerce_subtask(
             parent_frame_id: None,
             elements: None,
             screen: None,
+            generated_root_id: None,
         });
     }
 
@@ -408,6 +409,7 @@ fn coerce_subtask(
         parent_frame_id: None,
         elements,
         screen,
+        generated_root_id: None,
     })
 }
 

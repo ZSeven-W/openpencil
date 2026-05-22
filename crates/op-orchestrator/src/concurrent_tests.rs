@@ -33,6 +33,7 @@ fn subtask_with_screen(id: &str, screen: Option<&str>) -> Subtask {
         parent_frame_id: None,
         elements: None,
         screen: screen.map(|s| s.to_string()),
+        generated_root_id: None,
     }
 }
 
@@ -62,6 +63,7 @@ fn make_plan_with_subtasks(subtask_ids: &[&str]) -> crate::plan::OrchestratorPla
                 parent_frame_id: Some("root".into()),
                 elements: None,
                 screen: None,
+                generated_root_id: None,
             })
             .collect(),
         style_guide_name: None,

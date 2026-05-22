@@ -50,6 +50,7 @@ fn make_two_screen_plan() -> crate::plan::OrchestratorPlan {
                 parent_frame_id: Some("root".into()),
                 elements: None,
                 screen: Some("login".into()),
+                generated_root_id: None,
             },
             crate::plan::Subtask {
                 id: "s1".into(),
@@ -62,6 +63,7 @@ fn make_two_screen_plan() -> crate::plan::OrchestratorPlan {
                 parent_frame_id: Some("root".into()),
                 elements: None,
                 screen: Some("home".into()),
+                generated_root_id: None,
             },
         ],
         style_guide_name: None,
@@ -83,6 +85,7 @@ fn make_three_screen_plan() -> crate::plan::OrchestratorPlan {
         parent_frame_id: Some("root".into()),
         elements: None,
         screen: Some(screen.into()),
+        generated_root_id: None,
     };
     OrchestratorPlan {
         root_frame: RootFrameSpec {

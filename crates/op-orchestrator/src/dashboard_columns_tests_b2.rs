@@ -33,6 +33,7 @@ fn subtask(id: &str, label: &str, elements: Option<&str>) -> Subtask {
         parent_frame_id: None,
         elements: elements.map(String::from),
         screen: None,
+        generated_root_id: None,
     }
 }
 

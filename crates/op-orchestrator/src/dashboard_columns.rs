@@ -721,6 +721,16 @@ mod slots;
 pub(crate) use slots::{assign_dashboard_main_parents, RowFrameEntry};
 
 // ---------------------------------------------------------------------------
+// §4.7 Placeholder height + child reorder — sibling file (800-line cap)
+// ---------------------------------------------------------------------------
+
+mod height_reorder;
+#[allow(unused_imports)] // consumed by run.rs in a later task
+pub(crate) use height_reorder::{
+    get_dashboard_placeholder_height, reorder_dashboard_main_children,
+};
+
+// ---------------------------------------------------------------------------
 // Tests — split into sibling files to stay under 800 lines
 // ---------------------------------------------------------------------------
 
@@ -735,3 +745,7 @@ mod tests_b;
 #[cfg(test)]
 #[path = "dashboard_columns_tests_b2.rs"]
 mod tests_b2;
+
+#[cfg(test)]
+#[path = "dashboard_columns_tests_b3.rs"]
+mod tests_b3;
