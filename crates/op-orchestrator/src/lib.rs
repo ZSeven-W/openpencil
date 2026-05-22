@@ -24,6 +24,7 @@ pub mod types;
 pub mod variables;
 
 pub mod cleanup;
+pub mod concurrent;
 pub mod prompt;
 pub mod run;
 pub mod scaffold;

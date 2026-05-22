@@ -229,6 +229,7 @@ mod tests {
             model: Some("claude".into()),
             provider: None,
             design_md: None,
+            concurrency: 1,
         }
     }
 
@@ -366,6 +367,7 @@ mod tests {
             model: Some("claude-haiku".into()),
             provider: None,
             design_md: None,
+            concurrency: 1,
         };
         let full_cr =
             build_subagent_prompt(&st, &plan(), &basic_req, AbortFlag::new(), false, false);
@@ -451,6 +453,7 @@ mod tests {
             model: Some("claude-sonnet".into()),
             provider: None,
             design_md: None,
+            concurrency: 1,
         };
         let long_prompt = "x".repeat(5000); // >= 4200 chars
         let long_req = DesignRequest {
@@ -458,6 +461,7 @@ mod tests {
             model: Some("claude-sonnet".into()),
             provider: None,
             design_md: None,
+            concurrency: 1,
         };
         let short_pp = build_orchestrator_prompt(&short_req, PlanningMode::Rich, AbortFlag::new());
         let long_pp = build_orchestrator_prompt(&long_req, PlanningMode::Rich, AbortFlag::new());
@@ -476,6 +480,7 @@ mod tests {
             model: Some("deepseek-v4-pro".into()),
             provider: None,
             design_md: None,
+            concurrency: 1,
         };
         let pp = build_orchestrator_prompt(&ds_req, PlanningMode::Rich, AbortFlag::new());
         // Short bucket base: 300_000ms × 2.0 = 600_000ms
@@ -529,12 +534,14 @@ mod tests {
             model: Some("claude-sonnet".into()),
             provider: None,
             design_md: None,
+            concurrency: 1,
         };
         let long_req = DesignRequest {
             prompt: "x".repeat(5000),
             model: Some("claude-sonnet".into()),
             provider: None,
             design_md: None,
+            concurrency: 1,
         };
         let short_cr = build_subagent_prompt(
             &subtask(),
@@ -566,6 +573,7 @@ mod tests {
             model: Some("claude-haiku".into()),
             provider: None,
             design_md: None,
+            concurrency: 1,
         };
         let cr = build_subagent_prompt(
             &subtask(),

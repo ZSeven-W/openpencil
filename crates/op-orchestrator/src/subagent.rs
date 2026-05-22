@@ -104,6 +104,7 @@ mod tests {
             model: None,
             provider: None,
             design_md: None,
+            concurrency: 1,
         }
     }
 

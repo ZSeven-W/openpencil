@@ -167,6 +167,10 @@ pub struct DesignRequest {
     pub provider: Option<String>,
     /// 当前文档的 design.md(若有)—— 规划 prompt 据此走 design.md 分支。
     pub design_md: Option<jian_ops_schema::DesignMdSpec>,
+    /// 并发度:允许同时运行的 screen-group worker 数。
+    /// 调用方应传 store-clamped 值 [1,6];crate 内部防御性 clamp。
+    /// 默认为 1(顺序执行)。Port of TS `request.concurrency ?? 1`.
+    pub concurrency: u32,
 }
 
 #[cfg(test)]

@@ -242,6 +242,7 @@ fn req(prompt: &str) -> DesignRequest {
         model: None,
         provider: None,
         design_md: None,
+        concurrency: 1,
     }
 }
 
@@ -264,6 +265,7 @@ fn req_with_design_md(prompt: &str) -> DesignRequest {
             layout_principles: None,
             generation_notes: None,
         }),
+        concurrency: 1,
     }
 }
 
