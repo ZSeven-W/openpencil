@@ -15,6 +15,7 @@ pub mod model_profile;
 pub mod parse;
 pub mod plan;
 pub mod plan_normalize;
+pub mod retry;
 pub mod style_guide_context;
 pub mod types;
 pub mod variables;
