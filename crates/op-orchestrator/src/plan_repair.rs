@@ -478,6 +478,120 @@ pub(crate) fn build_fallback_heights(fallback: &OrchestratorPlan, count: usize) 
     allocate_section_heights(total_height, count)
 }
 
+// ── Task B3: parse_orchestrator_response cascade ──────────────────────────────
+
+/// Parse the raw LLM text output into an `OrchestratorPlan`, applying three
+/// extraction strategies in order. Returns `None` when all six probes fail.
+///
+/// The `bool` in the return tuple is `repaired`: `true` when the successful
+/// probe was the repair path (rather than the strict serde deserialization).
+///
+/// Strategies (each tried strict-then-repair):
+/// 1. **Direct** — `raw.trim()` as-is.
+/// 2. **Fenced** — strip a markdown code fence (` ```json ` or bare ` ``` `).
+/// 3. **Brace-slice** — `raw[first '{' ..= last '}']`.
+///
+/// Port of `parseOrchestratorResponse` from
+/// `apps/web/src/services/ai/orchestrator-planning.ts:20-55`.
+pub(crate) fn parse_orchestrator_response(
+    raw: &str,
+    request: &DesignRequest,
+) -> Option<(OrchestratorPlan, bool)> {
+    let trimmed = raw.trim();
+
+    // Strategy 1: direct
+    if let Some(plan) = try_parse_plan_strict(trimmed) {
+        return Some((plan, false));
+    }
+    if let Some(plan) = try_repair_plan_text(trimmed, request) {
+        return Some((plan, true));
+    }
+
+    // Strategy 2: fenced code block
+    if let Some(fenced_text) = extract_fence_content(trimmed) {
+        let fenced_text = fenced_text.trim();
+        if let Some(plan) = try_parse_plan_strict(fenced_text) {
+            return Some((plan, false));
+        }
+        if let Some(plan) = try_repair_plan_text(fenced_text, request) {
+            return Some((plan, true));
+        }
+    }
+
+    // Strategy 3: brace-slice
+    if let Some(braced_text) = extract_brace_slice(trimmed) {
+        if let Some(plan) = try_parse_plan_strict(braced_text) {
+            return Some((plan, false));
+        }
+        if let Some(plan) = try_repair_plan_text(braced_text, request) {
+            return Some((plan, true));
+        }
+    }
+
+    None
+}
+
+/// Strict probe: delegate to `parse_plan` (serde deserialization + non-empty
+/// subtasks check).  Returns `None` on any parse or validation failure.
+fn try_parse_plan_strict(text: &str) -> Option<OrchestratorPlan> {
+    crate::plan::parse_plan(text).ok()
+}
+
+/// Repair probe: `serde_json::from_str::<Value>` → `repair_plan_object`.
+/// Returns `None` on JSON parse failure or when `repair_plan_object` returns
+/// `None`.
+fn try_repair_plan_text(text: &str, request: &DesignRequest) -> Option<OrchestratorPlan> {
+    let value: Value = serde_json::from_str(text).ok()?;
+    repair_plan_object(&value, request)
+}
+
+/// Extract the content of a markdown code fence.
+///
+/// Matches ` ```(?:json)?\s*\n?([\s\S]*?)\n?``` ` — ported from the TS
+/// regex without adding the `regex` crate.
+///
+/// Returns `None` when no fence is found.
+fn extract_fence_content(text: &str) -> Option<&str> {
+    // Find the opening fence marker "```"
+    let fence_open = text.find("```")?;
+    let after_open = &text[fence_open + 3..]; // skip the three backticks
+
+    // Skip optional "json" tag
+    let after_tag = after_open.strip_prefix("json").unwrap_or(after_open);
+
+    // Skip optional whitespace / single newline (matches `\s*\n?`)
+    let after_ws = after_tag.trim_start_matches([' ', '\t', '\r']);
+    let content_start_in_tag = after_ws.strip_prefix('\n').unwrap_or(after_ws);
+
+    // Compute absolute start offset for the content
+    let content_abs_start = fence_open + 3 + (after_open.len() - content_start_in_tag.len());
+
+    // Find the closing "```" from the start of remaining text
+    let remaining = content_start_in_tag;
+    let close_rel = remaining.find("```")?;
+
+    // Strip optional trailing newline before the closing fence
+    let raw_content = &remaining[..close_rel];
+    let content = raw_content.strip_suffix('\n').unwrap_or(raw_content);
+
+    // Return the slice from the original `text` buffer
+    let end = content_abs_start + content.len();
+    Some(&text[content_abs_start..end])
+}
+
+/// Extract `text[first_brace ..= last_brace]`.
+///
+/// Port of the brace-slice strategy in `parseOrchestratorResponse`.
+fn extract_brace_slice(text: &str) -> Option<&str> {
+    let first = text.find('{')?;
+    let last = text.rfind('}')?;
+    if last > first {
+        Some(&text[first..=last])
+    } else {
+        None
+    }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 
 #[cfg(test)]

@@ -453,3 +453,110 @@ fn build_fallback_heights_desktop_allocates_correctly() {
     assert!(total > 0);
     assert!(heights.iter().all(|&h| h >= 80));
 }
+
+// ── Task B3: parse_orchestrator_response ─────────────────────────────────────
+
+/// A minimal valid plan JSON suitable for building test inputs.
+fn minimal_plan_json() -> &'static str {
+    r#"{
+  "rootFrame": { "id": "root", "name": "Page", "width": 1200, "height": 800 },
+  "styleGuideName": "clean-light",
+  "subtasks": [
+    { "id": "hero", "label": "Hero", "region": { "width": 1200, "height": 400 } }
+  ]
+}"#
+}
+
+/// Clean JSON plan → `Some((plan, repaired=false))`.
+#[test]
+fn parse_orchestrator_response_clean_json_direct() {
+    let raw = minimal_plan_json();
+    let result = parse_orchestrator_response(raw, &req("a landing page"));
+    let (plan, repaired) = result.expect("should parse");
+    assert!(!repaired, "clean JSON should not be marked as repaired");
+    assert_eq!(plan.root_frame.id, "root");
+    assert_eq!(plan.subtasks.len(), 1);
+    assert_eq!(plan.subtasks[0].id, "hero");
+}
+
+/// Same JSON wrapped in a ```json fence → `Some((_, repaired=false))`.
+#[test]
+fn parse_orchestrator_response_fenced_code_block() {
+    let raw = format!("```json\n{}\n```", minimal_plan_json());
+    let result = parse_orchestrator_response(&raw, &req("a landing page"));
+    let (plan, repaired) = result.expect("should parse fenced JSON");
+    assert!(!repaired, "valid fenced JSON should not be repaired");
+    assert_eq!(plan.root_frame.id, "root");
+    assert_eq!(plan.subtasks.len(), 1);
+}
+
+/// Plain ``` fence (no "json" tag) should also work.
+#[test]
+fn parse_orchestrator_response_fenced_no_lang_tag() {
+    let raw = format!("```\n{}\n```", minimal_plan_json());
+    let result = parse_orchestrator_response(&raw, &req("a landing page"));
+    let (plan, repaired) = result.expect("should parse plain-fenced JSON");
+    assert!(!repaired);
+    assert_eq!(plan.root_frame.id, "root");
+}
+
+/// Prose before/after `{...}` → brace-slice strategy recovers it.
+#[test]
+fn parse_orchestrator_response_brace_slice_extracts_from_prose() {
+    let raw = format!(
+        "Here is the plan for your design:\n{}\nHope that helps!",
+        minimal_plan_json()
+    );
+    let result = parse_orchestrator_response(&raw, &req("a landing page"));
+    let (plan, repaired) = result.expect("brace-slice should recover JSON");
+    assert!(!repaired, "brace-sliced valid JSON should not be repaired");
+    assert_eq!(plan.root_frame.id, "root");
+}
+
+/// An alias-keyed plan (`sections` instead of `subtasks`) goes through the
+/// repair path → `Some((_, repaired=true))`.
+#[test]
+fn parse_orchestrator_response_alias_key_repaired() {
+    let raw = r#"{
+  "rootFrame": { "id": "root", "name": "Page", "width": 1200, "height": 800 },
+  "sections": [
+    { "id": "hero", "label": "Hero", "region": { "width": 1200, "height": 400 } }
+  ]
+}"#;
+    let result = parse_orchestrator_response(raw, &req("a landing page"));
+    let (plan, repaired) = result.expect("alias plan should be repaired");
+    assert!(repaired, "sections-alias plan should be marked as repaired");
+    assert_eq!(plan.subtasks.len(), 1);
+}
+
+/// Pure garbage → `None`.
+#[test]
+fn parse_orchestrator_response_garbage_returns_none() {
+    assert!(
+        parse_orchestrator_response("I cannot generate a plan.", &req("x")).is_none(),
+        "non-JSON garbage must return None"
+    );
+    assert!(
+        parse_orchestrator_response("", &req("x")).is_none(),
+        "empty string must return None"
+    );
+}
+
+/// A fenced alias-keyed plan gets repaired → `repaired=true`.
+#[test]
+fn parse_orchestrator_response_fenced_alias_repaired() {
+    let inner = r#"{
+  "rootFrame": { "id": "r", "name": "P", "width": 390, "height": 812 },
+  "tasks": [
+    { "id": "s1", "label": "Screen 1", "region": { "width": 390, "height": 400 } }
+  ]
+}"#;
+    let raw = format!("```json\n{inner}\n```");
+    let result = parse_orchestrator_response(&raw, &req("mobile app"));
+    let (plan, repaired) = result.expect("fenced alias should be repaired");
+    assert!(
+        repaired,
+        "alias-key plan in fence should be marked repaired"
+    );
+    assert_eq!(plan.subtasks.len(), 1);
+}
