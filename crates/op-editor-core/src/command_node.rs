@@ -525,4 +525,69 @@ impl EditorState {
         }
         true
     }
+
+    /// Insert one or more nested `PenNode` subtrees. `parent_id` of
+    /// `NONE` appends to the active page root; otherwise the parent
+    /// must exist and be a container variant. Every incoming node id
+    /// (recursively) is remapped to a fresh editor id so an
+    /// externally-authored subtree can't collide with live doc ids.
+    pub(crate) fn cmd_insert_subtree(&mut self, nodes: Vec<PenNode>, parent_id: &NodeId) -> bool {
+        if nodes.is_empty() {
+            return false;
+        }
+        // Validate the parent up front (when not the page root).
+        if parent_id.is_real() {
+            match walkers::find_node(self.active_children(), parent_id) {
+                Some(p) if p.is_container() => {}
+                _ => return false, // missing or non-container
+            }
+        }
+        // Allocate fresh ids for the whole incoming forest.
+        let Some(mut next_id) = self.next_node_id_seed() else {
+            return false;
+        };
+        let mut taken: HashSet<NodeId> = self.collect_node_ids();
+        let mut nodes = nodes;
+        if !remap_subtree_ids(&mut nodes, &mut next_id, &mut taken) {
+            return false;
+        }
+        // All validation + allocation passed — now mutate.
+        if parent_id.is_real() {
+            let root = self.active_children_mut();
+            let Some(parent) = walkers::find_node_mut(root, parent_id) else {
+                return false;
+            };
+            let Some(slot) = parent.children_mut() else {
+                return false;
+            };
+            slot.extend(nodes);
+        } else {
+            self.active_children_mut().extend(nodes);
+        }
+        true
+    }
+}
+
+/// Reassign every node id in `nodes` (recursively, including
+/// `children`) to a fresh unique id. `next_id` + `taken` are the same
+/// allocator pair [`walkers::alloc_n_id`] uses; `taken` must be seeded
+/// with the document's live ids. Returns `false` on id-space
+/// exhaustion.
+pub(crate) fn remap_subtree_ids(
+    nodes: &mut [PenNode],
+    next_id: &mut u64,
+    taken: &mut HashSet<NodeId>,
+) -> bool {
+    for node in nodes.iter_mut() {
+        let Some(fresh) = walkers::alloc_n_id(next_id, taken) else {
+            return false;
+        };
+        node.base_mut().id = fresh.as_str().to_string();
+        if let Some(children) = node.children_mut() {
+            if !remap_subtree_ids(children, next_id, taken) {
+                return false;
+            }
+        }
+    }
+    true
 }

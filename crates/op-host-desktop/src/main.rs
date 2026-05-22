@@ -9,6 +9,7 @@ mod chat_attachment;
 mod chat_claude;
 mod chat_copilot;
 mod chat_http_server;
+mod chat_orchestrator;
 mod chat_runtime;
 mod chat_session;
 mod chat_subprocess;

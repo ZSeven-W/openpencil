@@ -12,6 +12,8 @@ on:
       - 'tools/check-jian-boundaries.sh'
       - 'tools/check-widget-boundary.sh'
       - '.github/workflows/rust-check.yml'
+      # TS planner-prompt source — drives the parity drift guard.
+      - 'apps/web/src/services/ai/orchestrator-prompt-optimizer.ts'
   push:
     branches: ['**']
     paths:
@@ -25,6 +27,8 @@ on:
       - 'tools/check-jian-boundaries.sh'
       - 'tools/check-widget-boundary.sh'
       - '.github/workflows/rust-check.yml'
+      # TS planner-prompt source — drives the parity drift guard.
+      - 'apps/web/src/services/ai/orchestrator-prompt-optimizer.ts'
 
 jobs:
   check:
@@ -81,6 +85,21 @@ jobs:
       - name: Verify Step 1b widget boundary (spec §1.4)
         if: runner.os == 'Linux'
         run: bash tools/check-widget-boundary.sh
+
+      - name: Install Bun
+        if: runner.os == 'Linux'
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install JS deps
+        if: runner.os == 'Linux'
+        run: bun install --frozen-lockfile
+
+      - name: Planner-prompt parity drift guard
+        if: runner.os == 'Linux'
+        run: |
+          bun run crates/op-orchestrator/tools/dump-planner-golden.ts
+          git diff --exit-code crates/op-orchestrator/tests/planner-golden/ \
+            || (echo "::error::planner golden drifted — rerun dump-planner-golden.ts" && exit 1)
 
   deny:
     name: cargo-deny (native)
