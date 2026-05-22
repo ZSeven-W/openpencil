@@ -505,6 +505,29 @@ pub struct EditorUiState {
     pub export_scale: f32,
     pub export_dialog_open: bool,
     pub export_format: ExportFormat,
+    /// Property-panel Export section: the scale dropdown's inline
+    /// select popup is open. Mutually exclusive with
+    /// `export_format_picker_open` — opening one closes the other.
+    pub export_scale_picker_open: bool,
+    /// Property-panel Export section: the format dropdown's inline
+    /// select popup is open.
+    pub export_format_picker_open: bool,
+    /// Row index the cursor is over in the open Export select popup
+    /// (drives the row hover highlight). `None` when no popup is
+    /// open or the cursor is off every row.
+    pub export_picker_hover: Option<usize>,
+    /// Vertical scroll offset of the right-rail PropertyPanel, in px
+    /// (≥ 0). A wheel / trackpad pan over the inspector advances it;
+    /// paint + hit-test shift the section content up by this amount
+    /// so a tall inspector (many effects, etc.) stays reachable.
+    pub property_panel_scroll: f32,
+    /// Vertical scroll offset (px, ≥ 0) of the LayerPanel's 页面
+    /// (Pages) section — that section has a bounded height, so a
+    /// long page list scrolls within it.
+    pub layer_pages_scroll: f32,
+    /// Vertical scroll offset (px, ≥ 0) of the LayerPanel's 图层
+    /// (Layers) section row viewport.
+    pub layer_layers_scroll: f32,
     /// "Import from Figma" modal.
     pub figma_import_open: bool,
     /// Floating `Cmd+,` agent-settings modal open.
@@ -667,6 +690,12 @@ impl Default for EditorUiState {
             export_scale: 2.0,
             export_dialog_open: false,
             export_format: ExportFormat::Png,
+            export_scale_picker_open: false,
+            export_format_picker_open: false,
+            export_picker_hover: None,
+            property_panel_scroll: 0.0,
+            layer_pages_scroll: 0.0,
+            layer_layers_scroll: 0.0,
             figma_import_open: false,
             agent_settings_open: false,
             agent_settings: crate::agent_settings::AgentSettings::default(),

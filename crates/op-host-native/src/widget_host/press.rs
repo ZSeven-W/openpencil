@@ -374,6 +374,14 @@ impl WidgetHostNative {
             return true;
         }
 
+        // 0c0b. Export scale / format inline select popup —
+        //       outside-click dismiss (`property_dispatch.rs`).
+        if !in_git_panel
+            && self.dismiss_export_picker_on_press(x, y, viewport_width, viewport_height)
+        {
+            return true;
+        }
+
         // 0b1. VariablesPanel — tested before PropertyPanel.
         if !in_git_panel
             && self.dispatch_variables_panel_press(x, y, viewport_width, viewport_height)

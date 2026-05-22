@@ -7,10 +7,9 @@ use crate::theme::Theme;
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::property_panel::NodeSnapshot;
 use crate::widgets::property_panel_inputs::{
-    format_color_hex, paint_dropdown, paint_input_with_icon_focused,
-    paint_input_with_prefix_focused, paint_input_with_suffix_focused, paint_section_divider,
-    paint_section_label, to_jian_color, HEADER_HEIGHT, INPUT_HEIGHT, INPUT_RADIUS, PAD_X,
-    SECTION_GAP, TAB_HEIGHT,
+    format_color_hex, paint_input_with_icon_focused, paint_input_with_prefix_focused,
+    paint_input_with_suffix_focused, paint_section_divider, paint_section_label, to_jian_color,
+    HEADER_HEIGHT, INPUT_HEIGHT, INPUT_RADIUS, PAD_X, SECTION_GAP, TAB_HEIGHT,
 };
 use crate::widgets::PaintCx;
 use crate::{Color, Point2D, Rect, TextLayout};
@@ -134,7 +133,7 @@ impl<'a> EditContext<'a> {
 /// `property_panel_layout.rs` now.
 pub use crate::widgets::property_panel_layout::{
     action_button_rects, action_button_rects_with_fill_picker, editable_input_rects,
-    fill_body_height, SizeFlags, VisibleSections,
+    fill_body_height, property_panel_content_height, SizeFlags, VisibleSections,
 };
 
 // ── Tab strip ─────────────────────────────────────────────────────
@@ -698,57 +697,12 @@ pub fn paint_stroke_section(
 // re-exported below so callers keep using `sections::*`.
 
 // ── Export section ────────────────────────────────────────────────
-
-// Paint-context + geometry args threaded through; a struct adds no gain.
-#[allow(clippy::too_many_arguments)]
-pub fn paint_export_section(
-    cx: &mut PaintCx<'_>,
-    theme: &Theme,
-    labels: &PropertyLabels,
-    format: crate::widgets::export_dialog::ExportFormat,
-    scale: f32,
-    x: f32,
-    y: f32,
-    width: f32,
-) -> f32 {
-    let mut y = paint_section_label(cx, theme, labels.export, x, y, width);
-    let usable_w = width - PAD_X * 2.0;
-    let half_w = (usable_w - 8.0) / 2.0;
-    // Left pill: current scale. Right pill: current format. Click
-    // anywhere in the section opens the ExportDialog so the user
-    // can change either (P3 wiring — full inline popovers will land
-    // when a generic dropdown-popover infra ships).
-    let scale_label = match crate::widgets::export_dialog::scale_index(scale) {
-        1 => "1x",
-        3 => "3x",
-        _ => "2x",
-    };
-    paint_dropdown(
-        cx,
-        theme,
-        Rect {
-            origin: Point2D::new(x + PAD_X, y),
-            size: Point2D::new(half_w, INPUT_HEIGHT),
-        },
-        scale_label,
-    );
-    paint_dropdown(
-        cx,
-        theme,
-        Rect {
-            origin: Point2D::new(x + PAD_X + half_w + 8.0, y),
-            size: Point2D::new(half_w, INPUT_HEIGHT),
-        },
-        format.label(),
-    );
-    y += INPUT_HEIGHT + 12.0;
-    y
-}
-
-// NOTE: a future `export_section_rect` walker will live here once
-// `hit_test_action` is extended to emit `OpenExportDialog` for
-// clicks inside this section. Until then the section is preview-
-// only — open the dialog via File menu / Cmd+Shift+P.
+// Paint code lives in `property_panel_export.rs` (split out to keep
+// this file under the 800-line ceiling); re-exported so callers
+// keep using `sections::*`.
+pub use crate::widgets::property_panel_export::{
+    export_scale_label, paint_export_picker, paint_export_section,
+};
 
 // All shared paint primitives + layout constants are imported
 // from `property_panel_inputs` via the `pub use` block earlier in

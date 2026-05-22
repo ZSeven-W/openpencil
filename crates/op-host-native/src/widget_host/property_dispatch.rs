@@ -53,9 +53,33 @@ impl WidgetHostNative {
                     .editor_state
                     .open_color_picker(color_target(target), 0.0);
             }
-            A::OpenExportDialog => {
+            A::ToggleExportScalePicker => {
+                let ui = &mut self.editor_state.editor_ui;
+                ui.export_scale_picker_open = !ui.export_scale_picker_open;
+                ui.export_format_picker_open = false;
+                ui.export_picker_hover = None;
+            }
+            A::ToggleExportFormatPicker => {
+                let ui = &mut self.editor_state.editor_ui;
+                ui.export_format_picker_open = !ui.export_format_picker_open;
+                ui.export_scale_picker_open = false;
+                ui.export_picker_hover = None;
+            }
+            A::SetExportScale(scale) => {
+                let ui = &mut self.editor_state.editor_ui;
+                ui.export_scale = scale;
+                ui.export_scale_picker_open = false;
+                ui.export_picker_hover = None;
+            }
+            A::SetExportFormat(format) => {
+                let ui = &mut self.editor_state.editor_ui;
+                ui.export_format = format;
+                ui.export_format_picker_open = false;
+                ui.export_picker_hover = None;
+            }
+            A::ExportImageNow => {
                 self.editor_state.editor_ui.pending_file_action =
-                    Some(op_editor_core::editor_ui_state::FileAction::ExportImage);
+                    Some(op_editor_core::editor_ui_state::FileAction::ExportImageConfirm);
             }
             A::AddEffect => {
                 self.editor_state.add_drop_shadow_to_selected();
@@ -92,6 +116,59 @@ impl WidgetHostNative {
             }
         }
         self.mark_dirty();
+    }
+
+    /// Outside-click dismiss for the Export section's inline scale /
+    /// format select popups. Returns `true` when a picker was open
+    /// and the press was consumed — an option / toggle was applied,
+    /// or the press fell outside and dismissed the popup. The caller
+    /// must stop dispatching the press in that case. `false` when no
+    /// picker was open (press dispatch continues normally).
+    pub(in crate::widget_host) fn dismiss_export_picker_on_press(
+        &mut self,
+        x: f32,
+        y: f32,
+        viewport_width: f32,
+        viewport_height: f32,
+    ) -> bool {
+        use op_editor_ui::widgets::{PropertyPanel, PropertyPanelAction as A, TOP_BAR_HEIGHT};
+        use op_editor_ui::{Point2D, Rect};
+        if !self.editor_state.editor_ui.export_scale_picker_open
+            && !self.editor_state.editor_ui.export_format_picker_open
+        {
+            return false;
+        }
+        self.refresh_layout_scene();
+        if let Some(panel) = PropertyPanel::for_selection(&self.editor_state) {
+            let property_rect = Rect {
+                origin: Point2D::new(
+                    viewport_width - self.editor_state.editor_ui.property_panel_width,
+                    TOP_BAR_HEIGHT,
+                ),
+                size: Point2D::new(
+                    self.editor_state.editor_ui.property_panel_width,
+                    (viewport_height - TOP_BAR_HEIGHT).max(0.0),
+                ),
+            };
+            if let Some(action) = panel.hit_test_action(property_rect, Point2D::new(x, y)) {
+                if matches!(
+                    action,
+                    A::SetExportScale(_)
+                        | A::SetExportFormat(_)
+                        | A::ToggleExportScalePicker
+                        | A::ToggleExportFormatPicker
+                ) {
+                    self.apply_property_action(action);
+                    return true;
+                }
+            }
+        }
+        let ui = &mut self.editor_state.editor_ui;
+        ui.export_scale_picker_open = false;
+        ui.export_format_picker_open = false;
+        ui.export_picker_hover = None;
+        self.mark_dirty();
+        true
     }
 
     /// Export-dialog press dispatcher.
