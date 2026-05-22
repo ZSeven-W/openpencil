@@ -1,0 +1,79 @@
+//! Web wheel-scroll routing for the side panels — extracted from
+//! `widget_host.rs` so the spine stays under the 800-line cap.
+//! Mirrors the native host's `widget_host/scroll.rs`.
+
+use super::{rect_contains, WidgetHost};
+use op_editor_ui::widgets::{LayerPanel, PropertyPanel, TOP_BAR_HEIGHT};
+use op_editor_ui::{Point2D, Rect};
+
+impl WidgetHost {
+    /// Scroll the right-rail PropertyPanel when a wheel lands over
+    /// it. Returns `true` when the cursor was over the inspector.
+    pub(in crate::widget_host) fn try_scroll_property_panel(
+        &mut self,
+        x: f32,
+        y: f32,
+        delta_y: f32,
+        viewport_width: f32,
+        viewport_height: f32,
+    ) -> bool {
+        let Some(panel) = PropertyPanel::for_selection(&self.editor_state) else {
+            return false;
+        };
+        let pw = self.editor_state.editor_ui.property_panel_width;
+        let property_rect = Rect {
+            origin: Point2D::new(viewport_width - pw, TOP_BAR_HEIGHT),
+            size: Point2D::new(pw, (viewport_height - TOP_BAR_HEIGHT).max(0.0)),
+        };
+        if !rect_contains(property_rect, Point2D::new(x, y)) {
+            return false;
+        }
+        let max = (panel.content_height(property_rect) - property_rect.size.y).max(0.0);
+        let next = (self.editor_state.editor_ui.property_panel_scroll - delta_y).clamp(0.0, max);
+        if next != self.editor_state.editor_ui.property_panel_scroll {
+            self.editor_state.editor_ui.property_panel_scroll = next;
+            self.mark_dirty();
+        }
+        true
+    }
+
+    /// Scroll the left-rail LayerPanel when a wheel lands over it —
+    /// the Pages section above the Layers row viewport, otherwise
+    /// the Layers section. Returns `true` when over the panel.
+    pub(in crate::widget_host) fn try_scroll_layer_panel(
+        &mut self,
+        x: f32,
+        y: f32,
+        delta_y: f32,
+        viewport_height: f32,
+    ) -> bool {
+        if !self.editor_state.editor_ui.sidebar_open {
+            return false;
+        }
+        let pw = self.editor_state.editor_ui.layer_panel_width;
+        let rect = Rect {
+            origin: Point2D::new(0.0, TOP_BAR_HEIGHT),
+            size: Point2D::new(pw, (viewport_height - TOP_BAR_HEIGHT).max(0.0)),
+        };
+        if !rect_contains(rect, Point2D::new(x, y)) {
+            return false;
+        }
+        let r = LayerPanel::from_editor(&self.editor_state).regions(rect);
+        if y >= r.layers_rows_top {
+            let next = (self.editor_state.editor_ui.layer_layers_scroll - delta_y)
+                .clamp(0.0, r.layers_max_scroll);
+            if next != self.editor_state.editor_ui.layer_layers_scroll {
+                self.editor_state.editor_ui.layer_layers_scroll = next;
+                self.mark_dirty();
+            }
+        } else {
+            let next = (self.editor_state.editor_ui.layer_pages_scroll - delta_y)
+                .clamp(0.0, r.pages_max_scroll);
+            if next != self.editor_state.editor_ui.layer_pages_scroll {
+                self.editor_state.editor_ui.layer_pages_scroll = next;
+                self.mark_dirty();
+            }
+        }
+        true
+    }
+}

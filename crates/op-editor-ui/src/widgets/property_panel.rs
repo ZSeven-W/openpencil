@@ -25,7 +25,7 @@
 
 use crate::layout_scene::{NodeKind, SceneStroke};
 use crate::theme::Theme;
-use crate::widgets::editor_state_ext::{doc_export_format, theme_for};
+use crate::widgets::editor_state_ext::theme_for;
 use crate::widgets::property_panel_sections as sections;
 use crate::widgets::{LayoutBox, LayoutCx, PaintCx, Widget, WidgetId};
 use crate::{Color, Point2D, Rect};
@@ -65,138 +65,17 @@ fn color_from_hex(hex: &str) -> Option<Color> {
 
 pub const PROPERTY_PANEL_WIDTH: f32 = 280.0;
 
-/// Button / checkbox actions in the property panel that don't
-/// map to a text input. The host dispatches these in `apply_press`
-/// after the text-input hit-test misses.
-///
-/// `PartialEq` only (not `Eq`) — `AdjustEffectParam` carries an `f32`.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum PropertyPanelAction {
-    SetFlexLayout(op_editor_core::FlexLayout),
-    ToggleSizeFillWidth,
-    ToggleSizeFillHeight,
-    ToggleSizeHugWidth,
-    ToggleSizeHugHeight,
-    ToggleSizeClipContent,
-    /// User clicked the Fill section's fill-type dropdown — host
-    /// toggles `Document.ui.fill_type_picker_open`.
-    ToggleFillTypePicker,
-    /// User picked a fill type from the dropdown.
-    SetFillType(op_editor_core::FillType),
-    /// User clicked a colour swatch (Fill or Stroke section). Host
-    /// opens the floating colour picker tied to that target.
-    OpenColorPicker(op_editor_core::ColorTarget),
-    /// User clicked anywhere in the Export section — host queues
-    /// `FileAction::ExportImage` so the picker dialog opens.
-    OpenExportDialog,
-    /// User clicked the Effects section's "+" — host appends a
-    /// default drop shadow to the selected node.
-    AddEffect,
-    /// User clicked the "✕" on an effect row — host removes the
-    /// effect at this index from the selected node.
-    RemoveEffect(usize),
-    /// User clicked a "−" / "+" stepper on an effect parameter row.
-    /// `new_value` is the post-step value (the walker computed it
-    /// from the current value ± the step); the host writes it via
-    /// `EditorCommand::SetEffectParam`.
-    AdjustEffectParam {
-        effect: usize,
-        field: op_editor_core::EffectField,
-        new_value: f32,
-    },
-}
+// `PropertyPanelAction` lives in `property_panel_action.rs` (split
+// out for the 800-line ceiling); re-exported so every existing
+// `widgets::PropertyPanelAction` / `property_panel::PropertyPanelAction`
+// path is unchanged.
+pub use crate::widgets::property_panel_action::PropertyPanelAction;
 
-/// Per-NodeKind toggles for which property-panel sections render.
-/// Mirrors the TS app's behaviour where a Line node hides the
-/// fill picker, a Frame hides Text properties, etc. Sections that
-/// always apply (Position / Layer / Export) aren't gated here.
-#[derive(Debug, Clone, Copy)]
-pub(crate) struct SectionCapabilities {
-    pub(crate) flex_layout: bool,
-    pub(crate) size_options: bool,
-    pub(crate) opacity: bool,
-    pub(crate) fill: bool,
-    pub(crate) stroke: bool,
-    pub(crate) effects: bool,
-    pub(crate) export: bool,
-}
-
-impl SectionCapabilities {
-    /// Capability mask for the multi-select aggregate snapshot.
-    /// Keeps Size (so the union W/H actually paint), hides
-    /// fill/stroke (no aggregation in v1), keeps Layer/Effects/
-    /// Export (paint safely with the zeroed snapshot fields).
-    fn for_multi() -> Self {
-        Self {
-            flex_layout: false,
-            size_options: true,
-            opacity: true,
-            fill: false,
-            stroke: false,
-            effects: true,
-            export: true,
-        }
-    }
-
-    pub(crate) fn for_kind(kind: &crate::layout_scene::NodeKind) -> Self {
-        use crate::layout_scene::NodeKind as K;
-        match kind {
-            // Frame: full chrome — it can host children, take auto-
-            // layout, fill / stroke / effects / export.
-            K::Frame => Self {
-                flex_layout: true,
-                size_options: true,
-                opacity: true,
-                fill: true,
-                stroke: true,
-                effects: true,
-                export: true,
-            },
-            // Group: structural — no fill / stroke, no flex slot
-            // (children own layout). Opacity + export still apply.
-            K::Group | K::Other(_) => Self {
-                flex_layout: false,
-                size_options: false,
-                opacity: true,
-                fill: false,
-                stroke: false,
-                effects: true,
-                export: true,
-            },
-            // Rect / Ellipse / Polygon: full leaf — every paint
-            // section applies; no flex (no children).
-            K::Rect | K::Ellipse | K::Polygon => Self {
-                flex_layout: false,
-                size_options: true,
-                opacity: true,
-                fill: true,
-                stroke: true,
-                effects: true,
-                export: true,
-            },
-            // Line / Path: only outline — fill doesn't apply.
-            K::Line | K::Path => Self {
-                flex_layout: false,
-                size_options: true,
-                opacity: true,
-                fill: false,
-                stroke: true,
-                effects: true,
-                export: true,
-            },
-            // Text: stroke is rare for text, but fill = ink colour.
-            K::Text => Self {
-                flex_layout: false,
-                size_options: true,
-                opacity: true,
-                fill: true,
-                stroke: false,
-                effects: true,
-                export: true,
-            },
-        }
-    }
-}
+// `SectionCapabilities` lives in `property_panel_layout.rs`
+// alongside `VisibleSections` (the section-visibility mask it
+// feeds); re-exported so `property_panel::SectionCapabilities`
+// resolves unchanged.
+pub(crate) use crate::widgets::property_panel_layout::SectionCapabilities;
 
 /// Snapshot of the selected node's editable fields, formatted for
 /// display. Built once per `for_selection` call so all paint
@@ -434,10 +313,21 @@ pub struct PropertyPanel {
     pub is_multi: bool,
     /// Active header tab — toggled by Cmd+Shift+C.
     pub tab: op_editor_core::PropertyTab,
-    /// Current export format + scale, surfaced as preview pills in
-    /// the Export section. Clicking the section opens the modal.
-    pub export_format: crate::widgets::export_dialog::ExportFormat,
+    /// Current export format + scale, shown on the Export section's
+    /// two dropdowns. Clicking a dropdown opens its inline select
+    /// popup (NOT the Export modal).
+    pub export_format: op_editor_core::ExportFormat,
     pub export_scale: f32,
+    /// Whether the Export section's scale / format inline select
+    /// popups are open.
+    pub export_scale_picker_open: bool,
+    pub export_format_picker_open: bool,
+    /// Row index the cursor is over in the open Export select
+    /// popup — `None` when no popup is open or no row is hovered.
+    pub export_picker_hover: Option<usize>,
+    /// Vertical scroll offset (px, ≥ 0) — paint + hit-test shift the
+    /// section content up by this so a tall inspector stays usable.
+    pub scroll: f32,
     /// Active UI locale — threaded into the Fill section so its
     /// type label / picker / body sub-labels translate.
     pub locale: op_editor_core::Locale,
@@ -537,9 +427,72 @@ impl PropertyPanel {
             fill_type_picker_open: ui.fill_type_picker_open,
             is_multi,
             tab: ui.property_tab,
-            export_format: doc_export_format(ui.export_format),
+            export_format: ui.export_format,
             export_scale: ui.export_scale,
+            export_scale_picker_open: ui.export_scale_picker_open,
+            export_format_picker_open: ui.export_format_picker_open,
+            export_picker_hover: ui.export_picker_hover,
+            scroll: ui.property_panel_scroll.max(0.0),
             locale: ui.locale,
+        }
+    }
+
+    /// `self.scroll` clamped to the current content's scrollable
+    /// range. The host only re-clamps the stored offset on a wheel
+    /// event, so selecting a shorter node (fewer sections / effects)
+    /// could otherwise leave the panel scrolled past its end —
+    /// every paint / hit-test reads through this so the view
+    /// self-corrects on the very next frame.
+    fn effective_scroll(&self, panel_rect: Rect) -> f32 {
+        let max = (self.content_height(panel_rect) - panel_rect.size.y).max(0.0);
+        self.scroll.clamp(0.0, max)
+    }
+
+    /// `panel_rect` shifted up by the (clamped) scroll offset. Both
+    /// paint and every hit-test walker start their y-walk from this
+    /// rect, so the panel scrolls as one piece and clicks stay
+    /// aligned with what is drawn.
+    fn scrolled_rect(&self, panel_rect: Rect) -> Rect {
+        Rect {
+            origin: Point2D::new(
+                panel_rect.origin.x,
+                panel_rect.origin.y - self.effective_scroll(panel_rect),
+            ),
+            size: panel_rect.size,
+        }
+    }
+
+    /// Whether `point` is inside the scrolling section viewport —
+    /// the panel below the pinned tab strip. A click in the tab-strip
+    /// band must not fall through to a section row scrolled up
+    /// under it (paint clips there; hit-test must agree).
+    fn point_in_section_viewport(&self, panel_rect: Rect, point: Point2D) -> bool {
+        point.y >= panel_rect.origin.y + crate::widgets::property_panel_inputs::TAB_HEIGHT
+    }
+
+    /// Total height (px) of the panel's section content — drives the
+    /// scroll clamp so the inspector can't scroll past its end.
+    pub fn content_height(&self, panel_rect: Rect) -> f32 {
+        sections::property_panel_content_height(
+            panel_rect,
+            self.visible_sections(),
+            &self.snapshot.effects,
+        )
+    }
+
+    /// Section-visibility mask for the current selection, threaded
+    /// into every layout walker so paint + hit-test stay aligned.
+    fn visible_sections(&self) -> sections::VisibleSections {
+        let caps = self.capabilities();
+        sections::VisibleSections {
+            flex_layout: caps.flex_layout,
+            size_options: caps.size_options,
+            opacity: caps.opacity,
+            fill: caps.fill,
+            stroke: caps.stroke,
+            effects: caps.effects,
+            export: caps.export,
+            fill_type: self.fill_type,
         }
     }
 
@@ -552,22 +505,16 @@ impl PropertyPanel {
             // Multi-select inputs / toggles are inert in v1.
             return None;
         }
-        let caps = SectionCapabilities::for_kind(&self.snapshot.kind_variant);
-        let visible = sections::VisibleSections {
-            flex_layout: caps.flex_layout,
-            size_options: caps.size_options,
-            opacity: caps.opacity,
-            fill: caps.fill,
-            stroke: caps.stroke,
-            effects: caps.effects,
-            export: caps.export,
-            fill_type: self.fill_type,
-        };
+        if !self.point_in_section_viewport(panel_rect, point) {
+            return None;
+        }
         let rects = sections::action_button_rects_with_fill_picker(
-            panel_rect,
-            visible,
+            self.scrolled_rect(panel_rect),
+            self.visible_sections(),
             &self.snapshot.effects,
             self.fill_type_picker_open,
+            self.export_scale_picker_open,
+            self.export_format_picker_open,
         );
         // Picker rows live in `rects` AFTER the dropdown rect, so
         // a row hit takes priority — `rev()` makes the picker rows
@@ -581,6 +528,36 @@ impl PropertyPanel {
         None
     }
 
+    /// Row index of the open Export select popup under `point`, or
+    /// `None` when no popup is open / the cursor is off every row.
+    /// The index counts only the option rows (`SetExportScale` /
+    /// `SetExportFormat`), matching `paint_select_popup`'s row walk,
+    /// so it can drive the popup's hover highlight.
+    pub fn export_picker_row_at(&self, panel_rect: Rect, point: Point2D) -> Option<usize> {
+        if !self.export_scale_picker_open && !self.export_format_picker_open {
+            return None;
+        }
+        if !self.point_in_section_viewport(panel_rect, point) {
+            return None;
+        }
+        sections::action_button_rects_with_fill_picker(
+            self.scrolled_rect(panel_rect),
+            self.visible_sections(),
+            &self.snapshot.effects,
+            self.fill_type_picker_open,
+            self.export_scale_picker_open,
+            self.export_format_picker_open,
+        )
+        .into_iter()
+        .filter(|(a, _)| {
+            matches!(
+                a,
+                PropertyPanelAction::SetExportScale(_) | PropertyPanelAction::SetExportFormat(_)
+            )
+        })
+        .position(|(_, rect)| rect_contains(rect, point))
+    }
+
     /// Hit-test the panel at `point` and return which input row
     /// (if any) contains the click. The layout walk mirrors the
     /// per-kind section filtering applied in `paint`, so rects
@@ -590,18 +567,12 @@ impl PropertyPanel {
             // Inputs inert in v1 multi-select aggregate view.
             return None;
         }
-        let caps = SectionCapabilities::for_kind(&self.snapshot.kind_variant);
-        let visible = sections::VisibleSections {
-            flex_layout: caps.flex_layout,
-            size_options: caps.size_options,
-            opacity: caps.opacity,
-            fill: caps.fill,
-            stroke: caps.stroke,
-            effects: caps.effects,
-            export: caps.export,
-            fill_type: self.fill_type,
-        };
-        for (focus, rect) in sections::editable_input_rects(panel_rect, visible) {
+        if !self.point_in_section_viewport(panel_rect, point) {
+            return None;
+        }
+        for (focus, rect) in
+            sections::editable_input_rects(self.scrolled_rect(panel_rect), self.visible_sections())
+        {
             if rect_contains(rect, point) {
                 return Some(focus);
             }
@@ -648,7 +619,11 @@ impl Widget for PropertyPanel {
 
         let x = rect.origin.x;
         let w = rect.size.x;
-        let mut y = rect.origin.y;
+        // The Design / Code tab strip is pinned to the panel top —
+        // painted fixed, above (and never scrolled with) the section
+        // content.
+        let tab_bottom =
+            sections::paint_tab_strip(cx, &self.theme, &self.labels, self.tab, x, rect.origin.y, w);
         let edit_ctx = sections::EditContext {
             focus: self.focus,
             draft: self.draft.as_str(),
@@ -657,11 +632,30 @@ impl Widget for PropertyPanel {
         };
         use crate::layout_scene::NodeKind;
         let caps = self.capabilities();
-        y = sections::paint_tab_strip(cx, &self.theme, &self.labels, self.tab, x, y, w);
         if matches!(self.tab, op_editor_core::PropertyTab::Code) {
-            paint_code_placeholder(cx, &self.theme, &self.snapshot, x, y, w);
+            paint_code_placeholder(cx, &self.theme, &self.snapshot, x, tab_bottom, w);
             return;
         }
+        // Section content scrolls below the pinned tab strip; clip it
+        // so a scrolled-up section can't paint over the tabs or bleed
+        // onto the neighbouring rail. Overlays (fill / export pickers)
+        // anchor to `scrolled` — the same shifted rect the layout
+        // walker uses (it adds `TAB_HEIGHT`), so paint + hit-test of
+        // the sections agree.
+        cx.backend.save();
+        cx.backend.clip_rect(Rect {
+            origin: Point2D::new(x, tab_bottom),
+            size: Point2D::new(w, (rect.origin.y + rect.size.y - tab_bottom).max(0.0)),
+        });
+        let scroll = self.effective_scroll(rect);
+        let scrolled = Rect {
+            origin: Point2D::new(rect.origin.x, rect.origin.y - scroll),
+            size: rect.size,
+        };
+        // First section sits just below the pinned tab strip:
+        // `tab_bottom - scroll` == `scrolled.origin.y + TAB_HEIGHT`,
+        // matching the layout walker's `+= TAB_HEIGHT` step.
+        let mut y = tab_bottom - scroll;
         y = sections::paint_node_header(cx, &self.theme, &self.snapshot, x, y, w);
         y = sections::paint_create_component(cx, &self.theme, &self.labels, x, y, w);
         y = sections::paint_position_section(
@@ -754,25 +748,32 @@ impl Widget for PropertyPanel {
         // Fill-type picker overlay sits on top of everything below
         // the Fill section so it can extend past the section divider.
         if caps.fill && self.fill_type_picker_open {
-            let visible = sections::VisibleSections {
-                flex_layout: caps.flex_layout,
-                size_options: caps.size_options,
-                opacity: caps.opacity,
-                fill: caps.fill,
-                stroke: caps.stroke,
-                effects: caps.effects,
-                export: caps.export,
-                fill_type: self.fill_type,
-            };
             sections::paint_fill_type_picker(
                 cx,
                 &self.theme,
-                rect,
-                visible,
+                scrolled,
+                self.visible_sections(),
                 self.fill_type,
                 self.locale,
             );
         }
+        // Export-section inline select popups — painted last so the
+        // scale / format dropdown overlays sit above every section.
+        if caps.export && (self.export_scale_picker_open || self.export_format_picker_open) {
+            sections::paint_export_picker(
+                cx,
+                &self.theme,
+                scrolled,
+                self.visible_sections(),
+                &self.snapshot.effects,
+                self.export_scale_picker_open,
+                self.export_format_picker_open,
+                self.export_scale,
+                self.export_format,
+                self.export_picker_hover,
+            );
+        }
+        cx.backend.restore();
         let _ = NodeKind::Frame; // ensure NodeKind is in scope above for tests
     }
 

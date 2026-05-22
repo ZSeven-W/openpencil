@@ -197,57 +197,15 @@ impl WidgetHostNative {
                 return true;
             }
         }
-        if self.editor_state.editor_ui.file_menu_open && !over_topmost {
-            use op_editor_ui::widgets::file_menu::FileMenu;
-            use op_editor_ui::widgets::top_bar::TopBar;
-            self.refresh_layout_scene();
-            let top_bar_rect = Rect {
-                origin: Point2D::new(0.0, 0.0),
-                size: Point2D::new(self.last_viewport_w, op_editor_ui::widgets::TOP_BAR_HEIGHT),
-            };
-            let anchor =
-                TopBar::file_menu_rect(top_bar_rect, self.editor_state.editor_ui.window_fullscreen);
-            let now_secs = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .map(|d| d.as_secs())
-                .unwrap_or(0);
-            let menu = FileMenu::from_editor_ui(&self.editor_state.editor_ui, now_secs);
-            let panel = menu.rect_at(anchor);
-            let new_hover = menu.hovered_at(panel, Point2D::new(x, y));
-            // shell-core `FileMenuChoice` option → op-editor-core.
-            let new_hover_ec =
-                new_hover.map(op_editor_ui::widgets::editor_state_ext::file_menu_choice);
-            if new_hover_ec != self.editor_state.editor_ui.file_menu_hover {
-                self.editor_state.editor_ui.file_menu_hover = new_hover_ec;
-                self.mark_dirty();
-                return true;
-            }
+        // File-menu / locale / shape dropdown hover (`geometry.rs`).
+        if self.update_dropdown_hover(x, y, over_topmost) {
+            return true;
         }
-        if self.editor_state.editor_ui.locale_picker_open && !over_topmost {
-            use op_editor_ui::widgets::locale_picker::LocalePicker;
-            self.refresh_layout_scene();
-            let panel = self.locale_picker_rect(self.last_viewport_w);
-            let picker = LocalePicker::for_editor_ui(&self.editor_state.editor_ui);
-            let new_hover = picker.hit_test(panel, Point2D::new(x, y));
-            let new_hover_ec = new_hover;
-            if new_hover_ec != self.editor_state.editor_ui.locale_picker_hover {
-                self.editor_state.editor_ui.locale_picker_hover = new_hover_ec;
-                self.mark_dirty();
-                return true;
-            }
-        }
-        if self.editor_state.editor_ui.shape_picker_open && !over_topmost {
-            use op_editor_ui::widgets::shape_picker::ShapePicker;
-            self.refresh_layout_scene();
-            let panel = self.shape_picker_rect(self.last_viewport_w, self.last_viewport_h);
-            let picker = ShapePicker::for_editor_ui(&self.editor_state.editor_ui);
-            let new_hover = picker.hit_test(panel, Point2D::new(x, y));
-            let new_hover_ec = new_hover.map(op_editor_ui::widgets::editor_state_ext::shape_choice);
-            if new_hover_ec != self.editor_state.editor_ui.shape_picker_hover {
-                self.editor_state.editor_ui.shape_picker_hover = new_hover_ec;
-                self.mark_dirty();
-                return true;
-            }
+        // Export-section select-popup row hover (no-op when closed).
+        if !over_topmost
+            && self.update_export_picker_hover(x, y, self.last_viewport_w, self.last_viewport_h)
+        {
+            return true;
         }
         // TopBar window-control cluster — hovering it reveals the
         // close / minimise / maximise glyphs on the 3 dots.

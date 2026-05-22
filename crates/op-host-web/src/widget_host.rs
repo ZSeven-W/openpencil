@@ -46,6 +46,8 @@ use op_editor_ui::{Point2D, Rect, Theme};
 mod keyboard;
 mod paint;
 mod press;
+mod property_dispatch;
+mod scroll;
 
 pub(in crate::widget_host) const TOOLBAR_INSET_X: f32 = 12.0;
 pub(in crate::widget_host) const TOOLBAR_INSET_Y: f32 = 12.0;
@@ -243,6 +245,14 @@ impl WidgetHost {
     ) -> bool {
         self.last_viewport_w = viewport_width;
         self.last_viewport_h = viewport_height;
+        // Side rails scroll their panels instead of zooming the
+        // canvas (`widget_host/scroll.rs`).
+        if self.try_scroll_property_panel(x, y, delta_y, viewport_width, viewport_height) {
+            return true;
+        }
+        if self.try_scroll_layer_panel(x, y, delta_y, viewport_height) {
+            return true;
+        }
         if !self.over_canvas(x, y, viewport_width, viewport_height) {
             return false;
         }
@@ -353,6 +363,31 @@ impl WidgetHost {
                     });
                 self.mark_dirty();
                 return true;
+            }
+        }
+        // Export-section select-popup row hover highlight.
+        if self.editor_state.editor_ui.export_scale_picker_open
+            || self.editor_state.editor_ui.export_format_picker_open
+        {
+            if let Some(panel) =
+                op_editor_ui::widgets::PropertyPanel::for_selection(&self.editor_state)
+            {
+                let property_rect = Rect {
+                    origin: Point2D::new(
+                        self.last_viewport_w - self.editor_state.editor_ui.property_panel_width,
+                        op_editor_ui::widgets::TOP_BAR_HEIGHT,
+                    ),
+                    size: Point2D::new(
+                        self.editor_state.editor_ui.property_panel_width,
+                        (self.last_viewport_h - op_editor_ui::widgets::TOP_BAR_HEIGHT).max(0.0),
+                    ),
+                };
+                let new_hover = panel.export_picker_row_at(property_rect, Point2D::new(x, y));
+                if new_hover != self.editor_state.editor_ui.export_picker_hover {
+                    self.editor_state.editor_ui.export_picker_hover = new_hover;
+                    self.mark_dirty();
+                    return true;
+                }
             }
         }
         if let Some(m) = self.marquee_drag.as_mut() {

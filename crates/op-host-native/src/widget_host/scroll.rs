@@ -9,6 +9,77 @@ use op_editor_ui::widgets::GitPanel;
 use op_editor_ui::Point2D;
 
 impl WidgetHostNative {
+    /// Scroll the right-rail PropertyPanel when a wheel / trackpad
+    /// pan lands over it. `delta` is the vertical scroll delta
+    /// (wheel `delta_y` or pan `dy`). Returns `true` when the cursor
+    /// was over the inspector, so the caller stops before zooming.
+    fn try_scroll_property_panel(
+        &mut self,
+        x: f32,
+        y: f32,
+        delta: f32,
+        viewport_width: f32,
+        viewport_height: f32,
+    ) -> bool {
+        use op_editor_ui::widgets::{PropertyPanel, TOP_BAR_HEIGHT};
+        use op_editor_ui::Rect;
+        let Some(panel) = PropertyPanel::for_selection_at(&self.editor_state, self.now_ms) else {
+            return false;
+        };
+        let pw = self.editor_state.editor_ui.property_panel_width;
+        let property_rect = Rect {
+            origin: Point2D::new(viewport_width - pw, TOP_BAR_HEIGHT),
+            size: Point2D::new(pw, (viewport_height - TOP_BAR_HEIGHT).max(0.0)),
+        };
+        if !rect_contains(property_rect, Point2D::new(x, y)) {
+            return false;
+        }
+        let max = (panel.content_height(property_rect) - property_rect.size.y).max(0.0);
+        let next = (self.editor_state.editor_ui.property_panel_scroll - delta).clamp(0.0, max);
+        if next != self.editor_state.editor_ui.property_panel_scroll {
+            self.editor_state.editor_ui.property_panel_scroll = next;
+            self.mark_dirty();
+        }
+        true
+    }
+
+    /// Scroll the left-rail LayerPanel when a wheel / trackpad pan
+    /// lands over it — the Pages section if the cursor is above the
+    /// Layers row viewport, otherwise the Layers section. Returns
+    /// `true` when the cursor was over the panel.
+    fn try_scroll_layer_panel(&mut self, x: f32, y: f32, delta: f32, viewport_height: f32) -> bool {
+        use op_editor_ui::widgets::{LayerPanel, TOP_BAR_HEIGHT};
+        use op_editor_ui::Rect;
+        if !self.editor_state.editor_ui.sidebar_open {
+            return false;
+        }
+        let pw = self.editor_state.editor_ui.layer_panel_width;
+        let rect = Rect {
+            origin: Point2D::new(0.0, TOP_BAR_HEIGHT),
+            size: Point2D::new(pw, (viewport_height - TOP_BAR_HEIGHT).max(0.0)),
+        };
+        if !rect_contains(rect, Point2D::new(x, y)) {
+            return false;
+        }
+        let r = LayerPanel::from_editor(&self.editor_state).regions(rect);
+        if y >= r.layers_rows_top {
+            let next = (self.editor_state.editor_ui.layer_layers_scroll - delta)
+                .clamp(0.0, r.layers_max_scroll);
+            if next != self.editor_state.editor_ui.layer_layers_scroll {
+                self.editor_state.editor_ui.layer_layers_scroll = next;
+                self.mark_dirty();
+            }
+        } else {
+            let next = (self.editor_state.editor_ui.layer_pages_scroll - delta)
+                .clamp(0.0, r.pages_max_scroll);
+            if next != self.editor_state.editor_ui.layer_pages_scroll {
+                self.editor_state.editor_ui.layer_pages_scroll = next;
+                self.mark_dirty();
+            }
+        }
+        true
+    }
+
     /// Wheel event — zoom centered at (x, y) over the canvas.
     pub fn apply_wheel(
         &mut self,
@@ -101,6 +172,16 @@ impl WidgetHostNative {
                 self.mark_dirty();
                 return true;
             }
+        }
+        // Right-rail inspector — a wheel over it scrolls the
+        // PropertyPanel content instead of zooming the canvas.
+        if self.try_scroll_property_panel(x, y, delta_y, viewport_width, viewport_height) {
+            return true;
+        }
+        // Left-rail LayerPanel — a wheel over it scrolls its Pages /
+        // Layers section instead of zooming.
+        if self.try_scroll_layer_panel(x, y, delta_y, viewport_height) {
+            return true;
         }
         if !self.over_canvas(x, y, viewport_width, viewport_height) {
             return false;
@@ -211,6 +292,16 @@ impl WidgetHostNative {
                 self.mark_dirty();
                 return true;
             }
+        }
+        // Right-rail inspector — a trackpad pan over it scrolls the
+        // PropertyPanel content instead of panning the canvas.
+        if self.try_scroll_property_panel(x, y, dy, viewport_width, viewport_height) {
+            return true;
+        }
+        // Left-rail LayerPanel — a trackpad pan over it scrolls its
+        // Pages / Layers section instead of panning the canvas.
+        if self.try_scroll_layer_panel(x, y, dy, viewport_height) {
+            return true;
         }
         if !self.over_canvas(x, y, viewport_width, viewport_height) {
             return false;
