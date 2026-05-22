@@ -3,9 +3,6 @@
 //! 对齐 TS `orchestrator.ts:1323-1329`(tier→mode 序列)
 //! 与 `orchestrator-sub-agent.ts:150-152`(不可重试错误检测)。
 
-// 这两个函数的调用方在 Task C2(`run.rs`)中添加;此处暂无调用方。
-#![allow(dead_code)]
-
 use crate::model_profile::ModelTier;
 use crate::types::PlanningMode;
 

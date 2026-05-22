@@ -16,12 +16,11 @@ use crate::design_type::{detect_design_type, DesignType};
 use crate::model_profile::resolve_model_profile;
 use crate::plan::{OrchestratorPlan, Subtask};
 use crate::style_guide_context::build_planning_style_guide_context;
+use crate::timeouts::{
+    apply_profile_to_timeouts, builtin_planning_timeouts, orchestrator_timeouts, sub_agent_timeouts,
+};
 use crate::types::{AbortFlag, CallRequest, DesignRequest, PlanningMode, PlanningPrompt};
 use std::collections::HashMap;
-use std::time::Duration;
-
-const PLANNING_TIMEOUT: Duration = Duration::from_secs(300);
-const SUBAGENT_TIMEOUT: Duration = Duration::from_secs(420);
 
 /// sub-agent 阶段要求模型产出的 JSON 形状说明。
 const NODE_FORMAT: &str = r#"
@@ -71,13 +70,25 @@ fn filter_planning_skills_for_prompt(
 
 /// 规划阶段的 LLM 调用输入。`mode` 决定 prompt 构造方式;返回
 /// `PlanningPrompt`(带 compact 的 forced style-guide 名,供 S3b-1b)。
+///
+/// 超时来源(对齐 TS `callOrchestrator` 中的 `timeouts` 分支):
+/// - `Compact` 模式对应 TS `fastTimeout=true`(仅 builtin / Basic 兜底路径),
+///   使用 `builtin_planning_timeouts` —— 较短,让规划快速失败。
+/// - `Rich` / `Minimal` 使用 `orchestrator_timeouts(prompt_len)`,按
+///   prompt 长度分桶后再乘以模型 tier 的 `timeout_multiplier`。
 pub fn build_orchestrator_prompt(
     req: &DesignRequest,
     mode: PlanningMode,
     abort: AbortFlag,
 ) -> PlanningPrompt {
+    let model_id = req.model.as_deref().unwrap_or("");
+    let profile = resolve_model_profile(model_id);
+    let multiplier = profile.timeout_multiplier;
+
     match mode {
         PlanningMode::Compact => {
+            // TS fastTimeout=true path: getBuiltinPlanningTimeouts(model)
+            let t = apply_profile_to_timeouts(builtin_planning_timeouts(profile.tier), multiplier);
             let cp = build_compact_planning_prompt(&req.prompt, req.design_md.as_ref());
             PlanningPrompt {
                 call_request: CallRequest {
@@ -85,16 +96,18 @@ pub fn build_orchestrator_prompt(
                     user_prompt: cp.user_prompt,
                     model: req.model.clone(),
                     provider: req.provider.clone(),
-                    timeout: PLANNING_TIMEOUT,
+                    timeout: t.hard,
                     abort,
-                    no_text_timeout: None,
-                    first_text_timeout: None,
+                    no_text_timeout: Some(t.no_text),
+                    first_text_timeout: Some(t.first_text),
                 },
                 forced_style_guide_name: Some(cp.selected_style_guide_name),
                 mode,
             }
         }
         PlanningMode::Rich | PlanningMode::Minimal => {
+            // TS fastTimeout=false path: getOrchestratorTimeouts(originalLength, model)
+            let t = apply_profile_to_timeouts(orchestrator_timeouts(req.prompt.len()), multiplier);
             let ctx = build_planning_style_guide_context(
                 &req.prompt,
                 req.model.as_deref(),
@@ -123,10 +136,10 @@ pub fn build_orchestrator_prompt(
                     user_prompt: req.prompt.clone(),
                     model: req.model.clone(),
                     provider: req.provider.clone(),
-                    timeout: PLANNING_TIMEOUT,
+                    timeout: t.hard,
                     abort,
-                    no_text_timeout: None,
-                    first_text_timeout: None,
+                    no_text_timeout: Some(t.no_text),
+                    first_text_timeout: Some(t.first_text),
                 },
                 forced_style_guide_name: None,
                 mode,
@@ -184,15 +197,24 @@ pub fn build_subagent_prompt(
         req.prompt, subtask.label, subtask.id_prefix, subtask.region.width, subtask.region.height,
     );
 
+    // Port of getSubAgentTimeouts(preparedPrompt.originalLength, model):
+    // `originalLength` = normalized user prompt length; here `req.prompt.len()`
+    // is the closest equivalent (we don't have a separate "normalized" form).
+    let profile = resolve_model_profile(model_id);
+    let t = apply_profile_to_timeouts(
+        sub_agent_timeouts(req.prompt.len(), tier),
+        profile.timeout_multiplier,
+    );
+
     CallRequest {
         system_prompt,
         user_prompt,
         model: req.model.clone(),
         provider: req.provider.clone(),
-        timeout: SUBAGENT_TIMEOUT,
+        timeout: t.hard,
         abort,
-        no_text_timeout: None,
-        first_text_timeout: None,
+        no_text_timeout: Some(t.no_text),
+        first_text_timeout: Some(t.first_text),
     }
 }
 
@@ -375,6 +397,192 @@ mod tests {
         assert_eq!(
             full_cr.system_prompt, reduced_cr.system_prompt,
             "reduced_complexity on Full tier should be a no-op"
+        );
+    }
+
+    // ── C4: timeout wiring tests ──────────────────────────────────────────────
+
+    /// Rich/Minimal mode sets profile-derived timeouts (not None).
+    #[test]
+    fn orchestrator_prompt_rich_has_profile_timeouts() {
+        let pp = build_orchestrator_prompt(&req(), PlanningMode::Rich, AbortFlag::new());
+        assert!(
+            pp.call_request.no_text_timeout.is_some(),
+            "no_text_timeout must be Some for Rich mode"
+        );
+        assert!(
+            pp.call_request.first_text_timeout.is_some(),
+            "first_text_timeout must be Some for Rich mode"
+        );
+        // Short prompt (< 2200 chars): hard = 300s for Standard/Full tier.
+        assert_eq!(
+            pp.call_request.timeout,
+            std::time::Duration::from_millis(300_000),
+            "short-prompt Rich timeout should be 300s"
+        );
+    }
+
+    /// Compact mode uses builtin_planning_timeouts (60s hard for Full tier, not 300s).
+    #[test]
+    fn orchestrator_prompt_compact_uses_builtin_timeouts() {
+        let pp = build_orchestrator_prompt(&req(), PlanningMode::Compact, AbortFlag::new());
+        // builtin: hard=60_000ms for Full tier (multiplier=1.0)
+        assert_eq!(
+            pp.call_request.timeout,
+            std::time::Duration::from_millis(60_000),
+            "Compact mode should use builtin planning timeout (60s hard)"
+        );
+        assert!(
+            pp.call_request.no_text_timeout.is_some(),
+            "no_text_timeout must be Some for Compact mode"
+        );
+        assert!(
+            pp.call_request.first_text_timeout.is_some(),
+            "first_text_timeout must be Some for Compact mode"
+        );
+    }
+
+    /// A long prompt (>= 4200 chars) yields a larger hard timeout than a short one
+    /// for Rich mode.
+    #[test]
+    fn orchestrator_prompt_long_prompt_has_larger_timeout_than_short() {
+        let short_req = DesignRequest {
+            prompt: "short".into(), // < 2200 chars
+            model: Some("claude-sonnet".into()),
+            provider: None,
+            design_md: None,
+        };
+        let long_prompt = "x".repeat(5000); // >= 4200 chars
+        let long_req = DesignRequest {
+            prompt: long_prompt,
+            model: Some("claude-sonnet".into()),
+            provider: None,
+            design_md: None,
+        };
+        let short_pp = build_orchestrator_prompt(&short_req, PlanningMode::Rich, AbortFlag::new());
+        let long_pp = build_orchestrator_prompt(&long_req, PlanningMode::Rich, AbortFlag::new());
+        assert!(
+            long_pp.call_request.timeout > short_pp.call_request.timeout,
+            "long prompt should yield a larger timeout than short prompt"
+        );
+    }
+
+    /// timeout_multiplier is applied: deepseek-v4-pro has multiplier=2.0,
+    /// so its timeout should be 2× the standard short-bucket orchestrator timeout.
+    #[test]
+    fn orchestrator_prompt_multiplier_applied() {
+        let ds_req = DesignRequest {
+            prompt: "a page".into(), // short bucket
+            model: Some("deepseek-v4-pro".into()),
+            provider: None,
+            design_md: None,
+        };
+        let pp = build_orchestrator_prompt(&ds_req, PlanningMode::Rich, AbortFlag::new());
+        // Short bucket base: 300_000ms × 2.0 = 600_000ms
+        assert_eq!(
+            pp.call_request.timeout,
+            std::time::Duration::from_millis(600_000),
+            "deepseek-v4-pro multiplier=2.0 should double the short-bucket timeout"
+        );
+    }
+
+    fn subtask() -> crate::plan::Subtask {
+        crate::plan::Subtask {
+            id: "s".into(),
+            label: "Section".into(),
+            region: crate::plan::Region {
+                width: 1200.0,
+                height: 400.0,
+            },
+            id_prefix: "s".into(),
+            parent_frame_id: None,
+            elements: None,
+            screen: None,
+        }
+    }
+
+    /// Sub-agent prompt has profile-derived timeouts (not None).
+    #[test]
+    fn subagent_prompt_has_profile_timeouts() {
+        let cr = build_subagent_prompt(&subtask(), &plan(), &req(), AbortFlag::new(), false, false);
+        assert!(
+            cr.no_text_timeout.is_some(),
+            "no_text_timeout must be Some for sub-agent"
+        );
+        assert!(
+            cr.first_text_timeout.is_some(),
+            "first_text_timeout must be Some for sub-agent"
+        );
+        // req() has short prompt → Short bucket SA hard = 420_000ms (Full tier, multiplier=1)
+        assert_eq!(
+            cr.timeout,
+            std::time::Duration::from_millis(420_000),
+            "short-prompt sub-agent hard timeout should be 420s"
+        );
+    }
+
+    /// A long prompt (>= 4200 chars) yields a larger sub-agent hard timeout.
+    #[test]
+    fn subagent_prompt_long_prompt_has_larger_timeout() {
+        let short_req = DesignRequest {
+            prompt: "design a page".into(),
+            model: Some("claude-sonnet".into()),
+            provider: None,
+            design_md: None,
+        };
+        let long_req = DesignRequest {
+            prompt: "x".repeat(5000),
+            model: Some("claude-sonnet".into()),
+            provider: None,
+            design_md: None,
+        };
+        let short_cr = build_subagent_prompt(
+            &subtask(),
+            &plan(),
+            &short_req,
+            AbortFlag::new(),
+            false,
+            false,
+        );
+        let long_cr = build_subagent_prompt(
+            &subtask(),
+            &plan(),
+            &long_req,
+            AbortFlag::new(),
+            false,
+            false,
+        );
+        assert!(
+            long_cr.timeout > short_cr.timeout,
+            "long prompt should yield a larger sub-agent timeout"
+        );
+    }
+
+    /// Basic-tier sub-agent clamps no_text and first_text timeouts.
+    #[test]
+    fn subagent_prompt_basic_tier_clamps_soft_timeouts() {
+        let basic_req = DesignRequest {
+            prompt: "a page".into(), // short bucket
+            model: Some("claude-haiku".into()),
+            provider: None,
+            design_md: None,
+        };
+        let cr = build_subagent_prompt(
+            &subtask(),
+            &plan(),
+            &basic_req,
+            AbortFlag::new(),
+            false,
+            false,
+        );
+        // Basic clamp: no_text ≤ 45_000ms, first_text ≤ 75_000ms
+        assert!(
+            cr.no_text_timeout.unwrap() <= std::time::Duration::from_millis(45_000),
+            "Basic tier no_text_timeout should be clamped to ≤ 45s"
+        );
+        assert!(
+            cr.first_text_timeout.unwrap() <= std::time::Duration::from_millis(75_000),
+            "Basic tier first_text_timeout should be clamped to ≤ 75s"
         );
     }
 }

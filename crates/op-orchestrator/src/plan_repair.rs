@@ -7,8 +7,6 @@
 //! `apps/web/src/services/ai/orchestrator-planning.ts:76-254`.
 //! Task B3 (parse_orchestrator_response) will be appended in the next task.
 
-#![allow(dead_code)]
-
 use crate::design_md_policy::{guess_neutral_background_from_theme, infer_design_md_background};
 use crate::plan::build_fallback_plan;
 use crate::plan::{OrchestratorPlan, PlanFill, Region, RootFrameSpec, Subtask};

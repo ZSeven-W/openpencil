@@ -7,8 +7,6 @@
 //!   `getBuiltinPlanningTimeouts`, `getSubAgentTimeouts`
 //! - `model-profiles.ts` — `applyProfileToTimeouts`
 
-#![allow(dead_code)]
-
 use crate::model_profile::ModelTier;
 use std::time::Duration;
 
