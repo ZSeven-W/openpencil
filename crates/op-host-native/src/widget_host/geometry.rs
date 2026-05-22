@@ -76,6 +76,7 @@ impl WidgetHostNative {
             changed |= ui.locale_picker_hover.take().is_some();
             changed |= ui.shape_picker_hover.take().is_some();
             changed |= ui.align_toolbar_hover.take().is_some();
+            changed |= ui.chat_model_picker_hover.take().is_some();
             if let Some(menu) = ui.layer_context_menu.as_mut() {
                 changed |= menu.hovered_row.take().is_some();
             }

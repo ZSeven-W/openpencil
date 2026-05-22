@@ -526,6 +526,13 @@ pub struct EditorUiState {
     // --- AI chat model picker --------------------------------------
     /// AI chat model-picker dropdown open.
     pub chat_model_picker_open: bool,
+    /// Vertical scroll offset of the model-picker dropdown, in px.
+    /// Non-zero only when the connected catalog is taller than the
+    /// picker's capped height; the host clamps it on wheel input.
+    pub chat_model_picker_scroll: f32,
+    /// Index into `chat.available_models` of the model row the cursor
+    /// is over, or `None`. Drives the picker's hover-row tint.
+    pub chat_model_picker_hover: Option<usize>,
     /// Index into `AgentProvider::ALL` of the agent driving the chat.
     pub chat_selected_agent: usize,
 
@@ -661,6 +668,8 @@ impl Default for EditorUiState {
             shape_picker_hover: None,
             shape_tool: Tool::Rect,
             chat_model_picker_open: false,
+            chat_model_picker_scroll: 0.0,
+            chat_model_picker_hover: None,
             chat_selected_agent: 0,
             align_toolbar_hover: None,
             property_tab: PropertyTab::Design,
