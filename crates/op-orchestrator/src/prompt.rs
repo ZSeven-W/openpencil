@@ -85,6 +85,8 @@ pub fn build_orchestrator_prompt(
                     provider: req.provider.clone(),
                     timeout: PLANNING_TIMEOUT,
                     abort,
+                    no_text_timeout: None,
+                    first_text_timeout: None,
                 },
                 forced_style_guide_name: Some(cp.selected_style_guide_name),
                 mode,
@@ -121,6 +123,8 @@ pub fn build_orchestrator_prompt(
                     provider: req.provider.clone(),
                     timeout: PLANNING_TIMEOUT,
                     abort,
+                    no_text_timeout: None,
+                    first_text_timeout: None,
                 },
                 forced_style_guide_name: None,
                 mode,
@@ -164,6 +168,8 @@ pub fn build_subagent_prompt(
         provider: req.provider.clone(),
         timeout: SUBAGENT_TIMEOUT,
         abort,
+        no_text_timeout: None,
+        first_text_timeout: None,
     }
 }
 
