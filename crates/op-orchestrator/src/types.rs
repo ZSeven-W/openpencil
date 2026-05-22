@@ -76,6 +76,15 @@ impl AbortFlag {
     }
 }
 
+/// 规划 prompt 的构造模式 —— TS rich/minimal/compact 三档。
+/// Plan B 的格式化器与 Plan C 的 `build_orchestrator_prompt` 共用。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PlanningMode {
+    Rich,
+    Minimal,
+    Compact,
+}
+
 /// 用户消息的意图分类 —— 决定走编排器还是普通聊天。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Intent {

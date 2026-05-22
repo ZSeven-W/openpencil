@@ -5,7 +5,10 @@
 #![allow(dead_code)]
 
 use crate::design_type::contains_word;
-use op_ai_skills::style_guide::{style_guide_registry, ParsedStyleGuide, Platform};
+use crate::types::PlanningMode;
+use op_ai_skills::style_guide::{
+    extract_style_guide_values, style_guide_registry, ParsedStyleGuide, Platform,
+};
 
 /// `lower` 含 `words` 任一(按 `contains_word`:ASCII 词边界 / CJK 子串)。
 fn any(lower: &str, words: &[&str]) -> bool {
@@ -300,6 +303,98 @@ pub(crate) fn rank_style_guides_for_prompt(
     scored.into_iter().map(|(g, _)| g).collect()
 }
 
+const STYLE_GUIDE_METADATA_TAG_LIMIT: usize = 4;
+const STYLE_GUIDE_SNIPPET_TAG_LIMIT: usize = 6;
+
+/// 一行 guide 元数据 —— port of `formatGuideMetadataLine`。
+/// `- {name} [{platform}]{bg} :: {tags}`。Rich 取 4 tag,Minimal 取 3。
+pub(crate) fn format_guide_metadata_line(guide: &ParsedStyleGuide, mode: PlanningMode) -> String {
+    let values = extract_style_guide_values(&guide.content);
+    let bg = values
+        .colors
+        .background
+        .as_ref()
+        .map(|b| format!(" bg:{b}"))
+        .unwrap_or_default();
+    let tag_limit = match mode {
+        PlanningMode::Rich => STYLE_GUIDE_METADATA_TAG_LIMIT,
+        // Compact mode never reaches this formatter (compact planning prompts
+        // don't use the style-guide catalog); handled for exhaustiveness.
+        PlanningMode::Minimal | PlanningMode::Compact => 3,
+    };
+    let tags = guide
+        .tags
+        .iter()
+        .take(tag_limit)
+        .cloned()
+        .collect::<Vec<_>>()
+        .join(", ");
+    format!(
+        "- {} [{}]{} :: {}",
+        guide.name,
+        guide.platform.as_str(),
+        bg,
+        tags
+    )
+}
+
+/// 一份 guide 的详细 snippet —— port of `formatGuideSnippet`。
+/// 多行块,无数据的行丢弃。
+pub(crate) fn format_guide_snippet(guide: &ParsedStyleGuide) -> String {
+    let v = extract_style_guide_values(&guide.content);
+    let mut lines: Vec<String> = vec![format!("### {} [{}]", guide.name, guide.platform.as_str())];
+
+    let tags = guide
+        .tags
+        .iter()
+        .take(STYLE_GUIDE_SNIPPET_TAG_LIMIT)
+        .cloned()
+        .collect::<Vec<_>>()
+        .join(", ");
+    if !tags.is_empty() {
+        lines.push(format!("tags: {tags}"));
+    }
+
+    let mut color_parts: Vec<String> = Vec::new();
+    if let Some(b) = &v.colors.background {
+        color_parts.push(format!("bg={b}"));
+    }
+    if let Some(s) = &v.colors.surface {
+        color_parts.push(format!("surface={s}"));
+    }
+    if let Some(a) = &v.colors.accent {
+        color_parts.push(format!("accent={a}"));
+    }
+    if !color_parts.is_empty() {
+        lines.push(format!("colors: {}", color_parts.join(", ")));
+    }
+
+    // TS formatGuideSnippet's fonts line is display+body only — data_font intentionally not emitted.
+    let mut font_parts: Vec<String> = Vec::new();
+    if let Some(d) = &v.typography.display_font {
+        font_parts.push(format!("display={d}"));
+    }
+    if let Some(b) = &v.typography.body_font {
+        font_parts.push(format!("body={b}"));
+    }
+    if !font_parts.is_empty() {
+        lines.push(format!("fonts: {}", font_parts.join(", ")));
+    }
+
+    let mut radius_parts: Vec<String> = Vec::new();
+    if let Some(c) = v.radius.card {
+        radius_parts.push(format!("card={c}"));
+    }
+    if let Some(b) = v.radius.button {
+        radius_parts.push(format!("button={b}"));
+    }
+    if !radius_parts.is_empty() {
+        lines.push(format!("radius: {}", radius_parts.join(", ")));
+    }
+
+    lines.join("\n")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -376,5 +471,42 @@ mod tests {
             Platform::Webapp,
         );
         assert!(s0 >= s1);
+    }
+
+    #[test]
+    fn metadata_line_shape() {
+        let g = &style_guide_registry()[0];
+        let line = format_guide_metadata_line(g, PlanningMode::Rich);
+        // `- {name} [{platform}]...  :: ...`
+        assert!(line.starts_with(&format!("- {} [", g.name)));
+        assert!(line.contains(" :: "));
+    }
+
+    #[test]
+    fn metadata_line_emits_bg_segment() {
+        // Find a registry guide whose content yields an extractable background;
+        // its metadata line must carry the ` bg:` segment.
+        let with_bg = style_guide_registry()
+            .iter()
+            .find(|g| {
+                extract_style_guide_values(&g.content)
+                    .colors
+                    .background
+                    .is_some()
+            })
+            .expect("at least one style guide should expose a background color");
+        let line = format_guide_metadata_line(with_bg, PlanningMode::Rich);
+        assert!(
+            line.contains(" bg:"),
+            "metadata line missing bg segment: {line}"
+        );
+    }
+
+    #[test]
+    fn snippet_has_heading_and_tags() {
+        let g = &style_guide_registry()[0];
+        let snip = format_guide_snippet(g);
+        assert!(snip.starts_with(&format!("### {} [", g.name)));
+        assert!(snip.contains("tags:"));
     }
 }
