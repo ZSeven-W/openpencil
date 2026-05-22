@@ -713,9 +713,25 @@ pub(crate) fn group_dashboard_main_rows(plan: &OrchestratorPlan) -> DashboardRow
 }
 
 // ---------------------------------------------------------------------------
-// Tests — split into sibling file to stay under 800 lines
+// §4.6 Slot assignment — implementation in sibling file (800-line cap)
+// ---------------------------------------------------------------------------
+
+mod slots;
+#[allow(unused_imports)] // consumed by run.rs in a later task
+pub(crate) use slots::{assign_dashboard_main_parents, RowFrameEntry};
+
+// ---------------------------------------------------------------------------
+// Tests — split into sibling files to stay under 800 lines
 // ---------------------------------------------------------------------------
 
 #[cfg(test)]
 #[path = "dashboard_columns_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "dashboard_columns_tests_b.rs"]
+mod tests_b;
+
+#[cfg(test)]
+#[path = "dashboard_columns_tests_b2.rs"]
+mod tests_b2;
