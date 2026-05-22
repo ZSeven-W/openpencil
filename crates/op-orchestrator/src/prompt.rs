@@ -309,6 +309,7 @@ mod tests {
             parent_frame_id: Some("root".into()),
             elements: None,
             screen: None,
+            generated_root_id: None,
         };
         let cr = build_subagent_prompt(&st, &plan(), &req(), AbortFlag::new(), false, false);
         assert!(cr.user_prompt.contains("Hero"));
@@ -329,6 +330,7 @@ mod tests {
             parent_frame_id: None,
             elements: None,
             screen: None,
+            generated_root_id: None,
         };
         // minimal_skills=true: the system prompt should contain "schema" skill
         // content and "jsonl-format" skill content, but NOT layout/text-rules etc.
@@ -359,6 +361,7 @@ mod tests {
             parent_frame_id: None,
             elements: None,
             screen: None,
+            generated_root_id: None,
         };
         // req() uses model "claude" which is Full tier — no narrowing.
         // Use a basic-tier model to test narrowing.
@@ -392,6 +395,7 @@ mod tests {
             parent_frame_id: None,
             elements: None,
             screen: None,
+            generated_root_id: None,
         };
         // req() uses "claude" which maps to Full tier → reduced_complexity is no-op
         let full_cr = build_subagent_prompt(&st, &plan(), &req(), AbortFlag::new(), false, false);
@@ -503,6 +507,7 @@ mod tests {
             parent_frame_id: None,
             elements: None,
             screen: None,
+            generated_root_id: None,
         }
     }
 

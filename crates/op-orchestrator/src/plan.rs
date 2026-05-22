@@ -71,6 +71,10 @@ pub struct Subtask {
     /// 对应的屏幕 / 页面名 —— port of TS `SubTask.screen`。
     #[serde(default)]
     pub screen: Option<String>,
+    /// sub-agent 运行后记录下的顶层节点 id —— port of TS
+    /// `SubTask.generatedRootId`。仪器由 run.rs 填写;规划阶段为 None。
+    #[serde(skip)]
+    pub generated_root_id: Option<String>,
 }
 
 /// 规划阶段的完整产物。字段对齐规划语料 `decomposition.md`。
@@ -172,6 +176,7 @@ pub fn build_fallback_plan(req: &DesignRequest) -> OrchestratorPlan {
                 parent_frame_id: None,
                 elements: None,
                 screen: None,
+                generated_root_id: None,
             }
         })
         .collect();

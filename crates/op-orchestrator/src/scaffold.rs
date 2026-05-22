@@ -303,6 +303,7 @@ mod tests {
             parent_frame_id: None,
             elements: None,
             screen: screen.map(|s| s.to_string()),
+            generated_root_id: None,
         }
     }
 

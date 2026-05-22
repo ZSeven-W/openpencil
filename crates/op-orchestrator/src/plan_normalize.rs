@@ -72,6 +72,7 @@ mod tests {
             parent_frame_id: None,
             elements: None,
             screen: None,
+            generated_root_id: None,
         }
     }
 
