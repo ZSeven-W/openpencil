@@ -18,6 +18,7 @@
 //! The dashboard path implementation lives in `run_dashboard.rs` (split to
 //! keep this file under the 800-line ceiling).
 
+use crate::append::apply_append_context_to_plan;
 use crate::cleanup::{
     aggregate_concurrent_verdict, cleanup_concurrent_roots, descendant_count, run_cleanup_passes,
 };
@@ -69,10 +70,24 @@ impl Orchestrator {
         on_progress(Progress::Planning);
         let (mut plan, norm) = planning_loop(&request, llm, abort).await?;
 
+        // -- S3b-4 Task B2 call site 1: apply append context (TS :737) --
+        // Must run AFTER planning_loop (which calls normalize) so root_frame.id
+        // and subtasks are already normalized before we repoint them.
+        let append_result =
+            apply_append_context_to_plan(&mut plan, request.append_context.as_ref());
+
         // -- S3b-2 Task C2: concurrency branch decision --
-        // Port of `orchestrator.ts:780-810` (minus append-mode gate, S3b-4).
+        // Port of `orchestrator.ts:780-810`.
         let screen_groups = group_subtasks_by_screen(&plan.subtasks);
-        let effective = effective_concurrency(request.concurrency, screen_groups.len());
+
+        // -- S3b-4 Task B2 call site 3: effective concurrency gate (TS :806-810) --
+        // Append mode is forced sequential — the concurrent branch creates multiple
+        // root frames which conflicts with reusing an existing content-root.
+        let effective = if append_result.skip_root_insertion {
+            1
+        } else {
+            effective_concurrency(request.concurrency, screen_groups.len())
+        };
 
         if effective > 1 {
             return run_concurrent_path(
@@ -103,7 +118,15 @@ impl Orchestrator {
         }
         let scaffold_root_index = sink.state().active_children().len();
 
-        if use_dashboard {
+        // -- S3b-4 Task B2: dashboard / append mutex (spec §2) --
+        // Both concurrent and dashboard paths create new root structures that
+        // conflict with reusing an existing content-root.  The concurrency gate
+        // above already enforces the concurrent/append mutex; here we enforce
+        // the dashboard/append mutex by preferring the append fast-path when
+        // both would otherwise fire.  Mirrors TS positional precedence — the
+        // append fast-path lives inside the sequential else block, before the
+        // dashboard sub-branch.
+        if !append_result.skip_root_insertion && use_dashboard {
             // ── Dashboard path (extracted to run_dashboard.rs) ────────────
             return run_dashboard_path(
                 plan,
@@ -118,43 +141,74 @@ impl Orchestrator {
             .await;
         }
 
-        // ── Non-dashboard sequential path (unchanged from S3a/S3b-1b) ──────
-        match build_scaffold(&plan, norm.is_mobile) {
-            Ok(cmds) => {
-                for cmd in cmds {
-                    if !sink.apply(cmd) {
-                        rollback(sink, &var_snapshot);
-                        sink.end_undo_batch();
-                        return Err(OrchestratorError::Internal(
-                            "scaffold insert rejected by document".into(),
-                        ));
+        // ── Non-dashboard sequential path ──────────────────────────────────
+        //
+        // -- S3b-4 Task B2 call site 4: append fast-path (TS :942-949) --
+        // In append mode we reuse the caller-provided content-root instead of
+        // creating a new root + status bar + dashboard columns.
+        // `skip_status_bar` is naturally satisfied here: the concurrent mobile
+        // scaffold (which injects a status-bar child) is skipped entirely, and
+        // `plan_normalize::normalize` already ran its mobile strip before
+        // `apply_append_context_to_plan` filtered any remaining status-bar subtasks.
+        let (root_id, scaffold_baseline) = if append_result.skip_root_insertion {
+            // Append fast-path: reuse the existing target frame as root.
+            // No scaffold InsertSubtree, no status bar, no agent badge.
+            let target_id = plan.root_frame.id.clone();
+            for subtask in &mut plan.subtasks {
+                subtask.parent_frame_id = Some(target_id.clone());
+            }
+            // Capture the pre-generation descendant count of the target frame.
+            // Used by the cleanup's zero-content check below.
+            let baseline = descendant_count(sink.state(), &target_id);
+            on_progress(Progress::ScaffoldDone);
+            (target_id, baseline)
+        } else {
+            // Normal scaffold path (unchanged from S3a/S3b-1b).
+            // S3b-4 Task B2 call site 2 (TS :743): guard the mobile status-bar
+            // injection — if append mode had been active `skip_status_bar` would
+            // be true and the mobile scaffold (which injects a status-bar child)
+            // would be suppressed.  Here we're in the non-append branch so
+            // `skip_status_bar` is always false; consuming it silences the
+            // dead-code lint and keeps the guard semantically aligned with TS.
+            let effective_is_mobile = norm.is_mobile && !append_result.skip_status_bar;
+            match build_scaffold(&plan, effective_is_mobile) {
+                Ok(cmds) => {
+                    for cmd in cmds {
+                        if !sink.apply(cmd) {
+                            rollback(sink, &var_snapshot);
+                            sink.end_undo_batch();
+                            return Err(OrchestratorError::Internal(
+                                "scaffold insert rejected by document".into(),
+                            ));
+                        }
                     }
                 }
+                Err(e) => {
+                    // scaffold 模板 bug —— 收尾后报内部错误。
+                    rollback(sink, &var_snapshot);
+                    sink.end_undo_batch();
+                    return Err(OrchestratorError::Internal(e));
+                }
             }
-            Err(e) => {
-                // scaffold 模板 bug —— 收尾后报内部错误。
+            let Some(rid) = sink
+                .state()
+                .active_children()
+                .get(scaffold_root_index)
+                .map(|n| n.id_str().to_string())
+            else {
                 rollback(sink, &var_snapshot);
                 sink.end_undo_batch();
-                return Err(OrchestratorError::Internal(e));
+                return Err(OrchestratorError::Internal(format!(
+                    "scaffold root `{planned_root_id}` was not inserted"
+                )));
+            };
+            for subtask in &mut plan.subtasks {
+                subtask.parent_frame_id = Some(rid.clone());
             }
-        }
-        let Some(root_id) = sink
-            .state()
-            .active_children()
-            .get(scaffold_root_index)
-            .map(|n| n.id_str().to_string())
-        else {
-            rollback(sink, &var_snapshot);
-            sink.end_undo_batch();
-            return Err(OrchestratorError::Internal(format!(
-                "scaffold root `{planned_root_id}` was not inserted"
-            )));
+            let baseline = descendant_count(sink.state(), &rid);
+            on_progress(Progress::ScaffoldDone);
+            (rid, baseline)
         };
-        for subtask in &mut plan.subtasks {
-            subtask.parent_frame_id = Some(root_id.clone());
-        }
-        let scaffold_baseline = descendant_count(sink.state(), &root_id);
-        on_progress(Progress::ScaffoldDone);
 
         // -- 阶段 3:顺序子 agent(C3: 3-attempt tier-gated retry ladder) --
         //
@@ -285,6 +339,11 @@ impl Orchestrator {
         }
 
         // -- 阶段 4:清理 --
+        // S3b-4 append mode natural no-op: in append mode the fast-path reuses
+        // `plan.root_frame.id` (the existing target frame) as the single cleanup
+        // root.  The cleanup loop iterates that one root; the `descendant_count
+        // <= scaffold_baseline` check below only deletes the frame if NOTHING
+        // new was added, which is the correct desired behaviour.
         run_cleanup_passes(sink, &plan, &[&root_id]);
         on_progress(Progress::CleanupDone);
 
@@ -604,3 +663,8 @@ mod tests_c2;
 #[cfg(test)]
 #[path = "run_tests_c3.rs"]
 mod tests_c3;
+
+// Task B2 (S3b-4) tests — append-to-document mode wiring.
+#[cfg(test)]
+#[path = "run_tests_b4.rs"]
+mod tests_b4;
