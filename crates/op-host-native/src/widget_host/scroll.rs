@@ -24,6 +24,28 @@ impl WidgetHostNative {
         if self.over_topmost_panel(x, y, viewport_width, viewport_height) {
             return true;
         }
+        // Open chat model-picker — a wheel over its dropdown scrolls
+        // the model list instead of zooming the canvas.
+        if self.editor_state.editor_ui.chat_model_picker_open {
+            use op_editor_ui::widgets::ai_chat_model_picker::max_picker_scroll;
+            use op_editor_ui::widgets::AIChatPlaceholder;
+            let picker = self
+                .ai_chat_rect(viewport_width, viewport_height)
+                .and_then(|chat_rect| {
+                    AIChatPlaceholder::from_editor_at(&self.editor_state, self.now_ms)
+                        .model_picker_bounds(chat_rect)
+                });
+            if let Some(picker) = picker {
+                if rect_contains(picker, Point2D::new(x, y)) {
+                    let max = max_picker_scroll(&self.editor_state.chat.available_models);
+                    let next = (self.editor_state.editor_ui.chat_model_picker_scroll - delta_y)
+                        .clamp(0.0, max);
+                    self.editor_state.editor_ui.chat_model_picker_scroll = next;
+                    self.mark_dirty();
+                    return true;
+                }
+            }
+        }
         // Agent-settings modal owns wheel.
         if self.editor_state.editor_ui.agent_settings_open {
             use op_editor_ui::widgets::agent_settings_panel::AgentSettingsPanel;
@@ -87,7 +109,12 @@ impl WidgetHostNative {
         let (cx0, cy0, _cw, _ch) = self.canvas_region(viewport_width, viewport_height);
         let cursor = Point2D::new(x - cx0, y - cy0);
         self.editor_state.viewport.zoom_at(cursor, delta_y);
-        self.mark_dirty();
+        // No `mark_dirty()`: a zoom only changes the viewport
+        // transform, not the document tree, so the cached
+        // `layout_scene` stays valid — re-running the taffy layout
+        // solve + skia text measurement every wheel tick was the
+        // canvas-zoom jank. The `true` return still drives the
+        // repaint, which re-applies the new viewport transform.
         true
     }
 
@@ -104,6 +131,28 @@ impl WidgetHostNative {
         // Any top-most floating panel owns trackpad scroll first.
         if self.over_topmost_panel(x, y, viewport_width, viewport_height) {
             return true;
+        }
+        // Open chat model-picker owns trackpad scroll over its
+        // dropdown, same as the wheel path.
+        if self.editor_state.editor_ui.chat_model_picker_open {
+            use op_editor_ui::widgets::ai_chat_model_picker::max_picker_scroll;
+            use op_editor_ui::widgets::AIChatPlaceholder;
+            let picker = self
+                .ai_chat_rect(viewport_width, viewport_height)
+                .and_then(|chat_rect| {
+                    AIChatPlaceholder::from_editor_at(&self.editor_state, self.now_ms)
+                        .model_picker_bounds(chat_rect)
+                });
+            if let Some(picker) = picker {
+                if rect_contains(picker, Point2D::new(x, y)) {
+                    let max = max_picker_scroll(&self.editor_state.chat.available_models);
+                    let next =
+                        (self.editor_state.editor_ui.chat_model_picker_scroll - dy).clamp(0.0, max);
+                    self.editor_state.editor_ui.chat_model_picker_scroll = next;
+                    self.mark_dirty();
+                    return true;
+                }
+            }
         }
         // Agent-settings modal owns trackpad scroll same as wheel.
         if self.editor_state.editor_ui.agent_settings_open {
@@ -170,7 +219,9 @@ impl WidgetHostNative {
             return false;
         }
         self.editor_state.viewport.pan(dx, dy);
-        self.mark_dirty();
+        // No `mark_dirty()`: a pan only translates the viewport, not
+        // the document tree — see the `apply_wheel` zoom branch. The
+        // `true` return drives the repaint.
         true
     }
 }

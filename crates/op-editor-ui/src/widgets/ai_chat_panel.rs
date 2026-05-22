@@ -166,6 +166,12 @@ pub struct AIChatPlaceholder<'a> {
     /// `state.available_models`; the active row is
     /// `state.selected_model`.
     pub model_picker_open: bool,
+    /// Vertical scroll offset of the open model-picker dropdown, in
+    /// px (`Document.ui.chat_model_picker_scroll`).
+    pub model_picker_scroll: f32,
+    /// Index into `state.available_models` of the picker row under
+    /// the cursor (`Document.ui.chat_model_picker_hover`).
+    pub model_picker_hover: Option<usize>,
     /// Localised empty-state example cards — resolved at construction
     /// time so the grid reflows when the user flips the Globe icon.
     pub(crate) examples: [ExampleCard; 4],
@@ -194,6 +200,8 @@ impl<'a> AIChatPlaceholder<'a> {
             label_tip_select_elements: translate(ui, "ai.tipSelectElements").to_string(),
             label_no_models: translate(ui, "ai.noModelsConnected").to_string(),
             model_picker_open: ui.chat_model_picker_open,
+            model_picker_scroll: ui.chat_model_picker_scroll,
+            model_picker_hover: ui.chat_model_picker_hover,
             examples: example_cards(ui.locale),
             locale: ui.locale,
         }
@@ -229,11 +237,12 @@ impl<'a> AIChatPlaceholder<'a> {
 
     /// Bounds of the model-picker dropdown — anchored just above
     /// the bottom toolbar (the chip), growing upward over the
-    /// message list. `input_rect` is the panel's input box.
+    /// message list. `input_rect` is the panel's input box. The
+    /// height is capped at `MODEL_PICKER_MAX_H`; a taller catalog
+    /// scrolls inside the card rather than overflowing the screen.
     fn model_picker_rect(&self, rect: Rect, input_rect: Rect) -> Rect {
-        let height = crate::widgets::ai_chat_model_picker::picker_content_height(
-            &self.state.available_models,
-        );
+        let height =
+            crate::widgets::ai_chat_model_picker::picker_view_height(&self.state.available_models);
         let toolbar_top =
             input_rect.origin.y + INPUT_AREA_HEIGHT + self.attachment_row_h() + CONTROLS_ROW_HEIGHT;
         let bottom = toolbar_top - 4.0;
@@ -241,6 +250,25 @@ impl<'a> AIChatPlaceholder<'a> {
             origin: Point2D::new(rect.origin.x + PAD, bottom - height),
             size: Point2D::new(rect.size.x - PAD * 2.0, height),
         }
+    }
+
+    /// Public bounds of the open model-picker dropdown — `None` when
+    /// the picker is closed. The host uses this to route wheel +
+    /// cursor-move input into the picker (scroll + hover) without
+    /// re-deriving the panel's internal input-block geometry.
+    pub fn model_picker_bounds(&self, rect: Rect) -> Option<Rect> {
+        if !self.model_picker_open {
+            return None;
+        }
+        let input_h = self.input_height();
+        let input_rect = Rect {
+            origin: Point2D::new(
+                rect.origin.x + PAD,
+                rect.origin.y + rect.size.y - input_h + 1.0,
+            ),
+            size: Point2D::new(rect.size.x - PAD * 2.0, input_h),
+        };
+        Some(self.model_picker_rect(rect, input_rect))
     }
 
     pub fn hit_test(&self, rect: Rect, point: Point2D) -> Option<AIChatHit> {
@@ -285,6 +313,7 @@ impl<'a> AIChatPlaceholder<'a> {
                 picker,
                 point,
                 &self.state.available_models,
+                self.model_picker_scroll,
             ) {
                 return Some(AIChatHit::SelectModel(idx));
             }
@@ -525,13 +554,23 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
             self.theme.border,
         );
 
-        // Textarea region — borderless, single line of placeholder /
-        // typed text, 14 px to mirror the TS app's textarea style.
+        // Textarea region — borderless, 14 px to mirror the TS app's
+        // textarea style. Long input wraps across up to `MAX_LINES`
+        // visible rows; beyond that the view anchors to the bottom
+        // (textarea scroll-to-bottom) so the caret line stays in
+        // sight. `clip_rect` keeps an over-long line from bleeding
+        // past the panel edge.
         let input_rect = Rect {
             origin: Point2D::new(rect.origin.x + PAD, sep_y + 1.0),
             size: Point2D::new(rect.size.x - PAD * 2.0, INPUT_AREA_HEIGHT),
         };
-        let (text, color) = if self.state.input.is_empty() {
+        /// Baseline-to-baseline gap for the wrapped input.
+        const LINE_H: f32 = 18.0;
+        /// First line's baseline, relative to `input_rect` top.
+        const FIRST_BASELINE: f32 = 16.0;
+        const MAX_LINES: usize = 3;
+        let is_placeholder = self.state.input.is_empty();
+        let (text, color) = if is_placeholder {
             (
                 self.label_input_placeholder.as_str(),
                 self.theme.muted_foreground,
@@ -539,26 +578,54 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
         } else {
             (self.state.input.as_str(), self.theme.foreground)
         };
-        let input_label = TextLayout::single_run(
+        let wrapped = crate::widgets::canvas_viewport_overlay::wrap_text(
+            cx.backend,
             text,
-            "system-ui",
             14.0,
-            to_jian_color(color),
-            Point2D::new(0.0, 0.0),
+            input_rect.size.x,
+            400,
         );
-        cx.backend.draw_text(
-            &input_label,
-            Point2D::new(input_rect.origin.x, input_rect.origin.y + 22.0),
-        );
+        // Anchor to the bottom — keep the last `MAX_LINES` rows, the
+        // ones nearest the (end-anchored) caret.
+        let start = wrapped.len().saturating_sub(MAX_LINES);
+        let visible = &wrapped[start..];
+        cx.backend.save();
+        cx.backend.clip_rect(input_rect);
+        for (i, line) in visible.iter().enumerate() {
+            let label = TextLayout::single_run(
+                line,
+                "system-ui",
+                14.0,
+                to_jian_color(color),
+                Point2D::new(0.0, 0.0),
+            );
+            let baseline = input_rect.origin.y + FIRST_BASELINE + i as f32 * LINE_H;
+            cx.backend
+                .draw_text(&label, Point2D::new(input_rect.origin.x, baseline));
+        }
+        cx.backend.restore();
         let caret_visible = self.state.focused
             && jian_core::anim::blink_visible(self.now_ms, self.state.caret_anchor_ms, 500);
         if caret_visible {
-            let text_w = cx.backend.measure_text(&self.state.input, 14.0);
-            let caret_x = input_rect.origin.x + text_w;
+            // The caret tracks the input's end. On an empty buffer it
+            // sits at the start of line 0 (the placeholder text is not
+            // part of the buffer); otherwise after the last wrapped
+            // row's glyphs.
+            let (caret_x, caret_line) = if is_placeholder {
+                (input_rect.origin.x, 0usize)
+            } else {
+                let last = visible.last().map(String::as_str).unwrap_or("");
+                (
+                    input_rect.origin.x + cx.backend.measure_text(last, 14.0),
+                    visible.len().saturating_sub(1),
+                )
+            };
+            let caret_top =
+                input_rect.origin.y + FIRST_BASELINE + caret_line as f32 * LINE_H - 13.0;
             cx.backend.fill_rect(
                 Rect {
-                    origin: Point2D::new(caret_x, input_rect.origin.y + 8.0),
-                    size: Point2D::new(1.5, 18.0),
+                    origin: Point2D::new(caret_x, caret_top),
+                    size: Point2D::new(1.5, 17.0),
                 },
                 self.theme.foreground,
             );
@@ -684,6 +751,8 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
                 picker,
                 &self.state.available_models,
                 self.state.selected_model,
+                self.model_picker_scroll,
+                self.model_picker_hover,
             );
         }
     }

@@ -248,6 +248,34 @@ impl WidgetHostNative {
                 return true;
             }
         }
+        // Open chat model-picker — track the model row under the
+        // cursor so the dropdown paints a hover wash. `model_at`
+        // returns `None` off the rows (headers / padding / off the
+        // card), which clears any stale highlight.
+        if self.editor_state.editor_ui.chat_model_picker_open && !over_topmost {
+            use op_editor_ui::widgets::ai_chat_model_picker::model_at;
+            use op_editor_ui::widgets::AIChatPlaceholder;
+            let picker = self
+                .ai_chat_rect(self.last_viewport_w, self.last_viewport_h)
+                .and_then(|chat_rect| {
+                    AIChatPlaceholder::from_editor_at(&self.editor_state, self.now_ms)
+                        .model_picker_bounds(chat_rect)
+                });
+            if let Some(picker) = picker {
+                let scroll = self.editor_state.editor_ui.chat_model_picker_scroll;
+                let new_hover = model_at(
+                    picker,
+                    Point2D::new(x, y),
+                    &self.editor_state.chat.available_models,
+                    scroll,
+                );
+                if new_hover != self.editor_state.editor_ui.chat_model_picker_hover {
+                    self.editor_state.editor_ui.chat_model_picker_hover = new_hover;
+                    self.mark_dirty();
+                    return true;
+                }
+            }
+        }
         if let Some(drag) = self.rotate_drag {
             let cursor_angle = (y - drag.center_screen_y).atan2(x - drag.center_screen_x);
             let new_rotation = drag.start_rotation + (cursor_angle - drag.start_cursor_angle);
@@ -466,7 +494,11 @@ impl WidgetHostNative {
             drag.last_x = x;
             drag.last_y = y;
             self.editor_state.viewport.pan(dx, dy);
-            self.mark_dirty();
+            // No `mark_dirty()`: a canvas pan-drag only translates the
+            // viewport, not the document tree, so the cached
+            // `layout_scene` stays valid (re-solving taffy layout on
+            // every drag frame was the pan jank). `return true` still
+            // drives the repaint that re-applies the viewport.
             return true;
         }
         // Align toolbar hover sync — AFTER drag detection. Suppressed

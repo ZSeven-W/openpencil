@@ -704,6 +704,8 @@ impl WidgetHost {
                     .position(|x| *x == p)
                     .unwrap_or(0);
                 self.editor_state.editor_ui.agent_settings.connected[idx] ^= true;
+                // Re-derive the chat model picker for the new mask.
+                self.editor_state.rebuild_chat_models();
             }
             AgentSettingsHit::ToggleMcpServer => {
                 self.editor_state

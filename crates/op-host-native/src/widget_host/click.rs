@@ -165,6 +165,11 @@ impl WidgetHostNative {
                     AIChatHit::ToggleModelPicker => {
                         self.editor_state.editor_ui.chat_model_picker_open =
                             !self.editor_state.editor_ui.chat_model_picker_open;
+                        // Reopen the picker un-scrolled / un-hovered so
+                        // a stale offset from a prior open never hides
+                        // the top of the catalog.
+                        self.editor_state.editor_ui.chat_model_picker_scroll = 0.0;
+                        self.editor_state.editor_ui.chat_model_picker_hover = None;
                         self.mark_dirty();
                         return true;
                     }
@@ -213,6 +218,8 @@ impl WidgetHostNative {
         // model picker if it was open.
         let picker_was_open = self.editor_state.editor_ui.chat_model_picker_open;
         self.editor_state.editor_ui.chat_model_picker_open = false;
+        self.editor_state.editor_ui.chat_model_picker_scroll = 0.0;
+        self.editor_state.editor_ui.chat_model_picker_hover = None;
         let was_focused = self.editor_state.chat.focused || picker_was_open;
         self.editor_state.chat.focused = false;
         self.mark_dirty();

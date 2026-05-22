@@ -633,6 +633,19 @@ impl EditorState {
             }
         }
         self.editor_ui.chat_model_picker_open = false;
+        self.editor_ui.chat_model_picker_scroll = 0.0;
+        self.editor_ui.chat_model_picker_hover = None;
+    }
+
+    /// Recompute the chat model-picker's `available_models` from the
+    /// discovered catalog filtered by the providers connected in
+    /// Settings → Agents. Thin wrapper over
+    /// [`ChatState::rebuild_available_models`] that reads the
+    /// connected mask off `editor_ui.agent_settings`. Hosts call this
+    /// after discovery finishes and after every connect toggle.
+    pub fn rebuild_chat_models(&mut self) {
+        let connected = self.editor_ui.agent_settings.connected;
+        self.chat.rebuild_available_models(&connected);
     }
 
     /// Light invariant check — Err on first violation: out-of-range
