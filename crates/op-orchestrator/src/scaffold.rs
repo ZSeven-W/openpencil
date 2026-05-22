@@ -22,7 +22,9 @@ pub fn build_scaffold(
 ) -> Result<Vec<EditorCommand>, String> {
     let rf = &plan.root_frame;
     let layout = rf.layout.as_deref().unwrap_or("vertical");
-    let fill_hex = rf.fill.as_deref().unwrap_or("#FFFFFF");
+    let fill_hex = rf
+        .first_solid_hex()
+        .unwrap_or_else(|| "#FFFFFF".to_string());
 
     let children = if is_mobile {
         json!([{
@@ -66,7 +68,7 @@ pub fn build_scaffold(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::plan::{OrchestratorPlan, RootFrameSpec};
+    use crate::plan::{OrchestratorPlan, PlanFill, RootFrameSpec};
     use op_editor_core::PenNodeExt;
 
     fn plan() -> OrchestratorPlan {
@@ -79,10 +81,13 @@ mod tests {
                 layout: Some("vertical".into()),
                 gap: Some(0.0),
                 padding: Some(0.0),
-                fill: Some("#FFFFFF".into()),
+                fill: Some(vec![PlanFill {
+                    kind: "solid".into(),
+                    color: "#FFFFFF".into(),
+                }]),
             },
             subtasks: vec![],
-            style_guide: None,
+            style_guide_name: None,
         }
     }
 

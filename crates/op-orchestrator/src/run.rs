@@ -218,13 +218,14 @@ mod tests {
     }
 
     const PLAN_JSON: &str = r##"{
-      "root_frame": { "id": "root", "name": "Page", "width": 1200, "height": 800,
-                      "layout": "vertical", "gap": 0, "fill": "#FFFFFF" },
-      "subtasks": [
-        { "id": "hero", "label": "Hero", "region": { "width": 1200, "height": 400 } },
-        { "id": "feat", "label": "Features", "region": { "width": 1200, "height": 400 } }
-      ]
-    }"##;
+  "rootFrame": { "id": "root", "name": "Page", "width": 1200, "height": 800,
+                 "layout": "vertical", "gap": 0,
+                 "fill": [{ "type": "solid", "color": "#FFFFFF" }] },
+  "subtasks": [
+    { "id": "hero", "label": "Hero", "region": { "width": 1200, "height": 400 } },
+    { "id": "feat", "label": "Features", "region": { "width": 1200, "height": 400 } }
+  ]
+}"##;
 
     fn node_json(prefix: &str) -> String {
         format!(

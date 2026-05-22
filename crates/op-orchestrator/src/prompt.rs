@@ -21,13 +21,14 @@ const SUBAGENT_TIMEOUT: Duration = Duration::from_secs(420);
 const PLAN_FORMAT: &str = r##"
 Respond with a single JSON object describing the design plan:
 {
-  "root_frame": { "id": "root", "name": "<name>", "width": <px>, "height": <px>,
-                  "layout": "vertical", "gap": <px>, "padding": <px>, "fill": "#RRGGBB" },
+  "rootFrame": { "id": "root", "name": "<name>", "width": <px>, "height": <px>,
+                 "layout": "vertical", "gap": <px>,
+                 "fill": [{ "type": "solid", "color": "#RRGGBB" }] },
+  "styleGuideName": "<style-guide-name or omit>",
   "subtasks": [
     { "id": "<kebab-id>", "label": "<human label>",
       "region": { "width": <px>, "height": <px> } }
-  ],
-  "style_guide": { "palette": { "color-1": "#RRGGBB", "color-2": "#RRGGBB" } }
+  ]
 }
 Each subtask is one visual section. Use 1-6 subtasks. Output ONLY the JSON object."##;
 
@@ -71,7 +72,7 @@ pub fn build_orchestrator_prompt(req: &DesignRequest, abort: AbortFlag) -> CallR
 /// 单个 sub-agent 的 LLM 调用输入。
 pub fn build_subagent_prompt(
     subtask: &Subtask,
-    plan: &OrchestratorPlan,
+    _plan: &OrchestratorPlan,
     req: &DesignRequest,
     abort: AbortFlag,
 ) -> CallRequest {
@@ -79,31 +80,10 @@ pub fn build_subagent_prompt(
     system_prompt.push_str("\n\n");
     system_prompt.push_str(NODE_FORMAT);
 
-    let palette = plan
-        .style_guide
-        .as_ref()
-        .map(|sg| {
-            sg.palette
-                .iter()
-                .map(|(k, v)| format!("{k}={v}"))
-                .collect::<Vec<_>>()
-                .join(", ")
-        })
-        .unwrap_or_default();
-
     let user_prompt = format!(
         "Overall design: {}\n\nGenerate the section \"{}\" \
-         (区块 id 前缀 `{}-`). Target region: {:.0}x{:.0} px.\nPalette: {}",
-        req.prompt,
-        subtask.label,
-        subtask.id_prefix,
-        subtask.region.width,
-        subtask.region.height,
-        if palette.is_empty() {
-            "(default)"
-        } else {
-            &palette
-        },
+         (区块 id 前缀 `{}-`). Target region: {:.0}x{:.0} px.\nPalette: (default)",
+        req.prompt, subtask.label, subtask.id_prefix, subtask.region.width, subtask.region.height,
     );
 
     CallRequest {
@@ -142,7 +122,7 @@ mod tests {
                 fill: None,
             },
             subtasks: vec![],
-            style_guide: None,
+            style_guide_name: None,
         }
     }
 

@@ -152,7 +152,7 @@ mod tests {
                 fill: None,
             },
             subtasks: vec![],
-            style_guide: None,
+            style_guide_name: None,
         }
     }
 
