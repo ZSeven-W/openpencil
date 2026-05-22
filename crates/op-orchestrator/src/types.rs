@@ -41,6 +41,12 @@ pub struct CallRequest {
     pub provider: Option<String>,
     pub timeout: Duration,
     pub abort: AbortFlag,
+    /// 从请求开始到收到第一个文本 chunk 的超时;`None` 表示不设。
+    /// Port of `noTextTimeoutMs` in the TS timeout profiles.
+    pub no_text_timeout: Option<Duration>,
+    /// 从第一个文本 chunk 到"真正内容"出现的超时;`None` 表示不设。
+    /// Port of `firstTextTimeoutMs` in the TS timeout profiles.
+    pub first_text_timeout: Option<Duration>,
 }
 
 /// 流元素 —— 区分文本与思考,与 TS 的 text/thinking/error 三分
