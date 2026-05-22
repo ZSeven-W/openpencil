@@ -10,27 +10,16 @@
 //! 的细则(style-guide 注入、移动端禁 phone-wrapper 等)是后续
 //! 细化项。
 
+use crate::compact_prompt::build_compact_planning_prompt;
+use crate::design_type::{detect_design_type, DesignType};
 use crate::plan::{OrchestratorPlan, Subtask};
-use crate::types::{AbortFlag, CallRequest, DesignRequest};
+use crate::style_guide_context::build_planning_style_guide_context;
+use crate::types::{AbortFlag, CallRequest, DesignRequest, PlanningMode, PlanningPrompt};
+use std::collections::HashMap;
 use std::time::Duration;
 
 const PLANNING_TIMEOUT: Duration = Duration::from_secs(300);
 const SUBAGENT_TIMEOUT: Duration = Duration::from_secs(420);
-
-/// 规划阶段要求模型产出的 JSON 形状说明。
-const PLAN_FORMAT: &str = r##"
-Respond with a single JSON object describing the design plan:
-{
-  "rootFrame": { "id": "root", "name": "<name>", "width": <px>, "height": <px>,
-                 "layout": "vertical", "gap": <px>,
-                 "fill": [{ "type": "solid", "color": "#RRGGBB" }] },
-  "styleGuideName": "<style-guide-name or omit>",
-  "subtasks": [
-    { "id": "<kebab-id>", "label": "<human label>",
-      "region": { "width": <px>, "height": <px> } }
-  ]
-}
-Each subtask is one visual section. Use 1-6 subtasks. Output ONLY the JSON object."##;
 
 /// sub-agent 阶段要求模型产出的 JSON 形状说明。
 const NODE_FORMAT: &str = r#"
@@ -43,6 +32,103 @@ ALL field names are camelCase: cornerRadius, fontSize, fontWeight, justifyConten
 alignItems, clipContent. Geometry fields are x, y, width, height. Never snake_case.
 Output ONLY the JSON array."#;
 
+/// Rich 模式 system prompt 末尾后缀 —— verbatim,`orchestrator.ts:1382-1383`。
+const RICH_SUFFIX: &str = "\n\n---\nCRITICAL OUTPUT FORMAT ENFORCEMENT:\n\
+You MUST output ONLY a single JSON object. Start your response with { and end with }.\n\
+Do NOT output any text, explanation, analysis, markdown, or tool calls before or after the JSON.\n\
+Do NOT \"explore\" or \"think out loud\". Do NOT use <tool_call> or function calls.\n\
+Any pre-design analysis (concept extraction, superfan simulation, etc.) must happen internally — include results as JSON fields, never as prose.\n\
+Violating this format will cause a system error.";
+
+/// Minimal 模式后缀 —— verbatim,`orchestrator.ts:1384`。
+const MINIMAL_SUFFIX: &str =
+    "\n\nOUTPUT ONLY ONE JSON OBJECT. No prose. No markdown. No tool calls.";
+
+fn planning_suffix(mode: PlanningMode) -> &'static str {
+    match mode {
+        PlanningMode::Rich => RICH_SUFFIX,
+        PlanningMode::Minimal => MINIMAL_SUFFIX,
+        PlanningMode::Compact => "",
+    }
+}
+
+/// 丢掉 `landing-page-predesign` skill(除非设计类型是 landing-page)。
+/// 见 spec §5.10。
+fn filter_planning_skills_for_prompt(
+    skills: Vec<op_ai_skills::ResolvedSkill>,
+    prompt: &str,
+) -> Vec<op_ai_skills::ResolvedSkill> {
+    if detect_design_type(prompt).type_ == DesignType::LandingPage {
+        return skills;
+    }
+    skills
+        .into_iter()
+        .filter(|s| s.meta.name != "landing-page-predesign")
+        .collect()
+}
+
+/// 规划阶段的 LLM 调用输入。`mode` 决定 prompt 构造方式;返回
+/// `PlanningPrompt`(带 compact 的 forced style-guide 名,供 S3b-1b)。
+pub fn build_orchestrator_prompt(
+    req: &DesignRequest,
+    mode: PlanningMode,
+    abort: AbortFlag,
+) -> PlanningPrompt {
+    match mode {
+        PlanningMode::Compact => {
+            let cp = build_compact_planning_prompt(&req.prompt, req.design_md.as_ref());
+            PlanningPrompt {
+                call_request: CallRequest {
+                    system_prompt: cp.system,
+                    user_prompt: cp.user_prompt,
+                    model: req.model.clone(),
+                    provider: req.provider.clone(),
+                    timeout: PLANNING_TIMEOUT,
+                    abort,
+                },
+                forced_style_guide_name: Some(cp.selected_style_guide_name),
+                mode,
+            }
+        }
+        PlanningMode::Rich | PlanningMode::Minimal => {
+            let ctx = build_planning_style_guide_context(
+                &req.prompt,
+                req.model.as_deref(),
+                mode,
+                req.design_md.as_ref(),
+            );
+            let opts = op_ai_skills::ResolveOptions {
+                dynamic_content: HashMap::from([(
+                    "availableStyleGuides".to_string(),
+                    ctx.available_style_guides,
+                )]),
+                ..Default::default()
+            };
+            let agent_ctx =
+                op_ai_skills::resolve_skills(op_ai_skills::Phase::Planning, &req.prompt, &opts);
+            let skills = filter_planning_skills_for_prompt(agent_ctx.skills, &req.prompt);
+            let mut system_prompt = skills
+                .iter()
+                .map(|s| s.content.as_str())
+                .collect::<Vec<_>>()
+                .join("\n\n");
+            system_prompt.push_str(planning_suffix(mode));
+            PlanningPrompt {
+                call_request: CallRequest {
+                    system_prompt,
+                    user_prompt: req.prompt.clone(),
+                    model: req.model.clone(),
+                    provider: req.provider.clone(),
+                    timeout: PLANNING_TIMEOUT,
+                    abort,
+                },
+                forced_style_guide_name: None,
+                mode,
+            }
+        }
+    }
+}
+
 /// 把解析出的 skill 正文 join 成一段。
 fn skill_preamble(phase: op_ai_skills::Phase, message: &str) -> String {
     let ctx =
@@ -52,21 +138,6 @@ fn skill_preamble(phase: op_ai_skills::Phase, message: &str) -> String {
         .map(|s| s.content.as_str())
         .collect::<Vec<_>>()
         .join("\n\n")
-}
-
-/// 规划阶段的 LLM 调用输入。
-pub fn build_orchestrator_prompt(req: &DesignRequest, abort: AbortFlag) -> CallRequest {
-    let mut system_prompt = skill_preamble(op_ai_skills::Phase::Planning, &req.prompt);
-    system_prompt.push_str("\n\n");
-    system_prompt.push_str(PLAN_FORMAT);
-    CallRequest {
-        system_prompt,
-        user_prompt: req.prompt.clone(),
-        model: req.model.clone(),
-        provider: req.provider.clone(),
-        timeout: PLANNING_TIMEOUT,
-        abort,
-    }
 }
 
 /// 单个 sub-agent 的 LLM 调用输入。
@@ -128,11 +199,49 @@ mod tests {
     }
 
     #[test]
-    fn orchestrator_prompt_carries_request_and_format() {
-        let cr = build_orchestrator_prompt(&req(), AbortFlag::new());
-        assert!(cr.user_prompt.contains("a pricing page"));
-        assert!(cr.system_prompt.contains("subtasks"));
-        assert_eq!(cr.model.as_deref(), Some("claude"));
+    fn rich_prompt_has_style_guides_and_suffix() {
+        let pp = build_orchestrator_prompt(&req(), PlanningMode::Rich, AbortFlag::new());
+        assert_eq!(pp.mode, PlanningMode::Rich);
+        assert!(pp.forced_style_guide_name.is_none());
+        // style-guide context 经 {{availableStyleGuides}} 注入到 planning skill
+        assert!(pp
+            .call_request
+            .system_prompt
+            .contains("Available style guides"));
+        // rich 后缀
+        assert!(pp
+            .call_request
+            .system_prompt
+            .contains("CRITICAL OUTPUT FORMAT ENFORCEMENT"));
+        assert_eq!(pp.call_request.user_prompt, req().prompt);
+    }
+
+    #[test]
+    fn minimal_prompt_has_short_suffix_no_snippets() {
+        let pp = build_orchestrator_prompt(&req(), PlanningMode::Minimal, AbortFlag::new());
+        assert!(pp
+            .call_request
+            .system_prompt
+            .contains("OUTPUT ONLY ONE JSON OBJECT"));
+        assert!(!pp
+            .call_request
+            .system_prompt
+            .contains("CRITICAL OUTPUT FORMAT ENFORCEMENT"));
+    }
+
+    #[test]
+    fn compact_prompt_carries_forced_guide_name() {
+        let pp = build_orchestrator_prompt(&req(), PlanningMode::Compact, AbortFlag::new());
+        assert!(pp.forced_style_guide_name.is_some());
+        assert!(pp
+            .call_request
+            .system_prompt
+            .starts_with("You are a UI planning assistant."));
+        // compact 不带 rich/minimal 后缀
+        assert!(!pp
+            .call_request
+            .system_prompt
+            .contains("CRITICAL OUTPUT FORMAT ENFORCEMENT"));
     }
 
     #[test]
