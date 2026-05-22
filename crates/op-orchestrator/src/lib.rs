@@ -7,6 +7,7 @@
 //! Plan B 提供"零件"(类型 + intent/plan/parse/normalize/variables);
 //! Plan C 在 `run` 模块接出四阶段主轴。
 
+pub mod design_md_policy;
 pub mod design_type;
 pub mod intent;
 pub mod model_profile;
@@ -25,6 +26,9 @@ pub mod subagent;
 #[cfg(test)]
 mod test_support;
 
+pub use design_md_policy::{
+    build_design_md_style_policy, guess_neutral_background_from_theme, infer_design_md_background,
+};
 pub use design_type::{detect_design_type, DesignType, DesignTypePreset};
 pub use intent::classify_intent;
 pub use model_profile::{resolve_model_profile, ModelProfile, ModelTier};
