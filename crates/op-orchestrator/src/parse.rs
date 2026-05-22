@@ -20,10 +20,9 @@ impl std::fmt::Display for ParseError {
 /// 容忍 ```json 围栏 + 前后散文 —— 抽第一个平衡的 `[...]`。
 /// 空数组视为失败(零节点)。
 pub fn parse_nodes(text: &str) -> Result<Vec<PenNode>, ParseError> {
-    let json = extract_json_array(text)
-        .ok_or_else(|| ParseError("no JSON array found".into()))?;
-    let nodes: Vec<PenNode> = serde_json::from_str(json)
-        .map_err(|e| ParseError(format!("deserialize: {e}")))?;
+    let json = extract_json_array(text).ok_or_else(|| ParseError("no JSON array found".into()))?;
+    let nodes: Vec<PenNode> =
+        serde_json::from_str(json).map_err(|e| ParseError(format!("deserialize: {e}")))?;
     if nodes.is_empty() {
         return Err(ParseError("empty node array".into()));
     }

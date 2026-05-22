@@ -90,7 +90,10 @@ mod tests {
 
     #[test]
     fn normalize_assigns_id_prefix_and_parent() {
-        let mut p = plan(1200.0, vec![subtask("hero", "Hero"), subtask("feat", "Features")]);
+        let mut p = plan(
+            1200.0,
+            vec![subtask("hero", "Hero"), subtask("feat", "Features")],
+        );
         let info = normalize(&mut p, &req());
         assert!(!info.is_mobile);
         for st in &p.subtasks {

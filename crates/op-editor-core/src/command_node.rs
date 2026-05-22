@@ -531,11 +531,7 @@ impl EditorState {
     /// must exist and be a container variant. Every incoming node id
     /// (recursively) is remapped to a fresh editor id so an
     /// externally-authored subtree can't collide with live doc ids.
-    pub(crate) fn cmd_insert_subtree(
-        &mut self,
-        nodes: Vec<PenNode>,
-        parent_id: &NodeId,
-    ) -> bool {
+    pub(crate) fn cmd_insert_subtree(&mut self, nodes: Vec<PenNode>, parent_id: &NodeId) -> bool {
         if nodes.is_empty() {
             return false;
         }

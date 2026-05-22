@@ -78,10 +78,10 @@ impl std::fmt::Display for PlanParseError {
 /// 容忍 ```json 围栏 + 前后散文 —— 抽第一个平衡的 `{...}`。
 /// `subtasks` 为空视为解析失败。
 pub fn parse_plan(text: &str) -> Result<OrchestratorPlan, PlanParseError> {
-    let json = extract_json_object(text)
-        .ok_or_else(|| PlanParseError("no JSON object found".into()))?;
-    let plan: OrchestratorPlan = serde_json::from_str(json)
-        .map_err(|e| PlanParseError(format!("deserialize: {e}")))?;
+    let json =
+        extract_json_object(text).ok_or_else(|| PlanParseError("no JSON object found".into()))?;
+    let plan: OrchestratorPlan =
+        serde_json::from_str(json).map_err(|e| PlanParseError(format!("deserialize: {e}")))?;
     if plan.subtasks.is_empty() {
         return Err(PlanParseError("plan has no subtasks".into()));
     }
