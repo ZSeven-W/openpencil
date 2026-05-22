@@ -12,6 +12,7 @@ mod chat_http_server;
 mod chat_runtime;
 mod chat_session;
 mod chat_subprocess;
+mod clipboard;
 mod cursor_icon;
 mod design_md_host;
 mod export;

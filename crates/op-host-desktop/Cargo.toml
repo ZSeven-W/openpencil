@@ -121,6 +121,10 @@ winit = { package = "casement", path = "../../vendor/casement", default-features
 serde = { workspace = true }
 serde_json = { workspace = true }
 rfd = "0.14"
+# OS clipboard for the AI chat input's Cmd+C / Cmd+V / Cmd+X.
+# arboard wraps NSPasteboard (macOS), the Win32 clipboard, and
+# X11 / Wayland on Linux — one cross-platform text-clipboard API.
+arboard = "3"
 # Base64-encodes chat image attachments for providers that take
 # inline image content blocks (Claude SDK) or a base64 body field
 # (HTTP-server transport). Same pure-Rust crate op-figma uses.

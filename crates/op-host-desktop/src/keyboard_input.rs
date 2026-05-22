@@ -111,9 +111,40 @@ impl DesktopApp {
                     _ if settings_focused => {}
                     "d" => consumed = self.host.apply_duplicate(),
                     "a" => consumed = self.host.apply_select_all(),
-                    "c" => consumed = self.host.apply_copy(),
-                    "x" => consumed = self.host.apply_cut(),
-                    "v" => consumed = self.host.apply_paste(),
+                    // Cmd+C / X / V route to the OS *text* clipboard
+                    // when the AI chat input owns the keyboard, and
+                    // to the document *node* clipboard otherwise.
+                    "c" => {
+                        consumed = if self.host.editor_state().chat.focused {
+                            let text = self.host.editor_state().chat.input.clone();
+                            if !text.is_empty() {
+                                crate::clipboard::set_text(&text);
+                            }
+                            true
+                        } else {
+                            self.host.apply_copy()
+                        };
+                    }
+                    "x" => {
+                        consumed = if self.host.editor_state().chat.focused {
+                            if let Some(text) = self.host.chat_input_cut() {
+                                crate::clipboard::set_text(&text);
+                            }
+                            true
+                        } else {
+                            self.host.apply_cut()
+                        };
+                    }
+                    "v" => {
+                        consumed = if self.host.editor_state().chat.focused {
+                            if let Some(text) = crate::clipboard::get_text() {
+                                self.host.chat_input_paste(&text);
+                            }
+                            true
+                        } else {
+                            self.host.apply_paste()
+                        };
+                    }
                     "z" => consumed = self.host.apply_undo(),
                     "y" => consumed = self.host.apply_redo(),
                     "g" => consumed = self.host.apply_group(),
