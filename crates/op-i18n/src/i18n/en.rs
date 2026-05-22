@@ -56,6 +56,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "topbar.dontSave" => "Don't Save",
         "topbar.agentsAndMcp" => "Agents & MCP",
         "topbar.agentSingular" => "agent",
+        "topbar.agentPlural" => "agents",
         "topbar.setupAgentsMcp" => "Setup Agents & MCP",
         "topbar.connected" => "connected",
         "topbar.agentStatus" => "{{agents}} agent{{agentSuffix}} · {{mcp}} MCP",

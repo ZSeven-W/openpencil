@@ -24,6 +24,37 @@ const GLOBE_BUTTON_WIDTH: f32 = 44.0;
 const FILE_MENU_BUTTON_WIDTH: f32 = 46.0;
 const CHEVRON_SIZE: f32 = 12.0;
 const PAD: f32 = 12.0;
+/// Gap between the stacked per-agent brand icons in the chip.
+const AGENT_ICON_GAP: f32 = 4.0;
+/// Diameter of a macOS-style window-control dot.
+const TRAFFIC_DOT: f32 = 12.0;
+/// Centre-to-centre spacing of the 3 window-control dots.
+const TRAFFIC_STEP: f32 = 20.0;
+/// Horizontal span the window-control cluster reserves at the
+/// TopBar's left edge before the app's own icons. macOS uses the
+/// *native* traffic-light buttons — they sit at the system
+/// position and end ~x=70, so reserve enough that the app icons
+/// clear them with a comfortable gap. Windows / Linux paint the
+/// custom dots from `PAD`, so the reservation is just the dot
+/// cluster + a small gap.
+const TRAFFIC_CLUSTER_W: f32 = if cfg!(target_os = "macos") {
+    66.0
+} else {
+    TRAFFIC_STEP * 2.0 + TRAFFIC_DOT + 16.0
+};
+
+/// A window-control dot in the TopBar's left cluster. Resolved by
+/// [`TopBar::window_control_at`]; the desktop runner maps each onto
+/// the matching winit `Window` call.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WindowControl {
+    /// Red dot — close the window / quit.
+    Close,
+    /// Yellow dot — minimise the window.
+    Minimize,
+    /// Green dot — toggle maximised.
+    Maximize,
+}
 
 /// What a click in the top bar resolved to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -49,9 +80,22 @@ pub struct TopBar {
     /// slice on every Open.
     pub file_name: String,
     pub agent_count: u32,
+    /// Per-provider connect state, indexed by `AgentProvider::ALL`.
+    /// The active chip paints one brand icon per connected provider.
+    pub connected: [bool; 5],
+    /// Number of enabled MCP CLI integrations — the `· N MCP` half
+    /// of the chip status.
+    pub mcp_count: u32,
     pub theme: Theme,
     pub label_agents_and_mcp: &'static str,
     pub label_agent_singular: &'static str,
+    pub label_agent_plural: &'static str,
+    /// Cursor is over the window-control cluster — the 3 dots paint
+    /// their close / minimise / maximise glyphs.
+    pub traffic_hover: bool,
+    /// Window is fullscreen — drops the left-edge window-control
+    /// reservation on macOS (native traffic lights hide then).
+    pub fullscreen: bool,
 }
 
 impl TopBar {
@@ -60,9 +104,14 @@ impl TopBar {
             id: WidgetId::new(5000),
             file_name: file_name.into(),
             agent_count: 1,
+            connected: [false; 5],
+            mcp_count: 0,
             theme: Theme::dark(),
             label_agents_and_mcp: "Agents & MCP",
             label_agent_singular: "agent",
+            label_agent_plural: "agents",
+            traffic_hover: false,
+            fullscreen: false,
         }
     }
 
@@ -75,19 +124,92 @@ impl TopBar {
             .file_name_display
             .clone()
             .unwrap_or_else(|| translate(ui, "common.untitled").to_string());
-        // The chip reflects how many providers the user has
-        // connected in Settings → Agents: `0` paints the
-        // "Agents & MCP" set-up affordance, `≥ 1` the green-dot
-        // "N agent" status.
+        // The chip reflects what the user set up in Settings: one
+        // brand icon per connected provider, plus the enabled-MCP
+        // count. All-zero paints the "Agents & MCP" set-up
+        // affordance instead.
         let agent_count = ui.agent_settings.connected.iter().filter(|&&c| c).count() as u32;
+        let mcp_count = ui
+            .agent_settings
+            .mcp_cli_enabled
+            .iter()
+            .filter(|&&e| e)
+            .count() as u32;
         Self {
             id: WidgetId::new(5000),
             file_name,
             agent_count,
+            connected: ui.agent_settings.connected,
+            mcp_count,
             theme: theme_for(ui),
             label_agents_and_mcp: translate(ui, "topbar.agentsAndMcp"),
             label_agent_singular: translate(ui, "topbar.agentSingular"),
+            label_agent_plural: translate(ui, "topbar.agentPlural"),
+            traffic_hover: ui.topbar_traffic_hover,
+            fullscreen: ui.window_fullscreen,
         }
+    }
+
+    /// Left-edge reservation for the window controls. Collapses to
+    /// `0` in fullscreen on macOS — the native traffic lights hide
+    /// then, so the gap would be dead space. Other platforms keep
+    /// the custom-dot cluster's inset in every mode.
+    fn left_inset_for(fullscreen: bool) -> f32 {
+        if fullscreen && cfg!(target_os = "macos") {
+            0.0
+        } else {
+            TRAFFIC_CLUSTER_W
+        }
+    }
+
+    fn left_inset(&self) -> f32 {
+        Self::left_inset_for(self.fullscreen)
+    }
+
+    /// Bounds of the 3-dot window-control cluster — the host's
+    /// cursor-move handler uses this to drive `topbar_traffic_hover`
+    /// (the glyph reveal).
+    pub fn traffic_cluster_rect(top_bar_rect: Rect) -> Rect {
+        Rect {
+            origin: Point2D::new(top_bar_rect.origin.x + PAD, top_bar_rect.origin.y),
+            size: Point2D::new(TRAFFIC_STEP * 2.0 + TRAFFIC_DOT, top_bar_rect.size.y),
+        }
+    }
+
+    /// Width of the chip's leading-icon cluster: the single
+    /// `LayoutGrid` glyph in the empty state, or one brand icon per
+    /// connected provider (with `AGENT_ICON_GAP` between them) in the
+    /// active state. Paint + hit-test both size the chip off this.
+    fn agent_icons_width(&self) -> f32 {
+        if self.agent_count == 0 {
+            ICON_SIZE
+        } else {
+            let n = self.agent_count.max(1) as f32;
+            n * ICON_SIZE + (n - 1.0) * AGENT_ICON_GAP
+        }
+    }
+
+    /// The chip's status text — `"{N} agent[s] · {M} MCP"`, each
+    /// half present only when its count is non-zero (TS
+    /// `top-bar.tsx` parity). `None` when nothing is set up, in
+    /// which case the caller paints the `Agents & MCP` label.
+    fn chip_status_text(&self) -> Option<String> {
+        if self.agent_count == 0 && self.mcp_count == 0 {
+            return None;
+        }
+        let mut parts: Vec<String> = Vec::new();
+        if self.agent_count > 0 {
+            let word = if self.agent_count == 1 {
+                self.label_agent_singular
+            } else {
+                self.label_agent_plural
+            };
+            parts.push(format!("{} {}", self.agent_count, word));
+        }
+        if self.mcp_count > 0 {
+            parts.push(format!("{} MCP", self.mcp_count));
+        }
+        Some(parts.join(" · "))
     }
 
     /// Returns the on-screen rect of the Globe-plus-chevron locale
@@ -98,8 +220,9 @@ impl TopBar {
     /// Anchor rect for the file-menu dropdown overlay (folder +
     /// chevron compound). Host anchors the dropdown directly under
     /// this rect when `Document.ui.file_menu_open == true`.
-    pub fn file_menu_rect(top_bar_rect: Rect) -> Rect {
-        let file_menu_x = top_bar_rect.origin.x + PAD + ICON_BUTTON + 4.0;
+    pub fn file_menu_rect(top_bar_rect: Rect, fullscreen: bool) -> Rect {
+        let file_menu_x =
+            top_bar_rect.origin.x + PAD + Self::left_inset_for(fullscreen) + ICON_BUTTON + 4.0;
         Rect {
             origin: Point2D::new(file_menu_x, top_bar_rect.origin.y + 8.0),
             size: Point2D::new(FILE_MENU_BUTTON_WIDTH, ICON_BUTTON),
@@ -118,6 +241,44 @@ impl TopBar {
         }
     }
 
+    /// Resolve a press on the left-edge window-control dots.
+    /// `None` for a press anywhere else (including the app's own
+    /// buttons). The desktop runner consults this before its normal
+    /// TopBar hit-test so a dot click drives the window, not the app.
+    pub fn window_control_at(&self, rect: Rect, point: Point2D) -> Option<WindowControl> {
+        // macOS uses the native traffic-light buttons — the custom
+        // dots (and this hit-test) exist only for Windows / Linux.
+        // Returning `None` here also avoids a false positive in
+        // macOS fullscreen, where the left inset collapses and the
+        // app's own icons would otherwise sit in the dot region.
+        if cfg!(target_os = "macos") {
+            return None;
+        }
+        if !rect_contains(rect, point) {
+            return None;
+        }
+        let cy = rect.origin.y + rect.size.y / 2.0;
+        let first_cx = rect.origin.x + PAD + TRAFFIC_DOT / 2.0;
+        for (i, ctl) in [
+            WindowControl::Close,
+            WindowControl::Minimize,
+            WindowControl::Maximize,
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let dot_cx = first_cx + i as f32 * TRAFFIC_STEP;
+            // Square slop around the dot — adjacent zones tile
+            // without overlap (±TRAFFIC_STEP/2 in x).
+            if (point.x - dot_cx).abs() <= TRAFFIC_STEP / 2.0
+                && (point.y - cy).abs() <= rect.size.y / 2.0
+            {
+                return Some(ctl);
+            }
+        }
+        None
+    }
+
     /// Hit-test the title bar at `point`. Recognised buttons:
     ///   - PanelLeft (left edge) → ToggleSidebar
     ///   - Sun (third from right) → ToggleTheme
@@ -128,13 +289,13 @@ impl TopBar {
         }
         let icon_y = rect.origin.y + 8.0;
         let panel_left_rect = Rect {
-            origin: Point2D::new(rect.origin.x + PAD, icon_y),
+            origin: Point2D::new(rect.origin.x + PAD + self.left_inset(), icon_y),
             size: Point2D::new(ICON_BUTTON, ICON_BUTTON),
         };
         if rect_contains(panel_left_rect, point) {
             return Some(TopBarHit::ToggleSidebar);
         }
-        let file_menu_x = rect.origin.x + PAD + ICON_BUTTON + 4.0;
+        let file_menu_x = rect.origin.x + PAD + self.left_inset() + ICON_BUTTON + 4.0;
         let file_menu_rect = Rect {
             origin: Point2D::new(file_menu_x, icon_y),
             size: Point2D::new(FILE_MENU_BUTTON_WIDTH, ICON_BUTTON),
@@ -174,21 +335,18 @@ impl TopBar {
         // CJK glyph estimate (12 px / char) plus 8 px padding on
         // each side keeps the click target slightly looser than
         // the visible chip so the first press always lands.
-        let chip_chars = if self.agent_count == 0 {
-            self.label_agents_and_mcp.chars().count()
-        } else {
-            // "{N} {label}" without allocating a String — counts the
-            // count digits + 1 space + label chars.
-            let digits = (self.agent_count as f32).log10().floor() as usize + 1;
-            digits + 1 + self.label_agent_singular.chars().count()
+        let status_text = self.chip_status_text();
+        let chip_chars = match &status_text {
+            Some(t) => t.chars().count(),
+            None => self.label_agents_and_mcp.chars().count(),
         };
-        let dot_w = if self.agent_count == 0 {
-            0.0
-        } else {
+        let dot_w = if status_text.is_some() {
             8.0 + 6.0
+        } else {
+            0.0
         };
         let approx_text_w = chip_chars as f32 * 12.0;
-        let chip_w = 8.0 + ICON_SIZE + 6.0 + dot_w + approx_text_w + 12.0 + 16.0;
+        let chip_w = 8.0 + self.agent_icons_width() + 6.0 + dot_w + approx_text_w + 12.0 + 16.0;
         let chip_rect = Rect {
             origin: Point2D::new(globe.origin.x - chip_w - 6.0, rect.origin.y + 4.0),
             size: Point2D::new(chip_w, rect.size.y - 8.0),
@@ -232,9 +390,101 @@ impl Widget for TopBar {
             self.theme.border,
         );
 
-        // ── Left cluster ───────────────────────────────────────
         let center_y = rect.origin.y + rect.size.y / 2.0;
-        let panel_left_x = rect.origin.x + PAD;
+        // ── Window-control dots ────────────────────────────────
+        // macOS keeps the *native* traffic-light buttons (the
+        // transparent title bar preserves them), so the custom
+        // dots paint only on Windows / Linux — whose
+        // `decorations(false)` window ships none. The desktop
+        // runner wires custom-dot clicks via `window_control_at`.
+        if !cfg!(target_os = "macos") {
+            let traffic = [
+                Color {
+                    r: 1.0,
+                    g: 0.373,
+                    b: 0.341,
+                    a: 1.0,
+                }, // #FF5F57
+                Color {
+                    r: 0.996,
+                    g: 0.737,
+                    b: 0.18,
+                    a: 1.0,
+                }, // #FEBC2E
+                Color {
+                    r: 0.157,
+                    g: 0.784,
+                    b: 0.251,
+                    a: 1.0,
+                }, // #28C840
+            ];
+            let first_dot_cx = rect.origin.x + PAD + TRAFFIC_DOT / 2.0;
+            for (i, color) in traffic.into_iter().enumerate() {
+                let dot_cx = first_dot_cx + i as f32 * TRAFFIC_STEP;
+                cx.backend.fill_oval(
+                    Rect {
+                        origin: Point2D::new(
+                            dot_cx - TRAFFIC_DOT / 2.0,
+                            center_y - TRAFFIC_DOT / 2.0,
+                        ),
+                        size: Point2D::new(TRAFFIC_DOT, TRAFFIC_DOT),
+                    },
+                    color,
+                );
+                // Hovering the cluster reveals each dot's glyph
+                // (macOS-style): ✕ close, − minimise, + maximise.
+                if self.traffic_hover {
+                    let glyph = Color {
+                        r: 0.0,
+                        g: 0.0,
+                        b: 0.0,
+                        a: 0.55,
+                    };
+                    let r = 3.0_f32;
+                    let lw = 1.3_f32;
+                    match i {
+                        0 => {
+                            cx.backend.stroke_line(
+                                Point2D::new(dot_cx - r, center_y - r),
+                                Point2D::new(dot_cx + r, center_y + r),
+                                glyph,
+                                lw,
+                            );
+                            cx.backend.stroke_line(
+                                Point2D::new(dot_cx - r, center_y + r),
+                                Point2D::new(dot_cx + r, center_y - r),
+                                glyph,
+                                lw,
+                            );
+                        }
+                        1 => {
+                            cx.backend.stroke_line(
+                                Point2D::new(dot_cx - r, center_y),
+                                Point2D::new(dot_cx + r, center_y),
+                                glyph,
+                                lw,
+                            );
+                        }
+                        _ => {
+                            cx.backend.stroke_line(
+                                Point2D::new(dot_cx - r, center_y),
+                                Point2D::new(dot_cx + r, center_y),
+                                glyph,
+                                lw,
+                            );
+                            cx.backend.stroke_line(
+                                Point2D::new(dot_cx, center_y - r),
+                                Point2D::new(dot_cx, center_y + r),
+                                glyph,
+                                lw,
+                            );
+                        }
+                    }
+                }
+            }
+        }
+        // ── Left cluster ───────────────────────────────────────
+        let panel_left_x = rect.origin.x + PAD + self.left_inset();
         paint_icon_button(cx, &self.theme, panel_left_x, center_y, Icon::PanelLeft);
         // File-menu compound: folder + tight chevron in one button.
         let file_menu_x = panel_left_x + ICON_BUTTON + 4.0;
@@ -316,32 +566,52 @@ impl Widget for TopBar {
         // Agent chip — two states:
         //   - empty (agent_count == 0): LayoutGrid icon + an
         //     "Agents and MCP" label. Affordance for "set up agents/MCP".
-        //   - active (≥ 1): Sparkles + green dot + "N agent" text.
+        //   - active (≥ 1): one brand icon per connected provider +
+        //     a green dot + "N agent" text.
         // Anchored just left of the globe icon button (+small gap).
-        let count_label;
-        let (chip_text, leading_icon, show_dot): (&str, Icon, bool) = if self.agent_count == 0 {
-            (self.label_agents_and_mcp, Icon::LayoutGrid, false)
-        } else {
-            count_label = format!("{} {}", self.agent_count, self.label_agent_singular);
-            (count_label.as_str(), Icon::Sparkles, true)
-        };
+        let status_text = self.chip_status_text();
+        let show_dot = status_text.is_some();
+        let chip_text: &str = status_text.as_deref().unwrap_or(self.label_agents_and_mcp);
         let dot_w = if show_dot { 8.0 + 6.0 } else { 0.0 };
+        let icons_w = self.agent_icons_width();
         let text_w = cx.backend.measure_text(chip_text, 12.0);
-        let chip_w = 8.0 + ICON_SIZE + 6.0 + dot_w + text_w + 12.0;
+        let chip_w = 8.0 + icons_w + 6.0 + dot_w + text_w + 12.0;
         let chip_rect = Rect {
             origin: Point2D::new(rx - chip_w - 6.0, center_y - 13.0),
             size: Point2D::new(chip_w, 26.0),
         };
-        // No border ring — TS empty-state chip has no outline.
-        draw_icon(
-            cx.backend,
-            leading_icon,
-            Point2D::new(chip_rect.origin.x + 8.0, chip_rect.origin.y + 4.0),
-            ICON_SIZE,
-            self.theme.foreground,
-            1.4,
-        );
-        let mut text_x = chip_rect.origin.x + 8.0 + ICON_SIZE + 6.0;
+        // Leading icons (no border ring — TS empty-state chip has no
+        // outline). The empty state shows the single LayoutGrid
+        // set-up affordance; the active chip stacks one brand logo
+        // per connected provider so the user sees *which* agents
+        // are on.
+        let icons_y = chip_rect.origin.y + 4.0;
+        if self.agent_count == 0 {
+            draw_icon(
+                cx.backend,
+                Icon::LayoutGrid,
+                Point2D::new(chip_rect.origin.x + 8.0, icons_y),
+                ICON_SIZE,
+                self.theme.foreground,
+                1.4,
+            );
+        } else {
+            let mut ix = chip_rect.origin.x + 8.0;
+            for (i, provider) in op_editor_core::AgentProvider::ALL.iter().enumerate() {
+                if !self.connected[i] {
+                    continue;
+                }
+                crate::widgets::ai_chat_model_picker::paint_provider_logo(
+                    cx,
+                    *provider,
+                    Point2D::new(ix, icons_y),
+                    ICON_SIZE,
+                    self.theme.foreground,
+                );
+                ix += ICON_SIZE + AGENT_ICON_GAP;
+            }
+        }
+        let mut text_x = chip_rect.origin.x + 8.0 + icons_w + 6.0;
         if show_dot {
             let dot_color = Color {
                 r: 0.0,

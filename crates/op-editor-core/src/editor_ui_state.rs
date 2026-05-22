@@ -536,6 +536,14 @@ pub struct EditorUiState {
     /// Index into `AgentProvider::ALL` of the agent driving the chat.
     pub chat_selected_agent: usize,
 
+    // --- Window chrome ---------------------------------------------
+    /// Cursor is over the TopBar's window-control (traffic-light)
+    /// cluster — reveals the close / minimise / maximise glyphs.
+    pub topbar_traffic_hover: bool,
+    /// Window is in fullscreen. macOS hides the native traffic
+    /// lights then, so the TopBar drops its left-edge reservation.
+    pub window_fullscreen: bool,
+
     // --- Alignment toolbar -----------------------------------------
     /// Align-toolbar button currently hovered.
     pub align_toolbar_hover: Option<crate::align::AlignAction>,
@@ -671,6 +679,8 @@ impl Default for EditorUiState {
             chat_model_picker_scroll: 0.0,
             chat_model_picker_hover: None,
             chat_selected_agent: 0,
+            topbar_traffic_hover: false,
+            window_fullscreen: false,
             align_toolbar_hover: None,
             property_tab: PropertyTab::Design,
             flex_layout: FlexLayout::Free,
