@@ -116,21 +116,42 @@ impl Orchestrator {
                 label: subtask.label.clone(),
             });
             let outcome = run_subtask(subtask, &plan, &request, llm, sink, abort).await;
-            if outcome.node_count == 0 {
-                // 零节点失败 —— 停止后续 subtask(spec §6.2)。
+            let zero = outcome.node_count == 0;
+            let node_count = outcome.node_count;
+            let err_msg = outcome.error.clone();
+            outcomes.push(outcome);
+
+            // abort 在 run_subtask 期间被置位 —— 优先于零节点判定归
+            // abort 路径(否则 mid-stream abort 会被误判为错误路径,
+            // 错误地移除 scaffold root 并返回 NoContent 而非 Aborted)。
+            if abort.is_set() {
+                aborted_mid = true;
+                if zero {
+                    on_progress(Progress::SubtaskFailed {
+                        id: subtask.id.clone(),
+                        error: err_msg.unwrap_or_else(|| "aborted".into()),
+                    });
+                } else {
+                    on_progress(Progress::SubtaskDone {
+                        id: subtask.id.clone(),
+                        node_count,
+                    });
+                }
+                break;
+            }
+            if zero {
+                // 零节点失败(非 abort)—— 停止后续 subtask(spec §6.2)。
                 on_progress(Progress::SubtaskFailed {
                     id: subtask.id.clone(),
-                    error: outcome.error.clone().unwrap_or_default(),
+                    error: err_msg.unwrap_or_default(),
                 });
-                outcomes.push(outcome);
                 zero_node_failure = true;
                 break;
             }
             on_progress(Progress::SubtaskDone {
                 id: subtask.id.clone(),
-                node_count: outcome.node_count,
+                node_count,
             });
-            outcomes.push(outcome);
         }
 
         // -- 阶段 4:清理 --
@@ -231,7 +252,9 @@ mod tests {
         ))
         .expect("run ok");
 
-        assert_eq!(summary.root_frame_id, "root");
+        // root_frame_id 是 InsertSubtree 重映射后的真实 id —— 不是
+        // plan 里的 "root" 字面值,只断言它非空。
+        assert!(!summary.root_frame_id.is_empty());
         assert_eq!(summary.subtasks.len(), 2);
         assert!(summary.total_nodes >= 2);
         // undo batch 配对。
