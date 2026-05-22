@@ -5,8 +5,6 @@
 //! present; returns an [`AppendPlanResult`] that `run.rs` uses to skip
 //! root-frame insertion and status-bar scaffold (Task B2).
 
-#![allow(dead_code)] // callers land in Task B2
-
 use crate::plan::OrchestratorPlan;
 use crate::types::AppendContext;
 
