@@ -84,7 +84,7 @@ mod tests {
                 fill: None,
             },
             subtasks,
-            style_guide: None,
+            style_guide_name: None,
         }
     }
 

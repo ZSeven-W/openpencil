@@ -6,7 +6,16 @@
 
 use crate::types::DesignRequest;
 use serde::Deserialize;
-use std::collections::BTreeMap;
+
+/// 根 frame 的一个 fill —— 对齐 TS canonical `[{type,color}]`。
+/// 规划只需 solid 色;非 solid 项保留 `color` 字段(可能为空)。
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+pub struct PlanFill {
+    #[serde(rename = "type", default)]
+    pub kind: String,
+    #[serde(default)]
+    pub color: String,
+}
 
 /// 一个 subtask 区域的尺寸。
 #[derive(Debug, Clone, PartialEq, Deserialize)]
@@ -15,7 +24,7 @@ pub struct Region {
     pub height: f64,
 }
 
-/// 根 frame 规格。
+/// 根 frame 规格。字段对齐规划语料 `decomposition.md` 的 `rootFrame`。
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 pub struct RootFrameSpec {
     pub id: String,
@@ -28,8 +37,20 @@ pub struct RootFrameSpec {
     pub gap: Option<f64>,
     #[serde(default)]
     pub padding: Option<f64>,
+    /// TS canonical fill 数组 `[{type:"solid",color:"#hex"}]`。
     #[serde(default)]
-    pub fill: Option<String>,
+    pub fill: Option<Vec<PlanFill>>,
+}
+
+impl RootFrameSpec {
+    /// fill 数组里首个 `type == "solid"` 的颜色;无则 `None`。
+    pub fn first_solid_hex(&self) -> Option<String> {
+        self.fill
+            .as_ref()?
+            .iter()
+            .find(|f| f.kind == "solid" && !f.color.is_empty())
+            .map(|f| f.color.clone())
+    }
 }
 
 /// 一个生成子任务 —— 对应设计里的一个区块。
@@ -46,21 +67,16 @@ pub struct Subtask {
     pub parent_frame_id: Option<String>,
 }
 
-/// 设计系统提示 —— 调色板等。
-#[derive(Debug, Clone, PartialEq, Default, Deserialize)]
-pub struct StyleGuide {
-    /// `名称 -> hex`,阶段 2 据此 seed `$color-*` 文档变量。
-    #[serde(default)]
-    pub palette: BTreeMap<String, String>,
-}
-
-/// 规划阶段的完整产物。
+/// 规划阶段的完整产物。字段对齐规划语料 `decomposition.md`。
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 pub struct OrchestratorPlan {
+    #[serde(rename = "rootFrame")]
     pub root_frame: RootFrameSpec,
     pub subtasks: Vec<Subtask>,
-    #[serde(default)]
-    pub style_guide: Option<StyleGuide>,
+    /// 规划选中的 style guide 名(catalog 引用)。S3b-1a 写进 plan
+    /// 但暂无消费方(变量播种入眠、sub-agent 注入推迟)。
+    #[serde(rename = "styleGuideName", default)]
+    pub style_guide_name: Option<String>,
 }
 
 /// plan 解析错误。
@@ -161,10 +177,13 @@ pub fn build_fallback_plan(req: &DesignRequest) -> OrchestratorPlan {
             layout: Some("vertical".into()),
             gap: Some(0.0),
             padding: Some(0.0),
-            fill: Some("#FFFFFF".into()),
+            fill: Some(vec![PlanFill {
+                kind: "solid".into(),
+                color: "#FFFFFF".into(),
+            }]),
         },
         subtasks,
-        style_guide: None,
+        style_guide_name: None,
     }
 }
 
@@ -181,26 +200,38 @@ mod tests {
     }
 
     #[test]
-    fn parse_plan_reads_fenced_json() {
-        let text = r#"Here is the plan:
-```json
+    fn parse_plan_reads_ts_native_shape() {
+        // decomposition.md FORMAT 行的形状:rootFrame / fill 数组 / styleGuideName
+        let text = r##"```json
 {
-  "root_frame": { "id": "root", "name": "Page", "width": 1200, "height": 800 },
+  "rootFrame": { "id": "page", "name": "Page", "width": 1200, "height": 0,
+                 "layout": "vertical", "gap": 0,
+                 "fill": [{ "type": "solid", "color": "#0A0F1C" }] },
+  "styleGuideName": "terminal-minimal-dark",
   "subtasks": [
-    { "id": "hero", "label": "Hero", "region": { "width": 1200, "height": 400 } }
+    { "id": "hero", "label": "Hero", "elements": "headline, CTA",
+      "region": { "width": 1200, "height": 560 } }
   ]
 }
-```
-done."#;
+```"##;
         let plan = parse_plan(text).expect("parse");
-        assert_eq!(plan.root_frame.id, "root");
+        assert_eq!(plan.root_frame.id, "page");
+        assert_eq!(
+            plan.style_guide_name.as_deref(),
+            Some("terminal-minimal-dark")
+        );
+        // fill 数组 → first_solid_hex 取首个 solid 色
+        assert_eq!(
+            plan.root_frame.first_solid_hex().as_deref(),
+            Some("#0A0F1C")
+        );
+        // 未知字段 elements 被 serde 忽略,不报错
         assert_eq!(plan.subtasks.len(), 1);
-        assert_eq!(plan.subtasks[0].id, "hero");
     }
 
     #[test]
     fn parse_plan_rejects_no_subtasks() {
-        let text = r#"{ "root_frame": { "id": "r", "name": "P", "width": 1, "height": 1 }, "subtasks": [] }"#;
+        let text = r#"{ "rootFrame": { "id": "r", "name": "P", "width": 1, "height": 1 }, "subtasks": [] }"#;
         assert!(parse_plan(text).is_err());
     }
 
