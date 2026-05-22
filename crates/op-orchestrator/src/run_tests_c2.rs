@@ -57,6 +57,7 @@ fn req_concurrent() -> DesignRequest {
         provider: None,
         design_md: None,
         concurrency: 2,
+        append_context: None,
     }
 }
 
@@ -69,6 +70,7 @@ fn req_sequential() -> DesignRequest {
         provider: None,
         design_md: None,
         concurrency: 1,
+        append_context: None,
     }
 }
 

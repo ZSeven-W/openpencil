@@ -21,6 +21,7 @@ fn make_req() -> crate::types::DesignRequest {
         provider: None,
         design_md: None,
         concurrency: 2,
+        append_context: None,
     }
 }
 
@@ -51,6 +52,7 @@ fn make_two_screen_plan() -> crate::plan::OrchestratorPlan {
                 elements: None,
                 screen: Some("login".into()),
                 generated_root_id: None,
+                existing_section_labels: None,
             },
             crate::plan::Subtask {
                 id: "s1".into(),
@@ -64,6 +66,7 @@ fn make_two_screen_plan() -> crate::plan::OrchestratorPlan {
                 elements: None,
                 screen: Some("home".into()),
                 generated_root_id: None,
+                existing_section_labels: None,
             },
         ],
         style_guide_name: None,
@@ -86,6 +89,7 @@ fn make_three_screen_plan() -> crate::plan::OrchestratorPlan {
         elements: None,
         screen: Some(screen.into()),
         generated_root_id: None,
+        existing_section_labels: None,
     };
     OrchestratorPlan {
         root_frame: RootFrameSpec {

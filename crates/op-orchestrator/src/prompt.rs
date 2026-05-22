@@ -230,6 +230,7 @@ mod tests {
             provider: None,
             design_md: None,
             concurrency: 1,
+            append_context: None,
         }
     }
 
@@ -310,6 +311,7 @@ mod tests {
             elements: None,
             screen: None,
             generated_root_id: None,
+            existing_section_labels: None,
         };
         let cr = build_subagent_prompt(&st, &plan(), &req(), AbortFlag::new(), false, false);
         assert!(cr.user_prompt.contains("Hero"));
@@ -331,6 +333,7 @@ mod tests {
             elements: None,
             screen: None,
             generated_root_id: None,
+            existing_section_labels: None,
         };
         // minimal_skills=true: the system prompt should contain "schema" skill
         // content and "jsonl-format" skill content, but NOT layout/text-rules etc.
@@ -362,6 +365,7 @@ mod tests {
             elements: None,
             screen: None,
             generated_root_id: None,
+            existing_section_labels: None,
         };
         // req() uses model "claude" which is Full tier — no narrowing.
         // Use a basic-tier model to test narrowing.
@@ -371,6 +375,7 @@ mod tests {
             provider: None,
             design_md: None,
             concurrency: 1,
+            append_context: None,
         };
         let full_cr =
             build_subagent_prompt(&st, &plan(), &basic_req, AbortFlag::new(), false, false);
@@ -396,6 +401,7 @@ mod tests {
             elements: None,
             screen: None,
             generated_root_id: None,
+            existing_section_labels: None,
         };
         // req() uses "claude" which maps to Full tier → reduced_complexity is no-op
         let full_cr = build_subagent_prompt(&st, &plan(), &req(), AbortFlag::new(), false, false);
@@ -458,6 +464,7 @@ mod tests {
             provider: None,
             design_md: None,
             concurrency: 1,
+            append_context: None,
         };
         let long_prompt = "x".repeat(5000); // >= 4200 chars
         let long_req = DesignRequest {
@@ -466,6 +473,7 @@ mod tests {
             provider: None,
             design_md: None,
             concurrency: 1,
+            append_context: None,
         };
         let short_pp = build_orchestrator_prompt(&short_req, PlanningMode::Rich, AbortFlag::new());
         let long_pp = build_orchestrator_prompt(&long_req, PlanningMode::Rich, AbortFlag::new());
@@ -485,6 +493,7 @@ mod tests {
             provider: None,
             design_md: None,
             concurrency: 1,
+            append_context: None,
         };
         let pp = build_orchestrator_prompt(&ds_req, PlanningMode::Rich, AbortFlag::new());
         // Short bucket base: 300_000ms × 2.0 = 600_000ms
@@ -508,6 +517,7 @@ mod tests {
             elements: None,
             screen: None,
             generated_root_id: None,
+            existing_section_labels: None,
         }
     }
 
@@ -540,6 +550,7 @@ mod tests {
             provider: None,
             design_md: None,
             concurrency: 1,
+            append_context: None,
         };
         let long_req = DesignRequest {
             prompt: "x".repeat(5000),
@@ -547,6 +558,7 @@ mod tests {
             provider: None,
             design_md: None,
             concurrency: 1,
+            append_context: None,
         };
         let short_cr = build_subagent_prompt(
             &subtask(),
@@ -579,6 +591,7 @@ mod tests {
             provider: None,
             design_md: None,
             concurrency: 1,
+            append_context: None,
         };
         let cr = build_subagent_prompt(
             &subtask(),

@@ -34,6 +34,7 @@ fn subtask(id: &str, label: &str, elements: Option<&str>) -> Subtask {
         elements: elements.map(String::from),
         screen: None,
         generated_root_id: None,
+        existing_section_labels: None,
     }
 }
 

@@ -304,6 +304,7 @@ mod tests {
             elements: None,
             screen: screen.map(|s| s.to_string()),
             generated_root_id: None,
+            existing_section_labels: None,
         }
     }
 

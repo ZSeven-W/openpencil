@@ -34,6 +34,7 @@ fn subtask_with_screen(id: &str, screen: Option<&str>) -> Subtask {
         elements: None,
         screen: screen.map(|s| s.to_string()),
         generated_root_id: None,
+        existing_section_labels: None,
     }
 }
 
@@ -64,6 +65,7 @@ fn make_plan_with_subtasks(subtask_ids: &[&str]) -> crate::plan::OrchestratorPla
                 elements: None,
                 screen: None,
                 generated_root_id: None,
+                existing_section_labels: None,
             })
             .collect(),
         style_guide_name: None,
@@ -77,6 +79,7 @@ fn make_req() -> crate::types::DesignRequest {
         provider: None,
         design_md: None,
         concurrency: 2,
+        append_context: None,
     }
 }
 

@@ -60,6 +60,7 @@ fn dashboard_plan(root_id: &str) -> OrchestratorPlan {
                 elements: None,
                 screen: None,
                 generated_root_id: None,
+                existing_section_labels: None,
             },
             Subtask {
                 id: "revenue-chart".into(),
@@ -73,6 +74,7 @@ fn dashboard_plan(root_id: &str) -> OrchestratorPlan {
                 elements: None,
                 screen: None,
                 generated_root_id: None,
+                existing_section_labels: None,
             },
             Subtask {
                 id: "kpi-metrics".into(),
@@ -86,6 +88,7 @@ fn dashboard_plan(root_id: &str) -> OrchestratorPlan {
                 elements: None,
                 screen: None,
                 generated_root_id: None,
+                existing_section_labels: None,
             },
         ],
         style_guide_name: None,
