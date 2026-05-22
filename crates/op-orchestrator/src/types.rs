@@ -143,6 +143,10 @@ pub enum OrchestratorError {
     Aborted,
     /// 跑完但未产出任何真实内容。
     NoContent,
+    /// 并发路径:所有 screen-group worker 全部失败(零节点)。
+    /// 内含第一个非空错误字符串,方便调用方记录或展示。
+    /// Port of `orchestrator-sub-agent.ts:321-325` throw path.
+    AllFailed(String),
     /// 内部错误(意外情况)。
     Internal(String),
 }
@@ -152,6 +156,7 @@ impl std::fmt::Display for OrchestratorError {
         match self {
             OrchestratorError::Aborted => write!(f, "orchestration aborted by user"),
             OrchestratorError::NoContent => write!(f, "orchestration produced no content"),
+            OrchestratorError::AllFailed(m) => write!(f, "orchestration failed: {m}"),
             OrchestratorError::Internal(m) => write!(f, "orchestration internal error: {m}"),
         }
     }
