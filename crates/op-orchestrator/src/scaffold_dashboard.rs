@@ -35,7 +35,6 @@ use op_editor_core::{EditorCommand, NodeId, PenNodeExt};
 ///   `scaffoldCounts.set(rootId, countDescendants(root))` in
 ///   `orchestrator.ts:1038-1053`. Callers compare a later live count
 ///   against this baseline to decide whether a root is scaffold-only.
-#[allow(dead_code)] // consumed by run.rs wiring in S3b-3 Task C3
 pub(crate) type DashboardScaffoldResult = (Vec<EditorCommand>, String, String, usize);
 
 /// Builds the dashboard-column scaffold variant (S3b-3 Task C2).
@@ -63,7 +62,6 @@ pub(crate) type DashboardScaffoldResult = (Vec<EditorCommand>, String, String, u
 ///
 /// # Errors
 /// Returns `Err` only on internal JSON template bugs (non-user-input errors).
-#[allow(dead_code)] // consumed by run.rs wiring in S3b-3 Task C3
 pub(crate) fn build_scaffold_dashboard(
     plan: &mut OrchestratorPlan,
     sidebar_fill_hex: &str,

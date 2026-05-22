@@ -1,10 +1,7 @@
 //! Dashboard column-layout detection predicates —— S3b-3 Plan A1.
 //!
 //! Faithful port of `apps/web/src/services/ai/orchestrator.ts:175-211`.
-//! Callers land in Plan C (wiring); all items are `pub(crate)` with
-//! `#![allow(dead_code)]` scaffolding acceptable until then.
-
-#![allow(dead_code)]
+//! All items are `pub(crate)` and consumed by the `run.rs` sequential path.
 
 use crate::plan::{OrchestratorPlan, Subtask};
 
@@ -717,15 +714,13 @@ pub(crate) fn group_dashboard_main_rows(plan: &OrchestratorPlan) -> DashboardRow
 // ---------------------------------------------------------------------------
 
 mod slots;
-#[allow(unused_imports)] // consumed by run.rs in a later task
-pub(crate) use slots::{assign_dashboard_main_parents, RowFrameEntry};
+pub(crate) use slots::assign_dashboard_main_parents;
 
 // ---------------------------------------------------------------------------
 // §4.7 Placeholder height + child reorder — sibling file (800-line cap)
 // ---------------------------------------------------------------------------
 
 mod height_reorder;
-#[allow(unused_imports)] // consumed by run.rs in a later task
 pub(crate) use height_reorder::{
     get_dashboard_placeholder_height, reorder_dashboard_main_children,
 };
