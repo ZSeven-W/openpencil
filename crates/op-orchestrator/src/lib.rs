@@ -9,6 +9,7 @@
 
 pub mod compact_prompt;
 pub mod compact_skills;
+pub mod dashboard_columns;
 pub mod design_md_policy;
 pub mod design_type;
 pub mod intent;
