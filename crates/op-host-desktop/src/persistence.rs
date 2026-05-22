@@ -368,17 +368,48 @@ pub fn open_path(
     }
 }
 
+/// Outcome of [`run_action`] — tells the desktop runner which
+/// post-action bookkeeping to run.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ActionOutcome {
+    /// The document now matches a file on disk (New / successful
+    /// Open / Save / Save-As / Open-Recent). The runner refreshes the
+    /// unsaved-changes baseline AND rebinds the Git session.
+    Saved,
+    /// The document's content + path changed but it does NOT match
+    /// any file on disk — a Figma import. The runner rebinds the Git
+    /// session + window title (the previously-open document's repo
+    /// binding is now stale) but must NOT refresh the unsaved-changes
+    /// baseline: the imported design is unsaved work and close must
+    /// still prompt.
+    PathChangedUnsaved,
+    /// Nothing to reconcile — export, recent-list edits, or a user
+    /// cancel / error.
+    Noop,
+}
+
+impl ActionOutcome {
+    /// Map a save/open helper's `bool` (`true` = the document now
+    /// matches a file on disk) onto an outcome.
+    fn saved_or_noop(saved: bool) -> Self {
+        if saved {
+            ActionOutcome::Saved
+        } else {
+            ActionOutcome::Noop
+        }
+    }
+}
+
 /// Route a `FileAction` raised by the file-menu dispatcher to the
-/// matching dialog flow. Returns `true` when the action left the
-/// document matching disk — a New / successful Open / successful
-/// Save — so the runner can refresh its unsaved-changes baseline;
-/// export / import / recent-list actions return `false`.
+/// matching dialog flow. The returned [`ActionOutcome`] tells the
+/// runner which post-action bookkeeping to run — see its variant
+/// docs.
 pub fn run_action(
     action: op_editor_core::editor_ui_state::FileAction,
     host: &mut WidgetHostNative,
     current_path: &mut Option<PathBuf>,
     window: Option<&winit::window::Window>,
-) -> bool {
+) -> ActionOutcome {
     use op_editor_core::editor_ui_state::FileAction;
     match action {
         FileAction::New => {
@@ -387,17 +418,19 @@ pub fn run_action(
             host.mark_editor_state_dirty();
             *current_path = None;
             refresh_title(current_path, window);
-            true
+            ActionOutcome::Saved
         }
-        FileAction::Open => handle_open(host, current_path, window),
-        FileAction::Save => handle_save(host, current_path, window),
-        FileAction::SaveAs => handle_save_as(host, current_path, window),
+        FileAction::Open => ActionOutcome::saved_or_noop(handle_open(host, current_path, window)),
+        FileAction::Save => ActionOutcome::saved_or_noop(handle_save(host, current_path, window)),
+        FileAction::SaveAs => {
+            ActionOutcome::saved_or_noop(handle_save_as(host, current_path, window))
+        }
         FileAction::ExportImage => {
             // main.rs intercepts ExportImage to open the picker; this
             // fallback keeps external callers working.
             host.editor_state_mut().editor_ui.export_dialog_open = true;
             host.mark_editor_state_dirty();
-            false
+            ActionOutcome::Noop
         }
         FileAction::ExportImageConfirm => {
             use op_editor_core::editor_ui_state::ExportFormat as Fmt;
@@ -455,11 +488,11 @@ pub fn run_action(
                     show_error_dialog(host, ErrorKind::Export, Some(&path), &e);
                 }
             }
-            false
+            ActionOutcome::Noop
         }
         FileAction::OpenRecent(i) => {
             let Some(entry) = host.editor_state().editor_ui.recent_files.get(i).cloned() else {
-                return false;
+                return ActionOutcome::Noop;
             };
             let path = std::path::PathBuf::from(&entry.path);
             match load_into_host(host, &path) {
@@ -467,7 +500,7 @@ pub fn run_action(
                     crate::settings_io::touch_recent(host, &path);
                     *current_path = Some(path);
                     refresh_title(current_path, window);
-                    true
+                    ActionOutcome::Saved
                 }
                 Err(e) => {
                     // File missing / parse failure → tell the user and
@@ -479,20 +512,71 @@ pub fn run_action(
                         .recent_files
                         .retain(|r| r.path != entry.path);
                     host.mark_editor_state_dirty();
-                    false
+                    ActionOutcome::Noop
                 }
             }
         }
         FileAction::ClearRecent => {
             host.editor_state_mut().editor_ui.recent_files.clear();
             host.mark_editor_state_dirty();
-            false
+            ActionOutcome::Noop
         }
         FileAction::ImportFigma => {
-            eprintln!("[file-action] {action:?} — not yet wired (UI only)");
-            false
+            let path = match rfd::FileDialog::new()
+                .set_title(op_i18n::translate(
+                    host.editor_state().editor_ui.locale,
+                    "dialog.pickerOpenTitle",
+                ))
+                .add_filter("Figma", &["fig"])
+                .pick_file()
+            {
+                Some(p) => p,
+                None => return ActionOutcome::Noop,
+            };
+            match import_figma_into_host(host, &path) {
+                Ok(()) => {
+                    // An imported `.fig` has no `.op` path of its own —
+                    // the next Save routes through Save As.
+                    *current_path = None;
+                    refresh_title(current_path, window);
+                    // `PathChangedUnsaved`, not `Saved`: an import does
+                    // NOT leave the document matching disk. Reporting
+                    // `Saved` would refresh the unsaved-changes
+                    // baseline, so closing the app would silently
+                    // discard the imported design with no save prompt.
+                    // The runner still rebinds the Git session (the
+                    // previously-open document's repo is now stale).
+                    ActionOutcome::PathChangedUnsaved
+                }
+                Err(e) => {
+                    eprintln!("[import-figma] {e}");
+                    show_error_dialog(host, ErrorKind::Open, Some(&path), &e);
+                    ActionOutcome::Noop
+                }
+            }
         }
     }
+}
+
+/// Read + parse a binary `.fig` file and swap the host's document
+/// for the imported one. The heavy lifting lives in `op_figma`.
+fn import_figma_into_host(
+    host: &mut WidgetHostNative,
+    path: &std::path::Path,
+) -> Result<(), String> {
+    let bytes = std::fs::read(path).map_err(|e| e.to_string())?;
+    let file_name = path
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("Figma Import");
+    let import = op_figma::parse_fig_binary(&bytes, file_name, op_figma::FigLayoutMode::OpenPencil)
+        .map_err(|e| e.to_string())?;
+    for warning in &import.warnings {
+        eprintln!("[import-figma] warning: {warning}");
+    }
+    *host.editor_state_mut() = EditorState::from_document(import.document);
+    host.mark_editor_state_dirty();
+    Ok(())
 }
 
 fn refresh_title(current_path: &Option<PathBuf>, window: Option<&winit::window::Window>) {

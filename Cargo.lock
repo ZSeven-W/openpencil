@@ -2619,6 +2619,7 @@ dependencies = [
  "op-ai-skills",
  "op-editor-core",
  "op-editor-ui",
+ "op-figma",
  "op-git",
  "op-host-native",
  "op-i18n",

@@ -585,13 +585,22 @@ impl ApplicationHandler for DesktopApp {
                         eui.export_dialog_open = true;
                         self.host.mark_editor_state_dirty();
                         self.request_redraw(true);
-                    } else if persistence::run_action(
-                        action,
-                        &mut self.host,
-                        &mut self.current_path,
-                        self.window.as_ref(),
-                    ) {
-                        self.mark_document_saved();
+                    } else {
+                        match persistence::run_action(
+                            action,
+                            &mut self.host,
+                            &mut self.current_path,
+                            self.window.as_ref(),
+                        ) {
+                            persistence::ActionOutcome::Saved => self.mark_document_saved(),
+                            // A Figma import changed the document path
+                            // but left unsaved work — rebind Git only,
+                            // keep the dirty baseline so close prompts.
+                            persistence::ActionOutcome::PathChangedUnsaved => {
+                                self.rebind_git_session_for_current_path()
+                            }
+                            persistence::ActionOutcome::Noop => {}
+                        }
                     }
                 }
                 if consumed {
