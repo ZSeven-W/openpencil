@@ -174,7 +174,8 @@ impl WidgetHostNative {
             origin: op_editor_ui::Point2D::new(0.0, 0.0),
             size: op_editor_ui::Point2D::new(viewport_width, op_editor_ui::widgets::TOP_BAR_HEIGHT),
         };
-        let anchor = TopBar::file_menu_rect(top_bar_rect);
+        let anchor =
+            TopBar::file_menu_rect(top_bar_rect, self.editor_state.editor_ui.window_fullscreen);
         let now_secs = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .map(|d| d.as_secs())

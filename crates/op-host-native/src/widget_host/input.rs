@@ -205,7 +205,8 @@ impl WidgetHostNative {
                 origin: Point2D::new(0.0, 0.0),
                 size: Point2D::new(self.last_viewport_w, op_editor_ui::widgets::TOP_BAR_HEIGHT),
             };
-            let anchor = TopBar::file_menu_rect(top_bar_rect);
+            let anchor =
+                TopBar::file_menu_rect(top_bar_rect, self.editor_state.editor_ui.window_fullscreen);
             let now_secs = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .map(|d| d.as_secs())
@@ -244,6 +245,24 @@ impl WidgetHostNative {
             let new_hover_ec = new_hover.map(op_editor_ui::widgets::editor_state_ext::shape_choice);
             if new_hover_ec != self.editor_state.editor_ui.shape_picker_hover {
                 self.editor_state.editor_ui.shape_picker_hover = new_hover_ec;
+                self.mark_dirty();
+                return true;
+            }
+        }
+        // TopBar window-control cluster — hovering it reveals the
+        // close / minimise / maximise glyphs on the 3 dots.
+        {
+            use op_editor_ui::widgets::{TopBar, TOP_BAR_HEIGHT};
+            let tb_rect = Rect {
+                origin: Point2D::new(0.0, 0.0),
+                size: Point2D::new(self.last_viewport_w, TOP_BAR_HEIGHT),
+            };
+            let over = super::helpers::rect_contains(
+                TopBar::traffic_cluster_rect(tb_rect),
+                Point2D::new(x, y),
+            );
+            if over != self.editor_state.editor_ui.topbar_traffic_hover {
+                self.editor_state.editor_ui.topbar_traffic_hover = over;
                 self.mark_dirty();
                 return true;
             }

@@ -56,6 +56,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "topbar.dontSave" => "Kaydetme",
         "topbar.agentsAndMcp" => "Ajanlar ve MCP",
         "topbar.agentSingular" => "ajan",
+        "topbar.agentPlural" => "ajan",
         "topbar.setupAgentsMcp" => "Ajanları ve MCP Kur",
         "topbar.connected" => "bağlı",
         "topbar.agentStatus" => "{{agents}} ajan{{agentSuffix}} · {{mcp}} MCP",
