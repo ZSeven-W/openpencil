@@ -1,17 +1,26 @@
 //! `Orchestrator::run()` —— 四阶段编排主轴(spec §4)。
 //!
-//! 规划 → 画布搭建 → 顺序子 agent → 清理。副作用全经
-//! [`DocSink`] / [`LlmClient`]。错误 / abort / 零内容语义见
-//! spec §6。
+//! 规划 → 画布搭建 → 顺序子 agent(或并发 screen-group) → 清理。
+//! 副作用全经 [`DocSink`] / [`LlmClient`]。
+//! 错误 / abort / 零内容语义见 spec §6。
+//!
+//! ## S3b-2 Task C2: concurrent path
+//! After planning, `effective_concurrency` decides whether to take the
+//! concurrent multi-screen path (N-root scaffold + `run_concurrent`) or
+//! the existing sequential single-screen path.  The sequential path is
+//! completely unchanged.
 
-use crate::cleanup::{descendant_count, run_cleanup_passes};
+use crate::cleanup::{
+    aggregate_concurrent_verdict, cleanup_concurrent_roots, descendant_count, run_cleanup_passes,
+};
+use crate::concurrent::{effective_concurrency, group_subtasks_by_screen, run_concurrent};
 use crate::model_profile::{resolve_model_profile, ModelTier};
 use crate::plan::{build_fallback_plan, OrchestratorPlan};
 use crate::plan_normalize::{normalize, NormInfo};
 use crate::plan_repair::parse_orchestrator_response;
 use crate::prompt::build_orchestrator_prompt;
 use crate::retry::{attempt_modes, is_non_retryable};
-use crate::scaffold::build_scaffold;
+use crate::scaffold::{build_scaffold, build_scaffold_concurrent_mobile};
 use crate::subagent::run_subtask;
 use crate::types::{
     AbortFlag, DesignRequest, DocSink, LlmChunk, LlmClient, OrchestratorError, Progress,
@@ -32,6 +41,11 @@ impl Orchestrator {
     }
 
     /// 跑一次完整编排。见 spec §4 数据流。
+    ///
+    /// ## S3b-2 分支决策
+    /// 规划完成后检查 `effective_concurrency`:
+    /// - `> 1` → 并发多屏路径(N-root scaffold + `run_concurrent`)。
+    /// - `<= 1` → 原有顺序路径,完全不变。
     pub async fn run(
         &self,
         request: DesignRequest,
@@ -44,6 +58,26 @@ impl Orchestrator {
         // `planning_loop` 内部已 normalize 并回传 `NormInfo`,此处不再二次规范化。
         on_progress(Progress::Planning);
         let (mut plan, norm) = planning_loop(&request, llm, abort).await?;
+
+        // -- S3b-2 Task C2: concurrency branch decision --
+        // Port of `orchestrator.ts:780-810` (minus append-mode gate, S3b-4).
+        let screen_groups = group_subtasks_by_screen(&plan.subtasks);
+        let effective = effective_concurrency(request.concurrency, screen_groups.len());
+
+        if effective > 1 {
+            return run_concurrent_path(
+                request,
+                plan,
+                norm,
+                &screen_groups,
+                sink,
+                llm,
+                on_progress,
+                abort,
+            )
+            .await;
+        }
+
         let planned_root_id = plan.root_frame.id.clone();
 
         // -- 进入"已动文档"区,全程 undo batch 包裹 --
@@ -254,6 +288,142 @@ impl Orchestrator {
     }
 }
 
+// ── S3b-2 Task C2: concurrent multi-screen path ───────────────────────────────
+
+/// 并发多屏路径(S3b-2 Task C2)。
+///
+/// Port of `orchestrator.ts:856-1158` concurrent branch.
+/// 只在 `effective_concurrency > 1` 时调用;顺序路径不碰此函数。
+#[allow(clippy::too_many_arguments)]
+async fn run_concurrent_path(
+    request: DesignRequest,
+    mut plan: OrchestratorPlan,
+    norm: NormInfo,
+    screen_groups: &[crate::concurrent::ScreenGroup],
+    sink: &mut dyn DocSink,
+    llm: &dyn LlmClient,
+    on_progress: &mut dyn FnMut(Progress),
+    abort: &AbortFlag,
+) -> Result<RunSummary, OrchestratorError> {
+    // -- 进入"已动文档"区 --
+    sink.begin_undo_batch();
+    let var_snapshot = snapshot_plan_vars(sink, &plan);
+
+    // -- 阶段 2 (并发):变量播种 + N-root scaffold --
+    for cmd in seed_commands(&plan) {
+        sink.apply(cmd);
+    }
+
+    // Build N scaffold roots (one per screen group).
+    let (scaffold_cmds, _original_root_ids, baselines) =
+        match build_scaffold_concurrent_mobile(&plan, screen_groups, norm.is_mobile) {
+            Ok(r) => r,
+            Err(e) => {
+                rollback(sink, &var_snapshot);
+                sink.end_undo_batch();
+                return Err(OrchestratorError::Internal(e));
+            }
+        };
+
+    // Record page-child count before inserting N roots.
+    let roots_start_index = sink.state().active_children().len();
+
+    for cmd in &scaffold_cmds {
+        if !sink.apply(cmd.clone()) {
+            rollback(sink, &var_snapshot);
+            sink.end_undo_batch();
+            return Err(OrchestratorError::Internal(
+                "concurrent scaffold insert rejected by document".into(),
+            ));
+        }
+    }
+
+    // Resolve the actual (remapped) root IDs from the live document.
+    // Each InsertSubtree appended one child to the active page — capture them
+    // in insertion order.
+    let actual_root_ids: Vec<String> = sink
+        .state()
+        .active_children()
+        .iter()
+        .skip(roots_start_index)
+        .take(screen_groups.len())
+        .map(|n| n.id_str().to_string())
+        .collect();
+
+    if actual_root_ids.len() != screen_groups.len() {
+        rollback(sink, &var_snapshot);
+        sink.end_undo_batch();
+        return Err(OrchestratorError::Internal(format!(
+            "expected {} concurrent scaffold roots, got {}",
+            screen_groups.len(),
+            actual_root_ids.len()
+        )));
+    }
+
+    // Assign parent_frame_id for each group's subtasks.
+    for (g, group) in screen_groups.iter().enumerate() {
+        let root_id = &actual_root_ids[g];
+        for &idx in &group.indices {
+            if let Some(subtask) = plan.subtasks.get_mut(idx) {
+                subtask.parent_frame_id = Some(root_id.clone());
+            }
+        }
+    }
+
+    on_progress(Progress::ScaffoldDone);
+
+    // -- 阶段 3 (并发):run_concurrent --
+    // Take a snapshot of current state for worker BufferDocSinks.
+    let state_snapshot = sink.state().clone();
+    let all_outcomes = run_concurrent(
+        screen_groups,
+        &plan,
+        &request,
+        llm,
+        abort,
+        state_snapshot,
+        sink,
+        on_progress,
+    )
+    .await;
+
+    // Collect non-None outcomes (workers that ran at least one subtask).
+    let collected: Vec<crate::types::SubtaskOutcome> =
+        all_outcomes.iter().filter_map(|o| o.clone()).collect();
+
+    // -- 阶段 4 (并发):清理 --
+    let root_id_strs: Vec<&str> = actual_root_ids.iter().map(|s| s.as_str()).collect();
+    run_cleanup_passes(sink, &plan, &root_id_strs);
+    on_progress(Progress::CleanupDone);
+
+    sink.end_undo_batch();
+
+    // -- Run-all-aggregate failure policy (Task C1) --
+    // Check AFTER cleanup so the cleanup pass still runs on partial results.
+    if let Err(e) = aggregate_concurrent_verdict(&collected) {
+        // All workers failed → clean up N roots + roll back variables.
+        sink.begin_undo_batch();
+        cleanup_concurrent_roots(sink, &root_id_strs, &baselines, &var_snapshot);
+        sink.end_undo_batch();
+        return Err(e);
+    }
+
+    // -- Abort check --
+    if abort.is_set() && collected.iter().map(|o| o.node_count).sum::<usize>() == 0 {
+        return Err(OrchestratorError::Aborted);
+    }
+
+    // -- Success: build RunSummary --
+    // Use the first surviving root as the "primary" root_frame_id.
+    let primary_root_id = actual_root_ids.first().cloned().unwrap_or_default();
+    let total_nodes = collected.iter().map(|o| o.node_count).sum();
+    Ok(RunSummary {
+        root_frame_id: primary_root_id,
+        subtasks: collected,
+        total_nodes,
+    })
+}
+
 /// 规划阶段: mode-rotation 重试循环。
 ///
 /// Port of `callOrchestrator` planning stage in `orchestrator.ts:1323-1503`.
@@ -392,376 +562,10 @@ async fn collect_text(
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::test_support::{ScriptResponse, ScriptedLlm, VecDocSink};
+#[path = "run_tests.rs"]
+mod tests;
 
-    fn req() -> DesignRequest {
-        DesignRequest {
-            prompt: "a landing page".into(),
-            model: None,
-            provider: None,
-            design_md: None,
-            concurrency: 1,
-        }
-    }
-
-    // Standard tier → [Rich, Minimal]
-    fn req_standard() -> DesignRequest {
-        DesignRequest {
-            prompt: "a landing page".into(),
-            // "gpt-4o" matches Standard tier in model_profile table
-            model: Some("gpt-4o".into()),
-            provider: None,
-            design_md: None,
-            concurrency: 1,
-        }
-    }
-
-    // Basic tier → [Rich, Minimal, Compact]
-    fn req_basic() -> DesignRequest {
-        DesignRequest {
-            prompt: "a landing page".into(),
-            // "glm" matches Basic tier in model_profile table
-            model: Some("glm-4".into()),
-            provider: None,
-            design_md: None,
-            concurrency: 1,
-        }
-    }
-
-    const PLAN_JSON: &str = r##"{
-  "rootFrame": { "id": "root", "name": "Page", "width": 1200, "height": 800,
-                 "layout": "vertical", "gap": 0,
-                 "fill": [{ "type": "solid", "color": "#FFFFFF" }] },
-  "subtasks": [
-    { "id": "hero", "label": "Hero", "region": { "width": 1200, "height": 400 } },
-    { "id": "feat", "label": "Features", "region": { "width": 1200, "height": 400 } }
-  ]
-}"##;
-
-    fn node_json(prefix: &str) -> String {
-        format!(
-            r#"[{{"type":"frame","id":"{prefix}-1","name":"Sec","x":0,"y":0,"width":1200,"height":300,"children":[]}}]"#
-        )
-    }
-
-    // ── existing tests (must stay green) ─────────────────────────────────────
-
-    #[test]
-    fn run_happy_path_applies_scaffold_and_subtasks() {
-        let llm = ScriptedLlm::new(vec![
-            ScriptResponse::Text(PLAN_JSON.into()),
-            ScriptResponse::Text(node_json("hero")),
-            ScriptResponse::Text(node_json("feat")),
-        ]);
-        let mut sink = VecDocSink::new();
-        let mut events: Vec<Progress> = Vec::new();
-        let mut on_progress = |p: Progress| events.push(p);
-
-        let summary = futures::executor::block_on(Orchestrator::new().run(
-            req(),
-            &mut sink,
-            &llm,
-            &mut on_progress,
-            &AbortFlag::new(),
-        ))
-        .expect("run ok");
-
-        // root_frame_id 是 InsertSubtree 重映射后的真实 id —— 不是
-        // plan 里的 "root" 字面值,只断言它非空。
-        assert!(!summary.root_frame_id.is_empty());
-        assert_eq!(summary.subtasks.len(), 2);
-        assert!(summary.total_nodes >= 2);
-        // undo batch 配对。
-        assert_eq!(sink.batch_depth, 0);
-        // 至少有 scaffold + 两个 subtask 的 InsertSubtree。
-        let inserts = sink
-            .applied
-            .iter()
-            .filter(|c| matches!(c, EditorCommand::InsertSubtree { .. }))
-            .count();
-        assert!(inserts >= 3, "expected >=3 InsertSubtree, got {inserts}");
-        assert!(matches!(events.first(), Some(Progress::Planning)));
-        assert!(matches!(events.last(), Some(Progress::CleanupDone)));
-    }
-
-    #[test]
-    fn run_zero_node_subtask_stops_and_errors() {
-        // 规划 OK,但第一个 subtask 吐垃圾(3 次全失败)→ 零节点 → NoContent。
-        // C3 引入 3-attempt 梯子:需要 3 条垃圾响应才能穷尽重试。
-        let llm = ScriptedLlm::new(vec![
-            ScriptResponse::Text(PLAN_JSON.into()),
-            ScriptResponse::Text("the model refused".into()),
-            ScriptResponse::Text("still refused".into()),
-            ScriptResponse::Text("refused again".into()),
-        ]);
-        let mut sink = VecDocSink::new();
-        let mut on_progress = |_p: Progress| {};
-        let result = futures::executor::block_on(Orchestrator::new().run(
-            req(),
-            &mut sink,
-            &llm,
-            &mut on_progress,
-            &AbortFlag::new(),
-        ));
-        assert!(matches!(result, Err(OrchestratorError::NoContent)));
-        // undo batch 仍配对。
-        assert_eq!(sink.batch_depth, 0);
-    }
-
-    #[test]
-    fn run_planning_failure_uses_fallback_plan() {
-        // 规划吐垃圾 → fallback plan;subtask 正常 → 成功。
-        let llm = ScriptedLlm::new(vec![
-            ScriptResponse::Text("no json here".into()),
-            ScriptResponse::Text(node_json("section-1")),
-        ]);
-        let mut sink = VecDocSink::new();
-        let mut on_progress = |_p: Progress| {};
-        let summary = futures::executor::block_on(Orchestrator::new().run(
-            req(),
-            &mut sink,
-            &llm,
-            &mut on_progress,
-            &AbortFlag::new(),
-        ))
-        .expect("fallback run ok");
-        assert!(summary.total_nodes >= 1);
-    }
-
-    // ── Task C2: new tests (Step 1 — add failing, then implement) ─────────────
-
-    /// Attempt 1 returns bad JSON (parse_error), attempt 2 returns valid plan.
-    /// Standard tier → [Rich, Minimal] → rotation occurs.
-    #[test]
-    fn planning_rotation_uses_attempt2_plan_on_attempt1_parse_failure() {
-        let llm = ScriptedLlm::new(vec![
-            // attempt 1 (Rich) → bad JSON
-            ScriptResponse::Text("not valid json at all".into()),
-            // attempt 2 (Minimal) → valid plan
-            ScriptResponse::Text(PLAN_JSON.into()),
-            // subtasks
-            ScriptResponse::Text(node_json("hero")),
-            ScriptResponse::Text(node_json("feat")),
-        ]);
-        let mut sink = VecDocSink::new();
-        let mut on_progress = |_p: Progress| {};
-        let summary = futures::executor::block_on(Orchestrator::new().run(
-            req_standard(), // Standard tier → [Rich, Minimal]
-            &mut sink,
-            &llm,
-            &mut on_progress,
-            &AbortFlag::new(),
-        ))
-        .expect("rotation run ok");
-        // 2 subtasks from the attempt-2 plan
-        assert_eq!(summary.subtasks.len(), 2);
-        assert!(summary.total_nodes >= 2);
-    }
-
-    /// Attempt 1 returns a stream error, attempt 2 returns valid plan.
-    #[test]
-    fn planning_rotation_uses_attempt2_plan_on_attempt1_stream_error() {
-        use crate::types::LlmError;
-        let llm = ScriptedLlm::new(vec![
-            // attempt 1 → stream error (non-abort)
-            ScriptResponse::Fail(LlmError {
-                message: "HTTP 500 upstream".into(),
-                aborted: false,
-            }),
-            // attempt 2 → valid plan
-            ScriptResponse::Text(PLAN_JSON.into()),
-            // subtasks
-            ScriptResponse::Text(node_json("hero")),
-            ScriptResponse::Text(node_json("feat")),
-        ]);
-        let mut sink = VecDocSink::new();
-        let mut on_progress = |_p: Progress| {};
-        let summary = futures::executor::block_on(Orchestrator::new().run(
-            req_standard(), // Standard tier → [Rich, Minimal]
-            &mut sink,
-            &llm,
-            &mut on_progress,
-            &AbortFlag::new(),
-        ))
-        .expect("rotation on stream error ok");
-        assert_eq!(summary.subtasks.len(), 2);
-    }
-
-    /// All attempts fail (Basic tier → [Rich, Minimal, Compact]) →
-    /// fallback plan used, run succeeds.
-    #[test]
-    fn planning_all_attempts_fail_uses_fallback_plan() {
-        // Basic tier has 3 attempts; supply 3 bad responses + 1 subtask response
-        // for the fallback plan's single subtask.
-        let llm = ScriptedLlm::new(vec![
-            ScriptResponse::Text("garbage 1".into()),
-            ScriptResponse::Text("garbage 2".into()),
-            ScriptResponse::Text("garbage 3".into()),
-            ScriptResponse::Text(node_json("section-1")),
-        ]);
-        let mut sink = VecDocSink::new();
-        let mut on_progress = |_p: Progress| {};
-        let summary = futures::executor::block_on(Orchestrator::new().run(
-            req_basic(),
-            &mut sink,
-            &llm,
-            &mut on_progress,
-            &AbortFlag::new(),
-        ))
-        .expect("fallback after all failures ok");
-        assert!(summary.total_nodes >= 1);
-    }
-
-    /// Abort during planning stream → `OrchestratorError::Aborted`, no rotation.
-    #[test]
-    fn planning_abort_during_stream_returns_aborted() {
-        use crate::types::LlmError;
-        let llm = ScriptedLlm::new(vec![ScriptResponse::Fail(LlmError {
-            message: "user aborted".into(),
-            aborted: true,
-        })]);
-        let mut sink = VecDocSink::new();
-        let mut on_progress = |_p: Progress| {};
-        let abort = AbortFlag::new();
-        let result = futures::executor::block_on(Orchestrator::new().run(
-            req(),
-            &mut sink,
-            &llm,
-            &mut on_progress,
-            &abort,
-        ));
-        assert!(matches!(result, Err(OrchestratorError::Aborted)));
-        // undo batch 在 abort 路径前返回,文档不应已进入批
-        assert_eq!(sink.batch_depth, 0);
-    }
-
-    // ── Task C3: sub-agent 3-attempt tier-gated retry ladder ──────────────────
-
-    /// Subtask returns zero nodes on attempt 1 but succeeds on attempt 2 →
-    /// the subtask's nodes land (ladder retries once).
-    /// Uses Full tier (attempt 2: reduced_complexity=false, minimal_skills=false).
-    #[test]
-    fn subtask_retries_on_attempt1_zero_succeeds_on_attempt2() {
-        let llm = ScriptedLlm::new(vec![
-            // planning
-            ScriptResponse::Text(PLAN_JSON.into()),
-            // subtask hero — attempt 1: garbage (0 nodes, retryable)
-            ScriptResponse::Text("the model gave garbage".into()),
-            // subtask hero — attempt 2: success
-            ScriptResponse::Text(node_json("hero")),
-            // subtask feat — attempt 1: success
-            ScriptResponse::Text(node_json("feat")),
-        ]);
-        let mut sink = VecDocSink::new();
-        let mut on_progress = |_p: Progress| {};
-        let summary = futures::executor::block_on(Orchestrator::new().run(
-            req(), // Full tier → reduced_complexity=false on attempt 2
-            &mut sink,
-            &llm,
-            &mut on_progress,
-            &AbortFlag::new(),
-        ))
-        .expect("retry succeeded");
-        assert_eq!(summary.subtasks.len(), 2);
-        assert!(summary.total_nodes >= 2);
-        assert_eq!(sink.batch_depth, 0);
-    }
-
-    /// Subtask fails all 3 attempts → `OrchestratorError::NoContent`.
-    #[test]
-    fn subtask_all_three_attempts_fail_returns_no_content() {
-        let llm = ScriptedLlm::new(vec![
-            // planning
-            ScriptResponse::Text(PLAN_JSON.into()),
-            // subtask hero — attempt 1: garbage
-            ScriptResponse::Text("garbage attempt 1".into()),
-            // subtask hero — attempt 2: garbage
-            ScriptResponse::Text("garbage attempt 2".into()),
-            // subtask hero — attempt 3: garbage
-            ScriptResponse::Text("garbage attempt 3".into()),
-        ]);
-        let mut sink = VecDocSink::new();
-        let mut on_progress = |_p: Progress| {};
-        let result = futures::executor::block_on(Orchestrator::new().run(
-            req(),
-            &mut sink,
-            &llm,
-            &mut on_progress,
-            &AbortFlag::new(),
-        ));
-        assert!(matches!(result, Err(OrchestratorError::NoContent)));
-        assert_eq!(sink.batch_depth, 0);
-    }
-
-    /// Subtask's attempt-1 error is non-retryable (HTTP 401) →
-    /// no retry, stops immediately with NoContent.
-    #[test]
-    fn subtask_non_retryable_error_stops_immediately_no_retry() {
-        use crate::types::LlmError;
-        let llm = ScriptedLlm::new(vec![
-            // planning
-            ScriptResponse::Text(PLAN_JSON.into()),
-            // subtask hero — attempt 1: HTTP 401 (non-retryable)
-            ScriptResponse::Fail(LlmError {
-                message: "HTTP 401 Unauthorized".into(),
-                aborted: false,
-            }),
-            // This response should NOT be consumed — if it were, the test
-            // would assert fewer LLM calls than expected (we just verify NoContent).
-        ]);
-        let mut sink = VecDocSink::new();
-        let mut on_progress = |_p: Progress| {};
-        let result = futures::executor::block_on(Orchestrator::new().run(
-            req(),
-            &mut sink,
-            &llm,
-            &mut on_progress,
-            &AbortFlag::new(),
-        ));
-        assert!(matches!(result, Err(OrchestratorError::NoContent)));
-        assert_eq!(sink.batch_depth, 0);
-    }
-
-    /// Partial result (node_count > 0 with an error) is never retried —
-    /// it is accepted and counted toward summary.
-    ///
-    /// Note: the current `run_subtask` returns `error: None` on success and
-    /// `error: Some` only on zero-node failure. A partial result (nodes
-    /// produced + downstream soft error) would arrive as node_count>0,
-    /// error=None from `run_subtask`. We model this by having the first
-    /// subtask succeed (nodes produced) even though the scenario calls for
-    /// a "partial with error". The key invariant: once node_count>0 the
-    /// ladder does not retry regardless of error state.
-    #[test]
-    fn subtask_partial_result_not_retried() {
-        // A subtask that returns a valid node on the first attempt must
-        // succeed without using a second LLM slot.
-        let llm = ScriptedLlm::new(vec![
-            // planning
-            ScriptResponse::Text(PLAN_JSON.into()),
-            // subtask hero — attempt 1: success (node_count > 0)
-            ScriptResponse::Text(node_json("hero")),
-            // subtask feat — attempt 1: success
-            ScriptResponse::Text(node_json("feat")),
-            // A third response here would mean hero was retried — we assert
-            // only 2 subtasks succeeded so the LLM is not over-consumed.
-        ]);
-        let mut sink = VecDocSink::new();
-        let mut on_progress = |_p: Progress| {};
-        let summary = futures::executor::block_on(Orchestrator::new().run(
-            req(),
-            &mut sink,
-            &llm,
-            &mut on_progress,
-            &AbortFlag::new(),
-        ))
-        .expect("no retry on partial");
-        // Both subtasks succeed; if hero had been retried the scripted LLM
-        // would have served feat's slot to the second hero attempt, leaving
-        // feat with 0 nodes and causing NoContent.
-        assert_eq!(summary.subtasks.len(), 2);
-        assert!(summary.total_nodes >= 2);
-    }
-}
+// Task C2 tests are in a sibling file to keep run.rs under the 800-line cap.
+#[cfg(test)]
+#[path = "run_tests_c2.rs"]
+mod tests_c2;

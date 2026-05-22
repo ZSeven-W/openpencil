@@ -49,10 +49,10 @@ fn aggregate_all_zero_returns_err_with_first_error() {
     ];
     let result = aggregate_concurrent_verdict(&outcomes);
     match result {
-        Err(OrchestratorError::Internal(msg)) => {
+        Err(OrchestratorError::AllFailed(msg)) => {
             assert_eq!(msg, "model timed out", "should carry first non-empty error");
         }
-        other => panic!("expected Err(Internal), got {other:?}"),
+        other => panic!("expected Err(AllFailed), got {other:?}"),
     }
 }
 
@@ -62,13 +62,13 @@ fn aggregate_all_zero_no_errors_returns_fallback_message() {
     let outcomes = vec![outcome(0, None), outcome(0, None)];
     let result = aggregate_concurrent_verdict(&outcomes);
     match result {
-        Err(OrchestratorError::Internal(msg)) => {
+        Err(OrchestratorError::AllFailed(msg)) => {
             assert!(
                 msg.contains("failed to generate"),
                 "fallback message should describe failure, got: {msg}"
             );
         }
-        other => panic!("expected Err(Internal), got {other:?}"),
+        other => panic!("expected Err(AllFailed), got {other:?}"),
     }
 }
 
@@ -115,10 +115,10 @@ fn aggregate_picks_first_non_empty_error() {
     ];
     let result = aggregate_concurrent_verdict(&outcomes);
     match result {
-        Err(OrchestratorError::Internal(msg)) => {
+        Err(OrchestratorError::AllFailed(msg)) => {
             assert_eq!(msg, "second");
         }
-        other => panic!("expected Err(Internal), got {other:?}"),
+        other => panic!("expected Err(AllFailed), got {other:?}"),
     }
 }
 

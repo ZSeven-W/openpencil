@@ -9,8 +9,9 @@
 //! ## Task C1 (S3b-2): concurrent failure policy + N-root cleanup
 //!
 //! [`aggregate_concurrent_verdict`] — run-all-aggregate failure check:
-//! if EVERY collected outcome has 0 nodes → returns the first non-empty
-//! error string (or a fallback message); otherwise returns `None` (partial
+//! if EVERY collected outcome has 0 nodes → returns
+//! `Err(OrchestratorError::AllFailed)` carrying the first non-empty error
+//! string (or a fallback message); otherwise returns `Ok(())` (partial
 //! success is accepted). Port of `orchestrator-sub-agent.ts:319-325`.
 //!
 //! [`cleanup_concurrent_roots`] — N-root cleanup after a concurrent run.
@@ -174,7 +175,7 @@ pub fn aggregate_concurrent_verdict(collected: &[SubtaskOutcome]) -> Result<(), 
             .iter()
             .find_map(|o| o.error.as_deref().filter(|s| !s.is_empty()))
             .unwrap_or("The model failed to generate any design output.");
-        return Err(OrchestratorError::Internal(first_error.to_string()));
+        return Err(OrchestratorError::AllFailed(first_error.to_string()));
     }
     Ok(())
 }
