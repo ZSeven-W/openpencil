@@ -54,6 +54,9 @@ op-i18n = { path = "../op-i18n" }
 # (`mcp.rs` + `mcp/*`) was extracted out of the dissolved shell-core into the
 # op-mcp crate; `mcp_serve.rs` registers tools through `op_mcp::*`.
 op-mcp = { path = "../op-mcp" }
+# S3a design orchestrator — driven by `chat_orchestrator.rs` when a chat
+# message classifies as a design request.
+op-orchestrator = { path = "../op-orchestrator" }
 # Phase 7 strangler reorg: the transport-free AI chat data shapes
 # (`ChatProvider` trait + model catalog + agent-settings state) were
 # extracted into op-ai; the `src/chat_*.rs` real transports + the
