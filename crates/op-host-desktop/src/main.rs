@@ -187,13 +187,22 @@ impl DesktopApp {
 
     /// Snapshot the current document as the saved baseline — called
     /// after every successful load / save / new so `document_is_dirty`
-    /// only reports edits made *since* that point.
-    ///
-    /// The document path may also have changed (New / Open / Save-As),
-    /// so this rebinds the Git session to the document's repository
-    /// and retitles the window with the active branch.
+    /// only reports edits made *since* that point. Also rebinds the
+    /// Git session (the document path may have changed).
     fn mark_document_saved(&mut self) {
         self.saved_doc_fingerprint = persistence::document_fingerprint(self.host.editor_state());
+        self.rebind_git_session_for_current_path();
+    }
+
+    /// Rebind the Git session to `current_path`, retitle the window
+    /// and refresh an open Git panel — WITHOUT touching the
+    /// unsaved-changes baseline. `mark_document_saved` calls this
+    /// after a real save; a Figma import calls it directly: the
+    /// import changed the document path (so the old repo binding is
+    /// stale) but the imported design is unsaved work, so
+    /// `saved_doc_fingerprint` must stay put or close would skip the
+    /// save prompt.
+    fn rebind_git_session_for_current_path(&mut self) {
         let prev_repo = self.git_session.repo().map(|r| r.workdir().to_path_buf());
         let prev_tracked = self.git_session.tracked_file().map(|p| p.to_path_buf());
         self.git_session.rebind(self.current_path.as_deref());
@@ -517,7 +526,8 @@ impl DesktopApp {
                     &mut self.host,
                     &mut self.current_path,
                     self.window.as_ref(),
-                ) {
+                ) == persistence::ActionOutcome::Saved
+                {
                     self.mark_document_saved();
                 }
                 true

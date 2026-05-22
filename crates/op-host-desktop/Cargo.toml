@@ -72,6 +72,9 @@ op-acp = { path = "../op-acp" }
 # `persistence.rs` keeps only the desktop-only `rfd` Save/Open + error
 # dialogs.
 op-pen-loader = { path = "../op-pen-loader" }
+# Binary `.fig` importer — `persistence.rs` runs `parse_fig_binary`
+# to turn a Figma file into a canonical `PenDocument`.
+op-figma = { path = "../op-figma" }
 # In-app Git — `git_session.rs` binds an `op_git::GitRepo` to the
 # currently-open document so the Git panel can show branch / status
 # / history and drive commits.
