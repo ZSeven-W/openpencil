@@ -5,14 +5,16 @@
 //! spec §6。
 
 use crate::cleanup::{descendant_count, run_cleanup_passes};
-use crate::plan::{build_fallback_plan, parse_plan};
-use crate::plan_normalize::normalize;
+use crate::plan::{build_fallback_plan, OrchestratorPlan};
+use crate::plan_normalize::{normalize, NormInfo};
+use crate::plan_repair::parse_orchestrator_response;
 use crate::prompt::build_orchestrator_prompt;
+use crate::retry::attempt_modes;
 use crate::scaffold::build_scaffold;
 use crate::subagent::run_subtask;
 use crate::types::{
-    AbortFlag, DesignRequest, DocSink, LlmChunk, LlmClient, OrchestratorError, PlanningMode,
-    Progress, RunSummary, SubtaskOutcome,
+    AbortFlag, DesignRequest, DocSink, LlmChunk, LlmClient, OrchestratorError, Progress,
+    RunSummary, SubtaskOutcome,
 };
 use crate::variables::{rollback, seed_commands, snapshot_plan_vars};
 use futures::StreamExt;
@@ -37,24 +39,10 @@ impl Orchestrator {
         on_progress: &mut dyn FnMut(Progress),
         abort: &AbortFlag,
     ) -> Result<RunSummary, OrchestratorError> {
-        // -- 阶段 1:规划 --
+        // -- 阶段 1:规划(含 mode-rotation 重试循环 + 规范化, S3b-1b Task C2)--
+        // `planning_loop` 内部已 normalize 并回传 `NormInfo`,此处不再二次规范化。
         on_progress(Progress::Planning);
-        let plan_call =
-            build_orchestrator_prompt(&request, PlanningMode::Rich, abort.clone()).call_request;
-        let mut plan = match collect_text(llm.call(plan_call)).await {
-            Ok(text) => parse_plan(&text).unwrap_or_else(|_| build_fallback_plan(&request)),
-            Err(aborted) => {
-                if aborted {
-                    // abort 在规划阶段:尚未动文档,直接返回。
-                    return Err(OrchestratorError::Aborted);
-                }
-                // 非 abort 失败 → 启发式兜底 plan。
-                build_fallback_plan(&request)
-            }
-        };
-
-        // -- 阶段 1.5:规范化 --
-        let norm = normalize(&mut plan, &request);
+        let (mut plan, norm) = planning_loop(&request, llm, abort).await?;
         let planned_root_id = plan.root_frame.id.clone();
 
         // -- 进入"已动文档"区,全程 undo batch 包裹 --
@@ -190,6 +178,127 @@ impl Orchestrator {
     }
 }
 
+/// 规划阶段: mode-rotation 重试循环。
+///
+/// Port of `callOrchestrator` planning stage in `orchestrator.ts:1323-1503`.
+/// 解析 tier → `attempt_modes` → 遍历每个 mode,调用 LLM + parse,首次
+/// 成功即回填 style_guide_name + normalize 后返回。全部失败 → fallback plan。
+///
+/// 返回 `(plan, NormInfo)` —— `planning_loop` 是唯一的规范化点,
+/// `NormInfo` 透传给 `build_scaffold`,调用方不再二次 `normalize`。
+async fn planning_loop(
+    request: &DesignRequest,
+    llm: &dyn LlmClient,
+    abort: &AbortFlag,
+) -> Result<(OrchestratorPlan, NormInfo), OrchestratorError> {
+    let tier =
+        crate::model_profile::resolve_model_profile(request.model.as_deref().unwrap_or("")).tier;
+    let modes = attempt_modes(tier);
+    let last_idx = modes.len() - 1;
+
+    /// 规划失败的诊断记录 —— 仅用于 `tracing::warn!`,不影响控制流。
+    struct PlanningFailure {
+        reason: &'static str,
+        mode: &'static str,
+        detail: String,
+    }
+
+    let mut last_planning_failure: Option<PlanningFailure> = None;
+
+    for (attempt_idx, &mode) in modes.iter().enumerate() {
+        let pp = build_orchestrator_prompt(request, mode, abort.clone());
+
+        let collect_result = collect_text(llm.call(pp.call_request)).await;
+
+        let raw = match collect_result {
+            Ok(text) => text,
+            Err(true) => {
+                // abort 在流中发生 → 立即返回,不轮换
+                return Err(OrchestratorError::Aborted);
+            }
+            Err(false) => {
+                // 真实流错误 → 记录,继续下一档
+                let mode_name = mode_name(mode);
+                tracing::warn!(
+                    mode = mode_name,
+                    attempt = attempt_idx + 1,
+                    "planning stream error; rotating to next mode"
+                );
+                last_planning_failure = Some(PlanningFailure {
+                    reason: "stream_error",
+                    mode: mode_name,
+                    detail: String::new(),
+                });
+                if attempt_idx < last_idx {
+                    continue;
+                } else {
+                    break;
+                }
+            }
+        };
+
+        // abort 在流结束后被置位(两次检查对齐 TS)
+        if abort.is_set() {
+            return Err(OrchestratorError::Aborted);
+        }
+
+        match parse_orchestrator_response(&raw, request) {
+            Some((mut plan, _repaired)) => {
+                // compact 模式回填 forced_style_guide_name(若 plan 未携带)
+                if plan.style_guide_name.is_none() {
+                    if let Some(forced) = pp.forced_style_guide_name {
+                        plan.style_guide_name = Some(forced);
+                    }
+                }
+                let norm = normalize(&mut plan, request);
+                return Ok((plan, norm));
+            }
+            None => {
+                let mode_name = mode_name(mode);
+                let preview = raw.trim().chars().take(150).collect::<String>();
+                tracing::warn!(
+                    mode = mode_name,
+                    attempt = attempt_idx + 1,
+                    preview = %preview,
+                    "planning parse failure; rotating to next mode"
+                );
+                last_planning_failure = Some(PlanningFailure {
+                    reason: "parse_error",
+                    mode: mode_name,
+                    detail: preview,
+                });
+                if attempt_idx < last_idx {
+                    continue;
+                }
+                // 最后一档 fall-through
+            }
+        }
+    }
+
+    // 所有档次耗尽 → fallback plan(规划不可出错)
+    if let Some(f) = &last_planning_failure {
+        tracing::warn!(
+            reason = f.reason,
+            mode = f.mode,
+            detail = %f.detail,
+            "planning exhausted all modes; using fallback plan"
+        );
+    }
+    let mut fallback = build_fallback_plan(request);
+    let norm = normalize(&mut fallback, request);
+    Ok((fallback, norm))
+}
+
+/// 返回 `PlanningMode` 的静态字符串名(用于日志)。
+fn mode_name(mode: crate::types::PlanningMode) -> &'static str {
+    use crate::types::PlanningMode;
+    match mode {
+        PlanningMode::Rich => "rich",
+        PlanningMode::Minimal => "minimal",
+        PlanningMode::Compact => "compact",
+    }
+}
+
 /// 消费一次 LLM 调用的流 —— 拼接所有 `Text` chunk,丢弃 `Thinking`。
 /// `Err(true)` 表示中止,`Err(false)` 表示真实错误。
 async fn collect_text(
@@ -220,6 +329,28 @@ mod tests {
         }
     }
 
+    // Standard tier → [Rich, Minimal]
+    fn req_standard() -> DesignRequest {
+        DesignRequest {
+            prompt: "a landing page".into(),
+            // "gpt-4o" matches Standard tier in model_profile table
+            model: Some("gpt-4o".into()),
+            provider: None,
+            design_md: None,
+        }
+    }
+
+    // Basic tier → [Rich, Minimal, Compact]
+    fn req_basic() -> DesignRequest {
+        DesignRequest {
+            prompt: "a landing page".into(),
+            // "glm" matches Basic tier in model_profile table
+            model: Some("glm-4".into()),
+            provider: None,
+            design_md: None,
+        }
+    }
+
     const PLAN_JSON: &str = r##"{
   "rootFrame": { "id": "root", "name": "Page", "width": 1200, "height": 800,
                  "layout": "vertical", "gap": 0,
@@ -235,6 +366,8 @@ mod tests {
             r#"[{{"type":"frame","id":"{prefix}-1","name":"Sec","x":0,"y":0,"width":1200,"height":300,"children":[]}}]"#
         )
     }
+
+    // ── existing tests (must stay green) ─────────────────────────────────────
 
     #[test]
     fn run_happy_path_applies_scaffold_and_subtasks() {
@@ -313,5 +446,112 @@ mod tests {
         ))
         .expect("fallback run ok");
         assert!(summary.total_nodes >= 1);
+    }
+
+    // ── Task C2: new tests (Step 1 — add failing, then implement) ─────────────
+
+    /// Attempt 1 returns bad JSON (parse_error), attempt 2 returns valid plan.
+    /// Standard tier → [Rich, Minimal] → rotation occurs.
+    #[test]
+    fn planning_rotation_uses_attempt2_plan_on_attempt1_parse_failure() {
+        let llm = ScriptedLlm::new(vec![
+            // attempt 1 (Rich) → bad JSON
+            ScriptResponse::Text("not valid json at all".into()),
+            // attempt 2 (Minimal) → valid plan
+            ScriptResponse::Text(PLAN_JSON.into()),
+            // subtasks
+            ScriptResponse::Text(node_json("hero")),
+            ScriptResponse::Text(node_json("feat")),
+        ]);
+        let mut sink = VecDocSink::new();
+        let mut on_progress = |_p: Progress| {};
+        let summary = futures::executor::block_on(Orchestrator::new().run(
+            req_standard(), // Standard tier → [Rich, Minimal]
+            &mut sink,
+            &llm,
+            &mut on_progress,
+            &AbortFlag::new(),
+        ))
+        .expect("rotation run ok");
+        // 2 subtasks from the attempt-2 plan
+        assert_eq!(summary.subtasks.len(), 2);
+        assert!(summary.total_nodes >= 2);
+    }
+
+    /// Attempt 1 returns a stream error, attempt 2 returns valid plan.
+    #[test]
+    fn planning_rotation_uses_attempt2_plan_on_attempt1_stream_error() {
+        use crate::types::LlmError;
+        let llm = ScriptedLlm::new(vec![
+            // attempt 1 → stream error (non-abort)
+            ScriptResponse::Fail(LlmError {
+                message: "HTTP 500 upstream".into(),
+                aborted: false,
+            }),
+            // attempt 2 → valid plan
+            ScriptResponse::Text(PLAN_JSON.into()),
+            // subtasks
+            ScriptResponse::Text(node_json("hero")),
+            ScriptResponse::Text(node_json("feat")),
+        ]);
+        let mut sink = VecDocSink::new();
+        let mut on_progress = |_p: Progress| {};
+        let summary = futures::executor::block_on(Orchestrator::new().run(
+            req_standard(), // Standard tier → [Rich, Minimal]
+            &mut sink,
+            &llm,
+            &mut on_progress,
+            &AbortFlag::new(),
+        ))
+        .expect("rotation on stream error ok");
+        assert_eq!(summary.subtasks.len(), 2);
+    }
+
+    /// All attempts fail (Basic tier → [Rich, Minimal, Compact]) →
+    /// fallback plan used, run succeeds.
+    #[test]
+    fn planning_all_attempts_fail_uses_fallback_plan() {
+        // Basic tier has 3 attempts; supply 3 bad responses + 1 subtask response
+        // for the fallback plan's single subtask.
+        let llm = ScriptedLlm::new(vec![
+            ScriptResponse::Text("garbage 1".into()),
+            ScriptResponse::Text("garbage 2".into()),
+            ScriptResponse::Text("garbage 3".into()),
+            ScriptResponse::Text(node_json("section-1")),
+        ]);
+        let mut sink = VecDocSink::new();
+        let mut on_progress = |_p: Progress| {};
+        let summary = futures::executor::block_on(Orchestrator::new().run(
+            req_basic(),
+            &mut sink,
+            &llm,
+            &mut on_progress,
+            &AbortFlag::new(),
+        ))
+        .expect("fallback after all failures ok");
+        assert!(summary.total_nodes >= 1);
+    }
+
+    /// Abort during planning stream → `OrchestratorError::Aborted`, no rotation.
+    #[test]
+    fn planning_abort_during_stream_returns_aborted() {
+        use crate::types::LlmError;
+        let llm = ScriptedLlm::new(vec![ScriptResponse::Fail(LlmError {
+            message: "user aborted".into(),
+            aborted: true,
+        })]);
+        let mut sink = VecDocSink::new();
+        let mut on_progress = |_p: Progress| {};
+        let abort = AbortFlag::new();
+        let result = futures::executor::block_on(Orchestrator::new().run(
+            req(),
+            &mut sink,
+            &llm,
+            &mut on_progress,
+            &abort,
+        ));
+        assert!(matches!(result, Err(OrchestratorError::Aborted)));
+        // undo batch 在 abort 路径前返回,文档不应已进入批
+        assert_eq!(sink.batch_depth, 0);
     }
 }
