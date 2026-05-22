@@ -55,6 +55,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "topbar.closeConfirmDetail" => "保存しないと変更内容が失われます。",
         "topbar.dontSave" => "保存しない",
         "topbar.agentsAndMcp" => "Agents & MCP",
+        "topbar.agentSingular" => "エージェント",
         "topbar.setupAgentsMcp" => "Agents & MCP を設定",
         "topbar.connected" => "接続済み",
         "topbar.agentStatus" => "{{agents}} Agent{{agentSuffix}} · {{mcp}} MCP",

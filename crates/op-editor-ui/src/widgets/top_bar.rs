@@ -75,10 +75,15 @@ impl TopBar {
             .file_name_display
             .clone()
             .unwrap_or_else(|| translate(ui, "common.untitled").to_string());
+        // The chip reflects how many providers the user has
+        // connected in Settings → Agents: `0` paints the
+        // "Agents & MCP" set-up affordance, `≥ 1` the green-dot
+        // "N agent" status.
+        let agent_count = ui.agent_settings.connected.iter().filter(|&&c| c).count() as u32;
         Self {
             id: WidgetId::new(5000),
             file_name,
-            agent_count: 0,
+            agent_count,
             theme: theme_for(ui),
             label_agents_and_mcp: translate(ui, "topbar.agentsAndMcp"),
             label_agent_singular: translate(ui, "topbar.agentSingular"),
