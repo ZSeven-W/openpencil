@@ -10,10 +10,6 @@
 //! conversion at the walk boundary is lossless).
 
 use crate::widgets::icons::Icon;
-use crate::widgets::layer_panel::{
-    LAYER_ROW_HEIGHT, PAGE_ROW_HEIGHT, SECTION_GAP, SECTION_HEADER_HEIGHT,
-};
-use crate::Rect;
 use op_editor_core::NodeId;
 
 use jian_ops_schema::node::PenNode;
@@ -217,75 +213,5 @@ pub(super) fn icon_for_node(node: &PenNode) -> Icon {
         PenNode::Image(_) => Icon::Square,
         PenNode::IconFont(_) => Icon::Square,
         PenNode::Ref(_) => Icon::Square,
-    }
-}
-
-/// Max height (px) of the LayerPanel's Pages-section row viewport —
-/// roughly six rows; a longer page list scrolls within it.
-pub const LAYER_PAGES_VIEW_MAX: f32 = PAGE_ROW_HEIGHT * 6.0;
-
-/// Resolved geometry of the LayerPanel's two bounded scroll regions
-/// (Pages + Layers). Paint, hit-test and the drop-target walk all
-/// derive from this single source so they stay aligned.
-#[derive(Debug, Clone, Copy)]
-pub struct LayerRegions {
-    /// y of the Pages section header.
-    pub pages_header_y: f32,
-    /// Top y of the clipped page-row viewport.
-    pub pages_rows_top: f32,
-    /// Height of the page-row viewport.
-    pub pages_view_h: f32,
-    /// Pages scroll offset, clamped to the scrollable range.
-    pub pages_scroll: f32,
-    /// Largest valid Pages scroll offset (`content - viewport`).
-    pub pages_max_scroll: f32,
-    /// y of the Layers section header.
-    pub layers_header_y: f32,
-    /// Top y of the clipped layer-row viewport.
-    pub layers_rows_top: f32,
-    /// Height of the layer-row viewport (fills the rail's tail).
-    pub layers_view_h: f32,
-    /// Layers scroll offset, clamped to the scrollable range.
-    pub layers_scroll: f32,
-    /// Largest valid Layers scroll offset (`content - viewport`).
-    pub layers_max_scroll: f32,
-}
-
-/// Compute the bounded Pages / Layers scroll-region geometry for a
-/// LayerPanel painted into `rect`. `pages_scroll` / `layers_scroll`
-/// are the raw stored offsets; the returned values are clamped to
-/// each region's scrollable range.
-pub fn layer_regions(
-    rect: Rect,
-    pages_len: usize,
-    items_len: usize,
-    pages_scroll: f32,
-    layers_scroll: f32,
-) -> LayerRegions {
-    let pages_header_y = rect.origin.y + 8.0;
-    let pages_rows_top = pages_header_y + SECTION_HEADER_HEIGHT;
-    let pages_content = pages_len as f32 * PAGE_ROW_HEIGHT;
-    let pages_view_h = pages_content.min(LAYER_PAGES_VIEW_MAX);
-    let pages_max_scroll = (pages_content - pages_view_h).max(0.0);
-    let pages_scroll = pages_scroll.clamp(0.0, pages_max_scroll);
-
-    let layers_header_y = pages_rows_top + pages_view_h + SECTION_GAP;
-    let layers_rows_top = layers_header_y + SECTION_HEADER_HEIGHT;
-    let layers_view_h = (rect.origin.y + rect.size.y - 8.0 - layers_rows_top).max(0.0);
-    let layers_content = items_len.max(1) as f32 * LAYER_ROW_HEIGHT;
-    let layers_max_scroll = (layers_content - layers_view_h).max(0.0);
-    let layers_scroll = layers_scroll.clamp(0.0, layers_max_scroll);
-
-    LayerRegions {
-        pages_header_y,
-        pages_rows_top,
-        pages_view_h,
-        pages_scroll,
-        pages_max_scroll,
-        layers_header_y,
-        layers_rows_top,
-        layers_view_h,
-        layers_scroll,
-        layers_max_scroll,
     }
 }

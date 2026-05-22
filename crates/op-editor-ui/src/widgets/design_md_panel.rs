@@ -155,7 +155,10 @@ impl<'a> DesignMdPanel<'a> {
         let y = panel.origin.y + (HEADER_H - BTN) / 2.0;
         let right = panel.origin.x + panel.size.x - PAD;
         let slot = |from_right: f32| Rect {
-            origin: Point2D::new(right - (from_right + 1.0) * BTN - from_right * BTN_GAP, y),
+            origin: Point2D::new(
+                right - (from_right + 1.0) * BTN - from_right * BTN_GAP,
+                y,
+            ),
             size: Point2D::new(BTN, BTN),
         };
         // from_right 0 = close (rightmost) … 2 = import.
@@ -336,8 +339,7 @@ impl<'a> DesignMdPanel<'a> {
     /// Paint the panel into `rect`.
     pub fn paint(&self, cx: &mut PaintCx<'_>, rect: Rect) {
         cx.backend.fill_round_rect(rect, 12.0, self.theme.card);
-        cx.backend
-            .stroke_round_rect(rect, 12.0, self.theme.border, 1.0);
+        cx.backend.stroke_round_rect(rect, 12.0, self.theme.border, 1.0);
 
         // Header — title + import / export / close.
         self.text(
@@ -466,14 +468,7 @@ impl<'a> DesignMdPanel<'a> {
                     self.paint_runs(cx, runs, left, y + 11.0, 11.0, false);
                 }
                 RenderLine::Bullet(runs) => {
-                    self.text(
-                        cx,
-                        "•",
-                        left - 10.0,
-                        y + 11.0,
-                        11.0,
-                        self.theme.muted_foreground,
-                    );
+                    self.text(cx, "•", left - 10.0, y + 11.0, 11.0, self.theme.muted_foreground);
                     self.paint_runs(cx, runs, left, y + 11.0, 11.0, false);
                 }
                 RenderLine::Color(i) => {
@@ -596,17 +591,8 @@ impl<'a> DesignMdPanel<'a> {
     }
 
     /// Draw one line of text.
-    fn text(
-        &self,
-        cx: &mut PaintCx<'_>,
-        s: &str,
-        x: f32,
-        baseline_y: f32,
-        size: f32,
-        color: Color,
-    ) {
-        let layout =
-            TextLayout::single_run(s, "system-ui", size, to_jian(color), Point2D::new(0.0, 0.0));
+    fn text(&self, cx: &mut PaintCx<'_>, s: &str, x: f32, baseline_y: f32, size: f32, color: Color) {
+        let layout = TextLayout::single_run(s, "system-ui", size, to_jian(color), Point2D::new(0.0, 0.0));
         cx.backend.draw_text(&layout, Point2D::new(x, baseline_y));
     }
 }
@@ -632,12 +618,7 @@ fn truncate(s: &str, max: usize) -> String {
 fn hex_to_color(hex: &str) -> Color {
     match op_editor_core::parse_hex_rgb(hex) {
         Some((r, g, b)) => Color { r, g, b, a: 1.0 },
-        None => Color {
-            r: 0.5,
-            g: 0.5,
-            b: 0.5,
-            a: 1.0,
-        },
+        None => Color { r: 0.5, g: 0.5, b: 0.5, a: 1.0 },
     }
 }
 

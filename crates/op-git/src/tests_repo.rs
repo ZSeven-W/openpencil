@@ -13,9 +13,7 @@ fn discover_finds_a_repo_and_rejects_a_bare_dir() {
     // A plain temp dir is not inside any repo.
     let plain = unique_temp_dir("discover-plain");
     std::fs::create_dir_all(&plain).unwrap();
-    assert!(crate::GitRepo::discover(&plain)
-        .expect("discover ok")
-        .is_none());
+    assert!(crate::GitRepo::discover(&plain).expect("discover ok").is_none());
     let _ = std::fs::remove_dir_all(&plain);
 
     // An initialized repo is discovered — including from a file path
@@ -84,17 +82,12 @@ fn branch_create_list_and_switch() {
     tr.repo.stage_all().expect("stage");
     tr.repo.commit("init").expect("commit");
 
-    assert_eq!(
-        tr.repo.current_branch().expect("current"),
-        Some("main".into())
-    );
+    assert_eq!(tr.repo.current_branch().expect("current"), Some("main".into()));
 
     tr.repo.create_branch("feature").expect("create branch");
     let branches = tr.repo.branches().expect("branches");
     assert_eq!(branches.len(), 2);
-    assert!(branches
-        .iter()
-        .any(|b| b.name == "feature" && !b.is_current));
+    assert!(branches.iter().any(|b| b.name == "feature" && !b.is_current));
     assert!(branches.iter().any(|b| b.name == "main" && b.is_current));
 
     tr.repo.switch_branch("feature").expect("switch");
@@ -196,8 +189,5 @@ fn create_and_switch_branch_in_one_step() {
     tr.repo
         .create_and_switch_branch("wip")
         .expect("create + switch");
-    assert_eq!(
-        tr.repo.current_branch().expect("current"),
-        Some("wip".into())
-    );
+    assert_eq!(tr.repo.current_branch().expect("current"), Some("wip".into()));
 }

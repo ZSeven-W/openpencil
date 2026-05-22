@@ -56,13 +56,10 @@ impl ModelProbe {
             Ok(models) => {
                 // The discovery worker emits shell-core `ModelEntry`s;
                 // translate each into the op-editor-core type the
-                // host's `EditorState.chat` carries. The translated
-                // list is the *full* catalog (every installed CLI);
-                // `rebuild_chat_models` then narrows it to the
-                // providers the user has connected in Settings.
-                let es = host.editor_state_mut();
-                es.chat.discovered_models = models.into_iter().map(model_entry_to_ec).collect();
-                es.rebuild_chat_models();
+                // host's `EditorState.chat` carries.
+                let chat = &mut host.editor_state_mut().chat;
+                chat.available_models = models.into_iter().map(model_entry_to_ec).collect();
+                chat.selected_model = 0;
                 host.mark_editor_state_dirty();
                 self.rx = None;
                 true

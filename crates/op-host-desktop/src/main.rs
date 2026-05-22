@@ -12,17 +12,15 @@ mod chat_http_server;
 mod chat_runtime;
 mod chat_session;
 mod chat_subprocess;
-mod clipboard;
 mod cursor_icon;
 mod design_md_host;
 mod export;
 mod export_pdf;
 mod frame;
 mod git_host;
+mod keyboard_input;
 mod git_jobs;
 mod git_session;
-mod keyboard_input;
-mod macos_app;
 mod mcp_serve;
 mod menu;
 mod model_discovery;
@@ -187,26 +185,23 @@ impl DesktopApp {
 
     /// Snapshot the current document as the saved baseline — called
     /// after every successful load / save / new so `document_is_dirty`
-    /// only reports edits made *since* that point. Also rebinds the
-    /// Git session (the document path may have changed).
+    /// only reports edits made *since* that point.
+    ///
+    /// The document path may also have changed (New / Open / Save-As),
+    /// so this rebinds the Git session to the document's repository
+    /// and retitles the window with the active branch.
     fn mark_document_saved(&mut self) {
         self.saved_doc_fingerprint = persistence::document_fingerprint(self.host.editor_state());
-        self.rebind_git_session_for_current_path();
-    }
-
-    /// Rebind the Git session to `current_path`, retitle the window
-    /// and refresh an open Git panel — WITHOUT touching the
-    /// unsaved-changes baseline. `mark_document_saved` calls this
-    /// after a real save; a Figma import calls it directly: the
-    /// import changed the document path (so the old repo binding is
-    /// stale) but the imported design is unsaved work, so
-    /// `saved_doc_fingerprint` must stay put or close would skip the
-    /// save prompt.
-    fn rebind_git_session_for_current_path(&mut self) {
-        let prev_repo = self.git_session.repo().map(|r| r.workdir().to_path_buf());
+        let prev_repo = self
+            .git_session
+            .repo()
+            .map(|r| r.workdir().to_path_buf());
         let prev_tracked = self.git_session.tracked_file().map(|p| p.to_path_buf());
         self.git_session.rebind(self.current_path.as_deref());
-        let new_repo = self.git_session.repo().map(|r| r.workdir().to_path_buf());
+        let new_repo = self
+            .git_session
+            .repo()
+            .map(|r| r.workdir().to_path_buf());
         let new_tracked = self.git_session.tracked_file().map(|p| p.to_path_buf());
         if prev_tracked != new_tracked {
             // The tracked document changed — a half-typed commit
@@ -372,7 +367,9 @@ impl DesktopApp {
             .as_ref()
             .and_then(|p| p.file_name())
             .map(|n| n.to_string_lossy().into_owned())
-            .unwrap_or_else(|| op_i18n::translate(locale, "dialog.untitledDocument").to_string());
+            .unwrap_or_else(|| {
+                op_i18n::translate(locale, "dialog.untitledDocument").to_string()
+            });
         let body = op_i18n::translate(locale, "dialog.closeBody").replace("{{name}}", &name);
         let choice = rfd::MessageDialog::new()
             .set_title(op_i18n::translate(locale, "dialog.unsavedTitle"))
@@ -408,7 +405,10 @@ impl DesktopApp {
         let Some(status) = self.update_probe.poll() else {
             return false;
         };
-        let available = matches!(status, op_editor_core::UpdateStatus::Available { .. });
+        let available = matches!(
+            status,
+            op_editor_core::UpdateStatus::Available { .. }
+        );
         self.host.editor_state_mut().editor_ui.update_status = status.clone();
         self.host.mark_editor_state_dirty();
         if available && !self.update_prompt_shown {
@@ -501,8 +501,8 @@ impl DesktopApp {
         };
         // The translated variant message keeps the actionable git
         // output via its `{{detail}}` slot (stderr / path / IO text).
-        let detail =
-            op_i18n::translate(locale, err.i18n_key()).replace("{{detail}}", &err.i18n_detail());
+        let detail = op_i18n::translate(locale, err.i18n_key())
+            .replace("{{detail}}", &err.i18n_detail());
         rfd::MessageDialog::new()
             .set_title(op_i18n::translate(locale, title_key))
             .set_description(format!(
@@ -526,8 +526,7 @@ impl DesktopApp {
                     &mut self.host,
                     &mut self.current_path,
                     self.window.as_ref(),
-                ) == persistence::ActionOutcome::Saved
-                {
+                ) {
                     self.mark_document_saved();
                 }
                 true
@@ -639,23 +638,6 @@ impl DesktopApp {
                 self.host.mark_editor_state_dirty();
                 true
             }
-            A::ToggleComponentBrowserPanel => {
-                let ui = &mut self.host.editor_state_mut().editor_ui;
-                let opening = !ui.component_browser_open;
-                if opening {
-                    ui.component_browser_pos = Some((
-                        ((self.viewport_width - op_editor_ui::widgets::COMPONENT_BROWSER_PANEL_W)
-                            / 2.0)
-                            .max(0.0),
-                        ((self.viewport_height - op_editor_ui::widgets::COMPONENT_BROWSER_PANEL_H)
-                            / 2.0)
-                            .max(0.0),
-                    ));
-                }
-                ui.component_browser_open = opening;
-                self.host.mark_editor_state_dirty();
-                true
-            }
             A::Quit => {
                 // Route through the unsaved-changes prompt — Cancel
                 // there aborts the quit.
@@ -726,6 +708,7 @@ impl DesktopApp {
     }
 }
 
+
 /// Scan argv for a document to open on launch. This is the
 /// file-association entry point: once the `.op` / `.pen` association
 /// is registered (see `Cargo.toml`'s `[package.metadata.bundle]`),
@@ -772,8 +755,6 @@ fn main() {
         }
     };
     event_loop.set_control_flow(ControlFlow::Wait);
-    // Give the non-bundled binary a proper Dock name + icon.
-    macos_app::apply();
     let mut app = DesktopApp::new(initial_file);
     if let Err(err) = event_loop.run_app(&mut app) {
         eprintln!("openpencil-desktop: run_app exited with error: {err}");

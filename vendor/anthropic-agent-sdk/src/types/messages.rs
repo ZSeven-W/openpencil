@@ -220,14 +220,6 @@ pub enum Message {
         #[serde(skip_serializing_if = "Option::is_none")]
         parent_tool_use_id: Option<String>,
     },
-    /// Any message `type` this SDK build does not model. Newer
-    /// Claude Code CLIs emit events the SDK was not compiled
-    /// against — e.g. `rate_limit_event` — and serde would
-    /// otherwise abort the whole stream on the first one. Routing
-    /// unknown tags here keeps the stream alive; downstream
-    /// consumers simply ignore an `Unknown`.
-    #[serde(other)]
-    Unknown,
 }
 
 #[cfg(test)]

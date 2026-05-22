@@ -108,14 +108,7 @@ impl GitPanel<'_> {
                 self.theme.muted_foreground,
             ),
         };
-        self.text(
-            cx,
-            &summary,
-            left,
-            top + SECTION_GAP + SUMMARY_OFF,
-            11.0,
-            summary_color,
-        );
+        self.text(cx, &summary, left, top + SECTION_GAP + SUMMARY_OFF, 11.0, summary_color);
 
         let layout = self.remotes_layout(panel);
         // URL input + "Set" / "SSH" buttons.
@@ -137,13 +130,7 @@ impl GitPanel<'_> {
             self.state.https_focused,
             self.t("git.panel.httpsPlaceholder"),
         );
-        self.paint_button(
-            cx,
-            layout.login_button,
-            self.t("git.panel.login"),
-            true,
-            false,
-        );
+        self.paint_button(cx, layout.login_button, self.t("git.panel.login"), true, false);
     }
 
     /// Paint one Remotes-section text input — fill, focus border,
@@ -167,28 +154,14 @@ impl GitPanel<'_> {
         let text_x = rect.origin.x + 8.0;
         let baseline = rect.origin.y + rect.size.y / 2.0 + 4.0;
         if shown.is_empty() && !focused {
-            self.text(
-                cx,
-                placeholder,
-                text_x,
-                baseline,
-                11.0,
-                self.theme.muted_foreground,
-            );
+            self.text(cx, placeholder, text_x, baseline, 11.0, self.theme.muted_foreground);
         } else {
             let line = if focused {
                 format!("{shown}|")
             } else {
                 shown.to_string()
             };
-            self.text(
-                cx,
-                &truncate(&line, 56),
-                text_x,
-                baseline,
-                11.0,
-                self.theme.foreground,
-            );
+            self.text(cx, &truncate(&line, 56), text_x, baseline, 11.0, self.theme.foreground);
         }
     }
 }

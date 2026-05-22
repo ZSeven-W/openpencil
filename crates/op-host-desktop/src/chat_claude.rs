@@ -213,14 +213,9 @@ async fn handle_message(msg: Message, tx: &mpsc::Sender<ChatDelta>) -> Option<(b
             };
             Some((true, reason))
         }
-        Message::System { .. }
-        | Message::User { .. }
-        | Message::StreamEvent { .. }
-        | Message::Unknown => {
-            // Init / context / partial-stream events plus any
-            // message type the SDK doesn't model (e.g.
-            // `rate_limit_event`) — the chat widget doesn't surface
-            // them today; silent.
+        Message::System { .. } | Message::User { .. } | Message::StreamEvent { .. } => {
+            // Init / context / partial-stream events — the chat
+            // widget doesn't surface them today; silent.
             None
         }
     }

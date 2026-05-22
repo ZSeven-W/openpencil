@@ -108,14 +108,11 @@ impl WidgetHostNative {
                 }
             }
             Some(GitPanelHit::ShowWorkingDiff) => {
-                panel.pending_action = Some(GitPanelAction::ShowDiff(GitDiffTarget::WorkingTree));
+                panel.pending_action =
+                    Some(GitPanelAction::ShowDiff(GitDiffTarget::WorkingTree));
             }
             Some(GitPanelHit::ShowCommitDiff(index)) => {
-                if let Some(rev) = panel
-                    .recent_commits
-                    .get(index)
-                    .map(|c| c.short_hash.clone())
-                {
+                if let Some(rev) = panel.recent_commits.get(index).map(|c| c.short_hash.clone()) {
                     panel.pending_action =
                         Some(GitPanelAction::ShowDiff(GitDiffTarget::Commit(rev)));
                 }

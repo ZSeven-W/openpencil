@@ -83,8 +83,7 @@ impl Drop for TempRepo {
 pub(crate) fn clone_for_test(remote: &std::path::Path, tag: &str) -> (PathBuf, GitRepo) {
     let dir = unique_temp_dir(tag);
     let repo = GitRepo::clone(remote.to_str().unwrap(), &dir).expect("clone");
-    repo.run(&["config", "user.email", "t@openpencil.dev"])
-        .unwrap();
+    repo.run(&["config", "user.email", "t@openpencil.dev"]).unwrap();
     repo.run(&["config", "user.name", "OP Test"]).unwrap();
     (dir, repo)
 }

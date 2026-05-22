@@ -15,13 +15,6 @@
 
 /// A menu selection, decoupled from `muda` so the runner matches on
 /// a plain enum. Each variant maps onto an existing host action.
-///
-/// `muda` only runs on macOS / Windows; the Linux `backend` is a
-/// stub whose `poll()` always returns `None`, so on Linux every
-/// variant is unconstructed by design. Silence `-D dead_code`
-/// there without weakening the lint on the platforms that actually
-/// build the menu.
-#[cfg_attr(not(any(target_os = "macos", target_os = "windows")), allow(dead_code))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MenuAction {
     New,
@@ -41,7 +34,6 @@ pub enum MenuAction {
     ToggleFullscreen,
     ToggleGitPanel,
     ToggleDesignMdPanel,
-    ToggleComponentBrowserPanel,
     Quit,
     CheckUpdates,
     OpenGithub,
@@ -76,7 +68,6 @@ mod backend {
     const ID_FULLSCREEN: &str = "fullscreen";
     const ID_GIT_PANEL: &str = "git-panel";
     const ID_DESIGN_MD: &str = "design-md";
-    const ID_COMPONENT_BROWSER: &str = "component-browser";
     const ID_QUIT: &str = "quit";
     const ID_CHECK_UPDATES: &str = "check-updates";
     const ID_GITHUB: &str = "github";
@@ -101,7 +92,6 @@ mod backend {
             ID_FULLSCREEN => MenuAction::ToggleFullscreen,
             ID_GIT_PANEL => MenuAction::ToggleGitPanel,
             ID_DESIGN_MD => MenuAction::ToggleDesignMdPanel,
-            ID_COMPONENT_BROWSER => MenuAction::ToggleComponentBrowserPanel,
             ID_QUIT => MenuAction::Quit,
             ID_CHECK_UPDATES => MenuAction::CheckUpdates,
             ID_GITHUB => MenuAction::OpenGithub,
@@ -177,11 +167,7 @@ mod backend {
                 &item(ID_SAVE, "Save", Some(accel(Code::KeyS))),
                 &item(ID_SAVE_AS, "Save As\u{2026}", Some(accel_shift(Code::KeyS))),
                 &PredefinedMenuItem::separator(),
-                &item(
-                    ID_EXPORT,
-                    "Export Image\u{2026}",
-                    Some(accel_shift(Code::KeyP)),
-                ),
+                &item(ID_EXPORT, "Export Image\u{2026}", Some(accel_shift(Code::KeyP))),
             ]);
             // Windows has no app menu — Quit lives at the File-menu foot.
             #[cfg(not(target_os = "macos"))]
@@ -231,7 +217,6 @@ mod backend {
             let _ = view.append(&PredefinedMenuItem::separator());
             let _ = view.append(&item(ID_GIT_PANEL, "Git Panel", None));
             let _ = view.append(&item(ID_DESIGN_MD, "Design.md Panel", None));
-            let _ = view.append(&item(ID_COMPONENT_BROWSER, "UIKit Browser", None));
             let _ = menu.append(&view);
 
             // Help menu.
@@ -319,7 +304,6 @@ mod backend {
                 ID_FULLSCREEN,
                 ID_GIT_PANEL,
                 ID_DESIGN_MD,
-                ID_COMPONENT_BROWSER,
                 ID_QUIT,
                 ID_CHECK_UPDATES,
                 ID_GITHUB,

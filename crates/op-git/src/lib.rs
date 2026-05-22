@@ -102,9 +102,9 @@ impl GitError {
                 format!("git {operation}: {stderr}")
             }
             GitError::Io(text) => text.clone(),
-            GitError::GitNotFound | GitError::MergeInProgress | GitError::WorkingTreeDirty => {
-                String::new()
-            }
+            GitError::GitNotFound
+            | GitError::MergeInProgress
+            | GitError::WorkingTreeDirty => String::new(),
         }
     }
 }
@@ -200,8 +200,7 @@ pub(crate) fn write_private_file(path: &Path, bytes: &[u8]) -> Result<(), GitErr
     let mut file = options
         .open(path)
         .map_err(|e| GitError::Io(e.to_string()))?;
-    file.write_all(bytes)
-        .map_err(|e| GitError::Io(e.to_string()))?;
+    file.write_all(bytes).map_err(|e| GitError::Io(e.to_string()))?;
     Ok(())
 }
 

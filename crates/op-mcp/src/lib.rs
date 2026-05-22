@@ -29,7 +29,6 @@ pub mod component_tools;
 mod component_tools_tests;
 #[cfg(test)]
 mod copy_node_tests;
-pub mod element_tools;
 pub mod extra_read_tools;
 #[cfg(test)]
 mod extra_read_tools_tests;

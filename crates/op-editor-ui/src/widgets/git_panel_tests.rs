@@ -84,26 +84,11 @@ fn hit_test_maps_each_action_region() {
     let rects = GitPanel::action_rects(rect, false);
     // Normal mode: Commit / Refresh / Pull / Push + the commit input.
     assert_eq!(rects.buttons.len(), 4);
-    assert_eq!(
-        panel.hit_test(rect, centre(rects.input)),
-        Some(GitPanelHit::CommitInput)
-    );
-    assert_eq!(
-        panel.hit_test(rect, centre(rects.buttons[0])),
-        Some(GitPanelHit::Commit)
-    );
-    assert_eq!(
-        panel.hit_test(rect, centre(rects.buttons[1])),
-        Some(GitPanelHit::Refresh)
-    );
-    assert_eq!(
-        panel.hit_test(rect, centre(rects.buttons[2])),
-        Some(GitPanelHit::Pull)
-    );
-    assert_eq!(
-        panel.hit_test(rect, centre(rects.buttons[3])),
-        Some(GitPanelHit::Push)
-    );
+    assert_eq!(panel.hit_test(rect, centre(rects.input)), Some(GitPanelHit::CommitInput));
+    assert_eq!(panel.hit_test(rect, centre(rects.buttons[0])), Some(GitPanelHit::Commit));
+    assert_eq!(panel.hit_test(rect, centre(rects.buttons[1])), Some(GitPanelHit::Refresh));
+    assert_eq!(panel.hit_test(rect, centre(rects.buttons[2])), Some(GitPanelHit::Pull));
+    assert_eq!(panel.hit_test(rect, centre(rects.buttons[3])), Some(GitPanelHit::Push));
     // Header area → swallowed, not an action.
     assert_eq!(
         panel.hit_test(rect, Point2D::new(20.0, 8.0)),
@@ -133,10 +118,7 @@ fn branch_rows_switch_to_non_current_branch() {
         Some(GitPanelHit::SwitchBranch(0))
     );
     // Row 1 is `main` (the current branch) → a no-op click.
-    assert_eq!(
-        panel.hit_test(rect, centre(rows[1])),
-        Some(GitPanelHit::Inside)
-    );
+    assert_eq!(panel.hit_test(rect, centre(rows[1])), Some(GitPanelHit::Inside));
 }
 
 #[test]
@@ -165,26 +147,15 @@ fn branch_row_merge_button_dispatches_a_merge() {
     // The current branch's row has no merge button — its whole row
     // (button area included) is a no-op.
     let current_btn = GitPanel::branch_merge_button(rows[1]);
-    assert_eq!(
-        panel.hit_test(rect, centre(current_btn)),
-        Some(GitPanelHit::Inside)
-    );
+    assert_eq!(panel.hit_test(rect, centre(current_btn)), Some(GitPanelHit::Inside));
 }
 
 #[test]
 fn changed_file_rows_toggle_staging() {
     let s = state_with(GitPanelState {
         changed_files: vec![
-            GitFileEntry {
-                path: "a.op".into(),
-                staged: false,
-                status: 'M',
-            },
-            GitFileEntry {
-                path: "b.op".into(),
-                staged: true,
-                status: 'A',
-            },
+            GitFileEntry { path: "a.op".into(), staged: false, status: 'M' },
+            GitFileEntry { path: "b.op".into(), staged: true, status: 'A' },
         ],
         ..open_repo()
     });
@@ -239,23 +210,11 @@ fn merge_mode_remaps_the_action_buttons() {
     let rects = GitPanel::action_rects(rect, true);
     // Merge mode: 3 buttons — Abort / Refresh / Complete.
     assert_eq!(rects.buttons.len(), 3);
-    assert_eq!(
-        panel.hit_test(rect, centre(rects.buttons[0])),
-        Some(GitPanelHit::AbortMerge)
-    );
-    assert_eq!(
-        panel.hit_test(rect, centre(rects.buttons[1])),
-        Some(GitPanelHit::Refresh)
-    );
-    assert_eq!(
-        panel.hit_test(rect, centre(rects.input)),
-        Some(GitPanelHit::Inside)
-    );
+    assert_eq!(panel.hit_test(rect, centre(rects.buttons[0])), Some(GitPanelHit::AbortMerge));
+    assert_eq!(panel.hit_test(rect, centre(rects.buttons[1])), Some(GitPanelHit::Refresh));
+    assert_eq!(panel.hit_test(rect, centre(rects.input)), Some(GitPanelHit::Inside));
     // Complete slot — inert while conflicts remain.
-    assert_eq!(
-        panel.hit_test(rect, centre(rects.buttons[2])),
-        Some(GitPanelHit::Inside)
-    );
+    assert_eq!(panel.hit_test(rect, centre(rects.buttons[2])), Some(GitPanelHit::Inside));
 
     // Conflicts resolved — Complete becomes actionable.
     let ready = state_with(GitPanelState {
@@ -266,10 +225,7 @@ fn merge_mode_remaps_the_action_buttons() {
     let panel = GitPanel::for_editor(&ready).unwrap();
     let rect = panel_rect(&panel);
     let rects = GitPanel::action_rects(rect, true);
-    assert_eq!(
-        panel.hit_test(rect, centre(rects.buttons[2])),
-        Some(GitPanelHit::CompleteMerge)
-    );
+    assert_eq!(panel.hit_test(rect, centre(rects.buttons[2])), Some(GitPanelHit::CompleteMerge));
 }
 
 #[test]
@@ -396,10 +352,7 @@ fn merge_resolution_view_maps_choices_and_actions() {
     let layout = panel.resolve_layout(rect);
     assert_eq!(layout.rows.len(), 2);
     let (ours0, theirs0) = layout.rows[0];
-    assert_eq!(
-        panel.hit_test(rect, centre(ours0)),
-        Some(GitPanelHit::MergeChoiceOurs(0))
-    );
+    assert_eq!(panel.hit_test(rect, centre(ours0)), Some(GitPanelHit::MergeChoiceOurs(0)));
     assert_eq!(
         panel.hit_test(rect, centre(theirs0)),
         Some(GitPanelHit::MergeChoiceTheirs(0))
@@ -491,26 +444,11 @@ fn diff_header_buttons_map_to_scroll_and_close() {
     let panel = GitPanel::for_editor(&diffing).unwrap();
     let rect = panel_rect(&panel);
     let [left, right, up, down, close] = GitPanel::diff_header_buttons(rect);
-    assert_eq!(
-        panel.hit_test(rect, centre(left)),
-        Some(GitPanelHit::DiffScrollLeft)
-    );
-    assert_eq!(
-        panel.hit_test(rect, centre(right)),
-        Some(GitPanelHit::DiffScrollRight)
-    );
-    assert_eq!(
-        panel.hit_test(rect, centre(up)),
-        Some(GitPanelHit::DiffScrollUp)
-    );
-    assert_eq!(
-        panel.hit_test(rect, centre(down)),
-        Some(GitPanelHit::DiffScrollDown)
-    );
-    assert_eq!(
-        panel.hit_test(rect, centre(close)),
-        Some(GitPanelHit::CloseDiff)
-    );
+    assert_eq!(panel.hit_test(rect, centre(left)), Some(GitPanelHit::DiffScrollLeft));
+    assert_eq!(panel.hit_test(rect, centre(right)), Some(GitPanelHit::DiffScrollRight));
+    assert_eq!(panel.hit_test(rect, centre(up)), Some(GitPanelHit::DiffScrollUp));
+    assert_eq!(panel.hit_test(rect, centre(down)), Some(GitPanelHit::DiffScrollDown));
+    assert_eq!(panel.hit_test(rect, centre(close)), Some(GitPanelHit::CloseDiff));
     // The diff body itself swallows clicks.
     assert_eq!(
         panel.hit_test(rect, Point2D::new(40.0, 200.0)),

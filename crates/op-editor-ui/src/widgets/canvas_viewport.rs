@@ -673,21 +673,22 @@ fn paint_grid(cx: &mut PaintCx<'_>, rect: Rect, viewport: &DocViewport, theme: &
     let origin_x = rect.origin.x + (viewport.pan_x.rem_euclid(step));
     let origin_y = rect.origin.y + (viewport.pan_y.rem_euclid(step));
 
-    // Collect every dot centre, then hand the whole batch to
-    // `fill_dots` — one draw call. Emitting a `fill_round_rect` per
-    // dot here was ~1000+ skia ops every frame, the dominant cost of
-    // an empty-canvas pan / drag.
-    let mut centers: Vec<Point2D> = Vec::new();
     let mut y = origin_y - step;
     while y < rect.origin.y + rect.size.y + step {
         let mut x = origin_x - step;
         while x < rect.origin.x + rect.size.x + step {
-            centers.push(Point2D::new(x, y));
+            cx.backend.fill_round_rect(
+                Rect {
+                    origin: Point2D::new(x - dot_size / 2.0, y - dot_size / 2.0),
+                    size: Point2D::new(dot_size, dot_size),
+                },
+                dot_size / 2.0,
+                dot_color,
+            );
             x += step;
         }
         y += step;
     }
-    cx.backend.fill_dots(&centers, dot_size / 2.0, dot_color);
 }
 
 #[cfg(test)]

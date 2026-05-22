@@ -63,13 +63,10 @@ pub fn editor_state_to_layout_scene(state: &op_editor_core::EditorState) -> Layo
                     .collect(),
             })
             .collect(),
-        // Follow the editor's active page (`EditorState.ui`) so the
-        // canvas switches when the user picks a page in the LayerPanel.
-        // `pen_document_to_payload` hardcodes the payload's index to 0,
-        // so the live editor state — not the payload — is the source
-        // of truth here; clamp into range against the page count.
-        active_page_index: state
-            .ui
+        // The loader always opens on page 0 (`pen_document_to_payload`
+        // hardcodes `active_page_index: 0`, then `apply_payload` clamps
+        // it into range — same result for a fresh load).
+        active_page_index: payload
             .active_page_index
             .min(payload.pages.len().saturating_sub(1)),
     }

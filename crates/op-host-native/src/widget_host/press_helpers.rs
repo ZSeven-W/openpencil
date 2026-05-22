@@ -71,10 +71,6 @@ impl WidgetHostNative {
                     .unwrap_or(0);
                 let v = &mut self.editor_state.editor_ui.agent_settings.connected[idx];
                 *v = !*v;
-                // Connecting / disconnecting a provider changes which
-                // models the chat picker may list — re-derive it from
-                // the discovered catalog against the new mask.
-                self.editor_state.rebuild_chat_models();
             }
             AgentSettingsHit::ToggleMcpServer => {
                 let v = &mut self

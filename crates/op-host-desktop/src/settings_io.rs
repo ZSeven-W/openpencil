@@ -35,7 +35,6 @@ pub struct Fingerprint {
     port: u16,
     cli: [bool; 6],
     images_adv: bool,
-    connected: [bool; 5],
 }
 
 pub fn fingerprint(state: &EditorState) -> Fingerprint {
@@ -46,7 +45,6 @@ pub fn fingerprint(state: &EditorState) -> Fingerprint {
         port: eui.agent_settings.mcp_server.port,
         cli: eui.agent_settings.mcp_cli_enabled,
         images_adv: eui.agent_settings.images_advanced_open,
-        connected: eui.agent_settings.connected,
     }
 }
 
@@ -73,11 +71,6 @@ struct SettingsPayload {
     mcp_cli_enabled: Option<[bool; 6]>,
     #[serde(default)]
     images_advanced_open: Option<bool>,
-    /// Per-provider connect state, indexed by `AgentProvider::ALL`
-    /// (Claude / Codex / OpenCode / Copilot / Gemini). Restored on
-    /// launch so the chat model picker survives a restart.
-    #[serde(default)]
-    connected: Option<[bool; 5]>,
     #[serde(default)]
     recent_files: Option<Vec<RecentFilePayload>>,
 }
@@ -100,7 +93,6 @@ fn to_payload(state: &EditorState) -> SettingsPayload {
         mcp_port: Some(eui.agent_settings.mcp_server.port),
         mcp_cli_enabled: Some(eui.agent_settings.mcp_cli_enabled),
         images_advanced_open: Some(eui.agent_settings.images_advanced_open),
-        connected: Some(eui.agent_settings.connected),
         recent_files: Some(
             eui.recent_files
                 .iter()
@@ -135,9 +127,6 @@ fn apply_payload(state: &mut EditorState, payload: SettingsPayload) {
     if let Some(b) = payload.images_advanced_open {
         eui.agent_settings.images_advanced_open = b;
     }
-    if let Some(c) = payload.connected {
-        eui.agent_settings.connected = c;
-    }
     if let Some(list) = payload.recent_files {
         eui.recent_files = list
             .into_iter()
@@ -148,11 +137,6 @@ fn apply_payload(state: &mut EditorState, payload: SettingsPayload) {
             })
             .collect();
     }
-    // Restored connect state changes which providers the chat model
-    // picker may list — re-derive it. `discovered_models` is still
-    // empty this early, so this is a no-op until discovery lands and
-    // `ModelProbe::poll_into` rebuilds again against the same mask.
-    state.rebuild_chat_models();
 }
 
 /// Push `path` to the head of the recent-files list on the host's
@@ -259,37 +243,4 @@ fn str_to_locale(s: &str) -> Option<Locale> {
         "id" => Locale::Id,
         _ => return None,
     })
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn connected_state_round_trips_through_payload() {
-        // Connect Claude (0) + Gemini (4), leave the rest off.
-        let mut src = EditorState::new();
-        src.editor_ui.agent_settings.connected = [true, false, false, false, true];
-        // Serialize → JSON → deserialize, the real on-disk path.
-        let json = serde_json::to_string(&to_payload(&src)).unwrap();
-        let payload: SettingsPayload = serde_json::from_str(&json).unwrap();
-        let mut dst = EditorState::new();
-        apply_payload(&mut dst, payload);
-        assert_eq!(
-            dst.editor_ui.agent_settings.connected,
-            [true, false, false, false, true]
-        );
-    }
-
-    #[test]
-    fn legacy_settings_without_connected_field_default_to_disconnected() {
-        // A settings.json written before the `connected` field
-        // existed must still load — the missing field defaults to
-        // all-disconnected rather than failing the parse.
-        let legacy = r#"{"version":1,"theme":"dark","locale":"en-US"}"#;
-        let payload: SettingsPayload = serde_json::from_str(legacy).unwrap();
-        let mut dst = EditorState::new();
-        apply_payload(&mut dst, payload);
-        assert_eq!(dst.editor_ui.agent_settings.connected, [false; 5]);
-    }
 }

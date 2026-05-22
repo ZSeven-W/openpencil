@@ -63,10 +63,7 @@ fn split_sections(markdown: &str) -> (Option<String>, Vec<(SectionKey, String)>)
     for line in markdown.lines() {
         if let Some(rest) = line.strip_prefix("# ").filter(|_| !line.starts_with("## ")) {
             if project_name.is_none() {
-                let name = rest
-                    .trim()
-                    .strip_prefix("Design System:")
-                    .unwrap_or(rest.trim());
+                let name = rest.trim().strip_prefix("Design System:").unwrap_or(rest.trim());
                 project_name = Some(name.trim().to_string());
             }
         } else if let Some(rest) = line.strip_prefix("## ") {
@@ -120,13 +117,15 @@ fn parse_colors(content: &str) -> Vec<DesignMdColor> {
         let before = &line[..idx];
         let after = &line[(idx + 7).min(line.len())..];
         // Prefer a `**Bold**` label as the colour name.
-        let name = bold_span(before).map(str::to_string).unwrap_or_else(|| {
-            before
-                .trim_end_matches(|c: char| "-*#():–— ".contains(c))
-                .trim_start_matches(|c: char| "-* ".contains(c))
-                .trim()
-                .to_string()
-        });
+        let name = bold_span(before)
+            .map(str::to_string)
+            .unwrap_or_else(|| {
+                before
+                    .trim_end_matches(|c: char| "-*#():–— ".contains(c))
+                    .trim_start_matches(|c: char| "-* ".contains(c))
+                    .trim()
+                    .to_string()
+            });
         let role = after
             .trim_start_matches(|c: char| ")(:–—- \t".contains(c))
             .trim()
@@ -156,7 +155,9 @@ fn parse_typography(content: &str) -> DesignMdTypography {
     };
     for line in content.lines() {
         let l = line.to_lowercase();
-        if (l.contains("font family") || l.contains("primary font")) && typo.font_family.is_none() {
+        if (l.contains("font family") || l.contains("primary font"))
+            && typo.font_family.is_none()
+        {
             if let Some(colon) = line.find(':') {
                 let v = line[colon + 1..].trim().trim_matches('*').trim();
                 if !v.is_empty() {
@@ -265,10 +266,7 @@ mod tests {
     #[test]
     fn section_less_markdown_falls_back_to_visual_theme() {
         let spec = parse_design_md("just some freeform notes");
-        assert_eq!(
-            spec.visual_theme.as_deref(),
-            Some("just some freeform notes")
-        );
+        assert_eq!(spec.visual_theme.as_deref(), Some("just some freeform notes"));
         assert_eq!(spec.raw, "just some freeform notes");
     }
 

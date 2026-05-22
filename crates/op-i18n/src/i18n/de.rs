@@ -55,8 +55,6 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "topbar.closeConfirmDetail" => "Ihre Änderungen gehen verloren, wenn Sie sie nicht speichern.",
         "topbar.dontSave" => "Nicht speichern",
         "topbar.agentsAndMcp" => "Agenten & MCP",
-        "topbar.agentSingular" => "Agent",
-        "topbar.agentPlural" => "Agenten",
         "topbar.setupAgentsMcp" => "Agenten & MCP einrichten",
         "topbar.connected" => "verbunden",
         "topbar.agentStatus" => "{{agents}} Agent{{agentSuffix}} · {{mcp}} MCP",
@@ -546,7 +544,6 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "a11y.layerContextMenu" => "Ebenen-Kontextmenü",
         "a11y.aiChat" => "KI-Chat",
         "designMd.emptyHint" => "Importiere eine .md-Datei, um ein Design-Briefing anzuhängen",
-        "componentBrowser.empty" => "Keine Komponenten gefunden",
         _ => return super::de_git::lookup(key),
     })
 }

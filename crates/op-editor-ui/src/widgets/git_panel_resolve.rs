@@ -86,11 +86,7 @@ impl GitPanel<'_> {
             origin: Point2D::new(left + half + CHOICE_GAP, actions_top),
             size: Point2D::new(half, BUTTON_H),
         };
-        ResolveLayout {
-            rows,
-            apply,
-            cancel,
-        }
+        ResolveLayout { rows, apply, cancel }
     }
 
     /// Paint the merge-conflict-resolution view.
@@ -104,9 +100,7 @@ impl GitPanel<'_> {
         self.text(
             cx,
             &truncate(
-                &self
-                    .t("git.panel.resolveTitle")
-                    .replace("{{branch}}", &merge.branch),
+                &self.t("git.panel.resolveTitle").replace("{{branch}}", &merge.branch),
                 56,
             ),
             left,
@@ -134,13 +128,7 @@ impl GitPanel<'_> {
             // Ours / Theirs choice buttons — the picked side is the
             // accent (primary) one; a structural conflict greys out
             // Theirs since it can only resolve to Ours.
-            self.paint_button(
-                cx,
-                *ours_rect,
-                self.t("git.panel.ours"),
-                true,
-                !row.take_theirs,
-            );
+            self.paint_button(cx, *ours_rect, self.t("git.panel.ours"), true, !row.take_theirs);
             self.paint_button(
                 cx,
                 *theirs_rect,

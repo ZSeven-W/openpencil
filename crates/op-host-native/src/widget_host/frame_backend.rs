@@ -95,10 +95,6 @@ impl<'a> RenderBackend for NativeFrameBackend<'a> {
         self.inner.fill_polygon(self.canvas, points, color);
     }
 
-    fn fill_dots(&mut self, centers: &[Point2D], radius: f32, color: Color) {
-        self.inner.fill_dots(self.canvas, centers, radius, color);
-    }
-
     fn draw_image(&mut self, rect: Rect, image_id: u64, encoded: &[u8]) {
         self.inner.draw_image(self.canvas, rect, image_id, encoded);
     }

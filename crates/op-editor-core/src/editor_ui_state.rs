@@ -505,29 +505,6 @@ pub struct EditorUiState {
     pub export_scale: f32,
     pub export_dialog_open: bool,
     pub export_format: ExportFormat,
-    /// Property-panel Export section: the scale dropdown's inline
-    /// select popup is open. Mutually exclusive with
-    /// `export_format_picker_open` — opening one closes the other.
-    pub export_scale_picker_open: bool,
-    /// Property-panel Export section: the format dropdown's inline
-    /// select popup is open.
-    pub export_format_picker_open: bool,
-    /// Row index the cursor is over in the open Export select popup
-    /// (drives the row hover highlight). `None` when no popup is
-    /// open or the cursor is off every row.
-    pub export_picker_hover: Option<usize>,
-    /// Vertical scroll offset of the right-rail PropertyPanel, in px
-    /// (≥ 0). A wheel / trackpad pan over the inspector advances it;
-    /// paint + hit-test shift the section content up by this amount
-    /// so a tall inspector (many effects, etc.) stays reachable.
-    pub property_panel_scroll: f32,
-    /// Vertical scroll offset (px, ≥ 0) of the LayerPanel's 页面
-    /// (Pages) section — that section has a bounded height, so a
-    /// long page list scrolls within it.
-    pub layer_pages_scroll: f32,
-    /// Vertical scroll offset (px, ≥ 0) of the LayerPanel's 图层
-    /// (Layers) section row viewport.
-    pub layer_layers_scroll: f32,
     /// "Import from Figma" modal.
     pub figma_import_open: bool,
     /// Floating `Cmd+,` agent-settings modal open.
@@ -549,23 +526,8 @@ pub struct EditorUiState {
     // --- AI chat model picker --------------------------------------
     /// AI chat model-picker dropdown open.
     pub chat_model_picker_open: bool,
-    /// Vertical scroll offset of the model-picker dropdown, in px.
-    /// Non-zero only when the connected catalog is taller than the
-    /// picker's capped height; the host clamps it on wheel input.
-    pub chat_model_picker_scroll: f32,
-    /// Index into `chat.available_models` of the model row the cursor
-    /// is over, or `None`. Drives the picker's hover-row tint.
-    pub chat_model_picker_hover: Option<usize>,
     /// Index into `AgentProvider::ALL` of the agent driving the chat.
     pub chat_selected_agent: usize,
-
-    // --- Window chrome ---------------------------------------------
-    /// Cursor is over the TopBar's window-control (traffic-light)
-    /// cluster — reveals the close / minimise / maximise glyphs.
-    pub topbar_traffic_hover: bool,
-    /// Window is in fullscreen. macOS hides the native traffic
-    /// lights then, so the TopBar drops its left-edge reservation.
-    pub window_fullscreen: bool,
 
     // --- Alignment toolbar -----------------------------------------
     /// Align-toolbar button currently hovered.
@@ -642,24 +604,6 @@ pub struct EditorUiState {
     /// click, drained by the desktop host (which owns the native file
     /// dialog). Transient: never serialized.
     pub design_md_request: Option<DesignMdRequest>,
-
-    // --- Component browser ------------------------------------------
-    /// Whether the floating Component-Browser panel is shown.
-    pub component_browser_open: bool,
-    /// Top-left corner of the Component-Browser panel in logical px;
-    /// `None` until first opened — the host then centres it.
-    pub component_browser_pos: Option<(f32, f32)>,
-    /// Live search filter — names + tags substring-match against this.
-    pub component_browser_search: String,
-    /// Active category pill (`None` = all categories).
-    pub component_browser_category: Option<crate::uikit::ComponentCategory>,
-    /// Active kit filter (`None` = every loaded kit). Kept for the
-    /// future imported-kits surface; v1 ships one built-in kit.
-    pub component_browser_kit_id: Option<String>,
-    /// A queued component-instantiate request — `(kit_id, comp_id)`,
-    /// set by a card click, drained by the desktop host so it can
-    /// run the instantiate against the viewport's centre.
-    pub component_browser_pending_insert: Option<(String, String)>,
 }
 
 /// A Design-MD panel action that needs the desktop host's native
@@ -690,12 +634,6 @@ impl Default for EditorUiState {
             export_scale: 2.0,
             export_dialog_open: false,
             export_format: ExportFormat::Png,
-            export_scale_picker_open: false,
-            export_format_picker_open: false,
-            export_picker_hover: None,
-            property_panel_scroll: 0.0,
-            layer_pages_scroll: 0.0,
-            layer_layers_scroll: 0.0,
             figma_import_open: false,
             agent_settings_open: false,
             agent_settings: crate::agent_settings::AgentSettings::default(),
@@ -705,11 +643,7 @@ impl Default for EditorUiState {
             shape_picker_hover: None,
             shape_tool: Tool::Rect,
             chat_model_picker_open: false,
-            chat_model_picker_scroll: 0.0,
-            chat_model_picker_hover: None,
             chat_selected_agent: 0,
-            topbar_traffic_hover: false,
-            window_fullscreen: false,
             align_toolbar_hover: None,
             property_tab: PropertyTab::Design,
             flex_layout: FlexLayout::Free,
@@ -735,12 +669,6 @@ impl Default for EditorUiState {
             design_md_panel_pos: None,
             design_md_expanded: 0b0000_0111,
             design_md_request: None,
-            component_browser_open: false,
-            component_browser_pos: None,
-            component_browser_search: String::new(),
-            component_browser_category: None,
-            component_browser_kit_id: None,
-            component_browser_pending_insert: None,
         }
     }
 }

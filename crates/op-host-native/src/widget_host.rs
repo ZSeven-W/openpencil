@@ -36,7 +36,6 @@ use op_editor_ui::{Rect, Theme};
 
 mod click;
 mod color_picker_press;
-mod component_browser_press;
 mod design_md_press;
 mod frame_backend;
 mod geometry;
@@ -49,8 +48,8 @@ mod keyboard;
 mod paint;
 mod press;
 mod press_helpers;
-mod property_dispatch;
 mod scroll;
+mod property_dispatch;
 mod shortcuts;
 
 pub use frame_backend::NativeFrameBackend;
@@ -121,8 +120,6 @@ pub struct WidgetHostNative {
     /// floating panel by its header bar. The live top-left is written
     /// straight back into `editor_ui.design_md_panel_pos`.
     pub(in crate::widget_host) design_md_drag: Option<DesignMdDragState>,
-    /// Active Component-Browser panel drag.
-    pub(in crate::widget_host) component_browser_drag: Option<ComponentBrowserDragState>,
     /// Active panel-resize drag — set when the cursor is pressed
     /// within the resize gutter of LayerPanel's right edge or
     /// PropertyPanel's left edge.
@@ -365,17 +362,9 @@ pub(in crate::widget_host) struct DesignMdDragState {
     pub(in crate::widget_host) grab_dy: f32,
 }
 
-#[derive(Debug, Clone, Copy)]
-pub(in crate::widget_host) struct ComponentBrowserDragState {
-    pub(in crate::widget_host) grab_dx: f32,
-    pub(in crate::widget_host) grab_dy: f32,
-}
-
 impl WidgetHostNative {
     pub fn new() -> Self {
-        // A fresh launch opens with a single empty starter Frame —
-        // see `EditorState::starter`.
-        let editor_state = op_editor_core::EditorState::starter();
+        let editor_state = op_editor_core::EditorState::sample();
         // Seed the render scene once up front; subsequent frames
         // re-derive only when `editor_state_dirty` is set.
         let layout_scene = op_pen_loader::editor_state_to_layout_scene(&editor_state);
@@ -387,7 +376,6 @@ impl WidgetHostNative {
             drag: None,
             chat_drag: None,
             design_md_drag: None,
-            component_browser_drag: None,
             panel_resize: None,
             node_drag: None,
             path_anchor_drag: None,
@@ -521,48 +509,6 @@ impl WidgetHostNative {
     /// next paint re-derives the snapshot.
     pub fn mark_editor_state_dirty(&mut self) {
         self.editor_state_dirty = true;
-    }
-
-    /// Drain a queued Component-Browser insert: place the chosen
-    /// UIKit component at the viewport's centre (top-left = centre −
-    /// half the component's size) and call
-    /// [`EditorState::instantiate_kit_component`]. Returns `true`
-    /// when an instantiate landed (the desktop runner schedules a
-    /// repaint on `true`).
-    pub fn drain_component_browser_insert(&mut self, viewport_w: f32, viewport_h: f32) -> bool {
-        let Some((kit_id, comp_id)) = self
-            .editor_state
-            .editor_ui
-            .component_browser_pending_insert
-            .take()
-        else {
-            return false;
-        };
-        let dims = self
-            .editor_state
-            .ui_kits
-            .iter()
-            .find(|k| k.id == kit_id)
-            .and_then(|k| k.components.iter().find(|c| c.id == comp_id))
-            .map(|c| (c.width as f64, c.height as f64));
-        let Some((cw_comp, ch_comp)) = dims else {
-            return false;
-        };
-        let (_cx0, _cy0, cw, ch) = self.canvas_region(viewport_w, viewport_h);
-        let canvas_local = op_editor_ui::Point2D::new(cw / 2.0, ch / 2.0);
-        let doc = self.editor_state.viewport.to_document(canvas_local);
-        let dx = doc.x as f64 - cw_comp / 2.0;
-        let dy = doc.y as f64 - ch_comp / 2.0;
-        if self
-            .editor_state
-            .instantiate_kit_component(&kit_id, &comp_id, dx, dy)
-            .is_some()
-        {
-            self.mark_dirty();
-            true
-        } else {
-            false
-        }
     }
 
     /// Commit any in-progress settings-modal input draft (currently

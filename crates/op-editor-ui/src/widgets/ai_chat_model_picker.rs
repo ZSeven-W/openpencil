@@ -20,22 +20,6 @@ pub const MODEL_GROUP_H: f32 = 22.0;
 pub const MODEL_ROW_H: f32 = 28.0;
 /// Vertical padding inside the dropdown card (top + bottom each).
 pub const MODEL_PICKER_PAD_Y: f32 = 6.0;
-/// Hard cap on the dropdown's painted height. A connected catalog
-/// taller than this (e.g. OpenCode's 75+ models) scrolls inside the
-/// card instead of growing off the top of the screen.
-pub const MODEL_PICKER_MAX_H: f32 = 320.0;
-
-/// Painted height of the dropdown for `models` — the content height
-/// clamped to [`MODEL_PICKER_MAX_H`].
-pub fn picker_view_height(models: &[ModelEntry]) -> f32 {
-    picker_content_height(models).min(MODEL_PICKER_MAX_H)
-}
-
-/// Largest valid scroll offset for `models` — `0` when the content
-/// already fits inside [`MODEL_PICKER_MAX_H`].
-pub fn max_picker_scroll(models: &[ModelEntry]) -> f32 {
-    (picker_content_height(models) - MODEL_PICKER_MAX_H).max(0.0)
-}
 
 /// One laid-out row in the dropdown.
 enum Row {
@@ -78,9 +62,7 @@ pub fn picker_content_height(models: &[ModelEntry]) -> f32 {
 
 /// Map a click inside the dropdown `rect` to the index of the
 /// model row under it. `None` for a click on a header / padding.
-/// `scroll` is the dropdown's vertical scroll offset in px — paint
-/// and hit-test share it so a scrolled row resolves correctly.
-pub fn model_at(rect: Rect, point: Point2D, models: &[ModelEntry], scroll: f32) -> Option<usize> {
+pub fn model_at(rect: Rect, point: Point2D, models: &[ModelEntry]) -> Option<usize> {
     if point.x < rect.origin.x
         || point.x > rect.origin.x + rect.size.x
         || point.y < rect.origin.y
@@ -89,16 +71,9 @@ pub fn model_at(rect: Rect, point: Point2D, models: &[ModelEntry], scroll: f32) 
         return None;
     }
     let mut hit = None;
-    // Walk from a scroll-shifted origin — the same offset paint
-    // applies via `translate` — then keep only hits whose row band
-    // actually falls inside the (unscrolled) card rect.
-    walk_rows(models, rect.origin.y - scroll, |row, y, h| {
+    walk_rows(models, rect.origin.y, |row, y, h| {
         if let Row::Model(idx) = row {
-            if point.y >= y
-                && point.y < y + h
-                && point.y >= rect.origin.y
-                && point.y <= rect.origin.y + rect.size.y
-            {
+            if point.y >= y && point.y < y + h {
                 hit = Some(*idx);
             }
         }
@@ -107,30 +82,20 @@ pub fn model_at(rect: Rect, point: Point2D, models: &[ModelEntry], scroll: f32) 
 }
 
 /// Paint the dropdown card + grouped rows. `selected` is the index
-/// of the active model (gets a check mark), `hover` the index of the
-/// row under the cursor (gets a hover wash). `rect` is the painted
-/// dropdown bounds (already capped at [`MODEL_PICKER_MAX_H`]);
-/// `scroll` shifts the content up when the catalog overflows.
+/// of the active model (gets a check mark). `rect` is the full
+/// dropdown bounds as positioned by the caller.
 pub fn paint_model_picker(
     cx: &mut PaintCx<'_>,
     theme: &Theme,
     rect: Rect,
     models: &[ModelEntry],
     selected: usize,
-    scroll: f32,
-    hover: Option<usize>,
 ) {
-    // Card background + border — painted unscrolled so the frame
-    // stays put while the rows scroll inside it.
+    // Card background + border.
     cx.backend.fill_round_rect(rect, 10.0, theme.popover);
     cx.backend.stroke_round_rect(rect, 10.0, theme.border, 1.0);
     let row_left = rect.origin.x + 12.0;
     let row_w = rect.size.x - 12.0;
-    // Clip to the card and shift by `-scroll` so off-card rows are
-    // trimmed and the visible band tracks the scroll offset.
-    cx.backend.save();
-    cx.backend.clip_rect(rect);
-    cx.backend.translate(Point2D::new(0.0, -scroll));
     walk_rows(models, rect.origin.y, |row, y, h| match row {
         Row::Header(provider) => {
             let logo_y = y + (h - 12.0) / 2.0;
@@ -153,19 +118,6 @@ pub fn paint_model_picker(
         }
         Row::Model(idx) => {
             let is_selected = *idx == selected;
-            let is_hovered = hover == Some(*idx);
-            // Hover wash on any non-selected row the cursor is over;
-            // the selected row keeps its own `muted` fill below.
-            if is_hovered && !is_selected {
-                cx.backend.fill_round_rect(
-                    Rect {
-                        origin: Point2D::new(rect.origin.x + 4.0, y + 1.0),
-                        size: Point2D::new(rect.size.x - 8.0, h - 2.0),
-                    },
-                    6.0,
-                    theme.button_hover,
-                );
-            }
             if is_selected {
                 cx.backend.fill_round_rect(
                     Rect {
@@ -204,30 +156,7 @@ pub fn paint_model_picker(
                 .draw_text(&label, Point2D::new(row_left + 22.0, y + h / 2.0 + 4.0));
         }
     });
-    cx.backend.restore();
     let _ = row_w;
-
-    // Scrollbar thumb — drawn after `restore()` so it sits in
-    // unscrolled card space. Shown only when the content overflows.
-    let content_h = picker_content_height(models);
-    let view_h = rect.size.y;
-    if content_h > view_h + 0.5 {
-        let track_h = view_h - 8.0;
-        let thumb_h = (track_h * view_h / content_h).max(24.0);
-        let max_scroll = (content_h - view_h).max(0.0);
-        let t = if max_scroll > 0.0 {
-            (scroll / max_scroll).clamp(0.0, 1.0)
-        } else {
-            0.0
-        };
-        let thumb_y = rect.origin.y + 4.0 + t * (track_h - thumb_h);
-        let thumb = Rect {
-            origin: Point2D::new(rect.origin.x + rect.size.x - 6.0, thumb_y),
-            size: Point2D::new(3.0, thumb_h),
-        };
-        cx.backend
-            .fill_round_rect(thumb, 1.5, theme.muted_foreground);
-    }
 }
 
 /// Paint a provider's brand logo into a `size × size` square.
@@ -302,38 +231,11 @@ mod tests {
         // First model row sits below the first group header.
         let first_row_y = MODEL_PICKER_PAD_Y + MODEL_GROUP_H + MODEL_ROW_H / 2.0;
         assert_eq!(
-            model_at(rect, Point2D::new(100.0, first_row_y), &models, 0.0),
+            model_at(rect, Point2D::new(100.0, first_row_y), &models),
             Some(0)
         );
         // A click on the header band resolves to nothing.
         let header_y = MODEL_PICKER_PAD_Y + MODEL_GROUP_H / 2.0;
-        assert_eq!(
-            model_at(rect, Point2D::new(100.0, header_y), &models, 0.0),
-            None
-        );
-    }
-
-    #[test]
-    fn model_at_honors_scroll_offset() {
-        // A tall catalog (one group, many rows) clamped to the cap;
-        // with the content scrolled down, the row under a fixed
-        // cursor point shifts to a later index.
-        let models: Vec<ModelEntry> = (0..40)
-            .map(|i| entry(AgentProvider::OpenCode, &format!("m{i}")))
-            .collect();
-        let rect = Rect {
-            origin: Point2D::new(0.0, 0.0),
-            size: Point2D::new(200.0, picker_view_height(&models)),
-        };
-        let probe = Point2D::new(
-            100.0,
-            MODEL_PICKER_PAD_Y + MODEL_GROUP_H + MODEL_ROW_H / 2.0,
-        );
-        let unscrolled = model_at(rect, probe, &models, 0.0);
-        let scrolled = model_at(rect, probe, &models, MODEL_ROW_H * 3.0);
-        assert_eq!(unscrolled, Some(0));
-        assert_eq!(scrolled, Some(3));
-        // The catalog overflows the cap, so scrolling is possible.
-        assert!(max_picker_scroll(&models) > 0.0);
+        assert_eq!(model_at(rect, Point2D::new(100.0, header_y), &models), None);
     }
 }

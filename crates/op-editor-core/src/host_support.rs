@@ -21,8 +21,9 @@ impl EditorState {
     /// containing a Text `n11` and a Group `n12` (`n13` blue rect +
     /// `n14` text). Selection anchors on `n11`.
     ///
-    /// This is the widget-test fixture. The native host opens with
-    /// [`EditorState::starter`] (a single empty Frame) instead.
+    /// Mirrors the historical shell-core `Document::sample()` fixture
+    /// so the native host opens with identical content after the
+    /// migration onto `EditorState`.
     pub fn sample() -> Self {
         let src = r##"{
             "version": "0.8.0",
@@ -51,29 +52,6 @@ impl EditorState {
             .value;
         let mut state = Self::from_document(doc);
         state.set_single_selection(NodeId::new("n11"));
-        state
-    }
-
-    /// Build the document a fresh launch opens with — a single empty
-    /// starter Frame `n10` (white fill, 1-px black stroke), selected
-    /// so the user can immediately resize / move it or drop nodes
-    /// inside. No demo decoration.
-    pub fn starter() -> Self {
-        let src = r##"{
-            "version": "0.8.0",
-            "children": [
-              {"type":"frame","id":"n10","name":"Frame",
-               "x":40,"y":40,"width":360,"height":240,
-               "fill":[{"type":"solid","color":"#FFFFFF"}],
-               "stroke":{"thickness":1,"fill":[{"type":"solid","color":"#000000"}]},
-               "children":[]}
-            ]
-        }"##;
-        let doc = jian_ops_schema::load_str(src)
-            .expect("EditorState::starter() fixture parses")
-            .value;
-        let mut state = Self::from_document(doc);
-        state.set_single_selection(NodeId::new("n10"));
         state
     }
 
@@ -220,17 +198,6 @@ mod tests {
         assert_eq!(s.selection.anchor, NodeId::new("n11"));
         // The frame + its two children are present.
         assert_eq!(s.max_node_id(), 14);
-    }
-
-    #[test]
-    fn starter_is_a_single_empty_frame_with_it_selected() {
-        let s = EditorState::starter();
-        // Exactly one top-level node — the starter Frame. The
-        // `max_node_id() == 10` check proves no demo children:
-        // the n11..n14 sample tree would lift it to 14.
-        assert_eq!(s.doc.children.len(), 1);
-        assert_eq!(s.max_node_id(), 10);
-        assert_eq!(s.selection.anchor, NodeId::new("n10"));
     }
 
     #[test]

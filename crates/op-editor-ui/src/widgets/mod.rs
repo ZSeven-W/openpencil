@@ -41,10 +41,8 @@ mod layer_panel_paint;
 mod layer_panel_tests;
 mod layer_panel_walkers;
 pub mod property_panel;
-pub mod property_panel_action;
 pub mod property_panel_code;
 pub mod property_panel_effects;
-pub mod property_panel_export;
 pub mod property_panel_fill;
 pub mod property_panel_inputs;
 pub mod property_panel_layout;
@@ -87,7 +85,6 @@ pub mod ai_chat_panel_paint;
 pub mod ai_chat_transcript;
 pub mod align_toolbar;
 pub mod color_picker;
-pub mod component_browser_panel;
 pub mod design_md_markdown;
 pub mod design_md_panel;
 pub mod export_dialog;
@@ -127,17 +124,15 @@ pub use ai_chat_panel::{
     AI_CHAT_HEIGHT, AI_CHAT_WIDTH,
 };
 pub use align_toolbar::{AlignToolbar, ALIGN_TOOLBAR_HEIGHT, ALIGN_TOOLBAR_WIDTH};
-pub use component_browser_panel::{
-    ComponentBrowserHit, ComponentBrowserPanel, COMPONENT_BROWSER_PANEL_H,
-    COMPONENT_BROWSER_PANEL_W,
-};
-pub use design_md_panel::{DesignMdHit, DesignMdPanel, DESIGN_MD_PANEL_H, DESIGN_MD_PANEL_W};
 pub use export_dialog::{ExportDialog, ExportDialogHit, ExportFormat};
-pub use git_panel::{GitPanel, GitPanelHit, GIT_PANEL_INSET, GIT_PANEL_WIDTH};
 pub use locale_picker::{LocalePicker, LOCALE_PICKER_WIDTH};
 pub use shape_picker::{ShapeChoice, ShapePicker, SHAPE_PICKER_WIDTH};
+pub use design_md_panel::{
+    DesignMdHit, DesignMdPanel, DESIGN_MD_PANEL_H, DESIGN_MD_PANEL_W,
+};
+pub use git_panel::{GitPanel, GitPanelHit, GIT_PANEL_INSET, GIT_PANEL_WIDTH};
 pub use status_bar::{StatusBar, STATUS_BAR_HEIGHT, STATUS_BAR_WIDTH};
-pub use top_bar::{TopBar, TopBarHit, WindowControl, TOP_BAR_HEIGHT};
+pub use top_bar::{TopBar, TopBarHit, TOP_BAR_HEIGHT};
 // Re-export panel/toolbar width constants + hit enums so the host
 // can size them consistently and route hits.
 pub use layer_panel::{DropPosition, DropTarget, LayerPanelHit, LAYER_PANEL_WIDTH};

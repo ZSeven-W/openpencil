@@ -3,7 +3,6 @@
 # Git submodules — owned by separate repos, not formatted from here.
 packages/agent-native/
 vendor/agent/
-vendor/casement/
 vendor/jian/
 # Vendored fork of rust-skia — keep upstream Cargo.toml / .orig formatting
 # byte-identical so the diff against upstream stays minimal.

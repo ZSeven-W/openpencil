@@ -55,9 +55,7 @@ impl RepoStatus {
 
     /// Whether any tracked file has an unresolved conflict.
     pub fn has_conflicts(&self) -> bool {
-        self.files
-            .iter()
-            .any(|f| f.state == ChangeState::Conflicted)
+        self.files.iter().any(|f| f.state == ChangeState::Conflicted)
     }
 }
 
@@ -210,17 +208,11 @@ fn parse_status(raw: &str) -> RepoStatus {
 /// Parse the `## ` branch header — `main...origin/main [ahead 1, behind 2]`.
 fn parse_branch_line(rest: &str) -> (Option<String>, u32, u32) {
     // The branch name runs up to `...` (upstream marker) or a space.
-    let name_end = rest
-        .find("...")
-        .or_else(|| rest.find(' '))
-        .unwrap_or(rest.len());
+    let name_end = rest.find("...").or_else(|| rest.find(' ')).unwrap_or(rest.len());
     let name = rest[..name_end].trim();
     // A brand-new repo with no commits reports `No commits yet on main`.
     let branch = if name.is_empty() || name.contains("No commits yet") {
-        rest.rsplit(' ')
-            .next()
-            .filter(|s| !s.is_empty())
-            .map(str::to_string)
+        rest.rsplit(' ').next().filter(|s| !s.is_empty()).map(str::to_string)
     } else {
         Some(name.to_string())
     };
@@ -269,11 +261,7 @@ fn parse_file_line(line: &str) -> FileStatus {
     // The index column (`x`) carries the change when it is staged.
     let staged = x != ' ' && x != '?';
 
-    FileStatus {
-        path,
-        state,
-        staged,
-    }
+    FileStatus { path, state, staged }
 }
 
 /// Whether an `XY` porcelain code marks an unresolved merge conflict.

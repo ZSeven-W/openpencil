@@ -46,7 +46,11 @@ impl GitRepo {
     ///   exact and sufficient.
     /// - neither is an ancestor of the other → the histories
     ///   diverged → a real merge commit (or a conflict).
-    pub(crate) fn integrate(&self, before: &str, target: &str) -> Result<MergeOutcome, GitError> {
+    pub(crate) fn integrate(
+        &self,
+        before: &str,
+        target: &str,
+    ) -> Result<MergeOutcome, GitError> {
         // Refuse to start a new integration while a merge is still
         // unresolved. Otherwise the leftover conflict state would be
         // misattributed to *this* call, and the `AlreadyUpToDate`
@@ -200,10 +204,7 @@ impl GitRepo {
             wrepo.run(&["merge", "--ff-only", &target])?;
             let merged = wrepo.run(&["rev-parse", "HEAD"])?.trim().to_string();
             self.run(&["merge", "--ff-only", &merged])?;
-            return Ok(WorktreeMergeReport::clean(
-                MergeOutcome::FastForward,
-                merged,
-            ));
+            return Ok(WorktreeMergeReport::clean(MergeOutcome::FastForward, merged));
         }
 
         // Diverged histories — a real merge commit, or conflicts.
@@ -236,7 +237,8 @@ impl GitRepo {
                     );
                     if let Some(content) = resolved {
                         let abs = wrepo.workdir().join(&file.path);
-                        std::fs::write(&abs, content).map_err(|e| GitError::Io(e.to_string()))?;
+                        std::fs::write(&abs, content)
+                            .map_err(|e| GitError::Io(e.to_string()))?;
                         wrepo.stage(&[abs.as_path()])?;
                     }
                 }
@@ -370,7 +372,10 @@ fn merge_worktree_dir() -> PathBuf {
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_nanos())
         .unwrap_or(0);
-    std::env::temp_dir().join(format!("op-git-merge-{}-{nanos}", std::process::id()))
+    std::env::temp_dir().join(format!(
+        "op-git-merge-{}-{nanos}",
+        std::process::id()
+    ))
 }
 
 /// Build a [`ConflictBag`] from a conflicted worktree's porcelain

@@ -67,23 +67,8 @@ fn group_snapshot_aggregates_child_bounds() {
     assert!(panel.snapshot.height > 0);
 }
 
-/// Build a `VisibleSections` from a panel's per-kind capabilities.
-fn visible_for(panel: &PropertyPanel) -> sections::VisibleSections {
-    let caps = SectionCapabilities::for_kind(&panel.snapshot.kind_variant);
-    sections::VisibleSections {
-        flex_layout: caps.flex_layout,
-        size_options: caps.size_options,
-        opacity: caps.opacity,
-        fill: caps.fill,
-        stroke: caps.stroke,
-        effects: caps.effects,
-        export: caps.export,
-        fill_type: panel.fill_type,
-    }
-}
-
 #[test]
-fn hit_test_action_export_section_returns_picker_toggles() {
+fn hit_test_action_export_section_returns_open_dialog() {
     // Single-frame selection paints every section + Export.
     let mut state = EditorState::sample();
     state.set_single_selection(NodeId::new("n10"));
@@ -92,88 +77,37 @@ fn hit_test_action_export_section_returns_picker_toggles() {
         origin: Point2D::new(0.0, 0.0),
         size: Point2D::new(280.0, 1600.0),
     };
-    let rects = sections::action_button_rects_with_fill_picker(
-        rect,
-        visible_for(&panel),
-        &panel.snapshot.effects,
-        false,
-        false,
-        false,
-    );
-    // The Export section emits a scale-dropdown + a format-dropdown
-    // toggle rect — clicking neither opens the Export modal.
-    let scale_rect = rects
-        .iter()
-        .find(|(a, _)| matches!(a, PropertyPanelAction::ToggleExportScalePicker))
-        .map(|(_, r)| *r)
-        .expect("export section must emit a scale-dropdown rect");
-    let format_rect = rects
-        .iter()
-        .find(|(a, _)| matches!(a, PropertyPanelAction::ToggleExportFormatPicker))
-        .map(|(_, r)| *r)
-        .expect("export section must emit a format-dropdown rect");
-    let scale_center = Point2D::new(
-        scale_rect.origin.x + scale_rect.size.x / 2.0,
-        scale_rect.origin.y + scale_rect.size.y / 2.0,
-    );
-    assert!(
-        matches!(
-            panel.hit_test_action(rect, scale_center),
-            Some(PropertyPanelAction::ToggleExportScalePicker)
-        ),
-        "click on the scale dropdown should toggle the scale picker",
-    );
-    let format_center = Point2D::new(
-        format_rect.origin.x + format_rect.size.x / 2.0,
-        format_rect.origin.y + format_rect.size.y / 2.0,
-    );
-    assert!(
-        matches!(
-            panel.hit_test_action(rect, format_center),
-            Some(PropertyPanelAction::ToggleExportFormatPicker)
-        ),
-        "click on the format dropdown should toggle the format picker",
-    );
-}
-
-#[test]
-fn export_scale_picker_open_emits_option_rows() {
-    let mut state = EditorState::sample();
-    state.set_single_selection(NodeId::new("n10"));
-    // Opening the scale picker makes the option rows part of the
-    // panel's hit surface.
-    state.editor_ui.export_scale_picker_open = true;
-    let panel = PropertyPanel::for_selection(&state).expect("frame panel");
-    let rect = Rect {
-        origin: Point2D::new(0.0, 0.0),
-        size: Point2D::new(280.0, 1600.0),
+    let caps = SectionCapabilities::for_kind(&panel.snapshot.kind_variant);
+    let visible = sections::VisibleSections {
+        flex_layout: caps.flex_layout,
+        size_options: caps.size_options,
+        opacity: caps.opacity,
+        fill: caps.fill,
+        stroke: caps.stroke,
+        effects: caps.effects,
+        export: caps.export,
+        fill_type: panel.fill_type,
     };
     let rects = sections::action_button_rects_with_fill_picker(
         rect,
-        visible_for(&panel),
+        visible,
         &panel.snapshot.effects,
         false,
-        true,
-        false,
     );
-    let rows: Vec<_> = rects
+    let export_rect = rects
         .iter()
-        .filter(|(a, _)| matches!(a, PropertyPanelAction::SetExportScale(_)))
-        .collect();
-    assert_eq!(rows.len(), 3, "open scale picker emits 1x/2x/3x rows");
-    // A click on an option row wins over the dropdown toggle it
-    // overlaps — `hit_test_action` walks the rects in `rev()`.
-    let row = rows[0].1;
-    let row_center = Point2D::new(
-        row.origin.x + row.size.x / 2.0,
-        row.origin.y + row.size.y / 2.0,
+        .find(|(action, _)| matches!(action, PropertyPanelAction::OpenExportDialog))
+        .map(|(_, r)| *r)
+        .expect("export section must emit an OpenExportDialog rect");
+    let center = Point2D::new(
+        export_rect.origin.x + export_rect.size.x / 2.0,
+        export_rect.origin.y + export_rect.size.y / 2.0,
     );
+    let hit = panel.hit_test_action(rect, center);
     assert!(
-        matches!(
-            panel.hit_test_action(rect, row_center),
-            Some(PropertyPanelAction::SetExportScale(_))
-        ),
-        "click on a picker row resolves to SetExportScale",
+        matches!(hit, Some(PropertyPanelAction::OpenExportDialog)),
+        "click in Export section should resolve to OpenExportDialog, got {:?}",
+        hit
     );
 }
 

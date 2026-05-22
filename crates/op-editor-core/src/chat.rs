@@ -237,18 +237,8 @@ pub struct ChatState {
     /// Set by `begin_send` to the just-sent user text; the desktop
     /// event loop drains this each frame. `None` = idle.
     pub pending_send: Option<String>,
-    /// Full model catalog discovered from every *installed* CLI,
-    /// before the connected-providers filter. The desktop host fills
-    /// this from `model_discovery`; [`rebuild_available_models`] then
-    /// derives [`available_models`] from it.
-    ///
-    /// [`rebuild_available_models`]: ChatState::rebuild_available_models
-    /// [`available_models`]: ChatState::available_models
-    pub discovered_models: Vec<ModelEntry>,
-    /// Models the user can pick in the chat panel's model dropdown —
-    /// `discovered_models` filtered to the providers the user has
-    /// *connected* in Settings → Agents. Empty until the host runs
-    /// discovery and the user connects at least one agent.
+    /// Models the user can pick in the chat panel's model dropdown.
+    /// Empty until the desktop host discovers them from connected CLIs.
     pub available_models: Vec<ModelEntry>,
     /// Index into `available_models` of the active model.
     pub selected_model: usize,
@@ -289,7 +279,6 @@ impl Default for ChatState {
             collapsed: false,
             caret_anchor_ms: 0,
             pending_send: None,
-            discovered_models: Vec::new(),
             available_models: Vec::new(),
             selected_model: 0,
             thinking_mode: ThinkingMode::Adaptive,
@@ -305,40 +294,6 @@ impl ChatState {
     /// empty.
     pub fn selected_model_entry(&self) -> Option<&ModelEntry> {
         self.available_models.get(self.selected_model)
-    }
-
-    /// Recompute [`available_models`] = [`discovered_models`] filtered
-    /// to the providers the user has connected (`connected` is indexed
-    /// by [`AgentProvider::ALL`]). The previously-selected model is
-    /// preserved by identity when it survives the filter, otherwise
-    /// `selected_model` falls back to `0`.
-    ///
-    /// Called by the host after model discovery completes and after
-    /// every connect / disconnect toggle, so the picker only ever
-    /// lists models the user can actually reach.
-    ///
-    /// [`available_models`]: ChatState::available_models
-    /// [`discovered_models`]: ChatState::discovered_models
-    pub fn rebuild_available_models(&mut self, connected: &[bool; 5]) {
-        let prev = self.available_models.get(self.selected_model).cloned();
-        self.available_models = self
-            .discovered_models
-            .iter()
-            .filter(|m| {
-                AgentProvider::ALL
-                    .iter()
-                    .position(|p| *p == m.provider)
-                    .is_some_and(|i| connected[i])
-            })
-            .cloned()
-            .collect();
-        self.selected_model = prev
-            .and_then(|p| {
-                self.available_models
-                    .iter()
-                    .position(|m| m.provider == p.provider && m.value == p.value)
-            })
-            .unwrap_or(0);
     }
 
     /// Append the focused input as a new user message + a stub
@@ -769,57 +724,5 @@ mod tests {
             ChatAnchor::nearest(p2, 0.0, 0.0, 100.0, 100.0),
             ChatAnchor::BottomRight
         );
-    }
-
-    #[test]
-    fn rebuild_available_models_keeps_only_connected_providers() {
-        let mut chat = ChatState {
-            discovered_models: vec![
-                ModelEntry::new(AgentProvider::ClaudeCode, "opus", "Opus"),
-                ModelEntry::new(AgentProvider::ClaudeCode, "sonnet", "Sonnet"),
-                ModelEntry::new(AgentProvider::CodexCli, "gpt-5.5", "GPT-5.5"),
-                ModelEntry::new(AgentProvider::OpenCode, "oc/x", "oc/x"),
-            ],
-            ..Default::default()
-        };
-        // Only Claude Code (index 0 of AgentProvider::ALL) connected.
-        let mut connected = [false; 5];
-        connected[0] = true;
-        chat.rebuild_available_models(&connected);
-        assert_eq!(chat.available_models.len(), 2);
-        assert!(chat
-            .available_models
-            .iter()
-            .all(|m| m.provider == AgentProvider::ClaudeCode));
-    }
-
-    #[test]
-    fn rebuild_available_models_preserves_selection_by_identity() {
-        let mut chat = ChatState {
-            discovered_models: vec![
-                ModelEntry::new(AgentProvider::ClaudeCode, "opus", "Opus"),
-                ModelEntry::new(AgentProvider::CodexCli, "gpt-5.5", "GPT-5.5"),
-            ],
-            ..Default::default()
-        };
-        let mut connected = [false; 5];
-        connected[0] = true; // Claude
-        connected[1] = true; // Codex
-        chat.rebuild_available_models(&connected);
-        // Select Codex's GPT-5.5 (index 1).
-        chat.selected_model = 1;
-        // Disconnecting Claude drops index 0 — the selection must
-        // follow GPT-5.5 to its new index rather than dangle.
-        connected[0] = false;
-        chat.rebuild_available_models(&connected);
-        assert_eq!(chat.available_models.len(), 1);
-        assert_eq!(chat.selected_model, 0);
-        assert_eq!(chat.available_models[0].value, "gpt-5.5");
-        // Disconnecting the last provider empties the list and the
-        // selection clamps back to 0.
-        connected[1] = false;
-        chat.rebuild_available_models(&connected);
-        assert!(chat.available_models.is_empty());
-        assert_eq!(chat.selected_model, 0);
     }
 }

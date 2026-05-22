@@ -10,9 +10,7 @@ use crate::{
 use op_host_native::{NativeBackend, SharedSkiaContext};
 use std::time::{Duration, Instant};
 use winit::application::ApplicationHandler;
-use winit::event::{
-    ElementState, KeyEvent, MouseButton, MouseScrollDelta, StartCause, WindowEvent,
-};
+use winit::event::{ElementState, KeyEvent, MouseButton, MouseScrollDelta, StartCause, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, ControlFlow};
 use winit::window::{Window, WindowId};
 
@@ -48,32 +46,6 @@ impl ApplicationHandler for DesktopApp {
                 INITIAL_VIEWPORT_W as u32,
                 INITIAL_VIEWPORT_H as u32,
             ));
-        // Hide the title bar but keep the platform's own window
-        // controls — the Electron `titleBarStyle: 'hidden'` recipe.
-        //
-        // macOS: a transparent, emptied title bar over a normal
-        // `NSWindow` — the native traffic-light buttons stay (with
-        // their native hover glyphs + green-button tiling menu),
-        // and rounded corners / shadow / edge-resize / key-window
-        // responsiveness all come for free. The TopBar insets its
-        // left cluster so the app icons clear the native buttons.
-        // Windows / Linux drop decorations (custom dots cover them).
-        #[cfg(target_os = "macos")]
-        {
-            use winit::platform::macos::WindowAttributesExtMacOS;
-            // Push the traffic lights down so they sit roughly
-            // centred in the 40 px `TopBar` rather than the 28 px
-            // native title bar. Tuned by eye.
-            attrs = attrs
-                .with_titlebar_transparent(true)
-                .with_fullsize_content_view(true)
-                .with_title_hidden(true)
-                .with_traffic_light_inset(4.0);
-        }
-        #[cfg(not(target_os = "macos"))]
-        {
-            attrs = attrs.with_decorations(false);
-        }
         // Restore the window geometry from the previous session
         // (position / size / maximized). A missing or stale file
         // leaves the default attrs untouched.
@@ -283,18 +255,6 @@ impl ApplicationHandler for DesktopApp {
                 if !self.win_maximized {
                     self.win_size = Some((size.width, size.height));
                 }
-                // Fullscreen enter / exit arrives as a `Resized` on
-                // macOS — refresh the flag so the TopBar drops its
-                // traffic-light reservation when the native lights
-                // hide in fullscreen.
-                let fullscreen = self
-                    .window
-                    .as_ref()
-                    .is_some_and(|w| w.fullscreen().is_some());
-                if self.host.editor_state().editor_ui.window_fullscreen != fullscreen {
-                    self.host.editor_state_mut().editor_ui.window_fullscreen = fullscreen;
-                    self.host.mark_editor_state_dirty();
-                }
                 self.request_redraw(true);
             }
             WindowEvent::Moved(pos) => {
@@ -378,21 +338,6 @@ impl ApplicationHandler for DesktopApp {
                     self.last_git_refresh = Instant::now();
                     self.refresh_git_panel();
                 }
-                // Refresh the fullscreen flag every frame — the
-                // macOS fullscreen-exit transition can land its
-                // final `Resized` before `window.fullscreen()`
-                // flips, so the `Resized` handler alone could miss
-                // the exit. Polling here self-corrects so the
-                // TopBar's traffic-light reservation is restored.
-                let fullscreen = self
-                    .window
-                    .as_ref()
-                    .is_some_and(|w| w.fullscreen().is_some());
-                if self.host.editor_state().editor_ui.window_fullscreen != fullscreen {
-                    self.host.editor_state_mut().editor_ui.window_fullscreen = fullscreen;
-                    self.host.mark_editor_state_dirty();
-                    self.redraw_dirty = true;
-                }
                 let should_paint = self.prepare_redraw();
                 if should_paint {
                     if let (Some(ctx), Some(backend)) = (self.ctx.as_mut(), self.backend.as_mut()) {
@@ -415,14 +360,8 @@ impl ApplicationHandler for DesktopApp {
                     let deadline = self.clock_start + Duration::from_millis(deadline_ms);
                     event_loop.set_control_flow(ControlFlow::WaitUntil(deadline));
                 } else if self.update_probe.is_pending()
-                    || self
-                        .git_pull_job
-                        .as_ref()
-                        .is_some_and(git_jobs::GitPullJob::is_pending)
-                    || self
-                        .git_push_job
-                        .as_ref()
-                        .is_some_and(git_jobs::GitPushJob::is_pending)
+                    || self.git_pull_job.as_ref().is_some_and(git_jobs::GitPullJob::is_pending)
+                    || self.git_push_job.as_ref().is_some_and(git_jobs::GitPushJob::is_pending)
                     || self
                         .git_status_job
                         .as_ref()
@@ -500,57 +439,6 @@ impl ApplicationHandler for DesktopApp {
                 if self.drain_pending_cursor_move() {
                     self.redraw_dirty = true;
                 }
-                // Custom window chrome — the native title bar is
-                // hidden, so a press on the TopBar's window-control
-                // dots drives the window, and a press on the bar's
-                // blank area starts a window drag.
-                if self.cursor_y < op_editor_ui::widgets::TOP_BAR_HEIGHT {
-                    use op_editor_ui::widgets::{TopBar, WindowControl};
-                    use op_editor_ui::{Point2D, Rect};
-                    let tb_rect = Rect {
-                        origin: Point2D::new(0.0, 0.0),
-                        size: Point2D::new(
-                            self.viewport_width,
-                            op_editor_ui::widgets::TOP_BAR_HEIGHT,
-                        ),
-                    };
-                    let tb = TopBar::for_editor_ui(&self.host.editor_state().editor_ui);
-                    let p = Point2D::new(self.cursor_x, self.cursor_y);
-                    if let Some(ctl) = tb.window_control_at(tb_rect, p) {
-                        match ctl {
-                            WindowControl::Close => {
-                                // Mirror `WindowEvent::CloseRequested`:
-                                // the unsaved-changes prompt can abort,
-                                // and settings flush + save before exit
-                                // — a bare `exit()` would drop work.
-                                if self.confirm_close() {
-                                    self.host.flush_settings_input();
-                                    settings_io::save(self.host.editor_state());
-                                    event_loop.exit();
-                                }
-                            }
-                            WindowControl::Minimize => {
-                                if let Some(w) = self.window.as_ref() {
-                                    w.set_minimized(true);
-                                }
-                            }
-                            WindowControl::Maximize => {
-                                if let Some(w) = self.window.as_ref() {
-                                    w.set_maximized(!w.is_maximized());
-                                }
-                            }
-                        }
-                        return;
-                    }
-                    // A press on the bar that hits none of the app's
-                    // own buttons is a window-drag grab.
-                    if tb.hit_test(tb_rect, p).is_none() {
-                        if let Some(w) = self.window.as_ref() {
-                            let _ = w.drag_window();
-                        }
-                        return;
-                    }
-                }
                 let consumed = self.host.apply_press(
                     self.cursor_x,
                     self.cursor_y,
@@ -585,22 +473,13 @@ impl ApplicationHandler for DesktopApp {
                         eui.export_dialog_open = true;
                         self.host.mark_editor_state_dirty();
                         self.request_redraw(true);
-                    } else {
-                        match persistence::run_action(
-                            action,
-                            &mut self.host,
-                            &mut self.current_path,
-                            self.window.as_ref(),
-                        ) {
-                            persistence::ActionOutcome::Saved => self.mark_document_saved(),
-                            // A Figma import changed the document path
-                            // but left unsaved work — rebind Git only,
-                            // keep the dirty baseline so close prompts.
-                            persistence::ActionOutcome::PathChangedUnsaved => {
-                                self.rebind_git_session_for_current_path()
-                            }
-                            persistence::ActionOutcome::Noop => {}
-                        }
+                    } else if persistence::run_action(
+                        action,
+                        &mut self.host,
+                        &mut self.current_path,
+                        self.window.as_ref(),
+                    ) {
+                        self.mark_document_saved();
                     }
                 }
                 if consumed {
@@ -737,15 +616,6 @@ impl ApplicationHandler for DesktopApp {
         self.drain_git_action();
         // A Design-MD panel click may have queued an import / export.
         self.drain_design_md_action();
-        // A Component-Browser card click may have queued an insert —
-        // run it against the current viewport centre. Schedule a
-        // repaint on success so the new node lands visibly.
-        if self
-            .host
-            .drain_component_browser_insert(self.viewport_width, self.viewport_height)
-        {
-            self.request_redraw(true);
-        }
     }
 
     fn exiting(&mut self, _event_loop: &ActiveEventLoop) {

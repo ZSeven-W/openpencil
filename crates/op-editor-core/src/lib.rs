@@ -14,11 +14,11 @@ pub mod chat;
 pub mod clipboard;
 pub mod color_picker;
 pub mod command;
+pub mod design_md;
 pub mod command_apply;
 pub mod command_node;
 pub mod command_node_attrs;
 pub mod components;
-pub mod design_md;
 pub mod editor_ui_state;
 pub mod fills;
 pub mod geometry;
@@ -39,7 +39,6 @@ pub mod svg_import;
 pub mod svg_path_bounds;
 pub mod tool;
 pub mod ui_draft;
-pub mod uikit;
 pub mod variables;
 pub mod viewport;
 pub mod walkers;
@@ -48,6 +47,8 @@ pub mod walkers;
 mod command_attr_tests;
 #[cfg(test)]
 mod command_tests;
+#[cfg(test)]
+mod command_subtree_tests;
 #[cfg(test)]
 mod svg_import_tests;
 #[cfg(test)]
@@ -71,17 +72,18 @@ pub use color_picker::{hsv_to_rgb, parse_hex_rgb, rgb_to_hex, rgb_to_hsv};
 pub use command::{BatchInsertItem, EditorCommand, EffectField, NodeFlag, VariableScalarPayload};
 pub use components::{Component, ComponentLibrary};
 pub use design_md::parse_design_md;
+pub use jian_ops_schema::{DesignMdColor, DesignMdSpec, DesignMdTypography};
 pub use editor_ui_state::{
     BooleanOp, DesignMdRequest, EditorUiState, ExportFormat, FileAction, FileMenuChoice, FillType,
-    FlexLayout, GitCommitSummary, GitDiffTarget, GitDiffView, GitFileEntry, GitPanelAction,
-    GitPanelState, LayerContextMenuState, Locale, MergeConflictRow, MergeResolveFile,
-    MergeResolveState, PageRenameState, PropertyTab, RecentFile, ShapeChoice, ThemeMode,
-    UpdateStatus, VariableRowFocus,
+    FlexLayout,
+    GitCommitSummary, GitDiffTarget, GitDiffView, GitFileEntry, GitPanelAction, GitPanelState,
+    LayerContextMenuState, Locale, MergeConflictRow, MergeResolveFile, MergeResolveState,
+    PageRenameState, PropertyTab, RecentFile, ShapeChoice, ThemeMode, UpdateStatus,
+    VariableRowFocus,
 };
 pub use fills::{first_fill_type, first_solid_fill_hex, first_solid_stroke_hex, node_effects};
 pub use geometry::{aggregate_bounds, own_bounds, union_aggregate_bounds, DocRect};
 pub use history::{EditorSnapshot, History, HISTORY_CAP};
-pub use jian_ops_schema::{DesignMdColor, DesignMdSpec, DesignMdTypography};
 pub use node_id::NodeId;
 pub use pen_node_ext::PenNodeExt;
 pub use render_backend::*;
@@ -92,6 +94,5 @@ pub use ui_draft::{
     ColorPickerDrag, ColorPickerState, ColorTarget, LayerContextTarget, LayerRenameState,
     PropertyFocus, UiDraftState, VariableUiState,
 };
-pub use uikit::{builtin_kits, ComponentCategory, KitComponent, UIKit};
 pub use viewport::Viewport;
 pub use walkers::ReorderDirection;

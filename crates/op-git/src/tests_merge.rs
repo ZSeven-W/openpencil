@@ -134,10 +134,7 @@ fn merge_fast_forwards_then_reports_up_to_date() {
 
     // `main` has not moved since `base` → merging `feature` is a
     // fast-forward; merging it again is a no-op.
-    assert_eq!(
-        tr.repo.merge("feature").expect("merge"),
-        MergeOutcome::FastForward
-    );
+    assert_eq!(tr.repo.merge("feature").expect("merge"), MergeOutcome::FastForward);
     assert_eq!(
         tr.repo.merge("feature").expect("merge"),
         MergeOutcome::AlreadyUpToDate
@@ -163,10 +160,7 @@ fn merge_creates_a_commit_on_divergence() {
 
     // Diverged, but the two branches touch different files → a
     // clean merge commit, no conflict, no merge left in progress.
-    assert_eq!(
-        tr.repo.merge("feature").expect("merge"),
-        MergeOutcome::Merge
-    );
+    assert_eq!(tr.repo.merge("feature").expect("merge"), MergeOutcome::Merge);
     assert!(!tr.repo.is_merging());
 }
 
@@ -188,10 +182,7 @@ fn conflicting_merge_reports_conflict_then_aborts() {
     tr.repo.commit("main").unwrap();
 
     // Both branches changed `doc.op` → the merge conflicts.
-    assert_eq!(
-        tr.repo.merge("feature").expect("merge"),
-        MergeOutcome::Conflict
-    );
+    assert_eq!(tr.repo.merge("feature").expect("merge"), MergeOutcome::Conflict);
     assert!(tr.repo.is_merging());
     assert_eq!(
         tr.repo.conflicted_files().expect("conflicts"),
@@ -244,10 +235,7 @@ fn worktree_merge_fast_forwards_into_a_clean_live_tree() {
     tr.repo.switch_branch("main").unwrap();
 
     // `main` is a strict ancestor of `feature` → an exact ff.
-    let report = tr
-        .repo
-        .merge_branch_isolated("feature", |_, _, _, _| None)
-        .expect("merge");
+    let report = tr.repo.merge_branch_isolated("feature", |_, _, _, _| None).expect("merge");
     assert_eq!(report.outcome, MergeOutcome::FastForward);
     assert!(report.merged_commit.is_some());
     assert!(report.conflicts.is_empty());
@@ -276,10 +264,7 @@ fn worktree_merge_creates_a_commit_on_divergence() {
     tr.repo.commit("main").unwrap();
 
     // Diverged but touching different files → a clean merge commit.
-    let report = tr
-        .repo
-        .merge_branch_isolated("feature", |_, _, _, _| None)
-        .expect("merge");
+    let report = tr.repo.merge_branch_isolated("feature", |_, _, _, _| None).expect("merge");
     assert_eq!(report.outcome, MergeOutcome::Merge);
     assert!(report.merged_commit.is_some());
     assert!(report.conflicts.is_empty());
@@ -309,10 +294,7 @@ fn worktree_merge_quarantines_conflicts_and_keeps_the_live_tree_pristine() {
 
     // Both branches changed `doc.op` → the merge conflicts, but the
     // conflict is quarantined to the throwaway worktree.
-    let report = tr
-        .repo
-        .merge_branch_isolated("feature", |_, _, _, _| None)
-        .expect("merge");
+    let report = tr.repo.merge_branch_isolated("feature", |_, _, _, _| None).expect("merge");
     assert_eq!(report.outcome, MergeOutcome::Conflict);
     assert!(report.merged_commit.is_none());
     assert_eq!(report.conflicts.len(), 1);
@@ -345,10 +327,7 @@ fn worktree_merge_reports_up_to_date_for_an_ancestor() {
 
     // `feature` points at an ancestor of `main` → nothing to do, and
     // no worktree is created.
-    let report = tr
-        .repo
-        .merge_branch_isolated("feature", |_, _, _, _| None)
-        .expect("merge");
+    let report = tr.repo.merge_branch_isolated("feature", |_, _, _, _| None).expect("merge");
     assert_eq!(report.outcome, MergeOutcome::AlreadyUpToDate);
     assert!(report.merged_commit.is_none());
     assert_eq!(worktree_count(&tr.repo), 1);

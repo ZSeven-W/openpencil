@@ -43,8 +43,7 @@ fn initialize_response_includes_protocol_and_capabilities() {
 
 #[test]
 fn tools_list_response_includes_all_registered_tools() {
-    let state = op_editor_core::EditorState::new();
-    let r = tools_list_response("3", &state);
+    let r = tools_list_response("3");
     // Exact-count assertion: any tool added without
     // updating this test will trip the count first. Codex
     // stop-gate: previous `contains`-only checks would have
@@ -55,27 +54,6 @@ fn tools_list_response_includes_all_registered_tools() {
         82,
         "tools/list catalog count must match the registered tools — add the new tool to this test"
     );
-    // UIKit element tools are appended dynamically — one per
-    // built-in starter-kit component (6) — and ride alongside
-    // the static schemas in the tools/list response.
-    assert_eq!(
-        op_mcp::element_tools::element_tool_schemas(&state).len(),
-        6,
-        "starter kit ships 6 element tools — update this if the kit grows"
-    );
-    for name in [
-        "insert_btn_primary",
-        "insert_input_text",
-        "insert_card_basic",
-        "insert_nav_bar",
-        "insert_divider",
-        "insert_badge",
-    ] {
-        assert!(
-            r.contains(name),
-            "tools/list must include element tool {name}"
-        );
-    }
     for name in [
         "get_document_info",
         "get_selection",

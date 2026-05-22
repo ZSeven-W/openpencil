@@ -69,7 +69,10 @@ impl GitPanel<'_> {
     /// Largest valid vertical scroll offset for the open diff.
     pub fn diff_max_scroll(&self) -> usize {
         match &self.state.diff {
-            Some(view) => view.lines.len().saturating_sub(Self::diff_visible_lines()),
+            Some(view) => view
+                .lines
+                .len()
+                .saturating_sub(Self::diff_visible_lines()),
             None => 0,
         }
     }
@@ -137,19 +140,10 @@ impl GitPanel<'_> {
 
         // Header — title + ◀ / ▶ / ▲ / ▼ / ✕ buttons.
         let title = truncate(
-            &self
-                .t("git.panel.diffTitle")
-                .replace("{{title}}", &view.title),
+            &self.t("git.panel.diffTitle").replace("{{title}}", &view.title),
             56,
         );
-        self.text(
-            cx,
-            &title,
-            left,
-            top + HEADER_BASELINE,
-            13.0,
-            self.theme.foreground,
-        );
+        self.text(cx, &title, left, top + HEADER_BASELINE, 13.0, self.theme.foreground);
         let [bl, br, up, down, close] = Self::diff_header_buttons(rect);
         self.paint_glyph_button(cx, bl, "◀");
         self.paint_glyph_button(cx, br, "▶");
@@ -207,8 +201,7 @@ impl GitPanel<'_> {
         let col = if h_scroll == 0 {
             String::new()
         } else {
-            self.t("git.panel.diffCol")
-                .replace("{{n}}", &(h_scroll + 1).to_string())
+            self.t("git.panel.diffCol").replace("{{n}}", &(h_scroll + 1).to_string())
         };
         self.text(
             cx,
@@ -236,9 +229,7 @@ impl GitPanel<'_> {
             return None;
         }
         let partner = if line.starts_with('+') {
-            lines
-                .get(index.wrapping_sub(1))
-                .filter(|p| p.starts_with('-'))
+            lines.get(index.wrapping_sub(1)).filter(|p| p.starts_with('-'))
         } else if line.starts_with('-') {
             lines.get(index + 1).filter(|p| p.starts_with('+'))
         } else {
@@ -283,19 +274,9 @@ impl GitPanel<'_> {
         let x0 = origin.x + (vis_start - h_scroll) as f32 * CHAR_W;
         let w = (vis_end - vis_start) as f32 * CHAR_W;
         let tint = if line.starts_with('+') {
-            Color {
-                r: 0.32,
-                g: 0.73,
-                b: 0.42,
-                a: 0.22,
-            }
+            Color { r: 0.32, g: 0.73, b: 0.42, a: 0.22 }
         } else {
-            Color {
-                r: 0.92,
-                g: 0.38,
-                b: 0.38,
-                a: 0.22,
-            }
+            Color { r: 0.92, g: 0.38, b: 0.38, a: 0.22 }
         };
         cx.backend.fill_rect(
             Rect {
@@ -308,24 +289,9 @@ impl GitPanel<'_> {
 
     /// Per-line colour for a unified-diff line.
     fn diff_line_color(&self, line: &str) -> Color {
-        let green = Color {
-            r: 0.32,
-            g: 0.73,
-            b: 0.42,
-            a: 1.0,
-        };
-        let red = Color {
-            r: 0.92,
-            g: 0.38,
-            b: 0.38,
-            a: 1.0,
-        };
-        let blue = Color {
-            r: 0.38,
-            g: 0.63,
-            b: 0.93,
-            a: 1.0,
-        };
+        let green = Color { r: 0.32, g: 0.73, b: 0.42, a: 1.0 };
+        let red = Color { r: 0.92, g: 0.38, b: 0.38, a: 1.0 };
+        let blue = Color { r: 0.38, g: 0.63, b: 0.93, a: 1.0 };
         if line.starts_with("@@") {
             blue
         } else if line.starts_with("+++")
@@ -354,8 +320,7 @@ impl GitPanel<'_> {
     /// and the branch-row "merge into current" button.
     pub(super) fn paint_glyph_button(&self, cx: &mut PaintCx<'_>, rect: Rect, glyph: &str) {
         cx.backend.fill_round_rect(rect, 5.0, self.theme.muted);
-        cx.backend
-            .stroke_round_rect(rect, 5.0, self.theme.border, 1.0);
+        cx.backend.stroke_round_rect(rect, 5.0, self.theme.border, 1.0);
         let baseline = rect.origin.y + rect.size.y / 2.0 + 4.0;
         self.text(
             cx,

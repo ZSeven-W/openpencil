@@ -23,7 +23,6 @@ path = "src/main.rs"
 [package.metadata.bundle]
 name = "OpenPencil"
 identifier = "com.zseven-w.openpencil"
-icon = ["assets/icon.icns"]
 
 [[package.metadata.bundle.file_associations]]
 ext = "op"
@@ -72,9 +71,6 @@ op-acp = { path = "../op-acp" }
 # `persistence.rs` keeps only the desktop-only `rfd` Save/Open + error
 # dialogs.
 op-pen-loader = { path = "../op-pen-loader" }
-# Binary `.fig` importer — `persistence.rs` runs `parse_fig_binary`
-# to turn a Figma file into a canonical `PenDocument`.
-op-figma = { path = "../op-figma" }
 # In-app Git — `git_session.rs` binds an `op_git::GitRepo` to the
 # currently-open document so the Git panel can show branch / status
 # / history and drive commits.
@@ -106,12 +102,12 @@ skia-safe = { version = "0.97.0", default-features = false, features = [
   "gl",
   "pdf",
 ] }
-# `casement` — ZSeven-W's winit fork (vendored as a submodule under
-# `vendor/casement`). It adds `winit::platform::macos::drain_opened_file_urls`,
-# the macOS open-documents Apple-event hook upstream winit lacks. The
+# `casement` — ZSeven-W's winit fork (sibling repo, local path for
+# now). It adds `winit::platform::macos::drain_opened_file_urls`, the
+# macOS open-documents Apple-event hook upstream winit lacks. The
 # `package` key keeps the `winit` import name, so all `use winit::…`
 # stays unchanged.
-winit = { package = "casement", path = "../../vendor/casement", default-features = false, features = [
+winit = { package = "casement", path = "../../../winit", default-features = false, features = [
   "x11",
   "wayland",
   "wayland-csd-adwaita",
@@ -125,10 +121,6 @@ winit = { package = "casement", path = "../../vendor/casement", default-features
 serde = { workspace = true }
 serde_json = { workspace = true }
 rfd = "0.14"
-# OS clipboard for the AI chat input's Cmd+C / Cmd+V / Cmd+X.
-# arboard wraps NSPasteboard (macOS), the Win32 clipboard, and
-# X11 / Wayland on Linux — one cross-platform text-clipboard API.
-arboard = "3"
 # Base64-encodes chat image attachments for providers that take
 # inline image content blocks (Claude SDK) or a base64 body field
 # (HTTP-server transport). Same pure-Rust crate op-figma uses.
@@ -204,22 +196,3 @@ futures = { version = "0.3", default-features = false, features = ["std"] }
 # false` drops the Linux-only `gtk` / `libxdo` feature deps.
 [target.'cfg(any(target_os = "macos", target_os = "windows"))'.dependencies]
 muda = { version = "0.17", default-features = false }
-
-# macOS-only — set the running app's Dock icon + process name at
-# startup so the dev (non-bundled) binary shows "OpenPencil" + the
-# brand icon instead of the bare executable name. Pinned to the
-# objc2 0.2 line winit / casement already use.
-[target.'cfg(target_os = "macos")'.dependencies]
-objc2 = "0.5"
-objc2-app-kit = { version = "0.2", default-features = false, features = [
-  "std",
-  "NSApplication",
-  "NSImage",
-  "NSResponder",
-] }
-objc2-foundation = { version = "0.2", default-features = false, features = [
-  "std",
-  "NSData",
-  "NSString",
-  "NSProcessInfo",
-] }

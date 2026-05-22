@@ -38,7 +38,9 @@ impl GitRepo {
             return Ok(Vec::new());
         }
         let limit_arg = limit.to_string();
-        let format = format!("--pretty=format:%H{SEP}%h{SEP}%an{SEP}%ae{SEP}%at{SEP}%s");
+        let format = format!(
+            "--pretty=format:%H{SEP}%h{SEP}%an{SEP}%ae{SEP}%at{SEP}%s"
+        );
         let raw = self.run(&["log", "-n", &limit_arg, &format])?;
         Ok(parse_log(&raw))
     }

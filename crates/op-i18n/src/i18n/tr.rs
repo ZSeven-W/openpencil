@@ -55,8 +55,6 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "topbar.closeConfirmDetail" => "Kaydetmezseniz değişiklikleriniz kaybolacaktır.",
         "topbar.dontSave" => "Kaydetme",
         "topbar.agentsAndMcp" => "Ajanlar ve MCP",
-        "topbar.agentSingular" => "ajan",
-        "topbar.agentPlural" => "ajan",
         "topbar.setupAgentsMcp" => "Ajanları ve MCP Kur",
         "topbar.connected" => "bağlı",
         "topbar.agentStatus" => "{{agents}} ajan{{agentSuffix}} · {{mcp}} MCP",
@@ -546,7 +544,6 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "a11y.layerContextMenu" => "Katman bağlam menüsü",
         "a11y.aiChat" => "Yapay zekâ sohbeti",
         "designMd.emptyHint" => "Bir tasarım özeti eklemek için bir .md dosyası içe aktarın",
-        "componentBrowser.empty" => "Bileşen bulunamadı",
         _ => return super::tr_git::lookup(key),
     })
 }

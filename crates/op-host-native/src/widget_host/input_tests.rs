@@ -50,7 +50,7 @@ fn escape_closes_one_overlay_per_press_in_priority_order() {
     host.editor_state_mut().editor_ui.fill_type_picker_open = true;
     host.editor_state_mut().chat.focused = true;
     host.editor_state_mut()
-        .set_single_selection(NodeId::new("n10"));
+        .set_single_selection(NodeId::new("n11"));
 
     // 1. Property focus clears first.
     assert!(host.apply_escape());
@@ -92,21 +92,21 @@ fn backspace_with_property_draft_does_not_delete_selected() {
     // char from the draft, not delete the selected node.
     let mut host = WidgetHostNative::new();
     host.editor_state_mut()
-        .set_single_selection(NodeId::new("n10"));
+        .set_single_selection(NodeId::new("n11"));
     host.editor_state_mut().ui.property_focus = Some(PropertyFocus::PositionX);
     host.editor_state_mut().ui.property_input_draft = "123".to_string();
 
     assert!(host.apply_backspace());
     assert_eq!(host.editor_state().ui.property_input_draft, "12");
     // Selection must be untouched.
-    assert_eq!(host.editor_state().selection.anchor, NodeId::new("n10"));
+    assert_eq!(host.editor_state().selection.anchor, NodeId::new("n11"));
 }
 
 #[test]
 fn backspace_without_focus_deletes_selected() {
     let mut host = WidgetHostNative::new();
     host.editor_state_mut()
-        .set_single_selection(NodeId::new("n10"));
+        .set_single_selection(NodeId::new("n11"));
     host.editor_state_mut().ui.property_focus = None;
     host.editor_state_mut().chat.focused = false;
 

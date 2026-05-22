@@ -55,8 +55,6 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "topbar.closeConfirmDetail" => "यदि आप सहेजते नहीं हैं तो आपके परिवर्तन खो जाएंगे।",
         "topbar.dontSave" => "सहेजें नहीं",
         "topbar.agentsAndMcp" => "एजेंट और MCP",
-        "topbar.agentSingular" => "एजेंट",
-        "topbar.agentPlural" => "एजेंट",
         "topbar.setupAgentsMcp" => "एजेंट और MCP सेटअप करें",
         "topbar.connected" => "कनेक्टेड",
         "topbar.agentStatus" => "{{agents}} एजेंट{{agentSuffix}} · {{mcp}} MCP",
@@ -546,7 +544,6 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "a11y.layerContextMenu" => "लेयर संदर्भ मेन्यू",
         "a11y.aiChat" => "AI चैट",
         "designMd.emptyHint" => "डिज़ाइन ब्रीफ़ संलग्न करने के लिए .md फ़ाइल आयात करें",
-        "componentBrowser.empty" => "कोई कंपोनेंट नहीं मिला",
         _ => return super::hi_git::lookup(key),
     })
 }

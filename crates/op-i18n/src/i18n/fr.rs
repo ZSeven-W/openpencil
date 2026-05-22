@@ -55,8 +55,6 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "topbar.closeConfirmDetail" => "Vos modifications seront perdues si vous ne les enregistrez pas.",
         "topbar.dontSave" => "Ne pas enregistrer",
         "topbar.agentsAndMcp" => "Agents & MCP",
-        "topbar.agentSingular" => "agent",
-        "topbar.agentPlural" => "agents",
         "topbar.setupAgentsMcp" => "Configurer Agents & MCP",
         "topbar.connected" => "connecté",
         "topbar.agentStatus" => "{{agents}} agent{{agentSuffix}} · {{mcp}} MCP",
@@ -546,7 +544,6 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "a11y.layerContextMenu" => "Menu contextuel du calque",
         "a11y.aiChat" => "Chat IA",
         "designMd.emptyHint" => "Importez un fichier .md pour joindre un brief de design",
-        "componentBrowser.empty" => "Aucun composant trouvé",
         _ => return super::fr_git::lookup(key),
     })
 }

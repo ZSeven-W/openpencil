@@ -58,8 +58,8 @@ impl AuthStore {
     /// The per-user credential store
     /// (`<config>/openpencil/git-auth.json`).
     pub fn user() -> Result<AuthStore, GitError> {
-        let base =
-            dirs::config_dir().ok_or_else(|| GitError::Io("no user config directory".into()))?;
+        let base = dirs::config_dir()
+            .ok_or_else(|| GitError::Io("no user config directory".into()))?;
         Ok(AuthStore {
             path: base.join("openpencil").join("git-auth.json"),
         })

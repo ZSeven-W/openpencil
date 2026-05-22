@@ -7,7 +7,3 @@
 [submodule "vendor/jian"]
 	path = vendor/jian
 	url = git@github.com:ZSeven-W/jian.git
-[submodule "vendor/casement"]
-	path = vendor/casement
-	url = https://github.com/ZSeven-W/casement.git
-	branch = op-file-open
