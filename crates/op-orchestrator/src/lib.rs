@@ -8,6 +8,7 @@
 //! Plan C 在 `run` 模块接出四阶段主轴。
 
 pub mod compact_prompt;
+pub mod compact_skills;
 pub mod design_md_policy;
 pub mod design_type;
 pub mod intent;

@@ -116,7 +116,8 @@ impl Orchestrator {
                 id: subtask.id.clone(),
                 label: subtask.label.clone(),
             });
-            let outcome = run_subtask(subtask, &plan, &request, llm, sink, abort).await;
+            let outcome =
+                run_subtask(subtask, &plan, &request, llm, sink, abort, false, false).await;
             let zero = outcome.node_count == 0;
             let node_count = outcome.node_count;
             let err_msg = outcome.error.clone();
