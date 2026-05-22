@@ -22,6 +22,7 @@ mod git_host;
 mod git_jobs;
 mod git_session;
 mod keyboard_input;
+mod macos_app;
 mod mcp_serve;
 mod menu;
 mod model_discovery;
@@ -761,6 +762,8 @@ fn main() {
         }
     };
     event_loop.set_control_flow(ControlFlow::Wait);
+    // Give the non-bundled binary a proper Dock name + icon.
+    macos_app::apply();
     let mut app = DesktopApp::new(initial_file);
     if let Err(err) = event_loop.run_app(&mut app) {
         eprintln!("openpencil-desktop: run_app exited with error: {err}");
