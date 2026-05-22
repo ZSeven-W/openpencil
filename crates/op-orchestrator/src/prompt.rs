@@ -191,11 +191,31 @@ pub fn build_subagent_prompt(
     system_prompt.push_str("\n\n");
     system_prompt.push_str(NODE_FORMAT);
 
-    let user_prompt = format!(
+    let mut user_prompt = format!(
         "Overall design: {}\n\nGenerate the section \"{}\" \
          (区块 id 前缀 `{}-`). Target region: {:.0}x{:.0} px.\nPalette: (default)",
         req.prompt, subtask.label, subtask.id_prefix, subtask.region.width, subtask.region.height,
     );
+
+    // Port of orchestrator-sub-agent.ts:739-748 — APPEND MODE prompt injection.
+    if let Some(labels) = subtask.existing_section_labels.as_ref() {
+        if !labels.is_empty() {
+            let existing = labels
+                .iter()
+                .map(|n| format!("\"{n}\""))
+                .collect::<Vec<_>>()
+                .join(", ");
+            user_prompt.push_str(&format!(
+                "\n\nAPPEND MODE: The page already contains these sibling sections (read-only, already on canvas): {existing}.\n\
+- Your root frame will be inserted as a NEW sibling at the end of that list.\n\
+- Do NOT re-emit any of the sections listed above. Do NOT emit any status bar or system chrome — that is also already on the page.\n\
+- Do NOT wrap your output in a phone mockup or a full-page container.\n\
+- Internal headings/titles within YOUR new section are fine — only the top-level sibling sections above are off-limits.\n\
+- Match the visual style (colors, cornerRadius, padding, gap) already established by those existing siblings.\n\
+- Output ONLY this one new section — a single root frame with its content."
+            ));
+        }
+    }
 
     // Port of getSubAgentTimeouts(preparedPrompt.originalLength, model):
     // `originalLength` = normalized user prompt length; here `req.prompt.len()`
@@ -609,6 +629,91 @@ mod tests {
         assert!(
             cr.first_text_timeout.unwrap() <= std::time::Duration::from_millis(75_000),
             "Basic tier first_text_timeout should be clamped to ≤ 75s"
+        );
+    }
+
+    // ── B1: APPEND MODE prompt injection ─────────────────────────────────────
+
+    /// When existing_section_labels is Some(non-empty), the user prompt must
+    /// contain the "APPEND MODE:" block with each label quoted.
+    #[test]
+    fn subagent_prompt_append_mode_injected_when_labels_present() {
+        let st = crate::plan::Subtask {
+            id: "pricing".into(),
+            label: "Pricing".into(),
+            region: crate::plan::Region {
+                width: 1200.0,
+                height: 400.0,
+            },
+            id_prefix: "pricing".into(),
+            parent_frame_id: None,
+            elements: None,
+            screen: None,
+            generated_root_id: None,
+            existing_section_labels: Some(vec!["Hero".into(), "Pricing".into()]),
+        };
+        let cr = build_subagent_prompt(&st, &plan(), &req(), AbortFlag::new(), false, false);
+        assert!(
+            cr.user_prompt.contains("APPEND MODE"),
+            "user_prompt must contain APPEND MODE block"
+        );
+        assert!(
+            cr.user_prompt.contains(r#""Hero""#),
+            "user_prompt must contain quoted label \"Hero\""
+        );
+        assert!(
+            cr.user_prompt.contains(r#""Pricing""#),
+            "user_prompt must contain quoted label \"Pricing\""
+        );
+    }
+
+    /// When existing_section_labels is None, the user prompt must NOT contain
+    /// the "APPEND MODE:" block.
+    #[test]
+    fn subagent_prompt_no_append_mode_when_labels_none() {
+        let st = crate::plan::Subtask {
+            id: "hero".into(),
+            label: "Hero".into(),
+            region: crate::plan::Region {
+                width: 1200.0,
+                height: 400.0,
+            },
+            id_prefix: "hero".into(),
+            parent_frame_id: None,
+            elements: None,
+            screen: None,
+            generated_root_id: None,
+            existing_section_labels: None,
+        };
+        let cr = build_subagent_prompt(&st, &plan(), &req(), AbortFlag::new(), false, false);
+        assert!(
+            !cr.user_prompt.contains("APPEND MODE"),
+            "user_prompt must NOT contain APPEND MODE block when labels is None"
+        );
+    }
+
+    /// When existing_section_labels is Some(empty vec), the user prompt must
+    /// NOT contain the "APPEND MODE:" block.
+    #[test]
+    fn subagent_prompt_no_append_mode_when_labels_empty() {
+        let st = crate::plan::Subtask {
+            id: "hero".into(),
+            label: "Hero".into(),
+            region: crate::plan::Region {
+                width: 1200.0,
+                height: 400.0,
+            },
+            id_prefix: "hero".into(),
+            parent_frame_id: None,
+            elements: None,
+            screen: None,
+            generated_root_id: None,
+            existing_section_labels: Some(vec![]),
+        };
+        let cr = build_subagent_prompt(&st, &plan(), &req(), AbortFlag::new(), false, false);
+        assert!(
+            !cr.user_prompt.contains("APPEND MODE"),
+            "user_prompt must NOT contain APPEND MODE block when labels is empty"
         );
     }
 }
