@@ -5,6 +5,7 @@
 #![allow(dead_code)]
 
 use crate::design_type::contains_word;
+use op_ai_skills::style_guide::{style_guide_registry, ParsedStyleGuide, Platform};
 
 /// `lower` 含 `words` 任一(按 `contains_word`:ASCII 词边界 / CJK 子串)。
 fn any(lower: &str, words: &[&str]) -> bool {
@@ -248,6 +249,57 @@ pub(crate) fn infer_tags_from_prompt(prompt: &str) -> Vec<String> {
     }
 }
 
+/// industry tag —— 命中得 +30(其余 tag +10)。
+const INDUSTRY_TAGS: &[&str] = &[
+    "warm-tones",
+    "wellness",
+    "fintech",
+    "developer",
+    "monospace",
+];
+
+/// 单个 guide 对 `(tags, platform)` 的加权分 —— port of
+/// `styleGuidePromptScore`。industry tag +30 / 其余命中 +10 /
+/// platform 不符 -30。
+pub(crate) fn style_guide_prompt_score(
+    guide: &ParsedStyleGuide,
+    tags: &[String],
+    platform: Platform,
+) -> i32 {
+    let mut score = 0;
+    for t in tags {
+        if guide.tags.iter().any(|gt| gt == t) {
+            score += if INDUSTRY_TAGS.contains(&t.as_str()) {
+                30
+            } else {
+                10
+            };
+        }
+    }
+    if guide.platform != platform {
+        score -= 30;
+    }
+    score
+}
+
+/// 对全 catalog 按加权分降序排名(不过滤)—— port of
+/// `rankStyleGuidesForPrompt`。平局:platform-match 优先,再 name 升序。
+pub(crate) fn rank_style_guides_for_prompt(
+    tags: &[String],
+    platform: Platform,
+) -> Vec<&'static ParsedStyleGuide> {
+    let mut scored: Vec<(&ParsedStyleGuide, i32)> = style_guide_registry()
+        .iter()
+        .map(|g| (g, style_guide_prompt_score(g, tags, platform)))
+        .collect();
+    scored.sort_by(|(a, sa), (b, sb)| {
+        sb.cmp(sa)
+            .then_with(|| (b.platform == platform).cmp(&(a.platform == platform)))
+            .then_with(|| a.name.cmp(&b.name))
+    });
+    scored.into_iter().map(|(g, _)| g).collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -295,5 +347,34 @@ mod tests {
         // "gift cards" (plural) is apple-wallet context → must NOT push fintech.
         let t = infer_tags_from_prompt("a wallet app for gift cards");
         assert!(!t.contains(&"fintech".to_string()));
+    }
+
+    #[test]
+    fn rank_ranks_full_registry_no_filter() {
+        let ranked = rank_style_guides_for_prompt(&["fintech".to_string()], Platform::Webapp);
+        // 排名不过滤 —— 全 catalog 都在
+        assert_eq!(ranked.len(), style_guide_registry().len());
+    }
+
+    #[test]
+    fn rank_industry_tag_outweighs_plain_tag() {
+        // fintech(industry,+30)的 guide 应排在只命中普通 tag(+10)的前面
+        let ranked = rank_style_guides_for_prompt(
+            &["fintech".to_string(), "minimal".to_string()],
+            Platform::Webapp,
+        );
+        assert!(!ranked.is_empty());
+        // 首个的分数 >= 其后任意(降序)
+        let s0 = style_guide_prompt_score(
+            ranked[0],
+            &["fintech".into(), "minimal".into()],
+            Platform::Webapp,
+        );
+        let s1 = style_guide_prompt_score(
+            ranked[ranked.len() - 1],
+            &["fintech".into(), "minimal".into()],
+            Platform::Webapp,
+        );
+        assert!(s0 >= s1);
     }
 }
