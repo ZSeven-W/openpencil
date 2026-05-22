@@ -7,7 +7,7 @@
 //!
 //! # Concurrent (multi-root) scaffold
 //!
-//! [`build_scaffold_concurrent`] handles the N-root-frame concurrent path
+//! [`build_scaffold_concurrent_mobile`] handles the N-root-frame concurrent path
 //! (S3b-2 Task A2). One root frame per [`ScreenGroup`], laid out
 //! left-to-right with gap 100. Returns `(cmds, root_ids, baselines)` where
 //! `baselines[i]` is the scaffold descendant count for root `i` (0 for
@@ -33,8 +33,7 @@ const CONCURRENT_MIN_HEIGHT: f64 = 320.0;
 /// Port of `plan.rootFrame.height || 812` in `orchestrator.ts:882`.
 const MOBILE_DEFAULT_HEIGHT: f64 = 812.0;
 
-/// Return type of [`build_scaffold_concurrent`] /
-/// [`build_scaffold_concurrent_mobile`]:
+/// Return type of [`build_scaffold_concurrent_mobile`]:
 /// `(commands, root_frame_ids, per_root_scaffold_baselines)`.
 ///
 /// - `Vec<EditorCommand>` — one `InsertSubtree` per screen group.
@@ -152,8 +151,10 @@ pub fn build_scaffold(
 /// * `groups` — screen groups from [`crate::concurrent::group_subtasks_by_screen`].
 ///
 /// # Returns
-/// See [`ConcurrentScaffoldResult`]:
-/// `(cmds, root_ids, baselines)`.
+/// Mobile-aware variant; exposed as a separate entry point so tests can drive
+/// the mobile path without going through `plan_normalize`.
+///
+/// Pass `is_mobile = false` for the desktop (non-mobile) path.
 ///
 /// # Side effect on plan subtasks
 /// The caller is responsible for assigning `parent_frame_id` on each subtask
@@ -161,19 +162,6 @@ pub fn build_scaffold(
 /// returns the mapping data needed for the caller to do so.
 ///
 /// Callers land in S3b-2 Task C2 (`run.rs`).
-#[allow(dead_code)]
-pub(crate) fn build_scaffold_concurrent(
-    plan: &OrchestratorPlan,
-    groups: &[ScreenGroup],
-) -> Result<ConcurrentScaffoldResult, String> {
-    build_scaffold_concurrent_inner(plan, groups, false)
-}
-
-/// Mobile-aware variant; exposed as a separate entry point so tests can drive
-/// the mobile path without going through `plan_normalize`.
-///
-/// Callers land in S3b-2 Task C2 (`run.rs`).
-#[allow(dead_code)]
 pub(crate) fn build_scaffold_concurrent_mobile(
     plan: &OrchestratorPlan,
     groups: &[ScreenGroup],
@@ -182,7 +170,6 @@ pub(crate) fn build_scaffold_concurrent_mobile(
     build_scaffold_concurrent_inner(plan, groups, is_mobile)
 }
 
-#[allow(dead_code)]
 fn build_scaffold_concurrent_inner(
     plan: &OrchestratorPlan,
     groups: &[ScreenGroup],
@@ -374,7 +361,7 @@ mod tests {
             },
         ];
         let (cmds, root_ids, baselines) =
-            build_scaffold_concurrent(&plan, &groups).expect("concurrent scaffold");
+            build_scaffold_concurrent_mobile(&plan, &groups, false).expect("concurrent scaffold");
         assert_eq!(cmds.len(), 3, "expected 3 InsertSubtree commands");
         assert_eq!(root_ids.len(), 3);
         assert_eq!(baselines.len(), 3);
@@ -407,7 +394,8 @@ mod tests {
                 indices: vec![2],
             },
         ];
-        let (cmds, _, _) = build_scaffold_concurrent(&plan, &groups).expect("scaffold");
+        let (cmds, _, _) =
+            build_scaffold_concurrent_mobile(&plan, &groups, false).expect("scaffold");
         let xs: Vec<f64> = cmds
             .iter()
             .map(|cmd| match cmd {
@@ -441,7 +429,8 @@ mod tests {
                 indices: vec![1],
             },
         ];
-        let (_, root_ids, _) = build_scaffold_concurrent(&plan, &groups).expect("scaffold");
+        let (_, root_ids, _) =
+            build_scaffold_concurrent_mobile(&plan, &groups, false).expect("scaffold");
         assert_eq!(root_ids.len(), 2);
         assert_ne!(root_ids[0], root_ids[1], "root IDs must be distinct");
     }
@@ -467,7 +456,8 @@ mod tests {
                 indices: vec![2],
             },
         ];
-        let (cmds, _, _) = build_scaffold_concurrent(&plan, &groups).expect("scaffold");
+        let (cmds, _, _) =
+            build_scaffold_concurrent_mobile(&plan, &groups, false).expect("scaffold");
         let heights: Vec<f64> = cmds
             .iter()
             .map(|cmd| match cmd {
@@ -574,7 +564,8 @@ mod tests {
                 indices: vec![2],
             },
         ];
-        let (_, _, baselines) = build_scaffold_concurrent(&plan, &groups).expect("scaffold");
+        let (_, _, baselines) =
+            build_scaffold_concurrent_mobile(&plan, &groups, false).expect("scaffold");
         assert_eq!(
             baselines,
             vec![0, 0, 0],
@@ -600,7 +591,8 @@ mod tests {
                 indices: vec![1],
             },
         ];
-        let (cmds, _, _) = build_scaffold_concurrent(&plan, &groups).expect("scaffold");
+        let (cmds, _, _) =
+            build_scaffold_concurrent_mobile(&plan, &groups, false).expect("scaffold");
         let names: Vec<String> = cmds
             .iter()
             .map(|cmd| match cmd {
@@ -632,7 +624,8 @@ mod tests {
                 indices: vec![1],
             },
         ];
-        let (cmds, _, _) = build_scaffold_concurrent(&plan, &groups).expect("scaffold");
+        let (cmds, _, _) =
+            build_scaffold_concurrent_mobile(&plan, &groups, false).expect("scaffold");
         for cmd in &cmds {
             match cmd {
                 EditorCommand::InsertSubtree { parent_id, .. } => {
@@ -650,7 +643,7 @@ mod tests {
     #[test]
     fn concurrent_scaffold_empty_groups_returns_empty() {
         let (cmds, root_ids, baselines) =
-            build_scaffold_concurrent(&plan(), &[]).expect("scaffold");
+            build_scaffold_concurrent_mobile(&plan(), &[], false).expect("scaffold");
         assert!(cmds.is_empty());
         assert!(root_ids.is_empty());
         assert!(baselines.is_empty());

@@ -39,10 +39,6 @@
 //!     commands into the real `&mut DocSink` in subtask-plan-index order
 //!     (deterministic)
 //!
-//! Callers for C1/C2 land in later S3b-2 tasks; scaffolding symbols are allowed
-//! to be unused until then.
-#![allow(dead_code)]
-
 use crate::plan::{OrchestratorPlan, Subtask};
 use crate::retry::is_non_retryable;
 use crate::subagent::run_subtask;
