@@ -1,7 +1,9 @@
-//! S3b-2 Tasks A1 + B1: concurrency decision + screen grouping + worker.
+//! S3b-2 Tasks A1 + B1 + B2: concurrency decision + screen grouping + worker
+//! + concurrent executor.
 //!
-//! Port of `orchestrator.ts:780-810` (Task A1) and
-//! `orchestrator-sub-agent.ts:248-312` (Task B1 worker body).
+//! Port of `orchestrator.ts:780-810` (Task A1),
+//! `orchestrator-sub-agent.ts:248-312` (Task B1 worker body), and
+//! `orchestrator-sub-agent.ts:227-327` (Task B2 concurrent executor).
 //!
 //! ## Task A1
 //! - `DesignRequest.concurrency` (added in `types.rs`)
@@ -21,14 +23,35 @@
 //!   in order using the 2-attempt concurrent retry ladder (vs the sequential
 //!   path's 3-attempt tier-gated ladder in `run.rs`).
 //!
-//! Callers land in later S3b-2 tasks; scaffolding symbols are allowed to be unused.
+//! ## Task B2
+//! - `run_concurrent` — the concurrent executor:
+//!   - a shared `Arc<tokio::sync::Semaphore>` (permits = `effective_concurrency`)
+//!     caps in-flight subtask LLM calls; RAII permit drop replaces TS `releaseSlot`
+//!   - N worker futures (one per screen group, each owning its own `BufferDocSink`)
+//!     driven together by `futures::future::join_all` on a SINGLE task (no
+//!     `tokio::spawn` — avoids `Send` bounds; LLM I/O is offloaded in
+//!     `LlmClient::call`).  `join_all` polls every worker on each wake, so
+//!     different groups' LLM calls genuinely overlap — the concurrent equivalent
+//!     of JS `Promise.all(workers)`.
+//!   - progress fan-in: workers send `Progress` on an mpsc channel; driver drains
+//!     + forwards to `on_progress` after `join_all`
+//!   - serialized replay: after `join_all`, replays every worker's buffered
+//!     commands into the real `&mut DocSink` in subtask-plan-index order
+//!     (deterministic)
+//!
+//! Callers for C1/C2 land in later S3b-2 tasks; scaffolding symbols are allowed
+//! to be unused until then.
 #![allow(dead_code)]
 
 use crate::plan::{OrchestratorPlan, Subtask};
 use crate::retry::is_non_retryable;
 use crate::subagent::run_subtask;
 use crate::types::{AbortFlag, DesignRequest, DocSink, LlmClient, Progress, SubtaskOutcome};
+use futures::future::join_all;
 use op_editor_core::{EditorCommand, EditorState};
+use std::sync::Arc;
+use tokio::sync::mpsc;
+use tokio::sync::Semaphore;
 
 /// A group of subtask indices that share the same screen.
 /// `screen` is the screen name; `indices` are into the plan's `subtasks` slice.
@@ -121,7 +144,7 @@ pub(crate) fn effective_concurrency(concurrency: u32, screen_group_count: usize)
 /// be taken just before the concurrent phase starts (after the N-root scaffold
 /// is applied to the real sink) — that is Task B2's responsibility.
 ///
-/// After `join_all` the orchestrator replays `commands` into the real
+/// After all workers finish the orchestrator replays `commands` into the real
 /// `DocSink` in subtask-plan-index order (Task B2: serialized replay).
 pub(crate) struct BufferDocSink {
     /// Snapshot of `EditorState` taken before the concurrent phase.
@@ -167,12 +190,30 @@ impl DocSink for BufferDocSink {
     }
 }
 
-// ── Task B1: concurrent screen-group worker fn ────────────────────────────────
+// ── Task B1/B2: concurrent screen-group worker fn ─────────────────────────────
+
+/// The output of one screen-group worker: its private command buffer plus the
+/// per-subtask outcomes (each tagged with its plan index for serialized replay).
+pub(crate) struct WorkerResult {
+    /// The worker's private buffer — replayed into the real sink after `join_all`.
+    pub buffer: BufferDocSink,
+    /// `(plan_index, outcome)` for every subtask the worker ran, in `indices` order.
+    pub outcomes: Vec<(usize, SubtaskOutcome)>,
+}
 
 /// Runs all subtasks for one screen group using the **2-attempt concurrent
 /// retry ladder** (vs the sequential path's 3-attempt tier-gated ladder).
 ///
 /// Port of `orchestrator-sub-agent.ts:248-312`.
+///
+/// ## Owned buffer (genuine concurrency)
+/// The worker **owns** its [`BufferDocSink`] by value (passed in, returned in
+/// [`WorkerResult`]).  `run_subtask` writes into this stack-local buffer via
+/// `&mut` — the `&mut` is to the worker's *own* buffer, never a shared `Vec`
+/// slot.  This is what lets [`run_concurrent`] drive N worker futures with
+/// `futures::future::join_all` without the borrow checker rejecting aliased
+/// `&mut` borrows: each future owns its buffer, so there is no shared mutable
+/// state.
 ///
 /// ## Retry ladder
 /// | Attempt | `reduced_complexity` | `minimal_skills` |
@@ -182,30 +223,30 @@ impl DocSink for BufferDocSink {
 ///
 /// Skips the sequential path's tier-gated middle attempt.
 ///
+/// ## Semaphore
+/// Each subtask acquires one permit from `semaphore` before the LLM call.
+/// RAII permit drop (when the block completes) replaces TS `releaseSlot`.
+///
 /// ## Retryable-failure gate (identical to sequential path)
 /// `error.is_some() && node_count == 0 && !abort.is_set() && !is_non_retryable(&err)`
 ///
 /// Partial results (`node_count > 0`) are **never** retried.
 ///
 /// ## Progress
-/// `progress_fn` is called with `SubtaskStarted` before each subtask and
-/// `SubtaskDone` / `SubtaskFailed` after.  In Task B2 this will be wired to
-/// an `mpsc::UnboundedSender` so multiple workers can fan-in; for B1 a plain
-/// `&mut dyn FnMut(Progress)` suffices.
-///
-/// ## Return value
-/// A `Vec<SubtaskOutcome>` with one entry per subtask index in `group.indices`,
-/// in the same order as `group.indices` (i.e. plan order within this screen).
+/// Progress events are sent via `progress_tx` (mpsc channel).
+/// The `run_concurrent` driver drains the receiver and forwards to `on_progress`.
+#[allow(clippy::too_many_arguments)]
 pub(crate) async fn run_screen_group_worker(
     group: &ScreenGroup,
     plan: &OrchestratorPlan,
     request: &DesignRequest,
     llm: &dyn LlmClient,
     abort: &AbortFlag,
-    sink: &mut BufferDocSink,
-    progress_fn: &mut dyn FnMut(Progress),
-) -> Vec<SubtaskOutcome> {
-    let mut outcomes: Vec<SubtaskOutcome> = Vec::with_capacity(group.indices.len());
+    mut buffer: BufferDocSink,
+    semaphore: Arc<Semaphore>,
+    progress_tx: mpsc::UnboundedSender<Progress>,
+) -> WorkerResult {
+    let mut outcomes: Vec<(usize, SubtaskOutcome)> = Vec::with_capacity(group.indices.len());
 
     for &idx in &group.indices {
         // Abort check at the top of every iteration (spec §4.4).
@@ -215,13 +256,30 @@ pub(crate) async fn run_screen_group_worker(
 
         let subtask = &plan.subtasks[idx];
 
-        progress_fn(Progress::SubtaskStarted {
+        let _ = progress_tx.send(Progress::SubtaskStarted {
             id: subtask.id.clone(),
             label: subtask.label.clone(),
         });
 
+        // Acquire a semaphore permit before the LLM call.
+        // RAII: permit drops when the block completes (= releaseSlot in TS).
+        let _permit = semaphore
+            .acquire()
+            .await
+            .expect("semaphore should not be closed");
+
         // --- Attempt 1: full complexity ---
-        let outcome1 = run_subtask(subtask, plan, request, llm, sink, abort, false, false).await;
+        let outcome1 = run_subtask(
+            subtask,
+            plan,
+            request,
+            llm,
+            &mut buffer,
+            abort,
+            false,
+            false,
+        )
+        .await;
 
         // Evaluate the non-retryable predicate once from attempt-1's error
         // (matches TS `isNonRetryable` computed before the retry chain).
@@ -244,7 +302,7 @@ pub(crate) async fn run_screen_group_worker(
                 error = outcome1.error.as_deref().unwrap_or(""),
                 "concurrent worker: subtask empty, retrying with minimal skills (attempt 2)"
             );
-            run_subtask(subtask, plan, request, llm, sink, abort, true, true).await
+            run_subtask(subtask, plan, request, llm, &mut buffer, abort, true, true).await
         } else {
             outcome1
         };
@@ -255,482 +313,153 @@ pub(crate) async fn run_screen_group_worker(
         let err_msg = final_outcome.error.clone();
 
         if zero {
-            progress_fn(Progress::SubtaskFailed {
+            let _ = progress_tx.send(Progress::SubtaskFailed {
                 id: subtask.id.clone(),
                 error: err_msg.unwrap_or_default(),
             });
         } else {
-            progress_fn(Progress::SubtaskDone {
+            let _ = progress_tx.send(Progress::SubtaskDone {
                 id: subtask.id.clone(),
                 node_count,
             });
         }
 
-        outcomes.push(final_outcome);
+        outcomes.push((idx, final_outcome));
     }
 
-    outcomes
+    WorkerResult { buffer, outcomes }
 }
+
+// ── Task B2: run_concurrent ────────────────────────────────────────────────────
+
+/// Concurrent executor — semaphore-gated screen-group workers + serialized replay.
+///
+/// Port of `orchestrator-sub-agent.ts:227-327` (semaphore + workers + collection).
+///
+/// ## Genuine concurrency via `join_all`
+/// One **worker future per screen group** is built; all N are driven together
+/// with [`futures::future::join_all`] on the SINGLE current task (no
+/// `tokio::spawn` — avoids `Send` bounds; the LLM I/O is already offloaded
+/// inside `LlmClient::call`).  `join_all` polls every worker on each wake: when
+/// worker A awaits an LLM stream chunk, `join_all` polls worker B, which
+/// proceeds with *its* LLM call — the calls genuinely overlap in wall-clock
+/// time.  This is the concurrent equivalent of JS `Promise.all(workers)`.
+///
+/// The borrow checker is satisfied because **each worker future owns its own
+/// `BufferDocSink`** (constructed here, moved in, returned in [`WorkerResult`])
+/// — there is no shared `&mut`.  The genuinely-shared values are all shared
+/// `&` (`&dyn LlmClient`, `&AbortFlag`, `&plan`, `&request`, `Arc<Semaphore>`);
+/// the `mpsc` sender is cloned per worker.
+///
+/// ## Semaphore
+/// A shared `Arc<Semaphore>` (permits = `effective_concurrency(concurrency,
+/// groups.len())`) caps the total in-flight subtask LLM calls across all
+/// genuinely-overlapping workers.
+///
+/// ## Progress fan-in
+/// Workers send `Progress` events on cloned `mpsc::UnboundedSender<Progress>`s;
+/// after `join_all` the driver drains the receiver and forwards to
+/// `on_progress`.  The `on_progress` consumer must tolerate interleaved
+/// `SubtaskStarted` events (multiple started before corresponding done).
+///
+/// ## Serialized replay (spec §5)
+/// `join_all` yields `Vec<WorkerResult>`; the driver then replays every
+/// worker's buffered `EditorCommand`s into the real `&mut DocSink` in
+/// ascending plan-index order — deterministic, matches the TS indexed-results
+/// array, never torn.
+///
+/// Sort-by-min-index: within each group subtasks already ran in ascending plan
+/// index order, so the buffer contains commands in ascending plan-index order.
+/// Cross-group: sorting groups by min(indices) ensures the group with the
+/// lower-numbered subtask replays first.
+///
+/// ## Return value
+/// `Vec<Option<SubtaskOutcome>>` indexed by plan order (0..plan.subtasks.len()).
+/// A slot is `None` if the worker was aborted before reaching that subtask.
+/// The all-zero-nodes failure verdict (Task C1) is NOT checked here.
+#[allow(clippy::too_many_arguments)]
+pub(crate) async fn run_concurrent(
+    groups: &[ScreenGroup],
+    plan: &OrchestratorPlan,
+    request: &DesignRequest,
+    llm: &dyn LlmClient,
+    abort: &AbortFlag,
+    snapshot: EditorState,
+    real_sink: &mut dyn DocSink,
+    on_progress: &mut dyn FnMut(Progress),
+) -> Vec<Option<SubtaskOutcome>> {
+    let n = plan.subtasks.len();
+    let ec = effective_concurrency(request.concurrency, groups.len());
+    let semaphore = Arc::new(Semaphore::new(ec as usize));
+
+    // Progress channel: workers send; we drain after `join_all`.
+    // The master sender is dropped after building the per-worker clones so the
+    // channel closes once every worker (and thus every clone) has finished.
+    let (progress_tx, mut progress_rx) = mpsc::unbounded_channel::<Progress>();
+
+    // Build one worker future per screen group.  Each future OWNS its own
+    // `BufferDocSink` (moved in) — no shared `&mut`, so `join_all` is legal.
+    let worker_futures: Vec<_> = groups
+        .iter()
+        .map(|group| {
+            let buffer = BufferDocSink::new(snapshot.clone());
+            let sem = Arc::clone(&semaphore);
+            let ptx = progress_tx.clone();
+            run_screen_group_worker(group, plan, request, llm, abort, buffer, sem, ptx)
+        })
+        .collect();
+
+    // Drop the master sender so the channel closes when all worker clones drop.
+    drop(progress_tx);
+
+    // Drive ALL workers concurrently on the current task.  `join_all` polls
+    // each worker on every wake — LLM calls from different groups genuinely
+    // overlap.  Returns one `WorkerResult` per group, in `groups` order.
+    let worker_results: Vec<WorkerResult> = join_all(worker_futures).await;
+
+    // Drain the progress channel and forward to `on_progress`.
+    while let Ok(event) = progress_rx.try_recv() {
+        on_progress(event);
+    }
+
+    // Collect per-subtask outcomes indexed by plan order.
+    let mut per_subtask: Vec<Option<SubtaskOutcome>> = vec![None; n];
+    for result in &worker_results {
+        for (plan_idx, outcome) in &result.outcomes {
+            per_subtask[*plan_idx] = Some(outcome.clone());
+        }
+    }
+
+    // Serialized replay in plan-index order.
+    // `worker_results` is in `groups` order; sort it by each group's minimum
+    // plan index so the group containing the lowest-indexed subtask replays
+    // first.  Within a group subtasks already ran in ascending index order.
+    let mut replay_order: Vec<usize> = (0..groups.len()).collect();
+    replay_order.sort_by_key(|&g| {
+        groups[g]
+            .indices
+            .iter()
+            .copied()
+            .min()
+            .unwrap_or(usize::MAX)
+    });
+    let mut worker_results = worker_results;
+    for g_idx in replay_order {
+        for cmd in worker_results[g_idx].buffer.commands.drain(..) {
+            real_sink.apply(cmd);
+        }
+    }
+
+    per_subtask
+}
+
+// Tests are split across two sibling files to honor the 800-line cap:
+// `concurrent_tests.rs`    — Task A1 + B1 (grouping / decision / worker / sink)
+// `concurrent_tests_b2.rs` — Task B2 (`run_concurrent` concurrent executor)
+#[cfg(test)]
+#[path = "concurrent_tests.rs"]
+mod tests;
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::plan::{Region, Subtask};
-
-    fn subtask_with_screen(id: &str, screen: Option<&str>) -> Subtask {
-        Subtask {
-            id: id.into(),
-            label: id.into(),
-            id_prefix: id.into(),
-            region: Region {
-                width: 1200.0,
-                height: 400.0,
-            },
-            parent_frame_id: None,
-            elements: None,
-            screen: screen.map(|s| s.to_string()),
-        }
-    }
-
-    // ── effective_concurrency ──────────────────────────────────────────────────
-
-    /// (concurrency=1, 3 screens) → 1  (single-threaded even with many screens)
-    #[test]
-    fn effective_concurrency_one_concurrency_three_screens_gives_one() {
-        assert_eq!(effective_concurrency(1, 3), 1);
-    }
-
-    /// (concurrency=4, 1 screen) → 1  (only one group → sequential)
-    #[test]
-    fn effective_concurrency_four_concurrency_one_screen_gives_one() {
-        assert_eq!(effective_concurrency(4, 1), 1);
-    }
-
-    /// (concurrency=4, 3 screens) → 4
-    #[test]
-    fn effective_concurrency_four_concurrency_three_screens_gives_four() {
-        assert_eq!(effective_concurrency(4, 3), 4);
-    }
-
-    /// Clamp: (concurrency=99, 3 screens) → 6
-    #[test]
-    fn effective_concurrency_clamps_to_six() {
-        assert_eq!(effective_concurrency(99, 3), 6);
-    }
-
-    // ── group_subtasks_by_screen ───────────────────────────────────────────────
-
-    /// Basic grouping: [login, home, login] → 2 groups {login:[0,2], home:[1]}
-    #[test]
-    fn group_subtasks_three_entries_two_screens() {
-        let subtasks = vec![
-            subtask_with_screen("a", Some("login")),
-            subtask_with_screen("b", Some("home")),
-            subtask_with_screen("c", Some("login")),
-        ];
-        let groups = group_subtasks_by_screen(&subtasks);
-        assert_eq!(groups.len(), 2);
-        assert_eq!(groups[0].screen, "login");
-        assert_eq!(groups[0].indices, vec![0, 2]);
-        assert_eq!(groups[1].screen, "home");
-        assert_eq!(groups[1].indices, vec![1]);
-    }
-
-    /// A subtask with no screen falls back to first_screen.
-    #[test]
-    fn group_subtasks_no_screen_falls_back_to_first_screen() {
-        let subtasks = vec![
-            subtask_with_screen("a", Some("login")),
-            subtask_with_screen("b", None), // no screen → "login"
-            subtask_with_screen("c", Some("home")),
-        ];
-        let groups = group_subtasks_by_screen(&subtasks);
-        // "login" gets index 0 and 1 (b bucketed under first_screen="login")
-        assert_eq!(groups.len(), 2);
-        assert_eq!(groups[0].screen, "login");
-        assert_eq!(groups[0].indices, vec![0, 1]);
-        assert_eq!(groups[1].screen, "home");
-        assert_eq!(groups[1].indices, vec![2]);
-    }
-
-    /// All subtasks have no screen → empty result (no groups).
-    #[test]
-    fn group_subtasks_all_no_screen_returns_empty() {
-        let subtasks = vec![
-            subtask_with_screen("a", None),
-            subtask_with_screen("b", None),
-        ];
-        let groups = group_subtasks_by_screen(&subtasks);
-        assert!(groups.is_empty());
-    }
-
-    /// Empty subtask slice → empty result.
-    #[test]
-    fn group_subtasks_empty_slice_returns_empty() {
-        let groups = group_subtasks_by_screen(&[]);
-        assert!(groups.is_empty());
-    }
-
-    /// Group order is first-seen order of distinct screen values.
-    #[test]
-    fn group_subtasks_preserves_first_seen_order() {
-        let subtasks = vec![
-            subtask_with_screen("a", Some("profile")),
-            subtask_with_screen("b", Some("settings")),
-            subtask_with_screen("c", Some("profile")),
-            subtask_with_screen("d", Some("dashboard")),
-        ];
-        let groups = group_subtasks_by_screen(&subtasks);
-        assert_eq!(groups.len(), 3);
-        assert_eq!(groups[0].screen, "profile");
-        assert_eq!(groups[1].screen, "settings");
-        assert_eq!(groups[2].screen, "dashboard");
-    }
-
-    /// first_screen fallback is "page" when no subtask has a screen
-    /// (but `has_any_screen` is false, so returns empty — tested separately).
-    /// Here we test that a None screen at the START falls back to first_screen
-    /// from a LATER subtask — i.e., first_screen is derived from the first
-    /// subtask that HAS a screen.
-    #[test]
-    fn group_subtasks_no_screen_at_start_uses_later_first_screen() {
-        let subtasks = vec![
-            subtask_with_screen("a", None),         // no screen
-            subtask_with_screen("b", Some("home")), // first with screen → first_screen="home"
-            subtask_with_screen("c", Some("settings")),
-        ];
-        let groups = group_subtasks_by_screen(&subtasks);
-        // "home" first (b has screen), but "a" has no screen → bucketed under first_screen="home"
-        assert_eq!(groups.len(), 2);
-        assert_eq!(groups[0].screen, "home");
-        // "a" (index 0) bucketed under "home" — it's first because it's processed first
-        // and maps to first_screen="home" which is first seen when processing "a".
-        assert!(groups[0].indices.contains(&0));
-        assert!(groups[0].indices.contains(&1));
-        assert_eq!(groups[1].screen, "settings");
-        assert_eq!(groups[1].indices, vec![2]);
-    }
-
-    // ── Task B1: BufferDocSink ────────────────────────────────────────────────
-
-    use crate::test_support::{ScriptResponse, ScriptedLlm};
-    use crate::types::LlmError;
-    use futures::executor::block_on;
-    use op_editor_core::EditorState;
-
-    fn make_plan_with_subtasks(subtask_ids: &[&str]) -> crate::plan::OrchestratorPlan {
-        use crate::plan::{OrchestratorPlan, Region, RootFrameSpec};
-        OrchestratorPlan {
-            root_frame: RootFrameSpec {
-                id: "root".into(),
-                name: "Page".into(),
-                width: 1200.0,
-                height: 800.0,
-                layout: None,
-                gap: None,
-                padding: None,
-                fill: None,
-            },
-            subtasks: subtask_ids
-                .iter()
-                .map(|id| crate::plan::Subtask {
-                    id: id.to_string(),
-                    label: id.to_string(),
-                    region: Region {
-                        width: 1200.0,
-                        height: 400.0,
-                    },
-                    id_prefix: id.to_string(),
-                    parent_frame_id: Some("root".into()),
-                    elements: None,
-                    screen: None,
-                })
-                .collect(),
-            style_guide_name: None,
-        }
-    }
-
-    fn make_req() -> crate::types::DesignRequest {
-        crate::types::DesignRequest {
-            prompt: "test".into(),
-            model: None,
-            provider: None,
-            design_md: None,
-            concurrency: 2,
-        }
-    }
-
-    const NODE_JSON: &str = r#"[{"type":"frame","id":"h1","name":"H","x":0,"y":0,"width":100,"height":100,"children":[]}]"#;
-
-    /// `BufferDocSink` collects commands without modifying a real doc.
-    #[test]
-    fn buffer_doc_sink_collects_commands() {
-        let mut sink = BufferDocSink::new(EditorState::new());
-        // apply() should always return true and buffer the command.
-        let applied = sink.apply(EditorCommand::InsertSubtree {
-            nodes: vec![],
-            parent_id: op_editor_core::NodeId::NONE,
-        });
-        assert!(applied, "BufferDocSink.apply must always return true");
-        assert_eq!(sink.commands.len(), 1);
-    }
-
-    /// `state()` on `BufferDocSink` returns the snapshot passed at construction.
-    #[test]
-    fn buffer_doc_sink_state_returns_snapshot() {
-        let state = EditorState::new();
-        let sink = BufferDocSink::new(state.clone());
-        // The returned reference should be valid (same content).
-        let _ = sink.state();
-    }
-
-    /// `BufferDocSink` tracks undo-batch depth correctly.
-    #[test]
-    fn buffer_doc_sink_undo_batch_depth() {
-        let mut sink = BufferDocSink::new(EditorState::new());
-        assert_eq!(sink.batch_depth, 0);
-        sink.begin_undo_batch();
-        assert_eq!(sink.batch_depth, 1);
-        sink.end_undo_batch();
-        assert_eq!(sink.batch_depth, 0);
-    }
-
-    // ── Task B1: run_screen_group_worker ─────────────────────────────────────
-
-    /// Happy path: both subtasks succeed on attempt 1.
-    #[test]
-    fn worker_happy_path_both_succeed() {
-        let plan = make_plan_with_subtasks(&["s0", "s1"]);
-        let req = make_req();
-        let llm = ScriptedLlm::new(vec![
-            ScriptResponse::Text(NODE_JSON.into()), // s0 attempt 1
-            ScriptResponse::Text(NODE_JSON.into()), // s1 attempt 1
-        ]);
-        let group = ScreenGroup {
-            screen: "home".into(),
-            indices: vec![0, 1],
-        };
-        let abort = AbortFlag::new();
-        let mut sink = BufferDocSink::new(EditorState::new());
-        let mut events: Vec<Progress> = Vec::new();
-        let outcomes = block_on(run_screen_group_worker(
-            &group,
-            &plan,
-            &req,
-            &llm,
-            &abort,
-            &mut sink,
-            &mut |p| events.push(p),
-        ));
-        assert_eq!(outcomes.len(), 2);
-        assert_eq!(outcomes[0].node_count, 1);
-        assert_eq!(outcomes[1].node_count, 1);
-        // Buffer collected 2 InsertSubtree commands (one per subtask).
-        assert_eq!(sink.commands.len(), 2);
-    }
-
-    /// Attempt-1 zero-node + retryable → attempt 2 runs with (true, true).
-    /// We verify this by scripting: attempt 1 → error, attempt 2 → nodes.
-    #[test]
-    fn worker_attempt1_zero_retryable_triggers_attempt2() {
-        let plan = make_plan_with_subtasks(&["s0"]);
-        let req = make_req();
-        let llm = ScriptedLlm::new(vec![
-            // Attempt 1 — LLM error → zero nodes, retryable
-            ScriptResponse::Fail(LlmError {
-                message: "timeout".into(),
-                aborted: false,
-            }),
-            // Attempt 2 — succeeds
-            ScriptResponse::Text(NODE_JSON.into()),
-        ]);
-        let group = ScreenGroup {
-            screen: "home".into(),
-            indices: vec![0],
-        };
-        let abort = AbortFlag::new();
-        let mut sink = BufferDocSink::new(EditorState::new());
-        let mut events: Vec<Progress> = Vec::new();
-        let outcomes = block_on(run_screen_group_worker(
-            &group,
-            &plan,
-            &req,
-            &llm,
-            &abort,
-            &mut sink,
-            &mut |p| events.push(p),
-        ));
-        assert_eq!(outcomes.len(), 1);
-        // Final outcome should show nodes from attempt 2.
-        assert_eq!(
-            outcomes[0].node_count, 1,
-            "attempt 2 should have produced a node"
-        );
-        assert_eq!(sink.commands.len(), 1, "one InsertSubtree from attempt 2");
-    }
-
-    /// Non-retryable error on attempt 1 → NO attempt 2.
-    #[test]
-    fn worker_non_retryable_error_no_retry() {
-        let plan = make_plan_with_subtasks(&["s0"]);
-        let req = make_req();
-        let llm = ScriptedLlm::new(vec![
-            // Attempt 1 — non-retryable HTTP 401
-            ScriptResponse::Fail(LlmError {
-                message: "HTTP 401 Unauthorized".into(),
-                aborted: false,
-            }),
-            // Attempt 2 — should NOT be called; if it is, the test fails by
-            // observing the scripted LLM's exhausted error.
-        ]);
-        let group = ScreenGroup {
-            screen: "home".into(),
-            indices: vec![0],
-        };
-        let abort = AbortFlag::new();
-        let mut sink = BufferDocSink::new(EditorState::new());
-        let mut events: Vec<Progress> = Vec::new();
-        let outcomes = block_on(run_screen_group_worker(
-            &group,
-            &plan,
-            &req,
-            &llm,
-            &abort,
-            &mut sink,
-            &mut |p| events.push(p),
-        ));
-        assert_eq!(outcomes.len(), 1);
-        assert_eq!(outcomes[0].node_count, 0, "non-retryable must stay zero");
-        // Verify the error message is the original 401, not "scripted LLM exhausted"
-        assert!(
-            outcomes[0].error.as_deref().unwrap_or("").contains("401"),
-            "error should carry original 401 message"
-        );
-        // No InsertSubtree in the buffer (nothing was applied).
-        assert_eq!(sink.commands.len(), 0);
-    }
-
-    /// Partial result (node_count > 0) on attempt 1 → never retried.
-    #[test]
-    fn worker_partial_result_never_retried() {
-        let plan = make_plan_with_subtasks(&["s0"]);
-        let req = make_req();
-        // Attempt 1 produces nodes — the scripted LLM has only one response.
-        let llm = ScriptedLlm::new(vec![ScriptResponse::Text(NODE_JSON.into())]);
-        let group = ScreenGroup {
-            screen: "home".into(),
-            indices: vec![0],
-        };
-        let abort = AbortFlag::new();
-        let mut sink = BufferDocSink::new(EditorState::new());
-        let outcomes = block_on(run_screen_group_worker(
-            &group,
-            &plan,
-            &req,
-            &llm,
-            &abort,
-            &mut sink,
-            &mut |_| {},
-        ));
-        assert_eq!(outcomes.len(), 1);
-        assert_eq!(outcomes[0].node_count, 1);
-        // Only 1 command buffered (attempt 1 only).
-        assert_eq!(sink.commands.len(), 1);
-    }
-
-    /// Abort flag set before the loop → worker returns immediately with no outcomes.
-    #[test]
-    fn worker_aborts_at_loop_head() {
-        let plan = make_plan_with_subtasks(&["s0", "s1"]);
-        let req = make_req();
-        let llm = ScriptedLlm::new(vec![]); // should not be called
-        let group = ScreenGroup {
-            screen: "home".into(),
-            indices: vec![0, 1],
-        };
-        let abort = AbortFlag::new();
-        abort.set(); // set before the worker runs
-        let mut sink = BufferDocSink::new(EditorState::new());
-        let outcomes = block_on(run_screen_group_worker(
-            &group,
-            &plan,
-            &req,
-            &llm,
-            &abort,
-            &mut sink,
-            &mut |_| {},
-        ));
-        assert!(
-            outcomes.is_empty(),
-            "aborted before loop: no outcomes expected"
-        );
-        assert_eq!(sink.commands.len(), 0);
-    }
-
-    /// Progress events: SubtaskStarted is emitted before each subtask;
-    /// SubtaskDone emitted for successful subtasks.
-    #[test]
-    fn worker_emits_started_and_done_progress() {
-        let plan = make_plan_with_subtasks(&["s0", "s1"]);
-        let req = make_req();
-        let llm = ScriptedLlm::new(vec![
-            ScriptResponse::Text(NODE_JSON.into()),
-            ScriptResponse::Text(NODE_JSON.into()),
-        ]);
-        let group = ScreenGroup {
-            screen: "home".into(),
-            indices: vec![0, 1],
-        };
-        let abort = AbortFlag::new();
-        let mut sink = BufferDocSink::new(EditorState::new());
-        let mut events: Vec<String> = Vec::new();
-        block_on(run_screen_group_worker(
-            &group,
-            &plan,
-            &req,
-            &llm,
-            &abort,
-            &mut sink,
-            &mut |p| match &p {
-                Progress::SubtaskStarted { id, .. } => events.push(format!("start:{id}")),
-                Progress::SubtaskDone { id, .. } => events.push(format!("done:{id}")),
-                Progress::SubtaskFailed { id, .. } => events.push(format!("fail:{id}")),
-                _ => {}
-            },
-        ));
-        assert_eq!(events, vec!["start:s0", "done:s0", "start:s1", "done:s1"],);
-    }
-
-    /// SubtaskFailed progress emitted when final outcome is zero nodes.
-    #[test]
-    fn worker_emits_failed_progress_on_zero_nodes() {
-        let plan = make_plan_with_subtasks(&["s0"]);
-        let req = make_req();
-        // Both attempts produce garbage → zero nodes.
-        let llm = ScriptedLlm::new(vec![
-            ScriptResponse::Text("not json".into()),
-            ScriptResponse::Text("also not json".into()),
-        ]);
-        let group = ScreenGroup {
-            screen: "home".into(),
-            indices: vec![0],
-        };
-        let abort = AbortFlag::new();
-        let mut sink = BufferDocSink::new(EditorState::new());
-        let mut events: Vec<String> = Vec::new();
-        block_on(run_screen_group_worker(
-            &group,
-            &plan,
-            &req,
-            &llm,
-            &abort,
-            &mut sink,
-            &mut |p| {
-                if let Progress::SubtaskFailed { id, .. } = &p {
-                    events.push(format!("fail:{id}"));
-                }
-            },
-        ));
-        assert_eq!(events, vec!["fail:s0"]);
-    }
-}
+#[path = "concurrent_tests_b2.rs"]
+mod tests_b2;
