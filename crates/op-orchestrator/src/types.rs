@@ -6,6 +6,7 @@
 use futures::stream::BoxStream;
 use op_editor_core::{EditorCommand, EditorState};
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
@@ -65,6 +66,80 @@ pub struct LlmError {
     pub aborted: bool,
 }
 
+// ── S3c: Vision-validation traits + supporting types ──────────────────────────
+
+/// 预校验(pre-validation)出口。host 实现把 TS `runPreValidationFixes`
+/// 的七个 pass 注入;stub 实现直接返回零修复计数。
+///
+/// Port of `design-pre-validation.ts:38-45` shape + spec §4.1.
+pub trait PreValidator: Send + Sync {
+    /// 在文档 sink 上原地运行所有预校验修复 pass,并返回修复统计。
+    fn run_pre_validation_fixes(&self, sink: &mut dyn DocSink) -> PreValidationResult;
+}
+
+/// 截图出口。host 实现调用 `SkiaEngine.captureRegion`;stub 返回 `None`
+/// 表示"跳过视觉轮次"。
+///
+/// Port of `design-screenshot.ts` shape + spec §4.1.
+pub trait ScreenshotProvider: Send + Sync {
+    /// 捕捉画布根帧截图,返回 base64 PNG;`None` 表示不可用 / 跳过。
+    fn capture_root_frame(&self) -> Option<String>;
+}
+
+/// 视觉 LLM 调用出口。host 实现使用多模态 LLM;stub 返回
+/// `VisionResponse::Skipped`。
+///
+/// Port of `validateDesignScreenshot` shape in `design-validation.ts:137-228`
+/// + spec §4.1.
+pub trait VisionLlmClient: Send + Sync {
+    /// 执行一次同步视觉校验调用并返回结果。
+    fn validate(&self, req: VisionCallRequest) -> VisionResponse;
+}
+
+/// `PreValidator::run_pre_validation_fixes` 的返回值 —— 修复统计。
+///
+/// Port of the TS `{ total, byCategory }` shape.
+#[derive(Debug, Clone, Default)]
+pub struct PreValidationResult {
+    /// 本次运行所有 pass 合计修复的节点数。
+    pub total: usize,
+    /// 按 pass 类别细分的修复计数(key = pass 名称)。
+    pub by_category: BTreeMap<String, usize>,
+}
+
+/// `VisionLlmClient::validate` 的输入 —— 单轮视觉校验请求。
+///
+/// Port of the call-site params in `validateDesignScreenshot`
+/// (`design-validation.ts:137`).
+#[derive(Debug, Clone)]
+pub struct VisionCallRequest {
+    /// 视觉 LLM system prompt。
+    pub system: String,
+    /// 携带节点树 dump 与修复指令的 user message。
+    pub message: String,
+    /// 画布截图 base64 PNG。
+    pub image_base64: String,
+    /// 覆盖模型名称;`None` 表示由 host 决定。
+    pub model: Option<String>,
+    /// 覆盖 provider;`None` 表示由 host 决定。
+    pub provider: Option<String>,
+    /// 本轮调用的超时时间。
+    pub timeout: Duration,
+}
+
+/// `VisionLlmClient::validate` 的返回值。
+///
+/// `Text` = 模型返回了 JSON 文本;`Skipped` = stub / 截图不可用 / host 选择跳过。
+#[derive(Debug, Clone)]
+pub enum VisionResponse {
+    /// 模型返回了完整文本(JSON 格式,待 `parse_validation_response` 解析)。
+    Text(String),
+    /// 本轮跳过;可选地附带跳过原因(用于日志)。
+    Skipped { reason: Option<String> },
+}
+
+// ── S3c end ───────────────────────────────────────────────────────────────────
+
 /// 廉价可克隆的中止句柄(`Arc<AtomicBool>` 语义)。
 #[derive(Debug, Clone, Default)]
 pub struct AbortFlag(Arc<AtomicBool>);
@@ -114,10 +189,41 @@ pub enum Intent {
 pub enum Progress {
     Planning,
     ScaffoldDone,
-    SubtaskStarted { id: String, label: String },
-    SubtaskDone { id: String, node_count: usize },
-    SubtaskFailed { id: String, error: String },
+    SubtaskStarted {
+        id: String,
+        label: String,
+    },
+    SubtaskDone {
+        id: String,
+        node_count: usize,
+    },
+    SubtaskFailed {
+        id: String,
+        error: String,
+    },
     CleanupDone,
+    // ── S3c: Vision-validation progress variants ─────────────────────────────
+    /// 视觉校验阶段开始(pre-validation 将在此之后立即运行)。
+    ValidationStarted,
+    /// Pre-validation 完成;`applied` = 总修复数,`by_category` = 分类明细。
+    ValidationPreCheckDone {
+        applied: usize,
+        by_category: BTreeMap<String, usize>,
+    },
+    /// 某轮视觉 LLM 调用开始。`round` ∈ [1, MAX_VALIDATION_ROUNDS]。
+    ValidationRoundStarted {
+        round: u8,
+    },
+    /// 某轮视觉 LLM 调用完成并已应用修复。
+    ValidationRoundDone {
+        round: u8,
+        applied: usize,
+        quality_score: u8,
+    },
+    /// 整个视觉校验阶段完成。`total_applied` = pre + 所有轮次之和。
+    ValidationDone {
+        total_applied: usize,
+    },
 }
 
 /// 单个 subtask 的执行结果。`error` 带值但 `node_count > 0` 表示
@@ -199,6 +305,16 @@ pub struct DesignRequest {
     /// Port of `AIDesignRequest.context.appendContext` in `ai-types.ts:51`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub append_context: Option<AppendContext>,
+    /// 是否启用后生成视觉校验循环(S3c)。
+    /// 对应 TS `VALIDATION_ENABLED` flag(默认 `true`)。
+    /// host 可将其设为 `false` 以跳过整个视觉校验阶段。
+    /// Port of `VALIDATION_ENABLED` in `ai-runtime-config.ts:109`.
+    #[serde(default = "default_validation_enabled")]
+    pub validation_enabled: bool,
+}
+
+fn default_validation_enabled() -> bool {
+    true
 }
 
 #[cfg(test)]
@@ -268,6 +384,7 @@ mod tests {
             design_md: None,
             concurrency: 1,
             append_context: None,
+            validation_enabled: true,
         };
         assert!(req.append_context.is_none());
     }
@@ -288,6 +405,7 @@ mod tests {
             design_md: None,
             concurrency: 1,
             append_context: Some(ctx),
+            validation_enabled: true,
         };
         assert!(req.append_context.is_some());
     }
@@ -302,11 +420,120 @@ mod tests {
             design_md: None,
             concurrency: 1,
             append_context: None,
+            validation_enabled: true,
         };
         let json = serde_json::to_string(&req).expect("serialize");
         assert!(
             !json.contains("appendContext"),
             "appendContext should be omitted when None, got: {json}"
         );
+    }
+
+    // ── Task A1 (S3c): vision validation types ────────────────────────────────
+
+    /// `PreValidator` stub returns zero fixes.
+    #[test]
+    fn skipped_pre_validator_returns_empty_result() {
+        use crate::test_support::SkippedPreValidator;
+        let mut sink = VecDocSink::new();
+        let result = SkippedPreValidator.run_pre_validation_fixes(&mut sink);
+        assert_eq!(result.total, 0);
+        assert!(result.by_category.is_empty());
+    }
+
+    /// `ScreenshotProvider` stub returns `None`.
+    #[test]
+    fn skipped_screenshot_provider_returns_none() {
+        use crate::test_support::SkippedScreenshotProvider;
+        assert!(SkippedScreenshotProvider.capture_root_frame().is_none());
+    }
+
+    /// `VisionLlmClient` stub returns `VisionResponse::Skipped`.
+    #[test]
+    fn skipped_vision_llm_client_returns_skipped() {
+        use crate::test_support::SkippedVisionLlmClient;
+        let req = VisionCallRequest {
+            system: "sys".into(),
+            message: "msg".into(),
+            image_base64: "img".into(),
+            model: None,
+            provider: None,
+            timeout: std::time::Duration::from_millis(5_000),
+        };
+        let resp = SkippedVisionLlmClient.validate(req);
+        assert!(matches!(resp, VisionResponse::Skipped { .. }));
+    }
+
+    /// `Progress::Validation*` variants all compile and pattern-match.
+    #[test]
+    fn progress_validation_variants_compile() {
+        use std::collections::BTreeMap;
+        let variants = vec![
+            Progress::ValidationStarted,
+            Progress::ValidationPreCheckDone {
+                applied: 3,
+                by_category: BTreeMap::new(),
+            },
+            Progress::ValidationRoundStarted { round: 1 },
+            Progress::ValidationRoundDone {
+                round: 1,
+                applied: 2,
+                quality_score: 7,
+            },
+            Progress::ValidationDone { total_applied: 5 },
+        ];
+        // Verify all variants are matchable
+        for v in variants {
+            match v {
+                Progress::ValidationStarted => {}
+                Progress::ValidationPreCheckDone { .. } => {}
+                Progress::ValidationRoundStarted { .. } => {}
+                Progress::ValidationRoundDone { .. } => {}
+                Progress::ValidationDone { .. } => {}
+                _ => {}
+            }
+        }
+    }
+
+    /// `DesignRequest.validation_enabled` defaults to `true` when omitted from JSON.
+    #[test]
+    fn design_request_validation_enabled_defaults_true() {
+        // JSON without `validationEnabled` field
+        let json = r#"{"prompt":"test","concurrency":1}"#;
+        let req: DesignRequest = serde_json::from_str(json).expect("deserialize");
+        assert!(
+            req.validation_enabled,
+            "validation_enabled should default to true"
+        );
+    }
+
+    /// `DesignRequest.validation_enabled` round-trips via serde.
+    #[test]
+    fn design_request_validation_enabled_serde_roundtrip() {
+        let req = DesignRequest {
+            prompt: "test".into(),
+            model: None,
+            provider: None,
+            design_md: None,
+            concurrency: 1,
+            append_context: None,
+            validation_enabled: false,
+        };
+        let json = serde_json::to_string(&req).expect("serialize");
+        let back: DesignRequest = serde_json::from_str(&json).expect("deserialize");
+        assert!(!back.validation_enabled);
+    }
+
+    /// Config consts have the values faithful to `ai-runtime-config.ts:119-123`.
+    #[test]
+    fn validation_config_consts_match_ts() {
+        use crate::validation_config::{
+            MAX_VALIDATION_ROUNDS, VALIDATION_NODE_COUNT_THRESHOLD, VALIDATION_QUALITY_THRESHOLD,
+            VALIDATION_TIMEOUT_MS,
+        };
+        assert_eq!(VALIDATION_NODE_COUNT_THRESHOLD, 30);
+        assert_eq!(MAX_VALIDATION_ROUNDS, 3);
+        assert_eq!(VALIDATION_QUALITY_THRESHOLD, 8);
+        assert_eq!(VALIDATION_TIMEOUT_MS, 180_000);
     }
 }

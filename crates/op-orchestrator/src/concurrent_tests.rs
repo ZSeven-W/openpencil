@@ -80,6 +80,7 @@ fn make_req() -> crate::types::DesignRequest {
         design_md: None,
         concurrency: 2,
         append_context: None,
+        validation_enabled: true,
     }
 }
 

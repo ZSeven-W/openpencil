@@ -1,6 +1,9 @@
 //! 测试桩 —— crate 内各测试模块共用。仅在 `cfg(test)` 下编译。
 
-use crate::types::{CallRequest, DocSink, LlmChunk, LlmClient, LlmError};
+use crate::types::{
+    CallRequest, DocSink, LlmChunk, LlmClient, LlmError, PreValidationResult, PreValidator,
+    ScreenshotProvider, VisionCallRequest, VisionLlmClient, VisionResponse,
+};
 use futures::stream::BoxStream;
 use futures::Stream;
 use op_editor_core::{EditorCommand, EditorState};
@@ -203,5 +206,37 @@ impl LlmClient for CountingLlm {
             text: Some(text),
             counters: Arc::clone(&self.counters),
         })
+    }
+}
+
+// ── S3c: vision-validation stub impls ─────────────────────────────────────────
+
+/// Stub `PreValidator` —— always returns zero fixes; no side effects.
+/// Used by all tests until S1 op-design-lint detectors are wired.
+pub(crate) struct SkippedPreValidator;
+
+impl PreValidator for SkippedPreValidator {
+    fn run_pre_validation_fixes(&self, _sink: &mut dyn DocSink) -> PreValidationResult {
+        PreValidationResult::default()
+    }
+}
+
+/// Stub `ScreenshotProvider` —— always returns `None` (no screenshot available).
+/// Causes the vision loop to exit after pre-validation with zero vision rounds.
+pub(crate) struct SkippedScreenshotProvider;
+
+impl ScreenshotProvider for SkippedScreenshotProvider {
+    fn capture_root_frame(&self) -> Option<String> {
+        None
+    }
+}
+
+/// Stub `VisionLlmClient` —— always returns `VisionResponse::Skipped`.
+/// Used until a real multimodal LLM client is wired host-side.
+pub(crate) struct SkippedVisionLlmClient;
+
+impl VisionLlmClient for SkippedVisionLlmClient {
+    fn validate(&self, _req: VisionCallRequest) -> VisionResponse {
+        VisionResponse::Skipped { reason: None }
     }
 }

@@ -251,6 +251,7 @@ mod tests {
             design_md: None,
             concurrency: 1,
             append_context: None,
+            validation_enabled: true,
         }
     }
 
@@ -396,6 +397,7 @@ mod tests {
             design_md: None,
             concurrency: 1,
             append_context: None,
+            validation_enabled: true,
         };
         let full_cr =
             build_subagent_prompt(&st, &plan(), &basic_req, AbortFlag::new(), false, false);
@@ -485,6 +487,7 @@ mod tests {
             design_md: None,
             concurrency: 1,
             append_context: None,
+            validation_enabled: true,
         };
         let long_prompt = "x".repeat(5000); // >= 4200 chars
         let long_req = DesignRequest {
@@ -494,6 +497,7 @@ mod tests {
             design_md: None,
             concurrency: 1,
             append_context: None,
+            validation_enabled: true,
         };
         let short_pp = build_orchestrator_prompt(&short_req, PlanningMode::Rich, AbortFlag::new());
         let long_pp = build_orchestrator_prompt(&long_req, PlanningMode::Rich, AbortFlag::new());
@@ -514,6 +518,7 @@ mod tests {
             design_md: None,
             concurrency: 1,
             append_context: None,
+            validation_enabled: true,
         };
         let pp = build_orchestrator_prompt(&ds_req, PlanningMode::Rich, AbortFlag::new());
         // Short bucket base: 300_000ms × 2.0 = 600_000ms
@@ -571,6 +576,7 @@ mod tests {
             design_md: None,
             concurrency: 1,
             append_context: None,
+            validation_enabled: true,
         };
         let long_req = DesignRequest {
             prompt: "x".repeat(5000),
@@ -579,6 +585,7 @@ mod tests {
             design_md: None,
             concurrency: 1,
             append_context: None,
+            validation_enabled: true,
         };
         let short_cr = build_subagent_prompt(
             &subtask(),
@@ -612,6 +619,7 @@ mod tests {
             design_md: None,
             concurrency: 1,
             append_context: None,
+            validation_enabled: true,
         };
         let cr = build_subagent_prompt(
             &subtask(),

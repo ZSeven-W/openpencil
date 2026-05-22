@@ -76,6 +76,7 @@ fn req_append(live_target_id: &str) -> DesignRequest {
             existing_section_labels: vec!["Hero".into(), "Features".into()],
             is_mobile: false,
         }),
+        validation_enabled: true,
     }
 }
 
@@ -92,6 +93,7 @@ fn req_append_concurrent(live_target_id: &str) -> DesignRequest {
             existing_section_labels: vec![],
             is_mobile: false,
         }),
+        validation_enabled: true,
     }
 }
 
@@ -334,6 +336,7 @@ fn non_append_mode_takes_normal_sequential_path() {
         design_md: None,
         concurrency: 1,
         append_context: None, // no append context
+        validation_enabled: true,
     };
 
     let summary = futures::executor::block_on(Orchestrator::new().run(
@@ -425,6 +428,7 @@ fn append_mode_wins_over_dashboard_branch() {
             existing_section_labels: vec!["Hero".into()],
             is_mobile: false,
         }),
+        validation_enabled: true,
     };
 
     let llm = ScriptedLlm::new(vec![

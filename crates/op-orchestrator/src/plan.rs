@@ -218,6 +218,7 @@ mod tests {
             design_md: None,
             concurrency: 1,
             append_context: None,
+            validation_enabled: true,
         }
     }
 
