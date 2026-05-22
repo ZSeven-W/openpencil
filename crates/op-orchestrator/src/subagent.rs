@@ -16,6 +16,15 @@ use op_editor_core::{EditorCommand, NodeId};
 
 /// 执行一个 subtask。总是返回 [`SubtaskOutcome`];调用方据
 /// `node_count` 决定继续/停止。
+///
+/// * `reduced_complexity` — Narrow the skill set to the `retryAllowed`
+///   8-skill set when the model is Basic tier.  Pass `false` for the
+///   first attempt; pass `true` on the second attempt of the retry
+///   ladder (Task C3).
+/// * `minimal_skills` — Strip the system prompt to only
+///   `schema`+`jsonl-format` (last-ditch fallback).  Pass `false` for
+///   the first two attempts; pass `true` on the third attempt (Task C3).
+#[allow(clippy::too_many_arguments)]
 pub async fn run_subtask(
     subtask: &Subtask,
     plan: &OrchestratorPlan,
@@ -23,6 +32,8 @@ pub async fn run_subtask(
     llm: &dyn LlmClient,
     sink: &mut dyn DocSink,
     abort: &AbortFlag,
+    reduced_complexity: bool,
+    minimal_skills: bool,
 ) -> SubtaskOutcome {
     let fail = |msg: String| SubtaskOutcome {
         id: subtask.id.clone(),
@@ -31,7 +42,14 @@ pub async fn run_subtask(
     };
 
     // 收集 LLM 文本输出。
-    let call_req = build_subagent_prompt(subtask, plan, req, abort.clone());
+    let call_req = build_subagent_prompt(
+        subtask,
+        plan,
+        req,
+        abort.clone(),
+        reduced_complexity,
+        minimal_skills,
+    );
     let mut stream = llm.call(call_req);
     let mut text = String::new();
     while let Some(item) = stream.next().await {
@@ -134,6 +152,8 @@ mod tests {
             &llm,
             &mut sink,
             &AbortFlag::new(),
+            false,
+            false,
         ));
         assert_eq!(outcome.node_count, 1);
         assert!(outcome.error.is_none());
@@ -154,6 +174,8 @@ mod tests {
             &llm,
             &mut sink,
             &AbortFlag::new(),
+            false,
+            false,
         ));
         assert_eq!(outcome.node_count, 0);
         assert!(outcome.error.is_some());
@@ -173,6 +195,8 @@ mod tests {
             &llm,
             &mut sink,
             &AbortFlag::new(),
+            false,
+            false,
         ));
         assert_eq!(outcome.node_count, 0);
         assert_eq!(outcome.error.as_deref(), Some("rate limited"));

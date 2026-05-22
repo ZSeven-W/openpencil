@@ -11,7 +11,9 @@
 //! 细化项。
 
 use crate::compact_prompt::build_compact_planning_prompt;
+use crate::compact_skills::apply_skill_filter;
 use crate::design_type::{detect_design_type, DesignType};
+use crate::model_profile::resolve_model_profile;
 use crate::plan::{OrchestratorPlan, Subtask};
 use crate::style_guide_context::build_planning_style_guide_context;
 use crate::types::{AbortFlag, CallRequest, DesignRequest, PlanningMode, PlanningPrompt};
@@ -133,25 +135,46 @@ pub fn build_orchestrator_prompt(
     }
 }
 
-/// 把解析出的 skill 正文 join 成一段。
-fn skill_preamble(phase: op_ai_skills::Phase, message: &str) -> String {
-    let ctx =
-        op_ai_skills::resolve_skills(phase, message, &op_ai_skills::ResolveOptions::default());
+/// 把解析出的 skill 列表返回(供下游过滤)。
+fn resolve_generation_skills(message: &str) -> Vec<op_ai_skills::ResolvedSkill> {
+    let ctx = op_ai_skills::resolve_skills(
+        op_ai_skills::Phase::Generation,
+        message,
+        &op_ai_skills::ResolveOptions::default(),
+    );
     ctx.skills
-        .iter()
-        .map(|s| s.content.as_str())
-        .collect::<Vec<_>>()
-        .join("\n\n")
 }
 
 /// 单个 sub-agent 的 LLM 调用输入。
+///
+/// * `reduced_complexity` — When `true` and the model is Basic tier,
+///   narrows the skill set to the `retryAllowed` 8-skill set (drops
+///   `elements` and other non-essential skills).  For Standard/Full
+///   tier this is a no-op.  Port of the `reducedComplexity` param in
+///   `executeSubAgent` (orchestrator-sub-agent.ts:349).
+/// * `minimal_skills` — When `true`, strips the system prompt down to
+///   only `schema` + `jsonl-format` (last-ditch fallback for models
+///   whose safety scanner times out on the full prompt).  Port of the
+///   `minimalSkills` param in `executeSubAgent` (lines 428-431).
 pub fn build_subagent_prompt(
     subtask: &Subtask,
     _plan: &OrchestratorPlan,
     req: &DesignRequest,
     abort: AbortFlag,
+    reduced_complexity: bool,
+    minimal_skills: bool,
 ) -> CallRequest {
-    let mut system_prompt = skill_preamble(op_ai_skills::Phase::Generation, &subtask.label);
+    // Resolve the full generation skill set, then apply tier-gated filtering.
+    let model_id = req.model.as_deref().unwrap_or("");
+    let tier = resolve_model_profile(model_id).tier;
+    let resolved = resolve_generation_skills(&subtask.label);
+    let filtered = apply_skill_filter(resolved, tier, minimal_skills, reduced_complexity);
+
+    let mut system_prompt = filtered
+        .iter()
+        .map(|s| s.content.as_str())
+        .collect::<Vec<_>>()
+        .join("\n\n");
     system_prompt.push_str("\n\n");
     system_prompt.push_str(NODE_FORMAT);
 
@@ -264,9 +287,94 @@ mod tests {
             elements: None,
             screen: None,
         };
-        let cr = build_subagent_prompt(&st, &plan(), &req(), AbortFlag::new());
+        let cr = build_subagent_prompt(&st, &plan(), &req(), AbortFlag::new(), false, false);
         assert!(cr.user_prompt.contains("Hero"));
         assert!(cr.user_prompt.contains("hero-"));
         assert!(cr.system_prompt.contains("PenNode"));
+    }
+
+    #[test]
+    fn subagent_prompt_minimal_skills_only_has_schema_and_jsonl() {
+        let st = Subtask {
+            id: "hero".into(),
+            label: "Hero".into(),
+            region: Region {
+                width: 1200.0,
+                height: 400.0,
+            },
+            id_prefix: "hero".into(),
+            parent_frame_id: None,
+            elements: None,
+            screen: None,
+        };
+        // minimal_skills=true: the system prompt should contain "schema" skill
+        // content and "jsonl-format" skill content, but NOT layout/text-rules etc.
+        let cr = build_subagent_prompt(&st, &plan(), &req(), AbortFlag::new(), false, true);
+        // schema and jsonl-format skills should appear (they always exist)
+        assert!(
+            cr.system_prompt.contains("PenNode"),
+            "NODE_FORMAT suffix should still be appended"
+        );
+        // The system_prompt should be considerably shorter than a full-skill prompt
+        let full_cr = build_subagent_prompt(&st, &plan(), &req(), AbortFlag::new(), false, false);
+        assert!(
+            cr.system_prompt.len() < full_cr.system_prompt.len(),
+            "minimal_skills prompt should be shorter than full-skill prompt"
+        );
+    }
+
+    #[test]
+    fn subagent_prompt_reduced_complexity_basic_is_shorter_than_full() {
+        let st = Subtask {
+            id: "hero".into(),
+            label: "Hero".into(),
+            region: Region {
+                width: 1200.0,
+                height: 400.0,
+            },
+            id_prefix: "hero".into(),
+            parent_frame_id: None,
+            elements: None,
+            screen: None,
+        };
+        // req() uses model "claude" which is Full tier — no narrowing.
+        // Use a basic-tier model to test narrowing.
+        let basic_req = DesignRequest {
+            prompt: "a page".into(),
+            model: Some("claude-haiku".into()),
+            provider: None,
+            design_md: None,
+        };
+        let full_cr =
+            build_subagent_prompt(&st, &plan(), &basic_req, AbortFlag::new(), false, false);
+        let reduced_cr =
+            build_subagent_prompt(&st, &plan(), &basic_req, AbortFlag::new(), true, false);
+        assert!(
+            reduced_cr.system_prompt.len() <= full_cr.system_prompt.len(),
+            "reduced_complexity Basic prompt should be no longer than full-skill prompt"
+        );
+    }
+
+    #[test]
+    fn subagent_prompt_reduced_complexity_full_tier_is_noop() {
+        let st = Subtask {
+            id: "hero".into(),
+            label: "Hero".into(),
+            region: Region {
+                width: 1200.0,
+                height: 400.0,
+            },
+            id_prefix: "hero".into(),
+            parent_frame_id: None,
+            elements: None,
+            screen: None,
+        };
+        // req() uses "claude" which maps to Full tier → reduced_complexity is no-op
+        let full_cr = build_subagent_prompt(&st, &plan(), &req(), AbortFlag::new(), false, false);
+        let reduced_cr = build_subagent_prompt(&st, &plan(), &req(), AbortFlag::new(), true, false);
+        assert_eq!(
+            full_cr.system_prompt, reduced_cr.system_prompt,
+            "reduced_complexity on Full tier should be a no-op"
+        );
     }
 }
