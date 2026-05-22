@@ -5,11 +5,11 @@
 //! `buildFallbackPlanFromPrompt`)。
 
 use crate::types::DesignRequest;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 /// 根 frame 的一个 fill —— 对齐 TS canonical `[{type,color}]`。
 /// 规划只需 solid 色;非 solid 项保留 `color` 字段(可能为空)。
-#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PlanFill {
     #[serde(rename = "type", default)]
     pub kind: String,
@@ -18,14 +18,14 @@ pub struct PlanFill {
 }
 
 /// 一个 subtask 区域的尺寸。
-#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Region {
     pub width: f64,
     pub height: f64,
 }
 
 /// 根 frame 规格。字段对齐规划语料 `decomposition.md` 的 `rootFrame`。
-#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct RootFrameSpec {
     pub id: String,
     pub name: String,
@@ -54,7 +54,8 @@ impl RootFrameSpec {
 }
 
 /// 一个生成子任务 —— 对应设计里的一个区块。
-#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Subtask {
     pub id: String,
     pub label: String,
@@ -75,10 +76,14 @@ pub struct Subtask {
     /// `SubTask.generatedRootId`。仪器由 run.rs 填写;规划阶段为 None。
     #[serde(skip)]
     pub generated_root_id: Option<String>,
+    /// 从 AppendContext 传播而来 —— 告知 sub-agent 哪些已有区块不要重复。
+    /// port of TS `SubTask.existingSectionLabels` (`ai-types.ts:134`)。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub existing_section_labels: Option<Vec<String>>,
 }
 
 /// 规划阶段的完整产物。字段对齐规划语料 `decomposition.md`。
-#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct OrchestratorPlan {
     #[serde(rename = "rootFrame")]
     pub root_frame: RootFrameSpec,
@@ -177,6 +182,7 @@ pub fn build_fallback_plan(req: &DesignRequest) -> OrchestratorPlan {
                 elements: None,
                 screen: None,
                 generated_root_id: None,
+                existing_section_labels: None,
             }
         })
         .collect();
@@ -211,6 +217,7 @@ mod tests {
             provider: None,
             design_md: None,
             concurrency: 1,
+            append_context: None,
         }
     }
 
@@ -264,5 +271,73 @@ mod tests {
         let long = build_fallback_plan(&req(&"x".repeat(300)));
         assert_eq!(long.subtasks.len(), 3);
         assert!(!long.subtasks.is_empty());
+    }
+
+    // ── Task A1: Subtask.existing_section_labels ──────────────────────────────
+
+    /// Subtask accepts existing_section_labels: None without breaking compilation.
+    #[test]
+    fn subtask_existing_section_labels_none_compiles() {
+        let st = Subtask {
+            id: "hero".into(),
+            label: "Hero".into(),
+            region: Region {
+                width: 1200.0,
+                height: 400.0,
+            },
+            id_prefix: "hero".into(),
+            parent_frame_id: None,
+            elements: None,
+            screen: None,
+            generated_root_id: None,
+            existing_section_labels: None,
+        };
+        assert!(st.existing_section_labels.is_none());
+    }
+
+    /// Subtask accepts a populated existing_section_labels vec.
+    #[test]
+    fn subtask_existing_section_labels_some_compiles() {
+        let st = Subtask {
+            id: "features".into(),
+            label: "Features".into(),
+            region: Region {
+                width: 1200.0,
+                height: 400.0,
+            },
+            id_prefix: "features".into(),
+            parent_frame_id: None,
+            elements: None,
+            screen: None,
+            generated_root_id: None,
+            existing_section_labels: Some(vec!["Hero".into(), "About".into()]),
+        };
+        let labels = st.existing_section_labels.as_ref().unwrap();
+        assert_eq!(labels[0], "Hero");
+        assert_eq!(labels[1], "About");
+    }
+
+    /// Subtask with existing_section_labels = Some([]) serializes without the field.
+    #[test]
+    fn subtask_existing_section_labels_omitted_when_none() {
+        let st = Subtask {
+            id: "hero".into(),
+            label: "Hero".into(),
+            region: Region {
+                width: 1200.0,
+                height: 400.0,
+            },
+            id_prefix: "hero".into(),
+            parent_frame_id: None,
+            elements: None,
+            screen: None,
+            generated_root_id: None,
+            existing_section_labels: None,
+        };
+        let json = serde_json::to_string(&st).expect("serialize");
+        assert!(
+            !json.contains("existingSectionLabels"),
+            "existingSectionLabels should be omitted when None, got: {json}"
+        );
     }
 }

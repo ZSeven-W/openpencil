@@ -56,6 +56,7 @@ fn req_dashboard() -> DesignRequest {
         provider: None,
         design_md: None,
         concurrency: 1,
+        append_context: None,
     }
 }
 
@@ -66,6 +67,7 @@ fn req_non_dashboard() -> DesignRequest {
         provider: None,
         design_md: None,
         concurrency: 1,
+        append_context: None,
     }
 }
 

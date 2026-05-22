@@ -13,6 +13,7 @@ fn req() -> DesignRequest {
         provider: None,
         design_md: None,
         concurrency: 1,
+        append_context: None,
     }
 }
 
@@ -25,6 +26,7 @@ fn req_standard() -> DesignRequest {
         provider: None,
         design_md: None,
         concurrency: 1,
+        append_context: None,
     }
 }
 
@@ -37,6 +39,7 @@ fn req_basic() -> DesignRequest {
         provider: None,
         design_md: None,
         concurrency: 1,
+        append_context: None,
     }
 }
 

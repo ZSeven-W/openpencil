@@ -47,6 +47,7 @@ mod tests {
             provider: None,
             design_md: None,
             concurrency: 1,
+            append_context: None,
         });
         assert!(seed_commands(&plan).is_empty());
         let sink = VecDocSink::new();

@@ -33,6 +33,7 @@ fn st(id: &str, label: &str, width: f64, height: f64) -> Subtask {
         elements: None,
         screen: None,
         generated_root_id: None,
+        existing_section_labels: None,
     }
 }
 
@@ -49,6 +50,7 @@ fn sidebar_st(height: f64) -> Subtask {
         elements: Some("nav links".into()),
         screen: None,
         generated_root_id: None,
+        existing_section_labels: None,
     }
 }
 

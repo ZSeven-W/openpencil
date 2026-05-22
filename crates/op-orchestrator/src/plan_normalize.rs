@@ -82,6 +82,7 @@ mod tests {
             provider: None,
             design_md: None,
             concurrency: 1,
+            append_context: None,
         }
     }
 
@@ -98,6 +99,7 @@ mod tests {
             elements: None,
             screen: None,
             generated_root_id: None,
+            existing_section_labels: None,
         }
     }
 
@@ -172,6 +174,7 @@ mod tests {
             provider: None,
             design_md: None,
             concurrency: 1,
+            append_context: None,
         }
     }
 
@@ -189,6 +192,7 @@ mod tests {
             elements: None,
             screen: None,
             generated_root_id: None,
+            existing_section_labels: None,
         };
         // chart subtask — LLM-provided height 300, within [inferred*0.6, inferred*1.6]
         // inferred for "chart" = 320  →  min=192, max=512  →  300 in range → keep 300
@@ -204,6 +208,7 @@ mod tests {
             elements: None,
             screen: None,
             generated_root_id: None,
+            existing_section_labels: None,
         };
         // metric subtask — LLM-provided height 0 (invalid) → use inferred = 160
         let st_metric = Subtask {
@@ -218,6 +223,7 @@ mod tests {
             elements: None,
             screen: None,
             generated_root_id: None,
+            existing_section_labels: None,
         };
         OrchestratorPlan {
             root_frame: RootFrameSpec {
@@ -317,6 +323,7 @@ mod tests {
                 elements: None,
                 screen: None,
                 generated_root_id: None,
+                existing_section_labels: None,
             }],
             style_guide_name: None,
         };
@@ -356,6 +363,7 @@ mod tests {
                 elements: None,
                 screen: None,
                 generated_root_id: None,
+                existing_section_labels: None,
             }],
             style_guide_name: None,
         };

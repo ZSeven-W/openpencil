@@ -105,6 +105,7 @@ mod tests {
             provider: None,
             design_md: None,
             concurrency: 1,
+            append_context: None,
         }
     }
 
@@ -138,6 +139,7 @@ mod tests {
             elements: None,
             screen: None,
             generated_root_id: None,
+            existing_section_labels: None,
         }
     }
 

@@ -5,6 +5,7 @@
 
 use futures::stream::BoxStream;
 use op_editor_core::{EditorCommand, EditorState};
+use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
@@ -164,8 +165,26 @@ impl std::fmt::Display for OrchestratorError {
 
 impl std::error::Error for OrchestratorError {}
 
+/// 追加上下文 —— 当用户要求扩展已有页面时由 host 填入。
+///
+/// Port of `AppendContext` in `apps/web/src/services/ai/ai-types.ts:28-37`.
+/// 当存在时,编排器跳过创建新根 frame,将生成的区块插入现有目标 frame。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AppendContext {
+    /// 新 sub-agent 区块应插入的 frame id。
+    pub target_parent_id: String,
+    /// 目标 frame 的宽度(用于给 sub-agent 确定区域尺寸)。
+    pub target_width: f64,
+    /// 现有顶层区块的标签列表 —— sub-agent 被告知不要重复这些。
+    pub existing_section_labels: Vec<String>,
+    /// 目标 frame 属于移动页面(宽度 ≤ 480)时为 true。
+    pub is_mobile: bool,
+}
+
 /// 编排器输入 —— 一次设计请求。
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct DesignRequest {
     pub prompt: String,
     pub model: Option<String>,
@@ -176,6 +195,10 @@ pub struct DesignRequest {
     /// 调用方应传 store-clamped 值 [1,6];crate 内部防御性 clamp。
     /// 默认为 1(顺序执行)。Port of TS `request.concurrency ?? 1`.
     pub concurrency: u32,
+    /// 追加模式上下文 —— 仅当 host 检测到 append intent 时填入。
+    /// Port of `AIDesignRequest.context.appendContext` in `ai-types.ts:51`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub append_context: Option<AppendContext>,
 }
 
 #[cfg(test)]
@@ -200,5 +223,90 @@ mod tests {
         let clone = flag.clone();
         flag.set();
         assert!(clone.is_set());
+    }
+
+    // ── Task A1: AppendContext + DesignRequest.append_context ─────────────────
+
+    /// AppendContext serde round-trips with all 4 fields (camelCase wire names).
+    #[test]
+    fn append_context_serde_round_trip() {
+        let ctx = AppendContext {
+            target_parent_id: "frame-abc".into(),
+            target_width: 390.0,
+            existing_section_labels: vec!["Hero".into(), "Pricing".into()],
+            is_mobile: true,
+        };
+        let json = serde_json::to_string(&ctx).expect("serialize");
+        // Wire names are camelCase
+        assert!(
+            json.contains("targetParentId"),
+            "expected targetParentId in {json}"
+        );
+        assert!(
+            json.contains("targetWidth"),
+            "expected targetWidth in {json}"
+        );
+        assert!(
+            json.contains("existingSectionLabels"),
+            "expected existingSectionLabels in {json}"
+        );
+        assert!(json.contains("isMobile"), "expected isMobile in {json}");
+        let back: AppendContext = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(back.target_parent_id, "frame-abc");
+        assert_eq!(back.target_width, 390.0);
+        assert_eq!(back.existing_section_labels, vec!["Hero", "Pricing"]);
+        assert!(back.is_mobile);
+    }
+
+    /// DesignRequest accepts append_context: None without breaking compilation.
+    #[test]
+    fn design_request_append_context_none_compiles() {
+        let req = DesignRequest {
+            prompt: "test".into(),
+            model: None,
+            provider: None,
+            design_md: None,
+            concurrency: 1,
+            append_context: None,
+        };
+        assert!(req.append_context.is_none());
+    }
+
+    /// DesignRequest accepts a populated AppendContext.
+    #[test]
+    fn design_request_append_context_some_compiles() {
+        let ctx = AppendContext {
+            target_parent_id: "p1".into(),
+            target_width: 1200.0,
+            existing_section_labels: vec![],
+            is_mobile: false,
+        };
+        let req = DesignRequest {
+            prompt: "extend page".into(),
+            model: None,
+            provider: None,
+            design_md: None,
+            concurrency: 1,
+            append_context: Some(ctx),
+        };
+        assert!(req.append_context.is_some());
+    }
+
+    /// DesignRequest without append_context serializes without the field.
+    #[test]
+    fn design_request_append_context_omitted_from_json_when_none() {
+        let req = DesignRequest {
+            prompt: "test".into(),
+            model: None,
+            provider: None,
+            design_md: None,
+            concurrency: 1,
+            append_context: None,
+        };
+        let json = serde_json::to_string(&req).expect("serialize");
+        assert!(
+            !json.contains("appendContext"),
+            "appendContext should be omitted when None, got: {json}"
+        );
     }
 }
