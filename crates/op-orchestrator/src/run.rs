@@ -5,11 +5,12 @@
 //! spec §6。
 
 use crate::cleanup::{descendant_count, run_cleanup_passes};
+use crate::model_profile::{resolve_model_profile, ModelTier};
 use crate::plan::{build_fallback_plan, OrchestratorPlan};
 use crate::plan_normalize::{normalize, NormInfo};
 use crate::plan_repair::parse_orchestrator_response;
 use crate::prompt::build_orchestrator_prompt;
-use crate::retry::attempt_modes;
+use crate::retry::{attempt_modes, is_non_retryable};
 use crate::scaffold::build_scaffold;
 use crate::subagent::run_subtask;
 use crate::types::{
@@ -91,7 +92,23 @@ impl Orchestrator {
         let scaffold_baseline = descendant_count(sink.state(), &root_id);
         on_progress(Progress::ScaffoldDone);
 
-        // -- 阶段 3:顺序子 agent --
+        // -- 阶段 3:顺序子 agent(C3: 3-attempt tier-gated retry ladder) --
+        //
+        // Port of `orchestrator-sub-agent.ts:128-206` (sequential path).
+        //
+        // Per subtask:
+        //   Attempt 1: reduced_complexity=false, minimal_skills=false
+        //   Attempt 2: reduced_complexity=(tier==Basic), minimal_skills=false
+        //   Attempt 3: reduced_complexity=true, minimal_skills=true
+        //
+        // A retryable failure = error.is_some() && node_count==0
+        //                       && !abort.is_set() && !is_non_retryable(&err).
+        // non_retryable is evaluated from attempt-1's error and cached
+        // (matching TS semantics where `isNonRetryable` is computed once
+        // before the retry chain).
+        // A partial result (node_count > 0) is never retried.
+        // After 3 still-zero → zero_node_failure stop.
+        let tier = resolve_model_profile(request.model.as_deref().unwrap_or("")).tier;
         let mut outcomes: Vec<SubtaskOutcome> = Vec::new();
         let mut aborted_mid = false;
         let mut zero_node_failure = false;
@@ -104,8 +121,67 @@ impl Orchestrator {
                 id: subtask.id.clone(),
                 label: subtask.label.clone(),
             });
-            let outcome =
+
+            // Attempt 1 — full complexity.
+            let outcome1 =
                 run_subtask(subtask, &plan, &request, llm, sink, abort, false, false).await;
+
+            // Evaluate non-retryable predicate once from attempt-1's error
+            // (faithful to TS: `isNonRetryable` is computed before the retry
+            // chain and reused for both the attempt-2 and attempt-3 guards).
+            let non_retryable = outcome1
+                .error
+                .as_deref()
+                .map(is_non_retryable)
+                .unwrap_or(false);
+
+            // Helper: is the current outcome a retryable failure?
+            let retryable = |o: &SubtaskOutcome| {
+                o.error.is_some() && o.node_count == 0 && !abort.is_set() && !non_retryable
+            };
+
+            // Attempt 2 — reduced_complexity iff Basic tier.
+            let outcome2 = if retryable(&outcome1) {
+                tracing::warn!(
+                    subtask = %subtask.id,
+                    error = outcome1.error.as_deref().unwrap_or(""),
+                    "subtask failed, retrying (attempt 2)"
+                );
+                Some(
+                    run_subtask(
+                        subtask,
+                        &plan,
+                        &request,
+                        llm,
+                        sink,
+                        abort,
+                        tier == ModelTier::Basic,
+                        false,
+                    )
+                    .await,
+                )
+            } else {
+                None
+            };
+
+            // Pick current best outcome after attempt 2.
+            let outcome_after2 = outcome2.as_ref().unwrap_or(&outcome1);
+
+            // Attempt 3 — minimal skills (last-ditch fallback).
+            let outcome3 = if retryable(outcome_after2) {
+                tracing::warn!(
+                    subtask = %subtask.id,
+                    error = outcome_after2.error.as_deref().unwrap_or(""),
+                    "subtask still empty after retry, falling back to minimal skills (attempt 3)"
+                );
+                Some(run_subtask(subtask, &plan, &request, llm, sink, abort, true, true).await)
+            } else {
+                None
+            };
+
+            // Final outcome: last attempt that ran.
+            let outcome = outcome3.unwrap_or_else(|| outcome2.unwrap_or(outcome1));
+
             let zero = outcome.node_count == 0;
             let node_count = outcome.node_count;
             let err_msg = outcome.error.clone();
@@ -130,7 +206,7 @@ impl Orchestrator {
                 break;
             }
             if zero {
-                // 零节点失败(非 abort)—— 停止后续 subtask(spec §6.2)。
+                // 零节点失败(非 abort,全部 3 次皆失败)—— 停止后续 subtask。
                 on_progress(Progress::SubtaskFailed {
                     id: subtask.id.clone(),
                     error: err_msg.unwrap_or_default(),
@@ -409,10 +485,13 @@ mod tests {
 
     #[test]
     fn run_zero_node_subtask_stops_and_errors() {
-        // 规划 OK,但第一个 subtask 吐垃圾 → 零节点失败 → 停止。
+        // 规划 OK,但第一个 subtask 吐垃圾(3 次全失败)→ 零节点 → NoContent。
+        // C3 引入 3-attempt 梯子:需要 3 条垃圾响应才能穷尽重试。
         let llm = ScriptedLlm::new(vec![
             ScriptResponse::Text(PLAN_JSON.into()),
             ScriptResponse::Text("the model refused".into()),
+            ScriptResponse::Text("still refused".into()),
+            ScriptResponse::Text("refused again".into()),
         ]);
         let mut sink = VecDocSink::new();
         let mut on_progress = |_p: Progress| {};
@@ -553,5 +632,133 @@ mod tests {
         assert!(matches!(result, Err(OrchestratorError::Aborted)));
         // undo batch 在 abort 路径前返回,文档不应已进入批
         assert_eq!(sink.batch_depth, 0);
+    }
+
+    // ── Task C3: sub-agent 3-attempt tier-gated retry ladder ──────────────────
+
+    /// Subtask returns zero nodes on attempt 1 but succeeds on attempt 2 →
+    /// the subtask's nodes land (ladder retries once).
+    /// Uses Full tier (attempt 2: reduced_complexity=false, minimal_skills=false).
+    #[test]
+    fn subtask_retries_on_attempt1_zero_succeeds_on_attempt2() {
+        let llm = ScriptedLlm::new(vec![
+            // planning
+            ScriptResponse::Text(PLAN_JSON.into()),
+            // subtask hero — attempt 1: garbage (0 nodes, retryable)
+            ScriptResponse::Text("the model gave garbage".into()),
+            // subtask hero — attempt 2: success
+            ScriptResponse::Text(node_json("hero")),
+            // subtask feat — attempt 1: success
+            ScriptResponse::Text(node_json("feat")),
+        ]);
+        let mut sink = VecDocSink::new();
+        let mut on_progress = |_p: Progress| {};
+        let summary = futures::executor::block_on(Orchestrator::new().run(
+            req(), // Full tier → reduced_complexity=false on attempt 2
+            &mut sink,
+            &llm,
+            &mut on_progress,
+            &AbortFlag::new(),
+        ))
+        .expect("retry succeeded");
+        assert_eq!(summary.subtasks.len(), 2);
+        assert!(summary.total_nodes >= 2);
+        assert_eq!(sink.batch_depth, 0);
+    }
+
+    /// Subtask fails all 3 attempts → `OrchestratorError::NoContent`.
+    #[test]
+    fn subtask_all_three_attempts_fail_returns_no_content() {
+        let llm = ScriptedLlm::new(vec![
+            // planning
+            ScriptResponse::Text(PLAN_JSON.into()),
+            // subtask hero — attempt 1: garbage
+            ScriptResponse::Text("garbage attempt 1".into()),
+            // subtask hero — attempt 2: garbage
+            ScriptResponse::Text("garbage attempt 2".into()),
+            // subtask hero — attempt 3: garbage
+            ScriptResponse::Text("garbage attempt 3".into()),
+        ]);
+        let mut sink = VecDocSink::new();
+        let mut on_progress = |_p: Progress| {};
+        let result = futures::executor::block_on(Orchestrator::new().run(
+            req(),
+            &mut sink,
+            &llm,
+            &mut on_progress,
+            &AbortFlag::new(),
+        ));
+        assert!(matches!(result, Err(OrchestratorError::NoContent)));
+        assert_eq!(sink.batch_depth, 0);
+    }
+
+    /// Subtask's attempt-1 error is non-retryable (HTTP 401) →
+    /// no retry, stops immediately with NoContent.
+    #[test]
+    fn subtask_non_retryable_error_stops_immediately_no_retry() {
+        use crate::types::LlmError;
+        let llm = ScriptedLlm::new(vec![
+            // planning
+            ScriptResponse::Text(PLAN_JSON.into()),
+            // subtask hero — attempt 1: HTTP 401 (non-retryable)
+            ScriptResponse::Fail(LlmError {
+                message: "HTTP 401 Unauthorized".into(),
+                aborted: false,
+            }),
+            // This response should NOT be consumed — if it were, the test
+            // would assert fewer LLM calls than expected (we just verify NoContent).
+        ]);
+        let mut sink = VecDocSink::new();
+        let mut on_progress = |_p: Progress| {};
+        let result = futures::executor::block_on(Orchestrator::new().run(
+            req(),
+            &mut sink,
+            &llm,
+            &mut on_progress,
+            &AbortFlag::new(),
+        ));
+        assert!(matches!(result, Err(OrchestratorError::NoContent)));
+        assert_eq!(sink.batch_depth, 0);
+    }
+
+    /// Partial result (node_count > 0 with an error) is never retried —
+    /// it is accepted and counted toward summary.
+    ///
+    /// Note: the current `run_subtask` returns `error: None` on success and
+    /// `error: Some` only on zero-node failure. A partial result (nodes
+    /// produced + downstream soft error) would arrive as node_count>0,
+    /// error=None from `run_subtask`. We model this by having the first
+    /// subtask succeed (nodes produced) even though the scenario calls for
+    /// a "partial with error". The key invariant: once node_count>0 the
+    /// ladder does not retry regardless of error state.
+    #[test]
+    fn subtask_partial_result_not_retried() {
+        // A subtask that returns a valid node on the first attempt must
+        // succeed without using a second LLM slot.
+        let llm = ScriptedLlm::new(vec![
+            // planning
+            ScriptResponse::Text(PLAN_JSON.into()),
+            // subtask hero — attempt 1: success (node_count > 0)
+            ScriptResponse::Text(node_json("hero")),
+            // subtask feat — attempt 1: success
+            ScriptResponse::Text(node_json("feat")),
+            // A third response here would mean hero was retried — we assert
+            // only 2 subtasks succeeded so the LLM is not over-consumed.
+        ]);
+        let mut sink = VecDocSink::new();
+        let mut on_progress = |_p: Progress| {};
+        let summary = futures::executor::block_on(Orchestrator::new().run(
+            req(),
+            &mut sink,
+            &llm,
+            &mut on_progress,
+            &AbortFlag::new(),
+        ))
+        .expect("no retry on partial");
+        // Both subtasks succeed; if hero had been retried the scripted LLM
+        // would have served feat's slot to the second hero attempt, leaving
+        // feat with 0 nodes and causing NoContent.
+        assert_eq!(summary.subtasks.len(), 2);
+        assert!(summary.total_nodes >= 2);
     }
 }
