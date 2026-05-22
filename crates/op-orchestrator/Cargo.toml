@@ -1,0 +1,16 @@
+[package]
+name = "op-orchestrator"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[dependencies]
+op-editor-core = { path = "../op-editor-core" }
+op-ai-skills = { path = "../op-ai-skills" }
+jian-ops-schema = { path = "../../vendor/jian/crates/jian-ops-schema" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+futures = "0.3"
