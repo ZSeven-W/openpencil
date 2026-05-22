@@ -24,6 +24,7 @@ pub mod timeouts;
 pub mod types;
 pub mod variables;
 
+pub mod append;
 pub mod cleanup;
 pub mod concurrent;
 pub mod prompt;
