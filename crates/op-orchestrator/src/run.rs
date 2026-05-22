@@ -11,12 +11,12 @@ use crate::prompt::build_orchestrator_prompt;
 use crate::scaffold::build_scaffold;
 use crate::subagent::run_subtask;
 use crate::types::{
-    AbortFlag, DesignRequest, DocSink, LlmChunk, LlmClient, OrchestratorError, Progress, RunSummary,
-    SubtaskOutcome,
+    AbortFlag, DesignRequest, DocSink, LlmChunk, LlmClient, OrchestratorError, Progress,
+    RunSummary, SubtaskOutcome,
 };
 use crate::variables::{rollback, seed_commands, snapshot_plan_vars};
 use futures::StreamExt;
-use op_editor_core::{EditorCommand, NodeId};
+use op_editor_core::{EditorCommand, NodeId, PenNodeExt};
 
 /// 设计编排器。S3a 阶段无构造期配置 —— 保留 struct 以便 S3b/S3c
 /// 挂选项。
@@ -54,7 +54,7 @@ impl Orchestrator {
 
         // -- 阶段 1.5:规范化 --
         let norm = normalize(&mut plan, &request);
-        let root_id = plan.root_frame.id.clone();
+        let planned_root_id = plan.root_frame.id.clone();
 
         // -- 进入"已动文档"区,全程 undo batch 包裹 --
         sink.begin_undo_batch();
@@ -64,10 +64,17 @@ impl Orchestrator {
         for cmd in seed_commands(&plan) {
             sink.apply(cmd);
         }
+        let scaffold_root_index = sink.state().active_children().len();
         match build_scaffold(&plan, norm.is_mobile) {
             Ok(cmds) => {
                 for cmd in cmds {
-                    sink.apply(cmd);
+                    if !sink.apply(cmd) {
+                        rollback(sink, &var_snapshot);
+                        sink.end_undo_batch();
+                        return Err(OrchestratorError::Internal(
+                            "scaffold insert rejected by document".into(),
+                        ));
+                    }
                 }
             }
             Err(e) => {
@@ -76,6 +83,21 @@ impl Orchestrator {
                 sink.end_undo_batch();
                 return Err(OrchestratorError::Internal(e));
             }
+        }
+        let Some(root_id) = sink
+            .state()
+            .active_children()
+            .get(scaffold_root_index)
+            .map(|n| n.id_str().to_string())
+        else {
+            rollback(sink, &var_snapshot);
+            sink.end_undo_batch();
+            return Err(OrchestratorError::Internal(format!(
+                "scaffold root `{planned_root_id}` was not inserted"
+            )));
+        };
+        for subtask in &mut plan.subtasks {
+            subtask.parent_frame_id = Some(root_id.clone());
         }
         let scaffold_baseline = descendant_count(sink.state(), &root_id);
         on_progress(Progress::ScaffoldDone);
@@ -174,14 +196,14 @@ mod tests {
         }
     }
 
-    const PLAN_JSON: &str = r#"{
+    const PLAN_JSON: &str = r##"{
       "root_frame": { "id": "root", "name": "Page", "width": 1200, "height": 800,
                       "layout": "vertical", "gap": 0, "fill": "#FFFFFF" },
       "subtasks": [
         { "id": "hero", "label": "Hero", "region": { "width": 1200, "height": 400 } },
         { "id": "feat", "label": "Features", "region": { "width": 1200, "height": 400 } }
       ]
-    }"#;
+    }"##;
 
     fn node_json(prefix: &str) -> String {
         format!(
