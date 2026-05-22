@@ -4,8 +4,13 @@
 // Functions are pub(crate); callers added in B3/B4/B5.
 #![allow(dead_code)]
 
-use crate::design_type::contains_word;
+use crate::design_md_policy::{
+    build_design_md_style_policy, guess_neutral_background_from_theme, infer_design_md_background,
+};
+use crate::design_type::{contains_word, detect_design_type, DesignType};
+use crate::model_profile::{resolve_model_profile, ModelTier};
 use crate::types::PlanningMode;
+use jian_ops_schema::DesignMdSpec;
 use op_ai_skills::style_guide::{
     extract_style_guide_values, style_guide_registry, ParsedStyleGuide, Platform,
 };
@@ -395,9 +400,181 @@ pub(crate) fn format_guide_snippet(guide: &ParsedStyleGuide) -> String {
     lines.join("\n")
 }
 
+/// `build_planning_style_guide_context` 的产物。`available_style_guides`
+/// 是 1a 唯一消费项;计数/名字给诊断(1b 可用)。crate 内部结构。
+#[derive(Debug, Clone)]
+pub(crate) struct PlanningStyleGuideContext {
+    pub available_style_guides: String,
+    pub metadata_count: usize,
+    pub snippet_count: usize,
+    pub top_guide_names: Vec<String>,
+    pub snippet_guide_names: Vec<String>,
+}
+
+/// Rich 模式各 tier 的 snippet 上限。
+fn snippet_limit(tier: ModelTier) -> usize {
+    match tier {
+        ModelTier::Full => 8,
+        ModelTier::Standard => 6,
+        ModelTier::Basic => 4,
+    }
+}
+
+/// 构造规划 prompt 的 `{{availableStyleGuides}}` 上下文 —— port of
+/// `buildPlanningStyleGuideContext`。design.md 在场时走早返回分支。
+pub(crate) fn build_planning_style_guide_context(
+    prompt: &str,
+    model: Option<&str>,
+    mode: PlanningMode,
+    design_md: Option<&DesignMdSpec>,
+) -> PlanningStyleGuideContext {
+    // —— design.md 分支:不碰 catalog ——
+    if let Some(spec) = design_md {
+        let policy = build_design_md_style_policy(spec);
+        let bg_hint = infer_design_md_background(spec);
+        // When design.md has no palette entry explicitly marked as background/
+        // surface/canvas, do NOT ask the model to "pick" from the palette — it
+        // will happily pick a brand/CTA color and paint the whole page that
+        // color. Give it a neutral default instead, biased by visualTheme
+        // keywords.
+        let neutral_default = guess_neutral_background_from_theme(spec.visual_theme.as_deref());
+        let root_fill_directive = match &bg_hint {
+            Some(hint) => format!(
+                "- Set rootFrame.fill color to \"{hint}\" (the primary background \
+                 color from the design.md palette)."
+            ),
+            None => format!(
+                "- Set rootFrame.fill color to \"{neutral_default}\" (neutral page \
+                 background — design.md has no palette entry tagged as background, \
+                 so DO NOT pick a brand/CTA/accent/text color from the palette for \
+                 the page background)."
+            ),
+        };
+        let lines: Vec<String> = vec![
+            "The user has a custom design system (design.md). DO NOT pick a style \
+             guide from a catalog."
+                .to_string(),
+            "Use the rules below for all style decisions:".to_string(),
+            String::new(),
+            if policy.is_empty() {
+                "(design.md is present but has no extractable policy; use project defaults)"
+                    .to_string()
+            } else {
+                policy
+            },
+            String::new(),
+            "Output directives:".to_string(),
+            "- Set \"styleGuideName\": \"design-md-custom\" (exact string).".to_string(),
+            root_fill_directive,
+        ];
+        return PlanningStyleGuideContext {
+            available_style_guides: lines.join("\n"),
+            metadata_count: 0,
+            snippet_count: 0,
+            top_guide_names: vec!["design-md-custom".to_string()],
+            snippet_guide_names: Vec::new(),
+        };
+    }
+
+    // —— catalog 分支 ——
+    let preset = detect_design_type(prompt);
+    let platform = if preset.type_ == DesignType::MobileScreen {
+        Platform::Mobile
+    } else {
+        Platform::Webapp
+    };
+    let tags = infer_tags_from_prompt(prompt);
+    let tier = resolve_model_profile(model.unwrap_or("")).tier;
+    let ranked = rank_style_guides_for_prompt(&tags, platform);
+
+    let metadata_lines: Vec<String> = ranked
+        .iter()
+        .map(|g| format_guide_metadata_line(g, mode))
+        .collect();
+    let limit = if mode == PlanningMode::Rich {
+        snippet_limit(tier)
+    } else {
+        0
+    };
+    let snippet_guides: Vec<&ParsedStyleGuide> = ranked.iter().take(limit).copied().collect();
+
+    let mut parts: Vec<String> = vec![
+        "Available style guides (compact catalog; all candidates are listed below):".to_string(),
+    ];
+    parts.extend(metadata_lines.iter().cloned());
+    if !snippet_guides.is_empty() {
+        parts.push(String::new());
+        parts.push(
+            "Detailed references for the best-matching candidates (prefer these before \
+             inventing a styleGuideName):"
+                .to_string(),
+        );
+        for g in &snippet_guides {
+            parts.push(format_guide_snippet(g));
+        }
+    }
+
+    PlanningStyleGuideContext {
+        available_style_guides: parts.join("\n"),
+        metadata_count: metadata_lines.len(),
+        snippet_count: snippet_guides.len(),
+        top_guide_names: ranked.iter().take(12).map(|g| g.name.clone()).collect(),
+        snippet_guide_names: snippet_guides.iter().map(|g| g.name.clone()).collect(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn catalog_context_lists_all_guides() {
+        let ctx = build_planning_style_guide_context(
+            "a fintech dashboard",
+            Some("claude-opus"),
+            PlanningMode::Rich,
+            None,
+        );
+        assert_eq!(ctx.metadata_count, style_guide_registry().len());
+        assert!(ctx.snippet_count > 0); // Rich + full tier → 有 snippet
+        assert!(ctx
+            .available_style_guides
+            .contains("Available style guides"));
+    }
+
+    #[test]
+    fn minimal_mode_has_no_snippets() {
+        let ctx = build_planning_style_guide_context(
+            "a fintech dashboard",
+            Some("claude-opus"),
+            PlanningMode::Minimal,
+            None,
+        );
+        assert_eq!(ctx.snippet_count, 0);
+    }
+
+    #[test]
+    fn design_md_branch_skips_catalog() {
+        let spec = jian_ops_schema::DesignMdSpec {
+            raw: String::new(),
+            project_name: None,
+            visual_theme: Some("calm".into()),
+            color_palette: None,
+            typography: None,
+            component_styles: None,
+            layout_principles: None,
+            generation_notes: None,
+        };
+        let ctx = build_planning_style_guide_context(
+            "a page",
+            Some("claude-opus"),
+            PlanningMode::Rich,
+            Some(&spec),
+        );
+        assert_eq!(ctx.metadata_count, 0);
+        assert_eq!(ctx.top_guide_names, vec!["design-md-custom".to_string()]);
+        assert!(ctx.available_style_guides.contains("custom design system"));
+    }
 
     #[test]
     fn unmatched_prompt_yields_only_tone_tag() {
