@@ -576,6 +576,8 @@ impl HookManager {
             }
 
             Message::StreamEvent { .. } => {}
+            // Unmodelled message types carry no hook payload.
+            Message::Unknown => {}
         }
 
         Ok(outputs)
