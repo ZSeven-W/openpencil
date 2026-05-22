@@ -116,6 +116,8 @@ mod tests {
             },
             id_prefix: "hero".into(),
             parent_frame_id: None,
+            elements: None,
+            screen: None,
         }
     }
 

@@ -65,6 +65,12 @@ pub struct Subtask {
     /// 规范化后赋值 = 根 frame id。
     #[serde(default)]
     pub parent_frame_id: Option<String>,
+    /// 本区块包含的元素描述 —— port of TS `SubTask.elements`。
+    #[serde(default)]
+    pub elements: Option<String>,
+    /// 对应的屏幕 / 页面名 —— port of TS `SubTask.screen`。
+    #[serde(default)]
+    pub screen: Option<String>,
 }
 
 /// 规划阶段的完整产物。字段对齐规划语料 `decomposition.md`。
@@ -164,6 +170,8 @@ pub fn build_fallback_plan(req: &DesignRequest) -> OrchestratorPlan {
                 },
                 id_prefix: id,
                 parent_frame_id: None,
+                elements: None,
+                screen: None,
             }
         })
         .collect();

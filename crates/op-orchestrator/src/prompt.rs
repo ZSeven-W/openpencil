@@ -261,6 +261,8 @@ mod tests {
             },
             id_prefix: "hero".into(),
             parent_frame_id: Some("root".into()),
+            elements: None,
+            screen: None,
         };
         let cr = build_subagent_prompt(&st, &plan(), &req(), AbortFlag::new());
         assert!(cr.user_prompt.contains("Hero"));

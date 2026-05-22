@@ -1,14 +1,24 @@
-//! `plan_repair` — JSON-repair value coercers.
+//! `plan_repair` — JSON-repair value coercers + plan repair/finalize.
 //!
 //! Task B1: helper functions ported from
 //! `apps/web/src/services/ai/orchestrator-planning.ts:272-352`.
-//! Task B2 (repair_plan_object + finalize_plan) and B3
-//! (parse_orchestrator_response) will be appended in later tasks.
+//! Task B2: `repair_plan_object`, `finalize_plan`, `extract_subtask_candidates`,
+//! `coerce_subtask`, `build_fallback_heights` — port of
+//! `apps/web/src/services/ai/orchestrator-planning.ts:76-254`.
+//! Task B3 (parse_orchestrator_response) will be appended in the next task.
 
 #![allow(dead_code)]
 
-use crate::plan::PlanFill;
+use crate::design_md_policy::{guess_neutral_background_from_theme, infer_design_md_background};
+use crate::plan::build_fallback_plan;
+use crate::plan::{OrchestratorPlan, PlanFill, Region, RootFrameSpec, Subtask};
+use crate::types::DesignRequest;
+use jian_ops_schema::DesignMdSpec;
 use serde_json::Value;
+
+/// The `styleGuideName` forced when `design_md` is present.
+/// Port of `DESIGN_MD_STYLE_GUIDE_NAME` from `orchestrator-prompt-optimizer.ts`.
+pub(crate) const DESIGN_MD_STYLE_GUIDE_NAME: &str = "design-md-custom";
 
 // ── public(crate) helpers ─────────────────────────────────────────────────────
 
@@ -195,236 +205,281 @@ pub(crate) fn allocate_section_heights(total_height: i64, count: usize) -> Vec<i
     heights
 }
 
+// ── Task B2: repair_plan_object + finalize_plan ───────────────────────────────
+
+/// Tries to repair a valid-JSON-but-schema-invalid value into an
+/// `OrchestratorPlan`.  Returns `None` when the object has no recognisable
+/// subtask candidates at all (empty after coercion).
+///
+/// Port of `repairPlanObject` from
+/// `apps/web/src/services/ai/orchestrator-planning.ts:89-138`.
+pub(crate) fn repair_plan_object(obj: &Value, request: &DesignRequest) -> Option<OrchestratorPlan> {
+    let fallback = build_fallback_plan(request);
+    let raw_subtasks = extract_subtask_candidates(obj);
+    if raw_subtasks.is_empty() {
+        return None;
+    }
+
+    // rootFrame source: prefer `rootFrame` object, fall back to the top-level
+    // object itself (faithfully mirrors TS `isRecord(obj.rootFrame) ? …`).
+    let root_source = if is_record(&obj["rootFrame"]) {
+        &obj["rootFrame"]
+    } else {
+        obj
+    };
+
+    let fallback_heights = build_fallback_heights(&fallback, raw_subtasks.len());
+
+    let root_frame = RootFrameSpec {
+        id: as_string(&root_source["id"]).unwrap_or_else(|| fallback.root_frame.id.clone()),
+        name: as_string(&root_source["name"]).unwrap_or_else(|| fallback.root_frame.name.clone()),
+        width: as_positive_number(&root_source["width"]).unwrap_or(fallback.root_frame.width),
+        height: as_non_negative_number(&root_source["height"])
+            .unwrap_or(fallback.root_frame.height),
+        layout: Some(
+            as_layout(&root_source["layout"])
+                .or_else(|| fallback.root_frame.layout.clone())
+                .unwrap_or_else(|| "vertical".to_owned()),
+        ),
+        gap: Some(
+            as_non_negative_number(&root_source["gap"])
+                .or(fallback.root_frame.gap)
+                .unwrap_or(0.0),
+        ),
+        padding: fallback.root_frame.padding,
+        fill: coerce_fill(&root_source["fill"]).or_else(|| fallback.root_frame.fill.clone()),
+    };
+
+    let subtasks: Vec<Subtask> = raw_subtasks
+        .iter()
+        .enumerate()
+        .filter_map(|(index, candidate)| {
+            coerce_subtask(
+                candidate,
+                index,
+                root_frame.width,
+                fallback_heights.get(index).copied().unwrap_or(160),
+            )
+        })
+        .collect();
+
+    if subtasks.is_empty() {
+        return None;
+    }
+
+    // styleGuideName aliasing: design_md → force "design-md-custom";
+    // else prefer camelCase `styleGuideName`, then snake_case `style_guide`,
+    // then fallback.
+    let style_guide_name = if request.design_md.is_some() {
+        Some(DESIGN_MD_STYLE_GUIDE_NAME.to_owned())
+    } else {
+        as_string(&obj["styleGuideName"])
+            .or_else(|| as_string(&obj["style_guide"]))
+            .or_else(|| fallback.style_guide_name.clone())
+    };
+
+    let mut repaired = OrchestratorPlan {
+        root_frame,
+        subtasks,
+        style_guide_name,
+    };
+
+    Some(finalize_plan(
+        &mut repaired,
+        Some(obj),
+        request.design_md.as_ref(),
+    ))
+}
+
+/// Post-processes a plan after strict-parse or repair.
+///
+/// - `design_md` present → force `style_guide_name = "design-md-custom"`,
+///   overwrite `root_frame.fill` with the design.md background color.
+/// - otherwise → leave the plan unchanged (the Rust struct has no
+///   `style_guide` inline field; catalog-guide recovery is a no-op here).
+///
+/// Port of `finalizePlan` from
+/// `apps/web/src/services/ai/orchestrator-planning.ts:140-184`.
+pub(crate) fn finalize_plan(
+    plan: &mut OrchestratorPlan,
+    _raw_obj: Option<&Value>,
+    design_md: Option<&DesignMdSpec>,
+) -> OrchestratorPlan {
+    if let Some(spec) = design_md {
+        plan.style_guide_name = Some(DESIGN_MD_STYLE_GUIDE_NAME.to_owned());
+        let bg = infer_design_md_background(spec)
+            .unwrap_or_else(|| guess_neutral_background_from_theme(spec.visual_theme.as_deref()));
+        plan.root_frame.fill = Some(vec![PlanFill {
+            kind: "solid".to_owned(),
+            color: bg,
+        }]);
+    }
+    plan.clone()
+}
+
+/// Returns the first non-empty candidate array from `subtasks` / `sections` /
+/// `tasks` in the object — or an empty vec when none are found.
+///
+/// Port of `extractSubtaskCandidates` from
+/// `apps/web/src/services/ai/orchestrator-planning.ts:186-191`.
+fn extract_subtask_candidates(obj: &Value) -> Vec<Value> {
+    for key in &["subtasks", "sections", "tasks"] {
+        if let Some(arr) = obj[key].as_array() {
+            if !arr.is_empty() {
+                return arr.clone();
+            }
+        }
+    }
+    vec![]
+}
+
+/// Coerces a single subtask candidate (string or object) into a `Subtask`, or
+/// returns `None` when it cannot be recovered.
+///
+/// Port of `coerceSubtask` + `asElements` from
+/// `apps/web/src/services/ai/orchestrator-planning.ts:215-270`.
+fn coerce_subtask(
+    candidate: &Value,
+    index: usize,
+    root_width: f64,
+    default_height: i64,
+) -> Option<Subtask> {
+    if let Some(s) = candidate.as_str() {
+        let label = s.trim().to_owned();
+        if label.is_empty() {
+            return None;
+        }
+        return Some(Subtask {
+            id: make_safe_section_id(&label, index),
+            label,
+            region: Region {
+                width: root_width,
+                height: default_height as f64,
+            },
+            id_prefix: String::new(),
+            parent_frame_id: None,
+            elements: None,
+            screen: None,
+        });
+    }
+
+    if !is_record(candidate) {
+        return None;
+    }
+
+    // label aliasing: label ?? name ?? title ?? section ?? "Section N"
+    let label = as_string(&candidate["label"])
+        .or_else(|| as_string(&candidate["name"]))
+        .or_else(|| as_string(&candidate["title"]))
+        .or_else(|| as_string(&candidate["section"]))
+        .unwrap_or_else(|| format!("Section {}", index + 1));
+
+    // region source: prefer `region` object, else the candidate itself
+    let region_source = if is_record(&candidate["region"]) {
+        &candidate["region"]
+    } else {
+        candidate
+    };
+    let width = as_positive_number(&region_source["width"]).unwrap_or(root_width);
+    let height = as_positive_number(&region_source["height"])
+        .or_else(|| as_positive_number(&candidate["height"]))
+        .map(|h| h as i64)
+        .unwrap_or(default_height);
+
+    // elements aliasing: elements ?? scope ?? description
+    let elements_raw = if candidate["elements"] != Value::Null {
+        &candidate["elements"]
+    } else if candidate["scope"] != Value::Null {
+        &candidate["scope"]
+    } else {
+        &candidate["description"]
+    };
+    let elements = coerce_elements(elements_raw);
+
+    // screen aliasing: screen ?? page
+    let screen = as_string(&candidate["screen"]).or_else(|| as_string(&candidate["page"]));
+
+    Some(Subtask {
+        id: as_string(&candidate["id"]).unwrap_or_else(|| make_safe_section_id(&label, index)),
+        label,
+        region: Region {
+            width,
+            height: height as f64,
+        },
+        id_prefix: String::new(),
+        parent_frame_id: None,
+        elements,
+        screen,
+    })
+}
+
+/// Coerces a value into a comma-joined elements string, matching the TS
+/// `asElements` helper.
+fn coerce_elements(value: &Value) -> Option<String> {
+    if let Some(s) = value.as_str() {
+        let trimmed = s.trim().to_owned();
+        return if trimmed.is_empty() {
+            None
+        } else {
+            Some(trimmed)
+        };
+    }
+    if let Some(arr) = value.as_array() {
+        let parts: Vec<String> = arr
+            .iter()
+            .filter_map(|item| item.as_str())
+            .map(|s| s.trim().to_owned())
+            .filter(|s| !s.is_empty())
+            .collect();
+        return if parts.is_empty() {
+            None
+        } else {
+            Some(parts.join(", "))
+        };
+    }
+    None
+}
+
+/// Builds the fallback height array for `count` subtasks derived from the
+/// fallback plan shape.
+///
+/// Port of `buildFallbackHeights` from
+/// `apps/web/src/services/ai/orchestrator-planning.ts:193-213`.
+pub(crate) fn build_fallback_heights(fallback: &OrchestratorPlan, count: usize) -> Vec<i64> {
+    if count == 0 {
+        return vec![];
+    }
+
+    let fw = fallback.root_frame.width;
+    let fh = fallback.root_frame.height;
+
+    // Component shape: narrow (≤480) + zero/undefined height
+    let is_component_shape = fw <= 480.0 && (fh == 0.0);
+    if is_component_shape {
+        return vec![200_i64; count];
+    }
+
+    // Mobile: narrow (≤500), split 812 evenly
+    if fw <= 500.0 {
+        let per_section = ((if fh == 0.0 { 812.0 } else { fh }) / count as f64).floor() as i64;
+        return vec![per_section; count];
+    }
+
+    // Desktop: weighted allocation
+    let total_height = if fh == 0.0 {
+        if count >= 4 {
+            4000
+        } else {
+            800
+        }
+    } else {
+        fh as i64
+    };
+    allocate_section_heights(total_height, count)
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use serde_json::{json, Value};
-
-    // ── as_string ─────────────────────────────────────────────────────────────
-
-    #[test]
-    fn as_string_non_empty_trimmed() {
-        assert_eq!(as_string(&json!("  hello  ")), Some("hello".into()));
-        assert_eq!(as_string(&json!("world")), Some("world".into()));
-    }
-
-    #[test]
-    fn as_string_empty_or_whitespace_returns_none() {
-        assert_eq!(as_string(&json!("")), None);
-        assert_eq!(as_string(&json!("   ")), None);
-    }
-
-    #[test]
-    fn as_string_non_string_returns_none() {
-        assert_eq!(as_string(&json!(42)), None);
-        assert_eq!(as_string(&Value::Null), None);
-        assert_eq!(as_string(&json!(true)), None);
-        assert_eq!(as_string(&json!([])), None);
-    }
-
-    // ── as_positive_number ────────────────────────────────────────────────────
-
-    #[test]
-    fn as_positive_number_accepts_finite_positive() {
-        assert_eq!(as_positive_number(&json!(1.0)), Some(1.0));
-        assert_eq!(as_positive_number(&json!(0.001)), Some(0.001));
-        assert_eq!(as_positive_number(&json!(1200)), Some(1200.0));
-    }
-
-    #[test]
-    fn as_positive_number_rejects_zero_and_negative() {
-        assert_eq!(as_positive_number(&json!(0)), None);
-        assert_eq!(as_positive_number(&json!(-5.0)), None);
-    }
-
-    #[test]
-    fn as_positive_number_rejects_non_number() {
-        assert_eq!(as_positive_number(&json!("1.5")), None);
-        assert_eq!(as_positive_number(&Value::Null), None);
-    }
-
-    // ── as_non_negative_number ────────────────────────────────────────────────
-
-    #[test]
-    fn as_non_negative_number_accepts_zero_and_positive() {
-        assert_eq!(as_non_negative_number(&json!(0)), Some(0.0));
-        assert_eq!(as_non_negative_number(&json!(0.0)), Some(0.0));
-        assert_eq!(as_non_negative_number(&json!(42.5)), Some(42.5));
-    }
-
-    #[test]
-    fn as_non_negative_number_rejects_negative() {
-        assert_eq!(as_non_negative_number(&json!(-0.001)), None);
-        assert_eq!(as_non_negative_number(&json!(-100)), None);
-    }
-
-    #[test]
-    fn as_non_negative_number_rejects_non_number() {
-        assert_eq!(as_non_negative_number(&json!("0")), None);
-        assert_eq!(as_non_negative_number(&Value::Null), None);
-    }
-
-    // ── as_layout ─────────────────────────────────────────────────────────────
-
-    #[test]
-    fn as_layout_accepts_valid_values() {
-        assert_eq!(as_layout(&json!("none")), Some("none".into()));
-        assert_eq!(as_layout(&json!("vertical")), Some("vertical".into()));
-        assert_eq!(as_layout(&json!("horizontal")), Some("horizontal".into()));
-    }
-
-    #[test]
-    fn as_layout_rejects_invalid_values() {
-        assert_eq!(as_layout(&json!("flex")), None);
-        assert_eq!(as_layout(&json!("")), None);
-        assert_eq!(as_layout(&json!(42)), None);
-        assert_eq!(as_layout(&Value::Null), None);
-    }
-
-    // ── coerce_fill ───────────────────────────────────────────────────────────
-
-    #[test]
-    fn coerce_fill_array_of_objects() {
-        let v = json!([{"type": "solid", "color": "#fff"}]);
-        let fills = coerce_fill(&v).unwrap();
-        assert_eq!(fills.len(), 1);
-        assert_eq!(fills[0].kind, "solid");
-        assert_eq!(fills[0].color, "#fff");
-    }
-
-    #[test]
-    fn coerce_fill_array_defaults_type_to_solid() {
-        let v = json!([{"color": "#123456"}]);
-        let fills = coerce_fill(&v).unwrap();
-        assert_eq!(fills[0].kind, "solid");
-    }
-
-    #[test]
-    fn coerce_fill_bare_color_string() {
-        let v = json!("#aabbcc");
-        let fills = coerce_fill(&v).unwrap();
-        assert_eq!(fills.len(), 1);
-        assert_eq!(fills[0].kind, "solid");
-        assert_eq!(fills[0].color, "#aabbcc");
-    }
-
-    #[test]
-    fn coerce_fill_array_drops_entries_without_color() {
-        let v = json!([{"type": "solid"}, {"color": "#ff0000"}]);
-        let fills = coerce_fill(&v).unwrap();
-        assert_eq!(fills.len(), 1);
-        assert_eq!(fills[0].color, "#ff0000");
-    }
-
-    #[test]
-    fn coerce_fill_empty_array_returns_none() {
-        assert_eq!(coerce_fill(&json!([])), None);
-    }
-
-    #[test]
-    fn coerce_fill_empty_string_returns_none() {
-        assert_eq!(coerce_fill(&json!("")), None);
-    }
-
-    // ── is_record ─────────────────────────────────────────────────────────────
-
-    #[test]
-    fn is_record_plain_object() {
-        assert!(is_record(&json!({"key": "val"})));
-        assert!(is_record(&json!({})));
-    }
-
-    #[test]
-    fn is_record_non_objects() {
-        assert!(!is_record(&Value::Null));
-        assert!(!is_record(&json!([])));
-        assert!(!is_record(&json!("string")));
-        assert!(!is_record(&json!(42)));
-        assert!(!is_record(&json!(true)));
-    }
-
-    // ── make_safe_section_id ──────────────────────────────────────────────────
-
-    #[test]
-    fn make_safe_section_id_normal_label() {
-        assert_eq!(make_safe_section_id("Hero Section", 0), "hero-section");
-    }
-
-    #[test]
-    fn make_safe_section_id_multiple_spaces_and_special_chars() {
-        assert_eq!(make_safe_section_id("FAQ  &  Help", 1), "faq-help");
-    }
-
-    #[test]
-    fn make_safe_section_id_empty_after_strip() {
-        assert_eq!(make_safe_section_id("!!!", 0), "section-1");
-        assert_eq!(make_safe_section_id("", 2), "section-3");
-    }
-
-    #[test]
-    fn make_safe_section_id_already_safe() {
-        assert_eq!(make_safe_section_id("hero", 0), "hero");
-    }
-
-    #[test]
-    fn make_safe_section_id_index_is_one_based_in_fallback() {
-        // index=0 → "section-1", index=4 → "section-5"
-        assert_eq!(make_safe_section_id("???", 0), "section-1");
-        assert_eq!(make_safe_section_id("???", 4), "section-5");
-    }
-
-    // ── allocate_section_heights ──────────────────────────────────────────────
-
-    #[test]
-    fn allocate_section_heights_zero_count() {
-        assert_eq!(allocate_section_heights(1080, 0), Vec::<i64>::new());
-    }
-
-    #[test]
-    fn allocate_section_heights_single_section() {
-        assert_eq!(allocate_section_heights(800, 1), vec![800]);
-    }
-
-    #[test]
-    fn allocate_section_heights_two_sections_sums_correctly() {
-        let total = 1080;
-        let result = allocate_section_heights(total, 2);
-        assert_eq!(result.len(), 2);
-        assert_eq!(result.iter().sum::<i64>(), total);
-        // Both sections should be ≥ min_height (80)
-        assert!(result.iter().all(|&h| h >= 80));
-    }
-
-    #[test]
-    fn allocate_section_heights_three_sections_sums_correctly() {
-        let total = 1080;
-        let result = allocate_section_heights(total, 3);
-        assert_eq!(result.len(), 3);
-        assert_eq!(result.iter().sum::<i64>(), total);
-        assert!(result.iter().all(|&h| h >= 80));
-        // First section should be larger than last (1.4 vs 0.6 weight)
-        assert!(result[0] > result[2]);
-    }
-
-    #[test]
-    fn allocate_section_heights_five_sections_sums_correctly() {
-        let total = 2400;
-        let result = allocate_section_heights(total, 5);
-        assert_eq!(result.len(), 5);
-        assert_eq!(result.iter().sum::<i64>(), total);
-        assert!(result.iter().all(|&h| h >= 80));
-    }
-
-    #[test]
-    fn allocate_section_heights_weighted_distribution() {
-        // For 3 sections: weights are [1.4, 1.0, 0.6], total=3.0
-        // With total=300: first≈140, middle≈100, last≈60 (min 80 applies to last)
-        let result = allocate_section_heights(300, 3);
-        assert_eq!(result.len(), 3);
-        assert_eq!(result.iter().sum::<i64>(), 300);
-        // First section gets the most weight
-        assert!(result[0] > result[1]);
-    }
-}
+#[path = "plan_repair_tests.rs"]
+mod tests;
