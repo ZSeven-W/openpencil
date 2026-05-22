@@ -85,6 +85,7 @@ mod tests {
             prompt: "a page".into(),
             model: None,
             provider: None,
+            design_md: None,
         }
     }
 

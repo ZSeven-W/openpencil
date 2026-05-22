@@ -173,6 +173,7 @@ pub async fn run_design_request(
         prompt,
         model,
         provider: provider_id,
+        design_md: state.doc.design_md.clone(),
     };
     let mut sink = DesktopDocSink::new(state);
     Orchestrator::new()

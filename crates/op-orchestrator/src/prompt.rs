@@ -106,6 +106,7 @@ mod tests {
             prompt: "a pricing page".into(),
             model: Some("claude".into()),
             provider: None,
+            design_md: None,
         }
     }
 

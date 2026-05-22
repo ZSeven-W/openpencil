@@ -214,6 +214,7 @@ mod tests {
             prompt: "a landing page".into(),
             model: None,
             provider: None,
+            design_md: None,
         }
     }
 
