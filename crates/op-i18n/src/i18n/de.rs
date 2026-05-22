@@ -55,6 +55,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "topbar.closeConfirmDetail" => "Ihre Änderungen gehen verloren, wenn Sie sie nicht speichern.",
         "topbar.dontSave" => "Nicht speichern",
         "topbar.agentsAndMcp" => "Agenten & MCP",
+        "topbar.agentSingular" => "Agent",
         "topbar.setupAgentsMcp" => "Agenten & MCP einrichten",
         "topbar.connected" => "verbunden",
         "topbar.agentStatus" => "{{agents}} Agent{{agentSuffix}} · {{mcp}} MCP",
