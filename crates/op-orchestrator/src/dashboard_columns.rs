@@ -367,6 +367,352 @@ fn has_table_analytics_customer_keyword(text: &str) -> bool {
 }
 
 // ---------------------------------------------------------------------------
+// §4.5 Main-subtask normalisation + row bin-packing
+// ---------------------------------------------------------------------------
+
+/// Return value of [`group_dashboard_main_rows`].
+pub(crate) struct DashboardRowGroups {
+    /// Each element is a row of subtask *indices* (into `plan.subtasks`).
+    pub rows: Vec<Vec<usize>>,
+    /// The computed full width of the main column.
+    pub full_width: f64,
+    /// The gap to use between rows.
+    pub row_gap: f64,
+}
+
+/// Normalises the main-content-container subtask in-place:
+///
+/// - Strips "metrics row" / "metrics container" phrases from its `elements`.
+/// - Relabels it to `"Top Bar"`.
+/// - Clamps its `region.height` to `[88, 120]`.
+///
+/// No-op when fewer than 2 main subtasks or when no
+/// `is_main_content_container_subtask` is found.
+///
+/// Port of TS `normalizeDashboardMainSubtasks` (`orchestrator.ts:322-343`).
+pub(crate) fn normalize_dashboard_main_subtasks(plan: &mut OrchestratorPlan) {
+    let main_count = plan
+        .subtasks
+        .iter()
+        .filter(|st| !is_sidebar_subtask(st))
+        .count();
+    if main_count < 2 {
+        return;
+    }
+
+    // Find the index of the main-content-container subtask.
+    let container_idx = plan
+        .subtasks
+        .iter()
+        .position(is_main_content_container_subtask);
+    let Some(idx) = container_idx else { return };
+
+    let container = &mut plan.subtasks[idx];
+
+    // Strip "metrics? (cards? )?(row|container)" phrases from elements.
+    let raw = container.elements.clone().unwrap_or_default();
+    let cleaned = strip_metrics_phrases(&raw);
+
+    // Extract "top bar …" substring if present, else use the cleaned text, else
+    // fall back to a fixed default.
+    let top_bar_elements = extract_top_bar_fragment(&cleaned);
+
+    container.label = "Top Bar".into();
+    container.elements = Some(top_bar_elements);
+    let h = container.region.height;
+    container.region.height = h.clamp(88.0, 120.0);
+}
+
+/// Strips `[,;]? metrics? (cards? )?(row|container)…` phrases (case-insensitive).
+///
+/// Port of the two `.replace()` calls in TS `normalizeDashboardMainSubtasks`.
+fn strip_metrics_phrases(s: &str) -> String {
+    // Simple iterative approach: scan for "metric" and remove the phrase up to
+    // the next punctuation boundary.
+    //
+    // TS regex: `/[,;]?\s*metrics?\s*(cards?\s*)?(row|container)[^,.;\]]*/gi`
+    // We implement this with a manual scan to avoid pulling in the `regex` crate.
+    let lower = s.to_lowercase();
+    let bytes = lower.as_bytes();
+    let src_bytes = s.as_bytes();
+    let len = bytes.len();
+    let mut result = String::with_capacity(len);
+    let mut i = 0usize;
+
+    while i < len {
+        // Try to match the phrase starting at position `i`.
+        if let Some(skip) = metrics_phrase_len(&lower[i..]) {
+            // Also eat a leading `,` or `;` if present just before `i`.
+            // The TS regex has `[,;]?` at the START of the match.
+            // Since we build `result` left-to-right, trim trailing `, ` from result.
+            trim_trailing_sep(&mut result);
+            i += skip;
+        } else {
+            // Emit byte from original (preserving case).
+            result.push(src_bytes[i] as char);
+            i += 1;
+        }
+    }
+
+    // Collapse multiple spaces and trim trailing punctuation.
+    let collapsed = collapse_spaces(&result);
+    trim_trailing_sep_str(&collapsed)
+}
+
+/// Returns the byte-length of a metrics phrase starting at the beginning of `s`
+/// (lowercased), or `None` if no match.
+///
+/// Pattern: `\s*metrics?\s*(cards?\s*)?(row|container)[^,.;\]]*`
+fn metrics_phrase_len(s: &str) -> Option<usize> {
+    let bytes = s.as_bytes();
+    let len = bytes.len();
+    let mut i = 0;
+
+    // Leading whitespace
+    while i < len && bytes[i] == b' ' {
+        i += 1;
+    }
+
+    // "metric" or "metrics"
+    let metric = b"metric";
+    if i + metric.len() > len {
+        return None;
+    }
+    if &bytes[i..i + metric.len()] != metric {
+        return None;
+    }
+    i += metric.len();
+    if i < len && bytes[i] == b's' {
+        i += 1;
+    }
+
+    // Optional whitespace
+    while i < len && bytes[i] == b' ' {
+        i += 1;
+    }
+
+    // Optional "cards? "
+    let card = b"card";
+    if i + card.len() <= len && &bytes[i..i + card.len()] == card {
+        i += card.len();
+        if i < len && bytes[i] == b's' {
+            i += 1;
+        }
+        while i < len && bytes[i] == b' ' {
+            i += 1;
+        }
+    }
+
+    // "row" or "container"
+    let row = b"row";
+    let container = b"container";
+    if i + row.len() <= len && &bytes[i..i + row.len()] == row {
+        i += row.len();
+    } else if i + container.len() <= len && &bytes[i..i + container.len()] == container {
+        i += container.len();
+    } else {
+        return None;
+    }
+
+    // Consume everything up to the next `,`, `.`, `;`, `]`.
+    while i < len && !matches!(bytes[i], b',' | b'.' | b';' | b']') {
+        i += 1;
+    }
+
+    Some(i)
+}
+
+/// Trims a trailing `, ` or `; ` (or just `,`/`;`) from `result`.
+fn trim_trailing_sep(result: &mut String) {
+    let trimmed = result.trim_end_matches(' ');
+    if trimmed.ends_with(',') || trimmed.ends_with(';') {
+        let new_len = trimmed.len() - 1;
+        result.truncate(new_len);
+        // Also eat any trailing space before the sep.
+        let trimmed2 = result.trim_end_matches(' ');
+        let final_len = trimmed2.len();
+        result.truncate(final_len);
+    }
+}
+
+/// Collapses two-or-more spaces into one.
+fn collapse_spaces(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    let mut last_space = false;
+    for c in s.chars() {
+        if c == ' ' {
+            if !last_space {
+                out.push(' ');
+            }
+            last_space = true;
+        } else {
+            last_space = false;
+            out.push(c);
+        }
+    }
+    out.trim().to_string()
+}
+
+/// Trims a trailing `;` or `,` (with optional whitespace) from a string slice.
+fn trim_trailing_sep_str(s: &str) -> String {
+    s.trim_end_matches([',', ';', ' ']).to_string()
+}
+
+/// Extracts the "top bar …" fragment from `cleaned` (case-insensitive), or
+/// returns `cleaned` itself, or a fixed default when both are empty.
+///
+/// Port of TS:
+/// ```ts
+/// const topBarElements =
+///   cleanedElements.match(/top\s*bar[^.;\]]*/i)?.[0]?.trim() ??
+///   cleanedElements ??
+///   'Top bar with page title, date range selector, and export button';
+/// ```
+fn extract_top_bar_fragment(cleaned: &str) -> String {
+    if cleaned.is_empty() {
+        return "Top bar with page title, date range selector, and export button".into();
+    }
+
+    // Case-insensitive search for "top" then optional space then "bar".
+    let lower = cleaned.to_lowercase();
+    if let Some(idx) = lower.find("top") {
+        let rest = &lower[idx + 3..];
+        // skip optional whitespace then "bar"
+        let rest2 = rest.trim_start_matches(' ');
+        if rest2.starts_with("bar") {
+            // End at the next `.`, `;`, or `]`
+            let start = idx;
+            let after_bar = idx + 3 + (rest.len() - rest2.len()) + 3;
+            let end = cleaned[after_bar..]
+                .find(['.', ';', ']'])
+                .map(|rel| after_bar + rel)
+                .unwrap_or(cleaned.len());
+            let fragment = cleaned[start..end].trim();
+            if !fragment.is_empty() {
+                return fragment.to_string();
+            }
+        }
+    }
+
+    cleaned.to_string()
+}
+
+/// Groups non-sidebar subtasks into rows using a greedy left-to-right bin-packer.
+///
+/// Returns [`DashboardRowGroups`] with rows as *indices into `plan.subtasks`*
+/// (not clones), plus the computed `full_width` and `row_gap`.
+///
+/// Rules (port of TS `groupDashboardMainRows` `orchestrator.ts:345-399`):
+/// - `full_width = max(root.width - 260, max of all main subtask region widths)`.
+/// - A subtask is **standalone** (its own row) if:
+///   - `region.width >= full_width * 0.82`, OR
+///   - it is an `is_main_content_container_subtask`.
+/// - Otherwise, greedily append to the current row:
+///   - Pre-flush the current row BEFORE adding if the proposed cumulative
+///     width (`currentWidth + gap + width`) would exceed `full_width * 1.05`.
+///   - Post-flush AFTER adding when the cumulative width `>= full_width * 0.92`.
+/// - `row_gap = root.gap` when `> 0`, else `24`.
+pub(crate) fn group_dashboard_main_rows(plan: &OrchestratorPlan) -> DashboardRowGroups {
+    // Indices of non-sidebar subtasks, preserving their original plan order.
+    let main_indices: Vec<usize> = plan
+        .subtasks
+        .iter()
+        .enumerate()
+        .filter(|(_, st)| !is_sidebar_subtask(st))
+        .map(|(i, _)| i)
+        .collect();
+
+    let full_width = {
+        let base = plan.root_frame.width - 260.0;
+        let max_w = main_indices
+            .iter()
+            .map(|&i| {
+                let w = plan.subtasks[i].region.width;
+                if w > 0.0 {
+                    w
+                } else {
+                    0.0
+                }
+            })
+            .fold(0.0_f64, f64::max);
+        f64::max(base, max_w)
+    };
+
+    let row_gap = match plan.root_frame.gap {
+        Some(g) if g > 0.0 => g,
+        _ => 24.0,
+    };
+
+    if main_indices.is_empty() {
+        return DashboardRowGroups {
+            rows: vec![],
+            full_width,
+            row_gap,
+        };
+    }
+
+    let mut rows: Vec<Vec<usize>> = Vec::new();
+    let mut current_row: Vec<usize> = Vec::new();
+    let mut current_width: f64 = 0.0;
+
+    let flush =
+        |rows: &mut Vec<Vec<usize>>, current_row: &mut Vec<usize>, current_width: &mut f64| {
+            if !current_row.is_empty() {
+                rows.push(std::mem::take(current_row));
+                *current_width = 0.0;
+            }
+        };
+
+    for &idx in &main_indices {
+        let st = &plan.subtasks[idx];
+        let width = if st.region.width > 0.0 {
+            st.region.width
+        } else {
+            full_width
+        };
+        let is_standalone = width >= full_width * 0.82 || is_main_content_container_subtask(st);
+
+        if is_standalone {
+            flush(&mut rows, &mut current_row, &mut current_width);
+            rows.push(vec![idx]);
+            continue;
+        }
+
+        // Proposed cumulative width if we add this subtask.
+        let next_width = if current_row.is_empty() {
+            width
+        } else {
+            current_width + row_gap + width
+        };
+
+        // Pre-flush: if adding would exceed 1.05 * full_width.
+        if !current_row.is_empty() && next_width > full_width * 1.05 {
+            flush(&mut rows, &mut current_row, &mut current_width);
+        }
+
+        current_row.push(idx);
+        current_width = if current_row.len() == 1 {
+            width
+        } else {
+            current_width + row_gap + width
+        };
+
+        // Post-flush: if cumulative >= 0.92 * full_width.
+        if current_width >= full_width * 0.92 {
+            flush(&mut rows, &mut current_row, &mut current_width);
+        }
+    }
+
+    flush(&mut rows, &mut current_row, &mut current_width);
+
+    DashboardRowGroups {
+        rows,
+        full_width,
+        row_gap,
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Tests — split into sibling file to stay under 800 lines
 // ---------------------------------------------------------------------------
 
