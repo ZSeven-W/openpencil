@@ -8,6 +8,7 @@
 //! Plan C 在 `run` 模块接出四阶段主轴。
 
 pub mod intent;
+pub mod model_profile;
 pub mod parse;
 pub mod plan;
 pub mod plan_normalize;
@@ -24,5 +25,6 @@ pub mod subagent;
 mod test_support;
 
 pub use intent::classify_intent;
+pub use model_profile::{resolve_model_profile, ModelProfile, ModelTier};
 pub use run::Orchestrator;
 pub use types::*;
