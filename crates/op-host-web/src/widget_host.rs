@@ -157,7 +157,9 @@ pub(in crate::widget_host) struct LayerDragState {
 
 impl WidgetHost {
     pub fn new() -> Self {
-        let editor_state = op_editor_core::EditorState::sample();
+        // A fresh launch opens with a single empty starter Frame —
+        // see `EditorState::starter`.
+        let editor_state = op_editor_core::EditorState::starter();
         // Seed the render scene once up front; subsequent frames
         // re-derive only when `editor_state_dirty` is set.
         let layout_scene = op_pen_loader::editor_state_to_layout_scene(&editor_state);
