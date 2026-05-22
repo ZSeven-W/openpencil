@@ -149,6 +149,8 @@ pub struct DesignRequest {
     pub prompt: String,
     pub model: Option<String>,
     pub provider: Option<String>,
+    /// 当前文档的 design.md(若有)—— 规划 prompt 据此走 design.md 分支。
+    pub design_md: Option<jian_ops_schema::DesignMdSpec>,
 }
 
 #[cfg(test)]

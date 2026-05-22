@@ -55,6 +55,7 @@ mod tests {
             prompt: "x".into(),
             model: None,
             provider: None,
+            design_md: None,
         }
     }
 

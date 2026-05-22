@@ -45,6 +45,7 @@ mod tests {
             prompt: "a page".into(),
             model: None,
             provider: None,
+            design_md: None,
         });
         assert!(seed_commands(&plan).is_empty());
         let sink = VecDocSink::new();

@@ -196,6 +196,7 @@ mod tests {
             prompt: prompt.into(),
             model: None,
             provider: None,
+            design_md: None,
         }
     }
 
