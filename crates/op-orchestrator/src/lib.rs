@@ -35,5 +35,6 @@ pub use design_md_policy::{
 pub use design_type::{detect_design_type, DesignType, DesignTypePreset};
 pub use intent::classify_intent;
 pub use model_profile::{resolve_model_profile, ModelProfile, ModelTier};
+pub use prompt::build_orchestrator_prompt;
 pub use run::Orchestrator;
 pub use types::*;

@@ -11,8 +11,8 @@ use crate::prompt::build_orchestrator_prompt;
 use crate::scaffold::build_scaffold;
 use crate::subagent::run_subtask;
 use crate::types::{
-    AbortFlag, DesignRequest, DocSink, LlmChunk, LlmClient, OrchestratorError, Progress,
-    RunSummary, SubtaskOutcome,
+    AbortFlag, DesignRequest, DocSink, LlmChunk, LlmClient, OrchestratorError, PlanningMode,
+    Progress, RunSummary, SubtaskOutcome,
 };
 use crate::variables::{rollback, seed_commands, snapshot_plan_vars};
 use futures::StreamExt;
@@ -39,7 +39,8 @@ impl Orchestrator {
     ) -> Result<RunSummary, OrchestratorError> {
         // -- 阶段 1:规划 --
         on_progress(Progress::Planning);
-        let plan_call = build_orchestrator_prompt(&request, abort.clone());
+        let plan_call =
+            build_orchestrator_prompt(&request, PlanningMode::Rich, abort.clone()).call_request;
         let mut plan = match collect_text(llm.call(plan_call)).await {
             Ok(text) => parse_plan(&text).unwrap_or_else(|_| build_fallback_plan(&request)),
             Err(aborted) => {

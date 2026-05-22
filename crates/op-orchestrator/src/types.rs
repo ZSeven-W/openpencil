@@ -85,6 +85,16 @@ pub enum PlanningMode {
     Compact,
 }
 
+/// `build_orchestrator_prompt` 的产物 —— 比裸 `CallRequest` 多带
+/// compact 模式的 `forced_style_guide_name`(S3b-1b 回填 plan 用)。
+#[derive(Debug, Clone)]
+pub struct PlanningPrompt {
+    pub call_request: CallRequest,
+    /// compact 模式预选的 styleGuideName;rich/minimal 为 None。
+    pub forced_style_guide_name: Option<String>,
+    pub mode: PlanningMode,
+}
+
 /// 用户消息的意图分类 —— 决定走编排器还是普通聊天。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Intent {

@@ -1,9 +1,6 @@
 //! 规划 prompt 的 style-guide 上下文构造 —— port of
 //! `orchestrator-prompt-optimizer.ts` 的 catalog 路径。
 
-// Functions are pub(crate); callers added in B3/B4/B5.
-#![allow(dead_code)]
-
 use crate::design_md_policy::{
     build_design_md_style_policy, guess_neutral_background_from_theme, infer_design_md_background,
 };
@@ -405,9 +402,17 @@ pub(crate) fn format_guide_snippet(guide: &ParsedStyleGuide) -> String {
 #[derive(Debug, Clone)]
 pub(crate) struct PlanningStyleGuideContext {
     pub available_style_guides: String,
+    /// 诊断字段 —— tests + S3b-1b 消费;production 暂未读取。
+    #[allow(dead_code)]
     pub metadata_count: usize,
+    /// 诊断字段 —— tests + S3b-1b 消费;production 暂未读取。
+    #[allow(dead_code)]
     pub snippet_count: usize,
+    /// 诊断字段 —— tests + S3b-1b 消费;production 暂未读取。
+    #[allow(dead_code)]
     pub top_guide_names: Vec<String>,
+    /// 诊断字段 —— tests + S3b-1b 消费;production 暂未读取。
+    #[allow(dead_code)]
     pub snippet_guide_names: Vec<String>,
 }
 
