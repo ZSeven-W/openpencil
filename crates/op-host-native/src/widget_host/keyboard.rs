@@ -87,30 +87,58 @@ impl WidgetHostNative {
             self.mark_dirty();
             return true;
         }
+        if self.editor_state.editor_ui.effect_param_focus.is_some() {
+            // Effect-param value box — numeric, caret-aware insert
+            // into the shared draft (same as a numeric property).
+            self.editor_state.ui.property_draft_select_all = false;
+            let draft = &self.editor_state.ui.property_input_draft;
+            let pos = self.editor_state.ui.property_caret_pos.min(draft.len());
+            let allowed = c.is_ascii_digit()
+                || (c == '-' && pos == 0 && !draft.starts_with('-'))
+                || (c == '.' && !draft.contains('.'));
+            if !allowed {
+                return false;
+            }
+            let draft = &mut self.editor_state.ui.property_input_draft;
+            draft.insert(pos, c);
+            self.editor_state.ui.property_caret_pos = pos + 1;
+            self.editor_state.ui.property_caret_anchor_ms = self.now_ms;
+            self.mark_dirty();
+            return true;
+        }
         if let Some(focus) = self.editor_state.ui.property_focus {
             self.editor_state.ui.property_draft_select_all = false;
             let is_hex_focus = matches!(focus, PropertyFocus::FillHex | PropertyFocus::StrokeHex);
+            // Caret byte-index — drafts are ASCII so it is also the
+            // char index. `-` / `#` are gated on the caret being at
+            // the start, NOT on the draft being empty: typing `-` at
+            // the head of an existing `40` is a valid edit (`-40`).
+            let draft = &self.editor_state.ui.property_input_draft;
+            let pos = self.editor_state.ui.property_caret_pos.min(draft.len());
             let allowed = if is_hex_focus {
-                self.editor_state.ui.property_input_draft.len() < 7
-                    && (c.is_ascii_hexdigit()
-                        || (c == '#' && self.editor_state.ui.property_input_draft.is_empty()))
+                draft.len() < 7
+                    && (c.is_ascii_hexdigit() || (c == '#' && pos == 0 && !draft.starts_with('#')))
             } else {
                 c.is_ascii_digit()
-                    || (c == '-' && self.editor_state.ui.property_input_draft.is_empty())
+                    || (c == '-' && pos == 0 && !draft.starts_with('-'))
                     || (c == '.'
                         && matches!(
                             focus,
                             PropertyFocus::Opacity
+                                | PropertyFocus::FillOpacity
                                 | PropertyFocus::Rotation
                                 | PropertyFocus::PositionR
                                 | PropertyFocus::StrokeWidth
                         )
-                        && !self.editor_state.ui.property_input_draft.contains('.'))
+                        && !draft.contains('.'))
             };
             if !allowed {
                 return false;
             }
-            self.editor_state.ui.property_input_draft.push(c);
+            // Insert at the caret and advance it.
+            let draft = &mut self.editor_state.ui.property_input_draft;
+            draft.insert(pos, c);
+            self.editor_state.ui.property_caret_pos = pos + 1;
             self.editor_state.ui.property_caret_anchor_ms = self.now_ms;
             self.mark_dirty();
             return true;
@@ -200,9 +228,16 @@ impl WidgetHostNative {
             }
             return false;
         }
-        if self.editor_state.ui.property_focus.is_some() {
+        if self.editor_state.ui.property_focus.is_some()
+            || self.editor_state.editor_ui.effect_param_focus.is_some()
+        {
             self.editor_state.ui.property_draft_select_all = false;
-            if self.editor_state.ui.property_input_draft.pop().is_some() {
+            // Delete the char before the caret, then pull it back.
+            let draft = &mut self.editor_state.ui.property_input_draft;
+            let pos = self.editor_state.ui.property_caret_pos.min(draft.len());
+            if pos > 0 {
+                draft.remove(pos - 1);
+                self.editor_state.ui.property_caret_pos = pos - 1;
                 self.editor_state.ui.property_caret_anchor_ms = self.now_ms;
                 self.mark_dirty();
                 return true;
@@ -291,6 +326,101 @@ impl WidgetHostNative {
         dup
     }
 
+    /// Up / Down arrow on a focused numeric property input — steps
+    /// the value by `delta` and commits it (like a `−` / `+`
+    /// stepper). Returns `false` when no numeric property input is
+    /// focused, so the caller falls back to nudging the selection.
+    pub fn apply_property_step(&mut self, delta: f32) -> bool {
+        use op_editor_core::ui_draft::PropertyFocus;
+        // Effect-parameter focus: step the value, commit via
+        // `SetEffectParam`, and reflect it back into the draft.
+        if let Some(ef) = self.editor_state.editor_ui.effect_param_focus {
+            let current: f32 = self
+                .editor_state
+                .ui
+                .property_input_draft
+                .trim()
+                .parse()
+                .unwrap_or(0.0);
+            let next = current + delta;
+            let id = self.editor_state.selection.anchor.clone();
+            if id.is_real() {
+                self.editor_state.commit_history();
+                let _ = self
+                    .editor_state
+                    .apply(op_editor_core::EditorCommand::SetEffectParam {
+                        node_id: id,
+                        index: ef.effect as u32,
+                        field: ef.field,
+                        value: next,
+                    });
+            }
+            self.editor_state.ui.property_input_draft = if next.fract() == 0.0 {
+                format!("{}", next as i64)
+            } else {
+                format!("{next}")
+            };
+            self.editor_state.ui.property_caret_pos =
+                self.editor_state.ui.property_input_draft.len();
+            self.editor_state.ui.property_caret_anchor_ms = self.now_ms;
+            self.mark_dirty();
+            return true;
+        }
+        let Some(focus) = self.editor_state.ui.property_focus else {
+            return false;
+        };
+        // Hex colour fields aren't numerically steppable.
+        if matches!(focus, PropertyFocus::FillHex | PropertyFocus::StrokeHex) {
+            return false;
+        }
+        let current: f32 = self
+            .editor_state
+            .ui
+            .property_input_draft
+            .trim()
+            .parse()
+            .unwrap_or(0.0);
+        let next = current + delta;
+        let _ = self.editor_state.commit_property_edit(focus, next);
+        // Reflect the committed value back into the draft so the
+        // field shows it and a further step builds on the new value.
+        self.editor_state.ui.property_input_draft = if next.fract() == 0.0 {
+            format!("{}", next as i64)
+        } else {
+            format!("{next}")
+        };
+        self.editor_state.ui.property_caret_pos = self.editor_state.ui.property_input_draft.len();
+        self.editor_state.ui.property_caret_anchor_ms = self.now_ms;
+        self.mark_dirty();
+        true
+    }
+
+    /// Left / Right arrow on a focused property input — moves the
+    /// text caret one character. Returns `false` when no property
+    /// input is focused, so the caller falls back to node-nudge.
+    pub fn apply_property_caret(&mut self, forward: bool) -> bool {
+        if self.editor_state.ui.property_focus.is_none()
+            && self.editor_state.editor_ui.effect_param_focus.is_none()
+        {
+            return false;
+        }
+        let len = self.editor_state.ui.property_input_draft.len();
+        let pos = self.editor_state.ui.property_caret_pos.min(len);
+        let next = if forward {
+            (pos + 1).min(len)
+        } else {
+            pos.saturating_sub(1)
+        };
+        if next != self.editor_state.ui.property_caret_pos {
+            self.editor_state.ui.property_caret_pos = next;
+            self.editor_state.ui.property_caret_anchor_ms = self.now_ms;
+            self.mark_dirty();
+        }
+        // Consumed regardless — an arrow over a focused input must
+        // never fall through to nudging the selected node.
+        true
+    }
+
     /// Arrow-key nudge — translate selection by (dx, dy) doc px.
     pub fn apply_nudge(&mut self, dx: f32, dy: f32) -> bool {
         if self.input_active() {
@@ -367,6 +497,10 @@ impl WidgetHostNative {
         }
         if self.editor_state.editor_ui.variable_row_focus.is_some() {
             self.commit_variable_row_focus_if_any();
+            return true;
+        }
+        if self.editor_state.editor_ui.effect_param_focus.is_some() {
+            self.commit_effect_param_focus_if_any();
             return true;
         }
         if self.editor_state.ui.property_focus.is_some() {
@@ -455,6 +589,18 @@ impl WidgetHostNative {
             .editor_state
             .editor_ui
             .variable_row_focus
+            .take()
+            .is_some()
+        {
+            self.editor_state.ui.property_input_draft.clear();
+            self.editor_state.ui.property_draft_select_all = false;
+            self.mark_dirty();
+            return true;
+        }
+        if self
+            .editor_state
+            .editor_ui
+            .effect_param_focus
             .take()
             .is_some()
         {

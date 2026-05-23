@@ -8,8 +8,8 @@ use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::property_panel::NodeSnapshot;
 use crate::widgets::property_panel_inputs::{
     format_color_hex, paint_input_with_icon_focused, paint_input_with_prefix_focused,
-    paint_input_with_suffix_focused, paint_section_divider, paint_section_label, to_jian_color,
-    HEADER_HEIGHT, INPUT_HEIGHT, INPUT_RADIUS, PAD_X, SECTION_GAP, TAB_HEIGHT,
+    paint_section_divider, paint_section_label, to_jian_color, HEADER_HEIGHT, INPUT_HEIGHT,
+    INPUT_RADIUS, PAD_X, SECTION_GAP, TAB_HEIGHT,
 };
 use crate::widgets::PaintCx;
 use crate::{Color, Point2D, Rect, TextLayout};
@@ -37,6 +37,8 @@ pub enum PropertyPanelHit {
 pub struct EditContext<'a> {
     pub focus: Option<PropertyFocus>,
     pub draft: &'a str,
+    /// Caret byte-index into `draft` (drafts are ASCII).
+    pub caret: usize,
     pub caret_anchor_ms: u64,
     pub now_ms: u64,
 }
@@ -117,10 +119,24 @@ impl<'a> EditContext<'a> {
         }
     }
 
-    /// Whether this field currently shows the caret.
-    pub fn caret_visible(&self, focus: PropertyFocus) -> bool {
-        self.focus == Some(focus)
+    /// Whether the caret blink is currently in its visible phase —
+    /// for editable surfaces (effect params) that don't key off a
+    /// `PropertyFocus`.
+    pub fn caret_blink_on(&self) -> bool {
+        jian_core::anim::blink_visible(self.now_ms, self.caret_anchor_ms, 500)
+    }
+
+    /// Caret byte-offset for `focus` when it is the focused field
+    /// and the blink is on — `None` otherwise. Drives caret paint;
+    /// the offset is clamped into the draft so a stale value is safe.
+    pub fn caret_at(&self, focus: PropertyFocus) -> Option<usize> {
+        if self.focus == Some(focus)
             && jian_core::anim::blink_visible(self.now_ms, self.caret_anchor_ms, 500)
+        {
+            Some(self.caret.min(self.draft.len()))
+        } else {
+            None
+        }
     }
 }
 
@@ -217,8 +233,15 @@ pub fn paint_node_header(
     y: f32,
     _w: f32,
 ) -> f32 {
+    // Show the node's name so the header matches the LayerPanel
+    // row; fall back to the kind label for an unnamed node.
+    let title = if snapshot.name.is_empty() {
+        snapshot.kind.as_str()
+    } else {
+        snapshot.name.as_str()
+    };
     let label = TextLayout::single_run(
-        &snapshot.kind,
+        title,
         "system-ui",
         14.0,
         to_jian_color(theme.foreground),
@@ -310,7 +333,7 @@ pub fn paint_position_section(
         "X",
         edit.value_for(PropertyFocus::PositionX, &x_value),
         edit.focus == Some(PropertyFocus::PositionX),
-        edit.caret_visible(PropertyFocus::PositionX),
+        edit.caret_at(PropertyFocus::PositionX),
     );
     let y_value = snapshot.y.to_string();
     paint_input_with_prefix_focused(
@@ -320,7 +343,7 @@ pub fn paint_position_section(
         "Y",
         edit.value_for(PropertyFocus::PositionY, &y_value),
         edit.focus == Some(PropertyFocus::PositionY),
-        edit.caret_visible(PropertyFocus::PositionY),
+        edit.caret_at(PropertyFocus::PositionY),
     );
     y += INPUT_HEIGHT + 6.0;
     // Rotation input — TS uses RotateCw glyph; we render with an
@@ -338,7 +361,7 @@ pub fn paint_position_section(
         edit.value_for(PropertyFocus::Rotation, &rotation_value),
         Some("°"),
         edit.focus == Some(PropertyFocus::Rotation),
-        edit.caret_visible(PropertyFocus::Rotation),
+        edit.caret_at(PropertyFocus::Rotation),
     );
     // Corner radius (R) — editable input bound to Node::corner_radius
     // via PropertyFocus::PositionR.
@@ -354,7 +377,7 @@ pub fn paint_position_section(
         "R",
         edit.value_for(PropertyFocus::PositionR, &r_value),
         edit.focus == Some(PropertyFocus::PositionR),
-        edit.caret_visible(PropertyFocus::PositionR),
+        edit.caret_at(PropertyFocus::PositionR),
     );
     y += INPUT_HEIGHT + 12.0;
     paint_section_divider(cx, theme, x, y, width);
@@ -452,7 +475,7 @@ pub fn paint_size_section(
         "W",
         edit.value_for(PropertyFocus::SizeW, &w_value),
         edit.focus == Some(PropertyFocus::SizeW),
-        edit.caret_visible(PropertyFocus::SizeW),
+        edit.caret_at(PropertyFocus::SizeW),
     );
     let h_value = snapshot.height.to_string();
     paint_input_with_prefix_focused(
@@ -462,7 +485,7 @@ pub fn paint_size_section(
         "H",
         edit.value_for(PropertyFocus::SizeH, &h_value),
         edit.focus == Some(PropertyFocus::SizeH),
-        edit.caret_visible(PropertyFocus::SizeH),
+        edit.caret_at(PropertyFocus::SizeH),
     );
     y += INPUT_HEIGHT + 10.0;
     let row_h = 22.0;
@@ -570,19 +593,75 @@ pub fn paint_layer_section(
     let usable_w = width - PAD_X * 2.0;
     let row = Rect {
         origin: Point2D::new(x + PAD_X, y),
+        // Half-width box — the empty right half avoids the over-wide
+        // look of a row spanning the full panel for a single value.
         size: Point2D::new(usable_w / 2.0 - 4.0, INPUT_HEIGHT),
     };
     let focused = edit.focus == Some(PropertyFocus::Opacity);
     let value = edit.value_for(PropertyFocus::Opacity, "100");
-    paint_input_with_suffix_focused(
-        cx,
-        theme,
-        row,
-        value,
-        "%",
-        focused,
-        edit.caret_visible(PropertyFocus::Opacity),
+    // Left-aligned compound `<label>  <value>  <unit>` — measuring
+    // the label first so the value never collides with it, then
+    // packing the unit right after the value. Avoids the overlap
+    // a "value-centered" layout produces in narrow boxes when the
+    // label is a wide CJK string ("不透明度" alone is ~50 px).
+    cx.backend.fill_round_rect(row, INPUT_RADIUS, theme.muted);
+    if focused {
+        cx.backend
+            .stroke_round_rect(row, INPUT_RADIUS, theme.primary, 1.5);
+    }
+    // Clip the text paint to the row so a long localized label
+    // (e.g. ru "Непрозрачность") can't bleed past the half-width
+    // box into the neighbouring rail.
+    cx.backend.save();
+    cx.backend.clip_rect(row);
+    let prefix = labels.opacity;
+    let prefix_w = cx.backend.measure_text(prefix, 12.0);
+    let value_w = cx.backend.measure_text(value, 12.0);
+    let baseline_y = y + 19.0;
+    let prefix_x = row.origin.x + 10.0;
+    let prefix_layout = TextLayout::single_run(
+        prefix,
+        "system-ui",
+        12.0,
+        to_jian_color(theme.muted_foreground),
+        Point2D::new(0.0, 0.0),
     );
+    cx.backend
+        .draw_text(&prefix_layout, Point2D::new(prefix_x, baseline_y));
+    let value_x = prefix_x + prefix_w + 8.0;
+    let value_layout = TextLayout::single_run(
+        value,
+        "system-ui",
+        12.0,
+        to_jian_color(theme.foreground),
+        Point2D::new(0.0, 0.0),
+    );
+    cx.backend
+        .draw_text(&value_layout, Point2D::new(value_x, baseline_y));
+    if let Some(pos) = edit.caret_at(PropertyFocus::Opacity) {
+        let w = cx
+            .backend
+            .measure_text(&value[..pos.min(value.len())], 12.0);
+        cx.backend.fill_rect(
+            Rect {
+                origin: Point2D::new(value_x + w, y + 6.0),
+                size: Point2D::new(1.5, INPUT_HEIGHT - 12.0),
+            },
+            theme.foreground,
+        );
+    }
+    let unit_layout = TextLayout::single_run(
+        "%",
+        "system-ui",
+        12.0,
+        to_jian_color(theme.muted_foreground),
+        Point2D::new(0.0, 0.0),
+    );
+    cx.backend.draw_text(
+        &unit_layout,
+        Point2D::new(value_x + value_w + 6.0, baseline_y),
+    );
+    cx.backend.restore();
     y += INPUT_HEIGHT + 12.0;
     paint_section_divider(cx, theme, x, y, width);
     y + SECTION_GAP
@@ -625,7 +704,9 @@ pub fn paint_stroke_section(
     }
     cx.backend.fill_round_rect(
         Rect {
-            origin: Point2D::new(hex_rect.origin.x + 6.0, hex_rect.origin.y + 5.0),
+            // Vertically centre the 16-tall swatch in the 30-tall
+            // row: `(30 - 16) / 2 == 7`.
+            origin: Point2D::new(hex_rect.origin.x + 6.0, hex_rect.origin.y + 7.0),
             size: Point2D::new(16.0, 16.0),
         },
         3.0,
@@ -642,9 +723,11 @@ pub fn paint_stroke_section(
     );
     let hex_x = hex_rect.origin.x + 30.0;
     cx.backend
-        .draw_text(&hex_layout, Point2D::new(hex_x, hex_rect.origin.y + 17.0));
-    if edit.caret_visible(PropertyFocus::StrokeHex) {
-        let w = cx.backend.measure_text(hex_text, 12.0);
+        .draw_text(&hex_layout, Point2D::new(hex_x, hex_rect.origin.y + 19.0));
+    if let Some(pos) = edit.caret_at(PropertyFocus::StrokeHex) {
+        let w = cx
+            .backend
+            .measure_text(&hex_text[..pos.min(hex_text.len())], 12.0);
         cx.backend.fill_rect(
             Rect {
                 origin: Point2D::new(hex_x + w, hex_rect.origin.y + 6.0),
@@ -675,9 +758,11 @@ pub fn paint_stroke_section(
     );
     let w_x = w_rect.origin.x + 12.0;
     cx.backend
-        .draw_text(&w_layout, Point2D::new(w_x, w_rect.origin.y + 17.0));
-    if edit.caret_visible(PropertyFocus::StrokeWidth) {
-        let w = cx.backend.measure_text(w_text, 12.0);
+        .draw_text(&w_layout, Point2D::new(w_x, w_rect.origin.y + 19.0));
+    if let Some(pos) = edit.caret_at(PropertyFocus::StrokeWidth) {
+        let w = cx
+            .backend
+            .measure_text(&w_text[..pos.min(w_text.len())], 12.0);
         cx.backend.fill_rect(
             Rect {
                 origin: Point2D::new(w_x + w, w_rect.origin.y + 6.0),

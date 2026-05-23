@@ -45,6 +45,9 @@ fn escape_closes_one_overlay_per_press_in_priority_order() {
     let mut host = WidgetHostNative::new();
     host.editor_state_mut().ui.property_focus = Some(PropertyFocus::PositionX);
     host.editor_state_mut().ui.property_input_draft = "12".to_string();
+    // Focusing an input seeds the caret at the draft's end (the
+    // press path does this); mirror it so the state is faithful.
+    host.editor_state_mut().ui.property_caret_pos = 2;
     host.editor_state_mut().editor_ui.locale_picker_open = true;
     host.editor_state_mut().editor_ui.shape_picker_open = true;
     host.editor_state_mut().editor_ui.fill_type_picker_open = true;
@@ -95,9 +98,13 @@ fn backspace_with_property_draft_does_not_delete_selected() {
         .set_single_selection(NodeId::new("n10"));
     host.editor_state_mut().ui.property_focus = Some(PropertyFocus::PositionX);
     host.editor_state_mut().ui.property_input_draft = "123".to_string();
+    // Caret at the draft's end, as a real focus seeds it — Backspace
+    // deletes the char *before* the caret.
+    host.editor_state_mut().ui.property_caret_pos = 3;
 
     assert!(host.apply_backspace());
     assert_eq!(host.editor_state().ui.property_input_draft, "12");
+    assert_eq!(host.editor_state().ui.property_caret_pos, 2);
     // Selection must be untouched.
     assert_eq!(host.editor_state().selection.anchor, NodeId::new("n10"));
 }

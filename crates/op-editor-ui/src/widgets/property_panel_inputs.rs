@@ -77,7 +77,7 @@ pub fn paint_input_with_prefix(
     prefix: &str,
     value: &str,
 ) {
-    paint_input_with_prefix_focused(cx, theme, rect, prefix, value, false, false);
+    paint_input_with_prefix_focused(cx, theme, rect, prefix, value, false, None);
 }
 
 /// `paint_input_with_prefix` with explicit focus + caret toggle.
@@ -88,7 +88,7 @@ pub fn paint_input_with_prefix_focused(
     prefix: &str,
     value: &str,
     focused: bool,
-    caret_visible: bool,
+    caret: Option<usize>,
 ) {
     cx.backend.fill_round_rect(rect, INPUT_RADIUS, theme.muted);
     if focused {
@@ -121,8 +121,10 @@ pub fn paint_input_with_prefix_focused(
     );
     cx.backend
         .draw_text(&value_layout, Point2D::new(value_x, baseline_y));
-    if caret_visible {
-        let value_w = cx.backend.measure_text(value, 12.0);
+    if let Some(pos) = caret {
+        let value_w = cx
+            .backend
+            .measure_text(&value[..pos.min(value.len())], 12.0);
         cx.backend.fill_rect(
             Rect {
                 origin: Point2D::new(value_x + value_w, rect.origin.y + 6.0),
@@ -141,7 +143,7 @@ pub fn paint_input_with_suffix(
     value: &str,
     unit: &str,
 ) {
-    paint_input_with_suffix_focused(cx, theme, rect, value, unit, false, false);
+    paint_input_with_suffix_focused(cx, theme, rect, value, unit, false, None);
 }
 
 pub fn paint_input_with_suffix_focused(
@@ -151,7 +153,7 @@ pub fn paint_input_with_suffix_focused(
     value: &str,
     unit: &str,
     focused: bool,
-    caret_visible: bool,
+    caret: Option<usize>,
 ) {
     cx.backend.fill_round_rect(rect, INPUT_RADIUS, theme.muted);
     if focused {
@@ -159,7 +161,7 @@ pub fn paint_input_with_suffix_focused(
             .stroke_round_rect(rect, INPUT_RADIUS, theme.primary, 1.5);
     }
     let value_x = rect.origin.x + 10.0;
-    let baseline_y = rect.origin.y + 17.0;
+    let baseline_y = rect.origin.y + 19.0;
     let value_layout = TextLayout::single_run(
         value,
         "system-ui",
@@ -169,8 +171,10 @@ pub fn paint_input_with_suffix_focused(
     );
     cx.backend
         .draw_text(&value_layout, Point2D::new(value_x, baseline_y));
-    if caret_visible {
-        let value_w = cx.backend.measure_text(value, 12.0);
+    if let Some(pos) = caret {
+        let value_w = cx
+            .backend
+            .measure_text(&value[..pos.min(value.len())], 12.0);
         cx.backend.fill_rect(
             Rect {
                 origin: Point2D::new(value_x + value_w, rect.origin.y + 6.0),
@@ -188,7 +192,7 @@ pub fn paint_input_with_suffix_focused(
     );
     cx.backend.draw_text(
         &unit_layout,
-        Point2D::new(rect.origin.x + rect.size.x - 14.0, rect.origin.y + 17.0),
+        Point2D::new(rect.origin.x + rect.size.x - 14.0, rect.origin.y + 19.0),
     );
 }
 
@@ -201,7 +205,7 @@ pub fn paint_input_with_icon(
     value: &str,
     unit: Option<&str>,
 ) {
-    paint_input_with_icon_focused(cx, theme, rect, icon, value, unit, false, false);
+    paint_input_with_icon_focused(cx, theme, rect, icon, value, unit, false, None);
 }
 
 // Paint-context + geometry args threaded through; a struct adds no gain.
@@ -214,23 +218,27 @@ pub fn paint_input_with_icon_focused(
     value: &str,
     unit: Option<&str>,
     focused: bool,
-    caret_visible: bool,
+    caret: Option<usize>,
 ) {
     cx.backend.fill_round_rect(rect, INPUT_RADIUS, theme.muted);
     if focused {
         cx.backend
             .stroke_round_rect(rect, INPUT_RADIUS, theme.primary, 1.5);
     }
+    // Icon at 10 px from the left edge — matches the prefix-text
+    // inputs (X / Y / W / H), so a row of mixed icon + prefix
+    // inputs reads as a single column. Vertically centred in the
+    // 30-tall row: `(30 - 14) / 2 == 8`.
     draw_icon(
         cx.backend,
         icon,
-        Point2D::new(rect.origin.x + 6.0, rect.origin.y + 5.0),
+        Point2D::new(rect.origin.x + 10.0, rect.origin.y + 8.0),
         14.0,
         theme.muted_foreground,
         1.4,
     );
-    let value_x = rect.origin.x + 26.0;
-    let baseline_y = rect.origin.y + 17.0;
+    let value_x = rect.origin.x + 30.0;
+    let baseline_y = rect.origin.y + 19.0;
     let value_layout = TextLayout::single_run(
         value,
         "system-ui",
@@ -240,17 +248,24 @@ pub fn paint_input_with_icon_focused(
     );
     cx.backend
         .draw_text(&value_layout, Point2D::new(value_x, baseline_y));
-    if caret_visible {
-        let value_w = cx.backend.measure_text(value, 12.0);
+    let value_w = cx.backend.measure_text(value, 12.0);
+    if let Some(pos) = caret {
+        let caret_w = cx
+            .backend
+            .measure_text(&value[..pos.min(value.len())], 12.0);
         cx.backend.fill_rect(
             Rect {
-                origin: Point2D::new(value_x + value_w, rect.origin.y + 6.0),
+                origin: Point2D::new(value_x + caret_w, rect.origin.y + 6.0),
                 size: Point2D::new(1.5, rect.size.y - 12.0),
             },
             theme.foreground,
         );
     }
+    let _ = value_w;
     if let Some(u) = unit {
+        // Unit pinned to the box's right edge — keeps the icon
+        // input visually consistent with the suffix-only inputs
+        // ("100 %" etc.) where the unit also anchors right.
         let unit_layout = TextLayout::single_run(
             u,
             "system-ui",
@@ -260,7 +275,7 @@ pub fn paint_input_with_icon_focused(
         );
         cx.backend.draw_text(
             &unit_layout,
-            Point2D::new(rect.origin.x + rect.size.x - 14.0, rect.origin.y + 17.0),
+            Point2D::new(rect.origin.x + rect.size.x - 14.0, baseline_y),
         );
     }
 }
@@ -277,7 +292,7 @@ pub fn paint_dropdown(cx: &mut PaintCx<'_>, theme: &Theme, rect: Rect, value: &s
     );
     cx.backend.draw_text(
         &value_layout,
-        Point2D::new(rect.origin.x + 12.0, rect.origin.y + 17.0),
+        Point2D::new(rect.origin.x + 12.0, rect.origin.y + 19.0),
     );
     draw_icon(
         cx.backend,

@@ -242,7 +242,7 @@ pub fn paint_fill_section(
     );
     cx.backend.draw_text(
         &label,
-        Point2D::new(dropdown_rect.origin.x + 10.0, dropdown_rect.origin.y + 17.0),
+        Point2D::new(dropdown_rect.origin.x + 10.0, dropdown_rect.origin.y + 19.0),
     );
     draw_icon(
         cx.backend,
@@ -261,17 +261,35 @@ pub fn paint_fill_section(
     };
     cx.backend
         .fill_round_rect(pct_rect, INPUT_RADIUS, theme.muted);
+    let opacity_focused = edit.focus == Some(PropertyFocus::FillOpacity);
+    if opacity_focused {
+        cx.backend
+            .stroke_round_rect(pct_rect, INPUT_RADIUS, theme.primary, 1.5);
+    }
+    let opacity_owned = ((snapshot.fill_opacity * 100.0).round() as i32).to_string();
+    let pct_text = edit.value_for(PropertyFocus::FillOpacity, &opacity_owned);
     let pct = TextLayout::single_run(
-        "100",
+        pct_text,
         "system-ui",
         12.0,
         to_jian_color(theme.foreground),
         Point2D::new(0.0, 0.0),
     );
-    cx.backend.draw_text(
-        &pct,
-        Point2D::new(pct_rect.origin.x + 10.0, pct_rect.origin.y + 17.0),
-    );
+    let pct_x = pct_rect.origin.x + 10.0;
+    cx.backend
+        .draw_text(&pct, Point2D::new(pct_x, pct_rect.origin.y + 19.0));
+    if let Some(pos) = edit.caret_at(PropertyFocus::FillOpacity) {
+        let w = cx
+            .backend
+            .measure_text(&pct_text[..pos.min(pct_text.len())], 12.0);
+        cx.backend.fill_rect(
+            Rect {
+                origin: Point2D::new(pct_x + w, pct_rect.origin.y + 6.0),
+                size: Point2D::new(1.5, pct_rect.size.y - 12.0),
+            },
+            theme.foreground,
+        );
+    }
     let pct_unit = TextLayout::single_run(
         "%",
         "system-ui",
@@ -283,7 +301,7 @@ pub fn paint_fill_section(
         &pct_unit,
         Point2D::new(
             pct_rect.origin.x + pct_rect.size.x - 14.0,
-            pct_rect.origin.y + 17.0,
+            pct_rect.origin.y + 19.0,
         ),
     );
     draw_icon(
@@ -342,7 +360,8 @@ fn paint_fill_solid_body(
     }
     cx.backend.fill_round_rect(
         Rect {
-            origin: Point2D::new(hex_rect.origin.x + 6.0, hex_rect.origin.y + 5.0),
+            // Vertically centre the 16-tall swatch in the 30-tall row.
+            origin: Point2D::new(hex_rect.origin.x + 6.0, hex_rect.origin.y + 7.0),
             size: Point2D::new(16.0, 16.0),
         },
         3.0,
@@ -357,9 +376,11 @@ fn paint_fill_solid_body(
     );
     let hex_x = hex_rect.origin.x + 30.0;
     cx.backend
-        .draw_text(&hex_layout, Point2D::new(hex_x, hex_rect.origin.y + 17.0));
-    if edit.caret_visible(PropertyFocus::FillHex) {
-        let w = cx.backend.measure_text(hex_text, 12.0);
+        .draw_text(&hex_layout, Point2D::new(hex_x, hex_rect.origin.y + 19.0));
+    if let Some(pos) = edit.caret_at(PropertyFocus::FillHex) {
+        let w = cx
+            .backend
+            .measure_text(&hex_text[..pos.min(hex_text.len())], 12.0);
         cx.backend.fill_rect(
             Rect {
                 origin: Point2D::new(hex_x + w, hex_rect.origin.y + 6.0),
@@ -398,7 +419,7 @@ fn paint_fill_gradient_body(
         );
         cx.backend.draw_text(
             &prefix,
-            Point2D::new(angle_rect.origin.x + 10.0, angle_rect.origin.y + 17.0),
+            Point2D::new(angle_rect.origin.x + 10.0, angle_rect.origin.y + 19.0),
         );
         let value = TextLayout::single_run(
             "0",
@@ -409,7 +430,7 @@ fn paint_fill_gradient_body(
         );
         cx.backend.draw_text(
             &value,
-            Point2D::new(angle_rect.origin.x + 44.0, angle_rect.origin.y + 17.0),
+            Point2D::new(angle_rect.origin.x + 44.0, angle_rect.origin.y + 19.0),
         );
         let unit = TextLayout::single_run(
             "°",
@@ -422,7 +443,7 @@ fn paint_fill_gradient_body(
             &unit,
             Point2D::new(
                 angle_rect.origin.x + angle_rect.size.x - 14.0,
-                angle_rect.origin.y + 17.0,
+                angle_rect.origin.y + 19.0,
             ),
         );
         yy += INPUT_HEIGHT + 6.0;
@@ -478,7 +499,7 @@ fn paint_fill_gradient_body(
         );
         cx.backend.draw_text(
             &hex_layout,
-            Point2D::new(hex_rect.origin.x + 30.0, hex_rect.origin.y + 17.0),
+            Point2D::new(hex_rect.origin.x + 30.0, hex_rect.origin.y + 19.0),
         );
         let pct_rect = Rect {
             origin: Point2D::new(x + PAD_X + hex_w + 8.0, row_y),
@@ -495,7 +516,7 @@ fn paint_fill_gradient_body(
         );
         cx.backend.draw_text(
             &pct_layout,
-            Point2D::new(pct_rect.origin.x + 12.0, pct_rect.origin.y + 17.0),
+            Point2D::new(pct_rect.origin.x + 12.0, pct_rect.origin.y + 19.0),
         );
         let pct_unit = TextLayout::single_run(
             "%",
@@ -508,7 +529,7 @@ fn paint_fill_gradient_body(
             &pct_unit,
             Point2D::new(
                 pct_rect.origin.x + pct_rect.size.x - 14.0,
-                pct_rect.origin.y + 17.0,
+                pct_rect.origin.y + 19.0,
             ),
         );
         yy += INPUT_HEIGHT + 4.0;
@@ -549,6 +570,6 @@ fn paint_fill_image_body(
     );
     cx.backend.draw_text(
         &label,
-        Point2D::new(row.origin.x + 30.0, row.origin.y + 17.0),
+        Point2D::new(row.origin.x + 30.0, row.origin.y + 19.0),
     );
 }

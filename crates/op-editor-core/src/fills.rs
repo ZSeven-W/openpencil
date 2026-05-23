@@ -179,6 +179,47 @@ fn solid_fill(hex: String) -> PenFill {
     })
 }
 
+/// Opacity of the node's primary solid fill (1.0 when missing /
+/// not stored — the canonical default a fresh fill paints with).
+pub fn first_solid_fill_opacity(node: &PenNode) -> f32 {
+    node_fills(node)
+        .and_then(|f| {
+            f.iter().find_map(|fill| match fill {
+                PenFill::Solid(b) => Some(b.opacity.unwrap_or(1.0)),
+                _ => None,
+            })
+        })
+        .unwrap_or(1.0)
+}
+
+/// Write the first `Solid` fill's `opacity` (clamped to `[0.0, 1.0]`).
+/// When the node has no solid fill, a transparent-black one is
+/// prepended so the opacity has a target. `false` when the variant
+/// carries no `fill` field at all.
+pub fn set_primary_fill_opacity(node: &mut PenNode, opacity: f32) -> bool {
+    let opacity = opacity.clamp(0.0, 1.0);
+    let Some(fills) = node_fills_mut(node) else {
+        return false;
+    };
+    if let Some(slot) = fills.iter_mut().find_map(|f| match f {
+        PenFill::Solid(body) => Some(body),
+        _ => None,
+    }) {
+        slot.opacity = Some(opacity);
+    } else {
+        fills.insert(
+            0,
+            PenFill::Solid(SolidFillBody {
+                color: "#000000".to_string(),
+                explain: None,
+                opacity: Some(opacity),
+                blend_mode: None,
+            }),
+        );
+    }
+    true
+}
+
 /// Replace the first `Solid` fill's colour with `hex`, leaving any
 /// gradient / image fills untouched. When the node has no solid fill,
 /// a fresh one is prepended so it paints on top. `false` when the

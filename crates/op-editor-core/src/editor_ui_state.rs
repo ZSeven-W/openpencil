@@ -462,6 +462,15 @@ pub enum VariableRowFocus {
     String(usize),
 }
 
+/// Keyboard focus on an effect-parameter value (the Effects
+/// section's editable X / Y / Blur / Spread / Radius numbers).
+/// `effect` is the index of the effect on the selected node.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct EffectParamFocus {
+    pub effect: usize,
+    pub field: crate::EffectField,
+}
+
 /// Editor-UI overlay + panel state — the widget-layer toggles, hover
 /// targets, menu / modal open flags and panel metrics that the ~30
 /// editor widgets paint from. Faithful superset of the UI subset
@@ -587,6 +596,10 @@ pub struct EditorUiState {
     pub axis_dropdown_open: Option<String>,
     /// Editor focus for a non-color variable row (Number / String).
     pub variable_row_focus: Option<VariableRowFocus>,
+    /// Editor focus on an effect-parameter value (Effects section).
+    /// Shares `UiDraftState.property_input_draft` + caret like the
+    /// variable-row focus does.
+    pub effect_param_focus: Option<EffectParamFocus>,
 
     // --- Layer / page hover + context menu -------------------------
     /// Currently-hovered LayerPanel row, or `None`.
@@ -721,6 +734,7 @@ impl Default for EditorUiState {
             fill_type_picker_open: false,
             axis_dropdown_open: None,
             variable_row_focus: None,
+            effect_param_focus: None,
             hovered_layer_id: None,
             hovered_page_index: None,
             layer_context_menu: None,
