@@ -25,6 +25,7 @@ pub mod types;
 pub mod validation_config;
 pub mod validation_dump;
 pub mod validation_fixes;
+pub(crate) mod validation_fixes_b3;
 pub mod variables;
 
 pub mod append;

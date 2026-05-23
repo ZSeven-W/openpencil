@@ -309,3 +309,7 @@ mod tests;
 #[cfg(test)]
 #[path = "validation_fixes_b2_tests.rs"]
 mod tests_b2;
+
+#[cfg(test)]
+#[path = "validation_fixes_b3_tests.rs"]
+mod tests_b3;

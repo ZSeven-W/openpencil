@@ -10,6 +10,9 @@
 use op_editor_core::{EditorCommand, LayoutPropValue, NodeId, PenNodeExt};
 
 use crate::validation_fixes::{is_valid_fix_value, SAFE_FIX_PROPERTIES};
+use crate::validation_fixes_b3::{
+    build_node_from_spec, node_type_str, snapshot_justify, snapshot_layout,
+};
 
 // ── B2: Types for fix application ─────────────────────────────────────────────
 
@@ -332,9 +335,67 @@ pub(crate) fn apply_validation_fixes(
                 sink.apply(EditorCommand::DeleteNode { node_id: id });
                 result.applied += 1;
             }
-            StructuralFix::AddChild { .. } => {
-                // B3 deferred: addChild structural fixes are not yet
-                // implemented.  Skip silently to keep B2 focused.
+            StructuralFix::AddChild {
+                parent_id,
+                index,
+                spec,
+            } => {
+                let pid = NodeId::new(parent_id.clone());
+                // Parent must exist.
+                let parent_node = {
+                    let state = sink.state();
+                    op_editor_core::walkers::find_node(state.active_children(), &pid).cloned()
+                };
+                let Some(parent_node) = parent_node else {
+                    result
+                        .errors
+                        .push(format!("addChild: parent {parent_id} not found"));
+                    continue;
+                };
+
+                // Never add children to the injected status-bar chrome.
+                if parent_node.base().role.as_deref() == Some("status-bar") {
+                    result.errors.push(format!(
+                        "addChild: parent {parent_id} is a protected status-bar node"
+                    ));
+                    continue;
+                }
+
+                // Snapshot parent properties we need for auto-fix BEFORE the add.
+                let parent_justify_before = snapshot_justify(&parent_node);
+                let parent_layout_before = snapshot_layout(&parent_node);
+                let parent_name_before = parent_node.base().name.clone().unwrap_or_default();
+                let parent_type_before = node_type_str(&parent_node);
+
+                // Build the node from the spec.
+                let Some(new_node) = build_node_from_spec(spec, *index) else {
+                    result.errors.push(format!(
+                        "addChild: could not build node for spec {:?}",
+                        spec.get("type").and_then(|v| v.as_str()).unwrap_or("?")
+                    ));
+                    continue;
+                };
+
+                // Insert via InsertSubtree under the parent.
+                // NOTE: InsertSubtree appends to the parent's children;
+                // the optional `index` in the spec is not yet supported
+                // by EditorCommand::InsertSubtree (it always appends).
+                // This matches the TS behaviour when index is None.
+                sink.apply(EditorCommand::InsertSubtree {
+                    nodes: vec![new_node],
+                    parent_id: pid.clone(),
+                });
+                result.applied += 1;
+
+                // Auto-fix parent layout to match sibling container if applicable.
+                auto_fix_parent_layout_after_add_child(
+                    sink,
+                    parent_id,
+                    parent_justify_before.as_deref(),
+                    parent_layout_before.as_deref(),
+                    &parent_name_before,
+                    parent_type_before,
+                );
             }
         }
     }
@@ -635,17 +696,21 @@ fn collect_node(node: &jian_ops_schema::node::PenNode, out: &mut Vec<NodeSnapsho
     }
 }
 
-fn extract_name_base(name: &str) -> &str {
-    // TS: `words[words.length - 1]` — last whitespace-delimited word
-    name.trim()
-        .rsplit_once(char::is_whitespace)
-        .map(|(_, last)| last)
-        .unwrap_or_else(|| {
-            let trimmed = name.trim();
-            if trimmed.is_empty() {
-                ""
-            } else {
-                trimmed
-            }
-        })
+/// Extract the last whitespace-delimited word from `name` and lowercase it.
+///
+/// Faithful port of `extractNameBase` in
+/// `design-validation-fixes.ts:435-438`:
+/// ```ts
+/// const words = name.trim().toLowerCase().split(/\s+/);
+/// return words.length > 0 ? words[words.length - 1] : '';
+/// ```
+/// B2 nit: the TS calls `.toLowerCase()` BEFORE splitting and taking the last
+/// word, so "Nav ITEM" → "item" and "Tab item" → "item" share the same base.
+/// The B2 Rust implementation was missing the lowercase step; B3 adds it.
+fn extract_name_base(name: &str) -> String {
+    let lowered = name.trim().to_lowercase();
+    if lowered.is_empty() {
+        return String::new();
+    }
+    lowered.split_whitespace().last().unwrap_or("").to_string()
 }
