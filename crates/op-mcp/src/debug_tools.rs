@@ -34,7 +34,12 @@ use super::{McpTool, ToolErrorCode, ToolOutcome};
 const DEBUG_TOOLS_ENV: &str = "OPENPENCIL_DEBUG_TOOLS";
 
 /// Returns whether the debug tools are enabled (`OPENPENCIL_DEBUG_TOOLS=1`).
-fn debug_tools_enabled() -> bool {
+///
+/// Public so the host MCP server can keep the debug tool out of the
+/// production catalog entirely — both `rebuild_registry` and
+/// `tools/list` consult this, so a client with the flag unset never
+/// sees `debug_validation_report` at all (not just `ToolFailed` on call).
+pub fn debug_tools_enabled() -> bool {
     std::env::var(DEBUG_TOOLS_ENV).is_ok_and(|v| v == "1")
 }
 

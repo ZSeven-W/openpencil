@@ -82,7 +82,9 @@ pub use component_tools::{
     rename_component_snapshot, set_node_collapsed_snapshot, CreateComponent, DeleteComponent,
     InstantiateComponent, RenameComponent, SetNodeCollapsed,
 };
-pub use debug_tools::{debug_validation_report_snapshot, DebugValidationReport};
+pub use debug_tools::{
+    debug_tools_enabled, debug_validation_report_snapshot, DebugValidationReport,
+};
 pub use extra_read_tools::{get_node_children_snapshot, ChildRecord, GetNodeChildren};
 pub use json_serializer::response_to_json;
 pub use node_attr_tools::{
