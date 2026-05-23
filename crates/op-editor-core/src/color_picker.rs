@@ -294,10 +294,7 @@ fn scalar_as_hex(s: &jian_ops_schema::variable::VariableScalar) -> Option<String
 /// `None` when the first fill isn't a gradient or `index` is out of
 /// range — the same gating `set_primary_gradient_stop_hex` applies
 /// on the write path.
-fn gradient_stop_hex(
-    node: &jian_ops_schema::node::PenNode,
-    index: usize,
-) -> Option<String> {
+fn gradient_stop_hex(node: &jian_ops_schema::node::PenNode, index: usize) -> Option<String> {
     use jian_ops_schema::style::PenFill;
     let fills = crate::fills::node_fills(node)?;
     let first = fills.first()?;

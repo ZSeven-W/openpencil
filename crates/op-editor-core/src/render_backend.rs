@@ -370,6 +370,7 @@ pub trait RenderBackend {
     ///
     /// Default impl falls back to a solid first-stop fill, same as
     /// the linear variant.
+    #[allow(clippy::too_many_arguments)]
     fn fill_round_rect_radial_gradient(
         &mut self,
         rect: Rect,

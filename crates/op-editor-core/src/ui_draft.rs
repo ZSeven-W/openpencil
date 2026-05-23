@@ -60,9 +60,7 @@ impl PropertyFocus {
     pub fn is_hex(self) -> bool {
         matches!(
             self,
-            PropertyFocus::FillHex
-                | PropertyFocus::StrokeHex
-                | PropertyFocus::GradientStopHex(_)
+            PropertyFocus::FillHex | PropertyFocus::StrokeHex | PropertyFocus::GradientStopHex(_)
         )
     }
 

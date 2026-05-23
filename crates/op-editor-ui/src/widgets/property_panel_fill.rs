@@ -523,8 +523,10 @@ fn paint_fill_gradient_body(
             Point2D::new(0.0, 0.0),
         );
         let hex_text_x = hex_rect.origin.x + 30.0;
-        cx.backend
-            .draw_text(&hex_layout, Point2D::new(hex_text_x, hex_rect.origin.y + 19.0));
+        cx.backend.draw_text(
+            &hex_layout,
+            Point2D::new(hex_text_x, hex_rect.origin.y + 19.0),
+        );
         if let Some(pos) = edit.caret_at(hex_focus) {
             let w = cx
                 .backend

@@ -329,9 +329,7 @@ fn radial_gradient_payload_uses_authored_centre_and_radius() {
     let n = &r.payload.pages[0].children[0];
     let gradient = n.gradient.as_ref().expect("gradient must populate");
     match gradient {
-        crate::payload::GradientPayload::Radial {
-            cx, cy, radius, ..
-        } => {
+        crate::payload::GradientPayload::Radial { cx, cy, radius, .. } => {
             assert!((cx - 0.25).abs() < 0.01);
             assert!((cy - 0.75).abs() < 0.01);
             assert!((radius - 0.6).abs() < 0.01);
@@ -350,7 +348,10 @@ fn solid_fill_leaves_gradient_payload_unset() {
     }"##;
     let r = load(src);
     let n = &r.payload.pages[0].children[0];
-    assert!(n.gradient.is_none(), "solid fill must not populate gradient");
+    assert!(
+        n.gradient.is_none(),
+        "solid fill must not populate gradient"
+    );
 }
 
 #[test]

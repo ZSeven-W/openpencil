@@ -23,14 +23,15 @@
 
 use op_editor_ui::layout_scene::NodeKind;
 use op_editor_ui::layout_scene::{
-    LayoutScene, SceneFillType, SceneGradient, SceneGradientStop, SceneNode, ScenePage,
-    SceneStroke,
+    LayoutScene, SceneFillType, SceneGradient, SceneGradientStop, SceneNode, ScenePage, SceneStroke,
 };
 use op_editor_ui::scene_vars::VariableTable;
 use op_editor_ui::Color;
 
 use crate::editor_state_var_table;
-use crate::payload::{DocPayload, GradientPayload, GradientStopPayload, NodePayload, StrokePayload};
+use crate::payload::{
+    DocPayload, GradientPayload, GradientStopPayload, NodePayload, StrokePayload,
+};
 
 /// Build a paint-only [`LayoutScene`] from an editor state.
 ///
