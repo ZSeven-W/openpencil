@@ -160,6 +160,23 @@ pub struct ValidationProviders<'a> {
     pub system_prompt: String,
 }
 
+// ── S4: VisualRefProvider ─────────────────────────────────────────────────────
+
+/// Visual-reference rendering outlet.
+///
+/// host 实现把 HTML 字符串渲染成 base64 PNG 截图;stub 返回 `None`
+/// 表示"跳过视觉参考阶段"。
+///
+/// Port of the `renderHtmlToScreenshot` call-site shape in
+/// `visual-ref-orchestrator.ts:108-122` + spec §4.5.
+pub trait VisualRefProvider: Send + Sync {
+    /// 将 HTML 字符串渲染为给定像素尺寸的截图,返回 base64 PNG;
+    /// `None` 表示不可用 / 跳过。
+    fn render_html_to_screenshot(&self, html: &str, width: f64, height: f64) -> Option<String>;
+}
+
+// ── S4 end ────────────────────────────────────────────────────────────────────
+
 // ── S3c end ───────────────────────────────────────────────────────────────────
 
 /// 廉价可克隆的中止句柄(`Arc<AtomicBool>` 语义)。
@@ -245,6 +262,40 @@ pub enum Progress {
     /// 整个视觉校验阶段完成。`total_applied` = pre + 所有轮次之和。
     ValidationDone {
         total_applied: usize,
+    },
+    // ── S4: Visual-Ref pipeline progress variants ─────────────────────────────
+    /// Visual-ref pipeline started (before design-system generation).
+    ///
+    /// Port of the entry point in `visual-ref-orchestrator.ts:62`.
+    VisualRefStarted,
+    /// Design system generated and variables seeded.
+    ///
+    /// Port of stage 1 in `visual-ref-orchestrator.ts:74-90`.
+    VisualRefDesignSystem {
+        /// Number of `SetVariable*` commands emitted (one per palette/spacing/radius token).
+        var_count: usize,
+    },
+    /// HTML code generated from the design system.
+    ///
+    /// Port of stage 2 in `visual-ref-orchestrator.ts:92-106`.
+    VisualRefHtmlGenerated {
+        /// Byte length of the generated HTML string.
+        byte_len: usize,
+    },
+    /// Screenshot step complete (or skipped when `VisualRefProvider` returns `None`).
+    ///
+    /// Port of stage 3 in `visual-ref-orchestrator.ts:108-122`.
+    VisualRefScreenshotReady {
+        /// `true` when the screenshot was skipped (provider returned `None`).
+        skipped: bool,
+    },
+    /// Visual-ref pipeline fell back to plain orchestration.
+    ///
+    /// Emitted when any stage fails or the provider skips. Port of the
+    /// fallback path in `visual-ref-orchestrator.ts:124-140`.
+    VisualRefFallback {
+        /// Human-readable reason for the fallback.
+        reason: String,
     },
 }
 
@@ -333,10 +384,20 @@ pub struct DesignRequest {
     /// Port of `VALIDATION_ENABLED` in `ai-runtime-config.ts:109`.
     #[serde(default = "default_validation_enabled")]
     pub validation_enabled: bool,
+    /// 是否在编排器执行前运行视觉参考(visual-ref)流水线(S4)。
+    /// 默认 `false`(host 明确选择才启用)。
+    /// Port of the `executeVisualRefOrchestration` vs `executeOrchestration`
+    /// dispatch pattern in `visual-ref-orchestrator.ts`.
+    #[serde(default = "default_visual_ref_enabled")]
+    pub visual_ref_enabled: bool,
 }
 
 fn default_validation_enabled() -> bool {
     true
+}
+
+fn default_visual_ref_enabled() -> bool {
+    false
 }
 
 #[cfg(test)]
@@ -407,6 +468,7 @@ mod tests {
             concurrency: 1,
             append_context: None,
             validation_enabled: true,
+            visual_ref_enabled: false,
         };
         assert!(req.append_context.is_none());
     }
@@ -428,6 +490,7 @@ mod tests {
             concurrency: 1,
             append_context: Some(ctx),
             validation_enabled: true,
+            visual_ref_enabled: false,
         };
         assert!(req.append_context.is_some());
     }
@@ -443,6 +506,7 @@ mod tests {
             concurrency: 1,
             append_context: None,
             validation_enabled: true,
+            visual_ref_enabled: false,
         };
         let json = serde_json::to_string(&req).expect("serialize");
         assert!(
@@ -517,6 +581,42 @@ mod tests {
         }
     }
 
+    // ── Task A2: VisualRefProvider trait + SkippedVisualRefProvider stub ─────────
+
+    /// `SkippedVisualRefProvider` returns `None` for any input.
+    #[test]
+    fn skipped_visual_ref_provider_returns_none() {
+        use crate::stub_providers::SkippedVisualRefProvider;
+        let p = SkippedVisualRefProvider;
+        assert!(p
+            .render_html_to_screenshot("<html></html>", 1280.0, 800.0)
+            .is_none());
+        assert!(p.render_html_to_screenshot("", 0.0, 0.0).is_none());
+        assert!(p
+            .render_html_to_screenshot("<html><body>Hello</body></html>", 390.0, 844.0)
+            .is_none());
+    }
+
+    /// `VisualRefProvider` trait is `Send + Sync`.
+    #[test]
+    fn visual_ref_provider_is_send_sync() {
+        use crate::types::VisualRefProvider;
+        fn assert_send_sync<T: Send + Sync + ?Sized>() {}
+        assert_send_sync::<dyn VisualRefProvider>();
+    }
+
+    /// `op_orchestrator::SkippedVisualRefProvider` resolves from a host-style import.
+    #[test]
+    fn skipped_visual_ref_provider_resolves_from_crate_root() {
+        use crate::{SkippedVisualRefProvider, VisualRefProvider};
+        let p: &dyn VisualRefProvider = &SkippedVisualRefProvider;
+        assert!(p
+            .render_html_to_screenshot("<p>test</p>", 800.0, 600.0)
+            .is_none());
+    }
+
+    // ── Task A2 end ───────────────────────────────────────────────────────────────
+
     /// `DesignRequest.validation_enabled` defaults to `true` when omitted from JSON.
     #[test]
     fn design_request_validation_enabled_defaults_true() {
@@ -540,6 +640,7 @@ mod tests {
             concurrency: 1,
             append_context: None,
             validation_enabled: false,
+            visual_ref_enabled: false,
         };
         let json = serde_json::to_string(&req).expect("serialize");
         let back: DesignRequest = serde_json::from_str(&json).expect("deserialize");

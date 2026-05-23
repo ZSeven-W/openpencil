@@ -1,5 +1,5 @@
 //! Production-visible stub provider implementations for the vision
-//! validation pipeline (S3c).
+//! validation pipeline (S3c) and visual-ref pipeline (S4).
 //!
 //! Hosts use these when the real implementations are not yet wired —
 //! `op-design-lint` integration is pending host wiring, screenshot
@@ -14,6 +14,8 @@
 //!   loop exits before any vision round.
 //! - `SkippedVisionLlmClient::validate` → `VisionResponse::Skipped`
 //!   (defensive in case `capture_root_frame` ever returns `Some`).
+//! - `SkippedVisualRefProvider::render_html_to_screenshot` → `None`,
+//!   so the visual-ref pipeline skips immediately to plain orchestration.
 //!
 //! Net result: the Progress stream emits `ValidationStarted` →
 //! `ValidationPreCheckDone { applied: 0, .. }` →
@@ -23,7 +25,7 @@
 
 use crate::types::{
     DocSink, PreValidationResult, PreValidator, ScreenshotProvider, VisionCallRequest,
-    VisionLlmClient, VisionResponse,
+    VisionLlmClient, VisionResponse, VisualRefProvider,
 };
 
 /// Stub `PreValidator` — always returns zero fixes; no side effects.
@@ -51,5 +53,15 @@ pub struct SkippedVisionLlmClient;
 impl VisionLlmClient for SkippedVisionLlmClient {
     fn validate(&self, _req: VisionCallRequest) -> VisionResponse {
         VisionResponse::Skipped { reason: None }
+    }
+}
+
+/// Stub `VisualRefProvider` — always returns `None`. Visual-ref pipeline
+/// short-circuits to plain orchestration without rendering any HTML.
+pub struct SkippedVisualRefProvider;
+
+impl VisualRefProvider for SkippedVisualRefProvider {
+    fn render_html_to_screenshot(&self, _html: &str, _width: f64, _height: f64) -> Option<String> {
+        None
     }
 }
