@@ -34,7 +34,9 @@ use jian_ops_schema::{
     PenDocument,
 };
 
-use crate::payload::{DocPayload, NodePayload, PagePayload, StrokePayload};
+use crate::payload::{
+    DocPayload, GradientPayload, GradientStopPayload, NodePayload, PagePayload, StrokePayload,
+};
 
 /// Default canvas allotment for a page-root sized with flex tokens
 /// (`fill_container` / `fit_content`) and no authored bounds — large
@@ -462,8 +464,7 @@ fn ellipse_to_payload(n: &EllipseNode) -> NodePayload {
     // numeric size here as the fallback for `apply_computed_rect`.
     p.w = sizing_to_f32(&n.width);
     p.h = sizing_to_f32(&n.height);
-    p.fill = first_solid_color(n.fill.as_deref());
-    p.fill_type = first_fill_type(n.fill.as_deref());
+    assign_first_fill(&mut p, n.fill.as_deref());
     p.stroke = stroke_to_payload(n.stroke.as_ref());
     p.corner_radius = n.corner_radius.unwrap_or(0.0) as f32;
     // Arc geometry — only carried when authored, so a plain ellipse
@@ -516,8 +517,7 @@ fn polygon_to_payload(n: &PolygonNode) -> NodePayload {
     // polygon dimensions to taffy, so we must seed authored size.
     p.w = sizing_to_f32(&n.width);
     p.h = sizing_to_f32(&n.height);
-    p.fill = first_solid_color(n.fill.as_deref());
-    p.fill_type = first_fill_type(n.fill.as_deref());
+    assign_first_fill(&mut p, n.fill.as_deref());
     p.stroke = stroke_to_payload(n.stroke.as_ref());
     p.corner_radius = n.corner_radius.unwrap_or(0.0) as f32;
     p
@@ -528,8 +528,7 @@ fn path_to_payload(n: &PathNode) -> NodePayload {
     p.path_closed = n.closed.unwrap_or(false);
     p.w = sizing_to_f32(&n.width);
     p.h = sizing_to_f32(&n.height);
-    p.fill = first_solid_color(n.fill.as_deref());
-    p.fill_type = first_fill_type(n.fill.as_deref());
+    assign_first_fill(&mut p, n.fill.as_deref());
     p.stroke = stroke_to_payload(n.stroke.as_ref());
     if let Some(anchors) = &n.anchors {
         // `points` is the path's anchor polyline — kept 1:1 with the
@@ -561,8 +560,7 @@ fn text_to_payload(n: &TextNode) -> NodePayload {
             .collect::<Vec<_>>()
             .join(""),
     });
-    p.fill = first_solid_color(n.fill.as_deref());
-    p.fill_type = first_fill_type(n.fill.as_deref());
+    assign_first_fill(&mut p, n.fill.as_deref());
     p.font_size = n.font_size.unwrap_or(0.0) as f32;
     p.font_weight = resolve_font_weight(n.font_weight.as_ref());
     // Only wrap text when the schema explicitly authored
@@ -615,8 +613,7 @@ fn resolve_font_weight(w: Option<&FontWeight>) -> u16 {
 fn text_input_to_payload(n: &TextInputNode) -> NodePayload {
     let mut p = base_payload(&n.base, "text");
     p.text = n.value.clone().or_else(|| n.placeholder.clone());
-    p.fill = first_solid_color(n.fill.as_deref());
-    p.fill_type = first_fill_type(n.fill.as_deref());
+    assign_first_fill(&mut p, n.fill.as_deref());
     p.stroke = stroke_to_payload(n.stroke.as_ref());
     p
 }
@@ -645,8 +642,7 @@ fn icon_font_to_payload(n: &IconFontNode) -> NodePayload {
     // scale-to-fit + stroke style.
     let mut p = base_payload(&n.base, "icon_font");
     p.text = Some(n.icon_font_name.clone());
-    p.fill = first_solid_color(n.fill.as_deref());
-    p.fill_type = first_fill_type(n.fill.as_deref());
+    assign_first_fill(&mut p, n.fill.as_deref());
     p
 }
 
@@ -678,6 +674,7 @@ fn base_payload(base: &PenNodeBase, kind: &str) -> NodePayload {
         locked: base.locked.unwrap_or(false),
         collapsed: false,
         fill_type: "solid".into(),
+        gradient: None,
         points: Vec::new(),
         path_anchors: Vec::new(),
         path_closed: false,
@@ -695,14 +692,70 @@ fn apply_container_style(
     stroke: Option<&PenStroke>,
     corner_radius: Option<&CornerRadius>,
 ) {
-    p.fill = first_solid_color(fill);
-    p.fill_type = first_fill_type(fill);
+    assign_first_fill(p, fill);
     p.stroke = stroke_to_payload(stroke);
     p.corner_radius = match corner_radius {
         Some(CornerRadius::Uniform(r)) => *r as f32,
         Some(CornerRadius::PerCorner(corners)) => corners[0] as f32,
         None => 0.0,
     };
+}
+
+/// Write `p.fill` / `p.fill_type` / `p.gradient` from a node's
+/// fill list as a single trio so the canvas painter sees a
+/// consistent triple — every paint-time gradient body keeps the
+/// matching first-stop solid colour in `fill` as a fallback for
+/// kinds whose painter doesn't grok gradients yet.
+fn assign_first_fill(p: &mut NodePayload, fills: Option<&[PenFill]>) {
+    p.fill = first_solid_color(fills);
+    p.fill_type = first_fill_type(fills);
+    p.gradient = first_gradient(fills);
+}
+
+/// Read the first fill as a resolved [`GradientPayload`] — `None`
+/// when it isn't a gradient, or when its stop list is empty (a
+/// degenerate gradient would paint as a fully transparent shape).
+fn first_gradient(fills: Option<&[PenFill]>) -> Option<GradientPayload> {
+    let fills = fills?;
+    let first = fills.first()?;
+    match first {
+        PenFill::LinearGradient(body) => {
+            let stops = gradient_stops(&body.stops)?;
+            Some(GradientPayload::Linear {
+                angle_deg: body.angle.unwrap_or(0.0),
+                opacity: body.opacity.unwrap_or(1.0).clamp(0.0, 1.0),
+                stops,
+            })
+        }
+        PenFill::RadialGradient(body) => {
+            let stops = gradient_stops(&body.stops)?;
+            Some(GradientPayload::Radial {
+                cx: body.cx.unwrap_or(0.5).clamp(0.0, 1.0),
+                cy: body.cy.unwrap_or(0.5).clamp(0.0, 1.0),
+                radius: body.radius.unwrap_or(0.5).clamp(0.0, 1.0),
+                opacity: body.opacity.unwrap_or(1.0).clamp(0.0, 1.0),
+                stops,
+            })
+        }
+        _ => None,
+    }
+}
+
+fn gradient_stops(
+    stops: &[jian_ops_schema::style::GradientStop],
+) -> Option<Vec<GradientStopPayload>> {
+    if stops.is_empty() {
+        return None;
+    }
+    Some(
+        stops
+            .iter()
+            .map(|s| GradientStopPayload {
+                offset: s.offset.clamp(0.0, 1.0),
+                color: parse_hex(&s.color).unwrap_or([0.0, 0.0, 0.0, 1.0]),
+            })
+            .collect(),
+    )
 }
 
 fn first_solid_color(fills: Option<&[PenFill]>) -> Option<[f32; 4]> {

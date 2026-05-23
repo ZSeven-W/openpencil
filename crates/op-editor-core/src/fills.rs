@@ -179,44 +179,123 @@ fn solid_fill(hex: String) -> PenFill {
     })
 }
 
-/// Opacity of the node's primary solid fill (1.0 when missing /
-/// not stored — the canonical default a fresh fill paints with).
+/// Opacity of the node's **primary** fill — whatever kind it is
+/// (Solid / LinearGradient / RadialGradient / Image). `1.0` when
+/// the node has no fill at all or the body's opacity is `None`.
+/// The Fill section's `100 %` input drives this regardless of
+/// fill kind, so a gradient / image fill reports its own opacity.
 pub fn first_solid_fill_opacity(node: &PenNode) -> f32 {
     node_fills(node)
-        .and_then(|f| {
-            f.iter().find_map(|fill| match fill {
-                PenFill::Solid(b) => Some(b.opacity.unwrap_or(1.0)),
-                _ => None,
-            })
+        .and_then(|fills| fills.first())
+        .map(|fill| match fill {
+            PenFill::Solid(b) => b.opacity.unwrap_or(1.0),
+            PenFill::LinearGradient(b) => b.opacity.unwrap_or(1.0),
+            PenFill::RadialGradient(b) => b.opacity.unwrap_or(1.0),
+            PenFill::Image(b) => b.opacity.unwrap_or(1.0),
         })
         .unwrap_or(1.0)
 }
 
-/// Write the first `Solid` fill's `opacity` (clamped to `[0.0, 1.0]`).
-/// When the node has no solid fill, a transparent-black one is
-/// prepended so the opacity has a target. `false` when the variant
-/// carries no `fill` field at all.
+/// Write the primary fill's `opacity` (clamped to `[0.0, 1.0]`),
+/// matching on whatever variant the first fill is. Touches no
+/// other field — a gradient / image fill keeps its stops, image
+/// url, etc. `false` (no-op) when the variant carries no `fill`
+/// field or the node has no fills.
 pub fn set_primary_fill_opacity(node: &mut PenNode, opacity: f32) -> bool {
+    // Read-only probe first: `node_fills_mut` would `get_or_insert_with`
+    // an empty Vec, silently mutating `fill: None` into
+    // `fill: Some([])`. Bail before touching the document when
+    // there's nothing to update.
+    if node_fills(node).map(|f| f.is_empty()).unwrap_or(true) {
+        return false;
+    }
     let opacity = opacity.clamp(0.0, 1.0);
     let Some(fills) = node_fills_mut(node) else {
         return false;
     };
-    if let Some(slot) = fills.iter_mut().find_map(|f| match f {
-        PenFill::Solid(body) => Some(body),
-        _ => None,
-    }) {
-        slot.opacity = Some(opacity);
-    } else {
-        fills.insert(
-            0,
-            PenFill::Solid(SolidFillBody {
-                color: "#000000".to_string(),
-                explain: None,
-                opacity: Some(opacity),
-                blend_mode: None,
-            }),
-        );
+    let Some(first) = fills.first_mut() else {
+        return false;
+    };
+    match first {
+        PenFill::Solid(b) => b.opacity = Some(opacity),
+        PenFill::LinearGradient(b) => b.opacity = Some(opacity),
+        PenFill::RadialGradient(b) => b.opacity = Some(opacity),
+        PenFill::Image(b) => b.opacity = Some(opacity),
     }
+    true
+}
+
+/// Set the LinearGradient body's `angle` (degrees, canonical
+/// `.op` convention — 0° = bottom→top). No-op when the first fill
+/// isn't a linear gradient; returns `false` so callers can detect
+/// the silent rejection (panel input clears without mutation).
+pub fn set_primary_gradient_angle(node: &mut PenNode, angle_deg: f32) -> bool {
+    if node_fills(node).map(|f| f.is_empty()).unwrap_or(true) {
+        return false;
+    }
+    let Some(fills) = node_fills_mut(node) else {
+        return false;
+    };
+    let Some(first) = fills.first_mut() else {
+        return false;
+    };
+    match first {
+        PenFill::LinearGradient(b) => {
+            b.angle = Some(angle_deg);
+            true
+        }
+        _ => false,
+    }
+}
+
+/// Replace gradient stop `index`'s colour with `hex` (already
+/// validated `#RRGGBB`). Linear + Radial both accepted. No-op when
+/// the first fill isn't a gradient or `index` is out of range.
+pub fn set_primary_gradient_stop_hex(node: &mut PenNode, index: usize, hex: &str) -> bool {
+    if node_fills(node).map(|f| f.is_empty()).unwrap_or(true) {
+        return false;
+    }
+    let Some(fills) = node_fills_mut(node) else {
+        return false;
+    };
+    let Some(first) = fills.first_mut() else {
+        return false;
+    };
+    let stops = match first {
+        PenFill::LinearGradient(b) => &mut b.stops,
+        PenFill::RadialGradient(b) => &mut b.stops,
+        _ => return false,
+    };
+    let Some(stop) = stops.get_mut(index) else {
+        return false;
+    };
+    stop.color = hex.to_string();
+    true
+}
+
+/// Replace gradient stop `index`'s offset with `frac` (0.0..=1.0).
+/// Linear + Radial both accepted. Same no-op rules as the hex
+/// setter; offset is clamped before write so the canonical schema's
+/// invariant (`0 ≤ offset ≤ 1`) holds.
+pub fn set_primary_gradient_stop_offset(node: &mut PenNode, index: usize, frac: f32) -> bool {
+    if node_fills(node).map(|f| f.is_empty()).unwrap_or(true) {
+        return false;
+    }
+    let Some(fills) = node_fills_mut(node) else {
+        return false;
+    };
+    let Some(first) = fills.first_mut() else {
+        return false;
+    };
+    let stops = match first {
+        PenFill::LinearGradient(b) => &mut b.stops,
+        PenFill::RadialGradient(b) => &mut b.stops,
+        _ => return false,
+    };
+    let Some(stop) = stops.get_mut(index) else {
+        return false;
+    };
+    stop.offset = frac.clamp(0.0, 1.0);
     true
 }
 

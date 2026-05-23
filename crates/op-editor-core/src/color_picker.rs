@@ -92,11 +92,20 @@ impl EditorState {
             return false;
         };
         let current_hex = match target {
-            ColorTarget::Fill => first_solid_fill_hex(node),
-            ColorTarget::Stroke => first_solid_stroke_hex(node),
+            ColorTarget::Fill => first_solid_fill_hex(node).map(str::to_string),
+            ColorTarget::Stroke => first_solid_stroke_hex(node).map(str::to_string),
+            ColorTarget::GradientStop(i) => gradient_stop_hex(node, i),
         }
-        .unwrap_or("#000000");
-        let (h, s, v) = rgb_to_hsv(parse_hex_rgb(current_hex).unwrap_or((0.0, 0.0, 0.0)));
+        .unwrap_or_else(|| "#000000".to_string());
+        let (h, s, v) = rgb_to_hsv(parse_hex_rgb(&current_hex).unwrap_or((0.0, 0.0, 0.0)));
+        // Preserve per-stop alpha across picker edits. Fill / stroke
+        // ignore alpha (they carry it in a separate opacity input)
+        // so this only matters for `GradientStop`.
+        let alpha = if matches!(target, ColorTarget::GradientStop(_)) {
+            parse_hex_alpha(&current_hex)
+        } else {
+            1.0
+        };
         self.ui.pending_color_history = Some(self.snapshot_for_history());
         self.ui.color_picker = Some(ColorPickerState {
             target,
@@ -106,6 +115,7 @@ impl EditorState {
             drag: None,
             anchor_y,
             variable: None,
+            alpha,
         });
         true
     }
@@ -153,6 +163,7 @@ impl EditorState {
             drag: None,
             anchor_y,
             variable: Some(name),
+            alpha: 1.0,
         });
         true
     }
@@ -183,7 +194,35 @@ impl EditorState {
             self.set_variable_color(&name, &hex);
             return true;
         }
-        self.set_selected_color(matches!(target, ColorTarget::Fill), &hex);
+        match target {
+            ColorTarget::Fill => {
+                self.set_selected_color(true, &hex);
+            }
+            ColorTarget::Stroke => {
+                self.set_selected_color(false, &hex);
+            }
+            ColorTarget::GradientStop(i) => {
+                // Splice the picker's preserved alpha back onto the
+                // RGB hex — the picker has no alpha slider, so the
+                // stop's authored transparency must round-trip even
+                // when the user drags hue / saturation / value.
+                let alpha_u8 = (self
+                    .ui
+                    .color_picker
+                    .as_ref()
+                    .map(|s| s.alpha)
+                    .unwrap_or(1.0)
+                    .clamp(0.0, 1.0)
+                    * 255.0)
+                    .round() as u8;
+                let hex_with_alpha = if alpha_u8 == 255 {
+                    hex.clone()
+                } else {
+                    format!("{}{:02X}", hex, alpha_u8)
+                };
+                let _ = self.set_selected_gradient_stop_hex(i, &hex_with_alpha);
+            }
+        }
         true
     }
 
@@ -225,10 +264,12 @@ impl EditorState {
                 crate::walkers::find_node(snap_children, &sel).and_then(|n| match state.target {
                     ColorTarget::Fill => first_solid_fill_hex(n).map(str::to_string),
                     ColorTarget::Stroke => first_solid_stroke_hex(n).map(str::to_string),
+                    ColorTarget::GradientStop(i) => gradient_stop_hex(n, i),
                 });
             let after = self.selected_node().and_then(|n| match state.target {
                 ColorTarget::Fill => first_solid_fill_hex(n).map(str::to_string),
                 ColorTarget::Stroke => first_solid_stroke_hex(n).map(str::to_string),
+                ColorTarget::GradientStop(i) => gradient_stop_hex(n, i),
             });
             before != after
         };
@@ -247,6 +288,25 @@ fn scalar_as_hex(s: &jian_ops_schema::variable::VariableScalar) -> Option<String
         jian_ops_schema::variable::VariableScalar::Str(hex) => Some(hex.clone()),
         _ => None,
     }
+}
+
+/// Read one stop's hex from the node's primary gradient body.
+/// `None` when the first fill isn't a gradient or `index` is out of
+/// range — the same gating `set_primary_gradient_stop_hex` applies
+/// on the write path.
+fn gradient_stop_hex(
+    node: &jian_ops_schema::node::PenNode,
+    index: usize,
+) -> Option<String> {
+    use jian_ops_schema::style::PenFill;
+    let fills = crate::fills::node_fills(node)?;
+    let first = fills.first()?;
+    let stops = match first {
+        PenFill::LinearGradient(b) => &b.stops,
+        PenFill::RadialGradient(b) => &b.stops,
+        _ => return None,
+    };
+    stops.get(index).map(|s| s.color.clone())
 }
 
 /// Resolve a Color variable's hex scalar from a history snapshot's
@@ -366,6 +426,22 @@ pub fn parse_hex_rgb(s: &str) -> Option<(f32, f32, f32)> {
         _ => return None,
     };
     Some((r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0))
+}
+
+/// Parse the alpha channel out of `#rrggbbaa` — defaults to `1.0`
+/// when the hex is 6-char (no alpha authored) or unparseable. Used
+/// by the gradient-stop colour picker so dragging SV / hue doesn't
+/// drop the stop's authored transparency.
+pub fn parse_hex_alpha(s: &str) -> f32 {
+    let Some(stripped) = s.trim().strip_prefix('#') else {
+        return 1.0;
+    };
+    if stripped.len() != 8 {
+        return 1.0;
+    }
+    u8::from_str_radix(&stripped[6..8], 16)
+        .map(|a| a as f32 / 255.0)
+        .unwrap_or(1.0)
 }
 
 /// Format RGB floats (0..1) as a `#rrggbb` hex string.
@@ -570,5 +646,57 @@ mod tests {
             Some(VariableScalar::Str(hex)) => assert_eq!(hex, "#ff8800"),
             other => panic!("undo must restore #ff8800, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn gradient_stop_picker_preserves_alpha() {
+        // Open the picker on a transparent stop (`#00000000`) and
+        // drag SV → the resulting stop must still carry the original
+        // alpha, not silently flip to opaque.
+        use jian_ops_schema::node::PenNode;
+        use jian_ops_schema::style::{GradientStop, LinearGradientBody, PenFill};
+        let mut node = rect("n1", "r", 0.0, 0.0, 40.0, 30.0);
+        // Seed a 2-stop gradient where stop 1 is fully transparent.
+        let body = PenFill::LinearGradient(LinearGradientBody {
+            angle: Some(0.0),
+            stops: vec![
+                GradientStop {
+                    offset: 0.0,
+                    color: "#ffffff".into(),
+                },
+                GradientStop {
+                    offset: 1.0,
+                    color: "#00000000".into(),
+                },
+            ],
+            explain: None,
+            opacity: None,
+            blend_mode: None,
+        });
+        if let PenNode::Rectangle(r) = &mut node {
+            r.container.fill = Some(vec![body]);
+        } else {
+            panic!("expected rectangle");
+        }
+        let mut s = state_with(vec![node]);
+        s.set_single_selection(NodeId::new("n1"));
+        assert!(s.open_color_picker(ColorTarget::GradientStop(1), 100.0));
+        assert!(s.color_picker_set_hsv(0.0, 1.0, 1.0)); // → red
+        let _ = s.close_color_picker();
+        let node = s.selected_node().expect("rect");
+        let stops = match crate::fills::node_fills(node)
+            .and_then(|f| f.first())
+            .expect("first fill")
+        {
+            PenFill::LinearGradient(b) => &b.stops,
+            other => panic!("expected linear, got {other:?}"),
+        };
+        let written = &stops[1].color;
+        assert!(
+            written.eq_ignore_ascii_case("#ff000000"),
+            "alpha must round-trip; got {written}"
+        );
+        // Stop 0 (opaque) must be untouched.
+        assert!(stops[0].color.eq_ignore_ascii_case("#ffffff"));
     }
 }

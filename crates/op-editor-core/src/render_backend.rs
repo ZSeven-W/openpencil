@@ -330,6 +330,67 @@ pub trait RenderBackend {
     /// is expected to have painted a placeholder frame underneath.
     fn draw_image(&mut self, _rect: Rect, _image_id: u64, _encoded: &[u8]) {}
 
+    /// Fill a (round-)rectangle with a linear gradient. `stops`
+    /// carries `(offset, color)` pairs in 0.0..=1.0 with at least one
+    /// entry; `angle_deg` is the gradient direction in the canonical
+    /// `.op` convention (0° = bottom→top, 90° = left→right, matches
+    /// CSS `to-top`); `opacity` is the per-fill multiplier folded
+    /// into every stop's alpha. A `radius` of 0 paints a plain rect.
+    ///
+    /// Default impl degrades to a solid `fill_round_rect` using the
+    /// first stop's colour pre-multiplied by `opacity` so backends
+    /// without a gradient shader still paint something resembling
+    /// the gradient.
+    fn fill_round_rect_linear_gradient(
+        &mut self,
+        rect: Rect,
+        radius: f32,
+        stops: &[(f32, Color)],
+        _angle_deg: f32,
+        opacity: f32,
+    ) {
+        if let Some((_, c)) = stops.first() {
+            let color = Color {
+                r: c.r,
+                g: c.g,
+                b: c.b,
+                a: c.a * opacity.clamp(0.0, 1.0),
+            };
+            self.fill_round_rect(rect, radius, color);
+        }
+    }
+
+    /// Fill a (round-)rectangle with a radial gradient. `cx_frac`
+    /// / `cy_frac` are 0.0..=1.0 fractions of `rect`'s width / height
+    /// for the centre; `radius_frac` is a 0.0..=1.0 fraction of
+    /// `max(w, h)` for the outer radius — matches the TS
+    /// `pen-renderer` so the same `.op` file paints at the same
+    /// radial size on native + web + export. Stops + opacity follow
+    /// the same convention as the linear variant.
+    ///
+    /// Default impl falls back to a solid first-stop fill, same as
+    /// the linear variant.
+    fn fill_round_rect_radial_gradient(
+        &mut self,
+        rect: Rect,
+        radius: f32,
+        stops: &[(f32, Color)],
+        _cx_frac: f32,
+        _cy_frac: f32,
+        _radius_frac: f32,
+        opacity: f32,
+    ) {
+        if let Some((_, c)) = stops.first() {
+            let color = Color {
+                r: c.r,
+                g: c.g,
+                b: c.b,
+                a: c.a * opacity.clamp(0.0, 1.0),
+            };
+            self.fill_round_rect(rect, radius, color);
+        }
+    }
+
     // Transform stack.
     fn save(&mut self);
     fn restore(&mut self);

@@ -60,7 +60,9 @@ fn contain_rect(outer: Rect, img_w: f32, img_h: f32) -> Rect {
     }
 }
 
-fn to_sk_rect(r: Rect) -> skia_safe::Rect {
+// `pub(super)` so the sibling `gradient.rs` impl block can convert
+// rects without re-implementing the helper.
+pub(super) fn to_sk_rect(r: Rect) -> skia_safe::Rect {
     skia_safe::Rect::from_xywh(r.origin.x, r.origin.y, r.size.x, r.size.y)
 }
 
@@ -88,6 +90,12 @@ fn jian_color_to_color4f(c: Color) -> skia_safe::Color4f {
         c.a.clamp(0.0, 1.0),
     )
 }
+
+// Gradient shader paint methods (`fill_round_rect_linear_gradient`
+// / `_radial_gradient`) and their helpers live in the sibling
+// `gradient.rs` so this spine stays under the 800-line cap. The
+// methods are added to `NativeBackend` via a sibling `impl` block.
+mod gradient;
 
 /// Frame-scoped Jian-DrawOp adapter (spec v19 §5.2.1).
 ///

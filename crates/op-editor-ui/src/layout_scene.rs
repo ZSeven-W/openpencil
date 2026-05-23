@@ -78,6 +78,45 @@ pub struct DropShadow {
     pub color: Color,
 }
 
+/// One resolved gradient stop — offset 0.0..=1.0 plus the stop's
+/// concrete colour (already hex-parsed and `$ref`-resolved by the
+/// scene builder).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct SceneGradientStop {
+    pub offset: f32,
+    pub color: Color,
+}
+
+/// A paintable gradient — either linear (canonical `.op` angle in
+/// degrees, where 0° = bottom→top, 90° = left→right, 180° = top→bottom
+/// — i.e. CSS `to-top` convention; the renderer subtracts 90° before
+/// projecting endpoints) or radial (centre + radius as 0.0..=1.0
+/// fractions of the node's bounds, with radius scaled against
+/// `max(w, h)` for parity with the TS `pen-renderer`). Carries the
+/// per-fill `opacity` so the painter can fold it into every stop's
+/// alpha without mutating the stops themselves.
+#[derive(Debug, Clone, PartialEq)]
+pub enum SceneGradient {
+    Linear {
+        /// Canonical `.op` angle (degrees, 0° = bottom→top).
+        angle_deg: f32,
+        opacity: f32,
+        stops: Vec<SceneGradientStop>,
+    },
+    Radial {
+        /// Centre x as a 0.0..=1.0 fraction of bounds width (0.5 = centre).
+        cx: f32,
+        /// Centre y as a 0.0..=1.0 fraction of bounds height.
+        cy: f32,
+        /// Outer radius as a 0.0..=1.0 fraction of `max(w, h)` — matches
+        /// `pen-renderer/src/node-renderer.ts::node_renderer` so `.op`
+        /// files import / export at the same radial size as the TS app.
+        radius: f32,
+        opacity: f32,
+        stops: Vec<SceneGradientStop>,
+    },
+}
+
 /// A visual effect painted with a [`SceneNode`]. v1 ships drop
 /// shadow (what the property panel's effects section needs).
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -196,6 +235,12 @@ pub struct SceneNode {
     /// / `Image`. The current canvas paints all of them as the solid
     /// `fill` colour; carried so a richer painter can branch later.
     pub fill_type: SceneFillType,
+    /// Resolved gradient body — populated when `fill_type` is
+    /// `LinearGradient` or `RadialGradient`. `fill` still holds the
+    /// first stop's colour so non-gradient code paths (Polygon /
+    /// Path / Ellipse / Line painters that have no gradient overload
+    /// yet) keep a sensible fallback.
+    pub gradient: Option<SceneGradient>,
     /// Resolved stroke (colour + width). `$ref` stroke colours are
     /// resolved at build time. `None` = no stroke.
     pub stroke: Option<SceneStroke>,
@@ -293,6 +338,7 @@ impl SceneNode {
             corner_radius: 0.0,
             fill: None,
             fill_type: SceneFillType::Solid,
+            gradient: None,
             stroke: None,
             text: None,
             font_size: 0.0,

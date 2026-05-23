@@ -8,7 +8,6 @@
 
 use super::WidgetHostNative;
 use op_editor_core::editor_ui_state::VariableRowFocus;
-use op_editor_core::ui_draft::PropertyFocus;
 
 impl WidgetHostNative {
     /// Typed-char router: settings → rename → text-edit → variable
@@ -108,7 +107,7 @@ impl WidgetHostNative {
         }
         if let Some(focus) = self.editor_state.ui.property_focus {
             self.editor_state.ui.property_draft_select_all = false;
-            let is_hex_focus = matches!(focus, PropertyFocus::FillHex | PropertyFocus::StrokeHex);
+            let is_hex_focus = focus.is_hex();
             // Caret byte-index — drafts are ASCII so it is also the
             // char index. `-` / `#` are gated on the caret being at
             // the start, NOT on the draft being empty: typing `-` at
@@ -116,21 +115,15 @@ impl WidgetHostNative {
             let draft = &self.editor_state.ui.property_input_draft;
             let pos = self.editor_state.ui.property_caret_pos.min(draft.len());
             let allowed = if is_hex_focus {
+                // Cap at 7 chars (`#RRGGBB`) — per-stop alpha is
+                // preserved at commit time so the user never types
+                // raw alpha digits.
                 draft.len() < 7
                     && (c.is_ascii_hexdigit() || (c == '#' && pos == 0 && !draft.starts_with('#')))
             } else {
                 c.is_ascii_digit()
                     || (c == '-' && pos == 0 && !draft.starts_with('-'))
-                    || (c == '.'
-                        && matches!(
-                            focus,
-                            PropertyFocus::Opacity
-                                | PropertyFocus::FillOpacity
-                                | PropertyFocus::Rotation
-                                | PropertyFocus::PositionR
-                                | PropertyFocus::StrokeWidth
-                        )
-                        && !draft.contains('.'))
+                    || (c == '.' && focus.accepts_decimal() && !draft.contains('.'))
             };
             if !allowed {
                 return false;
@@ -292,7 +285,15 @@ impl WidgetHostNative {
             }
             return ok;
         }
-        if self.editor_state.ui.property_focus.is_some() || self.editor_state.chat.focused {
+        // Don't delete the selected node when any text input owns
+        // the keyboard — property focus, effect-param focus, or the
+        // chat input. The text-input branches above handle their
+        // own backspace; falling through to `delete_selected` here
+        // would silently drop the node behind the focused field.
+        if self.editor_state.ui.property_focus.is_some()
+            || self.editor_state.editor_ui.effect_param_focus.is_some()
+            || self.editor_state.chat.focused
+        {
             return false;
         }
         if self.editor_state.selection.is_empty() {
@@ -331,7 +332,6 @@ impl WidgetHostNative {
     /// stepper). Returns `false` when no numeric property input is
     /// focused, so the caller falls back to nudging the selection.
     pub fn apply_property_step(&mut self, delta: f32) -> bool {
-        use op_editor_core::ui_draft::PropertyFocus;
         // Effect-parameter focus: step the value, commit via
         // `SetEffectParam`, and reflect it back into the draft.
         if let Some(ef) = self.editor_state.editor_ui.effect_param_focus {
@@ -370,7 +370,7 @@ impl WidgetHostNative {
             return false;
         };
         // Hex colour fields aren't numerically steppable.
-        if matches!(focus, PropertyFocus::FillHex | PropertyFocus::StrokeHex) {
+        if focus.is_hex() {
             return false;
         }
         let current: f32 = self

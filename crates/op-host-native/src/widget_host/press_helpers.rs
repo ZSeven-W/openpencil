@@ -158,6 +158,30 @@ pub(in crate::widget_host) fn property_focus_initial(
             .stroke
             .map(|s| format!("{}", s.width.round() as i32))
             .unwrap_or_else(|| "1".to_string()),
+        F::GradientAngle => {
+            let a = panel.snapshot.gradient_angle.unwrap_or(0.0);
+            if a.fract() == 0.0 {
+                format!("{}", a as i32)
+            } else {
+                format!("{a}")
+            }
+        }
+        F::GradientStopHex(i) => panel
+            .snapshot
+            .gradient_stops
+            .get(i)
+            // Strip alpha so the input pill matches what paint shows.
+            // Per-stop transparency rides through commit invisibly.
+            .map(|s| {
+                op_editor_ui::widgets::property_panel_fill::stop_hex_rgb_only(&s.hex)
+            })
+            .unwrap_or_else(|| "#000000".to_string()),
+        F::GradientStopOffset(i) => panel
+            .snapshot
+            .gradient_stops
+            .get(i)
+            .map(|s| ((s.offset * 100.0).round() as i32).to_string())
+            .unwrap_or_else(|| "0".to_string()),
     }
 }
 
@@ -169,5 +193,8 @@ pub(in crate::widget_host) fn color_target(
     match t {
         op_editor_core::ColorTarget::Fill => op_editor_core::ui_draft::ColorTarget::Fill,
         op_editor_core::ColorTarget::Stroke => op_editor_core::ui_draft::ColorTarget::Stroke,
+        op_editor_core::ColorTarget::GradientStop(i) => {
+            op_editor_core::ui_draft::ColorTarget::GradientStop(i)
+        }
     }
 }

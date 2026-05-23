@@ -157,6 +157,7 @@ fn paint_picker(cx: &mut PaintCx<'_>, theme: &Theme, state: &ColorPickerState, p
     let title = match state.target {
         ColorTarget::Fill => "Fill",
         ColorTarget::Stroke => "Stroke",
+        ColorTarget::GradientStop(_) => "Gradient Stop",
     };
     let title_layout = TextLayout::single_run(
         title,
@@ -503,5 +504,6 @@ pub fn target_label(t: ColorTarget) -> &'static str {
     match t {
         ColorTarget::Fill => "Fill",
         ColorTarget::Stroke => "Stroke",
+        ColorTarget::GradientStop(_) => "Gradient Stop",
     }
 }

@@ -122,3 +122,47 @@ fn rect_translation_keeps_size() {
     assert!((jr.size.width - 30.0).abs() < 1e-6);
     assert!((jr.size.height - 40.0).abs() < 1e-6);
 }
+
+#[test]
+fn linear_gradient_angle_zero_runs_bottom_to_top() {
+    // The canonical `.op` convention puts `angle = 0` at "from
+    // bottom to top" (CSS `to-top`). Mirrors the TS renderer at
+    // `pen-renderer/src/node-renderer.ts:155` which subtracts 90°
+    // before projecting onto endpoints.
+    let rect = Rect::xywh(0.0, 0.0, 100.0, 50.0);
+    let (start, end) = super::gradient::linear_gradient_endpoints(rect, 0.0);
+    // Start at the bottom edge centre, end at the top edge centre.
+    assert!((start.x - 50.0).abs() < 1e-3, "start x={}", start.x);
+    assert!((start.y - 25.0 - 25.0).abs() < 1e-3, "start y={}", start.y);
+    assert!((end.x - 50.0).abs() < 1e-3, "end x={}", end.x);
+    assert!((end.y - 25.0 + 25.0).abs() < 1e-3, "end y={}", end.y);
+}
+
+#[test]
+fn linear_gradient_angle_ninety_runs_left_to_right() {
+    // `angle = 90` → horizontal, left to right.
+    let rect = Rect::xywh(0.0, 0.0, 100.0, 50.0);
+    let (start, end) = super::gradient::linear_gradient_endpoints(rect, 90.0);
+    assert!((start.x - 0.0).abs() < 1e-3, "start x={}", start.x);
+    assert!((start.y - 25.0).abs() < 1e-3, "start y={}", start.y);
+    assert!((end.x - 100.0).abs() < 1e-3, "end x={}", end.x);
+    assert!((end.y - 25.0).abs() < 1e-3, "end y={}", end.y);
+}
+
+#[test]
+fn linear_gradient_endpoints_use_ellipse_not_aabb() {
+    // At 45°, endpoints must sit on the bounding ellipse — NOT on
+    // the AABB diagonal. The earlier AABB-projection trick gave a
+    // longer gradient line that diverged from the TS renderer.
+    let rect = Rect::xywh(0.0, 0.0, 200.0, 100.0);
+    let (start, end) = super::gradient::linear_gradient_endpoints(rect, 45.0);
+    // 45° in canonical convention = (angle - 90 = -45°) in screen
+    // convention. cos(-45°) = √2/2, sin(-45°) = -√2/2.
+    // dx = (√2/2) * 100 ≈ 70.71, dy = (-√2/2) * 50 ≈ -35.36.
+    let dx_expected = 200.0 * 0.5 * 0.5_f32.sqrt();
+    let dy_expected = -100.0 * 0.5 * 0.5_f32.sqrt();
+    assert!((start.x - (100.0 - dx_expected)).abs() < 1e-2);
+    assert!((start.y - (50.0 - dy_expected)).abs() < 1e-2);
+    assert!((end.x - (100.0 + dx_expected)).abs() < 1e-2);
+    assert!((end.y - (50.0 + dy_expected)).abs() < 1e-2);
+}

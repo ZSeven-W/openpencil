@@ -165,6 +165,61 @@ fn text_node_carries_content_and_text_style() {
 }
 
 #[test]
+fn property_panel_fill_type_switch_produces_scene_gradient() {
+    // Reproduce what the property-panel does on
+    // "Solid → LinearGradient": mutate `EditorState.doc` via the
+    // same code path the host calls, then re-build the scene and
+    // assert that `SceneNode.gradient` is populated. Catches the
+    // case where the live mutation path bypasses the scene's
+    // gradient field — e.g. if the adapter only reads .op files
+    // and not in-memory `PenDocument` mutations.
+    let src = r##"{
+      "version":"1.0.0","pages":[{"id":"p","name":"P","children":[{
+        "type":"rectangle","id":"r","width":100,"height":50,
+        "fill":[{"type":"solid","color":"#FF0000"}]
+      }]}],"children":[]
+    }"##;
+    let mut state = state_from(src);
+    let node_id = op_editor_core::NodeId::new("r");
+    state.selection.set = vec![node_id.clone()];
+    state.selection.anchor = node_id;
+    assert!(state.set_selected_fill_type(op_editor_core::FillType::LinearGradient));
+    let scene = editor_state_to_layout_scene(&state);
+    let n = &scene.pages[0].children[0];
+    assert!(
+        n.gradient.is_some(),
+        "scene gradient must populate after Solid → LinearGradient toggle; \
+         live-mutated PenDocument is being silently dropped"
+    );
+}
+
+#[test]
+fn linear_gradient_payload_threads_into_scene_node() {
+    // A LinearGradient first-fill must come out of the scene builder
+    // as `SceneNode.gradient = Some(Linear { ... })` — otherwise the
+    // canvas painter falls back to the first-stop solid and the
+    // user's "switch fill to LinearGradient" intent doesn't render.
+    let src = r##"{
+      "version":"1.0.0","pages":[{"id":"p","name":"P","children":[{
+        "type":"rectangle","id":"r","width":100,"height":50,
+        "fill":[{"type":"linear_gradient","angle":90,
+                 "stops":[{"color":"#FF0000","offset":0},
+                          {"color":"#0000FF","offset":1}]}]
+      }]}],"children":[]
+    }"##;
+    let scene = editor_state_to_layout_scene(&state_from(src));
+    let n = &scene.pages[0].children[0];
+    let g = n.gradient.as_ref().expect("scene gradient must populate");
+    match g {
+        op_editor_ui::layout_scene::SceneGradient::Linear { stops, .. } => {
+            assert_eq!(stops.len(), 2);
+            assert!(stops[0].color.r > 0.99 && stops[0].color.b < 0.01);
+        }
+        other => panic!("expected linear, got {other:?}"),
+    }
+}
+
+#[test]
 fn empty_editor_state_yields_empty_single_page_scene() {
     let scene = editor_state_to_layout_scene(&EditorState::new());
     // The loader's single-page fallback yields one empty page.

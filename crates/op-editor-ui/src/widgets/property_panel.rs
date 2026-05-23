@@ -57,10 +57,13 @@ fn node_kind_of(node: &PenNode) -> NodeKind {
 }
 
 /// Parse a `#RRGGBB` / `#RGB` hex string into a `Color`. Reuses the
-/// editor-state colour parser (RGB only — opacity stays 1.0).
+/// editor-state colour parser; 8-char `#RRGGBBAA` is honoured so
+/// gradient stop swatches (and any other authored alpha) round-trip
+/// transparency into paint instead of always reading as opaque.
 fn color_from_hex(hex: &str) -> Option<Color> {
     let (r, g, b) = op_editor_core::parse_hex_rgb(hex)?;
-    Some(Color { r, g, b, a: 1.0 })
+    let a = op_editor_core::parse_hex_alpha(hex);
+    Some(Color { r, g, b, a })
 }
 
 pub const PROPERTY_PANEL_WIDTH: f32 = 280.0;
@@ -97,11 +100,37 @@ pub struct NodeSnapshot {
     /// section's `100 %` paints `fill_opacity * 100`.
     pub fill_opacity: f32,
     pub stroke: Option<SceneStroke>,
+    /// LinearGradient angle in degrees (canonical `.op` convention,
+    /// 0° = bottom→top). `None` when the primary fill isn't a
+    /// linear gradient — the Fill section hides the angle row in
+    /// that case.
+    pub gradient_angle: Option<f32>,
+    /// Resolved primary-fill gradient stops, in authored order.
+    /// Populated for Linear + Radial fills; empty for Solid / Image
+    /// / no-fill. Each entry carries the schema hex string (so the
+    /// panel input can paint exactly what the file authored) plus
+    /// the parsed paint colour for the stop swatch.
+    pub gradient_stops: Vec<GradientStopSummary>,
     /// The node's visual effects, in paint order — drives the
     /// Effects section's rows + param inputs.
     pub effects: Vec<EffectSummary>,
     /// Drives per-kind section filtering (Line hides fill, etc.).
     pub kind_variant: crate::layout_scene::NodeKind,
+}
+
+/// One gradient stop summary for the Fill section.
+#[derive(Debug, Clone)]
+pub struct GradientStopSummary {
+    /// Offset 0.0..=1.0 — the Fill panel paints `offset * 100` as
+    /// the per-stop `%` input.
+    pub offset: f32,
+    /// Schema hex string (`#RRGGBB` or `#RRGGBBAA`). The panel
+    /// paints this verbatim so a freshly-typed user value isn't
+    /// silently re-cased by `format_color_hex` round-trips.
+    pub hex: String,
+    /// Parsed paint colour for the per-row swatch. Falls back to
+    /// black when the hex fails to parse.
+    pub color: Color,
 }
 
 /// Which visual-effect variant a row represents.
@@ -216,6 +245,8 @@ impl NodeSnapshot {
             fill: None,
             fill_opacity: 1.0,
             stroke: None,
+            gradient_angle: None,
+            gradient_stops: Vec::new(),
             // Multi-select shows no per-effect rows — the Effects
             // section paints just its header + the add affordance.
             effects: Vec::new(),
@@ -259,6 +290,8 @@ impl NodeSnapshot {
             fill,
             fill_opacity: op_editor_core::first_solid_fill_opacity(node),
             stroke,
+            gradient_angle: gradient_angle_of(node),
+            gradient_stops: gradient_stops_of(node),
             effects: op_editor_core::node_effects(node)
                 .iter()
                 .map(EffectSummary::from_pen_effect)
@@ -266,6 +299,41 @@ impl NodeSnapshot {
             kind_variant: kind,
         }
     }
+}
+
+/// LinearGradient `angle` for the node's first fill, when it has
+/// one. Falls back to `0.0` (canonical default, bottom→top) when
+/// the body omits an explicit angle. `None` for non-linear primary
+/// fills — the Fill section uses that to hide the angle row.
+fn gradient_angle_of(node: &PenNode) -> Option<f32> {
+    use jian_ops_schema::style::PenFill;
+    match op_editor_core::fills::node_fills(node)
+        .and_then(|f| f.first())?
+    {
+        PenFill::LinearGradient(body) => Some(body.angle.unwrap_or(0.0)),
+        _ => None,
+    }
+}
+
+/// Resolved stops for the primary Linear / Radial gradient — empty
+/// list for Solid / Image / no-fill nodes.
+fn gradient_stops_of(node: &PenNode) -> Vec<GradientStopSummary> {
+    use jian_ops_schema::style::PenFill;
+    let Some(first) = op_editor_core::fills::node_fills(node).and_then(|f| f.first()) else {
+        return Vec::new();
+    };
+    let raw = match first {
+        PenFill::LinearGradient(b) => &b.stops,
+        PenFill::RadialGradient(b) => &b.stops,
+        _ => return Vec::new(),
+    };
+    raw.iter()
+        .map(|s| GradientStopSummary {
+            offset: s.offset.clamp(0.0, 1.0),
+            hex: s.color.clone(),
+            color: color_from_hex(&s.color).unwrap_or(Color::BLACK),
+        })
+        .collect()
 }
 
 /// Uniform corner radius (doc-px) for a container variant — Frame /
@@ -514,6 +582,7 @@ impl PropertyPanel {
             effects: caps.effects,
             export: caps.export,
             fill_type: self.fill_type,
+            gradient_stop_count: self.snapshot.gradient_stops.len(),
         }
     }
 

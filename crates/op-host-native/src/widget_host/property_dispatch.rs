@@ -416,6 +416,32 @@ impl WidgetHostNative {
                     }
                 }
             }
+            PropertyFocus::GradientStopHex(index) => {
+                let stripped = draft.trim().trim_start_matches('#');
+                if !stripped.is_empty() {
+                    if let Some(color) = parse_hex_color(draft.trim()) {
+                        // The input pill never paints alpha digits,
+                        // so re-attach the stop's existing alpha here
+                        // — a transparent stop must stay transparent
+                        // after the user edits its RGB.
+                        let existing_alpha = self
+                            .editor_state
+                            .selected_node()
+                            .and_then(|n| current_stop_alpha(n, index))
+                            .unwrap_or(1.0);
+                        let with_alpha = op_editor_ui::Color {
+                            r: color.r,
+                            g: color.g,
+                            b: color.b,
+                            a: existing_alpha,
+                        };
+                        let _ = self.editor_state.set_selected_gradient_stop_hex(
+                            index,
+                            &super::helpers::color_to_hex_with_alpha(with_alpha),
+                        );
+                    }
+                }
+            }
             _ => {
                 if let Ok(value) = draft.trim().parse::<f32>() {
                     let _ = self.editor_state.commit_property_edit(focus, value);
@@ -556,10 +582,30 @@ impl WidgetHostNative {
     }
 }
 
+/// Read the live alpha of gradient stop `index` on `node`, parsed
+/// out of the canonical hex (8-char `#RRGGBBAA`). `None` when the
+/// first fill isn't a gradient or the stop hex omits alpha — the
+/// caller defaults to `1.0` in that case so opaque stops stay
+/// opaque through an RGB edit.
+fn current_stop_alpha(node: &jian_ops_schema::node::PenNode, index: usize) -> Option<f32> {
+    use jian_ops_schema::style::PenFill;
+    let first = op_editor_core::fills::node_fills(node).and_then(|f| f.first())?;
+    let stops = match first {
+        PenFill::LinearGradient(b) => &b.stops,
+        PenFill::RadialGradient(b) => &b.stops,
+        _ => return None,
+    };
+    let hex = &stops.get(index)?.color;
+    Some(op_editor_core::parse_hex_alpha(hex))
+}
+
 /// Translate a shell-core `ColorTarget` into op-editor-core's.
 fn color_target(t: op_editor_core::ColorTarget) -> op_editor_core::ui_draft::ColorTarget {
     match t {
         op_editor_core::ColorTarget::Fill => op_editor_core::ui_draft::ColorTarget::Fill,
         op_editor_core::ColorTarget::Stroke => op_editor_core::ui_draft::ColorTarget::Stroke,
+        op_editor_core::ColorTarget::GradientStop(i) => {
+            op_editor_core::ui_draft::ColorTarget::GradientStop(i)
+        }
     }
 }

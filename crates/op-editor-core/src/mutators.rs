@@ -460,8 +460,39 @@ impl EditorState {
             PropertyFocus::FillOpacity => {
                 let _ = self.set_selected_fill_opacity((value / 100.0).clamp(0.0, 1.0));
             }
+            PropertyFocus::GradientAngle => {
+                let _ = crate::fills::set_primary_gradient_angle(node, value);
+            }
+            PropertyFocus::GradientStopOffset(index) => {
+                // Percent → fraction. Clamp happens inside the setter.
+                let _ = crate::fills::set_primary_gradient_stop_offset(
+                    node,
+                    index,
+                    value / 100.0,
+                );
+            }
+            // Hex focuses route through the dedicated colour setters
+            // (a typed-in hex is parsed by the host before commit), so
+            // the numeric `commit_property_edit` arm is a no-op for them.
+            PropertyFocus::GradientStopHex(_) => {}
         }
         true
+    }
+
+    /// Write a parsed hex colour to the selected gradient stop. Used
+    /// by the host's hex-input commit path; mirrors
+    /// `set_selected_color` for solid fills. `false` when the first
+    /// fill isn't a gradient, the index is out of range, or the
+    /// selection isn't editable.
+    pub fn set_selected_gradient_stop_hex(&mut self, index: usize, hex: &str) -> bool {
+        let sel = self.selection.anchor.clone();
+        if !sel.is_real() || !self.is_editable(&sel) {
+            return false;
+        }
+        let Some(node) = find_node_mut(self.active_children_mut(), &sel) else {
+            return false;
+        };
+        crate::fills::set_primary_gradient_stop_hex(node, index, hex)
     }
 
     /// Write the picker's fill-type choice to the anchor node. The
