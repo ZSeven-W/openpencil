@@ -523,8 +523,10 @@ fn paint_fill_gradient_body(
             Point2D::new(0.0, 0.0),
         );
         let hex_text_x = hex_rect.origin.x + 30.0;
-        cx.backend
-            .draw_text(&hex_layout, Point2D::new(hex_text_x, hex_rect.origin.y + 19.0));
+        cx.backend.draw_text(
+            &hex_layout,
+            Point2D::new(hex_text_x, hex_rect.origin.y + 19.0),
+        );
         if let Some(pos) = edit.caret_at(hex_focus) {
             let w = cx
                 .backend
@@ -616,6 +618,13 @@ pub fn stop_hex_rgb_only(hex: &str) -> String {
         stripped
     };
     format!("#{}", body.to_uppercase())
+}
+
+/// Public re-export so sibling widget modules (e.g. the effects
+/// section's colour row) can reuse the same alpha-aware swatch
+/// background without duplicating the geometry.
+pub fn paint_alpha_checker_public(cx: &mut PaintCx<'_>, rect: Rect, radius: f32) {
+    paint_alpha_checker(cx, rect, radius);
 }
 
 /// Paint a 2×2 light/dark checker behind a colour swatch so a

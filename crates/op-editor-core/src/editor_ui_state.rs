@@ -154,6 +154,15 @@ pub enum FileAction {
     ExportImage,
     ExportImageConfirm,
     ImportFigma,
+    /// User chose `Import image or SVG…` in the toolbar shape picker
+    /// — host opens a file dialog, then inserts the raster image as a
+    /// new Image node (or parses the SVG into nodes; SVG path lands
+    /// as a follow-up).
+    ImportImageOrSvg,
+    /// User clicked the `图片` fill body row — host opens a file
+    /// dialog and writes the chosen image into the selected node's
+    /// primary fill as `PenFill::Image { url: <data-url> }`.
+    PickFillImage,
     OpenRecent(usize),
     ClearRecent,
 }

@@ -121,10 +121,19 @@ fn apply_payload(state: &mut EditorState, payload: SettingsPayload) {
     if let Some(s) = payload.theme.as_deref() {
         eui.theme_mode = str_to_theme(s);
     }
-    if let Some(s) = payload.locale.as_deref() {
-        if let Some(loc) = str_to_locale(s) {
-            eui.locale = loc;
-        }
+    // Locale precedence: persisted user choice > detected system
+    // locale > the EditorState default (EnUs). Without this fallback
+    // a fresh install on a Chinese system would still pop English
+    // dialogs / chrome until the user manually picked a locale.
+    if let Some(s) =
+        payload
+            .locale
+            .as_deref()
+            .and_then(|s| if s.is_empty() { None } else { str_to_locale(s) })
+    {
+        eui.locale = s;
+    } else if let Some(detected) = detect_system_locale() {
+        eui.locale = detected;
     }
     if let Some(port) = payload.mcp_port {
         eui.agent_settings.mcp_server.port = port.max(1024);
@@ -179,6 +188,13 @@ pub fn touch_recent(host: &mut WidgetHostNative, path: &std::path::Path) {
 
 /// Best-effort load. Returns silently on missing file / parse error.
 pub fn load(state: &mut EditorState) {
+    // Seed the locale from the OS BEFORE the settings file is read.
+    // `apply_payload`'s persisted-locale arm overrides this when a
+    // saved choice exists; first-run / missing-file lands the
+    // detected locale instead of leaving the EnUs default.
+    if let Some(detected) = detect_system_locale() {
+        state.editor_ui.locale = detected;
+    }
     let Some(path) = settings_path() else { return };
     let Ok(bytes) = std::fs::read(&path) else {
         return;
@@ -187,6 +203,46 @@ pub fn load(state: &mut EditorState) {
         return;
     };
     apply_payload(state, payload);
+}
+
+/// Read the host OS's preferred locale (env-var driven, no extra
+/// crate dependency) and map it onto the supported [`Locale`] set.
+/// Returns `None` when nothing resolves so the caller can keep its
+/// fallback. Order matches POSIX precedence: `LC_ALL` overrides
+/// `LANG` which overrides `LC_MESSAGES`.
+fn detect_system_locale() -> Option<Locale> {
+    for var in ["LC_ALL", "LANG", "LC_MESSAGES"] {
+        let Ok(raw) = std::env::var(var) else {
+            continue;
+        };
+        if let Some(loc) = locale_from_tag(&raw) {
+            return Some(loc);
+        }
+    }
+    None
+}
+
+/// Parse a POSIX / IETF locale tag (`zh_CN.UTF-8`, `zh-CN`,
+/// `pt_BR`, `en`, …) onto the supported `Locale` set. Falls back to
+/// the language subtag when the full tag is unknown so `pt_BR` still
+/// lands `Locale::Pt` rather than rejecting.
+fn locale_from_tag(raw: &str) -> Option<Locale> {
+    let tag = raw.split('.').next().unwrap_or(raw).replace('_', "-");
+    // Try the full tag first (handles `zh-CN` / `zh-TW`); fall back
+    // to the language subtag (`zh-CN` → `zh`).
+    if let Some(loc) = str_to_locale(&tag) {
+        return Some(loc);
+    }
+    // Heuristic: zh-Hans → zh-CN, zh-Hant → zh-TW.
+    let lower = tag.to_ascii_lowercase();
+    if lower.starts_with("zh") {
+        if lower.contains("hant") || lower.contains("tw") || lower.contains("hk") {
+            return Some(Locale::ZhTw);
+        }
+        return Some(Locale::ZhCn);
+    }
+    let lang = tag.split('-').next().unwrap_or(&tag);
+    str_to_locale(lang)
 }
 
 /// Best-effort save. Returns silently on IO failure.

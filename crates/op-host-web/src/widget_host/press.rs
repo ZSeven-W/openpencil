@@ -274,7 +274,27 @@ impl WidgetHost {
                 ),
             };
             if let Some(action) = panel.hit_test_action(property_rect, Point2D::new(x, y)) {
-                self.apply_property_action(action);
+                // Anchor the colour picker at the clicked y so it
+                // pops next to the swatch row, not at the panel top.
+                if let op_editor_ui::widgets::PropertyPanelAction::OpenColorPicker(target) = action
+                {
+                    let _ = self.editor_state.open_color_picker(
+                        super::property_dispatch::color_target_public(target),
+                        y,
+                    );
+                    self.mark_dirty();
+                } else if let op_editor_ui::widgets::PropertyPanelAction::OpenEffectColorPicker(
+                    index,
+                ) = action
+                {
+                    let _ = self.editor_state.open_color_picker(
+                        op_editor_core::ui_draft::ColorTarget::EffectColor(index),
+                        y,
+                    );
+                    self.mark_dirty();
+                } else {
+                    self.apply_property_action(action);
+                }
                 return true;
             }
         }

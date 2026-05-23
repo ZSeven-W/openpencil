@@ -465,11 +465,7 @@ impl EditorState {
             }
             PropertyFocus::GradientStopOffset(index) => {
                 // Percent → fraction. Clamp happens inside the setter.
-                let _ = crate::fills::set_primary_gradient_stop_offset(
-                    node,
-                    index,
-                    value / 100.0,
-                );
+                let _ = crate::fills::set_primary_gradient_stop_offset(node, index, value / 100.0);
             }
             // Hex focuses route through the dedicated colour setters
             // (a typed-in hex is parsed by the host before commit), so

@@ -555,6 +555,14 @@ pub fn run_action(
                 }
             }
         }
+        FileAction::ImportImageOrSvg => {
+            crate::persistence_image::handle_import_image_or_svg(host);
+            ActionOutcome::Noop
+        }
+        FileAction::PickFillImage => {
+            crate::persistence_image::handle_pick_fill_image(host);
+            ActionOutcome::Noop
+        }
     }
 }
 

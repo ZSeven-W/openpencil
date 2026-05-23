@@ -172,9 +172,7 @@ pub(in crate::widget_host) fn property_focus_initial(
             .get(i)
             // Strip alpha so the input pill matches what paint shows.
             // Per-stop transparency rides through commit invisibly.
-            .map(|s| {
-                op_editor_ui::widgets::property_panel_fill::stop_hex_rgb_only(&s.hex)
-            })
+            .map(|s| op_editor_ui::widgets::property_panel_fill::stop_hex_rgb_only(&s.hex))
             .unwrap_or_else(|| "#000000".to_string()),
         F::GradientStopOffset(i) => panel
             .snapshot
@@ -195,6 +193,9 @@ pub(in crate::widget_host) fn color_target(
         op_editor_core::ColorTarget::Stroke => op_editor_core::ui_draft::ColorTarget::Stroke,
         op_editor_core::ColorTarget::GradientStop(i) => {
             op_editor_core::ui_draft::ColorTarget::GradientStop(i)
+        }
+        op_editor_core::ColorTarget::EffectColor(i) => {
+            op_editor_core::ui_draft::ColorTarget::EffectColor(i)
         }
     }
 }

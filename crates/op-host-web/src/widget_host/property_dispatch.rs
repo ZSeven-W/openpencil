@@ -116,9 +116,30 @@ impl WidgetHost {
                 // commit, or Escape out. The `−` / `+` steppers
                 // (`AdjustEffectParam`) remain the web edit path.
             }
+            A::OpenEffectColorPicker(index) => {
+                let _ = self.editor_state.open_color_picker(
+                    op_editor_core::ui_draft::ColorTarget::EffectColor(index),
+                    0.0,
+                );
+            }
+            A::PickFillImage => {
+                // Web file-picker path lands later; the wasm shell
+                // has no rfd / native dialog so this is a no-op for
+                // now. A future implementation would surface a
+                // `<input type="file">` via the JS bridge.
+            }
         }
         self.mark_dirty();
     }
+}
+
+/// Public alias for [`color_target`] — used by the press dispatch
+/// in `press.rs` so it can anchor the colour picker at the clicked
+/// y instead of always passing `0.0`.
+pub(in crate::widget_host) fn color_target_public(
+    t: op_editor_core::ColorTarget,
+) -> op_editor_core::ui_draft::ColorTarget {
+    color_target(t)
 }
 
 /// Translate a shell-core `ColorTarget` into op-editor-core's.
@@ -126,5 +147,11 @@ fn color_target(t: op_editor_core::ColorTarget) -> op_editor_core::ui_draft::Col
     match t {
         op_editor_core::ColorTarget::Fill => op_editor_core::ui_draft::ColorTarget::Fill,
         op_editor_core::ColorTarget::Stroke => op_editor_core::ui_draft::ColorTarget::Stroke,
+        op_editor_core::ColorTarget::GradientStop(i) => {
+            op_editor_core::ui_draft::ColorTarget::GradientStop(i)
+        }
+        op_editor_core::ColorTarget::EffectColor(i) => {
+            op_editor_core::ui_draft::ColorTarget::EffectColor(i)
+        }
     }
 }

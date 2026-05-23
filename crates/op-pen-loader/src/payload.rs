@@ -88,6 +88,10 @@ pub struct NodePayload {
     /// back to the first).
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub path_closed: bool,
+    /// Preserved SVG path data for imported path nodes. Coordinates
+    /// are local doc-px relative to the node origin.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub svg_path: Option<String>,
     /// Text size in doc-px. 0 = use the renderer's default 13 px.
     /// Text-only.
     #[serde(default)]
@@ -100,6 +104,12 @@ pub struct NodePayload {
     /// Drop-shadow effects.
     #[serde(default)]
     pub effects: Vec<crate::effects::ShadowPayload>,
+    /// Source URL (`data:image/...;base64,...` or file path) when the
+    /// node is an `Image` — the canvas painter decodes the inline
+    /// bytes and draws them with `RenderBackend::draw_image`. `None`
+    /// for non-image nodes.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub image_src: Option<String>,
     #[serde(default)]
     pub children: Vec<NodePayload>,
 }
