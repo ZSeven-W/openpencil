@@ -1,9 +1,6 @@
 //! 测试桩 —— crate 内各测试模块共用。仅在 `cfg(test)` 下编译。
 
-use crate::types::{
-    CallRequest, DocSink, LlmChunk, LlmClient, LlmError, PreValidationResult, PreValidator,
-    ScreenshotProvider, VisionCallRequest, VisionLlmClient, VisionResponse,
-};
+use crate::types::{CallRequest, DocSink, LlmChunk, LlmClient, LlmError};
 use futures::stream::BoxStream;
 use futures::Stream;
 use op_editor_core::{EditorCommand, EditorState};
@@ -210,33 +207,11 @@ impl LlmClient for CountingLlm {
 }
 
 // ── S3c: vision-validation stub impls ─────────────────────────────────────────
-
-/// Stub `PreValidator` —— always returns zero fixes; no side effects.
-/// Used by all tests until S1 op-design-lint detectors are wired.
-pub(crate) struct SkippedPreValidator;
-
-impl PreValidator for SkippedPreValidator {
-    fn run_pre_validation_fixes(&self, _sink: &mut dyn DocSink) -> PreValidationResult {
-        PreValidationResult::default()
-    }
-}
-
-/// Stub `ScreenshotProvider` —— always returns `None` (no screenshot available).
-/// Causes the vision loop to exit after pre-validation with zero vision rounds.
-pub(crate) struct SkippedScreenshotProvider;
-
-impl ScreenshotProvider for SkippedScreenshotProvider {
-    fn capture_root_frame(&self) -> Option<String> {
-        None
-    }
-}
-
-/// Stub `VisionLlmClient` —— always returns `VisionResponse::Skipped`.
-/// Used until a real multimodal LLM client is wired host-side.
-pub(crate) struct SkippedVisionLlmClient;
-
-impl VisionLlmClient for SkippedVisionLlmClient {
-    fn validate(&self, _req: VisionCallRequest) -> VisionResponse {
-        VisionResponse::Skipped { reason: None }
-    }
-}
+// 移到 `crate::stub_providers`(production 可见,host 也能用)。这里
+// 重新导出保持 test 模块对 `SkippedXxx` 的引用不变;新加 `#[allow(unused_imports)]`
+// 是因 test_support 没有任何 test 显式触发这三处 re-export,但 crate-wide
+// 测试随时会从这里拿。
+#[allow(unused_imports)]
+pub(crate) use crate::stub_providers::{
+    SkippedPreValidator, SkippedScreenshotProvider, SkippedVisionLlmClient,
+};
