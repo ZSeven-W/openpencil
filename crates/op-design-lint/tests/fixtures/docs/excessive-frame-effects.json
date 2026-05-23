@@ -10,72 +10,30 @@
           "type": "frame",
           "id": "stacked-effects",
           "effects": [
-            {
-              "type": "shadow",
-              "offsetX": 0,
-              "offsetY": 1,
-              "blur": 4,
-              "spread": 0,
-              "color": "#000000"
-            },
-            {
-              "type": "shadow",
-              "offsetX": 0,
-              "offsetY": 2,
-              "blur": 8,
-              "spread": 0,
-              "color": "#000000"
-            },
-            {
-              "type": "shadow",
-              "offsetX": 0,
-              "offsetY": 4,
-              "blur": 12,
-              "spread": 0,
-              "color": "#000000"
-            }
+            { "type": "shadow", "offsetX": 0, "offsetY": 1, "blur": 4, "spread": 0, "color": "#000000" },
+            { "type": "shadow", "offsetX": 0, "offsetY": 2, "blur": 8, "spread": 0, "color": "#000000" },
+            { "type": "shadow", "offsetX": 0, "offsetY": 4, "blur": 12, "spread": 0, "color": "#000000" }
           ]
         },
         {
           "type": "frame",
           "id": "halo-blur",
           "effects": [
-            {
-              "type": "shadow",
-              "offsetX": 0,
-              "offsetY": 0,
-              "blur": 64,
-              "spread": 0,
-              "color": "#000000"
-            }
+            { "type": "shadow", "offsetX": 0, "offsetY": 0, "blur": 64, "spread": 0, "color": "#000000" }
           ]
         },
         {
           "type": "frame",
           "id": "spiked-spread",
           "effects": [
-            {
-              "type": "shadow",
-              "offsetX": 0,
-              "offsetY": 2,
-              "blur": 16,
-              "spread": 8,
-              "color": "#000000"
-            }
+            { "type": "shadow", "offsetX": 0, "offsetY": 2, "blur": 16, "spread": 8, "color": "#000000" }
           ]
         },
         {
           "type": "frame",
           "id": "subtle-shadow",
           "effects": [
-            {
-              "type": "shadow",
-              "offsetX": 0,
-              "offsetY": 2,
-              "blur": 16,
-              "spread": 0,
-              "color": "#000000"
-            }
+            { "type": "shadow", "offsetX": 0, "offsetY": 2, "blur": 16, "spread": 0, "color": "#000000" }
           ]
         }
       ]

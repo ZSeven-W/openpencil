@@ -18,6 +18,7 @@ import {
 } from './ai-runtime-config';
 import type { PenNode } from '@/types/pen';
 import type { AIProviderType } from '@/types/agent-settings';
+import { getCurrentVisualReference, clearVisualReference } from './visual-ref-orchestrator';
 import { resolveSkills } from '@zseven-w/pen-ai-skills';
 import { runPreValidationFixesDetailed } from './design-pre-validation';
 
@@ -309,6 +310,7 @@ export async function runPostGenerationValidation(options?: {
 
   // If LLM validation is disabled, stop after pre-checks
   if (!VALIDATION_ENABLED) {
+    clearVisualReference();
     const breakdown = formatCategoryBreakdown(preFix.byCategory);
     emit(
       'done',
@@ -326,6 +328,7 @@ export async function runPostGenerationValidation(options?: {
   // outputs (one badge, one chart) are not worth the round-trip.
   const nodeCount = countNodesInActivePage();
   if (nodeCount < VALIDATION_NODE_COUNT_THRESHOLD) {
+    clearVisualReference();
     const breakdown = formatCategoryBreakdown(preFix.byCategory);
     emit(
       'done',
@@ -366,6 +369,7 @@ export async function runPostGenerationValidation(options?: {
       console.warn(`[Validation] Round ${round}: could not capture screenshot — stopping`);
       if (isFirstRound) {
         emit('done', '[error] Screenshot failed');
+        clearVisualReference();
         return { applied: 0, skipped: true };
       }
       break;
@@ -382,14 +386,17 @@ export async function runPostGenerationValidation(options?: {
       console.log(`[Validation] Node tree dump:\n${nodeTreeDump}`);
     }
 
-    // Reference-comparison path was deleted with the visual-ref pipeline
-    // (no caller ever populated `currentReference`). The Rust port keeps
-    // the `referenceScreenshot` parameter on `validateDesignScreenshot`
-    // so a future visual-ref source can be plumbed back in without
-    // touching this control flow.
+    // Reference comparison only on first round
+    const visualRef = isFirstRound ? getCurrentVisualReference() : null;
+    const hasReference = visualRef?.screenshot && visualRef.screenshot.length > 0;
+
     emit(
       'streaming',
-      isFirstRound ? '[pending] Analyzing design...' : `[pending] Analyzing (round ${round})...`,
+      hasReference && isFirstRound
+        ? '[pending] Comparing with design reference...'
+        : isFirstRound
+          ? '[pending] Analyzing design...'
+          : `[pending] Analyzing (round ${round})...`,
     );
 
     const result = await validateDesignScreenshot(
@@ -397,7 +404,7 @@ export async function runPostGenerationValidation(options?: {
       nodeTreeDump,
       options?.model,
       options?.provider,
-      undefined,
+      hasReference ? visualRef!.screenshot : undefined,
       round,
     );
 
@@ -413,6 +420,7 @@ export async function runPostGenerationValidation(options?: {
         : 'timeout or provider error';
       log[log.length - 1] = `[error] Analysis skipped (${reasonShort})`;
       if (isFirstRound) {
+        clearVisualReference();
         emit('done');
         return { applied: 0, skipped: true };
       }
@@ -495,6 +503,9 @@ export async function runPostGenerationValidation(options?: {
     }
     emit('streaming');
   }
+
+  // Cleanup visual reference after all rounds
+  clearVisualReference();
 
   // Final summary line
   const qualityInfo = lastQualityScore > 0 ? ` — quality: ${lastQualityScore}/10` : '';

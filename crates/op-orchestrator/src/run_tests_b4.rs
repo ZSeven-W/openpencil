@@ -89,8 +89,6 @@ fn req_append(live_target_id: &str) -> DesignRequest {
             is_mobile: false,
         }),
         validation_enabled: true,
-
-        visual_ref_enabled: false,
     }
 }
 
@@ -108,8 +106,6 @@ fn req_append_concurrent(live_target_id: &str) -> DesignRequest {
             is_mobile: false,
         }),
         validation_enabled: true,
-
-        visual_ref_enabled: false,
     }
 }
 
@@ -357,8 +353,6 @@ fn non_append_mode_takes_normal_sequential_path() {
         concurrency: 1,
         append_context: None, // no append context
         validation_enabled: true,
-
-        visual_ref_enabled: false,
     };
 
     let summary = futures::executor::block_on(Orchestrator::new().run(
@@ -452,8 +446,6 @@ fn append_mode_wins_over_dashboard_branch() {
             is_mobile: false,
         }),
         validation_enabled: true,
-
-        visual_ref_enabled: false,
     };
 
     let llm = ScriptedLlm::new(vec![

@@ -6,18 +6,14 @@ import { buildCompactPlanningPrompt } from '../../../apps/web/src/services/ai/or
 
 const dir = join(import.meta.dir, '../tests/planner-golden');
 const cases = JSON.parse(readFileSync(join(dir, 'cases.json'), 'utf8')) as Array<{
-  name: string;
-  fn: string;
-  prompt: string;
+  name: string; fn: string; prompt: string;
 }>;
 
 let written = 0;
 for (const c of cases) {
   if (c.fn === 'compact') {
     const { systemPrompt, userPrompt, selectedStyleGuideName } = buildCompactPlanningPrompt(
-      c.prompt,
-      undefined,
-      undefined,
+      c.prompt, undefined, undefined,
     );
     writeFileSync(
       join(dir, `${c.name}.json`),

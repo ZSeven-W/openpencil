@@ -15,14 +15,18 @@
           "role": "section",
           "layout": "vertical",
           "padding": [0, 24, 0, 24],
-          "children": [{ "type": "text", "id": "specials-title", "content": "Today's Specials" }]
+          "children": [
+            { "type": "text", "id": "specials-title", "content": "Today's Specials" }
+          ]
         },
         {
           "type": "frame",
           "id": "menu",
           "role": "section",
           "layout": "vertical",
-          "children": [{ "type": "text", "id": "menu-title", "content": "Menu" }]
+          "children": [
+            { "type": "text", "id": "menu-title", "content": "Menu" }
+          ]
         }
       ]
     }

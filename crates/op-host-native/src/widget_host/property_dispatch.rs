@@ -134,6 +134,19 @@ impl WidgetHostNative {
                 self.editor_state.editor_ui.effect_param_focus =
                     Some(op_editor_core::editor_ui_state::EffectParamFocus { effect, field });
             }
+            A::OpenEffectColorPicker(index) => {
+                let _ = self.editor_state.open_color_picker(
+                    op_editor_core::ui_draft::ColorTarget::EffectColor(index),
+                    0.0,
+                );
+            }
+            A::PickFillImage => {
+                // Queue the file dialog — the desktop runner pops it
+                // on the next frame and writes the chosen image into
+                // the selected node's primary fill.
+                self.editor_state.editor_ui.pending_file_action =
+                    Some(op_editor_core::editor_ui_state::FileAction::PickFillImage);
+            }
         }
         self.mark_dirty();
     }
@@ -606,6 +619,9 @@ fn color_target(t: op_editor_core::ColorTarget) -> op_editor_core::ui_draft::Col
         op_editor_core::ColorTarget::Stroke => op_editor_core::ui_draft::ColorTarget::Stroke,
         op_editor_core::ColorTarget::GradientStop(i) => {
             op_editor_core::ui_draft::ColorTarget::GradientStop(i)
+        }
+        op_editor_core::ColorTarget::EffectColor(i) => {
+            op_editor_core::ui_draft::ColorTarget::EffectColor(i)
         }
     }
 }

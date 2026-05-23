@@ -602,7 +602,10 @@ impl NativeBackend {
         let s = size / viewbox;
         let mut matrix = skia_safe::Matrix::new_identity();
         matrix.set_scale_translate((s, s), (top_left.x, top_left.y));
-        let path = path.with_transform(&matrix);
+        let mut path = path.with_transform(&matrix);
+        if d.matches(['Z', 'z']).count() > 1 {
+            path.set_fill_type(skia_safe::PathFillType::EvenOdd);
+        }
         let mut paint = skia_safe::Paint::new(jian_color_to_color4f(color), None);
         paint.set_anti_alias(true);
         canvas.draw_path(&path, &paint);

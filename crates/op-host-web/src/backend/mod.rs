@@ -356,7 +356,10 @@ impl RenderBackend for WebBackend {
         let s = size / viewbox;
         let mut matrix = skia_safe::Matrix::new_identity();
         matrix.set_scale_translate((s, s), (top_left.x, top_left.y));
-        let path = path.with_transform(&matrix);
+        let mut path = path.with_transform(&matrix);
+        if d.matches(['Z', 'z']).count() > 1 {
+            path.set_fill_type(skia_safe::PathFillType::EvenOdd);
+        }
         let mut paint = skia_safe::Paint::new(
             skia_safe::Color4f::new(color.r, color.g, color.b, color.a),
             None,

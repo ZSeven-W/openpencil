@@ -162,6 +162,11 @@ pub struct EffectSummary {
     pub offset_y: f32,
     pub blur: f32,
     pub spread: f32,
+    /// Effect colour — Shadow carries an authored hex string; the
+    /// blur kinds don't have a colour field, so paint reads
+    /// `Color::TRANSPARENT` (and the colour row is hidden by the
+    /// effects-section painter when alpha is zero).
+    pub color: Color,
 }
 
 impl EffectSummary {
@@ -188,6 +193,12 @@ impl EffectSummary {
                 offset_y: s.offset_y,
                 blur: s.blur,
                 spread: s.spread,
+                color: color_from_hex(&s.color).unwrap_or(Color {
+                    r: 0.0,
+                    g: 0.0,
+                    b: 0.0,
+                    a: 0.25,
+                }),
             },
             PenEffect::Blur(b) => EffectSummary {
                 kind: EffectKind::Blur,
@@ -195,6 +206,7 @@ impl EffectSummary {
                 offset_y: 0.0,
                 blur: b.radius,
                 spread: 0.0,
+                color: Color::TRANSPARENT,
             },
             PenEffect::BackgroundBlur(b) => EffectSummary {
                 kind: EffectKind::BackgroundBlur,
@@ -202,6 +214,7 @@ impl EffectSummary {
                 offset_y: 0.0,
                 blur: b.radius,
                 spread: 0.0,
+                color: Color::TRANSPARENT,
             },
         }
     }

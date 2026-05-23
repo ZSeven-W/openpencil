@@ -64,4 +64,12 @@ pub enum PropertyPanelAction {
         field: op_editor_core::EffectField,
         value: f32,
     },
+    /// User clicked the colour swatch on a Shadow effect's colour
+    /// row — host opens the HSV picker bound to
+    /// `effect[index].color`.
+    OpenEffectColorPicker(usize),
+    /// User clicked the `图片` fill body row — host opens an image
+    /// file picker (rfd) and writes the chosen file into the selected
+    /// node's primary fill as `PenFill::Image { url: <data-url> }`.
+    PickFillImage,
 }

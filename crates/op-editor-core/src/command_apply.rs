@@ -195,6 +195,11 @@ impl EditorState {
                 field,
                 value,
             } => self.cmd_set_effect_param(&node_id, index, field, value),
+            EditorCommand::SetEffectColor {
+                node_id,
+                index,
+                hex,
+            } => self.cmd_set_effect_color(&node_id, index, &hex),
 
             // --- Variables + themes --------------------------------
             EditorCommand::SetVariableColor { name, hex } => self.set_variable_color(&name, &hex),

@@ -11,7 +11,6 @@ pub mod compact_prompt;
 pub mod compact_skills;
 pub mod dashboard_columns;
 pub mod design_md_policy;
-pub mod design_system;
 pub mod design_type;
 pub mod intent;
 pub mod model_profile;
@@ -40,7 +39,6 @@ pub mod run_dashboard;
 pub mod scaffold;
 pub mod scaffold_dashboard;
 pub mod subagent;
-pub mod visual_ref;
 
 #[cfg(test)]
 mod test_support;
@@ -49,21 +47,10 @@ pub use compact_prompt::{build_compact_planning_prompt, CompactPlanningPrompt};
 pub use design_md_policy::{
     build_design_md_style_policy, guess_neutral_background_from_theme, infer_design_md_background,
 };
-pub use design_system::{
-    default_design_system, design_system_to_prompt_context, design_system_to_seed_commands,
-    generate_design_system, parse_design_system, DesignSystem, Spacing, Typography,
-};
 pub use design_type::{detect_design_type, DesignType, DesignTypePreset};
 pub use intent::classify_intent;
 pub use model_profile::{resolve_model_profile, ModelProfile, ModelTier};
 pub use prompt::build_orchestrator_prompt;
 pub use run::Orchestrator;
-pub use stub_providers::{
-    SkippedPreValidator, SkippedScreenshotProvider, SkippedVisionLlmClient,
-    SkippedVisualRefProvider,
-};
+pub use stub_providers::{SkippedPreValidator, SkippedScreenshotProvider, SkippedVisionLlmClient};
 pub use types::*;
-pub use visual_ref::{
-    build_enhanced_prompt, execute_visual_ref_orchestration, extract_structure_summary,
-    generate_design_code,
-};

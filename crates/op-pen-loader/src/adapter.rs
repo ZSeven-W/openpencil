@@ -530,12 +530,13 @@ fn path_to_payload(n: &PathNode) -> NodePayload {
     p.h = sizing_to_f32(&n.height);
     assign_first_fill(&mut p, n.fill.as_deref());
     p.stroke = stroke_to_payload(n.stroke.as_ref());
+    p.svg_path = n.d.clone();
     if let Some(anchors) = &n.anchors {
         // `points` is the path's anchor polyline — kept 1:1 with the
         // schema anchors so the pen-tool anchor hit-test (which maps a
         // `points` index straight onto an anchor index) stays correct.
-        // SVG-imported curves arrive pre-flattened to dense straight
-        // anchors, so this faithfully traces them without bezier data.
+        // Editable paths trace their anchors here. Imported SVG
+        // paths that preserve `d` paint through `svg_path` instead.
         p.points = anchors.iter().map(|a| [a.x as f32, a.y as f32]).collect();
         // Anchor-bounded path: when width/height weren't authored,
         // derive size from the handle-aware anchor bounds (cubic
@@ -625,6 +626,11 @@ fn image_to_payload(n: &ImageNode) -> NodePayload {
     } else if let Some(CornerRadius::PerCorner(corners)) = &n.corner_radius {
         p.corner_radius = corners[0] as f32;
     }
+    // Carry the image source so the canvas painter can decode +
+    // draw the bitmap. `fill` stays at a neutral grey so the
+    // placeholder reads correctly when the bytes fail to decode
+    // (corrupt url / unsupported codec).
+    p.image_src = Some(n.src.clone());
     p.fill = Some([0.85, 0.86, 0.88, 1.0]);
     p.name = if n.base.name.as_deref().unwrap_or("").is_empty() {
         format!("Image ({})", short_src(&n.src))
@@ -678,10 +684,12 @@ fn base_payload(base: &PenNodeBase, kind: &str) -> NodePayload {
         points: Vec::new(),
         path_anchors: Vec::new(),
         path_closed: false,
+        svg_path: None,
         font_size: 0.0,
         font_weight: 0,
         text_wrap: false,
         effects: Vec::new(),
+        image_src: None,
         children: Vec::new(),
     }
 }

@@ -90,6 +90,10 @@ pub enum ColorTarget {
     /// One stop on the primary gradient body — indexed against
     /// `stops`. Out-of-range writes are silently dropped at commit.
     GradientStop(usize),
+    /// The colour of the visual effect at `index` (Shadow only).
+    /// Out-of-range writes silently drop at commit; the picker stays
+    /// open against a missing target so the user can re-pick.
+    EffectColor(usize),
 }
 
 /// What an inline rename / context action is acting on. Ported from

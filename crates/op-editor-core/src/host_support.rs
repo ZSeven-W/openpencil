@@ -141,6 +141,101 @@ impl EditorState {
         Some(id)
     }
 
+    /// Append an Image node centred on the current viewport with a
+    /// default 300×200 box. `src` is typically a `data:` URL the host
+    /// already produced from a picked file. Returns the new node id on
+    /// success; `None` when the id allocator is exhausted.
+    pub fn insert_image_node_at_viewport(&mut self, name: &str, src: &str) -> Option<NodeId> {
+        use jian_ops_schema::node::image::ImageNode;
+        use jian_ops_schema::node::PenNode;
+        use jian_ops_schema::sizing::SizingBehavior;
+        const W: f64 = 300.0;
+        const H: f64 = 200.0;
+        let pan_x = self.viewport.pan_x as f64;
+        let pan_y = self.viewport.pan_y as f64;
+        let zoom = self.viewport.zoom.max(0.001) as f64;
+        let centre_x = -pan_x / zoom;
+        let centre_y = -pan_y / zoom;
+        let safe = self.max_node_id().checked_add(1)?;
+        let id = NodeId::new(format!("n{}", safe));
+        let mut next_id = safe.checked_add(1)?;
+        let _ = &mut next_id;
+        self.commit_history();
+        let node = PenNode::Image(ImageNode {
+            base: jian_ops_schema::node::base::PenNodeBase {
+                id: id.as_str().to_string(),
+                name: Some(name.to_string()),
+                x: Some(centre_x - W / 2.0),
+                y: Some(centre_y - H / 2.0),
+                ..Default::default()
+            },
+            src: src.to_string(),
+            object_fit: None,
+            width: Some(SizingBehavior::Number(W)),
+            height: Some(SizingBehavior::Number(H)),
+            corner_radius: None,
+            effects: None,
+            exposure: None,
+            contrast: None,
+            saturation: None,
+            temperature: None,
+            tint: None,
+            highlights: None,
+            shadows: None,
+            image_prompt: None,
+            image_search_query: None,
+            state: None,
+            bindings: None,
+            events: None,
+            lifecycle: None,
+            semantics: None,
+            gestures: None,
+            route: None,
+        });
+        self.active_children_mut().push(node);
+        self.set_single_selection(id.clone());
+        Some(id)
+    }
+
+    /// Replace the selected node's primary fill with an Image fill
+    /// rooted at `src` (typically a `data:` URL). Existing colour /
+    /// gradient is overwritten; non-fillable variants reject silently.
+    /// Returns `true` on success.
+    pub fn set_selected_fill_image_url(&mut self, src: &str) -> bool {
+        use jian_ops_schema::style::{ImageFillBody, PenFill};
+        let sel = self.selection.anchor.clone();
+        if !sel.is_real() || !self.is_editable(&sel) {
+            return false;
+        }
+        let Some(node) = crate::walkers::find_node_mut(self.active_children_mut(), &sel) else {
+            return false;
+        };
+        let Some(fills) = crate::fills::node_fills_mut(node) else {
+            return false;
+        };
+        let body = PenFill::Image(ImageFillBody {
+            url: src.to_string(),
+            mode: None,
+            original_size: None,
+            transform: None,
+            explain: None,
+            opacity: None,
+            exposure: None,
+            contrast: None,
+            saturation: None,
+            temperature: None,
+            tint: None,
+            highlights: None,
+            shadows: None,
+        });
+        if fills.is_empty() {
+            fills.push(body);
+        } else {
+            fills[0] = body;
+        }
+        true
+    }
+
     /// Replace the path nodes `source_ids` on the active page with a
     /// single new `Path` node whose anchors trace `points`. Used by
     /// the host's path-boolean op: the skia `Path::op` math lives in

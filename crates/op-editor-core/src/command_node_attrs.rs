@@ -448,4 +448,31 @@ impl EditorState {
         }
         true
     }
+
+    /// Replace the colour on the Shadow effect at `index`. Blur
+    /// kinds carry no colour and silently reject.
+    pub(crate) fn cmd_set_effect_color(&mut self, node_id: &NodeId, index: u32, hex: &str) -> bool {
+        if !node_id.is_real() {
+            return false;
+        }
+        let Some(node) = find_node_mut(self.active_children_mut(), node_id) else {
+            return false;
+        };
+        let Some(slot) = node_effects_slot(node) else {
+            return false;
+        };
+        let Some(effects) = slot.as_mut() else {
+            return false;
+        };
+        let Some(effect) = effects.get_mut(index as usize) else {
+            return false;
+        };
+        match effect {
+            PenEffect::Shadow(s) => {
+                s.color = hex.to_string();
+                true
+            }
+            _ => false,
+        }
+    }
 }

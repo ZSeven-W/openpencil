@@ -263,6 +263,9 @@ pub struct SceneNode {
     pub path_anchors: Vec<SceneAnchor>,
     /// Whether a `Path` node is closed (last anchor links to first).
     pub path_closed: bool,
+    /// Preserved SVG path data for imported Path nodes. Coordinates
+    /// are local doc-px relative to `bounds.origin`.
+    pub svg_path: Option<String>,
     /// Ellipse arc start angle in degrees. `None` = full ellipse.
     pub arc_start_angle: Option<f32>,
     /// Ellipse arc sweep angle in degrees. `None` = full ellipse.
@@ -270,6 +273,12 @@ pub struct SceneNode {
     /// Ellipse donut-hole radius (0.0..=1.0 fraction). `None` / 0 =
     /// solid.
     pub arc_inner_radius: Option<f32>,
+    /// Image source for nodes that paint a bitmap (`PenNode::Image`).
+    /// Carries the canonical schema's `src` field verbatim — usually
+    /// a `data:image/...;base64,...` URL produced by the host's file
+    /// picker, or a plain file path / remote URL on documents that
+    /// reference external media. `None` for non-image nodes.
+    pub image_src: Option<String>,
     /// Drop-shadow / effects painted behind the node's fill.
     pub effects: Vec<Effect>,
     /// Whether the node (and its subtree) is hidden — the painter
@@ -347,9 +356,11 @@ impl SceneNode {
             points: Vec::new(),
             path_anchors: Vec::new(),
             path_closed: false,
+            svg_path: None,
             arc_start_angle: None,
             arc_sweep_angle: None,
             arc_inner_radius: None,
+            image_src: None,
             effects: Vec::new(),
             hidden: false,
             locked: false,

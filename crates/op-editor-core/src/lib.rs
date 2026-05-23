@@ -38,6 +38,7 @@ pub mod selection;
 pub mod state;
 pub mod svg_import;
 pub mod svg_path_bounds;
+mod svg_path_data;
 pub mod tool;
 pub mod ui_draft;
 pub mod uikit;

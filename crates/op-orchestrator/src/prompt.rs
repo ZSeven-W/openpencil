@@ -252,8 +252,6 @@ mod tests {
             concurrency: 1,
             append_context: None,
             validation_enabled: true,
-
-            visual_ref_enabled: false,
         }
     }
 
@@ -400,8 +398,6 @@ mod tests {
             concurrency: 1,
             append_context: None,
             validation_enabled: true,
-
-            visual_ref_enabled: false,
         };
         let full_cr =
             build_subagent_prompt(&st, &plan(), &basic_req, AbortFlag::new(), false, false);
@@ -492,8 +488,6 @@ mod tests {
             concurrency: 1,
             append_context: None,
             validation_enabled: true,
-
-            visual_ref_enabled: false,
         };
         let long_prompt = "x".repeat(5000); // >= 4200 chars
         let long_req = DesignRequest {
@@ -504,8 +498,6 @@ mod tests {
             concurrency: 1,
             append_context: None,
             validation_enabled: true,
-
-            visual_ref_enabled: false,
         };
         let short_pp = build_orchestrator_prompt(&short_req, PlanningMode::Rich, AbortFlag::new());
         let long_pp = build_orchestrator_prompt(&long_req, PlanningMode::Rich, AbortFlag::new());
@@ -527,8 +519,6 @@ mod tests {
             concurrency: 1,
             append_context: None,
             validation_enabled: true,
-
-            visual_ref_enabled: false,
         };
         let pp = build_orchestrator_prompt(&ds_req, PlanningMode::Rich, AbortFlag::new());
         // Short bucket base: 300_000ms × 2.0 = 600_000ms
@@ -587,8 +577,6 @@ mod tests {
             concurrency: 1,
             append_context: None,
             validation_enabled: true,
-
-            visual_ref_enabled: false,
         };
         let long_req = DesignRequest {
             prompt: "x".repeat(5000),
@@ -598,8 +586,6 @@ mod tests {
             concurrency: 1,
             append_context: None,
             validation_enabled: true,
-
-            visual_ref_enabled: false,
         };
         let short_cr = build_subagent_prompt(
             &subtask(),
@@ -634,8 +620,6 @@ mod tests {
             concurrency: 1,
             append_context: None,
             validation_enabled: true,
-
-            visual_ref_enabled: false,
         };
         let cr = build_subagent_prompt(
             &subtask(),

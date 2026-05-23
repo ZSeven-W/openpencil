@@ -1,6 +1,10 @@
 [
-  { "name": "compact-mobile-login", "fn": "compact", "prompt": "a mobile login screen" },
-  { "name": "compact-fintech-landing", "fn": "compact", "prompt": "a fintech marketing site" },
-  { "name": "compact-dashboard", "fn": "compact", "prompt": "an analytics admin dashboard" },
-  { "name": "compact-component", "fn": "compact", "prompt": "a pricing card" }
+  { "name": "compact-mobile-login", "fn": "compact",
+    "prompt": "a mobile login screen" },
+  { "name": "compact-fintech-landing", "fn": "compact",
+    "prompt": "a fintech marketing site" },
+  { "name": "compact-dashboard", "fn": "compact",
+    "prompt": "an analytics admin dashboard" },
+  { "name": "compact-component", "fn": "compact",
+    "prompt": "a pricing card" }
 ]

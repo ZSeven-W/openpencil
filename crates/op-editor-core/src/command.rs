@@ -266,6 +266,13 @@ pub enum EditorCommand {
         field: EffectField,
         value: f32,
     },
+    /// Replace the colour of the Shadow effect at `index`. `hex` is
+    /// canonical `#RRGGBB` or `#RRGGBBAA`. No-op for Blur kinds.
+    SetEffectColor {
+        node_id: NodeId,
+        index: u32,
+        hex: String,
+    },
     /// Set the active canvas tool.
     SetActiveTool { tool: String },
     /// Undo the last change.

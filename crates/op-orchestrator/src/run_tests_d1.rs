@@ -91,8 +91,6 @@ fn req_validation_enabled() -> DesignRequest {
         concurrency: 1,
         append_context: None,
         validation_enabled: true,
-
-        visual_ref_enabled: false,
     }
 }
 
@@ -105,8 +103,6 @@ fn req_validation_disabled() -> DesignRequest {
         concurrency: 1,
         append_context: None,
         validation_enabled: false,
-
-        visual_ref_enabled: false,
     }
 }
 
@@ -325,8 +321,6 @@ fn dashboard_validation_enabled_emits_validation_done() {
             concurrency: 1,
             append_context: None,
             validation_enabled: true,
-
-            visual_ref_enabled: false,
         },
         &mut sink,
         &llm,
@@ -386,8 +380,6 @@ fn dashboard_validation_disabled_no_validation_events() {
             concurrency: 1,
             append_context: None,
             validation_enabled: false,
-
-            visual_ref_enabled: false,
         },
         &mut sink,
         &llm,
@@ -430,8 +422,6 @@ fn concurrent_validation_enabled_emits_validation_done() {
             concurrency: 2,
             append_context: None,
             validation_enabled: true,
-
-            visual_ref_enabled: false,
         },
         &mut sink,
         &llm,
@@ -491,8 +481,6 @@ fn concurrent_validation_disabled_no_validation_events() {
             concurrency: 2,
             append_context: None,
             validation_enabled: false,
-
-            visual_ref_enabled: false,
         },
         &mut sink,
         &llm,
