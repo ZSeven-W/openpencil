@@ -24,6 +24,7 @@ pub mod timeouts;
 pub mod types;
 pub mod validation_config;
 pub mod validation_dump;
+pub mod validation_fixes;
 pub mod variables;
 
 pub mod append;
