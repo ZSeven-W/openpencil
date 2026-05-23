@@ -441,6 +441,13 @@ impl EditorState {
                     doc_y.unwrap_or(0.0),
                 )
                 .is_some(),
+
+            // --- Layout / text property writer ----------------------
+            EditorCommand::SetNodeLayoutProp {
+                node_id,
+                property,
+                value,
+            } => self.cmd_set_node_layout_prop(&node_id, &property, &value),
         }
     }
 }

@@ -4,8 +4,8 @@
 //! `apps/web/src/services/ai/design-validation-fixes.ts:67-157`
 //! (`SAFE_FIX_PROPERTIES`, `isValidFixValue`, `isValidStructuralFix`).
 //!
-//! This module contains ONLY the whitelist + validation helpers (Task B1).
-//! Fix application (`applyValidationFixes`) is Task B2;
+//! This module contains the whitelist + validation helpers (Task B1)
+//! and wires in the fix-application submodule (Task B2).
 //! `buildNodeFromSpec` is Task B3.
 
 #![allow(dead_code)]
@@ -290,6 +290,22 @@ pub(crate) fn is_valid_structural_fix(fix: &Value) -> bool {
     }
 }
 
+// ── B2: Fix application (split to stay under 800-line ceiling) ───────────────
+
+#[path = "validation_fixes_apply.rs"]
+pub(crate) mod apply;
+
+// Re-exported for call sites outside this module (vision pass, B3, tests).
+#[allow(unused_imports)]
+pub(crate) use apply::{
+    apply_validation_fixes, auto_fix_parent_layout_after_add_child, ApplyResult, StructuralFix,
+    ValidationFix,
+};
+
 #[cfg(test)]
 #[path = "validation_fixes_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "validation_fixes_b2_tests.rs"]
+mod tests_b2;
