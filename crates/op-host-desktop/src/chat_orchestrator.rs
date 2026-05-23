@@ -11,7 +11,7 @@
 //! - [`run_design_request`] —— intent gate 之后的入口:跑
 //!   `Orchestrator::run()`。
 //!
-//! ## 仍待 host 作者接的线(casement 阻塞,本文件未经编译)
+//! ## 仍待 host 作者接的线(任务 #27 — casement 已解,本文件现可编译)
 //!
 //! 1. **intent gate**:`chat_runtime.rs` 收到用户消息后先过
 //!    `op_orchestrator::classify_intent`;`Design` → 本模块,`Chat`
@@ -24,6 +24,17 @@
 //! 3. **undo 批界**:`DesktopDocSink::begin/end_undo_batch` 目前是
 //!    no-op —— `op-editor-core` 的 History batch API 待确认后接上
 //!    (见各方法的注释)。
+//! 4. **stub ValidationProviders**:S3c 落地后 `Orchestrator::run` 需
+//!    `&ValidationProviders<'_>`,本文件当前用 `Skipped*` 三件套 +
+//!    `validation_enabled: false` 让 validation 阶段整体跳过;真实
+//!    `PreValidator` / `ScreenshotProvider` / `VisionLlmClient` 由 #27
+//!    接线时按 host 资源(`op-design-lint`、`jian-skia::captureRegion`、
+//!    vision LLM crate)逐步替换。
+//!
+//! `#![allow(dead_code)]` 标注:本模块整体作为 #27 真接线前的预留
+//! 编译目标,所有 `pub` 项现都没人调用 —— 直到 `chat_runtime.rs`
+//! 引入这条路径才会被消费。删除该 allow 应与 #27 真接线在同一 PR。
+#![allow(dead_code)]
 
 use std::sync::Arc;
 
@@ -36,7 +47,8 @@ use futures::StreamExt;
 use op_editor_core::{EditorCommand, EditorState};
 use op_orchestrator::{
     AbortFlag, CallRequest, DesignRequest, DocSink, LlmChunk, LlmClient, LlmError, Orchestrator,
-    OrchestratorError, Progress, RunSummary,
+    OrchestratorError, Progress, RunSummary, SkippedPreValidator, SkippedScreenshotProvider,
+    SkippedVisionLlmClient, ValidationProviders,
 };
 
 /// `LlmClient` 的 desktop 实现。每次 `call` 新建一个 `QueryEngine`
@@ -174,9 +186,29 @@ pub async fn run_design_request(
         model,
         provider: provider_id,
         design_md: state.doc.design_md.clone(),
+        // S3b-2 / S3b-4 / S3c additions — host 暂无路由,统一保守值。
+        // 真实接线在 task #27 走 chat_runtime intent gate 时定。
+        append_context: None,
+        concurrency: 1,
+        validation_enabled: false,
     };
     let mut sink = DesktopDocSink::new(state);
+    // Stub validation providers — production-visible, no-op. Host can
+    // swap in real `PreValidator` (when `op-design-lint` is wired),
+    // `ScreenshotProvider` (when `jian-skia::captureRegion` is exposed
+    // host-side), and `VisionLlmClient` (when a Rust multimodal client
+    // lands) without touching `op-orchestrator`. Today `validation_enabled
+    // = false` short-circuits the validation phase anyway.
+    let pre_validator = SkippedPreValidator;
+    let screenshot = SkippedScreenshotProvider;
+    let vision = SkippedVisionLlmClient;
+    let providers = ValidationProviders {
+        pre_validator: &pre_validator,
+        screenshot: &screenshot,
+        vision: &vision,
+        system_prompt: String::new(),
+    };
     Orchestrator::new()
-        .run(request, &mut sink, llm, on_progress, abort)
+        .run(request, &mut sink, llm, on_progress, abort, &providers)
         .await
 }
