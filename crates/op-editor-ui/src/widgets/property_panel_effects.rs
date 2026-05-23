@@ -132,6 +132,7 @@ fn paint_effect_card(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn paint_param_input(
     cx: &mut PaintCx<'_>,
     theme: &Theme,

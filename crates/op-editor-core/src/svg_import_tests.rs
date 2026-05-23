@@ -81,7 +81,7 @@ fn imports_path_with_lines_and_cubic() {
         PenNode::Path(p) => {
             let d = p.d.as_deref().expect("path d");
             assert!(d.contains('C'), "cubic command must survive: {d}");
-            assert!(p.anchors.as_ref().map_or(true, Vec::is_empty));
+            assert!(p.anchors.as_ref().is_none_or(Vec::is_empty));
             assert_eq!(p.closed, Some(true));
         }
         other => panic!("expected path, got {other:?}"),
@@ -275,7 +275,7 @@ fn filled_arc_path_preserves_svg_d_and_default_black_fill() {
     };
     let d = path.d.as_deref().expect("imported SVG path d");
     assert!(d.contains('A'), "arc command must survive, got {d}");
-    assert!(path.anchors.as_ref().map_or(true, Vec::is_empty));
+    assert!(path.anchors.as_ref().is_none_or(Vec::is_empty));
     let fill = path.fill.as_ref().expect("default SVG fill");
     let first = fill.first().expect("at least one fill");
     let hex = match first {
