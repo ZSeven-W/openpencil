@@ -2572,6 +2572,7 @@ name = "op-editor-ui"
 version = "0.1.0"
 dependencies = [
  "accesskit",
+ "base64",
  "bitflags 2.11.1",
  "glam",
  "jian-core",

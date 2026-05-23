@@ -25,3 +25,9 @@ jian-ops-schema = { path = "../../vendor/jian/crates/jian-ops-schema" }
 # i18n string tables + the canonical editor state model.
 op-i18n = { path = "../op-i18n" }
 op-editor-core = { path = "../op-editor-core" }
+
+# Decode `data:image/...;base64,...` URLs in the canvas painter so a
+# pasted / picked image lands on the canvas instead of the grey
+# placeholder. Workspace pinned via the same `base64` op-host-desktop
+# uses for the file picker.
+base64 = "0.22"

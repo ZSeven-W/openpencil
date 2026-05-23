@@ -121,6 +121,7 @@ impl<'a> RenderBackend for NativeFrameBackend<'a> {
         );
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn fill_round_rect_radial_gradient(
         &mut self,
         rect: Rect,

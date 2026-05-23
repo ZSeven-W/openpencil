@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  cargo-bundle merges this file into the generated OpenPencil.app
+  Info.plist. The app UI is localized in Rust rather than .lproj
+  resources, so let AppKit use the user's preferred language for
+  native panels such as NSOpenPanel / NSSavePanel.
+-->
+<plist version="1.0">
+<dict>
+  <key>CFBundleAllowMixedLocalizations</key>
+  <true/>
+  <key>CFBundleDevelopmentRegion</key>
+  <string>en</string>
+  <key>CFBundleLocalizations</key>
+  <array>
+    <string>en</string>
+    <string>zh-Hans</string>
+    <string>zh-Hant</string>
+    <string>ja</string>
+    <string>ko</string>
+    <string>fr</string>
+    <string>es</string>
+    <string>de</string>
+    <string>pt</string>
+    <string>ru</string>
+    <string>hi</string>
+    <string>tr</string>
+    <string>th</string>
+    <string>vi</string>
+    <string>id</string>
+  </array>
+</dict>
+</plist>

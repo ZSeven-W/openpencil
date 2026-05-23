@@ -248,9 +248,15 @@ impl WidgetHostNative {
                         self.editor_state.editor_ui.shape_tool = ec_tool;
                         self.editor_state.tool = ec_tool;
                     }
-                    ShapeChoice::OpenIconPicker | ShapeChoice::ImportImageOrSvg => {
-                        // Host-side dispatch lands when the icon
-                        // picker / file dialog widgets ship.
+                    ShapeChoice::OpenIconPicker => {
+                        // Icon picker not wired yet — closes dropdown only.
+                    }
+                    ShapeChoice::ImportImageOrSvg => {
+                        // Queue a file action so the press handler
+                        // (which knows about `rfd::FileDialog`) can
+                        // pop the picker after the click frame.
+                        self.editor_state.editor_ui.pending_file_action =
+                            Some(op_editor_core::editor_ui_state::FileAction::ImportImageOrSvg);
                     }
                 }
                 self.editor_state.editor_ui.shape_picker_open = false;
@@ -412,6 +418,17 @@ impl WidgetHostNative {
                     let _ = self
                         .editor_state
                         .open_color_picker(super::press_helpers::color_target(target), y);
+                    self.mark_dirty();
+                } else if let op_editor_ui::widgets::PropertyPanelAction::OpenEffectColorPicker(
+                    index,
+                ) = action
+                {
+                    // Anchor the picker at the clicked swatch so it
+                    // pops next to the row, not at the panel top.
+                    let _ = self.editor_state.open_color_picker(
+                        op_editor_core::ui_draft::ColorTarget::EffectColor(index),
+                        y,
+                    );
                     self.mark_dirty();
                 } else {
                     self.apply_property_action(action);

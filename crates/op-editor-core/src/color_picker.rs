@@ -95,16 +95,19 @@ impl EditorState {
             ColorTarget::Fill => first_solid_fill_hex(node).map(str::to_string),
             ColorTarget::Stroke => first_solid_stroke_hex(node).map(str::to_string),
             ColorTarget::GradientStop(i) => gradient_stop_hex(node, i),
+            ColorTarget::EffectColor(i) => effect_color_hex(node, i),
         }
         .unwrap_or_else(|| "#000000".to_string());
         let (h, s, v) = rgb_to_hsv(parse_hex_rgb(&current_hex).unwrap_or((0.0, 0.0, 0.0)));
-        // Preserve per-stop alpha across picker edits. Fill / stroke
-        // ignore alpha (they carry it in a separate opacity input)
-        // so this only matters for `GradientStop`.
-        let alpha = if matches!(target, ColorTarget::GradientStop(_)) {
-            parse_hex_alpha(&current_hex)
-        } else {
-            1.0
+        // Preserve per-stop / per-effect alpha across picker edits.
+        // Fill / stroke ignore alpha (they carry it in a separate
+        // opacity input) so this only matters for `GradientStop`
+        // and `EffectColor`.
+        let alpha = match target {
+            ColorTarget::GradientStop(_) | ColorTarget::EffectColor(_) => {
+                parse_hex_alpha(&current_hex)
+            }
+            _ => 1.0,
         };
         self.ui.pending_color_history = Some(self.snapshot_for_history());
         self.ui.color_picker = Some(ColorPickerState {
@@ -202,28 +205,32 @@ impl EditorState {
                 self.set_selected_color(false, &hex);
             }
             ColorTarget::GradientStop(i) => {
-                // Splice the picker's preserved alpha back onto the
-                // RGB hex — the picker has no alpha slider, so the
-                // stop's authored transparency must round-trip even
-                // when the user drags hue / saturation / value.
-                let alpha_u8 = (self
-                    .ui
-                    .color_picker
-                    .as_ref()
-                    .map(|s| s.alpha)
-                    .unwrap_or(1.0)
-                    .clamp(0.0, 1.0)
-                    * 255.0)
-                    .round() as u8;
-                let hex_with_alpha = if alpha_u8 == 255 {
-                    hex.clone()
-                } else {
-                    format!("{}{:02X}", hex, alpha_u8)
-                };
+                let hex_with_alpha = splice_alpha(&hex, self.picker_alpha());
                 let _ = self.set_selected_gradient_stop_hex(i, &hex_with_alpha);
+            }
+            ColorTarget::EffectColor(i) => {
+                let hex_with_alpha = splice_alpha(&hex, self.picker_alpha());
+                let sel = self.selection.anchor.clone();
+                if sel.is_real() {
+                    let _ = self.apply(crate::EditorCommand::SetEffectColor {
+                        node_id: sel,
+                        index: i as u32,
+                        hex: hex_with_alpha,
+                    });
+                }
             }
         }
         true
+    }
+
+    /// Read the picker's preserved alpha (0..=1) — defaults to 1.0
+    /// when no picker is open.
+    fn picker_alpha(&self) -> f32 {
+        self.ui
+            .color_picker
+            .as_ref()
+            .map(|s| s.alpha.clamp(0.0, 1.0))
+            .unwrap_or(1.0)
     }
 
     /// Set the active drag kind so `apply_cursor_move` can route a
@@ -265,11 +272,13 @@ impl EditorState {
                     ColorTarget::Fill => first_solid_fill_hex(n).map(str::to_string),
                     ColorTarget::Stroke => first_solid_stroke_hex(n).map(str::to_string),
                     ColorTarget::GradientStop(i) => gradient_stop_hex(n, i),
+                    ColorTarget::EffectColor(i) => effect_color_hex(n, i),
                 });
             let after = self.selected_node().and_then(|n| match state.target {
                 ColorTarget::Fill => first_solid_fill_hex(n).map(str::to_string),
                 ColorTarget::Stroke => first_solid_stroke_hex(n).map(str::to_string),
                 ColorTarget::GradientStop(i) => gradient_stop_hex(n, i),
+                ColorTarget::EffectColor(i) => effect_color_hex(n, i),
             });
             before != after
         };
@@ -286,6 +295,30 @@ impl EditorState {
 fn scalar_as_hex(s: &jian_ops_schema::variable::VariableScalar) -> Option<String> {
     match s {
         jian_ops_schema::variable::VariableScalar::Str(hex) => Some(hex.clone()),
+        _ => None,
+    }
+}
+
+/// Re-attach an alpha (0..=1) to a `#RRGGBB` hex. When the alpha
+/// would round to fully opaque the 6-char form is preserved so the
+/// canonical schema stays compact.
+fn splice_alpha(hex: &str, alpha: f32) -> String {
+    let a = (alpha.clamp(0.0, 1.0) * 255.0).round() as u8;
+    if a == 255 {
+        hex.to_string()
+    } else {
+        format!("{}{:02X}", hex, a)
+    }
+}
+
+/// Read the colour hex of the Shadow effect at `index` on `node`.
+/// `None` when the node has no effects, the index is out of range,
+/// or the effect isn't a Shadow.
+fn effect_color_hex(node: &jian_ops_schema::node::PenNode, index: usize) -> Option<String> {
+    use jian_ops_schema::style::PenEffect;
+    let effects = crate::fills::node_effects(node);
+    match effects.get(index)? {
+        PenEffect::Shadow(s) => Some(s.color.clone()),
         _ => None,
     }
 }

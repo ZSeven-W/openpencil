@@ -57,9 +57,9 @@ impl FigmaImportModal {
         if rect_contains(close_rect(panel), point) {
             return FigmaImportHit::Close;
         }
-        // Drop zone is paint-only until the `.fig` parser lands —
-        // returning `DropZone` would surface a stub picker that the
-        // backend can't actually consume.
+        if rect_contains(drop_zone_rect(panel), point) {
+            return FigmaImportHit::DropZone;
+        }
         FigmaImportHit::Inside
     }
 }
@@ -92,14 +92,10 @@ fn rect_contains(r: Rect, p: Point2D) -> bool {
 }
 
 fn t(locale: Locale, key: &str) -> &'static str {
-    // Drop-zone copy is intentionally non-actionable: the .fig parser
-    // isn't wired yet, so promising "drop a file here / or click to
-    // browse" would lie. The "drop" key resolves to a "not yet wired"
-    // line so the affordance reads as informational.
     match key {
         "title" => op_i18n::translate(locale, "figma.title"),
-        "drop" => op_i18n::translate(locale, "figma.importNotWired"),
-        "browse" => op_i18n::translate(locale, "figma.comingSoon"),
+        "drop" => op_i18n::translate(locale, "figma.dropFile"),
+        "browse" => op_i18n::translate(locale, "figma.orBrowse"),
         "footer" => op_i18n::translate(locale, "figma.exportTip"),
         _ => "",
     }
@@ -224,4 +220,22 @@ fn to_jian(c: Color) -> jian_core::scene::Color {
         (v.clamp(0.0, 1.0) * 255.0).round() as u8
     }
     jian_core::scene::Color::rgba(ch(c.r), ch(c.g), ch(c.b), ch(c.a))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn clicking_drop_zone_requests_figma_import() {
+        let modal = FigmaImportModal::for_editor(&EditorState::new());
+        let panel = modal.rect(800.0, 600.0);
+        let drop = drop_zone_rect(panel);
+        let point = Point2D::new(
+            drop.origin.x + drop.size.x / 2.0,
+            drop.origin.y + drop.size.y / 2.0,
+        );
+
+        assert_eq!(modal.hit_test(panel, point), FigmaImportHit::DropZone);
+    }
 }

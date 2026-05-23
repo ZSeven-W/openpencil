@@ -130,6 +130,22 @@ fn path_anchors_honor_nonzero_minima_and_scale() {
 }
 
 #[test]
+fn path_d_carries_to_payload_for_svg_painting() {
+    let src = r##"{
+      "version":"1.0.0","pages":[{"id":"p","name":"P","children":[
+        {"type":"path","id":"arc","x":10,"y":20,"width":80,"height":40,
+         "d":"M0 20 A40 40 0 0 1 80 20 Z",
+         "fill":[{"type":"solid","color":"#000000"}]}
+      ]}],"children":[]
+    }"##;
+    let r = load(src);
+    let n = &r.payload.pages[0].children[0];
+    assert_eq!(n.svg_path.as_deref(), Some("M0 20 A40 40 0 0 1 80 20 Z"));
+    assert!(n.points.is_empty());
+    assert!(n.path_anchors.is_empty());
+}
+
+#[test]
 fn shape_inside_offset_root_inherits_canvas_offset() {
     // The zero-size shape fallback used to keep `(x, y)` from
     // `base_payload` (= authored local coords inside the parent

@@ -194,5 +194,8 @@ pub(in crate::widget_host) fn color_target(
         op_editor_core::ColorTarget::GradientStop(i) => {
             op_editor_core::ui_draft::ColorTarget::GradientStop(i)
         }
+        op_editor_core::ColorTarget::EffectColor(i) => {
+            op_editor_core::ui_draft::ColorTarget::EffectColor(i)
+        }
     }
 }

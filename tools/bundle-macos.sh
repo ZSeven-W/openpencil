@@ -36,6 +36,26 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
   <key>CFBundleDisplayName</key><string>OpenPencil</string>
   <key>CFBundleExecutable</key><string>openpencil-desktop</string>
   <key>CFBundleIdentifier</key><string>com.zseven-w.openpencil</string>
+  <key>CFBundleAllowMixedLocalizations</key><true/>
+  <key>CFBundleDevelopmentRegion</key><string>en</string>
+  <key>CFBundleLocalizations</key>
+  <array>
+    <string>en</string>
+    <string>zh-Hans</string>
+    <string>zh-Hant</string>
+    <string>ja</string>
+    <string>ko</string>
+    <string>fr</string>
+    <string>es</string>
+    <string>de</string>
+    <string>pt</string>
+    <string>ru</string>
+    <string>hi</string>
+    <string>tr</string>
+    <string>th</string>
+    <string>vi</string>
+    <string>id</string>
+  </array>
   <key>CFBundleIconFile</key><string>icon</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
