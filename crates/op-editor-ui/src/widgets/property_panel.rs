@@ -307,9 +307,7 @@ impl NodeSnapshot {
 /// fills — the Fill section uses that to hide the angle row.
 fn gradient_angle_of(node: &PenNode) -> Option<f32> {
     use jian_ops_schema::style::PenFill;
-    match op_editor_core::fills::node_fills(node)
-        .and_then(|f| f.first())?
-    {
+    match op_editor_core::fills::node_fills(node).and_then(|f| f.first())? {
         PenFill::LinearGradient(body) => Some(body.angle.unwrap_or(0.0)),
         _ => None,
     }

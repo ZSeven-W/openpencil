@@ -186,11 +186,12 @@ pub async fn run_design_request(
         model,
         provider: provider_id,
         design_md: state.doc.design_md.clone(),
-        // S3b-2 / S3b-4 / S3c additions — host 暂无路由,统一保守值。
+        // S3b-2 / S3b-4 / S3c / S4 additions — host 暂无路由,统一保守值。
         // 真实接线在 task #27 走 chat_runtime intent gate 时定。
         append_context: None,
         concurrency: 1,
         validation_enabled: false,
+        visual_ref_enabled: false,
     };
     let mut sink = DesktopDocSink::new(state);
     // Stub validation providers — production-visible, no-op. Host can
