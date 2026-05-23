@@ -132,6 +132,15 @@ impl EditorState {
                 drop_children,
             ),
             EditorCommand::BatchInsert { items } => self.cmd_batch_insert(&items),
+            EditorCommand::InsertSubtree { nodes, parent_id } => {
+                let snap = self.snapshot_for_history();
+                if self.cmd_insert_subtree(nodes, &parent_id) {
+                    self.history_push_past(snap);
+                    true
+                } else {
+                    false
+                }
+            }
 
             // --- Per-node attribute writers ------------------------
             EditorCommand::SetNodeRotation { node_id, degrees } => {
@@ -432,6 +441,13 @@ impl EditorState {
                     doc_y.unwrap_or(0.0),
                 )
                 .is_some(),
+
+            // --- Layout / text property writer ----------------------
+            EditorCommand::SetNodeLayoutProp {
+                node_id,
+                property,
+                value,
+            } => self.cmd_set_node_layout_prop(&node_id, &property, &value),
         }
     }
 }

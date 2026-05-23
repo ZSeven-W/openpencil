@@ -15,6 +15,7 @@ pub mod clipboard;
 pub mod color_picker;
 pub mod command;
 pub mod command_apply;
+pub mod command_layout_prop;
 pub mod command_node;
 pub mod command_node_attrs;
 pub mod components;
@@ -47,6 +48,8 @@ pub mod walkers;
 #[cfg(test)]
 mod command_attr_tests;
 #[cfg(test)]
+mod command_subtree_tests;
+#[cfg(test)]
 mod command_tests;
 #[cfg(test)]
 mod svg_import_tests;
@@ -68,7 +71,9 @@ pub use chat::{
     ModelEntry,
 };
 pub use color_picker::{hsv_to_rgb, parse_hex_rgb, rgb_to_hex, rgb_to_hsv};
-pub use command::{BatchInsertItem, EditorCommand, EffectField, NodeFlag, VariableScalarPayload};
+pub use command::{
+    BatchInsertItem, EditorCommand, EffectField, LayoutPropValue, NodeFlag, VariableScalarPayload,
+};
 pub use components::{Component, ComponentLibrary};
 pub use design_md::parse_design_md;
 pub use editor_ui_state::{

@@ -2625,6 +2625,7 @@ dependencies = [
  "op-i18n",
  "op-mcp",
  "op-opmerge",
+ "op-orchestrator",
  "op-pen-loader",
  "reqwest",
  "rfd",
@@ -2694,6 +2695,20 @@ version = "0.1.0"
 dependencies = [
  "serde_json",
  "thiserror 1.0.69",
+]
+
+[[package]]
+name = "op-orchestrator"
+version = "0.1.0"
+dependencies = [
+ "futures",
+ "jian-ops-schema",
+ "op-ai-skills",
+ "op-editor-core",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]

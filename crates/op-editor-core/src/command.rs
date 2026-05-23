@@ -28,6 +28,7 @@
 
 use crate::node_id::NodeId;
 use crate::walkers::ReorderDirection;
+use jian_ops_schema::node::PenNode;
 
 /// Which boolean property [`EditorCommand::SetNodeFlag`] writes. The
 /// canonical `PenNodeBase` carries `visible` + `locked`; `Collapsed` is
@@ -59,6 +60,23 @@ pub enum VariableScalarPayload {
     Number(f64),
     String(String),
     Boolean(bool),
+}
+
+/// Value payload for [`EditorCommand::SetNodeLayoutProp`] — covers the
+/// full shape set used by layout / text properties that do not have
+/// their own typed `EditorCommand` variants.
+///
+/// Variants:
+/// - `Number(f64)` — plain numeric value (gap, letterSpacing, lineHeight,
+///   opacity, and sizing numbers for width/height).
+/// - `Keyword(String)` — a string keyword (textAlign, textGrowth,
+///   alignItems, justifyContent, and sizing keywords like "fit_content").
+/// - `NumberArray(Vec<f64>)` — padding as a number array.
+#[derive(Debug, Clone, PartialEq)]
+pub enum LayoutPropValue {
+    Number(f64),
+    Keyword(String),
+    NumberArray(Vec<f64>),
 }
 
 /// Per-item descriptor for [`EditorCommand::BatchInsert`]. Same shape as
@@ -138,6 +156,17 @@ pub enum EditorCommand {
     /// Insert N leaf nodes on the active page atomically — one bad
     /// descriptor rejects the whole batch.
     BatchInsert { items: Vec<BatchInsertItem> },
+
+    /// Insert one or more pre-built canonical `PenNode` subtrees under a
+    /// parent. Unlike `InsertNode` / `BatchInsert` (flat leaves), this
+    /// carries fully-nested nodes — frames with children, layout, text.
+    /// Every incoming node id is remapped to a fresh editor id, so the
+    /// caller's ids are structural placeholders only.
+    InsertSubtree {
+        nodes: Vec<PenNode>,
+        /// `NodeId::NONE` → active page root.
+        parent_id: NodeId,
+    },
     /// Set a non-color scalar variable's value.
     SetVariableScalar {
         name: String,
@@ -284,4 +313,21 @@ pub enum EditorCommand {
     /// Parse an SVG document + insert the resulting nodes on the
     /// active page, offset by `(x, y)` doc-px.
     ImportSvg { svg: String, x: i32, y: i32 },
+    /// Set a layout / text property on a node by name + value.
+    ///
+    /// Covers the remaining 17-property whitelist entries that do not
+    /// have their own typed command variants: `gap`, `padding`,
+    /// `letterSpacing`, `lineHeight`, `opacity`, `textAlign`,
+    /// `textGrowth`, `alignItems`, `justifyContent`, and sizing
+    /// keywords for `width` / `height` (`"fit_content"` /
+    /// `"fill_container"`).
+    ///
+    /// Unknown / unsupported (property, value) combinations return
+    /// `false` at apply time — the same convention as all other
+    /// commands.
+    SetNodeLayoutProp {
+        node_id: NodeId,
+        property: String,
+        value: LayoutPropValue,
+    },
 }
