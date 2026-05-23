@@ -10,8 +10,8 @@ use crate::types::{
     Progress, ValidationProviders, VisualRefProvider,
 };
 use crate::visual_ref::{
-    build_enhanced_prompt, execute_visual_ref_orchestration, extract_structure_summary,
-    generate_design_code,
+    build_enhanced_prompt, execute_visual_ref_orchestration, extract_html_from_response,
+    extract_structure_summary, generate_design_code,
 };
 use futures::stream::BoxStream;
 use std::sync::Mutex;
@@ -677,4 +677,118 @@ async fn execute_visual_ref_ds_progress_reports_correct_var_count() {
         17,
         "expected 17 vars from DEFAULT_DESIGN_SYSTEM"
     );
+}
+
+// ── extract_html_from_response ────────────────────────────────────────────
+
+#[test]
+fn extract_html_fenced_with_doctype_returns_inner() {
+    // Stage 1: ```html ... ``` wraps a full HTML document → return inner (trimmed).
+    let resp =
+        "Sure here's the HTML:\n```html\n<!DOCTYPE html>\n<html><body>Hi</body></html>\n```\nDone.";
+    let html = extract_html_from_response(resp);
+    assert!(html.starts_with("<!DOCTYPE html>"));
+    assert!(html.ends_with("</html>"));
+    assert!(!html.contains("```"));
+    assert!(!html.contains("Done."));
+}
+
+#[test]
+fn extract_html_fenced_no_doctype_marker_falls_through_to_wrap() {
+    // Stage 1 falls through (inner has no <!DOCTYPE/<html); stage 2-3 don't match;
+    // stage 4 wraps the ORIGINAL trimmed response (fence chars and all).
+    let resp = "```\n<div>not a full doc</div>\n```";
+    let html = extract_html_from_response(resp);
+    assert!(html.starts_with("<!DOCTYPE html>"));
+    assert!(html.contains("<body>```"));
+}
+
+#[test]
+fn extract_html_starts_with_doctype_returns_trimmed_verbatim() {
+    // Stage 2: trimmed starts with <!DOCTYPE → return as-is.
+    let resp = "  <!DOCTYPE html>\n<html><body>X</body></html>  ";
+    let html = extract_html_from_response(resp);
+    assert_eq!(html, "<!DOCTYPE html>\n<html><body>X</body></html>");
+}
+
+#[test]
+fn extract_html_starts_with_html_returns_verbatim() {
+    // Stage 2: trimmed starts with <html → return as-is.
+    let resp = "<html><body>Y</body></html>";
+    let html = extract_html_from_response(resp);
+    assert_eq!(html, "<html><body>Y</body></html>");
+}
+
+#[test]
+fn extract_html_embedded_doctype_to_close_extracted() {
+    // Stage 3: chatty preamble + trailing text → slice out <!DOCTYPE…</html>.
+    let resp = "Here's the design:\n<!DOCTYPE html>\n<html><body>Hi</body></html>\nLet me know.";
+    let html = extract_html_from_response(resp);
+    assert!(html.starts_with("<!DOCTYPE html>"));
+    assert!(html.ends_with("</html>"));
+    assert!(!html.contains("Let me know"));
+    assert!(!html.contains("Here's the design"));
+}
+
+#[test]
+fn extract_html_case_insensitive_doctype_via_stage3() {
+    // Lowercase <!doctype doesn't pass case-sensitive stage 2 startsWith;
+    // stage 3 case-insensitive find catches it. Original case preserved.
+    let resp = "<!doctype html>\n<HTML><body>Z</body></HTML>";
+    let html = extract_html_from_response(resp);
+    assert_eq!(html, "<!doctype html>\n<HTML><body>Z</body></HTML>");
+}
+
+#[test]
+fn extract_html_bare_text_wrapped_in_default_scaffold() {
+    // Stage 4: no fence, no <!DOCTYPE/<html → wrap in default scaffold.
+    let resp = "Hello world.";
+    let html = extract_html_from_response(resp);
+    assert!(html.starts_with("<!DOCTYPE html>"));
+    assert!(html.contains("<body>Hello world.</body>"));
+}
+
+#[test]
+fn extract_html_empty_response_wrapped_as_empty_body() {
+    // Stage 4 with empty trimmed content.
+    let html = extract_html_from_response("");
+    assert!(html.starts_with("<!DOCTYPE html>"));
+    assert!(html.contains("<body></body>"));
+}
+
+#[test]
+fn extract_html_utf8_preamble_does_not_panic_stage3() {
+    // Regression guard: `text.to_lowercase()` would change byte length for
+    // some non-ASCII chars (e.g. Turkish İ → i\u{0307}, German ẞ in some
+    // locales), making indices derived from the lowercased string unsafe
+    // on the original UTF-8 text. The ASCII-byte-scan implementation lets
+    // any UTF-8 preamble pass through cleanly. Asserts no panic + correct
+    // slice extraction.
+    let resp = "解释一下:İ\n<!DOCTYPE html>\n<html><body>UTF-8 OK</body></html>\n注释";
+    let html = extract_html_from_response(resp);
+    assert!(html.starts_with("<!DOCTYPE html>"));
+    assert!(html.ends_with("</html>"));
+    assert!(!html.contains("解释一下"));
+    assert!(!html.contains("注释"));
+    assert!(!html.contains("İ"));
+}
+
+#[test]
+fn extract_html_utf8_inside_body_preserved() {
+    // Multi-byte chars INSIDE the extracted HTML must round-trip intact.
+    let resp = "Here:\n<!DOCTYPE html>\n<html><body>你好 İstanbul</body></html>\n done";
+    let html = extract_html_from_response(resp);
+    assert!(html.contains("你好"));
+    assert!(html.contains("İstanbul"));
+    assert!(!html.contains("Here:"));
+    assert!(!html.contains("done"));
+}
+
+#[test]
+fn extract_html_mixed_case_doctype_with_utf8_preamble() {
+    // Combine case-insensitivity + UTF-8 preamble. ASCII-byte scan handles
+    // both without to_lowercase() byte-shift.
+    let resp = "Note: ß and İ are tricky.\n<!DocType html>\n<HTML><body>OK</body></HTML>";
+    let html = extract_html_from_response(resp);
+    assert_eq!(html, "<!DocType html>\n<HTML><body>OK</body></HTML>");
 }
