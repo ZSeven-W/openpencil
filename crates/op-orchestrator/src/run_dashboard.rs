@@ -17,8 +17,9 @@ use crate::scaffold_dashboard::build_scaffold_dashboard;
 use crate::subagent::run_subtask;
 use crate::types::{
     AbortFlag, DesignRequest, DocSink, LlmClient, OrchestratorError, Progress, RunSummary,
-    SubtaskOutcome,
+    SubtaskOutcome, ValidationProviders,
 };
+use crate::validation::run_post_generation_validation;
 use crate::variables::{rollback, VarSnapshot};
 use jian_ops_schema::node::PenNode;
 use op_ai_skills::style_guide::style_guide_registry;
@@ -45,6 +46,7 @@ pub(crate) async fn run_dashboard_path(
     var_snapshot: &VarSnapshot,
     on_progress: &mut dyn FnMut(Progress),
     abort: &AbortFlag,
+    providers: &ValidationProviders<'_>,
 ) -> Result<RunSummary, OrchestratorError> {
     let planned_root_id = plan.root_frame.id.clone();
 
@@ -262,6 +264,23 @@ pub(crate) async fn run_dashboard_path(
             OrchestratorError::NoContent
         });
     }
+
+    // -- 阶段 5 (dashboard):视觉校验 (S3c D1) --
+    // Port of `orchestrator.ts:1247-1292`.
+    // 守卫: request.validation_enabled && !abort.is_set().
+    if request.validation_enabled && !abort.is_set() {
+        let _ = run_post_generation_validation(
+            sink,
+            providers.pre_validator,
+            providers.screenshot,
+            providers.vision,
+            &providers.system_prompt,
+            &request,
+            on_progress,
+            abort,
+        );
+    }
+
     let total_nodes = outcomes.iter().map(|o| o.node_count).sum();
     Ok(RunSummary {
         root_frame_id: root_id,

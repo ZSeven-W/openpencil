@@ -35,8 +35,9 @@ use crate::scaffold::{build_scaffold, build_scaffold_concurrent_mobile};
 use crate::subagent::run_subtask;
 use crate::types::{
     AbortFlag, DesignRequest, DocSink, LlmChunk, LlmClient, OrchestratorError, Progress,
-    RunSummary, SubtaskOutcome,
+    RunSummary, SubtaskOutcome, ValidationProviders,
 };
+use crate::validation::run_post_generation_validation;
 use crate::variables::{rollback, seed_commands, snapshot_plan_vars};
 use futures::StreamExt;
 use op_editor_core::{EditorCommand, NodeId, PenNodeExt};
@@ -64,6 +65,7 @@ impl Orchestrator {
         llm: &dyn LlmClient,
         on_progress: &mut dyn FnMut(Progress),
         abort: &AbortFlag,
+        providers: &ValidationProviders<'_>,
     ) -> Result<RunSummary, OrchestratorError> {
         // -- 阶段 1:规划(含 mode-rotation 重试循环 + 规范化, S3b-1b Task C2)--
         // `planning_loop` 内部已 normalize 并回传 `NormInfo`,此处不再二次规范化。
@@ -99,6 +101,7 @@ impl Orchestrator {
                 llm,
                 on_progress,
                 abort,
+                providers,
             )
             .await;
         }
@@ -137,6 +140,7 @@ impl Orchestrator {
                 &var_snapshot,
                 on_progress,
                 abort,
+                providers,
             )
             .await;
         }
@@ -368,6 +372,23 @@ impl Orchestrator {
                 OrchestratorError::NoContent
             });
         }
+
+        // -- 阶段 5:视觉校验 (S3c D1) — 在 cleanup 后、返回 RunSummary 前 --
+        // Port of `orchestrator.ts:1247-1292`.
+        // 守卫: request.validation_enabled && !abort.is_set().
+        if request.validation_enabled && !abort.is_set() {
+            let _ = run_post_generation_validation(
+                sink,
+                providers.pre_validator,
+                providers.screenshot,
+                providers.vision,
+                &providers.system_prompt,
+                &request,
+                on_progress,
+                abort,
+            );
+        }
+
         let total_nodes = outcomes.iter().map(|o| o.node_count).sum();
         Ok(RunSummary {
             root_frame_id: root_id,
@@ -393,6 +414,7 @@ async fn run_concurrent_path(
     llm: &dyn LlmClient,
     on_progress: &mut dyn FnMut(Progress),
     abort: &AbortFlag,
+    providers: &ValidationProviders<'_>,
 ) -> Result<RunSummary, OrchestratorError> {
     // -- 进入"已动文档"区 --
     sink.begin_undo_batch();
@@ -500,6 +522,22 @@ async fn run_concurrent_path(
     // -- Abort check --
     if abort.is_set() && collected.iter().map(|o| o.node_count).sum::<usize>() == 0 {
         return Err(OrchestratorError::Aborted);
+    }
+
+    // -- 阶段 5 (并发):视觉校验 (S3c D1) --
+    // Port of `orchestrator.ts:1247-1292`.
+    // 守卫: request.validation_enabled && !abort.is_set().
+    if request.validation_enabled && !abort.is_set() {
+        let _ = run_post_generation_validation(
+            sink,
+            providers.pre_validator,
+            providers.screenshot,
+            providers.vision,
+            &providers.system_prompt,
+            &request,
+            on_progress,
+            abort,
+        );
     }
 
     // -- Success: build RunSummary --
@@ -668,3 +706,8 @@ mod tests_c3;
 #[cfg(test)]
 #[path = "run_tests_b4.rs"]
 mod tests_b4;
+
+// Task D1 (S3c) tests — vision validation wiring across all paths.
+#[cfg(test)]
+#[path = "run_tests_d1.rs"]
+mod tests_d1;

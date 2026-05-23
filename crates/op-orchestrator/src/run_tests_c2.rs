@@ -11,9 +11,21 @@
 //! - Concurrent all-fail → `Err(OrchestratorError::AllFailed(_))`.
 
 use super::*;
-use crate::test_support::{ScriptResponse, ScriptedLlm, VecDocSink};
+use crate::test_support::{
+    ScriptResponse, ScriptedLlm, SkippedPreValidator, SkippedScreenshotProvider,
+    SkippedVisionLlmClient, VecDocSink,
+};
 use crate::types::OrchestratorError;
 use op_editor_core::EditorCommand;
+
+fn stub_providers() -> ValidationProviders<'static> {
+    ValidationProviders {
+        pre_validator: &SkippedPreValidator,
+        screenshot: &SkippedScreenshotProvider,
+        vision: &SkippedVisionLlmClient,
+        system_prompt: String::new(),
+    }
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -101,6 +113,7 @@ fn run_multiscreen_concurrent_creates_n_roots_and_lands_all_nodes() {
         &llm,
         &mut on_progress,
         &AbortFlag::new(),
+        &stub_providers(),
     ))
     .expect("concurrent run should succeed");
 
@@ -126,9 +139,14 @@ fn run_multiscreen_concurrent_creates_n_roots_and_lands_all_nodes() {
     );
     // Undo batch properly closed.
     assert_eq!(sink.batch_depth, 0);
-    // Progress: Planning + ScaffoldDone + SubtaskStarted×2 + SubtaskDone×2 + CleanupDone.
+    // Progress: Planning + ScaffoldDone + SubtaskStarted×2 + SubtaskDone×2
+    // + CleanupDone + ValidationStarted + … + ValidationDone.
     assert!(matches!(events.first(), Some(Progress::Planning)));
-    assert!(matches!(events.last(), Some(Progress::CleanupDone)));
+    // CleanupDone must be present (validation runs after it).
+    assert!(
+        events.iter().any(|e| matches!(e, Progress::CleanupDone)),
+        "expected CleanupDone in events"
+    );
 }
 
 /// `concurrency=1` with a multi-screen plan → sequential path.
@@ -154,6 +172,7 @@ fn run_concurrency_one_multiscreen_takes_sequential_path() {
         &llm,
         &mut on_progress,
         &AbortFlag::new(),
+        &stub_providers(),
     ))
     .expect("sequential run should succeed");
 
@@ -186,6 +205,7 @@ fn run_single_screen_plan_takes_sequential_path_regardless_of_concurrency() {
         &llm,
         &mut on_progress,
         &AbortFlag::new(),
+        &stub_providers(),
     ))
     .expect("single-screen run should succeed");
 
@@ -217,6 +237,7 @@ fn run_concurrent_all_fail_returns_all_failed() {
         &llm,
         &mut on_progress,
         &AbortFlag::new(),
+        &stub_providers(),
     ));
 
     assert!(
@@ -254,6 +275,7 @@ fn run_sequential_happy_path_regression() {
         &llm,
         &mut on_progress,
         &AbortFlag::new(),
+        &stub_providers(),
     ))
     .expect("sequential happy path");
 

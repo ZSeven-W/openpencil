@@ -138,6 +138,28 @@ pub enum VisionResponse {
     Skipped { reason: Option<String> },
 }
 
+/// Bundle of the three vision-validation trait objects.
+///
+/// Passed once to `Orchestrator::run` and threaded to the post-cleanup hook
+/// in each of the 3 execution paths (sequential / dashboard / concurrent).
+/// All fields are trait-object references — the concrete types live host-side.
+///
+/// Approach (c) from the D1 spec: a bundle struct, passed as a single param,
+/// avoids adding 3 separate fields to the `Orchestrator` struct and keeps the
+/// `run` signature manageable.
+pub struct ValidationProviders<'a> {
+    /// Pre-validation (pure code checks, no LLM).
+    pub pre_validator: &'a dyn PreValidator,
+    /// Screenshot capture (provides the vision loop's input image).
+    pub screenshot: &'a dyn ScreenshotProvider,
+    /// Vision LLM caller (multimodal round evaluation).
+    pub vision: &'a dyn VisionLlmClient,
+    /// System prompt for the vision LLM — resolved by the host from
+    /// `op-ai-skills::resolveSkills('validation', '')` (or passed as a
+    /// constant from the Rust skill registry).
+    pub system_prompt: String,
+}
+
 // ── S3c end ───────────────────────────────────────────────────────────────────
 
 /// 廉价可克隆的中止句柄(`Arc<AtomicBool>` 语义)。
