@@ -1,17 +1,21 @@
-//! `design_system.rs` — S4 A1: `DesignSystem` struct, `DEFAULT_DESIGN_SYSTEM`
-//! const, and `parse_design_system` JSON-cleaning fallback chain.
+//! `design_system.rs` — S4 A1 + B1: `DesignSystem` struct, parse, defaults,
+//! LLM generator, variable seeding, and prompt context.
 //!
-//! Port of `design-system-generator.ts` (deleted in commit `0f12b6e9`),
-//! specifically:
+//! Port of `design-system-generator.ts` (deleted in commit `0f12b6e9`):
+//! - L20-29: `generateDesignSystem` entry (→ `generate_design_system`).
 //! - L40-100: `parseDesignSystem` + `tryParseDS` 4-stage fallback chain.
 //! - L102-124: `DEFAULT_DESIGN_SYSTEM` constant values.
+//! - L134-156: `designSystemToVariables` (→ `design_system_to_seed_commands`).
+//! - L161-170: `designSystemToPromptContext` (→ `design_system_to_prompt_context`).
 //! - L59-81: `DesignSystem` interface (via `ai-types.ts`).
-//!
-//! No LLM call yet — that is added in Task B1.
 
+use futures::StreamExt;
+use op_editor_core::{EditorCommand, VariableScalarPayload};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::sync::OnceLock;
+
+use crate::types::{AbortFlag, CallRequest, LlmChunk, LlmClient};
 
 // ── DesignSystem struct (mirrors TS ai-types.ts:59-81) ────────────────────────
 
@@ -263,6 +267,214 @@ fn extract_code_fence(text: &str) -> Option<&str> {
     let inner = inner.strip_suffix('\n').unwrap_or(inner);
 
     Some(inner)
+}
+
+// ── B1: generate_design_system (port of TS L20-29) ───────────────────────────
+
+/// Generate a `DesignSystem` from a user prompt via a single LLM call.
+///
+/// Port of `generateDesignSystem` in `design-system-generator.ts:20-29`:
+///  1. Loads the `design-system` skill as system prompt via
+///     `op_ai_skills::get_skill_by_name`.
+///  2. Makes a single (non-streaming) `LlmClient::call` with the user prompt.
+///  3. Collects all text chunks, then parses via `parse_design_system`.
+///  4. Falls back to `DEFAULT_DESIGN_SYSTEM` on any parse/LLM failure.
+///
+/// The `model` / `provider` / `abort` params match the existing `CallRequest`
+/// shape used by `subagent.rs` and `prompt.rs`.
+pub async fn generate_design_system(
+    prompt: &str,
+    llm: &dyn LlmClient,
+    model: Option<&str>,
+    provider: Option<&str>,
+    abort: &AbortFlag,
+) -> DesignSystem {
+    // Load the design-system skill content as system prompt.
+    let system_prompt = op_ai_skills::get_skill_by_name("design-system")
+        .map(|e| e.content.as_str())
+        .unwrap_or("")
+        .to_string();
+
+    let req = CallRequest {
+        system_prompt,
+        user_prompt: prompt.to_string(),
+        model: model.map(|s| s.to_string()),
+        provider: provider.map(|s| s.to_string()),
+        timeout: std::time::Duration::from_secs(30),
+        abort: abort.clone(),
+        no_text_timeout: None,
+        first_text_timeout: None,
+    };
+
+    // Collect all text chunks.
+    let mut stream = llm.call(req);
+    let mut text = String::new();
+    while let Some(item) = stream.next().await {
+        match item {
+            Ok(LlmChunk::Text(t)) => text.push_str(&t),
+            Ok(LlmChunk::Thinking(_)) => {}
+            Err(_) => break,
+        }
+    }
+
+    // Parse and return; falls back to DEFAULT on failure.
+    parse_design_system(&text)
+}
+
+// ── B1: design_system_to_seed_commands (port of TS L134-156) ─────────────────
+
+/// Convert a `DesignSystem` into `EditorCommand::SetVariable*` commands.
+///
+/// Faithful port of `designSystemToVariables` in
+/// `design-system-generator.ts:134-156`. Emits ONLY:
+///  - Palette: `color-{kebab(key)}` → `SetVariableColor` (one per palette entry)
+///  - Spacing scale: `spacing-{xs|sm|md|lg|xl|2xl|3xl|4xl|5xl|6xl}` →
+///    `SetVariableScalar::Number` (capped at `spacingNames.length`)
+///  - Radius: `radius-{sm|md|lg|xl}` → `SetVariableScalar::Number` (capped at
+///    `radiusNames.length`)
+///
+/// Typography is NOT seeded into document variables — the TS source feeds
+/// heading/body fonts + type scale into the LLM via
+/// `design_system_to_prompt_context` only.
+///
+/// DEFAULT_DESIGN_SYSTEM emits exactly 17 commands: 8 palette + 6 spacing + 3 radius.
+pub fn design_system_to_seed_commands(ds: &DesignSystem) -> Vec<EditorCommand> {
+    let mut cmds = Vec::new();
+
+    // Colors: palette → SetVariableColor with kebab-case name.
+    // TS: `for (const [key, value] of Object.entries(ds.palette))`
+    // Note: BTreeMap iterates in sorted key order, which is fine for determinism.
+    for (key, value) in &ds.palette {
+        let name = format!("color-{}", camel_to_kebab(key));
+        cmds.push(EditorCommand::SetVariableColor {
+            name,
+            hex: value.clone(),
+        });
+    }
+
+    // Spacing scale → spacing-xs/sm/md/lg/xl/2xl/3xl/4xl/5xl/6xl
+    // TS: `const spacingNames = ['xs', 'sm', 'md', 'lg', 'xl', '2xl', '3xl', '4xl', '5xl', '6xl']`
+    const SPACING_NAMES: &[&str] = &[
+        "xs", "sm", "md", "lg", "xl", "2xl", "3xl", "4xl", "5xl", "6xl",
+    ];
+    for (i, &label) in SPACING_NAMES
+        .iter()
+        .enumerate()
+        .take(ds.spacing.scale.len())
+    {
+        let name = format!("spacing-{label}");
+        cmds.push(EditorCommand::SetVariableScalar {
+            name,
+            scalar: VariableScalarPayload::Number(ds.spacing.scale[i]),
+        });
+    }
+
+    // Radius → radius-sm/md/lg/xl
+    // TS: `const radiusNames = ['sm', 'md', 'lg', 'xl']`
+    const RADIUS_NAMES: &[&str] = &["sm", "md", "lg", "xl"];
+    for (i, &label) in RADIUS_NAMES.iter().enumerate().take(ds.radius.len()) {
+        let name = format!("radius-{label}");
+        cmds.push(EditorCommand::SetVariableScalar {
+            name,
+            scalar: VariableScalarPayload::Number(ds.radius[i]),
+        });
+    }
+
+    cmds
+}
+
+/// Convert a camelCase string to kebab-case.
+///
+/// Port of `kebab` in `design-system-generator.ts`:
+/// `str.replace(/([a-z])([A-Z])/g, '$1-$2').toLowerCase()`
+fn camel_to_kebab(s: &str) -> String {
+    let mut out = String::with_capacity(s.len() + 4);
+    let chars: Vec<char> = s.chars().collect();
+    for i in 0..chars.len() {
+        let c = chars[i];
+        if i > 0 && c.is_uppercase() && chars[i - 1].is_lowercase() {
+            out.push('-');
+        }
+        out.push(c.to_ascii_lowercase());
+    }
+    out
+}
+
+// ── B1: design_system_to_prompt_context (port of TS L161-170) ────────────────
+
+/// Build a fixed-form design-system context string for AI prompts.
+///
+/// Port of `designSystemToPromptContext` in `design-system-generator.ts:161-170`:
+/// ```text
+/// DESIGN SYSTEM (use these values consistently):
+/// Colors: bg {bg}, surface {surface}, text {text}, muted {muted}, ...
+/// Fonts: heading "{headingFont}", body "{bodyFont}"
+/// Type scale: {scale}px
+/// Spacing: {scale}px ({unit}px grid)
+/// Radius: {radius}px
+/// Style: {aesthetic}
+/// ```
+pub fn design_system_to_prompt_context(ds: &DesignSystem) -> String {
+    let p = &ds.palette;
+    let bg = p.get("background").map(|s| s.as_str()).unwrap_or("");
+    let surface = p.get("surface").map(|s| s.as_str()).unwrap_or("");
+    let text = p.get("text").map(|s| s.as_str()).unwrap_or("");
+    let muted = p.get("textSecondary").map(|s| s.as_str()).unwrap_or("");
+    let primary = p.get("primary").map(|s| s.as_str()).unwrap_or("");
+    let primary_light = p.get("primaryLight").map(|s| s.as_str()).unwrap_or("");
+    let accent = p.get("accent").map(|s| s.as_str()).unwrap_or("");
+    let border = p.get("border").map(|s| s.as_str()).unwrap_or("");
+
+    // Type scale: "14, 16, 20, 28, 40, 56px"
+    let type_scale = ds
+        .typography
+        .scale
+        .iter()
+        .map(|v| format_num(*v))
+        .collect::<Vec<_>>()
+        .join(", ");
+
+    // Spacing scale: "8, 16, 24, 32, 48, 64px"
+    let spacing_scale = ds
+        .spacing
+        .scale
+        .iter()
+        .map(|v| format_num(*v))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let spacing_unit = format_num(ds.spacing.unit);
+
+    // Radius: "8, 12, 16px"
+    let radius = ds
+        .radius
+        .iter()
+        .map(|v| format_num(*v))
+        .collect::<Vec<_>>()
+        .join(", ");
+
+    format!(
+        "DESIGN SYSTEM (use these values consistently):\n\
+Colors: bg {bg}, surface {surface}, text {text}, muted {muted}, primary {primary}, primaryLight {primary_light}, accent {accent}, border {border}\n\
+Fonts: heading \"{heading}\", body \"{body}\"\n\
+Type scale: {type_scale}px\n\
+Spacing: {spacing_scale}px ({spacing_unit}px grid)\n\
+Radius: {radius}px\n\
+Style: {aesthetic}",
+        heading = ds.typography.heading_font,
+        body = ds.typography.body_font,
+        aesthetic = ds.aesthetic,
+    )
+}
+
+/// Format a float as an integer if it has no fractional part, or with 1
+/// decimal place otherwise. Matches the JS number-to-string behaviour for
+/// the values in the design system (all are whole numbers in practice).
+fn format_num(v: f64) -> String {
+    if v.fract() == 0.0 {
+        format!("{}", v as i64)
+    } else {
+        format!("{v:.1}")
+    }
 }
 
 #[cfg(test)]

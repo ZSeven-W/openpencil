@@ -49,7 +49,8 @@ pub use design_md_policy::{
     build_design_md_style_policy, guess_neutral_background_from_theme, infer_design_md_background,
 };
 pub use design_system::{
-    default_design_system, parse_design_system, DesignSystem, Spacing, Typography,
+    default_design_system, design_system_to_prompt_context, design_system_to_seed_commands,
+    generate_design_system, parse_design_system, DesignSystem, Spacing, Typography,
 };
 pub use design_type::{detect_design_type, DesignType, DesignTypePreset};
 pub use intent::classify_intent;
