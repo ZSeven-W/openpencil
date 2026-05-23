@@ -1,0 +1,20 @@
+{
+  "version": "1.0",
+  "children": [
+    {
+      "type": "frame",
+      "id": "root",
+      "layout": "vertical",
+      "children": [
+        { "type": "frame", "id": "tilted-card", "rotation": 12 },
+        { "type": "frame", "id": "square-card", "rotation": 90 },
+        {
+          "type": "text",
+          "id": "tilted-label",
+          "content": "Skewed",
+          "rotation": 7.5
+        }
+      ]
+    }
+  ]
+}

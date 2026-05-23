@@ -17,6 +17,9 @@ editor-*.png
 scripts/ab-corpus/runs/
 
 docs/
+# The bare `docs/` pattern above also shadows this test-fixture dir, which
+# MUST be tracked (the CI diagnostics-golden drift guard reads it).
+!crates/op-design-lint/tests/fixtures/docs/
 
 # Build outputs
 out/

@@ -1,0 +1,11 @@
+[
+  {
+    "nodeId": "pinned-text",
+    "category": "text-explicit-height",
+    "severity": "warning",
+    "property": "height",
+    "currentValue": 40,
+    "suggestedValue": "fit_content",
+    "reason": "text node has explicit height=40px — causes clipping"
+  }
+]

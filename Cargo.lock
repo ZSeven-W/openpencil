@@ -2548,6 +2548,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "op-design-lint"
+version = "0.1.0"
+dependencies = [
+ "jian-ops-schema",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "op-editor-core"
 version = "0.1.0"
 dependencies = [
@@ -2686,7 +2695,9 @@ name = "op-mcp"
 version = "0.1.0"
 dependencies = [
  "jian-ops-schema",
+ "op-design-lint",
  "op-editor-core",
+ "serde_json",
 ]
 
 [[package]]

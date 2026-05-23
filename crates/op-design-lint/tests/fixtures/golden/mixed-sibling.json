@@ -1,0 +1,20 @@
+[
+  {
+    "nodeId": "rc-c",
+    "category": "sibling-inconsistency",
+    "severity": "warning",
+    "property": "cornerRadius",
+    "currentValue": 12,
+    "suggestedValue": 8,
+    "reason": "inconsistent with 2 siblings"
+  },
+  {
+    "nodeId": "pc-c",
+    "category": "mixed-sibling-padding",
+    "severity": "warning",
+    "property": "padding",
+    "currentValue": 20,
+    "suggestedValue": 16,
+    "reason": "padding [20,20,20,20] doesn't match the 2 other sibling(s) at [16,16,16,16]"
+  }
+]

@@ -29,6 +29,7 @@ pub mod component_tools;
 mod component_tools_tests;
 #[cfg(test)]
 mod copy_node_tests;
+pub mod debug_tools;
 pub mod element_tools;
 pub mod extra_read_tools;
 #[cfg(test)]
@@ -81,6 +82,7 @@ pub use component_tools::{
     rename_component_snapshot, set_node_collapsed_snapshot, CreateComponent, DeleteComponent,
     InstantiateComponent, RenameComponent, SetNodeCollapsed,
 };
+pub use debug_tools::{debug_validation_report_snapshot, DebugValidationReport};
 pub use extra_read_tools::{get_node_children_snapshot, ChildRecord, GetNodeChildren};
 pub use json_serializer::response_to_json;
 pub use node_attr_tools::{

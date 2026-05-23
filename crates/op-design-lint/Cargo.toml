@@ -1,17 +1,16 @@
 [package]
-name = "op-mcp"
+name = "op-design-lint"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
-description = "OpenPencil MCP server — JSON-RPC tool registry over op-editor-core EditorState / EditorCommand"
+description = "OpenPencil design diagnostics — pure detectors + fixes over jian PenDocument"
 
 [lib]
-name = "op_mcp"
+name = "op_design_lint"
 path = "src/lib.rs"
 
 [dependencies]
 jian-ops-schema = { path = "../../vendor/jian/crates/jian-ops-schema" }
-op-design-lint = { path = "../op-design-lint" }
-op-editor-core = { path = "../op-editor-core" }
+serde = { workspace = true }
 serde_json = { workspace = true }

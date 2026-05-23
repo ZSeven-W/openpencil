@@ -33,7 +33,8 @@ use op_mcp::{
     add_node_effect_snapshot, add_page_snapshot, align_selected_snapshot, batch_design_snapshot,
     clear_selection_snapshot, copy_node_snapshot, copy_selected_snapshot, count_nodes_snapshot,
     create_component_snapshot, create_variable_snapshot, cut_selected_snapshot,
-    cycle_active_axis_value_snapshot, delete_component_snapshot, delete_node_snapshot,
+    cycle_active_axis_value_snapshot, debug_validation_report_snapshot, delete_component_snapshot,
+    delete_node_snapshot,
     delete_page_snapshot, delete_selected_snapshot, delete_variable_snapshot,
     design_content_snapshot, design_refine_snapshot, design_skeleton_snapshot,
     document_info_snapshot, duplicate_page_snapshot, duplicate_selected_snapshot,
@@ -330,6 +331,7 @@ fn rebuild_registry(doc: &EditorState) -> ToolRegistry {
     r.register(Box::new(get_history_depth_snapshot(doc)));
     r.register(Box::new(get_viewport_snapshot(doc)));
     r.register(Box::new(get_selection_set_snapshot(doc)));
+    r.register(Box::new(debug_validation_report_snapshot(doc)));
     r.register(Box::new(clear_selection_snapshot()));
     r.register(Box::new(set_selection_snapshot()));
     r.register(Box::new(set_viewport_snapshot()));
@@ -614,6 +616,7 @@ const TOOL_SCHEMAS: &[&str] = &[
     r#"{"name":"get_history_depth","description":"Return undo + redo stack sizes. Useful before bulk rollback to know how many steps are available.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}}"#,
     r#"{"name":"get_viewport","description":"Return current canvas pan + zoom. pan_x/pan_y are i32 doc-px; zoom_percent is the zoom * 100 as int.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}}"#,
     r#"{"name":"get_selection_set","description":"Return every id in the multi-select set (vs get_selection which returns only the anchor). Result: count + comma-separated ids + anchor.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}}"#,
+    r#"{"name":"debug_validation_report","description":"Run the op-design-lint detectors over the active page and return the design-issue list. Read-only, no parameters. Result: count + categories (`;`-separated `category|count`) + issues (JSON-serialized Issue array). Gated behind the OPENPENCIL_DEBUG_TOOLS=1 env flag — ToolFailed when unset.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}}"#,
     r#"{"name":"clear_selection","description":"Drop the current multi-select. No args.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}}"#,
     r#"{"name":"set_selection","description":"Set selection to a single node by id (scoped to the ACTIVE page only). Rejects unknown ids and ids that live on a non-active page — switch the active page first with set_active_page.","inputSchema":{"type":"object","properties":{"node_id":{"type":"string","description":"positive u64 node id on the active page"}},"required":["node_id"]}}"#,
     r#"{"name":"set_viewport","description":"Set canvas pan + zoom. Pass any subset of pan_x / pan_y / zoom_percent — omitted axes are left unchanged. zoom_percent clamps to [10, 2000].","inputSchema":{"type":"object","properties":{"pan_x":{"type":"string","description":"i32 doc-px"},"pan_y":{"type":"string","description":"i32 doc-px"},"zoom_percent":{"type":"string","description":"int * 100 (100 == 1.0×)"}}}}"#,

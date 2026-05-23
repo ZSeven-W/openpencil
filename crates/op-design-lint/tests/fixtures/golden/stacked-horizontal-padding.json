@@ -1,0 +1,16 @@
+[
+  {
+    "nodeId": "specials",
+    "category": "stacked-horizontal-padding",
+    "severity": "info",
+    "property": "padding",
+    "currentValue": [
+      0,
+      24,
+      0,
+      24
+    ],
+    "suggestedValue": null,
+    "reason": "section h-padding [24/24] stacks with root h-padding [16/16] — combined gutter 40/40"
+  }
+]

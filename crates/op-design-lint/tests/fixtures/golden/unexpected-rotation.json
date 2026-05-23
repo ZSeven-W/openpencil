@@ -1,0 +1,20 @@
+[
+  {
+    "nodeId": "tilted-card",
+    "category": "unexpected-rotation",
+    "severity": "warning",
+    "property": "rotation",
+    "currentValue": 12,
+    "suggestedValue": 0,
+    "reason": "frame node has rotation=12; UI nodes are rarely tilted on purpose"
+  },
+  {
+    "nodeId": "tilted-label",
+    "category": "unexpected-rotation",
+    "severity": "warning",
+    "property": "rotation",
+    "currentValue": 7.5,
+    "suggestedValue": 0,
+    "reason": "text node has rotation=7.5; UI nodes are rarely tilted on purpose"
+  }
+]

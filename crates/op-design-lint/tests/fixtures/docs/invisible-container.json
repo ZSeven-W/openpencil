@@ -1,0 +1,39 @@
+{
+  "version": "1.0",
+  "children": [
+    {
+      "type": "frame",
+      "id": "root",
+      "layout": "vertical",
+      "fill": [{ "type": "solid", "color": "#FFFFFF" }],
+      "children": [
+        {
+          "type": "frame",
+          "id": "light-on-light",
+          "layout": "vertical",
+          "fill": [{ "type": "solid", "color": "#FFFFFF" }],
+          "children": [
+            { "type": "text", "id": "lol-label", "content": "Inside light wrapper" }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "dark-shell",
+          "layout": "vertical",
+          "fill": [{ "type": "solid", "color": "#0A0A0A" }],
+          "children": [
+            {
+              "type": "frame",
+              "id": "dark-on-dark",
+              "layout": "vertical",
+              "fill": [{ "type": "solid", "color": "#0A0A0A" }],
+              "children": [
+                { "type": "text", "id": "dod-label", "content": "Inside dark wrapper" }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,32 @@
+{
+  "version": "1.0",
+  "children": [
+    {
+      "type": "frame",
+      "id": "root",
+      "layout": "vertical",
+      "children": [
+        {
+          "type": "frame",
+          "id": "card-group",
+          "layout": "vertical",
+          "children": [
+            { "type": "frame", "id": "card-a", "role": "card", "height": 100 },
+            { "type": "frame", "id": "card-b", "role": "card", "height": 100 },
+            { "type": "frame", "id": "card-c", "role": "card", "height": 160 }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "label-group",
+          "layout": "vertical",
+          "children": [
+            { "type": "text", "id": "label-a", "role": "label", "content": "One", "fontSize": 14 },
+            { "type": "text", "id": "label-b", "role": "label", "content": "Two", "fontSize": 14 },
+            { "type": "text", "id": "label-c", "role": "label", "content": "Three", "fontSize": 20 }
+          ]
+        }
+      ]
+    }
+  ]
+}

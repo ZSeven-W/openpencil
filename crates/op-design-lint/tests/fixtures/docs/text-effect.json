@@ -1,0 +1,32 @@
+{
+  "version": "1.0",
+  "children": [
+    {
+      "type": "frame",
+      "id": "root",
+      "layout": "vertical",
+      "children": [
+        {
+          "type": "text",
+          "id": "shadowed-label",
+          "content": "Fuzzy label",
+          "effects": [
+            {
+              "type": "shadow",
+              "offsetX": 0,
+              "offsetY": 2,
+              "blur": 8,
+              "spread": 0,
+              "color": "#000000"
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "id": "plain-label",
+          "content": "Crisp label"
+        }
+      ]
+    }
+  ]
+}
