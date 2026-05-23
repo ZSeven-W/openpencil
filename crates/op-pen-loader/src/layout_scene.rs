@@ -22,12 +22,15 @@
 //! struct, kind / fill-type string → enum).
 
 use op_editor_ui::layout_scene::NodeKind;
-use op_editor_ui::layout_scene::{LayoutScene, SceneFillType, SceneNode, ScenePage, SceneStroke};
+use op_editor_ui::layout_scene::{
+    LayoutScene, SceneFillType, SceneGradient, SceneGradientStop, SceneNode, ScenePage,
+    SceneStroke,
+};
 use op_editor_ui::scene_vars::VariableTable;
 use op_editor_ui::Color;
 
 use crate::editor_state_var_table;
-use crate::payload::{DocPayload, NodePayload, StrokePayload};
+use crate::payload::{DocPayload, GradientPayload, GradientStopPayload, NodePayload, StrokePayload};
 
 /// Build a paint-only [`LayoutScene`] from an editor state.
 ///
@@ -101,6 +104,7 @@ fn node_payload_to_scene(node: &NodePayload, var_table: &VariableTable) -> Scene
             .fill_for(&node_id)
             .or_else(|| node.fill.map(array_to_color)),
         fill_type: str_to_scene_fill_type(&node.fill_type),
+        gradient: node.gradient.as_ref().map(payload_gradient_to_scene),
         stroke: node
             .stroke
             .as_ref()
@@ -186,6 +190,44 @@ fn str_to_kind(s: &str) -> NodeKind {
         "text" => NodeKind::Text,
         "path" => NodeKind::Path,
         other => NodeKind::Other(other.to_string()),
+    }
+}
+
+/// Convert a [`GradientPayload`] into the paint-only
+/// [`SceneGradient`]. Each stop's `[r,g,b,a]` is unpacked into a
+/// [`Color`]; the body's opacity rides through unchanged so the
+/// painter can fold it into the per-stop alpha at draw time.
+fn payload_gradient_to_scene(g: &GradientPayload) -> SceneGradient {
+    match g {
+        GradientPayload::Linear {
+            angle_deg,
+            opacity,
+            stops,
+        } => SceneGradient::Linear {
+            angle_deg: *angle_deg,
+            opacity: *opacity,
+            stops: stops.iter().map(stop_to_scene).collect(),
+        },
+        GradientPayload::Radial {
+            cx,
+            cy,
+            radius,
+            opacity,
+            stops,
+        } => SceneGradient::Radial {
+            cx: *cx,
+            cy: *cy,
+            radius: *radius,
+            opacity: *opacity,
+            stops: stops.iter().map(stop_to_scene).collect(),
+        },
+    }
+}
+
+fn stop_to_scene(s: &GradientStopPayload) -> SceneGradientStop {
+    SceneGradientStop {
+        offset: s.offset,
+        color: array_to_color(s.color),
     }
 }
 

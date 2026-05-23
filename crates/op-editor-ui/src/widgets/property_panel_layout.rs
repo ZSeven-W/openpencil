@@ -132,6 +132,11 @@ pub struct VisibleSections {
     /// the walk past Fill stays aligned with paint when the user
     /// flips Solid / Gradient / Image.
     pub fill_type: FillType,
+    /// Number of stops in the primary gradient body — drives
+    /// gradient-section row count so paint + hit-test agree on how
+    /// far the section reaches and which stop a click hits. `0` for
+    /// non-gradient fills.
+    pub gradient_stop_count: usize,
 }
 
 impl VisibleSections {
@@ -145,6 +150,7 @@ impl VisibleSections {
         effects: true,
         export: true,
         fill_type: FillType::Solid,
+        gradient_stop_count: 0,
     };
 }
 
@@ -218,12 +224,22 @@ pub struct SizeFlags {
 /// y-offset of sections after Fill stays aligned with paint when
 /// the user flips fill types.
 pub fn fill_body_height(fill_type: FillType) -> f32 {
+    // Legacy 2-stop assumption — kept for callers that don't yet
+    // thread `stop_count`. Prefer `fill_body_height_with_stops`.
+    fill_body_height_with_stops(fill_type, 2)
+}
+
+/// Stop-aware variant — accounts for the actual number of gradient
+/// stops so adding / removing a stop reflows the panel correctly.
+pub fn fill_body_height_with_stops(fill_type: FillType, stop_count: usize) -> f32 {
+    let stops = stop_count.max(0);
+    let stops_block = SECTION_HEADER_HEIGHT
+        + stops as f32 * (INPUT_HEIGHT + 4.0)
+        + if stops == 0 { 0.0 } else { 2.0 };
     match fill_type {
         FillType::Solid => INPUT_HEIGHT + 6.0,
-        FillType::LinearGradient => {
-            INPUT_HEIGHT + 6.0 + SECTION_HEADER_HEIGHT + INPUT_HEIGHT + 4.0 + INPUT_HEIGHT + 6.0
-        }
-        FillType::RadialGradient => SECTION_HEADER_HEIGHT + INPUT_HEIGHT + 4.0 + INPUT_HEIGHT + 6.0,
+        FillType::LinearGradient => INPUT_HEIGHT + 6.0 + stops_block + 6.0,
+        FillType::RadialGradient => stops_block + 6.0,
         FillType::Image => INPUT_HEIGHT + 6.0,
     }
 }
@@ -418,7 +434,33 @@ pub fn action_button_rects_with_fill_picker(
                 },
             ));
         }
-        y += fill_body_height(visible.fill_type) - 6.0 + 12.0; // body + divider gap
+        // Gradient stop swatches — each row's 16 px swatch opens the
+        // picker on that specific stop, matching the solid fill
+        // affordance.
+        if matches!(
+            visible.fill_type,
+            FillType::LinearGradient | FillType::RadialGradient
+        ) {
+            let mut stop_y = y;
+            if visible.fill_type == FillType::LinearGradient {
+                stop_y += INPUT_HEIGHT + 6.0; // Angle row sits above the stops header.
+            }
+            stop_y += SECTION_HEADER_HEIGHT; // 色标 header
+            for index in 0..visible.gradient_stop_count {
+                out.push((
+                    PropertyPanelAction::OpenColorPicker(
+                        op_editor_core::ColorTarget::GradientStop(index),
+                    ),
+                    Rect {
+                        origin: Point2D::new(x0 + PAD_X, stop_y),
+                        size: Point2D::new(28.0, INPUT_HEIGHT),
+                    },
+                ));
+                stop_y += INPUT_HEIGHT + 4.0;
+            }
+        }
+        y += fill_body_height_with_stops(visible.fill_type, visible.gradient_stop_count) - 6.0
+            + 12.0; // body + divider gap
         y += SECTION_GAP;
     }
     if visible.stroke {
@@ -573,6 +615,38 @@ pub fn action_button_rects_with_fill_picker(
     out
 }
 
+/// Emit `(GradientStopHex, rect)` + `(GradientStopOffset, rect)`
+/// pairs for `stop_count` rows starting at `*y`, advancing `y` past
+/// the last row. Geometry mirrors `paint_fill_gradient_body`'s row
+/// layout so click targets land on the boxes the user sees.
+fn push_gradient_stop_rects(
+    rects: &mut Vec<(PropertyFocus, Rect)>,
+    x0: f32,
+    y: &mut f32,
+    usable_w: f32,
+    stop_count: usize,
+) {
+    let pct_w = 56.0;
+    let hex_w = usable_w - pct_w - 8.0;
+    for index in 0..stop_count {
+        rects.push((
+            PropertyFocus::GradientStopHex(index),
+            Rect {
+                origin: Point2D::new(x0 + PAD_X, *y),
+                size: Point2D::new(hex_w, INPUT_HEIGHT),
+            },
+        ));
+        rects.push((
+            PropertyFocus::GradientStopOffset(index),
+            Rect {
+                origin: Point2D::new(x0 + PAD_X + hex_w + 8.0, *y),
+                size: Point2D::new(pct_w, INPUT_HEIGHT),
+            },
+        ));
+        *y += INPUT_HEIGHT + 4.0;
+    }
+}
+
 /// On-screen rects of every editable input. Same y walk as
 /// `action_button_rects` so paint + hit-test stay aligned.
 pub fn editable_input_rects(
@@ -667,16 +741,47 @@ pub fn editable_input_rects(
             },
         ));
         y += INPUT_HEIGHT + 6.0;
-        if matches!(visible.fill_type, FillType::Solid) {
-            rects.push((
-                PropertyFocus::FillHex,
-                Rect {
-                    origin: Point2D::new(x0 + PAD_X, y),
-                    size: Point2D::new(usable_w, INPUT_HEIGHT),
-                },
-            ));
+        match visible.fill_type {
+            FillType::Solid => {
+                rects.push((
+                    PropertyFocus::FillHex,
+                    Rect {
+                        origin: Point2D::new(x0 + PAD_X, y),
+                        size: Point2D::new(usable_w, INPUT_HEIGHT),
+                    },
+                ));
+            }
+            FillType::LinearGradient => {
+                // Angle row (full width).
+                rects.push((
+                    PropertyFocus::GradientAngle,
+                    Rect {
+                        origin: Point2D::new(x0 + PAD_X, y),
+                        size: Point2D::new(usable_w, INPUT_HEIGHT),
+                    },
+                ));
+                let mut stop_y = y + INPUT_HEIGHT + 6.0 + SECTION_HEADER_HEIGHT;
+                push_gradient_stop_rects(
+                    &mut rects,
+                    x0,
+                    &mut stop_y,
+                    usable_w,
+                    visible.gradient_stop_count,
+                );
+            }
+            FillType::RadialGradient => {
+                let mut stop_y = y + SECTION_HEADER_HEIGHT;
+                push_gradient_stop_rects(
+                    &mut rects,
+                    x0,
+                    &mut stop_y,
+                    usable_w,
+                    visible.gradient_stop_count,
+                );
+            }
+            FillType::Image => {}
         }
-        y += fill_body_height(visible.fill_type) - 6.0;
+        y += fill_body_height_with_stops(visible.fill_type, visible.gradient_stop_count) - 6.0;
         y += 12.0;
         y += SECTION_GAP;
     }

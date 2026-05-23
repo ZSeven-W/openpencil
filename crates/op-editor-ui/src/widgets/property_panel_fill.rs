@@ -321,10 +321,10 @@ pub fn paint_fill_section(
             paint_fill_solid_body(cx, theme, edit, fill, x, y, width);
         }
         FillType::LinearGradient => {
-            paint_fill_gradient_body(cx, theme, locale, x, y, width, true);
+            paint_fill_gradient_body(cx, theme, edit, snapshot, locale, x, y, width, true);
         }
         FillType::RadialGradient => {
-            paint_fill_gradient_body(cx, theme, locale, x, y, width, false);
+            paint_fill_gradient_body(cx, theme, edit, snapshot, locale, x, y, width, false);
         }
         FillType::Image => {
             paint_fill_image_body(cx, theme, locale, x, y, width);
@@ -391,9 +391,12 @@ fn paint_fill_solid_body(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn paint_fill_gradient_body(
     cx: &mut PaintCx<'_>,
     theme: &Theme,
+    edit: &EditContext<'_>,
+    snapshot: &NodeSnapshot,
     locale: op_editor_core::Locale,
     x: f32,
     y: f32,
@@ -407,9 +410,14 @@ fn paint_fill_gradient_body(
             origin: Point2D::new(x + PAD_X, yy),
             size: Point2D::new(usable_w, INPUT_HEIGHT),
         };
+        let angle_focus = PropertyFocus::GradientAngle;
+        let angle_focused = edit.focus == Some(angle_focus);
         cx.backend
             .fill_round_rect(angle_rect, INPUT_RADIUS, theme.muted);
-        // Angle prefix at left, value in middle, ° at right.
+        if angle_focused {
+            cx.backend
+                .stroke_round_rect(angle_rect, INPUT_RADIUS, theme.primary, 1.5);
+        }
         let prefix = TextLayout::single_run(
             op_i18n::translate(locale, "fill.angle"),
             "system-ui",
@@ -421,17 +429,30 @@ fn paint_fill_gradient_body(
             &prefix,
             Point2D::new(angle_rect.origin.x + 10.0, angle_rect.origin.y + 19.0),
         );
+        let angle_owned = format_angle(snapshot.gradient_angle.unwrap_or(0.0));
+        let value_text = edit.value_for(angle_focus, &angle_owned);
         let value = TextLayout::single_run(
-            "0",
+            value_text,
             "system-ui",
             12.0,
             to_jian_color(theme.foreground),
             Point2D::new(0.0, 0.0),
         );
-        cx.backend.draw_text(
-            &value,
-            Point2D::new(angle_rect.origin.x + 44.0, angle_rect.origin.y + 19.0),
-        );
+        let value_x = angle_rect.origin.x + 44.0;
+        cx.backend
+            .draw_text(&value, Point2D::new(value_x, angle_rect.origin.y + 19.0));
+        if let Some(pos) = edit.caret_at(angle_focus) {
+            let w = cx
+                .backend
+                .measure_text(&value_text[..pos.min(value_text.len())], 12.0);
+            cx.backend.fill_rect(
+                Rect {
+                    origin: Point2D::new(value_x + w, angle_rect.origin.y + 6.0),
+                    size: Point2D::new(1.5, angle_rect.size.y - 12.0),
+                },
+                theme.foreground,
+            );
+        }
         let unit = TextLayout::single_run(
             "°",
             "system-ui",
@@ -467,57 +488,91 @@ fn paint_fill_gradient_body(
         1.4,
     );
     yy += SECTION_HEADER_HEIGHT;
-    // Two static placeholder stops: black 0%, white 100%.
-    let stops: [(Color, &str, &str); 2] = [
-        (Color::BLACK, "#000000", "0"),
-        (Color::WHITE, "#FFFFFF", "100"),
-    ];
     let pct_w = 56.0;
-    for (color, hex, pct) in stops.iter() {
+    for (index, stop) in snapshot.gradient_stops.iter().enumerate() {
         let row_y = yy;
         let hex_w = usable_w - pct_w - 8.0;
         let hex_rect = Rect {
             origin: Point2D::new(x + PAD_X, row_y),
             size: Point2D::new(hex_w, INPUT_HEIGHT),
         };
+        let hex_focus = PropertyFocus::GradientStopHex(index);
+        let hex_focused = edit.focus == Some(hex_focus);
         cx.backend
             .fill_round_rect(hex_rect, INPUT_RADIUS, theme.muted);
-        cx.backend.fill_round_rect(
-            Rect {
-                origin: Point2D::new(hex_rect.origin.x + 6.0, hex_rect.origin.y + 5.0),
-                size: Point2D::new(16.0, 16.0),
-            },
-            3.0,
-            *color,
-        );
+        if hex_focused {
+            cx.backend
+                .stroke_round_rect(hex_rect, INPUT_RADIUS, theme.primary, 1.5);
+        }
+        let swatch = Rect {
+            origin: Point2D::new(hex_rect.origin.x + 6.0, hex_rect.origin.y + 5.0),
+            size: Point2D::new(16.0, 16.0),
+        };
+        paint_alpha_checker(cx, swatch, 3.0);
+        cx.backend.fill_round_rect(swatch, 3.0, stop.color);
+        // Display only `#RRGGBB` — the swatch on the left already
+        // conveys per-stop transparency. Alpha is preserved at
+        // commit time, so the user never types raw alpha digits.
+        let hex_owned = stop_hex_rgb_only(&stop.hex);
+        let hex_text = edit.value_for(hex_focus, &hex_owned);
         let hex_layout = TextLayout::single_run(
-            hex,
+            hex_text,
             "system-ui",
             12.0,
             to_jian_color(theme.foreground),
             Point2D::new(0.0, 0.0),
         );
-        cx.backend.draw_text(
-            &hex_layout,
-            Point2D::new(hex_rect.origin.x + 30.0, hex_rect.origin.y + 19.0),
-        );
+        let hex_text_x = hex_rect.origin.x + 30.0;
+        cx.backend
+            .draw_text(&hex_layout, Point2D::new(hex_text_x, hex_rect.origin.y + 19.0));
+        if let Some(pos) = edit.caret_at(hex_focus) {
+            let w = cx
+                .backend
+                .measure_text(&hex_text[..pos.min(hex_text.len())], 12.0);
+            cx.backend.fill_rect(
+                Rect {
+                    origin: Point2D::new(hex_text_x + w, hex_rect.origin.y + 6.0),
+                    size: Point2D::new(1.5, hex_rect.size.y - 12.0),
+                },
+                theme.foreground,
+            );
+        }
         let pct_rect = Rect {
             origin: Point2D::new(x + PAD_X + hex_w + 8.0, row_y),
             size: Point2D::new(pct_w, INPUT_HEIGHT),
         };
+        let offset_focus = PropertyFocus::GradientStopOffset(index);
+        let offset_focused = edit.focus == Some(offset_focus);
         cx.backend
             .fill_round_rect(pct_rect, INPUT_RADIUS, theme.muted);
+        if offset_focused {
+            cx.backend
+                .stroke_round_rect(pct_rect, INPUT_RADIUS, theme.primary, 1.5);
+        }
+        let pct_owned = ((stop.offset * 100.0).round() as i32).to_string();
+        let pct_text = edit.value_for(offset_focus, &pct_owned);
         let pct_layout = TextLayout::single_run(
-            pct,
+            pct_text,
             "system-ui",
             12.0,
             to_jian_color(theme.foreground),
             Point2D::new(0.0, 0.0),
         );
-        cx.backend.draw_text(
-            &pct_layout,
-            Point2D::new(pct_rect.origin.x + 12.0, pct_rect.origin.y + 19.0),
-        );
+        let pct_x = pct_rect.origin.x + 12.0;
+        cx.backend
+            .draw_text(&pct_layout, Point2D::new(pct_x, pct_rect.origin.y + 19.0));
+        if let Some(pos) = edit.caret_at(offset_focus) {
+            let w = cx
+                .backend
+                .measure_text(&pct_text[..pos.min(pct_text.len())], 12.0);
+            cx.backend.fill_rect(
+                Rect {
+                    origin: Point2D::new(pct_x + w, pct_rect.origin.y + 6.0),
+                    size: Point2D::new(1.5, pct_rect.size.y - 12.0),
+                },
+                theme.foreground,
+            );
+        }
         let pct_unit = TextLayout::single_run(
             "%",
             "system-ui",
@@ -535,6 +590,71 @@ fn paint_fill_gradient_body(
         yy += INPUT_HEIGHT + 4.0;
     }
     let _ = yy;
+}
+
+/// Format the gradient angle for the panel input — drop the
+/// fractional part when the angle is whole-degree so 0/45/90/180
+/// don't paint as "0.0", "45.0", etc.
+fn format_angle(angle: f32) -> String {
+    if angle.fract() == 0.0 {
+        format!("{}", angle as i32)
+    } else {
+        format!("{}", angle)
+    }
+}
+
+/// Strip alpha from a canonical-schema stop hex (`#RRGGBB` or
+/// `#RRGGBBAA`) for the panel input. The swatch on the left already
+/// paints with alpha so the input stays at 6 hex chars regardless
+/// of authored transparency.
+pub fn stop_hex_rgb_only(hex: &str) -> String {
+    let trimmed = hex.trim();
+    let stripped = trimmed.trim_start_matches('#');
+    let body = if stripped.len() >= 6 {
+        &stripped[..6]
+    } else {
+        stripped
+    };
+    format!("#{}", body.to_uppercase())
+}
+
+/// Paint a 2×2 light/dark checker behind a colour swatch so a
+/// partially or fully transparent fill reads as "transparent"
+/// instead of looking like the input pill's background. The
+/// caller paints the (possibly translucent) stop colour on top.
+fn paint_alpha_checker(cx: &mut PaintCx<'_>, rect: Rect, radius: f32) {
+    let light = Color {
+        r: 0.95,
+        g: 0.95,
+        b: 0.95,
+        a: 1.0,
+    };
+    let dark = Color {
+        r: 0.78,
+        g: 0.78,
+        b: 0.78,
+        a: 1.0,
+    };
+    cx.backend.fill_round_rect(rect, radius, light);
+    let hx = rect.size.x / 2.0;
+    let hy = rect.size.y / 2.0;
+    // Skia has no clipped round-rect for sub-rect fills, so paint
+    // the two darker quadrants as plain rects — the surrounding
+    // light fill already supplies the rounded silhouette.
+    cx.backend.fill_rect(
+        Rect {
+            origin: Point2D::new(rect.origin.x + hx, rect.origin.y),
+            size: Point2D::new(hx, hy),
+        },
+        dark,
+    );
+    cx.backend.fill_rect(
+        Rect {
+            origin: Point2D::new(rect.origin.x, rect.origin.y + hy),
+            size: Point2D::new(hx, hy),
+        },
+        dark,
+    );
 }
 
 fn paint_fill_image_body(

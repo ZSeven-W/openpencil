@@ -37,8 +37,51 @@ pub enum PropertyFocus {
     FillHex,
     /// Fill section's `100 %` opacity input — percentage (0..100).
     FillOpacity,
+    /// LinearGradient angle input — degrees in the canonical `.op`
+    /// convention (0° = bottom→top, 90° = left→right). Only valid
+    /// while the selected node's first fill is `LinearGradient`.
+    GradientAngle,
+    /// One gradient stop's `#RRGGBB` colour input — indexed into the
+    /// first fill's `stops` list. Valid for both Linear and Radial
+    /// fills; an out-of-range index is treated as no-op at commit.
+    GradientStopHex(usize),
+    /// One gradient stop's offset input — percentage in `0..=100`
+    /// (stored as 0.0..=1.0 in the canonical schema). Same indexing
+    /// + scope rules as [`GradientStopHex`].
+    GradientStopOffset(usize),
     StrokeHex,
     StrokeWidth,
+}
+
+impl PropertyFocus {
+    /// True when the focused row carries hex colour input — drives
+    /// the `#`-sticky keyboard validation. Hex focuses cap the draft
+    /// at 7 chars (`#RRGGBB`).
+    pub fn is_hex(self) -> bool {
+        matches!(
+            self,
+            PropertyFocus::FillHex
+                | PropertyFocus::StrokeHex
+                | PropertyFocus::GradientStopHex(_)
+        )
+    }
+
+    /// True when the focused row accepts a decimal point — used by
+    /// the numeric input validator. Position / Size / corner radius
+    /// reject `.` (integer doc px); rotation / opacity / stroke width
+    /// / gradient angle / gradient offset accept it.
+    pub fn accepts_decimal(self) -> bool {
+        matches!(
+            self,
+            PropertyFocus::Rotation
+                | PropertyFocus::PositionR
+                | PropertyFocus::Opacity
+                | PropertyFocus::FillOpacity
+                | PropertyFocus::StrokeWidth
+                | PropertyFocus::GradientAngle
+                | PropertyFocus::GradientStopOffset(_)
+        )
+    }
 }
 
 /// Which colour a draft edit / picker is targeting.
@@ -46,6 +89,9 @@ pub enum PropertyFocus {
 pub enum ColorTarget {
     Fill,
     Stroke,
+    /// One stop on the primary gradient body — indexed against
+    /// `stops`. Out-of-range writes are silently dropped at commit.
+    GradientStop(usize),
 }
 
 /// What an inline rename / context action is acting on. Ported from
@@ -106,6 +152,13 @@ pub struct ColorPickerState {
     /// any code that pattern-matches on it without checking `variable`.
     /// Ported from shell-core's `ColorPickerState::variable`.
     pub variable: Option<String>,
+    /// Alpha (`0..=1`) the picker preserves on every commit. Seeded
+    /// from the target's current colour at open time so adjusting
+    /// SV / hue on a transparent gradient stop (`#00000000`) keeps
+    /// it transparent instead of silently turning it opaque. Fill /
+    /// stroke / variable targets always seed `1.0` because their
+    /// alpha lives in a separate opacity field.
+    pub alpha: f32,
 }
 
 /// Transient variable/theme editor state (spec §5.2).

@@ -72,6 +72,12 @@ pub struct NodePayload {
     pub collapsed: bool,
     #[serde(default)]
     pub fill_type: String,
+    /// Resolved gradient body for the first fill when it is a
+    /// `LinearGradient` / `RadialGradient`. `None` for solid /
+    /// image fills; `fill` still carries the first-stop colour as
+    /// a fallback for paint paths that don't grok gradients.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub gradient: Option<GradientPayload>,
     #[serde(default)]
     pub points: Vec<[f32; 2]>,
     /// Path bezier anchors (absolute doc coords, handles resolved).
@@ -102,6 +108,47 @@ pub struct NodePayload {
 pub struct StrokePayload {
     pub color: [f32; 4],
     pub width: f32,
+}
+
+/// One resolved gradient stop — offset 0.0..=1.0 + RGBA colour.
+/// Mirrors `jian_ops_schema::GradientStop` but with the colour
+/// hex pre-parsed into the same `[r,g,b,a]` array `NodePayload.fill`
+/// uses.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GradientStopPayload {
+    pub offset: f32,
+    pub color: [f32; 4],
+}
+
+/// Layout-resolved gradient body for `NodePayload.gradient`.
+/// Pre-parsed (colour hex → RGBA, opacity baked into the variant)
+/// so the scene builder + canvas painter never re-walk the
+/// canonical schema.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum GradientPayload {
+    Linear {
+        /// Gradient angle in degrees, canonical `.op` convention:
+        /// 0° = bottom→top, 90° = left→right, 180° = top→bottom
+        /// (matches CSS `to-top`). The renderer subtracts 90° before
+        /// projecting endpoints, so storing as authored keeps the
+        /// scene wire-format equal to the file's `angle`.
+        angle_deg: f32,
+        opacity: f32,
+        stops: Vec<GradientStopPayload>,
+    },
+    Radial {
+        /// Centre x as a 0.0..=1.0 fraction of bounds width.
+        cx: f32,
+        /// Centre y as a 0.0..=1.0 fraction of bounds height.
+        cy: f32,
+        /// Outer radius as a 0.0..=1.0 fraction of `max(w, h)` —
+        /// matches the TS renderer, so the same `.op` file paints at
+        /// the same radial size on native + web + export.
+        radius: f32,
+        opacity: f32,
+        stops: Vec<GradientStopPayload>,
+    },
 }
 
 /// One path bezier anchor in absolute doc coords. `handle_in` /

@@ -2,7 +2,7 @@
 //! of `canvas_viewport.rs` to keep that file under the 800-line
 //! ceiling.
 
-use crate::layout_scene::{LayoutScene, SceneNode};
+use crate::layout_scene::{LayoutScene, SceneGradient, SceneNode};
 use crate::theme::Theme;
 use crate::widgets::PaintCx;
 use crate::{Color, Point2D, Rect};
@@ -157,7 +157,13 @@ pub fn paint_fill_then_stroke(
 ) {
     let r = node.corner_radius * zoom;
     let use_round = r > 0.5;
-    if let Some(fill) = fill {
+    // Gradients win over solid `fill` when present. The scene
+    // builder leaves the first stop's colour in `fill` as a
+    // fallback for paint paths that don't grok gradients yet, so
+    // the gradient body is the more faithful representation here.
+    if let Some(gradient) = node.gradient.as_ref() {
+        paint_gradient_rect(cx, gradient, world_rect, if use_round { r } else { 0.0 });
+    } else if let Some(fill) = fill {
         if use_round {
             cx.backend.fill_round_rect(world_rect, r, fill);
         } else {
@@ -171,6 +177,51 @@ pub fn paint_fill_then_stroke(
         } else {
             cx.backend
                 .stroke_rect(world_rect, stroke.color, stroke.width * zoom);
+        }
+    }
+}
+
+/// Dispatch a [`SceneGradient`] onto the right `RenderBackend`
+/// gradient method. Stops are flattened into `(offset, Color)` pairs
+/// because the trait stays free of scene-specific types.
+pub(crate) fn paint_gradient_rect(
+    cx: &mut PaintCx<'_>,
+    gradient: &SceneGradient,
+    rect: Rect,
+    corner_radius: f32,
+) {
+    match gradient {
+        SceneGradient::Linear {
+            angle_deg,
+            opacity,
+            stops,
+        } => {
+            let flat: Vec<(f32, Color)> = stops.iter().map(|s| (s.offset, s.color)).collect();
+            cx.backend.fill_round_rect_linear_gradient(
+                rect,
+                corner_radius,
+                &flat,
+                *angle_deg,
+                *opacity,
+            );
+        }
+        SceneGradient::Radial {
+            cx: gx,
+            cy,
+            radius,
+            opacity,
+            stops,
+        } => {
+            let flat: Vec<(f32, Color)> = stops.iter().map(|s| (s.offset, s.color)).collect();
+            cx.backend.fill_round_rect_radial_gradient(
+                rect,
+                corner_radius,
+                &flat,
+                *gx,
+                *cy,
+                *radius,
+                *opacity,
+            );
         }
     }
 }

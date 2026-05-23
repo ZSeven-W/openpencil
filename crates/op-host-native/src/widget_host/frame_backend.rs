@@ -103,6 +103,46 @@ impl<'a> RenderBackend for NativeFrameBackend<'a> {
         self.inner.draw_image(self.canvas, rect, image_id, encoded);
     }
 
+    fn fill_round_rect_linear_gradient(
+        &mut self,
+        rect: Rect,
+        radius: f32,
+        stops: &[(f32, Color)],
+        angle_deg: f32,
+        opacity: f32,
+    ) {
+        self.inner.fill_round_rect_linear_gradient(
+            self.canvas,
+            rect,
+            radius,
+            stops,
+            angle_deg,
+            opacity,
+        );
+    }
+
+    fn fill_round_rect_radial_gradient(
+        &mut self,
+        rect: Rect,
+        radius: f32,
+        stops: &[(f32, Color)],
+        cx_frac: f32,
+        cy_frac: f32,
+        radius_frac: f32,
+        opacity: f32,
+    ) {
+        self.inner.fill_round_rect_radial_gradient(
+            self.canvas,
+            rect,
+            radius,
+            stops,
+            cx_frac,
+            cy_frac,
+            radius_frac,
+            opacity,
+        );
+    }
+
     fn resize(&mut self, _width: u32, _height: u32) {}
 
     fn dpi_scale(&self) -> f32 {
