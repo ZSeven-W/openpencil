@@ -160,6 +160,23 @@ pub struct ValidationProviders<'a> {
     pub system_prompt: String,
 }
 
+// ── S4: VisualRefProvider ─────────────────────────────────────────────────────
+
+/// Visual-reference rendering outlet.
+///
+/// host 实现把 HTML 字符串渲染成 base64 PNG 截图;stub 返回 `None`
+/// 表示"跳过视觉参考阶段"。
+///
+/// Port of the `renderHtmlToScreenshot` call-site shape in
+/// `visual-ref-orchestrator.ts:108-122` + spec §4.5.
+pub trait VisualRefProvider: Send + Sync {
+    /// 将 HTML 字符串渲染为给定像素尺寸的截图,返回 base64 PNG;
+    /// `None` 表示不可用 / 跳过。
+    fn render_html_to_screenshot(&self, html: &str, width: f64, height: f64) -> Option<String>;
+}
+
+// ── S4 end ────────────────────────────────────────────────────────────────────
+
 // ── S3c end ───────────────────────────────────────────────────────────────────
 
 /// 廉价可克隆的中止句柄(`Arc<AtomicBool>` 语义)。
@@ -563,6 +580,42 @@ mod tests {
             }
         }
     }
+
+    // ── Task A2: VisualRefProvider trait + SkippedVisualRefProvider stub ─────────
+
+    /// `SkippedVisualRefProvider` returns `None` for any input.
+    #[test]
+    fn skipped_visual_ref_provider_returns_none() {
+        use crate::stub_providers::SkippedVisualRefProvider;
+        let p = SkippedVisualRefProvider;
+        assert!(p
+            .render_html_to_screenshot("<html></html>", 1280.0, 800.0)
+            .is_none());
+        assert!(p.render_html_to_screenshot("", 0.0, 0.0).is_none());
+        assert!(p
+            .render_html_to_screenshot("<html><body>Hello</body></html>", 390.0, 844.0)
+            .is_none());
+    }
+
+    /// `VisualRefProvider` trait is `Send + Sync`.
+    #[test]
+    fn visual_ref_provider_is_send_sync() {
+        use crate::types::VisualRefProvider;
+        fn assert_send_sync<T: Send + Sync + ?Sized>() {}
+        assert_send_sync::<dyn VisualRefProvider>();
+    }
+
+    /// `op_orchestrator::SkippedVisualRefProvider` resolves from a host-style import.
+    #[test]
+    fn skipped_visual_ref_provider_resolves_from_crate_root() {
+        use crate::{SkippedVisualRefProvider, VisualRefProvider};
+        let p: &dyn VisualRefProvider = &SkippedVisualRefProvider;
+        assert!(p
+            .render_html_to_screenshot("<p>test</p>", 800.0, 600.0)
+            .is_none());
+    }
+
+    // ── Task A2 end ───────────────────────────────────────────────────────────────
 
     /// `DesignRequest.validation_enabled` defaults to `true` when omitted from JSON.
     #[test]

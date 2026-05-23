@@ -56,5 +56,8 @@ pub use intent::classify_intent;
 pub use model_profile::{resolve_model_profile, ModelProfile, ModelTier};
 pub use prompt::build_orchestrator_prompt;
 pub use run::Orchestrator;
-pub use stub_providers::{SkippedPreValidator, SkippedScreenshotProvider, SkippedVisionLlmClient};
+pub use stub_providers::{
+    SkippedPreValidator, SkippedScreenshotProvider, SkippedVisionLlmClient,
+    SkippedVisualRefProvider,
+};
 pub use types::*;
