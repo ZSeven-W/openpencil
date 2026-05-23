@@ -250,11 +250,7 @@ fn extract_code_fence(text: &str) -> Option<&str> {
     let after_open = &text[fence_start + 3..];
 
     // Skip optional "json" language tag and the following newline
-    let content_start = if after_open.starts_with("json") {
-        &after_open[4..]
-    } else {
-        after_open
-    };
+    let content_start = after_open.strip_prefix("json").unwrap_or(after_open);
 
     // Skip leading newline
     let content_start = content_start.strip_prefix('\n').unwrap_or(content_start);
