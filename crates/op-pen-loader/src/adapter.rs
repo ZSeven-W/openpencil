@@ -718,6 +718,29 @@ fn assign_first_fill(p: &mut NodePayload, fills: Option<&[PenFill]>) {
     p.fill = first_solid_color(fills);
     p.fill_type = first_fill_type(fills);
     p.gradient = first_gradient(fills);
+    // Image fills: surface the URL so the canvas painter can decode
+    // + draw the bitmap. Without this the painter only sees the
+    // grey placeholder `fill` and the image never appears, even
+    // though `set_selected_fill_image_url` already wrote the URL
+    // into the canonical `PenFill::Image { url }` slot.
+    if let Some(url) = first_image_fill_url(fills) {
+        p.image_src = Some(url);
+    }
+}
+
+/// Read the first fill's image URL when it is a `PenFill::Image`.
+/// `None` for any other variant (or empty url) so non-image fills
+/// keep their solid / gradient paint paths.
+fn first_image_fill_url(fills: Option<&[PenFill]>) -> Option<String> {
+    let body = fills?.first().and_then(|f| match f {
+        PenFill::Image(b) => Some(b),
+        _ => None,
+    })?;
+    if body.url.trim().is_empty() {
+        None
+    } else {
+        Some(body.url.clone())
+    }
 }
 
 /// Read the first fill as a resolved [`GradientPayload`] — `None`
