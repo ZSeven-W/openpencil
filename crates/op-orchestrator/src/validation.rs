@@ -1,23 +1,26 @@
-//! C1: Per-round vision call — `parse_validation_response` + `validate_design_screenshot`.
+//! C1 + C2: Vision-validation pipeline — per-round call + full loop.
 //!
-//! Faithful port of `apps/web/src/services/ai/design-validation.ts:137-274`
+//! C1 port: `apps/web/src/services/ai/design-validation.ts:137-274`
 //! (`validateDesignScreenshot` + `parseValidationResponse`).
 //!
-//! This module is responsible for one round of the vision-validation pipeline:
-//! building the user message from the node-tree dump, calling the injected
-//! `VisionLlmClient` trait, parsing the JSON response, and returning a
-//! `ValidationResult` (with skipped=true on any failure / stub response).
-//!
-//! `run_post_generation_validation` (the full loop) is Task C2.
+//! C2 port: `apps/web/src/services/ai/design-validation.ts:280-524`
+//! (`runPostGenerationValidation` — the full loop).
 
-// C2 will consume all pub(crate) items from this module.
 #![allow(dead_code)]
 
+use std::collections::HashMap;
 use std::time::Duration;
 
-use crate::types::{VisionCallRequest, VisionLlmClient, VisionResponse};
-use crate::validation_config::VALIDATION_TIMEOUT_MS;
-use crate::validation_fixes::apply::{StructuralFix, ValidationFix};
+use crate::types::{
+    AbortFlag, DesignRequest, DocSink, OrchestratorError, PreValidator, Progress,
+    ScreenshotProvider, VisionCallRequest, VisionLlmClient, VisionResponse,
+};
+use crate::validation_config::{
+    MAX_VALIDATION_ROUNDS, VALIDATION_NODE_COUNT_THRESHOLD, VALIDATION_QUALITY_THRESHOLD,
+    VALIDATION_TIMEOUT_MS,
+};
+use crate::validation_dump::{build_node_tree_dump, count_nodes_in_active_page};
+use crate::validation_fixes::apply::{apply_validation_fixes, StructuralFix, ValidationFix};
 use crate::validation_fixes::{is_valid_fix_value, is_valid_structural_fix, SAFE_FIX_PROPERTIES};
 
 // ── Response types ────────────────────────────────────────────────────────────
@@ -366,8 +369,226 @@ pub(crate) fn validate_design_screenshot(
     }
 }
 
+// ── C2: ValidationSummary ────────────────────────────────────────────────────
+
+/// Summary returned by `run_post_generation_validation`.
+///
+/// `total_applied` is pre-validation fixes + all vision-round fixes combined.
+/// `rounds_run` is the number of completed vision LLM rounds (0 when the node
+/// count gate fires or the screenshot is unavailable).
+#[derive(Debug, Clone, Default)]
+pub(crate) struct ValidationSummary {
+    pub total_applied: usize,
+    pub rounds_run: u8,
+}
+
+// ── C2: run_post_generation_validation ───────────────────────────────────────
+
+/// Full post-generation validation loop.
+///
+/// Faithful port of `runPostGenerationValidation` in
+/// `apps/web/src/services/ai/design-validation.ts:280-524`.
+///
+/// Steps:
+/// 1. Emit `Progress::ValidationStarted`.
+/// 2. Run `pre_validator.run_pre_validation_fixes(sink)`.
+///    Emit `Progress::ValidationPreCheckDone`.
+/// 3. If `request.validation_enabled == false` → emit `ValidationDone`, return.
+/// 4. Node-count gate: if node count < 30 → emit `ValidationDone`, return.
+/// 5. Loop `round in 1..=MAX_VALIDATION_ROUNDS`:
+///    a. Check abort.
+///    b. Emit `ValidationRoundStarted`.
+///    c. `screenshot.capture_root_frame()` — `None` → break.
+///    d. `build_node_tree_dump(sink.state())`.
+///    e. `validate_design_screenshot(...)` — call the vision LLM.
+///    f. `Skipped` → break (round 1) or break (round > 1).
+///    g. `quality_score==0 && issues.is_empty()` → parse failure → break.
+///    h. `quality_score >= VALIDATION_QUALITY_THRESHOLD` → break.
+///    i. Track fix history; deduplicate fixes seen ≥2 times.
+///    j. `fixes.is_empty() && structural_fixes.is_empty()` → break.
+///    k. `apply_validation_fixes` → add to `total_applied`.
+///    l. Emit `ValidationRoundDone`.
+///    m. If applied == 0 → break (nothing could be applied).
+/// 6. Emit `ValidationDone`.  Return `Ok(ValidationSummary)`.
+///
+/// Returns `Err(OrchestratorError::Aborted)` when the abort flag is set before
+/// any vision round starts.
+///
+/// `reference_screenshot` is currently always `None` from within this function;
+/// D1's host wiring will thread host-side reference images through.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn run_post_generation_validation(
+    sink: &mut dyn DocSink,
+    pre_validator: &dyn PreValidator,
+    screenshot: &dyn ScreenshotProvider,
+    vision: &dyn VisionLlmClient,
+    system_prompt: &str,
+    request: &DesignRequest,
+    on_progress: &mut dyn FnMut(Progress),
+    abort: &AbortFlag,
+) -> Result<ValidationSummary, OrchestratorError> {
+    let mut total_applied: usize = 0;
+    let mut rounds_run: u8 = 0;
+
+    // ── Step 1: signal that validation phase started ──────────────────────────
+    on_progress(Progress::ValidationStarted);
+
+    // ── Step 2: pre-validation (pure code checks, no LLM) ────────────────────
+    let pre = pre_validator.run_pre_validation_fixes(sink);
+    total_applied += pre.total;
+    on_progress(Progress::ValidationPreCheckDone {
+        applied: pre.total,
+        by_category: pre.by_category,
+    });
+
+    // ── Step 3: LLM-validation gate — host can disable entirely ───────────────
+    if !request.validation_enabled {
+        on_progress(Progress::ValidationDone { total_applied });
+        return Ok(ValidationSummary {
+            total_applied,
+            rounds_run,
+        });
+    }
+
+    // ── Step 4: node-count gate (TS L328-342) ─────────────────────────────────
+    let node_count = count_nodes_in_active_page(sink.state());
+    if node_count < VALIDATION_NODE_COUNT_THRESHOLD {
+        on_progress(Progress::ValidationDone { total_applied });
+        return Ok(ValidationSummary {
+            total_applied,
+            rounds_run,
+        });
+    }
+
+    // ── Step 5: vision LLM loop ───────────────────────────────────────────────
+
+    // Fix-history map: "nodeId:property" → count of rounds where this fix appeared.
+    let mut fix_history: HashMap<String, usize> = HashMap::new();
+
+    for round in 1..=MAX_VALIDATION_ROUNDS {
+        // 5a: abort check — if set before this round starts, return early.
+        if abort.is_set() {
+            return Err(OrchestratorError::Aborted);
+        }
+
+        // 5b: emit round-started progress.
+        on_progress(Progress::ValidationRoundStarted { round });
+
+        // 5c: capture screenshot — None means bail.
+        let Some(image_base64) = screenshot.capture_root_frame() else {
+            // TS: on first round → emit "done" with error; subsequent rounds → break.
+            break;
+        };
+
+        // 5d: build node-tree dump.
+        let node_tree_dump = build_node_tree_dump(sink.state());
+
+        // 5e: call vision LLM (reference_screenshot = None for C2; D1 wires host ref).
+        let result = validate_design_screenshot(
+            vision,
+            system_prompt,
+            &image_base64,
+            &node_tree_dump,
+            request.model.as_deref(),
+            request.provider.as_deref(),
+            None, // reference_screenshot — D1 will thread host-side refs here
+            round,
+        );
+
+        // 5f: skipped → break (round 1 or subsequent).
+        if result.skipped {
+            break;
+        }
+
+        // Unwrap the response (skipped=false guarantees Some).
+        let response = result.response.unwrap_or_default();
+
+        // 5g: quality_score==0 && issues.is_empty() → parse failure → break.
+        if response.quality_score == 0 && response.issues.is_empty() {
+            rounds_run = round;
+            on_progress(Progress::ValidationRoundDone {
+                round,
+                applied: 0,
+                quality_score: 0,
+            });
+            break;
+        }
+
+        // 5h: quality at or above threshold → acceptable; stop loop.
+        if response.quality_score >= VALIDATION_QUALITY_THRESHOLD {
+            rounds_run = round;
+            on_progress(Progress::ValidationRoundDone {
+                round,
+                applied: 0,
+                quality_score: response.quality_score,
+            });
+            break;
+        }
+
+        // 5i: track fix history for all fixes returned this round.
+        for fix in &response.fixes {
+            let key = format!("{}:{}", fix.node_id, fix.property);
+            *fix_history.entry(key).or_insert(0) += 1;
+        }
+
+        // 5i (continued): deduplicate fixes seen 2+ times across rounds.
+        // TS: filter out fixes whose history count > 1 when round > 1.
+        let deduped_fixes: Vec<ValidationFix> = if round > 1 {
+            response
+                .fixes
+                .into_iter()
+                .filter(|f| {
+                    let key = format!("{}:{}", f.node_id, f.property);
+                    fix_history.get(&key).copied().unwrap_or(0) <= 1
+                })
+                .collect()
+        } else {
+            response.fixes
+        };
+
+        // 5j: no fixes at all → break (design is already good or nothing actionable).
+        if deduped_fixes.is_empty() && response.structural_fixes.is_empty() {
+            rounds_run = round;
+            on_progress(Progress::ValidationRoundDone {
+                round,
+                applied: 0,
+                quality_score: response.quality_score,
+            });
+            break;
+        }
+
+        // 5k: apply fixes.
+        let apply_result = apply_validation_fixes(sink, &deduped_fixes, &response.structural_fixes);
+        total_applied += apply_result.applied;
+
+        // 5l: emit round-done progress.
+        rounds_run = round;
+        on_progress(Progress::ValidationRoundDone {
+            round,
+            applied: apply_result.applied,
+            quality_score: response.quality_score,
+        });
+
+        // 5m: if nothing could be applied (all fixes were invalid/skipped), stop.
+        if apply_result.applied == 0 {
+            break;
+        }
+    }
+
+    // ── Step 6: done ──────────────────────────────────────────────────────────
+    on_progress(Progress::ValidationDone { total_applied });
+    Ok(ValidationSummary {
+        total_applied,
+        rounds_run,
+    })
+}
+
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
 #[path = "validation_tests_c1.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "validation_tests_c2.rs"]
+mod tests_c2;
