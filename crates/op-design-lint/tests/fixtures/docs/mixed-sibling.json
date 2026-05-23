@@ -1,0 +1,32 @@
+{
+  "version": "1.0",
+  "children": [
+    {
+      "type": "frame",
+      "id": "root",
+      "layout": "vertical",
+      "children": [
+        {
+          "type": "frame",
+          "id": "radius-group",
+          "layout": "vertical",
+          "children": [
+            { "type": "frame", "id": "rc-a", "role": "tile", "cornerRadius": 8 },
+            { "type": "frame", "id": "rc-b", "role": "tile", "cornerRadius": 8 },
+            { "type": "frame", "id": "rc-c", "role": "tile", "cornerRadius": 12 }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "padding-group",
+          "layout": "vertical",
+          "children": [
+            { "type": "frame", "id": "pc-a", "role": "panel", "padding": 16 },
+            { "type": "frame", "id": "pc-b", "role": "panel", "padding": [16, 16, 16, 16] },
+            { "type": "frame", "id": "pc-c", "role": "panel", "padding": 20 }
+          ]
+        }
+      ]
+    }
+  ]
+}

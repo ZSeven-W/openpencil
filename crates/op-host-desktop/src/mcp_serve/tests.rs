@@ -52,7 +52,7 @@ fn tools_list_response_includes_all_registered_tools() {
     // without being added to the list below.
     assert_eq!(
         TOOL_SCHEMAS.len(),
-        82,
+        83,
         "tools/list catalog count must match the registered tools — add the new tool to this test"
     );
     // UIKit element tools are appended dynamically — one per
@@ -95,6 +95,7 @@ fn tools_list_response_includes_all_registered_tools() {
         "get_history_depth",
         "get_viewport",
         "get_selection_set",
+        "debug_validation_report",
         "clear_selection",
         "set_selection",
         "set_viewport",

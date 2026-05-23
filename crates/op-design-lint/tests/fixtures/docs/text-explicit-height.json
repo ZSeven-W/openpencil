@@ -1,0 +1,24 @@
+{
+  "version": "1.0",
+  "children": [
+    {
+      "type": "frame",
+      "id": "root",
+      "layout": "vertical",
+      "children": [
+        {
+          "type": "text",
+          "id": "pinned-text",
+          "content": "Clipped heading",
+          "height": 40
+        },
+        {
+          "type": "text",
+          "id": "fit-text",
+          "content": "Auto-height body",
+          "height": "fit_content"
+        }
+      ]
+    }
+  ]
+}

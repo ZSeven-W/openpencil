@@ -1,0 +1,25 @@
+{
+  "version": "1.0",
+  "children": [
+    {
+      "type": "frame",
+      "id": "page",
+      "layout": "vertical",
+      "fill": [{ "type": "solid", "color": "#FFFFFF" }],
+      "children": [
+        {
+          "type": "text",
+          "id": "low-contrast",
+          "content": "Barely visible",
+          "fill": [{ "type": "solid", "color": "#FCFCFC" }]
+        },
+        {
+          "type": "text",
+          "id": "high-contrast",
+          "content": "Clearly visible",
+          "fill": [{ "type": "solid", "color": "#000000" }]
+        }
+      ]
+    }
+  ]
+}

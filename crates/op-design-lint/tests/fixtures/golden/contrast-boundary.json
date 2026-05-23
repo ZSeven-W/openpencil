@@ -1,0 +1,16 @@
+[
+  {
+    "nodeId": "below-normal-threshold",
+    "category": "text-bg-contrast",
+    "severity": "info",
+    "property": "fill",
+    "currentValue": [
+      {
+        "type": "solid",
+        "color": "#B0B0B0"
+      }
+    ],
+    "suggestedValue": null,
+    "reason": "text/bg contrast 2.17:1 below 2.5:1 (text=#B0B0B0 on bg=#FFFFFF)"
+  }
+]

@@ -1,0 +1,16 @@
+[
+  {
+    "nodeId": "low-contrast",
+    "category": "text-bg-contrast",
+    "severity": "info",
+    "property": "fill",
+    "currentValue": [
+      {
+        "type": "solid",
+        "color": "#FCFCFC"
+      }
+    ],
+    "suggestedValue": null,
+    "reason": "text/bg contrast 1.03:1 below 2.5:1 (text=#FCFCFC on bg=#FFFFFF)"
+  }
+]

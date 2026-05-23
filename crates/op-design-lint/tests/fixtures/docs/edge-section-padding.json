@@ -1,0 +1,32 @@
+{
+  "version": "1.0",
+  "children": [
+    {
+      "type": "frame",
+      "id": "mobile-root",
+      "width": 393,
+      "height": 852,
+      "layout": "vertical",
+      "children": [
+        {
+          "type": "frame",
+          "id": "categories",
+          "role": "categories",
+          "layout": "vertical",
+          "children": [
+            { "type": "text", "id": "cat-label", "content": "Categories" }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "list",
+          "role": "list",
+          "layout": "vertical",
+          "children": [
+            { "type": "text", "id": "list-item", "content": "First item" }
+          ]
+        }
+      ]
+    }
+  ]
+}

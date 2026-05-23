@@ -1,0 +1,16 @@
+[
+  {
+    "nodeId": "mobile-root",
+    "category": "edge-section-padding",
+    "severity": "warning",
+    "property": "padding",
+    "currentValue": null,
+    "suggestedValue": [
+      0,
+      16,
+      0,
+      16
+    ],
+    "reason": "mobile root has 0 horizontal padding while 2 content section(s) glue text/icon to screen edge"
+  }
+]

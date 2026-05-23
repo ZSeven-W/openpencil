@@ -1,0 +1,36 @@
+[
+  {
+    "nodeId": "light-on-light",
+    "category": "invisible-container",
+    "severity": "warning",
+    "property": "stroke",
+    "currentValue": null,
+    "suggestedValue": {
+      "thickness": 1,
+      "fill": [
+        {
+          "type": "solid",
+          "color": "#E2E8F0"
+        }
+      ]
+    },
+    "reason": "same fill as parent (#FFFFFF ≈ #FFFFFF, contrast=1.00)"
+  },
+  {
+    "nodeId": "dark-on-dark",
+    "category": "invisible-container",
+    "severity": "info",
+    "property": "stroke",
+    "currentValue": null,
+    "suggestedValue": {
+      "thickness": 1,
+      "fill": [
+        {
+          "type": "solid",
+          "color": "#E2E8F0"
+        }
+      ]
+    },
+    "reason": "same fill as parent (#0A0A0A ≈ #0A0A0A, contrast=1.00)"
+  }
+]

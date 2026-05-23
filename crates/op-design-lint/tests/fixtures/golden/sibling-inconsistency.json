@@ -1,0 +1,20 @@
+[
+  {
+    "nodeId": "card-c",
+    "category": "sibling-inconsistency",
+    "severity": "warning",
+    "property": "height",
+    "currentValue": 160,
+    "suggestedValue": 100,
+    "reason": "inconsistent with 2 siblings"
+  },
+  {
+    "nodeId": "label-c",
+    "category": "sibling-inconsistency",
+    "severity": "warning",
+    "property": "fontSize",
+    "currentValue": 20,
+    "suggestedValue": 14,
+    "reason": "inconsistent with 2 siblings"
+  }
+]

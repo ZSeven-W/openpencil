@@ -1,0 +1,27 @@
+{
+  "version": "1.0",
+  "children": [
+    {
+      "type": "frame",
+      "id": "page",
+      "layout": "vertical",
+      "fill": [{ "type": "solid", "color": "#FFFFFF" }],
+      "children": [
+        {
+          "type": "text",
+          "id": "below-normal-threshold",
+          "content": "Normal text just below 2.5:1",
+          "fontSize": 14,
+          "fill": [{ "type": "solid", "color": "#B0B0B0" }]
+        },
+        {
+          "type": "text",
+          "id": "large-passes-low-threshold",
+          "content": "Large text above 2.0:1",
+          "fontSize": 28,
+          "fill": [{ "type": "solid", "color": "#B0B0B0" }]
+        }
+      ]
+    }
+  ]
+}

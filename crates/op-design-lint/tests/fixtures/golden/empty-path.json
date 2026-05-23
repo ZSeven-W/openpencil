@@ -1,0 +1,11 @@
+[
+  {
+    "nodeId": "ghost-path",
+    "category": "empty-path",
+    "severity": "warning",
+    "property": "__remove",
+    "currentValue": null,
+    "suggestedValue": true,
+    "reason": "path node without geometry (renders invisible)"
+  }
+]
