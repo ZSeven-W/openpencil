@@ -232,7 +232,7 @@ pub fn effect_param_value_rect(x: f32, y: f32, width: f32) -> Rect {
 /// `ceil(field_count / 2)`. Shadow has 4 → 2 rows; Blur/BG-Blur
 /// have 1 → 1 row.
 pub fn effect_param_row_count(kind: EffectKind) -> usize {
-    (effect_param_fields(kind).len() + 1) / 2
+    effect_param_fields(kind).len().div_ceil(2)
 }
 
 /// Whether the card has a colour row (only Shadow does today).

@@ -203,7 +203,7 @@ fn segment_bounds(segments: &[Segment]) -> Option<SvgPathBounds> {
                 last_quad_ctrl = None;
             }
             Segment::Cubic(x1, y1, x2, y2, x, y) => {
-                include_cubic_bounds(&mut include, cx, cy, x1, y1, x2, y2, x, y);
+                include_cubic_bounds(&mut include, [(cx, cy), (x1, y1), (x2, y2), (x, y)]);
                 cx = x;
                 cy = y;
                 last_cubic_ctrl = Some((x2, y2));
@@ -213,7 +213,7 @@ fn segment_bounds(segments: &[Segment]) -> Option<SvgPathBounds> {
                 let (x1, y1) = last_cubic_ctrl
                     .map(|(px, py)| (2.0 * cx - px, 2.0 * cy - py))
                     .unwrap_or((cx, cy));
-                include_cubic_bounds(&mut include, cx, cy, x1, y1, x2, y2, x, y);
+                include_cubic_bounds(&mut include, [(cx, cy), (x1, y1), (x2, y2), (x, y)]);
                 cx = x;
                 cy = y;
                 last_cubic_ctrl = Some((x2, y2));
@@ -221,7 +221,7 @@ fn segment_bounds(segments: &[Segment]) -> Option<SvgPathBounds> {
             }
             Segment::Quad(qx, qy, x, y) => {
                 let (x1, y1, x2, y2) = quad_to_cubic(cx, cy, qx, qy, x, y);
-                include_cubic_bounds(&mut include, cx, cy, x1, y1, x2, y2, x, y);
+                include_cubic_bounds(&mut include, [(cx, cy), (x1, y1), (x2, y2), (x, y)]);
                 cx = x;
                 cy = y;
                 last_quad_ctrl = Some((qx, qy));
@@ -232,7 +232,7 @@ fn segment_bounds(segments: &[Segment]) -> Option<SvgPathBounds> {
                     .map(|(px, py)| (2.0 * cx - px, 2.0 * cy - py))
                     .unwrap_or((cx, cy));
                 let (x1, y1, x2, y2) = quad_to_cubic(cx, cy, qx, qy, x, y);
-                include_cubic_bounds(&mut include, cx, cy, x1, y1, x2, y2, x, y);
+                include_cubic_bounds(&mut include, [(cx, cy), (x1, y1), (x2, y2), (x, y)]);
                 cx = x;
                 cy = y;
                 last_quad_ctrl = Some((qx, qy));
@@ -264,17 +264,8 @@ fn segment_bounds(segments: &[Segment]) -> Option<SvgPathBounds> {
     })
 }
 
-fn include_cubic_bounds(
-    include: &mut impl FnMut(f64, f64),
-    p0x: f64,
-    p0y: f64,
-    p1x: f64,
-    p1y: f64,
-    p2x: f64,
-    p2y: f64,
-    p3x: f64,
-    p3y: f64,
-) {
+fn include_cubic_bounds(include: &mut impl FnMut(f64, f64), points: [(f64, f64); 4]) {
+    let [(p0x, p0y), (p1x, p1y), (p2x, p2y), (p3x, p3y)] = points;
     include(p0x, p0y);
     include(p3x, p3y);
     for t in cubic_derivative_roots(p0x, p1x, p2x, p3x) {
@@ -398,7 +389,7 @@ fn push_num(out: &mut String, n: f64) {
     out.push(' ');
     let n = if n.abs() < 1e-9 { 0.0 } else { n };
     out.push_str(
-        &format!("{n:.6}")
+        format!("{n:.6}")
             .trim_end_matches('0')
             .trim_end_matches('.'),
     );
