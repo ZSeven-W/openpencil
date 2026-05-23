@@ -11,6 +11,7 @@ pub mod compact_prompt;
 pub mod compact_skills;
 pub mod dashboard_columns;
 pub mod design_md_policy;
+pub mod design_system;
 pub mod design_type;
 pub mod intent;
 pub mod model_profile;
@@ -46,6 +47,9 @@ mod test_support;
 pub use compact_prompt::{build_compact_planning_prompt, CompactPlanningPrompt};
 pub use design_md_policy::{
     build_design_md_style_policy, guess_neutral_background_from_theme, infer_design_md_background,
+};
+pub use design_system::{
+    default_design_system, parse_design_system, DesignSystem, Spacing, Typography,
 };
 pub use design_type::{detect_design_type, DesignType, DesignTypePreset};
 pub use intent::classify_intent;

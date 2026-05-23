@@ -219,6 +219,8 @@ mod tests {
             concurrency: 1,
             append_context: None,
             validation_enabled: true,
+
+            visual_ref_enabled: false,
         }
     }
 

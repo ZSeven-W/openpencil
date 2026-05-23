@@ -23,6 +23,8 @@ fn make_req() -> crate::types::DesignRequest {
         concurrency: 2,
         append_context: None,
         validation_enabled: true,
+
+        visual_ref_enabled: false,
     }
 }
 
