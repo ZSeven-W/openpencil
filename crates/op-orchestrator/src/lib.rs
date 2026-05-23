@@ -23,6 +23,7 @@ pub mod style_guide_context;
 pub mod timeouts;
 pub mod types;
 pub mod validation_config;
+pub mod validation_dump;
 pub mod variables;
 
 pub mod append;
