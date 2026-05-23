@@ -93,6 +93,9 @@ pub struct NodeSnapshot {
     /// Uniform corner radius in doc-px.
     pub corner_radius: f32,
     pub fill: Option<Color>,
+    /// Primary solid-fill opacity in `[0.0, 1.0]` — the Fill
+    /// section's `100 %` paints `fill_opacity * 100`.
+    pub fill_opacity: f32,
     pub stroke: Option<SceneStroke>,
     /// The node's visual effects, in paint order — drives the
     /// Effects section's rows + param inputs.
@@ -211,6 +214,7 @@ impl NodeSnapshot {
             rotation_deg: 0.0,
             corner_radius: 0.0,
             fill: None,
+            fill_opacity: 1.0,
             stroke: None,
             // Multi-select shows no per-effect rows — the Effects
             // section paints just its header + the add affordance.
@@ -253,6 +257,7 @@ impl NodeSnapshot {
             rotation_deg: base.rotation.unwrap_or(0.0) as f32,
             corner_radius,
             fill,
+            fill_opacity: op_editor_core::first_solid_fill_opacity(node),
             stroke,
             effects: op_editor_core::node_effects(node)
                 .iter()
@@ -296,6 +301,8 @@ pub struct PropertyPanel {
     /// is focused. The host fills this on click + mutates on
     /// keystroke; the panel paints it as the field's value.
     pub draft: String,
+    /// Caret byte-offset into `draft` (ASCII drafts → char index).
+    pub caret_pos: usize,
     /// Caret-blink anchor (ms since host start) for the focused
     /// input. Drives the same `jian_core::anim::blink_visible`
     /// helper the chat caret uses.
@@ -331,6 +338,9 @@ pub struct PropertyPanel {
     /// Active UI locale — threaded into the Fill section so its
     /// type label / picker / body sub-labels translate.
     pub locale: op_editor_core::Locale,
+    /// Focused effect-parameter value, if any — drives the Effects
+    /// section's editable value boxes.
+    pub effect_param_focus: Option<op_editor_core::editor_ui_state::EffectParamFocus>,
 }
 
 impl PropertyPanel {
@@ -413,6 +423,11 @@ impl PropertyPanel {
             } else {
                 state.ui.property_input_draft.clone()
             },
+            caret_pos: if is_multi {
+                0
+            } else {
+                state.ui.property_caret_pos
+            },
             caret_anchor_ms: state.ui.property_caret_anchor_ms,
             now_ms,
             flex_layout: ui.flex_layout,
@@ -434,6 +449,12 @@ impl PropertyPanel {
             export_picker_hover: ui.export_picker_hover,
             scroll: ui.property_panel_scroll.max(0.0),
             locale: ui.locale,
+            // Inert in the multi-select aggregate view.
+            effect_param_focus: if is_multi {
+                None
+            } else {
+                ui.effect_param_focus
+            },
         }
     }
 
@@ -627,6 +648,7 @@ impl Widget for PropertyPanel {
         let edit_ctx = sections::EditContext {
             focus: self.focus,
             draft: self.draft.as_str(),
+            caret: self.caret_pos,
             caret_anchor_ms: self.caret_anchor_ms,
             now_ms: self.now_ms,
         };
@@ -728,6 +750,8 @@ impl Widget for PropertyPanel {
                 &self.theme,
                 &self.labels,
                 &self.snapshot.effects,
+                &edit_ctx,
+                self.effect_param_focus,
                 x,
                 y,
                 w,

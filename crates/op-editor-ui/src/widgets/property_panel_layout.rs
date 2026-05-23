@@ -173,6 +173,17 @@ pub fn effect_param_fields(kind: EffectKind) -> &'static [(EffectField, &'static
     }
 }
 
+/// On-screen rect of an effect-parameter's editable value box — the
+/// click target that focuses it for keyboard entry. Shared by the
+/// action-rect walker (hit-test) and `paint_effect_param_row`
+/// (paint) so the two never drift. `y` is the param row's top.
+pub fn effect_param_value_rect(x: f32, y: f32, width: f32) -> Rect {
+    Rect {
+        origin: Point2D::new(x + width - PAD_X - 104.0, y + 3.0),
+        size: Point2D::new(52.0, INPUT_HEIGHT - 6.0),
+    }
+}
+
 /// Total height one effect block consumes — its header row plus one
 /// row per editable parameter.
 pub fn effect_block_height(kind: EffectKind) -> f32 {
@@ -469,6 +480,15 @@ pub fn action_button_rects_with_fill_picker(
                         size: Point2D::new(22.0, INPUT_HEIGHT - 6.0),
                     },
                 ));
+                // The value box — click to type a value directly.
+                out.push((
+                    PropertyPanelAction::FocusEffectParam {
+                        effect: ei,
+                        field,
+                        value: cur,
+                    },
+                    effect_param_value_rect(x0, py, w),
+                ));
                 py += EFFECT_PARAM_ROW_HEIGHT;
             }
             y += effect_block_height(eff.kind);
@@ -623,12 +643,12 @@ pub fn editable_input_rects(
     }
     if visible.opacity {
         y += SECTION_HEADER_HEIGHT;
-        let half = usable_w / 2.0 - 4.0;
+        // Half-width Layer-opacity row — matches `paint_layer_section`.
         rects.push((
             PropertyFocus::Opacity,
             Rect {
                 origin: Point2D::new(x0 + PAD_X, y),
-                size: Point2D::new(half, INPUT_HEIGHT),
+                size: Point2D::new(usable_w / 2.0 - 4.0, INPUT_HEIGHT),
             },
         ));
         y += INPUT_HEIGHT + 12.0;
@@ -636,6 +656,16 @@ pub fn editable_input_rects(
     }
     if visible.fill {
         y += SECTION_HEADER_HEIGHT;
+        // FillOpacity input — the head row's `100 %` box, sitting
+        // to the right of the fill-type dropdown. Geometry mirrors
+        // `paint_fill_section`'s `pct_rect`.
+        rects.push((
+            PropertyFocus::FillOpacity,
+            Rect {
+                origin: Point2D::new(x0 + w - PAD_X - 78.0, y),
+                size: Point2D::new(50.0, INPUT_HEIGHT),
+            },
+        ));
         y += INPUT_HEIGHT + 6.0;
         if matches!(visible.fill_type, FillType::Solid) {
             rects.push((

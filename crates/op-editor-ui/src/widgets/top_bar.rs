@@ -96,6 +96,10 @@ pub struct TopBar {
     /// Window is fullscreen — drops the left-edge window-control
     /// reservation on macOS (native traffic lights hide then).
     pub fullscreen: bool,
+    /// Active theme mode — drives the toggle icon: a Sun glyph in
+    /// Dark mode (click to go light), a Moon glyph in Light mode
+    /// (click to go dark).
+    pub theme_mode: op_editor_core::ThemeMode,
 }
 
 impl TopBar {
@@ -112,6 +116,7 @@ impl TopBar {
             label_agent_plural: "agents",
             traffic_hover: false,
             fullscreen: false,
+            theme_mode: op_editor_core::ThemeMode::Dark,
         }
     }
 
@@ -147,6 +152,7 @@ impl TopBar {
             label_agent_plural: translate(ui, "topbar.agentPlural"),
             traffic_hover: ui.topbar_traffic_hover,
             fullscreen: ui.window_fullscreen,
+            theme_mode: ui.theme_mode,
         }
     }
 
@@ -530,8 +536,13 @@ impl Widget for TopBar {
         paint_icon_button(cx, &self.theme, rx, center_y, Icon::Maximize);
         rx -= ICON_BUTTON;
 
-        // Theme toggle.
-        paint_icon_button(cx, &self.theme, rx, center_y, Icon::Sun);
+        // Theme toggle — Sun in dark mode (click → light); Moon in
+        // light mode (click → dark).
+        let theme_icon = match self.theme_mode {
+            op_editor_core::ThemeMode::Dark => Icon::Sun,
+            op_editor_core::ThemeMode::Light => Icon::Moon,
+        };
+        paint_icon_button(cx, &self.theme, rx, center_y, theme_icon);
         rx -= GLOBE_BUTTON_WIDTH;
 
         // i18n globe + chevron-down (single hit-target).

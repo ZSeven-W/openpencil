@@ -108,6 +108,14 @@ impl WidgetHost {
                             });
                 }
             }
+            A::FocusEffectParam { .. } => {
+                // No-op on web: the web host has no keyboard path for
+                // property / effect-param text inputs (`apply_text`
+                // has no such branch), so setting `effect_param_focus`
+                // here would strand the focus with no way to type,
+                // commit, or Escape out. The `−` / `+` steppers
+                // (`AdjustEffectParam`) remain the web edit path.
+            }
         }
         self.mark_dirty();
     }

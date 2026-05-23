@@ -60,8 +60,10 @@ pub enum Icon {
     Minus,
     /// Search — magnifier.
     Search,
-    /// Sun — theme toggle.
+    /// Sun — theme toggle (paints in dark mode).
     Sun,
+    /// Moon — theme toggle (paints in light mode).
+    Moon,
     /// Globe — i18n switcher.
     Globe,
     /// Maximize — fullscreen toggle.
@@ -249,6 +251,7 @@ impl Icon {
             Icon::Minus => MINUS,
             Icon::Search => SEARCH,
             Icon::Sun => SUN,
+            Icon::Moon => MOON,
             Icon::Globe => GLOBE,
             Icon::Maximize => MAXIMIZE,
             Icon::Hash => HASH,
@@ -412,6 +415,7 @@ impl Icon {
             "cursor" | "mouse-pointer" => Icon::Cursor,
             "maximize" | "fullscreen" => Icon::Maximize,
             "sun" => Icon::Sun,
+            "moon" => Icon::Moon,
             "panel-left" => Icon::PanelLeft,
             "braces" | "code" => Icon::Braces,
             "book-open" => Icon::BookOpen,

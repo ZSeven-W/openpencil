@@ -41,16 +41,24 @@ impl DesktopApp {
                 consumed = self.host.apply_escape();
             }
             Key::Named(NamedKey::ArrowUp) if !self.zoom_modifier && !settings_focused => {
-                consumed = self.host.apply_nudge(0.0, -nudge);
+                // A focused numeric property input steps its value;
+                // otherwise the arrow nudges the selection.
+                consumed =
+                    self.host.apply_property_step(nudge) || self.host.apply_nudge(0.0, -nudge);
             }
             Key::Named(NamedKey::ArrowDown) if !self.zoom_modifier && !settings_focused => {
-                consumed = self.host.apply_nudge(0.0, nudge);
+                consumed =
+                    self.host.apply_property_step(-nudge) || self.host.apply_nudge(0.0, nudge);
             }
             Key::Named(NamedKey::ArrowLeft) if !self.zoom_modifier && !settings_focused => {
-                consumed = self.host.apply_nudge(-nudge, 0.0);
+                // A focused property input moves its text caret;
+                // otherwise the arrow nudges the selection.
+                consumed =
+                    self.host.apply_property_caret(false) || self.host.apply_nudge(-nudge, 0.0);
             }
             Key::Named(NamedKey::ArrowRight) if !self.zoom_modifier && !settings_focused => {
-                consumed = self.host.apply_nudge(nudge, 0.0);
+                consumed =
+                    self.host.apply_property_caret(true) || self.host.apply_nudge(nudge, 0.0);
             }
             // Cmd/Ctrl+Alt+U/S/I/X — path boolean ops (Paper.js
             // parity). Gated on `!settings_focused` so they

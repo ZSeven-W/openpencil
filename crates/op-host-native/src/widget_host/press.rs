@@ -424,6 +424,9 @@ impl WidgetHostNative {
                 // shell-core `PropertyFocus` → op-editor-core.
                 self.editor_state.ui.property_focus = Some(focus);
                 self.editor_state.ui.property_input_draft = initial;
+                // Caret starts at the end of the seeded draft.
+                self.editor_state.ui.property_caret_pos =
+                    self.editor_state.ui.property_input_draft.len();
                 self.editor_state.ui.property_caret_anchor_ms = self.now_ms;
                 self.editor_state.ui.property_draft_select_all = false;
                 self.editor_state.chat.focused = false;

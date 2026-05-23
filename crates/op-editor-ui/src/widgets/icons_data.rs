@@ -85,6 +85,11 @@ pub(super) const SUN: &[&str] = &[
     "m19.07 4.93-1.41 1.41",
 ];
 
+pub(super) const MOON: &[&str] = &[
+    // Lucide moon — crescent.
+    "M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z",
+];
+
 pub(super) const GLOBE: &[&str] = &[
     // <circle cx=12 cy=12 r=10/>
     "M2 12A10 10 0 1 0 22 12A10 10 0 1 0 2 12Z",
