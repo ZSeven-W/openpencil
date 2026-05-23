@@ -96,7 +96,105 @@ pub async fn generate_design_code(
             Err(_) => break,
         }
     }
-    text
+    // Empty text = LLM error or truly-empty response. We can't distinguish
+    // here (no exceptions in Rust streams). Return empty so the caller's
+    // `html.is_empty()` fall-back path fires — TS catches the LLM error via
+    // try/catch and falls back; this is the equivalent shortcut. Non-empty
+    // text gets the full 4-stage normalization (TS extractHtmlFromResponse).
+    if text.is_empty() {
+        text
+    } else {
+        extract_html_from_response(&text)
+    }
+}
+
+/// Normalize an LLM response into clean HTML.
+///
+/// Port of `extractHtmlFromResponse` in `design-code-generator.ts:54-87`.
+/// Faithful 4-stage chain — without this, code-fence-wrapped HTML
+/// (the most common LLM output shape) leaks ``` markers into the
+/// downstream `extract_structure_summary` scan.
+///
+/// 1. ` ```(html)?\s*\n?…\n?``` ` fenced block — if the inner content
+///    contains `<!DOCTYPE` or `<html`, return the inner content (trimmed).
+/// 2. Trimmed response itself starts with `<!DOCTYPE` or `<html` — return as-is.
+/// 3. Case-insensitive find of `<!DOCTYPE…</html>` substring — return slice.
+/// 4. Wrap bare content in a default HTML document scaffold.
+pub(crate) fn extract_html_from_response(response: &str) -> String {
+    let trimmed = response.trim();
+
+    // Stage 1: code fence with HTML inside
+    if let Some(content) = extract_html_fenced_content(trimmed) {
+        let inner = content.trim();
+        if inner.contains("<!DOCTYPE") || inner.contains("<html") {
+            return inner.to_string();
+        }
+    }
+
+    // Stage 2: trimmed starts with DOCTYPE / html
+    if trimmed.starts_with("<!DOCTYPE") || trimmed.starts_with("<html") {
+        return trimmed.to_string();
+    }
+
+    // Stage 3: embedded <!DOCTYPE…</html>
+    if let Some(html) = extract_doctype_to_html_close(trimmed) {
+        return html;
+    }
+
+    // Stage 4: wrap bare content in default scaffold
+    format!(
+        "<!DOCTYPE html>\n<html lang=\"en\">\n<head><meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><title>Design</title></head>\n<body>{trimmed}</body>\n</html>"
+    )
+}
+
+/// Find content inside ` ```(html)?…``` `. Returns raw inner (caller trims).
+/// Matches TS regex `/```(?:html)?\s*\n?([\s\S]*?)\n?```/`.
+fn extract_html_fenced_content(text: &str) -> Option<&str> {
+    let start = text.find("```")?;
+    let after = &text[start + 3..];
+
+    // Optional "html" language tag
+    let after = after.strip_prefix("html").unwrap_or(after);
+    // \s* — strip any leading whitespace (incl. \n)
+    let after = after.trim_start();
+
+    // Closing ```
+    let end = after.find("```")?;
+    Some(&after[..end])
+}
+
+/// ASCII case-insensitive find of `<!DOCTYPE…</html>` in `text`. Returns
+/// the slice from `text` (preserving original case) between those markers.
+///
+/// **UTF-8 safety**: we scan byte windows with `eq_ignore_ascii_case`
+/// instead of `text.to_lowercase()`. The `to_lowercase()` approach can
+/// change byte lengths for non-ASCII (e.g. Turkish `İ` 2 bytes →
+/// `i\u{0307}` 3 bytes), making lower-string indices unsafe to use on
+/// the original `text` — slicing on a non-char-boundary panics. ASCII
+/// needles (`<!doctype` / `</html>`) always land on byte positions that
+/// are valid UTF-8 char boundaries (any byte ≤ 0x7F is a char start in
+/// UTF-8), so direct byte-index slicing on `text` is safe.
+fn extract_doctype_to_html_close(text: &str) -> Option<String> {
+    let bytes = text.as_bytes();
+    let doc_needle: &[u8] = b"<!doctype";
+    let close_needle: &[u8] = b"</html>";
+
+    let doc_start = bytes.windows(doc_needle.len()).position(|w| {
+        w.iter()
+            .zip(doc_needle)
+            .all(|(a, b)| a.eq_ignore_ascii_case(b))
+    })?;
+
+    let close_rel = bytes[doc_start..]
+        .windows(close_needle.len())
+        .position(|w| {
+            w.iter()
+                .zip(close_needle)
+                .all(|(a, b)| a.eq_ignore_ascii_case(b))
+        })?;
+
+    let end = doc_start + close_rel + close_needle.len();
+    Some(text[doc_start..end].to_string())
 }
 
 /// Build the user prompt for HTML/CSS code generation.
