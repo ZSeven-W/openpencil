@@ -10,9 +10,21 @@
 //! - Non-append mode: all prior paths unchanged (covered by green existing tests).
 
 use super::*;
-use crate::test_support::{ScriptResponse, ScriptedLlm, VecDocSink};
+use crate::test_support::{
+    ScriptResponse, ScriptedLlm, SkippedPreValidator, SkippedScreenshotProvider,
+    SkippedVisionLlmClient, VecDocSink,
+};
 use crate::types::{AppendContext, DesignRequest};
 use op_editor_core::{EditorCommand, PenNodeExt};
+
+fn stub_providers() -> ValidationProviders<'static> {
+    ValidationProviders {
+        pre_validator: &SkippedPreValidator,
+        screenshot: &SkippedScreenshotProvider,
+        vision: &SkippedVisionLlmClient,
+        system_prompt: String::new(),
+    }
+}
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -141,6 +153,7 @@ fn append_mode_does_not_emit_scaffold_root_insert() {
         &llm,
         &mut |_| {},
         &abort,
+        &stub_providers(),
     ));
 
     assert!(result.is_ok(), "append run should succeed: {result:?}");
@@ -189,6 +202,7 @@ fn append_mode_summary_root_equals_target_parent_id() {
         &llm,
         &mut |_| {},
         &abort,
+        &stub_providers(),
     ))
     .expect("append run ok");
 
@@ -236,6 +250,7 @@ fn append_mode_forces_effective_concurrency_to_one() {
         &llm,
         &mut |_| {},
         &abort,
+        &stub_providers(),
     ))
     .expect("append concurrent run ok");
 
@@ -290,6 +305,7 @@ fn append_mode_content_lands_in_target_frame() {
         &llm,
         &mut |_| {},
         &abort,
+        &stub_providers(),
     ))
     .expect("append run ok");
 
@@ -345,6 +361,7 @@ fn non_append_mode_takes_normal_sequential_path() {
         &llm,
         &mut |_| {},
         &abort,
+        &stub_providers(),
     ))
     .expect("non-append run ok");
 
@@ -444,6 +461,7 @@ fn append_mode_wins_over_dashboard_branch() {
         &llm,
         &mut |_| {},
         &abort,
+        &stub_providers(),
     ))
     .expect("append+dashboard run ok");
 

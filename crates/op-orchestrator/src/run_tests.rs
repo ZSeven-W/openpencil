@@ -4,7 +4,19 @@
 //! stays a child module of `run`, so `use super::*` resolves to `run`.
 
 use super::*;
-use crate::test_support::{ScriptResponse, ScriptedLlm, VecDocSink};
+use crate::test_support::{
+    ScriptResponse, ScriptedLlm, SkippedPreValidator, SkippedScreenshotProvider,
+    SkippedVisionLlmClient, VecDocSink,
+};
+
+fn stub_providers() -> ValidationProviders<'static> {
+    ValidationProviders {
+        pre_validator: &SkippedPreValidator,
+        screenshot: &SkippedScreenshotProvider,
+        vision: &SkippedVisionLlmClient,
+        system_prompt: String::new(),
+    }
+}
 
 fn req() -> DesignRequest {
     DesignRequest {
@@ -81,6 +93,7 @@ fn run_happy_path_applies_scaffold_and_subtasks() {
         &llm,
         &mut on_progress,
         &AbortFlag::new(),
+        &stub_providers(),
     ))
     .expect("run ok");
 
@@ -99,7 +112,11 @@ fn run_happy_path_applies_scaffold_and_subtasks() {
         .count();
     assert!(inserts >= 3, "expected >=3 InsertSubtree, got {inserts}");
     assert!(matches!(events.first(), Some(Progress::Planning)));
-    assert!(matches!(events.last(), Some(Progress::CleanupDone)));
+    // CleanupDone must be present (validation runs after it).
+    assert!(
+        events.iter().any(|e| matches!(e, Progress::CleanupDone)),
+        "expected CleanupDone in events"
+    );
 }
 
 #[test]
@@ -120,6 +137,7 @@ fn run_zero_node_subtask_stops_and_errors() {
         &llm,
         &mut on_progress,
         &AbortFlag::new(),
+        &stub_providers(),
     ));
     assert!(matches!(result, Err(OrchestratorError::NoContent)));
     // undo batch 仍配对。
@@ -141,6 +159,7 @@ fn run_planning_failure_uses_fallback_plan() {
         &llm,
         &mut on_progress,
         &AbortFlag::new(),
+        &stub_providers(),
     ))
     .expect("fallback run ok");
     assert!(summary.total_nodes >= 1);
@@ -169,6 +188,7 @@ fn planning_rotation_uses_attempt2_plan_on_attempt1_parse_failure() {
         &llm,
         &mut on_progress,
         &AbortFlag::new(),
+        &stub_providers(),
     ))
     .expect("rotation run ok");
     // 2 subtasks from the attempt-2 plan
@@ -200,6 +220,7 @@ fn planning_rotation_uses_attempt2_plan_on_attempt1_stream_error() {
         &llm,
         &mut on_progress,
         &AbortFlag::new(),
+        &stub_providers(),
     ))
     .expect("rotation on stream error ok");
     assert_eq!(summary.subtasks.len(), 2);
@@ -225,6 +246,7 @@ fn planning_all_attempts_fail_uses_fallback_plan() {
         &llm,
         &mut on_progress,
         &AbortFlag::new(),
+        &stub_providers(),
     ))
     .expect("fallback after all failures ok");
     assert!(summary.total_nodes >= 1);
@@ -247,6 +269,7 @@ fn planning_abort_during_stream_returns_aborted() {
         &llm,
         &mut on_progress,
         &abort,
+        &stub_providers(),
     ));
     assert!(matches!(result, Err(OrchestratorError::Aborted)));
     // undo batch 在 abort 路径前返回,文档不应已进入批
@@ -278,6 +301,7 @@ fn subtask_retries_on_attempt1_zero_succeeds_on_attempt2() {
         &llm,
         &mut on_progress,
         &AbortFlag::new(),
+        &stub_providers(),
     ))
     .expect("retry succeeded");
     assert_eq!(summary.subtasks.len(), 2);
@@ -306,6 +330,7 @@ fn subtask_all_three_attempts_fail_returns_no_content() {
         &llm,
         &mut on_progress,
         &AbortFlag::new(),
+        &stub_providers(),
     ));
     assert!(matches!(result, Err(OrchestratorError::NoContent)));
     assert_eq!(sink.batch_depth, 0);
@@ -335,6 +360,7 @@ fn subtask_non_retryable_error_stops_immediately_no_retry() {
         &llm,
         &mut on_progress,
         &AbortFlag::new(),
+        &stub_providers(),
     ));
     assert!(matches!(result, Err(OrchestratorError::NoContent)));
     assert_eq!(sink.batch_depth, 0);
@@ -372,6 +398,7 @@ fn subtask_partial_result_not_retried() {
         &llm,
         &mut on_progress,
         &AbortFlag::new(),
+        &stub_providers(),
     ))
     .expect("no retry on partial");
     // Both subtasks succeed; if hero had been retried the scripted LLM

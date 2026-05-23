@@ -9,8 +9,20 @@
 //! - Non-dashboard plan → existing sequential vertical path, unchanged.
 
 use super::*;
-use crate::test_support::{ScriptResponse, ScriptedLlm, VecDocSink};
+use crate::test_support::{
+    ScriptResponse, ScriptedLlm, SkippedPreValidator, SkippedScreenshotProvider,
+    SkippedVisionLlmClient, VecDocSink,
+};
 use op_editor_core::EditorCommand;
+
+fn stub_providers() -> ValidationProviders<'static> {
+    ValidationProviders {
+        pre_validator: &SkippedPreValidator,
+        screenshot: &SkippedScreenshotProvider,
+        vision: &SkippedVisionLlmClient,
+        system_prompt: String::new(),
+    }
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -114,6 +126,7 @@ fn dashboard_run_succeeds_and_lands_all_subtask_nodes() {
         &llm,
         &mut on_progress,
         &AbortFlag::new(),
+        &stub_providers(),
     ))
     .expect("dashboard run ok");
 
@@ -129,9 +142,14 @@ fn dashboard_run_succeeds_and_lands_all_subtask_nodes() {
     assert!(summary.total_nodes >= 2, "both subtask nodes should land");
     assert_eq!(sink.batch_depth, 0, "undo batch must be balanced");
 
-    // Progress events: Planning → ScaffoldDone → 2×(SubtaskStarted,SubtaskDone) → CleanupDone
+    // Progress events: Planning → ScaffoldDone → 2×(SubtaskStarted,SubtaskDone)
+    // → CleanupDone → ValidationStarted → … → ValidationDone.
     assert!(matches!(events.first(), Some(Progress::Planning)));
-    assert!(matches!(events.last(), Some(Progress::CleanupDone)));
+    // CleanupDone must be present (validation runs after it).
+    assert!(
+        events.iter().any(|e| matches!(e, Progress::CleanupDone)),
+        "expected CleanupDone in events"
+    );
 
     // Dashboard scaffold emits 1 InsertSubtree for the root (with sidebar+main embedded)
     // + 2 InsertSubtrees for the subtask contents.
@@ -193,6 +211,7 @@ fn non_dashboard_run_takes_sequential_vertical_path() {
         &llm,
         &mut on_progress,
         &AbortFlag::new(),
+        &stub_providers(),
     ))
     .expect("non-dashboard run ok");
 
@@ -224,6 +243,7 @@ fn dashboard_zero_node_subtask_returns_no_content() {
         &llm,
         &mut on_progress,
         &AbortFlag::new(),
+        &stub_providers(),
     ));
 
     assert!(
@@ -268,6 +288,7 @@ fn dashboard_abort_mid_run_returns_aborted() {
         &llm,
         &mut on_progress,
         &abort,
+        &stub_providers(),
     ));
 
     assert!(
