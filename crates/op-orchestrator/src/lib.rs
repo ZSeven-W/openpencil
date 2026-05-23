@@ -40,6 +40,7 @@ pub mod run_dashboard;
 pub mod scaffold;
 pub mod scaffold_dashboard;
 pub mod subagent;
+pub mod visual_ref;
 
 #[cfg(test)]
 mod test_support;
@@ -62,3 +63,4 @@ pub use stub_providers::{
     SkippedVisualRefProvider,
 };
 pub use types::*;
+pub use visual_ref::{build_enhanced_prompt, extract_structure_summary, generate_design_code};
