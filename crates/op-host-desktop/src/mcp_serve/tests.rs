@@ -43,17 +43,27 @@ fn initialize_response_includes_protocol_and_capabilities() {
 
 #[test]
 fn tools_list_response_includes_all_registered_tools() {
+    // The debug isolation flag is process-global; remove it
+    // explicitly so this test is deterministic under cargo's
+    // parallel runner (an earlier test may have set it).
+    std::env::remove_var("OPENPENCIL_DEBUG_TOOLS");
     let state = op_editor_core::EditorState::new();
     let r = tools_list_response("3", &state);
-    // Exact-count assertion: any tool added without
-    // updating this test will trip the count first. Codex
-    // stop-gate: previous `contains`-only checks would have
-    // silently passed if a new tool slipped into TOOL_SCHEMAS
-    // without being added to the list below.
+    // The production catalog excludes debug tools. Exact-count
+    // assertion: any tool added without updating this test trips
+    // the count first. Codex stop-gate: previous `contains`-only
+    // checks would have silently passed if a new tool slipped into
+    // TOOL_SCHEMAS without being added to the list below.
     assert_eq!(
         TOOL_SCHEMAS.len(),
-        83,
+        82,
         "tools/list catalog count must match the registered tools — add the new tool to this test"
+    );
+    // Production catalog excludes debug tools (we removed the
+    // env var above to ensure deterministic gate-off behaviour).
+    assert!(
+        !r.contains("debug_validation_report"),
+        "production tools/list must not advertise the debug tool: {r}"
     );
     // UIKit element tools are appended dynamically — one per
     // built-in starter-kit component (6) — and ride alongside
@@ -95,7 +105,6 @@ fn tools_list_response_includes_all_registered_tools() {
         "get_history_depth",
         "get_viewport",
         "get_selection_set",
-        "debug_validation_report",
         "clear_selection",
         "set_selection",
         "set_viewport",
@@ -163,6 +172,15 @@ fn tools_list_response_includes_all_registered_tools() {
     ] {
         assert!(r.contains(name), "tools/list must include {name}: {r}");
     }
+
+    // Gate open — the debug tool joins the catalog.
+    std::env::set_var("OPENPENCIL_DEBUG_TOOLS", "1");
+    let r_debug = tools_list_response("3", &state);
+    assert!(
+        r_debug.contains("debug_validation_report"),
+        "debug tools/list must advertise debug_validation_report: {r_debug}"
+    );
+    std::env::remove_var("OPENPENCIL_DEBUG_TOOLS");
 }
 
 /// In-memory `Read + Write` stand-in for a `TcpStream` so the HTTP

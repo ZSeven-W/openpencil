@@ -33,31 +33,30 @@ use op_mcp::{
     add_node_effect_snapshot, add_page_snapshot, align_selected_snapshot, batch_design_snapshot,
     clear_selection_snapshot, copy_node_snapshot, copy_selected_snapshot, count_nodes_snapshot,
     create_component_snapshot, create_variable_snapshot, cut_selected_snapshot,
-    cycle_active_axis_value_snapshot, debug_validation_report_snapshot, delete_component_snapshot,
-    delete_node_snapshot,
-    delete_page_snapshot, delete_selected_snapshot, delete_variable_snapshot,
-    design_content_snapshot, design_refine_snapshot, design_skeleton_snapshot,
-    document_info_snapshot, duplicate_page_snapshot, duplicate_selected_snapshot,
-    find_node_by_name_snapshot, get_active_theme_snapshot, get_canvas_bounds_snapshot,
-    get_component_snapshot, get_history_depth_snapshot, get_node_children_snapshot,
-    get_node_parent_snapshot, get_node_snapshot, get_selection_set_snapshot, get_viewport_snapshot,
-    group_selected_snapshot, import_svg_snapshot, insert_node_snapshot,
-    instantiate_component_snapshot, list_components_snapshot, list_node_kinds_snapshot,
-    list_pages_snapshot, list_variables_snapshot, move_node_snapshot, nudge_selected_snapshot,
-    paste_clipboard_snapshot, redo_snapshot, remove_node_effect_snapshot,
-    rename_component_snapshot, rename_page_snapshot, rename_variable_snapshot,
-    reorder_page_snapshot, reorder_selected_snapshot, replace_node_snapshot,
-    run_stdio_with_applier, selection_snapshot, set_active_axis_value_snapshot,
-    set_active_page_snapshot, set_active_tool_snapshot, set_ellipse_arc_snapshot,
-    set_node_collapsed_snapshot, set_node_corner_radius_snapshot, set_node_fill_hex_snapshot,
-    set_node_flip_snapshot, set_node_font_size_snapshot, set_node_font_weight_snapshot,
-    set_node_hidden_snapshot, set_node_locked_snapshot, set_node_name_snapshot,
-    set_node_rotation_snapshot, set_node_stroke_hex_snapshot, set_node_stroke_width_snapshot,
-    set_node_text_snapshot, set_selection_set_snapshot, set_selection_snapshot,
-    set_variable_boolean_snapshot, set_variable_color_snapshot, set_variable_number_snapshot,
-    set_variable_string_snapshot, set_viewport_snapshot, snapshot_layout_snapshot,
-    toggle_node_selection_snapshot, undo_snapshot, ungroup_selected_snapshot, update_node_snapshot,
-    ToolRegistry,
+    cycle_active_axis_value_snapshot, debug_tools_enabled, debug_validation_report_snapshot,
+    delete_component_snapshot, delete_node_snapshot, delete_page_snapshot,
+    delete_selected_snapshot, delete_variable_snapshot, design_content_snapshot,
+    design_refine_snapshot, design_skeleton_snapshot, document_info_snapshot,
+    duplicate_page_snapshot, duplicate_selected_snapshot, find_node_by_name_snapshot,
+    get_active_theme_snapshot, get_canvas_bounds_snapshot, get_component_snapshot,
+    get_history_depth_snapshot, get_node_children_snapshot, get_node_parent_snapshot,
+    get_node_snapshot, get_selection_set_snapshot, get_viewport_snapshot, group_selected_snapshot,
+    import_svg_snapshot, insert_node_snapshot, instantiate_component_snapshot,
+    list_components_snapshot, list_node_kinds_snapshot, list_pages_snapshot,
+    list_variables_snapshot, move_node_snapshot, nudge_selected_snapshot, paste_clipboard_snapshot,
+    redo_snapshot, remove_node_effect_snapshot, rename_component_snapshot, rename_page_snapshot,
+    rename_variable_snapshot, reorder_page_snapshot, reorder_selected_snapshot,
+    replace_node_snapshot, run_stdio_with_applier, selection_snapshot,
+    set_active_axis_value_snapshot, set_active_page_snapshot, set_active_tool_snapshot,
+    set_ellipse_arc_snapshot, set_node_collapsed_snapshot, set_node_corner_radius_snapshot,
+    set_node_fill_hex_snapshot, set_node_flip_snapshot, set_node_font_size_snapshot,
+    set_node_font_weight_snapshot, set_node_hidden_snapshot, set_node_locked_snapshot,
+    set_node_name_snapshot, set_node_rotation_snapshot, set_node_stroke_hex_snapshot,
+    set_node_stroke_width_snapshot, set_node_text_snapshot, set_selection_set_snapshot,
+    set_selection_snapshot, set_variable_boolean_snapshot, set_variable_color_snapshot,
+    set_variable_number_snapshot, set_variable_string_snapshot, set_viewport_snapshot,
+    snapshot_layout_snapshot, toggle_node_selection_snapshot, undo_snapshot,
+    ungroup_selected_snapshot, update_node_snapshot, ToolRegistry,
 };
 
 /// Load a `.op` file into an `EditorState`. The `.op` format is plain
@@ -331,7 +330,12 @@ fn rebuild_registry(doc: &EditorState) -> ToolRegistry {
     r.register(Box::new(get_history_depth_snapshot(doc)));
     r.register(Box::new(get_viewport_snapshot(doc)));
     r.register(Box::new(get_selection_set_snapshot(doc)));
-    r.register(Box::new(debug_validation_report_snapshot(doc)));
+    // Debug tools stay out of the production registry unless the
+    // isolation flag is set — matches the TS design where debug tools
+    // ship only in a debug build, never in the production catalog.
+    if debug_tools_enabled() {
+        r.register(Box::new(debug_validation_report_snapshot(doc)));
+    }
     r.register(Box::new(clear_selection_snapshot()));
     r.register(Box::new(set_selection_snapshot()));
     r.register(Box::new(set_viewport_snapshot()));
@@ -584,9 +588,14 @@ fn tools_list_response(id_raw: &str, state: &EditorState) -> String {
     // client to render a tool picker + validate calls. Dynamic
     // UIKit element tools (one per kit component) are appended
     // alongside the static schemas — the kit set lives on
-    // `EditorState`, so they're computed per call.
+    // `EditorState`, so they're computed per call. Debug-tool
+    // schemas are appended only when the isolation flag is set,
+    // so they stay invisible to a production client.
     let mut entries: Vec<String> = TOOL_SCHEMAS.iter().map(|s| (*s).to_string()).collect();
     entries.extend(op_mcp::element_tools::element_tool_schemas(state));
+    if debug_tools_enabled() {
+        entries.extend(DEBUG_TOOL_SCHEMAS.iter().map(|s| (*s).to_string()));
+    }
     format!(
         r#"{{"jsonrpc":"2.0","id":{id_raw},"result":{{"tools":[{}]}}}}"#,
         entries.join(",")
@@ -616,7 +625,6 @@ const TOOL_SCHEMAS: &[&str] = &[
     r#"{"name":"get_history_depth","description":"Return undo + redo stack sizes. Useful before bulk rollback to know how many steps are available.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}}"#,
     r#"{"name":"get_viewport","description":"Return current canvas pan + zoom. pan_x/pan_y are i32 doc-px; zoom_percent is the zoom * 100 as int.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}}"#,
     r#"{"name":"get_selection_set","description":"Return every id in the multi-select set (vs get_selection which returns only the anchor). Result: count + comma-separated ids + anchor.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}}"#,
-    r#"{"name":"debug_validation_report","description":"Run the op-design-lint detectors over the active page and return the design-issue list. Read-only, no parameters. Result: count + categories (`;`-separated `category|count`) + issues (JSON-serialized Issue array). Gated behind the OPENPENCIL_DEBUG_TOOLS=1 env flag — ToolFailed when unset.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}}"#,
     r#"{"name":"clear_selection","description":"Drop the current multi-select. No args.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}}"#,
     r#"{"name":"set_selection","description":"Set selection to a single node by id (scoped to the ACTIVE page only). Rejects unknown ids and ids that live on a non-active page — switch the active page first with set_active_page.","inputSchema":{"type":"object","properties":{"node_id":{"type":"string","description":"positive u64 node id on the active page"}},"required":["node_id"]}}"#,
     r#"{"name":"set_viewport","description":"Set canvas pan + zoom. Pass any subset of pan_x / pan_y / zoom_percent — omitted axes are left unchanged. zoom_percent clamps to [10, 2000].","inputSchema":{"type":"object","properties":{"pan_x":{"type":"string","description":"i32 doc-px"},"pan_y":{"type":"string","description":"i32 doc-px"},"zoom_percent":{"type":"string","description":"int * 100 (100 == 1.0×)"}}}}"#,
@@ -682,6 +690,13 @@ const TOOL_SCHEMAS: &[&str] = &[
     r#"{"name":"move_node","description":"Reparent a node. target_parent_id=0 puts it at the active page root.","inputSchema":{"type":"object","properties":{"node_id":{"type":"string"},"target_parent_id":{"type":"string"}},"required":["node_id","target_parent_id"]}}"#,
     r#"{"name":"copy_node","description":"Deep-clone a subtree with fresh ids under a new parent.","inputSchema":{"type":"object","properties":{"node_id":{"type":"string"},"target_parent_id":{"type":"string"}},"required":["node_id","target_parent_id"]}}"#,
     r#"{"name":"replace_node","description":"Swap an existing node at the same parent slot with a freshly-built leaf. Set drop_children=true to discard a container's subtree.","inputSchema":{"type":"object","properties":{"node_id":{"type":"string"},"kind":{"type":"string","enum":["frame","group","rect","ellipse","polygon","line","text","path"]},"name":{"type":"string"},"x":{"type":"string"},"y":{"type":"string"},"width":{"type":"string"},"height":{"type":"string"},"fill_hex":{"type":"string"},"drop_children":{"type":"string","enum":["true","false"]}},"required":["node_id","kind","name","x","y","width","height"]}}"#,
+];
+
+/// Debug-only tool schemas — appended to `tools/list` only when
+/// `OPENPENCIL_DEBUG_TOOLS=1`. Kept separate from `TOOL_SCHEMAS` so the
+/// production catalog never advertises them.
+const DEBUG_TOOL_SCHEMAS: &[&str] = &[
+    r#"{"name":"debug_validation_report","description":"Run the op-design-lint detectors over the active page and return the design-issue list. Read-only, no parameters. Result: count + categories (`;`-separated `category|count`) + issues (JSON-serialized Issue array). Gated behind the OPENPENCIL_DEBUG_TOOLS=1 env flag.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}}"#,
 ];
 
 #[cfg(test)]
