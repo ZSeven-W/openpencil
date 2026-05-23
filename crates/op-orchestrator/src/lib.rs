@@ -63,4 +63,7 @@ pub use stub_providers::{
     SkippedVisualRefProvider,
 };
 pub use types::*;
-pub use visual_ref::{build_enhanced_prompt, extract_structure_summary, generate_design_code};
+pub use visual_ref::{
+    build_enhanced_prompt, execute_visual_ref_orchestration, extract_structure_summary,
+    generate_design_code,
+};

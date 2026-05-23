@@ -1,6 +1,7 @@
-//! `visual_ref.rs` — S4 B2: HTML helpers for the visual-reference pipeline.
+//! `visual_ref.rs` — S4 B2+C1: HTML helpers + main orchestration for the
+//! visual-reference pipeline.
 //!
-//! Three functions ported from the deleted TS source (`commit 0f12b6e9^`):
+//! Functions ported from the deleted TS source (`commit 0f12b6e9^`):
 //!
 //! - [`generate_design_code`] — LLM call using `design-code` +
 //!   `design-principles` skills as the system prompt. Returns HTML verbatim.
@@ -14,13 +15,24 @@
 //! - [`build_enhanced_prompt`] — string concatenation producing the exact
 //!   prompt template from `visual-ref-orchestrator.ts:172-184`.
 //!
+//! - [`execute_visual_ref_orchestration`] — 5-stage visual-ref pipeline.
+//!   Port of `executeVisualRefOrchestration` in
+//!   `visual-ref-orchestrator.ts:45-166`.
+//!
 //! No `regex` crate dependency (not in workspace Cargo.toml). The scanner uses
 //! a hand-rolled byte-level approach consistent with the S3b-4 precedent.
 
 use futures::StreamExt;
 
-use crate::design_system::{design_system_to_prompt_context, DesignSystem};
-use crate::types::{AbortFlag, CallRequest, LlmChunk, LlmClient};
+use crate::design_system::{
+    design_system_to_prompt_context, design_system_to_seed_commands, generate_design_system,
+    DesignSystem,
+};
+use crate::run::Orchestrator;
+use crate::types::{
+    AbortFlag, CallRequest, DesignRequest, DocSink, LlmChunk, LlmClient, OrchestratorError,
+    Progress, RunSummary, ValidationProviders, VisualRefProvider,
+};
 
 // ── generate_design_code ──────────────────────────────────────────────────────
 
@@ -473,6 +485,174 @@ pub fn build_enhanced_prompt(original: &str, structure: &str, ds_context: &str) 
     format!(
         "{original}\n\n{structure}\n\n{ds_context}\n\nIMPORTANT: Follow the design reference structure closely. The design system colors, fonts, and spacing have already been determined — use them consistently. The reference structure shows the intended layout — match its section order and composition."
     )
+}
+
+// ── execute_visual_ref_orchestration ─────────────────────────────────────────
+
+/// 5-stage visual-reference pipeline.
+///
+/// Port of `executeVisualRefOrchestration` in
+/// `visual-ref-orchestrator.ts:45-166`.
+///
+/// ## Stage flow
+///
+/// 1. Emit `Progress::VisualRefStarted`. Check abort. Call
+///    `generate_design_system`, apply `design_system_to_seed_commands` to
+///    `sink`, emit `Progress::VisualRefDesignSystem { var_count }`.
+///
+/// 2. Check abort. Call `generate_design_code`. If the result is empty,
+///    emit `Progress::VisualRefFallback` and fall back to `Orchestrator::run`
+///    with the original (un-enhanced) request.
+///    Otherwise emit `Progress::VisualRefHtmlGenerated { byte_len }`.
+///
+/// 3. Check abort. Call `visual_ref.render_html_to_screenshot`. Emit
+///    `Progress::VisualRefScreenshotReady { skipped: screenshot.is_none() }`.
+///    Stage 3 **does not fall back** — the pipeline continues to stages 4+5
+///    regardless of whether a screenshot was returned. The screenshot is an
+///    optional reference for the downstream vision-validation loop
+///    (currently always `None` in Rust S3c; future plumb-through to
+///    `validation.rs::reference_screenshot` is out of S4 scope).
+///
+/// 4. Build `enhanced_request` with prompt replaced by the output of
+///    `build_enhanced_prompt(original_prompt, extract_structure_summary(&html),
+///    design_system_to_prompt_context(&ds))`.
+///
+/// 5. Call `Orchestrator::new().run(enhanced_request, ...)` and return its
+///    `Result<RunSummary, OrchestratorError>`.
+///
+/// ## Abort handling
+///
+/// `abort.is_set()` is checked before each stage. If set, returns
+/// `Err(OrchestratorError::Aborted)` immediately.
+///
+/// ## Fallback semantics
+///
+/// Fallback to plain `Orchestrator::run(original_request, ...)` happens
+/// ONLY on:
+/// - Stage 2 failure (`generate_design_code` returns empty string).
+///
+/// Stage 1 (`generate_design_system`) already has internal fallback to
+/// `DEFAULT_DESIGN_SYSTEM` on any LLM/parse failure, so it never
+/// short-circuits.  Stage 3 (`render_html_to_screenshot` returning `None`)
+/// is informational only — the pipeline continues to stages 4+5 without
+/// a screenshot.
+///
+/// ## Canvas size
+///
+/// The Rust `DesignRequest` does not carry a `canvas_size` field.  The TS
+/// source used `request.context?.canvasSize?.width ?? 1200` and
+/// `?? 0` for height, so this function uses the same defaults:
+/// `width = 1200.0, height = 0.0`.
+#[allow(clippy::too_many_arguments)]
+pub async fn execute_visual_ref_orchestration(
+    sink: &mut dyn DocSink,
+    llm: &dyn LlmClient,
+    providers: &ValidationProviders<'_>,
+    visual_ref: &dyn VisualRefProvider,
+    request: DesignRequest,
+    on_progress: &mut dyn FnMut(Progress),
+    abort: &AbortFlag,
+) -> Result<RunSummary, OrchestratorError> {
+    // Default canvas dimensions: matches TS `request.context?.canvasSize?.{width,height} ?? default`
+    const PLAN_WIDTH: f64 = 1200.0;
+    const PLAN_HEIGHT: f64 = 0.0;
+
+    // Keep a clone of the original request for fallback paths.
+    let original_request = request.clone();
+
+    // ── Stage 0: emit started, check abort ────────────────────────────────────
+    on_progress(Progress::VisualRefStarted);
+
+    if abort.is_set() {
+        return Err(OrchestratorError::Aborted);
+    }
+
+    // ── Stage 1: design system ────────────────────────────────────────────────
+
+    // generate_design_system falls back to DEFAULT on any LLM/parse failure.
+    let ds = generate_design_system(
+        &request.prompt,
+        llm,
+        request.model.as_deref(),
+        request.provider.as_deref(),
+        abort,
+    )
+    .await;
+
+    // Seed design-system variables into the document.
+    let seed_cmds = design_system_to_seed_commands(&ds);
+    let var_count = seed_cmds.len();
+    for cmd in seed_cmds {
+        sink.apply(cmd);
+    }
+
+    on_progress(Progress::VisualRefDesignSystem { var_count });
+
+    if abort.is_set() {
+        return Err(OrchestratorError::Aborted);
+    }
+
+    // ── Stage 2: generate HTML/CSS ────────────────────────────────────────────
+
+    let html = generate_design_code(
+        &request.prompt,
+        &ds,
+        PLAN_WIDTH,
+        PLAN_HEIGHT,
+        llm,
+        request.model.as_deref(),
+        request.provider.as_deref(),
+        abort,
+    )
+    .await;
+
+    if html.is_empty() {
+        on_progress(Progress::VisualRefFallback {
+            reason: "design-code failed".into(),
+        });
+        return Orchestrator::new()
+            .run(original_request, sink, llm, on_progress, abort, providers)
+            .await;
+    }
+
+    on_progress(Progress::VisualRefHtmlGenerated {
+        byte_len: html.len(),
+    });
+
+    if abort.is_set() {
+        return Err(OrchestratorError::Aborted);
+    }
+
+    // ── Stage 3: render screenshot ─────────────────────────────────────────────
+    //
+    // Informational stage: a `None` screenshot is OK — we still proceed to
+    // stages 4+5 with the HTML structure summary + design system context.
+    // The screenshot is reserved for a future plumb-through to S3c's
+    // `validation.rs::reference_screenshot` (currently always `None`).
+    let screenshot = visual_ref.render_html_to_screenshot(&html, PLAN_WIDTH, PLAN_HEIGHT);
+    on_progress(Progress::VisualRefScreenshotReady {
+        skipped: screenshot.is_none(),
+    });
+    let _ = screenshot; // currently unused downstream; see doc-comment
+
+    if abort.is_set() {
+        return Err(OrchestratorError::Aborted);
+    }
+
+    // ── Stage 4 + 5: build enhanced request → run Orchestrator ───────────────
+
+    let structure_summary = extract_structure_summary(&html);
+    let ds_context = design_system_to_prompt_context(&ds);
+    let enhanced_prompt = build_enhanced_prompt(&request.prompt, &structure_summary, &ds_context);
+
+    let enhanced_request = DesignRequest {
+        prompt: enhanced_prompt,
+        ..request
+    };
+
+    Orchestrator::new()
+        .run(enhanced_request, sink, llm, on_progress, abort, providers)
+        .await
 }
 
 #[cfg(test)]

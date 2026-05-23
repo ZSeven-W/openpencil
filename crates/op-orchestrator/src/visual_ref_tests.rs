@@ -1,13 +1,22 @@
-//! Tests for `visual_ref.rs` — S4 B2.
+//! Tests for `visual_ref.rs` — S4 B2 + C1.
 
 #[cfg(test)]
 mod tests {
     use crate::design_system::default_design_system;
-    use crate::test_support::{ScriptResponse, ScriptedLlm};
-    use crate::types::AbortFlag;
-    use crate::visual_ref::{
-        build_enhanced_prompt, extract_structure_summary, generate_design_code,
+    use crate::test_support::{
+        ScriptResponse, ScriptedLlm, SkippedPreValidator, SkippedScreenshotProvider,
+        SkippedVisionLlmClient, VecDocSink,
     };
+    use crate::types::{
+        AbortFlag, CallRequest, DesignRequest, LlmChunk, LlmClient, LlmError, OrchestratorError,
+        Progress, ValidationProviders, VisualRefProvider,
+    };
+    use crate::visual_ref::{
+        build_enhanced_prompt, execute_visual_ref_orchestration, extract_structure_summary,
+        generate_design_code,
+    };
+    use futures::stream::BoxStream;
+    use std::sync::Mutex;
 
     // ── generate_design_code ──────────────────────────────────────────────────
 
@@ -255,5 +264,421 @@ mod tests {
         // Should still produce the IMPORTANT line
         assert!(result.contains("IMPORTANT:"));
         assert_eq!(result, "\n\n\n\n\n\nIMPORTANT: Follow the design reference structure closely. The design system colors, fonts, and spacing have already been determined — use them consistently. The reference structure shows the intended layout — match its section order and composition.");
+    }
+
+    // ── execute_visual_ref_orchestration — C1 tests ───────────────────────────
+
+    // Shared test fixtures ---------------------------------------------------
+
+    fn make_request() -> DesignRequest {
+        DesignRequest {
+            prompt: "a landing page".into(),
+            model: None,
+            provider: None,
+            design_md: None,
+            concurrency: 1,
+            append_context: None,
+            validation_enabled: false,
+            visual_ref_enabled: true,
+        }
+    }
+
+    fn stub_providers() -> ValidationProviders<'static> {
+        ValidationProviders {
+            pre_validator: &SkippedPreValidator,
+            screenshot: &SkippedScreenshotProvider,
+            vision: &SkippedVisionLlmClient,
+            system_prompt: String::new(),
+        }
+    }
+
+    /// Minimal valid plan JSON for the Orchestrator.
+    const PLAN_JSON: &str = r##"{
+  "rootFrame": { "id": "root", "name": "Page", "width": 1200, "height": 800,
+                 "layout": "vertical", "gap": 0,
+                 "fill": [{ "type": "solid", "color": "#FFFFFF" }] },
+  "subtasks": [
+    { "id": "hero", "label": "Hero", "region": { "width": 1200, "height": 400 } }
+  ]
+}"##;
+
+    fn node_json(prefix: &str) -> String {
+        format!(
+            r#"[{{"type":"frame","id":"{prefix}-1","name":"Sec","x":0,"y":0,"width":1200,"height":300,"children":[]}}]"#
+        )
+    }
+
+    fn default_ds_json() -> String {
+        let ds = default_design_system();
+        serde_json::to_string(ds).expect("serialize default DS")
+    }
+
+    /// An `LlmClient` that records every `CallRequest` it sees while still
+    /// returning scripted responses in order.  Used to verify the enhanced
+    /// prompt reaches the underlying orchestrator.
+    struct RecordingLlm {
+        responses: Mutex<std::collections::VecDeque<ScriptResponse>>,
+        recorded: Mutex<Vec<CallRequest>>,
+    }
+
+    impl RecordingLlm {
+        fn new(responses: Vec<ScriptResponse>) -> Self {
+            Self {
+                responses: Mutex::new(responses.into()),
+                recorded: Mutex::new(Vec::new()),
+            }
+        }
+
+        fn calls(&self) -> Vec<CallRequest> {
+            self.recorded.lock().unwrap().clone()
+        }
+    }
+
+    impl LlmClient for RecordingLlm {
+        fn call(&self, req: CallRequest) -> BoxStream<'static, Result<LlmChunk, LlmError>> {
+            self.recorded.lock().unwrap().push(req);
+            let next = self.responses.lock().unwrap().pop_front();
+            let items: Vec<Result<LlmChunk, LlmError>> = match next {
+                Some(ScriptResponse::Text(t)) => vec![Ok(LlmChunk::Text(t))],
+                Some(ScriptResponse::Fail(e)) => vec![Err(e)],
+                None => vec![Err(LlmError {
+                    message: "RecordingLlm exhausted".into(),
+                    aborted: false,
+                })],
+            };
+            Box::pin(futures::stream::iter(items))
+        }
+    }
+
+    // A `VisualRefProvider` that returns Some(base64) for any call.
+    struct MockVisualRefProvider;
+    impl VisualRefProvider for MockVisualRefProvider {
+        fn render_html_to_screenshot(&self, _html: &str, _w: f64, _h: f64) -> Option<String> {
+            Some("base64screenshot==".to_string())
+        }
+    }
+
+    // A `VisualRefProvider` that always returns None.
+    struct NoneVisualRefProvider;
+    impl VisualRefProvider for NoneVisualRefProvider {
+        fn render_html_to_screenshot(&self, _html: &str, _w: f64, _h: f64) -> Option<String> {
+            None
+        }
+    }
+
+    // ── Test 1: None screenshot → still runs enhanced orchestration ──────────
+
+    /// When `VisualRefProvider` returns `None`, the pipeline does NOT fall back
+    /// to plain orchestration — it emits
+    /// `Progress::VisualRefScreenshotReady { skipped: true }` and continues
+    /// to the enhanced `Orchestrator::run`.  No `VisualRefFallback` event is
+    /// emitted. Matches TS `visual-ref-orchestrator.ts:109-122` semantics.
+    #[tokio::test]
+    async fn execute_visual_ref_none_screenshot_still_runs_enhanced_orchestration() {
+        // LLM call order:
+        //  [0] generate_design_system  → DS JSON
+        //  [1] generate_design_code    → HTML (contains <h1>Hero</h1>)
+        //  [2] Orchestrator planning   → PLAN_JSON
+        //  [3] Orchestrator subtask    → node_json
+        let llm = RecordingLlm::new(vec![
+            ScriptResponse::Text(default_ds_json()),
+            ScriptResponse::Text("<html><body><h1>Hero</h1></body></html>".into()),
+            ScriptResponse::Text(PLAN_JSON.into()),
+            ScriptResponse::Text(node_json("hero")),
+        ]);
+        let mut sink = VecDocSink::new();
+        let mut events: Vec<Progress> = Vec::new();
+        let providers = stub_providers();
+
+        let result = execute_visual_ref_orchestration(
+            &mut sink,
+            &llm,
+            &providers,
+            &NoneVisualRefProvider,
+            make_request(),
+            &mut |p| events.push(p),
+            &AbortFlag::new(),
+        )
+        .await;
+
+        assert!(result.is_ok(), "expected Ok, got {:?}", result.err());
+
+        // All four pre-orchestrator events
+        assert!(
+            events
+                .iter()
+                .any(|e| matches!(e, Progress::VisualRefStarted)),
+            "missing VisualRefStarted in {:?}",
+            events
+        );
+        assert!(
+            events
+                .iter()
+                .any(|e| matches!(e, Progress::VisualRefDesignSystem { .. })),
+            "missing VisualRefDesignSystem in {:?}",
+            events
+        );
+        assert!(
+            events
+                .iter()
+                .any(|e| matches!(e, Progress::VisualRefHtmlGenerated { .. })),
+            "missing VisualRefHtmlGenerated in {:?}",
+            events
+        );
+        assert!(
+            events
+                .iter()
+                .any(|e| matches!(e, Progress::VisualRefScreenshotReady { skipped: true })),
+            "expected VisualRefScreenshotReady{{skipped:true}} in {:?}",
+            events
+        );
+
+        // CRITICAL: no VisualRefFallback should be emitted when screenshot is None.
+        let no_fallback = events
+            .iter()
+            .all(|e| !matches!(e, Progress::VisualRefFallback { .. }));
+        assert!(
+            no_fallback,
+            "stage 3 None → must NOT emit VisualRefFallback; got {:?}",
+            events
+        );
+
+        // Orchestrator emits Planning when it runs.
+        assert!(
+            events.iter().any(|e| matches!(e, Progress::Planning)),
+            "expected Planning event from enhanced Orchestrator::run, got {:?}",
+            events
+        );
+
+        // CRITICAL: the planning call (call index 2, after DS + codegen) must
+        // have received the ENHANCED prompt (not the original "a landing page").
+        // The enhanced prompt contains the IMPORTANT-instruction tail.
+        let calls = llm.calls();
+        assert!(
+            calls.len() >= 3,
+            "expected ≥3 LLM calls (DS + codegen + planning), got {}",
+            calls.len()
+        );
+        let planning_user_prompt = &calls[2].user_prompt;
+        assert!(
+            planning_user_prompt
+                .contains("IMPORTANT: Follow the design reference structure closely."),
+            "planning user prompt should carry the enhanced-prompt instruction tail; got:\n{}",
+            planning_user_prompt
+        );
+        // It should also carry the structure summary marker (since HTML had <h1>Hero</h1>).
+        assert!(
+            planning_user_prompt.contains("DESIGN REFERENCE STRUCTURE:"),
+            "planning user prompt should carry the structure summary header; got:\n{}",
+            planning_user_prompt
+        );
+    }
+
+    // ── Test 2: MockVisualRefProvider → all 5 stages + Orchestrator::run ──────
+
+    /// When `VisualRefProvider` returns `Some(base64)`, all 5 stages run and
+    /// `Orchestrator::run` is called with the enhanced prompt.
+    #[tokio::test]
+    async fn execute_visual_ref_with_screenshot_runs_all_stages() {
+        // LLM call order:
+        //  [0] generate_design_system  → DS JSON
+        //  [1] generate_design_code    → HTML
+        //  [2] Orchestrator planning   → PLAN_JSON
+        //  [3] Orchestrator subtask    → node_json
+        let llm = ScriptedLlm::new(vec![
+            ScriptResponse::Text(default_ds_json()),
+            ScriptResponse::Text("<html><body><h1>Hero</h1></body></html>".into()),
+            ScriptResponse::Text(PLAN_JSON.into()),
+            ScriptResponse::Text(node_json("hero")),
+        ]);
+        let mut sink = VecDocSink::new();
+        let mut events: Vec<Progress> = Vec::new();
+        let providers = stub_providers();
+
+        let result = execute_visual_ref_orchestration(
+            &mut sink,
+            &llm,
+            &providers,
+            &MockVisualRefProvider,
+            make_request(),
+            &mut |p| events.push(p),
+            &AbortFlag::new(),
+        )
+        .await;
+
+        assert!(result.is_ok(), "expected Ok, got {:?}", result.err());
+
+        // VisualRefStarted
+        assert!(
+            events
+                .iter()
+                .any(|e| matches!(e, Progress::VisualRefStarted)),
+            "missing VisualRefStarted"
+        );
+        // VisualRefDesignSystem
+        assert!(
+            events
+                .iter()
+                .any(|e| matches!(e, Progress::VisualRefDesignSystem { .. })),
+            "missing VisualRefDesignSystem"
+        );
+        // VisualRefHtmlGenerated
+        assert!(
+            events
+                .iter()
+                .any(|e| matches!(e, Progress::VisualRefHtmlGenerated { .. })),
+            "missing VisualRefHtmlGenerated"
+        );
+        // VisualRefScreenshotReady { skipped: false }
+        assert!(
+            events
+                .iter()
+                .any(|e| matches!(e, Progress::VisualRefScreenshotReady { skipped: false })),
+            "missing VisualRefScreenshotReady{{skipped:false}}"
+        );
+        // No fallback
+        let no_fallback = events
+            .iter()
+            .all(|e| !matches!(e, Progress::VisualRefFallback { .. }));
+        assert!(no_fallback, "unexpected VisualRefFallback in {:?}", events);
+
+        // Orchestrator events present (Planning at minimum)
+        let has_planning = events.iter().any(|e| matches!(e, Progress::Planning));
+        assert!(has_planning, "expected Planning in {:?}", events);
+    }
+
+    // ── Test 3: generate_design_code returns empty → fallback ─────────────────
+
+    /// When `generate_design_code` returns an empty string (LLM fails or returns
+    /// nothing), the function emits `VisualRefFallback` and falls back.
+    #[tokio::test]
+    async fn execute_visual_ref_empty_html_falls_back() {
+        // LLM call order:
+        //  [0] generate_design_system  → DS JSON
+        //  [1] generate_design_code    → empty (simulated via LLM error)
+        //  [2] Orchestrator planning   → PLAN_JSON (fallback runs Orchestrator)
+        //  [3] Orchestrator subtask    → node_json
+        use crate::types::LlmError;
+        let llm = ScriptedLlm::new(vec![
+            ScriptResponse::Text(default_ds_json()),
+            ScriptResponse::Fail(LlmError {
+                message: "codegen timeout".into(),
+                aborted: false,
+            }),
+            ScriptResponse::Text(PLAN_JSON.into()),
+            ScriptResponse::Text(node_json("hero")),
+        ]);
+        let mut sink = VecDocSink::new();
+        let mut events: Vec<Progress> = Vec::new();
+        let providers = stub_providers();
+
+        let result = execute_visual_ref_orchestration(
+            &mut sink,
+            &llm,
+            &providers,
+            &MockVisualRefProvider,
+            make_request(),
+            &mut |p| events.push(p),
+            &AbortFlag::new(),
+        )
+        .await;
+
+        assert!(result.is_ok(), "expected Ok, got {:?}", result.err());
+
+        let has_fallback = events
+            .iter()
+            .any(|e| matches!(e, Progress::VisualRefFallback { .. }));
+        assert!(
+            has_fallback,
+            "expected VisualRefFallback for empty HTML in {:?}",
+            events
+        );
+        // No VisualRefHtmlGenerated (never got past code gen)
+        let no_html_event = events
+            .iter()
+            .all(|e| !matches!(e, Progress::VisualRefHtmlGenerated { .. }));
+        assert!(
+            no_html_event,
+            "unexpected VisualRefHtmlGenerated when HTML empty"
+        );
+    }
+
+    // ── Test 4: abort before stage 1 → Err(Aborted) ──────────────────────────
+
+    /// When the abort flag is set before the call, the function returns
+    /// `Err(OrchestratorError::Aborted)`.
+    #[tokio::test]
+    async fn execute_visual_ref_abort_before_stage_1_returns_aborted() {
+        let llm = ScriptedLlm::new(vec![]);
+        let mut sink = VecDocSink::new();
+        let providers = stub_providers();
+        let abort = AbortFlag::new();
+        abort.set(); // fire before any call
+
+        let result = execute_visual_ref_orchestration(
+            &mut sink,
+            &llm,
+            &providers,
+            &NoneVisualRefProvider,
+            make_request(),
+            &mut |_| {},
+            &abort,
+        )
+        .await;
+
+        assert!(
+            matches!(result, Err(OrchestratorError::Aborted)),
+            "expected Aborted, got {:?}",
+            result
+        );
+    }
+
+    // ── Test 5: DesignSystem var_count matches seeded commands ─────────────────
+
+    /// `VisualRefDesignSystem.var_count` equals the number of commands emitted
+    /// by `design_system_to_seed_commands(default)` = 17.
+    #[tokio::test]
+    async fn execute_visual_ref_ds_progress_reports_correct_var_count() {
+        // Use NoneVisualRefProvider to keep test simple (fallback after screenshot)
+        let llm = ScriptedLlm::new(vec![
+            ScriptResponse::Text(default_ds_json()),
+            ScriptResponse::Text("<html><body>page</body></html>".into()),
+            ScriptResponse::Text(PLAN_JSON.into()),
+            ScriptResponse::Text(node_json("hero")),
+        ]);
+        let mut sink = VecDocSink::new();
+        let mut events: Vec<Progress> = Vec::new();
+        let providers = stub_providers();
+
+        let _ = execute_visual_ref_orchestration(
+            &mut sink,
+            &llm,
+            &providers,
+            &NoneVisualRefProvider,
+            make_request(),
+            &mut |p| events.push(p),
+            &AbortFlag::new(),
+        )
+        .await;
+
+        // Find the VisualRefDesignSystem event and check var_count
+        let ds_event = events.iter().find_map(|e| {
+            if let Progress::VisualRefDesignSystem { var_count } = e {
+                Some(*var_count)
+            } else {
+                None
+            }
+        });
+        assert!(
+            ds_event.is_some(),
+            "missing VisualRefDesignSystem event in {:?}",
+            events
+        );
+        // DEFAULT_DESIGN_SYSTEM: 8 palette + 6 spacing + 3 radius = 17
+        assert_eq!(
+            ds_event.unwrap(),
+            17,
+            "expected 17 vars from DEFAULT_DESIGN_SYSTEM"
+        );
     }
 }
