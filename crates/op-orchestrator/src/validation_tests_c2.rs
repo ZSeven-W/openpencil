@@ -29,6 +29,7 @@ fn make_request(validation_enabled: bool) -> DesignRequest {
         concurrency: 1,
         append_context: None,
         validation_enabled,
+        visual_ref_enabled: false,
     }
 }
 

@@ -246,6 +246,40 @@ pub enum Progress {
     ValidationDone {
         total_applied: usize,
     },
+    // ── S4: Visual-Ref pipeline progress variants ─────────────────────────────
+    /// Visual-ref pipeline started (before design-system generation).
+    ///
+    /// Port of the entry point in `visual-ref-orchestrator.ts:62`.
+    VisualRefStarted,
+    /// Design system generated and variables seeded.
+    ///
+    /// Port of stage 1 in `visual-ref-orchestrator.ts:74-90`.
+    VisualRefDesignSystem {
+        /// Number of `SetVariable*` commands emitted (one per palette/spacing/radius token).
+        var_count: usize,
+    },
+    /// HTML code generated from the design system.
+    ///
+    /// Port of stage 2 in `visual-ref-orchestrator.ts:92-106`.
+    VisualRefHtmlGenerated {
+        /// Byte length of the generated HTML string.
+        byte_len: usize,
+    },
+    /// Screenshot step complete (or skipped when `VisualRefProvider` returns `None`).
+    ///
+    /// Port of stage 3 in `visual-ref-orchestrator.ts:108-122`.
+    VisualRefScreenshotReady {
+        /// `true` when the screenshot was skipped (provider returned `None`).
+        skipped: bool,
+    },
+    /// Visual-ref pipeline fell back to plain orchestration.
+    ///
+    /// Emitted when any stage fails or the provider skips. Port of the
+    /// fallback path in `visual-ref-orchestrator.ts:124-140`.
+    VisualRefFallback {
+        /// Human-readable reason for the fallback.
+        reason: String,
+    },
 }
 
 /// 单个 subtask 的执行结果。`error` 带值但 `node_count > 0` 表示
@@ -333,10 +367,20 @@ pub struct DesignRequest {
     /// Port of `VALIDATION_ENABLED` in `ai-runtime-config.ts:109`.
     #[serde(default = "default_validation_enabled")]
     pub validation_enabled: bool,
+    /// 是否在编排器执行前运行视觉参考(visual-ref)流水线(S4)。
+    /// 默认 `false`(host 明确选择才启用)。
+    /// Port of the `executeVisualRefOrchestration` vs `executeOrchestration`
+    /// dispatch pattern in `visual-ref-orchestrator.ts`.
+    #[serde(default = "default_visual_ref_enabled")]
+    pub visual_ref_enabled: bool,
 }
 
 fn default_validation_enabled() -> bool {
     true
+}
+
+fn default_visual_ref_enabled() -> bool {
+    false
 }
 
 #[cfg(test)]
@@ -407,6 +451,7 @@ mod tests {
             concurrency: 1,
             append_context: None,
             validation_enabled: true,
+            visual_ref_enabled: false,
         };
         assert!(req.append_context.is_none());
     }
@@ -428,6 +473,7 @@ mod tests {
             concurrency: 1,
             append_context: Some(ctx),
             validation_enabled: true,
+            visual_ref_enabled: false,
         };
         assert!(req.append_context.is_some());
     }
@@ -443,6 +489,7 @@ mod tests {
             concurrency: 1,
             append_context: None,
             validation_enabled: true,
+            visual_ref_enabled: false,
         };
         let json = serde_json::to_string(&req).expect("serialize");
         assert!(
@@ -540,6 +587,7 @@ mod tests {
             concurrency: 1,
             append_context: None,
             validation_enabled: false,
+            visual_ref_enabled: false,
         };
         let json = serde_json::to_string(&req).expect("serialize");
         let back: DesignRequest = serde_json::from_str(&json).expect("deserialize");

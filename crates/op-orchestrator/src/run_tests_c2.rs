@@ -71,6 +71,8 @@ fn req_concurrent() -> DesignRequest {
         concurrency: 2,
         append_context: None,
         validation_enabled: true,
+
+        visual_ref_enabled: false,
     }
 }
 
@@ -85,6 +87,8 @@ fn req_sequential() -> DesignRequest {
         concurrency: 1,
         append_context: None,
         validation_enabled: true,
+
+        visual_ref_enabled: false,
     }
 }
 
