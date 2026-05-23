@@ -13,18 +13,14 @@
           "id": "categories",
           "role": "categories",
           "layout": "vertical",
-          "children": [
-            { "type": "text", "id": "cat-label", "content": "Categories" }
-          ]
+          "children": [{ "type": "text", "id": "cat-label", "content": "Categories" }]
         },
         {
           "type": "frame",
           "id": "list",
           "role": "list",
           "layout": "vertical",
-          "children": [
-            { "type": "text", "id": "list-item", "content": "First item" }
-          ]
+          "children": [{ "type": "text", "id": "list-item", "content": "First item" }]
         }
       ]
     }
