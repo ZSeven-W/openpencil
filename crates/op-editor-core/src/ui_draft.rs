@@ -35,6 +35,8 @@ pub enum PropertyFocus {
     SizeH,
     Opacity,
     FillHex,
+    /// Fill section's `100 %` opacity input — percentage (0..100).
+    FillOpacity,
     StrokeHex,
     StrokeWidth,
 }
@@ -137,6 +139,11 @@ pub struct UiDraftState {
     /// Draft for the focused property input; committed on Enter,
     /// discarded on Escape.
     pub property_input_draft: String,
+    /// Caret position (byte index into `property_input_draft`) for
+    /// the focused property input. Property drafts are ASCII, so a
+    /// byte index is also the char index. Typing inserts here and
+    /// Backspace deletes before it; ← / → move it.
+    pub property_caret_pos: usize,
     /// Caret-blink anchor (ms) for the focused property input — reset
     /// on focus and on every keystroke.
     pub property_caret_anchor_ms: u64,

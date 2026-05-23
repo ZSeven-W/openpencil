@@ -114,6 +114,26 @@ impl WidgetHostNative {
                             });
                 }
             }
+            A::FocusEffectParam {
+                effect,
+                field,
+                value,
+            } => {
+                // Any prior input was committed by the press path's
+                // `commit_property_focus_if_any`; seed this param's
+                // draft from its current value, caret at the end.
+                let ui = &mut self.editor_state.ui;
+                ui.property_input_draft = if value.fract() == 0.0 {
+                    format!("{}", value as i64)
+                } else {
+                    format!("{value}")
+                };
+                ui.property_caret_pos = ui.property_input_draft.len();
+                ui.property_caret_anchor_ms = self.now_ms;
+                ui.property_draft_select_all = false;
+                self.editor_state.editor_ui.effect_param_focus =
+                    Some(op_editor_core::editor_ui_state::EffectParamFocus { effect, field });
+            }
         }
         self.mark_dirty();
     }
@@ -338,9 +358,38 @@ impl WidgetHostNative {
         self.mark_dirty();
     }
 
+    /// Commit a pending effect-parameter edit (Effects section's
+    /// editable value box). Parses the shared draft and writes it
+    /// via `SetEffectParam`; a non-numeric draft is discarded.
+    pub(in crate::widget_host) fn commit_effect_param_focus_if_any(&mut self) {
+        let Some(focus) = self.editor_state.editor_ui.effect_param_focus.take() else {
+            return;
+        };
+        self.editor_state.ui.property_draft_select_all = false;
+        let draft = std::mem::take(&mut self.editor_state.ui.property_input_draft);
+        if let Ok(value) = draft.trim().parse::<f32>() {
+            if value.is_finite() {
+                let id = self.editor_state.selection.anchor.clone();
+                if id.is_real() {
+                    self.editor_state.commit_history();
+                    let _ =
+                        self.editor_state
+                            .apply(op_editor_core::EditorCommand::SetEffectParam {
+                                node_id: id,
+                                index: focus.effect as u32,
+                                field: focus.field,
+                                value,
+                            });
+                }
+            }
+        }
+        self.mark_dirty();
+    }
+
     pub(in crate::widget_host) fn commit_property_focus_if_any(&mut self) {
-        // Commit any pending variable-row edit first.
+        // Commit any pending variable-row / effect-param edit first.
         self.commit_variable_row_focus_if_any();
+        self.commit_effect_param_focus_if_any();
         let Some(focus) = self.editor_state.ui.property_focus.take() else {
             return;
         };

@@ -142,6 +142,7 @@ pub(in crate::widget_host) fn property_focus_initial(
         F::Rotation => (panel.snapshot.rotation_deg.round() as i32).to_string(),
         F::PositionR => (panel.snapshot.corner_radius.round() as i32).to_string(),
         F::Opacity => "100".to_string(),
+        F::FillOpacity => ((panel.snapshot.fill_opacity * 100.0).round() as i32).to_string(),
         F::FillHex => panel
             .snapshot
             .fill

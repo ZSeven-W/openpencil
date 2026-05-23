@@ -56,4 +56,12 @@ pub enum PropertyPanelAction {
         field: op_editor_core::EffectField,
         new_value: f32,
     },
+    /// User clicked an effect parameter's value — host focuses it
+    /// for keyboard entry (`editor_ui.effect_param_focus`). `value`
+    /// is the current committed value, used to seed the draft.
+    FocusEffectParam {
+        effect: usize,
+        field: op_editor_core::EffectField,
+        value: f32,
+    },
 }

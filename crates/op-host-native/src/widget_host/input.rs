@@ -18,6 +18,7 @@ impl WidgetHostNative {
             || ui.text_editing.is_some()
             || ui.property_focus.is_some()
             || self.editor_state.editor_ui.variable_row_focus.is_some()
+            || self.editor_state.editor_ui.effect_param_focus.is_some()
             || self.editor_state.editor_ui.agent_settings.focus.is_some()
             || self.editor_state.chat.focused
             || self.git_commit_focus_active()

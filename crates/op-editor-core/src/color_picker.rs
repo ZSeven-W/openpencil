@@ -50,6 +50,19 @@ impl EditorState {
         }
     }
 
+    /// Write the anchor node's primary-fill opacity, in `[0.0, 1.0]`.
+    /// Editable-gated. Drives the Fill section's `100 %` input.
+    pub fn set_selected_fill_opacity(&mut self, opacity: f32) -> bool {
+        let sel = self.selection.anchor.clone();
+        if !sel.is_real() || !self.is_editable(&sel) {
+            return false;
+        }
+        let Some(node) = find_node_mut(self.active_children_mut(), &sel) else {
+            return false;
+        };
+        crate::fills::set_primary_fill_opacity(node, opacity)
+    }
+
     /// Append a default drop-shadow effect to the anchor node.
     /// Editable-gated. Mirrors shell-core's
     /// `add_drop_shadow_to_selected`.

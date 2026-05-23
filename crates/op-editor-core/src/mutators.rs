@@ -454,6 +454,12 @@ impl EditorState {
             | PropertyFocus::Opacity
             | PropertyFocus::FillHex
             | PropertyFocus::StrokeHex => {}
+            // Fill opacity is a percentage in the UI — convert to
+            // the canonical `[0.0, 1.0]` and route through the
+            // dedicated fill-opacity setter.
+            PropertyFocus::FillOpacity => {
+                let _ = self.set_selected_fill_opacity((value / 100.0).clamp(0.0, 1.0));
+            }
         }
         true
     }
