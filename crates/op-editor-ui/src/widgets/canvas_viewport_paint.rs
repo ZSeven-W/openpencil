@@ -253,7 +253,16 @@ pub fn paint_node(
 
     match &node.kind {
         NodeKind::Frame => {
-            paint_fill_then_stroke(cx, node, world_rect, zoom, node.fill);
+            // Image-fill Frames paint the bitmap behind their
+            // children; gradient + solid fall back to the shared
+            // fill/stroke painter. Without this branch a Frame whose
+            // primary fill is `PenFill::Image { url }` only shows the
+            // grey placeholder + its children, never the image.
+            if let Some(src) = node.image_src.as_deref() {
+                paint_image_node(cx, node, world_rect, zoom, src);
+            } else {
+                paint_fill_then_stroke(cx, node, world_rect, zoom, node.fill);
+            }
             for child in &node.children {
                 paint_node(cx, child, viewport_origin, zoom, edit_caret.clone(), cull);
             }
@@ -282,7 +291,19 @@ pub fn paint_node(
             }
         }
         NodeKind::Ellipse => {
-            paint_ellipse(cx, node, world_rect, zoom);
+            if let Some(src) = node.image_src.as_deref() {
+                // Image-fill ellipse: paint the bitmap clipped to the
+                // ellipse silhouette via skia's `clip_oval`-style
+                // approximation (no native clip_oval on the trait, so
+                // fall back to the rect-clip path the painter has).
+                paint_image_node(cx, node, world_rect, zoom, src);
+                if let Some(stroke) = node.stroke {
+                    cx.backend
+                        .stroke_oval(world_rect, stroke.color, stroke.width * zoom);
+                }
+            } else {
+                paint_ellipse(cx, node, world_rect, zoom);
+            }
         }
         NodeKind::Polygon => {
             // Default triangle: top-centre, bottom-left, bottom-right.
@@ -296,7 +317,13 @@ pub fn paint_node(
                 Point2D::new(left_x, bottom_y),
                 Point2D::new(right_x, bottom_y),
             ];
-            if let Some(fill) = node.fill {
+            // Image fills paint the bitmap in the AABB underneath the
+            // polygon outline; the triangle silhouette is then drawn
+            // by the stroke. A perfect clip-to-polygon path lands when
+            // `RenderBackend` grows a polygon-clip primitive.
+            if let Some(src) = node.image_src.as_deref() {
+                paint_image_node(cx, node, world_rect, zoom, src);
+            } else if let Some(fill) = node.fill {
                 cx.backend.fill_polygon(&pts, fill);
             }
             if let Some(stroke) = node.stroke {
