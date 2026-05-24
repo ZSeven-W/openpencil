@@ -7,9 +7,9 @@ use super::helpers::{STATUS_INSET, TOOLBAR_INSET_X, TOOLBAR_INSET_Y};
 use super::WidgetHostNative;
 use op_editor_ui::widgets::{
     variables_panel::VariablesPanel, AIChatPlaceholder, AlignToolbar, CanvasViewport,
-    ComponentBrowserPanel, DesignMdPanel, GitPanel, LayerPanel, LayoutCx, LocalePicker, PaintCx,
-    PropertyPanel, ShapePicker, StatusBar, Toolbar, TopBar, Widget, GIT_PANEL_INSET,
-    STATUS_BAR_HEIGHT, STATUS_BAR_WIDTH, TOOLBAR_WIDTH, TOP_BAR_HEIGHT,
+    ComponentBrowserPanel, DesignMdPanel, GitPanel, IconPickerPanel, LayerPanel, LayoutCx,
+    LocalePicker, PaintCx, PropertyPanel, ShapePicker, StatusBar, Toolbar, TopBar, Widget,
+    GIT_PANEL_INSET, STATUS_BAR_HEIGHT, STATUS_BAR_WIDTH, TOOLBAR_WIDTH, TOP_BAR_HEIGHT,
 };
 use op_editor_ui::{Point2D, Rect, RenderBackend};
 
@@ -428,6 +428,19 @@ impl WidgetHostNative {
         if let (Some(panel), Some(panel_rect)) = (
             ComponentBrowserPanel::for_editor(&self.editor_state),
             self.component_browser_panel_rect(viewport_width, viewport_height),
+        ) {
+            let mut cx = PaintCx {
+                backend: &mut *frame,
+            };
+            panel.paint(&mut cx, panel_rect);
+        }
+
+        // 11.7. Floating Icon picker — opened from the shape-tool
+        //       dropdown. It sits above the component browser and
+        //       below Design-MD, matching the press routing order.
+        if let (Some(panel), Some(panel_rect)) = (
+            IconPickerPanel::for_editor(&self.editor_state),
+            self.icon_picker_panel_rect(viewport_width, viewport_height),
         ) {
             let mut cx = PaintCx {
                 backend: &mut *frame,

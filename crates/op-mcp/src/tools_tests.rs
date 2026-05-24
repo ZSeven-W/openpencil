@@ -3,11 +3,11 @@
 //! Ported off the old shell-core `Document` onto `op_editor_core::
 //! EditorState`.
 
-use super::test_fixtures::{add_theme_axis, add_variable, state_with};
+use super::test_fixtures::{add_theme_axis, add_variable, frame, state_with};
 use super::tools::*;
 use super::{McpTool, ToolOutcome};
 use jian_ops_schema::variable::{VariableKind, VariableScalar};
-use op_editor_core::EditorState;
+use op_editor_core::{EditorCommand, EditorState, NodeId};
 use std::collections::BTreeMap;
 
 fn state_with_variables() -> EditorState {
@@ -109,6 +109,59 @@ fn list_variables_empty_document_returns_zero_count() {
             assert_eq!(out.get("variables"), Some(&String::new()));
         }
         _ => panic!("expected Ok"),
+    }
+}
+
+#[test]
+fn list_components_reports_registered_components() {
+    let mut s = state_with(vec![frame(
+        "n1",
+        "Card Root",
+        0.0,
+        0.0,
+        100.0,
+        80.0,
+        Vec::new(),
+    )]);
+    assert!(s.apply(EditorCommand::CreateComponent {
+        node_id: NodeId::new("n1"),
+        name: "Card".into(),
+    }));
+    let tool = list_components_snapshot(&s);
+    match tool.call(&BTreeMap::new()) {
+        ToolOutcome::Ok(out) => {
+            assert_eq!(out.get("count"), Some(&"1".to_string()));
+            assert_eq!(out.get("components"), Some(&"Card|n1".to_string()));
+        }
+        other => panic!("expected Ok, got {other:?}"),
+    }
+}
+
+#[test]
+fn get_component_reports_kind_and_subtree_size() {
+    let mut s = state_with(vec![frame(
+        "n1",
+        "Card Root",
+        0.0,
+        0.0,
+        100.0,
+        80.0,
+        Vec::new(),
+    )]);
+    assert!(s.apply(EditorCommand::CreateComponent {
+        node_id: NodeId::new("n1"),
+        name: "Card".into(),
+    }));
+    let tool = get_component_snapshot(&s);
+    let mut args = BTreeMap::new();
+    args.insert("component_id".into(), "n1".into());
+    match tool.call(&args) {
+        ToolOutcome::Ok(out) => {
+            assert_eq!(out.get("name"), Some(&"Card".to_string()));
+            assert_eq!(out.get("kind"), Some(&"frame".to_string()));
+            assert_eq!(out.get("leaf_count"), Some(&"1".to_string()));
+        }
+        other => panic!("expected Ok, got {other:?}"),
     }
 }
 

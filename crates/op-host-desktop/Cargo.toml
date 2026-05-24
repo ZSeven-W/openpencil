@@ -48,8 +48,6 @@ op-host-native = { path = "../op-host-native", version = "0.1.0" }
 # `op_editor_core::EditorState` (canonical `.op` document) instead of the
 # old shell-core `Document`.
 op-editor-core = { path = "../op-editor-core" }
-# D′ architecture: pre-validation adapter translates PlannedFix → EditorCommand.
-op-design-lint = { path = "../op-design-lint" }
 # Locale tables — git dialog strings go through `op_i18n::translate`
 # so they are localized like the rest of the chrome.
 op-i18n = { path = "../op-i18n" }

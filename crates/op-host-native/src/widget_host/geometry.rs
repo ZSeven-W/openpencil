@@ -13,8 +13,8 @@ use op_editor_core::ChatAnchor;
 use op_editor_ui::widgets::{
     rotation_corner_at_point, selection_handle_at_point, GitPanel, LayoutCx, LocalePicker,
     ShapePicker, Toolbar, TopBar, Widget, AI_CHAT_COLLAPSED_HEIGHT, AI_CHAT_COLLAPSED_WIDTH,
-    AI_CHAT_HEIGHT, AI_CHAT_WIDTH, GIT_PANEL_INSET, LOCALE_PICKER_WIDTH, SHAPE_PICKER_WIDTH,
-    TOOLBAR_WIDTH, TOP_BAR_HEIGHT,
+    AI_CHAT_HEIGHT, AI_CHAT_WIDTH, GIT_PANEL_INSET, ICON_PICKER_PANEL_H, ICON_PICKER_PANEL_W,
+    LOCALE_PICKER_WIDTH, SHAPE_PICKER_WIDTH, TOOLBAR_WIDTH, TOP_BAR_HEIGHT,
 };
 use op_editor_ui::{Point2D, Rect};
 
@@ -461,6 +461,25 @@ impl WidgetHostNative {
         })
     }
 
+    /// Floating Icon-picker panel rect — `None` when closed.
+    /// The TS picker is a dialog; native centers a compact searchable
+    /// panel because the built-in Rust catalog is local and finite.
+    pub(in crate::widget_host) fn icon_picker_panel_rect(
+        &self,
+        viewport_w: f32,
+        viewport_h: f32,
+    ) -> Option<Rect> {
+        if !self.editor_state.editor_ui.icon_picker_open {
+            return None;
+        }
+        let x = ((viewport_w - ICON_PICKER_PANEL_W) / 2.0).max(0.0);
+        let y = ((viewport_h - ICON_PICKER_PANEL_H) / 2.0).max(0.0);
+        Some(Rect {
+            origin: Point2D::new(x, y),
+            size: Point2D::new(ICON_PICKER_PANEL_W, ICON_PICKER_PANEL_H),
+        })
+    }
+
     /// Whether `point` is inside ANY top-most floating panel
     /// (Design-MD or Component-Browser). Used by the input gates so
     /// wheel / pan / right-press / hover side-effects do not leak to
@@ -475,6 +494,9 @@ impl WidgetHostNative {
         let p = Point2D::new(x, y);
         self.design_md_panel_rect(viewport_w, viewport_h)
             .is_some_and(|r| rect_contains(r, p))
+            || self
+                .icon_picker_panel_rect(viewport_w, viewport_h)
+                .is_some_and(|r| rect_contains(r, p))
             || self
                 .component_browser_panel_rect(viewport_w, viewport_h)
                 .is_some_and(|r| rect_contains(r, p))

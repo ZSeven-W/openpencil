@@ -10,7 +10,6 @@ pub mod fixes;
 pub mod issue;
 pub mod node_mut;
 pub mod node_util;
-pub mod plan;
 
 pub use color::{color_contrast, parse_hex_color, relative_luminance, Rgb};
 pub use detectors::{
@@ -22,4 +21,3 @@ pub use detectors::{
 };
 pub use fixes::{apply_fixes, detect_and_fix};
 pub use issue::{FixProperty, FixReport, Issue, IssueCategory, IssueSeverity};
-pub use plan::{detect_and_plan, PlannedAction, PlannedFix};

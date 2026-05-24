@@ -46,6 +46,7 @@ pub mod property_panel_code;
 pub mod property_panel_effects;
 pub mod property_panel_export;
 pub mod property_panel_fill;
+pub mod property_panel_input_layout;
 pub mod property_panel_inputs;
 pub mod property_panel_layout;
 pub mod property_panel_sections;
@@ -100,6 +101,7 @@ mod git_panel_remotes;
 mod git_panel_resolve;
 #[cfg(test)]
 mod git_panel_tests;
+pub mod icon_picker_panel;
 pub mod locale_picker;
 pub mod shape_picker;
 pub mod status_bar;
@@ -134,6 +136,9 @@ pub use component_browser_panel::{
 pub use design_md_panel::{DesignMdHit, DesignMdPanel, DESIGN_MD_PANEL_H, DESIGN_MD_PANEL_W};
 pub use export_dialog::{ExportDialog, ExportDialogHit, ExportFormat};
 pub use git_panel::{GitPanel, GitPanelHit, GIT_PANEL_INSET, GIT_PANEL_WIDTH};
+pub use icon_picker_panel::{
+    IconPickerHit, IconPickerPanel, ICON_PICKER_PANEL_H, ICON_PICKER_PANEL_W,
+};
 pub use locale_picker::{LocalePicker, LOCALE_PICKER_WIDTH};
 pub use shape_picker::{ShapeChoice, ShapePicker, SHAPE_PICKER_WIDTH};
 pub use status_bar::{StatusBar, STATUS_BAR_HEIGHT, STATUS_BAR_WIDTH};

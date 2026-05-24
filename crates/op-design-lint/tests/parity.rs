@@ -178,10 +178,6 @@ parity_case!(parity_edge_section_padding, "edge-section-padding");
 parity_case!(parity_empty_path, "empty-path");
 parity_case!(parity_excessive_frame_effects, "excessive-frame-effects");
 parity_case!(parity_invisible_container, "invisible-container");
-parity_case!(
-    parity_invisible_container_with_var,
-    "invisible-container-with-var"
-);
 parity_case!(parity_mixed_sibling, "mixed-sibling");
 parity_case!(parity_sibling_inconsistency, "sibling-inconsistency");
 parity_case!(

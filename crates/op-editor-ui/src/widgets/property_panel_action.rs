@@ -16,6 +16,8 @@ pub enum PropertyPanelAction {
     ToggleSizeHugWidth,
     ToggleSizeHugHeight,
     ToggleSizeClipContent,
+    /// User clicked the header "Create Component" affordance.
+    CreateComponent,
     /// User clicked the Fill section's fill-type dropdown — host
     /// toggles `Document.ui.fill_type_picker_open`.
     ToggleFillTypePicker,

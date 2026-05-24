@@ -10,14 +10,10 @@
 //! write tools emit an `op_editor_core::EditorCommand` the host applies
 //! via `EditorState::apply`.
 //!
-//! ## Component-command gap
-//!
-//! `op-editor-core` has no component registry yet. The four component
-//! MCP tools (`instantiate_component` / `create_component` /
-//! `delete_component` / `rename_component`) — and `set_node_collapsed`
-//! (`NodeFlag::Collapsed`) — therefore surface a clean `ToolFailed`
-//! error at call time rather than queueing a command `EditorState::
-//! apply` would reject. See `component_tools.rs`.
+//! `set_node_collapsed` (`NodeFlag::Collapsed`) remains editor-chrome
+//! state with no canonical schema field, so that tool returns a clean
+//! `ToolFailed` instead of queueing a command `EditorState::apply`
+//! would reject. See `component_tools.rs`.
 
 use std::collections::BTreeMap;
 

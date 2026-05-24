@@ -511,10 +511,9 @@ pub fn get_active_theme_snapshot(state: &EditorState) -> GetActiveTheme {
     GetActiveTheme { active, options }
 }
 
-// --- list_components / get_component (component-registry gap) --------
+// --- list_components / get_component ---------------------------------
 
-/// First-party `list_components` tool. **Gap**: `op-editor-core` has
-/// no component registry, so this always reports an empty library.
+/// First-party `list_components` tool.
 pub struct ListComponents {
     pub items: Vec<(String, String)>,
 }
@@ -536,13 +535,18 @@ impl McpTool for ListComponents {
     }
 }
 
-pub fn list_components_snapshot(_state: &EditorState) -> ListComponents {
-    // op-editor-core has no component registry — empty by design.
-    ListComponents { items: Vec::new() }
+pub fn list_components_snapshot(state: &EditorState) -> ListComponents {
+    ListComponents {
+        items: state
+            .components
+            .components
+            .iter()
+            .map(|c| (c.name.clone(), c.id.as_str().to_string()))
+            .collect(),
+    }
 }
 
-/// First-party `get_component` tool. **Gap**: no component registry,
-/// so every lookup is a clean `ToolFailed`.
+/// First-party `get_component` tool.
 pub struct GetComponent {
     pub snapshot: Vec<(String, String, String, usize)>,
 }
@@ -566,10 +570,7 @@ impl McpTool for GetComponent {
         else {
             return ToolOutcome::Err(
                 ToolErrorCode::ToolFailed,
-                format!(
-                    "component {component_id} not found (op-editor-core has no \
-                     component registry yet — known gap)"
-                ),
+                format!("component {component_id} not found"),
             );
         };
         let mut out = BTreeMap::new();
@@ -580,10 +581,21 @@ impl McpTool for GetComponent {
     }
 }
 
-pub fn get_component_snapshot(_state: &EditorState) -> GetComponent {
-    // op-editor-core has no component registry — empty by design.
+pub fn get_component_snapshot(state: &EditorState) -> GetComponent {
     GetComponent {
-        snapshot: Vec::new(),
+        snapshot: state
+            .components
+            .components
+            .iter()
+            .map(|c| {
+                (
+                    c.id.as_str().to_string(),
+                    c.name.clone(),
+                    kind_label(&c.root).to_string(),
+                    count_subtree(&c.root),
+                )
+            })
+            .collect(),
     }
 }
 

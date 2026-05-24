@@ -136,6 +136,16 @@ impl WidgetHostNative {
             self.mark_dirty();
             return true;
         }
+        if self.editor_state.editor_ui.icon_picker_open && !c.is_control() {
+            self.editor_state.editor_ui.icon_picker_search.push(c);
+            self.mark_dirty();
+            return true;
+        }
+        if self.editor_state.editor_ui.component_browser_open && !c.is_control() {
+            self.editor_state.editor_ui.component_browser_search.push(c);
+            self.mark_dirty();
+            return true;
+        }
         if !self.editor_state.chat.focused {
             return false;
         }
@@ -237,6 +247,32 @@ impl WidgetHostNative {
             }
             return false;
         }
+        if self.editor_state.editor_ui.icon_picker_open {
+            if self
+                .editor_state
+                .editor_ui
+                .icon_picker_search
+                .pop()
+                .is_some()
+            {
+                self.mark_dirty();
+                return true;
+            }
+            return false;
+        }
+        if self.editor_state.editor_ui.component_browser_open {
+            if self
+                .editor_state
+                .editor_ui
+                .component_browser_search
+                .pop()
+                .is_some()
+            {
+                self.mark_dirty();
+                return true;
+            }
+            return false;
+        }
         if self.editor_state.chat.focused {
             if self.editor_state.chat.input.pop().is_some() {
                 self.editor_state.chat.caret_anchor_ms = self.now_ms;
@@ -292,6 +328,8 @@ impl WidgetHostNative {
         // would silently drop the node behind the focused field.
         if self.editor_state.ui.property_focus.is_some()
             || self.editor_state.editor_ui.effect_param_focus.is_some()
+            || self.editor_state.editor_ui.icon_picker_open
+            || self.editor_state.editor_ui.component_browser_open
             || self.editor_state.chat.focused
         {
             return false;
@@ -624,6 +662,17 @@ impl WidgetHostNative {
         if self.editor_state.editor_ui.shape_picker_open {
             self.editor_state.editor_ui.shape_picker_open = false;
             self.editor_state.editor_ui.shape_picker_hover = None;
+            self.mark_dirty();
+            return true;
+        }
+        if self.editor_state.editor_ui.icon_picker_open {
+            self.editor_state.editor_ui.icon_picker_open = false;
+            self.editor_state.editor_ui.icon_picker_search.clear();
+            self.mark_dirty();
+            return true;
+        }
+        if self.editor_state.editor_ui.component_browser_open {
+            self.editor_state.editor_ui.component_browser_open = false;
             self.mark_dirty();
             return true;
         }

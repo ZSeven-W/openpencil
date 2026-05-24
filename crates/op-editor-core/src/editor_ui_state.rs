@@ -563,6 +563,10 @@ pub struct EditorUiState {
     /// Last-selected shape tool — drives the toolbar shape slot's
     /// icon. Always one of Rect / Ellipse / Polygon / Line / Pen.
     pub shape_tool: Tool,
+    /// Whether the Toolbar's Icon action picker is open.
+    pub icon_picker_open: bool,
+    /// Live text filter for the native Lucide icon picker.
+    pub icon_picker_search: String,
 
     // --- AI chat model picker --------------------------------------
     /// AI chat model-picker dropdown open.
@@ -726,6 +730,8 @@ impl Default for EditorUiState {
             shape_picker_open: false,
             shape_picker_hover: None,
             shape_tool: Tool::Rect,
+            icon_picker_open: false,
+            icon_picker_search: String::new(),
             chat_model_picker_open: false,
             chat_model_picker_scroll: 0.0,
             chat_model_picker_hover: None,
