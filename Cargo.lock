@@ -2856,6 +2856,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "op-smoke"
+version = "0.1.0"
+dependencies = [
+ "agent",
+ "futures",
+ "op-editor-core",
+ "op-orchestrator",
+ "tokio",
+]
+
+[[package]]
 name = "openssl-probe"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
