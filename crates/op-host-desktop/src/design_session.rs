@@ -293,9 +293,10 @@ pub fn pump_commands(host: &mut WidgetHostNative, current: &mut Option<DesignSes
     for req in reqs {
         let applied = match req.op {
             DesignCmdOp::Apply(cmd) => state.apply(cmd),
-            // TODO(host): wire into op-editor-core history batch mode once
-            // available. Today undo-batch boundaries are no-ops, matching
-            // `DesktopDocSink`.
+            // TODO(host): wire into op-editor-core history batch mode
+            // once available. Today undo-batch boundaries are no-ops so
+            // each `EditorCommand::InsertSubtree` is its own undo step —
+            // functionally correct, just finer-grained than ideal.
             DesignCmdOp::BeginUndoBatch | DesignCmdOp::EndUndoBatch => true,
         };
         let snapshot = state.clone();
