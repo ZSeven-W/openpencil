@@ -29,6 +29,7 @@ mod menu;
 mod model_discovery;
 mod persistence;
 mod persistence_image;
+mod pre_validator;
 mod settings_io;
 mod update_check;
 mod window_state;

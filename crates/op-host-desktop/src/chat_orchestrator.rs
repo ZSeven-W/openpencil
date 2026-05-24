@@ -47,8 +47,8 @@ use futures::StreamExt;
 use op_editor_core::{EditorCommand, EditorState};
 use op_orchestrator::{
     AbortFlag, CallRequest, DesignRequest, DocSink, LlmChunk, LlmClient, LlmError, Orchestrator,
-    OrchestratorError, Progress, RunSummary, SkippedPreValidator, SkippedScreenshotProvider,
-    SkippedVisionLlmClient, ValidationProviders,
+    OrchestratorError, Progress, RunSummary, SkippedScreenshotProvider, SkippedVisionLlmClient,
+    ValidationProviders,
 };
 
 /// `LlmClient` 的 desktop 实现。每次 `call` 新建一个 `QueryEngine`
@@ -194,13 +194,12 @@ pub async fn run_design_request(
         visual_ref_enabled: false,
     };
     let mut sink = DesktopDocSink::new(state);
-    // Stub validation providers — production-visible, no-op. Host can
-    // swap in real `PreValidator` (when `op-design-lint` is wired),
-    // `ScreenshotProvider` (when `jian-skia::captureRegion` is exposed
-    // host-side), and `VisionLlmClient` (when a Rust multimodal client
-    // lands) without touching `op-orchestrator`. Today `validation_enabled
-    // = false` short-circuits the validation phase anyway.
-    let pre_validator = SkippedPreValidator;
+    // PreValidator: real `op-design-lint` adapter (D′ architecture, task #35).
+    // `ScreenshotProvider` and `VisionLlmClient` remain stubbed until
+    // `jian-skia::captureRegion` is exposed host-side and a Rust multimodal
+    // client lands. Today `validation_enabled = false` short-circuits the
+    // vision loop; only `run_pre_validation_fixes` is exercised per request.
+    let pre_validator = crate::pre_validator::LintPreValidator;
     let screenshot = SkippedScreenshotProvider;
     let vision = SkippedVisionLlmClient;
     let providers = ValidationProviders {
