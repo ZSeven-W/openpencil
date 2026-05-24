@@ -732,6 +732,30 @@ fn icon_picker_click_inserts_icon_font_node() {
 }
 
 #[test]
+fn icon_picker_header_drag_moves_the_panel() {
+    let mut host = WidgetHostNative::new();
+    let viewport_w = 1440.0;
+    let viewport_h = 900.0;
+    host.editor_state_mut().editor_ui.icon_picker_open = true;
+
+    let start = host
+        .icon_picker_panel_rect(viewport_w, viewport_h)
+        .expect("icon picker rect");
+    let press_x = start.origin.x + 72.0;
+    let press_y = start.origin.y + 20.0;
+    assert!(host.apply_press(press_x, press_y, viewport_w, viewport_h));
+
+    assert!(host.apply_cursor_move(press_x + 96.0, press_y + 44.0));
+    let moved = host
+        .icon_picker_panel_rect(viewport_w, viewport_h)
+        .expect("icon picker rect after drag");
+
+    assert_eq!(moved.origin.x, start.origin.x + 96.0);
+    assert_eq!(moved.origin.y, start.origin.y + 44.0);
+    assert!(host.apply_release_with_viewport(viewport_w, viewport_h));
+}
+
+#[test]
 fn anchor_press_release_without_motion_does_not_push_history() {
     // Codex CONCERN: a press-release on an anchor without any
     // cursor motion must NOT pollute the undo stack.

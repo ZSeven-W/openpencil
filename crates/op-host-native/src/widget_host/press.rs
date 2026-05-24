@@ -368,6 +368,13 @@ impl WidgetHostNative {
             return true;
         }
 
+        // 0c0a1. Text font-family picker — outside-click dismiss.
+        if !in_git_panel
+            && self.dismiss_font_family_picker_on_press(x, y, viewport_width, viewport_height)
+        {
+            return true;
+        }
+
         // 0c0b. Export scale / format inline select popup —
         //       outside-click dismiss (`property_dispatch.rs`).
         if !in_git_panel

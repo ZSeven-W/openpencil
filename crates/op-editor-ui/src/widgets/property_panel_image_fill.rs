@@ -43,10 +43,10 @@ fn rect_contains(r: Rect, p: Point2D) -> bool {
 }
 
 fn image_body_rect(panel_rect: Rect, visible: VisibleSections) -> Option<Rect> {
-    if !visible.fill || visible.fill_type != op_editor_core::FillType::Image {
+    if !visible.image && (!visible.fill || visible.fill_type != op_editor_core::FillType::Image) {
         return None;
     }
-    action_button_rects_with_fill_picker(panel_rect, visible, &[], false, false, false)
+    action_button_rects_with_fill_picker(panel_rect, visible, &[], false, false, false, false)
         .into_iter()
         .find_map(|(action, rect)| {
             matches!(action, PropertyPanelAction::ToggleImageFillPopover).then_some(rect)

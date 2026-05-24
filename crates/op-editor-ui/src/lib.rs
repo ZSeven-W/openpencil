@@ -37,6 +37,7 @@ pub mod theme;
 pub mod widgets;
 
 // Re-export the primary API for the hosts / widgets / tests.
+pub use layout_scene::{SceneTextAlign, SceneTextVerticalAlign};
 pub use op_editor_core::render_backend::{
     Color, ImageAdjustments, ImageDrawMode, Point2D, Rect, RenderBackend, TextLayout,
 };

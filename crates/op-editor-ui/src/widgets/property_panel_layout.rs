@@ -11,156 +11,12 @@ use crate::widgets::property_panel_inputs::{
     HEADER_HEIGHT, INPUT_HEIGHT, PAD_X, SECTION_GAP, SECTION_HEADER_HEIGHT, TAB_HEIGHT,
 };
 use crate::{Point2D, Rect};
-use op_editor_core::{EffectField, FillType, FlexLayout};
+use op_editor_core::{EffectField, FillType};
+
+pub(crate) use crate::widgets::property_panel_visibility::SectionCapabilities;
+pub use crate::widgets::property_panel_visibility::VisibleSections;
 
 pub use crate::widgets::property_panel_input_layout::editable_input_rects;
-
-/// Per-NodeKind toggles for which property-panel sections render.
-/// Mirrors the TS app's behaviour where a Line node hides the
-/// fill picker, a Frame hides Text properties, etc. Sections that
-/// always apply (Position / Layer / Export) aren't gated here.
-/// Lives here alongside `VisibleSections` — the mask it feeds.
-#[derive(Debug, Clone, Copy)]
-pub(crate) struct SectionCapabilities {
-    pub(crate) flex_layout: bool,
-    pub(crate) size_options: bool,
-    pub(crate) opacity: bool,
-    pub(crate) fill: bool,
-    pub(crate) stroke: bool,
-    pub(crate) effects: bool,
-    pub(crate) export: bool,
-}
-
-impl SectionCapabilities {
-    /// Capability mask for the multi-select aggregate snapshot.
-    /// Keeps Size (so the union W/H actually paint), hides
-    /// fill/stroke (no aggregation in v1), keeps Layer/Effects/
-    /// Export (paint safely with the zeroed snapshot fields).
-    pub(crate) fn for_multi() -> Self {
-        Self {
-            flex_layout: false,
-            size_options: true,
-            opacity: true,
-            fill: false,
-            stroke: false,
-            effects: true,
-            export: true,
-        }
-    }
-
-    pub(crate) fn for_kind(kind: &crate::layout_scene::NodeKind) -> Self {
-        use crate::layout_scene::NodeKind as K;
-        match kind {
-            // Frame: full chrome — it can host children, take auto-
-            // layout, fill / stroke / effects / export.
-            K::Frame => Self {
-                flex_layout: true,
-                size_options: true,
-                opacity: true,
-                fill: true,
-                stroke: true,
-                effects: true,
-                export: true,
-            },
-            // Group: structural — no fill / stroke, no flex slot
-            // (children own layout). Opacity + export still apply.
-            K::Group | K::Other(_) => Self {
-                flex_layout: false,
-                size_options: false,
-                opacity: true,
-                fill: false,
-                stroke: false,
-                effects: true,
-                export: true,
-            },
-            // Rect / Ellipse / Polygon: full leaf — every paint
-            // section applies; no flex (no children).
-            K::Rect | K::Ellipse | K::Polygon => Self {
-                flex_layout: false,
-                size_options: true,
-                opacity: true,
-                fill: true,
-                stroke: true,
-                effects: true,
-                export: true,
-            },
-            // Line / Path: only outline — fill doesn't apply.
-            K::Line | K::Path => Self {
-                flex_layout: false,
-                size_options: true,
-                opacity: true,
-                fill: false,
-                stroke: true,
-                effects: true,
-                export: true,
-            },
-            // Text: stroke is rare for text, but fill = ink colour.
-            K::Text => Self {
-                flex_layout: false,
-                size_options: true,
-                opacity: true,
-                fill: true,
-                stroke: false,
-                effects: true,
-                export: true,
-            },
-        }
-    }
-}
-
-/// Whether each section currently paints — drives the layout
-/// walk so when per-kind filtering hides a section, the rects
-/// that follow shift up.
-#[derive(Debug, Clone, Copy)]
-pub struct VisibleSections {
-    pub flex_layout: bool,
-    pub size_options: bool,
-    /// `Opacity` from the Layer section.
-    pub opacity: bool,
-    /// Polygon side-count input in the Layer section.
-    pub polygon_sides: bool,
-    /// Ellipse start/sweep/inner-radius inputs in the Layer section.
-    pub ellipse_arc: bool,
-    /// `FillHex` from the Fill section.
-    pub fill: bool,
-    /// `StrokeHex` + `StrokeWidth` from the Stroke section.
-    pub stroke: bool,
-    /// Effects section paints (header + add chip + one block per
-    /// effect). Tracked because the export-rect walker needs to know
-    /// whether it consumed vertical space ahead of the Export
-    /// section. The per-effect geometry is driven by the `effects`
-    /// slice the walker takes alongside this struct.
-    pub effects: bool,
-    /// Export section paints — its scale / format dropdown rects
-    /// emit only when this is true.
-    pub export: bool,
-    /// Active fill type — affects fill-section body height so
-    /// the walk past Fill stays aligned with paint when the user
-    /// flips Solid / Gradient / Image.
-    pub fill_type: FillType,
-    /// Number of stops in the primary gradient body — drives
-    /// gradient-section row count so paint + hit-test agree on how
-    /// far the section reaches and which stop a click hits. `0` for
-    /// non-gradient fills.
-    pub gradient_stop_count: usize,
-}
-
-impl VisibleSections {
-    /// Every section visible — matches the legacy unfiltered layout.
-    pub const ALL: Self = Self {
-        flex_layout: true,
-        size_options: true,
-        opacity: true,
-        polygon_sides: false,
-        ellipse_arc: false,
-        fill: true,
-        stroke: true,
-        effects: true,
-        export: true,
-        fill_type: FillType::Solid,
-        gradient_stop_count: 0,
-    };
-}
 
 /// Height (px) of an effect card's title row — `投影` label on
 /// the left + remove `—` icon on the right.
@@ -331,7 +187,7 @@ pub fn action_button_rects(
     visible: VisibleSections,
     effects: &[EffectSummary],
 ) -> Vec<(PropertyPanelAction, Rect)> {
-    action_button_rects_with_fill_picker(panel_rect, visible, effects, false, false, false)
+    action_button_rects_with_fill_picker(panel_rect, visible, effects, false, false, false, false)
 }
 
 /// Height of one row in an Export-section inline select popup.
@@ -347,8 +203,9 @@ pub fn property_panel_content_height(
     visible: VisibleSections,
     effects: &[EffectSummary],
 ) -> f32 {
-    let actions =
-        action_button_rects_with_fill_picker(panel_rect, visible, effects, false, false, false);
+    let actions = action_button_rects_with_fill_picker(
+        panel_rect, visible, effects, false, false, false, false,
+    );
     let inputs = editable_input_rects(panel_rect, visible);
     let bottom = actions
         .iter()
@@ -370,6 +227,7 @@ pub fn action_button_rects_with_fill_picker(
     visible: VisibleSections,
     effects: &[EffectSummary],
     fill_picker_open: bool,
+    font_family_picker_open: bool,
     export_scale_picker_open: bool,
     export_format_picker_open: bool,
 ) -> Vec<(PropertyPanelAction, Rect)> {
@@ -382,14 +240,16 @@ pub fn action_button_rects_with_fill_picker(
     let mut y = panel_rect.origin.y;
     y += TAB_HEIGHT;
     y += HEADER_HEIGHT;
-    out.push((
-        PropertyPanelAction::CreateComponent,
-        Rect {
-            origin: Point2D::new(x0 + PAD_X, y + 8.0),
-            size: Point2D::new(usable_w, 36.0),
-        },
-    ));
-    y += 8.0 + 36.0 + 12.0;
+    if visible.create_component {
+        out.push((
+            PropertyPanelAction::CreateComponent,
+            Rect {
+                origin: Point2D::new(x0 + PAD_X, y + 8.0),
+                size: Point2D::new(usable_w, 36.0),
+            },
+        ));
+        y += 8.0 + 36.0 + 12.0;
+    }
     // Position section.
     y += SECTION_HEADER_HEIGHT;
     y += INPUT_HEIGHT + 6.0;
@@ -398,26 +258,16 @@ pub fn action_button_rects_with_fill_picker(
 
     if visible.flex_layout {
         y += SECTION_HEADER_HEIGHT;
-        let btn_w = 56.0;
-        let gap = 8.0;
-        let row_x = x0 + PAD_X;
-        let modes = [
-            FlexLayout::Free,
-            FlexLayout::Vertical,
-            FlexLayout::Horizontal,
-        ];
-        for (i, mode) in modes.iter().enumerate() {
-            let bx = row_x + i as f32 * (btn_w + gap);
-            out.push((
-                PropertyPanelAction::SetFlexLayout(*mode),
-                Rect {
-                    origin: Point2D::new(bx, y),
-                    size: Point2D::new(btn_w, 32.0),
-                },
-            ));
-        }
-        y += 32.0 + 12.0;
-        y += SECTION_GAP;
+        crate::widgets::property_panel_flex::push_flex_action_rects(
+            &mut out,
+            x0,
+            y,
+            w,
+            visible.flex_layout_mode,
+            visible.layout_justify,
+        );
+        y += crate::widgets::property_panel_flex::flex_section_height(visible.flex_layout_mode)
+            - SECTION_HEADER_HEIGHT;
     }
 
     if visible.size_options {
@@ -454,14 +304,50 @@ pub fn action_button_rects_with_fill_picker(
             },
         ));
         y += row_h;
+        if visible.clip_content {
+            out.push((
+                PropertyPanelAction::ToggleSizeClipContent,
+                Rect {
+                    origin: Point2D::new(x0 + PAD_X, y),
+                    size: Point2D::new(usable_w, row_h),
+                },
+            ));
+            y += row_h;
+        }
+        y += 12.0;
+        y += SECTION_GAP;
+    }
+
+    if visible.icon {
+        crate::widgets::property_panel_icon::push_icon_action_rects(&mut out, x0, y, w);
+        y += crate::widgets::property_panel_icon::icon_section_height();
+    }
+
+    if visible.text {
+        out.extend(crate::widgets::property_panel_text::text_action_rects(
+            x0, y, usable_w,
+        ));
+        if font_family_picker_open {
+            out.extend(
+                crate::widgets::property_panel_text::font_family_picker_action_rects(
+                    x0, y, usable_w,
+                ),
+            );
+        }
+        y += crate::widgets::property_panel_text::text_section_height();
+        y += SECTION_GAP;
+    }
+
+    if visible.image {
+        y += SECTION_HEADER_HEIGHT;
         out.push((
-            PropertyPanelAction::ToggleSizeClipContent,
+            PropertyPanelAction::ToggleImageFillPopover,
             Rect {
                 origin: Point2D::new(x0 + PAD_X, y),
-                size: Point2D::new(usable_w, row_h),
+                size: Point2D::new(usable_w, INPUT_HEIGHT),
             },
         ));
-        y += row_h + 12.0;
+        y += INPUT_HEIGHT + 34.0;
         y += SECTION_GAP;
     }
 
@@ -470,6 +356,13 @@ pub fn action_button_rects_with_fill_picker(
         y += SECTION_GAP;
     }
     if visible.fill {
+        out.push((
+            PropertyPanelAction::AddFill,
+            Rect {
+                origin: Point2D::new(x0 + w - PAD_X - 22.0, y),
+                size: Point2D::new(28.0, SECTION_HEADER_HEIGHT),
+            },
+        ));
         y += SECTION_HEADER_HEIGHT;
         // The head-row swatch is display-only — the colour picker
         // opens from the hex-row swatch below (added further down),
@@ -517,6 +410,13 @@ pub fn action_button_rects_with_fill_picker(
                 },
             ));
         }
+        out.push((
+            PropertyPanelAction::RemoveFill,
+            Rect {
+                origin: Point2D::new(x0 + w - PAD_X - 22.0, y - INPUT_HEIGHT - 6.0),
+                size: Point2D::new(28.0, INPUT_HEIGHT),
+            },
+        ));
         if visible.fill_type == FillType::Image {
             // Whole image-fill row opens the TS-parity image editor
             // popover. The popover's upload well opens the file picker.
@@ -540,6 +440,13 @@ pub fn action_button_rects_with_fill_picker(
             if visible.fill_type == FillType::LinearGradient {
                 stop_y += INPUT_HEIGHT + 6.0; // Angle row sits above the stops header.
             }
+            out.push((
+                PropertyPanelAction::AddGradientStop,
+                Rect {
+                    origin: Point2D::new(x0 + w - PAD_X - 22.0, stop_y),
+                    size: Point2D::new(28.0, SECTION_HEADER_HEIGHT),
+                },
+            ));
             stop_y += SECTION_HEADER_HEIGHT; // 色标 header
             for index in 0..visible.gradient_stop_count {
                 out.push((
@@ -551,6 +458,15 @@ pub fn action_button_rects_with_fill_picker(
                         size: Point2D::new(28.0, INPUT_HEIGHT),
                     },
                 ));
+                if visible.gradient_stop_count > 2 {
+                    out.push((
+                        PropertyPanelAction::RemoveGradientStop(index),
+                        Rect {
+                            origin: Point2D::new(x0 + w - PAD_X - 22.0, stop_y),
+                            size: Point2D::new(28.0, INPUT_HEIGHT),
+                        },
+                    ));
+                }
                 stop_y += INPUT_HEIGHT + 4.0;
             }
         }
@@ -688,9 +604,14 @@ pub fn action_button_rects_with_fill_picker(
             }
         }
         if export_format_picker_open {
-            let count = op_editor_core::ExportFormat::ALL.len() as f32;
+            let formats = [
+                op_editor_core::ExportFormat::Png,
+                op_editor_core::ExportFormat::Jpeg,
+                op_editor_core::ExportFormat::Webp,
+            ];
+            let count = formats.len() as f32;
             let first_row_y = format_rect.origin.y - 4.0 - 6.0 - count * EXPORT_PICKER_ROW_H;
-            for (i, fmt) in op_editor_core::ExportFormat::ALL.into_iter().enumerate() {
+            for (i, fmt) in formats.into_iter().enumerate() {
                 out.push((
                     PropertyPanelAction::SetExportFormat(fmt),
                     Rect {

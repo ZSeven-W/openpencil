@@ -40,6 +40,10 @@ fn write_corner_radius(node: &mut PenNode, radius: f64) -> bool {
             n.container.corner_radius = Some(CornerRadius::Uniform(radius));
             true
         }
+        PenNode::Image(n) => {
+            n.corner_radius = Some(CornerRadius::Uniform(radius));
+            true
+        }
         PenNode::Ellipse(n) => {
             n.corner_radius = Some(radius);
             true

@@ -46,7 +46,12 @@ pub mod property_panel_code;
 pub mod property_panel_effects;
 pub mod property_panel_export;
 pub mod property_panel_fill;
+pub mod property_panel_flex;
+pub mod property_panel_icon;
+#[cfg(test)]
+mod property_panel_icon_tests;
 pub mod property_panel_image_fill;
+pub mod property_panel_image_node;
 mod property_panel_image_preview;
 pub mod property_panel_input_layout;
 pub mod property_panel_inputs;
@@ -56,6 +61,8 @@ pub mod property_panel_sections;
 pub mod property_panel_snapshot;
 #[cfg(test)]
 mod property_panel_tests;
+pub mod property_panel_text;
+pub mod property_panel_visibility;
 pub mod toolbar;
 
 // Step 3 — center canvas that renders document nodes as actual
@@ -69,7 +76,10 @@ pub mod canvas_viewport_paint;
 pub mod editor_state_ext;
 
 // Step 4 — icon glyph drawer for editor chrome (lucide-flavored line art).
+pub mod icon_catalog;
 pub mod icons;
+#[cfg(test)]
+mod icons_tests;
 // Lucide d-string data — extracted as a sibling so `icons.rs` stays
 // under the 800-line cap as more first-party glyphs are added.
 mod icons_data;
@@ -126,7 +136,7 @@ pub use canvas_viewport::{
     selection_handle_at_point, ArcHandle, CanvasViewport, SelectionHandle,
 };
 
-pub use icons::{draw_icon, Icon};
+pub use icons::{draw_icon, draw_icon_catalog_entry, draw_icon_data, Icon, IconPathData};
 
 pub use ai_chat_panel::{
     AIChatHit, AIChatPlaceholder, AI_CHAT_COLLAPSED_HEIGHT, AI_CHAT_COLLAPSED_WIDTH,
@@ -141,7 +151,8 @@ pub use design_md_panel::{DesignMdHit, DesignMdPanel, DESIGN_MD_PANEL_H, DESIGN_
 pub use export_dialog::{ExportDialog, ExportDialogHit, ExportFormat};
 pub use git_panel::{GitPanel, GitPanelHit, GIT_PANEL_INSET, GIT_PANEL_WIDTH};
 pub use icon_picker_panel::{
-    IconPickerHit, IconPickerPanel, ICON_PICKER_PANEL_H, ICON_PICKER_PANEL_W,
+    IconPickerHit, IconPickerPanel, ICONIFY_LOAD_MORE_LIMIT, ICON_PICKER_PANEL_H,
+    ICON_PICKER_PANEL_W,
 };
 pub use locale_picker::{LocalePicker, LOCALE_PICKER_WIDTH};
 pub use shape_picker::{ShapeChoice, ShapePicker, SHAPE_PICKER_WIDTH};

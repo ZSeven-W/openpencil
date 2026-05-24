@@ -6,6 +6,7 @@ import { ICONIFY_API_URL } from '@/constants/app';
 
 const ICONIFY_API = ICONIFY_API_URL;
 const DEBOUNCE_MS = 250;
+const SEARCH_LIMIT = 60;
 
 function getIconColor(): string {
   const isLight =
@@ -16,6 +17,10 @@ function getIconColor(): string {
 function parseIconId(id: string) {
   const idx = id.indexOf(':');
   return { collection: id.slice(0, idx), name: id.slice(idx + 1) };
+}
+
+function mergeIconIds(prev: string[], next: string[]) {
+  return [...new Set([...prev, ...next])];
 }
 
 export interface IconPickerPosition {
@@ -53,6 +58,8 @@ export default function IconPickerDialog({
   const [collectionLoading, setCollectionLoading] = useState(false);
   // Global search (no collection context)
   const [searchIcons, setSearchIcons] = useState<string[]>([]);
+  const [searchTotal, setSearchTotal] = useState<number | null>(null);
+  const [searchStart, setSearchStart] = useState(0);
   const [searchLoading, setSearchLoading] = useState(false);
   const [searched, setSearched] = useState(false);
   const [fetching, setFetching] = useState<string | null>(null);
@@ -104,11 +111,15 @@ export default function IconPickerDialog({
   // Focus + pre-fill on open
   useEffect(() => {
     if (open) {
-      setQuery(initialQuery ?? '');
+      const nextQuery = initialQuery ?? '';
+      setQuery(nextQuery);
+      if (nextQuery.trim()) doGlobalSearch(nextQuery);
       setTimeout(() => inputRef.current?.focus(), 30);
     } else {
       setQuery('');
       setSearchIcons([]);
+      setSearchTotal(null);
+      setSearchStart(0);
       setSearched(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -143,36 +154,60 @@ export default function IconPickerDialog({
     };
   }, [open, onClose]);
 
-  // Global search (used when no collection is loaded)
+  const fetchSearch = async (q: string, start = 0, append = false) => {
+    const trimmed = q.trim();
+    if (!trimmed) return;
+    setSearchLoading(true);
+    try {
+      const prefix = activeCollection ? `&prefix=${encodeURIComponent(activeCollection)}` : '';
+      const res = await fetch(
+        `${ICONIFY_API}/search?query=${encodeURIComponent(trimmed)}&limit=${SEARCH_LIMIT}&start=${start}${prefix}`,
+      );
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      const icons = data.icons ?? [];
+      setSearchIcons((prev) => (append ? mergeIconIds(prev, icons) : icons));
+      setSearchTotal(data.total ?? icons.length);
+      setSearchStart((data.start ?? start) + icons.length);
+    } catch {
+      if (!append) setSearchIcons([]);
+      setSearchTotal(null);
+    } finally {
+      setSearchLoading(false);
+      setSearched(true);
+    }
+  };
+
   const doGlobalSearch = (q: string) => {
     if (timerRef.current) clearTimeout(timerRef.current);
     if (!q.trim()) {
       setSearchIcons([]);
+      setSearchTotal(null);
+      setSearchStart(0);
       setSearchLoading(false);
       setSearched(false);
       return;
     }
+    setSearchIcons([]);
+    setSearchTotal(null);
+    setSearchStart(0);
     setSearchLoading(true);
-    timerRef.current = setTimeout(async () => {
-      try {
-        const res = await fetch(
-          `${ICONIFY_API}/search?query=${encodeURIComponent(q.trim())}&limit=120`,
-        );
-        if (!res.ok) throw new Error();
-        const data = await res.json();
-        setSearchIcons(data.icons ?? []);
-      } catch {
-        setSearchIcons([]);
-      } finally {
-        setSearchLoading(false);
-        setSearched(true);
-      }
-    }, DEBOUNCE_MS);
+    timerRef.current = setTimeout(() => void fetchSearch(q, 0, false), DEBOUNCE_MS);
   };
 
   const handleQueryChange = (val: string) => {
     setQuery(val);
-    if (!activeCollection) doGlobalSearch(val);
+    doGlobalSearch(val);
+  };
+
+  useEffect(() => {
+    if (open && query.trim()) doGlobalSearch(query);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeCollection]);
+
+  const handleLoadMore = () => {
+    if (!trimmedQuery || searchLoading) return;
+    void fetchSearch(trimmedQuery, searchStart, true);
   };
 
   const handleSelect = async (iconId: string) => {
@@ -197,7 +232,15 @@ export default function IconPickerDialog({
   let displayIcons: string[];
   let isLoading: boolean;
 
-  if (activeCollection) {
+  if (trimmedQuery) {
+    displayIcons =
+      searchIcons.length || searched
+        ? searchIcons
+        : activeCollection
+          ? allIcons.filter((id) => (id.split(':')[1] ?? '').includes(trimmedQuery))
+          : [];
+    isLoading = searchLoading && searchIcons.length === 0;
+  } else if (activeCollection) {
     displayIcons = trimmedQuery
       ? allIcons.filter((id) => (id.split(':')[1] ?? '').includes(trimmedQuery))
       : allIcons;
@@ -209,9 +252,13 @@ export default function IconPickerDialog({
 
   const countLabel = activeCollection
     ? t('icon.iconsCount', {
-        count: trimmedQuery ? displayIcons.length : (totalCount ?? displayIcons.length),
+        count: trimmedQuery
+          ? (searchTotal ?? displayIcons.length)
+          : (totalCount ?? displayIcons.length),
       })
     : null;
+  const canLoadMore =
+    !!trimmedQuery && !searchLoading && searchTotal !== null && searchStart < searchTotal;
 
   // Compute popover position: anchored to the left of the property panel
   const PANEL_WIDTH = 256; // property panel w-64
@@ -268,39 +315,50 @@ export default function IconPickerDialog({
             <Loader2 size={18} className="animate-spin text-muted-foreground" />
           </div>
         ) : displayIcons.length > 0 ? (
-          <div className="grid grid-cols-6 gap-0.5">
-            {displayIcons.map((iconId) => {
-              const { collection, name } = parseIconId(iconId);
-              const isFetching = fetching === iconId;
-              const isCurrent = iconId === currentIconId;
-              return (
-                <button
-                  key={iconId}
-                  title={iconId}
-                  onClick={() => handleSelect(iconId)}
-                  disabled={isFetching}
-                  className={`w-10 h-10 flex items-center justify-center rounded transition-colors disabled:opacity-50 ${
-                    isCurrent
-                      ? 'bg-primary/15 ring-1 ring-inset ring-primary'
-                      : 'hover:bg-accent cursor-pointer'
-                  }`}
-                >
-                  {isFetching ? (
-                    <Loader2 size={14} className="animate-spin text-muted-foreground" />
-                  ) : (
-                    <img
-                      src={`${ICONIFY_API}/${collection}/${name}.svg?height=18&color=${getIconColor()}`}
-                      alt={name}
-                      width={18}
-                      height={18}
-                      loading="lazy"
-                    />
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        ) : searched && !activeCollection ? (
+          <>
+            <div className="grid grid-cols-6 gap-0.5">
+              {displayIcons.map((iconId) => {
+                const { collection, name } = parseIconId(iconId);
+                const isFetching = fetching === iconId;
+                const isCurrent = iconId === currentIconId;
+                return (
+                  <button
+                    key={iconId}
+                    title={iconId}
+                    onClick={() => handleSelect(iconId)}
+                    disabled={isFetching}
+                    className={`w-10 h-10 flex items-center justify-center rounded transition-colors disabled:opacity-50 ${
+                      isCurrent
+                        ? 'bg-primary/15 ring-1 ring-inset ring-primary'
+                        : 'hover:bg-accent cursor-pointer'
+                    }`}
+                  >
+                    {isFetching ? (
+                      <Loader2 size={14} className="animate-spin text-muted-foreground" />
+                    ) : (
+                      <img
+                        src={`${ICONIFY_API}/${collection}/${name}.svg?height=18&color=${getIconColor()}`}
+                        alt={name}
+                        width={18}
+                        height={18}
+                        loading="lazy"
+                      />
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+            {canLoadMore && (
+              <button
+                type="button"
+                onClick={handleLoadMore}
+                className="mt-2 h-8 w-full rounded bg-secondary text-xs text-foreground hover:bg-accent"
+              >
+                {t('git.history.loadMore')}
+              </button>
+            )}
+          </>
+        ) : searched && trimmedQuery ? (
           <p className="text-xs text-muted-foreground text-center py-8">{t('icon.noIconsFound')}</p>
         ) : !activeCollection && !trimmedQuery ? (
           <p className="text-xs text-muted-foreground text-center py-8">{t('icon.typeToSearch')}</p>

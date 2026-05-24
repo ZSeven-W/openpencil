@@ -1,8 +1,9 @@
 //! `SetNodeLayoutProp` command application — sets layout / text
 //! properties that do not have their own typed `EditorCommand` variants.
 //!
-//! Covers: `gap`, `padding`, `letterSpacing`, `lineHeight`, `opacity`,
-//! `textAlign`, `textGrowth`, `alignItems`, `justifyContent`, and
+//! Covers: `layout`, `gap`, `padding`, `letterSpacing`, `lineHeight`,
+//! `opacity`, `fontFamily`, `textAlign`, `textAlignVertical`,
+//! `textGrowth`, `alignItems`, `justifyContent`, `clipContent`, and
 //! sizing keywords for `width` / `height` (`"fit_content"` /
 //! `"fill_container"`).
 //!
@@ -15,8 +16,8 @@ use crate::pen_node_ext::PenNodeExt;
 use crate::state::EditorState;
 use crate::walkers::find_node_mut;
 use jian_ops_schema::node::base::NumberOrExpression;
-use jian_ops_schema::node::container::{AlignItems, JustifyContent, Padding};
-use jian_ops_schema::node::text::{TextAlign, TextGrowth};
+use jian_ops_schema::node::container::{AlignItems, JustifyContent, LayoutMode, Padding};
+use jian_ops_schema::node::text::{TextAlign, TextAlignVertical, TextGrowth};
 use jian_ops_schema::node::PenNode;
 use jian_ops_schema::sizing::{SizingBehavior, SizingKeyword};
 
@@ -44,6 +45,17 @@ fn parse_align_items(s: &str) -> Option<AlignItems> {
     }
 }
 
+// ── helper: parse layout keyword ─────────────────────────────────────────────
+
+fn parse_layout_mode(s: &str) -> Option<LayoutMode> {
+    match s {
+        "none" => Some(LayoutMode::None),
+        "vertical" => Some(LayoutMode::Vertical),
+        "horizontal" => Some(LayoutMode::Horizontal),
+        _ => None,
+    }
+}
+
 // ── helper: parse text_align keyword ─────────────────────────────────────────
 
 fn parse_text_align(s: &str) -> Option<TextAlign> {
@@ -51,6 +63,18 @@ fn parse_text_align(s: &str) -> Option<TextAlign> {
         "left" => Some(TextAlign::Left),
         "center" => Some(TextAlign::Center),
         "right" => Some(TextAlign::Right),
+        "justify" => Some(TextAlign::Justify),
+        _ => None,
+    }
+}
+
+// ── helper: parse text_align_vertical keyword ────────────────────────────────
+
+fn parse_text_align_vertical(s: &str) -> Option<TextAlignVertical> {
+    match s {
+        "top" => Some(TextAlignVertical::Top),
+        "middle" => Some(TextAlignVertical::Middle),
+        "bottom" => Some(TextAlignVertical::Bottom),
         _ => None,
     }
 }
@@ -93,7 +117,7 @@ fn build_padding(value: &LayoutPropValue) -> Option<Padding> {
             4 => Some(Padding::LtrB([arr[0], arr[1], arr[2], arr[3]])),
             _ => None,
         },
-        LayoutPropValue::Keyword(_) => None,
+        LayoutPropValue::Keyword(_) | LayoutPropValue::Bool(_) => None,
     }
 }
 
@@ -129,6 +153,14 @@ impl EditorState {
                     return false;
                 }
             }
+            "layout" => {
+                let LayoutPropValue::Keyword(s) = value else {
+                    return false;
+                };
+                if parse_layout_mode(s).is_none() {
+                    return false;
+                }
+            }
             "justifyContent" => {
                 let LayoutPropValue::Keyword(s) = value else {
                     return false;
@@ -153,6 +185,22 @@ impl EditorState {
                     return false;
                 }
             }
+            "textAlignVertical" => {
+                let LayoutPropValue::Keyword(s) = value else {
+                    return false;
+                };
+                if parse_text_align_vertical(s).is_none() {
+                    return false;
+                }
+            }
+            "fontFamily" => {
+                let LayoutPropValue::Keyword(s) = value else {
+                    return false;
+                };
+                if s.trim().is_empty() {
+                    return false;
+                }
+            }
             "textGrowth" => {
                 let LayoutPropValue::Keyword(s) = value else {
                     return false;
@@ -168,6 +216,11 @@ impl EditorState {
                     return false;
                 };
                 if parse_sizing_keyword(s).is_none() {
+                    return false;
+                }
+            }
+            "clipContent" => {
+                if !matches!(value, LayoutPropValue::Bool(_)) {
                     return false;
                 }
             }
@@ -189,6 +242,13 @@ impl EditorState {
             "padding" => {
                 let pad = build_padding(value).expect("validated above");
                 set_container_padding(node, pad)
+            }
+            "layout" => {
+                let LayoutPropValue::Keyword(s) = value else {
+                    return false;
+                };
+                let mode = parse_layout_mode(s).expect("validated above");
+                set_container_layout(node, mode)
             }
             "justifyContent" => {
                 let LayoutPropValue::Keyword(s) = value else {
@@ -223,6 +283,19 @@ impl EditorState {
                 let ta = parse_text_align(s).expect("validated above");
                 set_text_align(node, ta)
             }
+            "textAlignVertical" => {
+                let LayoutPropValue::Keyword(s) = value else {
+                    return false;
+                };
+                let ta = parse_text_align_vertical(s).expect("validated above");
+                set_text_align_vertical(node, ta)
+            }
+            "fontFamily" => {
+                let LayoutPropValue::Keyword(s) = value else {
+                    return false;
+                };
+                set_text_font_family(node, s.trim().to_string())
+            }
             "textGrowth" => {
                 let LayoutPropValue::Keyword(s) = value else {
                     return false;
@@ -251,6 +324,12 @@ impl EditorState {
                 let sb = parse_sizing_keyword(s).expect("validated above");
                 set_node_height(node, sb)
             }
+            "clipContent" => {
+                let LayoutPropValue::Bool(v) = value else {
+                    return false;
+                };
+                set_container_clip_content(node, *v)
+            }
             _ => false,
         }
     }
@@ -277,6 +356,24 @@ fn set_container_gap(node: &mut PenNode, gap: f64) -> bool {
     }
 }
 
+fn set_container_layout(node: &mut PenNode, mode: LayoutMode) -> bool {
+    match node {
+        PenNode::Frame(n) => {
+            n.container.layout = Some(mode);
+            true
+        }
+        PenNode::Group(n) => {
+            n.container.layout = Some(mode);
+            true
+        }
+        PenNode::Rectangle(n) => {
+            n.container.layout = Some(mode);
+            true
+        }
+        _ => false,
+    }
+}
+
 fn set_container_padding(node: &mut PenNode, pad: Padding) -> bool {
     match node {
         PenNode::Frame(n) => {
@@ -289,6 +386,24 @@ fn set_container_padding(node: &mut PenNode, pad: Padding) -> bool {
         }
         PenNode::Rectangle(n) => {
             n.container.padding = Some(pad);
+            true
+        }
+        _ => false,
+    }
+}
+
+fn set_container_clip_content(node: &mut PenNode, value: bool) -> bool {
+    match node {
+        PenNode::Frame(n) => {
+            n.container.clip_content = Some(value);
+            true
+        }
+        PenNode::Group(n) => {
+            n.container.clip_content = Some(value);
+            true
+        }
+        PenNode::Rectangle(n) => {
+            n.container.clip_content = Some(value);
             true
         }
         _ => false,
@@ -361,6 +476,26 @@ fn set_text_align(node: &mut PenNode, ta: TextAlign) -> bool {
     }
 }
 
+fn set_text_align_vertical(node: &mut PenNode, ta: TextAlignVertical) -> bool {
+    match node {
+        PenNode::Text(t) => {
+            t.text_align_vertical = Some(ta);
+            true
+        }
+        _ => false,
+    }
+}
+
+fn set_text_font_family(node: &mut PenNode, family: String) -> bool {
+    match node {
+        PenNode::Text(t) => {
+            t.font_family = Some(family);
+            true
+        }
+        _ => false,
+    }
+}
+
 fn set_text_growth(node: &mut PenNode, tg: TextGrowth) -> bool {
     match node {
         PenNode::Text(t) => {
@@ -385,11 +520,31 @@ fn set_node_width(node: &mut PenNode, sb: SizingBehavior) -> bool {
             n.container.width = Some(sb);
             true
         }
+        PenNode::Ellipse(n) => {
+            n.width = Some(sb);
+            true
+        }
+        PenNode::Polygon(n) => {
+            n.width = Some(sb);
+            true
+        }
+        PenNode::Path(n) => {
+            n.width = Some(sb);
+            true
+        }
         PenNode::Text(n) => {
             n.width = Some(sb);
             true
         }
         PenNode::TextInput(n) => {
+            n.width = Some(sb);
+            true
+        }
+        PenNode::Image(n) => {
+            n.width = Some(sb);
+            true
+        }
+        PenNode::IconFont(n) => {
             n.width = Some(sb);
             true
         }
@@ -411,11 +566,31 @@ fn set_node_height(node: &mut PenNode, sb: SizingBehavior) -> bool {
             n.container.height = Some(sb);
             true
         }
+        PenNode::Ellipse(n) => {
+            n.height = Some(sb);
+            true
+        }
+        PenNode::Polygon(n) => {
+            n.height = Some(sb);
+            true
+        }
+        PenNode::Path(n) => {
+            n.height = Some(sb);
+            true
+        }
         PenNode::Text(n) => {
             n.height = Some(sb);
             true
         }
         PenNode::TextInput(n) => {
+            n.height = Some(sb);
+            true
+        }
+        PenNode::Image(n) => {
+            n.height = Some(sb);
+            true
+        }
+        PenNode::IconFont(n) => {
             n.height = Some(sb);
             true
         }

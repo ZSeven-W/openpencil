@@ -56,6 +56,26 @@ impl ImageFillMode {
             | None => Self::Fill,
         }
     }
+
+    pub fn to_image_node_schema(self) -> jian_ops_schema::node::image::ImageFitMode {
+        match self {
+            Self::Fill => jian_ops_schema::node::image::ImageFitMode::Fill,
+            Self::Fit => jian_ops_schema::node::image::ImageFitMode::Fit,
+            Self::Crop => jian_ops_schema::node::image::ImageFitMode::Crop,
+            Self::Tile => jian_ops_schema::node::image::ImageFitMode::Tile,
+        }
+    }
+
+    pub fn from_image_node_schema(
+        value: Option<&jian_ops_schema::node::image::ImageFitMode>,
+    ) -> Self {
+        match value {
+            Some(jian_ops_schema::node::image::ImageFitMode::Fit) => Self::Fit,
+            Some(jian_ops_schema::node::image::ImageFitMode::Crop) => Self::Crop,
+            Some(jian_ops_schema::node::image::ImageFitMode::Tile) => Self::Tile,
+            Some(jian_ops_schema::node::image::ImageFitMode::Fill) | None => Self::Fill,
+        }
+    }
 }
 
 /// Image-fill adjustment sliders. Values are clamped to `[-100, 100]`.

@@ -492,8 +492,18 @@ pub struct EditorUiState {
     pub shape_tool: Tool,
     /// Whether the Toolbar's Icon action picker is open.
     pub icon_picker_open: bool,
+    /// True when the icon picker should replace the selected icon
+    /// instead of inserting a new icon at the canvas centre.
+    pub icon_picker_replace_selection: bool,
+    /// Top-left corner of the floating Icon picker in logical px.
+    /// `None` until first dragged/opened, then reused across opens.
+    pub icon_picker_panel_pos: Option<(f32, f32)>,
     /// Live text filter for the native Lucide icon picker.
     pub icon_picker_search: String,
+    /// Remote Iconify search results appended by the desktop host.
+    pub icon_picker_remote: crate::icon_picker_state::IconPickerRemoteState,
+    /// Queued "load more" request drained asynchronously by desktop.
+    pub icon_picker_load_more_request: Option<crate::icon_picker_state::IconifyLoadMoreRequest>,
 
     // --- AI chat model picker --------------------------------------
     /// AI chat model-picker dropdown open.
@@ -534,6 +544,8 @@ pub struct EditorUiState {
     pub fill_type_picker_open: bool,
     /// Whether the image-fill editor popover is open.
     pub image_fill_popover_open: bool,
+    /// Whether the text font-family picker is open.
+    pub font_family_picker_open: bool,
     /// Active-theme axis whose value picker is open; `None` = closed.
     pub axis_dropdown_open: Option<String>,
     /// Editor focus for a non-color variable row (Number / String).
@@ -661,7 +673,11 @@ impl Default for EditorUiState {
             toolbar_hover: None,
             shape_tool: Tool::Rect,
             icon_picker_open: false,
+            icon_picker_replace_selection: false,
+            icon_picker_panel_pos: None,
             icon_picker_search: String::new(),
+            icon_picker_remote: crate::icon_picker_state::IconPickerRemoteState::default(),
+            icon_picker_load_more_request: None,
             chat_model_picker_open: false,
             chat_model_picker_scroll: 0.0,
             chat_model_picker_hover: None,
@@ -678,6 +694,7 @@ impl Default for EditorUiState {
             size_clip_content: false,
             fill_type_picker_open: false,
             image_fill_popover_open: false,
+            font_family_picker_open: false,
             axis_dropdown_open: None,
             variable_row_focus: None,
             effect_param_focus: None,

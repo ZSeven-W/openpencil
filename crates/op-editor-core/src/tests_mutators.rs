@@ -126,6 +126,24 @@ fn set_selected_image_adjustment_clamps_and_resets() {
     }
 }
 
+#[test]
+fn replace_selected_icon_updates_icon_font_name_without_closing_over_color() {
+    let mut s = sample();
+    let id = s
+        .insert_icon_font_node_at("search", "lucide", 50.0, 50.0)
+        .expect("insert icon");
+
+    assert!(s.replace_selected_icon("home", "lucide", None));
+
+    let node = find_node(s.active_children(), &id).unwrap();
+    let jian_ops_schema::node::PenNode::IconFont(icon) = node else {
+        panic!("expected icon_font node");
+    };
+    assert_eq!(icon.icon_font_name, "home");
+    assert_eq!(icon.icon_font_family.as_deref(), Some("lucide"));
+    assert!(icon.fill.is_some(), "replacement preserves display color");
+}
+
 // --- Delete ----------------------------------------------------------
 
 #[test]

@@ -269,6 +269,7 @@ pub fn paint_node(
         }
         NodeKind::Other(tag) if tag == "icon_font" => crate::widgets::icons::paint_icon_font_node(
             cx.backend,
+            node.font_family.as_str(),
             node.text.as_deref().unwrap_or(""),
             world_rect,
             node.fill,
@@ -521,34 +522,75 @@ fn paint_text_node(
         13.0
     };
     let font_size = base_size * zoom;
-    let baseline_y = world_rect.origin.y + (base_size + 1.0) * zoom;
+    let weight = if node.font_weight > 0 {
+        node.font_weight
+    } else {
+        400
+    };
+    let family = if node.font_family.trim().is_empty() {
+        "system-ui"
+    } else {
+        node.font_family.as_str()
+    };
+    let line_height = if node.line_height > 0.0 {
+        node.line_height
+    } else {
+        1.2
+    };
+    let letter_spacing = node.letter_spacing * zoom;
+    let lines: Vec<String> = if node.text_wrap {
+        wrap_text(cx.backend, text, font_size, world_rect.size.x, weight)
+    } else {
+        text.split('\n').map(str::to_string).collect()
+    };
     if !text.is_empty() {
-        let weight = if node.font_weight > 0 {
-            node.font_weight
-        } else {
-            400
-        };
         let jc = jian_core::scene::Color::rgba(ch(ink.r), ch(ink.g), ch(ink.b), ch(ink.a));
-        let line_h = base_size * 1.35 * zoom;
-        let mut ly = baseline_y;
-        let lines: Vec<String> = if node.text_wrap {
-            wrap_text(cx.backend, text, font_size, world_rect.size.x, weight)
+        let line_h = base_size * line_height * zoom;
+        let text_h = if lines.is_empty() {
+            0.0
         } else {
-            text.split('\n').map(str::to_string).collect()
+            font_size + line_h * (lines.len().saturating_sub(1) as f32)
         };
-        for line in lines {
-            cx.backend.draw_text(
-                &TextLayout::single_run(&line, "system-ui", font_size, jc, Point2D::new(0.0, 0.0))
-                    .with_font_weight(weight),
-                Point2D::new(world_rect.origin.x, ly),
+        let first_baseline_y = match node.text_vertical_align {
+            crate::layout_scene::SceneTextVerticalAlign::Middle => {
+                world_rect.origin.y + ((world_rect.size.y - text_h).max(0.0) / 2.0) + font_size
+            }
+            crate::layout_scene::SceneTextVerticalAlign::Bottom => {
+                world_rect.origin.y + (world_rect.size.y - text_h).max(0.0) + font_size
+            }
+            crate::layout_scene::SceneTextVerticalAlign::Top => world_rect.origin.y + font_size,
+        };
+        for (idx, line) in lines.iter().enumerate() {
+            let line_w = measure_line_width(cx.backend, line, font_size, weight, letter_spacing);
+            let x = match node.text_align {
+                crate::layout_scene::SceneTextAlign::Center => {
+                    world_rect.origin.x + (world_rect.size.x - line_w).max(0.0) / 2.0
+                }
+                crate::layout_scene::SceneTextAlign::Right => {
+                    world_rect.origin.x + (world_rect.size.x - line_w).max(0.0)
+                }
+                crate::layout_scene::SceneTextAlign::Left
+                | crate::layout_scene::SceneTextAlign::Justify => world_rect.origin.x,
+            };
+            let y = first_baseline_y + idx as f32 * line_h;
+            draw_text_line(
+                cx.backend,
+                line,
+                family,
+                font_size,
+                weight,
+                jc,
+                Point2D::new(x, y),
+                letter_spacing,
             );
-            ly += line_h;
         }
     }
     // Caret while editing — sits at the end of the text.
     if let Some(c) = edit_caret {
         if c.editing == node.id && jian_core::anim::blink_visible(c.now_ms, c.anchor_ms, 500) {
-            let text_w = cx.backend.measure_text(text, font_size);
+            let caret_line = lines.last().map(String::as_str).unwrap_or("");
+            let text_w =
+                measure_line_width(cx.backend, caret_line, font_size, weight, letter_spacing);
             let caret = Rect {
                 origin: Point2D::new(
                     world_rect.origin.x + text_w,
@@ -561,6 +603,49 @@ fn paint_text_node(
     }
 }
 
+fn measure_line_width(
+    backend: &mut dyn crate::RenderBackend,
+    line: &str,
+    font_size: f32,
+    weight: u16,
+    letter_spacing: f32,
+) -> f32 {
+    let base = backend.measure_text_weighted(line, font_size, weight);
+    let extra = line.chars().count().saturating_sub(1) as f32 * letter_spacing;
+    base + extra
+}
+
+#[allow(clippy::too_many_arguments)]
+fn draw_text_line(
+    backend: &mut dyn crate::RenderBackend,
+    line: &str,
+    family: &str,
+    font_size: f32,
+    weight: u16,
+    color: jian_core::scene::Color,
+    origin: Point2D,
+    letter_spacing: f32,
+) {
+    if letter_spacing.abs() < f32::EPSILON {
+        backend.draw_text(
+            &TextLayout::single_run(line, family, font_size, color, Point2D::new(0.0, 0.0))
+                .with_font_weight(weight),
+            origin,
+        );
+        return;
+    }
+    let mut x = origin.x;
+    for ch in line.chars() {
+        let s = ch.to_string();
+        backend.draw_text(
+            &TextLayout::single_run(&s, family, font_size, color, Point2D::new(0.0, 0.0))
+                .with_font_weight(weight),
+            Point2D::new(x, origin.y),
+        );
+        x += backend.measure_text_weighted(&s, font_size, weight) + letter_spacing;
+    }
+}
+
 #[cfg(test)]
 mod arc_tests {
     use super::arc_polygon;
@@ -568,11 +653,9 @@ mod arc_tests {
 
     #[test]
     fn pie_polygon_starts_at_centre() {
-        // 100×100 rect at origin → centre (50, 50).
         let poly = arc_polygon(Rect::xywh(0.0, 0.0, 100.0, 100.0), 0.0, 90.0, 0.0);
         assert_eq!(poly[0].x, 50.0);
         assert_eq!(poly[0].y, 50.0);
-        // First arc point at 0° = +X edge → (100, 50).
         assert!((poly[1].x - 100.0).abs() < 0.01);
         assert!((poly[1].y - 50.0).abs() < 0.01);
     }
@@ -580,9 +663,7 @@ mod arc_tests {
     #[test]
     fn donut_polygon_has_outer_and_inner_rings() {
         let poly = arc_polygon(Rect::xywh(0.0, 0.0, 100.0, 100.0), 0.0, 360.0, 0.5);
-        // segs for 360° = 90; outer (segs+1) + inner (segs+1) points.
         assert_eq!(poly.len(), 2 * (90 + 1));
-        // An inner-ring point sits at half the radius from centre.
         let last = poly[poly.len() - 1];
         let dist = ((last.x - 50.0).powi(2) + (last.y - 50.0).powi(2)).sqrt();
         assert!((dist - 25.0).abs() < 0.5, "inner radius ~25, got {dist}");
@@ -590,11 +671,83 @@ mod arc_tests {
 
     #[test]
     fn quarter_sweep_end_point_at_90_degrees() {
-        // start 0°, sweep 90° → last outer point at +Y edge (50, 100).
         let poly = arc_polygon(Rect::xywh(0.0, 0.0, 100.0, 100.0), 0.0, 90.0, 0.0);
         let last = poly[poly.len() - 1];
         assert!((last.x - 50.0).abs() < 0.01);
         assert!((last.y - 100.0).abs() < 0.01);
+    }
+}
+
+#[cfg(test)]
+mod text_tests {
+    use super::paint_text_node;
+    use crate::layout_scene::{NodeKind, SceneNode, SceneTextAlign, SceneTextVerticalAlign};
+    use crate::widgets::PaintCx;
+    use crate::{Color, ImageDrawMode, Point2D, Rect, RenderBackend, TextLayout};
+
+    #[derive(Default)]
+    struct TextCaptureBackend {
+        origins: Vec<Point2D>,
+        families: Vec<String>,
+    }
+
+    impl RenderBackend for TextCaptureBackend {
+        fn begin_frame(&mut self) {}
+        fn end_frame(&mut self) {}
+        fn fill_rect(&mut self, _: Rect, _: Color) {}
+        fn stroke_rect(&mut self, _: Rect, _: Color, _: f32) {}
+        fn draw_text(&mut self, layout: &TextLayout, origin: Point2D) {
+            self.origins.push(origin);
+            if let Some(run) = layout.runs().first() {
+                self.families.push(run.font_family.clone());
+            }
+        }
+        fn clip_rect(&mut self, _: Rect) {}
+        fn save(&mut self) {}
+        fn restore(&mut self) {}
+        fn translate(&mut self, _: Point2D) {}
+        fn stroke_line(&mut self, _: Point2D, _: Point2D, _: Color, _: f32) {}
+        fn fill_round_rect(&mut self, _: Rect, _: f32, _: Color) {}
+        fn stroke_round_rect(&mut self, _: Rect, _: f32, _: Color, _: f32) {}
+        fn stroke_svg_path(&mut self, _: &str, _: Point2D, _: f32, _: Color, _: f32) {}
+        fn draw_image(&mut self, _: Rect, _: u64, _: &[u8]) {}
+        fn draw_image_with_mode(&mut self, _: Rect, _: u64, _: &[u8], _: ImageDrawMode) {}
+        fn resize(&mut self, _: u32, _: u32) {}
+        fn dpi_scale(&self) -> f32 {
+            1.0
+        }
+        fn measure_text_weighted(&mut self, text: &str, font_size: f32, _: u16) -> f32 {
+            text.chars().count() as f32 * font_size * 0.5
+        }
+    }
+
+    #[test]
+    fn text_node_paint_honors_typography_alignment() {
+        let mut node = SceneNode::leaf("t", NodeKind::Text);
+        node.bounds = Rect::xywh(0.0, 0.0, 200.0, 80.0);
+        node.text = Some("Hi".to_string());
+        node.font_family = "Georgia".to_string();
+        node.font_size = 20.0;
+        node.line_height = 1.0;
+        node.text_align = SceneTextAlign::Center;
+        node.text_vertical_align = SceneTextVerticalAlign::Middle;
+        let mut backend = TextCaptureBackend::default();
+        let mut cx = PaintCx {
+            backend: &mut backend,
+        };
+
+        paint_text_node(&mut cx, &node, node.bounds, 1.0, &None);
+
+        assert_eq!(backend.families, vec!["Georgia".to_string()]);
+        let origin = backend.origins[0];
+        assert!(
+            origin.x > 80.0,
+            "center-aligned text should move away from the left edge"
+        );
+        assert!(
+            origin.y > 40.0,
+            "middle-aligned text should move down from the top baseline"
+        );
     }
 }
 
@@ -618,7 +771,6 @@ mod path_tests {
         let mut n = SceneNode::leaf("p", NodeKind::Path);
         n.points = vec![Point2D::new(0.0, 0.0), Point2D::new(10.0, 0.0)];
         n.path_anchors = vec![anchor(0.0, 0.0, None), anchor(10.0, 0.0, None)];
-        // No handles → straight polyline == points.
         assert_eq!(flatten_path(&n), n.points);
     }
 
@@ -631,17 +783,14 @@ mod path_tests {
             anchor(100.0, 0.0, None),
         ];
         let poly = flatten_path(&n);
-        // 1 start point + 16 tessellation steps for the cubic.
         assert_eq!(poly.len(), 17);
         assert_eq!(poly[0], Point2D::new(0.0, 0.0));
         assert_eq!(poly[poly.len() - 1], Point2D::new(100.0, 0.0));
-        // Mid-curve bows toward the +Y handle.
         assert!(poly[8].y > 1.0, "curve bows toward the handle");
     }
 
     #[test]
     fn bounds_kept_so_helper_is_pure() {
-        // flatten_path must not mutate the node.
         let mut n = SceneNode::leaf("p", NodeKind::Path);
         n.bounds = Rect::xywh(1.0, 2.0, 3.0, 4.0);
         let _ = flatten_path(&n);

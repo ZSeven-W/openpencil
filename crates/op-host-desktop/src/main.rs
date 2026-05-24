@@ -23,6 +23,7 @@ mod frame;
 mod git_host;
 mod git_jobs;
 mod git_session;
+mod iconify_host;
 mod keyboard_input;
 mod macos_app;
 mod mcp_serve;
@@ -95,6 +96,7 @@ struct DesktopApp {
     /// on a worker thread; its result is drained into
     /// `chat.available_models` on a later frame.
     model_probe: model_discovery::ModelProbe,
+    iconify_job: Option<iconify_host::IconifyJob>,
     /// Document to open once the window is ready — set from argv by
     /// the file-association launch path (`openpencil-desktop X.op`).
     initial_file: Option<PathBuf>,
@@ -106,8 +108,7 @@ struct DesktopApp {
     /// on a worker thread; its result is drained into
     /// `editor_ui.update_status` on a later frame.
     update_probe: update_check::UpdateProbe,
-    /// Whether the "update available" prompt has already been shown
-    /// for the current probe — gates the dialog to once per check.
+    /// Gates the update-available dialog to once per check.
     update_prompt_shown: bool,
     /// Last *windowed* (non-maximized) outer position, physical px.
     /// Persisted on exit so a restart restores window placement.
@@ -134,11 +135,9 @@ struct DesktopApp {
     /// *during* the async pull — which the spawn-time confirm did
     /// not cover — and re-confirm before discarding them.
     git_pull_doc_baseline: Option<u64>,
-    /// In-flight background Git status query, if any — keeps the
-    /// working-tree scan (`git status` / `log`) off the UI thread.
+    /// In-flight background Git status query, if any.
     git_status_job: Option<git_jobs::GitStatusJob>,
-    /// In-flight background Git diff (`git diff` / `git show`), if
-    /// any — keeps a potentially large diff off the UI thread.
+    /// In-flight background Git diff (`git diff` / `git show`), if any.
     git_diff_job: Option<git_jobs::GitDiffJob>,
     /// When the Git panel was last re-snapshotted — drives the
     /// periodic refresh that keeps an open panel current against
@@ -178,6 +177,7 @@ impl DesktopApp {
             current_chat: None,
             current_design: None,
             model_probe: model_discovery::ModelProbe::spawn(),
+            iconify_job: None,
             initial_file,
             app_menu: None,
             update_probe: update_check::UpdateProbe::spawn(),

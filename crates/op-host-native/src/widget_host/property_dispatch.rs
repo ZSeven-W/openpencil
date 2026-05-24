@@ -7,7 +7,8 @@
 
 use super::helpers::parse_hex_color;
 use super::WidgetHostNative;
-use op_editor_core::ui_draft::PropertyFocus;
+use jian_ops_schema::sizing::SizingKeyword;
+use op_editor_core::PropertyFocus;
 
 impl WidgetHostNative {
     pub(in crate::widget_host) fn apply_property_action(
@@ -17,27 +18,32 @@ impl WidgetHostNative {
         use op_editor_ui::widgets::PropertyPanelAction as A;
         match action {
             A::SetFlexLayout(mode) => {
-                self.editor_state.editor_ui.flex_layout = mode;
+                self.set_selected_layout_mode(mode);
             }
             A::ToggleSizeFillWidth => {
-                let v = &mut self.editor_state.editor_ui.size_fill_width;
-                *v = !*v;
+                self.toggle_selected_sizing(true, SizingKeyword::FillContainer);
             }
             A::ToggleSizeFillHeight => {
-                let v = &mut self.editor_state.editor_ui.size_fill_height;
-                *v = !*v;
+                self.toggle_selected_sizing(false, SizingKeyword::FillContainer);
             }
             A::ToggleSizeHugWidth => {
-                let v = &mut self.editor_state.editor_ui.size_hug_width;
-                *v = !*v;
+                self.toggle_selected_sizing(true, SizingKeyword::FitContent);
             }
             A::ToggleSizeHugHeight => {
-                let v = &mut self.editor_state.editor_ui.size_hug_height;
-                *v = !*v;
+                self.toggle_selected_sizing(false, SizingKeyword::FitContent);
             }
             A::ToggleSizeClipContent => {
-                let v = &mut self.editor_state.editor_ui.size_clip_content;
-                *v = !*v;
+                self.toggle_selected_clip_content();
+            }
+            A::SetLayoutAlign(value) => {
+                self.set_selected_layout_align(value);
+            }
+            A::SetLayoutJustify(value) => {
+                self.set_selected_layout_justify(value);
+            }
+            A::SetLayoutAlignment { justify, align } => {
+                self.set_selected_layout_justify(justify);
+                self.set_selected_layout_align(align);
             }
             A::CreateComponent => {
                 let id = self.editor_state.selection.anchor.clone();
@@ -49,16 +55,34 @@ impl WidgetHostNative {
                 let ui = &mut self.editor_state.editor_ui;
                 ui.fill_type_picker_open = !ui.fill_type_picker_open;
                 ui.image_fill_popover_open = false;
+                ui.font_family_picker_open = false;
             }
             A::SetFillType(t) => {
                 self.editor_state.set_selected_fill_type(t);
                 self.editor_state.editor_ui.fill_type_picker_open = false;
                 self.editor_state.editor_ui.image_fill_popover_open = false;
             }
+            A::AddFill => {
+                let _ = self
+                    .editor_state
+                    .set_selected_fill_type(op_editor_core::FillType::Solid);
+            }
+            A::RemoveFill => {
+                let _ = self.editor_state.clear_selected_fills();
+                self.editor_state.editor_ui.fill_type_picker_open = false;
+                self.editor_state.editor_ui.image_fill_popover_open = false;
+            }
+            A::AddGradientStop => {
+                let _ = self.editor_state.add_selected_gradient_stop();
+            }
+            A::RemoveGradientStop(index) => {
+                let _ = self.editor_state.remove_selected_gradient_stop(index);
+            }
             A::ToggleImageFillPopover => {
                 let ui = &mut self.editor_state.editor_ui;
                 ui.image_fill_popover_open = !ui.image_fill_popover_open;
                 ui.fill_type_picker_open = false;
+                ui.font_family_picker_open = false;
                 ui.export_scale_picker_open = false;
                 ui.export_format_picker_open = false;
             }
@@ -78,6 +102,38 @@ impl WidgetHostNative {
                 self.image_adjustment_drag = None;
                 let _ = self.editor_state.reset_selected_image_adjustments();
             }
+            A::OpenSelectedIconPicker => {
+                let ui = &mut self.editor_state.editor_ui;
+                ui.icon_picker_open = true;
+                ui.icon_picker_replace_selection = true;
+                ui.icon_picker_search.clear();
+                ui.fill_type_picker_open = false;
+                ui.image_fill_popover_open = false;
+                ui.font_family_picker_open = false;
+                ui.export_scale_picker_open = false;
+                ui.export_format_picker_open = false;
+            }
+            A::SetTextAlign(value) => {
+                self.set_selected_text_align(value);
+            }
+            A::SetTextVerticalAlign(value) => {
+                self.set_selected_text_vertical_align(value);
+            }
+            A::SetTextGrowth(value) => {
+                self.set_selected_text_growth(value);
+            }
+            A::ToggleFontFamilyPicker => {
+                let ui = &mut self.editor_state.editor_ui;
+                ui.font_family_picker_open = !ui.font_family_picker_open;
+                ui.fill_type_picker_open = false;
+                ui.image_fill_popover_open = false;
+                ui.export_scale_picker_open = false;
+                ui.export_format_picker_open = false;
+            }
+            A::SetFontFamily(choice) => {
+                self.set_selected_text_font_family(choice.family());
+                self.editor_state.editor_ui.font_family_picker_open = false;
+            }
             A::OpenColorPicker(target) => {
                 // Fallback anchor when called outside the press path.
                 let _ = self
@@ -88,12 +144,14 @@ impl WidgetHostNative {
                 let ui = &mut self.editor_state.editor_ui;
                 ui.export_scale_picker_open = !ui.export_scale_picker_open;
                 ui.export_format_picker_open = false;
+                ui.font_family_picker_open = false;
                 ui.export_picker_hover = None;
             }
             A::ToggleExportFormatPicker => {
                 let ui = &mut self.editor_state.editor_ui;
                 ui.export_format_picker_open = !ui.export_format_picker_open;
                 ui.export_scale_picker_open = false;
+                ui.font_family_picker_open = false;
                 ui.export_picker_hover = None;
             }
             A::SetExportScale(scale) => {
@@ -270,6 +328,42 @@ impl WidgetHostNative {
         ui.export_scale_picker_open = false;
         ui.export_format_picker_open = false;
         ui.export_picker_hover = None;
+        self.mark_dirty();
+        true
+    }
+
+    pub(in crate::widget_host) fn dismiss_font_family_picker_on_press(
+        &mut self,
+        x: f32,
+        y: f32,
+        viewport_width: f32,
+        viewport_height: f32,
+    ) -> bool {
+        use op_editor_ui::widgets::{PropertyPanel, PropertyPanelAction as A, TOP_BAR_HEIGHT};
+        use op_editor_ui::{Point2D, Rect};
+        if !self.editor_state.editor_ui.font_family_picker_open {
+            return false;
+        }
+        self.refresh_layout_scene();
+        if let Some(panel) = PropertyPanel::for_selection(&self.editor_state) {
+            let property_rect = Rect {
+                origin: Point2D::new(
+                    viewport_width - self.editor_state.editor_ui.property_panel_width,
+                    TOP_BAR_HEIGHT,
+                ),
+                size: Point2D::new(
+                    self.editor_state.editor_ui.property_panel_width,
+                    (viewport_height - TOP_BAR_HEIGHT).max(0.0),
+                ),
+            };
+            if let Some(action) = panel.hit_test_action(property_rect, Point2D::new(x, y)) {
+                if matches!(action, A::SetFontFamily(_) | A::ToggleFontFamilyPicker) {
+                    self.apply_property_action(action);
+                    return true;
+                }
+            }
+        }
+        self.editor_state.editor_ui.font_family_picker_open = false;
         self.mark_dirty();
         true
     }

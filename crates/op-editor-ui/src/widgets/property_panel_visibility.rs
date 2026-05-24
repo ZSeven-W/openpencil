@@ -1,0 +1,225 @@
+//! Section capability and visibility masks for the property panel.
+
+use op_editor_core::FillType;
+
+use crate::widgets::property_panel_action::{LayoutAlignValue, LayoutJustifyValue};
+
+/// Per-NodeKind toggles for which property-panel sections render.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct SectionCapabilities {
+    pub(crate) create_component: bool,
+    pub(crate) flex_layout: bool,
+    pub(crate) size_options: bool,
+    pub(crate) text: bool,
+    pub(crate) image: bool,
+    pub(crate) opacity: bool,
+    pub(crate) fill: bool,
+    pub(crate) stroke: bool,
+    pub(crate) effects: bool,
+    pub(crate) export: bool,
+}
+
+impl SectionCapabilities {
+    pub(crate) fn for_multi() -> Self {
+        Self {
+            create_component: false,
+            flex_layout: false,
+            size_options: true,
+            text: false,
+            image: false,
+            opacity: true,
+            fill: false,
+            stroke: false,
+            effects: true,
+            export: true,
+        }
+    }
+
+    pub(crate) fn for_kind(kind: &crate::layout_scene::NodeKind) -> Self {
+        use crate::layout_scene::NodeKind as K;
+        match kind {
+            K::Frame => Self {
+                create_component: true,
+                flex_layout: true,
+                size_options: true,
+                text: false,
+                image: false,
+                opacity: true,
+                fill: true,
+                stroke: true,
+                effects: true,
+                export: true,
+            },
+            K::Group => Self {
+                create_component: true,
+                flex_layout: true,
+                size_options: true,
+                text: false,
+                image: false,
+                opacity: true,
+                fill: false,
+                stroke: false,
+                effects: true,
+                export: true,
+            },
+            K::Other(tag) if tag == "image" => Self {
+                create_component: false,
+                flex_layout: false,
+                size_options: true,
+                text: false,
+                image: true,
+                opacity: true,
+                fill: false,
+                stroke: false,
+                effects: true,
+                export: true,
+            },
+            K::Other(tag) if tag == "icon_font" => Self {
+                create_component: false,
+                flex_layout: false,
+                size_options: true,
+                text: false,
+                image: false,
+                opacity: true,
+                fill: true,
+                stroke: true,
+                effects: false,
+                export: true,
+            },
+            K::Other(tag) if tag == "ref" => Self {
+                create_component: true,
+                flex_layout: false,
+                size_options: false,
+                text: false,
+                image: false,
+                opacity: true,
+                fill: false,
+                stroke: false,
+                effects: true,
+                export: true,
+            },
+            K::Other(_) => Self {
+                create_component: false,
+                flex_layout: false,
+                size_options: false,
+                text: false,
+                image: false,
+                opacity: true,
+                fill: false,
+                stroke: false,
+                effects: true,
+                export: true,
+            },
+            K::Rect => Self {
+                create_component: true,
+                flex_layout: true,
+                size_options: true,
+                text: false,
+                image: false,
+                opacity: true,
+                fill: true,
+                stroke: true,
+                effects: true,
+                export: true,
+            },
+            K::Ellipse | K::Polygon => Self {
+                create_component: false,
+                flex_layout: false,
+                size_options: true,
+                text: false,
+                image: false,
+                opacity: true,
+                fill: true,
+                stroke: true,
+                effects: true,
+                export: true,
+            },
+            K::Line => Self {
+                create_component: false,
+                flex_layout: false,
+                size_options: true,
+                text: false,
+                image: false,
+                opacity: true,
+                fill: false,
+                stroke: true,
+                effects: true,
+                export: true,
+            },
+            K::Path => Self {
+                create_component: false,
+                flex_layout: false,
+                size_options: true,
+                text: false,
+                image: false,
+                opacity: true,
+                fill: true,
+                stroke: true,
+                effects: true,
+                export: true,
+            },
+            K::Text => Self {
+                create_component: false,
+                flex_layout: false,
+                size_options: true,
+                text: true,
+                image: false,
+                opacity: true,
+                fill: true,
+                stroke: false,
+                effects: true,
+                export: true,
+            },
+        }
+    }
+}
+
+/// Whether each section currently paints.
+#[derive(Debug, Clone, Copy)]
+pub struct VisibleSections {
+    pub create_component: bool,
+    pub flex_layout: bool,
+    pub flex_layout_mode: op_editor_core::FlexLayout,
+    pub layout_justify: LayoutJustifyValue,
+    pub layout_align: LayoutAlignValue,
+    pub size_options: bool,
+    pub clip_content: bool,
+    pub text: bool,
+    pub icon: bool,
+    pub image: bool,
+    pub opacity: bool,
+    pub corner_radius: bool,
+    pub polygon_sides: bool,
+    pub ellipse_arc: bool,
+    pub fill: bool,
+    pub stroke: bool,
+    pub effects: bool,
+    pub export: bool,
+    pub fill_type: FillType,
+    pub gradient_stop_count: usize,
+}
+
+impl VisibleSections {
+    pub const ALL: Self = Self {
+        create_component: true,
+        flex_layout: true,
+        flex_layout_mode: op_editor_core::FlexLayout::Free,
+        layout_justify: LayoutJustifyValue::Start,
+        layout_align: LayoutAlignValue::Start,
+        size_options: true,
+        clip_content: true,
+        text: false,
+        icon: false,
+        image: false,
+        opacity: true,
+        corner_radius: true,
+        polygon_sides: false,
+        ellipse_arc: false,
+        fill: true,
+        stroke: true,
+        effects: true,
+        export: true,
+        fill_type: FillType::Solid,
+        gradient_stop_count: 0,
+    };
+}

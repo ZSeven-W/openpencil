@@ -13,6 +13,7 @@ use crate::fills::{set_primary_fill_hex, set_primary_stroke_hex};
 use crate::node_id::NodeId;
 use crate::state::EditorState;
 use crate::tool::Tool;
+use crate::walkers::find_node_mut;
 use jian_ops_schema::node::{IconFontNode, PathNode, PenNode, PenNodeBase, PenPathAnchor};
 
 impl EditorState {
@@ -250,6 +251,54 @@ impl EditorState {
         Some(id)
     }
 
+    /// Replace the selected icon node with another Lucide glyph.
+    /// `icon_font` nodes update their name/family directly. Path
+    /// icons update `iconId` and optionally replace their SVG `d`
+    /// data when the host can provide local path data.
+    pub fn replace_selected_icon(
+        &mut self,
+        icon_name: &str,
+        family: &str,
+        svg_path_d: Option<&str>,
+    ) -> bool {
+        let icon_name = icon_name.trim();
+        let family = family.trim();
+        let sel = self.selection.anchor.clone();
+        if icon_name.is_empty() || family.is_empty() || !sel.is_real() || !self.is_editable(&sel) {
+            return false;
+        }
+        let can_replace = match self.selected_node() {
+            Some(PenNode::IconFont(_)) => true,
+            Some(PenNode::Path(n)) => n.icon_id.is_some(),
+            _ => false,
+        };
+        if !can_replace {
+            return false;
+        }
+        self.commit_history();
+        let Some(node) = find_node_mut(self.active_children_mut(), &sel) else {
+            return false;
+        };
+        let icon_id = format!("{family}:{icon_name}");
+        match node {
+            PenNode::IconFont(n) => {
+                n.icon_font_name = icon_name.to_string();
+                n.icon_font_family = Some(family.to_string());
+                n.base.name = Some(icon_id);
+                true
+            }
+            PenNode::Path(n) if n.icon_id.is_some() => {
+                n.icon_id = Some(icon_id.clone());
+                n.base.name = Some(icon_id);
+                if let Some(d) = svg_path_d {
+                    n.d = Some(d.to_string());
+                }
+                true
+            }
+            _ => false,
+        }
+    }
+
     /// Replace the selected node's primary fill with an Image fill
     /// rooted at `src` (typically a `data:` URL). Existing colour /
     /// gradient is overwritten; non-fillable variants reject silently.
@@ -263,6 +312,10 @@ impl EditorState {
         let Some(node) = crate::walkers::find_node_mut(self.active_children_mut(), &sel) else {
             return false;
         };
+        if let PenNode::Image(image) = node {
+            image.src = src.to_string();
+            return true;
+        }
         let Some(fills) = crate::fills::node_fills_mut(node) else {
             return false;
         };

@@ -4,11 +4,13 @@
 
 #![cfg(test)]
 
-use crate::command::EditorCommand;
+use crate::command::{EditorCommand, LayoutPropValue};
 use crate::node_id::NodeId;
 use crate::pen_node_ext::PenNodeExt;
-use crate::test_support::{ellipse, rect, state_with};
+use crate::test_support::{ellipse, rect, state_with, text};
 use crate::walkers::find_node;
+use jian_ops_schema::node::container::{AlignItems, JustifyContent, LayoutMode, Padding};
+use jian_ops_schema::node::text::{TextAlign, TextAlignVertical, TextGrowth};
 use jian_ops_schema::node::PenNode;
 
 fn id(s: &str) -> NodeId {
@@ -226,4 +228,89 @@ fn set_effect_param_rejects_field_effect_mismatch() {
         field: crate::EffectField::OffsetX,
         value: 5.0,
     }));
+}
+
+// --- SetNodeLayoutProp ----------------------------------------------
+
+#[test]
+fn set_node_layout_prop_writes_container_layout_fields() {
+    let mut s = state_with(vec![rect("n1", "r", 0.0, 0.0, 10.0, 10.0)]);
+    for (property, value) in [
+        ("layout", LayoutPropValue::Keyword("horizontal".into())),
+        (
+            "justifyContent",
+            LayoutPropValue::Keyword("space_between".into()),
+        ),
+        ("alignItems", LayoutPropValue::Keyword("center".into())),
+        ("gap", LayoutPropValue::Number(12.0)),
+        (
+            "padding",
+            LayoutPropValue::NumberArray(vec![1.0, 2.0, 3.0, 4.0]),
+        ),
+        ("clipContent", LayoutPropValue::Bool(true)),
+    ] {
+        assert!(s.apply(EditorCommand::SetNodeLayoutProp {
+            node_id: id("n1"),
+            property: property.into(),
+            value,
+        }));
+    }
+    match find_node(s.active_children(), &id("n1")).unwrap() {
+        PenNode::Rectangle(r) => {
+            assert_eq!(r.container.layout, Some(LayoutMode::Horizontal));
+            assert_eq!(
+                r.container.justify_content,
+                Some(JustifyContent::SpaceBetween)
+            );
+            assert_eq!(r.container.align_items, Some(AlignItems::Center));
+            assert_eq!(
+                r.container.gap,
+                Some(jian_ops_schema::node::base::NumberOrExpression::Number(
+                    12.0
+                ))
+            );
+            assert_eq!(
+                r.container.padding,
+                Some(Padding::LtrB([1.0, 2.0, 3.0, 4.0]))
+            );
+            assert_eq!(r.container.clip_content, Some(true));
+        }
+        other => panic!("expected rect, got {other:?}"),
+    }
+}
+
+#[test]
+fn set_node_layout_prop_writes_text_specific_fields() {
+    let mut s = state_with(vec![text("t1", "t", 0.0, 0.0, 100.0, 40.0, "hello")]);
+    for (property, value) in [
+        ("fontFamily", LayoutPropValue::Keyword("Inter".into())),
+        ("textAlign", LayoutPropValue::Keyword("justify".into())),
+        (
+            "textAlignVertical",
+            LayoutPropValue::Keyword("middle".into()),
+        ),
+        (
+            "textGrowth",
+            LayoutPropValue::Keyword("fixed-width-height".into()),
+        ),
+        ("lineHeight", LayoutPropValue::Number(1.4)),
+        ("letterSpacing", LayoutPropValue::Number(2.0)),
+    ] {
+        assert!(s.apply(EditorCommand::SetNodeLayoutProp {
+            node_id: id("t1"),
+            property: property.into(),
+            value,
+        }));
+    }
+    match find_node(s.active_children(), &id("t1")).unwrap() {
+        PenNode::Text(t) => {
+            assert_eq!(t.font_family.as_deref(), Some("Inter"));
+            assert_eq!(t.text_align, Some(TextAlign::Justify));
+            assert_eq!(t.text_align_vertical, Some(TextAlignVertical::Middle));
+            assert_eq!(t.text_growth, Some(TextGrowth::FixedWidthHeight));
+            assert_eq!(t.line_height, Some(1.4));
+            assert_eq!(t.letter_spacing, Some(2.0));
+        }
+        other => panic!("expected text, got {other:?}"),
+    }
 }

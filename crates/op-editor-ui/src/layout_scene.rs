@@ -209,6 +209,21 @@ pub struct SceneAnchor {
     pub point_type: ScenePointType,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SceneTextAlign {
+    Left,
+    Center,
+    Right,
+    Justify,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SceneTextVerticalAlign {
+    Top,
+    Middle,
+    Bottom,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct SceneNode {
     /// Stable node id (the `.op` schema id). Identity for hit-test /
@@ -247,10 +262,20 @@ pub struct SceneNode {
     /// Text content — `Some` for Text nodes (and the lucide glyph
     /// name for `icon_font`). `None` for non-text kinds.
     pub text: Option<String>,
+    /// CSS font-family stack for text nodes. Empty = renderer default.
+    pub font_family: String,
     /// Text size in doc-px. `0.0` = the painter's default (13 px).
     pub font_size: f32,
     /// CSS-style font weight (100-900). `0` = default (400).
     pub font_weight: u16,
+    /// Line-height multiplier (`1.2` = 120%). `0.0` = renderer default.
+    pub line_height: f32,
+    /// Extra tracking in doc-px between glyphs.
+    pub letter_spacing: f32,
+    /// Horizontal text alignment inside `bounds`.
+    pub text_align: SceneTextAlign,
+    /// Vertical text alignment inside `bounds`.
+    pub text_vertical_align: SceneTextVerticalAlign,
     /// Whether the painter wraps the text to `bounds.size.x`.
     pub text_wrap: bool,
     /// Polyline / path geometry in absolute doc-space coords —
@@ -356,8 +381,13 @@ impl SceneNode {
             gradient: None,
             stroke: None,
             text: None,
+            font_family: String::new(),
             font_size: 0.0,
             font_weight: 0,
+            line_height: 0.0,
+            letter_spacing: 0.0,
+            text_align: SceneTextAlign::Left,
+            text_vertical_align: SceneTextVerticalAlign::Top,
             text_wrap: false,
             points: Vec::new(),
             path_anchors: Vec::new(),

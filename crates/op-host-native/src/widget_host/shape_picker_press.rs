@@ -28,6 +28,7 @@ impl WidgetHostNative {
                 }
                 ShapeChoice::OpenIconPicker => {
                     self.editor_state.editor_ui.icon_picker_open = true;
+                    self.editor_state.editor_ui.icon_picker_replace_selection = false;
                     self.editor_state.editor_ui.icon_picker_search.clear();
                 }
                 ShapeChoice::ImportImageOrSvg => {

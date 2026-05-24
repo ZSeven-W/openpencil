@@ -38,7 +38,10 @@ pub const PROPERTY_PANEL_WIDTH: f32 = 280.0;
 // out for the 800-line ceiling); re-exported so every existing
 // `widgets::PropertyPanelAction` / `property_panel::PropertyPanelAction`
 // path is unchanged.
-pub use crate::widgets::property_panel_action::PropertyPanelAction;
+pub use crate::widgets::property_panel_action::{
+    FontFamilyChoice, LayoutAlignValue, LayoutJustifyValue, PropertyPanelAction, TextAlignValue,
+    TextGrowthValue, TextVerticalAlignValue,
+};
 
 // `SectionCapabilities` lives in `property_panel_layout.rs`
 // alongside `VisibleSections` (the section-visibility mask it
@@ -80,6 +83,7 @@ pub struct PropertyPanel {
     pub fill_type: op_editor_core::FillType,
     pub fill_type_picker_open: bool,
     pub image_fill_popover_open: bool,
+    pub font_family_picker_open: bool,
     /// True for multi-select aggregate (inputs inert, "N items").
     pub is_multi: bool,
     /// Active header tab — toggled by Cmd+Shift+C.
@@ -168,6 +172,14 @@ impl PropertyPanel {
         is_multi: bool,
     ) -> Self {
         let ui = &state.editor_ui;
+        let flex_layout = snapshot.flex_layout;
+        let size_flags = sections::SizeFlags {
+            fill_width: snapshot.size_fill_width,
+            fill_height: snapshot.size_fill_height,
+            hug_width: snapshot.size_hug_width,
+            hug_height: snapshot.size_hug_height,
+            clip_content: snapshot.size_clip_content,
+        };
         Self {
             id: WidgetId::new(2000),
             snapshot,
@@ -194,17 +206,12 @@ impl PropertyPanel {
             },
             caret_anchor_ms: state.ui.property_caret_anchor_ms,
             now_ms,
-            flex_layout: ui.flex_layout,
-            size_flags: sections::SizeFlags {
-                fill_width: ui.size_fill_width,
-                fill_height: ui.size_fill_height,
-                hug_width: ui.size_hug_width,
-                hug_height: ui.size_hug_height,
-                clip_content: ui.size_clip_content,
-            },
+            flex_layout,
+            size_flags,
             fill_type,
             fill_type_picker_open: ui.fill_type_picker_open,
             image_fill_popover_open: ui.image_fill_popover_open,
+            font_family_picker_open: ui.font_family_picker_open,
             is_multi,
             tab: ui.property_tab,
             export_format: ui.export_format,
@@ -271,9 +278,18 @@ impl PropertyPanel {
     fn visible_sections(&self) -> sections::VisibleSections {
         let caps = self.capabilities();
         sections::VisibleSections {
+            create_component: caps.create_component && self.snapshot.can_create_component,
             flex_layout: caps.flex_layout,
+            flex_layout_mode: self.snapshot.flex_layout,
+            layout_justify: self.snapshot.layout_justify,
+            layout_align: self.snapshot.layout_align,
             size_options: caps.size_options,
+            clip_content: self.snapshot.can_clip_content,
+            text: caps.text && self.snapshot.text.is_some(),
+            icon: self.snapshot.icon.is_some(),
+            image: caps.image && self.snapshot.is_image_node,
             opacity: caps.opacity,
+            corner_radius: self.snapshot.has_corner_radius,
             polygon_sides: self.snapshot.polygon_sides.is_some(),
             ellipse_arc: self.snapshot.ellipse_arc.is_some(),
             fill: caps.fill,
@@ -312,6 +328,7 @@ impl PropertyPanel {
             self.visible_sections(),
             &self.snapshot.effects,
             self.fill_type_picker_open,
+            self.font_family_picker_open,
             self.export_scale_picker_open,
             self.export_format_picker_open,
         );
@@ -344,6 +361,7 @@ impl PropertyPanel {
             self.visible_sections(),
             &self.snapshot.effects,
             self.fill_type_picker_open,
+            self.font_family_picker_open,
             self.export_scale_picker_open,
             self.export_format_picker_open,
         )
@@ -483,23 +501,28 @@ impl Widget for PropertyPanel {
         // matching the layout walker's `+= TAB_HEIGHT` step.
         let mut y = tab_bottom - scroll;
         y = sections::paint_node_header(cx, &self.theme, &self.snapshot, x, y, w);
-        y = sections::paint_create_component(cx, &self.theme, &self.labels, x, y, w);
+        if caps.create_component && self.snapshot.can_create_component {
+            y = sections::paint_create_component(cx, &self.theme, &self.labels, x, y, w);
+        }
         y = sections::paint_position_section(
             cx,
             &self.theme,
             &self.snapshot,
             &edit_ctx,
             &self.labels,
+            self.snapshot.has_corner_radius,
             x,
             y,
             w,
         );
         if caps.flex_layout {
-            y = sections::paint_flex_section(
+            y = crate::widgets::property_panel_flex::paint_flex_section(
                 cx,
                 &self.theme,
+                &self.snapshot,
+                &edit_ctx,
                 &self.labels,
-                self.flex_layout,
+                self.locale,
                 x,
                 y,
                 w,
@@ -513,6 +536,41 @@ impl Widget for PropertyPanel {
                 &edit_ctx,
                 &self.labels,
                 self.size_flags,
+                self.snapshot.can_clip_content,
+                x,
+                y,
+                w,
+            );
+        }
+        if self.snapshot.icon.is_some() {
+            y = crate::widgets::property_panel_icon::paint_icon_section(
+                cx,
+                &self.theme,
+                &self.snapshot,
+                self.locale,
+                x,
+                y,
+                w,
+            );
+        }
+        if caps.text && self.snapshot.text.is_some() {
+            y = crate::widgets::property_panel_text::paint_text_section(
+                cx,
+                &self.theme,
+                &self.snapshot,
+                &edit_ctx,
+                self.locale,
+                x,
+                y,
+                w,
+            );
+        }
+        if caps.image && self.snapshot.is_image_node {
+            y = crate::widgets::property_panel_image_node::paint_image_node_section(
+                cx,
+                &self.theme,
+                &self.snapshot,
+                self.locale,
                 x,
                 y,
                 w,
@@ -594,6 +652,17 @@ impl Widget for PropertyPanel {
                 self.locale,
             );
         }
+        if caps.text && self.font_family_picker_open {
+            if let Some(text) = self.snapshot.text.as_ref() {
+                crate::widgets::property_panel_text::paint_font_family_picker(
+                    cx,
+                    &self.theme,
+                    scrolled,
+                    self.visible_sections(),
+                    &text.font_family,
+                );
+            }
+        }
         // Export-section inline select popups — painted last so the
         // scale / format dropdown overlays sit above every section.
         if caps.export && (self.export_scale_picker_open || self.export_format_picker_open) {
@@ -625,7 +694,8 @@ impl PropertyPanel {
     /// right rail. Hosts call this late in their composition pass so
     /// the image-fill popover is above floating canvas controls.
     pub fn paint_overlays(&self, cx: &mut PaintCx<'_>, rect: Rect) {
-        if !self.capabilities().fill || !self.image_fill_popover_open {
+        let caps = self.capabilities();
+        if !(caps.fill || caps.image) || !self.image_fill_popover_open {
             return;
         }
         let scroll = self.effective_scroll(rect);

@@ -159,6 +159,7 @@ impl WidgetHost {
                 // now. A future implementation would surface a
                 // `<input type="file">` via the JS bridge.
             }
+            _ => {}
         }
         self.mark_dirty();
     }

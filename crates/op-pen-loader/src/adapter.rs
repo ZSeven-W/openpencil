@@ -564,8 +564,23 @@ fn text_to_payload(n: &TextNode) -> NodePayload {
             .join(""),
     });
     assign_first_fill(&mut p, n.fill.as_deref());
+    p.font_family = n.font_family.clone().unwrap_or_default();
     p.font_size = n.font_size.unwrap_or(0.0) as f32;
     p.font_weight = resolve_font_weight(n.font_weight.as_ref());
+    p.line_height = n.line_height.unwrap_or(0.0) as f32;
+    p.letter_spacing = n.letter_spacing.unwrap_or(0.0) as f32;
+    p.text_align = n
+        .text_align
+        .as_ref()
+        .map(text_align_keyword)
+        .unwrap_or("")
+        .to_string();
+    p.text_vertical_align = n
+        .text_align_vertical
+        .as_ref()
+        .map(text_vertical_align_keyword)
+        .unwrap_or("")
+        .to_string();
     // Only wrap text when the schema explicitly authored
     // `textGrowth: fixed-width` (or fixed-width-and-height) —
     // matches canonical paint behaviour. Default-growth text was
@@ -613,6 +628,23 @@ fn resolve_font_weight(w: Option<&FontWeight>) -> u16 {
     }
 }
 
+fn text_align_keyword(value: &jian_ops_schema::node::TextAlign) -> &'static str {
+    match value {
+        jian_ops_schema::node::TextAlign::Left => "left",
+        jian_ops_schema::node::TextAlign::Center => "center",
+        jian_ops_schema::node::TextAlign::Right => "right",
+        jian_ops_schema::node::TextAlign::Justify => "justify",
+    }
+}
+
+fn text_vertical_align_keyword(value: &jian_ops_schema::node::TextAlignVertical) -> &'static str {
+    match value {
+        jian_ops_schema::node::TextAlignVertical::Top => "top",
+        jian_ops_schema::node::TextAlignVertical::Middle => "middle",
+        jian_ops_schema::node::TextAlignVertical::Bottom => "bottom",
+    }
+}
+
 fn text_input_to_payload(n: &TextInputNode) -> NodePayload {
     let mut p = base_payload(&n.base, "text");
     p.text = n.value.clone().or_else(|| n.placeholder.clone());
@@ -652,6 +684,10 @@ fn icon_font_to_payload(n: &IconFontNode) -> NodePayload {
     // scale-to-fit + stroke style.
     let mut p = base_payload(&n.base, "icon_font");
     p.text = Some(n.icon_font_name.clone());
+    p.font_family = n
+        .icon_font_family
+        .clone()
+        .unwrap_or_else(|| "lucide".to_string());
     assign_first_fill(&mut p, n.fill.as_deref());
     p
 }
@@ -675,6 +711,7 @@ fn base_payload(base: &PenNodeBase, kind: &str) -> NodePayload {
         fill: None,
         stroke: None,
         text: None,
+        font_family: String::new(),
         rotation: (base.rotation.unwrap_or(0.0) as f32).to_radians(),
         corner_radius: 0.0,
         arc_start_angle: None,
@@ -692,6 +729,10 @@ fn base_payload(base: &PenNodeBase, kind: &str) -> NodePayload {
         svg_path: None,
         font_size: 0.0,
         font_weight: 0,
+        line_height: 0.0,
+        letter_spacing: 0.0,
+        text_align: String::new(),
+        text_vertical_align: String::new(),
         text_wrap: false,
         effects: Vec::new(),
         image_src: None,

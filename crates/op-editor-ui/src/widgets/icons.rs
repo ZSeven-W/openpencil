@@ -518,15 +518,58 @@ pub fn draw_icon(
     }
 }
 
-/// Paint a canonical `icon_font` node — lucide glyph by name,
-/// scaled into `rect` with aspect preserved. Mirrors TS
-/// `drawIconFont` (packages/pen-renderer/src/node-renderer.ts).
-/// Unknown names stroke a small dot at the centre — same shape
-/// as the TS `FALLBACK_ICON_D` (`M12 12m-3 0a3 3 0 1 0 6 0a3 3 0 1 0 -6 0`)
-/// so the user sees an honest "unknown glyph" mark instead of
-/// a solid block.
+pub struct IconPathData<'a> {
+    pub d: &'a str,
+    pub style: super::icon_catalog::IconRenderStyle,
+    pub viewbox: f32,
+}
+
+pub fn draw_icon_data(
+    backend: &mut dyn RenderBackend,
+    data: IconPathData<'_>,
+    top_left: Point2D,
+    size: f32,
+    color: Color,
+    stroke_width: f32,
+) {
+    match data.style {
+        super::icon_catalog::IconRenderStyle::Stroke => {
+            backend.stroke_svg_path(data.d, top_left, size, color, stroke_width);
+        }
+        super::icon_catalog::IconRenderStyle::Fill => {
+            backend.fill_svg_path(data.d, top_left, size, data.viewbox.max(1.0), color);
+        }
+    }
+}
+
+pub fn draw_icon_catalog_entry(
+    backend: &mut dyn RenderBackend,
+    icon: &super::icon_catalog::IconCatalogEntry,
+    top_left: Point2D,
+    size: f32,
+    color: Color,
+    stroke_width: f32,
+) {
+    draw_icon_data(
+        backend,
+        IconPathData {
+            d: &icon.d,
+            style: icon.style,
+            viewbox: icon.width.max(icon.height),
+        },
+        top_left,
+        size,
+        color,
+        stroke_width,
+    );
+}
+
+/// Paint a canonical `icon_font` node by Iconify collection + name,
+/// scaled into `rect` with aspect preserved. Unknown names stroke a
+/// small dot at the centre so the user sees an honest fallback mark.
 pub fn paint_icon_font_node(
     backend: &mut dyn RenderBackend,
+    family: &str,
     name: &str,
     rect: crate::Rect,
     fill: Option<Color>,
@@ -546,8 +589,19 @@ pub fn paint_icon_font_node(
         rect.origin.y + (rect.size.y - size) / 2.0,
     );
     let stroke_width = (size / 24.0 * 2.0).max(1.0);
-    if let Some(icon) = Icon::from_name(name) {
-        draw_icon(backend, icon, top_left, size, color, stroke_width);
+    let family = if family.trim().is_empty() {
+        "lucide"
+    } else {
+        family.trim()
+    };
+    if let Some(icon) = super::icon_catalog::lookup_icon(family, name) {
+        draw_icon_catalog_entry(backend, icon, top_left, size, color, stroke_width);
+    } else if family == "lucide" {
+        if let Some(icon) = Icon::from_name(name) {
+            draw_icon(backend, icon, top_left, size, color, stroke_width);
+        } else {
+            backend.stroke_svg_path(FALLBACK_ICON_D, top_left, size, color, stroke_width);
+        }
     } else {
         backend.stroke_svg_path(FALLBACK_ICON_D, top_left, size, color, stroke_width);
     }
@@ -559,171 +613,3 @@ pub fn paint_icon_font_node(
 const FALLBACK_ICON_D: &str = "M12 12m-3 0a3 3 0 1 0 6 0a3 3 0 1 0 -6 0";
 
 use super::icons_data::*;
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::{Color, Point2D, Rect, TextLayout};
-
-    #[derive(Default)]
-    struct CountingBackend {
-        paths: usize,
-    }
-
-    impl RenderBackend for CountingBackend {
-        fn begin_frame(&mut self) {}
-        fn end_frame(&mut self) {}
-        fn fill_rect(&mut self, _: Rect, _: Color) {}
-        fn stroke_rect(&mut self, _: Rect, _: Color, _: f32) {}
-        fn draw_text(&mut self, _: &TextLayout, _: Point2D) {}
-        fn clip_rect(&mut self, _: Rect) {}
-        fn save(&mut self) {}
-        fn restore(&mut self) {}
-        fn translate(&mut self, _: Point2D) {}
-        fn stroke_line(&mut self, _: Point2D, _: Point2D, _: Color, _: f32) {}
-        fn fill_round_rect(&mut self, _: Rect, _: f32, _: Color) {}
-        fn stroke_round_rect(&mut self, _: Rect, _: f32, _: Color, _: f32) {}
-        fn stroke_svg_path(&mut self, _: &str, _: Point2D, _: f32, _: Color, _: f32) {
-            self.paths += 1;
-        }
-        fn resize(&mut self, _: u32, _: u32) {}
-        fn dpi_scale(&self) -> f32 {
-            1.0
-        }
-    }
-
-    fn paint_one(icon: Icon) -> CountingBackend {
-        let mut b = CountingBackend::default();
-        draw_icon(
-            &mut b,
-            icon,
-            Point2D::new(0.0, 0.0),
-            16.0,
-            Color::WHITE,
-            1.5,
-        );
-        b
-    }
-
-    #[test]
-    fn plus_renders_two_paths() {
-        let b = paint_one(Icon::Plus);
-        assert_eq!(b.paths, 2);
-    }
-
-    #[test]
-    fn minus_renders_one_path() {
-        let b = paint_one(Icon::Minus);
-        assert_eq!(b.paths, 1);
-    }
-
-    #[test]
-    fn sun_renders_disc_plus_eight_rays() {
-        let b = paint_one(Icon::Sun);
-        assert_eq!(b.paths, 9);
-    }
-
-    #[test]
-    fn every_variant_paints_at_least_one_primitive() {
-        for icon in [
-            Icon::Cursor,
-            Icon::Square,
-            Icon::ChevronDown,
-            Icon::Type,
-            Icon::Frame,
-            Icon::Hand,
-            Icon::Undo,
-            Icon::Redo,
-            Icon::Braces,
-            Icon::BookOpen,
-            Icon::Plus,
-            Icon::Minus,
-            Icon::Search,
-            Icon::Sun,
-            Icon::Globe,
-            Icon::Maximize,
-            Icon::Hash,
-            Icon::PanelLeft,
-            Icon::FolderOpen,
-            Icon::Sparkles,
-            Icon::Close,
-            Icon::ChevronUp,
-            Icon::MessageSquare,
-            Icon::LayoutGrid,
-            Icon::Rows3,
-            Icon::Columns3,
-            Icon::RotateCw,
-            Icon::Diamond,
-            Icon::Component,
-            Icon::Unlink,
-            Icon::Check,
-            Icon::ArrowUpRight,
-        ] {
-            let b = paint_one(icon);
-            assert!(b.paths > 0, "{:?} drew nothing", icon);
-        }
-    }
-
-    #[test]
-    fn first_party_icon_font_names_all_resolve() {
-        // Every `iconFontName` value emitted by the TS element-builders
-        // — both literal `iconFontName: '...'` AND values fed through
-        // builder defaults / param indirection (e.g. callout severity
-        // maps, input-with-action's `action_icon` default, toolbar-v1
-        // formatting glyphs) — must resolve via `Icon::from_name`.
-        // Scanned across `packages/pen-core/src/element-builders/` on
-        // 2026-05-13; extend this list when new names land.
-        for name in [
-            // Direct iconFontName literals
-            "calendar",
-            "check",
-            "chevron-down",
-            "chevron-left",
-            "chevron-right",
-            "clock",
-            "map-pin",
-            "more-vertical",
-            "play",
-            "search",
-            "star",
-            "x",
-            // Builder defaults / indirection
-            "arrow-right",
-            "check-circle",
-            "alert-triangle",
-            "alert-octagon",
-            "sticky-note",
-            "bar-chart-2",
-            "bold",
-            "italic",
-            "underline",
-            "shopping-cart",
-            "shopping-bag",
-            "message-circle",
-            "rocket",
-            "menu",
-            "credit-card",
-            // pencil-demo.op fixture sweep (2026-05-13) — covers
-            // 56 occurrences that previously fell through.
-            "trending-up",
-            "trending-down",
-            "compass",
-            "refresh-cw",
-            "layout-dashboard",
-            "users",
-            "package",
-            "zap",
-            "sliders-horizontal",
-            "activity",
-            "loader",
-            "focus",
-            "chart-line",
-            "settings-2",
-        ] {
-            assert!(
-                Icon::from_name(name).is_some(),
-                "first-party iconFontName {:?} fell through to placeholder",
-                name
-            );
-        }
-    }
-}

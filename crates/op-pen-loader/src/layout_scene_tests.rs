@@ -133,6 +133,33 @@ fn variable_ref_fill_resolves_to_concrete_color() {
 }
 
 #[test]
+fn text_typography_fields_flow_through_to_scene() {
+    let src = r##"{
+      "version":"1.0.0","pages":[{"id":"p","name":"P","children":[
+        {"type":"text","id":"t","x":10,"y":20,"width":200,"height":80,
+         "content":"hello",
+         "fontFamily":"Georgia","fontSize":28,"fontWeight":700,
+         "lineHeight":1.6,"letterSpacing":3,
+         "textAlign":"center","textAlignVertical":"middle",
+         "textGrowth":"fixed-width-height"}
+      ]}],"children":[]
+    }"##;
+    let scene = editor_state_to_layout_scene(&state_from(src));
+    let n = scene.pages[0].find("t").expect("text node in scene");
+    assert_eq!(n.font_family, "Georgia");
+    assert_eq!(n.font_size, 28.0);
+    assert_eq!(n.font_weight, 700);
+    assert_eq!(n.line_height, 1.6);
+    assert_eq!(n.letter_spacing, 3.0);
+    assert_eq!(n.text_align, op_editor_ui::SceneTextAlign::Center);
+    assert_eq!(
+        n.text_vertical_align,
+        op_editor_ui::SceneTextVerticalAlign::Middle
+    );
+    assert!(n.text_wrap);
+}
+
+#[test]
 fn no_variable_ref_keeps_authored_fill() {
     // Without a registered `$ref`, the node keeps its authored fill.
     let src = r##"{

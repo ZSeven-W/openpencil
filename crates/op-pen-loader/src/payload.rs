@@ -51,6 +51,9 @@ pub struct NodePayload {
     pub stroke: Option<StrokePayload>,
     #[serde(default)]
     pub text: Option<String>,
+    /// CSS font-family stack. Text-only.
+    #[serde(default)]
+    pub font_family: String,
     #[serde(default)]
     pub rotation: f32,
     #[serde(default)]
@@ -105,6 +108,18 @@ pub struct NodePayload {
     /// CSS-style font weight (100-900). 0 = default 400. Text-only.
     #[serde(default)]
     pub font_weight: u16,
+    /// Line-height multiplier. 0 = renderer default. Text-only.
+    #[serde(default)]
+    pub line_height: f32,
+    /// Extra letter spacing in doc-px. Text-only.
+    #[serde(default)]
+    pub letter_spacing: f32,
+    /// Horizontal alignment keyword. Text-only.
+    #[serde(default)]
+    pub text_align: String,
+    /// Vertical alignment keyword. Text-only.
+    #[serde(default)]
+    pub text_vertical_align: String,
     #[serde(default)]
     pub text_wrap: bool,
     /// Drop-shadow effects.

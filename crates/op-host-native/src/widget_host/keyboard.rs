@@ -667,6 +667,7 @@ impl WidgetHostNative {
         }
         if self.editor_state.editor_ui.icon_picker_open {
             self.editor_state.editor_ui.icon_picker_open = false;
+            self.editor_state.editor_ui.icon_picker_replace_selection = false;
             self.editor_state.editor_ui.icon_picker_search.clear();
             self.mark_dirty();
             return true;

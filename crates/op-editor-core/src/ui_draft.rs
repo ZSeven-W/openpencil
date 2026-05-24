@@ -33,6 +33,13 @@ pub enum PropertyFocus {
     PositionR,
     SizeW,
     SizeH,
+    /// Container flex-layout gap in document px.
+    LayoutGap,
+    /// Container padding values, shown in top/right/bottom/left order.
+    PaddingTop,
+    PaddingRight,
+    PaddingBottom,
+    PaddingLeft,
     Opacity,
     FillHex,
     /// Fill section's `100 %` opacity input — percentage (0..100).
@@ -57,6 +64,14 @@ pub enum PropertyFocus {
     EllipseSweep,
     /// Ellipse donut-hole radius, shown as a percentage.
     EllipseInnerRadius,
+    /// Text font size in document px.
+    FontSize,
+    /// Text font weight, numeric 1..=1000.
+    FontWeight,
+    /// Text line height, shown as a percentage.
+    LineHeight,
+    /// Text letter spacing in document px.
+    LetterSpacing,
     StrokeHex,
     StrokeWidth,
 }
@@ -83,12 +98,20 @@ impl PropertyFocus {
                 | PropertyFocus::PositionR
                 | PropertyFocus::Opacity
                 | PropertyFocus::FillOpacity
+                | PropertyFocus::LayoutGap
+                | PropertyFocus::PaddingTop
+                | PropertyFocus::PaddingRight
+                | PropertyFocus::PaddingBottom
+                | PropertyFocus::PaddingLeft
                 | PropertyFocus::StrokeWidth
                 | PropertyFocus::GradientAngle
                 | PropertyFocus::GradientStopOffset(_)
                 | PropertyFocus::EllipseStart
                 | PropertyFocus::EllipseSweep
                 | PropertyFocus::EllipseInnerRadius
+                | PropertyFocus::FontSize
+                | PropertyFocus::LineHeight
+                | PropertyFocus::LetterSpacing
         )
     }
 }
