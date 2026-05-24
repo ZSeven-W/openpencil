@@ -53,14 +53,30 @@ impl LlmClient for ChatProviderLlmClient {
             return Box::pin(rx);
         }
 
-        // Build the ChatRequest. The orchestrator's `CallRequest` only
-        // carries system + user prompts + an abort handle + an optional
-        // model hint; the chat-side knobs (thinking / effort /
-        // attachments) get sensible defaults — sub-agents inherit
-        // whatever the CLI does by default.
+        // **Inline the orchestrator's system prompt into the user
+        // message.** The CLI-backed `ChatProvider` impls
+        // (`ClaudeCodeProvider`, `CopilotProvider`,
+        // `SubprocessProvider`) all *ignore* `ChatRequest.system_prompt`
+        // — they drive their respective CLIs through subprocess /
+        // SDK channels that don't expose a per-turn system slot.
+        // Putting `req.system_prompt` into the field would silently
+        // drop the orchestrator's planner / sub-agent role prompt,
+        // leaving the LLM with only the bare user prompt — codex
+        // stop-time review caught this regression. Follow the same
+        // prepend pattern `BuiltInProvider` uses for its
+        // generation-phase skill preamble (see
+        // `chat_runtime.rs::ChatProvider::send` line 138).
+        let user_message = if req.system_prompt.is_empty() {
+            req.user_prompt.clone()
+        } else {
+            format!("{}\n\n---\n\n{}", req.system_prompt, req.user_prompt)
+        };
         let chat_req = ChatRequest {
-            system_prompt: req.system_prompt.clone(),
-            user_message: req.user_prompt.clone(),
+            // Kept empty deliberately — see the prepend above. Any CLI
+            // that grows a real system-prompt channel later should
+            // also unwrap this back into the field.
+            system_prompt: String::new(),
+            user_message,
             // The orchestrator's prompts can run long (planner system
             // is ~12 KB, sub-agents emit dense JSON). Give them room.
             max_output_tokens: 8192,
