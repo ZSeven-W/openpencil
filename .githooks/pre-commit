@@ -7,56 +7,35 @@
 BRANCH=$(git rev-parse --abbrev-ref HEAD)
 
 # Extract version from branch name like v0.5.0, v1.2.3, release/v2.0.0
-VERSION=$(echo "$BRANCH" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
+VERSION=$(echo "$BRANCH" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' || true)
 
-if [ -z "$VERSION" ]; then
-  exit 0
-fi
-
-CHANGED=0
-for f in package.json apps/*/package.json packages/*/package.json; do
-  if [ -f "$f" ]; then
-    CURRENT=$(jq -r '.version' "$f")
-    if [ "$CURRENT" != "$VERSION" ]; then
-      jq --arg v "$VERSION" '.version=$v' "$f" > "$f.tmp" && mv "$f.tmp" "$f"
-      git add "$f"
-      CHANGED=1
+if [ -n "$VERSION" ]; then
+  CHANGED=0
+  for f in package.json apps/*/package.json packages/*/package.json; do
+    if [ -f "$f" ]; then
+      CURRENT=$(jq -r '.version' "$f")
+      if [ "$CURRENT" != "$VERSION" ]; then
+        jq --arg v "$VERSION" '.version=$v' "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+        git add "$f"
+        CHANGED=1
+      fi
     fi
-  fi
-done
+  done
 
-if [ "$CHANGED" = "1" ]; then
-  echo "[version-sync] branch $BRANCH → $VERSION"
-fi
-
-# --- Auto-format via the same script CI uses, then re-stage staged files ---
-#
-# Run `bun run format:check` first; if it fails, run `bun run format` to
-# auto-fix and re-stage only the files that were already staged. New
-# files added without going through the formatter (the most common cause
-# of CI format-check failures) get fixed silently here. The format
-# scripts already respect .prettierignore so the agent-native submodule
-# and generated files are untouched.
-#
-# NOTE: re-adding files pulls in any unstaged hunks from a partially
-# staged file. Stage cleanly if that matters to you.
-if ! bun run format:check > /dev/null 2>&1; then
-  echo "[pre-commit] format drift detected — running \`bun run format\`"
-  if ! bun run format > /dev/null 2>&1; then
-    echo "[pre-commit] \`bun run format\` failed"; exit 1;
-  fi
-  STAGED=$(git diff --cached --name-only --diff-filter=d \
-    | grep -E '\.(ts|tsx|js|jsx|cjs|mjs|json|jsonc|md|yml|yaml)$' || true)
-  if [ -n "$STAGED" ]; then
-    echo "$STAGED" | xargs git add
+  if [ "$CHANGED" = "1" ]; then
+    echo "[version-sync] branch $BRANCH → $VERSION"
   fi
 fi
 
-# --- Lint staged TS/JS files (no auto-fix, fail loudly on errors) ---
-LINT_STAGED=$(git diff --cached --name-only --diff-filter=d \
-  | grep -E '\.(ts|tsx|js|jsx|cjs|mjs)$' || true)
-if [ -n "$LINT_STAGED" ]; then
-  echo "$LINT_STAGED" | xargs npx oxlint || {
-    echo "[pre-commit] lint failed. Run: bun run lint:fix"; exit 1;
-  }
+# --- Rust format + lint gates (same checks as CI) ---
+echo "[pre-commit] checking Rust format"
+if ! cargo fmt --all -- --check; then
+  echo "[pre-commit] Rust format check failed. Run: cargo fmt --all"
+  exit 1
+fi
+
+echo "[pre-commit] running Rust clippy"
+if ! cargo clippy --workspace --all-targets -- -D warnings; then
+  echo "[pre-commit] Rust clippy failed. Fix warnings before committing."
+  exit 1
 fi
