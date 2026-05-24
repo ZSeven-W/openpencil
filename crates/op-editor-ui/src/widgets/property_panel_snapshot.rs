@@ -52,6 +52,10 @@ pub struct NodeSnapshot {
     pub rotation_deg: f32,
     /// Uniform corner radius in doc-px.
     pub corner_radius: f32,
+    /// Polygon side count, only present for Polygon selections.
+    pub polygon_sides: Option<u32>,
+    /// Ellipse arc controls, only present for Ellipse selections.
+    pub ellipse_arc: Option<EllipseArcSummary>,
     pub fill: Option<Color>,
     /// Primary solid-fill opacity in `[0.0, 1.0]` — the Fill
     /// section's `100 %` paints `fill_opacity * 100`.
@@ -76,6 +80,13 @@ pub struct NodeSnapshot {
     pub effects: Vec<EffectSummary>,
     /// Drives per-kind section filtering (Line hides fill, etc.).
     pub kind_variant: crate::layout_scene::NodeKind,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct EllipseArcSummary {
+    pub start_deg: f32,
+    pub sweep_deg: f32,
+    pub inner_percent: f32,
 }
 
 /// One gradient stop summary for the Fill section.
@@ -215,6 +226,8 @@ impl NodeSnapshot {
             height: bounds.h.round() as i32,
             rotation_deg: 0.0,
             corner_radius: 0.0,
+            polygon_sides: None,
+            ellipse_arc: None,
             fill: None,
             fill_opacity: 1.0,
             stroke: None,
@@ -261,6 +274,8 @@ impl NodeSnapshot {
             // schema; the snapshot's `rotation_deg` wants degrees.
             rotation_deg: base.rotation.unwrap_or(0.0) as f32,
             corner_radius,
+            polygon_sides: polygon_sides_of(node),
+            ellipse_arc: ellipse_arc_of(node),
             fill,
             fill_opacity: op_editor_core::first_solid_fill_opacity(node),
             stroke,
@@ -273,6 +288,24 @@ impl NodeSnapshot {
                 .collect(),
             kind_variant: kind,
         }
+    }
+}
+
+fn polygon_sides_of(node: &PenNode) -> Option<u32> {
+    match node {
+        PenNode::Polygon(n) => Some(n.polygon_count.clamp(3, 100)),
+        _ => None,
+    }
+}
+
+fn ellipse_arc_of(node: &PenNode) -> Option<EllipseArcSummary> {
+    match node {
+        PenNode::Ellipse(n) => Some(EllipseArcSummary {
+            start_deg: n.start_angle.unwrap_or(0.0) as f32,
+            sweep_deg: n.sweep_angle.unwrap_or(360.0) as f32,
+            inner_percent: (n.inner_radius.unwrap_or(0.0).clamp(0.0, 0.99) * 100.0) as f32,
+        }),
+        _ => None,
     }
 }
 

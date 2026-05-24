@@ -64,6 +64,12 @@ pub struct NodePayload {
     /// Ellipse donut-hole radius, 0.0..=1.0 fraction of the radius.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub arc_inner_radius: Option<f32>,
+    /// Polygon side count. Defaults to the triangle parity value.
+    #[serde(
+        default = "default_polygon_sides",
+        skip_serializing_if = "is_default_polygon_sides"
+    )]
+    pub polygon_sides: u32,
     #[serde(default)]
     pub hidden: bool,
     #[serde(default)]
@@ -119,6 +125,14 @@ pub struct NodePayload {
     pub image_adjustments: Option<ImageAdjustmentPayload>,
     #[serde(default)]
     pub children: Vec<NodePayload>,
+}
+
+fn default_polygon_sides() -> u32 {
+    3
+}
+
+fn is_default_polygon_sides(value: &u32) -> bool {
+    *value == 3
 }
 
 #[derive(Debug, Serialize, Deserialize)]

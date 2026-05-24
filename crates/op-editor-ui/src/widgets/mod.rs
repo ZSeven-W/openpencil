@@ -50,6 +50,7 @@ pub mod property_panel_image_fill;
 mod property_panel_image_preview;
 pub mod property_panel_input_layout;
 pub mod property_panel_inputs;
+pub mod property_panel_layer;
 pub mod property_panel_layout;
 pub mod property_panel_sections;
 pub mod property_panel_snapshot;

@@ -8,7 +8,7 @@
 //! raster path composes `Canvas::rotate`.
 
 use op_editor_ui::layout_scene::NodeKind;
-use op_editor_ui::layout_scene::{LayoutScene, SceneNode};
+use op_editor_ui::layout_scene::{regular_polygon_points, LayoutScene, SceneNode};
 use op_editor_ui::Color;
 use std::fmt::Write as _;
 use std::path::Path as StdPath;
@@ -116,14 +116,17 @@ fn emit_polygon(out: &mut String, n: &SceneNode) {
     if r.size.x == 0.0 || r.size.y == 0.0 {
         return;
     }
-    let cx = r.origin.x + r.size.x * 0.5;
-    let top = r.origin.y;
-    let left = r.origin.x;
-    let right = r.origin.x + r.size.x;
-    let bottom = r.origin.y + r.size.y;
+    let points = regular_polygon_points(r, n.polygon_sides);
+    let mut point_attr = String::new();
+    for (i, p) in points.iter().enumerate() {
+        if i > 0 {
+            point_attr.push(' ');
+        }
+        let _ = write!(point_attr, "{},{}", p.x, p.y);
+    }
     let _ = write!(
         out,
-        r#"<polygon points="{cx},{top} {left},{bottom} {right},{bottom}"{}/>"#,
+        r#"<polygon points="{point_attr}"{}/>"#,
         fill_stroke_attrs(n),
     );
 }

@@ -521,6 +521,7 @@ fn polygon_to_payload(n: &PolygonNode) -> NodePayload {
     assign_first_fill(&mut p, n.fill.as_deref());
     p.stroke = stroke_to_payload(n.stroke.as_ref());
     p.corner_radius = n.corner_radius.unwrap_or(0.0) as f32;
+    p.polygon_sides = n.polygon_count.clamp(3, 100);
     p
 }
 
@@ -679,6 +680,7 @@ fn base_payload(base: &PenNodeBase, kind: &str) -> NodePayload {
         arc_start_angle: None,
         arc_sweep_angle: None,
         arc_inner_radius: None,
+        polygon_sides: 3,
         hidden: !base.visible.unwrap_or(true),
         locked: base.locked.unwrap_or(false),
         collapsed: false,
