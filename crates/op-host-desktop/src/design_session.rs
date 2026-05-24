@@ -44,18 +44,15 @@
 //! sees the channel closed and returns `false`, ending the turn.
 
 use std::sync::mpsc::{self, Receiver, Sender, SyncSender, TryRecvError};
-use std::sync::Arc;
 use std::thread;
 
-use agent::provider::Provider;
 use op_editor_core::{EditorCommand, EditorState};
 use op_host_native::WidgetHostNative;
 use op_orchestrator::{
-    AbortFlag, DesignRequest, DocSink, Orchestrator, OrchestratorError, Progress, RunSummary,
-    SkippedScreenshotProvider, SkippedVisionLlmClient, ValidationProviders,
+    AbortFlag, DesignRequest, DocSink, LlmClient, Orchestrator, OrchestratorError, Progress,
+    RunSummary, SkippedScreenshotProvider, SkippedVisionLlmClient, ValidationProviders,
 };
 
-use crate::chat_orchestrator::DesktopLlmClient;
 use crate::chat_runtime::shared_runtime;
 use crate::pre_validator::LintPreValidator;
 
@@ -108,9 +105,13 @@ impl DesignSession {
     /// Spawn a worker that runs `Orchestrator::run` against a
     /// `RemoteDocSink`. Returns immediately; the LLM turn streams off
     /// the UI thread.
-    pub fn start(
-        provider: Arc<dyn Provider>,
-        default_model: String,
+    ///
+    /// `llm` is any `LlmClient` implementation — production code passes
+    /// a `ChatProviderLlmClient` wrapping the user's currently-selected
+    /// chat agent (Claude Code / Copilot / Gemini), so the orchestrator
+    /// rides whatever CLI auth the chat panel already has.
+    pub fn start<L: LlmClient + Send + 'static>(
+        llm: L,
         request: DesignRequest,
         initial_state: EditorState,
     ) -> Self {
@@ -120,7 +121,6 @@ impl DesignSession {
         thread::Builder::new()
             .name("op-design-turn".into())
             .spawn(move || {
-                let llm = DesktopLlmClient::new(provider, default_model);
                 let mut sink = RemoteDocSink::new(cmd_tx, initial_state);
                 let abort = AbortFlag::new();
                 let pre_validator = LintPreValidator;

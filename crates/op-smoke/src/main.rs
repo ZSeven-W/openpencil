@@ -55,8 +55,12 @@ use op_orchestrator::{
 
 /// `LlmClient` impl for the smoke runner — `AnthropicProvider` under a
 /// `QueryEngine`, with every call spawned onto the current tokio runtime.
-/// Mirrors `op-host-desktop::chat_orchestrator::DesktopLlmClient` but
-/// uses `tokio::spawn` instead of a shared `Runtime::spawn` handle.
+/// Standalone — `op-host-desktop` no longer ships a desktop
+/// `LlmClient`; its production path goes through
+/// `chat_provider_llm::ChatProviderLlmClient` (wrapping the user's
+/// selected chat CLI). The smoke needs to talk to a raw API endpoint
+/// to validate orchestrator behaviour independently of any CLI, hence
+/// this dedicated client.
 struct SmokeLlmClient {
     provider: Arc<dyn Provider>,
     default_model: String,
