@@ -217,9 +217,11 @@ async fn main() -> std::process::ExitCode {
 
     let provider_kind =
         std::env::var("OPENPENCIL_LLM_PROVIDER").unwrap_or_else(|_| "anthropic".into());
-    let model = std::env::var("OPENPENCIL_ORCHESTRATOR_MODEL").unwrap_or_else(|_| match provider_kind.as_str() {
-        "anthropic" => "claude-sonnet-4-6".into(),
-        _ => "gpt-4o-mini".into(),
+    let model = std::env::var("OPENPENCIL_ORCHESTRATOR_MODEL").unwrap_or_else(|_| {
+        match provider_kind.as_str() {
+            "anthropic" => "claude-sonnet-4-6".into(),
+            _ => "gpt-4o-mini".into(),
+        }
     });
 
     eprintln!("[SMOKE] provider={provider_kind} model={model}");
@@ -251,7 +253,9 @@ async fn main() -> std::process::ExitCode {
                 .ok()
                 .filter(|u| !u.is_empty());
             let Some(base_url) = base_url else {
-                eprintln!("error: OPENPENCIL_LLM_BASE_URL is not set (e.g. https://api.openai.com/v1)");
+                eprintln!(
+                    "error: OPENPENCIL_LLM_BASE_URL is not set (e.g. https://api.openai.com/v1)"
+                );
                 return std::process::ExitCode::from(3);
             };
             eprintln!("[SMOKE] base_url={base_url}");
@@ -260,7 +264,9 @@ async fn main() -> std::process::ExitCode {
             )))
         }
         other => {
-            eprintln!("error: unknown OPENPENCIL_LLM_PROVIDER={other:?} (want anthropic|openai-compat)");
+            eprintln!(
+                "error: unknown OPENPENCIL_LLM_PROVIDER={other:?} (want anthropic|openai-compat)"
+            );
             return std::process::ExitCode::from(3);
         }
     };
