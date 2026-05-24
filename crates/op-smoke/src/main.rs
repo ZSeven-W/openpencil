@@ -40,6 +40,7 @@ use std::sync::Arc;
 
 use agent::abort::AbortController;
 use agent::provider::anthropic::AnthropicProvider;
+use agent::provider::openai_compat::{OpenAiCompatConfig, OpenAiCompatProvider};
 use agent::provider::Provider;
 use agent::query::QueryEngine;
 use agent::stream::Event;
@@ -214,22 +215,55 @@ async fn main() -> std::process::ExitCode {
         }
     };
 
-    let api_key = std::env::var("OPENPENCIL_ANTHROPIC_API_KEY")
-        .ok()
-        .or_else(|| std::env::var("ANTHROPIC_API_KEY").ok())
-        .filter(|k| !k.is_empty());
-    let Some(api_key) = api_key else {
-        eprintln!("error: neither OPENPENCIL_ANTHROPIC_API_KEY nor ANTHROPIC_API_KEY is set");
-        return std::process::ExitCode::from(3);
-    };
+    let provider_kind =
+        std::env::var("OPENPENCIL_LLM_PROVIDER").unwrap_or_else(|_| "anthropic".into());
+    let model = std::env::var("OPENPENCIL_ORCHESTRATOR_MODEL").unwrap_or_else(|_| match provider_kind.as_str() {
+        "anthropic" => "claude-sonnet-4-6".into(),
+        _ => "gpt-4o-mini".into(),
+    });
 
-    let model = std::env::var("OPENPENCIL_ORCHESTRATOR_MODEL")
-        .unwrap_or_else(|_| "claude-sonnet-4-6".into());
-
-    eprintln!("[SMOKE] model={model}");
+    eprintln!("[SMOKE] provider={provider_kind} model={model}");
     eprintln!("[SMOKE] prompt={prompt:?}");
 
-    let provider: Arc<dyn Provider> = Arc::new(AnthropicProvider::new(api_key));
+    let provider: Arc<dyn Provider> = match provider_kind.as_str() {
+        "anthropic" => {
+            let key = std::env::var("OPENPENCIL_ANTHROPIC_API_KEY")
+                .ok()
+                .or_else(|| std::env::var("ANTHROPIC_API_KEY").ok())
+                .filter(|k| !k.is_empty());
+            let Some(key) = key else {
+                eprintln!(
+                    "error: neither OPENPENCIL_ANTHROPIC_API_KEY nor ANTHROPIC_API_KEY is set"
+                );
+                return std::process::ExitCode::from(3);
+            };
+            Arc::new(AnthropicProvider::new(key))
+        }
+        "openai" | "openai-compat" => {
+            let key = std::env::var("OPENPENCIL_LLM_API_KEY")
+                .ok()
+                .filter(|k| !k.is_empty());
+            let Some(key) = key else {
+                eprintln!("error: OPENPENCIL_LLM_API_KEY is not set");
+                return std::process::ExitCode::from(3);
+            };
+            let base_url = std::env::var("OPENPENCIL_LLM_BASE_URL")
+                .ok()
+                .filter(|u| !u.is_empty());
+            let Some(base_url) = base_url else {
+                eprintln!("error: OPENPENCIL_LLM_BASE_URL is not set (e.g. https://api.openai.com/v1)");
+                return std::process::ExitCode::from(3);
+            };
+            eprintln!("[SMOKE] base_url={base_url}");
+            Arc::new(OpenAiCompatProvider::new(OpenAiCompatConfig::new(
+                key, base_url,
+            )))
+        }
+        other => {
+            eprintln!("error: unknown OPENPENCIL_LLM_PROVIDER={other:?} (want anthropic|openai-compat)");
+            return std::process::ExitCode::from(3);
+        }
+    };
     let llm = SmokeLlmClient {
         provider,
         default_model: model.clone(),
