@@ -12,7 +12,7 @@ path = "src/main.rs"
 
 [dependencies]
 # AnthropicProvider — the `anthropic` feature gates the real HTTP client.
-agent = { path = "../../vendor/agent/crates/agent", default-features = false, features = ["anthropic"] }
+agent = { path = "../../vendor/agent/crates/agent", default-features = false, features = ["anthropic", "openai"] }
 # The orchestrator + its types. Smoke calls `Orchestrator::new().run(...)`
 # directly on the current thread, bypassing the actor-channel model
 # `DesignSession` uses for UI safety — we want the simplest possible
