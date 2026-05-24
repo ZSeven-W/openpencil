@@ -33,7 +33,11 @@ impl DesktopApp {
             Key::Named(NamedKey::Enter) if !self.zoom_modifier => {
                 consumed = self.host.apply_send();
                 // apply_send may raise pending_send (chat send).
-                if chat_session::launch_if_pending(&mut self.host, &mut self.current_chat) {
+                if chat_session::launch_if_pending(
+                    &mut self.host,
+                    &mut self.current_chat,
+                    &mut self.current_design,
+                ) {
                     self.request_redraw(true);
                 }
             }

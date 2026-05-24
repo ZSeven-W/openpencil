@@ -8,15 +8,19 @@
 //! message.
 
 use std::sync::mpsc::{self, Receiver, TryRecvError};
+use std::sync::Arc;
 use std::thread;
 
+use agent::provider::Provider;
 use op_ai::chat_provider::{ChatDelta, ChatProvider, ChatRequest, CliName};
 use op_editor_core::{ChatMessage, ChatToolCall};
 use op_host_native::WidgetHostNative;
+use op_orchestrator::{classify_intent, DesignRequest, Intent};
 
 use crate::chat_claude::ClaudeCodeProvider;
 use crate::chat_copilot::CopilotProvider;
 use crate::chat_subprocess::SubprocessProvider;
+use crate::design_session::DesignSession;
 
 /// One in-flight chat turn. The worker thread owns the provider and
 /// drains `provider.send()` into the channel; [`poll`] consumes
@@ -142,17 +146,55 @@ impl ChatSession {
     }
 }
 
-/// Drain `chat.pending_send` (raised by `ChatState::begin_send`)
-/// into a fresh `ChatSession` against the Claude Code CLI.
-/// `ClaudeCodeProvider` auto-discovers the `claude` binary. A send
-/// fired mid-turn replaces the in-flight session — the old worker
-/// thread drains harmlessly once its channel receiver drops.
-/// Returns true when a turn was launched (caller redraws).
-pub fn launch_if_pending(host: &mut WidgetHostNative, current: &mut Option<ChatSession>) -> bool {
+/// Drain `chat.pending_send` (raised by `ChatState::begin_send`) and
+/// route it through the orchestrator intent gate. `Intent::Design`
+/// requests with a configured `agent::Provider` launch into
+/// `current_design`; everything else (chat intent, or design intent
+/// with no Provider available) falls through to the existing
+/// `ChatProvider` path in `current_chat`. A send fired mid-turn
+/// replaces the in-flight session — the old worker thread drains
+/// harmlessly once its channel receiver drops.
+///
+/// Returns true when *any* turn was launched (caller redraws).
+pub fn launch_if_pending(
+    host: &mut WidgetHostNative,
+    current_chat: &mut Option<ChatSession>,
+    current_design: &mut Option<DesignSession>,
+) -> bool {
     let Some(user_text) = host.editor_state_mut().chat.pending_send.take() else {
         return false;
     };
     host.mark_editor_state_dirty();
+    // Intent gate (op_orchestrator::classify_intent) — design verbs
+    // route to the orchestrator pipeline when a Provider is available;
+    // otherwise we fall through to the existing chat path so the user
+    // still gets an answer.
+    if matches!(classify_intent(&user_text), Intent::Design) {
+        if let Some((provider, model)) = provider_for_design() {
+            *current_chat = None;
+            let initial_state = host.editor_state().clone();
+            let request = DesignRequest {
+                prompt: user_text,
+                model: Some(model.clone()),
+                provider: None,
+                design_md: initial_state.doc.design_md.clone(),
+                append_context: None,
+                concurrency: 1,
+                validation_enabled: false,
+                visual_ref_enabled: false,
+            };
+            *current_design = Some(DesignSession::start(
+                provider,
+                model,
+                request,
+                initial_state,
+            ));
+            return true;
+        }
+        // Design intent but no Provider configured — fall through to
+        // the chat path. The assistant CLI will still answer the user
+        // (most CLIs handle design verbs as chat).
+    }
     let agent_idx = host.editor_state().editor_ui.chat_selected_agent;
     let Some(provider) = provider_for_agent(agent_idx) else {
         // Selected agent has no `ChatProvider` bridge yet (Codex /
@@ -165,7 +207,7 @@ pub fn launch_if_pending(host: &mut WidgetHostNative, current: &mut Option<ChatS
         // `pump` keeps streaming the previous agent's deltas into
         // this fresh error bubble (codex stop-gate: stale session
         // overwrote the unwired-agent error text).
-        *current = None;
+        *current_chat = None;
         let name = op_editor_core::AgentProvider::ALL
             .get(agent_idx)
             .map(|a| a.name())
@@ -206,8 +248,28 @@ pub fn launch_if_pending(host: &mut WidgetHostNative, current: &mut Option<ChatS
         effort,
         attachments,
     };
-    *current = Some(ChatSession::start(provider, req));
+    *current_chat = Some(ChatSession::start(provider, req));
     true
+}
+
+/// Build an `agent::Provider` for the orchestrator's design path.
+/// MVP: reads `OPENPENCIL_ANTHROPIC_API_KEY` (preferred) or
+/// `ANTHROPIC_API_KEY` from the environment and constructs an
+/// `AnthropicProvider`. Returns `None` when neither key is set so the
+/// caller can fall back to the chat-CLI path honestly.
+///
+/// `OPENPENCIL_*` is checked first so users can isolate the
+/// orchestrator's API key from any `ANTHROPIC_API_KEY` other tooling
+/// might consume (e.g. `claude` CLI, the Anthropic SDK examples).
+fn provider_for_design() -> Option<(Arc<dyn Provider>, String)> {
+    let api_key = std::env::var("OPENPENCIL_ANTHROPIC_API_KEY")
+        .ok()
+        .or_else(|| std::env::var("ANTHROPIC_API_KEY").ok())
+        .filter(|k| !k.is_empty())?;
+    let model = std::env::var("OPENPENCIL_ORCHESTRATOR_MODEL")
+        .unwrap_or_else(|_| "claude-sonnet-4-6".to_string());
+    let provider = agent::provider::anthropic::AnthropicProvider::new(api_key);
+    Some((Arc::new(provider) as Arc<dyn Provider>, model))
 }
 
 /// Build the `ChatProvider` for an agent index (into

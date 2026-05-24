@@ -16,6 +16,7 @@ mod chat_subprocess;
 mod clipboard;
 mod cursor_icon;
 mod design_md_host;
+mod design_session;
 mod export;
 mod export_pdf;
 mod frame;
@@ -84,6 +85,12 @@ struct DesktopApp {
     /// `chat.pending_send`; the event loop drains that into a
     /// `ChatSession` here and pumps deltas into the transcript.
     current_chat: Option<chat_session::ChatSession>,
+    /// In-flight design-orchestrator turn, if any. Mutually exclusive
+    /// with `current_chat`: `chat_session::launch_if_pending` classifies
+    /// the user's message via `op_orchestrator::classify_intent` and
+    /// routes `Intent::Design` here (when an `agent::Provider` is
+    /// available), `Intent::Chat` to `current_chat`.
+    current_design: Option<design_session::DesignSession>,
     /// Background AI-model discovery — probes the installed CLIs
     /// on a worker thread; its result is drained into
     /// `chat.available_models` on a later frame.
@@ -169,6 +176,7 @@ impl DesktopApp {
             current_path: None,
             error: None,
             current_chat: None,
+            current_design: None,
             model_probe: model_discovery::ModelProbe::spawn(),
             initial_file,
             app_menu: None,

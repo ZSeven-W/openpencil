@@ -160,7 +160,9 @@ dirs = "5"
 # the trait + the engine wiring + `from_provider`; concrete
 # Provider impls (Anthropic / OpenAI-compat / Ollama) flip on once the
 # workspace rust-toolchain bumps.
-agent = { path = "../../vendor/agent/crates/agent", default-features = false }
+agent = { path = "../../vendor/agent/crates/agent", default-features = false, features = [
+  "anthropic",
+] }
 # Forked from bartolli/anthropic-agent-sdk — lives under
 # `vendor/anthropic-agent-sdk/` so OP owns the source and can diverge
 # from upstream. Provides the Claude Code CLI subprocess transport +
