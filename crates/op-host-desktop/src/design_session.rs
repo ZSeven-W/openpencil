@@ -104,13 +104,6 @@ pub struct DesignPoll {
     pub finished: bool,
 }
 
-impl DesignPoll {
-    #[cfg(test)]
-    fn is_idle(&self) -> bool {
-        self.progress.is_empty() && self.summary.is_none() && !self.finished
-    }
-}
-
 impl DesignSession {
     /// Spawn a worker that runs `Orchestrator::run` against a
     /// `RemoteDocSink`. Returns immediately; the LLM turn streams off
@@ -202,21 +195,12 @@ impl DesignSession {
         out
     }
 
-    /// Test-only accessor.
-    #[cfg(test)]
-    pub fn finished(&self) -> bool {
-        self.finished
-    }
-
     /// Test-only ctor — wraps externally-supplied channels so a fake
     /// worker thread can drive the UI-side pumps end-to-end without
     /// spinning up a real LLM. Production code goes through
     /// [`DesignSession::start`].
     #[cfg(test)]
-    pub fn from_channels(
-        delta_rx: Receiver<DesignDelta>,
-        cmd_rx: Receiver<DesignCmdReq>,
-    ) -> Self {
+    pub fn from_channels(delta_rx: Receiver<DesignDelta>, cmd_rx: Receiver<DesignCmdReq>) -> Self {
         Self {
             delta_rx,
             cmd_rx,
