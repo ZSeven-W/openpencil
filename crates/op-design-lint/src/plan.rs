@@ -338,6 +338,63 @@ mod tests {
         );
     }
 
+    /// Load the `invisible-container-with-var` fixture (doc declares
+    /// `color-border` variable) and assert equivalence — exercises the
+    /// `$color-border` design-token reference path.
+    ///
+    /// Regression guard: caught by stop-time review — `LintPreValidator`
+    /// previously dropped `$color-border` refs while reporting success
+    /// because `cmd_set_node_stroke_hex` strict-parsed the hex. The
+    /// op-design-lint side (this test) ensures `detect_and_plan + apply`
+    /// produces the same `$color-border`-stamped doc as `detect_and_fix`;
+    /// the host parity test confirms the same through `EditorCommand`.
+    #[test]
+    fn equivalence_invisible_container_with_var() {
+        let raw = include_str!("../tests/fixtures/docs/invisible-container-with-var.json");
+        let doc_a: PenDocument = serde_json::from_str(raw).expect("parse");
+        let doc_b: PenDocument = serde_json::from_str(raw).expect("parse");
+
+        // Clone A: detect_and_fix (the reference path).
+        let mut clone_a = doc_a;
+        let report = detect_and_fix(&mut clone_a);
+
+        // Clone B: detect_and_plan + apply each fix via node_mut primitives.
+        let mut clone_b = doc_b;
+        let plan = detect_and_plan(&clone_b);
+        let applied: usize = plan
+            .iter()
+            .filter(|fix| apply_planned_fix_to_doc(&mut clone_b, fix))
+            .count();
+
+        assert_eq!(report.total as usize, applied);
+        assert_eq!(plan.len(), applied);
+        assert_eq!(
+            clone_a, clone_b,
+            "var-ref stroke must round-trip identically"
+        );
+
+        // Verify the plan carries the $color-border ref (not a resolved hex).
+        let stroke_plan = plan
+            .iter()
+            .find(|f| f.node_id == "light-on-light")
+            .expect("light-on-light should be in the plan");
+        let value = match &stroke_plan.action {
+            PlannedAction::SetStroke(v) => v,
+            other => panic!("expected SetStroke, got {other:?}"),
+        };
+        let color = value
+            .get("fill")
+            .and_then(|f| f.as_array())
+            .and_then(|arr| arr.first())
+            .and_then(|entry| entry.get("color"))
+            .and_then(|c| c.as_str())
+            .expect("color field");
+        assert_eq!(
+            color, "$color-border",
+            "plan must preserve design-token ref, not resolve to hex"
+        );
+    }
+
     /// Load the `text-explicit-height` fixture and assert equivalence.
     ///
     /// This fixture exercises `FixProperty::Height` with `"fit_content"`.

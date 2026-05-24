@@ -1,0 +1,23 @@
+{
+  "version": "1.0",
+  "variables": {
+    "color-border": { "type": "color", "value": "#CBD5E1" }
+  },
+  "children": [
+    {
+      "type": "frame",
+      "id": "root",
+      "layout": "vertical",
+      "fill": [{ "type": "solid", "color": "#FFFFFF" }],
+      "children": [
+        {
+          "type": "frame",
+          "id": "light-on-light",
+          "layout": "vertical",
+          "fill": [{ "type": "solid", "color": "#FFFFFF" }],
+          "children": [{ "type": "text", "id": "lol-label", "content": "Inside light wrapper" }]
+        }
+      ]
+    }
+  ]
+}

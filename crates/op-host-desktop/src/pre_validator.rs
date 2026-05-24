@@ -399,4 +399,22 @@ mod tests {
             "empty-path",
         );
     }
+
+    /// invisible-container-with-var: exercises `$color-border` design-token
+    /// reference path through `SetNodeStrokeHex`. Regression guard caught
+    /// by stop-time review — `cmd_set_node_stroke_hex` previously rejected
+    /// `$`-prefixed strings via `parse_hex_rgb`, dropping the color silently
+    /// while `SetNodeStrokeWidth` still applied (so `any_applied=true` and
+    /// `applied_count` overreported). The op-editor-core fix relaxed both
+    /// `cmd_set_node_stroke_hex` + `cmd_set_node_fill_hex` to passthrough
+    /// `$ref` strings (the underlying `color: String` field accepts them).
+    #[test]
+    fn parity_invisible_container_with_var() {
+        assert_parity(
+            include_str!(
+                "../../op-design-lint/tests/fixtures/docs/invisible-container-with-var.json"
+            ),
+            "invisible-container-with-var",
+        );
+    }
 }
