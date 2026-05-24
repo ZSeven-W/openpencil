@@ -23,7 +23,8 @@
 
 use op_editor_ui::layout_scene::NodeKind;
 use op_editor_ui::layout_scene::{
-    LayoutScene, SceneFillType, SceneGradient, SceneGradientStop, SceneNode, ScenePage, SceneStroke,
+    LayoutScene, SceneFillType, SceneGradient, SceneGradientStop, SceneImageFit, SceneNode,
+    ScenePage, SceneStroke,
 };
 use op_editor_ui::scene_vars::VariableTable;
 use op_editor_ui::Color;
@@ -126,6 +127,8 @@ fn node_payload_to_scene(node: &NodePayload, var_table: &VariableTable) -> Scene
         arc_sweep_angle: node.arc_sweep_angle,
         arc_inner_radius: node.arc_inner_radius,
         image_src: node.image_src.clone(),
+        image_fit: image_fit_to_scene(node.image_fit.as_deref()),
+        image_adjustments: image_adjustments_to_scene(node.image_adjustments),
         effects: crate::effects::effects_from_payload_ref(&node.effects),
         hidden: node.hidden,
         locked: node.locked,
@@ -134,6 +137,33 @@ fn node_payload_to_scene(node: &NodePayload, var_table: &VariableTable) -> Scene
             .iter()
             .map(|c| node_payload_to_scene(c, var_table))
             .collect(),
+    }
+}
+
+fn image_fit_to_scene(value: Option<&str>) -> SceneImageFit {
+    match value {
+        Some("fit") => SceneImageFit::Fit,
+        Some("crop") => SceneImageFit::Crop,
+        Some("tile") => SceneImageFit::Tile,
+        Some("stretch") => SceneImageFit::Stretch,
+        _ => SceneImageFit::Fill,
+    }
+}
+
+fn image_adjustments_to_scene(
+    value: Option<crate::payload::ImageAdjustmentPayload>,
+) -> op_editor_ui::ImageAdjustments {
+    let Some(value) = value else {
+        return op_editor_ui::ImageAdjustments::default();
+    };
+    op_editor_ui::ImageAdjustments {
+        exposure: value.exposure,
+        contrast: value.contrast,
+        saturation: value.saturation,
+        temperature: value.temperature,
+        tint: value.tint,
+        highlights: value.highlights,
+        shadows: value.shadows,
     }
 }
 

@@ -220,6 +220,41 @@ fn linear_gradient_payload_threads_into_scene_node() {
 }
 
 #[test]
+fn image_fill_mode_threads_into_scene_node() {
+    let src = r##"{
+      "version":"1.0.0","pages":[{"id":"p","name":"P","children":[{
+        "type":"rectangle","id":"r","width":360,"height":240,
+        "fill":[{"type":"image","url":"data:image/png;base64,AA==","mode":"fit"}]
+      }]}],"children":[]
+    }"##;
+    let scene = editor_state_to_layout_scene(&state_from(src));
+    let n = &scene.pages[0].children[0];
+    assert_eq!(n.image_src.as_deref(), Some("data:image/png;base64,AA=="));
+    assert_eq!(n.image_fit, op_editor_ui::layout_scene::SceneImageFit::Fit);
+}
+
+#[test]
+fn image_fill_adjustments_thread_into_scene_node() {
+    let src = r##"{
+      "version":"1.0.0","pages":[{"id":"p","name":"P","children":[{
+        "type":"rectangle","id":"r","width":360,"height":240,
+        "fill":[{"type":"image","url":"data:image/png;base64,AA==",
+          "mode":"fit","exposure":100,"contrast":-100,"saturation":50,
+          "temperature":25,"tint":-25,"highlights":75,"shadows":-75}]
+      }]}],"children":[]
+    }"##;
+    let scene = editor_state_to_layout_scene(&state_from(src));
+    let a = scene.pages[0].children[0].image_adjustments;
+    assert_eq!(a.exposure, 100.0);
+    assert_eq!(a.contrast, -100.0);
+    assert_eq!(a.saturation, 50.0);
+    assert_eq!(a.temperature, 25.0);
+    assert_eq!(a.tint, -25.0);
+    assert_eq!(a.highlights, 75.0);
+    assert_eq!(a.shadows, -75.0);
+}
+
+#[test]
 fn empty_editor_state_yields_empty_single_page_scene() {
     let scene = editor_state_to_layout_scene(&EditorState::new());
     // The loader's single-page fallback yields one empty page.

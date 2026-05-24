@@ -37,6 +37,53 @@ fn fill_container_resolves_via_taffy() {
 }
 
 #[test]
+fn image_fill_payload_carries_fit_mode() {
+    let src = r##"{
+      "version":"1.0.0",
+      "pages":[{
+        "id":"p","name":"P",
+        "children":[{
+          "type":"rectangle","id":"r","width":360,"height":240,
+          "fill":[{"type":"image","url":"data:image/png;base64,AA==","mode":"tile"}]
+        }]
+      }],
+      "children":[]
+    }"##;
+    let r = load(src);
+    let n = &r.payload.pages[0].children[0];
+    assert_eq!(n.image_src.as_deref(), Some("data:image/png;base64,AA=="));
+    assert_eq!(n.image_fit.as_deref(), Some("tile"));
+}
+
+#[test]
+fn image_fill_payload_carries_adjustments() {
+    let src = r##"{
+      "version":"1.0.0",
+      "pages":[{
+        "id":"p","name":"P",
+        "children":[{
+          "type":"rectangle","id":"r","width":360,"height":240,
+          "fill":[{"type":"image","url":"data:image/png;base64,AA==",
+            "mode":"fit","exposure":100,"contrast":-100,"saturation":50,
+            "temperature":25,"tint":-25,"highlights":75,"shadows":-75}]
+        }]
+      }],
+      "children":[]
+    }"##;
+    let r = load(src);
+    let a = r.payload.pages[0].children[0]
+        .image_adjustments
+        .expect("image adjustments must be carried");
+    assert_eq!(a.exposure, 100.0);
+    assert_eq!(a.contrast, -100.0);
+    assert_eq!(a.saturation, 50.0);
+    assert_eq!(a.temperature, 25.0);
+    assert_eq!(a.tint, -25.0);
+    assert_eq!(a.highlights, 75.0);
+    assert_eq!(a.shadows, -75.0);
+}
+
+#[test]
 fn path_anchors_absolutize_to_canvas_coords() {
     // Canonical `PathNode.anchors` are authored local to the
     // path's `base.x`/`base.y` *and* scaled to its `width`/

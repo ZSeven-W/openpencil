@@ -8,6 +8,7 @@
 use crate::theme::Theme;
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::property_panel::NodeSnapshot;
+use crate::widgets::property_panel_image_preview::paint_image_preview;
 use crate::widgets::property_panel_inputs::{
     format_color_hex, paint_section_divider, paint_section_label_with_add, to_jian_color,
     HEADER_HEIGHT, INPUT_HEIGHT, INPUT_RADIUS, PAD_X, SECTION_GAP, SECTION_HEADER_HEIGHT,
@@ -683,17 +684,30 @@ fn paint_fill_image_body(
     cx.backend.fill_round_rect(row, INPUT_RADIUS, theme.muted);
     cx.backend
         .stroke_round_rect(row, INPUT_RADIUS, theme.border, 1.0);
-    draw_icon(
-        cx.backend,
-        Icon::ImagePlus,
-        Point2D::new(row.origin.x + 6.0, row.origin.y + 5.0),
-        18.0,
-        theme.muted_foreground,
-        1.4,
-    );
-    let label_key = snapshot
-        .image_fill
-        .as_ref()
+    let summary = snapshot.image_fill.as_ref();
+    let thumbnail = Rect {
+        origin: Point2D::new(row.origin.x + 6.0, row.origin.y + 5.0),
+        size: Point2D::new(20.0, 20.0),
+    };
+    let painted_thumbnail = summary
+        .and_then(|summary| {
+            summary
+                .image_url
+                .as_deref()
+                .map(|src| paint_image_preview(cx, thumbnail, src, summary))
+        })
+        .unwrap_or(false);
+    if !painted_thumbnail {
+        draw_icon(
+            cx.backend,
+            Icon::ImagePlus,
+            Point2D::new(row.origin.x + 6.0, row.origin.y + 5.0),
+            18.0,
+            theme.muted_foreground,
+            1.4,
+        );
+    }
+    let label_key = summary
         .map(|summary| summary.mode.label_key())
         .unwrap_or("fill.title");
     let label = TextLayout::single_run(

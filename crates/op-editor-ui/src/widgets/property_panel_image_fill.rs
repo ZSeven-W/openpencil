@@ -6,6 +6,7 @@
 use crate::theme::Theme;
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::property_panel::{NodeSnapshot, PropertyPanelAction};
+use crate::widgets::property_panel_image_preview::paint_image_preview;
 use crate::widgets::property_panel_inputs::to_jian_color;
 use crate::widgets::property_panel_layout::{
     action_button_rects_with_fill_picker, VisibleSections,
@@ -147,6 +148,16 @@ pub fn image_fill_popover_action_at(
         }
     }
     None
+}
+
+pub fn image_fill_popover_contains(
+    panel_rect: Rect,
+    visible: VisibleSections,
+    point: Point2D,
+) -> bool {
+    popover_rect(panel_rect, visible)
+        .map(|pop| rect_contains(pop, point))
+        .unwrap_or(false)
 }
 
 pub fn image_fill_popover_adjustment_action_for_drag(
@@ -292,69 +303,43 @@ fn paint_upload(
 ) {
     let rect = upload_rect(pop);
     cx.backend.fill_round_rect(rect, 6.0, theme.muted);
-    let image_bytes = summary.image_url.as_deref().and_then(data_url_bytes);
-    if let (Some(src), Some(bytes)) = (summary.image_url.as_deref(), image_bytes.as_ref()) {
+    if let Some(src) = summary.image_url.as_deref() {
         let preview = Rect {
             origin: Point2D::new(rect.origin.x + 6.0, rect.origin.y + 6.0),
             size: Point2D::new((rect.size.x - 12.0).max(0.0), (rect.size.y - 12.0).max(0.0)),
         };
-        cx.backend.save();
-        cx.backend.clip_rect(rect);
-        cx.backend.draw_image(preview, src_hash(src), bytes);
-        cx.backend.restore();
+        if paint_image_preview(cx, preview, src, summary) {
+            cx.backend.stroke_round_rect(rect, 6.0, theme.border, 1.0);
+            return;
+        }
+    }
+    draw_icon(
+        cx.backend,
+        Icon::ImagePlus,
+        Point2D::new(
+            rect.origin.x + rect.size.x / 2.0 - 12.0,
+            rect.origin.y + 35.0,
+        ),
+        24.0,
+        theme.muted_foreground,
+        1.6,
+    );
+    let label = if summary.has_image {
+        op_i18n::translate(locale, "image.title")
     } else {
-        draw_icon(
-            cx.backend,
-            Icon::ImagePlus,
-            Point2D::new(
-                rect.origin.x + rect.size.x / 2.0 - 12.0,
-                rect.origin.y + 35.0,
-            ),
-            24.0,
-            theme.muted_foreground,
-            1.6,
-        );
-        let label = if summary.has_image {
-            op_i18n::translate(locale, "image.title")
-        } else {
-            op_i18n::translate(locale, "image.clickToUpload")
-        };
-        paint_centered_label(
-            cx,
-            theme,
-            label,
-            Rect {
-                origin: Point2D::new(rect.origin.x, rect.origin.y + 64.0),
-                size: Point2D::new(rect.size.x, 24.0),
-            },
-            theme.muted_foreground,
-        );
-    }
+        op_i18n::translate(locale, "image.clickToUpload")
+    };
+    paint_centered_label(
+        cx,
+        theme,
+        label,
+        Rect {
+            origin: Point2D::new(rect.origin.x, rect.origin.y + 64.0),
+            size: Point2D::new(rect.size.x, 24.0),
+        },
+        theme.muted_foreground,
+    );
     cx.backend.stroke_round_rect(rect, 6.0, theme.border, 1.0);
-}
-
-fn data_url_bytes(src: &str) -> Option<Vec<u8>> {
-    let after_scheme = src.strip_prefix("data:")?;
-    let comma = after_scheme.find(',')?;
-    let meta = &after_scheme[..comma];
-    let payload = &after_scheme[comma + 1..];
-    if !meta.contains(";base64") {
-        return None;
-    }
-    let clean: String = payload
-        .chars()
-        .filter(|c| !c.is_ascii_whitespace())
-        .collect();
-    use base64::engine::general_purpose::STANDARD as B64;
-    use base64::Engine as _;
-    B64.decode(clean.as_bytes()).ok()
-}
-
-fn src_hash(src: &str) -> u64 {
-    use std::hash::{Hash, Hasher};
-    let mut h = std::collections::hash_map::DefaultHasher::new();
-    src.hash(&mut h);
-    h.finish()
 }
 
 fn paint_adjustments(

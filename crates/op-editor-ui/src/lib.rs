@@ -37,7 +37,9 @@ pub mod theme;
 pub mod widgets;
 
 // Re-export the primary API for the hosts / widgets / tests.
-pub use op_editor_core::render_backend::{Color, Point2D, Rect, RenderBackend, TextLayout};
+pub use op_editor_core::render_backend::{
+    Color, ImageAdjustments, ImageDrawMode, Point2D, Rect, RenderBackend, TextLayout,
+};
 pub use theme::Theme;
 
 /// Re-exports of Jian gesture / event types so widget code can use the

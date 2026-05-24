@@ -212,6 +212,9 @@ impl WidgetHostNative {
                 self.apply_property_action(action);
                 return true;
             }
+            if panel.image_fill_popover_contains(property_rect, Point2D::new(x, y)) {
+                return true;
+            }
         }
         self.editor_state.editor_ui.image_fill_popover_open = false;
         self.mark_dirty();

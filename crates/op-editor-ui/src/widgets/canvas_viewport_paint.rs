@@ -486,7 +486,13 @@ fn paint_image_node(
     }
     if let Some(bytes) = bytes {
         let id = src_hash(src);
-        cx.backend.draw_image(world_rect, id, &bytes);
+        cx.backend.draw_image_with_options(
+            world_rect,
+            id,
+            &bytes,
+            node.image_fit.to_draw_mode(),
+            node.image_adjustments,
+        );
     }
     if let Some(stroke) = node.stroke {
         let width = stroke.width * zoom;
