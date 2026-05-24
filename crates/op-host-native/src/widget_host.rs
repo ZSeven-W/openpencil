@@ -126,6 +126,9 @@ pub struct WidgetHostNative {
     pub(in crate::widget_host) design_md_drag: Option<DesignMdDragState>,
     /// Active Component-Browser panel drag.
     pub(in crate::widget_host) component_browser_drag: Option<ComponentBrowserDragState>,
+    /// Active image-fill adjustment slider drag in the floating
+    /// property popover.
+    pub(in crate::widget_host) image_adjustment_drag: Option<op_editor_core::ImageAdjustmentField>,
     /// Active panel-resize drag — set when the cursor is pressed
     /// within the resize gutter of LayerPanel's right edge or
     /// PropertyPanel's left edge.
@@ -391,6 +394,7 @@ impl WidgetHostNative {
             chat_drag: None,
             design_md_drag: None,
             component_browser_drag: None,
+            image_adjustment_drag: None,
             panel_resize: None,
             node_drag: None,
             path_anchor_drag: None,

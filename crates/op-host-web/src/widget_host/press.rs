@@ -221,6 +221,29 @@ impl WidgetHost {
             return rename_committed || text_edit_committed;
         }
 
+        // 0c0a. Image-fill popover — outside-click dismiss.
+        if self.editor_state.editor_ui.image_fill_popover_open {
+            if let Some(panel) = PropertyPanel::for_selection(&self.editor_state) {
+                let property_rect = Rect {
+                    origin: Point2D::new(
+                        viewport_width - self.editor_state.editor_ui.property_panel_width,
+                        TOP_BAR_HEIGHT,
+                    ),
+                    size: Point2D::new(
+                        self.editor_state.editor_ui.property_panel_width,
+                        (viewport_height - TOP_BAR_HEIGHT).max(0.0),
+                    ),
+                };
+                if let Some(action) = panel.hit_test_action(property_rect, Point2D::new(x, y)) {
+                    self.apply_property_action(action);
+                    return true;
+                }
+            }
+            self.editor_state.editor_ui.image_fill_popover_open = false;
+            self.mark_dirty();
+            return true;
+        }
+
         // 0c0b. Export scale / format inline select popup —
         //       outside-click dismiss. A click on a popup row or a
         //       dropdown toggle is applied; any other click closes

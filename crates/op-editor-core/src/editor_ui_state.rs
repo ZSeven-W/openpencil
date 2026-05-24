@@ -49,85 +49,9 @@ impl ThemeMode {
     }
 }
 
-/// Which PropertyPanel tab is active — toggled by `Cmd+Shift+C`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum PropertyTab {
-    Design,
-    Code,
-}
-
-/// Variants the Fill section's type-selector pill exposes.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum FillType {
-    Solid,
-    LinearGradient,
-    RadialGradient,
-    Image,
-}
-
-/// Three flex-layout modes the property panel exposes.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum FlexLayout {
-    Free,
-    Vertical,
-    Horizontal,
-}
-
-/// Path boolean ops — TS parity with Paper.js (Ctrl+Alt+U/S/I/X).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum BooleanOp {
-    Union,
-    Subtract,
-    Intersect,
-    Exclude,
-}
-
-/// Raster export format. State enum ported from shell-core's
-/// `widgets/export_dialog::ExportFormat` (the widget render code stays
-/// in shell-core).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ExportFormat {
-    Png,
-    Jpeg,
-    Webp,
-    Svg,
-    Pdf,
-}
-
-impl ExportFormat {
-    pub const ALL: [ExportFormat; 5] = [
-        ExportFormat::Png,
-        ExportFormat::Jpeg,
-        ExportFormat::Webp,
-        ExportFormat::Svg,
-        ExportFormat::Pdf,
-    ];
-
-    pub fn label(self) -> &'static str {
-        match self {
-            ExportFormat::Png => "PNG",
-            ExportFormat::Jpeg => "JPEG",
-            ExportFormat::Webp => "WEBP",
-            ExportFormat::Svg => "SVG",
-            ExportFormat::Pdf => "PDF",
-        }
-    }
-
-    pub fn extension(self) -> &'static str {
-        match self {
-            ExportFormat::Png => "png",
-            ExportFormat::Jpeg => "jpg",
-            ExportFormat::Webp => "webp",
-            ExportFormat::Svg => "svg",
-            ExportFormat::Pdf => "pdf",
-        }
-    }
-
-    /// Whether the format has a working export backend.
-    pub fn is_implemented(self) -> bool {
-        true
-    }
-}
+pub use crate::property_panel_state::{
+    BooleanOp, ExportFormat, FillType, FlexLayout, ImageAdjustmentField, ImageFillMode, PropertyTab,
+};
 
 /// File-menu choices. State enum ported from shell-core's
 /// `widgets/file_menu::FileMenuChoice`.
@@ -608,6 +532,8 @@ pub struct EditorUiState {
     pub size_clip_content: bool,
     /// Whether the fill-type dropdown is open.
     pub fill_type_picker_open: bool,
+    /// Whether the image-fill editor popover is open.
+    pub image_fill_popover_open: bool,
     /// Active-theme axis whose value picker is open; `None` = closed.
     pub axis_dropdown_open: Option<String>,
     /// Editor focus for a non-color variable row (Number / String).
@@ -751,6 +677,7 @@ impl Default for EditorUiState {
             size_hug_height: false,
             size_clip_content: false,
             fill_type_picker_open: false,
+            image_fill_popover_open: false,
             axis_dropdown_open: None,
             variable_row_focus: None,
             effect_param_focus: None,

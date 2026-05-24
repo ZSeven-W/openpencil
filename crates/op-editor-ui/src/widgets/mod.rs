@@ -46,10 +46,12 @@ pub mod property_panel_code;
 pub mod property_panel_effects;
 pub mod property_panel_export;
 pub mod property_panel_fill;
+pub mod property_panel_image_fill;
 pub mod property_panel_input_layout;
 pub mod property_panel_inputs;
 pub mod property_panel_layout;
 pub mod property_panel_sections;
+pub mod property_panel_snapshot;
 #[cfg(test)]
 mod property_panel_tests;
 pub mod toolbar;

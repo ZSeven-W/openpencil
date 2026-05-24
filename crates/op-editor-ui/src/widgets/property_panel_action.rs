@@ -71,7 +71,22 @@ pub enum PropertyPanelAction {
     /// `effect[index].color`.
     OpenEffectColorPicker(usize),
     /// User clicked the `图片` fill body row — host opens an image
-    /// file picker (rfd) and writes the chosen file into the selected
+    /// fill popover, matching the TS right-panel image editor.
+    ToggleImageFillPopover,
+    /// User clicked the popover close button.
+    CloseImageFillPopover,
+    /// User picked a fill/fit/crop/tile mode in the image-fill
+    /// popover.
+    SetImageFillMode(op_editor_core::ImageFillMode),
+    /// User clicked the image-fill popover's upload well — host opens
+    /// a file picker and writes the chosen file into the selected
     /// node's primary fill as `PenFill::Image { url: <data-url> }`.
     PickFillImage,
+    /// User clicked one of the image adjustment tracks.
+    SetImageAdjustment {
+        field: op_editor_core::ImageAdjustmentField,
+        value: f32,
+    },
+    /// User clicked the image adjustment reset affordance.
+    ResetImageAdjustments,
 }

@@ -513,6 +513,46 @@ impl EditorState {
         crate::fills::set_primary_fill_type(node, fill_type)
     }
 
+    /// Set the selected node's primary image-fill fit mode.
+    pub fn set_selected_image_fill_mode(&mut self, mode: crate::ImageFillMode) -> bool {
+        let sel = self.selection.anchor.clone();
+        if !sel.is_real() || !self.is_editable(&sel) {
+            return false;
+        }
+        let Some(node) = find_node_mut(self.active_children_mut(), &sel) else {
+            return false;
+        };
+        crate::fills::set_primary_image_fill_mode(node, mode)
+    }
+
+    /// Set one selected-node primary image-fill adjustment.
+    pub fn set_selected_image_adjustment(
+        &mut self,
+        field: crate::ImageAdjustmentField,
+        value: f32,
+    ) -> bool {
+        let sel = self.selection.anchor.clone();
+        if !sel.is_real() || !self.is_editable(&sel) {
+            return false;
+        }
+        let Some(node) = find_node_mut(self.active_children_mut(), &sel) else {
+            return false;
+        };
+        crate::fills::set_primary_image_adjustment(node, field, value)
+    }
+
+    /// Reset all selected-node primary image-fill adjustments.
+    pub fn reset_selected_image_adjustments(&mut self) -> bool {
+        let sel = self.selection.anchor.clone();
+        if !sel.is_real() || !self.is_editable(&sel) {
+            return false;
+        }
+        let Some(node) = find_node_mut(self.active_children_mut(), &sel) else {
+            return false;
+        };
+        crate::fills::reset_primary_image_adjustments(node)
+    }
+
     // --- Tree ops ----------------------------------------------------
 
     /// Remove every editable node in the selection set from its

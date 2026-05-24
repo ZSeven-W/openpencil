@@ -79,6 +79,9 @@ pub struct WidgetHost {
     pub(in crate::widget_host) theme: Theme,
     drag: Option<DragState>,
     chat_drag: Option<ChatDragState>,
+    /// Active image-fill adjustment slider drag in the floating
+    /// property popover.
+    image_adjustment_drag: Option<op_editor_core::ImageAdjustmentField>,
     /// Active marquee rect-select drag. Mirrors the native host —
     /// drag a rect on empty canvas with the Select tool, every
     /// intersecting top-level node joins (or extends) the
@@ -172,6 +175,7 @@ impl WidgetHost {
             theme: Theme::dark(),
             drag: None,
             chat_drag: None,
+            image_adjustment_drag: None,
             marquee_drag: None,
             layer_drag: None,
             next_node_id: 100,
@@ -424,6 +428,26 @@ impl WidgetHost {
             d.pos_y = y - d.grab_dy;
             return true;
         }
+        if let Some(field) = self.image_adjustment_drag {
+            if let Some(panel) =
+                op_editor_ui::widgets::PropertyPanel::for_selection(&self.editor_state)
+            {
+                let property_rect = Rect {
+                    origin: Point2D::new(
+                        self.last_viewport_w - self.editor_state.editor_ui.property_panel_width,
+                        op_editor_ui::widgets::TOP_BAR_HEIGHT,
+                    ),
+                    size: Point2D::new(
+                        self.editor_state.editor_ui.property_panel_width,
+                        (self.last_viewport_h - op_editor_ui::widgets::TOP_BAR_HEIGHT).max(0.0),
+                    ),
+                };
+                if let Some(action) = panel.image_adjustment_drag_action(property_rect, field, x) {
+                    self.apply_property_action(action);
+                    return true;
+                }
+            }
+        }
         if let Some(drag) = self.drag.as_mut() {
             let dx = x - drag.last_x;
             let dy = y - drag.last_y;
@@ -504,14 +528,15 @@ impl WidgetHost {
             // ADD-only: every hit joins the set; already-selected
             // hits stay selected. Shift-marquee never removes.
             for id in ids {
-                let ec_id = id.clone();
+                let ec_id = op_editor_core::NodeId::new(&id);
                 if !self.editor_state.is_selected(&ec_id) {
                     self.editor_state.toggle_selection(ec_id);
                 }
             }
             self.mark_dirty();
         } else if !ids.is_empty() {
-            let ec_ids: Vec<op_editor_core::NodeId> = ids.iter().map(|id| id.clone()).collect();
+            let ec_ids: Vec<op_editor_core::NodeId> =
+                ids.iter().map(op_editor_core::NodeId::new).collect();
             let anchor = ec_ids.last().unwrap().clone();
             self.editor_state.selection.set = ec_ids;
             self.editor_state.selection.anchor = anchor;
@@ -544,6 +569,9 @@ impl WidgetHost {
             self.mark_dirty();
             return true;
         }
+        if self.image_adjustment_drag.take().is_some() {
+            return true;
+        }
         let was_dragging = self.drag.is_some();
         self.drag = None;
         was_dragging
@@ -566,6 +594,9 @@ impl WidgetHost {
             return true;
         }
         if self.chat_drag.take().is_some() {
+            return true;
+        }
+        if self.image_adjustment_drag.take().is_some() {
             return true;
         }
         let was_dragging = self.drag.is_some();
@@ -737,7 +768,7 @@ impl WidgetHost {
     }
 
     /// Per-button hover wash on the floating toolbar. Mirrors
-    /// `op_host_native::widget_host::toolbar_hover::update_toolbar_hover`.
+    /// `op_host_native::widget_host::geometry::update_toolbar_hover`.
     /// Returns `true` if the hover state changed.
     fn update_toolbar_hover(&mut self, x: f32, y: f32) -> bool {
         let rect = self.toolbar_rect(self.last_viewport_w);

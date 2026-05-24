@@ -331,6 +331,13 @@ impl WidgetHostNative {
             return rename_committed || text_edit_committed;
         }
 
+        // 0c0a. Image-fill popover — outside-click dismiss.
+        if !in_git_panel
+            && self.dismiss_image_fill_popover_on_press(x, y, viewport_width, viewport_height)
+        {
+            return true;
+        }
+
         // 0c0. Fill-type picker — outside-click dismiss.
         if self.editor_state.editor_ui.fill_type_picker_open && !in_git_panel {
             self.refresh_layout_scene();

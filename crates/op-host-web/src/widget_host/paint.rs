@@ -105,21 +105,6 @@ impl WidgetHost {
             layer_panel.paint(&mut cx, layer_panel_rect);
         }
 
-        let property_panel = PropertyPanel::for_selection(&self.editor_state);
-        if let Some(panel) = property_panel.as_ref() {
-            let property_rect = Rect {
-                origin: Point2D::new(viewport_width - ui.property_panel_width, TOP_BAR_HEIGHT),
-                size: Point2D::new(
-                    ui.property_panel_width,
-                    (viewport_height - TOP_BAR_HEIGHT).max(0.0),
-                ),
-            };
-            let mut cx = PaintCx {
-                backend: &mut *backend,
-            };
-            panel.paint(&mut cx, property_rect);
-        }
-
         let (canvas_left, _canvas_y, canvas_w, canvas_h) =
             self.canvas_region(viewport_width, viewport_height);
         let canvas_rect = Rect {
@@ -135,6 +120,21 @@ impl WidgetHost {
                 backend: &mut *backend,
             };
             canvas.paint(&mut cx, canvas_rect);
+        }
+
+        let property_panel = PropertyPanel::for_selection(&self.editor_state);
+        if let Some(panel) = property_panel.as_ref() {
+            let property_rect = Rect {
+                origin: Point2D::new(viewport_width - ui.property_panel_width, TOP_BAR_HEIGHT),
+                size: Point2D::new(
+                    ui.property_panel_width,
+                    (viewport_height - TOP_BAR_HEIGHT).max(0.0),
+                ),
+            };
+            let mut cx = PaintCx {
+                backend: &mut *backend,
+            };
+            panel.paint(&mut cx, property_rect);
         }
 
         let toolbar = Toolbar::for_editor(&self.editor_state);
@@ -222,6 +222,23 @@ impl WidgetHost {
                 backend.fill_rect(rect, fill);
                 backend.stroke_rect(rect, primary, 1.0);
             }
+        }
+
+        // PropertyPanel overlays — painted after canvas floating
+        // controls so the image-fill popover can cover the zoom
+        // status pill when it extends into the canvas.
+        if let Some(panel) = property_panel.as_ref() {
+            let property_rect = Rect {
+                origin: Point2D::new(viewport_width - ui.property_panel_width, TOP_BAR_HEIGHT),
+                size: Point2D::new(
+                    ui.property_panel_width,
+                    (viewport_height - TOP_BAR_HEIGHT).max(0.0),
+                ),
+            };
+            let mut cx = PaintCx {
+                backend: &mut *backend,
+            };
+            panel.paint_overlays(&mut cx, property_rect);
         }
 
         if ui.locale_picker_open {
