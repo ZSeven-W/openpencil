@@ -119,7 +119,36 @@ pub fn editable_input_rects(
                 size: Point2D::new(usable_w / 2.0 - 4.0, INPUT_HEIGHT),
             },
         ));
-        y += INPUT_HEIGHT + 12.0;
+        if visible.polygon_sides {
+            rects.push((
+                PropertyFocus::PolygonSides,
+                Rect {
+                    origin: Point2D::new(x0 + PAD_X + half_w + 8.0, y),
+                    size: Point2D::new(half_w, INPUT_HEIGHT),
+                },
+            ));
+        }
+        y += INPUT_HEIGHT;
+        if visible.ellipse_arc {
+            y += 6.0;
+            let col_w = (usable_w - 12.0) / 3.0;
+            let focuses = [
+                PropertyFocus::EllipseStart,
+                PropertyFocus::EllipseSweep,
+                PropertyFocus::EllipseInnerRadius,
+            ];
+            for (i, focus) in focuses.into_iter().enumerate() {
+                rects.push((
+                    focus,
+                    Rect {
+                        origin: Point2D::new(x0 + PAD_X + i as f32 * (col_w + 6.0), y),
+                        size: Point2D::new(col_w, INPUT_HEIGHT),
+                    },
+                ));
+            }
+            y += INPUT_HEIGHT;
+        }
+        y += 12.0;
         y += SECTION_GAP;
     }
     if visible.fill {

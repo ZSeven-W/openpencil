@@ -13,7 +13,7 @@
 //! body-opts-out-children-stay rule, and the hidden-subtree skip.
 
 use crate::layout_scene::NodeKind;
-use crate::layout_scene::{LayoutScene, SceneNode};
+use crate::layout_scene::{regular_polygon_points, LayoutScene, SceneNode};
 use crate::{Point2D, Rect};
 
 impl LayoutScene {
@@ -226,29 +226,12 @@ fn point_in_node(node: &SceneNode, local: Point2D, bounds: Rect, zoom: f32) -> b
             r2 >= inner * inner
         }
         NodeKind::Polygon => {
-            // Triangle vertices: top-center, bottom-left,
-            // bottom-right — mirrors the polygon paint path.
-            let top = Point2D::new(cx, bounds.origin.y);
-            let bl = Point2D::new(bounds.origin.x, bounds.origin.y + bounds.size.y);
-            let br = Point2D::new(
-                bounds.origin.x + bounds.size.x,
-                bounds.origin.y + bounds.size.y,
-            );
-            point_in_triangle(local, top, bl, br)
+            let points = regular_polygon_points(bounds, node.polygon_sides);
+            point_in_polygon(local, &points)
         }
         // Frame, Group, Rect, Text, Other, Path — bounds-only hit.
         _ => true,
     }
-}
-
-/// Sign-of-cross-product point-in-triangle test.
-fn point_in_triangle(p: Point2D, a: Point2D, b: Point2D, c: Point2D) -> bool {
-    let s1 = (b.x - a.x) * (p.y - a.y) - (b.y - a.y) * (p.x - a.x);
-    let s2 = (c.x - b.x) * (p.y - b.y) - (c.y - b.y) * (p.x - b.x);
-    let s3 = (a.x - c.x) * (p.y - c.y) - (a.y - c.y) * (p.x - c.x);
-    let has_neg = s1 < 0.0 || s2 < 0.0 || s3 < 0.0;
-    let has_pos = s1 > 0.0 || s2 > 0.0 || s3 > 0.0;
-    !(has_neg && has_pos)
 }
 
 /// Even-odd ray-cast point-in-polygon test over a closed vertex ring.

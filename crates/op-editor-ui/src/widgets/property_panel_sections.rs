@@ -27,6 +27,7 @@ pub use crate::widgets::property_panel_image_fill::{
     paint_image_fill_popover,
 };
 pub use crate::widgets::property_panel_inputs::format_color_hex as _format_color_hex_compat;
+pub use crate::widgets::property_panel_layer::paint_layer_section;
 
 /// Hit-result for a click on the property panel — payload is the
 /// input the click landed on (host stores in
@@ -63,6 +64,10 @@ pub struct PropertyLabels {
     pub size: &'static str,
     pub layer: &'static str,
     pub opacity: &'static str,
+    pub polygon_sides: &'static str,
+    pub ellipse_start: &'static str,
+    pub ellipse_sweep: &'static str,
+    pub ellipse_inner_radius: &'static str,
     pub fill: &'static str,
     pub stroke: &'static str,
     pub effects: &'static str,
@@ -99,6 +104,10 @@ impl PropertyLabels {
             size: pick("layout.dimensions", "Size"),
             layer: pick("appearance.layer", "Layer"),
             opacity: pick("appearance.opacity", "Opacity"),
+            polygon_sides: pick("polygon.sides", "Sides"),
+            ellipse_start: pick("ellipse.start", "Start"),
+            ellipse_sweep: pick("ellipse.sweep", "Sweep"),
+            ellipse_inner_radius: pick("ellipse.innerRadius", "Inner"),
             fill: pick("fill.title", "Fill"),
             stroke: pick("stroke.title", "Stroke"),
             effects: pick("effects.title", "Effects"),
@@ -581,95 +590,6 @@ fn paint_check_row(
         Point2D::new(0.0, 0.0),
     );
     cx.backend.draw_text(&lbl, Point2D::new(x + 22.0, y + 16.0));
-}
-
-// ── Layer (opacity) section ───────────────────────────────────────
-
-pub fn paint_layer_section(
-    cx: &mut PaintCx<'_>,
-    theme: &Theme,
-    labels: &PropertyLabels,
-    edit: &EditContext<'_>,
-    x: f32,
-    y: f32,
-    width: f32,
-) -> f32 {
-    let mut y = paint_section_label(cx, theme, labels.layer, x, y, width);
-    let usable_w = width - PAD_X * 2.0;
-    let row = Rect {
-        origin: Point2D::new(x + PAD_X, y),
-        // Half-width box — the empty right half avoids the over-wide
-        // look of a row spanning the full panel for a single value.
-        size: Point2D::new(usable_w / 2.0 - 4.0, INPUT_HEIGHT),
-    };
-    let focused = edit.focus == Some(PropertyFocus::Opacity);
-    let value = edit.value_for(PropertyFocus::Opacity, "100");
-    // Left-aligned compound `<label>  <value>  <unit>` — measuring
-    // the label first so the value never collides with it, then
-    // packing the unit right after the value. Avoids the overlap
-    // a "value-centered" layout produces in narrow boxes when the
-    // label is a wide CJK string ("不透明度" alone is ~50 px).
-    cx.backend.fill_round_rect(row, INPUT_RADIUS, theme.muted);
-    if focused {
-        cx.backend
-            .stroke_round_rect(row, INPUT_RADIUS, theme.primary, 1.5);
-    }
-    // Clip the text paint to the row so a long localized label
-    // (e.g. ru "Непрозрачность") can't bleed past the half-width
-    // box into the neighbouring rail.
-    cx.backend.save();
-    cx.backend.clip_rect(row);
-    let prefix = labels.opacity;
-    let prefix_w = cx.backend.measure_text(prefix, 12.0);
-    let value_w = cx.backend.measure_text(value, 12.0);
-    let baseline_y = y + 19.0;
-    let prefix_x = row.origin.x + 10.0;
-    let prefix_layout = TextLayout::single_run(
-        prefix,
-        "system-ui",
-        12.0,
-        to_jian_color(theme.muted_foreground),
-        Point2D::new(0.0, 0.0),
-    );
-    cx.backend
-        .draw_text(&prefix_layout, Point2D::new(prefix_x, baseline_y));
-    let value_x = prefix_x + prefix_w + 8.0;
-    let value_layout = TextLayout::single_run(
-        value,
-        "system-ui",
-        12.0,
-        to_jian_color(theme.foreground),
-        Point2D::new(0.0, 0.0),
-    );
-    cx.backend
-        .draw_text(&value_layout, Point2D::new(value_x, baseline_y));
-    if let Some(pos) = edit.caret_at(PropertyFocus::Opacity) {
-        let w = cx
-            .backend
-            .measure_text(&value[..pos.min(value.len())], 12.0);
-        cx.backend.fill_rect(
-            Rect {
-                origin: Point2D::new(value_x + w, y + 6.0),
-                size: Point2D::new(1.5, INPUT_HEIGHT - 12.0),
-            },
-            theme.foreground,
-        );
-    }
-    let unit_layout = TextLayout::single_run(
-        "%",
-        "system-ui",
-        12.0,
-        to_jian_color(theme.muted_foreground),
-        Point2D::new(0.0, 0.0),
-    );
-    cx.backend.draw_text(
-        &unit_layout,
-        Point2D::new(value_x + value_w + 6.0, baseline_y),
-    );
-    cx.backend.restore();
-    y += INPUT_HEIGHT + 12.0;
-    paint_section_divider(cx, theme, x, y, width);
-    y + SECTION_GAP
 }
 
 // ── Stroke section ────────────────────────────────────────────────

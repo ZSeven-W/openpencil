@@ -65,7 +65,7 @@ impl WidgetHostNative {
     /// against the other top-level nodes, snap the selection onto the
     /// nearest edge/centre alignment, and store the guide lines for
     /// the canvas painter. Cleared on drag release.
-    fn apply_smart_guides(&mut self) {
+    fn apply_smart_guides(&mut self) -> (f64, f64) {
         use op_editor_core::align_guides::compute_alignment_guides;
         /// Snap range in doc-px — an edge/centre this close to another
         /// node's edge/centre locks on.
@@ -100,16 +100,18 @@ impl WidgetHostNative {
             };
         let Some(m) = moving else {
             self.editor_state.editor_ui.active_guides.clear();
-            return;
+            return (0.0, 0.0);
         };
         let others: Vec<(f64, f64, f64, f64)> =
             others.iter().map(|a| (a[0], a[1], a[2], a[3])).collect();
         let result = compute_alignment_guides((m[0], m[1], m[2], m[3]), &others, GUIDE_THRESHOLD);
+        let snap = (result.snap_dx, result.snap_dy);
         if result.snap_dx != 0.0 || result.snap_dy != 0.0 {
             self.editor_state
                 .translate_selected(result.snap_dx, result.snap_dy);
         }
         self.editor_state.editor_ui.active_guides = result.guides;
+        snap
     }
 
     pub fn apply_cursor_move(&mut self, x: f32, y: f32) -> bool {
@@ -314,17 +316,32 @@ impl WidgetHostNative {
             self.mark_dirty();
             return true;
         }
-        if let Some(drag) = self.node_drag.as_mut() {
+        if let Some(drag) = self.node_drag {
             let zoom = self.editor_state.viewport.zoom.max(0.0001);
-            let dx = (x - drag.last_screen_x) / zoom;
-            let dy = (y - drag.last_screen_y) / zoom;
-            drag.last_screen_x = x;
-            drag.last_screen_y = y;
+            let prev_screen_x = drag.last_screen_x;
+            let prev_screen_y = drag.last_screen_y;
+            let dx = (x - prev_screen_x) / zoom;
+            let dy = (y - prev_screen_y) / zoom;
             if dx != 0.0 || dy != 0.0 {
+                if let Some(drag) = self.node_drag.as_mut() {
+                    drag.last_screen_x = x;
+                    drag.last_screen_y = y;
+                }
                 self.editor_state.translate_selected(dx as f64, dy as f64);
-                // `drag`'s last use was above — `self` is free to
-                // re-borrow for the smart-guide alignment pass.
-                self.apply_smart_guides();
+                let (snap_dx, snap_dy) = self.apply_smart_guides();
+                if let Some(drag) = self.node_drag.as_mut() {
+                    // When smart guides pull the node back onto a guide,
+                    // keep the cursor baseline on that axis at its previous
+                    // value. Small subsequent cursor moves then accumulate
+                    // until they exceed the snap threshold instead of being
+                    // eaten one frame at a time.
+                    if snap_dx != 0.0 {
+                        drag.last_screen_x = prev_screen_x;
+                    }
+                    if snap_dy != 0.0 {
+                        drag.last_screen_y = prev_screen_y;
+                    }
+                }
                 self.mark_dirty();
                 return true;
             }

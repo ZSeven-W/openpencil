@@ -74,12 +74,87 @@ fn visible_for(panel: &PropertyPanel) -> sections::VisibleSections {
         flex_layout: caps.flex_layout,
         size_options: caps.size_options,
         opacity: caps.opacity,
+        polygon_sides: panel.snapshot.polygon_sides.is_some(),
+        ellipse_arc: panel.snapshot.ellipse_arc.is_some(),
         fill: caps.fill,
         stroke: caps.stroke,
         effects: caps.effects,
         export: caps.export,
         fill_type: panel.fill_type,
         gradient_stop_count: panel.snapshot.gradient_stops.len(),
+    }
+}
+
+#[test]
+fn polygon_selection_exposes_sides_layer_input() {
+    let mut state = state_from(
+        r##"{ "version": "0.8.0", "children": [
+              {"type":"polygon","id":"poly","name":"Hex",
+               "x":40,"y":40,"width":120,"height":120,
+               "polygonCount":6}
+        ]}"##,
+    );
+    state.set_single_selection(NodeId::new("poly"));
+    let panel = PropertyPanel::for_selection(&state).expect("polygon panel");
+
+    assert_eq!(panel.snapshot.polygon_sides, Some(6));
+
+    let rect = Rect {
+        origin: Point2D::new(0.0, 0.0),
+        size: Point2D::new(280.0, 1200.0),
+    };
+    let sides_rect = sections::editable_input_rects(rect, visible_for(&panel))
+        .into_iter()
+        .find(|(focus, _)| *focus == op_editor_core::PropertyFocus::PolygonSides)
+        .map(|(_, r)| r)
+        .expect("polygon side input rect");
+    let center = Point2D::new(
+        sides_rect.origin.x + sides_rect.size.x / 2.0,
+        sides_rect.origin.y + sides_rect.size.y / 2.0,
+    );
+    assert_eq!(
+        panel.hit_test(rect, center),
+        Some(op_editor_core::PropertyFocus::PolygonSides)
+    );
+}
+
+#[test]
+fn ellipse_selection_exposes_arc_layer_inputs() {
+    let mut state = state_from(
+        r##"{ "version": "0.8.0", "children": [
+              {"type":"ellipse","id":"ell","name":"Arc",
+               "x":40,"y":40,"width":120,"height":100,
+               "startAngle":30,"sweepAngle":270,"innerRadius":0.25}
+        ]}"##,
+    );
+    state.set_single_selection(NodeId::new("ell"));
+    let panel = PropertyPanel::for_selection(&state).expect("ellipse panel");
+
+    let arc = panel.snapshot.ellipse_arc.expect("ellipse arc snapshot");
+    assert_eq!(arc.start_deg, 30.0);
+    assert_eq!(arc.sweep_deg, 270.0);
+    assert_eq!(arc.inner_percent, 25.0);
+
+    let rect = Rect {
+        origin: Point2D::new(0.0, 0.0),
+        size: Point2D::new(280.0, 1200.0),
+    };
+    let rects = sections::editable_input_rects(rect, visible_for(&panel));
+    for focus in [
+        op_editor_core::PropertyFocus::EllipseStart,
+        op_editor_core::PropertyFocus::EllipseSweep,
+        op_editor_core::PropertyFocus::EllipseInnerRadius,
+    ] {
+        let target = rects
+            .iter()
+            .find(|(f, _)| *f == focus)
+            .map(|(_, r)| *r)
+            .expect("ellipse arc input rect");
+        let center = Point2D::new(
+            target.origin.x + target.size.x / 2.0,
+            target.origin.y + target.size.y / 2.0,
+        );
+        assert_eq!(panel.hit_test(rect, center), Some(focus));
     }
 }
 

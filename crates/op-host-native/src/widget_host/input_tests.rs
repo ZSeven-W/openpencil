@@ -5,7 +5,7 @@
 //! `host.editor_state` from canonical-schema JSON and assert against
 //! `editor_state` + the derived `LayoutScene` render scene.
 
-use super::WidgetHostNative;
+use super::{NodeDragState, WidgetHostNative};
 use op_editor_core::ui_draft::PropertyFocus;
 use op_editor_core::NodeId;
 use op_editor_core::PenNodeExt;
@@ -193,6 +193,124 @@ fn image_fill_actions_refresh_the_render_scene() {
         op_editor_ui::layout_scene::SceneImageFit::Fit
     );
     assert_eq!(rendered.image_adjustments.exposure, 64.0);
+}
+
+#[test]
+fn corner_radius_property_focus_updates_selected_rectangle() {
+    let mut host = WidgetHostNative::new();
+    seed(
+        &mut host,
+        r##"{ "version": "0.8.0", "children": [
+              {"type":"rectangle","id":"n62","name":"Rounded",
+               "x":40,"y":40,"width":180,"height":120,
+               "fill":[{"type":"solid","color":"#BDC7D9"}]}
+        ]}"##,
+    );
+    host.editor_state_mut()
+        .set_single_selection(NodeId::new("n62"));
+    host.editor_state_mut().ui.property_focus = Some(PropertyFocus::PositionR);
+    host.editor_state_mut().ui.property_input_draft = "24".to_string();
+
+    host.commit_property_focus_if_any();
+
+    let node = host.editor_state().selected_node().unwrap();
+    match node {
+        jian_ops_schema::node::PenNode::Rectangle(rect) => {
+            assert_eq!(
+                rect.container.corner_radius,
+                Some(jian_ops_schema::node::container::CornerRadius::Uniform(
+                    24.0
+                )),
+            );
+        }
+        other => panic!("expected rectangle, got {other:?}"),
+    }
+    let rendered = host
+        .layout_scene()
+        .active_page()
+        .unwrap()
+        .find("n62")
+        .unwrap();
+    assert_eq!(rendered.corner_radius, 24.0);
+}
+
+#[test]
+fn polygon_sides_property_focus_updates_selected_polygon() {
+    let mut host = WidgetHostNative::new();
+    seed(
+        &mut host,
+        r##"{ "version": "0.8.0", "children": [
+              {"type":"polygon","id":"poly","name":"Polygon",
+               "x":40,"y":40,"width":120,"height":120,
+               "polygonCount":3}
+        ]}"##,
+    );
+    host.editor_state_mut()
+        .set_single_selection(NodeId::new("poly"));
+    host.editor_state_mut().ui.property_focus = Some(PropertyFocus::PolygonSides);
+    host.editor_state_mut().ui.property_input_draft = "7".to_string();
+
+    host.commit_property_focus_if_any();
+
+    let node = host.editor_state().selected_node().unwrap();
+    match node {
+        jian_ops_schema::node::PenNode::Polygon(poly) => {
+            assert_eq!(poly.polygon_count, 7);
+        }
+        other => panic!("expected polygon, got {other:?}"),
+    }
+    let rendered = host
+        .layout_scene()
+        .active_page()
+        .unwrap()
+        .find("poly")
+        .unwrap();
+    assert_eq!(rendered.polygon_sides, 7);
+}
+
+#[test]
+fn ellipse_arc_property_focus_updates_selected_ellipse() {
+    let mut host = WidgetHostNative::new();
+    seed(
+        &mut host,
+        r##"{ "version": "0.8.0", "children": [
+              {"type":"ellipse","id":"ell","name":"Ellipse",
+               "x":40,"y":40,"width":120,"height":100}
+        ]}"##,
+    );
+    host.editor_state_mut()
+        .set_single_selection(NodeId::new("ell"));
+
+    host.editor_state_mut().ui.property_focus = Some(PropertyFocus::EllipseStart);
+    host.editor_state_mut().ui.property_input_draft = "45".to_string();
+    host.commit_property_focus_if_any();
+
+    host.editor_state_mut().ui.property_focus = Some(PropertyFocus::EllipseSweep);
+    host.editor_state_mut().ui.property_input_draft = "180".to_string();
+    host.commit_property_focus_if_any();
+
+    host.editor_state_mut().ui.property_focus = Some(PropertyFocus::EllipseInnerRadius);
+    host.editor_state_mut().ui.property_input_draft = "25".to_string();
+    host.commit_property_focus_if_any();
+
+    let node = host.editor_state().selected_node().unwrap();
+    match node {
+        jian_ops_schema::node::PenNode::Ellipse(ell) => {
+            assert_eq!(ell.start_angle, Some(45.0));
+            assert_eq!(ell.sweep_angle, Some(180.0));
+            assert_eq!(ell.inner_radius, Some(0.25));
+        }
+        other => panic!("expected ellipse, got {other:?}"),
+    }
+    let rendered = host
+        .layout_scene()
+        .active_page()
+        .unwrap()
+        .find("ell")
+        .unwrap();
+    assert_eq!(rendered.arc_start_angle, Some(45.0));
+    assert_eq!(rendered.arc_sweep_angle, Some(180.0));
+    assert_eq!(rendered.arc_inner_radius, Some(0.25));
 }
 
 #[test]
@@ -773,6 +891,35 @@ fn node_drag_not_intercepted_by_align_toolbar_hover() {
     assert!(
         (b.0 - (120.0 + expected_dx as f64)).abs() < 0.5,
         "node-drag delta lost on b; got {b:?}",
+    );
+}
+
+#[test]
+fn node_drag_snap_does_not_trap_incremental_cursor_motion() {
+    let mut host = WidgetHostNative::new();
+    seed(
+        &mut host,
+        r#"{"version":"0.8.0","children":[
+          {"type":"rectangle","id":"moving","name":"moving","x":90,"y":0,"width":10,"height":10},
+          {"type":"rectangle","id":"guide","name":"guide","x":105,"y":100,"width":100,"height":20}
+        ]}"#,
+    );
+    host.editor_state_mut()
+        .set_single_selection(NodeId::new("moving"));
+    host.editor_state_mut().viewport.zoom = 1.0;
+    host.node_drag = Some(NodeDragState {
+        last_screen_x: 500.0,
+        last_screen_y: 500.0,
+    });
+
+    for x in (502..=522).step_by(2) {
+        host.apply_cursor_move(x as f32, 500.0);
+    }
+
+    let moved = node_xy(&host, "moving");
+    assert!(
+        moved.0 > 110.0,
+        "small cursor moves must accumulate enough to leave a smart-guide snap; got {moved:?}"
     );
 }
 

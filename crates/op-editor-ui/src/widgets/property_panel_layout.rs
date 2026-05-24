@@ -117,6 +117,10 @@ pub struct VisibleSections {
     pub size_options: bool,
     /// `Opacity` from the Layer section.
     pub opacity: bool,
+    /// Polygon side-count input in the Layer section.
+    pub polygon_sides: bool,
+    /// Ellipse start/sweep/inner-radius inputs in the Layer section.
+    pub ellipse_arc: bool,
     /// `FillHex` from the Fill section.
     pub fill: bool,
     /// `StrokeHex` + `StrokeWidth` from the Stroke section.
@@ -147,6 +151,8 @@ impl VisibleSections {
         flex_layout: true,
         size_options: true,
         opacity: true,
+        polygon_sides: false,
+        ellipse_arc: false,
         fill: true,
         stroke: true,
         effects: true,
@@ -302,6 +308,20 @@ pub fn fill_body_height_with_stops(fill_type: FillType, stop_count: usize) -> f3
     }
 }
 
+/// Height consumed by the Layer section. Polygon adds a same-row
+/// side-count field; ellipse adds a second row for arc controls.
+pub fn layer_section_height(visible: VisibleSections) -> f32 {
+    if !visible.opacity {
+        return 0.0;
+    }
+    let extra_arc_row = if visible.ellipse_arc {
+        INPUT_HEIGHT + 6.0
+    } else {
+        0.0
+    };
+    SECTION_HEADER_HEIGHT + INPUT_HEIGHT + extra_arc_row + 12.0
+}
+
 /// Rects of every clickable button / checkbox in the panel —
 /// flex-layout 3 buttons, size-options 5 checkboxes. Same y-walk
 /// math as `editable_input_rects` so paint + hit-test stay in
@@ -446,8 +466,7 @@ pub fn action_button_rects_with_fill_picker(
     }
 
     if visible.opacity {
-        y += SECTION_HEADER_HEIGHT;
-        y += INPUT_HEIGHT + 12.0;
+        y += layer_section_height(visible);
         y += SECTION_GAP;
     }
     if visible.fill {

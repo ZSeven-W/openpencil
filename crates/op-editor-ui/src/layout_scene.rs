@@ -273,6 +273,8 @@ pub struct SceneNode {
     /// Ellipse donut-hole radius (0.0..=1.0 fraction). `None` / 0 =
     /// solid.
     pub arc_inner_radius: Option<f32>,
+    /// Polygon side count. `3` is the canonical triangle default.
+    pub polygon_sides: u32,
     /// Image source for nodes that paint a bitmap (`PenNode::Image`).
     /// Carries the canonical schema's `src` field verbatim — usually
     /// a `data:image/...;base64,...` URL produced by the host's file
@@ -364,6 +366,7 @@ impl SceneNode {
             arc_start_angle: None,
             arc_sweep_angle: None,
             arc_inner_radius: None,
+            polygon_sides: 3,
             image_src: None,
             image_fit: SceneImageFit::Fill,
             image_adjustments: crate::ImageAdjustments::default(),
@@ -373,6 +376,22 @@ impl SceneNode {
             children: Vec::new(),
         }
     }
+}
+
+/// Vertices for a regular polygon fitted inside `rect`.
+pub fn regular_polygon_points(rect: Rect, sides: u32) -> Vec<Point2D> {
+    let n = sides.clamp(3, 100) as usize;
+    let cx = rect.origin.x + rect.size.x / 2.0;
+    let cy = rect.origin.y + rect.size.y / 2.0;
+    let rx = rect.size.x / 2.0;
+    let ry = rect.size.y / 2.0;
+    let start = -std::f32::consts::FRAC_PI_2;
+    (0..n)
+        .map(|i| {
+            let angle = start + i as f32 * std::f32::consts::TAU / n as f32;
+            Point2D::new(cx + rx * angle.cos(), cy + ry * angle.sin())
+        })
+        .collect()
 }
 
 /// Resolved stroke descriptor — colour already `$ref`-resolved.

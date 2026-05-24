@@ -49,6 +49,14 @@ pub enum PropertyFocus {
     /// (stored as 0.0..=1.0 in the canonical schema). Same indexing
     /// + scope rules as [`GradientStopHex`].
     GradientStopOffset(usize),
+    /// Polygon side count input. UI clamps to `3..=100`.
+    PolygonSides,
+    /// Ellipse arc start angle, in degrees.
+    EllipseStart,
+    /// Ellipse arc sweep angle, in degrees.
+    EllipseSweep,
+    /// Ellipse donut-hole radius, shown as a percentage.
+    EllipseInnerRadius,
     StrokeHex,
     StrokeWidth,
 }
@@ -78,6 +86,9 @@ impl PropertyFocus {
                 | PropertyFocus::StrokeWidth
                 | PropertyFocus::GradientAngle
                 | PropertyFocus::GradientStopOffset(_)
+                | PropertyFocus::EllipseStart
+                | PropertyFocus::EllipseSweep
+                | PropertyFocus::EllipseInnerRadius
         )
     }
 }
