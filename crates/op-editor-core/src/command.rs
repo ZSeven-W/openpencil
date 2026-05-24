@@ -18,14 +18,6 @@
 //!   - Node payloads describe leaf geometry with plain scalars; the
 //!     applier builds the canonical `jian_ops_schema::PenNode` variant.
 //!
-//! ## Component commands
-//!
-//! `op-editor-core` has no component registry yet (it was a shell-core
-//! `Document` concern; the canonical-schema component model is a later
-//! task). The four `*Component` variants are kept on the enum so the
-//! DTO surface stays a faithful port, but [`EditorState::apply`] rejects
-//! them (`false`) — see the apply module for the documented gap.
-
 use crate::node_id::NodeId;
 use crate::walkers::ReorderDirection;
 use jian_ops_schema::node::PenNode;
@@ -183,14 +175,13 @@ pub enum EditorCommand {
     DeleteVariable { name: String },
     /// Rename a variable.
     RenameVariable { old_name: String, new_name: String },
-    /// Instantiate a registered component. **Gap**: no component
-    /// registry in `op-editor-core` — rejected at apply time.
+    /// Instantiate a registered component onto the active page.
     InstantiateComponent { component_id: NodeId },
-    /// Promote a node to a component. **Gap** — rejected.
+    /// Promote an active-page Frame / Group / Rectangle to a component.
     CreateComponent { node_id: NodeId, name: String },
-    /// Remove a component. **Gap** — rejected.
+    /// Remove a component registration.
     DeleteComponent { component_id: NodeId },
-    /// Rename a component. **Gap** — rejected.
+    /// Rename a component registration.
     RenameComponent { component_id: NodeId, name: String },
     /// Instantiate a UIKit component onto the active page. The kit /
     /// component lookup happens against [`crate::EditorState::ui_kits`]

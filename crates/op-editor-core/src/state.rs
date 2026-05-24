@@ -96,6 +96,7 @@ impl EditorState {
     /// loaded document always opens with an empty selection, the
     /// Select tool, the identity viewport and page 0 active.
     pub fn from_document(doc: jian_ops_schema::PenDocument) -> Self {
+        let components = ComponentLibrary::from_document(&doc);
         Self {
             doc,
             selection: SelectionState::empty(),
@@ -106,7 +107,7 @@ impl EditorState {
             ui: UiDraftState::new(),
             editor_ui: EditorUiState::new(),
             chat: ChatState::default(),
-            components: ComponentLibrary::default(),
+            components,
             ui_kits: crate::uikit::builtin_kits(),
         }
     }

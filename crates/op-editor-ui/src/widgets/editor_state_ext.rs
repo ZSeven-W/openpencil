@@ -121,6 +121,33 @@ pub fn shape_choice(c: crate::widgets::shape_picker::ShapeChoice) -> op_editor_c
     }
 }
 
+/// Map the widget-layer `widgets::toolbar::ToolbarAction` onto the
+/// canonical `op_editor_core::ToolbarAction`. Variant-identical;
+/// bridges the toolbar hover state.
+pub fn toolbar_action(a: crate::widgets::toolbar::ToolbarAction) -> op_editor_core::ToolbarAction {
+    use crate::widgets::toolbar::ToolbarAction as W;
+    use op_editor_core::ToolbarAction as O;
+    match a {
+        W::Undo => O::Undo,
+        W::Redo => O::Redo,
+        W::ToggleCodePanel => O::ToggleCodePanel,
+        W::ToggleDesignPanel => O::ToggleDesignPanel,
+    }
+}
+
+/// Map a widget-layer `ToolbarHit` onto the canonical
+/// `op_editor_core::ToolbarHover` so the host can store the
+/// hovered item on `EditorUiState.toolbar_hover`.
+pub fn toolbar_hover(hit: crate::widgets::toolbar::ToolbarHit) -> op_editor_core::ToolbarHover {
+    use crate::widgets::toolbar::ToolbarHit as W;
+    use op_editor_core::ToolbarHover as O;
+    match hit {
+        W::Tool(t) => O::Tool(t),
+        W::Action(a) => O::Action(toolbar_action(a)),
+        W::ToggleShapePicker => O::ShapeSlot,
+    }
+}
+
 /// Map the widget-layer `widgets::export_dialog::ExportFormat` onto
 /// the canonical `op_editor_core::ExportFormat`. Reverse of
 /// [`doc_export_format`].

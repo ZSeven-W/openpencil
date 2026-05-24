@@ -1,45 +1,22 @@
 //! Component MCP tools — `instantiate_component` / `create_component`
 //! / `delete_component` / `rename_component` — plus `set_node_collapsed`.
 //!
-//! ## Component-command gap (Phase 5 Task 5.1)
-//!
-//! `op-editor-core` has no component registry yet (it was a shell-core
-//! `Document` concern; the canonical-schema component model is a later
-//! task). `EditorState::apply` REJECTS the four `*Component` variants
-//! and `NodeFlag::Collapsed` (`Collapsed` has no canonical-schema
-//! field — it was editor-chrome-only state).
-//!
-//! Rather than queue an `EditorCommand` the applier would silently
-//! reject — which would surface to the client as a generic `Internal`
-//! "host rejected command" error — these five tools return a clean,
-//! self-describing `ToolFailed` error directly at call time. The tools
-//! stay registered (so `tools/list` is honest about the catalog) and
-//! the wire contract still validates arguments; only the apply step is
-//! turned into an explicit "not supported yet" failure.
-//!
 //! The remaining write tools that lived here in shell-core (pages /
 //! selection / viewport / tool / flags / undo) moved to `page_tools.rs`.
 
 use std::collections::BTreeMap;
 
-use super::{McpTool, ToolErrorCode, ToolOutcome};
+use op_editor_core::NodeId;
 
-/// Shared error body for the component-registry gap. The message names
-/// the tool + says explicitly it is an unimplemented capability so an
-/// LLM client doesn't retry it as a transient failure.
-fn component_gap_error(tool: &str) -> ToolOutcome {
-    ToolOutcome::Err(
-        ToolErrorCode::ToolFailed,
-        format!(
-            "{tool} is not supported yet: op-editor-core has no component \
-             registry (known gap — the canonical-schema component model is a \
-             later task)"
-        ),
-    )
+use super::{EditorCommand, McpTool, ToolErrorCode, ToolOutcome};
+
+fn wrote() -> BTreeMap<String, String> {
+    let mut out = BTreeMap::new();
+    out.insert("wrote".into(), "true".into());
+    out
 }
 
-/// First-party `instantiate_component` tool. **Gap** — no component
-/// registry in `op-editor-core`; surfaces a clean `ToolFailed`.
+/// First-party `instantiate_component` tool.
 pub struct InstantiateComponent;
 
 impl McpTool for InstantiateComponent {
@@ -58,7 +35,12 @@ impl McpTool for InstantiateComponent {
                 "component_id is required".into(),
             );
         }
-        component_gap_error("instantiate_component")
+        ToolOutcome::OkWithCommand(
+            wrote(),
+            EditorCommand::InstantiateComponent {
+                component_id: NodeId::new(args["component_id"].clone()),
+            },
+        )
     }
 }
 
@@ -66,7 +48,7 @@ pub fn instantiate_component_snapshot() -> InstantiateComponent {
     InstantiateComponent
 }
 
-/// First-party `create_component` tool. **Gap** — see module docs.
+/// First-party `create_component` tool.
 pub struct CreateComponent;
 
 impl McpTool for CreateComponent {
@@ -77,10 +59,22 @@ impl McpTool for CreateComponent {
         if args.get("node_id").map(String::is_empty).unwrap_or(true) {
             return ToolOutcome::Err(ToolErrorCode::MissingArgument, "node_id is required".into());
         }
-        if args.get("name").is_none() {
+        let Some(name) = args.get("name") else {
             return ToolOutcome::Err(ToolErrorCode::MissingArgument, "name is required".into());
+        };
+        if name.trim().is_empty() {
+            return ToolOutcome::Err(
+                ToolErrorCode::InvalidArgument,
+                "name must not be empty / whitespace-only".into(),
+            );
         }
-        component_gap_error("create_component")
+        ToolOutcome::OkWithCommand(
+            wrote(),
+            EditorCommand::CreateComponent {
+                node_id: NodeId::new(args["node_id"].clone()),
+                name: name.clone(),
+            },
+        )
     }
 }
 
@@ -88,7 +82,7 @@ pub fn create_component_snapshot() -> CreateComponent {
     CreateComponent
 }
 
-/// First-party `delete_component` tool. **Gap** — see module docs.
+/// First-party `delete_component` tool.
 pub struct DeleteComponent;
 
 impl McpTool for DeleteComponent {
@@ -106,7 +100,12 @@ impl McpTool for DeleteComponent {
                 "component_id is required".into(),
             );
         }
-        component_gap_error("delete_component")
+        ToolOutcome::OkWithCommand(
+            wrote(),
+            EditorCommand::DeleteComponent {
+                component_id: NodeId::new(args["component_id"].clone()),
+            },
+        )
     }
 }
 
@@ -114,7 +113,7 @@ pub fn delete_component_snapshot() -> DeleteComponent {
     DeleteComponent
 }
 
-/// First-party `rename_component` tool. **Gap** — see module docs.
+/// First-party `rename_component` tool.
 pub struct RenameComponent;
 
 impl McpTool for RenameComponent {
@@ -144,7 +143,13 @@ impl McpTool for RenameComponent {
             }
             Some(_) => {}
         }
-        component_gap_error("rename_component")
+        ToolOutcome::OkWithCommand(
+            wrote(),
+            EditorCommand::RenameComponent {
+                component_id: NodeId::new(args["component_id"].clone()),
+                name: args["name"].clone(),
+            },
+        )
     }
 }
 

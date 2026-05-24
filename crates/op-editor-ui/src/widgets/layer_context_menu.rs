@@ -24,6 +24,7 @@ pub enum LayerContextAction {
     RenameLayer,
     Duplicate,
     Delete,
+    GroupSelection,
     CreateComponent,
     ToggleLock,
     ToggleVisibility,
@@ -58,6 +59,12 @@ const LAYER_ROWS: &[Row] = &[
         icon: Icon::Copy,
         action: LayerContextAction::Duplicate,
         label_key: "common.duplicate",
+        destructive: false,
+    },
+    Row {
+        icon: Icon::Component,
+        action: LayerContextAction::GroupSelection,
+        label_key: "layerMenu.groupSelection",
         destructive: false,
     },
     Row {
@@ -123,7 +130,7 @@ pub struct LayerContextMenu {
     pub id: WidgetId,
     pub theme: Theme,
     pub state: LayerContextMenuState,
-    rows: &'static [Row],
+    rows: Vec<Row>,
     /// Active UI locale — drives row-label translation in `paint`.
     locale: op_editor_core::Locale,
     /// Index of the currently-hovered row (None when the cursor is
@@ -135,8 +142,14 @@ pub struct LayerContextMenu {
 impl LayerContextMenu {
     pub fn for_state(state: &EditorState, menu: LayerContextMenuState) -> Self {
         let rows = match &menu.target {
-            LayerContextTarget::Layer(_) => LAYER_ROWS,
-            LayerContextTarget::Page(_) => PAGE_ROWS,
+            LayerContextTarget::Layer(_) => LAYER_ROWS
+                .iter()
+                .copied()
+                .filter(|row| {
+                    row.action != LayerContextAction::GroupSelection || state.selection_count() > 1
+                })
+                .collect(),
+            LayerContextTarget::Page(_) => PAGE_ROWS.to_vec(),
         };
         let hovered_row = menu.hovered_row.map(|i| i as usize);
         Self {

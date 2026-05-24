@@ -39,6 +39,12 @@ impl WidgetHostNative {
                 let v = &mut self.editor_state.editor_ui.size_clip_content;
                 *v = !*v;
             }
+            A::CreateComponent => {
+                let id = self.editor_state.selection.anchor.clone();
+                if id.is_real() {
+                    let _ = self.editor_state.create_component_from_node_name(&id);
+                }
+            }
             A::ToggleFillTypePicker => {
                 let v = &mut self.editor_state.editor_ui.fill_type_picker_open;
                 *v = !*v;

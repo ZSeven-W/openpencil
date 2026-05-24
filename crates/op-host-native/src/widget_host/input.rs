@@ -20,6 +20,8 @@ impl WidgetHostNative {
             || self.editor_state.editor_ui.variable_row_focus.is_some()
             || self.editor_state.editor_ui.effect_param_focus.is_some()
             || self.editor_state.editor_ui.agent_settings.focus.is_some()
+            || self.editor_state.editor_ui.icon_picker_open
+            || self.editor_state.editor_ui.component_browser_open
             || self.editor_state.chat.focused
             || self.git_commit_focus_active()
             || self.git_remote_focus_active()
@@ -477,6 +479,12 @@ impl WidgetHostNative {
             // `layout_scene` stays valid (re-solving taffy layout on
             // every drag frame was the pan jank). `return true` still
             // drives the repaint that re-applies the viewport.
+            return true;
+        }
+        // Toolbar per-button hover wash — AFTER drag detection so a
+        // path-anchor / node / pan drag whose cursor crosses the
+        // toolbar isn't intercepted by the hover update.
+        if self.update_toolbar_hover(x, y, over_topmost) {
             return true;
         }
         // Align toolbar hover sync — AFTER drag detection. Suppressed

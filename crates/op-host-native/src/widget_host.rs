@@ -42,6 +42,7 @@ mod frame_backend;
 mod geometry;
 mod git_press;
 mod helpers;
+mod icon_picker_press;
 mod input;
 #[cfg(test)]
 mod input_tests;
@@ -51,7 +52,9 @@ mod press;
 mod press_helpers;
 mod property_dispatch;
 mod scroll;
+mod shape_picker_press;
 mod shortcuts;
+mod toolbar_hover;
 
 pub use frame_backend::NativeFrameBackend;
 

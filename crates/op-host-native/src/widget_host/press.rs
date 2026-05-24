@@ -14,8 +14,7 @@ use super::{
 };
 use op_editor_ui::widgets::{
     rotation_corner_at_point, selection_handle_at_point, AIChatHit, AIChatPlaceholder, LayoutCx,
-    LocalePicker, PropertyPanel, ShapeChoice, ShapePicker, Toolbar, TopBar, TopBarHit, Widget,
-    TOOLBAR_WIDTH, TOP_BAR_HEIGHT,
+    LocalePicker, PropertyPanel, Toolbar, TopBar, TopBarHit, Widget, TOOLBAR_WIDTH, TOP_BAR_HEIGHT,
 };
 use op_editor_ui::{Point2D, Rect};
 
@@ -40,13 +39,18 @@ impl WidgetHostNative {
                 self.editor_state.commit_history();
                 let _ = self.editor_state.delete_selected();
             }
+            (A::GroupSelection, T::Layer(_)) => {
+                let _ = self.apply_group();
+            }
             (A::ToggleLock, T::Layer(id)) => {
                 self.editor_state.toggle_node_locked(&id);
             }
             (A::ToggleVisibility, T::Layer(id)) => {
                 self.editor_state.toggle_node_hidden(&id);
             }
-            (A::CreateComponent, T::Layer(_)) => {} // stub
+            (A::CreateComponent, T::Layer(id)) => {
+                let _ = self.editor_state.create_component_from_node_name(&id);
+            }
             (A::DuplicatePage, T::Page(idx)) => {
                 let _ = self.editor_state.duplicate_page(idx);
             }
@@ -103,7 +107,11 @@ impl WidgetHostNative {
         match panel.hit_test(layer_rect, Point2D::new(x, y)) {
             Some(LayerPanelHit::Layer(id)) => {
                 let ec_id = id.clone();
-                self.editor_state.set_single_selection(ec_id.clone());
+                if !(self.editor_state.is_selected(&ec_id)
+                    && self.editor_state.selection_count() > 1)
+                {
+                    self.editor_state.set_single_selection(ec_id.clone());
+                }
                 self.editor_state.editor_ui.layer_context_menu = Some(LayerContextMenuState {
                     target: LayerContextTarget::Layer(ec_id),
                     anchor_x: x,
@@ -161,6 +169,9 @@ impl WidgetHostNative {
         // panel's before any lower layer can claim it (dispatch in
         // `design_md_press.rs`).
         if self.dispatch_design_md_press(x, y, viewport_width, viewport_height) {
+            return true;
+        }
+        if self.dispatch_icon_picker_press(x, y, viewport_width, viewport_height) {
             return true;
         }
         // Floating Component-Browser panel — painted just under the
@@ -236,37 +247,7 @@ impl WidgetHostNative {
         }
 
         // 0ab. Shape picker overlay.
-        if self.editor_state.editor_ui.shape_picker_open {
-            self.refresh_layout_scene();
-            let panel_rect = self.shape_picker_rect(viewport_width, viewport_height);
-            let picker = ShapePicker::for_editor_ui(&self.editor_state.editor_ui);
-            if let Some(choice) = picker.hit_test(panel_rect, Point2D::new(x, y)) {
-                match choice {
-                    ShapeChoice::Tool(tool) => {
-                        let _ = self.editor_state.finish_pen_path();
-                        let ec_tool = tool;
-                        self.editor_state.editor_ui.shape_tool = ec_tool;
-                        self.editor_state.tool = ec_tool;
-                    }
-                    ShapeChoice::OpenIconPicker => {
-                        // Icon picker not wired yet — closes dropdown only.
-                    }
-                    ShapeChoice::ImportImageOrSvg => {
-                        // Queue a file action so the press handler
-                        // (which knows about `rfd::FileDialog`) can
-                        // pop the picker after the click frame.
-                        self.editor_state.editor_ui.pending_file_action =
-                            Some(op_editor_core::editor_ui_state::FileAction::ImportImageOrSvg);
-                    }
-                }
-                self.editor_state.editor_ui.shape_picker_open = false;
-                self.editor_state.editor_ui.shape_picker_hover = None;
-                self.mark_dirty();
-                return true;
-            }
-            self.editor_state.editor_ui.shape_picker_open = false;
-            self.editor_state.editor_ui.shape_picker_hover = None;
-            self.mark_dirty();
+        if self.dispatch_shape_picker_press(x, y, viewport_width, viewport_height) {
             return true;
         }
 

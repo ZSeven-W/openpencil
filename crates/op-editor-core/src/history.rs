@@ -14,6 +14,7 @@
 //! Mutators push onto `past` BEFORE a transactional edit; this task is
 //! types-only (Task 4.5 ports the mutator `impl`s).
 
+use crate::components::ComponentLibrary;
 use crate::selection::SelectionState;
 use std::collections::VecDeque;
 
@@ -24,9 +25,10 @@ pub const HISTORY_CAP: usize = 100;
 /// Snapshot of the editor state covered by undo / redo.
 ///
 /// Holds a full `PenDocument` clone (node tree + pages + variables +
-/// themes) so a variable-table edit can be undone the same way a node
-/// edit can — the shell-core stop-gate that forced `var_table` into
-/// the old snapshot is satisfied for free here.
+/// themes) plus transient registries whose behavior depends on document
+/// edits. A variable-table edit can therefore be undone the same way a
+/// node edit can, and component promotion stays in sync with the
+/// persisted `reusable` flag.
 #[derive(Debug, Clone, PartialEq)]
 pub struct EditorSnapshot {
     /// The canonical document at snapshot time.
@@ -35,6 +37,9 @@ pub struct EditorSnapshot {
     pub selection: SelectionState,
     /// Active page index at snapshot time.
     pub active_page_index: usize,
+    /// Runtime component registry mirrored from reusable document nodes
+    /// and explicit component commands.
+    pub components: ComponentLibrary,
 }
 
 /// Editor undo / redo stacks. `VecDeque` so the over-cap eviction is an
