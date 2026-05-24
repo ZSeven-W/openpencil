@@ -268,9 +268,7 @@ mod tests {
         false
     }
 
-    fn active_page_roots_mut(
-        doc: &mut PenDocument,
-    ) -> &mut [jian_ops_schema::node::PenNode] {
+    fn active_page_roots_mut(doc: &mut PenDocument) -> &mut [jian_ops_schema::node::PenNode] {
         let has_page = doc
             .pages
             .as_ref()
@@ -283,10 +281,7 @@ mod tests {
         }
     }
 
-    fn find_node_mut<'a>(
-        root: &'a mut PenNode,
-        node_id: &str,
-    ) -> Option<&'a mut PenNode> {
+    fn find_node_mut<'a>(root: &'a mut PenNode, node_id: &str) -> Option<&'a mut PenNode> {
         if node_util::node_id(root) == node_id {
             return Some(root);
         }
@@ -308,9 +303,7 @@ mod tests {
     /// node must NOT be in the plan).
     #[test]
     fn equivalence_invisible_container() {
-        let raw = include_str!(
-            "../tests/fixtures/docs/invisible-container.json"
-        );
+        let raw = include_str!("../tests/fixtures/docs/invisible-container.json");
         let doc_a: PenDocument = serde_json::from_str(raw).expect("parse");
         let doc_b: PenDocument = serde_json::from_str(raw).expect("parse");
 
@@ -339,7 +332,10 @@ mod tests {
 
         // Verify the Info-severity dark-on-dark node is NOT in the plan.
         let dark_in_plan = plan.iter().any(|f| f.node_id == "dark-on-dark");
-        assert!(!dark_in_plan, "Info-severity nodes must not appear in the plan");
+        assert!(
+            !dark_in_plan,
+            "Info-severity nodes must not appear in the plan"
+        );
     }
 
     /// Load the `text-explicit-height` fixture and assert equivalence.
@@ -347,8 +343,7 @@ mod tests {
     /// This fixture exercises `FixProperty::Height` with `"fit_content"`.
     #[test]
     fn equivalence_text_explicit_height() {
-        let raw =
-            include_str!("../tests/fixtures/docs/text-explicit-height.json");
+        let raw = include_str!("../tests/fixtures/docs/text-explicit-height.json");
         let doc_a: PenDocument = serde_json::from_str(raw).expect("parse");
         let doc_b: PenDocument = serde_json::from_str(raw).expect("parse");
 
@@ -369,7 +364,10 @@ mod tests {
         // The fit-text node with explicit `height: "fit_content"` must NOT appear
         // (it already has the keyword, no issue is raised for it).
         let fit_in_plan = plan.iter().any(|f| f.node_id == "fit-text");
-        assert!(!fit_in_plan, "fit-text has no issue; must not appear in plan");
+        assert!(
+            !fit_in_plan,
+            "fit-text has no issue; must not appear in plan"
+        );
     }
 
     /// Load the `stacked-horizontal-padding` fixture and assert equivalence.
@@ -379,9 +377,7 @@ mod tests {
     /// fixes) and both docs remain unchanged.
     #[test]
     fn equivalence_stacked_horizontal_padding() {
-        let raw = include_str!(
-            "../tests/fixtures/docs/stacked-horizontal-padding.json"
-        );
+        let raw = include_str!("../tests/fixtures/docs/stacked-horizontal-padding.json");
         let doc_a: PenDocument = serde_json::from_str(raw).expect("parse");
         let doc_b: PenDocument = serde_json::from_str(raw).expect("parse");
 
@@ -456,8 +452,7 @@ mod tests {
     /// The `UnexpectedRotation` fix (Rotation property).
     #[test]
     fn equivalence_unexpected_rotation() {
-        let raw =
-            include_str!("../tests/fixtures/docs/unexpected-rotation.json");
+        let raw = include_str!("../tests/fixtures/docs/unexpected-rotation.json");
         let doc_a: PenDocument = serde_json::from_str(raw).expect("parse");
         let doc_b: PenDocument = serde_json::from_str(raw).expect("parse");
 
