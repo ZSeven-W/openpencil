@@ -4,8 +4,8 @@
 //! `DesktopApp` struct, its helper `impl`, and `fn main`.
 
 use crate::{
-    chat_attachment, chat_session, cursor_icon, frame, git_jobs, menu, persistence, settings_io,
-    window_state, DesktopApp, INITIAL_VIEWPORT_H, INITIAL_VIEWPORT_W,
+    chat_attachment, chat_session, cursor_icon, design_session, frame, git_jobs, menu, persistence,
+    settings_io, window_state, DesktopApp, INITIAL_VIEWPORT_H, INITIAL_VIEWPORT_W,
 };
 use op_host_native::{NativeBackend, SharedSkiaContext};
 use std::time::{Duration, Instant};
@@ -344,6 +344,16 @@ impl ApplicationHandler for DesktopApp {
                 if chat_session::pump(&mut self.host, &mut self.current_chat) {
                     self.redraw_dirty = true;
                 }
+                // Drain orchestrator apply requests + progress events
+                // for any in-flight design turn (orchestrator runs off
+                // the UI thread; `RemoteDocSink` forwards mutations
+                // here each frame).
+                if design_session::pump_commands(&mut self.host, &mut self.current_design) {
+                    self.redraw_dirty = true;
+                }
+                if design_session::pump_progress(&mut self.host, &mut self.current_design) {
+                    self.redraw_dirty = true;
+                }
                 // Drain background model discovery once it lands.
                 if self.model_probe.poll_into(&mut self.host) {
                     self.redraw_dirty = true;
@@ -406,8 +416,9 @@ impl ApplicationHandler for DesktopApp {
                         );
                     }
                 }
-                // Chat turn streaming → wake ~30 fps to pump deltas.
-                if self.current_chat.is_some() {
+                // Chat or design turn streaming → wake ~30 fps to pump
+                // deltas / orchestrator apply requests.
+                if self.current_chat.is_some() || self.current_design.is_some() {
                     event_loop.set_control_flow(ControlFlow::WaitUntil(
                         Instant::now() + Duration::from_millis(33),
                     ));
@@ -559,7 +570,11 @@ impl ApplicationHandler for DesktopApp {
                 );
                 // A click on the chat Send button raises
                 // `pending_send` — launch the provider turn.
-                if chat_session::launch_if_pending(&mut self.host, &mut self.current_chat) {
+                if chat_session::launch_if_pending(
+                    &mut self.host,
+                    &mut self.current_chat,
+                    &mut self.current_design,
+                ) {
                     self.request_redraw(true);
                 }
                 // A click on the attach button raises
