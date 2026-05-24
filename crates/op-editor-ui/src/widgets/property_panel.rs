@@ -372,6 +372,16 @@ impl PropertyPanel {
         )
     }
 
+    pub fn image_fill_popover_contains(&self, panel_rect: Rect, point: Point2D) -> bool {
+        !self.is_multi
+            && self.image_fill_popover_open
+            && sections::image_fill_popover_contains(
+                self.scrolled_rect(panel_rect),
+                self.visible_sections(),
+                point,
+            )
+    }
+
     /// Hit-test the panel at `point` and return which input row
     /// (if any) contains the click. The layout walk mirrors the
     /// per-kind section filtering applied in `paint`, so rects

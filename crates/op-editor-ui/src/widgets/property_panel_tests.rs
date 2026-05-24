@@ -7,7 +7,7 @@
 use super::property_panel::{PropertyPanel, PropertyPanelAction, SectionCapabilities};
 use super::property_panel_sections as sections;
 use crate::widgets::{PaintCx, Widget};
-use crate::{Color, Point2D, Rect};
+use crate::{Color, ImageDrawMode, Point2D, Rect};
 use op_editor_core::{EditorState, NodeId};
 
 /// Build an `EditorState` from a canonical `.op` JSON string.
@@ -220,6 +220,7 @@ struct CountingBackend {
     texts: Vec<String>,
     round_rects: usize,
     images: Vec<(Rect, u64, usize)>,
+    image_modes: Vec<ImageDrawMode>,
 }
 impl crate::RenderBackend for CountingBackend {
     fn begin_frame(&mut self) {}
@@ -244,6 +245,16 @@ impl crate::RenderBackend for CountingBackend {
     fn stroke_svg_path(&mut self, _: &str, _: Point2D, _: f32, _: Color, _: f32) {}
     fn draw_image(&mut self, rect: Rect, image_id: u64, encoded: &[u8]) {
         self.images.push((rect, image_id, encoded.len()));
+    }
+    fn draw_image_with_mode(
+        &mut self,
+        rect: Rect,
+        image_id: u64,
+        encoded: &[u8],
+        mode: ImageDrawMode,
+    ) {
+        self.images.push((rect, image_id, encoded.len()));
+        self.image_modes.push(mode);
     }
     fn resize(&mut self, _: u32, _: u32) {}
     fn dpi_scale(&self) -> f32 {
@@ -410,6 +421,34 @@ fn open_image_fill_popover_paints_selected_image_preview() {
 }
 
 #[test]
+fn image_fill_body_paints_selected_image_thumbnail_with_mode() {
+    const PNG_DATA_URL: &str =
+        "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=";
+    let mut state = image_fill_state_with_url(PNG_DATA_URL);
+    assert!(state.set_selected_image_fill_mode(op_editor_core::ImageFillMode::Tile));
+    let panel = PropertyPanel::for_selection(&state).expect("image fill panel");
+
+    let mut backend = CountingBackend::default();
+    {
+        let mut cx = PaintCx {
+            backend: &mut backend,
+        };
+        panel.paint(
+            &mut cx,
+            Rect {
+                origin: Point2D::new(320.0, 24.0),
+                size: Point2D::new(280.0, 900.0),
+            },
+        );
+    }
+
+    assert!(
+        backend.image_modes.contains(&ImageDrawMode::Tile),
+        "fill body thumbnail should paint the selected image using the current image mode",
+    );
+}
+
+#[test]
 fn image_fill_adjustment_reset_label_uses_i18n() {
     let mut state = image_fill_state();
     state.editor_ui.image_fill_popover_open = true;
@@ -485,5 +524,30 @@ fn open_image_fill_popover_routes_upload_and_mode_actions() {
             ))
         ),
         "fit-mode chips should dispatch mode updates",
+    );
+}
+
+#[test]
+fn image_fill_popover_internal_gap_is_consumed_without_action() {
+    let mut state = image_fill_state();
+    state.editor_ui.image_fill_popover_open = true;
+    let panel = PropertyPanel::for_selection(&state).expect("image fill panel");
+    let rect = Rect {
+        origin: Point2D::new(320.0, 24.0),
+        size: Point2D::new(280.0, 900.0),
+    };
+    let popup_rects =
+        sections::image_fill_popover_action_rects(rect, visible_for(&panel), &panel.snapshot);
+    let upload = popup_rects
+        .iter()
+        .find(|(a, _)| matches!(a, PropertyPanelAction::PickFillImage))
+        .map(|(_, r)| *r)
+        .expect("upload rect exists");
+    let gap = Point2D::new(upload.origin.x + 20.0, upload.origin.y - 5.0);
+
+    assert_eq!(panel.hit_test_action(rect, gap), None);
+    assert!(
+        panel.image_fill_popover_contains(rect, gap),
+        "clicks in non-interactive popover gaps must be consumed so the popover stays open",
     );
 }

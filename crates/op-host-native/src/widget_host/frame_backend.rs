@@ -6,7 +6,9 @@
 //! 800-line ceiling.
 
 use crate::backend::NativeBackend;
-use op_editor_ui::{Color, Point2D, Rect, RenderBackend, TextLayout};
+use op_editor_ui::{
+    Color, ImageAdjustments, ImageDrawMode, Point2D, Rect, RenderBackend, TextLayout,
+};
 
 pub struct NativeFrameBackend<'a> {
     inner: &'a mut NativeBackend,
@@ -101,6 +103,29 @@ impl<'a> RenderBackend for NativeFrameBackend<'a> {
 
     fn draw_image(&mut self, rect: Rect, image_id: u64, encoded: &[u8]) {
         self.inner.draw_image(self.canvas, rect, image_id, encoded);
+    }
+
+    fn draw_image_with_mode(
+        &mut self,
+        rect: Rect,
+        image_id: u64,
+        encoded: &[u8],
+        mode: ImageDrawMode,
+    ) {
+        self.inner
+            .draw_image_with_mode(self.canvas, rect, image_id, encoded, mode);
+    }
+
+    fn draw_image_with_options(
+        &mut self,
+        rect: Rect,
+        image_id: u64,
+        encoded: &[u8],
+        mode: ImageDrawMode,
+        adjustments: ImageAdjustments,
+    ) {
+        self.inner
+            .draw_image_with_options(self.canvas, rect, image_id, encoded, mode, adjustments);
     }
 
     fn fill_round_rect_linear_gradient(

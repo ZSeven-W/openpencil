@@ -279,6 +279,10 @@ pub struct SceneNode {
     /// picker, or a plain file path / remote URL on documents that
     /// reference external media. `None` for non-image nodes.
     pub image_src: Option<String>,
+    /// How `image_src` is placed into `bounds`.
+    pub image_fit: SceneImageFit,
+    /// Per-image colour adjustments from the image-fill editor.
+    pub image_adjustments: crate::ImageAdjustments,
     /// Drop-shadow / effects painted behind the node's fill.
     pub effects: Vec<Effect>,
     /// Whether the node (and its subtree) is hidden — the painter
@@ -361,6 +365,8 @@ impl SceneNode {
             arc_sweep_angle: None,
             arc_inner_radius: None,
             image_src: None,
+            image_fit: SceneImageFit::Fill,
+            image_adjustments: crate::ImageAdjustments::default(),
             effects: Vec::new(),
             hidden: false,
             locked: false,
@@ -386,6 +392,29 @@ pub enum SceneFillType {
     LinearGradient,
     RadialGradient,
     Image,
+}
+
+/// Image placement mode carried by a [`SceneNode`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum SceneImageFit {
+    #[default]
+    Fill,
+    Fit,
+    Crop,
+    Tile,
+    Stretch,
+}
+
+impl SceneImageFit {
+    pub fn to_draw_mode(self) -> crate::ImageDrawMode {
+        match self {
+            Self::Fill => crate::ImageDrawMode::Fill,
+            Self::Fit => crate::ImageDrawMode::Fit,
+            Self::Crop => crate::ImageDrawMode::Crop,
+            Self::Tile => crate::ImageDrawMode::Tile,
+            Self::Stretch => crate::ImageDrawMode::Stretch,
+        }
+    }
 }
 
 #[cfg(test)]

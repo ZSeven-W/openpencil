@@ -145,6 +145,57 @@ fn image_adjustment_drag_updates_live_after_press() {
 }
 
 #[test]
+fn image_fill_actions_refresh_the_render_scene() {
+    let mut host = WidgetHostNative::new();
+    seed(
+        &mut host,
+        r##"{ "version": "0.8.0", "children": [
+              {"type":"rectangle","id":"n61","name":"Photo fill",
+               "x":40,"y":40,"width":180,"height":120,
+               "fill":[{"type":"image","url":"data:image/png;base64,AA==","mode":"fill",
+                 "exposure":0,"contrast":0,"saturation":0,
+                 "temperature":0,"tint":0,"highlights":0,"shadows":0}]}
+        ]}"##,
+    );
+    host.editor_state_mut()
+        .set_single_selection(NodeId::new("n61"));
+    host.mark_paint_dirty_for_test();
+
+    let initial_fit = host
+        .layout_scene()
+        .active_page()
+        .unwrap()
+        .find("n61")
+        .unwrap()
+        .image_fit;
+    assert_eq!(initial_fit, op_editor_ui::layout_scene::SceneImageFit::Fill);
+
+    host.apply_property_action(
+        op_editor_ui::widgets::PropertyPanelAction::SetImageFillMode(
+            op_editor_core::ImageFillMode::Fit,
+        ),
+    );
+    host.apply_property_action(
+        op_editor_ui::widgets::PropertyPanelAction::SetImageAdjustment {
+            field: op_editor_core::ImageAdjustmentField::Exposure,
+            value: 64.0,
+        },
+    );
+
+    let rendered = host
+        .layout_scene()
+        .active_page()
+        .unwrap()
+        .find("n61")
+        .unwrap();
+    assert_eq!(
+        rendered.image_fit,
+        op_editor_ui::layout_scene::SceneImageFit::Fit
+    );
+    assert_eq!(rendered.image_adjustments.exposure, 64.0);
+}
+
+#[test]
 fn backspace_with_property_draft_does_not_delete_selected() {
     // With a non-empty property draft buffer, Backspace must pop a
     // char from the draft, not delete the selected node.

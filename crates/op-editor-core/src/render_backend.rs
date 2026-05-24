@@ -127,6 +127,43 @@ pub struct TextLayout {
     runs: Vec<TextRun>,
 }
 
+/// Raster image placement mode. Matches the canonical image-fill /
+/// image-node modes used by the TS renderer.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ImageDrawMode {
+    #[default]
+    Fill,
+    Fit,
+    Crop,
+    Tile,
+    Stretch,
+}
+
+/// Per-image adjustment values from the image-fill popover. Each
+/// value is in the TS slider range `[-100, 100]`.
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub struct ImageAdjustments {
+    pub exposure: f32,
+    pub contrast: f32,
+    pub saturation: f32,
+    pub temperature: f32,
+    pub tint: f32,
+    pub highlights: f32,
+    pub shadows: f32,
+}
+
+impl ImageAdjustments {
+    pub fn is_neutral(self) -> bool {
+        self.exposure == 0.0
+            && self.contrast == 0.0
+            && self.saturation == 0.0
+            && self.temperature == 0.0
+            && self.tint == 0.0
+            && self.highlights == 0.0
+            && self.shadows == 0.0
+    }
+}
+
 impl TextLayout {
     /// Single-run constructor (the only active path in Step 1a; used by the
     /// Phase B/C demo + raster_text_smoke).
@@ -329,6 +366,34 @@ pub trait RenderBackend {
     /// pipeline (or codec support) degrade gracefully and the caller
     /// is expected to have painted a placeholder frame underneath.
     fn draw_image(&mut self, _rect: Rect, _image_id: u64, _encoded: &[u8]) {}
+
+    /// Draw a raster image using an explicit fill/fit/crop/tile mode.
+    /// Backends without mode-aware support fall back to `draw_image`.
+    fn draw_image_with_mode(
+        &mut self,
+        rect: Rect,
+        image_id: u64,
+        encoded: &[u8],
+        mode: ImageDrawMode,
+    ) {
+        let _ = mode;
+        self.draw_image(rect, image_id, encoded);
+    }
+
+    /// Draw a raster image with both placement and image-adjustment
+    /// controls. Backends without color-filter support fall back to
+    /// mode-aware drawing.
+    fn draw_image_with_options(
+        &mut self,
+        rect: Rect,
+        image_id: u64,
+        encoded: &[u8],
+        mode: ImageDrawMode,
+        adjustments: ImageAdjustments,
+    ) {
+        let _ = adjustments;
+        self.draw_image_with_mode(rect, image_id, encoded, mode);
+    }
 
     /// Fill a (round-)rectangle with a linear gradient. `stops`
     /// carries `(offset, color)` pairs in 0.0..=1.0 with at least one

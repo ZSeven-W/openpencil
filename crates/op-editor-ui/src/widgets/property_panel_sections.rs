@@ -23,7 +23,8 @@ pub use crate::widgets::property_panel_fill::{
 };
 pub use crate::widgets::property_panel_image_fill::{
     image_fill_popover_action_at, image_fill_popover_action_rects,
-    image_fill_popover_adjustment_action_for_drag, paint_image_fill_popover,
+    image_fill_popover_adjustment_action_for_drag, image_fill_popover_contains,
+    paint_image_fill_popover,
 };
 pub use crate::widgets::property_panel_inputs::format_color_hex as _format_color_hex_compat;
 

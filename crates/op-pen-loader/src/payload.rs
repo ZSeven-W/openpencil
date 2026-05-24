@@ -110,6 +110,13 @@ pub struct NodePayload {
     /// for non-image nodes.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub image_src: Option<String>,
+    /// Image placement mode for `image_src` (`fill`, `fit`, `crop`,
+    /// `tile`, `stretch`). `None` defaults to `fill`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub image_fit: Option<String>,
+    /// Per-image adjustment values from image fills / image nodes.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub image_adjustments: Option<ImageAdjustmentPayload>,
     #[serde(default)]
     pub children: Vec<NodePayload>,
 }
@@ -118,6 +125,24 @@ pub struct NodePayload {
 pub struct StrokePayload {
     pub color: [f32; 4],
     pub width: f32,
+}
+
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
+pub struct ImageAdjustmentPayload {
+    #[serde(default)]
+    pub exposure: f32,
+    #[serde(default)]
+    pub contrast: f32,
+    #[serde(default)]
+    pub saturation: f32,
+    #[serde(default)]
+    pub temperature: f32,
+    #[serde(default)]
+    pub tint: f32,
+    #[serde(default)]
+    pub highlights: f32,
+    #[serde(default)]
+    pub shadows: f32,
 }
 
 /// One resolved gradient stop — offset 0.0..=1.0 + RGBA colour.

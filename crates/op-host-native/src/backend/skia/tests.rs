@@ -59,6 +59,42 @@ fn contain_rect_degenerate_image_size_falls_back_to_outer() {
 }
 
 #[test]
+fn cover_rect_crops_square_image_vertically_in_wide_rect() {
+    let outer = Rect::xywh(0.0, 0.0, 360.0, 240.0);
+    let r = cover_rect(outer, 200.0, 200.0);
+    assert!((r.size.x - 360.0).abs() < 1e-4);
+    assert!((r.size.y - 360.0).abs() < 1e-4);
+    assert!((r.origin.x - 0.0).abs() < 1e-4);
+    assert!(
+        (r.origin.y + 60.0).abs() < 1e-4,
+        "center-cropped vertically"
+    );
+}
+
+#[test]
+fn image_adjustment_matrix_matches_ts_formula() {
+    let matrix = image_adjustment_matrix(op_editor_ui::ImageAdjustments {
+        exposure: 100.0,
+        contrast: -100.0,
+        saturation: 100.0,
+        temperature: 100.0,
+        tint: -100.0,
+        highlights: 100.0,
+        shadows: 100.0,
+    })
+    .expect("non-neutral adjustments produce a color matrix");
+
+    // With contrast = -100%, c = 0, so every RGB multiplier is zero.
+    // The visible change comes from the TS offset formula.
+    assert!((matrix[0] - 0.0).abs() < 1e-6);
+    assert!((matrix[5] - 0.0).abs() < 1e-6);
+    assert!((matrix[10] - 0.0).abs() < 1e-6);
+    assert!((matrix[4] - 0.80).abs() < 1e-6);
+    assert!((matrix[9] - 0.50).abs() < 1e-6);
+    assert!((matrix[14] - 0.50).abs() < 1e-6);
+}
+
+#[test]
 fn image_cache_caches_decode_failure_without_redecoding() {
     let mut be = NativeBackend::with_dpi(1.0);
     // Garbage bytes fail to decode → None.

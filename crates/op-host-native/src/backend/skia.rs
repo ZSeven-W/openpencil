@@ -96,6 +96,9 @@ fn jian_color_to_color4f(c: Color) -> skia_safe::Color4f {
 // `gradient.rs` so this spine stays under the 800-line cap. The
 // methods are added to `NativeBackend` via a sibling `impl` block.
 mod gradient;
+mod image;
+#[cfg(test)]
+use image::{cover_rect, image_adjustment_matrix};
 
 /// Frame-scoped Jian-DrawOp adapter (spec v19 §5.2.1).
 ///
@@ -737,20 +740,6 @@ impl NativeBackend {
     #[cfg(test)]
     pub(crate) fn image_cache_len(&self) -> usize {
         self.image_cache.len()
-    }
-
-    /// Draw the image identified by `id`, aspect-fit + centered
-    /// inside `rect`. `encoded` is the raw image bytes, consulted
-    /// only on the first (cache-miss) draw. A decode failure paints
-    /// nothing — callers paint a placeholder frame underneath.
-    pub fn draw_image(&mut self, canvas: &skia_safe::Canvas, rect: Rect, id: u64, encoded: &[u8]) {
-        let Some(image) = self.cached_image(id, encoded) else {
-            return;
-        };
-        let fit = contain_rect(rect, image.width() as f32, image.height() as f32);
-        let mut paint = skia_safe::Paint::default();
-        paint.set_anti_alias(true);
-        canvas.draw_image_rect(&image, None, to_sk_rect(fit), &paint);
     }
 }
 

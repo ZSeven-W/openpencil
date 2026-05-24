@@ -26,16 +26,17 @@ use jian_ops_schema::{
     node::container::CornerRadius,
     node::text::TextContent,
     node::{
-        EllipseNode, FontWeight, FrameNode, GroupNode, IconFontNode, ImageNode, LineNode, PathNode,
-        PenNode, PolygonNode, RectangleNode, TextInputNode, TextNode,
+        EllipseNode, FontWeight, FrameNode, GroupNode, IconFontNode, ImageFitMode, ImageNode,
+        LineNode, PathNode, PenNode, PolygonNode, RectangleNode, TextInputNode, TextNode,
     },
     sizing::SizingBehavior,
-    style::{PenFill, PenStroke, StrokeThickness},
+    style::{ImageFillMode, PenFill, PenStroke, StrokeThickness},
     PenDocument,
 };
 
 use crate::payload::{
-    DocPayload, GradientPayload, GradientStopPayload, NodePayload, PagePayload, StrokePayload,
+    DocPayload, GradientPayload, GradientStopPayload, ImageAdjustmentPayload, NodePayload,
+    PagePayload, StrokePayload,
 };
 
 /// Default canvas allotment for a page-root sized with flex tokens
@@ -631,6 +632,8 @@ fn image_to_payload(n: &ImageNode) -> NodePayload {
     // placeholder reads correctly when the bytes fail to decode
     // (corrupt url / unsupported codec).
     p.image_src = Some(n.src.clone());
+    p.image_fit = n.object_fit.as_ref().map(image_node_fit_to_payload);
+    p.image_adjustments = image_node_adjustments(n);
     p.fill = Some([0.85, 0.86, 0.88, 1.0]);
     p.name = if n.base.name.as_deref().unwrap_or("").is_empty() {
         format!("Image ({})", short_src(&n.src))
@@ -690,6 +693,8 @@ fn base_payload(base: &PenNodeBase, kind: &str) -> NodePayload {
         text_wrap: false,
         effects: Vec::new(),
         image_src: None,
+        image_fit: None,
+        image_adjustments: None,
         children: Vec::new(),
     }
 }
@@ -723,15 +728,18 @@ fn assign_first_fill(p: &mut NodePayload, fills: Option<&[PenFill]>) {
     // grey placeholder `fill` and the image never appears, even
     // though `set_selected_fill_image_url` already wrote the URL
     // into the canonical `PenFill::Image { url }` slot.
-    if let Some(url) = first_image_fill_url(fills) {
+    if let Some((url, fit, adjustments)) = first_image_fill(fills) {
         p.image_src = Some(url);
+        p.image_fit = Some(fit);
+        p.image_adjustments = adjustments;
     }
 }
 
-/// Read the first fill's image URL when it is a `PenFill::Image`.
-/// `None` for any other variant (or empty url) so non-image fills
-/// keep their solid / gradient paint paths.
-fn first_image_fill_url(fills: Option<&[PenFill]>) -> Option<String> {
+/// Read the first fill's image URL + placement mode when it is a
+/// `PenFill::Image`. `None` for any other variant (or empty url).
+fn first_image_fill(
+    fills: Option<&[PenFill]>,
+) -> Option<(String, String, Option<ImageAdjustmentPayload>)> {
     let body = fills?.first().and_then(|f| match f {
         PenFill::Image(b) => Some(b),
         _ => None,
@@ -739,8 +747,88 @@ fn first_image_fill_url(fills: Option<&[PenFill]>) -> Option<String> {
     if body.url.trim().is_empty() {
         None
     } else {
-        Some(body.url.clone())
+        Some((
+            body.url.clone(),
+            image_fill_mode_to_payload(body.mode.as_ref()),
+            image_fill_adjustments(body),
+        ))
     }
+}
+
+fn image_fill_mode_to_payload(mode: Option<&ImageFillMode>) -> String {
+    match mode {
+        Some(ImageFillMode::Fit) => "fit",
+        Some(ImageFillMode::Crop) => "crop",
+        Some(ImageFillMode::Tile) => "tile",
+        Some(ImageFillMode::Stretch) => "stretch",
+        Some(ImageFillMode::Fill) | None => "fill",
+    }
+    .into()
+}
+
+fn image_node_fit_to_payload(mode: &ImageFitMode) -> String {
+    match mode {
+        ImageFitMode::Fit => "fit",
+        ImageFitMode::Crop => "crop",
+        ImageFitMode::Tile => "tile",
+        ImageFitMode::Fill => "fill",
+    }
+    .into()
+}
+
+fn image_fill_adjustments(
+    body: &jian_ops_schema::style::ImageFillBody,
+) -> Option<ImageAdjustmentPayload> {
+    adjustments_payload(
+        body.exposure,
+        body.contrast,
+        body.saturation,
+        body.temperature,
+        body.tint,
+        body.highlights,
+        body.shadows,
+    )
+}
+
+fn image_node_adjustments(n: &ImageNode) -> Option<ImageAdjustmentPayload> {
+    adjustments_payload(
+        n.exposure.map(|v| v as f32),
+        n.contrast.map(|v| v as f32),
+        n.saturation.map(|v| v as f32),
+        n.temperature.map(|v| v as f32),
+        n.tint.map(|v| v as f32),
+        n.highlights.map(|v| v as f32),
+        n.shadows.map(|v| v as f32),
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn adjustments_payload(
+    exposure: Option<f32>,
+    contrast: Option<f32>,
+    saturation: Option<f32>,
+    temperature: Option<f32>,
+    tint: Option<f32>,
+    highlights: Option<f32>,
+    shadows: Option<f32>,
+) -> Option<ImageAdjustmentPayload> {
+    let payload = ImageAdjustmentPayload {
+        exposure: exposure.unwrap_or(0.0),
+        contrast: contrast.unwrap_or(0.0),
+        saturation: saturation.unwrap_or(0.0),
+        temperature: temperature.unwrap_or(0.0),
+        tint: tint.unwrap_or(0.0),
+        highlights: highlights.unwrap_or(0.0),
+        shadows: shadows.unwrap_or(0.0),
+    };
+    (payload.exposure != 0.0
+        || payload.contrast != 0.0
+        || payload.saturation != 0.0
+        || payload.temperature != 0.0
+        || payload.tint != 0.0
+        || payload.highlights != 0.0
+        || payload.shadows != 0.0)
+        .then_some(payload)
 }
 
 /// Read the first fill as a resolved [`GradientPayload`] — `None`
