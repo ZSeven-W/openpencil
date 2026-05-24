@@ -207,6 +207,22 @@ impl DesignSession {
     pub fn finished(&self) -> bool {
         self.finished
     }
+
+    /// Test-only ctor — wraps externally-supplied channels so a fake
+    /// worker thread can drive the UI-side pumps end-to-end without
+    /// spinning up a real LLM. Production code goes through
+    /// [`DesignSession::start`].
+    #[cfg(test)]
+    pub fn from_channels(
+        delta_rx: Receiver<DesignDelta>,
+        cmd_rx: Receiver<DesignCmdReq>,
+    ) -> Self {
+        Self {
+            delta_rx,
+            cmd_rx,
+            finished: false,
+        }
+    }
 }
 
 /// Worker-side `DocSink` impl — forwards every mutation to the UI
@@ -407,6 +423,8 @@ fn progress_label(p: &Progress) -> String {
 mod tests {
     use super::*;
     use op_editor_core::EditorCommand;
+    use op_orchestrator::{RunSummary, SubtaskOutcome};
+    use std::time::{Duration, Instant};
 
     /// `RemoteDocSink::apply` blocks until UI acks. When the UI side
     /// drops the receiver, `apply` returns false instead of hanging.
@@ -479,5 +497,95 @@ mod tests {
         drop(sink); // close the channel so the ui-side recv loop exits
         let kinds = ui.join().expect("ui thread finishes");
         assert_eq!(kinds, vec!["begin", "apply", "end"]);
+    }
+
+    /// End-to-end smoke through `pump_commands` + `pump_progress`:
+    /// a fake worker thread drives a `RemoteDocSink` against
+    /// real-looking channels, the UI loop drains both pumps, and we
+    /// assert that the chat bubble carries the rendered progress +
+    /// terminal summary line, and that the session clears itself
+    /// after `Done`.
+    ///
+    /// This is the host-side complement to the orchestrator's own
+    /// end-to-end tests — it exercises the actor seam without
+    /// requiring an `agent::Provider` / `ANTHROPIC_API_KEY`. Task #28
+    /// covers the live LLM smoke separately.
+    #[test]
+    fn end_to_end_pump_round_trips_apply_and_progress_via_actor_channels() {
+        let (delta_tx, delta_rx) = mpsc::channel::<DesignDelta>();
+        let (cmd_tx, cmd_rx) = mpsc::channel::<DesignCmdReq>();
+        let mut current = Some(DesignSession::from_channels(delta_rx, cmd_rx));
+        let mut host = WidgetHostNative::new();
+        // Seed a streaming assistant bubble — `chat.begin_send`
+        // creates one in production; the pumps fold the worker's
+        // progress + summary into it.
+        host.editor_state_mut()
+            .chat
+            .messages
+            .push(op_editor_core::ChatMessage::assistant_streaming());
+
+        // Fake worker — emits one progress event, asks UI to apply
+        // ClearSelection, then a successful `Done`.
+        let fake_worker = thread::spawn(move || {
+            // Progress first so the bubble starts streaming text
+            // before the doc mutation.
+            let _ = delta_tx.send(DesignDelta::Progress(Progress::Planning));
+            let mut sink = RemoteDocSink::new(cmd_tx, EditorState::new());
+            sink.apply(EditorCommand::ClearSelection);
+            let _ = delta_tx.send(DesignDelta::Done(Ok(RunSummary {
+                root_frame_id: "root".into(),
+                subtasks: vec![SubtaskOutcome {
+                    id: "s1".into(),
+                    node_count: 3,
+                    error: None,
+                }],
+                total_nodes: 3,
+            })));
+            // Hold the sink so its channel survives until the UI has
+            // had a chance to drain (the test polls until `Done`).
+            sink
+        });
+
+        // UI drives the pumps until the session clears (mirrors the
+        // event-loop `RedrawRequested` block). Bound the loop with a
+        // timeout so a hung worker fails the test instead of hanging.
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while current.is_some() && Instant::now() < deadline {
+            let _ = pump_commands(&mut host, &mut current);
+            let _ = pump_progress(&mut host, &mut current);
+            if current.is_none() {
+                break;
+            }
+            thread::sleep(Duration::from_millis(2));
+        }
+        // Worker can join now — the sink it returned (and thus its
+        // cmd_tx) drops at this scope end.
+        let _ = fake_worker.join().expect("fake worker exits cleanly");
+
+        assert!(
+            current.is_none(),
+            "session must clear after Done — leaving it set would keep the\
+             event loop ticking and pump_progress retrying"
+        );
+        let bubble = host
+            .editor_state()
+            .chat
+            .messages
+            .last()
+            .expect("seeded bubble survives");
+        assert!(
+            bubble.content.contains("Planning"),
+            "progress line should render Planning, got: {:?}",
+            bubble.content
+        );
+        assert!(
+            bubble.content.contains("1 subtask"),
+            "summary should report 1 subtask succeeded, got: {:?}",
+            bubble.content
+        );
+        assert!(
+            !bubble.streaming,
+            "summary path must clear streaming so the chat panel stops the animation"
+        );
     }
 }
