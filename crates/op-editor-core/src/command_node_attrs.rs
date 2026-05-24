@@ -171,8 +171,19 @@ impl EditorState {
 
     /// `SetNodeStrokeHex` — set the stroke color on a node. A node with
     /// no stroke gets a fresh 1-px stroke so the color always lands.
+    ///
+    /// Accepts either a literal `#RGB`/`#RRGGBB` hex OR a `$variable-name`
+    /// design-token reference. The underlying `PenStroke.fill[*].color`
+    /// field is a free `String`; `op-design-lint` detectors emit
+    /// `$color-border` refs when the doc declares that variable, and a
+    /// strict hex parse here would silently drop them (regression caught
+    /// by a stop-time review of `LintPreValidator`).
     pub(crate) fn cmd_set_node_stroke_hex(&mut self, node_id: &NodeId, hex: &str) -> bool {
-        if !node_id.is_real() || crate::color_picker::parse_hex_rgb(hex).is_none() {
+        if !node_id.is_real() {
+            return false;
+        }
+        let is_var_ref = hex.starts_with('$');
+        if !is_var_ref && crate::color_picker::parse_hex_rgb(hex).is_none() {
             return false;
         }
         let Some(node) = find_node_mut(self.active_children_mut(), node_id) else {
@@ -216,8 +227,16 @@ impl EditorState {
     }
 
     /// `SetNodeFillHex` — set the fill color on a node by id.
+    ///
+    /// Accepts either a literal `#RGB`/`#RRGGBB` hex OR a `$variable-name`
+    /// design-token reference (same rationale as `SetNodeStrokeHex` —
+    /// `PenFill::Solid.color` is a free `String`).
     pub(crate) fn cmd_set_node_fill_hex(&mut self, node_id: &NodeId, hex: &str) -> bool {
-        if !node_id.is_real() || crate::color_picker::parse_hex_rgb(hex).is_none() {
+        if !node_id.is_real() {
+            return false;
+        }
+        let is_var_ref = hex.starts_with('$');
+        if !is_var_ref && crate::color_picker::parse_hex_rgb(hex).is_none() {
             return false;
         }
         let Some(node) = find_node_mut(self.active_children_mut(), node_id) else {
