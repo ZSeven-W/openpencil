@@ -481,6 +481,12 @@ impl WidgetHostNative {
             // drives the repaint that re-applies the viewport.
             return true;
         }
+        // Toolbar per-button hover wash — AFTER drag detection so a
+        // path-anchor / node / pan drag whose cursor crosses the
+        // toolbar isn't intercepted by the hover update.
+        if self.update_toolbar_hover(x, y, over_topmost) {
+            return true;
+        }
         // Align toolbar hover sync — AFTER drag detection. Suppressed
         // when the cursor is over a top-most floating panel
         // (`over_topmost`, computed above) so a toolbar button below
