@@ -40,6 +40,7 @@ pub mod svg_import;
 pub mod svg_path_bounds;
 mod svg_path_data;
 pub mod tool;
+pub mod toolbar_state;
 pub mod ui_draft;
 pub mod uikit;
 pub mod variables;
@@ -82,8 +83,9 @@ pub use editor_ui_state::{
     FlexLayout, GitCommitSummary, GitDiffTarget, GitDiffView, GitFileEntry, GitPanelAction,
     GitPanelState, LayerContextMenuState, Locale, MergeConflictRow, MergeResolveFile,
     MergeResolveState, PageRenameState, PropertyTab, RecentFile, ShapeChoice, ThemeMode,
-    ToolbarAction, ToolbarHover, UpdateStatus, VariableRowFocus,
+    UpdateStatus, VariableRowFocus,
 };
+pub use toolbar_state::{ToolbarAction, ToolbarHover};
 pub use fills::{
     first_fill_type, first_solid_fill_hex, first_solid_fill_opacity, first_solid_stroke_hex,
     node_effects,

@@ -441,29 +441,6 @@ pub enum ShapeChoice {
     ImportImageOrSvg,
 }
 
-/// One-shot action a toolbar button can dispatch. State-layer
-/// mirror of `op_editor_ui::widgets::toolbar::ToolbarAction`; kept
-/// here so the hover field below is wasm-clean and free of widget
-/// dependencies.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ToolbarAction {
-    Undo,
-    Redo,
-    ToggleCodePanel,
-    ToggleDesignPanel,
-}
-
-/// Which toolbar item the cursor is over. State-layer mirror of
-/// `op_editor_ui::widgets::toolbar::ToolbarHit`. `None` on
-/// `EditorUiState.toolbar_hover` = no hover wash.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ToolbarHover {
-    Tool(Tool),
-    Action(ToolbarAction),
-    /// The shape slot (compound rect/ellipse/polygon/line/pen + chevron).
-    ShapeSlot,
-}
-
 // What the LayerPanel right-click context menu is acting on — the
 // canonical definition is `ui_draft::LayerContextTarget` (it backs
 // the inline-rename draft too). Re-exported so UI code that
@@ -585,7 +562,7 @@ pub struct EditorUiState {
     pub shape_picker_hover: Option<ShapeChoice>,
     /// Toolbar button currently hovered — drives the per-button
     /// `theme.button_hover` wash on the vertical tool column.
-    pub toolbar_hover: Option<ToolbarHover>,
+    pub toolbar_hover: Option<crate::toolbar_state::ToolbarHover>,
     /// Last-selected shape tool — drives the toolbar shape slot's
     /// icon. Always one of Rect / Ellipse / Polygon / Line / Pen.
     pub shape_tool: Tool,
