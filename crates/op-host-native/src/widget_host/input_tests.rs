@@ -337,6 +337,177 @@ fn layer_drag_below_activation_threshold_is_a_click_not_a_reorder() {
 }
 
 #[test]
+fn layer_context_create_component_click_promotes_frame() {
+    use op_editor_core::editor_ui_state::LayerContextMenuState;
+    use op_editor_core::ui_draft::LayerContextTarget;
+    let mut host = WidgetHostNative::new();
+    seed(
+        &mut host,
+        r#"{"version":"0.8.0","children":[
+          {"type":"frame","id":"n10","name":"Card","x":0,"y":0,"width":100,"height":80,
+           "children":[]}
+        ]}"#,
+    );
+    host.editor_state_mut().editor_ui.layer_context_menu = Some(LayerContextMenuState {
+        target: LayerContextTarget::Layer(NodeId::new("n10")),
+        anchor_x: 100.0,
+        anchor_y: 100.0,
+        hovered_row: None,
+    });
+
+    let create_row_y = 100.0 + 6.0 + 32.0 * 2.0 + 16.0;
+    assert!(host.apply_press(120.0, create_row_y, 1440.0, 900.0));
+    assert!(host
+        .editor_state()
+        .components
+        .find_by_id(&NodeId::new("n10"))
+        .is_some());
+    match &host.editor_state().doc.children[0] {
+        jian_ops_schema::node::PenNode::Frame(f) => assert_eq!(f.reusable, Some(true)),
+        _ => panic!("expected frame"),
+    }
+}
+
+#[test]
+fn property_panel_create_component_click_promotes_selected_frame() {
+    use op_editor_ui::widgets::TOP_BAR_HEIGHT;
+    let mut host = WidgetHostNative::new();
+    seed(
+        &mut host,
+        r#"{"version":"0.8.0","children":[
+          {"type":"frame","id":"n20","name":"Hero","x":0,"y":0,"width":120,"height":90,
+           "children":[]}
+        ]}"#,
+    );
+    host.editor_state_mut()
+        .set_single_selection(NodeId::new("n20"));
+
+    let viewport_w = 1440.0;
+    let viewport_h = 900.0;
+    let panel_left = viewport_w - host.editor_state().editor_ui.property_panel_width;
+    let button_x = panel_left + 24.0;
+    let button_y = TOP_BAR_HEIGHT + 36.0 + 30.0 + 8.0 + 18.0;
+    assert!(host.apply_press(button_x, button_y, viewport_w, viewport_h));
+    assert!(host
+        .editor_state()
+        .components
+        .find_by_id(&NodeId::new("n20"))
+        .is_some());
+}
+
+#[test]
+fn layer_context_group_preserves_multi_selection_and_groups() {
+    use op_editor_ui::widgets::TOP_BAR_HEIGHT;
+    let mut host = WidgetHostNative::new();
+    seed(
+        &mut host,
+        &three_rects(
+            [
+                (0.0, 0.0, 20.0, 20.0),
+                (40.0, 0.0, 20.0, 20.0),
+                (120.0, 0.0, 20.0, 20.0),
+            ],
+            ["n30", "n31", "n32"],
+        ),
+    );
+    host.editor_state_mut().selection.set = vec![NodeId::new("n30"), NodeId::new("n31")];
+    host.editor_state_mut().selection.anchor = NodeId::new("n30");
+
+    let viewport_w = 1440.0;
+    let viewport_h = 900.0;
+    let row_x = host.editor_state().editor_ui.layer_panel_width / 2.0;
+    let first_row_y = TOP_BAR_HEIGHT + 8.0 + 28.0 + 32.0 + 8.0 + 28.0 + 14.0;
+    assert!(host.apply_right_press(row_x, first_row_y, viewport_w, viewport_h));
+    assert_eq!(
+        host.editor_state().selection.set.len(),
+        2,
+        "right-clicking an already-selected layer must keep the multi-selection"
+    );
+
+    let group_row_y = first_row_y + 6.0 + 32.0 * 2.0 + 16.0;
+    assert!(host.apply_press(row_x + 20.0, group_row_y, viewport_w, viewport_h));
+    assert!(matches!(
+        host.editor_state().doc.children.first(),
+        Some(jian_ops_schema::node::PenNode::Group(_))
+    ));
+}
+
+#[test]
+fn component_browser_open_owns_keyboard_search() {
+    let mut host = WidgetHostNative::new();
+    host.editor_state_mut().editor_ui.component_browser_open = true;
+
+    assert!(host.input_active_pub());
+    assert!(host.apply_text('b'));
+    assert!(host.apply_text('a'));
+    assert_eq!(host.editor_state().editor_ui.component_browser_search, "ba");
+    assert!(host.apply_backspace());
+    assert_eq!(host.editor_state().editor_ui.component_browser_search, "b");
+    assert!(host.apply_escape());
+    assert!(!host.editor_state().editor_ui.component_browser_open);
+}
+
+#[test]
+fn shape_picker_icon_row_opens_icon_picker() {
+    let mut host = WidgetHostNative::new();
+    let viewport_w = 1440.0;
+    let viewport_h = 900.0;
+    host.editor_state_mut().editor_ui.shape_picker_open = true;
+
+    let panel = host.shape_picker_rect(viewport_w, viewport_h);
+    let icon_row_y = panel.origin.y + 6.0 + 32.0 * 4.0 + 16.0;
+    assert!(host.apply_press(panel.origin.x + 24.0, icon_row_y, viewport_w, viewport_h));
+
+    assert!(!host.editor_state().editor_ui.shape_picker_open);
+    assert!(host.editor_state().editor_ui.icon_picker_open);
+}
+
+#[test]
+fn icon_picker_open_owns_keyboard_search() {
+    let mut host = WidgetHostNative::new();
+    host.editor_state_mut().editor_ui.icon_picker_open = true;
+
+    assert!(host.input_active_pub());
+    assert!(host.apply_text('h'));
+    assert!(host.apply_text('o'));
+    assert_eq!(host.editor_state().editor_ui.icon_picker_search, "ho");
+    assert!(host.apply_backspace());
+    assert_eq!(host.editor_state().editor_ui.icon_picker_search, "h");
+    assert!(host.apply_escape());
+    assert!(!host.editor_state().editor_ui.icon_picker_open);
+}
+
+#[test]
+fn icon_picker_click_inserts_icon_font_node() {
+    let mut host = WidgetHostNative::new();
+    let viewport_w = 1440.0;
+    let viewport_h = 900.0;
+    host.editor_state_mut().editor_ui.icon_picker_open = true;
+    host.editor_state_mut().editor_ui.icon_picker_search = "home".to_string();
+
+    let panel = host
+        .icon_picker_panel_rect(viewport_w, viewport_h)
+        .expect("icon picker rect");
+    let row_y = panel.origin.y + 40.0 + 42.0 + 20.0;
+    assert!(host.apply_press(panel.origin.x + 40.0, row_y, viewport_w, viewport_h));
+
+    assert!(!host.editor_state().editor_ui.icon_picker_open);
+    let icon = host
+        .editor_state()
+        .doc
+        .children
+        .iter()
+        .find_map(|node| match node {
+            jian_ops_schema::node::PenNode::IconFont(icon) => Some(icon),
+            _ => None,
+        })
+        .expect("inserted icon_font node");
+    assert_eq!(icon.icon_font_name, "home");
+    assert_eq!(icon.icon_font_family.as_deref(), Some("lucide"));
+    assert_eq!(host.editor_state().selection.anchor.as_str(), icon.base.id);
+}
+
+#[test]
 fn anchor_press_release_without_motion_does_not_push_history() {
     // Codex CONCERN: a press-release on an anchor without any
     // cursor motion must NOT pollute the undo stack.

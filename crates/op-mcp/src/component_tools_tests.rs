@@ -1,10 +1,8 @@
-//! Tests for the component-command gap + selection / page tools.
+//! Tests for component commands + selection / page tools.
 //!
 //! Ported off the old shell-core `Document` onto `op_editor_core::
-//! EditorState`. The component tools surface a clean `ToolFailed`
-//! (op-editor-core has no component registry — known gap); the
-//! selection / theme tools emit `EditorCommand`s applied via
-//! `EditorState::apply`.
+//! EditorState`. Component / selection / theme tools emit
+//! `EditorCommand`s applied via `EditorState::apply`.
 
 use super::component_tools::*;
 use super::page_tools::*;
@@ -20,64 +18,66 @@ fn state_with_two_nodes() -> EditorState {
     ])
 }
 
-// --- Component-command gap -------------------------------------------
+// --- Component commands ----------------------------------------------
 
 #[test]
-fn instantiate_component_surfaces_clean_gap_error() {
+fn instantiate_component_emits_command() {
     let tool = instantiate_component_snapshot();
     let mut args = BTreeMap::new();
     args.insert("component_id".into(), "n5".into());
     match tool.call(&args) {
-        ToolOutcome::Err(code, msg) => {
-            assert_eq!(code, ToolErrorCode::ToolFailed);
-            assert!(
-                msg.contains("component registry"),
-                "msg names the gap: {msg}"
-            );
+        ToolOutcome::OkWithCommand(_, EditorCommand::InstantiateComponent { component_id }) => {
+            assert_eq!(component_id.as_str(), "n5");
         }
-        other => panic!("expected ToolFailed gap error, got {other:?}"),
+        other => panic!("expected InstantiateComponent command, got {other:?}"),
     }
 }
 
 #[test]
-fn create_component_surfaces_clean_gap_error() {
+fn create_component_emits_command() {
     let tool = create_component_snapshot();
     let mut args = BTreeMap::new();
     args.insert("node_id".into(), "n11".into());
     args.insert("name".into(), "Card".into());
     match tool.call(&args) {
-        ToolOutcome::Err(code, _) => assert_eq!(code, ToolErrorCode::ToolFailed),
-        other => panic!("expected ToolFailed gap error, got {other:?}"),
+        ToolOutcome::OkWithCommand(_, EditorCommand::CreateComponent { node_id, name }) => {
+            assert_eq!(node_id.as_str(), "n11");
+            assert_eq!(name, "Card");
+        }
+        other => panic!("expected CreateComponent command, got {other:?}"),
     }
 }
 
 #[test]
-fn delete_component_surfaces_clean_gap_error() {
+fn delete_component_emits_command() {
     let tool = delete_component_snapshot();
     let mut args = BTreeMap::new();
     args.insert("component_id".into(), "n5".into());
     match tool.call(&args) {
-        ToolOutcome::Err(code, _) => assert_eq!(code, ToolErrorCode::ToolFailed),
-        other => panic!("expected ToolFailed gap error, got {other:?}"),
+        ToolOutcome::OkWithCommand(_, EditorCommand::DeleteComponent { component_id }) => {
+            assert_eq!(component_id.as_str(), "n5");
+        }
+        other => panic!("expected DeleteComponent command, got {other:?}"),
     }
 }
 
 #[test]
-fn rename_component_surfaces_clean_gap_error() {
+fn rename_component_emits_command() {
     let tool = rename_component_snapshot();
     let mut args = BTreeMap::new();
     args.insert("component_id".into(), "n5".into());
     args.insert("name".into(), "Renamed".into());
     match tool.call(&args) {
-        ToolOutcome::Err(code, _) => assert_eq!(code, ToolErrorCode::ToolFailed),
-        other => panic!("expected ToolFailed gap error, got {other:?}"),
+        ToolOutcome::OkWithCommand(_, EditorCommand::RenameComponent { component_id, name }) => {
+            assert_eq!(component_id.as_str(), "n5");
+            assert_eq!(name, "Renamed");
+        }
+        other => panic!("expected RenameComponent command, got {other:?}"),
     }
 }
 
 #[test]
-fn component_tools_still_validate_arguments_before_the_gap() {
-    // The gap error only fires once the (validatable) argument shape
-    // is satisfied — a missing arg still surfaces MissingArgument.
+fn component_tools_validate_arguments() {
     match create_component_snapshot().call(&BTreeMap::new()) {
         ToolOutcome::Err(code, _) => assert_eq!(code, ToolErrorCode::MissingArgument),
         other => panic!("expected MissingArgument, got {other:?}"),

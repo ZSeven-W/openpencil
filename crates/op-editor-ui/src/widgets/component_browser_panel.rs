@@ -20,6 +20,7 @@ pub const COMPONENT_BROWSER_PANEL_H: f32 = 460.0;
 
 const PAD: f32 = 14.0;
 const HEADER_H: f32 = 40.0;
+const SEARCH_H: f32 = 42.0;
 const PILL_ROW_H: f32 = 36.0;
 const CLOSE_BTN: f32 = 24.0;
 const CARD_GAP: f32 = 8.0;
@@ -197,7 +198,7 @@ impl<'a> ComponentBrowserPanel<'a> {
         let pills = self.visible_categories();
         let mut out = Vec::with_capacity(pills.len());
         let mut x = panel.origin.x + PAD;
-        let y = panel.origin.y + HEADER_H + (PILL_ROW_H - PILL_H) / 2.0;
+        let y = panel.origin.y + HEADER_H + SEARCH_H + (PILL_ROW_H - PILL_H) / 2.0;
         for (cat, label_key) in pills {
             let label = self.t(label_key);
             let w = label.chars().count() as f32 * CHAR_W + PILL_PAD_X * 2.0;
@@ -218,7 +219,7 @@ impl<'a> ComponentBrowserPanel<'a> {
     fn card_rects(&self, panel: Rect) -> Vec<Rect> {
         let count = self.filtered().len();
         let left = panel.origin.x + PAD;
-        let top = panel.origin.y + HEADER_H + PILL_ROW_H + CARD_GAP;
+        let top = panel.origin.y + HEADER_H + SEARCH_H + PILL_ROW_H + CARD_GAP;
         let cols = CARD_COLS as f32;
         let inner_w = panel.size.x - PAD * 2.0;
         let card_w = (inner_w - CARD_GAP * (cols - 1.0)) / cols;
@@ -300,6 +301,42 @@ impl<'a> ComponentBrowserPanel<'a> {
             self.theme.border,
         );
 
+        // Search field. The native host routes keyboard input to this
+        // filter whenever the panel is open.
+        let search_rect = Rect {
+            origin: Point2D::new(rect.origin.x + PAD, rect.origin.y + HEADER_H + 8.0),
+            size: Point2D::new(rect.size.x - PAD * 2.0, 28.0),
+        };
+        cx.backend
+            .fill_round_rect(search_rect, 6.0, self.theme.muted);
+        cx.backend
+            .stroke_round_rect(search_rect, 6.0, self.theme.border, 1.0);
+        draw_icon(
+            cx.backend,
+            Icon::Search,
+            Point2D::new(search_rect.origin.x + 8.0, search_rect.origin.y + 7.0),
+            14.0,
+            self.theme.muted_foreground,
+            1.4,
+        );
+        let query = self.state.editor_ui.component_browser_search.trim();
+        let (search_text, search_color) = if query.is_empty() {
+            (
+                self.t("componentBrowser.searchComponents"),
+                self.theme.muted_foreground,
+            )
+        } else {
+            (query, self.theme.foreground)
+        };
+        self.text(
+            cx,
+            search_text,
+            search_rect.origin.x + 30.0,
+            search_rect.origin.y + 19.0,
+            12.0,
+            search_color,
+        );
+
         // Category pills.
         for (pill, cat) in self.pill_rects(rect) {
             let active = cat == self.active_category;
@@ -321,7 +358,10 @@ impl<'a> ComponentBrowserPanel<'a> {
         }
         cx.backend.fill_rect(
             Rect {
-                origin: Point2D::new(rect.origin.x, rect.origin.y + HEADER_H + PILL_ROW_H),
+                origin: Point2D::new(
+                    rect.origin.x,
+                    rect.origin.y + HEADER_H + SEARCH_H + PILL_ROW_H,
+                ),
                 size: Point2D::new(rect.size.x, 1.0),
             },
             self.theme.border,
@@ -331,8 +371,14 @@ impl<'a> ComponentBrowserPanel<'a> {
         // past the panel foot.
         cx.backend.save();
         cx.backend.clip_rect(Rect {
-            origin: Point2D::new(rect.origin.x, rect.origin.y + HEADER_H + PILL_ROW_H + 1.0),
-            size: Point2D::new(rect.size.x, rect.size.y - HEADER_H - PILL_ROW_H - 1.0),
+            origin: Point2D::new(
+                rect.origin.x,
+                rect.origin.y + HEADER_H + SEARCH_H + PILL_ROW_H + 1.0,
+            ),
+            size: Point2D::new(
+                rect.size.x,
+                rect.size.y - HEADER_H - SEARCH_H - PILL_ROW_H - 1.0,
+            ),
         });
         let filtered = self.filtered();
         if filtered.is_empty() {
@@ -340,7 +386,7 @@ impl<'a> ComponentBrowserPanel<'a> {
                 cx,
                 self.t("componentBrowser.empty"),
                 rect.origin.x + rect.size.x / 2.0 - 60.0,
-                rect.origin.y + HEADER_H + PILL_ROW_H + 40.0,
+                rect.origin.y + HEADER_H + SEARCH_H + PILL_ROW_H + 40.0,
                 12.0,
                 self.theme.muted_foreground,
             );

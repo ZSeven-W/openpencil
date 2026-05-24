@@ -7,12 +7,10 @@
 //! `Node`. Component ids stay `op-editor-core::NodeId` string ids so a
 //! component is addressable through the same id space as the tree.
 //!
-//! v1 scope: data storage + lookup by id / name. Instance insertion
-//! and the Components panel UI are follow-ups; the data shape lands
-//! first so the canonical `.op` loader has somewhere to put what it
-//! reads.
-
 use crate::node_id::NodeId;
+use crate::pen_node_ext::PenNodeExt;
+use crate::state::EditorState;
+use crate::walkers;
 use jian_ops_schema::node::PenNode;
 
 /// One reusable design fragment. `root` is the canonical subtree that
@@ -87,6 +85,162 @@ impl ComponentLibrary {
     pub fn len(&self) -> usize {
         self.components.len()
     }
+
+    /// Build a runtime component registry from persisted canonical
+    /// `reusable: true` frame nodes. TS treats reusable nodes in the
+    /// document tree as component definitions; this keeps loaded `.op`
+    /// files addressable even though the registry itself is transient.
+    pub fn from_document(doc: &jian_ops_schema::PenDocument) -> Self {
+        fn walk(node: &PenNode, lib: &mut ComponentLibrary) {
+            if let PenNode::Frame(frame) = node {
+                if frame.reusable == Some(true) {
+                    let id = NodeId::new(frame.base.id.clone());
+                    let name = frame
+                        .base
+                        .name
+                        .clone()
+                        .unwrap_or_else(|| frame.base.id.clone());
+                    lib.insert(Component {
+                        id,
+                        name,
+                        root: node.clone(),
+                    });
+                }
+            }
+            if let Some(children) = node.children() {
+                for child in children {
+                    walk(child, lib);
+                }
+            }
+        }
+
+        let mut lib = ComponentLibrary::default();
+        if let Some(pages) = doc.pages.as_ref() {
+            for page in pages {
+                for child in &page.children {
+                    walk(child, &mut lib);
+                }
+            }
+        }
+        for child in &doc.children {
+            walk(child, &mut lib);
+        }
+        lib
+    }
+}
+
+fn is_component_root(node: &PenNode) -> bool {
+    matches!(
+        node,
+        PenNode::Frame(_) | PenNode::Group(_) | PenNode::Rectangle(_)
+    )
+}
+
+fn set_reusable(node: &mut PenNode, reusable: bool) {
+    if let PenNode::Frame(frame) = node {
+        frame.reusable = reusable.then_some(true);
+    }
+}
+
+fn clear_reusable_in_document(doc: &mut jian_ops_schema::PenDocument, id: &NodeId) {
+    if let Some(pages) = doc.pages.as_mut() {
+        for page in pages {
+            if let Some(live) = walkers::find_node_mut(&mut page.children, id) {
+                set_reusable(live, false);
+                return;
+            }
+        }
+    }
+    if let Some(live) = walkers::find_node_mut(&mut doc.children, id) {
+        set_reusable(live, false);
+    }
+}
+
+impl EditorState {
+    /// Promote an active-page Frame / Group / Rectangle into the
+    /// runtime component registry. Frames also carry the canonical
+    /// persisted `reusable` flag so reloads can rebuild the registry.
+    pub fn create_component_from_node(&mut self, node_id: &NodeId, name: &str) -> bool {
+        let name = name.trim();
+        if !node_id.is_real() || name.is_empty() {
+            return false;
+        }
+        let Some(mut root) = walkers::find_node(self.active_children(), node_id).cloned() else {
+            return false;
+        };
+        if !is_component_root(&root) {
+            return false;
+        }
+
+        let snap = self.snapshot_for_history();
+        set_reusable(&mut root, true);
+        if let Some(live) = walkers::find_node_mut(self.active_children_mut(), node_id) {
+            set_reusable(live, true);
+        }
+        self.components.insert(Component {
+            id: node_id.clone(),
+            name: name.to_string(),
+            root,
+        });
+        self.history_push_past(snap);
+        true
+    }
+
+    /// Promote a node using its current layer name as the component
+    /// label. Used by direct UI affordances that do not prompt.
+    pub fn create_component_from_node_name(&mut self, node_id: &NodeId) -> bool {
+        let Some(node) = walkers::find_node(self.active_children(), node_id) else {
+            return false;
+        };
+        let name = node
+            .base()
+            .name
+            .clone()
+            .unwrap_or_else(|| node.id_str().to_string());
+        self.create_component_from_node(node_id, &name)
+    }
+
+    /// Clone a registered component onto the active page with fresh
+    /// ids. The inserted clone is standalone, so any reusable marker
+    /// on the prototype root is cleared.
+    pub fn instantiate_component(&mut self, component_id: &NodeId) -> Option<NodeId> {
+        let (template, name) = {
+            let component = self.components.find_by_id(component_id)?;
+            (component.root.clone(), component.name.clone())
+        };
+        let snap = self.snapshot_for_history();
+        let mut next_id = self.next_node_id_seed()?;
+        let mut taken = self.collect_node_ids();
+        let mut clone = walkers::deep_clone_with_new_ids(&template, &mut next_id, &mut taken);
+        set_reusable(&mut clone, false);
+        walkers::translate_subtree(&mut clone, 20.0, 20.0);
+        clone.base_mut().name = Some(name);
+        let new_id = NodeId::new(clone.base().id.clone());
+        self.active_children_mut().push(clone);
+        self.set_single_selection(new_id.clone());
+        self.history_push_past(snap);
+        Some(new_id)
+    }
+
+    /// Remove a component registration. If the source frame is still
+    /// on the active page, clear its persisted reusable marker too.
+    pub fn delete_component(&mut self, component_id: &NodeId) -> bool {
+        if self.components.find_by_id(component_id).is_none() {
+            return false;
+        }
+        let snap = self.snapshot_for_history();
+        self.components.remove(component_id);
+        clear_reusable_in_document(&mut self.doc, component_id);
+        self.history_push_past(snap);
+        true
+    }
+
+    /// Rename a registered component. This updates the runtime
+    /// registry label; the source node's visual/layer name is left
+    /// unchanged.
+    pub fn rename_component(&mut self, component_id: &NodeId, name: &str) -> bool {
+        self.components.rename(component_id, name.trim())
+    }
 }
 
 #[cfg(test)]
@@ -153,5 +307,31 @@ mod tests {
         assert!(!lib.remove(&NodeId::new("n99")));
         assert!(lib.remove(&NodeId::new("n10")));
         assert!(lib.is_empty());
+    }
+
+    #[test]
+    fn from_document_indexes_reusable_frames() {
+        let mut doc = jian_ops_schema::PenDocument {
+            version: "0.8.0".into(),
+            name: None,
+            themes: None,
+            variables: None,
+            pages: None,
+            children: vec![sample_node()],
+            format_version: None,
+            id: None,
+            app: None,
+            routes: None,
+            state: None,
+            lifecycle: None,
+            logic_modules: None,
+            design_md: None,
+        };
+        if let PenNode::Frame(f) = &mut doc.children[0] {
+            f.reusable = Some(true);
+        }
+        let lib = ComponentLibrary::from_document(&doc);
+        assert_eq!(lib.len(), 1);
+        assert_eq!(lib.find_by_id(&NodeId::new("f1")).unwrap().name, "Frame");
     }
 }

@@ -18,13 +18,6 @@
 //! a host can decide whether to push undo / persist), `false` on an
 //! apply-time validation failure.
 //!
-//! ## Component-command gap
-//!
-//! `op-editor-core` has no component registry — that was a shell-core
-//! `Document` concern and the canonical-schema component model is a
-//! later task. The four `*Component` variants are part of the DTO for
-//! surface fidelity, but `apply` rejects them (`false`).
-
 use crate::align::AlignAction;
 use crate::command::{EditorCommand, VariableScalarPayload};
 use crate::node_id::NodeId;
@@ -426,11 +419,17 @@ impl EditorState {
             EditorCommand::Undo => self.undo(),
             EditorCommand::Redo => self.redo(),
 
-            // --- Component commands — unsupported gap --------------
-            EditorCommand::InstantiateComponent { .. }
-            | EditorCommand::CreateComponent { .. }
-            | EditorCommand::DeleteComponent { .. }
-            | EditorCommand::RenameComponent { .. } => false,
+            // --- Component commands -------------------------------
+            EditorCommand::InstantiateComponent { component_id } => {
+                self.instantiate_component(&component_id).is_some()
+            }
+            EditorCommand::CreateComponent { node_id, name } => {
+                self.create_component_from_node(&node_id, &name)
+            }
+            EditorCommand::DeleteComponent { component_id } => self.delete_component(&component_id),
+            EditorCommand::RenameComponent { component_id, name } => {
+                self.rename_component(&component_id, &name)
+            }
 
             // --- UIKit element insert -------------------------------
             EditorCommand::InstantiateKitComponent {

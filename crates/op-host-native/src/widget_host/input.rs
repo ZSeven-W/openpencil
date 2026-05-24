@@ -20,6 +20,8 @@ impl WidgetHostNative {
             || self.editor_state.editor_ui.variable_row_focus.is_some()
             || self.editor_state.editor_ui.effect_param_focus.is_some()
             || self.editor_state.editor_ui.agent_settings.focus.is_some()
+            || self.editor_state.editor_ui.icon_picker_open
+            || self.editor_state.editor_ui.component_browser_open
             || self.editor_state.chat.focused
             || self.git_commit_focus_active()
             || self.git_remote_focus_active()

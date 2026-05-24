@@ -13,7 +13,7 @@ use crate::fills::{set_primary_fill_hex, set_primary_stroke_hex};
 use crate::node_id::NodeId;
 use crate::state::EditorState;
 use crate::tool::Tool;
-use jian_ops_schema::node::{PathNode, PenNode, PenNodeBase, PenPathAnchor};
+use jian_ops_schema::node::{IconFontNode, PathNode, PenNode, PenNodeBase, PenPathAnchor};
 
 impl EditorState {
     /// Build an editor state seeded with the demo sample document —
@@ -184,6 +184,59 @@ impl EditorState {
             shadows: None,
             image_prompt: None,
             image_search_query: None,
+            state: None,
+            bindings: None,
+            events: None,
+            lifecycle: None,
+            semantics: None,
+            gestures: None,
+            route: None,
+        });
+        self.active_children_mut().push(node);
+        self.set_single_selection(id.clone());
+        Some(id)
+    }
+
+    /// Insert a Lucide `icon_font` node centered at the given document
+    /// point. The native icon picker only offers names the renderer can
+    /// resolve, so this mutator validates only that the chosen name is
+    /// non-empty.
+    pub fn insert_icon_font_node_at(
+        &mut self,
+        icon_name: &str,
+        family: &str,
+        center_x: f64,
+        center_y: f64,
+    ) -> Option<NodeId> {
+        let icon_name = icon_name.trim();
+        if icon_name.is_empty() {
+            return None;
+        }
+        const SIZE: f64 = 32.0;
+        let safe = self.max_node_id().checked_add(1)?;
+        let id = NodeId::new(format!("n{}", safe));
+        self.commit_history();
+        let node = PenNode::IconFont(IconFontNode {
+            base: PenNodeBase {
+                id: id.as_str().to_string(),
+                name: Some(icon_name.to_string()),
+                x: Some(center_x - SIZE / 2.0),
+                y: Some(center_y - SIZE / 2.0),
+                ..Default::default()
+            },
+            icon_font_name: icon_name.to_string(),
+            icon_font_family: Some(family.to_string()),
+            width: Some(jian_ops_schema::sizing::SizingBehavior::Number(SIZE)),
+            height: Some(jian_ops_schema::sizing::SizingBehavior::Number(SIZE)),
+            fill: Some(vec![jian_ops_schema::style::PenFill::Solid(
+                jian_ops_schema::style::SolidFillBody {
+                    color: "#111827".to_string(),
+                    explain: None,
+                    opacity: None,
+                    blend_mode: None,
+                },
+            )]),
+            stroke: None,
             state: None,
             bindings: None,
             events: None,
