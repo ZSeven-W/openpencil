@@ -327,7 +327,7 @@ pub fn paint_fill_section(
             paint_fill_gradient_body(cx, theme, edit, snapshot, locale, x, y, width, false);
         }
         FillType::Image => {
-            paint_fill_image_body(cx, theme, locale, x, y, width);
+            paint_fill_image_body(cx, theme, snapshot, locale, x, y, width);
         }
     }
     y += fill_body_height(fill_type) - 6.0 + 12.0;
@@ -669,6 +669,7 @@ fn paint_alpha_checker(cx: &mut PaintCx<'_>, rect: Rect, radius: f32) {
 fn paint_fill_image_body(
     cx: &mut PaintCx<'_>,
     theme: &Theme,
+    snapshot: &NodeSnapshot,
     locale: op_editor_core::Locale,
     x: f32,
     y: f32,
@@ -690,8 +691,13 @@ fn paint_fill_image_body(
         theme.muted_foreground,
         1.4,
     );
+    let label_key = snapshot
+        .image_fill
+        .as_ref()
+        .map(|summary| summary.mode.label_key())
+        .unwrap_or("fill.title");
     let label = TextLayout::single_run(
-        op_i18n::translate(locale, "fill.title"),
+        op_i18n::translate(locale, label_key),
         "system-ui",
         12.0,
         to_jian_color(theme.foreground),

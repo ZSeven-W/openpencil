@@ -32,6 +32,7 @@ pub mod page_mutators;
 pub mod path_bounds;
 pub mod pen;
 pub mod pen_node_ext;
+pub mod property_panel_state;
 pub mod rename;
 pub mod render_backend;
 pub mod selection;
@@ -81,14 +82,13 @@ pub use design_md::parse_design_md;
 pub use editor_ui_state::{
     BooleanOp, DesignMdRequest, EditorUiState, ExportFormat, FileAction, FileMenuChoice, FillType,
     FlexLayout, GitCommitSummary, GitDiffTarget, GitDiffView, GitFileEntry, GitPanelAction,
-    GitPanelState, LayerContextMenuState, Locale, MergeConflictRow, MergeResolveFile,
-    MergeResolveState, PageRenameState, PropertyTab, RecentFile, ShapeChoice, ThemeMode,
-    UpdateStatus, VariableRowFocus,
+    GitPanelState, ImageAdjustmentField, ImageFillMode, LayerContextMenuState, Locale,
+    MergeConflictRow, MergeResolveFile, MergeResolveState, PageRenameState, PropertyTab,
+    RecentFile, ShapeChoice, ThemeMode, UpdateStatus, VariableRowFocus,
 };
-pub use toolbar_state::{ToolbarAction, ToolbarHover};
 pub use fills::{
-    first_fill_type, first_solid_fill_hex, first_solid_fill_opacity, first_solid_stroke_hex,
-    node_effects,
+    first_fill_type, first_image_fill_summary, first_solid_fill_hex, first_solid_fill_opacity,
+    first_solid_stroke_hex, node_effects, ImageFillSummary,
 };
 pub use geometry::{aggregate_bounds, own_bounds, union_aggregate_bounds, DocRect};
 pub use history::{EditorSnapshot, History, HISTORY_CAP};
@@ -99,6 +99,7 @@ pub use render_backend::*;
 pub use selection::SelectionState;
 pub use state::EditorState;
 pub use tool::Tool;
+pub use toolbar_state::{ToolbarAction, ToolbarHover};
 pub use ui_draft::{
     ColorPickerDrag, ColorPickerState, ColorTarget, LayerContextTarget, LayerRenameState,
     PropertyFocus, UiDraftState, VariableUiState,

@@ -21,6 +21,10 @@ pub use crate::widgets::property_panel_effects::paint_effects_section;
 pub use crate::widgets::property_panel_fill::{
     fill_type_label, paint_fill_section, paint_fill_type_picker,
 };
+pub use crate::widgets::property_panel_image_fill::{
+    image_fill_popover_action_at, image_fill_popover_action_rects,
+    image_fill_popover_adjustment_action_for_drag, paint_image_fill_popover,
+};
 pub use crate::widgets::property_panel_inputs::format_color_hex as _format_color_hex_compat;
 
 /// Hit-result for a click on the property panel — payload is the

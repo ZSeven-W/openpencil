@@ -34,13 +34,44 @@ impl WidgetHost {
                 let v = &mut self.editor_state.editor_ui.size_clip_content;
                 *v = !*v;
             }
+            A::CreateComponent => {
+                let id = self.editor_state.selection.anchor.clone();
+                if id.is_real() {
+                    let _ = self.editor_state.create_component_from_node_name(&id);
+                }
+            }
             A::ToggleFillTypePicker => {
-                let v = &mut self.editor_state.editor_ui.fill_type_picker_open;
-                *v = !*v;
+                let ui = &mut self.editor_state.editor_ui;
+                ui.fill_type_picker_open = !ui.fill_type_picker_open;
+                ui.image_fill_popover_open = false;
             }
             A::SetFillType(t) => {
                 self.editor_state.set_selected_fill_type(t);
                 self.editor_state.editor_ui.fill_type_picker_open = false;
+                self.editor_state.editor_ui.image_fill_popover_open = false;
+            }
+            A::ToggleImageFillPopover => {
+                let ui = &mut self.editor_state.editor_ui;
+                ui.image_fill_popover_open = !ui.image_fill_popover_open;
+                ui.fill_type_picker_open = false;
+                ui.export_scale_picker_open = false;
+                ui.export_format_picker_open = false;
+            }
+            A::CloseImageFillPopover => {
+                self.editor_state.editor_ui.image_fill_popover_open = false;
+            }
+            A::SetImageFillMode(mode) => {
+                let _ = self.editor_state.set_selected_image_fill_mode(mode);
+            }
+            A::SetImageAdjustment { field, value } => {
+                self.image_adjustment_drag = Some(field);
+                let _ = self
+                    .editor_state
+                    .set_selected_image_adjustment(field, value);
+            }
+            A::ResetImageAdjustments => {
+                self.image_adjustment_drag = None;
+                let _ = self.editor_state.reset_selected_image_adjustments();
             }
             A::ToggleExportScalePicker => {
                 let ui = &mut self.editor_state.editor_ui;

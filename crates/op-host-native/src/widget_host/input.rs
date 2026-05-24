@@ -160,6 +160,26 @@ impl WidgetHostNative {
             self.mark_dirty();
             return true;
         }
+        if let Some(field) = self.image_adjustment_drag {
+            if let Some(panel) =
+                op_editor_ui::widgets::PropertyPanel::for_selection(&self.editor_state)
+            {
+                let property_rect = Rect {
+                    origin: Point2D::new(
+                        self.last_viewport_w - self.editor_state.editor_ui.property_panel_width,
+                        op_editor_ui::widgets::TOP_BAR_HEIGHT,
+                    ),
+                    size: Point2D::new(
+                        self.editor_state.editor_ui.property_panel_width,
+                        (self.last_viewport_h - op_editor_ui::widgets::TOP_BAR_HEIGHT).max(0.0),
+                    ),
+                };
+                if let Some(action) = panel.image_adjustment_drag_action(property_rect, field, x) {
+                    self.apply_property_action(action);
+                    return true;
+                }
+            }
+        }
         // Pen rubber-band — track cursor doc coord for preview.
         if self.editor_state.ui.pen_in_progress.is_some() {
             let (cx0, cy0) = self.canvas_origin();
@@ -565,6 +585,9 @@ impl WidgetHostNative {
         if self.component_browser_drag.take().is_some() {
             return true;
         }
+        if self.image_adjustment_drag.take().is_some() {
+            return true;
+        }
         if let Some(m) = self.marquee_drag.take() {
             self.commit_marquee_selection(m, viewport_w, viewport_h);
             return true;
@@ -642,6 +665,9 @@ impl WidgetHostNative {
             return true;
         }
         if self.component_browser_drag.take().is_some() {
+            return true;
+        }
+        if self.image_adjustment_drag.take().is_some() {
             return true;
         }
         let was_dragging = self.drag.is_some();

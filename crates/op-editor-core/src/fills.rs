@@ -23,12 +23,50 @@
 //! ever touches the *first solid* entry, mirroring shell-core's
 //! single-colour behaviour without flattening the canonical model.
 
-use crate::editor_ui_state::FillType;
+use crate::editor_ui_state::{FillType, ImageAdjustmentField, ImageFillMode};
 use jian_ops_schema::node::PenNode;
 use jian_ops_schema::style::{
     GradientStop, ImageFillBody, LinearGradientBody, PenEffect, PenFill, PenStroke,
     RadialGradientBody, ShadowBody, SolidFillBody, StrokeThickness,
 };
+
+/// Display/edit summary of the primary image fill.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ImageFillSummary {
+    pub mode: ImageFillMode,
+    pub has_image: bool,
+    /// Current primary image URL. Native picked images are stored as
+    /// inline `data:image/...;base64,...` URLs so the property popover
+    /// can decode and preview them without another host-side fetch.
+    pub image_url: Option<String>,
+    pub exposure: f32,
+    pub contrast: f32,
+    pub saturation: f32,
+    pub temperature: f32,
+    pub tint: f32,
+    pub highlights: f32,
+    pub shadows: f32,
+}
+
+impl ImageFillSummary {
+    pub fn adjustment(&self, field: ImageAdjustmentField) -> f32 {
+        match field {
+            ImageAdjustmentField::Exposure => self.exposure,
+            ImageAdjustmentField::Contrast => self.contrast,
+            ImageAdjustmentField::Saturation => self.saturation,
+            ImageAdjustmentField::Temperature => self.temperature,
+            ImageAdjustmentField::Tint => self.tint,
+            ImageAdjustmentField::Highlights => self.highlights,
+            ImageAdjustmentField::Shadows => self.shadows,
+        }
+    }
+
+    pub fn has_adjustments(&self) -> bool {
+        ImageAdjustmentField::ALL
+            .iter()
+            .any(|field| self.adjustment(*field).abs() > f32::EPSILON)
+    }
+}
 
 /// Borrow a node's `fill` list, if the variant carries one. Frame /
 /// Group fills live on `container.fill`; the leaf paintable variants
@@ -194,6 +232,85 @@ pub fn first_solid_fill_opacity(node: &PenNode) -> f32 {
             PenFill::Image(b) => b.opacity.unwrap_or(1.0),
         })
         .unwrap_or(1.0)
+}
+
+/// Summary of the node's primary image fill. `None` when the first
+/// fill isn't `Image`.
+pub fn first_image_fill_summary(node: &PenNode) -> Option<ImageFillSummary> {
+    let PenFill::Image(body) = node_fills(node)?.first()? else {
+        return None;
+    };
+    let trimmed_url = body.url.trim();
+    Some(ImageFillSummary {
+        mode: ImageFillMode::from_schema(body.mode.as_ref()),
+        has_image: !trimmed_url.is_empty(),
+        image_url: (!trimmed_url.is_empty()).then(|| body.url.clone()),
+        exposure: body.exposure.unwrap_or(0.0),
+        contrast: body.contrast.unwrap_or(0.0),
+        saturation: body.saturation.unwrap_or(0.0),
+        temperature: body.temperature.unwrap_or(0.0),
+        tint: body.tint.unwrap_or(0.0),
+        highlights: body.highlights.unwrap_or(0.0),
+        shadows: body.shadows.unwrap_or(0.0),
+    })
+}
+
+fn primary_image_fill_mut(node: &mut PenNode) -> Option<&mut ImageFillBody> {
+    if node_fills(node).map(|f| f.is_empty()).unwrap_or(true) {
+        return None;
+    }
+    let fills = node_fills_mut(node)?;
+    match fills.first_mut()? {
+        PenFill::Image(body) => Some(body),
+        _ => None,
+    }
+}
+
+/// Set the primary image fill's fit mode.
+pub fn set_primary_image_fill_mode(node: &mut PenNode, mode: ImageFillMode) -> bool {
+    let Some(body) = primary_image_fill_mut(node) else {
+        return false;
+    };
+    body.mode = Some(mode.to_schema());
+    true
+}
+
+/// Set one primary image-fill adjustment, clamped to the TS slider
+/// range `[-100, 100]`.
+pub fn set_primary_image_adjustment(
+    node: &mut PenNode,
+    field: ImageAdjustmentField,
+    value: f32,
+) -> bool {
+    let Some(body) = primary_image_fill_mut(node) else {
+        return false;
+    };
+    let value = value.clamp(-100.0, 100.0);
+    match field {
+        ImageAdjustmentField::Exposure => body.exposure = Some(value),
+        ImageAdjustmentField::Contrast => body.contrast = Some(value),
+        ImageAdjustmentField::Saturation => body.saturation = Some(value),
+        ImageAdjustmentField::Temperature => body.temperature = Some(value),
+        ImageAdjustmentField::Tint => body.tint = Some(value),
+        ImageAdjustmentField::Highlights => body.highlights = Some(value),
+        ImageAdjustmentField::Shadows => body.shadows = Some(value),
+    }
+    true
+}
+
+/// Reset every primary image-fill adjustment to zero.
+pub fn reset_primary_image_adjustments(node: &mut PenNode) -> bool {
+    let Some(body) = primary_image_fill_mut(node) else {
+        return false;
+    };
+    body.exposure = Some(0.0);
+    body.contrast = Some(0.0);
+    body.saturation = Some(0.0);
+    body.temperature = Some(0.0);
+    body.tint = Some(0.0);
+    body.highlights = Some(0.0);
+    body.shadows = Some(0.0);
+    true
 }
 
 /// Write the primary fill's `opacity` (clamped to `[0.0, 1.0]`),

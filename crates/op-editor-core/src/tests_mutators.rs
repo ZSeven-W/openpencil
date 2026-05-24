@@ -8,6 +8,7 @@ use crate::node_id::NodeId;
 use crate::pen_node_ext::PenNodeExt;
 use crate::test_support::{frame, group, rect, sample, state_with};
 use crate::walkers::{find_node, ReorderDirection};
+use jian_ops_schema::style::PenFill;
 
 // --- Selection -------------------------------------------------------
 
@@ -54,6 +55,75 @@ fn select_all_top_level_picks_every_root() {
 fn select_all_top_level_empty_page_is_noop() {
     let mut s = state_with(vec![]);
     assert!(!s.select_all_top_level());
+}
+
+#[test]
+fn set_selected_image_fill_mode_updates_primary_image_fill() {
+    let mut node = rect("n60", "Photo fill", 0.0, 0.0, 100.0, 80.0);
+    crate::fills::set_primary_fill_type(&mut node, crate::FillType::Image);
+    let mut s = state_with(vec![node]);
+    s.set_single_selection(NodeId::new("n60"));
+
+    assert!(s.set_selected_image_fill_mode(crate::ImageFillMode::Crop));
+
+    let node = find_node(s.active_children(), &NodeId::new("n60")).unwrap();
+    match crate::fills::node_fills(node).unwrap().first().unwrap() {
+        PenFill::Image(body) => {
+            assert_eq!(body.mode, Some(jian_ops_schema::style::ImageFillMode::Crop));
+        }
+        other => panic!("expected image fill, got {other:?}"),
+    }
+}
+
+#[test]
+fn image_fill_summary_exposes_selected_image_url_for_preview() {
+    let mut node = rect("n62", "Photo fill", 0.0, 0.0, 100.0, 80.0);
+    crate::fills::set_primary_fill_type(&mut node, crate::FillType::Image);
+    let mut s = state_with(vec![node]);
+    s.set_single_selection(NodeId::new("n62"));
+
+    let url = "data:image/png;base64,iVBORw0KGgo=";
+    assert!(s.set_selected_fill_image_url(url));
+
+    let node = find_node(s.active_children(), &NodeId::new("n62")).unwrap();
+    let summary = crate::fills::first_image_fill_summary(node).unwrap();
+    assert!(summary.has_image);
+    assert_eq!(summary.image_url.as_deref(), Some(url));
+}
+
+#[test]
+fn set_selected_image_adjustment_clamps_and_resets() {
+    let mut node = rect("n61", "Photo fill", 0.0, 0.0, 100.0, 80.0);
+    crate::fills::set_primary_fill_type(&mut node, crate::FillType::Image);
+    let mut s = state_with(vec![node]);
+    s.set_single_selection(NodeId::new("n61"));
+
+    assert!(s.set_selected_image_adjustment(crate::ImageAdjustmentField::Exposure, 125.0));
+    assert!(s.set_selected_image_adjustment(crate::ImageAdjustmentField::Contrast, -125.0));
+
+    let node = find_node(s.active_children(), &NodeId::new("n61")).unwrap();
+    match crate::fills::node_fills(node).unwrap().first().unwrap() {
+        PenFill::Image(body) => {
+            assert_eq!(body.exposure, Some(100.0));
+            assert_eq!(body.contrast, Some(-100.0));
+        }
+        other => panic!("expected image fill, got {other:?}"),
+    }
+
+    assert!(s.reset_selected_image_adjustments());
+    let node = find_node(s.active_children(), &NodeId::new("n61")).unwrap();
+    match crate::fills::node_fills(node).unwrap().first().unwrap() {
+        PenFill::Image(body) => {
+            assert_eq!(body.exposure, Some(0.0));
+            assert_eq!(body.contrast, Some(0.0));
+            assert_eq!(body.saturation, Some(0.0));
+            assert_eq!(body.temperature, Some(0.0));
+            assert_eq!(body.tint, Some(0.0));
+            assert_eq!(body.highlights, Some(0.0));
+            assert_eq!(body.shadows, Some(0.0));
+        }
+        other => panic!("expected image fill, got {other:?}"),
+    }
 }
 
 // --- Delete ----------------------------------------------------------

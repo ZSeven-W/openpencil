@@ -46,12 +46,37 @@ impl WidgetHostNative {
                 }
             }
             A::ToggleFillTypePicker => {
-                let v = &mut self.editor_state.editor_ui.fill_type_picker_open;
-                *v = !*v;
+                let ui = &mut self.editor_state.editor_ui;
+                ui.fill_type_picker_open = !ui.fill_type_picker_open;
+                ui.image_fill_popover_open = false;
             }
             A::SetFillType(t) => {
                 self.editor_state.set_selected_fill_type(t);
                 self.editor_state.editor_ui.fill_type_picker_open = false;
+                self.editor_state.editor_ui.image_fill_popover_open = false;
+            }
+            A::ToggleImageFillPopover => {
+                let ui = &mut self.editor_state.editor_ui;
+                ui.image_fill_popover_open = !ui.image_fill_popover_open;
+                ui.fill_type_picker_open = false;
+                ui.export_scale_picker_open = false;
+                ui.export_format_picker_open = false;
+            }
+            A::CloseImageFillPopover => {
+                self.editor_state.editor_ui.image_fill_popover_open = false;
+            }
+            A::SetImageFillMode(mode) => {
+                let _ = self.editor_state.set_selected_image_fill_mode(mode);
+            }
+            A::SetImageAdjustment { field, value } => {
+                self.image_adjustment_drag = Some(field);
+                let _ = self
+                    .editor_state
+                    .set_selected_image_adjustment(field, value);
+            }
+            A::ResetImageAdjustments => {
+                self.image_adjustment_drag = None;
+                let _ = self.editor_state.reset_selected_image_adjustments();
             }
             A::OpenColorPicker(target) => {
                 // Fallback anchor when called outside the press path.
@@ -155,6 +180,42 @@ impl WidgetHostNative {
             }
         }
         self.mark_dirty();
+    }
+
+    /// Image-fill popover outside-click dismiss. Returns `true`
+    /// when the popover was open and the press was consumed.
+    pub(in crate::widget_host) fn dismiss_image_fill_popover_on_press(
+        &mut self,
+        x: f32,
+        y: f32,
+        viewport_width: f32,
+        viewport_height: f32,
+    ) -> bool {
+        use op_editor_ui::widgets::{PropertyPanel, TOP_BAR_HEIGHT};
+        use op_editor_ui::{Point2D, Rect};
+        if !self.editor_state.editor_ui.image_fill_popover_open {
+            return false;
+        }
+        self.refresh_layout_scene();
+        if let Some(panel) = PropertyPanel::for_selection(&self.editor_state) {
+            let property_rect = Rect {
+                origin: Point2D::new(
+                    viewport_width - self.editor_state.editor_ui.property_panel_width,
+                    TOP_BAR_HEIGHT,
+                ),
+                size: Point2D::new(
+                    self.editor_state.editor_ui.property_panel_width,
+                    (viewport_height - TOP_BAR_HEIGHT).max(0.0),
+                ),
+            };
+            if let Some(action) = panel.hit_test_action(property_rect, Point2D::new(x, y)) {
+                self.apply_property_action(action);
+                return true;
+            }
+        }
+        self.editor_state.editor_ui.image_fill_popover_open = false;
+        self.mark_dirty();
+        true
     }
 
     /// Outside-click dismiss for the Export section's inline scale /

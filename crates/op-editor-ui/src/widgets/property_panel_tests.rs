@@ -217,15 +217,20 @@ fn multi_selection_panel_shows_union_bounds_and_is_inert() {
 #[derive(Default)]
 struct CountingBackend {
     text: usize,
+    texts: Vec<String>,
     round_rects: usize,
+    images: Vec<(Rect, u64, usize)>,
 }
 impl crate::RenderBackend for CountingBackend {
     fn begin_frame(&mut self) {}
     fn end_frame(&mut self) {}
     fn fill_rect(&mut self, _: Rect, _: Color) {}
     fn stroke_rect(&mut self, _: Rect, _: Color, _: f32) {}
-    fn draw_text(&mut self, _: &crate::TextLayout, _: Point2D) {
+    fn draw_text(&mut self, layout: &crate::TextLayout, _: Point2D) {
         self.text += 1;
+        if let Some(run) = layout.runs().first() {
+            self.texts.push(run.content.clone());
+        }
     }
     fn clip_rect(&mut self, _: Rect) {}
     fn save(&mut self) {}
@@ -237,6 +242,9 @@ impl crate::RenderBackend for CountingBackend {
     }
     fn stroke_round_rect(&mut self, _: Rect, _: f32, _: Color, _: f32) {}
     fn stroke_svg_path(&mut self, _: &str, _: Point2D, _: f32, _: Color, _: f32) {}
+    fn draw_image(&mut self, rect: Rect, image_id: u64, encoded: &[u8]) {
+        self.images.push((rect, image_id, encoded.len()));
+    }
     fn resize(&mut self, _: u32, _: u32) {}
     fn dpi_scale(&self) -> f32 {
         1.0
@@ -310,4 +318,172 @@ fn multi_select_panel_shows_even_when_all_zero_size() {
     assert!(panel.is_multi);
     assert_eq!(panel.snapshot.width, 0);
     assert_eq!(panel.snapshot.height, 0);
+}
+
+fn image_fill_state_with_url(url: &str) -> EditorState {
+    let mut state = state_from(&format!(
+        r##"{{ "version": "0.8.0", "children": [
+              {{"type":"rectangle","id":"n60","name":"Photo fill",
+               "x":40,"y":40,"width":180,"height":120,
+               "fill":[{{"type":"image","url":"{}","mode":"fill",
+                 "exposure":0,"contrast":0,"saturation":0,
+                 "temperature":0,"tint":0,"highlights":0,"shadows":0}}]}}
+        ]}}"##,
+        url
+    ));
+    state.set_single_selection(NodeId::new("n60"));
+    state
+}
+
+fn image_fill_state() -> EditorState {
+    image_fill_state_with_url("")
+}
+
+#[test]
+fn image_fill_body_click_opens_the_image_popover() {
+    let state = image_fill_state();
+    let panel = PropertyPanel::for_selection(&state).expect("image fill panel");
+    let rect = Rect {
+        origin: Point2D::new(320.0, 24.0),
+        size: Point2D::new(280.0, 900.0),
+    };
+    let rects = sections::action_button_rects_with_fill_picker(
+        rect,
+        visible_for(&panel),
+        &panel.snapshot.effects,
+        false,
+        false,
+        false,
+    );
+    let body = rects
+        .iter()
+        .find(|(a, _)| matches!(a, PropertyPanelAction::ToggleImageFillPopover))
+        .map(|(_, r)| *r)
+        .expect("image fill body emits popover toggle action");
+    let center = Point2D::new(
+        body.origin.x + body.size.x / 2.0,
+        body.origin.y + body.size.y / 2.0,
+    );
+    assert!(
+        matches!(
+            panel.hit_test_action(rect, center),
+            Some(PropertyPanelAction::ToggleImageFillPopover)
+        ),
+        "image fill body click should open the image editor popover",
+    );
+}
+
+#[test]
+fn open_image_fill_popover_paints_selected_image_preview() {
+    const PNG_DATA_URL: &str =
+        "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=";
+    let mut state = image_fill_state_with_url(PNG_DATA_URL);
+    state.editor_ui.image_fill_popover_open = true;
+    let panel = PropertyPanel::for_selection(&state).expect("image fill panel");
+    assert_eq!(
+        panel
+            .snapshot
+            .image_fill
+            .as_ref()
+            .unwrap()
+            .image_url
+            .as_deref(),
+        Some(PNG_DATA_URL),
+    );
+
+    let mut backend = CountingBackend::default();
+    {
+        let mut cx = PaintCx {
+            backend: &mut backend,
+        };
+        let rect = Rect {
+            origin: Point2D::new(320.0, 24.0),
+            size: Point2D::new(280.0, 900.0),
+        };
+        panel.paint(&mut cx, rect);
+        panel.paint_overlays(&mut cx, rect);
+    }
+    assert!(
+        backend.images.iter().any(|(_, _, bytes)| *bytes > 0),
+        "selected image data URL should be decoded and painted in the upload well",
+    );
+}
+
+#[test]
+fn image_fill_adjustment_reset_label_uses_i18n() {
+    let mut state = image_fill_state();
+    state.editor_ui.image_fill_popover_open = true;
+    state.editor_ui.locale = op_editor_core::Locale::ZhCn;
+    assert!(
+        state.set_selected_image_adjustment(op_editor_core::ImageAdjustmentField::Exposure, 36.0)
+    );
+    let panel = PropertyPanel::for_selection(&state).expect("image fill panel");
+
+    let mut backend = CountingBackend::default();
+    {
+        let mut cx = PaintCx {
+            backend: &mut backend,
+        };
+        panel.paint_overlays(
+            &mut cx,
+            Rect {
+                origin: Point2D::new(320.0, 24.0),
+                size: Point2D::new(280.0, 900.0),
+            },
+        );
+    }
+    assert!(backend.texts.iter().any(|s| s == "重置"));
+    assert!(!backend.texts.iter().any(|s| s == "Reset"));
+}
+
+#[test]
+fn open_image_fill_popover_routes_upload_and_mode_actions() {
+    let mut state = image_fill_state();
+    state.editor_ui.image_fill_popover_open = true;
+    let panel = PropertyPanel::for_selection(&state).expect("image fill panel");
+    let rect = Rect {
+        origin: Point2D::new(320.0, 24.0),
+        size: Point2D::new(280.0, 900.0),
+    };
+    let popup_rects =
+        sections::image_fill_popover_action_rects(rect, visible_for(&panel), &panel.snapshot);
+    let upload = popup_rects
+        .iter()
+        .find(|(a, _)| matches!(a, PropertyPanelAction::PickFillImage))
+        .map(|(_, r)| *r)
+        .expect("open image popover exposes an upload hit rect");
+    let upload_center = Point2D::new(
+        upload.origin.x + upload.size.x / 2.0,
+        upload.origin.y + upload.size.y / 2.0,
+    );
+    assert!(
+        matches!(
+            panel.hit_test_action(rect, upload_center),
+            Some(PropertyPanelAction::PickFillImage)
+        ),
+        "upload well should trigger the image file picker",
+    );
+    let crop = popup_rects
+        .iter()
+        .find(|(a, _)| {
+            matches!(
+                a,
+                PropertyPanelAction::SetImageFillMode(op_editor_core::ImageFillMode::Crop)
+            )
+        })
+        .map(|(_, r)| *r)
+        .expect("open image popover exposes fit-mode hit rects");
+    let crop_center = Point2D::new(
+        crop.origin.x + crop.size.x / 2.0,
+        crop.origin.y + crop.size.y / 2.0,
+    );
+    assert!(
+        matches!(
+            panel.hit_test_action(rect, crop_center),
+            Some(PropertyPanelAction::SetImageFillMode(
+                op_editor_core::ImageFillMode::Crop
+            ))
+        ),
+        "fit-mode chips should dispatch mode updates",
+    );
 }

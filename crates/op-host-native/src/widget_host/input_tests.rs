@@ -90,6 +90,61 @@ fn escape_closes_one_overlay_per_press_in_priority_order() {
 }
 
 #[test]
+fn pick_fill_image_keeps_image_popover_open_for_mode_selection() {
+    let mut host = WidgetHostNative::new();
+    host.editor_state_mut().editor_ui.image_fill_popover_open = true;
+
+    host.apply_property_action(op_editor_ui::widgets::PropertyPanelAction::PickFillImage);
+
+    assert_eq!(
+        host.editor_state().editor_ui.pending_file_action,
+        Some(op_editor_core::editor_ui_state::FileAction::PickFillImage),
+    );
+    assert!(
+        host.editor_state().editor_ui.image_fill_popover_open,
+        "the image popover must stay open so Fill/Fit/Crop/Tile remain selectable",
+    );
+}
+
+#[test]
+fn image_adjustment_drag_updates_live_after_press() {
+    let mut host = WidgetHostNative::new();
+    seed(
+        &mut host,
+        r##"{ "version": "0.8.0", "children": [
+              {"type":"rectangle","id":"n60","name":"Photo fill",
+               "x":40,"y":40,"width":180,"height":120,
+               "fill":[{"type":"image","url":"","mode":"fill",
+                 "exposure":0,"contrast":0,"saturation":0,
+                 "temperature":0,"tint":0,"highlights":0,"shadows":0}]}
+        ]}"##,
+    );
+    host.editor_state_mut()
+        .set_single_selection(NodeId::new("n60"));
+    host.editor_state_mut().editor_ui.image_fill_popover_open = true;
+    host.image_adjustment_drag = Some(op_editor_core::ImageAdjustmentField::Exposure);
+    host.last_viewport_w = 900.0;
+    host.last_viewport_h = 760.0;
+
+    assert!(host.apply_cursor_move(0.0, 0.0));
+
+    let node = host
+        .editor_state()
+        .selected_node()
+        .expect("selected image-fill node");
+    match op_editor_core::fills::node_fills(node)
+        .unwrap()
+        .first()
+        .unwrap()
+    {
+        jian_ops_schema::style::PenFill::Image(body) => {
+            assert_eq!(body.exposure, Some(-100.0));
+        }
+        other => panic!("expected image fill, got {other:?}"),
+    }
+}
+
+#[test]
 fn backspace_with_property_draft_does_not_delete_selected() {
     // With a non-empty property draft buffer, Backspace must pop a
     // char from the draft, not delete the selected node.

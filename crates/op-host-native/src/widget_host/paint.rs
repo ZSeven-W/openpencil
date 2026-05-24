@@ -99,7 +99,27 @@ impl WidgetHostNative {
             layer_panel.paint(&mut cx, layer_panel_rect);
         }
 
-        // 4. PropertyPanel — only when selection.
+        // 4. CanvasViewport — middle band, respects sidebar
+        //    collapse state. It paints before the right rail so
+        //    PropertyPanel popovers can extend into the canvas.
+        let (canvas_left, _canvas_y, canvas_w, canvas_h) =
+            self.canvas_region(viewport_width, viewport_height);
+        let canvas_rect = Rect {
+            origin: Point2D::new(canvas_left, TOP_BAR_HEIGHT),
+            size: Point2D::new(canvas_w, canvas_h),
+        };
+        if canvas_w > 0.0 && canvas_h > 0.0 {
+            // PAINT path — the canvas reads editor state + the
+            // layout-resolved render scene (`refresh_layout_scene`).
+            let mut canvas = CanvasViewport::from_editor(&self.editor_state, &self.layout_scene);
+            canvas.now_ms = self.now_ms;
+            let mut cx = PaintCx {
+                backend: &mut *frame,
+            };
+            canvas.paint(&mut cx, canvas_rect);
+        }
+
+        // 5. PropertyPanel — only when selection.
         let property_panel = PropertyPanel::for_selection_at(&self.editor_state, self.now_ms);
         let has_property = property_panel.is_some();
         let property_panel_width = ui.property_panel_width;
@@ -118,7 +138,7 @@ impl WidgetHostNative {
             panel.paint(&mut cx, property_rect);
         }
 
-        // 4b. VariablesPanel — paints whenever the document has
+        // 5b. VariablesPanel — paints whenever the document has
         //     variables (so users with themed `.op` files see them
         //     immediately without needing to select a node). Sits in
         //     the same right-rail column as PropertyPanel. When a
@@ -155,26 +175,6 @@ impl WidgetHostNative {
                 backend: &mut *frame,
             };
             vars.paint(&mut cx, vars_rect);
-        }
-
-        // 5. CanvasViewport — middle band, respects sidebar
-        //    collapse state.
-        let (canvas_left, _canvas_y, canvas_w, canvas_h) =
-            self.canvas_region(viewport_width, viewport_height);
-        let _ = has_property;
-        let canvas_rect = Rect {
-            origin: Point2D::new(canvas_left, TOP_BAR_HEIGHT),
-            size: Point2D::new(canvas_w, canvas_h),
-        };
-        if canvas_w > 0.0 && canvas_h > 0.0 {
-            // PAINT path — the canvas reads editor state + the
-            // layout-resolved render scene (`refresh_layout_scene`).
-            let mut canvas = CanvasViewport::from_editor(&self.editor_state, &self.layout_scene);
-            canvas.now_ms = self.now_ms;
-            let mut cx = PaintCx {
-                backend: &mut *frame,
-            };
-            canvas.paint(&mut cx, canvas_rect);
         }
 
         // 6. Toolbar — floating column.
@@ -284,6 +284,23 @@ impl WidgetHostNative {
                 frame.fill_rect(rect, fill);
                 frame.stroke_rect(rect, primary, 1.0);
             }
+        }
+
+        // 8.6. PropertyPanel overlays — painted after canvas floating
+        //      controls so the image-fill popover can cover the zoom
+        //      status pill when it extends into the canvas.
+        if let Some(panel) = property_panel.as_ref() {
+            let property_rect = Rect {
+                origin: Point2D::new(right_rail_x, TOP_BAR_HEIGHT),
+                size: Point2D::new(
+                    property_panel_width,
+                    (viewport_height - TOP_BAR_HEIGHT).max(0.0),
+                ),
+            };
+            let mut cx = PaintCx {
+                backend: &mut *frame,
+            };
+            panel.paint_overlays(&mut cx, property_rect);
         }
 
         // 9. ShapePicker — anchored to the right of the toolbar

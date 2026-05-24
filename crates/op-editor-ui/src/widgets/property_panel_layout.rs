@@ -499,11 +499,11 @@ pub fn action_button_rects_with_fill_picker(
             ));
         }
         if visible.fill_type == FillType::Image {
-            // Whole image-fill row opens the file picker — there's no
-            // other affordance inside it.
+            // Whole image-fill row opens the TS-parity image editor
+            // popover. The popover's upload well opens the file picker.
             let usable_w = w - PAD_X * 2.0;
             out.push((
-                PropertyPanelAction::PickFillImage,
+                PropertyPanelAction::ToggleImageFillPopover,
                 Rect {
                     origin: Point2D::new(x0 + PAD_X, y),
                     size: Point2D::new(usable_w, INPUT_HEIGHT),
