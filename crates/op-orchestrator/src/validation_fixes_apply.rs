@@ -565,10 +565,6 @@ fn node_child_count(node: &jian_ops_schema::node::PenNode) -> usize {
     }
 }
 
-pub(super) fn node_base_role(node: &jian_ops_schema::node::PenNode) -> Option<&str> {
-    node.base().role.as_deref()
-}
-
 /// A flat snapshot of the properties we need for
 /// `auto_fix_parent_layout_after_add_child`.
 struct NodeSnapshot {
