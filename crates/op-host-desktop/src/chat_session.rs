@@ -195,6 +195,13 @@ pub fn launch_if_pending(
         // the chat path. The assistant CLI will still answer the user
         // (most CLIs handle design verbs as chat).
     }
+    // Taking the chat path — drop any in-flight design turn so its
+    // worker's next `apply` returns false (channel dropped) and its
+    // `Progress` deltas stop streaming into this turn's fresh bubble
+    // (codex stop-gate: stale design session survived chat fallback,
+    // kept overwriting the new bubble content + applying ack'd
+    // EditorCommands long after the user moved on).
+    *current_design = None;
     let agent_idx = host.editor_state().editor_ui.chat_selected_agent;
     let Some(provider) = provider_for_agent(agent_idx) else {
         // Selected agent has no `ChatProvider` bridge yet (Codex /
