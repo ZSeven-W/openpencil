@@ -126,6 +126,7 @@ fn node_payload_to_scene(node: &NodePayload, var_table: &VariableTable) -> Scene
         arc_start_angle: node.arc_start_angle,
         arc_sweep_angle: node.arc_sweep_angle,
         arc_inner_radius: node.arc_inner_radius,
+        polygon_sides: node.polygon_sides.clamp(3, 100),
         image_src: node.image_src.clone(),
         image_fit: image_fit_to_scene(node.image_fit.as_deref()),
         image_adjustments: image_adjustments_to_scene(node.image_adjustments),

@@ -13,7 +13,7 @@
 //! only the viewport transform — no second layout pass, no variable
 //! lookup.
 
-use crate::layout_scene::SceneNode;
+use crate::layout_scene::{regular_polygon_points, SceneNode};
 use crate::layout_scene::{Effect, NodeKind};
 use crate::widgets::canvas_viewport::EditCaret;
 use crate::widgets::canvas_viewport_overlay::{paint_fill_then_stroke, wrap_text};
@@ -306,19 +306,9 @@ pub fn paint_node(
             }
         }
         NodeKind::Polygon => {
-            // Default triangle: top-centre, bottom-left, bottom-right.
-            let cx_pt = world_rect.origin.x + world_rect.size.x / 2.0;
-            let top_y = world_rect.origin.y;
-            let bottom_y = world_rect.origin.y + world_rect.size.y;
-            let left_x = world_rect.origin.x;
-            let right_x = world_rect.origin.x + world_rect.size.x;
-            let pts = [
-                Point2D::new(cx_pt, top_y),
-                Point2D::new(left_x, bottom_y),
-                Point2D::new(right_x, bottom_y),
-            ];
+            let pts = regular_polygon_points(world_rect, node.polygon_sides);
             // Image fills paint the bitmap in the AABB underneath the
-            // polygon outline; the triangle silhouette is then drawn
+            // polygon outline; the polygon silhouette is then drawn
             // by the stroke. A perfect clip-to-polygon path lands when
             // `RenderBackend` grows a polygon-clip primitive.
             if let Some(src) = node.image_src.as_deref() {

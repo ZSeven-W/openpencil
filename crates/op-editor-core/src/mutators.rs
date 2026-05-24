@@ -436,6 +436,49 @@ impl EditorState {
         if !sel.is_real() || !self.is_editable(&sel) {
             return false;
         }
+        match focus {
+            PropertyFocus::PositionR => return self.cmd_set_node_corner_radius(&sel, value),
+            PropertyFocus::PolygonSides => {
+                if !value.is_finite() {
+                    return false;
+                }
+                return self.cmd_set_polygon_count(&sel, value.round().clamp(3.0, 100.0) as u32);
+            }
+            PropertyFocus::EllipseStart => {
+                if !value.is_finite() {
+                    return false;
+                }
+                return self.cmd_set_ellipse_arc(
+                    &sel,
+                    Some(value.clamp(0.0, 360.0) as f64),
+                    None,
+                    None,
+                );
+            }
+            PropertyFocus::EllipseSweep => {
+                if !value.is_finite() {
+                    return false;
+                }
+                return self.cmd_set_ellipse_arc(
+                    &sel,
+                    None,
+                    Some(value.clamp(0.0, 360.0) as f64),
+                    None,
+                );
+            }
+            PropertyFocus::EllipseInnerRadius => {
+                if !value.is_finite() {
+                    return false;
+                }
+                return self.cmd_set_ellipse_arc(
+                    &sel,
+                    None,
+                    None,
+                    Some((value.clamp(0.0, 99.0) / 100.0) as f64),
+                );
+            }
+            _ => {}
+        }
         let Some(node) = find_node_mut(self.active_children_mut(), &sel) else {
             return false;
         };
@@ -449,10 +492,16 @@ impl EditorState {
                 // Property panel ships degrees; schema stores degrees.
                 node.base_mut().rotation = Some(v);
             }
-            // Corner-radius, hex + opacity edits route through
+            PropertyFocus::PositionR => unreachable!("corner radius handled before node borrow"),
+            PropertyFocus::PolygonSides
+            | PropertyFocus::EllipseStart
+            | PropertyFocus::EllipseSweep
+            | PropertyFocus::EllipseInnerRadius => {
+                unreachable!("shape-specific properties handled before node borrow")
+            }
+            // Hex + opacity edits route through
             // dedicated setters (not a single base-field write).
-            PropertyFocus::PositionR
-            | PropertyFocus::StrokeWidth
+            PropertyFocus::StrokeWidth
             | PropertyFocus::Opacity
             | PropertyFocus::FillHex
             | PropertyFocus::StrokeHex => {}

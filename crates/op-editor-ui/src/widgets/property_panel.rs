@@ -46,7 +46,7 @@ pub use crate::widgets::property_panel_action::PropertyPanelAction;
 // resolves unchanged.
 pub(crate) use crate::widgets::property_panel_layout::SectionCapabilities;
 pub use crate::widgets::property_panel_snapshot::{
-    EffectKind, EffectSummary, GradientStopSummary, NodeSnapshot,
+    EffectKind, EffectSummary, EllipseArcSummary, GradientStopSummary, NodeSnapshot,
 };
 
 pub struct PropertyPanel {
@@ -274,6 +274,8 @@ impl PropertyPanel {
             flex_layout: caps.flex_layout,
             size_options: caps.size_options,
             opacity: caps.opacity,
+            polygon_sides: self.snapshot.polygon_sides.is_some(),
+            ellipse_arc: self.snapshot.ellipse_arc.is_some(),
             fill: caps.fill,
             stroke: caps.stroke,
             effects: caps.effects,
@@ -517,7 +519,16 @@ impl Widget for PropertyPanel {
             );
         }
         if caps.opacity {
-            y = sections::paint_layer_section(cx, &self.theme, &self.labels, &edit_ctx, x, y, w);
+            y = sections::paint_layer_section(
+                cx,
+                &self.theme,
+                &self.snapshot,
+                &self.labels,
+                &edit_ctx,
+                x,
+                y,
+                w,
+            );
         }
         if caps.fill {
             y = sections::paint_fill_section(

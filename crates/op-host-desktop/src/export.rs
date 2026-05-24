@@ -23,8 +23,8 @@
 //! — JPEG has no alpha so a "transparent" JPEG would read as black).
 //! Scale: caller picks @1x / @2x / @3x (TS export dialog parity).
 
+use op_editor_ui::layout_scene::{regular_polygon_points, LayoutScene, SceneNode, ScenePage};
 use op_editor_ui::layout_scene::{Effect, NodeKind};
-use op_editor_ui::layout_scene::{LayoutScene, SceneNode, ScenePage};
 use op_editor_ui::{Color, Point2D, Rect};
 use skia_safe::{Canvas, EncodedImageFormat, Paint, PaintStyle, Path, PathBuilder};
 use std::path::Path as StdPath;
@@ -416,7 +416,7 @@ pub(crate) fn paint_node(canvas: &Canvas, node: &SceneNode) {
             paint_oval(canvas, world_rect, node);
         }
         NodeKind::Polygon => {
-            paint_triangle(canvas, world_rect, node);
+            paint_polygon(canvas, world_rect, node);
         }
         NodeKind::Line => {
             let (color, width) = match node.stroke {
@@ -520,20 +520,20 @@ fn paint_oval(canvas: &Canvas, rect: Rect, node: &SceneNode) {
     }
 }
 
-fn paint_triangle(canvas: &Canvas, rect: Rect, node: &SceneNode) {
+fn paint_polygon(canvas: &Canvas, rect: Rect, node: &SceneNode) {
     let rect = normalize_rect(rect);
     if rect.size.x == 0.0 || rect.size.y == 0.0 {
         return;
     }
-    let cx = rect.origin.x + rect.size.x / 2.0;
-    let top = rect.origin.y;
-    let left = rect.origin.x;
-    let right = rect.origin.x + rect.size.x;
-    let bottom = rect.origin.y + rect.size.y;
+    let points = regular_polygon_points(rect, node.polygon_sides);
     let mut builder = PathBuilder::new();
-    builder.move_to((cx, top));
-    builder.line_to((left, bottom));
-    builder.line_to((right, bottom));
+    let Some(first) = points.first() else {
+        return;
+    };
+    builder.move_to((first.x, first.y));
+    for p in points.iter().skip(1) {
+        builder.line_to((p.x, p.y));
+    }
     builder.close();
     let path: Path = builder.detach();
     if let Some(fill) = node.fill {

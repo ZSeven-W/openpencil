@@ -133,6 +133,24 @@ impl EditorState {
         write_corner_radius(node, radius as f64)
     }
 
+    /// Set the side count on a Polygon node. The TS panel allows
+    /// `3..=100`; keep the same guard here so all callers converge.
+    pub(crate) fn cmd_set_polygon_count(&mut self, node_id: &NodeId, count: u32) -> bool {
+        if !node_id.is_real() || !self.is_editable(node_id) {
+            return false;
+        }
+        let Some(node) = find_node_mut(self.active_children_mut(), node_id) else {
+            return false;
+        };
+        match node {
+            PenNode::Polygon(p) => {
+                p.polygon_count = count.clamp(3, 100);
+                true
+            }
+            _ => false,
+        }
+    }
+
     /// `SetNodeFontSize` — set the font size on a Text node. Rejects
     /// non-Text kinds + non-positive sizes.
     pub(crate) fn cmd_set_node_font_size(&mut self, node_id: &NodeId, font_size: f32) -> bool {
