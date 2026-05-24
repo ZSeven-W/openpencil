@@ -14,7 +14,7 @@ use crate::widgets::property_panel_inputs::{
     HEADER_HEIGHT, INPUT_HEIGHT, INPUT_RADIUS, PAD_X, SECTION_GAP, SECTION_HEADER_HEIGHT,
     TAB_HEIGHT,
 };
-use crate::widgets::property_panel_layout::{fill_body_height, VisibleSections};
+use crate::widgets::property_panel_layout::{fill_body_height_with_stops, VisibleSections};
 use crate::widgets::property_panel_sections::{EditContext, PropertyLabels};
 use crate::widgets::PaintCx;
 use crate::{Color, Point2D, Rect, TextLayout};
@@ -57,22 +57,34 @@ pub fn paint_fill_type_picker(
     let mut y = panel_rect.origin.y;
     y += TAB_HEIGHT;
     y += HEADER_HEIGHT;
-    y += 8.0 + 36.0 + 12.0;
+    if visible.create_component {
+        y += 8.0 + 36.0 + 12.0;
+    }
     // Position section.
     y += SECTION_HEADER_HEIGHT;
     y += INPUT_HEIGHT + 6.0;
     y += INPUT_HEIGHT + 12.0;
     y += SECTION_GAP;
     if visible.flex_layout {
-        y += SECTION_HEADER_HEIGHT;
-        y += 32.0 + 12.0;
-        y += SECTION_GAP;
+        y += crate::widgets::property_panel_flex::flex_section_height(visible.flex_layout_mode);
     }
     if visible.size_options {
         y += SECTION_HEADER_HEIGHT;
         y += INPUT_HEIGHT + 10.0;
-        y += 22.0 * 3.0;
+        y += 22.0 * if visible.clip_content { 3.0 } else { 2.0 };
         y += 12.0 + SECTION_GAP;
+    }
+    if visible.icon {
+        y += crate::widgets::property_panel_icon::icon_section_height();
+    }
+    if visible.text {
+        y += crate::widgets::property_panel_text::text_section_height();
+        y += SECTION_GAP;
+    }
+    if visible.image {
+        y += SECTION_HEADER_HEIGHT;
+        y += INPUT_HEIGHT + 34.0;
+        y += SECTION_GAP;
     }
     if visible.opacity {
         y += SECTION_HEADER_HEIGHT;
@@ -331,7 +343,7 @@ pub fn paint_fill_section(
             paint_fill_image_body(cx, theme, snapshot, locale, x, y, width);
         }
     }
-    y += fill_body_height(fill_type) - 6.0 + 12.0;
+    y += fill_body_height_with_stops(fill_type, snapshot.gradient_stops.len()) - 6.0 + 12.0;
     paint_section_divider(cx, theme, x, y, width);
     y + SECTION_GAP
 }
@@ -490,9 +502,12 @@ fn paint_fill_gradient_body(
     );
     yy += SECTION_HEADER_HEIGHT;
     let pct_w = 56.0;
+    let show_remove = snapshot.gradient_stops.len() > 2;
+    let remove_w = if show_remove { 26.0 } else { 0.0 };
+    let remove_gap = if show_remove { 6.0 } else { 0.0 };
     for (index, stop) in snapshot.gradient_stops.iter().enumerate() {
         let row_y = yy;
-        let hex_w = usable_w - pct_w - 8.0;
+        let hex_w = usable_w - pct_w - 8.0 - remove_w - remove_gap;
         let hex_rect = Rect {
             origin: Point2D::new(x + PAD_X, row_y),
             size: Point2D::new(hex_w, INPUT_HEIGHT),
@@ -590,6 +605,19 @@ fn paint_fill_gradient_body(
                 pct_rect.origin.y + 19.0,
             ),
         );
+        if show_remove {
+            draw_icon(
+                cx.backend,
+                Icon::Close,
+                Point2D::new(
+                    pct_rect.origin.x + pct_rect.size.x + 10.0,
+                    row_y + (INPUT_HEIGHT - 14.0) / 2.0,
+                ),
+                14.0,
+                theme.muted_foreground,
+                1.4,
+            );
+        }
         yy += INPUT_HEIGHT + 4.0;
     }
     let _ = yy;

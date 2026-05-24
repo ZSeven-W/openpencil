@@ -1,10 +1,4 @@
-//! Non-press input handlers on `WidgetHostNative`. press → press.rs.
-//!
-//! `EditorState` is the host's source of truth. Scalar / chrome
-//! reads go straight to `editor_state`; node-tree hit-tests run
-//! against the layout-resolved `LayoutScene`, refreshed at the top
-//! of each handler. Every mutation flags `editor_state` so the next
-//! refresh re-derives.
+//! Non-press input handlers on `WidgetHostNative`. press -> press.rs.
 
 use super::helpers::{resize_bounds, PANEL_MAX_WIDTH, PANEL_MIN_WIDTH};
 use super::{PanelResizeKind, WidgetHostNative};
@@ -32,43 +26,28 @@ impl WidgetHostNative {
         self.editor_state.editor_ui.agent_settings.focus.is_some()
     }
 
-    /// Whether the Git panel's commit-message input owns the
-    /// keyboard. Like [`Self::settings_focus_active`], the desktop
-    /// runner gates editor shortcuts on this so typing a commit
-    /// message never mutates the document.
-    ///
-    /// Never active while the panel is `loading`: the commit input
-    /// is hidden then, so a stale `commit_focused` must not let
-    /// keystrokes — or Enter — reach (and commit through) a control
-    /// the user cannot see.
+    /// Whether the visible Git commit-message input owns the keyboard.
     pub fn git_commit_focus_active(&self) -> bool {
         let panel = &self.editor_state.editor_ui.git_panel;
         panel.open && panel.commit_focused && !panel.loading
     }
 
-    /// Whether the Git panel's remote-URL input owns the keyboard.
-    /// Mirrors [`Self::git_commit_focus_active`] for the Remotes
-    /// section's URL field.
+    /// Whether the visible Git remote-URL input owns the keyboard.
     pub fn git_remote_focus_active(&self) -> bool {
         let panel = &self.editor_state.editor_ui.git_panel;
         panel.open && panel.remote_focused && !panel.loading
     }
 
-    /// Whether the Git panel's HTTPS-credential input owns the
-    /// keyboard — the Remotes section's `username:token` field.
+    /// Whether the visible Git HTTPS-credential input owns the keyboard.
     pub fn git_https_focus_active(&self) -> bool {
         let panel = &self.editor_state.editor_ui.git_panel;
         panel.open && panel.https_focused && !panel.loading
     }
 
-    /// After a node-drag translate, compute smart-guide alignment
-    /// against the other top-level nodes, snap the selection onto the
-    /// nearest edge/centre alignment, and store the guide lines for
-    /// the canvas painter. Cleared on drag release.
+    /// Snap node drags to nearby top-level edge/centre guides.
     fn apply_smart_guides(&mut self) -> (f64, f64) {
         use op_editor_core::align_guides::compute_alignment_guides;
-        /// Snap range in doc-px — an edge/centre this close to another
-        /// node's edge/centre locks on.
+        /// Snap range in doc-px.
         const GUIDE_THRESHOLD: f64 = 6.0;
 
         self.refresh_layout_scene();
@@ -115,10 +94,7 @@ impl WidgetHostNative {
     }
 
     pub fn apply_cursor_move(&mut self, x: f32, y: f32) -> bool {
-        // Every hit-test below (color picker, layer context menu, align
-        // toolbar, panel resize, …) reasons about the layout-resolved
-        // render scene. Refresh it once up front so a mutation since the
-        // last paint can't leave any of them hit-testing stale geometry.
+        // Keep hit-tests on the current layout-resolved scene.
         self.refresh_layout_scene();
         if self.editor_state.editor_ui.agent_settings_open && self.update_agent_settings_hover(x, y)
         {
@@ -147,10 +123,7 @@ impl WidgetHostNative {
                 return true;
             }
         }
-        // Top-most floating panel drags supersede every lower
-        // cursor-move branch — once a drag is active the cursor
-        // belongs to the panel, regardless of which tool / overlay is
-        // also in play (a pen rubber-band, a node drag, etc.).
+        // Top-most floating panel drags own cursor movement.
         if let Some(d) = self.design_md_drag {
             self.editor_state.editor_ui.design_md_panel_pos = Some((x - d.grab_dx, y - d.grab_dy));
             self.mark_dirty();
@@ -158,6 +131,12 @@ impl WidgetHostNative {
         }
         if let Some(d) = self.component_browser_drag {
             self.editor_state.editor_ui.component_browser_pos =
+                Some((x - d.grab_dx, y - d.grab_dy));
+            self.mark_dirty();
+            return true;
+        }
+        if let Some(d) = self.icon_picker_drag {
+            self.editor_state.editor_ui.icon_picker_panel_pos =
                 Some((x - d.grab_dx, y - d.grab_dy));
             self.mark_dirty();
             return true;
@@ -191,16 +170,10 @@ impl WidgetHostNative {
             self.mark_dirty();
             return true;
         }
-        // Any top-most floating panel (Design-MD / Component-Browser)
-        // suppresses every lower-overlay hover update underneath it —
-        // a click already routes to the panel first, so a highlight
-        // bleeding through would be misleading. Moving onto the panel
-        // also clears any highlight set just before, so none lingers.
+        // Suppress lower-overlay hover while a floating panel is on top.
         let over_topmost =
             self.over_topmost_panel(x, y, self.last_viewport_w, self.last_viewport_h);
-        // `cleared` is folded into the final return so the repaint
-        // scheduler (which gates on `apply_cursor_move`'s bool) does
-        // not skip the frame that drops the stale highlight.
+        // Fold stale-hover clearing into the final repaint signal.
         let cleared = over_topmost && self.clear_lower_overlay_hover();
         if let Some(state) = self
             .editor_state
@@ -301,9 +274,7 @@ impl WidgetHostNative {
             let cur = self.editor_state.viewport.to_document(canvas_local);
             let min_x = drag.start_doc_x.min(cur.x);
             let min_y = drag.start_doc_y.min(cur.y);
-            // Text needs room for the placeholder glyphs; shape
-            // tools start at 1 px so the drag immediately sizes
-            // the node to the cursor.
+            // Text needs room for placeholder glyphs.
             let (min_w, min_h) = match self.editor_state.tool {
                 op_editor_core::Tool::Text => (96.0_f32, 24.0_f32),
                 _ => (1.0_f32, 1.0_f32),
@@ -330,11 +301,7 @@ impl WidgetHostNative {
                 self.editor_state.translate_selected(dx as f64, dy as f64);
                 let (snap_dx, snap_dy) = self.apply_smart_guides();
                 if let Some(drag) = self.node_drag.as_mut() {
-                    // When smart guides pull the node back onto a guide,
-                    // keep the cursor baseline on that axis at its previous
-                    // value. Small subsequent cursor moves then accumulate
-                    // until they exceed the snap threshold instead of being
-                    // eaten one frame at a time.
+                    // Keep snapped axes accumulating instead of eating small moves.
                     if snap_dx != 0.0 {
                         drag.last_screen_x = prev_screen_x;
                     }
@@ -347,9 +314,7 @@ impl WidgetHostNative {
             }
             return false;
         }
-        // Path-anchor / handle drag — write the current cursor
-        // position (codex BLOCK: drag-back-to-start was being
-        // silently dropped, so always write).
+        // Path-anchor / handle drag: always write current cursor position.
         if self.path_anchor_drag.is_some() {
             use super::AnchorDragTarget;
             let (cx0, cy0) = self.canvas_origin();
@@ -367,16 +332,10 @@ impl WidgetHostNative {
                     d.moved,
                 )
             };
-            // `is_move` uses the raw (rotation-independent) cursor —
-            // motion detection is frame-agnostic. The drag mutates
-            // nothing until the cursor first travels, so a
-            // press-release leaves the document (and undo stack)
-            // untouched; once it HAS moved, every event (incl. a
-            // drag back to the start point) keeps writing.
+            // Motion detection is frame-agnostic; writes start after first move.
             let is_move = (doc.x - start.x).abs() > 0.001 || (doc.y - start.y).abs() > 0.001;
             if is_move || already_moved {
-                // Un-rotate the cursor into the path's local frame so
-                // anchor / handle coords are written rotation-free.
+                // Write anchor / handle coords in the path's local frame.
                 let local = match self
                     .layout_scene
                     .active_page()
@@ -400,9 +359,7 @@ impl WidgetHostNative {
                         );
                     }
                     AnchorDragTarget::Handle(side) => {
-                        // First real move sets the anchor's point type
-                        // — Shift = independent (broken) handles, else
-                        // mirrored (smooth).
+                        // First real move sets the anchor's point type.
                         if !self
                             .path_anchor_drag
                             .as_ref()
@@ -432,8 +389,7 @@ impl WidgetHostNative {
             }
             return true;
         }
-        // Ellipse arc-handle drag — recompute the arc geometry from
-        // the cursor and re-apply `SetEllipseArc` each move.
+        // Ellipse arc-handle drag: recompute arc geometry from the cursor.
         if self.arc_handle_drag.is_some() {
             let (cx0, cy0) = self.canvas_origin();
             let canvas_local = Point2D::new(x - cx0, y - cy0);
@@ -442,9 +398,7 @@ impl WidgetHostNative {
                 let d = self.arc_handle_drag.as_ref().unwrap();
                 (d.node_id.clone(), d.handle, d.start_doc, d.moved)
             };
-            // Mutate nothing until the cursor first travels — a
-            // press-release must not write the arc or push an undo
-            // entry. Once moved, keep writing every event.
+            // Do not mutate until the cursor first travels.
             let is_move = (doc.x - start.x).abs() > 0.001 || (doc.y - start.y).abs() > 0.001;
             if is_move || already_moved {
                 if let Some(cmd) = self.arc_drag_command(&id, handle, doc) {
@@ -511,23 +465,14 @@ impl WidgetHostNative {
             drag.last_x = x;
             drag.last_y = y;
             self.editor_state.viewport.pan(dx, dy);
-            // No `mark_dirty()`: a canvas pan-drag only translates the
-            // viewport, not the document tree, so the cached
-            // `layout_scene` stays valid (re-solving taffy layout on
-            // every drag frame was the pan jank). `return true` still
-            // drives the repaint that re-applies the viewport.
+            // Canvas pan only translates the viewport; keep layout cache intact.
             return true;
         }
-        // Toolbar per-button hover wash — AFTER drag detection so a
-        // path-anchor / node / pan drag whose cursor crosses the
-        // toolbar isn't intercepted by the hover update.
+        // Toolbar hover after drag detection.
         if self.update_toolbar_hover(x, y, over_topmost) {
             return true;
         }
-        // Align toolbar hover sync — AFTER drag detection. Suppressed
-        // when the cursor is over a top-most floating panel
-        // (`over_topmost`, computed above) so a toolbar button below
-        // it does not light up.
+        // Align toolbar hover after drag detection.
         let new_hover = if self.editor_state.selection_count() >= 2 && !over_topmost {
             self.align_toolbar_hit(x, y, self.last_viewport_w, self.last_viewport_h)
         } else {
@@ -539,8 +484,7 @@ impl WidgetHostNative {
             self.mark_dirty();
             return true;
         }
-        // `cleared` carries a stale-hover drop that no earlier branch
-        // reported — fold it in so the repaint is scheduled.
+        // Fold stale-hover clearing into the repaint signal.
         cleared
     }
 
@@ -565,8 +509,7 @@ impl WidgetHostNative {
             return true;
         }
         if self.create_drag.take().is_some() {
-            // Switch back to Select so the user can immediately
-            // refine the freshly-created shape.
+            // Switch back to Select for immediate shape refinement.
             self.editor_state.tool = op_editor_core::Tool::Select;
             self.mark_dirty();
             return true;
@@ -577,9 +520,7 @@ impl WidgetHostNative {
             return true;
         }
         if let Some(drag) = self.path_anchor_drag.take() {
-            // Push history snapshot only when the anchor actually
-            // moved (codex CONCERN — a press-release without motion
-            // was polluting the undo stack with no-op entries).
+            // Push history only when the anchor actually moved.
             if drag.moved {
                 self.editor_state.history_push_past(drag.pre_drag_snapshot);
                 return true;
@@ -595,11 +536,13 @@ impl WidgetHostNative {
             return false;
         }
         if self.design_md_drag.take().is_some() {
-            // The panel position was updated live during the drag;
-            // release just ends it.
+            // Position was updated live; release only ends the drag.
             return true;
         }
         if self.component_browser_drag.take().is_some() {
+            return true;
+        }
+        if self.icon_picker_drag.take().is_some() {
             return true;
         }
         if self.image_adjustment_drag.take().is_some() {
@@ -613,9 +556,7 @@ impl WidgetHostNative {
             return self.commit_layer_drag(d, viewport_h);
         }
         if let Some(d) = self.chat_drag.take() {
-            // Use the live panel size (expanded vs collapsed) so a
-            // dragged collapsed pill snaps to the corner closest to
-            // its actual center.
+            // Snap using the live expanded/collapsed panel size.
             let (panel_w, panel_h) = self.ai_chat_size();
             let center = Point2D::new(d.pos_x + panel_w / 2.0, d.pos_y + panel_h / 2.0);
             let (cx0, cy0, cw, ch) = self.canvas_region(viewport_w, viewport_h);
@@ -651,17 +592,14 @@ impl WidgetHostNative {
             return true;
         }
         if self.marquee_drag.take().is_some() {
-            // Can't compute the doc-space marquee rect without a
-            // viewport; drop without committing.
+            // No viewport: drop without committing.
             return true;
         }
         if self.layer_drag.take().is_some() {
-            // Same story as marquee — no viewport, drop the candidate.
+            // No viewport: drop the candidate.
             return true;
         }
-        // Path-anchor / arc-handle drags — commit the history snapshot
-        // when they actually moved (parity with the with-viewport
-        // release; without this a stale drag would leak).
+        // Commit path / arc history when the drag actually moved.
         if let Some(drag) = self.path_anchor_drag.take() {
             if drag.moved {
                 self.editor_state.history_push_past(drag.pre_drag_snapshot);
@@ -682,6 +620,9 @@ impl WidgetHostNative {
             return true;
         }
         if self.component_browser_drag.take().is_some() {
+            return true;
+        }
+        if self.icon_picker_drag.take().is_some() {
             return true;
         }
         if self.image_adjustment_drag.take().is_some() {

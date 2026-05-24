@@ -71,9 +71,18 @@ fn group_snapshot_aggregates_child_bounds() {
 fn visible_for(panel: &PropertyPanel) -> sections::VisibleSections {
     let caps = SectionCapabilities::for_kind(&panel.snapshot.kind_variant);
     sections::VisibleSections {
+        create_component: caps.create_component && panel.snapshot.can_create_component,
         flex_layout: caps.flex_layout,
+        flex_layout_mode: panel.snapshot.flex_layout,
+        layout_justify: panel.snapshot.layout_justify,
+        layout_align: panel.snapshot.layout_align,
         size_options: caps.size_options,
+        clip_content: panel.snapshot.can_clip_content,
+        text: caps.text && panel.snapshot.text.is_some(),
+        icon: panel.snapshot.icon.is_some(),
+        image: caps.image && panel.snapshot.is_image_node,
         opacity: caps.opacity,
+        corner_radius: panel.snapshot.has_corner_radius,
         polygon_sides: panel.snapshot.polygon_sides.is_some(),
         ellipse_arc: panel.snapshot.ellipse_arc.is_some(),
         fill: caps.fill,
@@ -175,6 +184,7 @@ fn hit_test_action_export_section_returns_picker_toggles() {
         false,
         false,
         false,
+        false,
     );
     // The Export section emits a scale-dropdown + a format-dropdown
     // toggle rect — clicking neither opens the Export modal.
@@ -213,6 +223,99 @@ fn hit_test_action_export_section_returns_picker_toggles() {
 }
 
 #[test]
+fn flex_advanced_rows_do_not_overlap_gap_modes() {
+    let mut state = state_from(
+        r##"{ "version": "0.8.0", "children": [
+              {"type":"frame","id":"f","name":"Frame",
+               "x":40,"y":40,"width":360,"height":240,
+               "layout":"horizontal","gap":0,
+               "children":[]}
+        ]}"##,
+    );
+    state.set_single_selection(NodeId::new("f"));
+    let panel = PropertyPanel::for_selection(&state).expect("frame panel");
+    let rect = Rect {
+        origin: Point2D::new(0.0, 0.0),
+        size: Point2D::new(280.0, 1200.0),
+    };
+    let visible = visible_for(&panel);
+    let actions = sections::action_button_rects_with_fill_picker(
+        rect,
+        visible,
+        &panel.snapshot.effects,
+        false,
+        false,
+        false,
+        false,
+    );
+    let last_gap_mode = actions
+        .iter()
+        .find(|(action, _)| {
+            matches!(
+                action,
+                PropertyPanelAction::SetLayoutJustify(
+                    super::property_panel::LayoutJustifyValue::SpaceAround
+                )
+            )
+        })
+        .map(|(_, r)| *r)
+        .expect("space-around hit rect");
+    let padding_top = sections::editable_input_rects(rect, visible)
+        .into_iter()
+        .find(|(focus, _)| *focus == op_editor_core::PropertyFocus::PaddingTop)
+        .map(|(_, r)| r)
+        .expect("padding top input rect");
+
+    assert!(
+        padding_top.origin.y >= last_gap_mode.origin.y + last_gap_mode.size.y + 18.0,
+        "padding inputs must start below the full gap-mode column"
+    );
+}
+
+#[test]
+fn font_family_picker_rows_are_clickable() {
+    let mut state = EditorState::sample();
+    state.set_single_selection(NodeId::new("n11"));
+    state.editor_ui.font_family_picker_open = true;
+    let panel = PropertyPanel::for_selection(&state).expect("text panel");
+    let rect = Rect {
+        origin: Point2D::new(0.0, 0.0),
+        size: Point2D::new(280.0, 1200.0),
+    };
+    let rects = sections::action_button_rects_with_fill_picker(
+        rect,
+        visible_for(&panel),
+        &panel.snapshot.effects,
+        false,
+        true,
+        false,
+        false,
+    );
+    let georgia = rects
+        .iter()
+        .find(|(action, _)| {
+            matches!(
+                action,
+                PropertyPanelAction::SetFontFamily(
+                    super::property_panel::FontFamilyChoice::Georgia
+                )
+            )
+        })
+        .map(|(_, r)| *r)
+        .expect("Georgia font row");
+    let center = Point2D::new(
+        georgia.origin.x + georgia.size.x / 2.0,
+        georgia.origin.y + georgia.size.y / 2.0,
+    );
+    assert!(matches!(
+        panel.hit_test_action(rect, center),
+        Some(PropertyPanelAction::SetFontFamily(
+            super::property_panel::FontFamilyChoice::Georgia
+        ))
+    ));
+}
+
+#[test]
 fn export_scale_picker_open_emits_option_rows() {
     let mut state = EditorState::sample();
     state.set_single_selection(NodeId::new("n10"));
@@ -228,6 +331,7 @@ fn export_scale_picker_open_emits_option_rows() {
         rect,
         visible_for(&panel),
         &panel.snapshot.effects,
+        false,
         false,
         true,
         false,
@@ -437,6 +541,7 @@ fn image_fill_body_click_opens_the_image_popover() {
         rect,
         visible_for(&panel),
         &panel.snapshot.effects,
+        false,
         false,
         false,
         false,

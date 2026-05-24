@@ -1,6 +1,7 @@
 import { defineEventHandler, getQuery, setResponseHeaders } from 'h3';
 import simpleIconsData from '@iconify-json/simple-icons/icons.json';
 import lucideData from '@iconify-json/lucide/icons.json';
+import featherData from '@iconify-json/feather/icons.json';
 
 interface IconResult {
   d: string;
@@ -18,6 +19,7 @@ type IconifySet = {
 
 const simpleIcons = simpleIconsData as unknown as IconifySet;
 const lucideIcons = lucideData as unknown as IconifySet;
+const featherIcons = featherData as unknown as IconifySet;
 
 // In-memory cache: normalized name → result (null = confirmed miss)
 const iconCache = new Map<string, IconResult | null>();
@@ -26,7 +28,7 @@ const iconCache = new Map<string, IconResult | null>();
  * GET /api/ai/icon?name=google
  *
  * Resolves icon names to SVG path data using locally bundled icon sets.
- * Search order: lucide → simple-icons (brand icons)
+ * Search order: simple-icons → lucide → feather
  * No external network requests — instant, offline-capable.
  */
 export default defineEventHandler(async (event) => {
@@ -161,6 +163,12 @@ function resolveIcon(name: string): IconResult | null {
   // 2. Try Lucide (UI icons)
   for (const n of candidates) {
     const result = lookupLocal(lucideIcons, 'lucide', n);
+    if (result) return result;
+  }
+
+  // 3. Try Feather for legacy/generated icon names.
+  for (const n of candidates) {
+    const result = lookupLocal(featherIcons, 'feather', n);
     if (result) return result;
   }
 

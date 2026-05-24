@@ -1,27 +1,10 @@
 //! Fill / stroke / effect read-write helpers for `PenNode`.
 //!
-//! shell-core's flat `Node` carried `fill: Option<Color>` and a
-//! `stroke: Option<Stroke>` — a single literal colour per channel.
-//! The canonical `PenNode` is richer: every paintable variant carries
-//! `fill: Option<Vec<PenFill>>` (where each `PenFill` is a tagged
-//! `Solid` / gradient / `Image` body with hex `String` colours), and
-//! the stroke colour lives inside `PenStroke::fill` as its own
-//! `Vec<PenFill>`.
-//!
-//! The colour-picker + property-panel mutators only ever care about
-//! "the node's primary solid colour" — a single hex. This module is
-//! the shim that reads / writes exactly that:
-//!
-//!   - [`first_solid_fill_hex`] — read the first `Solid` fill's hex.
-//!   - [`set_primary_fill_hex`] — replace the first `Solid` fill (or
-//!     prepend one) with a new hex, keeping any non-solid fills.
-//!   - the stroke parallel ([`first_solid_stroke_hex`] /
-//!     [`set_primary_stroke_hex`]).
-//!   - [`push_drop_shadow`] — append a default drop-shadow effect.
-//!
-//! Gradient / image fills are preserved verbatim — a hex write only
-//! ever touches the *first solid* entry, mirroring shell-core's
-//! single-colour behaviour without flattening the canonical model.
+//! The canonical model stores rich `Vec<PenFill>` payloads; the
+//! property panel mostly edits a primary colour/fill/stroke/effect
+//! surface. These helpers preserve non-target fills and gradient/image
+//! bodies instead of flattening the node into shell-core's old scalar
+//! colour model.
 
 use crate::editor_ui_state::{FillType, ImageAdjustmentField, ImageFillMode};
 use jian_ops_schema::node::PenNode;
@@ -416,6 +399,41 @@ pub fn set_primary_gradient_stop_offset(node: &mut PenNode, index: usize, frac: 
     true
 }
 
+fn primary_gradient_stops_mut(node: &mut PenNode) -> Option<&mut Vec<GradientStop>> {
+    if node_fills(node).map(|f| f.is_empty()).unwrap_or(true) {
+        return None;
+    }
+    let fills = node_fills_mut(node)?;
+    match fills.first_mut()? {
+        PenFill::LinearGradient(b) => Some(&mut b.stops),
+        PenFill::RadialGradient(b) => Some(&mut b.stops),
+        _ => None,
+    }
+}
+
+pub fn add_primary_gradient_stop(node: &mut PenNode) -> bool {
+    let Some(stops) = primary_gradient_stops_mut(node) else {
+        return false;
+    };
+    let last_offset = stops.last().map(|s| s.offset).unwrap_or(0.5);
+    stops.push(GradientStop {
+        offset: (last_offset + 0.1).min(1.0),
+        color: "#888888".to_string(),
+    });
+    true
+}
+
+pub fn remove_primary_gradient_stop(node: &mut PenNode, index: usize) -> bool {
+    let Some(stops) = primary_gradient_stops_mut(node) else {
+        return false;
+    };
+    if stops.len() <= 2 || index >= stops.len() {
+        return false;
+    }
+    stops.remove(index);
+    true
+}
+
 /// Replace the first `Solid` fill's colour with `hex`, leaving any
 /// gradient / image fills untouched. When the node has no solid fill,
 /// a fresh one is prepended so it paints on top. `false` when the
@@ -586,6 +604,14 @@ pub fn set_primary_fill_type(node: &mut PenNode, kind: FillType) -> bool {
         let existing = fills.remove(0);
         fills.insert(0, convert_fill(existing, kind));
     }
+    true
+}
+
+pub fn clear_primary_fills(node: &mut PenNode) -> bool {
+    let Some(fills) = node_fills_mut(node) else {
+        return false;
+    };
+    fills.clear();
     true
 }
 

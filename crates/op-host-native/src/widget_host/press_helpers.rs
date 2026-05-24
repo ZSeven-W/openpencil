@@ -139,6 +139,13 @@ pub(in crate::widget_host) fn property_focus_initial(
         F::PositionY => panel.snapshot.y.to_string(),
         F::SizeW => panel.snapshot.width.to_string(),
         F::SizeH => panel.snapshot.height.to_string(),
+        F::LayoutGap => format_panel_number(panel.snapshot.layout_gap),
+        F::PaddingTop | F::PaddingRight | F::PaddingBottom | F::PaddingLeft => panel
+            .snapshot
+            .layout_padding
+            .value_for(focus)
+            .map(format_panel_number)
+            .unwrap_or_else(|| "0".to_string()),
         F::Rotation => (panel.snapshot.rotation_deg.round() as i32).to_string(),
         F::PositionR => (panel.snapshot.corner_radius.round() as i32).to_string(),
         F::Opacity => "100".to_string(),
@@ -164,6 +171,30 @@ pub(in crate::widget_host) fn property_focus_initial(
                 .map(|a| a.inner_percent)
                 .unwrap_or(0.0),
         ),
+        F::FontSize => panel
+            .snapshot
+            .text
+            .as_ref()
+            .map(|t| format_panel_number(t.font_size))
+            .unwrap_or_else(|| "16".to_string()),
+        F::FontWeight => panel
+            .snapshot
+            .text
+            .as_ref()
+            .map(|t| t.font_weight.to_string())
+            .unwrap_or_else(|| "400".to_string()),
+        F::LineHeight => panel
+            .snapshot
+            .text
+            .as_ref()
+            .map(|t| format_panel_number(t.line_height_percent))
+            .unwrap_or_else(|| "120".to_string()),
+        F::LetterSpacing => panel
+            .snapshot
+            .text
+            .as_ref()
+            .map(|t| format_panel_number(t.letter_spacing))
+            .unwrap_or_else(|| "0".to_string()),
         F::FillOpacity => ((panel.snapshot.fill_opacity * 100.0).round() as i32).to_string(),
         F::FillHex => panel
             .snapshot

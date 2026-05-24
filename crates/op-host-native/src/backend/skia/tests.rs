@@ -132,6 +132,23 @@ fn image_cache_decodes_a_valid_png() {
     assert_eq!(be.image_cache_len(), 1);
 }
 
+#[test]
+fn explicit_family_typeface_lookup_is_cached() {
+    let mut be = NativeBackend::with_dpi(1.0);
+    assert_eq!(be.family_typeface_cache_len(), 0);
+
+    let first = be
+        .typeface_for_family_char('A', "Georgia", 400)
+        .map(|tf| tf.unique_id());
+    assert_eq!(be.family_typeface_cache_len(), 1);
+
+    let second = be
+        .typeface_for_family_char('A', "Georgia", 400)
+        .map(|tf| tf.unique_id());
+    assert_eq!(second, first);
+    assert_eq!(be.family_typeface_cache_len(), 1);
+}
+
 /// Encode a solid raster surface to PNG bytes — a real image for
 /// the decode-cache test (no hardcoded blob).
 fn encode_test_png(w: i32, h: i32) -> Vec<u8> {

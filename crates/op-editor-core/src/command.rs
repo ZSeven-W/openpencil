@@ -64,11 +64,13 @@ pub enum VariableScalarPayload {
 /// - `Keyword(String)` — a string keyword (textAlign, textGrowth,
 ///   alignItems, justifyContent, and sizing keywords like "fit_content").
 /// - `NumberArray(Vec<f64>)` — padding as a number array.
+/// - `Bool(bool)` — boolean layout flags such as `clipContent`.
 #[derive(Debug, Clone, PartialEq)]
 pub enum LayoutPropValue {
     Number(f64),
     Keyword(String),
     NumberArray(Vec<f64>),
+    Bool(bool),
 }
 
 /// Per-item descriptor for [`EditorCommand::BatchInsert`]. Same shape as

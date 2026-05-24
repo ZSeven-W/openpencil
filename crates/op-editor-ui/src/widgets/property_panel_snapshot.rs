@@ -1,8 +1,16 @@
 //! Snapshot extraction for the right-rail `PropertyPanel`.
 
 use crate::layout_scene::{NodeKind, SceneStroke};
+use crate::widgets::property_panel_action::{
+    LayoutAlignValue, LayoutJustifyValue, TextAlignValue, TextGrowthValue, TextVerticalAlignValue,
+};
 use crate::Color;
+use jian_ops_schema::node::base::NumberOrExpression;
+use jian_ops_schema::node::container::LayoutMode;
+use jian_ops_schema::node::container::{AlignItems, JustifyContent, Padding};
+use jian_ops_schema::node::text::{FontWeight, TextAlign, TextAlignVertical, TextGrowth};
 use jian_ops_schema::node::PenNode;
+use jian_ops_schema::sizing::{SizingBehavior, SizingKeyword};
 use op_editor_core::pen_node_ext::PenNodeExt;
 use op_editor_core::EditorState;
 
@@ -56,6 +64,22 @@ pub struct NodeSnapshot {
     pub polygon_sides: Option<u32>,
     /// Ellipse arc controls, only present for Ellipse selections.
     pub ellipse_arc: Option<EllipseArcSummary>,
+    pub flex_layout: op_editor_core::FlexLayout,
+    pub layout_justify: LayoutJustifyValue,
+    pub layout_align: LayoutAlignValue,
+    pub layout_gap: f32,
+    pub layout_padding: LayoutPaddingSummary,
+    pub size_fill_width: bool,
+    pub size_fill_height: bool,
+    pub size_hug_width: bool,
+    pub size_hug_height: bool,
+    pub size_clip_content: bool,
+    pub can_clip_content: bool,
+    pub has_corner_radius: bool,
+    pub can_create_component: bool,
+    pub is_image_node: bool,
+    pub icon: Option<IconSummary>,
+    pub text: Option<TextSummary>,
     pub fill: Option<Color>,
     /// Primary solid-fill opacity in `[0.0, 1.0]` — the Fill
     /// section's `100 %` paints `fill_opacity * 100`.
@@ -87,6 +111,53 @@ pub struct EllipseArcSummary {
     pub start_deg: f32,
     pub sweep_deg: f32,
     pub inner_percent: f32,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct TextSummary {
+    pub font_family: String,
+    pub font_size: f32,
+    pub font_weight: u16,
+    pub line_height_percent: f32,
+    pub letter_spacing: f32,
+    pub align: TextAlignValue,
+    pub vertical_align: TextVerticalAlignValue,
+    pub growth: TextGrowthValue,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct IconSummary {
+    pub family: String,
+    pub name: String,
+    pub icon_id: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct LayoutPaddingSummary {
+    pub top: f32,
+    pub right: f32,
+    pub bottom: f32,
+    pub left: f32,
+}
+
+impl LayoutPaddingSummary {
+    pub const ZERO: Self = Self {
+        top: 0.0,
+        right: 0.0,
+        bottom: 0.0,
+        left: 0.0,
+    };
+
+    pub fn value_for(self, focus: op_editor_core::PropertyFocus) -> Option<f32> {
+        use op_editor_core::PropertyFocus as F;
+        match focus {
+            F::PaddingTop => Some(self.top),
+            F::PaddingRight => Some(self.right),
+            F::PaddingBottom => Some(self.bottom),
+            F::PaddingLeft => Some(self.left),
+            _ => None,
+        }
+    }
 }
 
 /// One gradient stop summary for the Fill section.
@@ -228,6 +299,22 @@ impl NodeSnapshot {
             corner_radius: 0.0,
             polygon_sides: None,
             ellipse_arc: None,
+            flex_layout: op_editor_core::FlexLayout::Free,
+            layout_justify: LayoutJustifyValue::Start,
+            layout_align: LayoutAlignValue::Start,
+            layout_gap: 0.0,
+            layout_padding: LayoutPaddingSummary::ZERO,
+            size_fill_width: false,
+            size_fill_height: false,
+            size_hug_width: false,
+            size_hug_height: false,
+            size_clip_content: false,
+            can_clip_content: false,
+            has_corner_radius: false,
+            can_create_component: false,
+            is_image_node: false,
+            icon: None,
+            text: None,
             fill: None,
             fill_opacity: 1.0,
             stroke: None,
@@ -276,12 +363,29 @@ impl NodeSnapshot {
             corner_radius,
             polygon_sides: polygon_sides_of(node),
             ellipse_arc: ellipse_arc_of(node),
+            flex_layout: flex_layout_of(node),
+            layout_justify: layout_justify_of(node),
+            layout_align: layout_align_of(node),
+            layout_gap: layout_gap_of(node),
+            layout_padding: layout_padding_of(node),
+            size_fill_width: sizing_is(node_width_sizing(node), SizingKeyword::FillContainer),
+            size_fill_height: sizing_is(node_height_sizing(node), SizingKeyword::FillContainer),
+            size_hug_width: sizing_is(node_width_sizing(node), SizingKeyword::FitContent),
+            size_hug_height: sizing_is(node_height_sizing(node), SizingKeyword::FitContent),
+            size_clip_content: clip_content_of(node),
+            can_clip_content: can_clip_content(node),
+            has_corner_radius: has_corner_radius(node),
+            can_create_component: can_create_component(node),
+            is_image_node: matches!(node, PenNode::Image(_)),
+            icon: icon_summary_of(node),
+            text: text_summary_of(node),
             fill,
             fill_opacity: op_editor_core::first_solid_fill_opacity(node),
             stroke,
             gradient_angle: gradient_angle_of(node),
             gradient_stops: gradient_stops_of(node),
-            image_fill: op_editor_core::first_image_fill_summary(node),
+            image_fill: op_editor_core::first_image_fill_summary(node)
+                .or_else(|| op_editor_core::image_node_summary(node)),
             effects: op_editor_core::node_effects(node)
                 .iter()
                 .map(EffectSummary::from_pen_effect)
@@ -306,6 +410,250 @@ fn ellipse_arc_of(node: &PenNode) -> Option<EllipseArcSummary> {
             inner_percent: (n.inner_radius.unwrap_or(0.0).clamp(0.0, 0.99) * 100.0) as f32,
         }),
         _ => None,
+    }
+}
+
+fn container_layout(node: &PenNode) -> Option<&LayoutMode> {
+    match node {
+        PenNode::Frame(n) => n.container.layout.as_ref(),
+        PenNode::Group(n) => n.container.layout.as_ref(),
+        PenNode::Rectangle(n) => n.container.layout.as_ref(),
+        _ => None,
+    }
+}
+
+fn flex_layout_of(node: &PenNode) -> op_editor_core::FlexLayout {
+    match container_layout(node) {
+        Some(LayoutMode::Vertical) => op_editor_core::FlexLayout::Vertical,
+        Some(LayoutMode::Horizontal) => op_editor_core::FlexLayout::Horizontal,
+        Some(LayoutMode::None) | None => op_editor_core::FlexLayout::Free,
+    }
+}
+
+fn layout_justify_of(node: &PenNode) -> LayoutJustifyValue {
+    let value = match node {
+        PenNode::Frame(n) => n.container.justify_content.as_ref(),
+        PenNode::Group(n) => n.container.justify_content.as_ref(),
+        PenNode::Rectangle(n) => n.container.justify_content.as_ref(),
+        _ => None,
+    };
+    match value.unwrap_or(&JustifyContent::Start) {
+        JustifyContent::Start => LayoutJustifyValue::Start,
+        JustifyContent::Center => LayoutJustifyValue::Center,
+        JustifyContent::End => LayoutJustifyValue::End,
+        JustifyContent::SpaceBetween => LayoutJustifyValue::SpaceBetween,
+        JustifyContent::SpaceAround => LayoutJustifyValue::SpaceAround,
+    }
+}
+
+fn layout_align_of(node: &PenNode) -> LayoutAlignValue {
+    let value = match node {
+        PenNode::Frame(n) => n.container.align_items.as_ref(),
+        PenNode::Group(n) => n.container.align_items.as_ref(),
+        PenNode::Rectangle(n) => n.container.align_items.as_ref(),
+        _ => None,
+    };
+    match value.unwrap_or(&AlignItems::Start) {
+        AlignItems::Start => LayoutAlignValue::Start,
+        AlignItems::Center => LayoutAlignValue::Center,
+        AlignItems::End => LayoutAlignValue::End,
+    }
+}
+
+fn layout_gap_of(node: &PenNode) -> f32 {
+    let gap = match node {
+        PenNode::Frame(n) => n.container.gap.as_ref(),
+        PenNode::Group(n) => n.container.gap.as_ref(),
+        PenNode::Rectangle(n) => n.container.gap.as_ref(),
+        _ => None,
+    };
+    match gap {
+        Some(NumberOrExpression::Number(v)) => *v as f32,
+        Some(NumberOrExpression::Expression(_)) | None => 0.0,
+    }
+}
+
+fn layout_padding_of(node: &PenNode) -> LayoutPaddingSummary {
+    let padding = match node {
+        PenNode::Frame(n) => n.container.padding.as_ref(),
+        PenNode::Group(n) => n.container.padding.as_ref(),
+        PenNode::Rectangle(n) => n.container.padding.as_ref(),
+        _ => None,
+    };
+    match padding {
+        Some(Padding::Uniform(v)) => {
+            let v = *v as f32;
+            LayoutPaddingSummary {
+                top: v,
+                right: v,
+                bottom: v,
+                left: v,
+            }
+        }
+        Some(Padding::XY(v)) => LayoutPaddingSummary {
+            top: v[0] as f32,
+            right: v[1] as f32,
+            bottom: v[0] as f32,
+            left: v[1] as f32,
+        },
+        Some(Padding::LtrB(v)) => LayoutPaddingSummary {
+            top: v[0] as f32,
+            right: v[1] as f32,
+            bottom: v[2] as f32,
+            left: v[3] as f32,
+        },
+        Some(Padding::Expression(_)) | None => LayoutPaddingSummary::ZERO,
+    }
+}
+
+fn node_width_sizing(node: &PenNode) -> Option<&SizingBehavior> {
+    match node {
+        PenNode::Frame(n) => n.container.width.as_ref(),
+        PenNode::Group(n) => n.container.width.as_ref(),
+        PenNode::Rectangle(n) => n.container.width.as_ref(),
+        PenNode::Ellipse(n) => n.width.as_ref(),
+        PenNode::Polygon(n) => n.width.as_ref(),
+        PenNode::Path(n) => n.width.as_ref(),
+        PenNode::Text(n) => n.width.as_ref(),
+        PenNode::TextInput(n) => n.width.as_ref(),
+        PenNode::Image(n) => n.width.as_ref(),
+        PenNode::IconFont(n) => n.width.as_ref(),
+        PenNode::Line(_) | PenNode::Ref(_) => None,
+    }
+}
+
+fn node_height_sizing(node: &PenNode) -> Option<&SizingBehavior> {
+    match node {
+        PenNode::Frame(n) => n.container.height.as_ref(),
+        PenNode::Group(n) => n.container.height.as_ref(),
+        PenNode::Rectangle(n) => n.container.height.as_ref(),
+        PenNode::Ellipse(n) => n.height.as_ref(),
+        PenNode::Polygon(n) => n.height.as_ref(),
+        PenNode::Path(n) => n.height.as_ref(),
+        PenNode::Text(n) => n.height.as_ref(),
+        PenNode::TextInput(n) => n.height.as_ref(),
+        PenNode::Image(n) => n.height.as_ref(),
+        PenNode::IconFont(n) => n.height.as_ref(),
+        PenNode::Line(_) | PenNode::Ref(_) => None,
+    }
+}
+
+fn sizing_is(sizing: Option<&SizingBehavior>, keyword: SizingKeyword) -> bool {
+    matches!(sizing, Some(SizingBehavior::Keyword(k)) if *k == keyword)
+}
+
+fn clip_content_of(node: &PenNode) -> bool {
+    match node {
+        PenNode::Frame(n) => n.container.clip_content.unwrap_or(false),
+        PenNode::Group(n) => n.container.clip_content.unwrap_or(false),
+        PenNode::Rectangle(n) => n.container.clip_content.unwrap_or(false),
+        _ => false,
+    }
+}
+
+fn can_clip_content(node: &PenNode) -> bool {
+    matches!(
+        node,
+        PenNode::Frame(_) | PenNode::Group(_) | PenNode::Rectangle(_)
+    )
+}
+
+fn icon_summary_of(node: &PenNode) -> Option<IconSummary> {
+    match node {
+        PenNode::IconFont(n) => {
+            let family = n
+                .icon_font_family
+                .clone()
+                .unwrap_or_else(|| "lucide".to_string());
+            Some(IconSummary {
+                icon_id: format!("{}:{}", family, n.icon_font_name),
+                family,
+                name: n.icon_font_name.clone(),
+            })
+        }
+        PenNode::Path(n) => {
+            let icon_id = n.icon_id.as_ref()?;
+            let (family, name) = icon_id
+                .split_once(':')
+                .map(|(family, name)| (family.to_string(), name.to_string()))
+                .unwrap_or_else(|| ("lucide".to_string(), icon_id.clone()));
+            Some(IconSummary {
+                family,
+                name,
+                icon_id: icon_id.clone(),
+            })
+        }
+        _ => None,
+    }
+}
+
+fn has_corner_radius(node: &PenNode) -> bool {
+    matches!(
+        node,
+        PenNode::Frame(_)
+            | PenNode::Rectangle(_)
+            | PenNode::Ellipse(_)
+            | PenNode::Polygon(_)
+            | PenNode::Image(_)
+    )
+}
+
+fn can_create_component(node: &PenNode) -> bool {
+    matches!(
+        node,
+        PenNode::Frame(_) | PenNode::Group(_) | PenNode::Rectangle(_) | PenNode::Ref(_)
+    )
+}
+
+fn text_summary_of(node: &PenNode) -> Option<TextSummary> {
+    let PenNode::Text(t) = node else {
+        return None;
+    };
+    Some(TextSummary {
+        font_family: t
+            .font_family
+            .clone()
+            .unwrap_or_else(|| "Inter, sans-serif".to_string()),
+        font_size: t.font_size.unwrap_or(16.0) as f32,
+        font_weight: font_weight_value(t.font_weight.as_ref()),
+        line_height_percent: (t.line_height.unwrap_or(1.2) * 100.0) as f32,
+        letter_spacing: t.letter_spacing.unwrap_or(0.0) as f32,
+        align: match t.text_align.as_ref().unwrap_or(&TextAlign::Left) {
+            TextAlign::Left => TextAlignValue::Left,
+            TextAlign::Center => TextAlignValue::Center,
+            TextAlign::Right => TextAlignValue::Right,
+            TextAlign::Justify => TextAlignValue::Justify,
+        },
+        vertical_align: match t
+            .text_align_vertical
+            .as_ref()
+            .unwrap_or(&TextAlignVertical::Top)
+        {
+            TextAlignVertical::Top => TextVerticalAlignValue::Top,
+            TextAlignVertical::Middle => TextVerticalAlignValue::Middle,
+            TextAlignVertical::Bottom => TextVerticalAlignValue::Bottom,
+        },
+        growth: match t.text_growth.as_ref().unwrap_or(&TextGrowth::FixedWidth) {
+            TextGrowth::Auto => TextGrowthValue::Auto,
+            TextGrowth::FixedWidth => TextGrowthValue::FixedWidth,
+            TextGrowth::FixedWidthHeight => TextGrowthValue::FixedWidthHeight,
+        },
+    })
+}
+
+fn font_weight_value(weight: Option<&FontWeight>) -> u16 {
+    match weight {
+        Some(FontWeight::Number(n)) => (*n).clamp(1, 1000) as u16,
+        Some(FontWeight::Keyword(s)) => match s.as_str() {
+            "thin" => 100,
+            "light" => 300,
+            "medium" => 500,
+            "semibold" => 600,
+            "bold" => 700,
+            "black" => 900,
+            _ => 400,
+        },
+        None => 400,
     }
 }
 
@@ -351,11 +699,16 @@ fn container_corner_radius(node: &PenNode) -> f32 {
         PenNode::Frame(n) => n.container.corner_radius.as_ref(),
         PenNode::Group(n) => n.container.corner_radius.as_ref(),
         PenNode::Rectangle(n) => n.container.corner_radius.as_ref(),
+        PenNode::Image(n) => n.corner_radius.as_ref(),
         _ => None,
     };
     match cr {
         Some(CornerRadius::Uniform(r)) => *r as f32,
         Some(CornerRadius::PerCorner(c)) => c[0] as f32,
-        None => 0.0,
+        None => match node {
+            PenNode::Ellipse(n) => n.corner_radius.unwrap_or(0.0) as f32,
+            PenNode::Polygon(n) => n.corner_radius.unwrap_or(0.0) as f32,
+            _ => 0.0,
+        },
     }
 }

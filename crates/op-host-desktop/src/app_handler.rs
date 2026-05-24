@@ -358,6 +358,9 @@ impl ApplicationHandler for DesktopApp {
                 if self.model_probe.poll_into(&mut self.host) {
                     self.redraw_dirty = true;
                 }
+                if self.drain_iconify_picker() {
+                    self.redraw_dirty = true;
+                }
                 // Drain the background auto-update probe.
                 if self.poll_update_probe() {
                     self.redraw_dirty = true;
@@ -426,6 +429,10 @@ impl ApplicationHandler for DesktopApp {
                     let deadline = self.clock_start + Duration::from_millis(deadline_ms);
                     event_loop.set_control_flow(ControlFlow::WaitUntil(deadline));
                 } else if self.update_probe.is_pending()
+                    || self
+                        .iconify_job
+                        .as_ref()
+                        .is_some_and(crate::iconify_host::IconifyJob::is_pending)
                     || self
                         .git_pull_job
                         .as_ref()

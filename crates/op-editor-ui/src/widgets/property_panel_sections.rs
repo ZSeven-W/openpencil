@@ -324,6 +324,7 @@ pub fn paint_position_section(
     snapshot: &NodeSnapshot,
     edit: &EditContext<'_>,
     labels: &PropertyLabels,
+    show_radius: bool,
     x: f32,
     y: f32,
     width: f32,
@@ -377,22 +378,24 @@ pub fn paint_position_section(
         edit.focus == Some(PropertyFocus::Rotation),
         edit.caret_at(PropertyFocus::Rotation),
     );
-    // Corner radius (R) — editable input bound to Node::corner_radius
-    // via PropertyFocus::PositionR.
-    let r_rect = Rect {
-        origin: Point2D::new(x + PAD_X + half_w + 8.0, y),
-        size: Point2D::new(half_w, INPUT_HEIGHT),
-    };
-    let r_value = format!("{}", snapshot.corner_radius.round() as i32);
-    paint_input_with_prefix_focused(
-        cx,
-        theme,
-        r_rect,
-        "R",
-        edit.value_for(PropertyFocus::PositionR, &r_value),
-        edit.focus == Some(PropertyFocus::PositionR),
-        edit.caret_at(PropertyFocus::PositionR),
-    );
+    if show_radius {
+        // Corner radius (R) — editable input bound to Node::corner_radius
+        // via PropertyFocus::PositionR.
+        let r_rect = Rect {
+            origin: Point2D::new(x + PAD_X + half_w + 8.0, y),
+            size: Point2D::new(half_w, INPUT_HEIGHT),
+        };
+        let r_value = format!("{}", snapshot.corner_radius.round() as i32);
+        paint_input_with_prefix_focused(
+            cx,
+            theme,
+            r_rect,
+            "R",
+            edit.value_for(PropertyFocus::PositionR, &r_value),
+            edit.focus == Some(PropertyFocus::PositionR),
+            edit.caret_at(PropertyFocus::PositionR),
+        );
+    }
     y += INPUT_HEIGHT + 12.0;
     paint_section_divider(cx, theme, x, y, width);
     y + SECTION_GAP
@@ -466,6 +469,7 @@ pub fn paint_size_section(
     edit: &EditContext<'_>,
     labels: &PropertyLabels,
     flags: SizeFlags,
+    show_clip_content: bool,
     x: f32,
     y: f32,
     width: f32,
@@ -541,16 +545,19 @@ pub fn paint_size_section(
         flags.hug_height,
     );
     y += row_h;
-    paint_check_row(
-        cx,
-        theme,
-        x + PAD_X,
-        y,
-        usable_w,
-        labels.clip_content,
-        flags.clip_content,
-    );
-    y += row_h + 12.0;
+    if show_clip_content {
+        paint_check_row(
+            cx,
+            theme,
+            x + PAD_X,
+            y,
+            usable_w,
+            labels.clip_content,
+            flags.clip_content,
+        );
+        y += row_h;
+    }
+    y += 12.0;
     paint_section_divider(cx, theme, x, y, width);
     y + SECTION_GAP
 }

@@ -473,8 +473,15 @@ impl WidgetHostNative {
         if !self.editor_state.editor_ui.icon_picker_open {
             return None;
         }
-        let x = ((viewport_w - ICON_PICKER_PANEL_W) / 2.0).max(0.0);
-        let y = ((viewport_h - ICON_PICKER_PANEL_H) / 2.0).max(0.0);
+        let ui = &self.editor_state.editor_ui;
+        let (px, py) = ui.icon_picker_panel_pos.unwrap_or_else(|| {
+            (
+                ((viewport_w - ICON_PICKER_PANEL_W) / 2.0).max(0.0),
+                ((viewport_h - ICON_PICKER_PANEL_H) / 2.0).max(0.0),
+            )
+        });
+        let x = px.clamp(0.0, (viewport_w - 80.0).max(0.0));
+        let y = py.clamp(0.0, (viewport_h - 40.0).max(0.0));
         Some(Rect {
             origin: Point2D::new(x, y),
             size: Point2D::new(ICON_PICKER_PANEL_W, ICON_PICKER_PANEL_H),

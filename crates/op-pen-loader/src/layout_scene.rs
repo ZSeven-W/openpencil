@@ -24,7 +24,7 @@
 use op_editor_ui::layout_scene::NodeKind;
 use op_editor_ui::layout_scene::{
     LayoutScene, SceneFillType, SceneGradient, SceneGradientStop, SceneImageFit, SceneNode,
-    ScenePage, SceneStroke,
+    ScenePage, SceneStroke, SceneTextAlign, SceneTextVerticalAlign,
 };
 use op_editor_ui::scene_vars::VariableTable;
 use op_editor_ui::Color;
@@ -112,8 +112,13 @@ fn node_payload_to_scene(node: &NodePayload, var_table: &VariableTable) -> Scene
             .as_ref()
             .map(|s| scene_stroke(s, &node_id, var_table)),
         text: node.text.clone(),
+        font_family: node.font_family.clone(),
         font_size: node.font_size,
         font_weight: node.font_weight,
+        line_height: node.line_height,
+        letter_spacing: node.letter_spacing,
+        text_align: text_align_to_scene(&node.text_align),
+        text_vertical_align: text_vertical_align_to_scene(&node.text_vertical_align),
         text_wrap: node.text_wrap,
         points: node
             .points
@@ -138,6 +143,23 @@ fn node_payload_to_scene(node: &NodePayload, var_table: &VariableTable) -> Scene
             .iter()
             .map(|c| node_payload_to_scene(c, var_table))
             .collect(),
+    }
+}
+
+fn text_align_to_scene(value: &str) -> SceneTextAlign {
+    match value {
+        "center" => SceneTextAlign::Center,
+        "right" => SceneTextAlign::Right,
+        "justify" => SceneTextAlign::Justify,
+        _ => SceneTextAlign::Left,
+    }
+}
+
+fn text_vertical_align_to_scene(value: &str) -> SceneTextVerticalAlign {
+    match value {
+        "middle" => SceneTextVerticalAlign::Middle,
+        "bottom" => SceneTextVerticalAlign::Bottom,
+        _ => SceneTextVerticalAlign::Top,
     }
 }
 

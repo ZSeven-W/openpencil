@@ -79,6 +79,20 @@ fn font_style_for_weight(weight: u16) -> skia_safe::FontStyle {
     )
 }
 
+fn primary_font_family(stack: &str) -> Option<&str> {
+    let first = stack.split(',').next()?.trim().trim_matches(['"', '\'']);
+    if first.is_empty()
+        || matches!(
+            first,
+            "system-ui" | "sans-serif" | "serif" | "monospace" | "-apple-system"
+        )
+    {
+        None
+    } else {
+        Some(first)
+    }
+}
+
 /// OP `Color` → `skia_safe::Color4f` — used by the direct-canvas
 /// helpers (stroke_line / fill_round_rect / stroke_round_rect)
 /// that skip the jian DrawOp pipeline.
@@ -127,19 +141,13 @@ pub struct NativeBackend {
     typeface_tried: bool,
     cjk_typeface: Option<skia_safe::Typeface>,
     cjk_typeface_tried: bool,
-    /// Per-codepoint typeface cache. Populated on first sight of a
-    /// non-ASCII character so multi-script chrome (Korean 한국어,
-    /// Devanagari हिन्दी, Thai ไทย, Vietnamese precomposed
-    /// `Tiếng Việt` …) renders against the right system font
-    /// instead of falling through to the single `cjk_typeface`
-    /// (which only covers Han / Hiragana / Katakana on most OSes).
-    /// Cache key is `(codepoint, weight)` so weight 400 chrome glyphs
-    /// and weight 700 canvas headlines don't share an entry. Bold
-    /// text from `.op` files (`fontWeight: 700`) re-resolves the
-    /// typeface against `FontStyle::new(Weight, Width::NORMAL, …)`
-    /// so the system FontMgr returns the bold-variant TTF when one
-    /// is installed (TS app parity).
+    /// Default-family per-codepoint typeface cache, keyed by
+    /// `(codepoint, weight)`.
     char_typeface_cache: std::collections::HashMap<(i32, u16), Option<skia_safe::Typeface>>,
+    /// Explicit-family typeface cache for selected text / font picker
+    /// previews, keyed by `(primary family, codepoint, weight)`.
+    family_typeface_cache:
+        std::collections::HashMap<(String, i32, u16), Option<skia_safe::Typeface>>,
     /// Decoded-image cache keyed by [`op_editor_core::ChatImage::id`].
     /// `draw_image` decodes the raw bytes once on first sight; later
     /// frames reuse the cached `Image`. A decode failure is cached as
@@ -206,6 +214,7 @@ impl NativeBackend {
             cjk_typeface: None,
             cjk_typeface_tried: false,
             char_typeface_cache: std::collections::HashMap::new(),
+            family_typeface_cache: std::collections::HashMap::new(),
             image_cache: std::collections::HashMap::new(),
             image_cache_order: std::collections::VecDeque::new(),
         };
@@ -253,14 +262,41 @@ impl NativeBackend {
         resolved
     }
 
+    fn typeface_for_family_char(
+        &mut self,
+        c: char,
+        family: &str,
+        weight: u16,
+    ) -> Option<skia_safe::Typeface> {
+        let Some(primary) = primary_font_family(family) else {
+            return self.typeface_for_char(c, weight);
+        };
+        let key = (primary.to_string(), c as i32, weight);
+        if let Some(cached) = self.family_typeface_cache.get(&key) {
+            return cached.clone();
+        }
+        let style = font_style_for_weight(weight);
+        let mgr = skia_safe::FontMgr::new();
+        let resolved = mgr
+            .match_family_style_character(primary, style, &[], c as i32)
+            .or_else(|| self.typeface_for_char(c, weight));
+        self.family_typeface_cache.insert(key, resolved.clone());
+        resolved
+    }
+
     /// Split `text` into contiguous segments that share a typeface,
     /// preserving char order. Glyphs without any covering typeface
     /// are bucketed with the previous segment so they at least
     /// occupy space (rather than disappearing).
-    fn segment_text(&mut self, text: &str, weight: u16) -> Vec<(skia_safe::Typeface, String)> {
+    fn segment_text(
+        &mut self,
+        text: &str,
+        family: &str,
+        weight: u16,
+    ) -> Vec<(skia_safe::Typeface, String)> {
         let mut segments: Vec<(skia_safe::Typeface, String)> = Vec::new();
         for c in text.chars() {
-            let tf = self.typeface_for_char(c, weight);
+            let tf = self.typeface_for_family_char(c, family, weight);
             let Some(tf) = tf else {
                 if let Some(last) = segments.last_mut() {
                     last.1.push(c);
@@ -402,7 +438,7 @@ impl NativeBackend {
     /// this the wrap pass measured at 400 and paint at 700 — the
     /// rendered string could then overflow the wrap budget.
     pub fn measure_text_weighted(&mut self, text: &str, font_size: f32, weight: u16) -> f32 {
-        let segments = self.segment_text(text, weight);
+        let segments = self.segment_text(text, "", weight);
         if segments.is_empty() {
             return 0.0;
         }
@@ -431,7 +467,8 @@ impl NativeBackend {
     pub fn draw_text(&mut self, canvas: &skia_safe::Canvas, layout: &TextLayout, origin: Point2D) {
         let runs: Vec<_> = layout.runs().to_vec();
         for run in runs {
-            let segments = self.segment_text(run.content.as_str(), run.font_weight);
+            let segments =
+                self.segment_text(run.content.as_str(), &run.font_family, run.font_weight);
             if segments.is_empty() {
                 continue;
             }
@@ -740,6 +777,11 @@ impl NativeBackend {
     #[cfg(test)]
     pub(crate) fn image_cache_len(&self) -> usize {
         self.image_cache.len()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn family_typeface_cache_len(&self) -> usize {
+        self.family_typeface_cache.len()
     }
 }
 

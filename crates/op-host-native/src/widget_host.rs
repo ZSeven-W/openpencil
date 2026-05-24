@@ -51,6 +51,7 @@ mod paint;
 mod press;
 mod press_helpers;
 mod property_dispatch;
+mod property_layout_dispatch;
 mod scroll;
 mod shape_picker_press;
 mod shortcuts;
@@ -126,6 +127,8 @@ pub struct WidgetHostNative {
     pub(in crate::widget_host) design_md_drag: Option<DesignMdDragState>,
     /// Active Component-Browser panel drag.
     pub(in crate::widget_host) component_browser_drag: Option<ComponentBrowserDragState>,
+    /// Active Icon-picker panel drag.
+    pub(in crate::widget_host) icon_picker_drag: Option<IconPickerDragState>,
     /// Active image-fill adjustment slider drag in the floating
     /// property popover.
     pub(in crate::widget_host) image_adjustment_drag: Option<op_editor_core::ImageAdjustmentField>,
@@ -377,6 +380,12 @@ pub(in crate::widget_host) struct ComponentBrowserDragState {
     pub(in crate::widget_host) grab_dy: f32,
 }
 
+#[derive(Debug, Clone, Copy)]
+pub(in crate::widget_host) struct IconPickerDragState {
+    pub(in crate::widget_host) grab_dx: f32,
+    pub(in crate::widget_host) grab_dy: f32,
+}
+
 impl WidgetHostNative {
     pub fn new() -> Self {
         // A fresh launch opens with a single empty starter Frame —
@@ -394,6 +403,7 @@ impl WidgetHostNative {
             chat_drag: None,
             design_md_drag: None,
             component_browser_drag: None,
+            icon_picker_drag: None,
             image_adjustment_drag: None,
             panel_resize: None,
             node_drag: None,

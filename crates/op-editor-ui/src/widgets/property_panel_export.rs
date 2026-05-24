@@ -115,6 +115,7 @@ pub fn paint_export_picker(
         visible,
         effects,
         false,
+        false,
         scale_open,
         format_open,
     );

@@ -2832,6 +2832,8 @@ dependencies = [
  "jian-ops-schema",
  "op-editor-core",
  "op-i18n",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

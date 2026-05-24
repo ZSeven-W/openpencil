@@ -3,6 +3,103 @@
 //! keep that file under the 800-line ceiling; re-exported from
 //! `property_panel` so `widgets::PropertyPanelAction` is unchanged.
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TextAlignValue {
+    Left,
+    Center,
+    Right,
+    Justify,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TextVerticalAlignValue {
+    Top,
+    Middle,
+    Bottom,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TextGrowthValue {
+    Auto,
+    FixedWidth,
+    FixedWidthHeight,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FontFamilyChoice {
+    Inter,
+    Poppins,
+    Roboto,
+    Montserrat,
+    OpenSans,
+    Lato,
+    Raleway,
+    DmSans,
+    PlayfairDisplay,
+    Nunito,
+    SourceSans3,
+    Arial,
+    Helvetica,
+    Georgia,
+    CourierNew,
+}
+
+impl FontFamilyChoice {
+    pub const ALL: [Self; 15] = [
+        Self::Inter,
+        Self::Poppins,
+        Self::Roboto,
+        Self::Montserrat,
+        Self::OpenSans,
+        Self::Lato,
+        Self::Raleway,
+        Self::DmSans,
+        Self::PlayfairDisplay,
+        Self::Nunito,
+        Self::SourceSans3,
+        Self::Arial,
+        Self::Helvetica,
+        Self::Georgia,
+        Self::CourierNew,
+    ];
+
+    pub fn family(self) -> &'static str {
+        match self {
+            Self::Inter => "Inter",
+            Self::Poppins => "Poppins",
+            Self::Roboto => "Roboto",
+            Self::Montserrat => "Montserrat",
+            Self::OpenSans => "Open Sans",
+            Self::Lato => "Lato",
+            Self::Raleway => "Raleway",
+            Self::DmSans => "DM Sans",
+            Self::PlayfairDisplay => "Playfair Display",
+            Self::Nunito => "Nunito",
+            Self::SourceSans3 => "Source Sans 3",
+            Self::Arial => "Arial",
+            Self::Helvetica => "Helvetica",
+            Self::Georgia => "Georgia",
+            Self::CourierNew => "Courier New",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LayoutAlignValue {
+    Start,
+    Center,
+    End,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LayoutJustifyValue {
+    Start,
+    Center,
+    End,
+    SpaceBetween,
+    SpaceAround,
+}
+
 /// Button / checkbox actions in the property panel that don't
 /// map to a text input. The host dispatches these in `apply_press`
 /// after the text-input hit-test misses.
@@ -16,6 +113,12 @@ pub enum PropertyPanelAction {
     ToggleSizeHugWidth,
     ToggleSizeHugHeight,
     ToggleSizeClipContent,
+    SetLayoutAlign(LayoutAlignValue),
+    SetLayoutJustify(LayoutJustifyValue),
+    SetLayoutAlignment {
+        justify: LayoutJustifyValue,
+        align: LayoutAlignValue,
+    },
     /// User clicked the header "Create Component" affordance.
     CreateComponent,
     /// User clicked the Fill section's fill-type dropdown — host
@@ -23,6 +126,14 @@ pub enum PropertyPanelAction {
     ToggleFillTypePicker,
     /// User picked a fill type from the dropdown.
     SetFillType(op_editor_core::FillType),
+    /// User clicked the Fill section header "+".
+    AddFill,
+    /// User clicked the Fill section row remove button.
+    RemoveFill,
+    /// User clicked the gradient-stops header "+".
+    AddGradientStop,
+    /// User clicked a gradient stop row remove button.
+    RemoveGradientStop(usize),
     /// User clicked a colour swatch (Fill or Stroke section). Host
     /// opens the floating colour picker tied to that target.
     OpenColorPicker(op_editor_core::ColorTarget),
@@ -89,4 +200,12 @@ pub enum PropertyPanelAction {
     },
     /// User clicked the image adjustment reset affordance.
     ResetImageAdjustments,
+    /// User clicked the Icon section's icon/library row — host opens
+    /// the native Lucide picker in replace-selection mode.
+    OpenSelectedIconPicker,
+    SetTextAlign(TextAlignValue),
+    SetTextVerticalAlign(TextVerticalAlignValue),
+    SetTextGrowth(TextGrowthValue),
+    ToggleFontFamilyPicker,
+    SetFontFamily(FontFamilyChoice),
 }

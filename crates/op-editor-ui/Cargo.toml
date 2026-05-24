@@ -31,3 +31,5 @@ op-editor-core = { path = "../op-editor-core" }
 # placeholder. Workspace pinned via the same `base64` op-host-desktop
 # uses for the file picker.
 base64 = "0.22"
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }

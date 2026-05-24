@@ -22,7 +22,9 @@ fn push_gradient_stop_rects(
     stop_count: usize,
 ) {
     let pct_w = 56.0;
-    let hex_w = usable_w - pct_w - 8.0;
+    let remove_w = if stop_count > 2 { 26.0 } else { 0.0 };
+    let remove_gap = if stop_count > 2 { 6.0 } else { 0.0 };
+    let hex_w = usable_w - pct_w - 8.0 - remove_w - remove_gap;
     for index in 0..stop_count {
         rects.push((
             PropertyFocus::GradientStopHex(index),
@@ -56,7 +58,9 @@ pub fn editable_input_rects(
     let mut y = panel_rect.origin.y;
     y += TAB_HEIGHT;
     y += HEADER_HEIGHT;
-    y += 8.0 + 36.0 + 12.0;
+    if visible.create_component {
+        y += 8.0 + 36.0 + 12.0;
+    }
     y += SECTION_HEADER_HEIGHT;
     let x_rect = Rect {
         origin: Point2D::new(x0 + PAD_X, y),
@@ -71,23 +75,30 @@ pub fn editable_input_rects(
         origin: Point2D::new(x0 + PAD_X, y),
         size: Point2D::new(half_w, INPUT_HEIGHT),
     };
-    let radius_rect = Rect {
+    let radius_rect = visible.corner_radius.then_some(Rect {
         origin: Point2D::new(x0 + PAD_X + half_w + 8.0, y),
         size: Point2D::new(half_w, INPUT_HEIGHT),
-    };
+    });
     y += INPUT_HEIGHT + 12.0;
     y += SECTION_GAP;
-    if visible.flex_layout {
-        y += SECTION_HEADER_HEIGHT;
-        y += 32.0 + 12.0;
-        y += SECTION_GAP;
-    }
     let mut rects = vec![
         (PropertyFocus::PositionX, x_rect),
         (PropertyFocus::PositionY, y_rect),
         (PropertyFocus::Rotation, rotation_rect),
-        (PropertyFocus::PositionR, radius_rect),
     ];
+    if let Some(radius_rect) = radius_rect {
+        rects.push((PropertyFocus::PositionR, radius_rect));
+    }
+    if visible.flex_layout {
+        crate::widgets::property_panel_flex::push_flex_input_rects(
+            &mut rects,
+            x0,
+            y,
+            w,
+            visible.flex_layout_mode,
+        );
+        y += crate::widgets::property_panel_flex::flex_section_height(visible.flex_layout_mode);
+    }
     if visible.size_options {
         y += SECTION_HEADER_HEIGHT;
         rects.push((
@@ -106,8 +117,21 @@ pub fn editable_input_rects(
         ));
         y += INPUT_HEIGHT + 10.0;
         let check_h = 22.0;
-        y += check_h * 3.0;
+        y += check_h * if visible.clip_content { 3.0 } else { 2.0 };
         y += 12.0;
+        y += SECTION_GAP;
+    }
+    if visible.icon {
+        y += crate::widgets::property_panel_icon::icon_section_height();
+    }
+    if visible.text {
+        crate::widgets::property_panel_text::push_text_input_rects(&mut rects, x0, y, usable_w);
+        y += crate::widgets::property_panel_text::text_section_height();
+        y += SECTION_GAP;
+    }
+    if visible.image {
+        y += SECTION_HEADER_HEIGHT;
+        y += INPUT_HEIGHT + 34.0;
         y += SECTION_GAP;
     }
     if visible.opacity {

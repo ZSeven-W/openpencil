@@ -1,19 +1,16 @@
-//! Native Lucide icon picker used by the Toolbar shape dropdown.
-//!
-//! This is deliberately small compared with the TS Iconify dialog:
-//! it lists the Lucide glyphs the Rust renderer already knows how to
-//! paint as `icon_font` nodes. Search is owned by the host keyboard
-//! router while the panel is open.
+//! Native Iconify picker used by the toolbar and icon property row.
 
 use crate::theme::Theme;
 use crate::widgets::editor_state_ext::theme_for;
-use crate::widgets::{draw_icon, Icon, PaintCx};
+use crate::widgets::icon_catalog::{search_icons, IconCatalogEntry, IconRenderStyle};
+use crate::widgets::{
+    draw_icon, draw_icon_catalog_entry, draw_icon_data, Icon, IconPathData, PaintCx,
+};
 use crate::{Color, Point2D, Rect, TextLayout};
-use op_editor_core::{EditorState, Locale};
+use op_editor_core::{EditorState, IconPickerRemoteIcon, Locale};
 
 pub const ICON_PICKER_PANEL_W: f32 = 320.0;
 pub const ICON_PICKER_PANEL_H: f32 = 420.0;
-
 const PAD: f32 = 14.0;
 const HEADER_H: f32 = 40.0;
 const SEARCH_H: f32 = 42.0;
@@ -22,84 +19,37 @@ const ROW_H: f32 = 34.0;
 const ICON_SIZE: f32 = 17.0;
 const ROW_PAD_X: f32 = 10.0;
 const CHAR_W: f32 = 6.0;
+const LOCAL_LIMIT: usize = 120;
+pub const ICONIFY_LOAD_MORE_LIMIT: usize = 48;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum IconPickerHit {
     Close,
-    SelectIcon(String),
+    DragHeader,
+    SelectIcon { collection: String, name: String },
+    LoadMore,
     Inside,
 }
 
-struct IconPickerItem {
-    name: &'static str,
-    label: &'static str,
-    icon: Icon,
+enum IconRow<'a> {
+    Local(&'static IconCatalogEntry),
+    Remote(&'a IconPickerRemoteIcon),
 }
 
-const ICONS: &[IconPickerItem] = &[
-    item("search", "Search", Icon::Search),
-    item("home", "Home", Icon::Home),
-    item("user", "User", Icon::User),
-    item("settings", "Settings", Icon::Settings),
-    item("bell", "Bell", Icon::Bell),
-    item("mail", "Mail", Icon::Mail),
-    item("calendar", "Calendar", Icon::Calendar),
-    item("clock", "Clock", Icon::Clock),
-    item("heart", "Heart", Icon::Heart),
-    item("star", "Star", Icon::Star),
-    item("check", "Check", Icon::Check),
-    item("x", "X", Icon::Close),
-    item("plus", "Plus", Icon::Plus),
-    item("minus", "Minus", Icon::Minus),
-    item("arrow-right", "Arrow Right", Icon::ArrowRight),
-    item("arrow-left", "Arrow Left", Icon::ArrowLeft),
-    item("chevron-left", "Chevron Left", Icon::ChevronLeft),
-    item("chevron-right", "Chevron Right", Icon::ChevronRight),
-    item("chevron-down", "Chevron Down", Icon::ChevronDown),
-    item("more-horizontal", "More Horizontal", Icon::MoreHorizontal),
-    item("more-vertical", "More Vertical", Icon::MoreVertical),
-    item("trash-2", "Trash", Icon::Trash),
-    item("copy", "Copy", Icon::Copy),
-    item("pencil", "Pencil", Icon::Pencil),
-    item("download", "Download", Icon::Download),
-    item("save", "Save", Icon::Save),
-    item("image", "Image", Icon::Image),
-    item("camera", "Camera", Icon::Camera),
-    item("video", "Video", Icon::Video),
-    item("music", "Music", Icon::Music),
-    item("phone", "Phone", Icon::Phone),
-    item("map-pin", "Map Pin", Icon::MapPin),
-    item("info", "Info", Icon::Info),
-    item("alert-circle", "Alert Circle", Icon::AlertCircle),
-    item("help-circle", "Help Circle", Icon::HelpCircle),
-    item("message-circle", "Message Circle", Icon::MessageCircle),
-    item("message-square", "Message Square", Icon::MessageSquare),
-    item("shopping-cart", "Shopping Cart", Icon::ShoppingCart),
-    item("shopping-bag", "Shopping Bag", Icon::ShoppingBag),
-    item("credit-card", "Credit Card", Icon::CreditCard),
-    item("send", "Send", Icon::Send),
-    item("rocket", "Rocket", Icon::Rocket),
-    item("activity", "Activity", Icon::Activity),
-    item("trending-up", "Trending Up", Icon::TrendingUp),
-    item("trending-down", "Trending Down", Icon::TrendingDown),
-    item("bar-chart-2", "Bar Chart", Icon::BarChart2),
-    item("layout-dashboard", "Dashboard", Icon::LayoutDashboard),
-    item("users", "Users", Icon::Users),
-    item("package", "Package", Icon::Package),
-    item("zap", "Zap", Icon::Zap),
-    item("sliders-horizontal", "Sliders", Icon::SlidersHorizontal),
-    item("lock", "Lock", Icon::Lock),
-    item("unlock", "Unlock", Icon::LockOpen),
-    item("eye", "Eye", Icon::Eye),
-    item("eye-off", "Eye Off", Icon::EyeOff),
-    item("github", "GitHub", Icon::Github),
-    item("globe", "Globe", Icon::Globe),
-    item("terminal", "Terminal", Icon::Terminal),
-    item("bot", "Bot", Icon::Bot),
-];
+impl IconRow<'_> {
+    fn collection(&self) -> &str {
+        match self {
+            IconRow::Local(i) => &i.collection,
+            IconRow::Remote(i) => &i.collection,
+        }
+    }
 
-const fn item(name: &'static str, label: &'static str, icon: Icon) -> IconPickerItem {
-    IconPickerItem { name, label, icon }
+    fn name(&self) -> &str {
+        match self {
+            IconRow::Local(i) => &i.name,
+            IconRow::Remote(i) => &i.name,
+        }
+    }
 }
 
 pub struct IconPickerPanel<'a> {
@@ -124,20 +74,45 @@ impl<'a> IconPickerPanel<'a> {
         crate::i18n::translate(self.locale, key)
     }
 
-    fn filtered(&self) -> Vec<&'static IconPickerItem> {
-        let query = self
-            .state
+    fn query(&self) -> String {
+        self.state
             .editor_ui
             .icon_picker_search
             .trim()
-            .to_lowercase();
-        if query.is_empty() {
-            return ICONS.iter().collect();
+            .to_lowercase()
+    }
+
+    fn rows(&self, limit: usize) -> Vec<IconRow<'a>> {
+        let query = self.query();
+        let mut rows: Vec<IconRow<'a>> = search_icons(&query, LOCAL_LIMIT)
+            .into_iter()
+            .map(IconRow::Local)
+            .collect();
+        let remote = &self.state.editor_ui.icon_picker_remote;
+        if !query.is_empty() && remote.query == query {
+            for icon in &remote.icons {
+                if !rows
+                    .iter()
+                    .any(|row| row.collection() == icon.collection && row.name() == icon.name)
+                {
+                    rows.push(IconRow::Remote(icon));
+                }
+            }
         }
-        ICONS
-            .iter()
-            .filter(|item| item.name.contains(&query) || item.label.to_lowercase().contains(&query))
-            .collect()
+        rows.truncate(limit);
+        rows
+    }
+
+    fn has_load_more(&self) -> bool {
+        let query = self.query();
+        if query.is_empty() {
+            return false;
+        }
+        let remote = &self.state.editor_ui.icon_picker_remote;
+        if remote.loading {
+            return true;
+        }
+        remote.query != query || remote.next_start < remote.total
     }
 
     fn close_rect(panel: Rect) -> Rect {
@@ -172,15 +147,25 @@ impl<'a> IconPickerPanel<'a> {
         if rect_contains(Self::close_rect(panel), point) {
             return Some(IconPickerHit::Close);
         }
+        if point.y <= panel.origin.y + HEADER_H {
+            return Some(IconPickerHit::DragHeader);
+        }
         let list_top = Self::list_top(panel);
         if point.y >= list_top {
             let row = ((point.y - list_top) / ROW_H) as usize;
-            let items = self.filtered();
             let capacity = Self::visible_row_capacity(panel);
-            if row < capacity {
-                if let Some(item) = items.get(row) {
-                    return Some(IconPickerHit::SelectIcon(item.name.to_string()));
-                }
+            let has_more = self.has_load_more();
+            let item_cap = capacity.saturating_sub(usize::from(has_more));
+            let items = self.rows(item_cap);
+            if row < items.len() {
+                let item = &items[row];
+                return Some(IconPickerHit::SelectIcon {
+                    collection: item.collection().to_string(),
+                    name: item.name().to_string(),
+                });
+            }
+            if has_more && row == items.len() && !self.state.editor_ui.icon_picker_remote.loading {
+                return Some(IconPickerHit::LoadMore);
             }
         }
         Some(IconPickerHit::Inside)
@@ -190,7 +175,26 @@ impl<'a> IconPickerPanel<'a> {
         cx.backend.fill_round_rect(panel, 8.0, self.theme.popover);
         cx.backend
             .stroke_round_rect(panel, 8.0, self.theme.border, 1.0);
+        self.paint_header(cx, panel);
+        self.paint_search(cx, panel);
 
+        let rows = Self::visible_row_capacity(panel);
+        let has_more = self.has_load_more();
+        let item_cap = rows.saturating_sub(usize::from(has_more));
+        let filtered = self.rows(item_cap);
+        if filtered.is_empty() && !has_more {
+            self.paint_empty(cx, panel);
+            return;
+        }
+        for (idx, item) in filtered.iter().enumerate() {
+            self.paint_row(cx, panel, idx, item);
+        }
+        if has_more && rows > 0 {
+            self.paint_load_more(cx, panel, filtered.len());
+        }
+    }
+
+    fn paint_header(&self, cx: &mut PaintCx<'_>, panel: Rect) {
         let title = TextLayout::single_run(
             self.t("icon.title"),
             "system-ui",
@@ -202,7 +206,6 @@ impl<'a> IconPickerPanel<'a> {
             &title,
             Point2D::new(panel.origin.x + PAD, panel.origin.y + 25.0),
         );
-
         let close = Self::close_rect(panel);
         draw_icon(
             cx.backend,
@@ -212,7 +215,9 @@ impl<'a> IconPickerPanel<'a> {
             self.theme.muted_foreground,
             1.4,
         );
+    }
 
+    fn paint_search(&self, cx: &mut PaintCx<'_>, panel: Rect) {
         let search = Self::search_rect(panel);
         cx.backend.fill_round_rect(search, 6.0, self.theme.muted);
         draw_icon(
@@ -223,72 +228,120 @@ impl<'a> IconPickerPanel<'a> {
             self.theme.muted_foreground,
             1.4,
         );
-        let query = self.state.editor_ui.icon_picker_search.trim();
-        let search_text = if query.is_empty() {
+        let raw_query = self.state.editor_ui.icon_picker_search.trim();
+        let search_text = if raw_query.is_empty() {
             self.t("icon.searchIcons")
         } else {
-            query
+            raw_query
         };
-        let search_color = if query.is_empty() {
+        let color = if raw_query.is_empty() {
             self.theme.muted_foreground
         } else {
             self.theme.foreground
         };
-        let search_layout = TextLayout::single_run(
+        let layout = TextLayout::single_run(
             search_text,
             "system-ui",
             12.0,
-            to_jian(search_color),
+            to_jian(color),
             Point2D::new(0.0, 0.0),
         );
         cx.backend.draw_text(
-            &search_layout,
+            &layout,
             Point2D::new(search.origin.x + 30.0, search.origin.y + 18.0),
         );
+    }
 
-        let filtered = self.filtered();
-        if filtered.is_empty() {
-            let empty = TextLayout::single_run(
-                self.t("icon.noIconsFound"),
-                "system-ui",
-                12.0,
-                to_jian(self.theme.muted_foreground),
-                Point2D::new(0.0, 0.0),
-            );
-            cx.backend.draw_text(
-                &empty,
-                Point2D::new(panel.origin.x + PAD, Self::list_top(panel) + 28.0),
-            );
-            return;
-        }
+    fn paint_empty(&self, cx: &mut PaintCx<'_>, panel: Rect) {
+        let empty = TextLayout::single_run(
+            self.t("icon.noIconsFound"),
+            "system-ui",
+            12.0,
+            to_jian(self.theme.muted_foreground),
+            Point2D::new(0.0, 0.0),
+        );
+        cx.backend.draw_text(
+            &empty,
+            Point2D::new(panel.origin.x + PAD, Self::list_top(panel) + 28.0),
+        );
+    }
 
-        let rows = Self::visible_row_capacity(panel);
-        for (idx, item) in filtered.into_iter().take(rows).enumerate() {
-            let y = Self::list_top(panel) + idx as f32 * ROW_H;
-            let row = Rect {
-                origin: Point2D::new(panel.origin.x + 6.0, y),
-                size: Point2D::new(panel.size.x - 12.0, ROW_H),
-            };
-            cx.backend.fill_round_rect(row, 6.0, self.theme.popover);
-            draw_icon(
+    fn paint_row(&self, cx: &mut PaintCx<'_>, panel: Rect, idx: usize, item: &IconRow<'_>) {
+        let y = Self::list_top(panel) + idx as f32 * ROW_H;
+        let row = Rect {
+            origin: Point2D::new(panel.origin.x + 6.0, y),
+            size: Point2D::new(panel.size.x - 12.0, ROW_H),
+        };
+        cx.backend.fill_round_rect(row, 6.0, self.theme.popover);
+        let icon_pos = Point2D::new(row.origin.x + ROW_PAD_X, y + (ROW_H - ICON_SIZE) / 2.0);
+        match item {
+            IconRow::Local(icon) => draw_icon_catalog_entry(
                 cx.backend,
-                item.icon,
-                Point2D::new(row.origin.x + ROW_PAD_X, y + (ROW_H - ICON_SIZE) / 2.0),
+                icon,
+                icon_pos,
                 ICON_SIZE,
                 self.theme.foreground,
                 1.5,
-            );
-            let label = truncate(item.label, ((row.size.x - 54.0) / CHAR_W) as usize);
-            let text = TextLayout::single_run(
-                &label,
-                "system-ui",
-                12.0,
-                to_jian(self.theme.foreground),
-                Point2D::new(0.0, 0.0),
-            );
-            cx.backend
-                .draw_text(&text, Point2D::new(row.origin.x + 38.0, y + 21.0));
+            ),
+            IconRow::Remote(icon) => draw_icon_data(
+                cx.backend,
+                IconPathData {
+                    d: &icon.d,
+                    style: remote_style(&icon.style),
+                    viewbox: icon.width.max(icon.height),
+                },
+                icon_pos,
+                ICON_SIZE,
+                self.theme.foreground,
+                1.5,
+            ),
         }
+        let label = truncate(
+            &format!("{}:{}", item.collection(), item.name()),
+            ((row.size.x - 54.0) / CHAR_W) as usize,
+        );
+        let text = TextLayout::single_run(
+            &label,
+            "system-ui",
+            12.0,
+            to_jian(self.theme.foreground),
+            Point2D::new(0.0, 0.0),
+        );
+        cx.backend
+            .draw_text(&text, Point2D::new(row.origin.x + 38.0, y + 21.0));
+    }
+
+    fn paint_load_more(&self, cx: &mut PaintCx<'_>, panel: Rect, idx: usize) {
+        let y = Self::list_top(panel) + idx as f32 * ROW_H;
+        let row = Rect {
+            origin: Point2D::new(panel.origin.x + 6.0, y + 2.0),
+            size: Point2D::new(panel.size.x - 12.0, ROW_H - 4.0),
+        };
+        cx.backend.fill_round_rect(row, 6.0, self.theme.muted);
+        let label = if self.state.editor_ui.icon_picker_remote.loading {
+            "..."
+        } else {
+            self.t("git.history.loadMore")
+        };
+        let text = TextLayout::single_run(
+            label,
+            "system-ui",
+            12.0,
+            to_jian(self.theme.foreground),
+            Point2D::new(0.0, 0.0),
+        );
+        cx.backend.draw_text(
+            &text,
+            Point2D::new(row.origin.x + ROW_PAD_X, row.origin.y + 20.0),
+        );
+    }
+}
+
+fn remote_style(style: &str) -> IconRenderStyle {
+    if style == "stroke" {
+        IconRenderStyle::Stroke
+    } else {
+        IconRenderStyle::Fill
     }
 }
 
