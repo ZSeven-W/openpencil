@@ -80,6 +80,10 @@ pub struct Toolbar {
     /// `Document.ui.shape_tool` so the icon flips after the user
     /// picks a shape from the dropdown.
     pub shape_tool: Tool,
+    /// Which item the cursor is over — drives the per-button hover
+    /// wash. `None` = no hover (cursor off the bar or over an
+    /// active item where the active fill already reads).
+    pub hover: Option<op_editor_core::ToolbarHover>,
 }
 
 impl Toolbar {
@@ -112,6 +116,29 @@ impl Toolbar {
             active: state.tool,
             theme: theme_for(&state.editor_ui),
             shape_tool: state.editor_ui.shape_tool,
+            hover: state.editor_ui.toolbar_hover,
+        }
+    }
+
+    /// True when `hover` matches `item`. The active state takes
+    /// visual precedence (active button paints the primary fill,
+    /// not the hover wash), so an active+hovered item is
+    /// considered not-hovered here.
+    fn item_hovered(&self, item: &ToolbarItem) -> bool {
+        use op_editor_core::ToolbarHover as H;
+        let Some(hover) = self.hover else {
+            return false;
+        };
+        match item {
+            ToolbarItem::Tool(tool, _) => {
+                matches!(hover, H::Tool(t) if t == *tool) && *tool != self.active
+            }
+            ToolbarItem::Action(action, _) => {
+                use crate::widgets::editor_state_ext::toolbar_action;
+                matches!(hover, H::Action(a) if a == toolbar_action(*action))
+            }
+            ToolbarItem::ShapeSlot => matches!(hover, H::ShapeSlot) && !self.active.is_shape(),
+            ToolbarItem::Separator => false,
         }
     }
 
@@ -323,7 +350,8 @@ impl Widget for Toolbar {
                         y += BUTTON_GAP;
                     }
                     let active = *tool == self.active;
-                    paint_button(cx, &self.theme, button_x, y, *icon, active);
+                    let hovered = self.item_hovered(item);
+                    paint_button(cx, &self.theme, button_x, y, *icon, active, hovered);
                     y += BUTTON_SIZE;
                     prev_was_item = true;
                 }
@@ -331,7 +359,8 @@ impl Widget for Toolbar {
                     if prev_was_item {
                         y += BUTTON_GAP;
                     }
-                    paint_button(cx, &self.theme, button_x, y, *icon, false);
+                    let hovered = self.item_hovered(item);
+                    paint_button(cx, &self.theme, button_x, y, *icon, false, hovered);
                     y += BUTTON_SIZE;
                     prev_was_item = true;
                 }
@@ -340,6 +369,7 @@ impl Widget for Toolbar {
                         y += BUTTON_GAP;
                     }
                     let active = self.active.is_shape();
+                    let hovered = self.item_hovered(item);
                     paint_button(
                         cx,
                         &self.theme,
@@ -347,6 +377,7 @@ impl Widget for Toolbar {
                         y,
                         icon_for_shape(self.shape_tool),
                         active,
+                        hovered,
                     );
                     // Chevron-down sits just BELOW the button,
                     // horizontally centered — matches the TS
@@ -375,7 +406,15 @@ impl Widget for Toolbar {
     }
 }
 
-fn paint_button(cx: &mut PaintCx<'_>, theme: &Theme, x: f32, y: f32, icon: Icon, active: bool) {
+fn paint_button(
+    cx: &mut PaintCx<'_>,
+    theme: &Theme,
+    x: f32,
+    y: f32,
+    icon: Icon,
+    active: bool,
+    hovered: bool,
+) {
     let button_rect = Rect {
         origin: Point2D::new(x, y),
         size: Point2D::new(BUTTON_SIZE, BUTTON_SIZE),
@@ -384,6 +423,10 @@ fn paint_button(cx: &mut PaintCx<'_>, theme: &Theme, x: f32, y: f32, icon: Icon,
         cx.backend
             .fill_round_rect(button_rect, BUTTON_RADIUS, theme.primary);
         theme.primary_foreground
+    } else if hovered {
+        cx.backend
+            .fill_round_rect(button_rect, BUTTON_RADIUS, theme.button_hover);
+        theme.foreground
     } else {
         theme.muted_foreground
     };

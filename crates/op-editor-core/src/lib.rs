@@ -82,7 +82,7 @@ pub use editor_ui_state::{
     FlexLayout, GitCommitSummary, GitDiffTarget, GitDiffView, GitFileEntry, GitPanelAction,
     GitPanelState, LayerContextMenuState, Locale, MergeConflictRow, MergeResolveFile,
     MergeResolveState, PageRenameState, PropertyTab, RecentFile, ShapeChoice, ThemeMode,
-    UpdateStatus, VariableRowFocus,
+    ToolbarAction, ToolbarHover, UpdateStatus, VariableRowFocus,
 };
 pub use fills::{
     first_fill_type, first_solid_fill_hex, first_solid_fill_opacity, first_solid_stroke_hex,

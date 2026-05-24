@@ -54,6 +54,7 @@ mod property_dispatch;
 mod scroll;
 mod shape_picker_press;
 mod shortcuts;
+mod toolbar_hover;
 
 pub use frame_backend::NativeFrameBackend;
 

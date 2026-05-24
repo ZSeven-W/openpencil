@@ -433,6 +433,13 @@ impl WidgetHost {
             self.mark_dirty();
             return true;
         }
+        // Toolbar per-button hover wash — AFTER drag detection so a
+        // path-anchor / node / pan drag whose cursor crosses the
+        // toolbar isn't intercepted by the hover update (mirrors
+        // native widget_host/input.rs ordering).
+        if self.update_toolbar_hover(x, y) {
+            return true;
+        }
         // No drag active — sync align toolbar hover. AFTER all drag
         // branches so an active drag isn't intercepted (codex CONCERN
         // — mirrors native widget_host/input.rs ordering).
@@ -726,6 +733,24 @@ impl WidgetHost {
         Rect {
             origin: Point2D::new(cx0 + TOOLBAR_INSET_X, TOP_BAR_HEIGHT + TOOLBAR_INSET_Y),
             size: Point2D::new(TOOLBAR_WIDTH, h),
+        }
+    }
+
+    /// Per-button hover wash on the floating toolbar. Mirrors
+    /// `op_host_native::widget_host::toolbar_hover::update_toolbar_hover`.
+    /// Returns `true` if the hover state changed.
+    fn update_toolbar_hover(&mut self, x: f32, y: f32) -> bool {
+        let rect = self.toolbar_rect(self.last_viewport_w);
+        let toolbar = Toolbar::for_editor(&self.editor_state);
+        let new_hover = toolbar
+            .hit_test(rect, Point2D::new(x, y))
+            .map(op_editor_ui::widgets::editor_state_ext::toolbar_hover);
+        if new_hover != self.editor_state.editor_ui.toolbar_hover {
+            self.editor_state.editor_ui.toolbar_hover = new_hover;
+            self.mark_dirty();
+            true
+        } else {
+            false
         }
     }
 
