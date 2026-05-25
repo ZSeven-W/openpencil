@@ -415,7 +415,7 @@ impl<'a> Widget for CanvasViewport<'a> {
                     rect.size.y + CULL_MARGIN * 2.0,
                 ),
             };
-            for child in &page.children {
+            for child in page.children.iter().rev() {
                 super::canvas_viewport_paint::paint_node(
                     cx,
                     child,
