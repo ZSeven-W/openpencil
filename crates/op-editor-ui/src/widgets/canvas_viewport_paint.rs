@@ -263,7 +263,7 @@ pub fn paint_node(
             } else {
                 paint_fill_then_stroke(cx, node, world_rect, zoom, node.fill);
             }
-            for child in &node.children {
+            for child in node.children.iter().rev() {
                 paint_node(cx, child, viewport_origin, zoom, edit_caret.clone(), cull);
             }
         }
@@ -275,7 +275,7 @@ pub fn paint_node(
             node.fill,
         ),
         NodeKind::Group | NodeKind::Other(_) => {
-            for child in &node.children {
+            for child in node.children.iter().rev() {
                 paint_node(cx, child, viewport_origin, zoom, edit_caret.clone(), cull);
             }
         }

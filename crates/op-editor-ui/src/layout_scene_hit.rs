@@ -8,7 +8,7 @@
 //! reads the same resolved geometry the painter walks.
 //!
 //! Hit semantics are preserved bit-for-bit from `document/walkers.rs`:
-//! top-most-first z-order, per-node rotation inverse-transform, the
+//! top-most-first z-order (`children[0]` is frontmost), per-node rotation inverse-transform, the
 //! tighter Ellipse / Polygon / Line geometry, the locked-node
 //! body-opts-out-children-stay rule, and the hidden-subtree skip.
 
@@ -18,15 +18,15 @@ use crate::{Point2D, Rect};
 
 impl LayoutScene {
     /// Topmost node id whose geometry contains `point` (doc space)
-    /// on the active page. Walks children in reverse z-order so the
-    /// most-recently-painted node wins. `None` on dead space.
+    /// on the active page. Walks children in front-to-back z-order
+    /// (`children[0]` is frontmost). `None` on dead space.
     ///
     /// `zoom` is the live viewport zoom — it scales the Line stroke
     /// hit slack so a thin line stays clickable at any zoom.
     pub fn node_at_doc_point(&self, point: Point2D, zoom: f32) -> Option<String> {
         let zoom = zoom.max(0.0001);
         let page = self.active_page()?;
-        for child in page.children.iter().rev() {
+        for child in &page.children {
             if let Some(hit) = hit_test_walk(child, point, zoom) {
                 return Some(hit);
             }
@@ -92,7 +92,7 @@ fn hit_test_walk(node: &SceneNode, point: Point2D, zoom: f32) -> Option<String> 
     } else {
         point
     };
-    for child in node.children.iter().rev() {
+    for child in &node.children {
         if let Some(hit) = hit_test_walk(child, local, zoom) {
             return Some(hit);
         }
@@ -292,22 +292,22 @@ mod tests {
     }
 
     #[test]
-    fn node_at_doc_point_picks_topmost_overlapping_node() {
+    fn node_at_doc_point_treats_first_child_as_frontmost() {
         let scene = one_page(vec![
-            leaf("under", NodeKind::Rect, Rect::xywh(0.0, 0.0, 50.0, 50.0)),
-            leaf("over", NodeKind::Rect, Rect::xywh(10.0, 10.0, 50.0, 50.0)),
+            leaf("over", NodeKind::Rect, Rect::xywh(0.0, 0.0, 50.0, 50.0)),
+            leaf("under", NodeKind::Rect, Rect::xywh(10.0, 10.0, 50.0, 50.0)),
         ]);
-        // Overlap region → the later-painted "over" wins.
+        // Overlap region -> children[0] is the top layer.
         assert_eq!(
             scene
                 .node_at_doc_point(Point2D::new(20.0, 20.0), 1.0)
                 .as_deref(),
             Some("over")
         );
-        // Only "under" covers (5, 5).
+        // Only "under" covers (55, 55).
         assert_eq!(
             scene
-                .node_at_doc_point(Point2D::new(5.0, 5.0), 1.0)
+                .node_at_doc_point(Point2D::new(55.0, 55.0), 1.0)
                 .as_deref(),
             Some("under")
         );

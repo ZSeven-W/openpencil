@@ -238,28 +238,28 @@ fn root_ids(s: &crate::state::EditorState) -> Vec<String> {
 }
 
 #[test]
-fn reorder_selected_up_moves_to_higher_index() {
+fn reorder_selected_up_moves_toward_front_index() {
     let mut s = three_rects();
     s.set_single_selection(NodeId::new("n2"));
     assert!(s.reorder_selected(ReorderDirection::Up));
-    assert_eq!(root_ids(&s), vec!["n1", "n3", "n2"]);
+    assert_eq!(root_ids(&s), vec!["n2", "n1", "n3"]);
 }
 
 #[test]
-fn reorder_selected_down_moves_to_lower_index() {
+fn reorder_selected_down_moves_toward_back_index() {
     let mut s = three_rects();
     s.set_single_selection(NodeId::new("n2"));
     assert!(s.reorder_selected(ReorderDirection::Down));
-    assert_eq!(root_ids(&s), vec!["n2", "n1", "n3"]);
+    assert_eq!(root_ids(&s), vec!["n1", "n3", "n2"]);
 }
 
 #[test]
 fn reorder_selected_at_edges_is_noop() {
     let mut s = three_rects();
     s.set_single_selection(NodeId::new("n1"));
-    assert!(!s.reorder_selected(ReorderDirection::Down));
-    s.set_single_selection(NodeId::new("n3"));
     assert!(!s.reorder_selected(ReorderDirection::Up));
+    s.set_single_selection(NodeId::new("n3"));
+    assert!(!s.reorder_selected(ReorderDirection::Down));
 }
 
 #[test]

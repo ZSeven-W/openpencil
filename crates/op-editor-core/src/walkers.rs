@@ -15,10 +15,10 @@ use std::collections::HashSet;
 /// selected node swaps with in its parent's children vec.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ReorderDirection {
-    /// Towards the front of the paint order (higher index, drawn on
-    /// top). Bound to `]`.
+    /// Towards the front of the paint order (lower index,
+    /// `children[0]` is top). Bound to `]`.
     Up,
-    /// Towards the back of the paint order (lower index, drawn
+    /// Towards the back of the paint order (higher index, drawn
     /// underneath). Bound to `[`.
     Down,
 }
@@ -193,12 +193,12 @@ pub fn reorder_in_children(
 ) -> bool {
     if let Some(idx) = children.iter().position(|n| n.id_str() == target.as_str()) {
         match direction {
-            ReorderDirection::Up if idx + 1 < children.len() => {
-                children.swap(idx, idx + 1);
+            ReorderDirection::Up if idx > 0 => {
+                children.swap(idx, idx - 1);
                 return true;
             }
-            ReorderDirection::Down if idx > 0 => {
-                children.swap(idx, idx - 1);
+            ReorderDirection::Down if idx + 1 < children.len() => {
+                children.swap(idx, idx + 1);
                 return true;
             }
             _ => return false,
