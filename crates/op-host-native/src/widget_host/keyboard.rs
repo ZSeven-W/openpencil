@@ -68,20 +68,63 @@ impl WidgetHostNative {
             }
             return false;
         }
-        if let Some(focus) = self.editor_state.editor_ui.variable_row_focus {
+        if (self
+            .editor_state
+            .editor_ui
+            .variables_theme_rename_axis
+            .is_some()
+            || self
+                .editor_state
+                .editor_ui
+                .variables_variant_rename_value
+                .is_some())
+            && !c.is_control()
+        {
+            if self.editor_state.ui.property_draft_select_all {
+                self.editor_state.ui.property_input_draft.clear();
+                self.editor_state.ui.property_caret_pos = 0;
+            }
             self.editor_state.ui.property_draft_select_all = false;
+            let pos = text_boundary_at_or_before(
+                &self.editor_state.ui.property_input_draft,
+                self.editor_state.ui.property_caret_pos,
+            );
+            self.editor_state.ui.property_input_draft.insert(pos, c);
+            self.editor_state.ui.property_caret_pos = pos + c.len_utf8();
+            self.editor_state.ui.property_caret_anchor_ms = self.now_ms;
+            self.mark_dirty();
+            return true;
+        }
+        if let Some(focus) = self.editor_state.editor_ui.variable_row_focus {
+            let replace_selection = self.editor_state.ui.property_draft_select_all;
+            let draft = &self.editor_state.ui.property_input_draft;
+            let pos = if replace_selection {
+                0
+            } else {
+                text_boundary_at_or_before(draft, self.editor_state.ui.property_caret_pos)
+            };
             let allowed = match focus {
-                VariableRowFocus::Number(_) => {
+                VariableRowFocus::Name(_) => !c.is_control(),
+                VariableRowFocus::Number(_) | VariableRowFocus::NumberCell { .. } => {
                     c.is_ascii_digit()
-                        || (c == '-' && self.editor_state.ui.property_input_draft.is_empty())
-                        || (c == '.' && !self.editor_state.ui.property_input_draft.contains('.'))
+                        || (c == '-'
+                            && (replace_selection || (pos == 0 && !draft.starts_with('-'))))
+                        || (c == '.' && (replace_selection || !draft.contains('.')))
                 }
-                VariableRowFocus::String(_) => !c.is_control(),
+                VariableRowFocus::String(_) | VariableRowFocus::StringCell { .. } => {
+                    !c.is_control()
+                }
             };
             if !allowed {
                 return false;
             }
-            self.editor_state.ui.property_input_draft.push(c);
+            if replace_selection {
+                self.editor_state.ui.property_input_draft.clear();
+                self.editor_state.ui.property_caret_pos = 0;
+            }
+            self.editor_state.ui.property_draft_select_all = false;
+            self.editor_state.ui.property_input_draft.insert(pos, c);
+            self.editor_state.ui.property_caret_pos = pos + c.len_utf8();
             self.editor_state.ui.property_caret_anchor_ms = self.now_ms;
             self.mark_dirty();
             return true;
@@ -138,6 +181,8 @@ impl WidgetHostNative {
         }
         if self.editor_state.editor_ui.icon_picker_open && !c.is_control() {
             self.editor_state.editor_ui.icon_picker_search.push(c);
+            self.editor_state.editor_ui.icon_picker_caret_anchor_ms = self.now_ms;
+            self.editor_state.editor_ui.icon_picker_scroll = 0.0;
             self.mark_dirty();
             return true;
         }
@@ -222,9 +267,57 @@ impl WidgetHostNative {
             }
             return ok;
         }
+        if self
+            .editor_state
+            .editor_ui
+            .variables_theme_rename_axis
+            .is_some()
+            || self
+                .editor_state
+                .editor_ui
+                .variables_variant_rename_value
+                .is_some()
+        {
+            if self.editor_state.ui.property_draft_select_all {
+                self.editor_state.ui.property_input_draft.clear();
+                self.editor_state.ui.property_caret_pos = 0;
+                self.editor_state.ui.property_draft_select_all = false;
+                self.editor_state.ui.property_caret_anchor_ms = self.now_ms;
+                self.mark_dirty();
+                return true;
+            }
+            let pos = text_boundary_at_or_before(
+                &self.editor_state.ui.property_input_draft,
+                self.editor_state.ui.property_caret_pos,
+            );
+            if pos > 0 {
+                let prev = previous_text_boundary(&self.editor_state.ui.property_input_draft, pos);
+                self.editor_state.ui.property_input_draft.drain(prev..pos);
+                self.editor_state.ui.property_caret_pos = prev;
+                self.editor_state.ui.property_caret_anchor_ms = self.now_ms;
+                self.mark_dirty();
+                return true;
+            }
+            return false;
+        }
         if self.editor_state.editor_ui.variable_row_focus.is_some() {
+            if self.editor_state.ui.property_draft_select_all {
+                self.editor_state.ui.property_input_draft.clear();
+                self.editor_state.ui.property_caret_pos = 0;
+                self.editor_state.ui.property_draft_select_all = false;
+                self.editor_state.ui.property_caret_anchor_ms = self.now_ms;
+                self.mark_dirty();
+                return true;
+            }
             self.editor_state.ui.property_draft_select_all = false;
-            if self.editor_state.ui.property_input_draft.pop().is_some() {
+            let pos = text_boundary_at_or_before(
+                &self.editor_state.ui.property_input_draft,
+                self.editor_state.ui.property_caret_pos,
+            );
+            if pos > 0 {
+                let prev = previous_text_boundary(&self.editor_state.ui.property_input_draft, pos);
+                self.editor_state.ui.property_input_draft.drain(prev..pos);
+                self.editor_state.ui.property_caret_pos = prev;
                 self.editor_state.ui.property_caret_anchor_ms = self.now_ms;
                 self.mark_dirty();
                 return true;
@@ -255,6 +348,8 @@ impl WidgetHostNative {
                 .pop()
                 .is_some()
             {
+                self.editor_state.editor_ui.icon_picker_caret_anchor_ms = self.now_ms;
+                self.editor_state.editor_ui.icon_picker_scroll = 0.0;
                 self.mark_dirty();
                 return true;
             }
@@ -296,9 +391,57 @@ impl WidgetHostNative {
     /// Delete — pops a char from rename / text-edit when active;
     /// otherwise deletes the selected node.
     pub fn apply_delete(&mut self) -> bool {
+        if self
+            .editor_state
+            .editor_ui
+            .variables_theme_rename_axis
+            .is_some()
+            || self
+                .editor_state
+                .editor_ui
+                .variables_variant_rename_value
+                .is_some()
+        {
+            if self.editor_state.ui.property_draft_select_all {
+                self.editor_state.ui.property_input_draft.clear();
+                self.editor_state.ui.property_caret_pos = 0;
+                self.editor_state.ui.property_draft_select_all = false;
+                self.editor_state.ui.property_caret_anchor_ms = self.now_ms;
+                self.mark_dirty();
+                return true;
+            }
+            let pos = text_boundary_at_or_before(
+                &self.editor_state.ui.property_input_draft,
+                self.editor_state.ui.property_caret_pos,
+            );
+            if pos < self.editor_state.ui.property_input_draft.len() {
+                let next = next_text_boundary(&self.editor_state.ui.property_input_draft, pos);
+                self.editor_state.ui.property_input_draft.drain(pos..next);
+                self.editor_state.ui.property_caret_pos = pos;
+                self.editor_state.ui.property_caret_anchor_ms = self.now_ms;
+                self.mark_dirty();
+                return true;
+            }
+            return false;
+        }
         if self.editor_state.editor_ui.variable_row_focus.is_some() {
+            if self.editor_state.ui.property_draft_select_all {
+                self.editor_state.ui.property_input_draft.clear();
+                self.editor_state.ui.property_caret_pos = 0;
+                self.editor_state.ui.property_draft_select_all = false;
+                self.editor_state.ui.property_caret_anchor_ms = self.now_ms;
+                self.mark_dirty();
+                return true;
+            }
             self.editor_state.ui.property_draft_select_all = false;
-            if self.editor_state.ui.property_input_draft.pop().is_some() {
+            let pos = text_boundary_at_or_before(
+                &self.editor_state.ui.property_input_draft,
+                self.editor_state.ui.property_caret_pos,
+            );
+            if pos < self.editor_state.ui.property_input_draft.len() {
+                let next = next_text_boundary(&self.editor_state.ui.property_input_draft, pos);
+                self.editor_state.ui.property_input_draft.drain(pos..next);
+                self.editor_state.ui.property_caret_pos = pos;
                 self.editor_state.ui.property_caret_anchor_ms = self.now_ms;
                 self.mark_dirty();
                 return true;
@@ -344,133 +487,6 @@ impl WidgetHostNative {
             return true;
         }
         false
-    }
-
-    /// Cmd-D — duplicate selection as a sibling at +10 doc px.
-    pub fn apply_duplicate(&mut self) -> bool {
-        if self.input_active() {
-            return false;
-        }
-        if self.editor_state.selection.is_empty() {
-            return false;
-        }
-        self.editor_state.commit_history();
-        let dup = self
-            .editor_state
-            .duplicate_selected(&mut self.next_node_id, 10.0)
-            .is_some();
-        if dup {
-            self.mark_dirty();
-        }
-        dup
-    }
-
-    /// Up / Down arrow on a focused numeric property input — steps
-    /// the value by `delta` and commits it (like a `−` / `+`
-    /// stepper). Returns `false` when no numeric property input is
-    /// focused, so the caller falls back to nudging the selection.
-    pub fn apply_property_step(&mut self, delta: f32) -> bool {
-        // Effect-parameter focus: step the value, commit via
-        // `SetEffectParam`, and reflect it back into the draft.
-        if let Some(ef) = self.editor_state.editor_ui.effect_param_focus {
-            let current: f32 = self
-                .editor_state
-                .ui
-                .property_input_draft
-                .trim()
-                .parse()
-                .unwrap_or(0.0);
-            let next = current + delta;
-            let id = self.editor_state.selection.anchor.clone();
-            if id.is_real() {
-                self.editor_state.commit_history();
-                let _ = self
-                    .editor_state
-                    .apply(op_editor_core::EditorCommand::SetEffectParam {
-                        node_id: id,
-                        index: ef.effect as u32,
-                        field: ef.field,
-                        value: next,
-                    });
-            }
-            self.editor_state.ui.property_input_draft = if next.fract() == 0.0 {
-                format!("{}", next as i64)
-            } else {
-                format!("{next}")
-            };
-            self.editor_state.ui.property_caret_pos =
-                self.editor_state.ui.property_input_draft.len();
-            self.editor_state.ui.property_caret_anchor_ms = self.now_ms;
-            self.mark_dirty();
-            return true;
-        }
-        let Some(focus) = self.editor_state.ui.property_focus else {
-            return false;
-        };
-        // Hex colour fields aren't numerically steppable.
-        if focus.is_hex() {
-            return false;
-        }
-        let current: f32 = self
-            .editor_state
-            .ui
-            .property_input_draft
-            .trim()
-            .parse()
-            .unwrap_or(0.0);
-        let next = current + delta;
-        let _ = self.editor_state.commit_property_edit(focus, next);
-        // Reflect the committed value back into the draft so the
-        // field shows it and a further step builds on the new value.
-        self.editor_state.ui.property_input_draft = if next.fract() == 0.0 {
-            format!("{}", next as i64)
-        } else {
-            format!("{next}")
-        };
-        self.editor_state.ui.property_caret_pos = self.editor_state.ui.property_input_draft.len();
-        self.editor_state.ui.property_caret_anchor_ms = self.now_ms;
-        self.mark_dirty();
-        true
-    }
-
-    /// Left / Right arrow on a focused property input — moves the
-    /// text caret one character. Returns `false` when no property
-    /// input is focused, so the caller falls back to node-nudge.
-    pub fn apply_property_caret(&mut self, forward: bool) -> bool {
-        if self.editor_state.ui.property_focus.is_none()
-            && self.editor_state.editor_ui.effect_param_focus.is_none()
-        {
-            return false;
-        }
-        let len = self.editor_state.ui.property_input_draft.len();
-        let pos = self.editor_state.ui.property_caret_pos.min(len);
-        let next = if forward {
-            (pos + 1).min(len)
-        } else {
-            pos.saturating_sub(1)
-        };
-        if next != self.editor_state.ui.property_caret_pos {
-            self.editor_state.ui.property_caret_pos = next;
-            self.editor_state.ui.property_caret_anchor_ms = self.now_ms;
-            self.mark_dirty();
-        }
-        // Consumed regardless — an arrow over a focused input must
-        // never fall through to nudging the selected node.
-        true
-    }
-
-    /// Arrow-key nudge — translate selection by (dx, dy) doc px.
-    pub fn apply_nudge(&mut self, dx: f32, dy: f32) -> bool {
-        if self.input_active() {
-            return false;
-        }
-        if self.editor_state.selection.is_empty() {
-            return false;
-        }
-        self.editor_state.commit_history();
-        self.editor_state.translate_selected(dx as f64, dy as f64);
-        self.mark_dirty();
-        true
     }
 
     pub fn apply_send(&mut self) -> bool {
@@ -532,6 +548,20 @@ impl WidgetHostNative {
                 self.mark_dirty();
             }
             return ok;
+        }
+        if self
+            .editor_state
+            .editor_ui
+            .variables_theme_rename_axis
+            .is_some()
+            || self
+                .editor_state
+                .editor_ui
+                .variables_variant_rename_value
+                .is_some()
+        {
+            self.commit_variables_panel_header_focus_if_any();
+            return true;
         }
         if self.editor_state.editor_ui.variable_row_focus.is_some() {
             self.commit_variable_row_focus_if_any();
@@ -626,6 +656,24 @@ impl WidgetHostNative {
         if self
             .editor_state
             .editor_ui
+            .variables_theme_rename_axis
+            .take()
+            .is_some()
+            || self
+                .editor_state
+                .editor_ui
+                .variables_variant_rename_value
+                .take()
+                .is_some()
+        {
+            self.editor_state.ui.property_input_draft.clear();
+            self.editor_state.ui.property_draft_select_all = false;
+            self.mark_dirty();
+            return true;
+        }
+        if self
+            .editor_state
+            .editor_ui
             .variable_row_focus
             .take()
             .is_some()
@@ -669,6 +717,7 @@ impl WidgetHostNative {
             self.editor_state.editor_ui.icon_picker_open = false;
             self.editor_state.editor_ui.icon_picker_replace_selection = false;
             self.editor_state.editor_ui.icon_picker_search.clear();
+            self.editor_state.editor_ui.icon_picker_scroll = 0.0;
             self.mark_dirty();
             return true;
         }
@@ -699,4 +748,29 @@ impl WidgetHostNative {
         }
         false
     }
+}
+
+fn text_boundary_at_or_before(value: &str, pos: usize) -> usize {
+    let mut clipped = pos.min(value.len());
+    while clipped > 0 && !value.is_char_boundary(clipped) {
+        clipped -= 1;
+    }
+    clipped
+}
+
+fn previous_text_boundary(value: &str, pos: usize) -> usize {
+    let pos = text_boundary_at_or_before(value, pos);
+    value[..pos]
+        .char_indices()
+        .last()
+        .map(|(idx, _)| idx)
+        .unwrap_or(0)
+}
+
+fn next_text_boundary(value: &str, pos: usize) -> usize {
+    let pos = text_boundary_at_or_before(value, pos);
+    if pos >= value.len() {
+        return value.len();
+    }
+    pos + value[pos..].chars().next().map(char::len_utf8).unwrap_or(0)
 }

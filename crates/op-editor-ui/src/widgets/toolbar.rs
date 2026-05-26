@@ -4,7 +4,7 @@
 //! Layout matches `apps/web/src/components/editor/toolbar.tsx`:
 //! tools at the top (Select / Rect / Text / Frame / Hand), a hairline
 //! separator, undo/redo, another separator, then panel toggles
-//! (Code / Design system).
+//! (Variables / Design system).
 //!
 //! Active tool gets a `theme.primary` filled rounded square + the
 //! white foreground icon. Inactive items render the icon in
@@ -57,7 +57,7 @@ pub enum ToolbarItem {
 pub enum ToolbarAction {
     Undo,
     Redo,
-    ToggleCodePanel,
+    ToggleVariablesPanel,
     ToggleDesignPanel,
 }
 
@@ -80,6 +80,8 @@ pub struct Toolbar {
     /// `Document.ui.shape_tool` so the icon flips after the user
     /// picks a shape from the dropdown.
     pub shape_tool: Tool,
+    pub variables_panel_open: bool,
+    pub design_md_panel_open: bool,
     /// Which item the cursor is over — drives the per-button hover
     /// wash. `None` = no hover (cursor off the bar or over an
     /// active item where the active fill already reads).
@@ -110,12 +112,14 @@ impl Toolbar {
                 ToolbarItem::Action(ToolbarAction::Undo, Icon::Undo),
                 ToolbarItem::Action(ToolbarAction::Redo, Icon::Redo),
                 ToolbarItem::Separator,
-                ToolbarItem::Action(ToolbarAction::ToggleCodePanel, Icon::Braces),
+                ToolbarItem::Action(ToolbarAction::ToggleVariablesPanel, Icon::Braces),
                 ToolbarItem::Action(ToolbarAction::ToggleDesignPanel, Icon::BookOpen),
             ],
             active: state.tool,
             theme: theme_for(&state.editor_ui),
             shape_tool: state.editor_ui.shape_tool,
+            variables_panel_open: state.editor_ui.variables_panel_open,
+            design_md_panel_open: state.editor_ui.design_md_panel_open,
             hover: state.editor_ui.toolbar_hover,
         }
     }
@@ -359,8 +363,17 @@ impl Widget for Toolbar {
                     if prev_was_item {
                         y += BUTTON_GAP;
                     }
+                    let active = match item {
+                        ToolbarItem::Action(ToolbarAction::ToggleVariablesPanel, _) => {
+                            self.variables_panel_open
+                        }
+                        ToolbarItem::Action(ToolbarAction::ToggleDesignPanel, _) => {
+                            self.design_md_panel_open
+                        }
+                        _ => false,
+                    };
                     let hovered = self.item_hovered(item);
-                    paint_button(cx, &self.theme, button_x, y, *icon, false, hovered);
+                    paint_button(cx, &self.theme, button_x, y, *icon, active, hovered);
                     y += BUTTON_SIZE;
                     prev_was_item = true;
                 }

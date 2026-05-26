@@ -5,10 +5,72 @@
 
 use super::helpers::rect_contains;
 use super::WidgetHostNative;
-use op_editor_ui::widgets::GitPanel;
+use op_editor_ui::widgets::{GitPanel, IconPickerPanel};
 use op_editor_ui::Point2D;
 
 impl WidgetHostNative {
+    fn try_scroll_icon_picker(
+        &mut self,
+        x: f32,
+        y: f32,
+        delta: f32,
+        viewport_width: f32,
+        viewport_height: f32,
+    ) -> bool {
+        let Some(panel_rect) = self.icon_picker_panel_rect(viewport_width, viewport_height) else {
+            return false;
+        };
+        if !rect_contains(panel_rect, Point2D::new(x, y)) {
+            return false;
+        }
+        let max = IconPickerPanel::for_editor(&self.editor_state)
+            .map(|panel| panel.max_scroll(panel_rect))
+            .unwrap_or(0.0);
+        let next = (self.editor_state.editor_ui.icon_picker_scroll - delta).clamp(0.0, max);
+        if next != self.editor_state.editor_ui.icon_picker_scroll {
+            self.editor_state.editor_ui.icon_picker_scroll = next;
+            self.mark_dirty();
+        }
+        true
+    }
+
+    fn try_scroll_font_family_picker(
+        &mut self,
+        x: f32,
+        y: f32,
+        delta: f32,
+        viewport_width: f32,
+        viewport_height: f32,
+    ) -> bool {
+        use op_editor_ui::widgets::{PropertyPanel, TOP_BAR_HEIGHT};
+        use op_editor_ui::Rect;
+        if !self.editor_state.editor_ui.font_family_picker_open {
+            return false;
+        }
+        let Some(panel) = PropertyPanel::for_selection_at(&self.editor_state, self.now_ms) else {
+            return false;
+        };
+        let pw = self.editor_state.editor_ui.property_panel_width;
+        let property_rect = Rect {
+            origin: Point2D::new(viewport_width - pw, TOP_BAR_HEIGHT),
+            size: Point2D::new(pw, (viewport_height - TOP_BAR_HEIGHT).max(0.0)),
+        };
+        let point = Point2D::new(x, y);
+        let Some(picker) = panel.font_family_picker_bounds(property_rect) else {
+            return false;
+        };
+        if !rect_contains(picker, point) {
+            return false;
+        }
+        let max = panel.font_family_picker_max_scroll(property_rect);
+        let next = (self.editor_state.editor_ui.font_family_picker_scroll - delta).clamp(0.0, max);
+        if next != self.editor_state.editor_ui.font_family_picker_scroll {
+            self.editor_state.editor_ui.font_family_picker_scroll = next;
+            self.mark_dirty();
+        }
+        true
+    }
+
     /// Scroll the right-rail PropertyPanel when a wheel / trackpad
     /// pan lands over it. `delta` is the vertical scroll delta
     /// (wheel `delta_y` or pan `dy`). Returns `true` when the cursor
@@ -89,6 +151,12 @@ impl WidgetHostNative {
         viewport_width: f32,
         viewport_height: f32,
     ) -> bool {
+        if self.try_scroll_icon_picker(x, y, delta_y, viewport_width, viewport_height) {
+            return true;
+        }
+        if self.try_scroll_font_family_picker(x, y, delta_y, viewport_width, viewport_height) {
+            return true;
+        }
         // Any top-most floating panel (Design-MD / Component-Browser)
         // owns the wheel before lower layers — a scroll over them
         // never reaches the modal / Git panel / canvas.
@@ -209,6 +277,12 @@ impl WidgetHostNative {
         viewport_width: f32,
         viewport_height: f32,
     ) -> bool {
+        if self.try_scroll_icon_picker(x, y, dy, viewport_width, viewport_height) {
+            return true;
+        }
+        if self.try_scroll_font_family_picker(x, y, dy, viewport_width, viewport_height) {
+            return true;
+        }
         // Any top-most floating panel owns trackpad scroll first.
         if self.over_topmost_panel(x, y, viewport_width, viewport_height) {
             return true;

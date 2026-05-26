@@ -388,11 +388,14 @@ pub struct PageRenameState {
     pub draft: String,
 }
 
-/// Editor focus for a non-color variable row in the VariablesPanel.
+/// Editor focus for a variable row cell in the VariablesPanel.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum VariableRowFocus {
+    Name(usize),
     Number(usize),
     String(usize),
+    NumberCell { row: usize, variant: usize },
+    StringCell { row: usize, variant: usize },
 }
 
 /// Keyboard focus on an effect-parameter value (the Effects
@@ -500,6 +503,10 @@ pub struct EditorUiState {
     pub icon_picker_panel_pos: Option<(f32, f32)>,
     /// Live text filter for the native Lucide icon picker.
     pub icon_picker_search: String,
+    /// Blink anchor for the icon picker's focused search caret.
+    pub icon_picker_caret_anchor_ms: u64,
+    /// Vertical scroll offset for the native icon picker list.
+    pub icon_picker_scroll: f32,
     /// Remote Iconify search results appended by the desktop host.
     pub icon_picker_remote: crate::icon_picker_state::IconPickerRemoteState,
     /// Queued "load more" request drained asynchronously by desktop.
@@ -533,6 +540,23 @@ pub struct EditorUiState {
     // --- Property panel: tabs + layout toggles ---------------------
     /// Active PropertyPanel tab — toggled by `Cmd+Shift+C`.
     pub property_tab: PropertyTab,
+    /// Floating Variables panel open, matching the TS toolbar's
+    /// `{}` button.
+    pub variables_panel_open: bool,
+    pub variables_preset_menu_open: bool,
+    pub variables_add_menu_open: bool,
+    /// Theme axis currently shown in the floating variables panel.
+    /// Separate from `ui.variables.active_theme`, which stores the
+    /// concrete value selected for each axis.
+    pub variables_current_axis: Option<String>,
+    /// Theme-axis tab whose rename/delete menu is open.
+    pub variables_theme_menu_axis: Option<String>,
+    /// Variant column whose rename/delete menu is open.
+    pub variables_variant_menu_value: Option<String>,
+    /// Theme-axis name currently being edited in the VariablesPanel.
+    pub variables_theme_rename_axis: Option<String>,
+    /// Variant column value currently being edited in the VariablesPanel.
+    pub variables_variant_rename_value: Option<String>,
     /// Active flex-layout mode for the property panel's row.
     pub flex_layout: FlexLayout,
     pub size_fill_width: bool,
@@ -546,6 +570,10 @@ pub struct EditorUiState {
     pub image_fill_popover_open: bool,
     /// Whether the text font-family picker is open.
     pub font_family_picker_open: bool,
+    /// Vertical scroll offset for the text font-family picker.
+    pub font_family_picker_scroll: f32,
+    /// Cached system font family names provided by the native host.
+    pub system_font_families: Vec<String>,
     /// Active-theme axis whose value picker is open; `None` = closed.
     pub axis_dropdown_open: Option<String>,
     /// Editor focus for a non-color variable row (Number / String).
@@ -579,6 +607,9 @@ pub struct EditorUiState {
     /// Last canvas left-click target + ms; 400 ms same-node re-press
     /// on a Text node promotes to inline text edit.
     pub last_canvas_click: Option<(NodeId, u64)>,
+    /// Last VariablesPanel name-cell click + ms; 400 ms same-row
+    /// re-press promotes to variable rename.
+    pub last_variable_name_click: Option<(usize, u64)>,
     /// Smart-guide lines to paint during the current node drag —
     /// computed each `apply_cursor_move` by `align_guides`, cleared on
     /// drag release. View-only transient state: never serialized,
@@ -676,6 +707,8 @@ impl Default for EditorUiState {
             icon_picker_replace_selection: false,
             icon_picker_panel_pos: None,
             icon_picker_search: String::new(),
+            icon_picker_caret_anchor_ms: 0,
+            icon_picker_scroll: 0.0,
             icon_picker_remote: crate::icon_picker_state::IconPickerRemoteState::default(),
             icon_picker_load_more_request: None,
             chat_model_picker_open: false,
@@ -686,6 +719,14 @@ impl Default for EditorUiState {
             window_fullscreen: false,
             align_toolbar_hover: None,
             property_tab: PropertyTab::Design,
+            variables_panel_open: false,
+            variables_preset_menu_open: false,
+            variables_add_menu_open: false,
+            variables_current_axis: None,
+            variables_theme_menu_axis: None,
+            variables_variant_menu_value: None,
+            variables_theme_rename_axis: None,
+            variables_variant_rename_value: None,
             flex_layout: FlexLayout::Free,
             size_fill_width: false,
             size_fill_height: false,
@@ -695,6 +736,8 @@ impl Default for EditorUiState {
             fill_type_picker_open: false,
             image_fill_popover_open: false,
             font_family_picker_open: false,
+            font_family_picker_scroll: 0.0,
+            system_font_families: Vec::new(),
             axis_dropdown_open: None,
             variable_row_focus: None,
             effect_param_focus: None,
@@ -705,6 +748,7 @@ impl Default for EditorUiState {
             rename_caret_anchor_ms: 0,
             last_layer_click: None,
             last_canvas_click: None,
+            last_variable_name_click: None,
             active_guides: Vec::new(),
             update_status: UpdateStatus::Idle,
             git_panel: GitPanelState::default(),

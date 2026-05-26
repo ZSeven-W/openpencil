@@ -130,7 +130,7 @@ pub fn toolbar_action(a: crate::widgets::toolbar::ToolbarAction) -> op_editor_co
     match a {
         W::Undo => O::Undo,
         W::Redo => O::Redo,
-        W::ToggleCodePanel => O::ToggleCodePanel,
+        W::ToggleVariablesPanel => O::ToggleVariablesPanel,
         W::ToggleDesignPanel => O::ToggleDesignPanel,
     }
 }

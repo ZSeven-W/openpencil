@@ -121,7 +121,6 @@ impl WidgetHostNative {
 
         // 5. PropertyPanel — only when selection.
         let property_panel = PropertyPanel::for_selection_at(&self.editor_state, self.now_ms);
-        let has_property = property_panel.is_some();
         let property_panel_width = ui.property_panel_width;
         let right_rail_x = viewport_width - property_panel_width;
         if let Some(panel) = property_panel.as_ref() {
@@ -138,39 +137,10 @@ impl WidgetHostNative {
             panel.paint(&mut cx, property_rect);
         }
 
-        // 5b. VariablesPanel — paints whenever the document has
-        //     variables (so users with themed `.op` files see them
-        //     immediately without needing to select a node). Sits in
-        //     the same right-rail column as PropertyPanel. When a
-        //     selection is active, PropertyPanel owns the rail and
-        //     VariablesPanel paints below it; when no selection, the
-        //     Variables panel anchors at the top so it's not hidden.
-        let has_variables = self
-            .editor_state
-            .doc
-            .variables
-            .as_ref()
-            .map(|v| !v.is_empty())
-            .unwrap_or(false);
-        if has_variables {
-            let vars = VariablesPanel::for_editor(&self.editor_state);
-            let intrinsic = vars.intrinsic_height();
-            let top_y = if has_property {
-                // Below PropertyPanel — naive offset uses the
-                // PropertyPanel's own intrinsic height proxy. The
-                // property panel paints to fill the rail, so we put
-                // Variables at the bottom of the rail above the
-                // status bar; users scroll the property pane
-                // separately. Approximate: anchor to bottom-of-rail.
-                let bottom_pad = STATUS_BAR_HEIGHT + 16.0;
-                (viewport_height - bottom_pad - intrinsic).max(TOP_BAR_HEIGHT + 8.0)
-            } else {
-                TOP_BAR_HEIGHT + 8.0
-            };
-            let vars_rect = Rect {
-                origin: Point2D::new(right_rail_x, top_y),
-                size: Point2D::new(property_panel_width, intrinsic),
-            };
+        // 5b. VariablesPanel — mirrors TS' `{}` toolbar toggle as a
+        //     floating canvas overlay next to the toolbar.
+        if let Some(vars_rect) = self.variables_panel_rect(viewport_width, viewport_height) {
+            let vars = VariablesPanel::for_editor_at(&self.editor_state, self.now_ms);
             let mut cx = PaintCx {
                 backend: &mut *frame,
             };
@@ -456,7 +426,7 @@ impl WidgetHostNative {
         //       dropdown. It sits above the component browser and
         //       below Design-MD, matching the press routing order.
         if let (Some(panel), Some(panel_rect)) = (
-            IconPickerPanel::for_editor(&self.editor_state),
+            IconPickerPanel::for_editor_at(&self.editor_state, self.now_ms),
             self.icon_picker_panel_rect(viewport_width, viewport_height),
         ) {
             let mut cx = PaintCx {

@@ -193,6 +193,16 @@ pub fn action_button_rects(
 /// Height of one row in an Export-section inline select popup.
 pub const EXPORT_PICKER_ROW_H: f32 = 30.0;
 
+#[derive(Debug, Clone, Copy, Default)]
+pub struct ActionButtonRectOptions<'a> {
+    pub system_fonts: &'a [String],
+    pub active_font_family: &'a str,
+    pub fill_picker_open: bool,
+    pub font_family_picker_open: bool,
+    pub export_scale_picker_open: bool,
+    pub export_format_picker_open: bool,
+}
+
 /// Total height (px) of the PropertyPanel's section content. The
 /// scroll clamp uses it so the inspector cannot scroll past its
 /// end. Computed as the furthest bottom edge across every action
@@ -230,6 +240,26 @@ pub fn action_button_rects_with_fill_picker(
     font_family_picker_open: bool,
     export_scale_picker_open: bool,
     export_format_picker_open: bool,
+) -> Vec<(PropertyPanelAction, Rect)> {
+    action_button_rects_with_font_picker(
+        panel_rect,
+        visible,
+        effects,
+        ActionButtonRectOptions {
+            fill_picker_open,
+            font_family_picker_open,
+            export_scale_picker_open,
+            export_format_picker_open,
+            ..Default::default()
+        },
+    )
+}
+
+pub fn action_button_rects_with_font_picker(
+    panel_rect: Rect,
+    visible: VisibleSections,
+    effects: &[EffectSummary],
+    options: ActionButtonRectOptions<'_>,
 ) -> Vec<(PropertyPanelAction, Rect)> {
     let x0 = panel_rect.origin.x;
     let w = panel_rect.size.x;
@@ -327,13 +357,6 @@ pub fn action_button_rects_with_fill_picker(
         out.extend(crate::widgets::property_panel_text::text_action_rects(
             x0, y, usable_w,
         ));
-        if font_family_picker_open {
-            out.extend(
-                crate::widgets::property_panel_text::font_family_picker_action_rects(
-                    x0, y, usable_w,
-                ),
-            );
-        }
         y += crate::widgets::property_panel_text::text_section_height();
         y += SECTION_GAP;
     }
@@ -372,7 +395,7 @@ pub fn action_button_rects_with_fill_picker(
             size: Point2D::new(usable_w - 22.0 - 6.0 - 50.0 - 22.0 - 12.0, INPUT_HEIGHT),
         };
         out.push((PropertyPanelAction::ToggleFillTypePicker, dropdown_rect));
-        if fill_picker_open {
+        if options.fill_picker_open {
             let row_h = 32.0;
             let panel_w = dropdown_rect.size.x;
             let panel_x = dropdown_rect.origin.x;
@@ -587,7 +610,7 @@ pub fn action_button_rects_with_fill_picker(
         // here. `first_row_y` is placed so the background's bottom
         // edge lands `4 px` above the dropdown (matches the `6 px`
         // top/bottom padding `paint_select_popup` adds).
-        if export_scale_picker_open {
+        if options.export_scale_picker_open {
             let count = 3.0;
             let first_row_y = scale_rect.origin.y - 4.0 - 6.0 - count * EXPORT_PICKER_ROW_H;
             for (i, scale) in [1.0_f32, 2.0, 3.0].into_iter().enumerate() {
@@ -603,7 +626,7 @@ pub fn action_button_rects_with_fill_picker(
                 ));
             }
         }
-        if export_format_picker_open {
+        if options.export_format_picker_open {
             let formats = [
                 op_editor_core::ExportFormat::Png,
                 op_editor_core::ExportFormat::Jpeg,
