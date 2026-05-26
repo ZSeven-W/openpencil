@@ -3,8 +3,7 @@
 use crate::theme::Theme;
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::property_panel::{
-    FontFamilyChoice, NodeSnapshot, PropertyPanelAction, TextAlignValue, TextGrowthValue,
-    TextVerticalAlignValue,
+    NodeSnapshot, PropertyPanelAction, TextAlignValue, TextGrowthValue, TextVerticalAlignValue,
 };
 use crate::widgets::property_panel_inputs::{
     paint_input_with_prefix_focused, paint_section_divider, paint_section_label, to_jian_color,
@@ -167,27 +166,6 @@ pub fn text_action_rects(x0: f32, y: f32, usable_w: f32) -> Vec<(PropertyPanelAc
     out
 }
 
-pub fn font_family_picker_action_rects(
-    x0: f32,
-    y: f32,
-    usable_w: f32,
-) -> Vec<(PropertyPanelAction, Rect)> {
-    let family_y = y + TEXT_LAYOUT_BLOCK_H + SECTION_HEADER_HEIGHT + INPUT_HEIGHT + 4.0;
-    FontFamilyChoice::ALL
-        .into_iter()
-        .enumerate()
-        .map(|(i, choice)| {
-            (
-                PropertyPanelAction::SetFontFamily(choice),
-                Rect {
-                    origin: Point2D::new(x0 + PAD_X, family_y + i as f32 * 28.0),
-                    size: Point2D::new(usable_w, 28.0),
-                },
-            )
-        })
-        .collect()
-}
-
 #[allow(clippy::too_many_arguments)]
 pub fn paint_text_section(
     cx: &mut PaintCx<'_>,
@@ -313,104 +291,6 @@ pub fn paint_text_section(
     y += 12.0;
     paint_section_divider(cx, theme, x, y, width);
     y + SECTION_GAP
-}
-
-pub fn paint_font_family_picker(
-    cx: &mut PaintCx<'_>,
-    theme: &Theme,
-    panel_rect: Rect,
-    visible: crate::widgets::property_panel_layout::VisibleSections,
-    active_family: &str,
-) {
-    let x0 = panel_rect.origin.x;
-    let w = panel_rect.size.x;
-    let usable_w = w - PAD_X * 2.0;
-    let Some(text_y) = text_section_top(panel_rect, visible) else {
-        return;
-    };
-    let rows = font_family_picker_action_rects(x0, text_y, usable_w);
-    if rows.is_empty() {
-        return;
-    }
-    let first = rows.first().map(|(_, r)| *r).unwrap();
-    let last = rows.last().map(|(_, r)| *r).unwrap();
-    let pop = Rect {
-        origin: Point2D::new(first.origin.x, first.origin.y - 6.0),
-        size: Point2D::new(
-            first.size.x,
-            last.origin.y + last.size.y - first.origin.y + 12.0,
-        ),
-    };
-    cx.backend.fill_round_rect(pop, 8.0, theme.popover);
-    cx.backend.stroke_round_rect(pop, 8.0, theme.border, 1.0);
-    let active = display_font_family(active_family);
-    for (action, row) in rows {
-        let PropertyPanelAction::SetFontFamily(choice) = action else {
-            continue;
-        };
-        let is_active = choice.family() == active;
-        if is_active {
-            cx.backend
-                .fill_round_rect(row, 6.0, theme.row_selected_primary);
-        }
-        let label = TextLayout::single_run(
-            choice.family(),
-            choice.family(),
-            12.0,
-            to_jian_color(if is_active {
-                theme.primary
-            } else {
-                theme.foreground
-            }),
-            Point2D::new(0.0, 0.0),
-        );
-        cx.backend.draw_text(
-            &label,
-            Point2D::new(row.origin.x + 10.0, row.origin.y + 19.0),
-        );
-        if is_active {
-            draw_icon(
-                cx.backend,
-                Icon::Check,
-                Point2D::new(row.origin.x + row.size.x - 22.0, row.origin.y + 7.0),
-                14.0,
-                theme.primary,
-                1.6,
-            );
-        }
-    }
-}
-
-fn text_section_top(
-    panel_rect: Rect,
-    visible: crate::widgets::property_panel_layout::VisibleSections,
-) -> Option<f32> {
-    if !visible.text {
-        return None;
-    }
-    let mut y = panel_rect.origin.y;
-    y += crate::widgets::property_panel_inputs::TAB_HEIGHT;
-    y += crate::widgets::property_panel_inputs::HEADER_HEIGHT;
-    if visible.create_component {
-        y += 8.0 + 36.0 + 12.0;
-    }
-    y += SECTION_HEADER_HEIGHT;
-    y += INPUT_HEIGHT + 6.0;
-    y += INPUT_HEIGHT + 12.0;
-    y += SECTION_GAP;
-    if visible.flex_layout {
-        y += crate::widgets::property_panel_flex::flex_section_height(visible.flex_layout_mode);
-    }
-    if visible.size_options {
-        y += SECTION_HEADER_HEIGHT;
-        y += INPUT_HEIGHT + 10.0;
-        y += 22.0 * if visible.clip_content { 3.0 } else { 2.0 };
-        y += 12.0 + SECTION_GAP;
-    }
-    if visible.icon {
-        y += crate::widgets::property_panel_icon::icon_section_height();
-    }
-    Some(y)
 }
 
 fn paint_text_growth_row(
@@ -609,13 +489,4 @@ fn format_panel_number(value: f32) -> String {
     } else {
         format!("{value:.2}")
     }
-}
-
-fn display_font_family(value: &str) -> &str {
-    value
-        .split(',')
-        .next()
-        .unwrap_or(value)
-        .trim()
-        .trim_matches(['"', '\''])
 }

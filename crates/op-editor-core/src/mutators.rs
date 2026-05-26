@@ -157,14 +157,10 @@ impl EditorState {
             .any(|id| find_node(children, id).is_some())
     }
 
-    /// True when ANY widget occupies the right rail — PropertyPanel
-    /// (gated on selection) OR VariablesPanel (gated on a non-empty
-    /// persisted variable table). Faithful port of shell-core's
-    /// `Document::right_rail_visible`; the persisted variables that
-    /// shell-core read from `var_table.variables` live on
-    /// `EditorState.doc.variables` in the canonical model.
+    /// True when a widget occupies the right rail. The Variables panel is a
+    /// floating canvas overlay in the TS app, so it must not reserve rail width.
     pub fn right_rail_visible(&self) -> bool {
-        self.property_panel_visible() || self.doc.variables.as_ref().is_some_and(|v| !v.is_empty())
+        self.property_panel_visible()
     }
 
     /// Union of `aggregate_bounds` across the selected nodes.

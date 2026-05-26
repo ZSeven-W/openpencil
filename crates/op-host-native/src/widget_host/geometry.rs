@@ -502,6 +502,7 @@ impl WidgetHostNative {
         let p = Point2D::new(x, y);
         self.design_md_panel_rect(viewport_w, viewport_h)
             .is_some_and(|r| rect_contains(r, p))
+            || self.over_variables_panel(x, y, viewport_w, viewport_h)
             || self
                 .icon_picker_panel_rect(viewport_w, viewport_h)
                 .is_some_and(|r| rect_contains(r, p))

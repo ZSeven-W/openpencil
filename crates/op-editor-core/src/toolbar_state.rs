@@ -16,7 +16,7 @@ use crate::tool::Tool;
 pub enum ToolbarAction {
     Undo,
     Redo,
-    ToggleCodePanel,
+    ToggleVariablesPanel,
     ToggleDesignPanel,
 }
 

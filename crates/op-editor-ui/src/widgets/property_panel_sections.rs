@@ -162,8 +162,9 @@ impl<'a> EditContext<'a> {
 /// `VisibleSections` / `SizeFlags` state live in
 /// `property_panel_layout.rs` now.
 pub use crate::widgets::property_panel_layout::{
-    action_button_rects, action_button_rects_with_fill_picker, editable_input_rects,
-    fill_body_height, property_panel_content_height, SizeFlags, VisibleSections,
+    action_button_rects, action_button_rects_with_fill_picker,
+    action_button_rects_with_font_picker, editable_input_rects, fill_body_height,
+    property_panel_content_height, ActionButtonRectOptions, SizeFlags, VisibleSections,
 };
 
 // ── Tab strip ─────────────────────────────────────────────────────

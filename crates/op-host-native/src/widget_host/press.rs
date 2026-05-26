@@ -508,7 +508,10 @@ impl WidgetHostNative {
                         let acted = match action {
                             ToolbarAction::Undo => self.editor_state.undo(),
                             ToolbarAction::Redo => self.editor_state.redo(),
-                            _ => false,
+                            ToolbarAction::ToggleVariablesPanel => {
+                                self.apply_toggle_variables_panel()
+                            }
+                            ToolbarAction::ToggleDesignPanel => self.apply_toggle_design_md_panel(),
                         };
                         self.mark_dirty();
                         return acted || rename_committed || text_edit_committed;
