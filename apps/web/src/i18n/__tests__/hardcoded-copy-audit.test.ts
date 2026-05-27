@@ -17,6 +17,9 @@ const AUDITED_FILES = [
   'apps/web/src/components/panels/code-local-output-actions.tsx',
   'apps/web/src/components/panels/code-panel.tsx',
   'apps/web/src/components/tasks/task-center.tsx',
+  'apps/web/src/components/tasks/task-detail.tsx',
+  'apps/web/src/components/tasks/task-notifications.tsx',
+  'apps/web/src/components/tasks/task-table.tsx',
   'apps/web/src/components/tasks/worker-management.tsx',
   'apps/web/src/components/tasks/task-notification-listener.tsx',
 ];
@@ -43,7 +46,8 @@ const REQUIRED_SNIPPETS = [
     file: 'apps/web/src/components/cloud/cloud-file-details-panel.tsx',
     text: "t('cloudLibrary.details.openFileTasks')",
   },
-  { file: 'apps/web/src/components/tasks/task-center.tsx', text: "t('tasks.retry')" },
+  { file: 'apps/web/src/components/tasks/task-table.tsx', text: "t('tasks.retry')" },
+  { file: 'apps/web/src/components/tasks/task-detail.tsx', text: "t('tasks.executionSummary')" },
   {
     file: 'apps/web/src/components/tasks/worker-management.tsx',
     text: "t('tasks.workerManagement')",
