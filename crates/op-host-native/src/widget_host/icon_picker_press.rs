@@ -27,7 +27,6 @@ impl WidgetHostNative {
                 self.editor_state.editor_ui.icon_picker_open = false;
                 self.editor_state.editor_ui.icon_picker_replace_selection = false;
                 self.editor_state.editor_ui.icon_picker_search.clear();
-                self.editor_state.editor_ui.icon_picker_scroll = 0.0;
             }
             IconPickerHit::DragHeader => {
                 self.icon_picker_drag = Some(IconPickerDragState {
@@ -71,7 +70,6 @@ impl WidgetHostNative {
                     );
                     self.editor_state.editor_ui.icon_picker_open = false;
                     self.editor_state.editor_ui.icon_picker_search.clear();
-                    self.editor_state.editor_ui.icon_picker_scroll = 0.0;
                     self.editor_state.editor_ui.icon_picker_replace_selection = false;
                     if inserted.is_some() {
                         self.mark_dirty();

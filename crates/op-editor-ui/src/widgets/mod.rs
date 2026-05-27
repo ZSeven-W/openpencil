@@ -47,7 +47,6 @@ pub mod property_panel_effects;
 pub mod property_panel_export;
 pub mod property_panel_fill;
 pub mod property_panel_flex;
-pub mod property_panel_font_picker;
 pub mod property_panel_icon;
 #[cfg(test)]
 mod property_panel_icon_tests;

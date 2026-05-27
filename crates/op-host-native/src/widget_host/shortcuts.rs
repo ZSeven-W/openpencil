@@ -155,24 +155,6 @@ impl WidgetHostNative {
         true
     }
 
-    /// Cmd+Shift+V / toolbar `{}` — open / close the Variables panel.
-    pub fn apply_toggle_variables_panel(&mut self) -> bool {
-        self.commit_variable_row_focus_if_any();
-        let ui = &mut self.editor_state.editor_ui;
-        ui.variables_panel_open = !ui.variables_panel_open;
-        self.mark_dirty();
-        true
-    }
-
-    /// Cmd+Shift+D / toolbar book — open / close the Design.md panel.
-    pub fn apply_toggle_design_md_panel(&mut self) -> bool {
-        self.commit_variable_row_focus_if_any();
-        let ui = &mut self.editor_state.editor_ui;
-        ui.design_md_panel_open = !ui.design_md_panel_open;
-        self.mark_dirty();
-        true
-    }
-
     /// Cmd+, — open / close the floating agent-settings modal.
     pub fn apply_toggle_agent_settings(&mut self) -> bool {
         self.commit_variable_row_focus_if_any();
@@ -217,7 +199,6 @@ impl WidgetHostNative {
     /// export actions so the typed value lands before the file
     /// op runs.
     pub fn commit_variable_row_focus_if_any_pub(&mut self) {
-        self.commit_variables_panel_header_focus_if_any();
         self.commit_variable_row_focus_if_any();
     }
 

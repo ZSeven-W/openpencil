@@ -25,23 +25,64 @@ pub enum TextGrowthValue {
     FixedWidthHeight,
 }
 
-pub const BUILT_IN_FONT_FAMILIES: [&str; 15] = [
-    "Inter",
-    "Poppins",
-    "Roboto",
-    "Montserrat",
-    "Open Sans",
-    "Lato",
-    "Raleway",
-    "DM Sans",
-    "Playfair Display",
-    "Nunito",
-    "Source Sans 3",
-    "Arial",
-    "Helvetica",
-    "Georgia",
-    "Courier New",
-];
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FontFamilyChoice {
+    Inter,
+    Poppins,
+    Roboto,
+    Montserrat,
+    OpenSans,
+    Lato,
+    Raleway,
+    DmSans,
+    PlayfairDisplay,
+    Nunito,
+    SourceSans3,
+    Arial,
+    Helvetica,
+    Georgia,
+    CourierNew,
+}
+
+impl FontFamilyChoice {
+    pub const ALL: [Self; 15] = [
+        Self::Inter,
+        Self::Poppins,
+        Self::Roboto,
+        Self::Montserrat,
+        Self::OpenSans,
+        Self::Lato,
+        Self::Raleway,
+        Self::DmSans,
+        Self::PlayfairDisplay,
+        Self::Nunito,
+        Self::SourceSans3,
+        Self::Arial,
+        Self::Helvetica,
+        Self::Georgia,
+        Self::CourierNew,
+    ];
+
+    pub fn family(self) -> &'static str {
+        match self {
+            Self::Inter => "Inter",
+            Self::Poppins => "Poppins",
+            Self::Roboto => "Roboto",
+            Self::Montserrat => "Montserrat",
+            Self::OpenSans => "Open Sans",
+            Self::Lato => "Lato",
+            Self::Raleway => "Raleway",
+            Self::DmSans => "DM Sans",
+            Self::PlayfairDisplay => "Playfair Display",
+            Self::Nunito => "Nunito",
+            Self::SourceSans3 => "Source Sans 3",
+            Self::Arial => "Arial",
+            Self::Helvetica => "Helvetica",
+            Self::Georgia => "Georgia",
+            Self::CourierNew => "Courier New",
+        }
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LayoutAlignValue {
@@ -64,7 +105,7 @@ pub enum LayoutJustifyValue {
 /// after the text-input hit-test misses.
 ///
 /// `PartialEq` only (not `Eq`) — `AdjustEffectParam` carries an `f32`.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum PropertyPanelAction {
     SetFlexLayout(op_editor_core::FlexLayout),
     ToggleSizeFillWidth,
@@ -166,5 +207,5 @@ pub enum PropertyPanelAction {
     SetTextVerticalAlign(TextVerticalAlignValue),
     SetTextGrowth(TextGrowthValue),
     ToggleFontFamilyPicker,
-    SetFontFamily(String),
+    SetFontFamily(FontFamilyChoice),
 }

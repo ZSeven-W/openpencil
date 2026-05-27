@@ -84,27 +84,6 @@ impl EditorState {
     /// a pre-edit history snapshot. Returns false when there is no
     /// editable selection to edit.
     pub fn open_color_picker(&mut self, target: ColorTarget, anchor_y: f32) -> bool {
-        self.open_color_picker_with_anchor(target, None, anchor_y)
-    }
-
-    /// Same as [`Self::open_color_picker`], but horizontally anchors
-    /// the floating picker near the click point instead of the right
-    /// property rail.
-    pub fn open_color_picker_at(
-        &mut self,
-        target: ColorTarget,
-        anchor_x: f32,
-        anchor_y: f32,
-    ) -> bool {
-        self.open_color_picker_with_anchor(target, Some(anchor_x), anchor_y)
-    }
-
-    fn open_color_picker_with_anchor(
-        &mut self,
-        target: ColorTarget,
-        anchor_x: Option<f32>,
-        anchor_y: f32,
-    ) -> bool {
         let sel = self.selection.anchor.clone();
         if !sel.is_real() || !self.is_editable(&sel) {
             return false;
@@ -138,7 +117,6 @@ impl EditorState {
             val: v,
             drag: None,
             anchor_y,
-            anchor_x,
             variable: None,
             alpha,
         });
@@ -156,26 +134,6 @@ impl EditorState {
     pub fn open_color_picker_for_variable(
         &mut self,
         variable: impl Into<String>,
-        anchor_y: f32,
-    ) -> bool {
-        self.open_color_picker_for_variable_with_anchor(variable, None, anchor_y)
-    }
-
-    /// Same as [`Self::open_color_picker_for_variable`], but anchors
-    /// the floating picker near the clicked variable swatch.
-    pub fn open_color_picker_for_variable_at(
-        &mut self,
-        variable: impl Into<String>,
-        anchor_x: f32,
-        anchor_y: f32,
-    ) -> bool {
-        self.open_color_picker_for_variable_with_anchor(variable, Some(anchor_x), anchor_y)
-    }
-
-    fn open_color_picker_for_variable_with_anchor(
-        &mut self,
-        variable: impl Into<String>,
-        anchor_x: Option<f32>,
         anchor_y: f32,
     ) -> bool {
         let name = variable.into();
@@ -207,7 +165,6 @@ impl EditorState {
             val: v,
             drag: None,
             anchor_y,
-            anchor_x,
             variable: Some(name),
             alpha: 1.0,
         });

@@ -5,12 +5,10 @@
 //! `host.editor_state` from canonical-schema JSON and assert against
 //! `editor_state` + the derived `LayoutScene` render scene.
 
-use super::{helpers::TOOLBAR_INSET_X, helpers::TOOLBAR_INSET_Y, NodeDragState, WidgetHostNative};
+use super::{NodeDragState, WidgetHostNative};
 use op_editor_core::ui_draft::PropertyFocus;
 use op_editor_core::NodeId;
 use op_editor_core::PenNodeExt;
-use op_editor_ui::widgets::{LayoutCx, Toolbar, ToolbarAction, ToolbarHit, Widget, TOOLBAR_WIDTH};
-use op_editor_ui::{Point2D, Rect};
 
 /// Seed a host's `editor_state` from a canonical `.op` JSON snippet.
 fn seed(host: &mut WidgetHostNative, json: &str) {
@@ -36,41 +34,6 @@ fn three_rects(boxes: [(f64, f64, f64, f64); 3], ids: [&str; 3]) -> String {
         node(ids[1], boxes[1]),
         node(ids[2], boxes[2]),
     )
-}
-
-fn toolbar_action_point(
-    host: &WidgetHostNative,
-    action: ToolbarAction,
-    viewport_w: f32,
-    viewport_h: f32,
-) -> Point2D {
-    let (cx0, _cy0, _cw, _ch) = host.canvas_region(viewport_w, viewport_h);
-    let toolbar = Toolbar::for_editor(host.editor_state());
-    let toolbar_h = toolbar
-        .layout(&LayoutCx {
-            available_width: TOOLBAR_WIDTH,
-            dpi: 1.0,
-        })
-        .rect
-        .size
-        .y;
-    let rect = Rect {
-        origin: Point2D::new(
-            cx0 + TOOLBAR_INSET_X,
-            op_editor_ui::widgets::TOP_BAR_HEIGHT + TOOLBAR_INSET_Y,
-        ),
-        size: Point2D::new(TOOLBAR_WIDTH, toolbar_h),
-    };
-    let x = rect.origin.x + rect.size.x / 2.0;
-    let mut y = rect.origin.y;
-    while y <= rect.origin.y + rect.size.y {
-        let point = Point2D::new(x, y);
-        if toolbar.hit_test(rect, point) == Some(ToolbarHit::Action(action)) {
-            return point;
-        }
-        y += 1.0;
-    }
-    panic!("toolbar action {action:?} not hittable");
 }
 
 #[test]
@@ -729,32 +692,13 @@ fn icon_picker_open_owns_keyboard_search() {
     host.editor_state_mut().editor_ui.icon_picker_open = true;
 
     assert!(host.input_active_pub());
-    host.set_now_ms(42);
     assert!(host.apply_text('h'));
-    assert_eq!(
-        host.editor_state().editor_ui.icon_picker_caret_anchor_ms,
-        42
-    );
     assert!(host.apply_text('o'));
     assert_eq!(host.editor_state().editor_ui.icon_picker_search, "ho");
-    host.set_now_ms(96);
     assert!(host.apply_backspace());
-    assert_eq!(
-        host.editor_state().editor_ui.icon_picker_caret_anchor_ms,
-        96
-    );
     assert_eq!(host.editor_state().editor_ui.icon_picker_search, "h");
     assert!(host.apply_escape());
     assert!(!host.editor_state().editor_ui.icon_picker_open);
-}
-
-#[test]
-fn icon_picker_open_schedules_search_caret_blink() {
-    let mut host = WidgetHostNative::new();
-    host.set_now_ms(1200);
-    host.editor_state_mut().editor_ui.icon_picker_open = true;
-
-    assert!(host.next_animation_deadline_ms().is_some());
 }
 
 #[test]
@@ -785,46 +729,6 @@ fn icon_picker_click_inserts_icon_font_node() {
     assert_eq!(icon.icon_font_name, "home");
     assert_eq!(icon.icon_font_family.as_deref(), Some("lucide"));
     assert_eq!(host.editor_state().selection.anchor.as_str(), icon.base.id);
-}
-
-#[test]
-fn toolbar_design_button_toggles_design_md_panel() {
-    let mut host = WidgetHostNative::new();
-    let viewport_w = 1280.0;
-    let viewport_h = 900.0;
-    assert!(!host.editor_state().editor_ui.design_md_panel_open);
-
-    let point = toolbar_action_point(
-        &host,
-        ToolbarAction::ToggleDesignPanel,
-        viewport_w,
-        viewport_h,
-    );
-    assert!(host.apply_press(point.x, point.y, viewport_w, viewport_h));
-    assert!(host.editor_state().editor_ui.design_md_panel_open);
-
-    assert!(host.apply_press(point.x, point.y, viewport_w, viewport_h));
-    assert!(!host.editor_state().editor_ui.design_md_panel_open);
-}
-
-#[test]
-fn toolbar_variables_button_toggles_variables_panel() {
-    let mut host = WidgetHostNative::new();
-    let viewport_w = 1280.0;
-    let viewport_h = 900.0;
-    assert!(!host.editor_state().editor_ui.variables_panel_open);
-
-    let point = toolbar_action_point(
-        &host,
-        ToolbarAction::ToggleVariablesPanel,
-        viewport_w,
-        viewport_h,
-    );
-    assert!(host.apply_press(point.x, point.y, viewport_w, viewport_h));
-    assert!(host.editor_state().editor_ui.variables_panel_open);
-
-    assert!(host.apply_press(point.x, point.y, viewport_w, viewport_h));
-    assert!(!host.editor_state().editor_ui.variables_panel_open);
 }
 
 #[test]
