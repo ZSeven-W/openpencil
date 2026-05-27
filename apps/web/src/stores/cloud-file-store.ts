@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type {
   CloudFileLayout,
+  CloudListPage,
   CloudFileSort,
   CloudFileSummary,
   CloudFileView,
@@ -16,7 +17,7 @@ import {
   deleteCloudFile,
   deleteCloudFolder,
   deleteCloudProject,
-  listCloudFiles,
+  listCloudFilesPage,
   listCloudFolders,
   listCloudProjects,
   permanentlyDeleteCloudFile,
@@ -27,6 +28,7 @@ import {
   updateCloudProject,
 } from '@/services/cloud/cloud-files';
 import type { PenDocument } from '@/types/pen';
+import { reuseInFlightRequest, stableRequestKey } from '@/utils/in-flight-request';
 
 type OperationName =
   | 'copy'
@@ -44,6 +46,7 @@ type OperationMap = Record<string, OperationName | undefined>;
 
 interface CloudFileState {
   files: CloudFileSummary[];
+  filePage: CloudListPage;
   folders: CloudFolder[];
   projects: CloudProject[];
   loading: boolean;
@@ -58,9 +61,10 @@ interface CloudFileState {
   layout: CloudFileLayout;
   operatingIds: OperationMap;
   initializeLibrary: () => Promise<void>;
-  loadProjects: () => Promise<void>;
-  loadFolders: () => Promise<void>;
-  loadFiles: () => Promise<void>;
+  loadProjects: (options?: { force?: boolean }) => Promise<void>;
+  loadFolders: (options?: { force?: boolean }) => Promise<void>;
+  loadFiles: (options?: { force?: boolean; limit?: number; offset?: number }) => Promise<void>;
+  setFilePage: (page: number) => Promise<void>;
   selectProject: (projectId: string) => Promise<void>;
   selectFolder: (folderId: string | null) => Promise<void>;
   setView: (view: CloudFileView) => Promise<void>;
@@ -92,6 +96,7 @@ interface CloudFileState {
 
 const initialState = {
   files: [],
+  filePage: { total: 0, limit: 10, offset: 0 },
   folders: [],
   projects: [],
   loading: false,
@@ -106,6 +111,8 @@ const initialState = {
   layout: 'list' as CloudFileLayout,
   operatingIds: {},
 };
+
+const readRequests = new Map<string, Promise<unknown>>();
 
 function errorMessage(err: unknown, fallback: string): string {
   return err instanceof Error ? err.message : fallback;
@@ -134,113 +141,198 @@ function fileQuery(state: CloudFileState) {
     view: state.view,
     search: state.search.trim() || undefined,
     sort: state.sort,
+    limit: state.filePage.limit,
+    offset: state.filePage.offset,
   };
 }
 
-export const useCloudFileStore = create<CloudFileState>((set, get) => ({
-  ...initialState,
+function resetFilePageOffset(state: CloudFileState): CloudListPage {
+  return { ...state.filePage, offset: 0 };
+}
 
-  initializeLibrary: async () => {
-    set({ projectsLoading: true, foldersLoading: true, loading: true, error: null });
-    try {
-      const projects = await listCloudProjects();
-      const selectedProjectId = get().selectedProjectId ?? projects[0]?.id ?? null;
-      set({ projects, selectedProjectId, projectsLoading: false });
+function updateFilePageForRequest(
+  state: CloudFileState,
+  options: { limit?: number; offset?: number },
+): CloudListPage {
+  return {
+    ...state.filePage,
+    limit: options.limit ?? state.filePage.limit,
+    offset: options.offset ?? state.filePage.offset,
+  };
+}
 
-      if (selectedProjectId) {
-        await get().loadFolders();
-        await get().loadFiles();
-      } else {
-        set({ folders: [], files: [], foldersLoading: false, loading: false });
-      }
-    } catch (err) {
-      set({
-        projectsLoading: false,
-        foldersLoading: false,
-        loading: false,
-        error: errorMessage(err, 'Failed to load cloud library'),
-      });
-    }
-  },
+function forceReadOption(force?: boolean): { force: true } | undefined {
+  return force ? { force: true } : undefined;
+}
 
-  loadProjects: async () => {
-    set({ projectsLoading: true, error: null });
-    try {
-      const projects = await listCloudProjects();
-      const currentProjectId = get().selectedProjectId;
-      const selectedProjectId =
-        currentProjectId && projects.some((project) => project.id === currentProjectId)
-          ? currentProjectId
-          : projects[0]?.id ?? null;
-      set({ projects, selectedProjectId, projectsLoading: false });
-    } catch (err) {
-      set({
-        projectsLoading: false,
-        error: errorMessage(err, 'Failed to load cloud projects'),
-      });
-    }
-  },
+function callWithOptionalReadOptions<Result>(
+  read: (options?: { force?: boolean }) => Promise<Result>,
+  force?: boolean,
+): Promise<Result> {
+  const options = forceReadOption(force);
+  return options ? read(options) : read();
+}
 
-  loadFolders: async () => {
-    const selectedProjectId = get().selectedProjectId;
-    if (!selectedProjectId) {
-      set({ folders: [], foldersLoading: false });
-      return;
-    }
+function callWithOptionalListOptions<Input, Result>(
+  read: (input: Input, options?: { force?: boolean }) => Promise<Result>,
+  input: Input,
+  force?: boolean,
+): Promise<Result> {
+  const options = forceReadOption(force);
+  return options ? read(input, options) : read(input);
+}
 
-    set({ foldersLoading: true, error: null });
-    try {
-      const folders = await listCloudFolders({ projectId: selectedProjectId });
-      set({ folders, foldersLoading: false });
-    } catch (err) {
-      set({
-        foldersLoading: false,
-        error: errorMessage(err, 'Failed to load cloud folders'),
-      });
-    }
-  },
-
-  loadFiles: async () => {
+async function loadCurrentFilePage(
+  set: (partial: Partial<CloudFileState> | ((state: CloudFileState) => Partial<CloudFileState>)) => void,
+  get: () => CloudFileState,
+  options: { force?: boolean; limit?: number; offset?: number } = {},
+) {
+  if (options.limit !== undefined || options.offset !== undefined) {
+    set((state) => ({ filePage: updateFilePageForRequest(state, options) }));
+  }
+  const query = fileQuery(get());
+  return reuseInFlightRequest(readRequests, stableRequestKey('files', { query, options }), async () => {
     set({ loading: true, error: null });
     try {
-      const files = await listCloudFiles(fileQuery(get()));
-      set({ files, loading: false });
+      const result = await callWithOptionalListOptions(
+        listCloudFilesPage,
+        query,
+        options.force,
+      );
+      set({ files: result.data, filePage: result.page, loading: false });
     } catch (err) {
       set({
         loading: false,
         error: errorMessage(err, 'Failed to load cloud files'),
       });
     }
+  });
+}
+
+export const useCloudFileStore = create<CloudFileState>((set, get) => ({
+  ...initialState,
+
+  initializeLibrary: async () => {
+    return reuseInFlightRequest(readRequests, stableRequestKey('initialize-library'), async () => {
+      set({ projectsLoading: true, foldersLoading: true, loading: true, error: null });
+      try {
+        const projects = await listCloudProjects();
+        const selectedProjectId = get().selectedProjectId ?? projects[0]?.id ?? null;
+        set({ projects, selectedProjectId, projectsLoading: false });
+
+        if (selectedProjectId) {
+          await Promise.all([get().loadFolders(), get().loadFiles()]);
+        } else {
+          set({ folders: [], files: [], foldersLoading: false, loading: false });
+        }
+      } catch (err) {
+        set({
+          projectsLoading: false,
+          foldersLoading: false,
+          loading: false,
+          error: errorMessage(err, 'Failed to load cloud library'),
+        });
+      }
+    });
+  },
+
+  loadProjects: async (options = {}) =>
+    reuseInFlightRequest(readRequests, stableRequestKey('projects', options), async () => {
+      set({ projectsLoading: true, error: null });
+      try {
+        const projects = await callWithOptionalReadOptions(listCloudProjects, options.force);
+        const currentProjectId = get().selectedProjectId;
+        const selectedProjectId =
+          currentProjectId && projects.some((project) => project.id === currentProjectId)
+            ? currentProjectId
+            : projects[0]?.id ?? null;
+        set({ projects, selectedProjectId, projectsLoading: false });
+      } catch (err) {
+        set({
+          projectsLoading: false,
+          error: errorMessage(err, 'Failed to load cloud projects'),
+        });
+      }
+    }),
+
+  loadFolders: async (options = {}) => {
+    const selectedProjectId = get().selectedProjectId;
+    if (!selectedProjectId) {
+      set({ folders: [], foldersLoading: false });
+      return;
+    }
+
+    return reuseInFlightRequest(
+      readRequests,
+      stableRequestKey('folders', { projectId: selectedProjectId, options }),
+      async () => {
+        set({ foldersLoading: true, error: null });
+        try {
+          const folders = await callWithOptionalListOptions(
+            listCloudFolders,
+            { projectId: selectedProjectId },
+            options.force,
+          );
+          set({ folders, foldersLoading: false });
+        } catch (err) {
+          set({
+            foldersLoading: false,
+            error: errorMessage(err, 'Failed to load cloud folders'),
+          });
+        }
+      },
+    );
+  },
+
+  loadFiles: async (options = {}) => loadCurrentFilePage(set, get, options),
+
+  setFilePage: async (page) => {
+    const { filePage } = get();
+    const nextPage = Math.max(1, Math.trunc(page));
+    await get().loadFiles({
+      offset: (nextPage - 1) * filePage.limit,
+      limit: filePage.limit,
+    });
   },
 
   selectProject: async (projectId) => {
-    set({
+    set((state) => ({
       selectedProjectId: projectId,
       selectedFolderId: null,
       view: 'all',
       error: null,
-    });
+      filePage: resetFilePageOffset(state),
+    }));
     await get().loadFolders();
     await get().loadFiles();
   },
 
   selectFolder: async (folderId) => {
-    set({ selectedFolderId: folderId, view: 'all', error: null });
+    set((state) => ({
+      selectedFolderId: folderId,
+      view: 'all',
+      error: null,
+      filePage: resetFilePageOffset(state),
+    }));
     await get().loadFiles();
   },
 
   setView: async (view) => {
-    set({ view, selectedFolderId: view === 'all' ? get().selectedFolderId : null });
+    set((state) => ({
+      view,
+      selectedFolderId: view === 'all' ? state.selectedFolderId : null,
+      filePage: resetFilePageOffset(state),
+    }));
     await get().loadFiles();
   },
 
   setSearch: async (search) => {
-    set({ search });
+    set((state) => ({ search, filePage: resetFilePageOffset(state) }));
     await get().loadFiles();
   },
 
   setSort: async (sort) => {
-    set({ sort });
+    set((state) => ({ sort, filePage: resetFilePageOffset(state) }));
     await get().loadFiles();
   },
 
@@ -366,9 +458,10 @@ export const useCloudFileStore = create<CloudFileState>((set, get) => ({
       await deleteCloudFolder(folderId);
       set((state) => ({
         folders: state.folders.filter((folder) => folder.id !== folderId),
-        files: state.files.filter((file) => file.folderId !== folderId),
         selectedFolderId: state.selectedFolderId === folderId ? null : state.selectedFolderId,
+        filePage: resetFilePageOffset(state),
       }));
+      await loadCurrentFilePage(set, get, { force: true });
       return true;
     } catch (err) {
       set({ error: errorMessage(err, 'Failed to delete folder') });
@@ -389,7 +482,8 @@ export const useCloudFileStore = create<CloudFileState>((set, get) => ({
         folderId: state.selectedFolderId,
         source,
       });
-      set({ files: [file, ...get().files], loading: false });
+      await loadCurrentFilePage(set, get, { force: true, offset: 0 });
+      set({ loading: false });
       return file.id;
     } catch (err) {
       set({
@@ -428,7 +522,7 @@ export const useCloudFileStore = create<CloudFileState>((set, get) => ({
         projectId: state.selectedProjectId,
         folderId: state.selectedFolderId,
       });
-      set({ files: [file, ...get().files] });
+      await loadCurrentFilePage(set, get, { force: true, offset: 0 });
       return file.id;
     } catch (err) {
       set({ error: errorMessage(err, 'Failed to copy cloud file') });
@@ -442,16 +536,12 @@ export const useCloudFileStore = create<CloudFileState>((set, get) => ({
     setOperation(set, id, 'move');
     set({ error: null });
     try {
-      const file = await updateCloudFileMetadata({
+      await updateCloudFileMetadata({
         id,
         projectId: get().selectedProjectId,
         folderId,
       });
-      set((state) => ({
-        files: state.files
-          .map((item) => (item.id === id ? file : item))
-          .filter((item) => state.view !== 'all' || item.folderId === state.selectedFolderId),
-      }));
+      await loadCurrentFilePage(set, get, { force: true });
       return true;
     } catch (err) {
       set({ error: errorMessage(err, 'Failed to move cloud file') });
@@ -494,11 +584,13 @@ export const useCloudFileStore = create<CloudFileState>((set, get) => ({
     set({ error: null });
     try {
       const file = await updateCloudFileMetadata({ id, starred });
-      set((state) => ({
-        files: state.files
-          .map((item) => (item.id === id ? file : item))
-          .filter((item) => state.view !== 'starred' || item.starred),
-      }));
+      if (get().view === 'starred' && !file.starred) {
+        await loadCurrentFilePage(set, get, { force: true });
+      } else {
+        set((state) => ({
+          files: state.files.map((item) => (item.id === id ? file : item)),
+        }));
+      }
       return true;
     } catch (err) {
       set({ error: errorMessage(err, 'Failed to update favorite') });
@@ -513,7 +605,7 @@ export const useCloudFileStore = create<CloudFileState>((set, get) => ({
     set({ error: null });
     try {
       await deleteCloudFile(id);
-      set({ files: get().files.filter((file) => file.id !== id) });
+      await loadCurrentFilePage(set, get, { force: true });
       return true;
     } catch (err) {
       set({ error: errorMessage(err, 'Failed to delete cloud file') });
@@ -527,13 +619,8 @@ export const useCloudFileStore = create<CloudFileState>((set, get) => ({
     setOperation(set, id, 'restore');
     set({ error: null });
     try {
-      const file = await restoreCloudFile(id);
-      set((state) => ({
-        files:
-          state.view === 'trash'
-            ? state.files.filter((item) => item.id !== id)
-            : [file, ...state.files.filter((item) => item.id !== id)],
-      }));
+      await restoreCloudFile(id);
+      await loadCurrentFilePage(set, get, { force: true });
       return true;
     } catch (err) {
       set({ error: errorMessage(err, 'Failed to restore cloud file') });
@@ -548,7 +635,7 @@ export const useCloudFileStore = create<CloudFileState>((set, get) => ({
     set({ error: null });
     try {
       await permanentlyDeleteCloudFile(id);
-      set({ files: get().files.filter((file) => file.id !== id) });
+      await loadCurrentFilePage(set, get, { force: true });
       return true;
     } catch (err) {
       set({ error: errorMessage(err, 'Failed to permanently delete cloud file') });
@@ -558,5 +645,8 @@ export const useCloudFileStore = create<CloudFileState>((set, get) => ({
     }
   },
 
-  reset: () => set(initialState),
+  reset: () => {
+    readRequests.clear();
+    set(initialState);
+  },
 }));

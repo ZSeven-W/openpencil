@@ -2,6 +2,16 @@ import { useEffect, useState } from 'react';
 import { ShieldCheck, Trash2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
+import { Field, FieldGroup, FieldLabel } from '@/components/ui/field';
+import { Input } from '@/components/ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import {
   createCloudFileShare,
   listCloudFileShares,
@@ -98,29 +108,44 @@ export function CloudFileSharingSection({ file }: CloudFileSharingSectionProps) 
   return (
     <section className="mt-5 border-t border-border pt-4 text-xs">
       <p className="mb-3 font-medium">{t('cloudLibrary.share.title')}</p>
-      <div className="space-y-2">
-        <input
-          aria-label={t('cloudLibrary.share.email')}
+      <FieldGroup className="gap-2">
+        <Field>
+          <FieldLabel className="sr-only" htmlFor={`share-email-${file.id}`}>
+            {t('cloudLibrary.share.email')}
+          </FieldLabel>
+        <Input
+          id={`share-email-${file.id}`}
+          type="email"
           value={email}
           onChange={(event) => setEmail(event.target.value)}
           placeholder="teammate@example.com"
-          className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs outline-none focus:border-ring"
+          className="h-8 text-xs"
         />
+        </Field>
         <div className="flex gap-2">
-          <select
-            aria-label={t('cloudLibrary.share.roleLabel')}
+          <Select
             value={role}
-            onChange={(event) => setRole(event.target.value as CloudShareRole)}
-            className="h-8 min-w-0 flex-1 rounded-md border border-input bg-background px-2 text-xs outline-none focus:border-ring"
+            onValueChange={(value) => setRole(value as CloudShareRole)}
           >
-            <option value="viewer">{t('cloudLibrary.share.role.viewer')}</option>
-            <option value="editor">{t('cloudLibrary.share.role.editor')}</option>
-          </select>
+            <SelectTrigger
+              size="sm"
+              aria-label={t('cloudLibrary.share.roleLabel')}
+              className="min-w-0 flex-1"
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectGroup>
+                <SelectItem value="viewer">{t('cloudLibrary.share.role.viewer')}</SelectItem>
+                <SelectItem value="editor">{t('cloudLibrary.share.role.editor')}</SelectItem>
+              </SelectGroup>
+            </SelectContent>
+          </Select>
           <Button size="sm" onClick={() => void addShare()} disabled={saving || !email.trim()}>
             {t('cloudLibrary.share.add')}
           </Button>
         </div>
-      </div>
+      </FieldGroup>
 
       {error && <p className="mt-3 text-xs text-destructive">{error}</p>}
       {loading ? (
@@ -130,7 +155,7 @@ export function CloudFileSharingSection({ file }: CloudFileSharingSectionProps) 
           {t('cloudLibrary.share.empty')}
         </p>
       ) : (
-        <div className="mt-3 space-y-2">
+        <div className="mt-3 flex flex-col gap-2">
           {shares.map((share) => {
             const recipient =
               share.sharedWithEmail ??

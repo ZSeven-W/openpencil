@@ -1,7 +1,19 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { PenTool } from 'lucide-react';
+import { CloudOff, PenTool } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
+import { Field, FieldGroup, FieldLabel } from '@/components/ui/field';
+import { Input } from '@/components/ui/input';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useCloudAuthStore } from '@/stores/cloud-auth-store';
 
 interface AuthGateProps {
@@ -27,26 +39,45 @@ export function AuthGate({ children }: AuthGateProps) {
 
   if (!initialized || status === 'loading') {
     return (
-      <div className="min-h-screen bg-background text-foreground flex items-center justify-center">
-        <span className="text-sm text-muted-foreground">{t('auth.loadingCloudWorkspace')}</span>
+      <div className="flex min-h-screen items-center justify-center bg-background px-6 text-foreground">
+        <Card className="w-full max-w-md rounded-md">
+          <CardHeader>
+            <CardTitle>{t('auth.loadingCloudWorkspace')}</CardTitle>
+            <CardDescription>{t('workbench.home.description')}</CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-3">
+            <Skeleton className="h-9 w-full" />
+            <Skeleton className="h-9 w-5/6" />
+            <Skeleton className="h-20 w-full" />
+          </CardContent>
+        </Card>
       </div>
     );
   }
 
   if (status === 'unconfigured') {
     return (
-      <div className="min-h-screen bg-background text-foreground flex items-center justify-center px-6">
-        <div className="w-full max-w-md border border-border bg-card p-6">
-          <div className="flex items-center gap-3">
-            <PenTool size={24} className="text-primary" />
-            <div>
-              <h1 className="text-lg font-semibold">{t('auth.supabaseNotConfiguredTitle')}</h1>
-              <p className="mt-1 text-sm text-muted-foreground">
-                {t('auth.supabaseNotConfiguredBody')}
-              </p>
+      <div className="flex min-h-screen items-center justify-center bg-background px-6 text-foreground">
+        <Card className="w-full max-w-lg rounded-md">
+          <CardHeader>
+            <div className="flex items-center gap-3">
+              <span className="flex size-9 items-center justify-center rounded-md border border-border bg-background">
+                <CloudOff />
+              </span>
+              <div>
+                <CardTitle>{t('auth.supabaseNotConfiguredTitle')}</CardTitle>
+                <CardDescription>{t('workbench.nav.auth')}</CardDescription>
+              </div>
             </div>
-          </div>
-        </div>
+          </CardHeader>
+          <CardContent>
+            <Alert>
+              <CloudOff />
+              <AlertTitle>{t('auth.supabaseNotConfiguredTitle')}</AlertTitle>
+              <AlertDescription>{t('auth.supabaseNotConfiguredBody')}</AlertDescription>
+            </Alert>
+          </CardContent>
+        </Card>
       </div>
     );
   }
@@ -70,62 +101,75 @@ export function AuthGate({ children }: AuthGateProps) {
   };
 
   return (
-    <div className="min-h-screen bg-background text-foreground flex items-center justify-center px-6">
-      <form onSubmit={submit} className="w-full max-w-sm border border-border bg-card p-6">
-        <div className="mb-6 flex items-center gap-3">
-          <PenTool size={28} className="text-primary" />
-          <div>
-            <h1 className="text-xl font-semibold">{t('auth.cloudTitle')}</h1>
-            <p className="text-sm text-muted-foreground">{t('auth.cloudSubtitle')}</p>
+    <div className="flex min-h-screen items-center justify-center bg-background px-6 text-foreground">
+      <Card className="w-full max-w-sm rounded-md">
+        <CardHeader>
+          <div className="flex items-center gap-3">
+            <span className="flex size-10 items-center justify-center rounded-md border border-border bg-background">
+              <PenTool />
+            </span>
+            <div>
+              <CardTitle>{t('auth.cloudTitle')}</CardTitle>
+              <CardDescription>{t('auth.cloudSubtitle')}</CardDescription>
+            </div>
           </div>
-        </div>
+        </CardHeader>
+        <CardContent>
+          <Tabs
+            value={mode}
+            onValueChange={(value) => setMode(value as 'sign-in' | 'sign-up')}
+            className="mb-5"
+          >
+            <TabsList className="w-full">
+              <TabsTrigger className="flex-1" value="sign-in">
+                {t('auth.signIn')}
+              </TabsTrigger>
+              <TabsTrigger className="flex-1" value="sign-up">
+                {t('auth.createAccount')}
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+          <form onSubmit={submit}>
+            <FieldGroup className="gap-4">
+              <Field>
+                <FieldLabel htmlFor="cloud-email">{t('auth.email')}</FieldLabel>
+                <Input
+                  id="cloud-email"
+                  type="email"
+                  required
+                  value={email}
+                  onChange={(event) => setEmail(event.target.value)}
+                />
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="cloud-password">{t('auth.password')}</FieldLabel>
+                <Input
+                  id="cloud-password"
+                  type="password"
+                  required
+                  minLength={6}
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                />
+              </Field>
+            </FieldGroup>
 
-        <label className="block text-xs font-medium text-muted-foreground" htmlFor="cloud-email">
-          {t('auth.email')}
-        </label>
-        <input
-          id="cloud-email"
-          type="email"
-          required
-          value={email}
-          onChange={(event) => setEmail(event.target.value)}
-          className="mt-1 h-9 w-full border border-border bg-background px-3 text-sm outline-none focus:border-primary"
-        />
+            {error && (
+              <Alert variant="destructive" className="mt-4">
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            )}
 
-        <label
-          className="mt-4 block text-xs font-medium text-muted-foreground"
-          htmlFor="cloud-password"
-        >
-          {t('auth.password')}
-        </label>
-        <input
-          id="cloud-password"
-          type="password"
-          required
-          minLength={6}
-          value={password}
-          onChange={(event) => setPassword(event.target.value)}
-          className="mt-1 h-9 w-full border border-border bg-background px-3 text-sm outline-none focus:border-primary"
-        />
-
-        {error && <p className="mt-3 text-xs text-destructive">{error}</p>}
-
-        <Button type="submit" className="mt-5 w-full" disabled={busy}>
-          {busy
-            ? t('auth.working')
-            : mode === 'sign-in'
-              ? t('auth.signIn')
-              : t('auth.createAccount')}
-        </Button>
-
-        <button
-          type="button"
-          className="mt-4 w-full text-center text-xs text-muted-foreground hover:text-foreground"
-          onClick={() => setMode(mode === 'sign-in' ? 'sign-up' : 'sign-in')}
-        >
-          {mode === 'sign-in' ? t('auth.createNewAccount') : t('auth.useExistingAccount')}
-        </button>
-      </form>
+            <Button type="submit" className="mt-5 w-full" disabled={busy}>
+              {busy
+                ? t('auth.working')
+                : mode === 'sign-in'
+                  ? t('auth.signIn')
+                  : t('auth.createAccount')}
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
     </div>
   );
 }

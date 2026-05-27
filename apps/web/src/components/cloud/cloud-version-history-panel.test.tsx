@@ -19,7 +19,7 @@ const panelState = {
 
 const cloudFileMocks = vi.hoisted(() => ({
   listCloudFileActivity: vi.fn(),
-  listCloudFileVersions: vi.fn(),
+  listCloudFileVersionsPage: vi.fn(),
   restoreCloudFileVersion: vi.fn(),
   updateCloudFileVersionLabel: vi.fn(),
 }));
@@ -48,28 +48,31 @@ beforeEach(() => {
   documentState.cloudFileId = 'file-1';
   documentState.cloudRevision = 5;
   documentState.cloudShareRole = null;
-  cloudFileMocks.listCloudFileVersions.mockResolvedValue([
-    {
-      id: 'version-5',
-      fileId: 'file-1',
-      revision: 5,
-      source: 'manual_save',
-      label: 'Manual save',
-      actorId: 'user-1',
-      sizeBytes: 2048,
-      createdAt: '2026-05-12T08:00:00.000Z',
-    },
-    {
-      id: 'version-3',
-      fileId: 'file-1',
-      revision: 3,
-      source: 'autosave',
-      label: null,
-      actorId: null,
-      sizeBytes: 512,
-      createdAt: '2026-05-12T07:00:00.000Z',
-    },
-  ]);
+  cloudFileMocks.listCloudFileVersionsPage.mockResolvedValue({
+    data: [
+      {
+        id: 'version-5',
+        fileId: 'file-1',
+        revision: 5,
+        source: 'manual_save',
+        label: 'Manual save',
+        actorId: 'user-1',
+        sizeBytes: 2048,
+        createdAt: '2026-05-12T08:00:00.000Z',
+      },
+      {
+        id: 'version-3',
+        fileId: 'file-1',
+        revision: 3,
+        source: 'autosave',
+        label: null,
+        actorId: null,
+        sizeBytes: 512,
+        createdAt: '2026-05-12T07:00:00.000Z',
+      },
+    ],
+    page: { total: 2, limit: 10, offset: 0 },
+  });
   cloudFileMocks.listCloudFileActivity.mockResolvedValue({
     data: [
       {
@@ -84,7 +87,7 @@ beforeEach(() => {
       },
     ],
     nextCursor: '2026-05-12T08:00:00.000Z',
-    limit: 20,
+    limit: 10,
   });
   cloudFileMocks.restoreCloudFileVersion.mockResolvedValue({
     id: 'file-1',
@@ -117,11 +120,14 @@ describe('CloudVersionHistoryPanel', () => {
     expect(screen.getByText(/2 KB/)).toBeTruthy();
     expect(await screen.findByText('file saved')).toBeTruthy();
     expect(screen.getByText('Current rev 5')).toBeTruthy();
-    expect(cloudFileMocks.listCloudFileVersions).toHaveBeenCalledWith('file-1');
+    expect(cloudFileMocks.listCloudFileVersionsPage).toHaveBeenCalledWith('file-1', {
+      limit: 10,
+      offset: 0,
+    });
     expect(cloudFileMocks.listCloudFileActivity).toHaveBeenCalledWith('file-1', {
       type: 'all',
       cursor: null,
-      limit: 20,
+      limit: 10,
     });
   });
 
@@ -196,7 +202,7 @@ describe('CloudVersionHistoryPanel', () => {
           },
         ],
         nextCursor: '2026-05-12T08:00:00.000Z',
-        limit: 20,
+        limit: 10,
       })
       .mockResolvedValueOnce({
         data: [
@@ -212,12 +218,12 @@ describe('CloudVersionHistoryPanel', () => {
           },
         ],
         nextCursor: null,
-        limit: 20,
+        limit: 10,
       })
       .mockResolvedValueOnce({
         data: [],
         nextCursor: null,
-        limit: 20,
+        limit: 10,
       });
 
     render(<CloudVersionHistoryPanel />);
@@ -229,7 +235,7 @@ describe('CloudVersionHistoryPanel', () => {
       expect(cloudFileMocks.listCloudFileActivity).toHaveBeenCalledWith('file-1', {
         type: 'all',
         cursor: '2026-05-12T08:00:00.000Z',
-        limit: 20,
+        limit: 10,
       });
       expect(screen.getByText('rev 4')).toBeTruthy();
     });
@@ -242,7 +248,7 @@ describe('CloudVersionHistoryPanel', () => {
       expect(cloudFileMocks.listCloudFileActivity).toHaveBeenCalledWith('file-1', {
         type: 'file_shared',
         cursor: null,
-        limit: 20,
+        limit: 10,
       });
     });
   });

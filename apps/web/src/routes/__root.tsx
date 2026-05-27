@@ -5,6 +5,8 @@ import { useTranslation } from 'react-i18next';
 import '@/i18n';
 import { detectLanguagePostHydration } from '@/i18n';
 import { TaskNotificationListener } from '@/components/tasks/task-notification-listener';
+import { Toaster } from '@/components/ui/sonner';
+import { installApiRequestObserver } from '@/utils/api-request-observer';
 import appCss from '../styles.css?url';
 
 export const Route = createRootRoute({
@@ -47,6 +49,7 @@ function RootComponent() {
     <>
       <Outlet />
       <TaskNotificationListener />
+      <Toaster />
     </>
   );
 }
@@ -55,6 +58,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
   const { i18n } = useTranslation();
 
   useEffect(() => {
+    installApiRequestObserver();
     void detectLanguagePostHydration();
   }, []);
 

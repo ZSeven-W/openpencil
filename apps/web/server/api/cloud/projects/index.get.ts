@@ -5,7 +5,7 @@ import { getDefaultProject, PROJECT_SELECT } from '../../../utils/cloud-file-man
 
 export default defineEventHandler(async (event) => {
   const { supabase, user } = await getCloudSupabase(event);
-  await getDefaultProject({ supabase, userId: user.id });
+  await getDefaultProject({ supabase, userId: user.id, attachUnprojected: false });
 
   const { data, error } = await supabase
     .from('projects')

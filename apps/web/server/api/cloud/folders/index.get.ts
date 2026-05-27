@@ -2,11 +2,7 @@ import { defineEventHandler, getQuery, createError } from 'h3';
 import { z } from 'zod';
 import { getCloudSupabase, toApiError } from '../../../utils/cloud-supabase';
 import { mapFolder } from '../../../utils/cloud-file-mappers';
-import {
-  assertProjectAccess,
-  FOLDER_SELECT,
-  getDefaultProject,
-} from '../../../utils/cloud-file-management';
+import { FOLDER_SELECT, getDefaultProject } from '../../../utils/cloud-file-management';
 
 const querySchema = z.object({
   projectId: z.string().uuid().optional(),
@@ -24,13 +20,8 @@ export default defineEventHandler(async (event) => {
 
   const { supabase, user } = await getCloudSupabase(event);
   const project = parsed.data.projectId
-    ? (await assertProjectAccess({
-        supabase,
-        userId: user.id,
-        projectId: parsed.data.projectId,
-      }),
-      { id: parsed.data.projectId })
-    : await getDefaultProject({ supabase, userId: user.id });
+    ? { id: parsed.data.projectId }
+    : await getDefaultProject({ supabase, userId: user.id, attachUnprojected: false });
 
   let query = supabase
     .from('folders')

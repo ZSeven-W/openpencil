@@ -4,11 +4,16 @@ import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import {
   listCloudFileActivity,
-  listCloudFileVersions,
+  listCloudFileVersionsPage,
   restoreCloudFileVersion,
   updateCloudFileVersionLabel,
 } from '@/services/cloud/cloud-files';
-import type { CloudActivityEvent, CloudActivityEventType, CloudFileVersion } from '@/types/cloud';
+import type {
+  CloudActivityEvent,
+  CloudActivityEventType,
+  CloudFileVersion,
+  CloudListPage,
+} from '@/types/cloud';
 import { useCloudVersionPanelStore } from '@/stores/cloud-version-panel-store';
 import { useDocumentStore } from '@/stores/document-store';
 
@@ -31,6 +36,8 @@ const ACTIVITY_FILTERS: Array<{ value: CloudActivityEventType | 'all'; labelKey:
   { value: 'codegen_job_created', labelKey: 'versionHistory.activityFilter.codegenJobs' },
   { value: 'version_labeled', labelKey: 'versionHistory.activityFilter.labels' },
 ];
+const VERSION_PAGE_SIZE = 10;
+const ACTIVITY_PAGE_SIZE = 10;
 
 function getActivityTypeKey(type: CloudActivityEventType) {
   return `versionHistory.activityType.${type}`;
@@ -59,6 +66,11 @@ export function CloudVersionHistoryPanel() {
   const cloudRevision = useDocumentStore((s) => s.cloudRevision);
   const cloudShareRole = useDocumentStore((s) => s.cloudShareRole);
   const [versions, setVersions] = useState<CloudFileVersion[]>([]);
+  const [versionPage, setVersionPage] = useState<CloudListPage>({
+    total: 0,
+    limit: VERSION_PAGE_SIZE,
+    offset: 0,
+  });
   const [activity, setActivity] = useState<CloudActivityEvent[]>([]);
   const [activityFilter, setActivityFilter] = useState<CloudActivityEventType | 'all'>('all');
   const [activityCursor, setActivityCursor] = useState<string | null>(null);
@@ -76,10 +88,11 @@ export function CloudVersionHistoryPanel() {
     let cancelled = false;
     setLoading(true);
     setError(null);
-    Promise.all([listCloudFileVersions(fileId), loadActivityPage(fileId, null)])
-      .then(([items, page]) => {
+    Promise.all([loadVersionPage(fileId, 0), loadActivityPage(fileId, null)])
+      .then(([versionResult, page]) => {
         if (!cancelled) {
-          setVersions(items);
+          setVersions(versionResult.data);
+          setVersionPage(versionResult.page);
           setActivity(page.data);
           setActivityCursor(page.nextCursor);
         }
@@ -97,15 +110,41 @@ export function CloudVersionHistoryPanel() {
     };
   }, [activityFilter, cloudFileId, open]);
 
+  const loadVersionPage = (fileId: string, offset: number) =>
+    listCloudFileVersionsPage(fileId, {
+      limit: VERSION_PAGE_SIZE,
+      offset,
+    }).catch(() => ({
+      data: [],
+      page: { total: 0, limit: VERSION_PAGE_SIZE, offset },
+    }));
+
   const loadActivityPage = (fileId: string, cursor: string | null) =>
     listCloudFileActivity(fileId, {
       type: activityFilter,
       cursor,
-      limit: 20,
-    }).catch(() => ({ data: [], nextCursor: null, limit: 20 }));
+      limit: ACTIVITY_PAGE_SIZE,
+    }).catch(() => ({ data: [], nextCursor: null, limit: ACTIVITY_PAGE_SIZE }));
 
   if (!open || !cloudFileId) return null;
   const canManageVersions = cloudShareRole !== 'viewer';
+  const currentVersionPage = Math.floor(versionPage.offset / versionPage.limit) + 1;
+  const versionPageCount = Math.max(1, Math.ceil(versionPage.total / versionPage.limit));
+
+  const changeVersionPage = async (page: number) => {
+    const nextPage = Math.min(Math.max(1, page), versionPageCount);
+    setLoading(true);
+    setError(null);
+    try {
+      const result = await loadVersionPage(cloudFileId, (nextPage - 1) * versionPage.limit);
+      setVersions(result.data);
+      setVersionPage(result.page);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t('versionHistory.errorLoad'));
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const restoreVersion = async (version: CloudFileVersion) => {
     setRestoringId(version.id);
@@ -113,7 +152,9 @@ export function CloudVersionHistoryPanel() {
     try {
       const file = await restoreCloudFileVersion({ fileId: cloudFileId, versionId: version.id });
       useDocumentStore.getState().loadCloudDocument(file);
-      setVersions(await listCloudFileVersions(cloudFileId));
+      const result = await loadVersionPage(cloudFileId, versionPage.offset);
+      setVersions(result.data);
+      setVersionPage(result.page);
     } catch (err) {
       setError(err instanceof Error ? err.message : t('versionHistory.errorRestore'));
     } finally {
@@ -196,7 +237,36 @@ export function CloudVersionHistoryPanel() {
             {t('versionHistory.empty')}
           </p>
         ) : (
-          <div className="space-y-2">
+          <div className="flex flex-col gap-2">
+            <div className="mb-2 flex items-center justify-between gap-2 text-xs text-muted-foreground">
+              <span>
+                {t('tasks.pageRange', {
+                  from: versionPage.total === 0 ? 0 : versionPage.offset + 1,
+                  to: Math.min(versionPage.total, versionPage.offset + versionPage.limit),
+                  total: versionPage.total,
+                })}
+              </span>
+              <div className="flex gap-1">
+                <Button
+                  variant="outline"
+                  size="icon-sm"
+                  aria-label={t('tasks.previousPage')}
+                  disabled={currentVersionPage <= 1 || loading}
+                  onClick={() => void changeVersionPage(currentVersionPage - 1)}
+                >
+                  <ChevronDown size={12} className="rotate-90" />
+                </Button>
+                <Button
+                  variant="outline"
+                  size="icon-sm"
+                  aria-label={t('tasks.nextPage')}
+                  disabled={currentVersionPage >= versionPageCount || loading}
+                  onClick={() => void changeVersionPage(currentVersionPage + 1)}
+                >
+                  <ChevronDown size={12} className="-rotate-90" />
+                </Button>
+              </div>
+            </div>
             {versions.map((version) => {
               const title = version.label ?? version.source;
               return (
@@ -308,7 +378,7 @@ export function CloudVersionHistoryPanel() {
               {t('versionHistory.noActivity')}
             </p>
           ) : (
-            <div className="space-y-2">
+            <div className="flex flex-col gap-2">
               {activity.map((item) => (
                 <div key={item.id} className="rounded-md border border-border bg-background p-2 text-xs">
                   <div className="flex items-start justify-between gap-2">

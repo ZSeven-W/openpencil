@@ -6,7 +6,6 @@ import {
   CLOUD_FILE_SUMMARY_SELECT,
   getDefaultProject,
   listSharedCloudFileSummaries,
-  resolveProjectAndFolder,
 } from '../../../utils/cloud-file-management';
 
 const querySchema = z.object({
@@ -21,7 +20,8 @@ const querySchema = z.object({
     .enum(['updated_desc', 'updated_asc', 'name_asc', 'name_desc', 'created_desc'])
     .optional()
     .default('updated_desc'),
-  limit: z.coerce.number().int().positive().max(200).optional().default(100),
+  limit: z.coerce.number().int().positive().max(100).optional().default(10),
+  offset: z.coerce.number().int().nonnegative().optional().default(0),
 });
 
 export default defineEventHandler(async (event) => {
@@ -39,27 +39,26 @@ export default defineEventHandler(async (event) => {
       search: parsed.data.search,
       sort: parsed.data.sort,
       limit: parsed.data.limit,
+      offset: parsed.data.offset,
     });
-    return { data: sharedFiles.map(mapFileSummary) };
+    return {
+      data: sharedFiles.data.map(mapFileSummary),
+      page: {
+        total: sharedFiles.total,
+        limit: parsed.data.limit,
+        offset: parsed.data.offset,
+      },
+    };
   }
 
   const defaultProject = parsed.data.projectId
     ? null
-    : await getDefaultProject({ supabase, userId: user.id });
+    : await getDefaultProject({ supabase, userId: user.id, attachUnprojected: false });
   const projectId = parsed.data.projectId ?? defaultProject?.id;
-
-  if (parsed.data.projectId || parsed.data.folderId) {
-    await resolveProjectAndFolder({
-      supabase,
-      userId: user.id,
-      projectId,
-      folderId: parsed.data.folderId,
-    });
-  }
 
   let query = supabase
     .from('design_files')
-    .select(CLOUD_FILE_SUMMARY_SELECT)
+    .select(CLOUD_FILE_SUMMARY_SELECT, { count: 'exact' })
     .eq('owner_id', user.id);
 
   if (projectId) query = query.eq('project_id', projectId);
@@ -93,11 +92,21 @@ export default defineEventHandler(async (event) => {
     sortedQuery = sortedQuery.order('updated_at', { ascending: false });
   }
 
-  const { data, error } = await sortedQuery.limit(parsed.data.limit);
+  const { data, error, count } = await sortedQuery.range(
+    parsed.data.offset,
+    parsed.data.offset + parsed.data.limit - 1,
+  );
 
   if (error) {
     throw createError({ statusCode: 500, statusMessage: error.message });
   }
 
-  return { data: (data ?? []).map(mapFileSummary) };
+  return {
+    data: (data ?? []).map(mapFileSummary),
+    page: {
+      total: count ?? 0,
+      limit: parsed.data.limit,
+      offset: parsed.data.offset,
+    },
+  };
 });

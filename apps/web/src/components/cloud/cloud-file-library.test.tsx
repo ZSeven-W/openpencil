@@ -26,6 +26,7 @@ const cloudFileMocks = vi.hoisted(() => ({
   deleteCloudProject: vi.fn(),
   listCloudFolders: vi.fn(),
   listCloudFiles: vi.fn(),
+  listCloudFilesPage: vi.fn(),
   listCloudFileShares: vi.fn(),
   createCloudFile: vi.fn(),
   createCloudFolder: vi.fn(),
@@ -49,6 +50,29 @@ vi.mock('@/stores/cloud-auth-store', () => ({
 }));
 
 vi.mock('@/services/cloud/cloud-files', () => cloudFileMocks);
+
+vi.mock('@/components/workbench/workbench-shell', () => ({
+  WorkbenchShell: ({
+    title,
+    description,
+    toolbar,
+    children,
+  }: {
+    title: string;
+    description?: string;
+    toolbar?: React.ReactNode;
+    children: React.ReactNode;
+  }) => (
+    <div>
+      <header>
+        <h1>{title}</h1>
+        {description && <p>{description}</p>}
+        {toolbar}
+      </header>
+      {children}
+    </div>
+  ),
+}));
 
 vi.mock('@/stores/document-store', () => ({
   createEmptyDocument: () => ({
@@ -132,11 +156,15 @@ const share: CloudFileShare = {
   updatedAt: '2026-05-12T08:00:00.000Z',
 };
 
+function filePage(data: CloudFileSummary[], total = data.length, offset = 0) {
+  return { data, page: { total, limit: 10, offset } };
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   cloudFileMocks.listCloudProjects.mockResolvedValue([project]);
   cloudFileMocks.listCloudFolders.mockResolvedValue([folder]);
-  cloudFileMocks.listCloudFiles.mockResolvedValue([fileSummary]);
+  cloudFileMocks.listCloudFilesPage.mockResolvedValue(filePage([fileSummary]));
   cloudFileMocks.listCloudFileShares.mockResolvedValue([]);
   cloudFileMocks.createCloudProject.mockResolvedValue({
     ...project,
@@ -171,22 +199,7 @@ beforeEach(() => {
   cloudFileMocks.permanentlyDeleteCloudFile.mockResolvedValue(undefined);
   cloudFileMocks.createCloudFileShare.mockResolvedValue(share);
   cloudFileMocks.revokeCloudFileShare.mockResolvedValue(undefined);
-  useCloudFileStore.setState({
-    files: [],
-    folders: [],
-    projects: [],
-    loading: false,
-    foldersLoading: false,
-    projectsLoading: false,
-    error: null,
-    selectedProjectId: null,
-    selectedFolderId: null,
-    view: 'all',
-    search: '',
-    sort: 'updated_desc',
-    layout: 'list',
-    operatingIds: {},
-  });
+  useCloudFileStore.getState().reset();
 });
 
 afterEach(() => {
@@ -196,7 +209,7 @@ afterEach(() => {
 
 describe('CloudFileLibrary', () => {
   it('shows loading and empty file states without exposing stale actions', async () => {
-    cloudFileMocks.listCloudFiles.mockImplementation(() => new Promise(() => {}));
+    cloudFileMocks.listCloudFilesPage.mockImplementation(() => new Promise(() => {}));
 
     const { unmount } = render(<CloudFileLibrary />);
 
@@ -205,8 +218,9 @@ describe('CloudFileLibrary', () => {
     unmount();
 
     cleanup();
-    cloudFileMocks.listCloudFiles.mockReset();
-    cloudFileMocks.listCloudFiles.mockResolvedValue([]);
+    useCloudFileStore.getState().reset();
+    cloudFileMocks.listCloudFilesPage.mockReset();
+    cloudFileMocks.listCloudFilesPage.mockResolvedValue(filePage([]));
 
     render(<CloudFileLibrary />);
 
@@ -267,12 +281,14 @@ describe('CloudFileLibrary', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Folder Flows' }));
 
     await waitFor(() => {
-      expect(cloudFileMocks.listCloudFiles).toHaveBeenLastCalledWith({
+      expect(cloudFileMocks.listCloudFilesPage).toHaveBeenLastCalledWith({
         projectId: 'project-1',
         folderId: 'folder-1',
         view: 'all',
         search: 'login',
         sort: 'name_asc',
+        limit: 10,
+        offset: 0,
       });
     });
   });
@@ -288,7 +304,7 @@ describe('CloudFileLibrary', () => {
       .mockResolvedValueOnce([project])
       .mockResolvedValueOnce([{ ...project, id: 'project-2', name: 'Archive' }]);
     cloudFileMocks.listCloudFolders.mockResolvedValue([folder]);
-    cloudFileMocks.listCloudFiles.mockResolvedValue([fileSummary]);
+    cloudFileMocks.listCloudFilesPage.mockResolvedValue(filePage([fileSummary]));
 
     render(<CloudFileLibrary />);
 
@@ -403,7 +419,7 @@ describe('CloudFileLibrary', () => {
   });
 
   it('shows a trash-specific empty state and only destructive trash actions', async () => {
-    cloudFileMocks.listCloudFiles.mockResolvedValueOnce([fileSummary]).mockResolvedValueOnce([]);
+    cloudFileMocks.listCloudFilesPage.mockResolvedValueOnce(filePage([fileSummary])).mockResolvedValueOnce(filePage([]));
 
     render(<CloudFileLibrary />);
 
@@ -431,12 +447,14 @@ describe('CloudFileLibrary', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Shared with me' }));
 
     await waitFor(() => {
-      expect(cloudFileMocks.listCloudFiles).toHaveBeenCalledWith({
+      expect(cloudFileMocks.listCloudFilesPage).toHaveBeenCalledWith({
         projectId: 'project-1',
         folderId: undefined,
         view: 'shared',
         search: undefined,
         sort: 'updated_desc',
+        limit: 10,
+        offset: 0,
       });
     });
   });
@@ -509,7 +527,7 @@ describe('CloudFileLibrary', () => {
 
   it('runs batch favorite and delete actions for selected files', async () => {
     const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
-    cloudFileMocks.listCloudFiles.mockResolvedValue([fileSummary, folderFileSummary]);
+    cloudFileMocks.listCloudFilesPage.mockResolvedValue(filePage([fileSummary, folderFileSummary]));
 
     render(<CloudFileLibrary />);
 
@@ -539,6 +557,25 @@ describe('CloudFileLibrary', () => {
     });
   });
 
+  it('selects visible table files from the header checkbox', async () => {
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    cloudFileMocks.listCloudFilesPage.mockResolvedValue(filePage([fileSummary, folderFileSummary]));
+
+    render(<CloudFileLibrary />);
+
+    expect(await screen.findByText('Home Screen')).toBeTruthy();
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Select all' }));
+
+    expect(screen.getByText('2 selected')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Delete selected' }));
+
+    await waitFor(() => {
+      expect(confirmSpy).toHaveBeenCalledWith('Delete 2 selected files?');
+      expect(cloudFileMocks.deleteCloudFile).toHaveBeenCalledWith('file-1');
+      expect(cloudFileMocks.deleteCloudFile).toHaveBeenCalledWith('file-2');
+    });
+  });
+
   it('switches between list and grid layouts', async () => {
     render(<CloudFileLibrary />);
 
@@ -555,7 +592,7 @@ describe('CloudFileLibrary', () => {
 
   it('moves files through the target selector and shares by email', async () => {
     const promptSpy = vi.spyOn(window, 'prompt').mockReturnValue('bob@example.com');
-    cloudFileMocks.listCloudFiles.mockResolvedValue([fileSummary, folderFileSummary]);
+    cloudFileMocks.listCloudFilesPage.mockResolvedValue(filePage([fileSummary, folderFileSummary]));
     cloudFileMocks.updateCloudFileMetadata.mockImplementation(async (input: { id: string; folderId?: string | null }) => ({
       ...(input.id === 'file-2' ? folderFileSummary : fileSummary),
       folderId: input.folderId ?? null,

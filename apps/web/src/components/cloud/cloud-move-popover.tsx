@@ -40,16 +40,18 @@ export function CloudMovePopover({
           {t('cloudLibrary.action.move')}
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="start" className="w-72 p-2" arrow={false}>
+      <PopoverContent align="start" className="w-72 p-2">
         <p className="mb-2 truncate px-1 text-xs font-medium">
           {t('cloudLibrary.move.title', { name: fileName })}
         </p>
-        <div className="max-h-72 space-y-1 overflow-y-auto">
+        <div className="flex max-h-72 flex-col gap-1 overflow-y-auto">
           {targets.map((target) => (
-            <button
+            <Button
               key={target.id ?? 'root'}
               type="button"
-              className="flex w-full items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left text-xs hover:bg-accent"
+              variant="ghost"
+              size="sm"
+              className="w-full justify-between gap-2 px-2 text-left text-xs"
               disabled={target.id === currentFolderId}
               onClick={() => onMove(target.id)}
             >
@@ -59,7 +61,7 @@ export function CloudMovePopover({
                   {t('cloudLibrary.move.currentBadge')}
                 </span>
               )}
-            </button>
+            </Button>
           ))}
         </div>
       </PopoverContent>

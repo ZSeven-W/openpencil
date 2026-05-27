@@ -1,6 +1,6 @@
 import { AuthGate } from '@/components/cloud/auth-gate';
-import { CloudFileLibrary } from '@/components/cloud/cloud-file-library';
 import { DesktopStartPage } from '@/components/cloud/desktop-start-page';
+import { WorkbenchHome } from '@/components/workbench/workbench-home';
 import { isElectron } from '@/utils/file-operations';
 
 export function AppEntryPage() {
@@ -10,7 +10,7 @@ export function AppEntryPage() {
 
   return (
     <AuthGate>
-      <CloudFileLibrary />
+      <WorkbenchHome />
     </AuthGate>
   );
 }

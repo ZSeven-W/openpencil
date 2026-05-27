@@ -11,6 +11,8 @@ import {
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
+import { ConfirmActionButton } from '@/components/workbench/confirm-action-button';
 import { CloudFileActionsMenu } from './cloud-file-actions-menu';
 import { cn } from '@/lib/utils';
 import type { CloudFileSummary } from '@/types/cloud';
@@ -62,7 +64,7 @@ export function CloudFileGrid({
 }: CloudFileGridProps) {
   const { t } = useTranslation();
   return (
-    <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-3">
+    <div className="grid grid-cols-[repeat(auto-fill,minmax(190px,1fr))] gap-2">
       {files.map((file) => {
         const busy = Boolean(operatingIds[file.id]);
         const canMove = canMoveFile(file);
@@ -70,7 +72,7 @@ export function CloudFileGrid({
           <article
             key={file.id}
             className={cn(
-              'relative rounded-md border border-border bg-card p-3',
+              'relative rounded border border-border bg-card p-2.5',
               selectedFileIds.includes(file.id) && 'bg-accent/60',
             )}
             onContextMenu={(event) => {
@@ -78,43 +80,63 @@ export function CloudFileGrid({
               onToggleActions(file.id);
             }}
           >
-            <div className="mb-3 flex items-start justify-between gap-2">
-              <input
-                type="checkbox"
+            <div className="mb-2 flex items-start justify-between gap-2">
+              <Checkbox
                 aria-label={t('cloudLibrary.action.selectFile', { name: file.name })}
                 checked={selectedFileIds.includes(file.id)}
-                onChange={() => onToggleSelected(file.id)}
-                className="mt-1 h-4 w-4 rounded border-border"
+                onCheckedChange={() => onToggleSelected(file.id)}
+                className="mt-1"
               />
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                aria-label={t('cloudLibrary.action.moreActionsFor', { name: file.name })}
-                disabled={busy}
-                onClick={() => onToggleActions(actionsFileId === file.id ? null : file.id)}
-              >
-                <MoreHorizontal size={14} />
-              </Button>
+              <CloudFileActionsMenu
+                file={file}
+                open={actionsFileId === file.id}
+                onOpenChange={(open) => onToggleActions(open ? file.id : null)}
+                trigger={
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label={t('cloudLibrary.action.moreActionsFor', { name: file.name })}
+                    disabled={busy}
+                  >
+                    <MoreHorizontal size={14} />
+                  </Button>
+                }
+                isTrash={isTrashView}
+                canMove={canMove}
+                onOpen={() => onOpen(file.id)}
+                onDetails={() => onShowDetails(file.id)}
+                onFavorite={() => onToggleFavorite(file)}
+                onRename={() => onRename(file)}
+                onCopy={() => onCopy(file)}
+                onMove={() => onMove(file)}
+                onShare={() => onShare(file)}
+                onDelete={() => onDelete(file)}
+                onRestore={() => onRestore(file)}
+                onPermanentDelete={() => onPermanentDelete(file)}
+              />
             </div>
-            <button
+            <Button
               type="button"
+              variant="ghost"
               aria-label={t('cloudLibrary.action.openFile', { name: file.name })}
-              className="block w-full text-left"
+              className="h-auto w-full justify-start p-0 text-left"
               onClick={() => onOpen(file.id)}
               disabled={isTrashView}
             >
-              <div className="mb-3 flex aspect-[16/10] items-center justify-center rounded-md border border-border bg-background">
-                <FileJson size={28} className="text-muted-foreground" />
-              </div>
-              <span className="block truncate text-sm font-medium">{file.name}</span>
-              <span className="mt-1 block truncate text-xs text-muted-foreground">
-                {folderPath(file.folderId)}
+              <span className="block min-w-0 flex-1">
+                <span className="mb-2 flex aspect-[16/10] items-center justify-center rounded border border-border bg-background">
+                  <FileJson size={24} className="text-muted-foreground" />
+                </span>
+                <span className="block truncate text-xs font-medium">{file.name}</span>
+                <span className="mt-1 block truncate text-xs text-muted-foreground">
+                  {folderPath(file.folderId)}
+                </span>
+                <span className="mt-2 block text-xs text-muted-foreground">
+                  rev {file.revision} · {formatDate(file.updatedAt)}
+                </span>
               </span>
-              <span className="mt-2 block text-xs text-muted-foreground">
-                rev {file.revision} · {formatDate(file.updatedAt)}
-              </span>
-            </button>
-            <div className="mt-3 flex items-center justify-between gap-1 border-t border-border pt-2">
+            </Button>
+            <div className="mt-2 flex items-center justify-between gap-1 border-t border-border pt-1.5">
               {isTrashView ? (
                 <>
                   <IconButton
@@ -124,14 +146,14 @@ export function CloudFileGrid({
                   >
                     <ArchiveRestore size={14} />
                   </IconButton>
-                  <IconButton
+                  <ConfirmIconButton
                     label={t('cloudLibrary.action.permanentlyDeleteFile', { name: file.name })}
                     disabled={busy}
-                    destructive
-                    onClick={() => onPermanentDelete(file)}
+                    title={t('cloudLibrary.confirm.permanentlyDeleteFile', { name: file.name })}
+                    onConfirm={() => onPermanentDelete(file)}
                   >
                     <Trash2 size={14} />
-                  </IconButton>
+                  </ConfirmIconButton>
                 </>
               ) : (
                 <>
@@ -179,34 +201,17 @@ export function CloudFileGrid({
                   >
                     <Share2 size={14} />
                   </IconButton>
-                  <IconButton
+                  <ConfirmIconButton
                     label={t('cloudLibrary.action.deleteFile', { name: file.name })}
                     disabled={busy}
-                    destructive
-                    onClick={() => onDelete(file)}
+                    title={t('cloudLibrary.confirm.deleteFile', { name: file.name })}
+                    onConfirm={() => onDelete(file)}
                   >
                     <Trash2 size={14} />
-                  </IconButton>
+                  </ConfirmIconButton>
                 </>
               )}
             </div>
-            {actionsFileId === file.id && (
-              <CloudFileActionsMenu
-                file={file}
-                isTrash={isTrashView}
-                canMove={canMove}
-                onOpen={() => onOpen(file.id)}
-                onDetails={() => onShowDetails(file.id)}
-                onFavorite={() => onToggleFavorite(file)}
-                onRename={() => onRename(file)}
-                onCopy={() => onCopy(file)}
-                onMove={() => onMove(file)}
-                onShare={() => onShare(file)}
-                onDelete={() => onDelete(file)}
-                onRestore={() => onRestore(file)}
-                onPermanentDelete={() => onPermanentDelete(file)}
-              />
-            )}
           </article>
         );
       })}
@@ -238,5 +243,37 @@ function IconButton({
     >
       {children}
     </Button>
+  );
+}
+
+function ConfirmIconButton({
+  label,
+  disabled,
+  title,
+  children,
+  onConfirm,
+}: {
+  label: string;
+  disabled: boolean;
+  title: string;
+  children: React.ReactNode;
+  onConfirm: () => void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <ConfirmActionButton
+      variant="ghost"
+      size="icon-sm"
+      ariaLabel={label}
+      disabled={disabled}
+      title={title}
+      description={title}
+      confirmLabel={t('common.delete')}
+      cancelLabel={t('common.cancel')}
+      className="text-muted-foreground hover:text-destructive"
+      onConfirm={onConfirm}
+    >
+      {children}
+    </ConfirmActionButton>
   );
 }

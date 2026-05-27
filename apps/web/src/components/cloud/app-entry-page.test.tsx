@@ -19,6 +19,10 @@ vi.mock('@/components/cloud/cloud-file-library', () => ({
   CloudFileLibrary: () => <div>Cloud Library</div>,
 }));
 
+vi.mock('@/components/workbench/workbench-home', () => ({
+  WorkbenchHome: () => <div>Workbench Home</div>,
+}));
+
 vi.mock('@/components/cloud/desktop-start-page', () => ({
   DesktopStartPage: () => <div>Desktop Start</div>,
 }));
@@ -40,10 +44,10 @@ describe('AppEntryPage', () => {
     expect(screen.queryByTestId('auth-gate')).toBeNull();
   });
 
-  it('renders the cloud file library directly on the web', () => {
+  it('renders the workbench home on the web', () => {
     render(<AppEntryPage />);
 
     expect(screen.getByTestId('auth-gate')).toBeTruthy();
-    expect(screen.getByText('Cloud Library')).toBeTruthy();
+    expect(screen.getByText('Workbench Home')).toBeTruthy();
   });
 });

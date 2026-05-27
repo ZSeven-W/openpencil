@@ -9,12 +9,33 @@ import {
   Star,
   Trash2,
 } from 'lucide-react';
+import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button } from '@/components/ui/button';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import type { CloudFileSummary } from '@/types/cloud';
 
 interface CloudFileActionsMenuProps {
   file: CloudFileSummary;
+  trigger: ReactNode;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
   isTrash: boolean;
   canMove: boolean;
   onOpen: () => void;
@@ -31,6 +52,9 @@ interface CloudFileActionsMenuProps {
 
 export function CloudFileActionsMenu({
   file,
+  trigger,
+  open,
+  onOpenChange,
   isTrash,
   canMove,
   onOpen,
@@ -46,101 +70,100 @@ export function CloudFileActionsMenu({
 }: CloudFileActionsMenuProps) {
   const { t } = useTranslation();
   return (
-    <div
-      role="menu"
-      aria-label={t('cloudLibrary.action.fileActionsFor', { name: file.name })}
-      className="absolute right-5 z-20 mt-1 w-52 rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-md"
-    >
-      {isTrash ? (
-        <>
-          <MenuItem
-            label={t('cloudLibrary.action.restore')}
-            onClick={onRestore}
-            icon={<ArchiveRestore size={14} />}
-          />
-          <MenuItem
-            label={t('cloudLibrary.action.deleteForever')}
-            onClick={onPermanentDelete}
-            icon={<Trash2 size={14} />}
-            destructive
-          />
-        </>
-      ) : (
-        <>
-          <MenuItem
-            label={t('cloudLibrary.action.open')}
-            onClick={onOpen}
-            icon={<ExternalLink size={14} />}
-          />
-          <MenuItem
-            label={t('cloudLibrary.action.details')}
-            onClick={onDetails}
-            icon={<FileText size={14} />}
-          />
-          <MenuItem
-            label={
-              file.starred
-                ? t('cloudLibrary.action.unfavorite')
-                : t('cloudLibrary.action.favorite')
-            }
-            onClick={onFavorite}
-            icon={<Star size={14} />}
-          />
-          <MenuItem
-            label={t('common.rename')}
-            onClick={onRename}
-            icon={<Pencil size={14} />}
-          />
-          <MenuItem
-            label={t('cloudLibrary.action.copy')}
-            onClick={onCopy}
-            icon={<Copy size={14} />}
-          />
-          <MenuItem
-            label={t('cloudLibrary.action.share')}
-            onClick={onShare}
-            icon={<Share2 size={14} />}
-          />
-          {canMove && (
-            <MenuItem
-              label={t('cloudLibrary.action.move')}
-              onClick={onMove}
-              icon={<FolderInput size={14} />}
-            />
+    <DropdownMenu open={open} onOpenChange={onOpenChange}>
+      <DropdownMenuTrigger asChild>{trigger}</DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-52">
+        <DropdownMenuGroup>
+          {isTrash ? (
+            <>
+              <DropdownMenuItem onClick={onRestore}>
+                <ArchiveRestore />
+                {t('cloudLibrary.action.restore')}
+              </DropdownMenuItem>
+              <ConfirmDropdownItem
+                title={t('cloudLibrary.confirm.permanentlyDeleteFile', { name: file.name })}
+                label={t('cloudLibrary.action.deleteForever')}
+                onConfirm={onPermanentDelete}
+              />
+            </>
+          ) : (
+            <>
+              <DropdownMenuItem onClick={onOpen}>
+                <ExternalLink />
+                {t('cloudLibrary.action.open')}
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={onDetails}>
+                <FileText />
+                {t('cloudLibrary.action.details')}
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={onFavorite}>
+                <Star />
+                {file.starred
+                  ? t('cloudLibrary.action.unfavorite')
+                  : t('cloudLibrary.action.favorite')}
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={onRename}>
+                <Pencil />
+                {t('common.rename')}
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={onCopy}>
+                <Copy />
+                {t('cloudLibrary.action.copy')}
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={onShare}>
+                <Share2 />
+                {t('cloudLibrary.action.share')}
+              </DropdownMenuItem>
+              {canMove && (
+                <DropdownMenuItem onClick={onMove}>
+                  <FolderInput />
+                  {t('cloudLibrary.action.move')}
+                </DropdownMenuItem>
+              )}
+              <ConfirmDropdownItem
+                title={t('cloudLibrary.confirm.deleteFile', { name: file.name })}
+                label={t('common.delete')}
+                onConfirm={onDelete}
+              />
+            </>
           )}
-          <MenuItem
-            label={t('common.delete')}
-            onClick={onDelete}
-            icon={<Trash2 size={14} />}
-            destructive
-          />
-        </>
-      )}
-    </div>
+        </DropdownMenuGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
-function MenuItem({
+function ConfirmDropdownItem({
+  title,
   label,
-  icon,
-  destructive,
-  onClick,
+  onConfirm,
 }: {
+  title: string;
   label: string;
-  icon: React.ReactNode;
-  destructive?: boolean;
-  onClick: () => void;
+  onConfirm: () => void;
 }) {
+  const { t } = useTranslation();
+
   return (
-    <Button
-      role="menuitem"
-      variant="ghost"
-      size="sm"
-      className={`h-8 w-full justify-start ${destructive ? 'hover:text-destructive' : ''}`}
-      onClick={onClick}
-    >
-      {icon}
-      {label}
-    </Button>
+    <AlertDialog>
+      <AlertDialogTrigger asChild>
+        <DropdownMenuItem variant="destructive" onSelect={(event) => event.preventDefault()}>
+          <Trash2 />
+          {label}
+        </DropdownMenuItem>
+      </AlertDialogTrigger>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>{title}</AlertDialogTitle>
+          <AlertDialogDescription>{title}</AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
+          <AlertDialogAction variant="destructive" onClick={onConfirm}>
+            {t('common.delete')}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }

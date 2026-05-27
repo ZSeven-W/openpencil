@@ -27,7 +27,7 @@ export function CloudFileDetailsPanel({
   return (
     <aside
       aria-label={t('cloudLibrary.details.title')}
-      className="border-l border-border bg-background p-4"
+      className="bg-background p-4"
     >
       <div className="mb-4 flex items-start justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
@@ -53,7 +53,7 @@ export function CloudFileDetailsPanel({
         </Button>
       </div>
 
-      <dl className="space-y-3 text-xs">
+      <dl className="flex flex-col gap-3 text-xs">
         <DetailRow label={t('cloudLibrary.details.revision')} value={`rev ${file.revision}`} />
         <DetailRow label={t('cloudLibrary.details.project')} value={projectName} />
         <DetailRow label={t('cloudLibrary.details.location')} value={location} />

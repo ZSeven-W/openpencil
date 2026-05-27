@@ -12,6 +12,7 @@ const cloudFileMocks = vi.hoisted(() => ({
   updateCloudFolder: vi.fn(),
   deleteCloudFolder: vi.fn(),
   listCloudFiles: vi.fn(),
+  listCloudFilesPage: vi.fn(),
   createCloudFile: vi.fn(),
   updateCloudFileMetadata: vi.fn(),
   createCloudFileShare: vi.fn(),
@@ -67,6 +68,10 @@ const folder: CloudFolder = {
   updatedAt: '2026-05-12T08:00:00.000Z',
 };
 
+function filePage(data: CloudFileSummary[], total = data.length, offset = 0) {
+  return { data, page: { total, limit: 10, offset } };
+}
+
 describe('useCloudFileStore', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -83,6 +88,7 @@ describe('useCloudFileStore', () => {
       view: 'all',
       search: '',
       sort: 'updated_desc',
+      filePage: { total: 0, limit: 10, offset: 0 },
       operatingIds: {},
       layout: 'list',
     });
@@ -101,7 +107,7 @@ describe('useCloudFileStore', () => {
     );
     cloudFileMocks.deleteCloudProject.mockResolvedValue(undefined);
     cloudFileMocks.listCloudFolders.mockResolvedValue([folder]);
-    cloudFileMocks.listCloudFiles.mockResolvedValue([baseSummary]);
+    cloudFileMocks.listCloudFilesPage.mockResolvedValue(filePage([baseSummary]));
   });
 
   it('initializes projects, folders, and root files', async () => {
@@ -109,12 +115,14 @@ describe('useCloudFileStore', () => {
 
     expect(cloudFileMocks.listCloudProjects).toHaveBeenCalled();
     expect(cloudFileMocks.listCloudFolders).toHaveBeenCalledWith({ projectId: 'project-1' });
-    expect(cloudFileMocks.listCloudFiles).toHaveBeenCalledWith({
+    expect(cloudFileMocks.listCloudFilesPage).toHaveBeenCalledWith({
       projectId: 'project-1',
       folderId: null,
       view: 'all',
       search: undefined,
       sort: 'updated_desc',
+      limit: 10,
+      offset: 0,
     });
     expect(useCloudFileStore.getState()).toMatchObject({
       projects: [project],
@@ -127,9 +135,57 @@ describe('useCloudFileStore', () => {
     });
   });
 
+  it('loads folders and files in parallel after resolving the selected project', async () => {
+    const calls: string[] = [];
+    let resolveFolders!: (folders: CloudFolder[]) => void;
+    cloudFileMocks.listCloudProjects.mockImplementation(async () => {
+      calls.push('projects');
+      return [project];
+    });
+    cloudFileMocks.listCloudFolders.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          calls.push('folders-start');
+          resolveFolders = resolve;
+        }),
+    );
+    cloudFileMocks.listCloudFilesPage.mockImplementation(async () => {
+      calls.push('files-start');
+      return filePage([baseSummary]);
+    });
+
+    const initialized = useCloudFileStore.getState().initializeLibrary();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(calls).toEqual(['projects', 'folders-start', 'files-start']);
+    resolveFolders([folder]);
+    await initialized;
+  });
+
+  it('reuses identical in-flight library initialization', async () => {
+    let resolveProjects!: (projects: CloudProject[]) => void;
+    cloudFileMocks.listCloudProjects.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveProjects = resolve;
+        }),
+    );
+
+    const first = useCloudFileStore.getState().initializeLibrary();
+    const second = useCloudFileStore.getState().initializeLibrary();
+    await Promise.resolve();
+
+    expect(cloudFileMocks.listCloudProjects).toHaveBeenCalledTimes(1);
+    resolveProjects([project]);
+    await Promise.all([first, second]);
+    expect(cloudFileMocks.listCloudFolders).toHaveBeenCalledTimes(1);
+    expect(cloudFileMocks.listCloudFilesPage).toHaveBeenCalledTimes(1);
+  });
+
   it('loads files for the current filters and preserves previous files on errors', async () => {
     useCloudFileStore.setState({ files: [baseSummary], selectedProjectId: 'project-1' });
-    cloudFileMocks.listCloudFiles.mockRejectedValueOnce(new Error('network unavailable'));
+    cloudFileMocks.listCloudFilesPage.mockRejectedValueOnce(new Error('network unavailable'));
 
     await useCloudFileStore.getState().loadFiles();
 
@@ -138,6 +194,88 @@ describe('useCloudFileStore', () => {
       loading: false,
       error: 'network unavailable',
     });
+  });
+
+  it('reuses identical in-flight project, folder, and file loads', async () => {
+    useCloudFileStore.setState({ selectedProjectId: 'project-1' });
+    let resolveProjects!: (projects: CloudProject[]) => void;
+    let resolveFolders!: (folders: CloudFolder[]) => void;
+    let resolveFiles!: (result: ReturnType<typeof filePage>) => void;
+    cloudFileMocks.listCloudProjects.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveProjects = resolve;
+        }),
+    );
+    cloudFileMocks.listCloudFolders.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveFolders = resolve;
+        }),
+    );
+    cloudFileMocks.listCloudFilesPage.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveFiles = resolve;
+        }),
+    );
+
+    const projectsA = useCloudFileStore.getState().loadProjects();
+    const projectsB = useCloudFileStore.getState().loadProjects();
+    const foldersA = useCloudFileStore.getState().loadFolders();
+    const foldersB = useCloudFileStore.getState().loadFolders();
+    const filesA = useCloudFileStore.getState().loadFiles();
+    const filesB = useCloudFileStore.getState().loadFiles();
+    await Promise.resolve();
+
+    expect(cloudFileMocks.listCloudProjects).toHaveBeenCalledTimes(1);
+    expect(cloudFileMocks.listCloudFolders).toHaveBeenCalledTimes(1);
+    expect(cloudFileMocks.listCloudFilesPage).toHaveBeenCalledTimes(1);
+    resolveProjects([project]);
+    resolveFolders([folder]);
+    resolveFiles(filePage([baseSummary]));
+    await Promise.all([projectsA, projectsB, foldersA, foldersB, filesA, filesB]);
+  });
+
+  it('keeps separate in-flight file loads when query filters change', async () => {
+    useCloudFileStore.setState({ selectedProjectId: 'project-1' });
+    cloudFileMocks.listCloudFilesPage.mockResolvedValue(filePage([baseSummary]));
+
+    const first = useCloudFileStore.getState().loadFiles();
+    useCloudFileStore.setState({ search: 'login' });
+    const second = useCloudFileStore.getState().loadFiles();
+    await Promise.all([first, second]);
+
+    expect(cloudFileMocks.listCloudFilesPage).toHaveBeenCalledTimes(2);
+  });
+
+  it('passes force refresh through to list APIs', async () => {
+    useCloudFileStore.setState({ selectedProjectId: 'project-1' });
+    cloudFileMocks.listCloudProjects.mockResolvedValue([project]);
+    cloudFileMocks.listCloudFolders.mockResolvedValue([folder]);
+    cloudFileMocks.listCloudFilesPage.mockResolvedValue(filePage([baseSummary]));
+
+    await useCloudFileStore.getState().loadProjects({ force: true });
+    await useCloudFileStore.getState().loadFolders({ force: true });
+    await useCloudFileStore.getState().loadFiles({ force: true });
+
+    expect(cloudFileMocks.listCloudProjects).toHaveBeenCalledWith({ force: true });
+    expect(cloudFileMocks.listCloudFolders).toHaveBeenCalledWith(
+      { projectId: 'project-1' },
+      { force: true },
+    );
+    expect(cloudFileMocks.listCloudFilesPage).toHaveBeenCalledWith(
+      {
+        projectId: 'project-1',
+        folderId: null,
+        view: 'all',
+        search: undefined,
+        sort: 'updated_desc',
+        limit: 10,
+        offset: 0,
+      },
+      { force: true },
+    );
   });
 
   it('changes view, search, sort, project, and folder query state', async () => {
@@ -154,12 +292,14 @@ describe('useCloudFileStore', () => {
     await useCloudFileStore.getState().setView('shared');
     await useCloudFileStore.getState().selectFolder('folder-1');
 
-    expect(cloudFileMocks.listCloudFiles).toHaveBeenLastCalledWith({
+    expect(cloudFileMocks.listCloudFilesPage).toHaveBeenLastCalledWith({
       projectId: 'project-1',
       folderId: 'folder-1',
       view: 'all',
       search: 'login',
       sort: 'name_asc',
+      limit: 10,
+      offset: 0,
     });
     expect(useCloudFileStore.getState()).toMatchObject({
       selectedFolderId: 'folder-1',
@@ -168,7 +308,7 @@ describe('useCloudFileStore', () => {
       sort: 'name_asc',
     });
     expect(
-      cloudFileMocks.listCloudFiles.mock.calls.some((call) => call[0]?.view === 'shared'),
+      cloudFileMocks.listCloudFilesPage.mock.calls.some((call) => call[0]?.view === 'shared'),
     ).toBe(true);
   });
 
@@ -191,7 +331,9 @@ describe('useCloudFileStore', () => {
     });
     cloudFileMocks.listCloudProjects.mockResolvedValueOnce([fallbackProject]);
     cloudFileMocks.listCloudFolders.mockResolvedValueOnce([]).mockResolvedValueOnce([]);
-    cloudFileMocks.listCloudFiles.mockResolvedValueOnce([]).mockResolvedValueOnce([]);
+    cloudFileMocks.listCloudFilesPage
+      .mockResolvedValueOnce(filePage([]))
+      .mockResolvedValueOnce(filePage([]));
 
     await expect(useCloudFileStore.getState().createProject('Web App')).resolves.toBe('project-2');
     await expect(useCloudFileStore.getState().renameProject('project-2', 'Website')).resolves.toBe(
@@ -214,7 +356,7 @@ describe('useCloudFileStore', () => {
     });
   });
 
-  it('prepends a newly created cloud file and returns its id', async () => {
+  it('refreshes the first page after creating a cloud file and returns its id', async () => {
     useCloudFileStore.setState({
       files: [baseSummary],
       selectedProjectId: 'project-1',
@@ -229,6 +371,7 @@ describe('useCloudFileStore', () => {
       document,
     };
     cloudFileMocks.createCloudFile.mockResolvedValueOnce(created);
+    cloudFileMocks.listCloudFilesPage.mockResolvedValueOnce(filePage([created, baseSummary], 2));
 
     const id = await useCloudFileStore.getState().createFile('Untitled', document);
 
@@ -244,6 +387,10 @@ describe('useCloudFileStore', () => {
       'file-2',
       'file-1',
     ]);
+    expect(cloudFileMocks.listCloudFilesPage).toHaveBeenCalledWith(
+      expect.objectContaining({ limit: 10, offset: 0 }),
+      { force: true },
+    );
   });
 
   it('creates folders under the selected folder and refreshes the folder tree', async () => {
@@ -298,6 +445,7 @@ describe('useCloudFileStore', () => {
     cloudFileMocks.deleteCloudFile.mockResolvedValueOnce(undefined);
     cloudFileMocks.restoreCloudFile.mockResolvedValueOnce(baseSummary);
     cloudFileMocks.permanentlyDeleteCloudFile.mockResolvedValueOnce(undefined);
+    cloudFileMocks.listCloudFilesPage.mockResolvedValue(filePage([]));
 
     await expect(useCloudFileStore.getState().renameFile('file-1', 'Renamed')).resolves.toBe(true);
     await expect(useCloudFileStore.getState().copyFile('file-1', 'Renamed Copy')).resolves.toBe(
@@ -347,5 +495,9 @@ describe('useCloudFileStore', () => {
     expect(cloudFileMocks.restoreCloudFile).toHaveBeenCalledWith('file-1');
     expect(cloudFileMocks.permanentlyDeleteCloudFile).toHaveBeenCalledWith('file-1');
     expect(useCloudFileStore.getState().files).toEqual([]);
+    expect(cloudFileMocks.listCloudFilesPage).toHaveBeenCalledWith(
+      expect.objectContaining({ limit: 10 }),
+      { force: true },
+    );
   });
 });
