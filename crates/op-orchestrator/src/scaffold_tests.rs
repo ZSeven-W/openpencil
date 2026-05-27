@@ -117,6 +117,31 @@ fn build_scaffold_mobile_status_bar_uses_fixed_icon_positions() {
 }
 
 #[test]
+fn build_scaffold_mobile_status_bar_clamps_levels_to_explicit_narrow_width() {
+    // iPhone SE: 320 wide. The pre-fix scaffold hardcoded levels.x=286
+    // which put the right-aligned chrome (cellular/wifi/battery, 78 wide)
+    // at x=286..364 — 44 px off-screen on a 320-wide root.
+    let mut narrow = plan();
+    narrow.root_frame.width = 320.0;
+    let cmds = build_scaffold(&narrow, true).expect("scaffold");
+    match &cmds[0] {
+        EditorCommand::InsertSubtree { nodes, .. } => {
+            let status_json = serde_json::to_value(&nodes[0].children().expect("children")[0])
+                .expect("status json");
+            let levels = &status_json["children"][1];
+            let levels_x = levels["x"].as_f64().expect("levels x");
+            let levels_w = levels["width"].as_f64().expect("levels width");
+            assert!(
+                levels_x + levels_w <= 320.0,
+                "levels right edge {} overflows root width 320",
+                levels_x + levels_w
+            );
+        }
+        other => panic!("expected InsertSubtree, got {other:?}"),
+    }
+}
+
+#[test]
 fn build_scaffold_single_root_uses_safe_canvas_offset() {
     let cmds = build_scaffold(&plan(), true).expect("scaffold");
     match &cmds[0] {
