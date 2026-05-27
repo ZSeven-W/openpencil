@@ -4,6 +4,9 @@
   "private": true,
   "type": "module",
   "dependencies": {
+    "@base-ui/react": "^1.4.1",
+    "@hookform/resolvers": "^5.2.2",
+    "@tanstack/react-table": "^8.21.3",
     "@zseven-w/agent-native": "workspace:*",
     "@zseven-w/pen-acp": "workspace:*",
     "@zseven-w/pen-ai-skills": "workspace:*",
@@ -14,6 +17,20 @@
     "@zseven-w/pen-react": "workspace:*",
     "@zseven-w/pen-renderer": "workspace:*",
     "@zseven-w/pen-types": "workspace:*",
-    "zod": "^3.24"
+    "class-variance-authority": "^0.7.1",
+    "cmdk": "^1.1.1",
+    "date-fns": "^4.1.0",
+    "embla-carousel-react": "^8.6.0",
+    "input-otp": "^1.4.2",
+    "lucide-react": "^1.14.0",
+    "next-themes": "^0.4.6",
+    "radix-ui": "^1.4.3",
+    "react-day-picker": "^10.0.0",
+    "react-hook-form": "^7.75.0",
+    "react-resizable-panels": "^4",
+    "recharts": "3.8.0",
+    "sonner": "^2.0.7",
+    "vaul": "^1.1.2",
+    "zod": "^4.4.3"
   }
 }

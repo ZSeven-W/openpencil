@@ -24,6 +24,7 @@
     "test": "node scripts/run-vitest-groups.mjs",
     "dev:cloud": "bun --bun apps/web/scripts/dev-cloud.ts",
     "codegen:worker": "bun --bun apps/web/scripts/codegen-worker.ts",
+    "codegen:benchmark": "bun --bun apps/web/scripts/codegen-benchmark-baseline.ts",
     "mcp:compile": "esbuild packages/pen-mcp/src/server.ts --bundle --platform=node --target=node20 --outfile=out/mcp-server.cjs --format=cjs --sourcemap --alias:@zseven-w/pen-types=./packages/pen-types/src --alias:@zseven-w/pen-core=./packages/pen-core/src --alias:@zseven-w/pen-figma=./packages/pen-figma/src --alias:@zseven-w/pen-renderer=./packages/pen-renderer/src --alias:@zseven-w/pen-sdk=./packages/pen-sdk/src --alias:@zseven-w/pen-ai-skills=./packages/pen-ai-skills/src --alias:@zseven-w/pen-mcp=./packages/pen-mcp/src --alias:@zseven-w/pen-engine=./packages/pen-engine/src --alias:@zseven-w/pen-react=./packages/pen-react/src --define:import.meta.env={} --external:canvas --external:paper",
     "mcp:dev": "bun run packages/pen-mcp/src/server.ts",
     "electron:dev": "bun run apps/desktop/dev.ts",
@@ -119,6 +120,7 @@
     "jsdom": "^27.0.0",
     "oxfmt": "^0.42.0",
     "oxlint": "^1.57.0",
+    "shadcn": "^4.7.0",
     "typescript": "^5.7.2",
     "vite": "7.1.7",
     "vitest": "^3.0.5"
