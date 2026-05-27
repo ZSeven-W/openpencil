@@ -46,7 +46,9 @@
 use std::sync::mpsc::{self, Receiver, Sender, SyncSender, TryRecvError};
 use std::thread;
 
-use op_editor_core::{EditorCommand, EditorState};
+use op_editor_core::Viewport;
+use op_editor_core::{DocRect, EditorCommand, EditorState};
+use op_editor_ui::widgets::TOP_BAR_HEIGHT;
 use op_host_native::WidgetHostNative;
 use op_orchestrator::{
     AbortFlag, DesignRequest, DocSink, LlmClient, Orchestrator, OrchestratorError, Progress,
@@ -264,7 +266,12 @@ impl DocSink for RemoteDocSink {
 /// request gets an ack containing a fresh state snapshot so the
 /// worker's mirror reflects ID-remapping. Returns true when at least
 /// one command applied (caller should mark redraw dirty).
-pub fn pump_commands(host: &mut WidgetHostNative, current: &mut Option<DesignSession>) -> bool {
+pub fn pump_commands(
+    host: &mut WidgetHostNative,
+    current: &mut Option<DesignSession>,
+    viewport_width: f32,
+    viewport_height: f32,
+) -> bool {
     let Some(session) = current.as_mut() else {
         return false;
     };
@@ -276,7 +283,13 @@ pub fn pump_commands(host: &mut WidgetHostNative, current: &mut Option<DesignSes
     let mut any_applied = false;
     for req in reqs {
         let applied = match req.op {
-            DesignCmdOp::Apply(cmd) => state.apply(cmd),
+            DesignCmdOp::Apply(cmd) => {
+                let applied = state.apply(cmd);
+                if applied {
+                    fit_design_viewport_to_content(state, viewport_width, viewport_height);
+                }
+                applied
+            }
             // TODO(host): wire into op-editor-core history batch mode
             // once available. Today undo-batch boundaries are no-ops so
             // each `EditorCommand::InsertSubtree` is its own undo step —
@@ -299,6 +312,92 @@ pub fn pump_commands(host: &mut WidgetHostNative, current: &mut Option<DesignSes
         host.mark_editor_state_dirty();
     }
     any_applied
+}
+
+const DESIGN_FIT_PADDING: f32 = 48.0;
+
+/// Keep the generated design centered and fully visible while the
+/// orchestrator progressively applies scaffold/subtask nodes.
+fn fit_design_viewport_to_content(
+    state: &mut EditorState,
+    viewport_width: f32,
+    viewport_height: f32,
+) -> bool {
+    let Some(bounds) = active_content_bounds(state) else {
+        return false;
+    };
+    let (canvas_w, canvas_h) = design_canvas_size(state, viewport_width, viewport_height);
+    if canvas_w <= 1.0 || canvas_h <= 1.0 {
+        return false;
+    }
+
+    let pad_x = DESIGN_FIT_PADDING.min(canvas_w / 4.0);
+    let pad_y = DESIGN_FIT_PADDING.min(canvas_h / 4.0);
+    let fit_w = (canvas_w - pad_x * 2.0).max(1.0);
+    let fit_h = (canvas_h - pad_y * 2.0).max(1.0);
+    let content_w = (bounds.w as f32).max(1.0);
+    let content_h = (bounds.h as f32).max(1.0);
+    let zoom = (fit_w / content_w)
+        .min(fit_h / content_h)
+        .clamp(Viewport::MIN_ZOOM, Viewport::MAX_ZOOM);
+    let center_x = (bounds.x + bounds.w / 2.0) as f32;
+    let center_y = (bounds.y + bounds.h / 2.0) as f32;
+    let next_pan_x = canvas_w / 2.0 - center_x * zoom;
+    let next_pan_y = canvas_h / 2.0 - center_y * zoom;
+
+    let changed = (state.viewport.zoom - zoom).abs() > 0.001
+        || (state.viewport.pan_x - next_pan_x).abs() > 0.5
+        || (state.viewport.pan_y - next_pan_y).abs() > 0.5;
+    state.viewport.zoom = zoom;
+    state.viewport.pan_x = next_pan_x;
+    state.viewport.pan_y = next_pan_y;
+    changed
+}
+
+fn active_content_bounds(state: &EditorState) -> Option<DocRect> {
+    let scene = op_pen_loader::editor_state_to_layout_scene(state);
+    let page = scene.active_page()?;
+    let mut iter = page
+        .children
+        .iter()
+        .map(|node| node.aggregate_bounds())
+        .filter(|rect| rect.size.x > 0.0 || rect.size.y > 0.0);
+    let first = iter.next()?;
+    let (mut min_x, mut min_y) = (first.origin.x, first.origin.y);
+    let (mut max_x, mut max_y) = (first.origin.x + first.size.x, first.origin.y + first.size.y);
+    for rect in iter {
+        min_x = min_x.min(rect.origin.x);
+        min_y = min_y.min(rect.origin.y);
+        max_x = max_x.max(rect.origin.x + rect.size.x);
+        max_y = max_y.max(rect.origin.y + rect.size.y);
+    }
+    Some(DocRect {
+        x: min_x as f64,
+        y: min_y as f64,
+        w: (max_x - min_x) as f64,
+        h: (max_y - min_y) as f64,
+    })
+}
+
+fn design_canvas_size(
+    state: &EditorState,
+    viewport_width: f32,
+    viewport_height: f32,
+) -> (f32, f32) {
+    let canvas_left = if state.editor_ui.sidebar_open {
+        state.editor_ui.layer_panel_width
+    } else {
+        0.0
+    };
+    let canvas_right = if state.right_rail_visible() {
+        viewport_width - state.editor_ui.property_panel_width
+    } else {
+        viewport_width
+    };
+    (
+        (canvas_right - canvas_left).max(0.0),
+        (viewport_height - TOP_BAR_HEIGHT).max(0.0),
+    )
 }
 
 /// Drain every pending progress delta and fold it into the trailing
@@ -536,7 +635,7 @@ mod tests {
         // timeout so a hung worker fails the test instead of hanging.
         let deadline = Instant::now() + Duration::from_secs(5);
         while current.is_some() && Instant::now() < deadline {
-            let _ = pump_commands(&mut host, &mut current);
+            let _ = pump_commands(&mut host, &mut current, 1440.0, 900.0);
             let _ = pump_progress(&mut host, &mut current);
             if current.is_none() {
                 break;
@@ -572,5 +671,137 @@ mod tests {
             !bubble.streaming,
             "summary path must clear streaming so the chat panel stops the animation"
         );
+    }
+
+    #[test]
+    fn fit_design_viewport_centers_and_fits_mobile_root() {
+        let mut state = EditorState::new();
+        state.doc.children = vec![mobile_root()];
+
+        assert!(fit_design_viewport_to_content(&mut state, 1440.0, 900.0));
+
+        let bounds = active_content_bounds(&state).expect("root bounds");
+        let (canvas_w, canvas_h) = design_canvas_size(&state, 1440.0, 900.0);
+        let left = state.viewport.pan_x + bounds.x as f32 * state.viewport.zoom;
+        let top = state.viewport.pan_y + bounds.y as f32 * state.viewport.zoom;
+        let right = left + bounds.w as f32 * state.viewport.zoom;
+        let bottom = top + bounds.h as f32 * state.viewport.zoom;
+        let center_x = (left + right) / 2.0;
+        let center_y = (top + bottom) / 2.0;
+
+        assert!(left >= 0.0, "left edge should be visible, got {left}");
+        assert!(top >= 0.0, "top edge should be visible, got {top}");
+        assert!(
+            right <= canvas_w,
+            "right edge should be visible: {right} > {canvas_w}"
+        );
+        assert!(
+            bottom <= canvas_h,
+            "bottom edge should be visible: {bottom} > {canvas_h}"
+        );
+        assert!((center_x - canvas_w / 2.0).abs() < 0.5);
+        assert!((center_y - canvas_h / 2.0).abs() < 0.5);
+    }
+
+    #[test]
+    fn pump_commands_refits_viewport_after_design_insert() {
+        let (_delta_tx, delta_rx) = mpsc::channel::<DesignDelta>();
+        let (cmd_tx, cmd_rx) = mpsc::channel::<DesignCmdReq>();
+        let mut current = Some(DesignSession::from_channels(delta_rx, cmd_rx));
+        let mut host = WidgetHostNative::new();
+        host.editor_state_mut().doc.children.clear();
+        let before = host.editor_state().viewport;
+
+        let (ack_tx, ack_rx) = mpsc::sync_channel::<DesignCmdAck>(1);
+        cmd_tx
+            .send(DesignCmdReq {
+                op: DesignCmdOp::Apply(EditorCommand::InsertSubtree {
+                    nodes: vec![mobile_root()],
+                    parent_id: op_editor_core::NodeId::NONE,
+                }),
+                ack: ack_tx,
+            })
+            .expect("request should queue");
+
+        assert!(pump_commands(&mut host, &mut current, 1440.0, 900.0));
+        let ack = ack_rx
+            .recv_timeout(Duration::from_secs(1))
+            .expect("pump should ack apply request");
+        assert!(ack.applied);
+        assert!(
+            !ack.new_state.doc.children.is_empty(),
+            "ack snapshot should include inserted root"
+        );
+        assert_eq!(
+            host.editor_state().doc.children.len(),
+            1,
+            "host state should receive inserted root"
+        );
+
+        let after = host.editor_state().viewport;
+        assert_ne!(before, after, "design insert should refit viewport");
+        assert!(
+            (after.zoom - 0.905).abs() < 0.01,
+            "mobile root should fit viewport height, got zoom {}",
+            after.zoom
+        );
+    }
+
+    #[test]
+    fn fit_design_viewport_uses_resolved_layout_for_fit_content_root() {
+        let mut state = EditorState::new();
+        state.doc.children = vec![mobile_fit_content_root()];
+
+        assert!(fit_design_viewport_to_content(&mut state, 1440.0, 900.0));
+
+        let bounds = active_content_bounds(&state).expect("resolved root bounds");
+        assert!(
+            (bounds.h - 844.0).abs() < 1.0,
+            "fit_content root should resolve to full mobile height, got {}",
+            bounds.h
+        );
+        assert!(
+            (state.viewport.zoom - 0.905).abs() < 0.01,
+            "full mobile root should remain fully visible, got zoom {}",
+            state.viewport.zoom
+        );
+    }
+
+    fn mobile_root() -> jian_ops_schema::node::PenNode {
+        serde_json::from_value(serde_json::json!({
+            "type": "frame",
+            "id": "root",
+            "name": "Mobile Root",
+            "x": 80,
+            "y": 40,
+            "width": 390,
+            "height": 844,
+            "children": []
+        }))
+        .expect("mobile root fixture parses")
+    }
+
+    fn mobile_fit_content_root() -> jian_ops_schema::node::PenNode {
+        serde_json::from_value(serde_json::json!({
+            "type": "frame",
+            "id": "root",
+            "name": "Mobile Root",
+            "x": 80,
+            "y": 40,
+            "width": 390,
+            "height": "fit_content",
+            "layout": "vertical",
+            "gap": 0,
+            "children": [
+                {"type": "frame", "id": "status", "name": "Status Bar", "width": "fill_container", "height": 32},
+                {"type": "frame", "id": "header", "name": "Header", "width": "fill_container", "height": 92},
+                {"type": "frame", "id": "search", "name": "Search", "width": "fill_container", "height": 104},
+                {"type": "frame", "id": "promo", "name": "Promo", "width": "fill_container", "height": 132},
+                {"type": "frame", "id": "categories", "name": "Categories", "width": "fill_container", "height": 86},
+                {"type": "frame", "id": "restaurants", "name": "Restaurants", "width": "fill_container", "height": 314},
+                {"type": "frame", "id": "bottom-nav", "name": "Bottom Nav", "width": "fill_container", "height": 84}
+            ]
+        }))
+        .expect("fit_content mobile root fixture parses")
     }
 }

@@ -18,6 +18,8 @@
 //!   (gemini reads piped stdin as the message).
 //! - **GitHub Copilot CLI (`gh-copilot`)** — `gh-copilot suggest`;
 //!   prompt via stdin.
+//! - **Codex CLI (`codex`)** — `codex exec --json`; prompt as a
+//!   positional argv after `--`.
 //!
 //! Stdout is read line-by-line; recognized structured shapes mapped
 //! to `ChatDelta`; unrecognized lines surface as raw `TextDelta` so
@@ -249,10 +251,10 @@ impl SubprocessProvider {
     ///   reference and Claude Code's own documented headless mode.
     /// - **Gemini**: `--quiet`; prompt via stdin.
     /// - **Copilot**: `suggest`; prompt via stdin.
+    /// - **Codex**: `exec --json`; prompt as positional argv.
     ///
-    /// Returns `None` when `cli` is in the HttpServer category
-    /// (Codex / OpenCode) — those go through the dedicated
-    /// HttpServerProvider, not this subprocess bridge.
+    /// Returns `None` for OpenCode, whose server protocol is still
+    /// not verified.
     pub fn for_cli(cli: CliName) -> Option<Self> {
         let (args, prompt_mode): (Vec<String>, PromptMode) = match cli {
             CliName::ClaudeCode => (
@@ -266,7 +268,17 @@ impl SubprocessProvider {
             ),
             CliName::Gemini => (vec!["--quiet".into()], PromptMode::Stdin),
             CliName::Copilot => (vec!["suggest".into()], PromptMode::Stdin),
-            CliName::Codex | CliName::OpenCode => return None,
+            CliName::Codex => (
+                vec![
+                    "exec".into(),
+                    "--sandbox".into(),
+                    "read-only".into(),
+                    "--skip-git-repo-check".into(),
+                    "--json".into(),
+                ],
+                PromptMode::PositionalArg,
+            ),
+            CliName::OpenCode => return None,
         };
         let binary = find_binary(cli.default_binary());
         Some(Self {
@@ -594,6 +606,22 @@ pub(crate) fn parse_line(line: &str) -> ChatDelta {
                 stop_reason: map_stop_reason(reason),
             }
         }
+        "item.completed" => {
+            let item = val.get("item");
+            match (
+                item.and_then(|i| i.get("type")).and_then(|v| v.as_str()),
+                item.and_then(|i| i.get("text")).and_then(|v| v.as_str()),
+            ) {
+                (Some("agent_message"), Some(text)) => ChatDelta::TextDelta(text.to_string()),
+                _ => ChatDelta::Thinking(String::new()),
+            }
+        }
+        "turn.completed" => ChatDelta::Done {
+            stop_reason: StopReason::EndTurn,
+        },
+        "thread.started" | "turn.started" | "item.started" | "item.updated" => {
+            ChatDelta::Thinking(String::new())
+        }
         "error" => match val.get("message").and_then(|v| v.as_str()) {
             Some(msg) => ChatDelta::Error(msg.to_string()),
             None => ChatDelta::Error(format!("malformed error event: {trimmed}")),
@@ -656,6 +684,37 @@ mod tests {
             }
             other => panic!("expected Done, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn parse_line_codex_agent_message_completed() {
+        match parse_line(
+            r#"{"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":"hi"}}"#,
+        ) {
+            ChatDelta::TextDelta(s) => assert_eq!(s, "hi"),
+            other => panic!("expected TextDelta, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parse_line_codex_turn_completed() {
+        match parse_line(
+            r#"{"type":"turn.completed","usage":{"input_tokens":1,"output_tokens":2}}"#,
+        ) {
+            ChatDelta::Done { stop_reason } => {
+                assert!(matches!(stop_reason, StopReason::EndTurn));
+            }
+            other => panic!("expected Done, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn for_cli_constructs_codex_exec_provider() {
+        let provider = SubprocessProvider::for_cli(CliName::Codex);
+        assert!(
+            provider.is_some(),
+            "Codex CLI should be wired through exec --json"
+        );
     }
 
     #[test]
@@ -727,8 +786,7 @@ mod tests {
     }
 
     #[test]
-    fn for_cli_rejects_http_server_kinds() {
-        assert!(SubprocessProvider::for_cli(CliName::Codex).is_none());
+    fn for_cli_rejects_opencode() {
         assert!(SubprocessProvider::for_cli(CliName::OpenCode).is_none());
     }
 

@@ -385,7 +385,12 @@ impl ApplicationHandler for DesktopApp {
                 // for any in-flight design turn (orchestrator runs off
                 // the UI thread; `RemoteDocSink` forwards mutations
                 // here each frame).
-                if design_session::pump_commands(&mut self.host, &mut self.current_design) {
+                if design_session::pump_commands(
+                    &mut self.host,
+                    &mut self.current_design,
+                    self.viewport_width,
+                    self.viewport_height,
+                ) {
                     self.redraw_dirty = true;
                 }
                 if design_session::pump_progress(&mut self.host, &mut self.current_design) {
