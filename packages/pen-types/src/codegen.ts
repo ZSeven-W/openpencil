@@ -94,6 +94,77 @@ export interface ChunkResult {
   contract: ChunkContract;
 }
 
+export type CodegenQualityStatus = 'passed' | 'repaired' | 'degraded' | 'failed';
+
+export type CodegenQualityIssueSeverity = 'info' | 'warning' | 'error';
+
+export interface CodegenQualityIssue {
+  code: string;
+  severity: CodegenQualityIssueSeverity;
+  message: string;
+  filePath?: string;
+  nodeId?: string;
+}
+
+export interface CodegenQualityReport {
+  status: CodegenQualityStatus;
+  framework: Framework;
+  issues: CodegenQualityIssue[];
+  checkedAt: string;
+  summary: {
+    fileCount: number;
+    errorCount: number;
+    warningCount: number;
+    missingTextCount: number;
+    missingAssetCount: number;
+  };
+}
+
+export type CodegenProviderCallStage = 'planning' | 'chunk' | 'assembly' | 'repair' | 'direct_generation';
+
+export type CodegenPipelineMode = 'direct_generation' | 'full_pipeline' | 'unknown';
+
+export interface CodegenProviderCallTiming {
+  stage: CodegenProviderCallStage;
+  durationMs: number;
+  attempt: number;
+  provider?: string;
+  model?: string;
+  chunkId?: string;
+  error?: string;
+}
+
+export interface CodegenTimingBreakdown {
+  planningMs?: number;
+  chunkMs?: number;
+  assemblyMs?: number;
+  qualityCheckMs?: number;
+  repairMs?: number;
+  providerMs?: number;
+  providerCallTotalMs?: number;
+  providerCallCount?: number;
+  providerCalls?: CodegenProviderCallTiming[];
+  totalMs?: number;
+}
+
+export interface CodegenRepairAttempt {
+  attempt: number;
+  issues: CodegenQualityIssue[];
+  code: string;
+  report: CodegenQualityReport;
+  durationMs: number;
+}
+
+export interface CodegenCheckpoint {
+  stage: 'planning' | 'chunk' | 'assembly' | 'quality_check' | 'repair' | 'final_validation';
+  status: 'succeeded' | 'failed';
+  attempt: number;
+  data: unknown;
+  createdAt: string;
+}
+
+export type CodegenResumeMode = 'from_failed_stage' | 'quality_check' | 'repair' | 'chunk';
+
 // === Progress 事件 ===
 
 export type ChunkStatus = 'pending' | 'running' | 'done' | 'degraded' | 'failed' | 'skipped';
@@ -103,6 +174,7 @@ export type CodeGenProgress =
       step: 'planning';
       status: 'running' | 'done' | 'failed';
       plan?: CodePlanFromAI;
+      designIR?: unknown;
       error?: string;
     }
   | {
@@ -113,8 +185,36 @@ export type CodeGenProgress =
       result?: ChunkResult;
       error?: string;
     }
-  | { step: 'assembly'; status: 'running' | 'done' | 'failed'; error?: string }
-  | { step: 'complete'; finalCode: string; degraded: boolean }
+  | {
+      step: 'assembly';
+      status: 'running' | 'done' | 'failed';
+      code?: string;
+      files?: unknown[];
+      error?: string;
+    }
+  | {
+      step: 'quality_check';
+      status: 'running' | 'done' | 'failed';
+      report?: CodegenQualityReport;
+      error?: string;
+    }
+  | {
+      step: 'repair';
+      status: 'running' | 'done' | 'failed' | 'skipped';
+      attempt?: number;
+      report?: CodegenQualityReport;
+      error?: string;
+    }
+  | { step: 'final_validation'; status: 'running' | 'done' | 'failed'; error?: string }
+  | {
+      step: 'complete';
+      finalCode: string;
+      degraded: boolean;
+      qualityReport?: CodegenQualityReport;
+      timing?: CodegenTimingBreakdown;
+      repairAttempts?: CodegenRepairAttempt[];
+      pipelineMode?: CodegenPipelineMode;
+    }
   | { step: 'error'; message: string; chunkId?: string };
 
 // === Contract 验证 ===

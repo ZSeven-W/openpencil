@@ -1,5 +1,7 @@
-import type { Framework } from '@zseven-w/pen-types';
+import type { CodegenPipelineMode, CodegenResumeMode, Framework } from '@zseven-w/pen-types';
 import type { PenDocument } from '@/types/pen';
+
+export type { CodegenPipelineMode, CodegenResumeMode } from '@zseven-w/pen-types';
 
 export type CloudSaveState = 'idle' | 'saving' | 'saved' | 'conflict' | 'error';
 export type CloudVersionSource =
@@ -16,6 +18,8 @@ export interface CloudFileSummary {
   name: string;
   thumbnailPath: string | null;
   revision: number;
+  checkpointRevision?: number;
+  checkpointSizeBytes?: number;
   metadata?: Record<string, unknown>;
   starred: boolean;
   lastOpenedAt: string | null;
@@ -26,8 +30,28 @@ export interface CloudFileSummary {
   sharedByEmail?: string | null;
 }
 
+export interface CloudListPage {
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface CloudPagedResult<T> {
+  data: T[];
+  page: CloudListPage;
+}
+
 export interface CloudFileRecord extends CloudFileSummary {
   document: PenDocument;
+}
+
+export interface CloudDocumentPatchSaveAck {
+  id: string;
+  name: string;
+  revision: number;
+  updatedAt: string;
+  checkpointRevision: number;
+  snapshotCreated: boolean;
 }
 
 export interface CloudFileVersion {
@@ -79,6 +103,8 @@ export interface CloudActivityPage {
   nextCursor: string | null;
   limit: number;
 }
+
+export type CloudFileVersionPage = CloudPagedResult<CloudFileVersion>;
 
 export interface CloudProject {
   id: string;
@@ -244,6 +270,9 @@ export type CodegenJobAgentRole =
   | 'planner'
   | 'page_codegen'
   | 'reviewer_repair'
+  | 'quality_check'
+  | 'repair'
+  | 'final_validation'
   | 'bundler_persist';
 
 export interface CloudCodegenJobStep {
@@ -276,6 +305,9 @@ export interface CloudCodegenJob {
   fileId: string;
   ownerId: string;
   generationId: string | null;
+  fileName?: string | null;
+  pageName?: string | null;
+  pipelineMode?: CodegenPipelineMode | null;
   jobKind: CodegenJobKind;
   status: CodegenJobStatus;
   framework: Framework;
@@ -426,6 +458,7 @@ export interface CodegenWorkerOverview {
 
 export interface CreateCloudCodegenJobInput extends CodegenTarget {
   jobKind?: CodegenJobKind;
+  qualityMode?: 'production' | 'draft';
   fileId: string;
   framework: Framework;
   documentRevision: number;
@@ -433,8 +466,21 @@ export interface CreateCloudCodegenJobInput extends CodegenTarget {
   provider: string;
   nodes: unknown[];
   variables?: Record<string, unknown>;
+  fileName?: string;
+  pageName?: string;
   baseGenerationId?: string;
   patchInstruction?: string;
+}
+
+export type CodegenStageRerunMode = Exclude<CodegenResumeMode, 'from_failed_stage'>;
+
+export interface ResumeCloudCodegenJobInput {
+  stage?: CodegenResumeMode;
+}
+
+export interface RerunCloudCodegenJobStepInput {
+  stage: CodegenStageRerunMode;
+  chunkId?: string;
 }
 
 export type TaskNotificationKind =
