@@ -16,6 +16,7 @@
 use crate::layout_scene::{regular_polygon_points, SceneNode};
 use crate::layout_scene::{Effect, NodeKind};
 use crate::widgets::canvas_viewport::EditCaret;
+use crate::widgets::canvas_viewport_image::paint_image_node;
 use crate::widgets::canvas_viewport_overlay::{paint_fill_then_stroke, wrap_text};
 use crate::widgets::PaintCx;
 use crate::{Point2D, Rect, TextLayout};
@@ -411,88 +412,6 @@ fn paint_svg_path_node(
             stroke.color,
             stroke.width * zoom,
         );
-    }
-}
-
-/// Paint a Text `SceneNode` — wrapped or single-line text plus the
-/// edit caret when the node is the one being edited.
-/// Decode an inline-base64 `data:image/...;base64,...` URL into the
-/// raw image bytes the backend's `draw_image` decoder expects. Returns
-/// `None` for any URL that isn't an inline base64 payload (file paths,
-/// remote URLs, malformed strings) — those paths are deferred to a
-/// future loader.
-fn data_url_bytes(src: &str) -> Option<Vec<u8>> {
-    let after_scheme = src.strip_prefix("data:")?;
-    let comma = after_scheme.find(',')?;
-    let meta = &after_scheme[..comma];
-    let payload = &after_scheme[comma + 1..];
-    if !meta.contains(";base64") {
-        return None;
-    }
-    // The base64 alphabet is ASCII; strip any embedded whitespace
-    // (line breaks in a wrapped data URL) before decode.
-    let clean: String = payload
-        .chars()
-        .filter(|c| !c.is_ascii_whitespace())
-        .collect();
-    use base64::engine::general_purpose::STANDARD as B64;
-    use base64::Engine as _;
-    B64.decode(clean.as_bytes()).ok()
-}
-
-/// Hash a string into a stable u64 — drives the backend's image
-/// decode cache so the same `src` doesn't re-decode every frame.
-fn src_hash(src: &str) -> u64 {
-    use std::hash::{Hash, Hasher};
-    let mut h = std::collections::hash_map::DefaultHasher::new();
-    src.hash(&mut h);
-    h.finish()
-}
-
-/// Paint a raster image inside `world_rect`. Decodes the data URL
-/// once, hands raw bytes + a stable id to the backend cache, then
-/// strokes the corner-radius outline on top so a per-corner radius
-/// authored on the schema still reads.
-fn paint_image_node(
-    cx: &mut PaintCx<'_>,
-    node: &SceneNode,
-    world_rect: Rect,
-    zoom: f32,
-    src: &str,
-) {
-    let bytes = data_url_bytes(src);
-    let r = node.corner_radius * zoom;
-    let use_round = r > 0.5;
-    // Only paint the grey placeholder when the URL can't be decoded
-    // — painting it under a transparent raster would leave a grey
-    // matte bleeding through the alpha channel.
-    if bytes.is_none() {
-        if let Some(fill) = node.fill {
-            if use_round {
-                cx.backend.fill_round_rect(world_rect, r, fill);
-            } else {
-                cx.backend.fill_rect(world_rect, fill);
-            }
-        }
-    }
-    if let Some(bytes) = bytes {
-        let id = src_hash(src);
-        cx.backend.draw_image_with_options(
-            world_rect,
-            id,
-            &bytes,
-            node.image_fit.to_draw_mode(),
-            node.image_adjustments,
-        );
-    }
-    if let Some(stroke) = node.stroke {
-        let width = stroke.width * zoom;
-        if use_round {
-            cx.backend
-                .stroke_round_rect(world_rect, r, stroke.color, width);
-        } else {
-            cx.backend.stroke_rect(world_rect, stroke.color, width);
-        }
     }
 }
 

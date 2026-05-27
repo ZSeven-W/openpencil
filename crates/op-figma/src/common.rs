@@ -11,6 +11,58 @@ use jian_ops_schema::node::base::{NumberOrExpression, PenNodeBase};
 use jian_ops_schema::node::container::CornerRadius;
 use jian_ops_schema::sizing::SizingBehavior;
 use std::collections::HashMap;
+use std::sync::RwLock;
+
+/// Stroke vs fill rendering for a host-resolved icon.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum IconStyle {
+    Stroke,
+    Fill,
+}
+
+/// Host-resolved icon match (ports TS `IconLookupResult`). `d` is the
+/// canonical 24×24 lucide path; `icon_id` is the canonical lucide name
+/// (kebab-case) so the renderer can re-resolve; `style` defaults to
+/// stroke when unspecified.
+#[derive(Debug, Clone)]
+pub struct IconLookupResult {
+    pub d: String,
+    pub icon_id: Option<String>,
+    pub style: Option<IconStyle>,
+}
+
+type IconLookupFn = dyn Fn(&str) -> Option<IconLookupResult> + Send + Sync;
+
+static ICON_LOOKUP: RwLock<Option<Box<IconLookupFn>>> = RwLock::new(None);
+
+/// Install (or replace) a host-provided icon-name resolver. The
+/// converter consults it on every VECTOR node — if a node's name maps
+/// to a registered icon, the converter emits a `Path` carrying the
+/// lucide `d` + `icon_id` instead of decoding the raw vector geometry.
+/// Matches TS `setIconLookup` in `converters/common.ts`.
+pub fn set_icon_lookup<F>(f: F)
+where
+    F: Fn(&str) -> Option<IconLookupResult> + Send + Sync + 'static,
+{
+    if let Ok(mut slot) = ICON_LOOKUP.write() {
+        *slot = Some(Box::new(f));
+    }
+}
+
+/// Drop any previously-installed icon resolver.
+pub fn clear_icon_lookup() {
+    if let Ok(mut slot) = ICON_LOOKUP.write() {
+        *slot = None;
+    }
+}
+
+/// Resolve `name` through the installed lookup; `None` when no
+/// resolver is set or when the resolver itself returns `None`.
+pub fn lookup_icon_by_name(name: &str) -> Option<IconLookupResult> {
+    let slot = ICON_LOOKUP.read().ok()?;
+    let f = slot.as_ref()?;
+    f(name)
+}
 
 /// Whether OpenPencil layout semantics or verbatim Figma geometry is
 /// produced.

@@ -88,6 +88,42 @@ pub fn pen_document_to_payload(doc: &PenDocument) -> LoadedDoc {
     }
 }
 
+/// Convert a document that already carries authored absolute/parent
+/// geometry into payloads without running the flex/text layout pass.
+///
+/// Figma `.fig` import uses this after parsing in Preserve mode: all
+/// nodes have numeric sizes and parent-local positions from Figma, so
+/// re-running jian layout only burns time and can visibly freeze the
+/// UI after the import worker finishes.
+pub fn pen_document_to_payload_preserving_geometry(doc: &PenDocument) -> LoadedDoc {
+    let pages: Vec<PagePayload> = if let Some(pages) = &doc.pages {
+        pages
+            .iter()
+            .map(|p| build_page_preserving_geometry(&p.id, &p.name, &p.children))
+            .collect()
+    } else if !doc.children.is_empty() {
+        vec![build_page_preserving_geometry(
+            "page-1",
+            doc.name.as_deref().unwrap_or("Page 1"),
+            &doc.children,
+        )]
+    } else {
+        vec![PagePayload {
+            id: "n1".to_string(),
+            name: "Page 1".into(),
+            children: Vec::new(),
+        }]
+    };
+    LoadedDoc {
+        payload: DocPayload {
+            version: 1,
+            active_page_index: 0,
+            pages,
+            var_table: crate::variables::VarTablePayload::default(),
+        },
+    }
+}
+
 /// Copy `PenDocument.variables` + `.themes` into a shell-core
 /// `VariableTable`. Caller assigns the result to `Document.var_table`
 /// AFTER `apply_payload` (which clears it via Default). Lossless on
@@ -162,6 +198,15 @@ fn build_page(id: &str, name: &str, roots: &[PenNode], page_idx: usize) -> PageP
             .iter()
             .map(|n| node_to_payload(n, &layout_rects))
             .collect(),
+    }
+}
+
+fn build_page_preserving_geometry(id: &str, name: &str, roots: &[PenNode]) -> PagePayload {
+    let rects = crate::authored_geometry::rects_for_roots(roots);
+    PagePayload {
+        id: id.to_string(),
+        name: name.to_string(),
+        children: roots.iter().map(|n| node_to_payload(n, &rects)).collect(),
     }
 }
 
@@ -286,6 +331,11 @@ fn node_to_payload(node: &PenNode, rects: &BTreeMap<String, [f32; 4]>) -> NodePa
     // overwrite its hand-encoded geometry with the taffy AABB.
     if !matches!(node, PenNode::Line(_)) {
         apply_computed_rect(&mut p, rects);
+    } else if let Some([x, y, w, h]) = rects.get(&p.schema_id).copied() {
+        if w.is_nan() && h.is_nan() {
+            p.x = x;
+            p.y = y;
+        }
     }
     // Canonical `PathNode.anchors` need the same transform the TS
     // renderer applies in `pen-renderer/node-renderer.ts::drawPath`:

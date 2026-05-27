@@ -1,0 +1,28 @@
+use super::WidgetHostNative;
+use op_editor_core::{EditorState, Locale};
+
+#[test]
+fn install_imported_state_preserves_live_ui_and_defers_layout() {
+    let mut host = WidgetHostNative::new();
+    host.editor_state.editor_ui.locale = Locale::ZhCn;
+    host.editor_state.editor_ui.sidebar_open = false;
+    host.editor_state.editor_ui.figma_import_in_progress = true;
+    host.editor_state_dirty = false;
+
+    let mut imported = EditorState::new();
+    imported.editor_ui.file_name_display = Some("Dashboard.fig".into());
+    imported.editor_ui.locale = Locale::EnUs;
+    imported.editor_ui.sidebar_open = true;
+
+    host.install_imported_state(imported);
+
+    assert_eq!(host.editor_state.editor_ui.locale, Locale::ZhCn);
+    assert!(!host.editor_state.editor_ui.sidebar_open);
+    assert!(!host.editor_state.editor_ui.figma_import_in_progress);
+    assert_eq!(
+        host.editor_state.editor_ui.file_name_display.as_deref(),
+        Some("Dashboard.fig")
+    );
+    assert!(host.editor_state_dirty);
+    assert!(host.layout_scene.pages.is_empty());
+}

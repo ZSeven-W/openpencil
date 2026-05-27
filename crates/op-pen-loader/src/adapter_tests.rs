@@ -6,6 +6,38 @@ fn load(src: &str) -> LoadedDoc {
 }
 
 #[test]
+fn preserving_geometry_keeps_authored_nested_positions() {
+    let src = r##"{
+      "version":"1.0.0",
+      "pages":[{
+        "id":"p1","name":"Page 1",
+        "children":[{
+          "type":"frame","id":"root","x":100,"y":200,"width":300,"height":200,
+          "layout":"horizontal","gap":99,
+          "children":[
+            {"type":"rectangle","id":"r1","x":10,"y":20,"width":30,"height":40,
+             "fill":[{"type":"solid","color":"#000000"}]},
+            {"type":"line","id":"l1","x":5,"y":6,"x2":10,"y2":0}
+          ]
+        }]
+      }],
+      "children":[]
+    }"##;
+    let r = jian_ops_schema::load_str(src).unwrap();
+    let loaded = pen_document_to_payload_preserving_geometry(&r.value);
+    let root = &loaded.payload.pages[0].children[0];
+    let rect = &root.children[0];
+    let line = &root.children[1];
+
+    assert_eq!(
+        (root.x, root.y, root.w, root.h),
+        (100.0, 200.0, 300.0, 200.0)
+    );
+    assert_eq!((rect.x, rect.y, rect.w, rect.h), (110.0, 220.0, 30.0, 40.0));
+    assert_eq!((line.x, line.y, line.w, line.h), (105.0, 206.0, 10.0, 0.0));
+}
+
+#[test]
 fn minimal_empty_doc() {
     let r = load(r#"{"version":"0.8.0","children":[]}"#);
     assert_eq!(r.payload.pages.len(), 1);

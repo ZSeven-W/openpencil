@@ -475,6 +475,18 @@ pub struct EditorUiState {
     pub layer_layers_scroll: f32,
     /// "Import from Figma" modal.
     pub figma_import_open: bool,
+    /// True while a `.fig` is being parsed on a worker thread. Paint
+    /// uses this to show a "正在解析 Figma 文件…" overlay so the user
+    /// gets feedback during the multi-second parse (a 2-3 MB .fig with
+    /// hundreds of nodes can take a couple of seconds to walk the
+    /// Kiwi schema, build the tree, and convert every node). The
+    /// desktop runner sets it when spawning the worker and clears it
+    /// when the result lands.
+    pub figma_import_in_progress: bool,
+    /// Imported Figma documents parsed in Preserve mode already carry
+    /// authored parent-local geometry. The scene builder can use this
+    /// flag to skip the expensive flex/text layout pass.
+    pub preserve_authored_geometry: bool,
     /// Floating `Cmd+,` agent-settings modal open.
     pub agent_settings_open: bool,
     pub agent_settings: crate::agent_settings::AgentSettings,
@@ -695,6 +707,8 @@ impl Default for EditorUiState {
             layer_pages_scroll: 0.0,
             layer_layers_scroll: 0.0,
             figma_import_open: false,
+            figma_import_in_progress: false,
+            preserve_authored_geometry: false,
             agent_settings_open: false,
             agent_settings: crate::agent_settings::AgentSettings::default(),
             agent_settings_drag: None,

@@ -23,8 +23,8 @@
 
 use op_editor_ui::layout_scene::NodeKind;
 use op_editor_ui::layout_scene::{
-    LayoutScene, SceneFillType, SceneGradient, SceneGradientStop, SceneImageFit, SceneNode,
-    ScenePage, SceneStroke, SceneTextAlign, SceneTextVerticalAlign,
+    stable_image_source_id, LayoutScene, SceneFillType, SceneGradient, SceneGradientStop,
+    SceneImageFit, SceneNode, ScenePage, SceneStroke, SceneTextAlign, SceneTextVerticalAlign,
 };
 use op_editor_ui::scene_vars::VariableTable;
 use op_editor_ui::Color;
@@ -47,7 +47,11 @@ pub fn editor_state_to_layout_scene(state: &op_editor_core::EditorState) -> Layo
     // every `NodePayload`'s AABB by jian-core's `LayoutEngine`. This
     // is the reusable layout-resolution core; it never touches the
     // shell-core `Document` model.
-    let payload: DocPayload = crate::adapter::pen_document_to_payload(&state.doc).payload;
+    let payload: DocPayload = if state.editor_ui.preserve_authored_geometry {
+        crate::adapter::pen_document_to_payload_preserving_geometry(&state.doc).payload
+    } else {
+        crate::adapter::pen_document_to_payload(&state.doc).payload
+    };
     // Variables + active theme + the `fill_refs` / `stroke_refs`
     // caches the editor holds. `editor_state_var_table` folds the
     // persisted definitions and the transient `EditorState.ui`
@@ -133,6 +137,11 @@ fn node_payload_to_scene(node: &NodePayload, var_table: &VariableTable) -> Scene
         arc_inner_radius: node.arc_inner_radius,
         polygon_sides: node.polygon_sides.clamp(3, 100),
         image_src: node.image_src.clone(),
+        image_src_id: node
+            .image_src
+            .as_deref()
+            .map(stable_image_source_id)
+            .unwrap_or(0),
         image_fit: image_fit_to_scene(node.image_fit.as_deref()),
         image_adjustments: image_adjustments_to_scene(node.image_adjustments),
         effects: crate::effects::effects_from_payload_ref(&node.effects),

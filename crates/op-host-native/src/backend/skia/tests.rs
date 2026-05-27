@@ -149,6 +149,36 @@ fn explicit_family_typeface_lookup_is_cached() {
     assert_eq!(be.family_typeface_cache_len(), 1);
 }
 
+#[test]
+fn svg_path_cache_reuses_parsed_paths() {
+    let mut be = NativeBackend::with_dpi(1.0);
+    let mut surface = skia_safe::surfaces::raster_n32_premul((32, 32)).unwrap();
+    let canvas = surface.canvas();
+    let d = "M0 0 L10 0 L10 10 Z";
+
+    be.fill_svg_path(canvas, d, Point2D::ZERO, 1.0, 1.0, Color::BLACK);
+    assert_eq!(be.svg_path_cache_len(), 1);
+
+    be.fill_svg_path(canvas, d, Point2D::new(4.0, 4.0), 2.0, 1.0, Color::RED);
+    assert_eq!(be.svg_path_cache_len(), 1);
+}
+
+#[test]
+fn complex_svg_fill_uses_raster_cache_after_first_paint() {
+    let mut be = NativeBackend::with_dpi(1.0);
+    let mut surface = skia_safe::surfaces::raster_n32_premul((128, 128)).unwrap();
+    let canvas = surface.canvas();
+    let d = format!("M0 0 L64 0 L64 64 L0 64 Z{}", " ".repeat(4096));
+
+    be.fill_svg_path(canvas, &d, Point2D::ZERO, 1.0, 1.0, Color::BLACK);
+    assert_eq!(be.svg_path_cache_len(), 1);
+    assert_eq!(be.svg_raster_cache_len(), 1);
+
+    be.fill_svg_path(canvas, &d, Point2D::new(8.0, 8.0), 1.0, 1.0, Color::BLACK);
+    assert_eq!(be.svg_path_cache_len(), 1);
+    assert_eq!(be.svg_raster_cache_len(), 1);
+}
+
 /// Encode a solid raster surface to PNG bytes — a real image for
 /// the decode-cache test (no hardcoded blob).
 fn encode_test_png(w: i32, h: i32) -> Vec<u8> {

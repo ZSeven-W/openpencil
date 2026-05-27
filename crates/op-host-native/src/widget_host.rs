@@ -39,6 +39,8 @@ mod click;
 mod color_picker_press;
 mod component_browser_press;
 mod design_md_press;
+#[cfg(test)]
+mod figma_import_tests;
 mod frame_backend;
 mod geometry;
 mod git_press;
@@ -570,6 +572,29 @@ impl WidgetHostNative {
     /// `.op` load, chat streaming, model discovery) calls this so the
     /// next paint re-derives the snapshot.
     pub fn mark_editor_state_dirty(&mut self) {
+        self.editor_state_dirty = true;
+    }
+
+    /// Install a Figma-imported editor state. The worker only parses
+    /// into canonical data; layout scene construction stays on the
+    /// normal host path so the worker never touches Skia / FontMgr.
+    pub fn install_imported_state(&mut self, mut state: op_editor_core::EditorState) {
+        let mut preserved = self.editor_state.editor_ui.clone();
+        preserved.figma_import_in_progress = false;
+        preserved.file_name_display = state.editor_ui.file_name_display.take();
+        preserved.preserve_authored_geometry = state.editor_ui.preserve_authored_geometry;
+        state.editor_ui = preserved;
+
+        let old_state = std::mem::replace(&mut self.editor_state, state);
+        let old_scene = std::mem::take(&mut self.layout_scene);
+        std::thread::Builder::new()
+            .name("op-import-drop".into())
+            .spawn(move || {
+                drop(old_state);
+                drop(old_scene);
+            })
+            .expect("spawn op-import-drop worker");
+
         self.editor_state_dirty = true;
     }
 
