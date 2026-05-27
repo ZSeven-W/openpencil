@@ -295,6 +295,7 @@ describe('cloud version and activity routes', () => {
     });
     cloudSupabaseMocks.getCloudSupabase.mockResolvedValue({ supabase: { from }, user: viewer });
     h3Mocks.params = { id: fileRow.id };
+    h3Mocks.query = { limit: '10', offset: '10' };
 
     const handler = (await import('../files/[id]/versions.get')).default;
     const result = await handler(event);
@@ -302,9 +303,11 @@ describe('cloud version and activity routes', () => {
     expect(access.shareByUserQuery.eq).toHaveBeenCalledWith('shared_with_user_id', viewer.id);
     expect(versionsQuery.eq).toHaveBeenCalledWith('file_id', fileRow.id);
     expect(versionsQuery.eq).toHaveBeenCalledWith('owner_id', owner.id);
+    expect(versionsQuery.range).toHaveBeenCalledWith(10, 19);
     expect(result.data).toEqual([
       expect.objectContaining({ id: 'version-1', actorId: owner.id, sizeBytes: 2048 }),
     ]);
+    expect(result.page).toEqual({ total: 0, limit: 10, offset: 10 });
   });
 
   it('rejects shared viewers when editing version labels', async () => {
@@ -418,7 +421,7 @@ describe('cloud version and activity routes', () => {
 
     expect(activityQuery.eq).toHaveBeenCalledWith('file_id', fileRow.id);
     expect(activityQuery.eq).toHaveBeenCalledWith('owner_id', user.id);
-    expect(result.meta).toEqual({ nextCursor: null, limit: 20 });
+    expect(result.meta).toEqual({ nextCursor: null, limit: 10 });
     expect(result.data).toEqual([
       expect.objectContaining({ id: 'activity-1', type: 'file_saved', actorId: user.id }),
     ]);

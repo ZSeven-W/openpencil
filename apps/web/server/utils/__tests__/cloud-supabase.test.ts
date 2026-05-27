@@ -67,25 +67,35 @@ describe('cloud-supabase auth helpers', () => {
   it('rejects invalid bearer tokens with 401', async () => {
     vi.stubEnv('SUPABASE_URL', 'https://example.supabase.co');
     vi.stubEnv('SUPABASE_ANON_KEY', 'anon-key');
-    const getUser = vi.fn(async () => ({
-      data: { user: null },
+    const getClaims = vi.fn(async () => ({
+      data: null,
       error: new Error('invalid token'),
     }));
-    createClientMock.mockReturnValue({ auth: { getUser } });
+    createClientMock.mockReturnValue({ auth: { getClaims } });
 
     await expect(getCloudSupabase(makeEvent('Bearer invalid-token'))).rejects.toThrow(
       /Invalid bearer token/,
     );
-    expect(getUser).toHaveBeenCalledWith('invalid-token');
+    expect(getClaims).toHaveBeenCalledWith('invalid-token');
   });
 
-  it('creates a user-scoped Supabase client for valid bearer tokens', async () => {
+  it('creates a user-scoped Supabase client from verified JWT claims', async () => {
     vi.stubEnv('SUPABASE_URL', 'https://example.supabase.co');
     vi.stubEnv('SUPABASE_ANON_KEY', 'anon-key');
-    const user = { id: 'user-1', email: 'user@example.test' };
+    const user = expect.objectContaining({ id: 'user-1', email: 'user@example.test' });
     const client = {
       auth: {
-        getUser: vi.fn(async () => ({ data: { user }, error: null })),
+        getClaims: vi.fn(async () => ({
+          data: {
+            claims: {
+              sub: 'user-1',
+              email: 'user@example.test',
+              role: 'authenticated',
+              exp: Math.floor(Date.now() / 1000) + 3600,
+            },
+          },
+          error: null,
+        })),
       },
     };
     createClientMock.mockReturnValue(client);
@@ -93,6 +103,7 @@ describe('cloud-supabase auth helpers', () => {
     const context = await getCloudSupabase(makeEvent('Bearer valid-token'));
 
     expect(context).toEqual({ supabase: client, user, token: 'valid-token' });
+    expect(client.auth.getClaims).toHaveBeenCalledWith('valid-token');
     expect(createClientMock).toHaveBeenCalledWith(
       'https://example.supabase.co',
       'anon-key',
@@ -104,6 +115,45 @@ describe('cloud-supabase auth helpers', () => {
         },
       }),
     );
+  });
+
+  it('falls back to getUser when getClaims is unavailable', async () => {
+    vi.stubEnv('SUPABASE_URL', 'https://example.supabase.co');
+    vi.stubEnv('SUPABASE_ANON_KEY', 'anon-key');
+    const user = { id: 'user-1', email: 'user@example.test' };
+    const client = {
+      auth: {
+        getUser: vi.fn(async () => ({ data: { user }, error: null })),
+      },
+    };
+    createClientMock.mockReturnValue(client);
+
+    const context = await getCloudSupabase(makeEvent('Bearer fallback-token'));
+
+    expect(context.user).toBe(user);
+    expect(client.auth.getUser).toHaveBeenCalledWith('fallback-token');
+  });
+
+  it('reuses recently verified bearer claims for repeated cloud API requests', async () => {
+    vi.stubEnv('SUPABASE_URL', 'https://example.supabase.co');
+    vi.stubEnv('SUPABASE_ANON_KEY', 'anon-key');
+    const getClaims = vi.fn(async () => ({
+      data: {
+        claims: {
+          sub: 'user-1',
+          email: 'user@example.test',
+          role: 'authenticated',
+          exp: Math.floor(Date.now() / 1000) + 3600,
+        },
+      },
+      error: null,
+    }));
+    createClientMock.mockReturnValue({ auth: { getClaims } });
+
+    await getCloudSupabase(makeEvent('Bearer cached-token'));
+    await getCloudSupabase(makeEvent('Bearer cached-token'));
+
+    expect(getClaims).toHaveBeenCalledTimes(1);
   });
 
   it('keeps every /api/cloud route behind getCloudSupabase', () => {

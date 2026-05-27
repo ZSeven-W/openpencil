@@ -29,7 +29,7 @@ const ACTIVITY_EVENT_TYPES = [
 const activityQuerySchema = z.object({
   type: z.enum(['all', ...ACTIVITY_EVENT_TYPES]).optional(),
   cursor: z.string().datetime().optional(),
-  limit: z.coerce.number().int().min(1).max(100).optional().default(20),
+  limit: z.coerce.number().int().min(1).max(100).optional().default(10),
 });
 
 export default defineEventHandler(async (event) => {

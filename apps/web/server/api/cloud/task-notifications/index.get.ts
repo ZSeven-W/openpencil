@@ -4,7 +4,9 @@ import { getCloudSupabase, toApiError } from '../../../utils/cloud-supabase';
 import { listTaskNotifications } from '../../../utils/cloud-codegen-jobs';
 
 const querySchema = z.object({
-  limit: z.coerce.number().int().positive().max(100).optional().default(50),
+  fileId: z.string().uuid().optional(),
+  limit: z.coerce.number().int().positive().max(100).optional().default(10),
+  offset: z.coerce.number().int().nonnegative().optional().default(0),
 });
 
 export default defineEventHandler(async (event) => {
@@ -19,7 +21,11 @@ export default defineEventHandler(async (event) => {
   }
 
   const { supabase, user } = await getCloudSupabase(event);
-  return {
-    data: await listTaskNotifications({ supabase, userId: user.id, limit: parsed.data.limit }),
-  };
+  return await listTaskNotifications({
+    supabase,
+    userId: user.id,
+    fileId: parsed.data.fileId,
+    limit: parsed.data.limit,
+    offset: parsed.data.offset,
+  });
 });
