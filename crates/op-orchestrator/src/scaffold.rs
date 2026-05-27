@@ -84,7 +84,15 @@ fn status_bar_foreground(fill_hex: &str) -> &'static str {
     }
 }
 
-fn mobile_status_bar_json(root_id: &str, fill_hex: &str) -> serde_json::Value {
+/// Status-bar chrome for a mobile root frame. `width` is the root frame's
+/// width so the right-aligned levels group (cellular/wifi/battery) clamps
+/// to the screen edge instead of overflowing on explicit narrow widths
+/// (e.g. 320 × 568 iPhone SE). Right-edge inset = 26 to match the iOS
+/// safe-area gutter the 390-wide reference is built against.
+fn mobile_status_bar_json(root_id: &str, fill_hex: &str, width: f64) -> serde_json::Value {
+    const LEVELS_WIDTH: f64 = 78.0;
+    const LEVELS_RIGHT_INSET: f64 = 26.0;
+    let levels_x = (width - LEVELS_WIDTH - LEVELS_RIGHT_INSET).max(0.0);
     let fg = status_bar_foreground(fill_hex);
     let fg_fill = solid_fill_json(fg);
     let time_label = serde_json::json!({
@@ -186,9 +194,9 @@ fn mobile_status_bar_json(root_id: &str, fill_hex: &str) -> serde_json::Value {
         "type": "frame",
         "id": format!("{root_id}-status-bar-levels"),
         "name": "Levels",
-        "x": 286,
+        "x": levels_x,
         "y": 24,
-        "width": 78,
+        "width": LEVELS_WIDTH,
         "height": 14,
         "layout": "none",
         "children": [cellular, wifi, battery]
@@ -224,7 +232,7 @@ fn build_root_frame_node(
     is_mobile: bool,
 ) -> Result<PenNode, String> {
     let children = if is_mobile {
-        serde_json::json!([mobile_status_bar_json(id, fill_hex)])
+        serde_json::json!([mobile_status_bar_json(id, fill_hex, width)])
     } else {
         serde_json::json!([])
     };
