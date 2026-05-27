@@ -33,7 +33,6 @@
 
 use op_editor_ui::widgets::SelectionHandle;
 use op_editor_ui::{Rect, Theme};
-use std::sync::mpsc::{Receiver, TryRecvError};
 
 mod click;
 mod color_picker_press;
@@ -50,7 +49,6 @@ mod input;
 #[cfg(test)]
 mod input_tests;
 mod keyboard;
-mod keyboard_motion;
 mod paint;
 mod press;
 mod press_helpers;
@@ -60,11 +58,6 @@ mod scroll;
 mod shape_picker_press;
 mod shortcuts;
 mod toolbar_hover;
-mod variables_panel_commit;
-mod variables_panel_geometry;
-mod variables_panel_press;
-#[cfg(test)]
-mod variables_panel_tests;
 
 pub use frame_backend::NativeFrameBackend;
 
@@ -202,7 +195,6 @@ pub struct WidgetHostNative {
     /// driving the color-picker drag).
     pub(in crate::widget_host) last_viewport_w: f32,
     pub(in crate::widget_host) last_viewport_h: f32,
-    system_font_rx: Option<Receiver<Vec<String>>>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -429,7 +421,6 @@ impl WidgetHostNative {
             shift_held: false,
             last_viewport_w: 0.0,
             last_viewport_h: 0.0,
-            system_font_rx: Some(crate::system_fonts::spawn_system_font_loader()),
         }
     }
 
@@ -445,30 +436,6 @@ impl WidgetHostNative {
     /// animations via `jian_core::anim`.
     pub fn set_now_ms(&mut self, now_ms: u64) {
         self.now_ms = now_ms;
-        if self.poll_system_font_loader() {
-            self.mark_dirty();
-        }
-    }
-
-    fn poll_system_font_loader(&mut self) -> bool {
-        let Some(result) = self.system_font_rx.as_ref().map(|rx| rx.try_recv()) else {
-            return false;
-        };
-        match result {
-            Ok(families) => {
-                self.system_font_rx = None;
-                if self.editor_state.editor_ui.system_font_families == families {
-                    return false;
-                }
-                self.editor_state.editor_ui.system_font_families = families;
-                true
-            }
-            Err(TryRecvError::Empty) => false,
-            Err(TryRecvError::Disconnected) => {
-                self.system_font_rx = None;
-                false
-            }
-        }
     }
 
     /// Run a path boolean op on the active selection (Union /
@@ -677,31 +644,6 @@ impl WidgetHostNative {
             return Some(jian_core::anim::next_blink_flip_ms(
                 self.now_ms,
                 ui.property_caret_anchor_ms,
-                500,
-            ));
-        }
-        if self.editor_state.editor_ui.variable_row_focus.is_some()
-            || self
-                .editor_state
-                .editor_ui
-                .variables_theme_rename_axis
-                .is_some()
-            || self
-                .editor_state
-                .editor_ui
-                .variables_variant_rename_value
-                .is_some()
-        {
-            return Some(jian_core::anim::next_blink_flip_ms(
-                self.now_ms,
-                ui.property_caret_anchor_ms,
-                500,
-            ));
-        }
-        if self.editor_state.editor_ui.icon_picker_open {
-            return Some(jian_core::anim::next_blink_flip_ms(
-                self.now_ms,
-                self.editor_state.editor_ui.icon_picker_caret_anchor_ms,
                 500,
             ));
         }

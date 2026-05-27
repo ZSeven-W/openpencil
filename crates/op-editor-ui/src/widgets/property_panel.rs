@@ -39,8 +39,8 @@ pub const PROPERTY_PANEL_WIDTH: f32 = 280.0;
 // `widgets::PropertyPanelAction` / `property_panel::PropertyPanelAction`
 // path is unchanged.
 pub use crate::widgets::property_panel_action::{
-    LayoutAlignValue, LayoutJustifyValue, PropertyPanelAction, TextAlignValue, TextGrowthValue,
-    TextVerticalAlignValue,
+    FontFamilyChoice, LayoutAlignValue, LayoutJustifyValue, PropertyPanelAction, TextAlignValue,
+    TextGrowthValue, TextVerticalAlignValue,
 };
 
 // `SectionCapabilities` lives in `property_panel_layout.rs`
@@ -84,8 +84,6 @@ pub struct PropertyPanel {
     pub fill_type_picker_open: bool,
     pub image_fill_popover_open: bool,
     pub font_family_picker_open: bool,
-    pub font_family_picker_scroll: f32,
-    pub system_font_families: Vec<String>,
     /// True for multi-select aggregate (inputs inert, "N items").
     pub is_multi: bool,
     /// Active header tab — toggled by Cmd+Shift+C.
@@ -214,8 +212,6 @@ impl PropertyPanel {
             fill_type_picker_open: ui.fill_type_picker_open,
             image_fill_popover_open: ui.image_fill_popover_open,
             font_family_picker_open: ui.font_family_picker_open,
-            font_family_picker_scroll: ui.font_family_picker_scroll,
-            system_font_families: ui.system_font_families.clone(),
             is_multi,
             tab: ui.property_tab,
             export_format: ui.export_format,
@@ -324,42 +320,17 @@ impl PropertyPanel {
                 return Some(action);
             }
         }
-        if self.font_family_picker_open {
-            if let Some(text) = self.snapshot.text.as_ref() {
-                if let Some(action) =
-                    crate::widgets::property_panel_font_picker::font_family_picker_action_at(
-                        self.scrolled_rect(panel_rect),
-                        self.visible_sections(),
-                        &text.font_family,
-                        &self.system_font_families,
-                        self.font_family_picker_scroll,
-                        point,
-                    )
-                {
-                    return Some(action);
-                }
-            }
-        }
         if !self.point_in_section_viewport(panel_rect, point) {
             return None;
         }
-        let rects = sections::action_button_rects_with_font_picker(
+        let rects = sections::action_button_rects_with_fill_picker(
             self.scrolled_rect(panel_rect),
             self.visible_sections(),
             &self.snapshot.effects,
-            sections::ActionButtonRectOptions {
-                system_fonts: &self.system_font_families,
-                active_font_family: self
-                    .snapshot
-                    .text
-                    .as_ref()
-                    .map(|text| text.font_family.as_str())
-                    .unwrap_or(""),
-                fill_picker_open: self.fill_type_picker_open,
-                font_family_picker_open: self.font_family_picker_open,
-                export_scale_picker_open: self.export_scale_picker_open,
-                export_format_picker_open: self.export_format_picker_open,
-            },
+            self.fill_type_picker_open,
+            self.font_family_picker_open,
+            self.export_scale_picker_open,
+            self.export_format_picker_open,
         );
         // Picker rows live in `rects` AFTER the dropdown rect, so
         // a row hit takes priority — `rev()` makes the picker rows
@@ -385,23 +356,14 @@ impl PropertyPanel {
         if !self.point_in_section_viewport(panel_rect, point) {
             return None;
         }
-        sections::action_button_rects_with_font_picker(
+        sections::action_button_rects_with_fill_picker(
             self.scrolled_rect(panel_rect),
             self.visible_sections(),
             &self.snapshot.effects,
-            sections::ActionButtonRectOptions {
-                system_fonts: &self.system_font_families,
-                active_font_family: self
-                    .snapshot
-                    .text
-                    .as_ref()
-                    .map(|text| text.font_family.as_str())
-                    .unwrap_or(""),
-                fill_picker_open: self.fill_type_picker_open,
-                font_family_picker_open: self.font_family_picker_open,
-                export_scale_picker_open: self.export_scale_picker_open,
-                export_format_picker_open: self.export_format_picker_open,
-            },
+            self.fill_type_picker_open,
+            self.font_family_picker_open,
+            self.export_scale_picker_open,
+            self.export_format_picker_open,
         )
         .into_iter()
         .filter(|(a, _)| {
@@ -411,40 +373,6 @@ impl PropertyPanel {
             )
         })
         .position(|(_, rect)| rect_contains(rect, point))
-    }
-
-    pub fn font_family_picker_bounds(&self, panel_rect: Rect) -> Option<Rect> {
-        let text = self.snapshot.text.as_ref()?;
-        crate::widgets::property_panel_font_picker::font_family_picker_rect(
-            self.scrolled_rect(panel_rect),
-            self.visible_sections(),
-            &text.font_family,
-            &self.system_font_families,
-        )
-    }
-
-    pub fn font_family_picker_max_scroll(&self, panel_rect: Rect) -> f32 {
-        let Some(text) = self.snapshot.text.as_ref() else {
-            return 0.0;
-        };
-        crate::widgets::property_panel_font_picker::font_family_picker_max_scroll(
-            self.scrolled_rect(panel_rect),
-            self.visible_sections(),
-            &text.font_family,
-            &self.system_font_families,
-        )
-    }
-
-    pub fn font_family_picker_row_rect(&self, panel_rect: Rect, family: &str) -> Option<Rect> {
-        let text = self.snapshot.text.as_ref()?;
-        crate::widgets::property_panel_font_picker::font_family_picker_row_rect(
-            self.scrolled_rect(panel_rect),
-            self.visible_sections(),
-            &text.font_family,
-            &self.system_font_families,
-            self.font_family_picker_scroll,
-            family,
-        )
     }
 
     pub fn image_adjustment_drag_action(
@@ -726,14 +654,12 @@ impl Widget for PropertyPanel {
         }
         if caps.text && self.font_family_picker_open {
             if let Some(text) = self.snapshot.text.as_ref() {
-                crate::widgets::property_panel_font_picker::paint_font_family_picker(
+                crate::widgets::property_panel_text::paint_font_family_picker(
                     cx,
                     &self.theme,
                     scrolled,
                     self.visible_sections(),
                     &text.font_family,
-                    &self.system_font_families,
-                    self.font_family_picker_scroll,
                 );
             }
         }

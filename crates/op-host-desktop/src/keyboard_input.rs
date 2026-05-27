@@ -196,8 +196,6 @@ impl DesktopApp {
                     "z" => consumed = self.host.apply_redo(),
                     "g" => consumed = self.host.apply_ungroup(),
                     "c" => consumed = self.host.apply_toggle_code_panel(),
-                    "v" => consumed = self.host.apply_toggle_variables_panel(),
-                    "d" => consumed = self.host.apply_toggle_design_md_panel(),
                     _ => {}
                 }
             }

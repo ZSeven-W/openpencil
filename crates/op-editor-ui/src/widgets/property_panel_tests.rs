@@ -282,106 +282,37 @@ fn font_family_picker_rows_are_clickable() {
         origin: Point2D::new(0.0, 0.0),
         size: Point2D::new(280.0, 1200.0),
     };
-    let poppins = panel
-        .font_family_picker_row_rect(rect, "Poppins")
-        .expect("Poppins font row");
+    let rects = sections::action_button_rects_with_fill_picker(
+        rect,
+        visible_for(&panel),
+        &panel.snapshot.effects,
+        false,
+        true,
+        false,
+        false,
+    );
+    let georgia = rects
+        .iter()
+        .find(|(action, _)| {
+            matches!(
+                action,
+                PropertyPanelAction::SetFontFamily(
+                    super::property_panel::FontFamilyChoice::Georgia
+                )
+            )
+        })
+        .map(|(_, r)| *r)
+        .expect("Georgia font row");
     let center = Point2D::new(
-        poppins.origin.x + poppins.size.x / 2.0,
-        poppins.origin.y + poppins.size.y / 2.0,
+        georgia.origin.x + georgia.size.x / 2.0,
+        georgia.origin.y + georgia.size.y / 2.0,
     );
     assert!(matches!(
         panel.hit_test_action(rect, center),
-        Some(PropertyPanelAction::SetFontFamily(family)) if family == "Poppins"
+        Some(PropertyPanelAction::SetFontFamily(
+            super::property_panel::FontFamilyChoice::Georgia
+        ))
     ));
-}
-
-#[test]
-fn font_family_options_include_promoted_system_fonts() {
-    let system_fonts = vec![
-        "Zapfino".to_string(),
-        "PingFang SC".to_string(),
-        "Hiragino Sans GB".to_string(),
-    ];
-    let system_fonts =
-        super::property_panel_font_picker::prepare_system_font_families(system_fonts);
-    let options =
-        super::property_panel_font_picker::font_family_options(&system_fonts, "My Brand Font");
-    assert_eq!(options.first().map(String::as_str), Some("My Brand Font"));
-    let pingfang = options
-        .iter()
-        .position(|family| family == "PingFang SC")
-        .expect("system CJK font should be visible");
-    let zapfino = options
-        .iter()
-        .position(|family| family == "Zapfino")
-        .expect("regular system font should be visible");
-    assert!(pingfang < zapfino, "CJK fonts should be promoted");
-}
-
-#[test]
-fn prepared_system_fonts_are_sorted_once_for_smooth_picker_scroll() {
-    let system_fonts = vec![
-        "Zapfino".to_string(),
-        "  ".to_string(),
-        "PingFang SC".to_string(),
-        "zapfino".to_string(),
-        "Bodoni 72".to_string(),
-    ];
-    let prepared = super::property_panel_font_picker::prepare_system_font_families(system_fonts);
-
-    assert_eq!(
-        prepared,
-        vec![
-            "PingFang SC".to_string(),
-            "Bodoni 72".to_string(),
-            "Zapfino".to_string()
-        ]
-    );
-}
-
-#[test]
-fn font_family_picker_scroll_hits_later_system_fonts() {
-    let mut state = EditorState::sample();
-    state.set_single_selection(NodeId::new("n11"));
-    state.editor_ui.font_family_picker_open = true;
-    state.editor_ui.system_font_families =
-        (0..120).map(|i| format!("System Font {i:03}")).collect();
-    state.editor_ui.font_family_picker_scroll = 56.0 * 20.0;
-
-    let panel = PropertyPanel::for_selection(&state).expect("text panel");
-    let rect = Rect {
-        origin: Point2D::new(0.0, 0.0),
-        size: Point2D::new(280.0, 900.0),
-    };
-
-    assert!(panel.font_family_picker_max_scroll(rect) > 0.0);
-    let target = panel
-        .font_family_picker_row_rect(rect, "System Font 030")
-        .expect("scrolled system font row");
-    let center = Point2D::new(
-        target.origin.x + target.size.x / 2.0,
-        target.origin.y + target.size.y / 2.0,
-    );
-
-    assert!(matches!(
-        panel.hit_test_action(rect, center),
-        Some(PropertyPanelAction::SetFontFamily(family)) if family == "System Font 030"
-    ));
-}
-
-#[test]
-fn font_family_options_include_all_system_fonts_after_scroll_support() {
-    let mut system_fonts: Vec<String> = (0..400).map(|i| format!("System Font {i}")).collect();
-    system_fonts.push("PingFang SC".to_string());
-    system_fonts.push("宋体".to_string());
-
-    let options =
-        super::property_panel_font_picker::font_family_options(&system_fonts, "Brand Font");
-
-    assert_eq!(options.first().map(String::as_str), Some("Brand Font"));
-    assert!(options.iter().any(|family| family == "PingFang SC"));
-    assert!(options.iter().any(|family| family == "宋体"));
-    assert!(options.iter().any(|family| family == "System Font 399"));
 }
 
 #[test]

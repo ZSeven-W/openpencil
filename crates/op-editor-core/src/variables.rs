@@ -79,46 +79,12 @@ impl EditorState {
         self.set_variable_scalar(name, VariableKind::Number, VariableScalar::Num(value))
     }
 
-    /// Write a number into one concrete theme value column.
-    pub fn set_variable_number_for_theme(
-        &mut self,
-        name: &str,
-        axis: &str,
-        theme_value: &str,
-        value: f64,
-    ) -> bool {
-        self.set_variable_scalar_for_theme(
-            name,
-            VariableKind::Number,
-            VariableScalar::Num(value),
-            axis,
-            theme_value,
-        )
-    }
-
     /// Write a string into a `String` variable. Kind-mismatch → false.
     pub fn set_variable_string(&mut self, name: &str, value: impl Into<String>) -> bool {
         self.set_variable_scalar(
             name,
             VariableKind::String,
             VariableScalar::Str(value.into()),
-        )
-    }
-
-    /// Write a string into one concrete theme value column.
-    pub fn set_variable_string_for_theme(
-        &mut self,
-        name: &str,
-        axis: &str,
-        theme_value: &str,
-        value: impl Into<String>,
-    ) -> bool {
-        self.set_variable_scalar_for_theme(
-            name,
-            VariableKind::String,
-            VariableScalar::Str(value.into()),
-            axis,
-            theme_value,
         )
     }
 
@@ -144,36 +110,6 @@ impl EditorState {
             return false;
         }
         write_scalar(&mut def.value, scalar, &active);
-        true
-    }
-
-    fn set_variable_scalar_for_theme(
-        &mut self,
-        name: &str,
-        expect: VariableKind,
-        scalar: VariableScalar,
-        axis: &str,
-        theme_value: &str,
-    ) -> bool {
-        let Some(theme_values) = self
-            .doc
-            .themes
-            .as_ref()
-            .and_then(|themes| themes.get(axis))
-            .cloned()
-        else {
-            return self.set_variable_scalar(name, expect, scalar);
-        };
-        if !theme_values.iter().any(|value| value == theme_value) {
-            return false;
-        }
-        let Some(def) = self.variables_mut().get_mut(name) else {
-            return false;
-        };
-        if def.kind != expect {
-            return false;
-        }
-        write_scalar_for_theme(&mut def.value, scalar, axis, theme_value, &theme_values);
         true
     }
 
@@ -381,54 +317,6 @@ fn write_scalar(
             entries.push(ThemedValue {
                 value: scalar,
                 theme: Some(active.clone()),
-            });
-        }
-    }
-}
-
-fn write_scalar_for_theme(
-    value: &mut VariableValue,
-    scalar: VariableScalar,
-    axis: &str,
-    theme_value: &str,
-    theme_values: &[String],
-) {
-    match value {
-        VariableValue::Scalar(current) => {
-            let fallback = current.clone();
-            let themed = theme_values
-                .iter()
-                .map(|value_name| {
-                    let mut theme = BTreeMap::new();
-                    theme.insert(axis.to_string(), value_name.clone());
-                    ThemedValue {
-                        value: if value_name == theme_value {
-                            scalar.clone()
-                        } else {
-                            fallback.clone()
-                        },
-                        theme: Some(theme),
-                    }
-                })
-                .collect();
-            *value = VariableValue::Themed(themed);
-        }
-        VariableValue::Themed(entries) => {
-            if let Some(entry) = entries.iter_mut().find(|entry| {
-                entry
-                    .theme
-                    .as_ref()
-                    .and_then(|theme| theme.get(axis))
-                    .is_some_and(|value| value == theme_value)
-            }) {
-                entry.value = scalar;
-                return;
-            }
-            let mut theme = BTreeMap::new();
-            theme.insert(axis.to_string(), theme_value.to_string());
-            entries.push(ThemedValue {
-                value: scalar,
-                theme: Some(theme),
             });
         }
     }

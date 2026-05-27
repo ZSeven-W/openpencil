@@ -107,8 +107,6 @@ impl WidgetHostNative {
                 ui.icon_picker_open = true;
                 ui.icon_picker_replace_selection = true;
                 ui.icon_picker_search.clear();
-                ui.icon_picker_caret_anchor_ms = self.now_ms;
-                ui.icon_picker_scroll = 0.0;
                 ui.fill_type_picker_open = false;
                 ui.image_fill_popover_open = false;
                 ui.font_family_picker_open = false;
@@ -126,20 +124,15 @@ impl WidgetHostNative {
             }
             A::ToggleFontFamilyPicker => {
                 let ui = &mut self.editor_state.editor_ui;
-                let opening = !ui.font_family_picker_open;
-                ui.font_family_picker_open = opening;
-                if opening {
-                    ui.font_family_picker_scroll = 0.0;
-                }
+                ui.font_family_picker_open = !ui.font_family_picker_open;
                 ui.fill_type_picker_open = false;
                 ui.image_fill_popover_open = false;
                 ui.export_scale_picker_open = false;
                 ui.export_format_picker_open = false;
             }
-            A::SetFontFamily(family) => {
-                self.set_selected_text_font_family(&family);
+            A::SetFontFamily(choice) => {
+                self.set_selected_text_font_family(choice.family());
                 self.editor_state.editor_ui.font_family_picker_open = false;
-                self.editor_state.editor_ui.font_family_picker_scroll = 0.0;
             }
             A::OpenColorPicker(target) => {
                 // Fallback anchor when called outside the press path.
@@ -371,7 +364,6 @@ impl WidgetHostNative {
             }
         }
         self.editor_state.editor_ui.font_family_picker_open = false;
-        self.editor_state.editor_ui.font_family_picker_scroll = 0.0;
         self.mark_dirty();
         true
     }
@@ -498,6 +490,51 @@ impl WidgetHostNative {
         self.mark_dirty();
     }
 
+    /// Commit any pending VariablesPanel row edit (Number / String).
+    pub(in crate::widget_host) fn commit_variable_row_focus_if_any(&mut self) {
+        use op_editor_core::editor_ui_state::VariableRowFocus;
+        let Some(focus) = self.editor_state.editor_ui.variable_row_focus.take() else {
+            return;
+        };
+        self.editor_state.ui.property_draft_select_all = false;
+        let draft = std::mem::take(&mut self.editor_state.ui.property_input_draft);
+        // Resolve the row index → variable name off the editor-state
+        // var-table (the same Vec the VariablesPanel widget walks).
+        let var_table = op_pen_loader::editor_state_var_table(&self.editor_state);
+        let snap = self.editor_state.snapshot_for_history();
+        // Every path below has already cleared focus + drained the
+        // draft, so each exit must finalize through `mark_dirty` or the
+        // derived render scene stays stale after an invalid edit. An
+        // inner closure makes the "did the value commit" branches
+        // return into one place that always marks dirty.
+        let committed = (|| -> bool {
+            match focus {
+                VariableRowFocus::Number(idx) => {
+                    let Some(name) = var_table.variables.get(idx).map(|v| v.name.clone()) else {
+                        return false;
+                    };
+                    let Ok(n) = draft.trim().parse::<f64>() else {
+                        return false;
+                    };
+                    if !n.is_finite() {
+                        return false;
+                    }
+                    self.editor_state.set_variable_number(&name, n)
+                }
+                VariableRowFocus::String(idx) => {
+                    let Some(name) = var_table.variables.get(idx).map(|v| v.name.clone()) else {
+                        return false;
+                    };
+                    self.editor_state.set_variable_string(&name, draft)
+                }
+            }
+        })();
+        if committed {
+            self.editor_state.history_push_past(snap);
+        }
+        self.mark_dirty();
+    }
+
     /// Commit a pending effect-parameter edit (Effects section's
     /// editable value box). Parses the shared draft and writes it
     /// via `SetEffectParam`; a non-numeric draft is discarded.
@@ -528,7 +565,6 @@ impl WidgetHostNative {
 
     pub(in crate::widget_host) fn commit_property_focus_if_any(&mut self) {
         // Commit any pending variable-row / effect-param edit first.
-        self.commit_variables_panel_header_focus_if_any();
         self.commit_variable_row_focus_if_any();
         self.commit_effect_param_focus_if_any();
         let Some(focus) = self.editor_state.ui.property_focus.take() else {
@@ -590,6 +626,136 @@ impl WidgetHostNative {
             }
         }
         self.mark_dirty();
+    }
+
+    /// VariablesPanel press dispatcher.
+    pub(in crate::widget_host) fn dispatch_variables_panel_press(
+        &mut self,
+        x: f32,
+        y: f32,
+        viewport_width: f32,
+        viewport_height: f32,
+    ) -> bool {
+        let has_variables = self
+            .editor_state
+            .doc
+            .variables
+            .as_ref()
+            .map(|v| !v.is_empty())
+            .unwrap_or(false);
+        if !has_variables {
+            return false;
+        }
+        use op_editor_ui::widgets::variables_panel::{VariablesPanel, VariablesPanelHit};
+        use op_editor_ui::widgets::{STATUS_BAR_HEIGHT, TOP_BAR_HEIGHT};
+        use op_editor_ui::{Point2D, Rect};
+        let vars = VariablesPanel::for_editor(&self.editor_state);
+        let intrinsic = vars.intrinsic_height();
+        let top_y = if self.editor_state.property_panel_visible() {
+            let bottom_pad = STATUS_BAR_HEIGHT + 16.0;
+            (viewport_height - bottom_pad - intrinsic).max(TOP_BAR_HEIGHT + 8.0)
+        } else {
+            TOP_BAR_HEIGHT + 8.0
+        };
+        let vars_rect = Rect {
+            origin: Point2D::new(
+                viewport_width - self.editor_state.editor_ui.property_panel_width,
+                top_y,
+            ),
+            size: Point2D::new(self.editor_state.editor_ui.property_panel_width, intrinsic),
+        };
+        let Some(hit) = vars.hit_test(vars_rect, Point2D::new(x, y)) else {
+            return false;
+        };
+        match hit {
+            VariablesPanelHit::Row(idx) => {
+                // Resolve (name, kind) off the editor-state var-table.
+                use op_editor_ui::scene_vars::VariableKind;
+                let var_table = op_pen_loader::editor_state_var_table(&self.editor_state);
+                let Some((name, kind)) = var_table
+                    .variables
+                    .get(idx)
+                    .map(|v| (v.name.clone(), v.kind))
+                else {
+                    return true;
+                };
+                match kind {
+                    VariableKind::Color => {
+                        self.commit_property_focus_if_any();
+                        let _ = self.editor_state.open_color_picker_for_variable(name, y);
+                    }
+                    VariableKind::Boolean => {
+                        // Toggle the boolean value through the
+                        // active-theme-aware setter.
+                        let current = self
+                            .editor_state
+                            .resolve_variable(&name)
+                            .and_then(|s| match s {
+                                jian_ops_schema::variable::VariableScalar::Bool(b) => Some(*b),
+                                _ => None,
+                            })
+                            .unwrap_or(false);
+                        self.commit_property_focus_if_any();
+                        let snap = self.editor_state.snapshot_for_history();
+                        if self.editor_state.set_variable_boolean(&name, !current) {
+                            self.editor_state.history_push_past(snap);
+                        }
+                    }
+                    VariableKind::Number | VariableKind::String => {
+                        use op_editor_core::editor_ui_state::VariableRowFocus;
+                        self.commit_property_focus_if_any();
+                        self.commit_variable_row_focus_if_any();
+                        // Seed the draft from the resolved scalar.
+                        use jian_ops_schema::variable::VariableScalar;
+                        let resolved = self.editor_state.resolve_variable(&name).cloned();
+                        self.editor_state.ui.property_input_draft = match (&kind, &resolved) {
+                            (VariableKind::Number, Some(VariableScalar::Num(n))) => {
+                                format!("{n}")
+                            }
+                            (VariableKind::String, Some(VariableScalar::Str(s))) => s.clone(),
+                            _ => String::new(),
+                        };
+                        self.editor_state.editor_ui.variable_row_focus = Some(match kind {
+                            VariableKind::Number => VariableRowFocus::Number(idx),
+                            VariableKind::String => VariableRowFocus::String(idx),
+                            _ => return true,
+                        });
+                        self.editor_state.ui.property_caret_anchor_ms = self.now_ms;
+                    }
+                }
+                self.mark_dirty();
+                true
+            }
+            VariablesPanelHit::AxisChip(idx) => {
+                // Look up the axis name from the active-theme map
+                // (BTreeMap iteration order is stable, matching the
+                // chip walk order in VariablesPanel).
+                let var_table = op_pen_loader::editor_state_var_table(&self.editor_state);
+                let axis = var_table.active_theme.keys().nth(idx).cloned();
+                if let Some(name) = axis {
+                    self.commit_property_focus_if_any();
+                    if self.editor_state.editor_ui.axis_dropdown_open.as_deref()
+                        == Some(name.as_str())
+                    {
+                        self.editor_state.editor_ui.axis_dropdown_open = None;
+                    } else {
+                        self.editor_state.editor_ui.axis_dropdown_open = Some(name);
+                    }
+                }
+                self.mark_dirty();
+                true
+            }
+            VariablesPanelHit::AxisDropdownItem { axis, value } => {
+                self.commit_property_focus_if_any();
+                let snap = self.editor_state.snapshot_for_history();
+                if self.editor_state.set_active_axis_value(&axis, &value) {
+                    self.editor_state.history_push_past(snap);
+                }
+                self.editor_state.editor_ui.axis_dropdown_open = None;
+                self.mark_dirty();
+                true
+            }
+        }
     }
 }
 

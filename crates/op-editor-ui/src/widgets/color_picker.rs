@@ -57,18 +57,11 @@ impl ColorPicker {
     }
 
     /// Resolve the picker's anchor (top-left) in viewport coords —
-    /// pinned near an explicit click point when available, otherwise
-    /// to the right rail near the Fill section. Hosts use this for
-    /// paint AND hit-test so they stay in sync.
+    /// pinned to the right rail near the Fill section. Hosts use
+    /// this for paint AND hit-test so they stay in sync.
     pub fn rect(&self, viewport_w: f32, viewport_h: f32) -> Rect {
-        let x = self
-            .state
-            .anchor_x
-            .map(|anchor_x| anchored_x(anchor_x, viewport_w))
-            .unwrap_or_else(|| {
-                let right_rail_left = viewport_w - self.property_panel_width;
-                (right_rail_left - PICKER_WIDTH - 8.0).max(8.0)
-            });
+        let right_rail_left = viewport_w - self.property_panel_width;
+        let x = (right_rail_left - PICKER_WIDTH - 8.0).max(8.0);
         // Center vertically around the swatch the user clicked, then
         // clamp so the panel stays fully on-screen.
         let mut y = self.state.anchor_y - PICKER_HEIGHT / 2.0;
@@ -128,18 +121,6 @@ impl ColorPicker {
         let t = ((point.x - h.origin.x) / h.size.x).clamp(0.0, 1.0);
         t * 360.0
     }
-}
-
-fn anchored_x(anchor_x: f32, viewport_w: f32) -> f32 {
-    let gap = 12.0;
-    let right = anchor_x + gap;
-    let max_x = (viewport_w - PICKER_WIDTH - 8.0).max(8.0);
-    let preferred = if right + PICKER_WIDTH <= viewport_w - 8.0 {
-        right
-    } else {
-        anchor_x - PICKER_WIDTH - gap
-    };
-    preferred.clamp(8.0, max_x)
 }
 
 impl Widget for ColorPicker {

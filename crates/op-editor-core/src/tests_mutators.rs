@@ -508,6 +508,23 @@ fn select_chat_model_bad_index_still_closes_picker() {
     assert!(!s.editor_ui.chat_model_picker_open);
 }
 
+#[test]
+fn rebuild_chat_models_syncs_agent_to_selected_model_provider() {
+    let mut s = sample();
+    s.chat.discovered_models = vec![crate::ModelEntry::new(
+        crate::AgentProvider::CodexCli,
+        "gpt-5.5",
+        "GPT-5.5",
+    )];
+    s.editor_ui.agent_settings.connected = [false, true, false, false, false];
+    s.editor_ui.chat_selected_agent = 0;
+
+    s.rebuild_chat_models();
+
+    assert_eq!(s.chat.selected_model, 0);
+    assert_eq!(s.editor_ui.chat_selected_agent, 1);
+}
+
 // --- Layer collapse (Gap 3) -----------------------------------------
 
 #[test]
