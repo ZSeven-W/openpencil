@@ -18,11 +18,15 @@ function resolveNodeBinary() {
   return 'node';
 }
 
-const child = spawn(resolveNodeBinary(), [VITE_CLI, 'dev', '--port', DEV_PORT, '--strictPort'], {
-  cwd: import.meta.dirname,
-  stdio: 'inherit',
-  env: { ...process.env },
-});
+const child = spawn(
+  resolveNodeBinary(),
+  [VITE_CLI, 'dev', '--port', DEV_PORT, '--strictPort', '--configLoader', 'native'],
+  {
+    cwd: import.meta.dirname,
+    stdio: 'inherit',
+    env: { ...process.env },
+  },
+);
 
 child.on('exit', (code, signal) => {
   if (signal) {

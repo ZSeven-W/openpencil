@@ -1,14 +1,14 @@
 import { defineConfig } from 'vitest/config';
 import { devtools } from '@tanstack/devtools-vite';
 import { tanstackStart } from '@tanstack/react-start/plugin/vite';
+import tailwindcss from '@tailwindcss/vite';
+import { nitro } from 'nitro/vite';
 import viteReact from '@vitejs/plugin-react';
 import viteTsConfigPaths from 'vite-tsconfig-paths';
 import { fileURLToPath, URL } from 'node:url';
-import tailwindcss from '@tailwindcss/vite';
-import { nitro } from 'nitro/vite';
 import { copyFileSync, mkdirSync, existsSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { vitePluginSkills } from '../../packages/pen-ai-skills/vite-plugin-skills';
+import { vitePluginSkills } from '../../packages/pen-ai-skills/vite-plugin-skills.ts';
 
 const isElectronBuild = process.env.BUILD_TARGET === 'electron';
 
