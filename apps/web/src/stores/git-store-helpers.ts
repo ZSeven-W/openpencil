@@ -267,7 +267,7 @@ export function makeSyncAfterHeadMove(get: () => GitStore): () => Promise<void> 
     if ((state.kind === 'ready' || state.kind === 'conflict') && state.repo.trackedFilePath) {
       await loadOpFileFromPath(state.repo.trackedFilePath);
     }
-    await get().loadLog({ ref: currentLogRef(get()), limit: 50 });
+    await get().loadLog({ ref: currentLogRef(get()), limit: 10 });
   };
 }
 
@@ -291,7 +291,7 @@ export function makeReloadAfterApply(get: () => GitStore): () => Promise<void> {
     // Refresh status to pick up the new merge commit in ahead/behind counts.
     await get().refreshStatus();
     // Reload the log so the history list shows the merge commit.
-    await get().loadLog({ ref: currentLogRef(get()), limit: 50 });
+    await get().loadLog({ ref: currentLogRef(get()), limit: 10 });
   };
 }
 

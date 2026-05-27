@@ -507,7 +507,7 @@ export const useGitStore = create<GitStore>((set, get) => {
       await withCleanWorkingTree(async () => {
         await gitClient.commit(repoId, { kind: 'milestone', message, author });
         // Phase 4c：刷新日志并在成功时清除草稿，以便历史列表显示新的提交并且输入为空。
-        await get().loadLog({ ref: currentLogRef(get()), limit: 50 });
+        await get().loadLog({ ref: currentLogRef(get()), limit: 10 });
         get().clearCommitMessage();
       }, 'commit milestone');
     },
@@ -543,7 +543,7 @@ export const useGitStore = create<GitStore>((set, get) => {
         if ((state.kind === 'ready' || state.kind === 'conflict') && state.repo.trackedFilePath) {
           await loadOpFileFromPath(state.repo.trackedFilePath);
         }
-        await get().loadLog({ ref: currentLogRef(get()), limit: 50 });
+        await get().loadLog({ ref: currentLogRef(get()), limit: 10 });
       }, 'promote autosave');
     },
 

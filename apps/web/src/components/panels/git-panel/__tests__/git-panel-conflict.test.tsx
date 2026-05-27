@@ -121,7 +121,7 @@ describe('GitPanelConflict', () => {
   it('loads the log on mount while in conflict state', () => {
     renderWithProvider(<GitPanelConflict />);
     expect(mocks.loadLog).toHaveBeenCalledTimes(1);
-    expect(mocks.loadLog).toHaveBeenCalledWith({ ref: 'main', limit: 50 });
+    expect(mocks.loadLog).toHaveBeenCalledWith({ ref: 'main', limit: 10 });
   });
 
   it('renders the history list in read-only mode (no restore / promote buttons)', () => {

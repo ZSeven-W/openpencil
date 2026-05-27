@@ -95,7 +95,7 @@ describe('useGitPanelLogLoader', () => {
     mocks.state.repo.currentBranch = 'feature/login-redesign';
     render(<Harness kinds={['ready']} />);
     expect(mocks.loadLog).toHaveBeenCalledTimes(1);
-    expect(mocks.loadLog).toHaveBeenCalledWith({ ref: 'feature/login-redesign', limit: 50 });
+    expect(mocks.loadLog).toHaveBeenCalledWith({ ref: 'feature/login-redesign', limit: 10 });
   });
 
   it('loads the log for the current branch in conflict state', () => {
@@ -108,7 +108,7 @@ describe('useGitPanelLogLoader', () => {
     };
     render(<Harness kinds={['conflict']} />);
     expect(mocks.loadLog).toHaveBeenCalledTimes(1);
-    expect(mocks.loadLog).toHaveBeenCalledWith({ ref: 'dev', limit: 50 });
+    expect(mocks.loadLog).toHaveBeenCalledWith({ ref: 'dev', limit: 10 });
   });
 
   it('does NOT load log when state.kind is not in the allowed kinds', () => {
@@ -122,13 +122,13 @@ describe('useGitPanelLogLoader', () => {
     mocks.state.repo.currentBranch = 'main';
     const { rerender } = render(<Harness kinds={['ready']} />);
     expect(mocks.loadLog).toHaveBeenCalledTimes(1);
-    expect(mocks.loadLog).toHaveBeenLastCalledWith({ ref: 'main', limit: 50 });
+    expect(mocks.loadLog).toHaveBeenLastCalledWith({ ref: 'main', limit: 10 });
 
     // Simulate 分支开关（相同状态类型，不同 currentBranch）
     mocks.state.repo.currentBranch = 'feature/x';
     rerender(<Harness kinds={['ready']} />);
     expect(mocks.loadLog).toHaveBeenCalledTimes(2);
-    expect(mocks.loadLog).toHaveBeenLastCalledWith({ ref: 'feature/x', limit: 50 });
+    expect(mocks.loadLog).toHaveBeenLastCalledWith({ ref: 'feature/x', limit: 10 });
   });
 
   it('re-fires when state transitions from no-file to ready', () => {
@@ -159,6 +159,6 @@ describe('useGitPanelLogLoader', () => {
     };
     rerender(<Harness kinds={['ready']} />);
     expect(mocks.loadLog).toHaveBeenCalledTimes(1);
-    expect(mocks.loadLog).toHaveBeenCalledWith({ ref: 'main', limit: 50 });
+    expect(mocks.loadLog).toHaveBeenCalledWith({ ref: 'main', limit: 10 });
   });
 });

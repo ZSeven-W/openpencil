@@ -106,10 +106,10 @@ describe('GitPanelReady', () => {
     cleanup();
   });
 
-  it('calls loadLog on first mount with { ref: main, limit: 50 }', () => {
+  it('calls loadLog on first mount with { ref: main, limit: 10 }', () => {
     renderWithProvider(<GitPanelReady />);
     expect(mocks.loadLog).toHaveBeenCalledTimes(1);
-    expect(mocks.loadLog).toHaveBeenCalledWith({ ref: 'main', limit: 50 });
+    expect(mocks.loadLog).toHaveBeenCalledWith({ ref: 'main', limit: 10 });
   });
 
   it('renders the header, commit input, and history list when state is ready', () => {
@@ -165,6 +165,6 @@ describe('GitPanelReady', () => {
       </TooltipProvider>,
     );
     expect(mocks.loadLog).toHaveBeenCalledTimes(1);
-    expect(mocks.loadLog).toHaveBeenCalledWith({ ref: 'main', limit: 50 });
+    expect(mocks.loadLog).toHaveBeenCalledWith({ ref: 'main', limit: 10 });
   });
 });

@@ -941,7 +941,7 @@ describe('git-store state machine', () => {
     // GitPanelReady 日志效果键在切换期间会更改 NOT，因此存储是唯一可以执行此操作的地方。
     expect(gitClient.branchSwitch).toHaveBeenCalledWith('repo-1', 'feature/x');
     expect(mockedLoadOpFileFromPath).toHaveBeenCalledWith('/tmp/repo/login.op');
-    expect(gitClient.log).toHaveBeenCalledWith('repo-1', { ref: 'main', limit: 50 });
+    expect(gitClient.log).toHaveBeenCalledWith('repo-1', { ref: 'main', limit: 10 });
   });
 
   it('mergeBranch (fast-forward / clean path) refreshes the log and reloads the document', async () => {
@@ -958,7 +958,7 @@ describe('git-store state machine', () => {
 
     expect(gitClient.branchMerge).toHaveBeenCalledWith('repo-1', 'feature/x');
     expect(mockedLoadOpFileFromPath).toHaveBeenCalledWith('/tmp/repo/login.op');
-    expect(gitClient.log).toHaveBeenCalledWith('repo-1', { ref: 'main', limit: 50 });
+    expect(gitClient.log).toHaveBeenCalledWith('repo-1', { ref: 'main', limit: 10 });
   });
 
   it('mergeBranch (conflict path) does NOT refresh log or reload document', async () => {
@@ -1042,7 +1042,7 @@ describe('git-store state machine', () => {
     // After 开关，refreshStatus 将 state.repo.currentBranch
     // 更新为“feature/x”。然后必须使用 ref: 'feature/x' 调用 loadLog，而不是之前硬编码的
     // 'main'，因此历史列表在转换后遵循实际的当前分支。
-    expect(gitClient.log).toHaveBeenCalledWith('repo-1', { ref: 'feature/x', limit: 50 });
+    expect(gitClient.log).toHaveBeenCalledWith('repo-1', { ref: 'feature/x', limit: 10 });
   });
 
   // ---- Phase 6a：克隆向导 + 远程合约 -------------------------
@@ -1243,7 +1243,7 @@ describe('git-store state machine', () => {
     expect(gitClient.status).toHaveBeenCalledTimes(1);
     expect(gitClient.branchList).toHaveBeenCalledTimes(1);
     expect(mockedLoadOpFileFromPath).toHaveBeenCalledWith('/tmp/repo/login.op');
-    expect(gitClient.log).toHaveBeenCalledWith('repo-1', { ref: 'main', limit: 50 });
+    expect(gitClient.log).toHaveBeenCalledWith('repo-1', { ref: 'main', limit: 10 });
   });
 
   it('pull (merge) runs the same head-move cascade as fast-forward', async () => {
@@ -1256,7 +1256,7 @@ describe('git-store state machine', () => {
     await useGitStore.getState().pull();
 
     expect(mockedLoadOpFileFromPath).toHaveBeenCalledWith('/tmp/repo/login.op');
-    expect(gitClient.log).toHaveBeenCalledWith('repo-1', { ref: 'main', limit: 50 });
+    expect(gitClient.log).toHaveBeenCalledWith('repo-1', { ref: 'main', limit: 10 });
   });
 
   it('pull (conflict) transitions into conflict state without reloading the document', async () => {

@@ -13,7 +13,7 @@ import { useGitStore } from '@/stores/git-store';
 
 /**
  * Fires `loadL
- * og({ ref: state.repo.currentBranch, limit: 50 })` 每当面板位于给定的 `kinds`
+ * og({ ref: state.repo.currentBranch, limit: 10 })` 每当面板位于给定的 `kinds`
  * 之一时。 Re-当 state.kind 或 currentBranch 更改时触发，因此分支切换和冲突 → 就绪转换始终显示正确的日志。
  *
  */
@@ -29,6 +29,6 @@ export function useGitPanelLogLoader(kinds: ReadonlyArray<string>): void {
   useEffect(() => {
     if (!kinds.includes(stateKind)) return;
     if (currentBranch === null) return;
-    void loadLog({ ref: currentBranch, limit: 50 });
+    void loadLog({ ref: currentBranch, limit: 10 });
   }, [stateKind, currentBranch, loadLog, kinds]);
 }
