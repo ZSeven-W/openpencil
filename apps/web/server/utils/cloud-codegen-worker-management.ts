@@ -19,8 +19,8 @@ import {
 import { recordCloudActivity } from './cloud-activity-events';
 import { toCodegenDbError } from './cloud-codegen-errors';
 
-const JOB_SELECT =
-  'id,file_id,owner_id,generation_id,status,framework,page_id,target_kind,node_ids,target_hash,document_revision,provider,model,priority,progress,attempts,max_attempts,locked_by,locked_until,last_heartbeat_at,next_run_at,dead_lettered_at,last_error,failure_type,input_snapshot,output,error,created_at,updated_at,started_at,completed_at,canceled_at';
+const JOB_SUMMARY_SELECT =
+  'id,file_id,owner_id,generation_id,file_name,page_name,job_kind,status,framework,page_id,target_kind,node_ids,target_hash,document_revision,provider,model,priority,progress,attempts,max_attempts,locked_by,locked_until,last_heartbeat_at,next_run_at,dead_lettered_at,last_error,failure_type,error,created_at,updated_at,started_at,completed_at,canceled_at';
 const PROVIDER_CONFIG_SELECT =
   'provider,enabled,max_per_minute,circuit_threshold,circuit_open_ms,updated_by,created_at,updated_at';
 const PROVIDER_CONFIG_AUDIT_SELECT =
@@ -44,6 +44,14 @@ type ReplaySelectRow = {
   framework?: string | null;
   status?: string | null;
   dead_lettered_at?: string | null;
+};
+type WorkerHeartbeatRow = {
+  worker_id: string;
+  hostname?: string | null;
+  pid?: number | null;
+  metadata?: Record<string, unknown> | null;
+  started_at: string;
+  last_heartbeat_at: string;
 };
 
 const ROLE_RANK: Record<CodegenQueueRole, number> = {
@@ -99,7 +107,7 @@ function buildMetrics(rows: Array<{
 
 function pageOf(limit?: number, offset?: number) {
   return {
-    limit: Math.min(Math.max(Number(limit ?? 50), 1), 100),
+    limit: Math.min(Math.max(Number(limit ?? 10), 1), 100),
     offset: Math.max(Number(offset ?? 0), 0),
   };
 }
@@ -134,6 +142,22 @@ function accessForRole(role: CodegenQueueRole, bootstrapMode = false): CodegenQu
     canReplayFailed: canRole(role, 'operator'),
     canManageProviders: canRole(role, 'admin'),
   };
+}
+
+function mapWorkerRows(rows: WorkerHeartbeatRow[], now = Date.now()) {
+  return rows.map((row) => {
+    const lastHeartbeatAt = row.last_heartbeat_at;
+    const heartbeatMs = new Date(lastHeartbeatAt).getTime();
+    return {
+      workerId: row.worker_id,
+      hostname: row.hostname ?? null,
+      pid: row.pid ?? null,
+      metadata: row.metadata ?? {},
+      startedAt: row.started_at,
+      lastHeartbeatAt,
+      active: Number.isFinite(heartbeatMs) && now - heartbeatMs < 60_000,
+    };
+  });
 }
 
 export async function getCodegenQueueAccess(input: {
@@ -186,7 +210,7 @@ export async function updateCodegenJobPriority(input: {
     .eq('id', input.jobId)
     .eq('owner_id', input.userId)
     .eq('status', 'pending')
-    .select(JOB_SELECT)
+    .select(JOB_SUMMARY_SELECT)
     .maybeSingle();
   if (updated.error) throw toCodegenDbError(updated.error, 'Failed to update codegen job priority');
   if (!updated.data) {
@@ -335,7 +359,7 @@ export async function replayFailedCodegenJobs(input: {
       selectQuery.not('dead_lettered_at', 'is', null),
       input,
     );
-    selectQuery = filteredQuery.limit(input.limit ?? 50);
+    selectQuery = filteredQuery.limit(input.limit ?? 10);
   }
 
   const selected = await selectQuery;
@@ -368,7 +392,7 @@ export async function replayFailedCodegenJobs(input: {
     })
     .eq('owner_id', input.userId)
     .in('id', ids)
-    .select(JOB_SELECT);
+    .select(JOB_SUMMARY_SELECT);
   if (updated.error) throw toCodegenDbError(updated.error, 'Failed to replay failed jobs');
 
   const replayMetadata = {
@@ -410,6 +434,7 @@ export async function getCodegenWorkerOverview(input: {
   supabase: SupabaseClient;
   adminSupabase: SupabaseClient | null;
   userId: string;
+  summary?: boolean;
   workerLimit?: number;
   workerOffset?: number;
   providerLimit?: number;
@@ -424,6 +449,11 @@ export async function getCodegenWorkerOverview(input: {
   const workerPage = pageOf(input.workerLimit, input.workerOffset);
   const providerPage = pageOf(input.providerLimit, input.providerOffset);
   const failedPage = pageOf(input.failedLimit, input.failedOffset);
+  const emptyPages = {
+    workers: { ...workerPage, total: 0 },
+    providers: { ...providerPage, total: 0 },
+    failedJobs: { ...failedPage, total: 0 },
+  };
 
   const jobs = await input.supabase
     .from('codegen_jobs')
@@ -432,10 +462,29 @@ export async function getCodegenWorkerOverview(input: {
     .order('created_at', { ascending: false })
     .limit(500);
   if (jobs.error) throw toCodegenDbError(jobs.error, 'Failed to load worker metrics');
+  const metrics = buildMetrics(jobs.data ?? []);
+
+  if (input.summary) {
+    const workerRows = input.adminSupabase
+      ? await input.adminSupabase
+        .from('codegen_worker_heartbeats')
+        .select('worker_id,hostname,pid,metadata,started_at,last_heartbeat_at')
+        .order('last_heartbeat_at', { ascending: false })
+        .limit(5)
+      : { data: [], error: null };
+    if (workerRows.error) throw toCodegenDbError(workerRows.error, 'Failed to load workers');
+    return {
+      workers: mapWorkerRows((workerRows.data ?? []) as WorkerHeartbeatRow[]),
+      metrics,
+      providers: [],
+      failedJobs: [],
+      pages: emptyPages,
+    };
+  }
 
   let failedQuery = input.supabase
     .from('codegen_jobs')
-    .select(JOB_SELECT, { count: 'exact' })
+    .select(JOB_SUMMARY_SELECT, { count: 'exact' })
     .eq('owner_id', input.userId)
     .eq('status', 'failed')
     .not('dead_lettered_at', 'is', null) as unknown as DbQuery<CodegenJobRowForMap>;
@@ -473,27 +522,8 @@ export async function getCodegenWorkerOverview(input: {
 
   const now = Date.now();
   return {
-    workers: (workerRows.data ?? []).map((row: {
-      worker_id: string;
-      hostname?: string | null;
-      pid?: number | null;
-      metadata?: Record<string, unknown> | null;
-      started_at: string;
-      last_heartbeat_at: string;
-    }) => {
-      const lastHeartbeatAt = row.last_heartbeat_at;
-      const heartbeatMs = new Date(lastHeartbeatAt).getTime();
-      return {
-        workerId: row.worker_id,
-        hostname: row.hostname ?? null,
-        pid: row.pid ?? null,
-        metadata: row.metadata ?? {},
-        startedAt: row.started_at,
-        lastHeartbeatAt,
-        active: Number.isFinite(heartbeatMs) && now - heartbeatMs < 60_000,
-      };
-    }),
-    metrics: buildMetrics(jobs.data ?? []),
+    workers: mapWorkerRows((workerRows.data ?? []) as WorkerHeartbeatRow[], now),
+    metrics,
     providers: (providerRows.data ?? []).map((row: {
       provider: string;
       total_requests?: number | null;

@@ -14,7 +14,8 @@ const querySchema = z.object({
   status: z.enum(['pending', 'running', 'succeeded', 'failed', 'canceled']).optional(),
   active: booleanQuery.optional(),
   deadLettered: booleanQuery.optional(),
-  limit: z.coerce.number().int().positive().max(100).optional().default(50),
+  limit: z.coerce.number().int().positive().max(100).optional().default(10),
+  offset: z.coerce.number().int().nonnegative().optional().default(0),
 });
 
 export default defineEventHandler(async (event) => {
@@ -24,7 +25,7 @@ export default defineEventHandler(async (event) => {
   }
 
   const { supabase, user } = await getCloudSupabase(event);
-  const jobs = await listCodegenJobs({
+  return await listCodegenJobs({
     supabase,
     userId: user.id,
     fileId: parsed.data.fileId,
@@ -32,6 +33,6 @@ export default defineEventHandler(async (event) => {
     active: parsed.data.active,
     deadLettered: parsed.data.deadLettered,
     limit: parsed.data.limit,
+    offset: parsed.data.offset,
   });
-  return { data: jobs };
 });

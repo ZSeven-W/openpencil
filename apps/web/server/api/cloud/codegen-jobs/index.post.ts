@@ -7,6 +7,7 @@ import { createCodegenJob } from '../../../utils/cloud-codegen-jobs';
 
 const createSchema = z.object({
   jobKind: z.enum(['full_generation', 'patch_generation']).optional(),
+  qualityMode: z.enum(['production', 'draft']).optional(),
   fileId: z.string().uuid(),
   pageId: z.string().min(1),
   framework: z.enum(FRAMEWORKS as [Framework, ...Framework[]]),
@@ -18,6 +19,8 @@ const createSchema = z.object({
   provider: z.enum(['anthropic', 'openai', 'gemini']),
   nodes: z.array(z.unknown()),
   variables: z.record(z.string(), z.unknown()).optional(),
+  fileName: z.string().min(1).max(200).optional(),
+  pageName: z.string().min(1).max(200).optional(),
   baseGenerationId: z.string().uuid().optional(),
   patchInstruction: z.string().trim().min(1).optional(),
 }).superRefine((value, ctx) => {

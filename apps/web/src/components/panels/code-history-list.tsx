@@ -31,6 +31,27 @@ function isPatchGeneration(entry: CodegenHistoryEntry): boolean {
   return entry.metadata?.jobKind === 'patch_generation';
 }
 
+function getQualityStatus(entry: CodegenHistoryEntry): string | null {
+  const value = entry.metadata?.qualityStatus;
+  return typeof value === 'string' ? value : null;
+}
+
+function getRepairIssueCodes(metadata: Record<string, unknown> | undefined): string[] {
+  const attempts = Array.isArray(metadata?.repairAttempts) ? metadata.repairAttempts : [];
+  const codes = new Set<string>();
+  for (const attempt of attempts) {
+    if (!attempt || typeof attempt !== 'object') continue;
+    const issues = (attempt as { issues?: unknown }).issues;
+    if (!Array.isArray(issues)) continue;
+    for (const issue of issues) {
+      if (!issue || typeof issue !== 'object') continue;
+      const code = (issue as { code?: unknown }).code;
+      if (typeof code === 'string' && code.length > 0) codes.add(code);
+    }
+  }
+  return [...codes].slice(0, 3);
+}
+
 export default function CodeHistoryList({
   history,
   selectedId,
@@ -55,6 +76,8 @@ export default function CodeHistoryList({
       {history.map((entry) => {
         const selected = entry.id === selectedId;
         const patchGeneration = isPatchGeneration(entry);
+        const qualityStatus = getQualityStatus(entry);
+        const repairIssueCodes = getRepairIssueCodes(entry.metadata);
         return (
           <div
             key={entry.id}
@@ -94,6 +117,20 @@ export default function CodeHistoryList({
                 {patchGeneration && (
                   <span className="rounded bg-primary/10 px-1.5 py-0.5 text-primary">
                     {t('codePanel.history.patchGenerated')}
+                  </span>
+                )}
+                {qualityStatus && (
+                  <span className="rounded bg-emerald-500/10 px-1.5 py-0.5 text-emerald-600">
+                    {t(`codePanel.history.quality.${qualityStatus}`, {
+                      defaultValue: qualityStatus,
+                    })}
+                  </span>
+                )}
+                {repairIssueCodes.length > 0 && (
+                  <span className="rounded bg-amber-500/10 px-1.5 py-0.5 text-amber-600">
+                    {t('codePanel.history.repairIssues', {
+                      issues: repairIssueCodes.join(', '),
+                    })}
                   </span>
                 )}
                 {entry.model && <span>{entry.model}</span>}

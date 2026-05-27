@@ -7,6 +7,31 @@ import {
   getClaudeAgentDebugFilePath,
 } from './resolve-claude-agent-env';
 
+interface CachedClaudeProviderRuntime {
+  env: ReturnType<typeof buildClaudeAgentEnv>;
+  debugFile: string | undefined;
+  claudePath: string | undefined;
+  spawnClaudeCodeProcess: ReturnType<typeof buildSpawnClaudeCodeProcess>;
+}
+
+let cachedClaudeProviderRuntime: CachedClaudeProviderRuntime | undefined;
+
+function getClaudeProviderRuntime(): CachedClaudeProviderRuntime {
+  if (!cachedClaudeProviderRuntime) {
+    cachedClaudeProviderRuntime = {
+      env: buildClaudeAgentEnv(),
+      debugFile: getClaudeAgentDebugFilePath(),
+      claudePath: resolveClaudeCli(),
+      spawnClaudeCodeProcess: buildSpawnClaudeCodeProcess(),
+    };
+  }
+  return cachedClaudeProviderRuntime;
+}
+
+export function clearServerCodegenProviderCacheForTests() {
+  cachedClaudeProviderRuntime = undefined;
+}
+
 export async function createChatCompletionText(input: {
   system: string;
   message: string;
@@ -18,10 +43,7 @@ export async function createChatCompletionText(input: {
 
   if (input.provider === 'anthropic') {
     const { query } = await import('@anthropic-ai/claude-agent-sdk');
-    const env = buildClaudeAgentEnv();
-    const debugFile = getClaudeAgentDebugFilePath();
-    const claudePath = resolveClaudeCli();
-    const spawnClaudeCodeProcess = buildSpawnClaudeCodeProcess();
+    const { env, debugFile, claudePath, spawnClaudeCodeProcess } = getClaudeProviderRuntime();
     const q = query({
       prompt: input.message,
       options: {

@@ -6,6 +6,9 @@ import { join } from 'node:path';
 const IS_WIN = platform() === 'win32';
 
 type EnvLike = Record<string, string | undefined>;
+let cachedClaudeAgentEnv: EnvLike | undefined;
+let cachedClaudeAgentDebugFilePath: string | undefined;
+let didResolveClaudeAgentDebugFilePath = false;
 
 interface ClaudeSettings {
   env?: Record<string, unknown>;
@@ -113,6 +116,10 @@ function ensureClaudeConfigWritable(): void {
  > ~/.claude/settings.json 环境。
  */
 export function buildClaudeAgentEnv(): EnvLike {
+  if (cachedClaudeAgentEnv) {
+    return { ...cachedClaudeAgentEnv };
+  }
+
   // On Windows，预先创建配置文件以避免 EPERM 错误
   ensureClaudeConfigWritable();
 
@@ -181,7 +188,8 @@ export function buildClaudeAgentEnv(): EnvLike {
     }
   }
 
-  return merged;
+  cachedClaudeAgentEnv = { ...merged };
+  return { ...cachedClaudeAgentEnv };
 }
 
 /**
@@ -189,13 +197,23 @@ export function buildClaudeAgentEnv(): EnvLike {
  * CLI 调试输出到可写临时位置。 This 避免在 ~/.claude/debug 不可写的受限环境中崩溃。
  */
 export function getClaudeAgentDebugFilePath(): string | undefined {
+  if (didResolveClaudeAgentDebugFilePath) return cachedClaudeAgentDebugFilePath;
+  didResolveClaudeAgentDebugFilePath = true;
+
   try {
     const dir = join(tmpdir(), 'openpencil-claude-debug');
     mkdirSync(dir, { recursive: true });
-    return join(dir, 'claude-agent.log');
+    cachedClaudeAgentDebugFilePath = join(dir, 'claude-agent.log');
+    return cachedClaudeAgentDebugFilePath;
   } catch {
     return undefined;
   }
+}
+
+export function clearClaudeAgentEnvCacheForTests() {
+  cachedClaudeAgentEnv = undefined;
+  cachedClaudeAgentDebugFilePath = undefined;
+  didResolveClaudeAgentDebugFilePath = false;
 }
 
 /**

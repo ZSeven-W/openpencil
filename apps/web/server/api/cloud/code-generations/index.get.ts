@@ -10,7 +10,7 @@ const querySchema = z.object({
   framework: z.string().min(1),
   targetKind: z.enum(['page', 'selection']),
   targetHash: z.string().min(1),
-  limit: z.coerce.number().int().positive().max(100).optional().default(20),
+  limit: z.coerce.number().int().positive().max(100).optional().default(10),
 });
 
 export default defineEventHandler(async (event) => {

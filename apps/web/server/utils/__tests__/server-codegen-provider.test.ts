@@ -13,10 +13,16 @@ vi.mock('../resolve-claude-cli', () => ({
   resolveClaudeCli: vi.fn(() => '/usr/local/bin/claude'),
 }));
 
-vi.mock('../resolve-claude-agent-env', () => ({
+const runtimeMocks = vi.hoisted(() => ({
   buildClaudeAgentEnv: vi.fn(() => ({ HOME: '/tmp/openpencil-test' })),
   buildSpawnClaudeCodeProcess: vi.fn(() => undefined),
   getClaudeAgentDebugFilePath: vi.fn(() => undefined),
+}));
+
+vi.mock('../resolve-claude-agent-env', () => ({
+  buildClaudeAgentEnv: runtimeMocks.buildClaudeAgentEnv,
+  buildSpawnClaudeCodeProcess: runtimeMocks.buildSpawnClaudeCodeProcess,
+  getClaudeAgentDebugFilePath: runtimeMocks.getClaudeAgentDebugFilePath,
 }));
 
 function claudeResultStream(message: Record<string, unknown>) {
@@ -61,6 +67,40 @@ describe('server codegen provider', () => {
       }),
     );
     expect(agentMocks.close).toHaveBeenCalled();
+  });
+
+  it('caches Claude provider runtime across calls', async () => {
+    const { createChatCompletionText, clearServerCodegenProviderCacheForTests } = await import(
+      '../server-codegen-provider'
+    );
+    clearServerCodegenProviderCacheForTests();
+    runtimeMocks.buildClaudeAgentEnv.mockClear();
+    runtimeMocks.getClaudeAgentDebugFilePath.mockClear();
+    runtimeMocks.buildSpawnClaudeCodeProcess.mockClear();
+    agentMocks.query.mockReturnValue(
+      claudeResultStream({
+        type: 'result',
+        subtype: 'success',
+        result: 'ok',
+      }),
+    );
+
+    await createChatCompletionText({
+      provider: 'anthropic',
+      model: 'claude-sonnet-4-6',
+      system: 'Generate code.',
+      message: 'Build A.',
+    });
+    await createChatCompletionText({
+      provider: 'anthropic',
+      model: 'claude-sonnet-4-6',
+      system: 'Generate code.',
+      message: 'Build B.',
+    });
+
+    expect(runtimeMocks.buildClaudeAgentEnv).toHaveBeenCalledTimes(1);
+    expect(runtimeMocks.getClaudeAgentDebugFilePath).toHaveBeenCalledTimes(1);
+    expect(runtimeMocks.buildSpawnClaudeCodeProcess).toHaveBeenCalledTimes(1);
   });
 
   it('surfaces Anthropic provider failures to the worker', async () => {

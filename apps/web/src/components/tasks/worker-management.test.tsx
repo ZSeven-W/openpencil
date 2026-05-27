@@ -14,6 +14,29 @@ vi.mock('@tanstack/react-router', () => ({
   useNavigate: () => routerMocks.navigate,
 }));
 
+vi.mock('@/components/workbench/workbench-shell', () => ({
+  WorkbenchShell: ({
+    title,
+    description,
+    toolbar,
+    children,
+  }: {
+    title: string;
+    description?: string;
+    toolbar?: React.ReactNode;
+    children: React.ReactNode;
+  }) => (
+    <div>
+      <header>
+        <h1>{title}</h1>
+        {description && <p>{description}</p>}
+        {toolbar}
+      </header>
+      {children}
+    </div>
+  ),
+}));
+
 beforeEach(() => {
   vi.clearAllMocks();
   useCodegenJobStore.setState({
@@ -110,7 +133,7 @@ beforeEach(() => {
         createdAt: '2026-05-13T08:03:00.000Z',
       },
     ],
-    providerConfigAuditPage: { total: 1, limit: 20, offset: 0 },
+    providerConfigAuditPage: { total: 1, limit: 10, offset: 0 },
     queueAccess: {
       role: 'admin',
       bootstrapMode: false,
@@ -160,7 +183,7 @@ beforeEach(() => {
 afterEach(() => cleanup());
 
 describe('WorkerManagement', () => {
-  it('renders worker metrics, provider circuit state, and replays failures', async () => {
+  it('renders worker metrics, provider health, and replays failures', async () => {
     render(<WorkerManagement />);
 
     expect(screen.getByText('Worker management')).toBeTruthy();
@@ -170,20 +193,20 @@ describe('WorkerManagement', () => {
     expect(screen.getByText('rate limit')).toBeTruthy();
     expect(screen.getByText('Queue role: admin')).toBeTruthy();
     expect(screen.getByText('Runtime statistics')).toBeTruthy();
-    expect(screen.getByText('Config audit history')).toBeTruthy();
-    expect(screen.getByText('capacity tuning')).toBeTruthy();
+    expect(screen.queryByText('Config audit history')).toBeNull();
+    expect(screen.queryByText('capacity tuning')).toBeNull();
 
     fireEvent.click(screen.getByText('Replay visible'));
 
     await waitFor(() => {
       expect(useCodegenJobStore.getState().replayFailedJobs).toHaveBeenCalledWith({
         jobIds: ['job-1'],
-        limit: 50,
+        limit: 10,
       });
     });
   });
 
-  it('filters dead-letter replay and saves provider limits', async () => {
+  it('filters dead-letter replay from the workers view', async () => {
     render(<WorkerManagement />);
 
     fireEvent.change(screen.getByLabelText('Provider'), { target: { value: 'openai' } });
@@ -194,9 +217,13 @@ describe('WorkerManagement', () => {
         failureType: undefined,
         deadLetteredFrom: undefined,
         deadLetteredTo: undefined,
-        limit: 50,
+        limit: 10,
       });
     });
+  });
+
+  it('saves provider limits from the provider view', async () => {
+    render(<WorkerManagement view="providers" />);
 
     fireEvent.change(screen.getByLabelText('Max per minute'), { target: { value: '18' } });
     fireEvent.change(screen.getByLabelText('Change reason'), { target: { value: 'capacity tuning' } });
@@ -228,6 +255,19 @@ describe('WorkerManagement', () => {
     expect(screen.getByText('Queue role: viewer')).toBeTruthy();
     expect(screen.getByText('Replay visible').closest('button')?.disabled).toBe(true);
     expect(screen.getByText('Replay filtered').closest('button')?.disabled).toBe(true);
+
+    cleanup();
+
+    render(<WorkerManagement view="providers" />);
+
     expect(screen.getByText('Save config').closest('button')?.disabled).toBe(true);
+  });
+
+  it('renders audit records only from the audit view', () => {
+    render(<WorkerManagement view="audit" />);
+
+    expect(screen.getAllByText('Config audit history').length).toBeGreaterThan(0);
+    expect(screen.getByText('capacity tuning')).toBeTruthy();
+    expect(screen.queryByText('Provider config')).toBeNull();
   });
 });

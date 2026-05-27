@@ -4,9 +4,11 @@ import { TaskCenter } from '@/components/tasks/task-center';
 
 interface TasksRouteShellProps {
   fileId?: string;
+  jobId?: string;
+  view?: 'tasks' | 'notifications';
 }
 
-export function TasksRouteShell({ fileId }: TasksRouteShellProps) {
+export function TasksRouteShell({ fileId, jobId, view }: TasksRouteShellProps) {
   const location = useLocation();
 
   if (location.pathname !== '/tasks') {
@@ -15,7 +17,7 @@ export function TasksRouteShell({ fileId }: TasksRouteShellProps) {
 
   return (
     <AuthGate>
-      <TaskCenter fileId={fileId} />
+      <TaskCenter fileId={fileId} jobId={jobId} view={view} />
     </AuthGate>
   );
 }

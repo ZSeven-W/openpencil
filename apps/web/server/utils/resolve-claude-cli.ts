@@ -6,6 +6,8 @@ import { serverLog } from './server-logger';
 import { posixUserBinDirs, probeViaLoginShell } from './cli-resolver-helpers';
 
 const isWindows = platform() === 'win32';
+let cachedClaudeCli: string | undefined;
+let didResolveClaudeCli = false;
 
 /** Windows npm 全局安装可能会创建 .cmd 或 .ps1 包装器 - 两者都尝试一下 */
 function winNpmCandidates(dir: string, name: string): string[] {
@@ -32,6 +34,14 @@ function resolveWinExtension(binPath: string): string {
  * binaries and spawns them directly (no `node` wrapper needed).
  */
 export function resolveClaudeCli(): string | undefined {
+  if (didResolveClaudeCli) {
+    serverLog.info(
+      `[resolve-claude-cli] cache hit: "${cachedClaudeCli ?? 'not-found'}"`,
+    );
+    return cachedClaudeCli;
+  }
+
+  didResolveClaudeCli = true;
   serverLog.info(
     `[resolve-claude-cli] platform=${platform()}, isWindows=${isWindows}, SHELL=${process.env.SHELL ?? 'unset'}`,
   );
@@ -49,7 +59,10 @@ export function resolveClaudeCli(): string | undefined {
     serverLog.info(
       `[resolve-claude-cli] PATH lookup result: "${p}" (exists=${p ? existsSync(p) : false})`,
     );
-    if (p && existsSync(p)) return resolveWinExtension(p);
+    if (p && existsSync(p)) {
+      cachedClaudeCli = resolveWinExtension(p);
+      return cachedClaudeCli;
+    }
   } catch (err) {
     serverLog.info(
       `[resolve-claude-cli] PATH lookup failed: ${err instanceof Error ? err.message : err}`,
@@ -62,7 +75,10 @@ export function resolveClaudeCli(): string | undefined {
   //    "CLI installed but OpenPencil can't find it" reports on Mac.
   if (!isWindows) {
     const viaShell = probeViaLoginShell('claude', 'resolve-claude-cli');
-    if (viaShell) return viaShell;
+    if (viaShell) {
+      cachedClaudeCli = viaShell;
+      return cachedClaudeCli;
+    }
   }
 
   // 3. Try `npm prefix -g` to find actual npm global bin directory
@@ -80,7 +96,10 @@ export function resolveClaudeCli(): string | undefined {
           serverLog.info(
             `[resolve-claude-cli] checking npm global bin: "${bin}" (exists=${existsSync(bin)})`,
           );
-          if (existsSync(bin)) return bin;
+          if (existsSync(bin)) {
+            cachedClaudeCli = bin;
+            return cachedClaudeCli;
+          }
         }
       }
     } catch (err) {
@@ -108,11 +127,19 @@ export function resolveClaudeCli(): string | undefined {
   for (const c of candidates) {
     const exists = c ? existsSync(c) : false;
     serverLog.info(`[resolve-claude-cli] candidate: "${c}" (exists=${exists})`);
-    if (c && exists) return c;
+    if (c && exists) {
+      cachedClaudeCli = c;
+      return cachedClaudeCli;
+    }
   }
 
   serverLog.warn(
     '[resolve-claude-cli] no claude binary found after PATH, login-shell probe, and candidate scan',
   );
   return undefined;
+}
+
+export function clearClaudeCliCacheForTests() {
+  cachedClaudeCli = undefined;
+  didResolveClaudeCli = false;
 }

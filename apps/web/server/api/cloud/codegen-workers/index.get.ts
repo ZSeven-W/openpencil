@@ -4,11 +4,12 @@ import { getCloudServiceSupabase, getCloudSupabase, toApiError } from '../../../
 import { getCodegenWorkerOverview } from '../../../utils/cloud-codegen-jobs';
 
 const querySchema = z.object({
-  workerLimit: z.coerce.number().int().positive().max(100).optional().default(50),
+  summary: z.coerce.boolean().optional().default(false),
+  workerLimit: z.coerce.number().int().positive().max(100).optional().default(10),
   workerOffset: z.coerce.number().int().min(0).optional().default(0),
-  providerLimit: z.coerce.number().int().positive().max(100).optional().default(50),
+  providerLimit: z.coerce.number().int().positive().max(100).optional().default(10),
   providerOffset: z.coerce.number().int().min(0).optional().default(0),
-  failedLimit: z.coerce.number().int().positive().max(100).optional().default(50),
+  failedLimit: z.coerce.number().int().positive().max(100).optional().default(10),
   failedOffset: z.coerce.number().int().min(0).optional().default(0),
   provider: z.string().min(1).max(64).optional(),
   failureType: z

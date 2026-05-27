@@ -1,5 +1,12 @@
 import { create } from 'zustand';
-import type { CodeGenProgress, ChunkStatus, Framework } from '@zseven-w/pen-types';
+import type {
+  CodeGenProgress,
+  ChunkStatus,
+  Framework,
+  CodegenQualityReport,
+  CodegenRepairAttempt,
+  CodegenTimingBreakdown,
+} from '@zseven-w/pen-types';
 import type { CodegenAssetFile } from '@/services/ai/codegen-assets';
 import { buildCodegenFiles } from '@/services/ai/codegen-files';
 import type {
@@ -15,6 +22,7 @@ import {
   saveCodeGenerationHistory,
 } from '@/services/cloud/codegen-history';
 import { useDocumentStore } from '@/stores/document-store';
+import { reuseInFlightRequest, stableRequestKey } from '@/utils/in-flight-request';
 
 export type CodegenStepStatus = 'idle' | 'running' | 'done' | 'failed';
 
@@ -34,6 +42,9 @@ export interface GeneratedCodeBundle {
   assetsManifest?: CodegenAssetManifestEntry[];
   files?: SaveCodegenFileInput[];
   metadata?: Record<string, unknown>;
+  qualityReport?: CodegenQualityReport;
+  timing?: CodegenTimingBreakdown;
+  repairAttempts?: CodegenRepairAttempt[];
 }
 
 export interface CodegenHistoryEntry {
@@ -64,6 +75,11 @@ interface CodegenState {
   planningStatus: CodegenStepStatus;
   planningError?: string;
   assemblyStatus: CodegenStepStatus;
+  qualityStatus: CodegenStepStatus;
+  qualityError?: string;
+  repairStatus: CodegenStepStatus | 'skipped';
+  repairError?: string;
+  finalValidationStatus: CodegenStepStatus;
   chunks: CodegenChunkProgress[];
   selectionChanged: boolean;
   generateError?: string;
@@ -83,7 +99,11 @@ interface CodegenState {
   completeGeneration: (runId: string, framework: Framework, bundle: GeneratedCodeBundle) => void;
   failGeneration: (runId: string, message: string) => void;
   cancelGeneration: () => void;
-  loadHistory: (framework: Framework, target: CodegenTarget) => Promise<void>;
+  loadHistory: (
+    framework: Framework,
+    target: CodegenTarget,
+    options?: { force?: boolean },
+  ) => Promise<void>;
   selectHistoryEntry: (framework: Framework, generationId: string) => void;
   promoteHistoryEntry: (framework: Framework, generationId: string) => Promise<void>;
   deleteHistoryEntry: (framework: Framework, generationId: string) => Promise<void>;
@@ -104,6 +124,11 @@ const initialGenerationState = {
   planningStatus: 'idle' as CodegenStepStatus,
   planningError: undefined,
   assemblyStatus: 'idle' as CodegenStepStatus,
+  qualityStatus: 'idle' as CodegenStepStatus,
+  qualityError: undefined,
+  repairStatus: 'idle' as CodegenStepStatus | 'skipped',
+  repairError: undefined,
+  finalValidationStatus: 'idle' as CodegenStepStatus,
   chunks: [],
   selectionChanged: false,
   generateError: undefined,
@@ -117,6 +142,7 @@ const initialGenerationState = {
 };
 
 let nextRunId = 0;
+const historyRequests = new Map<string, Promise<unknown>>();
 
 function createRunId(): string {
   nextRunId += 1;
@@ -182,6 +208,11 @@ export const useCodegenStore = create<CodegenState>((set, get) => ({
       planningStatus: 'idle',
       planningError: undefined,
       assemblyStatus: 'idle',
+      qualityStatus: 'idle',
+      qualityError: undefined,
+      repairStatus: 'idle',
+      repairError: undefined,
+      finalValidationStatus: 'idle',
       chunks: [],
       selectionChanged: false,
       generateError: undefined,
@@ -211,6 +242,18 @@ export const useCodegenStore = create<CodegenState>((set, get) => ({
           };
         case 'assembly':
           return { assemblyStatus: event.status };
+        case 'quality_check':
+          return {
+            qualityStatus: event.status,
+            qualityError: event.error ?? state.qualityError,
+          };
+        case 'repair':
+          return {
+            repairStatus: event.status,
+            repairError: event.error ?? state.repairError,
+          };
+        case 'final_validation':
+          return { finalValidationStatus: event.status };
         case 'complete':
           return {
             isGenerating: false,
@@ -221,6 +264,15 @@ export const useCodegenStore = create<CodegenState>((set, get) => ({
                 degraded: event.degraded,
                 assets: [],
                 files: buildCodegenFiles({ framework, code: event.finalCode }),
+                qualityReport: event.qualityReport,
+                timing: event.timing,
+                repairAttempts: event.repairAttempts,
+                metadata: {
+                  qualityStatus: event.qualityReport?.status,
+                  qualityReport: event.qualityReport,
+                  timing: event.timing,
+                  repairAttempts: event.repairAttempts,
+                },
               },
             },
           };
@@ -272,54 +324,68 @@ export const useCodegenStore = create<CodegenState>((set, get) => ({
     });
   },
 
-  loadHistory: async (framework, target) => {
+  loadHistory: async (framework, target, options = {}) => {
     const { cloudFileId } = useDocumentStore.getState();
     if (!cloudFileId) return;
-    set({ historyLoading: true, historyError: undefined });
-    try {
-      const history = await listCodeGenerationHistory({
-        fileId: cloudFileId,
-        framework,
-        target,
-      });
-      const latest = history[0];
-      set((state) => {
-        const codeCache = { ...state.codeCache };
-        if (latest?.finalCode) {
-          codeCache[framework] = {
-            code: latest.finalCode,
-            degraded: latest.degraded,
-            assets: [],
-            historyId: latest.id,
-            status: latest.status,
-            assetsManifest: latest.assetsManifest,
-            metadata: latest.metadata,
-            files: buildCodegenFiles({ framework, code: latest.finalCode }),
+    return reuseInFlightRequest(
+      historyRequests,
+      stableRequestKey('codegen-history', { cloudFileId, framework, target, options }),
+      async () => {
+        set({ historyLoading: true, historyError: undefined });
+        try {
+          const historyInput = {
+            fileId: cloudFileId,
+            framework,
+            target,
           };
-        } else {
-          delete codeCache[framework];
-        }
-        const entries = history.map(mapHistoryEntry);
+          const history = await listCodeGenerationHistory(
+            options.force ? { ...historyInput, force: true } : historyInput,
+          );
+          const latest = history[0];
+          set((state) => {
+            const codeCache = { ...state.codeCache };
+            if (latest?.finalCode) {
+              codeCache[framework] = {
+                code: latest.finalCode,
+                degraded: latest.degraded,
+                assets: [],
+                historyId: latest.id,
+                status: latest.status,
+                assetsManifest: latest.assetsManifest,
+                metadata: latest.metadata,
+                qualityReport:
+                  latest.metadata?.qualityReport as GeneratedCodeBundle['qualityReport'],
+                timing: latest.metadata?.timing as GeneratedCodeBundle['timing'],
+                repairAttempts:
+                  latest.metadata?.repairAttempts as GeneratedCodeBundle['repairAttempts'],
+                files: buildCodegenFiles({ framework, code: latest.finalCode }),
+              };
+            } else {
+              delete codeCache[framework];
+            }
+            const entries = history.map(mapHistoryEntry);
 
-        return {
-          historyLoading: false,
-          history: {
-            ...state.history,
-            [framework]: entries,
-          },
-          selectedHistoryId: {
-            ...state.selectedHistoryId,
-            [framework]: latest?.id,
-          },
-          codeCache,
-        };
-      });
-    } catch (err) {
-      set({
-        historyLoading: false,
-        historyError: err instanceof Error ? err.message : 'Failed to load code history',
-      });
-    }
+            return {
+              historyLoading: false,
+              history: {
+                ...state.history,
+                [framework]: entries,
+              },
+              selectedHistoryId: {
+                ...state.selectedHistoryId,
+                [framework]: latest?.id,
+              },
+              codeCache,
+            };
+          });
+        } catch (err) {
+          set({
+            historyLoading: false,
+            historyError: err instanceof Error ? err.message : 'Failed to load code history',
+          });
+        }
+      },
+    );
   },
 
   selectHistoryEntry: (framework, generationId) =>
@@ -336,6 +402,9 @@ export const useCodegenStore = create<CodegenState>((set, get) => ({
           status: entry.status,
           assetsManifest: entry.assetsManifest,
           metadata: entry.metadata,
+          qualityReport: entry.metadata?.qualityReport as GeneratedCodeBundle['qualityReport'],
+          timing: entry.metadata?.timing as GeneratedCodeBundle['timing'],
+          repairAttempts: entry.metadata?.repairAttempts as GeneratedCodeBundle['repairAttempts'],
           files: buildCodegenFiles({ framework, code: entry.finalCode }),
         };
       } else {
@@ -396,6 +465,11 @@ export const useCodegenStore = create<CodegenState>((set, get) => ({
               status: nextSelected.status,
               assetsManifest: nextSelected.assetsManifest,
               metadata: nextSelected.metadata,
+              qualityReport:
+                nextSelected.metadata?.qualityReport as GeneratedCodeBundle['qualityReport'],
+              timing: nextSelected.metadata?.timing as GeneratedCodeBundle['timing'],
+              repairAttempts:
+                nextSelected.metadata?.repairAttempts as GeneratedCodeBundle['repairAttempts'],
               files: buildCodegenFiles({ framework, code: nextSelected.finalCode }),
             };
           } else {
@@ -439,6 +513,13 @@ export const useCodegenStore = create<CodegenState>((set, get) => ({
         files: bundle.files ?? buildCodegenFiles({ framework, code: bundle.code }),
         model,
         provider,
+        metadata: {
+          ...(bundle.metadata ?? {}),
+          qualityStatus: bundle.qualityReport?.status ?? bundle.metadata?.qualityStatus,
+          qualityReport: bundle.qualityReport ?? bundle.metadata?.qualityReport,
+          timing: bundle.timing ?? bundle.metadata?.timing,
+          repairAttempts: bundle.repairAttempts ?? bundle.metadata?.repairAttempts,
+        },
         chunks: get().chunks.map((chunk, index) => ({
           chunkId: chunk.chunkId,
           name: chunk.name,
@@ -479,6 +560,7 @@ export const useCodegenStore = create<CodegenState>((set, get) => ({
 
   reset: () => {
     get().abortController?.abort();
+    historyRequests.clear();
     set({
       ...initialGenerationState,
       codeCache: {},

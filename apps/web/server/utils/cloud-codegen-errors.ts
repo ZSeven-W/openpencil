@@ -11,6 +11,8 @@ export const BACKGROUND_JOBS_MIGRATION =
     'supabase/migrations/202605130006_codegen_patch_jobs.sql',
     'supabase/migrations/202605130007_codegen_generation_metadata.sql',
     'supabase/migrations/202605130008_codegen_job_step_attempts.sql',
+    'supabase/migrations/202605160003_codegen_job_step_agent_roles.sql',
+    'supabase/migrations/202605160004_close_stale_succeeded_codegen_steps.sql',
   ].join(', ');
 
 export interface SupabaseErrorLike {

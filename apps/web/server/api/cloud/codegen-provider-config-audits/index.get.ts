@@ -9,7 +9,7 @@ import { listCodegenProviderConfigAudits } from '../../../utils/cloud-codegen-jo
 
 const querySchema = z.object({
   provider: z.string().min(1).max(64).optional(),
-  limit: z.coerce.number().int().positive().max(100).optional().default(20),
+  limit: z.coerce.number().int().positive().max(100).optional().default(10),
   offset: z.coerce.number().int().min(0).optional().default(0),
 });
 

@@ -7,9 +7,20 @@ import type {
   CodegenWorkerRuntimeStats,
   CodegenWorkerOverview,
   CreateCloudCodegenJobInput,
+  RerunCloudCodegenJobStepInput,
+  ResumeCloudCodegenJobInput,
+  CloudPagedResult,
   TaskNotification,
 } from '@/types/cloud';
 import { cloudFetch } from './cloud-fetch';
+
+interface CloudReadOptions {
+  force?: boolean;
+}
+
+function cloudRead<T>(path: string, options?: CloudReadOptions): Promise<T> {
+  return options?.force ? cloudFetch<T>(path, { force: true }) : cloudFetch<T>(path);
+}
 
 export async function createCloudCodegenJob(
   input: CreateCloudCodegenJobInput,
@@ -27,23 +38,49 @@ export async function listCloudCodegenJobs(input: {
   active?: boolean;
   deadLettered?: boolean;
   limit?: number;
-} = {}): Promise<CloudCodegenJob[]> {
+  offset?: number;
+} = {}, options: CloudReadOptions = {}): Promise<CloudCodegenJob[]> {
+  const res = await listCloudCodegenJobsPage(input, options);
+  return res.data;
+}
+
+export async function listCloudCodegenJobsPage(input: {
+  fileId?: string;
+  status?: CloudCodegenJob['status'];
+  active?: boolean;
+  deadLettered?: boolean;
+  limit?: number;
+  offset?: number;
+} = {}, options: CloudReadOptions = {}): Promise<CloudPagedResult<CloudCodegenJob>> {
   const params = new URLSearchParams();
   if (input.fileId) params.set('fileId', input.fileId);
   if (input.status) params.set('status', input.status);
   if (input.active !== undefined) params.set('active', String(input.active));
   if (input.deadLettered !== undefined) params.set('deadLettered', String(input.deadLettered));
   if (input.limit) params.set('limit', String(input.limit));
+  if (input.offset !== undefined) params.set('offset', String(input.offset));
   const query = params.toString();
-  const res = await cloudFetch<{ data: CloudCodegenJob[] }>(
+  const res = await cloudRead<CloudPagedResult<CloudCodegenJob>>(
     `/api/cloud/codegen-jobs${query ? `?${query}` : ''}`,
+    options,
   );
-  return res.data;
+  return {
+    data: res.data,
+    page: res.page ?? {
+      total: res.data.length,
+      limit: input.limit ?? res.data.length,
+      offset: input.offset ?? 0,
+    },
+  };
 }
 
-export async function getCloudCodegenJob(jobId: string): Promise<CloudCodegenJob> {
-  const res = await cloudFetch<{ data: CloudCodegenJob }>(
+export async function getCloudCodegenJob(
+  jobId: string,
+  options: CloudReadOptions = {},
+): Promise<CloudCodegenJob> {
+  const res = await cloudRead<{ data: CloudCodegenJob }>(
     `/api/cloud/codegen-jobs/${encodeURIComponent(jobId)}`,
+    options,
   );
   return res.data;
 }
@@ -67,10 +104,44 @@ export async function cancelCloudCodegenJob(jobId: string): Promise<CloudCodegen
   return res.data;
 }
 
+export async function deleteCloudCodegenJob(jobId: string): Promise<void> {
+  await cloudFetch(`/api/cloud/codegen-jobs/${encodeURIComponent(jobId)}`, {
+    method: 'DELETE',
+  });
+}
+
 export async function retryCloudCodegenJob(jobId: string): Promise<CloudCodegenJob> {
   const res = await cloudFetch<{ data: CloudCodegenJob }>(
     `/api/cloud/codegen-jobs/${encodeURIComponent(jobId)}/retry`,
     { method: 'POST' },
+  );
+  return res.data;
+}
+
+export async function resumeCloudCodegenJob(
+  jobId: string,
+  input: ResumeCloudCodegenJobInput = {},
+): Promise<CloudCodegenJob> {
+  const res = await cloudFetch<{ data: CloudCodegenJob }>(
+    `/api/cloud/codegen-jobs/${encodeURIComponent(jobId)}/resume`,
+    {
+      method: 'POST',
+      body: JSON.stringify(input),
+    },
+  );
+  return res.data;
+}
+
+export async function rerunCloudCodegenJobStep(
+  jobId: string,
+  input: RerunCloudCodegenJobStepInput,
+): Promise<CloudCodegenJob> {
+  const res = await cloudFetch<{ data: CloudCodegenJob }>(
+    `/api/cloud/codegen-jobs/${encodeURIComponent(jobId)}/rerun-step`,
+    {
+      method: 'POST',
+      body: JSON.stringify(input),
+    },
   );
   return res.data;
 }
@@ -85,6 +156,7 @@ export interface ReplayFailedCloudCodegenJobsInput {
 }
 
 export interface CloudCodegenWorkerOverviewFilters {
+  summary?: boolean;
   workerLimit?: number;
   workerOffset?: number;
   providerLimit?: number;
@@ -135,23 +207,31 @@ function queryFromRecord(input: object) {
 
 export async function getCloudCodegenWorkerOverview(
   input: CloudCodegenWorkerOverviewFilters = {},
+  options: CloudReadOptions = {},
 ): Promise<CodegenWorkerOverview> {
-  const res = await cloudFetch<{ data: CodegenWorkerOverview }>(
+  const res = await cloudRead<{ data: CodegenWorkerOverview }>(
     `/api/cloud/codegen-workers${queryFromRecord(input)}`,
+    options,
   );
   return res.data;
 }
 
-export async function getCloudCodegenQueueAccess(): Promise<CodegenQueueAccess> {
-  const res = await cloudFetch<{ data: CodegenQueueAccess }>('/api/cloud/codegen-queue-access');
+export async function getCloudCodegenQueueAccess(
+  options: CloudReadOptions = {},
+): Promise<CodegenQueueAccess> {
+  const res = await cloudRead<{ data: CodegenQueueAccess }>(
+    '/api/cloud/codegen-queue-access',
+    options,
+  );
   return res.data;
 }
 
 export async function getCloudCodegenWorkerStats(input: {
   days?: number;
-} = {}): Promise<CodegenWorkerRuntimeStats> {
-  const res = await cloudFetch<{ data: CodegenWorkerRuntimeStats }>(
+} = {}, options: CloudReadOptions = {}): Promise<CodegenWorkerRuntimeStats> {
+  const res = await cloudRead<{ data: CodegenWorkerRuntimeStats }>(
     `/api/cloud/codegen-worker-stats${queryFromRecord(input)}`,
+    options,
   );
   return res.data;
 }
@@ -160,9 +240,10 @@ export async function listCloudCodegenProviderConfigs(input: {
   provider?: string;
   limit?: number;
   offset?: number;
-} = {}): Promise<CodegenProviderConfig[]> {
-  const res = await cloudFetch<{ data: CodegenProviderConfig[] }>(
+} = {}, options: CloudReadOptions = {}): Promise<CodegenProviderConfig[]> {
+  const res = await cloudRead<{ data: CodegenProviderConfig[] }>(
     `/api/cloud/codegen-provider-configs${queryFromRecord(input)}`,
+    options,
   );
   return res.data;
 }
@@ -171,14 +252,14 @@ export async function listCloudCodegenProviderConfigAudits(input: {
   provider?: string;
   limit?: number;
   offset?: number;
-} = {}): Promise<{
+} = {}, options: CloudReadOptions = {}): Promise<{
   data: CodegenProviderConfigAudit[];
   page: { total: number; limit: number; offset: number };
 }> {
-  return cloudFetch<{
+  return cloudRead<{
     data: CodegenProviderConfigAudit[];
     page: { total: number; limit: number; offset: number };
-  }>(`/api/cloud/codegen-provider-config-audits${queryFromRecord(input)}`);
+  }>(`/api/cloud/codegen-provider-config-audits${queryFromRecord(input)}`, options);
 }
 
 export async function updateCloudCodegenProviderConfig(
@@ -198,9 +279,31 @@ export async function updateCloudCodegenProviderConfig(
   return res.data;
 }
 
-export async function listTaskNotifications(): Promise<TaskNotification[]> {
-  const res = await cloudFetch<{ data: TaskNotification[] }>('/api/cloud/task-notifications');
+export async function listTaskNotifications(
+  input: { fileId?: string; limit?: number; offset?: number } = {},
+  options: CloudReadOptions = {},
+): Promise<TaskNotification[]> {
+  const res = await listTaskNotificationsPage(input, options);
   return res.data;
+}
+
+export async function listTaskNotificationsPage(
+  input: { fileId?: string; limit?: number; offset?: number } = {},
+  options: CloudReadOptions = {},
+): Promise<CloudPagedResult<TaskNotification>> {
+  const query = queryFromRecord(input);
+  const res = await cloudRead<CloudPagedResult<TaskNotification>>(
+    `/api/cloud/task-notifications${query}`,
+    options,
+  );
+  return {
+    data: res.data,
+    page: res.page ?? {
+      total: res.data.length,
+      limit: input.limit ?? res.data.length,
+      offset: input.offset ?? 0,
+    },
+  };
 }
 
 export async function markTaskNotificationRead(id: string): Promise<TaskNotification> {
@@ -209,4 +312,10 @@ export async function markTaskNotificationRead(id: string): Promise<TaskNotifica
     { method: 'POST' },
   );
   return res.data;
+}
+
+export async function deleteTaskNotification(id: string): Promise<void> {
+  await cloudFetch(`/api/cloud/task-notifications/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+  });
 }

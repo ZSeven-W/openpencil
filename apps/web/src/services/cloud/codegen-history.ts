@@ -78,6 +78,7 @@ export async function listCodeGenerationHistory(input: {
   framework: Framework;
   target: CodegenTarget;
   limit?: number;
+  force?: boolean;
 }): Promise<CloudCodeGeneration[]> {
   const params = new URLSearchParams({
     fileId: input.fileId,
@@ -85,11 +86,12 @@ export async function listCodeGenerationHistory(input: {
     pageId: input.target.pageId,
     targetKind: input.target.targetKind,
     targetHash: input.target.targetHash,
-    limit: String(input.limit ?? 20),
+    limit: String(input.limit ?? 10),
   });
-  const res = await cloudFetch<{ data: CloudCodeGeneration[] }>(
-    `/api/cloud/code-generations?${params.toString()}`,
-  );
+  const path = `/api/cloud/code-generations?${params.toString()}`;
+  const res = input.force
+    ? await cloudFetch<{ data: CloudCodeGeneration[] }>(path, { force: true })
+    : await cloudFetch<{ data: CloudCodeGeneration[] }>(path);
   return res.data;
 }
 

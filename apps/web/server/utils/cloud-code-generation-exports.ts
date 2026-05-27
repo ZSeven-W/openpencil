@@ -23,6 +23,40 @@ function addZipEntry(entries: Record<string, Uint8Array>, path: string, bytes: U
   entries[path] = bytes;
 }
 
+function buildReadme(detail: CloudCodeGenerationDetail, files: Array<{ path: string }>): string {
+  const qualityStatus =
+    typeof detail.metadata?.qualityStatus === 'string' ? detail.metadata.qualityStatus : 'unknown';
+  const commands =
+    detail.framework === 'uniapp'
+      ? ['Install dependencies in your UniApp project.', 'Run with HBuilderX or your UniApp CLI.']
+      : detail.framework === 'vue'
+        ? ['Copy the generated files into a Vue 3 project.', 'Run your project build command.']
+        : detail.framework === 'html'
+          ? ['Open design.html in a browser.']
+          : ['Copy the generated files into the target project.'];
+
+  return [
+    '# OpenPencil Generated Code',
+    '',
+    `Framework: ${detail.framework}`,
+    `Quality status: ${qualityStatus}`,
+    `Document revision: ${detail.documentRevision}`,
+    '',
+    '## Files',
+    '',
+    ...files.map((file) => `- ${file.path}`),
+    '',
+    '## Run / integrate',
+    '',
+    ...commands.map((command) => `- ${command}`),
+    '',
+    '## Notes',
+    '',
+    '- Replace mock/static data with real business data as needed.',
+    '- Keep asset paths under assets/ when moving files.',
+  ].join('\n');
+}
+
 async function loadExportableAssets(input: {
   supabase: SupabaseClient;
   assetsManifest: CodegenAssetManifestEntry[];
@@ -119,6 +153,7 @@ export async function buildCodeGenerationExportZip(
   }
 
   addZipEntry(zipEntries, manifestFileName, serializeJson(manifest));
+  addZipEntry(zipEntries, 'README.md', encodeText(buildReadme(detail, files)));
 
   return {
     fileName: `design-${detail.framework}.zip`,

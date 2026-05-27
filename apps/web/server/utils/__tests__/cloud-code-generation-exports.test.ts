@@ -44,6 +44,7 @@ describe('buildCodeGenerationExportZip', () => {
           sourceKind: 'image-fill',
         },
       ],
+      metadata: { qualityStatus: 'passed' },
       model: 'model-a',
       provider: 'builtin',
       error: null,
@@ -142,6 +143,7 @@ describe('buildCodeGenerationExportZip', () => {
     const archive = parseZip(result.bytes);
     expect(Object.keys(archive).sort()).toEqual([
       'App.vue',
+      'README.md',
       'assets/card.png',
       'manifest.json',
       'openpencil-codegen-manifest.json',
@@ -161,5 +163,7 @@ describe('buildCodeGenerationExportZip', () => {
     expect(bundleManifest.framework).toBe('uniapp');
     expect(bundleManifest.entry.codeFile).toBe('uniapp-bundle.txt');
     expect(bundleManifest.assets).toHaveLength(1);
+    expect(new TextDecoder().decode(archive['README.md'])).toContain('Quality status: passed');
+    expect(new TextDecoder().decode(archive['README.md'])).toContain('pages/index/index.vue');
   });
 });

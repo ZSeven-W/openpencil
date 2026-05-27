@@ -1,8 +1,15 @@
-import type { Framework } from '@zseven-w/pen-types';
+import type {
+  CodegenQualityReport,
+  CodegenRepairAttempt,
+  CodegenTimingBreakdown,
+  Framework,
+} from '@zseven-w/pen-types';
 import type { PenNode } from '../../src/types/pen';
 import type { CloudCodeGenerationDetail, SaveCodegenFileInput } from '../../src/types/cloud';
 import { buildCodegenFiles } from '../../src/services/ai/codegen-files';
 import type { CodegenTextCollector } from '../../src/services/ai/code-generation-pipeline';
+import { buildCodegenDesignIR, type CodegenDesignIR } from '../../src/services/ai/codegen-design-ir';
+import { buildCodegenQualityReport } from '../../src/services/ai/codegen-quality';
 
 export interface CodegenPatchInput {
   framework: Framework;
@@ -18,6 +25,10 @@ export interface CodegenPatchResult {
   code: string;
   files: SaveCodegenFileInput[];
   degraded: boolean;
+  qualityReport?: CodegenQualityReport;
+  timing?: CodegenTimingBreakdown;
+  repairAttempts?: CodegenRepairAttempt[];
+  designIR?: CodegenDesignIR;
 }
 
 function formatBaseFiles(baseGeneration: CloudCodeGenerationDetail): string {
@@ -61,6 +72,11 @@ function buildPatchedFiles(input: {
 }
 
 export async function generateCodePatch(input: CodegenPatchInput): Promise<CodegenPatchResult> {
+  const startedAt =
+    typeof performance !== 'undefined' && typeof performance.now === 'function'
+      ? performance.now()
+      : Date.now();
+  const designIR = buildCodegenDesignIR(input.nodes);
   const baseFiles = formatBaseFiles(input.baseGeneration);
   const selectedNodesJson = JSON.stringify(input.nodes);
   const isMultiFile =
@@ -91,6 +107,9 @@ export async function generateCodePatch(input: CodegenPatchInput): Promise<Codeg
     'Selected design nodes JSON:',
     selectedNodesJson,
     '',
+    'Selected design IR:',
+    JSON.stringify(designIR),
+    '',
     'Base generated code:',
     baseFiles,
   ].join('\n');
@@ -103,5 +122,22 @@ export async function generateCodePatch(input: CodegenPatchInput): Promise<Codeg
     code,
     baseGeneration: input.baseGeneration,
   });
-  return { code, files, degraded: false };
+  const qualityReport = buildCodegenQualityReport({
+    framework: input.framework,
+    files,
+    designIR,
+  });
+  const finishedAt =
+    typeof performance !== 'undefined' && typeof performance.now === 'function'
+      ? performance.now()
+      : Date.now();
+  return {
+    code,
+    files,
+    degraded: qualityReport.summary.errorCount > 0,
+    qualityReport,
+    timing: { totalMs: Math.max(0, Math.round(finishedAt - startedAt)) },
+    repairAttempts: [],
+    designIR,
+  };
 }

@@ -1,55 +1,100 @@
-import { useEffect, useState } from 'react';
-import { CheckCircle2, X } from 'lucide-react';
-import { useNavigate } from '@tanstack/react-router';
+import { useEffect } from 'react';
+import { useLocation, useNavigate } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { useCloudAuthStore } from '@/stores/cloud-auth-store';
 import { useCodegenJobStore } from '@/stores/codegen-job-store';
-import type { TaskNotification } from '@/types/cloud';
 
-interface ToastState {
-  id: string;
-  title: string;
-  message: string;
-  notification: TaskNotification;
+const INITIAL_NOTIFICATION_POLL_DELAY_MS = 5_000;
+const NOTIFICATION_POLL_INTERVAL_MS = 15_000;
+
+function hasTaskJobSearch(search: unknown): boolean {
+  if (!search) return false;
+  if (typeof search === 'string') {
+    return new URLSearchParams(search.startsWith('?') ? search.slice(1) : search).has('jobId');
+  }
+  if (typeof search !== 'object') return false;
+  const value = (search as Record<string, unknown>).jobId;
+  return typeof value === 'string' && value.trim().length > 0;
+}
+
+export function shouldPollTaskNotifications(pathname: string, search: unknown): boolean {
+  if (pathname === '/tasks' || pathname.startsWith('/tasks/')) return false;
+  if (hasTaskJobSearch(search)) return false;
+  return true;
 }
 
 export function TaskNotificationListener() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const location = useLocation();
   const status = useCloudAuthStore((s) => s.status);
   const initialized = useCloudAuthStore((s) => s.initialized);
   const refreshNotifications = useCodegenJobStore((s) => s.refreshNotifications);
   const notifyUnreadCompletions = useCodegenJobStore((s) => s.notifyUnreadCompletions);
-  const [toast, setToast] = useState<ToastState | null>(null);
+  const search =
+    typeof (location as { searchStr?: unknown }).searchStr === 'string'
+      ? (location as { searchStr: string }).searchStr
+      : (location as { search?: unknown }).search;
+  const shouldPoll = shouldPollTaskNotifications(location.pathname, search);
 
   useEffect(() => {
     const handler = (event: Event) => {
-      const detail = (event as CustomEvent<Omit<ToastState, 'id'>>).detail;
-      setToast({
+      const detail = (
+        event as CustomEvent<{
+          title: string;
+          message: string;
+          notification: { id: string; fileId?: string | null };
+        }>
+      ).detail;
+      toast(detail.title, {
         id: detail.notification.id,
-        title: detail.title,
-        message: detail.message,
-        notification: detail.notification,
+        description: detail.message,
+        action: (
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() => {
+              const fileId = detail.notification.fileId ?? undefined;
+              void navigate({
+                to: '/tasks',
+                search: { ...(fileId ? { fileId } : {}), view: 'notifications' },
+              });
+            }}
+          >
+            {t('tasks.notification.open')}
+          </Button>
+        ),
       });
     };
     window.addEventListener('openpencil:task-notification', handler);
     return () => {
       window.removeEventListener('openpencil:task-notification', handler);
     };
-  }, []);
+  }, [navigate, t]);
 
   useEffect(() => {
     const cleanup = window.electronAPI?.onMenuAction?.((action) => {
       if (!action.startsWith('navigate:')) return;
       const route = action.slice('navigate:'.length);
+      if (route.startsWith('/tasks?')) {
+        const params = new URLSearchParams(route.slice('/tasks?'.length));
+        const fileId = params.get('fileId') ?? undefined;
+        void navigate({
+          to: '/tasks',
+          search: { ...(fileId ? { fileId } : {}), view: 'notifications' },
+        });
+        return;
+      }
       if (route === '/tasks') {
         void navigate({ to: '/tasks' });
         return;
       }
       const taskMatch = /^\/tasks\/([^/]+)$/.exec(route);
       if (taskMatch) {
-        void navigate({ to: '/tasks/$jobId', params: { jobId: taskMatch[1] } });
+        void navigate({ to: '/tasks', search: { jobId: taskMatch[1] } });
         return;
       }
       const match = /^\/editor\/([^/]+)$/.exec(route);
@@ -61,63 +106,24 @@ export function TaskNotificationListener() {
   }, [navigate]);
 
   useEffect(() => {
-    if (!initialized || status !== 'authenticated') return;
+    if (!initialized || status !== 'authenticated' || !shouldPoll) return;
     let cancelled = false;
     const tick = async () => {
       if (cancelled) return;
-      await refreshNotifications();
+      await refreshNotifications({ limit: 10 });
       if (!cancelled) await notifyUnreadCompletions();
     };
-    void tick();
-    const timer = window.setInterval(() => void tick(), 15_000);
+    const initialTimer = window.setTimeout(() => void tick(), INITIAL_NOTIFICATION_POLL_DELAY_MS);
+    const intervalTimer = window.setInterval(
+      () => void tick(),
+      NOTIFICATION_POLL_INTERVAL_MS,
+    );
     return () => {
       cancelled = true;
-      window.clearInterval(timer);
+      window.clearTimeout(initialTimer);
+      window.clearInterval(intervalTimer);
     };
-  }, [initialized, notifyUnreadCompletions, refreshNotifications, status]);
+  }, [initialized, notifyUnreadCompletions, refreshNotifications, shouldPoll, status]);
 
-  useEffect(() => {
-    if (!toast) return;
-    const timer = window.setTimeout(() => setToast(null), 6000);
-    return () => window.clearTimeout(timer);
-  }, [toast]);
-
-  if (!toast) return null;
-
-  const openTarget = () => {
-    const jobId = toast.notification.jobId;
-    if (jobId) {
-      void navigate({ to: '/tasks/$jobId', params: { jobId } });
-      setToast(null);
-      return;
-    }
-    const fileId = toast.notification.fileId;
-    if (fileId) {
-      void navigate({ to: '/editor/$fileId', params: { fileId } });
-    } else {
-      void navigate({ to: '/tasks' });
-    }
-    setToast(null);
-  };
-
-  return (
-    <div className="fixed bottom-4 right-4 z-50 w-[320px] rounded-md border border-border bg-card p-3 text-card-foreground shadow-lg">
-      <div className="flex items-start gap-3">
-        <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-        <button type="button" className="min-w-0 flex-1 text-left" onClick={openTarget}>
-          <p className="text-sm font-medium">{toast.title}</p>
-          <p className="mt-1 text-xs text-muted-foreground">{toast.message}</p>
-          <p className="mt-2 text-xs font-medium text-primary">{t('tasks.notification.open')}</p>
-        </button>
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          aria-label={t('common.close')}
-          onClick={() => setToast(null)}
-        >
-          <X size={14} />
-        </Button>
-      </div>
-    </div>
-  );
+  return null;
 }

@@ -4,238 +4,236 @@ import type { PenNode } from '@zseven-w/pen-types';
 import type {
   Framework,
   CodePlanFromAI,
-  CodeExecutionPlan,
-  ExecutableChunk,
-  PlannedChunk,
   ChunkResult,
   ChunkContract,
   ChunkStatus,
   CodeGenProgress,
-  ContractValidationResult,
+  CodegenQualityReport,
+  CodegenTimingBreakdown,
+  CodegenRepairAttempt,
 } from '@zseven-w/pen-types';
 import { sanitizeName } from '@zseven-w/pen-core';
-import { buildPlanningPrompt, buildChunkPrompt, buildAssemblyPrompt } from './codegen-prompts';
-import { streamChat } from './ai-service';
 import {
   collectChunkAssetHints,
   extractCodegenAssets,
-  type CodegenAssetFile,
-  type CodegenAssetHint,
 } from './codegen-assets';
 import { buildCodegenFiles, validateCodegenFiles } from './codegen-files';
+import { buildCodegenDesignIR } from './codegen-design-ir';
+import {
+  collectStreamText,
+  runAssembly,
+  runChunkGeneration,
+  runPlanning,
+  runRepair,
+} from './codegen-model-calls';
+import { generateCodeWithDirectFastPath, shouldUseDirectFastPath } from './codegen-fast-path';
+import {
+  hasCodegenQualityErrors,
+  runCodegenRepairPass,
+} from './codegen-quality-gate';
+import { buildCodegenQualityReport } from './codegen-quality';
+import { hydratePlan } from './codegen-plan';
+import { validateContract } from './codegen-response-parser';
+import {
+  addTiming,
+  elapsedSince,
+  finalizeTiming,
+  mergeProviderCallTiming,
+  nowMs,
+  withProviderTiming,
+} from './codegen-timing';
+import type {
+  CodegenChunkResumeInput,
+  GenerateCodeOptions,
+  GenerateCodeResult,
+} from './codegen-types';
 
-export type CodegenTextCollector = (
-  systemPrompt: string,
-  userMessage: string,
-  model: string,
-  provider: string | undefined,
-  abortSignal?: AbortSignal,
-) => Promise<string>;
+export { computeExecutionOrder, hydratePlan } from './codegen-plan';
+export { parseChunkResponse } from './codegen-response-parser';
+export type {
+  CodegenChunkCheckpointInput,
+  CodegenChunkResumeInput,
+  CodegenQualityGateInput,
+  CodegenQualityGateResult,
+  CodegenRepairPassInput,
+  CodegenRepairPassResult,
+  CodegenTextCollector,
+  GenerateCodeOptions,
+  GenerateCodeResult,
+} from './codegen-types';
+export { hasCodegenQualityErrors, runCodegenQualityGate, runCodegenRepairPass } from './codegen-quality-gate';
 
-export interface GenerateCodeOptions {
-  collectText?: CodegenTextCollector;
-}
-
-// Inlined 以避免从 @zseven-w/pen-mcp 导入，这会通过文档管理器传递地拉取节点：fs/promises 并破坏 Vite
-// 浏览器构建。
-function validateContract(result: ChunkResult): ContractValidationResult {
-  const issues: string[] = [];
-  const { contract, code } = result;
-  if (contract.componentName && !/^[A-Z][a-zA-Z0-9]*$/.test(contract.componentName)) {
-    issues.push(`componentName "${contract.componentName}" is not a valid PascalCase identifier`);
+export async function resumeCodegenFromChunkCheckpoint(
+  input: CodegenChunkResumeInput,
+): Promise<GenerateCodeResult & { chunkResult: ChunkResult; chunkName: string }> {
+  const totalStart = nowMs();
+  const timing: CodegenTimingBreakdown = {};
+  const { nodes: sanitizedNodes, assets } = extractCodegenAssets(input.nodes);
+  const designIR =
+    input.designIR ??
+    buildCodegenDesignIR(
+      sanitizedNodes,
+      assets.map((asset) => ({
+        relativePath: asset.relativePath,
+        sourceNodeId: asset.sourceNodeId,
+        sourceNodeName: asset.sourceNodeName,
+        sourceKind: asset.sourceKind,
+      })),
+    );
+  const collectText = input.collectText ?? collectStreamText;
+  const execPlan = hydratePlan(input.plan, sanitizedNodes);
+  if (execPlan.chunks.length === 0) {
+    throw new Error('Planning checkpoint produced no valid chunks');
   }
-  const isSFC = code.includes('<script') || code.includes('<template') || code.includes('<style');
-  if (contract.componentName && !isSFC && !code.includes(contract.componentName)) {
-    issues.push(`componentName "${contract.componentName}" not found in generated code`);
-  }
-  return { valid: issues.length === 0, issues };
-}
-
-// ── Exported 助手（独立测试）──
-
-/**
- * Hydrate 和
- * CodePlanFromAI 包含实际节点数据。 Strips 块，其 nodeIds
- 不匹配任何输入节点。
- */
-export function hydratePlan(plan: CodePlanFromAI, nodes: PenNode[]): CodeExecutionPlan {
-  const nodeMap = new Map<string, PenNode>();
-  function indexNodes(list: PenNode[]) {
-    for (const n of list) {
-      nodeMap.set(n.id, n);
-      const children = (n as { children?: PenNode[] }).children;
-      if (children) indexNodes(children);
-    }
-  }
-  indexNodes(nodes);
-
-  const orders = computeExecutionOrder(plan.chunks);
-
-  const chunks: ExecutableChunk[] = plan.chunks
-    .map((chunk) => {
-      const resolved = chunk.nodeIds
-        .map((id) => nodeMap.get(id))
-        .filter((n): n is PenNode => n !== undefined);
-      if (resolved.length === 0) return null;
-      return {
-        ...chunk,
-        nodes: resolved,
-        order: orders.get(chunk.id) ?? 0,
-        depContracts: [] as ChunkContract[],
-      };
-    })
-    .filter((c): c is ExecutableChunk => c !== null);
-
-  return {
-    chunks,
-    sharedStyles: plan.sharedStyles,
-    rootLayout: plan.rootLayout,
-  };
-}
-
-/**
- * Compute
- * 依赖关系图中的执行顺序。没有 deps 的 Chunks 获得顺序 0。Dependent
- 块获得 max(dep orders) + 1。
- */
-export function computeExecutionOrder(chunks: PlannedChunk[]): Map<string, number> {
-  const orders = new Map<string, number>();
-
-  function resolve(id: string, visited: Set<string>): number {
-    if (orders.has(id)) return orders.get(id)!;
-    if (visited.has(id)) return 0; // 自行车护卫
-    visited.add(id);
-
-    const chunk = chunks.find((c) => c.id === id);
-    if (!chunk || chunk.dependencies.length === 0) {
-      orders.set(id, 0);
-      return 0;
-    }
-
-    const maxDep = Math.max(...chunk.dependencies.map((depId) => resolve(depId, visited)));
-    const order = maxDep + 1;
-    orders.set(id, order);
-    return order;
+  const targetChunk = execPlan.chunks.find((chunk) => chunk.id === input.chunkId);
+  if (!targetChunk) {
+    throw new Error(`Chunk checkpoint ${input.chunkId} does not exist in the planning checkpoint.`);
   }
 
-  for (const chunk of chunks) {
-    resolve(chunk.id, new Set());
+  const checkpointByChunk = new Map(input.checkpoints.map((checkpoint) => [checkpoint.chunkId, checkpoint]));
+  const resultByChunk = new Map<string, ChunkResult>();
+  const statusByChunk = new Map<string, ChunkStatus>();
+  for (const chunk of execPlan.chunks) {
+    const checkpoint = checkpointByChunk.get(chunk.id);
+    if (checkpoint?.result) resultByChunk.set(chunk.id, checkpoint.result);
+    statusByChunk.set(chunk.id, checkpoint?.status ?? 'pending');
   }
 
-  return orders;
-}
+  const depContracts: ChunkContract[] = targetChunk.dependencies
+    .map((depId) => resultByChunk.get(depId)?.contract)
+    .filter((contract): contract is ChunkContract => Boolean(contract?.componentName));
+  const assetHints = collectChunkAssetHints(targetChunk.nodes, assets);
+  const chunkStart = nowMs();
+  const chunkResult = await runChunkGeneration(
+    targetChunk.nodes,
+    input.framework,
+    targetChunk.suggestedComponentName,
+    depContracts,
+    targetChunk.id,
+    designIR,
+    input.model,
+    input.provider,
+    input.abortSignal,
+    assetHints,
+    withProviderTiming(timing, collectText, {
+      stage: 'chunk',
+      attempt: 1,
+      provider: input.provider,
+      model: input.model,
+      chunkId: targetChunk.id,
+    }),
+  );
+  if (
+    !chunkResult.contract.componentName ||
+    !/^[A-Z][a-zA-Z0-9]*$/.test(chunkResult.contract.componentName)
+  ) {
+    chunkResult.contract.componentName = sanitizeName(targetChunk.suggestedComponentName);
+  }
+  const validation = validateContract(chunkResult);
+  resultByChunk.set(targetChunk.id, chunkResult);
+  statusByChunk.set(targetChunk.id, validation.valid ? 'done' : 'degraded');
+  addTiming(timing, 'chunkMs', elapsedSince(chunkStart));
 
-/**
- * Parse 将块生成响应
- * 转化为代码+合约。 Looks 为 ---CONTRACT--- 分隔符。
- */
-export function parseChunkResponse(response: string, chunkId: string): ChunkResult {
-  // Strategy 1：显式 ---CONTRACT--- 分隔符
-  const separator = '---CONTRACT---';
-  const sepIdx = response.indexOf(separator);
-  if (sepIdx !== -1) {
-    const code = cleanCode(response.slice(0, sepIdx));
-    const contractStr = response.slice(sepIdx + separator.length).trim();
-    const contract = tryParseContract(contractStr, chunkId);
-    if (contract) return { chunkId, code, contract };
+  const chunkInputs = execPlan.chunks.map((chunk) => {
+    const status = statusByChunk.get(chunk.id);
+    const result = resultByChunk.get(chunk.id);
+    return {
+      chunkId: chunk.id,
+      name: chunk.name,
+      code: result?.code ?? '',
+      contract: result?.contract,
+      status: (status === 'done' ? 'successful' : status === 'degraded' ? 'degraded' : 'failed') as
+        | 'successful'
+        | 'degraded'
+        | 'failed',
+    };
+  });
+  if (!chunkInputs.some((chunk) => chunk.code.length > 0)) {
+    throw new Error('All chunks failed — no code to assemble');
   }
 
-  // Strategy 2：找到包含“componentName”的 JSON 块（AI 通常包裹在 ```json 中）
-  const contractJsonMatch = response.match(/```json\s*\n([\s\S]*?)\n\s*```/);
-  if (contractJsonMatch) {
-    const jsonStr = contractJsonMatch[1].trim();
-    if (jsonStr.includes('"componentName"')) {
-      const contract = tryParseContract(jsonStr, chunkId);
-      if (contract) {
-        // JSON 块之前的 Everything 是代码
-        const jsonBlockStart = response.indexOf(contractJsonMatch[0]);
-        const code = cleanCode(response.slice(0, jsonBlockStart));
-        return { chunkId, code, contract };
-      }
-    }
-  }
-
-  // Strategy 3：查找响应中带有“componentName”的最后一个 JSON 对象
-  const lastJsonMatch = response.match(/(\{[^{}]*"componentName"[^{}]*\})\s*$/);
-  if (lastJsonMatch) {
-    const contract = tryParseContract(lastJsonMatch[1], chunkId);
-    if (contract) {
-      const jsonStart = response.lastIndexOf(lastJsonMatch[1]);
-      const code = cleanCode(response.slice(0, jsonStart));
-      return { chunkId, code, contract };
-    }
-  }
-
-  // Strategy 4：从代码推断合同（从导出中提取组件名称）
-  const code = cleanCode(response);
-  const inferredContract = inferContractFromCode(code, chunkId);
-  return { chunkId, code, contract: inferredContract };
-}
-
-function tryParseContract(str: string, chunkId: string): ChunkContract | null {
+  const exportedAssetPaths = assets.map((asset) => asset.relativePath);
+  let finalCode: string;
+  let degraded =
+    chunkInputs.some((chunk) => chunk.status !== 'successful') || !validation.valid;
   try {
-    // Strip 降价围栏（如果存在）
-    const cleaned = str
-      .replace(/^```\w*\n?/gm, '')
-      .replace(/```\s*$/gm, '')
-      .trim();
-    const parsed = JSON.parse(cleaned) as ChunkContract;
-    if (parsed.componentName) {
-      parsed.chunkId = chunkId;
-      parsed.exportedProps = parsed.exportedProps ?? [];
-      parsed.slots = parsed.slots ?? [];
-      parsed.cssClasses = parsed.cssClasses ?? [];
-      parsed.cssVariables = parsed.cssVariables ?? [];
-      parsed.imports = parsed.imports ?? [];
-      parsed.outputFiles = Array.isArray(parsed.outputFiles)
-        ? parsed.outputFiles.filter((file): file is string => typeof file === 'string')
-        : undefined;
-      return parsed;
-    }
+    const assemblyStart = nowMs();
+    finalCode = await runAssembly(
+      chunkInputs,
+      input.plan,
+      input.framework,
+      input.variables,
+      input.model,
+      input.provider,
+      input.abortSignal,
+      exportedAssetPaths,
+      designIR,
+      withProviderTiming(timing, collectText, {
+        stage: 'assembly',
+        attempt: 1,
+        provider: input.provider,
+        model: input.model,
+      }),
+    );
+    addTiming(timing, 'assemblyMs', elapsedSince(assemblyStart));
   } catch {
-    /* 无效 JSON */
+    finalCode = chunkInputs
+      .filter((chunk) => chunk.code)
+      .map((chunk) => `// ── ${chunk.name} (${chunk.status}) ──\n\n${chunk.code}`)
+      .join('\n\n');
+    degraded = true;
   }
-  return null;
-}
 
-function inferContractFromCode(code: string, chunkId: string): ChunkContract {
-  const isSFC = code.includes('<script') || code.includes('<template') || code.includes('<style');
+  let files = buildCodegenFiles({ framework: input.framework, code: finalCode });
+  const repairAttempts: CodegenRepairAttempt[] = [];
+  const qualityStart = nowMs();
+  let qualityReport = buildCodegenQualityReport({
+    framework: input.framework,
+    files,
+    designIR,
+  });
+  addTiming(timing, 'qualityCheckMs', elapsedSince(qualityStart));
 
-  // Try 从导出语句中提取组件名称 Skip 针对 SFC 导出 let/const （Svelte
-  // 将它们用作 props，而不是组件名称）
-  const exportMatch =
-    code.match(/export\s+default\s+function\s+(\w+)/) ??
-    code.match(/export\s+function\s+([A-Z]\w*)/) ?? // 仅 PascalCase 功能
-    (!isSFC ? code.match(/export\s+default\s+class\s+(\w+)/) : null) ??
-    code.match(/fun\s+([A-Z]\w*)\s*\(/) ?? // Kotlin（仅限 PascalCase）
-    code.match(/struct\s+(\w+)\s*:\s*View/) ?? // SwiftUI
-    code.match(/class\s+(\w+)\s+extends/); // Dart/Flutter
-  const componentName = exportMatch?.[1] ?? '';
+  const maxRepairAttempts = input.maxRepairAttempts ?? 2;
+  for (let attempt = 1; hasCodegenQualityErrors(qualityReport) && attempt <= maxRepairAttempts; attempt++) {
+    const repair = await runCodegenRepairPass({
+      framework: input.framework,
+      code: finalCode,
+      files,
+      designIR,
+      qualityReport,
+      model: input.model,
+      provider: input.provider,
+      abortSignal: input.abortSignal,
+      collectText,
+      exportedAssetPaths,
+      attempt,
+    });
+    mergeProviderCallTiming(timing, repair.timing);
+    addTiming(timing, 'repairMs', repair.timing.repairMs ?? 0);
+    finalCode = repair.code;
+    files = repair.files;
+    qualityReport = repair.qualityReport;
+    repairAttempts.push(repair.repairAttempt);
+  }
 
-  // Extract 进口
-  const importMatches = [...code.matchAll(/import\s+.*?from\s+['"](.+?)['"]/g)];
-  const imports = importMatches.map((m) => ({
-    source: m[1],
-    specifiers: [] as string[],
-  }));
+  if (hasCodegenQualityErrors(qualityReport)) degraded = true;
+  if (!validateCodegenFiles(input.framework, files).valid) degraded = true;
+  finalizeTiming(timing, elapsedSince(totalStart));
 
   return {
-    chunkId,
-    componentName,
-    exportedProps: [],
-    slots: [],
-    cssClasses: [],
-    cssVariables: [],
-    imports,
-    outputFiles: [],
+    code: finalCode,
+    degraded,
+    assets,
+    files,
+    qualityReport,
+    timing,
+    repairAttempts,
+    designIR,
+    pipelineMode: 'full_pipeline',
+    chunkResult,
+    chunkName: targetChunk.name,
   };
-}
-
-function cleanCode(raw: string): string {
-  return raw
-    .replace(/^```\w*\n?/gm, '')
-    .replace(/```\s*$/gm, '')
-    .trim();
 }
 
 // ── Main 管道 ──
@@ -249,38 +247,83 @@ export async function generateCode(
   provider: string | undefined,
   abortSignal?: AbortSignal,
   options: GenerateCodeOptions = {},
-): Promise<{ code: string; degraded: boolean; assets: CodegenAssetFile[] }> {
+): Promise<GenerateCodeResult> {
+  const totalStart = nowMs();
+  const timing: CodegenTimingBreakdown = {};
   const { nodes: sanitizedNodes, assets } = extractCodegenAssets(nodes);
+  const designIR = buildCodegenDesignIR(
+    sanitizedNodes,
+    assets.map((asset) => ({
+      relativePath: asset.relativePath,
+      sourceNodeId: asset.sourceNodeId,
+      sourceNodeName: asset.sourceNodeName,
+      sourceKind: asset.sourceKind,
+    })),
+  );
   const collectText = options.collectText ?? collectStreamText;
+  const exportedAssetPaths = assets.map((asset) => asset.relativePath);
+  if (shouldUseDirectFastPath({ nodes: sanitizedNodes, framework, options })) {
+    return generateCodeWithDirectFastPath({
+      nodes: sanitizedNodes,
+      assets,
+      exportedAssetPaths,
+      framework,
+      variables,
+      onProgress,
+      model,
+      provider,
+      abortSignal,
+      options,
+      designIR,
+      collectText,
+      totalStart,
+    });
+  }
   // ── Step 1: Planning ──
   onProgress({ step: 'planning', status: 'running' });
 
   let planFromAI: CodePlanFromAI;
   try {
+    const started = nowMs();
     planFromAI = await runPlanning(
       sanitizedNodes,
       framework,
+      designIR,
       model,
       provider,
       abortSignal,
       false,
-      collectText,
+      withProviderTiming(timing, collectText, {
+        stage: 'planning',
+        attempt: 1,
+        provider,
+        model,
+      }),
     );
-    onProgress({ step: 'planning', status: 'done', plan: planFromAI });
+    addTiming(timing, 'planningMs', elapsedSince(started));
+    onProgress({ step: 'planning', status: 'done', plan: planFromAI, designIR });
   } catch (err) {
     if (abortSignal?.aborted) throw err;
     // Retry 一次，提示更严格
     try {
+      const started = nowMs();
       planFromAI = await runPlanning(
         sanitizedNodes,
         framework,
+        designIR,
         model,
         provider,
         abortSignal,
         true,
-        collectText,
+        withProviderTiming(timing, collectText, {
+          stage: 'planning',
+          attempt: 2,
+          provider,
+          model,
+        }),
       );
-      onProgress({ step: 'planning', status: 'done', plan: planFromAI });
+      addTiming(timing, 'planningMs', elapsedSince(started));
+      onProgress({ step: 'planning', status: 'done', plan: planFromAI, designIR });
     } catch (retryErr) {
       const msg = retryErr instanceof Error ? retryErr.message : 'Planning failed';
       onProgress({ step: 'planning', status: 'failed', error: msg });
@@ -338,11 +381,18 @@ export async function generateCode(
           chunk.suggestedComponentName,
           depContracts,
           chunk.id,
+          designIR,
           model,
           provider,
           abortSignal,
           assetHints,
-          collectText,
+          withProviderTiming(timing, collectText, {
+            stage: 'chunk',
+            attempt: 1,
+            provider,
+            model,
+            chunkId: chunk.id,
+          }),
         );
 
         // Ensure componentName 有效 PascalCase — AI 可能返回 kebab-case 或空
@@ -387,11 +437,18 @@ export async function generateCode(
             chunk.suggestedComponentName,
             depContracts,
             chunk.id,
+            designIR,
             model,
             provider,
             abortSignal,
             assetHints,
-            collectText,
+            withProviderTiming(timing, collectText, {
+              stage: 'chunk',
+              attempt: 2,
+              provider,
+              model,
+              chunkId: chunk.id,
+            }),
           );
           if (
             !result.contract.componentName ||
@@ -426,7 +483,9 @@ export async function generateCode(
       }
     });
 
+    const started = nowMs();
     await Promise.all(batchPromises);
+    addTiming(timing, 'chunkMs', elapsedSince(started));
   }
 
   // ── Step 3: Assembly ──
@@ -457,9 +516,8 @@ export async function generateCode(
 
   let finalCode: string;
   let degraded = chunkInputs.some((c) => c.status !== 'successful');
-  const exportedAssetPaths = assets.map((asset) => asset.relativePath);
-
   try {
+    const started = nowMs();
     finalCode = await runAssembly(
       chunkInputs,
       planFromAI,
@@ -469,12 +527,25 @@ export async function generateCode(
       provider,
       abortSignal,
       exportedAssetPaths,
-      collectText,
+      designIR,
+      withProviderTiming(timing, collectText, {
+        stage: 'assembly',
+        attempt: 1,
+        provider,
+        model,
+      }),
     );
-    onProgress({ step: 'assembly', status: 'done' });
+    addTiming(timing, 'assemblyMs', elapsedSince(started));
+    onProgress({
+      step: 'assembly',
+      status: 'done',
+      code: finalCode,
+      files: buildCodegenFiles({ framework, code: finalCode }),
+    });
   } catch {
     // Retry 一次
     try {
+      const started = nowMs();
       finalCode = await runAssembly(
         chunkInputs,
         planFromAI,
@@ -484,8 +555,15 @@ export async function generateCode(
         provider,
         abortSignal,
         exportedAssetPaths,
-        collectText,
+        designIR,
+        withProviderTiming(timing, collectText, {
+          stage: 'assembly',
+          attempt: 2,
+          provider,
+          model,
+        }),
       );
+      addTiming(timing, 'assemblyMs', elapsedSince(started));
       onProgress({ step: 'assembly', status: 'done' });
     } catch {
       // Best-effort 后备：连接块代码
@@ -497,140 +575,142 @@ export async function generateCode(
       onProgress({
         step: 'assembly',
         status: 'failed',
+        code: finalCode,
+        files: buildCodegenFiles({ framework, code: finalCode }),
         error: 'Assembly failed — showing concatenated chunks',
       });
     }
   }
 
-  const filesValidation = validateCodegenFiles(
-    framework,
-    buildCodegenFiles({ framework, code: finalCode }),
-  );
-  if (!filesValidation.valid) {
+  let files = buildCodegenFiles({ framework, code: finalCode });
+  const repairAttempts: CodegenRepairAttempt[] = [];
+  let qualityReport: CodegenQualityReport;
+
+  onProgress({ step: 'quality_check', status: 'running' });
+  const qualityStart = nowMs();
+  qualityReport = buildCodegenQualityReport({ framework, files, designIR });
+  addTiming(timing, 'qualityCheckMs', elapsedSince(qualityStart));
+  onProgress({
+    step: 'quality_check',
+    status: hasCodegenQualityErrors(qualityReport) ? 'failed' : 'done',
+    report: qualityReport,
+    error: hasCodegenQualityErrors(qualityReport)
+      ? qualityReport.issues
+          .filter((issue) => issue.severity === 'error')
+          .map((issue) => issue.message)
+          .join('; ')
+      : undefined,
+  });
+
+  const maxRepairAttempts = options.maxRepairAttempts ?? 2;
+  for (let attempt = 1; hasCodegenQualityErrors(qualityReport) && attempt <= maxRepairAttempts; attempt++) {
+    if (abortSignal?.aborted) throw new Error('Aborted');
+    onProgress({ step: 'repair', status: 'running', attempt, report: qualityReport });
+    const repairStart = nowMs();
+    try {
+      const repairedCode = await runRepair(
+        {
+          framework,
+          code: finalCode,
+          files,
+          issues: qualityReport.issues.filter((issue) => issue.severity === 'error'),
+          designIR,
+          exportedAssetPaths,
+        },
+        model,
+        provider,
+        abortSignal,
+        withProviderTiming(timing, collectText, {
+          stage: 'repair',
+          attempt,
+          provider,
+          model,
+        }),
+      );
+      const durationMs = elapsedSince(repairStart);
+      addTiming(timing, 'repairMs', durationMs);
+      finalCode = repairedCode;
+      files = buildCodegenFiles({ framework, code: finalCode });
+      const repairedReport = buildCodegenQualityReport({
+        framework,
+        files,
+        designIR,
+        repaired: true,
+      });
+      repairAttempts.push({
+        attempt,
+        issues: qualityReport.issues,
+        code: finalCode,
+        report: repairedReport,
+        durationMs,
+      });
+      qualityReport = repairedReport;
+      onProgress({
+        step: 'repair',
+        status: hasCodegenQualityErrors(qualityReport) ? 'failed' : 'done',
+        attempt,
+        report: qualityReport,
+        error: hasCodegenQualityErrors(qualityReport)
+          ? qualityReport.issues
+              .filter((issue) => issue.severity === 'error')
+              .map((issue) => issue.message)
+              .join('; ')
+          : undefined,
+      });
+    } catch (repairErr) {
+      const durationMs = elapsedSince(repairStart);
+      addTiming(timing, 'repairMs', durationMs);
+      const msg = repairErr instanceof Error ? repairErr.message : 'Repair failed';
+      repairAttempts.push({
+        attempt,
+        issues: qualityReport.issues,
+        code: finalCode,
+        report: qualityReport,
+        durationMs,
+      });
+      onProgress({ step: 'repair', status: 'failed', attempt, report: qualityReport, error: msg });
+      break;
+    }
+  }
+
+  if (!hasCodegenQualityErrors(qualityReport)) {
+    onProgress({ step: 'final_validation', status: 'running' });
+    onProgress({ step: 'final_validation', status: 'done' });
+  } else {
     degraded = true;
     onProgress({
-      step: 'assembly',
+      step: 'final_validation',
       status: 'failed',
-      error: filesValidation.issues.join('; '),
+      error: qualityReport.issues
+        .filter((issue) => issue.severity === 'error')
+        .map((issue) => issue.message)
+        .join('; '),
     });
   }
 
-  onProgress({ step: 'complete', finalCode, degraded });
-  return { code: finalCode, degraded, assets };
-}
+  const filesValidation = validateCodegenFiles(framework, files);
+  if (!filesValidation.valid) degraded = true;
 
-// ── Internal AI call wrappers ──
+  finalizeTiming(timing, elapsedSince(totalStart));
 
-/**
- * Collect all text content from a streamChat call.
- * Adapts the AIStreamChunk-based generator to return a plain string.
- * Throws on error chunks from the stream.
- */
-async function collectStreamText(
-  systemPrompt: string,
-  userMessage: string,
-  model: string,
-  provider: string | undefined,
-  abortSignal?: AbortSignal,
-): Promise<string> {
-  let fullResponse = '';
-  for await (const chunk of streamChat(
-    systemPrompt,
-    [{ role: 'user', content: userMessage }],
-    model,
-    undefined, // options
-    provider,
-    abortSignal,
-  )) {
-    if (chunk.type === 'text') {
-      fullResponse += chunk.content;
-    } else if (chunk.type === 'error') {
-      throw new Error(chunk.content);
-    }
-  }
-  return fullResponse;
-}
-
-async function runPlanning(
-  nodes: PenNode[],
-  framework: Framework,
-  model: string,
-  provider: string | undefined,
-  abortSignal?: AbortSignal,
-  strict?: boolean,
-  collectText: CodegenTextCollector = collectStreamText,
-): Promise<CodePlanFromAI> {
-  const { system, user } = buildPlanningPrompt(nodes, framework);
-  const systemPrompt = strict
-    ? system + '\n\nCRITICAL: Respond with ONLY valid JSON. No markdown, no explanation.'
-    : system;
-
-  const fullResponse = await collectText(systemPrompt, user, model, provider, abortSignal);
-
-  // Extract JSON from response
-  const jsonMatch = fullResponse.match(/\{[\s\S]*\}/);
-  if (!jsonMatch) throw new Error('No JSON found in planning response');
-
-  const plan = JSON.parse(jsonMatch[0]) as CodePlanFromAI;
-  if (!plan.chunks || !plan.rootLayout) {
-    throw new Error('Planning response missing required fields (chunks, rootLayout)');
-  }
-  plan.sharedStyles = plan.sharedStyles ?? [];
-
-  return plan;
-}
-
-async function runChunkGeneration(
-  nodes: PenNode[],
-  framework: Framework,
-  suggestedComponentName: string,
-  depContracts: ChunkContract[],
-  chunkId: string,
-  model: string,
-  provider: string | undefined,
-  abortSignal?: AbortSignal,
-  assetHints: CodegenAssetHint[] = [],
-  collectText: CodegenTextCollector = collectStreamText,
-): Promise<ChunkResult> {
-  const { system, user } = buildChunkPrompt(
-    nodes,
-    framework,
-    suggestedComponentName,
-    depContracts,
-    assetHints,
-  );
-
-  const fullResponse = await collectText(system, user, model, provider, abortSignal);
-
-  return parseChunkResponse(fullResponse, chunkId);
-}
-
-async function runAssembly(
-  chunkResults: {
-    chunkId: string;
-    name: string;
-    code: string;
-    contract?: ChunkContract;
-    status: 'successful' | 'degraded' | 'failed';
-  }[],
-  plan: CodePlanFromAI,
-  framework: Framework,
-  variables: Record<string, unknown> | undefined,
-  model: string,
-  provider: string | undefined,
-  abortSignal?: AbortSignal,
-  exportedAssetPaths: string[] = [],
-  collectText: CodegenTextCollector = collectStreamText,
-): Promise<string> {
-  const { system, user } = buildAssemblyPrompt(
-    chunkResults,
-    plan,
-    framework,
-    variables,
-    exportedAssetPaths,
-  );
-
-  const fullResponse = await collectText(system, user, model, provider, abortSignal);
-
-  return cleanCode(fullResponse);
+  onProgress({
+    step: 'complete',
+    finalCode,
+    degraded,
+    qualityReport,
+    timing,
+    repairAttempts,
+    pipelineMode: 'full_pipeline',
+  });
+  return {
+    code: finalCode,
+    degraded,
+    assets,
+    files,
+    qualityReport,
+    timing,
+    repairAttempts,
+    designIR,
+    pipelineMode: 'full_pipeline',
+  };
 }

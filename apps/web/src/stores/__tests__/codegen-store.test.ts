@@ -66,6 +66,77 @@ describe('codegen-store', () => {
     expect(useCodegenStore.getState().isGenerating).toBe(false);
   });
 
+  it('stores quality metadata from generation progress and saveHistory', async () => {
+    vi.mocked(codegenHistory.saveCodeGenerationHistory).mockResolvedValue({
+      id: 'gen-quality',
+      fileId: 'file-1',
+      pageId: 'page-1',
+      framework: 'html',
+      targetKind: 'page',
+      nodeIds: [],
+      targetHash: 'hash-1',
+      documentRevision: 4,
+      status: 'done',
+      finalCode: '<main>done</main>',
+      degraded: false,
+      assetsManifest: [],
+      metadata: { qualityStatus: 'passed' },
+      model: 'model-a',
+      provider: 'builtin',
+      error: null,
+      createdAt: '2026-05-09T11:00:00.000Z',
+      completedAt: '2026-05-09T11:00:02.000Z',
+      files: [],
+      chunks: [],
+    });
+    const controller = new AbortController();
+    const runId = useCodegenStore.getState().startGeneration('node-1', controller);
+    const qualityReport = {
+      status: 'passed' as const,
+      framework: 'html' as const,
+      issues: [],
+      checkedAt: '2026-05-14T00:00:00.000Z',
+      summary: {
+        fileCount: 1,
+        errorCount: 0,
+        warningCount: 0,
+        missingTextCount: 0,
+        missingAssetCount: 0,
+      },
+    };
+
+    useCodegenStore.getState().applyProgress(runId, 'html', {
+      step: 'complete',
+      finalCode: '<main>done</main>',
+      degraded: false,
+      qualityReport,
+      timing: { totalMs: 123 },
+      repairAttempts: [],
+    });
+
+    const bundle = useCodegenStore.getState().codeCache.html!;
+    expect(bundle.metadata).toMatchObject({ qualityStatus: 'passed' });
+
+    await useCodegenStore.getState().saveHistory(
+      'html',
+      { pageId: 'page-1', targetKind: 'page', nodeIds: [], targetHash: 'hash-1' },
+      bundle,
+      'model-a',
+      'builtin',
+    );
+
+    expect(codegenHistory.saveCodeGenerationHistory).toHaveBeenCalledWith(
+      expect.objectContaining({
+        metadata: expect.objectContaining({
+          qualityStatus: 'passed',
+          qualityReport,
+          timing: { totalMs: 123 },
+          repairAttempts: [],
+        }),
+      }),
+    );
+  });
+
   it('aborts the in-flight run only when the user cancels', () => {
     const controller = new AbortController();
     const abortSpy = vi.spyOn(controller, 'abort');
@@ -145,6 +216,51 @@ describe('codegen-store', () => {
       path: 'design.html',
       content: '<main>new</main>',
     });
+  });
+
+  it('reuses identical in-flight history loads', async () => {
+    let resolveHistory!: (history: any[]) => void;
+    vi.mocked(codegenHistory.listCodeGenerationHistory).mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveHistory = resolve;
+        }),
+    );
+    const target = {
+      pageId: 'page-1',
+      targetKind: 'page' as const,
+      nodeIds: [],
+      targetHash: 'hash-1',
+    };
+
+    const first = useCodegenStore.getState().loadHistory('html', target);
+    const second = useCodegenStore.getState().loadHistory('html', target);
+    await Promise.resolve();
+
+    expect(codegenHistory.listCodeGenerationHistory).toHaveBeenCalledTimes(1);
+    resolveHistory([]);
+    await Promise.all([first, second]);
+  });
+
+  it('keeps separate history loads for different targets', async () => {
+    vi.mocked(codegenHistory.listCodeGenerationHistory).mockResolvedValue([]);
+
+    await Promise.all([
+      useCodegenStore.getState().loadHistory('html', {
+        pageId: 'page-1',
+        targetKind: 'page',
+        nodeIds: [],
+        targetHash: 'hash-1',
+      }),
+      useCodegenStore.getState().loadHistory('html', {
+        pageId: 'page-1',
+        targetKind: 'selection',
+        nodeIds: ['node-1'],
+        targetHash: 'hash-2',
+      }),
+    ]);
+
+    expect(codegenHistory.listCodeGenerationHistory).toHaveBeenCalledTimes(2);
   });
 
   it('selects an older history entry without writing to the cloud', () => {

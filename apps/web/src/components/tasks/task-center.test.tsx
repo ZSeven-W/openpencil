@@ -11,6 +11,11 @@ const routerMocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@tanstack/react-router', () => ({
+  Link: ({ children, to, ...props }: any) => (
+    <a href={typeof to === 'string' ? to : '#'} {...props}>
+      {children}
+    </a>
+  ),
   useNavigate: () => routerMocks.navigate,
 }));
 
@@ -19,6 +24,9 @@ const job = {
   fileId: 'file-1',
   ownerId: 'user-1',
   generationId: null,
+  fileName: 'Design Library',
+  pageName: 'Checkout Page',
+  pipelineMode: 'direct_generation',
   status: 'running',
   framework: 'react',
   pageId: 'page-1',
@@ -34,8 +42,8 @@ const job = {
   maxAttempts: 2,
   lockedBy: null,
   lockedUntil: null,
-  inputSnapshot: {},
-  output: {},
+  inputSnapshot: { fileName: 'Design Library', pageName: 'Checkout Page' },
+  output: { pipelineMode: 'direct_generation' },
   error: null,
   createdAt: '2026-05-13T08:00:00.000Z',
   updatedAt: '2026-05-13T08:00:00.000Z',
@@ -72,8 +80,22 @@ const job = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  Object.defineProperty(window, 'matchMedia', {
+    writable: true,
+    value: vi.fn().mockImplementation((query: string) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })),
+  });
   useCodegenJobStore.setState({
     jobs: [job as any],
+    jobPage: { total: 1, limit: 10, offset: 0 },
     notifications: [
       {
         id: 'note-1',
@@ -88,6 +110,7 @@ beforeEach(() => {
         createdAt: '2026-05-13T08:00:00.000Z',
       } as any,
     ],
+    notificationPage: { total: 1, limit: 10, offset: 0 },
     workerOverview: {
       workers: [
         {
@@ -121,10 +144,12 @@ beforeEach(() => {
     refreshNotifications: vi.fn(),
     refreshWorkerOverview: vi.fn(),
     cancelJob: vi.fn(),
+    deleteJob: vi.fn(),
     batchCancelJobs: vi.fn(),
     retryJob: vi.fn(),
     updateJobPriority: vi.fn(),
     markNotificationRead: vi.fn(),
+    deleteNotification: vi.fn(),
   } as any);
 });
 
@@ -133,35 +158,59 @@ afterEach(() => {
 });
 
 describe('TaskCenter', () => {
-  it('renders global background tasks and notifications', async () => {
+  it('renders global background tasks without an embedded notification card', async () => {
     render(<TaskCenter />);
 
-    expect(screen.getByText('Tasks')).toBeTruthy();
+    expect(screen.getAllByText('Tasks').length).toBeGreaterThan(0);
     expect(screen.getByText('react code generation')).toBeTruthy();
-    expect(screen.getByText('Code generation completed')).toBeTruthy();
+    expect(screen.getByText('Direct Generation')).toBeTruthy();
+    expect(screen.queryByText('Code generation completed')).toBeNull();
     await waitFor(() => {
       expect(useCodegenJobStore.getState().refreshWorkerOverview).toHaveBeenCalledWith({
+        summary: true,
         workerLimit: 5,
         providerLimit: 1,
         failedLimit: 1,
       });
+      expect(useCodegenJobStore.getState().refreshJobs).toHaveBeenCalledWith({
+        status: undefined,
+        limit: 10,
+        offset: 0,
+      });
+      expect(useCodegenJobStore.getState().refreshNotifications).toHaveBeenCalledWith({
+        fileId: undefined,
+        limit: 10,
+        offset: 0,
+      });
     });
 
-    fireEvent.click(screen.getByText('Open file'));
+    fireEvent.click(screen.getByRole('button', { name: 'Open file' }));
     expect(routerMocks.navigate).toHaveBeenCalledWith({
       to: '/editor/$fileId',
       params: { fileId: 'file-1' },
     });
 
+    fireEvent.click(screen.getByText('react code generation'));
+    expect(routerMocks.navigate).toHaveBeenCalledWith({
+      to: '/tasks',
+      search: { jobId: 'job-1' },
+    });
+
     fireEvent.click(screen.getByText('Details'));
     expect(routerMocks.navigate).toHaveBeenCalledWith({
-      to: '/tasks/$jobId',
-      params: { jobId: 'job-1' },
+      to: '/tasks',
+      search: { jobId: 'job-1' },
     });
 
     fireEvent.click(screen.getByText('Cancel'));
     await waitFor(() => {
       expect(useCodegenJobStore.getState().cancelJob).toHaveBeenCalledWith('job-1');
+    });
+
+    fireEvent.click(screen.getByLabelText('Delete task'));
+    fireEvent.click(await screen.findByRole('button', { name: 'Delete' }));
+    await waitFor(() => {
+      expect(useCodegenJobStore.getState().deleteJob).toHaveBeenCalledWith('job-1');
     });
   });
 
@@ -176,7 +225,12 @@ describe('TaskCenter', () => {
     render(<TaskCenter fileId="file-1" />);
 
     await waitFor(() => {
-      expect(refreshJobs).toHaveBeenCalledWith({ fileId: 'file-1' });
+      expect(refreshJobs).toHaveBeenCalledWith({
+        fileId: 'file-1',
+        status: undefined,
+        limit: 10,
+        offset: 0,
+      });
     });
 
     fireEvent.click(screen.getByText('Retry'));
@@ -200,6 +254,69 @@ describe('TaskCenter', () => {
 
     await waitFor(() => {
       expect(batchCancelJobs).toHaveBeenCalledWith(['job-1', 'job-2']);
+    });
+  });
+
+  it('selects the current task page from the table header', async () => {
+    const batchCancelJobs = vi.fn();
+    useCodegenJobStore.setState({
+      jobs: [job as any, { ...job, id: 'job-2', status: 'pending' } as any],
+      batchCancelJobs,
+    } as any);
+
+    render(<TaskCenter />);
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Select all' }));
+    fireEvent.click(screen.getByText('Cancel selected'));
+
+    await waitFor(() => {
+      expect(batchCancelJobs).toHaveBeenCalledWith(['job-1', 'job-2']);
+    });
+  });
+
+  it('shows notification records and deletes a notification', async () => {
+    const deleteNotification = vi.fn();
+    useCodegenJobStore.setState({
+      deleteNotification,
+      notificationPage: { total: 1, limit: 10, offset: 0 },
+    } as any);
+
+    render(<TaskCenter view="notifications" />);
+
+    expect(screen.getAllByRole('heading', { name: 'Notification records' }).length).toBeGreaterThan(
+      0,
+    );
+    fireEvent.click(screen.getByLabelText('Delete notification'));
+    fireEvent.click(await screen.findByRole('button', { name: 'Delete' }));
+
+    await waitFor(() => {
+      expect(deleteNotification).toHaveBeenCalledWith('note-1');
+    });
+  });
+
+  it('keeps notification records out of the task center view', () => {
+    render(<TaskCenter />);
+
+    expect(screen.queryByRole('heading', { name: 'Notification records' })).toBeNull();
+    expect(screen.queryByText('Code generation completed')).toBeNull();
+  });
+
+  it('marks notification records read without opening task detail', async () => {
+    render(<TaskCenter view="notifications" />);
+
+    routerMocks.navigate.mockClear();
+    fireEvent.click(screen.getByText('View notification'));
+
+    await waitFor(() => {
+      expect(useCodegenJobStore.getState().markNotificationRead).toHaveBeenCalledWith('note-1');
+    });
+    expect(routerMocks.navigate).not.toHaveBeenCalledWith({
+      to: '/tasks',
+      search: { jobId: 'job-1', view: 'notifications' },
+    });
+    expect(routerMocks.navigate).not.toHaveBeenCalledWith({
+      to: '/tasks',
+      search: { jobId: 'job-1' },
     });
   });
 

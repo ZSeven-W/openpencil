@@ -1,5 +1,5 @@
 import { defineEventHandler, getRouterParam, createError } from 'h3';
-import { getCloudSupabase } from '../../../utils/cloud-supabase';
+import { getCloudServiceSupabase, getCloudSupabase } from '../../../utils/cloud-supabase';
 import { getCodegenJobDetail } from '../../../utils/cloud-codegen-jobs';
 
 export default defineEventHandler(async (event) => {
@@ -8,6 +8,10 @@ export default defineEventHandler(async (event) => {
 
   const { supabase, user } = await getCloudSupabase(event);
   return {
-    data: await getCodegenJobDetail({ supabase, userId: user.id, jobId: id }),
+    data: await getCodegenJobDetail({
+      supabase: getCloudServiceSupabase() ?? supabase,
+      userId: user.id,
+      jobId: id,
+    }),
   };
 });

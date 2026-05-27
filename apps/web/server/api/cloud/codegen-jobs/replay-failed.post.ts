@@ -15,7 +15,7 @@ const replayFailedSchema = z.object({
     .optional(),
   deadLetteredFrom: z.string().datetime().optional(),
   deadLetteredTo: z.string().datetime().optional(),
-  limit: z.number().int().positive().max(50).optional().default(50),
+  limit: z.number().int().positive().max(50).optional().default(10),
 });
 
 export default defineEventHandler(async (event) => {

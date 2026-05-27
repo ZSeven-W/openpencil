@@ -26,6 +26,8 @@ const cloudSupabaseMocks = vi.hoisted(() => ({
 const cloudDocumentStorageMocks = vi.hoisted(() => ({
   prepareCloudDocumentForStorage: vi.fn(async ({ document }: { document: unknown }) => ({
     storedDocument: document,
+    sizeBytes: 0,
+    isExternal: false,
   })),
   resolveCloudDocumentFromStorage: vi.fn(async (_supabase: unknown, document: unknown) => document),
 }));
@@ -113,6 +115,11 @@ function createSelectQuery(data: unknown, error: unknown = null) {
     ilike: vi.fn(() => query),
     order: vi.fn(() => query),
     limit: vi.fn(() => query),
+    range: vi.fn(async () => ({
+      data,
+      error,
+      count: Array.isArray(data) ? data.length : data ? 1 : 0,
+    })),
     single: vi.fn(async () => ({ data, error })),
     maybeSingle: vi.fn(async () => ({ data, error })),
     then: (resolve: (value: { data: unknown; error: unknown }) => unknown, reject?: (reason: unknown) => unknown) =>
@@ -151,7 +158,14 @@ beforeEach(() => {
   h3Mocks.params = {};
   h3Mocks.status = undefined;
   cloudSupabaseMocks.getCloudSupabase.mockReset();
-  cloudDocumentStorageMocks.prepareCloudDocumentForStorage.mockClear();
+  cloudDocumentStorageMocks.prepareCloudDocumentForStorage.mockReset();
+  cloudDocumentStorageMocks.prepareCloudDocumentForStorage.mockImplementation(
+    async ({ document }: { document: unknown }) => ({
+      storedDocument: document,
+      sizeBytes: 0,
+      isExternal: false,
+    }),
+  );
   cloudDocumentStorageMocks.resolveCloudDocumentFromStorage.mockClear();
 });
 
@@ -354,7 +368,9 @@ describe('cloud file routes', () => {
     expect(fileListQuery.is).toHaveBeenCalledWith('deleted_at', null);
     expect(fileListQuery.ilike).toHaveBeenCalledWith('name', '%Home%');
     expect(fileListQuery.order).toHaveBeenCalledWith('name', { ascending: true });
+    expect(fileListQuery.range).toHaveBeenCalledWith(0, 9);
     expect(result.data).toEqual([expect.objectContaining({ id: fileRow.id, name: 'Home Screen' })]);
+    expect(result.page).toEqual({ total: 1, limit: 10, offset: 0 });
   });
 
   it('soft deletes a file with a 204 response', async () => {
@@ -372,6 +388,27 @@ describe('cloud file routes', () => {
     expect(deleteQuery.eq).toHaveBeenCalledWith('id', fileRow.id);
     expect(deleteQuery.eq).toHaveBeenCalledWith('owner_id', 'user-1');
     expect(deleteQuery.is).toHaveBeenCalledWith('deleted_at', null);
+  });
+
+  it('opens an owned file without reselecting the full document after touching last_opened_at', async () => {
+    const fileLookupQuery = createSelectQuery(fileRow);
+    const openedQuery = createMutationQuery({ last_opened_at: now, updated_at: now });
+    const update = vi.fn(() => openedQuery);
+    const from = vi.fn((table: string) => {
+      if (table !== 'design_files') throw new Error(`Unexpected table ${table}`);
+      return { select: fileLookupQuery.select, update };
+    });
+    cloudSupabaseMocks.getCloudSupabase.mockResolvedValue({ supabase: { from }, user });
+    h3Mocks.params = { id: fileRow.id };
+
+    const handler = (await import('../files/[id].get')).default;
+    const result = await handler(event);
+
+    expect(result.data).toMatchObject({ id: fileRow.id, document: fileRow.document });
+    expect(update).toHaveBeenCalledWith({ last_opened_at: expect.any(String) });
+    expect(openedQuery.select).toHaveBeenCalledWith('last_opened_at,updated_at');
+    expect(openedQuery.select).not.toHaveBeenCalledWith(expect.stringContaining('document'));
+    expect(cloudDocumentStorageMocks.resolveCloudDocumentFromStorage).toHaveBeenCalledTimes(1);
   });
 
   it('rejects stale document saves with structured revision conflict details', async () => {
@@ -455,6 +492,209 @@ describe('cloud file routes', () => {
     expect(result.data).toMatchObject({ id: fileRow.id, revision: 8 });
   });
 
+  it('saves document patches without checkpointing normal autosaves', async () => {
+    const baseDocument = {
+      version: '1.0.0',
+      pages: [{ id: 'page-1', name: 'Page 1', children: [] }],
+      children: [],
+    };
+    const accessQuery = createSelectQuery({ id: fileRow.id, owner_id: user.id });
+    const duplicateQuery = createSelectQuery(null);
+    const currentQuery = createSelectQuery({
+      ...fileRow,
+      document: baseDocument,
+      revision: 7,
+      checkpoint_revision: 7,
+      checkpoint_size_bytes: 128,
+      owner_id: user.id,
+    });
+    const updateQuery = createMutationQuery({
+      ...fileRow,
+      revision: 8,
+      checkpoint_revision: 7,
+      checkpoint_size_bytes: 128,
+      updated_at: now,
+    });
+    const changeQuery = createMutationQuery();
+    const activityQuery = createMutationQuery();
+    const update = vi.fn(() => updateQuery);
+    const insertChange = vi.fn(() => changeQuery);
+    const insertActivity = vi.fn(() => activityQuery);
+    const designFilesSelect = vi
+      .fn()
+      .mockReturnValueOnce(accessQuery)
+      .mockReturnValueOnce(currentQuery);
+    const from = vi.fn((table: string) => {
+      if (table === 'design_files') return { select: designFilesSelect, update };
+      if (table === 'design_file_changes') {
+        return { select: duplicateQuery.select, insert: insertChange };
+      }
+      if (table === 'activity_events') return { insert: insertActivity };
+      throw new Error(`Unexpected table ${table}`);
+    });
+    cloudSupabaseMocks.getCloudSupabase.mockResolvedValue({ supabase: { from }, user });
+    h3Mocks.params = { id: fileRow.id };
+    h3Mocks.body = {
+      baseRevision: 7,
+      clientMutationId: 'mutation-1',
+      source: 'autosave',
+      snapshot: false,
+      patches: [{ op: 'set-doc-field', field: 'name', value: 'Patched Design' }],
+    };
+
+    const handler = (await import('../files/[id]/document-patches.post')).default;
+    const result = await handler(event);
+
+    expect(update).toHaveBeenCalledWith({ revision: 8 });
+    expect(updateQuery.eq).toHaveBeenCalledWith('revision', 7);
+    expect(insertChange).toHaveBeenCalledWith(
+      expect.objectContaining({
+        file_id: fileRow.id,
+        owner_id: user.id,
+        actor_id: user.id,
+        base_revision: 7,
+        revision: 8,
+        client_mutation_id: 'mutation-1',
+        source: 'autosave',
+        size_bytes: expect.any(Number),
+      }),
+    );
+    expect(cloudDocumentStorageMocks.prepareCloudDocumentForStorage).not.toHaveBeenCalled();
+    expect(result.data).toEqual({
+      id: fileRow.id,
+      name: fileRow.name,
+      revision: 8,
+      updatedAt: now,
+      checkpointRevision: 7,
+      snapshotCreated: false,
+    });
+  });
+
+  it('returns an idempotent patch ack for duplicate clientMutationId', async () => {
+    const accessQuery = createSelectQuery({ id: fileRow.id, owner_id: user.id });
+    const duplicateQuery = createSelectQuery({ revision: 8 });
+    const currentQuery = createSelectQuery({
+      ...fileRow,
+      revision: 8,
+      checkpoint_revision: 7,
+      checkpoint_size_bytes: 128,
+      owner_id: user.id,
+    });
+    const designFilesSelect = vi
+      .fn()
+      .mockReturnValueOnce(accessQuery)
+      .mockReturnValueOnce(currentQuery);
+    const from = vi.fn((table: string) => {
+      if (table === 'design_files') return { select: designFilesSelect };
+      if (table === 'design_file_changes') return { select: duplicateQuery.select };
+      throw new Error(`Unexpected table ${table}`);
+    });
+    cloudSupabaseMocks.getCloudSupabase.mockResolvedValue({ supabase: { from }, user });
+    h3Mocks.params = { id: fileRow.id };
+    h3Mocks.body = {
+      baseRevision: 7,
+      clientMutationId: 'mutation-1',
+      patches: [],
+    };
+
+    const handler = (await import('../files/[id]/document-patches.post')).default;
+    const result = await handler(event);
+
+    expect(result.data).toMatchObject({
+      id: fileRow.id,
+      revision: 8,
+      checkpointRevision: 7,
+      snapshotCreated: false,
+    });
+  });
+
+  it('creates a checkpoint and version for snapshot patch saves', async () => {
+    const baseDocument = {
+      version: '1.0.0',
+      pages: [{ id: 'page-1', name: 'Page 1', children: [] }],
+      children: [],
+    };
+    const accessQuery = createSelectQuery({ id: fileRow.id, owner_id: user.id });
+    const duplicateQuery = createSelectQuery(null);
+    const currentQuery = createSelectQuery({
+      ...fileRow,
+      document: baseDocument,
+      revision: 7,
+      checkpoint_revision: 7,
+      checkpoint_size_bytes: 128,
+      owner_id: user.id,
+    });
+    const storedDocument = { stored: true };
+    cloudDocumentStorageMocks.prepareCloudDocumentForStorage.mockResolvedValueOnce({
+      storedDocument,
+      sizeBytes: 2048,
+      isExternal: false,
+    });
+    const updateQuery = createMutationQuery({
+      ...fileRow,
+      revision: 8,
+      checkpoint_revision: 8,
+      checkpoint_size_bytes: 2048,
+      updated_at: now,
+    });
+    const changeQuery = createMutationQuery();
+    const versionQuery = createMutationQuery();
+    const activityQuery = createMutationQuery();
+    const update = vi.fn(() => updateQuery);
+    const insertChange = vi.fn(() => changeQuery);
+    const insertVersion = vi.fn(() => versionQuery);
+    const insertActivity = vi.fn(() => activityQuery);
+    const designFilesSelect = vi
+      .fn()
+      .mockReturnValueOnce(accessQuery)
+      .mockReturnValueOnce(currentQuery);
+    const from = vi.fn((table: string) => {
+      if (table === 'design_files') return { select: designFilesSelect, update };
+      if (table === 'design_file_changes') {
+        return { select: duplicateQuery.select, insert: insertChange };
+      }
+      if (table === 'design_file_versions') return { insert: insertVersion };
+      if (table === 'activity_events') return { insert: insertActivity };
+      throw new Error(`Unexpected table ${table}`);
+    });
+    cloudSupabaseMocks.getCloudSupabase.mockResolvedValue({ supabase: { from }, user });
+    h3Mocks.params = { id: fileRow.id };
+    h3Mocks.body = {
+      baseRevision: 7,
+      clientMutationId: 'mutation-2',
+      source: 'manual_save',
+      label: 'Manual save',
+      snapshot: true,
+      patches: [{ op: 'set-doc-field', field: 'name', value: 'Snapshot Design' }],
+    };
+
+    const handler = (await import('../files/[id]/document-patches.post')).default;
+    const result = await handler(event);
+
+    expect(update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        revision: 8,
+        document: storedDocument,
+        checkpoint_revision: 8,
+        checkpoint_size_bytes: 2048,
+      }),
+    );
+    expect(insertVersion).toHaveBeenCalledWith(
+      expect.objectContaining({
+        file_id: fileRow.id,
+        owner_id: user.id,
+        actor_id: user.id,
+        revision: 8,
+        document: storedDocument,
+        source: 'manual_save',
+        label: 'Manual save',
+        size_bytes: 2048,
+      }),
+    );
+    expect(result.data.snapshotCreated).toBe(true);
+    expect(result.data.checkpointRevision).toBe(8);
+  });
+
   it('lists files shared with the current user', async () => {
     const byUserSharesQuery = createSelectQuery([]);
     const byEmailSharesQuery = createSelectQuery([shareRow]);
@@ -475,9 +715,11 @@ describe('cloud file routes', () => {
     expect(fileListQuery.in).toHaveBeenCalledWith('id', [fileRow.id]);
     expect(fileListQuery.ilike).toHaveBeenCalledWith('name', '%Home%');
     expect(fileListQuery.order).toHaveBeenCalledWith('name', { ascending: false });
+    expect(fileListQuery.range).toHaveBeenCalledWith(0, 9);
     expect(result.data).toEqual([
       expect.objectContaining({ id: fileRow.id, name: 'Home Screen', shareRole: 'viewer' }),
     ]);
+    expect(result.page).toEqual({ total: 1, limit: 10, offset: 0 });
   });
 
   it('copies a file into the requested folder and creates the copied version', async () => {

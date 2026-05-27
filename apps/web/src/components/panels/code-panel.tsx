@@ -37,9 +37,9 @@ import { buildCodegenTarget, exportCodeGenerationZip, getCodeGenerationHistoryDe
 import { buildCodePreviewDocument } from '@/services/cloud/codegen-preview';
 import { buildAIStructureBundle, encodeAIStructureBundleZip } from '@/services/ai/structure-bundle';
 import { highlightCode } from '@/utils/syntax-highlight';
-import type { Framework, CodeGenProgress } from '@zseven-w/pen-types';
+import type { Framework, CodeGenProgress, CodegenRepairAttempt } from '@zseven-w/pen-types';
 import { FRAMEWORKS } from '@zseven-w/pen-types';
-import type { PenNode } from '@/types/pen';
+import type { PenDocument, PenNode } from '@/types/pen';
 import { encode as encodeZip } from 'uzip';
 import { useTranslation } from 'react-i18next';
 
@@ -47,6 +47,43 @@ type PanelState = 'empty' | 'generating' | 'complete';
 export type CodePanelView = 'code' | 'history';
 
 const EMPTY_HISTORY: CodegenHistoryEntry[] = [];
+
+type RepairIssuePreview = {
+  attempt: number;
+  code: string;
+  severity: string;
+  message: string;
+  filePath?: string;
+};
+
+function getRepairAttemptArray(value: unknown): CodegenRepairAttempt[] {
+  return Array.isArray(value) ? (value as CodegenRepairAttempt[]) : [];
+}
+
+function getRepairIssuePreview(value: unknown): RepairIssuePreview[] {
+  return getRepairAttemptArray(value)
+    .flatMap((attempt) =>
+      (Array.isArray(attempt.issues) ? attempt.issues : []).map((issue) => ({
+        attempt: Number(attempt.attempt ?? 1),
+        code: typeof issue.code === 'string' ? issue.code : 'unknown',
+        severity: typeof issue.severity === 'string' ? issue.severity : '-',
+        message: typeof issue.message === 'string' ? issue.message : '',
+        filePath: typeof issue.filePath === 'string' ? issue.filePath : undefined,
+      })),
+    )
+    .slice(0, 6);
+}
+
+function getDocumentName(document: PenDocument | null | undefined): string | undefined {
+  return document?.name;
+}
+
+function getPageName(
+  document: PenDocument | null | undefined,
+  pageId: string | null,
+): string | undefined {
+  return document?.pages?.find((page) => page.id === pageId)?.name;
+}
 
 type CodePanelProps = { generationId?: string };
 
@@ -63,6 +100,11 @@ function CodePanelInner({ generationId }: CodePanelProps) {
   const planningStatus = useCodegenStore((s) => s.planningStatus);
   const planningError = useCodegenStore((s) => s.planningError);
   const assemblyStatus = useCodegenStore((s) => s.assemblyStatus);
+  const qualityStatus = useCodegenStore((s) => s.qualityStatus);
+  const qualityError = useCodegenStore((s) => s.qualityError);
+  const repairStatus = useCodegenStore((s) => s.repairStatus);
+  const repairError = useCodegenStore((s) => s.repairError);
+  const finalValidationStatus = useCodegenStore((s) => s.finalValidationStatus);
   const chunks = useCodegenStore((s) => s.chunks);
   const selectionChanged = useCodegenStore((s) => s.selectionChanged);
   const generateError = useCodegenStore((s) => s.generateError);
@@ -94,6 +136,16 @@ function CodePanelInner({ generationId }: CodePanelProps) {
   const isDegraded = cached?.degraded ?? false;
   const exportedAssets = cached?.assets ?? [];
   const exportedAssetsManifest = cached?.assetsManifest ?? [];
+  const qualityReport = cached?.qualityReport ?? cached?.metadata?.qualityReport;
+  const qualityStatusLabel =
+    cached?.qualityReport?.status ??
+    (typeof cached?.metadata?.qualityStatus === 'string' ? cached.metadata.qualityStatus : null);
+  const timing = cached?.timing ?? cached?.metadata?.timing;
+  const repairAttempts = cached?.repairAttempts ?? cached?.metadata?.repairAttempts;
+  const repairIssuePreview = useMemo(
+    () => getRepairIssuePreview(repairAttempts),
+    [repairAttempts],
+  );
   const hasExportedAssets = exportedAssets.length > 0;
   const requiresZipBundle = activeTab === 'uniapp' || hasExportedAssets;
   const panelState: PanelState = isGenerating ? 'generating' : cached ? 'complete' : 'empty';
@@ -105,6 +157,7 @@ function CodePanelInner({ generationId }: CodePanelProps) {
   const getNodeById = useDocumentStore((s) => s.getNodeById);
   const children = useDocumentStore((s) => getActivePageChildren(s.document, activePageId));
   const document = useDocumentStore((s) => s.document);
+  const fileNameFromStore = useDocumentStore((s) => s.fileName);
   const cloudFileId = useDocumentStore((s) => s.cloudFileId);
   const cloudRevision = useDocumentStore((s) => s.cloudRevision);
   const variables = document?.variables;
@@ -121,6 +174,14 @@ function CodePanelInner({ generationId }: CodePanelProps) {
   const codegenTarget = useMemo(
     () => buildCodegenTarget({ pageId: activePageId, selectedIds }),
     [activePageId, selectedIds],
+  );
+  const activePageName = useMemo(() => getPageName(document, activePageId), [
+    activePageId,
+    document,
+  ]);
+  const documentName = useMemo(
+    () => fileNameFromStore ?? getDocumentName(document),
+    [document, fileNameFromStore],
   );
   const generatedFiles = useMemo(
     () =>
@@ -149,6 +210,9 @@ function CodePanelInner({ generationId }: CodePanelProps) {
     return t('codePanel.patch.multipleSelection', { count: targetNodes.length });
   }, [targetNodes, t]);
   const activeHistoryShortId = activeHistoryId ? activeHistoryId.slice(0, 8) : null;
+  const refreshHistory = useCallback(() => {
+    void loadHistory(activeTab, codegenTarget, { force: true });
+  }, [activeTab, codegenTarget, loadHistory]);
 
   useEffect(() => {
     if (generationId) return;
@@ -239,7 +303,16 @@ function CodePanelInner({ generationId }: CodePanelProps) {
         code: result.code,
         degraded: result.degraded,
         assets: result.assets,
-        files: buildCodegenFiles({ framework: generationFramework, code: result.code }),
+        files: result.files ?? buildCodegenFiles({ framework: generationFramework, code: result.code }),
+        qualityReport: result.qualityReport,
+        timing: result.timing,
+        repairAttempts: result.repairAttempts,
+        metadata: {
+          qualityStatus: result.qualityReport?.status,
+          qualityReport: result.qualityReport,
+          timing: result.timing,
+          repairAttempts: result.repairAttempts,
+        },
       };
       completeGeneration(runId, generationFramework, bundle);
       void saveHistory(
@@ -285,8 +358,12 @@ function CodePanelInner({ generationId }: CodePanelProps) {
       provider: modelConfig.provider,
       nodes,
       variables: variables as Record<string, unknown> | undefined,
+      fileName: documentName,
+      pageName: activePageName,
+      qualityMode: 'production',
     });
   }, [
+    activePageName,
     activeTab,
     cloudFileId,
     cloudRevision,
@@ -295,6 +372,7 @@ function CodePanelInner({ generationId }: CodePanelProps) {
     getTargetNodes,
     model,
     modelConfig,
+    documentName,
     variables,
   ]);
 
@@ -321,6 +399,9 @@ function CodePanelInner({ generationId }: CodePanelProps) {
       provider: modelConfig.provider,
       nodes,
       variables: variables as Record<string, unknown> | undefined,
+      fileName: documentName,
+      pageName: activePageName,
+      qualityMode: 'production',
       baseGenerationId: activeHistoryId,
       patchInstruction: instruction,
     });
@@ -330,6 +411,7 @@ function CodePanelInner({ generationId }: CodePanelProps) {
     }
   }, [
     activeHistoryId,
+    activePageName,
     activeTab,
     cloudFileId,
     cloudRevision,
@@ -338,6 +420,7 @@ function CodePanelInner({ generationId }: CodePanelProps) {
     getTargetNodes,
     model,
     modelConfig,
+    documentName,
     patchInstruction,
     variables,
   ]);
@@ -527,11 +610,20 @@ function CodePanelInner({ generationId }: CodePanelProps) {
     return highlightCode(displayedCode, lang);
   }, [activeTab, displayedCode, selectedFile]);
 
-  const totalSteps = 1 + chunks.length + (assemblyStatus !== 'idle' ? 1 : 0);
+  const totalSteps =
+    1 +
+    chunks.length +
+    (assemblyStatus !== 'idle' ? 1 : 0) +
+    (qualityStatus !== 'idle' ? 1 : 0) +
+    (repairStatus !== 'idle' ? 1 : 0) +
+    (finalValidationStatus !== 'idle' ? 1 : 0);
   const completedSteps =
     (planningStatus === 'done' ? 1 : 0) +
     chunks.filter((c) => c.status === 'done' || c.status === 'degraded').length +
-    (assemblyStatus === 'done' ? 1 : 0);
+    (assemblyStatus === 'done' ? 1 : 0) +
+    (qualityStatus === 'done' ? 1 : 0) +
+    (repairStatus === 'done' || repairStatus === 'skipped' ? 1 : 0) +
+    (finalValidationStatus === 'done' ? 1 : 0);
   const progressPct = totalSteps > 0 ? (completedSteps / totalSteps) * 100 : 0;
 
   return (
@@ -690,6 +782,49 @@ function CodePanelInner({ generationId }: CodePanelProps) {
                   }
                 />
               )}
+
+              {qualityStatus !== 'idle' && (
+                <ProgressItem
+                  label={t('codePanel.step.qualityCheck')}
+                  status={
+                    qualityStatus === 'running'
+                      ? 'running'
+                      : qualityStatus === 'done'
+                        ? 'done'
+                        : 'failed'
+                  }
+                  error={qualityError}
+                />
+              )}
+
+              {repairStatus !== 'idle' && (
+                <ProgressItem
+                  label={t('codePanel.step.repair')}
+                  status={
+                    repairStatus === 'running'
+                      ? 'running'
+                      : repairStatus === 'done'
+                        ? 'done'
+                        : repairStatus === 'skipped'
+                          ? 'skipped'
+                          : 'failed'
+                  }
+                  error={repairError}
+                />
+              )}
+
+              {finalValidationStatus !== 'idle' && (
+                <ProgressItem
+                  label={t('codePanel.step.finalValidation')}
+                  status={
+                    finalValidationStatus === 'running'
+                      ? 'running'
+                      : finalValidationStatus === 'done'
+                        ? 'done'
+                        : 'failed'
+                  }
+                />
+              )}
             </div>
 
             <div className="mt-auto border-t border-border/50 p-2 shrink-0">
@@ -742,9 +877,83 @@ function CodePanelInner({ generationId }: CodePanelProps) {
                 </div>
               </div>
             )}
+            {(qualityStatusLabel || timing || qualityReport || repairAttempts) && (
+              <div className="border-b border-border/50 bg-muted/30 px-3 py-2 text-[11px] text-muted-foreground shrink-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  {qualityStatusLabel && (
+                    <span className="rounded bg-primary/10 px-1.5 py-0.5 font-medium text-primary">
+                      {t(`codePanel.quality.${qualityStatusLabel}`, {
+                        defaultValue: qualityStatusLabel,
+                      })}
+                    </span>
+                  )}
+                  {typeof timing === 'object' && timing && 'totalMs' in timing && (
+                    <span>
+                      {t('codePanel.quality.totalTime', {
+                        ms: String((timing as { totalMs?: number }).totalMs ?? 0),
+                      })}
+                    </span>
+                  )}
+                  {Array.isArray(repairAttempts) && repairAttempts.length > 0 && (
+                    <span>
+                      {t('codePanel.quality.repairAttempts', {
+                        count: repairAttempts.length,
+                      })}
+                    </span>
+                  )}
+                  {typeof qualityReport === 'object' &&
+                    qualityReport &&
+                    'summary' in qualityReport && (
+                      <span>
+                        {t('codePanel.quality.issueSummary', {
+                          errors: String(
+                            (qualityReport as { summary?: { errorCount?: number } }).summary
+                              ?.errorCount ?? 0,
+                          ),
+                          warnings: String(
+                            (qualityReport as { summary?: { warningCount?: number } }).summary
+                              ?.warningCount ?? 0,
+                          ),
+                        })}
+                      </span>
+                    )}
+                </div>
+                {(repairError || repairIssuePreview.length > 0) && (
+                  <div className="mt-2 rounded-md border border-amber-500/20 bg-amber-500/8 px-2 py-2">
+                    <div className="font-medium text-amber-700">
+                      {t('codePanel.quality.repairDetails')}
+                    </div>
+                    {repairError && <div className="mt-1 text-destructive">{repairError}</div>}
+                    {repairIssuePreview.length > 0 && (
+                      <div className="mt-1 flex flex-col gap-1">
+                        {repairIssuePreview.map((issue, index) => (
+                          <div
+                            key={`${issue.attempt}:${issue.code}:${issue.filePath ?? ''}:${index}`}
+                            className="text-muted-foreground"
+                          >
+                            <span className="font-medium text-foreground">{issue.code}</span>
+                            <span> · {issue.severity}</span>
+                            {issue.filePath && <span> · {issue.filePath}</span>}
+                            {issue.message && <span> · {issue.message}</span>}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
             {history.length > 0 && (
-              <div className="border-b border-border/50 bg-muted/30 px-3 py-1.5 text-[11px] text-muted-foreground shrink-0">
-                {t('codePanel.history.count', { count: history.length })}
+              <div className="flex items-center justify-between gap-2 border-b border-border/50 bg-muted/30 px-3 py-1.5 text-[11px] text-muted-foreground shrink-0">
+                <span>{t('codePanel.history.count', { count: history.length })}</span>
+                <button
+                  type="button"
+                  className="font-medium text-primary hover:underline disabled:text-muted-foreground disabled:no-underline"
+                  onClick={refreshHistory}
+                  disabled={historyLoading}
+                >
+                  {t('tasks.refresh')}
+                </button>
               </div>
             )}
             <div className="border-b border-border/50 bg-card px-1.5 py-1 shrink-0">

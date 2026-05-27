@@ -29,7 +29,10 @@ const jobMocks = vi.hoisted(() => ({
   listCodegenJobs: vi.fn(),
   getCodegenJobDetail: vi.fn(),
   cancelCodegenJob: vi.fn(),
+  deleteCodegenJob: vi.fn(),
   retryCodegenJob: vi.fn(),
+  resumeCodegenJob: vi.fn(),
+  rerunCodegenJobStep: vi.fn(),
   batchCancelCodegenJobs: vi.fn(),
   updateCodegenJobPriority: vi.fn(),
   replayFailedCodegenJobs: vi.fn(),
@@ -41,6 +44,7 @@ const jobMocks = vi.hoisted(() => ({
   updateCodegenProviderConfig: vi.fn(),
   listTaskNotifications: vi.fn(),
   markTaskNotificationRead: vi.fn(),
+  deleteTaskNotification: vi.fn(),
 }));
 
 vi.mock('h3', async () => {
@@ -240,7 +244,10 @@ describe('cloud codegen job routes', () => {
   });
 
   it('lists active codegen jobs by file', async () => {
-    jobMocks.listCodegenJobs.mockResolvedValue([job]);
+    jobMocks.listCodegenJobs.mockResolvedValue({
+      data: [job],
+      page: { total: 1, limit: 10, offset: 0 },
+    });
     h3Mocks.query = { fileId: job.fileId, active: 'true', deadLettered: 'false', limit: '10' };
 
     const handler = (await import('../codegen-jobs/index.get')).default;
@@ -254,24 +261,31 @@ describe('cloud codegen job routes', () => {
       active: true,
       deadLettered: false,
       limit: 10,
+      offset: 0,
     });
-    expect(result.data).toEqual([job]);
+    expect(result).toEqual({
+      data: [job],
+      page: { total: 1, limit: 10, offset: 0 },
+    });
   });
 
-  it('loads, cancels, and retries a job by route id', async () => {
+  it('loads, cancels, deletes, and retries a job by route id', async () => {
     jobMocks.getCodegenJobDetail.mockResolvedValue(job);
     jobMocks.cancelCodegenJob.mockResolvedValue({ ...job, status: 'canceled' });
+    jobMocks.deleteCodegenJob.mockResolvedValue(undefined);
     jobMocks.retryCodegenJob.mockResolvedValue({ ...job, status: 'pending', error: null });
     h3Mocks.params = { id: job.id };
 
     const detailHandler = (await import('../codegen-jobs/[id].get')).default;
     const cancelHandler = (await import('../codegen-jobs/[id]/cancel.post')).default;
+    const deleteHandler = (await import('../codegen-jobs/[id].delete')).default;
     const retryHandler = (await import('../codegen-jobs/[id]/retry.post')).default;
 
     await expect(detailHandler(event)).resolves.toEqual({ data: job });
     await expect(cancelHandler(event)).resolves.toEqual({
       data: expect.objectContaining({ status: 'canceled' }),
     });
+    await expect(deleteHandler(event)).resolves.toBeNull();
     await expect(retryHandler(event)).resolves.toEqual({
       data: expect.objectContaining({ status: 'pending', error: null }),
     });
@@ -285,11 +299,79 @@ describe('cloud codegen job routes', () => {
       userId: user.id,
       jobId: job.id,
     });
+    expect(jobMocks.deleteCodegenJob).toHaveBeenCalledWith({
+      supabase,
+      userId: user.id,
+      jobId: job.id,
+    });
     expect(jobMocks.retryCodegenJob).toHaveBeenCalledWith({
       supabase,
       userId: user.id,
       jobId: job.id,
     });
+    expect(h3Mocks.status).toBe(204);
+  });
+
+  it('resumes a failed job from its latest checkpoint', async () => {
+    jobMocks.resumeCodegenJob.mockResolvedValue({
+      ...job,
+      status: 'pending',
+      error: null,
+    });
+    h3Mocks.params = { id: job.id };
+
+    const handler = (await import('../codegen-jobs/[id]/resume.post')).default;
+    const result = await handler(event);
+
+    expect(jobMocks.resumeCodegenJob).toHaveBeenCalledWith({
+      supabase,
+      userId: user.id,
+      jobId: job.id,
+      stage: undefined,
+    });
+    expect(result.data).toMatchObject({ status: 'pending', error: null });
+  });
+
+  it('re-runs a specific stage for an existing checkpoint', async () => {
+    jobMocks.rerunCodegenJobStep.mockResolvedValue({
+      ...job,
+      status: 'pending',
+      error: null,
+    });
+    h3Mocks.params = { id: job.id };
+    h3Mocks.body = { stage: 'quality_check' };
+
+    const handler = (await import('../codegen-jobs/[id]/rerun-step.post')).default;
+    const result = await handler(event);
+
+    expect(jobMocks.rerunCodegenJobStep).toHaveBeenCalledWith({
+      supabase,
+      userId: user.id,
+      jobId: job.id,
+      stage: 'quality_check',
+      chunkId: undefined,
+    });
+    expect(result.data).toMatchObject({ status: 'pending', error: null });
+  });
+
+  it('rejects chunk stage rerun without a chunk id', async () => {
+    h3Mocks.params = { id: job.id };
+    h3Mocks.body = { stage: 'chunk' };
+
+    const handler = (await import('../codegen-jobs/[id]/rerun-step.post')).default;
+
+    await expect(handler(event)).rejects.toMatchObject({
+      statusCode: 400,
+      data: expect.objectContaining({
+        code: 'validation_error',
+        details: expect.objectContaining({
+          fieldErrors: expect.objectContaining({
+            chunkId: expect.any(Array),
+          }),
+        }),
+      }),
+    });
+    expect(jobMocks.rerunCodegenJobStep).not.toHaveBeenCalled();
   });
 
   it('batch cancels selected jobs', async () => {
@@ -391,7 +473,7 @@ describe('cloud codegen job routes', () => {
       provider: 'openai',
       failureType: 'rate_limit',
       deadLetteredFrom: '2026-05-13T00:00:00.000Z',
-      deadLetteredTo: undefined,
+      summary: false,
     });
     expect(result.data).toBe(overview);
   });
@@ -426,7 +508,7 @@ describe('cloud codegen job routes', () => {
     expect(jobMocks.listCodegenProviderConfigs).toHaveBeenCalledWith({
       supabase: serviceSupabase,
       provider: undefined,
-      limit: 50,
+      limit: 10,
       offset: 0,
     });
     expect(jobMocks.updateCodegenProviderConfig).toHaveBeenCalledWith({
@@ -515,19 +597,29 @@ describe('cloud codegen job routes', () => {
       readAt: null,
       createdAt: '2026-05-13T08:00:00.000Z',
     };
-    jobMocks.listTaskNotifications.mockResolvedValue([notification]);
+    jobMocks.listTaskNotifications.mockResolvedValue({
+      data: [notification],
+      page: { total: 1, limit: 10, offset: 0 },
+    });
     jobMocks.markTaskNotificationRead.mockResolvedValue({
       ...notification,
       readAt: '2026-05-13T08:01:00.000Z',
     });
+    jobMocks.deleteTaskNotification.mockResolvedValue(undefined);
     h3Mocks.params = { id: notification.id };
 
     const listHandler = (await import('../task-notifications/index.get')).default;
     const readHandler = (await import('../task-notifications/[id]/read.post')).default;
+    const deleteHandler = (await import('../task-notifications/[id].delete')).default;
 
-    await expect(listHandler(event)).resolves.toEqual({ data: [notification] });
+    await expect(listHandler(event)).resolves.toEqual({
+      data: [notification],
+      page: { total: 1, limit: 10, offset: 0 },
+    });
     await expect(readHandler(event)).resolves.toEqual({
       data: expect.objectContaining({ readAt: '2026-05-13T08:01:00.000Z' }),
     });
+    await expect(deleteHandler(event)).resolves.toBeNull();
+    expect(h3Mocks.status).toBe(204);
   });
 });
