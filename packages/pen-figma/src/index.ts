@@ -6,6 +6,7 @@ export {
   figmaToPenDocument,
   figmaAllPagesToPenDocument,
   getFigmaPages,
+  getFigmaPageLayers,
   figmaNodeChangesToPenNodes,
 } from './figma-node-mapper.js';
 
@@ -24,3 +25,4 @@ export { setIconLookup } from './figma-node-converters.js';
 
 // Types
 export type { FigmaDecodedFile, FigmaImportLayoutMode } from './figma-types.js';
+export type { FigmaLayerSummary, FigmaToPenDocumentOptions } from './figma-node-mapper.js';

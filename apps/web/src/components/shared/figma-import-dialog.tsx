@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { X, Upload, AlertCircle, Loader2, FileUp } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { useDocumentStore } from '@/stores/document-store';
 import { useCanvasStore } from '@/stores/canvas-store';
 import { zoomToFitContent, getSkiaEngineRef } from '@/canvas/skia-engine-ref';
@@ -10,11 +11,20 @@ import {
   figmaToPenDocument,
   figmaAllPagesToPenDocument,
   getFigmaPages,
+  getFigmaPageLayers,
 } from '@/services/figma/figma-node-mapper';
 import { resolveImageBlobs } from '@/services/figma/figma-image-resolver';
 import type { FigmaDecodedFile, FigmaImportLayoutMode } from '@/services/figma/figma-types';
+import type { FigmaLayerSummary } from '@/services/figma/figma-node-mapper';
 
-type ImportState = 'idle' | 'parsing' | 'page-select' | 'converting' | 'done' | 'error';
+type ImportState =
+  | 'idle'
+  | 'parsing'
+  | 'page-select'
+  | 'layer-select'
+  | 'converting'
+  | 'done'
+  | 'error';
 
 interface FigmaImportDialogProps {
   open: boolean;
@@ -30,6 +40,9 @@ export default function FigmaImportDialog({ open, onClose }: FigmaImportDialogPr
   const [decoded, setDecoded] = useState<FigmaDecodedFile | null>(null);
   const [fileName, setFileName] = useState('');
   const [pages, setPages] = useState<{ id: string; name: string; childCount: number }[]>([]);
+  const [selectedPageIndex, setSelectedPageIndex] = useState<number | null>(null);
+  const [pageLayers, setPageLayers] = useState<FigmaLayerSummary[]>([]);
+  const [selectedLayerIds, setSelectedLayerIds] = useState<Set<string>>(() => new Set());
   const [isDragging, setIsDragging] = useState(false);
   const [layoutMode, setLayoutMode] = useState<FigmaImportLayoutMode>('preserve');
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -72,9 +85,17 @@ export default function FigmaImportDialog({ open, onClose }: FigmaImportDialogPr
           return;
         }
 
-        // Always 显示页面选择让用户选择布局模式
         setPages(figmaPages);
-        setState('page-select');
+        if (figmaPages.length === 1) {
+          const layers = getFigmaPageLayers(decodedFile, 0);
+          setSelectedPageIndex(0);
+          setPageLayers(layers);
+          setSelectedLayerIds(new Set(layers.map((layer) => layer.id)));
+          setState(layers.length > 0 ? 'layer-select' : 'page-select');
+        } else {
+          // Always 显示页面选择让用户选择布局模式
+          setState('page-select');
+        }
       } catch (err) {
         console.error('[Figma Import] Parse error:', err);
         setError(err instanceof Error ? err.message : t('figma.parseFailed'));
@@ -94,6 +115,9 @@ export default function FigmaImportDialog({ open, onClose }: FigmaImportDialogPr
       setDecoded(null);
       setFileName('');
       setPages([]);
+      setSelectedPageIndex(null);
+      setPageLayers([]);
+      setSelectedLayerIds(new Set());
       setLayoutMode('preserve');
 
       const pending = useCanvasStore.getState().pendingFigmaFile;
@@ -105,7 +129,12 @@ export default function FigmaImportDialog({ open, onClose }: FigmaImportDialogPr
   }, [open, processFile]);
 
   const convertAndLoad = useCallback(
-    async (decodedFile: FigmaDecodedFile, name: string, pageIndex: number | 'all') => {
+    async (
+      decodedFile: FigmaDecodedFile,
+      name: string,
+      pageIndex: number | 'all',
+      topLevelNodeIds?: string[],
+    ) => {
       setState('converting');
       setProgress(60);
 
@@ -119,7 +148,7 @@ export default function FigmaImportDialog({ open, onClose }: FigmaImportDialogPr
           imageBlobs,
         } = pageIndex === 'all'
           ? figmaAllPagesToPenDocument(decodedFile, name, layoutMode)
-          : figmaToPenDocument(decodedFile, name, pageIndex, layoutMode);
+          : figmaToPenDocument(decodedFile, name, pageIndex, layoutMode, { topLevelNodeIds });
         setProgress(80);
 
         // Resolve 图像 blob 和基于哈希的图像到所有页面的数据 URLs
@@ -181,10 +210,49 @@ export default function FigmaImportDialog({ open, onClose }: FigmaImportDialogPr
   const handlePageSelect = useCallback(
     (pageIndex: number | 'all') => {
       if (!decoded) return;
-      convertAndLoad(decoded, fileName, pageIndex);
+      if (pageIndex === 'all') {
+        convertAndLoad(decoded, fileName, pageIndex);
+        return;
+      }
+
+      const layers = getFigmaPageLayers(decoded, pageIndex);
+      if (layers.length === 0) {
+        convertAndLoad(decoded, fileName, pageIndex);
+        return;
+      }
+
+      setSelectedPageIndex(pageIndex);
+      setPageLayers(layers);
+      setSelectedLayerIds(new Set(layers.map((layer) => layer.id)));
+      setState('layer-select');
     },
     [decoded, fileName, convertAndLoad],
   );
+
+  const toggleLayer = useCallback((layerId: string) => {
+    setSelectedLayerIds((current) => {
+      const next = new Set(current);
+      if (next.has(layerId)) next.delete(layerId);
+      else next.add(layerId);
+      return next;
+    });
+  }, []);
+
+  const importSelectedLayers = useCallback(() => {
+    if (!decoded || selectedPageIndex === null || selectedLayerIds.size === 0) return;
+    const layerIds = pageLayers
+      .filter((layer) => selectedLayerIds.has(layer.id))
+      .map((layer) => layer.id);
+    convertAndLoad(decoded, fileName, selectedPageIndex, layerIds);
+  }, [convertAndLoad, decoded, fileName, pageLayers, selectedLayerIds, selectedPageIndex]);
+
+  const selectAllLayers = useCallback(() => {
+    setSelectedLayerIds(new Set(pageLayers.map((layer) => layer.id)));
+  }, [pageLayers]);
+
+  const clearLayerSelection = useCallback(() => {
+    setSelectedLayerIds(new Set());
+  }, []);
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -307,7 +375,7 @@ export default function FigmaImportDialog({ open, onClose }: FigmaImportDialogPr
                 <p className="text-xs text-muted-foreground mb-3">
                   {t('figma.selectPage', { count: pages.length })}
                 </p>
-                <div className="max-h-48 overflow-y-auto space-y-1 mb-3">
+                <div className="max-h-48 overflow-y-auto flex flex-col gap-1 mb-3">
                   {pages.map((page, i) => (
                     <button
                       key={page.id}
@@ -335,6 +403,92 @@ export default function FigmaImportDialog({ open, onClose }: FigmaImportDialogPr
                 </Button>
               </>
             )}
+          </div>
+        )}
+
+        {/* Layer selection */}
+        {state === 'layer-select' && (
+          <div className="py-2">
+            <div className="mb-3">
+              <p className="text-xs text-muted-foreground mb-2">{t('figma.layoutMode')}</p>
+              <div className="flex gap-1">
+                <button
+                  className={`flex-1 px-3 py-1.5 rounded text-xs transition-colors ${
+                    layoutMode === 'preserve'
+                      ? 'bg-primary text-primary-foreground'
+                      : 'bg-secondary text-foreground hover:bg-secondary/80'
+                  }`}
+                  onClick={() => setLayoutMode('preserve')}
+                >
+                  {t('figma.preserveLayout')}
+                </button>
+                <button
+                  className="flex-1 px-3 py-1.5 rounded text-xs transition-colors bg-secondary text-muted-foreground cursor-not-allowed opacity-50"
+                  disabled
+                  title={t('figma.comingSoon')}
+                >
+                  {t('figma.autoLayout')}
+                </button>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between gap-3 mb-2">
+              <div className="min-w-0">
+                <p className="text-xs font-medium text-foreground">{t('figma.selectLayers')}</p>
+                <p className="text-[10px] text-muted-foreground truncate">
+                  {pages[selectedPageIndex ?? 0]?.name} ·{' '}
+                  {t('figma.selectedLayers', {
+                    selected: selectedLayerIds.size,
+                    total: pageLayers.length,
+                  })}
+                </p>
+              </div>
+              <div className="flex shrink-0 gap-1">
+                <Button variant="ghost" size="xs" onClick={selectAllLayers}>
+                  {t('common.selectAll')}
+                </Button>
+                <Button variant="ghost" size="xs" onClick={clearLayerSelection}>
+                  {t('figma.clearSelection')}
+                </Button>
+              </div>
+            </div>
+
+            <div className="max-h-56 overflow-y-auto rounded-md border border-border bg-background/40">
+              {pageLayers.map((layer) => (
+                <label
+                  key={layer.id}
+                  className="flex cursor-pointer items-center gap-3 border-b border-border/60 px-3 py-2 last:border-b-0 hover:bg-secondary/60"
+                >
+                  <Checkbox
+                    aria-label={layer.name}
+                    checked={selectedLayerIds.has(layer.id)}
+                    onCheckedChange={() => toggleLayer(layer.id)}
+                  />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm text-foreground">{layer.name}</span>
+                    <span className="block truncate text-[10px] text-muted-foreground">
+                      {layer.type ?? 'Layer'} · {t('figma.layers', { count: layer.childCount })}
+                    </span>
+                  </span>
+                </label>
+              ))}
+            </div>
+
+            <div className="flex gap-2 mt-3">
+              {pages.length > 1 && (
+                <Button variant="secondary" size="sm" onClick={() => setState('page-select')}>
+                  {t('figma.backToPages')}
+                </Button>
+              )}
+              <Button
+                size="sm"
+                className="flex-1"
+                onClick={importSelectedLayers}
+                disabled={selectedLayerIds.size === 0}
+              >
+                {t('figma.importSelected')}
+              </Button>
+            </div>
           </div>
         )}
 

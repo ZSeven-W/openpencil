@@ -16,6 +16,18 @@ import {
   collectImageBlobs,
 } from './figma-node-converters';
 
+export interface FigmaLayerSummary {
+  id: string;
+  name: string;
+  type: FigmaNodeChange['type'];
+  childCount: number;
+  visible: boolean;
+}
+
+export interface FigmaToPenDocumentOptions {
+  topLevelNodeIds?: string[];
+}
+
 /**
  * Resolve
  * 样式引用（填充、描边、文本、效果）到内联属性。 Figma 将样式存储为单独的节点 (styleType='FILL'|'TEXT'|'EFFECT'
@@ -97,6 +109,7 @@ export function figmaToPenDocument(
   fileName: string,
   pageIndex: number = 0,
   layoutMode: FigmaImportLayoutMode = 'openpencil',
+  options: FigmaToPenDocumentOptions = {},
 ): { document: PenDocument; warnings: string[]; imageBlobs: Map<number, Uint8Array> } {
   const warnings: string[] = [];
 
@@ -124,10 +137,11 @@ export function figmaToPenDocument(
     };
   }
 
+  const pageForConversion = filterTopLevelNodes(page, options.topLevelNodeIds);
   const componentMap = new Map<string, string>();
   const symbolTree = new Map<string, TreeNode>();
   let idCounter = 1;
-  collectComponents(page, componentMap, () => `fig_${idCounter++}`);
+  collectComponents(pageForConversion, componentMap, () => `fig_${idCounter++}`);
   // Collect SYMBOL tree nodes from ALL canvases (including Figma's internal canvas
   // where master components live) so INSTANCE nodes can inline their content.
   collectSymbolTree(tree, symbolTree);
@@ -141,7 +155,7 @@ export function figmaToPenDocument(
     layoutMode,
   };
 
-  const children = convertChildren(page, ctx);
+  const children = convertChildren(pageForConversion, ctx);
   const imageBlobs = collectImageBlobs(decoded.blobs);
 
   const pageName = page.figma.name ?? 'Page 1';
@@ -260,6 +274,43 @@ export function getFigmaPages(
     name: c.figma.name ?? 'Page',
     childCount: c.children.length,
   }));
+}
+
+/**
+ * Get a page's top-level layers before conversion so callers can import only
+ * the frames/sections/groups they need from large Figma files.
+ */
+export function getFigmaPageLayers(
+  decoded: FigmaDecodedFile,
+  pageIndex: number = 0,
+): FigmaLayerSummary[] {
+  const tree = buildTree(decoded.nodeChanges);
+  if (!tree) return [];
+
+  const pages = tree.children.filter(isUserPage);
+  const page = pages[pageIndex] ?? pages[0];
+  if (!page) return [];
+
+  return page.children.map((child) => ({
+    id: guidToString(child.figma.guid!),
+    name: child.figma.name ?? child.figma.type ?? 'Layer',
+    type: child.figma.type,
+    childCount: child.children.length,
+    visible: child.figma.visible !== false,
+  }));
+}
+
+function filterTopLevelNodes(page: TreeNode, nodeIds?: string[]): TreeNode {
+  if (!nodeIds) return page;
+
+  const selected = new Set(nodeIds);
+  return {
+    figma: page.figma,
+    children: page.children.filter((child) => {
+      if (!child.figma.guid) return false;
+      return selected.has(guidToString(child.figma.guid));
+    }),
+  };
 }
 
 /**
