@@ -10,8 +10,7 @@ use crate::test_support::{CountingLlm, ScriptResponse, ScriptedLlm};
 use futures::executor::block_on;
 use op_editor_core::{EditorState, PenNodeExt};
 
-const NODE_JSON: &str =
-    r#"[{"type":"frame","id":"h1","name":"H","x":0,"y":0,"width":100,"height":100,"children":[]}]"#;
+const NODE_JSON: &str = r#"[{"type":"frame","id":"h1","name":"H","x":0,"y":0,"width":100,"height":100,"children":[{"type":"text","id":"h-title","content":"H","fontSize":18}]}]"#;
 
 /// A default `DesignRequest` (concurrency overridden per-test as needed).
 fn make_req() -> crate::types::DesignRequest {
@@ -303,8 +302,8 @@ fn concurrent_replay_is_in_plan_index_order() {
     let req = make_req();
     let groups = group_subtasks_by_screen(&plan.subtasks);
 
-    let s0_json = r#"[{"type":"frame","id":"s0-node","name":"S0","x":0,"y":0,"width":10,"height":10,"children":[]}]"#;
-    let s1_json = r#"[{"type":"frame","id":"s1-node","name":"S1","x":0,"y":0,"width":20,"height":20,"children":[]}]"#;
+    let s0_json = r#"[{"type":"frame","id":"s0-node","name":"S0","x":0,"y":0,"width":10,"height":10,"children":[{"type":"text","id":"s0-title","content":"S0","fontSize":18}]}]"#;
+    let s1_json = r#"[{"type":"frame","id":"s1-node","name":"S1","x":0,"y":0,"width":20,"height":20,"children":[{"type":"text","id":"s1-title","content":"S1","fontSize":18}]}]"#;
 
     let llm = ScriptedLlm::new(vec![
         ScriptResponse::Text(s0_json.into()),

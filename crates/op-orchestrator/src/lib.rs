@@ -33,6 +33,7 @@ pub mod variables;
 
 pub mod append;
 pub mod cleanup;
+pub(crate) mod cleanup_typography;
 pub mod concurrent;
 pub mod prompt;
 pub mod run;

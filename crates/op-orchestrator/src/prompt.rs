@@ -171,7 +171,7 @@ fn resolve_generation_skills(message: &str) -> Vec<op_ai_skills::ResolvedSkill> 
 ///   `minimalSkills` param in `executeSubAgent` (lines 428-431).
 pub fn build_subagent_prompt(
     subtask: &Subtask,
-    _plan: &OrchestratorPlan,
+    plan: &OrchestratorPlan,
     req: &DesignRequest,
     abort: AbortFlag,
     reduced_complexity: bool,
@@ -191,11 +191,81 @@ pub fn build_subagent_prompt(
     system_prompt.push_str("\n\n");
     system_prompt.push_str(NODE_FORMAT);
 
+    let section_list = plan
+        .subtasks
+        .iter()
+        .map(|st| {
+            let marker = if st.id == subtask.id { " <- YOU" } else { "" };
+            let elements = st
+                .elements
+                .as_ref()
+                .map(|items| format!(" [{items}]"))
+                .unwrap_or_default();
+            format!(
+                "- {}{} ({:.0}x{:.0}){}",
+                st.label, elements, st.region.width, st.region.height, marker
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    let my_elements = subtask
+        .elements
+        .as_ref()
+        .map(|items| {
+            format!("\nYOUR ELEMENTS: {items}\nDo NOT generate elements listed in other sections.")
+        })
+        .unwrap_or_default();
+
     let mut user_prompt = format!(
-        "Overall design: {}\n\nGenerate the section \"{}\" \
-         (区块 id 前缀 `{}-`). Target region: {:.0}x{:.0} px.\nPalette: (default)",
-        req.prompt, subtask.label, subtask.id_prefix, subtask.region.width, subtask.region.height,
+        "Page sections:\n{}\n\n\
+Generate ONLY \"{}\" (~{:.0}px of content).{}\n\
+Overall design: {}\n\n\
+CRITICAL LAYOUT CONSTRAINTS:\n\
+- Root frame: id=\"{}-root\", width=\"fill_container\", height=\"fit_content\", layout=\"vertical\". NEVER use fixed pixel height on root -- let content determine height.\n\
+- Target content amount: ~{:.0}px tall. Generate enough elements to fill this area.\n\
+- ALL nodes must be descendants of the root frame. No floating/orphan nodes.\n\
+- NEVER set x or y on children inside layout frames.\n\
+- Use \"fill_container\" for children that stretch, \"fit_content\" for shrink-wrap sizing.\n\
+- SECTION BACKGROUND: do NOT set fill on your section root frame. Only set fill on cards, buttons, chips, badges, and other visually distinct components.\n\
+- TYPOGRAPHY HIERARCHY: Do NOT make every text bold. Use 700 only for primary headings, 600 for buttons/key labels, 500 for short chips/nav labels, and 400 for body text, placeholders, subtitles, metadata, and captions.\n\
+- ICONS: use icon_font with lucide iconFontName; never use path nodes for icons.\n\
+- IDs prefix=\"{}-\". Output ONLY the JSON array.",
+        section_list,
+        subtask.label,
+        subtask.region.height,
+        my_elements,
+        req.prompt,
+        subtask.id_prefix,
+        subtask.region.height,
+        subtask.id_prefix,
     );
+
+    if plan.root_frame.width <= 480.0 {
+        user_prompt.push_str(
+            "\n\nMOBILE STATUS BAR: A status bar (time, signal, wifi, battery) has already been pre-inserted as the first child of the root page frame. Do NOT generate any status bar, system chrome, or OS-level indicators. Start your content directly.",
+        );
+        user_prompt.push_str(
+            "\n\nNO PHONE MOCKUP WRAPPER: The whole design IS a mobile screen. Do NOT wrap your section in a phone-shaped frame. Your section root must use width=\"fill_container\" and contain only this section's content.",
+        );
+        user_prompt.push_str(
+            "\n\nMOBILE WIDTH SAFETY: Every visible child must stay inside the 390px screen width. Do not create horizontal rows, chips, cards, or buttons that overflow outside the root; wrap, shrink, or clip horizontal lists instead.",
+        );
+        user_prompt.push_str(
+            "\nMOBILE SECTION INSETS: Every non-chrome section root must keep horizontal padding of about 24px. Headings, cards, chips, and lists must not touch the screen edge. Use width=\"fill_container\" inside padded sections instead of fixed 390px widths.",
+        );
+        user_prompt.push_str(
+            "\nMOBILE SEARCH ACTIONS: Search filter/sliders actions must be visible square controls, not loose white icons. Put them in a 52-56px by 52-56px rounded button using the accent color with a high-contrast icon.",
+        );
+        user_prompt.push_str(
+            "\nNO BLANK PLACEHOLDERS: Do not use empty gray image placeholders in app UI. If no real image asset is available, use a square colored food/icon tile with icon_font instead.",
+        );
+        user_prompt.push_str(
+            "\nMOBILE ROW STRUCTURE: For category chips, segmented controls, tab bars, and bottom navigation, use either multiple horizontal rows inside a vertical wrapper or equal-width children in a fill_container row. Never create one fit_content horizontal row whose total child width can exceed the screen.",
+        );
+        user_prompt.push_str(
+            "\nMOBILE NAV SURFACE: Bottom navigation and tab bars must sit on the current page palette, full width at the bottom, 62-72px tall. Do not create a separate white footer band, oversized rounded pill, or extra side margins. Never use black or safe-dark fills for nav bars unless the whole root frame background is dark.",
+        );
+    }
 
     // Port of orchestrator-sub-agent.ts:739-748 — APPEND MODE prompt injection.
     if let Some(labels) = subtask.existing_section_labels.as_ref() {
@@ -340,6 +410,68 @@ mod tests {
         assert!(cr.user_prompt.contains("Hero"));
         assert!(cr.user_prompt.contains("hero-"));
         assert!(cr.system_prompt.contains("PenNode"));
+    }
+
+    #[test]
+    fn subagent_prompt_carries_ts_layout_contract() {
+        let mut plan = plan();
+        plan.root_frame.width = 390.0;
+        plan.subtasks = vec![
+            Subtask {
+                id: "header".into(),
+                label: "Header".into(),
+                region: Region {
+                    width: 390.0,
+                    height: 96.0,
+                },
+                id_prefix: "header".into(),
+                parent_frame_id: Some("page".into()),
+                elements: Some("delivery location".into()),
+                screen: None,
+                generated_root_id: None,
+                existing_section_labels: None,
+            },
+            Subtask {
+                id: "categories".into(),
+                label: "Food Categories".into(),
+                region: Region {
+                    width: 390.0,
+                    height: 112.0,
+                },
+                id_prefix: "categories".into(),
+                parent_frame_id: Some("page".into()),
+                elements: Some("category chips".into()),
+                screen: None,
+                generated_root_id: None,
+                existing_section_labels: None,
+            },
+        ];
+        let cr = build_subagent_prompt(
+            &plan.subtasks[1],
+            &plan,
+            &req(),
+            AbortFlag::new(),
+            false,
+            false,
+        );
+
+        assert!(cr.user_prompt.contains("Page sections:"));
+        assert!(cr.user_prompt.contains("Food Categories [category chips]"));
+        assert!(cr
+            .user_prompt
+            .contains("Root frame: id=\"categories-root\""));
+        assert!(cr.user_prompt.contains("width=\"fill_container\""));
+        assert!(cr.user_prompt.contains("height=\"fit_content\""));
+        assert!(cr.user_prompt.contains("Generate enough elements"));
+        assert!(cr.user_prompt.contains("MOBILE STATUS BAR"));
+        assert!(cr.user_prompt.contains("time, signal, wifi, battery"));
+        assert!(cr.user_prompt.contains("NO PHONE MOCKUP WRAPPER"));
+        assert!(cr.user_prompt.contains("MOBILE WIDTH SAFETY"));
+        assert!(cr.user_prompt.contains("MOBILE SECTION INSETS"));
+        assert!(cr.user_prompt.contains("MOBILE SEARCH ACTIONS"));
+        assert!(cr.user_prompt.contains("NO BLANK PLACEHOLDERS"));
+        assert!(cr.user_prompt.contains("MOBILE NAV SURFACE"));
+        assert!(cr.user_prompt.contains("TYPOGRAPHY HIERARCHY"));
     }
 
     #[test]

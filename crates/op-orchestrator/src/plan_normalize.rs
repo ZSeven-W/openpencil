@@ -7,7 +7,7 @@
 use crate::dashboard_columns::{
     infer_dashboard_section_height, infer_dashboard_section_width, is_dashboard_like_prompt,
 };
-use crate::plan::OrchestratorPlan;
+use crate::plan::{OrchestratorPlan, Region, Subtask};
 use crate::types::DesignRequest;
 
 /// 规范化产出的派生信息。
@@ -19,12 +19,96 @@ pub struct NormInfo {
 
 /// 移动端宽度上限(含)—— ≤ 此值视为移动端单屏。
 const MOBILE_MAX_WIDTH: f64 = 480.0;
+const MOBILE_DEFAULT_HEIGHT: f64 = 812.0;
 
 /// subtask 的 id / label 命中即视为"状态栏"区块 —— 移动端由
 /// scaffold 注入固定状态栏,plan 里若带状态栏 subtask 则剔除。
 fn is_status_bar_subtask(id: &str, label: &str) -> bool {
     let hay = format!("{} {}", id.to_lowercase(), label.to_lowercase());
     hay.contains("status bar") || hay.contains("status-bar") || hay.contains("statusbar")
+}
+
+fn is_status_bar_fragment(fragment: &str) -> bool {
+    let hay = fragment.to_lowercase();
+    hay.contains("status bar")
+        || hay.contains("status-bar")
+        || hay.contains("statusbar")
+        || hay.contains("system chrome")
+        || hay.contains("os-level indicators")
+}
+
+fn strip_status_bar_fragments(text: &str) -> Option<String> {
+    let kept: Vec<&str> = text
+        .split(',')
+        .map(str::trim)
+        .filter(|fragment| !fragment.is_empty() && !is_status_bar_fragment(fragment))
+        .collect();
+    if kept.is_empty() {
+        None
+    } else {
+        Some(kept.join(", "))
+    }
+}
+
+fn prompt_requests_bottom_nav(prompt: &str) -> bool {
+    let hay = prompt.to_lowercase();
+    let negated = hay.contains("no bottom nav")
+        || hay.contains("without bottom nav")
+        || hay.contains("without bottom navigation")
+        || hay.contains("不要底部导航")
+        || hay.contains("不需要底部导航");
+    if negated {
+        return false;
+    }
+    hay.contains("bottom nav")
+        || hay.contains("bottom navigation")
+        || hay.contains("bottom tab")
+        || hay.contains("bottom-tab")
+        || hay.contains("tab bar")
+        || hay.contains("tabbar")
+        || hay.contains("底部导航")
+        || hay.contains("底栏")
+}
+
+fn is_bottom_nav_subtask(st: &Subtask) -> bool {
+    let hay = format!(
+        "{} {} {}",
+        st.id.to_lowercase(),
+        st.label.to_lowercase(),
+        st.elements.as_deref().unwrap_or_default().to_lowercase()
+    );
+    hay.contains("bottom nav")
+        || hay.contains("bottom-navigation")
+        || hay.contains("bottom navigation")
+        || hay.contains("bottom tab")
+        || hay.contains("bottom-tab")
+        || hay.contains("tab bar")
+        || hay.contains("tabbar")
+        || hay.contains("bottom-tab-bar")
+}
+
+fn ensure_requested_bottom_nav_subtask(plan: &mut OrchestratorPlan, req: &DesignRequest) {
+    if !prompt_requests_bottom_nav(&req.prompt) || plan.subtasks.iter().any(is_bottom_nav_subtask) {
+        return;
+    }
+
+    plan.subtasks.push(Subtask {
+        id: "bottom-navigation".into(),
+        label: "Bottom Navigation".into(),
+        region: Region {
+            width: plan.root_frame.width,
+            height: 78.0,
+        },
+        id_prefix: String::new(),
+        parent_frame_id: None,
+        elements: Some(
+            "bottom tab bar with Home, Search, Orders, Likes, Account; icon plus label tabs; role bottom-tab-bar; light surface matching the page"
+                .into(),
+        ),
+        screen: None,
+        generated_root_id: None,
+        existing_section_labels: None,
+    });
 }
 
 /// 就地规范化 `plan`:
@@ -39,8 +123,24 @@ pub fn normalize(plan: &mut OrchestratorPlan, req: &DesignRequest) -> NormInfo {
     let is_mobile = plan.root_frame.width <= MOBILE_MAX_WIDTH;
 
     if is_mobile {
+        plan.root_frame.layout = Some("vertical".into());
+        plan.root_frame.gap = Some(0.0);
+        plan.root_frame.padding = Some(0.0);
+        if plan.root_frame.height <= 0.0 {
+            plan.root_frame.height = MOBILE_DEFAULT_HEIGHT;
+        }
         plan.subtasks
             .retain(|st| !is_status_bar_subtask(&st.id, &st.label));
+        for st in &mut plan.subtasks {
+            if let Some(elements) = st.elements.as_deref() {
+                st.elements = strip_status_bar_fragments(elements);
+            }
+            if is_bottom_nav_subtask(st) {
+                st.region.width = plan.root_frame.width;
+                st.region.height = 78.0;
+            }
+        }
+        ensure_requested_bottom_nav_subtask(plan, req);
     }
 
     let root_width = plan.root_frame.width;
@@ -76,8 +176,12 @@ mod tests {
     use crate::plan::{OrchestratorPlan, Region, RootFrameSpec, Subtask};
 
     fn req() -> DesignRequest {
+        req_with_prompt("x")
+    }
+
+    fn req_with_prompt(prompt: &str) -> DesignRequest {
         DesignRequest {
-            prompt: "x".into(),
+            prompt: prompt.into(),
             model: None,
             provider: None,
             design_md: None,
@@ -145,6 +249,36 @@ mod tests {
     }
 
     #[test]
+    fn normalize_mobile_forces_vertical_root_layout() {
+        let mut p = plan(390.0, vec![subtask("hero", "Hero")]);
+        p.root_frame.layout = Some("none".into());
+        p.root_frame.gap = Some(12.0);
+        p.root_frame.padding = Some(16.0);
+
+        normalize(&mut p, &req());
+
+        assert_eq!(p.root_frame.layout.as_deref(), Some("vertical"));
+        assert_eq!(p.root_frame.gap, Some(0.0));
+        assert_eq!(p.root_frame.padding, Some(0.0));
+    }
+
+    #[test]
+    fn normalize_mobile_zero_height_uses_default_viewport() {
+        let mut p = plan(390.0, vec![subtask("hero", "Hero")]);
+        p.root_frame.height = 0.0;
+        normalize(&mut p, &req());
+        assert_eq!(p.root_frame.height, 812.0);
+    }
+
+    #[test]
+    fn normalize_mobile_preserves_positive_height() {
+        let mut p = plan(390.0, vec![subtask("hero", "Hero")]);
+        p.root_frame.height = 844.0;
+        normalize(&mut p, &req());
+        assert_eq!(p.root_frame.height, 844.0);
+    }
+
+    #[test]
     fn normalize_strips_status_bar_subtask_on_mobile() {
         let mut p = plan(
             390.0,
@@ -156,6 +290,33 @@ mod tests {
     }
 
     #[test]
+    fn normalize_strips_status_bar_mentions_from_mobile_subtask_elements() {
+        let mut st = subtask("delivery-header", "Delivery Header");
+        st.region.width = 390.0;
+        st.region.height = 118.0;
+        st.elements = Some(
+            "built-in mobile status bar, Brooklyn delivery location row, dropdown chevron".into(),
+        );
+        let mut p = plan(390.0, vec![st]);
+        p.root_frame.height = 844.0;
+
+        normalize(&mut p, &req_with_prompt("mobile food app"));
+
+        let elements = p.subtasks[0]
+            .elements
+            .as_deref()
+            .expect("elements should remain");
+        assert!(
+            !elements.to_lowercase().contains("status bar"),
+            "mobile subtask elements must not contradict the built-in status bar rule"
+        );
+        assert!(
+            elements.contains("Brooklyn delivery location row"),
+            "non-status-bar element fragments should be preserved"
+        );
+    }
+
+    #[test]
     fn normalize_keeps_status_bar_subtask_on_desktop() {
         // 桌面端不剔除(只有移动端 scaffold 注入固定状态栏)。
         let mut p = plan(
@@ -164,6 +325,86 @@ mod tests {
         );
         normalize(&mut p, &req());
         assert_eq!(p.subtasks.len(), 2);
+    }
+
+    #[test]
+    fn normalize_adds_requested_bottom_nav_subtask_on_mobile() {
+        let mut p = plan(
+            390.0,
+            vec![
+                subtask("header", "Delivery Header"),
+                subtask("popular", "Popular Restaurants"),
+            ],
+        );
+        normalize(
+            &mut p,
+            &req_with_prompt("mobile food delivery screen with bottom navigation bar"),
+        );
+
+        let nav = p
+            .subtasks
+            .iter()
+            .find(|st| st.id == "bottom-navigation")
+            .expect("normalization should append missing bottom nav");
+        assert_eq!(nav.parent_frame_id.as_deref(), Some("root"));
+        assert_eq!(nav.id_prefix, "bottom-navigation");
+        assert_eq!(nav.region.width, 390.0);
+        assert!(nav
+            .elements
+            .as_deref()
+            .unwrap_or_default()
+            .contains("bottom-tab-bar"));
+    }
+
+    #[test]
+    fn normalize_does_not_duplicate_existing_bottom_nav_subtask() {
+        let mut p = plan(
+            390.0,
+            vec![
+                subtask("header", "Delivery Header"),
+                subtask("bottom-tabs", "Bottom Tab Bar"),
+            ],
+        );
+        normalize(
+            &mut p,
+            &req_with_prompt("mobile food delivery screen with bottom navigation bar"),
+        );
+
+        let count = p
+            .subtasks
+            .iter()
+            .filter(|st| st.label.contains("Bottom"))
+            .count();
+        assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn normalize_mobile_bottom_nav_region_to_bar_size() {
+        let mut st = subtask("bottom-nav", "Bottom Navigation");
+        st.region.width = 260.0;
+        st.region.height = 456.0;
+        st.elements = Some("bottom navigation tabs".into());
+        let mut p = plan(390.0, vec![st]);
+
+        normalize(
+            &mut p,
+            &req_with_prompt("mobile food app with bottom navigation"),
+        );
+
+        let nav = &p.subtasks[0];
+        assert_eq!(nav.region.width, 390.0);
+        assert_eq!(nav.region.height, 78.0);
+    }
+
+    #[test]
+    fn normalize_does_not_add_bottom_nav_on_desktop() {
+        let mut p = plan(1200.0, vec![subtask("content", "Content")]);
+        normalize(
+            &mut p,
+            &req_with_prompt("desktop dashboard with bottom navigation bar"),
+        );
+
+        assert!(p.subtasks.iter().all(|st| st.id != "bottom-navigation"));
     }
 
     // -----------------------------------------------------------------------
