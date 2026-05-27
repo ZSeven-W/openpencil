@@ -12,7 +12,9 @@ use crate::plan::{OrchestratorPlan, Subtask};
 use crate::prompt::build_subagent_prompt;
 use crate::types::{AbortFlag, DesignRequest, DocSink, LlmChunk, LlmClient, SubtaskOutcome};
 use futures::StreamExt;
-use op_editor_core::{EditorCommand, NodeId};
+use jian_ops_schema::node::PenNode;
+use jian_ops_schema::sizing::{SizingBehavior, SizingKeyword};
+use op_editor_core::{EditorCommand, NodeId, PenNodeExt};
 
 /// 执行一个 subtask。总是返回 [`SubtaskOutcome`];调用方据
 /// `node_count` 决定继续/停止。
@@ -67,10 +69,14 @@ pub async fn run_subtask(
     }
 
     // 解析成 PenNode 树。
-    let nodes = match parse_nodes(&text) {
+    let mut nodes = match parse_nodes(&text) {
         Ok(n) => n,
         Err(e) => return fail(e.to_string()),
     };
+    if is_blank_container_forest(&nodes) {
+        return fail("blank container root produced no content nodes".into());
+    }
+    normalize_section_roots_for_parent_layout(&mut nodes);
     let node_count = nodes.len();
 
     // 经 DocSink 发 InsertSubtree。
@@ -90,6 +96,35 @@ pub async fn run_subtask(
     }
 }
 
+fn is_blank_container_forest(nodes: &[PenNode]) -> bool {
+    !nodes.iter().any(has_content_node)
+}
+
+fn has_content_node(node: &PenNode) -> bool {
+    match node.children() {
+        Some(children) if !children.is_empty() => children.iter().any(has_content_node),
+        _ => !node.is_container(),
+    }
+}
+
+fn normalize_section_roots_for_parent_layout(nodes: &mut [PenNode]) {
+    for node in nodes {
+        node.base_mut().x = None;
+        node.base_mut().y = None;
+        match node {
+            PenNode::Frame(frame) => {
+                frame.container.width = Some(SizingBehavior::Keyword(SizingKeyword::FillContainer));
+                frame.container.height = Some(SizingBehavior::Keyword(SizingKeyword::FitContent));
+            }
+            PenNode::Group(group) => {
+                group.container.width = Some(SizingBehavior::Keyword(SizingKeyword::FillContainer));
+                group.container.height = Some(SizingBehavior::Keyword(SizingKeyword::FitContent));
+            }
+            _ => {}
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -97,6 +132,7 @@ mod tests {
     use crate::test_support::{ScriptResponse, ScriptedLlm, VecDocSink};
     use crate::types::LlmError;
     use futures::executor::block_on;
+    use jian_ops_schema::node::PenNode;
 
     fn req() -> DesignRequest {
         DesignRequest {
@@ -146,7 +182,7 @@ mod tests {
         }
     }
 
-    const NODE_JSON: &str = r#"[{"type":"frame","id":"hero-1","name":"Card","x":0,"y":0,"width":1200,"height":200,"children":[]}]"#;
+    const NODE_JSON: &str = r#"[{"type":"frame","id":"hero-1","name":"Card","x":0,"y":0,"width":1200,"height":200,"children":[{"type":"text","id":"hero-title","content":"Hero","fontSize":18}]}]"#;
 
     #[test]
     fn run_subtask_ok_applies_insert_subtree() {
@@ -186,6 +222,74 @@ mod tests {
         ));
         assert_eq!(outcome.node_count, 0);
         assert!(outcome.error.is_some());
+    }
+
+    #[test]
+    fn run_subtask_rejects_blank_container_root() {
+        let llm = ScriptedLlm::new(vec![ScriptResponse::Text(
+            r#"[{"type":"frame","id":"section-root","name":"Blank","x":0,"y":0,"width":390,"height":112,"children":[]}]"#
+                .into(),
+        )]);
+        let mut sink = VecDocSink::new();
+        let outcome = block_on(run_subtask(
+            &subtask(),
+            &plan(),
+            &req(),
+            &llm,
+            &mut sink,
+            &AbortFlag::new(),
+            false,
+            false,
+        ));
+
+        assert_eq!(outcome.node_count, 0);
+        assert!(outcome
+            .error
+            .as_deref()
+            .unwrap_or_default()
+            .contains("blank container"));
+        assert!(sink.applied.is_empty());
+    }
+
+    #[test]
+    fn run_subtask_normalizes_section_root_for_parent_layout() {
+        let llm = ScriptedLlm::new(vec![ScriptResponse::Text(
+            r#"[{"type":"frame","id":"section-root","name":"Section","x":0,"y":0,"width":390,"height":112,"children":[{"type":"text","id":"title","content":"Pizza","fontSize":18}]}]"#
+                .into(),
+        )]);
+        let mut sink = VecDocSink::new();
+        let outcome = block_on(run_subtask(
+            &subtask(),
+            &plan(),
+            &req(),
+            &llm,
+            &mut sink,
+            &AbortFlag::new(),
+            false,
+            false,
+        ));
+
+        assert_eq!(outcome.node_count, 1);
+        let Some(EditorCommand::InsertSubtree { nodes, .. }) = sink.applied.last() else {
+            panic!("expected InsertSubtree");
+        };
+        let PenNode::Frame(frame) = &nodes[0] else {
+            panic!("expected frame root");
+        };
+        assert!(frame.base.x.is_none());
+        assert!(frame.base.y.is_none());
+        assert!(matches!(
+            frame.container.width,
+            Some(jian_ops_schema::sizing::SizingBehavior::Keyword(
+                jian_ops_schema::sizing::SizingKeyword::FillContainer
+            ))
+        ));
+        assert!(matches!(
+            frame.container.height,
+            Some(jian_ops_schema::sizing::SizingBehavior::Keyword(
+                jian_ops_schema::sizing::SizingKeyword::FitContent
+            ))
+        ));
     }
 
     #[test]

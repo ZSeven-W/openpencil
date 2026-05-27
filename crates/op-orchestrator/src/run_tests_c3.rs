@@ -57,7 +57,7 @@ const DASHBOARD_PLAN_JSON: &str = r##"{
 
 fn node_json(prefix: &str) -> String {
     format!(
-        r#"[{{"type":"frame","id":"{prefix}-1","name":"Content","x":0,"y":0,"width":200,"height":200,"children":[]}}]"#
+        r#"[{{"type":"frame","id":"{prefix}-1","name":"Content","x":0,"y":0,"width":200,"height":200,"children":[{{"type":"text","id":"{prefix}-title","content":"{prefix}","fontSize":18}}]}}]"#
     )
 }
 

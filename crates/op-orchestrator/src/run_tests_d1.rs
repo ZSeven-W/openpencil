@@ -32,7 +32,7 @@ const PLAN_JSON: &str = r##"{
 
 fn node_json(prefix: &str) -> String {
     format!(
-        r#"[{{"type":"frame","id":"{prefix}-1","name":"Sec","x":0,"y":0,"width":1200,"height":300,"children":[]}}]"#
+        r#"[{{"type":"frame","id":"{prefix}-1","name":"Sec","x":0,"y":0,"width":1200,"height":300,"children":[{{"type":"text","id":"{prefix}-title","content":"{prefix}","fontSize":18}}]}}]"#
     )
 }
 
@@ -53,7 +53,7 @@ const MULTI_SCREEN_PLAN_JSON: &str = r##"{
 
 fn node_json_mobile(prefix: &str) -> String {
     format!(
-        r#"[{{"type":"frame","id":"{prefix}-1","name":"Sec","x":0,"y":0,"width":390,"height":300,"children":[]}}]"#
+        r#"[{{"type":"frame","id":"{prefix}-1","name":"Sec","x":0,"y":0,"width":390,"height":300,"children":[{{"type":"text","id":"{prefix}-title","content":"{prefix}","fontSize":18}}]}}]"#
     )
 }
 

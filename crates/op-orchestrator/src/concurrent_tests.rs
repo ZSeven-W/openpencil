@@ -86,8 +86,7 @@ fn make_req() -> crate::types::DesignRequest {
     }
 }
 
-const NODE_JSON: &str =
-    r#"[{"type":"frame","id":"h1","name":"H","x":0,"y":0,"width":100,"height":100,"children":[]}]"#;
+const NODE_JSON: &str = r#"[{"type":"frame","id":"h1","name":"H","x":0,"y":0,"width":100,"height":100,"children":[{"type":"text","id":"h-title","content":"H","fontSize":18}]}]"#;
 
 /// Build a default semaphore (2 permits) and an mpsc sender for B1 worker tests.
 /// Returns `(semaphore, sender, receiver)`.

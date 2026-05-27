@@ -21,12 +21,40 @@ impl std::fmt::Display for ParseError {
 /// 空数组视为失败(零节点)。
 pub fn parse_nodes(text: &str) -> Result<Vec<PenNode>, ParseError> {
     let json = extract_json_array(text).ok_or_else(|| ParseError("no JSON array found".into()))?;
+    let mut value: serde_json::Value =
+        serde_json::from_str(json).map_err(|e| ParseError(format!("json: {e}")))?;
+    normalize_generated_node_json(&mut value);
     let nodes: Vec<PenNode> =
-        serde_json::from_str(json).map_err(|e| ParseError(format!("deserialize: {e}")))?;
+        serde_json::from_value(value).map_err(|e| ParseError(format!("deserialize: {e}")))?;
     if nodes.is_empty() {
         return Err(ParseError("empty node array".into()));
     }
     Ok(nodes)
+}
+
+fn normalize_generated_node_json(value: &mut serde_json::Value) {
+    match value {
+        serde_json::Value::Array(items) => {
+            for item in items {
+                normalize_generated_node_json(item);
+            }
+        }
+        serde_json::Value::Object(object) => {
+            if object
+                .get("type")
+                .and_then(serde_json::Value::as_str)
+                .is_some_and(|ty| ty == "image")
+                && matches!(object.get("src"), None | Some(serde_json::Value::Null))
+            {
+                object.insert("src".into(), serde_json::Value::String(String::new()));
+            }
+
+            for child in object.values_mut() {
+                normalize_generated_node_json(child);
+            }
+        }
+        _ => {}
+    }
 }
 
 /// 抽第一个平衡的 `[...]`(忽略字符串内的方括号)。
@@ -91,5 +119,18 @@ mod tests {
     #[test]
     fn parse_nodes_rejects_no_array() {
         assert!(parse_nodes("the model wrote prose only").is_err());
+    }
+
+    #[test]
+    fn parse_nodes_defaults_missing_image_src_to_empty_string() {
+        let text = r#"[
+  { "type": "image", "id": "photo", "name": "Restaurant photo", "x": 0, "y": 0, "width": 240, "height": 160 }
+]"#;
+
+        let nodes = parse_nodes(text).expect("missing image src should be tolerated");
+        let PenNode::Image(image) = &nodes[0] else {
+            panic!("expected image node");
+        };
+        assert_eq!(image.src, "");
     }
 }

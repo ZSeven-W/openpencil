@@ -4,6 +4,7 @@
 //! 失败时 `build_fallback_plan` 给一个启发式的可跑 plan(对齐 TS
 //! `buildFallbackPlanFromPrompt`)。
 
+use crate::design_type::{detect_design_type, DesignType};
 use crate::types::DesignRequest;
 use serde::{Deserialize, Serialize};
 
@@ -160,6 +161,66 @@ pub fn build_fallback_plan(req: &DesignRequest) -> OrchestratorPlan {
     const WIDTH: f64 = 1200.0;
     const SECTION_HEIGHT: f64 = 360.0;
 
+    let preset = detect_design_type(&req.prompt);
+    if preset.type_ == DesignType::MobileScreen {
+        let (width, height) = explicit_mobile_size(&req.prompt)
+            .unwrap_or((preset.width, preset.root_height.max(preset.height)));
+        let top_h = (height * 0.24).round().clamp(140.0, 220.0);
+        let main_h = (height - top_h).max(320.0);
+        return OrchestratorPlan {
+            root_frame: RootFrameSpec {
+                id: "page".into(),
+                name: "Page".into(),
+                width,
+                height,
+                layout: Some("vertical".into()),
+                gap: Some(0.0),
+                padding: Some(0.0),
+                fill: Some(vec![PlanFill {
+                    kind: "solid".into(),
+                    color: "#FFFFFF".into(),
+                }]),
+            },
+            subtasks: vec![
+                Subtask {
+                    id: "top-summary".into(),
+                    label: "Top Summary".into(),
+                    region: Region {
+                        width,
+                        height: top_h,
+                    },
+                    id_prefix: "top-summary".into(),
+                    parent_frame_id: Some("page".into()),
+                    elements: Some(
+                        "delivery header, location, profile/action controls; no status bar"
+                            .into(),
+                    ),
+                    screen: None,
+                    generated_root_id: None,
+                    existing_section_labels: None,
+                },
+                Subtask {
+                    id: "main-content".into(),
+                    label: "Main Content".into(),
+                    region: Region {
+                        width,
+                        height: main_h,
+                    },
+                    id_prefix: "main-content".into(),
+                    parent_frame_id: Some("page".into()),
+                    elements: Some(
+                        "search, filters, promotional banner, cards, lists, primary content; do not repeat the top summary"
+                            .into(),
+                    ),
+                    screen: None,
+                    generated_root_id: None,
+                    existing_section_labels: None,
+                },
+            ],
+            style_guide_name: None,
+        };
+    }
+
     // prompt 越长 → 区块越多,封顶 3(单屏骨架不做更复杂的切分)。
     let section_count = match req.prompt.chars().count() {
         0..=80 => 1,
@@ -204,6 +265,48 @@ pub fn build_fallback_plan(req: &DesignRequest) -> OrchestratorPlan {
         subtasks,
         style_guide_name: None,
     }
+}
+
+fn explicit_mobile_size(prompt: &str) -> Option<(f64, f64)> {
+    let normalized = prompt.replace('×', "x").to_lowercase();
+    let bytes = normalized.as_bytes();
+    for (i, b) in bytes.iter().enumerate() {
+        if *b != b'x' {
+            continue;
+        }
+
+        let mut left_end = i;
+        while left_end > 0 && bytes[left_end - 1].is_ascii_whitespace() {
+            left_end -= 1;
+        }
+        let mut left_start = left_end;
+        while left_start > 0 && bytes[left_start - 1].is_ascii_digit() {
+            left_start -= 1;
+        }
+
+        let mut right_start = i + 1;
+        while right_start < bytes.len() && bytes[right_start].is_ascii_whitespace() {
+            right_start += 1;
+        }
+        let mut right_end = right_start;
+        while right_end < bytes.len() && bytes[right_end].is_ascii_digit() {
+            right_end += 1;
+        }
+
+        if left_start == left_end || right_start == right_end {
+            continue;
+        }
+        let Ok(width) = normalized[left_start..left_end].parse::<f64>() else {
+            continue;
+        };
+        let Ok(height) = normalized[right_start..right_end].parse::<f64>() else {
+            continue;
+        };
+        if (240.0..=520.0).contains(&width) && (480.0..=1200.0).contains(&height) {
+            return Some((width, height));
+        }
+    }
+    None
 }
 
 #[cfg(test)]
@@ -274,6 +377,16 @@ mod tests {
         let long = build_fallback_plan(&req(&"x".repeat(300)));
         assert_eq!(long.subtasks.len(), 3);
         assert!(!long.subtasks.is_empty());
+    }
+
+    #[test]
+    fn fallback_plan_honors_mobile_type_and_explicit_size() {
+        let mobile = build_fallback_plan(&req("Design a 390x844 mobile food delivery home screen"));
+        assert_eq!(mobile.root_frame.width, 390.0);
+        assert_eq!(mobile.root_frame.height, 844.0);
+        assert_eq!(mobile.subtasks.len(), 2);
+        assert_eq!(mobile.subtasks[0].label, "Top Summary");
+        assert_eq!(mobile.subtasks[1].label, "Main Content");
     }
 
     // ── Task A1: Subtask.existing_section_labels ──────────────────────────────
