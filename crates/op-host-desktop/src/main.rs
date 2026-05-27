@@ -19,6 +19,7 @@ mod design_md_host;
 mod design_session;
 mod export;
 mod export_pdf;
+mod figma_import_session;
 mod frame;
 mod git_host;
 mod git_jobs;
@@ -92,6 +93,11 @@ struct DesktopApp {
     /// routes `Intent::Design` here (when an `agent::Provider` is
     /// available), `Intent::Chat` to `current_chat`.
     current_design: Option<design_session::DesignSession>,
+    /// In-flight `.fig` import — worker thread that parses on a
+    /// background thread so the editor UI keeps repainting. The pump
+    /// in `RedrawRequested` swaps in the parsed document when the
+    /// worker finishes.
+    current_figma_import: Option<figma_import_session::FigmaImportSession>,
     /// Background AI-model discovery — probes the installed CLIs
     /// on a worker thread; its result is drained into
     /// `chat.available_models` on a later frame.
@@ -176,6 +182,7 @@ impl DesktopApp {
             error: None,
             current_chat: None,
             current_design: None,
+            current_figma_import: None,
             model_probe: model_discovery::ModelProbe::spawn(),
             iconify_job: None,
             initial_file,
@@ -201,6 +208,12 @@ impl DesktopApp {
     /// only reports edits made *since* that point. Also rebinds the
     /// Git session (the document path may have changed).
     fn mark_document_saved(&mut self) {
+        // Any successful Save / Open / New replaced the document. If
+        // a background Figma import is still running, its result
+        // would later overwrite this fresh document in `pump` —
+        // drop the session here so the worker's `send` becomes a
+        // silent no-op when it finishes.
+        figma_import_session::cancel(&mut self.host, &mut self.current_figma_import);
         self.saved_doc_fingerprint = persistence::document_fingerprint(self.host.editor_state());
         self.rebind_git_session_for_current_path();
     }
@@ -299,7 +312,18 @@ impl DesktopApp {
         {
             let mut opened = false;
             for path in winit::platform::macos::drain_opened_file_urls() {
-                if !persistence::is_supported_document(&path) {
+                let is_op = persistence::is_supported_document(&path);
+                let is_fig = persistence::is_supported_figma_import(&path);
+                if !is_op && !is_fig {
+                    continue;
+                }
+                if is_fig
+                    && self
+                        .current_figma_import
+                        .as_ref()
+                        .is_some_and(|sess| sess.path() == path.as_path())
+                {
+                    opened = true;
                     continue;
                 }
                 if opened {
@@ -310,7 +334,18 @@ impl DesktopApp {
                     );
                     continue;
                 }
-                if persistence::open_path(
+                if is_fig {
+                    // `.fig` → background import. Mark `opened` true
+                    // so further drops in this batch are skipped, but
+                    // don't run `mark_document_saved` (the document is
+                    // still pending; pump applies it when the worker
+                    // finishes).
+                    figma_import_session::cancel(&mut self.host, &mut self.current_figma_import);
+                    self.current_figma_import =
+                        Some(figma_import_session::spawn(&mut self.host, path));
+                    self.request_redraw(true);
+                    opened = true;
+                } else if persistence::open_path(
                     &mut self.host,
                     path,
                     &mut self.current_path,
@@ -742,13 +777,15 @@ impl DesktopApp {
 /// is registered (see `Cargo.toml`'s `[package.metadata.bundle]`),
 /// the OS launches this binary with the document path in argv —
 /// double-click on Windows / Linux, or `open file.op` from a shell
-/// on any platform. The first existing `.op` / `.pen` argument wins;
-/// flags (`--mcp`, …) never match the extension filter.
+/// on any platform. The first existing `.op` / `.pen` / `.fig`
+/// argument wins; flags (`--mcp`, …) never match the extension
+/// filter. `.fig` routes through the Figma import worker once the
+/// window is up (see `DesktopApp::apply_initial_file`).
 fn initial_file_from_argv() -> Option<PathBuf> {
-    std::env::args_os()
-        .skip(1)
-        .map(PathBuf::from)
-        .find(|p| persistence::is_supported_document(p) && p.is_file())
+    std::env::args_os().skip(1).map(PathBuf::from).find(|p| {
+        (persistence::is_supported_document(p) || persistence::is_supported_figma_import(p))
+            && p.is_file()
+    })
 }
 
 /// Pop a native dialog offering to open the download page when a

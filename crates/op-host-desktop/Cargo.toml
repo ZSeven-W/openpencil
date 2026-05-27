@@ -35,6 +35,21 @@ ext = "pen"
 name = "OpenPencil Document"
 role = "Editor"
 
+# Figma `.fig` binary exports — routes through the desktop's
+# background `figma_import_session` worker (see
+# `persistence::is_supported_figma_import` + the dispatch sites in
+# `app_handler::resumed` / `WindowEvent::DroppedFile` / `main::drain_opened_files`).
+# `cargo-bundle` 0.10.0 only writes `CFBundleTypeExtensions` here; the
+# modern UTI binding (`LSItemContentTypes = com.figma.document`,
+# `UTImportedTypeDeclarations`, `LSHandlerRank = Alternate`) is sunk
+# into the produced `Info.plist` by `scripts/bundle-macos.sh` because
+# the macOS file-association lookup since 10.10 is UTI-based, not
+# extension-based.
+[[package.metadata.bundle.file_associations]]
+ext = "fig"
+name = "Figma Document"
+role = "Editor"
+
 # Desktop-only binary. The op-host-native lib is multi-platform (mobile
 # stubs land in Step 1f) but the runner here pulls winit + glutin via
 # op-host-native's desktop dep set, so the whole crate is gated to

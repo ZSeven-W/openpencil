@@ -341,6 +341,19 @@ pub fn is_supported_document(path: &std::path::Path) -> bool {
         .is_some_and(|ext| ext.eq_ignore_ascii_case("op") || ext.eq_ignore_ascii_case("pen"))
 }
 
+/// True for Figma `.fig` binary exports. The bundle declares `.fig`
+/// as a `CFBundleDocumentTypes` extension (macOS / Windows / Linux),
+/// so double-clicking one in Finder / dragging one onto the dock /
+/// the running window all need to route through
+/// `figma_import_session::spawn` rather than the `.op`-only
+/// `open_path`. Case-insensitive (Figma's "Save Local Copy" emits
+/// `.fig`; some macOS shares fold to `.FIG`).
+pub fn is_supported_figma_import(path: &std::path::Path) -> bool {
+    path.extension()
+        .and_then(|s| s.to_str())
+        .is_some_and(|ext| ext.eq_ignore_ascii_case("fig"))
+}
+
 /// Open `path` directly — no dialog. Backs drag-and-drop drops and
 /// the file-association launch path. Replaces the host's document,
 /// records the file in recents and refreshes the window title.
@@ -370,19 +383,18 @@ pub fn open_path(
 
 /// Outcome of [`run_action`] — tells the desktop runner which
 /// post-action bookkeeping to run.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ActionOutcome {
     /// The document now matches a file on disk (New / successful
     /// Open / Save / Save-As / Open-Recent). The runner refreshes the
     /// unsaved-changes baseline AND rebinds the Git session.
     Saved,
-    /// The document's content + path changed but it does NOT match
-    /// any file on disk — a Figma import. The runner rebinds the Git
-    /// session + window title (the previously-open document's repo
-    /// binding is now stale) but must NOT refresh the unsaved-changes
-    /// baseline: the imported design is unsaved work and close must
-    /// still prompt.
-    PathChangedUnsaved,
+    /// User picked a `.fig` and the desktop runner should spawn the
+    /// background parser (`figma_import_session::spawn`). The actual
+    /// document swap happens later when `figma_import_session::pump`
+    /// drains the worker's result + rebinds the Git session itself
+    /// (the previously-open repo binding goes stale on import).
+    FigmaImportStarted(PathBuf),
     /// Nothing to reconcile — export, recent-list edits, or a user
     /// cancel / error.
     Noop,
@@ -533,27 +545,13 @@ pub fn run_action(
                 Some(p) => p,
                 None => return ActionOutcome::Noop,
             };
-            match import_figma_into_host(host, &path) {
-                Ok(()) => {
-                    // An imported `.fig` has no `.op` path of its own —
-                    // the next Save routes through Save As.
-                    *current_path = None;
-                    refresh_title(current_path, window);
-                    // `PathChangedUnsaved`, not `Saved`: an import does
-                    // NOT leave the document matching disk. Reporting
-                    // `Saved` would refresh the unsaved-changes
-                    // baseline, so closing the app would silently
-                    // discard the imported design with no save prompt.
-                    // The runner still rebinds the Git session (the
-                    // previously-open document's repo is now stale).
-                    ActionOutcome::PathChangedUnsaved
-                }
-                Err(e) => {
-                    eprintln!("[import-figma] {e}");
-                    show_error_dialog(host, ErrorKind::Open, Some(&path), &e);
-                    ActionOutcome::Noop
-                }
-            }
+            // Spawn the parse on a worker thread so the UI keeps
+            // repainting (a 2–3 MB .fig with hundreds of nodes takes
+            // multiple seconds; running it on the main thread freezes
+            // the window). The desktop runner picks up the session in
+            // the next `RedrawRequested` pump and applies the result
+            // when it lands.
+            ActionOutcome::FigmaImportStarted(path)
         }
         FileAction::ImportImageOrSvg => {
             crate::persistence_image::handle_import_image_or_svg(host);
@@ -566,26 +564,9 @@ pub fn run_action(
     }
 }
 
-/// Read + parse a binary `.fig` file and swap the host's document
-/// for the imported one. The heavy lifting lives in `op_figma`.
-fn import_figma_into_host(
-    host: &mut WidgetHostNative,
-    path: &std::path::Path,
-) -> Result<(), String> {
-    let bytes = std::fs::read(path).map_err(|e| e.to_string())?;
-    let file_name = path
-        .file_stem()
-        .and_then(|s| s.to_str())
-        .unwrap_or("Figma Import");
-    let import = op_figma::parse_fig_binary(&bytes, file_name, op_figma::FigLayoutMode::OpenPencil)
-        .map_err(|e| e.to_string())?;
-    for warning in &import.warnings {
-        eprintln!("[import-figma] warning: {warning}");
-    }
-    *host.editor_state_mut() = EditorState::from_document(import.document);
-    host.mark_editor_state_dirty();
-    Ok(())
-}
+// `import_figma_into_host` (synchronous parse) was retired in favour
+// of `figma_import_session::spawn`, which moves the parse to a worker
+// thread and pumps the result back through a channel each frame.
 
 fn refresh_title(current_path: &Option<PathBuf>, window: Option<&winit::window::Window>) {
     let Some(window) = window else { return };
@@ -626,10 +607,22 @@ fn show_error_dialog(
 }
 
 #[derive(Debug, Clone, Copy)]
-enum ErrorKind {
+pub enum ErrorKind {
     Open,
     Save,
     Export,
+}
+
+/// Public re-export of the native error dialog — used by the
+/// background Figma import session (`figma_import_session::pump`) to
+/// pop the same OS dialog the synchronous error path uses.
+pub fn show_error_dialog_public(
+    host: &WidgetHostNative,
+    kind: ErrorKind,
+    path: Option<&std::path::Path>,
+    detail: &str,
+) {
+    show_error_dialog(host, kind, path, detail)
 }
 
 #[cfg(test)]

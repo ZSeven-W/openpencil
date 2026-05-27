@@ -47,6 +47,19 @@ fn fill_color_hex(v: &FigValue) -> String {
         .unwrap_or_else(|| "#000000".to_string())
 }
 
+/// First visible SOLID paint's color as `#rrggbb`, mirroring TS
+/// `figmaFillColor` in `converters/common.ts`. Used by the icon
+/// converter to colorise the lucide stroke when the node has no
+/// explicit stroke paint.
+pub fn fig_fill_color(figma: &FigValue) -> Option<String> {
+    let paints = figma.get_array("fillPaints")?;
+    let paint = paints
+        .iter()
+        .find(|p| p.get_bool("visible") != Some(false) && p.get_str("type") == Some("SOLID"))?;
+    let color = paint.get("color").and_then(FigColor::from_value)?;
+    Some(figma_color_to_hex(&color))
+}
+
 fn gradient_stops(paint: &FigValue) -> Vec<GradientStop> {
     paint
         .get_array("stops")

@@ -15,9 +15,20 @@ use jian_ops_schema::node::PenNode;
 use jian_ops_schema::page::PenPage;
 use std::collections::HashMap;
 
-/// Outcome of a Figma import.
+/// Outcome of a full-document Figma import.
 pub struct FigmaImportResult {
     pub document: PenDocument,
+    pub warnings: Vec<String>,
+    /// In-blob image bytes keyed by blob index.
+    pub image_blobs: HashMap<u32, Vec<u8>>,
+}
+
+/// Outcome of a clipboard-style Figma import — a flat `PenNode` list
+/// without a document wrapper, mirroring TS
+/// `figmaNodeChangesToPenNodes`'s `{ nodes, warnings, imageBlobs }`
+/// return shape.
+pub struct FigmaClipboardResult {
+    pub nodes: Vec<PenNode>,
     pub warnings: Vec<String>,
     /// In-blob image bytes keyed by blob index.
     pub image_blobs: HashMap<u32, Vec<u8>>,
@@ -302,12 +313,14 @@ pub fn get_figma_pages(decoded: &FigmaDecodedFile) -> Vec<FigmaPageInfo> {
         .collect()
 }
 
-/// Convert clipboard node changes into a flat `PenNode` list (no
-/// document wrapper).
+/// Convert clipboard node changes into a flat `PenNode` list — no
+/// document wrapper, no synthesised page. Matches the TS
+/// `figmaNodeChangesToPenNodes` shape so a clipboard-paste caller can
+/// splice the returned nodes into the active document at the cursor.
 pub fn figma_node_changes_to_pen_nodes(
     mut decoded: FigmaDecodedFile,
     layout_mode: FigLayoutMode,
-) -> FigmaImportResult {
+) -> FigmaClipboardResult {
     resolve_style_references(&mut decoded.node_changes);
     let image_blobs = collect_image_blobs(&decoded.blobs);
     let tree = build_tree(&decoded.node_changes);
@@ -326,8 +339,8 @@ pub fn figma_node_changes_to_pen_nodes(
     };
 
     if top_nodes.is_empty() {
-        return FigmaImportResult {
-            document: empty_document("clipboard"),
+        return FigmaClipboardResult {
+            nodes: Vec::new(),
             warnings: vec!["No convertible nodes found".to_string()],
             image_blobs,
         };
@@ -364,11 +377,8 @@ pub fn figma_node_changes_to_pen_nodes(
         }
     }
 
-    FigmaImportResult {
-        document: document_with_pages(
-            "clipboard",
-            vec![pen_page("clipboard".into(), "Clipboard".into(), nodes)],
-        ),
+    FigmaClipboardResult {
+        nodes,
         warnings: ctx.warnings,
         image_blobs,
     }

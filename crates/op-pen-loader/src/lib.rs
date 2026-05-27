@@ -20,6 +20,7 @@
 //! dialogs stay in `openpencil-desktop/src/persistence.rs`.
 
 mod adapter;
+mod authored_geometry;
 mod effects;
 mod layout_scene;
 mod path_bounds;
@@ -38,7 +39,10 @@ pub use layout_scene::editor_state_to_layout_scene;
 
 // Re-exports so `openpencil-desktop`'s existing call sites change
 // minimally.
-pub use adapter::{build_var_table, pen_document_to_payload, LoadedDoc};
+pub use adapter::{
+    build_var_table, pen_document_to_payload, pen_document_to_payload_preserving_geometry,
+    LoadedDoc,
+};
 pub use effects::{
     effects_from_payload, effects_from_payload_ref, effects_to_payload, shadows_from_canonical,
     ShadowPayload,

@@ -306,6 +306,9 @@ pub struct SceneNode {
     /// picker, or a plain file path / remote URL on documents that
     /// reference external media. `None` for non-image nodes.
     pub image_src: Option<String>,
+    /// Stable content hash for `image_src`. The canvas painter uses it
+    /// as a per-frame cache key without hashing large data URLs again.
+    pub image_src_id: u64,
     /// How `image_src` is placed into `bounds`.
     pub image_fit: SceneImageFit,
     /// Per-image colour adjustments from the image-fill editor.
@@ -398,6 +401,7 @@ impl SceneNode {
             arc_inner_radius: None,
             polygon_sides: 3,
             image_src: None,
+            image_src_id: 0,
             image_fit: SceneImageFit::Fill,
             image_adjustments: crate::ImageAdjustments::default(),
             effects: Vec::new(),
@@ -406,6 +410,13 @@ impl SceneNode {
             children: Vec::new(),
         }
     }
+}
+
+pub fn stable_image_source_id(src: &str) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    src.hash(&mut h);
+    h.finish()
 }
 
 /// Vertices for a regular polygon fitted inside `rect`.

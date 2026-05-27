@@ -69,6 +69,7 @@ pub mod toolbar;
 // Step 3 — center canvas that renders document nodes as actual
 // visual primitives (frame fills, rect strokes, text strings).
 pub mod canvas_viewport;
+mod canvas_viewport_image;
 pub mod canvas_viewport_overlay;
 pub mod canvas_viewport_paint;
 
@@ -108,6 +109,7 @@ pub mod design_md_markdown;
 pub mod design_md_panel;
 pub mod export_dialog;
 pub mod figma_import;
+pub mod figma_import_progress;
 pub mod file_menu;
 pub mod git_panel;
 mod git_panel_diff;

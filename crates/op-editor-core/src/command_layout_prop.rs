@@ -232,7 +232,7 @@ impl EditorState {
             return false;
         };
 
-        match property {
+        let changed = match property {
             "gap" => {
                 let LayoutPropValue::Number(n) = value else {
                     return false;
@@ -331,11 +331,30 @@ impl EditorState {
                 set_container_clip_content(node, *v)
             }
             _ => false,
+        };
+        if changed && property_invalidates_preserved_geometry(property) {
+            self.editor_ui.preserve_authored_geometry = false;
         }
+        changed
     }
 }
 
 // ── field writers ─────────────────────────────────────────────────────────────
+
+fn property_invalidates_preserved_geometry(property: &str) -> bool {
+    matches!(
+        property,
+        "gap"
+            | "padding"
+            | "layout"
+            | "justifyContent"
+            | "alignItems"
+            | "width"
+            | "height"
+            | "clipContent"
+            | "textGrowth"
+    )
+}
 
 fn set_container_gap(node: &mut PenNode, gap: f64) -> bool {
     let noe = NumberOrExpression::Number(gap);

@@ -96,7 +96,7 @@ fn primary_font_family(stack: &str) -> Option<&str> {
 /// OP `Color` → `skia_safe::Color4f` — used by the direct-canvas
 /// helpers (stroke_line / fill_round_rect / stroke_round_rect)
 /// that skip the jian DrawOp pipeline.
-fn jian_color_to_color4f(c: Color) -> skia_safe::Color4f {
+pub(super) fn jian_color_to_color4f(c: Color) -> skia_safe::Color4f {
     skia_safe::Color4f::new(
         c.r.clamp(0.0, 1.0),
         c.g.clamp(0.0, 1.0),
@@ -109,8 +109,10 @@ fn jian_color_to_color4f(c: Color) -> skia_safe::Color4f {
 // / `_radial_gradient`) and their helpers live in the sibling
 // `gradient.rs` so this spine stays under the 800-line cap. The
 // methods are added to `NativeBackend` via a sibling `impl` block.
+mod font_script;
 mod gradient;
 mod image;
+mod path;
 #[cfg(test)]
 use image::{cover_rect, image_adjustment_matrix};
 
@@ -123,6 +125,7 @@ use image::{cover_rect, image_adjustment_matrix};
 pub struct NativeBackend {
     skia: jian_skia::SkiaBackend,
     dpi: f32,
+    font_mgr: skia_safe::FontMgr,
     /// Lazy-initialised typeface backed by the embedded Roboto TTF
     /// (shared with shell-web). Step 4 perf fix: jian-skia's
     /// `textlayout` path allocates a fresh `FontCollection` +
@@ -159,6 +162,10 @@ pub struct NativeBackend {
     /// on its next paint).
     image_cache: std::collections::HashMap<u64, Option<skia_safe::Image>>,
     image_cache_order: std::collections::VecDeque<u64>,
+    svg_path_cache: std::collections::HashMap<u64, path::SvgPathCacheEntry>,
+    svg_path_cache_order: std::collections::VecDeque<u64>,
+    svg_raster_cache: std::collections::HashMap<path::SvgRasterKey, path::SvgRasterCacheEntry>,
+    svg_raster_cache_order: std::collections::VecDeque<path::SvgRasterKey>,
 }
 
 /// Maximum number of decoded chat images held at once. Decoded RGBA
@@ -209,6 +216,7 @@ impl NativeBackend {
         let mut this = Self {
             skia,
             dpi,
+            font_mgr: skia_safe::FontMgr::new(),
             typeface: None,
             typeface_tried: false,
             cjk_typeface: None,
@@ -217,6 +225,10 @@ impl NativeBackend {
             family_typeface_cache: std::collections::HashMap::new(),
             image_cache: std::collections::HashMap::new(),
             image_cache_order: std::collections::VecDeque::new(),
+            svg_path_cache: std::collections::HashMap::new(),
+            svg_path_cache_order: std::collections::VecDeque::new(),
+            svg_raster_cache: std::collections::HashMap::new(),
+            svg_raster_cache_order: std::collections::VecDeque::new(),
         };
         // Pre-warm the per-codepoint typeface cache with every CJK
         // glyph that appears in the chrome (top bar, layer panel,
@@ -243,14 +255,18 @@ impl NativeBackend {
         if c.is_ascii() && weight == 400 {
             return self.ensure_typeface().cloned();
         }
+        if font_script::is_east_asian_codepoint(c) {
+            return self.ensure_cjk_typeface().cloned();
+        }
         let cp = c as i32;
         let key = (cp, weight);
         if let Some(cached) = self.char_typeface_cache.get(&key) {
             return cached.clone();
         }
         let style = font_style_for_weight(weight);
-        let mgr = skia_safe::FontMgr::new();
-        let tf = mgr.match_family_style_character("", style, &[], cp);
+        let tf = self
+            .font_mgr
+            .match_family_style_character("", style, &[], cp);
         let resolved = tf.or_else(|| {
             // CJK fallback path doesn't yet vary by weight — TS app
             // synthesises bold via paint stroke when the family is
@@ -271,13 +287,16 @@ impl NativeBackend {
         let Some(primary) = primary_font_family(family) else {
             return self.typeface_for_char(c, weight);
         };
+        if font_script::is_east_asian_codepoint(c) {
+            return self.ensure_cjk_typeface().cloned();
+        }
         let key = (primary.to_string(), c as i32, weight);
         if let Some(cached) = self.family_typeface_cache.get(&key) {
             return cached.clone();
         }
         let style = font_style_for_weight(weight);
-        let mgr = skia_safe::FontMgr::new();
-        let resolved = mgr
+        let resolved = self
+            .font_mgr
             .match_family_style_character(primary, style, &[], c as i32)
             .or_else(|| self.typeface_for_char(c, weight));
         self.family_typeface_cache.insert(key, resolved.clone());
@@ -314,7 +333,7 @@ impl NativeBackend {
     /// Lazy-init the Step 4 cached Roboto typeface (ASCII path).
     fn ensure_typeface(&mut self) -> Option<&skia_safe::Typeface> {
         if !self.typeface_tried {
-            self.typeface = skia_safe::FontMgr::new().new_from_data(ROBOTO_TTF, None);
+            self.typeface = self.font_mgr.new_from_data(ROBOTO_TTF, None);
             self.typeface_tried = true;
         }
         self.typeface.as_ref()
@@ -328,8 +347,7 @@ impl NativeBackend {
     /// don't pay the FontMgr lookup more than once.
     fn ensure_cjk_typeface(&mut self) -> Option<&skia_safe::Typeface> {
         if !self.cjk_typeface_tried {
-            let mgr = skia_safe::FontMgr::new();
-            self.cjk_typeface = mgr.match_family_style_character(
+            self.cjk_typeface = self.font_mgr.match_family_style_character(
                 "",
                 skia_safe::FontStyle::default(),
                 &[],
@@ -590,65 +608,6 @@ impl NativeBackend {
         paint.set_stroke_width(width);
         paint.set_anti_alias(true);
         canvas.draw_round_rect(to_sk_rect(rect), radius, radius, &paint);
-    }
-
-    /// Step 5 SVG icons: parse an SVG path `d` string, scale from
-    /// a 24×24 viewBox to `size × size` at `top_left`, and stroke
-    /// it with round caps + joins (matches lucide's visual style).
-    /// Falls back to a no-op when the path string fails to parse —
-    /// silently dropping a single icon is better than panicking
-    /// the paint loop.
-    pub fn stroke_svg_path(
-        &self,
-        canvas: &skia_safe::Canvas,
-        d: &str,
-        top_left: Point2D,
-        size: f32,
-        color: Color,
-        width: f32,
-    ) {
-        let Some(path) = skia_safe::utils::parse_path::from_svg(d) else {
-            return;
-        };
-        let s = size / 24.0;
-        let mut matrix = skia_safe::Matrix::new_identity();
-        matrix.set_scale_translate((s, s), (top_left.x, top_left.y));
-        let path = path.with_transform(&matrix);
-        let mut paint = skia_safe::Paint::new(jian_color_to_color4f(color), None);
-        paint.set_stroke(true);
-        paint.set_stroke_width(width);
-        paint.set_anti_alias(true);
-        paint.set_stroke_cap(skia_safe::PaintCap::Round);
-        paint.set_stroke_join(skia_safe::PaintJoin::Round);
-        canvas.draw_path(&path, &paint);
-    }
-
-    /// Fill an SVG path scaled from `viewbox × viewbox` to
-    /// `size × size`. Brand logos ship as filled paths in their
-    /// own viewBox; the same parser as `stroke_svg_path` is
-    /// reused but paint is configured for `Fill` not `Stroke`.
-    pub fn fill_svg_path(
-        &self,
-        canvas: &skia_safe::Canvas,
-        d: &str,
-        top_left: Point2D,
-        size: f32,
-        viewbox: f32,
-        color: Color,
-    ) {
-        let Some(path) = skia_safe::utils::parse_path::from_svg(d) else {
-            return;
-        };
-        let s = size / viewbox;
-        let mut matrix = skia_safe::Matrix::new_identity();
-        matrix.set_scale_translate((s, s), (top_left.x, top_left.y));
-        let mut path = path.with_transform(&matrix);
-        if d.matches(['Z', 'z']).count() > 1 {
-            path.set_fill_type(skia_safe::PathFillType::EvenOdd);
-        }
-        let mut paint = skia_safe::Paint::new(jian_color_to_color4f(color), None);
-        paint.set_anti_alias(true);
-        canvas.draw_path(&path, &paint);
     }
 
     /// Filled ellipse inscribed in `bounds`. Uses skia's native

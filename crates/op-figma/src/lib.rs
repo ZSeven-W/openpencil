@@ -6,6 +6,7 @@
 //! [`node_mapper`]). Clipboard-JSON (`.fig.json`) keeps the
 //! hand-rolled shallow extractor below.
 
+mod clipboard;
 mod color;
 mod common;
 mod container;
@@ -25,10 +26,18 @@ mod zip_reader;
 #[cfg(test)]
 mod binary_e2e_tests;
 
-pub use common::FigLayoutMode;
+pub use clipboard::{
+    enrich_nodes_from_html_hints, extract_figma_clipboard_data, figma_clipboard_to_nodes,
+    fix_unresolved_images, is_figma_clipboard_html, parse_clipboard_html_styles,
+    FigmaClipboardData, HtmlStyleHint,
+};
+pub use common::{
+    clear_icon_lookup, lookup_icon_by_name, set_icon_lookup, FigLayoutMode, IconLookupResult,
+    IconStyle,
+};
 pub use node_mapper::{
     figma_all_pages_to_pen_document, figma_node_changes_to_pen_nodes, figma_to_pen_document,
-    get_figma_pages, FigmaImportResult, FigmaPageInfo,
+    get_figma_pages, FigmaClipboardResult, FigmaImportResult, FigmaPageInfo,
 };
 
 use common::FigLayoutMode as LayoutMode;

@@ -3,14 +3,16 @@
 //! canonical `PenNode`s.
 
 use crate::common::{
-    common_props, extract_position, map_corner_radius, normalize_angle, resolve_height,
-    resolve_width, round2, round3, ConversionContext, FigLayoutMode, SKIPPED_TYPES,
+    common_props, extract_position, lookup_icon_by_name, map_corner_radius, normalize_angle,
+    resolve_height, resolve_width, round2, round3, ConversionContext, FigLayoutMode, IconStyle,
+    SKIPPED_TYPES,
 };
 use crate::figma_types::FigVec2;
 use crate::instance::{apply_instance_overrides, merge_symbol_props};
 use crate::kiwi::FigValue;
 use crate::mappers::{
-    map_figma_effects, map_figma_fills, map_figma_layout, map_figma_stroke, LayoutProps,
+    fig_fill_color, map_figma_effects, map_figma_fills, map_figma_layout, map_figma_stroke,
+    LayoutProps,
 };
 use crate::node_build::{
     ellipse_node, frame_node, group_node, line_node, path_node, rectangle_node, ref_node, text_node,
@@ -484,6 +486,16 @@ fn convert_vector(
 ) -> PenNode {
     let id = ctx.generate_id();
     let figma = &tree.figma;
+
+    // Icon-lookup branch — match the node's name against the host's
+    // icon registry. When set, the node converts to a Path carrying the
+    // canonical 24×24 lucide `d` + `icon_id`, bypassing vector decode.
+    // Mirrors TS `convertVector` lines 25-65.
+    let name = figma.get_str("name").unwrap_or("");
+    if let Some(icon) = lookup_icon_by_name(name) {
+        return build_icon_path_node(figma, id, parent_stack_mode, ctx, icon);
+    }
+
     let path_d = decode_figma_vector_path(figma, &ctx.blobs).unwrap_or_default();
 
     if !path_d.is_empty() {
@@ -572,3 +584,84 @@ fn convert_vector(
     };
     rectangle_node(common_props(figma, id), container)
 }
+
+/// Build a `Path` PenNode for a host-resolved icon — ports
+/// `path-converter.ts` lines 25-65. Stroke gets a sensible default
+/// when the node has no stroke paint, and the stroke thickness scales
+/// down proportionally for icons smaller than the lucide 24×24
+/// reference box.
+fn build_icon_path_node(
+    figma: &FigValue,
+    id: String,
+    parent_stack_mode: Option<&str>,
+    ctx: &mut ConversionContext,
+    icon: crate::common::IconLookupResult,
+) -> PenNode {
+    use jian_ops_schema::style::{
+        PenFill, PenStroke, SolidFillBody, StrokeCap, StrokeJoin, StrokeThickness,
+    };
+
+    let icon_w = resolve_width(figma, parent_stack_mode, ctx);
+    let icon_h = resolve_height(figma, parent_stack_mode, ctx);
+
+    // iconSize = min(width-if-numeric, height-if-numeric), defaulting to
+    // 24 (the lucide reference box) when either axis is non-numeric.
+    let w_num: f64 = match icon_w {
+        SizingBehavior::Number(n) => n,
+        _ => 24.0,
+    };
+    let h_num: f64 = match icon_h {
+        SizingBehavior::Number(n) => n,
+        _ => 24.0,
+    };
+    let icon_size = w_num.min(h_num);
+    let icon_scale: f64 = icon_size / 24.0;
+
+    let style = icon.style.unwrap_or(IconStyle::Stroke);
+    let mapped_stroke = map_figma_stroke(figma);
+    let mut stroke = match style {
+        IconStyle::Stroke => Some(mapped_stroke.unwrap_or_else(|| PenStroke {
+            thickness: StrokeThickness::Uniform(1.5),
+            align: None,
+            join: Some(StrokeJoin::Round),
+            cap: Some(StrokeCap::Round),
+            dash_pattern: None,
+            dash_offset: None,
+            fill: Some(vec![PenFill::Solid(SolidFillBody {
+                color: fig_fill_color(figma).unwrap_or_else(|| "#000000".to_string()),
+                explain: None,
+                opacity: None,
+                blend_mode: None,
+            })]),
+        })),
+        IconStyle::Fill => mapped_stroke,
+    };
+
+    if let Some(s) = stroke.as_mut() {
+        if icon_scale < 0.99 {
+            if let StrokeThickness::Uniform(t) = s.thickness {
+                let scaled = round2(t as f64 * icon_scale) as f32;
+                s.thickness = StrokeThickness::Uniform(scaled);
+            }
+        }
+    }
+
+    let fill = match style {
+        IconStyle::Fill => map_figma_fills(figma.get_array("fillPaints")),
+        IconStyle::Stroke => None,
+    };
+
+    path_node(
+        common_props(figma, id),
+        Some(icon.d),
+        icon.icon_id,
+        icon_w,
+        icon_h,
+        fill,
+        stroke,
+        map_figma_effects(figma.get_array("effects")),
+    )
+}
+
+#[cfg(test)]
+mod tests;

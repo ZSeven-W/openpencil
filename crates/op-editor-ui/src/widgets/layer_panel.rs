@@ -512,6 +512,12 @@ impl Widget for LayerPanel {
                 origin: Point2D::new(rect.origin.x + 6.0, y + 2.0),
                 size: Point2D::new(rect.size.x - 12.0, PAGE_ROW_HEIGHT - 4.0),
             };
+            if row.origin.y + row.size.y < r.pages_rows_top
+                || row.origin.y > r.pages_rows_top + r.pages_view_h
+            {
+                y += PAGE_ROW_HEIGHT;
+                continue;
+            }
             if page.active {
                 cx.backend
                     .fill_round_rect(row, 6.0, self.theme.row_selected);
@@ -599,6 +605,12 @@ impl Widget for LayerPanel {
                 origin: Point2D::new(rect.origin.x + 6.0, y + 2.0),
                 size: Point2D::new(rect.size.x - 12.0, LAYER_ROW_HEIGHT - 4.0),
             };
+            if row.origin.y + row.size.y < r.layers_rows_top
+                || row.origin.y > r.layers_rows_top + r.layers_view_h
+            {
+                y += LAYER_ROW_HEIGHT;
+                continue;
+            }
             if item.selected {
                 // TS uses bg-blue-500/15 + primary text + primary
                 // icon for the selected layer row.
@@ -625,10 +637,6 @@ impl Widget for LayerPanel {
             } else {
                 dim(self.theme.muted_foreground, dim_factor)
             };
-            // Leading chevron — only for container rows (TS
-            // `LayerRow` shows the caret only when the node has
-            // children). 12 px slot so the kind icon aligns to
-            // the same x regardless.
             if item.has_children {
                 let chev_icon = if item.collapsed {
                     Icon::ChevronRight
@@ -644,11 +652,7 @@ impl Widget for LayerPanel {
                     1.4,
                 );
             }
-            // 18 px slot for the chevron (was 14, no breathing
-            // room between chevron and kind icon — user feedback
-            // 2026-05-11).
             let icon_x = row.origin.x + indent + 18.0;
-            // Kind icon — switches to primary color when selected.
             draw_icon(
                 cx.backend,
                 item.icon,
@@ -692,10 +696,6 @@ impl Widget for LayerPanel {
                 cx.backend
                     .draw_text(&label, Point2D::new(label_x, row.origin.y + 17.0));
             }
-            // Trailing eye + lock icons. Icon shape signals state
-            // (Eye/EyeOff, Lock/LockOpen); locked Lock paints in
-            // warm orange so it reads as a "can't edit" alert.
-            // Eye-to-lock gap (22 px) matches hit-test spacing.
             let trailing_right = row.origin.x + row.size.x - 8.0;
             let lock_x = trailing_right - 14.0;
             let eye_x = lock_x - 22.0;
@@ -722,15 +722,10 @@ impl Widget for LayerPanel {
             } else {
                 trailing_default
             };
-            // Slimmer than the leading icons (12 px @ 1.2 stroke).
             let trailing_size = 12.0;
             let trailing_stroke = 1.2;
             let trailing_y = row.origin.y + 7.0;
-            // Eye only paints on hover / selected / hidden — TS
-            // parity (hover reveal). Hidden always shows so
-            // the user sees state at a glance.
             let show_eye = item.hovered || item.selected || item.hidden;
-            // Lock paints on hover / selected / locked.
             let show_lock = item.hovered || item.selected || item.locked;
             if show_eye {
                 draw_icon(

@@ -32,6 +32,33 @@ impl WidgetHostNative {
 
         let dpi = frame.dpi_scale();
 
+        // During Figma import, keep the frame path independent from
+        // document layout/canvas paint. The parser can be CPU-heavy;
+        // rebuilding or painting the old scene here makes the loading
+        // overlay appear frozen.
+        if self.editor_state.editor_ui.figma_import_in_progress {
+            use op_editor_ui::widgets::figma_import_progress::FigmaImportProgressOverlay;
+            frame.fill_rect(
+                Rect {
+                    origin: Point2D::new(0.0, 0.0),
+                    size: Point2D::new(viewport_width, viewport_height),
+                },
+                op_editor_ui::Color {
+                    r: 0.0,
+                    g: 0.0,
+                    b: 0.0,
+                    a: 0.55,
+                },
+            );
+            let overlay = FigmaImportProgressOverlay::for_editor(&self.editor_state, self.now_ms);
+            let rect = overlay.rect(viewport_width, viewport_height);
+            let mut cx = PaintCx {
+                backend: &mut *frame,
+            };
+            overlay.paint(&mut cx, rect);
+            return;
+        }
+
         // Rebuild the layout-resolved render scene ONCE for the whole
         // paint pass. Every widget builder below reads `editor_state`
         // directly; the canvas reads `self.layout_scene`.

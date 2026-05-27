@@ -4,8 +4,9 @@
 //! `DesktopApp` struct, its helper `impl`, and `fn main`.
 
 use crate::{
-    chat_attachment, chat_session, cursor_icon, design_session, frame, git_jobs, menu, persistence,
-    settings_io, window_state, DesktopApp, INITIAL_VIEWPORT_H, INITIAL_VIEWPORT_W,
+    chat_attachment, chat_session, cursor_icon, design_session, figma_import_session, frame,
+    git_jobs, menu, persistence, settings_io, window_state, DesktopApp, INITIAL_VIEWPORT_H,
+    INITIAL_VIEWPORT_W,
 };
 use op_host_native::{NativeBackend, SharedSkiaContext};
 use std::time::{Duration, Instant};
@@ -200,9 +201,16 @@ impl ApplicationHandler for DesktopApp {
         }
 
         // File-association launch path: open the document handed in
-        // via argv now that the host + window are ready.
+        // via argv now that the host + window are ready. Routes `.op`
+        // / `.pen` through `open_path`; `.fig` goes through the
+        // background Figma import worker so the launch doesn't freeze
+        // on a multi-second parse.
         if let Some(path) = self.initial_file.take() {
-            if persistence::open_path(
+            if persistence::is_supported_figma_import(&path) {
+                figma_import_session::cancel(&mut self.host, &mut self.current_figma_import);
+                self.current_figma_import = Some(figma_import_session::spawn(&mut self.host, path));
+                self.request_redraw(true);
+            } else if persistence::open_path(
                 &mut self.host,
                 path,
                 &mut self.current_path,
@@ -306,10 +314,19 @@ impl ApplicationHandler for DesktopApp {
                 }
             }
             WindowEvent::DroppedFile(path) => {
-                // Drag-and-drop open. Only `.op` / `.pen` documents
-                // are accepted; anything else is ignored silently so
-                // a stray drop can't disrupt the current document.
-                if persistence::is_supported_document(&path) {
+                // Drag-and-drop open. `.op` / `.pen` documents route
+                // through the canonical loader; `.fig` Figma exports
+                // route through the background Figma import worker
+                // (the parse + layout pass takes seconds for large
+                // dashboards, so doing it inline would freeze the
+                // window). Anything else is ignored silently so a
+                // stray drop can't disrupt the current document.
+                if persistence::is_supported_figma_import(&path) {
+                    figma_import_session::cancel(&mut self.host, &mut self.current_figma_import);
+                    self.current_figma_import =
+                        Some(figma_import_session::spawn(&mut self.host, path));
+                    self.request_redraw(true);
+                } else if persistence::is_supported_document(&path) {
                     if persistence::open_path(
                         &mut self.host,
                         path,
@@ -321,7 +338,7 @@ impl ApplicationHandler for DesktopApp {
                     }
                 } else {
                     eprintln!(
-                        "openpencil-desktop: ignored dropped file (not .op / .pen): {}",
+                        "openpencil-desktop: ignored dropped file (not .op / .pen / .fig): {}",
                         path.display()
                     );
                 }
@@ -343,6 +360,26 @@ impl ApplicationHandler for DesktopApp {
                 // Pump in-flight AI chat deltas into this frame.
                 if chat_session::pump(&mut self.host, &mut self.current_chat) {
                     self.redraw_dirty = true;
+                }
+                // Drain a finished background `.fig` parse — applies
+                // the imported document + clears the loading overlay
+                // flag. Rebinds Git + window title on success
+                // (matches the prior synchronous path's outcome).
+                match figma_import_session::pump(
+                    &mut self.host,
+                    &mut self.current_figma_import,
+                    &mut self.current_path,
+                    self.window.as_ref(),
+                ) {
+                    figma_import_session::PumpOutcome::CompletedOk => {
+                        self.rebind_git_session_for_current_path();
+                        self.redraw_dirty = true;
+                    }
+                    figma_import_session::PumpOutcome::CompletedErr => {
+                        self.redraw_dirty = true;
+                    }
+                    figma_import_session::PumpOutcome::StillPending
+                    | figma_import_session::PumpOutcome::Idle => {}
                 }
                 // Drain orchestrator apply requests + progress events
                 // for any in-flight design turn (orchestrator runs off
@@ -419,11 +456,18 @@ impl ApplicationHandler for DesktopApp {
                         );
                     }
                 }
-                // Chat or design turn streaming → wake ~30 fps to pump
-                // deltas / orchestrator apply requests.
+                // Chat / design / Figma-import worker active → wake
+                // ~10 fps to pump results and animate the loading
+                // overlay's spinner. Chat + design need ~30 fps for
+                // streaming deltas; Figma import is a one-shot result
+                // but the overlay's spinner needs frames to animate.
                 if self.current_chat.is_some() || self.current_design.is_some() {
                     event_loop.set_control_flow(ControlFlow::WaitUntil(
                         Instant::now() + Duration::from_millis(33),
+                    ));
+                } else if self.current_figma_import.is_some() {
+                    event_loop.set_control_flow(ControlFlow::WaitUntil(
+                        Instant::now() + Duration::from_millis(100),
                     ));
                 } else if let Some(deadline_ms) = self.host.next_animation_deadline_ms() {
                     let deadline = self.clock_start + Duration::from_millis(deadline_ms);
@@ -614,12 +658,24 @@ impl ApplicationHandler for DesktopApp {
                             &mut self.current_path,
                             self.window.as_ref(),
                         ) {
+                            // `mark_document_saved` cancels any
+                            // in-flight Figma import internally, so a
+                            // stale worker can't overwrite the fresh
+                            // document when its result lands.
                             persistence::ActionOutcome::Saved => self.mark_document_saved(),
-                            // A Figma import changed the document path
-                            // but left unsaved work — rebind Git only,
-                            // keep the dirty baseline so close prompts.
-                            persistence::ActionOutcome::PathChangedUnsaved => {
-                                self.rebind_git_session_for_current_path()
+                            // User picked a `.fig`; spin up the worker
+                            // session and let `pump` apply the document
+                            // once parsing finishes. Cancel any prior
+                            // in-flight session first so two imports
+                            // in quick succession don't race.
+                            persistence::ActionOutcome::FigmaImportStarted(path) => {
+                                figma_import_session::cancel(
+                                    &mut self.host,
+                                    &mut self.current_figma_import,
+                                );
+                                self.current_figma_import =
+                                    Some(figma_import_session::spawn(&mut self.host, path));
+                                self.request_redraw(true);
                             }
                             persistence::ActionOutcome::Noop => {}
                         }
