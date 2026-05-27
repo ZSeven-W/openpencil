@@ -1,13 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useDocumentStore, createEmptyDocument } from '@/stores/document-store';
 import { CloudApiError } from '@/services/cloud/cloud-fetch';
-import { createCloudFile, saveCloudFile } from '@/services/cloud/cloud-files';
-import type { CloudFileRecord } from '@/types/cloud';
-import type { PenDocument } from '@/types/pen';
+import {
+  createCloudFile,
+  getCloudFile,
+  saveCloudFile,
+  saveCloudFilePatches,
+} from '@/services/cloud/cloud-files';
 
 vi.mock('@/services/cloud/cloud-files', () => ({
   createCloudFile: vi.fn(),
+  getCloudFile: vi.fn(),
   saveCloudFile: vi.fn(),
+  saveCloudFilePatches: vi.fn(),
 }));
 
 vi.mock('@/stores/cloud-auth-store', () => ({
@@ -29,6 +34,7 @@ describe('useDocumentStore.saveCloud()', () => {
       isDirty: true,
       cloudFileId: 'file-1',
       cloudRevision: 7,
+      cloudBaseDocument: createEmptyDocument(),
       cloudShareRole: null,
       cloudSaveState: 'idle',
       cloudSaveError: null,
@@ -61,6 +67,7 @@ describe('useDocumentStore.saveCloud()', () => {
       isDirty: true,
       cloudFileId: null,
       cloudRevision: null,
+      cloudBaseDocument: null,
       cloudShareRole: null,
       cloudSaveState: 'idle',
       cloudSaveError: null,
@@ -89,8 +96,15 @@ describe('useDocumentStore.saveCloud()', () => {
 
   it('ignores stale conflict responses from an older in-flight save after a newer save succeeds', async () => {
     let rejectFirst!: (error: Error) => void;
-    let resolveSecond!: (file: CloudFileRecord) => void;
-    vi.mocked(saveCloudFile)
+    let resolveSecond!: (file: {
+      id: string;
+      name: string;
+      revision: number;
+      updatedAt: string;
+      checkpointRevision: number;
+      snapshotCreated: boolean;
+    }) => void;
+    vi.mocked(saveCloudFilePatches)
       .mockReturnValueOnce(
         new Promise((_, reject) => {
           rejectFirst = reject;
@@ -107,19 +121,11 @@ describe('useDocumentStore.saveCloud()', () => {
 
     resolveSecond({
       id: 'file-1',
-      projectId: 'project-1',
-      folderId: null,
       name: 'Design',
-      thumbnailPath: null,
       revision: 8,
-      shareRole: 'editor',
-      metadata: {},
-      starred: false,
-      lastOpenedAt: null,
-      deletedAt: null,
-      createdAt: '2026-01-01T00:00:00.000Z',
       updatedAt: '2026-01-01T00:00:00.000Z',
-      document: createEmptyDocument(),
+      checkpointRevision: 8,
+      snapshotCreated: true,
     });
     await expect(second).resolves.toBe('Design');
 
@@ -132,14 +138,13 @@ describe('useDocumentStore.saveCloud()', () => {
 
     const state = useDocumentStore.getState();
     expect(state.cloudRevision).toBe(8);
-    expect(state.cloudShareRole).toBe('editor');
     expect(state.cloudSaveState).toBe('saved');
     expect(state.cloudSaveError).toBeNull();
     expect(state.cloudSaveConflict).toBeNull();
   });
 
   it('surfaces a real revision conflict when no newer local save has succeeded', async () => {
-    vi.mocked(saveCloudFile).mockRejectedValueOnce(
+    vi.mocked(saveCloudFilePatches).mockRejectedValueOnce(
       new CloudApiError(409, 'revision_conflict', 'Cloud file has a newer revision', {
         fileId: 'file-1',
         expectedRevision: 7,
@@ -187,6 +192,7 @@ describe('useDocumentStore.saveCloud()', () => {
     ).resolves.toBeNull();
 
     expect(saveCloudFile).not.toHaveBeenCalled();
+    expect(saveCloudFilePatches).not.toHaveBeenCalled();
     expect(useDocumentStore.getState()).toMatchObject({
       cloudShareRole: 'viewer',
       cloudSaveState: 'error',
@@ -195,13 +201,20 @@ describe('useDocumentStore.saveCloud()', () => {
   });
 
   it('does not overwrite newer local edits when an older save response returns', async () => {
-    let resolveSave!: (file: CloudFileRecord) => void;
+    let resolveSave!: (file: {
+      id: string;
+      name: string;
+      revision: number;
+      updatedAt: string;
+      checkpointRevision: number;
+      snapshotCreated: boolean;
+    }) => void;
     const submitted = createEmptyDocument();
     submitted.name = 'Submitted';
     const edited = createEmptyDocument();
     edited.name = 'Edited after save started';
     useDocumentStore.setState({ document: submitted, isDirty: true });
-    vi.mocked(saveCloudFile).mockReturnValueOnce(
+    vi.mocked(saveCloudFilePatches).mockReturnValueOnce(
       new Promise((resolve) => {
         resolveSave = resolve;
       }),
@@ -211,6 +224,116 @@ describe('useDocumentStore.saveCloud()', () => {
     useDocumentStore.setState({ document: edited, isDirty: true });
 
     resolveSave({
+      id: 'file-1',
+      name: 'Design',
+      revision: 8,
+      updatedAt: '2026-01-01T00:00:00.000Z',
+      checkpointRevision: 8,
+      snapshotCreated: true,
+    });
+    await expect(save).resolves.toBe('Design');
+
+    const state = useDocumentStore.getState();
+    expect(state.document.name).toBe('Edited after save started');
+    expect(state.isDirty).toBe(true);
+    expect(state.cloudRevision).toBe(8);
+    expect(state.cloudSaveState).toBe('saved');
+    expect(state.cloudSaveConflict).toBeNull();
+  });
+
+  it('sends autosave document patches instead of the full document', async () => {
+    const base = createEmptyDocument();
+    const current = createEmptyDocument();
+    current.name = 'Edited';
+    useDocumentStore.setState({
+      document: current,
+      cloudBaseDocument: base,
+      cloudRevision: 7,
+      isDirty: true,
+    });
+    vi.mocked(saveCloudFilePatches).mockResolvedValueOnce({
+      id: 'file-1',
+      name: 'Design',
+      revision: 8,
+      updatedAt: '2026-01-01T00:00:00.000Z',
+      checkpointRevision: 7,
+      snapshotCreated: false,
+    });
+
+    await expect(useDocumentStore.getState().saveCloud('autosave', undefined, false)).resolves.toBe(
+      'Design',
+    );
+
+    expect(saveCloudFile).not.toHaveBeenCalled();
+    expect(saveCloudFilePatches).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'file-1',
+        baseRevision: 7,
+        source: 'autosave',
+        snapshot: false,
+        patches: expect.arrayContaining([
+          expect.objectContaining({ op: 'set-doc-field', field: 'name', value: 'Edited' }),
+        ]),
+      }),
+    );
+    expect(useDocumentStore.getState()).toMatchObject({
+      cloudRevision: 8,
+      cloudBaseDocument: current,
+      isDirty: false,
+    });
+  });
+
+  it('maps large Figma autosave string allocation failures to a cloud size message', async () => {
+    const stringify = vi.spyOn(JSON, 'stringify').mockImplementationOnce(() => {
+      throw new RangeError('Invalid string length');
+    });
+
+    await expect(useDocumentStore.getState().saveCloud('autosave', undefined, false)).resolves.toBeNull();
+
+    expect(saveCloudFilePatches).not.toHaveBeenCalled();
+    expect(useDocumentStore.getState().cloudSaveState).toBe('error');
+    expect(useDocumentStore.getState().cloudSaveError).toContain(
+      'This design is too large to send to the cloud API',
+    );
+
+    stringify.mockRestore();
+  });
+
+  it('merges remote changes and retries once after a patch revision conflict', async () => {
+    const base = createEmptyDocument();
+    base.pages![0].children = [
+      { id: 'ours', type: 'rectangle', width: 10, height: 10 },
+    ] as any;
+    const ours = createEmptyDocument();
+    ours.pages![0].children = [
+      { id: 'ours', type: 'rectangle', width: 20, height: 10 },
+    ] as any;
+    const theirs = createEmptyDocument();
+    theirs.pages![0].children = [
+      { id: 'ours', type: 'rectangle', width: 10, height: 10 },
+      { id: 'theirs', type: 'rectangle', width: 8, height: 8 },
+    ] as any;
+    useDocumentStore.setState({
+      document: ours,
+      cloudBaseDocument: base,
+      cloudRevision: 7,
+      isDirty: true,
+    });
+    vi.mocked(saveCloudFilePatches)
+      .mockRejectedValueOnce(
+        new CloudApiError(409, 'revision_conflict', 'Cloud file has a newer revision', {
+          serverRevision: 8,
+        }),
+      )
+      .mockResolvedValueOnce({
+        id: 'file-1',
+        name: 'Design',
+        revision: 9,
+        updatedAt: '2026-01-01T00:00:00.000Z',
+        checkpointRevision: 9,
+        snapshotCreated: true,
+      });
+    vi.mocked(getCloudFile).mockResolvedValueOnce({
       id: 'file-1',
       projectId: 'project-1',
       folderId: null,
@@ -223,15 +346,21 @@ describe('useDocumentStore.saveCloud()', () => {
       deletedAt: null,
       createdAt: '2026-01-01T00:00:00.000Z',
       updatedAt: '2026-01-01T00:00:00.000Z',
-      document: submitted as PenDocument,
+      document: theirs,
     });
-    await expect(save).resolves.toBe('Design');
 
-    const state = useDocumentStore.getState();
-    expect(state.document.name).toBe('Edited after save started');
-    expect(state.isDirty).toBe(true);
-    expect(state.cloudRevision).toBe(8);
-    expect(state.cloudSaveState).toBe('saved');
-    expect(state.cloudSaveConflict).toBeNull();
+    await expect(
+      useDocumentStore.getState().saveCloud('manual_save', 'Manual save', true),
+    ).resolves.toBe('Design');
+
+    expect(saveCloudFilePatches).toHaveBeenCalledTimes(2);
+    expect(saveCloudFilePatches).toHaveBeenLastCalledWith(
+      expect.objectContaining({ baseRevision: 8 }),
+    );
+    expect(useDocumentStore.getState().document.pages?.[0].children.map((node) => node.id)).toEqual([
+      'ours',
+      'theirs',
+    ]);
+    expect(useDocumentStore.getState().cloudRevision).toBe(9);
   });
 });

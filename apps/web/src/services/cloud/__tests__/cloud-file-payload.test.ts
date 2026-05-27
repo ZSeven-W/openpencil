@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   CloudFilePayloadTooLargeError,
   stringifyCloudFilePayload,
@@ -21,5 +21,23 @@ describe('stringifyCloudFilePayload', () => {
       expect((err as CloudFilePayloadTooLargeError).maxBytes).toBe(8);
       expect((err as CloudFilePayloadTooLargeError).sizeBytes).toBeGreaterThan(8);
     }
+  });
+
+  it('wraps browser string allocation failures as a typed size error', () => {
+    const stringify = vi.spyOn(JSON, 'stringify').mockImplementationOnce(() => {
+      throw new RangeError('Invalid string length');
+    });
+
+    let caught: unknown;
+    try {
+      stringifyCloudFilePayload({ document: { children: [] } });
+    } catch (err) {
+      caught = err;
+    } finally {
+      stringify.mockRestore();
+    }
+
+    expect(caught).toBeInstanceOf(CloudFilePayloadTooLargeError);
+    expect((caught as CloudFilePayloadTooLargeError).sizeBytes).toBeUndefined();
   });
 });

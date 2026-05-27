@@ -14,10 +14,10 @@ import { recordCloudActivity } from '../../../utils/cloud-activity-events';
 
 const createFileSchema = z.object({
   name: z.string().trim().min(1).max(160),
-  document: z.record(z.unknown()),
+  document: z.record(z.string(), z.unknown()),
   projectId: z.string().uuid().optional().nullable(),
   folderId: z.string().uuid().optional().nullable(),
-  metadata: z.record(z.unknown()).optional(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
   source: z.enum(['import', 'manual_save']).optional(),
 });
 
@@ -56,6 +56,8 @@ export default defineEventHandler(async (event) => {
       name: parsed.data.name,
       document: preparedDocument.storedDocument,
       revision: 1,
+      checkpoint_revision: 1,
+      checkpoint_size_bytes: preparedDocument.sizeBytes,
       metadata: parsed.data.metadata ?? {},
     })
     .select(CLOUD_FILE_SELECT)

@@ -4,6 +4,8 @@
 
 export type { NodePatch } from './node-diff.js';
 export { diffDocuments } from './node-diff.js';
+export type { DocumentFieldName, DocumentPatch } from './document-patch.js';
+export { applyDocumentPatches, diffPenDocuments } from './document-patch.js';
 
 export type {
   MergeInput,

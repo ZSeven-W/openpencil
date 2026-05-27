@@ -8,10 +8,10 @@ import {
 import { recordCloudActivity } from './cloud-activity-events';
 
 export const CLOUD_FILE_SELECT =
-  'id,project_id,folder_id,name,document,thumbnail_path,revision,metadata,starred,last_opened_at,deleted_at,created_at,updated_at';
+  'id,project_id,folder_id,name,document,thumbnail_path,revision,checkpoint_revision,checkpoint_size_bytes,metadata,starred,last_opened_at,deleted_at,created_at,updated_at,owner_id';
 
 export const CLOUD_FILE_SUMMARY_SELECT =
-  'id,project_id,folder_id,name,thumbnail_path,revision,metadata,starred,last_opened_at,deleted_at,created_at,updated_at';
+  'id,project_id,folder_id,name,thumbnail_path,revision,checkpoint_revision,checkpoint_size_bytes,metadata,starred,last_opened_at,deleted_at,created_at,updated_at,owner_id';
 
 const PROJECT_SELECT = 'id,name,description,icon,color,created_at,updated_at';
 const FOLDER_SELECT = 'id,project_id,parent_id,name,sort_order,created_at,updated_at';
@@ -33,7 +33,11 @@ async function attachUnprojectedFiles(input: {
   }
 }
 
-export async function getDefaultProject(input: { supabase: SupabaseClient; userId: string }) {
+export async function getDefaultProject(input: {
+  supabase: SupabaseClient;
+  userId: string;
+  attachUnprojected?: boolean;
+}) {
   const existing = await input.supabase
     .from('projects')
     .select(PROJECT_SELECT)
@@ -46,11 +50,13 @@ export async function getDefaultProject(input: { supabase: SupabaseClient; userI
     throw createError({ statusCode: 500, statusMessage: existing.error.message });
   }
   if (existing.data) {
-    await attachUnprojectedFiles({
-      supabase: input.supabase,
-      userId: input.userId,
-      projectId: existing.data.id,
-    });
+    if (input.attachUnprojected !== false) {
+      await attachUnprojectedFiles({
+        supabase: input.supabase,
+        userId: input.userId,
+        projectId: existing.data.id,
+      });
+    }
     return existing.data;
   }
 
@@ -65,11 +71,13 @@ export async function getDefaultProject(input: { supabase: SupabaseClient; userI
       statusMessage: created.error?.message ?? 'Failed to create default project',
     });
   }
-  await attachUnprojectedFiles({
-    supabase: input.supabase,
-    userId: input.userId,
-    projectId: created.data.id,
-  });
+  if (input.attachUnprojected !== false) {
+    await attachUnprojectedFiles({
+      supabase: input.supabase,
+      userId: input.userId,
+      projectId: created.data.id,
+    });
+  }
   return created.data;
 }
 
@@ -188,6 +196,7 @@ export async function listSharedCloudFileSummaries(input: {
   search?: string;
   sort: 'updated_desc' | 'updated_asc' | 'name_asc' | 'name_desc' | 'created_desc';
   limit: number;
+  offset?: number;
 }) {
   const shareRows = [];
   const byUser = await input.supabase
@@ -220,11 +229,11 @@ export async function listSharedCloudFileSummaries(input: {
   }
 
   const fileIds = [...roleByFileId.keys()];
-  if (fileIds.length === 0) return [];
+  if (fileIds.length === 0) return { data: [], total: 0 };
 
   let query = input.supabase
     .from('design_files')
-    .select(CLOUD_FILE_SUMMARY_SELECT)
+    .select(CLOUD_FILE_SUMMARY_SELECT, { count: 'exact' })
     .in('id', fileIds)
     .is('deleted_at', null);
   if (input.search) query = query.ilike('name', `%${input.search}%`);
@@ -241,15 +250,19 @@ export async function listSharedCloudFileSummaries(input: {
     query = query.order('updated_at', { ascending: false });
   }
 
-  const files = await query.limit(input.limit);
+  const offset = input.offset ?? 0;
+  const files = await query.range(offset, offset + input.limit - 1);
   if (files.error) {
     throw createError({ statusCode: 500, statusMessage: files.error.message });
   }
 
-  return (files.data ?? []).map((file) => ({
-    ...file,
-    share_role: roleByFileId.get(file.id),
-  }));
+  return {
+    data: (files.data ?? []).map((file) => ({
+      ...file,
+      share_role: roleByFileId.get(file.id),
+    })),
+    total: files.count ?? 0,
+  };
 }
 
 export async function getCloudFileShareRole(input: {
@@ -379,6 +392,8 @@ export async function copyCloudFile(input: {
       document: preparedDocument.storedDocument,
       thumbnail_path: source.data.thumbnail_path,
       revision: 1,
+      checkpoint_revision: 1,
+      checkpoint_size_bytes: preparedDocument.sizeBytes,
       metadata: source.data.metadata ?? {},
       starred: false,
     })

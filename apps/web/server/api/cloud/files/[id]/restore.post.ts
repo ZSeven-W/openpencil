@@ -1,7 +1,7 @@
 import { defineEventHandler, getRouterParam, createError } from 'h3';
 import { getCloudSupabase } from '../../../../utils/cloud-supabase';
 import { mapFileRecord } from '../../../../utils/cloud-file-mappers';
-import { resolveCloudDocumentFromStorage } from '../../../../utils/cloud-document-storage';
+import { resolveCloudDocumentWithChanges } from '../../../../utils/cloud-document-changes';
 import { CLOUD_FILE_SELECT } from '../../../../utils/cloud-file-management';
 import { recordCloudActivity } from '../../../../utils/cloud-activity-events';
 
@@ -23,7 +23,7 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 404, statusMessage: 'Cloud file not found' });
   }
 
-  const document = await resolveCloudDocumentFromStorage(supabase, restored.data.document);
+  const document = await resolveCloudDocumentWithChanges(supabase, restored.data);
   await recordCloudActivity({
     supabase,
     ownerId: user.id,

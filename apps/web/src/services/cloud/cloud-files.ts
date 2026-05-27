@@ -1,9 +1,12 @@
 import type { PenDocument } from '@/types/pen';
+import type { DocumentPatch } from '@zseven-w/pen-core';
 import type {
+  CloudDocumentPatchSaveAck,
   CloudFileRecord,
   CloudFileSort,
   CloudFileSummary,
   CloudFileVersion,
+  CloudFileVersionPage,
   CloudFileView,
   CloudFileShare,
   CloudShareRole,
@@ -12,9 +15,18 @@ import type {
   CloudActivityEvent,
   CloudActivityEventType,
   CloudActivityPage,
+  CloudPagedResult,
 } from '@/types/cloud';
 import { cloudFetch } from './cloud-fetch';
 import { stringifyCloudFilePayload } from './cloud-file-payload';
+
+interface CloudListOptions {
+  force?: boolean;
+}
+
+function cloudRead<T>(path: string, options?: CloudListOptions): Promise<T> {
+  return options?.force ? cloudFetch<T>(path, { force: true }) : cloudFetch<T>(path);
+}
 
 function buildQuery(input: Record<string, string | number | boolean | null | undefined>): string {
   const params = new URLSearchParams();
@@ -25,8 +37,8 @@ function buildQuery(input: Record<string, string | number | boolean | null | und
   return query ? `?${query}` : '';
 }
 
-export async function listCloudProjects(): Promise<CloudProject[]> {
-  const res = await cloudFetch<{ data: CloudProject[] }>('/api/cloud/projects');
+export async function listCloudProjects(options?: CloudListOptions): Promise<CloudProject[]> {
+  const res = await cloudRead<{ data: CloudProject[] }>('/api/cloud/projects', options);
   return res.data;
 }
 
@@ -67,9 +79,10 @@ export async function deleteCloudProject(id: string): Promise<void> {
 export async function listCloudFolders(input: {
   projectId?: string;
   parentId?: string | null;
-} = {}): Promise<CloudFolder[]> {
-  const res = await cloudFetch<{ data: CloudFolder[] }>(
+} = {}, options: CloudListOptions = {}): Promise<CloudFolder[]> {
+  const res = await cloudRead<{ data: CloudFolder[] }>(
     `/api/cloud/folders${buildQuery(input)}`,
+    options,
   );
   return res.data;
 }
@@ -115,11 +128,33 @@ export async function listCloudFiles(input: {
   search?: string;
   sort?: CloudFileSort;
   limit?: number;
-} = {}): Promise<CloudFileSummary[]> {
-  const res = await cloudFetch<{ data: CloudFileSummary[] }>(
-    `/api/cloud/files${buildQuery(input)}`,
-  );
+  offset?: number;
+} = {}, options: CloudListOptions = {}): Promise<CloudFileSummary[]> {
+  const res = await listCloudFilesPage(input, options);
   return res.data;
+}
+
+export async function listCloudFilesPage(input: {
+  projectId?: string;
+  folderId?: string | null;
+  view?: CloudFileView;
+  search?: string;
+  sort?: CloudFileSort;
+  limit?: number;
+  offset?: number;
+} = {}, options: CloudListOptions = {}): Promise<CloudPagedResult<CloudFileSummary>> {
+  const res = await cloudRead<CloudPagedResult<CloudFileSummary>>(
+    `/api/cloud/files${buildQuery(input)}`,
+    options,
+  );
+  return {
+    data: res.data,
+    page: res.page ?? {
+      total: res.data.length,
+      limit: input.limit ?? res.data.length,
+      offset: input.offset ?? 0,
+    },
+  };
 }
 
 export async function createCloudFile(input: {
@@ -182,6 +217,27 @@ export async function saveCloudFile(input: {
   return res.data;
 }
 
+export async function saveCloudFilePatches(input: {
+  id: string;
+  baseRevision: number;
+  patches: DocumentPatch[];
+  clientMutationId: string;
+  name?: string;
+  source?: 'manual_save' | 'autosave' | 'code_generation';
+  label?: string;
+  snapshot?: boolean;
+}): Promise<CloudDocumentPatchSaveAck> {
+  const { id, ...body } = input;
+  const res = await cloudFetch<{ data: CloudDocumentPatchSaveAck }>(
+    `/api/cloud/files/${encodeURIComponent(id)}/document-patches`,
+    {
+      method: 'POST',
+      body: stringifyCloudFilePayload(body),
+    },
+  );
+  return res.data;
+}
+
 export async function deleteCloudFile(id: string): Promise<void> {
   await cloudFetch<{ ok: true }>(`/api/cloud/files/${encodeURIComponent(id)}`, {
     method: 'DELETE',
@@ -218,11 +274,29 @@ export async function permanentlyDeleteCloudFile(id: string): Promise<void> {
   });
 }
 
-export async function listCloudFileVersions(id: string): Promise<CloudFileVersion[]> {
-  const res = await cloudFetch<{ data: CloudFileVersion[] }>(
-    `/api/cloud/files/${encodeURIComponent(id)}/versions`,
-  );
+export async function listCloudFileVersions(
+  id: string,
+  input: { limit?: number; offset?: number } = {},
+): Promise<CloudFileVersion[]> {
+  const res = await listCloudFileVersionsPage(id, input);
   return res.data;
+}
+
+export async function listCloudFileVersionsPage(
+  id: string,
+  input: { limit?: number; offset?: number } = {},
+): Promise<CloudFileVersionPage> {
+  const res = await cloudFetch<CloudFileVersionPage>(
+    `/api/cloud/files/${encodeURIComponent(id)}/versions${buildQuery(input)}`,
+  );
+  return {
+    data: res.data,
+    page: res.page ?? {
+      total: res.data.length,
+      limit: input.limit ?? res.data.length,
+      offset: input.offset ?? 0,
+    },
+  };
 }
 
 export async function updateCloudFileVersionLabel(input: {

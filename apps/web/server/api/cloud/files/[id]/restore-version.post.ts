@@ -70,7 +70,12 @@ export default defineEventHandler(async (event) => {
 
   const updated = await supabase
     .from('design_files')
-    .update({ document: preparedDocument.storedDocument, revision: nextRevision })
+    .update({
+      document: preparedDocument.storedDocument,
+      revision: nextRevision,
+      checkpoint_revision: nextRevision,
+      checkpoint_size_bytes: preparedDocument.sizeBytes,
+    })
     .eq('id', id)
     .eq('owner_id', access.ownerId)
     .eq('revision', current.data.revision)

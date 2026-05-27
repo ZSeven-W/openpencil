@@ -7,8 +7,8 @@ import { getCloudSupabase, toApiError } from '../../../utils/cloud-supabase';
 import { mapFileRecord } from '../../../utils/cloud-file-mappers';
 import {
   prepareCloudDocumentForStorage,
-  resolveCloudDocumentFromStorage,
 } from '../../../utils/cloud-document-storage';
+import { resolveCloudDocumentWithChanges } from '../../../utils/cloud-document-changes';
 import {
   createCloudRevisionConflictDetails,
   isOptimisticUpdateMiss,
@@ -24,11 +24,11 @@ import { pruneAutosaveVersions } from '../../../utils/cloud-version-retention';
 
 const saveFileSchema = z.object({
   name: z.string().trim().min(1).max(160).optional(),
-  document: z.record(z.unknown()).optional(),
+  document: z.record(z.string(), z.unknown()).optional(),
   expectedRevision: z.number().int().positive().optional(),
   projectId: z.string().uuid().optional().nullable(),
   folderId: z.string().uuid().optional().nullable(),
-  metadata: z.record(z.unknown()).optional(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
   starred: z.boolean().optional(),
   source: z
     .enum(['manual_save', 'autosave', 'code_generation', 'restore'])
@@ -108,7 +108,7 @@ export default defineEventHandler(async (event) => {
     updates.folder_id = location.folderId;
   }
 
-  let document = await resolveCloudDocumentFromStorage(supabase, currentData.document);
+  let document = await resolveCloudDocumentWithChanges(supabase, currentData);
   let preparedDocument: Awaited<ReturnType<typeof prepareCloudDocumentForStorage>> | null = null;
   let documentExpectedRevision: number | null = null;
   if (parsedData.document) {
@@ -131,7 +131,7 @@ export default defineEventHandler(async (event) => {
     document = parsedData.document as unknown as PenDocument;
     preparedDocument = await prepareCloudDocumentForStorage({
       supabase,
-      userId: user.id,
+      userId: access.ownerId,
       fileId: id,
       revision: nextRevision,
       document,
@@ -139,6 +139,8 @@ export default defineEventHandler(async (event) => {
     });
     updates.document = preparedDocument.storedDocument;
     updates.revision = nextRevision;
+    updates.checkpoint_revision = nextRevision;
+    updates.checkpoint_size_bytes = preparedDocument.sizeBytes;
   } else if (Object.keys(updates).length === 0) {
     throw toApiError(400, 'validation_error', 'At least one cloud file field is required');
   }

@@ -28,6 +28,8 @@ interface DesignFileSummaryRow {
   name: string;
   thumbnail_path: string | null;
   revision: number;
+  checkpoint_revision?: number | null;
+  checkpoint_size_bytes?: number | null;
   metadata?: Record<string, unknown> | null;
   starred?: boolean | null;
   last_opened_at?: string | null;
@@ -145,6 +147,9 @@ interface CodegenJobRow {
   file_id: string;
   owner_id: string;
   generation_id: string | null;
+  file_name?: string | null;
+  page_name?: string | null;
+  pipeline_mode?: CloudCodegenJob['pipelineMode'] | null;
   job_kind?: CloudCodegenJob['jobKind'] | null;
   status: CloudCodegenJob['status'];
   framework: Framework;
@@ -244,6 +249,8 @@ export function mapFileSummary(row: DesignFileSummaryRow): CloudFileSummary {
     name: row.name,
     thumbnailPath: row.thumbnail_path,
     revision: Number(row.revision),
+    checkpointRevision: Number(row.checkpoint_revision ?? row.revision),
+    checkpointSizeBytes: Number(row.checkpoint_size_bytes ?? 0),
     metadata: row.metadata ?? {},
     starred: Boolean(row.starred),
     lastOpenedAt: row.last_opened_at ?? null,
@@ -417,6 +424,9 @@ export function mapCodegenJob(
     fileId: row.file_id,
     ownerId: row.owner_id,
     generationId: row.generation_id,
+    fileName: row.file_name ?? null,
+    pageName: row.page_name ?? null,
+    pipelineMode: row.pipeline_mode ?? null,
     jobKind: row.job_kind ?? 'full_generation',
     status: row.status,
     framework: row.framework,

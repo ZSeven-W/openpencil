@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { diffPenDocuments, mergeDocuments } from '@zseven-w/pen-core';
 import type { PenDocument, PenNode } from '@/types/pen';
 import type { VariableDefinition } from '@/types/variables';
 
@@ -34,8 +35,16 @@ import type {
 } from '@/types/cloud';
 import { CloudApiError } from '@/services/cloud/cloud-fetch';
 import { createCloudFilePayloadTooLargeMessage } from '@/constants/cloud';
-import { CloudFilePayloadTooLargeError } from '@/services/cloud/cloud-file-payload';
-import { createCloudFile, saveCloudFile } from '@/services/cloud/cloud-files';
+import {
+  CloudFilePayloadTooLargeError,
+  isJsonStringAllocationError,
+} from '@/services/cloud/cloud-file-payload';
+import {
+  createCloudFile,
+  getCloudFile,
+  saveCloudFile,
+  saveCloudFilePatches,
+} from '@/services/cloud/cloud-files';
 import { useCloudAuthStore } from '@/stores/cloud-auth-store';
 
 interface DocumentStoreState {
@@ -50,6 +59,7 @@ interface DocumentStoreState {
   saveDialogOpen: boolean;
   cloudFileId: string | null;
   cloudRevision: number | null;
+  cloudBaseDocument: PenDocument | null;
   cloudShareRole: CloudShareRole | null;
   cloudSaveState: CloudSaveState;
   cloudSaveError: string | null;
@@ -149,6 +159,7 @@ export const useDocumentStore = create<DocumentStoreState>((set, get) => ({
   saveDialogOpen: false,
   cloudFileId: null,
   cloudRevision: null,
+  cloudBaseDocument: null,
   cloudShareRole: null,
   cloudSaveState: 'idle',
   cloudSaveError: null,
@@ -203,6 +214,7 @@ export const useDocumentStore = create<DocumentStoreState>((set, get) => ({
       isDirty: false,
       cloudFileId: null,
       cloudRevision: null,
+      cloudBaseDocument: null,
       cloudShareRole: null,
       cloudSaveState: 'idle',
       cloudSaveError: null,
@@ -252,6 +264,7 @@ export const useDocumentStore = create<DocumentStoreState>((set, get) => ({
       isDirty: false,
       cloudFileId: null,
       cloudRevision: null,
+      cloudBaseDocument: null,
       cloudShareRole: null,
       cloudSaveState: 'idle',
       cloudSaveError: null,
@@ -271,6 +284,7 @@ export const useDocumentStore = create<DocumentStoreState>((set, get) => ({
     set({
       cloudFileId,
       cloudRevision,
+      cloudBaseDocument: cloudFileId ? get().cloudBaseDocument : null,
       cloudShareRole,
       cloudSaveState: 'idle',
       cloudSaveError: null,
@@ -472,14 +486,57 @@ export const useDocumentStore = create<DocumentStoreState>((set, get) => ({
       return null;
     }
     const submittedDocument = state.document;
+    const submittedBaseDocument = state.cloudBaseDocument;
+    const submittedRevision = state.cloudRevision;
+    const submittedName = state.fileName ?? state.document.name ?? 'Untitled';
 
     set({ cloudSaveState: 'saving', cloudSaveError: null, cloudSaveConflict: null });
     try {
+      if (submittedBaseDocument && !options?.force) {
+        const patchResult = await saveCloudPatchesWithMergeRetry({
+          fileId: state.cloudFileId,
+          baseRevision: submittedRevision,
+          baseDocument: submittedBaseDocument,
+          submittedDocument,
+          name: submittedName,
+          source,
+          label,
+          snapshot,
+        });
+        if (!patchResult) return null;
+
+        const current = get();
+        const hasNewerLocalEdits =
+          current.cloudFileId === state.cloudFileId &&
+          current.cloudRevision === submittedRevision &&
+          current.document !== submittedDocument;
+        set({
+          document: hasNewerLocalEdits ? current.document : patchResult.document,
+          fileName: patchResult.name,
+          fileHandle: null,
+          filePath: null,
+          isDirty: hasNewerLocalEdits ? true : false,
+          cloudFileId: patchResult.id,
+          cloudRevision: patchResult.revision,
+          cloudBaseDocument: patchResult.document,
+          cloudShareRole: current.cloudShareRole,
+          cloudSaveState: 'saved',
+          cloudSaveError: null,
+          cloudSaveConflict: null,
+        });
+        documentEvents.emit('saved', {
+          filePath: null,
+          fileName: patchResult.name,
+          document: patchResult.document,
+        });
+        return patchResult.name;
+      }
+
       const saved = await saveCloudFile({
         id: state.cloudFileId,
-        name: state.fileName ?? state.document.name ?? 'Untitled',
+        name: submittedName,
         document: state.document,
-        expectedRevision: state.cloudRevision,
+        expectedRevision: submittedRevision,
         source,
         label,
         snapshot,
@@ -498,6 +555,7 @@ export const useDocumentStore = create<DocumentStoreState>((set, get) => ({
         isDirty: hasNewerLocalEdits ? true : false,
         cloudFileId: saved.id,
         cloudRevision: saved.revision,
+        cloudBaseDocument: saved.document,
         cloudShareRole: saved.shareRole ?? null,
         cloudSaveState: 'saved',
         cloudSaveError: null,
@@ -511,7 +569,7 @@ export const useDocumentStore = create<DocumentStoreState>((set, get) => ({
       return saved.name;
     } catch (err) {
       const current = get();
-      if (current.cloudFileId !== state.cloudFileId || current.cloudRevision !== state.cloudRevision) {
+      if (current.cloudFileId !== state.cloudFileId || current.cloudRevision !== submittedRevision) {
         return null;
       }
       if (err instanceof CloudApiError && err.status === 409) {
@@ -519,14 +577,14 @@ export const useDocumentStore = create<DocumentStoreState>((set, get) => ({
         set({
           cloudSaveState: 'conflict',
           cloudSaveError: err.message,
-          cloudRevision: state.cloudRevision,
+          cloudRevision: submittedRevision,
           cloudSaveConflict: {
             code: 'revision_conflict',
             fileId: typeof details?.fileId === 'string' ? details.fileId : state.cloudFileId,
             expectedRevision:
               typeof details?.expectedRevision === 'number'
                 ? details.expectedRevision
-                : state.cloudRevision,
+                : submittedRevision,
             serverRevision:
               typeof details?.serverRevision === 'number' ? details.serverRevision : null,
           },
@@ -553,6 +611,7 @@ export const useDocumentStore = create<DocumentStoreState>((set, get) => ({
       isDirty: false,
       cloudFileId: file.id,
       cloudRevision: file.revision,
+      cloudBaseDocument: migrated,
       cloudShareRole: file.shareRole ?? null,
       cloudSaveState: 'idle',
       cloudSaveError: null,
@@ -567,10 +626,103 @@ export const useDocumentStore = create<DocumentStoreState>((set, get) => ({
 }));
 
 function getCloudSaveErrorMessage(err: unknown, fallback: string): string {
-  if (err instanceof CloudFilePayloadTooLargeError) {
-    return createCloudFilePayloadTooLargeMessage(err.sizeBytes, err.maxBytes);
+  if (err instanceof CloudFilePayloadTooLargeError || isJsonStringAllocationError(err)) {
+    const sizeBytes = err instanceof CloudFilePayloadTooLargeError ? err.sizeBytes : undefined;
+    const maxBytes = err instanceof CloudFilePayloadTooLargeError ? err.maxBytes : undefined;
+    return createCloudFilePayloadTooLargeMessage(sizeBytes, maxBytes);
   }
   return err instanceof Error ? err.message : fallback;
+}
+
+async function saveCloudPatchesWithMergeRetry(input: {
+  fileId: string;
+  baseRevision: number;
+  baseDocument: PenDocument;
+  submittedDocument: PenDocument;
+  name: string;
+  source: Exclude<CloudVersionSource, 'import' | 'restore'>;
+  label?: string;
+  snapshot: boolean;
+}): Promise<{ id: string; name: string; revision: number; document: PenDocument } | null> {
+  const patches = diffPenDocuments(input.baseDocument, input.submittedDocument);
+  try {
+    const ack = await saveCloudFilePatches({
+      id: input.fileId,
+      baseRevision: input.baseRevision,
+      patches,
+      clientMutationId: createClientMutationId(),
+      name: input.name,
+      source: input.source,
+      label: input.label,
+      snapshot: input.snapshot,
+    });
+    return {
+      id: ack.id,
+      name: ack.name,
+      revision: ack.revision,
+      document: input.submittedDocument,
+    };
+  } catch (err) {
+    if (!(err instanceof CloudApiError) || err.status !== 409) throw err;
+    const current = useDocumentStore.getState();
+    if (current.cloudFileId !== input.fileId || current.cloudRevision !== input.baseRevision) {
+      throw err;
+    }
+    let retried: Awaited<ReturnType<typeof retryPatchSaveAfterConflict>> = null;
+    try {
+      retried = await retryPatchSaveAfterConflict(input);
+    } catch {
+      retried = null;
+    }
+    if (retried) return retried;
+    throw err;
+  }
+}
+
+async function retryPatchSaveAfterConflict(input: {
+  fileId: string;
+  baseDocument: PenDocument;
+  submittedDocument: PenDocument;
+  name: string;
+  source: Exclude<CloudVersionSource, 'import' | 'restore'>;
+  label?: string;
+  snapshot: boolean;
+}): Promise<{ id: string; name: string; revision: number; document: PenDocument } | null> {
+  const remote = await getCloudFile(input.fileId);
+  const merged = mergeDocuments({
+    base: input.baseDocument,
+    ours: input.submittedDocument,
+    theirs: remote.document,
+  });
+  if (merged.nodeConflicts.length > 0 || merged.docFieldConflicts.length > 0) {
+    return null;
+  }
+
+  const patches = diffPenDocuments(remote.document, merged.merged);
+  const ack = await saveCloudFilePatches({
+    id: input.fileId,
+    baseRevision: remote.revision,
+    patches,
+    clientMutationId: createClientMutationId(),
+    name: input.name,
+    source: input.source,
+    label: input.label,
+    snapshot: input.snapshot,
+  });
+
+  return {
+    id: ack.id,
+    name: ack.name,
+    revision: ack.revision,
+    document: merged.merged,
+  };
+}
+
+function createClientMutationId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
 export {

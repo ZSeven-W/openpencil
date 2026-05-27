@@ -1,8 +1,11 @@
 import { defineEventHandler, getRouterParam, createError } from 'h3';
 import { getCloudSupabase } from '../../../utils/cloud-supabase';
 import { mapFileRecord } from '../../../utils/cloud-file-mappers';
-import { resolveCloudDocumentFromStorage } from '../../../utils/cloud-document-storage';
-import { CLOUD_FILE_SELECT, getCloudFileShareRole } from '../../../utils/cloud-file-management';
+import { resolveCloudDocumentWithChanges } from '../../../utils/cloud-document-changes';
+import {
+  CLOUD_FILE_SELECT,
+  getCloudFileShareRole,
+} from '../../../utils/cloud-file-management';
 
 export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id');
@@ -41,14 +44,14 @@ export default defineEventHandler(async (event) => {
     }
   }
 
-  const document = await resolveCloudDocumentFromStorage(supabase, data.document);
+  const document = await resolveCloudDocumentWithChanges(supabase, data);
   let openedData = data;
   if (!shareRole || shareRole === 'editor') {
     const opened = await supabase
       .from('design_files')
       .update({ last_opened_at: new Date().toISOString() })
       .eq('id', id)
-      .select(CLOUD_FILE_SELECT)
+      .select('last_opened_at,updated_at')
       .single();
     if (opened.error || !opened.data) {
       throw createError({
@@ -56,7 +59,11 @@ export default defineEventHandler(async (event) => {
         statusMessage: opened.error?.message ?? 'Failed to update recent file timestamp',
       });
     }
-    openedData = opened.data;
+    openedData = {
+      ...data,
+      last_opened_at: opened.data.last_opened_at,
+      updated_at: opened.data.updated_at,
+    };
   }
 
   return { data: mapFileRecord({ ...openedData, document, share_role: shareRole }) };

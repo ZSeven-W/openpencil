@@ -156,6 +156,8 @@ export {
 // --- Merge 模块 ---
 export type { NodePatch } from './merge/node-diff.js';
 export { diffDocuments } from './merge/node-diff.js';
+export type { DocumentFieldName, DocumentPatch } from './merge/document-patch.js';
+export { applyDocumentPatches, diffPenDocuments } from './merge/document-patch.js';
 export type {
   MergeInput,
   MergeResult,

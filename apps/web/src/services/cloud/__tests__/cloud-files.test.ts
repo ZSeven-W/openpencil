@@ -1,9 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  CloudFilePayloadTooLargeError,
+} from '../cloud-file-payload';
+import {
   copyCloudFile,
   createCloudFolder,
   createCloudFileShare,
   listCloudFileVersions,
+  listCloudFileVersionsPage,
   createCloudProject,
   listCloudFileShares,
   listCloudFiles,
@@ -13,6 +17,7 @@ import {
   restoreCloudFileVersion,
   revokeCloudFileShare,
   saveCloudFile,
+  saveCloudFilePatches,
   listCloudFileActivity,
   updateCloudFileVersionLabel,
   updateCloudFileMetadata,
@@ -43,6 +48,24 @@ describe('cloud file service', () => {
 
     expect(cloudFetchMock).toHaveBeenCalledWith(
       '/api/cloud/files?projectId=project-1&folderId=null&view=starred&search=dashboard&sort=name_asc&limit=25',
+    );
+  });
+
+  it('passes force refresh options to list APIs', async () => {
+    cloudFetchMock.mockResolvedValue({ data: [] });
+
+    await listCloudFiles({ projectId: 'project-1' }, { force: true });
+    await listCloudFolders({ projectId: 'project-1' }, { force: true });
+
+    expect(cloudFetchMock).toHaveBeenNthCalledWith(
+      1,
+      '/api/cloud/files?projectId=project-1',
+      { force: true },
+    );
+    expect(cloudFetchMock).toHaveBeenNthCalledWith(
+      2,
+      '/api/cloud/folders?projectId=project-1',
+      { force: true },
     );
   });
 
@@ -125,6 +148,64 @@ describe('cloud file service', () => {
     });
   });
 
+  it('sends document patches without the full document body', async () => {
+    cloudFetchMock.mockResolvedValueOnce({ data: { id: 'file-1', revision: 8 } });
+
+    await saveCloudFilePatches({
+      id: 'file-1',
+      baseRevision: 7,
+      clientMutationId: 'mutation-1',
+      patches: [
+        {
+          op: 'modify',
+          pageId: 'page-1',
+          nodeId: 'node-1',
+          fields: { width: 20 },
+        },
+      ],
+      name: 'Design',
+      source: 'autosave',
+      snapshot: false,
+    });
+
+    const [, request] = cloudFetchMock.mock.calls[0] ?? [];
+    const body = JSON.parse((request as RequestInit).body as string);
+    expect(cloudFetchMock).toHaveBeenCalledWith('/api/cloud/files/file-1/document-patches', {
+      method: 'POST',
+      body: expect.any(String),
+    });
+    expect(body).toMatchObject({
+      baseRevision: 7,
+      clientMutationId: 'mutation-1',
+      name: 'Design',
+      source: 'autosave',
+      snapshot: false,
+    });
+    expect(body.patches).toHaveLength(1);
+    expect(body.document).toBeUndefined();
+  });
+
+  it('uses guarded payload serialization for document patch saves', async () => {
+    const stringify = vi
+      .spyOn(JSON, 'stringify')
+      .mockImplementationOnce(() => {
+        throw new RangeError('Invalid string length');
+      });
+
+    await expect(
+      saveCloudFilePatches({
+        id: 'file-1',
+        baseRevision: 7,
+        clientMutationId: 'mutation-1',
+        patches: [],
+        source: 'autosave',
+      }),
+    ).rejects.toBeInstanceOf(CloudFilePayloadTooLargeError);
+    expect(cloudFetchMock).not.toHaveBeenCalled();
+
+    stringify.mockRestore();
+  });
+
   it('calls cloud file sharing APIs', async () => {
     cloudFetchMock.mockResolvedValue({ data: [{ id: 'share-1' }] });
 
@@ -148,6 +229,7 @@ describe('cloud file service', () => {
     cloudFetchMock.mockResolvedValue({ data: [{ id: 'version-1', revision: 3 }] });
 
     await listCloudFileVersions('file-1');
+    await listCloudFileVersionsPage('file-1', { limit: 10, offset: 10 });
     await restoreCloudFileVersion({ fileId: 'file-1', versionId: 'version-1' });
     await updateCloudFileVersionLabel({
       fileId: 'file-1',
@@ -161,12 +243,16 @@ describe('cloud file service', () => {
     });
 
     expect(cloudFetchMock).toHaveBeenNthCalledWith(1, '/api/cloud/files/file-1/versions');
-    expect(cloudFetchMock).toHaveBeenNthCalledWith(2, '/api/cloud/files/file-1/restore-version', {
+    expect(cloudFetchMock).toHaveBeenNthCalledWith(
+      2,
+      '/api/cloud/files/file-1/versions?limit=10&offset=10',
+    );
+    expect(cloudFetchMock).toHaveBeenNthCalledWith(3, '/api/cloud/files/file-1/restore-version', {
       method: 'POST',
       body: JSON.stringify({ versionId: 'version-1' }),
     });
     expect(cloudFetchMock).toHaveBeenNthCalledWith(
-      3,
+      4,
       '/api/cloud/files/file-1/versions/version-1',
       {
         method: 'PATCH',
@@ -174,7 +260,7 @@ describe('cloud file service', () => {
       },
     );
     expect(cloudFetchMock).toHaveBeenNthCalledWith(
-      4,
+      5,
       '/api/cloud/files/file-1/activity?type=file_saved&cursor=2026-05-12T08%3A00%3A00.000Z&limit=10',
     );
   });
