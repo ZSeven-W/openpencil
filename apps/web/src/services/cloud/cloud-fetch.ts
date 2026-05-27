@@ -26,6 +26,9 @@ type CachedPayload = {
 };
 
 const DEFAULT_GET_CACHE_TTL_MS = 10_000;
+const TASK_GET_CACHE_TTL_MS = 5_000;
+const CLOUD_FILE_LIST_GET_CACHE_TTL_MS = 15_000;
+const DETAIL_GET_CACHE_TTL_MS = 30_000;
 const DEFAULT_SLOW_REQUEST_MS = 800;
 
 const cloudJsonCache = new Map<string, CachedPayload>();
@@ -63,10 +66,54 @@ function shouldUseJsonCache(path: string, method: string, init: CloudFetchInit):
   return method === 'GET' && isCloudApiPath(path) && init.force !== true;
 }
 
+function getCloudPathname(path: string): string {
+  try {
+    return new URL(path, 'http://openpencil.local').pathname;
+  } catch {
+    return path.split('?')[0] ?? path;
+  }
+}
+
+function isTaskListPath(pathname: string): boolean {
+  return (
+    pathname === '/api/cloud/codegen-jobs' ||
+    pathname === '/api/cloud/codegen-workers' ||
+    pathname === '/api/cloud/codegen-worker-stats' ||
+    pathname === '/api/cloud/codegen-queue-access' ||
+    pathname === '/api/cloud/codegen-provider-configs' ||
+    pathname === '/api/cloud/task-notifications'
+  );
+}
+
+function isCloudFileManagementListPath(pathname: string): boolean {
+  return (
+    pathname === '/api/cloud/files' ||
+    pathname === '/api/cloud/projects' ||
+    pathname === '/api/cloud/folders' ||
+    pathname === '/api/cloud/code-generations'
+  );
+}
+
+function isCloudDetailPath(pathname: string): boolean {
+  return (
+    /^\/api\/cloud\/files\/[^/]+(?:\/(?:versions|activity|shares))?$/.test(pathname) ||
+    /^\/api\/cloud\/codegen-jobs\/[^/]+$/.test(pathname) ||
+    /^\/api\/cloud\/code-generations\/[^/]+(?:\/files)?$/.test(pathname)
+  );
+}
+
+function getDefaultCacheTtlMs(path: string): number {
+  const pathname = getCloudPathname(path);
+  if (isTaskListPath(pathname)) return TASK_GET_CACHE_TTL_MS;
+  if (isCloudFileManagementListPath(pathname)) return CLOUD_FILE_LIST_GET_CACHE_TTL_MS;
+  if (isCloudDetailPath(pathname)) return DETAIL_GET_CACHE_TTL_MS;
+  return DEFAULT_GET_CACHE_TTL_MS;
+}
+
 function getCacheTtlMs(path: string, method: string, init: CloudFetchInit): number {
   if (method !== 'GET' || !isCloudApiPath(path)) return 0;
   if (init.cacheTtlMs !== undefined) return Math.max(0, init.cacheTtlMs);
-  return DEFAULT_GET_CACHE_TTL_MS;
+  return getDefaultCacheTtlMs(path);
 }
 
 function logCloudRequest(input: {

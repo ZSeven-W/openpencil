@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const authStoreMock = vi.hoisted(() => ({
   getAccessToken: vi.fn(),
@@ -17,6 +17,11 @@ describe('cloudFetchRaw', () => {
     clearCloudFetchCache();
     authStoreMock.getAccessToken.mockReset();
     vi.stubGlobal('fetch', vi.fn(async () => new Response('{}', { status: 200 })));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
   });
 
   it('sends the restored Supabase bearer token to cloud APIs', async () => {
@@ -80,6 +85,85 @@ describe('cloudFetchRaw', () => {
     await cloudFetch('/api/cloud/files', { cacheTtlMs: 1_000 });
 
     expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('uses a shorter default TTL for task and notification lists', async () => {
+    vi.useFakeTimers();
+    authStoreMock.getAccessToken.mockResolvedValue('desktop-session-token');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(JSON.stringify({ data: [] }), { status: 200 })),
+    );
+
+    await cloudFetch('/api/cloud/codegen-jobs');
+    vi.advanceTimersByTime(4_999);
+    await cloudFetch('/api/cloud/codegen-jobs');
+    vi.advanceTimersByTime(2);
+    await cloudFetch('/api/cloud/codegen-jobs');
+
+    await cloudFetch('/api/cloud/task-notifications');
+    vi.advanceTimersByTime(4_999);
+    await cloudFetch('/api/cloud/task-notifications');
+    vi.advanceTimersByTime(2);
+    await cloudFetch('/api/cloud/task-notifications');
+
+    expect(fetch).toHaveBeenCalledTimes(4);
+    vi.useRealTimers();
+  });
+
+  it('uses a medium default TTL for cloud file management lists', async () => {
+    vi.useFakeTimers();
+    authStoreMock.getAccessToken.mockResolvedValue('desktop-session-token');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(JSON.stringify({ data: [] }), { status: 200 })),
+    );
+
+    await cloudFetch('/api/cloud/files?projectId=project-1');
+    vi.advanceTimersByTime(14_999);
+    await cloudFetch('/api/cloud/files?projectId=project-1');
+    vi.advanceTimersByTime(2);
+    await cloudFetch('/api/cloud/files?projectId=project-1');
+
+    await cloudFetch('/api/cloud/projects');
+    await cloudFetch('/api/cloud/folders?projectId=project-1');
+
+    expect(fetch).toHaveBeenCalledTimes(4);
+    vi.useRealTimers();
+  });
+
+  it('uses a longer default TTL for detail endpoints', async () => {
+    vi.useFakeTimers();
+    authStoreMock.getAccessToken.mockResolvedValue('desktop-session-token');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(JSON.stringify({ data: { id: 'file-1' } }), { status: 200 })),
+    );
+
+    await cloudFetch('/api/cloud/files/file-1');
+    vi.advanceTimersByTime(29_999);
+    await cloudFetch('/api/cloud/files/file-1');
+    vi.advanceTimersByTime(2);
+    await cloudFetch('/api/cloud/files/file-1');
+
+    expect(fetch).toHaveBeenCalledTimes(2);
+    vi.useRealTimers();
+  });
+
+  it('lets callers override endpoint default TTLs', async () => {
+    vi.useFakeTimers();
+    authStoreMock.getAccessToken.mockResolvedValue('desktop-session-token');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(JSON.stringify({ data: ['file-1'] }), { status: 200 })),
+    );
+
+    await cloudFetch('/api/cloud/codegen-jobs', { cacheTtlMs: 20_000 });
+    vi.advanceTimersByTime(5_001);
+    await cloudFetch('/api/cloud/codegen-jobs', { cacheTtlMs: 20_000 });
+
+    expect(fetch).toHaveBeenCalledTimes(1);
+    vi.useRealTimers();
   });
 
   it('allows forced GET refreshes to bypass the cache', async () => {
