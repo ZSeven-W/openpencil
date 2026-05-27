@@ -1,7 +1,5 @@
-//! `impl ApplicationHandler for DesktopApp` — the winit event-loop
-//! body (new_events / resumed / window_event). Split out of `main.rs`
-//! to keep that file under the 800-line cap; `main.rs` keeps the
-//! `DesktopApp` struct, its helper `impl`, and `fn main`.
+//! winit `ApplicationHandler` impl for `DesktopApp`. Split out of
+//! `main.rs` to keep that file under the 800-line cap.
 
 use crate::{
     chat_attachment, chat_session, cursor_icon, design_session, figma_import_session, frame,
@@ -832,17 +830,14 @@ impl ApplicationHandler for DesktopApp {
     }
 
     fn exiting(&mut self, _event_loop: &ActiveEventLoop) {
-        // Belt-and-suspenders: macOS Cmd+Q / Alt+F4 / window-manager
-        // close can deliver `exiting` without `CloseRequested`. Flush
-        // any in-progress MCP port draft before snapshotting so a
-        // focused-but-uncommitted edit isn't silently dropped.
+        // macOS Cmd+Q / Alt+F4 / WM-close can deliver `exiting` without
+        // `CloseRequested`; flush MCP port draft before snapshotting so
+        // a focused-but-uncommitted edit isn't silently dropped.
         self.host.flush_settings_input();
         settings_io::save(self.host.editor_state());
-        // Persist the window geometry so the next launch restores
-        // where the user left the window. Guarded on a window having
-        // existed: a failed startup (create_window / Skia init error)
-        // reaches `exiting` with unseeded geometry, and saving that
-        // would clobber the previous session's good geometry.
+        // Save window geometry for next launch. Guarded on a window
+        // having existed — a failed startup reaches `exiting` with
+        // unseeded geometry and would clobber the previous good save.
         if self.window.is_some() {
             window_state::save(&window_state::WindowState::from_window(
                 self.win_pos,
