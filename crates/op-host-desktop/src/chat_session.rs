@@ -12,7 +12,7 @@ use std::sync::Arc;
 use std::thread;
 
 use op_ai::chat_provider::{ChatDelta, ChatProvider, ChatRequest, CliName};
-use op_editor_core::{ChatMessage, ChatToolCall};
+use op_editor_core::{ChatMessage, ChatToolCall, EditorState};
 use op_host_native::WidgetHostNative;
 use op_orchestrator::{classify_intent, DesignRequest, Intent};
 
@@ -176,6 +176,9 @@ pub fn launch_if_pending(
         if let Some(provider) = provider_for_agent(agent_idx) {
             *current_chat = None;
             let llm = ChatProviderLlmClient::new(Arc::from(provider));
+            if clear_fresh_starter_frame_for_design(host.editor_state_mut()) {
+                host.mark_editor_state_dirty();
+            }
             let initial_state = host.editor_state().clone();
             let request = DesignRequest {
                 prompt: user_text,
@@ -261,20 +264,31 @@ pub fn launch_if_pending(
     true
 }
 
+fn clear_fresh_starter_frame_for_design(state: &mut EditorState) -> bool {
+    if state.doc != EditorState::starter().doc {
+        return false;
+    }
+    state.active_children_mut().clear();
+    state.clear_selection();
+    true
+}
+
 /// Build the `ChatProvider` for an agent index (into
 /// `AgentProvider::ALL`: 0 ClaudeCode, 1 CodexCli, 2 OpenCode,
 /// 3 GithubCopilot, 4 GeminiCli). Claude Code uses its dedicated
-/// SDK adapter; Copilot / Gemini use the subprocess transport.
-/// Returns `None` for Codex + OpenCode — HTTP-server CLIs whose
-/// `ChatProvider` bridge isn't wired yet; the caller surfaces an
-/// explicit error rather than rerouting to a different agent.
+/// SDK adapter; Codex / Copilot / Gemini use the subprocess transport.
+/// Returns `None` for OpenCode — its `ChatProvider` bridge isn't
+/// wired yet; the caller surfaces an explicit error rather than
+/// rerouting to a different agent.
 fn provider_for_agent(agent_idx: usize) -> Option<Box<dyn ChatProvider>> {
     match agent_idx {
         0 => Some(Box::new(ClaudeCodeProvider::new())),
+        1 => SubprocessProvider::for_cli(CliName::Codex)
+            .map(|p| Box::new(p) as Box<dyn ChatProvider>),
         3 => Some(Box::new(CopilotProvider::new())),
         4 => SubprocessProvider::for_cli(CliName::Gemini)
             .map(|p| Box::new(p) as Box<dyn ChatProvider>),
-        // 1 CodexCli, 2 OpenCode — no bridge yet.
+        // 2 OpenCode — no bridge yet.
         _ => None,
     }
 }
@@ -465,5 +479,23 @@ mod tests {
             std::thread::sleep(std::time::Duration::from_millis(1));
         }
         assert_eq!(err.as_deref(), Some("boom"));
+    }
+
+    #[test]
+    fn design_turn_clears_fresh_starter_frame() {
+        let mut state = op_editor_core::EditorState::starter();
+
+        assert!(clear_fresh_starter_frame_for_design(&mut state));
+        assert!(state.active_children().is_empty());
+        assert!(state.selection.is_empty());
+    }
+
+    #[test]
+    fn design_turn_preserves_non_starter_documents() {
+        let mut state = op_editor_core::EditorState::starter();
+        state.active_children_mut().clear();
+
+        assert!(!clear_fresh_starter_frame_for_design(&mut state));
+        assert!(state.active_children().is_empty());
     }
 }
