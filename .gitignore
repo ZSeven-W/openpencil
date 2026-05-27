@@ -12,6 +12,12 @@ todos.json
 .openpencil-tmp/
 .superpowers/
 
+# Local run artifacts
+.playwright-cli/
+output/
+.sample-*.txt
+supabase/.temp/
+
 docs/*
 !docs/desktop-ci-cd.md
 
