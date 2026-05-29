@@ -12,13 +12,55 @@
 
 use op_editor_ui::widgets::{
     AIChatHit, AIChatPlaceholder, LayerPanel, LayerPanelHit, LocalePicker, PropertyPanel, Toolbar,
-    TopBar, TopBarHit, TOP_BAR_HEIGHT,
+    TopBar, TopBarHit, STATUS_BAR_HEIGHT, STATUS_BAR_WIDTH, TOP_BAR_HEIGHT,
 };
 use op_editor_ui::{Point2D, Rect};
 
 use super::{
     rect_contains, ChatDragState, DragState, LayerDragState, MarqueeDragState, WidgetHost,
+    STATUS_INSET,
 };
+
+impl WidgetHost {
+    /// `true` when `(x, y)` is over the StatusBar's search icon — the
+    /// left section of the bottom-right pill. Mirrors the native
+    /// host; `38 px` is a generous target that stops short of the
+    /// minus button.
+    pub(in crate::widget_host) fn status_bar_search_hit(
+        &self,
+        x: f32,
+        y: f32,
+        viewport_w: f32,
+        viewport_h: f32,
+    ) -> bool {
+        let (canvas_left, _top, canvas_w, canvas_h) = self.canvas_region(viewport_w, viewport_h);
+        if canvas_w <= STATUS_BAR_WIDTH + STATUS_INSET * 2.0 {
+            return false;
+        }
+        let canvas_right = canvas_left + canvas_w;
+        let origin_x = canvas_right - STATUS_BAR_WIDTH - STATUS_INSET;
+        let origin_y = TOP_BAR_HEIGHT + canvas_h - STATUS_BAR_HEIGHT - STATUS_INSET;
+        const SEARCH_SECTION_W: f32 = 38.0;
+        x >= origin_x
+            && x <= origin_x + SEARCH_SECTION_W
+            && y >= origin_y
+            && y <= origin_y + STATUS_BAR_HEIGHT
+    }
+
+    /// Zoom + pan so the active page's content is framed within the
+    /// canvas region (the StatusBar search action).
+    pub(in crate::widget_host) fn zoom_to_fit(&mut self, viewport_w: f32, viewport_h: f32) {
+        self.refresh_layout_scene();
+        let Some(content) = self.layout_scene.content_bounds() else {
+            return;
+        };
+        let (_l, _t, canvas_w, canvas_h) = self.canvas_region(viewport_w, viewport_h);
+        self.editor_state
+            .viewport
+            .fit_to(content, canvas_w, canvas_h, 48.0);
+        self.mark_dirty();
+    }
+}
 
 impl WidgetHost {
     /// Right-click handler — opens the LayerPanel context menu on
@@ -145,6 +187,12 @@ impl WidgetHost {
         let text_edit_committed = self.editor_state.text_edit_commit();
         if rename_committed || text_edit_committed {
             self.mark_dirty();
+        }
+        // StatusBar search icon → frame the page content in the
+        // viewport (floating bottom-right; hit-tests above the canvas).
+        if self.status_bar_search_hit(x, y, viewport_width, viewport_height) {
+            self.zoom_to_fit(viewport_width, viewport_height);
+            return true;
         }
         if self.editor_state.editor_ui.agent_settings_open
             && self.dispatch_agent_settings_press(x, y, viewport_width, viewport_height)
