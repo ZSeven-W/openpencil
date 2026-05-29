@@ -19,7 +19,7 @@ use crate::{Point2D, Rect, TextLayout};
 use op_editor_core::chat::{ChatMessage, ChatRole};
 
 use super::ai_chat_transcript_steps::{
-    extract_step_blocks, split_design_progress, ParsedStep, ParsedStepStatus,
+    extract_step_blocks, split_design_progress, strip_tool_call_xml, ParsedStep, ParsedStepStatus,
 };
 use super::ai_chat_transcript_tools::tool_lines;
 
@@ -179,7 +179,8 @@ fn build_item(
     let visible_content = if is_user {
         msg.content.clone()
     } else {
-        let extracted = extract_step_blocks(&msg.content, msg.streaming);
+        let display_content = strip_tool_call_xml(&msg.content);
+        let extracted = extract_step_blocks(&display_content, msg.streaming);
         progress_steps.extend(extracted.steps);
         extracted.visible_text
     };

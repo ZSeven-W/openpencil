@@ -216,6 +216,51 @@ render: captured frame
 }
 
 #[test]
+fn assistant_tool_call_xml_is_hidden_from_answer_bubble() {
+    let message = ChatMessage::assistant(
+        r#"before
+<function_calls><invoke name="batch_design">secret</invoke></function_calls>
+<result>{"ok":true}</result>
+<!-- APPLIED -->
+after"#,
+    );
+
+    let items = build_transcript(
+        std::slice::from_ref(&message),
+        body(),
+        op_editor_core::Locale::EnUs,
+    );
+    let text = items[0].bubble.as_ref().unwrap().lines.join("\n");
+
+    assert!(text.contains("before"));
+    assert!(text.contains("after"));
+    assert!(!text.contains("function_calls"));
+    assert!(!text.contains("invoke"));
+    assert!(!text.contains("secret"));
+    assert!(!text.contains("APPLIED"));
+}
+
+#[test]
+fn streaming_unclosed_invoke_is_hidden_from_answer_bubble() {
+    let mut message = ChatMessage::assistant_streaming();
+    message.content = r#"visible
+<invoke name="batch_design"><parameter name="dsl">internal"#
+        .into();
+
+    let items = build_transcript(
+        std::slice::from_ref(&message),
+        body(),
+        op_editor_core::Locale::EnUs,
+    );
+    let text = items[0].bubble.as_ref().unwrap().lines.join("\n");
+
+    assert!(text.contains("visible"));
+    assert!(!text.contains("invoke"));
+    assert!(!text.contains("parameter"));
+    assert!(!text.contains("internal"));
+}
+
+#[test]
 fn tool_calls_block_header_label_counts_the_calls() {
     let mut m = ChatMessage::assistant("done");
     m.tool_calls = vec![

@@ -19,6 +19,24 @@ pub(crate) struct StepExtraction {
     pub visible_text: String,
 }
 
+pub(crate) fn strip_tool_call_xml(text: &str) -> String {
+    let mut cleaned = text.to_string();
+    for tag in ["function_calls", "result", "inference_process", "parameter"] {
+        cleaned = strip_closed_blocks(&cleaned, tag);
+    }
+    cleaned = strip_closed_blocks(&cleaned, "invoke");
+    cleaned = strip_unclosed_block(&cleaned, "invoke");
+    for tag in ["invoke", "parameter", "function_calls"] {
+        cleaned = strip_open_tags(&cleaned, tag);
+        cleaned = strip_close_tags(&cleaned, tag);
+    }
+    for tag in ["search_quality_reflection", "thought_process"] {
+        cleaned = strip_simple_tags(&cleaned, tag);
+    }
+    cleaned = cleaned.replace("<!-- APPLIED -->", "");
+    collapse_blank_lines(&cleaned).trim().to_string()
+}
+
 pub(crate) fn split_design_progress(thinking: &str) -> (Vec<ParsedStep>, String) {
     let mut steps = Vec::new();
     let mut rest = Vec::new();
@@ -81,6 +99,112 @@ fn finish_extraction(steps: Vec<ParsedStep>, visible: String) -> StepExtraction 
         steps,
         visible_text: visible.trim().to_string(),
     }
+}
+
+fn strip_closed_blocks(input: &str, tag: &str) -> String {
+    let open_pat = format!("<{tag}");
+    let close_pat = format!("</{tag}>");
+    let mut out = String::new();
+    let mut cursor = 0usize;
+
+    while let Some(open) = find_ascii_ci(input, &open_pat, cursor) {
+        if !is_open_tag_at(input, open, tag) {
+            out.push_str(&input[cursor..open + 1]);
+            cursor = open + 1;
+            continue;
+        }
+        let Some(tag_end_rel) = input[open..].find('>') else {
+            break;
+        };
+        let content_start = open + tag_end_rel + 1;
+        let Some(close) = find_ascii_ci(input, &close_pat, content_start) else {
+            break;
+        };
+        out.push_str(&input[cursor..open]);
+        cursor = close + close_pat.len();
+    }
+
+    out.push_str(&input[cursor..]);
+    out
+}
+
+fn strip_unclosed_block(input: &str, tag: &str) -> String {
+    let open_pat = format!("<{tag}");
+    let mut cursor = 0usize;
+    while let Some(open) = find_ascii_ci(input, &open_pat, cursor) {
+        if is_open_tag_at(input, open, tag) {
+            return input[..open].to_string();
+        }
+        cursor = open + 1;
+    }
+    input.to_string()
+}
+
+fn strip_open_tags(input: &str, tag: &str) -> String {
+    let open_pat = format!("<{tag}");
+    let mut out = String::new();
+    let mut cursor = 0usize;
+
+    while let Some(open) = find_ascii_ci(input, &open_pat, cursor) {
+        if !is_open_tag_at(input, open, tag) {
+            out.push_str(&input[cursor..open + 1]);
+            cursor = open + 1;
+            continue;
+        }
+        let Some(tag_end_rel) = input[open..].find('>') else {
+            break;
+        };
+        out.push_str(&input[cursor..open]);
+        cursor = open + tag_end_rel + 1;
+    }
+
+    out.push_str(&input[cursor..]);
+    out
+}
+
+fn strip_close_tags(input: &str, tag: &str) -> String {
+    let close_pat = format!("</{tag}>");
+    let mut out = String::new();
+    let mut cursor = 0usize;
+
+    while let Some(close) = find_ascii_ci(input, &close_pat, cursor) {
+        out.push_str(&input[cursor..close]);
+        cursor = close + close_pat.len();
+    }
+
+    out.push_str(&input[cursor..]);
+    out
+}
+
+fn strip_simple_tags(input: &str, tag: &str) -> String {
+    strip_close_tags(&strip_open_tags(input, tag), tag)
+}
+
+fn is_open_tag_at(input: &str, open: usize, tag: &str) -> bool {
+    let Some(after) = input.get(open + 1 + tag.len()..) else {
+        return false;
+    };
+    after
+        .chars()
+        .next()
+        .map_or(true, |c| c == '>' || c == '/' || c.is_ascii_whitespace())
+}
+
+fn collapse_blank_lines(input: &str) -> String {
+    let mut out = Vec::new();
+    let mut blank = false;
+    for line in input.lines().map(str::trim_end) {
+        if line.trim().is_empty() {
+            if !blank && !out.is_empty() {
+                out.push(String::new());
+            }
+            blank = true;
+        } else {
+            out.push(line.to_string());
+            blank = false;
+        }
+    }
+    out.join("\n")
 }
 
 fn parsed_step(attrs: &str, content: &str, partial: bool) -> ParsedStep {
