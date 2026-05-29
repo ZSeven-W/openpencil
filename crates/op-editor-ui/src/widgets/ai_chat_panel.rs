@@ -1,4 +1,7 @@
 use crate::theme::Theme;
+use crate::widgets::ai_chat_checklist::{
+    fixed_checklist_height, fixed_checklist_rect, paint_fixed_checklist,
+};
 use crate::widgets::ai_chat_panel_controls::{
     attachment_row_hit, paint_attachment_row, ATTACHMENT_ROW_HEIGHT,
 };
@@ -122,10 +125,7 @@ pub struct AIChatPlaceholder<'a> {
     pub id: WidgetId,
     pub theme: Theme,
     pub state: &'a ChatState,
-    /// Host-supplied frame timestamp (milliseconds since the host
-    /// started). Drives caret blink via
-    /// [`jian_core::anim::blink_visible`]. `0` = host hasn't
-    /// installed a clock yet (caret stays solid).
+    /// Host frame timestamp in ms; drives caret blink.
     pub now_ms: u64,
     /// Localised chrome strings — resolved at construction time
     /// from `Document::t` so the panel reflows when the user
@@ -133,9 +133,7 @@ pub struct AIChatPlaceholder<'a> {
     pub label_new_chat: String,
     pub label_start_with_ai: String,
     pub label_input_placeholder: String,
-    /// Tip line ("select canvas elements before chatting to provide
-    /// context") — bottom of the empty-state body, between the example
-    /// cards and the separator above the input.
+    /// Empty-state tip line below the example cards.
     pub label_tip_select_elements: String,
     /// Chip label shown when no model is selected / discovered yet
     /// (`ai.noModelsConnected`).
@@ -211,24 +209,21 @@ impl<'a> AIChatPlaceholder<'a> {
         INPUT_BASE_HEIGHT + self.attachment_row_h()
     }
 
-    /// Bounds of the transcript body region — between the header and
-    /// the input block. Shared by `paint` and `hit_test` so the
-    /// message layout (and its collapsible-header hit targets) line
-    /// up exactly.
+    /// Bounds of the transcript body region.
     fn body_rect(&self, rect: Rect) -> Rect {
         let body_top = rect.origin.y + HEADER_HEIGHT;
-        let body_bottom = rect.origin.y + rect.size.y - self.input_height() - PAD - 8.0;
+        let body_bottom = rect.origin.y + rect.size.y
+            - self.input_height()
+            - PAD
+            - 8.0
+            - fixed_checklist_height(&self.state.messages);
         Rect {
             origin: Point2D::new(rect.origin.x + PAD, body_top),
             size: Point2D::new(rect.size.x - PAD * 2.0, (body_bottom - body_top).max(0.0)),
         }
     }
 
-    /// Bounds of the model-picker dropdown — anchored just above
-    /// the bottom toolbar (the chip), growing upward over the
-    /// message list. `input_rect` is the panel's input box. The
-    /// height is capped at `MODEL_PICKER_MAX_H`; a taller catalog
-    /// scrolls inside the card rather than overflowing the screen.
+    /// Bounds of the model-picker dropdown.
     fn model_picker_rect(&self, rect: Rect, input_rect: Rect) -> Rect {
         let height = crate::widgets::ai_chat_model_picker::picker_view_height(
             &self.state.available_models,
@@ -242,10 +237,7 @@ impl<'a> AIChatPlaceholder<'a> {
         }
     }
 
-    /// Public bounds of the open model-picker dropdown — `None` when
-    /// the picker is closed. The host uses this to route wheel +
-    /// cursor-move input into the picker (scroll + hover) without
-    /// re-deriving the panel's internal input-block geometry.
+    /// Public bounds of the open model-picker dropdown.
     pub fn model_picker_bounds(&self, rect: Rect) -> Option<Rect> {
         if !self.model_picker_open {
             return None;
@@ -511,6 +503,7 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
 
         // Body — either messages or examples.
         let input_h = self.input_height();
+        let checklist_h = fixed_checklist_height(&self.state.messages);
         if self.state.messages.is_empty() {
             paint_examples(
                 cx,
@@ -528,6 +521,14 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
                 &self.state.messages,
                 self.now_ms,
                 self.locale,
+            );
+        }
+        if checklist_h > 0.0 {
+            paint_fixed_checklist(
+                cx,
+                &self.theme,
+                fixed_checklist_rect(rect, input_h, checklist_h),
+                &self.state.messages,
             );
         }
 

@@ -18,10 +18,9 @@ use crate::widgets::PaintCx;
 use crate::{Point2D, Rect, TextLayout};
 use op_editor_core::chat::{ChatMessage, ChatRole, ChatToolCall};
 
-#[path = "ai_chat_transcript_steps.rs"]
-mod transcript_steps;
-
-use transcript_steps::{extract_step_blocks, split_design_progress, ParsedStep, ParsedStepStatus};
+use super::ai_chat_transcript_steps::{
+    extract_step_blocks, split_design_progress, ParsedStep, ParsedStepStatus,
+};
 
 /// Body text size used throughout the transcript.
 const BODY_FONT: f32 = 12.0;
