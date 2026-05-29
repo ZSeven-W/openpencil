@@ -583,9 +583,9 @@ impl Widget for TopBar {
         let status_text = self.chip_status_text();
         let show_dot = status_text.is_some();
         let chip_text: &str = status_text.as_deref().unwrap_or(self.label_agents_and_mcp);
-        let dot_w = if show_dot { 8.0 + 6.0 } else { 0.0 };
+        let dot_w = if show_dot { 6.0 + 6.0 } else { 0.0 };
         let icons_w = self.agent_icons_width();
-        let text_w = cx.backend.measure_text(chip_text, 12.0);
+        let text_w = cx.backend.measure_text(chip_text, 11.0);
         let chip_w = 8.0 + icons_w + 6.0 + dot_w + text_w + 12.0;
         let chip_rect = Rect {
             origin: Point2D::new(rx - chip_w - 6.0, center_y - 13.0),
@@ -624,31 +624,44 @@ impl Widget for TopBar {
         }
         let mut text_x = chip_rect.origin.x + 8.0 + icons_w + 6.0;
         if show_dot {
+            // emerald-500 (#10b981) — matches the TS status dot.
             let dot_color = Color {
-                r: 0.0,
-                g: 0.85,
-                b: 0.4,
+                r: 0.063,
+                g: 0.725,
+                b: 0.506,
                 a: 1.0,
             };
             cx.backend.fill_round_rect(
                 Rect {
-                    origin: Point2D::new(text_x, chip_rect.origin.y + chip_rect.size.y / 2.0 - 4.0),
-                    size: Point2D::new(8.0, 8.0),
+                    origin: Point2D::new(text_x, chip_rect.origin.y + chip_rect.size.y / 2.0 - 3.0),
+                    size: Point2D::new(6.0, 6.0),
                 },
-                4.0,
+                3.0,
                 dot_color,
             );
-            text_x += 8.0 + 6.0;
+            text_x += 6.0 + 6.0;
         }
         let chip_label = TextLayout::single_run(
             chip_text,
             "system-ui",
-            12.0,
-            to_jian_color(self.theme.foreground),
+            11.0,
+            to_jian_color(self.theme.muted_foreground),
             Point2D::new(0.0, 0.0),
         );
         cx.backend
             .draw_text(&chip_label, Point2D::new(text_x, chip_rect.origin.y + 18.0));
+
+        // Vertical divider between the agent chip and the globe button
+        // (TS: `w-px h-3.5 bg-border/60`) — groups the status chip
+        // apart from the locale/theme/fullscreen controls.
+        let divider_x = globe_button.origin.x - 3.0;
+        cx.backend.fill_rect(
+            Rect {
+                origin: Point2D::new(divider_x, center_y - 7.0),
+                size: Point2D::new(1.0, 14.0),
+            },
+            self.theme.border,
+        );
     }
 
     fn access_node(&self) -> accesskit::Node {
