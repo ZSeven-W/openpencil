@@ -108,6 +108,71 @@ fn hit_test_resolves_first_layer_row() {
     }
 }
 
+fn first_layer_trailing_points(panel: &LayerPanel, rect: Rect) -> (Point2D, Point2D) {
+    let y = 8.0
+        + SECTION_HEADER_HEIGHT
+        + panel.pages.len() as f32 * PAGE_ROW_HEIGHT
+        + SECTION_GAP
+        + SECTION_HEADER_HEIGHT;
+    let row = Rect {
+        origin: Point2D::new(rect.origin.x + 6.0, y + 2.0),
+        size: Point2D::new(rect.size.x - 12.0, LAYER_ROW_HEIGHT - 4.0),
+    };
+    let trailing_right = row.origin.x + row.size.x - 8.0;
+    let lock_x = trailing_right - 14.0;
+    let eye_x = lock_x - 22.0;
+    let icon_y = row.origin.y + 6.0;
+    (
+        Point2D::new(eye_x + 6.0, icon_y + 6.0),
+        Point2D::new(lock_x + 6.0, icon_y + 6.0),
+    )
+}
+
+#[test]
+fn selected_visible_unlocked_layer_does_not_expose_trailing_actions_without_hover() {
+    let state = EditorState::starter();
+    let panel = LayerPanel::from_editor(&state);
+    assert!(panel.items[0].selected);
+    assert!(!panel.items[0].hovered);
+    assert!(!panel.items[0].hidden);
+    assert!(!panel.items[0].locked);
+    let rect = Rect {
+        origin: Point2D::new(0.0, 0.0),
+        size: Point2D::new(LAYER_PANEL_WIDTH, panel.intrinsic_height()),
+    };
+    let (eye, lock) = first_layer_trailing_points(&panel, rect);
+
+    assert!(matches!(
+        panel.hit_test(rect, eye),
+        Some(LayerPanelHit::Layer(_))
+    ));
+    assert!(matches!(
+        panel.hit_test(rect, lock),
+        Some(LayerPanelHit::Layer(_))
+    ));
+}
+
+#[test]
+fn hovered_layer_exposes_trailing_actions() {
+    let mut state = EditorState::starter();
+    state.editor_ui.hovered_layer_id = Some(NodeId::new("n10"));
+    let panel = LayerPanel::from_editor(&state);
+    let rect = Rect {
+        origin: Point2D::new(0.0, 0.0),
+        size: Point2D::new(LAYER_PANEL_WIDTH, panel.intrinsic_height()),
+    };
+    let (eye, lock) = first_layer_trailing_points(&panel, rect);
+
+    assert_eq!(
+        panel.hit_test(rect, eye),
+        Some(LayerPanelHit::ToggleHidden(NodeId::new("n10")))
+    );
+    assert_eq!(
+        panel.hit_test(rect, lock),
+        Some(LayerPanelHit::ToggleLocked(NodeId::new("n10")))
+    );
+}
+
 #[test]
 fn hit_test_resolves_add_page_plus_icon() {
     let state = EditorState::sample();

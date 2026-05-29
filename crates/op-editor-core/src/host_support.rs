@@ -56,17 +56,16 @@ impl EditorState {
     }
 
     /// Build the document a fresh launch opens with — a single empty
-    /// starter Frame `n10` (white fill, 1-px black stroke), selected
-    /// so the user can immediately resize / move it or drop nodes
-    /// inside. No demo decoration.
+    /// starter Frame `n10` matching the TypeScript app's blank
+    /// document geometry, selected so the user can immediately resize
+    /// / move it or drop nodes inside. No demo decoration.
     pub fn starter() -> Self {
         let src = r##"{
             "version": "0.8.0",
             "children": [
               {"type":"frame","id":"n10","name":"Frame",
-               "x":40,"y":40,"width":360,"height":240,
+               "x":0,"y":0,"width":1200,"height":800,
                "fill":[{"type":"solid","color":"#FFFFFF"}],
-               "stroke":{"thickness":1,"fill":[{"type":"solid","color":"#000000"}]},
                "children":[]}
             ]
         }"##;
@@ -432,6 +431,21 @@ mod tests {
         assert_eq!(s.doc.children.len(), 1);
         assert_eq!(s.max_node_id(), 10);
         assert_eq!(s.selection.anchor, NodeId::new("n10"));
+        let frame = match &s.doc.children[0] {
+            jian_ops_schema::node::PenNode::Frame(frame) => frame,
+            other => panic!("starter should be a frame, got {:?}", other),
+        };
+        assert_eq!(frame.base.x, Some(0.0));
+        assert_eq!(frame.base.y, Some(0.0));
+        assert!(matches!(
+            frame.container.width,
+            Some(jian_ops_schema::sizing::SizingBehavior::Number(1200.0))
+        ));
+        assert!(matches!(
+            frame.container.height,
+            Some(jian_ops_schema::sizing::SizingBehavior::Number(800.0))
+        ));
+        assert!(frame.container.stroke.is_none());
     }
 
     #[test]
