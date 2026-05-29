@@ -5,7 +5,9 @@ use crate::widgets::ai_chat_checklist::{
 use crate::widgets::ai_chat_panel_controls::{
     attachment_row_hit, paint_attachment_row, ATTACHMENT_ROW_HEIGHT,
 };
-use crate::widgets::ai_chat_panel_paint::{example_card_rects, paint_examples};
+use crate::widgets::ai_chat_panel_paint::{
+    example_card_rects, paint_examples, paint_panel_surface,
+};
 use crate::widgets::editor_state_ext::{theme_for, translate};
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::{LayoutBox, LayoutCx, PaintCx, Widget, WidgetId};
@@ -459,9 +461,7 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
             return;
         }
 
-        cx.backend.fill_round_rect(rect, 14.0, self.theme.popover);
-        cx.backend
-            .stroke_round_rect(rect, 14.0, self.theme.border, 1.0);
+        paint_panel_surface(cx, &self.theme, rect);
 
         // Expanded header.
         let header_y = rect.origin.y + 8.0;
