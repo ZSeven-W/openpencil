@@ -486,7 +486,7 @@ impl WidgetHostNative {
         let (_l, _t, canvas_w, canvas_h) = self.canvas_region(viewport_w, viewport_h);
         self.editor_state
             .viewport
-            .fit_to(content, canvas_w, canvas_h, 48.0);
+            .fit_to_with_max_zoom(content, canvas_w, canvas_h, 64.0, 1.0);
         self.mark_dirty();
     }
 

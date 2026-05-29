@@ -196,17 +196,9 @@ fn status_bar_search_click_frames_content_in_viewport() {
 
     assert!(consumed, "search-icon click must be consumed");
     let v = host.editor_state().viewport;
-    assert!(
-        (v.zoom - 0.2).abs() > 1e-3,
-        "zoom should change to frame the content, got {}",
-        v.zoom
-    );
-    assert!(
-        v.pan_x > -5000.0 && v.pan_y > -5000.0,
-        "pan should re-anchor toward the content, got ({}, {})",
-        v.pan_x,
-        v.pan_y
-    );
+    assert!((v.zoom - 1.0).abs() < 1e-3, "zoom {}", v.zoom);
+    assert!((v.pan_x - 230.0).abs() < 1e-2, "pan_x {}", v.pan_x);
+    assert!((v.pan_y - 180.0).abs() < 1e-2, "pan_y {}", v.pan_y);
 }
 
 #[test]
