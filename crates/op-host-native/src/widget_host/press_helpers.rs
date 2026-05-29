@@ -77,6 +77,7 @@ impl WidgetHostNative {
                 self.editor_state.rebuild_chat_models();
             }
             AgentSettingsHit::ToggleMcpServer => {
+                self.commit_settings_focus_if_any();
                 let v = &mut self
                     .editor_state
                     .editor_ui

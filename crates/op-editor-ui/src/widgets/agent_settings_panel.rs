@@ -148,7 +148,7 @@ impl<'a> AgentSettingsPanel<'a> {
                 }
             }
             AgentSettingsTab::Mcp => {
-                match agent_settings_mcp::hit_test(content_rect(panel), scrolled) {
+                match agent_settings_mcp::hit_test(content_rect(panel), &self.settings, scrolled) {
                     McpHit::ToggleServer => return AgentSettingsHit::ToggleMcpServer,
                     McpHit::ToggleCli(cli) => return AgentSettingsHit::ToggleMcpCli(cli),
                     McpHit::FocusPort => return AgentSettingsHit::FocusMcpPort,

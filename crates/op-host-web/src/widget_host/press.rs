@@ -760,6 +760,7 @@ impl WidgetHost {
                 self.editor_state.rebuild_chat_models();
             }
             AgentSettingsHit::ToggleMcpServer => {
+                self.commit_settings_focus();
                 self.editor_state
                     .editor_ui
                     .agent_settings
