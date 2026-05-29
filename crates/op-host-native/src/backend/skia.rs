@@ -144,6 +144,11 @@ pub struct NativeBackend {
     typeface_tried: bool,
     cjk_typeface: Option<skia_safe::Typeface>,
     cjk_typeface_tried: bool,
+    /// Korean (Hangul) face — resolved separately from `cjk_typeface`
+    /// because the Han-ideograph match returns a Chinese font without
+    /// Hangul coverage.
+    korean_typeface: Option<skia_safe::Typeface>,
+    korean_typeface_tried: bool,
     /// Default-family per-codepoint typeface cache, keyed by
     /// `(codepoint, weight)`.
     char_typeface_cache: std::collections::HashMap<(i32, u16), Option<skia_safe::Typeface>>,
@@ -221,6 +226,8 @@ impl NativeBackend {
             typeface_tried: false,
             cjk_typeface: None,
             cjk_typeface_tried: false,
+            korean_typeface: None,
+            korean_typeface_tried: false,
             char_typeface_cache: std::collections::HashMap::new(),
             family_typeface_cache: std::collections::HashMap::new(),
             image_cache: std::collections::HashMap::new(),
@@ -255,7 +262,11 @@ impl NativeBackend {
         if c.is_ascii() && weight == 400 {
             return self.ensure_typeface().cloned();
         }
-        if font_script::is_east_asian_codepoint(c) {
+        if font_script::is_hangul_codepoint(c) {
+            if let Some(tf) = self.ensure_korean_typeface().cloned() {
+                return Some(tf);
+            }
+        } else if font_script::is_east_asian_codepoint(c) {
             return self.ensure_cjk_typeface().cloned();
         }
         let cp = c as i32;
@@ -287,7 +298,11 @@ impl NativeBackend {
         let Some(primary) = primary_font_family(family) else {
             return self.typeface_for_char(c, weight);
         };
-        if font_script::is_east_asian_codepoint(c) {
+        if font_script::is_hangul_codepoint(c) {
+            if let Some(tf) = self.ensure_korean_typeface().cloned() {
+                return Some(tf);
+            }
+        } else if font_script::is_east_asian_codepoint(c) {
             return self.ensure_cjk_typeface().cloned();
         }
         let key = (primary.to_string(), c as i32, weight);
@@ -356,6 +371,23 @@ impl NativeBackend {
             self.cjk_typeface_tried = true;
         }
         self.cjk_typeface.as_ref()
+    }
+
+    /// Lazy-init the cached Korean (Hangul) typeface, resolved from a
+    /// Hangul syllable so the OS picks a Hangul-covering face (e.g.
+    /// Apple SD Gothic Neo / Noto Sans KR) rather than the Chinese
+    /// font the Han-ideograph match returns.
+    fn ensure_korean_typeface(&mut self) -> Option<&skia_safe::Typeface> {
+        if !self.korean_typeface_tried {
+            self.korean_typeface = self.font_mgr.match_family_style_character(
+                "",
+                skia_safe::FontStyle::default(),
+                &[],
+                '한' as i32,
+            );
+            self.korean_typeface_tried = true;
+        }
+        self.korean_typeface.as_ref()
     }
 
     /// Convenience constructor for tests and the basic-window demo.
