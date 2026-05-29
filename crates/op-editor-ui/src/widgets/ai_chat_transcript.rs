@@ -30,6 +30,10 @@ const HEADER_H: f32 = 22.0;
 const MSG_GAP: f32 = 10.0;
 /// Vertical gap between sub-blocks within one message.
 const SUB_GAP: f32 = 4.0;
+/// Height of one compact design-progress step row.
+const ACTION_STEP_H: f32 = 28.0;
+/// Vertical gap between compact design-progress rows.
+const ACTION_STEP_GAP: f32 = 4.0;
 /// Side length of an image thumbnail box.
 const IMG_THUMB: f32 = 60.0;
 /// Gap between image thumbnails.
@@ -61,6 +65,16 @@ pub(crate) struct Collapsible {
     pub lines: Vec<String>,
 }
 
+/// One compact design-progress row, matching the TS chat's action
+/// step treatment rather than dumping progress into reasoning text.
+pub(crate) struct ActionStep {
+    pub rect: Rect,
+    pub label: String,
+    pub done: bool,
+    pub active: bool,
+    pub failed: bool,
+}
+
 /// The answer-text bubble of a message. `typing` is set on an
 /// in-flight message with no text yet — paint shows animated dots.
 pub(crate) struct TextBubble {
@@ -74,6 +88,7 @@ pub(crate) struct TextBubble {
 pub(crate) struct TranscriptItem {
     pub msg_index: usize,
     pub role: ChatRole,
+    pub steps: Vec<ActionStep>,
     pub thinking: Option<Collapsible>,
     pub tools: Option<Collapsible>,
     pub bubble: Option<TextBubble>,
@@ -118,6 +133,38 @@ fn tool_lines(calls: &[ChatToolCall], budget: u32) -> Vec<String> {
     lines
 }
 
+fn split_design_progress(thinking: &str) -> (Vec<String>, String) {
+    let mut steps = Vec::new();
+    let mut rest = Vec::new();
+    for line in thinking.lines() {
+        let trimmed = line.trim();
+        if let Some(label) = trimmed.strip_prefix('•').map(str::trim) {
+            if !label.is_empty() {
+                steps.push(label.to_string());
+            }
+        } else if !trimmed.is_empty() {
+            rest.push(line.trim_end().to_string());
+        }
+    }
+    (steps, rest.join("\n"))
+}
+
+fn progress_failed(label: &str) -> bool {
+    let lower = label.to_ascii_lowercase();
+    lower.contains("failed") || lower.starts_with("error:")
+}
+
+fn progress_terminal(label: &str) -> bool {
+    let lower = label.to_ascii_lowercase();
+    progress_failed(label)
+        || lower.contains(" done")
+        || lower.ends_with("done")
+        || lower.contains("ready")
+        || lower.contains("applied")
+        || lower.contains("captured")
+        || lower.contains("skipped")
+}
+
 /// Place one message starting at `top`. Returns the item and the
 /// `y` immediately below it (before the inter-message gap).
 fn build_item(
@@ -136,6 +183,7 @@ fn build_item(
     };
     let budget = unit_budget(bubble_w - 2.0 * BUBBLE_PAD);
     let mut y = top;
+    let (progress_labels, thinking_text) = split_design_progress(&msg.thinking);
 
     let build_collapsible = |present: bool,
                              collapsed: bool,
@@ -167,11 +215,27 @@ fn build_item(
         })
     };
 
+    let mut steps = Vec::new();
+    for (i, label) in progress_labels.iter().enumerate() {
+        let failed = progress_failed(label);
+        let done =
+            failed || !msg.streaming || i + 1 < progress_labels.len() || progress_terminal(label);
+        let active = msg.streaming && i + 1 == progress_labels.len() && !done;
+        steps.push(ActionStep {
+            rect: Rect::xywh(x, y, bubble_w, ACTION_STEP_H),
+            label: label.clone(),
+            done,
+            active,
+            failed,
+        });
+        y += ACTION_STEP_H + ACTION_STEP_GAP;
+    }
+
     let thinking = build_collapsible(
-        !msg.thinking.is_empty(),
+        !thinking_text.trim().is_empty(),
         msg.thinking_collapsed,
         op_i18n::translate(locale, "ai.thinkingProcess").to_string(),
-        &|| wrap_units(&msg.thinking, budget),
+        &|| wrap_units(&thinking_text, budget),
         &mut y,
     );
     let tools = build_collapsible(
@@ -183,7 +247,11 @@ fn build_item(
         &mut y,
     );
 
-    let typing = msg.streaming && msg.content.is_empty();
+    let typing = msg.streaming
+        && msg.content.is_empty()
+        && steps.is_empty()
+        && thinking.is_none()
+        && tools.is_none();
     let bubble = if typing {
         let r = Rect::xywh(x, y, bubble_w, LINE_H + 2.0 * BUBBLE_PAD);
         y += r.size.y;
@@ -230,6 +298,7 @@ fn build_item(
         TranscriptItem {
             msg_index,
             role: msg.role,
+            steps,
             thinking,
             tools,
             bubble,
@@ -404,6 +473,64 @@ fn draw_line(
     cx.backend.draw_text(&layout, Point2D::new(x, baseline_y));
 }
 
+fn paint_action_step(cx: &mut PaintCx<'_>, theme: &Theme, step: &ActionStep) {
+    cx.backend.fill_round_rect(step.rect, 6.0, theme.muted);
+    cx.backend
+        .stroke_round_rect(step.rect, 6.0, theme.border, 1.0);
+    let icon_box = Rect::xywh(
+        step.rect.origin.x + 10.0,
+        step.rect.origin.y + 7.0,
+        14.0,
+        14.0,
+    );
+    if step.failed {
+        draw_icon(
+            cx.backend,
+            Icon::XCircle,
+            Point2D::new(icon_box.origin.x, icon_box.origin.y),
+            14.0,
+            theme.destructive,
+            1.7,
+        );
+    } else if step.done {
+        draw_icon(
+            cx.backend,
+            Icon::Check,
+            Point2D::new(icon_box.origin.x, icon_box.origin.y),
+            14.0,
+            theme.primary,
+            2.1,
+        );
+    } else {
+        let color = if step.active {
+            theme.primary
+        } else {
+            theme.muted_foreground
+        };
+        let r = if step.active { 4.0 } else { 3.0 };
+        let center = Point2D::new(icon_box.origin.x + 7.0, icon_box.origin.y + 7.0);
+        cx.backend.fill_oval(
+            Rect::xywh(center.x - r, center.y - r, r * 2.0, r * 2.0),
+            color,
+        );
+    }
+    let label_color = if step.active {
+        theme.foreground
+    } else if step.failed {
+        theme.destructive
+    } else {
+        theme.muted_foreground
+    };
+    draw_line(
+        cx,
+        &step.label,
+        step.rect.origin.x + 32.0,
+        step.rect.origin.y + 18.0,
+        11.0,
+        label_color,
+    );
+}
+
 /// Paint a collapsible block — header row (chevron + label) plus,
 /// when expanded, a tinted body box with the wrapped lines.
 fn paint_collapsible(cx: &mut PaintCx<'_>, theme: &Theme, block: &Collapsible) {
@@ -487,6 +614,9 @@ pub(crate) fn paint_transcript(
     cx.backend.save();
     cx.backend.clip_rect(body_rect);
     for item in build_transcript(messages, body_rect, locale) {
+        for step in &item.steps {
+            paint_action_step(cx, theme, step);
+        }
         if let Some(block) = &item.thinking {
             paint_collapsible(cx, theme, block);
         }
@@ -648,6 +778,45 @@ mod tests {
         assert!(!t.collapsed);
         assert!(t.lines.len() > 1, "long reasoning wraps to many lines");
         assert!(t.body.size.y > 0.0);
+    }
+
+    #[test]
+    fn design_progress_lines_do_not_render_as_reasoning_or_typing_placeholder() {
+        let mut m = ChatMessage::assistant_streaming();
+        m.thinking = "\n• Planning…\n• Scaffold ready".into();
+        let items = build_transcript(
+            std::slice::from_ref(&m),
+            body(),
+            op_editor_core::Locale::EnUs,
+        );
+
+        assert_eq!(items[0].steps.len(), 2);
+        assert_eq!(items[0].steps[0].label, "Planning…");
+        assert!(items[0].steps[0].done);
+        assert!(items[0].steps[1].done);
+        assert!(
+            items[0].thinking.is_none(),
+            "design progress should render as action steps, not a thinking block"
+        );
+        assert!(
+            items[0].bubble.is_none(),
+            "design progress should replace the empty streaming typing placeholder"
+        );
+    }
+
+    #[test]
+    fn current_design_progress_step_is_active_until_terminal() {
+        let mut m = ChatMessage::assistant_streaming();
+        m.thinking = "• Planning…".into();
+        let items = build_transcript(
+            std::slice::from_ref(&m),
+            body(),
+            op_editor_core::Locale::EnUs,
+        );
+
+        assert_eq!(items[0].steps.len(), 1);
+        assert!(items[0].steps[0].active);
+        assert!(!items[0].steps[0].done);
     }
 
     #[test]
