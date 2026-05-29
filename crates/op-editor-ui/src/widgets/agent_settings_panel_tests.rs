@@ -131,3 +131,21 @@ fn hit_test_resolves_builtin_agent_compact_edit_button() {
         AgentSettingsHit::EditBuiltinAgent(0)
     );
 }
+
+#[test]
+fn mcp_port_field_is_not_focusable_while_server_is_running() {
+    let mut state = EditorState::default();
+    state.editor_ui.agent_settings.tab = AgentSettingsTab::Mcp;
+    state.editor_ui.agent_settings.mcp_server.running = true;
+    let panel = AgentSettingsPanel::for_editor(&state);
+    let rect = panel.rect(1200.0, 800.0);
+    let content_x = rect.origin.x + 200.0 + 24.0;
+    let content_y = rect.origin.y + 24.0;
+    let content_w = rect.size.x - 200.0 - 48.0;
+    let server_card_top = content_y + 36.0;
+    let button_x = content_x + content_w - 16.0 - 72.0;
+    let port_x = button_x - 8.0 - 64.0;
+    let point = crate::Point2D::new(port_x + 32.0, server_card_top + 26.0);
+
+    assert_eq!(panel.hit_test(rect, point), AgentSettingsHit::Inside);
+}

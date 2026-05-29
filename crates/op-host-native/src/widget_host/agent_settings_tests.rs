@@ -1,5 +1,5 @@
 use super::WidgetHostNative;
-use op_editor_core::agent_settings::{BuiltinAgentField, SettingsFocus};
+use op_editor_core::agent_settings::{AgentSettingsTab, BuiltinAgentField, SettingsFocus};
 use op_editor_ui::widgets::agent_settings_panel::AgentSettingsPanel;
 
 #[test]
@@ -108,4 +108,32 @@ fn builtin_agent_compact_edit_focuses_display_name_form() {
         host.editor_state().editor_ui.settings_input_draft,
         "MiniMax"
     );
+}
+
+#[test]
+fn starting_mcp_server_commits_port_draft_and_clears_focus() {
+    let mut host = WidgetHostNative::new();
+    host.editor_state_mut().editor_ui.agent_settings.tab = AgentSettingsTab::Mcp;
+    host.editor_state_mut().editor_ui.agent_settings.focus = Some(SettingsFocus::McpPort);
+    host.editor_state_mut().editor_ui.settings_input_draft = "3101".into();
+
+    let panel = AgentSettingsPanel::for_editor(host.editor_state());
+    let rect = panel.rect(1200.0, 800.0);
+    let content_x = rect.origin.x + 200.0 + 24.0;
+    let content_y = rect.origin.y + 24.0;
+    let content_w = rect.size.x - 200.0 - 48.0;
+    let server_card_top = content_y + 36.0;
+    let button_x = content_x + content_w - 16.0 - 72.0;
+    assert!(host.dispatch_agent_settings_press(
+        button_x + 36.0,
+        server_card_top + 26.0,
+        1200.0,
+        800.0
+    ));
+
+    let state = host.editor_state();
+    assert!(state.editor_ui.agent_settings.mcp_server.running);
+    assert_eq!(state.editor_ui.agent_settings.mcp_server.port, 3101);
+    assert!(state.editor_ui.agent_settings.focus.is_none());
+    assert!(state.editor_ui.settings_input_draft.is_empty());
 }

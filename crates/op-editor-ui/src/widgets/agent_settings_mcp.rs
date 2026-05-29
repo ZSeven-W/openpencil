@@ -99,11 +99,11 @@ fn cli_cell_rect(content: Rect, idx: usize) -> Rect {
     }
 }
 
-pub fn hit_test(content: Rect, scrolled: Point2D) -> McpHit {
+pub fn hit_test(content: Rect, settings: &AgentSettings, scrolled: Point2D) -> McpHit {
     if rect_contains(server_button_rect(content), scrolled) {
         return McpHit::ToggleServer;
     }
-    if rect_contains(port_field_rect(content), scrolled) {
+    if !settings.mcp_server.running && rect_contains(port_field_rect(content), scrolled) {
         return McpHit::FocusPort;
     }
     for (i, cli) in McpCli::ALL.iter().enumerate() {
@@ -229,7 +229,8 @@ fn paint_server_card(
         Point2D::new(port_field_x - 8.0 - port_label_w, mid_y + 4.0),
     );
     let port_field = port_field_rect(content);
-    let focused = matches!(settings.focus, Some(SettingsFocus::McpPort));
+    let port_editable = !running;
+    let focused = port_editable && matches!(settings.focus, Some(SettingsFocus::McpPort));
     let port_str = if focused {
         ui.settings_input_draft.clone()
     } else {
@@ -247,7 +248,11 @@ fn paint_server_card(
         &port_str,
         "system-ui",
         12.0,
-        to_jian(theme.foreground),
+        to_jian(if port_editable {
+            theme.foreground
+        } else {
+            theme.muted_foreground
+        }),
         Point2D::new(0.0, 0.0),
     );
     let port_x = port_field.origin.x + (PORT_FIELD_W - port_w) / 2.0;
