@@ -13,6 +13,28 @@ pub(crate) struct ImageSearchTarget {
     pub query: String,
 }
 
+#[derive(Clone, PartialEq, Eq)]
+pub(crate) struct OpenverseCredentials {
+    client_id: String,
+    client_secret: String,
+}
+
+impl OpenverseCredentials {
+    fn from_state(state: &EditorState) -> Option<Self> {
+        let settings = &state.editor_ui.agent_settings;
+        let client_id = settings.openverse_client_id.trim();
+        let client_secret = settings.openverse_client_secret.trim();
+        if client_id.is_empty() || client_secret.is_empty() {
+            None
+        } else {
+            Some(Self {
+                client_id: client_id.to_string(),
+                client_secret: client_secret.to_string(),
+            })
+        }
+    }
+}
+
 struct ImageSearchJob {
     node_id: NodeId,
     rx: Receiver<Option<String>>,
@@ -47,10 +69,11 @@ impl ImageSearchSession {
         if targets.is_empty() {
             return false;
         }
+        let credentials = OpenverseCredentials::from_state(state);
         for target in targets {
             let id = target.node_id.as_str().to_string();
             self.in_flight.insert(id);
-            self.jobs.push(spawn_job(target));
+            self.jobs.push(spawn_job(target, credentials.clone()));
         }
         true
     }
@@ -84,11 +107,17 @@ impl ImageSearchSession {
     }
 }
 
-fn spawn_job(target: ImageSearchTarget) -> ImageSearchJob {
+fn spawn_job(
+    target: ImageSearchTarget,
+    credentials: Option<OpenverseCredentials>,
+) -> ImageSearchJob {
     let (tx, rx) = mpsc::channel();
     let node_id = target.node_id.clone();
     std::thread::spawn(move || {
-        let _ = tx.send(fetch_first_image_url_blocking(&target.query));
+        let _ = tx.send(fetch_first_image_url_blocking(
+            &target.query,
+            credentials.as_ref(),
+        ));
     });
     ImageSearchJob { node_id, rx }
 }
@@ -148,7 +177,10 @@ pub(crate) fn apply_result(state: &mut EditorState, node_id: &NodeId, url: &str)
     true
 }
 
-fn fetch_first_image_url_blocking(query: &str) -> Option<String> {
+fn fetch_first_image_url_blocking(
+    query: &str,
+    credentials: Option<&OpenverseCredentials>,
+) -> Option<String> {
     let query = query.trim();
     if query.is_empty() {
         return None;
@@ -157,22 +189,25 @@ fn fetch_first_image_url_blocking(query: &str) -> Option<String> {
         .enable_all()
         .build()
         .ok()?;
-    runtime.block_on(fetch_first_image_url(query))
+    runtime.block_on(fetch_first_image_url(query, credentials))
 }
 
-async fn fetch_first_image_url(query: &str) -> Option<String> {
+async fn fetch_first_image_url(
+    query: &str,
+    credentials: Option<&OpenverseCredentials>,
+) -> Option<String> {
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(8))
         .user_agent(concat!("openpencil-desktop/", env!("CARGO_PKG_VERSION")))
         .build()
         .ok()?;
-    if let Some(url) = fetch_openverse(&client, query).await {
+    if let Some(url) = fetch_openverse(&client, query, credentials).await {
         return Some(url);
     }
     let words: Vec<&str> = query.split_whitespace().filter(|w| !w.is_empty()).collect();
     if words.len() > 2 {
         let truncated = words[..2].join(" ");
-        if let Some(url) = fetch_openverse(&client, &truncated).await {
+        if let Some(url) = fetch_openverse(&client, &truncated, credentials).await {
             return Some(url);
         }
         if let Some(url) = fetch_wikimedia(&client, &truncated).await {
@@ -182,13 +217,23 @@ async fn fetch_first_image_url(query: &str) -> Option<String> {
     fetch_wikimedia(&client, query).await
 }
 
-async fn fetch_openverse(client: &reqwest::Client, query: &str) -> Option<String> {
+async fn fetch_openverse(
+    client: &reqwest::Client,
+    query: &str,
+    credentials: Option<&OpenverseCredentials>,
+) -> Option<String> {
     let url = reqwest::Url::parse_with_params(
         "https://api.openverse.org/v1/images/",
         &[("q", query), ("page_size", "1")],
     )
     .ok()?;
-    let resp = client.get(url).send().await.ok()?;
+    let mut request = client.get(url);
+    if let Some(credentials) = credentials {
+        if let Some(token) = fetch_openverse_token(client, credentials).await {
+            request = request.bearer_auth(token);
+        }
+    }
+    let resp = request.send().await.ok()?;
     if !resp.status().is_success() {
         return None;
     }
@@ -199,6 +244,31 @@ async fn fetch_openverse(client: &reqwest::Client, query: &str) -> Option<String
         .and_then(serde_json::Value::as_str)
         .or_else(|| result.get("url").and_then(serde_json::Value::as_str))
         .filter(|s| !s.trim().is_empty())
+        .map(str::to_string)
+}
+
+async fn fetch_openverse_token(
+    client: &reqwest::Client,
+    credentials: &OpenverseCredentials,
+) -> Option<String> {
+    let resp = client
+        .post("https://api.openverse.org/v1/auth_tokens/token/")
+        .form(&[
+            ("grant_type", "client_credentials"),
+            ("client_id", credentials.client_id.as_str()),
+            ("client_secret", credentials.client_secret.as_str()),
+        ])
+        .send()
+        .await
+        .ok()?;
+    if !resp.status().is_success() {
+        return None;
+    }
+    let json: serde_json::Value = resp.json().await.ok()?;
+    json.get("access_token")
+        .and_then(serde_json::Value::as_str)
+        .map(str::trim)
+        .filter(|token| !token.is_empty())
         .map(str::to_string)
 }
 
@@ -318,10 +388,24 @@ mod tests {
         assert_eq!(image.src, "https://example.com/photo.jpg");
     }
 
+    #[test]
+    fn openverse_credentials_require_both_fields() {
+        let mut state = EditorState::default();
+        assert!(OpenverseCredentials::from_state(&state).is_none());
+
+        state.editor_ui.agent_settings.openverse_client_id = " client ".into();
+        assert!(OpenverseCredentials::from_state(&state).is_none());
+
+        state.editor_ui.agent_settings.openverse_client_secret = " secret ".into();
+        let credentials = OpenverseCredentials::from_state(&state).expect("complete credentials");
+        assert_eq!(credentials.client_id, "client");
+        assert_eq!(credentials.client_secret, "secret");
+    }
+
     #[tokio::test]
     #[ignore = "network smoke test for Openverse/Wikimedia"]
     async fn fetch_first_image_url_smoke() {
-        let url = fetch_first_image_url("burger fries")
+        let url = fetch_first_image_url("burger fries", None)
             .await
             .expect("common query should return an image URL");
         assert!(url.starts_with("http"), "got {url}");
