@@ -124,6 +124,7 @@ pub(super) fn paint_image_node(
             bytes.as_ref(),
             node.image_fit.to_draw_mode(),
             node.image_adjustments,
+            node.opacity,
         );
     }
     if let Some(stroke) = node.stroke {

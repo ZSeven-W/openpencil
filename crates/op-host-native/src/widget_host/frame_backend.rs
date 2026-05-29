@@ -199,9 +199,17 @@ impl<'a> RenderBackend for NativeFrameBackend<'a> {
         encoded: &[u8],
         mode: ImageDrawMode,
         adjustments: ImageAdjustments,
+        opacity: f32,
     ) {
-        self.inner
-            .draw_image_with_options(self.canvas, rect, image_id, encoded, mode, adjustments);
+        self.inner.draw_image_with_options(
+            self.canvas,
+            rect,
+            image_id,
+            encoded,
+            mode,
+            adjustments,
+            opacity,
+        );
     }
 
     fn fill_round_rect_linear_gradient(

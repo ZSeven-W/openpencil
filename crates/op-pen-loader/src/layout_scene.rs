@@ -113,6 +113,10 @@ fn node_payload_to_scene(
             origin: Point2D::new(node.x, node.y),
             size: Point2D::new(node.w, node.h),
         },
+        // Carried so the image painter can dim rasters (which have no
+        // colour to bake opacity into); fill/stroke/gradient/shadow
+        // already have `cum_opacity` folded into their alpha above.
+        opacity: cum_opacity,
         rotation: node.rotation,
         flip_x: node.flip_x,
         flip_y: node.flip_y,

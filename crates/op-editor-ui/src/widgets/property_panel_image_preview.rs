@@ -20,6 +20,7 @@ pub(crate) fn paint_image_preview(
         &bytes,
         mode_to_draw_mode(summary.mode),
         summary_adjustments(summary),
+        1.0,
     );
     cx.backend.restore();
     true
