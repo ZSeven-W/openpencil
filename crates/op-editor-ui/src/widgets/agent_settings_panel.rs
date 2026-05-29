@@ -56,6 +56,8 @@ pub enum AgentSettingsHit {
     ToggleImagesAdvanced,
     TestImageSearch,
     AddGenConfig,
+    SetActiveGenConfig(usize),
+    RemoveGenConfig(usize),
     ToggleAutoUpdate,
     FocusMcpPort,
     Outside,
@@ -162,6 +164,12 @@ impl<'a> AgentSettingsPanel<'a> {
                     ImagesHit::ToggleAdvanced => return AgentSettingsHit::ToggleImagesAdvanced,
                     ImagesHit::TestSearch => return AgentSettingsHit::TestImageSearch,
                     ImagesHit::AddGenConfig => return AgentSettingsHit::AddGenConfig,
+                    ImagesHit::SetActiveGenConfig(index) => {
+                        return AgentSettingsHit::SetActiveGenConfig(index);
+                    }
+                    ImagesHit::RemoveGenConfig(index) => {
+                        return AgentSettingsHit::RemoveGenConfig(index);
+                    }
                     ImagesHit::None => {}
                 }
             }

@@ -103,6 +103,38 @@ impl WidgetHostNative {
                     .images_advanced_open;
                 *v = !*v;
             }
+            AgentSettingsHit::SetActiveGenConfig(index) => {
+                self.commit_settings_focus_if_any();
+                if let Some(id) = self
+                    .editor_state
+                    .editor_ui
+                    .agent_settings
+                    .image_gen_profiles
+                    .get(index)
+                    .map(|profile| profile.id.clone())
+                {
+                    self.editor_state
+                        .editor_ui
+                        .agent_settings
+                        .set_active_image_gen_profile(&id);
+                }
+            }
+            AgentSettingsHit::RemoveGenConfig(index) => {
+                self.commit_settings_focus_if_any();
+                if let Some(id) = self
+                    .editor_state
+                    .editor_ui
+                    .agent_settings
+                    .image_gen_profiles
+                    .get(index)
+                    .map(|profile| profile.id.clone())
+                {
+                    self.editor_state
+                        .editor_ui
+                        .agent_settings
+                        .remove_image_gen_profile(&id);
+                }
+            }
             AgentSettingsHit::ToggleAutoUpdate => {
                 let v = &mut self
                     .editor_state
@@ -247,8 +279,14 @@ impl WidgetHostNative {
             }
             AgentSettingsHit::AddAcpAgent
             | AgentSettingsHit::TestImageSearch
-            | AgentSettingsHit::AddGenConfig
             | AgentSettingsHit::Inside => {}
+            AgentSettingsHit::AddGenConfig => {
+                self.commit_settings_focus_if_any();
+                self.editor_state
+                    .editor_ui
+                    .agent_settings
+                    .add_image_gen_profile();
+            }
         }
         self.mark_dirty();
         true

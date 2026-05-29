@@ -150,6 +150,47 @@ impl BuiltinAgentConfig {
     }
 }
 
+/// Image-generation service providers mirrored from the TS
+/// `ImageGenProvider` union.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ImageGenProvider {
+    OpenAi,
+    Gemini,
+    Replicate,
+    Custom,
+}
+
+impl ImageGenProvider {
+    pub fn label(self) -> &'static str {
+        match self {
+            ImageGenProvider::OpenAi => "OpenAI",
+            ImageGenProvider::Gemini => "Google Gemini",
+            ImageGenProvider::Replicate => "Replicate",
+            ImageGenProvider::Custom => "Custom",
+        }
+    }
+
+    pub fn default_model_placeholder(self) -> &'static str {
+        match self {
+            ImageGenProvider::OpenAi => "dall-e-3",
+            ImageGenProvider::Gemini => "gemini-2.0-flash-preview-image-generation",
+            ImageGenProvider::Replicate => "black-forest-labs/flux-1.1-pro",
+            ImageGenProvider::Custom => "model-name",
+        }
+    }
+}
+
+/// One image-generation configuration profile.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ImageGenProfile {
+    pub id: String,
+    pub name: String,
+    pub provider: ImageGenProvider,
+    pub api_key: String,
+    pub model: String,
+    pub base_url: Option<String>,
+}
+
 /// State for the floating agent-settings modal.
 #[derive(Debug, Clone, PartialEq)]
 pub struct AgentSettings {
@@ -163,6 +204,9 @@ pub struct AgentSettings {
     pub mcp_cli_enabled: [bool; 6],
     pub images_advanced_open: bool,
     pub images_search_ready: bool,
+    pub image_gen_profiles: Vec<ImageGenProfile>,
+    pub active_image_gen_profile_id: Option<String>,
+    pub next_image_gen_profile_id: u64,
     /// Whether the desktop host should check GitHub releases on
     /// startup. Manual "Check for Updates" stays available.
     pub auto_update_enabled: bool,
@@ -187,8 +231,11 @@ impl Default for AgentSettings {
             scroll_y: 0.0,
             mcp_server: McpServer::default(),
             mcp_cli_enabled: [false; 6],
-            images_advanced_open: true,
+            images_advanced_open: false,
             images_search_ready: true,
+            image_gen_profiles: Vec::new(),
+            active_image_gen_profile_id: None,
+            next_image_gen_profile_id: 1,
             auto_update_enabled: true,
             focus: None,
             hover_provider: usize::MAX,
@@ -224,6 +271,46 @@ impl AgentSettings {
         });
         id
     }
+
+    pub fn add_image_gen_profile(&mut self) -> String {
+        let n = self.next_image_gen_profile_id.max(1);
+        let id = format!("igp-{n}");
+        self.next_image_gen_profile_id = n.saturating_add(1);
+        self.image_gen_profiles.push(ImageGenProfile {
+            id: id.clone(),
+            name: format!("Config {n}"),
+            provider: ImageGenProvider::OpenAi,
+            api_key: String::new(),
+            model: String::new(),
+            base_url: None,
+        });
+        if self.active_image_gen_profile_id.is_none() {
+            self.active_image_gen_profile_id = Some(id.clone());
+        }
+        id
+    }
+
+    pub fn set_active_image_gen_profile(&mut self, id: &str) -> bool {
+        if self.image_gen_profiles.iter().any(|p| p.id == id) {
+            self.active_image_gen_profile_id = Some(id.to_string());
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn remove_image_gen_profile(&mut self, id: &str) -> bool {
+        let before = self.image_gen_profiles.len();
+        self.image_gen_profiles.retain(|p| p.id != id);
+        if self.image_gen_profiles.len() == before {
+            return false;
+        }
+        if self.active_image_gen_profile_id.as_deref() == Some(id) {
+            self.active_image_gen_profile_id =
+                self.image_gen_profiles.first().map(|p| p.id.clone());
+        }
+        true
+    }
 }
 
 /// Drag state for the settings modal. Reserved — the modal does not
@@ -243,6 +330,9 @@ mod tests {
         assert_eq!(s.tab, AgentSettingsTab::Agents);
         assert_eq!(s.connected, [false; 5]);
         assert!(s.builtin_agents.is_empty());
+        assert!(s.image_gen_profiles.is_empty());
+        assert!(s.active_image_gen_profile_id.is_none());
+        assert!(!s.images_advanced_open);
         assert_eq!(s.mcp_server.port, 3100);
         assert!(s.auto_update_enabled);
         assert!(s.focus.is_none());
@@ -254,5 +344,42 @@ mod tests {
     fn tab_and_cli_arrays_cover_all_variants() {
         assert_eq!(AgentSettingsTab::ALL.len(), 4);
         assert_eq!(McpCli::ALL.len(), 6);
+    }
+
+    #[test]
+    fn image_generation_profiles_follow_ts_lifecycle() {
+        let mut s = AgentSettings::default();
+
+        let first = s.add_image_gen_profile();
+        assert_eq!(s.image_gen_profiles.len(), 1);
+        assert_eq!(
+            s.active_image_gen_profile_id.as_deref(),
+            Some(first.as_str())
+        );
+        assert_eq!(s.image_gen_profiles[0].name, "Config 1");
+        assert_eq!(s.image_gen_profiles[0].provider, ImageGenProvider::OpenAi);
+
+        let second = s.add_image_gen_profile();
+        assert_eq!(s.image_gen_profiles.len(), 2);
+        assert_eq!(
+            s.active_image_gen_profile_id.as_deref(),
+            Some(first.as_str())
+        );
+
+        assert!(s.set_active_image_gen_profile(&second));
+        assert_eq!(
+            s.active_image_gen_profile_id.as_deref(),
+            Some(second.as_str())
+        );
+
+        assert!(s.remove_image_gen_profile(&second));
+        assert_eq!(
+            s.active_image_gen_profile_id.as_deref(),
+            Some(first.as_str())
+        );
+
+        assert!(s.remove_image_gen_profile(&first));
+        assert!(s.image_gen_profiles.is_empty());
+        assert!(s.active_image_gen_profile_id.is_none());
     }
 }

@@ -170,3 +170,81 @@ fn system_auto_update_switch_toggles_preference() {
             .auto_update_enabled
     );
 }
+
+#[test]
+fn image_generation_profile_buttons_add_activate_and_remove() {
+    let mut host = WidgetHostNative::new();
+    host.editor_state_mut().editor_ui.agent_settings.tab = AgentSettingsTab::Images;
+
+    let panel = AgentSettingsPanel::for_editor(host.editor_state());
+    let rect = panel.rect(1200.0, 800.0);
+    let content_x = rect.origin.x + 200.0 + 24.0;
+    let content_y = rect.origin.y + 24.0;
+    let content_w = rect.size.x - 200.0 - 48.0;
+    let gen_top = content_y + 36.0 + 24.0 + 28.0;
+
+    assert!(host.dispatch_agent_settings_press(
+        content_x + content_w - 36.0,
+        gen_top + 14.0,
+        1200.0,
+        800.0
+    ));
+    assert!(host.dispatch_agent_settings_press(
+        content_x + content_w - 36.0,
+        gen_top + 14.0,
+        1200.0,
+        800.0
+    ));
+
+    let first = host
+        .editor_state()
+        .editor_ui
+        .agent_settings
+        .image_gen_profiles[0]
+        .id
+        .clone();
+    let second = host
+        .editor_state()
+        .editor_ui
+        .agent_settings
+        .image_gen_profiles[1]
+        .id
+        .clone();
+    assert_eq!(
+        host.editor_state()
+            .editor_ui
+            .agent_settings
+            .active_image_gen_profile_id
+            .as_deref(),
+        Some(first.as_str())
+    );
+
+    let second_row_y = gen_top + 36.0 + 32.0 + 6.0;
+    assert!(host.dispatch_agent_settings_press(
+        content_x + 15.0,
+        second_row_y + 16.0,
+        1200.0,
+        800.0
+    ));
+    assert_eq!(
+        host.editor_state()
+            .editor_ui
+            .agent_settings
+            .active_image_gen_profile_id
+            .as_deref(),
+        Some(second.as_str())
+    );
+
+    assert!(host.dispatch_agent_settings_press(
+        content_x + content_w - 12.0,
+        second_row_y + 16.0,
+        1200.0,
+        800.0
+    ));
+    let settings = &host.editor_state().editor_ui.agent_settings;
+    assert_eq!(settings.image_gen_profiles.len(), 1);
+    assert_eq!(
+        settings.active_image_gen_profile_id.as_deref(),
+        Some(first.as_str())
+    );
+}

@@ -167,3 +167,58 @@ fn system_auto_update_switch_has_click_target() {
         AgentSettingsHit::ToggleAutoUpdate
     );
 }
+
+#[test]
+fn images_tab_profile_rows_expose_active_and_remove_targets() {
+    let mut state = EditorState::default();
+    state.editor_ui.agent_settings.tab = AgentSettingsTab::Images;
+    state.editor_ui.agent_settings.add_image_gen_profile();
+    let panel = AgentSettingsPanel::for_editor(&state);
+    let rect = panel.rect(1200.0, 800.0);
+    let content_x = rect.origin.x + 200.0 + 24.0;
+    let content_y = rect.origin.y + 24.0;
+    let content_w = rect.size.x - 200.0 - 48.0;
+
+    let gen_top = content_y + 36.0 + 24.0 + 28.0;
+    let row_y = gen_top + 36.0;
+
+    assert_eq!(
+        panel.hit_test(rect, crate::Point2D::new(content_x + 15.0, row_y + 16.0)),
+        AgentSettingsHit::SetActiveGenConfig(0)
+    );
+    assert_eq!(
+        panel.hit_test(
+            rect,
+            crate::Point2D::new(content_x + content_w - 12.0, row_y + 16.0)
+        ),
+        AgentSettingsHit::RemoveGenConfig(0)
+    );
+}
+
+#[test]
+fn images_tab_content_height_includes_profile_rows() {
+    let mut empty = EditorState::default();
+    empty.editor_ui.agent_settings.tab = AgentSettingsTab::Images;
+    let empty_h = AgentSettingsPanel::for_editor(&empty).content_total_height();
+
+    let mut with_profiles = EditorState::default();
+    with_profiles.editor_ui.agent_settings.tab = AgentSettingsTab::Images;
+    with_profiles
+        .editor_ui
+        .agent_settings
+        .add_image_gen_profile();
+    with_profiles
+        .editor_ui
+        .agent_settings
+        .add_image_gen_profile();
+    with_profiles
+        .editor_ui
+        .agent_settings
+        .add_image_gen_profile();
+    let profiles_h = AgentSettingsPanel::for_editor(&with_profiles).content_total_height();
+
+    assert!(
+        profiles_h > empty_h,
+        "configured image generation profiles should replace the TS empty state with rows"
+    );
+}
