@@ -2,7 +2,7 @@ use crate::theme::Theme;
 use crate::widgets::ai_chat_panel_controls::{
     attachment_row_hit, paint_attachment_row, ATTACHMENT_ROW_HEIGHT,
 };
-use crate::widgets::ai_chat_panel_paint::paint_examples;
+use crate::widgets::ai_chat_panel_paint::{example_card_rects, paint_examples};
 use crate::widgets::editor_state_ext::{theme_for, translate};
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::{LayoutBox, LayoutCx, PaintCx, Widget, WidgetId};
@@ -373,20 +373,8 @@ impl<'a> AIChatPlaceholder<'a> {
         }
         if self.state.messages.is_empty() {
             // Examples grid hit-test (only rendered when no messages).
-            let card_w = (rect.size.x - PAD * 2.0 - 8.0) / 2.0;
-            let card_h = 70.0;
-            let grid_y = rect.origin.y + HEADER_HEIGHT + 32.0;
-            for (i, ex) in self.examples.iter().enumerate() {
-                let col = (i % 2) as f32;
-                let row = (i / 2) as f32;
-                let card = Rect {
-                    origin: Point2D::new(
-                        rect.origin.x + PAD + col * (card_w + 8.0),
-                        grid_y + row * (card_h + 8.0),
-                    ),
-                    size: Point2D::new(card_w, card_h),
-                };
-                if rect_contains(card, point) {
+            for (card, ex) in example_card_rects(rect).iter().zip(self.examples.iter()) {
+                if rect_contains(*card, point) {
                     return Some(AIChatHit::Example(ex.prompt.clone()));
                 }
             }
