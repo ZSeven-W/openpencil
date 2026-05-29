@@ -122,6 +122,27 @@ pub(super) const FOLDER_OPEN: &[&str] = &[
     "m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2",
 ];
 
+pub(super) const HISTORY: &[&str] = &[
+    "M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8",
+    "M3 3v5h5",
+    "M12 7v5l4 2",
+];
+
+pub(super) const FILE_PLUS: &[&str] = &[
+    "M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z",
+    "M14 2v4a2 2 0 0 0 2 2h4",
+    "M9 15h6",
+    "M12 18v-6",
+];
+
+pub(super) const GIT_FORK: &[&str] = &[
+    "M12 18 m-3 0 a3 3 0 1 0 6 0 a3 3 0 1 0 -6 0",
+    "M6 6 m-3 0 a3 3 0 1 0 6 0 a3 3 0 1 0 -6 0",
+    "M18 6 m-3 0 a3 3 0 1 0 6 0 a3 3 0 1 0 -6 0",
+    "M18 9v2c0 .6-.4 1-1 1H7c-.6 0-1-.4-1-1V9",
+    "M12 12v3",
+];
+
 pub(super) const GIT_BRANCH: &[&str] = &[
     // lucide git-branch: line + two r=3 circles + connecting arc.
     "M6 3v12",

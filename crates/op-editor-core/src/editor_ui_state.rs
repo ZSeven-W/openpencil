@@ -290,6 +290,10 @@ pub struct GitPanelState {
     pub open: bool,
     /// Whether the open document lives inside a git repository.
     pub in_repo: bool,
+    /// Whether the open document has an on-disk path — gates the
+    /// empty-state "Init" card (can't create local history for an
+    /// unsaved doc). Set by the host on each panel refresh.
+    pub has_saved_file: bool,
     /// Current branch name of that repository.
     pub branch: Option<String>,
     /// All local branch names, sorted — the panel lists them for

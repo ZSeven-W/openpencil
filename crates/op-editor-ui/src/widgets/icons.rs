@@ -76,6 +76,12 @@ pub enum Icon {
     FolderOpen,
     /// GitBranch — TopBar git-panel toggle next to the file name.
     GitBranch,
+    /// History — git empty-state clock glyph.
+    History,
+    /// FilePlus — git empty-state "Init / create local history" card.
+    FilePlus,
+    /// GitFork — git empty-state "Clone from a remote" card.
+    GitFork,
     /// Sparkles — agent active indicator.
     Sparkles,
     /// X — close affordance.
@@ -260,6 +266,9 @@ impl Icon {
             Icon::PanelLeft => PANEL_LEFT,
             Icon::FolderOpen => FOLDER_OPEN,
             Icon::GitBranch => GIT_BRANCH,
+            Icon::History => HISTORY,
+            Icon::FilePlus => FILE_PLUS,
+            Icon::GitFork => GIT_FORK,
             Icon::Sparkles => SPARKLES,
             Icon::Close => CLOSE,
             Icon::Trash => TRASH,
@@ -406,6 +415,9 @@ impl Icon {
             "file-text" => Icon::FileText,
             "folder-open" | "folder" => Icon::FolderOpen,
             "git-branch" | "git" => Icon::GitBranch,
+            "history" | "clock-history" => Icon::History,
+            "file-plus" => Icon::FilePlus,
+            "git-fork" => Icon::GitFork,
             "sparkles" => Icon::Sparkles,
             "diamond" => Icon::Diamond,
             "component" => Icon::Component,
