@@ -32,6 +32,28 @@ fn with_alpha(color: Color, a: f32) -> Color {
     Color { a, ..color }
 }
 
+/// Paint the floating chat panel shell. TS uses
+/// `rounded-xl border bg-card/95 shadow-2xl backdrop-blur-sm`;
+/// Skia here has no blur primitive, so we layer translucent rounded
+/// rects behind the card to give the panel a comparable lift.
+pub(crate) fn paint_panel_surface(cx: &mut PaintCx<'_>, theme: &Theme, rect: Rect) {
+    let shadow_outer = Rect {
+        origin: Point2D::new(rect.origin.x, rect.origin.y + 18.0),
+        size: rect.size,
+    };
+    let shadow_inner = Rect {
+        origin: Point2D::new(rect.origin.x, rect.origin.y + 8.0),
+        size: rect.size,
+    };
+    cx.backend
+        .fill_round_rect(shadow_outer, 14.0, with_alpha(Color::BLACK, 0.14));
+    cx.backend
+        .fill_round_rect(shadow_inner, 14.0, with_alpha(Color::BLACK, 0.2));
+    cx.backend
+        .fill_round_rect(rect, 14.0, with_alpha(theme.card, 0.95));
+    cx.backend.stroke_round_rect(rect, 14.0, theme.border, 1.0);
+}
+
 /// Paint the empty-state hint line + the 2×2 example-card grid.
 pub(crate) fn paint_examples(
     cx: &mut PaintCx<'_>,
