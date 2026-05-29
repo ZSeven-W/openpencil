@@ -5,7 +5,7 @@ use super::WidgetHostNative;
 impl WidgetHostNative {
     /// Commit any focused settings-modal input.
     pub(in crate::widget_host) fn commit_settings_focus_if_any(&mut self) {
-        use op_editor_core::agent_settings::{BuiltinAgentField, SettingsFocus};
+        use op_editor_core::agent_settings::{BuiltinAgentField, ImageGenField, SettingsFocus};
         let Some(focus) = self.editor_state.editor_ui.agent_settings.focus.take() else {
             return;
         };
@@ -45,6 +45,34 @@ impl WidgetHostNative {
                         }
                     }
                     self.editor_state.rebuild_chat_models();
+                }
+            }
+            SettingsFocus::ImageGenProfile { index, field } => {
+                if let Some(profile) = self
+                    .editor_state
+                    .editor_ui
+                    .agent_settings
+                    .image_gen_profiles
+                    .get_mut(index)
+                {
+                    match field {
+                        ImageGenField::Name => {
+                            profile.name = draft.trim().to_string();
+                        }
+                        ImageGenField::ApiKey => {
+                            profile.api_key = draft.trim().to_string();
+                        }
+                        ImageGenField::Model => {
+                            profile.model = draft.trim().to_string();
+                        }
+                        ImageGenField::BaseUrl => {
+                            profile.base_url = if draft.trim().is_empty() {
+                                None
+                            } else {
+                                Some(draft.trim().to_string())
+                            };
+                        }
+                    }
                 }
             }
         }

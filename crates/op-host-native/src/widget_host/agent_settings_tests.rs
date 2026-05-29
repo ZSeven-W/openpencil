@@ -1,5 +1,7 @@
 use super::WidgetHostNative;
-use op_editor_core::agent_settings::{AgentSettingsTab, BuiltinAgentField, SettingsFocus};
+use op_editor_core::agent_settings::{
+    AgentSettingsTab, BuiltinAgentField, ImageGenField, SettingsFocus,
+};
 use op_editor_ui::widgets::agent_settings_panel::AgentSettingsPanel;
 
 #[test]
@@ -247,4 +249,36 @@ fn image_generation_profile_buttons_add_activate_and_remove() {
         settings.active_image_gen_profile_id.as_deref(),
         Some(first.as_str())
     );
+}
+
+#[test]
+fn image_generation_profile_focus_accepts_text_and_commits() {
+    let mut host = WidgetHostNative::new();
+    host.editor_state_mut().editor_ui.agent_settings.tab = AgentSettingsTab::Images;
+    host.editor_state_mut()
+        .editor_ui
+        .agent_settings
+        .add_image_gen_profile();
+    host.editor_state_mut().editor_ui.agent_settings.focus = Some(SettingsFocus::ImageGenProfile {
+        index: 0,
+        field: ImageGenField::Name,
+    });
+    host.editor_state_mut()
+        .editor_ui
+        .settings_input_draft
+        .clear();
+
+    for c in "Hero Images".chars() {
+        assert!(host.apply_text(c));
+    }
+    assert!(host.apply_send());
+
+    let settings = &host.editor_state().editor_ui.agent_settings;
+    assert_eq!(settings.image_gen_profiles[0].name, "Hero Images");
+    assert!(settings.focus.is_none());
+    assert!(host
+        .editor_state()
+        .editor_ui
+        .settings_input_draft
+        .is_empty());
 }

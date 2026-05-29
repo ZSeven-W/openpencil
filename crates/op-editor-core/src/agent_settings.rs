@@ -101,11 +101,23 @@ pub enum BuiltinAgentField {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ImageGenField {
+    Name,
+    ApiKey,
+    Model,
+    BaseUrl,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SettingsFocus {
     McpPort,
     BuiltinAgent {
         index: usize,
         field: BuiltinAgentField,
+    },
+    ImageGenProfile {
+        index: usize,
+        field: ImageGenField,
     },
 }
 

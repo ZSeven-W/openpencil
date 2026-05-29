@@ -404,6 +404,7 @@ impl WidgetHost {
                     self.editor_state.editor_ui.agent_settings.mcp_server.port = port.max(1024);
                 }
             }
+            SettingsFocus::BuiltinAgent { .. } | SettingsFocus::ImageGenProfile { .. } => {}
         }
         self.mark_dirty();
     }

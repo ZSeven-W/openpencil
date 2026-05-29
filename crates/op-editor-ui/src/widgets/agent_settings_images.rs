@@ -5,7 +5,9 @@ use crate::widgets::agent_settings_i18n::t as t_settings;
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::PaintCx;
 use crate::{Color, Point2D, Rect, TextLayout};
-use op_editor_core::agent_settings::{AgentSettings, ImageGenProfile};
+use op_editor_core::agent_settings::{
+    AgentSettings, ImageGenField, ImageGenProfile, SettingsFocus,
+};
 use op_editor_core::editor_ui_state::EditorUiState;
 
 const TITLE_H: f32 = 36.0;
@@ -25,6 +27,8 @@ const PROFILE_ROW_H: f32 = 32.0;
 const PROFILE_ROW_GAP: f32 = 6.0;
 const ACTIVE_DOT: f32 = 14.0;
 const DELETE_W: f32 = 24.0;
+const PROFILE_FORM_TOP: f32 = 40.0;
+const PROFILE_FIELD_H: f32 = 24.0;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ImagesHit {
@@ -33,6 +37,7 @@ pub enum ImagesHit {
     AddGenConfig,
     SetActiveGenConfig(usize),
     RemoveGenConfig(usize),
+    FocusGenConfig { index: usize, field: ImageGenField },
     None,
 }
 
@@ -60,8 +65,21 @@ fn profile_list_h(settings: &AgentSettings) -> f32 {
     if settings.image_gen_profiles.is_empty() {
         80.0
     } else {
-        settings.image_gen_profiles.len() as f32 * PROFILE_ROW_H
+        settings
+            .image_gen_profiles
+            .iter()
+            .enumerate()
+            .map(|(index, _)| profile_row_h(settings, index))
+            .sum::<f32>()
             + settings.image_gen_profiles.len().saturating_sub(1) as f32 * PROFILE_ROW_GAP
+    }
+}
+
+fn profile_row_h(settings: &AgentSettings, index: usize) -> f32 {
+    if is_editing_profile(settings, index) {
+        PROFILE_ROW_H + 8.0 + 4.0 * ROW_H
+    } else {
+        PROFILE_ROW_H
     }
 }
 
@@ -103,12 +121,17 @@ fn add_btn_rect(content: Rect, settings: &AgentSettings) -> Rect {
 
 fn profile_row_rect(content: Rect, settings: &AgentSettings, index: usize) -> Rect {
     let top = image_gen_section_top(content, settings) + SECTION_TITLE_H;
+    let y = settings
+        .image_gen_profiles
+        .iter()
+        .enumerate()
+        .take(index)
+        .fold(top, |acc, (i, _)| {
+            acc + profile_row_h(settings, i) + PROFILE_ROW_GAP
+        });
     Rect {
-        origin: Point2D::new(
-            content.origin.x,
-            top + index as f32 * (PROFILE_ROW_H + PROFILE_ROW_GAP),
-        ),
-        size: Point2D::new(content.size.x, PROFILE_ROW_H),
+        origin: Point2D::new(content.origin.x, y),
+        size: Point2D::new(content.size.x, profile_row_h(settings, index)),
     }
 }
 
@@ -132,6 +155,16 @@ fn profile_remove_rect(row: Rect) -> Rect {
     }
 }
 
+fn profile_field_rect(row: Rect, field_index: usize) -> Rect {
+    Rect {
+        origin: Point2D::new(
+            row.origin.x + LABEL_W,
+            row.origin.y + PROFILE_FORM_TOP + field_index as f32 * ROW_H,
+        ),
+        size: Point2D::new(row.size.x - LABEL_W - 12.0, PROFILE_FIELD_H),
+    }
+}
+
 pub fn hit_test(content: Rect, settings: &AgentSettings, scrolled: Point2D) -> ImagesHit {
     if rect_contains(advanced_toggle_rect(content), scrolled) {
         return ImagesHit::ToggleAdvanced;
@@ -149,6 +182,19 @@ pub fn hit_test(content: Rect, settings: &AgentSettings, scrolled: Point2D) -> I
         }
         if rect_contains(profile_remove_rect(row), scrolled) {
             return ImagesHit::RemoveGenConfig(index);
+        }
+        if is_editing_profile(settings, index) {
+            for (field_index, field) in image_gen_fields().into_iter().enumerate() {
+                if rect_contains(profile_field_rect(row, field_index), scrolled) {
+                    return ImagesHit::FocusGenConfig { index, field };
+                }
+            }
+        }
+        if rect_contains(row, scrolled) {
+            return ImagesHit::FocusGenConfig {
+                index,
+                field: ImageGenField::Name,
+            };
         }
     }
     ImagesHit::None
@@ -365,7 +411,7 @@ pub(super) fn paint_images_tab(
     } else {
         for (index, profile) in settings.image_gen_profiles.iter().enumerate() {
             let row = profile_row_rect(content, settings, index);
-            paint_profile_row(cx, theme, settings, profile, row);
+            paint_profile_row(cx, theme, settings, ui, profile, index, row);
         }
     }
 }
@@ -374,13 +420,21 @@ fn paint_profile_row(
     cx: &mut PaintCx<'_>,
     theme: &Theme,
     settings: &AgentSettings,
+    ui: &EditorUiState,
     profile: &ImageGenProfile,
+    index: usize,
     row: Rect,
 ) {
     let active = settings.active_image_gen_profile_id.as_deref() == Some(profile.id.as_str());
-    if active {
+    let editing = is_editing_profile(settings, index);
+    if active || editing {
         cx.backend.fill_round_rect(row, 6.0, theme.muted);
-        cx.backend.stroke_round_rect(row, 6.0, theme.primary, 1.0);
+        cx.backend.stroke_round_rect(
+            row,
+            6.0,
+            if active { theme.primary } else { theme.border },
+            1.0,
+        );
     } else {
         cx.backend.stroke_round_rect(row, 6.0, theme.border, 1.0);
     }
@@ -445,6 +499,93 @@ fn paint_profile_row(
         theme.muted_foreground,
         1.5,
     );
+
+    if editing {
+        for (field_index, field) in image_gen_fields().into_iter().enumerate() {
+            paint_profile_field(
+                cx,
+                theme,
+                settings,
+                ui,
+                profile,
+                index,
+                field,
+                field_index,
+                row,
+            );
+        }
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn paint_profile_field(
+    cx: &mut PaintCx<'_>,
+    theme: &Theme,
+    settings: &AgentSettings,
+    ui: &EditorUiState,
+    profile: &ImageGenProfile,
+    index: usize,
+    field: ImageGenField,
+    field_index: usize,
+    row: Rect,
+) {
+    let focused = settings.focus == Some(SettingsFocus::ImageGenProfile { index, field });
+    let value = if focused {
+        ui.settings_input_draft.as_str()
+    } else {
+        match field {
+            ImageGenField::Name => profile.name.as_str(),
+            ImageGenField::ApiKey if !profile.api_key.is_empty() => "********",
+            ImageGenField::ApiKey => "",
+            ImageGenField::Model => profile.model.as_str(),
+            ImageGenField::BaseUrl => profile.base_url.as_deref().unwrap_or(""),
+        }
+    };
+    let label = match field {
+        ImageGenField::Name => "Name",
+        ImageGenField::ApiKey => "API Key",
+        ImageGenField::Model => "Model",
+        ImageGenField::BaseUrl => "Base URL",
+    };
+    let input = profile_field_rect(row, field_index);
+    let label_lay = TextLayout::single_run(
+        label,
+        "system-ui",
+        11.0,
+        to_jian(theme.muted_foreground),
+        Point2D::new(0.0, 0.0),
+    );
+    cx.backend.draw_text(
+        &label_lay,
+        Point2D::new(row.origin.x + 12.0, input.origin.y + 16.0),
+    );
+    cx.backend.fill_round_rect(
+        input,
+        6.0,
+        if focused {
+            theme.background
+        } else {
+            theme.card
+        },
+    );
+    cx.backend.stroke_round_rect(
+        input,
+        6.0,
+        if focused { theme.primary } else { theme.border },
+        1.0,
+    );
+    let value = ellipsize(cx, value, input.size.x - 12.0, 11.0);
+    let value_lay = TextLayout::single_run(
+        &value,
+        "system-ui",
+        11.0,
+        to_jian(theme.foreground),
+        Point2D::new(0.0, 0.0),
+    );
+    cx.backend.draw_text(
+        &value_lay,
+        Point2D::new(input.origin.x + 6.0, input.origin.y + 16.0),
+    );
 }
 
 fn paint_input_row(
@@ -493,6 +634,22 @@ fn ellipsize(cx: &mut PaintCx<'_>, value: &str, max_w: f32, size: f32) -> String
         out.pop();
     }
     format!("{out}...")
+}
+
+fn image_gen_fields() -> [ImageGenField; 4] {
+    [
+        ImageGenField::Name,
+        ImageGenField::ApiKey,
+        ImageGenField::Model,
+        ImageGenField::BaseUrl,
+    ]
+}
+
+fn is_editing_profile(settings: &AgentSettings, index: usize) -> bool {
+    matches!(
+        settings.focus,
+        Some(SettingsFocus::ImageGenProfile { index: i, .. }) if i == index
+    )
 }
 
 fn rect_contains(r: Rect, p: Point2D) -> bool {
