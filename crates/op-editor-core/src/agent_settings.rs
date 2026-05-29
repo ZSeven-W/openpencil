@@ -163,6 +163,9 @@ pub struct AgentSettings {
     pub mcp_cli_enabled: [bool; 6],
     pub images_advanced_open: bool,
     pub images_search_ready: bool,
+    /// Whether the desktop host should check GitHub releases on
+    /// startup. Manual "Check for Updates" stays available.
+    pub auto_update_enabled: bool,
     /// Currently-focused editable input on the modal.
     pub focus: Option<SettingsFocus>,
     /// Index into `AgentProvider::ALL` of the hovered card;
@@ -186,6 +189,7 @@ impl Default for AgentSettings {
             mcp_cli_enabled: [false; 6],
             images_advanced_open: true,
             images_search_ready: true,
+            auto_update_enabled: true,
             focus: None,
             hover_provider: usize::MAX,
             hover_builtin_agent: usize::MAX,
@@ -240,6 +244,7 @@ mod tests {
         assert_eq!(s.connected, [false; 5]);
         assert!(s.builtin_agents.is_empty());
         assert_eq!(s.mcp_server.port, 3100);
+        assert!(s.auto_update_enabled);
         assert!(s.focus.is_none());
         assert_eq!(s.hover_provider, usize::MAX);
         assert_eq!(s.hover_builtin_agent, usize::MAX);

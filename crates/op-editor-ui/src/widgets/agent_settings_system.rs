@@ -1,12 +1,10 @@
 //! System tab of the settings modal.
 //!
-//! Renders the auto-update status card. The desktop host runs a
-//! background probe against the GitHub releases API and writes the
-//! outcome into `EditorUiState::update_status`; this tab paints a
-//! status dot + label + description from it. The card stays
-//! read-only — a manual re-check is offered through the native
-//! "Check for Updates" menu item, so no clickable hit is needed
-//! here (`SystemHit::None`).
+//! Renders the auto-update preference + status card. The desktop
+//! host runs a background probe against the GitHub releases API when
+//! auto-check is enabled and writes the outcome into
+//! `EditorUiState::update_status`; this tab paints the preference
+//! switch plus the latest status.
 
 use crate::theme::Theme;
 use crate::widgets::agent_settings_i18n::t as t_settings;
@@ -16,8 +14,11 @@ use op_editor_core::agent_settings::AgentSettings;
 use op_editor_core::editor_ui_state::{EditorUiState, UpdateStatus};
 
 const TITLE_H: f32 = 36.0;
-const CARD_H: f32 = 96.0;
+const CARD_H: f32 = 112.0;
 const STATUS_DOT_RADIUS: f32 = 5.0;
+const SWITCH_W: f32 = 36.0;
+const SWITCH_H: f32 = 20.0;
+const SWITCH_KNOB: f32 = 14.0;
 
 /// Status-dot palette. The theme exposes no status tokens, so these
 /// mirror the TS app's Tailwind hues directly.
@@ -54,6 +55,7 @@ const GREY: Color = Color {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SystemHit {
+    ToggleAutoUpdate,
     None,
 }
 
@@ -61,7 +63,28 @@ pub(super) fn content_height() -> f32 {
     12.0 + TITLE_H + CARD_H + 24.0
 }
 
-pub fn hit_test(_content: Rect, _scrolled: Point2D) -> SystemHit {
+fn auto_update_card_rect(content: Rect) -> Rect {
+    Rect {
+        origin: Point2D::new(content.origin.x, content.origin.y + 12.0 + TITLE_H),
+        size: Point2D::new(content.size.x, CARD_H),
+    }
+}
+
+fn auto_update_switch_rect(content: Rect) -> Rect {
+    let card = auto_update_card_rect(content);
+    Rect {
+        origin: Point2D::new(
+            card.origin.x + card.size.x - 16.0 - SWITCH_W,
+            card.origin.y + 18.0,
+        ),
+        size: Point2D::new(SWITCH_W, SWITCH_H),
+    }
+}
+
+pub fn hit_test(content: Rect, scrolled: Point2D) -> SystemHit {
+    if rect_contains(auto_update_switch_rect(content), scrolled) {
+        return SystemHit::ToggleAutoUpdate;
+    }
     SystemHit::None
 }
 
@@ -101,7 +124,7 @@ fn status_view(status: &UpdateStatus) -> (Color, &'static str, &'static str) {
 pub(super) fn paint_system_tab(
     cx: &mut PaintCx<'_>,
     theme: &Theme,
-    _settings: &AgentSettings,
+    settings: &AgentSettings,
     ui: &EditorUiState,
     content: Rect,
 ) {
@@ -117,27 +140,14 @@ pub(super) fn paint_system_tab(
         Point2D::new(content.origin.x, content.origin.y + 20.0),
     );
 
-    let card = Rect {
-        origin: Point2D::new(content.origin.x, content.origin.y + 12.0 + TITLE_H),
-        size: Point2D::new(content.size.x, CARD_H),
-    };
+    let card = auto_update_card_rect(content);
     cx.backend.fill_round_rect(card, 10.0, theme.muted);
     cx.backend.stroke_round_rect(card, 10.0, theme.border, 1.0);
 
     let (dot_color, status_key, desc_key) = status_view(&ui.update_status);
 
-    // Status dot — coloured per the probe outcome.
-    let dot_x = card.origin.x + 20.0;
-    let dot_y = card.origin.y + 28.0;
-    let dot_rect = Rect {
-        origin: Point2D::new(dot_x - STATUS_DOT_RADIUS, dot_y - STATUS_DOT_RADIUS),
-        size: Point2D::new(STATUS_DOT_RADIUS * 2.0, STATUS_DOT_RADIUS * 2.0),
-    };
-    cx.backend.fill_oval(dot_rect, dot_color);
-
-    // "Auto-update" header.
     let label_layout = TextLayout::single_run(
-        t_settings(ui, "settings.system.autoUpdate"),
+        t_settings(ui, "agents.autoUpdate"),
         "system-ui",
         13.0,
         to_jian(theme.foreground),
@@ -145,11 +155,35 @@ pub(super) fn paint_system_tab(
     );
     cx.backend.draw_text(
         &label_layout,
-        Point2D::new(card.origin.x + 38.0, card.origin.y + 24.0),
+        Point2D::new(card.origin.x + 16.0, card.origin.y + 24.0),
     );
 
-    // Right-side status text. `Available` formats the version in;
-    // every other state uses a static i18n string.
+    let desc_layout = TextLayout::single_run(
+        t_settings(ui, "settings.autoUpdateDesc"),
+        "system-ui",
+        11.0,
+        to_jian(theme.muted_foreground),
+        Point2D::new(0.0, 0.0),
+    );
+    cx.backend.draw_text(
+        &desc_layout,
+        Point2D::new(card.origin.x + 16.0, card.origin.y + 46.0),
+    );
+
+    paint_switch(
+        cx,
+        theme,
+        auto_update_switch_rect(content),
+        settings.auto_update_enabled,
+    );
+
+    let dot_y = card.origin.y + 70.0;
+    let dot_rect = Rect {
+        origin: Point2D::new(card.origin.x + 16.0, dot_y - STATUS_DOT_RADIUS),
+        size: Point2D::new(STATUS_DOT_RADIUS * 2.0, STATUS_DOT_RADIUS * 2.0),
+    };
+    cx.backend.fill_oval(dot_rect, dot_color);
+
     let status_text: String = match &ui.update_status {
         UpdateStatus::Available { version } => {
             format!("{} v{}", t_settings(ui, status_key), version)
@@ -163,15 +197,12 @@ pub(super) fn paint_system_tab(
         to_jian(dot_color),
         Point2D::new(0.0, 0.0),
     );
-    // Float the status to a fixed column past the label so the card
-    // layout stays predictable without per-locale text measurement.
     cx.backend.draw_text(
         &status_layout,
-        Point2D::new(card.origin.x + card.size.x - 160.0, card.origin.y + 24.0),
+        Point2D::new(card.origin.x + 32.0, card.origin.y + 74.0),
     );
 
-    // Description line.
-    let desc_layout = TextLayout::single_run(
+    let status_desc_layout = TextLayout::single_run(
         t_settings(ui, desc_key),
         "system-ui",
         11.0,
@@ -179,8 +210,8 @@ pub(super) fn paint_system_tab(
         Point2D::new(0.0, 0.0),
     );
     cx.backend.draw_text(
-        &desc_layout,
-        Point2D::new(card.origin.x + 38.0, card.origin.y + 46.0),
+        &status_desc_layout,
+        Point2D::new(card.origin.x + 16.0, card.origin.y + 92.0),
     );
 
     // Current build version — same value the probe compares against
@@ -199,8 +230,39 @@ pub(super) fn paint_system_tab(
     );
     cx.backend.draw_text(
         &version_layout,
-        Point2D::new(card.origin.x + 38.0, card.origin.y + 68.0),
+        Point2D::new(card.origin.x + card.size.x - 120.0, card.origin.y + 92.0),
     );
+}
+
+fn paint_switch(cx: &mut PaintCx<'_>, theme: &Theme, rect: Rect, enabled: bool) {
+    let track_color = if enabled {
+        theme.primary
+    } else {
+        theme.background
+    };
+    cx.backend
+        .fill_round_rect(rect, SWITCH_H / 2.0, track_color);
+    if !enabled {
+        cx.backend
+            .stroke_round_rect(rect, SWITCH_H / 2.0, theme.border, 1.0);
+    }
+    let knob_x = if enabled {
+        rect.origin.x + SWITCH_W - SWITCH_KNOB - 3.0
+    } else {
+        rect.origin.x + 3.0
+    };
+    let knob = Rect {
+        origin: Point2D::new(knob_x, rect.origin.y + (SWITCH_H - SWITCH_KNOB) / 2.0),
+        size: Point2D::new(SWITCH_KNOB, SWITCH_KNOB),
+    };
+    cx.backend.fill_oval(knob, theme.foreground);
+}
+
+fn rect_contains(r: Rect, p: Point2D) -> bool {
+    p.x >= r.origin.x
+        && p.y >= r.origin.y
+        && p.x <= r.origin.x + r.size.x
+        && p.y <= r.origin.y + r.size.y
 }
 
 fn to_jian(c: Color) -> jian_core::scene::Color {

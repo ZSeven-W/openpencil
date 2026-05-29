@@ -165,6 +165,12 @@ impl DesktopApp {
         // Baseline for the unsaved-changes prompt — the fresh,
         // empty document is by definition "saved" (nothing to lose).
         let saved_doc_fingerprint = persistence::document_fingerprint(host.editor_state());
+        let update_probe = update_check::UpdateProbe::for_auto_check(
+            host.editor_state()
+                .editor_ui
+                .agent_settings
+                .auto_update_enabled,
+        );
         Self {
             window: None,
             ctx: None,
@@ -193,7 +199,7 @@ impl DesktopApp {
             iconify_job: None,
             initial_file,
             app_menu: None,
-            update_probe: update_check::UpdateProbe::spawn(),
+            update_probe,
             update_prompt_shown: false,
             win_pos: None,
             win_size: None,
