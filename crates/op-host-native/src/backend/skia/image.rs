@@ -37,11 +37,20 @@ impl NativeBackend {
         encoded: &[u8],
         mode: ImageDrawMode,
     ) {
-        self.draw_image_with_options(canvas, rect, id, encoded, mode, ImageAdjustments::default());
+        self.draw_image_with_options(
+            canvas,
+            rect,
+            id,
+            encoded,
+            mode,
+            ImageAdjustments::default(),
+            1.0,
+        );
     }
 
     /// Draw the image identified by `id` using placement and
     /// adjustment controls from the image-fill popover.
+    #[allow(clippy::too_many_arguments)]
     pub fn draw_image_with_options(
         &mut self,
         canvas: &skia_safe::Canvas,
@@ -50,12 +59,16 @@ impl NativeBackend {
         encoded: &[u8],
         mode: ImageDrawMode,
         adjustments: ImageAdjustments,
+        opacity: f32,
     ) {
         let Some(image) = self.cached_image(id, encoded) else {
             return;
         };
         let mut paint = skia_safe::Paint::default();
         paint.set_anti_alias(true);
+        // Node-level opacity dims the raster (rasters carry no fill
+        // colour to bake the opacity into at scene-build).
+        paint.set_alpha_f(opacity.clamp(0.0, 1.0));
         if let Some(matrix) = image_adjustment_matrix(adjustments) {
             paint.set_color_filter(skia_safe::color_filters::matrix_row_major(&matrix, None));
         }

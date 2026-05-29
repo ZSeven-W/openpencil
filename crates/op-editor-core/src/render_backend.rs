@@ -471,8 +471,9 @@ pub trait RenderBackend {
         encoded: &[u8],
         mode: ImageDrawMode,
         adjustments: ImageAdjustments,
+        opacity: f32,
     ) {
-        let _ = adjustments;
+        let _ = (adjustments, opacity);
         self.draw_image_with_mode(rect, image_id, encoded, mode);
     }
 

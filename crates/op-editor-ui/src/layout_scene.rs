@@ -268,6 +268,12 @@ pub struct SceneNode {
     /// page-root's authored `(x, y)` — paint applies only the
     /// viewport transform.
     pub bounds: Rect,
+    /// Cumulative node opacity (0.0..=1.0), already multiplied down
+    /// the subtree. Fill / stroke / gradient / shadow colours have it
+    /// baked into their alpha at scene-build; the painter applies it
+    /// directly only for raster images (which carry no colour to
+    /// bake into). 1.0 = fully opaque.
+    pub opacity: f32,
     /// Rotation in radians, clockwise about the node's bounds centre.
     pub rotation: f32,
     /// Mirror horizontally around the node's aggregate-bounds centre.
@@ -412,6 +418,7 @@ impl SceneNode {
             id: id.into(),
             kind,
             bounds: Rect::ZERO,
+            opacity: 1.0,
             rotation: 0.0,
             flip_x: false,
             flip_y: false,

@@ -343,3 +343,40 @@ fn inner_shadow_path_darkens_edges_not_center() {
         center.r()
     );
 }
+
+#[test]
+fn image_draw_respects_node_opacity() {
+    // A solid-blue image drawn at 0.5 opacity over white must blend
+    // toward white (≈ 50% each); full opacity would leave it pure blue.
+    let mut be = NativeBackend::with_dpi(1.0);
+    let png = encode_test_png(8, 8);
+    let mut surface = skia_safe::surfaces::raster_n32_premul((20, 20)).unwrap();
+    surface.canvas().clear(skia_safe::Color::WHITE);
+    let rect = Rect {
+        origin: Point2D::new(0.0, 0.0),
+        size: Point2D::new(20.0, 20.0),
+    };
+    be.draw_image_with_options(
+        surface.canvas(),
+        rect,
+        4242,
+        &png,
+        op_editor_ui::ImageDrawMode::Stretch,
+        op_editor_ui::ImageAdjustments::default(),
+        0.5,
+    );
+    let img = surface.image_snapshot();
+    let pm = img.peek_pixels().expect("peek raster pixels");
+    let c = pm.get_color((10, 10));
+    // 0.5 blue over white ≈ (128,128,255); full opacity would be r=0.
+    assert!(
+        c.r() > 80 && c.r() < 200,
+        "image opacity should blend toward white, got r={}",
+        c.r()
+    );
+    assert!(
+        c.b() > 200,
+        "blue channel should stay high, got b={}",
+        c.b()
+    );
+}
