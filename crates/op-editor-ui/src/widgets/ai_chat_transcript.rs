@@ -37,6 +37,10 @@ const MSG_GAP: f32 = 10.0;
 const SUB_GAP: f32 = 4.0;
 /// Height of one compact design-progress step row.
 const ACTION_STEP_H: f32 = 28.0;
+/// Height of one detail line under a progress step.
+const ACTION_DETAIL_LINE_H: f32 = 14.0;
+/// Gap between the progress title row and detail lines.
+const ACTION_DETAIL_GAP: f32 = 4.0;
 /// Vertical gap between compact design-progress rows.
 const ACTION_STEP_GAP: f32 = 4.0;
 /// Side length of an image thumbnail box.
@@ -75,6 +79,7 @@ pub(crate) struct Collapsible {
 pub(crate) struct ActionStep {
     pub rect: Rect,
     pub label: String,
+    pub details: Vec<String>,
     pub done: bool,
     pub active: bool,
     pub failed: bool,
@@ -209,14 +214,21 @@ fn build_item(
     let total_steps = progress_steps.len();
     for (i, step) in progress_steps.iter().enumerate() {
         let (done, active, failed) = step_state(step, msg.streaming, i, total_steps);
+        let details: Vec<String> = step
+            .details
+            .iter()
+            .flat_map(|line| wrap_units(line, budget.saturating_sub(4)))
+            .collect();
+        let step_h = action_step_height(details.len());
         steps.push(ActionStep {
-            rect: Rect::xywh(x, y, bubble_w, ACTION_STEP_H),
+            rect: Rect::xywh(x, y, bubble_w, step_h),
             label: step.title.clone(),
+            details,
             done,
             active,
             failed,
         });
-        y += ACTION_STEP_H + ACTION_STEP_GAP;
+        y += step_h + ACTION_STEP_GAP;
     }
 
     let thinking = build_collapsible(
@@ -301,6 +313,14 @@ fn build_item(
         },
         y,
     )
+}
+
+fn action_step_height(detail_count: usize) -> f32 {
+    if detail_count == 0 {
+        ACTION_STEP_H
+    } else {
+        ACTION_STEP_H + ACTION_DETAIL_GAP + detail_count as f32 * ACTION_DETAIL_LINE_H
+    }
 }
 
 /// Lay out the tail of `messages` that fits inside `body_rect`,
@@ -523,6 +543,23 @@ fn paint_action_step(cx: &mut PaintCx<'_>, theme: &Theme, step: &ActionStep) {
         11.0,
         label_color,
     );
+    if !step.details.is_empty() {
+        cx.backend.save();
+        cx.backend.clip_rect(step.rect);
+        let mut baseline = step.rect.origin.y + ACTION_STEP_H + ACTION_DETAIL_GAP + 9.0;
+        for line in &step.details {
+            draw_line(
+                cx,
+                line,
+                step.rect.origin.x + 32.0,
+                baseline,
+                10.0,
+                theme.muted_foreground,
+            );
+            baseline += ACTION_DETAIL_LINE_H;
+        }
+        cx.backend.restore();
+    }
 }
 
 /// Paint a collapsible block — header row (chevron + label) plus,
