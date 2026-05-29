@@ -14,7 +14,7 @@ use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::{PaintCx, Widget, WidgetId};
 use crate::{Color, Point2D, Rect, TextLayout};
 use op_editor_core::agent_settings::{
-    AgentProvider, AgentSettings, AgentSettingsTab, BuiltinAgentField, McpCli,
+    AgentProvider, AgentSettings, AgentSettingsTab, BuiltinAgentField, ImageGenField, McpCli,
 };
 use op_editor_core::editor_ui_state::EditorUiState;
 use op_editor_core::EditorState;
@@ -58,6 +58,10 @@ pub enum AgentSettingsHit {
     AddGenConfig,
     SetActiveGenConfig(usize),
     RemoveGenConfig(usize),
+    FocusGenConfig {
+        index: usize,
+        field: ImageGenField,
+    },
     ToggleAutoUpdate,
     FocusMcpPort,
     Outside,
@@ -169,6 +173,9 @@ impl<'a> AgentSettingsPanel<'a> {
                     }
                     ImagesHit::RemoveGenConfig(index) => {
                         return AgentSettingsHit::RemoveGenConfig(index);
+                    }
+                    ImagesHit::FocusGenConfig { index, field } => {
+                        return AgentSettingsHit::FocusGenConfig { index, field };
                     }
                     ImagesHit::None => {}
                 }

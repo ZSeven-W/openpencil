@@ -1,5 +1,7 @@
 use crate::widgets::agent_settings_panel::{AgentSettingsHit, AgentSettingsPanel};
-use op_editor_core::agent_settings::{AgentSettingsTab, BuiltinAgentField, SettingsFocus};
+use op_editor_core::agent_settings::{
+    AgentSettingsTab, BuiltinAgentField, ImageGenField, SettingsFocus,
+};
 use op_editor_core::EditorState;
 
 #[test]
@@ -220,5 +222,39 @@ fn images_tab_content_height_includes_profile_rows() {
     assert!(
         profiles_h > empty_h,
         "configured image generation profiles should replace the TS empty state with rows"
+    );
+}
+
+#[test]
+fn images_tab_expanded_profile_fields_are_focusable() {
+    let mut state = EditorState::default();
+    state.editor_ui.agent_settings.tab = AgentSettingsTab::Images;
+    state.editor_ui.agent_settings.add_image_gen_profile();
+    state.editor_ui.agent_settings.focus = Some(SettingsFocus::ImageGenProfile {
+        index: 0,
+        field: ImageGenField::Name,
+    });
+    let panel = AgentSettingsPanel::for_editor(&state);
+    let rect = panel.rect(1200.0, 800.0);
+    let content_x = rect.origin.x + 200.0 + 24.0;
+    let content_y = rect.origin.y + 24.0;
+
+    let gen_top = content_y + 36.0 + 24.0 + 28.0;
+    let row_y = gen_top + 36.0;
+    let api_field_y = row_y + 32.0 + 8.0 + 36.0;
+
+    assert_eq!(
+        panel.hit_test(
+            rect,
+            crate::Point2D::new(content_x + 110.0 + 20.0, api_field_y + 12.0)
+        ),
+        AgentSettingsHit::FocusGenConfig {
+            index: 0,
+            field: ImageGenField::ApiKey,
+        }
+    );
+    assert!(
+        panel.content_total_height() > 180.0,
+        "focused image profile should expand to show editable fields"
     );
 }

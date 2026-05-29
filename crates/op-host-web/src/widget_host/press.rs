@@ -1,15 +1,5 @@
-//! Web `apply_press` + `apply_click` + `apply_right_press` —
-//! extracted from `widget_host.rs` so the spine stays under the
-//! 800-line cap. Mirrors the native `widget_host/press.rs` +
-//! `click.rs` split.
-//!
-//! `EditorState` is the host's source of truth. Every widget
-//! the canvas hit-test runs against the layout-resolved `LayoutScene`,
-//! refreshed at the top of each input handler); the shell-core hit
-//! results (`NodeId` / hit enums) are translated into op-editor-core
-//! widget hit-test results before feeding `EditorState`
-//! mutators.
-
+//! Web press handlers split from `widget_host.rs`; mirrors the
+//! native press/click split and keeps `EditorState` as source of truth.
 use op_editor_ui::widgets::{
     AIChatHit, AIChatPlaceholder, LayerPanel, LayerPanelHit, LocalePicker, PropertyPanel, Toolbar,
     TopBar, TopBarHit, STATUS_BAR_HEIGHT, STATUS_BAR_WIDTH, TOP_BAR_HEIGHT,
@@ -22,10 +12,7 @@ use super::{
 };
 
 impl WidgetHost {
-    /// `true` when `(x, y)` is over the StatusBar's search icon — the
-    /// left section of the bottom-right pill. Mirrors the native
-    /// host; `38 px` is a generous target that stops short of the
-    /// minus button.
+    /// `true` when `(x, y)` is over the StatusBar search icon.
     pub(in crate::widget_host) fn status_bar_search_hit(
         &self,
         x: f32,
@@ -47,8 +34,7 @@ impl WidgetHost {
             && y <= origin_y + STATUS_BAR_HEIGHT
     }
 
-    /// Zoom + pan so the active page's content is framed within the
-    /// canvas region (the StatusBar search action).
+    /// Zoom + pan so the active page's content is framed within the canvas.
     pub(in crate::widget_host) fn zoom_to_fit(&mut self, viewport_w: f32, viewport_h: f32) {
         self.refresh_layout_scene();
         let Some(content) = self.layout_scene.content_bounds() else {
@@ -803,6 +789,9 @@ impl WidgetHost {
             | AgentSettingsHit::AddAcpAgent
             | AgentSettingsHit::TestImageSearch
             | AgentSettingsHit::AddGenConfig
+            | AgentSettingsHit::SetActiveGenConfig(_)
+            | AgentSettingsHit::RemoveGenConfig(_)
+            | AgentSettingsHit::FocusGenConfig { .. }
             | AgentSettingsHit::Inside => {}
         }
         self.mark_dirty();

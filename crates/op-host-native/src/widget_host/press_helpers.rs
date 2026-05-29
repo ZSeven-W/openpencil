@@ -135,6 +135,35 @@ impl WidgetHostNative {
                         .remove_image_gen_profile(&id);
                 }
             }
+            AgentSettingsHit::FocusGenConfig { index, field } => {
+                self.commit_settings_focus_if_any();
+                if let Some(profile) = self
+                    .editor_state
+                    .editor_ui
+                    .agent_settings
+                    .image_gen_profiles
+                    .get(index)
+                {
+                    self.editor_state.editor_ui.settings_input_draft = match field {
+                        op_editor_core::agent_settings::ImageGenField::Name => profile.name.clone(),
+                        op_editor_core::agent_settings::ImageGenField::ApiKey => {
+                            profile.api_key.clone()
+                        }
+                        op_editor_core::agent_settings::ImageGenField::Model => {
+                            profile.model.clone()
+                        }
+                        op_editor_core::agent_settings::ImageGenField::BaseUrl => {
+                            profile.base_url.clone().unwrap_or_default()
+                        }
+                    };
+                    self.editor_state.editor_ui.agent_settings.focus = Some(
+                        op_editor_core::agent_settings::SettingsFocus::ImageGenProfile {
+                            index,
+                            field,
+                        },
+                    );
+                }
+            }
             AgentSettingsHit::ToggleAutoUpdate => {
                 let v = &mut self
                     .editor_state
@@ -282,10 +311,34 @@ impl WidgetHostNative {
             | AgentSettingsHit::Inside => {}
             AgentSettingsHit::AddGenConfig => {
                 self.commit_settings_focus_if_any();
-                self.editor_state
+                let id = self
+                    .editor_state
                     .editor_ui
                     .agent_settings
                     .add_image_gen_profile();
+                let index = self
+                    .editor_state
+                    .editor_ui
+                    .agent_settings
+                    .image_gen_profiles
+                    .iter()
+                    .position(|profile| profile.id == id)
+                    .unwrap_or(0);
+                if let Some(profile) = self
+                    .editor_state
+                    .editor_ui
+                    .agent_settings
+                    .image_gen_profiles
+                    .get(index)
+                {
+                    self.editor_state.editor_ui.settings_input_draft = profile.name.clone();
+                    self.editor_state.editor_ui.agent_settings.focus = Some(
+                        op_editor_core::agent_settings::SettingsFocus::ImageGenProfile {
+                            index,
+                            field: op_editor_core::agent_settings::ImageGenField::Name,
+                        },
+                    );
+                }
             }
         }
         self.mark_dirty();
