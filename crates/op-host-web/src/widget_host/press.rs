@@ -261,6 +261,9 @@ impl WidgetHost {
                 TopBarHit::OpenFigmaImport => {
                     self.editor_state.editor_ui.figma_import_open = true;
                 }
+                TopBarHit::ToggleGitPanel => {
+                    self.editor_state.editor_ui.git_panel.open ^= true;
+                }
             }
             self.mark_dirty();
             return true;

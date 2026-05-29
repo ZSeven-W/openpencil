@@ -85,6 +85,7 @@ fn every_variant_paints_at_least_one_primitive() {
         Icon::Hash,
         Icon::PanelLeft,
         Icon::FolderOpen,
+        Icon::GitBranch,
         Icon::Sparkles,
         Icon::Close,
         Icon::ChevronUp,

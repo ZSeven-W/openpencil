@@ -79,6 +79,8 @@ pub enum TopBarHit {
     ToggleLocale,
     /// Agents and MCP chip — open the agent settings modal.
     OpenAgentSettings,
+    /// Git-branch button next to the file name — toggle the git panel.
+    ToggleGitPanel,
 }
 
 pub struct TopBar {
@@ -108,6 +110,10 @@ pub struct TopBar {
     /// Dark mode (click to go light), a Moon glyph in Light mode
     /// (click to go dark).
     pub theme_mode: op_editor_core::ThemeMode,
+    /// Current git branch when the open document is in a repo — shown
+    /// beside the file name. `None` = no branch (the button still
+    /// paints, icon-only, as a toggle for the git panel).
+    pub git_branch: Option<String>,
 }
 
 impl TopBar {
@@ -125,6 +131,7 @@ impl TopBar {
             traffic_hover: false,
             fullscreen: false,
             theme_mode: op_editor_core::ThemeMode::Dark,
+            git_branch: None,
         }
     }
 
@@ -161,6 +168,7 @@ impl TopBar {
             traffic_hover: ui.topbar_traffic_hover,
             fullscreen: ui.window_fullscreen,
             theme_mode: ui.theme_mode,
+            git_branch: ui.git_panel.branch.clone(),
         }
     }
 
@@ -263,6 +271,34 @@ impl TopBar {
         }
     }
 
+    /// Git-panel toggle button — sits just right of the centred file
+    /// name. Width holds the branch glyph plus an optional branch
+    /// label. Shared by paint + hit-test so they can't drift.
+    fn git_button_rect(&self, top_bar_rect: Rect) -> Rect {
+        let center_y = top_bar_rect.origin.y + top_bar_rect.size.y / 2.0;
+        // The name is *centred* using the 9 px/char heuristic, but a
+        // CJK glyph renders ~14 px wide, so the real right edge is
+        // further out — use a CJK-aware estimate so the button clears
+        // the (often CJK) file name instead of overlapping it.
+        let center_approx = self.file_name.chars().count() as f32 * 9.0;
+        let render_w: f32 = self
+            .file_name
+            .chars()
+            .map(|c| if is_wide_glyph(c) { 14.0 } else { 7.5 })
+            .sum();
+        let filename_left = top_bar_rect.origin.x + (top_bar_rect.size.x - center_approx) / 2.0;
+        let filename_right = filename_left + render_w;
+        let branch_w = self
+            .git_branch
+            .as_deref()
+            .map(|b| 6.0 + b.chars().count() as f32 * 7.0)
+            .unwrap_or(0.0);
+        Rect {
+            origin: Point2D::new(filename_right + 10.0, center_y - ICON_BUTTON / 2.0),
+            size: Point2D::new(ICON_SIZE + 8.0 + branch_w, ICON_BUTTON),
+        }
+    }
+
     /// Resolve a press on the left-edge window-control dots.
     /// `None` for a press anywhere else (including the app's own
     /// buttons). The desktop runner consults this before its normal
@@ -333,6 +369,10 @@ impl TopBar {
         };
         if rect_contains(figma_rect, point) {
             return Some(TopBarHit::OpenFigmaImport);
+        }
+        // Git-panel toggle, just right of the centred file name.
+        if rect_contains(self.git_button_rect(rect), point) {
+            return Some(TopBarHit::ToggleGitPanel);
         }
         // Right cluster: Maximize / Sun / Globe-with-chevron (right→left).
         // Maximize + Sun are normal ICON_BUTTON wide; Globe is
@@ -546,6 +586,33 @@ impl Widget for TopBar {
             ),
         );
 
+        // Git-panel button just right of the file name (TS GitButton):
+        // a branch glyph + optional branch name. Always shown — a
+        // click toggles the git panel (which offers `init` when the
+        // doc isn't yet in a repo).
+        let git_rect = self.git_button_rect(rect);
+        draw_icon(
+            cx.backend,
+            Icon::GitBranch,
+            Point2D::new(git_rect.origin.x, glyph_top(center_y, ICON_SIZE)),
+            ICON_SIZE,
+            self.theme.muted_foreground,
+            1.4,
+        );
+        if let Some(branch) = self.git_branch.as_deref() {
+            let label = TextLayout::single_run(
+                branch,
+                "system-ui",
+                11.0,
+                to_jian_color(self.theme.muted_foreground),
+                Point2D::new(0.0, 0.0),
+            );
+            cx.backend.draw_text(
+                &label,
+                Point2D::new(git_rect.origin.x + ICON_SIZE + 6.0, center_y + 4.0),
+            );
+        }
+
         // ── Right cluster ──────────────────────────────────────
         // Right → left: Maximize | Sun | Globe+Chevron. Globe is a
         // wider compound button (signals the dropdown affordance).
@@ -739,6 +806,14 @@ fn paint_figma_button(cx: &mut PaintCx<'_>, theme: &Theme, x: f32, center_y: f32
         ICON_SIZE,
         theme.muted_foreground,
     );
+}
+
+/// Rough "is this a full-width (CJK/Hangul/full-width-form) glyph"
+/// test — used only to estimate the rendered file-name width so the
+/// git button clears it.
+fn is_wide_glyph(c: char) -> bool {
+    let cp = c as u32;
+    matches!(cp, 0x1100..=0x11FF | 0x2E80..=0x9FFF | 0xAC00..=0xD7AF | 0xF900..=0xFAFF | 0xFF00..=0xFFEF)
 }
 
 /// Top-left y for a glyph of `size` vertically centred on `center_y`.
