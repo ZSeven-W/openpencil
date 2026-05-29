@@ -235,8 +235,16 @@ impl TopBar {
     /// chevron compound). Host anchors the dropdown directly under
     /// this rect when `Document.ui.file_menu_open == true`.
     pub fn file_menu_rect(top_bar_rect: Rect, fullscreen: bool) -> Rect {
-        let file_menu_x =
-            top_bar_rect.origin.x + PAD + Self::left_inset_for(fullscreen) + ICON_BUTTON + 4.0;
+        // Mirror the paint layout: panel button │ divider │ file-menu.
+        // The divider span (gap + width + gap) pushes the file-menu
+        // right of the sidebar toggle — keep this anchor in sync so
+        // the dropdown opens under the folder button, not left of it.
+        let divider_span = DIVIDER_GAP + DIVIDER_W + DIVIDER_GAP;
+        let file_menu_x = top_bar_rect.origin.x
+            + PAD
+            + Self::left_inset_for(fullscreen)
+            + ICON_BUTTON
+            + divider_span;
         Rect {
             origin: Point2D::new(file_menu_x, top_bar_rect.origin.y + 8.0),
             size: Point2D::new(FILE_MENU_BUTTON_WIDTH, ICON_BUTTON),
@@ -309,14 +317,12 @@ impl TopBar {
         if rect_contains(panel_left_rect, point) {
             return Some(TopBarHit::ToggleSidebar);
         }
-        // Mirror the paint layout: panel │ file-menu │ Figma, each
-        // group split by a divider (DIVIDER_GAP + DIVIDER_W + DIVIDER_GAP).
+        // Reuse the canonical anchor so the hit area, paint, and
+        // dropdown anchor can never drift (Codex caught a divider-span
+        // drift here once).
+        let file_menu_rect = Self::file_menu_rect(rect, self.fullscreen);
+        let file_menu_x = file_menu_rect.origin.x;
         let divider_span = DIVIDER_GAP + DIVIDER_W + DIVIDER_GAP;
-        let file_menu_x = rect.origin.x + PAD + self.left_inset() + ICON_BUTTON + divider_span;
-        let file_menu_rect = Rect {
-            origin: Point2D::new(file_menu_x, icon_y),
-            size: Point2D::new(FILE_MENU_BUTTON_WIDTH, ICON_BUTTON),
-        };
         if rect_contains(file_menu_rect, point) {
             return Some(TopBarHit::ToggleFileMenu);
         }
