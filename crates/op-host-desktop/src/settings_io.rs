@@ -14,7 +14,10 @@
 use std::path::PathBuf;
 
 use op_editor_core::editor_ui_state::RecentFile;
-use op_editor_core::{BuiltinAgentConfig, BuiltinAgentKind, EditorState, Locale, ThemeMode};
+use op_editor_core::{
+    BuiltinAgentConfig, BuiltinAgentKind, EditorState, ImageGenProfile, ImageGenProvider, Locale,
+    ThemeMode,
+};
 use op_host_native::WidgetHostNative;
 use serde::{Deserialize, Serialize};
 
@@ -37,6 +40,17 @@ struct BuiltinAgentPayload {
     enabled: bool,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+struct ImageGenProfilePayload {
+    id: String,
+    name: String,
+    provider: String,
+    api_key: String,
+    model: String,
+    #[serde(default)]
+    base_url: Option<String>,
+}
+
 /// Cheap snapshot of every persisted field. Captured before each
 /// dispatch; if it differs after, save the file.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -49,6 +63,8 @@ pub struct Fingerprint {
     auto_update_enabled: bool,
     connected: [bool; 5],
     builtin_agents: Vec<BuiltinAgentConfig>,
+    image_gen_profiles: Vec<ImageGenProfile>,
+    active_image_gen_profile_id: Option<String>,
 }
 
 pub fn fingerprint(state: &EditorState) -> Fingerprint {
@@ -62,6 +78,8 @@ pub fn fingerprint(state: &EditorState) -> Fingerprint {
         auto_update_enabled: eui.agent_settings.auto_update_enabled,
         connected: eui.agent_settings.connected,
         builtin_agents: eui.agent_settings.builtin_agents.clone(),
+        image_gen_profiles: eui.agent_settings.image_gen_profiles.clone(),
+        active_image_gen_profile_id: eui.agent_settings.active_image_gen_profile_id.clone(),
     }
 }
 
@@ -98,6 +116,10 @@ struct SettingsPayload {
     #[serde(default)]
     builtin_agents: Option<Vec<BuiltinAgentPayload>>,
     #[serde(default)]
+    image_gen_profiles: Option<Vec<ImageGenProfilePayload>>,
+    #[serde(default)]
+    active_image_gen_profile_id: Option<String>,
+    #[serde(default)]
     recent_files: Option<Vec<RecentFilePayload>>,
 }
 
@@ -128,6 +150,14 @@ fn to_payload(state: &EditorState) -> SettingsPayload {
                 .map(builtin_agent_to_payload)
                 .collect(),
         ),
+        image_gen_profiles: Some(
+            eui.agent_settings
+                .image_gen_profiles
+                .iter()
+                .map(image_gen_profile_to_payload)
+                .collect(),
+        ),
+        active_image_gen_profile_id: eui.agent_settings.active_image_gen_profile_id.clone(),
         recent_files: Some(
             eui.recent_files
                 .iter()
@@ -185,6 +215,37 @@ fn apply_payload(state: &mut EditorState, payload: SettingsPayload) {
         eui.agent_settings.next_builtin_agent_id =
             next_builtin_agent_id(&eui.agent_settings.builtin_agents);
     }
+    if let Some(profiles) = payload.image_gen_profiles {
+        eui.agent_settings.image_gen_profiles = profiles
+            .into_iter()
+            .filter_map(image_gen_profile_from_payload)
+            .collect();
+        eui.agent_settings.next_image_gen_profile_id =
+            next_image_gen_profile_id(&eui.agent_settings.image_gen_profiles);
+    }
+    if let Some(active) = payload.active_image_gen_profile_id {
+        if eui
+            .agent_settings
+            .image_gen_profiles
+            .iter()
+            .any(|profile| profile.id == active)
+        {
+            eui.agent_settings.active_image_gen_profile_id = Some(active);
+        } else {
+            eui.agent_settings.active_image_gen_profile_id = eui
+                .agent_settings
+                .image_gen_profiles
+                .first()
+                .map(|profile| profile.id.clone());
+        }
+    }
+    if eui.agent_settings.active_image_gen_profile_id.is_none() {
+        eui.agent_settings.active_image_gen_profile_id = eui
+            .agent_settings
+            .image_gen_profiles
+            .first()
+            .map(|profile| profile.id.clone());
+    }
     if let Some(list) = payload.recent_files {
         eui.recent_files = list
             .into_iter()
@@ -235,10 +296,54 @@ fn builtin_agent_from_payload(payload: BuiltinAgentPayload) -> Option<BuiltinAge
     })
 }
 
+fn image_gen_profile_to_payload(profile: &ImageGenProfile) -> ImageGenProfilePayload {
+    ImageGenProfilePayload {
+        id: profile.id.clone(),
+        name: profile.name.clone(),
+        provider: match profile.provider {
+            ImageGenProvider::OpenAi => "openai",
+            ImageGenProvider::Gemini => "gemini",
+            ImageGenProvider::Replicate => "replicate",
+            ImageGenProvider::Custom => "custom",
+        }
+        .into(),
+        api_key: profile.api_key.clone(),
+        model: profile.model.clone(),
+        base_url: profile.base_url.clone(),
+    }
+}
+
+fn image_gen_profile_from_payload(payload: ImageGenProfilePayload) -> Option<ImageGenProfile> {
+    let provider = match payload.provider.as_str() {
+        "openai" => ImageGenProvider::OpenAi,
+        "gemini" => ImageGenProvider::Gemini,
+        "replicate" => ImageGenProvider::Replicate,
+        "custom" => ImageGenProvider::Custom,
+        _ => return None,
+    };
+    Some(ImageGenProfile {
+        id: payload.id,
+        name: payload.name,
+        provider,
+        api_key: payload.api_key,
+        model: payload.model,
+        base_url: payload.base_url,
+    })
+}
+
 fn next_builtin_agent_id(agents: &[BuiltinAgentConfig]) -> u64 {
     agents
         .iter()
         .filter_map(|agent| agent.id.strip_prefix("builtin-")?.parse::<u64>().ok())
+        .max()
+        .unwrap_or(0)
+        .saturating_add(1)
+}
+
+fn next_image_gen_profile_id(profiles: &[ImageGenProfile]) -> u64 {
+    profiles
+        .iter()
+        .filter_map(|profile| profile.id.strip_prefix("igp-")?.parse::<u64>().ok())
         .max()
         .unwrap_or(0)
         .saturating_add(1)
@@ -449,6 +554,46 @@ mod tests {
         assert_eq!(
             dst.editor_ui.agent_settings.builtin_agents[0].api_key,
             "sk-test"
+        );
+    }
+
+    #[test]
+    fn image_generation_profiles_round_trip_through_payload() {
+        let mut src = EditorState::new();
+        let first = src.editor_ui.agent_settings.add_image_gen_profile();
+        let second = src.editor_ui.agent_settings.add_image_gen_profile();
+        let second_profile = &mut src.editor_ui.agent_settings.image_gen_profiles[1];
+        second_profile.name = "Gemini Image".into();
+        second_profile.provider = ImageGenProvider::Gemini;
+        second_profile.api_key = "image-key".into();
+        second_profile.model = "gemini-image".into();
+        second_profile.base_url = Some("https://images.example/v1".into());
+        assert!(src
+            .editor_ui
+            .agent_settings
+            .set_active_image_gen_profile(&second));
+
+        let json = serde_json::to_string(&to_payload(&src)).unwrap();
+        let payload: SettingsPayload = serde_json::from_str(&json).unwrap();
+        let mut dst = EditorState::new();
+        apply_payload(&mut dst, payload);
+
+        assert_eq!(dst.editor_ui.agent_settings.image_gen_profiles.len(), 2);
+        assert_eq!(
+            dst.editor_ui
+                .agent_settings
+                .active_image_gen_profile_id
+                .as_deref(),
+            Some(second.as_str())
+        );
+        assert_eq!(dst.editor_ui.agent_settings.image_gen_profiles[0].id, first);
+        assert_eq!(
+            dst.editor_ui.agent_settings.image_gen_profiles[1].provider,
+            ImageGenProvider::Gemini
+        );
+        assert_eq!(
+            dst.editor_ui.agent_settings.image_gen_profiles[1].base_url,
+            Some("https://images.example/v1".into())
         );
     }
 

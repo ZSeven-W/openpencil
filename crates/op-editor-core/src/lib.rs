@@ -70,7 +70,7 @@ mod tests_pages;
 
 pub use agent_settings::{
     AgentSettings, AgentSettingsDrag, AgentSettingsTab, BuiltinAgentConfig, BuiltinAgentField,
-    BuiltinAgentKind, McpCli, McpServer, SettingsFocus,
+    BuiltinAgentKind, ImageGenProfile, ImageGenProvider, McpCli, McpServer, SettingsFocus,
 };
 pub use align::AlignAction;
 pub use chat::{
