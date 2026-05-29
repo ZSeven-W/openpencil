@@ -1,6 +1,6 @@
 use crate::widgets::agent_settings_panel::{AgentSettingsHit, AgentSettingsPanel};
 use op_editor_core::agent_settings::{
-    AgentSettingsTab, BuiltinAgentField, ImageGenField, SettingsFocus,
+    AgentSettingsTab, BuiltinAgentField, ImageGenField, ImageSearchField, SettingsFocus,
 };
 use op_editor_core::EditorState;
 
@@ -194,6 +194,56 @@ fn images_tab_profile_rows_expose_active_and_remove_targets() {
             crate::Point2D::new(content_x + content_w - 12.0, row_y + 16.0)
         ),
         AgentSettingsHit::RemoveGenConfig(0)
+    );
+}
+
+#[test]
+fn images_tab_advanced_search_fields_are_focusable() {
+    let mut state = EditorState::default();
+    state.editor_ui.agent_settings.tab = AgentSettingsTab::Images;
+    state.editor_ui.agent_settings.images_advanced_open = true;
+    let panel = AgentSettingsPanel::for_editor(&state);
+    let rect = panel.rect(1200.0, 800.0);
+    let content_x = rect.origin.x + 200.0 + 24.0;
+    let content_y = rect.origin.y + 24.0;
+    let field_x = content_x + 110.0 + 16.0;
+    let first_field_y = content_y + 36.0 + 24.0 + 22.0;
+
+    assert_eq!(
+        panel.hit_test(rect, crate::Point2D::new(field_x, first_field_y + 18.0)),
+        AgentSettingsHit::FocusSearchField(ImageSearchField::ClientId)
+    );
+    assert_eq!(
+        panel.hit_test(
+            rect,
+            crate::Point2D::new(field_x, first_field_y + 36.0 + 10.0 + 18.0)
+        ),
+        AgentSettingsHit::FocusSearchField(ImageSearchField::ClientSecret)
+    );
+}
+
+#[test]
+fn images_tab_test_search_requires_some_oauth_text() {
+    let mut state = EditorState::default();
+    state.editor_ui.agent_settings.tab = AgentSettingsTab::Images;
+    state.editor_ui.agent_settings.images_advanced_open = true;
+    let panel = AgentSettingsPanel::for_editor(&state);
+    let rect = panel.rect(1200.0, 800.0);
+    let content_y = rect.origin.y + 24.0;
+    let content_w = rect.size.x - 200.0 - 48.0;
+    let button_x = rect.origin.x + 200.0 + 24.0 + content_w - 28.0;
+    let button_y = content_y + 36.0 + 24.0 + 22.0 + 36.0 + 10.0 + 36.0 + 14.0 + 18.0;
+
+    assert_eq!(
+        panel.hit_test(rect, crate::Point2D::new(button_x, button_y)),
+        AgentSettingsHit::Inside
+    );
+
+    state.editor_ui.agent_settings.openverse_client_id = "client".into();
+    let panel = AgentSettingsPanel::for_editor(&state);
+    assert_eq!(
+        panel.hit_test(rect, crate::Point2D::new(button_x, button_y)),
+        AgentSettingsHit::TestImageSearch
     );
 }
 

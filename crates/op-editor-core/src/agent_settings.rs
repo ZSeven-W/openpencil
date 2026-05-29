@@ -109,8 +109,15 @@ pub enum ImageGenField {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ImageSearchField {
+    ClientId,
+    ClientSecret,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SettingsFocus {
     McpPort,
+    ImageSearch(ImageSearchField),
     BuiltinAgent {
         index: usize,
         field: BuiltinAgentField,
@@ -216,6 +223,8 @@ pub struct AgentSettings {
     pub mcp_cli_enabled: [bool; 6],
     pub images_advanced_open: bool,
     pub images_search_ready: bool,
+    pub openverse_client_id: String,
+    pub openverse_client_secret: String,
     pub image_gen_profiles: Vec<ImageGenProfile>,
     pub active_image_gen_profile_id: Option<String>,
     pub next_image_gen_profile_id: u64,
@@ -245,6 +254,8 @@ impl Default for AgentSettings {
             mcp_cli_enabled: [false; 6],
             images_advanced_open: false,
             images_search_ready: true,
+            openverse_client_id: String::new(),
+            openverse_client_secret: String::new(),
             image_gen_profiles: Vec::new(),
             active_image_gen_profile_id: None,
             next_image_gen_profile_id: 1,
@@ -345,6 +356,8 @@ mod tests {
         assert!(s.image_gen_profiles.is_empty());
         assert!(s.active_image_gen_profile_id.is_none());
         assert!(!s.images_advanced_open);
+        assert!(s.openverse_client_id.is_empty());
+        assert!(s.openverse_client_secret.is_empty());
         assert_eq!(s.mcp_server.port, 3100);
         assert!(s.auto_update_enabled);
         assert!(s.focus.is_none());

@@ -20,6 +20,9 @@ impl WidgetHostNative {
                 op_editor_core::agent_settings::SettingsFocus::McpPort => {
                     c.is_ascii_digit() && draft.len() < 5
                 }
+                op_editor_core::agent_settings::SettingsFocus::ImageSearch(_) => {
+                    !c.is_control() && draft.len() < 512
+                }
                 op_editor_core::agent_settings::SettingsFocus::BuiltinAgent { .. } => {
                     !c.is_control() && draft.len() < 512
                 }

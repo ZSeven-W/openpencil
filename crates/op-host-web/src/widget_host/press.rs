@@ -718,7 +718,6 @@ impl WidgetHost {
         was_focused
     }
 
-    /// Cmd+, settings modal — dispatch hit-tests on the modal.
     /// Returns true once the modal swallowed the press.
     fn dispatch_agent_settings_press(&mut self, x: f32, y: f32, vw: f32, vh: f32) -> bool {
         use op_editor_ui::widgets::agent_settings_panel::{AgentSettingsHit, AgentSettingsPanel};
@@ -791,6 +790,7 @@ impl WidgetHost {
             | AgentSettingsHit::AddGenConfig
             | AgentSettingsHit::SetActiveGenConfig(_)
             | AgentSettingsHit::RemoveGenConfig(_)
+            | AgentSettingsHit::FocusSearchField(_)
             | AgentSettingsHit::FocusGenConfig { .. }
             | AgentSettingsHit::Inside => {}
         }

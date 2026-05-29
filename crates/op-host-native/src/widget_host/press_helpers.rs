@@ -103,6 +103,32 @@ impl WidgetHostNative {
                     .images_advanced_open;
                 *v = !*v;
             }
+            AgentSettingsHit::FocusSearchField(field) => {
+                self.commit_settings_focus_if_any();
+                self.editor_state.editor_ui.settings_input_draft = match field {
+                    op_editor_core::agent_settings::ImageSearchField::ClientId => self
+                        .editor_state
+                        .editor_ui
+                        .agent_settings
+                        .openverse_client_id
+                        .clone(),
+                    op_editor_core::agent_settings::ImageSearchField::ClientSecret => self
+                        .editor_state
+                        .editor_ui
+                        .agent_settings
+                        .openverse_client_secret
+                        .clone(),
+                };
+                self.editor_state.editor_ui.agent_settings.focus = Some(
+                    op_editor_core::agent_settings::SettingsFocus::ImageSearch(field),
+                );
+            }
+            AgentSettingsHit::TestImageSearch => {
+                self.commit_settings_focus_if_any();
+                let settings = &mut self.editor_state.editor_ui.agent_settings;
+                settings.images_search_ready = !settings.openverse_client_id.trim().is_empty()
+                    && !settings.openverse_client_secret.trim().is_empty();
+            }
             AgentSettingsHit::SetActiveGenConfig(index) => {
                 self.commit_settings_focus_if_any();
                 if let Some(id) = self
@@ -306,9 +332,7 @@ impl WidgetHostNative {
                 self.editor_state.editor_ui.settings_input_draft.clear();
                 self.editor_state.rebuild_chat_models();
             }
-            AgentSettingsHit::AddAcpAgent
-            | AgentSettingsHit::TestImageSearch
-            | AgentSettingsHit::Inside => {}
+            AgentSettingsHit::AddAcpAgent | AgentSettingsHit::Inside => {}
             AgentSettingsHit::AddGenConfig => {
                 self.commit_settings_focus_if_any();
                 let id = self

@@ -16,6 +16,20 @@ impl WidgetHostNative {
                     self.editor_state.editor_ui.agent_settings.mcp_server.port = port.max(1024);
                 }
             }
+            SettingsFocus::ImageSearch(field) => match field {
+                op_editor_core::agent_settings::ImageSearchField::ClientId => {
+                    self.editor_state
+                        .editor_ui
+                        .agent_settings
+                        .openverse_client_id = draft.trim().to_string();
+                }
+                op_editor_core::agent_settings::ImageSearchField::ClientSecret => {
+                    self.editor_state
+                        .editor_ui
+                        .agent_settings
+                        .openverse_client_secret = draft.trim().to_string();
+                }
+            },
             SettingsFocus::BuiltinAgent { index, field } => {
                 if let Some(agent) = self
                     .editor_state
