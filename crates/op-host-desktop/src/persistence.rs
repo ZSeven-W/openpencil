@@ -426,7 +426,7 @@ pub fn run_action(
     match action {
         FileAction::New => {
             // Reset the document to a fresh untitled state.
-            *host.editor_state_mut() = EditorState::new();
+            *host.editor_state_mut() = EditorState::starter();
             host.mark_editor_state_dirty();
             *current_path = None;
             refresh_title(current_path, window);
@@ -700,6 +700,45 @@ mod tests {
             document_fingerprint(&mutated),
             "a structural change moves the fingerprint"
         );
+    }
+
+    #[test]
+    fn new_file_action_resets_to_starter_frame() {
+        let mut host = WidgetHostNative::new();
+        host.editor_state_mut().doc.children.clear();
+        let mut current_path = Some(PathBuf::from("/tmp/old.op"));
+
+        let outcome = run_action(
+            op_editor_core::editor_ui_state::FileAction::New,
+            &mut host,
+            &mut current_path,
+            None,
+        );
+
+        assert_eq!(outcome, ActionOutcome::Saved);
+        assert!(current_path.is_none());
+        assert_eq!(host.editor_state().doc.children.len(), 1);
+        assert_eq!(
+            host.editor_state().selection.anchor,
+            op_editor_core::NodeId::new("n10")
+        );
+        let frame = match &host.editor_state().doc.children[0] {
+            jian_ops_schema::node::PenNode::Frame(frame) => frame,
+            other => panic!(
+                "new file should create the blank starter frame, got {:?}",
+                other
+            ),
+        };
+        assert_eq!(frame.base.x, Some(0.0));
+        assert_eq!(frame.base.y, Some(0.0));
+        assert!(matches!(
+            frame.container.width,
+            Some(jian_ops_schema::sizing::SizingBehavior::Number(1200.0))
+        ));
+        assert!(matches!(
+            frame.container.height,
+            Some(jian_ops_schema::sizing::SizingBehavior::Number(800.0))
+        ));
     }
 
     #[test]

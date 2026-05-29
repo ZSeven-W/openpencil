@@ -159,8 +159,12 @@ struct DesktopApp {
 impl DesktopApp {
     fn new(initial_file: Option<PathBuf>) -> Self {
         let mut host = WidgetHostNative::new();
+        let fit_blank_frame = initial_file.is_none();
         // Best-effort prefs restore onto the host's `EditorState`.
         settings_io::load(host.editor_state_mut());
+        if fit_blank_frame {
+            host.fit_content_to_viewport(INITIAL_VIEWPORT_W, INITIAL_VIEWPORT_H);
+        }
         host.mark_editor_state_dirty();
         // Baseline for the unsaved-changes prompt — the fresh,
         // empty document is by definition "saved" (nothing to lose).

@@ -64,6 +64,7 @@ mod settings_dispatch;
 mod shape_picker_press;
 mod shortcuts;
 mod toolbar_hover;
+mod viewport_fit;
 
 pub use frame_backend::NativeFrameBackend;
 
