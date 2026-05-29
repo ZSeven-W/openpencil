@@ -55,14 +55,17 @@ impl DesktopApp {
                     self.host.apply_property_step(-nudge) || self.host.apply_nudge(0.0, nudge);
             }
             Key::Named(NamedKey::ArrowLeft) if !self.zoom_modifier && !settings_focused => {
-                // A focused property input moves its text caret;
+                // An active inline rename moves its caret first, then a
+                // focused property input moves its text caret;
                 // otherwise the arrow nudges the selection.
-                consumed =
-                    self.host.apply_property_caret(false) || self.host.apply_nudge(-nudge, 0.0);
+                consumed = self.host.apply_rename_caret(false)
+                    || self.host.apply_property_caret(false)
+                    || self.host.apply_nudge(-nudge, 0.0);
             }
             Key::Named(NamedKey::ArrowRight) if !self.zoom_modifier && !settings_focused => {
-                consumed =
-                    self.host.apply_property_caret(true) || self.host.apply_nudge(nudge, 0.0);
+                consumed = self.host.apply_rename_caret(true)
+                    || self.host.apply_property_caret(true)
+                    || self.host.apply_nudge(nudge, 0.0);
             }
             // Cmd/Ctrl+Alt+U/S/I/X — path boolean ops (Paper.js
             // parity). Gated on `!settings_focused` so they

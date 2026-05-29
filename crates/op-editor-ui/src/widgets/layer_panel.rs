@@ -83,6 +83,9 @@ pub struct LayerPanel {
     pub drag_ghost: Option<(LayerItem, f32)>,
     pub now_ms: u64,
     pub caret_anchor_ms: u64,
+    /// Caret position (char index) for the active inline rename — the
+    /// single renaming row reads this to place its blinking caret.
+    pub rename_caret: usize,
     /// Scroll offsets (px) for the bounded Pages / Layers regions.
     pub pages_scroll: f32,
     pub layers_scroll: f32,
@@ -111,6 +114,7 @@ impl LayerPanel {
             drag_ghost: None,
             now_ms: 0,
             caret_anchor_ms: 0,
+            rename_caret: state.ui.layer_rename.as_ref().map(|r| r.caret).unwrap_or(0),
             pages_scroll: state.editor_ui.layer_pages_scroll,
             layers_scroll: state.editor_ui.layer_layers_scroll,
         }
@@ -163,6 +167,7 @@ impl LayerPanel {
             drag_ghost: None,
             now_ms: 0,
             caret_anchor_ms: 0,
+            rename_caret: state.ui.layer_rename.as_ref().map(|r| r.caret).unwrap_or(0),
             pages_scroll: state.editor_ui.layer_pages_scroll,
             layers_scroll: state.editor_ui.layer_layers_scroll,
         }
@@ -180,6 +185,7 @@ impl LayerPanel {
             drag_ghost: None,
             now_ms: 0,
             caret_anchor_ms: 0,
+            rename_caret: 0,
             pages_scroll: 0.0,
             layers_scroll: 0.0,
         }
@@ -532,6 +538,7 @@ impl Widget for LayerPanel {
                     cx,
                     &self.theme,
                     &page.label,
+                    self.rename_caret,
                     label_x,
                     y + 2.0,
                     available_w,
@@ -678,6 +685,7 @@ impl Widget for LayerPanel {
                     cx,
                     &self.theme,
                     &item.label,
+                    self.rename_caret,
                     label_x,
                     row.origin.y,
                     available_w,

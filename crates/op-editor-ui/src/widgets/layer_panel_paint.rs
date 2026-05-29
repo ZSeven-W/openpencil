@@ -84,6 +84,7 @@ pub(super) fn paint_rename_input(
     cx: &mut PaintCx<'_>,
     theme: &Theme,
     draft: &str,
+    caret: usize,
     x: f32,
     row_y: f32,
     available_w: f32,
@@ -93,13 +94,17 @@ pub(super) fn paint_rename_input(
     let input_w = available_w.max(40.0);
     let input_h = LAYER_ROW_HEIGHT - 4.0;
     // No truncation while editing — full draft scrolls so the caret
-    // (and the last few chars the user is typing) stays in view.
-    // Use the backend's real glyph measurement so CJK / capital-
-    // heavy strings don't under-scroll (the 0.5-factor heuristic
-    // does for narrow ASCII).
+    // stays in view. Use the backend's real glyph measurement so CJK /
+    // capital-heavy strings don't under-scroll (the 0.5-factor
+    // heuristic does for narrow ASCII).
+    let prefix: String = draft.chars().take(caret).collect();
+    let prefix_w = cx.backend.measure_text(&prefix, ROW_FONT);
     let text_w = cx.backend.measure_text(draft, ROW_FONT);
     let caret_pad = 2.0;
-    let scroll_x = (text_w + caret_pad - input_w).max(0.0);
+    // Anchor the scroll to the caret (so mid-string editing keeps the
+    // caret visible), clamped so we never scroll past the draft end.
+    let max_scroll = (text_w + caret_pad - input_w).max(0.0);
+    let scroll_x = (prefix_w + caret_pad - input_w).max(0.0).min(max_scroll);
     let clip = Rect {
         origin: Point2D::new(x - 2.0, row_y),
         size: Point2D::new(input_w + 4.0, input_h),
@@ -116,7 +121,7 @@ pub(super) fn paint_rename_input(
     cx.backend
         .draw_text(&text, Point2D::new(x - scroll_x, row_y + 17.0));
     if jian_core::anim::blink_visible(now_ms, caret_anchor_ms, 500) {
-        let caret_x = x + text_w - scroll_x;
+        let caret_x = x + prefix_w - scroll_x;
         let caret_rect = Rect {
             origin: Point2D::new(caret_x, row_y + 5.0),
             size: Point2D::new(1.0, input_h - 6.0),

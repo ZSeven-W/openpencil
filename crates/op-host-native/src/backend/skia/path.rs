@@ -191,6 +191,31 @@ impl NativeBackend {
         canvas.draw_path(&path, &paint);
     }
 
+    /// Stroke an arbitrary document SVG path fitted into `rect` by
+    /// its own tight bounds. This mirrors the TS renderer's
+    /// `drawPath` transform and handles Figma vectors whose `d`
+    /// contains negative local coordinates.
+    pub fn stroke_svg_path_in_rect(
+        &mut self,
+        canvas: &skia_safe::Canvas,
+        d: &str,
+        rect: Rect,
+        color: Color,
+        width: f32,
+    ) {
+        let Some((_, path, _)) = self.cached_svg_path(d) else {
+            return;
+        };
+        let path = fit_path_to_rect(&path, rect);
+        let mut paint = skia_safe::Paint::new(jian_color_to_color4f(color), None);
+        paint.set_stroke(true);
+        paint.set_stroke_width(width);
+        paint.set_anti_alias(true);
+        paint.set_stroke_cap(skia_safe::PaintCap::Round);
+        paint.set_stroke_join(skia_safe::PaintJoin::Round);
+        canvas.draw_path(&path, &paint);
+    }
+
     /// Fill an SVG path scaled from `viewbox x viewbox` to
     /// `size x size`. The parsed base path is cached so Figma imports
     /// with many vector paths do not re-parse every paint frame.
@@ -236,6 +261,204 @@ impl NativeBackend {
         canvas.draw_path(&path, &paint);
     }
 
+    /// Fill an arbitrary document SVG path fitted into `rect` by its
+    /// own tight bounds. Unlike `fill_svg_path`, this is not tied to
+    /// a square icon viewBox.
+    pub fn fill_svg_path_in_rect(
+        &mut self,
+        canvas: &skia_safe::Canvas,
+        d: &str,
+        rect: Rect,
+        color: Color,
+    ) {
+        let Some((_, path, even_odd)) = self.cached_svg_path(d) else {
+            return;
+        };
+        let mut path = fit_path_to_rect(&path, rect);
+        if even_odd {
+            path.set_fill_type(skia_safe::PathFillType::EvenOdd);
+        }
+        let mut paint = skia_safe::Paint::new(jian_color_to_color4f(color), None);
+        paint.set_anti_alias(true);
+        canvas.draw_path(&path, &paint);
+    }
+
+    /// Fill a document SVG path (fitted into `rect`) with a linear
+    /// gradient. Shader endpoints come from `rect` — the same
+    /// unrotated AABB the path is fitted into — so when the caller
+    /// has a rotation on the canvas matrix the gradient rotates with
+    /// the path. Reuses the rect-gradient helpers so native paths and
+    /// rects agree on direction + colour interpolation.
+    pub fn fill_svg_path_in_rect_linear_gradient(
+        &mut self,
+        canvas: &skia_safe::Canvas,
+        d: &str,
+        rect: Rect,
+        stops: &[(f32, Color)],
+        angle_deg: f32,
+        opacity: f32,
+    ) {
+        if stops.is_empty() {
+            return;
+        }
+        let Some(path) = self.fitted_svg_path(d, rect) else {
+            return;
+        };
+        let (start, end) = super::gradient::linear_gradient_endpoints(rect, angle_deg);
+        let (colors, offsets) = super::gradient::gradient_color_arrays(stops, opacity);
+        let grad_colors = skia_safe::gradient::Colors::new(
+            &colors[..],
+            Some(offsets.as_slice()),
+            skia_safe::TileMode::Clamp,
+            None,
+        );
+        let gradient = skia_safe::gradient::Gradient::new(
+            grad_colors,
+            super::gradient::premul_interpolation(),
+        );
+        let shader = skia_safe::gradient::shaders::linear_gradient((start, end), &gradient, None);
+        self.draw_path_with_gradient(canvas, &path, shader, stops, opacity);
+    }
+
+    /// Fill a document SVG path (fitted into `rect`) with a radial
+    /// gradient. Centre / outer-radius fractions match the rect
+    /// radial helper (`pen-renderer` parity).
+    #[allow(clippy::too_many_arguments)]
+    pub fn fill_svg_path_in_rect_radial_gradient(
+        &mut self,
+        canvas: &skia_safe::Canvas,
+        d: &str,
+        rect: Rect,
+        stops: &[(f32, Color)],
+        cx_frac: f32,
+        cy_frac: f32,
+        radius_frac: f32,
+        opacity: f32,
+    ) {
+        if stops.is_empty() {
+            return;
+        }
+        let Some(path) = self.fitted_svg_path(d, rect) else {
+            return;
+        };
+        let center = skia_safe::Point::new(
+            rect.origin.x + rect.size.x * cx_frac.clamp(0.0, 1.0),
+            rect.origin.y + rect.size.y * cy_frac.clamp(0.0, 1.0),
+        );
+        let outer = ((rect.size.x.max(rect.size.y)) * radius_frac.clamp(0.0, 1.0)).max(0.01);
+        let (colors, offsets) = super::gradient::gradient_color_arrays(stops, opacity);
+        let grad_colors = skia_safe::gradient::Colors::new(
+            &colors[..],
+            Some(offsets.as_slice()),
+            skia_safe::TileMode::Clamp,
+            None,
+        );
+        let gradient = skia_safe::gradient::Gradient::new(
+            grad_colors,
+            super::gradient::premul_interpolation(),
+        );
+        let shader =
+            skia_safe::gradient::shaders::radial_gradient((center, outer), &gradient, None);
+        self.draw_path_with_gradient(canvas, &path, shader, stops, opacity);
+    }
+
+    /// Resolve `d` to a path fitted into `rect`, honouring the cached
+    /// even-odd fill rule. `None` when the path string fails to parse.
+    fn fitted_svg_path(&mut self, d: &str, rect: Rect) -> Option<skia_safe::Path> {
+        let (_, path, even_odd) = self.cached_svg_path(d)?;
+        let mut path = fit_path_to_rect(&path, rect);
+        if even_odd {
+            path.set_fill_type(skia_safe::PathFillType::EvenOdd);
+        }
+        Some(path)
+    }
+
+    /// Draw `path` with `shader`, or degrade to a solid first-stop
+    /// fill when skia rejected the (degenerate) gradient.
+    fn draw_path_with_gradient(
+        &self,
+        canvas: &skia_safe::Canvas,
+        path: &skia_safe::Path,
+        shader: Option<skia_safe::Shader>,
+        stops: &[(f32, Color)],
+        opacity: f32,
+    ) {
+        let mut paint = match shader {
+            Some(shader) => {
+                let mut p = skia_safe::Paint::default();
+                p.set_shader(shader);
+                p
+            }
+            None => skia_safe::Paint::new(
+                jian_color_to_color4f(super::gradient::fold_opacity(stops[0].1, opacity)),
+                None,
+            ),
+        };
+        paint.set_anti_alias(true);
+        canvas.draw_path(path, &paint);
+    }
+
+    /// Paint an inset (inner) shadow for a document SVG path fitted
+    /// into `rect`. Clips to the path silhouette, then draws an
+    /// inverse fill (everything *outside* the shape, shifted by the
+    /// shadow offset) through a blur mask: the blurred boundary
+    /// bleeds inward from the edge and the clip keeps only the
+    /// inside, yielding a recessed shadow. `sigma = blur * 0.5`
+    /// matches `fill_drop_shadow`.
+    #[allow(clippy::too_many_arguments)]
+    pub fn fill_inner_shadow_svg_path(
+        &mut self,
+        canvas: &skia_safe::Canvas,
+        d: &str,
+        rect: Rect,
+        offset_x: f32,
+        offset_y: f32,
+        blur: f32,
+        color: Color,
+    ) {
+        let Some(path) = self.fitted_svg_path(d, rect) else {
+            return;
+        };
+        // Standard inset-shadow recipe, isolated in its own layer so
+        // the punch-out never touches the backdrop:
+        //   1. fill the whole silhouette with the shadow colour,
+        //   2. punch out a blurred, offset copy with `DstOut` — the
+        //      blur's soft edge leaves a feathered shadow ring hugging
+        //      the inside of the boundary while the centre clears.
+        // The outer clip keeps everything inside the silhouette.
+        let offset_path = if offset_x != 0.0 || offset_y != 0.0 {
+            let mut m = skia_safe::Matrix::new_identity();
+            m.set_translate((offset_x, offset_y));
+            path.with_transform(&m)
+        } else {
+            path.clone()
+        };
+
+        canvas.save();
+        canvas.clip_path(&path, skia_safe::ClipOp::Intersect, true);
+        canvas.save_layer(&skia_safe::canvas::SaveLayerRec::default());
+
+        let mut fill = skia_safe::Paint::new(jian_color_to_color4f(color), None);
+        fill.set_anti_alias(true);
+        canvas.draw_path(&path, &fill);
+
+        let mut cut = skia_safe::Paint::default();
+        cut.set_anti_alias(true);
+        cut.set_blend_mode(skia_safe::BlendMode::DstOut);
+        let sigma = blur * 0.5;
+        if sigma > 0.0 {
+            if let Some(mask) =
+                skia_safe::MaskFilter::blur(skia_safe::BlurStyle::Normal, sigma, false)
+            {
+                cut.set_mask_filter(mask);
+            }
+        }
+        canvas.draw_path(&offset_path, &cut);
+
+        canvas.restore(); // pop the isolation layer
+        canvas.restore(); // pop the silhouette clip
+    }
+
     #[cfg(test)]
     pub(crate) fn svg_path_cache_len(&self) -> usize {
         self.svg_path_cache.len()
@@ -264,6 +487,37 @@ fn has_multiple_close_commands(d: &str) -> bool {
         }
     }
     false
+}
+
+fn fit_path_to_rect(path: &skia_safe::Path, rect: Rect) -> skia_safe::Path {
+    let bounds = path.compute_tight_bounds();
+    if !bounds.is_finite()
+        || !rect.size.x.is_finite()
+        || !rect.size.y.is_finite()
+        || rect.size.x <= 0.0
+        || rect.size.y <= 0.0
+    {
+        let mut matrix = skia_safe::Matrix::new_identity();
+        matrix.set_translate((rect.origin.x, rect.origin.y));
+        return path.with_transform(&matrix);
+    }
+    let native_w = bounds.width();
+    let native_h = bounds.height();
+    let sx = if native_w.abs() > 0.01 {
+        rect.size.x / native_w
+    } else {
+        1.0
+    };
+    let sy = if native_h.abs() > 0.01 {
+        rect.size.y / native_h
+    } else {
+        1.0
+    };
+    let tx = rect.origin.x - bounds.left() * sx;
+    let ty = rect.origin.y - bounds.top() * sy;
+    let mut matrix = skia_safe::Matrix::new_identity();
+    matrix.set_scale_translate((sx, sy), (tx, ty));
+    path.with_transform(&matrix)
 }
 
 fn color_key(c: Color) -> u32 {

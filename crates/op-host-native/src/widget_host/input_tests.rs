@@ -90,6 +90,86 @@ fn escape_closes_one_overlay_per_press_in_priority_order() {
 }
 
 #[test]
+fn rename_caret_arrows_move_caret_then_fall_through() {
+    let mut host = WidgetHostNative::new();
+    seed(
+        &mut host,
+        &three_rects(
+            [
+                (0.0, 0.0, 10.0, 10.0),
+                (20.0, 0.0, 10.0, 10.0),
+                (40.0, 0.0, 10.0, 10.0),
+            ],
+            ["ab", "b", "c"],
+        ),
+    );
+    assert!(host
+        .editor_state_mut()
+        .start_rename_layer(NodeId::new("ab")));
+    // Draft "ab" seeds caret at the end (2).
+    assert_eq!(
+        host.editor_state().ui.layer_rename.as_ref().unwrap().caret,
+        2
+    );
+    // Left arrow during rename is consumed and moves the caret.
+    assert!(host.apply_rename_caret(false));
+    assert_eq!(
+        host.editor_state().ui.layer_rename.as_ref().unwrap().caret,
+        1
+    );
+    assert!(host.apply_rename_caret(true));
+    assert_eq!(
+        host.editor_state().ui.layer_rename.as_ref().unwrap().caret,
+        2
+    );
+    // With no rename active the arrow falls through (not consumed).
+    host.editor_state_mut().rename_cancel();
+    assert!(!host.apply_rename_caret(false));
+}
+
+#[test]
+fn status_bar_search_click_frames_content_in_viewport() {
+    // Three rects spread across doc space (union ≈ x[100,400] y[100,300]).
+    let mut host = WidgetHostNative::new();
+    seed(
+        &mut host,
+        &three_rects(
+            [
+                (100.0, 100.0, 100.0, 100.0),
+                (300.0, 200.0, 100.0, 100.0),
+                (150.0, 150.0, 50.0, 50.0),
+            ],
+            ["a", "b", "c"],
+        ),
+    );
+    // Pan + zoom far away so the design is off-screen.
+    host.editor_state_mut().viewport.pan_x = -5000.0;
+    host.editor_state_mut().viewport.pan_y = -5000.0;
+    host.editor_state_mut().viewport.zoom = 0.2;
+
+    let (vw, vh) = (1200.0, 800.0);
+    let r = host
+        .status_bar_rect(vw, vh)
+        .expect("status bar visible at this size");
+    // Click the search icon (left section of the pill).
+    let consumed = host.apply_press(r.origin.x + 5.0, r.origin.y + r.size.y / 2.0, vw, vh);
+
+    assert!(consumed, "search-icon click must be consumed");
+    let v = host.editor_state().viewport;
+    assert!(
+        (v.zoom - 0.2).abs() > 1e-3,
+        "zoom should change to frame the content, got {}",
+        v.zoom
+    );
+    assert!(
+        v.pan_x > -5000.0 && v.pan_y > -5000.0,
+        "pan should re-anchor toward the content, got ({}, {})",
+        v.pan_x,
+        v.pan_y
+    );
+}
+
+#[test]
 fn pick_fill_image_keeps_image_popover_open_for_mode_selection() {
     let mut host = WidgetHostNative::new();
     host.editor_state_mut().editor_ui.image_fill_popover_open = true;

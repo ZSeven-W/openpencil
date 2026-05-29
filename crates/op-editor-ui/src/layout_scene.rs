@@ -67,15 +67,18 @@ impl NodeKind {
     }
 }
 
-/// Drop-shadow effect — offset + blur + colour, doc-px units.
-/// Painted behind the node's fill. Mirrors the TS `PenEffect`
-/// shadow variant (`offsetX` / `offsetY` / `blur` / `color`).
+/// Shadow effect — offset + blur + colour, doc-px units. Mirrors the
+/// TS `PenEffect` shadow variant (`offsetX` / `offsetY` / `blur` /
+/// `color` / `inner`). An outer shadow paints behind the node's fill;
+/// an `inner` shadow paints inset, clipped to the node silhouette.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct DropShadow {
     pub offset_x: f32,
     pub offset_y: f32,
     pub blur: f32,
     pub color: Color,
+    /// `true` = inset (inner) shadow; `false` = outer drop shadow.
+    pub inner: bool,
 }
 
 /// One resolved gradient stop — offset 0.0..=1.0 plus the stop's
@@ -146,6 +149,34 @@ impl LayoutScene {
     /// has no pages.
     pub fn active_page(&self) -> Option<&ScenePage> {
         self.pages.get(self.active_page_index)
+    }
+
+    /// Union AABB of every top-level node on the active page, in
+    /// document space — the extent a "zoom to fit" frames. `None`
+    /// when the page is empty (nothing to fit).
+    pub fn content_bounds(&self) -> Option<Rect> {
+        let page = self.active_page()?;
+        let mut acc: Option<Rect> = None;
+        for child in &page.children {
+            let b = child.aggregate_bounds();
+            if b.size.x <= 0.0 && b.size.y <= 0.0 {
+                continue;
+            }
+            acc = Some(match acc {
+                None => b,
+                Some(a) => {
+                    let min_x = a.origin.x.min(b.origin.x);
+                    let min_y = a.origin.y.min(b.origin.y);
+                    let max_x = (a.origin.x + a.size.x).max(b.origin.x + b.size.x);
+                    let max_y = (a.origin.y + a.size.y).max(b.origin.y + b.size.y);
+                    Rect {
+                        origin: Point2D::new(min_x, min_y),
+                        size: Point2D::new(max_x - min_x, max_y - min_y),
+                    }
+                }
+            });
+        }
+        acc
     }
 }
 
@@ -239,6 +270,10 @@ pub struct SceneNode {
     pub bounds: Rect,
     /// Rotation in radians, clockwise about the node's bounds centre.
     pub rotation: f32,
+    /// Mirror horizontally around the node's aggregate-bounds centre.
+    pub flip_x: bool,
+    /// Mirror vertically around the node's aggregate-bounds centre.
+    pub flip_y: bool,
     /// Corner radius in doc-px — honoured by Rect / Frame paint.
     pub corner_radius: f32,
     /// Resolved fill colour. `$ref` variable fills are already
@@ -378,6 +413,8 @@ impl SceneNode {
             kind,
             bounds: Rect::ZERO,
             rotation: 0.0,
+            flip_x: false,
+            flip_y: false,
             corner_radius: 0.0,
             fill: None,
             fill_type: SceneFillType::Solid,
@@ -553,5 +590,37 @@ mod tests {
         assert!(n.stroke.is_none());
         assert!(n.children.is_empty());
         assert_eq!(n.fill_type, SceneFillType::Solid);
+    }
+
+    #[test]
+    fn content_bounds_unions_top_level_nodes() {
+        let mut a = SceneNode::leaf("a", NodeKind::Rect);
+        a.bounds = Rect::xywh(10.0, 20.0, 30.0, 40.0); // → x[10,40] y[20,60]
+        let mut b = SceneNode::leaf("b", NodeKind::Rect);
+        b.bounds = Rect::xywh(100.0, 0.0, 50.0, 10.0); // → x[100,150] y[0,10]
+        let scene = LayoutScene {
+            pages: vec![ScenePage {
+                id: "p".into(),
+                name: "P".into(),
+                children: vec![a, b],
+            }],
+            active_page_index: 0,
+        };
+        let bounds = scene.content_bounds().expect("non-empty page has bounds");
+        // Union: x[10,150] y[0,60] → origin (10,0) size (140,60).
+        assert_eq!(bounds, Rect::xywh(10.0, 0.0, 140.0, 60.0));
+    }
+
+    #[test]
+    fn content_bounds_none_for_empty_page() {
+        let scene = LayoutScene {
+            pages: vec![ScenePage {
+                id: "p".into(),
+                name: "P".into(),
+                children: vec![],
+            }],
+            active_page_index: 0,
+        };
+        assert!(scene.content_bounds().is_none());
     }
 }

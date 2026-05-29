@@ -349,6 +349,23 @@ impl RenderBackend for WebBackend {
         self.surface.canvas().draw_path(&path, &paint);
     }
 
+    fn stroke_svg_path_in_rect(&mut self, d: &str, rect: Rect, color: Color, width: f32) {
+        let Some(path) = skia_safe::utils::parse_path::from_svg(d) else {
+            return;
+        };
+        let path = fit_path_to_rect(&path, rect);
+        let mut paint = skia_safe::Paint::new(
+            skia_safe::Color4f::new(color.r, color.g, color.b, color.a),
+            None,
+        );
+        paint.set_stroke(true);
+        paint.set_stroke_width(width);
+        paint.set_anti_alias(true);
+        paint.set_stroke_cap(skia_safe::PaintCap::Round);
+        paint.set_stroke_join(skia_safe::PaintJoin::Round);
+        self.surface.canvas().draw_path(&path, &paint);
+    }
+
     fn fill_svg_path(&mut self, d: &str, top_left: Point2D, size: f32, viewbox: f32, color: Color) {
         let Some(path) = skia_safe::utils::parse_path::from_svg(d) else {
             return;
@@ -357,6 +374,22 @@ impl RenderBackend for WebBackend {
         let mut matrix = skia_safe::Matrix::new_identity();
         matrix.set_scale_translate((s, s), (top_left.x, top_left.y));
         let mut path = path.with_transform(&matrix);
+        if d.matches(['Z', 'z']).count() > 1 {
+            path.set_fill_type(skia_safe::PathFillType::EvenOdd);
+        }
+        let mut paint = skia_safe::Paint::new(
+            skia_safe::Color4f::new(color.r, color.g, color.b, color.a),
+            None,
+        );
+        paint.set_anti_alias(true);
+        self.surface.canvas().draw_path(&path, &paint);
+    }
+
+    fn fill_svg_path_in_rect(&mut self, d: &str, rect: Rect, color: Color) {
+        let Some(path) = skia_safe::utils::parse_path::from_svg(d) else {
+            return;
+        };
+        let mut path = fit_path_to_rect(&path, rect);
         if d.matches(['Z', 'z']).count() > 1 {
             path.set_fill_type(skia_safe::PathFillType::EvenOdd);
         }
@@ -464,6 +497,13 @@ impl RenderBackend for WebBackend {
         self.surface.canvas().translate((offset.x, offset.y));
     }
 
+    fn scale(&mut self, scale: Point2D, pivot: Point2D) {
+        let canvas = self.surface.canvas();
+        canvas.translate((pivot.x, pivot.y));
+        canvas.scale((scale.x, scale.y));
+        canvas.translate((-pivot.x, -pivot.y));
+    }
+
     fn rotate(&mut self, radians: f32, pivot: Point2D) {
         let degrees = radians.to_degrees();
         self.surface
@@ -528,4 +568,35 @@ impl RenderBackend for WebBackend {
     fn measure_text_weighted(&mut self, text: &str, font_size: f32, _weight: u16) -> f32 {
         self.measure_text(text, font_size)
     }
+}
+
+fn fit_path_to_rect(path: &skia_safe::Path, rect: Rect) -> skia_safe::Path {
+    let bounds = path.compute_tight_bounds();
+    if !bounds.is_finite()
+        || !rect.size.x.is_finite()
+        || !rect.size.y.is_finite()
+        || rect.size.x <= 0.0
+        || rect.size.y <= 0.0
+    {
+        let mut matrix = skia_safe::Matrix::new_identity();
+        matrix.set_translate((rect.origin.x, rect.origin.y));
+        return path.with_transform(&matrix);
+    }
+    let native_w = bounds.width();
+    let native_h = bounds.height();
+    let sx = if native_w.abs() > 0.01 {
+        rect.size.x / native_w
+    } else {
+        1.0
+    };
+    let sy = if native_h.abs() > 0.01 {
+        rect.size.y / native_h
+    } else {
+        1.0
+    };
+    let tx = rect.origin.x - bounds.left() * sx;
+    let ty = rect.origin.y - bounds.top() * sy;
+    let mut matrix = skia_safe::Matrix::new_identity();
+    matrix.set_scale_translate((sx, sy), (tx, ty));
+    path.with_transform(&matrix)
 }

@@ -103,7 +103,7 @@ fn repair_light_mobile_nav_surfaces(sink: &mut dyn DocSink, root_id: &str) {
         children
             .iter()
             .filter_map(nav_surface_target)
-            .filter_map(|nav| nav_surface_repair(nav, root_surface_hex.as_deref()))
+            .filter_map(|nav| nav_surface_repair(nav, root_surface_hex))
             .collect()
     };
 
@@ -367,7 +367,7 @@ fn is_blank_gray_mobile_placeholder(node: &PenNode) -> bool {
         return false;
     }
     first_solid_fill_hex(node)
-        .map(|hex| is_soft_gray_placeholder_hex(&hex))
+        .map(is_soft_gray_placeholder_hex)
         .unwrap_or(false)
 }
 

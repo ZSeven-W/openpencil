@@ -53,6 +53,10 @@ impl<'a> RenderBackend for NativeFrameBackend<'a> {
         self.inner.translate(self.canvas, offset);
     }
 
+    fn scale(&mut self, scale: Point2D, pivot: Point2D) {
+        self.inner.scale(self.canvas, scale, pivot);
+    }
+
     fn rotate(&mut self, radians: f32, pivot: Point2D) {
         self.inner.rotate(self.canvas, radians, pivot);
     }
@@ -83,6 +87,78 @@ impl<'a> RenderBackend for NativeFrameBackend<'a> {
     fn fill_svg_path(&mut self, d: &str, top_left: Point2D, size: f32, viewbox: f32, color: Color) {
         self.inner
             .fill_svg_path(self.canvas, d, top_left, size, viewbox, color);
+    }
+
+    fn fill_svg_path_in_rect(&mut self, d: &str, rect: Rect, color: Color) {
+        self.inner
+            .fill_svg_path_in_rect(self.canvas, d, rect, color);
+    }
+
+    fn stroke_svg_path_in_rect(&mut self, d: &str, rect: Rect, color: Color, width: f32) {
+        self.inner
+            .stroke_svg_path_in_rect(self.canvas, d, rect, color, width);
+    }
+
+    fn fill_svg_path_in_rect_linear_gradient(
+        &mut self,
+        d: &str,
+        rect: Rect,
+        stops: &[(f32, Color)],
+        angle_deg: f32,
+        opacity: f32,
+    ) {
+        self.inner.fill_svg_path_in_rect_linear_gradient(
+            self.canvas,
+            d,
+            rect,
+            stops,
+            angle_deg,
+            opacity,
+        );
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn fill_svg_path_in_rect_radial_gradient(
+        &mut self,
+        d: &str,
+        rect: Rect,
+        stops: &[(f32, Color)],
+        cx_frac: f32,
+        cy_frac: f32,
+        radius_frac: f32,
+        opacity: f32,
+    ) {
+        self.inner.fill_svg_path_in_rect_radial_gradient(
+            self.canvas,
+            d,
+            rect,
+            stops,
+            cx_frac,
+            cy_frac,
+            radius_frac,
+            opacity,
+        );
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn fill_inner_shadow_svg_path(
+        &mut self,
+        d: &str,
+        rect: Rect,
+        offset_x: f32,
+        offset_y: f32,
+        blur: f32,
+        color: Color,
+    ) {
+        self.inner.fill_inner_shadow_svg_path(
+            self.canvas,
+            d,
+            rect,
+            offset_x,
+            offset_y,
+            blur,
+            color,
+        );
     }
 
     fn fill_oval(&mut self, bounds: Rect, color: Color) {

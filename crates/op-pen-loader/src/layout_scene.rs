@@ -23,8 +23,9 @@
 
 use op_editor_ui::layout_scene::NodeKind;
 use op_editor_ui::layout_scene::{
-    stable_image_source_id, LayoutScene, SceneFillType, SceneGradient, SceneGradientStop,
-    SceneImageFit, SceneNode, ScenePage, SceneStroke, SceneTextAlign, SceneTextVerticalAlign,
+    stable_image_source_id, DropShadow, Effect, LayoutScene, SceneFillType, SceneGradient,
+    SceneGradientStop, SceneImageFit, SceneNode, ScenePage, SceneStroke, SceneTextAlign,
+    SceneTextVerticalAlign,
 };
 use op_editor_ui::scene_vars::VariableTable;
 use op_editor_ui::Color;
@@ -68,7 +69,7 @@ pub fn editor_state_to_layout_scene(state: &op_editor_core::EditorState) -> Layo
                 children: page
                     .children
                     .iter()
-                    .map(|n| node_payload_to_scene(n, &var_table))
+                    .map(|n| node_payload_to_scene(n, &var_table, 1.0))
                     .collect(),
             })
             .collect(),
@@ -91,9 +92,20 @@ pub fn editor_state_to_layout_scene(state: &op_editor_core::EditorState) -> Layo
 /// here so the scene carries only concrete colours; a registered ref
 /// wins over the node's authored colour, mirroring the canvas
 /// painter's `var_table.fill_for(id).or(node.fill)`.
-fn node_payload_to_scene(node: &NodePayload, var_table: &VariableTable) -> SceneNode {
+fn node_payload_to_scene(
+    node: &NodePayload,
+    var_table: &VariableTable,
+    parent_opacity: f32,
+) -> SceneNode {
     use op_editor_ui::{Point2D, Rect};
     let node_id = op_editor_core::NodeId::new(node.id.clone());
+    // Node-level opacity composites multiplicatively down the tree
+    // (a 0.5 frame dims its 0.5 child to 0.25). We bake it into the
+    // resolved fill / stroke / gradient alpha rather than painting a
+    // group layer: every shape here is leaf-painted, so per-shape
+    // alpha matches a group-opacity layer except when a node's own
+    // sub-shapes overlap — which the current scene model never emits.
+    let cum_opacity = (parent_opacity * node.opacity).clamp(0.0, 1.0);
     SceneNode {
         id: node.id.clone(),
         kind: str_to_kind(&node.kind),
@@ -102,19 +114,26 @@ fn node_payload_to_scene(node: &NodePayload, var_table: &VariableTable) -> Scene
             size: Point2D::new(node.w, node.h),
         },
         rotation: node.rotation,
+        flip_x: node.flip_x,
+        flip_y: node.flip_y,
         corner_radius: node.corner_radius,
         // Paint-time `$ref` resolution: a registered fill ref wins,
         // else the node's own fill. Same precedence as the canvas
         // painter's `node_fill` helper.
         fill: var_table
             .fill_for(&node_id)
-            .or_else(|| node.fill.map(array_to_color)),
+            .or_else(|| node.fill.map(array_to_color))
+            .map(|c| mul_alpha(c, cum_opacity)),
         fill_type: str_to_scene_fill_type(&node.fill_type),
-        gradient: node.gradient.as_ref().map(payload_gradient_to_scene),
-        stroke: node
-            .stroke
+        gradient: node
+            .gradient
             .as_ref()
-            .map(|s| scene_stroke(s, &node_id, var_table)),
+            .map(|g| scale_gradient_opacity(payload_gradient_to_scene(g), cum_opacity)),
+        stroke: node.stroke.as_ref().map(|s| {
+            let mut st = scene_stroke(s, &node_id, var_table);
+            st.color = mul_alpha(st.color, cum_opacity);
+            st
+        }),
         text: node.text.clone(),
         font_family: node.font_family.clone(),
         font_size: node.font_size,
@@ -144,14 +163,70 @@ fn node_payload_to_scene(node: &NodePayload, var_table: &VariableTable) -> Scene
             .unwrap_or(0),
         image_fit: image_fit_to_scene(node.image_fit.as_deref()),
         image_adjustments: image_adjustments_to_scene(node.image_adjustments),
-        effects: crate::effects::effects_from_payload_ref(&node.effects),
+        effects: crate::effects::effects_from_payload_ref(&node.effects)
+            .into_iter()
+            .map(|e| scale_effect_opacity(e, cum_opacity))
+            .collect(),
         hidden: node.hidden,
         locked: node.locked,
         children: node
             .children
             .iter()
-            .map(|c| node_payload_to_scene(c, var_table))
+            .map(|c| node_payload_to_scene(c, var_table, cum_opacity))
             .collect(),
+    }
+}
+
+/// Fold node opacity into an effect's colour. A drop shadow is part
+/// of the node's own paint, so node opacity dims it alongside the
+/// fill (a 30%-opacity node casts a 30%-strength shadow).
+fn scale_effect_opacity(e: Effect, k: f32) -> Effect {
+    match e {
+        Effect::DropShadow(s) => Effect::DropShadow(DropShadow {
+            color: mul_alpha(s.color, k),
+            ..s
+        }),
+    }
+}
+
+/// Multiply a colour's alpha by `k` (node-opacity folding).
+fn mul_alpha(c: Color, k: f32) -> Color {
+    Color {
+        a: (c.a * k).clamp(0.0, 1.0),
+        ..c
+    }
+}
+
+/// Fold node opacity into a gradient by scaling its alpha multiplier
+/// only. The backend folds `opacity` into every stop colour when it
+/// builds the shader (`gradient_color_arrays`), so scaling the stops
+/// here too would dim the gradient twice. Leave stops at their
+/// authored alpha; the single `opacity` multiplier carries node
+/// opacity.
+fn scale_gradient_opacity(g: SceneGradient, k: f32) -> SceneGradient {
+    match g {
+        SceneGradient::Linear {
+            angle_deg,
+            opacity,
+            stops,
+        } => SceneGradient::Linear {
+            angle_deg,
+            opacity: (opacity * k).clamp(0.0, 1.0),
+            stops,
+        },
+        SceneGradient::Radial {
+            cx,
+            cy,
+            radius,
+            opacity,
+            stops,
+        } => SceneGradient::Radial {
+            cx,
+            cy,
+            radius,
+            opacity: (opacity * k).clamp(0.0, 1.0),
+            stops,
+        },
     }
 }
 

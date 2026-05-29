@@ -249,3 +249,97 @@ fn linear_gradient_endpoints_use_ellipse_not_aabb() {
     assert!((end.x - (100.0 + dx_expected)).abs() < 1e-2);
     assert!((end.y - (50.0 + dy_expected)).abs() < 1e-2);
 }
+
+#[test]
+fn linear_gradient_path_renders_color_ramp() {
+    // A full-rect square path filled with a left→right gradient
+    // (white at offset 0, red at offset 1; angle 90° = left→right)
+    // must paint a real ramp: the left edge stays green-ish (white),
+    // the right edge loses green (red). A solid first-stop fallback
+    // would paint the whole path white and fail the assert.
+    let mut be = NativeBackend::with_dpi(1.0);
+    let mut surface = skia_safe::surfaces::raster_n32_premul((40, 40)).unwrap();
+    surface.canvas().clear(skia_safe::Color::BLACK);
+    let rect = Rect {
+        origin: Point2D::new(0.0, 0.0),
+        size: Point2D::new(40.0, 40.0),
+    };
+    let stops = [
+        (
+            0.0,
+            Color {
+                r: 1.0,
+                g: 1.0,
+                b: 1.0,
+                a: 1.0,
+            },
+        ),
+        (
+            1.0,
+            Color {
+                r: 1.0,
+                g: 0.0,
+                b: 0.0,
+                a: 1.0,
+            },
+        ),
+    ];
+    be.fill_svg_path_in_rect_linear_gradient(
+        surface.canvas(),
+        "M0 0 L1 0 L1 1 L0 1 Z",
+        rect,
+        &stops,
+        90.0,
+        1.0,
+    );
+    let img = surface.image_snapshot();
+    let pm = img.peek_pixels().expect("peek raster pixels");
+    let left = pm.get_color((3, 20));
+    let right = pm.get_color((37, 20));
+    assert!(
+        left.g() as i32 > right.g() as i32 + 60,
+        "expected a left→right ramp (left greener than right), got left.g={} right.g={}",
+        left.g(),
+        right.g()
+    );
+}
+
+#[test]
+fn inner_shadow_path_darkens_edges_not_center() {
+    // A full-rect square path with a black inset shadow (offset 0,
+    // blur 8) must darken the inside edges while the centre stays
+    // near-white. A no-op (or outer-shadow) fallback would leave the
+    // edge as bright as the centre.
+    let mut be = NativeBackend::with_dpi(1.0);
+    let mut surface = skia_safe::surfaces::raster_n32_premul((60, 60)).unwrap();
+    surface.canvas().clear(skia_safe::Color::WHITE);
+    let rect = Rect {
+        origin: Point2D::new(0.0, 0.0),
+        size: Point2D::new(60.0, 60.0),
+    };
+    let d = "M0 0 L1 0 L1 1 L0 1 Z";
+    be.fill_inner_shadow_svg_path(
+        surface.canvas(),
+        d,
+        rect,
+        0.0,
+        0.0,
+        8.0,
+        Color {
+            r: 0.0,
+            g: 0.0,
+            b: 0.0,
+            a: 1.0,
+        },
+    );
+    let img = surface.image_snapshot();
+    let pm = img.peek_pixels().expect("peek raster pixels");
+    let edge = pm.get_color((2, 30));
+    let center = pm.get_color((30, 30));
+    assert!(
+        (edge.r() as i32) < (center.r() as i32) - 30,
+        "inset shadow should darken the edge vs centre: edge.r={} center.r={}",
+        edge.r(),
+        center.r()
+    );
+}

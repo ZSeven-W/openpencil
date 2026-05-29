@@ -748,6 +748,16 @@ fn empty_group(base: &PenNodeBase, kind: &str) -> NodePayload {
     p
 }
 
+/// Resolve a node's literal opacity (0.0..=1.0). Expression-valued
+/// opacity isn't evaluated yet — it falls back to fully opaque so a
+/// dynamic node never vanishes on load.
+fn base_opacity(base: &PenNodeBase) -> f32 {
+    match &base.opacity {
+        Some(jian_ops_schema::node::NumberOrExpression::Number(n)) => (*n as f32).clamp(0.0, 1.0),
+        _ => 1.0,
+    }
+}
+
 fn base_payload(base: &PenNodeBase, kind: &str) -> NodePayload {
     NodePayload {
         id: base.id.clone(),
@@ -763,6 +773,9 @@ fn base_payload(base: &PenNodeBase, kind: &str) -> NodePayload {
         text: None,
         font_family: String::new(),
         rotation: (base.rotation.unwrap_or(0.0) as f32).to_radians(),
+        flip_x: base.flip_x.unwrap_or(false),
+        flip_y: base.flip_y.unwrap_or(false),
+        opacity: base_opacity(base),
         corner_radius: 0.0,
         arc_start_angle: None,
         arc_sweep_angle: None,

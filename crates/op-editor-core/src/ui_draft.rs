@@ -143,6 +143,10 @@ pub enum LayerContextTarget {
 pub struct LayerRenameState {
     pub target: LayerContextTarget,
     pub draft: String,
+    /// Caret position as a CHAR index into `draft` (0..=char_count).
+    /// Char-based — not byte-based — so left/right movement and
+    /// insert/delete land on whole characters in CJK names.
+    pub caret: usize,
 }
 
 /// Which control of the HSV colour picker a drag is currently
