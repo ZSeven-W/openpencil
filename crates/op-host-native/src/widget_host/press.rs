@@ -332,6 +332,25 @@ impl WidgetHostNative {
                     self.mark_dirty();
                     return true;
                 }
+                TopBarHit::ToggleGitPanel => {
+                    // Mirror `main.rs` A::ToggleGitPanel bookkeeping; the
+                    // binary's per-frame `if git_panel.open { refresh }`
+                    // performs the actual repo scan.
+                    let panel = &mut self.editor_state.editor_ui.git_panel;
+                    let opening = !panel.open;
+                    panel.open = opening;
+                    if opening {
+                        panel.loading = true;
+                    } else {
+                        panel.commit_focused = false;
+                        panel.remote_focused = false;
+                        panel.https_focused = false;
+                        panel.diff = None;
+                        panel.merge_resolve = None;
+                    }
+                    self.mark_dirty();
+                    return true;
+                }
             }
         }
         if rect_contains(top_bar_rect, Point2D::new(x, y)) {

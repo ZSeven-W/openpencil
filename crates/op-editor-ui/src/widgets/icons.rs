@@ -74,6 +74,8 @@ pub enum Icon {
     PanelLeft,
     /// FolderOpen — TopBar folder.
     FolderOpen,
+    /// GitBranch — TopBar git-panel toggle next to the file name.
+    GitBranch,
     /// Sparkles — agent active indicator.
     Sparkles,
     /// X — close affordance.
@@ -257,6 +259,7 @@ impl Icon {
             Icon::Hash => HASH,
             Icon::PanelLeft => PANEL_LEFT,
             Icon::FolderOpen => FOLDER_OPEN,
+            Icon::GitBranch => GIT_BRANCH,
             Icon::Sparkles => SPARKLES,
             Icon::Close => CLOSE,
             Icon::Trash => TRASH,
@@ -402,6 +405,7 @@ impl Icon {
             "download" => Icon::Download,
             "file-text" => Icon::FileText,
             "folder-open" | "folder" => Icon::FolderOpen,
+            "git-branch" | "git" => Icon::GitBranch,
             "sparkles" => Icon::Sparkles,
             "diamond" => Icon::Diamond,
             "component" => Icon::Component,
