@@ -108,7 +108,10 @@ impl WidgetHostNative {
                 });
             if let Some(picker) = picker {
                 if rect_contains(picker, Point2D::new(x, y)) {
-                    let max = max_picker_scroll(&self.editor_state.chat.available_models);
+                    let max = max_picker_scroll(
+                        &self.editor_state.chat.available_models,
+                        &self.editor_state.editor_ui.chat_model_picker_search,
+                    );
                     let next = (self.editor_state.editor_ui.chat_model_picker_scroll - delta_y)
                         .clamp(0.0, max);
                     self.editor_state.editor_ui.chat_model_picker_scroll = next;
@@ -226,7 +229,10 @@ impl WidgetHostNative {
                 });
             if let Some(picker) = picker {
                 if rect_contains(picker, Point2D::new(x, y)) {
-                    let max = max_picker_scroll(&self.editor_state.chat.available_models);
+                    let max = max_picker_scroll(
+                        &self.editor_state.chat.available_models,
+                        &self.editor_state.editor_ui.chat_model_picker_search,
+                    );
                     let next =
                         (self.editor_state.editor_ui.chat_model_picker_scroll - dy).clamp(0.0, max);
                     self.editor_state.editor_ui.chat_model_picker_scroll = next;

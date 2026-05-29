@@ -534,6 +534,9 @@ pub struct EditorUiState {
     /// Non-zero only when the connected catalog is taller than the
     /// picker's capped height; the host clamps it on wheel input.
     pub chat_model_picker_scroll: f32,
+    /// Live text filter for the chat model picker. While the picker
+    /// is open it owns typed characters, matching the TS search box.
+    pub chat_model_picker_search: String,
     /// Index into `chat.available_models` of the model row the cursor
     /// is over, or `None`. Drives the picker's hover-row tint.
     pub chat_model_picker_hover: Option<usize>,
@@ -704,6 +707,7 @@ impl Default for EditorUiState {
             icon_picker_load_more_request: None,
             chat_model_picker_open: false,
             chat_model_picker_scroll: 0.0,
+            chat_model_picker_search: String::new(),
             chat_model_picker_hover: None,
             chat_selected_agent: 0,
             topbar_traffic_hover: false,

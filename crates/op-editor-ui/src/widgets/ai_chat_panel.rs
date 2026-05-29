@@ -94,6 +94,10 @@ pub enum AIChatHit {
     /// is the index into `chat.available_models`
     /// (`Document::select_chat_model`).
     SelectModel(usize),
+    /// Click landed inside the model-picker search/header area.
+    /// The picker owns keyboard input while open, so this consumes
+    /// the click without closing the dropdown.
+    FocusModelSearch,
     /// Click on the thinking-mode chip — host cycles
     /// `ChatState::thinking_mode`.
     CycleThinking,
@@ -150,6 +154,9 @@ pub struct AIChatPlaceholder<'a> {
     /// Index into `state.available_models` of the picker row under
     /// the cursor (`Document.ui.chat_model_picker_hover`).
     pub model_picker_hover: Option<usize>,
+    /// Live model-picker search query
+    /// (`Document.ui.chat_model_picker_search`).
+    pub model_picker_search: String,
     /// Localised empty-state example cards — resolved at construction
     /// time so the grid reflows when the user flips the Globe icon.
     pub(crate) examples: [ExampleCard; 4],
@@ -183,6 +190,7 @@ impl<'a> AIChatPlaceholder<'a> {
             model_picker_open: ui.chat_model_picker_open,
             model_picker_scroll: ui.chat_model_picker_scroll,
             model_picker_hover: ui.chat_model_picker_hover,
+            model_picker_search: ui.chat_model_picker_search.clone(),
             examples: example_cards(ui.locale),
             locale: ui.locale,
         }
@@ -222,8 +230,10 @@ impl<'a> AIChatPlaceholder<'a> {
     /// height is capped at `MODEL_PICKER_MAX_H`; a taller catalog
     /// scrolls inside the card rather than overflowing the screen.
     fn model_picker_rect(&self, rect: Rect, input_rect: Rect) -> Rect {
-        let height =
-            crate::widgets::ai_chat_model_picker::picker_view_height(&self.state.available_models);
+        let height = crate::widgets::ai_chat_model_picker::picker_view_height(
+            &self.state.available_models,
+            &self.model_picker_search,
+        );
         let toolbar_top = input_rect.origin.y + INPUT_AREA_HEIGHT + self.attachment_row_h();
         let bottom = toolbar_top - 4.0;
         Rect {
@@ -309,8 +319,12 @@ impl<'a> AIChatPlaceholder<'a> {
                 point,
                 &self.state.available_models,
                 self.model_picker_scroll,
+                &self.model_picker_search,
             ) {
                 return Some(AIChatHit::SelectModel(idx));
+            }
+            if rect_contains(picker, point) {
+                return Some(AIChatHit::FocusModelSearch);
             }
             return Some(AIChatHit::ToggleModelPicker);
         }
@@ -747,6 +761,8 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
                 self.state.selected_model,
                 self.model_picker_scroll,
                 self.model_picker_hover,
+                &self.model_picker_search,
+                self.locale,
             );
         }
     }

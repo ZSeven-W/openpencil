@@ -166,6 +166,7 @@ impl WidgetHostNative {
                         self.editor_state.chat.maximized = !self.editor_state.chat.maximized;
                         self.editor_state.chat.collapsed = false;
                         self.editor_state.editor_ui.chat_model_picker_open = false;
+                        self.editor_state.editor_ui.chat_model_picker_search.clear();
                         self.mark_dirty();
                         return true;
                     }
@@ -173,6 +174,7 @@ impl WidgetHostNative {
                         self.editor_state.chat.new_chat();
                         self.editor_state.editor_ui.chat_model_picker_open = false;
                         self.editor_state.editor_ui.chat_model_picker_scroll = 0.0;
+                        self.editor_state.editor_ui.chat_model_picker_search.clear();
                         self.editor_state.editor_ui.chat_model_picker_hover = None;
                         self.mark_dirty();
                         return true;
@@ -184,7 +186,12 @@ impl WidgetHostNative {
                         // a stale offset from a prior open never hides
                         // the top of the catalog.
                         self.editor_state.editor_ui.chat_model_picker_scroll = 0.0;
+                        self.editor_state.editor_ui.chat_model_picker_search.clear();
                         self.editor_state.editor_ui.chat_model_picker_hover = None;
+                        self.mark_dirty();
+                        return true;
+                    }
+                    AIChatHit::FocusModelSearch => {
                         self.mark_dirty();
                         return true;
                     }
@@ -234,6 +241,7 @@ impl WidgetHostNative {
         let picker_was_open = self.editor_state.editor_ui.chat_model_picker_open;
         self.editor_state.editor_ui.chat_model_picker_open = false;
         self.editor_state.editor_ui.chat_model_picker_scroll = 0.0;
+        self.editor_state.editor_ui.chat_model_picker_search.clear();
         self.editor_state.editor_ui.chat_model_picker_hover = None;
         let was_focused = self.editor_state.chat.focused || picker_was_open;
         self.editor_state.chat.focused = false;
