@@ -4,7 +4,8 @@ use std::collections::HashSet;
 use std::sync::mpsc::{self, Receiver, TryRecvError};
 use std::time::Duration;
 
-use jian_ops_schema::node::PenNode;
+use jian_ops_schema::node::{PenNode, TextContent};
+use jian_ops_schema::style::{ImageFillBody, ImageFillMode, PenFill};
 use op_editor_core::{walkers, EditorState, NodeId, PenNodeExt as _};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -127,7 +128,7 @@ pub(crate) fn collect_targets(
     known_node_ids: &HashSet<String>,
 ) -> Vec<ImageSearchTarget> {
     let mut targets = Vec::new();
-    collect_from_children(state.active_children(), known_node_ids, &mut targets);
+    collect_from_children(state.active_children(), known_node_ids, &mut targets, &[]);
     targets
 }
 
@@ -135,28 +136,254 @@ fn collect_from_children(
     children: &[PenNode],
     known_node_ids: &HashSet<String>,
     targets: &mut Vec<ImageSearchTarget>,
+    parent_names: &[String],
 ) {
     for node in children {
-        if let PenNode::Image(image) = node {
-            let id = image.base.id.as_str();
-            let query = image
-                .image_search_query
-                .as_deref()
-                .filter(|q| !q.trim().is_empty())
-                .or(image.base.name.as_deref())
-                .unwrap_or("placeholder")
-                .trim();
-            if image.src.trim().is_empty() && !query.is_empty() && !known_node_ids.contains(id) {
-                targets.push(ImageSearchTarget {
-                    node_id: NodeId::new(id),
-                    query: query.to_string(),
-                });
-            }
+        if let Some(target) = image_search_target_for(node, known_node_ids, parent_names) {
+            targets.push(target);
+        }
+
+        if is_image_placeholder_frame(node) || is_image_area_frame_by_heuristic(node) {
+            continue;
         }
         if let Some(grand) = node.children() {
-            collect_from_children(grand, known_node_ids, targets);
+            let mut child_parent_names = Vec::with_capacity(parent_names.len() + 1);
+            child_parent_names.push(node.base().name.clone().unwrap_or_default());
+            child_parent_names.extend(parent_names.iter().cloned());
+            collect_from_children(grand, known_node_ids, targets, &child_parent_names);
         }
     }
+}
+
+fn image_search_target_for(
+    node: &PenNode,
+    known_node_ids: &HashSet<String>,
+    parent_names: &[String],
+) -> Option<ImageSearchTarget> {
+    let id = node.base().id.as_str();
+    if known_node_ids.contains(id) {
+        return None;
+    }
+
+    let needs_image = match node {
+        PenNode::Image(image) => is_placeholder_src(&image.src),
+        PenNode::Frame(_) => is_frame_placeholder_still_unfilled(node),
+        _ => false,
+    };
+    if !needs_image {
+        return None;
+    }
+
+    let query = extract_query_for_node(node, parent_names);
+    if query.is_empty() {
+        return None;
+    }
+
+    Some(ImageSearchTarget {
+        node_id: NodeId::new(id),
+        query,
+    })
+}
+
+fn is_placeholder_src(src: &str) -> bool {
+    src.trim().is_empty() || src.starts_with("data:image/svg+xml;charset=utf-8,%3Csvg")
+}
+
+fn is_image_placeholder_frame(node: &PenNode) -> bool {
+    matches!(node, PenNode::Frame(_)) && node.base().role.as_deref() == Some("image-placeholder")
+}
+
+fn is_frame_placeholder_still_unfilled(node: &PenNode) -> bool {
+    is_unfilled_image_placeholder_frame(node) || is_image_area_frame_by_heuristic(node)
+}
+
+fn is_unfilled_image_placeholder_frame(node: &PenNode) -> bool {
+    if !is_image_placeholder_frame(node) {
+        return false;
+    }
+    let PenNode::Frame(frame) = node else {
+        return false;
+    };
+    match frame.container.fill.as_deref() {
+        None | Some([]) => true,
+        Some([PenFill::Image(_), ..]) => false,
+        Some(_) => true,
+    }
+}
+
+fn is_image_area_frame_by_heuristic(node: &PenNode) -> bool {
+    let PenNode::Frame(frame) = node else {
+        return false;
+    };
+    if frame.base.role.as_deref() == Some("image-placeholder") {
+        return false;
+    }
+    let Some(name) = frame.base.name.as_deref() else {
+        return false;
+    };
+    if !has_image_area_keyword(name) {
+        return false;
+    }
+    if !matches!(node.width_px(), Some(w) if w >= 80.0) {
+        return false;
+    }
+    if !matches!(node.height_px(), Some(h) if h >= 60.0) {
+        return false;
+    }
+    if !matches!(frame.container.fill.as_deref(), Some([PenFill::Solid(_)])) {
+        return false;
+    }
+    let Some(children) = frame.children.as_ref() else {
+        return true;
+    };
+    match children.as_slice() {
+        [] => true,
+        [PenNode::IconFont(_)] => true,
+        _ => false,
+    }
+}
+
+fn has_image_area_keyword(name: &str) -> bool {
+    name.split(|c: char| !c.is_ascii_alphanumeric())
+        .map(str::to_ascii_lowercase)
+        .any(|word| {
+            matches!(
+                word.as_str(),
+                "image"
+                    | "photo"
+                    | "cover"
+                    | "hero"
+                    | "thumbnail"
+                    | "thumb"
+                    | "picture"
+                    | "banner"
+                    | "poster"
+            )
+        })
+}
+
+fn extract_query_for_node(node: &PenNode, parent_names: &[String]) -> String {
+    if let PenNode::Image(image) = node {
+        if let Some(query) = image
+            .image_search_query
+            .as_deref()
+            .map(str::trim)
+            .filter(|query| !query.is_empty())
+        {
+            return query.to_string();
+        }
+    }
+
+    if is_image_placeholder_frame(node) {
+        if let Some(label) = placeholder_label_text(node) {
+            return label;
+        }
+    }
+
+    if let Some(name) = node
+        .base()
+        .name
+        .as_deref()
+        .map(str::trim)
+        .filter(|name| !name.is_empty())
+    {
+        if !is_generic_placeholder_name(name) {
+            return name.to_string();
+        }
+    }
+
+    if let Some(parent_name) = parent_semantic_name(parent_names) {
+        return parent_name;
+    }
+
+    node.base()
+        .name
+        .as_deref()
+        .map(str::trim)
+        .filter(|name| !name.is_empty())
+        .unwrap_or("placeholder")
+        .to_string()
+}
+
+fn placeholder_label_text(node: &PenNode) -> Option<String> {
+    let children = node.children()?;
+    for child in children {
+        let PenNode::Text(text) = child else {
+            continue;
+        };
+        if text.base.role.as_deref() != Some("image-placeholder-label") {
+            continue;
+        }
+        let label = match &text.content {
+            TextContent::Plain(content) => content.trim().to_string(),
+            TextContent::Styled(segments) => segments
+                .iter()
+                .map(|segment| segment.text.as_str())
+                .collect::<String>()
+                .trim()
+                .to_string(),
+        };
+        if !label.is_empty() {
+            return Some(label);
+        }
+    }
+    None
+}
+
+fn parent_semantic_name(parent_names: &[String]) -> Option<String> {
+    parent_names.iter().take(3).find_map(|name| {
+        let trimmed = name.trim();
+        if trimmed.is_empty()
+            || is_generic_placeholder_name(trimmed)
+            || is_layout_context_name(trimmed)
+        {
+            return None;
+        }
+        Some(trimmed.to_string())
+    })
+}
+
+fn is_generic_placeholder_name(name: &str) -> bool {
+    matches!(
+        name.trim().to_ascii_lowercase().as_str(),
+        "image"
+            | "photo"
+            | "cover"
+            | "hero"
+            | "thumbnail"
+            | "thumb"
+            | "picture"
+            | "banner"
+            | "poster"
+            | "image placeholder"
+            | "placeholder icon"
+            | "placeholder"
+            | "card image"
+            | "card photo"
+            | "product image"
+            | "item image"
+    )
+}
+
+fn is_layout_context_name(name: &str) -> bool {
+    name.split(|c: char| !c.is_ascii_alphanumeric())
+        .map(str::to_ascii_lowercase)
+        .any(|word| {
+            matches!(
+                word.as_str(),
+                "card"
+                    | "wrapper"
+                    | "container"
+                    | "section"
+                    | "frame"
+                    | "root"
+                    | "page"
+                    | "stack"
+                    | "row"
+                    | "column"
+                    | "content"
+            )
+        })
 }
 
 pub(crate) fn apply_result(state: &mut EditorState, node_id: &NodeId, url: &str) -> bool {
@@ -167,14 +394,36 @@ pub(crate) fn apply_result(state: &mut EditorState, node_id: &NodeId, url: &str)
     let Some(node) = walkers::find_node_mut(state.active_children_mut(), node_id) else {
         return false;
     };
-    let PenNode::Image(image) = node else {
-        return false;
-    };
-    if image.src == url {
-        return false;
+    let is_unfilled_placeholder_frame = is_frame_placeholder_still_unfilled(node);
+    match node {
+        PenNode::Image(image) => {
+            if image.src == url {
+                return false;
+            }
+            image.src = url.to_string();
+            true
+        }
+        PenNode::Frame(frame) if is_unfilled_placeholder_frame => {
+            frame.container.fill = Some(vec![PenFill::Image(ImageFillBody {
+                url: url.to_string(),
+                mode: Some(ImageFillMode::Crop),
+                original_size: None,
+                transform: None,
+                explain: None,
+                opacity: None,
+                exposure: None,
+                contrast: None,
+                saturation: None,
+                temperature: None,
+                tint: None,
+                highlights: None,
+                shadows: None,
+            })]);
+            frame.children = Some(Vec::new());
+            true
+        }
+        _ => false,
     }
-    image.src = url.to_string();
-    true
 }
 
 fn fetch_first_image_url_blocking(
@@ -315,99 +564,5 @@ async fn fetch_wikimedia(client: &reqwest::Client, query: &str) -> Option<String
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use jian_ops_schema::node::base::PenNodeBase;
-    use jian_ops_schema::node::ImageNode;
-    use jian_ops_schema::node::PenNode;
-    use jian_ops_schema::sizing::SizingBehavior;
-
-    fn image_node(id: &str, src: &str, query: Option<&str>) -> PenNode {
-        PenNode::Image(ImageNode {
-            base: PenNodeBase {
-                id: id.to_string(),
-                name: Some("Menu photo".into()),
-                ..Default::default()
-            },
-            src: src.to_string(),
-            object_fit: None,
-            width: Some(SizingBehavior::Number(240.0)),
-            height: Some(SizingBehavior::Number(160.0)),
-            corner_radius: None,
-            effects: None,
-            exposure: None,
-            contrast: None,
-            saturation: None,
-            temperature: None,
-            tint: None,
-            highlights: None,
-            shadows: None,
-            image_prompt: None,
-            image_search_query: query.map(str::to_string),
-            state: None,
-            bindings: None,
-            events: None,
-            lifecycle: None,
-            semantics: None,
-            gestures: None,
-            route: None,
-        })
-    }
-
-    #[test]
-    fn collect_targets_prefers_query_on_empty_image_nodes() {
-        let mut state = EditorState::default();
-        state.active_children_mut().clear();
-        state
-            .active_children_mut()
-            .push(image_node("img1", "", Some("burger fries")));
-
-        let targets = collect_targets(&state, &HashSet::new());
-
-        assert_eq!(targets.len(), 1);
-        assert_eq!(targets[0].node_id.as_str(), "img1");
-        assert_eq!(targets[0].query, "burger fries");
-    }
-
-    #[test]
-    fn apply_result_sets_empty_image_src() {
-        let mut state = EditorState::default();
-        state.active_children_mut().clear();
-        state
-            .active_children_mut()
-            .push(image_node("img1", "", Some("burger fries")));
-
-        assert!(apply_result(
-            &mut state,
-            &NodeId::new("img1"),
-            "https://example.com/photo.jpg"
-        ));
-        let PenNode::Image(image) = &state.active_children()[0] else {
-            panic!("expected image");
-        };
-        assert_eq!(image.src, "https://example.com/photo.jpg");
-    }
-
-    #[test]
-    fn openverse_credentials_require_both_fields() {
-        let mut state = EditorState::default();
-        assert!(OpenverseCredentials::from_state(&state).is_none());
-
-        state.editor_ui.agent_settings.openverse_client_id = " client ".into();
-        assert!(OpenverseCredentials::from_state(&state).is_none());
-
-        state.editor_ui.agent_settings.openverse_client_secret = " secret ".into();
-        let credentials = OpenverseCredentials::from_state(&state).expect("complete credentials");
-        assert_eq!(credentials.client_id, "client");
-        assert_eq!(credentials.client_secret, "secret");
-    }
-
-    #[tokio::test]
-    #[ignore = "network smoke test for Openverse/Wikimedia"]
-    async fn fetch_first_image_url_smoke() {
-        let url = fetch_first_image_url("burger fries", None)
-            .await
-            .expect("common query should return an image URL");
-        assert!(url.starts_with("http"), "got {url}");
-    }
-}
+#[path = "image_search_session_tests.rs"]
+mod tests;
