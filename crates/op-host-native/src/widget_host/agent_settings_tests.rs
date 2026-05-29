@@ -1,6 +1,6 @@
 use super::WidgetHostNative;
 use op_editor_core::agent_settings::{
-    AgentSettingsTab, BuiltinAgentField, ImageGenField, SettingsFocus,
+    AgentSettingsTab, BuiltinAgentField, ImageGenField, ImageSearchField, SettingsFocus,
 };
 use op_editor_ui::widgets::agent_settings_panel::AgentSettingsPanel;
 
@@ -281,4 +281,84 @@ fn image_generation_profile_focus_accepts_text_and_commits() {
         .editor_ui
         .settings_input_draft
         .is_empty());
+}
+
+#[test]
+fn image_search_oauth_focus_accepts_text_and_commits() {
+    let mut host = WidgetHostNative::new();
+    host.editor_state_mut().editor_ui.agent_settings.tab = AgentSettingsTab::Images;
+    host.editor_state_mut().editor_ui.agent_settings.focus =
+        Some(SettingsFocus::ImageSearch(ImageSearchField::ClientId));
+    host.editor_state_mut()
+        .editor_ui
+        .settings_input_draft
+        .clear();
+
+    for c in "openverse-client".chars() {
+        assert!(host.apply_text(c));
+    }
+    assert!(host.apply_send());
+
+    host.editor_state_mut().editor_ui.agent_settings.focus =
+        Some(SettingsFocus::ImageSearch(ImageSearchField::ClientSecret));
+    host.editor_state_mut()
+        .editor_ui
+        .settings_input_draft
+        .clear();
+    for c in "openverse-secret".chars() {
+        assert!(host.apply_text(c));
+    }
+    assert!(host.apply_send());
+
+    let settings = &host.editor_state().editor_ui.agent_settings;
+    assert_eq!(settings.openverse_client_id, "openverse-client");
+    assert_eq!(settings.openverse_client_secret, "openverse-secret");
+    assert!(settings.focus.is_none());
+    assert!(host
+        .editor_state()
+        .editor_ui
+        .settings_input_draft
+        .is_empty());
+}
+
+#[test]
+fn image_search_test_updates_ready_status_from_oauth_completeness() {
+    let mut host = WidgetHostNative::new();
+    host.editor_state_mut().editor_ui.agent_settings.tab = AgentSettingsTab::Images;
+    host.editor_state_mut()
+        .editor_ui
+        .agent_settings
+        .images_advanced_open = true;
+    host.editor_state_mut()
+        .editor_ui
+        .agent_settings
+        .openverse_client_id = "client".into();
+
+    let panel = AgentSettingsPanel::for_editor(host.editor_state());
+    let rect = panel.rect(1200.0, 800.0);
+    let content_y = rect.origin.y + 24.0;
+    let content_w = rect.size.x - 200.0 - 48.0;
+    let x = rect.origin.x + 200.0 + 24.0 + content_w - 28.0;
+    let y = content_y + 36.0 + 24.0 + 22.0 + 36.0 + 10.0 + 36.0 + 14.0 + 18.0;
+
+    assert!(host.dispatch_agent_settings_press(x, y, 1200.0, 800.0));
+    assert!(
+        !host
+            .editor_state()
+            .editor_ui
+            .agent_settings
+            .images_search_ready
+    );
+
+    host.editor_state_mut()
+        .editor_ui
+        .agent_settings
+        .openverse_client_secret = "secret".into();
+    assert!(host.dispatch_agent_settings_press(x, y, 1200.0, 800.0));
+    assert!(
+        host.editor_state()
+            .editor_ui
+            .agent_settings
+            .images_search_ready
+    );
 }

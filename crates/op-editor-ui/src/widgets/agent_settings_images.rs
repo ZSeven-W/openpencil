@@ -6,7 +6,7 @@ use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::PaintCx;
 use crate::{Color, Point2D, Rect, TextLayout};
 use op_editor_core::agent_settings::{
-    AgentSettings, ImageGenField, ImageGenProfile, SettingsFocus,
+    AgentSettings, ImageGenField, ImageGenProfile, ImageSearchField, SettingsFocus,
 };
 use op_editor_core::editor_ui_state::EditorUiState;
 
@@ -33,6 +33,7 @@ const PROFILE_FIELD_H: f32 = 24.0;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ImagesHit {
     ToggleAdvanced,
+    FocusSearchField(ImageSearchField),
     TestSearch,
     AddGenConfig,
     SetActiveGenConfig(usize),
@@ -92,6 +93,23 @@ fn advanced_toggle_rect(content: Rect) -> Rect {
 
 fn register_link_y(content: Rect) -> f32 {
     content.origin.y + TITLE_H + ADVANCED_ROW_H + SUBTITLE_H + ROW_H + ROW_VGAP + ROW_H + BODY_GAP
+}
+
+fn search_field_rect(content: Rect, index: usize) -> Rect {
+    let y = content.origin.y
+        + TITLE_H
+        + ADVANCED_ROW_H
+        + SUBTITLE_H
+        + if index == 0 { 0.0 } else { ROW_H + ROW_VGAP };
+    Rect {
+        origin: Point2D::new(content.origin.x + LABEL_W, y),
+        size: Point2D::new(content.size.x - LABEL_W, ROW_H),
+    }
+}
+
+fn has_search_credentials(settings: &AgentSettings) -> bool {
+    !settings.openverse_client_id.trim().is_empty()
+        || !settings.openverse_client_secret.trim().is_empty()
 }
 
 fn test_btn_rect(content: Rect, settings: &AgentSettings) -> Rect {
@@ -169,8 +187,18 @@ pub fn hit_test(content: Rect, settings: &AgentSettings, scrolled: Point2D) -> I
     if rect_contains(advanced_toggle_rect(content), scrolled) {
         return ImagesHit::ToggleAdvanced;
     }
-    if settings.images_advanced_open && rect_contains(test_btn_rect(content, settings), scrolled) {
-        return ImagesHit::TestSearch;
+    if settings.images_advanced_open {
+        if rect_contains(search_field_rect(content, 0), scrolled) {
+            return ImagesHit::FocusSearchField(ImageSearchField::ClientId);
+        }
+        if rect_contains(search_field_rect(content, 1), scrolled) {
+            return ImagesHit::FocusSearchField(ImageSearchField::ClientSecret);
+        }
+        if has_search_credentials(settings)
+            && rect_contains(test_btn_rect(content, settings), scrolled)
+        {
+            return ImagesHit::TestSearch;
+        }
     }
     if rect_contains(add_btn_rect(content, settings), scrolled) {
         return ImagesHit::AddGenConfig;
@@ -298,9 +326,12 @@ pub(super) fn paint_images_tab(
         cx.backend
             .draw_text(&sub, Point2D::new(content.origin.x, y + 14.0));
         y += SUBTITLE_H;
-        paint_input_row(
+        paint_search_input_row(
             cx,
             theme,
+            settings,
+            ui,
+            ImageSearchField::ClientId,
             t_settings(ui, "settings.images.clientId"),
             t_settings(ui, "settings.images.clientIdPlaceholder"),
             content.origin.x,
@@ -308,9 +339,12 @@ pub(super) fn paint_images_tab(
             content.size.x,
         );
         y += ROW_H + ROW_VGAP;
-        paint_input_row(
+        paint_search_input_row(
             cx,
             theme,
+            settings,
+            ui,
+            ImageSearchField::ClientSecret,
             t_settings(ui, "settings.images.clientSecret"),
             t_settings(ui, "settings.images.clientSecretPlaceholder"),
             content.origin.x,
@@ -588,9 +622,13 @@ fn paint_profile_field(
     );
 }
 
-fn paint_input_row(
+#[allow(clippy::too_many_arguments)]
+fn paint_search_input_row(
     cx: &mut PaintCx<'_>,
     theme: &Theme,
+    settings: &AgentSettings,
+    ui: &EditorUiState,
+    field_kind: ImageSearchField,
     label: &str,
     placeholder: &str,
     x: f32,
@@ -611,16 +649,44 @@ fn paint_input_row(
         size: Point2D::new(w - LABEL_W, ROW_H),
     };
     cx.backend.fill_round_rect(field, 6.0, theme.background);
-    cx.backend.stroke_round_rect(field, 6.0, theme.border, 1.0);
-    let ph = TextLayout::single_run(
-        placeholder,
+    let focused = settings.focus == Some(SettingsFocus::ImageSearch(field_kind));
+    cx.backend.stroke_round_rect(
+        field,
+        6.0,
+        if focused { theme.primary } else { theme.border },
+        1.0,
+    );
+    let stored = match field_kind {
+        ImageSearchField::ClientId => settings.openverse_client_id.as_str(),
+        ImageSearchField::ClientSecret => settings.openverse_client_secret.as_str(),
+    };
+    let text = if focused {
+        ui.settings_input_draft.as_str()
+    } else if matches!(field_kind, ImageSearchField::ClientSecret) && !stored.is_empty() {
+        "********"
+    } else {
+        stored
+    };
+    let showing_placeholder = text.is_empty();
+    let value = if showing_placeholder {
+        placeholder
+    } else {
+        text
+    };
+    let value = ellipsize(cx, value, field.size.x - 24.0, 13.0);
+    let lay = TextLayout::single_run(
+        &value,
         "system-ui",
         13.0,
-        to_jian(theme.muted_foreground),
+        to_jian(if showing_placeholder {
+            theme.muted_foreground
+        } else {
+            theme.foreground
+        }),
         Point2D::new(0.0, 0.0),
     );
     cx.backend.draw_text(
-        &ph,
+        &lay,
         Point2D::new(field.origin.x + 12.0, field.origin.y + ROW_H / 2.0 + 5.0),
     );
 }

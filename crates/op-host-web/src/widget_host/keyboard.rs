@@ -13,9 +13,20 @@ impl WidgetHost {
     /// Push a typed character into the focused chat / settings input.
     /// Returns true if anything changed.
     pub fn apply_text(&mut self, c: char) -> bool {
-        if self.editor_state.editor_ui.agent_settings.focus.is_some() {
-            if c.is_ascii_digit() && self.editor_state.editor_ui.settings_input_draft.len() < 5 {
-                self.editor_state.editor_ui.settings_input_draft.push(c);
+        if let Some(focus) = self.editor_state.editor_ui.agent_settings.focus {
+            let draft = &mut self.editor_state.editor_ui.settings_input_draft;
+            let accepts = match focus {
+                op_editor_core::agent_settings::SettingsFocus::McpPort => {
+                    c.is_ascii_digit() && draft.len() < 5
+                }
+                op_editor_core::agent_settings::SettingsFocus::ImageSearch(_)
+                | op_editor_core::agent_settings::SettingsFocus::BuiltinAgent { .. }
+                | op_editor_core::agent_settings::SettingsFocus::ImageGenProfile { .. } => {
+                    !c.is_control() && draft.len() < 512
+                }
+            };
+            if accepts {
+                draft.push(c);
                 self.mark_dirty();
                 return true;
             }
@@ -404,6 +415,20 @@ impl WidgetHost {
                     self.editor_state.editor_ui.agent_settings.mcp_server.port = port.max(1024);
                 }
             }
+            SettingsFocus::ImageSearch(field) => match field {
+                op_editor_core::agent_settings::ImageSearchField::ClientId => {
+                    self.editor_state
+                        .editor_ui
+                        .agent_settings
+                        .openverse_client_id = draft.trim().to_string();
+                }
+                op_editor_core::agent_settings::ImageSearchField::ClientSecret => {
+                    self.editor_state
+                        .editor_ui
+                        .agent_settings
+                        .openverse_client_secret = draft.trim().to_string();
+                }
+            },
             SettingsFocus::BuiltinAgent { .. } | SettingsFocus::ImageGenProfile { .. } => {}
         }
         self.mark_dirty();

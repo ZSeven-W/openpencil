@@ -51,6 +51,12 @@ struct ImageGenProfilePayload {
     base_url: Option<String>,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+struct OpenverseOAuthPayload {
+    client_id: String,
+    client_secret: String,
+}
+
 /// Cheap snapshot of every persisted field. Captured before each
 /// dispatch; if it differs after, save the file.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -60,6 +66,8 @@ pub struct Fingerprint {
     port: u16,
     cli: [bool; 6],
     images_adv: bool,
+    openverse_client_id: String,
+    openverse_client_secret: String,
     auto_update_enabled: bool,
     connected: [bool; 5],
     builtin_agents: Vec<BuiltinAgentConfig>,
@@ -75,6 +83,8 @@ pub fn fingerprint(state: &EditorState) -> Fingerprint {
         port: eui.agent_settings.mcp_server.port,
         cli: eui.agent_settings.mcp_cli_enabled,
         images_adv: eui.agent_settings.images_advanced_open,
+        openverse_client_id: eui.agent_settings.openverse_client_id.clone(),
+        openverse_client_secret: eui.agent_settings.openverse_client_secret.clone(),
         auto_update_enabled: eui.agent_settings.auto_update_enabled,
         connected: eui.agent_settings.connected,
         builtin_agents: eui.agent_settings.builtin_agents.clone(),
@@ -106,6 +116,8 @@ struct SettingsPayload {
     mcp_cli_enabled: Option<[bool; 6]>,
     #[serde(default)]
     images_advanced_open: Option<bool>,
+    #[serde(default)]
+    openverse_oauth: Option<OpenverseOAuthPayload>,
     #[serde(default)]
     auto_update_enabled: Option<bool>,
     /// Per-provider connect state, indexed by `AgentProvider::ALL`
@@ -141,6 +153,7 @@ fn to_payload(state: &EditorState) -> SettingsPayload {
         mcp_port: Some(eui.agent_settings.mcp_server.port),
         mcp_cli_enabled: Some(eui.agent_settings.mcp_cli_enabled),
         images_advanced_open: Some(eui.agent_settings.images_advanced_open),
+        openverse_oauth: openverse_oauth_to_payload(&eui.agent_settings),
         auto_update_enabled: Some(eui.agent_settings.auto_update_enabled),
         connected: Some(eui.agent_settings.connected),
         builtin_agents: Some(
@@ -200,6 +213,10 @@ fn apply_payload(state: &mut EditorState, payload: SettingsPayload) {
     }
     if let Some(b) = payload.images_advanced_open {
         eui.agent_settings.images_advanced_open = b;
+    }
+    if let Some(oauth) = payload.openverse_oauth {
+        eui.agent_settings.openverse_client_id = oauth.client_id;
+        eui.agent_settings.openverse_client_secret = oauth.client_secret;
     }
     if let Some(b) = payload.auto_update_enabled {
         eui.agent_settings.auto_update_enabled = b;
@@ -294,6 +311,21 @@ fn builtin_agent_from_payload(payload: BuiltinAgentPayload) -> Option<BuiltinAge
         base_url: payload.base_url,
         enabled: payload.enabled,
     })
+}
+
+fn openverse_oauth_to_payload(
+    settings: &op_editor_core::agent_settings::AgentSettings,
+) -> Option<OpenverseOAuthPayload> {
+    let client_id = settings.openverse_client_id.trim();
+    let client_secret = settings.openverse_client_secret.trim();
+    if client_id.is_empty() && client_secret.is_empty() {
+        None
+    } else {
+        Some(OpenverseOAuthPayload {
+            client_id: client_id.to_string(),
+            client_secret: client_secret.to_string(),
+        })
+    }
 }
 
 fn image_gen_profile_to_payload(profile: &ImageGenProfile) -> ImageGenProfilePayload {
@@ -594,6 +626,27 @@ mod tests {
         assert_eq!(
             dst.editor_ui.agent_settings.image_gen_profiles[1].base_url,
             Some("https://images.example/v1".into())
+        );
+    }
+
+    #[test]
+    fn openverse_oauth_round_trips_through_payload() {
+        let mut src = EditorState::new();
+        src.editor_ui.agent_settings.openverse_client_id = "client-id".into();
+        src.editor_ui.agent_settings.openverse_client_secret = "client-secret".into();
+
+        let json = serde_json::to_string(&to_payload(&src)).unwrap();
+        let payload: SettingsPayload = serde_json::from_str(&json).unwrap();
+        let mut dst = EditorState::new();
+        apply_payload(&mut dst, payload);
+
+        assert_eq!(
+            dst.editor_ui.agent_settings.openverse_client_id,
+            "client-id"
+        );
+        assert_eq!(
+            dst.editor_ui.agent_settings.openverse_client_secret,
+            "client-secret"
         );
     }
 

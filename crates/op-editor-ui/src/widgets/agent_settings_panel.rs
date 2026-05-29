@@ -1,6 +1,5 @@
 //! Multi-tab settings modal opened via `Cmd+,`. Left sidebar
 //! nav (Agents / MCP / Images / System) + scrollable right pane.
-//! Visual parity with the TS app's settings panel.
 
 use crate::theme::Theme;
 use crate::widgets::agent_settings_builtin::{self, BuiltinHit};
@@ -14,7 +13,8 @@ use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::{PaintCx, Widget, WidgetId};
 use crate::{Color, Point2D, Rect, TextLayout};
 use op_editor_core::agent_settings::{
-    AgentProvider, AgentSettings, AgentSettingsTab, BuiltinAgentField, ImageGenField, McpCli,
+    AgentProvider, AgentSettings, AgentSettingsTab, BuiltinAgentField, ImageGenField,
+    ImageSearchField, McpCli,
 };
 use op_editor_core::editor_ui_state::EditorUiState;
 use op_editor_core::EditorState;
@@ -54,6 +54,7 @@ pub enum AgentSettingsHit {
     ToggleMcpServer,
     ToggleMcpCli(McpCli),
     ToggleImagesAdvanced,
+    FocusSearchField(ImageSearchField),
     TestImageSearch,
     AddGenConfig,
     SetActiveGenConfig(usize),
@@ -166,6 +167,9 @@ impl<'a> AgentSettingsPanel<'a> {
                 match agent_settings_images::hit_test(content_rect(panel), &self.settings, scrolled)
                 {
                     ImagesHit::ToggleAdvanced => return AgentSettingsHit::ToggleImagesAdvanced,
+                    ImagesHit::FocusSearchField(field) => {
+                        return AgentSettingsHit::FocusSearchField(field);
+                    }
                     ImagesHit::TestSearch => return AgentSettingsHit::TestImageSearch,
                     ImagesHit::AddGenConfig => return AgentSettingsHit::AddGenConfig,
                     ImagesHit::SetActiveGenConfig(index) => {
