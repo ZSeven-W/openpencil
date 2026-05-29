@@ -380,3 +380,22 @@ fn image_draw_respects_node_opacity() {
         c.b()
     );
 }
+
+#[test]
+fn korean_hangul_resolves_to_a_covering_typeface() {
+    // Regression: Hangul routed to the shared CJK face (resolved from
+    // a Chinese ideograph) which lacks Hangul glyphs, so 한국어 painted
+    // blank. The resolved face for '한' must actually cover '한'.
+    let mut be = NativeBackend::with_dpi(1.0);
+    let tf = be.typeface_for_char('한', 400).expect("a typeface for 한");
+    assert_ne!(
+        tf.unichar_to_glyph('한' as i32),
+        0,
+        "the resolved Hangul face must have a glyph for 한"
+    );
+    // Every char of the Korean locale name resolves to a covering face.
+    for c in "한국어".chars() {
+        let tf = be.typeface_for_char(c, 400).expect("typeface");
+        assert_ne!(tf.unichar_to_glyph(c as i32), 0, "missing glyph for {c}");
+    }
+}
