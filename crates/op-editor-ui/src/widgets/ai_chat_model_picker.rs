@@ -68,6 +68,7 @@ fn model_matches(entry: &ModelEntry, q: &str) -> bool {
         || entry.display_name.to_lowercase().contains(q)
         || entry.value.to_lowercase().contains(q)
         || provider_label(entry.provider).to_lowercase().contains(q)
+        || group_label_for_entry(entry).to_lowercase().contains(q)
         || (is_builtin(entry) && "api key".contains(q))
 }
 
@@ -653,6 +654,19 @@ mod tests {
         entry.builtin_provider_display_name = Some("MiniMax".into());
 
         assert_eq!(group_label_for_entry(&entry), "MiniMax");
+    }
+
+    #[test]
+    fn search_matches_retained_builtin_provider_display_name() {
+        let entry = ModelEntry::builtin_with_display_name(
+            AgentProvider::CodexCli,
+            "builtin-bailian",
+            "百炼CP",
+            "builtin:builtin-bailian:qwen3-coder-plus",
+            "qwen3-coder-plus",
+        );
+
+        assert_eq!(visible_model_indices(&[entry], "百炼"), vec![0]);
     }
 
     #[test]
