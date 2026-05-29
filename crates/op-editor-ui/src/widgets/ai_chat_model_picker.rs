@@ -45,6 +45,7 @@ enum Row {
     Header {
         provider: AgentProvider,
         builtin: bool,
+        label: String,
     },
     /// Selectable model — carries its index into the flat list.
     Model { idx: usize, first_in_group: bool },
@@ -96,6 +97,7 @@ fn walk_rows(models: &[ModelEntry], search: &str, top: f32, mut f: impl FnMut(&R
                 &Row::Header {
                     provider: entry.provider,
                     builtin: is_builtin(entry),
+                    label: group_label_for_entry(entry),
                 },
                 y,
                 MODEL_GROUP_H,
@@ -236,7 +238,11 @@ pub fn paint_model_picker(
     cx.backend.clip_rect(list_rect);
     cx.backend.translate(Point2D::new(0.0, -scroll));
     walk_rows(models, search, list_rect.origin.y, |row, y, h| match row {
-        Row::Header { provider, builtin } => {
+        Row::Header {
+            provider,
+            builtin,
+            label,
+        } => {
             let logo_y = y + (h - 12.0) / 2.0;
             if *builtin {
                 paint_key_glyph(
@@ -255,7 +261,7 @@ pub fn paint_model_picker(
                 );
             }
             let label = TextLayout::single_run(
-                group_label(*provider, *builtin),
+                label,
                 "system-ui",
                 10.0,
                 to_jian_color(theme.muted_foreground),
@@ -527,6 +533,20 @@ fn group_label(provider: AgentProvider, builtin: bool) -> &'static str {
     }
 }
 
+fn group_label_for_entry(entry: &ModelEntry) -> String {
+    if is_builtin(entry) {
+        if let Some(label) = entry
+            .builtin_provider_display_name
+            .as_deref()
+            .map(str::trim)
+            .filter(|label| !label.is_empty())
+        {
+            return label.to_string();
+        }
+    }
+    group_label(entry.provider, is_builtin(entry)).to_string()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -620,5 +640,52 @@ mod tests {
             ),
             Some(1)
         );
+    }
+
+    #[test]
+    fn builtin_group_header_prefers_retained_provider_display_name() {
+        let mut entry = ModelEntry::builtin(
+            AgentProvider::CodexCli,
+            "builtin-1",
+            "builtin:builtin-1:MiniMax-M2.7",
+            "MiniMax-M2.7",
+        );
+        entry.builtin_provider_display_name = Some("MiniMax".into());
+
+        assert_eq!(group_label_for_entry(&entry), "MiniMax");
+    }
+
+    #[test]
+    fn builtin_group_header_falls_back_to_generic_label_without_retained_name() {
+        let entry = ModelEntry::builtin(
+            AgentProvider::CodexCli,
+            "builtin-1",
+            "builtin:builtin-1:deepseek-v4-pro",
+            "deepseek-v4-pro",
+        );
+
+        assert_eq!(group_label_for_entry(&entry), "OPENAI API KEY");
+    }
+
+    #[test]
+    fn builtin_groups_stay_separate_when_ids_differ_but_provider_matches() {
+        let models = vec![
+            ModelEntry::builtin(
+                AgentProvider::CodexCli,
+                "builtin-1",
+                "builtin:builtin-1:MiniMax-M2.7",
+                "MiniMax-M2.7",
+            ),
+            ModelEntry::builtin(
+                AgentProvider::CodexCli,
+                "builtin-2",
+                "builtin:builtin-2:deepseek-v4-pro",
+                "deepseek-v4-pro",
+            ),
+        ];
+
+        let expected =
+            MODEL_SEARCH_H + 2.0 * MODEL_GROUP_H + 2.0 * MODEL_ROW_H + MODEL_PICKER_PAD_Y * 2.0;
+        assert!((picker_content_height(&models, "") - expected).abs() < 0.01);
     }
 }
