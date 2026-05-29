@@ -150,6 +150,13 @@ impl WidgetHostNative {
             self.mark_dirty();
             return true;
         }
+        if self.editor_state.editor_ui.chat_model_picker_open && !c.is_control() {
+            self.editor_state.editor_ui.chat_model_picker_search.push(c);
+            self.editor_state.editor_ui.chat_model_picker_scroll = 0.0;
+            self.editor_state.editor_ui.chat_model_picker_hover = None;
+            self.mark_dirty();
+            return true;
+        }
         if self.editor_state.editor_ui.component_browser_open && !c.is_control() {
             self.editor_state.editor_ui.component_browser_search.push(c);
             self.mark_dirty();
@@ -264,6 +271,21 @@ impl WidgetHostNative {
                 .pop()
                 .is_some()
             {
+                self.mark_dirty();
+                return true;
+            }
+            return false;
+        }
+        if self.editor_state.editor_ui.chat_model_picker_open {
+            if self
+                .editor_state
+                .editor_ui
+                .chat_model_picker_search
+                .pop()
+                .is_some()
+            {
+                self.editor_state.editor_ui.chat_model_picker_scroll = 0.0;
+                self.editor_state.editor_ui.chat_model_picker_hover = None;
                 self.mark_dirty();
                 return true;
             }
@@ -694,6 +716,14 @@ impl WidgetHostNative {
             self.editor_state.editor_ui.icon_picker_open = false;
             self.editor_state.editor_ui.icon_picker_replace_selection = false;
             self.editor_state.editor_ui.icon_picker_search.clear();
+            self.mark_dirty();
+            return true;
+        }
+        if self.editor_state.editor_ui.chat_model_picker_open {
+            self.editor_state.editor_ui.chat_model_picker_open = false;
+            self.editor_state.editor_ui.chat_model_picker_scroll = 0.0;
+            self.editor_state.editor_ui.chat_model_picker_search.clear();
+            self.editor_state.editor_ui.chat_model_picker_hover = None;
             self.mark_dirty();
             return true;
         }

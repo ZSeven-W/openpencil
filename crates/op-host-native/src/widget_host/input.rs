@@ -15,6 +15,7 @@ impl WidgetHostNative {
             || self.editor_state.editor_ui.effect_param_focus.is_some()
             || self.editor_state.editor_ui.agent_settings.focus.is_some()
             || self.editor_state.editor_ui.icon_picker_open
+            || self.editor_state.editor_ui.chat_model_picker_open
             || self.editor_state.editor_ui.component_browser_open
             || self.editor_state.chat.focused
             || self.git_commit_focus_active()
@@ -243,6 +244,7 @@ impl WidgetHostNative {
                     Point2D::new(x, y),
                     &self.editor_state.chat.available_models,
                     scroll,
+                    &self.editor_state.editor_ui.chat_model_picker_search,
                 );
                 if new_hover != self.editor_state.editor_ui.chat_model_picker_hover {
                     self.editor_state.editor_ui.chat_model_picker_hover = new_hover;

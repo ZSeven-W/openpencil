@@ -792,6 +792,23 @@ fn component_browser_open_owns_keyboard_search() {
 }
 
 #[test]
+fn chat_model_picker_open_owns_keyboard_search() {
+    let mut host = WidgetHostNative::new();
+    host.editor_state_mut().editor_ui.chat_model_picker_open = true;
+    host.editor_state_mut().chat.focused = true;
+
+    assert!(host.input_active_pub());
+    assert!(host.apply_text('g'));
+    assert!(host.apply_text('p'));
+    assert_eq!(host.editor_state().editor_ui.chat_model_picker_search, "gp");
+    assert!(host.editor_state().chat.input.is_empty());
+    assert!(host.apply_backspace());
+    assert_eq!(host.editor_state().editor_ui.chat_model_picker_search, "g");
+    assert!(host.apply_escape());
+    assert!(!host.editor_state().editor_ui.chat_model_picker_open);
+}
+
+#[test]
 fn shape_picker_icon_row_opens_icon_picker() {
     let mut host = WidgetHostNative::new();
     let viewport_w = 1440.0;
