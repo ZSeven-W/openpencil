@@ -128,6 +128,21 @@ fn hit_test_resolves_first_example_when_empty() {
 }
 
 #[test]
+fn hit_test_keeps_quick_action_card_height_compact() {
+    let s = EditorState::new();
+    let panel = AIChatPlaceholder::from_editor(&s);
+    let rect = Rect::xywh(0.0, 0.0, AI_CHAT_WIDTH, AI_CHAT_HEIGHT);
+    let card_w = (AI_CHAT_WIDTH - PAD * 2.0 - 8.0) / 2.0;
+    let compact_card_h = 58.0;
+    let p = Point2D::new(
+        PAD + card_w / 2.0,
+        HEADER_HEIGHT + 32.0 + compact_card_h + 4.0,
+    );
+
+    assert_eq!(panel.hit_test(rect, p), Some(AIChatHit::DragHandle));
+}
+
+#[test]
 fn hit_test_header_returns_drag_handle() {
     let s = EditorState::new();
     let panel = AIChatPlaceholder::from_editor(&s);
