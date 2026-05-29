@@ -48,6 +48,38 @@ fn build_transcript_empty_messages_is_empty() {
 }
 
 #[test]
+fn assistant_blocks_use_full_body_width_like_ts_transcript() {
+    let msg = ChatMessage::assistant("assistant answer");
+    let body = body();
+    let items = build_transcript(
+        std::slice::from_ref(&msg),
+        body,
+        op_editor_core::Locale::EnUs,
+    );
+    let bubble = items[0].bubble.as_ref().expect("assistant answer bubble");
+
+    assert!((bubble.rect.origin.x - body.origin.x).abs() < 1e-4);
+    assert!((bubble.rect.size.x - body.size.x).abs() < 1e-4);
+}
+
+#[test]
+fn user_bubbles_remain_compact_and_right_aligned() {
+    let msg = ChatMessage::user("user prompt");
+    let body = body();
+    let items = build_transcript(
+        std::slice::from_ref(&msg),
+        body,
+        op_editor_core::Locale::EnUs,
+    );
+    let bubble = items[0].bubble.as_ref().expect("user bubble");
+
+    assert!((bubble.rect.size.x - body.size.x * BUBBLE_FRAC).abs() < 1e-4);
+    assert!(
+        (bubble.rect.origin.x + bubble.rect.size.x - (body.origin.x + body.size.x)).abs() < 1e-4
+    );
+}
+
+#[test]
 fn streaming_message_with_no_text_yields_a_typing_bubble() {
     let msgs = vec![ChatMessage::assistant_streaming()];
     let items = build_transcript(&msgs, body(), op_editor_core::Locale::EnUs);
