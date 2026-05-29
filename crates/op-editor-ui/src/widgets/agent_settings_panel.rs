@@ -23,7 +23,9 @@ pub const PANEL_WIDTH: f32 = 720.0;
 pub const PANEL_HEIGHT: f32 = 720.0;
 const SIDEBAR_WIDTH: f32 = 200.0;
 const PAD: f32 = 24.0;
-const NAV_ITEM_HEIGHT: f32 = 40.0;
+const NAV_ITEM_STEP: f32 = 30.0;
+const NAV_ITEM_HEIGHT: f32 = 28.0;
+const NAV_TOP: f32 = 56.0;
 const SECTION_GAP: f32 = 28.0;
 const CARD_HEIGHT: f32 = 56.0;
 const CARD_GAP: f32 = 8.0;
@@ -304,13 +306,13 @@ fn paint_sidebar(
     let title = TextLayout::single_run(
         t_settings(ui, "settings.title"),
         "system-ui",
-        18.0,
+        15.0,
         to_jian(theme.foreground),
         Point2D::new(0.0, 0.0),
     );
     cx.backend.draw_text(
         &title,
-        Point2D::new(panel.origin.x + 24.0, panel.origin.y + 36.0),
+        Point2D::new(panel.origin.x + 16.0, panel.origin.y + 31.0),
     );
     for (i, tab) in AgentSettingsTab::ALL.iter().enumerate() {
         let r = nav_item_rect(panel, i);
@@ -335,20 +337,20 @@ fn paint_sidebar(
         draw_icon(
             cx.backend,
             icon,
-            Point2D::new(r.origin.x + 12.0, r.origin.y + 11.0),
-            18.0,
+            Point2D::new(r.origin.x + 12.0, r.origin.y + 7.0),
+            14.0,
             icon_color,
             1.6,
         );
         let label = TextLayout::single_run(
             tab_i18n_label(ui, *tab),
             "system-ui",
-            14.0,
+            13.0,
             to_jian(icon_color),
             Point2D::new(0.0, 0.0),
         );
         cx.backend
-            .draw_text(&label, Point2D::new(r.origin.x + 40.0, r.origin.y + 24.0));
+            .draw_text(&label, Point2D::new(r.origin.x + 38.0, r.origin.y + 18.0));
     }
 }
 
@@ -690,10 +692,10 @@ fn content_rect(panel: Rect) -> Rect {
 }
 
 fn nav_item_rect(panel: Rect, i: usize) -> Rect {
-    let y = panel.origin.y + 80.0 + i as f32 * NAV_ITEM_HEIGHT;
+    let y = panel.origin.y + NAV_TOP + i as f32 * NAV_ITEM_STEP;
     Rect {
-        origin: Point2D::new(panel.origin.x + 12.0, y),
-        size: Point2D::new(SIDEBAR_WIDTH - 24.0, NAV_ITEM_HEIGHT - 4.0),
+        origin: Point2D::new(panel.origin.x + 8.0, y),
+        size: Point2D::new(SIDEBAR_WIDTH - 16.0, NAV_ITEM_HEIGHT),
     }
 }
 
