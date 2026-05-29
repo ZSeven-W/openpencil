@@ -546,6 +546,30 @@ fn rebuild_chat_models_includes_ready_builtin_agents() {
     assert!(entry.value.starts_with("builtin:"));
 }
 
+#[test]
+fn rebuild_chat_models_retains_builtin_agent_display_name_as_group_label() {
+    let mut s = sample();
+    let id = s.editor_ui.agent_settings.add_builtin_agent_with_defaults(
+        "MiniMax",
+        "sk-test",
+        "MiniMax-M2.7",
+    );
+
+    s.rebuild_chat_models();
+
+    let entry = s
+        .chat
+        .available_models
+        .iter()
+        .find(|m| m.builtin_provider_id.as_deref() == Some(id.as_str()))
+        .expect("ready built-in agent should appear in model picker");
+    assert_eq!(entry.display_name, "MiniMax-M2.7");
+    assert_eq!(
+        entry.builtin_provider_display_name.as_deref(),
+        Some("MiniMax")
+    );
+}
+
 // --- Layer collapse (Gap 3) -----------------------------------------
 
 #[test]

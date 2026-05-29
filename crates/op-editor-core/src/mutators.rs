@@ -606,9 +606,10 @@ impl EditorState {
                 .iter()
                 .filter(|agent| agent.ready())
                 .map(|agent| {
-                    crate::ModelEntry::builtin(
+                    crate::ModelEntry::builtin_with_display_name(
                         agent.kind.model_provider(),
                         agent.id.clone(),
+                        agent.display_name.clone(),
                         format!("builtin:{}:{}", agent.id, agent.model),
                         agent.model.clone(),
                     )

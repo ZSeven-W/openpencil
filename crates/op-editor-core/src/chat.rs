@@ -77,6 +77,10 @@ pub struct ModelEntry {
     /// `Some(id)` when this model belongs to a built-in API-key
     /// provider rather than an external CLI.
     pub builtin_provider_id: Option<String>,
+    /// Display label for the built-in provider group (for example
+    /// `MiniMax`). Kept separate from `display_name`, which is the
+    /// model row label.
+    pub builtin_provider_display_name: Option<String>,
 }
 
 impl ModelEntry {
@@ -90,6 +94,7 @@ impl ModelEntry {
             value: value.into(),
             display_name: display_name.into(),
             builtin_provider_id: None,
+            builtin_provider_display_name: None,
         }
     }
 
@@ -104,6 +109,23 @@ impl ModelEntry {
             value: value.into(),
             display_name: display_name.into(),
             builtin_provider_id: Some(builtin_provider_id.into()),
+            builtin_provider_display_name: None,
+        }
+    }
+
+    pub fn builtin_with_display_name(
+        provider: AgentProvider,
+        builtin_provider_id: impl Into<String>,
+        builtin_provider_display_name: impl Into<String>,
+        value: impl Into<String>,
+        display_name: impl Into<String>,
+    ) -> Self {
+        Self {
+            provider,
+            value: value.into(),
+            display_name: display_name.into(),
+            builtin_provider_id: Some(builtin_provider_id.into()),
+            builtin_provider_display_name: Some(builtin_provider_display_name.into()),
         }
     }
 }
