@@ -364,14 +364,18 @@ impl LayerPanel {
                 let eye_x = lock_x - 22.0;
                 let icon_y = inner.origin.y + 6.0;
                 let slop = 4.0;
-                if point.x >= lock_x - slop
+                let show_eye = item.hovered || item.hidden;
+                let show_lock = item.hovered || item.locked;
+                if show_lock
+                    && point.x >= lock_x - slop
                     && point.x <= lock_x + 14.0 + slop
                     && point.y >= icon_y - slop
                     && point.y <= icon_y + 14.0 + slop
                 {
                     return Some(LayerPanelHit::ToggleLocked(item.node_id.clone()));
                 }
-                if point.x >= eye_x - slop
+                if show_eye
+                    && point.x >= eye_x - slop
                     && point.x <= eye_x + 14.0 + slop
                     && point.y >= icon_y - slop
                     && point.y <= icon_y + 14.0 + slop
@@ -733,8 +737,8 @@ impl Widget for LayerPanel {
             let trailing_size = 12.0;
             let trailing_stroke = 1.2;
             let trailing_y = row.origin.y + 7.0;
-            let show_eye = item.hovered || item.selected || item.hidden;
-            let show_lock = item.hovered || item.selected || item.locked;
+            let show_eye = item.hovered || item.hidden;
+            let show_lock = item.hovered || item.locked;
             if show_eye {
                 draw_icon(
                     cx.backend,
