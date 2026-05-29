@@ -825,7 +825,13 @@ fn main() {
         return;
     }
     let initial_file = initial_file_from_argv();
-    let event_loop = match EventLoop::new() {
+    let mut event_loop_builder = EventLoop::builder();
+    #[cfg(target_os = "macos")]
+    {
+        use winit::platform::macos::{ActivationPolicy, EventLoopBuilderExtMacOS};
+        event_loop_builder.with_activation_policy(ActivationPolicy::Regular);
+    }
+    let event_loop = match event_loop_builder.build() {
         Ok(el) => el,
         Err(err) => {
             eprintln!("openpencil-desktop: EventLoop::new failed: {err}");

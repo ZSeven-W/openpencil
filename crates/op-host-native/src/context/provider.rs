@@ -21,6 +21,12 @@ pub enum ProviderError {
     /// cross-platform uniformity (each backend uses different error types).
     #[error("GL context provider failed: {0}")]
     Failure(String),
+    /// The platform has created a window, but its content surface is
+    /// still the placeholder startup size. Retrying after the first
+    /// real resize/redraw avoids entering native GL with an invalid
+    /// drawable.
+    #[error("GL window surface is not ready: {width}x{height}")]
+    SurfaceNotReady { width: u32, height: u32 },
 }
 
 impl ProviderError {
@@ -194,11 +200,11 @@ impl GlutinProvider {
         // `glutin_winit::GlWindow::build_surface_attributes` does
         // internally; we inline it so the crate stays off
         // `glutin-winit` (which is pinned to the upstream `winit`
-        // package). Sizes are clamped to ≥ 1 — a zero-area surface
-        // is rejected by every GL backend.
+        // package). During macOS startup, winit can briefly expose a
+        // placeholder 1×1 drawable; reject that state before entering
+        // native GL so the caller can retry after the real resize.
         let inner = window.inner_size();
-        let surface_width = std::num::NonZeroU32::new(inner.width.max(1)).unwrap();
-        let surface_height = std::num::NonZeroU32::new(inner.height.max(1)).unwrap();
+        let (surface_width, surface_height) = window_surface_size(inner)?;
         let surface_attrs =
             glutin::surface::SurfaceAttributesBuilder::<glutin::surface::WindowSurface>::new()
                 .build(raw_window_handle, surface_width, surface_height);
@@ -228,6 +234,21 @@ impl GlutinProvider {
             glow: Arc::new(glow_ctx),
         })
     }
+}
+
+#[cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]
+fn window_surface_size(
+    inner: winit::dpi::PhysicalSize<u32>,
+) -> ProviderResult<(std::num::NonZeroU32, std::num::NonZeroU32)> {
+    if inner.width <= 1 || inner.height <= 1 {
+        return Err(ProviderError::SurfaceNotReady {
+            width: inner.width,
+            height: inner.height,
+        });
+    }
+    let width = std::num::NonZeroU32::new(inner.width).expect("surface width is > 1");
+    let height = std::num::NonZeroU32::new(inner.height).expect("surface height is > 1");
+    Ok((width, height))
 }
 
 #[cfg(target_os = "macos")]
@@ -387,5 +408,34 @@ impl GlContextProvider for AndroidEglProvider {
     }
     fn release(&mut self) -> ProviderResult<()> {
         unimplemented!("Step 1f")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]
+    #[test]
+    fn window_surface_size_rejects_tiny_startup_extents() {
+        let err = window_surface_size(winit::dpi::PhysicalSize::new(1, 1)).unwrap_err();
+
+        assert!(matches!(
+            err,
+            ProviderError::SurfaceNotReady {
+                width: 1,
+                height: 1
+            }
+        ));
+    }
+
+    #[cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]
+    #[test]
+    fn window_surface_size_keeps_usable_extents() {
+        let (width, height) =
+            window_surface_size(winit::dpi::PhysicalSize::new(1440, 900)).unwrap();
+
+        assert_eq!(width.get(), 1440);
+        assert_eq!(height.get(), 900);
     }
 }

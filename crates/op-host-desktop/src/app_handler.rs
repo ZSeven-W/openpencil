@@ -6,7 +6,7 @@ use crate::{
     git_jobs, menu, persistence, settings_io, window_state, DesktopApp, INITIAL_VIEWPORT_H,
     INITIAL_VIEWPORT_W,
 };
-use op_host_native::{NativeBackend, SharedSkiaContext};
+use op_host_native::{NativeBackend, ProviderError, SharedSkiaContext, SharedSkiaError};
 use std::time::{Duration, Instant};
 use winit::application::ApplicationHandler;
 use winit::event::{
@@ -46,7 +46,8 @@ impl ApplicationHandler for DesktopApp {
             .with_inner_size(winit::dpi::LogicalSize::new(
                 INITIAL_VIEWPORT_W as u32,
                 INITIAL_VIEWPORT_H as u32,
-            ));
+            ))
+            .with_min_inner_size(winit::dpi::LogicalSize::new(640.0f64, 400.0f64));
         // Hide the title bar but keep the platform's own window
         // controls — the Electron `titleBarStyle: 'hidden'` recipe.
         //
@@ -95,18 +96,6 @@ impl ApplicationHandler for DesktopApp {
 
         let dpi = window.scale_factor() as f32;
         self.dpi = dpi;
-        match SharedSkiaContext::new_desktop(&window) {
-            Ok(ctx) => {
-                self.ctx = Some(ctx);
-                self.backend = Some(NativeBackend::with_dpi(dpi));
-            }
-            Err(err) => {
-                eprintln!("openpencil-desktop: SharedSkiaContext::new_desktop failed: {err}");
-                self.error = Some(err);
-                event_loop.exit();
-                return;
-            }
-        }
         // Build the curved-arrow rotate cursor once and cache it.
         let (rgba, w, h, hx, hy) = cursor_icon::make_rotate_cursor_rgba();
         match winit::window::CustomCursor::from_rgba(rgba, w, h, hx, hy) {
@@ -223,15 +212,17 @@ impl ApplicationHandler for DesktopApp {
         // first paint so the launch document shows immediately.
         self.drain_opened_files();
 
-        if let (Some(ctx), Some(backend)) = (self.ctx.as_mut(), self.backend.as_mut()) {
-            frame::paint(
-                ctx,
-                backend,
-                &mut self.host,
-                self.viewport_width,
-                self.viewport_height,
-                self.dpi,
-            );
+        if self.try_init_render_context(event_loop) {
+            if let (Some(ctx), Some(backend)) = (self.ctx.as_mut(), self.backend.as_mut()) {
+                frame::paint(
+                    ctx,
+                    backend,
+                    &mut self.host,
+                    self.viewport_width,
+                    self.viewport_height,
+                    self.dpi,
+                );
+            }
         }
 
         // The auto-update probe spawned in `new()` is likely still
@@ -279,6 +270,8 @@ impl ApplicationHandler for DesktopApp {
                         self.error = Some(err);
                         event_loop.exit();
                     }
+                } else {
+                    self.try_init_render_context(event_loop);
                 }
                 self.viewport_width = size.width as f32 / self.dpi;
                 self.viewport_height = size.height as f32 / self.dpi;
@@ -355,6 +348,13 @@ impl ApplicationHandler for DesktopApp {
                 self.request_redraw(true);
             }
             WindowEvent::RedrawRequested => {
+                if (self.ctx.is_none() || self.backend.is_none())
+                    && !self.try_init_render_context(event_loop)
+                {
+                    self.redraw_pending = false;
+                    self.redraw_dirty = true;
+                    return;
+                }
                 if chat_session::drain_new_chat_request(
                     &mut self.host,
                     &mut self.current_chat,
@@ -872,5 +872,80 @@ impl ApplicationHandler for DesktopApp {
         }
         self.backend.take();
         self.window.take();
+    }
+}
+
+fn render_surface_not_ready(err: &SharedSkiaError) -> bool {
+    matches!(
+        err,
+        SharedSkiaError::Provider(ProviderError::SurfaceNotReady { .. })
+    )
+}
+
+impl DesktopApp {
+    fn try_init_render_context(&mut self, event_loop: &ActiveEventLoop) -> bool {
+        if self.ctx.is_some() && self.backend.is_some() {
+            return true;
+        }
+        let Some(window) = self.window.as_ref() else {
+            return false;
+        };
+        let size = window.inner_size();
+        if size.width <= 1 || size.height <= 1 {
+            self.defer_render_context_init(event_loop);
+            return false;
+        }
+
+        let dpi = window.scale_factor() as f32;
+        match SharedSkiaContext::new_desktop(window) {
+            Ok(ctx) => {
+                self.dpi = dpi;
+                self.ctx = Some(ctx);
+                self.backend = Some(NativeBackend::with_dpi(dpi));
+                true
+            }
+            Err(err) if render_surface_not_ready(&err) => {
+                self.defer_render_context_init(event_loop);
+                false
+            }
+            Err(err) => {
+                eprintln!("openpencil-desktop: SharedSkiaContext::new_desktop failed: {err}");
+                self.error = Some(err);
+                event_loop.exit();
+                false
+            }
+        }
+    }
+
+    fn defer_render_context_init(&self, event_loop: &ActiveEventLoop) {
+        if let Some(window) = self.window.as_ref() {
+            let _ = window.request_inner_size(winit::dpi::LogicalSize::new(
+                INITIAL_VIEWPORT_W as f64,
+                INITIAL_VIEWPORT_H as f64,
+            ));
+        }
+        event_loop.set_control_flow(ControlFlow::WaitUntil(
+            Instant::now() + Duration::from_millis(50),
+        ));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn render_init_retries_only_surface_not_ready() {
+        let not_ready = op_host_native::SharedSkiaError::Provider(
+            op_host_native::ProviderError::SurfaceNotReady {
+                width: 1,
+                height: 1,
+            },
+        );
+        assert!(render_surface_not_ready(&not_ready));
+
+        assert!(!render_surface_not_ready(
+            &op_host_native::SharedSkiaError::GlInterface
+        ));
     }
 }
