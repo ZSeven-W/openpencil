@@ -155,6 +155,35 @@ fn step_tag_content_renders_as_progress_not_raw_bubble() {
 }
 
 #[test]
+fn step_tag_content_surfaces_as_progress_details() {
+    let mut message = ChatMessage::assistant_streaming();
+    message.content = r#"<step title="Validate design" status="streaming">
+lint: fixed spacing
+render: captured frame
+</step>"#
+        .into();
+
+    let items = build_transcript(
+        std::slice::from_ref(&message),
+        body(),
+        op_editor_core::Locale::EnUs,
+    );
+
+    assert_eq!(items[0].steps.len(), 1);
+    assert_eq!(
+        items[0].steps[0].details,
+        vec![
+            "lint: fixed spacing".to_string(),
+            "render: captured frame".to_string()
+        ]
+    );
+    assert!(
+        items[0].steps[0].rect.size.y > 28.0,
+        "step details should reserve space instead of being dropped"
+    );
+}
+
+#[test]
 fn tool_calls_block_header_label_counts_the_calls() {
     let mut m = ChatMessage::assistant("done");
     m.tool_calls = vec![

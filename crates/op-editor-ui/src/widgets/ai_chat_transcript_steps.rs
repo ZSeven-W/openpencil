@@ -10,6 +10,7 @@ pub(crate) enum ParsedStepStatus {
 pub(crate) struct ParsedStep {
     pub title: String,
     pub status: Option<ParsedStepStatus>,
+    pub details: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -28,6 +29,7 @@ pub(crate) fn split_design_progress(thinking: &str) -> (Vec<ParsedStep>, String)
                 steps.push(ParsedStep {
                     title: label.to_string(),
                     status: None,
+                    details: Vec::new(),
                 });
             }
         } else if !trimmed.is_empty() {
@@ -81,7 +83,7 @@ fn finish_extraction(steps: Vec<ParsedStep>, visible: String) -> StepExtraction 
     }
 }
 
-fn parsed_step(attrs: &str, _content: &str, partial: bool) -> ParsedStep {
+fn parsed_step(attrs: &str, content: &str, partial: bool) -> ParsedStep {
     let default_title = if partial { "Design" } else { "Processing" };
     ParsedStep {
         title: attr_value(attrs, "title")
@@ -89,7 +91,17 @@ fn parsed_step(attrs: &str, _content: &str, partial: bool) -> ParsedStep {
             .filter(|s| !s.is_empty())
             .unwrap_or_else(|| default_title.to_string()),
         status: attr_value(attrs, "status").and_then(|s| parse_status(s.trim())),
+        details: step_details(content),
     }
+}
+
+fn step_details(content: &str) -> Vec<String> {
+    content
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .map(str::to_string)
+        .collect()
 }
 
 fn parse_status(value: &str) -> Option<ParsedStepStatus> {
@@ -163,6 +175,7 @@ mod tests {
             vec![ParsedStep {
                 title: "Check".into(),
                 status: Some(ParsedStepStatus::Done),
+                details: vec!["ok".into()],
             }]
         );
     }
