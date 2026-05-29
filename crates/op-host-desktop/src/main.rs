@@ -26,6 +26,7 @@ mod git_host;
 mod git_jobs;
 mod git_session;
 mod iconify_host;
+mod image_search_session;
 mod keyboard_input;
 mod macos_app;
 mod mcp_serve;
@@ -103,6 +104,9 @@ struct DesktopApp {
     /// on a worker thread; its result is drained into
     /// `chat.available_models` on a later frame.
     model_probe: model_discovery::ModelProbe,
+    /// Background auto-search jobs that replace generated empty image
+    /// nodes with freely licensed remote images.
+    image_search: image_search_session::ImageSearchSession,
     iconify_job: Option<iconify_host::IconifyJob>,
     /// Document to open once the window is ready — set from argv by
     /// the file-association launch path (`openpencil-desktop X.op`).
@@ -185,6 +189,7 @@ impl DesktopApp {
             current_design: None,
             current_figma_import: None,
             model_probe: model_discovery::ModelProbe::spawn(),
+            image_search: image_search_session::ImageSearchSession::new(),
             iconify_job: None,
             initial_file,
             app_menu: None,
@@ -215,6 +220,7 @@ impl DesktopApp {
         // drop the session here so the worker's `send` becomes a
         // silent no-op when it finishes.
         figma_import_session::cancel(&mut self.host, &mut self.current_figma_import);
+        self.image_search.reset();
         self.saved_doc_fingerprint = persistence::document_fingerprint(self.host.editor_state());
         self.rebind_git_session_for_current_path();
     }

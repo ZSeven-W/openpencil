@@ -401,6 +401,11 @@ impl ApplicationHandler for DesktopApp {
                 if design_session::pump_progress(&mut self.host, &mut self.current_design) {
                     self.redraw_dirty = true;
                 }
+                self.image_search.enqueue_missing(self.host.editor_state());
+                if self.image_search.poll_into(self.host.editor_state_mut()) {
+                    self.host.mark_editor_state_dirty();
+                    self.redraw_dirty = true;
+                }
                 // Drain background model discovery once it lands.
                 if self.model_probe.poll_into(&mut self.host) {
                     self.redraw_dirty = true;
@@ -483,6 +488,7 @@ impl ApplicationHandler for DesktopApp {
                     let deadline = self.clock_start + Duration::from_millis(deadline_ms);
                     event_loop.set_control_flow(ControlFlow::WaitUntil(deadline));
                 } else if self.update_probe.is_pending()
+                    || self.image_search.is_pending()
                     || self
                         .iconify_job
                         .as_ref()
