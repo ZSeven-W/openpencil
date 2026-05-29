@@ -13,7 +13,10 @@ use crate::{Color, Point2D, Rect, TextLayout};
 use op_editor_core::editor_ui_state::EditorUiState;
 
 pub const TOP_BAR_HEIGHT: f32 = 40.0;
-const ICON_SIZE: f32 = 16.0;
+// Top-bar glyph size — 14 px (a touch smaller than the old 16 and
+// matching the TS `size-[15px]` chrome). Local to the top bar; other
+// widgets keep their own `ICON_SIZE`.
+const ICON_SIZE: f32 = 14.0;
 const ICON_BUTTON: f32 = 28.0;
 /// Globe locale-picker button — wider than a normal icon button so a
 /// chevron-down sits next to the globe glyph (signals the dropdown).
@@ -22,8 +25,13 @@ const GLOBE_BUTTON_WIDTH: f32 = 44.0;
 /// inside a single round-rect background. Tighter gap than two
 /// separate icon buttons (4 px between glyphs vs ICON_BUTTON + 4).
 const FILE_MENU_BUTTON_WIDTH: f32 = 46.0;
-const CHEVRON_SIZE: f32 = 12.0;
+const CHEVRON_SIZE: f32 = 10.0;
 const PAD: f32 = 12.0;
+/// Top-bar vertical divider geometry (TS `w-px h-3.5 bg-border/60
+/// mx-1`): 1 px wide, 14 px tall, 4 px gap on each side.
+const DIVIDER_W: f32 = 1.0;
+const DIVIDER_H: f32 = 14.0;
+const DIVIDER_GAP: f32 = 4.0;
 /// Gap between the stacked per-agent brand icons in the chip.
 const AGENT_ICON_GAP: f32 = 4.0;
 /// Diameter of a macOS-style window-control dot.
@@ -301,7 +309,10 @@ impl TopBar {
         if rect_contains(panel_left_rect, point) {
             return Some(TopBarHit::ToggleSidebar);
         }
-        let file_menu_x = rect.origin.x + PAD + self.left_inset() + ICON_BUTTON + 4.0;
+        // Mirror the paint layout: panel │ file-menu │ Figma, each
+        // group split by a divider (DIVIDER_GAP + DIVIDER_W + DIVIDER_GAP).
+        let divider_span = DIVIDER_GAP + DIVIDER_W + DIVIDER_GAP;
+        let file_menu_x = rect.origin.x + PAD + self.left_inset() + ICON_BUTTON + divider_span;
         let file_menu_rect = Rect {
             origin: Point2D::new(file_menu_x, icon_y),
             size: Point2D::new(FILE_MENU_BUTTON_WIDTH, ICON_BUTTON),
@@ -309,7 +320,7 @@ impl TopBar {
         if rect_contains(file_menu_rect, point) {
             return Some(TopBarHit::ToggleFileMenu);
         }
-        let figma_x = file_menu_x + FILE_MENU_BUTTON_WIDTH + 13.0;
+        let figma_x = file_menu_x + FILE_MENU_BUTTON_WIDTH + divider_span;
         let figma_rect = Rect {
             origin: Point2D::new(figma_x, icon_y),
             size: Point2D::new(ICON_BUTTON, ICON_BUTTON),
@@ -354,7 +365,10 @@ impl TopBar {
         let approx_text_w = chip_chars as f32 * 12.0;
         let chip_w = 8.0 + self.agent_icons_width() + 6.0 + dot_w + approx_text_w + 12.0 + 16.0;
         let chip_rect = Rect {
-            origin: Point2D::new(globe.origin.x - chip_w - 6.0, rect.origin.y + 4.0),
+            origin: Point2D::new(
+                globe.origin.x - chip_w - (DIVIDER_GAP * 2.0 + DIVIDER_W),
+                rect.origin.y + 4.0,
+            ),
             size: Point2D::new(chip_w, rect.size.y - 8.0),
         };
         if rect_contains(chip_rect, point) {
@@ -490,22 +504,21 @@ impl Widget for TopBar {
             }
         }
         // ── Left cluster ───────────────────────────────────────
+        // sidebar toggle │ file-menu │ Figma — each group split by a
+        // TS-style 1×14 divider (4 px gap each side).
         let panel_left_x = rect.origin.x + PAD + self.left_inset();
         paint_icon_button(cx, &self.theme, panel_left_x, center_y, Icon::PanelLeft);
+        // Divider between the sidebar toggle and the file-menu.
+        let divider1_x = panel_left_x + ICON_BUTTON + DIVIDER_GAP;
+        paint_divider(cx, &self.theme, divider1_x, center_y);
         // File-menu compound: folder + tight chevron in one button.
-        let file_menu_x = panel_left_x + ICON_BUTTON + 4.0;
+        let file_menu_x = divider1_x + DIVIDER_W + DIVIDER_GAP;
         paint_file_menu_button(cx, &self.theme, file_menu_x, center_y);
-        // Vertical divider before the Figma import affordance.
-        let divider_x = file_menu_x + FILE_MENU_BUTTON_WIDTH + 6.0;
-        cx.backend.fill_rect(
-            Rect {
-                origin: Point2D::new(divider_x, center_y - 8.0),
-                size: Point2D::new(1.0, 16.0),
-            },
-            self.theme.border,
-        );
+        // Divider before the Figma import affordance.
+        let divider2_x = file_menu_x + FILE_MENU_BUTTON_WIDTH + DIVIDER_GAP;
+        paint_divider(cx, &self.theme, divider2_x, center_y);
         // Figma import button.
-        let figma_x = divider_x + 6.0;
+        let figma_x = divider2_x + DIVIDER_W + DIVIDER_GAP;
         paint_figma_button(cx, &self.theme, figma_x, center_y);
 
         // ── Centered file name ─────────────────────────────────
@@ -587,8 +600,12 @@ impl Widget for TopBar {
         let icons_w = self.agent_icons_width();
         let text_w = cx.backend.measure_text(chip_text, 11.0);
         let chip_w = 8.0 + icons_w + 6.0 + dot_w + text_w + 12.0;
+        // Leave room for the chip↔globe divider (4 px gap + 1 px + 4 px).
         let chip_rect = Rect {
-            origin: Point2D::new(rx - chip_w - 6.0, center_y - 13.0),
+            origin: Point2D::new(
+                rx - chip_w - (DIVIDER_GAP * 2.0 + DIVIDER_W),
+                center_y - 13.0,
+            ),
             size: Point2D::new(chip_w, 26.0),
         };
         // Leading icons (no border ring — TS empty-state chip has no
@@ -596,14 +613,14 @@ impl Widget for TopBar {
         // set-up affordance; the active chip stacks one brand logo
         // per connected provider so the user sees *which* agents
         // are on.
-        let icons_y = chip_rect.origin.y + 4.0;
+        let icons_y = glyph_top(center_y, ICON_SIZE);
         if self.agent_count == 0 {
             draw_icon(
                 cx.backend,
                 Icon::LayoutGrid,
                 Point2D::new(chip_rect.origin.x + 8.0, icons_y),
                 ICON_SIZE,
-                self.theme.foreground,
+                self.theme.muted_foreground,
                 1.4,
             );
         } else {
@@ -648,19 +665,17 @@ impl Widget for TopBar {
             to_jian_color(self.theme.muted_foreground),
             Point2D::new(0.0, 0.0),
         );
+        // 11 px text centred on the bar's center line (ascent ≈ 8 px).
         cx.backend
-            .draw_text(&chip_label, Point2D::new(text_x, chip_rect.origin.y + 18.0));
+            .draw_text(&chip_label, Point2D::new(text_x, center_y + 4.0));
 
-        // Vertical divider between the agent chip and the globe button
-        // (TS: `w-px h-3.5 bg-border/60`) — groups the status chip
-        // apart from the locale/theme/fullscreen controls.
-        let divider_x = globe_button.origin.x - 3.0;
-        cx.backend.fill_rect(
-            Rect {
-                origin: Point2D::new(divider_x, center_y - 7.0),
-                size: Point2D::new(1.0, 14.0),
-            },
-            self.theme.border,
+        // Divider between the agent chip and the globe button — groups
+        // the status chip apart from the locale/theme/fullscreen controls.
+        paint_divider(
+            cx,
+            &self.theme,
+            globe_button.origin.x - DIVIDER_GAP - DIVIDER_W,
+            center_y,
         );
     }
 
@@ -717,6 +732,29 @@ fn paint_figma_button(cx: &mut PaintCx<'_>, theme: &Theme, x: f32, center_y: f32
         ),
         ICON_SIZE,
         theme.muted_foreground,
+    );
+}
+
+/// Top-left y for a glyph of `size` vertically centred on `center_y`.
+/// Every top-bar glyph routes through this so the whole bar shares
+/// one center line.
+fn glyph_top(center_y: f32, size: f32) -> f32 {
+    center_y - size / 2.0
+}
+
+/// Paint a top-bar vertical divider with its left edge at `x`,
+/// centred on `center_y` (TS `w-px h-3.5 bg-border/60`).
+fn paint_divider(cx: &mut PaintCx<'_>, theme: &Theme, x: f32, center_y: f32) {
+    let color = Color {
+        a: theme.border.a * 0.6,
+        ..theme.border
+    };
+    cx.backend.fill_rect(
+        Rect {
+            origin: Point2D::new(x, center_y - DIVIDER_H / 2.0),
+            size: Point2D::new(DIVIDER_W, DIVIDER_H),
+        },
+        color,
     );
 }
 
