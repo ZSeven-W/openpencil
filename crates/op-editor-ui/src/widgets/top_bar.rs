@@ -32,6 +32,11 @@ const PAD: f32 = 12.0;
 const DIVIDER_W: f32 = 1.0;
 const DIVIDER_H: f32 = 14.0;
 const DIVIDER_GAP: f32 = 4.0;
+/// The git button needs a desktop git backend (`op-git` via the
+/// desktop host) to populate + paint the panel; the web/wasm build
+/// has none, so the button is compiled out there — otherwise it would
+/// toggle an invisible panel (Codex stop-time review).
+const GIT_BUTTON_AVAILABLE: bool = !cfg!(target_arch = "wasm32");
 /// Gap between the stacked per-agent brand icons in the chip.
 const AGENT_ICON_GAP: f32 = 4.0;
 /// Diameter of a macOS-style window-control dot.
@@ -370,8 +375,9 @@ impl TopBar {
         if rect_contains(figma_rect, point) {
             return Some(TopBarHit::OpenFigmaImport);
         }
-        // Git-panel toggle, just right of the centred file name.
-        if rect_contains(self.git_button_rect(rect), point) {
+        // Git-panel toggle, just right of the centred file name
+        // (desktop only — see `GIT_BUTTON_AVAILABLE`).
+        if GIT_BUTTON_AVAILABLE && rect_contains(self.git_button_rect(rect), point) {
             return Some(TopBarHit::ToggleGitPanel);
         }
         // Right cluster: Maximize / Sun / Globe-with-chevron (right→left).
@@ -587,30 +593,33 @@ impl Widget for TopBar {
         );
 
         // Git-panel button just right of the file name (TS GitButton):
-        // a branch glyph + optional branch name. Always shown — a
-        // click toggles the git panel (which offers `init` when the
-        // doc isn't yet in a repo).
-        let git_rect = self.git_button_rect(rect);
-        draw_icon(
-            cx.backend,
-            Icon::GitBranch,
-            Point2D::new(git_rect.origin.x, glyph_top(center_y, ICON_SIZE)),
-            ICON_SIZE,
-            self.theme.muted_foreground,
-            1.4,
-        );
-        if let Some(branch) = self.git_branch.as_deref() {
-            let label = TextLayout::single_run(
-                branch,
-                "system-ui",
-                11.0,
-                to_jian_color(self.theme.muted_foreground),
-                Point2D::new(0.0, 0.0),
+        // a branch glyph + optional branch name. Always shown on
+        // desktop — a click toggles the git panel (which offers `init`
+        // when the doc isn't yet in a repo). Compiled out on web,
+        // which has no git backend to paint a panel.
+        if GIT_BUTTON_AVAILABLE {
+            let git_rect = self.git_button_rect(rect);
+            draw_icon(
+                cx.backend,
+                Icon::GitBranch,
+                Point2D::new(git_rect.origin.x, glyph_top(center_y, ICON_SIZE)),
+                ICON_SIZE,
+                self.theme.muted_foreground,
+                1.4,
             );
-            cx.backend.draw_text(
-                &label,
-                Point2D::new(git_rect.origin.x + ICON_SIZE + 6.0, center_y + 4.0),
-            );
+            if let Some(branch) = self.git_branch.as_deref() {
+                let label = TextLayout::single_run(
+                    branch,
+                    "system-ui",
+                    11.0,
+                    to_jian_color(self.theme.muted_foreground),
+                    Point2D::new(0.0, 0.0),
+                );
+                cx.backend.draw_text(
+                    &label,
+                    Point2D::new(git_rect.origin.x + ICON_SIZE + 6.0, center_y + 4.0),
+                );
+            }
         }
 
         // ── Right cluster ──────────────────────────────────────
