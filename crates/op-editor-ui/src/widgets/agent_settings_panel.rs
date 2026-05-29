@@ -3,6 +3,7 @@
 //! Visual parity with the TS app's settings panel.
 
 use crate::theme::Theme;
+use crate::widgets::agent_settings_builtin::{self, BuiltinHit};
 use crate::widgets::agent_settings_i18n::t as t_settings;
 use crate::widgets::agent_settings_images::{self, ImagesHit};
 use crate::widgets::agent_settings_mcp::{self, McpHit};
@@ -12,12 +13,14 @@ use crate::widgets::editor_state_ext::theme_for;
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::{PaintCx, Widget, WidgetId};
 use crate::{Color, Point2D, Rect, TextLayout};
-use op_editor_core::agent_settings::{AgentProvider, AgentSettings, AgentSettingsTab, McpCli};
+use op_editor_core::agent_settings::{
+    AgentProvider, AgentSettings, AgentSettingsTab, BuiltinAgentField, McpCli,
+};
 use op_editor_core::editor_ui_state::EditorUiState;
 use op_editor_core::EditorState;
 
-pub const PANEL_WIDTH: f32 = 880.0;
-pub const PANEL_HEIGHT: f32 = 640.0;
+pub const PANEL_WIDTH: f32 = 720.0;
+pub const PANEL_HEIGHT: f32 = 720.0;
 const SIDEBAR_WIDTH: f32 = 200.0;
 const PAD: f32 = 24.0;
 const NAV_ITEM_HEIGHT: f32 = 40.0;
@@ -37,6 +40,14 @@ pub enum AgentSettingsHit {
     SelectTab(AgentSettingsTab),
     Connect(AgentProvider),
     AddProvider,
+    FocusBuiltinAgent {
+        index: usize,
+        field: BuiltinAgentField,
+    },
+    ToggleBuiltinAgentKind(usize),
+    ToggleBuiltinAgentEnabled(usize),
+    EditBuiltinAgent(usize),
+    RemoveBuiltinAgent(usize),
     AddAcpAgent,
     ToggleMcpServer,
     ToggleMcpCli(McpCli),
@@ -60,7 +71,7 @@ impl<'a> AgentSettingsPanel<'a> {
         Self {
             id: WidgetId::new(5200),
             theme: theme_for(&state.editor_ui),
-            settings: state.editor_ui.agent_settings,
+            settings: state.editor_ui.agent_settings.clone(),
             ui: &state.editor_ui,
         }
     }
@@ -91,10 +102,30 @@ impl<'a> AgentSettingsPanel<'a> {
         let scrolled = Point2D::new(point.x, point.y + self.settings.scroll_y);
         match self.settings.tab {
             AgentSettingsTab::Agents => {
-                if rect_contains(add_provider_rect(panel), scrolled) {
-                    return AgentSettingsHit::AddProvider;
+                match agent_settings_builtin::hit_test(
+                    content_rect(panel),
+                    &self.settings,
+                    scrolled,
+                ) {
+                    BuiltinHit::AddProvider => return AgentSettingsHit::AddProvider,
+                    BuiltinHit::Focus { index, field } => {
+                        return AgentSettingsHit::FocusBuiltinAgent { index, field };
+                    }
+                    BuiltinHit::ToggleKind(index) => {
+                        return AgentSettingsHit::ToggleBuiltinAgentKind(index);
+                    }
+                    BuiltinHit::ToggleEnabled(index) => {
+                        return AgentSettingsHit::ToggleBuiltinAgentEnabled(index);
+                    }
+                    BuiltinHit::Edit(index) => {
+                        return AgentSettingsHit::EditBuiltinAgent(index);
+                    }
+                    BuiltinHit::Remove(index) => {
+                        return AgentSettingsHit::RemoveBuiltinAgent(index);
+                    }
+                    BuiltinHit::None => {}
                 }
-                if rect_contains(add_acp_rect(panel), scrolled) {
+                if rect_contains(add_acp_rect(panel, &self.settings), scrolled) {
                     return AgentSettingsHit::AddAcpAgent;
                 }
                 for (i, provider) in AgentProvider::ALL.iter().enumerate() {
@@ -165,12 +196,20 @@ impl<'a> AgentSettingsPanel<'a> {
             .find(|&i| rect_contains(agent_card_rect_in(panel, i, &self.settings), scrolled))
     }
 
+    pub fn builtin_card_at(&self, panel: Rect, point: Point2D) -> Option<usize> {
+        if !rect_contains(panel, point) {
+            return None;
+        }
+        let scrolled = Point2D::new(point.x, point.y + self.settings.scroll_y);
+        agent_settings_builtin::card_at(content_rect(panel), &self.settings, scrolled)
+    }
+
     /// Total content height for the active tab. Host uses this to
     /// clamp `scroll_y` so the bottom of the list never floats
     /// above the panel bottom.
     pub fn content_total_height(&self) -> f32 {
         match self.settings.tab {
-            AgentSettingsTab::Agents => agents_content_height(),
+            AgentSettingsTab::Agents => agents_content_height(&self.settings),
             AgentSettingsTab::Mcp => agent_settings_mcp::content_height(),
             AgentSettingsTab::Images => agent_settings_images::content_height(&self.settings),
             AgentSettingsTab::System => agent_settings_system::content_height(),
@@ -178,10 +217,11 @@ impl<'a> AgentSettingsPanel<'a> {
     }
 }
 
-fn agents_content_height() -> f32 {
-    // header 32 + subtitle 28 + empty 64 + GAP — twice — then Agents
+fn agents_content_height(settings: &AgentSettings) -> f32 {
+    // header 32 + subtitle 28 + built-in list + GAP, then ACP empty block, then Agents
     // header 32 + 5 cards (CARD_HEIGHT + CARD_GAP) + Claude-Code hint 28.
-    12.0 + (32.0 + 28.0 + 64.0 + SECTION_GAP) * 2.0
+    12.0 + (agent_settings_builtin::content_height(settings) + SECTION_GAP)
+        + (32.0 + 28.0 + 64.0 + SECTION_GAP)
         + 32.0
         + 5.0 * (CARD_HEIGHT + CARD_GAP)
         + 28.0
@@ -332,31 +372,7 @@ fn paint_agents_tab(
     content: Rect,
 ) {
     let mut y = content.origin.y + 12.0;
-    y = paint_section_header_inset(
-        cx,
-        theme,
-        t_settings(ui, "settings.agents.builtin"),
-        t_settings(ui, "settings.agents.addProvider"),
-        content.origin.x,
-        y,
-        content.size.x,
-        TOP_HEADER_RIGHT_INSET,
-    );
-    y = paint_section_subtitle(
-        cx,
-        theme,
-        t_settings(ui, "settings.agents.builtinSubtitle"),
-        content.origin.x,
-        y,
-    );
-    y = paint_empty_hint(
-        cx,
-        theme,
-        t_settings(ui, "settings.agents.builtinEmpty"),
-        content.origin.x,
-        y,
-        content.size.x,
-    );
+    y = agent_settings_builtin::paint_builtin_section(cx, theme, settings, ui, content, y);
     y += SECTION_GAP;
 
     y = paint_section_header_inset(
@@ -692,22 +708,10 @@ fn close_rect(panel: Rect) -> Rect {
     }
 }
 
-fn add_provider_rect(panel: Rect) -> Rect {
+fn add_acp_rect(panel: Rect, settings: &AgentSettings) -> Rect {
     let content = content_rect(panel);
-    let text_w = 96.0;
-    Rect {
-        origin: Point2D::new(
-            content.origin.x + content.size.x - TOP_HEADER_RIGHT_INSET - text_w,
-            content.origin.y + 12.0,
-        ),
-        size: Point2D::new(text_w, 24.0),
-    }
-}
-
-fn add_acp_rect(panel: Rect) -> Rect {
-    let content = content_rect(panel);
-    // Built-in providers block: header 32 + subtitle 28 + empty 64 + SECTION_GAP 28 = 152.
-    let y = content.origin.y + 12.0 + 152.0;
+    let y =
+        content.origin.y + 12.0 + agent_settings_builtin::content_height(settings) + SECTION_GAP;
     let text_w = 96.0;
     Rect {
         origin: Point2D::new(
@@ -737,8 +741,9 @@ fn connect_btn_rect_at(card: Rect) -> Rect {
 
 fn agent_card_rect_in(panel: Rect, index: usize, settings: &AgentSettings) -> Rect {
     let content = content_rect(panel);
-    let section_block = 32.0 + 28.0 + 64.0 + SECTION_GAP;
-    let mut y = content.origin.y + 12.0 + section_block * 2.0 + 32.0;
+    let builtin_block = agent_settings_builtin::content_height(settings) + SECTION_GAP;
+    let acp_block = 32.0 + 28.0 + 64.0 + SECTION_GAP;
+    let mut y = content.origin.y + 12.0 + builtin_block + acp_block + 32.0;
     for i in 0..index {
         y += CARD_HEIGHT + CARD_GAP;
         // The Claude env-var hint paints only when ClaudeCode is

@@ -74,6 +74,9 @@ pub struct ModelEntry {
     pub value: String,
     /// Human label shown in the picker (e.g. `GPT-5.5`).
     pub display_name: String,
+    /// `Some(id)` when this model belongs to a built-in API-key
+    /// provider rather than an external CLI.
+    pub builtin_provider_id: Option<String>,
 }
 
 impl ModelEntry {
@@ -86,6 +89,21 @@ impl ModelEntry {
             provider,
             value: value.into(),
             display_name: display_name.into(),
+            builtin_provider_id: None,
+        }
+    }
+
+    pub fn builtin(
+        provider: AgentProvider,
+        builtin_provider_id: impl Into<String>,
+        value: impl Into<String>,
+        display_name: impl Into<String>,
+    ) -> Self {
+        Self {
+            provider,
+            value: value.into(),
+            display_name: display_name.into(),
+            builtin_provider_id: Some(builtin_provider_id.into()),
         }
     }
 }
@@ -231,12 +249,21 @@ pub struct ChatState {
     pub anchor: ChatAnchor,
     /// Collapsed state — when true the panel paints only its header.
     pub collapsed: bool,
+    /// Maximized state — when true the host lays the panel out across
+    /// the canvas region with a small inset, mirroring the TS app's
+    /// expanded panel.
+    pub maximized: bool,
     /// Last user-action timestamp (focus / keystroke) in ms — drives
     /// the caret blink phase. Reset on focus and on every key event.
     pub caret_anchor_ms: u64,
     /// Set by `begin_send` to the just-sent user text; the desktop
     /// event loop drains this each frame. `None` = idle.
     pub pending_send: Option<String>,
+    /// Raised when the user clicks the panel's New Chat affordance.
+    /// The desktop event loop drains this to drop any in-flight chat
+    /// or design worker that could otherwise keep appending into the
+    /// fresh empty transcript.
+    pub pending_new_chat: bool,
     /// Full model catalog discovered from every *installed* CLI,
     /// before the connected-providers filter. The desktop host fills
     /// this from `model_discovery`; [`rebuild_available_models`] then
@@ -287,8 +314,10 @@ impl Default for ChatState {
             focused: false,
             anchor: ChatAnchor::BottomLeft,
             collapsed: false,
+            maximized: false,
             caret_anchor_ms: 0,
             pending_send: None,
+            pending_new_chat: false,
             discovered_models: Vec::new(),
             available_models: Vec::new(),
             selected_model: 0,
@@ -334,9 +363,11 @@ impl ChatState {
             .collect();
         self.selected_model = prev
             .and_then(|p| {
-                self.available_models
-                    .iter()
-                    .position(|m| m.provider == p.provider && m.value == p.value)
+                self.available_models.iter().position(|m| {
+                    m.provider == p.provider
+                        && m.value == p.value
+                        && m.builtin_provider_id == p.builtin_provider_id
+                })
             })
             .unwrap_or(0);
     }
@@ -396,6 +427,17 @@ impl ChatState {
         self.input.clear();
         self.pending_send = Some(trimmed);
         true
+    }
+
+    /// Start a fresh chat transcript and ask the host to abort any
+    /// in-flight worker tied to the previous conversation.
+    pub fn new_chat(&mut self) {
+        self.messages.clear();
+        self.input.clear();
+        self.pending_send = None;
+        self.pending_attachments.clear();
+        self.pending_attachment_pick = false;
+        self.pending_new_chat = true;
     }
 
     /// Flip the collapsed state of message `idx`'s thinking block.

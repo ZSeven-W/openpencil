@@ -14,9 +14,18 @@ impl WidgetHostNative {
     /// row → property → chat.
     pub fn apply_text(&mut self, c: char) -> bool {
         // Settings input owns the keyboard while focused.
-        if self.editor_state.editor_ui.agent_settings.focus.is_some() {
-            if c.is_ascii_digit() && self.editor_state.editor_ui.settings_input_draft.len() < 5 {
-                self.editor_state.editor_ui.settings_input_draft.push(c);
+        if let Some(focus) = self.editor_state.editor_ui.agent_settings.focus {
+            let draft = &mut self.editor_state.editor_ui.settings_input_draft;
+            let accepts = match focus {
+                op_editor_core::agent_settings::SettingsFocus::McpPort => {
+                    c.is_ascii_digit() && draft.len() < 5
+                }
+                op_editor_core::agent_settings::SettingsFocus::BuiltinAgent { .. } => {
+                    !c.is_control() && draft.len() < 512
+                }
+            };
+            if accepts {
+                draft.push(c);
                 self.mark_dirty();
                 return true;
             }

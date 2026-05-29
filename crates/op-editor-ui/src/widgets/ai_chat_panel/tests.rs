@@ -22,23 +22,26 @@ fn examples_grid_has_four_cards() {
     assert_eq!(example_cards(op_editor_core::Locale::EnUs).len(), 4);
 }
 
+#[test]
+fn from_editor_tracks_selection_count_for_toolbar() {
+    let mut s = EditorState::new();
+    s.selection.set = vec![
+        op_editor_core::NodeId::new("n1"),
+        op_editor_core::NodeId::new("n2"),
+    ];
+    let panel = AIChatPlaceholder::from_editor(&s);
+
+    assert_eq!(panel.selected_count, 2);
+}
+
 /// Y-coordinate of the textarea's vertical center.
 fn textarea_center_y() -> f32 {
     AI_CHAT_HEIGHT - INPUT_BASE_HEIGHT + 1.0 + INPUT_AREA_HEIGHT / 2.0
 }
 
-/// Y-coordinate of the per-turn controls strip's vertical center.
-fn controls_center_y() -> f32 {
-    AI_CHAT_HEIGHT - INPUT_BASE_HEIGHT + 1.0 + INPUT_AREA_HEIGHT + CONTROLS_ROW_HEIGHT / 2.0
-}
-
 /// Y-coordinate of the bottom toolbar's vertical center.
 fn toolbar_center_y() -> f32 {
-    AI_CHAT_HEIGHT - INPUT_BASE_HEIGHT
-        + 1.0
-        + INPUT_AREA_HEIGHT
-        + CONTROLS_ROW_HEIGHT
-        + INPUT_TOOLBAR_HEIGHT / 2.0
+    AI_CHAT_HEIGHT - INPUT_BASE_HEIGHT + 1.0 + INPUT_AREA_HEIGHT + INPUT_TOOLBAR_HEIGHT / 2.0
 }
 
 #[test]
@@ -62,20 +65,22 @@ fn hit_test_resolves_send_at_right() {
 }
 
 #[test]
-fn hit_test_resolves_controls_strip() {
+fn hit_test_resolves_bottom_toolbar_actions() {
     let s = EditorState::new();
     let panel = AIChatPlaceholder::from_editor(&s);
     let rect = Rect::xywh(0.0, 0.0, AI_CHAT_WIDTH, AI_CHAT_HEIGHT);
-    let y = controls_center_y();
-    // Thinking chip sits at the left edge of the input box (PAD).
+    let y = toolbar_center_y();
     assert_eq!(
         panel.hit_test(rect, Point2D::new(PAD + 8.0, y)),
-        Some(AIChatHit::CycleThinking)
-    );
-    // Model chip still resolves in the toolbar below.
-    assert_eq!(
-        panel.hit_test(rect, Point2D::new(PAD + 8.0, toolbar_center_y())),
         Some(AIChatHit::ToggleModelPicker)
+    );
+    assert_eq!(
+        panel.hit_test(rect, Point2D::new(AI_CHAT_WIDTH - PAD - 52.0, y)),
+        Some(AIChatHit::AddAttachment)
+    );
+    assert_eq!(
+        panel.hit_test(rect, Point2D::new(AI_CHAT_WIDTH - PAD - 16.0, y)),
+        Some(AIChatHit::Send)
     );
 }
 
@@ -130,4 +135,22 @@ fn hit_test_header_returns_drag_handle() {
     // Click in the empty header band (between title and icons).
     let p = Point2D::new(AI_CHAT_WIDTH / 2.0, 16.0);
     assert_eq!(panel.hit_test(rect, p), Some(AIChatHit::DragHandle));
+}
+
+#[test]
+fn hit_test_resolves_header_maximize_button() {
+    let s = EditorState::new();
+    let panel = AIChatPlaceholder::from_editor(&s);
+    let rect = Rect::xywh(0.0, 0.0, AI_CHAT_WIDTH, AI_CHAT_HEIGHT);
+    let p = Point2D::new(AI_CHAT_WIDTH - PAD - 50.0 + 9.0, 17.0);
+    assert_eq!(panel.hit_test(rect, p), Some(AIChatHit::ToggleMaximize));
+}
+
+#[test]
+fn hit_test_resolves_header_new_chat_button() {
+    let s = EditorState::new();
+    let panel = AIChatPlaceholder::from_editor(&s);
+    let rect = Rect::xywh(0.0, 0.0, AI_CHAT_WIDTH, AI_CHAT_HEIGHT);
+    let p = Point2D::new(AI_CHAT_WIDTH - PAD - 22.0 + 9.0, 17.0);
+    assert_eq!(panel.hit_test(rect, p), Some(AIChatHit::NewChat));
 }

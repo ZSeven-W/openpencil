@@ -525,6 +525,27 @@ fn rebuild_chat_models_syncs_agent_to_selected_model_provider() {
     assert_eq!(s.editor_ui.chat_selected_agent, 1);
 }
 
+#[test]
+fn rebuild_chat_models_includes_ready_builtin_agents() {
+    let mut s = sample();
+    let id = s.editor_ui.agent_settings.add_builtin_agent_with_defaults(
+        "Built-in Claude",
+        "sk-test",
+        "claude-sonnet-4-5",
+    );
+
+    s.rebuild_chat_models();
+
+    let entry = s
+        .chat
+        .available_models
+        .iter()
+        .find(|m| m.builtin_provider_id.as_deref() == Some(id.as_str()))
+        .expect("ready built-in agent should appear in model picker");
+    assert_eq!(entry.display_name, "claude-sonnet-4-5");
+    assert!(entry.value.starts_with("builtin:"));
+}
+
 // --- Layer collapse (Gap 3) -----------------------------------------
 
 #[test]

@@ -162,6 +162,21 @@ impl WidgetHostNative {
                         self.mark_dirty();
                         return true;
                     }
+                    AIChatHit::ToggleMaximize => {
+                        self.editor_state.chat.maximized = !self.editor_state.chat.maximized;
+                        self.editor_state.chat.collapsed = false;
+                        self.editor_state.editor_ui.chat_model_picker_open = false;
+                        self.mark_dirty();
+                        return true;
+                    }
+                    AIChatHit::NewChat => {
+                        self.editor_state.chat.new_chat();
+                        self.editor_state.editor_ui.chat_model_picker_open = false;
+                        self.editor_state.editor_ui.chat_model_picker_scroll = 0.0;
+                        self.editor_state.editor_ui.chat_model_picker_hover = None;
+                        self.mark_dirty();
+                        return true;
+                    }
                     AIChatHit::ToggleModelPicker => {
                         self.editor_state.editor_ui.chat_model_picker_open =
                             !self.editor_state.editor_ui.chat_model_picker_open;

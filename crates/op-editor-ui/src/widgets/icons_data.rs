@@ -520,6 +520,9 @@ pub(super) const SHOPPING_BAG: &[&str] = &[
     "M16 10a4 4 0 0 1-8 0",
 ];
 pub(super) const SEND: &[&str] = &["m22 2-7 20-4-9-9-4z", "M22 2 11 13"];
+pub(super) const PAPERCLIP: &[&str] = &[
+    "m16 6-8.414 8.586a2 2 0 0 0 2.829 2.829l8.414-8.586a4 4 0 1 0-5.657-5.657l-8.379 8.551a6 6 0 1 0 8.485 8.485l8.379-8.551",
+];
 pub(super) const MESSAGE_CIRCLE: &[&str] = &["M7.9 20A9 9 0 1 0 4 16.1L2 22z"];
 pub(super) const ROCKET: &[&str] = &[
     "M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z",

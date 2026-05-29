@@ -14,7 +14,7 @@
 use std::path::PathBuf;
 
 use op_editor_core::editor_ui_state::RecentFile;
-use op_editor_core::{EditorState, Locale, ThemeMode};
+use op_editor_core::{BuiltinAgentConfig, BuiltinAgentKind, EditorState, Locale, ThemeMode};
 use op_host_native::WidgetHostNative;
 use serde::{Deserialize, Serialize};
 
@@ -26,9 +26,20 @@ struct RecentFilePayload {
     modified_at: u64,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+struct BuiltinAgentPayload {
+    id: String,
+    display_name: String,
+    kind: String,
+    api_key: String,
+    model: String,
+    base_url: String,
+    enabled: bool,
+}
+
 /// Cheap snapshot of every persisted field. Captured before each
 /// dispatch; if it differs after, save the file.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Fingerprint {
     theme: ThemeMode,
     locale: Locale,
@@ -36,6 +47,7 @@ pub struct Fingerprint {
     cli: [bool; 6],
     images_adv: bool,
     connected: [bool; 5],
+    builtin_agents: Vec<BuiltinAgentConfig>,
 }
 
 pub fn fingerprint(state: &EditorState) -> Fingerprint {
@@ -47,6 +59,7 @@ pub fn fingerprint(state: &EditorState) -> Fingerprint {
         cli: eui.agent_settings.mcp_cli_enabled,
         images_adv: eui.agent_settings.images_advanced_open,
         connected: eui.agent_settings.connected,
+        builtin_agents: eui.agent_settings.builtin_agents.clone(),
     }
 }
 
@@ -79,6 +92,8 @@ struct SettingsPayload {
     #[serde(default)]
     connected: Option<[bool; 5]>,
     #[serde(default)]
+    builtin_agents: Option<Vec<BuiltinAgentPayload>>,
+    #[serde(default)]
     recent_files: Option<Vec<RecentFilePayload>>,
 }
 
@@ -101,6 +116,13 @@ fn to_payload(state: &EditorState) -> SettingsPayload {
         mcp_cli_enabled: Some(eui.agent_settings.mcp_cli_enabled),
         images_advanced_open: Some(eui.agent_settings.images_advanced_open),
         connected: Some(eui.agent_settings.connected),
+        builtin_agents: Some(
+            eui.agent_settings
+                .builtin_agents
+                .iter()
+                .map(builtin_agent_to_payload)
+                .collect(),
+        ),
         recent_files: Some(
             eui.recent_files
                 .iter()
@@ -147,6 +169,14 @@ fn apply_payload(state: &mut EditorState, payload: SettingsPayload) {
     if let Some(c) = payload.connected {
         eui.agent_settings.connected = c;
     }
+    if let Some(agents) = payload.builtin_agents {
+        eui.agent_settings.builtin_agents = agents
+            .into_iter()
+            .filter_map(builtin_agent_from_payload)
+            .collect();
+        eui.agent_settings.next_builtin_agent_id =
+            next_builtin_agent_id(&eui.agent_settings.builtin_agents);
+    }
     if let Some(list) = payload.recent_files {
         eui.recent_files = list
             .into_iter()
@@ -162,6 +192,48 @@ fn apply_payload(state: &mut EditorState, payload: SettingsPayload) {
     // empty this early, so this is a no-op until discovery lands and
     // `ModelProbe::poll_into` rebuilds again against the same mask.
     state.rebuild_chat_models();
+}
+
+fn builtin_agent_to_payload(agent: &BuiltinAgentConfig) -> BuiltinAgentPayload {
+    BuiltinAgentPayload {
+        id: agent.id.clone(),
+        display_name: agent.display_name.clone(),
+        kind: match agent.kind {
+            BuiltinAgentKind::Anthropic => "anthropic",
+            BuiltinAgentKind::OpenAiCompat => "openai-compat",
+        }
+        .into(),
+        api_key: agent.api_key.clone(),
+        model: agent.model.clone(),
+        base_url: agent.base_url.clone(),
+        enabled: agent.enabled,
+    }
+}
+
+fn builtin_agent_from_payload(payload: BuiltinAgentPayload) -> Option<BuiltinAgentConfig> {
+    let kind = match payload.kind.as_str() {
+        "anthropic" => BuiltinAgentKind::Anthropic,
+        "openai" | "openai-compat" | "openai_compat" => BuiltinAgentKind::OpenAiCompat,
+        _ => return None,
+    };
+    Some(BuiltinAgentConfig {
+        id: payload.id,
+        display_name: payload.display_name,
+        kind,
+        api_key: payload.api_key,
+        model: payload.model,
+        base_url: payload.base_url,
+        enabled: payload.enabled,
+    })
+}
+
+fn next_builtin_agent_id(agents: &[BuiltinAgentConfig]) -> u64 {
+    agents
+        .iter()
+        .filter_map(|agent| agent.id.strip_prefix("builtin-")?.parse::<u64>().ok())
+        .max()
+        .unwrap_or(0)
+        .saturating_add(1)
 }
 
 /// Push `path` to the head of the recent-files list on the host's
@@ -347,5 +419,28 @@ mod tests {
         let mut dst = EditorState::new();
         apply_payload(&mut dst, payload);
         assert_eq!(dst.editor_ui.agent_settings.connected, [false; 5]);
+    }
+
+    #[test]
+    fn builtin_agents_round_trip_through_payload() {
+        let mut src = EditorState::new();
+        src.editor_ui
+            .agent_settings
+            .add_builtin_agent_with_defaults("Built-in Claude", "sk-test", "claude-sonnet-4-5");
+
+        let json = serde_json::to_string(&to_payload(&src)).unwrap();
+        let payload: SettingsPayload = serde_json::from_str(&json).unwrap();
+        let mut dst = EditorState::new();
+        apply_payload(&mut dst, payload);
+
+        assert_eq!(dst.editor_ui.agent_settings.builtin_agents.len(), 1);
+        assert_eq!(
+            dst.editor_ui.agent_settings.builtin_agents[0].display_name,
+            "Built-in Claude"
+        );
+        assert_eq!(
+            dst.editor_ui.agent_settings.builtin_agents[0].api_key,
+            "sk-test"
+        );
     }
 }

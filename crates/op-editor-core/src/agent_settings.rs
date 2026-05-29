@@ -93,15 +93,70 @@ impl Default for McpServer {
 /// Editable inputs on the settings modal that aren't tied to a `Node`
 /// (so they don't fit the property-panel's `PropertyFocus`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BuiltinAgentField {
+    DisplayName,
+    ApiKey,
+    Model,
+    BaseUrl,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SettingsFocus {
     McpPort,
+    BuiltinAgent {
+        index: usize,
+        field: BuiltinAgentField,
+    },
+}
+
+/// Built-in provider backend configured directly in OpenPencil.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BuiltinAgentKind {
+    Anthropic,
+    OpenAiCompat,
+}
+
+impl BuiltinAgentKind {
+    pub fn default_base_url(self) -> &'static str {
+        match self {
+            BuiltinAgentKind::Anthropic => "https://api.anthropic.com",
+            BuiltinAgentKind::OpenAiCompat => "https://api.openai.com/v1",
+        }
+    }
+
+    pub fn model_provider(self) -> AgentProvider {
+        match self {
+            BuiltinAgentKind::Anthropic => AgentProvider::ClaudeCode,
+            BuiltinAgentKind::OpenAiCompat => AgentProvider::CodexCli,
+        }
+    }
+}
+
+/// One configured built-in Agent/API-key provider.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BuiltinAgentConfig {
+    pub id: String,
+    pub display_name: String,
+    pub kind: BuiltinAgentKind,
+    pub api_key: String,
+    pub model: String,
+    pub base_url: String,
+    pub enabled: bool,
+}
+
+impl BuiltinAgentConfig {
+    pub fn ready(&self) -> bool {
+        self.enabled && !self.api_key.trim().is_empty() && !self.model.trim().is_empty()
+    }
 }
 
 /// State for the floating agent-settings modal.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct AgentSettings {
     pub tab: AgentSettingsTab,
     pub connected: [bool; 5],
+    pub builtin_agents: Vec<BuiltinAgentConfig>,
+    pub next_builtin_agent_id: u64,
     /// Vertical scroll offset of the right content pane in px.
     pub scroll_y: f32,
     pub mcp_server: McpServer,
@@ -113,6 +168,8 @@ pub struct AgentSettings {
     /// Index into `AgentProvider::ALL` of the hovered card;
     /// `usize::MAX` means no card is hovered.
     pub hover_provider: usize,
+    /// Index into `builtin_agents` of the hovered provider card.
+    pub hover_builtin_agent: usize,
     /// Sidebar nav item under the cursor; `None` = no hover.
     pub hover_nav: Option<AgentSettingsTab>,
 }
@@ -122,6 +179,8 @@ impl Default for AgentSettings {
         Self {
             tab: AgentSettingsTab::Agents,
             connected: [false; 5],
+            builtin_agents: Vec::new(),
+            next_builtin_agent_id: 1,
             scroll_y: 0.0,
             mcp_server: McpServer::default(),
             mcp_cli_enabled: [false; 6],
@@ -129,8 +188,37 @@ impl Default for AgentSettings {
             images_search_ready: true,
             focus: None,
             hover_provider: usize::MAX,
+            hover_builtin_agent: usize::MAX,
             hover_nav: None,
         }
+    }
+}
+
+impl AgentSettings {
+    pub fn add_builtin_agent(&mut self) -> String {
+        let n = self.next_builtin_agent_id.max(1);
+        let name = format!("Built-in Agent {n}");
+        self.add_builtin_agent_with_defaults(&name, "", "claude-sonnet-4-5")
+    }
+
+    pub fn add_builtin_agent_with_defaults(
+        &mut self,
+        display_name: impl Into<String>,
+        api_key: impl Into<String>,
+        model: impl Into<String>,
+    ) -> String {
+        let id = format!("builtin-{}", self.next_builtin_agent_id.max(1));
+        self.next_builtin_agent_id = self.next_builtin_agent_id.max(1).saturating_add(1);
+        self.builtin_agents.push(BuiltinAgentConfig {
+            id: id.clone(),
+            display_name: display_name.into(),
+            kind: BuiltinAgentKind::Anthropic,
+            api_key: api_key.into(),
+            model: model.into(),
+            base_url: BuiltinAgentKind::Anthropic.default_base_url().into(),
+            enabled: true,
+        });
+        id
     }
 }
 
@@ -150,9 +238,11 @@ mod tests {
         let s = AgentSettings::default();
         assert_eq!(s.tab, AgentSettingsTab::Agents);
         assert_eq!(s.connected, [false; 5]);
+        assert!(s.builtin_agents.is_empty());
         assert_eq!(s.mcp_server.port, 3100);
         assert!(s.focus.is_none());
         assert_eq!(s.hover_provider, usize::MAX);
+        assert_eq!(s.hover_builtin_agent, usize::MAX);
     }
 
     #[test]
