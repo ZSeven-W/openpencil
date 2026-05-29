@@ -163,7 +163,11 @@ fn build_item(
     locale: op_editor_core::Locale,
 ) -> (TranscriptItem, f32) {
     let is_user = msg.role == ChatRole::User;
-    let bubble_w = body.size.x * BUBBLE_FRAC;
+    let bubble_w = if is_user {
+        body.size.x * BUBBLE_FRAC
+    } else {
+        body.size.x
+    };
     let x = if is_user {
         body.origin.x + body.size.x - bubble_w
     } else {
