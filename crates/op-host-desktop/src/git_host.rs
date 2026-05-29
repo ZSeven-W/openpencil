@@ -132,6 +132,15 @@ impl DesktopApp {
             return;
         };
         match action {
+            GitPanelAction::InitRepo => {
+                self.init_repo_for_doc();
+            }
+            GitPanelAction::OpenRepo => {
+                self.open_existing_repo();
+            }
+            GitPanelAction::CloneRepo => {
+                self.clone_repo_prompt();
+            }
             // Refresh is handled by the shared snapshot below.
             GitPanelAction::Refresh => {}
             GitPanelAction::Pull => {
@@ -535,6 +544,67 @@ impl DesktopApp {
                 eprintln!("openpencil-desktop: store HTTPS credential failed: {err}");
             }
         }
+    }
+
+    /// Empty-state "Init" card — create a local repo at the saved
+    /// document's directory, then re-discover so the doc is tracked.
+    fn init_repo_for_doc(&mut self) {
+        let Some(dir) = self
+            .current_path
+            .clone()
+            .and_then(|p| p.parent().map(|d| d.to_path_buf()))
+        else {
+            return;
+        };
+        match op_git::GitRepo::init(&dir) {
+            Ok(_) => self.rebind_git_session_for_current_path(),
+            Err(err) => self.show_git_empty_error(&format!("git init: {err}")),
+        }
+    }
+
+    /// Empty-state "Open" card — pick an existing repo folder and bind
+    /// it. The open doc is tracked only when it lives inside the repo.
+    fn open_existing_repo(&mut self) {
+        let Some(folder) = rfd::FileDialog::new().pick_folder() else {
+            return;
+        };
+        match op_git::GitRepo::discover(&folder) {
+            Ok(Some(repo)) => {
+                self.git_session
+                    .bind_repo(repo, self.current_path.as_deref());
+                self.host.editor_state_mut().editor_ui.git_panel.loading = true;
+                self.host.mark_editor_state_dirty();
+                self.refresh_git_panel();
+            }
+            Ok(None) => {
+                let locale = self.host.editor_state().editor_ui.locale;
+                self.show_git_empty_error(op_i18n::translate(locale, "git.empty.openNotARepo"));
+            }
+            Err(err) => self.show_git_empty_error(&format!("git open: {err}")),
+        }
+    }
+
+    /// Empty-state "Clone" card — cloning needs a remote URL, which
+    /// requires the in-panel clone form (a follow-up); for now point
+    /// the user at it.
+    fn clone_repo_prompt(&mut self) {
+        let locale = self.host.editor_state().editor_ui.locale;
+        rfd::MessageDialog::new()
+            .set_title(op_i18n::translate(locale, "git.empty.cloneCard"))
+            .set_description(op_i18n::translate(locale, "git.empty.cloneComingSoon"))
+            .set_level(rfd::MessageLevel::Info)
+            .set_buttons(rfd::MessageButtons::Ok)
+            .show();
+    }
+
+    /// Info/error dialog for the empty-state cards.
+    fn show_git_empty_error(&self, msg: &str) {
+        rfd::MessageDialog::new()
+            .set_title("Git")
+            .set_description(msg)
+            .set_level(rfd::MessageLevel::Warning)
+            .set_buttons(rfd::MessageButtons::Ok)
+            .show();
     }
 
     /// Show the generated SSH public key so the user can register it

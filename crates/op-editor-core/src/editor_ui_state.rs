@@ -243,6 +243,12 @@ impl MergeResolveState {
 /// against its `GitSession` (the widget layer never calls git).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum GitPanelAction {
+    /// Empty-state Init card — create a local repo for the saved doc.
+    InitRepo,
+    /// Empty-state Open card — pick + bind an existing repo folder.
+    OpenRepo,
+    /// Empty-state Clone card — clone a remote into a chosen folder.
+    CloneRepo,
     /// Re-read repository state into the panel.
     Refresh,
     /// Pull the current branch's upstream.

@@ -61,6 +61,8 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "git.empty.openCardDescription" => "已有仓库",
         "git.empty.cloneCard" => "克隆",
         "git.empty.cloneCardDescription" => "从远程仓库",
+        "git.empty.openNotARepo" => "该文件夹不是 Git 仓库。",
+        "git.empty.cloneComingSoon" => "克隆需要远程仓库 URL — 面板内克隆表单即将推出。",
         "git.author.heading" => "提交署名",
         "git.author.subheading" => "保存第一次提交需要署名",
         "git.author.nameLabel" => "姓名",

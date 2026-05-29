@@ -161,6 +161,12 @@ pub enum GitPanelHit {
     ApplyMergeResolution,
     /// The merge-resolution "Cancel" button.
     CancelMergeResolution,
+    /// Empty-state "Init" card — create a local repo for the doc.
+    EmptyInit,
+    /// Empty-state "Open" card — bind an existing repo folder.
+    EmptyOpen,
+    /// Empty-state "Clone" card — clone from a remote.
+    EmptyClone,
     /// Inside the panel but not on an interactive target — the
     /// click is swallowed (and the commit input defocused).
     Inside,

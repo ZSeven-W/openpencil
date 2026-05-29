@@ -82,6 +82,15 @@ impl WidgetHostNative {
                     panel.pending_action = Some(GitPanelAction::Commit);
                 }
             }
+            Some(GitPanelHit::EmptyInit) => {
+                panel.pending_action = Some(GitPanelAction::InitRepo);
+            }
+            Some(GitPanelHit::EmptyOpen) => {
+                panel.pending_action = Some(GitPanelAction::OpenRepo);
+            }
+            Some(GitPanelHit::EmptyClone) => {
+                panel.pending_action = Some(GitPanelAction::CloneRepo);
+            }
             Some(GitPanelHit::Refresh) => {
                 panel.pending_action = Some(GitPanelAction::Refresh);
             }

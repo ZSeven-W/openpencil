@@ -64,6 +64,17 @@ impl GitSession {
         }
     }
 
+    /// Bind an externally-opened repository (the empty-state "Open"
+    /// card), independent of the document's own location. The open
+    /// document is tracked only when it lives under the repo's
+    /// work-tree; otherwise the panel just reflects the repo's state.
+    pub fn bind_repo(&mut self, repo: GitRepo, doc: Option<&Path>) {
+        self.tracked_file = doc
+            .filter(|p| p.starts_with(repo.workdir()))
+            .map(|p| p.to_path_buf());
+        self.repo = Some(repo);
+    }
+
     /// Current branch of the bound repository.
     pub fn current_branch(&self) -> Option<String> {
         self.repo

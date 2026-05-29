@@ -547,3 +547,48 @@ fn diff_scroll_metrics_clamp_to_the_line_count() {
     assert!(GitPanel::for_editor(&long).unwrap().diff_max_scroll() > 0);
     assert!(GitPanel::diff_page_step() >= 1);
 }
+
+#[test]
+fn empty_state_cards_map_to_actions() {
+    // No repo + saved doc → Init enabled, all three cards act.
+    let saved = state_with(GitPanelState {
+        open: true,
+        in_repo: false,
+        has_saved_file: true,
+        ..GitPanelState::default()
+    });
+    let panel = GitPanel::for_editor(&saved).unwrap();
+    let rect = panel_rect(&panel);
+    let cards = panel.empty_state_rects(rect);
+    assert_eq!(
+        panel.hit_test(rect, centre(cards[0])),
+        Some(GitPanelHit::EmptyInit)
+    );
+    assert_eq!(
+        panel.hit_test(rect, centre(cards[1])),
+        Some(GitPanelHit::EmptyOpen)
+    );
+    assert_eq!(
+        panel.hit_test(rect, centre(cards[2])),
+        Some(GitPanelHit::EmptyClone)
+    );
+
+    // Unsaved doc → Init card is inert (swallowed), Open still acts.
+    let unsaved = state_with(GitPanelState {
+        open: true,
+        in_repo: false,
+        has_saved_file: false,
+        ..GitPanelState::default()
+    });
+    let panel = GitPanel::for_editor(&unsaved).unwrap();
+    let rect = panel_rect(&panel);
+    let cards = panel.empty_state_rects(rect);
+    assert_eq!(
+        panel.hit_test(rect, centre(cards[0])),
+        Some(GitPanelHit::Inside)
+    );
+    assert_eq!(
+        panel.hit_test(rect, centre(cards[1])),
+        Some(GitPanelHit::EmptyOpen)
+    );
+}

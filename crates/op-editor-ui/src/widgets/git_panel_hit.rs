@@ -57,6 +57,25 @@ impl GitPanel<'_> {
                 GitPanelHit::Inside
             });
         }
+        // No-repo onboarding empty state — the three cards are the
+        // only targets (Init is gated on a saved doc).
+        if self.is_empty_state() {
+            let cards = self.empty_state_rects(panel_rect);
+            if contains(cards[0], point) {
+                return Some(if self.state.has_saved_file {
+                    GitPanelHit::EmptyInit
+                } else {
+                    GitPanelHit::Inside
+                });
+            }
+            if contains(cards[1], point) {
+                return Some(GitPanelHit::EmptyOpen);
+            }
+            if contains(cards[2], point) {
+                return Some(GitPanelHit::EmptyClone);
+            }
+            return Some(GitPanelHit::Inside);
+        }
         // While loading / outside a repo there are no action targets;
         // an in-bounds click is just swallowed.
         if self.state.loading || !self.state.in_repo {
