@@ -6,6 +6,7 @@
 mod app_handler;
 mod chat_acp;
 mod chat_attachment;
+mod chat_builtin_http;
 mod chat_claude;
 mod chat_copilot;
 mod chat_http_server;

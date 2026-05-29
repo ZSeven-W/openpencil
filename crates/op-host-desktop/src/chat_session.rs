@@ -16,6 +16,7 @@ use op_editor_core::{ChatMessage, ChatToolCall, EditorState};
 use op_host_native::WidgetHostNative;
 use op_orchestrator::{classify_intent, DesignRequest, Intent};
 
+use crate::chat_builtin_http::ConfiguredBuiltinProvider;
 use crate::chat_claude::ClaudeCodeProvider;
 use crate::chat_copilot::CopilotProvider;
 use crate::chat_provider_llm::ChatProviderLlmClient;
@@ -171,9 +172,8 @@ pub fn launch_if_pending(
     // `ChatProviderLlmClient`). Unwired agents (Codex / OpenCode) fall
     // through to the chat path so `provider_for_agent` can surface the
     // unwired-agent error in the assistant bubble.
-    let agent_idx = host.editor_state().editor_ui.chat_selected_agent;
     if matches!(classify_intent(&user_text), Intent::Design) {
-        if let Some(provider) = provider_for_agent(agent_idx) {
+        if let Some(provider) = provider_for_selected_model(host) {
             *current_chat = None;
             let llm = ChatProviderLlmClient::new(Arc::from(provider));
             if clear_fresh_starter_frame_for_design(host.editor_state_mut()) {
@@ -208,7 +208,7 @@ pub fn launch_if_pending(
     // kept overwriting the new bubble content + applying ack'd
     // EditorCommands long after the user moved on).
     *current_design = None;
-    let Some(provider) = provider_for_agent(agent_idx) else {
+    let Some(provider) = provider_for_selected_model(host) else {
         // Selected agent has no `ChatProvider` bridge yet (Codex /
         // OpenCode HTTP-server transport). Surface that honestly in
         // the assistant bubble instead of silently running a
@@ -220,10 +220,7 @@ pub fn launch_if_pending(
         // this fresh error bubble (codex stop-gate: stale session
         // overwrote the unwired-agent error text).
         *current_chat = None;
-        let name = op_editor_core::AgentProvider::ALL
-            .get(agent_idx)
-            .map(|a| a.name())
-            .unwrap_or("This agent");
+        let name = selected_provider_label(host);
         let chat = &mut host.editor_state_mut().chat;
         if let Some(msg) = chat.messages.last_mut() {
             msg.content = format!(
@@ -264,6 +261,23 @@ pub fn launch_if_pending(
     true
 }
 
+/// Drain a New Chat request raised by the widget layer. The transcript
+/// has already been cleared inside `ChatState::new_chat`; this drops
+/// any in-flight workers so stale deltas cannot repopulate it.
+pub fn drain_new_chat_request(
+    host: &mut WidgetHostNative,
+    current_chat: &mut Option<ChatSession>,
+    current_design: &mut Option<DesignSession>,
+) -> bool {
+    if !std::mem::take(&mut host.editor_state_mut().chat.pending_new_chat) {
+        return false;
+    }
+    *current_chat = None;
+    *current_design = None;
+    host.mark_editor_state_dirty();
+    true
+}
+
 fn clear_fresh_starter_frame_for_design(state: &mut EditorState) -> bool {
     if state.doc != EditorState::starter().doc {
         return false;
@@ -291,6 +305,48 @@ fn provider_for_agent(agent_idx: usize) -> Option<Box<dyn ChatProvider>> {
         // 2 OpenCode — no bridge yet.
         _ => None,
     }
+}
+
+fn provider_for_selected_model(host: &WidgetHostNative) -> Option<Box<dyn ChatProvider>> {
+    if let Some(entry) = host.editor_state().chat.selected_model_entry() {
+        if let Some(id) = entry.builtin_provider_id.as_deref() {
+            return provider_for_builtin(host.editor_state(), id);
+        }
+    }
+    provider_for_agent(host.editor_state().editor_ui.chat_selected_agent)
+}
+
+fn provider_for_builtin(state: &EditorState, id: &str) -> Option<Box<dyn ChatProvider>> {
+    let config = state
+        .editor_ui
+        .agent_settings
+        .builtin_agents
+        .iter()
+        .find(|agent| agent.id == id && agent.ready())?;
+    let provider = ConfiguredBuiltinProvider::from_builtin_agent(config)?;
+    Some(Box::new(provider))
+}
+
+fn selected_provider_label(host: &WidgetHostNative) -> String {
+    if let Some(entry) = host.editor_state().chat.selected_model_entry() {
+        if let Some(id) = entry.builtin_provider_id.as_deref() {
+            if let Some(agent) = host
+                .editor_state()
+                .editor_ui
+                .agent_settings
+                .builtin_agents
+                .iter()
+                .find(|agent| agent.id == id)
+            {
+                return agent.display_name.clone();
+            }
+        }
+    }
+    let agent_idx = host.editor_state().editor_ui.chat_selected_agent;
+    op_editor_core::AgentProvider::ALL
+        .get(agent_idx)
+        .map(|a| a.name().to_string())
+        .unwrap_or_else(|| "This agent".into())
 }
 
 /// Pump the in-flight turn's deltas into the trailing (assistant)
@@ -451,6 +507,28 @@ mod tests {
         );
         assert_eq!(msg.content, "error: rate limited");
         assert!(!msg.streaming);
+    }
+
+    #[test]
+    fn selected_builtin_model_routes_to_builtin_provider() {
+        let mut host = WidgetHostNative::new();
+        let id = host
+            .editor_state_mut()
+            .editor_ui
+            .agent_settings
+            .add_builtin_agent_with_defaults("Built-in Claude", "sk-test", "claude-sonnet-4-5");
+        host.editor_state_mut().rebuild_chat_models();
+        let idx = host
+            .editor_state()
+            .chat
+            .available_models
+            .iter()
+            .position(|m| m.builtin_provider_id.as_deref() == Some(id.as_str()))
+            .expect("built-in model should be selectable");
+        host.editor_state_mut().select_chat_model(idx);
+
+        let provider = provider_for_selected_model(&host).expect("built-in provider should build");
+        assert_eq!(provider.provider_label(), "Built-in Claude");
     }
 
     #[test]

@@ -575,11 +575,13 @@ impl EditorState {
         if let Some(entry) = self.chat.available_models.get(idx) {
             let provider = entry.provider;
             self.chat.selected_model = idx;
-            if let Some(pidx) = crate::AgentProvider::ALL
-                .iter()
-                .position(|p| *p == provider)
-            {
-                self.editor_ui.chat_selected_agent = pidx;
+            if entry.builtin_provider_id.is_none() {
+                if let Some(pidx) = crate::AgentProvider::ALL
+                    .iter()
+                    .position(|p| *p == provider)
+                {
+                    self.editor_ui.chat_selected_agent = pidx;
+                }
             }
         }
         self.editor_ui.chat_model_picker_open = false;
@@ -596,12 +598,29 @@ impl EditorState {
     pub fn rebuild_chat_models(&mut self) {
         let connected = self.editor_ui.agent_settings.connected;
         self.chat.rebuild_available_models(&connected);
-        if let Some(entry) = self.chat.selected_model_entry() {
-            if let Some(pidx) = crate::AgentProvider::ALL
+        self.chat.available_models.extend(
+            self.editor_ui
+                .agent_settings
+                .builtin_agents
                 .iter()
-                .position(|p| *p == entry.provider)
-            {
-                self.editor_ui.chat_selected_agent = pidx;
+                .filter(|agent| agent.ready())
+                .map(|agent| {
+                    crate::ModelEntry::builtin(
+                        agent.kind.model_provider(),
+                        agent.id.clone(),
+                        format!("builtin:{}:{}", agent.id, agent.model),
+                        agent.model.clone(),
+                    )
+                }),
+        );
+        if let Some(entry) = self.chat.selected_model_entry() {
+            if entry.builtin_provider_id.is_none() {
+                if let Some(pidx) = crate::AgentProvider::ALL
+                    .iter()
+                    .position(|p| *p == entry.provider)
+                {
+                    self.editor_ui.chat_selected_agent = pidx;
+                }
             }
         }
     }

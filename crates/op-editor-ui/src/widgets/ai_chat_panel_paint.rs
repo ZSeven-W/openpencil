@@ -14,6 +14,7 @@ pub(crate) fn paint_examples(
     theme: &Theme,
     rect: Rect,
     hint_label: &str,
+    tip_label: &str,
     examples: &[ExampleCard; 4],
 ) {
     let hint = TextLayout::single_run(
@@ -78,4 +79,19 @@ pub(crate) fn paint_examples(
             Point2D::new(card.origin.x + 36.0, card.origin.y + 42.0),
         );
     }
+    let tip = TextLayout::single_run(
+        tip_label,
+        "system-ui",
+        10.0,
+        to_jian_color(theme.muted_foreground),
+        Point2D::new(0.0, 0.0),
+    );
+    let tip_w = cx.backend.measure_text(tip_label, 10.0);
+    cx.backend.draw_text(
+        &tip,
+        Point2D::new(
+            rect.origin.x + (rect.size.x - tip_w) / 2.0,
+            grid_origin_y + card_h * 2.0 + 8.0 * 2.0 + 22.0,
+        ),
+    );
 }

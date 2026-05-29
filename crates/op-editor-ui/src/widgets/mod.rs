@@ -91,10 +91,13 @@ mod icons_data;
 pub mod brand_icons;
 
 // Step 4 — extra editor-chrome widgets (TS app parity).
+pub mod agent_settings_builtin;
 pub mod agent_settings_i18n;
 pub mod agent_settings_images;
 pub mod agent_settings_mcp;
 pub mod agent_settings_panel;
+#[cfg(test)]
+mod agent_settings_panel_tests;
 pub mod agent_settings_system;
 pub mod ai_chat_model_picker;
 pub mod ai_chat_panel;

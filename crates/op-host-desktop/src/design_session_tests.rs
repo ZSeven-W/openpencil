@@ -151,8 +151,13 @@ fn end_to_end_pump_round_trips_apply_and_progress_via_actor_channels() {
         .last()
         .expect("seeded bubble survives");
     assert!(
-        bubble.content.contains("Planning"),
-        "progress line should render Planning, got: {:?}",
+        bubble.thinking.contains("Planning"),
+        "progress line should render in the process block, got thinking={:?}",
+        bubble.thinking
+    );
+    assert!(
+        !bubble.content.contains("Planning"),
+        "final answer should not be polluted by progress lines, got: {:?}",
         bubble.content
     );
     assert!(

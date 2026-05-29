@@ -355,6 +355,13 @@ impl ApplicationHandler for DesktopApp {
                 self.request_redraw(true);
             }
             WindowEvent::RedrawRequested => {
+                if chat_session::drain_new_chat_request(
+                    &mut self.host,
+                    &mut self.current_chat,
+                    &mut self.current_design,
+                ) {
+                    self.redraw_dirty = true;
+                }
                 // Pump in-flight AI chat deltas into this frame.
                 if chat_session::pump(&mut self.host, &mut self.current_chat) {
                     self.redraw_dirty = true;
@@ -625,6 +632,13 @@ impl ApplicationHandler for DesktopApp {
                 // A click on the chat Send button raises
                 // `pending_send` — launch the provider turn.
                 if chat_session::launch_if_pending(
+                    &mut self.host,
+                    &mut self.current_chat,
+                    &mut self.current_design,
+                ) {
+                    self.request_redraw(true);
+                }
+                if chat_session::drain_new_chat_request(
                     &mut self.host,
                     &mut self.current_chat,
                     &mut self.current_design,

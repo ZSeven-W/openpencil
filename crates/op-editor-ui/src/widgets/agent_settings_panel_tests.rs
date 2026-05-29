@@ -1,0 +1,116 @@
+use crate::widgets::agent_settings_panel::{AgentSettingsHit, AgentSettingsPanel};
+use op_editor_core::agent_settings::{BuiltinAgentField, SettingsFocus};
+use op_editor_core::EditorState;
+
+#[test]
+fn hit_test_resolves_builtin_agent_api_key_field() {
+    let mut state = EditorState::default();
+    state.editor_ui.agent_settings.add_builtin_agent();
+    state.editor_ui.agent_settings.focus = Some(SettingsFocus::BuiltinAgent {
+        index: 0,
+        field: BuiltinAgentField::ApiKey,
+    });
+    let panel = AgentSettingsPanel::for_editor(&state);
+    let rect = panel.rect(1200.0, 800.0);
+    let content_x = rect.origin.x + 200.0 + 24.0;
+    let content_y = rect.origin.y + 24.0;
+    let first_card_y = content_y + 12.0 + 28.0 + 28.0;
+    let point = crate::Point2D::new(content_x + 92.0, first_card_y + 88.0);
+
+    assert_eq!(
+        panel.hit_test(rect, point),
+        AgentSettingsHit::FocusBuiltinAgent {
+            index: 0,
+            field: BuiltinAgentField::ApiKey,
+        }
+    );
+}
+
+#[test]
+fn focused_builtin_agent_field_paints_from_settings_draft() {
+    let mut state = EditorState::default();
+    state.editor_ui.agent_settings.add_builtin_agent();
+    state.editor_ui.agent_settings.focus = Some(SettingsFocus::BuiltinAgent {
+        index: 0,
+        field: BuiltinAgentField::ApiKey,
+    });
+    state.editor_ui.settings_input_draft = "sk-draft".into();
+
+    let panel = AgentSettingsPanel::for_editor(&state);
+
+    assert_eq!(
+        panel.settings.focus,
+        Some(SettingsFocus::BuiltinAgent {
+            index: 0,
+            field: BuiltinAgentField::ApiKey,
+        })
+    );
+}
+
+#[test]
+fn builtin_agent_cards_use_ts_compact_height_when_not_editing() {
+    let mut state = EditorState::default();
+    state
+        .editor_ui
+        .agent_settings
+        .add_builtin_agent_with_defaults("MiniMax", "sk-test", "MiniMax-M2.7");
+    state
+        .editor_ui
+        .agent_settings
+        .add_builtin_agent_with_defaults("DeepSeek", "sk-test", "deepseek-v4-pro");
+    let panel = AgentSettingsPanel::for_editor(&state);
+
+    // Header + subtitle + two TS-style compact cards with one gap
+    // after each card. The pre-parity expanded form was >400 px.
+    assert_eq!(
+        panel.settings.builtin_agents.len(),
+        2,
+        "fixture should exercise multiple compact provider cards"
+    );
+    assert!(
+        panel.content_total_height() < 850.0,
+        "compact provider cards should not force the Agents tab to scroll immediately"
+    );
+}
+
+#[test]
+fn hit_test_resolves_builtin_agent_compact_switch() {
+    let mut state = EditorState::default();
+    state
+        .editor_ui
+        .agent_settings
+        .add_builtin_agent_with_defaults("MiniMax", "sk-test", "MiniMax-M2.7");
+    let panel = AgentSettingsPanel::for_editor(&state);
+    let rect = panel.rect(1200.0, 800.0);
+    let content_x = rect.origin.x + 200.0 + 24.0;
+    let content_w = rect.size.x - 200.0 - 48.0;
+    let content_y = rect.origin.y + 24.0;
+    let first_card_y = content_y + 12.0 + 28.0 + 28.0;
+    let point = crate::Point2D::new(content_x + content_w - 90.0, first_card_y + 30.0);
+
+    assert_eq!(
+        panel.hit_test(rect, point),
+        AgentSettingsHit::ToggleBuiltinAgentEnabled(0)
+    );
+}
+
+#[test]
+fn hit_test_resolves_builtin_agent_compact_edit_button() {
+    let mut state = EditorState::default();
+    state
+        .editor_ui
+        .agent_settings
+        .add_builtin_agent_with_defaults("MiniMax", "sk-test", "MiniMax-M2.7");
+    let panel = AgentSettingsPanel::for_editor(&state);
+    let rect = panel.rect(1200.0, 800.0);
+    let content_x = rect.origin.x + 200.0 + 24.0;
+    let content_w = rect.size.x - 200.0 - 48.0;
+    let content_y = rect.origin.y + 24.0;
+    let first_card_y = content_y + 12.0 + 28.0 + 28.0;
+    let point = crate::Point2D::new(content_x + content_w - 52.0, first_card_y + 30.0);
+
+    assert_eq!(
+        panel.hit_test(rect, point),
+        AgentSettingsHit::EditBuiltinAgent(0)
+    );
+}

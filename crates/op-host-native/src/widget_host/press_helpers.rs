@@ -114,8 +114,129 @@ impl WidgetHostNative {
                     .port
                     .to_string();
             }
-            AgentSettingsHit::AddProvider
-            | AgentSettingsHit::AddAcpAgent
+            AgentSettingsHit::FocusBuiltinAgent { index, field } => {
+                self.commit_settings_focus_if_any();
+                if let Some(agent) = self
+                    .editor_state
+                    .editor_ui
+                    .agent_settings
+                    .builtin_agents
+                    .get(index)
+                {
+                    self.editor_state.editor_ui.settings_input_draft = match field {
+                        op_editor_core::agent_settings::BuiltinAgentField::DisplayName => {
+                            agent.display_name.clone()
+                        }
+                        op_editor_core::agent_settings::BuiltinAgentField::ApiKey => {
+                            agent.api_key.clone()
+                        }
+                        op_editor_core::agent_settings::BuiltinAgentField::Model => {
+                            agent.model.clone()
+                        }
+                        op_editor_core::agent_settings::BuiltinAgentField::BaseUrl => {
+                            agent.base_url.clone()
+                        }
+                    };
+                    self.editor_state.editor_ui.agent_settings.focus = Some(
+                        op_editor_core::agent_settings::SettingsFocus::BuiltinAgent {
+                            index,
+                            field,
+                        },
+                    );
+                }
+            }
+            AgentSettingsHit::ToggleBuiltinAgentKind(index) => {
+                self.commit_settings_focus_if_any();
+                if let Some(agent) = self
+                    .editor_state
+                    .editor_ui
+                    .agent_settings
+                    .builtin_agents
+                    .get_mut(index)
+                {
+                    use op_editor_core::agent_settings::BuiltinAgentKind;
+                    agent.kind = match agent.kind {
+                        BuiltinAgentKind::Anthropic => BuiltinAgentKind::OpenAiCompat,
+                        BuiltinAgentKind::OpenAiCompat => BuiltinAgentKind::Anthropic,
+                    };
+                    agent.base_url = agent.kind.default_base_url().to_string();
+                    if agent.kind == BuiltinAgentKind::OpenAiCompat
+                        && agent.model.starts_with("claude-")
+                    {
+                        agent.model = "gpt-5.4".into();
+                    } else if agent.kind == BuiltinAgentKind::Anthropic
+                        && agent.model.starts_with("gpt-")
+                    {
+                        agent.model = "claude-sonnet-4-5".into();
+                    }
+                    self.editor_state.rebuild_chat_models();
+                }
+            }
+            AgentSettingsHit::ToggleBuiltinAgentEnabled(index) => {
+                self.commit_settings_focus_if_any();
+                if let Some(agent) = self
+                    .editor_state
+                    .editor_ui
+                    .agent_settings
+                    .builtin_agents
+                    .get_mut(index)
+                {
+                    agent.enabled = !agent.enabled;
+                    self.editor_state.rebuild_chat_models();
+                }
+            }
+            AgentSettingsHit::EditBuiltinAgent(index) => {
+                self.commit_settings_focus_if_any();
+                if let Some(agent) = self
+                    .editor_state
+                    .editor_ui
+                    .agent_settings
+                    .builtin_agents
+                    .get(index)
+                {
+                    self.editor_state.editor_ui.settings_input_draft = agent.display_name.clone();
+                    self.editor_state.editor_ui.agent_settings.focus = Some(
+                        op_editor_core::agent_settings::SettingsFocus::BuiltinAgent {
+                            index,
+                            field: op_editor_core::agent_settings::BuiltinAgentField::DisplayName,
+                        },
+                    );
+                }
+            }
+            AgentSettingsHit::RemoveBuiltinAgent(index) => {
+                self.commit_settings_focus_if_any();
+                let agents = &mut self.editor_state.editor_ui.agent_settings.builtin_agents;
+                if index < agents.len() {
+                    agents.remove(index);
+                    self.editor_state.editor_ui.agent_settings.focus = None;
+                    self.editor_state.editor_ui.settings_input_draft.clear();
+                    self.editor_state.rebuild_chat_models();
+                }
+            }
+            AgentSettingsHit::AddProvider => {
+                let id = self
+                    .editor_state
+                    .editor_ui
+                    .agent_settings
+                    .add_builtin_agent();
+                let index = self
+                    .editor_state
+                    .editor_ui
+                    .agent_settings
+                    .builtin_agents
+                    .iter()
+                    .position(|agent| agent.id == id)
+                    .unwrap_or(0);
+                self.editor_state.editor_ui.agent_settings.focus = Some(
+                    op_editor_core::agent_settings::SettingsFocus::BuiltinAgent {
+                        index,
+                        field: op_editor_core::agent_settings::BuiltinAgentField::ApiKey,
+                    },
+                );
+                self.editor_state.editor_ui.settings_input_draft.clear();
+                self.editor_state.rebuild_chat_models();
+            }
+            AgentSettingsHit::AddAcpAgent
             | AgentSettingsHit::TestImageSearch
             | AgentSettingsHit::AddGenConfig
             | AgentSettingsHit::Inside => {}

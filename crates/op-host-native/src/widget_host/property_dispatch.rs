@@ -472,24 +472,6 @@ impl WidgetHostNative {
         self.mark_dirty();
     }
 
-    /// Commit any focused settings-modal input (currently only the
-    /// MCP port).
-    pub(in crate::widget_host) fn commit_settings_focus_if_any(&mut self) {
-        use op_editor_core::agent_settings::SettingsFocus;
-        let Some(focus) = self.editor_state.editor_ui.agent_settings.focus.take() else {
-            return;
-        };
-        let draft = std::mem::take(&mut self.editor_state.editor_ui.settings_input_draft);
-        match focus {
-            SettingsFocus::McpPort => {
-                if let Ok(port) = draft.trim().parse::<u16>() {
-                    self.editor_state.editor_ui.agent_settings.mcp_server.port = port.max(1024);
-                }
-            }
-        }
-        self.mark_dirty();
-    }
-
     /// Commit any pending VariablesPanel row edit (Number / String).
     pub(in crate::widget_host) fn commit_variable_row_focus_if_any(&mut self) {
         use op_editor_core::editor_ui_state::VariableRowFocus;

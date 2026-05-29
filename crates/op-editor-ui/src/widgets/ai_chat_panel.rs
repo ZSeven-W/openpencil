@@ -1,21 +1,6 @@
-//! `AIChatPlaceholder` — floating "start designing with AI" / chat panel
-//! pinned to the bottom-center of the canvas (Step 4 visual lift +
-//! Step 5 P2 dynamic state).
-//!
-//! Two render modes driven by `ChatState`:
-//!  - **Empty** (no messages): the original "start designing with AI" hint
-//!    + 2×2 example cards — clicking a card fills the input.
-//!  - **Active** (≥1 message): renders the message list above the
-//!    input, hides the example grid.
-//!
-//! Hit-test exposes [`AIChatHit`] so the host can route a click to
-//! Send / focus input / pick example. Full keyboard plumbing lives
-//! on the host (`apply_text` / `apply_send`).
-
 use crate::theme::Theme;
 use crate::widgets::ai_chat_panel_controls::{
-    attachment_row_hit, controls_row_hit, paint_attachment_row, paint_controls_row,
-    ATTACHMENT_ROW_HEIGHT, CONTROLS_ROW_HEIGHT,
+    attachment_row_hit, paint_attachment_row, ATTACHMENT_ROW_HEIGHT,
 };
 use crate::widgets::ai_chat_panel_paint::paint_examples;
 use crate::widgets::editor_state_ext::{theme_for, translate};
@@ -25,30 +10,16 @@ use crate::{Color, Point2D, Rect, TextLayout};
 use op_editor_core::chat::ChatState;
 use op_editor_core::EditorState;
 
-pub const AI_CHAT_WIDTH: f32 = 380.0;
-pub const AI_CHAT_HEIGHT: f32 = 460.0;
-/// Pill width when [`ChatState::collapsed`] is true — sized to
-/// fit "[bubble] New Chat [chevron-up]" with comfortable padding,
-/// matching the TS app reference screenshot.
+pub const AI_CHAT_WIDTH: f32 = 360.0;
+pub const AI_CHAT_HEIGHT: f32 = 400.0;
 pub const AI_CHAT_COLLAPSED_WIDTH: f32 = 150.0;
-/// Height of the panel when collapsed — short pill, just enough
-/// for the row to read.
 pub const AI_CHAT_COLLAPSED_HEIGHT: f32 = 36.0;
 pub(crate) const PAD: f32 = 16.0;
 pub(crate) const HEADER_HEIGHT: f32 = 36.0;
-/// Tall textarea-style input region (placeholder / typed buffer).
 const INPUT_AREA_HEIGHT: f32 = 56.0;
-/// Toolbar below the textarea — model picker on left, attach +
-/// send on right. Mirrors the TS panel's bottom row.
 const INPUT_TOOLBAR_HEIGHT: f32 = 40.0;
-/// Click-width of the bottom-toolbar model chip (sparkles + agent
-/// name + chevron). Fixed so hit-test needs no text measurement.
 const MODEL_CHIP_W: f32 = 150.0;
-/// Reserved height of the input block when no attachment is staged:
-/// textarea + per-turn controls strip + bottom toolbar. The block
-/// grows by [`ATTACHMENT_ROW_HEIGHT`] when attachments are staged —
-/// see [`AIChatPlaceholder::input_height`].
-const INPUT_BASE_HEIGHT: f32 = INPUT_AREA_HEIGHT + CONTROLS_ROW_HEIGHT + INPUT_TOOLBAR_HEIGHT;
+const INPUT_BASE_HEIGHT: f32 = INPUT_AREA_HEIGHT + INPUT_TOOLBAR_HEIGHT;
 
 #[derive(Debug, Clone)]
 pub(crate) struct ExampleCard {
@@ -111,6 +82,10 @@ pub enum AIChatHit {
     /// Click on the chevron at the top-left of the header — host
     /// flips the `ChatState::collapsed` flag.
     ToggleCollapse,
+    /// Click on the maximize / restore affordance in the header.
+    ToggleMaximize,
+    /// Click on the plus affordance in the header.
+    NewChat,
     /// Click on the model chip (bottom-left of the input toolbar) —
     /// host toggles `ui.chat_model_picker_open` to open / close the
     /// model dropdown.
@@ -161,6 +136,9 @@ pub struct AIChatPlaceholder<'a> {
     /// Chip label shown when no model is selected / discovered yet
     /// (`ai.noModelsConnected`).
     pub label_no_models: String,
+    /// Number of currently selected canvas nodes, shown in the
+    /// bottom toolbar like the TS panel.
+    pub(crate) selected_count: usize,
     /// Whether the model-picker dropdown is open
     /// (`Document.ui.chat_model_picker_open`). The picker lists
     /// `state.available_models`; the active row is
@@ -194,11 +172,14 @@ impl<'a> AIChatPlaceholder<'a> {
             theme: theme_for(ui),
             state: &state.chat,
             now_ms,
-            label_new_chat: translate(ui, "ai.newChat").to_string(),
+            // TS stores the chat title as UI state and defaults it to
+            // this English title even under a Chinese locale.
+            label_new_chat: "New Chat".to_string(),
             label_start_with_ai: translate(ui, "ai.tryExample").to_string(),
             label_input_placeholder: translate(ui, "ai.designWithAgent").to_string(),
             label_tip_select_elements: translate(ui, "ai.tipSelectElements").to_string(),
             label_no_models: translate(ui, "ai.noModelsConnected").to_string(),
+            selected_count: state.selection_count(),
             model_picker_open: ui.chat_model_picker_open,
             model_picker_scroll: ui.chat_model_picker_scroll,
             model_picker_hover: ui.chat_model_picker_hover,
@@ -243,8 +224,7 @@ impl<'a> AIChatPlaceholder<'a> {
     fn model_picker_rect(&self, rect: Rect, input_rect: Rect) -> Rect {
         let height =
             crate::widgets::ai_chat_model_picker::picker_view_height(&self.state.available_models);
-        let toolbar_top =
-            input_rect.origin.y + INPUT_AREA_HEIGHT + self.attachment_row_h() + CONTROLS_ROW_HEIGHT;
+        let toolbar_top = input_rect.origin.y + INPUT_AREA_HEIGHT + self.attachment_row_h();
         let bottom = toolbar_top - 4.0;
         Rect {
             origin: Point2D::new(rect.origin.x + PAD, bottom - height),
@@ -291,6 +271,21 @@ impl<'a> AIChatPlaceholder<'a> {
         if rect_contains(chevron_rect, point) {
             return Some(AIChatHit::ToggleCollapse);
         }
+        let header_y = rect.origin.y + 8.0;
+        let maximize_rect = Rect {
+            origin: Point2D::new(rect.origin.x + rect.size.x - PAD - 50.0, header_y),
+            size: Point2D::new(22.0, 22.0),
+        };
+        if rect_contains(maximize_rect, point) {
+            return Some(AIChatHit::ToggleMaximize);
+        }
+        let new_chat_rect = Rect {
+            origin: Point2D::new(rect.origin.x + rect.size.x - PAD - 22.0, header_y),
+            size: Point2D::new(22.0, 22.0),
+        };
+        if rect_contains(new_chat_rect, point) {
+            return Some(AIChatHit::NewChat);
+        }
         let input_h = self.input_height();
         // Must match `paint` exactly: paint draws the separator at
         // `bottom - input_h` and the input block one pixel below it
@@ -322,11 +317,10 @@ impl<'a> AIChatPlaceholder<'a> {
         if rect_contains(input_rect, point) {
             let attach_top = input_rect.origin.y + INPUT_AREA_HEIGHT;
             let attach_h = self.attachment_row_h();
-            let controls_top = attach_top + attach_h;
-            let toolbar_top = controls_top + CONTROLS_ROW_HEIGHT;
+            let toolbar_top = attach_top + attach_h;
             // Staged-attachment strip — present only when attachments
             // are staged; a chip click removes that attachment.
-            if attach_h > 0.0 && point.y >= attach_top && point.y < controls_top {
+            if attach_h > 0.0 && point.y >= attach_top && point.y < toolbar_top {
                 let row = Rect {
                     origin: Point2D::new(input_rect.origin.x, attach_top),
                     size: Point2D::new(input_rect.size.x, attach_h),
@@ -338,27 +332,18 @@ impl<'a> AIChatPlaceholder<'a> {
                 }
                 return Some(AIChatHit::FocusInput);
             }
-            // Per-turn controls strip — thinking / effort / attach.
-            // Hit-tested before the toolbar so its chips aren't eaten
-            // by the model-chip / send band.
-            if point.y >= controls_top && point.y < toolbar_top {
-                let controls_rect = Rect {
-                    origin: Point2D::new(input_rect.origin.x, controls_top),
-                    size: Point2D::new(input_rect.size.x, CONTROLS_ROW_HEIGHT),
-                };
-                if let Some(hit) = controls_row_hit(controls_rect, point) {
-                    return Some(hit);
-                }
-                return Some(AIChatHit::FocusInput);
-            }
             // Bottom toolbar strip — its left `MODEL_CHIP_W` is the
-            // model chip (opens / closes the picker), its rightmost
-            // ~40px is the send chip.
+            // model chip (opens / closes the picker), with attach +
+            // send icon buttons on the right.
             if point.y >= toolbar_top {
                 if point.x <= input_rect.origin.x + MODEL_CHIP_W {
                     return Some(AIChatHit::ToggleModelPicker);
                 }
-                let send_x = input_rect.origin.x + input_rect.size.x - 40.0;
+                let send_x = input_rect.origin.x + input_rect.size.x - 32.0;
+                let attach_x = send_x - 32.0;
+                if point.x >= attach_x && point.x < send_x {
+                    return Some(AIChatHit::AddAttachment);
+                }
                 if point.x >= send_x {
                     return Some(AIChatHit::Send);
                 }
@@ -530,6 +515,7 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
                 &self.theme,
                 rect,
                 &self.label_start_with_ai,
+                &self.label_tip_select_elements,
                 &self.examples,
             );
         } else {
@@ -642,19 +628,9 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
             paint_attachment_row(cx, &self.theme, attach_rect, self.state);
         }
 
-        // Per-turn controls strip — thinking / effort / attach.
-        let controls_rect = Rect {
-            origin: Point2D::new(
-                input_rect.origin.x,
-                input_rect.origin.y + INPUT_AREA_HEIGHT + attach_h,
-            ),
-            size: Point2D::new(input_rect.size.x, CONTROLS_ROW_HEIGHT),
-        };
-        paint_controls_row(cx, &self.theme, controls_rect, self.state);
-
         // Bottom toolbar — model picker on the left, send on the
         // right (mirrors the TS panel's bottom row).
-        let toolbar_y = input_rect.origin.y + INPUT_AREA_HEIGHT + attach_h + CONTROLS_ROW_HEIGHT;
+        let toolbar_y = input_rect.origin.y + INPUT_AREA_HEIGHT + attach_h;
         let toolbar_center_y = toolbar_y + INPUT_TOOLBAR_HEIGHT / 2.0;
         // Model chip — brand logo of the selected model's provider
         // + its display name + a chevron. Click toggles the picker.
@@ -702,10 +678,51 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
             self.theme.muted_foreground,
             1.4,
         );
+        model_x += 18.0;
+        let chip = Rect {
+            origin: Point2D::new(model_x, toolbar_center_y - 10.0),
+            size: Point2D::new(28.0, 20.0),
+        };
+        cx.backend
+            .fill_round_rect(chip, 6.0, self.theme.button_hover);
+        draw_label(
+            cx,
+            "1x",
+            11.0,
+            self.theme.muted_foreground,
+            chip.origin.x + 7.0,
+            chip.origin.y + 14.0,
+        );
+        model_x += 36.0;
+        let count = self.selected_count.to_string();
+        let selected_label =
+            op_i18n::translate(self.locale, "common.selected").replace("{{count}}", &count);
+        draw_label(
+            cx,
+            &selected_label,
+            10.0,
+            self.theme.muted_foreground,
+            model_x,
+            toolbar_center_y + 4.0,
+        );
 
-        // Right cluster — send button. (Attach moved to the
-        // controls strip above.)
+        // Right cluster — attach + send buttons.
         let rx = rect.origin.x + rect.size.x - PAD;
+        let attach_size = 24.0;
+        let attach_rect = Rect {
+            origin: Point2D::new(rx - 58.0, toolbar_center_y - attach_size / 2.0),
+            size: Point2D::new(attach_size, attach_size),
+        };
+        cx.backend
+            .fill_round_rect(attach_rect, 6.0, self.theme.button_hover);
+        draw_icon(
+            cx.backend,
+            Icon::Paperclip,
+            Point2D::new(attach_rect.origin.x + 6.0, attach_rect.origin.y + 6.0),
+            12.0,
+            self.theme.muted_foreground,
+            1.4,
+        );
         let send_size = 24.0;
         let send_rect = Rect {
             origin: Point2D::new(rx - send_size, toolbar_center_y - send_size / 2.0),
@@ -721,24 +738,13 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
             (self.theme.muted, self.theme.muted_foreground)
         };
         cx.backend.fill_round_rect(send_rect, 6.0, send_bg);
-        // Lucide "send" arrow drawn as 3 short strokes.
-        cx.backend.stroke_line(
-            Point2D::new(send_rect.origin.x + 7.0, send_rect.origin.y + 7.0),
-            Point2D::new(send_rect.origin.x + 17.0, send_rect.origin.y + 12.0),
+        draw_icon(
+            cx.backend,
+            Icon::Send,
+            Point2D::new(send_rect.origin.x + 6.0, send_rect.origin.y + 6.0),
+            12.0,
             icon_color,
-            1.6,
-        );
-        cx.backend.stroke_line(
-            Point2D::new(send_rect.origin.x + 17.0, send_rect.origin.y + 12.0),
-            Point2D::new(send_rect.origin.x + 7.0, send_rect.origin.y + 17.0),
-            icon_color,
-            1.6,
-        );
-        cx.backend.stroke_line(
-            Point2D::new(send_rect.origin.x + 7.0, send_rect.origin.y + 7.0),
-            Point2D::new(send_rect.origin.x + 7.0, send_rect.origin.y + 17.0),
-            icon_color,
-            1.6,
+            1.4,
         );
 
         // Model-picker dropdown paints last so it sits above the
@@ -762,6 +768,17 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
         node.set_label(op_i18n::translate(self.locale, "a11y.aiChat"));
         node
     }
+}
+
+fn draw_label(cx: &mut PaintCx<'_>, text: &str, size: f32, color: Color, x: f32, y: f32) {
+    let label = TextLayout::single_run(
+        text,
+        "system-ui",
+        size,
+        to_jian_color(color),
+        Point2D::new(0.0, 0.0),
+    );
+    cx.backend.draw_text(&label, Point2D::new(x, y));
 }
 
 pub(crate) fn to_jian_color(c: Color) -> jian_core::scene::Color {

@@ -413,7 +413,8 @@ pub fn pump_progress(host: &mut WidgetHostNative, current: &mut Option<DesignSes
         let appended = render_progress(&poll.progress);
         let chat = &mut host.editor_state_mut().chat;
         if let Some(msg) = chat.messages.last_mut() {
-            msg.content.push_str(&appended);
+            msg.thinking.push_str(&appended);
+            msg.thinking_collapsed = false;
             changed = true;
         }
     }

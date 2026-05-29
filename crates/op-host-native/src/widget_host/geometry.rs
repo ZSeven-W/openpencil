@@ -11,17 +11,13 @@ use super::helpers::{
     rect_contains, PANEL_RESIZE_GUTTER, STATUS_INSET, TOOLBAR_INSET_X, TOOLBAR_INSET_Y,
 };
 use super::{CursorHint, PanelResizeKind, WidgetHostNative};
-use op_editor_core::ChatAnchor;
 use op_editor_ui::widgets::{
     rotation_corner_at_point, selection_handle_at_point, GitPanel, LayoutCx, LocalePicker,
-    ShapePicker, Toolbar, TopBar, Widget, AI_CHAT_COLLAPSED_HEIGHT, AI_CHAT_COLLAPSED_WIDTH,
-    AI_CHAT_HEIGHT, AI_CHAT_WIDTH, GIT_PANEL_INSET, ICON_PICKER_PANEL_H, ICON_PICKER_PANEL_W,
-    LOCALE_PICKER_WIDTH, SHAPE_PICKER_WIDTH, STATUS_BAR_HEIGHT, STATUS_BAR_WIDTH, TOOLBAR_WIDTH,
-    TOP_BAR_HEIGHT,
+    ShapePicker, Toolbar, TopBar, Widget, GIT_PANEL_INSET, ICON_PICKER_PANEL_H,
+    ICON_PICKER_PANEL_W, LOCALE_PICKER_WIDTH, SHAPE_PICKER_WIDTH, STATUS_BAR_HEIGHT,
+    STATUS_BAR_WIDTH, TOOLBAR_WIDTH, TOP_BAR_HEIGHT,
 };
 use op_editor_ui::{Point2D, Rect};
-
-use super::helpers::{AICHAT_INSET_BOTTOM, AICHAT_INSET_LEFT};
 
 impl WidgetHostNative {
     /// Hit-test which screen region the cursor is over. Used by
@@ -267,39 +263,54 @@ impl WidgetHostNative {
         self.node_drag.is_some()
     }
 
-    /// Recompute the hovered provider-card index on the agent
-    /// settings modal. Returns true iff the cached value changed.
     pub fn update_agent_settings_hover(&mut self, x: f32, y: f32) -> bool {
         use op_editor_core::AgentSettingsTab;
         use op_editor_ui::widgets::agent_settings_panel::AgentSettingsPanel;
         self.refresh_layout_scene();
         let point = Point2D::new(x, y);
-        let (new_nav, new_card) = {
+        let (new_nav, new_card, new_builtin) = {
             let panel = AgentSettingsPanel::for_editor(&self.editor_state);
             let panel_rect = panel.rect(self.last_viewport_w, self.last_viewport_h);
             let nav = panel.nav_at(panel_rect, point);
-            // `tab` is op-editor-core's `AgentSettingsTab`.
-            let card = if matches!(
+            let is_agents = matches!(
                 self.editor_state.editor_ui.agent_settings.tab,
                 AgentSettingsTab::Agents
-            ) {
-                Some(panel.card_at(panel_rect, point).unwrap_or(usize::MAX))
+            );
+            let card = if is_agents {
+                panel.card_at(panel_rect, point).unwrap_or(usize::MAX)
             } else {
-                None
+                usize::MAX
             };
-            (nav, card)
+            let builtin = if is_agents {
+                panel
+                    .builtin_card_at(panel_rect, point)
+                    .unwrap_or(usize::MAX)
+            } else {
+                usize::MAX
+            };
+            (nav, card, builtin)
         };
-        // `nav_at` returns op-editor-core's `AgentSettingsTab`.
         let mut changed = false;
         if new_nav != self.editor_state.editor_ui.agent_settings.hover_nav {
             self.editor_state.editor_ui.agent_settings.hover_nav = new_nav;
             changed = true;
         }
-        if let Some(v) = new_card {
-            if v != self.editor_state.editor_ui.agent_settings.hover_provider {
-                self.editor_state.editor_ui.agent_settings.hover_provider = v;
-                changed = true;
-            }
+        if new_card != self.editor_state.editor_ui.agent_settings.hover_provider {
+            self.editor_state.editor_ui.agent_settings.hover_provider = new_card;
+            changed = true;
+        }
+        if new_builtin
+            != self
+                .editor_state
+                .editor_ui
+                .agent_settings
+                .hover_builtin_agent
+        {
+            self.editor_state
+                .editor_ui
+                .agent_settings
+                .hover_builtin_agent = new_builtin;
+            changed = true;
         }
         if changed {
             self.mark_dirty();
@@ -648,57 +659,6 @@ impl WidgetHostNative {
             origin: Point2D::new(x, y),
             size: Point2D::new(LOCALE_PICKER_WIDTH, panel_h),
         }
-    }
-
-    pub(in crate::widget_host) fn ai_chat_size(&self) -> (f32, f32) {
-        if self.editor_state.chat.collapsed {
-            (AI_CHAT_COLLAPSED_WIDTH, AI_CHAT_COLLAPSED_HEIGHT)
-        } else {
-            (AI_CHAT_WIDTH, AI_CHAT_HEIGHT)
-        }
-    }
-
-    pub(in crate::widget_host) fn ai_chat_rect(
-        &self,
-        viewport_w: f32,
-        viewport_h: f32,
-    ) -> Option<Rect> {
-        let (cx0, cy0, cw, ch) = self.canvas_region(viewport_w, viewport_h);
-        let (panel_w, panel_h) = self.ai_chat_size();
-        if cw <= panel_w + AICHAT_INSET_LEFT + 16.0 || ch <= panel_h + 16.0 {
-            return None;
-        }
-        if let Some(d) = self.chat_drag {
-            return Some(Rect {
-                origin: Point2D::new(d.pos_x, d.pos_y),
-                size: Point2D::new(panel_w, panel_h),
-            });
-        }
-        // `editor_state.chat.anchor` is op-editor-core's `ChatAnchor`;
-        // shell-core's is a structurally identical four-variant enum.
-        let (x, y) = match self.editor_state.chat.anchor {
-            op_editor_core::ChatAnchor::TopLeft => {
-                (cx0 + AICHAT_INSET_LEFT, cy0 + AICHAT_INSET_BOTTOM)
-            }
-            op_editor_core::ChatAnchor::TopRight => (
-                cx0 + cw - panel_w - AICHAT_INSET_BOTTOM,
-                cy0 + AICHAT_INSET_BOTTOM,
-            ),
-            op_editor_core::ChatAnchor::BottomLeft => (
-                cx0 + AICHAT_INSET_LEFT,
-                cy0 + ch - panel_h - AICHAT_INSET_BOTTOM,
-            ),
-            op_editor_core::ChatAnchor::BottomRight => (
-                cx0 + cw - panel_w - AICHAT_INSET_BOTTOM,
-                cy0 + ch - panel_h - AICHAT_INSET_BOTTOM,
-            ),
-        };
-        // `ChatAnchor` import kept for the `nearest` call in input.rs.
-        let _ = ChatAnchor::TopLeft;
-        Some(Rect {
-            origin: Point2D::new(x, y),
-            size: Point2D::new(panel_w, panel_h),
-        })
     }
 
     /// When the active selection is a single Path node + the Pen

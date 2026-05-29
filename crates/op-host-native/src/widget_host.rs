@@ -34,6 +34,9 @@
 use op_editor_ui::widgets::SelectionHandle;
 use op_editor_ui::{Rect, Theme};
 
+#[cfg(test)]
+mod agent_settings_tests;
+mod ai_chat_geometry;
 mod click;
 mod color_picker_press;
 mod component_browser_press;
@@ -47,6 +50,8 @@ mod helpers;
 mod icon_picker_press;
 mod input;
 #[cfg(test)]
+mod input_drag_tests;
+#[cfg(test)]
 mod input_tests;
 mod keyboard;
 mod paint;
@@ -55,6 +60,7 @@ mod press_helpers;
 mod property_dispatch;
 mod property_layout_dispatch;
 mod scroll;
+mod settings_dispatch;
 mod shape_picker_press;
 mod shortcuts;
 mod toolbar_hover;
