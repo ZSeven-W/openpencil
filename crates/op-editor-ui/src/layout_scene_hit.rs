@@ -92,6 +92,26 @@ fn hit_test_walk(node: &SceneNode, point: Point2D, zoom: f32) -> Option<String> 
     } else {
         point
     };
+    let local = if node.flip_x || node.flip_y {
+        if let Some(pivot) = rotation_pivot(node, bounds) {
+            Point2D::new(
+                if node.flip_x {
+                    2.0 * pivot.x - local.x
+                } else {
+                    local.x
+                },
+                if node.flip_y {
+                    2.0 * pivot.y - local.y
+                } else {
+                    local.y
+                },
+            )
+        } else {
+            local
+        }
+    } else {
+        local
+    };
     for child in &node.children {
         if let Some(hit) = hit_test_walk(child, local, zoom) {
             return Some(hit);

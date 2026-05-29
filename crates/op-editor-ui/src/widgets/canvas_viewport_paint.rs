@@ -13,7 +13,7 @@
 //! only the viewport transform — no second layout pass, no variable
 //! lookup.
 
-use crate::layout_scene::{regular_polygon_points, SceneNode};
+use crate::layout_scene::{regular_polygon_points, SceneGradient, SceneNode};
 use crate::layout_scene::{Effect, NodeKind};
 use crate::widgets::canvas_viewport::EditCaret;
 use crate::widgets::canvas_viewport_image::paint_image_node;
@@ -34,6 +34,11 @@ fn paint_drop_shadows(cx: &mut PaintCx<'_>, node: &SceneNode, world_rect: Rect, 
     };
     for effect in &node.effects {
         let Effect::DropShadow(s) = effect;
+        // Inset shadows are painted inside the silhouette by the
+        // per-kind painter, not here — skip them in the outer pass.
+        if s.inner {
+            continue;
+        }
         let shadow_rect = Rect {
             origin: Point2D::new(
                 world_rect.origin.x + s.offset_x * zoom,
@@ -223,18 +228,31 @@ pub fn paint_node(
         }
     }
 
-    // Wrap the paint in save/rotate/restore if the node carries a
-    // non-zero rotation. Rotation pivots around the node's own
-    // bounds centre — for containers, this is the aggregate centre.
+    // Wrap the paint in save/transform/restore when the node carries
+    // a mirror or non-zero rotation. Both pivot around the node's
+    // own bounds centre; containers use their aggregate centre.
+    let flipped = node.flip_x || node.flip_y;
     let rotated = node.rotation.abs() > f32::EPSILON;
-    if rotated {
+    let transformed = flipped || rotated;
+    if transformed {
         let pivot_doc = node.aggregate_bounds();
         let pivot = Point2D::new(
             viewport_origin.x + (pivot_doc.origin.x + pivot_doc.size.x / 2.0) * zoom,
             viewport_origin.y + (pivot_doc.origin.y + pivot_doc.size.y / 2.0) * zoom,
         );
         cx.backend.save();
-        cx.backend.rotate(node.rotation, pivot);
+        if flipped {
+            cx.backend.scale(
+                Point2D::new(
+                    if node.flip_x { -1.0 } else { 1.0 },
+                    if node.flip_y { -1.0 } else { 1.0 },
+                ),
+                pivot,
+            );
+        }
+        if rotated {
+            cx.backend.rotate(node.rotation, pivot);
+        }
     }
 
     // Drop shadows paint behind the node's own fill. Only kinds
@@ -343,7 +361,7 @@ pub fn paint_node(
         NodeKind::Path => {
             if let Some(d) = node.svg_path.as_deref() {
                 paint_svg_path_node(cx, node, world_rect, zoom, d);
-                if rotated {
+                if transformed {
                     cx.backend.restore();
                 }
                 return;
@@ -384,11 +402,16 @@ pub fn paint_node(
             }
         }
         NodeKind::Text => {
-            paint_text_node(cx, node, world_rect, zoom, &edit_caret);
+            let zoom = zoom.max(0.0001);
+            cx.backend.save();
+            cx.backend.translate(viewport_origin);
+            cx.backend.scale(Point2D::new(zoom, zoom), Point2D::ZERO);
+            paint_text_node(cx, node, node.bounds, zoom, &edit_caret);
+            cx.backend.restore();
         }
     }
 
-    if rotated {
+    if transformed {
         cx.backend.restore();
     }
 }
@@ -400,18 +423,59 @@ fn paint_svg_path_node(
     zoom: f32,
     d: &str,
 ) {
-    if let Some(fill) = node.fill {
-        cx.backend
-            .fill_svg_path(d, world_rect.origin, zoom, 1.0, fill);
+    // Gradient-filled paths paint through the dedicated gradient
+    // method (real shader on native, solid first-stop fallback on
+    // backends without one); solid / image fills fall back to the
+    // node's resolved `fill` colour.
+    match node.gradient.as_ref() {
+        Some(SceneGradient::Linear {
+            angle_deg,
+            opacity,
+            stops,
+        }) => {
+            let flat: Vec<(f32, crate::Color)> =
+                stops.iter().map(|s| (s.offset, s.color)).collect();
+            cx.backend
+                .fill_svg_path_in_rect_linear_gradient(d, world_rect, &flat, *angle_deg, *opacity);
+        }
+        Some(SceneGradient::Radial {
+            cx: gx,
+            cy,
+            radius,
+            opacity,
+            stops,
+        }) => {
+            let flat: Vec<(f32, crate::Color)> =
+                stops.iter().map(|s| (s.offset, s.color)).collect();
+            cx.backend.fill_svg_path_in_rect_radial_gradient(
+                d, world_rect, &flat, *gx, *cy, *radius, *opacity,
+            );
+        }
+        None => {
+            if let Some(fill) = node.fill {
+                cx.backend.fill_svg_path_in_rect(d, world_rect, fill);
+            }
+        }
+    }
+    // Inset shadows paint over the fill, clipped to the path
+    // silhouette. Outer shadows on paths stay deferred (no shape-mask
+    // drop-shadow path for arbitrary vectors yet).
+    for effect in &node.effects {
+        let Effect::DropShadow(s) = effect;
+        if s.inner {
+            cx.backend.fill_inner_shadow_svg_path(
+                d,
+                world_rect,
+                s.offset_x * zoom,
+                s.offset_y * zoom,
+                s.blur * zoom,
+                s.color,
+            );
+        }
     }
     if let Some(stroke) = node.stroke {
-        cx.backend.stroke_svg_path(
-            d,
-            world_rect.origin,
-            24.0 * zoom,
-            stroke.color,
-            stroke.width * zoom,
-        );
+        cx.backend
+            .stroke_svg_path_in_rect(d, world_rect, stroke.color, stroke.width * zoom);
     }
 }
 
@@ -440,7 +504,7 @@ fn paint_text_node(
     } else {
         13.0
     };
-    let font_size = base_size * zoom;
+    let font_size = base_size;
     let weight = if node.font_weight > 0 {
         node.font_weight
     } else {
@@ -456,37 +520,47 @@ fn paint_text_node(
     } else {
         1.2
     };
-    let letter_spacing = node.letter_spacing * zoom;
-    let lines: Vec<String> = if node.text_wrap {
-        wrap_text(cx.backend, text, font_size, world_rect.size.x, weight)
+    let letter_spacing = node.letter_spacing;
+    let wrap_width_doc = if node.text_wrap {
+        // Wrapping is authored document geometry, not viewport
+        // geometry. Measuring at the zoomed font size can shift CJK
+        // line breaks because real font metrics are not perfectly
+        // linear across sizes (hinting / fallback / rounding). Keep
+        // wrap decisions in doc space; the caller applies viewport
+        // scale as a canvas transform.
+        let doc_width = world_rect.size.x;
+        // TS renderer gives fixed-width paragraphs a small tolerance
+        // (`min(ceil(w*5%), ceil(fontSize*50%))`) before shaping.
+        // Without it, CJK strings that exactly fit in CanvasKit can
+        // wrap in the native direct-font path by a fraction of a px.
+        let tolerance = (doc_width * 0.05).ceil().min((base_size * 0.5).ceil());
+        Some(doc_width + tolerance)
+    } else {
+        None
+    };
+    let lines: Vec<String> = if let Some(doc_wrap_width) = wrap_width_doc {
+        wrap_text(cx.backend, text, base_size, doc_wrap_width, weight)
     } else {
         text.split('\n').map(str::to_string).collect()
     };
     if !text.is_empty() {
         let jc = jian_core::scene::Color::rgba(ch(ink.r), ch(ink.g), ch(ink.b), ch(ink.a));
-        let line_h = base_size * line_height * zoom;
-        let text_h = if lines.is_empty() {
-            0.0
-        } else {
-            font_size + line_h * (lines.len().saturating_sub(1) as f32)
-        };
-        let first_baseline_y = match node.text_vertical_align {
-            crate::layout_scene::SceneTextVerticalAlign::Middle => {
-                world_rect.origin.y + ((world_rect.size.y - text_h).max(0.0) / 2.0) + font_size
-            }
-            crate::layout_scene::SceneTextVerticalAlign::Bottom => {
-                world_rect.origin.y + (world_rect.size.y - text_h).max(0.0) + font_size
-            }
-            crate::layout_scene::SceneTextVerticalAlign::Top => world_rect.origin.y + font_size,
-        };
+        let line_h = base_size * line_height;
+        // TS `pen-renderer` draws text at the node's authored top-left
+        // and does not apply `textAlignVertical` during paint. Figma
+        // exports already bake vertical placement into `x/y`; applying
+        // middle/bottom again shifts imported labels away from their
+        // TS positions.
+        let first_baseline_y = world_rect.origin.y + font_size;
+        let align_width = wrap_width_doc.unwrap_or(world_rect.size.x);
         for (idx, line) in lines.iter().enumerate() {
             let line_w = measure_line_width(cx.backend, line, font_size, weight, letter_spacing);
             let x = match node.text_align {
                 crate::layout_scene::SceneTextAlign::Center => {
-                    world_rect.origin.x + (world_rect.size.x - line_w).max(0.0) / 2.0
+                    world_rect.origin.x + (align_width - line_w).max(0.0) / 2.0
                 }
                 crate::layout_scene::SceneTextAlign::Right => {
-                    world_rect.origin.x + (world_rect.size.x - line_w).max(0.0)
+                    world_rect.origin.x + (align_width - line_w).max(0.0)
                 }
                 crate::layout_scene::SceneTextAlign::Left
                 | crate::layout_scene::SceneTextAlign::Justify => world_rect.origin.x,
@@ -511,11 +585,8 @@ fn paint_text_node(
             let text_w =
                 measure_line_width(cx.backend, caret_line, font_size, weight, letter_spacing);
             let caret = Rect {
-                origin: Point2D::new(
-                    world_rect.origin.x + text_w,
-                    world_rect.origin.y + 2.0 * zoom,
-                ),
-                size: Point2D::new(1.0_f32.max(zoom), font_size * 1.15),
+                origin: Point2D::new(world_rect.origin.x + text_w, world_rect.origin.y + 2.0),
+                size: Point2D::new((1.0 / zoom).max(1.0), font_size * 1.15),
             };
             cx.backend.fill_rect(caret, ink);
         }
@@ -599,7 +670,7 @@ mod arc_tests {
 
 #[cfg(test)]
 mod text_tests {
-    use super::paint_text_node;
+    use super::{paint_node, paint_svg_path_node, paint_text_node};
     use crate::layout_scene::{NodeKind, SceneNode, SceneTextAlign, SceneTextVerticalAlign};
     use crate::widgets::PaintCx;
     use crate::{Color, ImageDrawMode, Point2D, Rect, RenderBackend, TextLayout};
@@ -608,6 +679,10 @@ mod text_tests {
     struct TextCaptureBackend {
         origins: Vec<Point2D>,
         families: Vec<String>,
+        font_sizes: Vec<f32>,
+        lines: Vec<String>,
+        translates: Vec<Point2D>,
+        scales: Vec<(Point2D, Point2D)>,
     }
 
     impl RenderBackend for TextCaptureBackend {
@@ -619,12 +694,19 @@ mod text_tests {
             self.origins.push(origin);
             if let Some(run) = layout.runs().first() {
                 self.families.push(run.font_family.clone());
+                self.font_sizes.push(run.font_size);
+                self.lines.push(run.content.clone());
             }
         }
         fn clip_rect(&mut self, _: Rect) {}
         fn save(&mut self) {}
         fn restore(&mut self) {}
-        fn translate(&mut self, _: Point2D) {}
+        fn translate(&mut self, offset: Point2D) {
+            self.translates.push(offset);
+        }
+        fn scale(&mut self, scale: Point2D, pivot: Point2D) {
+            self.scales.push((scale, pivot));
+        }
         fn stroke_line(&mut self, _: Point2D, _: Point2D, _: Color, _: f32) {}
         fn fill_round_rect(&mut self, _: Rect, _: f32, _: Color) {}
         fn stroke_round_rect(&mut self, _: Rect, _: f32, _: Color, _: f32) {}
@@ -636,12 +718,16 @@ mod text_tests {
             1.0
         }
         fn measure_text_weighted(&mut self, text: &str, font_size: f32, _: u16) -> f32 {
-            text.chars().count() as f32 * font_size * 0.5
+            if text.is_ascii() {
+                text.chars().count() as f32 * font_size * 0.5
+            } else {
+                text.chars().count() as f32 * font_size * 0.7 + font_size * font_size * 0.07
+            }
         }
     }
 
     #[test]
-    fn text_node_paint_honors_typography_alignment() {
+    fn text_node_paint_honors_horizontal_alignment_and_ts_top_baseline() {
         let mut node = SceneNode::leaf("t", NodeKind::Text);
         node.bounds = Rect::xywh(0.0, 0.0, 200.0, 80.0);
         node.text = Some("Hi".to_string());
@@ -663,9 +749,286 @@ mod text_tests {
             origin.x > 80.0,
             "center-aligned text should move away from the left edge"
         );
+        assert_eq!(
+            origin.y, 20.0,
+            "canvas text follows TS paint parity: authored y is the top edge even when textAlignVertical=middle"
+        );
+    }
+
+    #[test]
+    fn text_wrap_is_stable_across_canvas_zoom() {
+        let mut node = SceneNode::leaf("t", NodeKind::Text);
+        node.bounds = Rect::xywh(0.0, 0.0, 100.0, 40.0);
+        node.text = Some("可忽略风险".to_string());
+        node.font_size = 20.0;
+        node.text_wrap = true;
+
+        let mut backend_1x = TextCaptureBackend::default();
+        let mut cx_1x = PaintCx {
+            backend: &mut backend_1x,
+        };
+        paint_node(
+            &mut cx_1x,
+            &node,
+            Point2D::ZERO,
+            1.0,
+            None,
+            Rect::xywh(0.0, 0.0, 800.0, 600.0),
+        );
+
+        let mut backend_2x = TextCaptureBackend::default();
+        let mut cx_2x = PaintCx {
+            backend: &mut backend_2x,
+        };
+        paint_node(
+            &mut cx_2x,
+            &node,
+            Point2D::ZERO,
+            2.0,
+            None,
+            Rect::xywh(0.0, 0.0, 800.0, 600.0),
+        );
+
+        assert_eq!(
+            backend_2x.lines, backend_1x.lines,
+            "canvas zoom must not change authored text wrapping"
+        );
+    }
+
+    #[test]
+    fn text_node_uses_viewport_transform_instead_of_zoomed_font_size() {
+        let mut node = SceneNode::leaf("t", NodeKind::Text);
+        node.bounds = Rect::xywh(12.0, 24.0, 100.0, 40.0);
+        node.text = Some("Zoom".to_string());
+        node.font_size = 20.0;
+
+        let viewport_origin = Point2D::new(80.0, 40.0);
+        let mut backend = TextCaptureBackend::default();
+        let mut cx = PaintCx {
+            backend: &mut backend,
+        };
+
+        paint_node(
+            &mut cx,
+            &node,
+            viewport_origin,
+            2.0,
+            None,
+            Rect::xywh(0.0, 0.0, 800.0, 600.0),
+        );
+
+        assert_eq!(
+            backend.font_sizes,
+            vec![20.0],
+            "canvas zoom should be a transform; text layout keeps the authored font size"
+        );
+        assert_eq!(backend.translates, vec![viewport_origin]);
+        assert_eq!(
+            backend.scales,
+            vec![(Point2D::new(2.0, 2.0), Point2D::ZERO)]
+        );
+    }
+
+    #[derive(Default)]
+    struct SvgCaptureBackend {
+        fill_rects: Vec<Rect>,
+    }
+
+    impl RenderBackend for SvgCaptureBackend {
+        fn begin_frame(&mut self) {}
+        fn end_frame(&mut self) {}
+        fn fill_rect(&mut self, _: Rect, _: Color) {}
+        fn stroke_rect(&mut self, _: Rect, _: Color, _: f32) {}
+        fn draw_text(&mut self, _: &TextLayout, _: Point2D) {}
+        fn clip_rect(&mut self, _: Rect) {}
+        fn save(&mut self) {}
+        fn restore(&mut self) {}
+        fn translate(&mut self, _: Point2D) {}
+        fn stroke_line(&mut self, _: Point2D, _: Point2D, _: Color, _: f32) {}
+        fn fill_round_rect(&mut self, _: Rect, _: f32, _: Color) {}
+        fn stroke_round_rect(&mut self, _: Rect, _: f32, _: Color, _: f32) {}
+        fn stroke_svg_path(&mut self, _: &str, _: Point2D, _: f32, _: Color, _: f32) {}
+        fn fill_svg_path_in_rect(&mut self, _: &str, rect: Rect, _: Color) {
+            self.fill_rects.push(rect);
+        }
+        fn draw_image(&mut self, _: Rect, _: u64, _: &[u8]) {}
+        fn draw_image_with_mode(&mut self, _: Rect, _: u64, _: &[u8], _: ImageDrawMode) {}
+        fn resize(&mut self, _: u32, _: u32) {}
+        fn dpi_scale(&self) -> f32 {
+            1.0
+        }
+    }
+
+    #[test]
+    fn svg_path_node_paint_fits_path_to_node_rect() {
+        let mut node = SceneNode::leaf("p", NodeKind::Path);
+        node.fill = Some(Color::BLACK);
+        let rect = Rect::xywh(10.0, 20.0, 28.0, 28.0);
+        let mut backend = SvgCaptureBackend::default();
+        let mut cx = PaintCx {
+            backend: &mut backend,
+        };
+
+        paint_svg_path_node(&mut cx, &node, rect, 1.0, "M10 0 L0 -5 L0 5 Z");
+
+        assert_eq!(backend.fill_rects, vec![rect]);
+    }
+
+    #[derive(Default)]
+    struct GradientPathCaptureBackend {
+        solid_fills: Vec<Rect>,
+        linear_gradients: Vec<(Rect, f32, usize)>,
+        radial_gradients: Vec<(Rect, usize)>,
+        inner_shadows: Vec<(Rect, Color)>,
+    }
+
+    impl RenderBackend for GradientPathCaptureBackend {
+        fn begin_frame(&mut self) {}
+        fn end_frame(&mut self) {}
+        fn fill_rect(&mut self, _: Rect, _: Color) {}
+        fn stroke_rect(&mut self, _: Rect, _: Color, _: f32) {}
+        fn draw_text(&mut self, _: &TextLayout, _: Point2D) {}
+        fn clip_rect(&mut self, _: Rect) {}
+        fn save(&mut self) {}
+        fn restore(&mut self) {}
+        fn translate(&mut self, _: Point2D) {}
+        fn stroke_line(&mut self, _: Point2D, _: Point2D, _: Color, _: f32) {}
+        fn fill_round_rect(&mut self, _: Rect, _: f32, _: Color) {}
+        fn stroke_round_rect(&mut self, _: Rect, _: f32, _: Color, _: f32) {}
+        fn stroke_svg_path(&mut self, _: &str, _: Point2D, _: f32, _: Color, _: f32) {}
+        fn fill_svg_path_in_rect(&mut self, _: &str, rect: Rect, _: Color) {
+            self.solid_fills.push(rect);
+        }
+        fn fill_svg_path_in_rect_linear_gradient(
+            &mut self,
+            _: &str,
+            rect: Rect,
+            stops: &[(f32, Color)],
+            angle_deg: f32,
+            _: f32,
+        ) {
+            self.linear_gradients.push((rect, angle_deg, stops.len()));
+        }
+        fn fill_svg_path_in_rect_radial_gradient(
+            &mut self,
+            _: &str,
+            rect: Rect,
+            stops: &[(f32, Color)],
+            _: f32,
+            _: f32,
+            _: f32,
+            _: f32,
+        ) {
+            self.radial_gradients.push((rect, stops.len()));
+        }
+        fn fill_inner_shadow_svg_path(
+            &mut self,
+            _: &str,
+            rect: Rect,
+            _: f32,
+            _: f32,
+            _: f32,
+            color: Color,
+        ) {
+            self.inner_shadows.push((rect, color));
+        }
+        fn draw_image(&mut self, _: Rect, _: u64, _: &[u8]) {}
+        fn draw_image_with_mode(&mut self, _: Rect, _: u64, _: &[u8], _: ImageDrawMode) {}
+        fn resize(&mut self, _: u32, _: u32) {}
+        fn dpi_scale(&self) -> f32 {
+            1.0
+        }
+    }
+
+    #[test]
+    fn svg_path_node_with_linear_gradient_paints_gradient_not_solid() {
+        use crate::layout_scene::{SceneFillType, SceneGradient, SceneGradientStop};
+        let mut node = SceneNode::leaf("p", NodeKind::Path);
+        node.fill = Some(Color {
+            r: 1.0,
+            g: 1.0,
+            b: 1.0,
+            a: 1.0,
+        });
+        node.fill_type = SceneFillType::LinearGradient;
+        node.gradient = Some(SceneGradient::Linear {
+            angle_deg: 90.0,
+            opacity: 1.0,
+            stops: vec![
+                SceneGradientStop {
+                    offset: 0.0,
+                    color: Color {
+                        r: 1.0,
+                        g: 1.0,
+                        b: 1.0,
+                        a: 1.0,
+                    },
+                },
+                SceneGradientStop {
+                    offset: 1.0,
+                    color: Color {
+                        r: 0.0,
+                        g: 0.0,
+                        b: 0.0,
+                        a: 0.0,
+                    },
+                },
+            ],
+        });
+        let rect = Rect::xywh(0.0, 0.0, 10.0, 10.0);
+        let mut backend = GradientPathCaptureBackend::default();
+        let mut cx = PaintCx {
+            backend: &mut backend,
+        };
+
+        paint_svg_path_node(&mut cx, &node, rect, 1.0, "M0 0 L10 0 L10 10 Z");
+
+        assert_eq!(
+            backend.linear_gradients,
+            vec![(rect, 90.0, 2)],
+            "linear-gradient path must paint via the gradient method"
+        );
         assert!(
-            origin.y > 40.0,
-            "middle-aligned text should move down from the top baseline"
+            backend.solid_fills.is_empty(),
+            "gradient path must not fall back to the solid fill"
+        );
+    }
+
+    #[test]
+    fn svg_path_node_with_inner_shadow_paints_inset_shadow() {
+        use crate::layout_scene::{DropShadow, Effect};
+        let mut node = SceneNode::leaf("p", NodeKind::Path);
+        node.fill = Some(Color {
+            r: 0.0,
+            g: 0.0,
+            b: 1.0,
+            a: 1.0,
+        });
+        let shadow_color = Color {
+            r: 0.0,
+            g: 0.0,
+            b: 0.0,
+            a: 0.5,
+        };
+        node.effects = vec![Effect::DropShadow(DropShadow {
+            offset_x: 0.0,
+            offset_y: 0.0,
+            blur: 4.0,
+            color: shadow_color,
+            inner: true,
+        })];
+        let rect = Rect::xywh(0.0, 0.0, 20.0, 20.0);
+        let mut backend = GradientPathCaptureBackend::default();
+        let mut cx = PaintCx {
+            backend: &mut backend,
+        };
+
+        paint_svg_path_node(&mut cx, &node, rect, 1.0, "M0 0 L20 0 L20 20 L0 20 Z");
+
+        assert_eq!(
+            backend.inner_shadows,
+            vec![(rect, shadow_color)],
+            "inner-shadow path must route to the inset-shadow painter"
         );
     }
 }

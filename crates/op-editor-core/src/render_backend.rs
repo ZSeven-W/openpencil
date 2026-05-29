@@ -240,6 +240,16 @@ impl TextLayout {
 /// borrows); instead it exposes the same-named methods with an explicit
 /// `canvas: &skia_safe::Canvas` argument. The trait signature contains no
 /// Skia / GPU-backend-specific types.
+/// Pre-multiply a colour's alpha by a 0..=1 opacity multiplier —
+/// shared by the gradient default impls when they degrade to a solid
+/// first-stop fill.
+fn fold_alpha(c: Color, opacity: f32) -> Color {
+    Color {
+        a: c.a * opacity.clamp(0.0, 1.0),
+        ..c
+    }
+}
+
 pub trait RenderBackend {
     /// Begin a frame; the backend tracks current frame state internally
     /// (canvas type is not exposed).
@@ -285,6 +295,77 @@ pub trait RenderBackend {
         _viewbox: f32,
         _color: Color,
     ) {
+    }
+
+    /// Fill an arbitrary SVG path fitted into `rect` by the path's
+    /// own tight bounds. Document Path nodes use this instead of the
+    /// icon-oriented square viewBox helper because imported Figma
+    /// vectors often carry negative local coordinates.
+    fn fill_svg_path_in_rect(&mut self, d: &str, rect: Rect, color: Color) {
+        self.fill_svg_path(d, rect.origin, 1.0, 1.0, color);
+    }
+
+    /// Stroke an arbitrary SVG path fitted into `rect` by the path's
+    /// own tight bounds. Default degrades to the icon-oriented path
+    /// helper for simple backends.
+    fn stroke_svg_path_in_rect(&mut self, d: &str, rect: Rect, color: Color, width: f32) {
+        self.stroke_svg_path(d, rect.origin, rect.size.x.max(rect.size.y), color, width);
+    }
+
+    /// Fill an arbitrary SVG path (fitted into `rect` by its own tight
+    /// bounds) with a linear gradient. `stops` / `angle_deg` /
+    /// `opacity` follow the same convention as
+    /// [`fill_round_rect_linear_gradient`]. Default degrades to a
+    /// solid first-stop fill so backends without a path-gradient
+    /// shader still paint something resembling the gradient.
+    fn fill_svg_path_in_rect_linear_gradient(
+        &mut self,
+        d: &str,
+        rect: Rect,
+        stops: &[(f32, Color)],
+        _angle_deg: f32,
+        opacity: f32,
+    ) {
+        if let Some((_, c)) = stops.first() {
+            self.fill_svg_path_in_rect(d, rect, fold_alpha(*c, opacity));
+        }
+    }
+
+    /// Paint an inset (inner) shadow for an SVG path fitted into
+    /// `rect`: a blurred shadow that bleeds inward from the path
+    /// silhouette, offset by `(offset_x, offset_y)`. Default is a
+    /// no-op — backends without the primitive simply omit the inset
+    /// shadow rather than drawing it as an outer one.
+    #[allow(clippy::too_many_arguments)]
+    fn fill_inner_shadow_svg_path(
+        &mut self,
+        _d: &str,
+        _rect: Rect,
+        _offset_x: f32,
+        _offset_y: f32,
+        _blur: f32,
+        _color: Color,
+    ) {
+    }
+
+    /// Fill an arbitrary SVG path (fitted into `rect`) with a radial
+    /// gradient. Centre / radius fractions follow
+    /// [`fill_round_rect_radial_gradient`]. Default degrades to a
+    /// solid first-stop fill.
+    #[allow(clippy::too_many_arguments)]
+    fn fill_svg_path_in_rect_radial_gradient(
+        &mut self,
+        d: &str,
+        rect: Rect,
+        stops: &[(f32, Color)],
+        _cx_frac: f32,
+        _cy_frac: f32,
+        _radius_frac: f32,
+        opacity: f32,
+    ) {
+        if let Some((_, c)) = stops.first() {
+            self.fill_svg_path_in_rect(d, rect, fold_alpha(*c, opacity));
+        }
     }
 
     /// Paint a drop shadow: a gaussian-blurred filled rounded
@@ -461,6 +542,9 @@ pub trait RenderBackend {
     fn save(&mut self);
     fn restore(&mut self);
     fn translate(&mut self, offset: Point2D);
+    /// Scale the current transform around `pivot`. Used for node
+    /// `flipX` / `flipY` parity with the TS renderer.
+    fn scale(&mut self, _scale: Point2D, _pivot: Point2D) {}
     /// Rotate the current transform `radians` clockwise about
     /// `pivot` (in current-space coordinates, BEFORE the rotation
     /// is applied). Default impl is a no-op so backends without

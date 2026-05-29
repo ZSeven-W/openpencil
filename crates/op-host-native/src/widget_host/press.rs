@@ -190,6 +190,14 @@ impl WidgetHostNative {
             return true;
         }
 
+        // StatusBar search icon → frame the page content in the
+        // viewport (floating bottom-right, so it hit-tests above the
+        // canvas / toolbar).
+        if self.status_bar_search_hit(x, y, viewport_width, viewport_height) {
+            self.zoom_to_fit(viewport_width, viewport_height);
+            return true;
+        }
+
         if let Some(state) = self.editor_state.editor_ui.layer_context_menu.clone() {
             use op_editor_ui::widgets::layer_context_menu::LayerContextMenu;
             let menu = LayerContextMenu::for_state(&self.editor_state, state.clone());

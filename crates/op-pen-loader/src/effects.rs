@@ -14,6 +14,11 @@ pub struct ShadowPayload {
     pub offset_y: f32,
     pub blur: f32,
     pub color: [f32; 4],
+    /// `true` = inset (inner) shadow. `#[serde(default)]` keeps older
+    /// payloads (saved before inner shadows were carried) loading as
+    /// outer drop shadows.
+    #[serde(default)]
+    pub inner: bool,
 }
 
 /// Serialize a node's `effects` into payload form.
@@ -27,6 +32,7 @@ pub fn effects_to_payload(effects: &[Effect]) -> Vec<ShadowPayload> {
                 offset_y: s.offset_y,
                 blur: s.blur,
                 color: [s.color.r, s.color.g, s.color.b, s.color.a],
+                inner: s.inner,
             }
         })
         .collect()
@@ -56,6 +62,7 @@ fn shadow_payload_to_effect(s: &ShadowPayload) -> Effect {
             b: s.color[2],
             a: s.color[3],
         },
+        inner: s.inner,
     })
 }
 
@@ -100,6 +107,7 @@ pub fn shadows_from_canonical(node: &PenNode) -> Vec<ShadowPayload> {
                 offset_y: s.offset_y,
                 blur: s.blur,
                 color,
+                inner: s.inner.unwrap_or(false),
             }),
             PenEffect::Blur(_) | PenEffect::BackgroundBlur(_) => None,
         })
@@ -205,6 +213,7 @@ mod tests {
                     b: 0.0,
                     a: 0.5,
                 },
+                inner: false,
             }),
             Effect::DropShadow(DropShadow {
                 offset_x: -2.0,
@@ -216,6 +225,7 @@ mod tests {
                     b: 0.0,
                     a: 1.0,
                 },
+                inner: true,
             }),
         ];
         // Through the actual serde JSON path the `.op` file uses.

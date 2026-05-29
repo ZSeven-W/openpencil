@@ -116,6 +116,26 @@ fn image_fill_payload_carries_adjustments() {
 }
 
 #[test]
+fn payload_preserves_node_flip_flags() {
+    let src = r##"{
+      "version":"1.0.0",
+      "pages":[{
+        "id":"p","name":"P",
+        "children":[{
+          "type":"rectangle","id":"r","width":100,"height":50,
+          "flipX":true,"flipY":true,
+          "fill":[{"type":"solid","color":"#000000"}]
+        }]
+      }],
+      "children":[]
+    }"##;
+    let r = load(src);
+    let n = &r.payload.pages[0].children[0];
+    assert!(n.flip_x, "flipX must survive into the paint payload");
+    assert!(n.flip_y, "flipY must survive into the paint payload");
+}
+
+#[test]
 fn path_anchors_absolutize_to_canvas_coords() {
     // Canonical `PathNode.anchors` are authored local to the
     // path's `base.x`/`base.y` *and* scaled to its `width`/

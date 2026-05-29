@@ -57,6 +57,15 @@ pub struct NodePayload {
     #[serde(default)]
     pub rotation: f32,
     #[serde(default)]
+    pub flip_x: bool,
+    #[serde(default)]
+    pub flip_y: bool,
+    /// Node-level opacity (0.0..=1.0). Folded into resolved fill /
+    /// stroke / text / gradient-stop alpha at scene-build time (see
+    /// `layout_scene`), cumulative down the subtree. Defaults to 1.0.
+    #[serde(default = "default_opacity")]
+    pub opacity: f32,
+    #[serde(default)]
     pub corner_radius: f32,
     /// Ellipse arc start angle in degrees (`None` = full ellipse).
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -144,6 +153,10 @@ pub struct NodePayload {
 
 fn default_polygon_sides() -> u32 {
     3
+}
+
+fn default_opacity() -> f32 {
+    1.0
 }
 
 fn is_default_polygon_sides(value: &u32) -> bool {

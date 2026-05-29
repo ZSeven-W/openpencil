@@ -7,14 +7,17 @@
 //! input-dispatch contract keeps `layout_scene` fresh before any
 //! hit-testing input event (see `widget_host.rs`).
 
-use super::helpers::{rect_contains, PANEL_RESIZE_GUTTER, TOOLBAR_INSET_X, TOOLBAR_INSET_Y};
+use super::helpers::{
+    rect_contains, PANEL_RESIZE_GUTTER, STATUS_INSET, TOOLBAR_INSET_X, TOOLBAR_INSET_Y,
+};
 use super::{CursorHint, PanelResizeKind, WidgetHostNative};
 use op_editor_core::ChatAnchor;
 use op_editor_ui::widgets::{
     rotation_corner_at_point, selection_handle_at_point, GitPanel, LayoutCx, LocalePicker,
     ShapePicker, Toolbar, TopBar, Widget, AI_CHAT_COLLAPSED_HEIGHT, AI_CHAT_COLLAPSED_WIDTH,
     AI_CHAT_HEIGHT, AI_CHAT_WIDTH, GIT_PANEL_INSET, ICON_PICKER_PANEL_H, ICON_PICKER_PANEL_W,
-    LOCALE_PICKER_WIDTH, SHAPE_PICKER_WIDTH, TOOLBAR_WIDTH, TOP_BAR_HEIGHT,
+    LOCALE_PICKER_WIDTH, SHAPE_PICKER_WIDTH, STATUS_BAR_HEIGHT, STATUS_BAR_WIDTH, TOOLBAR_WIDTH,
+    TOP_BAR_HEIGHT,
 };
 use op_editor_ui::{Point2D, Rect};
 
@@ -416,6 +419,64 @@ impl WidgetHostNative {
         let canvas_w = (canvas_right - canvas_left).max(0.0);
         let canvas_h = (viewport_h - TOP_BAR_HEIGHT).max(0.0);
         (canvas_left, TOP_BAR_HEIGHT, canvas_w, canvas_h)
+    }
+
+    /// Bottom-right floating StatusBar rect — mirrors the placement in
+    /// `widget_host/paint.rs` §8. `None` when the canvas is too narrow
+    /// to float the pill (matching the paint guard).
+    pub(in crate::widget_host) fn status_bar_rect(
+        &self,
+        viewport_w: f32,
+        viewport_h: f32,
+    ) -> Option<Rect> {
+        let (canvas_left, _top, canvas_w, canvas_h) = self.canvas_region(viewport_w, viewport_h);
+        if canvas_w <= STATUS_BAR_WIDTH + STATUS_INSET * 2.0 {
+            return None;
+        }
+        let canvas_right = canvas_left + canvas_w;
+        Some(Rect {
+            origin: Point2D::new(
+                canvas_right - STATUS_BAR_WIDTH - STATUS_INSET,
+                TOP_BAR_HEIGHT + canvas_h - STATUS_BAR_HEIGHT - STATUS_INSET,
+            ),
+            size: Point2D::new(STATUS_BAR_WIDTH, STATUS_BAR_HEIGHT),
+        })
+    }
+
+    /// `true` when `(x, y)` is over the StatusBar's search icon — the
+    /// left section of the pill before the `[- N% +]` zoom cluster.
+    /// `SIDE_PAD(14) + ICON(14) + half SECTION_GAP(9) ≈ 37 px`; 38 is
+    /// a generous target that stops short of the minus button.
+    pub(in crate::widget_host) fn status_bar_search_hit(
+        &self,
+        x: f32,
+        y: f32,
+        viewport_w: f32,
+        viewport_h: f32,
+    ) -> bool {
+        let Some(r) = self.status_bar_rect(viewport_w, viewport_h) else {
+            return false;
+        };
+        const SEARCH_SECTION_W: f32 = 38.0;
+        x >= r.origin.x
+            && x <= r.origin.x + SEARCH_SECTION_W
+            && y >= r.origin.y
+            && y <= r.origin.y + r.size.y
+    }
+
+    /// Zoom + pan so the active page's content is framed within the
+    /// canvas region (the StatusBar search action). No-op for an empty
+    /// page.
+    pub(in crate::widget_host) fn zoom_to_fit(&mut self, viewport_w: f32, viewport_h: f32) {
+        self.refresh_layout_scene();
+        let Some(content) = self.layout_scene.content_bounds() else {
+            return;
+        };
+        let (_l, _t, canvas_w, canvas_h) = self.canvas_region(viewport_w, viewport_h);
+        self.editor_state
+            .viewport
+            .fit_to(content, canvas_w, canvas_h, 48.0);
+        self.mark_dirty();
     }
 
     /// Floating Git-panel rect — `None` when the panel is closed.

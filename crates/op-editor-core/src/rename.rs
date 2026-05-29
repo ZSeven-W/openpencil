@@ -43,9 +43,11 @@ impl EditorState {
             return false;
         };
         let draft = node.base().name.clone().unwrap_or_default();
+        let caret = draft.chars().count();
         self.ui.layer_rename = Some(LayerRenameState {
             target: LayerContextTarget::Layer(id),
             draft,
+            caret,
         });
         true
     }
@@ -60,31 +62,67 @@ impl EditorState {
         let Some(page) = pages.get(idx) else {
             return false;
         };
+        let draft = page.name.clone();
+        let caret = draft.chars().count();
         self.ui.layer_rename = Some(LayerRenameState {
             target: LayerContextTarget::Page(idx),
-            draft: page.name.clone(),
+            draft,
+            caret,
         });
         true
     }
 
-    /// Append text to the in-flight rename draft. `false` when no
-    /// rename is active.
+    /// Insert `text` at the caret of the in-flight rename draft and
+    /// advance the caret past it. `false` when no rename is active.
     pub fn rename_append(&mut self, text: &str) -> bool {
         match self.ui.layer_rename.as_mut() {
             Some(state) => {
-                state.draft.push_str(text);
+                let byte = char_to_byte(&state.draft, state.caret);
+                state.draft.insert_str(byte, text);
+                state.caret += text.chars().count();
                 true
             }
             None => false,
         }
     }
 
-    /// Pop the last char of the rename draft. `false` when no rename
-    /// is active.
+    /// Delete the character immediately before the caret. A no-op at
+    /// the start of the draft. `false` when no rename is active.
     pub fn rename_backspace(&mut self) -> bool {
         match self.ui.layer_rename.as_mut() {
             Some(state) => {
-                state.draft.pop();
+                if state.caret > 0 {
+                    let start = char_to_byte(&state.draft, state.caret - 1);
+                    let end = char_to_byte(&state.draft, state.caret);
+                    state.draft.replace_range(start..end, "");
+                    state.caret -= 1;
+                }
+                true
+            }
+            None => false,
+        }
+    }
+
+    /// Move the rename caret one character left. Returns whether a
+    /// rename is active (so the host consumes the arrow key instead
+    /// of nudging the selection).
+    pub fn rename_caret_left(&mut self) -> bool {
+        match self.ui.layer_rename.as_mut() {
+            Some(state) => {
+                state.caret = state.caret.saturating_sub(1);
+                true
+            }
+            None => false,
+        }
+    }
+
+    /// Move the rename caret one character right (clamped to the draft
+    /// length). Returns whether a rename is active.
+    pub fn rename_caret_right(&mut self) -> bool {
+        match self.ui.layer_rename.as_mut() {
+            Some(state) => {
+                let len = state.draft.chars().count();
+                state.caret = (state.caret + 1).min(len);
                 true
             }
             None => false,
@@ -221,6 +259,17 @@ impl EditorState {
 
 // --- Free helpers ----------------------------------------------------
 
+/// Byte offset of the `char_idx`-th character in `s`, or `s.len()`
+/// when `char_idx` is at/after the end. Used to translate the
+/// char-based rename caret into a byte index for `insert_str` /
+/// `replace_range`.
+fn char_to_byte(s: &str, char_idx: usize) -> usize {
+    s.char_indices()
+        .nth(char_idx)
+        .map(|(b, _)| b)
+        .unwrap_or(s.len())
+}
+
 /// Mutable handle to a `Text` node's plain content string. Returns
 /// `None` for a non-Text node or a `Styled` content variant (the
 /// inline editor only handles plain text).
@@ -260,6 +309,59 @@ mod tests {
         assert_eq!(node.base().name.as_deref(), Some("RectanglX"));
         // The name changed → exactly one history entry.
         assert_eq!(s.history.past.len(), 1);
+    }
+
+    #[test]
+    fn rename_caret_moves_and_edits_mid_string() {
+        let mut s = doc();
+        assert!(s.start_rename_layer(NodeId::new("n1"))); // "Rectangle", caret 9
+        assert_eq!(s.ui.layer_rename.as_ref().unwrap().caret, 9);
+        // Three lefts → caret 6 ("Rectan|gle").
+        assert!(s.rename_caret_left());
+        assert!(s.rename_caret_left());
+        assert!(s.rename_caret_left());
+        assert_eq!(s.ui.layer_rename.as_ref().unwrap().caret, 6);
+        // Insert mid-string.
+        assert!(s.rename_append("X"));
+        assert_eq!(s.ui.layer_rename.as_ref().unwrap().draft, "RectanXgle");
+        assert_eq!(s.ui.layer_rename.as_ref().unwrap().caret, 7);
+        // Backspace removes the just-inserted 'X' (before caret).
+        assert!(s.rename_backspace());
+        assert_eq!(s.ui.layer_rename.as_ref().unwrap().draft, "Rectangle");
+        assert_eq!(s.ui.layer_rename.as_ref().unwrap().caret, 6);
+        // Right past the end clamps to the char count.
+        for _ in 0..20 {
+            s.rename_caret_right();
+        }
+        assert_eq!(s.ui.layer_rename.as_ref().unwrap().caret, 9);
+        // Left past the start clamps to 0.
+        for _ in 0..20 {
+            s.rename_caret_left();
+        }
+        assert_eq!(s.ui.layer_rename.as_ref().unwrap().caret, 0);
+    }
+
+    #[test]
+    fn rename_caret_is_char_based_for_cjk() {
+        let mut s = doc();
+        s.ui.layer_rename = Some(crate::ui_draft::LayerRenameState {
+            target: crate::ui_draft::LayerContextTarget::Layer(NodeId::new("n1")),
+            draft: "首页".to_string(),
+            caret: 2,
+        });
+        // One left → between the two CJK chars (char index 1, byte 3).
+        assert!(s.rename_caret_left());
+        assert_eq!(s.ui.layer_rename.as_ref().unwrap().caret, 1);
+        // Insert lands on the char boundary, not mid-codepoint.
+        assert!(s.rename_append("X"));
+        assert_eq!(s.ui.layer_rename.as_ref().unwrap().draft, "首X页");
+    }
+
+    #[test]
+    fn rename_caret_methods_false_when_inactive() {
+        let mut s = doc();
+        assert!(!s.rename_caret_left());
+        assert!(!s.rename_caret_right());
     }
 
     #[test]

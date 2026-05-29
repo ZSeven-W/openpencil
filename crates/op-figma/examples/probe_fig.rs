@@ -5,7 +5,7 @@
 //! warnings, and a top-of-tree variant tally so the import behaves
 //! visibly even without a GUI.
 //!
-//! Usage: `cargo run -p op-figma --example probe_fig -- <path.fig>`
+//! Usage: `cargo run -p op-figma --example probe_fig -- <path.fig> [preserve|openpencil]`
 
 use jian_ops_schema::node::PenNode;
 use jian_ops_schema::sizing::SizingBehavior;
@@ -37,9 +37,13 @@ fn tally(nodes: &[PenNode]) -> std::collections::BTreeMap<&'static str, usize> {
 }
 
 fn main() {
-    let path = std::env::args()
-        .nth(1)
-        .expect("usage: probe_fig <path.fig>");
+    let mut args = std::env::args().skip(1);
+    let path = args.next().expect("usage: probe_fig <path.fig>");
+    let layout_mode = match args.next().as_deref() {
+        Some("preserve") => FigLayoutMode::Preserve,
+        Some("openpencil") | None => FigLayoutMode::OpenPencil,
+        Some(other) => panic!("unknown layout mode {other:?}; use preserve or openpencil"),
+    };
     let bytes = std::fs::read(&path).expect("read file");
     let file_name = std::path::Path::new(&path)
         .file_stem()
@@ -48,7 +52,7 @@ fn main() {
 
     println!("input: {path} ({} bytes)", bytes.len());
 
-    let import = match parse_fig_binary(&bytes, file_name, FigLayoutMode::OpenPencil) {
+    let import = match parse_fig_binary(&bytes, file_name, layout_mode) {
         Ok(i) => i,
         Err(e) => {
             eprintln!("PARSE ERROR: {e}");

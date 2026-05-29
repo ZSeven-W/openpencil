@@ -698,6 +698,13 @@ impl NativeBackend {
         canvas.translate((offset.x, offset.y));
     }
 
+    /// Scale the current canvas matrix around `pivot`.
+    pub fn scale(&self, canvas: &skia_safe::Canvas, scale: Point2D, pivot: Point2D) {
+        canvas.translate((pivot.x, pivot.y));
+        canvas.scale((scale.x, scale.y));
+        canvas.translate((-pivot.x, -pivot.y));
+    }
+
     /// Rotate the current canvas matrix `radians` clockwise about
     /// `pivot`. Skia's `rotate_with_pivot` takes degrees, so the
     /// conversion happens here.

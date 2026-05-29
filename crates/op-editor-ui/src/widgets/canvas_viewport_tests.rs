@@ -13,6 +13,7 @@ enum Op {
     Save,
     Restore,
     Clip,
+    Scale,
     Fill,
     Stroke,
     Text,
@@ -51,6 +52,9 @@ impl crate::RenderBackend for RecordingBackend {
         self.ops.push(Op::Restore);
     }
     fn translate(&mut self, _: Point2D) {}
+    fn scale(&mut self, _: Point2D, _: Point2D) {
+        self.ops.push(Op::Scale);
+    }
     fn stroke_line(&mut self, _: Point2D, _: Point2D, _: Color, _: f32) {
         self.strokes += 1;
         self.ops.push(Op::Stroke);
@@ -226,7 +230,11 @@ fn paint_is_clip_isolated_save_clip_then_restore() {
     let saves = backend.ops.iter().filter(|o| **o == Op::Save).count();
     let restores = backend.ops.iter().filter(|o| **o == Op::Restore).count();
     assert_eq!(saves, restores, "balanced save/restore");
-    assert_eq!(saves, 1);
+    // One outer canvas Save/Clip wraps the whole paint; on top of it
+    // each Text node opens its own save/translate/scale/restore for
+    // the viewport transform (flip/rotate nodes do the same). This
+    // fixture paints two Text nodes, so 1 canvas + 2 text = 3 saves.
+    assert_eq!(saves, 3);
 }
 
 #[test]
@@ -276,6 +284,39 @@ fn group_kind_recurses_without_own_paint() {
     // canvas bg (1) + grid dots (variable) + leaf rect fill (1)
     // — group fill skipped.
     assert!(backend.rects >= 2, "canvas bg + at least the leaf");
+}
+
+#[test]
+fn flipped_node_applies_scale_transform() {
+    let state = sample_state();
+    let mut node = leaf(
+        "flipped",
+        NodeKind::Rect,
+        Rect::xywh(20.0, 30.0, 50.0, 40.0),
+        Some(Color::RED),
+    );
+    node.flip_x = true;
+    let scene = LayoutScene {
+        pages: vec![ScenePage {
+            id: "p".into(),
+            name: "p".into(),
+            children: vec![node],
+        }],
+        active_page_index: 0,
+    };
+    let viewport = CanvasViewport::from_editor(&state, &scene);
+    let mut backend = RecordingBackend::default();
+    {
+        let mut cx = PaintCx {
+            backend: &mut backend,
+        };
+        viewport.paint(&mut cx, Rect::xywh(0.0, 0.0, 200.0, 200.0));
+    }
+
+    assert!(
+        backend.ops.contains(&Op::Scale),
+        "flipX/flipY must apply a canvas scale transform"
+    );
 }
 
 /// `selection_handle_at_point` + `rotation_corner_at_point` are
