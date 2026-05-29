@@ -169,6 +169,22 @@ impl WidgetHost {
         dup
     }
 
+    /// Left / Right arrow during an inline rename — moves the rename
+    /// caret one character. Returns whether a rename is active, so the
+    /// caller falls back to node-nudge when it isn't.
+    pub fn apply_rename_caret(&mut self, forward: bool) -> bool {
+        let moved = if forward {
+            self.editor_state.rename_caret_right()
+        } else {
+            self.editor_state.rename_caret_left()
+        };
+        if moved {
+            self.editor_state.editor_ui.rename_caret_anchor_ms = self.now_ms;
+            self.mark_dirty();
+        }
+        moved
+    }
+
     /// Arrow-key nudge — translate the selected node by
     /// `(dx, dy)` document px. Shift-arrow callers pass 10 px;
     /// plain arrows pass 1 px.
