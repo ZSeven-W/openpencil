@@ -1,5 +1,5 @@
 use crate::widgets::agent_settings_panel::{AgentSettingsHit, AgentSettingsPanel};
-use op_editor_core::agent_settings::{BuiltinAgentField, SettingsFocus};
+use op_editor_core::agent_settings::{AgentSettingsTab, BuiltinAgentField, SettingsFocus};
 use op_editor_core::EditorState;
 
 #[test]
@@ -44,6 +44,23 @@ fn focused_builtin_agent_field_paints_from_settings_draft() {
             index: 0,
             field: BuiltinAgentField::ApiKey,
         })
+    );
+}
+
+#[test]
+fn sidebar_nav_uses_ts_compact_rows() {
+    let state = EditorState::default();
+    let panel = AgentSettingsPanel::for_editor(&state);
+    let rect = panel.rect(1200.0, 800.0);
+    let x = rect.origin.x + 100.0;
+
+    assert_eq!(
+        panel.hit_test(rect, crate::Point2D::new(x, rect.origin.y + 70.0)),
+        AgentSettingsHit::SelectTab(AgentSettingsTab::Agents)
+    );
+    assert_eq!(
+        panel.hit_test(rect, crate::Point2D::new(x, rect.origin.y + 100.0)),
+        AgentSettingsHit::SelectTab(AgentSettingsTab::Mcp)
     );
 }
 
