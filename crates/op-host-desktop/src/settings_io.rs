@@ -5,7 +5,7 @@
 //!  - `persistence.rs` saves the *document* (.pen / .op) to a path
 //!    the user chose via the rfd Save dialog.
 //!  - `settings_io.rs` saves the *preferences* (theme / locale /
-//!    MCP port / MCP CLI toggles / Images advanced flag) to a
+//!    MCP port / MCP CLI toggles / Images advanced / auto-update flags) to a
 //!    fixed config dir so they survive app restarts.
 //!
 //! All preferences live on `EditorState.editor_ui` — the host's
@@ -46,6 +46,7 @@ pub struct Fingerprint {
     port: u16,
     cli: [bool; 6],
     images_adv: bool,
+    auto_update_enabled: bool,
     connected: [bool; 5],
     builtin_agents: Vec<BuiltinAgentConfig>,
 }
@@ -58,6 +59,7 @@ pub fn fingerprint(state: &EditorState) -> Fingerprint {
         port: eui.agent_settings.mcp_server.port,
         cli: eui.agent_settings.mcp_cli_enabled,
         images_adv: eui.agent_settings.images_advanced_open,
+        auto_update_enabled: eui.agent_settings.auto_update_enabled,
         connected: eui.agent_settings.connected,
         builtin_agents: eui.agent_settings.builtin_agents.clone(),
     }
@@ -86,6 +88,8 @@ struct SettingsPayload {
     mcp_cli_enabled: Option<[bool; 6]>,
     #[serde(default)]
     images_advanced_open: Option<bool>,
+    #[serde(default)]
+    auto_update_enabled: Option<bool>,
     /// Per-provider connect state, indexed by `AgentProvider::ALL`
     /// (Claude / Codex / OpenCode / Copilot / Gemini). Restored on
     /// launch so the chat model picker survives a restart.
@@ -115,6 +119,7 @@ fn to_payload(state: &EditorState) -> SettingsPayload {
         mcp_port: Some(eui.agent_settings.mcp_server.port),
         mcp_cli_enabled: Some(eui.agent_settings.mcp_cli_enabled),
         images_advanced_open: Some(eui.agent_settings.images_advanced_open),
+        auto_update_enabled: Some(eui.agent_settings.auto_update_enabled),
         connected: Some(eui.agent_settings.connected),
         builtin_agents: Some(
             eui.agent_settings
@@ -165,6 +170,9 @@ fn apply_payload(state: &mut EditorState, payload: SettingsPayload) {
     }
     if let Some(b) = payload.images_advanced_open {
         eui.agent_settings.images_advanced_open = b;
+    }
+    if let Some(b) = payload.auto_update_enabled {
+        eui.agent_settings.auto_update_enabled = b;
     }
     if let Some(c) = payload.connected {
         eui.agent_settings.connected = c;
@@ -442,5 +450,18 @@ mod tests {
             dst.editor_ui.agent_settings.builtin_agents[0].api_key,
             "sk-test"
         );
+    }
+
+    #[test]
+    fn auto_update_preference_round_trips_through_payload() {
+        let mut src = EditorState::new();
+        src.editor_ui.agent_settings.auto_update_enabled = false;
+
+        let json = serde_json::to_string(&to_payload(&src)).unwrap();
+        let payload: SettingsPayload = serde_json::from_str(&json).unwrap();
+        let mut dst = EditorState::new();
+        apply_payload(&mut dst, payload);
+
+        assert!(!dst.editor_ui.agent_settings.auto_update_enabled);
     }
 }

@@ -56,6 +56,7 @@ pub enum AgentSettingsHit {
     ToggleImagesAdvanced,
     TestImageSearch,
     AddGenConfig,
+    ToggleAutoUpdate,
     FocusMcpPort,
     Outside,
     Inside,
@@ -166,6 +167,7 @@ impl<'a> AgentSettingsPanel<'a> {
             }
             AgentSettingsTab::System => {
                 match agent_settings_system::hit_test(content_rect(panel), scrolled) {
+                    SystemHit::ToggleAutoUpdate => return AgentSettingsHit::ToggleAutoUpdate,
                     SystemHit::None => {}
                 }
             }

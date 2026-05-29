@@ -781,6 +781,12 @@ impl WidgetHost {
                     .agent_settings
                     .images_advanced_open ^= true;
             }
+            AgentSettingsHit::ToggleAutoUpdate => {
+                self.editor_state
+                    .editor_ui
+                    .agent_settings
+                    .auto_update_enabled ^= true;
+            }
             AgentSettingsHit::FocusMcpPort => {
                 self.commit_settings_focus();
                 self.editor_state.editor_ui.agent_settings.focus =

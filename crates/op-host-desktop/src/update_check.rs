@@ -46,6 +46,22 @@ pub struct UpdateProbe {
 }
 
 impl UpdateProbe {
+    /// Startup probe constructor that honors the persisted
+    /// auto-update preference.
+    pub fn for_auto_check(auto_update_enabled: bool) -> Self {
+        if auto_update_enabled {
+            Self::spawn()
+        } else {
+            Self::idle()
+        }
+    }
+
+    /// Disabled auto-check state. Manual checks still call
+    /// [`UpdateProbe::spawn`] directly.
+    pub fn idle() -> Self {
+        Self { rx: None }
+    }
+
     /// Spawn the probe worker. Returns immediately; the request
     /// runs on its own thread.
     pub fn spawn() -> Self {
@@ -208,5 +224,19 @@ mod tests {
             releases_url(),
             "https://github.com/ZSeven-W/openpencil/releases"
         );
+    }
+
+    #[test]
+    fn idle_probe_is_not_pending() {
+        let probe = UpdateProbe::idle();
+
+        assert!(!probe.is_pending());
+    }
+
+    #[test]
+    fn disabled_auto_check_creates_idle_probe() {
+        let probe = UpdateProbe::for_auto_check(false);
+
+        assert!(!probe.is_pending());
     }
 }

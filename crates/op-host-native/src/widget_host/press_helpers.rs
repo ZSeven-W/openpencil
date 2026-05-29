@@ -103,6 +103,14 @@ impl WidgetHostNative {
                     .images_advanced_open;
                 *v = !*v;
             }
+            AgentSettingsHit::ToggleAutoUpdate => {
+                let v = &mut self
+                    .editor_state
+                    .editor_ui
+                    .agent_settings
+                    .auto_update_enabled;
+                *v = !*v;
+            }
             AgentSettingsHit::FocusMcpPort => {
                 self.commit_settings_focus_if_any();
                 self.editor_state.editor_ui.agent_settings.focus =
