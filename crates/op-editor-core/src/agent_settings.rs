@@ -169,6 +169,41 @@ impl BuiltinAgentConfig {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BuiltinAgentPreset {
+    pub display_name: &'static str,
+    pub kind: BuiltinAgentKind,
+    pub model: &'static str,
+    pub base_url: &'static str,
+}
+
+pub const BUILTIN_AGENT_PRESETS: [BuiltinAgentPreset; 4] = [
+    BuiltinAgentPreset {
+        display_name: "MINIMAX",
+        kind: BuiltinAgentKind::OpenAiCompat,
+        model: "MiniMax-M2.7",
+        base_url: "https://api.minimaxi.com/v1",
+    },
+    BuiltinAgentPreset {
+        display_name: "百炼CP",
+        kind: BuiltinAgentKind::OpenAiCompat,
+        model: "qwen3-coder-plus",
+        base_url: "https://coding.dashscope.aliyuncs.com/v1",
+    },
+    BuiltinAgentPreset {
+        display_name: "方舟CP",
+        kind: BuiltinAgentKind::OpenAiCompat,
+        model: "ark-code-latest",
+        base_url: "https://ark.cn-beijing.volces.com/api/coding/v3",
+    },
+    BuiltinAgentPreset {
+        display_name: "DS",
+        kind: BuiltinAgentKind::OpenAiCompat,
+        model: "deepseek-v4-pro",
+        base_url: "https://api.deepseek.com",
+    },
+];
+
 /// Image-generation service providers mirrored from the TS
 /// `ImageGenProvider` union.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -270,6 +305,20 @@ impl Default for AgentSettings {
 
 impl AgentSettings {
     pub fn add_builtin_agent(&mut self) -> String {
+        if let Some(preset) = BUILTIN_AGENT_PRESETS.iter().find(|preset| {
+            !self
+                .builtin_agents
+                .iter()
+                .any(|agent| agent.display_name == preset.display_name)
+        }) {
+            return self.add_builtin_agent_config(
+                preset.display_name,
+                "",
+                preset.model,
+                preset.kind,
+                preset.base_url,
+            );
+        }
         let n = self.next_builtin_agent_id.max(1);
         let name = format!("Built-in Agent {n}");
         self.add_builtin_agent_with_defaults(&name, "", "claude-sonnet-4-5")
@@ -281,15 +330,32 @@ impl AgentSettings {
         api_key: impl Into<String>,
         model: impl Into<String>,
     ) -> String {
+        self.add_builtin_agent_config(
+            display_name,
+            api_key,
+            model,
+            BuiltinAgentKind::Anthropic,
+            BuiltinAgentKind::Anthropic.default_base_url(),
+        )
+    }
+
+    pub fn add_builtin_agent_config(
+        &mut self,
+        display_name: impl Into<String>,
+        api_key: impl Into<String>,
+        model: impl Into<String>,
+        kind: BuiltinAgentKind,
+        base_url: impl Into<String>,
+    ) -> String {
         let id = format!("builtin-{}", self.next_builtin_agent_id.max(1));
         self.next_builtin_agent_id = self.next_builtin_agent_id.max(1).saturating_add(1);
         self.builtin_agents.push(BuiltinAgentConfig {
             id: id.clone(),
             display_name: display_name.into(),
-            kind: BuiltinAgentKind::Anthropic,
+            kind,
             api_key: api_key.into(),
             model: model.into(),
-            base_url: BuiltinAgentKind::Anthropic.default_base_url().into(),
+            base_url: base_url.into(),
             enabled: true,
         });
         id
@@ -406,5 +472,62 @@ mod tests {
         assert!(s.remove_image_gen_profile(&first));
         assert!(s.image_gen_profiles.is_empty());
         assert!(s.active_image_gen_profile_id.is_none());
+    }
+
+    #[test]
+    fn add_builtin_agent_prefills_coding_provider_presets_first() {
+        let mut s = AgentSettings::default();
+
+        for _ in 0..4 {
+            s.add_builtin_agent();
+        }
+
+        let summary: Vec<_> = s
+            .builtin_agents
+            .iter()
+            .map(|agent| {
+                (
+                    agent.display_name.as_str(),
+                    agent.kind,
+                    agent.model.as_str(),
+                    agent.base_url.as_str(),
+                    agent.api_key.as_str(),
+                )
+            })
+            .collect();
+
+        assert_eq!(
+            summary,
+            vec![
+                (
+                    "MINIMAX",
+                    BuiltinAgentKind::OpenAiCompat,
+                    "MiniMax-M2.7",
+                    "https://api.minimaxi.com/v1",
+                    "",
+                ),
+                (
+                    "百炼CP",
+                    BuiltinAgentKind::OpenAiCompat,
+                    "qwen3-coder-plus",
+                    "https://coding.dashscope.aliyuncs.com/v1",
+                    "",
+                ),
+                (
+                    "方舟CP",
+                    BuiltinAgentKind::OpenAiCompat,
+                    "ark-code-latest",
+                    "https://ark.cn-beijing.volces.com/api/coding/v3",
+                    "",
+                ),
+                (
+                    "DS",
+                    BuiltinAgentKind::OpenAiCompat,
+                    "deepseek-v4-pro",
+                    "https://api.deepseek.com",
+                    "",
+                ),
+            ]
+        );
     }
 }
