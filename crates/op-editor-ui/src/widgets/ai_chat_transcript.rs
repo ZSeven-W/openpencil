@@ -16,11 +16,12 @@ use crate::theme::Theme;
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::PaintCx;
 use crate::{Point2D, Rect, TextLayout};
-use op_editor_core::chat::{ChatMessage, ChatRole, ChatToolCall};
+use op_editor_core::chat::{ChatMessage, ChatRole};
 
 use super::ai_chat_transcript_steps::{
     extract_step_blocks, split_design_progress, ParsedStep, ParsedStepStatus,
 };
+use super::ai_chat_transcript_tools::tool_lines;
 
 /// Body text size used throughout the transcript.
 const BODY_FONT: f32 = 12.0;
@@ -109,32 +110,6 @@ fn rect_contains(r: Rect, x: f32, y: f32) -> bool {
 /// Wrap-unit budget for an inner text width.
 fn unit_budget(inner_w: f32) -> u32 {
     (inner_w / CHAR_UNIT_PX).floor().max(1.0) as u32
-}
-
-/// Format the tool-call list into display lines: one `→ name` line
-/// per call, followed by the call's args wrapped across as many
-/// lines as needed. The expanded panel shows the full arguments,
-/// capped at [`MAX_ARG_LINES`] per call so one giant JSON blob can't
-/// flood the narrow panel.
-fn tool_lines(calls: &[ChatToolCall], budget: u32) -> Vec<String> {
-    /// Per-call ceiling on wrapped argument lines.
-    const MAX_ARG_LINES: usize = 8;
-    let mut lines = Vec::new();
-    for c in calls {
-        lines.push(format!("→ {}", c.name));
-        let compact: String = c.args.split_whitespace().collect::<Vec<_>>().join(" ");
-        if !compact.is_empty() {
-            let wrapped = wrap_units(&compact, budget.saturating_sub(2).max(1));
-            let shown = wrapped.len().min(MAX_ARG_LINES);
-            for line in &wrapped[..shown] {
-                lines.push(format!("  {line}"));
-            }
-            if wrapped.len() > shown {
-                lines.push("  …".to_string());
-            }
-        }
-    }
-    lines
 }
 
 fn progress_failed(label: &str) -> bool {
@@ -256,7 +231,13 @@ fn build_item(
         msg.tools_collapsed,
         op_i18n::translate(locale, "ai.toolCalls")
             .replace("{{count}}", &msg.tool_calls.len().to_string()),
-        &|| tool_lines(&msg.tool_calls, budget),
+        &|| {
+            tool_lines(
+                &msg.tool_calls,
+                budget,
+                if msg.streaming { "running" } else { "done" },
+            )
+        },
         &mut y,
     );
 

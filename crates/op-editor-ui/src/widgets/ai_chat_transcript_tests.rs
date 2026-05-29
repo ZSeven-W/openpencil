@@ -1,4 +1,5 @@
 use super::*;
+use op_editor_core::chat::ChatToolCall;
 
 #[test]
 fn wrap_units_breaks_ascii_at_word_boundaries() {
@@ -177,6 +178,66 @@ fn tool_calls_block_header_label_counts_the_calls() {
     let expected =
         op_i18n::translate(op_editor_core::Locale::EnUs, "ai.toolCalls").replace("{{count}}", "2");
     assert_eq!(t.label, expected, "header label counts the calls");
+}
+
+#[test]
+fn expanded_tool_card_surfaces_status_source_and_result() {
+    let mut m = ChatMessage::assistant("done");
+    m.tools_collapsed = false;
+    m.tool_calls = vec![ChatToolCall {
+        name: "batch_design".into(),
+        args: r#"{"source":"designer-1","status":"error","args":{"dsl":"I(\"root\",{})"},"result":{"success":false,"error":"node not found"}}"#.into(),
+    }];
+
+    let items = build_transcript(
+        std::slice::from_ref(&m),
+        body(),
+        op_editor_core::Locale::EnUs,
+    );
+    let t = items[0].tools.as_ref().expect("tools block present");
+
+    assert!(
+        t.lines.iter().any(|line| line == "  Source: designer-1"),
+        "tool card should expose the originating agent/source"
+    );
+    assert!(
+        t.lines.iter().any(|line| line == "  Status: error"),
+        "tool card should expose the tool status"
+    );
+    assert!(
+        t.lines
+            .iter()
+            .any(|line| line == "  Result: node not found"),
+        "tool card should expose failure result text"
+    );
+    assert!(
+        t.lines
+            .iter()
+            .any(|line| line.contains(r#""dsl":"I(\"root\",{})""#)),
+        "tool card should still show the actual call arguments"
+    );
+}
+
+#[test]
+fn streaming_tool_card_falls_back_to_running_status() {
+    let mut m = ChatMessage::assistant_streaming();
+    m.tools_collapsed = false;
+    m.tool_calls = vec![ChatToolCall {
+        name: "snapshot_layout".into(),
+        args: "{}".into(),
+    }];
+
+    let items = build_transcript(
+        std::slice::from_ref(&m),
+        body(),
+        op_editor_core::Locale::EnUs,
+    );
+    let t = items[0].tools.as_ref().expect("tools block present");
+
+    assert!(
+        t.lines.iter().any(|line| line == "  Status: running"),
+        "in-flight tool card should not look like a completed raw JSON dump"
+    );
 }
 
 #[test]

@@ -106,6 +106,7 @@ pub mod ai_chat_panel_controls;
 pub mod ai_chat_panel_paint;
 pub mod ai_chat_transcript;
 pub(crate) mod ai_chat_transcript_steps;
+pub(crate) mod ai_chat_transcript_tools;
 pub mod align_toolbar;
 pub mod color_picker;
 pub mod component_browser_panel;
