@@ -61,6 +61,10 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "git.empty.openCardDescription" => "Existing repo",
         "git.empty.cloneCard" => "Clone",
         "git.empty.cloneCardDescription" => "From a remote",
+        "git.empty.openNotARepo" => "That folder isn't a Git repository.",
+        "git.empty.cloneComingSoon" => {
+            "Cloning needs a remote URL — the in-panel clone form is coming soon."
+        }
         "git.author.heading" => "Your commit author",
         "git.author.subheading" => "Saving the first commit needs a name and email",
         "git.author.nameLabel" => "Name",

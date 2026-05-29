@@ -227,6 +227,12 @@ impl DesktopApp {
     /// `saved_doc_fingerprint` must stay put or close would skip the
     /// save prompt.
     fn rebind_git_session_for_current_path(&mut self) {
+        // The empty-state "Init" card is gated on the doc having a path.
+        self.host
+            .editor_state_mut()
+            .editor_ui
+            .git_panel
+            .has_saved_file = self.current_path.is_some();
         let prev_repo = self.git_session.repo().map(|r| r.workdir().to_path_buf());
         let prev_tracked = self.git_session.tracked_file().map(|p| p.to_path_buf());
         self.git_session.rebind(self.current_path.as_deref());
