@@ -99,11 +99,13 @@ pub mod agent_settings_panel;
 #[cfg(test)]
 mod agent_settings_panel_tests;
 pub mod agent_settings_system;
+mod ai_chat_checklist;
 pub mod ai_chat_model_picker;
 pub mod ai_chat_panel;
 pub mod ai_chat_panel_controls;
 pub mod ai_chat_panel_paint;
 pub mod ai_chat_transcript;
+pub(crate) mod ai_chat_transcript_steps;
 pub mod align_toolbar;
 pub mod color_picker;
 pub mod component_browser_panel;

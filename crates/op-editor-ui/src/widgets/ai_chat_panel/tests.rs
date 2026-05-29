@@ -169,3 +169,23 @@ fn hit_test_resolves_header_new_chat_button() {
     let p = Point2D::new(AI_CHAT_WIDTH - PAD - 22.0 + 9.0, 17.0);
     assert_eq!(panel.hit_test(rect, p), Some(AIChatHit::NewChat));
 }
+
+#[test]
+fn body_rect_reserves_space_for_fixed_step_checklist() {
+    let mut s = EditorState::new();
+    let mut message = op_editor_core::ChatMessage::assistant_streaming();
+    message.content =
+        r#"<step title="Checking guidelines" status="streaming">Analyzing request...</step>"#
+            .into();
+    s.chat.messages.push(message);
+
+    let panel = AIChatPlaceholder::from_editor(&s);
+    let rect = Rect::xywh(0.0, 0.0, AI_CHAT_WIDTH, AI_CHAT_HEIGHT);
+    let body = panel.body_rect(rect);
+    let legacy_bottom = rect.origin.y + rect.size.y - INPUT_BASE_HEIGHT - PAD - 8.0;
+
+    assert!(
+        body.origin.y + body.size.y < legacy_bottom - 1.0,
+        "fixed step checklist should reserve bottom space outside transcript"
+    );
+}
