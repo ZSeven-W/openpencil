@@ -140,33 +140,43 @@ fn caret_bridge_catches_cursor_and_clicks() {
 }
 
 #[test]
-fn init_hint_tracks_hover_over_the_disabled_card() {
+fn init_card_hover_tracks_the_card_index_and_not_allowed_cursor() {
     // `host_with_git_panel_open` leaves `has_saved_file == false`, so
-    // the Init card is the disabled one whose hint is hover-gated.
+    // the Init card (index 0) is the disabled one.
     let mut host = host_with_git_panel_open();
-    host.last_viewport_w = 1400.0;
-    host.last_viewport_h = 900.0;
-    let body = host
-        .git_panel_rect(1400.0, 900.0)
-        .expect("panel open => Some");
+    let (vw, vh) = (1400.0, 900.0);
+    host.last_viewport_w = vw;
+    host.last_viewport_h = vh;
+    let body = host.git_panel_rect(vw, vh).expect("panel open => Some");
     let card = GitPanel::for_editor(host.editor_state())
         .and_then(|p| p.empty_init_card_rect(body))
         .expect("empty state => an Init card rect");
     let cx = card.origin.x + card.size.x / 2.0;
     let cy = card.origin.y + card.size.y / 2.0;
 
-    // Hover-gated: nothing is flagged until the cursor is over the card.
-    assert!(!host.editor_state().editor_ui.git_panel.empty_init_hovered);
+    // Nothing is flagged until the cursor is over a card.
+    assert_eq!(
+        host.editor_state().editor_ui.git_panel.empty_hovered_card,
+        None
+    );
     assert!(
         host.update_git_panel_empty_hover(cx, cy),
-        "moving onto the Init card flips hover on (a repaint is due)",
+        "moving onto the Init card records its index (a repaint is due)",
     );
-    assert!(host.editor_state().editor_ui.git_panel.empty_init_hovered);
+    assert_eq!(
+        host.editor_state().editor_ui.git_panel.empty_hovered_card,
+        Some(0)
+    );
+    // The disabled Init card shows the not-allowed cursor.
+    assert_eq!(host.cursor_hint(cx, cy, vw, vh), CursorHint::NotAllowed);
 
-    // Moving off the card clears it again.
+    // Moving off the cards clears it again.
     assert!(
         host.update_git_panel_empty_hover(card.origin.x - 40.0, cy),
-        "moving off the card flips hover off",
+        "moving off the cards clears the hovered index",
     );
-    assert!(!host.editor_state().editor_ui.git_panel.empty_init_hovered);
+    assert_eq!(
+        host.editor_state().editor_ui.git_panel.empty_hovered_card,
+        None
+    );
 }

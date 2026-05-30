@@ -322,6 +322,12 @@ impl WidgetHostNative {
         {
             return CursorHint::Default;
         }
+        // The disabled empty-state Init card shows a not-allowed cursor
+        // (TS `cursor-not-allowed`) — checked before the overlay block
+        // so it wins over the Git popover's neutral Default.
+        if self.over_disabled_init_card(x, y, viewport_w, viewport_h) {
+            return CursorHint::NotAllowed;
+        }
         // Any floating overlay (panels, Git popover, Toolbar /
         // StatusBar / chat, open dropdowns) — a neutral cursor over
         // them, never a canvas action cursor (Move / Crosshair)

@@ -67,7 +67,7 @@ pub(super) const DIFF_VIEW_HEIGHT: f32 = 484.0;
 /// Init/Open/Clone cards + note). The card-row metrics + paint live
 /// in the `git_panel_empty` sibling module (split for the 800 cap).
 pub(super) const EMPTY_STATE_WIDTH: f32 = 380.0;
-pub(super) const EMPTY_STATE_HEIGHT: f32 = 284.0;
+pub(super) const EMPTY_STATE_HEIGHT: f32 = 300.0;
 
 /// What a click landed on inside the Git panel.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

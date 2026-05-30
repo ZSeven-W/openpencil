@@ -87,6 +87,9 @@ pub enum CursorHint {
     Crosshair,
     /// Text cursor — only shown by the Text tool over canvas.
     Text,
+    /// Not-allowed — over a disabled affordance (e.g. the empty-state
+    /// Init card with no saved file). TS `cursor-not-allowed`.
+    NotAllowed,
     ResizeEw,
     ResizeNs,
     ResizeNwse,
