@@ -9,6 +9,8 @@ use op_editor_core::editor_ui_state::EditorUiState;
 
 const TITLE_H: f32 = 36.0;
 const SERVER_CARD_H: f32 = 52.0;
+const CLIENT_CONFIG_H: f32 = 58.0;
+const CLIENT_CONFIG_GAP: f32 = 8.0;
 const SECTION_GAP: f32 = 28.0;
 const SECTION_TITLE_H: f32 = 28.0;
 const SUBTITLE_H: f32 = 20.0;
@@ -28,18 +30,28 @@ fn server_card_top(content: Rect) -> f32 {
     content.origin.y + TITLE_H
 }
 
-fn grid_top(content: Rect) -> f32 {
+fn client_config_block_h(settings: &AgentSettings) -> f32 {
+    if settings.mcp_server.running {
+        CLIENT_CONFIG_GAP + CLIENT_CONFIG_H
+    } else {
+        0.0
+    }
+}
+
+fn grid_top(content: Rect, settings: &AgentSettings) -> f32 {
     server_card_top(content)
         + SERVER_CARD_H
+        + client_config_block_h(settings)
         + SECTION_GAP
         + SECTION_TITLE_H
         + SUBTITLE_H * 2.0
         + ROW_GAP_BEFORE_GRID
 }
 
-pub(super) fn content_height() -> f32 {
+pub(super) fn content_height(settings: &AgentSettings) -> f32 {
     TITLE_H
         + SERVER_CARD_H
+        + client_config_block_h(settings)
         + SECTION_GAP
         + SECTION_TITLE_H
         + SUBTITLE_H * 2.0
@@ -86,14 +98,14 @@ fn port_field_rect(content: Rect) -> Rect {
     }
 }
 
-fn cli_cell_rect(content: Rect, idx: usize) -> Rect {
+fn cli_cell_rect(content: Rect, settings: &AgentSettings, idx: usize) -> Rect {
     let col = (idx % 2) as f32;
     let row = (idx / 2) as f32;
     let cell_w = (content.size.x - CELL_HGAP) / 2.0;
     Rect {
         origin: Point2D::new(
             content.origin.x + col * (cell_w + CELL_HGAP),
-            grid_top(content) + row * (CELL_H + CELL_VGAP),
+            grid_top(content, settings) + row * (CELL_H + CELL_VGAP),
         ),
         size: Point2D::new(cell_w, CELL_H),
     }
@@ -107,7 +119,7 @@ pub fn hit_test(content: Rect, settings: &AgentSettings, scrolled: Point2D) -> M
         return McpHit::FocusPort;
     }
     for (i, cli) in McpCli::ALL.iter().enumerate() {
-        if rect_contains(cli_cell_rect(content, i), scrolled) {
+        if rect_contains(cli_cell_rect(content, settings, i), scrolled) {
             return McpHit::ToggleCli(*cli);
         }
     }
@@ -133,8 +145,10 @@ pub(super) fn paint_mcp_tab(
         Point2D::new(content.origin.x, content.origin.y + 20.0),
     );
     paint_server_card(cx, theme, settings, ui, content);
+    paint_client_config(cx, theme, settings, ui, content);
 
-    let mut y = server_card_top(content) + SERVER_CARD_H + SECTION_GAP;
+    let mut y =
+        server_card_top(content) + SERVER_CARD_H + client_config_block_h(settings) + SECTION_GAP;
     let section_title = TextLayout::single_run(
         t_settings(ui, "settings.mcp.terminalIntegrations"),
         "system-ui",
@@ -166,7 +180,7 @@ pub(super) fn paint_mcp_tab(
         .draw_text(&s2, Point2D::new(content.origin.x, y + 13.0));
 
     for (i, cli) in McpCli::ALL.iter().enumerate() {
-        let cell = cli_cell_rect(content, i);
+        let cell = cli_cell_rect(content, settings, i);
         paint_cli_cell(cx, theme, *cli, settings.mcp_cli_enabled[i], cell);
     }
 }
@@ -302,6 +316,54 @@ fn paint_server_card(
     );
 }
 
+fn paint_client_config(
+    cx: &mut PaintCx<'_>,
+    theme: &Theme,
+    settings: &AgentSettings,
+    ui: &EditorUiState,
+    content: Rect,
+) {
+    if !settings.mcp_server.running {
+        return;
+    }
+    let rect = Rect {
+        origin: Point2D::new(
+            content.origin.x,
+            server_card_top(content) + SERVER_CARD_H + 8.0,
+        ),
+        size: Point2D::new(content.size.x, CLIENT_CONFIG_H),
+    };
+    cx.backend.fill_round_rect(rect, 8.0, theme.card);
+    cx.backend.stroke_round_rect(rect, 8.0, theme.border, 1.0);
+    let title = TextLayout::single_run(
+        t_settings(ui, "agents.mcpClientConfig"),
+        "system-ui",
+        11.0,
+        to_jian(theme.muted_foreground),
+        Point2D::new(0.0, 0.0),
+    );
+    cx.backend.draw_text(
+        &title,
+        Point2D::new(rect.origin.x + 12.0, rect.origin.y + 18.0),
+    );
+    let config = format!(
+        r#"{{ "type": "http", "url": "http://127.0.0.1:{}/mcp" }}"#,
+        settings.mcp_server.port
+    );
+    let config = ellipsize(cx, &config, rect.size.x - 24.0, 10.0);
+    let config_lay = TextLayout::single_run(
+        &config,
+        "monospace",
+        10.0,
+        to_jian(theme.muted_foreground),
+        Point2D::new(0.0, 0.0),
+    );
+    cx.backend.draw_text(
+        &config_lay,
+        Point2D::new(rect.origin.x + 12.0, rect.origin.y + 40.0),
+    );
+}
+
 fn paint_cli_cell(cx: &mut PaintCx<'_>, theme: &Theme, cli: McpCli, enabled: bool, cell: Rect) {
     let bg = if enabled { theme.muted } else { theme.card };
     cx.backend.fill_round_rect(cell, 10.0, bg);
@@ -362,6 +424,17 @@ fn rect_contains(r: Rect, p: Point2D) -> bool {
         && p.y >= r.origin.y
         && p.x <= r.origin.x + r.size.x
         && p.y <= r.origin.y + r.size.y
+}
+
+fn ellipsize(cx: &mut PaintCx<'_>, value: &str, max_w: f32, size: f32) -> String {
+    if cx.backend.measure_text(value, size) <= max_w {
+        return value.to_string();
+    }
+    let mut out = value.to_string();
+    while !out.is_empty() && cx.backend.measure_text(&format!("{out}..."), size) > max_w {
+        out.pop();
+    }
+    format!("{out}...")
 }
 
 fn to_jian(c: Color) -> jian_core::scene::Color {

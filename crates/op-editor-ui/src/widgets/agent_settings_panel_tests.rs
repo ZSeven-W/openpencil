@@ -167,6 +167,23 @@ fn mcp_port_field_is_not_focusable_while_server_is_running() {
 }
 
 #[test]
+fn mcp_running_server_exposes_client_config_height() {
+    let mut stopped_state = EditorState::default();
+    stopped_state.editor_ui.agent_settings.tab = AgentSettingsTab::Mcp;
+    let stopped = AgentSettingsPanel::for_editor(&stopped_state).content_total_height();
+
+    let mut running_state = EditorState::default();
+    running_state.editor_ui.agent_settings.tab = AgentSettingsTab::Mcp;
+    running_state.editor_ui.agent_settings.mcp_server.running = true;
+    let running = AgentSettingsPanel::for_editor(&running_state).content_total_height();
+
+    assert!(
+        running > stopped,
+        "running MCP server should reserve space for the HTTP client config row"
+    );
+}
+
+#[test]
 fn system_auto_update_switch_has_click_target() {
     let mut state = EditorState::default();
     state.editor_ui.agent_settings.tab = AgentSettingsTab::System;
