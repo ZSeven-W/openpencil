@@ -29,6 +29,18 @@ const BODY_FONT: f32 = 12.0;
 const LINE_H: f32 = 16.0;
 /// Inner padding inside a bubble / block box.
 const BUBBLE_PAD: f32 = 8.0;
+/// Text shown in the TS-style empty streaming assistant pill.
+const TYPING_LABEL: &str = "Thinking";
+/// Horizontal padding inside the empty streaming assistant pill.
+const TYPING_PAD_X: f32 = 10.0;
+/// Vertical padding inside the empty streaming assistant pill.
+const TYPING_PAD_Y: f32 = 4.0;
+/// Gap between the "Thinking" label and animated dots.
+const TYPING_LABEL_DOT_GAP: f32 = 6.0;
+/// Diameter of one animated typing dot.
+const TYPING_DOT: f32 = 4.0;
+/// Horizontal gap between animated typing dots.
+const TYPING_DOT_GAP: f32 = 2.0;
 /// Height of a collapsible header row (thinking / tool-calls).
 const HEADER_H: f32 = 22.0;
 /// Vertical gap between two messages.
@@ -115,6 +127,18 @@ fn rect_contains(r: Rect, x: f32, y: f32) -> bool {
 /// Wrap-unit budget for an inner text width.
 fn unit_budget(inner_w: f32) -> u32 {
     (inner_w / CHAR_UNIT_PX).floor().max(1.0) as u32
+}
+
+fn text_unit_width(text: &str) -> f32 {
+    text.chars().map(char_display_units).sum::<u32>() as f32 * CHAR_UNIT_PX
+}
+
+fn typing_dots_width() -> f32 {
+    3.0 * TYPING_DOT + 2.0 * TYPING_DOT_GAP
+}
+
+fn typing_pill_width() -> f32 {
+    2.0 * TYPING_PAD_X + text_unit_width(TYPING_LABEL) + TYPING_LABEL_DOT_GAP + typing_dots_width()
 }
 
 fn progress_failed(label: &str) -> bool {
@@ -264,7 +288,12 @@ fn build_item(
         && thinking.is_none()
         && tools.is_none();
     let bubble = if typing {
-        let r = Rect::xywh(x, y, bubble_w, LINE_H + 2.0 * BUBBLE_PAD);
+        let r = Rect::xywh(
+            x,
+            y,
+            typing_pill_width().min(body.size.x),
+            LINE_H + 2.0 * TYPING_PAD_Y,
+        );
         y += r.size.y;
         Some(TextBubble {
             rect: r,
@@ -622,21 +651,29 @@ fn paint_collapsible(cx: &mut PaintCx<'_>, theme: &Theme, block: &Collapsible) {
     }
 }
 
-/// Paint the animated "assistant is typing" dots inside `rect`.
-fn paint_typing_dots(cx: &mut PaintCx<'_>, theme: &Theme, rect: Rect, now_ms: u64) {
+/// Paint the animated "assistant is typing" dots after the label.
+fn paint_typing_dots(
+    cx: &mut PaintCx<'_>,
+    theme: &Theme,
+    start_x: f32,
+    center_y: f32,
+    now_ms: u64,
+) {
     let phase = (now_ms / 280) % 3;
-    let cy = rect.origin.y + rect.size.y / 2.0;
     for i in 0..3u64 {
         let active = i == phase;
-        let r = if active { 3.5 } else { 2.5 };
-        let color = if active {
-            theme.foreground
+        let r = if active {
+            TYPING_DOT * 0.6
         } else {
-            theme.muted_foreground
+            TYPING_DOT * 0.5
         };
-        let cx_dot = rect.origin.x + BUBBLE_PAD + 6.0 + i as f32 * 10.0;
-        cx.backend
-            .fill_oval(Rect::xywh(cx_dot - r, cy - r, r * 2.0, r * 2.0), color);
+        let mut color = theme.muted_foreground;
+        color.a *= if active { 0.9 } else { 0.7 };
+        let cx_dot = start_x + r + i as f32 * (TYPING_DOT + TYPING_DOT_GAP);
+        cx.backend.fill_oval(
+            Rect::xywh(cx_dot - r, center_y - r, r * 2.0, r * 2.0),
+            color,
+        );
     }
 }
 
@@ -669,8 +706,25 @@ pub(crate) fn paint_transcript(
                 ChatRole::Assistant => (theme.muted, theme.foreground),
             };
             if bubble.typing {
-                cx.backend.fill_round_rect(bubble.rect, 8.0, bg);
-                paint_typing_dots(cx, theme, bubble.rect, now_ms);
+                cx.backend
+                    .fill_round_rect(bubble.rect, bubble.rect.size.y / 2.0, bg);
+                let text_x = bubble.rect.origin.x + TYPING_PAD_X;
+                let baseline = bubble.rect.origin.y + TYPING_PAD_Y + 11.0;
+                draw_line(
+                    cx,
+                    TYPING_LABEL,
+                    text_x,
+                    baseline,
+                    BODY_FONT,
+                    theme.muted_foreground,
+                );
+                paint_typing_dots(
+                    cx,
+                    theme,
+                    text_x + text_unit_width(TYPING_LABEL) + TYPING_LABEL_DOT_GAP,
+                    bubble.rect.origin.y + bubble.rect.size.y / 2.0,
+                    now_ms,
+                );
             } else {
                 // Clip to the bubble — over-long tokens stay inside.
                 cx.backend.save();
