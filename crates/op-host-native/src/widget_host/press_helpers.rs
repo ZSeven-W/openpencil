@@ -161,6 +161,19 @@ impl WidgetHostNative {
                         .remove_image_gen_profile(&id);
                 }
             }
+            AgentSettingsHit::CycleGenProvider(index) => {
+                self.commit_settings_focus_if_any();
+                if let Some(profile) = self
+                    .editor_state
+                    .editor_ui
+                    .agent_settings
+                    .image_gen_profiles
+                    .get_mut(index)
+                {
+                    profile.provider = profile.provider.next();
+                    profile.model.clear();
+                }
+            }
             AgentSettingsHit::FocusGenConfig { index, field } => {
                 self.commit_settings_focus_if_any();
                 if let Some(profile) = self

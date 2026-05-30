@@ -215,6 +215,13 @@ pub enum ImageGenProvider {
 }
 
 impl ImageGenProvider {
+    pub const ALL: [ImageGenProvider; 4] = [
+        ImageGenProvider::OpenAi,
+        ImageGenProvider::Gemini,
+        ImageGenProvider::Replicate,
+        ImageGenProvider::Custom,
+    ];
+
     pub fn label(self) -> &'static str {
         match self {
             ImageGenProvider::OpenAi => "OpenAI",
@@ -231,6 +238,11 @@ impl ImageGenProvider {
             ImageGenProvider::Replicate => "black-forest-labs/flux-1.1-pro",
             ImageGenProvider::Custom => "model-name",
         }
+    }
+
+    pub fn next(self) -> Self {
+        let idx = Self::ALL.iter().position(|p| *p == self).unwrap_or(0);
+        Self::ALL[(idx + 1) % Self::ALL.len()]
     }
 }
 

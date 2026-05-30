@@ -1,6 +1,7 @@
 use super::WidgetHostNative;
 use op_editor_core::agent_settings::{
-    AgentSettingsTab, BuiltinAgentField, ImageGenField, ImageSearchField, SettingsFocus,
+    AgentSettingsTab, BuiltinAgentField, ImageGenField, ImageGenProvider, ImageSearchField,
+    SettingsFocus,
 };
 use op_editor_ui::widgets::agent_settings_panel::AgentSettingsPanel;
 
@@ -281,6 +282,49 @@ fn image_generation_profile_focus_accepts_text_and_commits() {
         .editor_ui
         .settings_input_draft
         .is_empty());
+}
+
+#[test]
+fn image_generation_provider_click_cycles_provider_and_clears_model() {
+    let mut host = WidgetHostNative::new();
+    host.editor_state_mut().editor_ui.agent_settings.tab = AgentSettingsTab::Images;
+    host.editor_state_mut()
+        .editor_ui
+        .agent_settings
+        .add_image_gen_profile();
+    host.editor_state_mut()
+        .editor_ui
+        .agent_settings
+        .image_gen_profiles[0]
+        .model = "dall-e-3".into();
+    host.editor_state_mut().editor_ui.agent_settings.focus = Some(SettingsFocus::ImageGenProfile {
+        index: 0,
+        field: ImageGenField::Name,
+    });
+
+    let panel = AgentSettingsPanel::for_editor(host.editor_state());
+    let rect = panel.rect(1200.0, 800.0);
+    let content_x = rect.origin.x + 200.0 + 24.0;
+    let content_y = rect.origin.y + 24.0;
+    let gen_top = content_y + 36.0 + 24.0 + 28.0;
+    let row_y = gen_top + 36.0;
+    let provider_y = row_y + 32.0 + 8.0 + 36.0;
+
+    assert!(host.dispatch_agent_settings_press(
+        content_x + 110.0 + 20.0,
+        provider_y + 12.0,
+        1200.0,
+        800.0
+    ));
+
+    let profile = &host
+        .editor_state()
+        .editor_ui
+        .agent_settings
+        .image_gen_profiles[0];
+    assert_eq!(profile.provider, ImageGenProvider::Gemini);
+    assert!(profile.model.is_empty());
+    assert!(host.editor_state().editor_ui.agent_settings.focus.is_none());
 }
 
 #[test]

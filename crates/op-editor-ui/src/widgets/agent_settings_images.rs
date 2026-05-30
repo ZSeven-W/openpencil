@@ -38,6 +38,7 @@ pub enum ImagesHit {
     AddGenConfig,
     SetActiveGenConfig(usize),
     RemoveGenConfig(usize),
+    CycleGenProvider(usize),
     FocusGenConfig { index: usize, field: ImageGenField },
     None,
 }
@@ -78,7 +79,7 @@ fn profile_list_h(settings: &AgentSettings) -> f32 {
 
 fn profile_row_h(settings: &AgentSettings, index: usize) -> f32 {
     if is_editing_profile(settings, index) {
-        PROFILE_ROW_H + 8.0 + 4.0 * ROW_H
+        PROFILE_ROW_H + 8.0 + 5.0 * ROW_H
     } else {
         PROFILE_ROW_H
     }
@@ -183,6 +184,19 @@ fn profile_field_rect(row: Rect, field_index: usize) -> Rect {
     }
 }
 
+fn profile_provider_rect(row: Rect) -> Rect {
+    profile_field_rect(row, 1)
+}
+
+fn profile_field_index(field: ImageGenField) -> usize {
+    match field {
+        ImageGenField::Name => 0,
+        ImageGenField::ApiKey => 2,
+        ImageGenField::Model => 3,
+        ImageGenField::BaseUrl => 4,
+    }
+}
+
 pub fn hit_test(content: Rect, settings: &AgentSettings, scrolled: Point2D) -> ImagesHit {
     if rect_contains(advanced_toggle_rect(content), scrolled) {
         return ImagesHit::ToggleAdvanced;
@@ -212,8 +226,14 @@ pub fn hit_test(content: Rect, settings: &AgentSettings, scrolled: Point2D) -> I
             return ImagesHit::RemoveGenConfig(index);
         }
         if is_editing_profile(settings, index) {
-            for (field_index, field) in image_gen_fields().into_iter().enumerate() {
-                if rect_contains(profile_field_rect(row, field_index), scrolled) {
+            if rect_contains(profile_provider_rect(row), scrolled) {
+                return ImagesHit::CycleGenProvider(index);
+            }
+            for field in image_gen_fields() {
+                if rect_contains(
+                    profile_field_rect(row, profile_field_index(field)),
+                    scrolled,
+                ) {
                     return ImagesHit::FocusGenConfig { index, field };
                 }
             }
@@ -535,19 +555,10 @@ fn paint_profile_row(
     );
 
     if editing {
-        for (field_index, field) in image_gen_fields().into_iter().enumerate() {
-            paint_profile_field(
-                cx,
-                theme,
-                settings,
-                ui,
-                profile,
-                index,
-                field,
-                field_index,
-                row,
-            );
+        for field in image_gen_fields() {
+            paint_profile_field(cx, theme, settings, ui, profile, index, field, row);
         }
+        paint_provider_field(cx, theme, profile, row);
     }
 }
 
@@ -560,7 +571,6 @@ fn paint_profile_field(
     profile: &ImageGenProfile,
     index: usize,
     field: ImageGenField,
-    field_index: usize,
     row: Rect,
 ) {
     let focused = settings.focus == Some(SettingsFocus::ImageGenProfile { index, field });
@@ -581,7 +591,7 @@ fn paint_profile_field(
         ImageGenField::Model => "Model",
         ImageGenField::BaseUrl => "Base URL",
     };
-    let input = profile_field_rect(row, field_index);
+    let input = profile_field_rect(row, profile_field_index(field));
     let label_lay = TextLayout::single_run(
         label,
         "system-ui",
@@ -619,6 +629,43 @@ fn paint_profile_field(
     cx.backend.draw_text(
         &value_lay,
         Point2D::new(input.origin.x + 6.0, input.origin.y + 16.0),
+    );
+}
+
+fn paint_provider_field(cx: &mut PaintCx<'_>, theme: &Theme, profile: &ImageGenProfile, row: Rect) {
+    let input = profile_provider_rect(row);
+    let label_lay = TextLayout::single_run(
+        "Provider",
+        "system-ui",
+        11.0,
+        to_jian(theme.muted_foreground),
+        Point2D::new(0.0, 0.0),
+    );
+    cx.backend.draw_text(
+        &label_lay,
+        Point2D::new(row.origin.x + 12.0, input.origin.y + 16.0),
+    );
+    cx.backend.fill_round_rect(input, 6.0, theme.card);
+    cx.backend.stroke_round_rect(input, 6.0, theme.border, 1.0);
+    let value = ellipsize(cx, profile.provider.label(), input.size.x - 28.0, 11.0);
+    let value_lay = TextLayout::single_run(
+        &value,
+        "system-ui",
+        11.0,
+        to_jian(theme.foreground),
+        Point2D::new(0.0, 0.0),
+    );
+    cx.backend.draw_text(
+        &value_lay,
+        Point2D::new(input.origin.x + 6.0, input.origin.y + 16.0),
+    );
+    draw_icon(
+        cx.backend,
+        Icon::ChevronDown,
+        Point2D::new(input.origin.x + input.size.x - 18.0, input.origin.y + 5.0),
+        14.0,
+        theme.muted_foreground,
+        1.5,
     );
 }
 

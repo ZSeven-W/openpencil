@@ -291,7 +291,7 @@ fn images_tab_expanded_profile_fields_are_focusable() {
 
     let gen_top = content_y + 36.0 + 24.0 + 28.0;
     let row_y = gen_top + 36.0;
-    let api_field_y = row_y + 32.0 + 8.0 + 36.0;
+    let api_field_y = row_y + 32.0 + 8.0 + 36.0 * 2.0;
 
     assert_eq!(
         panel.hit_test(
@@ -306,5 +306,31 @@ fn images_tab_expanded_profile_fields_are_focusable() {
     assert!(
         panel.content_total_height() > 180.0,
         "focused image profile should expand to show editable fields"
+    );
+}
+
+#[test]
+fn images_tab_expanded_profile_provider_row_is_clickable() {
+    let mut state = EditorState::default();
+    state.editor_ui.agent_settings.tab = AgentSettingsTab::Images;
+    state.editor_ui.agent_settings.add_image_gen_profile();
+    state.editor_ui.agent_settings.focus = Some(SettingsFocus::ImageGenProfile {
+        index: 0,
+        field: ImageGenField::Name,
+    });
+    let panel = AgentSettingsPanel::for_editor(&state);
+    let rect = panel.rect(1200.0, 800.0);
+    let content_x = rect.origin.x + 200.0 + 24.0;
+    let content_y = rect.origin.y + 24.0;
+    let gen_top = content_y + 36.0 + 24.0 + 28.0;
+    let row_y = gen_top + 36.0;
+    let provider_y = row_y + 32.0 + 8.0 + 36.0;
+
+    assert_eq!(
+        panel.hit_test(
+            rect,
+            crate::Point2D::new(content_x + 110.0 + 20.0, provider_y + 12.0)
+        ),
+        AgentSettingsHit::CycleGenProvider(0)
     );
 }
