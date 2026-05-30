@@ -551,6 +551,7 @@ impl ApplicationHandler for DesktopApp {
                     } else {
                         let icon = match hint {
                             CursorHint::Default => winit::window::CursorIcon::Default,
+                            CursorHint::NotAllowed => winit::window::CursorIcon::NotAllowed,
                             CursorHint::Move => winit::window::CursorIcon::Move,
                             CursorHint::Grab => winit::window::CursorIcon::Grab,
                             CursorHint::Grabbing => winit::window::CursorIcon::Grabbing,

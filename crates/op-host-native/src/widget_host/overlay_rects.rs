@@ -72,24 +72,44 @@ impl WidgetHostNative {
         })
     }
 
-    /// Update `git_panel.empty_init_hovered` from the cursor — the
-    /// disabled-Init hint pill shows only while the cursor is over that
-    /// card (not persistently). Returns `true` when the hover state
-    /// flipped (a repaint is due).
+    /// Update `git_panel.empty_hovered_card` from the cursor — drives
+    /// the per-card hover effect + the disabled-Init hint (shown only
+    /// while card 0 is hovered). Returns `true` when the hovered card
+    /// changed (a repaint is due).
     pub(in crate::widget_host) fn update_git_panel_empty_hover(&mut self, x: f32, y: f32) -> bool {
         let hovered = self
             .git_panel_rect(self.last_viewport_w, self.last_viewport_h)
             .and_then(|body| {
-                GitPanel::for_editor(&self.editor_state).and_then(|p| p.empty_init_card_rect(body))
-            })
-            .is_some_and(|card| rect_contains(card, Point2D::new(x, y)));
-        if hovered != self.editor_state.editor_ui.git_panel.empty_init_hovered {
-            self.editor_state.editor_ui.git_panel.empty_init_hovered = hovered;
+                GitPanel::for_editor(&self.editor_state)
+                    .and_then(|p| p.empty_card_at(body, Point2D::new(x, y)))
+            });
+        if hovered != self.editor_state.editor_ui.git_panel.empty_hovered_card {
+            self.editor_state.editor_ui.git_panel.empty_hovered_card = hovered;
             self.mark_dirty();
             true
         } else {
             false
         }
+    }
+
+    /// Whether `(x, y)` is over the *disabled* empty-state Init card —
+    /// the no-saved-file onboarding card that can't create history.
+    /// The cursor shows `NotAllowed` over it (TS `cursor-not-allowed`).
+    pub(in crate::widget_host) fn over_disabled_init_card(
+        &self,
+        x: f32,
+        y: f32,
+        viewport_w: f32,
+        viewport_h: f32,
+    ) -> bool {
+        if self.editor_state.editor_ui.git_panel.has_saved_file {
+            return false;
+        }
+        self.git_panel_rect(viewport_w, viewport_h)
+            .and_then(|body| {
+                GitPanel::for_editor(&self.editor_state).and_then(|p| p.empty_init_card_rect(body))
+            })
+            .is_some_and(|card| rect_contains(card, Point2D::new(x, y)))
     }
 
     /// Floating Component-Browser panel rect — `None` when closed.

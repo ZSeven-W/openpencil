@@ -300,10 +300,12 @@ pub struct GitPanelState {
     /// empty-state "Init" card (can't create local history for an
     /// unsaved doc). Set by the host on each panel refresh.
     pub has_saved_file: bool,
-    /// Whether the cursor is over the empty-state "Init" card. Drives
-    /// the disabled-Init hint pill, which only shows on hover (not
-    /// persistently). Updated by the host on cursor-move.
-    pub empty_init_hovered: bool,
+    /// Which empty-state onboarding card the cursor is over, if any
+    /// (`0` = Init, `1` = Open, `2` = Clone). Drives the per-card hover
+    /// effect and the disabled-Init hint pill (shown only while card
+    /// `0` is hovered with no saved file). Updated by the host on
+    /// cursor-move.
+    pub empty_hovered_card: Option<u8>,
     /// Current branch name of that repository.
     pub branch: Option<String>,
     /// All local branch names, sorted — the panel lists them for
