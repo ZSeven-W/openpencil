@@ -95,7 +95,9 @@ fn user_bubbles_remain_compact_and_right_aligned() {
 
 #[derive(Default)]
 struct TranscriptPaintBackend {
-    round_rects: usize,
+    round_rects: Vec<(Rect, f32)>,
+    ovals: usize,
+    texts: Vec<String>,
 }
 
 impl crate::RenderBackend for TranscriptPaintBackend {
@@ -103,17 +105,24 @@ impl crate::RenderBackend for TranscriptPaintBackend {
     fn end_frame(&mut self) {}
     fn fill_rect(&mut self, _: Rect, _: crate::Color) {}
     fn stroke_rect(&mut self, _: Rect, _: crate::Color, _: f32) {}
-    fn draw_text(&mut self, _: &crate::TextLayout, _: Point2D) {}
+    fn draw_text(&mut self, layout: &crate::TextLayout, _: Point2D) {
+        if let Some(run) = layout.runs().first() {
+            self.texts.push(run.content.clone());
+        }
+    }
     fn clip_rect(&mut self, _: Rect) {}
     fn save(&mut self) {}
     fn restore(&mut self) {}
     fn translate(&mut self, _: Point2D) {}
     fn stroke_line(&mut self, _: Point2D, _: Point2D, _: crate::Color, _: f32) {}
-    fn fill_round_rect(&mut self, _: Rect, _: f32, _: crate::Color) {
-        self.round_rects += 1;
+    fn fill_round_rect(&mut self, rect: Rect, radius: f32, _: crate::Color) {
+        self.round_rects.push((rect, radius));
     }
     fn stroke_round_rect(&mut self, _: Rect, _: f32, _: crate::Color, _: f32) {}
     fn stroke_svg_path(&mut self, _: &str, _: Point2D, _: f32, _: crate::Color, _: f32) {}
+    fn fill_oval(&mut self, _: Rect, _: crate::Color) {
+        self.ovals += 1;
+    }
     fn resize(&mut self, _: u32, _: u32) {}
     fn dpi_scale(&self) -> f32 {
         1.0
@@ -137,7 +146,7 @@ fn paint_transcript_leaves_assistant_answer_unframed() {
         op_editor_core::Locale::EnUs,
     );
 
-    assert_eq!(backend.round_rects, 0);
+    assert_eq!(backend.round_rects.len(), 0);
 }
 
 #[test]
@@ -157,7 +166,7 @@ fn paint_transcript_keeps_user_answer_bubble_background() {
         op_editor_core::Locale::EnUs,
     );
 
-    assert_eq!(backend.round_rects, 1);
+    assert_eq!(backend.round_rects.len(), 1);
 }
 
 #[test]
@@ -169,6 +178,41 @@ fn streaming_message_with_no_text_yields_a_typing_bubble() {
     let bubble = items[0].bubble.as_ref().expect("typing bubble present");
     assert!(bubble.typing, "empty in-flight message shows typing dots");
     assert!(bubble.lines.is_empty());
+    assert!(
+        bubble.rect.size.x < 120.0,
+        "TS renders the empty streaming state as a compact w-fit pill"
+    );
+}
+
+#[test]
+fn paint_streaming_empty_assistant_shows_thinking_pill_label() {
+    let messages = [ChatMessage::assistant_streaming()];
+    let mut backend = TranscriptPaintBackend::default();
+    let mut cx = PaintCx {
+        backend: &mut backend,
+    };
+
+    paint_transcript(
+        &mut cx,
+        &crate::Theme::dark(),
+        body(),
+        &messages,
+        0,
+        op_editor_core::Locale::EnUs,
+    );
+
+    assert_eq!(backend.round_rects.len(), 1);
+    let (pill, radius) = backend.round_rects[0];
+    assert!(pill.size.x < 120.0, "typing pill should not be full width");
+    assert!(
+        (radius - pill.size.y / 2.0).abs() < 1e-4,
+        "TS uses rounded-full for the streaming pill"
+    );
+    assert!(
+        backend.texts.iter().any(|text| text == "Thinking"),
+        "TS shows the Thinking label before the animated dots"
+    );
+    assert_eq!(backend.ovals, 3);
 }
 
 #[test]
