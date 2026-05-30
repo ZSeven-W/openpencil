@@ -218,6 +218,49 @@ fn apply_result_repaints_placeholder_frame_with_image_fill_and_clears_children()
 }
 
 #[test]
+fn poll_into_applies_finished_job_to_placeholder_frame() {
+    let mut state = EditorState::default();
+    state.active_children_mut().clear();
+    state.active_children_mut().push(frame_node(
+        "photo",
+        "Image",
+        Some("image-placeholder"),
+        Some(vec![solid_fill()]),
+        vec![text_label(
+            "label",
+            Some("image-placeholder-label"),
+            "pizza hero",
+        )],
+    ));
+
+    let (tx, rx) = std::sync::mpsc::channel();
+    tx.send(Some("https://example.com/photo.jpg".to_string()))
+        .unwrap();
+    let mut session = ImageSearchSession {
+        in_flight: HashSet::from(["photo".to_string()]),
+        completed: HashSet::new(),
+        jobs: vec![ImageSearchJob {
+            node_id: NodeId::new("photo"),
+            rx,
+        }],
+    };
+
+    assert!(session.poll_into(&mut state));
+    assert!(!session.is_pending());
+    assert!(session.in_flight.is_empty());
+    assert!(session.completed.contains("photo"));
+
+    let PenNode::Frame(frame) = &state.active_children()[0] else {
+        panic!("expected frame");
+    };
+    let Some([PenFill::Image(image_fill)]) = frame.container.fill.as_deref() else {
+        panic!("expected single image fill");
+    };
+    assert_eq!(image_fill.url, "https://example.com/photo.jpg");
+    assert_eq!(frame.children.as_deref(), Some(&[][..]));
+}
+
+#[test]
 fn openverse_credentials_require_both_fields() {
     let mut state = EditorState::default();
     assert!(OpenverseCredentials::from_state(&state).is_none());
