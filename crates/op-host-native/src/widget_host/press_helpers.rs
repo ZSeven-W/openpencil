@@ -345,7 +345,11 @@ impl WidgetHostNative {
                 self.editor_state.editor_ui.settings_input_draft.clear();
                 self.editor_state.rebuild_chat_models();
             }
-            AgentSettingsHit::AddAcpAgent | AgentSettingsHit::Inside => {}
+            AgentSettingsHit::AddAcpAgent => {
+                self.commit_settings_focus_if_any();
+                self.editor_state.editor_ui.agent_settings.add_acp_agent();
+            }
+            AgentSettingsHit::Inside => {}
             AgentSettingsHit::AddGenConfig => {
                 self.commit_settings_focus_if_any();
                 let id = self

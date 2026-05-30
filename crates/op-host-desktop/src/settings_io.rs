@@ -15,8 +15,8 @@ use std::path::PathBuf;
 
 use op_editor_core::editor_ui_state::RecentFile;
 use op_editor_core::{
-    BuiltinAgentConfig, BuiltinAgentKind, EditorState, ImageGenProfile, ImageGenProvider, Locale,
-    ThemeMode,
+    AcpAgentConfig, AcpConnectionType, BuiltinAgentConfig, BuiltinAgentKind, EditorState,
+    ImageGenProfile, ImageGenProvider, Locale, ThemeMode,
 };
 use op_host_native::WidgetHostNative;
 use serde::{Deserialize, Serialize};
@@ -37,6 +37,22 @@ struct BuiltinAgentPayload {
     api_key: String,
     model: String,
     base_url: String,
+    enabled: bool,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+struct AcpAgentPayload {
+    id: String,
+    display_name: String,
+    connection_type: String,
+    #[serde(default)]
+    command: String,
+    #[serde(default)]
+    args: Vec<String>,
+    #[serde(default)]
+    env: std::collections::BTreeMap<String, String>,
+    #[serde(default)]
+    url: Option<String>,
     enabled: bool,
 }
 
@@ -71,6 +87,7 @@ pub struct Fingerprint {
     auto_update_enabled: bool,
     connected: [bool; 5],
     builtin_agents: Vec<BuiltinAgentConfig>,
+    acp_agents: Vec<AcpAgentConfig>,
     image_gen_profiles: Vec<ImageGenProfile>,
     active_image_gen_profile_id: Option<String>,
 }
@@ -88,6 +105,7 @@ pub fn fingerprint(state: &EditorState) -> Fingerprint {
         auto_update_enabled: eui.agent_settings.auto_update_enabled,
         connected: eui.agent_settings.connected,
         builtin_agents: eui.agent_settings.builtin_agents.clone(),
+        acp_agents: eui.agent_settings.acp_agents.clone(),
         image_gen_profiles: eui.agent_settings.image_gen_profiles.clone(),
         active_image_gen_profile_id: eui.agent_settings.active_image_gen_profile_id.clone(),
     }
@@ -128,6 +146,8 @@ struct SettingsPayload {
     #[serde(default)]
     builtin_agents: Option<Vec<BuiltinAgentPayload>>,
     #[serde(default)]
+    acp_agents: Option<Vec<AcpAgentPayload>>,
+    #[serde(default)]
     image_gen_profiles: Option<Vec<ImageGenProfilePayload>>,
     #[serde(default)]
     active_image_gen_profile_id: Option<String>,
@@ -161,6 +181,13 @@ fn to_payload(state: &EditorState) -> SettingsPayload {
                 .builtin_agents
                 .iter()
                 .map(builtin_agent_to_payload)
+                .collect(),
+        ),
+        acp_agents: Some(
+            eui.agent_settings
+                .acp_agents
+                .iter()
+                .map(acp_agent_to_payload)
                 .collect(),
         ),
         image_gen_profiles: Some(
@@ -231,6 +258,13 @@ fn apply_payload(state: &mut EditorState, payload: SettingsPayload) {
             .collect();
         eui.agent_settings.next_builtin_agent_id =
             next_builtin_agent_id(&eui.agent_settings.builtin_agents);
+    }
+    if let Some(agents) = payload.acp_agents {
+        eui.agent_settings.acp_agents = agents
+            .into_iter()
+            .filter_map(acp_agent_from_payload)
+            .collect();
+        eui.agent_settings.next_acp_agent_id = next_acp_agent_id(&eui.agent_settings.acp_agents);
     }
     if let Some(profiles) = payload.image_gen_profiles {
         eui.agent_settings.image_gen_profiles = profiles
@@ -313,6 +347,41 @@ fn builtin_agent_from_payload(payload: BuiltinAgentPayload) -> Option<BuiltinAge
     })
 }
 
+fn acp_agent_to_payload(agent: &AcpAgentConfig) -> AcpAgentPayload {
+    AcpAgentPayload {
+        id: agent.id.clone(),
+        display_name: agent.display_name.clone(),
+        connection_type: match agent.connection_type {
+            AcpConnectionType::Local => "local",
+            AcpConnectionType::Remote => "remote",
+        }
+        .into(),
+        command: agent.command.clone(),
+        args: agent.args.clone(),
+        env: agent.env.clone(),
+        url: agent.url.clone(),
+        enabled: agent.enabled,
+    }
+}
+
+fn acp_agent_from_payload(payload: AcpAgentPayload) -> Option<AcpAgentConfig> {
+    let connection_type = match payload.connection_type.as_str() {
+        "local" => AcpConnectionType::Local,
+        "remote" => AcpConnectionType::Remote,
+        _ => return None,
+    };
+    Some(AcpAgentConfig {
+        id: payload.id,
+        display_name: payload.display_name,
+        connection_type,
+        command: payload.command,
+        args: payload.args,
+        env: payload.env,
+        url: payload.url,
+        enabled: payload.enabled,
+    })
+}
+
 fn openverse_oauth_to_payload(
     settings: &op_editor_core::agent_settings::AgentSettings,
 ) -> Option<OpenverseOAuthPayload> {
@@ -367,6 +436,15 @@ fn next_builtin_agent_id(agents: &[BuiltinAgentConfig]) -> u64 {
     agents
         .iter()
         .filter_map(|agent| agent.id.strip_prefix("builtin-")?.parse::<u64>().ok())
+        .max()
+        .unwrap_or(0)
+        .saturating_add(1)
+}
+
+fn next_acp_agent_id(agents: &[AcpAgentConfig]) -> u64 {
+    agents
+        .iter()
+        .filter_map(|agent| agent.id.strip_prefix("acp-")?.parse::<u64>().ok())
         .max()
         .unwrap_or(0)
         .saturating_add(1)
@@ -587,6 +665,52 @@ mod tests {
             dst.editor_ui.agent_settings.builtin_agents[0].api_key,
             "sk-test"
         );
+    }
+
+    #[test]
+    fn acp_agents_round_trip_through_payload() {
+        let mut src = EditorState::new();
+        let mut env = std::collections::BTreeMap::new();
+        env.insert("ACP_TOKEN".into(), "secret".into());
+        src.editor_ui.agent_settings.add_acp_agent_config(
+            "Design Agent",
+            AcpConnectionType::Local,
+            "/usr/local/bin/design-agent",
+            vec!["--stdio".into()],
+            env,
+            None,
+            true,
+        );
+        src.editor_ui.agent_settings.add_acp_agent_config(
+            "Remote Agent",
+            AcpConnectionType::Remote,
+            "",
+            Vec::new(),
+            std::collections::BTreeMap::new(),
+            Some("ws://localhost:8100".into()),
+            false,
+        );
+
+        let json = serde_json::to_string(&to_payload(&src)).unwrap();
+        let payload: SettingsPayload = serde_json::from_str(&json).unwrap();
+        let mut dst = EditorState::new();
+        apply_payload(&mut dst, payload);
+
+        assert_eq!(dst.editor_ui.agent_settings.acp_agents.len(), 2);
+        let local = &dst.editor_ui.agent_settings.acp_agents[0];
+        assert_eq!(local.display_name, "Design Agent");
+        assert_eq!(local.connection_type, AcpConnectionType::Local);
+        assert_eq!(local.command, "/usr/local/bin/design-agent");
+        assert_eq!(local.args, vec!["--stdio"]);
+        assert_eq!(
+            local.env.get("ACP_TOKEN").map(String::as_str),
+            Some("secret")
+        );
+        let remote = &dst.editor_ui.agent_settings.acp_agents[1];
+        assert_eq!(remote.connection_type, AcpConnectionType::Remote);
+        assert_eq!(remote.url.as_deref(), Some("ws://localhost:8100"));
+        assert!(!remote.enabled);
+        assert_eq!(dst.editor_ui.agent_settings.next_acp_agent_id, 3);
     }
 
     #[test]

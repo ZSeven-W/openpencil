@@ -69,9 +69,9 @@ mod tests_mutators;
 mod tests_pages;
 
 pub use agent_settings::{
-    AgentSettings, AgentSettingsDrag, AgentSettingsTab, BuiltinAgentConfig, BuiltinAgentField,
-    BuiltinAgentKind, ImageGenField, ImageGenProfile, ImageGenProvider, ImageSearchField, McpCli,
-    McpServer, SettingsFocus,
+    AcpAgentConfig, AcpConnectionType, AgentSettings, AgentSettingsDrag, AgentSettingsTab,
+    BuiltinAgentConfig, BuiltinAgentField, BuiltinAgentKind, ImageGenField, ImageGenProfile,
+    ImageGenProvider, ImageSearchField, McpCli, McpServer, SettingsFocus,
 };
 pub use align::AlignAction;
 pub use chat::{

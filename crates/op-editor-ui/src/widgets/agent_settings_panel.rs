@@ -1,6 +1,7 @@
 //! Multi-tab settings modal opened via `Cmd+,`.
 
 use crate::theme::Theme;
+use crate::widgets::agent_settings_acp::{self, AcpHit};
 use crate::widgets::agent_settings_builtin::{self, BuiltinHit};
 use crate::widgets::agent_settings_i18n::t as t_settings;
 use crate::widgets::agent_settings_images::{self, ImagesHit};
@@ -135,8 +136,11 @@ impl<'a> AgentSettingsPanel<'a> {
                     }
                     BuiltinHit::None => {}
                 }
-                if rect_contains(add_acp_rect(panel, &self.settings), scrolled) {
-                    return AgentSettingsHit::AddAcpAgent;
+                let content = content_rect(panel);
+                let acp_y = acp_section_y(content, &self.settings);
+                match agent_settings_acp::hit_test(content, scrolled, acp_y) {
+                    AcpHit::AddAgent => return AgentSettingsHit::AddAcpAgent,
+                    AcpHit::None => {}
                 }
                 for (i, provider) in AgentProvider::ALL.iter().enumerate() {
                     let card = agent_card_rect_in(panel, i, &self.settings);
@@ -244,10 +248,8 @@ impl<'a> AgentSettingsPanel<'a> {
 }
 
 fn agents_content_height(settings: &AgentSettings) -> f32 {
-    // header 32 + subtitle 28 + built-in list + GAP, then ACP empty block, then Agents
-    // header 32 + 5 cards (CARD_HEIGHT + CARD_GAP) + Claude-Code hint 28.
     12.0 + (agent_settings_builtin::content_height(settings) + SECTION_GAP)
-        + (32.0 + 28.0 + 64.0 + SECTION_GAP)
+        + (agent_settings_acp::content_height(settings) + SECTION_GAP)
         + 32.0
         + 5.0 * (CARD_HEIGHT + CARD_GAP)
         + 28.0
@@ -400,32 +402,7 @@ fn paint_agents_tab(
     let mut y = content.origin.y + 12.0;
     y = agent_settings_builtin::paint_builtin_section(cx, theme, settings, ui, content, y);
     y += SECTION_GAP;
-
-    y = paint_section_header_inset(
-        cx,
-        theme,
-        t_settings(ui, "settings.agents.acp"),
-        t_settings(ui, "settings.agents.addAcp"),
-        content.origin.x,
-        y,
-        content.size.x,
-        TOP_HEADER_RIGHT_INSET,
-    );
-    y = paint_section_subtitle(
-        cx,
-        theme,
-        t_settings(ui, "settings.agents.acpSubtitle"),
-        content.origin.x,
-        y,
-    );
-    y = paint_empty_hint(
-        cx,
-        theme,
-        t_settings(ui, "settings.agents.acpEmpty"),
-        content.origin.x,
-        y,
-        content.size.x,
-    );
+    y = agent_settings_acp::paint_acp_section(cx, theme, settings, ui, content, y);
     y += SECTION_GAP;
 
     y = paint_section_header(
@@ -504,39 +481,6 @@ fn paint_section_header_inset(
             .draw_text(&act, Point2D::new(x + w - right_inset - action_w, y + 18.0));
     }
     y + 28.0
-}
-
-fn paint_section_subtitle(cx: &mut PaintCx<'_>, theme: &Theme, text: &str, x: f32, y: f32) -> f32 {
-    let layout = TextLayout::single_run(
-        text,
-        "system-ui",
-        12.0,
-        to_jian(theme.muted_foreground),
-        Point2D::new(0.0, 0.0),
-    );
-    cx.backend.draw_text(&layout, Point2D::new(x, y + 16.0));
-    y + 28.0
-}
-
-fn paint_empty_hint(
-    cx: &mut PaintCx<'_>,
-    theme: &Theme,
-    text: &str,
-    x: f32,
-    y: f32,
-    w: f32,
-) -> f32 {
-    let text_w = cx.backend.measure_text(text, 13.0);
-    let layout = TextLayout::single_run(
-        text,
-        "system-ui",
-        13.0,
-        to_jian(theme.muted_foreground),
-        Point2D::new(0.0, 0.0),
-    );
-    cx.backend
-        .draw_text(&layout, Point2D::new(x + (w - text_w) / 2.0, y + 44.0));
-    y + 64.0
 }
 
 fn paint_agent_card(
@@ -684,7 +628,6 @@ fn paint_agent_card(
 }
 
 const DISCONNECT_BTN_W: f32 = 96.0;
-const TOP_HEADER_RIGHT_INSET: f32 = 12.0;
 
 fn tab_i18n_label(ui: &EditorUiState, tab: AgentSettingsTab) -> &'static str {
     match tab {
@@ -734,18 +677,8 @@ fn close_rect(panel: Rect) -> Rect {
     }
 }
 
-fn add_acp_rect(panel: Rect, settings: &AgentSettings) -> Rect {
-    let content = content_rect(panel);
-    let y =
-        content.origin.y + 12.0 + agent_settings_builtin::content_height(settings) + SECTION_GAP;
-    let text_w = 96.0;
-    Rect {
-        origin: Point2D::new(
-            content.origin.x + content.size.x - TOP_HEADER_RIGHT_INSET - text_w,
-            y,
-        ),
-        size: Point2D::new(text_w, 24.0),
-    }
+fn acp_section_y(content: Rect, settings: &AgentSettings) -> f32 {
+    content.origin.y + 12.0 + agent_settings_builtin::content_height(settings) + SECTION_GAP
 }
 
 fn agent_card_rect_at(x: f32, y: f32, w: f32) -> Rect {

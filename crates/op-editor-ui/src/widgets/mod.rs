@@ -91,6 +91,7 @@ mod icons_data;
 pub mod brand_icons;
 
 // Step 4 — extra editor-chrome widgets (TS app parity).
+pub mod agent_settings_acp;
 pub mod agent_settings_builtin;
 pub mod agent_settings_i18n;
 pub mod agent_settings_images;

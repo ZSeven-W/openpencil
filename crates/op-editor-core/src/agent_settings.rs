@@ -10,6 +10,8 @@
 //! model's backing-agent discriminator) and is re-exported here so
 //! both the chat layer and the settings layer share one definition.
 
+use std::collections::BTreeMap;
+
 pub use crate::chat::AgentProvider;
 
 /// Which section of the settings modal is active.
@@ -204,6 +206,27 @@ pub const BUILTIN_AGENT_PRESETS: [BuiltinAgentPreset; 4] = [
     },
 ];
 
+/// ACP-compatible agent connection style mirrored from the TS
+/// `AcpAgentConfig.connectionType` union.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AcpConnectionType {
+    Local,
+    Remote,
+}
+
+/// One configured ACP-compatible external agent.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AcpAgentConfig {
+    pub id: String,
+    pub display_name: String,
+    pub connection_type: AcpConnectionType,
+    pub command: String,
+    pub args: Vec<String>,
+    pub env: BTreeMap<String, String>,
+    pub url: Option<String>,
+    pub enabled: bool,
+}
+
 /// Image-generation service providers mirrored from the TS
 /// `ImageGenProvider` union.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -264,6 +287,8 @@ pub struct AgentSettings {
     pub connected: [bool; 5],
     pub builtin_agents: Vec<BuiltinAgentConfig>,
     pub next_builtin_agent_id: u64,
+    pub acp_agents: Vec<AcpAgentConfig>,
+    pub next_acp_agent_id: u64,
     /// Vertical scroll offset of the right content pane in px.
     pub scroll_y: f32,
     pub mcp_server: McpServer,
@@ -296,6 +321,8 @@ impl Default for AgentSettings {
             connected: [false; 5],
             builtin_agents: Vec::new(),
             next_builtin_agent_id: 1,
+            acp_agents: Vec::new(),
+            next_acp_agent_id: 1,
             scroll_y: 0.0,
             mcp_server: McpServer::default(),
             mcp_cli_enabled: [false; 6],
@@ -369,6 +396,44 @@ impl AgentSettings {
             model: model.into(),
             base_url: base_url.into(),
             enabled: true,
+        });
+        id
+    }
+
+    pub fn add_acp_agent(&mut self) -> String {
+        let n = self.next_acp_agent_id.max(1);
+        self.add_acp_agent_config(
+            format!("ACP Agent {n}"),
+            AcpConnectionType::Local,
+            "",
+            Vec::new(),
+            BTreeMap::new(),
+            None,
+            true,
+        )
+    }
+
+    pub fn add_acp_agent_config(
+        &mut self,
+        display_name: impl Into<String>,
+        connection_type: AcpConnectionType,
+        command: impl Into<String>,
+        args: Vec<String>,
+        env: BTreeMap<String, String>,
+        url: Option<String>,
+        enabled: bool,
+    ) -> String {
+        let id = format!("acp-{}", self.next_acp_agent_id.max(1));
+        self.next_acp_agent_id = self.next_acp_agent_id.max(1).saturating_add(1);
+        self.acp_agents.push(AcpAgentConfig {
+            id: id.clone(),
+            display_name: display_name.into(),
+            connection_type,
+            command: command.into(),
+            args,
+            env,
+            url,
+            enabled,
         });
         id
     }
@@ -541,5 +606,25 @@ mod tests {
                 ),
             ]
         );
+    }
+
+    #[test]
+    fn add_acp_agent_assigns_id_and_defaults_to_local_config() {
+        let mut s = AgentSettings::default();
+
+        let first = s.add_acp_agent();
+        let second = s.add_acp_agent();
+
+        assert_eq!(first, "acp-1");
+        assert_eq!(second, "acp-2");
+        assert_eq!(s.acp_agents.len(), 2);
+        assert_eq!(s.next_acp_agent_id, 3);
+        assert_eq!(s.acp_agents[0].display_name, "ACP Agent 1");
+        assert_eq!(s.acp_agents[0].connection_type, AcpConnectionType::Local);
+        assert!(s.acp_agents[0].command.is_empty());
+        assert!(s.acp_agents[0].args.is_empty());
+        assert!(s.acp_agents[0].env.is_empty());
+        assert!(s.acp_agents[0].url.is_none());
+        assert!(s.acp_agents[0].enabled);
     }
 }
