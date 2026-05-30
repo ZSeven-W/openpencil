@@ -22,6 +22,7 @@ pub fn frame_node(
         base,
         container,
         children,
+        image_search_query: None,
         reusable,
         slot: None,
         state: None,

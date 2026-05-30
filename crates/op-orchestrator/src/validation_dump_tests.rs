@@ -27,6 +27,7 @@ fn make_frame(id: &str, children: Option<Vec<PenNode>>) -> PenNode {
         },
         container: ContainerProps::default(),
         children,
+        image_search_query: None,
         reusable: None,
         slot: None,
         state: None,
@@ -153,6 +154,7 @@ fn dump_width_height_number() {
             ..Default::default()
         },
         children: None,
+        image_search_query: None,
         reusable: None,
         slot: None,
         state: None,
@@ -183,6 +185,7 @@ fn dump_width_keyword_quoted() {
             ..Default::default()
         },
         children: None,
+        image_search_query: None,
         reusable: None,
         slot: None,
         state: None,
@@ -224,6 +227,7 @@ fn dump_layout_props() {
             ..Default::default()
         },
         children: None,
+        image_search_query: None,
         reusable: None,
         slot: None,
         state: None,
@@ -262,6 +266,7 @@ fn dump_corner_radius() {
             ..Default::default()
         },
         children: None,
+        image_search_query: None,
         reusable: None,
         slot: None,
         state: None,
@@ -295,6 +300,7 @@ fn dump_fill_color() {
             ..Default::default()
         },
         children: None,
+        image_search_query: None,
         reusable: None,
         slot: None,
         state: None,
@@ -336,6 +342,7 @@ fn dump_stroke() {
             ..Default::default()
         },
         children: None,
+        image_search_query: None,
         reusable: None,
         slot: None,
         state: None,
@@ -443,6 +450,7 @@ fn dump_exact_format_simple_tree() {
             ..Default::default()
         },
         children: Some(vec![child]),
+        image_search_query: None,
         reusable: None,
         slot: None,
         state: None,
@@ -476,6 +484,7 @@ fn dump_opacity_omitted_at_1() {
         base: base_opaque,
         container: ContainerProps::default(),
         children: None,
+        image_search_query: None,
         reusable: None,
         slot: None,
         state: None,
@@ -502,6 +511,7 @@ fn dump_opacity_omitted_at_1() {
         base: base_half,
         container: ContainerProps::default(),
         children: None,
+        image_search_query: None,
         reusable: None,
         slot: None,
         state: None,

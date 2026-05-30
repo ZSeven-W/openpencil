@@ -367,6 +367,7 @@ fn build_node(variant: FigmaNodeVariant, base: PenNodeBase) -> PenNode {
             base,
             container: ContainerProps::default(),
             children: None,
+            image_search_query: None,
             reusable: None,
             slot: None,
             state: None,

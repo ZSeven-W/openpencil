@@ -275,6 +275,7 @@ fn fix_unresolved_images_recurses_into_frame_children() {
         base: base(),
         container: ContainerProps::default(),
         children: Some(vec![inner]),
+        image_search_query: None,
         reusable: None,
         slot: None,
         state: None,

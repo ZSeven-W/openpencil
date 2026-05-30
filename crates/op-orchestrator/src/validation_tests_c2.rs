@@ -42,6 +42,7 @@ fn make_frame_node(id: &str) -> PenNode {
         },
         container: ContainerProps::default(),
         children: None,
+        image_search_query: None,
         reusable: None,
         slot: None,
         state: None,
