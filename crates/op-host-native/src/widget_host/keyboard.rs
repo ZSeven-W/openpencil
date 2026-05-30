@@ -26,6 +26,9 @@ impl WidgetHostNative {
                 op_editor_core::agent_settings::SettingsFocus::BuiltinAgent { .. } => {
                     !c.is_control() && draft.len() < 512
                 }
+                op_editor_core::agent_settings::SettingsFocus::AcpAgent { .. } => {
+                    !c.is_control() && draft.len() < 512
+                }
                 op_editor_core::agent_settings::SettingsFocus::ImageGenProfile { .. } => {
                     !c.is_control() && draft.len() < 512
                 }

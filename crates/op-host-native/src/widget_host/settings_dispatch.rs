@@ -5,7 +5,9 @@ use super::WidgetHostNative;
 impl WidgetHostNative {
     /// Commit any focused settings-modal input.
     pub(in crate::widget_host) fn commit_settings_focus_if_any(&mut self) {
-        use op_editor_core::agent_settings::{BuiltinAgentField, ImageGenField, SettingsFocus};
+        use op_editor_core::agent_settings::{
+            AcpAgentField, BuiltinAgentField, ImageGenField, SettingsFocus,
+        };
         let Some(focus) = self.editor_state.editor_ui.agent_settings.focus.take() else {
             return;
         };
@@ -85,6 +87,35 @@ impl WidgetHostNative {
                             } else {
                                 Some(draft.trim().to_string())
                             };
+                        }
+                    }
+                }
+            }
+            SettingsFocus::AcpAgent { index, field } => {
+                if let Some(agent) = self
+                    .editor_state
+                    .editor_ui
+                    .agent_settings
+                    .acp_agents
+                    .get_mut(index)
+                {
+                    match field {
+                        AcpAgentField::DisplayName => {
+                            if !draft.trim().is_empty() {
+                                agent.display_name = draft.trim().to_string();
+                            }
+                        }
+                        AcpAgentField::Command => {
+                            agent.command = draft.trim().to_string();
+                            agent.connected = false;
+                        }
+                        AcpAgentField::Url => {
+                            agent.url = if draft.trim().is_empty() {
+                                None
+                            } else {
+                                Some(draft.trim().to_string())
+                            };
+                            agent.connected = false;
                         }
                     }
                 }

@@ -379,6 +379,7 @@ fn acp_agent_from_payload(payload: AcpAgentPayload) -> Option<AcpAgentConfig> {
         env: payload.env,
         url: payload.url,
         enabled: payload.enabled,
+        connected: false,
     })
 }
 
@@ -701,6 +702,7 @@ mod tests {
         assert_eq!(local.display_name, "Design Agent");
         assert_eq!(local.connection_type, AcpConnectionType::Local);
         assert_eq!(local.command, "/usr/local/bin/design-agent");
+        assert!(!local.connected);
         assert_eq!(local.args, vec!["--stdio"]);
         assert_eq!(
             local.env.get("ACP_TOKEN").map(String::as_str),

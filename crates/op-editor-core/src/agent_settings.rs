@@ -117,6 +117,13 @@ pub enum ImageSearchField {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AcpAgentField {
+    DisplayName,
+    Command,
+    Url,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SettingsFocus {
     McpPort,
     ImageSearch(ImageSearchField),
@@ -127,6 +134,10 @@ pub enum SettingsFocus {
     ImageGenProfile {
         index: usize,
         field: ImageGenField,
+    },
+    AcpAgent {
+        index: usize,
+        field: AcpAgentField,
     },
 }
 
@@ -225,6 +236,21 @@ pub struct AcpAgentConfig {
     pub env: BTreeMap<String, String>,
     pub url: Option<String>,
     pub enabled: bool,
+    pub connected: bool,
+}
+
+impl AcpAgentConfig {
+    pub fn ready(&self) -> bool {
+        self.enabled
+            && match self.connection_type {
+                AcpConnectionType::Local => !self.command.trim().is_empty(),
+                AcpConnectionType::Remote => self
+                    .url
+                    .as_deref()
+                    .map(|url| !url.trim().is_empty())
+                    .unwrap_or(false),
+            }
+    }
 }
 
 /// Image-generation service providers mirrored from the TS
@@ -434,8 +460,15 @@ impl AgentSettings {
             env,
             url,
             enabled,
+            connected: false,
         });
         id
+    }
+
+    pub fn remove_acp_agent(&mut self, id: &str) -> bool {
+        let before = self.acp_agents.len();
+        self.acp_agents.retain(|agent| agent.id != id);
+        self.acp_agents.len() != before
     }
 
     pub fn add_image_gen_profile(&mut self) -> String {
@@ -626,5 +659,6 @@ mod tests {
         assert!(s.acp_agents[0].env.is_empty());
         assert!(s.acp_agents[0].url.is_none());
         assert!(s.acp_agents[0].enabled);
+        assert!(!s.acp_agents[0].connected);
     }
 }
