@@ -4,7 +4,9 @@
 //! of letting step rows scroll away with assistant messages.
 
 use super::ai_chat_panel::{to_jian_color, PAD};
-use super::ai_chat_transcript_steps::{extract_step_blocks, ParsedStep, ParsedStepStatus};
+use super::ai_chat_transcript_steps::{
+    extract_step_blocks, split_design_progress, ParsedStep, ParsedStepStatus,
+};
 use crate::theme::Theme;
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::PaintCx;
@@ -35,11 +37,18 @@ pub(crate) fn fixed_checklist_items(messages: &[ChatMessage]) -> Vec<ChecklistIt
         return Vec::new();
     };
 
-    let steps: Vec<ParsedStep> = extract_step_blocks(&message.content, message.streaming)
+    let mut steps: Vec<ParsedStep> = extract_step_blocks(&message.content, message.streaming)
         .steps
         .into_iter()
         .filter(|step| !step.title.eq_ignore_ascii_case("Thinking"))
         .collect();
+    if steps.is_empty() {
+        steps = split_design_progress(&message.thinking)
+            .0
+            .into_iter()
+            .filter(|step| !step.title.eq_ignore_ascii_case("Thinking"))
+            .collect();
+    }
     if steps.is_empty() {
         return Vec::new();
     }
@@ -275,5 +284,18 @@ mod tests {
         assert_eq!(items.len(), 2);
         assert!(items[0].done);
         assert!(items[1].active);
+    }
+
+    #[test]
+    fn fixed_checklist_uses_design_session_thinking_progress() {
+        let mut message = ChatMessage::assistant_streaming();
+        message.thinking = "• Planning…\n• Subtask `hero` — Hero section".into();
+
+        let items = fixed_checklist_items(std::slice::from_ref(&message));
+
+        assert_eq!(items.len(), 2);
+        assert!(items[0].done);
+        assert!(items[1].active);
+        assert_eq!(items[1].label, "Subtask `hero` — Hero section");
     }
 }
