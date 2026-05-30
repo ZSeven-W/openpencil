@@ -128,6 +128,11 @@ fn first_layer_trailing_points(panel: &LayerPanel, rect: Rect) -> (Point2D, Poin
     )
 }
 
+fn first_layer_eye_top_left(panel: &LayerPanel, rect: Rect) -> Point2D {
+    let (eye_center, _) = first_layer_trailing_points(panel, rect);
+    Point2D::new(eye_center.x - 6.0, eye_center.y - 5.0)
+}
+
 #[test]
 fn selected_visible_unlocked_layer_does_not_expose_trailing_actions_without_hover() {
     let state = EditorState::starter();
@@ -171,6 +176,78 @@ fn hovered_layer_exposes_trailing_actions() {
         panel.hit_test(rect, lock),
         Some(LayerPanelHit::ToggleLocked(NodeId::new("n10")))
     );
+}
+
+#[derive(Default)]
+struct LayerPaintBackend {
+    strokes: Vec<(Point2D, f32, crate::Color)>,
+}
+
+impl crate::RenderBackend for LayerPaintBackend {
+    fn begin_frame(&mut self) {}
+    fn end_frame(&mut self) {}
+    fn fill_rect(&mut self, _: Rect, _: crate::Color) {}
+    fn stroke_rect(&mut self, _: Rect, _: crate::Color, _: f32) {}
+    fn draw_text(&mut self, _: &crate::TextLayout, _: Point2D) {}
+    fn clip_rect(&mut self, _: Rect) {}
+    fn save(&mut self) {}
+    fn restore(&mut self) {}
+    fn translate(&mut self, _: Point2D) {}
+    fn stroke_line(&mut self, _: Point2D, _: Point2D, _: crate::Color, _: f32) {}
+    fn fill_round_rect(&mut self, _: Rect, _: f32, _: crate::Color) {}
+    fn stroke_round_rect(&mut self, _: Rect, _: f32, _: crate::Color, _: f32) {}
+    fn stroke_svg_path(
+        &mut self,
+        _: &str,
+        top_left: Point2D,
+        size: f32,
+        color: crate::Color,
+        _: f32,
+    ) {
+        self.strokes.push((top_left, size, color));
+    }
+    fn resize(&mut self, _: u32, _: u32) {}
+    fn dpi_scale(&self) -> f32 {
+        1.0
+    }
+}
+
+fn approx_point(a: Point2D, b: Point2D) -> bool {
+    (a.x - b.x).abs() < 1e-4 && (a.y - b.y).abs() < 1e-4
+}
+
+fn is_yellow_400(color: crate::Color) -> bool {
+    (color.r - 250.0 / 255.0).abs() < 1e-4
+        && (color.g - 204.0 / 255.0).abs() < 1e-4
+        && (color.b - 21.0 / 255.0).abs() < 1e-4
+        && (color.a - 1.0).abs() < 1e-4
+}
+
+#[test]
+fn hidden_layer_eye_icon_uses_ts_yellow_state_color() {
+    let mut state = EditorState::starter();
+    state.toggle_node_hidden(&NodeId::new("n10"));
+    let panel = LayerPanel::from_editor(&state);
+    let rect = Rect {
+        origin: Point2D::new(0.0, 0.0),
+        size: Point2D::new(LAYER_PANEL_WIDTH, panel.intrinsic_height()),
+    };
+    let eye_top_left = first_layer_eye_top_left(&panel, rect);
+    let mut backend = LayerPaintBackend::default();
+    let mut cx = super::PaintCx {
+        backend: &mut backend,
+    };
+
+    panel.paint(&mut cx, rect);
+
+    assert!(backend
+        .strokes
+        .iter()
+        .any(
+            |(top_left, size, color)| approx_point(*top_left, eye_top_left)
+                && (*size - 12.0).abs() < 1e-4
+                && is_yellow_400(*color)
+        ));
 }
 
 #[test]
