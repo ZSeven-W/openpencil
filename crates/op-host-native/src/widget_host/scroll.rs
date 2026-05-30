@@ -144,7 +144,7 @@ impl WidgetHostNative {
         // Floating Git panel — a wheel over its open diff view
         // scrolls the diff (vertically; horizontally with Shift held)
         // instead of zooming the canvas.
-        if let Some(panel_rect) = self.git_panel_rect(viewport_width, viewport_height) {
+        if let Some(panel_rect) = self.git_panel_outer_rect(viewport_width, viewport_height) {
             if rect_contains(panel_rect, Point2D::new(x, y))
                 && self.editor_state.editor_ui.git_panel.diff.is_some()
             {
@@ -264,7 +264,7 @@ impl WidgetHostNative {
         }
         // Floating Git panel — a trackpad scroll over its open diff
         // pans the diff (dy vertically, dx sideways) like the wheel.
-        if let Some(panel_rect) = self.git_panel_rect(viewport_width, viewport_height) {
+        if let Some(panel_rect) = self.git_panel_outer_rect(viewport_width, viewport_height) {
             if rect_contains(panel_rect, Point2D::new(x, y))
                 && self.editor_state.editor_ui.git_panel.diff.is_some()
             {

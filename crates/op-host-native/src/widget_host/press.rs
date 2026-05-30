@@ -233,7 +233,7 @@ impl WidgetHostNative {
         // rect belongs to the Git panel (block 0.9 below), so every
         // rail block in between skips a click it would otherwise own.
         let in_git_panel = self
-            .git_panel_rect(viewport_width, viewport_height)
+            .git_panel_outer_rect(viewport_width, viewport_height)
             .is_some_and(|r| rect_contains(r, Point2D::new(x, y)));
 
         // 0z. Panel-resize gutter — ±4 px from rail edges.

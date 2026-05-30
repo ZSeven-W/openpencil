@@ -118,9 +118,11 @@ pub mod figma_import_progress;
 pub mod file_menu;
 pub mod git_panel;
 mod git_panel_diff;
+mod git_panel_empty;
 mod git_panel_hit;
 mod git_panel_remotes;
 mod git_panel_resolve;
+mod git_panel_status;
 #[cfg(test)]
 mod git_panel_tests;
 pub mod icon_picker_panel;
@@ -128,6 +130,7 @@ pub mod locale_picker;
 pub mod shape_picker;
 pub mod status_bar;
 pub mod top_bar;
+mod top_bar_paint;
 pub mod variables_panel;
 
 pub use dropdown::{Dropdown, DropdownState};

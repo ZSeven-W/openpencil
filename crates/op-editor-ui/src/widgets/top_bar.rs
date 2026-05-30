@@ -9,40 +9,40 @@ use crate::theme::Theme;
 use crate::widgets::editor_state_ext::{theme_for, translate};
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::{LayoutBox, LayoutCx, PaintCx, Widget, WidgetId};
-use crate::{Color, Point2D, Rect, TextLayout};
+use crate::{Color, Point2D, Rect};
 use op_editor_core::editor_ui_state::EditorUiState;
 
 pub const TOP_BAR_HEIGHT: f32 = 40.0;
 // Top-bar glyph size — 14 px (a touch smaller than the old 16 and
 // matching the TS `size-[15px]` chrome). Local to the top bar; other
 // widgets keep their own `ICON_SIZE`.
-const ICON_SIZE: f32 = 14.0;
-const ICON_BUTTON: f32 = 28.0;
+pub(super) const ICON_SIZE: f32 = 14.0;
+pub(super) const ICON_BUTTON: f32 = 28.0;
 /// Globe locale-picker button — wider than a normal icon button so a
 /// chevron-down sits next to the globe glyph (signals the dropdown).
-const GLOBE_BUTTON_WIDTH: f32 = 44.0;
+pub(super) const GLOBE_BUTTON_WIDTH: f32 = 44.0;
 /// File-menu compound button — folder + a smaller chevron-down sit
 /// inside a single round-rect background. Tighter gap than two
 /// separate icon buttons (4 px between glyphs vs ICON_BUTTON + 4).
-const FILE_MENU_BUTTON_WIDTH: f32 = 46.0;
-const CHEVRON_SIZE: f32 = 10.0;
-const PAD: f32 = 12.0;
+pub(super) const FILE_MENU_BUTTON_WIDTH: f32 = 46.0;
+pub(super) const CHEVRON_SIZE: f32 = 10.0;
+pub(super) const PAD: f32 = 12.0;
 /// Top-bar vertical divider geometry (TS `w-px h-3.5 bg-border/60
 /// mx-1`): 1 px wide, 14 px tall, 4 px gap on each side.
-const DIVIDER_W: f32 = 1.0;
-const DIVIDER_H: f32 = 14.0;
-const DIVIDER_GAP: f32 = 4.0;
+pub(super) const DIVIDER_W: f32 = 1.0;
+pub(super) const DIVIDER_H: f32 = 14.0;
+pub(super) const DIVIDER_GAP: f32 = 4.0;
 /// The git button needs a desktop git backend (`op-git` via the
 /// desktop host) to populate + paint the panel; the web/wasm build
 /// has none, so the button is compiled out there — otherwise it would
 /// toggle an invisible panel (Codex stop-time review).
-const GIT_BUTTON_AVAILABLE: bool = !cfg!(target_arch = "wasm32");
+pub(super) const GIT_BUTTON_AVAILABLE: bool = !cfg!(target_arch = "wasm32");
 /// Gap between the stacked per-agent brand icons in the chip.
-const AGENT_ICON_GAP: f32 = 4.0;
+pub(super) const AGENT_ICON_GAP: f32 = 4.0;
 /// Diameter of a macOS-style window-control dot.
-const TRAFFIC_DOT: f32 = 12.0;
+pub(super) const TRAFFIC_DOT: f32 = 12.0;
 /// Centre-to-centre spacing of the 3 window-control dots.
-const TRAFFIC_STEP: f32 = 20.0;
+pub(super) const TRAFFIC_STEP: f32 = 20.0;
 /// Horizontal span the window-control cluster reserves at the
 /// TopBar's left edge before the app's own icons. macOS uses the
 /// *native* traffic-light buttons — they sit at the system
@@ -50,7 +50,7 @@ const TRAFFIC_STEP: f32 = 20.0;
 /// clear them with a comfortable gap. Windows / Linux paint the
 /// custom dots from `PAD`, so the reservation is just the dot
 /// cluster + a small gap.
-const TRAFFIC_CLUSTER_W: f32 = if cfg!(target_os = "macos") {
+pub(super) const TRAFFIC_CLUSTER_W: f32 = if cfg!(target_os = "macos") {
     66.0
 } else {
     TRAFFIC_STEP * 2.0 + TRAFFIC_DOT + 16.0
@@ -181,7 +181,7 @@ impl TopBar {
     /// `0` in fullscreen on macOS — the native traffic lights hide
     /// then, so the gap would be dead space. Other platforms keep
     /// the custom-dot cluster's inset in every mode.
-    fn left_inset_for(fullscreen: bool) -> f32 {
+    pub(super) fn left_inset_for(fullscreen: bool) -> f32 {
         if fullscreen && cfg!(target_os = "macos") {
             0.0
         } else {
@@ -189,7 +189,7 @@ impl TopBar {
         }
     }
 
-    fn left_inset(&self) -> f32 {
+    pub(super) fn left_inset(&self) -> f32 {
         Self::left_inset_for(self.fullscreen)
     }
 
@@ -207,7 +207,7 @@ impl TopBar {
     /// `LayoutGrid` glyph in the empty state, or one brand icon per
     /// connected provider (with `AGENT_ICON_GAP` between them) in the
     /// active state. Paint + hit-test both size the chip off this.
-    fn agent_icons_width(&self) -> f32 {
+    pub(super) fn agent_icons_width(&self) -> f32 {
         if self.agent_count == 0 {
             ICON_SIZE
         } else {
@@ -220,7 +220,7 @@ impl TopBar {
     /// half present only when its count is non-zero (TS
     /// `top-bar.tsx` parity). `None` when nothing is set up, in
     /// which case the caller paints the `Agents & MCP` label.
-    fn chip_status_text(&self) -> Option<String> {
+    pub(super) fn chip_status_text(&self) -> Option<String> {
         if self.agent_count == 0 && self.mcp_count == 0 {
             return None;
         }
@@ -279,7 +279,7 @@ impl TopBar {
     /// Git-panel toggle button — sits just right of the centred file
     /// name. Width holds the branch glyph plus an optional branch
     /// label. Shared by paint + hit-test so they can't drift.
-    fn git_button_rect(&self, top_bar_rect: Rect) -> Rect {
+    pub(super) fn git_button_rect(&self, top_bar_rect: Rect) -> Rect {
         let center_y = top_bar_rect.origin.y + top_bar_rect.size.y / 2.0;
         // The name is *centred* using the 9 px/char heuristic, but a
         // CJK glyph renders ~14 px wide, so the real right edge is
@@ -302,6 +302,18 @@ impl TopBar {
             origin: Point2D::new(filename_right + 10.0, center_y - ICON_BUTTON / 2.0),
             size: Point2D::new(ICON_SIZE + 8.0 + branch_w, ICON_BUTTON),
         }
+    }
+
+    /// Center-x of the Git-panel toggle button when it is shown
+    /// (desktop only — see `GIT_BUTTON_AVAILABLE`). The floating Git
+    /// panel anchors its caret here so it reads as a popover hanging
+    /// off the button (TS parity); `None` when the button is hidden.
+    pub fn git_button_center_x(&self, top_bar_rect: Rect) -> Option<f32> {
+        if !GIT_BUTTON_AVAILABLE {
+            return None;
+        }
+        let r = self.git_button_rect(top_bar_rect);
+        Some(r.origin.x + r.size.x / 2.0)
     }
 
     /// Resolve a press on the left-edge window-control dots.
@@ -430,7 +442,7 @@ impl TopBar {
     }
 }
 
-fn rect_contains(r: Rect, p: Point2D) -> bool {
+pub(super) fn rect_contains(r: Rect, p: Point2D) -> bool {
     p.x >= r.origin.x
         && p.x <= r.origin.x + r.size.x
         && p.y >= r.origin.y
@@ -452,313 +464,9 @@ impl Widget for TopBar {
     }
 
     fn paint(&self, cx: &mut PaintCx<'_>, rect: Rect) {
-        cx.backend.fill_rect(rect, self.theme.background);
-        // Bottom hairline.
-        cx.backend.fill_rect(
-            Rect {
-                origin: Point2D::new(rect.origin.x, rect.origin.y + rect.size.y - 1.0),
-                size: Point2D::new(rect.size.x, 1.0),
-            },
-            self.theme.border,
-        );
-
-        let center_y = rect.origin.y + rect.size.y / 2.0;
-        // ── Window-control dots ────────────────────────────────
-        // macOS keeps the *native* traffic-light buttons (the
-        // transparent title bar preserves them), so the custom
-        // dots paint only on Windows / Linux — whose
-        // `decorations(false)` window ships none. The desktop
-        // runner wires custom-dot clicks via `window_control_at`.
-        if !cfg!(target_os = "macos") {
-            let traffic = [
-                Color {
-                    r: 1.0,
-                    g: 0.373,
-                    b: 0.341,
-                    a: 1.0,
-                }, // #FF5F57
-                Color {
-                    r: 0.996,
-                    g: 0.737,
-                    b: 0.18,
-                    a: 1.0,
-                }, // #FEBC2E
-                Color {
-                    r: 0.157,
-                    g: 0.784,
-                    b: 0.251,
-                    a: 1.0,
-                }, // #28C840
-            ];
-            let first_dot_cx = rect.origin.x + PAD + TRAFFIC_DOT / 2.0;
-            for (i, color) in traffic.into_iter().enumerate() {
-                let dot_cx = first_dot_cx + i as f32 * TRAFFIC_STEP;
-                cx.backend.fill_oval(
-                    Rect {
-                        origin: Point2D::new(
-                            dot_cx - TRAFFIC_DOT / 2.0,
-                            center_y - TRAFFIC_DOT / 2.0,
-                        ),
-                        size: Point2D::new(TRAFFIC_DOT, TRAFFIC_DOT),
-                    },
-                    color,
-                );
-                // Hovering the cluster reveals each dot's glyph
-                // (macOS-style): ✕ close, − minimise, + maximise.
-                if self.traffic_hover {
-                    let glyph = Color {
-                        r: 0.0,
-                        g: 0.0,
-                        b: 0.0,
-                        a: 0.55,
-                    };
-                    let r = 3.0_f32;
-                    let lw = 1.3_f32;
-                    match i {
-                        0 => {
-                            cx.backend.stroke_line(
-                                Point2D::new(dot_cx - r, center_y - r),
-                                Point2D::new(dot_cx + r, center_y + r),
-                                glyph,
-                                lw,
-                            );
-                            cx.backend.stroke_line(
-                                Point2D::new(dot_cx - r, center_y + r),
-                                Point2D::new(dot_cx + r, center_y - r),
-                                glyph,
-                                lw,
-                            );
-                        }
-                        1 => {
-                            cx.backend.stroke_line(
-                                Point2D::new(dot_cx - r, center_y),
-                                Point2D::new(dot_cx + r, center_y),
-                                glyph,
-                                lw,
-                            );
-                        }
-                        _ => {
-                            cx.backend.stroke_line(
-                                Point2D::new(dot_cx - r, center_y),
-                                Point2D::new(dot_cx + r, center_y),
-                                glyph,
-                                lw,
-                            );
-                            cx.backend.stroke_line(
-                                Point2D::new(dot_cx, center_y - r),
-                                Point2D::new(dot_cx, center_y + r),
-                                glyph,
-                                lw,
-                            );
-                        }
-                    }
-                }
-            }
-        }
-        // ── Left cluster ───────────────────────────────────────
-        // sidebar toggle │ file-menu │ Figma — each group split by a
-        // TS-style 1×14 divider (4 px gap each side).
-        let panel_left_x = rect.origin.x + PAD + self.left_inset();
-        paint_icon_button(cx, &self.theme, panel_left_x, center_y, Icon::PanelLeft);
-        // Divider between the sidebar toggle and the file-menu.
-        let divider1_x = panel_left_x + ICON_BUTTON + DIVIDER_GAP;
-        paint_divider(cx, &self.theme, divider1_x, center_y);
-        // File-menu compound: folder + tight chevron in one button.
-        let file_menu_x = divider1_x + DIVIDER_W + DIVIDER_GAP;
-        paint_file_menu_button(cx, &self.theme, file_menu_x, center_y);
-        // Divider before the Figma import affordance.
-        let divider2_x = file_menu_x + FILE_MENU_BUTTON_WIDTH + DIVIDER_GAP;
-        paint_divider(cx, &self.theme, divider2_x, center_y);
-        // Figma import button.
-        let figma_x = divider2_x + DIVIDER_W + DIVIDER_GAP;
-        paint_figma_button(cx, &self.theme, figma_x, center_y);
-
-        // ── Centered file name ─────────────────────────────────
-        let name = TextLayout::single_run(
-            &self.file_name,
-            "system-ui",
-            13.0,
-            to_jian_color(self.theme.foreground),
-            Point2D::new(0.0, 0.0),
-        );
-        // Approximate text width; skia textlayout would tell us the
-        // exact pixel width but for Step 4 we don't pull that in.
-        let approx_w = self.file_name.chars().count() as f32 * 9.0;
-        cx.backend.draw_text(
-            &name,
-            Point2D::new(
-                rect.origin.x + (rect.size.x - approx_w) / 2.0,
-                center_y + 5.0,
-            ),
-        );
-
-        // Git-panel button just right of the file name (TS GitButton):
-        // a branch glyph + optional branch name. Always shown on
-        // desktop — a click toggles the git panel (which offers `init`
-        // when the doc isn't yet in a repo). Compiled out on web,
-        // which has no git backend to paint a panel.
-        if GIT_BUTTON_AVAILABLE {
-            let git_rect = self.git_button_rect(rect);
-            draw_icon(
-                cx.backend,
-                Icon::GitBranch,
-                Point2D::new(git_rect.origin.x, glyph_top(center_y, ICON_SIZE)),
-                ICON_SIZE,
-                self.theme.muted_foreground,
-                1.4,
-            );
-            if let Some(branch) = self.git_branch.as_deref() {
-                let label = TextLayout::single_run(
-                    branch,
-                    "system-ui",
-                    11.0,
-                    to_jian_color(self.theme.muted_foreground),
-                    Point2D::new(0.0, 0.0),
-                );
-                cx.backend.draw_text(
-                    &label,
-                    Point2D::new(git_rect.origin.x + ICON_SIZE + 6.0, center_y + 4.0),
-                );
-            }
-        }
-
-        // ── Right cluster ──────────────────────────────────────
-        // Right → left: Maximize | Sun | Globe+Chevron. Globe is a
-        // wider compound button (signals the dropdown affordance).
-        let mut rx = rect.origin.x + rect.size.x - PAD - ICON_BUTTON;
-
-        // Fullscreen.
-        paint_icon_button(cx, &self.theme, rx, center_y, Icon::Maximize);
-        rx -= ICON_BUTTON;
-
-        // Theme toggle — Sun in dark mode (click → light); Moon in
-        // light mode (click → dark).
-        let theme_icon = match self.theme_mode {
-            op_editor_core::ThemeMode::Dark => Icon::Sun,
-            op_editor_core::ThemeMode::Light => Icon::Moon,
-        };
-        paint_icon_button(cx, &self.theme, rx, center_y, theme_icon);
-        rx -= GLOBE_BUTTON_WIDTH;
-
-        // i18n globe + chevron-down (single hit-target).
-        let globe_button = Rect {
-            origin: Point2D::new(rx, center_y - ICON_BUTTON / 2.0),
-            size: Point2D::new(GLOBE_BUTTON_WIDTH, ICON_BUTTON),
-        };
-        // Globe glyph at the left half.
-        draw_icon(
-            cx.backend,
-            Icon::Globe,
-            Point2D::new(globe_button.origin.x + 4.0, center_y - ICON_SIZE / 2.0),
-            ICON_SIZE,
-            self.theme.muted_foreground,
-            1.4,
-        );
-        // Chevron-down at the right side, smaller.
-        draw_icon(
-            cx.backend,
-            Icon::ChevronDown,
-            Point2D::new(
-                globe_button.origin.x + 4.0 + ICON_SIZE + 4.0,
-                center_y - CHEVRON_SIZE / 2.0,
-            ),
-            CHEVRON_SIZE,
-            self.theme.muted_foreground,
-            1.4,
-        );
-        // `rx` now points at the LEFT edge of the globe button —
-        // the chip anchors immediately to its left (small gap).
-
-        // Agent chip — two states:
-        //   - empty (agent_count == 0): LayoutGrid icon + an
-        //     "Agents and MCP" label. Affordance for "set up agents/MCP".
-        //   - active (≥ 1): one brand icon per connected provider +
-        //     a green dot + "N agent" text.
-        // Anchored just left of the globe icon button (+small gap).
-        let status_text = self.chip_status_text();
-        let show_dot = status_text.is_some();
-        let chip_text: &str = status_text.as_deref().unwrap_or(self.label_agents_and_mcp);
-        let dot_w = if show_dot { 6.0 + 6.0 } else { 0.0 };
-        let icons_w = self.agent_icons_width();
-        let text_w = cx.backend.measure_text(chip_text, 11.0);
-        let chip_w = 8.0 + icons_w + 6.0 + dot_w + text_w + 12.0;
-        // Leave room for the chip↔globe divider (4 px gap + 1 px + 4 px).
-        let chip_rect = Rect {
-            origin: Point2D::new(
-                rx - chip_w - (DIVIDER_GAP * 2.0 + DIVIDER_W),
-                center_y - 13.0,
-            ),
-            size: Point2D::new(chip_w, 26.0),
-        };
-        // Leading icons (no border ring — TS empty-state chip has no
-        // outline). The empty state shows the single LayoutGrid
-        // set-up affordance; the active chip stacks one brand logo
-        // per connected provider so the user sees *which* agents
-        // are on.
-        let icons_y = glyph_top(center_y, ICON_SIZE);
-        if self.agent_count == 0 {
-            draw_icon(
-                cx.backend,
-                Icon::LayoutGrid,
-                Point2D::new(chip_rect.origin.x + 8.0, icons_y),
-                ICON_SIZE,
-                self.theme.muted_foreground,
-                1.4,
-            );
-        } else {
-            let mut ix = chip_rect.origin.x + 8.0;
-            for (i, provider) in op_editor_core::AgentProvider::ALL.iter().enumerate() {
-                if !self.connected[i] {
-                    continue;
-                }
-                crate::widgets::ai_chat_model_picker::paint_provider_logo(
-                    cx,
-                    *provider,
-                    Point2D::new(ix, icons_y),
-                    ICON_SIZE,
-                    self.theme.foreground,
-                );
-                ix += ICON_SIZE + AGENT_ICON_GAP;
-            }
-        }
-        let mut text_x = chip_rect.origin.x + 8.0 + icons_w + 6.0;
-        if show_dot {
-            // emerald-500 (#10b981) — matches the TS status dot.
-            let dot_color = Color {
-                r: 0.063,
-                g: 0.725,
-                b: 0.506,
-                a: 1.0,
-            };
-            cx.backend.fill_round_rect(
-                Rect {
-                    origin: Point2D::new(text_x, chip_rect.origin.y + chip_rect.size.y / 2.0 - 3.0),
-                    size: Point2D::new(6.0, 6.0),
-                },
-                3.0,
-                dot_color,
-            );
-            text_x += 6.0 + 6.0;
-        }
-        let chip_label = TextLayout::single_run(
-            chip_text,
-            "system-ui",
-            11.0,
-            to_jian_color(self.theme.muted_foreground),
-            Point2D::new(0.0, 0.0),
-        );
-        // 11 px text centred on the bar's center line (ascent ≈ 8 px).
-        cx.backend
-            .draw_text(&chip_label, Point2D::new(text_x, center_y + 4.0));
-
-        // Divider between the agent chip and the globe button — groups
-        // the status chip apart from the locale/theme/fullscreen controls.
-        paint_divider(
-            cx,
-            &self.theme,
-            globe_button.origin.x - DIVIDER_GAP - DIVIDER_W,
-            center_y,
-        );
+        // Full composition lives in the `top_bar_paint` sibling (split
+        // for the 800-line cap).
+        self.paint_chrome(cx, rect);
     }
 
     fn access_node(&self) -> accesskit::Node {
@@ -768,7 +476,13 @@ impl Widget for TopBar {
     }
 }
 
-fn paint_icon_button(cx: &mut PaintCx<'_>, theme: &Theme, x: f32, center_y: f32, icon: Icon) {
+pub(super) fn paint_icon_button(
+    cx: &mut PaintCx<'_>,
+    theme: &Theme,
+    x: f32,
+    center_y: f32,
+    icon: Icon,
+) {
     let icon_origin = Point2D::new(
         x + (ICON_BUTTON - ICON_SIZE) / 2.0,
         center_y - ICON_SIZE / 2.0,
@@ -786,7 +500,7 @@ fn paint_icon_button(cx: &mut PaintCx<'_>, theme: &Theme, x: f32, center_y: f32,
 /// File-menu compound: folder glyph + tighter chevron, both inside
 /// a single 46×28 hit-target. The chevron gap is ~4 px instead of
 /// ICON_BUTTON-wide as it used to render.
-fn paint_file_menu_button(cx: &mut PaintCx<'_>, theme: &Theme, x: f32, center_y: f32) {
+pub(super) fn paint_file_menu_button(cx: &mut PaintCx<'_>, theme: &Theme, x: f32, center_y: f32) {
     draw_icon(
         cx.backend,
         Icon::FolderOpen,
@@ -805,7 +519,7 @@ fn paint_file_menu_button(cx: &mut PaintCx<'_>, theme: &Theme, x: f32, center_y:
     );
 }
 
-fn paint_figma_button(cx: &mut PaintCx<'_>, theme: &Theme, x: f32, center_y: f32) {
+pub(super) fn paint_figma_button(cx: &mut PaintCx<'_>, theme: &Theme, x: f32, center_y: f32) {
     crate::widgets::brand_icons::paint_figma_logo(
         cx.backend,
         Point2D::new(
@@ -820,7 +534,7 @@ fn paint_figma_button(cx: &mut PaintCx<'_>, theme: &Theme, x: f32, center_y: f32
 /// Rough "is this a full-width (CJK/Hangul/full-width-form) glyph"
 /// test — used only to estimate the rendered file-name width so the
 /// git button clears it.
-fn is_wide_glyph(c: char) -> bool {
+pub(super) fn is_wide_glyph(c: char) -> bool {
     let cp = c as u32;
     matches!(cp, 0x1100..=0x11FF | 0x2E80..=0x9FFF | 0xAC00..=0xD7AF | 0xF900..=0xFAFF | 0xFF00..=0xFFEF)
 }
@@ -828,13 +542,13 @@ fn is_wide_glyph(c: char) -> bool {
 /// Top-left y for a glyph of `size` vertically centred on `center_y`.
 /// Every top-bar glyph routes through this so the whole bar shares
 /// one center line.
-fn glyph_top(center_y: f32, size: f32) -> f32 {
+pub(super) fn glyph_top(center_y: f32, size: f32) -> f32 {
     center_y - size / 2.0
 }
 
 /// Paint a top-bar vertical divider with its left edge at `x`,
 /// centred on `center_y` (TS `w-px h-3.5 bg-border/60`).
-fn paint_divider(cx: &mut PaintCx<'_>, theme: &Theme, x: f32, center_y: f32) {
+pub(super) fn paint_divider(cx: &mut PaintCx<'_>, theme: &Theme, x: f32, center_y: f32) {
     let color = Color {
         a: theme.border.a * 0.6,
         ..theme.border
@@ -848,7 +562,7 @@ fn paint_divider(cx: &mut PaintCx<'_>, theme: &Theme, x: f32, center_y: f32) {
     );
 }
 
-fn to_jian_color(c: Color) -> jian_core::scene::Color {
+pub(super) fn to_jian_color(c: Color) -> jian_core::scene::Color {
     fn ch(v: f32) -> u8 {
         (v.clamp(0.0, 1.0) * 255.0).round() as u8
     }

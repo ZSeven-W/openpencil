@@ -13,7 +13,6 @@
 
 use crate::theme::Theme;
 use crate::widgets::editor_state_ext::theme_for;
-use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::PaintCx;
 use crate::{Color, Point2D, Rect, TextLayout};
 use op_editor_core::{EditorState, GitPanelState};
@@ -63,38 +62,12 @@ const SUMMARY_MAX: usize = 38;
 /// sibling module (split out for the 800-line file cap).
 pub(super) const DIFF_VIEW_HEIGHT: f32 = 484.0;
 
-/// Empty-state (no-repo) panel size + card metrics. The empty state
-/// is a centred onboarding UI (clock + heading + Init/Open/Clone
-/// cards + note), so it needs a wider, taller panel than the normal
-/// status view — three 96 px cards don't fit in the 320 px width.
+/// Empty-state (no-repo) panel size — wider + taller than the status
+/// view to fit the centred onboarding UI (clock + heading + three
+/// Init/Open/Clone cards + note). The card-row metrics + paint live
+/// in the `git_panel_empty` sibling module (split for the 800 cap).
 pub(super) const EMPTY_STATE_WIDTH: f32 = 380.0;
 pub(super) const EMPTY_STATE_HEIGHT: f32 = 284.0;
-const EMPTY_ICON_BOX: f32 = 48.0;
-const EMPTY_CARD_W: f32 = 96.0;
-const EMPTY_CARD_H: f32 = 104.0;
-const EMPTY_CARD_GAP: f32 = 8.0;
-const EMPTY_CARD_ICON_BOX: f32 = 36.0;
-/// Top offset (from the panel's top edge) of the card row.
-const EMPTY_CARDS_TOP: f32 = 116.0;
-/// The three onboarding cards: (icon, label key, description key).
-/// Index 0 (Init) is gated on `has_saved_file`.
-const EMPTY_CARDS: [(Icon, &str, &str); 3] = [
-    (
-        Icon::FilePlus,
-        "git.empty.newCard",
-        "git.empty.newCardDescription",
-    ),
-    (
-        Icon::FolderOpen,
-        "git.empty.openCard",
-        "git.empty.openCardDescription",
-    ),
-    (
-        Icon::GitFork,
-        "git.empty.cloneCard",
-        "git.empty.cloneCardDescription",
-    ),
-];
 
 /// What a click landed on inside the Git panel.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -218,16 +191,6 @@ impl<'a> GitPanel<'a> {
     /// no hardcoded UI strings.
     pub(super) fn t(&self, key: &'static str) -> &'static str {
         op_i18n::translate(self.locale, key)
-    }
-
-    /// `true` when the panel shows the no-repo onboarding empty state
-    /// (clock + Init/Open/Clone cards) — i.e. not loading, not in a
-    /// repo, and not in the diff / merge views.
-    pub(super) fn is_empty_state(&self) -> bool {
-        !self.state.loading
-            && !self.state.in_repo
-            && self.state.diff.is_none()
-            && self.state.merge_resolve.is_none()
     }
 
     /// Panel width for the current mode — wider while a diff or the
@@ -712,110 +675,6 @@ impl<'a> GitPanel<'a> {
         self.footer(cx, left, top + self.height() - PAD);
     }
 
-    /// The working-tree status line text + colour.
-    fn status_line(&self) -> (String, Color) {
-        let blue = Color {
-            r: 0.23,
-            g: 0.51,
-            b: 0.96,
-            a: 1.0,
-        };
-        if self.state.pulling {
-            return (self.t("git.panel.pulling").to_string(), blue);
-        }
-        if self.state.pushing {
-            return (self.t("git.panel.pushing").to_string(), blue);
-        }
-        if self.state.conflicted_count > 0 {
-            (
-                self.t("git.panel.changedConflicted")
-                    .replace("{{changed}}", &self.state.dirty_count.to_string())
-                    .replace("{{conflicted}}", &self.state.conflicted_count.to_string()),
-                Color {
-                    r: 0.94,
-                    g: 0.27,
-                    b: 0.27,
-                    a: 1.0,
-                },
-            )
-        } else if self.state.dirty_count > 0 {
-            (
-                self.t("git.panel.changed")
-                    .replace("{{count}}", &self.state.dirty_count.to_string()),
-                Color {
-                    r: 0.96,
-                    g: 0.62,
-                    b: 0.04,
-                    a: 1.0,
-                },
-            )
-        } else {
-            (
-                self.t("git.panel.clean").to_string(),
-                Color {
-                    r: 0.22,
-                    g: 0.78,
-                    b: 0.42,
-                    a: 1.0,
-                },
-            )
-        }
-    }
-
-    /// Paint the merge-in-progress banner into the action-input slot
-    /// (the commit input is replaced by it during a merge).
-    fn paint_merge_banner(&self, cx: &mut PaintCx<'_>, rect: Rect) {
-        let amber = Color {
-            r: 0.96,
-            g: 0.62,
-            b: 0.04,
-            a: 1.0,
-        };
-        cx.backend.fill_round_rect(rect, 6.0, self.theme.muted);
-        cx.backend.stroke_round_rect(rect, 6.0, amber, 1.0);
-        let baseline = rect.origin.y + rect.size.y / 2.0 + 4.0;
-        self.text(
-            cx,
-            self.t("git.panel.mergeInProgress"),
-            rect.origin.x + 8.0,
-            baseline,
-            12.0,
-            amber,
-        );
-    }
-
-    /// Paint the commit-message input box.
-    fn paint_input(&self, cx: &mut PaintCx<'_>, rect: Rect) {
-        cx.backend.fill_round_rect(rect, 6.0, self.theme.muted);
-        let border = if self.state.commit_focused {
-            self.theme.primary
-        } else {
-            self.theme.border
-        };
-        cx.backend.stroke_round_rect(rect, 6.0, border, 1.0);
-
-        let text_x = rect.origin.x + 8.0;
-        let baseline = rect.origin.y + rect.size.y / 2.0 + 4.0;
-        let msg = &self.state.commit_message;
-        if msg.is_empty() && !self.state.commit_focused {
-            self.text(
-                cx,
-                self.t("git.panel.commitPlaceholder"),
-                text_x,
-                baseline,
-                12.0,
-                self.theme.muted_foreground,
-            );
-        } else {
-            let shown = if self.state.commit_focused {
-                format!("{msg}|")
-            } else {
-                msg.clone()
-            };
-            self.text(cx, &shown, text_x, baseline, 12.0, self.theme.foreground);
-        }
-    }
-
     /// Paint one action button. `enabled` dims a disabled button;
     /// `primary` paints the accent (Commit) style.
     pub(super) fn paint_button(
@@ -885,144 +744,6 @@ impl<'a> GitPanel<'a> {
         let layout =
             TextLayout::single_run(s, "system-ui", size, to_jian(color), Point2D::new(0.0, 0.0));
         cx.backend.draw_text(&layout, Point2D::new(x, baseline_y));
-    }
-
-    /// Horizontally-centred text at `center_x` (baseline `y`).
-    fn text_centered(
-        &self,
-        cx: &mut PaintCx<'_>,
-        s: &str,
-        center_x: f32,
-        baseline_y: f32,
-        size: f32,
-        color: Color,
-    ) {
-        let w = cx.backend.measure_text(s, size);
-        self.text(cx, s, center_x - w / 2.0, baseline_y, size, color);
-    }
-
-    /// The three card rects for the onboarding empty state — shared by
-    /// paint + hit-test so they can't drift.
-    pub(super) fn empty_state_rects(&self, rect: Rect) -> [Rect; 3] {
-        let center_x = rect.origin.x + EMPTY_STATE_WIDTH / 2.0;
-        let row_w = EMPTY_CARD_W * 3.0 + EMPTY_CARD_GAP * 2.0;
-        let row_left = center_x - row_w / 2.0;
-        let top = rect.origin.y + EMPTY_CARDS_TOP;
-        let mut rects = [Rect {
-            origin: Point2D::new(0.0, 0.0),
-            size: Point2D::new(0.0, 0.0),
-        }; 3];
-        for (i, r) in rects.iter_mut().enumerate() {
-            r.origin = Point2D::new(row_left + i as f32 * (EMPTY_CARD_W + EMPTY_CARD_GAP), top);
-            r.size = Point2D::new(EMPTY_CARD_W, EMPTY_CARD_H);
-        }
-        rects
-    }
-
-    /// Paint the no-repo onboarding empty state (TS parity).
-    fn paint_empty_state(&self, cx: &mut PaintCx<'_>, rect: Rect) {
-        let center_x = rect.origin.x + EMPTY_STATE_WIDTH / 2.0;
-
-        // Clock glyph in a rounded, ringed container.
-        let box_y = rect.origin.y + 24.0;
-        let box_rect = Rect {
-            origin: Point2D::new(center_x - EMPTY_ICON_BOX / 2.0, box_y),
-            size: Point2D::new(EMPTY_ICON_BOX, EMPTY_ICON_BOX),
-        };
-        cx.backend.fill_round_rect(box_rect, 14.0, self.theme.muted);
-        cx.backend
-            .stroke_round_rect(box_rect, 14.0, self.theme.border, 1.0);
-        let hist = 22.0;
-        draw_icon(
-            cx.backend,
-            Icon::History,
-            Point2D::new(center_x - hist / 2.0, box_y + (EMPTY_ICON_BOX - hist) / 2.0),
-            hist,
-            self.theme.muted_foreground,
-            1.5,
-        );
-
-        // Heading.
-        self.text_centered(
-            cx,
-            self.t("git.empty.heading"),
-            center_x,
-            rect.origin.y + 98.0,
-            13.0,
-            self.theme.foreground,
-        );
-
-        // Init / Open / Clone cards.
-        let cards = self.empty_state_rects(rect);
-        for (i, (icon, label_key, desc_key)) in EMPTY_CARDS.iter().enumerate() {
-            // Init (index 0) is disabled until the doc has a saved path.
-            let enabled = i != 0 || self.state.has_saved_file;
-            self.paint_empty_card(
-                cx,
-                cards[i],
-                *icon,
-                self.t(label_key),
-                self.t(desc_key),
-                enabled,
-            );
-        }
-
-        // Footer note.
-        self.text_centered(
-            cx,
-            self.t("git.empty.optional"),
-            center_x,
-            rect.origin.y + 248.0,
-            11.0,
-            self.theme.muted_foreground,
-        );
-    }
-
-    /// One onboarding card: rounded body + icon box + label + desc.
-    /// `enabled == false` dims the glyph + label (the disabled Init).
-    fn paint_empty_card(
-        &self,
-        cx: &mut PaintCx<'_>,
-        card: Rect,
-        icon: Icon,
-        label: &str,
-        desc: &str,
-        enabled: bool,
-    ) {
-        cx.backend.fill_round_rect(card, 12.0, self.theme.card);
-        cx.backend
-            .stroke_round_rect(card, 12.0, self.theme.border, 1.0);
-        let card_cx = card.origin.x + card.size.x / 2.0;
-
-        let ib = EMPTY_CARD_ICON_BOX;
-        let ib_rect = Rect {
-            origin: Point2D::new(card_cx - ib / 2.0, card.origin.y + 16.0),
-            size: Point2D::new(ib, ib),
-        };
-        cx.backend.fill_round_rect(ib_rect, 10.0, self.theme.muted);
-        let fg = if enabled {
-            self.theme.foreground
-        } else {
-            self.theme.muted_foreground
-        };
-        let isz = 18.0;
-        draw_icon(
-            cx.backend,
-            icon,
-            Point2D::new(card_cx - isz / 2.0, ib_rect.origin.y + (ib - isz) / 2.0),
-            isz,
-            fg,
-            1.75,
-        );
-        self.text_centered(cx, label, card_cx, card.origin.y + 68.0, 11.0, fg);
-        self.text_centered(
-            cx,
-            desc,
-            card_cx,
-            card.origin.y + 82.0,
-            9.0,
-            self.theme.muted_foreground,
-        );
     }
 }
 

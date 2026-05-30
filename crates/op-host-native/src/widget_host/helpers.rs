@@ -16,6 +16,14 @@ pub(in crate::widget_host) const TOOLBAR_INSET_X: f32 = 12.0;
 pub(in crate::widget_host) const TOOLBAR_INSET_Y: f32 = 12.0;
 pub(in crate::widget_host) const STATUS_INSET: f32 = 16.0;
 
+/// Floating Git panel — gap below the TopBar (room for the caret that
+/// connects the panel to its toggle button) + the caret's height and
+/// half-width. Shared by `overlay_rects::git_panel_rect` (placement)
+/// and `paint` (the caret triangle) so they can't drift.
+pub(in crate::widget_host) const GIT_PANEL_CARET_GAP: f32 = 9.0;
+pub(in crate::widget_host) const GIT_PANEL_CARET_H: f32 = 7.0;
+pub(in crate::widget_host) const GIT_PANEL_CARET_HALF: f32 = 8.0;
+
 /// Pixel half-thickness of the resize gutter on each panel edge —
 /// click within this distance of the edge to begin a resize drag.
 pub(in crate::widget_host) const PANEL_RESIZE_GUTTER: f32 = 4.0;

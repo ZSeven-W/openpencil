@@ -1,0 +1,172 @@
+//! Placement + overlay-cursor tests for the floating Git panel.
+//!
+//! Locks two behaviours the desktop relies on: the panel hangs
+//! centred under the TopBar Git button (TS popover parity), and the
+//! cursor stays neutral over it — no canvas Move / Crosshair bleeding
+//! through a node sitting underneath the popover.
+
+use super::helpers::GIT_PANEL_CARET_GAP;
+use super::{CursorHint, WidgetHostNative};
+use op_editor_ui::widgets::{GitPanel, TopBar, TOP_BAR_HEIGHT};
+use op_editor_ui::{Point2D, Rect};
+
+/// A host with the Git panel open in its no-repo onboarding state
+/// (no saved file → the disabled-Init empty state).
+fn host_with_git_panel_open() -> WidgetHostNative {
+    let mut host = WidgetHostNative::new();
+    let panel = &mut host.editor_state_mut().editor_ui.git_panel;
+    panel.open = true;
+    panel.loading = false;
+    panel.in_repo = false;
+    panel.has_saved_file = false;
+    host
+}
+
+#[test]
+fn git_panel_hangs_centred_under_the_git_button() {
+    let host = host_with_git_panel_open();
+    let (vw, vh) = (1400.0, 900.0);
+    let r = host.git_panel_rect(vw, vh).expect("panel open => Some");
+
+    // Centre-x aligns with the Git button centre (a wide viewport
+    // leaves the centred panel un-clamped).
+    let top_bar_rect = Rect {
+        origin: Point2D::new(0.0, 0.0),
+        size: Point2D::new(vw, TOP_BAR_HEIGHT),
+    };
+    let btn_cx = TopBar::for_editor_ui(&host.editor_state().editor_ui)
+        .git_button_center_x(top_bar_rect)
+        .expect("Git button is shown on desktop");
+    let panel_cx = r.origin.x + r.size.x / 2.0;
+    assert!(
+        (panel_cx - btn_cx).abs() < 0.5,
+        "panel centre {panel_cx} should align with button centre {btn_cx}",
+    );
+
+    // Hangs just below the top bar, leaving room for the up-caret.
+    assert_eq!(r.origin.y, TOP_BAR_HEIGHT + GIT_PANEL_CARET_GAP);
+}
+
+#[test]
+fn git_panel_pins_to_the_inset_when_the_canvas_is_too_narrow() {
+    let host = host_with_git_panel_open();
+    // Both rails open on a small viewport leave little/no canvas — the
+    // 380px panel can't fit at all. It must still pin to the left
+    // inset (never slide off-screen-left or under the layer rail)
+    // rather than centre off the edge.
+    let (vw, vh) = (520.0, 700.0);
+    let r = host.git_panel_rect(vw, vh).expect("panel open => Some");
+    let (canvas_left, _t, _cw, _h) = host.canvas_region(vw, vh);
+    assert!(
+        r.origin.x >= canvas_left - 0.01,
+        "panel left {} pins at/after the canvas inset {canvas_left}",
+        r.origin.x
+    );
+}
+
+#[test]
+fn cursor_stays_neutral_over_the_git_panel() {
+    let host = host_with_git_panel_open();
+    let (vw, vh) = (1400.0, 900.0);
+    let r = host.git_panel_rect(vw, vh).unwrap();
+    let mx = r.origin.x + r.size.x / 2.0;
+    let my = r.origin.y + r.size.y / 2.0;
+
+    assert!(
+        host.over_floating_overlay(mx, my, vw, vh),
+        "the Git panel must count as a floating overlay",
+    );
+    assert_eq!(
+        host.cursor_hint(mx, my, vw, vh),
+        CursorHint::Default,
+        "no canvas action cursor bleeds through the panel",
+    );
+
+    // Coverage is not git-panel-only: the always-on Toolbar (a
+    // floating widget over the canvas) suppresses the cursor too.
+    let tb = host.toolbar_rect(vw, vh);
+    assert!(
+        host.over_floating_overlay(
+            tb.origin.x + tb.size.x / 2.0,
+            tb.origin.y + tb.size.y / 2.0,
+            vw,
+            vh,
+        ),
+        "the floating Toolbar must also count as an overlay",
+    );
+
+    // The bare centre of the canvas (below the top-anchored panel,
+    // clear of the corner-anchored chat / status widgets) must NOT be
+    // treated as an overlay — otherwise the fix would be too greedy.
+    let (canvas_left, _t, canvas_w, canvas_h) = host.canvas_region(vw, vh);
+    let bare_x = canvas_left + canvas_w / 2.0;
+    let bare_y = TOP_BAR_HEIGHT + canvas_h / 2.0;
+    assert!(
+        !host.over_floating_overlay(bare_x, bare_y, vw, vh),
+        "bare canvas must not be flagged as an overlay",
+    );
+}
+
+#[test]
+fn caret_bridge_catches_cursor_and_clicks() {
+    let mut host = host_with_git_panel_open();
+    let (vw, vh) = (1400.0, 900.0);
+    let body = host.git_panel_rect(vw, vh).expect("panel open => Some");
+    // A probe in the caret bridge: below the top bar, above the body.
+    let caret_x = body.origin.x + body.size.x / 2.0;
+    let caret_y = (TOP_BAR_HEIGHT + body.origin.y) / 2.0;
+    assert!(
+        caret_y > TOP_BAR_HEIGHT && caret_y < body.origin.y,
+        "probe sits in the gap above the painted body",
+    );
+
+    // The caret is painted as part of the popover, so the cursor must
+    // stay neutral over it (no canvas Move cursor bleeding through).
+    assert!(
+        host.over_floating_overlay(caret_x, caret_y, vw, vh),
+        "the caret bridge counts as the Git overlay",
+    );
+    assert_eq!(
+        host.cursor_hint(caret_x, caret_y, vw, vh),
+        CursorHint::Default
+    );
+
+    // And a click on the caret is swallowed by the panel rather than
+    // falling through to the canvas underneath.
+    assert!(
+        host.dispatch_git_panel_press(caret_x, caret_y, vw, vh),
+        "a caret click is consumed by the Git panel",
+    );
+}
+
+#[test]
+fn init_hint_tracks_hover_over_the_disabled_card() {
+    // `host_with_git_panel_open` leaves `has_saved_file == false`, so
+    // the Init card is the disabled one whose hint is hover-gated.
+    let mut host = host_with_git_panel_open();
+    host.last_viewport_w = 1400.0;
+    host.last_viewport_h = 900.0;
+    let body = host
+        .git_panel_rect(1400.0, 900.0)
+        .expect("panel open => Some");
+    let card = GitPanel::for_editor(host.editor_state())
+        .and_then(|p| p.empty_init_card_rect(body))
+        .expect("empty state => an Init card rect");
+    let cx = card.origin.x + card.size.x / 2.0;
+    let cy = card.origin.y + card.size.y / 2.0;
+
+    // Hover-gated: nothing is flagged until the cursor is over the card.
+    assert!(!host.editor_state().editor_ui.git_panel.empty_init_hovered);
+    assert!(
+        host.update_git_panel_empty_hover(cx, cy),
+        "moving onto the Init card flips hover on (a repaint is due)",
+    );
+    assert!(host.editor_state().editor_ui.git_panel.empty_init_hovered);
+
+    // Moving off the card clears it again.
+    assert!(
+        host.update_git_panel_empty_hover(card.origin.x - 40.0, cy),
+        "moving off the card flips hover off",
+    );
+    assert!(!host.editor_state().editor_ui.git_panel.empty_init_hovered);
+}
