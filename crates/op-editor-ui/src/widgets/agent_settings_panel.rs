@@ -240,7 +240,7 @@ impl<'a> AgentSettingsPanel<'a> {
     pub fn content_total_height(&self) -> f32 {
         match self.settings.tab {
             AgentSettingsTab::Agents => agents_content_height(&self.settings),
-            AgentSettingsTab::Mcp => agent_settings_mcp::content_height(),
+            AgentSettingsTab::Mcp => agent_settings_mcp::content_height(&self.settings),
             AgentSettingsTab::Images => agent_settings_images::content_height(&self.settings),
             AgentSettingsTab::System => agent_settings_system::content_height(),
         }
