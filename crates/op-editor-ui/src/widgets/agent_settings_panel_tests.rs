@@ -93,6 +93,20 @@ fn builtin_agent_cards_use_ts_compact_height_when_not_editing() {
 }
 
 #[test]
+fn agents_tab_acp_cards_replace_empty_hint_height() {
+    let empty = AgentSettingsPanel::for_editor(&EditorState::default()).content_total_height();
+    let mut state = EditorState::default();
+    state.editor_ui.agent_settings.add_acp_agent();
+    state.editor_ui.agent_settings.add_acp_agent();
+    let with_acp = AgentSettingsPanel::for_editor(&state).content_total_height();
+
+    assert!(
+        with_acp > empty,
+        "configured ACP agents should contribute list-card height instead of a fixed empty hint"
+    );
+}
+
+#[test]
 fn hit_test_resolves_builtin_agent_compact_switch() {
     let mut state = EditorState::default();
     state

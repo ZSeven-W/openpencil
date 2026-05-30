@@ -114,6 +114,24 @@ fn builtin_agent_compact_edit_focuses_display_name_form() {
 }
 
 #[test]
+fn add_acp_agent_press_creates_local_agent() {
+    let mut host = WidgetHostNative::new();
+    let panel = AgentSettingsPanel::for_editor(host.editor_state());
+    let rect = panel.rect(1200.0, 800.0);
+    let content_x = rect.origin.x + 200.0 + 24.0;
+    let content_y = rect.origin.y + 24.0;
+    let content_w = rect.size.x - 200.0 - 48.0;
+    let add_x = content_x + content_w - 12.0 - 48.0;
+    let add_y = content_y + 12.0 + 120.0 + 28.0 + 12.0;
+
+    assert!(host.dispatch_agent_settings_press(add_x, add_y, 1200.0, 800.0));
+
+    let settings = &host.editor_state().editor_ui.agent_settings;
+    assert_eq!(settings.acp_agents.len(), 1);
+    assert_eq!(settings.acp_agents[0].display_name, "ACP Agent 1");
+}
+
+#[test]
 fn starting_mcp_server_commits_port_draft_and_clears_focus() {
     let mut host = WidgetHostNative::new();
     host.editor_state_mut().editor_ui.agent_settings.tab = AgentSettingsTab::Mcp;
