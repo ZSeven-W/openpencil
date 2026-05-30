@@ -259,39 +259,6 @@ impl WidgetHostNative {
             status.paint(&mut cx, status_rect);
         }
 
-        // 8.2. Floating Git panel — a popover hanging off the TopBar
-        //      Git button. `git_panel_rect` centres it under the button
-        //      (clamped to the canvas) so the caret + hit-test + cursor
-        //      logic share one placement.
-        if let Some(panel_rect) = self.git_panel_rect(viewport_width, viewport_height) {
-            let panel = GitPanel::for_editor(&self.editor_state)
-                .expect("git_panel_rect is Some, so the panel is open");
-            let git_theme = theme_for(&self.editor_state.editor_ui);
-            let mut cx = PaintCx {
-                backend: &mut *frame,
-            };
-            panel.paint(&mut cx, panel_rect);
-
-            // Up-caret connecting the panel to the Git button — drawn
-            // after the panel so its base covers the panel's top border
-            // and reads as one continuous popover surface.
-            if let Some(btn_cx) = top_bar.git_button_center_x(top_bar_rect) {
-                let half = GIT_PANEL_CARET_HALF;
-                let top = panel_rect.origin.y;
-                let caret_x = btn_cx.clamp(
-                    panel_rect.origin.x + half + 2.0,
-                    panel_rect.origin.x + panel_rect.size.x - half - 2.0,
-                );
-                let tip = Point2D::new(caret_x, top - GIT_PANEL_CARET_H);
-                let base_l = Point2D::new(caret_x - half, top + 0.5);
-                let base_r = Point2D::new(caret_x + half, top + 0.5);
-                cx.backend
-                    .fill_polygon(&[tip, base_l, base_r], git_theme.popover);
-                cx.backend.stroke_line(tip, base_l, git_theme.border, 1.0);
-                cx.backend.stroke_line(tip, base_r, git_theme.border, 1.0);
-            }
-        }
-
         // 8.4. Floating align/distribute toolbar — visible whenever
         //      2+ nodes are selected. Sits above the canvas but
         //      below status / modal overlays.
@@ -347,6 +314,43 @@ impl WidgetHostNative {
                 backend: &mut *frame,
             };
             panel.paint_overlays(&mut cx, property_rect);
+        }
+
+        // 8.7. Floating Git panel — a popover hanging off the TopBar
+        //      Git button (centred by `git_panel_rect`). Painted here —
+        //      ABOVE the align toolbar / marquee / property overlays but
+        //      BELOW the shape / locale pickers and modals — so its
+        //      paint z-order matches its hit-test priority (press block
+        //      0.9, ahead of chat / toolbar / canvas). When it floated
+        //      top-left this was moot; centred under the button it now
+        //      overlaps the align toolbar, so the orders must agree.
+        if let Some(panel_rect) = self.git_panel_rect(viewport_width, viewport_height) {
+            let panel = GitPanel::for_editor(&self.editor_state)
+                .expect("git_panel_rect is Some, so the panel is open");
+            let git_theme = theme_for(&self.editor_state.editor_ui);
+            let mut cx = PaintCx {
+                backend: &mut *frame,
+            };
+            panel.paint(&mut cx, panel_rect);
+
+            // Up-caret connecting the panel to the Git button — drawn
+            // after the panel so its base covers the panel's top border
+            // and reads as one continuous popover surface.
+            if let Some(btn_cx) = top_bar.git_button_center_x(top_bar_rect) {
+                let half = GIT_PANEL_CARET_HALF;
+                let top = panel_rect.origin.y;
+                let caret_x = btn_cx.clamp(
+                    panel_rect.origin.x + half + 2.0,
+                    panel_rect.origin.x + panel_rect.size.x - half - 2.0,
+                );
+                let tip = Point2D::new(caret_x, top - GIT_PANEL_CARET_H);
+                let base_l = Point2D::new(caret_x - half, top + 0.5);
+                let base_r = Point2D::new(caret_x + half, top + 0.5);
+                cx.backend
+                    .fill_polygon(&[tip, base_l, base_r], git_theme.popover);
+                cx.backend.stroke_line(tip, base_l, git_theme.border, 1.0);
+                cx.backend.stroke_line(tip, base_r, git_theme.border, 1.0);
+            }
         }
 
         // 9. ShapePicker — anchored to the right of the toolbar
