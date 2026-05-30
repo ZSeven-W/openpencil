@@ -12,6 +12,26 @@ impl GitPanel<'_> {
     /// Map a click at `point` onto a [`GitPanelHit`]. `None` when the
     /// click is outside `panel_rect` entirely.
     pub fn hit_test(&self, panel_rect: Rect, point: Point2D) -> Option<GitPanelHit> {
+        // While a ready-state header popover is open it is modal: a
+        // click inside it maps to its action; ANY click outside it
+        // (below the panel body, or out on the canvas) dismisses it and
+        // is swallowed — so the popover can never get stuck open. This
+        // runs BEFORE the panel-bounds gate precisely so an outside
+        // click still reaches `DismissPopover`.
+        if self.is_ready_state() {
+            if self.state.branch_picker_open {
+                return Some(
+                    self.branch_picker_hit(panel_rect, point)
+                        .unwrap_or(GitPanelHit::DismissPopover),
+                );
+            }
+            if self.state.overflow_open {
+                return Some(
+                    self.overflow_hit_dispatch(panel_rect, point)
+                        .unwrap_or(GitPanelHit::DismissPopover),
+                );
+            }
+        }
         if !contains(panel_rect, point) {
             return None;
         }
@@ -80,6 +100,14 @@ impl GitPanel<'_> {
         // an in-bounds click is just swallowed.
         if self.state.loading || !self.state.in_repo {
             return Some(GitPanelHit::Inside);
+        }
+        // Clean bound-repo → the TS ready layout's own hit-map (branch
+        // button / pull / push / overflow / commit box + button /
+        // history rows). Any open header popover was already fully
+        // handled at the top of this fn, so reaching here means none is
+        // open.
+        if self.is_ready_state() {
+            return self.ready_hit(panel_rect, point);
         }
         // The button row. Normal: Commit / Refresh / Pull / Push.
         // Merge mode: Abort / Refresh / Complete; the commit input

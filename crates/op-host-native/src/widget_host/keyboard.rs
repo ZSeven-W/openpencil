@@ -43,7 +43,11 @@ impl WidgetHostNative {
         // Git panel's commit-message input owns the keyboard next.
         if self.git_commit_focus_active() {
             if !c.is_control() {
-                self.editor_state.editor_ui.git_panel.commit_message.push(c);
+                let now = self.now_ms;
+                let panel = &mut self.editor_state.editor_ui.git_panel;
+                panel.commit_message.push(c);
+                // Keep the caret solid while typing (reset the blink).
+                panel.commit_caret_anchor_ms = now;
                 self.mark_dirty();
                 return true;
             }

@@ -472,6 +472,21 @@ fn set_node_stroke_width_zero_clears_stroke() {
 }
 
 #[test]
+fn commit_property_edit_writes_stroke_width() {
+    // Regression: committing the stroke-width input used to be a no-op
+    // in `commit_property_edit`, so the typed value reset on commit.
+    let mut s = state_with(vec![rect("n1", "r", 0.0, 0.0, 10.0, 10.0)]);
+    assert!(s.apply(EditorCommand::SetNodeStrokeHex {
+        node_id: id("n1"),
+        hex: "#114194".into(),
+    }));
+    s.set_single_selection(id("n1"));
+    assert!(s.commit_property_edit(crate::ui_draft::PropertyFocus::StrokeWidth, 5.0));
+    let w = crate::fills::node_stroke_width(find_node(s.active_children(), &id("n1")).unwrap());
+    assert_eq!(w, Some(5.0));
+}
+
+#[test]
 fn set_node_corner_radius_rejects_negative() {
     let mut s = state_with(vec![rect("n1", "r", 0.0, 0.0, 10.0, 10.0)]);
     assert!(!s.apply(EditorCommand::SetNodeCornerRadius {

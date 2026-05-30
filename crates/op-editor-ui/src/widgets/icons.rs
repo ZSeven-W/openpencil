@@ -238,6 +238,8 @@ pub enum Icon {
     DistributeH,
     /// Lucide `align-vertical-distribute-center` — equal center spacing on Y.
     DistributeV,
+    /// Custom line-height glyph — typography section's 行高 input prefix.
+    LineHeight,
 }
 
 impl Icon {
@@ -373,6 +375,7 @@ impl Icon {
             Icon::AlignBottom => ALIGN_BOTTOM,
             Icon::DistributeH => DISTRIBUTE_H,
             Icon::DistributeV => DISTRIBUTE_V,
+            Icon::LineHeight => LINE_HEIGHT,
         }
     }
 

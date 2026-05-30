@@ -4,19 +4,12 @@
 //! Phase 6: the panel builds from `op_editor_core::EditorState`, so
 //! the fixtures construct `EditorState` values.
 
-use super::property_panel::{PropertyPanel, PropertyPanelAction, SectionCapabilities};
+use super::property_panel::{PropertyPanel, PropertyPanelAction};
 use super::property_panel_sections as sections;
-use crate::widgets::{PaintCx, Widget};
-use crate::{Color, ImageDrawMode, Point2D, Rect};
+use super::property_panel_test_support::{state_from, visible_for};
+use crate::widgets::Widget;
+use crate::{Color, Point2D, Rect};
 use op_editor_core::{EditorState, NodeId};
-
-/// Build an `EditorState` from a canonical `.op` JSON string.
-fn state_from(src: &str) -> EditorState {
-    let doc = jian_ops_schema::load_str(src)
-        .expect("property-panel fixture parses")
-        .value;
-    EditorState::from_document(doc)
-}
 
 #[test]
 fn for_selection_with_real_node_builds_snapshot() {
@@ -65,33 +58,6 @@ fn group_snapshot_aggregates_child_bounds() {
     assert_eq!(panel.snapshot.y, 130);
     assert!(panel.snapshot.width > 0);
     assert!(panel.snapshot.height > 0);
-}
-
-/// Build a `VisibleSections` from a panel's per-kind capabilities.
-fn visible_for(panel: &PropertyPanel) -> sections::VisibleSections {
-    let caps = SectionCapabilities::for_kind(&panel.snapshot.kind_variant);
-    sections::VisibleSections {
-        create_component: caps.create_component && panel.snapshot.can_create_component,
-        flex_layout: caps.flex_layout,
-        flex_layout_mode: panel.snapshot.flex_layout,
-        layout_justify: panel.snapshot.layout_justify,
-        layout_align: panel.snapshot.layout_align,
-        size_options: caps.size_options,
-        clip_content: panel.snapshot.can_clip_content,
-        text: caps.text && panel.snapshot.text.is_some(),
-        icon: panel.snapshot.icon.is_some(),
-        image: caps.image && panel.snapshot.is_image_node,
-        opacity: caps.opacity,
-        corner_radius: panel.snapshot.has_corner_radius,
-        polygon_sides: panel.snapshot.polygon_sides.is_some(),
-        ellipse_arc: panel.snapshot.ellipse_arc.is_some(),
-        fill: caps.fill,
-        stroke: caps.stroke,
-        effects: caps.effects,
-        export: caps.export,
-        fill_type: panel.fill_type,
-        gradient_stop_count: panel.snapshot.gradient_stops.len(),
-    }
 }
 
 #[test]
@@ -185,6 +151,8 @@ fn hit_test_action_export_section_returns_picker_toggles() {
         false,
         false,
         false,
+        false,
+        false,
     );
     // The Export section emits a scale-dropdown + a format-dropdown
     // toggle rect — clicking neither opens the Export modal.
@@ -223,6 +191,194 @@ fn hit_test_action_export_section_returns_picker_toggles() {
 }
 
 #[test]
+fn fill_width_hides_the_w_input_but_keeps_h_and_row_height() {
+    use op_editor_core::PropertyFocus;
+    let fill = {
+        let mut s = state_from(
+            r##"{ "version": "0.8.0", "children": [
+                  {"type":"frame","id":"ff","name":"Frame",
+                   "x":40,"y":40,"width":"fill_container","height":240,
+                   "layout":"vertical","children":[]}
+            ]}"##,
+        );
+        s.set_single_selection(NodeId::new("ff"));
+        PropertyPanel::for_selection(&s).expect("fill-width frame panel")
+    };
+    assert!(fill.snapshot.size_fill_width, "width sizing should be fill");
+    assert!(
+        !fill.snapshot.size_fill_height,
+        "height stays a concrete number"
+    );
+    let rect = Rect {
+        origin: Point2D::new(0.0, 0.0),
+        size: Point2D::new(280.0, 1200.0),
+    };
+    let fill_rects = sections::editable_input_rects(rect, visible_for(&fill));
+    // W is omitted (fill); H remains (numeric).
+    assert!(
+        !fill_rects.iter().any(|(f, _)| *f == PropertyFocus::SizeW),
+        "SizeW must be hidden when width is fill"
+    );
+    let fill_h = fill_rects
+        .iter()
+        .find(|(f, _)| *f == PropertyFocus::SizeH)
+        .map(|(_, r)| *r)
+        .expect("SizeH must remain");
+
+    // A fixed-width frame keeps both — and SizeH sits at the SAME y, so
+    // hiding W never collapses the row / shifts later sections.
+    let fixed = {
+        let mut s = state_from(
+            r##"{ "version": "0.8.0", "children": [
+                  {"type":"frame","id":"ff","name":"Frame",
+                   "x":40,"y":40,"width":360,"height":240,
+                   "layout":"vertical","children":[]}
+            ]}"##,
+        );
+        s.set_single_selection(NodeId::new("ff"));
+        PropertyPanel::for_selection(&s).expect("fixed-width frame panel")
+    };
+    let fixed_rects = sections::editable_input_rects(rect, visible_for(&fixed));
+    assert!(
+        fixed_rects.iter().any(|(f, _)| *f == PropertyFocus::SizeW),
+        "fixed width keeps SizeW"
+    );
+    let fixed_w = fixed_rects
+        .iter()
+        .find(|(f, _)| *f == PropertyFocus::SizeW)
+        .map(|(_, r)| *r)
+        .expect("SizeW present for fixed width");
+    let fixed_h = fixed_rects
+        .iter()
+        .find(|(f, _)| *f == PropertyFocus::SizeH)
+        .map(|(_, r)| *r)
+        .expect("SizeH present for fixed width");
+    assert!(
+        (fill_h.origin.y - fixed_h.origin.y).abs() < 0.01,
+        "hiding W must not move H's row (row height preserved)"
+    );
+    // With W hidden, H reflows into the (now-empty) LEFT slot.
+    assert!(
+        (fill_h.origin.x - fixed_w.origin.x).abs() < 0.01,
+        "H must slide into the left slot when W is hidden"
+    );
+}
+
+#[test]
+fn both_dimensions_fill_collapses_the_size_input_row() {
+    use op_editor_core::PropertyFocus;
+    let rect = Rect {
+        origin: Point2D::new(0.0, 0.0),
+        size: Point2D::new(280.0, 1200.0),
+    };
+    let panel_for = |w: &str, h: &str| {
+        let json = format!(
+            r##"{{ "version": "0.8.0", "children": [
+                  {{"type":"frame","id":"ff","name":"Frame",
+                   "x":40,"y":40,"width":{w},"height":{h},
+                   "layout":"vertical","children":[]}}
+            ]}}"##
+        );
+        let mut s = state_from(&json);
+        s.set_single_selection(NodeId::new("ff"));
+        PropertyPanel::for_selection(&s).expect("frame panel")
+    };
+    // The size checkboxes sit BELOW the W/H input row. When both
+    // dimensions are fill, the whole input row collapses, so the first
+    // checkbox (填充宽度) shifts up by exactly one input row.
+    let chk_y = |p: &PropertyPanel| {
+        sections::action_button_rects_with_fill_picker(
+            rect,
+            visible_for(p),
+            &p.snapshot.effects,
+            false,
+            false,
+            false,
+            false,
+            false,
+            false,
+        )
+        .into_iter()
+        .find(|(a, _)| matches!(a, PropertyPanelAction::ToggleSizeFillWidth))
+        .map(|(_, r)| r.origin.y)
+        .expect("fill-width checkbox rect")
+    };
+    // One dimension numeric (row present) vs both fill (row collapsed).
+    let one = panel_for("\"fill_container\"", "240");
+    let both = panel_for("\"fill_container\"", "\"fill_container\"");
+    assert!(one.snapshot.size_fill_width && both.snapshot.size_fill_height);
+    // INPUT_HEIGHT (30) + 10 gap = 40 px of collapse.
+    let delta = chk_y(&one) - chk_y(&both);
+    assert!(
+        (delta - 40.0).abs() < 0.01,
+        "both-hidden must collapse the input row (~40px up), got {delta}"
+    );
+    // Neither W nor H emits a focus rect when both are hidden.
+    let both_inputs = sections::editable_input_rects(rect, visible_for(&both));
+    assert!(
+        !both_inputs
+            .iter()
+            .any(|(f, _)| matches!(f, PropertyFocus::SizeW | PropertyFocus::SizeH)),
+        "no W/H hit-rect when both dimensions are fill"
+    );
+}
+
+#[test]
+fn padding_mode_derives_from_values_and_drives_input_count() {
+    use op_editor_core::{PaddingEditMode, PropertyFocus};
+    // from_values mirrors TS parsePaddingValues.
+    assert_eq!(
+        PaddingEditMode::from_values(10.0, 10.0, 10.0, 10.0),
+        PaddingEditMode::Single
+    );
+    assert_eq!(
+        PaddingEditMode::from_values(10.0, 20.0, 10.0, 20.0),
+        PaddingEditMode::Axis
+    );
+    assert_eq!(
+        PaddingEditMode::from_values(8.0, 24.0, 32.0, 24.0),
+        PaddingEditMode::Individual
+    );
+
+    let rect = Rect {
+        origin: Point2D::new(0.0, 0.0),
+        size: Point2D::new(280.0, 1200.0),
+    };
+    let padding_rects = |padding: &str| {
+        let json = format!(
+            r##"{{ "version": "0.8.0", "children": [
+                  {{"type":"frame","id":"f","name":"F","x":0,"y":0,
+                   "width":300,"height":200,"layout":"vertical",
+                   "padding":{padding},"children":[]}}
+            ]}}"##
+        );
+        let mut s = state_from(&json);
+        s.set_single_selection(NodeId::new("f"));
+        let panel = PropertyPanel::for_selection(&s).expect("frame panel");
+        sections::editable_input_rects(rect, visible_for(&panel))
+            .into_iter()
+            .filter(|(f, _)| {
+                matches!(
+                    f,
+                    PropertyFocus::PaddingTop
+                        | PropertyFocus::PaddingRight
+                        | PropertyFocus::PaddingBottom
+                        | PropertyFocus::PaddingLeft
+                )
+            })
+            .count()
+    };
+    // Single → 1 input, Axis → 2, Individual → 4.
+    assert_eq!(padding_rects("12"), 1, "uniform padding → 1 input");
+    assert_eq!(padding_rects("[10, 20]"), 2, "axis padding → 2 inputs");
+    assert_eq!(
+        padding_rects("[8, 24, 32, 24]"),
+        4,
+        "individual padding → 4 inputs"
+    );
+}
+
+#[test]
 fn flex_advanced_rows_do_not_overlap_gap_modes() {
     let mut state = state_from(
         r##"{ "version": "0.8.0", "children": [
@@ -243,6 +399,8 @@ fn flex_advanced_rows_do_not_overlap_gap_modes() {
         rect,
         visible,
         &panel.snapshot.effects,
+        false,
+        false,
         false,
         false,
         false,
@@ -290,6 +448,8 @@ fn font_family_picker_rows_are_clickable() {
         true,
         false,
         false,
+        false,
+        false,
     );
     let georgia = rects
         .iter()
@@ -333,7 +493,9 @@ fn export_scale_picker_open_emits_option_rows() {
         &panel.snapshot.effects,
         false,
         false,
+        false,
         true,
+        false,
         false,
     );
     let rows: Vec<_> = rects
@@ -366,368 +528,13 @@ fn format_color_hex_pads_to_six_chars() {
 }
 
 #[test]
-fn multi_selection_panel_shows_union_bounds_and_is_inert() {
-    let mut state = EditorState::sample();
-    state.set_single_selection(NodeId::new("n11"));
-    state.toggle_selection(NodeId::new("n12"));
-    assert_eq!(state.selection_count(), 2);
-
-    let panel = PropertyPanel::for_selection(&state).expect("multi-select must paint");
-    assert!(panel.is_multi);
-    assert_eq!(panel.snapshot.kind, "2 items");
-    assert_eq!(panel.snapshot.x, 60);
-    assert_eq!(panel.snapshot.y, 60);
-    // Union spans Title (y 60..88) + Button group (y 130..166) →
-    // x=60, w=240, h≈106.
-    assert!(panel.snapshot.width >= 240);
-    assert!(panel.snapshot.height >= 100);
-    assert!(panel.focus.is_none());
-    let rect = Rect {
-        origin: Point2D::new(0.0, 0.0),
-        size: Point2D::new(280.0, 600.0),
-    };
-    assert!(panel.hit_test(rect, Point2D::new(140.0, 100.0)).is_none());
-    assert!(panel
-        .hit_test_action(rect, Point2D::new(140.0, 100.0))
-        .is_none());
-}
-
-/// Minimal `RenderBackend` that counts paint ops.
-#[derive(Default)]
-struct CountingBackend {
-    text: usize,
-    texts: Vec<String>,
-    round_rects: usize,
-    images: Vec<(Rect, u64, usize)>,
-    image_modes: Vec<ImageDrawMode>,
-}
-impl crate::RenderBackend for CountingBackend {
-    fn begin_frame(&mut self) {}
-    fn end_frame(&mut self) {}
-    fn fill_rect(&mut self, _: Rect, _: Color) {}
-    fn stroke_rect(&mut self, _: Rect, _: Color, _: f32) {}
-    fn draw_text(&mut self, layout: &crate::TextLayout, _: Point2D) {
-        self.text += 1;
-        if let Some(run) = layout.runs().first() {
-            self.texts.push(run.content.clone());
-        }
-    }
-    fn clip_rect(&mut self, _: Rect) {}
-    fn save(&mut self) {}
-    fn restore(&mut self) {}
-    fn translate(&mut self, _: Point2D) {}
-    fn stroke_line(&mut self, _: Point2D, _: Point2D, _: Color, _: f32) {}
-    fn fill_round_rect(&mut self, _: Rect, _: f32, _: Color) {
-        self.round_rects += 1;
-    }
-    fn stroke_round_rect(&mut self, _: Rect, _: f32, _: Color, _: f32) {}
-    fn stroke_svg_path(&mut self, _: &str, _: Point2D, _: f32, _: Color, _: f32) {}
-    fn draw_image(&mut self, rect: Rect, image_id: u64, encoded: &[u8]) {
-        self.images.push((rect, image_id, encoded.len()));
-    }
-    fn draw_image_with_mode(
-        &mut self,
-        rect: Rect,
-        image_id: u64,
-        encoded: &[u8],
-        mode: ImageDrawMode,
-    ) {
-        self.images.push((rect, image_id, encoded.len()));
-        self.image_modes.push(mode);
-    }
-    fn resize(&mut self, _: u32, _: u32) {}
-    fn dpi_scale(&self) -> f32 {
-        1.0
-    }
-}
-
-#[test]
-fn multi_select_paint_diverges_from_full_section_paint() {
-    let mut state = EditorState::sample();
-    state.set_single_selection(NodeId::new("n11"));
-    state.toggle_selection(NodeId::new("n12"));
-    let panel_multi = PropertyPanel::for_selection(&state).expect("multi");
-    state.set_single_selection(NodeId::new("n10"));
-    let panel_frame = PropertyPanel::for_selection(&state).expect("frame");
-    assert!(!panel_frame.is_multi);
-
-    let rect = Rect {
-        origin: Point2D::new(0.0, 0.0),
-        size: Point2D::new(280.0, 1200.0),
-    };
-    let multi = paint_and_count(&panel_multi, rect);
-    let frame = paint_and_count(&panel_frame, rect);
-    assert_ne!(multi, frame, "multi must paint fewer ops than single-Frame");
-    assert!(multi.0 > 5 && multi.1 > 0, "Size section must paint");
-}
-
-fn paint_and_count(panel: &PropertyPanel, rect: Rect) -> (usize, usize) {
-    let mut backend = CountingBackend::default();
-    {
-        let mut cx = PaintCx {
-            backend: &mut backend,
-        };
-        panel.paint(&mut cx, rect);
-    }
-    (backend.text, backend.round_rects)
-}
-
-#[test]
-fn multi_select_caps_keep_size_hide_fill_and_stroke() {
-    let mut state = EditorState::sample();
-    state.set_single_selection(NodeId::new("n11"));
-    state.toggle_selection(NodeId::new("n12"));
-    let panel = PropertyPanel::for_selection(&state).expect("multi-select panel");
-    assert!(panel.is_multi);
-    let caps = panel.capabilities();
-    assert!(caps.size_options, "multi-select must paint W/H");
-    assert!(!caps.fill, "multi-select must hide fill section");
-    assert!(!caps.stroke, "multi-select must hide stroke section");
-    assert!(!caps.flex_layout, "multi-select hides flex");
-    // A Rect selection routes through `for_kind`, exposing fill/stroke.
-    state.set_single_selection(NodeId::new("n13"));
-    let single = PropertyPanel::for_selection(&state).expect("single-select panel");
-    let caps_single = single.capabilities();
-    assert!(caps_single.fill, "single Rect must paint fill");
-    assert!(caps_single.stroke, "single Rect must paint stroke");
-}
-
-#[test]
-fn multi_select_panel_shows_even_when_all_zero_size() {
-    // Symmetry with single-select: a 0x0 node still shows the panel.
-    let mut state = state_from(
-        r##"{ "version": "0.8.0", "children": [
-              {"type":"rectangle","id":"n50","name":"A"},
-              {"type":"rectangle","id":"n51","name":"B"}
-        ]}"##,
-    );
-    state.set_single_selection(NodeId::new("n50"));
-    state.toggle_selection(NodeId::new("n51"));
-    assert_eq!(state.selection_count(), 2);
-    let panel = PropertyPanel::for_selection(&state).expect("0x0 multi-select must paint");
-    assert!(panel.is_multi);
-    assert_eq!(panel.snapshot.width, 0);
-    assert_eq!(panel.snapshot.height, 0);
-}
-
-fn image_fill_state_with_url(url: &str) -> EditorState {
-    let mut state = state_from(&format!(
-        r##"{{ "version": "0.8.0", "children": [
-              {{"type":"rectangle","id":"n60","name":"Photo fill",
-               "x":40,"y":40,"width":180,"height":120,
-               "fill":[{{"type":"image","url":"{}","mode":"fill",
-                 "exposure":0,"contrast":0,"saturation":0,
-                 "temperature":0,"tint":0,"highlights":0,"shadows":0}}]}}
-        ]}}"##,
-        url
-    ));
-    state.set_single_selection(NodeId::new("n60"));
-    state
-}
-
-fn image_fill_state() -> EditorState {
-    image_fill_state_with_url("")
-}
-
-#[test]
-fn image_fill_body_click_opens_the_image_popover() {
-    let state = image_fill_state();
-    let panel = PropertyPanel::for_selection(&state).expect("image fill panel");
-    let rect = Rect {
-        origin: Point2D::new(320.0, 24.0),
-        size: Point2D::new(280.0, 900.0),
-    };
-    let rects = sections::action_button_rects_with_fill_picker(
-        rect,
-        visible_for(&panel),
-        &panel.snapshot.effects,
-        false,
-        false,
-        false,
-        false,
-    );
-    let body = rects
-        .iter()
-        .find(|(a, _)| matches!(a, PropertyPanelAction::ToggleImageFillPopover))
-        .map(|(_, r)| *r)
-        .expect("image fill body emits popover toggle action");
-    let center = Point2D::new(
-        body.origin.x + body.size.x / 2.0,
-        body.origin.y + body.size.y / 2.0,
-    );
-    assert!(
-        matches!(
-            panel.hit_test_action(rect, center),
-            Some(PropertyPanelAction::ToggleImageFillPopover)
-        ),
-        "image fill body click should open the image editor popover",
-    );
-}
-
-#[test]
-fn open_image_fill_popover_paints_selected_image_preview() {
-    const PNG_DATA_URL: &str =
-        "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=";
-    let mut state = image_fill_state_with_url(PNG_DATA_URL);
-    state.editor_ui.image_fill_popover_open = true;
-    let panel = PropertyPanel::for_selection(&state).expect("image fill panel");
-    assert_eq!(
-        panel
-            .snapshot
-            .image_fill
-            .as_ref()
-            .unwrap()
-            .image_url
-            .as_deref(),
-        Some(PNG_DATA_URL),
-    );
-
-    let mut backend = CountingBackend::default();
-    {
-        let mut cx = PaintCx {
-            backend: &mut backend,
-        };
-        let rect = Rect {
-            origin: Point2D::new(320.0, 24.0),
-            size: Point2D::new(280.0, 900.0),
-        };
-        panel.paint(&mut cx, rect);
-        panel.paint_overlays(&mut cx, rect);
-    }
-    assert!(
-        backend.images.iter().any(|(_, _, bytes)| *bytes > 0),
-        "selected image data URL should be decoded and painted in the upload well",
-    );
-}
-
-#[test]
-fn image_fill_body_paints_selected_image_thumbnail_with_mode() {
-    const PNG_DATA_URL: &str =
-        "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=";
-    let mut state = image_fill_state_with_url(PNG_DATA_URL);
-    assert!(state.set_selected_image_fill_mode(op_editor_core::ImageFillMode::Tile));
-    let panel = PropertyPanel::for_selection(&state).expect("image fill panel");
-
-    let mut backend = CountingBackend::default();
-    {
-        let mut cx = PaintCx {
-            backend: &mut backend,
-        };
-        panel.paint(
-            &mut cx,
-            Rect {
-                origin: Point2D::new(320.0, 24.0),
-                size: Point2D::new(280.0, 900.0),
-            },
-        );
-    }
-
-    assert!(
-        backend.image_modes.contains(&ImageDrawMode::Tile),
-        "fill body thumbnail should paint the selected image using the current image mode",
-    );
-}
-
-#[test]
-fn image_fill_adjustment_reset_label_uses_i18n() {
-    let mut state = image_fill_state();
-    state.editor_ui.image_fill_popover_open = true;
-    state.editor_ui.locale = op_editor_core::Locale::ZhCn;
-    assert!(
-        state.set_selected_image_adjustment(op_editor_core::ImageAdjustmentField::Exposure, 36.0)
-    );
-    let panel = PropertyPanel::for_selection(&state).expect("image fill panel");
-
-    let mut backend = CountingBackend::default();
-    {
-        let mut cx = PaintCx {
-            backend: &mut backend,
-        };
-        panel.paint_overlays(
-            &mut cx,
-            Rect {
-                origin: Point2D::new(320.0, 24.0),
-                size: Point2D::new(280.0, 900.0),
-            },
-        );
-    }
-    assert!(backend.texts.iter().any(|s| s == "重置"));
-    assert!(!backend.texts.iter().any(|s| s == "Reset"));
-}
-
-#[test]
-fn open_image_fill_popover_routes_upload_and_mode_actions() {
-    let mut state = image_fill_state();
-    state.editor_ui.image_fill_popover_open = true;
-    let panel = PropertyPanel::for_selection(&state).expect("image fill panel");
-    let rect = Rect {
-        origin: Point2D::new(320.0, 24.0),
-        size: Point2D::new(280.0, 900.0),
-    };
-    let popup_rects =
-        sections::image_fill_popover_action_rects(rect, visible_for(&panel), &panel.snapshot);
-    let upload = popup_rects
-        .iter()
-        .find(|(a, _)| matches!(a, PropertyPanelAction::PickFillImage))
-        .map(|(_, r)| *r)
-        .expect("open image popover exposes an upload hit rect");
-    let upload_center = Point2D::new(
-        upload.origin.x + upload.size.x / 2.0,
-        upload.origin.y + upload.size.y / 2.0,
-    );
-    assert!(
-        matches!(
-            panel.hit_test_action(rect, upload_center),
-            Some(PropertyPanelAction::PickFillImage)
-        ),
-        "upload well should trigger the image file picker",
-    );
-    let crop = popup_rects
-        .iter()
-        .find(|(a, _)| {
-            matches!(
-                a,
-                PropertyPanelAction::SetImageFillMode(op_editor_core::ImageFillMode::Crop)
-            )
-        })
-        .map(|(_, r)| *r)
-        .expect("open image popover exposes fit-mode hit rects");
-    let crop_center = Point2D::new(
-        crop.origin.x + crop.size.x / 2.0,
-        crop.origin.y + crop.size.y / 2.0,
-    );
-    assert!(
-        matches!(
-            panel.hit_test_action(rect, crop_center),
-            Some(PropertyPanelAction::SetImageFillMode(
-                op_editor_core::ImageFillMode::Crop
-            ))
-        ),
-        "fit-mode chips should dispatch mode updates",
-    );
-}
-
-#[test]
-fn image_fill_popover_internal_gap_is_consumed_without_action() {
-    let mut state = image_fill_state();
-    state.editor_ui.image_fill_popover_open = true;
-    let panel = PropertyPanel::for_selection(&state).expect("image fill panel");
-    let rect = Rect {
-        origin: Point2D::new(320.0, 24.0),
-        size: Point2D::new(280.0, 900.0),
-    };
-    let popup_rects =
-        sections::image_fill_popover_action_rects(rect, visible_for(&panel), &panel.snapshot);
-    let upload = popup_rects
-        .iter()
-        .find(|(a, _)| matches!(a, PropertyPanelAction::PickFillImage))
-        .map(|(_, r)| *r)
-        .expect("upload rect exists");
-    let gap = Point2D::new(upload.origin.x + 20.0, upload.origin.y - 5.0);
-
-    assert_eq!(panel.hit_test_action(rect, gap), None);
-    assert!(
-        panel.image_fill_popover_contains(rect, gap),
-        "clicks in non-interactive popover gaps must be consumed so the popover stays open",
-    );
+fn no_stroke_swatch_defaults_to_slate_not_black() {
+    // Regression: clicking the stroke hex used to seed #000000 while the
+    // swatch painted slate. Paint and the edit-seed now read ONE source
+    // (`stroke_swatch_color`), whose no-stroke default is `#374151`.
+    use crate::widgets::property_panel_inputs::format_color_hex;
+    use crate::widgets::property_panel_snapshot::NodeSnapshot;
+    let hex = format_color_hex(NodeSnapshot::DEFAULT_STROKE_SWATCH);
+    assert_eq!(hex, "#374151");
+    assert_ne!(hex, "#000000");
 }

@@ -190,6 +190,31 @@ impl WidgetHostNative {
             return true;
         }
 
+        // 0-git-modal. While a Git ready-state header popover (branch
+        // picker / overflow / its subview) is open it is MODAL: route
+        // every press to the Git panel first so a click anywhere
+        // outside the popover dismisses it. The popover extends past the
+        // panel rect, so the rail / top-bar / canvas blocks below cannot
+        // be relied on to forward an outside click — `hit_test` returns
+        // `DismissPopover` for any outside-popover point.
+        //
+        // IMPORTANT: fall through on `false`. If the popover flags are
+        // stale (set while the panel was ready, but it has since left
+        // the ready state — gone dirty / merging / loading, so
+        // `hit_test`'s ready-gated popover capture no longer fires),
+        // `dispatch_git_panel_press` returns `false` for an outside
+        // click. Returning that directly would dead-end EVERY press; so
+        // only consume when it actually handled the click.
+        {
+            let gp = &self.editor_state.editor_ui.git_panel;
+            if gp.open
+                && (gp.branch_picker_open || gp.overflow_open)
+                && self.dispatch_git_panel_press(x, y, viewport_width, viewport_height)
+            {
+                return true;
+            }
+        }
+
         // StatusBar search icon → frame the page content in the
         // viewport (floating bottom-right, so it hit-tests above the
         // canvas / toolbar).
@@ -398,6 +423,20 @@ impl WidgetHostNative {
         // 0c0a1. Text font-family picker — outside-click dismiss.
         if !in_git_panel
             && self.dismiss_font_family_picker_on_press(x, y, viewport_width, viewport_height)
+        {
+            return true;
+        }
+
+        // 0c0a2. Text font-weight picker — outside-click dismiss.
+        if !in_git_panel
+            && self.dismiss_font_weight_picker_on_press(x, y, viewport_width, viewport_height)
+        {
+            return true;
+        }
+
+        // 0c0a3. Padding mode-selector popover — outside-click dismiss.
+        if !in_git_panel
+            && self.dismiss_padding_mode_popover_on_press(x, y, viewport_width, viewport_height)
         {
             return true;
         }
@@ -712,6 +751,9 @@ impl WidgetHostNative {
                             self.node_drag = Some(NodeDragState {
                                 last_screen_x: x,
                                 last_screen_y: y,
+                                press_screen_x: x,
+                                press_screen_y: y,
+                                moved: false,
                             });
                         }
                         self.mark_dirty();
@@ -727,6 +769,9 @@ impl WidgetHostNative {
                     self.node_drag = Some(NodeDragState {
                         last_screen_x: x,
                         last_screen_y: y,
+                        press_screen_x: x,
+                        press_screen_y: y,
+                        moved: false,
                     });
                     self.mark_dirty();
                     return true;

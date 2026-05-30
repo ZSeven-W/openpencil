@@ -38,6 +38,10 @@ impl DesktopApp {
                 panel.changed_files.clear();
                 panel.remotes.clear();
                 panel.recent_commits.clear();
+                // No repo → no ready view → no header popovers.
+                panel.branch_picker_open = false;
+                panel.overflow_open = false;
+                panel.overflow_view = op_editor_core::GitOverflowView::Menu;
                 // Cleared synchronously — there is nothing to wait for.
                 panel.loading = false;
             }
@@ -82,6 +86,15 @@ impl DesktopApp {
         panel.changed_files = snap.changed_files;
         panel.remotes = snap.remotes;
         panel.recent_commits = snap.recent_commits;
+        // The header popovers only exist in the clean ready view; if the
+        // refresh left that state (no repo / merging / a dirty tree),
+        // clear the popover flags so they can't go stale and dead-end
+        // input (the press-time modal guard keys off these flags).
+        if !panel.in_repo || panel.merging || !panel.changed_files.is_empty() {
+            panel.branch_picker_open = false;
+            panel.overflow_open = false;
+            panel.overflow_view = op_editor_core::GitOverflowView::Menu;
+        }
         // The fresh snapshot has landed — leave the loading state.
         let was_loading = panel.loading;
         panel.loading = false;
@@ -199,6 +212,62 @@ impl DesktopApp {
                         Err(err) => {
                             self.show_git_op_error_dialog("commit", &err);
                         }
+                    }
+                }
+            }
+            GitPanelAction::CommitMilestone => {
+                let message = self
+                    .host
+                    .editor_state()
+                    .editor_ui
+                    .git_panel
+                    .commit_message
+                    .trim()
+                    .to_string();
+                // Ready-view "Save milestone": snapshot the live design
+                // as a commit in one step — write the editor's current
+                // state to the tracked .op, stage that file, then commit
+                // (the TS `commitMilestone` flow). stage_tracked is
+                // explicitly designed to refresh the index blob after a
+                // save, so a milestone captures exactly what's on screen.
+                if !message.is_empty() {
+                    match self.git_session.tracked_file().map(|p| p.to_path_buf()) {
+                        Some(path) => {
+                            match persistence::save_to_path(self.host.editor_state(), &path) {
+                                Ok(()) => {
+                                    self.mark_document_saved();
+                                    let committed = self
+                                        .git_session
+                                        .stage_tracked()
+                                        .and_then(|()| self.git_session.commit_staged(&message));
+                                    match committed {
+                                        Ok(()) => {
+                                            let panel = &mut self
+                                                .host
+                                                .editor_state_mut()
+                                                .editor_ui
+                                                .git_panel;
+                                            panel.commit_message.clear();
+                                            panel.commit_focused = false;
+                                        }
+                                        Err(err) => self.show_git_op_error_dialog("commit", &err),
+                                    }
+                                }
+                                Err(detail) => persistence::show_error_dialog_public(
+                                    &self.host,
+                                    persistence::ErrorKind::Save,
+                                    Some(&path),
+                                    &detail,
+                                ),
+                            }
+                        }
+                        None => persistence::show_error_dialog_public(
+                            &self.host,
+                            persistence::ErrorKind::Save,
+                            None,
+                            "the open document is not tracked under this repository — \
+                             save it into the repository folder first",
+                        ),
                     }
                 }
             }

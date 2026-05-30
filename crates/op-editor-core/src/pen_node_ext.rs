@@ -47,6 +47,12 @@ pub trait PenNodeExt {
     /// True when this node is a `Group` — the ungroup target.
     fn is_group(&self) -> bool;
 
+    /// True when this node is an auto-layout (flex) container —
+    /// `layout: Vertical | Horizontal`. Its children are flow-
+    /// positioned by the layout engine, NOT by stored `x` / `y`, so a
+    /// move of the container must leave the children un-positioned.
+    fn is_auto_layout_container(&self) -> bool;
+
     /// Explicit pixel width, when the variant carries one and it is
     /// a literal number (not `fit_content` / a `$variable`).
     fn width_px(&self) -> Option<f64>;
@@ -143,6 +149,17 @@ impl PenNodeExt for PenNode {
 
     fn is_group(&self) -> bool {
         matches!(self, PenNode::Group(_))
+    }
+
+    fn is_auto_layout_container(&self) -> bool {
+        use jian_ops_schema::node::container::LayoutMode;
+        let layout = match self {
+            PenNode::Frame(n) => n.container.layout.as_ref(),
+            PenNode::Group(n) => n.container.layout.as_ref(),
+            PenNode::Rectangle(n) => n.container.layout.as_ref(),
+            _ => None,
+        };
+        matches!(layout, Some(LayoutMode::Vertical | LayoutMode::Horizontal))
     }
 
     fn width_px(&self) -> Option<f64> {

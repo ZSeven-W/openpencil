@@ -17,6 +17,7 @@ impl EditorState {
         }
         match focus {
             PropertyFocus::PositionR => return self.cmd_set_node_corner_radius(&sel, value),
+            PropertyFocus::StrokeWidth => return self.cmd_set_node_stroke_width(&sel, value),
             PropertyFocus::PolygonSides => {
                 if !value.is_finite() {
                     return false;
@@ -105,14 +106,39 @@ impl EditorState {
                     .selected_node()
                     .map(container_padding_values)
                     .unwrap_or([0.0; 4]);
-                let idx = match focus {
-                    PropertyFocus::PaddingTop => 0,
-                    PropertyFocus::PaddingRight => 1,
-                    PropertyFocus::PaddingBottom => 2,
-                    PropertyFocus::PaddingLeft => 3,
-                    _ => unreachable!(),
-                };
-                values[idx] = value.max(0.0) as f64;
+                let v = value.max(0.0) as f64;
+                // Fan the edit out to the sides the active mode binds
+                // together (TS: Single writes all four; Axis-V =
+                // top+bottom, Axis-H = right+left).
+                let mode = self.editor_ui.padding_edit_mode.unwrap_or_else(|| {
+                    crate::PaddingEditMode::from_values(
+                        values[0] as f32,
+                        values[1] as f32,
+                        values[2] as f32,
+                        values[3] as f32,
+                    )
+                });
+                match (mode, focus) {
+                    (crate::PaddingEditMode::Single, _) => values = [v; 4],
+                    (crate::PaddingEditMode::Axis, PropertyFocus::PaddingTop) => {
+                        values[0] = v;
+                        values[2] = v;
+                    }
+                    (crate::PaddingEditMode::Axis, PropertyFocus::PaddingRight) => {
+                        values[1] = v;
+                        values[3] = v;
+                    }
+                    _ => {
+                        let idx = match focus {
+                            PropertyFocus::PaddingTop => 0,
+                            PropertyFocus::PaddingRight => 1,
+                            PropertyFocus::PaddingBottom => 2,
+                            PropertyFocus::PaddingLeft => 3,
+                            _ => unreachable!(),
+                        };
+                        values[idx] = v;
+                    }
+                }
                 return self.cmd_set_node_layout_prop(
                     &sel,
                     "padding",
@@ -131,7 +157,9 @@ impl EditorState {
             PropertyFocus::SizeW => node.set_width_px(v.max(0.0)),
             PropertyFocus::SizeH => node.set_height_px(v.max(0.0)),
             PropertyFocus::Rotation => node.base_mut().rotation = Some(v),
-            PropertyFocus::PositionR => unreachable!("corner radius handled before node borrow"),
+            PropertyFocus::PositionR | PropertyFocus::StrokeWidth => {
+                unreachable!("corner radius / stroke width handled before node borrow")
+            }
             PropertyFocus::PolygonSides
             | PropertyFocus::EllipseStart
             | PropertyFocus::EllipseSweep
@@ -147,10 +175,10 @@ impl EditorState {
             | PropertyFocus::PaddingLeft => {
                 unreachable!("shape-specific properties handled before node borrow")
             }
-            PropertyFocus::StrokeWidth
-            | PropertyFocus::Opacity
-            | PropertyFocus::FillHex
-            | PropertyFocus::StrokeHex => {}
+            // StrokeWidth handled in the first match (before the node
+            // borrow). Opacity / FillHex / StrokeHex are applied by the
+            // host commit path, not this numeric commit.
+            PropertyFocus::Opacity | PropertyFocus::FillHex | PropertyFocus::StrokeHex => {}
             PropertyFocus::FillOpacity => {
                 let _ = self.set_selected_fill_opacity((value / 100.0).clamp(0.0, 1.0));
             }
@@ -207,6 +235,31 @@ impl EditorState {
             return false;
         };
         crate::fills::set_primary_fill_type(node, fill_type)
+    }
+
+    /// Normalise the selected node's padding to the canonical shape for
+    /// `mode` (TS `handleModeChange`): Single collapses to the top
+    /// value on all sides; Axis mirrors top→bottom and right→left;
+    /// Individual leaves the four values as-is.
+    pub fn set_selected_padding_mode_shape(&mut self, mode: crate::PaddingEditMode) -> bool {
+        let sel = self.selection.anchor.clone();
+        if !sel.is_real() || !self.is_editable(&sel) {
+            return false;
+        }
+        let v = self
+            .selected_node()
+            .map(container_padding_values)
+            .unwrap_or([0.0; 4]);
+        let reshaped = match mode {
+            crate::PaddingEditMode::Single => [v[0]; 4],
+            crate::PaddingEditMode::Axis => [v[0], v[1], v[0], v[1]],
+            crate::PaddingEditMode::Individual => v,
+        };
+        self.cmd_set_node_layout_prop(
+            &sel,
+            "padding",
+            &crate::LayoutPropValue::NumberArray(reshaped.to_vec()),
+        )
     }
 
     pub fn clear_selected_fills(&mut self) -> bool {

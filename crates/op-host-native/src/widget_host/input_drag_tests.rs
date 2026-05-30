@@ -209,6 +209,11 @@ fn node_drag_snap_does_not_trap_incremental_cursor_motion() {
     host.node_drag = Some(NodeDragState {
         last_screen_x: 500.0,
         last_screen_y: 500.0,
+        press_screen_x: 500.0,
+        press_screen_y: 500.0,
+        // This test exercises smart-guide accumulation on an already-
+        // in-progress drag, not the press-time threshold gate.
+        moved: true,
     });
 
     for x in (502..=522).step_by(2) {

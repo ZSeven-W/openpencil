@@ -122,6 +122,42 @@ pub enum FlexLayout {
     Horizontal,
 }
 
+/// How the padding section shows its inputs — TS `PaddingMode`.
+/// `Single` = one value for all four sides; `Axis` = vertical +
+/// horizontal; `Individual` = top / right / bottom / left.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PaddingEditMode {
+    Single,
+    Axis,
+    Individual,
+}
+
+impl PaddingEditMode {
+    pub const ALL: [Self; 3] = [Self::Single, Self::Axis, Self::Individual];
+
+    /// i18n key for the gear-popover row label.
+    pub fn label_key(self) -> &'static str {
+        match self {
+            Self::Single => "padding.oneValue",
+            Self::Axis => "padding.horizontalVertical",
+            Self::Individual => "padding.topRightBottomLeft",
+        }
+    }
+
+    /// Derive the mode from the four effective padding values — mirrors
+    /// the TS `parsePaddingValues` (uniform first, then axis, else
+    /// individual).
+    pub fn from_values(t: f32, r: f32, b: f32, l: f32) -> Self {
+        if t == r && r == b && b == l {
+            Self::Single
+        } else if t == b && r == l {
+            Self::Axis
+        } else {
+            Self::Individual
+        }
+    }
+}
+
 /// Path boolean ops — TS parity with Paper.js (Ctrl+Alt+U/S/I/X).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BooleanOp {

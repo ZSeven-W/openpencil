@@ -11,8 +11,8 @@ use crate::widgets::property_panel::NodeSnapshot;
 use crate::widgets::property_panel_image_preview::paint_image_preview;
 use crate::widgets::property_panel_inputs::{
     format_color_hex, paint_section_divider, paint_section_label_with_add, to_jian_color,
-    HEADER_HEIGHT, INPUT_HEIGHT, INPUT_RADIUS, PAD_X, SECTION_GAP, SECTION_HEADER_HEIGHT,
-    TAB_HEIGHT,
+    CREATE_COMPONENT_BLOCK_H, HEADER_HEIGHT, INPUT_HEIGHT, INPUT_RADIUS, PAD_X, SECTION_GAP,
+    SECTION_HEADER_HEIGHT, TAB_HEIGHT,
 };
 use crate::widgets::property_panel_layout::{fill_body_height_with_stops, VisibleSections};
 use crate::widgets::property_panel_sections::{EditContext, PropertyLabels};
@@ -58,7 +58,7 @@ pub fn paint_fill_type_picker(
     y += TAB_HEIGHT;
     y += HEADER_HEIGHT;
     if visible.create_component {
-        y += 8.0 + 36.0 + 12.0;
+        y += CREATE_COMPONENT_BLOCK_H;
     }
     // Position section.
     y += SECTION_HEADER_HEIGHT;
@@ -66,7 +66,10 @@ pub fn paint_fill_type_picker(
     y += INPUT_HEIGHT + 12.0;
     y += SECTION_GAP;
     if visible.flex_layout {
-        y += crate::widgets::property_panel_flex::flex_section_height(visible.flex_layout_mode);
+        y += crate::widgets::property_panel_flex::flex_section_height(
+            visible.flex_layout_mode,
+            visible.padding_edit_mode,
+        );
     }
     if visible.size_options {
         y += SECTION_HEADER_HEIGHT;

@@ -159,6 +159,49 @@ impl WidgetHost {
                 // now. A future implementation would surface a
                 // `<input type="file">` via the JS bridge.
             }
+            A::ToggleFontWeightPicker => {
+                let ui = &mut self.editor_state.editor_ui;
+                ui.font_weight_picker_open = !ui.font_weight_picker_open;
+                ui.font_weight_picker_hover = None;
+                ui.font_family_picker_open = false;
+                ui.fill_type_picker_open = false;
+                ui.image_fill_popover_open = false;
+                ui.export_scale_picker_open = false;
+                ui.export_format_picker_open = false;
+            }
+            A::SetFontWeight(choice) => {
+                let id = self.editor_state.selection.anchor.clone();
+                if id.is_real() {
+                    self.editor_state.commit_history();
+                    let _ = self.editor_state.commit_property_edit(
+                        op_editor_core::PropertyFocus::FontWeight,
+                        choice.value() as f32,
+                    );
+                }
+                self.editor_state.editor_ui.font_weight_picker_open = false;
+                self.editor_state.editor_ui.font_weight_picker_hover = None;
+            }
+            A::TogglePaddingModePopover => {
+                let ui = &mut self.editor_state.editor_ui;
+                ui.padding_mode_popover_open = !ui.padding_mode_popover_open;
+                ui.padding_mode_popover_hover = None;
+                ui.font_weight_picker_open = false;
+                ui.fill_type_picker_open = false;
+                ui.image_fill_popover_open = false;
+                ui.export_scale_picker_open = false;
+                ui.export_format_picker_open = false;
+            }
+            A::SetPaddingMode(mode) => {
+                // Scope the pin to the node it was set for (no leak into
+                // the next selection).
+                let anchor = self.editor_state.selection.anchor.as_str().to_string();
+                self.editor_state.editor_ui.padding_edit_mode = Some(mode);
+                self.editor_state.editor_ui.padding_edit_mode_anchor = anchor;
+                self.editor_state.editor_ui.padding_mode_popover_open = false;
+                self.editor_state.editor_ui.padding_mode_popover_hover = None;
+                self.editor_state.commit_history();
+                let _ = self.editor_state.set_selected_padding_mode_shape(mode);
+            }
             _ => {}
         }
         self.mark_dirty();

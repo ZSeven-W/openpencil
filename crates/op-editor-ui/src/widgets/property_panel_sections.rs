@@ -8,11 +8,12 @@ use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::property_panel::NodeSnapshot;
 use crate::widgets::property_panel_inputs::{
     format_color_hex, paint_input_with_icon_focused, paint_input_with_prefix_focused,
-    paint_section_divider, paint_section_label, to_jian_color, HEADER_HEIGHT, INPUT_HEIGHT,
-    INPUT_RADIUS, PAD_X, SECTION_GAP, TAB_HEIGHT,
+    paint_section_divider, paint_section_label, to_jian_color, CREATE_COMPONENT_BLOCK_H,
+    CREATE_COMPONENT_BTN_H, CREATE_COMPONENT_ICON, CREATE_COMPONENT_PAD_TOP, HEADER_HEIGHT,
+    INPUT_HEIGHT, INPUT_RADIUS, PAD_X, SECTION_GAP, TAB_HEIGHT,
 };
 use crate::widgets::PaintCx;
-use crate::{Color, Point2D, Rect, TextLayout};
+use crate::{Point2D, Rect, TextLayout};
 use op_editor_core::PropertyFocus;
 
 // Re-exports — fill paint moved to `property_panel_fill.rs`,
@@ -276,8 +277,8 @@ pub fn paint_create_component(
     y: f32,
     width: f32,
 ) -> f32 {
-    let pad_top = 8.0;
-    let btn_h = 36.0;
+    let pad_top = CREATE_COMPONENT_PAD_TOP;
+    let btn_h = CREATE_COMPONENT_BTN_H;
     let btn_rect = Rect {
         origin: Point2D::new(x + PAD_X, y + pad_top),
         size: Point2D::new(width - PAD_X * 2.0, btn_h),
@@ -287,14 +288,19 @@ pub fn paint_create_component(
         .stroke_round_rect(btn_rect, 8.0, theme.border, 1.0);
     // TS uses Component icon (cluster of 4 small diamonds) for
     // the "create component" affordance. Diamond is imported in
-    // the same file but used elsewhere (instance indicator).
+    // the same file but used elsewhere (instance indicator). The
+    // icon is vertically centred in the compact button.
+    let icon = CREATE_COMPONENT_ICON;
     draw_icon(
         cx.backend,
         Icon::Component,
-        Point2D::new(btn_rect.origin.x + 12.0, btn_rect.origin.y + 9.0),
-        18.0,
+        Point2D::new(
+            btn_rect.origin.x + 12.0,
+            btn_rect.origin.y + (btn_h - icon) / 2.0,
+        ),
+        icon,
         theme.foreground,
-        1.4,
+        1.3,
     );
     let label = TextLayout::single_run(
         labels.create_component,
@@ -308,10 +314,10 @@ pub fn paint_create_component(
         &label,
         Point2D::new(
             btn_rect.origin.x + (btn_rect.size.x - label_w) / 2.0 + 12.0,
-            btn_rect.origin.y + 23.0,
+            btn_rect.origin.y + btn_h / 2.0 + 4.5,
         ),
     );
-    y + pad_top + btn_h + 12.0
+    y + CREATE_COMPONENT_BLOCK_H
 }
 
 // ── Position section ──────────────────────────────────────────────
@@ -485,27 +491,47 @@ pub fn paint_size_section(
         origin: Point2D::new(x + PAD_X + half_w + 8.0, y),
         size: Point2D::new(half_w, INPUT_HEIGHT),
     };
-    let w_value = snapshot.width.to_string();
-    paint_input_with_prefix_focused(
-        cx,
-        theme,
-        w_rect,
-        "W",
-        edit.value_for(PropertyFocus::SizeW, &w_value),
-        edit.focus == Some(PropertyFocus::SizeW),
-        edit.caret_at(PropertyFocus::SizeW),
-    );
-    let h_value = snapshot.height.to_string();
-    paint_input_with_prefix_focused(
-        cx,
-        theme,
-        h_rect,
-        "H",
-        edit.value_for(PropertyFocus::SizeH, &h_value),
-        edit.focus == Some(PropertyFocus::SizeH),
-        edit.caret_at(PropertyFocus::SizeH),
-    );
-    y += INPUT_HEIGHT + 10.0;
+    // Hide the W/H box entirely when its dimension is fill/hug —
+    // matching TS size-section.tsx, which renders the NumberInput only
+    // when the dimension is a concrete number. Visible dimensions flow
+    // left-to-right, so when W is hidden, H slides into the left slot
+    // (no dangling empty half). The fixed `y += INPUT_HEIGHT + 10.0`
+    // below keeps the row height (and every later section's offset)
+    // unchanged regardless of how many boxes paint.
+    let w_visible = !flags.fill_width && !flags.hug_width;
+    let h_visible = !flags.fill_height && !flags.hug_height;
+    if w_visible {
+        let w_value = snapshot.width.to_string();
+        paint_input_with_prefix_focused(
+            cx,
+            theme,
+            w_rect,
+            "W",
+            edit.value_for(PropertyFocus::SizeW, &w_value),
+            edit.focus == Some(PropertyFocus::SizeW),
+            edit.caret_at(PropertyFocus::SizeW),
+        );
+    }
+    if h_visible {
+        let h_value = snapshot.height.to_string();
+        let h_target = if w_visible { h_rect } else { w_rect };
+        paint_input_with_prefix_focused(
+            cx,
+            theme,
+            h_target,
+            "H",
+            edit.value_for(PropertyFocus::SizeH, &h_value),
+            edit.focus == Some(PropertyFocus::SizeH),
+            edit.caret_at(PropertyFocus::SizeH),
+        );
+    }
+    // Collapse the whole input row when BOTH dimensions are fill/hug —
+    // the section shrinks up so the checkboxes sit under the label with
+    // no dangling empty row. `size_input_row_h` keeps the layout
+    // walkers in lockstep with this advance.
+    if w_visible || h_visible {
+        y += INPUT_HEIGHT + 10.0;
+    }
     let row_h = 22.0;
     paint_check_row(
         cx,
@@ -615,12 +641,7 @@ pub fn paint_stroke_section(
 ) -> f32 {
     let mut y = paint_section_label(cx, theme, labels.stroke, x, y, width);
     let usable_w = width - PAD_X * 2.0;
-    let stroke_color = snapshot.stroke.map(|s| s.color).unwrap_or(Color {
-        r: 0x37 as f32 / 255.0,
-        g: 0x41 as f32 / 255.0,
-        b: 0x51 as f32 / 255.0,
-        a: 1.0,
-    });
+    let stroke_color = snapshot.stroke_swatch_color();
     let stroke_width = snapshot.stroke.map(|s| s.width).unwrap_or(0.0);
     let width_w = 60.0;
     let hex_rect = Rect {

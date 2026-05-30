@@ -420,6 +420,14 @@ impl EditorState {
         }
         let children = self.active_children_mut();
         for target in &editable {
+            // A child of an auto-layout (flex) parent is engine-positioned;
+            // materializing x/y here flips it to Position::Absolute in
+            // jian-core and detaches it from flex flow. A free drag of
+            // such a node is a no-op (it cannot move independently of the
+            // layout engine). Checked before the cascade dedup.
+            if walkers::is_flow_child_of_flex(children, target) {
+                continue;
+            }
             if !walkers::is_ancestor_in_set(children, target, &editable) {
                 if let Some(node) = find_node_mut(children, target) {
                     walkers::translate_subtree(node, dx, dy);

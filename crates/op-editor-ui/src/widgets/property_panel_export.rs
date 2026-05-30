@@ -116,8 +116,10 @@ pub fn paint_export_picker(
         effects,
         false,
         false,
+        false,
         scale_open,
         format_open,
+        false,
     );
     if scale_open {
         let rows: Vec<(&str, bool, Rect)> = rects

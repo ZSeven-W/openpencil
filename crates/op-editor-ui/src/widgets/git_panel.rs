@@ -14,7 +14,7 @@
 use crate::theme::Theme;
 use crate::widgets::editor_state_ext::theme_for;
 use crate::widgets::PaintCx;
-use crate::{Color, Point2D, Rect, TextLayout};
+use crate::{Color, Point2D, Rect};
 use op_editor_core::{EditorState, GitPanelState};
 
 /// Panel width in logical px.
@@ -76,12 +76,29 @@ pub enum GitPanelHit {
     CommitInput,
     /// The Commit button.
     Commit,
+    /// The ready-view "Save milestone" button — save the live design to
+    /// the tracked `.op` + stage + commit (TS `commitMilestone`).
+    CommitMilestone,
     /// The Refresh button.
     Refresh,
     /// The Pull button.
     Pull,
     /// The Push button.
     Push,
+    /// The ready-state header's `⎇ <branch> ▾` button — toggle the
+    /// branch-picker dropdown.
+    BranchPicker,
+    /// The ready-state header's `…` button — toggle the overflow menu.
+    Overflow,
+    /// The overflow menu's "Remote settings" entry — open that subview.
+    OverflowRemoteSettings,
+    /// The overflow menu's "SSH keys" entry — set up SSH auth.
+    OverflowSshKeys,
+    /// A subview's `‹ Back` row — return to the overflow menu.
+    OverflowBack,
+    /// A click outside an open header popover (but inside the panel) —
+    /// the host closes the popover and swallows the click.
+    DismissPopover,
     /// The "Abort Merge" button (shown while a merge is in progress).
     AbortMerge,
     /// The "Complete Merge" button (shown while a merge is in
@@ -171,11 +188,22 @@ pub struct GitPanel<'a> {
     pub(super) theme: Theme,
     /// UI locale — every painted string goes through [`GitPanel::t`].
     pub(super) locale: op_editor_core::Locale,
+    /// Wall-clock ms, for caret-blink animation. `0` (hit-test / tests)
+    /// just yields a steady un-blinked caret.
+    pub(super) now_ms: u64,
 }
 
 impl<'a> GitPanel<'a> {
     /// Build the panel for the editor, or `None` when it is closed.
+    /// Hit-test / tests use this (no blink); paint uses
+    /// [`GitPanel::for_editor_at`] to drive the caret blink.
     pub fn for_editor(state: &'a EditorState) -> Option<GitPanel<'a>> {
+        Self::for_editor_at(state, 0)
+    }
+
+    /// Like [`GitPanel::for_editor`] but threads the wall-clock ms so
+    /// the commit-input caret can blink.
+    pub fn for_editor_at(state: &'a EditorState, now_ms: u64) -> Option<GitPanel<'a>> {
         let panel = &state.editor_ui.git_panel;
         if !panel.open {
             return None;
@@ -184,6 +212,7 @@ impl<'a> GitPanel<'a> {
             state: panel,
             theme: theme_for(&state.editor_ui),
             locale: state.editor_ui.locale,
+            now_ms,
         })
     }
 
@@ -248,6 +277,10 @@ impl<'a> GitPanel<'a> {
             // Header + one status line ("Loading…" / "not a repo")
             // + footer — no branch / action area / commit list.
             return HEADER_BASELINE + 24.0 + FOOTER_H + PAD;
+        }
+        // Clean bound-repo → the TS ready layout sizes to its history.
+        if self.is_ready_state() {
+            return self.ready_height();
         }
         // List + Branches + Remotes sections, then the footer.
         self.remotes_section_top() + self.remotes_block_height() + FOOTER_H + PAD
@@ -382,6 +415,22 @@ impl<'a> GitPanel<'a> {
 
         let left = rect.origin.x + PAD;
         let top = rect.origin.y;
+
+        // Clean bound-repo → the TS `GitPanelReady` layout: a compact
+        // header (branch button + pull/push + overflow), a commit
+        // textarea, and the recent-commit history. Painted BEFORE the
+        // classic "Git" title so that title never bleeds through the
+        // ready header. Dirty trees + merges keep the classic body.
+        if self.is_ready_state() {
+            self.paint_ready(cx, rect);
+            // Header popovers paint on top of the ready body.
+            if self.state.branch_picker_open {
+                self.paint_branch_picker(cx, rect);
+            } else if self.state.overflow_open {
+                self.paint_overflow(cx, rect);
+            }
+            return;
+        }
 
         self.text(
             cx,
@@ -695,11 +744,12 @@ impl<'a> GitPanel<'a> {
             cx.backend
                 .stroke_round_rect(rect, 6.0, self.theme.border, 1.0);
         }
-        // Roughly centre the label (no per-glyph measurement here).
-        // A long localized label (e.g. German "Birleştirmeyi iptal
-        // et") can be wider than the fixed button — clip the draw to
-        // the button rect so it never bleeds into a neighbour.
-        let label_w = label.chars().count() as f32 * 6.5;
+        // Centre the label using the real measured width so CJK labels
+        // (e.g. "保存为里程碑", ~2× a Latin glyph) centre correctly
+        // instead of overflowing the right edge. A long localized label
+        // can still exceed the fixed button — clip the draw to the rect
+        // so it never bleeds into a neighbour.
+        let label_w = cx.backend.measure_text(label, 12.0);
         let text_x = rect.origin.x + (rect.size.x - label_w).max(6.0) / 2.0;
         let baseline = rect.origin.y + rect.size.y / 2.0 + 4.0;
         cx.backend.save();
@@ -718,33 +768,6 @@ impl<'a> GitPanel<'a> {
             self.theme.border,
         );
     }
-
-    /// Paint the menu hint at the panel foot.
-    fn footer(&self, cx: &mut PaintCx<'_>, left: f32, y: f32) {
-        self.text(
-            cx,
-            self.t("git.panel.footer"),
-            left,
-            y,
-            10.0,
-            self.theme.muted_foreground,
-        );
-    }
-
-    /// Draw one line of text.
-    pub(super) fn text(
-        &self,
-        cx: &mut PaintCx<'_>,
-        s: &str,
-        x: f32,
-        baseline_y: f32,
-        size: f32,
-        color: Color,
-    ) {
-        let layout =
-            TextLayout::single_run(s, "system-ui", size, to_jian(color), Point2D::new(0.0, 0.0));
-        cx.backend.draw_text(&layout, Point2D::new(x, baseline_y));
-    }
 }
 
 /// Whether `point` is inside `rect`.
@@ -762,11 +785,4 @@ pub(super) fn truncate(s: &str, max: usize) -> String {
     }
     let kept: String = s.chars().take(max.saturating_sub(1)).collect();
     format!("{kept}…")
-}
-
-fn to_jian(c: Color) -> jian_core::scene::Color {
-    fn ch(v: f32) -> u8 {
-        (v.clamp(0.0, 1.0) * 255.0).round() as u8
-    }
-    jian_core::scene::Color::rgba(ch(c.r), ch(c.g), ch(c.b), ch(c.a))
 }

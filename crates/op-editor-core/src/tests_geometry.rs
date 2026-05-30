@@ -48,6 +48,78 @@ fn translate_selected_cascades_into_children() {
 }
 
 #[test]
+fn translate_selected_keeps_flex_children_flow_positioned() {
+    // A flex (auto-layout) frame positions its children via the
+    // layout engine — they carry NO authored x / y. Moving the frame
+    // must shift ONLY the frame's own origin; materializing an
+    // explicit x / y onto a flow child turns it into an absolutely
+    // positioned node (jian-core `explicit_position`), pulling it out
+    // of flex flow so the next re-layout stacks every child at the
+    // frame's top-left. Regression for "first frame select crowds the
+    // contents".
+    use crate::test_support::{flex_frame, flow_rect};
+    let mut s = state_with(vec![flex_frame(
+        "n1",
+        "Flex",
+        100.0,
+        100.0,
+        200.0,
+        300.0,
+        vec![
+            flow_rect("n2", "A", 80.0, 24.0),
+            flow_rect("n3", "B", 80.0, 24.0),
+        ],
+    )]);
+    s.set_single_selection(NodeId::new("n1"));
+    s.translate_selected(5.0, 7.0);
+
+    // The frame's own origin moved.
+    let f = find_node(s.active_children(), &NodeId::new("n1")).unwrap();
+    assert_eq!(f.base().x, Some(105.0));
+    assert_eq!(f.base().y, Some(107.0));
+
+    // The flow children stay un-positioned — the core invariant.
+    for id in ["n2", "n3"] {
+        let c = find_node(s.active_children(), &NodeId::new(id)).unwrap();
+        assert_eq!(c.base().x, None, "flow child {id} must keep x == None");
+        assert_eq!(c.base().y, None, "flow child {id} must keep y == None");
+    }
+}
+
+#[test]
+fn translate_selected_skips_a_directly_selected_flex_child() {
+    // The actual first-click bug path: the click selects the DEEPEST
+    // node, which inside an auto-layout form is a flow CHILD — not the
+    // frame. Dragging that child must NOT move it (it is engine-
+    // positioned); materializing x/y would detach it from flex flow and
+    // collapse the siblings. A free-layout child of a free frame still
+    // drags (see `translate_selected_cascades_into_children`).
+    use crate::test_support::{flex_frame, flow_rect};
+    let mut s = state_with(vec![flex_frame(
+        "n1",
+        "Flex",
+        0.0,
+        0.0,
+        200.0,
+        300.0,
+        vec![flow_rect("n2", "A", 80.0, 24.0)],
+    )]);
+    s.set_single_selection(NodeId::new("n2"));
+    s.translate_selected(9.0, 11.0);
+    let c = find_node(s.active_children(), &NodeId::new("n2")).unwrap();
+    assert_eq!(
+        c.base().x,
+        None,
+        "a dragged flex child must stay unpositioned"
+    );
+    assert_eq!(
+        c.base().y,
+        None,
+        "a dragged flex child must stay unpositioned"
+    );
+}
+
+#[test]
 fn translate_selected_dedups_ancestor_and_descendant() {
     let mut s = state_with(vec![frame(
         "n1",

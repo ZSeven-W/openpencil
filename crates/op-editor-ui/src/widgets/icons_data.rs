@@ -688,3 +688,15 @@ pub(super) const DISTRIBUTE_V: &[&str] = &[
     "M7 14 H17 A2 2 0 0 1 19 16 V18 A2 2 0 0 1 17 20 H7 A2 2 0 0 1 5 18 V16 A2 2 0 0 1 7 14 Z",
     "M9 4 H15 A2 2 0 0 1 17 6 V8 A2 2 0 0 1 15 10 H9 A2 2 0 0 1 7 8 V6 A2 2 0 0 1 9 4 Z",
 ];
+
+/// Line-height glyph for the typography section — a vertical
+/// double-arrow beside three text rules. Ported from the TS
+/// `LineHeightIcon` inline SVG (12×12), scaled to the 24×24 viewBox.
+pub(super) const LINE_HEIGHT: &[&str] = &[
+    "M4 4 L4 20",
+    "M8 8 L4 4 L0 8",
+    "M8 16 L4 20 L0 16",
+    "M11 6 L18 6",
+    "M11 12 L22 12",
+    "M11 18 L18 18",
+];

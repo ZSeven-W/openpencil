@@ -23,6 +23,60 @@ fn host_with_git_panel_open() -> WidgetHostNative {
 }
 
 #[test]
+fn open_git_popover_is_modal_and_dismisses_on_any_outside_press() {
+    let mut host = WidgetHostNative::new();
+    {
+        let panel = &mut host.editor_state_mut().editor_ui.git_panel;
+        panel.open = true;
+        panel.loading = false;
+        panel.in_repo = true; // clean bound repo → ready view
+        panel.branch = Some("main".to_string());
+        panel.branch_picker_open = true;
+    }
+    let (vw, vh) = (1440.0, 900.0);
+    // A press far from the panel (top-left of the canvas) must close the
+    // open branch-picker popover AND be consumed (modal).
+    let consumed = host.apply_press(8.0, 220.0, vw, vh);
+    assert!(consumed, "a press while a Git popover is open is consumed");
+    assert!(
+        !host.editor_state().editor_ui.git_panel.branch_picker_open,
+        "an outside press must dismiss the open branch-picker popover"
+    );
+}
+
+#[test]
+fn stale_git_popover_flag_does_not_dead_end_input() {
+    // A popover flag left `true` while the panel is NOT in the ready
+    // view (here: a dirty working tree) must not swallow + drop every
+    // press: the modal guard only consumes a press the Git panel
+    // actually handled, so an outside click still reaches the canvas.
+    let mut host = WidgetHostNative::new();
+    {
+        let panel = &mut host.editor_state_mut().editor_ui.git_panel;
+        panel.open = true;
+        panel.loading = false;
+        panel.in_repo = true;
+        panel.branch = Some("main".to_string());
+        // Dirty tree → NOT the ready view (so `hit_test` won't capture
+        // the popover), yet the flag is stale-true.
+        panel.changed_files = vec![op_editor_core::GitFileEntry {
+            path: "x.op".into(),
+            staged: false,
+            status: 'M',
+        }];
+        panel.branch_picker_open = true;
+    }
+    let (vw, vh) = (1440.0, 900.0);
+    // A press on the empty canvas (centre, well below the panel) must
+    // reach the empty-canvas handler (which consumes it) rather than
+    // being dead-ended to `false` by the modal guard.
+    assert!(
+        host.apply_press(700.0, 600.0, vw, vh),
+        "a stale popover flag must not dead-end the press"
+    );
+}
+
+#[test]
 fn git_panel_hangs_centred_under_the_git_button() {
     let host = host_with_git_panel_open();
     let (vw, vh) = (1400.0, 900.0);
