@@ -34,6 +34,17 @@ fn from_editor_tracks_selection_count_for_toolbar() {
     assert_eq!(panel.selected_count, 2);
 }
 
+#[test]
+fn from_editor_uses_ts_start_designing_hint() {
+    let s = EditorState::new();
+    let panel = AIChatPlaceholder::from_editor(&s);
+
+    assert_eq!(
+        panel.label_start_with_ai,
+        op_i18n::translate(s.editor_ui.locale, "ai.startDesigning")
+    );
+}
+
 /// Y-coordinate of the textarea's vertical center.
 fn textarea_center_y() -> f32 {
     AI_CHAT_HEIGHT - INPUT_BASE_HEIGHT + 1.0 + INPUT_AREA_HEIGHT / 2.0
@@ -188,4 +199,74 @@ fn body_rect_reserves_space_for_fixed_step_checklist() {
         body.origin.y + body.size.y < legacy_bottom - 1.0,
         "fixed step checklist should reserve bottom space outside transcript"
     );
+}
+
+#[derive(Default)]
+struct PanelPaintBackend {
+    fills: Vec<(Rect, crate::Color)>,
+}
+
+impl crate::RenderBackend for PanelPaintBackend {
+    fn begin_frame(&mut self) {}
+    fn end_frame(&mut self) {}
+    fn fill_rect(&mut self, rect: Rect, color: crate::Color) {
+        self.fills.push((rect, color));
+    }
+    fn stroke_rect(&mut self, _: Rect, _: crate::Color, _: f32) {}
+    fn draw_text(&mut self, _: &crate::TextLayout, _: Point2D) {}
+    fn clip_rect(&mut self, _: Rect) {}
+    fn save(&mut self) {}
+    fn restore(&mut self) {}
+    fn translate(&mut self, _: Point2D) {}
+    fn stroke_line(&mut self, _: Point2D, _: Point2D, _: crate::Color, _: f32) {}
+    fn fill_round_rect(&mut self, _: Rect, _: f32, _: crate::Color) {}
+    fn stroke_round_rect(&mut self, _: Rect, _: f32, _: crate::Color, _: f32) {}
+    fn stroke_svg_path(&mut self, _: &str, _: Point2D, _: f32, _: crate::Color, _: f32) {}
+    fn resize(&mut self, _: u32, _: u32) {}
+    fn dpi_scale(&self) -> f32 {
+        1.0
+    }
+}
+
+fn has_fill_rect(fills: &[(Rect, crate::Color)], expected: Rect) -> bool {
+    fills.iter().any(|(rect, _)| {
+        (rect.origin.x - expected.origin.x).abs() < 1e-4
+            && (rect.origin.y - expected.origin.y).abs() < 1e-4
+            && (rect.size.x - expected.size.x).abs() < 1e-4
+            && (rect.size.y - expected.size.y).abs() < 1e-4
+    })
+}
+
+#[test]
+fn paint_draws_header_divider_and_message_body_background() {
+    let s = EditorState::new();
+    let panel = AIChatPlaceholder::from_editor(&s);
+    let rect = Rect::xywh(10.0, 20.0, AI_CHAT_WIDTH, AI_CHAT_HEIGHT);
+    let input_h = INPUT_BASE_HEIGHT;
+    let sep_y = rect.origin.y + rect.size.y - input_h;
+    let mut backend = PanelPaintBackend::default();
+    let mut cx = PaintCx {
+        backend: &mut backend,
+    };
+
+    panel.paint(&mut cx, rect);
+
+    assert!(has_fill_rect(
+        &backend.fills,
+        Rect::xywh(
+            rect.origin.x + 1.0,
+            rect.origin.y + HEADER_HEIGHT,
+            rect.size.x - 2.0,
+            1.0
+        )
+    ));
+    assert!(has_fill_rect(
+        &backend.fills,
+        Rect::xywh(
+            rect.origin.x + 1.0,
+            rect.origin.y + HEADER_HEIGHT + 1.0,
+            rect.size.x - 2.0,
+            sep_y - (rect.origin.y + HEADER_HEIGHT + 1.0),
+        )
+    ));
 }

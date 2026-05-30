@@ -273,7 +273,11 @@ fn build_item(
         })
     } else if !visible_content.is_empty() {
         let lines = wrap_units(&visible_content, budget);
-        let h = lines.len() as f32 * LINE_H + 2.0 * BUBBLE_PAD;
+        let h = if is_user {
+            lines.len() as f32 * LINE_H + 2.0 * BUBBLE_PAD
+        } else {
+            lines.len() as f32 * LINE_H
+        };
         let r = Rect::xywh(x, y, bubble_w, h);
         y += h;
         Some(TextBubble {
@@ -664,23 +668,27 @@ pub(crate) fn paint_transcript(
                 ChatRole::User => (theme.primary, theme.primary_foreground),
                 ChatRole::Assistant => (theme.muted, theme.foreground),
             };
-            cx.backend.fill_round_rect(bubble.rect, 8.0, bg);
             if bubble.typing {
+                cx.backend.fill_round_rect(bubble.rect, 8.0, bg);
                 paint_typing_dots(cx, theme, bubble.rect, now_ms);
             } else {
                 // Clip to the bubble — over-long tokens stay inside.
                 cx.backend.save();
                 cx.backend.clip_rect(bubble.rect);
-                let mut baseline = bubble.rect.origin.y + BUBBLE_PAD + 11.0;
+                if item.role == ChatRole::User {
+                    cx.backend.fill_round_rect(bubble.rect, 8.0, bg);
+                }
+                let text_x = match item.role {
+                    ChatRole::User => bubble.rect.origin.x + BUBBLE_PAD,
+                    ChatRole::Assistant => bubble.rect.origin.x,
+                };
+                let mut baseline = bubble.rect.origin.y
+                    + match item.role {
+                        ChatRole::User => BUBBLE_PAD + 11.0,
+                        ChatRole::Assistant => 11.0,
+                    };
                 for line in &bubble.lines {
-                    draw_line(
-                        cx,
-                        line,
-                        bubble.rect.origin.x + BUBBLE_PAD,
-                        baseline,
-                        BODY_FONT,
-                        fg,
-                    );
+                    draw_line(cx, line, text_x, baseline, BODY_FONT, fg);
                     baseline += LINE_H;
                 }
                 // Streaming caret — a blinking bar after the last
@@ -688,7 +696,7 @@ pub(crate) fn paint_transcript(
                 if item.streaming && jian_core::anim::blink_visible(now_ms, 0, 500) {
                     let last = bubble.lines.last().map(String::as_str).unwrap_or("");
                     let units: u32 = last.chars().map(char_display_units).sum();
-                    let caret_x = bubble.rect.origin.x + BUBBLE_PAD + units as f32 * CHAR_UNIT_PX;
+                    let caret_x = text_x + units as f32 * CHAR_UNIT_PX;
                     let caret_y = baseline - LINE_H - 9.0;
                     cx.backend
                         .fill_rect(Rect::xywh(caret_x, caret_y, 2.0, 13.0), fg);

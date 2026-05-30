@@ -54,6 +54,27 @@ pub(crate) fn paint_panel_surface(cx: &mut PaintCx<'_>, theme: &Theme, rect: Rec
     cx.backend.stroke_round_rect(rect, 14.0, theme.border, 1.0);
 }
 
+/// Paint the message body's TS-style background and internal dividers.
+pub(crate) fn paint_panel_body_chrome(cx: &mut PaintCx<'_>, theme: &Theme, rect: Rect, sep_y: f32) {
+    let inner_x = rect.origin.x + 1.0;
+    let inner_w = (rect.size.x - 2.0).max(0.0);
+    cx.backend.fill_rect(
+        Rect::xywh(inner_x, rect.origin.y + HEADER_HEIGHT, inner_w, 1.0),
+        theme.border,
+    );
+    let body_y = rect.origin.y + HEADER_HEIGHT + 1.0;
+    if sep_y > body_y {
+        cx.backend.fill_rect(
+            Rect::xywh(inner_x, body_y, inner_w, sep_y - body_y),
+            with_alpha(theme.background, 0.8),
+        );
+    }
+    cx.backend.fill_rect(
+        Rect::xywh(rect.origin.x + PAD, sep_y, rect.size.x - PAD * 2.0, 1.0),
+        theme.border,
+    );
+}
+
 /// Paint the empty-state hint line + the 2×2 example-card grid.
 pub(crate) fn paint_examples(
     cx: &mut PaintCx<'_>,
