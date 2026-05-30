@@ -169,6 +169,18 @@ impl WidgetHostNative {
         self.set_selected_layout_keyword("fontFamily", family);
     }
 
+    /// Commit a named-weight choice from the typography weight dropdown.
+    pub(in crate::widget_host) fn set_selected_font_weight(&mut self, weight: u16) {
+        let id = self.editor_state.selection.anchor.clone();
+        if !id.is_real() {
+            return;
+        }
+        self.editor_state.commit_history();
+        let _ = self
+            .editor_state
+            .commit_property_edit(op_editor_core::PropertyFocus::FontWeight, weight as f32);
+    }
+
     fn set_selected_layout_keyword(&mut self, property: &str, keyword: &str) {
         let id = self.editor_state.selection.anchor.clone();
         if !id.is_real() {

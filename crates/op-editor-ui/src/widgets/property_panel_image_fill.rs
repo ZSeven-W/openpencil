@@ -46,11 +46,21 @@ fn image_body_rect(panel_rect: Rect, visible: VisibleSections) -> Option<Rect> {
     if !visible.image && (!visible.fill || visible.fill_type != op_editor_core::FillType::Image) {
         return None;
     }
-    action_button_rects_with_fill_picker(panel_rect, visible, &[], false, false, false, false)
-        .into_iter()
-        .find_map(|(action, rect)| {
-            matches!(action, PropertyPanelAction::ToggleImageFillPopover).then_some(rect)
-        })
+    action_button_rects_with_fill_picker(
+        panel_rect,
+        visible,
+        &[],
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+    )
+    .into_iter()
+    .find_map(|(action, rect)| {
+        matches!(action, PropertyPanelAction::ToggleImageFillPopover).then_some(rect)
+    })
 }
 
 fn popover_rect(panel_rect: Rect, visible: VisibleSections) -> Option<Rect> {

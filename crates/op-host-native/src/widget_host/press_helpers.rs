@@ -593,11 +593,10 @@ pub(in crate::widget_host) fn property_focus_initial(
             .fill
             .map(color_to_hex)
             .unwrap_or_else(|| "#FFFFFF".to_string()),
-        F::StrokeHex => panel
-            .snapshot
-            .stroke
-            .map(|s| color_to_hex(s.color))
-            .unwrap_or_else(|| "#000000".to_string()),
+        // Seed the SAME color the stroke swatch paints (the real stroke
+        // when set, else the slate placeholder) so clicking the hex input
+        // doesn't flip it to #000000.
+        F::StrokeHex => color_to_hex(panel.snapshot.stroke_swatch_color()),
         F::StrokeWidth => panel
             .snapshot
             .stroke

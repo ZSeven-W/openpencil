@@ -51,14 +51,20 @@ pub mod property_panel_icon;
 #[cfg(test)]
 mod property_panel_icon_tests;
 pub mod property_panel_image_fill;
+#[cfg(test)]
+mod property_panel_image_fill_tests;
 pub mod property_panel_image_node;
 mod property_panel_image_preview;
 pub mod property_panel_input_layout;
 pub mod property_panel_inputs;
 pub mod property_panel_layer;
 pub mod property_panel_layout;
+#[cfg(test)]
+mod property_panel_multi_select_tests;
 pub mod property_panel_sections;
 pub mod property_panel_snapshot;
+#[cfg(test)]
+mod property_panel_test_support;
 #[cfg(test)]
 mod property_panel_tests;
 pub mod property_panel_text;
@@ -116,16 +122,20 @@ pub mod design_md_panel;
 pub mod export_dialog;
 pub mod figma_import;
 pub mod figma_import_progress;
+pub mod file_drop_overlay;
 pub mod file_menu;
 pub mod git_panel;
 mod git_panel_diff;
 mod git_panel_empty;
 mod git_panel_hit;
+mod git_panel_menus;
+mod git_panel_ready;
 mod git_panel_remotes;
 mod git_panel_resolve;
 mod git_panel_status;
 #[cfg(test)]
 mod git_panel_tests;
+mod git_panel_text;
 pub mod icon_picker_panel;
 pub mod locale_picker;
 pub mod shape_picker;
@@ -140,7 +150,7 @@ pub use text_input::{TextInput, TextInputState};
 pub use tree::{TreeItem, TreeWidget};
 
 pub use layer_panel::{LayerItem, LayerPanel};
-pub use property_panel::{PropertyPanel, PropertyPanelAction};
+pub use property_panel::{FontWeightChoice, PropertyPanel, PropertyPanelAction};
 pub use toolbar::Toolbar;
 
 pub use canvas_viewport::{

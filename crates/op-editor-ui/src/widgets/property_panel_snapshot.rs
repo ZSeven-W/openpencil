@@ -263,6 +263,28 @@ impl EffectSummary {
 }
 
 impl NodeSnapshot {
+    /// Slate-gray placeholder shown for the stroke swatch + hex input
+    /// when the node has no parseable solid stroke (`#374151`). The paint
+    /// routine AND the edit-seed path MUST read this same value so that
+    /// clicking into the hex input doesn't change the displayed color.
+    pub(crate) const DEFAULT_STROKE_SWATCH: Color = Color {
+        r: 0x37 as f32 / 255.0,
+        g: 0x41 as f32 / 255.0,
+        b: 0x51 as f32 / 255.0,
+        a: 1.0,
+    };
+
+    /// The color the stroke swatch + hex input should display: the
+    /// node's solid stroke color, or the slate placeholder when unset.
+    /// Single source of truth so paint and the click-to-edit seed can
+    /// never drift (the bug where the seed defaulted to `#000000`).
+    /// `pub` so the host seed path (op-host-native) reads the same value.
+    pub fn stroke_swatch_color(&self) -> Color {
+        self.stroke
+            .map(|s| s.color)
+            .unwrap_or(Self::DEFAULT_STROKE_SWATCH)
+    }
+
     /// Build an aggregate snapshot for a multi-node selection.
     /// Returns None when nothing on the active page resolves from
     /// `selected_set`. Uses `Document::selection_bounds` (the union

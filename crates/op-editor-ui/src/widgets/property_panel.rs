@@ -39,8 +39,8 @@ pub const PROPERTY_PANEL_WIDTH: f32 = 280.0;
 // `widgets::PropertyPanelAction` / `property_panel::PropertyPanelAction`
 // path is unchanged.
 pub use crate::widgets::property_panel_action::{
-    FontFamilyChoice, LayoutAlignValue, LayoutJustifyValue, PropertyPanelAction, TextAlignValue,
-    TextGrowthValue, TextVerticalAlignValue,
+    FontFamilyChoice, FontWeightChoice, LayoutAlignValue, LayoutJustifyValue, PropertyPanelAction,
+    TextAlignValue, TextGrowthValue, TextVerticalAlignValue,
 };
 
 // `SectionCapabilities` lives in `property_panel_layout.rs`
@@ -84,6 +84,15 @@ pub struct PropertyPanel {
     pub fill_type_picker_open: bool,
     pub image_fill_popover_open: bool,
     pub font_family_picker_open: bool,
+    pub font_weight_picker_open: bool,
+    /// Hovered weight-dropdown row index (when the dropdown is open).
+    pub font_weight_picker_hover: Option<usize>,
+    /// Resolved padding edit mode (UI pin or derived from the node's
+    /// values) + whether the gear popover is open.
+    pub padding_edit_mode: op_editor_core::PaddingEditMode,
+    pub padding_mode_popover_open: bool,
+    /// Hovered padding-mode popover row index (gear popover open).
+    pub padding_mode_popover_hover: Option<usize>,
     /// True for multi-select aggregate (inputs inert, "N items").
     pub is_multi: bool,
     /// Active header tab — toggled by Cmd+Shift+C.
@@ -180,6 +189,19 @@ impl PropertyPanel {
             hug_height: snapshot.size_hug_height,
             clip_content: snapshot.size_clip_content,
         };
+        // Padding edit mode: the user's gear pin (only while it still
+        // applies to the selected node — see `padding_edit_mode_anchor`),
+        // else derived from the node's four effective values (TS
+        // default-derives each frame). Anchor-scoping stops one node's
+        // pinned mode leaking into the next selection.
+        let pin_applies = ui.padding_edit_mode_anchor == state.selection.anchor.as_str();
+        let padding_edit_mode = ui
+            .padding_edit_mode
+            .filter(|_| pin_applies)
+            .unwrap_or_else(|| {
+                let p = snapshot.layout_padding;
+                op_editor_core::PaddingEditMode::from_values(p.top, p.right, p.bottom, p.left)
+            });
         Self {
             id: WidgetId::new(2000),
             snapshot,
@@ -212,6 +234,11 @@ impl PropertyPanel {
             fill_type_picker_open: ui.fill_type_picker_open,
             image_fill_popover_open: ui.image_fill_popover_open,
             font_family_picker_open: ui.font_family_picker_open,
+            font_weight_picker_open: ui.font_weight_picker_open,
+            font_weight_picker_hover: ui.font_weight_picker_hover,
+            padding_edit_mode,
+            padding_mode_popover_open: ui.padding_mode_popover_open,
+            padding_mode_popover_hover: ui.padding_mode_popover_hover,
             is_multi,
             tab: ui.property_tab,
             export_format: ui.export_format,
@@ -281,9 +308,14 @@ impl PropertyPanel {
             create_component: caps.create_component && self.snapshot.can_create_component,
             flex_layout: caps.flex_layout,
             flex_layout_mode: self.snapshot.flex_layout,
+            padding_edit_mode: self.padding_edit_mode,
             layout_justify: self.snapshot.layout_justify,
             layout_align: self.snapshot.layout_align,
             size_options: caps.size_options,
+            size_fill_width: self.snapshot.size_fill_width,
+            size_fill_height: self.snapshot.size_fill_height,
+            size_hug_width: self.snapshot.size_hug_width,
+            size_hug_height: self.snapshot.size_hug_height,
             clip_content: self.snapshot.can_clip_content,
             text: caps.text && self.snapshot.text.is_some(),
             icon: self.snapshot.icon.is_some(),
@@ -329,8 +361,10 @@ impl PropertyPanel {
             &self.snapshot.effects,
             self.fill_type_picker_open,
             self.font_family_picker_open,
+            self.font_weight_picker_open,
             self.export_scale_picker_open,
             self.export_format_picker_open,
+            self.padding_mode_popover_open,
         );
         // Picker rows live in `rects` AFTER the dropdown rect, so
         // a row hit takes priority — `rev()` makes the picker rows
@@ -362,8 +396,10 @@ impl PropertyPanel {
             &self.snapshot.effects,
             self.fill_type_picker_open,
             self.font_family_picker_open,
+            self.font_weight_picker_open,
             self.export_scale_picker_open,
             self.export_format_picker_open,
+            self.padding_mode_popover_open,
         )
         .into_iter()
         .filter(|(a, _)| {
@@ -515,6 +551,7 @@ impl Widget for PropertyPanel {
             y,
             w,
         );
+        let flex_section_y = y;
         if caps.flex_layout {
             y = crate::widgets::property_panel_flex::paint_flex_section(
                 cx,
@@ -523,6 +560,7 @@ impl Widget for PropertyPanel {
                 &edit_ctx,
                 &self.labels,
                 self.locale,
+                self.padding_edit_mode,
                 x,
                 y,
                 w,
@@ -662,6 +700,35 @@ impl Widget for PropertyPanel {
                     &text.font_family,
                 );
             }
+        }
+        if caps.text && self.font_weight_picker_open {
+            if let Some(text) = self.snapshot.text.as_ref() {
+                crate::widgets::property_panel_text::paint_font_weight_picker(
+                    cx,
+                    &self.theme,
+                    scrolled,
+                    self.visible_sections(),
+                    self.locale,
+                    text.font_weight,
+                    self.font_weight_picker_hover,
+                );
+            }
+        }
+        // Padding mode-selector popover — overlays the sections below
+        // the gear. Anchored off the flex section's body top (after its
+        // header), matching the y the action-rect walker passes to
+        // `push_flex_action_rects`.
+        if caps.flex_layout && self.padding_mode_popover_open {
+            crate::widgets::property_panel_flex::paint_padding_mode_popover(
+                cx,
+                &self.theme,
+                self.locale,
+                self.padding_edit_mode,
+                self.padding_mode_popover_hover,
+                x,
+                flex_section_y + crate::widgets::property_panel_inputs::SECTION_HEADER_HEIGHT,
+                w,
+            );
         }
         // Export-section inline select popups — painted last so the
         // scale / format dropdown overlays sit above every section.

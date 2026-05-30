@@ -56,6 +56,7 @@ impl WidgetHostNative {
                 ui.fill_type_picker_open = !ui.fill_type_picker_open;
                 ui.image_fill_popover_open = false;
                 ui.font_family_picker_open = false;
+                ui.font_weight_picker_open = false;
             }
             A::SetFillType(t) => {
                 self.editor_state.set_selected_fill_type(t);
@@ -83,6 +84,7 @@ impl WidgetHostNative {
                 ui.image_fill_popover_open = !ui.image_fill_popover_open;
                 ui.fill_type_picker_open = false;
                 ui.font_family_picker_open = false;
+                ui.font_weight_picker_open = false;
                 ui.export_scale_picker_open = false;
                 ui.export_format_picker_open = false;
             }
@@ -110,6 +112,7 @@ impl WidgetHostNative {
                 ui.fill_type_picker_open = false;
                 ui.image_fill_popover_open = false;
                 ui.font_family_picker_open = false;
+                ui.font_weight_picker_open = false;
                 ui.export_scale_picker_open = false;
                 ui.export_format_picker_open = false;
             }
@@ -125,6 +128,7 @@ impl WidgetHostNative {
             A::ToggleFontFamilyPicker => {
                 let ui = &mut self.editor_state.editor_ui;
                 ui.font_family_picker_open = !ui.font_family_picker_open;
+                ui.font_weight_picker_open = false;
                 ui.fill_type_picker_open = false;
                 ui.image_fill_popover_open = false;
                 ui.export_scale_picker_open = false;
@@ -133,6 +137,43 @@ impl WidgetHostNative {
             A::SetFontFamily(choice) => {
                 self.set_selected_text_font_family(choice.family());
                 self.editor_state.editor_ui.font_family_picker_open = false;
+            }
+            A::ToggleFontWeightPicker => {
+                let ui = &mut self.editor_state.editor_ui;
+                ui.font_weight_picker_open = !ui.font_weight_picker_open;
+                ui.font_weight_picker_hover = None;
+                ui.font_family_picker_open = false;
+                ui.fill_type_picker_open = false;
+                ui.image_fill_popover_open = false;
+                ui.export_scale_picker_open = false;
+                ui.export_format_picker_open = false;
+            }
+            A::SetFontWeight(choice) => {
+                self.set_selected_font_weight(choice.value());
+                self.editor_state.editor_ui.font_weight_picker_open = false;
+                self.editor_state.editor_ui.font_weight_picker_hover = None;
+            }
+            A::TogglePaddingModePopover => {
+                let ui = &mut self.editor_state.editor_ui;
+                ui.padding_mode_popover_open = !ui.padding_mode_popover_open;
+                ui.padding_mode_popover_hover = None;
+                ui.font_weight_picker_open = false;
+                ui.font_family_picker_open = false;
+                ui.fill_type_picker_open = false;
+                ui.image_fill_popover_open = false;
+                ui.export_scale_picker_open = false;
+                ui.export_format_picker_open = false;
+            }
+            A::SetPaddingMode(mode) => {
+                // Scope the pin to the node it was set for so it can't
+                // leak into the next selection.
+                let anchor = self.editor_state.selection.anchor.as_str().to_string();
+                self.editor_state.editor_ui.padding_edit_mode = Some(mode);
+                self.editor_state.editor_ui.padding_edit_mode_anchor = anchor;
+                self.editor_state.editor_ui.padding_mode_popover_open = false;
+                self.editor_state.editor_ui.padding_mode_popover_hover = None;
+                self.editor_state.commit_history();
+                let _ = self.editor_state.set_selected_padding_mode_shape(mode);
             }
             A::OpenColorPicker(target) => {
                 // Fallback anchor when called outside the press path.
@@ -145,6 +186,7 @@ impl WidgetHostNative {
                 ui.export_scale_picker_open = !ui.export_scale_picker_open;
                 ui.export_format_picker_open = false;
                 ui.font_family_picker_open = false;
+                ui.font_weight_picker_open = false;
                 ui.export_picker_hover = None;
             }
             A::ToggleExportFormatPicker => {
@@ -152,6 +194,7 @@ impl WidgetHostNative {
                 ui.export_format_picker_open = !ui.export_format_picker_open;
                 ui.export_scale_picker_open = false;
                 ui.font_family_picker_open = false;
+                ui.font_weight_picker_open = false;
                 ui.export_picker_hover = None;
             }
             A::SetExportScale(scale) => {
@@ -238,134 +281,6 @@ impl WidgetHostNative {
             }
         }
         self.mark_dirty();
-    }
-
-    /// Image-fill popover outside-click dismiss. Returns `true`
-    /// when the popover was open and the press was consumed.
-    pub(in crate::widget_host) fn dismiss_image_fill_popover_on_press(
-        &mut self,
-        x: f32,
-        y: f32,
-        viewport_width: f32,
-        viewport_height: f32,
-    ) -> bool {
-        use op_editor_ui::widgets::{PropertyPanel, TOP_BAR_HEIGHT};
-        use op_editor_ui::{Point2D, Rect};
-        if !self.editor_state.editor_ui.image_fill_popover_open {
-            return false;
-        }
-        self.refresh_layout_scene();
-        if let Some(panel) = PropertyPanel::for_selection(&self.editor_state) {
-            let property_rect = Rect {
-                origin: Point2D::new(
-                    viewport_width - self.editor_state.editor_ui.property_panel_width,
-                    TOP_BAR_HEIGHT,
-                ),
-                size: Point2D::new(
-                    self.editor_state.editor_ui.property_panel_width,
-                    (viewport_height - TOP_BAR_HEIGHT).max(0.0),
-                ),
-            };
-            if let Some(action) = panel.hit_test_action(property_rect, Point2D::new(x, y)) {
-                self.apply_property_action(action);
-                return true;
-            }
-            if panel.image_fill_popover_contains(property_rect, Point2D::new(x, y)) {
-                return true;
-            }
-        }
-        self.editor_state.editor_ui.image_fill_popover_open = false;
-        self.mark_dirty();
-        true
-    }
-
-    /// Outside-click dismiss for the Export section's inline scale /
-    /// format select popups. Returns `true` when a picker was open
-    /// and the press was consumed — an option / toggle was applied,
-    /// or the press fell outside and dismissed the popup. The caller
-    /// must stop dispatching the press in that case. `false` when no
-    /// picker was open (press dispatch continues normally).
-    pub(in crate::widget_host) fn dismiss_export_picker_on_press(
-        &mut self,
-        x: f32,
-        y: f32,
-        viewport_width: f32,
-        viewport_height: f32,
-    ) -> bool {
-        use op_editor_ui::widgets::{PropertyPanel, PropertyPanelAction as A, TOP_BAR_HEIGHT};
-        use op_editor_ui::{Point2D, Rect};
-        if !self.editor_state.editor_ui.export_scale_picker_open
-            && !self.editor_state.editor_ui.export_format_picker_open
-        {
-            return false;
-        }
-        self.refresh_layout_scene();
-        if let Some(panel) = PropertyPanel::for_selection(&self.editor_state) {
-            let property_rect = Rect {
-                origin: Point2D::new(
-                    viewport_width - self.editor_state.editor_ui.property_panel_width,
-                    TOP_BAR_HEIGHT,
-                ),
-                size: Point2D::new(
-                    self.editor_state.editor_ui.property_panel_width,
-                    (viewport_height - TOP_BAR_HEIGHT).max(0.0),
-                ),
-            };
-            if let Some(action) = panel.hit_test_action(property_rect, Point2D::new(x, y)) {
-                if matches!(
-                    action,
-                    A::SetExportScale(_)
-                        | A::SetExportFormat(_)
-                        | A::ToggleExportScalePicker
-                        | A::ToggleExportFormatPicker
-                ) {
-                    self.apply_property_action(action);
-                    return true;
-                }
-            }
-        }
-        let ui = &mut self.editor_state.editor_ui;
-        ui.export_scale_picker_open = false;
-        ui.export_format_picker_open = false;
-        ui.export_picker_hover = None;
-        self.mark_dirty();
-        true
-    }
-
-    pub(in crate::widget_host) fn dismiss_font_family_picker_on_press(
-        &mut self,
-        x: f32,
-        y: f32,
-        viewport_width: f32,
-        viewport_height: f32,
-    ) -> bool {
-        use op_editor_ui::widgets::{PropertyPanel, PropertyPanelAction as A, TOP_BAR_HEIGHT};
-        use op_editor_ui::{Point2D, Rect};
-        if !self.editor_state.editor_ui.font_family_picker_open {
-            return false;
-        }
-        self.refresh_layout_scene();
-        if let Some(panel) = PropertyPanel::for_selection(&self.editor_state) {
-            let property_rect = Rect {
-                origin: Point2D::new(
-                    viewport_width - self.editor_state.editor_ui.property_panel_width,
-                    TOP_BAR_HEIGHT,
-                ),
-                size: Point2D::new(
-                    self.editor_state.editor_ui.property_panel_width,
-                    (viewport_height - TOP_BAR_HEIGHT).max(0.0),
-                ),
-            };
-            if let Some(action) = panel.hit_test_action(property_rect, Point2D::new(x, y)) {
-                if matches!(action, A::SetFontFamily(_) | A::ToggleFontFamilyPicker) {
-                    self.apply_property_action(action);
-                    return true;
-                }
-            }
-        }
-        self.editor_state.editor_ui.font_family_picker_open = false;
-        self.mark_dirty();
-        true
     }
 
     /// Export-dialog press dispatcher.
@@ -618,6 +533,12 @@ impl WidgetHostNative {
         viewport_width: f32,
         viewport_height: f32,
     ) -> bool {
+        // Lockstep with paint: when a node is selected the PropertyPanel
+        // owns the right rail, so the VariablesPanel neither paints nor
+        // hit-tests there (otherwise it would eat inspector clicks).
+        if self.editor_state.property_panel_visible() {
+            return false;
+        }
         let has_variables = self
             .editor_state
             .doc

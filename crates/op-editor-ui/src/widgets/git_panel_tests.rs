@@ -4,8 +4,8 @@
 use crate::widgets::git_panel::*;
 use crate::{Point2D, Rect};
 use op_editor_core::{
-    EditorState, GitCommitSummary, GitDiffView, GitFileEntry, GitPanelState, MergeConflictRow,
-    MergeResolveFile, MergeResolveState,
+    EditorState, GitCommitSummary, GitDiffView, GitFileEntry, GitOverflowView, GitPanelState,
+    MergeConflictRow, MergeResolveFile, MergeResolveState,
 };
 
 fn state_with(panel: GitPanelState) -> EditorState {
@@ -19,6 +19,22 @@ fn open_repo() -> GitPanelState {
         open: true,
         in_repo: true,
         ..GitPanelState::default()
+    }
+}
+
+/// A bound repo with a dirty working tree — leaves the TS ready view
+/// (which only shows for a clean tree) and exercises the classic
+/// status body: branch rows, the Commit/Refresh/Pull/Push row, the
+/// working-tree status line, and the Remotes section.
+fn dirty_repo() -> GitPanelState {
+    GitPanelState {
+        changed_files: vec![GitFileEntry {
+            path: "dirty.op".into(),
+            staged: false,
+            status: 'M',
+        }],
+        dirty_count: 1,
+        ..open_repo()
     }
 }
 
@@ -78,7 +94,10 @@ fn empty_history_reserves_a_placeholder_row() {
 
 #[test]
 fn hit_test_maps_each_action_region() {
-    let s = state_with(open_repo());
+    // A dirty tree keeps the classic status body (the TS ready view
+    // only paints for a clean tree); that is where the 4-button row
+    // + commit input live.
+    let s = state_with(dirty_repo());
     let panel = GitPanel::for_editor(&s).unwrap();
     let rect = panel_rect(&panel);
     let rects = GitPanel::action_rects(rect, false);
@@ -121,7 +140,7 @@ fn branch_rows_switch_to_non_current_branch() {
     let s = state_with(GitPanelState {
         branch: Some("main".to_string()),
         branches: vec!["feature".to_string(), "main".to_string()],
-        ..open_repo()
+        ..dirty_repo()
     });
     let panel = GitPanel::for_editor(&s).unwrap();
     let rect = panel_rect(&panel);
@@ -144,7 +163,7 @@ fn branch_row_merge_button_dispatches_a_merge() {
     let s = state_with(GitPanelState {
         branch: Some("main".to_string()),
         branches: vec!["feature".to_string(), "main".to_string()],
-        ..open_repo()
+        ..dirty_repo()
     });
     let panel = GitPanel::for_editor(&s).unwrap();
     let rect = panel_rect(&panel);
@@ -210,7 +229,7 @@ fn changed_file_rows_toggle_staging() {
 fn remotes_section_maps_the_input_and_set_button() {
     let s = state_with(GitPanelState {
         remotes: vec!["origin → git@host:org/repo.git".into()],
-        ..open_repo()
+        ..dirty_repo()
     });
     let panel = GitPanel::for_editor(&s).unwrap();
     let rect = panel_rect(&panel);
@@ -301,17 +320,18 @@ fn truncate_caps_long_summaries() {
 
 #[test]
 fn dirty_status_line_opens_the_working_diff() {
-    // A clean tree → the status line is inert.
+    // A clean tree → the TS ready view, which has no working-tree
+    // status line at all, so no click anywhere yields a working diff.
     let clean = state_with(open_repo());
     let panel = GitPanel::for_editor(&clean).unwrap();
     let rect = panel_rect(&panel);
     let clean_hit = panel.hit_test(rect, centre(panel.status_rect(rect)));
-    assert_eq!(clean_hit, Some(GitPanelHit::Inside));
+    assert_ne!(clean_hit, Some(GitPanelHit::ShowWorkingDiff));
 
-    // A dirty tree → clicking the status line opens the diff.
+    // A dirty tree → the classic body's status line opens the diff.
     let dirty = state_with(GitPanelState {
         dirty_count: 3,
-        ..open_repo()
+        ..dirty_repo()
     });
     let panel = GitPanel::for_editor(&dirty).unwrap();
     let rect = panel_rect(&panel);
@@ -340,7 +360,9 @@ fn commit_rows_open_a_commit_diff() {
     });
     let panel = GitPanel::for_editor(&s).unwrap();
     let rect = panel_rect(&panel);
-    let rows = panel.list_row_rects(rect);
+    // A clean tree shows the TS ready view; its history rows map to
+    // a commit's diff.
+    let rows = panel.ready_commit_row_rects(rect);
     assert_eq!(rows.len(), 2);
     assert_eq!(
         panel.hit_test(rect, centre(rows[0])),
@@ -349,6 +371,172 @@ fn commit_rows_open_a_commit_diff() {
     assert_eq!(
         panel.hit_test(rect, centre(rows[1])),
         Some(GitPanelHit::ShowCommitDiff(1))
+    );
+}
+
+#[test]
+fn ready_view_maps_each_header_and_commit_region() {
+    // A clean bound repo → the TS ready layout. Its header exposes
+    // the branch picker + pull/push + overflow; the commit box is a
+    // focus target and its button commits a non-empty message.
+    let s = state_with(GitPanelState {
+        branch: Some("main".to_string()),
+        commit_message: "ship it".to_string(),
+        ..open_repo()
+    });
+    let panel = GitPanel::for_editor(&s).unwrap();
+    let rect = panel_rect(&panel);
+    let (pull, push, overflow) = panel.ready_header_buttons(rect);
+    assert_eq!(
+        panel.hit_test(rect, centre(panel.ready_branch_rect(rect))),
+        Some(GitPanelHit::BranchPicker)
+    );
+    assert_eq!(panel.hit_test(rect, centre(pull)), Some(GitPanelHit::Pull));
+    assert_eq!(panel.hit_test(rect, centre(push)), Some(GitPanelHit::Push));
+    assert_eq!(
+        panel.hit_test(rect, centre(overflow)),
+        Some(GitPanelHit::Overflow)
+    );
+    // With a non-empty message the Save-milestone button fires (it
+    // saves the live design + commits, so no pre-staged file needed).
+    assert_eq!(
+        panel.hit_test(rect, centre(panel.ready_commit_btn(rect))),
+        Some(GitPanelHit::CommitMilestone)
+    );
+    // The box body away from the button focuses the input.
+    let box_r = panel.ready_commit_box(rect);
+    let top_left = Point2D::new(box_r.origin.x + 6.0, box_r.origin.y + 6.0);
+    assert_eq!(
+        panel.hit_test(rect, top_left),
+        Some(GitPanelHit::CommitInput)
+    );
+}
+
+#[test]
+fn ready_commit_button_is_inert_without_a_message() {
+    // An empty commit message → the button is not a commit target;
+    // the click falls through to the box's focus instead.
+    let s = state_with(GitPanelState {
+        branch: Some("main".to_string()),
+        ..open_repo()
+    });
+    let panel = GitPanel::for_editor(&s).unwrap();
+    let rect = panel_rect(&panel);
+    assert_eq!(
+        panel.hit_test(rect, centre(panel.ready_commit_btn(rect))),
+        Some(GitPanelHit::CommitInput)
+    );
+}
+
+#[test]
+fn branch_picker_dropdown_switches_and_dismisses() {
+    let s = state_with(GitPanelState {
+        branch: Some("main".to_string()),
+        branches: vec!["feature".to_string(), "main".to_string()],
+        branch_picker_open: true,
+        ..open_repo()
+    });
+    let panel = GitPanel::for_editor(&s).unwrap();
+    let rect = panel_rect(&panel);
+    let rows = panel.branch_picker_row_rects(rect);
+    assert_eq!(rows.len(), 2);
+    // Row 0 = feature (not current) → switch; row 1 = main (current) → no-op.
+    assert_eq!(
+        panel.hit_test(rect, centre(rows[0])),
+        Some(GitPanelHit::SwitchBranch(0))
+    );
+    assert_eq!(
+        panel.hit_test(rect, centre(rows[1])),
+        Some(GitPanelHit::Inside)
+    );
+    // A click outside the dropdown (but inside the panel) dismisses it.
+    let outside = Point2D::new(rect.origin.x + rect.size.x / 2.0, rect.origin.y + 8.0);
+    assert_eq!(
+        panel.hit_test(rect, outside),
+        Some(GitPanelHit::DismissPopover)
+    );
+    // An open popover is modal: a click FAR OUTSIDE the panel (e.g. on
+    // the canvas) also dismisses it rather than returning None (which
+    // would leave the popover stuck open).
+    let far = Point2D::new(rect.origin.x - 200.0, rect.origin.y + 400.0);
+    assert_eq!(panel.hit_test(rect, far), Some(GitPanelHit::DismissPopover));
+}
+
+#[test]
+fn ready_long_branch_never_eats_the_overflow_button() {
+    // A long branch name must not push the pull/push cluster over the
+    // right-anchored `…` overflow button (the branch rect is clamped).
+    let s = state_with(GitPanelState {
+        branch: Some("feature/a-very-long-branch-name-indeed".to_string()),
+        ..open_repo()
+    });
+    let panel = GitPanel::for_editor(&s).unwrap();
+    let rect = panel_rect(&panel);
+    let (_, _, overflow) = panel.ready_header_buttons(rect);
+    assert_eq!(
+        panel.hit_test(rect, centre(overflow)),
+        Some(GitPanelHit::Overflow)
+    );
+    // The branch button must not overlap the pull button either.
+    let branch = panel.ready_branch_rect(rect);
+    let (pull, _, _) = panel.ready_header_buttons(rect);
+    assert!(
+        branch.origin.x + branch.size.x <= pull.origin.x,
+        "branch button overruns the pull icon"
+    );
+}
+
+#[test]
+fn overflow_menu_maps_its_entries() {
+    let s = state_with(GitPanelState {
+        branch: Some("main".to_string()),
+        overflow_open: true,
+        ..open_repo()
+    });
+    let panel = GitPanel::for_editor(&s).unwrap();
+    let rect = panel_rect(&panel);
+    let rows = panel.overflow_row_rects(rect);
+    assert_eq!(rows.len(), 2);
+    assert_eq!(
+        panel.hit_test(rect, centre(rows[0])),
+        Some(GitPanelHit::OverflowRemoteSettings)
+    );
+    assert_eq!(
+        panel.hit_test(rect, centre(rows[1])),
+        Some(GitPanelHit::OverflowSshKeys)
+    );
+}
+
+#[test]
+fn overflow_remote_settings_subview_maps_inputs_and_back() {
+    let s = state_with(GitPanelState {
+        branch: Some("main".to_string()),
+        overflow_open: true,
+        overflow_view: GitOverflowView::RemoteSettings,
+        ..open_repo()
+    });
+    let panel = GitPanel::for_editor(&s).unwrap();
+    let rect = panel_rect(&panel);
+    let (back, url, set, https, login) = panel.remote_settings_rects(rect);
+    assert_eq!(
+        panel.hit_test(rect, centre(back)),
+        Some(GitPanelHit::OverflowBack)
+    );
+    assert_eq!(
+        panel.hit_test(rect, centre(url)),
+        Some(GitPanelHit::RemoteInput)
+    );
+    assert_eq!(
+        panel.hit_test(rect, centre(set)),
+        Some(GitPanelHit::SetRemote)
+    );
+    assert_eq!(
+        panel.hit_test(rect, centre(https)),
+        Some(GitPanelHit::HttpsInput)
+    );
+    assert_eq!(
+        panel.hit_test(rect, centre(login)),
+        Some(GitPanelHit::SetHttpsAuth)
     );
 }
 

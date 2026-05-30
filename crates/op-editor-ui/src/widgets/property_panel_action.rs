@@ -84,6 +84,90 @@ impl FontFamilyChoice {
     }
 }
 
+/// Named font-weight options for the typography weight dropdown — a
+/// port of the TS `WEIGHT_OPTIONS` (thin … black).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FontWeightChoice {
+    Thin,
+    ExtraLight,
+    Light,
+    Regular,
+    Medium,
+    Semibold,
+    Bold,
+    ExtraBold,
+    Black,
+}
+
+impl FontWeightChoice {
+    pub const ALL: [Self; 9] = [
+        Self::Thin,
+        Self::ExtraLight,
+        Self::Light,
+        Self::Regular,
+        Self::Medium,
+        Self::Semibold,
+        Self::Bold,
+        Self::ExtraBold,
+        Self::Black,
+    ];
+
+    /// Numeric weight written to the node.
+    pub fn value(self) -> u16 {
+        match self {
+            Self::Thin => 100,
+            Self::ExtraLight => 200,
+            Self::Light => 300,
+            Self::Regular => 400,
+            Self::Medium => 500,
+            Self::Semibold => 600,
+            Self::Bold => 700,
+            Self::ExtraBold => 800,
+            Self::Black => 900,
+        }
+    }
+
+    /// The bare numeric weight string (`"100"` … `"900"`) for the
+    /// dropdown's "number + name" rows.
+    pub fn numeric_label(self) -> &'static str {
+        match self {
+            Self::Thin => "100",
+            Self::ExtraLight => "200",
+            Self::Light => "300",
+            Self::Regular => "400",
+            Self::Medium => "500",
+            Self::Semibold => "600",
+            Self::Bold => "700",
+            Self::ExtraBold => "800",
+            Self::Black => "900",
+        }
+    }
+
+    /// i18n key for the named label (`text.weight.*`).
+    pub fn label_key(self) -> &'static str {
+        match self {
+            Self::Thin => "text.weight.thin",
+            Self::ExtraLight => "text.weight.extralight",
+            Self::Light => "text.weight.light",
+            Self::Regular => "text.weight.regular",
+            Self::Medium => "text.weight.medium",
+            Self::Semibold => "text.weight.semibold",
+            Self::Bold => "text.weight.bold",
+            Self::ExtraBold => "text.weight.extrabold",
+            Self::Black => "text.weight.black",
+        }
+    }
+
+    /// The named choice nearest to a numeric weight — used to show the
+    /// node's current weight in the dropdown trigger.
+    pub fn nearest(weight: u16) -> Self {
+        Self::ALL
+            .into_iter()
+            .min_by_key(|c| (c.value() as i32 - weight as i32).abs())
+            .unwrap_or(Self::Regular)
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LayoutAlignValue {
     Start,
@@ -208,4 +292,15 @@ pub enum PropertyPanelAction {
     SetTextGrowth(TextGrowthValue),
     ToggleFontFamilyPicker,
     SetFontFamily(FontFamilyChoice),
+    /// User clicked the typography weight dropdown — host toggles
+    /// `editor_ui.font_weight_picker_open`.
+    ToggleFontWeightPicker,
+    /// User picked a named weight from the dropdown.
+    SetFontWeight(FontWeightChoice),
+    /// User clicked the padding-section gear — host toggles
+    /// `editor_ui.padding_mode_popover_open`.
+    TogglePaddingModePopover,
+    /// User picked a padding edit mode in the gear popover — host pins
+    /// `editor_ui.padding_edit_mode` + reshapes the value.
+    SetPaddingMode(op_editor_core::PaddingEditMode),
 }

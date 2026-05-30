@@ -40,6 +40,34 @@ pub fn rect(id: &str, name: &str, x: f64, y: f64, w: f64, h: f64) -> PenNode {
     })
 }
 
+/// A rectangle leaf with NO authored position — a flow child of an
+/// auto-layout (flex) frame. The layout engine places it; the editor
+/// must never materialize an explicit `x` / `y` onto it.
+pub fn flow_rect(id: &str, name: &str, w: f64, h: f64) -> PenNode {
+    PenNode::Rectangle(RectangleNode {
+        base: PenNodeBase {
+            id: id.to_string(),
+            name: Some(name.to_string()),
+            x: None,
+            y: None,
+            ..Default::default()
+        },
+        container: ContainerProps {
+            width: Some(SizingBehavior::Number(w)),
+            height: Some(SizingBehavior::Number(h)),
+            ..Default::default()
+        },
+        children: None,
+        state: None,
+        bindings: None,
+        events: None,
+        lifecycle: None,
+        semantics: None,
+        gestures: None,
+        route: None,
+    })
+}
+
 /// A text leaf at `(x, y)` sized `w × h` with `content`.
 pub fn text(id: &str, name: &str, x: f64, y: f64, w: f64, h: f64, content: &str) -> PenNode {
     PenNode::Text(TextNode {
@@ -101,6 +129,46 @@ pub fn frame(
         },
         children: Some(children),
         image_search_query: None,
+        reusable: None,
+        slot: None,
+        state: None,
+        bindings: None,
+        events: None,
+        lifecycle: None,
+        semantics: None,
+        gestures: None,
+        route: None,
+    })
+}
+
+/// An auto-layout (flex) frame at `(x, y)` sized `w × h` with
+/// `layout: Vertical`. Pass flow children (see [`flow_rect`]) that
+/// carry NO authored x / y — the layout engine positions them.
+pub fn flex_frame(
+    id: &str,
+    name: &str,
+    x: f64,
+    y: f64,
+    w: f64,
+    h: f64,
+    children: Vec<PenNode>,
+) -> PenNode {
+    use jian_ops_schema::node::container::LayoutMode;
+    PenNode::Frame(FrameNode {
+        base: PenNodeBase {
+            id: id.to_string(),
+            name: Some(name.to_string()),
+            x: Some(x),
+            y: Some(y),
+            ..Default::default()
+        },
+        container: ContainerProps {
+            width: Some(SizingBehavior::Number(w)),
+            height: Some(SizingBehavior::Number(h)),
+            layout: Some(LayoutMode::Vertical),
+            ..Default::default()
+        },
+        children: Some(children),
         reusable: None,
         slot: None,
         state: None,

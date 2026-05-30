@@ -62,6 +62,7 @@ mod press;
 mod press_helpers;
 mod property_dispatch;
 mod property_layout_dispatch;
+mod property_popovers;
 mod scroll;
 mod settings_dispatch;
 mod shape_picker_press;
@@ -241,6 +242,12 @@ pub enum PanelResizeKind {
 pub(in crate::widget_host) struct NodeDragState {
     pub(in crate::widget_host) last_screen_x: f32,
     pub(in crate::widget_host) last_screen_y: f32,
+    /// Press point in screen px — the drag-threshold anchor.
+    pub(in crate::widget_host) press_screen_x: f32,
+    pub(in crate::widget_host) press_screen_y: f32,
+    /// Latches true once the cursor travels past `NODE_DRAG_THRESHOLD_PX`
+    /// so a pure click with sub-pixel jitter never moves anything.
+    pub(in crate::widget_host) moved: bool,
 }
 
 /// Active handle-drag — captures the press cursor anchor + the
@@ -665,6 +672,17 @@ impl WidgetHostNative {
                 self.now_ms,
                 self.editor_state.chat.caret_anchor_ms,
                 500,
+            ));
+        }
+        // Git commit textarea caret — same 530 ms cadence the ready
+        // panel paints at (`git_panel_ready.rs`). Without this wake the
+        // window never repaints while the commit box is focused, so the
+        // caret sits static instead of blinking.
+        if self.editor_state.editor_ui.git_panel.commit_focused {
+            return Some(jian_core::anim::next_blink_flip_ms(
+                self.now_ms,
+                self.editor_state.editor_ui.git_panel.commit_caret_anchor_ms,
+                530,
             ));
         }
         None

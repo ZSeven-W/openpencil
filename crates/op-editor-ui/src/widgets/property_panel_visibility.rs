@@ -180,9 +180,19 @@ pub struct VisibleSections {
     pub create_component: bool,
     pub flex_layout: bool,
     pub flex_layout_mode: op_editor_core::FlexLayout,
+    /// Resolved padding edit mode (UI pin or derived from values) —
+    /// drives the padding row count so all walkers agree.
+    pub padding_edit_mode: op_editor_core::PaddingEditMode,
     pub layout_justify: LayoutJustifyValue,
     pub layout_align: LayoutAlignValue,
     pub size_options: bool,
+    /// Per-dimension sizing masks — when set, the matching W/H input is
+    /// hidden (fill/hug replaces the numeric field, TS size-section
+    /// parity). Read by `editable_input_rects` to gate the hit-rect.
+    pub size_fill_width: bool,
+    pub size_fill_height: bool,
+    pub size_hug_width: bool,
+    pub size_hug_height: bool,
     pub clip_content: bool,
     pub text: bool,
     pub icon: bool,
@@ -204,9 +214,14 @@ impl VisibleSections {
         create_component: true,
         flex_layout: true,
         flex_layout_mode: op_editor_core::FlexLayout::Free,
+        padding_edit_mode: op_editor_core::PaddingEditMode::Individual,
         layout_justify: LayoutJustifyValue::Start,
         layout_align: LayoutAlignValue::Start,
         size_options: true,
+        size_fill_width: false,
+        size_fill_height: false,
+        size_hug_width: false,
+        size_hug_height: false,
         clip_content: true,
         text: false,
         icon: false,

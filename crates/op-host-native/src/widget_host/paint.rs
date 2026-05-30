@@ -182,7 +182,12 @@ impl WidgetHostNative {
             .as_ref()
             .map(|v| !v.is_empty())
             .unwrap_or(false);
-        if has_variables {
+        // The PropertyPanel owns the right rail whenever a node is
+        // selected (TS parity); painting the opaque VariablesPanel over
+        // it obscured the inspector (e.g. the flex alignment grid) and
+        // its press handler swallowed those clicks. Only show Variables
+        // when there is no selection inspector.
+        if has_variables && !has_property {
             let vars = VariablesPanel::for_editor(&self.editor_state);
             let intrinsic = vars.intrinsic_height();
             let top_y = if has_property {
@@ -325,7 +330,7 @@ impl WidgetHostNative {
         //      top-left this was moot; centred under the button it now
         //      overlaps the align toolbar, so the orders must agree.
         if let Some(panel_rect) = self.git_panel_rect(viewport_width, viewport_height) {
-            let panel = GitPanel::for_editor(&self.editor_state)
+            let panel = GitPanel::for_editor_at(&self.editor_state, self.now_ms)
                 .expect("git_panel_rect is Some, so the panel is open");
             let git_theme = theme_for(&self.editor_state.editor_ui);
             let mut cx = PaintCx {
@@ -529,6 +534,23 @@ impl WidgetHostNative {
                 backend: &mut *frame,
             };
             panel.paint(&mut cx, panel_rect);
+        }
+
+        // 13. File-drop overlay — top-most layer, above every panel and
+        //     modal, while a file is dragged over the window.
+        if self.editor_state.editor_ui.file_drop_active {
+            let (drop_left, _y, drop_w, drop_h) =
+                self.canvas_region(viewport_width, viewport_height);
+            let drop_rect = Rect {
+                origin: Point2D::new(drop_left, TOP_BAR_HEIGHT),
+                size: Point2D::new(drop_w, drop_h),
+            };
+            op_editor_ui::widgets::file_drop_overlay::paint_file_drop_overlay(
+                &mut *frame,
+                &self.theme,
+                self.editor_state.editor_ui.locale,
+                drop_rect,
+            );
         }
     }
 }

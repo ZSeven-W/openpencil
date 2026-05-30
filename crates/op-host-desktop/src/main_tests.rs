@@ -40,7 +40,10 @@ fn fresh_app_fits_blank_frame_like_ts_canvas_init() {
     let app = DesktopApp::new(None);
     let v = app.host.editor_state().viewport;
 
-    assert!((v.zoom - 0.66).abs() < 1e-3, "zoom {}", v.zoom);
+    // Golden fit values track `property_panel_width` (the right rail is
+    // shown on the fresh app, so the canvas region = 1440 − panel). At
+    // the TS-matching `w-64` (256 px) panel the blank frame fits at 0.68.
+    assert!((v.zoom - 0.68).abs() < 1e-3, "zoom {}", v.zoom);
     assert!((v.pan_x - 64.0).abs() < 1e-2, "pan_x {}", v.pan_x);
-    assert!((v.pan_y - 166.0).abs() < 1e-2, "pan_y {}", v.pan_y);
+    assert!((v.pan_y - 158.0).abs() < 1e-2, "pan_y {}", v.pan_y);
 }

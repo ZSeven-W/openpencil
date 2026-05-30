@@ -319,6 +319,46 @@ impl WidgetHost {
             return true;
         }
 
+        // 0c0c. Font-weight dropdown + padding mode-selector popover —
+        //       outside-click dismiss. A click on a picker row / toggle
+        //       is applied; any other click closes the popover and is
+        //       swallowed (mirrors the native host's dismiss handlers).
+        if self.editor_state.editor_ui.font_weight_picker_open
+            || self.editor_state.editor_ui.padding_mode_popover_open
+        {
+            use op_editor_ui::widgets::PropertyPanelAction as A;
+            if let Some(panel) = PropertyPanel::for_selection(&self.editor_state) {
+                let property_rect = Rect {
+                    origin: Point2D::new(
+                        viewport_width - self.editor_state.editor_ui.property_panel_width,
+                        TOP_BAR_HEIGHT,
+                    ),
+                    size: Point2D::new(
+                        self.editor_state.editor_ui.property_panel_width,
+                        (viewport_height - TOP_BAR_HEIGHT).max(0.0),
+                    ),
+                };
+                if let Some(action) = panel.hit_test_action(property_rect, Point2D::new(x, y)) {
+                    if matches!(
+                        action,
+                        A::SetFontWeight(_)
+                            | A::ToggleFontWeightPicker
+                            | A::SetPaddingMode(_)
+                            | A::TogglePaddingModePopover
+                    ) {
+                        self.apply_property_action(action);
+                        return true;
+                    }
+                }
+            }
+            self.editor_state.editor_ui.font_weight_picker_open = false;
+            self.editor_state.editor_ui.font_weight_picker_hover = None;
+            self.editor_state.editor_ui.padding_mode_popover_open = false;
+            self.editor_state.editor_ui.padding_mode_popover_hover = None;
+            self.mark_dirty();
+            return true;
+        }
+
         // 0c. PropertyPanel button / checkbox — flex modes + size
         //     flags. Runs AFTER locale picker + TopBar so the
         //     dropdown overlays still win.

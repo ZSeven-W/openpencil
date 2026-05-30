@@ -6,7 +6,7 @@
 //! after the rail blocks (which already skip a click that lands
 //! inside the Git-panel rect) and before the canvas overlays.
 
-use op_editor_core::{GitDiffTarget, GitPanelAction};
+use op_editor_core::{GitDiffTarget, GitOverflowView, GitPanelAction};
 use op_editor_ui::widgets::{GitPanel, GitPanelHit};
 use op_editor_ui::Point2D;
 
@@ -49,10 +49,12 @@ impl WidgetHostNative {
         let on_caret = self
             .git_panel_outer_rect(viewport_width, viewport_height)
             .is_some_and(|r| rect_contains(r, Point2D::new(x, y)));
+        let now = self.now_ms;
         let panel = &mut self.editor_state.editor_ui.git_panel;
         match hit {
             Some(GitPanelHit::CommitInput) => {
                 panel.commit_focused = true;
+                panel.commit_caret_anchor_ms = now;
                 panel.remote_focused = false;
                 panel.https_focused = false;
             }
@@ -90,6 +92,14 @@ impl WidgetHostNative {
                     panel.pending_action = Some(GitPanelAction::Commit);
                 }
             }
+            Some(GitPanelHit::CommitMilestone) => {
+                // Ready-view Save milestone — saves the live design to
+                // the tracked .op + stages + commits in one step, so it
+                // only needs a non-empty message (no pre-staged file).
+                if !panel.commit_message.trim().is_empty() {
+                    panel.pending_action = Some(GitPanelAction::CommitMilestone);
+                }
+            }
             Some(GitPanelHit::EmptyInit) => {
                 panel.pending_action = Some(GitPanelAction::InitRepo);
             }
@@ -108,6 +118,40 @@ impl WidgetHostNative {
             Some(GitPanelHit::Push) => {
                 panel.pending_action = Some(GitPanelAction::Push);
             }
+            Some(GitPanelHit::BranchPicker) => {
+                // Toggle the branch-picker dropdown; close the overflow
+                // menu so only one ready-state popover is open at a time.
+                panel.branch_picker_open = !panel.branch_picker_open;
+                panel.overflow_open = false;
+                panel.overflow_view = GitOverflowView::Menu;
+            }
+            Some(GitPanelHit::Overflow) => {
+                // Always (re)open on the top-level menu so a prior
+                // session's subview never leaks back in.
+                panel.overflow_open = !panel.overflow_open;
+                panel.overflow_view = GitOverflowView::Menu;
+                panel.branch_picker_open = false;
+            }
+            Some(GitPanelHit::OverflowRemoteSettings) => {
+                panel.overflow_view = GitOverflowView::RemoteSettings;
+            }
+            Some(GitPanelHit::OverflowSshKeys) => {
+                panel.pending_action = Some(GitPanelAction::SetupSshAuth);
+                panel.overflow_open = false;
+                panel.overflow_view = GitOverflowView::Menu;
+            }
+            Some(GitPanelHit::OverflowBack) => {
+                panel.overflow_view = GitOverflowView::Menu;
+            }
+            Some(GitPanelHit::DismissPopover) => {
+                // Click outside an open popover — close it + swallow.
+                panel.branch_picker_open = false;
+                panel.overflow_open = false;
+                panel.overflow_view = GitOverflowView::Menu;
+                panel.commit_focused = false;
+                panel.remote_focused = false;
+                panel.https_focused = false;
+            }
             Some(GitPanelHit::AbortMerge) => {
                 panel.pending_action = Some(GitPanelAction::AbortMerge);
             }
@@ -118,11 +162,14 @@ impl WidgetHostNative {
                 if let Some(name) = panel.branches.get(index).cloned() {
                     panel.pending_action = Some(GitPanelAction::SwitchBranch(name));
                 }
+                // Close the branch-picker dropdown after a pick.
+                panel.branch_picker_open = false;
             }
             Some(GitPanelHit::MergeBranch(index)) => {
                 if let Some(name) = panel.branches.get(index).cloned() {
                     panel.pending_action = Some(GitPanelAction::MergeBranch(name));
                 }
+                panel.branch_picker_open = false;
             }
             Some(GitPanelHit::ShowWorkingDiff) => {
                 panel.pending_action = Some(GitPanelAction::ShowDiff(GitDiffTarget::WorkingTree));

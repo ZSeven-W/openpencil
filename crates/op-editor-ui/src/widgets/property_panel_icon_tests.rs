@@ -19,9 +19,19 @@ fn visible_for(panel: &PropertyPanel) -> sections::VisibleSections {
         create_component: caps.create_component && panel.snapshot.can_create_component,
         flex_layout: caps.flex_layout,
         flex_layout_mode: panel.snapshot.flex_layout,
+        padding_edit_mode: op_editor_core::PaddingEditMode::from_values(
+            panel.snapshot.layout_padding.top,
+            panel.snapshot.layout_padding.right,
+            panel.snapshot.layout_padding.bottom,
+            panel.snapshot.layout_padding.left,
+        ),
         layout_justify: panel.snapshot.layout_justify,
         layout_align: panel.snapshot.layout_align,
         size_options: caps.size_options,
+        size_fill_width: panel.snapshot.size_fill_width,
+        size_fill_height: panel.snapshot.size_fill_height,
+        size_hug_width: panel.snapshot.size_hug_width,
+        size_hug_height: panel.snapshot.size_hug_height,
         clip_content: panel.snapshot.can_clip_content,
         text: caps.text && panel.snapshot.text.is_some(),
         icon: panel.snapshot.icon.is_some(),
@@ -57,6 +67,8 @@ fn text_size_section_does_not_emit_clip_content_action() {
         false,
         false,
         false,
+        false,
+        false,
     );
 
     assert!(
@@ -87,6 +99,8 @@ fn icon_font_selection_exposes_icon_picker_action() {
         rect,
         visible_for(&panel),
         &panel.snapshot.effects,
+        false,
+        false,
         false,
         false,
         false,

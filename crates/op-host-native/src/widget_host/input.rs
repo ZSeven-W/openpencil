@@ -4,6 +4,11 @@ use super::helpers::{resize_bounds, PANEL_MAX_WIDTH, PANEL_MIN_WIDTH};
 use super::{PanelResizeKind, WidgetHostNative};
 use op_editor_ui::{Point2D, Rect};
 
+/// Minimum cursor travel (logical px) from the node-drag press point
+/// before a move is committed. A pure click with sub-pixel jitter then
+/// never mutates the document — kills "first click breaks the layout".
+const NODE_DRAG_THRESHOLD_PX: f32 = 4.0;
+
 impl WidgetHostNative {
     /// True iff a text-input surface owns the keyboard.
     pub(in crate::widget_host) fn input_active(&self) -> bool {
@@ -212,6 +217,14 @@ impl WidgetHostNative {
         {
             return true;
         }
+        // Padding-mode gear popover row hover (no-op when closed).
+        if self.update_padding_mode_popover_hover(x, y) {
+            return true;
+        }
+        // Font-weight dropdown row hover (no-op when closed).
+        if self.update_font_weight_picker_hover(x, y) {
+            return true;
+        }
         // TopBar window-control cluster — hovering it reveals the
         // close / minimise / maximise glyphs on the 3 dots.
         {
@@ -296,6 +309,22 @@ impl WidgetHostNative {
             return true;
         }
         if let Some(drag) = self.node_drag {
+            // Threshold gate: a pure click with sub-pixel jitter must not
+            // move (or re-flow) anything. Until the cursor has travelled
+            // past NODE_DRAG_THRESHOLD_PX from the press point, swallow the
+            // move; once it crosses, the drag latches and moves for the
+            // rest of the gesture.
+            if !drag.moved
+                && (x - drag.press_screen_x).abs() <= NODE_DRAG_THRESHOLD_PX
+                && (y - drag.press_screen_y).abs() <= NODE_DRAG_THRESHOLD_PX
+            {
+                return false;
+            }
+            if !drag.moved {
+                if let Some(d) = self.node_drag.as_mut() {
+                    d.moved = true;
+                }
+            }
             let zoom = self.editor_state.viewport.zoom.max(0.0001);
             let prev_screen_x = drag.last_screen_x;
             let prev_screen_y = drag.last_screen_y;

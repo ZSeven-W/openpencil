@@ -8,7 +8,8 @@
 
 use crate::widgets::property_panel::{EffectKind, EffectSummary, PropertyPanelAction};
 use crate::widgets::property_panel_inputs::{
-    HEADER_HEIGHT, INPUT_HEIGHT, PAD_X, SECTION_GAP, SECTION_HEADER_HEIGHT, TAB_HEIGHT,
+    CREATE_COMPONENT_BLOCK_H, CREATE_COMPONENT_BTN_H, CREATE_COMPONENT_PAD_TOP, HEADER_HEIGHT,
+    INPUT_HEIGHT, PAD_X, SECTION_GAP, SECTION_HEADER_HEIGHT, TAB_HEIGHT,
 };
 use crate::{Point2D, Rect};
 use op_editor_core::{EffectField, FillType};
@@ -187,7 +188,9 @@ pub fn action_button_rects(
     visible: VisibleSections,
     effects: &[EffectSummary],
 ) -> Vec<(PropertyPanelAction, Rect)> {
-    action_button_rects_with_fill_picker(panel_rect, visible, effects, false, false, false, false)
+    action_button_rects_with_fill_picker(
+        panel_rect, visible, effects, false, false, false, false, false, false,
+    )
 }
 
 /// Height of one row in an Export-section inline select popup.
@@ -204,7 +207,7 @@ pub fn property_panel_content_height(
     effects: &[EffectSummary],
 ) -> f32 {
     let actions = action_button_rects_with_fill_picker(
-        panel_rect, visible, effects, false, false, false, false,
+        panel_rect, visible, effects, false, false, false, false, false, false,
     );
     let inputs = editable_input_rects(panel_rect, visible);
     let bottom = actions
@@ -222,14 +225,17 @@ pub fn property_panel_content_height(
 /// scale (3 rows) / format (5 rows) select popups. `effects` drives
 /// the Effects section's per-effect "✕" and parameter-stepper rects
 /// + that section's variable height.
+#[allow(clippy::too_many_arguments)]
 pub fn action_button_rects_with_fill_picker(
     panel_rect: Rect,
     visible: VisibleSections,
     effects: &[EffectSummary],
     fill_picker_open: bool,
     font_family_picker_open: bool,
+    font_weight_picker_open: bool,
     export_scale_picker_open: bool,
     export_format_picker_open: bool,
+    padding_mode_popover_open: bool,
 ) -> Vec<(PropertyPanelAction, Rect)> {
     let x0 = panel_rect.origin.x;
     let w = panel_rect.size.x;
@@ -244,11 +250,11 @@ pub fn action_button_rects_with_fill_picker(
         out.push((
             PropertyPanelAction::CreateComponent,
             Rect {
-                origin: Point2D::new(x0 + PAD_X, y + 8.0),
-                size: Point2D::new(usable_w, 36.0),
+                origin: Point2D::new(x0 + PAD_X, y + CREATE_COMPONENT_PAD_TOP),
+                size: Point2D::new(usable_w, CREATE_COMPONENT_BTN_H),
             },
         ));
-        y += 8.0 + 36.0 + 12.0;
+        y += CREATE_COMPONENT_BLOCK_H;
     }
     // Position section.
     y += SECTION_HEADER_HEIGHT;
@@ -265,14 +271,24 @@ pub fn action_button_rects_with_fill_picker(
             w,
             visible.flex_layout_mode,
             visible.layout_justify,
+            padding_mode_popover_open,
         );
-        y += crate::widgets::property_panel_flex::flex_section_height(visible.flex_layout_mode)
-            - SECTION_HEADER_HEIGHT;
+        y += crate::widgets::property_panel_flex::flex_section_height(
+            visible.flex_layout_mode,
+            visible.padding_edit_mode,
+        ) - SECTION_HEADER_HEIGHT;
     }
 
     if visible.size_options {
         y += SECTION_HEADER_HEIGHT;
-        y += INPUT_HEIGHT + 10.0;
+        // The W/H input row collapses when both dimensions are fill/hug
+        // (matches paint + editable_input_rects), so the size checkbox
+        // rects below shift up by the row height.
+        let w_visible = !visible.size_fill_width && !visible.size_hug_width;
+        let h_visible = !visible.size_fill_height && !visible.size_hug_height;
+        if w_visible || h_visible {
+            y += INPUT_HEIGHT + 10.0;
+        }
         let row_h = 22.0;
         out.push((
             PropertyPanelAction::ToggleSizeFillWidth,
@@ -330,6 +346,13 @@ pub fn action_button_rects_with_fill_picker(
         if font_family_picker_open {
             out.extend(
                 crate::widgets::property_panel_text::font_family_picker_action_rects(
+                    x0, y, usable_w,
+                ),
+            );
+        }
+        if font_weight_picker_open {
+            out.extend(
+                crate::widgets::property_panel_text::font_weight_picker_action_rects(
                     x0, y, usable_w,
                 ),
             );

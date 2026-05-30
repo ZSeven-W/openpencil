@@ -20,6 +20,17 @@ pub const SECTION_HEADER_HEIGHT: f32 = 24.0;
 pub const TAB_HEIGHT: f32 = 36.0;
 pub const HEADER_HEIGHT: f32 = 30.0;
 
+/// "Create component" button metrics — shared by `paint_create_component`
+/// and every layout walker so paint ↔ hit-test ↔ section offsets stay in
+/// lockstep. The button + its icon are kept compact (icon size below).
+pub const CREATE_COMPONENT_PAD_TOP: f32 = 8.0;
+pub const CREATE_COMPONENT_BTN_H: f32 = 30.0;
+pub const CREATE_COMPONENT_PAD_BOTTOM: f32 = 12.0;
+pub const CREATE_COMPONENT_ICON: f32 = 14.0;
+/// Total vertical space the create-component block consumes.
+pub const CREATE_COMPONENT_BLOCK_H: f32 =
+    CREATE_COMPONENT_PAD_TOP + CREATE_COMPONENT_BTN_H + CREATE_COMPONENT_PAD_BOTTOM;
+
 pub fn paint_section_label(
     cx: &mut PaintCx<'_>,
     theme: &Theme,
@@ -161,7 +172,10 @@ pub fn paint_input_with_suffix_focused(
             .stroke_round_rect(rect, INPUT_RADIUS, theme.primary, 1.5);
     }
     let value_x = rect.origin.x + 10.0;
-    let baseline_y = rect.origin.y + 19.0;
+    // Centre the text vertically in the box: for the standard 30px input
+    // this is +19 (unchanged); for the compact 20px gap row it becomes
+    // +14 so the value isn't pinned to the bottom.
+    let baseline_y = rect.origin.y + rect.size.y / 2.0 + 4.0;
     let value_layout = TextLayout::single_run(
         value,
         "system-ui",
@@ -192,7 +206,7 @@ pub fn paint_input_with_suffix_focused(
     );
     cx.backend.draw_text(
         &unit_layout,
-        Point2D::new(rect.origin.x + rect.size.x - 14.0, rect.origin.y + 19.0),
+        Point2D::new(rect.origin.x + rect.size.x - 14.0, baseline_y),
     );
 }
 

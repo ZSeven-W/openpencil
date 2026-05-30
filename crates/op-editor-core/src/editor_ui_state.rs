@@ -50,7 +50,8 @@ impl ThemeMode {
 }
 
 pub use crate::property_panel_state::{
-    BooleanOp, ExportFormat, FillType, FlexLayout, ImageAdjustmentField, ImageFillMode, PropertyTab,
+    BooleanOp, ExportFormat, FillType, FlexLayout, ImageAdjustmentField, ImageFillMode,
+    PaddingEditMode, PropertyTab,
 };
 
 /// File-menu choices. State enum ported from shell-core's
@@ -238,6 +239,18 @@ impl MergeResolveState {
     }
 }
 
+/// Which view the ready-state overflow `…` popover is showing. The
+/// top-level menu opens subviews in place (mirrors the TS header's
+/// `overflowView` state machine), resetting to `Menu` on close.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum GitOverflowView {
+    /// The top-level action list.
+    #[default]
+    Menu,
+    /// The remote-settings subview — origin URL + HTTPS credential.
+    RemoteSettings,
+}
+
 /// An interactive action requested from the Git panel. The desktop
 /// host drains it from [`GitPanelState::pending_action`] and runs it
 /// against its `GitSession` (the widget layer never calls git).
@@ -258,6 +271,12 @@ pub enum GitPanelAction {
     /// Stage + commit the tracked document with the panel's
     /// `commit_message`.
     Commit,
+    /// Ready-view "Save milestone": save the current design to the
+    /// tracked `.op`, stage it, and commit with the panel's
+    /// `commit_message` — the TS `commitMilestone` flow. Unlike
+    /// [`GitPanelAction::Commit`] (which commits a pre-assembled staged
+    /// index) this snapshots the live editor state in one click.
+    CommitMilestone,
     /// Switch the working tree to the named branch.
     SwitchBranch(String),
     /// Add / re-point the `origin` remote to the given URL.
@@ -306,6 +325,17 @@ pub struct GitPanelState {
     /// `0` is hovered with no saved file). Updated by the host on
     /// cursor-move.
     pub empty_hovered_card: Option<u8>,
+    /// Ready-state header: whether the `…` overflow popover is open
+    /// (switch-tracked / clear-author / remote-settings › / SSH-keys › /
+    /// close-repo). Mirrors the TS header's local `overflowOpen`.
+    pub overflow_open: bool,
+    /// Which view the overflow popover is showing — the top-level menu
+    /// or one of its subviews (remote settings). Resets to `Menu` each
+    /// time the popover closes. Mirrors the TS header's `overflowView`.
+    pub overflow_view: GitOverflowView,
+    /// Ready-state header: whether the branch-picker dropdown (opened
+    /// from the `⎇ <branch> ▾` button) is open.
+    pub branch_picker_open: bool,
     /// Current branch name of that repository.
     pub branch: Option<String>,
     /// All local branch names, sorted — the panel lists them for
@@ -338,6 +368,10 @@ pub struct GitPanelState {
     pub commit_message: String,
     /// Whether the commit-message input holds keyboard focus.
     pub commit_focused: bool,
+    /// Caret-blink anchor (ms) for the commit input — reset on focus +
+    /// each keystroke so the caret stays solid while typing, then
+    /// blinks (same cadence as the chat / property inputs).
+    pub commit_caret_anchor_ms: u64,
     /// Interactive action requested by a panel click / Enter —
     /// drained and executed by the desktop host.
     pub pending_action: Option<GitPanelAction>,
@@ -496,6 +530,10 @@ pub struct EditorUiState {
     /// desktop runner sets it when spawning the worker and clears it
     /// when the result lands.
     pub figma_import_in_progress: bool,
+    /// True while a file is being dragged over the window (between the
+    /// platform's `HoveredFile` and `HoveredFileCancelled` / drop). Drives
+    /// the full-canvas drop overlay so the user sees a clear drop target.
+    pub file_drop_active: bool,
     /// Imported Figma documents parsed in Preserve mode already carry
     /// authored parent-local geometry. The scene builder can use this
     /// flag to skip the expensive flex/text layout pass.
@@ -566,6 +604,22 @@ pub struct EditorUiState {
     pub property_tab: PropertyTab,
     /// Active flex-layout mode for the property panel's row.
     pub flex_layout: FlexLayout,
+    /// Padding-section edit mode pinned via the gear popover. `None`
+    /// re-derives the mode from the node's values each frame (TS
+    /// default); `Some(_)` keeps the user's pick. The pin is scoped to
+    /// [`Self::padding_edit_mode_anchor`] so it never leaks into the
+    /// next selection — the panel ignores it once the anchor differs.
+    pub padding_edit_mode: Option<PaddingEditMode>,
+    /// Node id (anchor) the [`Self::padding_edit_mode`] pin was set for.
+    /// Empty when unset. The property panel honours the pin only while
+    /// the current selection anchor still matches, so selecting another
+    /// node falls back to deriving the mode from that node's values.
+    pub padding_edit_mode_anchor: String,
+    /// Whether the padding-mode gear popover is open.
+    pub padding_mode_popover_open: bool,
+    /// Index (into `PaddingEditMode::ALL`) of the popover row under the
+    /// cursor while the gear popover is open — drives the hover wash.
+    pub padding_mode_popover_hover: Option<usize>,
     pub size_fill_width: bool,
     pub size_fill_height: bool,
     pub size_hug_width: bool,
@@ -577,6 +631,11 @@ pub struct EditorUiState {
     pub image_fill_popover_open: bool,
     /// Whether the text font-family picker is open.
     pub font_family_picker_open: bool,
+    /// Whether the typography font-weight dropdown is open.
+    pub font_weight_picker_open: bool,
+    /// Index (into `FontWeightChoice::ALL`) of the weight-dropdown row
+    /// under the cursor while it's open — drives the hover wash.
+    pub font_weight_picker_hover: Option<usize>,
     /// Active-theme axis whose value picker is open; `None` = closed.
     pub axis_dropdown_open: Option<String>,
     /// Editor focus for a non-color variable row (Number / String).
@@ -675,7 +734,7 @@ impl Default for EditorUiState {
         Self {
             sidebar_open: true,
             layer_panel_width: 240.0,
-            property_panel_width: 280.0,
+            property_panel_width: 256.0,
             theme_mode: ThemeMode::Dark,
             locale: Locale::ZhCn,
             locale_picker_open: false,
@@ -696,6 +755,7 @@ impl Default for EditorUiState {
             layer_layers_scroll: 0.0,
             figma_import_open: false,
             figma_import_in_progress: false,
+            file_drop_active: false,
             preserve_authored_geometry: false,
             agent_settings_open: false,
             agent_settings: crate::agent_settings::AgentSettings::default(),
@@ -721,6 +781,10 @@ impl Default for EditorUiState {
             align_toolbar_hover: None,
             property_tab: PropertyTab::Design,
             flex_layout: FlexLayout::Free,
+            padding_edit_mode: None,
+            padding_edit_mode_anchor: String::new(),
+            padding_mode_popover_open: false,
+            padding_mode_popover_hover: None,
             size_fill_width: false,
             size_fill_height: false,
             size_hug_width: false,
@@ -729,6 +793,8 @@ impl Default for EditorUiState {
             fill_type_picker_open: false,
             image_fill_popover_open: false,
             font_family_picker_open: false,
+            font_weight_picker_open: false,
+            font_weight_picker_hover: None,
             axis_dropdown_open: None,
             variable_row_focus: None,
             effect_param_focus: None,

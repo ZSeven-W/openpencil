@@ -294,19 +294,54 @@ pub fn deep_clone_with_new_ids(
 }
 
 /// Translate `node` and its whole subtree by `(dx, dy)` document px.
-/// Children carry document-absolute coords, so moving a container
-/// must shift the descendants too or they detach.
+/// Free-layout children carry document-absolute coords, so moving a
+/// container must shift the descendants too or they detach.
+///
+/// Auto-layout (flex) containers are the exception: their children are
+/// flow-positioned by the layout engine and re-flow under the moved
+/// origin on their own. Cascading into them would materialize an
+/// explicit `x` / `y` onto each flow child, which jian-core reads as
+/// an absolutely positioned node — collapsing every child to the
+/// frame's top-left on the next re-layout. So move only the flex
+/// container's own origin and stop.
 pub fn translate_subtree(node: &mut PenNode, dx: f64, dy: f64) {
     {
         let base = node.base_mut();
         base.x = Some(base.x.unwrap_or(0.0) + dx);
         base.y = Some(base.y.unwrap_or(0.0) + dy);
     }
+    if node.is_auto_layout_container() {
+        return;
+    }
     if let Some(children) = node.children_mut() {
         for child in children {
             translate_subtree(child, dx, dy);
         }
     }
+}
+
+/// True when `target`'s immediate parent (anywhere in the forest) is an
+/// auto-layout (flex) container — i.e. `target` is positioned by the
+/// layout engine, not by stored `x` / `y`.
+///
+/// Such a node must not be free-dragged: writing `x` / `y` onto it (even
+/// the tiny delta of a jittered click) flips it to `Position::Absolute`
+/// in jian-core and detaches it from its parent's flex flow, collapsing
+/// the siblings. A drag of an auto-layout child is therefore a no-op
+/// (reorder-on-drag is a separate, future affordance). Top-level nodes
+/// and children of free-layout parents are NOT affected.
+pub fn is_flow_child_of_flex(children: &[PenNode], target: &NodeId) -> bool {
+    for child in children {
+        if let Some(grand) = child.children() {
+            if grand.iter().any(|c| c.id_str() == target.as_str()) {
+                return child.is_auto_layout_container();
+            }
+            if is_flow_child_of_flex(grand, target) {
+                return true;
+            }
+        }
+    }
+    false
 }
 
 /// True when any ancestor of `target` within the forest is also in

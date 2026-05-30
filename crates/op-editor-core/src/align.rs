@@ -115,6 +115,11 @@ fn apply_align(
         if is_ancestor_in_set(children, id, editable) {
             continue;
         }
+        // Engine-positioned flex children can't move independently; a
+        // translate would materialize x/y and detach them from flow.
+        if crate::walkers::is_flow_child_of_flex(children, id) {
+            continue;
+        }
         let Some(cur) = find_node(children, id).map(aggregate_bounds) else {
             continue;
         };
@@ -148,6 +153,9 @@ fn apply_distribute(children: &mut [PenNode], editable: &[NodeId], action: Align
     let filtered: Vec<NodeId> = editable
         .iter()
         .filter(|id| !is_ancestor_in_set(children, id, editable))
+        // Engine-positioned flex children are excluded from distribution
+        // for the same reason as the align/translate paths.
+        .filter(|id| !crate::walkers::is_flow_child_of_flex(children, id))
         .cloned()
         .collect();
     let mut sorted: Vec<(NodeId, DocRect)> = filtered

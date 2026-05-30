@@ -4,7 +4,8 @@
 //! and input-rect walker stay under the repository file-size cap.
 
 use crate::widgets::property_panel_inputs::{
-    HEADER_HEIGHT, INPUT_HEIGHT, PAD_X, SECTION_GAP, SECTION_HEADER_HEIGHT, TAB_HEIGHT,
+    CREATE_COMPONENT_BLOCK_H, HEADER_HEIGHT, INPUT_HEIGHT, PAD_X, SECTION_GAP,
+    SECTION_HEADER_HEIGHT, TAB_HEIGHT,
 };
 use crate::widgets::property_panel_layout::{fill_body_height_with_stops, VisibleSections};
 use crate::{Point2D, Rect};
@@ -59,7 +60,7 @@ pub fn editable_input_rects(
     y += TAB_HEIGHT;
     y += HEADER_HEIGHT;
     if visible.create_component {
-        y += 8.0 + 36.0 + 12.0;
+        y += CREATE_COMPONENT_BLOCK_H;
     }
     y += SECTION_HEADER_HEIGHT;
     let x_rect = Rect {
@@ -96,26 +97,48 @@ pub fn editable_input_rects(
             y,
             w,
             visible.flex_layout_mode,
+            visible.layout_justify,
+            visible.padding_edit_mode,
         );
-        y += crate::widgets::property_panel_flex::flex_section_height(visible.flex_layout_mode);
+        y += crate::widgets::property_panel_flex::flex_section_height(
+            visible.flex_layout_mode,
+            visible.padding_edit_mode,
+        );
     }
     if visible.size_options {
         y += SECTION_HEADER_HEIGHT;
-        rects.push((
-            PropertyFocus::SizeW,
-            Rect {
-                origin: Point2D::new(x0 + PAD_X, y),
-                size: Point2D::new(half_w, INPUT_HEIGHT),
-            },
-        ));
-        rects.push((
-            PropertyFocus::SizeH,
-            Rect {
-                origin: Point2D::new(x0 + PAD_X + half_w + 8.0, y),
-                size: Point2D::new(half_w, INPUT_HEIGHT),
-            },
-        ));
-        y += INPUT_HEIGHT + 10.0;
+        // Mirror paint_size_section: omit the W/H hit-rect when its
+        // dimension is fill/hug, and reflow H into the left slot when W
+        // is hidden — but keep the row's vertical advance fixed so later
+        // sections don't shift. (TS size-section.tsx: input rendered
+        // only when the dimension is a concrete number.)
+        let w_left = Point2D::new(x0 + PAD_X, y);
+        let h_right = Point2D::new(x0 + PAD_X + half_w + 8.0, y);
+        let w_visible = !visible.size_fill_width && !visible.size_hug_width;
+        let h_visible = !visible.size_fill_height && !visible.size_hug_height;
+        if w_visible {
+            rects.push((
+                PropertyFocus::SizeW,
+                Rect {
+                    origin: w_left,
+                    size: Point2D::new(half_w, INPUT_HEIGHT),
+                },
+            ));
+        }
+        if h_visible {
+            rects.push((
+                PropertyFocus::SizeH,
+                Rect {
+                    origin: if w_visible { h_right } else { w_left },
+                    size: Point2D::new(half_w, INPUT_HEIGHT),
+                },
+            ));
+        }
+        // Collapse the input row when both dimensions are fill/hug (same
+        // rule as paint_size_section) so the checkboxes shift up.
+        if w_visible || h_visible {
+            y += INPUT_HEIGHT + 10.0;
+        }
         let check_h = 22.0;
         y += check_h * if visible.clip_content { 3.0 } else { 2.0 };
         y += 12.0;

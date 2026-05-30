@@ -61,9 +61,20 @@ impl ApplicationHandler for DesktopApp {
         #[cfg(target_os = "macos")]
         {
             use winit::platform::macos::WindowAttributesExtMacOS;
-            // Push the traffic lights down so they sit roughly
-            // centred in the 40 px `TopBar` rather than the 28 px
-            // native title bar. Tuned by eye.
+            // Push the traffic lights down so their centre lines up with
+            // the `TopBar`'s app icon GLYPHS. The icon buttons paint their
+            // glyph centred at `TOP_BAR_HEIGHT / 2` = 20 px below the
+            // window top (the 28 px hit box top+8 is wider than the glyph
+            // and is NOT the visual centre). AppKit's default button centre
+            // for a fullsize-content / transparent titlebar window is
+            // `casement`'s `reposition_traffic_lights` lowers the button
+            // by `inset` points from AppKit's default baseline. The
+            // geometric centre is ~6, but by eye the user wants more top
+            // margin so the dots drop onto the icon row. The casement
+            // fork now applies this on `windowDidBecomeKey` (it was a
+            // no-op at window creation — the buttons didn't exist yet,
+            // so the inset only took effect after a resize). 4 px lands
+            // the dots on the icon-glyph row (tuned by eye with the user).
             attrs = attrs
                 .with_titlebar_transparent(true)
                 .with_fullsize_content_view(true)
@@ -304,7 +315,27 @@ impl ApplicationHandler for DesktopApp {
                     self.win_pos = Some((pos.x, pos.y));
                 }
             }
+            WindowEvent::HoveredFile(_path) => {
+                // A file is being dragged over the window — show the
+                // full-canvas drop overlay so the target is obvious.
+                if !self.host.editor_state().editor_ui.file_drop_active {
+                    self.host.editor_state_mut().editor_ui.file_drop_active = true;
+                    self.host.mark_editor_state_dirty();
+                    self.request_redraw(true);
+                }
+            }
+            WindowEvent::HoveredFileCancelled => {
+                // The drag left the window without dropping — hide it.
+                if self.host.editor_state().editor_ui.file_drop_active {
+                    self.host.editor_state_mut().editor_ui.file_drop_active = false;
+                    self.host.mark_editor_state_dirty();
+                    self.request_redraw(true);
+                }
+            }
             WindowEvent::DroppedFile(path) => {
+                // Clear the drag overlay now that the drop has landed.
+                self.host.editor_state_mut().editor_ui.file_drop_active = false;
+                self.host.mark_editor_state_dirty();
                 // Drag-and-drop open. `.op` / `.pen` documents route
                 // through the canonical loader; `.fig` Figma exports
                 // route through the background Figma import worker
