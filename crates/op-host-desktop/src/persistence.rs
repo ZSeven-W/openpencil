@@ -425,8 +425,15 @@ pub fn run_action(
     use op_editor_core::editor_ui_state::FileAction;
     match action {
         FileAction::New => {
-            // Reset the document to a fresh untitled state.
             *host.editor_state_mut() = EditorState::starter();
+            let (vw, vh) = window
+                .map(|w| {
+                    let size = w.inner_size();
+                    let scale = w.scale_factor() as f32;
+                    (size.width as f32 / scale, size.height as f32 / scale)
+                })
+                .unwrap_or((super::INITIAL_VIEWPORT_W, super::INITIAL_VIEWPORT_H));
+            host.fit_content_to_viewport(vw, vh);
             host.mark_editor_state_dirty();
             *current_path = None;
             refresh_title(current_path, window);
@@ -686,9 +693,6 @@ mod tests {
 
     #[test]
     fn document_fingerprint_is_stable_and_change_sensitive() {
-        // The unsaved-changes prompt rests on this: an unchanged
-        // document hashes the same, a structural edit hashes
-        // differently.
         let state = EditorState::new();
         let fp = document_fingerprint(&state);
         assert_eq!(fp, document_fingerprint(&state), "stable for the same doc");
@@ -706,6 +710,9 @@ mod tests {
     fn new_file_action_resets_to_starter_frame() {
         let mut host = WidgetHostNative::new();
         host.editor_state_mut().doc.children.clear();
+        host.editor_state_mut().viewport.pan_x = -5000.0;
+        host.editor_state_mut().viewport.pan_y = -5000.0;
+        host.editor_state_mut().viewport.zoom = 0.2;
         let mut current_path = Some(PathBuf::from("/tmp/old.op"));
 
         let outcome = run_action(
@@ -739,6 +746,10 @@ mod tests {
             frame.container.height,
             Some(jian_ops_schema::sizing::SizingBehavior::Number(800.0))
         ));
+        let v = host.editor_state().viewport;
+        assert!((v.zoom - 0.66).abs() < 1e-3, "zoom {}", v.zoom);
+        assert!((v.pan_x - 64.0).abs() < 1e-2, "pan_x {}", v.pan_x);
+        assert!((v.pan_y - 166.0).abs() < 1e-2, "pan_y {}", v.pan_y);
     }
 
     #[test]
