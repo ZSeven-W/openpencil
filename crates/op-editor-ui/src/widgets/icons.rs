@@ -68,6 +68,8 @@ pub enum Icon {
     Globe,
     /// Maximize — fullscreen toggle.
     Maximize,
+    /// Minimize2 — restore from fullscreen toggle.
+    Minimize,
     /// Hash — Frame node-kind tag in the LayerPanel.
     Hash,
     /// PanelLeft — sidebar collapse button.
@@ -263,6 +265,7 @@ impl Icon {
             Icon::Moon => MOON,
             Icon::Globe => GLOBE,
             Icon::Maximize => MAXIMIZE,
+            Icon::Minimize => MINIMIZE_2,
             Icon::Hash => HASH,
             Icon::PanelLeft => PANEL_LEFT,
             Icon::FolderOpen => FOLDER_OPEN,
@@ -432,6 +435,7 @@ impl Icon {
             "hand" => Icon::Hand,
             "cursor" | "mouse-pointer" => Icon::Cursor,
             "maximize" | "fullscreen" => Icon::Maximize,
+            "minimize" | "minimize-2" | "restore" => Icon::Minimize,
             "sun" => Icon::Sun,
             "moon" => Icon::Moon,
             "panel-left" => Icon::PanelLeft,
