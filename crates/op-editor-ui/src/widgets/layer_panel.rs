@@ -632,8 +632,6 @@ impl Widget for LayerPanel {
             }
 
             let indent = ROW_PAD_X + f32::from(item.depth) * 12.0;
-            // Hidden rows dim everything by 50 % alpha — TS parity
-            // with `opacity-50` on hidden layer rows.
             let dim = |c: Color, factor: f32| -> Color {
                 Color {
                     r: c.r,
@@ -672,16 +670,12 @@ impl Widget for LayerPanel {
                 icon_color,
                 1.4,
             );
-            // Name label — dims to muted when hidden so the user
-            // can tell at a glance which rows are invisible.
             let label_color = if item.selected {
                 dim(self.theme.primary, dim_factor)
             } else {
                 dim(self.theme.card_foreground, dim_factor)
             };
             let label_x = icon_x + 20.0;
-            // Reserve space for trailing eye + lock so the label
-            // doesn't overlap them when the row is hovered/selected.
             let label_max_x = row.origin.x + row.size.x - 8.0 - 14.0 - 22.0 - 4.0;
             let available_w = (label_max_x - label_x).max(0.0);
             if item.renaming {
@@ -722,13 +716,14 @@ impl Widget for LayerPanel {
             } else {
                 dim(self.theme.muted_foreground, dim_factor)
             };
-            let lock_locked = Color {
-                r: 0.92,
-                g: 0.49,
-                b: 0.20,
-                a: 1.0,
+            let state_color = |r, g, b| Color { r, g, b, a: 1.0 };
+            let eye_hidden = state_color(0.98039216, 0.8, 0.08235294);
+            let lock_locked = state_color(0.92, 0.49, 0.20);
+            let eye_color = if item.hidden {
+                eye_hidden
+            } else {
+                trailing_default
             };
-            let eye_color = trailing_default;
             let lock_color = if item.locked {
                 lock_locked
             } else {
