@@ -23,7 +23,7 @@ pub const MODEL_SEARCH_H: f32 = 40.0;
 /// Hard cap on the dropdown's painted height. A connected catalog
 /// taller than this (e.g. OpenCode's 75+ models) scrolls inside the
 /// card instead of growing off the top of the screen.
-pub const MODEL_PICKER_MAX_H: f32 = 320.0;
+pub const MODEL_PICKER_MAX_H: f32 = 288.0;
 const MODEL_EMPTY_H: f32 = 44.0;
 
 /// Painted height of the dropdown for `models` — the content height
@@ -68,8 +68,12 @@ fn model_matches(entry: &ModelEntry, q: &str) -> bool {
         || entry.display_name.to_lowercase().contains(q)
         || entry.value.to_lowercase().contains(q)
         || provider_label(entry.provider).to_lowercase().contains(q)
-        || group_label_for_entry(entry).to_lowercase().contains(q)
-        || (is_builtin(entry) && "api key".contains(q))
+        || entry
+            .builtin_provider_display_name
+            .as_deref()
+            .map(str::trim)
+            .filter(|label| !label.is_empty())
+            .is_some_and(|label| label.to_lowercase().contains(q))
 }
 
 pub fn visible_model_indices(models: &[ModelEntry], search: &str) -> Vec<usize> {
@@ -619,6 +623,16 @@ mod tests {
     }
 
     #[test]
+    fn long_catalog_height_is_capped_to_ts_dropdown_height_and_still_scrolls() {
+        let models: Vec<ModelEntry> = (0..40)
+            .map(|i| entry(AgentProvider::OpenCode, &format!("m{i}")))
+            .collect();
+
+        assert!((picker_view_height(&models, "") - 288.0).abs() < 0.01);
+        assert!(max_picker_scroll(&models, "") > 0.0);
+    }
+
+    #[test]
     fn model_at_filters_by_search_and_returns_original_index() {
         let models = vec![
             entry(AgentProvider::ClaudeCode, "opus"),
@@ -668,6 +682,27 @@ mod tests {
         );
 
         assert_eq!(visible_model_indices(&[entry], "百炼"), vec![0]);
+    }
+
+    #[test]
+    fn builtin_search_does_not_match_api_key_badge_text() {
+        let builtin = ModelEntry::builtin(
+            AgentProvider::CodexCli,
+            "builtin-1",
+            "builtin:builtin-1:deepseek-v4-pro",
+            "deepseek-v4-pro",
+        );
+        let provider_model = entry(AgentProvider::CodexCli, "gpt-5.5");
+
+        assert_eq!(
+            visible_model_indices(&[builtin.clone()], "api key"),
+            Vec::<usize>::new()
+        );
+        assert_eq!(
+            visible_model_indices(&[builtin.clone()], "deepseek"),
+            vec![0]
+        );
+        assert_eq!(visible_model_indices(&[provider_model], "openai"), vec![0]);
     }
 
     #[test]
