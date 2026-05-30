@@ -13,8 +13,8 @@ use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::{PaintCx, Widget, WidgetId};
 use crate::{Color, Point2D, Rect, TextLayout};
 use op_editor_core::agent_settings::{
-    AgentProvider, AgentSettings, AgentSettingsTab, BuiltinAgentField, ImageGenField,
-    ImageSearchField, McpCli,
+    AcpAgentField, AgentProvider, AgentSettings, AgentSettingsTab, BuiltinAgentField,
+    ImageGenField, ImageSearchField, McpCli,
 };
 use op_editor_core::editor_ui_state::EditorUiState;
 use op_editor_core::EditorState;
@@ -51,6 +51,14 @@ pub enum AgentSettingsHit {
     EditBuiltinAgent(usize),
     RemoveBuiltinAgent(usize),
     AddAcpAgent,
+    FocusAcpAgent {
+        index: usize,
+        field: AcpAgentField,
+    },
+    ToggleAcpConnectionType(usize),
+    EditAcpAgent(usize),
+    RemoveAcpAgent(usize),
+    ToggleAcpConnected(usize),
     ToggleMcpServer,
     ToggleMcpCli(McpCli),
     ToggleImagesAdvanced,
@@ -138,8 +146,19 @@ impl<'a> AgentSettingsPanel<'a> {
                 }
                 let content = content_rect(panel);
                 let acp_y = acp_section_y(content, &self.settings);
-                match agent_settings_acp::hit_test(content, scrolled, acp_y) {
+                match agent_settings_acp::hit_test(content, &self.settings, scrolled, acp_y) {
                     AcpHit::AddAgent => return AgentSettingsHit::AddAcpAgent,
+                    AcpHit::Focus { index, field } => {
+                        return AgentSettingsHit::FocusAcpAgent { index, field };
+                    }
+                    AcpHit::ToggleConnectionType(index) => {
+                        return AgentSettingsHit::ToggleAcpConnectionType(index);
+                    }
+                    AcpHit::Edit(index) => return AgentSettingsHit::EditAcpAgent(index),
+                    AcpHit::Remove(index) => return AgentSettingsHit::RemoveAcpAgent(index),
+                    AcpHit::ToggleConnected(index) => {
+                        return AgentSettingsHit::ToggleAcpConnected(index);
+                    }
                     AcpHit::None => {}
                 }
                 for (i, provider) in AgentProvider::ALL.iter().enumerate() {
@@ -701,7 +720,7 @@ fn connect_btn_rect_at(card: Rect) -> Rect {
 fn agent_card_rect_in(panel: Rect, index: usize, settings: &AgentSettings) -> Rect {
     let content = content_rect(panel);
     let builtin_block = agent_settings_builtin::content_height(settings) + SECTION_GAP;
-    let acp_block = 32.0 + 28.0 + 64.0 + SECTION_GAP;
+    let acp_block = agent_settings_acp::content_height(settings) + SECTION_GAP;
     let mut y = content.origin.y + 12.0 + builtin_block + acp_block + 32.0;
     for i in 0..index {
         y += CARD_HEIGHT + CARD_GAP;

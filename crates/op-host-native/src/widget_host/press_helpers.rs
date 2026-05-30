@@ -345,9 +345,139 @@ impl WidgetHostNative {
                 self.editor_state.editor_ui.settings_input_draft.clear();
                 self.editor_state.rebuild_chat_models();
             }
+            AgentSettingsHit::FocusAcpAgent { index, field } => {
+                self.commit_settings_focus_if_any();
+                if let Some(agent) = self
+                    .editor_state
+                    .editor_ui
+                    .agent_settings
+                    .acp_agents
+                    .get(index)
+                {
+                    self.editor_state.editor_ui.settings_input_draft = match field {
+                        op_editor_core::agent_settings::AcpAgentField::DisplayName => {
+                            agent.display_name.clone()
+                        }
+                        op_editor_core::agent_settings::AcpAgentField::Command => {
+                            agent.command.clone()
+                        }
+                        op_editor_core::agent_settings::AcpAgentField::Url => {
+                            agent.url.clone().unwrap_or_default()
+                        }
+                    };
+                    self.editor_state.editor_ui.agent_settings.focus =
+                        Some(op_editor_core::agent_settings::SettingsFocus::AcpAgent {
+                            index,
+                            field,
+                        });
+                }
+            }
+            AgentSettingsHit::ToggleAcpConnectionType(index) => {
+                self.commit_settings_focus_if_any();
+                if let Some(agent) = self
+                    .editor_state
+                    .editor_ui
+                    .agent_settings
+                    .acp_agents
+                    .get_mut(index)
+                {
+                    use op_editor_core::agent_settings::{AcpAgentField, AcpConnectionType};
+                    agent.connection_type = match agent.connection_type {
+                        AcpConnectionType::Local => AcpConnectionType::Remote,
+                        AcpConnectionType::Remote => AcpConnectionType::Local,
+                    };
+                    agent.connected = false;
+                    let field = match agent.connection_type {
+                        AcpConnectionType::Local => AcpAgentField::Command,
+                        AcpConnectionType::Remote => AcpAgentField::Url,
+                    };
+                    self.editor_state.editor_ui.settings_input_draft = match field {
+                        AcpAgentField::Command => agent.command.clone(),
+                        AcpAgentField::Url => agent.url.clone().unwrap_or_default(),
+                        AcpAgentField::DisplayName => agent.display_name.clone(),
+                    };
+                    self.editor_state.editor_ui.agent_settings.focus =
+                        Some(op_editor_core::agent_settings::SettingsFocus::AcpAgent {
+                            index,
+                            field,
+                        });
+                }
+            }
+            AgentSettingsHit::EditAcpAgent(index) => {
+                self.commit_settings_focus_if_any();
+                if let Some(agent) = self
+                    .editor_state
+                    .editor_ui
+                    .agent_settings
+                    .acp_agents
+                    .get(index)
+                {
+                    self.editor_state.editor_ui.settings_input_draft = agent.display_name.clone();
+                    self.editor_state.editor_ui.agent_settings.focus =
+                        Some(op_editor_core::agent_settings::SettingsFocus::AcpAgent {
+                            index,
+                            field: op_editor_core::agent_settings::AcpAgentField::DisplayName,
+                        });
+                }
+            }
+            AgentSettingsHit::RemoveAcpAgent(index) => {
+                self.commit_settings_focus_if_any();
+                let agents = &mut self.editor_state.editor_ui.agent_settings.acp_agents;
+                if index < agents.len() {
+                    agents.remove(index);
+                    self.editor_state.editor_ui.agent_settings.focus = None;
+                    self.editor_state.editor_ui.settings_input_draft.clear();
+                }
+            }
+            AgentSettingsHit::ToggleAcpConnected(index) => {
+                self.commit_settings_focus_if_any();
+                if let Some(agent) = self
+                    .editor_state
+                    .editor_ui
+                    .agent_settings
+                    .acp_agents
+                    .get_mut(index)
+                {
+                    if agent.connected {
+                        agent.connected = false;
+                    } else if agent.ready() {
+                        agent.connected = true;
+                    } else {
+                        use op_editor_core::agent_settings::{AcpAgentField, AcpConnectionType};
+                        let field = match agent.connection_type {
+                            AcpConnectionType::Local => AcpAgentField::Command,
+                            AcpConnectionType::Remote => AcpAgentField::Url,
+                        };
+                        self.editor_state.editor_ui.settings_input_draft = match field {
+                            AcpAgentField::Command => agent.command.clone(),
+                            AcpAgentField::Url => agent.url.clone().unwrap_or_default(),
+                            AcpAgentField::DisplayName => agent.display_name.clone(),
+                        };
+                        self.editor_state.editor_ui.agent_settings.focus =
+                            Some(op_editor_core::agent_settings::SettingsFocus::AcpAgent {
+                                index,
+                                field,
+                            });
+                    }
+                }
+            }
             AgentSettingsHit::AddAcpAgent => {
                 self.commit_settings_focus_if_any();
-                self.editor_state.editor_ui.agent_settings.add_acp_agent();
+                let id = self.editor_state.editor_ui.agent_settings.add_acp_agent();
+                let index = self
+                    .editor_state
+                    .editor_ui
+                    .agent_settings
+                    .acp_agents
+                    .iter()
+                    .position(|agent| agent.id == id)
+                    .unwrap_or(0);
+                self.editor_state.editor_ui.agent_settings.focus =
+                    Some(op_editor_core::agent_settings::SettingsFocus::AcpAgent {
+                        index,
+                        field: op_editor_core::agent_settings::AcpAgentField::Command,
+                    });
+                self.editor_state.editor_ui.settings_input_draft.clear();
             }
             AgentSettingsHit::Inside => {}
             AgentSettingsHit::AddGenConfig => {
