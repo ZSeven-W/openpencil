@@ -1,5 +1,4 @@
-//! Multi-tab settings modal opened via `Cmd+,`. Left sidebar
-//! nav (Agents / MCP / Images / System) + scrollable right pane.
+//! Multi-tab settings modal opened via `Cmd+,`.
 
 use crate::theme::Theme;
 use crate::widgets::agent_settings_builtin::{self, BuiltinHit};
@@ -59,6 +58,7 @@ pub enum AgentSettingsHit {
     AddGenConfig,
     SetActiveGenConfig(usize),
     RemoveGenConfig(usize),
+    CycleGenProvider(usize),
     FocusGenConfig {
         index: usize,
         field: ImageGenField,
@@ -177,6 +177,9 @@ impl<'a> AgentSettingsPanel<'a> {
                     }
                     ImagesHit::RemoveGenConfig(index) => {
                         return AgentSettingsHit::RemoveGenConfig(index);
+                    }
+                    ImagesHit::CycleGenProvider(index) => {
+                        return AgentSettingsHit::CycleGenProvider(index);
                     }
                     ImagesHit::FocusGenConfig { index, field } => {
                         return AgentSettingsHit::FocusGenConfig { index, field };
@@ -769,9 +772,6 @@ fn agent_card_rect_in(panel: Rect, index: usize, settings: &AgentSettings) -> Re
     let mut y = content.origin.y + 12.0 + builtin_block + acp_block + 32.0;
     for i in 0..index {
         y += CARD_HEIGHT + CARD_GAP;
-        // The Claude env-var hint paints only when ClaudeCode is
-        // connected; mirror that here so the rect chain stays in
-        // sync with paint.
         if i == 0 && settings.connected[0] {
             y += 28.0;
         }
