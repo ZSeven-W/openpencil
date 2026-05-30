@@ -192,9 +192,9 @@ pub const BUILTIN_AGENT_PRESETS: [BuiltinAgentPreset; 4] = [
     },
     BuiltinAgentPreset {
         display_name: "方舟CP",
-        kind: BuiltinAgentKind::OpenAiCompat,
+        kind: BuiltinAgentKind::Anthropic,
         model: "ark-code-latest",
-        base_url: "https://ark.cn-beijing.volces.com/api/coding/v3",
+        base_url: "https://ark.cn-beijing.volces.com/api/coding",
     },
     BuiltinAgentPreset {
         display_name: "DS",
@@ -527,9 +527,9 @@ mod tests {
                 ),
                 (
                     "方舟CP",
-                    BuiltinAgentKind::OpenAiCompat,
+                    BuiltinAgentKind::Anthropic,
                     "ark-code-latest",
-                    "https://ark.cn-beijing.volces.com/api/coding/v3",
+                    "https://ark.cn-beijing.volces.com/api/coding",
                     "",
                 ),
                 (
