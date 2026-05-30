@@ -171,6 +171,12 @@ impl WidgetHostNative {
             self.mark_dirty();
             return true;
         }
+        // Git empty-state Init-card hover — toggles the disabled hint
+        // pill (a no-op repaint=false when the panel is closed / the
+        // cursor isn't over that card).
+        if self.update_git_panel_empty_hover(x, y) {
+            return true;
+        }
         // Suppress lower-overlay hover while a floating panel is on top.
         let over_topmost =
             self.over_topmost_panel(x, y, self.last_viewport_w, self.last_viewport_h);

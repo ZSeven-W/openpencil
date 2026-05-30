@@ -196,6 +196,7 @@ fn model_list_rect(rect: Rect) -> Rect {
 /// row under the cursor (gets a hover wash). `rect` is the painted
 /// dropdown bounds (already capped at [`MODEL_PICKER_MAX_H`]);
 /// `scroll` shifts the content up when the catalog overflows.
+#[allow(clippy::too_many_arguments)]
 pub fn paint_model_picker(
     cx: &mut PaintCx<'_>,
     theme: &Theme,

@@ -3,13 +3,16 @@
 //! the 800-line ceiling.
 
 use super::frame_backend::NativeFrameBackend;
-use super::helpers::{STATUS_INSET, TOOLBAR_INSET_X, TOOLBAR_INSET_Y};
+use super::helpers::{
+    GIT_PANEL_CARET_H, GIT_PANEL_CARET_HALF, STATUS_INSET, TOOLBAR_INSET_X, TOOLBAR_INSET_Y,
+};
 use super::WidgetHostNative;
+use op_editor_ui::widgets::editor_state_ext::theme_for;
 use op_editor_ui::widgets::{
     variables_panel::VariablesPanel, AIChatPlaceholder, AlignToolbar, CanvasViewport,
     ComponentBrowserPanel, DesignMdPanel, GitPanel, IconPickerPanel, LayerPanel, LayoutCx,
     LocalePicker, PaintCx, PropertyPanel, ShapePicker, StatusBar, Toolbar, TopBar, Widget,
-    GIT_PANEL_INSET, STATUS_BAR_HEIGHT, STATUS_BAR_WIDTH, TOOLBAR_WIDTH, TOP_BAR_HEIGHT,
+    STATUS_BAR_HEIGHT, STATUS_BAR_WIDTH, TOOLBAR_WIDTH, TOP_BAR_HEIGHT,
 };
 use op_editor_ui::{Point2D, Rect, RenderBackend};
 
@@ -256,21 +259,37 @@ impl WidgetHostNative {
             status.paint(&mut cx, status_rect);
         }
 
-        // 8.2. Floating Git panel — read-only repository status,
-        //      toggled from the View menu. Floats at the canvas's
-        //      top-left, below the TopBar.
-        if let Some(panel) = GitPanel::for_editor(&self.editor_state) {
-            let panel_rect = Rect {
-                origin: Point2D::new(
-                    canvas_left + GIT_PANEL_INSET,
-                    TOP_BAR_HEIGHT + GIT_PANEL_INSET,
-                ),
-                size: Point2D::new(panel.panel_width(), panel.height()),
-            };
+        // 8.2. Floating Git panel — a popover hanging off the TopBar
+        //      Git button. `git_panel_rect` centres it under the button
+        //      (clamped to the canvas) so the caret + hit-test + cursor
+        //      logic share one placement.
+        if let Some(panel_rect) = self.git_panel_rect(viewport_width, viewport_height) {
+            let panel = GitPanel::for_editor(&self.editor_state)
+                .expect("git_panel_rect is Some, so the panel is open");
+            let git_theme = theme_for(&self.editor_state.editor_ui);
             let mut cx = PaintCx {
                 backend: &mut *frame,
             };
             panel.paint(&mut cx, panel_rect);
+
+            // Up-caret connecting the panel to the Git button — drawn
+            // after the panel so its base covers the panel's top border
+            // and reads as one continuous popover surface.
+            if let Some(btn_cx) = top_bar.git_button_center_x(top_bar_rect) {
+                let half = GIT_PANEL_CARET_HALF;
+                let top = panel_rect.origin.y;
+                let caret_x = btn_cx.clamp(
+                    panel_rect.origin.x + half + 2.0,
+                    panel_rect.origin.x + panel_rect.size.x - half - 2.0,
+                );
+                let tip = Point2D::new(caret_x, top - GIT_PANEL_CARET_H);
+                let base_l = Point2D::new(caret_x - half, top + 0.5);
+                let base_r = Point2D::new(caret_x + half, top + 0.5);
+                cx.backend
+                    .fill_polygon(&[tip, base_l, base_r], git_theme.popover);
+                cx.backend.stroke_line(tip, base_l, git_theme.border, 1.0);
+                cx.backend.stroke_line(tip, base_r, git_theme.border, 1.0);
+            }
         }
 
         // 8.4. Floating align/distribute toolbar — visible whenever

@@ -187,7 +187,7 @@ fn is_open_tag_at(input: &str, open: usize, tag: &str) -> bool {
     after
         .chars()
         .next()
-        .map_or(true, |c| c == '>' || c == '/' || c.is_ascii_whitespace())
+        .is_none_or(|c| c == '>' || c == '/' || c.is_ascii_whitespace())
 }
 
 fn collapse_blank_lines(input: &str) -> String {
@@ -246,12 +246,12 @@ fn attr_value(attrs: &str, key: &str) -> Option<String> {
             || attrs[..found]
                 .chars()
                 .next_back()
-                .map_or(true, |c| c.is_ascii_whitespace());
+                .is_none_or(|c| c.is_ascii_whitespace());
         let after_key = found + key.len();
         let after_ok = attrs[after_key..]
             .chars()
             .next()
-            .map_or(true, |c| c.is_ascii_whitespace() || c == '=');
+            .is_none_or(|c| c.is_ascii_whitespace() || c == '=');
         if !before_ok || !after_ok {
             cursor = after_key;
             continue;

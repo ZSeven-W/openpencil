@@ -236,11 +236,7 @@ fn is_image_area_frame_by_heuristic(node: &PenNode) -> bool {
     let Some(children) = frame.children.as_ref() else {
         return true;
     };
-    match children.as_slice() {
-        [] => true,
-        [PenNode::IconFont(_)] => true,
-        _ => false,
-    }
+    matches!(children.as_slice(), [] | [PenNode::IconFont(_)])
 }
 
 fn has_image_area_keyword(name: &str) -> bool {

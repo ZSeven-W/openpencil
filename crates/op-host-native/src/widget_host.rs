@@ -45,6 +45,8 @@ mod design_md_press;
 mod figma_import_tests;
 mod frame_backend;
 mod geometry;
+#[cfg(test)]
+mod git_panel_placement_tests;
 mod git_press;
 mod helpers;
 mod icon_picker_press;
@@ -54,6 +56,7 @@ mod input_drag_tests;
 #[cfg(test)]
 mod input_tests;
 mod keyboard;
+mod overlay_rects;
 mod paint;
 mod press;
 mod press_helpers;

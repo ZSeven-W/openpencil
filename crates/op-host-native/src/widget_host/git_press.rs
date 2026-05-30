@@ -10,6 +10,7 @@ use op_editor_core::{GitDiffTarget, GitPanelAction};
 use op_editor_ui::widgets::{GitPanel, GitPanelHit};
 use op_editor_ui::Point2D;
 
+use super::helpers::rect_contains;
 use super::WidgetHostNative;
 
 impl WidgetHostNative {
@@ -41,6 +42,13 @@ impl WidgetHostNative {
         let diff_max_h_scroll = GitPanel::for_editor(&self.editor_state)
             .map(|p| p.diff_max_h_scroll())
             .unwrap_or(0);
+        // The caret bridge above the body is painted as part of the
+        // popover; a click there must be swallowed (not fall through to
+        // the canvas), even though `hit_test` against the body returns
+        // `None` for it.
+        let on_caret = self
+            .git_panel_outer_rect(viewport_width, viewport_height)
+            .is_some_and(|r| rect_contains(r, Point2D::new(x, y)));
         let panel = &mut self.editor_state.editor_ui.git_panel;
         match hit {
             Some(GitPanelHit::CommitInput) => {
@@ -203,15 +211,19 @@ impl WidgetHostNative {
                 panel.https_focused = false;
             }
             None => {
-                // Outside the panel — release the input focus, then
-                // let the click fall through.
+                // Release the input focus first (clicking away commits
+                // intent to defocus regardless).
                 if panel.commit_focused || panel.remote_focused || panel.https_focused {
                     panel.commit_focused = false;
                     panel.remote_focused = false;
                     panel.https_focused = false;
                     self.mark_dirty();
                 }
-                return false;
+                // A caret-bridge click belongs to the popover — swallow
+                // it. A truly-outside click falls through.
+                if !on_caret {
+                    return false;
+                }
             }
         }
         self.mark_dirty();

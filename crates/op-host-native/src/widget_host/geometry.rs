@@ -7,15 +7,11 @@
 //! input-dispatch contract keeps `layout_scene` fresh before any
 //! hit-testing input event (see `widget_host.rs`).
 
-use super::helpers::{
-    rect_contains, PANEL_RESIZE_GUTTER, STATUS_INSET, TOOLBAR_INSET_X, TOOLBAR_INSET_Y,
-};
+use super::helpers::{rect_contains, PANEL_RESIZE_GUTTER, STATUS_INSET};
 use super::{CursorHint, PanelResizeKind, WidgetHostNative};
 use op_editor_ui::widgets::{
-    rotation_corner_at_point, selection_handle_at_point, GitPanel, LayoutCx, LocalePicker,
-    ShapePicker, Toolbar, TopBar, Widget, GIT_PANEL_INSET, ICON_PICKER_PANEL_H,
-    ICON_PICKER_PANEL_W, LOCALE_PICKER_WIDTH, SHAPE_PICKER_WIDTH, STATUS_BAR_HEIGHT,
-    STATUS_BAR_WIDTH, TOOLBAR_WIDTH, TOP_BAR_HEIGHT,
+    rotation_corner_at_point, selection_handle_at_point, STATUS_BAR_HEIGHT, STATUS_BAR_WIDTH,
+    TOP_BAR_HEIGHT,
 };
 use op_editor_ui::{Point2D, Rect};
 
@@ -326,16 +322,18 @@ impl WidgetHostNative {
         {
             return CursorHint::Default;
         }
-        // Any top-most floating panel — a neutral cursor over them,
-        // never a canvas action cursor bleeding through.
-        if self.over_topmost_panel(x, y, viewport_w, viewport_h) {
+        // Any floating overlay (panels, Git popover, Toolbar /
+        // StatusBar / chat, open dropdowns) — a neutral cursor over
+        // them, never a canvas action cursor (Move / Crosshair)
+        // bleeding through from a node underneath.
+        if self.over_floating_overlay(x, y, viewport_w, viewport_h) {
             return CursorHint::Default;
         }
         // The floating Git panel paints on top of the right-rail
         // resize gutter (and in diff mode is wide enough to cover
         // it), so don't show the resize cursor over the panel.
         let over_git_panel = self
-            .git_panel_rect(viewport_w, viewport_h)
+            .git_panel_outer_rect(viewport_w, viewport_h)
             .is_some_and(|r| rect_contains(r, Point2D::new(x, y)));
         if self.is_resizing_panel()
             || (!over_git_panel && self.panel_resize_hover(x, y, viewport_w).is_some())
@@ -488,177 +486,6 @@ impl WidgetHostNative {
             .viewport
             .fit_to_with_max_zoom(content, canvas_w, canvas_h, 64.0, 1.0);
         self.mark_dirty();
-    }
-
-    /// Floating Git-panel rect — `None` when the panel is closed.
-    /// Mirrors the placement in `widget_host/paint.rs`.
-    pub(in crate::widget_host) fn git_panel_rect(
-        &self,
-        viewport_w: f32,
-        viewport_h: f32,
-    ) -> Option<Rect> {
-        let panel = GitPanel::for_editor(&self.editor_state)?;
-        let (canvas_left, _cy, _cw, _ch) = self.canvas_region(viewport_w, viewport_h);
-        Some(Rect {
-            origin: Point2D::new(
-                canvas_left + GIT_PANEL_INSET,
-                TOP_BAR_HEIGHT + GIT_PANEL_INSET,
-            ),
-            size: Point2D::new(panel.panel_width(), panel.height()),
-        })
-    }
-
-    /// Floating Component-Browser panel rect — `None` when closed.
-    /// Same centred-on-open + clamped placement as the Design-MD panel.
-    pub(in crate::widget_host) fn component_browser_panel_rect(
-        &self,
-        viewport_w: f32,
-        viewport_h: f32,
-    ) -> Option<Rect> {
-        use op_editor_ui::widgets::{COMPONENT_BROWSER_PANEL_H, COMPONENT_BROWSER_PANEL_W};
-        let ui = &self.editor_state.editor_ui;
-        if !ui.component_browser_open {
-            return None;
-        }
-        let (px, py) = ui.component_browser_pos.unwrap_or_else(|| {
-            (
-                ((viewport_w - COMPONENT_BROWSER_PANEL_W) / 2.0).max(0.0),
-                ((viewport_h - COMPONENT_BROWSER_PANEL_H) / 2.0).max(0.0),
-            )
-        });
-        let x = px.clamp(0.0, (viewport_w - 80.0).max(0.0));
-        let y = py.clamp(0.0, (viewport_h - 40.0).max(0.0));
-        Some(Rect {
-            origin: Point2D::new(x, y),
-            size: Point2D::new(COMPONENT_BROWSER_PANEL_W, COMPONENT_BROWSER_PANEL_H),
-        })
-    }
-
-    /// Floating Icon-picker panel rect — `None` when closed.
-    /// The TS picker is a dialog; native centers a compact searchable
-    /// panel because the built-in Rust catalog is local and finite.
-    pub(in crate::widget_host) fn icon_picker_panel_rect(
-        &self,
-        viewport_w: f32,
-        viewport_h: f32,
-    ) -> Option<Rect> {
-        if !self.editor_state.editor_ui.icon_picker_open {
-            return None;
-        }
-        let ui = &self.editor_state.editor_ui;
-        let (px, py) = ui.icon_picker_panel_pos.unwrap_or_else(|| {
-            (
-                ((viewport_w - ICON_PICKER_PANEL_W) / 2.0).max(0.0),
-                ((viewport_h - ICON_PICKER_PANEL_H) / 2.0).max(0.0),
-            )
-        });
-        let x = px.clamp(0.0, (viewport_w - 80.0).max(0.0));
-        let y = py.clamp(0.0, (viewport_h - 40.0).max(0.0));
-        Some(Rect {
-            origin: Point2D::new(x, y),
-            size: Point2D::new(ICON_PICKER_PANEL_W, ICON_PICKER_PANEL_H),
-        })
-    }
-
-    /// Whether `point` is inside ANY top-most floating panel
-    /// (Design-MD or Component-Browser). Used by the input gates so
-    /// wheel / pan / right-press / hover side-effects do not leak to
-    /// the canvas / lower layers beneath the panel.
-    pub(in crate::widget_host) fn over_topmost_panel(
-        &self,
-        x: f32,
-        y: f32,
-        viewport_w: f32,
-        viewport_h: f32,
-    ) -> bool {
-        let p = Point2D::new(x, y);
-        self.design_md_panel_rect(viewport_w, viewport_h)
-            .is_some_and(|r| rect_contains(r, p))
-            || self
-                .icon_picker_panel_rect(viewport_w, viewport_h)
-                .is_some_and(|r| rect_contains(r, p))
-            || self
-                .component_browser_panel_rect(viewport_w, viewport_h)
-                .is_some_and(|r| rect_contains(r, p))
-    }
-
-    /// Floating Design-MD panel rect — `None` when the panel is
-    /// closed. The top-left comes from `editor_ui.design_md_panel_pos`
-    /// (centred by the host on open), clamped to keep the header bar
-    /// reachable after a viewport resize.
-    pub(in crate::widget_host) fn design_md_panel_rect(
-        &self,
-        viewport_w: f32,
-        viewport_h: f32,
-    ) -> Option<Rect> {
-        use op_editor_ui::widgets::{DESIGN_MD_PANEL_H, DESIGN_MD_PANEL_W};
-        let ui = &self.editor_state.editor_ui;
-        if !ui.design_md_panel_open {
-            return None;
-        }
-        let (px, py) = ui.design_md_panel_pos.unwrap_or_else(|| {
-            (
-                ((viewport_w - DESIGN_MD_PANEL_W) / 2.0).max(0.0),
-                ((viewport_h - DESIGN_MD_PANEL_H) / 2.0).max(0.0),
-            )
-        });
-        // Keep at least the header bar on-screen.
-        let x = px.clamp(0.0, (viewport_w - 80.0).max(0.0));
-        let y = py.clamp(0.0, (viewport_h - 40.0).max(0.0));
-        Some(Rect {
-            origin: Point2D::new(x, y),
-            size: Point2D::new(DESIGN_MD_PANEL_W, DESIGN_MD_PANEL_H),
-        })
-    }
-
-    pub(in crate::widget_host) fn shape_picker_rect(
-        &self,
-        viewport_w: f32,
-        viewport_h: f32,
-    ) -> Rect {
-        let (cx0, _cy, cw, _ch) = self.canvas_region(viewport_w, viewport_h);
-        let toolbar = Toolbar::for_editor(&self.editor_state);
-        let toolbar_h = toolbar
-            .layout(&LayoutCx {
-                available_width: TOOLBAR_WIDTH,
-                dpi: 1.0,
-            })
-            .rect
-            .size
-            .y;
-        let toolbar_rect = Rect {
-            origin: Point2D::new(cx0 + TOOLBAR_INSET_X, TOP_BAR_HEIGHT + TOOLBAR_INSET_Y),
-            size: Point2D::new(TOOLBAR_WIDTH, toolbar_h),
-        };
-        let slot = toolbar
-            .shape_slot_rect(toolbar_rect)
-            .unwrap_or(toolbar_rect);
-        let panel_h = ShapePicker::panel_height();
-        let max_x = cx0 + cw - SHAPE_PICKER_WIDTH - 4.0;
-        let toolbar_right = toolbar_rect.origin.x + toolbar_rect.size.x;
-        let x = (toolbar_right + 8.0).min(max_x);
-        let y = slot.origin.y;
-        Rect {
-            origin: Point2D::new(x, y),
-            size: Point2D::new(SHAPE_PICKER_WIDTH, panel_h),
-        }
-    }
-
-    pub(in crate::widget_host) fn locale_picker_rect(&self, viewport_w: f32) -> Rect {
-        let top_bar_rect = Rect {
-            origin: Point2D::new(0.0, 0.0),
-            size: Point2D::new(viewport_w, TOP_BAR_HEIGHT),
-        };
-        let globe = TopBar::globe_rect(top_bar_rect);
-        let panel_h = LocalePicker::panel_height();
-        let x = (globe.origin.x + globe.size.x / 2.0 - LOCALE_PICKER_WIDTH / 2.0)
-            .max(8.0)
-            .min(viewport_w - LOCALE_PICKER_WIDTH - 8.0);
-        let y = globe.origin.y + globe.size.y + 6.0;
-        Rect {
-            origin: Point2D::new(x, y),
-            size: Point2D::new(LOCALE_PICKER_WIDTH, panel_h),
-        }
     }
 
     /// When the active selection is a single Path node + the Pen
