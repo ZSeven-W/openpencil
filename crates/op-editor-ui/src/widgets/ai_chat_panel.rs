@@ -632,6 +632,16 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
         let selected = self.state.selected_model_entry();
         let chip_color = self.theme.muted_foreground;
         match selected {
+            Some(entry)
+                if entry.builtin_provider_id.is_some() || entry.value.starts_with("builtin:") =>
+            {
+                crate::widgets::ai_chat_model_picker::paint_key_glyph(
+                    cx,
+                    Point2D::new(model_x, toolbar_center_y - 7.0),
+                    14.0,
+                    chip_color,
+                )
+            }
             Some(entry) => crate::widgets::ai_chat_model_picker::paint_provider_logo(
                 cx,
                 entry.provider,
