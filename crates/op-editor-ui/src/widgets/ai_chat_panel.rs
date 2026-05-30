@@ -28,12 +28,8 @@ const INPUT_BASE_HEIGHT: f32 = INPUT_AREA_HEIGHT + INPUT_TOOLBAR_HEIGHT;
 
 #[derive(Debug, Clone)]
 pub(crate) struct ExampleCard {
-    /// Localised card title — the headline shown on the card.
     pub(crate) title: String,
-    /// Localised one-line description below the title.
     pub(crate) subtitle: String,
-    /// The text inserted into the chat input when the card is
-    /// clicked — a fuller prompt than the short title.
     pub(crate) prompt: String,
     pub(crate) emoji: &'static str,
 }
@@ -209,6 +205,10 @@ impl<'a> AIChatPlaceholder<'a> {
     /// attachments are staged.
     fn input_height(&self) -> f32 {
         INPUT_BASE_HEIGHT + self.attachment_row_h()
+    }
+
+    fn maximize_icon(&self) -> Icon {
+        [Icon::Maximize, Icon::Minimize][self.state.maximized as usize]
     }
 
     /// Bounds of the transcript body region.
@@ -387,9 +387,9 @@ impl<'a> AIChatPlaceholder<'a> {
                 }
             }
         }
-        // Anywhere else in the panel = drag handle. Header strip,
-        // margins around the examples grid, gaps between cards —
-        // host starts a drag-to-move gesture.
+        if self.state.maximized {
+            return Some(AIChatHit::FocusInput);
+        }
         Some(AIChatHit::DragHandle)
     }
 }
@@ -489,7 +489,7 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
         );
         draw_icon(
             cx.backend,
-            Icon::Maximize,
+            self.maximize_icon(),
             Point2D::new(rect.origin.x + rect.size.x - PAD - 50.0, header_y),
             18.0,
             self.theme.muted_foreground,

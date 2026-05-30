@@ -173,6 +173,26 @@ fn hit_test_resolves_header_maximize_button() {
 }
 
 #[test]
+fn maximized_panel_uses_minimize_icon_for_restore_button() {
+    let mut s = EditorState::new();
+    s.chat.maximized = true;
+    let panel = AIChatPlaceholder::from_editor(&s);
+
+    assert_eq!(panel.maximize_icon(), crate::widgets::icons::Icon::Minimize);
+}
+
+#[test]
+fn maximized_header_empty_space_is_not_a_drag_handle() {
+    let mut s = EditorState::new();
+    s.chat.maximized = true;
+    let panel = AIChatPlaceholder::from_editor(&s);
+    let rect = Rect::xywh(0.0, 0.0, AI_CHAT_WIDTH, AI_CHAT_HEIGHT);
+    let p = Point2D::new(AI_CHAT_WIDTH / 2.0, 16.0);
+
+    assert_ne!(panel.hit_test(rect, p), Some(AIChatHit::DragHandle));
+}
+
+#[test]
 fn hit_test_resolves_header_new_chat_button() {
     let s = EditorState::new();
     let panel = AIChatPlaceholder::from_editor(&s);

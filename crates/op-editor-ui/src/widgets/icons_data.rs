@@ -104,6 +104,8 @@ pub(super) const MAXIMIZE: &[&str] = &[
     "M16 21h3a2 2 0 0 0 2-2v-3",
 ];
 
+pub(super) const MINIMIZE_2: &[&str] = &["M4 14h6v6", "M20 10h-6V4"];
+
 pub(super) const HASH: &[&str] = &[
     // 4 <line> elements.
     "M4 9L20 9",
