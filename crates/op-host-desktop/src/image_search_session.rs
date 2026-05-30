@@ -270,6 +270,17 @@ fn extract_query_for_node(node: &PenNode, parent_names: &[String]) -> String {
         }
     }
 
+    if let PenNode::Frame(frame) = node {
+        if let Some(query) = frame
+            .image_search_query
+            .as_deref()
+            .map(str::trim)
+            .filter(|query| !query.is_empty())
+        {
+            return query.to_string();
+        }
+    }
+
     if is_image_placeholder_frame(node) {
         if let Some(label) = placeholder_label_text(node) {
             return label;

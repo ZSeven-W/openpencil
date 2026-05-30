@@ -104,6 +104,7 @@ pub fn frame(
             ..Default::default()
         },
         children: Some(children),
+        image_search_query: None,
         reusable: None,
         slot: None,
         state: None,

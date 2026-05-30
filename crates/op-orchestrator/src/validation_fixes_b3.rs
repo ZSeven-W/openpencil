@@ -261,6 +261,7 @@ fn build_container_node(
             base,
             container,
             children: None,
+            image_search_query: None,
             reusable: None,
             slot: None,
             state: None,

@@ -91,6 +91,7 @@ fn frame_node(
             ..Default::default()
         },
         children: Some(children),
+        image_search_query: None,
         reusable: None,
         slot: None,
         state: None,
@@ -167,6 +168,30 @@ fn collect_targets_includes_unfilled_placeholder_frames() {
     assert_eq!(targets.len(), 1);
     assert_eq!(targets[0].node_id.as_str(), "photo");
     assert_eq!(targets[0].query, "pizza hero");
+}
+
+#[test]
+fn collect_targets_prefers_frame_image_search_query() {
+    let mut state = EditorState::default();
+    state.active_children_mut().clear();
+    let frame: PenNode = serde_json::from_value(serde_json::json!({
+        "type": "frame",
+        "id": "photo",
+        "name": "Image",
+        "role": "image-placeholder",
+        "width": 240,
+        "height": 160,
+        "fill": [{ "type": "solid", "color": "#E5E7EB" }],
+        "imageSearchQuery": "burger fries"
+    }))
+    .unwrap();
+    state.active_children_mut().push(frame);
+
+    let targets = collect_targets(&state, &HashSet::new());
+
+    assert_eq!(targets.len(), 1);
+    assert_eq!(targets[0].node_id.as_str(), "photo");
+    assert_eq!(targets[0].query, "burger fries");
 }
 
 #[test]
