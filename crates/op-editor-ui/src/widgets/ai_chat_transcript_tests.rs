@@ -63,6 +63,20 @@ fn assistant_blocks_use_full_body_width_like_ts_transcript() {
 }
 
 #[test]
+fn assistant_answer_uses_plain_text_height_without_bubble_padding() {
+    let msg = ChatMessage::assistant("first line\nsecond line");
+    let items = build_transcript(
+        std::slice::from_ref(&msg),
+        body(),
+        op_editor_core::Locale::EnUs,
+    );
+    let bubble = items[0].bubble.as_ref().expect("assistant answer text");
+
+    assert_eq!(bubble.lines.len(), 2);
+    assert!((bubble.rect.size.y - LINE_H * 2.0).abs() < 1e-4);
+}
+
+#[test]
 fn user_bubbles_remain_compact_and_right_aligned() {
     let msg = ChatMessage::user("user prompt");
     let body = body();
@@ -77,6 +91,73 @@ fn user_bubbles_remain_compact_and_right_aligned() {
     assert!(
         (bubble.rect.origin.x + bubble.rect.size.x - (body.origin.x + body.size.x)).abs() < 1e-4
     );
+}
+
+#[derive(Default)]
+struct TranscriptPaintBackend {
+    round_rects: usize,
+}
+
+impl crate::RenderBackend for TranscriptPaintBackend {
+    fn begin_frame(&mut self) {}
+    fn end_frame(&mut self) {}
+    fn fill_rect(&mut self, _: Rect, _: crate::Color) {}
+    fn stroke_rect(&mut self, _: Rect, _: crate::Color, _: f32) {}
+    fn draw_text(&mut self, _: &crate::TextLayout, _: Point2D) {}
+    fn clip_rect(&mut self, _: Rect) {}
+    fn save(&mut self) {}
+    fn restore(&mut self) {}
+    fn translate(&mut self, _: Point2D) {}
+    fn stroke_line(&mut self, _: Point2D, _: Point2D, _: crate::Color, _: f32) {}
+    fn fill_round_rect(&mut self, _: Rect, _: f32, _: crate::Color) {
+        self.round_rects += 1;
+    }
+    fn stroke_round_rect(&mut self, _: Rect, _: f32, _: crate::Color, _: f32) {}
+    fn stroke_svg_path(&mut self, _: &str, _: Point2D, _: f32, _: crate::Color, _: f32) {}
+    fn resize(&mut self, _: u32, _: u32) {}
+    fn dpi_scale(&self) -> f32 {
+        1.0
+    }
+}
+
+#[test]
+fn paint_transcript_leaves_assistant_answer_unframed() {
+    let messages = [ChatMessage::assistant("assistant answer")];
+    let mut backend = TranscriptPaintBackend::default();
+    let mut cx = PaintCx {
+        backend: &mut backend,
+    };
+
+    paint_transcript(
+        &mut cx,
+        &crate::Theme::dark(),
+        body(),
+        &messages,
+        0,
+        op_editor_core::Locale::EnUs,
+    );
+
+    assert_eq!(backend.round_rects, 0);
+}
+
+#[test]
+fn paint_transcript_keeps_user_answer_bubble_background() {
+    let messages = [ChatMessage::user("user prompt")];
+    let mut backend = TranscriptPaintBackend::default();
+    let mut cx = PaintCx {
+        backend: &mut backend,
+    };
+
+    paint_transcript(
+        &mut cx,
+        &crate::Theme::dark(),
+        body(),
+        &messages,
+        0,
+        op_editor_core::Locale::EnUs,
+    );
+
+    assert_eq!(backend.round_rects, 1);
 }
 
 #[test]

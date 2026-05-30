@@ -6,7 +6,7 @@ use crate::widgets::ai_chat_panel_controls::{
     attachment_row_hit, paint_attachment_row, ATTACHMENT_ROW_HEIGHT,
 };
 use crate::widgets::ai_chat_panel_paint::{
-    example_card_rects, paint_examples, paint_panel_surface,
+    example_card_rects, paint_examples, paint_panel_body_chrome, paint_panel_surface,
 };
 use crate::widgets::editor_state_ext::{theme_for, translate};
 use crate::widgets::icons::{draw_icon, Icon};
@@ -182,7 +182,7 @@ impl<'a> AIChatPlaceholder<'a> {
             // TS stores the chat title as UI state and defaults it to
             // this English title even under a Chinese locale.
             label_new_chat: "New Chat".to_string(),
-            label_start_with_ai: translate(ui, "ai.tryExample").to_string(),
+            label_start_with_ai: translate(ui, "ai.startDesigning").to_string(),
             label_input_placeholder: translate(ui, "ai.designWithAgent").to_string(),
             label_tip_select_elements: translate(ui, "ai.tipSelectElements").to_string(),
             label_no_models: translate(ui, "ai.noModelsConnected").to_string(),
@@ -462,6 +462,9 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
         }
 
         paint_panel_surface(cx, &self.theme, rect);
+        let input_h = self.input_height();
+        let sep_y = rect.origin.y + rect.size.y - input_h;
+        paint_panel_body_chrome(cx, &self.theme, rect, sep_y);
 
         // Expanded header.
         let header_y = rect.origin.y + 8.0;
@@ -502,7 +505,6 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
         );
 
         // Body — either messages or examples.
-        let input_h = self.input_height();
         let checklist_h = fixed_checklist_height(&self.state.messages);
         if self.state.messages.is_empty() {
             paint_examples(
@@ -531,17 +533,6 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
                 &self.state.messages,
             );
         }
-
-        // Separator hairline between body and input area
-        // (matches the TS panel's bottom-bordered body region).
-        let sep_y = rect.origin.y + rect.size.y - input_h;
-        cx.backend.fill_rect(
-            Rect {
-                origin: Point2D::new(rect.origin.x + PAD, sep_y),
-                size: Point2D::new(rect.size.x - PAD * 2.0, 1.0),
-            },
-            self.theme.border,
-        );
 
         // Textarea region — borderless, 14 px to mirror the TS app's
         // textarea style. Long input wraps across up to `MAX_LINES`
