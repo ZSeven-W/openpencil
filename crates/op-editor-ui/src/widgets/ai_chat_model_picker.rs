@@ -460,7 +460,7 @@ fn with_alpha(color: Color, a: f32) -> Color {
     Color { a, ..color }
 }
 
-fn paint_key_glyph(cx: &mut PaintCx<'_>, top_left: Point2D, size: f32, color: Color) {
+pub(crate) fn paint_key_glyph(cx: &mut PaintCx<'_>, top_left: Point2D, size: f32, color: Color) {
     let cy = top_left.y + size * 0.5;
     let ring = Rect {
         origin: Point2D::new(top_left.x, cy - size * 0.28),
@@ -515,7 +515,7 @@ fn provider_label(provider: AgentProvider) -> &'static str {
     match provider {
         AgentProvider::ClaudeCode => "ANTHROPIC",
         AgentProvider::CodexCli => "OPENAI",
-        AgentProvider::GeminiCli => "GEMINI",
+        AgentProvider::GeminiCli => "GOOGLE GEMINI",
         AgentProvider::GithubCopilot => "GITHUB COPILOT",
         AgentProvider::OpenCode => "OPENCODE",
     }
@@ -680,6 +680,11 @@ mod tests {
         );
 
         assert_eq!(group_label_for_entry(&entry), "OPENAI API KEY");
+    }
+
+    #[test]
+    fn gemini_provider_group_label_matches_ts_provider_name() {
+        assert_eq!(provider_label(AgentProvider::GeminiCli), "GOOGLE GEMINI");
     }
 
     #[test]

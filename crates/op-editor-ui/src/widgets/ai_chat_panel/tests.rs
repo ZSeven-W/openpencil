@@ -204,6 +204,7 @@ fn body_rect_reserves_space_for_fixed_step_checklist() {
 #[derive(Default)]
 struct PanelPaintBackend {
     fills: Vec<(Rect, crate::Color)>,
+    stroke_lines: usize,
 }
 
 impl crate::RenderBackend for PanelPaintBackend {
@@ -218,7 +219,9 @@ impl crate::RenderBackend for PanelPaintBackend {
     fn save(&mut self) {}
     fn restore(&mut self) {}
     fn translate(&mut self, _: Point2D) {}
-    fn stroke_line(&mut self, _: Point2D, _: Point2D, _: crate::Color, _: f32) {}
+    fn stroke_line(&mut self, _: Point2D, _: Point2D, _: crate::Color, _: f32) {
+        self.stroke_lines += 1;
+    }
     fn fill_round_rect(&mut self, _: Rect, _: f32, _: crate::Color) {}
     fn stroke_round_rect(&mut self, _: Rect, _: f32, _: crate::Color, _: f32) {}
     fn stroke_svg_path(&mut self, _: &str, _: Point2D, _: f32, _: crate::Color, _: f32) {}
@@ -226,6 +229,33 @@ impl crate::RenderBackend for PanelPaintBackend {
     fn dpi_scale(&self) -> f32 {
         1.0
     }
+}
+
+#[test]
+fn paint_model_chip_uses_key_glyph_for_builtin_model() {
+    let mut s = EditorState::new();
+    s.chat
+        .available_models
+        .push(op_editor_core::chat::ModelEntry::builtin_with_display_name(
+            op_editor_core::chat::AgentProvider::CodexCli,
+            "builtin-minimax",
+            "MiniMax",
+            "builtin:builtin-minimax:MiniMax-M2.7",
+            "MiniMax-M2.7",
+        ));
+    let panel = AIChatPlaceholder::from_editor(&s);
+    let rect = Rect::xywh(0.0, 0.0, AI_CHAT_WIDTH, AI_CHAT_HEIGHT);
+    let mut backend = PanelPaintBackend::default();
+    let mut cx = PaintCx {
+        backend: &mut backend,
+    };
+
+    panel.paint(&mut cx, rect);
+
+    assert!(
+        backend.stroke_lines >= 2,
+        "built-in selected model chip should paint the TS-style Key glyph"
+    );
 }
 
 fn has_fill_rect(fills: &[(Rect, crate::Color)], expected: Rect) -> bool {
