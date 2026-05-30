@@ -200,7 +200,7 @@ pub const BUILTIN_AGENT_PRESETS: [BuiltinAgentPreset; 4] = [
         display_name: "DS",
         kind: BuiltinAgentKind::OpenAiCompat,
         model: "deepseek-v4-pro",
-        base_url: "https://api.deepseek.com",
+        base_url: "https://api.deepseek.com/v1",
     },
 ];
 
@@ -536,7 +536,7 @@ mod tests {
                     "DS",
                     BuiltinAgentKind::OpenAiCompat,
                     "deepseek-v4-pro",
-                    "https://api.deepseek.com",
+                    "https://api.deepseek.com/v1",
                     "",
                 ),
             ]
