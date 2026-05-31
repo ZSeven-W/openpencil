@@ -94,12 +94,22 @@ fn model_entry_to_ec(m: ModelEntry) -> op_editor_core::ModelEntry {
 /// it only reads files and spawns short-lived subprocesses.
 pub fn discover_models() -> Vec<ModelEntry> {
     let mut out = Vec::new();
-    out.extend(discover_claude());
-    out.extend(discover_codex());
-    out.extend(discover_gemini());
-    out.extend(discover_copilot());
-    out.extend(discover_opencode());
+    for provider in discovery_provider_order() {
+        match provider {
+            AgentProvider::ClaudeCode => out.extend(discover_claude()),
+            AgentProvider::CodexCli => out.extend(discover_codex()),
+            AgentProvider::OpenCode => out.extend(discover_opencode()),
+            AgentProvider::GithubCopilot => out.extend(discover_copilot()),
+            AgentProvider::GeminiCli => out.extend(discover_gemini()),
+        }
+    }
     out
+}
+
+/// Provider probe order mirrors TS `DEFAULT_PROVIDERS`, which is
+/// also the core `AgentProvider::ALL` order used by Settings.
+fn discovery_provider_order() -> [AgentProvider; 5] {
+    AgentProvider::ALL
 }
 
 /// Resolve `name` to an executable on `PATH`. On Windows this also
@@ -559,6 +569,11 @@ mod tests {
         let models = parse_copilot_model_list(line).expect("framed line parses");
         assert_eq!(models.len(), 1);
         assert_eq!(models[0].display_name, "GPT-5");
+    }
+
+    #[test]
+    fn discovery_order_matches_ts_default_provider_order() {
+        assert_eq!(discovery_provider_order(), AgentProvider::ALL);
     }
 
     #[test]
