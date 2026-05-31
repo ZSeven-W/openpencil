@@ -112,6 +112,79 @@ title=I(card, {"type":"text","name":"Title","content":"Ready","width":100,"heigh
 }
 
 #[test]
+fn batch_design_accepts_single_update_operation() {
+    let tool = batch_design_snapshot();
+    let mut args = BTreeMap::new();
+    args.insert(
+        "operations".into(),
+        r##"U("n11", {"x":80,"y":90,"width":260,"height":32,"name":"Updated title","fill_hex":"#112233"})"##
+            .into(),
+    );
+
+    match tool.call(&args) {
+        ToolOutcome::OkWithCommand(
+            result,
+            EditorCommand::UpdateNode {
+                node_id,
+                x,
+                y,
+                width,
+                height,
+                name,
+                fill_hex,
+            },
+        ) => {
+            assert_eq!(result.get("count"), Some(&"1".to_string()));
+            assert_eq!(node_id.as_str(), "n11");
+            assert_eq!(x, Some(80));
+            assert_eq!(y, Some(90));
+            assert_eq!(width, Some(260));
+            assert_eq!(height, Some(32));
+            assert_eq!(name.as_deref(), Some("Updated title"));
+            assert_eq!(fill_hex.as_deref(), Some("#112233"));
+        }
+        other => panic!("expected UpdateNode command, got {other:?}"),
+    }
+}
+
+#[test]
+fn batch_design_accepts_single_delete_operation() {
+    let tool = batch_design_snapshot();
+    let mut args = BTreeMap::new();
+    args.insert("operations".into(), r##"D("n14")"##.into());
+
+    match tool.call(&args) {
+        ToolOutcome::OkWithCommand(result, EditorCommand::DeleteNode { node_id }) => {
+            assert_eq!(result.get("count"), Some(&"1".to_string()));
+            assert_eq!(node_id.as_str(), "n14");
+        }
+        other => panic!("expected DeleteNode command, got {other:?}"),
+    }
+}
+
+#[test]
+fn batch_design_accepts_single_move_operation_without_index() {
+    let tool = batch_design_snapshot();
+    let mut args = BTreeMap::new();
+    args.insert("operations".into(), r##"M("n14", null)"##.into());
+
+    match tool.call(&args) {
+        ToolOutcome::OkWithCommand(
+            result,
+            EditorCommand::MoveNode {
+                node_id,
+                target_parent,
+            },
+        ) => {
+            assert_eq!(result.get("count"), Some(&"1".to_string()));
+            assert_eq!(node_id.as_str(), "n14");
+            assert!(!target_parent.is_real());
+        }
+        other => panic!("expected MoveNode command, got {other:?}"),
+    }
+}
+
+#[test]
 fn batch_design_rejects_unknown_kind_in_any_item() {
     let tool = batch_design_snapshot();
     let mut args = BTreeMap::new();
