@@ -16,6 +16,24 @@ const MAX_EMBEDDED_IMAGE_BYTES: usize = 4 * 1024 * 1024;
 pub(crate) struct ImageSearchTarget {
     pub node_id: NodeId,
     pub query: String,
+    pub aspect_ratio: Option<ImageAspectRatio>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ImageAspectRatio {
+    Wide,
+    Tall,
+    Square,
+}
+
+impl ImageAspectRatio {
+    fn as_openverse_param(self) -> &'static str {
+        match self {
+            Self::Wide => "wide",
+            Self::Tall => "tall",
+            Self::Square => "square",
+        }
+    }
 }
 
 #[derive(Clone, PartialEq, Eq)]
@@ -123,9 +141,11 @@ fn spawn_job(
 ) -> ImageSearchJob {
     let (tx, rx) = mpsc::channel();
     let node_id = target.node_id.clone();
+    let aspect_ratio = target.aspect_ratio;
     std::thread::spawn(move || {
         let _ = tx.send(fetch_first_image_url_blocking(
             &target.query,
+            aspect_ratio,
             credentials.as_ref(),
         ));
     });
@@ -195,6 +215,7 @@ fn image_search_target_for(
     Some(ImageSearchTarget {
         node_id: NodeId::new(id),
         query,
+        aspect_ratio: infer_aspect_ratio(node),
     })
 }
 
@@ -282,6 +303,36 @@ fn image_area_dimension_ok(size: &Option<SizingBehavior>, min_px: f64) -> (bool,
         Some(SizingBehavior::Number(px)) if *px >= min_px => (true, true),
         Some(SizingBehavior::Keyword(SizingKeyword::FillContainer)) => (true, false),
         _ => (false, false),
+    }
+}
+
+fn infer_aspect_ratio(node: &PenNode) -> Option<ImageAspectRatio> {
+    let (width, height) = match node {
+        PenNode::Image(image) => (&image.width, &image.height),
+        PenNode::Frame(frame) => (&frame.container.width, &frame.container.height),
+        PenNode::Rectangle(rect) => (&rect.container.width, &rect.container.height),
+        _ => return None,
+    };
+    let (Some(width), Some(height)) = (dimension_number(width), dimension_number(height)) else {
+        return None;
+    };
+    if width <= 0.0 || height <= 0.0 {
+        return None;
+    }
+    let ratio = width / height;
+    if ratio > 1.3 {
+        Some(ImageAspectRatio::Wide)
+    } else if ratio < 0.77 {
+        Some(ImageAspectRatio::Tall)
+    } else {
+        Some(ImageAspectRatio::Square)
+    }
+}
+
+fn dimension_number(size: &Option<SizingBehavior>) -> Option<f64> {
+    match size {
+        Some(SizingBehavior::Number(px)) => Some(*px),
+        _ => None,
     }
 }
 
@@ -501,6 +552,7 @@ pub(crate) fn apply_result(state: &mut EditorState, node_id: &NodeId, url: &str)
 
 fn fetch_first_image_url_blocking(
     query: &str,
+    aspect_ratio: Option<ImageAspectRatio>,
     credentials: Option<&OpenverseCredentials>,
 ) -> Option<String> {
     let query = query.trim();
@@ -511,11 +563,12 @@ fn fetch_first_image_url_blocking(
         .enable_all()
         .build()
         .ok()?;
-    runtime.block_on(fetch_first_image_url(query, credentials))
+    runtime.block_on(fetch_first_image_url(query, aspect_ratio, credentials))
 }
 
 async fn fetch_first_image_url(
     query: &str,
+    aspect_ratio: Option<ImageAspectRatio>,
     credentials: Option<&OpenverseCredentials>,
 ) -> Option<String> {
     let client = reqwest::Client::builder()
@@ -523,13 +576,13 @@ async fn fetch_first_image_url(
         .user_agent(concat!("openpencil-desktop/", env!("CARGO_PKG_VERSION")))
         .build()
         .ok()?;
-    if let Some(url) = fetch_openverse(&client, query, credentials).await {
+    if let Some(url) = fetch_openverse(&client, query, aspect_ratio, credentials).await {
         return Some(url);
     }
     let words: Vec<&str> = query.split_whitespace().filter(|w| !w.is_empty()).collect();
     if words.len() > 2 {
         let truncated = words[..2].join(" ");
-        if let Some(url) = fetch_openverse(&client, &truncated, credentials).await {
+        if let Some(url) = fetch_openverse(&client, &truncated, aspect_ratio, credentials).await {
             return Some(url);
         }
         if let Some(url) = fetch_wikimedia(&client, &truncated).await {
@@ -542,13 +595,10 @@ async fn fetch_first_image_url(
 async fn fetch_openverse(
     client: &reqwest::Client,
     query: &str,
+    aspect_ratio: Option<ImageAspectRatio>,
     credentials: Option<&OpenverseCredentials>,
 ) -> Option<String> {
-    let url = reqwest::Url::parse_with_params(
-        "https://api.openverse.org/v1/images/",
-        &[("q", query), ("page_size", "1")],
-    )
-    .ok()?;
+    let url = openverse_search_url(query, aspect_ratio)?;
     let mut request = client.get(url);
     if let Some(credentials) = credentials {
         if let Some(token) = fetch_openverse_token(client, credentials).await {
@@ -571,6 +621,22 @@ async fn fetch_openverse(
         result.get("url").and_then(serde_json::Value::as_str),
     );
     first_renderable_image_src(client, candidates).await
+}
+
+fn openverse_search_url(
+    query: &str,
+    aspect_ratio: Option<ImageAspectRatio>,
+) -> Option<reqwest::Url> {
+    let mut url = reqwest::Url::parse_with_params(
+        "https://api.openverse.org/v1/images/",
+        &[("q", query), ("page_size", "1")],
+    )
+    .ok()?;
+    if let Some(aspect_ratio) = aspect_ratio {
+        url.query_pairs_mut()
+            .append_pair("aspect_ratio", aspect_ratio.as_openverse_param());
+    }
+    Some(url)
 }
 
 async fn fetch_openverse_token(
