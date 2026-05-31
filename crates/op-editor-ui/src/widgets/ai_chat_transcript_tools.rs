@@ -58,7 +58,7 @@ impl ToolLevel {
             Self::Create => Icon::Plus,
             Self::Modify => Icon::Pencil,
             Self::Delete => Icon::Trash,
-            Self::Orchestrate => Icon::Settings,
+            Self::Orchestrate => Icon::Wrench,
         }
     }
 }
@@ -532,4 +532,16 @@ fn draw_line(
         Point2D::new(0.0, 0.0),
     );
     cx.backend.draw_text(&layout, Point2D::new(x, baseline_y));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn orchestrate_tool_level_uses_ts_wrench_icon() {
+        let wrench = Icon::from_name("wrench").expect("wrench icon should be available");
+
+        assert_eq!(ToolLevel::Orchestrate.icon(), wrench);
+    }
 }

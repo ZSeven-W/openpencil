@@ -102,6 +102,7 @@ fn every_variant_paints_at_least_one_primitive() {
         Icon::Unlink,
         Icon::Check,
         Icon::ArrowUpRight,
+        Icon::Wrench,
     ] {
         let b = paint_one(icon);
         assert!(b.paths > 0, "{:?} drew nothing", icon);
@@ -152,6 +153,7 @@ fn first_party_icon_font_names_all_resolve() {
         "focus",
         "chart-line",
         "settings-2",
+        "wrench",
     ] {
         assert!(
             Icon::from_name(name).is_some(),
