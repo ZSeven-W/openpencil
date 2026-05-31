@@ -197,21 +197,29 @@ impl WidgetHostNative {
                     );
                 }
             }
-            AgentSettingsHit::CycleGenProvider(index) => {
+            AgentSettingsHit::ToggleGenProviderMenu(index) => {
                 self.commit_settings_focus_if_any();
-                if let Some(profile) = self
-                    .editor_state
-                    .editor_ui
-                    .agent_settings
-                    .image_gen_profiles
-                    .get_mut(index)
-                {
-                    profile.provider = profile.provider.next();
-                    profile.model.clear();
+                let settings = &mut self.editor_state.editor_ui.agent_settings;
+                settings.image_gen_provider_menu_open =
+                    (settings.image_gen_provider_menu_open != Some(index)).then_some(index);
+            }
+            AgentSettingsHit::SelectGenProvider { index, provider } => {
+                self.commit_settings_focus_if_any();
+                let settings = &mut self.editor_state.editor_ui.agent_settings;
+                if let Some(profile) = settings.image_gen_profiles.get_mut(index) {
+                    if profile.provider != provider {
+                        profile.provider = provider;
+                        profile.model.clear();
+                    }
                 }
+                settings.image_gen_provider_menu_open = None;
             }
             AgentSettingsHit::FocusGenConfig { index, field } => {
                 self.commit_settings_focus_if_any();
+                self.editor_state
+                    .editor_ui
+                    .agent_settings
+                    .image_gen_provider_menu_open = None;
                 self.focus_image_gen_profile(index, field);
             }
             AgentSettingsHit::ToggleAutoUpdate => {
