@@ -505,6 +505,10 @@ fn structured_arg_allowed(tool: &str, key: &str) -> bool {
             | ("read_nodes", "nodeIds")
             | ("batch_get", "patterns")
             | ("batch_get", "nodeIds")
+            | ("search_all_unique_properties", "parents")
+            | ("search_all_unique_properties", "properties")
+            | ("replace_all_matching_properties", "parents")
+            | ("replace_all_matching_properties", "properties")
             | ("get_style_guide", "tags")
     )
 }

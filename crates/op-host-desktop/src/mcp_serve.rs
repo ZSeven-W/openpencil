@@ -38,19 +38,19 @@ use op_mcp::{
     nudge_selected_snapshot, open_document_snapshot, paste_clipboard_snapshot, read_nodes_snapshot,
     redo_snapshot, remove_node_effect_snapshot, remove_page_snapshot, rename_component_snapshot,
     rename_page_snapshot, rename_variable_snapshot, reorder_page_snapshot,
-    reorder_selected_snapshot, replace_node_snapshot, run_stdio_with_applier,
-    save_theme_preset_snapshot, selection_snapshot, set_active_axis_value_snapshot,
-    set_active_page_snapshot, set_active_tool_snapshot, set_design_md_snapshot,
-    set_ellipse_arc_snapshot, set_node_collapsed_snapshot, set_node_corner_radius_snapshot,
-    set_node_fill_hex_snapshot, set_node_flip_snapshot, set_node_font_size_snapshot,
-    set_node_font_weight_snapshot, set_node_hidden_snapshot, set_node_locked_snapshot,
-    set_node_name_snapshot, set_node_rotation_snapshot, set_node_stroke_hex_snapshot,
-    set_node_stroke_width_snapshot, set_node_text_snapshot, set_selection_set_snapshot,
-    set_selection_snapshot, set_themes_snapshot, set_variable_boolean_snapshot,
-    set_variable_color_snapshot, set_variable_number_snapshot, set_variable_string_snapshot,
-    set_variables_snapshot, set_viewport_snapshot, snapshot_layout_snapshot,
-    toggle_node_selection_snapshot, undo_snapshot, ungroup_selected_snapshot, update_node_snapshot,
-    ToolRegistry,
+    reorder_selected_snapshot, replace_all_matching_properties_snapshot, replace_node_snapshot,
+    run_stdio_with_applier, save_theme_preset_snapshot, search_all_unique_properties_snapshot,
+    selection_snapshot, set_active_axis_value_snapshot, set_active_page_snapshot,
+    set_active_tool_snapshot, set_design_md_snapshot, set_ellipse_arc_snapshot,
+    set_node_collapsed_snapshot, set_node_corner_radius_snapshot, set_node_fill_hex_snapshot,
+    set_node_flip_snapshot, set_node_font_size_snapshot, set_node_font_weight_snapshot,
+    set_node_hidden_snapshot, set_node_locked_snapshot, set_node_name_snapshot,
+    set_node_rotation_snapshot, set_node_stroke_hex_snapshot, set_node_stroke_width_snapshot,
+    set_node_text_snapshot, set_selection_set_snapshot, set_selection_snapshot,
+    set_themes_snapshot, set_variable_boolean_snapshot, set_variable_color_snapshot,
+    set_variable_number_snapshot, set_variable_string_snapshot, set_variables_snapshot,
+    set_viewport_snapshot, snapshot_layout_snapshot, toggle_node_selection_snapshot, undo_snapshot,
+    ungroup_selected_snapshot, update_node_snapshot, ToolRegistry,
 };
 
 /// Load a `.op` file into an `EditorState`. The `.op` format is plain
@@ -395,6 +395,8 @@ fn rebuild_registry(doc: &EditorState) -> ToolRegistry {
     r.register(Box::new(get_component_snapshot(doc)));
     r.register(Box::new(batch_get_snapshot(doc)));
     r.register(Box::new(read_nodes_snapshot(doc)));
+    r.register(Box::new(search_all_unique_properties_snapshot(doc)));
+    r.register(Box::new(replace_all_matching_properties_snapshot(doc)));
     r.register(Box::new(snapshot_layout_snapshot(doc)));
     r.register(Box::new(find_empty_space_snapshot(doc)));
     r.register(Box::new(get_canvas_bounds_snapshot(doc)));
@@ -699,6 +701,8 @@ const TOOL_SCHEMAS: &[&str] = &[
     r#"{"name":"get_component","description":"Fetch one component by id with detail: name, root node kind, and the subtree's leaf count.","inputSchema":{"type":"object","properties":{"component_id":{"type":"string","description":"positive u64 component id"}},"required":["component_id"]}}"#,
     r#"{"name":"batch_get","description":"Search and read nodes from the document. With no patterns/nodeIds, returns top-level children. Supports type/name regex patterns, nodeIds, parentId, readDepth, searchDepth, and pageId.","inputSchema":{"type":"object","properties":{"patterns":{"type":"array","items":{"type":"object","properties":{"type":{"type":"string"},"name":{"type":"string"},"reusable":{"type":"boolean"}}}},"nodeIds":{"type":"array","items":{"type":"string"}},"parentId":{"type":"string"},"readDepth":{"type":"number"},"searchDepth":{"type":"number"},"pageId":{"type":"string"},"resolve_refs":{"type":"boolean"}}}}"#,
     r#"{"name":"read_nodes","description":"Read nodes with depth control. Omit nodeIds to return top-level page children; depth=0 truncates children to \"...\", depth=-1 returns full subtrees. includeVariables=true attaches variables/themes JSON strings.","inputSchema":{"type":"object","properties":{"nodeIds":{"type":"array","items":{"type":"string"},"description":"Node ids to read; omit for top-level children"},"depth":{"type":"number","description":"0=node only, 1=direct children, -1=full subtree"},"pageId":{"type":"string"},"includeVariables":{"type":"boolean"}}}}"#,
+    r#"{"name":"search_all_unique_properties","description":"Recursively search unique style property values under the provided parent node ids. Result `properties` is a JSON object keyed by requested property names.","inputSchema":{"type":"object","properties":{"parents":{"type":"array","items":{"type":"string"},"description":"Parent node ids to search; descendants and the parent itself are included"},"properties":{"type":"array","items":{"type":"string","enum":["fillColor","textColor","strokeColor","strokeThickness","cornerRadius","padding","gap","fontSize","fontFamily","fontWeight"]}},"pageId":{"type":"string"},"filePath":{"type":"string","description":"Accepted for TS compatibility; live Rust MCP uses the server document"}},"required":["parents","properties"]}}"#,
+    r#"{"name":"replace_all_matching_properties","description":"Recursively replace matching style property values under parent node ids. Returns replacedCount and applies one bulk edit when matches exist.","inputSchema":{"type":"object","properties":{"parents":{"type":"array","items":{"type":"string"}},"properties":{"type":"object","description":"property -> array of {from,to} replacement rules"},"pageId":{"type":"string"},"filePath":{"type":"string","description":"Accepted for TS compatibility; live Rust MCP uses the server document"}},"required":["parents","properties"]}}"#,
     r#"{"name":"snapshot_layout","description":"Return a depth-limited layout snapshot. Result `layout` is a `;`-separated record of `id|x|y|w|h` (ints, doc-px).","inputSchema":{"type":"object","properties":{"parentId":{"type":"string"},"maxDepth":{"type":"string","description":"u32 depth, default 1 when arguments are present"},"pageId":{"type":"string"}}}}"#,
     r#"{"name":"find_empty_space","description":"Find padded empty canvas space in one direction for placing new content.","inputSchema":{"type":"object","properties":{"width":{"type":"string","description":"i32 doc-px"},"height":{"type":"string","description":"i32 doc-px"},"padding":{"type":"string","description":"i32 doc-px, default 50"},"direction":{"type":"string","enum":["top","right","bottom","left"]},"nodeId":{"type":"string"},"pageId":{"type":"string"}},"required":["width","height","direction"]}}"#,
     r#"{"name":"get_canvas_bounds","description":"Return the union bounding box of every top-level node on the active page (x/y/w/h ints + has_content true/false).","inputSchema":{"type":"object","properties":{},"additionalProperties":false}}"#,
