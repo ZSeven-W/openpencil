@@ -131,9 +131,13 @@ pub fn hit_test(content: Rect, settings: &AgentSettings, point: Point2D) -> Buil
             }
         } else if rect_contains(compact_switch_rect(card), point) {
             return BuiltinHit::ToggleEnabled(index);
-        } else if rect_contains(compact_edit_rect(card), point) {
+        } else if settings.hover_builtin_agent == index
+            && rect_contains(compact_edit_rect(card), point)
+        {
             return BuiltinHit::Edit(index);
-        } else if rect_contains(compact_remove_rect(card), point) {
+        } else if settings.hover_builtin_agent == index
+            && rect_contains(compact_remove_rect(card), point)
+        {
             return BuiltinHit::Remove(index);
         }
         card_y += card.size.y + CARD_GAP;

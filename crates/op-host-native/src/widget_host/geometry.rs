@@ -264,7 +264,7 @@ impl WidgetHostNative {
         use op_editor_ui::widgets::agent_settings_panel::AgentSettingsPanel;
         self.refresh_layout_scene();
         let point = Point2D::new(x, y);
-        let (new_nav, new_card, new_builtin, new_preset_hover) = {
+        let (new_nav, new_card, new_builtin, new_acp, new_preset_hover) = {
             let panel = AgentSettingsPanel::for_editor(&self.editor_state);
             let panel_rect = panel.rect(self.last_viewport_w, self.last_viewport_h);
             let nav = panel.nav_at(panel_rect, point);
@@ -284,12 +284,17 @@ impl WidgetHostNative {
             } else {
                 usize::MAX
             };
+            let acp = if is_agents {
+                panel.acp_card_at(panel_rect, point).unwrap_or(usize::MAX)
+            } else {
+                usize::MAX
+            };
             let preset_hover = if is_agents {
                 panel.builtin_preset_hover_at(panel_rect, point)
             } else {
                 None
             };
-            (nav, card, builtin, preset_hover)
+            (nav, card, builtin, acp, preset_hover)
         };
         let mut changed = false;
         if new_nav != self.editor_state.editor_ui.agent_settings.hover_nav {
@@ -311,6 +316,10 @@ impl WidgetHostNative {
                 .editor_ui
                 .agent_settings
                 .hover_builtin_agent = new_builtin;
+            changed = true;
+        }
+        if new_acp != self.editor_state.editor_ui.agent_settings.hover_acp_agent {
+            self.editor_state.editor_ui.agent_settings.hover_acp_agent = new_acp;
             changed = true;
         }
         if new_preset_hover

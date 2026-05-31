@@ -299,6 +299,16 @@ impl<'a> AgentSettingsPanel<'a> {
         agent_settings_builtin::card_at(content_rect(panel), &self.settings, scrolled)
     }
 
+    pub fn acp_card_at(&self, panel: Rect, point: Point2D) -> Option<usize> {
+        if !rect_contains(panel, point) {
+            return None;
+        }
+        let content = content_rect(panel);
+        let scrolled = Point2D::new(point.x, point.y + self.settings.scroll_y);
+        let section_y = acp_section_y(content, &self.settings);
+        agent_settings_acp::card_at(content, &self.settings, scrolled, section_y)
+    }
+
     pub fn builtin_preset_hover_at(
         &self,
         panel: Rect,

@@ -92,9 +92,12 @@ pub fn hit_test(content: Rect, settings: &AgentSettings, point: Point2D, y: f32)
                     };
                 }
             }
-        } else if rect_contains(compact_edit_rect(card), point) {
+        } else if settings.hover_acp_agent == index && rect_contains(compact_edit_rect(card), point)
+        {
             return AcpHit::Edit(index);
-        } else if rect_contains(compact_remove_rect(card), point) {
+        } else if settings.hover_acp_agent == index
+            && rect_contains(compact_remove_rect(card), point)
+        {
             return AcpHit::Remove(index);
         } else if rect_contains(connection_button_rect(card), point) {
             return AcpHit::ToggleConnected(index);
@@ -119,6 +122,28 @@ pub fn hit_test(content: Rect, settings: &AgentSettings, point: Point2D, y: f32)
         }
     }
     AcpHit::None
+}
+
+pub fn card_at(
+    content: Rect,
+    settings: &AgentSettings,
+    point: Point2D,
+    section_y: f32,
+) -> Option<usize> {
+    let mut card_y = section_y + HEADER_H + SUBTITLE_H;
+    for (index, _) in settings.acp_agents.iter().enumerate() {
+        let card = card_rect(
+            content.origin.x,
+            card_y,
+            content.size.x,
+            card_height(settings, index),
+        );
+        if rect_contains(card, point) {
+            return Some(index);
+        }
+        card_y += card.size.y + CARD_GAP;
+    }
+    None
 }
 
 pub fn paint_acp_section(
@@ -247,15 +272,17 @@ fn paint_acp_card(
     if is_editing(settings, index) {
         paint_acp_form(cx, theme, settings, ui, agent, Some(index), card, now_ms);
     } else {
-        paint_compact_acp_card(cx, theme, ui, agent, card);
+        paint_compact_acp_card(cx, theme, settings, ui, agent, index, card);
     }
 }
 
 fn paint_compact_acp_card(
     cx: &mut PaintCx<'_>,
     theme: &Theme,
+    settings: &AgentSettings,
     ui: &EditorUiState,
     agent: &AcpAgentConfig,
+    index: usize,
     card: Rect,
 ) {
     cx.backend.fill_round_rect(
@@ -299,20 +326,22 @@ fn paint_compact_acp_card(
         card.origin.y + 39.0,
     );
 
-    paint_action(
-        cx,
-        theme,
-        compact_edit_rect(card),
-        Icon::Pencil,
-        theme.muted_foreground,
-    );
-    paint_action(
-        cx,
-        theme,
-        compact_remove_rect(card),
-        Icon::Trash,
-        theme.muted_foreground,
-    );
+    if settings.hover_acp_agent == index {
+        paint_action(
+            cx,
+            theme,
+            compact_edit_rect(card),
+            Icon::Pencil,
+            theme.muted_foreground,
+        );
+        paint_action(
+            cx,
+            theme,
+            compact_remove_rect(card),
+            Icon::Trash,
+            theme.muted_foreground,
+        );
+    }
     paint_connection_button(cx, theme, ui, agent, card);
 }
 
