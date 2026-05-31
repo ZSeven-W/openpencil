@@ -1,6 +1,9 @@
 /// What a click inside the AI chat panel resolved to.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AIChatHit {
+    /// Click landed inside disabled/non-actionable chat chrome. Host
+    /// should consume it so the canvas underneath is not affected.
+    Inside,
     /// Click landed on the input area — host should focus chat.
     FocusInput,
     /// Click landed on the send affordance.

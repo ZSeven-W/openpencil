@@ -134,8 +134,52 @@ fn ai_chat_stop_click_keeps_transcript_and_queues_abort() {
     assert!(host.editor_state().chat.pending_stop_chat);
 }
 
+#[test]
+fn ai_chat_streaming_textarea_click_does_not_focus_disabled_input() {
+    let mut host = WidgetHostNative::new();
+    host.editor_state_mut()
+        .chat
+        .messages
+        .push(op_editor_core::ChatMessage::assistant_streaming());
+    let rect = host
+        .ai_chat_rect(1200.0, 800.0)
+        .expect("chat panel visible");
+    let x = rect.origin.x + 120.0;
+    let y = rect.origin.y + textarea_center_y_for_test();
+
+    assert!(host.apply_click(x, y, 1200.0, 800.0));
+
+    assert!(!host.editor_state().chat.focused);
+}
+
+#[test]
+fn ai_chat_streaming_attachment_click_does_not_open_picker() {
+    let mut host = WidgetHostNative::new();
+    host.editor_state_mut()
+        .chat
+        .messages
+        .push(op_editor_core::ChatMessage::assistant_streaming());
+    let rect = host
+        .ai_chat_rect(1200.0, 800.0)
+        .expect("chat panel visible");
+    let x = rect.origin.x + op_editor_ui::widgets::AI_CHAT_WIDTH - 16.0 - 52.0;
+    let y = rect.origin.y + toolbar_center_y_for_test();
+
+    assert!(host.apply_click(x, y, 1200.0, 800.0));
+
+    assert!(!host.editor_state().chat.pending_attachment_pick);
+}
+
 fn toolbar_center_y_for_test() -> f32 {
     op_editor_ui::widgets::AI_CHAT_HEIGHT - 19.0
+}
+
+fn textarea_center_y_for_test() -> f32 {
+    const INPUT_AREA_HEIGHT: f32 = 56.0;
+    const INPUT_TOOLBAR_HEIGHT: f32 = 40.0;
+    op_editor_ui::widgets::AI_CHAT_HEIGHT - (INPUT_AREA_HEIGHT + INPUT_TOOLBAR_HEIGHT)
+        + 1.0
+        + INPUT_AREA_HEIGHT / 2.0
 }
 
 #[test]

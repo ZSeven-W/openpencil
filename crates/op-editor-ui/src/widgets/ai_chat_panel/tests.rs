@@ -175,6 +175,32 @@ fn hit_test_resolves_stop_at_right_while_streaming() {
 }
 
 #[test]
+fn streaming_textarea_click_is_consumed_without_focusing_like_ts_disabled_input() {
+    let mut s = EditorState::new();
+    s.chat
+        .messages
+        .push(op_editor_core::ChatMessage::assistant_streaming());
+    let panel = AIChatPlaceholder::from_editor(&s);
+    let rect = Rect::xywh(0.0, 0.0, AI_CHAT_WIDTH, AI_CHAT_HEIGHT);
+    let p = Point2D::new(120.0, textarea_center_y());
+
+    assert_eq!(panel.hit_test(rect, p), Some(AIChatHit::Inside));
+}
+
+#[test]
+fn streaming_attachment_button_is_consumed_without_opening_picker_like_ts() {
+    let mut s = EditorState::new();
+    s.chat
+        .messages
+        .push(op_editor_core::ChatMessage::assistant_streaming());
+    let panel = AIChatPlaceholder::from_editor(&s);
+    let rect = Rect::xywh(0.0, 0.0, AI_CHAT_WIDTH, AI_CHAT_HEIGHT);
+    let p = Point2D::new(AI_CHAT_WIDTH - PAD - 52.0, toolbar_center_y());
+
+    assert_eq!(panel.hit_test(rect, p), Some(AIChatHit::Inside));
+}
+
+#[test]
 fn hit_test_resolves_bottom_toolbar_actions() {
     let mut s = EditorState::new();
     seed_available_model(&mut s);
