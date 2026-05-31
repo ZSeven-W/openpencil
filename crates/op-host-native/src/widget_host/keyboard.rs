@@ -729,6 +729,22 @@ impl WidgetHostNative {
             self.mark_dirty();
             return true;
         }
+        // A branch-picker sub-mode (create / merge) takes Escape priority
+        // OVER the Git input fields: step it back to the branch list (the
+        // dropdown stays open). Driven off the mode, not input focus, so a
+        // stale commit / remote / https focus can't intercept it, and merge
+        // mode (which has no focused input) exits too.
+        if self.editor_state.editor_ui.git_panel.branch_picker_open
+            && self.editor_state.editor_ui.git_panel.branch_picker_mode
+                != op_editor_core::GitBranchPickerMode::List
+        {
+            let panel = &mut self.editor_state.editor_ui.git_panel;
+            panel.branch_picker_mode = op_editor_core::GitBranchPickerMode::List;
+            panel.branch_create_draft.clear();
+            panel.branch_create_focused = false;
+            self.mark_dirty();
+            return true;
+        }
         // Escape defocuses the Git commit input (the panel stays open).
         if self.git_commit_focus_active() {
             self.editor_state.editor_ui.git_panel.commit_focused = false;
@@ -744,20 +760,6 @@ impl WidgetHostNative {
         // …and the Git HTTPS-credential input.
         if self.git_https_focus_active() {
             self.editor_state.editor_ui.git_panel.https_focused = false;
-            self.mark_dirty();
-            return true;
-        }
-        // …and a branch-picker sub-mode (create / merge): Escape steps it
-        // back to the branch list (the dropdown stays open). Driven off the
-        // mode, not input focus, so merge mode (no focused input) exits too.
-        if self.editor_state.editor_ui.git_panel.branch_picker_open
-            && self.editor_state.editor_ui.git_panel.branch_picker_mode
-                != op_editor_core::GitBranchPickerMode::List
-        {
-            let panel = &mut self.editor_state.editor_ui.git_panel;
-            panel.branch_picker_mode = op_editor_core::GitBranchPickerMode::List;
-            panel.branch_create_draft.clear();
-            panel.branch_create_focused = false;
             self.mark_dirty();
             return true;
         }
