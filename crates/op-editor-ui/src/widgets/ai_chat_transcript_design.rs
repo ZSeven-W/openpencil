@@ -153,6 +153,7 @@ pub(crate) fn place_design_blocks(
     expanded_overrides: &[Option<bool>],
     hovered_index: Option<usize>,
 ) -> (Vec<DesignBlock>, f32) {
+    const BODY_TOP_GAP: f32 = 4.0;
     const BODY_PAD_Y: f32 = 8.0;
     const BODY_LINE_H: f32 = 13.0;
     const MAX_BODY_LINES: usize = 12;
@@ -176,15 +177,20 @@ pub(crate) fn place_design_blocks(
                 code_lines.push("…".to_string());
             }
         }
-        let body_h = if code_lines.is_empty() {
+        let body_content_h = if code_lines.is_empty() {
             0.0
         } else {
             BODY_PAD_Y * 2.0 + BODY_LINE_H * code_lines.len() as f32
         };
+        let body_h = if body_content_h > 0.0 {
+            BODY_TOP_GAP + body_content_h
+        } else {
+            0.0
+        };
         let rect = Rect::xywh(x, y, width, DESIGN_BLOCK_H + body_h);
         let header = Rect::xywh(x, y, width, DESIGN_BLOCK_H);
         let copy = Rect::xywh(x + width - 48.0, y + 6.0, 20.0, 20.0);
-        let body = Rect::xywh(x, y + DESIGN_BLOCK_H, width, body_h);
+        let body = Rect::xywh(x, y + DESIGN_BLOCK_H + BODY_TOP_GAP, width, body_content_h);
         blocks.push(DesignBlock {
             rect,
             header,
@@ -290,14 +296,13 @@ pub(crate) fn paint_design_block(cx: &mut PaintCx<'_>, theme: &Theme, block: &De
     );
 
     if block.body.size.y > 0.0 {
-        let mut divider = theme.border;
-        divider.a *= 0.3;
-        cx.backend.stroke_line(
-            Point2D::new(block.body.origin.x, block.body.origin.y),
-            Point2D::new(block.body.origin.x + block.body.size.x, block.body.origin.y),
-            divider,
-            1.0,
-        );
+        let mut body_fill = theme.card;
+        body_fill.a *= 0.5;
+        let mut body_border = theme.border;
+        body_border.a *= 0.3;
+        cx.backend.fill_round_rect(block.body, 6.0, body_fill);
+        cx.backend
+            .stroke_round_rect(block.body, 6.0, body_border, 1.0);
         cx.backend.save();
         cx.backend.clip_rect(block.body);
         let mut baseline = block.body.origin.y + 18.0;
