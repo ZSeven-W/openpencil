@@ -15,7 +15,7 @@ description = "Git-backed version control for OpenPencil documents"
 # In-process libgit2. `vendored-libgit2` builds + statically links
 # libgit2 from source (cmake + cc), so the shipped binary carries its
 # own git engine. Keeps the default `https` / `ssh` transports.
-git2 = { version = "=0.20.3", features = ["vendored-libgit2"] }
+git2 = { version = "=0.20.4", features = ["vendored-libgit2"] }
 thiserror = { workspace = true }
 # Credential store (`auth.rs`) persistence — the host-keyed token /
 # SSH-key table is serialized to a JSON file.

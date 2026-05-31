@@ -37,7 +37,15 @@ confidence-threshold = 0.93
 
 [advisories]
 yanked = "deny"
-ignore = []
+ignore = [
+  # async-openai 0.36.x still depends on backoff 0.4.x, and RustSec
+  # reports no safe upgrade path yet. Keep this narrow to the advisory
+  # until async-openai moves to a maintained retry crate.
+  "RUSTSEC-2025-0012",
+  # Transitive through backoff 0.4.x; see the async-openai/backoff note
+  # above.
+  "RUSTSEC-2024-0384",
+]
 
 [bans]
 multiple-versions = "warn"
