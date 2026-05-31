@@ -388,6 +388,10 @@ fn expanded_design_json_block_reserves_body_and_surfaces_code_like_ts() {
     assert!(block.expanded);
     assert!(block.rect.size.y > 32.0);
     assert!(block.body.size.y > 0.0);
+    assert!(
+        (block.body.origin.y - (block.header.origin.y + block.header.size.y + 4.0)).abs() < 1e-4,
+        "TS expanded design cards put the JSON preview in a separate mt-1 body box"
+    );
     assert!(block
         .code_lines
         .iter()
@@ -453,6 +457,48 @@ fn paint_expanded_design_json_block_draws_code_preview_like_ts() {
             .iter()
             .any(|line| line.contains(r#""type":"Frame""#)),
         "expanded TS design cards show a JSON preview"
+    );
+}
+
+#[test]
+fn paint_expanded_design_json_block_draws_separate_body_box_like_ts() {
+    let mut message = ChatMessage::assistant(
+        r#"```json
+[{"id":"frame-1","type":"Frame"}]
+```"#,
+    );
+    message.design_block_expanded_overrides = vec![Some(true)];
+    let body = body();
+    let expected = build_transcript(
+        std::slice::from_ref(&message),
+        body,
+        op_editor_core::Locale::EnUs,
+    )[0]
+    .design_blocks[0]
+        .body;
+    let mut backend = TranscriptPaintBackend::default();
+    let mut cx = PaintCx {
+        backend: &mut backend,
+    };
+
+    paint_transcript(
+        &mut cx,
+        &crate::Theme::dark(),
+        body,
+        &[message],
+        0,
+        op_editor_core::Locale::EnUs,
+    );
+
+    assert!(
+        backend.round_rects.iter().any(|(rect, radius)| {
+            (rect.origin.x - expected.origin.x).abs() < 1e-4
+                && (rect.origin.y - expected.origin.y).abs() < 1e-4
+                && (rect.size.x - expected.size.x).abs() < 1e-4
+                && (rect.size.y - expected.size.y).abs() < 1e-4
+                && (*radius - 6.0).abs() < 1e-4
+        }),
+        "expanded TS design cards paint the JSON preview in its own rounded body box"
     );
 }
 
