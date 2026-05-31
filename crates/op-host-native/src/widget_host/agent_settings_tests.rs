@@ -112,6 +112,10 @@ fn builtin_agent_compact_edit_focuses_display_name_form() {
         .editor_ui
         .agent_settings
         .add_builtin_agent_with_defaults("MiniMax", "sk-test", "MiniMax-M2.7");
+    host.editor_state_mut()
+        .editor_ui
+        .agent_settings
+        .hover_builtin_agent = 0;
 
     let panel = AgentSettingsPanel::for_editor(host.editor_state());
     let rect = panel.rect(1200.0, 800.0);
@@ -347,6 +351,10 @@ fn acp_agent_compact_edit_focuses_display_name_form() {
         .editor_ui
         .agent_settings
         .add_acp_agent();
+    host.editor_state_mut()
+        .editor_ui
+        .agent_settings
+        .hover_acp_agent = 0;
 
     let (content_x, content_y, content_w) = agent_settings_content_metrics(&host);
     let card_y = acp_card_y(content_y);
@@ -377,6 +385,10 @@ fn acp_agent_command_field_accepts_text_and_commits() {
         .editor_ui
         .agent_settings
         .add_acp_agent();
+    host.editor_state_mut()
+        .editor_ui
+        .agent_settings
+        .hover_acp_agent = 0;
 
     let (content_x, content_y, content_w) = agent_settings_content_metrics(&host);
     let card_y = acp_card_y(content_y);
@@ -415,6 +427,10 @@ fn acp_agent_remove_press_deletes_agent_and_clears_focus() {
         .editor_ui
         .agent_settings
         .add_acp_agent();
+    host.editor_state_mut()
+        .editor_ui
+        .agent_settings
+        .hover_acp_agent = 0;
 
     let (content_x, content_y, content_w) = agent_settings_content_metrics(&host);
     let card_y = acp_card_y(content_y);

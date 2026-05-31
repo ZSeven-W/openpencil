@@ -330,6 +330,50 @@ fn focused_acp_agent_field_hides_caret_at_blink_off_phase() {
 }
 
 #[test]
+fn acp_agent_compact_actions_are_hover_only_click_targets() {
+    let mut state = EditorState::default();
+    state.editor_ui.agent_settings.add_acp_agent();
+    let panel = AgentSettingsPanel::for_editor(&state);
+    let rect = panel.rect(1200.0, 800.0);
+    let content_x = rect.origin.x + 200.0 + 24.0;
+    let content_y = rect.origin.y + 24.0;
+    let content_w = rect.size.x - 200.0 - 48.0;
+    let card_y = content_y + 12.0 + 120.0 + 28.0 + 28.0 + 28.0;
+
+    assert_eq!(
+        panel.hit_test(
+            rect,
+            crate::Point2D::new(content_x + content_w - 156.0, card_y + 30.0)
+        ),
+        AgentSettingsHit::Inside
+    );
+    assert_eq!(
+        panel.hit_test(
+            rect,
+            crate::Point2D::new(content_x + content_w - 128.0, card_y + 30.0)
+        ),
+        AgentSettingsHit::Inside
+    );
+
+    state.editor_ui.agent_settings.hover_acp_agent = 0;
+    let panel = AgentSettingsPanel::for_editor(&state);
+    assert_eq!(
+        panel.hit_test(
+            rect,
+            crate::Point2D::new(content_x + content_w - 156.0, card_y + 30.0)
+        ),
+        AgentSettingsHit::EditAcpAgent(0)
+    );
+    assert_eq!(
+        panel.hit_test(
+            rect,
+            crate::Point2D::new(content_x + content_w - 128.0, card_y + 30.0)
+        ),
+        AgentSettingsHit::RemoveAcpAgent(0)
+    );
+}
+
+#[test]
 fn hit_test_resolves_builtin_agent_compact_switch() {
     let mut state = EditorState::default();
     state
@@ -351,7 +395,7 @@ fn hit_test_resolves_builtin_agent_compact_switch() {
 }
 
 #[test]
-fn hit_test_resolves_builtin_agent_compact_edit_button() {
+fn builtin_agent_compact_edit_button_is_a_hover_only_click_target() {
     let mut state = EditorState::default();
     state
         .editor_ui
@@ -365,6 +409,10 @@ fn hit_test_resolves_builtin_agent_compact_edit_button() {
     let first_card_y = content_y + 12.0 + 28.0 + 28.0;
     let point = crate::Point2D::new(content_x + content_w - 52.0, first_card_y + 30.0);
 
+    assert_eq!(panel.hit_test(rect, point), AgentSettingsHit::Inside);
+
+    state.editor_ui.agent_settings.hover_builtin_agent = 0;
+    let panel = AgentSettingsPanel::for_editor(&state);
     assert_eq!(
         panel.hit_test(rect, point),
         AgentSettingsHit::EditBuiltinAgent(0)

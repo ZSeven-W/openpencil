@@ -401,6 +401,8 @@ pub struct AgentSettings {
     pub hover_provider: usize,
     /// Index into `builtin_agents` of the hovered provider card.
     pub hover_builtin_agent: usize,
+    /// Index into `acp_agents` of the hovered ACP agent card.
+    pub hover_acp_agent: usize,
     /// Sidebar nav item under the cursor; `None` = no hover.
     pub hover_nav: Option<AgentSettingsTab>,
 }
@@ -433,6 +435,7 @@ impl Default for AgentSettings {
             focus: None,
             hover_provider: usize::MAX,
             hover_builtin_agent: usize::MAX,
+            hover_acp_agent: usize::MAX,
             hover_nav: None,
         }
     }
@@ -724,6 +727,7 @@ mod tests {
         assert!(s.focus.is_none());
         assert_eq!(s.hover_provider, usize::MAX);
         assert_eq!(s.hover_builtin_agent, usize::MAX);
+        assert_eq!(s.hover_acp_agent, usize::MAX);
     }
 
     #[test]
