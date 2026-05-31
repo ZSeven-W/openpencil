@@ -102,6 +102,8 @@ pub(crate) fn paint_examples(
     for (card, ex) in example_card_rects(rect).iter().zip(examples.iter()) {
         cx.backend.fill_round_rect(*card, 8.0, card_bg);
         cx.backend.stroke_round_rect(*card, 8.0, theme.border, 1.0);
+        cx.backend.save();
+        cx.backend.clip_rect(*card);
         let emoji_layout = TextLayout::single_run(
             ex.emoji,
             "system-ui",
@@ -144,6 +146,7 @@ pub(crate) fn paint_examples(
                 card.origin.y + EXAMPLE_CARD_PAD + 28.0,
             ),
         );
+        cx.backend.restore();
     }
     let tip = TextLayout::single_run(
         tip_label,
@@ -165,4 +168,86 @@ pub(crate) fn paint_examples(
                 + 22.0,
         ),
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{Color, RenderBackend};
+
+    #[derive(Default)]
+    struct CaptureBackend {
+        clips: usize,
+    }
+
+    impl RenderBackend for CaptureBackend {
+        fn begin_frame(&mut self) {}
+        fn end_frame(&mut self) {}
+        fn fill_rect(&mut self, _: Rect, _: Color) {}
+        fn stroke_rect(&mut self, _: Rect, _: Color, _: f32) {}
+        fn draw_text(&mut self, _: &TextLayout, _: Point2D) {}
+        fn clip_rect(&mut self, _: Rect) {
+            self.clips += 1;
+        }
+        fn save(&mut self) {}
+        fn restore(&mut self) {}
+        fn translate(&mut self, _: Point2D) {}
+        fn stroke_line(&mut self, _: Point2D, _: Point2D, _: Color, _: f32) {}
+        fn fill_round_rect(&mut self, _: Rect, _: f32, _: Color) {}
+        fn stroke_round_rect(&mut self, _: Rect, _: f32, _: Color, _: f32) {}
+        fn stroke_svg_path(&mut self, _: &str, _: Point2D, _: f32, _: Color, _: f32) {}
+        fn resize(&mut self, _: u32, _: u32) {}
+        fn dpi_scale(&self) -> f32 {
+            1.0
+        }
+    }
+
+    #[test]
+    fn quick_action_card_contents_are_clipped_to_card_bounds() {
+        let mut backend = CaptureBackend::default();
+        let mut cx = PaintCx {
+            backend: &mut backend,
+        };
+        let rect = Rect::xywh(0.0, 0.0, 380.0, 480.0);
+        let examples = [
+            ExampleCard {
+                emoji: "🎨",
+                title: "Suggest a color palette for my app".into(),
+                subtitle: "Color palette recommendation".into(),
+                prompt: "prompt".into(),
+            },
+            ExampleCard {
+                emoji: "⬇️",
+                title: "Design a bottom navigation".into(),
+                subtitle: "5-tab navigation bar".into(),
+                prompt: "prompt".into(),
+            },
+            ExampleCard {
+                emoji: "📱",
+                title: "Design a mobile login screen".into(),
+                subtitle: "Mobile login with social auth".into(),
+                prompt: "prompt".into(),
+            },
+            ExampleCard {
+                emoji: "🍕",
+                title: "Food app homepage".into(),
+                subtitle: "App homepage design".into(),
+                prompt: "prompt".into(),
+            },
+        ];
+
+        paint_examples(
+            &mut cx,
+            &Theme::dark(),
+            rect,
+            "Start designing with AI",
+            "Tip",
+            &examples,
+        );
+
+        assert_eq!(
+            backend.clips, 4,
+            "each quick-action card should clip its own text to avoid bleeding into neighboring cards"
+        );
+    }
 }
