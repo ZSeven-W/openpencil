@@ -63,7 +63,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "git.author.subheading" => "Для первого коммита нужно имя и email",
         "git.author.nameLabel" => "Имя",
         "git.author.namePlaceholder" => "Ваше имя",
-        "git.author.emailLabel" => "Email",
+        "git.author.emailLabel" => "Эл. почта",
         "git.author.emailPlaceholder" => "vy@example.com",
         "git.author.submit" => "Сохранить",
         "git.author.cancel" => "Отмена",
@@ -329,6 +329,8 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "git.gitError.mergeInProgress" => "Слияние уже выполняется — сначала завершите или отмените его.",
         "git.gitError.workingTreeDirty" => "В рабочем дереве есть незакоммиченные изменения — закоммитьте или спрячьте их перед слиянием.",
         "git.gitError.io" => "Ошибка процесса git: {{detail}}",
+        "git.empty.openNotARepo" => "Эта папка не является Git-репозиторием.",
+        "git.empty.cloneComingSoon" => "Для клонирования нужен удалённый URL — форма клонирования в панели появится скоро.",
         _ => return None,
     })
 }

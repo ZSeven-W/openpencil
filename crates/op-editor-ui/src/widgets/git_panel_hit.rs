@@ -35,6 +35,11 @@ impl GitPanel<'_> {
         if !contains(panel_rect, point) {
             return None;
         }
+        // Inline clone wizard — URL / destination fields, the folder
+        // pick, and Cancel / Clone.
+        if self.state.clone_form.is_some() {
+            return self.clone_hit(panel_rect, point);
+        }
         // Merge-resolution mode — Ours/Theirs choices + Apply/Cancel.
         if self.state.merge_resolve.is_some() {
             let layout = self.resolve_layout(panel_rect);

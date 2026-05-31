@@ -329,6 +329,8 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "git.gitError.mergeInProgress" => "Já há uma mesclagem em andamento — resolva-a ou cancele-a primeiro.",
         "git.gitError.workingTreeDirty" => "A árvore de trabalho tem alterações não confirmadas — confirme-as ou guarde-as antes de mesclar.",
         "git.gitError.io" => "Erro de processo git: {{detail}}",
+        "git.empty.openNotARepo" => "Esta pasta não é um repositório Git.",
+        "git.empty.cloneComingSoon" => "A clonagem precisa de uma URL remota — o formulário de clonagem no painel chega em breve.",
         _ => return None,
     })
 }

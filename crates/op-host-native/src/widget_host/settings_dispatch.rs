@@ -63,6 +63,36 @@ impl WidgetHostNative {
                     self.editor_state.rebuild_chat_models();
                 }
             }
+            SettingsFocus::BuiltinAgentDraft(field) => {
+                if let Some(agent) = self
+                    .editor_state
+                    .editor_ui
+                    .agent_settings
+                    .builtin_agent_draft
+                    .as_mut()
+                {
+                    match field {
+                        BuiltinAgentField::DisplayName => {
+                            if !draft.trim().is_empty() {
+                                agent.display_name = draft.trim().to_string();
+                            }
+                        }
+                        BuiltinAgentField::ApiKey => {
+                            agent.api_key = draft.trim().to_string();
+                        }
+                        BuiltinAgentField::Model => {
+                            agent.model = draft.trim().to_string();
+                        }
+                        BuiltinAgentField::BaseUrl => {
+                            agent.base_url = if draft.trim().is_empty() {
+                                agent.kind.default_base_url().to_string()
+                            } else {
+                                draft.trim().to_string()
+                            };
+                        }
+                    }
+                }
+            }
             SettingsFocus::ImageGenProfile { index, field } => {
                 if let Some(profile) = self
                     .editor_state
@@ -98,6 +128,35 @@ impl WidgetHostNative {
                     .agent_settings
                     .acp_agents
                     .get_mut(index)
+                {
+                    match field {
+                        AcpAgentField::DisplayName => {
+                            if !draft.trim().is_empty() {
+                                agent.display_name = draft.trim().to_string();
+                            }
+                        }
+                        AcpAgentField::Command => {
+                            agent.command = draft.trim().to_string();
+                            agent.connected = false;
+                        }
+                        AcpAgentField::Url => {
+                            agent.url = if draft.trim().is_empty() {
+                                None
+                            } else {
+                                Some(draft.trim().to_string())
+                            };
+                            agent.connected = false;
+                        }
+                    }
+                }
+            }
+            SettingsFocus::AcpAgentDraft(field) => {
+                if let Some(agent) = self
+                    .editor_state
+                    .editor_ui
+                    .agent_settings
+                    .acp_agent_draft
+                    .as_mut()
                 {
                     match field {
                         AcpAgentField::DisplayName => {

@@ -329,6 +329,8 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "git.gitError.mergeInProgress" => "Đã có một hợp nhất đang diễn ra — hãy giải quyết hoặc hủy nó trước.",
         "git.gitError.workingTreeDirty" => "Cây làm việc có thay đổi chưa commit — hãy commit hoặc stash trước khi hợp nhất.",
         "git.gitError.io" => "Lỗi tiến trình git: {{detail}}",
+        "git.empty.openNotARepo" => "Thư mục đó không phải là kho Git.",
+        "git.empty.cloneComingSoon" => "Sao chép cần URL từ xa — biểu mẫu sao chép trong bảng điều khiển sắp ra mắt.",
         _ => return None,
     })
 }

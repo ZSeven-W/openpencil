@@ -329,6 +329,8 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "git.gitError.mergeInProgress" => "Ya hay una fusión en curso — resuélvela o cancélala primero.",
         "git.gitError.workingTreeDirty" => "El árbol de trabajo tiene cambios sin confirmar — confírmalos o guárdalos antes de fusionar.",
         "git.gitError.io" => "Error de proceso git: {{detail}}",
+        "git.empty.openNotARepo" => "Esa carpeta no es un repositorio Git.",
+        "git.empty.cloneComingSoon" => "La clonación necesita una URL remota — el formulario de clonación en el panel llegará pronto.",
         _ => return None,
     })
 }

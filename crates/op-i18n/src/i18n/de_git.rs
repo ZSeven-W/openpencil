@@ -329,6 +329,8 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "git.gitError.mergeInProgress" => "Es läuft bereits ein Merge — löse ihn zuerst auf oder brich ihn ab.",
         "git.gitError.workingTreeDirty" => "Das Arbeitsverzeichnis hat nicht committete Änderungen — committe oder stashe sie vor dem Merge.",
         "git.gitError.io" => "Git-Prozessfehler: {{detail}}",
+        "git.empty.openNotARepo" => "Dieser Ordner ist kein Git-Repository.",
+        "git.empty.cloneComingSoon" => "Zum Klonen ist eine Remote-URL erforderlich — das Klon-Formular im Panel kommt bald.",
         _ => return None,
     })
 }

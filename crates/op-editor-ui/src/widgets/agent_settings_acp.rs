@@ -1,6 +1,11 @@
 //! ACP Agent section for the Agent settings panel.
 
 use crate::theme::Theme;
+use crate::widgets::agent_settings_acp_draft;
+use crate::widgets::agent_settings_caret::paint_caret;
+use crate::widgets::agent_settings_form_actions::{
+    cancel_button_rect, paint_form_actions, save_button_rect,
+};
 use crate::widgets::agent_settings_i18n::t as t_settings;
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::PaintCx;
@@ -15,6 +20,7 @@ const SUBTITLE_H: f32 = 28.0;
 const EMPTY_H: f32 = 64.0;
 const COMPACT_CARD_H: f32 = 60.0;
 const EXPANDED_CARD_H: f32 = 116.0;
+const DRAFT_CARD_H: f32 = 152.0;
 const CARD_GAP: f32 = 8.0;
 const TOP_HEADER_RIGHT_INSET: f32 = 12.0;
 const ADD_W: f32 = 96.0;
@@ -29,7 +35,11 @@ const CONNECT_BTN_H: f32 = 28.0;
 pub enum AcpHit {
     AddAgent,
     Focus { index: usize, field: AcpAgentField },
+    FocusDraft(AcpAgentField),
     ToggleConnectionType(usize),
+    ToggleDraftConnectionType,
+    SaveDraft,
+    CancelDraft,
     Edit(usize),
     Remove(usize),
     ToggleConnected(usize),
@@ -37,15 +47,22 @@ pub enum AcpHit {
 }
 
 pub fn content_height(settings: &AgentSettings) -> f32 {
-    let list_h = if settings.acp_agents.is_empty() {
+    let has_draft = settings.acp_agent_draft.is_some();
+    let list_h = if settings.acp_agents.is_empty() && !has_draft {
         EMPTY_H
     } else {
-        settings
+        let saved_h: f32 = settings
             .acp_agents
             .iter()
             .enumerate()
             .map(|(index, _)| card_height(settings, index) + CARD_GAP)
-            .sum()
+            .sum();
+        saved_h
+            + if has_draft {
+                DRAFT_CARD_H + CARD_GAP
+            } else {
+                0.0
+            }
     };
     HEADER_H + SUBTITLE_H + list_h
 }
@@ -86,6 +103,29 @@ pub fn hit_test(content: Rect, settings: &AgentSettings, point: Point2D, y: f32)
         }
         card_y += card.size.y + CARD_GAP;
     }
+    if let Some(agent) = settings.acp_agent_draft.as_ref() {
+        let card = card_rect(content.origin.x, card_y, content.size.x, DRAFT_CARD_H);
+        if rect_contains(type_toggle_rect(card), point) {
+            return AcpHit::ToggleDraftConnectionType;
+        }
+        for (row, field) in [
+            AcpAgentField::DisplayName,
+            connection_field(agent.connection_type),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            if rect_contains(field_input_rect(card, row), point) {
+                return AcpHit::FocusDraft(field);
+            }
+        }
+        if rect_contains(save_button_rect(card, EXPANDED_CARD_H), point) {
+            return AcpHit::SaveDraft;
+        }
+        if rect_contains(cancel_button_rect(card, EXPANDED_CARD_H), point) {
+            return AcpHit::CancelDraft;
+        }
+    }
     AcpHit::None
 }
 
@@ -96,6 +136,7 @@ pub fn paint_acp_section(
     ui: &EditorUiState,
     content: Rect,
     y: f32,
+    now_ms: u64,
 ) -> f32 {
     let mut y = paint_header(
         cx,
@@ -112,7 +153,7 @@ pub fn paint_acp_section(
         content,
         y,
     );
-    if settings.acp_agents.is_empty() {
+    if settings.acp_agents.is_empty() && settings.acp_agent_draft.is_none() {
         return paint_empty(
             cx,
             theme,
@@ -128,7 +169,20 @@ pub fn paint_acp_section(
             content.size.x,
             card_height(settings, index),
         );
-        paint_acp_card(cx, theme, settings, ui, agent, index, card);
+        paint_acp_card(cx, theme, settings, ui, agent, index, card, now_ms);
+        y += card.size.y + CARD_GAP;
+    }
+    if let Some(draft) = settings.acp_agent_draft.as_ref() {
+        let card = card_rect(content.origin.x, y, content.size.x, DRAFT_CARD_H);
+        paint_acp_form(cx, theme, settings, ui, draft, None, card, now_ms);
+        paint_form_actions(
+            cx,
+            theme,
+            ui,
+            card,
+            EXPANDED_CARD_H,
+            agent_settings_acp_draft::ready(settings, ui),
+        );
         y += card.size.y + CARD_GAP;
     }
     y
@@ -187,6 +241,7 @@ fn paint_empty(cx: &mut PaintCx<'_>, theme: &Theme, text: &str, content: Rect, y
     y + EMPTY_H
 }
 
+#[allow(clippy::too_many_arguments)]
 fn paint_acp_card(
     cx: &mut PaintCx<'_>,
     theme: &Theme,
@@ -195,9 +250,10 @@ fn paint_acp_card(
     agent: &AcpAgentConfig,
     index: usize,
     card: Rect,
+    now_ms: u64,
 ) {
     if is_editing(settings, index) {
-        paint_acp_form(cx, theme, settings, ui, agent, index, card);
+        paint_acp_form(cx, theme, settings, ui, agent, Some(index), card, now_ms);
     } else {
         paint_compact_acp_card(cx, theme, ui, agent, card);
     }
@@ -268,14 +324,16 @@ fn paint_compact_acp_card(
     paint_connection_button(cx, theme, ui, agent, card);
 }
 
+#[allow(clippy::too_many_arguments)]
 fn paint_acp_form(
     cx: &mut PaintCx<'_>,
     theme: &Theme,
     settings: &AgentSettings,
     ui: &EditorUiState,
     agent: &AcpAgentConfig,
-    index: usize,
+    index: Option<usize>,
     card: Rect,
+    now_ms: u64,
 ) {
     cx.backend.fill_round_rect(card, 10.0, theme.muted);
     cx.backend.stroke_round_rect(card, 10.0, theme.border, 1.0);
@@ -301,6 +359,7 @@ fn paint_acp_form(
         AcpAgentField::DisplayName,
         0,
         card,
+        now_ms,
     );
     paint_field(
         cx,
@@ -312,6 +371,7 @@ fn paint_acp_form(
         connection_field(agent.connection_type),
         1,
         card,
+        now_ms,
     );
 }
 
@@ -397,12 +457,16 @@ fn paint_field(
     settings: &AgentSettings,
     ui: &EditorUiState,
     agent: &AcpAgentConfig,
-    index: usize,
+    index: Option<usize>,
     field: AcpAgentField,
     row: usize,
     card: Rect,
+    now_ms: u64,
 ) {
-    let focused = settings.focus == Some(SettingsFocus::AcpAgent { index, field });
+    let focused = match index {
+        Some(index) => settings.focus == Some(SettingsFocus::AcpAgent { index, field }),
+        None => settings.focus == Some(SettingsFocus::AcpAgentDraft(field)),
+    };
     let value = if focused {
         ui.settings_input_draft.as_str()
     } else {
@@ -443,14 +507,22 @@ fn paint_field(
         1.0,
     );
     let clipped = ellipsize(cx, value, input.size.x - 12.0, 11.0);
+    let text_x = input.origin.x + 6.0;
     draw_text(
         cx,
         &clipped,
         11.0,
         theme.foreground,
-        input.origin.x + 6.0,
+        text_x,
         input.origin.y + 16.0,
     );
+    if focused {
+        let caret_x = (text_x + cx.backend.measure_text(&clipped, 11.0) + 1.0)
+            .min(input.origin.x + input.size.x - 8.0);
+        let caret_y = input.origin.y + 4.5;
+        let anchor = ui.settings_input_caret_anchor_ms;
+        paint_caret(cx, theme, now_ms, anchor, caret_x, caret_y);
+    }
 }
 
 fn paint_type_toggle(

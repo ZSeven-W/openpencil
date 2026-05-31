@@ -329,6 +329,8 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "git.gitError.mergeInProgress" => "มีการผสานกำลังดำเนินอยู่แล้ว — โปรดแก้ไขหรือยกเลิกก่อน",
         "git.gitError.workingTreeDirty" => "เวิร์กกิงทรีมีการเปลี่ยนแปลงที่ยังไม่คอมมิต — โปรดคอมมิตหรือสแตชก่อนผสาน",
         "git.gitError.io" => "ข้อผิดพลาดกระบวนการ Git: {{detail}}",
+        "git.empty.openNotARepo" => "โฟลเดอร์นี้ไม่ใช่ที่เก็บ Git",
+        "git.empty.cloneComingSoon" => "การโคลนต้องใช้ URL ระยะไกล — ฟอร์มโคลนในแผงกำลังจะมาเร็ว ๆ นี้",
         _ => return None,
     })
 }

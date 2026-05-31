@@ -303,6 +303,44 @@ pub enum GitPanelAction {
     /// Re-run the branch merge applying the per-node ours/theirs
     /// choices the user picked in the merge-resolution view.
     ApplyMergeResolution,
+    /// Clone-form "选择…" — open a native folder picker and write the
+    /// chosen path into the form's `dest` field.
+    PickCloneDest,
+    /// Clone-form submit — `git clone <url> <dest>` on a worker thread,
+    /// then bind the cloned repo. Reads url / dest from `clone_form`.
+    SubmitClone,
+}
+
+/// Which clone-form text field has keyboard focus.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CloneField {
+    /// The remote URL (`https://…` / `git@…`).
+    Url,
+    /// The local destination folder.
+    Dest,
+}
+
+/// Inline clone-wizard state — `Some` on `GitPanelState.clone_form`
+/// puts the panel into the clone view (a port of the TS
+/// `GitPanelCloneForm`). Reached from the empty-state Clone card. Plain
+/// data so the widget layer stays wasm-clean; the desktop host owns the
+/// folder picker + the `git clone` job.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct CloneFormState {
+    /// Remote URL draft.
+    pub url: String,
+    /// Local destination-folder draft.
+    pub dest: String,
+    /// Which field has keyboard focus (`None` = no caret).
+    pub focus: Option<CloneField>,
+    /// `true` while the `git clone` worker runs — disables the form.
+    pub cloning: bool,
+    /// Last clone error (validation or a failed `git clone`), shown
+    /// under the fields.
+    pub error: Option<String>,
+    /// Caret-blink anchor for the focused field — same cadence as the
+    /// commit input.
+    pub caret_anchor_ms: u64,
 }
 
 /// Git panel state — a plain-data snapshot the desktop host fills
@@ -325,6 +363,10 @@ pub struct GitPanelState {
     /// `0` is hovered with no saved file). Updated by the host on
     /// cursor-move.
     pub empty_hovered_card: Option<u8>,
+    /// Ready-state header: whether the cursor is over the `⎇ <branch> ▾`
+    /// button. Drives its `hover:bg-accent` wash. Updated by the host on
+    /// cursor-move.
+    pub branch_button_hovered: bool,
     /// Ready-state header: whether the `…` overflow popover is open
     /// (switch-tracked / clear-author / remote-settings › / SSH-keys › /
     /// close-repo). Mirrors the TS header's local `overflowOpen`.
@@ -393,6 +435,24 @@ pub struct GitPanelState {
     /// panel into resolution mode, listing each conflicting node with
     /// an ours/theirs choice. Cleared on Apply / Cancel.
     pub merge_resolve: Option<MergeResolveState>,
+    /// Inline clone wizard — `Some` puts the panel into the clone view
+    /// (URL + destination + Clone / Cancel), reached from the empty-state
+    /// Clone card. Cleared on Cancel or a successful clone.
+    pub clone_form: Option<CloneFormState>,
+}
+
+impl GitPanelState {
+    /// Whether the ready-view header popovers (the branch picker and the
+    /// `…` overflow menu) may be open in this state. They live only in
+    /// the bound, non-merging ready view. A dirty working tree still
+    /// shows that view (TS parity — the ready view no longer gates on a
+    /// clean tree), so dirtiness does NOT disqualify them; only an
+    /// unbound repo or an in-progress merge does. A background status
+    /// refresh that lands a non-ready state uses this to force-close the
+    /// popovers so they can't go stale and dead-end input.
+    pub fn header_popovers_allowed(&self) -> bool {
+        self.in_repo && !self.merging
+    }
 }
 
 /// File-menu "Recent files" entry — host persists via settings IO.
@@ -544,6 +604,8 @@ pub struct EditorUiState {
     pub agent_settings_drag: Option<crate::agent_settings::AgentSettingsDrag>,
     /// Draft for the focused settings-modal input (e.g. MCP port).
     pub settings_input_draft: String,
+    /// Last focus / edit timestamp for focused settings-modal inputs.
+    pub settings_input_caret_anchor_ms: u64,
 
     // --- Toolbar shape slot ----------------------------------------
     /// Whether the Toolbar shape-tool dropdown is open.
@@ -581,6 +643,9 @@ pub struct EditorUiState {
     /// Live text filter for the chat model picker. While the picker
     /// is open it owns typed characters, matching the TS search box.
     pub chat_model_picker_search: String,
+    /// Last focus / edit timestamp for the chat model-picker search
+    /// caret blink cycle.
+    pub chat_model_picker_caret_anchor_ms: u64,
     /// Index into `chat.available_models` of the model row the cursor
     /// is over, or `None`. Drives the picker's hover-row tint.
     pub chat_model_picker_hover: Option<usize>,
@@ -761,6 +826,7 @@ impl Default for EditorUiState {
             agent_settings: crate::agent_settings::AgentSettings::default(),
             agent_settings_drag: None,
             settings_input_draft: String::new(),
+            settings_input_caret_anchor_ms: 0,
             shape_picker_open: false,
             shape_picker_hover: None,
             toolbar_hover: None,
@@ -774,6 +840,7 @@ impl Default for EditorUiState {
             chat_model_picker_open: false,
             chat_model_picker_scroll: 0.0,
             chat_model_picker_search: String::new(),
+            chat_model_picker_caret_anchor_ms: 0,
             chat_model_picker_hover: None,
             chat_selected_agent: 0,
             topbar_traffic_hover: false,
@@ -860,5 +927,43 @@ mod tests {
         assert_eq!(ExportFormat::ALL.len(), 5);
         assert_eq!(ExportFormat::Png.extension(), "png");
         assert_eq!(ExportFormat::Jpeg.extension(), "jpg");
+    }
+
+    #[test]
+    fn dirty_ready_repo_keeps_header_popovers_allowed() {
+        // TS parity (the ready view now shows for dirty trees too): a
+        // bound, non-merging repo shows the branch-picker / overflow
+        // popovers whether the working tree is clean OR dirty. A periodic
+        // status refresh must NOT force-close them just because files
+        // changed — that was the pre-parity behaviour.
+        let mut s = GitPanelState {
+            in_repo: true,
+            merging: false,
+            ..Default::default()
+        };
+        assert!(s.header_popovers_allowed(), "clean bound repo");
+        s.changed_files = vec![GitFileEntry {
+            path: "a.op".into(),
+            staged: false,
+            status: 'M',
+        }];
+        assert!(
+            s.header_popovers_allowed(),
+            "dirty bound repo still shows the ready view → popovers stay"
+        );
+    }
+
+    #[test]
+    fn non_ready_states_disallow_header_popovers() {
+        // No repo, or a merge in progress → not the ready view → the
+        // header popovers can't exist, so a refresh clears them.
+        let mut s = GitPanelState {
+            in_repo: false,
+            ..Default::default()
+        };
+        assert!(!s.header_popovers_allowed(), "unbound repo");
+        s.in_repo = true;
+        s.merging = true;
+        assert!(!s.header_popovers_allowed(), "merge in progress");
     }
 }

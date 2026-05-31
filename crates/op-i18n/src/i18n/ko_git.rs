@@ -329,6 +329,8 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "git.gitError.mergeInProgress" => "이미 병합이 진행 중입니다 — 먼저 해결하거나 중단하세요.",
         "git.gitError.workingTreeDirty" => "작업 트리에 커밋되지 않은 변경 사항이 있습니다 — 병합 전에 커밋하거나 스태시하세요.",
         "git.gitError.io" => "Git 프로세스 오류: {{detail}}",
+        "git.empty.openNotARepo" => "해당 폴더는 Git 저장소가 아닙니다.",
+        "git.empty.cloneComingSoon" => "복제하려면 원격 URL이 필요합니다 — 패널 내 복제 양식은 곧 제공됩니다.",
         _ => return None,
     })
 }

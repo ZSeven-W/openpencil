@@ -161,7 +161,7 @@ impl WidgetHost {
         }
 
         if let Some(chat_rect) = self.ai_chat_rect(viewport_width, viewport_height) {
-            let chat = AIChatPlaceholder::from_editor(&self.editor_state);
+            let chat = AIChatPlaceholder::from_editor_at(&self.editor_state, self.now_ms);
             let mut cx = PaintCx {
                 backend: &mut *backend,
             };
@@ -264,7 +264,7 @@ impl WidgetHost {
         // Settings modal — Cmd+, overlay, top-most.
         if ui.agent_settings_open {
             use op_editor_ui::widgets::agent_settings_panel::AgentSettingsPanel;
-            let panel = AgentSettingsPanel::for_editor(&self.editor_state);
+            let panel = AgentSettingsPanel::for_editor_at(&self.editor_state, self.now_ms);
             let panel_rect = panel.rect(viewport_width, viewport_height);
             // Dim scrim behind the modal so the underlying canvas
             // reads as "blocked." Matches the native shell's chrome.

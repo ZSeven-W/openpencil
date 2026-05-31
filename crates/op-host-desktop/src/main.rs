@@ -150,6 +150,16 @@ struct DesktopApp {
     git_status_job: Option<git_jobs::GitStatusJob>,
     /// In-flight background Git diff (`git diff` / `git show`), if any.
     git_diff_job: Option<git_jobs::GitDiffJob>,
+    /// In-flight background `git clone`, if any — set while the inline
+    /// clone wizard's job runs; drained by `poll_git_clone_job`.
+    git_clone_job: Option<git_jobs::GitCloneJob>,
+    /// The document path that was current when the in-flight clone was
+    /// started. The clone binds its repo onto the live document, so if
+    /// the user has since switched / saved-as to a different document by
+    /// the time the clone lands, the bind target changed — the result is
+    /// discarded rather than bound onto the wrong document. `None` =
+    /// started on an untitled document.
+    git_clone_origin: Option<std::path::PathBuf>,
     /// When the Git panel was last re-snapshotted — drives the
     /// periodic refresh that keeps an open panel current against
     /// external repository changes.
@@ -215,6 +225,8 @@ impl DesktopApp {
             git_pull_doc_baseline: None,
             git_status_job: None,
             git_diff_job: None,
+            git_clone_job: None,
+            git_clone_origin: None,
             last_git_refresh: Instant::now(),
         }
     }
@@ -679,12 +691,17 @@ impl DesktopApp {
                     // job too: a result landing post-close must not
                     // repopulate the now-hidden panel.
                     self.git_diff_job = None;
+                    // Abandon an in-flight clone + close its wizard so a
+                    // result can't bind onto a hidden panel and a rapid
+                    // close→reopen can't resurface a stale cloning form.
+                    self.git_clone_job = None;
                     let panel = &mut self.host.editor_state_mut().editor_ui.git_panel;
                     panel.commit_focused = false;
                     panel.remote_focused = false;
                     panel.https_focused = false;
                     panel.diff = None;
                     panel.merge_resolve = None;
+                    panel.clone_form = None;
                 }
                 self.host.editor_state_mut().editor_ui.git_panel.open = opening;
                 self.host.mark_editor_state_dirty();

@@ -462,7 +462,7 @@ impl WidgetHostNative {
                 },
                 scrim_color,
             );
-            let panel = AgentSettingsPanel::for_editor(&self.editor_state);
+            let panel = AgentSettingsPanel::for_editor_at(&self.editor_state, self.now_ms);
             let panel_rect = panel.rect(viewport_width, viewport_height);
             let mut cx = PaintCx {
                 backend: &mut *frame,

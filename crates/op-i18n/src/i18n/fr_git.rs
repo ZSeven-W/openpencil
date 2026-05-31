@@ -329,6 +329,8 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "git.gitError.mergeInProgress" => "Une fusion est déjà en cours — résolvez-la ou abandonnez-la d'abord.",
         "git.gitError.workingTreeDirty" => "L'arbre de travail a des modifications non validées — validez-les ou remisez-les avant de fusionner.",
         "git.gitError.io" => "Erreur de processus git : {{detail}}",
+        "git.empty.openNotARepo" => "Ce dossier n'est pas un dépôt Git.",
+        "git.empty.cloneComingSoon" => "Le clonage nécessite une URL distante — le formulaire de clonage intégré arrive bientôt.",
         _ => return None,
     })
 }

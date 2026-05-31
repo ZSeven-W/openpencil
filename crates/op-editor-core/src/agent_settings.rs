@@ -131,6 +131,7 @@ pub enum SettingsFocus {
         index: usize,
         field: BuiltinAgentField,
     },
+    BuiltinAgentDraft(BuiltinAgentField),
     ImageGenProfile {
         index: usize,
         field: ImageGenField,
@@ -139,6 +140,7 @@ pub enum SettingsFocus {
         index: usize,
         field: AcpAgentField,
     },
+    AcpAgentDraft(AcpAgentField),
 }
 
 /// Built-in provider backend configured directly in OpenPencil.
@@ -312,8 +314,10 @@ pub struct AgentSettings {
     pub tab: AgentSettingsTab,
     pub connected: [bool; 5],
     pub builtin_agents: Vec<BuiltinAgentConfig>,
+    pub builtin_agent_draft: Option<BuiltinAgentConfig>,
     pub next_builtin_agent_id: u64,
     pub acp_agents: Vec<AcpAgentConfig>,
+    pub acp_agent_draft: Option<AcpAgentConfig>,
     pub next_acp_agent_id: u64,
     /// Vertical scroll offset of the right content pane in px.
     pub scroll_y: f32,
@@ -346,8 +350,10 @@ impl Default for AgentSettings {
             tab: AgentSettingsTab::Agents,
             connected: [false; 5],
             builtin_agents: Vec::new(),
+            builtin_agent_draft: None,
             next_builtin_agent_id: 1,
             acp_agents: Vec::new(),
+            acp_agent_draft: None,
             next_acp_agent_id: 1,
             scroll_y: 0.0,
             mcp_server: McpServer::default(),
@@ -387,6 +393,62 @@ impl AgentSettings {
         let n = self.next_builtin_agent_id.max(1);
         let name = format!("Built-in Agent {n}");
         self.add_builtin_agent_with_defaults(&name, "", "claude-sonnet-4-5")
+    }
+
+    pub fn begin_builtin_agent_draft(&mut self) {
+        if self.builtin_agent_draft.is_some() {
+            return;
+        }
+        let draft = if let Some(preset) = BUILTIN_AGENT_PRESETS.iter().find(|preset| {
+            !self
+                .builtin_agents
+                .iter()
+                .any(|agent| agent.display_name == preset.display_name)
+        }) {
+            BuiltinAgentConfig {
+                id: String::new(),
+                display_name: preset.display_name.into(),
+                kind: preset.kind,
+                api_key: String::new(),
+                model: preset.model.into(),
+                base_url: preset.base_url.into(),
+                enabled: true,
+            }
+        } else {
+            let n = self.next_builtin_agent_id.max(1);
+            BuiltinAgentConfig {
+                id: String::new(),
+                display_name: format!("Built-in Agent {n}"),
+                kind: BuiltinAgentKind::Anthropic,
+                api_key: String::new(),
+                model: "claude-sonnet-4-5".into(),
+                base_url: BuiltinAgentKind::Anthropic.default_base_url().into(),
+                enabled: true,
+            }
+        };
+        self.builtin_agent_draft = Some(draft);
+    }
+
+    pub fn save_builtin_agent_draft(&mut self) -> Option<String> {
+        if !self
+            .builtin_agent_draft
+            .as_ref()
+            .is_some_and(|draft| draft.ready())
+        {
+            return None;
+        }
+        let draft = self.builtin_agent_draft.take()?;
+        Some(self.add_builtin_agent_config(
+            draft.display_name,
+            draft.api_key,
+            draft.model,
+            draft.kind,
+            draft.base_url,
+        ))
+    }
+
+    pub fn cancel_builtin_agent_draft(&mut self) {
+        self.builtin_agent_draft = None;
     }
 
     pub fn add_builtin_agent_with_defaults(
@@ -437,6 +499,48 @@ impl AgentSettings {
             None,
             true,
         )
+    }
+
+    pub fn begin_acp_agent_draft(&mut self) {
+        if self.acp_agent_draft.is_some() {
+            return;
+        }
+        let n = self.next_acp_agent_id.max(1);
+        self.acp_agent_draft = Some(AcpAgentConfig {
+            id: String::new(),
+            display_name: format!("ACP Agent {n}"),
+            connection_type: AcpConnectionType::Local,
+            command: String::new(),
+            args: Vec::new(),
+            env: BTreeMap::new(),
+            url: None,
+            enabled: true,
+            connected: false,
+        });
+    }
+
+    pub fn save_acp_agent_draft(&mut self) -> Option<String> {
+        if !self
+            .acp_agent_draft
+            .as_ref()
+            .is_some_and(|draft| draft.ready())
+        {
+            return None;
+        }
+        let draft = self.acp_agent_draft.take()?;
+        Some(self.add_acp_agent_config(
+            draft.display_name,
+            draft.connection_type,
+            draft.command,
+            draft.args,
+            draft.env,
+            draft.url,
+            draft.enabled,
+        ))
+    }
+
+    pub fn cancel_acp_agent_draft(&mut self) {
+        self.acp_agent_draft = None;
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -513,8 +617,6 @@ impl AgentSettings {
     }
 }
 
-/// Drag state for the settings modal. Reserved — the modal does not
-/// support dragging yet.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AgentSettingsDrag {
     Reserved,
@@ -530,6 +632,8 @@ mod tests {
         assert_eq!(s.tab, AgentSettingsTab::Agents);
         assert_eq!(s.connected, [false; 5]);
         assert!(s.builtin_agents.is_empty());
+        assert!(s.builtin_agent_draft.is_none());
+        assert!(s.acp_agent_draft.is_none());
         assert!(s.image_gen_profiles.is_empty());
         assert!(s.active_image_gen_profile_id.is_none());
         assert!(!s.images_advanced_open);

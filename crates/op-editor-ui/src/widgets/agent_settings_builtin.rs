@@ -1,6 +1,10 @@
 //! Built-in provider section for the Agent settings panel.
 
 use crate::theme::Theme;
+use crate::widgets::agent_settings_builtin_draft;
+use crate::widgets::agent_settings_form_actions::{
+    cancel_button_rect, paint_form_actions, save_button_rect,
+};
 use crate::widgets::agent_settings_i18n::t as t_settings;
 use crate::widgets::brand_icons::{paint_brand_logo, BrandLogo};
 use crate::widgets::icons::{draw_icon, Icon};
@@ -16,6 +20,7 @@ const SUBTITLE_HEIGHT: f32 = 28.0;
 const EMPTY_HEIGHT: f32 = 64.0;
 const COMPACT_CARD_HEIGHT: f32 = 60.0;
 const EXPANDED_CARD_HEIGHT: f32 = 168.0;
+const DRAFT_CARD_HEIGHT: f32 = 204.0;
 const CARD_GAP: f32 = 8.0;
 const ADD_W: f32 = 96.0;
 const TOP_HEADER_RIGHT_INSET: f32 = 12.0;
@@ -32,7 +37,11 @@ pub enum BuiltinHit {
         index: usize,
         field: BuiltinAgentField,
     },
+    FocusDraft(BuiltinAgentField),
     ToggleKind(usize),
+    ToggleDraftKind,
+    SaveDraft,
+    CancelDraft,
     ToggleEnabled(usize),
     Edit(usize),
     Remove(usize),
@@ -40,15 +49,22 @@ pub enum BuiltinHit {
 }
 
 pub fn content_height(settings: &AgentSettings) -> f32 {
-    let list_h = if settings.builtin_agents.is_empty() {
+    let has_draft = settings.builtin_agent_draft.is_some();
+    let list_h = if settings.builtin_agents.is_empty() && !has_draft {
         EMPTY_HEIGHT
     } else {
-        settings
+        let saved_h: f32 = settings
             .builtin_agents
             .iter()
             .enumerate()
             .map(|(index, _)| card_height(settings, index) + CARD_GAP)
-            .sum()
+            .sum();
+        saved_h
+            + if has_draft {
+                DRAFT_CARD_HEIGHT + CARD_GAP
+            } else {
+                0.0
+            }
     };
     HEADER_HEIGHT + SUBTITLE_HEIGHT + list_h
 }
@@ -92,6 +108,31 @@ pub fn hit_test(content: Rect, settings: &AgentSettings, point: Point2D) -> Buil
         }
         card_y += card.size.y + CARD_GAP;
     }
+    if settings.builtin_agent_draft.is_some() {
+        let card = card_rect(content.origin.x, card_y, content.size.x, DRAFT_CARD_HEIGHT);
+        if rect_contains(kind_rect(card), point) {
+            return BuiltinHit::ToggleDraftKind;
+        }
+        for (row, field) in [
+            BuiltinAgentField::DisplayName,
+            BuiltinAgentField::ApiKey,
+            BuiltinAgentField::Model,
+            BuiltinAgentField::BaseUrl,
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            if rect_contains(field_input_rect(card, row), point) {
+                return BuiltinHit::FocusDraft(field);
+            }
+        }
+        if rect_contains(save_button_rect(card, EXPANDED_CARD_HEIGHT), point) {
+            return BuiltinHit::SaveDraft;
+        }
+        if rect_contains(cancel_button_rect(card, EXPANDED_CARD_HEIGHT), point) {
+            return BuiltinHit::CancelDraft;
+        }
+    }
     BuiltinHit::None
 }
 
@@ -119,6 +160,7 @@ pub fn paint_builtin_section(
     ui: &EditorUiState,
     content: Rect,
     y: f32,
+    now_ms: u64,
 ) -> f32 {
     let mut y = paint_header(
         cx,
@@ -136,28 +178,40 @@ pub fn paint_builtin_section(
         content.origin.x,
         y,
     );
-    if settings.builtin_agents.is_empty() {
-        paint_empty(
+    if settings.builtin_agents.is_empty() && settings.builtin_agent_draft.is_none() {
+        return paint_empty(
             cx,
             theme,
             t_settings(ui, "settings.agents.builtinEmpty"),
             content.origin.x,
             y,
             content.size.x,
-        )
-    } else {
-        for (index, agent) in settings.builtin_agents.iter().enumerate() {
-            let card = card_rect(
-                content.origin.x,
-                y,
-                content.size.x,
-                card_height(settings, index),
-            );
-            paint_builtin_agent_card(cx, theme, settings, ui, agent, index, card);
-            y += card.size.y + CARD_GAP;
-        }
-        y
+        );
     }
+    for (index, agent) in settings.builtin_agents.iter().enumerate() {
+        let card = card_rect(
+            content.origin.x,
+            y,
+            content.size.x,
+            card_height(settings, index),
+        );
+        paint_builtin_agent_card(cx, theme, settings, ui, agent, index, card, now_ms);
+        y += card.size.y + CARD_GAP;
+    }
+    if let Some(draft) = settings.builtin_agent_draft.as_ref() {
+        let card = card_rect(content.origin.x, y, content.size.x, DRAFT_CARD_HEIGHT);
+        paint_builtin_agent_form(cx, theme, settings, ui, draft, None, card, now_ms);
+        paint_form_actions(
+            cx,
+            theme,
+            ui,
+            card,
+            EXPANDED_CARD_HEIGHT,
+            agent_settings_builtin_draft::ready(settings, ui),
+        );
+        y += card.size.y + CARD_GAP;
+    }
+    y
 }
 
 fn paint_header(
@@ -218,6 +272,7 @@ fn paint_empty(cx: &mut PaintCx<'_>, theme: &Theme, text: &str, x: f32, y: f32, 
     y + EMPTY_HEIGHT
 }
 
+#[allow(clippy::too_many_arguments)]
 fn paint_builtin_agent_card(
     cx: &mut PaintCx<'_>,
     theme: &Theme,
@@ -226,22 +281,25 @@ fn paint_builtin_agent_card(
     agent: &BuiltinAgentConfig,
     index: usize,
     card: Rect,
+    now_ms: u64,
 ) {
     if !is_editing(settings, index) {
         paint_compact_builtin_agent_card(cx, theme, settings, ui, agent, index, card);
         return;
     }
-    paint_builtin_agent_form(cx, theme, settings, ui, agent, index, card);
+    paint_builtin_agent_form(cx, theme, settings, ui, agent, Some(index), card, now_ms);
 }
 
+#[allow(clippy::too_many_arguments)]
 fn paint_builtin_agent_form(
     cx: &mut PaintCx<'_>,
     theme: &Theme,
     settings: &AgentSettings,
     ui: &EditorUiState,
     agent: &BuiltinAgentConfig,
-    index: usize,
+    index: Option<usize>,
     card: Rect,
+    now_ms: u64,
 ) {
     cx.backend.fill_round_rect(card, 10.0, theme.muted);
     cx.backend.stroke_round_rect(card, 10.0, theme.border, 1.0);
@@ -293,6 +351,7 @@ fn paint_builtin_agent_form(
         BuiltinAgentField::DisplayName,
         0,
         card,
+        now_ms,
     );
     paint_field(
         cx,
@@ -304,6 +363,7 @@ fn paint_builtin_agent_form(
         BuiltinAgentField::ApiKey,
         1,
         card,
+        now_ms,
     );
     paint_field(
         cx,
@@ -315,6 +375,7 @@ fn paint_builtin_agent_form(
         BuiltinAgentField::Model,
         2,
         card,
+        now_ms,
     );
     paint_field(
         cx,
@@ -326,6 +387,7 @@ fn paint_builtin_agent_form(
         BuiltinAgentField::BaseUrl,
         3,
         card,
+        now_ms,
     );
 }
 
@@ -359,7 +421,12 @@ fn paint_compact_builtin_agent_card(
         text_x,
         card.origin.y + 22.0,
     );
-    let detail = format!("{}  ·  {}", agent.model, mask_key(&agent.api_key));
+    let api_key = if agent.api_key.trim().is_empty() {
+        "api key required".to_string()
+    } else {
+        mask_key(&agent.api_key)
+    };
+    let detail = format!("{}  ·  {}", agent.model, api_key);
     let detail = ellipsize(cx, &detail, 300.0, 11.0);
     draw_text(
         cx,
@@ -420,12 +487,16 @@ fn paint_field(
     settings: &AgentSettings,
     ui: &EditorUiState,
     agent: &BuiltinAgentConfig,
-    index: usize,
+    index: Option<usize>,
     field: BuiltinAgentField,
     row: usize,
     card: Rect,
+    now_ms: u64,
 ) {
-    let focused = settings.focus == Some(SettingsFocus::BuiltinAgent { index, field });
+    let focused = match index {
+        Some(index) => settings.focus == Some(SettingsFocus::BuiltinAgent { index, field }),
+        None => settings.focus == Some(SettingsFocus::BuiltinAgentDraft(field)),
+    };
     let value = if focused {
         ui.settings_input_draft.as_str()
     } else {
@@ -469,14 +540,26 @@ fn paint_field(
         1.0,
     );
     let clipped = ellipsize(cx, value, input.size.x - 12.0, 11.0);
+    let text_x = input.origin.x + 6.0;
     draw_text(
         cx,
         &clipped,
         11.0,
         theme.foreground,
-        input.origin.x + 6.0,
+        text_x,
         input.origin.y + 16.0,
     );
+    if focused && jian_core::anim::blink_visible(now_ms, ui.settings_input_caret_anchor_ms, 500) {
+        let caret_x = (text_x + cx.backend.measure_text(&clipped, 11.0) + 1.0)
+            .min(input.origin.x + input.size.x - 8.0);
+        cx.backend.fill_rect(
+            Rect {
+                origin: Point2D::new(caret_x, input.origin.y + 4.5),
+                size: Point2D::new(1.5, 15.0),
+            },
+            theme.foreground,
+        );
+    }
 }
 
 fn paint_kind_toggle(cx: &mut PaintCx<'_>, theme: &Theme, agent: &BuiltinAgentConfig, card: Rect) {

@@ -43,6 +43,7 @@ use op_editor_ui::widgets::{
 };
 use op_editor_ui::{Point2D, Rect, Theme};
 
+mod agent_settings_press;
 mod keyboard;
 mod paint;
 mod press;

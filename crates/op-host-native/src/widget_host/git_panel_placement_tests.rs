@@ -234,3 +234,99 @@ fn init_card_hover_tracks_the_card_index_and_not_allowed_cursor() {
         None
     );
 }
+
+#[test]
+fn clone_wizard_owns_keyboard_and_enter() {
+    use op_editor_core::{CloneField, CloneFormState, GitPanelAction};
+    let mut host = host_with_git_panel_open();
+    host.editor_state_mut().editor_ui.git_panel.clone_form = Some(CloneFormState {
+        focus: Some(CloneField::Url),
+        ..Default::default()
+    });
+    // The wizard captures the keyboard, so a tool-letter like `h` types
+    // into the URL field instead of switching tools (the regression the
+    // first clone-form review caught: `https://…` was untypeable).
+    assert!(host.git_clone_input_active());
+    assert!(host.input_active());
+    for c in "http".chars() {
+        assert!(host.apply_text(c), "char should be consumed by the wizard");
+    }
+    assert_eq!(
+        host.editor_state()
+            .editor_ui
+            .git_panel
+            .clone_form
+            .as_ref()
+            .unwrap()
+            .url,
+        "http"
+    );
+    // Enter on a focused field requests the clone.
+    assert!(host.apply_send());
+    assert_eq!(
+        host.editor_state().editor_ui.git_panel.pending_action,
+        Some(GitPanelAction::SubmitClone)
+    );
+    // Enter with no field focused is swallowed (returns true, no
+    // fall-through to chat send) and does not re-queue a submit.
+    host.editor_state_mut().editor_ui.git_panel.pending_action = None;
+    host.editor_state_mut()
+        .editor_ui
+        .git_panel
+        .clone_form
+        .as_mut()
+        .unwrap()
+        .focus = None;
+    assert!(host.apply_send());
+    assert_eq!(host.editor_state().editor_ui.git_panel.pending_action, None);
+}
+
+#[test]
+fn hidden_clone_form_does_not_capture_keyboard() {
+    use op_editor_core::{CloneField, CloneFormState};
+    let mut host = host_with_git_panel_open();
+    host.editor_state_mut().editor_ui.git_panel.clone_form = Some(CloneFormState {
+        focus: Some(CloneField::Url),
+        ..Default::default()
+    });
+    // Close the panel: the wizard is now hidden state. It must NOT own
+    // the keyboard, or keystrokes would silently edit an invisible form
+    // (and Delete / arrows would leak to the document).
+    host.editor_state_mut().editor_ui.git_panel.open = false;
+    assert!(!host.git_clone_input_active());
+    host.apply_text('h');
+    assert_eq!(
+        host.editor_state()
+            .editor_ui
+            .git_panel
+            .clone_form
+            .as_ref()
+            .unwrap()
+            .url,
+        "",
+        "a hidden clone form must not capture keystrokes"
+    );
+}
+
+#[test]
+fn clone_wizard_accepts_pasted_url() {
+    use op_editor_core::{CloneField, CloneFormState};
+    let mut host = host_with_git_panel_open();
+    host.editor_state_mut().editor_ui.git_panel.clone_form = Some(CloneFormState {
+        focus: Some(CloneField::Url),
+        ..Default::default()
+    });
+    // Pasting a URL (with a stray trailing newline) lands in the focused
+    // field; control characters are dropped (single-line input).
+    assert!(host.apply_input_paste("https://github.com/owner/repo.git\n"));
+    assert_eq!(
+        host.editor_state()
+            .editor_ui
+            .git_panel
+            .clone_form
+            .as_ref()
+            .unwrap()
+            .url,
+        "https://github.com/owner/repo.git"
+    );
+}

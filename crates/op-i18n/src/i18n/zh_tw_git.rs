@@ -329,6 +329,8 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "git.gitError.mergeInProgress" => "已有合併正在進行 — 請先解決或中止它。",
         "git.gitError.workingTreeDirty" => "工作區有未提交的變更 — 合併前請先提交或暫存。",
         "git.gitError.io" => "Git 程序錯誤:{{detail}}",
+        "git.empty.openNotARepo" => "該資料夾不是 Git 儲存庫。",
+        "git.empty.cloneComingSoon" => "複製需要遠端儲存庫 URL — 面板內複製表單即將推出。",
         _ => return None,
     })
 }

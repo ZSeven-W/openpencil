@@ -21,12 +21,16 @@ impl WidgetHost {
                 }
                 op_editor_core::agent_settings::SettingsFocus::ImageSearch(_)
                 | op_editor_core::agent_settings::SettingsFocus::BuiltinAgent { .. }
-                | op_editor_core::agent_settings::SettingsFocus::ImageGenProfile { .. } => {
+                | op_editor_core::agent_settings::SettingsFocus::BuiltinAgentDraft(_)
+                | op_editor_core::agent_settings::SettingsFocus::ImageGenProfile { .. }
+                | op_editor_core::agent_settings::SettingsFocus::AcpAgent { .. }
+                | op_editor_core::agent_settings::SettingsFocus::AcpAgentDraft(_) => {
                     !c.is_control() && draft.len() < 512
                 }
             };
             if accepts {
                 draft.push(c);
+                self.editor_state.editor_ui.settings_input_caret_anchor_ms = self.now_ms;
                 self.mark_dirty();
                 return true;
             }
@@ -51,6 +55,16 @@ impl WidgetHost {
             }
             return false;
         }
+        if self.editor_state.editor_ui.chat_model_picker_open && !c.is_control() {
+            self.editor_state.editor_ui.chat_model_picker_search.push(c);
+            self.editor_state
+                .editor_ui
+                .chat_model_picker_caret_anchor_ms = self.now_ms;
+            self.editor_state.editor_ui.chat_model_picker_scroll = 0.0;
+            self.editor_state.editor_ui.chat_model_picker_hover = None;
+            self.mark_dirty();
+            return true;
+        }
         if !self.editor_state.chat.focused {
             return false;
         }
@@ -62,6 +76,7 @@ impl WidgetHost {
     pub fn apply_backspace(&mut self) -> bool {
         if self.editor_state.editor_ui.agent_settings.focus.is_some() {
             self.editor_state.editor_ui.settings_input_draft.pop();
+            self.editor_state.editor_ui.settings_input_caret_anchor_ms = self.now_ms;
             self.mark_dirty();
             return true;
         }
@@ -78,6 +93,24 @@ impl WidgetHost {
                 self.mark_dirty();
             }
             return ok;
+        }
+        if self.editor_state.editor_ui.chat_model_picker_open {
+            if self
+                .editor_state
+                .editor_ui
+                .chat_model_picker_search
+                .pop()
+                .is_some()
+            {
+                self.editor_state
+                    .editor_ui
+                    .chat_model_picker_caret_anchor_ms = self.now_ms;
+                self.editor_state.editor_ui.chat_model_picker_scroll = 0.0;
+                self.editor_state.editor_ui.chat_model_picker_hover = None;
+                self.mark_dirty();
+                return true;
+            }
+            return false;
         }
         if self.editor_state.chat.focused {
             if self.editor_state.chat.input.pop().is_some() {
@@ -404,7 +437,9 @@ impl WidgetHost {
     /// just the MCP server port). Parses u16, clamps ≥1024, writes
     /// back, clears focus + draft. Mirrors the native helper.
     pub(super) fn commit_settings_focus(&mut self) {
-        use op_editor_core::agent_settings::SettingsFocus;
+        use op_editor_core::agent_settings::{
+            AcpAgentField, BuiltinAgentField, ImageGenField, SettingsFocus,
+        };
         let Some(focus) = self.editor_state.editor_ui.agent_settings.focus.take() else {
             return;
         };
@@ -429,7 +464,139 @@ impl WidgetHost {
                         .openverse_client_secret = draft.trim().to_string();
                 }
             },
-            SettingsFocus::BuiltinAgent { .. } | SettingsFocus::ImageGenProfile { .. } => {}
+            SettingsFocus::BuiltinAgent { index, field } => {
+                if let Some(agent) = self
+                    .editor_state
+                    .editor_ui
+                    .agent_settings
+                    .builtin_agents
+                    .get_mut(index)
+                {
+                    match field {
+                        BuiltinAgentField::DisplayName => {
+                            if !draft.trim().is_empty() {
+                                agent.display_name = draft.trim().to_string();
+                            }
+                        }
+                        BuiltinAgentField::ApiKey => agent.api_key = draft.trim().to_string(),
+                        BuiltinAgentField::Model => agent.model = draft.trim().to_string(),
+                        BuiltinAgentField::BaseUrl => {
+                            agent.base_url = if draft.trim().is_empty() {
+                                agent.kind.default_base_url().to_string()
+                            } else {
+                                draft.trim().to_string()
+                            };
+                        }
+                    }
+                    self.editor_state.rebuild_chat_models();
+                }
+            }
+            SettingsFocus::BuiltinAgentDraft(field) => {
+                if let Some(agent) = self
+                    .editor_state
+                    .editor_ui
+                    .agent_settings
+                    .builtin_agent_draft
+                    .as_mut()
+                {
+                    match field {
+                        BuiltinAgentField::DisplayName => {
+                            if !draft.trim().is_empty() {
+                                agent.display_name = draft.trim().to_string();
+                            }
+                        }
+                        BuiltinAgentField::ApiKey => agent.api_key = draft.trim().to_string(),
+                        BuiltinAgentField::Model => agent.model = draft.trim().to_string(),
+                        BuiltinAgentField::BaseUrl => {
+                            agent.base_url = if draft.trim().is_empty() {
+                                agent.kind.default_base_url().to_string()
+                            } else {
+                                draft.trim().to_string()
+                            };
+                        }
+                    }
+                }
+            }
+            SettingsFocus::ImageGenProfile { index, field } => {
+                if let Some(profile) = self
+                    .editor_state
+                    .editor_ui
+                    .agent_settings
+                    .image_gen_profiles
+                    .get_mut(index)
+                {
+                    match field {
+                        ImageGenField::Name => profile.name = draft.trim().to_string(),
+                        ImageGenField::ApiKey => profile.api_key = draft.trim().to_string(),
+                        ImageGenField::Model => profile.model = draft.trim().to_string(),
+                        ImageGenField::BaseUrl => {
+                            profile.base_url = if draft.trim().is_empty() {
+                                None
+                            } else {
+                                Some(draft.trim().to_string())
+                            };
+                        }
+                    }
+                }
+            }
+            SettingsFocus::AcpAgent { index, field } => {
+                if let Some(agent) = self
+                    .editor_state
+                    .editor_ui
+                    .agent_settings
+                    .acp_agents
+                    .get_mut(index)
+                {
+                    match field {
+                        AcpAgentField::DisplayName => {
+                            if !draft.trim().is_empty() {
+                                agent.display_name = draft.trim().to_string();
+                            }
+                        }
+                        AcpAgentField::Command => {
+                            agent.command = draft.trim().to_string();
+                            agent.connected = false;
+                        }
+                        AcpAgentField::Url => {
+                            agent.url = if draft.trim().is_empty() {
+                                None
+                            } else {
+                                Some(draft.trim().to_string())
+                            };
+                            agent.connected = false;
+                        }
+                    }
+                }
+            }
+            SettingsFocus::AcpAgentDraft(field) => {
+                if let Some(agent) = self
+                    .editor_state
+                    .editor_ui
+                    .agent_settings
+                    .acp_agent_draft
+                    .as_mut()
+                {
+                    match field {
+                        AcpAgentField::DisplayName => {
+                            if !draft.trim().is_empty() {
+                                agent.display_name = draft.trim().to_string();
+                            }
+                        }
+                        AcpAgentField::Command => {
+                            agent.command = draft.trim().to_string();
+                            agent.connected = false;
+                        }
+                        AcpAgentField::Url => {
+                            agent.url = if draft.trim().is_empty() {
+                                None
+                            } else {
+                                Some(draft.trim().to_string())
+                            };
+                            agent.connected = false;
+                        }
+                    }
+                }
+            }
         }
         self.mark_dirty();
     }

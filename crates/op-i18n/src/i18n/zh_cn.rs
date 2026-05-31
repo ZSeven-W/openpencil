@@ -273,7 +273,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
             "设计一个现代的移动端登录页面，包含邮箱输入框、密码输入框、登录按钮和社交登录选项"
         }
         "ai.quickAction.foodApp" => "美食App首页",
-        "ai.quickAction.foodAppPrompt" => "Generate a well-designed food mobile app homepage",
+        "ai.quickAction.foodAppPrompt" => "生成一个设计精良的美食应用移动端首页",
         "ai.quickAction.bottomNav" => "设计一个底部导航栏",
         "ai.quickAction.bottomNavPrompt" => {
             "设计一个包含 5 个标签的移动应用底部导航栏：首页、搜索、添加、消息、个人"
@@ -364,7 +364,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "settings.title" => "设置",
         "settings.agents" => "Agents",
         "settings.mcp" => "MCP",
-        "settings.images" => "Images",
+        "settings.images" => "图片",
         "settings.system" => "系统",
         "settings.autoUpdateDesc" => "启动时自动检查新版本",
         "settings.systemDesktopOnly" => "系统设置仅在桌面应用中可用。",
@@ -476,7 +476,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "variablePicker.noVariables" => "未定义 {{type}} 类型的变量",
         "settings.tab.agents" => "Agents",
         "settings.tab.mcp" => "MCP",
-        "settings.tab.images" => "Images",
+        "settings.tab.images" => "图片",
         "settings.tab.system" => "系统",
         "settings.agents.builtin" => "内置服务商",
         "settings.agents.builtinSubtitle" => "直接配置 API 密钥 — 无需 CLI 工具。",

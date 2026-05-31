@@ -98,7 +98,11 @@ pub mod brand_icons;
 
 // Step 4 — extra editor-chrome widgets (TS app parity).
 pub mod agent_settings_acp;
+mod agent_settings_acp_draft;
 pub mod agent_settings_builtin;
+mod agent_settings_builtin_draft;
+mod agent_settings_caret;
+mod agent_settings_form_actions;
 pub mod agent_settings_i18n;
 pub mod agent_settings_images;
 pub mod agent_settings_mcp;
@@ -125,6 +129,7 @@ pub mod figma_import_progress;
 pub mod file_drop_overlay;
 pub mod file_menu;
 pub mod git_panel;
+mod git_panel_clone;
 mod git_panel_diff;
 mod git_panel_empty;
 mod git_panel_hit;
