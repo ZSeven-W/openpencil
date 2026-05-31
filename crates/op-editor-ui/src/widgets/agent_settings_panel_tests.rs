@@ -538,6 +538,36 @@ fn images_tab_profile_rows_expose_active_and_remove_targets() {
 }
 
 #[test]
+fn images_tab_profile_row_paints_expand_chevron_before_delete_like_ts() {
+    let mut state = EditorState::default();
+    state.editor_ui.agent_settings.tab = AgentSettingsTab::Images;
+    state.editor_ui.agent_settings.add_image_gen_profile();
+    let panel = AgentSettingsPanel::for_editor(&state);
+    let rect = panel.rect(1200.0, 800.0);
+    let content_x = rect.origin.x + 200.0 + 24.0;
+    let content_y = rect.origin.y + 24.0;
+    let content_w = rect.size.x - 200.0 - 48.0;
+    let gen_top = content_y + 36.0 + 24.0 + 28.0;
+    let row_y = gen_top + 36.0;
+    let chevron_origin = crate::Point2D::new(content_x + content_w - 44.0, row_y + 10.0);
+
+    let mut backend = CaptureBackend::default();
+    let mut cx = PaintCx {
+        backend: &mut backend,
+    };
+    panel.paint(&mut cx, rect);
+
+    assert!(
+        backend.icon_strokes.iter().any(|(at, size, _)| {
+            (*size - 12.0).abs() < 0.01
+                && (at.x - chevron_origin.x).abs() < 0.01
+                && (at.y - chevron_origin.y).abs() < 0.01
+        }),
+        "profile rows should paint the TS expand/collapse chevron before the delete icon"
+    );
+}
+
+#[test]
 fn images_tab_advanced_search_fields_are_focusable() {
     let mut state = EditorState::default();
     state.editor_ui.agent_settings.tab = AgentSettingsTab::Images;

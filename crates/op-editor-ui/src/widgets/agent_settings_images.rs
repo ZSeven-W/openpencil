@@ -33,6 +33,7 @@ const PROFILE_ROW_H: f32 = 32.0;
 const PROFILE_ROW_GAP: f32 = 6.0;
 const ACTIVE_DOT: f32 = 14.0;
 const DELETE_W: f32 = 24.0;
+const CHEVRON_W: f32 = 24.0;
 const PROFILE_FORM_TOP: f32 = 40.0;
 const PROFILE_FIELD_H: f32 = 24.0;
 const PROFILE_TEST_BTN_W: f32 = 56.0;
@@ -181,6 +182,16 @@ fn profile_remove_rect(row: Rect) -> Rect {
             row.origin.y + (PROFILE_ROW_H - DELETE_W) / 2.0,
         ),
         size: Point2D::new(DELETE_W, DELETE_W),
+    }
+}
+
+fn profile_chevron_rect(row: Rect) -> Rect {
+    Rect {
+        origin: Point2D::new(
+            row.origin.x + row.size.x - DELETE_W - CHEVRON_W,
+            row.origin.y + (PROFILE_ROW_H - CHEVRON_W) / 2.0,
+        ),
+        size: Point2D::new(CHEVRON_W, CHEVRON_W),
     }
 }
 
@@ -584,9 +595,23 @@ fn paint_profile_row(
     cx.backend.draw_text(
         &provider_lay,
         Point2D::new(
-            row.origin.x + row.size.x - DELETE_W - 12.0 - provider_w,
+            row.origin.x + row.size.x - DELETE_W - CHEVRON_W - 12.0 - provider_w,
             row.origin.y + 20.0,
         ),
+    );
+
+    let chevron = profile_chevron_rect(row);
+    draw_icon(
+        cx.backend,
+        if editing {
+            Icon::ChevronDown
+        } else {
+            Icon::ChevronRight
+        },
+        Point2D::new(chevron.origin.x + 4.0, chevron.origin.y + 6.0),
+        12.0,
+        theme.muted_foreground,
+        1.5,
     );
 
     draw_icon(
