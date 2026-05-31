@@ -5,6 +5,14 @@
 use super::WidgetHostNative;
 use op_editor_ui::Point2D;
 
+fn empty_builtin_agent_draft_index(
+    settings: &op_editor_core::agent_settings::AgentSettings,
+) -> Option<usize> {
+    settings.builtin_agents.iter().position(|agent| {
+        agent.api_key.trim().is_empty() && agent.display_name.starts_with("Built-in Agent ")
+    })
+}
+
 impl WidgetHostNative {
     /// Spawn a fresh node for the active shape / frame / text tool at
     /// `doc_point`. Returns the new node's id when the tool maps to a
@@ -323,19 +331,24 @@ impl WidgetHostNative {
                 }
             }
             AgentSettingsHit::AddProvider => {
-                let id = self
-                    .editor_state
-                    .editor_ui
-                    .agent_settings
-                    .add_builtin_agent();
-                let index = self
-                    .editor_state
-                    .editor_ui
-                    .agent_settings
-                    .builtin_agents
-                    .iter()
-                    .position(|agent| agent.id == id)
-                    .unwrap_or(0);
+                let index = if let Some(index) =
+                    empty_builtin_agent_draft_index(&self.editor_state.editor_ui.agent_settings)
+                {
+                    index
+                } else {
+                    let id = self
+                        .editor_state
+                        .editor_ui
+                        .agent_settings
+                        .add_builtin_agent();
+                    self.editor_state
+                        .editor_ui
+                        .agent_settings
+                        .builtin_agents
+                        .iter()
+                        .position(|agent| agent.id == id)
+                        .unwrap_or(0)
+                };
                 self.editor_state.editor_ui.agent_settings.focus = Some(
                     op_editor_core::agent_settings::SettingsFocus::BuiltinAgent {
                         index,
