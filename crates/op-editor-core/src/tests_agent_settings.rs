@@ -157,6 +157,19 @@ fn pure_builtin_presets_do_not_toggle_api_format() {
 }
 
 #[test]
+fn pure_builtin_presets_keep_base_url_read_only_like_ts() {
+    let mut s = AgentSettings::default();
+
+    for _ in 0..3 {
+        s.add_builtin_agent();
+    }
+
+    assert!(!s.builtin_agents[0].base_url_editable());
+    assert!(!s.builtin_agents[1].base_url_editable());
+    assert!(s.builtin_agents[2].base_url_editable());
+}
+
+#[test]
 fn add_acp_agent_assigns_id_and_defaults_to_local_config() {
     let mut s = AgentSettings::default();
 

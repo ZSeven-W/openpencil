@@ -101,7 +101,10 @@ pub mod agent_settings_acp;
 mod agent_settings_acp_draft;
 pub mod agent_settings_builtin;
 mod agent_settings_builtin_draft;
+mod agent_settings_builtin_layout;
 mod agent_settings_builtin_parts;
+#[cfg(test)]
+mod agent_settings_builtin_tests;
 mod agent_settings_caret;
 mod agent_settings_form_actions;
 pub mod agent_settings_i18n;

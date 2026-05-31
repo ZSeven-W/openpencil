@@ -177,6 +177,34 @@ fn builtin_agent_kind_toggle_commits_focused_api_key_draft() {
 }
 
 #[test]
+fn pure_builtin_agent_base_url_commit_is_ignored_like_ts_read_only_input() {
+    let mut host = WidgetHostNative::new();
+    host.editor_state_mut()
+        .editor_ui
+        .agent_settings
+        .add_builtin_agent();
+    host.editor_state_mut().editor_ui.agent_settings.focus = Some(SettingsFocus::BuiltinAgent {
+        index: 0,
+        field: BuiltinAgentField::BaseUrl,
+    });
+    host.editor_state_mut().editor_ui.settings_input_draft = "https://example.invalid".into();
+
+    assert!(host.apply_send());
+
+    let settings = &host.editor_state().editor_ui.agent_settings;
+    assert_eq!(
+        settings.builtin_agents[0].base_url,
+        "https://api.anthropic.com"
+    );
+    assert!(settings.focus.is_none());
+    assert!(host
+        .editor_state()
+        .editor_ui
+        .settings_input_draft
+        .is_empty());
+}
+
+#[test]
 fn add_provider_opens_unsaved_builtin_agent_draft() {
     let mut host = WidgetHostNative::new();
     host.set_now_ms(1234);

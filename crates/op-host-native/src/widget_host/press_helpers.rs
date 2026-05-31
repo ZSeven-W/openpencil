@@ -234,6 +234,11 @@ impl WidgetHostNative {
                     .builtin_agents
                     .get(index)
                 {
+                    if field == op_editor_core::agent_settings::BuiltinAgentField::BaseUrl
+                        && !agent.base_url_editable()
+                    {
+                        return true;
+                    }
                     self.editor_state.editor_ui.settings_input_draft = match field {
                         op_editor_core::agent_settings::BuiltinAgentField::DisplayName => {
                             agent.display_name.clone()

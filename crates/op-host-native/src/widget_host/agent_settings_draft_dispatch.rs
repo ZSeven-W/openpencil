@@ -15,6 +15,9 @@ impl WidgetHostNative {
             .builtin_agent_draft
             .as_ref()
         {
+            if field == BuiltinAgentField::BaseUrl && !agent.base_url_editable() {
+                return;
+            }
             self.editor_state.editor_ui.settings_input_draft = match field {
                 BuiltinAgentField::DisplayName => agent.display_name.clone(),
                 BuiltinAgentField::ApiKey => agent.api_key.clone(),

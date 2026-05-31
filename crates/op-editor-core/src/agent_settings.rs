@@ -191,6 +191,13 @@ pub struct BuiltinAgentConfig {
 }
 
 impl BuiltinAgentConfig {
+    pub fn base_url_editable(&self) -> bool {
+        !matches!(
+            self.preset,
+            BuiltinAgentPresetKey::Anthropic | BuiltinAgentPresetKey::OpenAi
+        )
+    }
+
     pub fn ready(&self) -> bool {
         self.enabled && !self.api_key.trim().is_empty() && !self.model.trim().is_empty()
     }
