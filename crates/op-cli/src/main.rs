@@ -483,7 +483,7 @@ fn map_import_svg(positionals: &[String], flags: &Flags) -> Result<Command, Stri
     let path = required_pos(
         positionals,
         1,
-        "Usage: op import:svg <file.svg> [--x N] [--y N]",
+        "Usage: op import:svg <file.svg> [--x N] [--y N] [--parent P] [--page PAGE]",
     )?;
     let svg =
         fs::read_to_string(&path).map_err(|e| format!("cannot read SVG file {path:?}: {e}"))?;
@@ -496,6 +496,9 @@ fn map_import_svg(positionals: &[String], flags: &Flags) -> Result<Command, Stri
     }
     if let Some(parent) = flag_value(flags, "parent") {
         pairs.push(pair("parent", parent));
+    }
+    if let Some(page) = flag_value(flags, "page") {
+        pairs.push(pair("pageId", page));
     }
     tool_call("import_svg", pairs)
 }

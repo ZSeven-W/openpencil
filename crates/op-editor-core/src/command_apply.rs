@@ -70,6 +70,60 @@ fn parse_variable_kind(s: &str) -> Option<VariableKind> {
     }
 }
 
+fn import_svg_page_index(state: &EditorState, page_id: Option<&str>) -> Option<usize> {
+    let Some(raw) = page_id.map(str::trim).filter(|s| !s.is_empty()) else {
+        return Some(
+            state
+                .ui
+                .active_page_index
+                .min(state.page_count().saturating_sub(1)),
+        );
+    };
+    match state.doc.pages.as_ref() {
+        Some(pages) if !pages.is_empty() => pages
+            .iter()
+            .position(|page| page.id == raw)
+            .or_else(|| raw.parse::<usize>().ok().filter(|idx| *idx < pages.len())),
+        _ => raw.parse::<usize>().ok().filter(|idx| *idx == 0),
+    }
+}
+
+fn apply_import_svg_on_active_page(
+    state: &mut EditorState,
+    svg: &str,
+    x: i32,
+    y: i32,
+    target_parent: &NodeId,
+) -> bool {
+    let Some(mut next_id) = state.next_node_id_seed() else {
+        return false;
+    };
+    if target_parent.is_real() {
+        match find_node(state.active_children(), target_parent) {
+            Some(parent) if parent.is_container() => {}
+            _ => return false,
+        }
+    }
+    // `import_svg` pushes its own history snapshot when it inserts ≥ 1
+    // node.
+    let count = state.import_svg(&mut next_id, svg, (x as f64, y as f64));
+    if count == 0 {
+        return false;
+    }
+    if target_parent.is_real() {
+        let Some(imported_root) = state
+            .active_children()
+            .last()
+            .map(|node| NodeId::new(node.id_str()))
+        else {
+            return false;
+        };
+        imported_root.is_real() && state.cmd_move_node(&imported_root, target_parent)
+    } else {
+        true
+    }
+}
+
 impl EditorState {
     /// Apply one [`EditorCommand`]. Returns `true` when the command
     /// actually changed the document / editor state, `false` on an
@@ -397,34 +451,30 @@ impl EditorState {
                 x,
                 y,
                 target_parent,
+                page_id,
             } => {
-                let Some(mut next_id) = self.next_node_id_seed() else {
+                let Some(target_page_index) = import_svg_page_index(self, page_id.as_deref())
+                else {
                     return false;
                 };
-                if target_parent.is_real() {
-                    match find_node(self.active_children(), &target_parent) {
-                        Some(parent) if parent.is_container() => {}
-                        _ => return false,
+                let original_page_index = self.ui.active_page_index;
+                let original_selection = self.selection.clone();
+                let cross_page = page_id.is_some() && target_page_index != original_page_index;
+                if page_id.is_some() {
+                    self.ui.active_page_index = target_page_index;
+                }
+                let changed = apply_import_svg_on_active_page(self, &svg, x, y, &target_parent);
+                if cross_page {
+                    self.ui.active_page_index = original_page_index;
+                    self.selection = original_selection.clone();
+                    if changed {
+                        if let Some(snapshot) = self.history.past.back_mut() {
+                            snapshot.active_page_index = original_page_index;
+                            snapshot.selection = original_selection;
+                        }
                     }
                 }
-                // `import_svg` pushes its own history snapshot when it
-                // inserts ≥ 1 node.
-                let count = self.import_svg(&mut next_id, &svg, (x as f64, y as f64));
-                if count == 0 {
-                    return false;
-                }
-                if target_parent.is_real() {
-                    let Some(imported_root) = self
-                        .active_children()
-                        .last()
-                        .map(|node| NodeId::new(node.id_str()))
-                    else {
-                        return false;
-                    };
-                    imported_root.is_real() && self.cmd_move_node(&imported_root, &target_parent)
-                } else {
-                    true
-                }
+                changed
             }
 
             // --- Tool + viewport + history -------------------------

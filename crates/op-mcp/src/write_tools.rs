@@ -595,6 +595,13 @@ impl McpTool for ImportSvg {
             .or_else(|| args.get("target_parent_id"))
             .map(|s| root_or_node_id(s))
             .unwrap_or(NodeId::NONE);
+        let page_id = args
+            .get("pageId")
+            .or_else(|| args.get("page_id"))
+            .or_else(|| args.get("page"))
+            .map(|s| s.trim())
+            .filter(|s| !s.is_empty())
+            .map(str::to_string);
         let mut out = BTreeMap::new();
         out.insert("wrote".into(), "true".into());
         ToolOutcome::OkWithCommand(
@@ -604,6 +611,7 @@ impl McpTool for ImportSvg {
                 x,
                 y,
                 target_parent,
+                page_id,
             },
         )
     }

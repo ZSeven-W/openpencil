@@ -354,6 +354,9 @@ pub enum EditorCommand {
         y: i32,
         /// `NodeId::NONE` inserts at the active page root.
         target_parent: NodeId,
+        /// `None` inserts on the active page; `Some` targets a page id
+        /// or legacy page index.
+        page_id: Option<String>,
     },
     /// Set a layout / text property on a node by name + value.
     ///
