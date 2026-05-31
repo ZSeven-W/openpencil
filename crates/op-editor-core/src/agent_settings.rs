@@ -439,6 +439,7 @@ impl AgentSettings {
         )
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn add_acp_agent_config(
         &mut self,
         display_name: impl Into<String>,
