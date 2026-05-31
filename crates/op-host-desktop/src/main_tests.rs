@@ -66,3 +66,63 @@ fn fresh_app_refits_blank_frame_to_actual_window_size_once() {
     let unchanged = app.host.editor_state().viewport;
     assert_eq!(v, unchanged);
 }
+
+#[test]
+fn live_mcp_http_server_applies_write_requests_to_editor_state() {
+    use std::io::{Read, Write};
+    use std::net::{TcpListener, TcpStream};
+    use std::sync::mpsc;
+    use std::time::{Duration, Instant};
+
+    use op_editor_core::PenNodeExt;
+
+    fn unused_port() -> u16 {
+        let listener = TcpListener::bind(("127.0.0.1", 0)).expect("bind ephemeral port");
+        listener.local_addr().expect("local addr").port()
+    }
+
+    fn post_json(port: u16, body: &str) -> String {
+        let mut stream = TcpStream::connect(("127.0.0.1", port)).expect("connect MCP server");
+        let req = format!(
+            "POST /mcp HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: {}\r\n\r\n{}",
+            body.len(),
+            body
+        );
+        stream.write_all(req.as_bytes()).expect("write request");
+        let mut out = String::new();
+        stream.read_to_string(&mut out).expect("read response");
+        out
+    }
+
+    let port = unused_port();
+    let mut server = mcp_live::McpLiveServer::start(port).expect("start MCP server");
+    let mut state = op_editor_core::EditorState::new();
+    let body = r##"{"jsonrpc":"2.0","id":1,"method":"insert_node","params":{"kind":"rect","name":"From MCP","x":"10","y":"20","width":"100","height":"50","fill_hex":"#00ff00"}}"##;
+    let (tx, rx) = mpsc::channel();
+    std::thread::spawn(move || {
+        let _ = tx.send(post_json(port, body));
+    });
+
+    let started = Instant::now();
+    let response = loop {
+        server.pump(&mut state);
+        if let Ok(response) = rx.try_recv() {
+            break response;
+        }
+        assert!(
+            started.elapsed() < Duration::from_secs(2),
+            "MCP request timed out"
+        );
+        std::thread::sleep(Duration::from_millis(10));
+    };
+
+    assert!(response.starts_with("HTTP/1.1 200 OK"), "{response}");
+    assert!(response.contains(r#""wrote":"true""#), "{response}");
+    assert!(
+        state
+            .active_children()
+            .iter()
+            .any(|node| node.base().name.as_deref() == Some("From MCP")),
+        "MCP write should mutate the live editor state"
+    );
+}

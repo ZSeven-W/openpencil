@@ -29,6 +29,9 @@ mod iconify_host;
 mod image_search_session;
 mod keyboard_input;
 mod macos_app;
+mod mcp_integrations;
+mod mcp_live;
+mod mcp_runtime;
 mod mcp_serve;
 mod menu;
 mod model_discovery;
@@ -167,6 +170,8 @@ struct DesktopApp {
     /// periodic refresh that keeps an open panel current against
     /// external repository changes.
     last_git_refresh: Instant,
+    /// Live in-process MCP HTTP server, started from Settings -> MCP.
+    mcp_server: Option<mcp_live::McpLiveServer>,
 }
 
 impl DesktopApp {
@@ -232,6 +237,7 @@ impl DesktopApp {
             git_clone_job: None,
             git_clone_origin: None,
             last_git_refresh: Instant::now(),
+            mcp_server: None,
         }
     }
 
