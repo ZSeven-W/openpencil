@@ -698,6 +698,9 @@ pub struct EditorUiState {
     /// Index into `chat.available_models` of the model row the cursor
     /// is over, or `None`. Drives the picker's hover-row tint.
     pub chat_model_picker_hover: Option<usize>,
+    /// Hovered chat design JSON card `(message_index, block_index)`;
+    /// drives the TS-style hover reveal of the card's copy affordance.
+    pub chat_design_block_hover: Option<(usize, usize)>,
     /// Index into `AgentProvider::ALL` of the agent driving the chat.
     pub chat_selected_agent: usize,
 
@@ -894,6 +897,7 @@ impl Default for EditorUiState {
             chat_model_picker_caret: None,
             chat_model_picker_caret_anchor_ms: 0,
             chat_model_picker_hover: None,
+            chat_design_block_hover: None,
             chat_selected_agent: 0,
             topbar_traffic_hover: false,
             window_fullscreen: false,

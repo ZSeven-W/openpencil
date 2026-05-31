@@ -40,6 +40,9 @@ mod agent_settings_draft_dispatch;
 #[cfg(test)]
 mod agent_settings_tests;
 mod ai_chat_geometry;
+mod chat_design_hover;
+#[cfg(test)]
+mod chat_design_hover_tests;
 mod chat_model_picker_caret;
 #[cfg(test)]
 mod chat_model_picker_caret_tests;

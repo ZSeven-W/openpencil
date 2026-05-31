@@ -21,6 +21,7 @@ use op_editor_core::chat::{ChatMessage, ChatRole};
 use super::ai_chat_transcript_design::{
     extract_design_json_blocks, paint_design_block, place_design_blocks, DesignBlock,
 };
+pub(crate) use super::ai_chat_transcript_hit::{transcript_hit, TranscriptHit};
 use super::ai_chat_transcript_steps::{
     extract_step_blocks, split_design_progress, strip_tool_call_xml, ParsedStep, ParsedStepStatus,
 };
@@ -75,23 +76,6 @@ const CHAR_UNIT_PX: f32 = 6.6;
 /// Bubble width as a fraction of the transcript body width.
 const BUBBLE_FRAC: f32 = 0.84;
 
-/// What a click inside the transcript resolved to. Both variants
-/// carry the index into the full `messages` slice.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum TranscriptHit {
-    /// The thinking-block header — toggle its collapsed state.
-    ToggleThinking(usize),
-    /// The tool-calls panel header — toggle its collapsed state.
-    ToggleToolCalls(usize),
-    /// One tool-call card header — set just that card's expanded
-    /// state. Carries `(message_index, tool_call_index, expanded)`.
-    SetToolCallCardExpanded(usize, usize, bool),
-    /// One design JSON card header — set just that card's expanded
-    /// state. Carries `(message_index, design_block_index, expanded)`.
-    SetDesignBlockExpanded(usize, usize, bool),
-    CopyDesignBlock(String),
-}
-
 /// A collapsible block (thinking text or tool-call list) — a
 /// clickable `header` row plus an optional `body` box. When
 /// `collapsed`, `body` has zero height and `lines` is empty.
@@ -136,10 +120,6 @@ pub(crate) struct TranscriptItem {
     /// (truncated to whatever fits — see [`build_item`]).
     pub images: Vec<Rect>,
     pub streaming: bool,
-}
-
-fn rect_contains(r: Rect, x: f32, y: f32) -> bool {
-    x >= r.origin.x && x <= r.origin.x + r.size.x && y >= r.origin.y && y <= r.origin.y + r.size.y
 }
 
 /// Wrap-unit budget for an inner text width.
@@ -203,6 +183,7 @@ fn build_item(
     top: f32,
     body: Rect,
     locale: op_editor_core::Locale,
+    design_hover: Option<(usize, usize)>,
 ) -> (TranscriptItem, f32) {
     let is_user = msg.role == ChatRole::User;
     let bubble_w = if is_user {
@@ -318,6 +299,9 @@ fn build_item(
         bubble_w,
         SUB_GAP,
         &msg.design_block_expanded_overrides,
+        design_hover.and_then(|(message_index, block_index)| {
+            (message_index == msg_index).then_some(block_index)
+        }),
     );
     y = next_y;
 
@@ -427,6 +411,15 @@ pub(crate) fn build_transcript(
     body_rect: Rect,
     locale: op_editor_core::Locale,
 ) -> Vec<TranscriptItem> {
+    build_transcript_with_design_hover(messages, body_rect, locale, None)
+}
+
+pub(crate) fn build_transcript_with_design_hover(
+    messages: &[ChatMessage],
+    body_rect: Rect,
+    locale: op_editor_core::Locale,
+    design_hover: Option<(usize, usize)>,
+) -> Vec<TranscriptItem> {
     if messages.is_empty() {
         return Vec::new();
     }
@@ -435,7 +428,7 @@ pub(crate) fn build_transcript(
     let mut start = messages.len();
     let mut used = 0.0f32;
     for i in (0..messages.len()).rev() {
-        let (_, bottom) = build_item(&messages[i], i, 0.0, body_rect, locale);
+        let (_, bottom) = build_item(&messages[i], i, 0.0, body_rect, locale, None);
         let h = bottom
             + if start == messages.len() {
                 0.0
@@ -452,62 +445,11 @@ pub(crate) fn build_transcript(
     let mut items = Vec::new();
     let mut top = body_rect.origin.y;
     for (i, msg) in messages.iter().enumerate().skip(start) {
-        let (item, bottom) = build_item(msg, i, top, body_rect, locale);
+        let (item, bottom) = build_item(msg, i, top, body_rect, locale, design_hover);
         items.push(item);
         top = bottom + MSG_GAP;
     }
     items
-}
-
-/// Resolve a click inside the transcript body to a [`TranscriptHit`]
-/// — only the collapsible headers are interactive.
-pub(crate) fn transcript_hit(
-    messages: &[ChatMessage],
-    body_rect: Rect,
-    x: f32,
-    y: f32,
-    locale: op_editor_core::Locale,
-) -> Option<TranscriptHit> {
-    // Paint clips the transcript to `body_rect`; gate hit-test the
-    // same way so a click in the body/input gap can't toggle a
-    // header that an over-tall latest message placed off-screen.
-    if !rect_contains(body_rect, x, y) {
-        return None;
-    }
-    for item in build_transcript(messages, body_rect, locale) {
-        if let Some(t) = &item.thinking {
-            if rect_contains(t.header, x, y) {
-                return Some(TranscriptHit::ToggleThinking(item.msg_index));
-            }
-        }
-        if let Some(t) = &item.tools {
-            if rect_contains(t.header, x, y) {
-                return Some(TranscriptHit::ToggleToolCalls(item.msg_index));
-            }
-            for (tool_index, card) in t.cards.iter().enumerate() {
-                if rect_contains(card.header, x, y) {
-                    return Some(TranscriptHit::SetToolCallCardExpanded(
-                        item.msg_index,
-                        tool_index,
-                        !card.expanded,
-                    ));
-                }
-            }
-        }
-        for (block_index, block) in item.design_blocks.iter().enumerate() {
-            if rect_contains(block.copy, x, y) {
-                return Some(TranscriptHit::CopyDesignBlock(block.code.clone()));
-            }
-            if rect_contains(block.header, x, y) {
-                return Some(TranscriptHit::SetDesignBlockExpanded(
-                    item.msg_index,
-                    block_index,
-                    !block.expanded,
-                ));
-            }
-        }
-    }
-    None
 }
 
 /// Draw one wrapped text line. Small shared helper so the bubble,
@@ -685,6 +627,7 @@ fn paint_typing_dots(
 /// Paint the chat transcript — the tail of `messages` that fits in
 /// `body_rect`, with collapsible thinking / tool blocks, image
 /// thumbnails and the streaming animation on the in-flight message.
+#[cfg(test)]
 pub(crate) fn paint_transcript(
     cx: &mut PaintCx<'_>,
     theme: &Theme,
@@ -693,9 +636,21 @@ pub(crate) fn paint_transcript(
     now_ms: u64,
     locale: op_editor_core::Locale,
 ) {
+    paint_transcript_with_design_hover(cx, theme, body_rect, messages, now_ms, locale, None);
+}
+
+pub(crate) fn paint_transcript_with_design_hover(
+    cx: &mut PaintCx<'_>,
+    theme: &Theme,
+    body_rect: Rect,
+    messages: &[ChatMessage],
+    now_ms: u64,
+    locale: op_editor_core::Locale,
+    design_hover: Option<(usize, usize)>,
+) {
     cx.backend.save();
     cx.backend.clip_rect(body_rect);
-    for item in build_transcript(messages, body_rect, locale) {
+    for item in build_transcript_with_design_hover(messages, body_rect, locale, design_hover) {
         for step in &item.steps {
             paint_action_step(cx, theme, step);
         }

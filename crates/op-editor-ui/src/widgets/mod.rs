@@ -126,6 +126,7 @@ pub mod ai_chat_panel_controls;
 pub mod ai_chat_panel_paint;
 pub mod ai_chat_transcript;
 pub(crate) mod ai_chat_transcript_design;
+pub(crate) mod ai_chat_transcript_hit;
 pub(crate) mod ai_chat_transcript_steps;
 pub(crate) mod ai_chat_transcript_text;
 pub(crate) mod ai_chat_transcript_tools;

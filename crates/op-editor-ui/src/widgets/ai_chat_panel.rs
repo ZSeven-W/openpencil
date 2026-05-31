@@ -90,6 +90,7 @@ pub struct AIChatPlaceholder<'a> {
     pub model_picker_caret: Option<usize>,
     /// Last focus / edit timestamp for the model-picker search caret.
     pub model_picker_caret_anchor_ms: u64,
+    pub design_hover: Option<(usize, usize)>,
     /// Localised empty-state example cards.
     pub(crate) examples: [ExampleCard; 4],
     /// Active UI locale.
@@ -122,6 +123,7 @@ impl<'a> AIChatPlaceholder<'a> {
             model_picker_search: ui.chat_model_picker_search.clone(),
             model_picker_caret: ui.chat_model_picker_caret,
             model_picker_caret_anchor_ms: ui.chat_model_picker_caret_anchor_ms,
+            design_hover: ui.chat_design_block_hover,
             examples: example_cards(ui.locale),
             locale: ui.locale,
         }
@@ -150,7 +152,6 @@ impl<'a> AIChatPlaceholder<'a> {
         self.state.messages.iter().any(|message| message.streaming)
     }
 
-    /// Bounds of the transcript body region.
     fn body_rect(&self, rect: Rect) -> Rect {
         let body_top = rect.origin.y + HEADER_HEIGHT;
         let body_bottom = rect.origin.y + rect.size.y
@@ -164,7 +165,6 @@ impl<'a> AIChatPlaceholder<'a> {
         }
     }
 
-    /// Bounds of the model-picker dropdown.
     fn model_picker_rect(&self, rect: Rect, input_rect: Rect) -> Rect {
         let height = crate::widgets::ai_chat_model_picker::picker_view_height(
             &self.state.available_models,
@@ -178,7 +178,6 @@ impl<'a> AIChatPlaceholder<'a> {
         }
     }
 
-    /// Public bounds of the open model-picker dropdown.
     pub fn model_picker_bounds(&self, rect: Rect) -> Option<Rect> {
         if !self.model_picker_open {
             return None;
@@ -362,6 +361,19 @@ impl<'a> AIChatPlaceholder<'a> {
         }
         Some(AIChatHit::DragHandle)
     }
+
+    pub fn design_block_hover_at(&self, rect: Rect, point: Point2D) -> Option<(usize, usize)> {
+        if self.state.messages.is_empty() {
+            return None;
+        }
+        crate::widgets::ai_chat_transcript_hit::design_block_at(
+            &self.state.messages,
+            self.body_rect(rect),
+            point.x,
+            point.y,
+            self.locale,
+        )
+    }
 }
 
 fn rect_contains(r: Rect, p: Point2D) -> bool {
@@ -489,13 +501,14 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
                 !can_use_model || self.is_streaming(),
             );
         } else {
-            crate::widgets::ai_chat_transcript::paint_transcript(
+            crate::widgets::ai_chat_transcript::paint_transcript_with_design_hover(
                 cx,
                 &self.theme,
                 self.body_rect(rect),
                 &self.state.messages,
                 self.now_ms,
                 self.locale,
+                self.design_hover,
             );
         }
         if checklist_h > 0.0 {
