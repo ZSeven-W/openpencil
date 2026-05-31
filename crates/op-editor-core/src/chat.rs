@@ -200,6 +200,9 @@ pub struct ChatMessage {
     /// Per-tool-card expanded-state overrides. Missing / `None`
     /// entries fall back to the UI's auth-level default.
     pub tool_call_expanded_overrides: Vec<Option<bool>>,
+    /// Per-design-JSON-block expanded-state overrides. Missing /
+    /// `None` entries fall back to collapsed, matching the TS card.
+    pub design_block_expanded_overrides: Vec<Option<bool>>,
     /// True while this (assistant) message's turn streams in.
     pub streaming: bool,
 }
@@ -216,6 +219,7 @@ impl ChatMessage {
             thinking_collapsed: true,
             tools_collapsed: true,
             tool_call_expanded_overrides: Vec::new(),
+            design_block_expanded_overrides: Vec::new(),
             streaming: false,
         }
     }
@@ -232,6 +236,7 @@ impl ChatMessage {
             thinking_collapsed: true,
             tools_collapsed: true,
             tool_call_expanded_overrides: Vec::new(),
+            design_block_expanded_overrides: Vec::new(),
             streaming: false,
         }
     }
@@ -546,6 +551,24 @@ impl ChatState {
             msg.tool_call_expanded_overrides.resize(tool_idx + 1, None);
         }
         msg.tool_call_expanded_overrides[tool_idx] = Some(expanded);
+    }
+
+    /// Set one design JSON card's expanded override. Out-of-range
+    /// message indexes are no-ops.
+    pub fn set_message_design_block_expanded(
+        &mut self,
+        msg_idx: usize,
+        block_idx: usize,
+        expanded: bool,
+    ) {
+        let Some(msg) = self.messages.get_mut(msg_idx) else {
+            return;
+        };
+        if msg.design_block_expanded_overrides.len() <= block_idx {
+            msg.design_block_expanded_overrides
+                .resize(block_idx + 1, None);
+        }
+        msg.design_block_expanded_overrides[block_idx] = Some(expanded);
     }
 
     /// Flip the fixed design-checklist panel state.
@@ -917,6 +940,24 @@ mod tests {
         assert_eq!(
             chat.messages[0].tool_call_expanded_overrides,
             vec![Some(true)]
+        );
+    }
+
+    #[test]
+    fn set_message_design_block_expanded_records_per_card_override() {
+        let mut chat = ChatState::default();
+        chat.messages.push(ChatMessage::assistant("hi"));
+
+        chat.set_message_design_block_expanded(0, 1, true);
+        assert_eq!(
+            chat.messages[0].design_block_expanded_overrides,
+            vec![None, Some(true)]
+        );
+
+        chat.set_message_design_block_expanded(99, 0, false);
+        assert_eq!(
+            chat.messages[0].design_block_expanded_overrides,
+            vec![None, Some(true)]
         );
     }
 

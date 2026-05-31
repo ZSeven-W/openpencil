@@ -56,7 +56,31 @@ pub enum AIChatHit {
     /// Click on a single tool-call card header — host sets only
     /// that card's expanded override.
     SetToolCallCardExpanded(usize, usize, bool),
+    /// Click on a single design JSON card header — host sets only
+    /// that card's expanded override.
+    SetDesignBlockExpanded(usize, usize, bool),
     /// Click on the fixed "Pencil it out" checklist header — host
     /// toggles the checklist body between expanded and collapsed.
     ToggleChecklist,
+}
+
+impl From<super::ai_chat_transcript::TranscriptHit> for AIChatHit {
+    fn from(hit: super::ai_chat_transcript::TranscriptHit) -> Self {
+        match hit {
+            super::ai_chat_transcript::TranscriptHit::ToggleThinking(i) => Self::ToggleThinking(i),
+            super::ai_chat_transcript::TranscriptHit::ToggleToolCalls(i) => {
+                Self::ToggleToolCalls(i)
+            }
+            super::ai_chat_transcript::TranscriptHit::SetToolCallCardExpanded(
+                message_index,
+                tool_index,
+                expanded,
+            ) => Self::SetToolCallCardExpanded(message_index, tool_index, expanded),
+            super::ai_chat_transcript::TranscriptHit::SetDesignBlockExpanded(
+                message_index,
+                block_index,
+                expanded,
+            ) => Self::SetDesignBlockExpanded(message_index, block_index, expanded),
+        }
+    }
 }

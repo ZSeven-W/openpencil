@@ -86,6 +86,9 @@ pub enum TranscriptHit {
     /// One tool-call card header — set just that card's expanded
     /// state. Carries `(message_index, tool_call_index, expanded)`.
     SetToolCallCardExpanded(usize, usize, bool),
+    /// One design JSON card header — set just that card's expanded
+    /// state. Carries `(message_index, design_block_index, expanded)`.
+    SetDesignBlockExpanded(usize, usize, bool),
 }
 
 /// A collapsible block (thinking text or tool-call list) — a
@@ -307,8 +310,14 @@ fn build_item(
         },
     );
     y = next_y;
-    let (design_blocks, next_y) =
-        place_design_blocks(pending_design_blocks, x, y, bubble_w, SUB_GAP);
+    let (design_blocks, next_y) = place_design_blocks(
+        pending_design_blocks,
+        x,
+        y,
+        bubble_w,
+        SUB_GAP,
+        &msg.design_block_expanded_overrides,
+    );
     y = next_y;
 
     let typing = msg.streaming
@@ -482,6 +491,15 @@ pub(crate) fn transcript_hit(
                         !card.expanded,
                     ));
                 }
+            }
+        }
+        for (block_index, block) in item.design_blocks.iter().enumerate() {
+            if rect_contains(block.header, x, y) {
+                return Some(TranscriptHit::SetDesignBlockExpanded(
+                    item.msg_index,
+                    block_index,
+                    !block.expanded,
+                ));
             }
         }
     }

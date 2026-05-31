@@ -11,14 +11,19 @@ pub(crate) struct PendingDesignBlock {
     pub element_count: usize,
     pub label: String,
     pub streaming: bool,
+    pub code: String,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct DesignBlock {
     pub rect: Rect,
+    pub header: Rect,
+    pub body: Rect,
+    pub expanded: bool,
     pub element_count: usize,
     pub label: String,
     pub streaming: bool,
+    pub code_lines: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -87,6 +92,7 @@ fn finish_code_block(
             element_count,
             label,
             streaming,
+            code: code.trim_end().to_string(),
         });
     } else {
         visible.push(format!("```{code_lang}"));
@@ -137,17 +143,50 @@ pub(crate) fn place_design_blocks(
     mut y: f32,
     width: f32,
     gap: f32,
+    expanded_overrides: &[Option<bool>],
 ) -> (Vec<DesignBlock>, f32) {
+    const BODY_PAD_Y: f32 = 8.0;
+    const BODY_LINE_H: f32 = 13.0;
+    const MAX_BODY_LINES: usize = 12;
     let mut blocks = Vec::new();
-    for pending in pending {
-        let rect = Rect::xywh(x, y, width, DESIGN_BLOCK_H);
+    for (index, pending) in pending.into_iter().enumerate() {
+        let expanded = expanded_overrides
+            .get(index)
+            .copied()
+            .flatten()
+            .unwrap_or(false);
+        let mut code_lines = Vec::new();
+        if expanded {
+            code_lines.extend(
+                pending
+                    .code
+                    .lines()
+                    .take(MAX_BODY_LINES)
+                    .map(str::to_string),
+            );
+            if pending.code.lines().count() > MAX_BODY_LINES {
+                code_lines.push("…".to_string());
+            }
+        }
+        let body_h = if code_lines.is_empty() {
+            0.0
+        } else {
+            BODY_PAD_Y * 2.0 + BODY_LINE_H * code_lines.len() as f32
+        };
+        let rect = Rect::xywh(x, y, width, DESIGN_BLOCK_H + body_h);
+        let header = Rect::xywh(x, y, width, DESIGN_BLOCK_H);
+        let body = Rect::xywh(x, y + DESIGN_BLOCK_H, width, body_h);
         blocks.push(DesignBlock {
             rect,
+            header,
+            body,
+            expanded,
             element_count: pending.element_count,
             label: pending.label,
             streaming: pending.streaming,
+            code_lines,
         });
-        y += DESIGN_BLOCK_H + gap;
+        y += DESIGN_BLOCK_H + body_h + gap;
     }
     (blocks, y)
 }
@@ -190,10 +229,10 @@ pub(crate) fn paint_design_block(cx: &mut PaintCx<'_>, theme: &Theme, block: &De
     }
     cx.backend.save();
     cx.backend.clip_rect(Rect::xywh(
-        block.rect.origin.x + 30.0,
-        block.rect.origin.y,
-        (block.rect.size.x - 58.0).max(1.0),
-        block.rect.size.y,
+        block.header.origin.x + 30.0,
+        block.header.origin.y,
+        (block.header.size.x - 58.0).max(1.0),
+        block.header.size.y,
     ));
     let layout = TextLayout::single_run(
         &block.label,
@@ -204,7 +243,7 @@ pub(crate) fn paint_design_block(cx: &mut PaintCx<'_>, theme: &Theme, block: &De
     );
     cx.backend.draw_text(
         &layout,
-        Point2D::new(block.rect.origin.x + 30.0, block.rect.origin.y + 20.0),
+        Point2D::new(block.header.origin.x + 30.0, block.header.origin.y + 20.0),
     );
     cx.backend.restore();
 
@@ -212,13 +251,44 @@ pub(crate) fn paint_design_block(cx: &mut PaintCx<'_>, theme: &Theme, block: &De
     chevron_color.a *= 0.45;
     draw_icon(
         cx.backend,
-        Icon::ChevronDown,
+        if block.expanded {
+            Icon::ChevronUp
+        } else {
+            Icon::ChevronDown
+        },
         Point2D::new(
-            block.rect.origin.x + block.rect.size.x - 20.0,
-            block.rect.origin.y + 10.0,
+            block.header.origin.x + block.header.size.x - 20.0,
+            block.header.origin.y + 10.0,
         ),
         12.0,
         chevron_color,
         1.5,
     );
+
+    if block.body.size.y > 0.0 {
+        let mut divider = theme.border;
+        divider.a *= 0.3;
+        cx.backend.stroke_line(
+            Point2D::new(block.body.origin.x, block.body.origin.y),
+            Point2D::new(block.body.origin.x + block.body.size.x, block.body.origin.y),
+            divider,
+            1.0,
+        );
+        cx.backend.save();
+        cx.backend.clip_rect(block.body);
+        let mut baseline = block.body.origin.y + 18.0;
+        for line in &block.code_lines {
+            let layout = TextLayout::single_run(
+                line,
+                "monospace",
+                9.0,
+                to_jian_color(theme.muted_foreground),
+                Point2D::new(0.0, 0.0),
+            );
+            cx.backend
+                .draw_text(&layout, Point2D::new(block.body.origin.x + 10.0, baseline));
+            baseline += 13.0;
+        }
+        cx.backend.restore();
+    }
 }
