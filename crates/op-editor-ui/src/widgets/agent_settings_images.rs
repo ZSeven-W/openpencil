@@ -11,7 +11,7 @@ use crate::widgets::PaintCx;
 use crate::{Color, Point2D, Rect, TextLayout};
 use op_editor_core::agent_settings::{
     AgentSettings, ImageGenField, ImageGenProfile, ImageGenProvider, ImageSearchField,
-    SettingsFocus,
+    ImageTestStatus, SettingsFocus,
 };
 use op_editor_core::editor_ui_state::EditorUiState;
 
@@ -129,6 +129,11 @@ fn search_field_rect(content: Rect, index: usize) -> Rect {
 fn has_search_credentials(settings: &AgentSettings) -> bool {
     !settings.openverse_client_id.trim().is_empty()
         || !settings.openverse_client_secret.trim().is_empty()
+}
+
+fn search_test_enabled(settings: &AgentSettings) -> bool {
+    has_search_credentials(settings)
+        && settings.images_search_test_status != ImageTestStatus::Testing
 }
 
 fn test_btn_rect(content: Rect, settings: &AgentSettings) -> Rect {
@@ -273,7 +278,7 @@ pub fn hit_test(content: Rect, settings: &AgentSettings, scrolled: Point2D) -> I
         if rect_contains(search_field_rect(content, 1), scrolled) {
             return ImagesHit::FocusSearchField(ImageSearchField::ClientSecret);
         }
-        if has_search_credentials(settings)
+        if search_test_enabled(settings)
             && rect_contains(test_btn_rect(content, settings), scrolled)
         {
             return ImagesHit::TestSearch;
@@ -476,6 +481,7 @@ pub(super) fn paint_images_tab(
             1.6,
         );
         let test_btn = test_btn_rect(content, settings);
+        paint_search_test_status(cx, theme, settings, test_btn);
         cx.backend.fill_round_rect(test_btn, 6.0, theme.muted);
         cx.backend
             .stroke_round_rect(test_btn, 6.0, theme.border, 1.0);
@@ -485,7 +491,11 @@ pub(super) fn paint_images_tab(
             test_label,
             "system-ui",
             13.0,
-            to_jian(theme.foreground),
+            to_jian(if search_test_enabled(settings) {
+                theme.foreground
+            } else {
+                theme.muted_foreground
+            }),
             Point2D::new(0.0, 0.0),
         );
         cx.backend.draw_text(
@@ -550,6 +560,46 @@ pub(super) fn paint_images_tab(
         for (index, profile) in settings.image_gen_profiles.iter().enumerate() {
             let row = profile_row_rect(content, settings, index);
             paint_profile_row(cx, theme, settings, ui, profile, index, row, now_ms);
+        }
+    }
+}
+
+fn paint_search_test_status(
+    cx: &mut PaintCx<'_>,
+    theme: &Theme,
+    settings: &AgentSettings,
+    test_btn: Rect,
+) {
+    match settings.images_search_test_status {
+        ImageTestStatus::Idle => {}
+        ImageTestStatus::Testing => draw_icon(
+            cx.backend,
+            Icon::Loader,
+            Point2D::new(test_btn.origin.x - 20.0, test_btn.origin.y + 8.5),
+            11.0,
+            theme.muted_foreground,
+            1.5,
+        ),
+        ImageTestStatus::Valid => draw_icon(
+            cx.backend,
+            Icon::Check,
+            Point2D::new(test_btn.origin.x - 20.0, test_btn.origin.y + 8.5),
+            11.0,
+            theme.primary,
+            1.8,
+        ),
+        ImageTestStatus::Invalid => {
+            let label = TextLayout::single_run(
+                "Invalid",
+                "system-ui",
+                10.0,
+                to_jian(theme.destructive),
+                Point2D::new(0.0, 0.0),
+            );
+            cx.backend.draw_text(
+                &label,
+                Point2D::new(test_btn.origin.x - 44.0, test_btn.origin.y + 17.0),
+            );
         }
     }
 }

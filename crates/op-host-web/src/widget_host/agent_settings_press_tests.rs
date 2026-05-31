@@ -1,0 +1,153 @@
+use super::WidgetHost;
+use op_editor_core::agent_settings::{
+    AgentSettingsTab, BuiltinAgentField, ImageGenField, SettingsFocus,
+};
+use op_editor_ui::widgets::agent_settings_panel::AgentSettingsPanel;
+
+#[test]
+fn toggling_builtin_kind_commits_focused_api_key_draft() {
+    let mut host = WidgetHost::new();
+    host.editor_state
+        .editor_ui
+        .agent_settings
+        .add_builtin_agent_with_defaults("MINIMAX", "", "MiniMax-M2.7");
+    host.editor_state.editor_ui.agent_settings.focus = Some(SettingsFocus::BuiltinAgent {
+        index: 0,
+        field: BuiltinAgentField::ApiKey,
+    });
+    host.editor_state.editor_ui.settings_input_draft = "sk-web".into();
+
+    let panel = AgentSettingsPanel::for_editor(&host.editor_state);
+    let rect = panel.rect(1200.0, 800.0);
+    let content_x = rect.origin.x + 200.0 + 24.0;
+    let content_y = rect.origin.y + 24.0;
+    let content_w = rect.size.x - 200.0 - 48.0;
+    let first_card_y = content_y + 12.0 + 28.0 + 28.0;
+    let kind_x = content_x + content_w - 172.0 + 120.0;
+    let kind_y = first_card_y + 22.0;
+
+    assert!(host.dispatch_agent_settings_press(kind_x, kind_y, 1200.0, 800.0));
+
+    let agent = &host.editor_state.editor_ui.agent_settings.builtin_agents[0];
+    assert_eq!(agent.api_key, "sk-web");
+    assert_eq!(
+        agent.kind,
+        op_editor_core::agent_settings::BuiltinAgentKind::OpenAiCompat
+    );
+    assert!(host.editor_state.editor_ui.agent_settings.focus.is_none());
+}
+
+#[test]
+fn add_provider_opens_unsaved_builtin_agent_draft() {
+    let mut host = WidgetHost::new();
+    host.set_now_ms(1234);
+
+    let panel = AgentSettingsPanel::for_editor(&host.editor_state);
+    let rect = panel.rect(1200.0, 800.0);
+    let content_x = rect.origin.x + 200.0 + 24.0;
+    let content_y = rect.origin.y + 24.0;
+    let content_w = rect.size.x - 200.0 - 48.0;
+    let add_x = content_x + content_w - 48.0;
+    let add_y = content_y + 24.0;
+
+    assert!(host.dispatch_agent_settings_press(add_x, add_y, 1200.0, 800.0));
+
+    let settings = &host.editor_state.editor_ui.agent_settings;
+    assert!(settings.builtin_agents.is_empty());
+    assert!(settings.builtin_agent_draft.is_some());
+    assert_eq!(
+        settings.focus,
+        Some(SettingsFocus::BuiltinAgentDraft(BuiltinAgentField::ApiKey))
+    );
+    assert_eq!(host.editor_state.editor_ui.settings_input_draft, "");
+    assert_eq!(
+        host.editor_state.editor_ui.settings_input_caret_anchor_ms,
+        1234
+    );
+}
+
+#[test]
+fn builtin_provider_menu_selects_ts_preset_for_draft() {
+    let mut host = WidgetHost::new();
+    let panel = AgentSettingsPanel::for_editor(&host.editor_state);
+    let rect = panel.rect(1200.0, 800.0);
+    let content_x = rect.origin.x + 200.0 + 24.0;
+    let content_y = rect.origin.y + 24.0;
+    let content_w = rect.size.x - 200.0 - 48.0;
+    let add_x = content_x + content_w - 48.0;
+    let add_y = content_y + 24.0;
+
+    assert!(host.dispatch_agent_settings_press(add_x, add_y, 1200.0, 800.0));
+    let card_y = content_y + 12.0 + 28.0 + 28.0;
+    let provider_x = content_x + 68.0 + 24.0;
+    let provider_y = card_y + 60.0;
+    assert!(host.dispatch_agent_settings_press(provider_x, provider_y, 1200.0, 800.0));
+    let minimax_y = card_y + 76.0 + 4.0 + 5.0 * 24.0 + 12.0;
+    assert!(host.dispatch_agent_settings_press(provider_x, minimax_y, 1200.0, 800.0));
+
+    let draft = host
+        .editor_state
+        .editor_ui
+        .agent_settings
+        .builtin_agent_draft
+        .as_ref()
+        .expect("draft remains open");
+    assert_eq!(draft.preset, op_editor_core::BuiltinAgentPresetKey::MiniMax);
+    assert_eq!(draft.display_name, "MiniMax");
+    assert_eq!(draft.model, "MiniMax-M2.7");
+    assert_eq!(draft.base_url, "https://api.minimaxi.com/anthropic");
+}
+
+#[test]
+fn save_builtin_agent_draft_persists_provider() {
+    let mut host = WidgetHost::new();
+    let panel = AgentSettingsPanel::for_editor(&host.editor_state);
+    let rect = panel.rect(1200.0, 800.0);
+    let content_x = rect.origin.x + 200.0 + 24.0;
+    let content_y = rect.origin.y + 24.0;
+    let content_w = rect.size.x - 200.0 - 48.0;
+    let add_x = content_x + content_w - 48.0;
+    let add_y = content_y + 24.0;
+
+    assert!(host.dispatch_agent_settings_press(add_x, add_y, 1200.0, 800.0));
+    for c in "sk-web".chars() {
+        assert!(host.apply_text(c));
+    }
+    let card_y = content_y + 12.0 + 28.0 + 28.0;
+    let save_x = content_x + content_w - 12.0 - 34.0;
+    let save_y = card_y + 196.0 + 18.0;
+    assert!(host.dispatch_agent_settings_press(save_x, save_y, 1200.0, 800.0));
+
+    let settings = &host.editor_state.editor_ui.agent_settings;
+    assert_eq!(settings.builtin_agents.len(), 1);
+    assert!(settings.builtin_agent_draft.is_none());
+    assert_eq!(settings.builtin_agents[0].api_key, "sk-web");
+    assert!(settings.focus.is_none());
+}
+
+#[test]
+fn image_generation_profile_header_click_toggles_editor_closed() {
+    let mut host = WidgetHost::new();
+    host.editor_state.editor_ui.agent_settings.tab = AgentSettingsTab::Images;
+    host.editor_state
+        .editor_ui
+        .agent_settings
+        .add_image_gen_profile();
+    host.editor_state.editor_ui.agent_settings.focus = Some(SettingsFocus::ImageGenProfile {
+        index: 0,
+        field: ImageGenField::Name,
+    });
+    host.editor_state.editor_ui.settings_input_draft = "Config 1".into();
+
+    let panel = AgentSettingsPanel::for_editor(&host.editor_state);
+    let rect = panel.rect(1200.0, 800.0);
+    let content_x = rect.origin.x + 200.0 + 24.0;
+    let content_y = rect.origin.y + 24.0;
+    let gen_top = content_y + 36.0 + 24.0 + 28.0;
+    let row_y = gen_top + 36.0;
+
+    assert!(host.dispatch_agent_settings_press(content_x + 72.0, row_y + 16.0, 1200.0, 800.0));
+
+    assert_eq!(host.editor_state.editor_ui.agent_settings.focus, None);
+    assert!(host.editor_state.editor_ui.settings_input_draft.is_empty());
+}

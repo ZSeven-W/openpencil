@@ -136,6 +136,14 @@ pub enum ImageSearchField {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ImageTestStatus {
+    Idle,
+    Testing,
+    Valid,
+    Invalid,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AcpAgentField {
     DisplayName,
     Command,
@@ -433,6 +441,7 @@ pub struct AgentSettings {
     pub mcp_cli_enabled: [bool; 6],
     pub images_advanced_open: bool,
     pub images_search_ready: bool,
+    pub images_search_test_status: ImageTestStatus,
     pub openverse_client_id: String,
     pub openverse_client_secret: String,
     pub image_gen_profiles: Vec<ImageGenProfile>,
@@ -474,6 +483,7 @@ impl Default for AgentSettings {
             mcp_cli_enabled: [false; 6],
             images_advanced_open: false,
             images_search_ready: true,
+            images_search_test_status: ImageTestStatus::Idle,
             openverse_client_id: String::new(),
             openverse_client_secret: String::new(),
             image_gen_profiles: Vec::new(),

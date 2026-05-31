@@ -1,7 +1,7 @@
 use super::WidgetHostNative;
 use op_editor_core::agent_settings::{
     AcpAgentField, AgentSettingsTab, BuiltinAgentField, ImageGenField, ImageGenProvider,
-    ImageSearchField, SettingsFocus,
+    ImageSearchField, ImageTestStatus, SettingsFocus,
 };
 use op_editor_core::BuiltinAgentPresetKey;
 use op_editor_ui::widgets::agent_settings_panel::AgentSettingsPanel;
@@ -743,7 +743,7 @@ fn image_search_oauth_focus_accepts_text_and_commits() {
 }
 
 #[test]
-fn image_search_test_keeps_search_ready_when_oauth_is_incomplete() {
+fn image_search_test_tracks_invalid_and_testing_status_like_ts() {
     let mut host = WidgetHostNative::new();
     host.editor_state_mut().editor_ui.agent_settings.tab = AgentSettingsTab::Images;
     host.editor_state_mut()
@@ -763,6 +763,13 @@ fn image_search_test_keeps_search_ready_when_oauth_is_incomplete() {
     let y = content_y + 36.0 + 24.0 + 22.0 + 36.0 + 10.0 + 36.0 + 14.0 + 18.0;
 
     assert!(host.dispatch_agent_settings_press(x, y, 1200.0, 800.0));
+    assert_eq!(
+        host.editor_state()
+            .editor_ui
+            .agent_settings
+            .images_search_test_status,
+        ImageTestStatus::Invalid
+    );
     assert!(
         host.editor_state()
             .editor_ui
@@ -775,6 +782,13 @@ fn image_search_test_keeps_search_ready_when_oauth_is_incomplete() {
         .agent_settings
         .openverse_client_secret = "secret".into();
     assert!(host.dispatch_agent_settings_press(x, y, 1200.0, 800.0));
+    assert_eq!(
+        host.editor_state()
+            .editor_ui
+            .agent_settings
+            .images_search_test_status,
+        ImageTestStatus::Testing
+    );
     assert!(
         host.editor_state()
             .editor_ui

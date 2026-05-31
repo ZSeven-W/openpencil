@@ -76,7 +76,8 @@ mod tests_pages;
 pub use agent_settings::{
     AcpAgentConfig, AcpAgentField, AcpConnectionType, AgentSettings, AgentSettingsDrag,
     AgentSettingsTab, BuiltinAgentConfig, BuiltinAgentField, BuiltinAgentKind, ImageGenField,
-    ImageGenProfile, ImageGenProvider, ImageSearchField, McpCli, McpServer, SettingsFocus,
+    ImageGenProfile, ImageGenProvider, ImageSearchField, ImageTestStatus, McpCli, McpServer,
+    SettingsFocus,
 };
 pub use agent_settings_builtin_presets::{
     builtin_agent_preset, infer_builtin_agent_preset, normalize_builtin_agent_preset,

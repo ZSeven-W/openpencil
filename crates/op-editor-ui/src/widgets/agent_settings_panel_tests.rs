@@ -3,7 +3,7 @@ use crate::widgets::{PaintCx, Widget};
 use crate::{Color, Point2D, Rect, RenderBackend, TextLayout};
 use op_editor_core::agent_settings::{
     AcpAgentField, AgentSettingsTab, BuiltinAgentField, ImageGenField, ImageSearchField,
-    SettingsFocus,
+    ImageTestStatus, SettingsFocus,
 };
 use op_editor_core::EditorState;
 
@@ -750,6 +750,26 @@ fn images_tab_test_search_requires_some_oauth_text() {
     assert_eq!(
         panel.hit_test(rect, crate::Point2D::new(button_x, button_y)),
         AgentSettingsHit::TestImageSearch
+    );
+}
+
+#[test]
+fn images_tab_test_search_is_disabled_while_testing_like_ts() {
+    let mut state = EditorState::default();
+    state.editor_ui.agent_settings.tab = AgentSettingsTab::Images;
+    state.editor_ui.agent_settings.images_advanced_open = true;
+    state.editor_ui.agent_settings.openverse_client_id = "client".into();
+    state.editor_ui.agent_settings.images_search_test_status = ImageTestStatus::Testing;
+    let panel = AgentSettingsPanel::for_editor(&state);
+    let rect = panel.rect(1200.0, 800.0);
+    let content_y = rect.origin.y + 24.0;
+    let content_w = rect.size.x - 200.0 - 48.0;
+    let button_x = rect.origin.x + 200.0 + 24.0 + content_w - 28.0;
+    let button_y = content_y + 36.0 + 24.0 + 22.0 + 36.0 + 10.0 + 36.0 + 14.0 + 18.0;
+
+    assert_eq!(
+        panel.hit_test(rect, crate::Point2D::new(button_x, button_y)),
+        AgentSettingsHit::Inside
     );
 }
 
