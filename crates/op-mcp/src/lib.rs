@@ -57,6 +57,9 @@ mod scalar_vars_tests;
 pub mod selected_ops_tools;
 #[cfg(test)]
 mod selected_ops_tools_tests;
+pub mod style_guide_tools;
+#[cfg(test)]
+mod style_guide_tools_tests;
 #[cfg(test)]
 pub mod test_fixtures;
 pub mod theme_presets;
@@ -142,6 +145,9 @@ pub use selected_ops_tools::{
     ungroup_selected_snapshot, AlignSelected, CopySelected, CutSelected, DeleteSelected,
     DuplicateSelected, GroupSelected, NudgeSelected, PasteClipboard, ReorderSelected,
     UngroupSelected,
+};
+pub use style_guide_tools::{
+    get_style_guide_snapshot, get_style_guide_tags_snapshot, GetStyleGuide, GetStyleGuideTags,
 };
 pub use theme_presets::{
     list_theme_presets_snapshot, load_theme_preset_snapshot, save_theme_preset_snapshot,

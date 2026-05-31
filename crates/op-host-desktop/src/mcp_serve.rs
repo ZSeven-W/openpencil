@@ -12,15 +12,6 @@
 //! needed for this path. Write tools apply through
 //! `EditorState::apply(EditorCommand)`; on every successful write the
 //! `PenDocument` is serialized straight back to disk.
-//!
-//! Per-line dispatch:
-//!   - `initialize` → respond with protocol version + server
-//!     capabilities so the client completes its handshake.
-//!   - `tools/list` → respond with the tool catalog + JSON schemas.
-//!   - `notifications/initialized` / `ping` → handled inline.
-//!   - `tools/call` / legacy direct dispatch → routed through
-//!     shell-core's `run_stdio_with_applier`. The applier mutates the
-//!     live `EditorState` + saves on success.
 
 use std::io::{BufRead, BufReader, BufWriter, Write};
 use std::path::PathBuf;
@@ -39,26 +30,26 @@ use op_mcp::{
     get_canvas_bounds_snapshot, get_component_snapshot, get_design_md_snapshot,
     get_design_prompt_snapshot, get_history_depth_snapshot, get_node_children_snapshot,
     get_node_parent_snapshot, get_node_snapshot, get_selection_set_snapshot,
-    get_variables_snapshot, get_viewport_snapshot, group_selected_snapshot, import_svg_snapshot,
-    insert_node_snapshot, instantiate_component_snapshot, list_components_snapshot,
-    list_node_kinds_snapshot, list_pages_snapshot, list_theme_presets_snapshot,
-    list_variables_snapshot, load_theme_preset_snapshot, move_node_snapshot,
-    nudge_selected_snapshot, paste_clipboard_snapshot, read_nodes_snapshot, redo_snapshot,
-    remove_node_effect_snapshot, remove_page_snapshot, rename_component_snapshot,
-    rename_page_snapshot, rename_variable_snapshot, reorder_page_snapshot,
-    reorder_selected_snapshot, replace_node_snapshot, run_stdio_with_applier,
-    save_theme_preset_snapshot, selection_snapshot, set_active_axis_value_snapshot,
-    set_active_page_snapshot, set_active_tool_snapshot, set_design_md_snapshot,
-    set_ellipse_arc_snapshot, set_node_collapsed_snapshot, set_node_corner_radius_snapshot,
-    set_node_fill_hex_snapshot, set_node_flip_snapshot, set_node_font_size_snapshot,
-    set_node_font_weight_snapshot, set_node_hidden_snapshot, set_node_locked_snapshot,
-    set_node_name_snapshot, set_node_rotation_snapshot, set_node_stroke_hex_snapshot,
-    set_node_stroke_width_snapshot, set_node_text_snapshot, set_selection_set_snapshot,
-    set_selection_snapshot, set_themes_snapshot, set_variable_boolean_snapshot,
-    set_variable_color_snapshot, set_variable_number_snapshot, set_variable_string_snapshot,
-    set_variables_snapshot, set_viewport_snapshot, snapshot_layout_snapshot,
-    toggle_node_selection_snapshot, undo_snapshot, ungroup_selected_snapshot, update_node_snapshot,
-    ToolRegistry,
+    get_style_guide_snapshot, get_style_guide_tags_snapshot, get_variables_snapshot,
+    get_viewport_snapshot, group_selected_snapshot, import_svg_snapshot, insert_node_snapshot,
+    instantiate_component_snapshot, list_components_snapshot, list_node_kinds_snapshot,
+    list_pages_snapshot, list_theme_presets_snapshot, list_variables_snapshot,
+    load_theme_preset_snapshot, move_node_snapshot, nudge_selected_snapshot,
+    paste_clipboard_snapshot, read_nodes_snapshot, redo_snapshot, remove_node_effect_snapshot,
+    remove_page_snapshot, rename_component_snapshot, rename_page_snapshot,
+    rename_variable_snapshot, reorder_page_snapshot, reorder_selected_snapshot,
+    replace_node_snapshot, run_stdio_with_applier, save_theme_preset_snapshot, selection_snapshot,
+    set_active_axis_value_snapshot, set_active_page_snapshot, set_active_tool_snapshot,
+    set_design_md_snapshot, set_ellipse_arc_snapshot, set_node_collapsed_snapshot,
+    set_node_corner_radius_snapshot, set_node_fill_hex_snapshot, set_node_flip_snapshot,
+    set_node_font_size_snapshot, set_node_font_weight_snapshot, set_node_hidden_snapshot,
+    set_node_locked_snapshot, set_node_name_snapshot, set_node_rotation_snapshot,
+    set_node_stroke_hex_snapshot, set_node_stroke_width_snapshot, set_node_text_snapshot,
+    set_selection_set_snapshot, set_selection_snapshot, set_themes_snapshot,
+    set_variable_boolean_snapshot, set_variable_color_snapshot, set_variable_number_snapshot,
+    set_variable_string_snapshot, set_variables_snapshot, set_viewport_snapshot,
+    snapshot_layout_snapshot, toggle_node_selection_snapshot, undo_snapshot,
+    ungroup_selected_snapshot, update_node_snapshot, ToolRegistry,
 };
 
 /// Load a `.op` file into an `EditorState`. The `.op` format is plain
@@ -397,6 +388,8 @@ fn rebuild_registry(doc: &EditorState) -> ToolRegistry {
     r.register(Box::new(get_design_md_snapshot(doc)));
     r.register(Box::new(set_design_md_snapshot(doc)));
     r.register(Box::new(export_design_md_snapshot(doc)));
+    r.register(Box::new(get_style_guide_tags_snapshot()));
+    r.register(Box::new(get_style_guide_snapshot()));
     r.register(Box::new(get_active_theme_snapshot(doc)));
     r.register(Box::new(list_components_snapshot(doc)));
     r.register(Box::new(get_component_snapshot(doc)));
@@ -703,6 +696,8 @@ const TOOL_SCHEMAS: &[&str] = &[
     r#"{"name":"get_design_md","description":"Get the document design.md spec and markdown, falling back to best-effort extraction from variables and typography.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}}"#,
     r#"{"name":"set_design_md","description":"Import design.md markdown into the live document, or pass autoExtract=true to derive it from current variables and typography.","inputSchema":{"type":"object","properties":{"markdown":{"type":"string","description":"Raw design.md markdown"},"autoExtract":{"type":"boolean","description":"Derive design.md from the current document"}}}}"#,
     r#"{"name":"export_design_md","description":"Export design.md markdown, falling back to best-effort extraction when none is persisted.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}}"#,
+    r#"{"name":"get_style_guide_tags","description":"Return all available style guide tags for filtering light/dark visual styles.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}}"#,
+    r#"{"name":"get_style_guide","description":"Return a style guide by name or best tag match. Provide tags array/string, name, and optional platform.","inputSchema":{"type":"object","properties":{"tags":{"type":"array","items":{"type":"string"}},"name":{"type":"string"},"platform":{"type":"string","enum":["webapp","mobile","landing-page","slides"]}}}}"#,
     r#"{"name":"get_active_theme","description":"Return the active theme axis pinning per axis.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}}"#,
     r#"{"name":"list_components","description":"List registered components (saved Frames / Groups promoted via Save as Component). Returns count + a `;`-separated record of `name|id` pairs.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}}"#,
     r#"{"name":"get_component","description":"Fetch one component by id with detail: name, root node kind, and the subtree's leaf count.","inputSchema":{"type":"object","properties":{"component_id":{"type":"string","description":"positive u64 component id"}},"required":["component_id"]}}"#,
