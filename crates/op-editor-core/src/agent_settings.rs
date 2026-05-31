@@ -39,7 +39,7 @@ impl AgentSettingsTab {
             AgentSettingsTab::Agents => "Agents",
             AgentSettingsTab::Mcp => "MCP",
             AgentSettingsTab::Images => "Images",
-            AgentSettingsTab::System => "系统",
+            AgentSettingsTab::System => "System",
         }
     }
 }

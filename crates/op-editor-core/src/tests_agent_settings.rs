@@ -32,6 +32,16 @@ fn tab_and_cli_arrays_cover_all_variants() {
 }
 
 #[test]
+fn settings_tab_fallback_labels_match_ts_order() {
+    let labels: Vec<_> = AgentSettingsTab::ALL
+        .iter()
+        .map(|tab| tab.label())
+        .collect();
+
+    assert_eq!(labels, vec!["Agents", "MCP", "Images", "System"]);
+}
+
+#[test]
 fn image_generation_profiles_follow_ts_lifecycle() {
     let mut s = AgentSettings::default();
 
