@@ -635,6 +635,25 @@ impl WidgetHostNative {
         None
     }
 
+    /// Resolve a screen point to an align/distribute action or boolean
+    /// operation if it lands on the floating selection toolbar.
+    pub(in crate::widget_host) fn selection_toolbar_hit(
+        &self,
+        x: f32,
+        y: f32,
+        viewport_w: f32,
+        viewport_h: f32,
+    ) -> Option<op_editor_ui::widgets::AlignToolbarHit> {
+        use op_editor_ui::widgets::AlignToolbar;
+        let (cx, _, cw, ch) = self.canvas_region(viewport_w, viewport_h);
+        let canvas_region = Rect {
+            origin: Point2D::new(cx, TOP_BAR_HEIGHT),
+            size: Point2D::new(cw, ch),
+        };
+        AlignToolbar::for_canvas_region(canvas_region, &self.editor_state)?
+            .hit_test_action(Point2D::new(x, y))
+    }
+
     /// Resolve a screen point to an `AlignAction` if it lands on the
     /// floating align toolbar (visible when 2+ selected).
     pub(in crate::widget_host) fn align_toolbar_hit(
@@ -644,13 +663,9 @@ impl WidgetHostNative {
         viewport_w: f32,
         viewport_h: f32,
     ) -> Option<op_editor_core::AlignAction> {
-        use op_editor_ui::widgets::AlignToolbar;
-        let (cx, _, cw, ch) = self.canvas_region(viewport_w, viewport_h);
-        let canvas_region = Rect {
-            origin: Point2D::new(cx, TOP_BAR_HEIGHT),
-            size: Point2D::new(cw, ch),
-        };
-        AlignToolbar::for_canvas_region(canvas_region, &self.editor_state)?
-            .hit_test(Point2D::new(x, y))
+        match self.selection_toolbar_hit(x, y, viewport_w, viewport_h) {
+            Some(op_editor_ui::widgets::AlignToolbarHit::Align(action)) => Some(action),
+            _ => None,
+        }
     }
 }
