@@ -62,11 +62,14 @@ impl WidgetHostNative {
                 panel.remote_focused = true;
                 panel.commit_focused = false;
                 panel.https_focused = false;
+                // Seed the shared caret anchor so it starts solid, then blinks.
+                panel.commit_caret_anchor_ms = now;
             }
             Some(GitPanelHit::HttpsInput) => {
                 panel.https_focused = true;
                 panel.commit_focused = false;
                 panel.remote_focused = false;
+                panel.commit_caret_anchor_ms = now;
             }
             Some(GitPanelHit::SetRemote) => {
                 if !panel.remote_draft.trim().is_empty() {
