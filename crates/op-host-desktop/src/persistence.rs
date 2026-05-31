@@ -234,7 +234,11 @@ pub fn document_fingerprint(state: &EditorState) -> u64 {
 }
 
 fn set_display_name(host: &mut WidgetHostNative, path: Option<&std::path::Path>) {
-    host.editor_state_mut().editor_ui.file_name_display = path
+    set_file_name_display(host.editor_state_mut(), path);
+}
+
+fn set_file_name_display(state: &mut EditorState, path: Option<&std::path::Path>) {
+    state.editor_ui.file_name_display = path
         .and_then(|p| p.file_name())
         .map(|n| n.to_string_lossy().into_owned());
 }
@@ -264,7 +268,9 @@ pub fn handle_save_as(
 /// Replace the host's `EditorState` with one loaded from `path`.
 fn load_into_host(host: &mut WidgetHostNative, path: &std::path::Path) -> Result<(), String> {
     let locale = host.editor_state().editor_ui.locale;
-    let state = load_editor_state(path, locale)?;
+    let mut state = load_editor_state(path, locale)?;
+    preserve_app_preferences(host.editor_state(), &mut state);
+    set_file_name_display(&mut state, Some(path));
     let bb = active_page_bbox(&state);
     eprintln!(
         "[open] {} top-level nodes; content bbox {:?}",
@@ -274,6 +280,26 @@ fn load_into_host(host: &mut WidgetHostNative, path: &std::path::Path) -> Result
     *host.editor_state_mut() = state;
     host.mark_editor_state_dirty();
     Ok(())
+}
+
+fn preserve_app_preferences(previous: &EditorState, next: &mut EditorState) {
+    let previous_selected_model = previous.chat.selected_model_entry().cloned();
+    next.editor_ui.theme_mode = previous.editor_ui.theme_mode;
+    next.editor_ui.locale = previous.editor_ui.locale;
+    next.editor_ui.recent_files = previous.editor_ui.recent_files.clone();
+    next.editor_ui.agent_settings = previous.editor_ui.agent_settings.clone();
+    next.editor_ui.chat_selected_agent = previous.editor_ui.chat_selected_agent;
+    next.chat.discovered_models = previous.chat.discovered_models.clone();
+    next.rebuild_chat_models();
+    if let Some(prev) = previous_selected_model {
+        if let Some(idx) = next.chat.available_models.iter().position(|m| {
+            m.provider == prev.provider
+                && m.value == prev.value
+                && m.builtin_provider_id == prev.builtin_provider_id
+        }) {
+            next.select_chat_model(idx);
+        }
+    }
 }
 
 fn active_page_bbox(state: &EditorState) -> Option<(f64, f64, f64, f64)> {
@@ -425,7 +451,9 @@ pub fn run_action(
     use op_editor_core::editor_ui_state::FileAction;
     match action {
         FileAction::New => {
-            *host.editor_state_mut() = EditorState::starter();
+            let mut state = EditorState::starter();
+            preserve_app_preferences(host.editor_state(), &mut state);
+            *host.editor_state_mut() = state;
             let (vw, vh) = window
                 .map(|w| {
                     let size = w.inner_size();
@@ -747,9 +775,98 @@ mod tests {
             Some(jian_ops_schema::sizing::SizingBehavior::Number(800.0))
         ));
         let v = host.editor_state().viewport;
-        assert!((v.zoom - 0.66).abs() < 1e-3, "zoom {}", v.zoom);
+        assert!((v.zoom - 0.68).abs() < 1e-3, "zoom {}", v.zoom);
         assert!((v.pan_x - 64.0).abs() < 1e-2, "pan_x {}", v.pan_x);
-        assert!((v.pan_y - 166.0).abs() < 1e-2, "pan_y {}", v.pan_y);
+        assert!((v.pan_y - 158.0).abs() < 1e-2, "pan_y {}", v.pan_y);
+    }
+
+    #[test]
+    fn new_file_action_preserves_builtin_agent_models() {
+        let mut host = WidgetHostNative::new();
+        let builtin_id = host
+            .editor_state_mut()
+            .editor_ui
+            .agent_settings
+            .add_builtin_agent_config(
+                "DS",
+                "sk-test",
+                "deepseek-v4-pro",
+                op_editor_core::BuiltinAgentKind::OpenAiCompat,
+                "https://api.deepseek.com/v1",
+            );
+        host.editor_state_mut().rebuild_chat_models();
+        let mut current_path = Some(PathBuf::from("/tmp/old.op"));
+
+        let outcome = run_action(
+            op_editor_core::editor_ui_state::FileAction::New,
+            &mut host,
+            &mut current_path,
+            None,
+        );
+
+        assert_eq!(outcome, ActionOutcome::Saved);
+        assert_eq!(
+            host.editor_state()
+                .editor_ui
+                .agent_settings
+                .builtin_agents
+                .len(),
+            1
+        );
+        assert!(host
+            .editor_state()
+            .chat
+            .available_models
+            .iter()
+            .any(|m| m.builtin_provider_id.as_deref() == Some(builtin_id.as_str())));
+    }
+
+    #[test]
+    fn opening_document_preserves_builtin_agent_models() {
+        let mut host = WidgetHostNative::new();
+        let builtin_id = host
+            .editor_state_mut()
+            .editor_ui
+            .agent_settings
+            .add_builtin_agent_config(
+                "MINIMAX",
+                "sk-test",
+                "MiniMax-M2.7",
+                op_editor_core::BuiltinAgentKind::OpenAiCompat,
+                "https://api.minimaxi.com/v1",
+            );
+        host.editor_state_mut().rebuild_chat_models();
+        assert!(host
+            .editor_state()
+            .chat
+            .available_models
+            .iter()
+            .any(|m| m.builtin_provider_id.as_deref() == Some(builtin_id.as_str())));
+
+        let state_to_open = EditorState::new();
+        let path = temp_op_path("open-preserves-builtins");
+        save_to_path(&state_to_open, &path).expect("save succeeds");
+        let mut current_path = None;
+
+        assert!(open_path(&mut host, path.clone(), &mut current_path, None));
+
+        assert_eq!(
+            host.editor_state()
+                .editor_ui
+                .agent_settings
+                .builtin_agents
+                .len(),
+            1
+        );
+        assert!(host
+            .editor_state()
+            .chat
+            .available_models
+            .iter()
+            .any(|m| m.builtin_provider_id.as_deref() == Some(builtin_id.as_str())));
+
+        let _ = std::fs::remove_file(&path);
+        let _ = std::fs::remove_file(sidecar_path(&path));
     }
 
     #[test]
