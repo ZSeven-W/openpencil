@@ -645,6 +645,9 @@ impl WidgetHostNative {
             self.commit_property_focus_if_any();
             return true;
         }
+        if self.editor_state.chat.available_models.is_empty() {
+            return false;
+        }
         // `begin_send` itself gates on (text OR staged attachments) —
         // an attachment-only turn is valid, so don't short-circuit on
         // empty text here.

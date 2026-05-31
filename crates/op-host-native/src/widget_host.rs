@@ -41,6 +41,8 @@ mod ai_chat_geometry;
 mod chat_model_picker_caret;
 #[cfg(test)]
 mod chat_model_picker_caret_tests;
+#[cfg(test)]
+mod chat_send_tests;
 mod click;
 mod color_picker_press;
 mod component_browser_press;

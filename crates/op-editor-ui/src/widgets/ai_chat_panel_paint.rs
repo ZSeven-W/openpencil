@@ -83,12 +83,14 @@ pub(crate) fn paint_examples(
     hint_label: &str,
     tip_label: &str,
     examples: &[ExampleCard; 4],
+    disabled: bool,
 ) {
+    let opacity = if disabled { 0.6 } else { 1.0 };
     let hint = TextLayout::single_run(
         hint_label,
         "system-ui",
         12.0,
-        to_jian_color(theme.muted_foreground),
+        to_jian_color(with_alpha(theme.muted_foreground, opacity)),
         Point2D::new(0.0, 0.0),
     );
     let hint_y = rect.origin.y + HEADER_HEIGHT + 16.0;
@@ -98,17 +100,20 @@ pub(crate) fn paint_examples(
         Point2D::new(rect.origin.x + (rect.size.x - hint_w) / 2.0, hint_y),
     );
 
-    let card_bg = with_alpha(theme.muted, 0.3);
+    let card_bg = with_alpha(theme.muted, 0.3 * opacity);
+    let card_border = with_alpha(theme.border, opacity);
+    let title_color = with_alpha(theme.foreground, opacity);
+    let subtitle_color = with_alpha(theme.muted_foreground, opacity);
     for (card, ex) in example_card_rects(rect).iter().zip(examples.iter()) {
         cx.backend.fill_round_rect(*card, 8.0, card_bg);
-        cx.backend.stroke_round_rect(*card, 8.0, theme.border, 1.0);
+        cx.backend.stroke_round_rect(*card, 8.0, card_border, 1.0);
         cx.backend.save();
         cx.backend.clip_rect(*card);
         let emoji_layout = TextLayout::single_run(
             ex.emoji,
             "system-ui",
             14.0,
-            to_jian_color(theme.foreground),
+            to_jian_color(title_color),
             Point2D::new(0.0, 0.0),
         );
         cx.backend.draw_text(
@@ -122,7 +127,7 @@ pub(crate) fn paint_examples(
             &ex.title,
             "system-ui",
             12.0,
-            to_jian_color(theme.foreground),
+            to_jian_color(title_color),
             Point2D::new(0.0, 0.0),
         );
         cx.backend.draw_text(
@@ -136,7 +141,7 @@ pub(crate) fn paint_examples(
             &ex.subtitle,
             "system-ui",
             11.0,
-            to_jian_color(theme.muted_foreground),
+            to_jian_color(subtitle_color),
             Point2D::new(0.0, 0.0),
         );
         cx.backend.draw_text(
@@ -243,6 +248,7 @@ mod tests {
             "Start designing with AI",
             "Tip",
             &examples,
+            false,
         );
 
         assert_eq!(
