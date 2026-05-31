@@ -411,6 +411,37 @@ fn hit_test_resolves_design_block_header_toggle() {
     );
 }
 
+#[test]
+fn hit_test_resolves_design_block_copy_button() {
+    let code = r#"[{"id":"frame-1","type":"Frame"}]"#;
+    let mut s = EditorState::new();
+    s.chat
+        .messages
+        .push(op_editor_core::ChatMessage::assistant(format!(
+            r#"```json
+{code}
+```"#
+        )));
+
+    let panel = AIChatPlaceholder::from_editor(&s);
+    let rect = Rect::xywh(0.0, 0.0, AI_CHAT_WIDTH, AI_CHAT_HEIGHT);
+    let block = &crate::widgets::ai_chat_transcript::build_transcript(
+        &s.chat.messages,
+        panel.body_rect(rect),
+        panel.locale,
+    )[0]
+    .design_blocks[0];
+    let p = Point2D::new(
+        block.header.origin.x + block.header.size.x - 38.0,
+        block.header.origin.y + block.header.size.y / 2.0,
+    );
+
+    assert_eq!(
+        panel.hit_test(rect, p),
+        Some(AIChatHit::CopyDesignBlock(code.to_string()))
+    );
+}
+
 #[derive(Default)]
 struct PanelPaintBackend {
     fills: Vec<(Rect, crate::Color)>,

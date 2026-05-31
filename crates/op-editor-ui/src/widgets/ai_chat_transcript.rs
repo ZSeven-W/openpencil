@@ -77,7 +77,7 @@ const BUBBLE_FRAC: f32 = 0.84;
 
 /// What a click inside the transcript resolved to. Both variants
 /// carry the index into the full `messages` slice.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TranscriptHit {
     /// The thinking-block header — toggle its collapsed state.
     ToggleThinking(usize),
@@ -89,6 +89,7 @@ pub enum TranscriptHit {
     /// One design JSON card header — set just that card's expanded
     /// state. Carries `(message_index, design_block_index, expanded)`.
     SetDesignBlockExpanded(usize, usize, bool),
+    CopyDesignBlock(String),
 }
 
 /// A collapsible block (thinking text or tool-call list) — a
@@ -494,6 +495,9 @@ pub(crate) fn transcript_hit(
             }
         }
         for (block_index, block) in item.design_blocks.iter().enumerate() {
+            if rect_contains(block.copy, x, y) {
+                return Some(TranscriptHit::CopyDesignBlock(block.code.clone()));
+            }
             if rect_contains(block.header, x, y) {
                 return Some(TranscriptHit::SetDesignBlockExpanded(
                     item.msg_index,
@@ -789,3 +793,7 @@ pub(crate) fn paint_transcript(
 #[cfg(test)]
 #[path = "ai_chat_transcript_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "ai_chat_transcript_copy_tests.rs"]
+mod copy_tests;

@@ -59,6 +59,8 @@ pub enum AIChatHit {
     /// Click on a single design JSON card header — host sets only
     /// that card's expanded override.
     SetDesignBlockExpanded(usize, usize, bool),
+    /// Click on a design JSON card's copy affordance.
+    CopyDesignBlock(String),
     /// Click on the fixed "Pencil it out" checklist header — host
     /// toggles the checklist body between expanded and collapsed.
     ToggleChecklist,
@@ -81,6 +83,9 @@ impl From<super::ai_chat_transcript::TranscriptHit> for AIChatHit {
                 block_index,
                 expanded,
             ) => Self::SetDesignBlockExpanded(message_index, block_index, expanded),
+            super::ai_chat_transcript::TranscriptHit::CopyDesignBlock(text) => {
+                Self::CopyDesignBlock(text)
+            }
         }
     }
 }

@@ -18,11 +18,13 @@ pub(crate) struct PendingDesignBlock {
 pub(crate) struct DesignBlock {
     pub rect: Rect,
     pub header: Rect,
+    pub copy: Rect,
     pub body: Rect,
     pub expanded: bool,
     pub element_count: usize,
     pub label: String,
     pub streaming: bool,
+    pub code: String,
     pub code_lines: Vec<String>,
 }
 
@@ -175,15 +177,18 @@ pub(crate) fn place_design_blocks(
         };
         let rect = Rect::xywh(x, y, width, DESIGN_BLOCK_H + body_h);
         let header = Rect::xywh(x, y, width, DESIGN_BLOCK_H);
+        let copy = Rect::xywh(x + width - 48.0, y + 6.0, 20.0, 20.0);
         let body = Rect::xywh(x, y + DESIGN_BLOCK_H, width, body_h);
         blocks.push(DesignBlock {
             rect,
             header,
+            copy,
             body,
             expanded,
             element_count: pending.element_count,
             label: pending.label,
             streaming: pending.streaming,
+            code: pending.code,
             code_lines,
         });
         y += DESIGN_BLOCK_H + body_h + gap;
@@ -231,7 +236,7 @@ pub(crate) fn paint_design_block(cx: &mut PaintCx<'_>, theme: &Theme, block: &De
     cx.backend.clip_rect(Rect::xywh(
         block.header.origin.x + 30.0,
         block.header.origin.y,
-        (block.header.size.x - 58.0).max(1.0),
+        (block.header.size.x - 86.0).max(1.0),
         block.header.size.y,
     ));
     let layout = TextLayout::single_run(
@@ -246,6 +251,17 @@ pub(crate) fn paint_design_block(cx: &mut PaintCx<'_>, theme: &Theme, block: &De
         Point2D::new(block.header.origin.x + 30.0, block.header.origin.y + 20.0),
     );
     cx.backend.restore();
+
+    let mut copy_color = theme.muted_foreground;
+    copy_color.a *= 0.5;
+    draw_icon(
+        cx.backend,
+        Icon::Copy,
+        Point2D::new(block.copy.origin.x + 4.0, block.copy.origin.y + 4.0),
+        12.0,
+        copy_color,
+        1.5,
+    );
 
     let mut chevron_color = theme.muted_foreground;
     chevron_color.a *= 0.45;

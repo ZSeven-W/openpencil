@@ -698,6 +698,9 @@ impl ApplicationHandler for DesktopApp {
                     self.viewport_width,
                     self.viewport_height,
                 );
+                if let Some(text) = self.host.editor_state_mut().chat.pending_copy_text.take() {
+                    crate::clipboard::set_text(&text);
+                }
                 // A click on the chat Send button raises
                 // `pending_send` — launch the provider turn.
                 if chat_session::launch_if_pending(
