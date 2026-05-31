@@ -132,6 +132,39 @@ fn builtin_agent_compact_edit_focuses_display_name_form() {
 }
 
 #[test]
+fn repeated_add_provider_press_reuses_empty_builtin_draft() {
+    let mut host = WidgetHostNative::new();
+    for _ in 0..4 {
+        host.editor_state_mut()
+            .editor_ui
+            .agent_settings
+            .add_builtin_agent();
+    }
+
+    let (content_x, content_y, content_w) = agent_settings_content_metrics(&host);
+    let add_x = content_x + content_w - 12.0 - 48.0;
+    let add_y = content_y + 12.0 + 12.0;
+
+    assert!(host.dispatch_agent_settings_press(add_x, add_y, 1200.0, 800.0));
+    assert!(host.dispatch_agent_settings_press(add_x, add_y, 1200.0, 800.0));
+
+    let settings = &host.editor_state().editor_ui.agent_settings;
+    assert_eq!(
+        settings.builtin_agents.len(),
+        5,
+        "replayed add-provider presses should not append Built-in Agent 6+"
+    );
+    assert_eq!(settings.builtin_agents[4].display_name, "Built-in Agent 5");
+    assert_eq!(
+        settings.focus,
+        Some(SettingsFocus::BuiltinAgent {
+            index: 4,
+            field: BuiltinAgentField::ApiKey,
+        })
+    );
+}
+
+#[test]
 fn add_acp_agent_press_creates_local_agent() {
     let mut host = WidgetHostNative::new();
     let panel = AgentSettingsPanel::for_editor(host.editor_state());
