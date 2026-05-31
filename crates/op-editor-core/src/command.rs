@@ -126,6 +126,11 @@ pub enum EditorCommand {
         width: i32,
         height: i32,
         fill_hex: Option<String>,
+        /// `NodeId::NONE` inserts at the active/requested page root.
+        target_parent: NodeId,
+        /// `None` inserts on the active page; `Some` targets a page id
+        /// or legacy page index.
+        page_id: Option<String>,
     },
     /// Patch fields on an existing node — every field optional.
     UpdateNode {

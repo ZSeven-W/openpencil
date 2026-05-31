@@ -225,6 +225,8 @@ fn find_empty_space_returns_padded_position_from_active_page_bounds() {
         width: 100,
         height: 50,
         fill_hex: None,
+        target_parent: op_editor_core::NodeId::NONE,
+        page_id: None,
     }));
     assert!(state.apply(EditorCommand::InsertNode {
         kind: "rect".into(),
@@ -234,6 +236,8 @@ fn find_empty_space_returns_padded_position_from_active_page_bounds() {
         width: 50,
         height: 40,
         fill_hex: None,
+        target_parent: op_editor_core::NodeId::NONE,
+        page_id: None,
     }));
     let line = r#"{"jsonrpc":"2.0","id":9,"method":"tools/call","params":{"name":"find_empty_space","arguments":{"direction":"right","width":"320","height":"240"}}}"#;
     let response = process_message_with_applier(&mut state, line, |_, _| false)
@@ -255,6 +259,8 @@ fn read_nodes_accepts_structured_ids_over_mcp() {
         width: 100,
         height: 50,
         fill_hex: None,
+        target_parent: op_editor_core::NodeId::NONE,
+        page_id: None,
     }));
     let node_id = state.active_children()[0].base().id.clone();
     let line = format!(

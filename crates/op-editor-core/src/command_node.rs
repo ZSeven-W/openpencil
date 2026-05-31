@@ -264,6 +264,7 @@ impl EditorState {
         width: i32,
         height: i32,
         fill_hex: &Option<String>,
+        target_parent: &NodeId,
     ) -> bool {
         if !kind_is_valid(kind) || width < 0 || height < 0 {
             return false;
@@ -272,6 +273,12 @@ impl EditorState {
         if let Some(hex) = fill_hex {
             if crate::color_picker::parse_hex_rgb(hex).is_none() {
                 return false;
+            }
+        }
+        if target_parent.is_real() {
+            match walkers::find_node(self.active_children(), target_parent) {
+                Some(parent) if parent.is_container() => {}
+                _ => return false,
             }
         }
         let Some(new_id) = self.next_node_id() else {
@@ -284,7 +291,18 @@ impl EditorState {
         if let Some(hex) = fill_hex {
             set_primary_fill_hex(&mut node, hex);
         }
-        self.active_children_mut().push(node);
+        if target_parent.is_real() {
+            let root = self.active_children_mut();
+            let Some(parent) = walkers::find_node_mut(root, target_parent) else {
+                return false;
+            };
+            let Some(children) = parent.children_mut() else {
+                return false;
+            };
+            children.push(node);
+        } else {
+            self.active_children_mut().push(node);
+        }
         true
     }
 
