@@ -161,6 +161,17 @@ pub(super) const SPARKLES: &[&str] = &[
     "M2 20A2 2 0 1 0 6 20A2 2 0 1 0 2 20Z",
 ];
 
+pub(super) const WAND_SPARKLES: &[&str] = &[
+    "m21.64 3.64-1.28-1.28a1.21 1.21 0 0 0-1.72 0L2.36 18.64a1.21 1.21 0 0 0 0 1.72l1.28 1.28a1.2 1.2 0 0 0 1.72 0L21.64 5.36a1.2 1.2 0 0 0 0-1.72",
+    "m14 7 3 3",
+    "M5 6v4",
+    "M19 14v4",
+    "M10 2v2",
+    "M7 8H3",
+    "M21 16h-4",
+    "M11 3H9",
+];
+
 pub(super) const CLOSE: &[&str] = &["M18 6 6 18", "m6 6 12 12"];
 
 // Mirror of CHEVRON_DOWN flipped vertically — Lucide

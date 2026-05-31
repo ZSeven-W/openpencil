@@ -86,6 +86,8 @@ pub enum Icon {
     GitFork,
     /// Sparkles — agent active indicator.
     Sparkles,
+    /// Wand2 / WandSparkles — design JSON card indicator.
+    Wand2,
     /// X — close affordance.
     Close,
     /// Trash2 — proper delete affordance (line-art trash can).
@@ -279,6 +281,7 @@ impl Icon {
             Icon::FilePlus => FILE_PLUS,
             Icon::GitFork => GIT_FORK,
             Icon::Sparkles => SPARKLES,
+            Icon::Wand2 => WAND_SPARKLES,
             Icon::Close => CLOSE,
             Icon::Trash => TRASH,
             Icon::Copy => COPY,
@@ -433,6 +436,7 @@ impl Icon {
             "file-plus" => Icon::FilePlus,
             "git-fork" => Icon::GitFork,
             "sparkles" => Icon::Sparkles,
+            "wand-2" | "wand-sparkles" | "wand" => Icon::Wand2,
             "diamond" => Icon::Diamond,
             "component" => Icon::Component,
             "circle" => Icon::Circle,

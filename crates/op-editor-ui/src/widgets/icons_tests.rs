@@ -90,6 +90,7 @@ fn every_variant_paints_at_least_one_primitive() {
         Icon::FilePlus,
         Icon::GitFork,
         Icon::Sparkles,
+        Icon::Wand2,
         Icon::Close,
         Icon::ChevronUp,
         Icon::MessageSquare,
