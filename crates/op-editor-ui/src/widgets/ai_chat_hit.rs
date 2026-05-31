@@ -53,6 +53,9 @@ pub enum AIChatHit {
     /// Click on a message's tool-calls panel header — host toggles
     /// `ChatMessage::tools_collapsed` for that message index.
     ToggleToolCalls(usize),
+    /// Click on a single tool-call card header — host sets only
+    /// that card's expanded override.
+    SetToolCallCardExpanded(usize, usize, bool),
     /// Click on the fixed "Pencil it out" checklist header — host
     /// toggles the checklist body between expanded and collapsed.
     ToggleChecklist,

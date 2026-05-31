@@ -353,6 +353,11 @@ impl<'a> AIChatPlaceholder<'a> {
                     crate::widgets::ai_chat_transcript::TranscriptHit::ToggleToolCalls(i) => {
                         AIChatHit::ToggleToolCalls(i)
                     }
+                    crate::widgets::ai_chat_transcript::TranscriptHit::SetToolCallCardExpanded(
+                        message_index,
+                        tool_index,
+                        expanded,
+                    ) => AIChatHit::SetToolCallCardExpanded(message_index, tool_index, expanded),
                 });
             }
         }

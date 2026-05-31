@@ -68,6 +68,7 @@ pub(crate) struct ToolCallCard {
     pub rect: Rect,
     pub header: Rect,
     pub body: Rect,
+    pub expanded: bool,
     pub name: String,
     source: Option<String>,
     status: String,
@@ -95,6 +96,7 @@ pub(crate) struct ToolPanelLayout<'a> {
     pub width: f32,
     pub budget: u32,
     pub default_status: &'a str,
+    pub expanded_overrides: &'a [Option<bool>],
 }
 
 /// Format tool-call process cards with the same high-level semantics
@@ -131,6 +133,7 @@ pub(crate) fn build_tool_panel(
         width,
         budget,
         default_status,
+        expanded_overrides,
     } = layout;
     if calls.is_empty() {
         return (None, y);
@@ -154,8 +157,10 @@ pub(crate) fn build_tool_panel(
 
     let body_top = y;
     let mut cards = Vec::new();
-    for call in calls {
-        let (card, next_y) = layout_tool_card(call, x, y, width, budget, default_status);
+    for (index, call) in calls.iter().enumerate() {
+        let expanded_override = expanded_overrides.get(index).copied().flatten();
+        let (card, next_y) =
+            layout_tool_card(call, x, y, width, budget, default_status, expanded_override);
         cards.push(card);
         y = next_y + CARD_GAP;
     }
@@ -246,17 +251,18 @@ fn layout_tool_card(
     width: f32,
     budget: u32,
     default_status: &str,
+    expanded_override: Option<bool>,
 ) -> (ToolCallCard, f32) {
     const MAX_BODY_LINES: usize = 8;
     let fields = ToolCardFields::from_call(&call.name, &call.args, default_status);
-    let open = fields.level.default_open();
-    let arg_lines = if open && !fields.args.is_empty() {
+    let expanded = expanded_override.unwrap_or_else(|| fields.level.default_open());
+    let arg_lines = if expanded && !fields.args.is_empty() {
         prefixed_wrapped_lines("Args", &fields.args, budget, MAX_BODY_LINES)
     } else {
         Vec::new()
     };
     let result_failed = fields.status == "error" || fields.result_failed;
-    let result_lines = if open {
+    let result_lines = if expanded {
         fields
             .result
             .as_deref()
@@ -279,6 +285,7 @@ fn layout_tool_card(
             rect,
             header,
             body,
+            expanded,
             name: call.name.clone(),
             source: fields.source,
             status: fields.status,
@@ -400,7 +407,7 @@ fn paint_tool_card(cx: &mut PaintCx<'_>, theme: &Theme, card: &ToolCallCard) {
     cx.backend.stroke_round_rect(card.rect, 6.0, border, 1.0);
     draw_icon(
         cx.backend,
-        if card.level.default_open() {
+        if card.expanded {
             Icon::ChevronDown
         } else {
             Icon::ChevronRight

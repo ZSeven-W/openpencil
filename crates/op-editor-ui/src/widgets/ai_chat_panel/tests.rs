@@ -348,6 +348,40 @@ fn hit_test_resolves_fixed_checklist_header_toggle() {
     assert_eq!(panel.hit_test(rect, p), Some(AIChatHit::ToggleChecklist));
 }
 
+#[test]
+fn hit_test_resolves_individual_tool_card_header_toggle() {
+    let mut s = EditorState::new();
+    let mut message = op_editor_core::ChatMessage::assistant("answer");
+    message.tools_collapsed = false;
+    message.tool_calls.push(op_editor_core::ChatToolCall {
+        name: "snapshot_layout".into(),
+        args: r#"{"args":{"pageId":"page-1"}}"#.into(),
+    });
+    s.chat.messages.push(message);
+
+    let panel = AIChatPlaceholder::from_editor(&s);
+    let rect = Rect::xywh(0.0, 0.0, AI_CHAT_WIDTH, AI_CHAT_HEIGHT);
+    let card_header = crate::widgets::ai_chat_transcript::build_transcript(
+        &s.chat.messages,
+        panel.body_rect(rect),
+        panel.locale,
+    )[0]
+    .tools
+    .as_ref()
+    .unwrap()
+    .cards[0]
+        .header;
+    let p = Point2D::new(
+        card_header.origin.x + card_header.size.x / 2.0,
+        card_header.origin.y + card_header.size.y / 2.0,
+    );
+
+    assert_eq!(
+        panel.hit_test(rect, p),
+        Some(AIChatHit::SetToolCallCardExpanded(0, 0, true))
+    );
+}
+
 #[derive(Default)]
 struct PanelPaintBackend {
     fills: Vec<(Rect, crate::Color)>,
