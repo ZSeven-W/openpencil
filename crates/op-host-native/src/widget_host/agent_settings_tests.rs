@@ -464,7 +464,7 @@ fn copy_mcp_client_config_queues_clipboard_text() {
 
     assert_eq!(
         host.editor_state().chat.pending_copy_text.as_deref(),
-        Some(r#"{ "type": "http", "url": "http://127.0.0.1:4123/mcp" }"#)
+        Some("{\n  \"type\": \"http\",\n  \"url\": \"http://127.0.0.1:4123/mcp\"\n}")
     );
 }
 

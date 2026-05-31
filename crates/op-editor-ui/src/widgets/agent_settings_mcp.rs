@@ -396,7 +396,7 @@ fn paint_client_config(
         theme.muted_foreground,
         1.5,
     );
-    let config = settings.mcp_server.client_config_text();
+    let config = settings.mcp_server.client_config_display_text();
     let config = ellipsize(
         cx,
         &config,
