@@ -582,6 +582,22 @@ fn parse_tool_call_allows_structured_batch_get_args_for_ts_parity() {
 }
 
 #[test]
+fn parse_tool_call_allows_structured_insert_node_data_for_ts_parity() {
+    let line = r##"{"id":4,"method":"tools/call","params":{"name":"insert_node","arguments":{"parent":null,"data":{"type":"rectangle","name":"Card","x":1,"y":2,"width":100,"height":50,"fill":[{"type":"solid","color":"#112233"}]},"pageId":"page-2"}}}"##;
+    let call = parse_tool_call(line).expect("insert_node must accept TS-style data object");
+    assert_eq!(call.tool, "insert_node");
+    assert_eq!(call.arguments.get("parent"), Some(&"null".to_string()));
+    assert_eq!(
+        call.arguments.get("data"),
+        Some(
+            &r##"{"type":"rectangle","name":"Card","x":1,"y":2,"width":100,"height":50,"fill":[{"type":"solid","color":"#112233"}]}"##
+                .to_string()
+        )
+    );
+    assert_eq!(call.arguments.get("pageId"), Some(&"page-2".to_string()));
+}
+
+#[test]
 fn parse_tool_call_allows_structured_style_guide_tags_for_ts_parity() {
     let line = r#"{"id":4,"method":"tools/call","params":{"name":"get_style_guide","arguments":{"tags":["light-mode","clean"],"platform":"webapp"}}}"#;
     let call = parse_tool_call(line).expect("get_style_guide must accept TS-style tags array");

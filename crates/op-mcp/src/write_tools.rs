@@ -14,6 +14,7 @@ use op_editor_core::EditorState;
 use op_editor_core::NodeId;
 
 use super::{EditorCommand, McpTool, ToolErrorCode, ToolOutcome};
+use crate::insert_node_args::{insert_node_params, InsertNodeParams};
 
 /// Parse a `node_id`-style argument into a `NodeId`. Node ids are
 /// canonical `.op` schema strings — any non-empty string is valid; an
@@ -135,12 +136,19 @@ impl McpTool for InsertNode {
         "insert_node"
     }
     fn call(&self, args: &BTreeMap<String, String>) -> ToolOutcome {
-        let kind = match args.get("kind") {
-            Some(s) => s.clone(),
-            None => {
-                return ToolOutcome::Err(ToolErrorCode::MissingArgument, "kind is required".into());
-            }
+        let params = match insert_node_params(args) {
+            Ok(params) => params,
+            Err(e) => return e,
         };
+        let InsertNodeParams {
+            kind,
+            name,
+            x,
+            y,
+            width,
+            height,
+            fill_hex,
+        } = params;
         if !ALLOWED_KINDS.iter().any(|k| *k == kind) {
             return ToolOutcome::Err(
                 ToolErrorCode::InvalidArgument,
@@ -150,44 +158,20 @@ impl McpTool for InsertNode {
                 ),
             );
         }
-        let name = match args.get("name") {
-            Some(s) => s.clone(),
-            None => {
-                return ToolOutcome::Err(ToolErrorCode::MissingArgument, "name is required".into());
-            }
-        };
-        let x = match parse_i32_arg(args, "x") {
-            Ok(v) => v,
-            Err(e) => return e,
-        };
-        let y = match parse_i32_arg(args, "y") {
-            Ok(v) => v,
-            Err(e) => return e,
-        };
-        let width = match parse_i32_arg(args, "width") {
-            Ok(v) => v,
-            Err(e) => return e,
-        };
-        let height = match parse_i32_arg(args, "height") {
-            Ok(v) => v,
-            Err(e) => return e,
-        };
         if width < 0 || height < 0 {
             return ToolOutcome::Err(
                 ToolErrorCode::InvalidArgument,
                 "width / height must be non-negative".into(),
             );
         }
-        let fill_hex = match args.get("fill_hex") {
-            None => None,
-            Some(s) if !validate_hex(s) => {
+        if let Some(hex) = fill_hex.as_deref() {
+            if !validate_hex(hex) {
                 return ToolOutcome::Err(
                     ToolErrorCode::InvalidArgument,
-                    format!("fill_hex must be #rgb/#rrggbb/#rrggbbaa, got {s:?}"),
+                    format!("fill_hex must be #rgb/#rrggbb/#rrggbbaa, got {hex:?}"),
                 );
             }
-            Some(s) => Some(s.clone()),
-        };
+        }
         let target_parent = args
             .get("parent")
             .or_else(|| args.get("parent_id"))
@@ -399,7 +383,11 @@ pub fn move_node_snapshot() -> MoveNode {
 /// schema uses that wording for page-root inserts.
 fn root_or_node_id(raw: &str) -> NodeId {
     let trimmed = raw.trim();
-    if trimmed.is_empty() || trimmed == "0" || trimmed.eq_ignore_ascii_case("root") {
+    if trimmed.is_empty()
+        || trimmed == "0"
+        || trimmed.eq_ignore_ascii_case("root")
+        || trimmed.eq_ignore_ascii_case("null")
+    {
         NodeId::NONE
     } else {
         NodeId::new(trimmed)
