@@ -12,6 +12,10 @@ use std::fs;
 use std::io::{self, Read, Write};
 
 mod codegen_cli;
+mod figma_cli;
+
+#[cfg(test)]
+use figma_cli::figma_default_out_path;
 
 /// Default HTTP MCP port, matching TS `@zseven-w/pen-mcp`.
 const DEFAULT_PORT: u16 = 3100;
@@ -44,6 +48,9 @@ fn run(args: &[String]) -> Result<String, String> {
         Command::Version => version_json(),
         Command::Status => status_json(port),
         Command::ToolsList => post(port, &tools_list_body())?,
+        Command::ImportFigma { fig_path, out_path } => {
+            figma_cli::run_import_figma(&fig_path, &out_path)?
+        }
         Command::ToolCall { tool, args } => {
             post(port, &tool_call_body(&tool, &args_to_json(&args)))?
         }
@@ -67,6 +74,10 @@ enum Command {
     Version,
     Status,
     ToolsList,
+    ImportFigma {
+        fig_path: String,
+        out_path: String,
+    },
     ToolCall {
         tool: String,
         args: Vec<(String, String)>,
@@ -207,10 +218,11 @@ fn command_from_positionals(positionals: &[String], flags: &Flags) -> Result<Com
         "layout" => map_layout(flags),
         "find-space" => map_find_space(flags),
         "import:svg" => map_import_svg(positionals, flags),
+        "import:figma" => figma_cli::map_import_figma(positionals, flags),
         "codegen:plan" | "codegen:submit" | "codegen:assemble" | "codegen:clean" => {
             codegen_cli::map_codegen(positionals, flags)
         }
-        "start" | "stop" | "save" | "import:figma" | "install" | "uninstall" => Err(format!(
+        "start" | "stop" | "save" | "install" | "uninstall" => Err(format!(
             "TS command {:?} is not implemented by the Rust HTTP MCP CLI yet",
             positionals[0]
         )),
