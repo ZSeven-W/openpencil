@@ -234,6 +234,9 @@ impl BuiltinAgentConfig {
     }
 
     pub fn toggle_kind_for_preset(&mut self) {
+        if builtin_agent_preset(self.preset).alt_kind.is_none() {
+            return;
+        }
         let next = match self.kind {
             BuiltinAgentKind::Anthropic => BuiltinAgentKind::OpenAiCompat,
             BuiltinAgentKind::OpenAiCompat => BuiltinAgentKind::Anthropic,
@@ -821,6 +824,37 @@ mod tests {
                 ),
             ]
         );
+    }
+
+    #[test]
+    fn pure_builtin_presets_do_not_toggle_api_format() {
+        let mut anthropic = BuiltinAgentConfig {
+            id: "anthropic".into(),
+            preset: BuiltinAgentPresetKey::Anthropic,
+            display_name: "Anthropic".into(),
+            kind: BuiltinAgentKind::Anthropic,
+            api_key: String::new(),
+            model: "claude-sonnet-4-6-20250916".into(),
+            base_url: "https://api.anthropic.com".into(),
+            enabled: true,
+        };
+        anthropic.toggle_kind_for_preset();
+        assert_eq!(anthropic.kind, BuiltinAgentKind::Anthropic);
+        assert_eq!(anthropic.base_url, "https://api.anthropic.com");
+
+        let mut openai = BuiltinAgentConfig {
+            id: "openai".into(),
+            preset: BuiltinAgentPresetKey::OpenAi,
+            display_name: "OpenAI".into(),
+            kind: BuiltinAgentKind::OpenAiCompat,
+            api_key: String::new(),
+            model: "gpt-5.4".into(),
+            base_url: "https://api.openai.com/v1".into(),
+            enabled: true,
+        };
+        openai.toggle_kind_for_preset();
+        assert_eq!(openai.kind, BuiltinAgentKind::OpenAiCompat);
+        assert_eq!(openai.base_url, "https://api.openai.com/v1");
     }
 
     #[test]
