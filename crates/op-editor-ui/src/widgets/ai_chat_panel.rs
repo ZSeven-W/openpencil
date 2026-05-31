@@ -22,9 +22,14 @@ pub const AI_CHAT_MIN_WIDTH: f32 = 280.0;
 pub const AI_CHAT_MIN_HEIGHT: f32 = 250.0;
 pub const AI_CHAT_MAX_RATIO: f32 = 0.8;
 pub const AI_CHAT_COLLAPSED_WIDTH: f32 = 150.0;
-pub const AI_CHAT_COLLAPSED_HEIGHT: f32 = 36.0;
+pub const AI_CHAT_COLLAPSED_HEIGHT: f32 = 32.0;
 pub(crate) const PAD: f32 = 16.0;
 pub(crate) const HEADER_HEIGHT: f32 = 36.0;
+const COLLAPSED_RADIUS: f32 = 8.0;
+const COLLAPSED_X_PAD: f32 = 12.0;
+const COLLAPSED_GAP: f32 = 6.0;
+const COLLAPSED_MESSAGE_ICON: f32 = 13.0;
+const COLLAPSED_CHEVRON_ICON: f32 = 12.0;
 const RESIZE_GUTTER: f32 = 4.0;
 const RESIZE_CORNER: f32 = 12.0;
 const INPUT_AREA_HEIGHT: f32 = 56.0;
@@ -458,21 +463,22 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
     }
 
     fn paint(&self, cx: &mut PaintCx<'_>, rect: Rect) {
-        // Collapsed mode = compact pill: bubble icon + "New Chat"
-        // + chevron-up. No maximize/plus, narrow rounded radius.
+        // Collapsed mode mirrors TS AIChatMinimizedBar.
         if self.state.collapsed {
-            let radius = rect.size.y / 2.0;
-            cx.backend.fill_round_rect(rect, radius, self.theme.popover);
             cx.backend
-                .stroke_round_rect(rect, radius, self.theme.border, 1.0);
+                .fill_round_rect(rect, COLLAPSED_RADIUS, self.theme.card);
+            cx.backend
+                .stroke_round_rect(rect, COLLAPSED_RADIUS, self.theme.border, 1.0);
             let center_y = rect.origin.y + rect.size.y / 2.0;
-            let icon_size = 16.0;
             // Bubble at the left.
             draw_icon(
                 cx.backend,
                 Icon::MessageSquare,
-                Point2D::new(rect.origin.x + 12.0, center_y - icon_size / 2.0),
-                icon_size,
+                Point2D::new(
+                    rect.origin.x + COLLAPSED_X_PAD,
+                    center_y - COLLAPSED_MESSAGE_ICON / 2.0,
+                ),
+                COLLAPSED_MESSAGE_ICON,
                 self.theme.muted_foreground,
                 1.4,
             );
@@ -480,23 +486,26 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
             let title = TextLayout::single_run(
                 &self.label_new_chat,
                 "system-ui",
-                13.0,
-                to_jian_color(self.theme.foreground),
+                12.0,
+                to_jian_color(self.theme.muted_foreground),
                 Point2D::new(0.0, 0.0),
             );
             cx.backend.draw_text(
                 &title,
-                Point2D::new(rect.origin.x + 12.0 + icon_size + 8.0, center_y + 5.0),
+                Point2D::new(
+                    rect.origin.x + COLLAPSED_X_PAD + COLLAPSED_MESSAGE_ICON + COLLAPSED_GAP,
+                    center_y + 4.0,
+                ),
             );
             // Chevron-up at the right (click to expand).
             draw_icon(
                 cx.backend,
                 Icon::ChevronUp,
                 Point2D::new(
-                    rect.origin.x + rect.size.x - 12.0 - icon_size,
-                    center_y - icon_size / 2.0,
+                    rect.origin.x + rect.size.x - COLLAPSED_X_PAD - COLLAPSED_CHEVRON_ICON,
+                    center_y - COLLAPSED_CHEVRON_ICON / 2.0,
                 ),
-                icon_size,
+                COLLAPSED_CHEVRON_ICON,
                 self.theme.muted_foreground,
                 1.4,
             );
