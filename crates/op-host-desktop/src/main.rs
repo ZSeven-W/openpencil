@@ -39,6 +39,7 @@ mod persistence;
 mod persistence_image;
 mod pre_validator;
 mod settings_io;
+mod tcc_selftest;
 mod update_check;
 mod window_state;
 
@@ -876,6 +877,12 @@ fn main() {
     // `--mcp` / `--mcp-http` swap the GUI for an MCP server mode;
     // when one of those ran, exit instead of opening a window.
     if mcp_serve::run_cli_if_requested() {
+        return;
+    }
+    // `--tcc-selftest <dir> [outfile]` probes protected-folder access
+    // (macOS TCC) and exits — used to verify a signed bundle inherits
+    // a granted app's Desktop/Documents access without opening the GUI.
+    if tcc_selftest::run_cli_if_requested() {
         return;
     }
     let initial_file = initial_file_from_argv();

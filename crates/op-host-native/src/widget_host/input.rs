@@ -51,6 +51,12 @@ impl WidgetHostNative {
         panel.open && panel.https_focused && !panel.loading
     }
 
+    /// Whether the inline create-branch name input owns the keyboard.
+    pub fn git_branch_create_focus_active(&self) -> bool {
+        let panel = &self.editor_state.editor_ui.git_panel;
+        panel.open && panel.branch_create_focused && !panel.loading
+    }
+
     /// Whether the inline Git clone wizard is up. While it is, the
     /// wizard owns the keyboard: a focused URL / destination field takes
     /// text, and every other key is swallowed so no canvas shortcut

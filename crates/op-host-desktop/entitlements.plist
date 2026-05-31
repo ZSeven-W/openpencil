@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Hardened-runtime entitlements for the Developer ID-signed
+  OpenPencil.app bundle (tools/bundle-macos.sh).
+
+  disable-library-validation is required because the binary links
+  Homebrew OpenSSL dylibs (/opt/homebrew/opt/openssl@3/...), which
+  are signed by a different team; under the hardened runtime,
+  library validation would otherwise refuse to load them. The TS
+  Electron app ships the same entitlement for the same reason.
+-->
+<plist version="1.0">
+<dict>
+  <key>com.apple.security.cs.disable-library-validation</key>
+  <true/>
+</dict>
+</plist>
