@@ -21,9 +21,41 @@ fn add_page_promotes_single_page_document_and_migrates_root() {
     // The migrated "Page 1" keeps the root node.
     assert_eq!(pages[0].children.len(), 1);
     assert_eq!(pages[0].children[0].id_str(), "n1");
-    // New page is empty + active.
-    assert!(pages[1].children.is_empty());
+    // New page mirrors the TS blank-page default frame + active.
+    assert_eq!(pages[1].children.len(), 1);
     assert_eq!(s.ui.active_page_index, 1);
+}
+
+#[test]
+fn add_page_seeds_ts_blank_frame_geometry() {
+    let mut s = state_with(vec![rect("n1", "A", 0.0, 0.0, 10.0, 10.0)]);
+    let idx = s.add_page().expect("add_page");
+    let pages = s.doc.pages.as_ref().unwrap();
+    let child = pages[idx]
+        .children
+        .first()
+        .expect("new page should contain the default frame");
+    let PenNode::Frame(frame) = child else {
+        panic!("new page should contain a frame, got {:?}", child);
+    };
+
+    assert_eq!(frame.base.name.as_deref(), Some("Frame"));
+    assert_eq!(frame.base.x, Some(0.0));
+    assert_eq!(frame.base.y, Some(0.0));
+    assert!(matches!(
+        frame.container.width,
+        Some(jian_ops_schema::sizing::SizingBehavior::Number(1200.0))
+    ));
+    assert!(matches!(
+        frame.container.height,
+        Some(jian_ops_schema::sizing::SizingBehavior::Number(800.0))
+    ));
+    assert!(frame.container.stroke.is_none());
+    assert!(matches!(
+        frame.container.fill.as_deref(),
+        Some([jian_ops_schema::style::PenFill::Solid(body)]) if body.color == "#FFFFFF"
+    ));
+    assert_eq!(frame.children.as_deref(), Some(&[][..]));
 }
 
 #[test]
