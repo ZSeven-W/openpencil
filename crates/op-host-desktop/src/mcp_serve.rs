@@ -256,25 +256,37 @@ fn serve_http_connection<S: std::io::Read + std::io::Write>(
     state: &mut EditorState,
     path: &std::path::Path,
 ) -> Result<(), String> {
-    let body = read_http_request_body(stream)?;
-    let response = process_message(state, path, &body)?.unwrap_or_default();
-    let http = format!(
-        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\
-         Content-Length: {}\r\nConnection: close\r\n\r\n{}",
-        response.len(),
-        response
-    );
-    stream
-        .write_all(http.as_bytes())
-        .map_err(|e| format!("http write: {e}"))?;
-    stream.flush().map_err(|e| format!("http flush: {e}"))
+    let req = read_http_request(stream)?;
+    if req.method == "OPTIONS" {
+        return write_mcp_http_response(stream, "204 No Content", "");
+    }
+    if req.path != "/mcp" && req.path != "/" {
+        return write_mcp_http_response(stream, "404 Not Found", r#"{"error":"Not found"}"#);
+    }
+    if req.method != "POST" {
+        return write_mcp_http_response(
+            stream,
+            "400 Bad Request",
+            r#"{"jsonrpc":"2.0","error":{"code":-32000,"message":"Invalid or missing session ID"},"id":null}"#,
+        );
+    }
+    match process_message(state, path, &req.body)? {
+        Some(response) => write_mcp_http_response(stream, "200 OK", &response),
+        None => write_mcp_http_response(stream, "202 Accepted", ""),
+    }
 }
 
-/// Read an HTTP request off `stream` and return its body. Reads to
-/// the `\r\n\r\n` header terminator, parses `Content-Length`, then
-/// reads exactly that many body bytes. The header block is capped so
-/// a malformed peer can't exhaust memory.
-pub(crate) fn read_http_request_body<S: std::io::Read>(stream: &mut S) -> Result<String, String> {
+pub(crate) struct HttpRequest {
+    pub method: String,
+    pub path: String,
+    pub body: String,
+}
+
+/// Read an HTTP request off `stream`. Reads to the `\r\n\r\n` header
+/// terminator, parses the request line + `Content-Length`, then reads
+/// exactly that many body bytes. The header block is capped so a
+/// malformed peer can't exhaust memory.
+pub(crate) fn read_http_request<S: std::io::Read>(stream: &mut S) -> Result<HttpRequest, String> {
     const MAX_HEADER: usize = 64 * 1024;
     const MAX_BODY: usize = 8 * 1024 * 1024;
     let mut head: Vec<u8> = Vec::new();
@@ -295,6 +307,19 @@ pub(crate) fn read_http_request_body<S: std::io::Read>(stream: &mut S) -> Result
         }
     }
     let headers = String::from_utf8_lossy(&head);
+    let mut lines = headers.lines();
+    let request_line = lines
+        .next()
+        .ok_or_else(|| "request line missing".to_string())?;
+    let mut request_parts = request_line.split_whitespace();
+    let method = request_parts
+        .next()
+        .ok_or_else(|| "request method missing".to_string())?
+        .to_ascii_uppercase();
+    let path = request_parts
+        .next()
+        .ok_or_else(|| "request path missing".to_string())?
+        .to_string();
     let content_length = headers
         .lines()
         .find_map(|l| {
@@ -311,7 +336,41 @@ pub(crate) fn read_http_request_body<S: std::io::Read>(stream: &mut S) -> Result
     stream
         .read_exact(&mut body)
         .map_err(|e| format!("http body read: {e}"))?;
-    Ok(String::from_utf8_lossy(&body).into_owned())
+    Ok(HttpRequest {
+        method,
+        path,
+        body: String::from_utf8_lossy(&body).into_owned(),
+    })
+}
+
+/// Compatibility wrapper for older tests/callers that only care about
+/// the JSON-RPC body.
+#[cfg(test)]
+pub(crate) fn read_http_request_body<S: std::io::Read>(stream: &mut S) -> Result<String, String> {
+    read_http_request(stream).map(|req| req.body)
+}
+
+pub(crate) fn write_mcp_http_response<S: std::io::Write>(
+    stream: &mut S,
+    status: &str,
+    body: &str,
+) -> Result<(), String> {
+    let http = format!(
+        "HTTP/1.1 {status}\r\n\
+         Access-Control-Allow-Origin: *\r\n\
+         Access-Control-Allow-Methods: GET, POST, DELETE, OPTIONS\r\n\
+         Access-Control-Allow-Headers: Content-Type, mcp-session-id\r\n\
+         Access-Control-Expose-Headers: mcp-session-id\r\n\
+         mcp-session-id: openpencil\r\n\
+         Content-Type: application/json\r\n\
+         Content-Length: {}\r\nConnection: close\r\n\r\n{}",
+        body.len(),
+        body
+    );
+    stream
+        .write_all(http.as_bytes())
+        .map_err(|e| format!("http write: {e}"))?;
+    stream.flush().map_err(|e| format!("http flush: {e}"))
 }
 
 /// Re-build the registry against the latest editor state so read-tool
