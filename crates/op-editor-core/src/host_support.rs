@@ -13,8 +13,17 @@ use crate::fills::{set_primary_fill_hex, set_primary_stroke_hex};
 use crate::node_id::NodeId;
 use crate::state::EditorState;
 use crate::tool::Tool;
-use crate::walkers::find_node_mut;
+use crate::walkers::{find_node, find_node_mut};
 use jian_ops_schema::node::{IconFontNode, PathNode, PenNode, PenNodeBase, PenPathAnchor};
+use jian_ops_schema::sizing::SizingBehavior;
+use jian_ops_schema::style::{PenEffect, PenFill, PenStroke};
+
+#[derive(Default)]
+struct BooleanPathStyle {
+    fill: Option<Vec<PenFill>>,
+    stroke: Option<PenStroke>,
+    effects: Option<Vec<PenEffect>>,
+}
 
 impl EditorState {
     /// Build an editor state seeded with the demo sample document —
@@ -364,16 +373,32 @@ impl EditorState {
         *next_id = (*next_id).max(safe);
         let id = NodeId::new(format!("n{}", *next_id));
         *next_id = (*next_id).checked_add(1)?;
-        // Remove every source path from the active page.
+        let style = source_ids
+            .iter()
+            .find_map(|src| find_node(self.active_children(), src).map(boolean_path_style))
+            .unwrap_or_default();
+        let (min_x, min_y, max_x, max_y) = points.iter().fold(
+            (
+                f64::INFINITY,
+                f64::INFINITY,
+                f64::NEG_INFINITY,
+                f64::NEG_INFINITY,
+            ),
+            |(min_x, min_y, max_x, max_y), (x, y)| {
+                (min_x.min(*x), min_y.min(*y), max_x.max(*x), max_y.max(*y))
+            },
+        );
+        let width = (max_x - min_x).max(0.0);
+        let height = (max_y - min_y).max(0.0);
+        // Remove every source shape from the active page.
         for src in source_ids {
             crate::walkers::remove_from_children(self.active_children_mut(), src);
         }
-        let first = points[0];
         let anchors: Vec<PenPathAnchor> = points
             .iter()
             .map(|(x, y)| PenPathAnchor {
-                x: *x,
-                y: *y,
+                x: *x - min_x,
+                y: *y - min_y,
                 handle_in: None,
                 handle_out: None,
                 point_type: None,
@@ -383,19 +408,19 @@ impl EditorState {
             base: PenNodeBase {
                 id: id.as_str().to_string(),
                 name: Some("Boolean Result".to_string()),
-                x: Some(first.0),
-                y: Some(first.1),
+                x: Some(min_x),
+                y: Some(min_y),
                 ..Default::default()
             },
             icon_id: None,
             d: None,
             anchors: Some(anchors),
             closed: Some(true),
-            width: None,
-            height: None,
-            fill: None,
-            stroke: None,
-            effects: None,
+            width: Some(SizingBehavior::Number(width)),
+            height: Some(SizingBehavior::Number(height)),
+            fill: style.fill,
+            stroke: style.stroke,
+            effects: style.effects,
             state: None,
             bindings: None,
             events: None,
@@ -406,6 +431,42 @@ impl EditorState {
         });
         self.active_children_mut().push(node);
         Some(id)
+    }
+}
+
+fn boolean_path_style(node: &PenNode) -> BooleanPathStyle {
+    match node {
+        PenNode::Frame(n) => BooleanPathStyle {
+            fill: n.container.fill.clone(),
+            stroke: n.container.stroke.clone(),
+            effects: n.container.effects.clone(),
+        },
+        PenNode::Rectangle(n) => BooleanPathStyle {
+            fill: n.container.fill.clone(),
+            stroke: n.container.stroke.clone(),
+            effects: n.container.effects.clone(),
+        },
+        PenNode::Ellipse(n) => BooleanPathStyle {
+            fill: n.fill.clone(),
+            stroke: n.stroke.clone(),
+            effects: n.effects.clone(),
+        },
+        PenNode::Polygon(n) => BooleanPathStyle {
+            fill: n.fill.clone(),
+            stroke: n.stroke.clone(),
+            effects: n.effects.clone(),
+        },
+        PenNode::Path(n) => BooleanPathStyle {
+            fill: n.fill.clone(),
+            stroke: n.stroke.clone(),
+            effects: n.effects.clone(),
+        },
+        PenNode::Line(n) => BooleanPathStyle {
+            fill: None,
+            stroke: n.stroke.clone(),
+            effects: n.effects.clone(),
+        },
+        _ => BooleanPathStyle::default(),
     }
 }
 
@@ -487,13 +548,23 @@ mod tests {
         let result = s
             .replace_paths_with_polyline(
                 &[a, b],
-                &[(0.0, 0.0), (10.0, 0.0), (10.0, 10.0)],
+                &[(10.0, 10.0), (0.0, 0.0), (10.0, 0.0)],
                 &mut next,
             )
             .expect("polyline committed");
         assert!(result.is_real());
         // Both sources gone, one result node remains.
         assert_eq!(s.active_children().len(), 1);
+        let PenNode::Path(path) = &s.active_children()[0] else {
+            panic!("boolean result should be a Path");
+        };
+        assert_eq!(path.base.x, Some(0.0));
+        assert_eq!(path.base.y, Some(0.0));
+        assert_eq!(path.width, Some(SizingBehavior::Number(10.0)));
+        assert_eq!(path.height, Some(SizingBehavior::Number(10.0)));
+        let anchors = path.anchors.as_ref().expect("anchors");
+        assert_eq!(anchors[0].x, 10.0);
+        assert_eq!(anchors[0].y, 10.0);
     }
 
     #[test]
@@ -501,5 +572,32 @@ mod tests {
         let mut s = EditorState::new();
         let mut next = 100u64;
         assert!(s.replace_paths_with_polyline(&[], &[], &mut next).is_none());
+    }
+
+    #[test]
+    fn replace_paths_with_polyline_inherits_first_source_style() {
+        let src = r##"{
+            "version": "0.8.0",
+            "children": [
+              {"type":"rectangle","id":"n10","x":0,"y":0,"width":20,"height":20,
+               "fill":[{"type":"solid","color":"#ff0000"}]},
+              {"type":"rectangle","id":"n11","x":10,"y":0,"width":20,"height":20}
+            ]
+        }"##;
+        let doc = jian_ops_schema::load_str(src)
+            .expect("fixture parses")
+            .value;
+        let mut s = EditorState::from_document(doc);
+        let mut next = 100u64;
+        s.replace_paths_with_polyline(
+            &[NodeId::new("n10"), NodeId::new("n11")],
+            &[(0.0, 0.0), (20.0, 0.0), (20.0, 20.0)],
+            &mut next,
+        )
+        .expect("polyline committed");
+        let PenNode::Path(path) = &s.active_children()[0] else {
+            panic!("boolean result should be a Path");
+        };
+        assert!(path.fill.is_some(), "result should keep first source fill");
     }
 }
