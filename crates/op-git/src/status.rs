@@ -211,6 +211,8 @@ impl GitRepo {
             &tree,
             &parent_refs,
         )?;
+        let commit = repo.find_commit(oid)?;
+        repo.reset(commit.as_object(), git2::ResetType::Mixed, None)?;
         Ok(oid.to_string())
     }
 
@@ -234,15 +236,36 @@ impl GitRepo {
     /// pathspec APIs expect repo-relative paths, but callers pass
     /// absolute document paths.
     fn rel_to_workdir(&self, p: &Path) -> PathBuf {
-        p.strip_prefix(self.workdir())
-            .map(Path::to_path_buf)
-            .unwrap_or_else(|_| p.to_path_buf())
+        if let Ok(rel) = p.strip_prefix(self.workdir()) {
+            return rel.to_path_buf();
+        }
+
+        let Some(rel) = canonical_relpath(self.workdir(), p) else {
+            return p.to_path_buf();
+        };
+        rel
     }
 
     /// `rel_to_workdir` as a `String` for pathspec strings.
     fn rel_str(&self, p: &Path) -> String {
         self.rel_to_workdir(p).to_string_lossy().into_owned()
     }
+}
+
+fn canonical_relpath(root: &Path, path: &Path) -> Option<PathBuf> {
+    let root = std::fs::canonicalize(root).ok()?;
+    let path = canonicalize_path_or_parent(path)?;
+    path.strip_prefix(root).map(Path::to_path_buf).ok()
+}
+
+fn canonicalize_path_or_parent(path: &Path) -> Option<PathBuf> {
+    std::fs::canonicalize(path).ok().or_else(|| {
+        let parent = path.parent()?;
+        let file_name = path.file_name()?;
+        std::fs::canonicalize(parent)
+            .ok()
+            .map(|parent| parent.join(file_name))
+    })
 }
 
 /// Map a libgit2 status bitset to the single [`ChangeState`] the panel
