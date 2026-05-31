@@ -3011,6 +3011,7 @@ name = "op-mcp"
 version = "0.1.0"
 dependencies = [
  "jian-ops-schema",
+ "op-ai-skills",
  "op-design-lint",
  "op-editor-core",
  "serde_json",
