@@ -133,6 +133,11 @@ fn first_layer_eye_top_left(panel: &LayerPanel, rect: Rect) -> Point2D {
     Point2D::new(eye_center.x - 6.0, eye_center.y - 5.0)
 }
 
+fn first_layer_lock_top_left(panel: &LayerPanel, rect: Rect) -> Point2D {
+    let (_, lock_center) = first_layer_trailing_points(panel, rect);
+    Point2D::new(lock_center.x - 6.0, lock_center.y - 5.0)
+}
+
 #[test]
 fn selected_visible_unlocked_layer_does_not_expose_trailing_actions_without_hover() {
     let state = EditorState::starter();
@@ -176,6 +181,31 @@ fn hovered_layer_exposes_trailing_actions() {
         panel.hit_test(rect, lock),
         Some(LayerPanelHit::ToggleLocked(NodeId::new("n10")))
     );
+}
+
+#[test]
+fn hidden_locked_layer_does_not_expose_trailing_actions_without_hover() {
+    let mut state = EditorState::starter();
+    state.toggle_node_hidden(&NodeId::new("n10"));
+    state.toggle_node_locked(&NodeId::new("n10"));
+    let panel = LayerPanel::from_editor(&state);
+    assert!(!panel.items[0].hovered);
+    assert!(panel.items[0].hidden);
+    assert!(panel.items[0].locked);
+    let rect = Rect {
+        origin: Point2D::new(0.0, 0.0),
+        size: Point2D::new(LAYER_PANEL_WIDTH, panel.intrinsic_height()),
+    };
+    let (eye, lock) = first_layer_trailing_points(&panel, rect);
+
+    assert!(matches!(
+        panel.hit_test(rect, eye),
+        Some(LayerPanelHit::Layer(_))
+    ));
+    assert!(matches!(
+        panel.hit_test(rect, lock),
+        Some(LayerPanelHit::Layer(_))
+    ));
 }
 
 #[derive(Default)]
@@ -224,9 +254,41 @@ fn is_yellow_400(color: crate::Color) -> bool {
 }
 
 #[test]
-fn hidden_layer_eye_icon_uses_ts_yellow_state_color() {
+fn hidden_locked_layer_does_not_paint_trailing_actions_without_hover() {
     let mut state = EditorState::starter();
     state.toggle_node_hidden(&NodeId::new("n10"));
+    state.toggle_node_locked(&NodeId::new("n10"));
+    let panel = LayerPanel::from_editor(&state);
+    let rect = Rect {
+        origin: Point2D::new(0.0, 0.0),
+        size: Point2D::new(LAYER_PANEL_WIDTH, panel.intrinsic_height()),
+    };
+    let eye_top_left = first_layer_eye_top_left(&panel, rect);
+    let lock_top_left = first_layer_lock_top_left(&panel, rect);
+    let mut backend = LayerPaintBackend::default();
+    let mut cx = super::PaintCx {
+        backend: &mut backend,
+    };
+
+    panel.paint(&mut cx, rect);
+
+    assert!(!backend
+        .strokes
+        .iter()
+        .any(|(top_left, size, _)| approx_point(*top_left, eye_top_left)
+            && (*size - 12.0).abs() < 1e-4));
+    assert!(!backend
+        .strokes
+        .iter()
+        .any(|(top_left, size, _)| approx_point(*top_left, lock_top_left)
+            && (*size - 12.0).abs() < 1e-4));
+}
+
+#[test]
+fn hovered_hidden_layer_eye_icon_uses_ts_yellow_state_color() {
+    let mut state = EditorState::starter();
+    state.toggle_node_hidden(&NodeId::new("n10"));
+    state.editor_ui.hovered_layer_id = Some(NodeId::new("n10"));
     let panel = LayerPanel::from_editor(&state);
     let rect = Rect {
         origin: Point2D::new(0.0, 0.0),
@@ -240,14 +302,11 @@ fn hidden_layer_eye_icon_uses_ts_yellow_state_color() {
 
     panel.paint(&mut cx, rect);
 
-    assert!(backend
-        .strokes
-        .iter()
-        .any(
-            |(top_left, size, color)| approx_point(*top_left, eye_top_left)
-                && (*size - 12.0).abs() < 1e-4
-                && is_yellow_400(*color)
-        ));
+    assert!(backend.strokes.iter().any(|(top_left, size, color)| {
+        approx_point(*top_left, eye_top_left)
+            && (*size - 12.0).abs() < 1e-4
+            && is_yellow_400(*color)
+    }));
 }
 
 #[test]
