@@ -117,6 +117,8 @@ pub enum GitPanelHit {
     BranchCreateInput,
     /// The inline create-branch submit button — create + switch.
     BranchCreateSubmit,
+    /// Cancel a create / merge sub-mode — return to the branch list.
+    BranchPickerCancel,
     /// The Remotes-section URL input box — focus it.
     RemoteInput,
     /// The Remotes-section "Set origin" button.

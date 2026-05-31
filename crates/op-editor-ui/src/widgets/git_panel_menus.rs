@@ -228,12 +228,23 @@ impl GitPanel<'_> {
             let bi = if merging { candidates[i] } else { i };
             let is_current = self.state.branches.get(bi) == self.state.branch.as_ref();
             let name = truncate(
-                self.state.branches.get(bi).map(String::as_str).unwrap_or(""),
+                self.state
+                    .branches
+                    .get(bi)
+                    .map(String::as_str)
+                    .unwrap_or(""),
                 BRANCH_NAME_MAX,
             );
             // Line 1 — branch name (always foreground; current branch is
             // signalled by the check, not by colour).
-            self.text(cx, &name, row.origin.x + 10.0, row.origin.y + 16.0, 12.0, t.foreground);
+            self.text(
+                cx,
+                &name,
+                row.origin.x + 10.0,
+                row.origin.y + 16.0,
+                12.0,
+                t.foreground,
+            );
             // Line 2 — last-commit subtitle (only the current branch's HEAD
             // commit is known here; others fall back to the no-commits label).
             let subtitle = if is_current {
@@ -361,7 +372,9 @@ impl GitPanel<'_> {
                         return Some(GitPanelHit::MergeBranch(candidates[i]));
                     }
                 }
-                Some(GitPanelHit::Inside)
+                // A click anywhere else in the popover (including the 取消
+                // hint) cancels merge mode back to the branch list.
+                Some(GitPanelHit::BranchPickerCancel)
             }
             GitBranchPickerMode::List => {
                 for (i, row) in self.branch_picker_row_rects(panel_rect).iter().enumerate() {
