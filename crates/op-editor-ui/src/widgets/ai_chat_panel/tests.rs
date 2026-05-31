@@ -76,6 +76,20 @@ fn hit_test_resolves_send_at_right() {
 }
 
 #[test]
+fn hit_test_resolves_stop_at_right_while_streaming() {
+    let mut s = EditorState::new();
+    s.chat
+        .messages
+        .push(op_editor_core::ChatMessage::assistant_streaming());
+    let panel = AIChatPlaceholder::from_editor(&s);
+    let rect = Rect::xywh(0.0, 0.0, AI_CHAT_WIDTH, AI_CHAT_HEIGHT);
+    let send_x = AI_CHAT_WIDTH - PAD - 20.0;
+    let p = Point2D::new(send_x, toolbar_center_y());
+
+    assert_eq!(panel.hit_test(rect, p), Some(AIChatHit::Stop));
+}
+
+#[test]
 fn hit_test_resolves_bottom_toolbar_actions() {
     let s = EditorState::new();
     let panel = AIChatPlaceholder::from_editor(&s);

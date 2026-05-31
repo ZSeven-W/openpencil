@@ -393,6 +393,13 @@ impl ApplicationHandler for DesktopApp {
                 ) {
                     self.redraw_dirty = true;
                 }
+                if chat_session::drain_stop_request(
+                    &mut self.host,
+                    &mut self.current_chat,
+                    &mut self.current_design,
+                ) {
+                    self.redraw_dirty = true;
+                }
                 // Pump in-flight AI chat deltas into this frame.
                 if chat_session::pump(&mut self.host, &mut self.current_chat) {
                     self.redraw_dirty = true;
@@ -681,6 +688,13 @@ impl ApplicationHandler for DesktopApp {
                     self.request_redraw(true);
                 }
                 if chat_session::drain_new_chat_request(
+                    &mut self.host,
+                    &mut self.current_chat,
+                    &mut self.current_design,
+                ) {
+                    self.request_redraw(true);
+                }
+                if chat_session::drain_stop_request(
                     &mut self.host,
                     &mut self.current_chat,
                     &mut self.current_design,

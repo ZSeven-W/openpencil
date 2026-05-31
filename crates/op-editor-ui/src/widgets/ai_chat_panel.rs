@@ -166,6 +166,10 @@ impl<'a> AIChatPlaceholder<'a> {
         [Icon::Maximize, Icon::Minimize][self.state.maximized as usize]
     }
 
+    fn is_streaming(&self) -> bool {
+        self.state.messages.iter().any(|message| message.streaming)
+    }
+
     /// Bounds of the transcript body region.
     fn body_rect(&self, rect: Rect) -> Rect {
         let body_top = rect.origin.y + HEADER_HEIGHT;
@@ -315,7 +319,11 @@ impl<'a> AIChatPlaceholder<'a> {
                     return Some(AIChatHit::AddAttachment);
                 }
                 if point.x >= send_x {
-                    return Some(AIChatHit::Send);
+                    return Some(if self.is_streaming() {
+                        AIChatHit::Stop
+                    } else {
+                        AIChatHit::Send
+                    });
                 }
             }
             return Some(AIChatHit::FocusInput);
@@ -717,15 +725,26 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
         // both (TS parity: an attachment-only message is valid).
         let send_active =
             !self.state.input.trim().is_empty() || !self.state.pending_attachments.is_empty();
-        let (send_bg, icon_color) = if send_active {
-            (self.theme.primary, self.theme.primary_foreground)
+        let streaming = self.is_streaming();
+        let (send_bg, icon_color, send_icon) = if streaming {
+            (
+                self.theme.destructive,
+                self.theme.primary_foreground,
+                Icon::Square,
+            )
+        } else if send_active {
+            (
+                self.theme.primary,
+                self.theme.primary_foreground,
+                Icon::Send,
+            )
         } else {
-            (self.theme.muted, self.theme.muted_foreground)
+            (self.theme.muted, self.theme.muted_foreground, Icon::Send)
         };
         cx.backend.fill_round_rect(send_rect, 6.0, send_bg);
         draw_icon(
             cx.backend,
-            Icon::Send,
+            send_icon,
             Point2D::new(send_rect.origin.x + 6.0, send_rect.origin.y + 6.0),
             12.0,
             icon_color,

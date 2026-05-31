@@ -304,6 +304,10 @@ pub struct ChatState {
     /// or design worker that could otherwise keep appending into the
     /// fresh empty transcript.
     pub pending_new_chat: bool,
+    /// Raised when the user clicks the streaming turn's Stop
+    /// affordance. Unlike New Chat, the transcript stays visible; the
+    /// desktop event loop only drops the in-flight worker.
+    pub pending_stop_chat: bool,
     /// Full model catalog discovered from every *installed* CLI,
     /// before the connected-providers filter. The desktop host fills
     /// this from `model_discovery`; [`rebuild_available_models`] then
@@ -359,6 +363,7 @@ impl Default for ChatState {
             caret_anchor_ms: 0,
             pending_send: None,
             pending_new_chat: false,
+            pending_stop_chat: false,
             discovered_models: Vec::new(),
             available_models: Vec::new(),
             selected_model: 0,
@@ -470,12 +475,33 @@ impl ChatState {
         true
     }
 
+    /// Stop the currently streaming turn while keeping the visible
+    /// transcript. Returns true when either a queued send or streaming
+    /// bubble was actually cancelled.
+    pub fn stop_streaming(&mut self) -> bool {
+        let had_pending = self.pending_send.take().is_some();
+        let mut had_streaming = false;
+        for msg in &mut self.messages {
+            if msg.streaming {
+                had_streaming = true;
+                msg.streaming = false;
+            }
+        }
+        if had_pending || had_streaming {
+            self.pending_stop_chat = true;
+            true
+        } else {
+            false
+        }
+    }
+
     /// Start a fresh chat transcript and ask the host to abort any
     /// in-flight worker tied to the previous conversation.
     pub fn new_chat(&mut self) {
         self.messages.clear();
         self.input.clear();
         self.pending_send = None;
+        self.pending_stop_chat = false;
         self.pending_attachments.clear();
         self.pending_attachment_pick = false;
         self.pending_new_chat = true;

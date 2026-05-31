@@ -279,6 +279,23 @@ pub fn drain_new_chat_request(
     true
 }
 
+/// Drain a Stop request raised by the widget layer. The transcript
+/// has already had its streaming flags cleared; this only drops the
+/// in-flight workers so stale deltas cannot append after cancellation.
+pub fn drain_stop_request(
+    host: &mut WidgetHostNative,
+    current_chat: &mut Option<ChatSession>,
+    current_design: &mut Option<DesignSession>,
+) -> bool {
+    if !std::mem::take(&mut host.editor_state_mut().chat.pending_stop_chat) {
+        return false;
+    }
+    *current_chat = None;
+    *current_design = None;
+    host.mark_editor_state_dirty();
+    true
+}
+
 fn clear_fresh_starter_frame_for_design(state: &mut EditorState) -> bool {
     if state.doc != EditorState::starter().doc {
         return false;
@@ -552,6 +569,39 @@ mod tests {
         );
         assert_eq!(msg.content, "error: rate limited");
         assert!(!msg.streaming);
+    }
+
+    #[test]
+    fn drain_stop_request_drops_session_without_clearing_transcript() {
+        let provider = Box::new(EchoProvider {
+            script: vec![ChatDelta::TextDelta("late".into())],
+        });
+        let mut current = Some(ChatSession::start(
+            provider,
+            ChatRequest {
+                user_message: "x".into(),
+                max_output_tokens: 64,
+                ..Default::default()
+            },
+        ));
+        let mut current_design = None;
+        let mut host = WidgetHostNative::new();
+        host.editor_state_mut()
+            .chat
+            .messages
+            .push(ChatMessage::assistant_streaming());
+
+        assert!(host.editor_state_mut().chat.stop_streaming());
+        assert!(drain_stop_request(
+            &mut host,
+            &mut current,
+            &mut current_design
+        ));
+
+        assert!(current.is_none());
+        assert!(!host.editor_state().chat.pending_stop_chat);
+        assert_eq!(host.editor_state().chat.messages.len(), 1);
+        assert!(!host.editor_state().chat.messages[0].streaming);
     }
 
     #[test]

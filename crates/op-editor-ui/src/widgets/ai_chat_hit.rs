@@ -5,6 +5,9 @@ pub enum AIChatHit {
     FocusInput,
     /// Click landed on the send affordance.
     Send,
+    /// Click landed on the stop affordance shown during a streaming
+    /// turn.
+    Stop,
     /// Click landed on an example card; payload is the example's
     /// title (host fills the input with this).
     Example(String),
