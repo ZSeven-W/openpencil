@@ -1,27 +1,27 @@
-//! System-`git`-backed version control for OpenPencil documents.
+//! Git-backed version control for OpenPencil documents.
 //!
 //! This crate is the Rust counterpart of the TS Electron app's
-//! in-app Git (`apps/desktop/git/`). It drives the user's installed
-//! `git` executable through `std::process::Command` — the same
-//! approach as the TS `git-sys.ts` backend — so no `libgit2` /
-//! `git2` C dependency is pulled in.
+//! in-app Git (`apps/desktop/git/`). EVERY operation runs through
+//! in-process **libgit2** (`git2`, vendored), so the shipped binary
+//! carries its own git engine — there is no `std::process::Command`
+//! and no dependency on a system `git` executable at runtime. (The
+//! former subprocess backend failed under macOS TCC when the child
+//! process touched a sandboxed directory, and broke entirely on
+//! machines without git installed.)
 //!
 //! ## Scope
 //!
-//! The full TS surface spans repo lifecycle, branches, history,
-//! remotes, merge orchestration, worktree merges, auth + SSH keys.
-//! This module is the **foundation layer**: repo discovery / init,
-//! working-tree status, staging, commit, restore, branch list /
-//! create / delete / switch, and commit history / diff. Remote
-//! operations, merge orchestration and credential handling land in
-//! sibling modules in later increments.
+//! Repo lifecycle (discover / init / clone), working-tree status,
+//! staging, commit, restore, branches, commit history / diff, remotes
+//! and network ops (fetch / pull / push with credential callbacks), and
+//! merge orchestration incl. worktree-isolated merges. Credential and
+//! SSH-key storage live in `auth` / `ssh` (plain file I/O).
 //!
-//! Every operation returns a [`GitError`] on failure — a missing
-//! `git`, a non-repo path, or a non-zero `git` exit (with its
-//! stderr) — and never panics.
+//! Every operation returns a [`GitError`] on failure — a non-repo
+//! path, or a libgit2 error mapped onto [`GitError::Command`] — and
+//! never panics.
 
 use std::path::{Path, PathBuf};
-use std::process::{Command, Output};
 
 mod auth;
 mod branch;
@@ -109,6 +109,19 @@ impl GitError {
     }
 }
 
+/// A libgit2 error maps onto the existing [`GitError::Command`] variant
+/// (a non-zero op with its message) so the public error surface — the
+/// host's `i18n_key` matches + dialogs — stays unchanged across the
+/// subprocess → libgit2 migration.
+impl From<git2::Error> for GitError {
+    fn from(e: git2::Error) -> Self {
+        GitError::Command {
+            operation: "libgit2".to_string(),
+            stderr: e.message().to_string(),
+        }
+    }
+}
+
 /// A handle to a git repository — its working-tree root directory.
 #[derive(Debug, Clone)]
 pub struct GitRepo {
@@ -130,48 +143,6 @@ pub struct Author {
     pub name: Option<String>,
     /// `user.email`.
     pub email: Option<String>,
-}
-
-/// Run `git <args>` in `dir` with extra environment, mapping a
-/// missing executable to [`GitError::GitNotFound`].
-pub(crate) fn git_output_env(
-    dir: &Path,
-    args: &[&str],
-    env: &[(String, String)],
-) -> Result<Output, GitError> {
-    let mut command = Command::new("git");
-    command.current_dir(dir).args(args);
-    for (key, value) in env {
-        command.env(key, value);
-    }
-    command.output().map_err(|e| {
-        if e.kind() == std::io::ErrorKind::NotFound {
-            GitError::GitNotFound
-        } else {
-            GitError::Io(e.to_string())
-        }
-    })
-}
-
-/// Run `git <args>` in `dir`, mapping a missing executable to
-/// [`GitError::GitNotFound`].
-pub(crate) fn git_output(dir: &Path, args: &[&str]) -> Result<Output, GitError> {
-    Command::new("git")
-        .current_dir(dir)
-        .args(args)
-        .output()
-        .map_err(|e| {
-            if e.kind() == std::io::ErrorKind::NotFound {
-                GitError::GitNotFound
-            } else {
-                GitError::Io(e.to_string())
-            }
-        })
-}
-
-/// Trimmed stderr text of a failed invocation.
-pub(crate) fn stderr_of(output: &Output) -> String {
-    String::from_utf8_lossy(&output.stderr).trim().to_string()
 }
 
 /// Write `bytes` to `path` for a file that holds secret material
@@ -219,38 +190,44 @@ impl GitRepo {
         if !probe.exists() {
             return Ok(None);
         }
-        let output = git_output(probe, &["rev-parse", "--show-toplevel"])?;
-        if !output.status.success() {
-            // git exits non-zero outside a work tree — "no repo here".
-            return Ok(None);
+        match git2::Repository::discover(probe) {
+            Ok(repo) => Ok(Some(GitRepo {
+                // The work-tree root. A bare repo has none — fall back to
+                // the `.git` path so the handle is still well-formed.
+                workdir: repo
+                    .workdir()
+                    .map(|p| p.to_path_buf())
+                    .unwrap_or_else(|| repo.path().to_path_buf()),
+                auth_env: Vec::new(),
+            })),
+            // Not inside any repository is a normal state, not an error.
+            Err(e) if e.code() == git2::ErrorCode::NotFound => Ok(None),
+            Err(e) => Err(e.into()),
         }
-        let top = String::from_utf8_lossy(&output.stdout).trim().to_string();
-        if top.is_empty() {
-            return Ok(None);
-        }
-        Ok(Some(GitRepo {
-            workdir: PathBuf::from(top),
-            auth_env: Vec::new(),
-        }))
     }
 
-    /// `git init` a repository at `dir` (creating `dir` if needed)
-    /// and return a handle to it. The initial branch is named `main`.
+    /// Initialize a repository at `dir` (creating `dir` if needed) and
+    /// return a handle to it. The initial branch is named `main`.
     pub fn init(dir: &Path) -> Result<GitRepo, GitError> {
         std::fs::create_dir_all(dir).map_err(|e| GitError::Io(e.to_string()))?;
-        let output = git_output(dir, &["init", "--initial-branch=main"])?;
-        if !output.status.success() {
-            return Err(GitError::Command {
-                operation: "init".to_string(),
-                stderr: stderr_of(&output),
-            });
-        }
+        let mut opts = git2::RepositoryInitOptions::new();
+        opts.initial_head("main");
+        git2::Repository::init_opts(dir, &opts)?;
         GitRepo::discover(dir)?.ok_or_else(|| GitError::NotARepo(dir.to_path_buf()))
     }
 
     /// The repository's working-tree root.
     pub fn workdir(&self) -> &Path {
         &self.workdir
+    }
+
+    /// Open the in-process libgit2 handle for this repository. Opening
+    /// is cheap (it just reads `.git`), so every operation opens fresh —
+    /// keeping [`GitRepo`] itself a plain `Clone + Send` `{workdir,
+    /// auth_env}` that the background pull / push / clone jobs can move
+    /// across threads (a `git2::Repository` is neither `Clone` nor `Send`).
+    pub(crate) fn open(&self) -> Result<git2::Repository, GitError> {
+        git2::Repository::open(&self.workdir).map_err(Into::into)
     }
 
     /// A handle to the same repository whose `git` invocations carry
@@ -274,24 +251,38 @@ impl GitRepo {
         }
     }
 
-    /// Read a single git config value, or `None` when it is unset.
+    /// Read a single git config value (repo config, falling back to the
+    /// global/system config the way `git config --get` does), or `None`
+    /// when it is unset.
     fn config_get(&self, key: &str) -> Option<String> {
-        let output = git_output(&self.workdir, &["config", "--get", key]).ok()?;
-        if !output.status.success() {
-            return None;
-        }
-        let value = String::from_utf8_lossy(&output.stdout).trim().to_string();
-        (!value.is_empty()).then_some(value)
+        let repo = self.open().ok()?;
+        let cfg = repo.config().ok()?;
+        // `Config::get_string` already walks repo → global → system.
+        cfg.get_string(key).ok().filter(|v| !v.is_empty())
     }
 
-    /// Run `git <args>` in this repo, returning trimmed stdout on a
-    /// zero exit. Shared by every operation in the sibling modules.
+    /// Test-only porcelain escape hatch: run `git <args>` in this repo
+    /// and return trimmed stdout. Used ONLY by the integration-test
+    /// fixtures to *set up* repositories (seed commits, branches,
+    /// remotes) the quick way; the shipped library is pure libgit2 with
+    /// no subprocess, so this is gated out of every non-test build.
+    #[cfg(test)]
     pub(crate) fn run(&self, args: &[&str]) -> Result<String, GitError> {
-        let output = git_output_env(&self.workdir, args, &self.auth_env)?;
+        let output = std::process::Command::new("git")
+            .current_dir(&self.workdir)
+            .args(args)
+            .output()
+            .map_err(|e| {
+                if e.kind() == std::io::ErrorKind::NotFound {
+                    GitError::GitNotFound
+                } else {
+                    GitError::Io(e.to_string())
+                }
+            })?;
         if !output.status.success() {
             return Err(GitError::Command {
                 operation: args.first().copied().unwrap_or("git").to_string(),
-                stderr: stderr_of(&output),
+                stderr: String::from_utf8_lossy(&output.stderr).trim().to_string(),
             });
         }
         Ok(String::from_utf8_lossy(&output.stdout).into_owned())

@@ -4,13 +4,18 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
-description = "System-git-backed version control for OpenPencil documents"
+description = "Git-backed version control for OpenPencil documents"
 
-# Native-only: this crate drives the system `git` executable via
-# `std::process::Command`. It is the Rust counterpart of the TS
-# Electron app's `apps/desktop/git/git-sys.ts` system-git backend.
-# No heavy dependencies — the wire is plain subprocess + text parsing.
+# Native-only: in-process version control via libgit2 (`git2`),
+# vendored so no system `git` binary is required at runtime. Replaces
+# the former `std::process::Command` system-git backend (which failed
+# under macOS TCC when the subprocess touched a sandboxed directory and
+# broke entirely on machines without git installed).
 [dependencies]
+# In-process libgit2. `vendored-libgit2` builds + statically links
+# libgit2 from source (cmake + cc), so the shipped binary carries its
+# own git engine. Keeps the default `https` / `ssh` transports.
+git2 = { version = "=0.20.3", features = ["vendored-libgit2"] }
 thiserror = { workspace = true }
 # Credential store (`auth.rs`) persistence — the host-keyed token /
 # SSH-key table is serialized to a JSON file.

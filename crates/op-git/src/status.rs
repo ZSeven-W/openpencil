@@ -1,10 +1,9 @@
-//! Working-tree status, staging, commit and restore.
+//! Working-tree status, staging, commit and restore — in-process via
+//! libgit2 (`git2`), so no system `git` binary is required.
 
-use std::io::Write;
-use std::path::Path;
-use std::process::{Command, Stdio};
+use std::path::{Path, PathBuf};
 
-use crate::{stderr_of, GitError, GitRepo};
+use crate::{GitError, GitRepo};
 
 /// How a file differs from `HEAD`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -65,268 +64,223 @@ impl GitRepo {
     /// Snapshot the working tree — branch, changed files, ahead /
     /// behind counts.
     pub fn status(&self) -> Result<RepoStatus, GitError> {
-        let raw = self.run(&["status", "--porcelain=v1", "--branch"])?;
-        Ok(parse_status(&raw))
+        let repo = self.open()?;
+
+        let mut opts = git2::StatusOptions::new();
+        opts.include_untracked(true)
+            .recurse_untracked_dirs(true)
+            .renames_head_to_index(true)
+            .renames_index_to_workdir(true);
+        let entries = repo.statuses(Some(&mut opts))?;
+
+        let mut files = Vec::new();
+        for entry in entries.iter() {
+            let Some(path) = entry.path() else { continue };
+            files.push(FileStatus {
+                path: path.to_string(),
+                state: classify(entry.status()),
+                // Staged ⇔ the index differs from HEAD (any `INDEX_*` bit).
+                staged: entry.status().intersects(
+                    git2::Status::INDEX_NEW
+                        | git2::Status::INDEX_MODIFIED
+                        | git2::Status::INDEX_DELETED
+                        | git2::Status::INDEX_RENAMED
+                        | git2::Status::INDEX_TYPECHANGE,
+                ),
+            });
+        }
+
+        // `current_branch` resolves an unborn `HEAD` to its symbolic
+        // target (`main`) too, so a fresh repo reports its branch rather
+        // than a misleading detached state.
+        let branch = self.current_branch().unwrap_or(None);
+        let (ahead, behind) = ahead_behind(&repo);
+
+        Ok(RepoStatus {
+            branch,
+            files,
+            ahead,
+            behind,
+        })
     }
 
-    /// Stage `paths` (relative to the repo root or absolute).
+    /// Stage `paths` (relative to the repo root or absolute). Uses
+    /// `add_all`, which stages additions, modifications AND deletions
+    /// of the matched paths — mirroring `git add -- <path>`.
     pub fn stage(&self, paths: &[&Path]) -> Result<(), GitError> {
         if paths.is_empty() {
             return Ok(());
         }
-        let mut args: Vec<&str> = vec!["add", "--"];
-        let path_strs: Vec<&str> = paths.iter().filter_map(|p| p.to_str()).collect();
-        args.extend(path_strs);
-        self.run(&args)?;
+        let repo = self.open()?;
+        let mut index = repo.index()?;
+        let specs: Vec<PathBuf> = paths.iter().map(|p| self.rel_to_workdir(p)).collect();
+        index.add_all(specs.iter(), git2::IndexAddOption::DEFAULT, None)?;
+        index.write()?;
         Ok(())
     }
 
     /// Stage every change in the working tree (`git add -A`).
     pub fn stage_all(&self) -> Result<(), GitError> {
-        self.run(&["add", "-A"])?;
+        let repo = self.open()?;
+        let mut index = repo.index()?;
+        // `add_all` over the whole tree picks up new + modified files;
+        // `update_all` records deletions + modifications of already-tracked
+        // files — together they equal `git add -A`.
+        index.add_all(["*"].iter(), git2::IndexAddOption::DEFAULT, None)?;
+        index.update_all(["*"].iter(), None)?;
+        index.write()?;
         Ok(())
     }
 
     /// Unstage `paths` — remove them from the index without touching
-    /// the working tree. After the first commit `git restore --staged`
-    /// resets each path's index entry to `HEAD`; before any commit
-    /// there is no `HEAD`, so `git rm --cached` drops the staged
-    /// addition instead (leaving the file untracked).
+    /// the working tree. After the first commit each path's index entry
+    /// is reset to `HEAD`; before any commit there is no `HEAD`, so the
+    /// staged addition is dropped from the index instead (leaving the
+    /// file untracked).
     pub fn unstage(&self, paths: &[&Path]) -> Result<(), GitError> {
         if paths.is_empty() {
             return Ok(());
         }
-        let has_head = self
-            .run(&["rev-parse", "--verify", "--quiet", "HEAD"])
-            .is_ok();
-        for path in paths.iter().filter_map(|p| p.to_str()) {
-            if has_head {
-                self.run(&["restore", "--staged", "--", path])?;
-            } else {
-                self.run(&["rm", "--cached", "--quiet", "--", path])?;
+        let repo = self.open()?;
+        let specs: Vec<PathBuf> = paths.iter().map(|p| self.rel_to_workdir(p)).collect();
+        match repo.head() {
+            Ok(head) => {
+                let head_obj = head.peel(git2::ObjectType::Commit)?;
+                repo.reset_default(Some(&head_obj), specs.iter())?;
+            }
+            // Unborn HEAD (no commit yet) — drop the staged additions.
+            Err(_) => {
+                let mut index = repo.index()?;
+                for spec in &specs {
+                    let _ = index.remove_path(spec);
+                }
+                index.write()?;
             }
         }
         Ok(())
     }
 
-    /// Stage a unified-diff `patch` into the index — `git apply
-    /// --cached`, the mechanism behind per-hunk staging. `patch`
-    /// must be a self-contained patch (file header + the chosen
-    /// hunks). `--recount` lets git tolerate hunk line-count drift
-    /// when only a subset of a file's hunks is applied.
+    /// Stage a unified-diff `patch` into the index — the mechanism
+    /// behind per-hunk staging. `patch` must be a self-contained patch
+    /// (file header + the chosen hunks); it is applied to the index
+    /// only (the working tree is untouched).
     pub fn apply_cached(&self, patch: &str) -> Result<(), GitError> {
-        let mut child = Command::new("git")
-            .current_dir(&self.workdir)
-            .args(["apply", "--cached", "--recount", "-"])
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()
-            .map_err(|e| {
-                if e.kind() == std::io::ErrorKind::NotFound {
-                    GitError::GitNotFound
-                } else {
-                    GitError::Io(e.to_string())
-                }
-            })?;
-        child
-            .stdin
-            .take()
-            .ok_or_else(|| GitError::Io("git apply stdin unavailable".to_string()))?
-            .write_all(patch.as_bytes())
-            .map_err(|e| GitError::Io(e.to_string()))?;
-        let output = child
-            .wait_with_output()
-            .map_err(|e| GitError::Io(e.to_string()))?;
-        if !output.status.success() {
-            return Err(GitError::Command {
-                operation: "apply".to_string(),
-                stderr: stderr_of(&output),
-            });
-        }
+        let repo = self.open()?;
+        let diff = git2::Diff::from_buffer(patch.as_bytes())?;
+        repo.apply(&diff, git2::ApplyLocation::Index, None)?;
         Ok(())
     }
 
-    /// Whether `path` has a change staged in the index. `git diff
-    /// --cached` lists the path exactly when its index entry differs
-    /// from `HEAD` (or, before the first commit, from the empty
-    /// tree) — the authoritative answer, unlike a UI snapshot.
+    /// Whether `path` has a change staged in the index — its index
+    /// entry differs from `HEAD` (or, before the first commit, from the
+    /// empty tree).
     pub fn is_path_staged(&self, path: &str) -> Result<bool, GitError> {
-        let out = self.run(&["diff", "--cached", "--name-only", "--", path])?;
-        Ok(!out.trim().is_empty())
+        let repo = self.open()?;
+        let mut opts = git2::DiffOptions::new();
+        opts.pathspec(self.rel_str(Path::new(path)));
+        let head_tree = repo.head().ok().and_then(|h| h.peel_to_tree().ok());
+        let diff = repo.diff_tree_to_index(head_tree.as_ref(), None, Some(&mut opts))?;
+        Ok(diff.deltas().len() > 0)
     }
 
     /// Commit the staged changes with `message`. Returns the new
-    /// commit's full hash. Fails with [`GitError::Command`] when
-    /// there is nothing staged to commit.
+    /// commit's full hash. The committer identity comes from git config
+    /// (`user.name` / `user.email`); an unborn `HEAD` produces the
+    /// repository's first (parent-less) commit.
     pub fn commit(&self, message: &str) -> Result<String, GitError> {
-        self.run(&["commit", "-m", message])?;
-        Ok(self.run(&["rev-parse", "HEAD"])?.trim().to_string())
+        let repo = self.open()?;
+        let signature = repo.signature()?;
+
+        // Snapshot the staged index as a tree.
+        let mut index = repo.index()?;
+        let tree_oid = index.write_tree()?;
+        let tree = repo.find_tree(tree_oid)?;
+
+        // Parent = the current HEAD commit, if the branch has one yet.
+        let parents: Vec<git2::Commit> = match repo.head() {
+            Ok(head) => head.peel_to_commit().ok().into_iter().collect(),
+            Err(_) => Vec::new(),
+        };
+        let parent_refs: Vec<&git2::Commit> = parents.iter().collect();
+
+        let oid = repo.commit(
+            Some("HEAD"),
+            &signature,
+            &signature,
+            message,
+            &tree,
+            &parent_refs,
+        )?;
+        Ok(oid.to_string())
     }
 
-    /// Restore `path`'s working-tree content to its version at
-    /// `commit` (a hash, tag, branch, or `"HEAD"`).
-    ///
-    /// This mirrors the TS engine's `restoreFileFromCommit`: it
-    /// rewrites the working-tree file from the commit's blob and
-    /// leaves the index untouched. Passing `"HEAD"` therefore
-    /// discards uncommitted edits to the file; passing a historical
-    /// commit hash rolls the file back to that revision.
+    /// Restore `path`'s working-tree content to its version at `commit`
+    /// (a hash, tag, branch, or `"HEAD"`), rewriting the working-tree
+    /// file from the commit's blob and leaving the index untouched.
     pub fn restore(&self, path: &Path, commit: &str) -> Result<(), GitError> {
-        let Some(path) = path.to_str() else {
+        let repo = self.open()?;
+        let rel = self.rel_to_workdir(path);
+        let Some(rel_str) = rel.to_str() else {
             return Ok(());
         };
-        self.run(&["restore", "--source", commit, "--worktree", "--", path])?;
+        let object = repo.revparse_single(&format!("{commit}:{rel_str}"))?;
+        let blob = object.peel_to_blob()?;
+        let abs = self.workdir().join(&rel);
+        std::fs::write(&abs, blob.content()).map_err(|e| GitError::Io(e.to_string()))?;
         Ok(())
     }
-}
 
-/// Parse `git status --porcelain=v1 --branch` output.
-fn parse_status(raw: &str) -> RepoStatus {
-    let mut branch = None;
-    let mut ahead = 0;
-    let mut behind = 0;
-    let mut files = Vec::new();
-
-    for line in raw.lines() {
-        if let Some(rest) = line.strip_prefix("## ") {
-            let (b, a, be) = parse_branch_line(rest);
-            branch = b;
-            ahead = a;
-            behind = be;
-        } else if line.len() >= 3 {
-            files.push(parse_file_line(line));
-        }
+    /// A path made relative to the work-tree root — libgit2 index /
+    /// pathspec APIs expect repo-relative paths, but callers pass
+    /// absolute document paths.
+    fn rel_to_workdir(&self, p: &Path) -> PathBuf {
+        p.strip_prefix(self.workdir())
+            .map(Path::to_path_buf)
+            .unwrap_or_else(|_| p.to_path_buf())
     }
 
-    RepoStatus {
-        branch,
-        files,
-        ahead,
-        behind,
+    /// `rel_to_workdir` as a `String` for pathspec strings.
+    fn rel_str(&self, p: &Path) -> String {
+        self.rel_to_workdir(p).to_string_lossy().into_owned()
     }
 }
 
-/// Parse the `## ` branch header — `main...origin/main [ahead 1, behind 2]`.
-fn parse_branch_line(rest: &str) -> (Option<String>, u32, u32) {
-    // The branch name runs up to `...` (upstream marker) or a space.
-    let name_end = rest
-        .find("...")
-        .or_else(|| rest.find(' '))
-        .unwrap_or(rest.len());
-    let name = rest[..name_end].trim();
-    // A brand-new repo with no commits reports `No commits yet on main`.
-    let branch = if name.is_empty() || name.contains("No commits yet") {
-        rest.rsplit(' ')
-            .next()
-            .filter(|s| !s.is_empty())
-            .map(str::to_string)
-    } else {
-        Some(name.to_string())
-    };
-
-    let mut ahead = 0;
-    let mut behind = 0;
-    if let (Some(open), Some(close)) = (rest.find('['), rest.find(']')) {
-        if open < close {
-            for part in rest[open + 1..close].split(',') {
-                let part = part.trim();
-                if let Some(n) = part.strip_prefix("ahead ") {
-                    ahead = n.trim().parse().unwrap_or(0);
-                } else if let Some(n) = part.strip_prefix("behind ") {
-                    behind = n.trim().parse().unwrap_or(0);
-                }
-            }
-        }
-    }
-    (branch, ahead, behind)
-}
-
-/// Parse one `XY <path>` porcelain line into a [`FileStatus`].
-fn parse_file_line(line: &str) -> FileStatus {
-    let code = &line[..2];
-    let mut path = line[3..].to_string();
-    // Renames render as `old -> new`; keep the destination path.
-    if let Some(idx) = path.find(" -> ") {
-        path = path[idx + 4..].to_string();
-    }
-    let x = code.as_bytes()[0] as char;
-    let y = code.as_bytes()[1] as char;
-
-    let state = if code == "??" {
-        ChangeState::Untracked
-    } else if is_conflict(x, y) {
+/// Map a libgit2 status bitset to the single [`ChangeState`] the panel
+/// shows. Conflicts win; otherwise the first matching add / delete /
+/// rename / untracked classification, falling back to modified.
+fn classify(s: git2::Status) -> ChangeState {
+    use git2::Status as St;
+    if s.is_conflicted() {
         ChangeState::Conflicted
-    } else if x == 'A' || y == 'A' {
+    } else if s.intersects(St::WT_NEW) && !s.intersects(St::INDEX_NEW) {
+        ChangeState::Untracked
+    } else if s.intersects(St::INDEX_NEW) {
         ChangeState::Added
-    } else if x == 'D' || y == 'D' {
+    } else if s.intersects(St::INDEX_DELETED | St::WT_DELETED) {
         ChangeState::Deleted
-    } else if x == 'R' || y == 'R' {
+    } else if s.intersects(St::INDEX_RENAMED | St::WT_RENAMED) {
         ChangeState::Renamed
     } else {
         ChangeState::Modified
+    }
+}
+
+/// Ahead / behind commit counts of the current branch vs its configured
+/// upstream — `(0, 0)` when detached, unborn, or with no upstream set.
+fn ahead_behind(repo: &git2::Repository) -> (u32, u32) {
+    let resolve = || -> Option<(usize, usize)> {
+        let head = repo.head().ok()?;
+        let local = head.target()?;
+        let branch_name = head.shorthand()?;
+        let upstream = repo
+            .find_branch(branch_name, git2::BranchType::Local)
+            .ok()?
+            .upstream()
+            .ok()?;
+        let upstream_oid = upstream.get().target()?;
+        repo.graph_ahead_behind(local, upstream_oid).ok()
     };
-    // The index column (`x`) carries the change when it is staged.
-    let staged = x != ' ' && x != '?';
-
-    FileStatus {
-        path,
-        state,
-        staged,
-    }
-}
-
-/// Whether an `XY` porcelain code marks an unresolved merge conflict.
-fn is_conflict(x: char, y: char) -> bool {
-    x == 'U' || y == 'U' || (x == 'A' && y == 'A') || (x == 'D' && y == 'D')
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn parses_a_clean_branch_header() {
-        let s = parse_status("## main\n");
-        assert_eq!(s.branch.as_deref(), Some("main"));
-        assert!(s.is_clean());
-        assert_eq!((s.ahead, s.behind), (0, 0));
-    }
-
-    #[test]
-    fn parses_upstream_ahead_behind() {
-        let s = parse_status("## main...origin/main [ahead 2, behind 3]\n");
-        assert_eq!(s.branch.as_deref(), Some("main"));
-        assert_eq!((s.ahead, s.behind), (2, 3));
-    }
-
-    #[test]
-    fn classifies_each_porcelain_code() {
-        let raw = "## main\n\
-                   M  staged.txt\n\
-                   \u{20}M unstaged.txt\n\
-                   ?? new.txt\n\
-                   A  added.txt\n\
-                   \u{20}D gone.txt\n\
-                   UU conflict.txt\n";
-        let s = parse_status(raw);
-        assert_eq!(s.files.len(), 6);
-        let by = |name: &str| s.files.iter().find(|f| f.path == name).unwrap().clone();
-        assert_eq!(by("staged.txt").state, ChangeState::Modified);
-        assert!(by("staged.txt").staged);
-        assert_eq!(by("unstaged.txt").state, ChangeState::Modified);
-        assert!(!by("unstaged.txt").staged);
-        assert_eq!(by("new.txt").state, ChangeState::Untracked);
-        assert_eq!(by("added.txt").state, ChangeState::Added);
-        assert_eq!(by("gone.txt").state, ChangeState::Deleted);
-        assert_eq!(by("conflict.txt").state, ChangeState::Conflicted);
-        assert!(s.has_conflicts());
-    }
-
-    #[test]
-    fn rename_keeps_the_destination_path() {
-        let s = parse_status("## main\nR  old.txt -> new.txt\n");
-        assert_eq!(s.files[0].path, "new.txt");
-        assert_eq!(s.files[0].state, ChangeState::Renamed);
-    }
+    resolve()
+        .map(|(a, b)| (a as u32, b as u32))
+        .unwrap_or((0, 0))
 }
