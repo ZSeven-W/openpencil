@@ -282,19 +282,64 @@ pub fn builtin_agent_preset(key: BuiltinAgentPresetKey) -> BuiltinAgentPreset {
         .unwrap_or(BUILTIN_AGENT_PRESETS[0])
 }
 
-pub fn infer_builtin_agent_preset(kind: BuiltinAgentKind, base_url: &str) -> BuiltinAgentPresetKey {
+pub fn infer_builtin_agent_preset(
+    kind: BuiltinAgentKind,
+    base_url: &str,
+    model: &str,
+) -> BuiltinAgentPresetKey {
     let normalized = base_url.trim().trim_end_matches('/');
-    BUILTIN_AGENT_PRESETS
+    let model = model.trim();
+    let mut matches = BUILTIN_AGENT_PRESETS
         .iter()
-        .find(|preset| {
-            preset.base_url.trim_end_matches('/') == normalized
-                || preset
-                    .alt_base_url
-                    .is_some_and(|url| url.trim_end_matches('/') == normalized)
-        })
-        .map(|preset| preset.key)
-        .unwrap_or(match kind {
-            BuiltinAgentKind::Anthropic => BuiltinAgentPresetKey::Anthropic,
-            BuiltinAgentKind::OpenAiCompat => BuiltinAgentPresetKey::Custom,
-        })
+        .filter(|preset| preset_url_matches(**preset, normalized));
+
+    if let Some(preset) = matches
+        .clone()
+        .find(|preset| preset_kind_matches(**preset, kind) && preset.model == model)
+    {
+        return preset.key;
+    }
+    if let Some(preset) = matches.find(|preset| preset_kind_matches(**preset, kind)) {
+        return preset.key;
+    }
+    match kind {
+        BuiltinAgentKind::Anthropic => BuiltinAgentPresetKey::Anthropic,
+        BuiltinAgentKind::OpenAiCompat => BuiltinAgentPresetKey::Custom,
+    }
+}
+
+pub fn normalize_builtin_agent_preset(
+    saved: BuiltinAgentPresetKey,
+    kind: BuiltinAgentKind,
+    base_url: &str,
+    model: &str,
+) -> BuiltinAgentPresetKey {
+    let inferred = infer_builtin_agent_preset(kind, base_url, model);
+    if inferred == saved {
+        return saved;
+    }
+    let saved_preset = builtin_agent_preset(saved);
+    let inferred_preset = builtin_agent_preset(inferred);
+    let normalized = base_url.trim().trim_end_matches('/');
+    let model = model.trim();
+    if preset_url_matches(saved_preset, normalized)
+        && preset_kind_matches(saved_preset, kind)
+        && inferred_preset.model == model
+        && saved_preset.model != model
+    {
+        inferred
+    } else {
+        saved
+    }
+}
+
+fn preset_url_matches(preset: BuiltinAgentPreset, normalized: &str) -> bool {
+    preset.base_url.trim_end_matches('/') == normalized
+        || preset
+            .alt_base_url
+            .is_some_and(|url| url.trim_end_matches('/') == normalized)
+}
+
+fn preset_kind_matches(preset: BuiltinAgentPreset, kind: BuiltinAgentKind) -> bool {
+    preset.kind == kind || preset.alt_kind == Some(kind)
 }

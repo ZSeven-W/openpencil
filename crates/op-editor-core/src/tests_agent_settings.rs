@@ -126,6 +126,26 @@ fn add_builtin_agent_prefills_ts_provider_presets_first() {
 }
 
 #[test]
+fn ark_coding_builtin_agent_infers_ark_coding_preset() {
+    let mut s = AgentSettings::default();
+
+    let id = s.add_builtin_agent_config(
+        "方舟CP",
+        "sk-test",
+        "ark-code-latest",
+        BuiltinAgentKind::Anthropic,
+        "https://ark.cn-beijing.volces.com/api/coding",
+    );
+
+    let agent = s
+        .builtin_agents
+        .iter()
+        .find(|agent| agent.id == id)
+        .expect("agent added");
+    assert_eq!(agent.preset, BuiltinAgentPresetKey::ArkCoding);
+}
+
+#[test]
 fn pure_builtin_presets_do_not_toggle_api_format() {
     let mut anthropic = BuiltinAgentConfig {
         id: "anthropic".into(),
