@@ -57,7 +57,7 @@ fn tools_list_response_includes_all_registered_tools() {
     // TOOL_SCHEMAS without being added to the list below.
     assert_eq!(
         TOOL_SCHEMAS.len(),
-        91,
+        94,
         "tools/list catalog count must match the registered tools — add the new tool to this test"
     );
     // Production catalog excludes debug tools (we removed the
@@ -97,6 +97,9 @@ fn tools_list_response_includes_all_registered_tools() {
         "save_theme_preset",
         "load_theme_preset",
         "list_theme_presets",
+        "get_design_md",
+        "set_design_md",
+        "export_design_md",
         "get_active_theme",
         "list_components",
         "get_component",
@@ -296,6 +299,30 @@ fn load_theme_preset_merges_live_doc_over_mcp() {
 
     let _ = std::fs::remove_file(&preset_path);
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn set_design_md_mutates_live_doc_over_mcp() {
+    let mut state = op_editor_core::EditorState::new();
+    let markdown = serde_json::to_string("# Design System: Aurora\n\n## Visual Theme\nCalm.")
+        .expect("markdown json");
+    let line = format!(
+        r#"{{"jsonrpc":"2.0","id":13,"method":"tools/call","params":{{"name":"set_design_md","arguments":{{"markdown":{markdown}}}}}}}"#
+    );
+    let response =
+        process_message_with_applier(&mut state, &line, |state, cmd| state.apply(cmd.clone()))
+            .expect("dispatch")
+            .expect("response");
+    assert!(response.contains(r#""id":13"#), "{response}");
+    assert!(response.contains(r#""wrote":"true""#), "{response}");
+    assert_eq!(
+        state
+            .doc
+            .design_md
+            .as_ref()
+            .and_then(|spec| spec.project_name.as_deref()),
+        Some("Aurora")
+    );
 }
 
 #[test]

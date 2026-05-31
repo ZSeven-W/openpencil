@@ -238,6 +238,10 @@ impl EditorState {
             EditorCommand::MergeThemePreset { variables, themes } => {
                 self.set_variables_bulk(variables, false) && self.set_themes_bulk(themes, false)
             }
+            EditorCommand::SetDesignMd { spec } => {
+                self.doc.design_md = Some(*spec);
+                true
+            }
             EditorCommand::SetActiveAxisValue { axis, value } => {
                 self.set_active_axis_value(&axis, &value)
             }

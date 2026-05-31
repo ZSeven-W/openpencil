@@ -6,7 +6,12 @@
 //! Design-MD panel renders while keeping the original text in
 //! [`DesignMdSpec::raw`] for round-trip fidelity.
 
-use jian_ops_schema::{DesignMdColor, DesignMdSpec, DesignMdTypography};
+use std::collections::BTreeSet;
+
+use crate::pen_node_ext::PenNodeExt;
+use jian_ops_schema::node::PenNode;
+use jian_ops_schema::variable::{VariableKind, VariableScalar, VariableValue};
+use jian_ops_schema::{DesignMdColor, DesignMdSpec, DesignMdTypography, PenDocument};
 
 /// Which structured field a `## ` section maps onto.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -236,6 +241,148 @@ pub fn parse_design_md(markdown: &str) -> DesignMdSpec {
     spec
 }
 
+/// Generate markdown text from a structured design.md spec.
+pub fn generate_design_md(spec: &DesignMdSpec) -> String {
+    if !spec.raw.is_empty() {
+        return spec.raw.clone();
+    }
+
+    let mut lines = Vec::new();
+    lines.push(format!(
+        "# Design System: {}",
+        spec.project_name.as_deref().unwrap_or("Untitled")
+    ));
+    lines.push(String::new());
+
+    if let Some(visual_theme) = spec.visual_theme.as_ref().filter(|s| !s.is_empty()) {
+        lines.push("## 1. Visual Theme & Atmosphere".into());
+        lines.push(visual_theme.clone());
+        lines.push(String::new());
+    }
+
+    if let Some(colors) = spec.color_palette.as_ref().filter(|c| !c.is_empty()) {
+        lines.push("## 2. Color Palette & Roles".into());
+        lines.push(String::new());
+        for color in colors {
+            lines.push(format!(
+                "- **{}** ({}) — {}",
+                color.name, color.hex, color.role
+            ));
+        }
+        lines.push(String::new());
+    }
+
+    if let Some(typography) = &spec.typography {
+        lines.push("## 3. Typography Rules".into());
+        if let Some(font) = typography.font_family.as_ref().filter(|s| !s.is_empty()) {
+            lines.push(format!("**Primary Font Family:** {font}"));
+        }
+        if let Some(scale) = typography.scale.as_ref().filter(|s| !s.is_empty()) {
+            lines.push(scale.clone());
+        }
+        lines.push(String::new());
+    }
+
+    if let Some(component_styles) = spec.component_styles.as_ref().filter(|s| !s.is_empty()) {
+        lines.push("## 4. Component Stylings".into());
+        lines.push(component_styles.clone());
+        lines.push(String::new());
+    }
+
+    if let Some(layout) = spec.layout_principles.as_ref().filter(|s| !s.is_empty()) {
+        lines.push("## 5. Layout Principles".into());
+        lines.push(layout.clone());
+        lines.push(String::new());
+    }
+
+    if let Some(notes) = spec.generation_notes.as_ref().filter(|s| !s.is_empty()) {
+        lines.push("## 6. Design System Notes".into());
+        lines.push(notes.clone());
+        lines.push(String::new());
+    }
+
+    lines.join("\n")
+}
+
+/// Best-effort extraction of a design.md spec from document variables
+/// and typography, matching the TS MCP fallback behavior.
+pub fn extract_design_md_from_document(doc: &PenDocument) -> DesignMdSpec {
+    let mut colors = Vec::new();
+    if let Some(variables) = &doc.variables {
+        for (name, def) in variables {
+            if def.kind != VariableKind::Color {
+                continue;
+            }
+            let Some(hex) = variable_hex(&def.value) else {
+                continue;
+            };
+            colors.push(DesignMdColor {
+                name: name.trim_start_matches('$').to_string(),
+                hex,
+                role: format!("Design variable ${name}"),
+            });
+        }
+    }
+
+    let mut fonts = BTreeSet::new();
+    collect_fonts(&doc.children, &mut fonts);
+    if let Some(pages) = &doc.pages {
+        for page in pages {
+            collect_fonts(&page.children, &mut fonts);
+        }
+    }
+
+    let typography = (!fonts.is_empty()).then(|| DesignMdTypography {
+        font_family: Some(fonts.into_iter().collect::<Vec<_>>().join(", ")),
+        ..DesignMdTypography::default()
+    });
+
+    let mut spec = DesignMdSpec {
+        raw: String::new(),
+        project_name: Some(doc.name.clone().unwrap_or_else(|| "Untitled".into())),
+        visual_theme: None,
+        color_palette: (!colors.is_empty()).then_some(colors),
+        typography,
+        component_styles: None,
+        layout_principles: None,
+        generation_notes: None,
+    };
+    spec.raw = generate_design_md(&spec);
+    spec
+}
+
+fn variable_hex(value: &VariableValue) -> Option<String> {
+    let raw = match value {
+        VariableValue::Scalar(VariableScalar::Str(s)) => s,
+        VariableValue::Themed(values) => match values.first().map(|v| &v.value) {
+            Some(VariableScalar::Str(s)) => s,
+            _ => return None,
+        },
+        _ => return None,
+    };
+    let bytes = raw.as_bytes();
+    if !(bytes.len() == 7 || bytes.len() == 9) || bytes.first() != Some(&b'#') {
+        return None;
+    }
+    if !bytes[1..].iter().all(|b| b.is_ascii_hexdigit()) {
+        return None;
+    }
+    Some(raw[..7].to_uppercase())
+}
+
+fn collect_fonts(nodes: &[PenNode], fonts: &mut BTreeSet<String>) {
+    for node in nodes {
+        if let PenNode::Text(text) = node {
+            if let Some(font) = text.font_family.as_ref().filter(|s| !s.is_empty()) {
+                fonts.insert(font.clone());
+            }
+        }
+        if let Some(children) = node.children() {
+            collect_fonts(children, fonts);
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -286,5 +433,56 @@ mod tests {
     fn seven_hex_digits_are_not_a_color() {
         let spec = parse_design_md("## Colors\nref #12345678 not a color\n");
         assert!(spec.color_palette.is_none());
+    }
+
+    #[test]
+    fn generate_design_md_prefers_raw_and_builds_structured_markdown() {
+        let raw = "# Design System: Raw\n\n## Components\nKeep this.";
+        let mut spec = parse_design_md(raw);
+        assert_eq!(generate_design_md(&spec), raw);
+
+        spec.raw.clear();
+        let generated = generate_design_md(&spec);
+        assert!(generated.contains("# Design System: Raw"));
+        assert!(generated.contains("## 4. Component Stylings"));
+        assert!(generated.contains("Keep this."));
+    }
+
+    #[test]
+    fn extract_design_md_from_document_reads_color_variables_and_fonts() {
+        let mut doc = crate::EditorState::new().doc;
+        doc.name = Some("Aurora".into());
+        doc.variables = Some(std::collections::BTreeMap::from([(
+            "brand".into(),
+            jian_ops_schema::variable::VariableDefinition {
+                kind: jian_ops_schema::variable::VariableKind::Color,
+                value: jian_ops_schema::variable::VariableValue::Scalar(
+                    jian_ops_schema::variable::VariableScalar::Str("#3366ff".into()),
+                ),
+            },
+        )]));
+        let mut text = crate::test_support::text("t1", "Title", 0.0, 0.0, 120.0, 32.0, "Hello");
+        if let jian_ops_schema::node::PenNode::Text(t) = &mut text {
+            t.font_family = Some("Inter".into());
+        }
+        doc.children = vec![text];
+
+        let spec = extract_design_md_from_document(&doc);
+        assert_eq!(spec.project_name.as_deref(), Some("Aurora"));
+        assert_eq!(
+            spec.color_palette.as_ref().expect("colors")[0].name,
+            "brand"
+        );
+        assert_eq!(
+            spec.color_palette.as_ref().expect("colors")[0].hex,
+            "#3366FF"
+        );
+        assert_eq!(
+            spec.typography
+                .as_ref()
+                .and_then(|t| t.font_family.as_deref()),
+            Some("Inter")
+        );
+        assert!(spec.raw.contains("# Design System: Aurora"));
     }
 }
