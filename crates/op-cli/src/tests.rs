@@ -171,6 +171,59 @@ fn parse_args_maps_page_duplicate_name_to_ts_page_id_shape() {
 }
 
 #[test]
+fn parse_args_maps_layout_flags_to_ts_snapshot_shape() {
+    let args = vec![
+        "layout".to_string(),
+        "--parent".to_string(),
+        "n10".to_string(),
+        "--depth".to_string(),
+        "2".to_string(),
+        "--page".to_string(),
+        "p1".to_string(),
+    ];
+    let p = parse_args(&args).expect("parse");
+    assert_eq!(
+        p.command,
+        Command::ToolCall {
+            tool: "snapshot_layout".to_string(),
+            args: vec![
+                ("parentId".to_string(), "n10".to_string()),
+                ("maxDepth".to_string(), "2".to_string()),
+                ("pageId".to_string(), "p1".to_string()),
+            ],
+        }
+    );
+}
+
+#[test]
+fn parse_args_maps_find_space_to_ts_tool_shape() {
+    let args = vec![
+        "find-space".to_string(),
+        "--direction".to_string(),
+        "bottom".to_string(),
+        "--width".to_string(),
+        "320".to_string(),
+        "--height".to_string(),
+        "240".to_string(),
+        "--page".to_string(),
+        "p1".to_string(),
+    ];
+    let p = parse_args(&args).expect("parse");
+    assert_eq!(
+        p.command,
+        Command::ToolCall {
+            tool: "find_empty_space".to_string(),
+            args: vec![
+                ("direction".to_string(), "bottom".to_string()),
+                ("width".to_string(), "320".to_string()),
+                ("height".to_string(), "240".to_string()),
+                ("pageId".to_string(), "p1".to_string()),
+            ],
+        }
+    );
+}
+
+#[test]
 fn parse_args_maps_ts_insert_json_alias_to_rust_tool() {
     let args = vec![
         "insert".to_string(),

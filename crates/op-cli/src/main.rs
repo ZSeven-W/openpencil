@@ -40,7 +40,8 @@ COMMON COMMANDS:
   op page list|add [--name N]|remove|rename|reorder|duplicate ...
   op vars                                 list variables
   op themes                               get active theme pins
-  op layout                               snapshot top-level layout
+  op layout [--parent P] [--depth N]      snapshot layout tree
+  op find-space [--direction D] [--width W] [--height H]
   op import:svg <file.svg> [--x N] [--y N]
 
 GLOBAL FLAGS:
@@ -223,10 +224,11 @@ fn command_from_positionals(positionals: &[String], flags: &Flags) -> Result<Com
         "page" => map_page(positionals, flags),
         "vars" => tool_call("list_variables", vec![]),
         "themes" => tool_call("get_active_theme", vec![]),
-        "layout" => tool_call("snapshot_layout", vec![]),
+        "layout" => map_layout(flags),
+        "find-space" => map_find_space(flags),
         "import:svg" => map_import_svg(positionals, flags),
-        "start" | "stop" | "save" | "read-nodes" | "find-space" | "vars:set" | "themes:set"
-        | "theme:save" | "theme:load" | "theme:list" | "import:figma" | "install" | "uninstall"
+        "start" | "stop" | "save" | "read-nodes" | "vars:set" | "themes:set" | "theme:save"
+        | "theme:load" | "theme:list" | "import:figma" | "install" | "uninstall"
         | "codegen:plan" | "codegen:submit" | "codegen:assemble" | "codegen:clean" => Err(format!(
             "TS command {:?} is not implemented by the Rust HTTP MCP CLI yet",
             positionals[0]
@@ -346,6 +348,44 @@ fn map_page(positionals: &[String], flags: &Flags) -> Result<Command, String> {
         }
         _ => Err(format!("unknown page subcommand {sub:?}")),
     }
+}
+
+fn map_layout(flags: &Flags) -> Result<Command, String> {
+    let mut pairs = Vec::new();
+    if let Some(parent) = flag_value(flags, "parent") {
+        pairs.push(pair("parentId", parent));
+    }
+    if let Some(depth) = flag_value(flags, "depth") {
+        pairs.push(pair("maxDepth", depth));
+    }
+    if let Some(page) = flag_value(flags, "page") {
+        pairs.push(pair("pageId", page));
+    }
+    tool_call("snapshot_layout", pairs)
+}
+
+fn map_find_space(flags: &Flags) -> Result<Command, String> {
+    let direction = flag_value(flags, "direction").unwrap_or_else(|| "right".into());
+    let width = flag_value(flags, "width").unwrap_or_else(|| "400".into());
+    let height = flag_value(flags, "height").unwrap_or_else(|| "300".into());
+    let mut pairs = vec![
+        pair("direction", direction),
+        pair("width", width),
+        pair("height", height),
+    ];
+    if let Some(padding) = flag_value(flags, "padding") {
+        pairs.push(pair("padding", padding));
+    }
+    if let Some(node_id) = flag_value(flags, "node") {
+        pairs.push(pair("nodeId", node_id));
+    }
+    if let Some(node_id) = flag_value(flags, "node-id") {
+        pairs.push(pair("nodeId", node_id));
+    }
+    if let Some(page) = flag_value(flags, "page") {
+        pairs.push(pair("pageId", page));
+    }
+    tool_call("find_empty_space", pairs)
 }
 
 fn map_import_svg(positionals: &[String], flags: &Flags) -> Result<Command, String> {

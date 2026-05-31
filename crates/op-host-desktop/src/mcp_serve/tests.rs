@@ -56,7 +56,7 @@ fn tools_list_response_includes_all_registered_tools() {
     // TOOL_SCHEMAS without being added to the list below.
     assert_eq!(
         TOOL_SCHEMAS.len(),
-        83,
+        84,
         "tools/list catalog count must match the registered tools — add the new tool to this test"
     );
     // Production catalog excludes debug tools (we removed the
@@ -96,6 +96,7 @@ fn tools_list_response_includes_all_registered_tools() {
         "list_components",
         "get_component",
         "snapshot_layout",
+        "find_empty_space",
         "get_canvas_bounds",
         "find_node_by_name",
         "get_node_parent",
@@ -182,6 +183,36 @@ fn tools_list_response_includes_all_registered_tools() {
         "debug tools/list must advertise debug_validation_report: {r_debug}"
     );
     std::env::remove_var("OPENPENCIL_DEBUG_TOOLS");
+}
+
+#[test]
+fn find_empty_space_returns_padded_position_from_active_page_bounds() {
+    let mut state = op_editor_core::EditorState::new();
+    assert!(state.apply(EditorCommand::InsertNode {
+        kind: "rect".into(),
+        name: "Left".into(),
+        x: 10,
+        y: 20,
+        width: 100,
+        height: 50,
+        fill_hex: None,
+    }));
+    assert!(state.apply(EditorCommand::InsertNode {
+        kind: "rect".into(),
+        name: "Right".into(),
+        x: 140,
+        y: 30,
+        width: 50,
+        height: 40,
+        fill_hex: None,
+    }));
+    let line = r#"{"jsonrpc":"2.0","id":9,"method":"tools/call","params":{"name":"find_empty_space","arguments":{"direction":"right","width":"320","height":"240"}}}"#;
+    let response = process_message_with_applier(&mut state, line, |_, _| false)
+        .expect("dispatch")
+        .expect("response");
+    assert!(response.contains(r#""id":9"#), "{response}");
+    assert!(response.contains(r#""x":"240""#), "{response}");
+    assert!(response.contains(r#""y":"20""#), "{response}");
 }
 
 /// In-memory `Read + Write` stand-in for a `TcpStream` so the HTTP

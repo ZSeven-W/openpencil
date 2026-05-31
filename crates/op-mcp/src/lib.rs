@@ -119,15 +119,15 @@ pub use selected_ops_tools::{
     UngroupSelected,
 };
 pub use tools::{
-    count_nodes_snapshot, document_info_snapshot, find_node_by_name_snapshot,
-    get_active_theme_snapshot, get_canvas_bounds_snapshot, get_component_snapshot,
-    get_history_depth_snapshot, get_node_parent_snapshot, get_node_snapshot,
-    get_selection_set_snapshot, get_viewport_snapshot, list_components_snapshot,
+    count_nodes_snapshot, document_info_snapshot, find_empty_space_snapshot,
+    find_node_by_name_snapshot, get_active_theme_snapshot, get_canvas_bounds_snapshot,
+    get_component_snapshot, get_history_depth_snapshot, get_node_parent_snapshot,
+    get_node_snapshot, get_selection_set_snapshot, get_viewport_snapshot, list_components_snapshot,
     list_node_kinds_snapshot, list_pages_snapshot, list_variables_snapshot, selection_snapshot,
-    snapshot_layout_snapshot, CountNodes, FindNodeByName, GetActiveTheme, GetCanvasBounds,
-    GetComponent, GetDocumentInfo, GetHistoryDepth, GetNode, GetNodeParent, GetSelection,
-    GetSelectionSet, GetViewport, ListComponents, ListNodeKinds, ListPages, ListVariables,
-    NodeRecord, SnapshotLayout, VariableRecord,
+    snapshot_layout_snapshot, CountNodes, FindEmptySpace, FindNodeByName, GetActiveTheme,
+    GetCanvasBounds, GetComponent, GetDocumentInfo, GetHistoryDepth, GetNode, GetNodeParent,
+    GetSelection, GetSelectionSet, GetViewport, ListComponents, ListNodeKinds, ListPages,
+    ListVariables, NodeRecord, SnapshotLayout, VariableRecord,
 };
 pub use write_tools::{
     copy_node_snapshot, delete_node_snapshot, import_svg_snapshot, insert_node_snapshot,

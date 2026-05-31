@@ -611,9 +611,9 @@ pub fn get_component_snapshot(state: &EditorState) -> GetComponent {
 
 // The remaining read tools live in `read_tools.rs` (800-line cap).
 pub use super::read_tools::{
-    count_nodes_snapshot, find_node_by_name_snapshot, get_canvas_bounds_snapshot,
-    get_history_depth_snapshot, get_node_parent_snapshot, get_selection_set_snapshot,
-    get_viewport_snapshot, list_node_kinds_snapshot, snapshot_layout_snapshot, CountNodes,
-    FindNodeByName, GetCanvasBounds, GetHistoryDepth, GetNodeParent, GetSelectionSet, GetViewport,
-    ListNodeKinds, SnapshotLayout,
+    count_nodes_snapshot, find_empty_space_snapshot, find_node_by_name_snapshot,
+    get_canvas_bounds_snapshot, get_history_depth_snapshot, get_node_parent_snapshot,
+    get_selection_set_snapshot, get_viewport_snapshot, list_node_kinds_snapshot,
+    snapshot_layout_snapshot, CountNodes, FindEmptySpace, FindNodeByName, GetCanvasBounds,
+    GetHistoryDepth, GetNodeParent, GetSelectionSet, GetViewport, ListNodeKinds, SnapshotLayout,
 };
