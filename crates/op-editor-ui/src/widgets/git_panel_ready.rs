@@ -140,6 +140,18 @@ impl GitPanel<'_> {
         !self.state.commit_message.trim().is_empty()
     }
 
+    /// Whether Pull can fire — a configured remote and no in-flight
+    /// pull / push (TS `pullDisabled = !hasRemote || busy`).
+    fn pull_enabled(&self) -> bool {
+        !self.state.remotes.is_empty() && !self.state.pulling && !self.state.pushing
+    }
+
+    /// Whether Push can fire — Pull's conditions plus `ahead > 0` (TS
+    /// also disables Push when up-to-date, `ahead === 0`).
+    fn push_enabled(&self) -> bool {
+        self.pull_enabled() && self.state.ahead > 0
+    }
+
     /// Paint the ready view.
     pub(super) fn paint_ready(&self, cx: &mut PaintCx<'_>, rect: Rect) {
         let t = self.theme;
@@ -200,8 +212,8 @@ impl GitPanel<'_> {
 
         // Pull / Push / Overflow icon buttons.
         let (pull_r, push_r, overflow_r) = self.ready_header_buttons(rect);
-        self.paint_ready_icon(cx, pull_r, Icon::ArrowDown, !self.state.pulling);
-        self.paint_ready_icon(cx, push_r, Icon::ArrowUp, !self.state.pushing);
+        self.paint_ready_icon(cx, pull_r, Icon::ArrowDown, self.pull_enabled());
+        self.paint_ready_icon(cx, push_r, Icon::ArrowUp, self.push_enabled());
         // Overflow `…` — TS colors this `text-muted-foreground` at size 13,
         // dimmer than the pull / push glyphs (git-panel-header.tsx:127-129).
         let overflow_s = 13.0;
@@ -431,10 +443,10 @@ impl GitPanel<'_> {
         if contains(self.ready_branch_rect(rect), point) {
             return Some(GitPanelHit::BranchPicker);
         }
-        if contains(pull, point) {
+        if self.pull_enabled() && contains(pull, point) {
             return Some(GitPanelHit::Pull);
         }
-        if contains(push, point) {
+        if self.push_enabled() && contains(push, point) {
             return Some(GitPanelHit::Push);
         }
         if contains(self.ready_commit_box(rect), point) {
