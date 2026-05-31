@@ -747,7 +747,13 @@ impl WidgetHostNative {
             self.mark_dirty();
             return true;
         }
-        if self.git_branch_create_focus_active() {
+        // …and a branch-picker sub-mode (create / merge): Escape steps it
+        // back to the branch list (the dropdown stays open). Driven off the
+        // mode, not input focus, so merge mode (no focused input) exits too.
+        if self.editor_state.editor_ui.git_panel.branch_picker_open
+            && self.editor_state.editor_ui.git_panel.branch_picker_mode
+                != op_editor_core::GitBranchPickerMode::List
+        {
             let panel = &mut self.editor_state.editor_ui.git_panel;
             panel.branch_picker_mode = op_editor_core::GitBranchPickerMode::List;
             panel.branch_create_draft.clear();

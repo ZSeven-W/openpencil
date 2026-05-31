@@ -240,6 +240,12 @@ impl WidgetHostNative {
                     panel.branch_picker_open = false;
                 }
             }
+            Some(GitPanelHit::BranchPickerCancel) => {
+                // Step a create / merge sub-mode back to the branch list.
+                panel.branch_picker_mode = GitBranchPickerMode::List;
+                panel.branch_create_draft.clear();
+                panel.branch_create_focused = false;
+            }
             Some(GitPanelHit::ShowWorkingDiff) => {
                 panel.pending_action = Some(GitPanelAction::ShowDiff(GitDiffTarget::WorkingTree));
             }
