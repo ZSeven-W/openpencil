@@ -31,6 +31,9 @@ const LINE_H: f32 = 16.0;
 const BUBBLE_PAD: f32 = 8.0;
 /// Text shown in the TS-style empty streaming assistant pill.
 const TYPING_LABEL: &str = "Thinking";
+/// Text shown when a completed assistant action only contained hidden
+/// tool-call/result XML, matching the TS transcript fallback.
+const AUTOMATED_ACTION_LABEL: &str = "(Automated action completed)";
 /// Horizontal padding inside the empty streaming assistant pill.
 const TYPING_PAD_X: f32 = 10.0;
 /// Vertical padding inside the empty streaming assistant pill.
@@ -287,6 +290,13 @@ fn build_item(
         && steps.is_empty()
         && thinking.is_none()
         && tools.is_none();
+    let automated_placeholder = !is_user
+        && !msg.streaming
+        && !msg.content.trim().is_empty()
+        && visible_content.is_empty()
+        && steps.is_empty()
+        && thinking.is_none()
+        && tools.is_none();
     let bubble = if typing {
         let r = Rect::xywh(
             x,
@@ -299,6 +309,15 @@ fn build_item(
             rect: r,
             lines: Vec::new(),
             typing: true,
+        })
+    } else if automated_placeholder {
+        let lines = vec![AUTOMATED_ACTION_LABEL.to_string()];
+        let r = Rect::xywh(x, y, bubble_w, LINE_H);
+        y += r.size.y;
+        Some(TextBubble {
+            rect: r,
+            lines,
+            typing: false,
         })
     } else if !visible_content.is_empty() {
         let lines = wrap_units(&visible_content, budget);
