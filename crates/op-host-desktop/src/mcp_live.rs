@@ -5,7 +5,6 @@
 //! requests a fresh snapshot from the UI thread for each HTTP request,
 //! then sends write commands back for the UI thread to apply.
 
-use std::io::Write;
 use std::net::TcpListener;
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender, SyncSender, TryRecvError};
 use std::thread;
@@ -107,7 +106,7 @@ fn server_loop(listener: TcpListener, req_tx: Sender<UiRequest>, stop_rx: Receiv
                 let _ = stream.set_write_timeout(Some(UI_ACK_TIMEOUT));
                 if let Err(e) = serve_connection(&mut stream, &req_tx) {
                     eprintln!("openpencil-desktop mcp: {e}");
-                    let _ = write_http_response(
+                    let _ = crate::mcp_serve::write_mcp_http_response(
                         &mut stream,
                         "500 Internal Server Error",
                         &error_json(&e),
@@ -129,23 +128,45 @@ fn serve_connection<S: std::io::Read + std::io::Write>(
     stream: &mut S,
     req_tx: &Sender<UiRequest>,
 ) -> Result<(), String> {
-    let body = crate::mcp_serve::read_http_request_body(stream)?;
+    let req = crate::mcp_serve::read_http_request(stream)?;
+    if req.method == "OPTIONS" {
+        return crate::mcp_serve::write_mcp_http_response(stream, "204 No Content", "");
+    }
+    if req.path != "/mcp" && req.path != "/" {
+        return crate::mcp_serve::write_mcp_http_response(
+            stream,
+            "404 Not Found",
+            r#"{"error":"Not found"}"#,
+        );
+    }
+    if req.method != "POST" {
+        return crate::mcp_serve::write_mcp_http_response(
+            stream,
+            "400 Bad Request",
+            r#"{"jsonrpc":"2.0","error":{"code":-32000,"message":"Invalid or missing session ID"},"id":null}"#,
+        );
+    }
     let mut state = request_snapshot(req_tx)?;
-    let response =
-        crate::mcp_serve::process_message_with_applier(&mut state, &body, |local_state, cmd| {
-            match request_apply(req_tx, cmd.clone()) {
-                Ok(ack) => {
-                    *local_state = ack.state;
-                    ack.applied
-                }
-                Err(e) => {
-                    eprintln!("openpencil-desktop mcp: apply failed: {e}");
-                    false
-                }
+    let response = crate::mcp_serve::process_message_with_applier(
+        &mut state,
+        &req.body,
+        |local_state, cmd| match request_apply(req_tx, cmd.clone()) {
+            Ok(ack) => {
+                *local_state = ack.state;
+                ack.applied
             }
-        })?
-        .unwrap_or_default();
-    write_http_response(stream, "200 OK", &response)
+            Err(e) => {
+                eprintln!("openpencil-desktop mcp: apply failed: {e}");
+                false
+            }
+        },
+    )?
+    .unwrap_or_default();
+    if response.is_empty() {
+        crate::mcp_serve::write_mcp_http_response(stream, "202 Accepted", "")
+    } else {
+        crate::mcp_serve::write_mcp_http_response(stream, "200 OK", &response)
+    }
 }
 
 fn request_snapshot(req_tx: &Sender<UiRequest>) -> Result<EditorState, String> {
@@ -170,19 +191,6 @@ fn recv_with_timeout<T>(result: Result<T, RecvTimeoutError>, label: &str) -> Res
         Err(RecvTimeoutError::Timeout) => Err(format!("timed out waiting for UI {label} ack")),
         Err(RecvTimeoutError::Disconnected) => Err(format!("UI {label} ack channel closed")),
     }
-}
-
-fn write_http_response<S: Write>(stream: &mut S, status: &str, body: &str) -> Result<(), String> {
-    let http = format!(
-        "HTTP/1.1 {status}\r\nContent-Type: application/json\r\n\
-         Content-Length: {}\r\nConnection: close\r\n\r\n{}",
-        body.len(),
-        body
-    );
-    stream
-        .write_all(http.as_bytes())
-        .map_err(|e| format!("http write: {e}"))?;
-    stream.flush().map_err(|e| format!("http flush: {e}"))
 }
 
 fn error_json(message: &str) -> String {

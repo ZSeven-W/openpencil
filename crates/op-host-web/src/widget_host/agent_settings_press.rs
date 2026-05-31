@@ -52,6 +52,13 @@ impl WidgetHost {
                     .position(|candidate| *candidate == cli)
                     .unwrap_or(0);
                 self.editor_state.editor_ui.agent_settings.mcp_cli_enabled[idx] ^= true;
+                if self.editor_state.editor_ui.agent_settings.mcp_cli_enabled[idx] {
+                    self.editor_state
+                        .editor_ui
+                        .agent_settings
+                        .mcp_server
+                        .running = true;
+                }
             }
             AgentSettingsHit::ToggleImagesAdvanced => {
                 self.editor_state

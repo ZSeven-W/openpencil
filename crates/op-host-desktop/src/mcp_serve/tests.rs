@@ -239,8 +239,29 @@ fn http_transport_serves_initialize() {
     let resp = String::from_utf8(stream.output).unwrap();
     assert!(resp.starts_with("HTTP/1.1 200 OK"), "status line: {resp}");
     assert!(resp.contains("Content-Type: application/json"));
+    assert!(resp.contains("mcp-session-id: openpencil"));
+    assert!(resp.contains("Access-Control-Allow-Origin: *"));
     // The JSON-RPC initialize reply carries the protocol handshake +
     // the request id, proving the body round-tripped over HTTP.
     assert!(resp.contains(r#""protocolVersion""#), "body: {resp}");
     assert!(resp.contains(r#""id":7"#), "body: {resp}");
+}
+
+#[test]
+fn http_transport_serves_options_preflight() {
+    let request = "OPTIONS /mcp HTTP/1.1\r\nHost: x\r\nContent-Length: 0\r\n\r\n";
+    let mut stream = MockStream {
+        input: std::io::Cursor::new(request.as_bytes().to_vec()),
+        output: Vec::new(),
+    };
+    let mut state = EditorState::new();
+    serve_http_connection(
+        &mut stream,
+        &mut state,
+        std::path::Path::new("/tmp/unused.op"),
+    )
+    .expect("serve_http_connection");
+    let resp = String::from_utf8(stream.output).unwrap();
+    assert!(resp.starts_with("HTTP/1.1 204 No Content"), "{resp}");
+    assert!(resp.contains("Access-Control-Allow-Methods"));
 }

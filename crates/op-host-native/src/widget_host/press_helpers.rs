@@ -94,6 +94,13 @@ impl WidgetHostNative {
                     .unwrap_or(0);
                 let v = &mut self.editor_state.editor_ui.agent_settings.mcp_cli_enabled[idx];
                 *v = !*v;
+                if *v {
+                    self.editor_state
+                        .editor_ui
+                        .agent_settings
+                        .mcp_server
+                        .running = true;
+                }
             }
             AgentSettingsHit::ToggleImagesAdvanced => {
                 let v = &mut self
