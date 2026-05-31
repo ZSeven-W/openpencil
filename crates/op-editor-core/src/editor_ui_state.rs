@@ -413,6 +413,9 @@ pub struct GitPanelState {
     pub branch_create_focused: bool,
     /// Number of changed (dirty) files in the working tree.
     pub dirty_count: usize,
+    /// Commits the current branch is ahead of its upstream — gates the
+    /// Push button (TS disables Push when `ahead === 0`).
+    pub ahead: u32,
     /// Number of files with unresolved merge conflicts.
     pub conflicted_count: usize,
     /// Whether a merge is in progress — drives the panel's conflict

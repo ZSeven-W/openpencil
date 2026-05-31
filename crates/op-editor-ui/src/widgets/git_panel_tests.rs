@@ -196,6 +196,10 @@ fn ready_view_maps_each_header_and_commit_region() {
     let s = state_with(GitPanelState {
         branch: Some("main".to_string()),
         commit_message: "ship it".to_string(),
+        // A remote + commits-ahead so pull/push are enabled (they now
+        // disable when there's no remote / nothing to push, TS parity).
+        remotes: vec!["origin → https://example.com/r.git".to_string()],
+        ahead: 1,
         ..open_repo()
     });
     let panel = GitPanel::for_editor(&s).unwrap();

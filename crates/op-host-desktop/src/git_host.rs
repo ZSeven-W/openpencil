@@ -70,6 +70,7 @@ impl DesktopApp {
             || panel.branch != snap.branch
             || panel.branches != snap.branches
             || panel.dirty_count != snap.dirty_count
+            || panel.ahead != snap.ahead
             || panel.conflicted_count != snap.conflicted_count
             || panel.merging != snap.merging
             || panel.conflicted_files != snap.conflicted_files
@@ -80,6 +81,7 @@ impl DesktopApp {
         panel.branch = snap.branch;
         panel.branches = snap.branches;
         panel.dirty_count = snap.dirty_count;
+        panel.ahead = snap.ahead;
         panel.conflicted_count = snap.conflicted_count;
         panel.merging = snap.merging;
         panel.conflicted_files = snap.conflicted_files;

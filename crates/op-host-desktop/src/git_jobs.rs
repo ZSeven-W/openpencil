@@ -22,6 +22,8 @@ pub struct GitSnapshot {
     pub branches: Vec<String>,
     /// Changed-file count.
     pub dirty_count: usize,
+    /// Commits ahead of the upstream — gates the Push button.
+    pub ahead: u32,
     /// Conflicted-file count.
     pub conflicted_count: usize,
     /// Whether a merge is in progress.
@@ -112,6 +114,7 @@ fn snapshot(repo: &GitRepo) -> GitSnapshot {
         .collect();
     let status = repo.status().ok();
     let dirty_count = status.as_ref().map(|s| s.files.len()).unwrap_or(0);
+    let ahead = status.as_ref().map(|s| s.ahead).unwrap_or(0);
     let conflicted_count = status
         .as_ref()
         .map(|s| {
@@ -156,6 +159,7 @@ fn snapshot(repo: &GitRepo) -> GitSnapshot {
         branch,
         branches,
         dirty_count,
+        ahead,
         conflicted_count,
         merging,
         conflicted_files,
