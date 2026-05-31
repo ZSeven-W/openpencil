@@ -98,6 +98,7 @@ struct TranscriptPaintBackend {
     round_rects: Vec<(Rect, f32)>,
     ovals: usize,
     texts: Vec<String>,
+    svg_strokes: Vec<(Point2D, f32)>,
 }
 
 impl crate::RenderBackend for TranscriptPaintBackend {
@@ -119,7 +120,9 @@ impl crate::RenderBackend for TranscriptPaintBackend {
         self.round_rects.push((rect, radius));
     }
     fn stroke_round_rect(&mut self, _: Rect, _: f32, _: crate::Color, _: f32) {}
-    fn stroke_svg_path(&mut self, _: &str, _: Point2D, _: f32, _: crate::Color, _: f32) {}
+    fn stroke_svg_path(&mut self, _: &str, point: Point2D, size: f32, _: crate::Color, _: f32) {
+        self.svg_strokes.push((point, size));
+    }
     fn fill_oval(&mut self, _: Rect, _: crate::Color) {
         self.ovals += 1;
     }
@@ -364,6 +367,37 @@ Applied to canvas."#,
     assert!(visible_text.contains("Here is the design:"));
     assert!(visible_text.contains("Applied to canvas."));
     assert!(!visible_text.contains(r#""type":"Frame""#));
+}
+
+#[test]
+fn paint_design_json_block_shows_expand_affordance_like_ts() {
+    let message = ChatMessage::assistant(
+        r#"```json
+[{"id":"frame-1","type":"Frame"}]
+```"#,
+    );
+    let body = body();
+    let mut backend = TranscriptPaintBackend::default();
+    let mut cx = PaintCx {
+        backend: &mut backend,
+    };
+
+    paint_transcript(
+        &mut cx,
+        &crate::Theme::dark(),
+        body,
+        &[message],
+        0,
+        op_editor_core::Locale::EnUs,
+    );
+
+    assert!(
+        backend
+            .svg_strokes
+            .iter()
+            .any(|(point, size)| *size == 12.0 && point.x >= body.origin.x + body.size.x - 26.0),
+        "TS design JSON blocks carry a right-side chevron affordance"
+    );
 }
 
 #[test]

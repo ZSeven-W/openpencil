@@ -153,13 +153,29 @@ pub(crate) fn place_design_blocks(
 }
 
 pub(crate) fn paint_design_block(cx: &mut PaintCx<'_>, theme: &Theme, block: &DesignBlock) {
-    cx.backend.fill_round_rect(block.rect, 6.0, theme.muted);
-    cx.backend
-        .stroke_round_rect(block.rect, 6.0, theme.border, 1.0);
+    let mut fill = theme.background;
+    fill.a *= 0.4;
+    let mut border = theme.border;
+    border.a *= 0.35;
+    cx.backend.fill_round_rect(block.rect, 6.0, fill);
+    cx.backend.stroke_round_rect(block.rect, 6.0, border, 1.0);
+
+    let mut icon_bg = theme.primary;
+    icon_bg.a *= 0.12;
+    cx.backend.fill_round_rect(
+        Rect::xywh(
+            block.rect.origin.x + 8.0,
+            block.rect.origin.y + 8.0,
+            16.0,
+            16.0,
+        ),
+        8.0,
+        icon_bg,
+    );
     draw_icon(
         cx.backend,
         Icon::Sparkles,
-        Point2D::new(block.rect.origin.x + 10.0, block.rect.origin.y + 9.0),
+        Point2D::new(block.rect.origin.x + 10.0, block.rect.origin.y + 10.0),
         12.0,
         theme.primary,
         1.5,
@@ -172,6 +188,13 @@ pub(crate) fn paint_design_block(cx: &mut PaintCx<'_>, theme: &Theme, block: &De
     if block.streaming {
         color.a *= 0.85;
     }
+    cx.backend.save();
+    cx.backend.clip_rect(Rect::xywh(
+        block.rect.origin.x + 30.0,
+        block.rect.origin.y,
+        (block.rect.size.x - 58.0).max(1.0),
+        block.rect.size.y,
+    ));
     let layout = TextLayout::single_run(
         &block.label,
         "system-ui",
@@ -182,5 +205,20 @@ pub(crate) fn paint_design_block(cx: &mut PaintCx<'_>, theme: &Theme, block: &De
     cx.backend.draw_text(
         &layout,
         Point2D::new(block.rect.origin.x + 30.0, block.rect.origin.y + 20.0),
+    );
+    cx.backend.restore();
+
+    let mut chevron_color = theme.muted_foreground;
+    chevron_color.a *= 0.45;
+    draw_icon(
+        cx.backend,
+        Icon::ChevronDown,
+        Point2D::new(
+            block.rect.origin.x + block.rect.size.x - 20.0,
+            block.rect.origin.y + 10.0,
+        ),
+        12.0,
+        chevron_color,
+        1.5,
     );
 }
